@@ -10,7 +10,7 @@ model keeps a bit a bit for free:
 
 so OR, XOR and selection (De Morgan over those two) stay in `[0, 1]` too, `Proven` holds with every declared interval
 `[0, 1]`, and a Boolean circuit of any size costs 0 units (`units` charges a budgeted gate or a gather, and these are
-neither). The draw's bits enter through table reads: eight `gather (some 8) 0` over constant 0/1 columns (bit `b` of
+neither). The sample's bits enter through table reads: eight `gather (some 8) 0` over constant 0/1 columns (bit `b` of
 the index) at one coin byte pay 8 fresh index bits for the first and 0 for the rest (same index gate, same kind). A
 payload byte is registered, so its table reads pay nothing.
 
@@ -20,7 +20,7 @@ from word 1's, `t_i = i·t_1 mod p` (`Draw.tweak`: `t_i = τ·i mod p`, so `t_1 
 `(const, r, l)`, `(mask, l)` and `(tweak, 1, l)` once: `8·(k + 2)·n/8` units for the whole block, whatever its number
 of words. At p1024 and `k = 3` that is 5,120 units, so `EncodeChainHardness p1024 3 B E ε`'s conclusion
 `q·E·(n − 1) ≤ budgeted·(n − 1)` fails at every `q > 5120/E`, for every `B` (there is no budgeted gate) and every
-`ε < 1` (it is right on every draw). The stacking property then capped no MAC (`Property` capped rounding,
+`ε < 1` (it is right on every sample). The stacking property then capped no MAC (`Property` capped rounding,
 compare-select, gather and fold units; property/v1's census reads its MACs as informational), so these circuits also
 satisfied it at any caps that allowed the key's gather units.
 
@@ -207,7 +207,7 @@ def encode_block(n: int, c: int, rounds: int, words: list[int]) -> tuple[Builder
 
 
 def draw_inputs(n: int, c: int, cs: list[int], mask: int, tau: int, payload: dict[int, int]) -> dict:
-    """The slot values of a draw `(cs, mask, τ)` with payload words `payload` (`Slot.value`)."""
+    """The slot values of a sample `(cs, mask, τ)` with payload words `payload` (`Slot.value`)."""
     p, L = (1 << n) - c, n // 8
     x: dict = {}
     for l in range(L):
