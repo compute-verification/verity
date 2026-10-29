@@ -55,7 +55,7 @@ set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=${TREE:-$PWD}
 ARM=${ARM:?ARM is stock, noseal, seal, h1, graphs or async}; T=${T:-8192}; N=${N:-64}; PROMPT_IDS=${PROMPT_IDS:-1024}
-SLOTS=${SLOTS:-$(( T / PROMPT_IDS ))}; WARM=${WARM:-$(( 2 * SLOTS ))}; MAX_MODEL_LEN=${MAX_MODEL_LEN:-1088}
+SLOTS=${SLOTS:-$(( T / PROMPT_IDS ))}; STEP_TOKENS=$(( SLOTS * PROMPT_IDS )); WARM=${WARM:-$(( 2 * SLOTS ))}; MAX_MODEL_LEN=${MAX_MODEL_LEN:-1088}
 case $ARM:${ASYNC:-0} in graphs:*|async:*|*:1) SEQS=${SEQS:-$(( 2 * SLOTS ))} ;; *) SEQS=${SEQS:-$SLOTS} ;; esac
 LABEL=$ARM; [ "${ASYNC:-0}" = 1 ] && LABEL=$ARM-async
 ROOT=${UTIL_ROOT:-/workspace/research/vllm-util80}
@@ -74,7 +74,7 @@ if [ "${1:-}" != leased ]; then
   case $ARM in stock|noseal|seal|h1|graphs|async) ;; *) say "ARM $ARM: not stock, noseal, seal, h1, graphs or async"; exit 2 ;; esac
   case $ARM:${ASYNC:-0} in *:0|noseal:1|seal:1|h1:1) ;; *) say "ASYNC=1 is for the Commit's arms (noseal, seal, h1): stock's is ARM=async"; exit 2 ;; esac
   { echo "tree $(git -C "$TREE" log -1 --format='%H parents %P' 2>/dev/null)"; for h in ${HEADS:-}; do echo "$h"; done; } > "$OUT/heads.txt"
-  [ "$PROMPT_IDS" -ge 1 ] && [ "$PROMPT_IDS" -le 1024 ] && [ "$SLOTS" -ge 1 ] && [ $(( SLOTS * PROMPT_IDS )) -le "$T" ] \
+  [ "$PROMPT_IDS" -ge 1 ] && [ "$PROMPT_IDS" -le 1024 ] && [ "$SLOTS" -ge 1 ] && [ "$STEP_TOKENS" -le "$T" ] \
     || { say "SLOTS $SLOTS of PROMPT_IDS $PROMPT_IDS (1 to 1,024): not one to T $T tokens a step"; exit 2; }
   [ -f "$ROW/manifest.json" ] || { say "no B4 row Build under $ROOT"; exit 3; }
   if [ "$ARM" != stock ] && [ "$ARM" != graphs ] && [ "$ARM" != async ] && { [ ! -f "$HIDDEN_SO" ] || [ ! -f "$NORM_TAP_SO" ]; }; then
@@ -100,12 +100,12 @@ if [ "${1:-}" != leased ]; then
   rc=$?
   say "LEASED PART rc=$rc"
   "$PY" "$TREE/benchmarks/one_stage/served_util.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
-    --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --step-tokens $(( SLOTS * PROMPT_IDS )) \
+    --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --step-tokens "$STEP_TOKENS" \
     --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
   say "ANALYSIS rc=$?"; cat "$OUT/util.txt"
   if [ "${PYSPY:-0}" = 1 ]; then
     "$PY" "$TREE/benchmarks/one_stage/pyspy_steps.py" --trace-json "$SCR/pyspy.json" --t0 "$SCR/pyspy.t0" \
-      --steps "$D/advice_trace.jsonl" --timings "$SCR/main.timings.json" --T "$T" --out "$OUT/pyspy_steps.json" > "$OUT/pyspy_steps.txt" 2>&1
+      --steps "$D/advice_trace.jsonl" --timings "$SCR/main.timings.json" --T "$STEP_TOKENS" --out "$OUT/pyspy_steps.json" > "$OUT/pyspy_steps.txt" 2>&1
     say "PYSPY ANALYSIS rc=$?"; cat "$OUT/pyspy_steps.txt"
   fi
   if [ -d "$D/windows" ]; then
