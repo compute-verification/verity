@@ -65,7 +65,7 @@ def Counting : Prop :=
     ∀ (V : Finset (Fin d.D.N)) (ω : Fin d.D.N → ℝ) (q : ℝ), V ⊆ d.D.computed → 0 < q →
       (∀ u, ∑ v ∈ V ∩ P.gates u, ω v ≤ q) →
       (c : ℝ) / q * ∑ v ∈ V, ω v ≤ d.D.size d.D.computed ∧
-        ∀ T₀ : ℝ, 0 < T₀ → (c : ℝ) / (T₀ * q) * ∑ v ∈ V, ω v ≤ slowdown d.D T₀
+        ∀ T₀ : ℝ, 0 < T₀ → (c : ℝ) / (T₀ * q) * ∑ v ∈ V, ω v ≤ sizeRatio d.D T₀
 
 /-- **Padding proof blocks to `c` gates.** On a Boolean declaration, the proof blocks `S` of at most `c` gates pad to
 exactly `c` gates each in a Boolean declaration that contains it (`Pad`); the other proof blocks keep their gates, and
