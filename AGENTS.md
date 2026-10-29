@@ -60,7 +60,8 @@ The team's agents run these remotely (the team skill).
 The rules in force, each stated as itself; the friction skill has the standing rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
-  every output, is a value, committed under a hiding leaf and touched only inside a zero-knowledge proof.
+  every output, is a value, touched only inside a zero-knowledge proof. Only a proof block's inputs and outputs are
+  committed, each under a hiding leaf; the values inside a proof block never are (Daniel, 28 Oct).
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
   reason: protocol structure, the protocol's outputs, the verifier's coins and draws, and hiding commitments. Partitions
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
