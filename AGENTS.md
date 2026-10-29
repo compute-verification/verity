@@ -10,10 +10,10 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
-    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit, proof of useful
-    bandwidth (PoUB) and network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces
-    it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims' ids,
-    `service/flock/` C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
+    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit over PoUS's store,
+    PoUB over a node's registered store and network certification, each a Python verifier until its Lean verifier (its
+    `lean/`) replaces it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims'
+    ids, `service/flock/` C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
     release side, and `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
@@ -97,7 +97,9 @@ The rules in force, each stated as itself; the friction skill has the standing r
   Nothing the prover runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
-  and later from a separate physical calibration.
+  and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute
+  capacity, and nothing else: no power certifier, power ceiling, energy floor or meter enters a protocol, premise or
+  plan.
 - **Lean is the definition and the verifier.** Python in `verity.ml` mirrors it for the prover's
   speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
   Python verifier and the ml units it reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
