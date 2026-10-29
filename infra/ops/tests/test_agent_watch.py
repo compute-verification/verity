@@ -1617,8 +1617,9 @@ def test_a_silent_worker_is_rung_once_then_once_more_a_window_later_then_not_unt
     assert [r["window"] for r in silent(tmp_path)] == [1, 2, 1] and silent(tmp_path)[-1]["since"] == W.iso(p.stat().st_mtime)
 
 
-def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_top(tmp_path):
-    """top, 26 Oct: nine workers sat ACTIVE with no step for 30-64 h, each rung twice as silent and then by no one."""
+def test_a_silent_worker_still_showing_nothing_six_hours_on_is_archived_once_and_its_lane_told(tmp_path):
+    """Nobody rung for such a worker (top, its lane) has a tool to stop another cloud agent, so it holds its slot: the watch
+    archives it itself, once, and its lane hears to relaunch it from its last note or drop it."""
     notes = tmp_path / "notes"
     note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
     sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40})
@@ -1626,12 +1627,33 @@ def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_t
                                  git_remote=REMOTE, sh=sh)
     w.sweep(lambda r: None)
     sweeps(w, clock, 359)
-    assert [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step")] == ["silent", "silent"]
+    assert [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step", "archived")] == ["silent", "silent"]
+    assert not [p for p, _ in api.posts if p.endswith("/archive")]
     sweeps(w, clock, 1)
     sweeps(w, clock, 600)
-    got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
-    assert [{k: r[k] for k in ("agent", "since", "hours", "handle", "owner", "role")} for r in got] == [
-        {"agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": "top", "role": "worker"}]
+    got = [r for r in records(tmp_path) if r["kind"] in ("no_step", "archived")]
+    assert [{k: r.get(k) for k in ("kind", "agent", "since", "hours", "handle", "owner", "role")} for r in got] == [
+        {"kind": "archived", "agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": None, "role": "worker"}]
+    assert [p for p, _ in api.posts if p.endswith("/archive")] == [f"/v1/agents/{W1_}/archive"]
+
+
+def test_a_silent_worker_the_api_wont_archive_is_a_no_step_for_top_with_why(tmp_path):
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
+    sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40})
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh)
+
+    def refuse(path, body=None):
+        if path.endswith("/archive"):
+            raise W.urllib.error.HTTPError(path, 403, "Forbidden", {}, None)
+        return {}
+    api.post = refuse
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 960)
+    got = [r for r in records(tmp_path) if r["kind"] in ("no_step", "archived")]
+    assert [{k: r.get(k) for k in ("kind", "owner", "role", "archive_failed")} for r in got] == [
+        {"kind": "no_step", "owner": "top", "role": "worker", "archive_failed": "HTTP 403"}]
 
 
 def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(tmp_path):
