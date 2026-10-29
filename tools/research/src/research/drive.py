@@ -1,7 +1,7 @@
 """`research queue drive`: one tick of the landing automation (from an owner's ready mark to `main` moving, no agent acts
 unless the automation refuses).  A loop runs it every few minutes.
 
-What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns.  `--shadow`
+What it refuses goes to `CI` in the merge thread, once per commit or head, with the owner of the PR it concerns.  `--shadow`
 drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
 
 What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick applies the stale rule (`research.stale`, drive.toml's
@@ -170,7 +170,7 @@ LEAN_SETTLE_TICKS = 1
 #: how long a run may show no readable state (`unknown`) before drive takes it as lost (`Driver._lost`)
 LOST_AFTER_S = 3 * 3600
 #: how long the owners rung for a red suite or step have to mark a fix before drive reverts its culprit (`Driver._red_clock`;
-#: without it PRs keep landing on a `main` no after-landing run passed, and its failures reach only @ci)
+#: without it PRs keep landing on a `main` no after-landing run passed, and its failures reach only `CI`)
 FIX_WINDOW_S = 3600
 #: the red record reverted at once, with no `FIX_WINDOW_S`, and while it stands no PR touching what it reads lands
 #: (`Driver._circuit_held`): circuit-check runs only after landing, so every landing on its red would go unchecked
