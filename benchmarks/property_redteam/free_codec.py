@@ -23,7 +23,8 @@ data product, a unit (`Builder.nonlinear_units`).
 
 from __future__ import annotations
 
-from squaring import U8, Builder, free_bit
+from gates import U8, Builder
+from squaring import free_bit
 
 
 def rho_ref(p: int, a: int) -> int:
@@ -94,7 +95,7 @@ class FreeField:
     def reduce(self, v: int) -> int:
         """`v mod p` for `v ≥ 0` by binary long division: `[v ≥ 2^k·p]` then subtract, from the top quotient bit down."""
         b, p = self.b, self.p
-        q = b.gates[v].hi // p
+        q = b.hi[v] // p
         for k in range(max(q.bit_length() - 1, 0), -1, -1):
             bit = self.geq(v, const=(2 ** k) * p)
             v = b.affine(0, [(1, v), (-(2 ** k) * p, bit)])

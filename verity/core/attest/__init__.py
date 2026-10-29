@@ -14,8 +14,20 @@ commits every sampling block's records, each a byte string, as the leaves of one
 block, which the verifier checks in the clear (`lms.verify_liveness`). `Period.close` signs the root once
 (`lms.period_root_message`, binding the deployment's hash, the party, the attachment id the challenger drew, the link,
 the period's index and the record count) and returns the `SignedPeriod`, which goes to the prover only, as witness. The
-prover opens the records a proof reads (`SignedPeriod.read`), and the proof runs `MemoryChallenger.Attest.check` (Lean,
-package ``core_memory_challenger``): two LMS verifications for the two HSS levels, then each read's path to the root.
+party's lower key and the identity's certificate of it are public: every liveness record shows them in the clear. The
+prover opens the records a proof reads (`SignedPeriod.read`); the verifier checks the certificate in the clear
+(`Attest.checkKey`), and the proof runs `Attest.check` (Lean, this directory's ``lean/``, package ``core_attest``): the
+root's LMS signature under the lower key, then each read's path to the root. `Attest.accepts` is both. The period's unit,
+the root's signature as a Boolean Definition, is ``AttestPeriod_v1`` (`verity.ml.commitments.gates.attest`).
+
+The party signs for one attachment at a time: `Period` starts its attachment on the signer (`lms.PartyKey.start`, which
+records it on the key's leaf state before any signature of it), so a restart within the attachment signs nothing more
+of it, under no-state-rollback. `Period.block` signs the block's liveness record before it appends the block's records,
+so every record a closed period holds is in a block whose liveness record is out.
+
+A party key signs period roots and liveness records only. What a party signs per challenge outside its periods (the
+network certifier's reveals) is no record of a period: it stays under the party's own key, and no statement about a
+period reads it as the device's.
 
 Stdlib only, as a core unit with no ml edge is: the tree is written out here, and its test holds it to
 `verity.ml.commitments.merkle`, the signer is injected (`Signer`; `lms.PartyKey` is one).
@@ -93,7 +105,7 @@ def path(records: Sequence[bytes], position: int) -> tuple[bytes, ...]:
 
 def verify_opening(root_: bytes, count: int, position: int, record: bytes, siblings: Sequence[bytes]) -> bool:
     """Whether ``record`` at ``position`` climbs ``siblings`` to ``root_`` in a period tree of ``count`` records
-    (`MemoryChallenger.Attest.check`'s test of each read, ``FrameV3Sha512.verifyOpening``)."""
+    (`Attest.check`'s test of each read, ``FrameV3Sha512.verifyOpening``)."""
     if len(root_) != 64 or not 0 <= position < count or len(siblings) != _depth(count):
         return False
     if any(len(s) != 64 for s in siblings):
@@ -107,8 +119,11 @@ def verify_opening(root_: bytes, count: int, position: int, record: bytes, sibli
 
 
 class Signer(Protocol):
-    """A party's lower key as `Period` uses it (`lms.PartyKey`): each call signs at its key's next unused leaf and returns
-    the two-level signature, whose ``encode()`` is its bytes."""
+    """A party's lower key as `Period` uses it (`lms.PartyKey`): `start` starts its run of an attachment, refused for one
+    it has started before, and each signing call, for the started attachment only, signs at its key's next unused leaf
+    and returns the two-level signature, whose ``encode()`` is its bytes."""
+
+    def start(self, attachment: bytes) -> None: ...
 
     def period_root(self, attachment: bytes, link: str, period: int, count: int, root: bytes): ...
 
@@ -117,7 +132,7 @@ class Signer(Protocol):
 
 @dataclass(frozen=True)
 class Read:
-    """One record a period's proof reads: its position, its bytes and its path to the root (`MemoryChallenger.Attest.Read`)."""
+    """One record a period's proof reads: its position, its bytes and its path to the root (`Attest.Read`)."""
 
     position: int
     record: bytes
@@ -126,8 +141,9 @@ class Read:
 
 @dataclass(frozen=True)
 class SignedPeriod:
-    """A closed period as the prover receives it, witness only: the period's attachment, link and index, its records in
-    order, their root and the party's two-level signature of the root (bytes)."""
+    """A closed period as the prover receives it: the period's attachment, link and index, its records in order, their
+    root and the party's two-level signature of the root (bytes). The signature's lower key and certificate are public
+    (`Attest.PartyKey`); the rest of it, the records and the root are witness."""
 
     attachment: bytes
     link: str
@@ -156,7 +172,8 @@ class SignedPeriod:
 @dataclass
 class Period:
     """One certification period of a party: its records, sampling block by sampling block, under the party's lower key
-    ``signer``. Each block is certified once, in increasing order, and the period is closed once."""
+    ``signer``, which it starts on the attachment (`Signer.start`). Each block is certified once, in increasing order,
+    and the period is closed once."""
 
     signer: Signer
     attachment: bytes
@@ -166,15 +183,20 @@ class Period:
     _last: int = -1
     _closed: bool = False
 
+    def __post_init__(self) -> None:
+        self.signer.start(self.attachment)
+
     def block(self, block: int, records: Sequence[bytes]) -> bytes:
-        """Append sampling block ``block``'s records and return its public liveness record (the signature's bytes)."""
+        """Sign sampling block ``block``'s public liveness record, then append the block's records; the record's bytes.
+        A refused signature appends nothing."""
         if self._closed:
             raise ValueError(f"period {self.period} is closed")
         if block <= self._last:
             raise ValueError(f"block {block} is not after block {self._last}, already certified")
+        live = self.signer.liveness(self.attachment, self.link, self.period, block).encode()
         self.records.extend(bytes(r) for r in records)
         self._last = block
-        return self.signer.liveness(self.attachment, self.link, self.period, block).encode()
+        return live
 
     def close(self) -> SignedPeriod:
         """Sign the period's root once and return what goes to the prover."""
