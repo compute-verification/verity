@@ -9,6 +9,8 @@
   "Properties.Pouw.ServedValues",
   "Properties.Pouw.Strata",
   "Properties.Pouw.Credit",
+  "Properties.Pouw.Lead.Commit",
+  "Properties.Pouw.Lead.V2",
   "Properties.Nci",
   "Properties.Nci.Threads",
   "Properties.Nci.Baseline",
@@ -342,7 +344,8 @@
     "Properties.Pouw.Credit",
     "Properties.Pouw.Period",
     "Properties.Pouw.PeriodJ10R",
-    "Properties.Pouw.ServedValues"
+    "Properties.Pouw.ServedValues",
+    "Properties.Pouw.Lead.V2"
    ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -575,12 +578,17 @@
    "imports": ["Definitions.Core.Formalism", "Properties.Pouw.PeriodJ10R"],
    "except": [],
    "why": "the served period's values in AND gates are stated against served H1's period and premises (`Properties.Pouw.PeriodJ10R`) and the AND count (`Definitions.Core.Formalism`), never a proof"
+  },
+  "Properties.Pouw.Lead.V2": {
+   "imports": ["CoreProtocol.Protocol", "Definitions.Pouw.Lead"],
+   "except": [],
+   "why": "the lead's acceptance at PoUW's v2 case is stated against `Core.Protocol`'s acceptance and the lead's statement (`Definitions.Pouw.Lead`), never a proof"
   }
  },
  "reads_exempt": {
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT): PoUW's check reads its `V`, `canon`, `hexOf` and `Sha512.hash`, the NCI check decodes its Program with C-Flock's decoder, and the network check reads its SHA-512, bytes and canonical JSON",
   "Randomness": "core's randomness (`core_randomness`), read through PouwCommit and RemoteAudit's draws: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec",
-  "PouwWindow.Rounds": "PoUW window's rounds code, read by `PouwCheck.liveSaltCheck` through `Properties.Pouw.LiveSalt.oneRoot`: the salt epoch's rule (`SALT`, `SALT_FAMILIES`, `LIVE_SCHEME`, `saltEpochReason`); the window's lock declares no spec layer for `PouwWindow.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-81)",
+  "PouwWindow.Rounds": "PoUW window's rounds code, read by `PouwCheck.liveSaltCheck` through `Properties.Pouw.LiveSalt.oneRoot`: the salt epoch's rule (`SALT`, `SALT_FAMILIES`, `LIVE_SCHEME`, `saltEpochReason`); and the round check (`roundsReason`, `ROUND`, `liveEpochReason`), which the lead's g-private order reads through `Properties.Pouw.Lead.Commit`; the window's lock declares no spec layer for `PouwWindow.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-81)",
   "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
  },
  "guarantees": {
@@ -2446,6 +2454,15 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  },
+  "Pouw.SecurityProofs.Lead.Commit.leafFirstBlock": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Commit.rowBound": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots": {
+   "owner": "@compute-research"
   }
  },
  "shape": {
@@ -3565,6 +3582,18 @@
    },
    "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
     "function": "RemoteAudit.Protocol.check",
+    "outcome": "accept"
+   },
+   "Pouw.SecurityProofs.Lead.Commit.leafFirstBlock": {
+    "function": "PouwCommit.Domain.mk?",
+    "outcome": "accept"
+   },
+   "Pouw.SecurityProofs.Lead.Commit.rowBound": {
+    "function": "PouwCommit.Domain.mk?",
+    "outcome": "accept"
+   },
+   "Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots": {
+    "function": "PouwWindow.roundsReason",
     "outcome": "accept"
    }
   },

@@ -5,7 +5,6 @@ import Proofs.Pouw.Lead.Tags.Distinct
 import Proofs.Pouw.Lead.PStar.Table
 import Proofs.Pouw.Lead.Commit.Credit
 import Proofs.Pouw.Lead.Network.Term
-import Proofs.Pouw.Dimension.H100Proofs
 
 /-!
 # The lead's guarantee from its pieces
@@ -149,107 +148,5 @@ theorem G : Pouw.Guarantees.Lead.G := by
   have hps := mul_nonneg hN (show 0 ≤ pStarGap (lead T m n K) by unfold pStarGap stockRegs; positivity)
   unfold gapRegs
   linarith
-
-/-- A trace of `other` instructions writes one register each. -/
-theorem regCount_other {G : Type} (P : List (Op100 G)) (h : ∀ o ∈ P, ∃ f, o = .other f) : regCount P = P.length := by
-  unfold regCount
-  rw [List.map_congr_left fun o ho => show Pouw.Lead.Op100.regs o = 1 by obtain ⟨f, rfl⟩ := h o ho; rfl]
-  simp
-
-/-- The committed tiles at `ω`, in `tileIdx`'s order. -/
-noncomputable def tilesAt (L : Pouw.Lead.Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) :
-    List (Fin tileWords → ℤ) :=
-  (tileIdx L).toList.map fun x => tileOf L κ ω x.1 x.2.1 x.2.2
-
-/-- The honest commitment's compressions, the words' and A's, each rounded up. -/
-noncomputable def honestBlocks (L : Pouw.Lead.Layout) : ℕ :=
-  ⌈4 * wordsRegs L / 128 + (wordChunks L : ℚ)⌉₊ + ⌈aBlocks L⌉₊
-
-/-- One message of `honestBlocks L + 1` compressions. -/
-noncomputable def honestMsg (L : Pouw.Lead.Layout) : Hash.Msg := List.replicate (128 * honestBlocks L) 0
-
-/-- A commitment format meeting `CommitL1w`: one words message of `honestBlocks L + 1` compressions. -/
-noncomputable def honestCommit (L : Pouw.Lead.Layout) : Pouw.Lead.Commit L where
-  msgs _ _ := [honestMsg L]
-  root _ _ := 0
-  aMsgs := []
-  chunks := wordChunks L
-
-/-- The registers the honest message's compressions write, at ShaWrites' credit rounded up. -/
-noncomputable def honestShaRegs (L : Pouw.Lead.Layout) : ℕ := ⌈shaWordsRegs * blocks (honestMsg L)⌉₊
-
-/-- **The honest strategy**: no pre-coin table; at each coin value one `other` instruction a committed word, one write
-a committed tile, and the honest message hashed. -/
-noncomputable def honestStrategy (L : Pouw.Lead.Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) : Strategy L where
-  pre _ _ := 0
-  pre_supp _ _ := rfl
-  exec ω :=
-    { trace := ((tilesAt L κ ω).flatMap fun v => (List.finRange tileWords).map fun q => .other fun _ => (v q : ℚ)) ++
-        List.replicate (honestShaRegs L) (.other 0)
-      steps := (tilesAt L κ ω).map fun v => .write (.inl 0) 0 v
-      shaRegs := honestShaRegs L
-      hashed := [honestMsg L]
-      egress := 0
-      root := 0 }
-
-theorem honest_trace_other (L : Pouw.Lead.Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) :
-    ∀ o ∈ ((honestStrategy L κ).exec ω).trace, ∃ f, o = .other f := by
-  intro o ho
-  simp only [honestStrategy, List.mem_append, List.mem_flatMap, List.mem_map, List.mem_replicate] at ho
-  rcases ho with ⟨_, _, _, _, rfl⟩ | ⟨_, rfl⟩
-  · exact ⟨_, rfl⟩
-  · exact ⟨_, rfl⟩
-
-theorem blocks_honestMsg (L : Pouw.Lead.Layout) : blocks (honestMsg L) = honestBlocks L + 1 := by
-  rw [blocks, honestMsg, List.length_replicate]
-  omega
-
-/-- **The honest lemma**: the nominal W1 table meets `H32` (`H32Sat`), and at every call the honest strategy (write each
-committed tile once, hash one message of the honest commitment's compressions rounded up), with an empty coin stream,
-meets every premise and is accepted at every coin value. -/
-theorem honest : Pouw.Guarantees.Lead.Honest := by
-  intro T m n K H κ hadm
-  refine ⟨⟨fun _ _ => none, fun _ _ _ => rfl, fun _ _ _ _ _ h => by cases h⟩, honestCommit _, fun _ => false,
-    fun σ => σ = honestStrategy _ κ, honestStrategy _ κ, ?_, h32Sat, ?_, ?_, ?_, fun _ h => h, ?_, ?_, ?_, rfl, ?_⟩
-  · refine ⟨rfl, fun ω => ?_⟩
-    simp only [honestCommit, List.append_nil, List.dedup_cons_of_notMem List.not_mem_nil, List.dedup_nil,
-      List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, shaCredit, blocks_honestMsg, wordsBlocks,
-      Bool.false_eq_true, ↓reduceIte]
-    have hX := Nat.le_ceil (4 * wordsRegs (lead T m n K) / 128 + (wordChunks (lead T m n K) : ℚ))
-    have hY := Nat.le_ceil (aBlocks (lead T m n K))
-    have hY0 : 0 ≤ aBlocks (lead T m n K) := by unfold aBlocks; positivity
-    unfold honestBlocks
-    push_cast
-    norm_num only [shaWordsRegs, shaARegs]
-    linarith
-  · rintro σ rfl ω o ho
-    obtain ⟨f, rfl⟩ := honest_trace_other _ κ ω o ho
-    trivial
-  · rintro σ rfl ω - - rb hrb cb hcb t
-    have hy : tileOf _ κ ω rb cb t ∈ tilesAt _ κ ω := List.mem_map.2 ⟨(rb, cb, t), by simp [tileIdx, hrb, hcb], rfl⟩
-    exact Or.inl ⟨.inl 0, 0, List.mem_map.2 ⟨_, hy, rfl⟩⟩
-  · rintro σ rfl ω
-    rw [regCount_other _ (honest_trace_other _ κ ω)]
-    simp only [honestStrategy, writes, List.map_map, Function.comp_def, Step.cost, List.length_append,
-      List.length_replicate, List.length_flatMap, List.length_map, List.length_finRange, List.map_const',
-      List.sum_replicate, smul_eq_mul, mul_one, Nat.mul_comm tileWords]
-    rfl
-  · rintro σ rfl ω
-    simp only [honestStrategy, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, shaCredit,
-      Bool.false_eq_true, ↓reduceIte, honestShaRegs]
-    exact Nat.le_ceil _
-  · rintro σ rfl ω - - y hy
-    simp only [honestCommit, List.append_nil, List.mem_singleton] at hy
-    exact ⟨honestMsg _, List.mem_singleton_self _, by rw [hy]⟩
-  · rintro σ rfl
-    refine ⟨_, rfl, rfl, fun ω => ⟨rfl, rfl, fun _ h => Or.inl h, ?_⟩⟩
-    have : ((honestStrategy (lead T m n K) κ).exec ω).egress = 0 := rfl
-    rw [this, Nat.cast_zero, mul_zero, add_zero]
-  · intro ω
-    refine ⟨hadm, rfl, ?_⟩
-    show ((0 : ℕ) : ℚ) ≤ _
-    unfold Layout.callBits
-    push_cast
-    positivity
 
 end Pouw.SecurityProofs.Lead.Compose
