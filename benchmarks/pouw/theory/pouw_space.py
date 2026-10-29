@@ -38,9 +38,16 @@ costs `reg`. Under DistinctWrites each committed, pairwise-distinct, noise-depen
   only `forward_salts` (N-HIDE's subtree layouts, private roots). A card's `salt_basis = "leaf-time"` prices a salt as
   SW-HASH's claims did, the salt kernel's share of the leaf's hash time. Hiding is required (NIGHT.md §1 default 2), so
   no ruling waives it;
+- host: the prover's host hashes f_host of the rows (its best SHA-512 rate against the card's and its own) and computes
+  their words off the card (N-FLOOR's route H), f_host × (credited hashing + words), unless PeriodInventory counts the
+  host at θ's rows (HostsCounted) under the premise that θ's row is at least the host's best rate (host-row);
 - hashing slack: credited hashing under ShaSpeed, δ times its work (δ = 0 as §2a states it). δ* is the precision
   ShaSpeed needs for T1 to hold (CORE-SMELL C27). The coins' expansion is credited hashing too; T1 with it uncredited
   is reported beside T1 (NIGHT §1 default 4).
+
+Hashing is priced at the best known SHA-512 compression's register count (`price.hash_work`, ShaLB(3,534), N-SHALB):
+W1 counts registers and the honest program is the best, so every term that prices hashing reads it, and the served
+committer's excess (3,632) is printed as its own gap.
 
 T2 is t_H / t_S, a serial sum: the stock step, the stacked product's extra over the plain GEMM, the noise's coins a call
 and NCP's formed copies, A's root before each call's noise (an estimate), exporting each committed word, and hashing at
@@ -82,7 +89,7 @@ from exact_kit.checks import Checks
 
 CARD = Path(__file__).with_name("pouw_space.toml")
 TERMS = ("final_word", "uncommitted_steps", "coin_branch", "forming", "lane_fix", "noise_derivation", "denoise",
-         "pre_noise_hashing", "final_rows", "hiding", "hashing_slack")
+         "pre_noise_hashing", "final_rows", "hiding", "host", "hashing_slack")
 GAP_TERMS = ("final_word", "uncommitted_steps", "forming", "lane_fix", "noise_derivation", "denoise")
 PRICED = ("r", "formed_x", "formed_y", "noise_x", "noise_y", "derive_extra", "denoise", "pre_noise_bytes", "operand_max",
           "lane_fix", "wide_measured", "final_target", "dup", "L", "word_bits", "commit_formed_x", "commit_formed_y",
@@ -611,7 +618,8 @@ def call_units(card: dict, d: dict, m: float, n: float, K: float, g: float = 1.0
     return {"stock": stock, "terms": t, "credited_bytes": credited_b, "hashed_bytes": word_b + op_b + pre_b,
             "word_bytes": word_b, "operand_bytes": op_b, "pre_noise_bytes": pre_b, "coin_bytes": coin_b, "r": r,
             "x_entries": ent["formed_x"] + ent["noise_x"], "y_entries": ent["formed_y"] + ent["noise_y"],
-            "noise_y": ent["noise_y"], "mK": m * K, "nK": n * K, "words": nwords, "extra_macs": (r - 1) * stock,
+            "noise_y": ent["noise_y"], "mK": m * K, "nK": n * K, "words": nwords, "word_units": nwords * u_word,
+            "extra_macs": (r - 1) * stock,
             "coinform_ms": sum(coinsncp_ms(card, b * g, table) for table, bs in xof.items() for b in bs) / g,
             "a_ms": max(a_chain_s, a_bulk_s) / g * 1e3, "a_chain": chain / g, "bulk_hash_ms": bulk * 1e3,
             "sts_ms": nwords * sts * 1e3, "stg_ms": nwords * stg * 1e3, "hiding_closed": hiding_closed,
@@ -650,7 +658,8 @@ def attacked(card: dict, d: dict) -> list[str]:
 
 
 SUM_KEYS = ("stock", "credited_bytes", "hashed_bytes", "word_bytes", "operand_bytes", "pre_noise_bytes", "coin_bytes",
-            "x_entries", "y_entries", "noise_y", "mK", "nK", "words", "coinform_ms", "a_ms", "a_chain", "bulk_hash_ms",
+            "x_entries", "y_entries", "noise_y", "mK", "nK", "words", "word_units", "coinform_ms", "a_ms", "a_chain",
+            "bulk_hash_ms",
             "sts_ms", "stg_ms", "extra_macs", "hiding_closed", "hiding_a", "hiding_words", "hiding_operands", "salts")
 
 
@@ -699,7 +708,12 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
         if "hiding_salt" in closes and "hiding" not in closes:
             agg["credited_bytes"] += fs * sw / card["price"]["hash_work_floor"]["value"]
     hash_share = agg["credited_bytes"] * hw / stock
+    host = card["price"]["host_sha"]["value"]
+    f_host = host / (rate + host)
+    host_route = f_host * (hash_share + agg["word_units"] / stock)
     terms = {k: v / stock for k, v in agg["terms"].items()}
+    if "host" not in effects(card, d["premises"], 32)[0]:
+        terms["host"] = host_route
     terms["hashing_slack"] = delta * hash_share
     rest = sum(v for k, v in terms.items() if k != "hashing_slack")
     t1 = rest + terms["hashing_slack"]
@@ -726,6 +740,7 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
             "hash_bytes_per_mac": agg["credited_bytes"] / stock, "coin_bytes_per_mac": agg["coin_bytes"] / stock,
             "pre_noise_units": agg["pre_noise_bytes"] * hw / stock,
             "committer_gap": committer_gap, "sha_regs": hw * BLOCK / card["price"]["reg"]["value"],
+            "f_host": f_host, "host_route": host_route,
             "t2": t2, "t2_pass": t2["judged"] <= TARGET["t2"],
             "t3": t3, "t3_worst": t3w, "t3_pass": t3w is not None and t3w <= TARGET["t3"], "ranks": rk,
             "rank": rk["overall"], "rank_effective": rk["overall_effective"], "premises": ids, "choice": d["choice"],
@@ -840,6 +855,11 @@ def needs(row: dict) -> list[str]:
     if row["hiding_closed"]:
         out.append(f"the salt side's hiding work, {row['hiding_closed']:.2%} of stock, is closed by "
                    f"{' and '.join(p for p in row['premises'] if p in HIDING_PREMISES)}")
+    if not row["terms"]["host"]:
+        out.append(f"the host's work is counted by period-inventory (HostsCounted at θ's rows) and host-row: without "
+                   f"them the host hashes f_host = {row['f_host']:.2%} of the rows and computes their words off the card "
+                   f"(N-FLOOR's route H), {row['host_route']:.2f}x stock, {row['host_route'] / TARGET['t1']:.0f}x T1's "
+                   f"allowance")
     if not row["t1_pass"]:
         big = max(((k, v) for k, v in row["terms"].items()), key=lambda kv: kv[1])
         out.append(f"T1 {row['t1']:.2%} > 1%: its largest term is {big[0]} {big[1]:.2%}")
@@ -891,6 +911,7 @@ def periods(card: dict, row: dict) -> dict:
             out[p][scope] = {"stock_ands": work, "gap_ands": row["t1"] * work, "allowance_ands": 0.01 * work,
                              "shaspeed_ands": row["hash_units_per_mac"] * work,
                              "shaspeed_real_ands": sha_and_mac * macs_s * s,
+                             "host_route_ands": row["host_route"] * work,
                              "shaspeed_slack_ands": min(row["delta_star"], 1e9) * row["hash_units_per_mac"] * work}
     return out
 
@@ -903,17 +924,19 @@ def period_table(card: dict, row: dict) -> list[str]:
              f"{per['hardware_multiple']:.1f}x stock's hardware (T2). The gap is T1 x the stock work and the allowance 1% of "
              f"it, in W1 at stock's AND rate, since T1 is judged in W1; ShaSpeed's slack is delta* x its credited "
              f"hashing, the most it may err before T1 exceeds 1%. The credited hashing is also given in real AND gates, "
-             f"{card['price']['sha_and']['value']:,} a compression.", "",
+             f"{card['price']['sha_and']['value']:,} a compression. Route H is what the host takes off the card if "
+             f"period-inventory or host-row fails (in T1 then), in W1 at stock's AND rate.", "",
              "| period | scope | stock work | gap (T1) | allowance (1%) | ShaSpeed-credited hashing, W1 at stock's AND "
-             "rate | the same in real AND gates | ShaSpeed slack at delta* |",
-             "|---|---|---|---|---|---|---|---|"]
+             "rate | the same in real AND gates | ShaSpeed slack at delta* | route H if period-inventory fails |",
+             "|---|---|---|---|---|---|---|---|---|"]
     for p in PERIODS:
         for scope in ("h200", "datacenter", "world"):
             v = per[p][scope]
             lines.append(f"| {p} ({per[p]['seconds']:,} s) | {scope} | {v['stock_ands']:.3e} | {v['gap_ands']:.3e} "
                          f"({row['t1']:.3%}) | {v['allowance_ands']:.3e} | {v['shaspeed_ands']:.3e} "
                          f"({row['hash_units_per_mac']:.0f}x) | {v['shaspeed_real_ands']:.3e} "
-                         f"({v['shaspeed_real_ands'] / v['stock_ands']:.2f}x) | {v['shaspeed_slack_ands']:.3e} |")
+                         f"({v['shaspeed_real_ands'] / v['stock_ands']:.2f}x) | {v['shaspeed_slack_ands']:.3e} | "
+                         f"{v['host_route_ands']:.3e} ({row['host_route']:.2f}x) |")
     return lines
 
 
@@ -929,11 +952,11 @@ def if_refuted(card: dict, rows: list[dict]) -> list[tuple[str, dict | None]]:
     and changes no other row, so this filters the ranking."""
     uns = unsettled_premises(card, rows)
     out = []
-    keep = set(HASH_CREDIT) | {"period-inventory"}
+    keep = set(HASH_CREDIT) | {"period-inventory", "host-row"}
     for drop in [[p] for p in uns] + [[p for p in uns if p not in keep]]:
         best = next((r for r in rows if not set(drop) & set(r["premises"])), None)
-        out.append((drop[0] if len(drop) == 1 else "every unsettled premise but the hashing credit and PeriodInventory",
-                    best))
+        out.append((drop[0] if len(drop) == 1 else "every unsettled premise but the hashing credit and PeriodInventory "
+                    "with its host row", best))
     return out
 
 
@@ -977,14 +1000,16 @@ def row_line(i, row: dict) -> str:
             f"{'pass' if row['t1_pass'] else 'fail'} | {pct(row['t1_coins_uncredited'])} | {pct(t['final_word'])} | "
             f"{pct(t['uncommitted_steps'])} | {pct(t['coin_branch'])} | {pct(t['forming'])} | {pct(t['lane_fix'])} | "
             f"{pct(t['noise_derivation'])} | "
-            f"{pct(t['denoise'])} | {pct(t['hiding'])} ({pct(row['hiding_closed'])}) | {t2s(row)} "
+            f"{pct(t['denoise'])} | {pct(t['hiding'])} ({pct(row['hiding_closed'])}) | {pct(t['host'])} "
+            f"({row['host_route']:.2f}x) | {t2s(row)} "
             f"({row['t2']['unfused']:.1f}x) {'pass' if row['t2_pass'] else 'fail'} | {pct(row['t3_worst'])} | "
             f"{row['delta_star']:.1e} | {len(row['open'])}: {opened(row)} |")
 
 
 HEADER = ["| # | design | rank m/h (overall) | effective | T1 | +coins | final word | uncommitted | coin branch | forming | "
-          "lane fix | derivation | de-noise | hiding (closed) | T2 sync / async (unfused) | T3 | delta* | open (matmul) |",
-          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+          "lane fix | derivation | de-noise | hiding (closed) | host (route H) | T2 sync / async (unfused) | T3 | delta* | "
+          "open (matmul) |",
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
 
 
 def render(card: dict, results: dict, space_info: dict) -> str:
@@ -1205,6 +1230,15 @@ def main() -> int:
                  "delta* spends what route U's lane fix leaves of 1%",
                  660 < sh["hash_units_per_mac"] * bar < 700 and abs(sh["delta_star"] * sh["hash_units_per_mac"] + rest - 0.01)
                  < 1e-12, f"delta* {sh['delta_star']:.2e}, {sh['hash_units_per_mac']:.0f} units a MAC, other terms {rest:.3%}")
+    lead = row("t8192", nm("ssn-1l-tag", "served", "s8", "k32", "w", "r256k", "mask", "min"))
+    served = lead["f_host"] * (lead["hash_bytes_per_mac"] * card["price"]["hash_work_floor"]["value"]
+                               + lead["host_route"] / lead["f_host"] - lead["hash_units_per_mac"])
+    checks.check("route H on ssn_1l at T 8,192 is N-FLOOR final's: the host hashes 4.04% of the rows and computes their "
+                 "words, 4.83x stock at the served committer's 908 W1 a byte and 4.71x at the best leaf (here at ShaLB's "
+                 "883.5); period-inventory with host-row closes it, so it is no T1 term",
+                 abs(lead["f_host"] - 0.0404) < 0.0001 and abs(served / 4.83 - 1) < 0.01
+                 and abs(lead["host_route"] / 4.71 - 1) < 0.01 and lead["terms"]["host"] == 0,
+                 f"f_host {lead['f_host']:.3%}, {served:.2f}x at 908, {lead['host_route']:.2f}x at ShaLB")
     for point, want in (("t8192", 0.024), ("t512", 0.520)):
         t = cardrow("ncp-k32", point)["terms"]
         got = t["final_word"] + t["forming"] + t["noise_derivation"]
@@ -1431,6 +1465,13 @@ def main() -> int:
         checks.mutation("price on the grid, where the final-word lemma holds, and per2/cancel under it passes T1 at "
                         "T 8,192: N-SAKU's skip in M0 is what keeps every exact design out", e["t1_pass"] and not e0["t1_pass"],
                         f"T1 {e['t1']:.3%} on the grid, {e0['t1']:.2%} in M0")
+        c = mutated(lambda c: c["premise"]["period-inventory"].pop("closes"))
+        tag = dict(ssn_e, noise="ssn-1l-tag", operands="w", rows="r256k", derivation="min")
+        e, e0 = one(c, tag), one(card, tag)
+        checks.mutation("drop HostsCounted from PeriodInventory and the lead fails T1 by route H, the host's hashing "
+                        "and words off the card: the host term is what period-inventory and host-row close",
+                        not e["t1_pass"] and e["terms"]["host"] > 4 and e0["t1_pass"],
+                        f"T1 {e['t1']:.0%} vs {e0['t1']:.3%}")
         pool = {k: v for k, v in designs.items() if v["choice"]["noise"] in ("ssn-1l-tag", "ssn-1l-hw")}
         c = mutated(lambda c: c["attack"].__setitem__("x", {"targets": ["ssn-tag-distinct"], "status": "open", "source": "test"}))
         rows_c, _ = ranking(c, pool, "t8192")

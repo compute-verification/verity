@@ -41,6 +41,12 @@ unit = "W1 units a hashed byte, at H32's floor"
 kind = "measured"
 source = "SW-HASH final (note compute-research/20261029T0535Z-report-sw-hash, its sources table): SHA-512 a compression in the committer's build on sm_90a writes 3,632 registers, 116,224 W1 units at the floor table (h200Measured = h100Floor), SASS run r20261029-044108-5169; 116,224/128 a byte. The committer as served (N-SHALB confirms 3,632 rolled), 2.7% over hash_work's best count: its excess is the committer gap a needs list prints, and SW-HASH's leaf-time salt basis reads it (SW-HASH §9's floor column)"
 
+[price.host_sha]
+value = 21.9e9
+unit = "B/s"
+kind = "measured"
+source = "N-FLOOR final §1 (note compute-research/20261029T0832Z-report-np-floor): the H200's own host, a Xeon Platinum 8468 (8 cores, 16 threads, KVM guest), hashes SHA-512 at 21.9 GB/s with an AVX-512 eight-lane kernel (sha512x8.c, FIPS 180-4 checked; runs r20261029-072411-22ce, r20261029-072843-21ae, r20261029-074657-fc32, art:7f1ba2ed7cce4aaef45cce3e8d98ba3dae361fb2fcdf8bd0ddfdfbc1907fe1ad), against OpenSSL's 6.59; f_host = 21.9/(519.6 + 21.9) = 4.04% of the hashing, 4.90% at θ's hostH200 row (30.0 GB/s). The host term (route H) prices it: the rows it hashes and their words, computed on AMX (15.6-19.6 T int8 MACs/s), leave the card"
+
 [price.hash_rate]
 value = 519.63e9
 unit = "B/s"
@@ -434,7 +440,16 @@ source = "SW-SMELL S9: route U' (X s8, Y + gamma u8, the row init) needs its own
 rank = 3
 status = "open"
 owner = "SW-PREMISES"
-source = "every device the prover runs in the monitoring period is counted on both sides of T1, the host's SHA-512 and AMX included; stated in DitherInstance.lean, held open, not in the lock (SW-PREMISES interim #18; SW-LEAN interim §2: what the final-word lemma's grid rests on). The egress layer's (N-COMPOSE §7, egress_charged; N-PREM interim 1), closing no T1 term, and in every design's set (N-FLOOR interim 1's fix): without it the H200's own host (SHA-512 at 6.24 GB/s, 1.19% of the card's served rate; AMX int8 at 15.6 T MACs/s; PCIe 55.4 GB/s; runs r20261029-072411-22ce, r20261029-072843-21ae) takes 1.42x stock of credited W1 off the card at no time cost, 142x T1's budget, and 5.6x on θ's H200 node (estimates on measured parts); with it the host's work is priced at the card's own rate for the same work"
+requires = ["host-row"]
+closes = ["host"]
+source = "every device the prover runs in the monitoring period is counted on both sides of T1, the host's SHA-512 and AMX included; stated in DitherInstance.lean, held open, not in the lock (SW-PREMISES interim #18; SW-LEAN interim §2: what the final-word lemma's grid rests on). The egress layer's (N-COMPOSE §7, egress_charged; N-PREM interim 1), and in every design's set. N-FLOOR final §1's fix: the guarantee reads PeriodInventory with HostsCounted (Pouw/DitherInstance.lean) at θ's rows, so the honest optimum may use the host too and route H moves work between two counted resources; it closes the host term only with host-row. Without it the host term is what route H takes off the card at no time cost: f_host x (credited hashing + words), 4.83x stock on ssn_1l at the served committer's 908 W1 a byte (483x T1's allowance; 5.9% in AND gates); route P (words over PCIe at 55.4 GB/s, computed on AMX) adds 0.107x (estimates on measured parts). Pricing the host by its AMX capacity alone is not neutral (its SHA-512 displaces 1.01-1.27x that capacity in credited W1), so HostsCounted's SHA-512 row is needed"
+
+[premise.host-row]
+rank = "4a"
+part = "hashing"
+status = "open"
+owner = "N-PREM"
+source = "N-FLOOR final §1 fix 2: θ's host row (hostH200: SHA-512 30.0 GB/s and AMX 31.2 T int8 MACs/s a GPU, 8 cores) is at least the host's best rate, ShaSpeed's kind for the host's SHA-512 (rank 4a until N-PREM ledgers it). On the H200's host, a KVM guest, θ's row is 1.37x the best SHA-512 measured (21.9 GB/s, AVX-512 eight lanes; OpenSSL's 6.59 moved it 3.3x tonight) and 1.6-2.0x the measured AMX; bare metal and other ISAs are unmeasured, and the row is per node (N-SMELL item 37). Route H returns on any host faster than its row"
 
 [premise.final-word-lemma]
 rank = 0
@@ -660,10 +675,10 @@ source = "a noise whose words repeat on data (a zero k32 block dot product, iden
 [space]
 slots = [["N", "noise"], ["D", "denoise"], ["F", "format"], ["C", "density"], ["C", "operands"], ["H", "rows"],
          ["H", "hiding"], ["P", "final"], ["P", "forming"], ["P", "derivation"]]
-base = ["H32", "W1", "adaptive-dw", "atomic-call", "period-inventory", "ShaSpeed", "sha-writes", "carried-words", "hash-compose"]
+base = ["H32", "W1", "adaptive-dw", "atomic-call", "period-inventory", "host-row", "ShaSpeed", "sha-writes", "carried-words", "hash-compose"]
 fields = { pre_noise_bytes = "m*K", rows_mix_final = 1, word_bits = 32, format_forming = 0 }
 probe = { m = 64, n = 2048, K = 2048 }
-source = "NIGHT.md §2's axes; base: the DistinctWrites price at H32 in W1, stated for programs that read the coins (adaptive-dw), the atomic call for A's commitment hashed before the noise (N-COMPOSE), PeriodInventory in every design's set (N-FLOOR), and the hashing credit (ShaSpeed, its count ShaWrites, CarriedWords and the composition, NIGHT §1 default 1)"
+source = "NIGHT.md §2's axes; base: the DistinctWrites price at H32 in W1, stated for programs that read the coins (adaptive-dw), the atomic call for A's commitment hashed before the noise (N-COMPOSE), PeriodInventory with HostsCounted at θ's rows and its host row (N-FLOOR final), and the hashing credit (ShaSpeed at ShaLB's count, its count ShaWrites, CarriedWords and the composition, NIGHT §1 default 1)"
 
 # N, the noise. Fields: noise_x / noise_y the derived noise entries (one LOP3 a packed register from XOF bytes, CORE-SMELL
 # C28), derive_extra the derivation's intermediates no commitment holds, dup the share of words the data repeats, n_max
