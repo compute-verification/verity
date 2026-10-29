@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from math import ceil, log2
 
 from verity.core.protocols.sampled_proofs.costfit import Observation
+from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,7 @@ I = {
 #: ANDs of the pieces (their pins and hm96 PROTOCOL §5)
 S8_STEP = 4_190
 EPILOGUE = 5_000
-SHA512 = 58_120
+SHA512 = SHA512_ANDS
 HM96 = 116_240
 
 
@@ -173,8 +174,8 @@ def s8_coord_ands(k: int) -> int:
 
 
 #: the measurements the cost model is fitted from (`costfit`): benchmarks/one_stage/zk_cost.py's sessions of
-#: `ScaledMmS8Coordinate_v1{K}` by `flock-circuit prove --zk --gpu` with the firewall's send check, per (K, staged units,
-#: drawn units): the mean wall of its two cold prover processes (GPU-s: one touched statement's prover today, its statement
+#: `ScaledMmS8Coordinate_v1{K}` by `flock-circuit prove --zk --gpu` with the ZK server's send check, per (K, staged units,
+#: sampled proof blocks): the mean wall of its two cold prover processes (GPU-s: one touched statement's prover today, its statement
 #: build included), the mean CPU time of Lean `verify --zk` on its three sessions and its statement's staging (CPU-s)
 ZK_RUN = "r20261018-060433-b55e"
 ZK: dict[tuple[int, int, int], tuple[float, float, float]] = {
@@ -206,8 +207,8 @@ ZK: dict[tuple[int, int, int], tuple[float, float, float]] = {
 OPENING = "BlockOpeningCheck_v1{N=512,C=569,K=2,MASKED=0,BYTES=4096,ROWS=16,LEAF=16,P=64,DR=2,DP=12,DV=1}"
 OPENING_ANDS = 29_617_630
 
-#: benchmarks/one_stage/a8.py's sessions of it by `flock-circuit prove --zk --gpu` with the firewall's send check, per run
-#: and (staged units, drawn units): the GPU-seconds its cold prover process held the lease (its wall less the lease's
+#: benchmarks/one_stage/a8.py's sessions of it by `flock-circuit prove --zk --gpu` with the ZK server's send check, per run
+#: and (staged units, sampled proof blocks): the GPU-seconds its cold prover process held the lease (its wall less the lease's
 #: wait; the mean of two where it ran two). Their device phase is 79 ms an opening at a full statement, 16 ms without the
 #: send check, the GPU's own algebra about 1 ms of it. They
 #: give no `verify`: a8.py times Lean's by wall (478-488 s, flock-verify lean-4e521bba8e1bc519), not CPU. Nor `stage`:

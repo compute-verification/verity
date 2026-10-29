@@ -1,7 +1,7 @@
 """The Lean verifier of record of a served window's statements (`PouwCheck.Verified`, `pouw-check-difftest`'s
 ``credit-verified``) held to its Python reference, `credit._asks` and `credit._verified`, on `pouw_verified_cases`:
 with `runs` null, the verifier runs the Lean names (or the verdict, when it names none); with the answers, the verdict,
-each drawn unit's outcome or the refusal, string for string. `credit.window` and `credit.period_credit` take their
+each sampled proof block's outcome or the refusal, string for string. `credit.window` and `credit.period_credit` take their
 outcomes from the Lean (`credit._lean_verified`), so here the Lean is of record."""
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ server = D.server_fixture(VERIFIED_PORT)
 
 def test_verified(server):
     """Generated windows' statements, null and answered, then each mutation over a few seeds (`replay`), so every
-    refusal before the verifier runs and of its answers is reached whatever the draw."""
+    refusal before the verifier runs and of its answers is reached whatever the sample."""
     VERIFIED.clear()
     stats = D.run(VERIFIED_PORT, examples=300, server=server)
     swept = Counter(D.replay(VERIFIED_PORT, cases.verified_instance(random.Random(f"{name}/{seed}"), name), server)[0]
