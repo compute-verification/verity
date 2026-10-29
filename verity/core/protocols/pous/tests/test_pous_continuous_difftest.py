@@ -202,9 +202,9 @@ def test_the_oracle_transcribes_the_lean_model():
         path = re.search(r"\(`([^`]+\.lean)`\)", head).group(1)
         found[re.match(r"Lean `([^`]+)`", head).group(1)] = path
         assert _words(lean) in _words((ROOT / path).read_text()), f"{obj.__name__}: {path} no longer says this"
-    assert set(found) == {"Prog.run", "Prog.depth", "Prog.work", "ContMachine.round", "contVerdict", "ContState",
-                          "ContState.start", "contSend", "contMem", "contProg", "contNext", "contAfter", "ContRecord",
-                          "contRecord", "contRecords", "contAccepts"}
+    assert set(found) == {"OracleAlgorithm.run", "OracleAlgorithm.depth", "OracleAlgorithm.work", "ContMachine.round",
+                          "contVerdict", "ContState", "ContState.start", "contSend", "contMem", "contProg", "contNext",
+                          "contAfter", "ContRecord", "contRecord", "contRecords", "contAccepts"}
 
 
 # Fuzzed traces.

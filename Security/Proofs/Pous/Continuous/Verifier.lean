@@ -28,12 +28,12 @@ theorem round_depth_le (mach : ContMachine sch) (W : Bits sch.n) (pp : Bits sch.
       (mach.round W pp h T m msg).depth f ≤ T
   | 0, m, msg => by
     unfold ContMachine.round
-    split <;> simp [Prog.depth]
+    split <;> simp [OracleAlgorithm.depth]
   | T + 1, m, msg => by
     unfold ContMachine.round
     split
-    · simp [Prog.depth]
-    · simpa [Prog.depth] using round_depth_le mach W pp h f T _ none
+    · simp [OracleAlgorithm.depth]
+    · simpa [OracleAlgorithm.depth] using round_depth_le mach W pp h f T _ none
 
 /-- **Requirement 2.** A round's program takes at most `D_late` units. -/
 theorem contProg_depth_le (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
@@ -54,7 +54,7 @@ theorem close_le_send {B : ℕ} (arr : ℕ → ℕ) (s : ContState B) :
   ⟨le_max_right _ _, le_max_left _ _⟩
 
 /-- **Requirement 3.** A hit returned the right block within `D` units and `Q` queries. -/
-theorem hit_on_time {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : Prog M (Option (Bits ℓ) × σ))
+theorem hit_on_time {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : OracleAlgorithm M (Option (Bits ℓ) × σ))
     (c : Bits ℓ) (hh : contVerdict D Q Q_late f p c = .hit) :
     (p.run f).1 = some c ∧ p.depth f ≤ D ∧ p.work f ≤ Q := by
   unfold contVerdict at hh
@@ -66,13 +66,13 @@ theorem hit_on_time {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.
     exact ⟨ha, by omega, by omega⟩
 
 /-- **Requirement 3.** An answer past `(D, Q)` is never a hit. -/
-theorem late_not_hit {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : Prog M (Option (Bits ℓ) × σ))
+theorem late_not_hit {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : OracleAlgorithm M (Option (Bits ℓ) × σ))
     (c : Bits ℓ) (hl : D < p.depth f ∨ Q < p.work f) : contVerdict D Q Q_late f p c ≠ .hit := fun hh => by
   obtain ⟨-, h1, h2⟩ := hit_on_time D Q Q_late f p c hh
   omega
 
 /-- **Requirement 2.** A round that is not rejected returned an answer, within `Q_late` queries. -/
-theorem not_reject {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : Prog M (Option (Bits ℓ) × σ))
+theorem not_reject {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : OracleAlgorithm M (Option (Bits ℓ) × σ))
     (c : Bits ℓ) (hr : contVerdict D Q Q_late f p c ≠ .reject) :
     (∃ a, (p.run f).1 = some a) ∧ p.work f ≤ Q_late := by
   unfold contVerdict at hr
