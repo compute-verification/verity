@@ -736,6 +736,11 @@ def main() -> None:
     out["l1_words"] = []
     print(f"## L1 words (the hiding module's layout): sha512/row/v2 chunks, each digest a frame-v3 leaf of D_(f,W), prefix "
           f"block hoisted, {args.words_leaves:,} chunks a forward")
+    v2 = rowv2_row(1024)
+    v2_item = v2["by_level"][ITEM] + v2["by_level"][DATA]
+    out["rowv2_chunk"] = {**v2, "per_item_registers": v2_item}
+    print(f"- one 1 KiB chunk after its hoisted prefix: {v2_item:,} registers over {v2['per_item']} compressions "
+          f"({v2_item / v2['per_item']:.1f} a compression; sha512_rowv2.cuh's chunk)")
     for k in (int(x) for x in args.words_bytes.split(",")):
         r = l1_call(args.words_leaves, row_bytes=k, row_schema="row/v2")
         out["l1_words"].append(r)

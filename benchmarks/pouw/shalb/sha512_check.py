@@ -1,12 +1,14 @@
-"""Compare sha512_min_check's, sha512_l1_check's and sha512_rowseg_check's digests with hashlib's: stdlib only.
+"""Compare sha512_min_check's, sha512_l1_check's, sha512_rowseg_check's and sha512_rowv2_check's digests with
+hashlib's: stdlib only.
 
     ./sha512_min_check | python3 sha512_check.py
     ./sha512_l1_check | python3 sha512_check.py
     ./sha512_rowseg_check | python3 sha512_check.py
+    ./sha512_rowv2_check | python3 sha512_check.py
 
 Each input line is "TAG LEN HEX", the SHA-512 of the first LEN bytes of the check's message (byte i = 151 i + 7 mod
 256), "l1 CASE HEX", the frame-v3-sha512 leaf of `l1_case(CASE)`, or "seg CASE HEX", the bound row-seg segment of
-`seg_case(CASE)`. Exits nonzero on the first mismatch or if no line was read.
+`seg_case(CASE)`, or "v2 CASE HEX", SHA-512 of `v2_case(CASE)`. Exits nonzero on the first mismatch or if no line was read.
 """
 from __future__ import annotations
 
@@ -35,9 +37,14 @@ def seg_case(c: int) -> bytes:
     return head.ljust(128, b"\0") + bytes((151 * k + 7 + 13 * c) % 256 for k in range(1024))
 
 
+def v2_case(c: int) -> bytes:
+    """sha512_rowv2_check's case c: a 1 KiB row, byte k = 151 k + 7 + 13 c."""
+    return bytes((151 * k + 7 + 13 * c) % 256 for k in range(1024))
+
+
 def main() -> None:
     n = 0
-    cases = {"l1": l1_case, "seg": seg_case}
+    cases = {"l1": l1_case, "seg": seg_case, "v2": v2_case}
     for line in sys.stdin:
         tag, length, digest = line.split()
         msg = cases[tag](int(length)) if tag in cases else MSG[: int(length)]

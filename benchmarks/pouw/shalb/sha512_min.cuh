@@ -15,7 +15,8 @@
 //   H7 + K_0, so round 0's first add is h + W_0. The second block reads the first's H3 only in e_1 = d + T1 and its
 //   H7 + K_0 only in that first add, both with a free IADD3 slot, so the first block leaves each as two terms (cv[3] or
 //   cv[7] and pend[]), and the second adds both terms to its own d_80 or h_80 in one three-term add of its
-//   feed-forward: 2 × 3,534 − 4 registers a pair of blocks.
+//   feed-forward: 2 × 3,534 − 4 registers a pair of blocks. A chain from a constant chaining value starts with CVC and
+//   CHAIN 1: its round 0 adds K_0 as usual, and it leaves H3 and H7 + K_0 as constants beside the pending c and g.
 #pragma once
 #include <cstdint>
 
@@ -113,7 +114,7 @@ SHAMIN_HD uint64_t maj(uint64_t a, uint64_t b, uint64_t c) { return (a & b) | (c
 // them.
 template <int CVC, uint64_t PAD_BITS = 0, int CHAIN = 0>
 SHAMIN_HD void compress(uint64_t* cv, uint64_t* w, uint64_t* pend = nullptr) {
-  static_assert(!CHAIN || !CVC, "a chain's chaining values are variables");
+  static_assert(CHAIN != 2 || !CVC, "only a chain's first block has a constant chaining value");
   constexpr PadBlock pad(PAD_BITS);
   uint64_t a, b, c, d, e, f, g, h;
   if constexpr (CVC) {
@@ -135,7 +136,7 @@ SHAMIN_HD void compress(uint64_t* cv, uint64_t* w, uint64_t* pend = nullptr) {
     }
     uint64_t u;
     if constexpr (PAD_BITS != 0) {
-      if (CHAIN && t == 0) {
+      if (CHAIN && !CVC && t == 0) {
         u = CHAIN == 2 ? h + pend[1] + (pad.kw[0] - Kt(0)) : h + (pad.kw[0] - Kt(0));
       } else {
         u = h + pad.kw[t];
@@ -148,7 +149,7 @@ SHAMIN_HD void compress(uint64_t* cv, uint64_t* w, uint64_t* pend = nullptr) {
         wt = s1(w[(t - 2) & 15]) + w[(t - 7) & 15] + s0(w[(t - 15) & 15]) + w[t & 15];
         w[t & 15] = wt;
       }
-      if (CHAIN && t == 0) {
+      if (CHAIN && !CVC && t == 0) {
         u = CHAIN == 2 ? h + pend[1] + wt : h + wt;
       } else {
         u = h + wt + Kt(t);
@@ -165,6 +166,10 @@ SHAMIN_HD void compress(uint64_t* cv, uint64_t* w, uint64_t* pend = nullptr) {
   if constexpr (CHAIN == 1) {
     pend[0] = c;
     pend[1] = g;
+    if constexpr (CVC) {
+      cv[3] = cv3;
+      cv[7] = cv7 + Kt(0);
+    }
   } else if constexpr (CHAIN == 2) {
     uint64_t p3 = pend[0], p7 = pend[1];
 #ifdef __CUDA_ARCH__
