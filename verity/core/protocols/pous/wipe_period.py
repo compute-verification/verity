@@ -26,7 +26,7 @@ names each gap. `EXPERIMENTAL` says what the bound rests on.
 (`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`, the whole
 device declared, the driver's reserve included (`wipe_store.Cuda.info`'s `total_bytes`), so that its memory outside the
 fill counts in `R`, the server's disks ahead of it in the same session, `wipe.disk`, and the host's DRAM after it,
-`wipe.dram`), the memory challenger on `period.json`'s `challenger_host` (`wipe_party.Party.of`; this node by default, a
+`wipe.dram`), the memory challenger on `period.json`'s `challenger_host` (`wipe_party.side_of`; this node by default, a
 process whose key and session log are beside the periods). No network certifier counts the session's egress yet, so the
 challenger signs `UNCOUNTED` and an accepted leg's bound is vacuous: its verdict is real and its quantity isn't. The
 leg's record names what the bound doesn't cover (`uncertified`): the key off its own host, an uncounted egress, the
@@ -53,6 +53,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.deploy.stream import Side
 from verity.ml.commitments.identity import canonical_json_bytes
 
 from . import memory_challenger as mc
@@ -246,7 +247,7 @@ def timing(signed: sw.SignedWipe | None) -> dict[str, Any] | None:
 
 
 def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | None = None,
-        log: mc.SessionLog | None = None, party: wipe_party.Party | None = None,
+        log: mc.SessionLog | None = None, party: Side | None = None,
         prover: Callable[[sw.WipeParams], sw.Prover] = sw.Prover, egress_bits: int = UNCOUNTED,
         clock: Callable[[], int] = time.perf_counter_ns, secret: bytes | None = None, session_id: bytes | None = None,
         coin_secret: bytes | None = None, stop_after: int | None = None, trusted: Collection[bytes] | None = None,
@@ -530,7 +531,7 @@ def uncertified(where: Mapping[str, Any], signed: sw.SignedWipe | None) -> list[
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """The wipe's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): one wipe as `period.json`'s
     `wipe` says (`CONFIG`; by default `SEGMENTS` 32 MiB segments kept by `streamed_wipe.Prover`), the memory challenger a
-    party of its own on `period.json`'s `challenger_host` (`wipe_party.Party.of`; on this node by default, a process
+    party of its own on `period.json`'s `challenger_host` (`wipe_party.side_of`; on this node by default, a process
     whose key and session log are in `wipe-challenger` beside the periods) and the prover here. A `wipe_store` prover
     gates its store before the session. With `wipe-protocol` among the period's tools, the Lean answers (the verifier of
     record) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`.
@@ -547,7 +548,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
              if c["streamer"] == "native" else ()) + (() if c["egress_bits"] is None else
                                                        ("--egress-bits", str(c["egress_bits"]))) + (
         () if c["reads"] is None else ("--reads", str(c["reads"])))
-    party = wipe_party.Party.of(doc, node, Path(period_dir).parent / "wipe-challenger", extra)
+    party = wipe_party.side_of(doc, node, Path(period_dir).parent / "wipe-challenger", extra)
     if party.host != node and c["egress_bits"] is not None:
         raise ValueError(f"period.json's wipe.egress_bits reaches only a challenger on this node: the challenger on "
                          f"{party.host} signs the count its own side is started with (challenger.wipe.command)")
