@@ -18,9 +18,10 @@ import sys
 import tomllib
 from pathlib import Path
 
-#: Where a number was obtained. "H200-modelled" is the machine model on data/devices/sm_90; "estimate" is arithmetic on
-#: measured parts with no run of its own.
-CARDS = ("H200-measured", "H200-modelled", "H100-only", "4090-only", "sm_120-only", "estimate", "none")
+#: Where a number was obtained. "H200-modelled" is the machine model on data/devices/sm_90; "CPU-measured" is a run on
+#: CPU whose arithmetic doesn't depend on the GPU (exact integer products, as in a perplexity bench); "estimate" is
+#: arithmetic on measured parts with no run of its own; "none" is a "?" or a number from another model or design point.
+CARDS = ("H200-measured", "H200-modelled", "CPU-measured", "H100-only", "4090-only", "sm_120-only", "estimate", "none")
 LEAN = ("proved", "draft semantics", "locked", "refuted", "open", "none")
 STATUS = ("met", "open", "fail", "n/a")
 VERDICTS = ("ranked", "argument", "out", "not core")
