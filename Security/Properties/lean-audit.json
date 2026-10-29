@@ -13812,11 +13812,11 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "Properties.NetworkPeriod": {
-   "digest": "9f2b882645d35c1b945df37ced2528da07de1b70a6a56555d60d22b061b41d3e",
+   "digest": "70e82ed7afd7e637c2c36a112b58e8a4881d3bbfa2a25bc736e58e42b909ce58",
    "definitions": {
-    "Properties.NetworkPeriod.ClockKBoundsCount": "8cdb92caa40b67dd32763dd0bd4b5c1a316280f88dc25339058d7a54a38df555",
+    "Properties.NetworkPeriod.ClockKBoundsCount": "03a36352ddf697c2d2165d9aedc71a12ef22e4031ceaa3600ec6bfd60e4b044f",
     "Properties.NetworkPeriod.DrawnWhole": "d5c7f6a5343e4a69c877a3f04cb3cf4af53f9c4b5756f2b57226388104da9215",
-    "Properties.NetworkPeriod.RowsKBoundsCount": "9debf917e441e422d7f1f83f095a76f95446cefb0aee8d4f9c3087aff889fec0",
+    "Properties.NetworkPeriod.RowsKBoundsCount": "eb93558517c43ed67053f5dd13fc13195b854e711c4ce559adff859fd85ffeb0",
     "Properties.NetworkPeriod.RowsProgWired": "5e7e40cfc0d1b0ec2dca746b160bff4c1dc005a8437ae9e119756d89f917bcb7",
     "Properties.NetworkPeriod.RowsProgWiredOf": "ee96521355e32a542aae2f348c8e9d06f2617127755a077ead0a6424034b70ad",
     "Properties.NetworkPeriod.RowsStateTied": "eabae0b13245a684016c3a595e3c0b86d7ff27a29a1d77b244f0325b467fee83",
