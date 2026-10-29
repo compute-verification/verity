@@ -1,5 +1,5 @@
-// Atomics and reductions, uncontended (each lane its own word): RS-W′'s atom.cu (round 7, pi_32) on
-// probe.cuh, its mode 0 forms that lower to one instruction. One
+// Atomics and reductions, uncontended (each lane its own word), pi_32, on
+// probe.cuh: the mode 0 forms that lower to one instruction. One
 // 1024-thread block an SM (a global form: on 16 SMs for its row, on every SM for L2red), 8 an iteration on 8 words a
 // lane (shared: lane-consecutive words, no bank conflict). CAS is made to succeed: each lane compares against what it
 // last saw. A returning form XORs its result into the sink; a reduction's side effect is its sink.
@@ -165,7 +165,7 @@ AT_KERNEL(atome_gs_cas64, gs_cas64, SP_GS, 64, true)
 #define AT_GX(nm, k, K, ROW, SASS, N, W, IT, BLOCKS)                                                               \
   {.name = nm, .kernel = (const void*)k, .tpb = TPB, .kind = K, .row = ROW, .expect = SASS "=" #N, .words = W,    \
    .dyn_smem = SMEM, .iters = IT, .fn = #k, .blocks = BLOCKS}
-// A global form twice, one kernel: on 16 SMs its own row (the SM's path, as RS-W′'s rows were measured), and on every SM
+// A global form twice, one kernel: on 16 SMs its own row (the SM's path, as the machine model's rows price it), and on every SM
 // L2red, the L2's atomic throughput every SM shares (16 SMs don't reach it; 188 are bound by it).
 #define AT_GN(nm, K, SASS, N, W, IT) \
   AT_GX(#nm, nm, K, "ROW_" K, SASS, N, W, IT, 16), AT_GX(#nm "_l2", nm, K, "L2red", SASS, N, W, IT, 0)

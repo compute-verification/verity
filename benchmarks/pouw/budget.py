@@ -164,7 +164,7 @@ FAMILIES = (
 
 def sweep(out: Path = FILL_DATA) -> dict:
     """Regenerate `budget_fill.json` from the machine model (on a tree whose machine model has every family's design and
-    vector; VF3r-16 is on next since 9c9567c396). Each point is one `eps` LP, ≈ 0.3 s."""
+    vector, VF3r-16 among them). Each point is one `eps` LP, ≈ 0.3 s."""
     from verity_machine_model import eps as E
     from verity_machine_model.commands import eps as cmd
     from verity_machine_model.model import DATA, device
