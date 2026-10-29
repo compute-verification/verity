@@ -59,7 +59,6 @@ import Proofs.Pouw.FpG1.H1
 import Proofs.Pouw.Game
 import Proofs.Pouw.HiddenCredit
 import Proofs.Pouw.H1Zy
-import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
 import Proofs.Pouw.MerkleExtract
 import Proofs.Pouw.ShaRealize
