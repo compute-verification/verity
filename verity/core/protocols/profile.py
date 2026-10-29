@@ -29,7 +29,7 @@ from verity.ml.circuits.partition import Hierarchy, Level
 MARGIN = 2.0 ** -30
 
 
-def _neg_log_ratio(a: int, d: int) -> float:
+def neg_log_ratio(a: int, d: int) -> float:
     """-ln(a / d) for integers 0 < a <= d, to a few units in the last place: log1p of the correctly rounded 1 - a/d while
     a/d >= 1/2 (no cancellation), the log of the correctly rounded d/a while it fits a float, and the difference of the
     two big-integer logs only beyond that, where -ln(a/d) > 693 and the difference is relatively tiny."""
@@ -42,7 +42,7 @@ def _neg_log_ratio(a: int, d: int) -> float:
 
 @dataclass(frozen=True, slots=True)
 class Bernoulli:
-    """Every member of the level is drawn independently with probability `p`."""
+    """Every member of the level is sampled independently with probability `p`."""
 
     p: Fraction
 
@@ -55,7 +55,7 @@ class Bernoulli:
         return {"bernoulli": str(self.p)}
 
     def count_bound(self, population: int, delta: float) -> int:
-        """The largest M <= population with (1 - p)^M >= delta (Lean `Bound.bernoulliBound`): each member is drawn
+        """The largest M <= population with (1 - p)^M >= delta (Lean `Bound.bernoulliBound`): each member is sampled
         independently, so a set of M wrong members escapes with probability exactly (1 - p)^M, and except with
         probability delta an accepted transcript has at most this many.  All of them when 1 - population * p >= delta
         (Bernoulli's inequality), else the search doubles M while it escapes, then halves, in exact arithmetic."""
@@ -76,7 +76,7 @@ class Bernoulli:
 
 @dataclass(frozen=True, slots=True)
 class Subset:
-    """Exactly `k` members of the level are drawn, uniformly, inside each drawn member of the nearest drawn level
+    """Exactly `k` members of the level are sampled, uniformly, inside each drawn member of the nearest drawn level
     above (the whole transcript when none is)."""
 
     k: int
@@ -100,7 +100,7 @@ class IntegrityProfile:
 
     A profile of more than one level is valid only when its checked level is committed before the first draw
     (as serving commits every value, at serve time).  When the checked level is committed after
-    a draw it follows, the prover picks how many checked members of a drawn member are wrong after seeing that draw,
+    a sample it follows, the prover picks how many checked members of a drawn member are wrong after seeing that sample,
     and `accept(m)` over m wrong checked members no longer bounds it; such a lifecycle's profile is over the level
     committed first.
 
@@ -114,7 +114,7 @@ class IntegrityProfile:
         `programs`    digests of the evaluated Programs, in commit order;
         `prescribed`  families of `Input` values checked against external sources (e.g. "prompt", "weights", "noise");
         `linked`      every other `Input` equals a committed output of an earlier Program in the transcript;
-        `covered`     gate families proved on every audit, outside the draws (their faults survive with probability 0).
+        `covered`     gate families proved on every audit, outside the samples (their faults survive with probability 0).
     """
 
     levels: Hierarchy
@@ -206,13 +206,13 @@ class IntegrityProfile:
         return n, k, p.numerator, p.denominator, comb(n, k)
 
     def rho(self, m: int) -> float:
-        """Detection risk -ln accept(m), from exact integers to a few units in the last place (`_neg_log_ratio`): no
+        """Detection risk -ln accept(m), from exact integers to a few units in the last place (`neg_log_ratio`): no
         underflow where `accept` falls below the smallest float, and no cancellation where it is close to 1."""
         n, k, num, den, top = self._odds()
         if not 0 <= m <= n:
             raise ValueError(f"0 <= m <= {n}")
         a = (den - num) * top + num * comb(n - m, k)
-        return inf if a == 0 else _neg_log_ratio(a, den * top)
+        return inf if a == 0 else neg_log_ratio(a, den * top)
 
     def _rhos(self) -> list[float]:
         """rho(0), ..., rho(n), with C(n - m, k) updated exactly from m to m + 1: one pass, the same values as `rho`."""
@@ -220,7 +220,7 @@ class IntegrityProfile:
         whole, c, out = den * top, top, []
         for m in range(n + 1):
             a = (den - num) * top + num * c
-            out.append(inf if a == 0 else _neg_log_ratio(a, whole))
+            out.append(inf if a == 0 else neg_log_ratio(a, whole))
             c = c * (n - m - k) // (n - m) if n - m > k else 0
         return out
 
@@ -285,7 +285,7 @@ class IntegrityProfile:
         return self.worst_case(lambda m: float(m))
 
     def stratum_bounds(self) -> dict[str, int]:
-        """Each stratum's own bound at delta (`Stratified.stratum_bound`); empty when a level is drawn `Bernoulli`.  They
+        """Each stratum's own bound at delta (`Stratified.stratum_bound`); empty when a level is sampled `Bernoulli`.  They
         hold jointly with `bound`, not each at its own delta: the one-stage profile bounds a family of wrong-unit sets by
         its likeliest set to escape, and every set breaking one of these bounds escapes with less than delta."""
         law = self.strata()
@@ -321,7 +321,7 @@ HARM_MARGIN = 2.0 ** -20
 
 @dataclass(frozen=True, slots=True)
 class Stratum:
-    """`size` units of the partition, `k` of them drawn uniformly, independently of every other stratum."""
+    """`size` units of the partition, `k` of them sampled uniformly, independently of every other stratum."""
 
     name: str
     size: int
@@ -332,7 +332,7 @@ class Stratum:
             raise ValueError("a stratum needs a name, size >= 0 and 0 <= k <= size")
 
     def escape(self, m: int) -> Fraction:
-        """C(size - m, k) / C(size, k): the draw misses m given units of the stratum."""
+        """C(size - m, k) / C(size, k): the sample misses m given units of the stratum."""
         return Fraction(comb(self.size - m, self.k), comb(self.size, self.k))
 
     def _finite(self) -> int:
@@ -364,7 +364,7 @@ class Stratified:
     law): the uniform k-subset is one stratum, and a template floor is a stratum with
     k >= 1.  The strata are fixed by the agreement before registration, like every law.
 
-    A wrong-unit set with m_s units in stratum s escapes the draw with prod_s C(n_s - m_s, k_s) / C(n_s, k_s), which
+    A wrong-unit set with m_s units in stratum s escapes the sample with prod_s C(n_s - m_s, k_s) / C(n_s, k_s), which
     depends only on the counts.  Its risk rho = -ln(escape) is convex in each m_s, the increment from m to m + 1 being
     -ln(1 - k_s / (n_s - m)), so the worst case of any additive harm is a greedy fill in the order of increment per unit
     of harm: `miss` and `count_bound` exactly (increments ordered by k_s / (n_s - m), compared in integers, and the
@@ -401,7 +401,7 @@ class Stratified:
         raise KeyError(f"the law has no stratum {name!r}")
 
     def inclusion(self, name: str) -> Fraction:
-        """The probability that a given unit of the stratum is drawn."""
+        """The probability that a given unit of the stratum is sampled."""
         s = self.stratum(name)
         return Fraction(s.k, s.size) if s.size else Fraction(0)
 
@@ -414,17 +414,17 @@ class Stratified:
         return ms
 
     def escape(self, counts: Mapping[str, int]) -> Fraction:
-        """The exact probability that the draw misses a wrong-unit set with these counts per stratum."""
+        """The exact probability that the sample misses a wrong-unit set with these counts per stratum."""
         return prod((s.escape(m) for s, m in zip(self.strata, self._counts(counts))), start=Fraction(1))
 
     def rho(self, counts: Mapping[str, int]) -> float:
-        """-ln escape, from exact integers to a few units in the last place per stratum (`_neg_log_ratio`)."""
+        """-ln escape, from exact integers to a few units in the last place per stratum (`neg_log_ratio`)."""
         out = 0.0
         for s, m in zip(self.strata, self._counts(counts)):
             a = comb(s.size - m, s.k)
             if a == 0:
                 return inf
-            out += _neg_log_ratio(a, comb(s.size, s.k))
+            out += neg_log_ratio(a, comb(s.size, s.k))
         return out
 
     def _worst(self, K: int) -> list[int] | None:
@@ -580,4 +580,5 @@ class Stratified:
 Draw = Bernoulli | Subset | Stratified
 
 
-__all__ = ["HARM_MARGIN", "MARGIN", "Bernoulli", "Draw", "IntegrityProfile", "Stratified", "Stratum", "Subset"]
+__all__ = ["HARM_MARGIN", "MARGIN", "Bernoulli", "Draw", "IntegrityProfile", "Stratified", "Stratum", "Subset",
+           "neg_log_ratio"]

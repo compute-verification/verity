@@ -12,7 +12,7 @@ the interface the compiler, the encoders and the tie to the certified I/O code a
 n·log2 D`, is the advice's length under the residual code's compression (`code_v1`), not v0's. v0 is the committed form, as hm96 hiding
 rows, and the form the compiler reads. The advice is private: a compile unit, always proved in zero knowledge, states that the committed
 Programs are compile(advice) under the advice's hiding root, with the compiler's digest registered. The
-advice's root is registered before the live draw, and the compiler refuses every ill-formed advice up to the public cap
+advice's root is registered before the live sample, and the compiler refuses every ill-formed advice up to the public cap
 deterministically; v0's validity is that unit's first part (`advice_check`, below).
 
 **Interface.** The `Advice`, `RequestAdvice`, `StepAdvice`, `Row` and `Source` dataclasses are frozen, and construction

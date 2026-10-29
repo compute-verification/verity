@@ -17,7 +17,7 @@ import Proofs.Flock.VBridge.Family.Encode
 # The record the verdict reads decodes, at a decision of `nextR`
 
 At a dense inner statement where the last step reads and the base checks hold, the record value the verdict reads
-(`jAt`) decodes at the setup SHA-512 gives (`decode_at`, RECINT's `TargetDecode` with `At` unfolded), with no JSON
+(`jAt`) decodes at the setup SHA-512 gives (`decode_at`, `TargetDecode` with `At` unfolded), with no JSON
 premise: the verifier keeps the public header and the draw normalized, so both are well-formed (`unitDraw_of`,
 `draw_wf`), and the statement's coin tree is its coins' (`setupOne_stmt`), none at `.os` or `.seed` (`tree?_none`). `jAt` is the reader's record (`recJ`) with its digests and coins
 substituted, so it is alike the honest record whose rounds hold the fill's coins (`same_coinSubJ`, with the fill finding
@@ -342,7 +342,7 @@ theorem decode_jAt {rd : Msg → Option FinalP} {x : Msg}
   rw [streamOffset_shaSubJ]
   exact fill_of_live hnd hlv i hi hS k hk
 
-/-- **`TargetDecode`** (RECINT's, `At` unfolded): at a dense inner statement where the last step reads and the base
+/-- **`TargetDecode`** (`At` unfolded): at a dense inner statement where the last step reads and the base
 checks hold, a decision's record value the verdict reads decodes at the setup SHA-512 gives. -/
 theorem decode_at (rd : Msg → Option FinalP)
     (P : Msg → List Msg → List Coin → Prop) :

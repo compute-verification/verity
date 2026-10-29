@@ -4,7 +4,7 @@
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64] [--no-learn-warmup]
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
         [--retain host|device [--retain-device-gb 32] [--release-after sampled_proofs,pouw_h1 [--draws-dir DIR]]]
-        [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
+        [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
         [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
@@ -26,7 +26,7 @@ Sampling parameters are values the request brings: the server applies vLLM's neu
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
 engine's resulting parameters, the seed and its rule). A request without a ``seed`` is sampled under the public default,
 `engine.served_seed.DEFAULT_SEED`. A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's split count is not
-pinned yet, so its draw is not a function of the committed values.
+pinned yet, so its sample is not a function of the committed values.
 
 The default precision is ``verity_int8`` (int8 linears, vLLM's attention) with the committer's GPU tree: the one setting
 whose 16-token probe (0.81 s at 4 in flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even
@@ -40,7 +40,8 @@ request's connection as it comes. The HTTP side is an asyncio server on its own 
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
 certifier's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s
-``step_rows``). The engine schedules synchronously unless ``--async-scheduling``, which a bench row must declare (`serve_row`).
+``step_rows``). The engine schedules synchronously unless ``--async-scheduling``, which the row's Build of record must declare
+(`serve_row`).
 
 With the Commit on (the default), the server's committer (`serve_seal.committer`) commits every engine step exactly as it does
 a declared workload, values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
@@ -62,7 +63,8 @@ body's ``user``, its release and its place among the engine's adds, the runner's
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
 `serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512 trees,
 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
-and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
+and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
+writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
 recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
@@ -93,7 +95,7 @@ record is ``remote_session.json``, and a rejected session fails the exit.
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 another thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
 ``--switch-interval-ms`` (0.1 ms; Python's is 5 ms) and seals in a spawned process (``--seal-process``, `seal_process.sealer_of`),
-the sealer's thread here only writing each store's files. ``pauses.jsonl`` (`serve_seal.Watchdog`) records each stall of 0.2 s or more.
+the sealer's thread here only writing each store's files. ``pauses.jsonl`` (`serve_guard.Watchdog`) records each stall of 0.2 s or more.
 """
 from __future__ import annotations
 
@@ -113,12 +115,11 @@ from typing import Any
 
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-from verity_vllm.pipeline import (seal_process as SP, serve_h1 as SH, serve_release as RL, serve_remote as SR, serve_row as RW,
-                                   serve_seal as SS)
+from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
+                                   serve_remote as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
-from verity_vllm.pipeline import serve_learn as SL
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -208,10 +209,9 @@ class Options:
                                             "thread may wait for the GIL after each torch call while the seal's thread runs Python "
                                             "(0: leave Python's)")
     required_manifest: str | None = option("--required-manifest", default=None,
-                                           help="rows-sha512: the bench row's required manifest (its manifest.json), which the Commit of "
-                                                "record's committer parts and the sealed binding map are built from")
-    programs_root: str | None = option("--programs-root", default=None,
-                                       help="the Build's row dir of the manifest's partition and attention record (default: the manifest's dir)")
+                                           help="rows-sha512: the row's required manifest, DIR/manifest.json of its Build of record "
+                                                "(`verity-vllm predict row --out DIR`), which the Commit of record's committer parts, "
+                                                "the sealed binding map and the engine's scheduler are built from")
     hidden_so: str | None = option("--hidden-so", default=None, help="rows-sha512: the attention hidden tap (as the Commit's --hidden-so)")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB (as the Commit's)")
@@ -627,17 +627,6 @@ def served_class(opts: Options) -> dict[str, int]:
             **{k: int(v) for k, v in given.items()}}
 
 
-def disk_floor_of(opts: Options, usage: Callable[[Any], Any] = shutil.disk_usage) -> SS.DiskFloor | None:
-    """``--seal``'s `serve_seal.DiskFloor` over the filesystem ``--out`` is on (its nearest existing directory), None without
-    a floor."""
-    if not (opts.seal and opts.disk_floor_gb > 0):
-        return None
-    p = Path(opts.out).resolve()
-    while not p.exists() and p != p.parent:
-        p = p.parent
-    return SS.DiskFloor(p, int(opts.disk_floor_gb * SS.GB), usage)
-
-
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
               usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
     """What would fail after the model has loaded, refused before it."""
@@ -651,14 +640,12 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
-    if (floor := disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
+    if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
-    if why := SH.refusal(opts) or SR.refusal(opts) or SL.refusal(opts) or RW.commit_refusal(opts):
+    if why := SH.refusal(opts) or SR.refusal(opts) or SL.refusal(opts):
         raise UsageError(why)
-    if opts.required_manifest and not Path(opts.required_manifest).is_file():
-        raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
     if opts.commit and opts.gpu_tree and which("ninja") is None:
         raise UsageError("--gpu-tree JIT-builds its kernel with ninja, which is not on PATH: put the environment's bin (where its "
                          f"ninja is) on PATH{', or pass --no-gpu-tree' if opts.scheme == SS.V1 else ''}")
@@ -697,7 +684,7 @@ def main(opts: Options) -> int:
     defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
     tok = llm.get_tokenizer()
     trace = advice_trace(out, llm)
-    mirror = records_mirror(out, opts.copy_records_to)
+    mirror = records_mirror(out, opts.copy_records_to, before=trace.drain)
     windows = sealer = warmed = arm = None
     draws, draws_dir = RL.release_of(opts, out)
     if com is not None:
@@ -711,7 +698,7 @@ def main(opts: Options) -> int:
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
                                 seal=SS.seal_of(opts) if opts.seal else None,
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
-                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror,
+                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=SG.disk_floor_of(opts), mirror=mirror,
                                 request_cap=opts.window_requests, arm=arm, release=draws)
         if arm is not None:
             arm.drawing(draws)
@@ -742,7 +729,7 @@ def main(opts: Options) -> int:
     bound = [http.address]
     if opts.switch_interval_ms:
         sys.setswitchinterval(opts.switch_interval_ms / 1000)
-    watchdog = SS.Watchdog(out / "pauses.jsonl")
+    watchdog = SG.Watchdog(out / "pauses.jsonl")
     watchdog.thread.start()
     record = {"address": list(bound[0]), "served_model_name": served, "model": opts.model, "revision": opts.revision,
               "precision": opts.precision, "protocol": proto.name, "id_payload": getattr(proto, "payload", None),

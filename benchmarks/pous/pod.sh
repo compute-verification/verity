@@ -49,7 +49,7 @@
 # records, space-separated ROLE[:NAME]=FILE (a relative FILE is one of the run's inputs, --send), and GATE_ABSENT the peer
 # roles not deployed yet:
 #   gpu-lease 1 --on 7 --max-min M --timed -- QUIET bash benchmarks/pous/pod.sh IMPL=band-gpu GATE_ROLE=memory-challenger \
-#     GATE_CORES=124-127 GATE_PEERS=worker:NODE=PLACEMENT.json GATE_ABSENT='firewall challenger'
+#     GATE_CORES=124-127 GATE_PEERS=worker:NODE=PLACEMENT.json GATE_ABSENT='ZK server challenger'
 #
 # GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
