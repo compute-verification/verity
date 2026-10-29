@@ -149,34 +149,35 @@ theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cW : Pou
   · rw [h2, hS2, hS1, hv]
     simp [push_zero]
 
-theorem pouw_commitment : PouwCheck.protocol.commitment = PouwCheck.registrationOf := rfl
-theorem pouw_digest (c : PouwCheck.Registration) : PouwCheck.protocol.digest c = c.digest := rfl
-
 /-- **Remote's tie holds on an honest run** (the honest lemma of `AcceptInferenceOnly`'s tie): three cases committing
-to one record's bytes, which the three subprotocols' commitment decoders accept, leave no stray, and their three
-digests are the policy's record's. -/
+to one record's bytes, which the three subprotocols' commitment decoders accept, leave no stray among the components
+remote's check compares (`remote_check_ids`), and their three digests are the policy's record's. -/
 theorem acceptInferenceOnly_honest {bs : Blobs} {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
     {cW : PouwCheck.Registration} {cS : SampledProofs.OneStage.Commitment}
     (hW' : kW.commitment = kI.commitment) (hS' : kS.commitment = kI.commitment)
     (hI : NciCheck.Protocol.commitmentOf kI.commitment = .ok cI)
     (hW : PouwCheck.registrationOf kI.commitment = .ok cW)
     (hS : SampledProofs.OneStage.commitmentOf kI.commitment = .ok cS) :
-    strays ids (parts bs) [kI, kW, kS] = none ∧
-      Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some cI.digest ∧
-      Properties.Composition.digestOf PouwCheck.protocol kW.commitment = some cI.digest ∧
-      Properties.Composition.digestOf SampledProofs.OneStageZk.protocol.toProtocol kS.commitment = some cI.digest := by
+    strays [NciCheck.Protocol.protocol.id, PouwCheck.protocol.id, (SampledProofs.OneStageZk.protocol.onBlobs bs).id]
+        [NciCheck.Protocol.protocol, PouwCheck.protocol, SampledProofs.OneStageZk.protocol.onBlobs bs]
+        [kI, kW, kS] = none ∧
+      Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment =
+        some (NciCheck.Protocol.protocol.digest cI) ∧
+      Properties.Composition.digestOf PouwCheck.protocol kW.commitment =
+        some (NciCheck.Protocol.protocol.digest cI) ∧
+      Properties.Composition.digestOf SampledProofs.OneStageZk.protocol.toProtocol kS.commitment =
+        some (NciCheck.Protocol.protocol.digest cI) := by
   obtain ⟨dW, dS⟩ := one_digest hI hW hS
-  have hcI : NciCheck.Protocol.protocol.commitment kI.commitment = .ok cI := by rw [policy_commitment]; exact hI
-  have hcW : PouwCheck.protocol.commitment kW.commitment = .ok cW := by rw [pouw_commitment, hW']; exact hW
-  have hcS : SampledProofs.OneStage.commitmentOf kS.commitment = .ok cS := by rw [hS']; exact hS
-  have hm : ids.mapM (fun s => (committedBy s (parts bs) [kI, kW, kS]).map (s, ·)) =
-      some [("verity/inference-only/v0", cI.digest), ("verity/pouw/v1", PouwCheck.protocol.digest cW),
-        ("verity/sampled-proofs/one-stage/v2", cS.digest)] := by
-    simp [ids, committed_policy hcI, committed_pouw hcW, committed_stage hcS]
-  have hs : strays ids (parts bs) [kI, kW, kS] = none := by
-    unfold strays
-    rw [hm]
-    simp [pouw_digest, dW, dS]
-  exact ⟨hs, tie hI hcW hcS hs⟩
+  have hcI : NciCheck.Protocol.protocol.commitment kI.commitment = .ok cI := hI
+  have hcW : PouwCheck.protocol.commitment kW.commitment = .ok cW := by rw [hW']; exact hW
+  have hcS : (SampledProofs.OneStageZk.protocol.onBlobs bs).commitment kS.commitment = .ok cS := by
+    rw [hS']; exact hS
+  have hcS' : SampledProofs.OneStageZk.protocol.toProtocol.commitment kS.commitment = .ok cS := by
+    rw [hS']; exact hS
+  have dW' : PouwCheck.protocol.digest cW = NciCheck.Protocol.protocol.digest cI := dW
+  have dS' : (SampledProofs.OneStageZk.protocol.onBlobs bs).digest cS = NciCheck.Protocol.protocol.digest cI := dS
+  have dS'' : SampledProofs.OneStageZk.protocol.toProtocol.digest cS = NciCheck.Protocol.protocol.digest cI := dS
+  exact ⟨strays_three_none ne_policy_pouw (ne_policy_stage bs) (ne_pouw_stage bs) hcI hcW hcS dW' dS',
+    digestOf_ok hcI, (digestOf_ok hcW).trans (congrArg some dW'), (digestOf_ok hcS').trans (congrArg some dS'')⟩
 
 end Properties.Remote.SecurityProofs
