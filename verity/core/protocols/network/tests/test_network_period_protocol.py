@@ -286,7 +286,7 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
 def charged(case: dict, public: dict) -> list[int]:
     """The audits of an accepted rows-form `case` its `public` charges: tied to a link-window's scan and drawn in part."""
     c = json.loads(bytes.fromhex(case["commitment"]))
-    audits, windows = ([PC.Registration(x, b"") for x in c[k]] for k in ("audits", "windows"))
+    audits, windows = c["audits"], c["windows"]
     return [i for i, f in enumerate(public["audits"]) if f["drawn"] < f["units"] and PC._tied_in(audits, windows, i)]
 
 
@@ -337,10 +337,10 @@ def test_a_tied_audit_drawn_in_part_is_charged_its_link_windows_entries(server):
         s, prog = p.schedule, PC._scan_widths(case["params"]["scan"])[1]
         assert p.scan.entries == s.lanes * (s.window // s.every) * prog, (n, p.scan)
         c = json.loads(bytes.fromhex(case["commitment"]))
-        audits = [PC.Registration(x, b"") for x in c["audits"]]
+        audits = c["audits"]
         b = pub["audits"][i]["wrong_units"]
         assert [t["faulty_entries"] for t in pub["scans"]] == [
-            p.scan.entries if b and i in PC._tied_audits(audits, PC.Registration(reg, b"")) else 0
+            p.scan.entries if b and i in PC._tied_audits(audits, reg) else 0
             for reg in c["windows"]], (n, pub)
         assert pub["eps"] == str(sum((Fraction(t["delta"]) for t in pub["scans"]), Fraction(pub["audits"][i]["delta"])))
         seen["charged" if b else "uncharged"] += 1
@@ -389,14 +389,13 @@ def test_each_lanes_prog_is_its_own_chunk():
     s = types.SimpleNamespace(schedule=types.SimpleNamespace(window=4, every=2, lanes=2),
                               audits=[PC.Audit(0, 0, "", 4, 0, (("SlotEntry_v1{KO=1}", 4, PC.SLOT_ENTRY_PINS[0]),))])
 
-    def reg(*ports) -> PC.Registration:
-        return PC.Registration({"roots": [{"port": q, "leaves": n, "root": root, "domain": "d"}
-                                          for q, root, n in ports]}, b"")
+    def reg(*ports) -> dict:
+        return {"roots": [{"port": q, "leaves": n, "root": root, "domain": "d"} for q, root, n in ports]}
 
-    def chunks(l0: int, l1: int, k1: str) -> PC.Registration:
+    def chunks(l0: int, l1: int, k1: str) -> dict:
         return reg(("SlotEntry_v1{KO=1}/c0/o0", "r0", l0), (k1 + "/c1/o0", "r1", l1))
 
-    def scan(r0: str, r1: str) -> PC.Registration:
+    def scan(r0: str, r1: str) -> dict:
         return reg(("scan/prog0", r0, 2), ("scan/prog1", r1, 2))
 
     assert PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=1}")], scan("r0", "r1"))

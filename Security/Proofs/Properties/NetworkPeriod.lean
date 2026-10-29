@@ -91,7 +91,7 @@ theorem firstFinding_none {fs : List (Option (Core.Verdict × String))} (h : fir
   · intro f hf
     simpa using List.findSome?_eq_none_iff.mp h f hf
 
-theorem auditChecks_getElem? {p : Params} {c : Commitment} {e : Evidence} {i : ℕ} {a : Audit} {reg : Registration}
+theorem auditChecks_getElem? {p : Params} {c : Commitment} {e : Evidence} {i : ℕ} {a : Audit} {reg : Lean.Json}
     {x : Core.Answer} (ha : p.audits[i]? = some a) (hreg : c.audits[i]? = some reg) (hx : e.audits[i]? = some x) :
     (auditChecks p c e)[i]? = some (auditCheck i a reg x (tiedOf p.form c i)) := by
   have hz : ((p.audits.zip c.audits).zip e.audits)[i]? = some ((a, reg), x) :=
@@ -130,47 +130,47 @@ theorem drawsWhole_spec {a : Audit} {prof : Core.Integrity} {f : Facts} (h : dra
 
 /-- The refusal: an audit the check ties that it accepts drew every unit, or its slot entries' and scan slots'
 templates whole. -/
-theorem auditCheck_tied {i : ℕ} {a : Audit} {reg : Registration} {x : Core.Answer} {f : Facts}
+theorem auditCheck_tied {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answer} {f : Facts}
     (h : auditCheck i a reg x true = .ok f) : StrataDrawnWhole i a reg x := by
   unfold auditCheck at h
   cases ha : answered s!"audit {i}" reg x with
   | error r =>
     simp only [ha, bind, Except.bind] at h
-    by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
+    by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
       simp [c1, refuse] at h
   | ok pp =>
     obtain ⟨prof, pub⟩ := pp
     cases hf : factsOf s!"audit {i}" prof pub with
     | error r =>
       simp only [ha, hf, bind, Except.bind] at h
-      by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
+      by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
         simp [c1, refuse] at h
     | ok g =>
       refine ⟨prof, pub, g, ha, hf, drawsWhole_spec ?_⟩
       simp only [ha, hf, bind, Except.bind] at h
-      by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
+      by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
         by_cases c2 : g.units = a.units <;> by_cases c3 : drawsWhole a prof g = true <;>
           simp_all [refuse, pure, Except.pure]
 
 /-- The refusal refuses no audit drawn whole: one passes the tied check as it passes the untied one. -/
-theorem auditCheck_tied_whole {i : ℕ} {a : Audit} {reg : Registration} {x : Core.Answer} {f : Facts}
+theorem auditCheck_tied_whole {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answer} {f : Facts}
     (h : auditCheck i a reg x = .ok f) (hd : f.drawn = f.units) : auditCheck i a reg x true = .ok f := by
   unfold auditCheck at h ⊢
   cases ha : answered s!"audit {i}" reg x with
   | error r =>
     simp only [ha, bind, Except.bind] at h
-    by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
+    by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
       simp [c1, refuse] at h
   | ok pp =>
     obtain ⟨prof, pub⟩ := pp
     cases hf : factsOf s!"audit {i}" prof pub with
     | error r =>
       simp only [ha, hf, bind, Except.bind] at h
-      by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
+      by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
         simp [c1, refuse] at h
     | ok g =>
       simp only [ha, hf, bind, Except.bind] at h ⊢
-      by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
+      by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
         by_cases c2 : g.units = a.units <;> simp_all [refuse, pure, Except.pure, drawsWhole]
 
 theorem rowsTiedDrawn : RowsTiedDrawn := by
@@ -183,15 +183,13 @@ theorem rowsTiedDrawn : RowsTiedDrawn := by
 
 /-! ## Its nontrivial lemma -/
 
-/-- An audit's registration with an output port's entry, `u/o1` at the root `r` and the domain `d`. -/
-def tiedAudit : Registration :=
-  { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
-      [("port", "u/o1"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+/-- An audit's window record with an output port's entry, `u/o1` at the root `r` and the domain `d`. -/
+def tiedAudit : Lean.Json :=
+  Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj [("port", "u/o1"), ("root", "r"), ("domain", "d")]])]
 
-/-- A link-window's registration whose `prog` is at that root and domain. -/
-def tiedWindow : Registration :=
-  { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
-      [("port", "scan/prog0"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+/-- A link-window's window record whose `prog` is at that root and domain. -/
+def tiedWindow : Lean.Json :=
+  Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")]])]
 
 theorem tiedWindow_ties : tiedIn #[tiedAudit] #[tiedWindow] 0 = true := by
   decide +kernel
@@ -219,7 +217,7 @@ theorem rowsTiedDrawn_nontrivial : ¬ RowsTiedDrawnOf acceptAllRows := by
 /-! ## The rows form's scan reads a compute audit's slot entries -/
 
 theorem wiredChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray} {scan : Scan}
-    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Registration} (hreg : c.windows[i]? = some reg) :
+    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
     (wiredChecks p c)[i]? = some (wiredCheck p s c.audits (p.first + i) reg) := by
   simp [wiredChecks, hform, Array.getElem?_zipIdx, hreg]
 
@@ -254,10 +252,9 @@ def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntr
 def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
 
 /-- Its registration, with that template's entries port at the root `r` and the domain `d`. -/
-def slotReg : Registration :=
-  { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
-      [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])],
-    digest := .empty }
+def slotReg : Lean.Json :=
+  Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
+    [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
 
 /-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the slot audit
 is tied to it, so its free inputs are in the link-window's term. -/
@@ -270,10 +267,9 @@ digest `selectEntryPins`' first), and its registration, with that template's ent
 domain `d`. -/
 def selectAudit : Audit := ⟨0, 0, "", 1, 0, #[("SelectEntry_v1{KO=1}", 1, selectEntryPins[0]!)], #[]⟩
 
-def selectReg : Registration :=
-  { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
-      [("port", "SelectEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])],
-    digest := .empty }
+def selectReg : Lean.Json :=
+  Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
+    [("port", "SelectEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
 
 /-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the audit is
 tied to it. -/
@@ -319,7 +315,7 @@ theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
 /-! ## The rows form's scan's state is its wired audit's `SCAN_STATE` -/
 
 theorem stateChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray} {scan : Scan}
-    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Registration} (hreg : c.windows[i]? = some reg) :
+    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
     (stateChecks p c)[i]? = some (stateCheck p s c.audits (p.first + i) reg) := by
   simp [stateChecks, hform, Array.getElem?_zipIdx, hreg]
 
@@ -348,20 +344,19 @@ theorem rowsStateTied : RowsStateTied := by
 
 /-- The slot audit's registration with its `SCAN_STATE` registered at the root `root` and the domain `e`, beside its
 entries port at `r` and `d`. -/
-def stateReg (root : String) : Registration :=
-  { record := Lean.Json.mkObj [
-      ("registered", Lean.Json.arr #[Lean.Json.mkObj
-        [("value", "verity/certifier/scan-state/v1"), ("root", root), ("domain", "e")]]),
-      ("roots", Lean.Json.arr #[Lean.Json.mkObj
-        [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])],
-    digest := .empty }
+def stateReg (root : String) : Lean.Json :=
+  Lean.Json.mkObj [
+    ("registered", Lean.Json.arr #[Lean.Json.mkObj
+      [("value", "verity/certifier/scan-state/v1"), ("root", root), ("domain", "e")]]),
+    ("roots", Lean.Json.arr #[Lean.Json.mkObj
+      [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
 
 /-- A link-window whose scan's `prog` is at the slot audit's entries port's root and domain, and whose state, the tree
 its units read and register their states in, is at the root `s` and the domain `e`. -/
-def stateWindow : Registration :=
-  { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[
-      Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")],
-      Lean.Json.mkObj [("port", "scan/state"), ("root", "s"), ("domain", "e")]])], digest := .empty }
+def stateWindow : Lean.Json :=
+  Lean.Json.mkObj [("roots", Lean.Json.arr #[
+    Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")],
+    Lean.Json.mkObj [("port", "scan/state"), ("root", "s"), ("domain", "e")]])]
 
 /-- Its honest side: a slot audit whose `SCAN_STATE` is the scan's state, at its root and domain, ties it. -/
 theorem rowsStateTied_honest : stateTied #[slotAudit] slotSchedule #[stateReg "s"] stateWindow = true := by
