@@ -153,8 +153,9 @@ T1 = forming(N, F) − forced(C) + de-noise(D) + final word(D, P) + uncommitted 
   never in Git.
 - **Code:** push to cursor/compute-research-np-<slug>-<4 hex>. Never push to main, and open no PR.
 - **Compute:**
-  - CPU through `research run --on auto`. cpu-1..9 are up to Sat 31 Oct 20:00Z; cpu-10..12 are stopped. If a node's
-    slots are full, use another.
+  - CPU through `research run`. cpu-1..9 are up to Sat 31 Oct 20:00Z; cpu-10..12 are stopped. **cpu-1 is crowded**
+    (`--on auto` lands most runs there): pick `--on vy-nebius-cpu-N` for N in 2..9, spread by your name's position in
+    §4's table.
   - GPU only on vy-dc-h200-5, through gpu-lease and `research run`. Infra extended it to 15:00Z (lease 14:55Z; INF-362).
     Finish GPU runs by 14:45Z. Never the demo node vy-dc-h200.
   - Lean: the lean-proofs skill. Never share a writable `.lake` with another agent.
