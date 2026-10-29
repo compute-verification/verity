@@ -8,7 +8,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 pkg=$(cd "${1:-$here/../../../../../../Security/Proofs}" && pwd)
 out=$(mktemp)
-(cd "$pkg" && lake build Proofs.Flock.Soundness.Audit.Influence Proofs.Flock.Soundness.Audit.StratifiedMiss >&2 && lake env lean --run "$here/ExfiltrationVectors.lean") > "$out"
+(cd "$pkg" && lake build Proofs.Flock.Soundness.Audit.Influence Proofs.Flock.Soundness.Audit.StratifiedMiss Mathlib.Algebra.BigOperators.Fin >&2 && lake env lean --run "$here/ExfiltrationVectors.lean") > "$out"
 python3 - "$out" "$here" "$pkg" <<'PY'
 import hashlib, json, sys
 from pathlib import Path
