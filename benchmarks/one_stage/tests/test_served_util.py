@@ -126,7 +126,8 @@ def test_the_steady_cut_drops_steps_over_one_and_a_half_medians(tmp_path):
     assert s["sm_clock_mhz"] is None
 
 
-@pytest.mark.parametrize("arm, served", [("stock", True), ("noseal", True), ("graphs", False), ("async", False)])
+@pytest.mark.parametrize("arm, served", [("stock", True), ("noseal", True), ("graphs", False), ("async", False),
+                                         ("seal-async", False)])
 def test_an_arm_off_the_served_stack_says_so(tmp_path, monkeypatch, capsys, arm, served):
     out = tmp_path / "util.json"
     monkeypatch.setattr(sys, "argv", ["served_util.py", "--sqlite", str(_report(tmp_path / "prof.sqlite")), "--trace",
@@ -134,6 +135,21 @@ def test_an_arm_off_the_served_stack_says_so(tmp_path, monkeypatch, capsys, arm,
     assert U.main() == 0
     assert json.loads(out.read_text())["served_stack"] is served
     assert ("(not the served stack)" in capsys.readouterr().out) is not served
+
+
+def test_a_load_that_leaves_its_steps_part_empty_names_the_tokens_a_full_step_schedules(tmp_path, monkeypatch, capsys):
+    """V3's window, 4 prompts of 16 ids at T 512, schedules 64 tokens a step: at --T 16 no step is full, and with
+    --step-tokens 8 the steps of 8 tokens are the steady state."""
+    out = tmp_path / "util.json"
+    argv = ["served_util.py", "--sqlite", str(_report(tmp_path / "prof.sqlite")), "--trace", str(_trace(tmp_path / "advice_trace.jsonl")),
+            "--T", "16", "--arm", "seal", "--out", str(out)]
+    monkeypatch.setattr(sys, "argv", argv)
+    assert U.main() == 0 and json.loads(out.read_text())["all"]["steps"] == 0
+    monkeypatch.setattr(sys, "argv", [*argv, "--step-tokens", "8"])
+    assert U.main() == 0
+    doc = json.loads(out.read_text())
+    assert (doc["T"], doc["step_tokens"], doc["all"]["steps"], doc["all"]["tokens_per_s"]) == (16, 8, 4, pytest.approx(800.0))
+    assert "over 4 steps of 8 tokens" in capsys.readouterr().out
 
 
 def test_too_few_full_steps_is_said(tmp_path):
