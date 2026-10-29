@@ -1,4 +1,4 @@
-"""The proof service: the Spec's types, the public-items rule, and a Stream's register, select, deliver and outcome over
+"""The proof system: the Spec's types, the public-items rule, and a Stream's register, select, deliver and outcome over
 the one-stage audit, with a stub verifier, injected coins and an injected clock."""
 
 from __future__ import annotations

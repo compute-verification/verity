@@ -292,7 +292,7 @@ strict time.
 
 The targets and expected assumptions are README.md §3.
 
-**The masked protocol** is C-Flock ZK. It consists of VEIL-style masking of the
+**The masked protocol** is Flock ZK. It consists of VEIL-style masking of the
 sumchecks, Reed–Solomon padding in Ligerito over GF(2^128), and Halevi–Micali leaf commitments. The model in `Model/*`
 is written so that these slot in without restructuring:
 
@@ -466,7 +466,7 @@ straight-line-extractable commitments and concurrent-ZK preambles.
 - VEIL proves exactly that for its compiler: a simulator whose output equals the real view "for any value of verifier
   randomness" (perfect; Lemma 4.3). Its footnote names the notion "semi-malicious", and Succinct has machine-checked
   the paper's statements in Lean.
-- Masked Flock (C-Flock ZK, VEIL-style) must keep that property on binary fields:
+- Masked Flock (Flock ZK, VEIL-style) must keep that property on binary fields:
   - every leaked GF(2^128) value needs 128 uniform mask bits whose weights span;
   - ring switching must be covered;
   - adversarial out-of-domain points or repeated query positions must not reveal more than the padding covers.

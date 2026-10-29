@@ -48,7 +48,7 @@
 # A5_DRY=DIR: none of the builds, windows or audits: each session dir DIR/NAME a run's scratch held (a5's --out) is kept and
 #   stored as a run's is.
 # A5_CHALLENGER=local|gate:USER@HOST: each rank draws by its partition file's rule (stratified:K among them) from the auditor's
-#   challenger's coins through its own service.Stream, the proof service's path of record, its outcome held to the Lean's run;
+#   challenger's coins through its own service.Stream, the proof system's path of record, its outcome held to the Lean's run;
 #   one session on the TP run root (a5.py --challenger, a5_coins.py): local, a development session on this
 #   machine; gate:USER@HOST, vy-challenger-1 through infra's gate, with A5_PEER (this machine in its /etc/vy/peers),
 #   A5_CHALLENGER_KEY (the challenger's key record) and A5_GATE_KEY (the lane's gate key). The step's ranks draw from the one
@@ -71,7 +71,7 @@
 #   Another TP Commit than GLM-5.3's: A5_ROW its row (the workload integrations/vllm/workloads/$A5_ROW.json), A5_NAME the
 #   audit's name (default glm), A5_SETS the SiluMul_v2 widths its partition reads (default "256 1536"), e.g. LLAMA32_1B TP2:
 #   A5_ROW=llama32-1b__bf16__rtxpro6000__tp2__b2__i256__o32__mixed__greedy__bi-eager A5_PARTITION=benchmarks/one_stage/
-#   llama32_1b_silu_mul_v2_tp2.json A5_SETS=4096.  A rank's proved population must keep C-Flock's m = k_log + log2(units) <= 35:
+#   llama32_1b_silu_mul_v2_tp2.json A5_SETS=4096.  A rank's proved population must keep Flock's m = k_log + log2(units) <= 35:
 #   a SiluMul_v2{I=4096} unit is 2^25 bits, so that partition's scope keeps layer 0's decode steps 1..7 (8 units a rank, not 4,736).
 #   An A5_SETS entry with a / is a subcircuit spec of its own (rope-head/d64/bf16), any other a SiluMul_v2 width.
 # A5_TRANSFER_GATES="T ..." (with A5_ADVICE): the templates the stand-in compiler lists as holding transfer gates, every unit of

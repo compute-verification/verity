@@ -25,7 +25,7 @@ writes a tampered copy, and each naming the check that refuses it by its refusal
 - ``commit``: the Commit record of the run's committed values (I3).
 
 **The checks and their codes** (`Negative.code`). A code is ``CHECK.PART``: the check that refuses it, and the part of
-it that fails. On the proof service's stream every refusal shows only ``reject`` (the violation's kind stays in the
+it that fails. On the proof system's stream every refusal shows only ``reject`` (the violation's kind stays in the
 verifier); the code is what the verifier of record establishes, which `n2` reads here in the clear for N2's checks:
 - ``NetworkHeadCheck_v2.{opening,fields,counts,signed}``: N2's head check of each end (`head_check.reference_parts`):
   the head opens under the registered root, its fields (link, end, window, grid, status complete), its counts the
@@ -1530,7 +1530,7 @@ def tie_runs(src: Path, ids: Path | None = None) -> dict:
 
 
 def n2(run: Path, clock=time.monotonic) -> dict:
-    """N2's verdict on every link-window of the run's `certified.jsonl`, through the proof service's stream as
+    """N2's verdict on every link-window of the run's `certified.jsonl`, through the proof system's stream as
     `certifier_serve.check` takes it (Selection All, the Lean audit, `unproved_outcome`: nothing is proved, so the
     verdict reads the opening) without asking the certifier's salts, and the link's network verdict; each refused
     link-window's codes (`codes`), and their union."""

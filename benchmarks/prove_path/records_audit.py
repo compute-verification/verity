@@ -19,7 +19,7 @@ opens the registered root under the registered compiler, and that compiler, run 
 names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the draw on live coins read after
-the receipt, C-Flock ``--zk`` behind the Lean firewall on the drawn members, Lean's verdicts and the audit record. Then the
+the receipt, Flock ``--zk`` behind the Lean firewall on the drawn members, Lean's verdicts and the audit record. Then the
 advice was fixed before the draw (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
 Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) are
 proved whole beside the draw, under a work law: every draw's closure (a5's `output_closure`).
@@ -532,7 +532,7 @@ def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping
 
 
 def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[str, Any]]:
-    """A template's circuit from its Definition and its statement in the circuit record (C-Flock's `UnitStager` on the record's
+    """A template's circuit from its Definition and its statement in the circuit record (Flock's `UnitStager` on the record's
     ``in_rows``, ``out_rows`` and ``reads``), bound to the window's partition and program: a5's composer for its members."""
     def compose(out: Path, partition: str, program: str) -> dict[str, Any]:
         from verity_flock import circuit as FC
@@ -763,7 +763,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("audit", help="a window's audit from its records alone")
     p.add_argument("--window", required=True, help="the window's directory: circuit.json, registration.json, the value files")
-    p.add_argument("--law", required=True, help="the proof service's law of the window (subset:K, stratified:K, work:K)")
+    p.add_argument("--law", required=True, help="the proof system's law of the window (subset:K, stratified:K, work:K)")
     p.add_argument("--opening", help="the advice's opening (interface.advice_opening): the named gap, until the compile unit")
     p.add_argument("--compilers", help="with --opening: the registered compilers the verifier holds, {name: {digest, argv, "
                    "code, pythonpath}}")

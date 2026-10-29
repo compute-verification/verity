@@ -1,4 +1,4 @@
-"""Prove path: a committed run and its advice through the proof service, for network accounting under arbitrary vLLM usage.
+"""Prove path: a committed run and its advice through the proof system, for network accounting under arbitrary vLLM usage.
 
 Each window's step units are Programs a registered compiler made from the advice (`pipeline.advice_windows`), not a declared
 workload's. The advice is private: the prover commits I1's canonical encoding under hiding rows (`advice_windows.commit_advice`),
@@ -6,7 +6,7 @@ and each window's registration binds the compiler's digest and that commitment's
 window over the compiler's Programs from its sealed bundle. The verifier, handed the commitment's opening (the named gap: the
 advice is opened to the verifier until the compile unit exists, README.md), compiles the advice with its own copy of the
 compiler, derives its own window and audits it through the one-stage audit's `service.Stream` (`benchmarks/one_stage/a5.py`'s
-`audit`): register, select on the verifier's own live coins (read only after the receipt), C-Flock `--zk` behind the Lean
+`audit`): register, select on the verifier's own live coins (read only after the receipt), Flock `--zk` behind the Lean
 firewall on the drawn units, Lean's verdicts, and the outcome, which the Lean verifier of record's `Run.run` must agree with. It
 then checks that the advice was fixed before the draw (`advice_before_draw`).
 
@@ -69,7 +69,7 @@ Two kinds of committed run:
   draw's receipt and the advice-root-after-the-draw negative (`advice_after_draw`); ``OUT/summary.json`` over the windows.
   ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it sends proofs of the false
   witness, and a window passes when its registration passed every check before the draw and Lean refused the outcome
-  (`forged_row`). ``--plain``: the sessions are plain C-Flock, not `--zk` (a5's ``--plain``: a stratified draw over a window of
+  (`forged_row`). ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified draw over a window of
   one member, no registered reads or shared rows, Lean `verify --coins os --stratified K`, no firewall), and the summary
   names the interim (``plain``, `PLAIN_INTERIM`). Each window's row carries the charge terms of an accepted audit
   (``charge``, `charge_terms`): ``advice_bits``, ``delta``, ``wrong_units``, ``location_bits`` (λ_δ), ``harm_bound`` (β_δ)
@@ -1014,8 +1014,8 @@ def forged_row(s: dict, forged: dict | None) -> dict:
 
 
 def per_unit(s: dict) -> dict[str, dict]:
-    """Each drawn member's session timing per drawn unit (the units its one statement proves, ``draw_counts``; C-Flock's own
-    ``units`` count its virtual units): proving (C-Flock's ``prove_total_s`` and the session's wall), M0's and Lean's verify,
+    """Each drawn member's session timing per drawn unit (the units its one statement proves, ``draw_counts``; Flock's own
+    ``units`` count its virtual units): proving (Flock's ``prove_total_s`` and the session's wall), M0's and Lean's verify,
     and the proof's bytes over its reps."""
     out = {}
     for key, t in (s.get("timing") or {}).items():
@@ -1530,7 +1530,7 @@ def main(argv: list[str] | None = None) -> int:
                    "(default a base whose ports are free now, `free_ports`)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every window must be refused")
-    p.add_argument("--plain", action="store_true", help="plain C-Flock sessions, not --zk (a5's --plain): the partition's law "
+    p.add_argument("--plain", action="store_true", help="plain Flock sessions, not --zk (a5's --plain): the partition's law "
                    "stratified:K, each window one member with no registered reads or shared rows (a5.PLAIN_SCOPE)")
     p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "
                    "(a5_coins), not the verifier's own: local (a development session on this machine), or gate:USER@HOST "
@@ -1596,7 +1596,7 @@ def main(argv: list[str] | None = None) -> int:
                    "opened from against the committed weights root")
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards, checked when given (each tensor is "
                    "held to its committed tensor root either way)")
-    p.add_argument("--law", default="subset:1", help="the proof service's law of the window")
+    p.add_argument("--law", default="subset:1", help="the proof system's law of the window")
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement)")
     p.add_argument("--workers", type=int, default=None, help="commit workers (default min(16, CPUs))")
     for name in ("window-circuit", "class-size", "window-commit"):

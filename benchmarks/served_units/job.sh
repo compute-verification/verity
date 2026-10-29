@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A served model's proof blocks under C-Flock --zk on CPUs, each proved by Rust `prove --zk` and verified by the Lean verifier of record
+# A served model's proof blocks under Flock --zk on CPUs, each proved by Rust `prove --zk` and verified by the Lean verifier of record
 # (`flock-verify`). Run from the source tree's root; results go to
 # $RESEARCH_RUN_DIR/out, scratch to a `mktemp -d` directory the job removes, builds and stagings to $SU_CACHE (kept, keyed by their
 # inputs) or the scratch directory. The builds, the run and the selftest controls are hidden_zk's (its job.sh, sourced):
