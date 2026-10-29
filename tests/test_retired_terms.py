@@ -4,7 +4,8 @@ A semantically meaningful part of the registered or actual circuit is a block, a
 proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
 
 Scanned: every tracked text file but the Lean (`.lean` files, their packages' `lakefile.toml` and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
-line (behind a comment marker or not). Identifiers (`proof_unit`) are code; the retired-terms table
+line (behind a comment marker or not). Every file under `benchmarks/rho/` retires more (``RHO_TERMS``): its proof
+blocks, their steps and their outputs are incorrect, never faulty, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`) are code; the retired-terms table
 (`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``), a spelling baked into a
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
 already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
@@ -23,11 +24,15 @@ from test_repository import ROOT, _tracked
 
 #: Each retired term and what to write instead.
 TERMS = {"proof unit": "proof block", "faulty unit": "incorrect proof block", "proof service": "proof system",
-         "faulty outputs, faulty ANDs, faulty step, faulty ingress": "incorrect outputs, incorrect ANDs, incorrect step, "
-                                                                  "an incorrect ingress proof block"}
+         "faulty ANDs": "incorrect ANDs"}
 _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
-_TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}(?:outputs?|ANDs|steps?|ingress))\b",
-                   re.I)
+_TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
+
+#: Retired in every file under RHO too, and what to write instead.
+RHO = "benchmarks/rho/"
+RHO_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
+             "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set"}
+_RHO_TERM = re.compile(rf"\bfaulty{_SEP}(?:outputs?|steps?|ingress{_SEP}units?|(?:proof{_SEP})?blocks?|sets?)\b", re.I)
 
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
@@ -97,6 +102,8 @@ ALLOWED: dict[str, str] = {
     "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
                                             "it; renamed after it lands",
     "before any coin draws (the firewall's staged statements)": "a line of GLOSSARY.md that queued PRs on next rewrite; the protocol vocabulary's rename follows them",
+    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
+                                                       "which a queued PR on next rewrites; renamed after it lands",
 }
 
 PENDING: dict[str, str] = {
@@ -207,11 +214,13 @@ def offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]],
     out, used = [], set()
     for f in scanned(files):
         text = read(f)
-        if text is None or not any(w in text.lower() for w in ("unit", "service", "faulty")):
+        rho = f.startswith(RHO)
+        if text is None or not ("unit" in text.lower() or "service" in text.lower() or "faulty" in text.lower()):
             continue
         allowed = [(m.start(), m.end(), s) for s in ALLOWED for m in re.finditer(re.escape(s), text)]
         lines = text.splitlines()
-        for m in _TERM.finditer(text):
+        terms = (_TERM, _RHO_TERM) if rho else (_TERM,)
+        for m in sorted((m for t in terms for m in t.finditer(text)), key=lambda m: m.start()):
             n = text.count("\n", 0, m.start()) + 1
             if f == GLOSSARY and lines[n - 1].startswith(RETIRED_ROWS):
                 continue
@@ -249,6 +258,7 @@ def test_no_retired_term_in_prose():
     bad, used = offenders(_tracked())
     assert not bad, (
         "a retired term: say " + " and ".join(f'"{new}" for "{old}"' for old, new in TERMS.items())
+        + f" (in {RHO}, also " + " and ".join(f'"{new}" for "{old}"' for old, new in RHO_TERMS.items()) + ")"
         + f' (ARCHITECTURE.md, Glossary, "Block"; {GLOSSARY}); a spelling baked into a record or a digest goes in ALLOWED'
         + " with its reason:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
     unused = set(ALLOWED) - used - doc_offenders(_tracked())[1]
@@ -287,15 +297,27 @@ def test_the_scan_reads_each_form():
     assert used == {"N, the round's proof units", "verity/proof-service/"}
 
 
-def test_the_scan_reads_the_incorrect_outputs():
-    """Rho's incorrect outputs and sampling_plan's incorrect ANDs, on toy files: a faulty node, link or device stays."""
+def test_the_scan_reads_rho_terms():
+    """`benchmarks/rho`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
+    a faulty node, link or device, and the same words outside it stay."""
     docs = {
-        "a.py": '"""Faulty outputs, the faulty-outputs channel, 9 faulty ANDs and a faulty\n    step."""\n'
-                "# a faulty ingress unit; a faulty node, link or device, the faulty AND gate\n",
+        "benchmarks/rho/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
+                                'set."""\nx = s["exfil.faulty"], c.faulty_unit_bits  # faultyIngressBits; a faulty node, '
+                                "link or device\n"),
+        "benchmarks/rho/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
+        "c.py": "# faulty outputs and faulty blocks outside it\n",
     }
     assert offenders(list(docs), read=docs.__getitem__)[0] == [
-        ("a.py", 1, "Faulty outputs"), ("a.py", 1, "faulty-outputs"), ("a.py", 1, "faulty ANDs"), ("a.py", 1, "faulty step"),
-        ("a.py", 3, "faulty ingress")]
+        ("benchmarks/rho/a.py", 1, "faulty-outputs"), ("benchmarks/rho/a.py", 1, "faulty step"),
+        ("benchmarks/rho/a.py", 2, "faulty ingress unit"), ("benchmarks/rho/a.py", 2, "faulty set"),
+        ("benchmarks/rho/data/b.toml", 1, "Faulty outputs"), ("benchmarks/rho/data/b.toml", 1, "faulty proof block"),
+        ("benchmarks/rho/data/b.toml", 1, "faulty blocks")]
+
+
+def test_the_scan_reads_the_incorrect_ands():
+    """`sampling_plan`'s incorrect ANDs, on toy files, in every file: an AND gate in another sense stays."""
+    docs = {"a.py": "# 9 faulty ANDs and faulty\n# ANDs; a faulty AND gate, faulty outputs outside rho\n"}
+    assert offenders(list(docs), read=docs.__getitem__)[0] == [("a.py", 1, "faulty ANDs"), ("a.py", 1, "faulty # ANDs")]
 
 
 def test_the_doc_scan_reads_each_form():

@@ -9,10 +9,10 @@ the registry).
   the channels no certifier reads (the certifier's `timing` and `side` bit/s per host, times the location's hosts;
   certified egress is the registered circuit's output, fixed by its registered inputs), from one location or from every
   location at once. Remotely nothing bounds it (0 s).
-* **Incorrect outputs** (`incorrect.*`): an incorrect proof block the sampled proofs let go unchecked returns outputs the adversary chose, in
-  certified egress, in either regime. Each incorrect step carries `step_bits` and is sampled with chance `q`, and a drawn one
-  ends its identity, so time doesn't bound the channel; detection does. Its row gives the bits it carries before the
-  first detection, except with chance `δ`, and the chance of detection moving each reference.
+* **Incorrect outputs** (`incorrect.*`): a block the sampled proofs let go unchecked returns outputs the adversary
+  chose, in certified egress, in either regime. Each incorrect step carries `step_bits` and is sampled with chance
+  `q`, and a drawn one ends its identity, so time doesn't bound the channel; detection does. Its row gives the bits it
+  carries before the first detection, except with chance `δ`, and the chance of detection moving each reference.
 """
 
 from __future__ import annotations
@@ -95,9 +95,9 @@ class Row:
 
 
 def incorrect(registry: Registry, scenario: Scenario) -> Row:
-    """The incorrect-outputs row at the regime's identities, at the reporting confidence `incorrect.delta`. A sampled regime
-    draws at its own rate (`Detection.q`, with its step bits and floor); an unsampled one proves every unit (`q = 1`);
-    unmonitored, nothing detects it."""
+    """The incorrect-outputs row at the regime's identities, at the reporting confidence `incorrect.delta`. A sampled
+    regime draws at its own rate (`Detection.q`, with its step bits and floor); an unsampled one proves every unit
+    (`q = 1`); unmonitored, nothing detects it."""
     refs = {n: registry[f"exfil.{n}.bits"] for n in registry.names("exfil")}
     d = getattr(_inner(scenario.regime), "detection", None)
     delta = registry["incorrect.delta"]

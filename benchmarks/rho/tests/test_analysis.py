@@ -212,7 +212,7 @@ def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_
 
 def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatch, capsys):
     """The per-server bound at W63 (`onsite-w63`): 91.1 kbit/s a server over a 32-bucket link-window, intake 0.0282 at
-    the reference policy, labelled the honest-δ form with an incorrect ingress proof block's 356,592 bits excluded (and 0 when
+    the reference policy, labelled the honest-δ form with an incorrect ingress unit's 356,592 bits excluded (and 0 when
     every ingress unit is sampled), line rate beside it; the reference itself at `intake · α Φ`, 3.23 Mbit/s."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import run
@@ -225,15 +225,15 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     text = capsys.readouterr().out
     assert ("**Certified ingress:** 9.11e+04 bit/s into a location, intake 0.0282 × α Φ: 1 × each server's declared "
             "inputs, r_in = 9.11e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket link-window, at the warden "
-            "form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect ingress proof block's "
-            "3.57e+05 bits are excluded, and 0 when every ingress unit is drawn)") in text
+            "form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect ingress "
+            "unit's 3.57e+05 bits are excluded, and 0 when every ingress unit is drawn)") in text
     assert "line rate, 4.8e+12 bit/s, is its upper end until Lean proves that bound" in text
     assert text.count("Certified") == 1
     record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]
     assert record["reference-remote-h200"]["certified"] is None
     certified = record["onsite-w63"]["certified"]
     assert certified["r_in"] == pytest.approx(91_075) and certified["window_buckets"] == 32
-    assert certified["incorrect_block_bits"] == 356_592
+    assert certified["faulty_unit_bits"] == 356_592
     reference = run.certified(build(REG, "reference-onsite-h200"))
     assert not reference["declared"] and reference["intake"] == 1
     assert run.certified_md(reference)[0] == ("**Certified ingress:** 3.23e+06 bit/s into a location, intake 1 × α Φ: "

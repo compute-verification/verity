@@ -311,7 +311,7 @@ class Certifier:
     `Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`; the egress at the same requests). The
     bound is stated per link-window, so the rate is too: this package never cites less than the bound states. This is
     its honest-δ form, at a δ where only the empty incorrect set is possible. An incorrect ingress unit adds
-    `incorrect_block_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is drawn. The
+    `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is drawn. The
     bound is a draft until Lean proves it, so `declared_x` keeps the line rate as the ingress's upper end: the ingress
     is `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is below the prompt rate of
     the serving credited at the location can't feed that serving, so `declared` is off by default until a deployment
@@ -385,7 +385,7 @@ class Certifier:
         return int(self.lanes) * clog2(self.cell_rate + 2)
 
     @property
-    def incorrect_block_bits(self) -> float:
+    def faulty_unit_bits(self) -> float:
         """Bits an incorrect ingress unit adds, which the honest-δ form excludes and which are 0 when every ingress unit is
         drawn: its bucket's whole row, `8 B lanes r`, and two requests more a lane, its forged state's own and one
         admission its reset allows (`faultyIngressBits`)."""

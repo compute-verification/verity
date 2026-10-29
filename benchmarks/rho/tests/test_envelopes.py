@@ -245,7 +245,7 @@ def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest
     assert c.window_bits(32) == (291_440, 8_760) == (8 * 36_382 + 32 * 12, 8 * 1_095)
     assert (c.r_in, c.r_out) == (pytest.approx(91_075), pytest.approx(8_760 / 3.2))
     assert (round(c.r_in / 1e3, 1), round(c.r_out / 1e3, 1), c.warden_rate) == (91.1, 2.7, 655_360)
-    assert c.incorrect_block_bits == 356_592 and round(c.incorrect_block_bits / c.window_bits(32)[0], 2) == 1.22
+    assert c.faulty_unit_bits == 356_592 and round(c.faulty_unit_bits / c.window_bits(32)[0], 2) == 1.22
     # a slot is held D + 1 = 28 buckets from its admission, so the ceiling steps past 28
     assert c.window_bits(28) == (4 * 36_382 + 28 * 12, 4 * 1_095)
     assert c.window_bits(29) == (8 * 36_382 + 29 * 12, 8 * 1_095)
