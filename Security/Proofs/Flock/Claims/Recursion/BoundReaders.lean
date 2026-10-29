@@ -130,7 +130,7 @@ run's message at that round. -/
 def StagedRuns {W : Type} (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W)
     (L : Claims.Recursion.VStarB.LayoutB) (shape : Claims.Recursion.Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       ∀ s < D.nS x, shows s x ((Claims.Recursion.runVstar H D I P x ω r).getD s []) (coinSeq r) ∧
         ∀ i, i + 1 < L.rounds x →
@@ -150,7 +150,7 @@ theorem readers_run {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inn
     (hHeld : Claims.Recursion.VStarB.HeldB (deployRec I.V ivScope { b with rd := L.readers }) I L shape)
     (hOpen : ∀ s, Claims.Recursion.VStarB.PartOpensB H (deployRec I.V ivScope { b with rd := L.readers }) DO L shape
       shows cmt s)
-    {x : Msg} {st : Claims.Recursion.Stmt}
+    {x : Msg} {st : Claims.Recursion.CompiledStatement}
     (hst : (deployRec I.V ivScope { b with rd := L.readers }).parse x = some st) (hf : shape st.form)
     {Ω : Type} {P : Prover Ω} {ω : Ω} {r : Fin ((deployRec I.V ivScope { b with rd := L.readers }).V.k x) → Coin}
     (hsh : ∀ s < (deployRec I.V ivScope { b with rd := L.readers }).nS x,

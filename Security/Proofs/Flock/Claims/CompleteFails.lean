@@ -103,7 +103,7 @@ def rejD : Flock.Deploy Unit Unit Unit where
 /-! ## Sampling -/
 
 /-- **The empty sampling statement**: no gates, no outputs, no rules, no roots. -/
-def nilStmt : Sampling.Stmt := ⟨[], ⟨[], []⟩, ⟨"", 0, []⟩, ⟨[]⟩, []⟩
+def nilStmt : Sampling.AuditStatement := ⟨[], ⟨[], []⟩, ⟨"", 0, []⟩, ⟨[]⟩, []⟩
 
 theorem inScope_nilStmt : Sampling.InScope ⟨[]⟩ nilStmt := by
   refine ⟨⟨fun _ _ h => by simp [nilStmt] at h, fun _ h => by simp [nilStmt] at h⟩, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩,
