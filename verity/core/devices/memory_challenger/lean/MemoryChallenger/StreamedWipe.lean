@@ -1,3 +1,4 @@
+import CoreProtocol.Site
 import MemoryChallenger.Verdict
 
 /-!
@@ -34,7 +35,8 @@ and the count's 15. -/
 def EGRESS_MAX_UNITS : Int := 2 ^ 15 - 1
 
 /-- `WipeParams`: `labels` (`N`), the `k` challenges revealed `batch` at a time, each batch's deadline, and the memory
-tiers as `(name, bytes)`, which hold the fill and may declare memory past it. -/
+tiers as `(name, bytes)`, which hold the fill and may declare memory past it. A server's tiers are its registered memory
+leaves (`Params.ofSite`, `Params.checkSite`). -/
 structure Params where
   labels : Nat
   k : Nat
@@ -60,15 +62,40 @@ def Params.covered (p : Params) : Bool := p.batch == 1
 /-- `WipeParams.batches`: `⌈k / batch⌉`. -/
 def Params.batches (p : Params) : Nat := (p.k + p.batch - 1) / p.batch
 
+private def tiersJson (tiers : Array (String × Nat)) : String :=
+  "[" ++ ",".intercalate (tiers.toList.map fun (t, b) => "[" ++ pyJsonStr t ++ "," ++ toString b ++ "]") ++ "]"
+
+/-- `TIER_NAMES`: the wipe's name for each of the registered site's memory tiers. -/
+def tierName : Core.Site.Tier → String
+  | .hbm => "gpu-hbm" | .dram => "host-dram" | .disk => "disk"
+
+/-- `registered_tiers`: the memory leaves the registered site has in the server's host, by tier in the Site's order,
+each tier that has bytes. A server that is no registered host, or isn't UTF-8, is refused. -/
+def registeredTiers (S : Core.Site) (server : ByteArray) : E (Array (String × Nat)) :=
+  match String.fromUTF8? server with
+  | none => throw "the server is not a host the registered site has: it isn't UTF-8"
+  | some h =>
+    if S.kind? h = some .host then
+      pure ((S.tiers Core.Site.Registration.sha512.sheet h).filter (·.2 > 0) |>.map fun (t, b) => (tierName t, b)).toArray
+    else throw s!"the server '{h}' is not a host the registered site has"
+
+/-- `WipeParams.of`: a wipe of the server whose tiers are its registered memory. -/
+def Params.ofSite (S : Core.Site) (server : ByteArray) (labels k batch limitNs : Nat) : E Params := do
+  pure ⟨labels, k, batch, limitNs, ← registeredTiers S server⟩
+
+/-- `WipeParams.check_site`: the tiers are the server's registered memory, in any order, as the bound reads only their
+sum. -/
+def Params.checkSite (p : Params) (S : Core.Site) (server : ByteArray) : E Unit := do
+  let want ← registeredTiers S server
+  unless p.tiers.toList.isPerm want.toList do
+    throw s!"the wipe declares the tiers {tiersJson p.tiers}, not the registered host's memory {tiersJson want}"
+
 /-- `WipeCommitment`: what the challenger publishes when it opens the session. -/
 structure Commitment where
   server : ByteArray
   session : ByteArray
   params : Params
   deriving BEq, Inhabited
-
-private def tiersJson (tiers : Array (String × Nat)) : String :=
-  "[" ++ ",".intercalate (tiers.toList.map fun (t, b) => "[" ++ pyJsonStr t ++ "," ++ toString b ++ "]") ++ "]"
 
 /-- `WipeCommitment.header()`'s fields, each value as `json.dumps` writes it. -/
 def Commitment.headerFields (c : Commitment) : List (String × String) :=
