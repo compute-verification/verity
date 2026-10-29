@@ -13,7 +13,7 @@ import Proofs.Accounting.Headline.Luck
   `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by `δ_s` (`S_F`, `S_0` the folded and whole shares at `shareCone`), and
   `DrawnRightOff` gives one event of probability `δ_bind + δ_ks` off which every accepted drawn tile is right, so `Of`
   gives the play's ideal game's pass, which is the share game's.
-* **The words** (`work_of_bounds`): off both, `UnitFixed` and `ServiceCovers` give the good tiles' words at least
+* **The words** (`work_of_bounds`): off both, `BlockFixed` and `ServiceCovers` give the good tiles' words at least
   `(1 − (c_F + c₀))·N_w`, `c_F`, `c₀` the folded and whole shares at `tileCone`, and the words not skipped whole at
   least `(1 − S_0)·N_w`, since a tile's words are at most `N_w` times its `shareCone`; `Σ_t tileWords ≥ N_w`
   (`wordsOf_le_sum`: each credited word is in its unit's tile, under `RegisteredCircuit.Wf` and `units ≤ N_p`). `c_F + c₀` is
@@ -256,7 +256,7 @@ theorem workAt_of {Nw a b Λl D0 fixed fd SF S0 ZF Z0 D : ℝ} (ha : 0 ≤ a) (h
     rw [min_eq_right hab]
     linarith
 
-/-- **One accepted run's work**, at its modes `md` and its good tiles `good`, from `Covers`, `UnitFixed` at the
+/-- **One accepted run's work**, at its modes `md` and its good tiles `good`, from `Covers`, `BlockFixed` at the
 tiles' words and the two games' deficiencies. -/
 theorem work_of_bounds {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np : ℕ} (md : Fin Np → Mode)
     (good : Fin Np → Prop) [DecidablePred good] {a b Λl D fixed fd : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b)

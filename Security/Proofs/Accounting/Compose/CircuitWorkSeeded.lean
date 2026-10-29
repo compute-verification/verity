@@ -16,7 +16,7 @@ import Proofs.Accounting.Compose.CircuitWork
   `δ_s`.
 * **The work**: off `DrawnRightOff`'s event on `RegisteredCircuit.atDraw`'s layer, `Of` gives the share game's pass; off the
   rest, `S = (L − κ·U) + (1 + κ)·U` per mode (`share_split`) puts `a·S_F + b·S_0` below `rOfSeeded`'s first three terms,
-  and `UnitFixed` with `ServiceCovers` on `RegisteredCircuit.atIR`'s layer gives the words as in `CircuitWork`
+  and `BlockFixed` with `ServiceCovers` on `RegisteredCircuit.atIR`'s layer gives the words as in `CircuitWork`
   (`WorkProof.work_of_bounds`).
 -/
 

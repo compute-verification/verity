@@ -74,7 +74,7 @@ check doesn't discharge it:
   fact of that statement and the tile's Definition, with `UnitsOfLayout`'s tie of `Cd` to it. Where the service proves
   a statement other than the registered tile's (H1's leg proves the window's staged statement), this is the link
   between the two, and H1's instance splits it into `StagedPins` and `SaltIsLiveCoin`.
-* `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` per live tile, and `UnitFixed` at `periodMode`: the named claims, as in
+* `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` per live tile, and `BlockFixed` at `periodMode`: the named claims, as in
   `CircuitWorkPeriod`. On H1's unit they are (H-μ) at `μ = 3/4`, B′ at `r_B = 1/2` and the guess bound at
   `1/2`; ncp-v2 has no Compose `Scheme`, and its receipt bound is a time-tradeoff form
   (`Accounting.Guarantees.TileUnpredictableOfNCPU`), not lucks.
@@ -268,7 +268,7 @@ def CheckedWorkPeriod : Prop :=
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
-    UnitFixed Pl (checkedLayer Cd hr hK prm ws opened rel right)
+    BlockFixed Pl (checkedLayer Cd hr hK prm ws opened rel right)
       (periodMode Cd Wp (checkedRun hK prm ws opened rel right)) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧
       ¬ LiveWorkAt (checkedLive Sc Cd Wp prm ws x) (wordsOf Sc Cd : ℝ) a b
@@ -303,7 +303,7 @@ def CheckedCreditPeriod : Prop :=
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
-    UnitFixed Pl (checkedLayer Cd hr hK prm ws opened rel right)
+    BlockFixed Pl (checkedLayer Cd hr hK prm ws opened rel right)
       (periodMode Cd Wp (checkedRun hK prm ws opened rel right)) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd Np (ws.prefixLen prm x) (checkedLive Sc Cd Wp prm ws x) a b Λ δs) ≤ δs + n * (δbind + δks)
@@ -378,7 +378,7 @@ def H1CheckedCreditPeriod : Prop :=
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
-    UnitFixed Pl (checkedLayer Cd hr hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat))
+    BlockFixed Pl (checkedLayer Cd hr hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat))
       (periodMode Cd Wp (checkedRun hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat)))
       (fun _ t => (tileWords Sc Cd 144 t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <

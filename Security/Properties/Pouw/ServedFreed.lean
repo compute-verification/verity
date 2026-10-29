@@ -119,7 +119,7 @@ def ServedFreed : Prop :=
     RegisteredBeforeSample ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
     Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
-    UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
+    BlockFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
         (j10rAtCoin hr enc place tile))
       (periodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
         (j10rAtCoin hr enc place tile)))

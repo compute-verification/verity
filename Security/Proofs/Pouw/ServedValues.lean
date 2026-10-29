@@ -5,7 +5,7 @@ import Proofs.Pouw.PeriodJ10R
 # Proof of `RightValues`
 
 `H1J10RCheckedCreditPeriod` at the play whose fixed words are the right blocks' words (`rightWords`) and whose folded
-words are the blocks not skipped whole. There `UnitFixed` holds with equality, so H1 bounds the right blocks' words
+words are the blocks not skipped whole. There `BlockFixed` holds with equality, so H1 bounds the right blocks' words
 below `(1 − ε(j))₊·N_live` with no premise on the play's anatomy. The step to size is deterministic: a right block is
 live in a credited window (`good_live`, through `credited_iff`), so the size the right blocks miss of `S` is at most
 `σ` times the words they miss of `N_live` (`creditedSize_sub_le`), and `(1 − ε(j))₊·N_live` right words give
@@ -162,7 +162,7 @@ theorem rightValues : RightValues := by
     rightWords Sc Cd (Np := tileCount σ sT) fun w t => pf.Good mode x w t
   let Pl' : Play (Coin C Ξ Cd.rounds σ sT) n K T L U :=
     { game := Pl.game, accepts := Pl.accepts, run := fun x => { Pl.run x with fixed := Gw x / n } }
-  have hUF : UnitFixed Pl' pf mode (fun _ t => (tileWords Sc Cd (tileCount σ sT) t : ℝ))
+  have hUF : BlockFixed Pl' pf mode (fun _ t => (tileWords Sc Cd (tileCount σ sT) t : ℝ))
       (fun x => (∑ w, ∑ j, if mode x (w, j) = .whole then 0 else (tileWords Sc Cd (tileCount σ sT) j : ℝ)) / n) :=
     fun _ _ _ => ⟨le_rfl, le_rfl⟩
   have hH1 := h1J10RCheckedCreditPeriod σ k hk sT unitOf Sc Cd hn hN hr hM hKd ws opened enc place tile Wp Pl' _

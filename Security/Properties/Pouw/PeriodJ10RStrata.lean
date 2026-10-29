@@ -39,7 +39,7 @@ The rest is per stratum, the one-stratum statement's premise at stratum `s`'s vi
 `Wp s`, `Pl s`, `folded s`, `place s`, `tile s`, `ρ s`, `δ_s(s)`, `δ_bind(s)`, `δ_ks(s)`), `Scope`, the live share
 and stage share bounds, H1's lucks, the play's game, `DeadConeDead`, `PrefixOf`, binding at `δ_bind(s)`,
 `TileServiceSound` at `δ_ks(s)` (C-Flock's soundness at the stratum's drawn proof blocks), `SharedNoiseLucks` (the stratum's
-tile games) and `UnitFixed`.
+tile games) and `BlockFixed`.
 
 *Why the draw's premise is period-wide.* `TileSampleIsCoin` says the window's drawn proof blocks are exactly the `k s_T` of the
 tile stratum. A window over several strata draws `∑_{s ∈ S} k s` proof blocks, which no one stratum's coordinate covers, so
@@ -215,7 +215,7 @@ def H1J10RCheckedCreditPeriodStrata : Prop :=
     (∀ s ∈ S, TileServiceSound σ s unitOf (creditAt (hM s) σ s ws) (pullAt (hM s) σ s opened)
       (relAt (hM s) σ s ws (place s) (tile s)) (δks s)) →
     (∀ s ∈ S, SharedNoiseLucks Sc (Cd s) (Wp s)) →
-    (∀ s ∈ S, UnitFixed (Pl s) (layerAt (Cd s) (hr s) (hM s) σ k hk s unitOf ws opened enc (place s) (tile s))
+    (∀ s ∈ S, BlockFixed (Pl s) (layerAt (Cd s) (hr s) (hM s) σ k hk s unitOf ws opened enc (place s) (tile s))
       (periodMode (Cd s) (Wp s) (runAt (Cd s) (hr s) (hM s) σ k hk s unitOf ws opened enc (place s) (tile s)))
       (fun _ t => (tileWords Sc (Cd s) (tileCount σ s) t : ℝ)) (folded s)) →
     prob (fun x : Paths (StrataCoin C 1 σ) n => (∀ s ∈ S, (Pl s).accepts (pathsAt C (hM s) σ s n x)) ∧
