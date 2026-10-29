@@ -26,7 +26,7 @@ decides nothing.
   output word by the gates' references, `LinkWindows.outputs`) say beforehand which windows each member's proofs refuse
   (`expected`).
 * **The period** (``--draw K``): each member's windows sampled rather than all proved: every window's salted root
-  committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and only those
+  committed, then K of them drawn on the auditor's challenger's coins (`LinkWindows.period_draw`), and only those
   registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
   stream's δ, on the Lean verifier of record's sample. ``tampered`` then changes every window (`every_count`), which any
   draw refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
