@@ -90,12 +90,12 @@ def test_tree_paths_and_roots_are_cores(n):
     for i in range(n):
         p = R.path(lv, i)
         assert tree.open(i) == Opening(i, hs[i], p)
-        assert R.fold_path(dom, i, hs[i], p) == root
         assert verify_opening(dom, com, Opening(i, hs[i], p), R.SCHEMA, limits)
-        bad = bytes([hs[i][0] ^ 1]) + hs[i][1:]
-        assert R.fold_path(dom, i, bad, p) != root
-    assert R.fold_path(dom, n, hs[0], R.path(lv, 0)) is None
-    assert R.fold_path(dom, 0, hs[0], R.path(lv, 0) + (root,)) is None
+        refused = [Opening(i, bytes([hs[i][0] ^ 1]) + hs[i][1:], p), Opening(i, hs[i], p + (root,))]
+        if n > 1:
+            refused += [Opening(i ^ 1, hs[i], p), Opening(i, hs[i], p[1:]), Opening(i, hs[i], (root,) + p[1:])]
+        assert not any(verify_opening(dom, com, o, R.SCHEMA, limits) for o in refused)
+    assert not verify_opening(dom, com, Opening(n, hs[0], R.path(lv, 0)), R.SCHEMA, limits)
 
 
 def _range_path(lv, lo: int, hi: int) -> tuple:
