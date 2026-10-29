@@ -13,7 +13,7 @@ The inference-only policy is a subprotocol of both composites, onsite and remote
 `NciCheck.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
 interface. Its params are the registered circuit, the budgets and the registration log before the run; its commitment is
 the run's own registration record, which must name the registered circuit and which each composite requires to be the
-record sampled proofs commits to (`Core.Composition.same`); its evidence is the declared division with θ and θ's
+record sampled proofs commits to (`Core.Composition.same`); its evidence is the division with θ and θ's
 provenance. That evidence reaches the verifier in the clear: the check doesn't run inside a zero-knowledge
 proof yet.
 

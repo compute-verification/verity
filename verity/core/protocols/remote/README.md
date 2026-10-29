@@ -62,8 +62,8 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 
 The inference-only policy's check reads only the registered circuit and the registered information, so it needs no
 hardware at the site. Its commitment is the run's record, which must name the registered circuit, and remote refuses
-unless it is the record PoUW's window and sampled proofs commit to (one record, below). Its evidence, the declared
-division and θ's provenance, reaches the verifier in the clear, not inside a zero-knowledge proof.
+unless it is the record PoUW's window and sampled proofs commit to (one record, below). Its evidence, the division
+and θ's provenance, reaches the verifier in the clear, not inside a zero-knowledge proof.
 
 The code is `CoreRemote.lean`, `protocol = sameB "verity/remote/v0" ids components` over `components =
 [NciCheck.Protocol.protocol, PouwCheck.protocol, SampledProofs.OneStageZk.protocol]`, `ids` their ids: every one of the

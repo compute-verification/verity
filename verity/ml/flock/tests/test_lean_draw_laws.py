@@ -1,6 +1,6 @@
 """Draw laws (PROTOCOL.md §16.15, D12): `verify` refuses a session sampled by a law no soundness claim draws by (a bernoulli
-sample, a work sample with or without a closure) at setup, whatever flags it holds, and passes a stratified sample, and at
-hidden outputs a subset sample, on to the session's checks. The statement's form is checked last, once every check has
+sample, a work sample with or without a closure) at setup, whatever flags it holds, and passes a stratified sample, and
+at hidden outputs a subset sample, on to the session's checks. The statement's form is checked last, once every check has
 passed, and a session without a sample is refused after that. The statement is
 `test_lean_registered_reads.py`'s honest one (`stage`, every port registered): its program and partition are the ones a
 work sample's law derives from, so a work sample sets up there, where any other statement refuses it at setup before its law
