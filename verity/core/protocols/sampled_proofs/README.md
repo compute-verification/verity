@@ -243,7 +243,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per proof block, commitment, serve-time
   `Commitment`s, replay) and an `Objective` (harm per proof block at δ), `frontier` is the certified Pareto frontier of total
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
-  commitments, `certify` recomputes a plan's `Certificate`, `sensitivity` and `needs_benchmark` name what moves it,
+  commitments, `certify` recomputes a plan's `PlanBounds`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`. Two modes: `CostModel.commit_weight` is 0 (`PROVING_ONLY`, Lean's
   `GranularityOptimum`) or w on the serve-time commitment, paid on every proof block, drawn or not. `Grain`,
   `grain_costs` and `grain_optimum` price n equal proof blocks under the free-compute law (`Achievability`) or the

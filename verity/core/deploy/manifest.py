@@ -14,7 +14,7 @@ The manifest is a typed object in each protocol's package (`render` writes it as
 `place` checks a binding of the parties to a site's machines: each party's principal owns its machine (`principal`), the
 machine provides what the party needs (`needs`), a coin-carrying channel passes no developer-owned machine (`coins-hop`),
 and each channel's link meets its latency bound (`latency`). It refuses anything else by name, or, in a `simulated`
-placement, lets those four stand as the premises the run assumes and lists them (`Placement.unmet`). A binding that
+placement, lets those four stand as the premises the run assumes and lists them (`PlaceResult.unmet`). A binding that
 names an unknown party or machine, leaves a party unbound, binds a `per = "one"` party twice or puts a channel between
 machines with no link is refused in either mode.
 """
@@ -156,7 +156,9 @@ def render(m: Manifest) -> str:
 
 
 @dataclass(frozen=True)
-class Machine:
+class Host:
+    """A machine a party can be placed on: its owner and what it provides."""
+
     name: str
     owner: str
     provides: tuple[str, ...] = ()
@@ -167,7 +169,7 @@ class Machine:
 
 
 @dataclass(frozen=True)
-class Link:
+class Route:
     """A link between two machines, through the machines `via`, at `latency_ms`."""
 
     ends: tuple[str, str]
@@ -176,24 +178,26 @@ class Link:
 
 
 @dataclass(frozen=True)
-class Site:
-    machines: tuple[Machine, ...]
-    links: tuple[Link, ...] = ()
+class Topology:
+    """A site's machines and the routes between them, which `place` binds parties to."""
 
-    def machine(self, name: str) -> Machine:
+    machines: tuple[Host, ...]
+    links: tuple[Route, ...] = ()
+
+    def machine(self, name: str) -> Host:
         m = next((m for m in self.machines if m.name == name), None)
         if m is None:
             raise Refused("unknown-machine", f"the site has no machine {name!r}")
         return m
 
-    def link(self, a: str, b: str) -> Link | None:
+    def link(self, a: str, b: str) -> Route | None:
         if a == b:
-            return Link((a, b), 0)
+            return Route((a, b), 0)
         return next((k for k in self.links if set(k.ends) == {a, b}), None)
 
 
 @dataclass(frozen=True)
-class Placement:
+class PlaceResult:
     """The check's result: `placed`, or `simulated` with the premises it leaves unmet as (name, detail)."""
 
     mode: str
@@ -210,7 +214,7 @@ def _role_of(instance: str) -> tuple[str, str]:
     return role, scope
 
 
-def place(manifest: Manifest, site: Site, bindings: Mapping[str, str], *, simulated: bool = False) -> Placement:
+def place(manifest: Manifest, site: Topology, bindings: Mapping[str, str], *, simulated: bool = False) -> PlaceResult:
     """Check that `bindings` (party instance `ROLE` or `ROLE@SCOPE` -> machine) places `manifest`'s parties on `site`."""
     unmet: list[tuple[str, str]] = []
     instances: dict[str, list[tuple[str, str]]] = {r.name: [] for r in manifest.parties}
@@ -249,15 +253,15 @@ def place(manifest: Manifest, site: Site, bindings: Mapping[str, str], *, simula
     if unmet and not simulated:
         name, detail = unmet[0]
         raise Refused(name, detail)
-    return Placement("simulated" if simulated else "placed", dict(bindings), tuple(unmet))
+    return PlaceResult("simulated" if simulated else "placed", dict(bindings), tuple(unmet))
 
 
-def site_of(machines: Sequence[Mapping[str, Any]], links: Sequence[Mapping[str, Any]] = ()) -> Site:
+def site_of(machines: Sequence[Mapping[str, Any]], links: Sequence[Mapping[str, Any]] = ()) -> Topology:
     """A site from its description as data: `{"name", "owner", "provides"}` a machine, `{"ends", "latency_ms", "via"}` a
     link."""
-    return Site(tuple(Machine(m["name"], m["owner"], tuple(m.get("provides", ()))) for m in machines),
-                tuple(Link(tuple(k["ends"]), k["latency_ms"], tuple(k.get("via", ()))) for k in links))
+    return Topology(tuple(Host(m["name"], m["owner"], tuple(m.get("provides", ()))) for m in machines),
+                tuple(Route(tuple(k["ends"]), k["latency_ms"], tuple(k.get("via", ()))) for k in links))
 
 
-__all__ = ["OWNERS", "PER", "PREMISES", "PRINCIPALS", "SOURCES", "STRUCTURAL", "Channel", "Link", "Machine", "Manifest",
-           "Placement", "Role", "Site", "place", "render", "site_of", "workload"]
+__all__ = ["OWNERS", "PER", "PREMISES", "PRINCIPALS", "SOURCES", "STRUCTURAL", "Channel", "Host", "Manifest", "PlaceResult",
+           "Role", "Route", "Topology", "place", "render", "site_of", "workload"]

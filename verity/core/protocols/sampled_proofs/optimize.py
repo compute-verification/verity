@@ -255,7 +255,7 @@ class Objective:
 
 
 @dataclass(frozen=True)
-class Certificate:
+class PlanBounds:
     """What a plan's sampling design certifies at `delta`, from its sizes alone: `harm` (core's `harm_bound` of the objective's harm),
     `density` (`density_bound` of it), `free_compute` (core's `harm_bound` of credited work and influence) and, when the
     objective weighs bits, `leak` (`consumers.exfiltration_bound`: `harm_bound` of output bits plus `location_bits`).  When
@@ -284,7 +284,7 @@ class Plan:
     full: frozenset[str]
     cost: Mapping[str, float]
     weights: Mapping[str, float] = field(default_factory=dict)
-    certificate: Certificate | None = field(default=None, compare=False)
+    certificate: PlanBounds | None = field(default=None, compare=False)
 
 
 def _log_miss(n: int, m: int, k: int) -> float:
@@ -569,7 +569,7 @@ def max_harm(rows: Iterable[tuple[int, int, float | Fraction]], delta: float | F
 
 
 def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective: Objective, *,
-            exact: bool = True) -> Certificate:
+            exact: bool = True) -> PlanBounds:
     """The plan's guarantee, from its sizes alone, by core's bounds (and `density_bound`); by `density_bound` alone when not
     `exact`, for populations too large for core's search."""
     chosen = [c for c in candidates if c.template in sizes]
@@ -580,7 +580,7 @@ def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective
 
     density = dens(objective.harm)
     if not exact:
-        return Certificate(d, density, density, dens(lambda c: float(c.work + c.influence)), None, False)
+        return PlanBounds(d, density, density, dens(lambda c: float(c.work + c.influence)), None, False)
     law = Stratified(tuple(Stratum(c.template, c.units, sizes[c.template]) for c in chosen))
     harm = law.harm_bound({c.template: objective.harm(c) for c in chosen}, d)
     work = law.harm_bound({c.template: float(c.work + c.influence) for c in chosen}, d)
@@ -588,7 +588,7 @@ def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective
     if objective.bits:
         profile = IntegrityProfile(("unit",), (law.population,), {"unit": law}, d)
         leak = exfiltration_bound(profile, {c.template: float(c.out_bits) for c in chosen})
-    return Certificate(d, harm, density, work, leak)
+    return PlanBounds(d, harm, density, work, leak)
 
 
 def _k(c: Candidate, objective: Objective, lam: float, weight: float = 1.0) -> int:
@@ -673,7 +673,7 @@ def _pareto(plans: Iterable[Plan], key) -> list[Plan]:
 def frontier(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, *, by: str = "harm",
              grid: int = 121, promote: float = 0.05, exact: bool = True,
              weights: Mapping[str, float] | None = None) -> list[Plan]:
-    """The certified Pareto frontier of (expected cost, `by`), cheapest first, `by` a `Certificate` field, each weight
+    """The certified Pareto frontier of (expected cost, `by`), cheapest first, `by` a `PlanBounds` field, each weight
     class's density scaled by its weight (`weights`, 1 when absent).  The sweep's plans are screened by `density_bound`
     (cheap) before the survivors are certified (`certify`, `exact` or not)."""
     weights = dict(weights or {})
@@ -1014,8 +1014,8 @@ def sqrt_grain(beta: float, h: float, target: float, o: float, delta: float, wei
     return sqrt(weight * beta * h * target / (o * log(1 / delta)))
 
 
-__all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "PROVING_ONLY", "Plan", "ReplayDomain", "SHA512_ANDS", "SHA512_ROWS", "TemplateCost", "acceptance_parts",
+__all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
+           "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayDomain", "SHA512_ANDS", "SHA512_ROWS", "TemplateCost", "acceptance_parts",
            "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target", "frontier", "grain_costs",
            "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits", "max_harm",
            "max_harm_check", "needs_benchmark", "overlaps", "perturb", "pinned_ands", "replay_cost", "row_ands", "sensitivity",
