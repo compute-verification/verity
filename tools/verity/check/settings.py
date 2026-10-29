@@ -18,11 +18,12 @@ each variable of a prefix this registry owns (`OWNED`: the ``CHECK_*`` knobs and
 declare and nothing else in the tree reads (`ELSEWHERE`): `check.py` and `suites.py` refuse to start with one, so a misspelt or
 retired knob fails the run instead of being ignored.
 
-The check package reads ``os.environ`` here.  The reads left outside are
-``tools/verity/check/tests/test_settings.py``'s `DIRECT`, which only shrinks: `slot.py` and `lean_slot.py` run alone, their source sent to a machine as ``python3 -`` (``check.py --slots``,
-``research.auto``, ``research.remote``), `common.py` is in every Lean package's audit key (`lean_audit.py`), and the read guard
-(``guard/``) loads in every test process before anything else; each variable they read is declared here all the same.  Stdlib
-only, Python 3.10, and nothing from beside it: `slot.py`'s interpreter can run it, and every module of the package loads it.
+The check package reads ``os.environ`` here.  The reads left outside are ``tools/verity/check/tests/test_settings.py``'s
+`DIRECT`, which only shrinks: `slot.py` and `lean_slot.py` run alone, their source sent to a machine as ``python3 -``
+(``check.py --slots``, ``research.auto``, ``research.remote``), `common.py` is in every Lean package's audit key
+(`lean_audit.py`), and the read guard (``guard/``) loads in every test process before anything else; each variable they read
+is declared here all the same.  Stdlib only, and nothing from beside it: a machine's ``python3`` can run it, and every module
+of the package loads it.
 """
 from __future__ import annotations
 
