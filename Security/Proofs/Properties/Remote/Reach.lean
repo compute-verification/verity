@@ -14,8 +14,8 @@ Remote's check reads bytes through `Lean.Json.parse`, which is `partial`, so no 
 * `remote_accepts_decoded`: remote's decoded check accepts on any three cases the policy, PoUW and the one-stage audit
   accept on one digest, and `remote_accepts`: remote's check accepts the bytes of three cases committing to one record
   that the components decode to cases they accept, the converse of `remote_accept`.
-* `pouw_accepts`: PoUW's check accepts a literal window, a draw of `k = 4` of 4 units, by `decide +kernel`
-  (`Reach.Pouw`).
+* `pouw_accepts`: PoUW's check accepts a literal window, a draw of `K′ = 4` of 4 units, by
+  `Properties.Pouw.Check.acceptMeans_complete` (`Reach.Pouw`).
 
 The policy's and the one-stage audit's own checks parse again past their decoders (the policy decodes its program text
 in `names` and `Desc.evaluate`; the one-stage audit reads each session's files), so their acceptance on a literal is a
@@ -91,20 +91,20 @@ theorem checkSameOf_three {id : String} {P₁ P₂ P₃ : Protocol} {ps : List N
   have a₃ := P₃.answerOf_accept h₃
   have htie : straysOf [P₁.id, P₂.id, P₃.id]
       [⟨P₁, ⟨.ok p₁, .ok c₁, .ok e₁⟩⟩, ⟨P₂, ⟨.ok p₂, .ok c₂, .ok e₂⟩⟩, ⟨P₃, ⟨.ok p₃, .ok c₃, .ok e₃⟩⟩] = none := by
-    have e₁ : committedOf P₁.id
+    have k₁ : committedOf P₁.id
         [⟨P₁, ⟨.ok p₁, .ok c₁, .ok e₁⟩⟩, ⟨P₂, ⟨.ok p₂, .ok c₂, .ok e₂⟩⟩, ⟨P₃, ⟨.ok p₃, .ok c₃, .ok e₃⟩⟩] =
         some (P₁.digest c₁) := by
       simp [committedOf, Except.toOption]
-    have e₂ : committedOf P₂.id
+    have k₂ : committedOf P₂.id
         [⟨P₁, ⟨.ok p₁, .ok c₁, .ok e₁⟩⟩, ⟨P₂, ⟨.ok p₂, .ok c₂, .ok e₂⟩⟩, ⟨P₃, ⟨.ok p₃, .ok c₃, .ok e₃⟩⟩] =
         some (P₁.digest c₁) := by
       rw [← d₂]; simp [committedOf, n₁₂, Except.toOption]
-    have e₃ : committedOf P₃.id
+    have k₃ : committedOf P₃.id
         [⟨P₁, ⟨.ok p₁, .ok c₁, .ok e₁⟩⟩, ⟨P₂, ⟨.ok p₂, .ok c₂, .ok e₂⟩⟩, ⟨P₃, ⟨.ok p₃, .ok c₃, .ok e₃⟩⟩] =
         some (P₁.digest c₁) := by
       rw [← d₃]; simp [committedOf, n₁₃, n₂₃, Except.toOption]
     unfold straysOf
-    simp [e₁, e₂, e₃, bytes_bne_self]
+    simp [k₁, k₂, k₃, bytes_bne_self]
   have hp' : ps.map (·.id) = [P₁, P₂, P₃].map (·.id) := by rw [hp]; rfl
   rw [checkSameOf_accept (cs := [P₁, P₂, P₃]) hp' ?acc htie ?bind]
   · simp only [List.map_cons, List.map_nil, a₁, a₂, a₃, Option.getD_some]
