@@ -1478,8 +1478,13 @@ class Driver:
             return
         if now - pl.get("rang_behind", 0) < BEHIND_EVERY_S:
             return
-        reds = "; ".join(f"{k}" + (f" (culprit #{r['culprit'][0]}" + (", reverted)" if r.get("reverted") else ")")
-                                   if r.get("culprit") else "") for k, r in red.items()) or "nothing named red"
+        culprit = {k: f" (culprit #{r['culprit'][0]}" + (", reverted)" if r.get("reverted") else ")") if r.get("culprit") else ""
+                   for k, r in red.items()}
+        # a red another commit's run recorded is not red in this run, which may not have reached that step yet
+        ours = {k for k, r in red.items() if not run or run["tip"] in (r["tip"], r.get("seen"))}
+        reds = "; ".join(f"{k}{culprit[k]}" for k in red if k in ours) or "nothing named red"
+        reds += "".join(f"; {k} has not run at {run['tip'][:12]} yet (last red at {r['tip'][:12]}, run {' '.join(r['ids'])}"
+                        f"{culprit[k].replace(' (', ', ', 1) or ')'}" for k, r in red.items() if k not in ours)
         state = (f"its run {_ids(run)} of {run['tip'][:12]} has run {(now - run.get('at', now)) / 3600:.1f} h" if run else
                  "no after-landing run is going")
         text = (f"`{self.q.into}`'s last verified commit {pl['verified'][:12]} is {(now - since) / 3600:.1f} h behind its tip {main[:12]} "

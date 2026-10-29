@@ -198,6 +198,23 @@ def test_a_reviewed_pr_waiting_on_its_running_lean_check_rings_the_lean_audits_o
     assert ring.startswith(f"@{JOBS[LEAN_STEP][0]} queue: ") and f"held by the Lean check {rid} of " in ring, ring
 
 
+def test_the_behind_alarm_names_an_older_commits_red_as_not_yet_run_at_the_tip_not_as_red(world, monkeypatch):
+    from research.drive import BEHIND_S
+
+    h = _landed(world, monkeypatch)
+    state = h.q.load_state()
+    pl = state["drive"]["postland"]
+    old, tip = pl["verified"], pl["run"]["tip"]
+    pl["red"] = {"step lean-suites": {"tip": old, "ids": ["r-old"], "step": "lean-suites", "first": "x", "culprit": None,
+                                      "owner": None, "not_run": []}}
+    h.q.save_state(state)
+    h.clock += BEHIND_S + 60
+    h.tick()
+    (alarm,) = _rings(h, "behind its tip")
+    assert "red: nothing named red" in alarm and "red: step lean-suites" not in alarm, alarm
+    assert f"step lean-suites has not run at {tip[:12]} yet (last red at {old[:12]}, run r-old)" in alarm, alarm
+
+
 def test_a_red_step_on_checked_with_no_culprit_rings_its_ci_toml_owner_alone_once(world, monkeypatch, tmp_path):
     h = _landed(world, monkeypatch)
     start = h.clock
