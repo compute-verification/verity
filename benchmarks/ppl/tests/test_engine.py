@@ -198,6 +198,7 @@ def test_served_noise_stays_in_the_product(llama, ids):
     assert max(rise["ssn_a-1"], rise["ssn_1l-1"]) < rise["raw_byte-1"]
 
 
+@pytest.mark.slow
 def test_pinned_float_ssn_passes_and_differs(llama, ids, monkeypatch, tmp_path):
     """`ssnfp` runs the pinned MMA's exact words (benchmarks/pouw/ssn_fp8/check_ppl_step.py holds them to the bit-exact
     simulator): each arm passes its gates, the noise moves the output, the oracle bound is no coarser than l1, and no
