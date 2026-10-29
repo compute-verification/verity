@@ -1960,7 +1960,7 @@
   },
   "RecDeploy.HonestFixture": {
    "owner": "@proofs",
-   "digest": "95d524a42735956c5f050d51e030072af0cceb93e816d972118bf85d38e0ee50"
+   "digest": "1f9f31fe0da579a3f985c8bd59907805dbd85dc50e092668a4e00bcb4d761a63"
   },
   "RecDeploy.KSFixture": {
    "owner": "@proofs",
@@ -45210,9 +45210,9 @@
    ]
   },
   "Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture": {
-   "digest": "0b2f342819a5d4be392d1079c7efdb23836231cd52c02637589547a6ed07cc70",
+   "digest": "c5c1a1393567d08334cd78d68b6395c1c35d348b53fbfc7176175ed4f3fa8ee1",
    "definitions": {
-    "RecDeploy.HonestFixture": "95d524a42735956c5f050d51e030072af0cceb93e816d972118bf85d38e0ee50",
+    "RecDeploy.HonestFixture": "1f9f31fe0da579a3f985c8bd59907805dbd85dc50e092668a4e00bcb4d761a63",
     "RecDeploy.TopsAt": "e0bc47598164dd14e1ae4b658dbdc8ab7a76f6d30eebefa826b7241f561e9aa5"
    },
    "guarantees": ["RecDeploy.HonestHalfFixture.honest_half_fixture"]
