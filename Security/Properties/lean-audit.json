@@ -363,8 +363,11 @@
   "VStar.Holo",
   "VStar.InnerRepCheck",
   "VStar.Parts",
+  "VStar.PyJson",
+  "VStar.RecOpen",
   "VStar.Residuals",
   "VStar.Stage",
+  "VStar.Stream",
   "VStar.Unit"
  ],
  "layers": {
