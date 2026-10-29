@@ -6,7 +6,7 @@ import Proofs.Pouw.Prob
 # Proof of the integrity audit of a period from C-Flock's integrity audit over a monitoring period
 
 At each value of the other coins, a draw of the sampled audit's own coins on which it accepts while more than `ε` of
-the units are wrong is one on which every sampling block is accepted and the faulty proof blocks total more than
+the units are wrong is one on which every sampling block is accepted and the incorrect proof blocks total more than
 `ε·units ≥ ln(1/δ)/q`, the event `Flock.SecurityProofs.IntegrityHorizon` bounds; the realization's `law` carries the
 bound from the period's game to the uniform coins.
 -/

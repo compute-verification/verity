@@ -6,18 +6,18 @@ import Proofs.Flock.Soundness.Audit.StratifiedProj
 /-!
 # The tile coordinate is the sampling block's stratified draw at the tile stratum
 
-`TileStratumEscape`, proved, and its join to the law's side:
+`TileStratumAcceptProb`, proved, and its join to the law's side:
 
 * `miss_eq`: a uniform permutation's `K`-prefix (`Pouw.Window.subsetDraw`) misses `B` with probability exactly
   `C(N − |B|, K)/C(N, K)`, by `Properties.Served.SecurityProofs.miss_ge`'s induction through
   `Equiv.Perm.decomposeFin` with equality at each step: the first image misses `B` with probability `1 − |B|/N`, and
   given it misses, the rest is a uniform permutation of `N − 1` places that must miss a set of exactly `|B|` of them.
-* `tileStratumEscape`: the tile coordinate (`tileDraw`) misses `B` exactly when the permutation's `k s_T`-prefix misses
+* `tileStratumAcceptProb`: the tile coordinate (`tileDraw`) misses `B` exactly when the permutation's `k s_T`-prefix misses
   the stratum's places whose proof blocks are in `B` (`disjoint_tileDraw_iff`), `|B.filter (σ · = s_T)|` of them
-  (`card_tilesIn`), so `miss_eq` is `TileStratumEscape`.
-* `tileStratumEscape_eq_proj`: that is `FlockSoundness.Audit.Law.stratified_proj_escape`'s factor, so the tile
+  (`card_tilesIn`), so `miss_eq` is `TileStratumAcceptProb`.
+* `tileStratumAcceptProb_eq_proj`: that is `FlockSoundness.Audit.Law.stratified_proj_escape`'s factor, so the tile
   coordinate at a uniform permutation misses every `B` exactly as `Law.stratified σ k hk`'s coordinate `s_T` does, and
-  `tileStratumEscape_eq_exp`: with `m_s + k_s ≤ n_s`, it misses `B` with `exp(−stratumRisk σ k s_T m_s)`, stratum
+  `tileStratumAcceptProb_eq_exp`: with `m_s + k_s ≤ n_s`, it misses `B` with `exp(−stratumRisk σ k s_T m_s)`, stratum
   `s_T`'s exact risk (`Law.stratified_proj_escape_eq_exp`).
 -/
 
@@ -149,9 +149,9 @@ theorem card_tilesIn {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (B : F
     rw [ht]
     exact hB
 
-/-- **`TileStratumEscape`**: the tile coordinate at a uniform permutation of the stratum misses `B` with the stratum's
+/-- **`TileStratumAcceptProb`**: the tile coordinate at a uniform permutation of the stratum misses `B` with the stratum's
 hypergeometric factor. -/
-theorem tileStratumEscape : TileStratumEscape := by
+theorem tileStratumAcceptProb : TileStratumAcceptProb := by
   intro nB mB σ k hk sT B
   have h : (fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
       fun π => ∀ v ∈ Pouw.Window.subsetDraw (k sT) π, v ∉ tilesIn σ sT B :=
@@ -161,24 +161,24 @@ theorem tileStratumEscape : TileStratumEscape := by
 /-- **The tile coordinate is the stratified draw's coordinate `s_T`**: at a uniform permutation of the stratum it misses
 every `B` exactly as `Law.stratified σ k hk`'s coordinate `s_T` does (`Law.stratified_proj_escape`), so the period's
 tile coin is the sampling block's draw restricted to the tile stratum. -/
-theorem tileStratumEscape_eq_proj {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
+theorem tileStratumAcceptProb_eq_proj {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (B : Finset (Fin nB)) :
     ENNReal.ofReal (prob fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
       FlockSoundness.Game.prCoin
         (fun ω : (FlockSoundness.Audit.Law.stratified σ k hk).Ω => Disjoint (ω sT).1 B) := by
   have hpos : (0 : ℝ) < ((tileCount σ sT).choose (k sT) : ℝ) := by exact_mod_cast Nat.choose_pos (hk sT)
-  rw [tileStratumEscape σ k hk sT B, ENNReal.ofReal_div_of_pos hpos, ENNReal.ofReal_natCast,
+  rw [tileStratumAcceptProb σ k hk sT B, ENNReal.ofReal_div_of_pos hpos, ENNReal.ofReal_natCast,
     ENNReal.ofReal_natCast]
   exact (FlockSoundness.Audit.Law.stratified_proj_escape σ k hk sT B).symm
 
 /-- **The tile coordinate's escape is stratum `s_T`'s exact risk**: with `m_s + k_s ≤ n_s` it misses `B` with
 `exp(−stratumRisk σ k s_T m_s)` (`Law.stratified_proj_escape_eq_exp`). -/
-theorem tileStratumEscape_eq_exp {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
+theorem tileStratumAcceptProb_eq_exp {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (B : Finset (Fin nB))
     (hc : (B.filter (σ · = sT)).card + k sT ≤ tileCount σ sT) :
     ENNReal.ofReal (prob fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
       ENNReal.ofReal (Real.exp (-FlockSoundness.Audit.Law.stratumRisk σ k sT (B.filter (σ · = sT)).card)) := by
-  rw [tileStratumEscape_eq_proj]
+  rw [tileStratumAcceptProb_eq_proj]
   exact FlockSoundness.Audit.Law.stratified_proj_escape_eq_exp σ k hk sT B hc
 
 end Properties.Pouw.PeriodJ10R.SecurityProofs

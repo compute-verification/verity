@@ -38,7 +38,7 @@ def VerdictAccepts : Prop :=
     (verdict schemes trusted expected s c openings).accepted = true → Accepted schemes trusted expected s c openings
 
 def JudgeAccepts : Prop :=
-  ∀ (r : Judge.Record), Verdict.accepted <$> Judge.judge r = .ok true →
+  ∀ (r : Judge.JudgeInputs), Verdict.accepted <$> Judge.judge r = .ok true →
     ∃ schemes, Judge.schemesOf r.schemes = .ok schemes ∧
       Accepted schemes r.trusted.toList r.expected.find r.signed r.commitment r.openings
 
@@ -103,12 +103,12 @@ def Recorded.round (coins : CoinTree) (limitNs blockBytes : Nat) (st : Recorded)
 def Run.recorded (r : Run) : Recorded := r.observed.foldl (Recorded.round r.coins r.limitNs r.blockBytes) ⟨#[], none⟩
 
 /-- The memory challengers: the sessions the holder of each key runs under it. -/
-structure Device where
+structure Challengers where
   sessions : ByteArray → List Run
 
 /-- The messages the device signs under the key `pk`: for each session it runs under `pk` and ends,
 `memoryChallengerMessage` of the key's identifier, the session id and the session's `message`. -/
-def Signed (dev : Device) (pk m : ByteArray) : Prop :=
+def Signed (dev : Challengers) (pk m : ByteArray) : Prop :=
   ∃ r ∈ dev.sessions pk, ∃ ended rec, r.recorded.ended = some ended ∧
     message r.commitment ended r.recorded.rounds = .ok rec ∧
     memoryChallengerMessage (pk.extract 0 16) r.commitment.session rec = .ok m
@@ -157,7 +157,7 @@ def sessionStrings (pk : ByteArray) (c : SessionCommitment) (ended : String) (ro
     | .error _ => []
 
 /-- The strings the run hashes: the signed session's, and those of each session the device ends under its key. -/
-def runStrings (s : SignedSession) (dev : Device) : List ByteArray :=
+def runStrings (s : SignedSession) (dev : Challengers) : List ByteArray :=
   sessionStrings s.publicKey s.commitment s.ended s.rounds ++
     (dev.sessions s.publicKey).flatMap fun r => match r.recorded.ended with
       | some e => sessionStrings s.publicKey r.commitment e r.recorded.rounds
@@ -167,7 +167,7 @@ def runStrings (s : SignedSession) (dev : Device) : List ByteArray :=
 its end and every round (index, digest, send and receipt times) are the ones the device recorded; or two distinct
 strings of the run have one SHA-512 digest; or `s`'s signature verifies under a trusted key and an accepted scheme over
 its message, which the device never signed under that key. -/
-def SignedByDevice (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (dev : Device) : Prop :=
+def SignedByDevice (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (dev : Challengers) : Prop :=
   (∃ r ∈ dev.sessions s.publicKey, r.commitment = s.commitment ∧ r.recorded.ended = some s.ended ∧
       r.recorded.rounds = s.rounds) ∨
     (∃ x ∈ runStrings s dev, ∃ y ∈ runStrings s dev, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) ∨
@@ -177,7 +177,7 @@ def SignedByDevice (schemes : Schemes) (trusted : List ByteArray) (s : SignedSes
 /-- **An accepted session is the device's.** For every device, an accepted verdict's session is `SignedByDevice`. -/
 def VerdictSigned : Prop :=
   ∀ (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (s : SignedSession)
-    (c : SessionCommitment) (openings : Array CoinOpening) (dev : Device),
+    (c : SessionCommitment) (openings : Array CoinOpening) (dev : Challengers),
     (verdict schemes trusted expected s c openings).accepted = true → SignedByDevice schemes trusted s dev
 
 /-- `VerdictSigned` for `Judge.judge` on a record as its caller holds it, under the schemes the record names. The
@@ -185,7 +185,7 @@ forgery disjunct is at the record's own scheme parameters: a reader cites `euf-c
 record's scheme is `LMS` (`lms-sha512/n64-w1-h20/v0`) at its deployed parameters (`Lms.deployed`, Python
 `lms.DEPLOYED`). -/
 def JudgeSigned : Prop :=
-  ∀ (r : Judge.Record) (dev : Device), Verdict.accepted <$> Judge.judge r = .ok true →
+  ∀ (r : Judge.JudgeInputs) (dev : Challengers), Verdict.accepted <$> Judge.judge r = .ok true →
     ∃ schemes, Judge.schemesOf r.schemes = .ok schemes ∧ SignedByDevice schemes r.trusted.toList r.signed dev
 
 end MemoryChallenger.Properties
