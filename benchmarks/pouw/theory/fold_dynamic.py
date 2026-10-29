@@ -150,6 +150,19 @@ def summary(res: dict) -> dict:
             "examples": [f"{m[0]}: {m[3]}" for m in short[:3]]}
 
 
+def degenerate(fam: str, theta: str, W: int) -> bool:
+    """A member with a step that collapses: arxm's key x with rotl(x, r) in {0, 2^(W-1)} (the xor is then an add, so
+    the step is LEA.HI and IMAD), or a multiplier k = 1. At 32 bits each has probability about 2^-31 a step."""
+    top = 1 << (W - 1)
+    for st in theta.split(","):
+        f = dict((p[0], int(p[1:])) for p in st.split("."))
+        if fam == "arxm" and (((f["x"] << f["r"]) | (f["x"] >> (W - f["r"]))) & ((1 << W) - 1)) in (0, top):
+            return True
+        if fam in ("rotmuladd", "mulrotadd", "xormul") and f.get("k") == 1:
+            return True
+    return False
+
+
 # ---- decomp: the zero-data state over (row part, column part) ---------------------------------------------------------
 
 def step32(fam: str, th: dict, s: int, w: int, W: int) -> int:
@@ -486,11 +499,15 @@ def main() -> int:
                  all(m[2] is None for m in raw("lik.W8.S1.all")))
         ck.check("arxm: no member's step is one instruction (width 8, every k and r)",
                  all(m[2] is None for m in raw("arxm.W8.S1.all.D1")))
-        ck.check("arxm: no sampled member's step is two instructions (width 6)",
-                 all(m[2] is None for m in raw("arxm.W6.S1.D2")))
+        for name in ("arxm.W6.S1.D2",) + (("arxm.W8.S1.D2",) if full else ()):
+            Wn = int(name.split(".")[1][1:])
+            ck.check(f"arxm: every sampled member whose step is two instructions is degenerate, rotl(x, r) in "
+                     f"{{0, 2^(W-1)}} ({name})",
+                     all(m[2] is None or degenerate("arxm", m[0], Wn) for m in raw(name)),
+                     f"{sum(m[2] is not None for m in raw(name))} of {len(raw(name))} found")
         for fam in ("rotmuladd", "xormul", "lik", "arxm"):
-            ck.check(f"{fam}: no sampled two-step member has a 2-instruction program (width 6)",
-                     all(m[2] is None or m[2] >= m[1] for m in raw(f"{fam}.W6.S2.D2")))
+            ck.check(f"{fam}: every sampled two-step member shorter than honest has a degenerate step (width 6)",
+                     all(m[2] is None or m[2] >= m[1] or degenerate(fam, m[0], 6) for m in raw(f"{fam}.W6.S2.D2")))
         ck.check("arxm at zero data: no sampled two-step member has a 2-instruction program (width 6)",
                  all(m[2] is None for m in raw("arxm.W6.S2.D2.z")))
         if full:
