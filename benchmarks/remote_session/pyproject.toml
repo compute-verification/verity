@@ -32,6 +32,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/primitives/randomness", "verity/core/difftest/lean",
           # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
           "verity/core/difftest/python",
+          # engine.py's kv.so (test_store_layout imports it) opens through the benchmarks' one loader
+          "benchmarks/word_codec/cuda_lib.py",
           # test_vllm_serve.py, where vLLM and a GPU are: the integration's store and what it imports
           "verity/core/protocols/bandwidth",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit
