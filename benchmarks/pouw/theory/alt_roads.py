@@ -422,6 +422,7 @@ def per_period_bounds(inp: dict, res: dict) -> dict:
     hw = inp["ssn_1l_hw"]
     r4 = next(r for r in res["R4"]["rows"] if r["point"] == "t8192" and r["schedule"] == "overlapped")
     t2 = lambda key: r1[key]["gpu_400g"]["t2_judged"]
+    r1b_t2 = inp["space_t2"]["designs"]["ssn-1l-tag/served/s8/k32/w/r256k/cert/min"]["t8192"]["judged"]
     bounds = [
         ("R1 + ssn_1l_hw, T1 closed (forming and coin branch)", "T 512, 64 rows", t2("t64"), hw["t1_closed"]["t64"]),
         ("R1 + ssn_1l_hw, T1 closed (forming and coin branch)", "T 512, 512 rows", t2("t512"), hw["t1_closed"]["t512rows"]),
@@ -430,10 +431,8 @@ def per_period_bounds(inp: dict, res: dict) -> dict:
         ("R1 + ssn_1l_hw, T1 with coins uncredited", "T 8,192", t2("t8192"), hw["t1_coins_uncredited"]["t8192"]),
         ("R1 under T_cred, over-credit with a tensor-only floor", "T 512, 64 rows", t2("t64"),
          res["R4"]["t_cred_reading"]["certifier_commit_over_credit_tensor_only_floor"]),
-        ("R1b + ssn_1l_hw at 256 KiB rows: hiding term removed (W1 floor)", "T 8,192", inp["ssn_1l"]["t2_t8192"][1],
-         hw["hiding_salt_side"]["t8192"]),
-        ("R1b + ssn_1l_hw: hashing A before its noise removed (W1 floor)", "T 8,192", inp["ssn_1l"]["t2_t8192"][1],
-         hw["prenoise"]["t8192"]),
+        ("R1b + ssn_1l_hw at 256 KiB rows: hiding term removed (W1 floor)", "T 8,192", r1b_t2, hw["hiding_salt_side"]["t8192"]),
+        ("R1b + ssn_1l_hw: hashing A before its noise removed (W1 floor)", "T 8,192", r1b_t2, hw["prenoise"]["t8192"]),
         ("R4 elapsed-time reading: tensor pipe idle beyond stock's, SSN overlapped", "T 8,192", r4["t2"],
          r4["excess_idle_stock_macs_per_stock_mac"]),
         ("R1b egress: OutsourceWithinEgress at a 32-bit-a-token cap, W_mac at SHA-512's floor", "any", None,
