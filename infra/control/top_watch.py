@@ -31,8 +31,10 @@ seen.
 6. The Linear audit (`research.linear`'s `audit`, $LINEAR_CLIENT_ID and $LINEAR_CLIENT_SECRET): one JSON line a pass in
    <state dir>/linear-audit.jsonl, with the counts by lane and kind and #agent-coordination's last 24 h (`traffic --volume`:
    posts, words, posts over 80 words). Each lane with findings, once per LANE_RING_S, with its counts and the command that
-   lists them (findings with no lane: @top); once a day after 15:00Z, @top with the totals and their change from the line
-   24 h earlier, and the registry's teams the app can't read (`unread`), which the audit skips.
+   lists them (findings with no lane: @top); a person's ask off track (`linear.ASK_KINDS`) rings its lane every hour, naming
+   the issues, and top with the counts by lane, until it holds; once a day after 15:00Z,
+   @top with the totals and their change from the line 24 h earlier, and the registry's teams the app can't read
+   (`unread`), which the audit skips.
 
 `--seed` runs one pass that records every reply, comment, post and finding as seen or rung and rings nothing (a page's pending
 tick is left to the next pass), so a loop taking over from top's timers starts where they are; the watchers supervisor waits for
@@ -398,6 +400,19 @@ def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Call
         once_each(state, f"linear:{lane}:{bucket}", ring, name,
                   f"{name}: the Linear audit finds {sum(c.values())} on {whose} ({', '.join(f'{k} {n}' for k, n in c.items())}): "
                   f"`research msg linear audit --lane {lane}` lists them, one line each with its fix.", None, now)
+    hour = int(now // 3600)
+    asks = {lane: {k: n for k, n in c.items() if k in linear.ASK_KINDS} for lane, c in counts.items()}
+    asks = {lane: c for lane, c in asks.items() if c}
+    for lane, c in asks.items():
+        mine = [f["issue"] for f in found if f["lane"] == lane and f["kind"] in linear.ASK_KINDS]
+        once_each(state, f"linear-ask:{lane}:{hour}", ring, "top" if lane == linear.NO_LANE else lane,
+                  f"{lane}: a person's ask is off track on {', '.join(dict.fromkeys(mine))} ({', '.join(f'{k} {n}' for k, n in c.items())}): "
+                  f"`research msg linear audit --lane {lane}` gives each fix; this rings every hour until it holds.", None, now)
+    if asks:
+        once_each(state, f"linear-ask:top:{hour}", ring, "top",
+                  "top: people's asks off track: " + ", ".join(f"{lane} {sum(c.values())}" for lane, c in
+                                                                sorted(asks.items(), key=lambda kv: -sum(kv[1].values())))
+                  + " (`research msg linear audit --asks` is the ledger)", None, now)
     if time.gmtime(now).tm_hour < REPORT_HOUR_UTC:
         return
 
