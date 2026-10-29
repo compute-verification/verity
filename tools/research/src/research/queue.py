@@ -3175,7 +3175,8 @@ class RecordsGate:
         below = parents[0]
         try:
             same = below not in self._differs(commit, [below], self._inputs(commit, pkg))
-        except (QueueError, ValueError, TypeError, AttributeError):
+        except (QueueError, ValueError, TypeError, AttributeError) as e:
+            self.notes.append(f"{pkg}'s inputs at {commit[:12]} can't be compared with {below[:12]}'s ({type(e).__name__}: {e})")
             same = False
         if same:
             how = self._vouch(below, pkg, depth + 1)
