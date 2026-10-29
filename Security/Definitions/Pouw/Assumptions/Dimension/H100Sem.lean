@@ -39,6 +39,8 @@ reduction's target (`AlgSuffL`, rank 3, the analogue of `A2_algebraicSufficiency
   `innerProductRank`;
 * on cell-pure programs (`CellPure`, rank 4, Theorem K's purity) the count is the full `L` a word, `L/32` registers of
   32 (`PureCount`, a sketch of a short proof from `innerProductRank`);
+* on pure lanes (`PureLanes`: no tensor-core lane sums two noise variables) it is the full `L` a word whatever the
+  program shares (`CoverCount`, a covering count, sketched);
 * without purity the full `L` is `NoSharingGain`, a lower bound on matrix multiplication's cost with merges priced and
   operand ranges enforced: open at `L` 64 and 128, likely false from 256 (small data lets summed lanes fit s8).
 -/
@@ -463,10 +465,36 @@ def PureCount (L : ℕ) : Prop :=
         idx p < P.length ∧ (bamRegs P).getD (idx p) 0 = runForm a b L p.1 p.2.1 p.2.2) →
       CellPure P (K / L) idx → (m * n * (K / L) : ℚ) * L ≤ bamCost P
 
+/-- A lane that carries at most one noise variable. -/
+def Lane.Pure {α : Type} (u : Lane α) : Prop := ∀ i j, u (some i) ≠ 0 → u (some j) ≠ 0 → i = j
+
+/-- **`PureLanes P`**: every tensor-core lane of `P` carries at most one noise variable (no summed lanes). At `h200Types`
+an s8 lane is pure whenever the noised operand spans all 256 values; at this file's 64-value noise it is a restriction
+on the adversary (rank 4), since an s8 lane holds up to four noise variables on small data and an `f16` lane many. -/
+def PureLanes {α β : Type} (P : List (BamOp α β)) : Prop :=
+  ∀ o ∈ P, match o with
+    | .tc _ _ u v => (∀ t, (u t).Pure) ∧ ∀ t, (v t).Pure
+    | _ => True
+
+/-- **The count on pure lanes** (sketch of a theorem; rank 0 once proved): every well-formed program at the H200's
+types with pure lanes whose registers include every running word's form costs at least `N·L`, whatever it shares
+across cells, for every data.
+
+The proof is a covering count. On pure lanes a product's noise part is one monomial `e_α f_β`, a merge or copy adds
+no monomial, and a constant has none, so every monomial of every register is a product of some tensor-core register.
+The cells' last words hold all `m·n·K` monomials `e_(r,i) f_(i,c)`. A noise-carrying type has `k ≤ 32` (a lane with a
+noise variable spans at least 64 values, so `e4m3`, `e5m2`, int4 and `b1` lanes carry none), so it takes `m·n·K/32`
+registers of 32. It is KSW-K's one fresh monomial per honest MAC turned into a bound: summed lanes are what break it. -/
+def CoverCount (L : ℕ) : Prop :=
+  ∀ (m K n : ℕ) (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n → ℤ)
+    (P : List (BamOp (Fin m × Fin K) (Fin K × Fin n))),
+    L ∣ K → (∀ o ∈ P, o.WF h200Types) → PureLanes P → (∀ f ∈ runForms a b L, f ∈ bamRegs P) →
+      (m * n * (K / L) : ℚ) * L ≤ bamCost P
+
 /-- **`NoSharingGain L`** (open at `L` 64 and 128; rank 4 to 5): the same programs cost at least `N·L`, the honest
 `L/32` registers of 32 a word. It is a lower bound on matrix multiplication's cost with merges priced and operand
-ranges enforced, over every int7 data. `PureCount` gives it on the programs `CellPure` admits; the open part is the
-programs that share products across cells, which need summed lanes.
+ranges enforced, over every int7 data. `PureCount` gives it on the programs `CellPure` admits and `CoverCount` on
+those `PureLanes` admits; the open part is the programs that share products across cells through summed lanes.
 
 The ranges block a summed lane only where the data are large: two entries' sum fits s8 when the two data values sum
 to at most 64 in magnitude, and with zero data four entries' sum fits. So it is likely false from `L = 256` (an
@@ -495,8 +523,8 @@ def AlgSuffL (L : ℕ) : Prop :=
 
 /-- **The work bound at commit interval `L`** (sketch): under the semantic premises, every `MH100w` program at
 `h100Floor` that outputs the running words on fresh noise costs at least `c` a word. `AlgSuffL L ∧ BamFloor L` gives
-it at `c = 64 − 1024/L`, and `AlgSuffL L ∧ NoSharingGain L` at `c = L` (on cell-pure programs, `PureCount L`
-in place of `NoSharingGain L`). -/
+it at `c = 64 − 1024/L`, and `AlgSuffL L ∧ NoSharingGain L` at `c = L` (on cell-pure programs `PureCount L`, and
+on pure lanes `CoverCount L`, in place of `NoSharingGain L`). -/
 def LCommitBound (L : ℕ) (c : ℚ) : Prop :=
   ∀ (I : Sm90Isa), DecOK I.dec →
     ∀ (m K n : ℕ) (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n → ℤ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ)
