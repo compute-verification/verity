@@ -1,6 +1,6 @@
 """The H200 power ranking of PoUW designs: check a rows file and render it.
 
-A rows file is TOML: one ``[[row]]`` per design or argument, each target cell a cited value or ``"?"``, and one
+A rows file is TOML: one ``[[row]]`` per design or argument, each target a cited value or ``"?"``, and one
 ``[period]`` table with the compute a monitoring period scales by. ``rank.py`` refuses a row that leaves a column empty,
 uses a provenance mark or Lean status outside the lists below, or ranks a design without a position, and writes
 ``ranking.md``, ``ranking.csv`` and ``ranking.json`` into ``--out``.
@@ -89,7 +89,7 @@ def period_rows(rows: list[dict], period: dict) -> list[dict]:
     return out
 
 
-def cell(r: dict, t: str) -> str:
+def entry(r: dict, t: str) -> str:
     return f"{r[t]} [{', '.join(r[f'{t}_card'])}; {r[f'{t}_status']}]"
 
 
@@ -102,11 +102,11 @@ def md_table(header: list[str], body: list[list[str]]) -> list[str]:
 def render_md(rows: list[dict], period: dict, prows: list[dict], meta: dict) -> str:
     ranked = sorted((r for r in rows if r["verdict"] == "ranked"), key=lambda r: r["pos"])
     head = ["#", "id", "design", "rank", "T1 gap, H200 time", "T2 t_H/t_S", "T3 perplexity", "Lean", "vLLM"]
-    line = lambda r, pos: [pos, r["id"], r["design"], f"{r['rank']}: {r['assumption']}", cell(r, "t1"), cell(r, "t2"),
-                           cell(r, "t3"), f"{', '.join(r['lean'])}: {r['lean_ids']}", r["vllm"]]
+    line = lambda r, pos: [pos, r["id"], r["design"], f"{r['rank']}: {r['assumption']}", entry(r, "t1"), entry(r, "t2"),
+                           entry(r, "t3"), f"{', '.join(r['lean'])}: {r['lean_ids']}", r["vllm"]]
     out = [f"# {meta.get('title', 'H200 power ranking')}", ""]
     out += [meta.get("preamble", ""), ""]
-    out += ["Each target cell reads `value [where it was obtained; status]`. Marks: " + ", ".join(f"`{c}`" for c in CARDS)
+    out += ["Each target reads `value [where it was obtained; status]`. Marks: " + ", ".join(f"`{c}`" for c in CARDS)
             + ". Status: met, open or fail against CORE.md's targets (T1 ≤ 1% in H200 time, T2 ≤ 100, T3 ≤ 5%).", ""]
     out += ["## Ranked designs", ""] + md_table(head, [line(r, r["pos"]) for r in ranked]) + [""]
     for verdict, title in (("argument", "Arguments (no design of their own)"), ("not core", "Outside the core problem"),
@@ -128,7 +128,7 @@ def render_md(rows: list[dict], period: dict, prows: list[dict], meta: dict) -> 
     for r in sorted(rows, key=lambda r: (VERDICTS.index(r["verdict"]), r.get("pos", 99), r["id"])):
         out += [f"### {r['id']}: {r['design']}", "", f"- Catalogs: {', '.join(r['catalogs'])}",
                 f"- Assumption (rank {r['rank']}): {r['assumption']}"]
-        out += [f"- {t.upper()}: {cell(r, t)}" for t in TARGETS]
+        out += [f"- {t.upper()}: {entry(r, t)}" for t in TARGETS]
         out += [f"- Lean: {', '.join(r['lean'])}: {r['lean_ids']}", f"- vLLM: {r['vllm']}",
                 f"- Verdict: {r['verdict']}: {r['why']}"]
         if r.get("needs"):
