@@ -1,7 +1,9 @@
 import Proofs.Pouw.Lead.PStar.AlphabetProofs
 import Proofs.Pouw.Lead.PStar.ExpansionProofs
 import Proofs.Pouw.Lead.PStar.Lanes
+import Proofs.Pouw.Lead.PStar.Marginal
 import Proofs.Pouw.Lead.PStar.MassFloorProofs
+import Proofs.Pouw.Lead.PStar.Tile
 import Proofs.Pouw.Lead.PStar.Walks
 
 /-!
@@ -14,8 +16,12 @@ Its proofs are in `Lead/PStar/`, its new declarations in `Pouw.SecurityProofs.Le
 * `ExpansionProofs`: the affine expansion `u + t·v` is pairwise uniform on a prime modulus, with the two moments of
   the hit count over steps.
 * `Lanes`: `blc4a-t64-e7`'s three coin lanes sharing one draw a tile under `-rot`'s weights, `(127, 1, 1)` on even rows
-  and `(1, 127, 1)` on odd: `p* = 65/2,097,152` exactly on either class.
+  and `(1, 127, 1)` on odd: `p* = 65/2,097,152` exactly on either class, and the coin sum's range `±16,383`.
+* `Marginal`: a part of the draw caps the whole: a value that moves with one part of the draw only through a term
+  hits a fixed value on at most the share that term does.
 * `MassFloorProofs`: point masses at most `p` force a variance of at least `(1/p² − 1)/12`, with its mean over steps.
+* `Tile`: at tile grain, the even and odd rows together fix each column's triple, so a 16 × 8 MMA tile's step is
+  injective in its `2^184` draws: `p* = 2^−184` exactly.
 * `Walks`: the same lanes summed over steps: an entry's own walk keeps `p*` over any nonempty set of steps; an even
   and an odd row of one tile, which read the same coins, differ by a value fixed before the draw on at most `1/256` of
   the draws, and `k` of their words coincide together on at most `(1/2)·(1/128)^k`, the bits being shared by the

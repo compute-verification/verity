@@ -18,6 +18,7 @@ the largest share of the draws `(b, s)` on which the increment equals a value fi
 * **The increment** (`rotLane_fiber_le`, `rotLane_fiber_attained`): the coin sum is odd, so the parity of
   `c + b + Σ` fixes `b`, and `p* = 130/(2·128³) = 65/2,097,152` on either class, for any constant `c`
   (`rotLane_pstar`).
+* **The range** (`rotSum_abs_le`): the 127 weight lets a row's coin sum reach `16,383` in magnitude.
 -/
 
 namespace Pouw.SecurityProofs.Lead.PStar
@@ -154,6 +155,18 @@ theorem rotSum_fiber_127 (i : ℕ) : 130 ≤ (triples.filter fun s => rotSum i s
   by_cases hi : i % 2 = 0
   · simp only [rotSum, hi, ite_true]; exact evenSum_fiber_127
   · simp only [rotSum, hi, ite_false]; rw [oddSum_fiber_card]; exact evenSum_fiber_127
+
+/-- **The 127 weight's range**: a row's coin sum is at most `127·127 + 2·127 = 16,383` in magnitude, against `3·127`
+unweighted. -/
+theorem rotSum_abs_le (i : ℕ) {s : ℤ × ℤ × ℤ} (hs : s ∈ triples) : |rotSum i s| ≤ 16383 := by
+  rw [mem_triples] at hs
+  obtain ⟨a, ha1, ha2, ha⟩ := mem_coins.mp hs.1
+  obtain ⟨b, hb1, hb2, hb⟩ := mem_coins.mp hs.2.1
+  obtain ⟨c, hc1, hc2, hc⟩ := mem_coins.mp hs.2.2
+  rw [abs_le]
+  by_cases hi : i % 2 = 0
+  · simp only [rotSum, hi, ite_true, evenSum, ha, hb, hc]; constructor <;> omega
+  · simp only [rotSum, hi, ite_false, oddSum, ha, hb, hc]; constructor <;> omega
 
 /-- Row `i`'s step increment `c + b + Σ` from its bit `b` and the tile's coins `s`, weighted by its class. -/
 def rotLane (c : ℤ) (i : ℕ) (b : ℤ) (s : ℤ × ℤ × ℤ) : ℤ := c + b + rotSum i s
