@@ -81,7 +81,8 @@ def store_salt(key: bytes, label: bytes, c: int) -> bytes:
 
 
 def canonical_json(obj) -> bytes:
-    """`verity.ml.circuits.codec.canonical_json`'s bytes, which this protocol may not import."""
+    """`verity.ml.circuits.codec.canonical_json`'s bytes, which this protocol may not import, on every value codec
+    takes; a string past ASCII without DEL, which codec refuses, is escaped, as `RemoteAudit.Store.pyJson` escapes it."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
 

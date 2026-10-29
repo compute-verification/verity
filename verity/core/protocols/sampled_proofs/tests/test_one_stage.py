@@ -311,7 +311,7 @@ def test_draw_checks():
             D.parse_law(bad)
     for p in ("\u0661/\u0662", "\u00b9/2"):
         drawn = {"law": "bernoulli", "population": 6, "p": p, "units": [0, 5]}
-        assert D.check_draw(drawn, rec, {"law": "bernoulli", "p": p}).codes == ("p",)
+        assert D.check_draw(drawn, rec, D.parse_law("bernoulli:1/2")).codes == ("law", "p")
 
 
 def test_the_rate_law_is_its_rate_rounded_up_to_its_tables():
