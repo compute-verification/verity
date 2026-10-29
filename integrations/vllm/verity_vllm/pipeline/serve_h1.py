@@ -40,7 +40,10 @@ own Commit.
 * **Off the engine loop.** At a window's close the loop takes only H1's hooks and tap off; its release (the empty
   steps' calls, the manifest's commit, the draw coin, the session's close and the wait for its end entry) runs on
   ``closer``, one thread in window order, while the next window serves. Each window still has its own session,
-  coins and transcript, and its outcome is recorded in window order once its release ends.
+  coins and transcript, and its outcome is recorded in window order once its release ends. With ``--h1-prover`` each
+  served call's prover state is copied off the device and written by the server's `pouw_h1_prover.Writer`, whose ring
+  holds a window's bytes at most, and the window's release waits for its files: one not written is the window's error,
+  ``kept`` in its outcome otherwise.
 * **Its draw, for the draw-gated release** (``--retain device --seal --release-after pouw``, `serve_release`). Once a
   window's draw coin is open, its release puts H1's draw of the window under `DRAWER` (`H1Windows.drawn`): the proof
   blocks core draws (`credit.drawn` over the window Program's layout, as `pouw_h1_challenger.drawn_of` draws them), each
@@ -141,8 +144,9 @@ class GateOptions:
     h1_prover: str | None = option("--h1-prover", default=None, metavar="DIR",
                                    help="with --protocols: keep each H1 window's prover state (its salt key and each call's "
                                         "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
-                                        "owner-only, for proving its drawn units and rounds after the close; never a "
-                                        "published path")
+                                        "owner-only, for proving its drawn units and rounds after the close, written off "
+                                        "the engine loop (pouw_h1_prover.Writer, its ring a window's bytes in host memory); "
+                                        "never a published path")
 
 
 def config_of(value: str | None) -> dict[str, Any]:
@@ -424,7 +428,8 @@ class H1Windows:
     weights' registration key (a fresh one when None); ``unit`` the Program's tile unit at each K (`h1window.tile_unit`
     when None); ``sessions`` each window's session on the auditor host's challenger (`GateSessions`; None: in-process
     coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`;
-    None: kept nowhere, so no drawn unit or round of it can be proved). ``closer`` (a `worker`) runs each window's
+    None: kept nowhere, so no drawn unit or round of it can be proved), the calls' state written by ``writer`` (a
+    `pouw_h1_prover.Writer` whose ring holds the window's bytes, `pouw_h1_prover.kept_bytes`). ``closer`` (a `worker`) runs each window's
     release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
     ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release puts its
     draw under `DRAWER` (`drawn`) when it waits for one. ``clock`` times each part."""
@@ -435,7 +440,9 @@ class H1Windows:
                  draws: Any = None,
                  clock: Callable[[], float] = time.perf_counter) -> None:
         from verity_vllm.protocols import pouw
+        from verity_vllm.protocols.pouw import h1 as PH
         from verity_vllm.protocols.pouw.h1 import hooks as PHK
+        from verity_vllm.protocols.pouw.h1 import prover as PV
         from verity_vllm.protocols.pouw.h1 import served as SV
 
         self.model, self.com, self.rows, self.steps, self.engine = model, com, int(rows), int(steps), engine
@@ -463,6 +470,8 @@ class H1Windows:
         print(f"[serve-h1] declared in {t1 - t0:.1f} s, its digest {self.digest[:16]} and {PROGRAM} in "
               f"{time.perf_counter() - t1:.1f} s", flush=True)
         self.weights = SV.register_weights(self.digest, shapes, SV.weights_of(self.layers), key or os.urandom(32))
+        self.writer = None if prover is None else PV.Writer(self.steps * sum(
+            PV.kept_bytes(self.rows, k, PH.units(k, n, self.rows)) for n, k in shapes))
         self.tap: Any = None
         self.comp: Any = None
         self.run: Any = None
@@ -520,6 +529,7 @@ class H1Windows:
                 "reserve": "ahead" if self.sessions is not None and self.sessions.ahead is not None else "at the open",
                 "draw": f"put as {DRAWER} into the draw-gated release" if self.draws is not None else None,
                 "release": "on the loop" if self.closer is None else "off the loop",
+                "prover_ring": None if self.writer is None else self.writer.bound,
                 "linears": len(self.layers), "config": dict(self.config), "ready": self.readied}
 
     def open(self, window: int) -> None:
@@ -541,6 +551,8 @@ class H1Windows:
         t1 = self.clock()
         self.tap = HC.tap(self.com, self.model, self.layers, range(self.steps))
         prover = self.prover_of(window)
+        if self.writer is not None:
+            self.writer.open(prover)
         served = SV.Served(unit=self.unit, weights=self.weights, tap=self.tap, window=os.urandom(64),
                            program=self.program, program_digest=self.digest,
                            prover=None if prover is None else str(prover))
@@ -553,6 +565,8 @@ class H1Windows:
         except BaseException:
             self.tap.untap()
             self.tap = None
+            if self.writer is not None:
+                self.writer.wait(prover)
             raise
         self.run, self.window, self.held = pouw.h1_run(ENTRY), window, held
         self.opened = {"reserve": round(t1 - t0, 4), "install": round(self.clock() - t1, 4)}
@@ -597,15 +611,21 @@ class H1Windows:
         """Window ``window``'s release: its option closed (the empty steps' calls, its manifest committed, the draw coin
         opened and its session closed), with ``draws`` its draw put (`drawn`), and, with ``sessions``, its end entry
         waited for; its outcome, recorded in ``outcomes``, with ``error`` when any of it failed. ``off``: on ``closer``,
-        one of the windows ``releasing``."""
+        one of the windows ``releasing``. With ``writer``, its calls' prover state is written first, the outcome's
+        ``kept`` (`pouw_h1_prover.Writer.wait`), and a call's not written is its error, so its draw is refused."""
         t0 = t1 = self.clock()
-        end = drawn = None
+        end = drawn = kept = None
         try:
             try:
                 comp.close()
             except (ValueError, RuntimeError, OSError) as e:      # the window's failure, its outcome's error
                 error = error or f"{type(e).__name__}: {e}"
             finally:
+                if self.writer is not None:
+                    try:
+                        kept = self.writer.wait(self.prover_of(window))
+                    except OSError as e:                        # its prover state not all written: the window's failure
+                        error = error or f"its prover state: {e}"
                 t1 = self.clock()
                 if self.draws is not None:
                     drawn = self.drawn(window, run, held, error)
@@ -614,6 +634,8 @@ class H1Windows:
             seconds = {**seconds, "queued": round(t0 - queued, 4), "release": round(t1 - t0, 4),
                        "ended": round(self.clock() - t1, 4)}
             out = self._outcome(window, run, held, end, seconds)
+            if kept is not None:
+                out["kept"] = kept
             if drawn is not None:
                 out["draw"] = drawn
             if error is not None:
@@ -714,12 +736,15 @@ class H1Windows:
                 "seconds": seconds}
 
     def drain(self) -> None:
-        """Every window's release ended and its outcome recorded, and every session reserved ahead (`GateSessions.drain`)."""
+        """Every window's release ended and its outcome recorded, every session reserved ahead (`GateSessions.drain`), and
+        the prover state's writer closed."""
         if self.closer is not None:
             print(f"[serve-h1] stopping: {self.releasing} windows still releasing", flush=True)
             self.closer.shutdown(wait=True)
         if self.sessions is not None:
             self.sessions.drain()
+        if self.writer is not None:
+            self.writer.close()
 
     def summary(self) -> dict[str, Any]:
         """summary.json's ``pouw_h1``: windows closed, tied and refused at ROOTS1 (a window that served no step, whose
