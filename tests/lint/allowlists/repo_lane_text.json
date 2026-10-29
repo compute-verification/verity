@@ -9,7 +9,6 @@
     {"file": "Security/Definitions/Accounting/Joint.lean", "count": 1},
     {"file": "Security/Definitions/Accounting/JointLive.lean", "count": 2},
     {"file": "Security/Definitions/Claims/Recursion.lean", "count": 1},
-    {"file": "Security/Definitions/Hash/Basic.lean", "count": 1},
     {"file": "Security/Definitions/NetworkCertifier/Guarantees/AdviceV1Kraft.lean", "count": 1},
     {"file": "Security/Definitions/NetworkCertifier/Guarantees/Warden.lean", "count": 2},
     {"file": "Security/Definitions/Pouw/Guarantees/RelativeSecurity.lean", "count": 2},
