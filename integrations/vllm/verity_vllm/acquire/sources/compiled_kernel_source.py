@@ -270,7 +270,7 @@ class CompiledKernelSource:
         for k in self.eager_launch:
             self.eager_launch[k] = -1
         c = self.c
-        self.step_ntok = int(getattr(c, "_plan_key", 0) >> 16) if c is not None else 0
+        self.step_ntok = int((getattr(c, "_plan_shape", None) or (0, 0))[0]) if c is not None else 0
 
     def on_step_end(self, job: Any) -> None:
         c = self.c
