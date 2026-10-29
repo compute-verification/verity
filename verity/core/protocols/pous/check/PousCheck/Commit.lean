@@ -1,6 +1,7 @@
 import Flock.Canon
 import PousCheck.P2
 import Identity.Tagged
+import Identity.Domains
 
 /-!
 The commitment to `W` (`setup.commit`, `p2/PROTOCOL.md` §4 "Setup commitment, salt and verification root"):
@@ -42,5 +43,9 @@ def commitState (q : P2.Params) : Except String Sha512.State := do
 def commit (q : P2.Params) (w : ByteArray) : Except String ByteArray := do
   if w.size != q.wBytes then throw s!"W has {w.size} bytes, the parameters say {q.wBytes}"
   return ((← commitState q).update w).finalize
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : COMMIT_TAG = Domains.POUS_W_COMMITMENT := rfl
 
 end PousCheck.Commit

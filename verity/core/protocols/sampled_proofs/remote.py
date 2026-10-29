@@ -1,4 +1,4 @@
-"""The proof service's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
+"""The proof system's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
 
 The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
 prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session of the auditor host,
@@ -63,9 +63,10 @@ from verity.core.protocols.sampled_proofs.challenger import (ChallengerClose, Ch
                                                              LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,
                                                              write_record)
 from verity.ml.commitments.identity import canonical_json_text
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 RECORD, KEY, RELEASES, CLOSE, HELLOS = Ch.RECORD_FILE, "key.json", Ch.LOG_FILE, Ch.CLOSE_FILE, Ch.HELLOS_FILE
-ROOT_BYTES = 64
+ROOT_BYTES = DIGEST_BYTES["sha512"]
 HEADER = struct.Struct(">II")
 MAX_HEAD = 1 << 20
 MAX_BATCH = 64

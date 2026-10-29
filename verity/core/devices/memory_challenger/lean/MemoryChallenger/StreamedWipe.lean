@@ -1,4 +1,5 @@
 import MemoryChallenger.Verdict
+import Identity.Domains
 
 /-!
 # The streamed-label wipe's verdict
@@ -18,11 +19,11 @@ namespace MemoryChallenger.StreamedWipe
 
 open Flock
 
-def PROTOCOL : String := "verity-pous/streamed-wipe/v1"
-def SESSION_TAG : ByteArray := "verity-pous/streamed-wipe/session/v1".toUTF8.push 0
-def RECORD_BINDING : ByteArray := "verity-pous/streamed-wipe/batch-records/v1".toUTF8.push 0
-def RECORDS_TREE : String := "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1"
-def RECORD_SCHEMA : String := "pous/streamed-wipe/batch-record/v1"
+def PROTOCOL : String := Domains.POUS_STREAMED_WIPE
+def SESSION_TAG : ByteArray := Domains.POUS_STREAMED_WIPE_SESSION.toUTF8.push 0
+def RECORD_BINDING : ByteArray := Domains.POUS_STREAMED_WIPE_BATCH_RECORDS.toUTF8.push 0
+def RECORDS_TREE : String := Domains.POUS_STREAMED_WIPE_BATCH_RECORDS_FRAME_V3_SHA512
+def RECORD_SCHEMA : String := Domains.POUS_STREAMED_WIPE_BATCH_RECORD
 def LABEL_BYTES : Nat := 64
 def COMPLETE : String := "complete"
 

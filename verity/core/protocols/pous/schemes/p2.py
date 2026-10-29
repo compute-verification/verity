@@ -70,6 +70,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import cached_property
 
+from verity.ml.commitments import domains
 from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.randomness import frame
 
@@ -86,9 +87,9 @@ CHACHA8_NONCONFORMING = "ChaCha8 key expander, nonconforming to the spec's F4 (c
 SHA512_CTR, CHACHA8 = "sha512-ctr-v4", "chacha8"
 """The two key expanders: v4's and v2's."""
 
-KEYS_TAG = b"verity/pous/p2/keys/v4\0"
-PROTOCOL_ID = "p2/v4"
-SEED_DOMAIN = b"verity/pous/p2/seed/v1"
+KEYS_TAG = domains.POUS_P2_KEYS.encode() + b"\0"
+PROTOCOL_ID = domains.POUS_P2_SCHEME
+SEED_DOMAIN = domains.POUS_P2_SEED.encode()
 
 P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "random-oracle", "perfect-isolation",
              "cr/sha-512", "live-verifier", "designated-verifier", "trusted-host")

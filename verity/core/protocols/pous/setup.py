@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable, Sequence
 
+from verity.ml.commitments import domains
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.randomness import derive
 
@@ -27,9 +28,9 @@ from .params import SALT_BITS
 from .scheme import Encoding
 from .verifier import VerifierKey, segment_leaves, tree
 
-COMMIT_TAG = "verity-pous/w-commitment/v2"
-SALT_DOMAIN = "verity/pous/salt/v1"
-_TAGGED_SHA512 = b"verity/tagged-sha512/v1\0"
+COMMIT_TAG = domains.POUS_W_COMMITMENT
+SALT_DOMAIN = domains.POUS_SALT
+_TAGGED_SHA512 = domains.TAGGED_SHA512.encode() + b"\0"
 
 
 def _commitment_hash(params: Geometry):

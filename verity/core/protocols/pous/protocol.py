@@ -29,6 +29,7 @@ from typing import Any, ClassVar
 
 from verity.core.claims import Entry
 from verity.core.claims import get as core_claim
+from verity.ml.commitments import domains
 from verity.ml.randomness import Key
 
 from . import audit, setup
@@ -335,7 +336,7 @@ class StorageProfile:
                 f"({cert.theorem}{given}; under {', '.join(cert.claims)}).")
 
     def to_json(self) -> dict[str, Any]:
-        return {"schema": "verity-pous/storage-profile/v1", "scheme": self.scheme, "params": self.manifest,
+        return {"schema": domains.POUS_STORAGE_PROFILE, "scheme": self.scheme, "params": self.manifest,
                 "blocks": self.blocks, "block_bits": self.block_bits, "k": self.k, "limit_ns": self.limit_ns,
                 "effective_rounds": self.effective_rounds, "state_bound_bits": self.state_bound_bits,
                 "certificate": None if self.certificate is None else self.certificate.to_json(),

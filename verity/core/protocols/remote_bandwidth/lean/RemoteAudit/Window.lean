@@ -1,5 +1,6 @@
 import Std.Data.HashMap
 import RemoteAudit.Receipts
+import Identity.Domains
 
 /-!
 # A window's receipt checks: `audit.py`'s `Session.close` draw and `Session.verify`
@@ -69,7 +70,7 @@ def Registration.make? (node : ByteArray) (blocks : Nat) (payloadRoot codecSeed 
   if !receipt.rowsOk rows then throw "the sketch rows are not the receipt kind's"
   pure { node, blocks, payloadRoot, codecSeed, codec, receipt, rows, key := Codec.key codecSeed codec }
 
-def CODEC_DOMAIN : String := "verity/remote-bandwidth/codec/v0"
+def CODEC_DOMAIN : String := Domains.REMOTE_BANDWIDTH_CODEC
 def NONCE_BYTES : Nat := 32
 
 /-- `audit.register`: the codec seed the verifier draws from its secret `source` and a fresh 32-byte `nonce` once the
@@ -238,5 +239,13 @@ def verifyWindow (reg : Registration) (appends : Array Append) (w : WindowRecord
   let digest := reg.digest
   let drawn ← draws digest w.index openingsCoin samples (w.passes.map (·.plan.length))
   pure (checkWindow reg digest appends w drawn openings)
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : REGISTRATION_DOMAIN = tag0 Domains.REMOTE_BANDWIDTH_REGISTRATION := rfl
+example : PAYLOAD_DOMAIN = tag0 Domains.REMOTE_BANDWIDTH_PAYLOAD := rfl
+example : APPEND_DOMAIN = tag0 Domains.REMOTE_BANDWIDTH_APPEND := rfl
+example : OPENINGS_DOMAIN = Domains.REMOTE_BANDWIDTH_OPENINGS := rfl
+example : LAYOUT = Domains.STORE_ORDER := rfl
 
 end RemoteAudit

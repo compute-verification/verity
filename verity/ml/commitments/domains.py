@@ -209,7 +209,6 @@ SEMANTIC_ROOT = "verity/semantic-root/v0"
 SHA256_ROW_NVFP4 = "verity/sha256-row-nvfp4/v1"
 SHA256_ROW = "verity/sha256-row/v1"
 VLLM_V1_DOMAIN = "verity/vllm-v1/domain/v1"
-WORD_CODEC_KV = "verity/word-codec/kv/v0"
 
 # Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
 LMS_I = "verity/lms/v0/I"
@@ -266,7 +265,7 @@ REC_INNER = "verity/rec-inner/v1"
 REC_V0_VERIFIER_SALT = "verity/rec-v0/verifier-salt/v0"
 REC_V0_ZERO_RESIDUAL_SALT = "verity/rec-v0/zero-residual-salt/v0"
 
-# Not yet read from here: PoUS, the wipe and the memory challenger
+# PoUS, the wipe and the memory challenger
 CHAIN_DENSE_H = "chain-dense-H/v1"
 DENSE_CHAIN = "dense-chain/v1"
 LMS_SHA512_N64_W1_H20 = "lms-sha512/n64-w1-h20/v0"
@@ -323,7 +322,7 @@ BANDWIDTH_TAG_LEAF = "verity/bandwidth/tag-leaf/v1"
 BANDWIDTH_TAG = "verity/bandwidth/tag/v1"
 BANDWIDTH_PERIOD = "verity/bandwidth/window/v2"
 
-# Not yet read from here: the remote bandwidth audit
+# The remote bandwidth audit: its codec and memory map
 REMOTE_BANDWIDTH_P2_BLOCK4 = "p2-unit4/v0"
 STORE_ORDER = "store-order/v0"
 REMOTE_BANDWIDTH_MONITORING_PERIOD = "verity/remote-bandwidth-monitoring-period/v1"
@@ -351,6 +350,8 @@ REMOTE_BANDWIDTH_PROTOCOL = "verity/remote-bandwidth/v0"
 REMOTE_BANDWIDTH_PERIOD = "verity/remote-bandwidth/window/v1"
 REMOTE_SESSION_PAYLOAD_SALTS = "verity/remote-session/payload-salts/v0"
 STORE_SALT = "verity/store/salt/v0"
+WORD_CODEC_KV = "verity/word-codec/kv/v0"
+MEMORY_MAP = "verity/memory-map/v1"
 
 # Not yet read from here: the network certifier and network accounting
 CERTIFIER_ADVISED_ADVICE = "verity-network-certifier/advised-advice/v2"
@@ -396,7 +397,6 @@ BOUNDARY = "verity/boundary/v3"
 CERTIFIER_SCAN_STATE = "verity/certifier/scan-state/v1"
 CERTIFIER_SERVED_ROWS = "verity/certifier/served-rows/v1"
 CERTIFIER_PROTOCOL = "verity/certifier/v0"
-MEMORY_MAP = "verity/memory-map/v1"
 NET_CERT = "verity/net-cert/v1"
 NETWORK_CERTIFICATE_MESSAGE = "verity/network-certificate-message/v2"
 NETWORK_CERTIFICATE = "verity/network-certificate/v4"

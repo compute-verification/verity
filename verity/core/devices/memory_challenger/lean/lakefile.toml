@@ -1,7 +1,7 @@
 # PoUS's memory challenger's verdicts as executable Lean: its record formats and crypto, `verdict` on a record as its
 # caller holds it (`memory-challenger-verdict`) and as a core protocol (`memory-challenger`), and the streamed-label wipe's
 # `verdict` on a record (`streamed-wipe-verdict`) and as a core protocol (`wipe-protocol`). Code: Lean core and the
-# packages below, no Mathlib and nothing of Security.
+# packages below, no Mathlib and nothing of Security. Its separators are the one table's (`Identity.Domains`).
 name = "core_memory_challenger"
 defaultTargets = ["MemoryChallenger", "memory-challenger", "memory-challenger-test", "memory-challenger-verdict",
                   "streamed-wipe-verdict", "wipe-protocol", "wipe-protocol-test", "memory-challenger-difftest"]
@@ -23,12 +23,20 @@ name = "lms"
 path = "../../../primitives/lms/lean"
 
 [[require]]
+name = "core_attest"
+path = "../../../attest/lean"
+
+[[require]]
 name = "core_protocol"
 path = "../../../protocols/interface"
 
 [[require]]
 name = "verity_difftest"
 path = "../../../difftest/lean"
+
+[[require]]
+name = "core_identity"
+path = "../../../primitives/identity"
 
 [[lean_lib]]
 name = "MemoryChallenger"

@@ -5,6 +5,7 @@ import PousCheck.Merkle
 import PousCheck.Challenge
 import PousCheck.Wire.Codec
 import PousCheck.Prim.PyJson
+import Identity.Domains
 
 /-!
 # `p2-audit-wire/v4`: a setup and one timed audit, verified to its `FINAL` frame
@@ -39,8 +40,8 @@ open Lean (Json)
 
 def MAGIC : ByteArray := "P2AU".toUTF8
 def VERSION : Nat := 4
-def TRANSCRIPT_TAG : ByteArray := "verity/pous/p2/transcript/v4".toUTF8.push 0
-def EPOCH_TAG : ByteArray := "verity/pous/p2/epoch/v4".toUTF8.push 0
+def TRANSCRIPT_TAG : ByteArray := Domains.POUS_P2_TRANSCRIPT.toUTF8.push 0
+def EPOCH_TAG : ByteArray := Domains.POUS_P2_EPOCH.toUTF8.push 0
 def MAX_W : Nat := 16448
 def MAX_MANIFEST : Nat := 512
 def MAX_K : Nat := 105

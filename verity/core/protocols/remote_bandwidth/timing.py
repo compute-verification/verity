@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
+from verity.ml.commitments import domains
 
 from . import audit, codec
 from .codec import BLOCK_BYTES
@@ -44,7 +45,7 @@ from .receipts import DEFAULT, DIGEST_BYTES, KINDS, PER_LEAF, SALT_BYTES, SKETCH
 MS = 1_000_000
 US = 1_000
 S = 1_000_000_000
-JITTER_DOMAIN = b"verity/remote-bandwidth/timing-jitter/v0\0"
+JITTER_DOMAIN = domains.REMOTE_BANDWIDTH_TIMING_JITTER.encode() + b"\0"
 SECTOR_BYTES = 32
 SECTORS = BLOCK_BYTES // SECTOR_BYTES
 GPUS = 8
@@ -322,7 +323,7 @@ def spanning(gpu_bytes: int) -> int:
     return GPUS * gpu_bytes + math.floor(gpu_bytes * HOST_READ_BYTES_PER_S / GPU_READ_BYTES_PER_S)
 
 
-def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int, delta: float = 2.0 ** -40,
+def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int, delta: float = audit.DELTA,
            gap_ns: int = 50 * US, jitter_ns: int = 50 * US, read_bytes_per_s: float = READ_BYTES_PER_S,
            capacity_bytes_per_s: float = READ_BYTES_PER_S) -> audit.Ledger:
     """The ledger of the honest prover's session over a store of `store_bytes` on one node of `capacity_bytes_per_s`

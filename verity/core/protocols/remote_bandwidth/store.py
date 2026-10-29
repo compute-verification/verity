@@ -48,13 +48,14 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
+from verity.ml.commitments import domains
 from verity.ml.commitments.merkle import merkle_depth
 
 from . import audit, codec, receipts
 
 BLOCK = codec.BLOCK_BYTES
-SALT_DOMAIN = b"verity/store/salt/v0\0"
-PAYLOAD_LABEL = hashlib.sha512(b"verity/remote-session/payload-salts/v0").digest()
+SALT_DOMAIN = domains.STORE_SALT.encode() + b"\0"
+PAYLOAD_LABEL = hashlib.sha512(domains.REMOTE_SESSION_PAYLOAD_SALTS.encode()).digest()
 KEY_BYTES = 32
 """The verifier's payload salt key."""
 ARCHITECTURES = ("LlamaForCausalLM", "Qwen2ForCausalLM")

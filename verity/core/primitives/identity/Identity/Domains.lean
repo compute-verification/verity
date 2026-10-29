@@ -204,7 +204,6 @@ abbrev SEMANTIC_ROOT : String := "verity/semantic-root/v0"
 abbrev SHA256_ROW_NVFP4 : String := "verity/sha256-row-nvfp4/v1"
 abbrev SHA256_ROW : String := "verity/sha256-row/v1"
 abbrev VLLM_V1_DOMAIN : String := "verity/vllm-v1/domain/v1"
-abbrev WORD_CODEC_KV : String := "verity/word-codec/kv/v0"
 
 -- Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
 abbrev LMS_I : String := "verity/lms/v0/I"
@@ -261,7 +260,7 @@ abbrev REC_INNER : String := "verity/rec-inner/v1"
 abbrev REC_V0_VERIFIER_SALT : String := "verity/rec-v0/verifier-salt/v0"
 abbrev REC_V0_ZERO_RESIDUAL_SALT : String := "verity/rec-v0/zero-residual-salt/v0"
 
--- Not yet read from here: PoUS, the wipe and the memory challenger
+-- PoUS, the wipe and the memory challenger
 abbrev CHAIN_DENSE_H : String := "chain-dense-H/v1"
 abbrev DENSE_CHAIN : String := "dense-chain/v1"
 abbrev LMS_SHA512_N64_W1_H20 : String := "lms-sha512/n64-w1-h20/v0"
@@ -319,7 +318,7 @@ abbrev BANDWIDTH_TAG_LEAF : String := "verity/bandwidth/tag-leaf/v1"
 abbrev BANDWIDTH_TAG : String := "verity/bandwidth/tag/v1"
 abbrev BANDWIDTH_PERIOD : String := "verity/bandwidth/window/v2"
 
--- Not yet read from here: the remote bandwidth audit
+-- The remote bandwidth audit: its codec and memory map
 abbrev REMOTE_BANDWIDTH_P2_BLOCK4 : String := "p2-unit4/v0"
 abbrev STORE_ORDER : String := "store-order/v0"
 abbrev REMOTE_BANDWIDTH_MONITORING_PERIOD : String := "verity/remote-bandwidth-monitoring-period/v1"
@@ -347,6 +346,8 @@ abbrev REMOTE_BANDWIDTH_PROTOCOL : String := "verity/remote-bandwidth/v0"
 abbrev REMOTE_BANDWIDTH_PERIOD : String := "verity/remote-bandwidth/window/v1"
 abbrev REMOTE_SESSION_PAYLOAD_SALTS : String := "verity/remote-session/payload-salts/v0"
 abbrev STORE_SALT : String := "verity/store/salt/v0"
+abbrev WORD_CODEC_KV : String := "verity/word-codec/kv/v0"
+abbrev MEMORY_MAP : String := "verity/memory-map/v1"
 
 -- Not yet read from here: the network certifier and network accounting
 abbrev CERTIFIER_ADVISED_ADVICE : String := "verity-network-certifier/advised-advice/v2"
@@ -392,7 +393,6 @@ abbrev BOUNDARY : String := "verity/boundary/v3"
 abbrev CERTIFIER_SCAN_STATE : String := "verity/certifier/scan-state/v1"
 abbrev CERTIFIER_SERVED_ROWS : String := "verity/certifier/served-rows/v1"
 abbrev CERTIFIER_PROTOCOL : String := "verity/certifier/v0"
-abbrev MEMORY_MAP : String := "verity/memory-map/v1"
 abbrev NET_CERT : String := "verity/net-cert/v1"
 abbrev NETWORK_CERTIFICATE_MESSAGE : String := "verity/network-certificate-message/v2"
 abbrev NETWORK_CERTIFICATE : String := "verity/network-certificate/v4"

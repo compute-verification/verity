@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import Any, BinaryIO, Protocol
 
 from verity.core.protocols.pous.schemes.p2 import P2Params
+from verity.ml.commitments import domains
 
 from . import audit, p2, pooled
 from . import coins as C
@@ -52,7 +53,7 @@ from . import period as P
 from .receipts import Plan
 
 MODULE = "verity.core.protocols.remote_bandwidth.p2_party"
-PROTOCOL = "verity/remote-bandwidth/p2/v0"
+PROTOCOL = domains.REMOTE_BANDWIDTH_P2
 REQUEST_KEYS = ("deadline_ns", "node", "passes", "samples", "window_ns", "windows")
 
 

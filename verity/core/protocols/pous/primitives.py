@@ -46,6 +46,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Protocol
 
+from verity.ml.commitments import domains
 from verity.ml.randomness import Key, derive
 
 from .labels import mask
@@ -651,7 +652,7 @@ def heuristic_arx(params: Params) -> Primitives:
                       EvenMansourArx(params.m))
 
 
-IDEAL_DOMAIN = "verity/pous/ideal-model/v1"
+IDEAL_DOMAIN = domains.POUS_IDEAL_MODEL
 
 
 @dataclass(slots=True)

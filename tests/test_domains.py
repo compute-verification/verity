@@ -18,7 +18,17 @@ PYTHON = ROOT / "verity/ml/commitments/domains.py"
 #: only grows: a protocol joins in the change that makes its code read the table. A Lean definition a lock reads keeps
 #: its literal until its record next changes (the record hashes the value as written), tied to its entry by an
 #: `example : … Domains.NAME … := rfl` in its file (`TIE`).
-READERS: tuple[str, ...] = ("verity/core/protocols/pouw",)
+READERS: tuple[str, ...] = ("verity/core/protocols/pouw", "verity/core/protocols/pous", "verity/core/protocols/remote_bandwidth",
+                             "verity/core/devices/memory_challenger")
+#: A literal a reader still writes, as (path, entry), because another change writes that line, rewrites the one beside it
+#: or deletes its file; it is read from the table once both have landed, and until then, wherever its file exists, its
+#: bytes are held to its entry (`test_deferred_literals_are_their_entries`).
+DEFERRED: frozenset[tuple[str, str]] = frozenset({
+    ("verity/core/protocols/remote_bandwidth/period.py", "REMOTE_BANDWIDTH_PROTOCOL"),
+    ("verity/core/protocols/remote_bandwidth/lean/RemoteAudit/P2Session.lean", "REMOTE_BANDWIDTH_P2"),
+    ("verity/core/protocols/pous/check/PousCheck/Randomness.lean", "RANDOMNESS_DERIVE"),
+    ("verity/core/protocols/pous/check/PousCheck/Randomness.lean", "RANDOMNESS_STREAM"),
+})
 SKIPPED_PARTS = {"tests", "scripts"}
 ABBREV = re.compile(r'abbrev ([A-Z][A-Z0-9_]*) : String :=\s*"([^"\\]*)"')
 TIE = re.compile(r"^example : (.*) := rfl$", re.M)
@@ -116,6 +126,10 @@ def _lean_literals(path: Path):
             yield text.count("\n", 0, offset) + 1, s
 
 
+def _literals(path: Path):
+    return _python_literals(path) if path.suffix == ".py" else _lean_literals(path)
+
+
 def test_readers_carry_no_literal_of_the_table():
     by_value = {v: n for n, v in domains.TABLE.items()}
     found = []
@@ -124,14 +138,20 @@ def test_readers_carry_no_literal_of_the_table():
             rel = path.relative_to(ROOT)
             if SKIPPED_PARTS & set(rel.parts) or ".lake" in rel.parts or path.suffix not in (".py", ".lean"):
                 continue
-            literals = _python_literals(path) if path.suffix == ".py" else _lean_literals(path)
-            found += [f"{rel}:{line}: {v!r} is `{by_value[v.rstrip(chr(0))]}`" for line, v in literals
-                      if v.rstrip("\0") in by_value]
+            found += [f"{rel}:{line}: {v!r} is `{by_value[v.rstrip(chr(0))]}`" for line, v in _literals(path)
+                      if v.rstrip("\0") in by_value and (rel.as_posix(), by_value[v.rstrip("\0")]) not in DEFERRED]
     assert not found, ("a protocol that reads the table writes a separator of it as a literal; read it from "
                        "`verity.ml.commitments.domains` (Python) or `Domains` (Lean, `import Identity.Domains`; a "
                        "definition a lock reads keeps its literal, tied in its file by `example : … Domains.NAME … := "
                        "rfl`):\n"
                        + "\n".join(found))
+
+
+def test_deferred_literals_are_their_entries():
+    stale = [f"{rel}: `{name}`" for rel, name in sorted(DEFERRED) if (ROOT / rel).exists()
+             and domains.TABLE[name] not in {v.rstrip("\0") for _, v in _literals(ROOT / rel)}]
+    assert not stale, ("these files no longer write their entry's bytes: read it from the table and remove the site from "
+                       "`DEFERRED`:\n" + "\n".join(stale))
 
 
 def test_every_entry_is_read_or_still_written():

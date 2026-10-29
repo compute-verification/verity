@@ -1,4 +1,4 @@
-"""The remote audit's coins on the proof service's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
+"""The remote audit's coins on the proof system's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
 are one epoch of `sampled_proofs.challenger`'s live coins, drawn and committed by the challenger before the session, on
 its own host when it is remote (`sampled_proofs.remote`), and each opened once, after the root the verifier recorded.
 
@@ -43,15 +43,16 @@ from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
                                                              LiveOpening, LiveRecord, Verify, ledger_head, live_reason,
                                                              order_reason, pinned_session, record_many)
+from verity.ml.commitments import domains
 from verity.ml.commitments.scheme import DIGEST_BYTES
 
-SCHEME = "verity/remote-bandwidth/coins/v1"
+SCHEME = domains.REMOTE_BANDWIDTH_COINS
 CHALLENGE, OPENINGS, APPEND = "challenge", "openings", "append"
 LABELS = (CHALLENGE, OPENINGS, APPEND)
 COIN_BYTES = 32
 APPENDS = 1024
 """A session's append coins unless it names its own: one an append, so a session appends at most this many times."""
-WINDOW_DOMAIN = b"verity/remote-bandwidth/window/v1\0"
+WINDOW_DOMAIN = domains.REMOTE_BANDWIDTH_PERIOD.encode() + b"\0"
 
 
 def openings_coins(windows: int, per_coin: int = 1) -> int:

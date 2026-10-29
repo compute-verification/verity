@@ -1,5 +1,6 @@
 import Lms.Verify
 import MemoryChallenger.Records
+import Identity.Domains
 
 /-!
 # The message a memory challenger's session record signs
@@ -23,5 +24,9 @@ def MEMORY_CHALLENGER_TAG : String := "verity/memory-challenger-record/v1"
 def memoryChallengerMessage (I session record : ByteArray) : E ByteArray := do
   if I.size ≠ 16 then throw s!"an LMS identifier is 16 bytes, not {I.size}"
   pure (Sha512.hash (field MEMORY_CHALLENGER_TAG.toUTF8 ++ I ++ field (field session) ++ field record))
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : MEMORY_CHALLENGER_TAG = Domains.MEMORY_CHALLENGER_RECORD := rfl
 
 end MemoryChallenger

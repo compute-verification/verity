@@ -1,6 +1,7 @@
 import Flock.Canon
 import RemoteAudit.Unboxed
 import RemoteAudit.Window
+import Identity.Domains
 
 /-!
 # The store binding's decision: `store.py`
@@ -42,8 +43,8 @@ namespace RemoteAudit.Store
 open Lean (Json)
 open Flock
 
-def SALT_DOMAIN : ByteArray := tag0 "verity/store/salt/v0"
-def PAYLOAD_LABEL : ByteArray := sha512 "verity/remote-session/payload-salts/v0".toUTF8
+def SALT_DOMAIN : ByteArray := tag0 Domains.STORE_SALT
+def PAYLOAD_LABEL : ByteArray := sha512 Domains.REMOTE_SESSION_PAYLOAD_SALTS.toUTF8
 
 /-- `store_salt(key, label, c)`, SHAKE256 with its lanes unboxed (`Unboxed.shake256`): one a block of the store. -/
 def storeSalt (key label : ByteArray) (c : Nat) : ByteArray :=

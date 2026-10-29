@@ -75,19 +75,19 @@ from array import array
 from collections.abc import Iterator, Sequence
 
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, VerificationLimits
-from verity.ml.commitments import hm96, verify_opening
+from verity.ml.commitments import domains, hm96, verify_opening
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
 from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.randomness import derive, frame
 
 from .codec import BLOCK_BYTES
 
-SEED_DOMAIN = b"verity/remote-bandwidth/seed/v0\0"
-PLAN_DOMAIN = b"verity/remote-bandwidth/plan/v0\0"
-RECEIPT_DOMAIN = b"verity/remote-bandwidth/receipt/v0\0"
-SKETCH_RECEIPT_DOMAIN = b"verity/remote-bandwidth/sketch-receipt/v0\0"
-SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"
-TREE_DOMAIN = b"verity/remote-bandwidth/receipt-tree/v0\0"
+SEED_DOMAIN = domains.REMOTE_BANDWIDTH_SEED.encode() + b"\0"
+PLAN_DOMAIN = domains.REMOTE_BANDWIDTH_PLAN.encode() + b"\0"
+RECEIPT_DOMAIN = domains.REMOTE_BANDWIDTH_RECEIPT.encode() + b"\0"
+SKETCH_RECEIPT_DOMAIN = domains.REMOTE_BANDWIDTH_SKETCH_RECEIPT.encode() + b"\0"
+SIGN_DOMAIN = domains.REMOTE_BANDWIDTH_SKETCH_SIGNS
+TREE_DOMAIN = domains.REMOTE_BANDWIDTH_RECEIPT_TREE.encode() + b"\0"
 BLOCK_SHA512 = "block-sha512"
 SKETCH_SHA512 = "sketch-sha512"
 SKETCH_ROWS = 16
@@ -486,7 +486,7 @@ def receipter(kind: str, seed: bytes, rows: int | None = None) -> Receipter | Sk
     return SketchReceipter(seed, rows) if rows else Receipter(seed)
 
 
-STORE_ORDER = "store-order/v0"
+STORE_ORDER = domains.STORE_ORDER
 LAYOUTS = (STORE_ORDER,)
 LAYOUT = STORE_ORDER
 

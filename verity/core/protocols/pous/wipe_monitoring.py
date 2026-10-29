@@ -34,16 +34,18 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.ml.commitments import domains
+
 from . import streamed_wipe as sw
 from . import wipe_period
 
 PERIODS: tuple[tuple[str, int], ...] = (("week", 7 * 86400), ("month", 30 * 86400), ("year", 365 * 86400))
 DELTAS: tuple[Fraction, ...] = (Fraction(1, 100), Fraction(1, 10 ** 6))
-FORMAT = "verity/wipe-monitoring-period/v1"
+FORMAT = domains.WIPE_MONITORING_PERIOD
 STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
              "file": "Security/Proofs/Flock/Soundness/Audit/Periods.lean"}
 CADENCE_S = 86400
-EGRESS = "wipe-egress/v1"
+EGRESS = domains.WIPE_EGRESS
 HBM = "gpu-hbm"
 EXCEPT = ("each wipe's PRF advantage (its labels' and coins' PRF, a named assumption), δ_net (the network certifier's "
           "error in the egress count) and the egress count's premises (every link leaving the node counted, its window "

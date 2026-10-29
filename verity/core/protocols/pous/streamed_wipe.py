@@ -48,6 +48,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from verity.ml.commitments import domains
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.scheme import DIGEST_BYTES
@@ -55,14 +56,14 @@ from verity.ml.randomness import derive
 
 from .memory_challenger import CLOCK_RESOLUTION_NS, SCHEMES, SessionLog, Signer, Verify
 
-PROTOCOL = "verity-pous/streamed-wipe/v1"
-KEY_DOMAIN = "verity/pous/streamed-wipe-labels/v1"
-COIN_DOMAIN = "verity/pous/streamed-wipe-coins/v1"
-LABEL_TAG = b"verity-pous/streamed-wipe/label/v1\0"
-SESSION_TAG = b"verity-pous/streamed-wipe/session/v1\0"
-RECORD_BINDING = b"verity-pous/streamed-wipe/batch-records/v1\0"
-RECORDS_TREE = "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1"
-RECORD_SCHEMA = "pous/streamed-wipe/batch-record/v1"
+PROTOCOL = domains.POUS_STREAMED_WIPE
+KEY_DOMAIN = domains.POUS_STREAMED_WIPE_LABELS
+COIN_DOMAIN = domains.POUS_STREAMED_WIPE_COINS
+LABEL_TAG = domains.POUS_STREAMED_WIPE_LABEL.encode() + b"\0"
+SESSION_TAG = domains.POUS_STREAMED_WIPE_SESSION.encode() + b"\0"
+RECORD_BINDING = domains.POUS_STREAMED_WIPE_BATCH_RECORDS.encode() + b"\0"
+RECORDS_TREE = domains.POUS_STREAMED_WIPE_BATCH_RECORDS_FRAME_V3_SHA512
+RECORD_SCHEMA = domains.POUS_STREAMED_WIPE_BATCH_RECORD
 LABEL_BYTES = DIGEST_BYTES["sha512"]
 LABEL_BITS = 8 * LABEL_BYTES
 COMPLETE, LATE, WRONG = "complete", "late", "wrong"

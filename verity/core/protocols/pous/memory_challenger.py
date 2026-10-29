@@ -77,7 +77,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.limits import VerificationLimits
 from verity.ml.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
@@ -88,17 +88,17 @@ from verity.ml.randomness import derive
 from .protocol import Certificate, Scheme
 from .verifier import DIGEST_BYTES
 
-PROTOCOL = "verity-pous/memory-challenger/v1"
-COIN_DOMAIN = "verity/pous/memory-challenger-coins/v1"
-COIN_TREE = "verity-pous/coin-tree/hm96-sha512/v1"
-RECORDS_TREE = "verity-pous/round-records/frame-v3-sha512/v1"
-COIN_TAG = b"verity-pous/memory-challenger/coin/v1\0"
-COIN_BINDING = b"verity-pous/memory-challenger/coin-tree/v1\0"
-RECORD_BINDING = b"verity-pous/memory-challenger/round-records/v1\0"
-SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
-SESSION_LOG = "verity-pous/memory-challenger/session-log/v1"
-COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
-RECORD_SCHEMA = "pous/round-record/v2"
+PROTOCOL = domains.POUS_MEMORY_CHALLENGER
+COIN_DOMAIN = domains.POUS_MEMORY_CHALLENGER_COINS
+COIN_TREE = domains.POUS_COIN_TREE_HM96_SHA512
+RECORDS_TREE = domains.POUS_ROUND_RECORDS_FRAME_V3_SHA512
+COIN_TAG = domains.POUS_MEMORY_CHALLENGER_COIN.encode() + b"\0"
+COIN_BINDING = domains.POUS_MEMORY_CHALLENGER_COIN_TREE.encode() + b"\0"
+RECORD_BINDING = domains.POUS_MEMORY_CHALLENGER_ROUND_RECORDS.encode() + b"\0"
+SESSION_TAG = domains.POUS_MEMORY_CHALLENGER_SESSION.encode() + b"\0"
+SESSION_LOG = domains.POUS_MEMORY_CHALLENGER_SESSION_LOG
+COIN_SCHEMA = domains.POUS_COIN_HM96_SHA512
+RECORD_SCHEMA = domains.POUS_ROUND_RECORD
 TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
 """The coarsest clock the memory challenger runs on: a microsecond (the certifier's 100 ms buckets are far too coarse)."""
@@ -294,7 +294,7 @@ class Signer(Protocol):
 type Verify = Callable[[bytes, bytes, bytes, bytes], bool]
 """`verify(public_key, session, record, signature)`."""
 
-LMS = "lms-sha512/n64-w1-h20/v0"
+LMS = domains.LMS_SHA512_N64_W1_H20
 """S1's scheme at its deployed parameters (`lms.DEPLOYED`)."""
 
 

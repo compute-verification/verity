@@ -54,6 +54,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.ml.commitments.identity import canonical_json_bytes
+from verity.ml.commitments import domains
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
@@ -65,10 +66,10 @@ from . import setup
 from .schemes import p2 as P2
 from .verifier import DIGEST_BYTES
 
-PROTOCOL = "verity/pous/p2/v4/run"
+PROTOCOL = domains.POUS_P2_RUN
 """`PousCheck.RunProtocol.ID`; a test signer's runs answer under `memory_challenger.TEST_PREFIX` + it."""
-SETUP_PROTOCOL = "verity/pous/p2/v4/setup"
-SESSION_DOMAIN = "verity/pous-period/session/v1"
+SETUP_PROTOCOL = domains.POUS_P2_SETUP
+SESSION_DOMAIN = domains.POUS_PERIOD_SESSION
 W, C0 = 1024, 105
 """The small point's width: a 1,024-bit prime `2^w − c0` of P2's ladder, 126 payload bytes a 128-byte block."""
 K = P2.CERT_K
@@ -390,13 +391,13 @@ def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> m
         else:
             seed, data = seed_file.read_bytes(), tree_file.read_bytes()
             tree = (b"", *(data[p.N * r:p.N * (r + 1)] for r in range(top - 1)))
-            key = lms.PrivateKey(p, hashlib.sha512(b"verity/lms/v0/I" + seed).digest()[:16], seed, tree)
+            key = lms.PrivateKey(p, hashlib.sha512(domains.LMS_I.encode() + seed).digest()[:16], seed, tree)
         if not (d / "sessions").exists():
             mc.SessionLog.create(d / "sessions")
     return mc.LmsSigner(key, state)
 
 
-LEDGER_SCHEMAS = ("verity/challenger-auditor/v1", "verity/challenger-auditor/v2")
+LEDGER_SCHEMAS = (domains.CHALLENGER_AUDITOR_V1, domains.CHALLENGER_AUDITOR_V2)
 """The schemas of the auditor's ledger entries (`sampled_proofs.challenger.LEDGER_TAGS`), whose copies `cite` cuts."""
 _ENTRY = ["body", "kind", "prev", "schema", "seq", "session", "sig"]
 _CLOSE = ["chain", "ended", "lines", "session", "signature"]

@@ -1,7 +1,8 @@
 import Flock.Hm96
 import Flock.HmRow
 import Randomness
-import MemoryChallenger.FrameV3
+import Attest.FrameV3Sha512
+import Identity.Domains
 
 /-!
 # The memory challenger's records and coins
@@ -20,7 +21,7 @@ open Flock
 abbrev E := Except String
 
 def PROTOCOL : String := "verity-pous/memory-challenger/v1"
-def COIN_DOMAIN : String := "verity/pous/memory-challenger-coins/v1"
+def COIN_DOMAIN : String := Domains.POUS_MEMORY_CHALLENGER_COINS
 def COIN_TREE : String := "verity-pous/coin-tree/hm96-sha512/v1"
 def RECORDS_TREE : String := "verity-pous/round-records/frame-v3-sha512/v1"
 def COIN_TAG : ByteArray := "verity-pous/memory-challenger/coin/v1".toUTF8.push 0
@@ -209,5 +210,17 @@ def message (c : SessionCommitment) (ended : String) (rounds : Array Round) : E 
   let head := (header c ended rounds.size).toUTF8
   let root ← recordsRoot c.session rounds
   pure (Sha512.hash (SESSION_TAG ++ be64 head.size.toUInt64 ++ head ++ root))
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : PROTOCOL = Domains.POUS_MEMORY_CHALLENGER := rfl
+example : COIN_TREE = Domains.POUS_COIN_TREE_HM96_SHA512 := rfl
+example : RECORDS_TREE = Domains.POUS_ROUND_RECORDS_FRAME_V3_SHA512 := rfl
+example : COIN_TAG = Domains.POUS_MEMORY_CHALLENGER_COIN.toUTF8.push 0 := rfl
+example : COIN_BINDING = Domains.POUS_MEMORY_CHALLENGER_COIN_TREE.toUTF8.push 0 := rfl
+example : RECORD_BINDING = Domains.POUS_MEMORY_CHALLENGER_ROUND_RECORDS.toUTF8.push 0 := rfl
+example : SESSION_TAG = Domains.POUS_MEMORY_CHALLENGER_SESSION.toUTF8.push 0 := rfl
+example : COIN_SCHEMA = Domains.POUS_COIN_HM96_SHA512 := rfl
+example : RECORD_SCHEMA = Domains.POUS_ROUND_RECORD := rfl
 
 end MemoryChallenger

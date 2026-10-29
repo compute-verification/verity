@@ -38,6 +38,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
+from verity.ml.commitments import domains
 from verity_difftest import Server, build, canonical
 
 HERE = Path(__file__).resolve().parent
@@ -181,7 +182,7 @@ def controls(s: Store, doc: dict, other: Store) -> Iterator[tuple[str, Any, byte
     yield "no salt", {k: v for k, v in ready.items() if k != "salt"}, leaves, doc
     yield "scheme v3", {**ready, "scheme": ready["scheme"].replace("/v4", "/v3")}, leaves, doc
     yield "scheme v2", {**ready, "scheme": ready["scheme"].replace("/v4", "/v2")}, leaves, doc
-    yield "scheme at another width", {**ready, "scheme": "p2-8/v4"}, leaves, doc
+    yield "scheme at another width", {**ready, "scheme": domains.POUS_P2_8}, leaves, doc
     m = ready["params"]
     for name, edit in [("chacha8 expander", {"expander": "chacha8"}), ("v3 expander", {"expander": "shake256-v1"}),
                        ("no expander", {"expander": None}), ("extra key", {"extra": 1}),

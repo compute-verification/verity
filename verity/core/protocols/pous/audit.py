@@ -24,6 +24,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+from verity.ml.commitments import domains
 from verity.ml.randomness import Key, derive
 
 from .band import check_deployment
@@ -32,7 +33,7 @@ from .primitives import Primitives
 from .scheme import Encoding
 from .verifier import MerkleTree, VerifierKey
 
-CHALLENGE_DOMAIN = "verity/pous/audit-challenge/v1"
+CHALLENGE_DOMAIN = domains.POUS_AUDIT_CHALLENGE
 
 DEADLINE_NS = 500_000
 """Δ: the strict per-answer deadline, 0.5 ms (`docs/p3-gpu-measurements.md` §1)."""
