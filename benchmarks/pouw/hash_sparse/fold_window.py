@@ -25,11 +25,13 @@ given besides.
 Modes (transformed-state loops):
 
   plain    the state is N on entry and N_s on exit
-  basis    the state is phi(N) = ((N ^ a) b ^ c) d + e on entry and phi'(N_s) on exit, a..e free functions of the
-           keys with b, d odd (a bijection: a factored key product such as N P^-1, offsets, both); phi and phi' are
-           independent, not counted
+  basis    the state at each window boundary is phi_b(N) = ((N ^ a) b ^ c) d + e, a..e free per boundary with b, d
+           odd (a bijection: a factored key product such as N P^-1, offsets, both), not counted. Consecutive
+           windows share their boundary's basis (three chained key groups), as a loop must: with independent bases
+           at a window's two ends, the exit basis absorbs the window's last multiply, an edge effect a loop pays back
+           at the next window
   carry    the state is two words (u, v) with N = u + v (or u ^ v, the solver's choice, the same at both ends), u
-           arbitrary (examples draw it), on entry and on exit: carry-save and redundant forms
+           arbitrary (examples draw it), on entry and on exit: carry-save forms that accept any split
 
   full     (32 bits only, no reduction) the set above plus IMAD.WIDE's high word, SHF.R, PRMT with a register
            selector, IDP.4A and IMNMX
@@ -185,8 +187,11 @@ def instance(spec, w, seed):
         word_v = lambda: rng.randrange(-(1 << 27), 1 << 27) & mask
     else:
         row_v = col_v = word_v = lambda: rng.randrange(0, 1 << w)
-    nk, nr, nc, nn = spec.get("grid", (2, 3, 3, 4))
-    keys = [[odd() for _ in range(s)] for _ in range(nk)]
+    nk, nr, nc, nn = spec.get("grid", (3, 2, 3, 4) if mode == "basis" else (2, 3, 3, 4))
+    # basis mode chains its key groups: group a's window reads keys[a + 1] and maps basis a to basis a + 1, so a
+    # boundary's basis is one function for the window that ends there and the one that starts there
+    chain = [[odd() for _ in range(s)] for _ in range(nk + 1)]
+    keys = chain[1:] if mode == "basis" else chain[:nk]
     rows = [[row_v() for _ in range(s)] for _ in range(nr)]
     cols = [[col_v() for _ in range(s)] for _ in range(nc)]
     kf = [[z3.BitVec(f"kf{f}_{a}", w) for a in range(nk)] for f in range(F)]
@@ -223,10 +228,9 @@ def instance(spec, w, seed):
     sol.add(prog.constraints())
     basis = {}
     if mode == "basis":
-        for end in ("in", "out"):
-            basis[end] = [[z3.BitVec(f"{end}{x}_{a}", w) for a in range(nk)] for x in "abcde"]
-            for a in range(nk):
-                sol.add(z3.Extract(0, 0, basis[end][1][a]) == 1, z3.Extract(0, 0, basis[end][3][a]) == 1)
+        basis = [[z3.BitVec(f"basis{x}_{b}", w) for x in "abcde"] for b in range(nk + 1)]
+        for b in range(nk + 1):
+            sol.add(z3.Extract(0, 0, basis[b][1]) == 1, z3.Extract(0, 0, basis[b][3]) == 1)
     if mode == "carry":
         xor_form = z3.Bool("carry_xor")
     W = lambda x: z3.BitVecVal(x & mask, w)
@@ -239,9 +243,8 @@ def instance(spec, w, seed):
             r_idx, c_idx = rr[0][0], cc[0][0]
             srcs += [rf[f][a][r_idx] for f in range(F)] + [cf[f][a][c_idx] for f in range(F)]
         if mode == "basis":
-            ba = [basis["in"][i][a] for i in range(5)]
+            ba, bo = basis[a], basis[a + 1]
             srcs[0] = ((((srcs[0] ^ ba[0]) * ba[1]) ^ ba[2]) * ba[3]) + ba[4]
-            bo = [basis["out"][i][a] for i in range(5)]
             goal = ((((W(want) ^ bo[0]) * bo[1]) ^ bo[2]) * bo[3]) + bo[4]
             sol.add(prog.run(srcs)[-1] == goal)
         elif mode == "carry":
@@ -288,7 +291,7 @@ def specs(width, timeout, quick):
                 if mode != "plain" and s == 3:
                     continue
                 for L in (h - 1, h):
-                    if L == h and mode != "plain":
+                    if L == h and mode != "plain" and not (mode == "basis" and s == 1):
                         continue
                     add(target, s, mode, L, width)
             if s >= 2:
