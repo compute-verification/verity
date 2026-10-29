@@ -13,7 +13,7 @@ is one 32-bit accumulator value after a k32 step. Every 64-bit message word W of
 - F. The folds, each an honest W1 program checked bit for bit against its reference:
   - R80: SHA-512's compression with its message schedule replaced by 80 raw message words a block (K_0..K_79, the
     feed-forward fused into round 79), chained;
-  - R16: chunks of SHA-512's first 16 rounds (K_0..K_15, which read raw message words in SHA-512 itself), chained with
+  - C16: chunks of SHA-512's first 16 rounds (K_0..K_15, which read raw message words in SHA-512 itself), chained with
     no feed-forward;
   - Rr: r rounds a message word (the word injected at the first), r = 1..5;
   - RD: R80 with a second message word V added into e' = d + T1 + V, the only free IADD3 slot of a round;
@@ -34,7 +34,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exact_kit"))
-from exact_kit.checks import Checks  # noqa: E402
+from exact_kit.checks import Checks
 
 M32 = (1 << 32) - 1
 M64 = (1 << 64) - 1
@@ -284,7 +284,7 @@ def fold_ref(design: dict, st0: list[int], ws: list[int], vs: list[int] | None =
                 st = round_ref(st, w ^ xc(t) if design.get("xor") else w, K[t])
             st = [(x + y) & M64 for x, y in zip(cv, st)]
         return st
-    if kind == "R16":
+    if kind == "C16":
         for i, w in enumerate(ws):
             st = round_ref(st, w, K[i % 16])
         return st
@@ -329,7 +329,7 @@ def fold_w1(r: Regs, design: dict, st0, ws, vs=None):
                 w = xor_w1(r, w, xc(t)) if design.get("xor") else w
                 st = round_w1(r, st, w, K[t], ff=cv if t == len(blk) - 1 else None)
         return st
-    if kind == "R16":
+    if kind == "C16":
         for i, w in enumerate(ws):
             st = round_w1(r, st, w, K[i % 16])
         return st
@@ -366,7 +366,7 @@ def fold_w1(r: Regs, design: dict, st0, ws, vs=None):
 DESIGNS = {
     "R80": {"kind": "R80", "w_per_unit": 80, "state_bits": 512,
             "what": "SHA-512's compression with its schedule replaced by 80 raw message words a block, chained"},
-    "R16": {"kind": "R16", "w_per_unit": 16, "state_bits": 512,
+    "C16": {"kind": "C16", "w_per_unit": 16, "state_bits": 512,
             "what": "chunks of SHA-512's first 16 rounds (the rounds that read raw words), chained without feed-forward"},
     **{f"RR{r}": {"kind": "RR", "r": r, "w_per_unit": 1, "state_bits": 512,
                   "what": f"{r} SHA-512 rounds a 64-bit message word ({r / 2:g} a 32-bit word)"} for r in (2, 3, 4, 5)},
@@ -386,7 +386,7 @@ DESIGNS = {
 
 def fold_run(d: dict, ref_d: dict, rng: np.random.Generator, n: int = 8) -> tuple[bool, Regs, int]:
     """d's honest W1 program against ref_d's reference on n random instances: (exact, its counts, message words)."""
-    nw = 160 if ref_d["kind"] in ("R80", "RD") else (64 if ref_d["kind"] in ("R16", "TC") else 40)
+    nw = 160 if ref_d["kind"] in ("R80", "RD") else (64 if ref_d["kind"] in ("C16", "TC") else 40)
     ws = rng.integers(0, 2**64, size=(nw, n), dtype=np.uint64)
     vs = rng.integers(0, 2**64, size=(nw, n), dtype=np.uint64) if ref_d["kind"] == "RD" else None
     st0 = rng.integers(0, 2**64, size=(8, n), dtype=np.uint64)
@@ -433,18 +433,18 @@ def part_f(checks: Checks, rng: np.random.Generator) -> dict:
     checks.check("F: R80's block is 2,254 writes, ShaWrites' own R_PAD (80 rounds and a fused feed-forward, no "
                  "schedule): the count ShaWrites already asserts for a padding block, here over raw words",
                  out["R80"]["writes"] == 2 * R_PAD, f"{out['R80']['writes']} for 2 blocks")
-    checks.check("F: R16 is 14 writes a word, RD 7, SCH 10; Rr is 14r; a full compression is 110.4",
-                 out["R16"]["writes_per_word"] == 14 and out["RD"]["writes_per_word"] == 7
+    checks.check("F: C16 is 14 writes a word, RD 7, SCH 10; Rr is 14r; a full compression is 110.4",
+                 out["C16"]["writes_per_word"] == 14 and out["RD"]["writes_per_word"] == 7
                  and out["SCH"]["writes_per_word"] == 10
                  and all(out[f"RR{r}"]["writes_per_word"] == 14 * r for r in (2, 3, 4, 5)),
-                 f"R16 {out['R16']['writes_per_word']}, RD {out['RD']['writes_per_word']}, "
+                 f"C16 {out['C16']['writes_per_word']}, RD {out['RD']['writes_per_word']}, "
                  f"SCH {out['SCH']['writes_per_word']}")
     checks.check("F: the compression splits as rounds 0-15 (448) + schedule (1,280) + rounds 16-79 (1,792) + "
-                 "feed-forward (14): R16's chunk is exactly the part of the lead's compression that reads raw words",
-                 16 * 28 + 64 * 20 + 64 * 28 + 14 == 3534 and out["R16"]["writes"] == 64 * 28)
+                 "feed-forward (14): C16's chunk is exactly the part of the lead's compression that reads raw words",
+                 16 * 28 + 64 * 20 + 64 * 28 + 14 == 3534 and out["C16"]["writes"] == 64 * 28)
     ws = [int(x) for x in rng.integers(0, 2**64, size=16, dtype=np.uint64)]
     blk = compress_ref(IV, ws)
-    st16 = fold_ref(DESIGNS["R16"], IV, ws)
+    st16 = fold_ref(DESIGNS["C16"], IV, ws)
     w = list(ws)
     for t in range(16, 80):
         w.append(sched_ref(w[t - 16:t]))
@@ -452,9 +452,9 @@ def part_f(checks: Checks, rng: np.random.Generator) -> dict:
     for t in range(16, 80):
         st = round_ref(st, w[t], K[t])
     checks.check("F: the reduction's split is exact: SHA-512's compression = feed-forward(rounds 16-79 over the "
-                 "schedule, from R16's chunk state); and RD with V = 0 is SHA-512's rounds",
+                 "schedule, from C16's chunk state); and RD with V = 0 is SHA-512's rounds",
                  [(x + y) & M64 for x, y in zip(IV, st)] == blk
-                 and fold_ref(DESIGNS["RD"], IV, ws, [0] * 16) == fold_ref(dict(DESIGNS["R16"]), IV, ws))
+                 and fold_ref(DESIGNS["RD"], IV, ws, [0] * 16) == fold_ref(dict(DESIGNS["C16"]), IV, ws))
     for name, d in DESIGNS.items():
         out[name]["head_saving"] = head_saving(d, rng)
     r0, r1 = Regs(), Regs(fold_consts=True)
@@ -463,13 +463,13 @@ def part_f(checks: Checks, rng: np.random.Generator) -> dict:
     compress_w1(r0, iv, blk)
     compress_w1(r1, iv, blk)
     sha_head = r0.total() - r1.total()
-    checks.check("F: a chain from a public start state saves 20 writes on R80, R16 and RD, as SHA-512's own first block "
+    checks.check("F: a chain from a public start state saves 20 writes on R80, C16 and RD, as SHA-512's own first block "
                  "does in this model (ShaWrites' card: 22), and 140 on SCH, whose first 15 steps' s0 and first two "
                  "steps' s1 read the start window alone",
-                 all(out[n]["head_saving"] == sha_head == 20 for n in ("R80", "R16", "RD"))
+                 all(out[n]["head_saving"] == sha_head == 20 for n in ("R80", "C16", "RD"))
                  and out["SCH"]["head_saving"] == 140,
                  f"SHA-512 {r0.total()} -> {r1.total()}; " + ", ".join(f"{n} {out[n]['head_saving']}"
-                                                                       for n in ("R80", "R16", "RD", "SCH")))
+                                                                       for n in ("R80", "C16", "RD", "SCH")))
     return out
 
 
@@ -751,7 +751,7 @@ def part_d(checks: Checks, rng: np.random.Generator) -> dict:
                  "becomes h + R + (C + K_t) with C + K_t shared by the threads that hold the column at that position, "
                  "and the lo carry, corrected by free predicates, always fits IADD3.X's two carry-ins",
                  ok and carries <= {0, 1, 2}, f"4 threads x 160 words: exact {ok}, carries {sorted(carries)}")
-    checks.check("D: at the served layout decomp pays 0.11 writes a word against honest's MMA write, so R80, R16 and "
+    checks.check("D: at the served layout decomp pays 0.11 writes a word against honest's MMA write, so R80, C16 and "
                  "Rr lose the words' credit (T1 about r (1 - 0.11), past 100% of stock) and RD half of it",
                  abs(served - (3 / 32 + 1 / 64)) < 1e-12, f"{served:.4f} a word")
     checks.check("D: XORing each word with a per-position constant first (R80X) leaves decomp's program wrong: the "
@@ -768,7 +768,7 @@ def r_row(row: int) -> float:
 def part_p(checks: Checks, lead: dict, f: dict, a: dict, dd: dict) -> dict:
     out = {"seal": {}, "designs": {}}
     # the share of a fold's words read only by an add that also takes a round constant: decomp's (part D)
-    exposed = {"R80": 1.0, "R16": 1.0, "TC16": 1.0, "RD": 0.5, "R80X": 0.0, "RDX": 0.0, "SCH": 0.0,
+    exposed = {"R80": 1.0, "C16": 1.0, "TC16": 1.0, "RD": 0.5, "R80X": 0.0, "RDX": 0.0, "SCH": 0.0,
                **{f"RR{k}": 1.0 for k in (2, 3, 4, 5)}}
     # the seal: each fold state hashed once a call at the lead's per-byte price; states per thread, cells per thread
     seal_cases = {"64 cells a thread, K 2,048": (64, 2048), "128 cells a thread, K 8,192": (128, 8192)}
@@ -827,7 +827,7 @@ def part_p(checks: Checks, lead: dict, f: dict, a: dict, dd: dict) -> dict:
                  f"{max(out['designs']['SCH']['points']['t8192']['h'].values()):.2f}")
     # the precision each premise is needed to: T1's slack over the fold, absolute writes a 32 words and relative
     prec = {}
-    for name in ("R80", "R16", "RD", "SCH"):
+    for name in ("R80", "C16", "RD", "SCH"):
         pt = lead["points"]["t8192"]
         slack = T1_BAR - (pt["t1"] - pt["terms"].get("chunk_head", 0.0))
         h_fold = out["designs"][name]["points"]["t8192"]["h_fold"]
@@ -878,8 +878,8 @@ def main() -> int:
             checks.mutation("the W1 round with Maj as a & b", not fold_exact(DESIGNS["R80"], DESIGNS["R80"], mrng))
         finally:
             maj_w1 = good_maj
-        checks.mutation("R80's program without its feed-forward (R16's) against R80's reference",
-                        not fold_exact(dict(DESIGNS["R80"], kind="R16"), DESIGNS["R80"], mrng))
+        checks.mutation("R80's program without its feed-forward (C16's) against R80's reference",
+                        not fold_exact(dict(DESIGNS["R80"], kind="C16"), DESIGNS["R80"], mrng))
         good_ripple = Planes.ripple
 
         def bad_ripple(self, x, y):
@@ -904,8 +904,8 @@ def main() -> int:
             Regs._count = good_count
         checks.mutation("decomp without its carry correction", not decomp_r80(mrng, 2, 16, 5, fix_carry=False)[0])
         checks.mutation("a skipped round taken for the full state",
-                        fold_ref(DESIGNS["R16"], IV, list(range(1, 17)))
-                        != fold_ref(DESIGNS["R16"], IV, list(range(1, 16))))
+                        fold_ref(DESIGNS["C16"], IV, list(range(1, 17)))
+                        != fold_ref(DESIGNS["C16"], IV, list(range(1, 16))))
     if out_path:
         Path(out_path).write_text(json.dumps({"model": m, "folds": f, "attacks": a, "decomp": dd, "prices": p}, indent=1,
                                              sort_keys=True, default=float) + "\n")
