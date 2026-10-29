@@ -67,7 +67,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | network certification (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
 | PoUW (its period credit: the period's windows credited all or nothing) | yes | | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
 | PoUW (its window check) | | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
-| sampled proofs (the one-stage audit on the proofs themselves, which it reads as blobs) | yes | yes | `SampledProofs.OneStageZk.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
+| sampled proofs (the one-stage audit; v2, the audit on the proofs themselves, joins once its check reads the challenger's signed coins) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
 | the inference-only policy (its check: the declared circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | PoUB-P2 (its session over PoUS's store) | yes | | `RemoteAudit.P2Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/p2/v0` |
@@ -98,8 +98,7 @@ private form (the division committed under hiding leaves, compliance proved, a p
 private data among the products' components unless its `KNOWN` lists it with its reason, and `KNOWN` only shrinks;
 `benchmarks/one_stage/composite.py` writes the exception's line into the record it renders.
 
-A subprotocol that reads blobs (`Core.BlobProtocol`, the content-addressed files beside its three byte strings: sampled
-proofs' proof files) makes the product one too: `productB` (`CoreComposition/Blobs.lean`) hands the caller's blobs to
+A subprotocol that reads blobs (`Core.BlobProtocol`, the content-addressed files beside its three byte strings) makes the product one too: `productB` (`CoreComposition/Blobs.lean`) hands the caller's blobs to
 every subprotocol, those that read none ignore them (`Protocol.withoutBlobs`), and on the blobs it is `product` of its
 subprotocols on them (`productB_on`). `onsite check P C E [BLOB ...]` reads them after the evidence, and a `serve` case
 carries them as hex under `blobs`.
@@ -112,9 +111,9 @@ all commit to the first one's digest reject it whatever the subprotocols answer 
 committed D'`); one whose commitment doesn't decode rejects as a subprotocol. Its formats are the product's. Both
 products are one:
 
-- remote, `sameB "verity/remote/v0" [verity/inference-only/v0, verity/pouw/v1, verity/sampled-proofs/one-stage/v2]
+- remote, `sameB "verity/remote/v0" [verity/inference-only/v0, verity/pouw/v1, verity/sampled-proofs/one-stage/v1]
   components`, whose policy, PoUW window and one-stage audit each commit to the window record;
-- onsite, `tiedSameB "verity/onsite/v0" [verity/inference-only/v0, verity/sampled-proofs/one-stage/v2] [store]
+- onsite, `tiedSameB "verity/onsite/v0" [verity/inference-only/v0, verity/sampled-proofs/one-stage/v1] [store]
   components`, whose policy and one-stage audit each commit to the run's registration record.
 
 Each product's `#guard`s pin that two records reject it with the policy among the subprotocols. Onsite's PoUW period and
@@ -154,13 +153,12 @@ Lean to:
 
 Hypothesis samples 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
 (one sample in six every one aimed at acceptance, one in six all but one, which is aimed at undecided; the inference-only
-policy is never undecided), every case hands the subprotocols the same blobs (sampled proofs' circuit and public file),
-and the composition's inputs, its blobs or the case itself are often broken. Sampled proofs accept only on a session's
-proof, which no case carries (its cases are audits with no session, undecided when their draw drew nothing, and audits
-whose sessions' files are in no blob), so no product accepts in the difftest until a v2 case with a proof does. Often
+policy is never undecided), every case hands the subprotocols the same blobs, and the composition's inputs, its blobs or
+the case itself are often broken. Sampled proofs' cases are aimed at undecided at best (audits whose draw drew nothing,
+and audits with one or two changes), so no product accepts in the difftest. Often
 the tied subprotocols are put on one record (`one_record`), and otherwise they mostly commit to two, which the product
-refuses. Remote's cases reject: on one record all three are on PoUW's, which the one-stage audit refuses (PoUW's window
-reads registered values, outside v2's mirror). Onsite's reach undecided: on one record the policy declares the one-stage
+refuses. Remote's cases reject: on one record all three are on PoUW's, which the one-stage audit refuses (it is not the
+registration its params describe). Onsite's reach undecided: on one record the policy declares the one-stage
 audit's own circuit on its record, which it accepts.
 `test_remote_refuses_two_records_and_else_keeps_the_products_verdict` shows that refusal changes no other verdict of
 the product's. Onsite's PoUS and PoUB-P2 cases are on one store, but for PoUS's honest run on another
