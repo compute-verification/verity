@@ -16,10 +16,13 @@
 //   formb    the same for the B tile (256 x 32), the weight side
 //   formab   both
 //   formars  A formed in registers and fed to wgmma from them (wgmma .rs: no STS and no wgmma read of A from shared memory)
+// wait0, xor, fold and stg also run with period P = 2, 4 and 8: only every P-th step waits for 0 and exports (a word every
+// 32 P steps of K: every k64, k128 and k256); the steps between are plain's.
 //
-//   k32 check               every mode's accumulators (and sts's and stg's exported words) against the host, 6 steps
-//   k32 run REPS STEPS      one JSON line a (mode, CTAs an SM): ms (median of REPS), its SM clock, MACs, MACs an SM-clock,
-//                           and the MAC-times it occupies (ms x f x SMs x 4,096: MH100's unit, one dense int8 MAC = 1)
+//   k32 check               every variant's accumulators (and sts's and stg's last exported words) against the host, 8 steps
+//   k32 run REPS STEPS      one JSON line a (variant, CTAs an SM): ms (median of REPS), its SM clock, MACs, MACs an SM-clock,
+//                           the MAC-times it occupies (ms x f x SMs x 4,096: MH100's unit, one dense int8 MAC = 1) and the
+//                           words it exports (STEPS / P a CTA, 64 x 256 each)
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a k32.cu -o k32
 #include <cuda_runtime.h>
 
@@ -29,6 +32,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "../dc/dc.cuh"
@@ -87,9 +91,16 @@ __device__ __forceinline__ void absorb(DuoSt (&ch)[8], const int* d) {
   }
 }
 
-template <int MODE>
+template <class F, int... J>
+__device__ __forceinline__ void unroll(F& f, std::integer_sequence<int, J...>) {
+  (f(std::integral_constant<int, J>{}), ...);
+}
+
+template <int MODE, int P>
 __global__ void __launch_bounds__(128) k32_k(const __grid_constant__ Ops ops, int steps, int* C, uint4* ring,
                                              uint4* stage_out, u32* sink, Clk* clk) {
+  static_assert(P == 1 || (exports(MODE) && (P == 2 || P == 4 || P == 8)), "a period only for an exporting mode");
+  constexpr int G = P < 2 ? 2 : P;  // steps a loop iteration
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
   extern __shared__ __align__(1024) unsigned char sm[];
   const int tid = threadIdx.x;
@@ -117,8 +128,9 @@ __global__ void __launch_bounds__(128) k32_k(const __grid_constant__ Ops ops, in
   for (int h = 0; h < 8; h++) ch[h] = duo_init(blockIdx.x, tid * 8 + h);
   const uint4* s4 = reinterpret_cast<const uint4*>(sm);
 
-  auto step = [&](auto BUF, int s) {
-    constexpr int buf = decltype(BUF)::value;
+  auto step = [&](auto J, int s) {
+    constexpr int buf = decltype(J)::value & 1;
+    constexpr bool ex = exports(MODE) && decltype(J)::value % P == P - 1;
     if constexpr (forms_a(MODE)) reinterpret_cast<uint4*>(sm + (buf ? SA1 : SA0))[tid] = add33(s4[RAWA / 16 + tid], s4[DA / 16 + tid]);
     if constexpr (forms_b(MODE)) {
 #pragma unroll
@@ -138,7 +150,7 @@ __global__ void __launch_bounds__(128) k32_k(const __grid_constant__ Ops ops, in
     if constexpr (MODE == FORMARS) wgmma_s8_n256_rs(d, a, db[0], 1);
     else wgmma_s8_n256(d, da[forms_a(MODE) ? buf : 0], db[forms_b(MODE) ? buf : 0], 1);
     wgmma_commit();
-    if constexpr (!exports(MODE)) {
+    if constexpr (!ex) {
       wgmma_wait<1>();
     } else {
       wgmma_wait<0>();
@@ -161,7 +173,7 @@ __global__ void __launch_bounds__(128) k32_k(const __grid_constant__ Ops ops, in
           reinterpret_cast<uint4*>(sm + STAGE)[j * 128 + tid] = make_uint4(d[4 * j], d[4 * j + 1], d[4 * j + 2], d[4 * j + 3]);
       }
       if constexpr (MODE == STG) {
-        uint4* r = ring + ((size_t)blockIdx.x * RING + (s & (RING - 1))) * 4096;
+        uint4* r = ring + ((size_t)blockIdx.x * RING + ((s / P) & (RING - 1))) * 4096;
 #pragma unroll
         for (int j = 0; j < 32; j++) r[j * 128 + tid] = make_uint4(d[4 * j], d[4 * j + 1], d[4 * j + 2], d[4 * j + 3]);
       }
@@ -171,9 +183,9 @@ __global__ void __launch_bounds__(128) k32_k(const __grid_constant__ Ops ops, in
   const long long c0 = clock64();
   const u64 t0 = gtime();
 #pragma unroll 1
-  for (int s = 0; s < steps; s += 2) {
-    step(std::integral_constant<int, 0>{}, s);
-    step(std::integral_constant<int, 1>{}, s + 1);
+  for (int s = 0; s < steps; s += G) {
+    auto at = [&](auto J) { step(J, s + decltype(J)::value); };
+    unroll(at, std::make_integer_sequence<int, G>{});
   }
   wgmma_wait<0>();
   wgmma_hold(d);
@@ -199,9 +211,20 @@ __global__ void __launch_bounds__(128) k32_k(const __grid_constant__ Ops ops, in
 }
 
 typedef void (*Kern)(Ops, int, int*, uint4*, uint4*, u32*, Clk*);
-static const Kern KERNS[N_MODES] = {k32_k<PLAIN>, k32_k<WAIT0>, k32_k<XOR>,   k32_k<FOLD>,   k32_k<STS>,
-                                    k32_k<STG>,   k32_k<FORMA>, k32_k<FORMB>, k32_k<FORMAB>, k32_k<FORMARS>};
-static int smem_of(int m) { return m == STS ? SMEM_STS : SMEM; }
+struct Var {
+  int mode, p;
+  Kern k;
+};
+static const Var VARS[] = {
+    {PLAIN, 1, k32_k<PLAIN, 1>}, {WAIT0, 1, k32_k<WAIT0, 1>}, {XOR, 1, k32_k<XOR, 1>},       {FOLD, 1, k32_k<FOLD, 1>},
+    {STS, 1, k32_k<STS, 1>},     {STG, 1, k32_k<STG, 1>},     {FORMA, 1, k32_k<FORMA, 1>},   {FORMB, 1, k32_k<FORMB, 1>},
+    {FORMAB, 1, k32_k<FORMAB, 1>}, {FORMARS, 1, k32_k<FORMARS, 1>},
+    {WAIT0, 2, k32_k<WAIT0, 2>}, {WAIT0, 4, k32_k<WAIT0, 4>}, {WAIT0, 8, k32_k<WAIT0, 8>},
+    {XOR, 2, k32_k<XOR, 2>},     {XOR, 4, k32_k<XOR, 4>},     {XOR, 8, k32_k<XOR, 8>},
+    {FOLD, 2, k32_k<FOLD, 2>},   {FOLD, 4, k32_k<FOLD, 4>},   {FOLD, 8, k32_k<FOLD, 8>},
+    {STG, 2, k32_k<STG, 2>},     {STG, 4, k32_k<STG, 4>},     {STG, 8, k32_k<STG, 8>},
+};
+static int smem_of(const Var& v) { return v.mode == STS ? SMEM_STS : SMEM; }
 
 // ---- host ------------------------------------------------------------------------------------------------------------------
 static u32 mix32(u32 x) {
@@ -267,27 +290,28 @@ static Dev make_dev(const Host& h, int max_ctas) {
   CK(cudaMalloc(&d.clk, sizeof(Clk)));
   return d;
 }
-static void launch(int m, const Dev& d, int ctas, int steps, cudaStream_t st = 0) {
-  KERNS[m]<<<ctas, 128, smem_of(m), st>>>(d.ops, steps, d.C, d.ring, d.stage, d.sink, d.clk);
+static void launch(const Var& v, const Dev& d, int ctas, int steps, cudaStream_t st = 0) {
+  v.k<<<ctas, 128, smem_of(v), st>>>(d.ops, steps, d.C, d.ring, d.stage, d.sink, d.clk);
   CK(cudaGetLastError());
 }
 static int g_sms = 132;
-static int occupancy(int m) {
-  CK(cudaFuncSetAttribute(KERNS[m], cudaFuncAttributeMaxDynamicSharedMemorySize, smem_of(m)));
+static int occupancy(const Var& v) {
+  CK(cudaFuncSetAttribute(v.k, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_of(v)));
   int n = 0;
-  CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&n, KERNS[m], 128, smem_of(m)));
+  CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&n, v.k, 128, smem_of(v)));
   return n;
 }
 
 static int check() {
-  const int S = 6, ctas = 2 * g_sms;
+  const int S = 8, ctas = 2 * g_sms;
   const Host h = make_host();
   const Dev d = make_dev(h, ctas);
   std::vector<int> C((size_t)ctas * 64 * 256);
   std::vector<uint4> buf(4096);
   int bad_all = 0;
-  for (int m = 0; m < N_MODES; m++) {
-    occupancy(m);
+  for (const Var& v : VARS) {
+    const int m = v.mode;
+    occupancy(v);
     std::vector<int> T(64 * 256);
     for (int r = 0; r < 64; r++)
       for (int n = 0; n < 256; n++) {
@@ -302,7 +326,7 @@ static int check() {
     CK(cudaMemset(d.C, 0xA5, C.size() * 4));
     CK(cudaMemset(d.ring, 0xA5, (size_t)ctas * RING * 65536));
     CK(cudaMemset(d.stage, 0xA5, 65536));
-    launch(m, d, ctas, S);
+    launch(v, d, ctas, S);
     CK(cudaDeviceSynchronize());
     CK(cudaMemcpy(C.data(), d.C, C.size() * 4, cudaMemcpyDeviceToHost));
     size_t bad = 0, bad_x = 0;
@@ -324,11 +348,12 @@ static int check() {
     }
     if (m == STG)
       for (int c = 0; c < ctas; c += 37) {
-        CK(cudaMemcpy(buf.data(), d.ring + ((size_t)c * RING + (S - 1) % RING) * 4096, 65536, cudaMemcpyDeviceToHost));
+        CK(cudaMemcpy(buf.data(), d.ring + ((size_t)c * RING + (S - 1) / v.p % RING) * 4096, 65536, cudaMemcpyDeviceToHost));
         bad_x += words_bad(buf.data());
       }
-    printf("{\"check\": \"%s\", \"ctas\": %d, \"steps\": %d, \"accumulator_mismatches\": %zu, \"exported_mismatches\": %zu}\n",
-           NAMES[m], ctas, S, bad, bad_x);
+    printf("{\"check\": \"%s\", \"period\": %d, \"ctas\": %d, \"steps\": %d, \"accumulator_mismatches\": %zu, "
+           "\"exported_mismatches\": %zu}\n",
+           NAMES[m], v.p, ctas, S, bad, bad_x);
     bad_all += bad || bad_x;
   }
   return bad_all ? 1 : 0;
@@ -337,21 +362,21 @@ static int check() {
 static int run(int reps, int steps) {
   const Host h = make_host();
   int occ_max = 0;
-  for (int m = 0; m < N_MODES; m++) occ_max = std::max(occ_max, occupancy(m));
+  for (const Var& v : VARS) occ_max = std::max(occ_max, occupancy(v));
   const Dev d = make_dev(h, occ_max * g_sms);
   cudaEvent_t e0, e1;
   CK(cudaEventCreate(&e0));
   CK(cudaEventCreate(&e1));
-  for (int m = 0; m < N_MODES; m++) {
-    const int occ = occupancy(m);
+  for (const Var& v : VARS) {
+    const int occ = occupancy(v);
     for (int o = 1; o <= occ; o = o == occ ? occ + 1 : occ) {
       const int ctas = o * g_sms;
-      launch(m, d, ctas, steps);
+      launch(v, d, ctas, steps);
       CK(cudaDeviceSynchronize());
       std::vector<double> ms, mhz;
       for (int r = 0; r < reps; r++) {
         CK(cudaEventRecord(e0));
-        launch(m, d, ctas, steps);
+        launch(v, d, ctas, steps);
         CK(cudaEventRecord(e1));
         CK(cudaEventSynchronize(e1));
         float t = 0;
@@ -364,13 +389,13 @@ static int run(int reps, int steps) {
       std::sort(ms.begin(), ms.end());
       std::sort(mhz.begin(), mhz.end());
       const double t = ms[reps / 2], f = mhz[reps / 2];
-      const double macs = (double)ctas * steps * 64 * 256 * KB, words = (double)ctas * steps * 64 * 256;
+      const double macs = (double)ctas * steps * 64 * 256 * KB, words = (double)ctas * steps / v.p * 64 * 256;
       const double units = t * 1e-3 * f * 1e6 * g_sms * 4096.0;
-      printf("{\"mode\": \"%s\", \"occ\": %d, \"occ_max\": %d, \"ctas\": %d, \"steps\": %d, \"ms\": %.6f, \"ms_min\": %.6f, "
-             "\"ms_max\": %.6f, \"mhz\": %.1f, \"macs\": %.6e, \"mac_per_sm_clk\": %.2f, \"units\": %.6e, \"units_per_mac\": %.4f, "
-             "\"words\": %.6e, \"units_per_word\": %.3f, \"smem\": %d}\n",
-             NAMES[m], o, occ, ctas, steps, t, ms[0], ms[reps - 1], f, macs, macs / (t * 1e-3 * f * 1e6 * g_sms), units,
-             units / macs, words, units / words, smem_of(m));
+      printf("{\"mode\": \"%s\", \"period\": %d, \"occ\": %d, \"occ_max\": %d, \"ctas\": %d, \"steps\": %d, \"ms\": %.6f, "
+             "\"ms_min\": %.6f, \"ms_max\": %.6f, \"mhz\": %.1f, \"macs\": %.6e, \"mac_per_sm_clk\": %.2f, \"units\": %.6e, "
+             "\"units_per_mac\": %.4f, \"words\": %.6e, \"units_per_word\": %.3f, \"smem\": %d}\n",
+             NAMES[v.mode], v.p, o, occ, ctas, steps, t, ms[0], ms[reps - 1], f, macs, macs / (t * 1e-3 * f * 1e6 * g_sms),
+             units, units / macs, words, units / words, smem_of(v));
       fflush(stdout);
     }
   }
@@ -388,8 +413,8 @@ int main(int argc, char** argv) {
   if (argc == 2 && !strcmp(argv[1], "check")) return check();
   if (argc == 4 && !strcmp(argv[1], "run")) {
     const int steps = atoi(argv[3]);
-    if (steps < 2 || steps % 2) {
-      fprintf(stderr, "STEPS even\n");
+    if (steps < 8 || steps % 8) {
+      fprintf(stderr, "STEPS a multiple of 8 (the longest period)\n");
       return 2;
     }
     return run(atoi(argv[2]), steps);

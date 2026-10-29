@@ -127,17 +127,21 @@ def k32(out: Path, res: dict) -> list[str]:
     plain = {r["occ"]: r for r in rows if r["mode"] == "plain"}
     formed = {"forma": 64 * 32, "formb": 256 * 32, "formab": 320 * 32, "formars": 64 * 32}
     md = ["### Every-k32 commit and forming beside wgmma (k32): m64n256k32 s8, operands resident in shared memory", "",
-          "| mode | CTAs an SM | MACs an SM-clock | units a MAC | units a word | over plain (same CTAs an SM) | extra units a word | "
-          "extra units a formed entry | MHz |", "|---|---|---|---|---|---|---|---|---|"]
+          "A mode with a period L exports a word every L steps of K (every L/32-th wgmma); a word is one s32 accumulator word "
+          "exported, and the extra is over plain at the same CTAs an SM.", "",
+          "| mode | every L | CTAs an SM | MACs an SM-clock | units a MAC | units a word | over plain | extra units a word | "
+          "extra units a MAC | extra units a formed entry | MHz |", "|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         p = plain.get(r["occ"]) or plain[max(plain)]
         extra = r["units"] - p["units"] * r["steps"] / p["steps"] * r["ctas"] / p["ctas"]
         ent = r["ctas"] * r["steps"] * formed[r["mode"]] if r["mode"] in formed else None
         r["over_plain"] = r["units"] / (p["units"] * r["ctas"] / p["ctas"]) - 1
         r["extra_per_word"] = extra / r["words"]
+        r["extra_per_mac"] = extra / r["macs"]
         r["extra_per_formed_entry"] = extra / ent if ent else None
-        md.append(f"| {r['mode']} | {r['occ']} | {r['mac_per_sm_clk']:.0f} | {r['units_per_mac']:.3f} | {r['units_per_word']:.1f} | "
-                  f"{r['over_plain']:+.3f} | {r['extra_per_word']:.1f} | "
+        every = 32 * r.get("period", 1) if r["mode"] in ("wait0", "xor", "fold", "sts", "stg") else ""
+        md.append(f"| {r['mode']} | {every} | {r['occ']} | {r['mac_per_sm_clk']:.0f} | {r['units_per_mac']:.3f} | "
+                  f"{r['units_per_word']:.1f} | {r['over_plain']:+.3f} | {r['extra_per_word']:.1f} | {r['extra_per_mac']:+.4f} | "
                   + (f"{r['extra_per_formed_entry']:.2f}" if ent else "") + f" | {r['mhz']:.0f} |")
     res["k32"] = rows
     return md
