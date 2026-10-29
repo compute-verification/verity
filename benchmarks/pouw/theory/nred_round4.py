@@ -1,0 +1,527 @@
+"""N-RED round 4 (final 2): the lead `ssn-1l-tag + blc4a-t64-e7` with coins after A_j, under model P read two ways;
+R1's check (b) against copies across entries; and the order the coins need.
+
+Two readings of model P (shares of stock, Llama-weighted, chosen data):
+
+- **P, literal** (final 1's model P): moves, predicate-only writes and data-dependent branches are free. Detection
+  is then free, so an adversary writes each distinct value of a group once, plus the positions it computes them from
+  (one a tile-column-step, one a row-step).
+- **P′** (P with N-W1's measured decision price, note 20261029T1045Z-report-np-w1 §1, r20261029-094825-8394): moves
+  free, but every instruction that steers work costs at least `price` units a lane, 32 at the floor and 327 measured
+  (divergent, if-converted). One decision may merge many words, so the adversary decides a group at once: one decision
+  a tile-column-step to read the coins, and one a merging group (the rows that copy the same source). Paying only for
+  productive groups makes this a lower bound on the adversary's cost.
+
+The lead's words (`lead_instance`) on chosen data: step 1 carries 24 zero data lanes, the tags T(i) against G_j and the
+coin bits a₁(i) against the column code C_j, from −β_j. A later step carries a cancel lane (A = 1, B = −c_t; c_t = 1 for
+`a2c`, alternating 1, 2 for `a2r`), the row lane (1 + b_t(i))·1 and the coin lanes 1·s_t[tile, j] (odd, uniform in
+±(2^e − 1)). The honest chain is the explicit lane product, tile by tile. The adversary's words come from positions:
+D0(i, j) + R_t(i) + C_t(tile, j). They must be equal.
+
+The groups whose distinct values are counted:
+
+- `entry`: one entry's steps, R1 check (b)'s grain (final 1's unbounded column, now with the real step 1);
+- `xrow`: a tile's rows at one step. The coin lanes are the tile's, so they cancel between its rows. Two rows meet
+  when their walks differ by their step-1 difference D0(i, j) − D0(i′, j), which is small: |T·G| ≤ 72, |a₁·C| ≤ 24;
+- `tilecol`: a tile's rows and steps (entry and xrow together, plus cross-step meetings);
+- `column`: every row and step of one column.
+
+`ordering` checks that the "coins s before A_j" attack of final 1 builds A without reading a coin: only B reads s, so
+the requirement is that s and G come after root(B_j), and the row coins b after root(A_j).
+
+The fix for the tile pools is the wide tag (`wide_tags`): balanced base-255 digits of z_i + `WIDE_OFFSET` against
+G ∈ [−127, 127]. `identical_columns` checks R1's check (b) against chosen identical weight columns.
+
+`mirror_instance` is N-NOISE's frontier design `A/byte1/b13s4/mirror/s8/noc1/M0+tag+wv` (note
+20261029T1106Z-report-np-noise §1): a coin byte u_t(i) a row a step against a drawn nonzero int8 window weight W_t[j],
+replayed against −W_t[j] in order in the second half, so the final word is A·Bᵀ + code + tags. On chosen identical rows
+every lane has cancelled at the last step, and a column's final words differ only by the narrow tag and code, so they
+meet in a birthday pool of every row of the column. `salt` adds a per-row ρ_i (Q 2^18) to the last step, removed by
+the stock epilogue's `IADD3` row source as N-EXACT's xu does.
+
+`a5_lead` is round 2's A5 search (`nred_round2.a5_step_greedy`) on the lead: with s drawn per call after A_j a row's
+step-t vector holds the call's coins for every t ≥ 2, so only step 1 (16 a₁ codes) can be tabled; with s drawn a
+window, a row's step-t vectors are ssn_1l's 16·t.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+
+import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import noise_sweep as ns
+import nred_attacks as na
+import nred_egress as ne
+import nred_final as nf
+import nred_round2 as r2
+
+H32 = ns.H32
+LAYOUTS = {"blc4a-t64-e7": (64, 7, 3), "blc4a-t32-e7": (32, 7, 3), "blc7a-t64-e7": (64, 7, 6),
+           "blc1a-t128-e4": (128, 4, 1)}
+PRICES = (32.0, 327.0)
+SHAPES = {"llama": ns.LLAMA, "v4_dense": ns.V4_DENSE}
+STEP1_DATA = ns.DATA_PER_STEP - na.TAG_LANES
+
+
+def _distinct(x: np.ndarray, axis: int) -> np.ndarray:
+    srt = np.sort(x, axis=axis)
+    return 1 + (np.diff(srt, axis=axis) != 0).sum(axis=axis)
+
+
+def _repeated_values(x: np.ndarray, axis: int) -> np.ndarray:
+    """How many values occur at least twice along `axis`: the merging groups."""
+    srt = np.sort(x, axis=axis)
+    eq = np.diff(srt, axis=axis) == 0
+    head = np.concatenate([np.zeros_like(np.take(eq, [0], axis=axis)), eq], axis=axis)
+    start = np.diff(head.astype(np.int8), axis=axis) == 1
+    return start.sum(axis=axis)
+
+
+def _merge_groups(v: np.ndarray, t: np.ndarray) -> tuple[int, int]:
+    """Pools in the rows of v (G × P), each element at step t. An element merges when its value occurred before it in
+    its pool (by step, then position); a group is one (pool, value, step) among the merged, which one decision copies.
+    Returns (merged, groups)."""
+    g_idx = np.repeat(np.arange(v.shape[0]), v.shape[1])
+    vf, tf = v.ravel(), t.ravel()
+    order = np.lexsort((tf, vf, g_idx))
+    gs, vs, ts = g_idx[order], vf[order], tf[order]
+    first = np.ones(len(vs), dtype=bool)
+    first[1:] = (gs[1:] != gs[:-1]) | (vs[1:] != vs[:-1])
+    mg, mv, mt = gs[~first], vs[~first], ts[~first]
+    if len(mg) == 0:
+        return 0, 0
+    new = np.ones(len(mg), dtype=bool)
+    new[1:] = (mg[1:] != mg[:-1]) | (mv[1:] != mv[:-1]) | (mt[1:] != mt[:-1])
+    return int((~first).sum()), int(new.sum())
+
+
+WIDE_OFFSET = sum(100 * 255 ** lane for lane in range(4))
+
+
+def wide_tags(m: int) -> np.ndarray:
+    """Balanced base-255 digits of z_i + WIDE_OFFSET, each in [−127, 127]: injective, with every lane in use (about
+    100 each), against a full-range G. Without the offset a row with |z| ≤ 127 uses one lane, and T·G_j then takes
+    only 255 values across columns."""
+    i = np.arange(m)
+    z = np.where(i % 2 == 0, i // 2 + 1, -(i // 2 + 1)).astype(np.int64) + WIDE_OFFSET
+    out = []
+    for _ in range(na.TAG_LANES):
+        d = ((z + 127) % 255) - 127
+        out.append(d)
+        z = (z - d) // 255
+    assert (z == 0).all()
+    return np.stack(out, axis=-1)
+
+
+def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pattern: str,
+                  tag: str = "narrow") -> dict:
+    """`tag` is the lead's (`narrow`: base-13 T against G ∈ [−3, 3]) or the fix (`wide`: base-255 T against
+    G ∈ [−127, 127], the served offset removed in the epilogue)."""
+    tile, e, lanes = LAYOUTS[cfg]
+    s = ns.steps1l(k)
+    ntiles = -(-m // tile)
+    tile_of = np.arange(m) // tile
+    if tag == "wide":
+        tags, g = wide_tags(m), rng.integers(-127, 128, (na.TAG_LANES, n))
+    else:
+        tags, g = na.row_tags(m), rng.integers(-na.G_MAX, na.G_MAX + 1, (na.TAG_LANES, n))
+    code = na.code(n)
+    a1 = rng.integers(0, 2, (m, na.TAG_LANES))
+    beta = na.bias(code, s, True)
+    b = rng.integers(0, 2, (m, s - 1))
+    odd = np.arange(-(2 ** e - 1), 2 ** e, 2)
+    coin = rng.choice(odd, (lanes, ntiles, s - 1, n))
+    c = np.where((np.arange(s - 1) % 2 == 1) & (pattern == "a2r"), 2, 1)
+
+    x1 = np.concatenate([np.zeros((m, STEP1_DATA), dtype=np.int64), tags, a1], axis=1)
+    y1 = np.concatenate([np.zeros((STEP1_DATA, n), dtype=np.int64), g, code], axis=0)
+    honest = np.empty((m, s, n), dtype=np.int64)
+    honest[:, 0] = x1 @ y1 - beta[None]
+    for tau in range(ntiles):
+        rows = tile_of == tau
+        xa = np.concatenate([np.ones((rows.sum(), s - 1, 1)), (1 + b[rows])[:, :, None],
+                             np.ones((rows.sum(), s - 1, lanes))], axis=2).astype(np.int64)
+        yb = np.concatenate([np.broadcast_to(-c[:, None, None], (s - 1, 1, n)), np.ones((s - 1, 1, n)),
+                             coin[:, tau].transpose(1, 0, 2)], axis=1).astype(np.int64)
+        honest[rows, 1:] = honest[rows, :1] + np.cumsum(np.einsum("itl,tln->itn", xa, yb), axis=1)
+    assert np.abs(x1).max() <= 127 and np.abs(y1).max() <= 127 and np.abs(odd).max() <= 127 or e > 7
+
+    d0 = tags @ g + a1 @ code - beta[None]
+    rpos = np.concatenate([np.zeros((m, 1), dtype=np.int64), np.cumsum(1 + b - c[None], axis=1)], axis=1)
+    cpos = np.concatenate([np.zeros((ntiles, 1, n), dtype=np.int64), np.cumsum(coin.sum(0), axis=1)], axis=1)
+    w = d0[:, None, :] + rpos[:, :, None] + cpos[tile_of]
+    per = m * n
+
+    t4 = w.reshape(ntiles, tile, s, n)
+    entry = float((s - _distinct(w, 1)).sum()) / per
+    xrow = float((tile - _distinct(t4, 1)).sum()) / per
+    tilecol = float((tile * s - _distinct(t4.reshape(ntiles, tile * s, n), 1)).sum()) / per
+    column = float((m * s - _distinct(w.reshape(m * s, n), 0)).sum()) / per
+    lag1 = float((np.diff(w, axis=1) == 0).sum()) / per
+    xrow_groups = float(_repeated_values(t4, 1).sum()) / per
+    steps_of = np.broadcast_to(np.arange(s)[None, :, None], (m, s, n))
+    tc_v = t4.transpose(0, 3, 1, 2).reshape(ntiles * n, tile * s)
+    tc_t = steps_of.reshape(ntiles, tile, s, n).transpose(0, 3, 1, 2).reshape(ntiles * n, tile * s)
+    tc_merged, tc_groups = _merge_groups(tc_v, tc_t)
+    col_merged, col_groups = _merge_groups(w.transpose(2, 0, 1).reshape(n, m * s),
+                                           steps_of.transpose(2, 0, 1).reshape(n, m * s))
+    assert tc_merged == round(tilecol * per) and col_merged == round(column * per)
+
+    covered = np.zeros((m, s, n), dtype=bool)
+    entry_groups = 0
+    for d in range(1, s):
+        new = (w[:, d:] == w[:, :-d]) & ~covered[:, d:]
+        if new.any():
+            covered[:, d:] |= new
+            entry_groups += int(new.reshape(ntiles, tile, s - d, n).any(axis=1).sum())
+    assert abs(float(covered.sum()) / per - entry) < 1e-9
+
+    return {"equal_to_honest": bool(np.array_equal(w, honest)), "steps": s, "tile": tile,
+            "d0_range": [int(d0.min()), int(d0.max())],
+            "saved": {"entry": entry, "xrow": xrow, "tilecol": tilecol, "column": column, "lag1": lag1},
+            "groups": {"entry": entry_groups / per, "xrow": xrow_groups, "tilecol": tc_groups / per,
+                       "column": col_groups / per},
+            "c_track": (s - 1) / tile}
+
+
+def shares(inst: dict, k: int, big_n: int) -> dict:
+    """Shares of one linear's stock under literal P and P′ at each price."""
+    s, tile, sv, gr = inst["steps"], inst["tile"], inst["saved"], inst["groups"]
+    ptr = (s - 1) / big_n
+    out = {}
+    for grain in ("entry", "xrow", "tilecol", "column"):
+        out[f"P/{grain}"] = H32 * (sv[grain] - inst["c_track"] - ptr) / k
+    out["P/lag1"] = H32 * (sv["lag1"] - ptr) / k
+    for price in PRICES:
+        q = price / H32
+        decide = (s - 1) / tile
+        out[f"P'{int(price)}/lag1"] = H32 * (sv["lag1"] - decide - q * decide - ptr) / k
+        out[f"P'{int(price)}/entry"] = H32 * (sv["entry"] - inst["c_track"] - ptr - q * (decide + gr["entry"])) / k
+        for grain in ("xrow", "tilecol", "column"):
+            out[f"P'{int(price)}/{grain}"] = H32 * (sv[grain] - inst["c_track"] - ptr
+                                                    - q * (decide + gr[grain])) / k
+    return out
+
+
+def weighted(insts: dict, shape: dict) -> dict:
+    stock = sum(nn * kk for nn, kk in shape.values())
+    keys = next(iter(insts.values()))["share_keys"]
+    return {key: sum(nn * kk * shares(insts[kk], kk, nn)[key] for nn, kk in shape.values()) / stock for key in keys}
+
+
+def runs(seed: int = 97, m: int = 256, n: int = 64) -> dict:
+    rng = np.random.default_rng(seed)
+    out = {}
+    cases = [(cfg, "narrow") for cfg in LAYOUTS] + [("blc4a-t64-e7", "wide"), ("blc7a-t64-e7", "wide")]
+    v4_cfgs = {"blc4a-t64-e7", "blc7a-t64-e7"}
+    for cfg, tag in cases:
+        for pattern in ("a2c", "a2r"):
+            for shape_name, shape in SHAPES.items():
+                if shape_name == "v4_dense" and cfg not in v4_cfgs:
+                    continue
+                insts = {}
+                for kk in sorted({kk for _, kk in shape.values()}):
+                    inst = lead_instance(cfg, kk, m, n, rng, pattern, tag)
+                    inst["share_keys"] = list(shares(inst, kk, n).keys())
+                    insts[kk] = inst
+                row = {"equal_to_honest": all(v["equal_to_honest"] for v in insts.values()),
+                       "shares": weighted(insts, shape),
+                       "per_k": {f"k{kk}": {"saved": v["saved"], "groups": v["groups"], "c_track": v["c_track"],
+                                            "steps": v["steps"], "d0_range": v["d0_range"],
+                                            "shares": shares(v, kk, max(nn for nn, k2 in shape.values() if k2 == kk))}
+                                 for kk, v in insts.items()}}
+                out[f"{cfg}{'+wide' if tag == 'wide' else ''}/{pattern}/{shape_name}"] = row
+    return out
+
+
+def scaling(seed: int = 98, m: int = 128, n: int = 32) -> dict:
+    """The lead's per-K shares at one N (2,048) for growing K: the within-entry and cross-row terms grow with S."""
+    rng = np.random.default_rng(seed)
+    out = {}
+    for kk in (2048, 4096, 8192, 16384):
+        inst = lead_instance("blc4a-t64-e7", kk, m, n, rng, "a2r", "narrow")
+        out[f"k{kk}"] = {"equal_to_honest": inst["equal_to_honest"], "saved": inst["saved"],
+                         "groups": inst["groups"], "shares": shares(inst, kk, 2048)}
+    return out
+
+
+def ordering(seed: int = 99, m: int = 128, n: int = 16, k: int = 2048) -> dict:
+    """Final 1's `before_s` adversary, rebuilt: A (the cancel lane and one tile indicator a tile) reads no coin, and B
+    reads s. Its words equal the honest chain for two different coin draws with one A, so A can be committed first."""
+    tile, e, lanes = nf.BLC["blc4a-t64-e7"]
+    s = ns.steps1l(k)
+    ntiles = -(-m // tile)
+    tile_of = np.arange(m) // tile
+    a = np.zeros((m, s - 1, 30), dtype=np.int64)
+    a[:, :, 0] = 1
+    for tau in range(ntiles):
+        a[:, :, 1 + tau] = (tile_of == tau)[:, None]
+    res = []
+    rng = np.random.default_rng(seed)
+    odd = np.arange(-(2 ** e - 1), 2 ** e, 2)
+    for _ in range(2):
+        coin = rng.choice(odd, (lanes, ntiles, s - 1, n)).sum(0)
+        b = rng.integers(0, 2, (m, s - 1))
+        bw = np.zeros((s - 1, 30, n), dtype=np.int64)
+        bw[:, 0, :] = -1
+        for tau in range(ntiles):
+            bw[:, 1 + tau, :] = -coin[tau]
+        inc = np.einsum("mtl,tln->mtn", a, bw) + coin[tile_of] + (1 + b)[:, :, None]
+        words = np.concatenate([np.zeros((m, 1, n), dtype=np.int64), np.cumsum(inc, axis=1)], axis=1)
+        rpos = np.concatenate([np.zeros((m, 1), dtype=np.int64), np.cumsum(b, axis=1)], axis=1)
+        res.append({"equal": bool(np.array_equal(words, np.broadcast_to(rpos[:, :, None], words.shape))),
+                    "repeat_share": float((np.diff(words, axis=1) == 0).mean())})
+    return {"a_reads_no_coin": True, "draws": res}
+
+
+def identical_columns(seed: int = 101, m: int = 64, n: int = 32, k: int = 2048, tag: str = "narrow") -> dict:
+    """R1 check (b) is per entry (one (row, column)'s distinct values). Cross-column copies are a different grain:
+    with every weight column equal, the data is column-constant, but the coin s_t[tile, j] and the tag G_j are per
+    column, so a row's words still differ across columns. Count the cross-column merges at the entry grain (what (b)
+    would over-credit) against what the coin and G leave."""
+    rng = np.random.default_rng(seed)
+    tile, e, lanes = LAYOUTS["blc4a-t64-e7"]
+    s = ns.steps1l(k)
+    ntiles = -(-m // tile)
+    tile_of = np.arange(m) // tile
+    if tag == "wide":
+        tags, g = wide_tags(m), rng.integers(-127, 128, (na.TAG_LANES, n))
+    else:
+        tags, g = na.row_tags(m), rng.integers(-na.G_MAX, na.G_MAX + 1, (na.TAG_LANES, n))
+    code = na.code(n)
+    a1 = rng.integers(0, 2, (m, na.TAG_LANES))
+    beta = na.bias(code, s, True)
+    b = rng.integers(0, 2, (m, s - 1))
+    odd = np.arange(-(2 ** e - 1), 2 ** e, 2)
+    coin = rng.choice(odd, (lanes, ntiles, s - 1, n)).sum(0)
+    d0 = tags @ g + a1 @ code - beta[None]
+    rpos = np.concatenate([np.zeros((m, 1), dtype=np.int64), np.cumsum(1 + b, axis=1)], axis=1)
+    cpos = np.concatenate([np.zeros((ntiles, 1, n), dtype=np.int64), np.cumsum(coin, axis=1)], axis=1)
+    w = d0[:, None, :] + rpos[:, :, None] + cpos[tile_of]            # natural coins, every weight column equal
+    dup = float((n - _distinct(w, 2)).sum()) / w.size
+    step0 = float((n - _distinct(w[:, :1], 2)).sum()) / w[:, :1].size
+    return {"cross_column_dup_share": dup, "step0_dup_share": step0,
+            "tags_nonzero": bool((tags != 0).any(axis=1).all())}
+
+
+MIRROR_POOL_TILE = 64
+MIRROR_WALK_ROWS = 256
+
+
+def mirror_instance(k: int, m: int, n: int, rng: np.random.Generator, variant: str = "narrow") -> dict:
+    """Chosen identical rows (zero data) through mirror. Step t ≤ h = ⌈S/2⌉ adds u_t(i)·W_t[j]; step h + d replays
+    lane d against −W_d[j], and for odd S the middle lane h is replayed in the last step as well. Returns the merges
+    and merging groups a pool (a whole column; a tile of 64 rows), at the final step and at the steps before it,
+    and A2r's within-entry revisits on the same words."""
+    s = ns.steps1l(k)
+    h = (s + 1) // 2
+    if variant == "wide":
+        tags, g = wide_tags(m), rng.integers(-127, 128, (na.TAG_LANES, n))
+    else:
+        tags, g = na.row_tags(m), rng.integers(-na.G_MAX, na.G_MAX + 1, (na.TAG_LANES, n))
+    a1 = rng.integers(0, 2, (m, na.TAG_LANES))
+    d0 = tags @ g + a1 @ na.code(n)
+    u = rng.integers(-128, 128, (m, h))
+    wv = rng.integers(1, 128, (h, n)) * rng.choice([-1, 1], (h, n))
+    rho = rng.integers(-(1 << 17), 1 << 17, m) if variant == "salt" else np.zeros(m, dtype=np.int64)
+    word = d0.astype(np.int64)
+    acc = {f"{p}/{when}": [0, 0] for p in ("column", "tile") for when in ("final", "interior")}
+    entry_seen = []
+    rev = variant == "reversed"
+    for t in range(s):
+        lane = t if t < h else (h - 1 - (t - h) if rev else t - h)
+        word = word + (1 if t < h else -1) * u[:, lane, None] * wv[lane][None]
+        if t == s - 1 and s % 2 == 1:
+            mid = 0 if rev else h - 1
+            word = word - u[:, mid, None] * wv[mid][None]
+        out_word = word + rho[:, None] if t == s - 1 else word
+        when = "final" if t == s - 1 else "interior"
+        tiles = out_word.reshape(m // MIRROR_POOL_TILE, MIRROR_POOL_TILE, n)
+        acc[f"column/{when}"][0] += int((m - _distinct(out_word, 0)).sum())
+        acc[f"column/{when}"][1] += int(_repeated_values(out_word, 0).sum())
+        acc[f"tile/{when}"][0] += int((MIRROR_POOL_TILE - _distinct(tiles, 1)).sum())
+        acc[f"tile/{when}"][1] += int(_repeated_values(tiles, 1).sum())
+        entry_seen.append(out_word[:MIRROR_WALK_ROWS])
+    final_clean = bool(np.array_equal(word, d0))
+    walk = np.stack(entry_seen, axis=1)
+    per = m * n
+    return {"steps": s, "final_word_is_code_and_tags": final_clean,
+            "saved": {key: v[0] / per for key, v in acc.items()}, "groups": {key: v[1] / per for key, v in acc.items()},
+            "a2r_revisits": float((s - _distinct(walk, 1)).sum()) / (walk.shape[0] * n),
+            "d0_distinct_a_column": float(_distinct(d0, 0).mean())}
+
+
+def mirror_shares(inst: dict, k: int, big_n: int, m: int) -> dict:
+    """Literal P and P′ shares of one linear's stock, a pool kind and step class. A decision a column-step (pool) and a
+    row pointer a row-step (big_n), as for the lead."""
+    s, sv, gr = inst["steps"], inst["saved"], inst["groups"]
+    out = {}
+    for pool, rows in (("column", m), ("tile", MIRROR_POOL_TILE)):
+        for when, nsteps in (("final", 1), ("interior", s - 1)):
+            key = f"{pool}/{when}"
+            base = sv[key] - nsteps / rows - nsteps / big_n
+            out[f"P/{key}"] = H32 * base / k
+            for price in PRICES:
+                out[f"P'{int(price)}/{key}"] = H32 * (base - price / H32 * (gr[key] + nsteps / rows)) / k
+    out["P/a2r_entry"] = H32 * (inst["a2r_revisits"] - (s - 1) / big_n) / k
+    return out
+
+
+def mirror_runs(seed: int = 103, n: int = 64) -> dict:
+    """Mirror at Llama's shapes for N-CARD's row counts (64, 512 and 8,192 rows)."""
+    rng = np.random.default_rng(seed)
+    out = {}
+    for variant in ("narrow", "wide", "salt", "reversed"):
+        for m in ((64,) if variant == "reversed" else (64, 512, 8192)):
+            insts = {kk: mirror_instance(kk, m, n, rng, variant) for kk in sorted({kk for _, kk in ns.LLAMA.values()})}
+            stock = sum(nn * kk for nn, kk in ns.LLAMA.values())
+            keys = mirror_shares(next(iter(insts.values())), 2048, 2048, m).keys()
+            sh = {key: sum(nn * kk * mirror_shares(insts[kk], kk, nn, m)[key] for nn, kk in ns.LLAMA.values()) / stock
+                  for key in keys}
+            out[f"{variant}/m{m}"] = {"shares": sh, "final_word_is_code_and_tags": all(
+                v["final_word_is_code_and_tags"] for v in insts.values()),
+                "per_k": {f"k{kk}": {key: v[key] for key in ("steps", "saved", "groups", "a2r_revisits",
+                                                             "d0_distinct_a_column")} for kk, v in insts.items()}}
+    return out
+
+
+def a5_lead() -> dict:
+    """Round 2's A5 search on the lead. `call`: s drawn per call after A_j, so a row's step-t vector holds the call's
+    coins for t ≥ 2 and only step 1's 16 a₁ codes can be tabled. `window`: s drawn once a window, known to advice, so a
+    row's step-t vectors are ssn_1l's 16·t."""
+    call = r2.a5_step_greedy(designs=("lead_call_s",), vectors=lambda _d, t: 16 if t == 1 else float("inf"))
+    window = r2.a5_step_greedy(designs=("ssn_1l",))
+    return {"call": {key: v for key, v in call.items() if isinstance(v, dict)},
+            "window": {key: v for key, v in window.items() if isinstance(v, dict)}}
+
+
+def check(rep: dict) -> list[dict]:
+    res = []
+
+    def ok(name, cond, detail=""):
+        res.append({"check": name, "pass": bool(cond), "detail": detail})
+
+    r = rep["runs"]
+    ok("every instance's words equal the honest lane product", all(v["equal_to_honest"] for v in r.values()))
+    ok("scaling instances equal the honest lane product",
+       all(v["equal_to_honest"] for v in rep["scaling"].values()))
+    for p in ("a2c", "a2r"):
+        sh = r[f"blc4a-t64-e7/{p}/llama"]["shares"]
+        ok(f"{p}: literal P, cross-row meetings in a tile exceed 1% on the lead (the coin lanes cancel between "
+           "a tile's rows, and T·G spans ~92 values for 64 rows)", sh["P/xrow"] > 0.01, sh["P/xrow"])
+        ok(f"{p}: P′ at the floor (32), cross-row still exceeds 1% (one decision merges a group)",
+           sh["P'32/xrow"] > 0.01, sh["P'32/xrow"])
+        ok(f"{p}: literal P, within-entry revisits exceed 1% (final 1's unbounded column, with the real step 1)",
+           sh["P/entry"] > 0.01, sh["P/entry"])
+        ok(f"{p}: literal P, lag-1 alone stays under 1% (final 1's 0.28%)", sh["P/lag1"] < 0.01, sh["P/lag1"])
+        ok(f"{p}: P′ at the floor, within-entry and lag-1 don't pay on Llama",
+           max(sh["P'32/entry"], sh["P'32/lag1"]) <= 0, [sh["P'32/entry"], sh["P'32/lag1"]])
+        v4 = r[f"blc4a-t64-e7/{p}/v4_dense"]["shares"]
+        ok(f"{p}: P′ at the floor, within-entry pays above 1% on V4 dense (K 7,168: revisits grow as √S)",
+           v4["P'32/entry"] > 0.01, v4["P'32/entry"])
+        w = r[f"blc4a-t64-e7+wide/{p}/llama"]["shares"]
+        ok(f"{p}: the wide tag (G ∈ [−127, 127]) closes cross-row under literal P (< 0.1%)",
+           w["P/xrow"] < 0.001, w["P/xrow"])
+        ok(f"{p}: the wide tag leaves within-entry unchanged (the tag is constant in t; check (b) closes it)",
+           abs(w["P/entry"] - sh["P/entry"]) < 0.005, [w["P/entry"], sh["P/entry"]])
+    wide_pp = [r[f"{c}+wide/{p}/{sh}"]["shares"][f"P'32/{g}"] for c in ("blc4a-t64-e7", "blc7a-t64-e7")
+               for p in ("a2c", "a2r") for sh in SHAPES for g in ("xrow", "tilecol", "column")]
+    ok("wide tag: P′ at the floor pays at no tile or column grain (blc4a and blc7a, Llama and V4 dense)",
+       max(wide_pp) <= 0, max(wide_pp))
+    b7 = [r[f"blc7a-t64-e7+wide/{p}/v4_dense"]["shares"]["P'32/entry"] for p in ("a2c", "a2r")]
+    b4 = r["blc4a-t64-e7+wide/a2r/v4_dense"]["shares"]["P'32/entry"]
+    ok("wide tag, V4 dense, P′ at the floor: blc7a's 6 coin lanes hold within-entry under 1% with no check (b); "
+       "blc4a's 3 pay > 1%", max(b7) < 0.01 < b4, [b7, b4])
+    e4 = r["blc1a-t128-e4/a2c/llama"]["shares"]
+    ok("P′ at the floor: blc1a-t128-e4's lag-1 still pays (> 1%), so e7 is what closes lag-1",
+       e4["P'32/lag1"] > 0.01, e4["P'32/lag1"])
+    ok("the tilecol floor counts at least the entry and xrow merges together",
+       all(v["per_k"][kk]["saved"]["tilecol"] + 1e-9 >= max(v["per_k"][kk]["saved"]["entry"],
+                                                              v["per_k"][kk]["saved"]["xrow"])
+           for v in r.values() for kk in v["per_k"]))
+    ok("smaller tiles shrink cross-row but don't close it under literal P (t32 still > 1%)",
+       0.01 < r["blc4a-t32-e7/a2r/llama"]["shares"]["P/xrow"] < r["blc4a-t64-e7/a2r/llama"]["shares"]["P/xrow"])
+    o = rep["ordering"]
+    ok("ordering: one coin-free A gives words equal to the honest chain for two coin draws (B reads s)",
+       all(d["equal"] for d in o["draws"]))
+    ic, icw = rep["identical_columns"]["narrow"], rep["identical_columns"]["wide"]
+    ok("identical columns, narrow tag: > 1% of a row's words equal across columns, mostly early steps "
+       "(check (b), per entry, doesn't see them)", ic["cross_column_dup_share"] > 0.01 and ic["tags_nonzero"],
+       [ic["cross_column_dup_share"], ic["step0_dup_share"]])
+    ok("identical columns, wide tag: < 0.1% equal across columns",
+       icw["cross_column_dup_share"] < 0.001, icw["cross_column_dup_share"])
+    sc = rep["scaling"]
+    ok("scaling: within-entry grows with K under literal P and under P′ at the floor",
+       sc["k16384"]["shares"]["P/entry"] > sc["k2048"]["shares"]["P/entry"]
+       and sc["k16384"]["shares"]["P'32/entry"] > sc["k2048"]["shares"]["P'32/entry"])
+    mr = rep["mirror"]
+    ok("mirror: every final word is code + tags (all lanes cancel)",
+       all(v["final_word_is_code_and_tags"] for v in mr.values()))
+    nar = mr["narrow/m8192"]["shares"]
+    ok("mirror, narrow tag, 8,192 rows: the final-step column pool pays > 1% under P′ at the floor (the tag spans "
+       "~80 values for 8,192 rows; N-NOISE's adjacent-tag bound is 0.18%)", nar["P'32/column/final"] > 0.01,
+       nar["P'32/column/final"])
+    ok("mirror, narrow tag: the final-step leak needs the column pool; a 64-row tile pays < 1%",
+       nar["P'32/tile/final"] < 0.01, nar["P'32/tile/final"])
+    wid, sal = mr["wide/m8192"]["shares"], mr["salt/m8192"]["shares"]
+    ok("mirror, wide tag, 8,192 rows: the final-step column pool < 1% under P′, below the narrow tag's",
+       wid["P'32/column/final"] < min(0.01, nar["P'32/column/final"]), wid["P'32/column/final"])
+    ok("mirror, per-row salt ρ_i in the final word: the final-step column pool ≤ 0.1% under P′",
+       sal["P'32/column/final"] <= 0.001, sal["P'32/column/final"])
+    ok("mirror's in-order replay: within-entry revisits < 1%; a reversed (out-and-back) replay retraces the path, "
+       "> 10%", mr["narrow/m64"]["shares"]["P/a2r_entry"] < 0.01
+       and mr["reversed/m64"]["shares"]["P/a2r_entry"] > 0.1,
+       [mr["narrow/m64"]["shares"]["P/a2r_entry"], mr["reversed/m64"]["shares"]["P/a2r_entry"]])
+    a5 = rep["a5"]
+    ok("A5 on the lead: s drawn per call after A_j saves 0 at every m",
+       max(v["gap_share_of_stock"] for v in a5["call"].values()) == 0)
+    ok("A5 on the lead: s drawn once a window reopens it (ssn_1l's 16·t vectors), > 1% at m 64",
+       a5["window"]["ssn_1l/m64"]["gap_share_of_stock"] > 0.01, a5["window"]["ssn_1l/m64"]["gap_share_of_stock"])
+    return res
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--json", default=None)
+    args = ap.parse_args()
+    rep = {"runs": runs(), "scaling": scaling(), "ordering": ordering(),
+           "identical_columns": {t: identical_columns(tag=t) for t in ("narrow", "wide")},
+           "mirror": mirror_runs(), "a5": a5_lead()}
+    lead = rep["runs"]["blc4a-t64-e7/a2r/llama"]["shares"]
+    mir = rep["mirror"]["narrow/m8192"]["shares"]
+    rep["periods"] = {"P/xrow": ne.periods(lead["P/xrow"]), "P'32/xrow": ne.periods(lead["P'32/xrow"]),
+                      "P/entry": ne.periods(lead["P/entry"]),
+                      "mirror_P'32/column/final_m8192": ne.periods(mir["P'32/column/final"])}
+    rep["checks"] = check(rep)
+    for key, v in rep["runs"].items():
+        sh = v["shares"]
+        print(f"{key:32s} eq={v['equal_to_honest']}  " + "  ".join(
+            f"{g}={100 * sh[g]:.2f}%" for g in ("P/lag1", "P/entry", "P/xrow", "P/tilecol", "P/column",
+                                                "P'32/lag1", "P'32/entry", "P'32/xrow", "P'32/tilecol",
+                                                "P'32/column", "P'327/entry")))
+    for key, v in rep["mirror"].items():
+        sh = v["shares"]
+        print(f"mirror {key:16s} " + "  ".join(
+            f"{g}={100 * sh[g]:.3f}%" for g in ("P/column/final", "P'32/column/final", "P'32/tile/final",
+                                                "P/column/interior", "P'32/column/interior", "P/a2r_entry")))
+    print("A5: " + "  ".join(f"{k}={100 * v['gap_share_of_stock']:.2f}%"
+                             for part in rep["a5"].values() for k, v in part.items()))
+    for kk, v in rep["scaling"].items():
+        print(f"scaling {kk}: " + "  ".join(f"{g}={100 * v['shares'][g]:.2f}%" for g in
+                                            ("P/entry", "P/xrow", "P'32/entry", "P'32/xrow")))
+    npass = sum(c["pass"] for c in rep["checks"])
+    for c in rep["checks"]:
+        print(("PASS " if c["pass"] else "FAIL ") + c["check"] + (f"  [{c['detail']}]" if c["detail"] != "" else ""))
+    print(f"{npass}/{len(rep['checks'])} checks")
+    if args.json:
+        with open(args.json, "w") as f:
+            json.dump(rep, f, indent=1)
+
+
+if __name__ == "__main__":
+    main()
