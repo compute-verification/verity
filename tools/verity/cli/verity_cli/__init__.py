@@ -130,8 +130,8 @@ def _lean(args: list[str]) -> int:
         return _lean_here(a.file)
     tree = _tree(a.file)
     file = a.file if not Path(a.file).is_file() else os.path.relpath(Path(a.file).resolve(), tree)
-    if not (tree / file).is_file():
-        raise SystemExit(f"verity lean try: no {file} in {tree}, the checkout it ships")
+    if file.startswith(os.pardir + os.sep) or not (tree / file).is_file():
+        raise SystemExit(f"verity lean try: no {a.file} in {tree}, the checkout it ships: put FILE in a checkout")
     pool = a.pool or (TRY_POOL if a.on == TRY_NODE else None)
     research = [sys.executable, "-m", "research"]
     t0 = time.monotonic()
