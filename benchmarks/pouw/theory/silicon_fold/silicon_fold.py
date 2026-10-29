@@ -10,7 +10,9 @@ The design this prices (FT, "fused transcript"):
 
 Inputs: `synth.json` from synth.py (areas, depths, AND counts, all checked against rho.py). Software costs of each rho
 in W1 register writes (best known, word-wise or bit-sliced, and the round-structured counting floor) are stated in
-SOFTWARE with their derivations. Experiments run bit for bit on small instances:
+SOFTWARE with their derivations. Margins and T1 are priced twice: in W1 (a write is 32 MACs) and at sm_120's measured
+issue prices (a LOP3-type write 16.2 FP8 MACs, an integer add 8.29), where a software bypass is cheaper. Experiments run
+bit for bit on small instances:
 - E1, usefulness: the split output equals the int8 GEMM exactly after linear denoising, and in-line rho does not.
 - E2, the affine lemma: an affine rho's transcript at zero data is a row term plus a column term (`decomp` reproduces it
   exactly), and every non-linear rho fails that separability test.
@@ -46,6 +48,10 @@ AND_PER_MAC_S8 = 2079 / 16  # the card's int8 MAC in AND gates
 SHA512_MC_COMPRESSION = 57947  # Bristol Fashion sha512.txt: ANDs a compression (literature)
 LEAD_MACS_PER_WORD = 27.75
 CYCLE_DEPTH = 0  # gate levels a cycle; 0 takes the s8 MAC's own depth
+# sm_120's measured issue prices in FP8 MACs a lane (kb/sm120 W1 price table, r20260930-060338-26b9): LOP3, PRMT, SHF
+# 16.2 and IMAD 16.3 against W1's 32 a write; INT32 adds 8.29 as ptxas merges them, which also prices decomp's forming
+SM120_WRITE = 16.2
+SM120_ADD = 8.29
 
 
 @dataclass(frozen=True)
@@ -63,6 +69,10 @@ class Rho:
     standard: bool
     and_mc: int  # multiplicative complexity an invocation (literature or exact count), for the proof
     nonlinear: bool = True
+    sw_sm120: float = 0.0  # the cheapest software invocation at sm_120's prices, FP8 MACs; 0 means c_sw LOP3-type writes
+
+    def sm120(self) -> float:
+        return self.sw_sm120 or self.c_sw * SM120_WRITE
 
 
 SOFTWARE = [
@@ -93,16 +103,19 @@ SOFTWARE = [
         96.0, 96.0, "8 QRs x 12 writes (IADD3, LOP3, SHF or PRMT a step; no sm_120 instruction fuses two of add, xor, "
         "rotate); bit-sliced also 12 a QR",
         "ChaChaRound: no program evaluates chained ChaCha double rounds with 16 absorbed words under 14.3 writes "
-        "(6.7x under the best known)", "4a (3 in the word model)", True, 8 * 4 * 31),
+        "(6.7x under the best known)", "4a (3 in the word model)", True, 8 * 4 * 31,
+        sw_sm120=64 * SM120_WRITE + 32 * SM120_ADD),
     Rho("sha512", "SHA-512 round per 2-word absorption (R80's round, hardware)", ("sha512_rnd", "sha512_krom"), 512, 2,
         28.0, 28.0, "R80X's W1 count, 28 a round (S1 8, S0 8, Ch 2, Maj 2, four IADD3 pairs 8), equal to its restricted-"
         "model bound; bit-sliced 39.75",
         "ShaRound-14: no program evaluates chained SHA-512 rounds with a 64-bit word each in under 1.78 writes a round "
-        "(15.7x under R80X's count and its restricted-model bound)", "4a (3 in R80X's restricted model)", True, 7 * 63 + 128),
+        "(15.7x under R80X's count and its restricted-model bound)", "4a (3 in R80X's restricted model)", True, 7 * 63 + 128,
+        sw_sm120=20 * SM120_WRITE + 8 * SM120_ADD),
     Rho("aes", "AES round with the absorbed 128 bits as round key", ("aes_rnd",), 128, 4,
-        40.0, 16.0, "T-tables: 16 index extractions + 16 shared-memory loads + 8 LOP3; bit-sliced about 45. Floor: 16 "
-        "S-box outputs need >= 16 writes",
-        "AesRound under 3.6 writes a round; and the chip holds AES elsewhere (copy engines' AES-GCM)", "4a-", True, 16 * 32),
+        40.0, 16.0, "T-tables: 16 index extractions + 16 shared-memory loads + 8 LOP3; bit-sliced about 45, the cheaper "
+        "on sm_120 where an LDS lookup costs 66. Floor: 16 S-box outputs need >= 16 writes",
+        "AesRound under 3.6 writes a round; and the chip holds AES elsewhere (copy engines' AES-GCM)", "4a-", True, 16 * 32,
+        sw_sm120=45 * SM120_WRITE),
     Rho("speck64", "Speck64 round per word (the cheapest standard ARX)", ("speck64_rnd",), 64, 1,
         4.0, 3.0, "word-wise 5 (SHF/PRMT, IADD3, LOP3, SHF, LOP3); bit-sliced 4 (add 2 with the key xor fused, xor 1, "
         "rotations renamed). Floor 3",
@@ -111,10 +124,11 @@ SOFTWARE = [
         2.0, 2.0, "bit-sliced 2 LOP3 a bit plane ((a & b) xor c, then xor y xor k); word-wise 5",
         "SimonRound under 0.89 writes a round (2.2x under the best known)", "4a- (ISO/IEC 29167-21)", True, 32),
     Rho("nv_arx", "our own per-lane ARX, ((t + w) <<< 7) xor t", ("nv_arx",), 32, 1,
-        3.0, 2.0, "IADD3, SHF, LOP3; bit-sliced add 2 + xor 1", "NvArx: our own mixer has no shortcut", "5", False, 31),
+        3.0, 2.0, "IADD3, SHF, LOP3; bit-sliced add 2 + xor 1", "NvArx: our own mixer has no shortcut", "5", False, 31,
+        sw_sm120=2 * SM120_WRITE + SM120_ADD),
     Rho("affine", "affine control, t * a + w mod 2^32", ("affine",), 32, 1,
         1.0, 0.0, "one IMAD; and `decomp` evaluates it at zero data with no per-cell work (E2)",
-        "none: refuted by E2", "refuted", False, 0, nonlinear=False),
+        "none: refuted by E2", "refuted", False, 0, nonlinear=False, sw_sm120=16.3),
 ]
 
 
@@ -153,10 +167,17 @@ def price(r: Rho, synth: dict, base: dict, margin: float) -> dict:
         "margin_known": r.c_sw / (r.absorb_words * need),
         "margin_floor": r.c_floor / (r.absorb_words * need) if r.c_floor else 0.0,
     }
-    covered = r.c_sw / (margin * need)  # MAC-words an invocation may cover at this margin
-    prefold = max(0.0, covered - r.absorb_words) * 32 * 2.0 * 1.0  # an XOR2 a bit to pre-fold extra words
-    at_m = {"covered_words": covered, "ge_per_mac": (unit + prefold) / (covered * MACS_PER_WORD)}
-    for d in (every, at_m):
+    need_sm120 = MACS_PER_WORD - DECOMP_FORM * SM120_ADD  # the same saving in sm_120 MACs
+    every["margin_known_sm120"] = r.sm120() / (r.absorb_words * need_sm120)
+    every["margin_floor_sm120"] = r.c_floor * r.sm120() / r.c_sw / (r.absorb_words * need_sm120) if r.c_floor else 0.0
+
+    def at(covered: float) -> dict:
+        prefold = max(0.0, covered - r.absorb_words) * 32 * 2.0  # an XOR2 a bit to pre-fold extra words
+        return {"covered_words": covered, "ge_per_mac": (unit + prefold) / (covered * MACS_PER_WORD)}
+
+    at_m = at(r.c_sw / (margin * need))  # MAC-words an invocation may cover at this margin
+    at_m_sm120 = at(r.sm120() / (margin * need_sm120))
+    for d in (every, at_m, at_m_sm120):
         d["pct_s8"] = 100 * d["ge_per_mac"] / base["s8_ge_per_mac"]
         d["pct_fp8"] = 100 * d["ge_per_mac"] / base["fp8_ge_per_mac"]
     return {
@@ -168,6 +189,7 @@ def price(r: Rho, synth: dict, base: dict, margin: float) -> dict:
         "ge_per_write": round(unit / r.c_sw, 1),
         "every_word": {k: round(v, 4) for k, v in every.items()},
         f"margin_{margin:g}": {k: round(v, 4) for k, v in at_m.items()},
+        f"margin_{margin:g}_sm120": {k: round(v, 4) for k, v in at_m_sm120.items()},
         "and_per_mac_every_word": round(r.and_mc / (r.absorb_words * MACS_PER_WORD), 3),
         "ands_synth": sum(m[x]["ands"] for x in r.modules if not x.endswith("rom")),
     }
@@ -195,6 +217,17 @@ def t1_attacks(r: Rho, covered_words: float, placement: str, k: int, fast_ratio:
         s["faster-format trigger"] = 1.0 / fast_ratio
     best = min(s, key=s.get)
     return {"strategies": {x: round(v, 4) for x, v in s.items()}, "best": best, "t1": round(max(0.0, honest - s[best]), 4)}
+
+
+def t1_sm120(r: Rho, covered_words: float) -> dict:
+    """Per-instruction placement with the trigger rule at sm_120's prices, in FP8 MACs a credited word (honest: 32)."""
+    honest = float(MACS_PER_WORD)
+    form = DECOMP_FORM * SM120_ADD
+    s = {"honest": honest, "decomp+software": form + (r.sm120() / covered_words if r.nonlinear else 0.0),
+         "decomp+c-inject": honest * (1.0 + 1.0 / MACS_PER_WORD)}
+    best = min(s, key=s.get)
+    return {"strategies": {x: round(v, 4) for x, v in s.items()}, "best": best,
+            "t1": round(max(0.0, 1.0 - s[best] / honest), 4)}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -482,17 +515,31 @@ def run(synth: dict, margin: float, k: int, fast_ratio: float) -> dict:
             "standard": r.standard,
             "software": {"c_sw": r.c_sw, "c_floor": r.c_floor, "note": r.sw_note},
             "area": p,
-            "t1": {"every_word": t1_every, "tile_end": t1_tile, "no_trigger_rule": t1_notrig},
+            "t1": {"every_word": t1_every, "tile_end": t1_tile, "no_trigger_rule": t1_notrig,
+                   "every_word_sm120": t1_sm120(r, cov_every)},
             "h": h,
             "h_with_hw_A_hash": h_hw,
         }
-    kk = designs["keccak1600"]["area"]
-    trade = {}
-    for M in (1.1, 120.0 / 50.0 / (1 - DECOMP_FORM), 4.21):
-        g = kk["ge_unit"] * M * (1 - DECOMP_FORM) / (120.0 * MACS_PER_WORD)
-        trade[f"{M:.2f}"] = {"ge_per_mac": round(g, 2), "pct_s8": round(100 * g / base["s8_ge_per_mac"], 2),
-                             "pct_fp8": round(100 * g / base["fp8_ge_per_mac"], 2),
-                             "words_per_round": round(120.0 / (M * (1 - DECOMP_FORM)), 1)}
+    models = {"w1": (1.0, 1.0 - DECOMP_FORM), "sm120": (SM120_WRITE, MACS_PER_WORD - DECOMP_FORM * SM120_ADD)}
+
+    def at_margin(r: Rho, model: str, M: float) -> dict:
+        """One invocation covering as many words as margin M allows (pre-folded by XOR2s past its natural width)."""
+        cost = r.c_sw if model == "w1" else r.sm120()
+        words = cost / (M * models[model][1])
+        unit = designs[r.key]["area"]["ge_unit"]
+        g = (unit + max(0.0, words - r.absorb_words) * 32 * 2.0) / (words * MACS_PER_WORD)
+        return {"words_per_round": round(words, 1), "ge_per_mac": round(g, 2),
+                "pct_s8": round(100 * g / base["s8_ge_per_mac"], 2), "pct_fp8": round(100 * g / base["fp8_ge_per_mac"], 2)}
+
+    kr = SOFTWARE[0]
+    floor_one = kr.c_sw / kr.c_floor  # the known margin at which the counting floor's margin is exactly 1
+    trade = {f"{model} {M:.2f}": at_margin(kr, model, M) for model in models for M in (1.1, floor_one, 4.0)}
+    trade["w1 4.21 (every word)"] = at_margin(kr, "w1", 120.0 / 32 / (1 - DECOMP_FORM))
+    cheapest = {}
+    for model in models:
+        pts = {r.key: at_margin(r, model, 1.1) for r in SOFTWARE if r.standard}
+        best = min(pts, key=lambda x: pts[x]["ge_per_mac"])
+        cheapest[model] = {"rho": best, **pts[best], "all": pts}
     lead_and = AND_PER_MAC_S8 + SHA512_MC_COMPRESSION / 32 / LEAD_MACS_PER_WORD
     exps = {
         "e1_usefulness": e1_usefulness(rng),
@@ -504,10 +551,12 @@ def run(synth: dict, margin: float, k: int, fast_ratio: float) -> dict:
     return {
         "baseline": base,
         "params": {"margin": margin, "K": k, "fast_ratio": fast_ratio, "tc_macs_per_cycle": TC_MACS_PER_CYCLE,
-                   "decomp_form": DECOMP_FORM, "w1_per_sha_byte": W1_PER_SHA_BYTE, "h_rest": H_REST},
+                   "decomp_form": DECOMP_FORM, "w1_per_sha_byte": W1_PER_SHA_BYTE, "h_rest": H_REST,
+                   "sm120_write": SM120_WRITE, "sm120_add": SM120_ADD},
         "proof": {"lead_and_per_mac": round(lead_and, 2), "mac_and_per_mac": round(AND_PER_MAC_S8, 2)},
         "designs": designs,
         "keccak_margin_trade": trade,
+        "cheapest_at_margin_1.1": cheapest,
         "experiments": exps,
     }
 
@@ -525,6 +574,10 @@ def checks(res: dict, synth: dict) -> list[tuple[str, bool]]:
     c.append(("affine control fails T1", d["affine"]["t1"]["every_word"]["t1"] > 0.85))
     c.append(("every standard rho's h under R80X's", all(v["h"]["h"] < H_R80X[0] for v in d.values() if v["standard"])))
     c.append(("keccak margin above 1 at its counting floor", d["keccak1600"]["area"]["every_word"]["margin_floor"] > 1))
+    c.append(("keccak1600 every-word margin above 1 at sm_120's prices",
+              d["keccak1600"]["area"]["every_word"]["margin_known_sm120"] > 1))
+    c.append(("keccak1600 every-word T1 is 0 at sm_120's prices", d["keccak1600"]["t1"]["every_word_sm120"]["t1"] == 0))
+    c.append(("affine control fails T1 at sm_120's prices", d["affine"]["t1"]["every_word_sm120"]["t1"] > 0.4))
     # dominance: keccak1600 every-word is the least area among standard rho with margin_known >= 4 every-word, or least at the common margin
     mk = f"margin_{res['params']['margin']:g}"
     top = {k: v for k, v in d.items() if v["rank"].split(" ")[0] == "4a"}
@@ -564,17 +617,21 @@ def mutations(synth: dict, margin: float, k: int, fast_ratio: float) -> list[tup
 def table(res: dict) -> str:
     mk = f"margin_{res['params']['margin']:g}"
     L = ["| rho | GE unit | depth | stages | GE a forced write | every word: GE/MAC, % s8, % FP8, margin known / floor | "
-         f"at margin {res['params']['margin']:g}: GE/MAC, % s8 | h | T1 every word / tile-end / no trigger rule | AND/MAC | rank |",
-         "|---|---|---|---|---|---|---|---|---|---|---|"]
+         f"at margin {res['params']['margin']:g}: GE/MAC, % s8 | sm_120 prices: margin known / floor, at margin "
+         f"{res['params']['margin']:g} % s8, T1 every word | h | T1 every word / tile-end / no trigger rule | AND/MAC | rank |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for k, v in res["designs"].items():
         a = v["area"]
         e = a["every_word"]
         m = a[mk]
+        ms = a[mk + "_sm120"]
         t = v["t1"]
         L.append(
             f"| {k} | {a['ge_unit']:.0f} | {a['depth']} | {a['stages']} | {a['ge_per_write']:.0f} | "
             f"{e['ge_per_mac']:.1f}, {e['pct_s8']:.1f}%, {e['pct_fp8']:.1f}%, {e['margin_known']:.2f} / {e['margin_floor']:.2f} | "
-            f"{m['ge_per_mac']:.1f}, {m['pct_s8']:.1f}% | {v['h']['h']:.3f} | "
+            f"{m['ge_per_mac']:.1f}, {m['pct_s8']:.1f}% | "
+            f"{e['margin_known_sm120']:.2f} / {e['margin_floor_sm120']:.2f}, {ms['pct_s8']:.1f}%, "
+            f"{100 * t['every_word_sm120']['t1']:.1f}% | {v['h']['h']:.3f} | "
             f"{100 * t['every_word']['t1']:.1f}% / {100 * t['tile_end']['t1']:.1f}% / {100 * t['no_trigger_rule']['t1']:.1f}% | "
             f"{a['and_per_mac_every_word']:.2f} | {v['rank']} |"
         )
