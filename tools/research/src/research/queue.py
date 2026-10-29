@@ -136,8 +136,8 @@ keeps `next` up to drive's running and passed Lean checks (`lean_hold`).  A
 PR whose head contains another open PR's head, or by ancestry an older one (a head the queue saw it at, or its branch merged in:
 `Queue.entries`; never by PR number, and never for commits the two merely share), goes
 in after it and waits while that one waits, unless it carries that one's change: the same owner, or that one's owner withdrew its
-mark (`Queue._carried`); drive tells a marked PR left out so, and the owner of the one it waits for (unmarked, ejected, held
-or waiting itself), with the fix, once per pair of heads (`Driver.tell_contained`).  What a sync adds on top goes non-Lean first
+mark (`Queue._carried`); drive tells the owner of the one it waits for (unmarked, ejected, held or waiting itself) and those of
+every marked PR left out for it in one post, with the fix (`Driver.tell_out`).  What a sync adds on top goes non-Lean first
 (drive.toml's `nonlean_first`, on by default: `Queue._nonlean_order`): each PR whose own change is no Lean change (`lean_change`
 on its diff against `main`, or against the PR it's stacked on) and contains none of those merged with it goes below every Lean
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
@@ -152,7 +152,7 @@ above everything else, whatever `--first` or non-Lean first would say, so a sync
 with the gate's fix: each PR the sync merges is judged, a new one or one merged again above a
 dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`; a merge
 with the message, tree and parent tree of one judged under the same `main` takes that verdict (`Queue._gated`).  A PR
-that contains one left out waits, recorded (the state's `waiting`) and told as a conflict is; `status` shows it waiting and
+that contains one left out waits, recorded (the state's `waiting`) and named in that one's notice; `status` shows it waiting and
 names the PR it contains and why that one is out, judging each PR after those it contains (else it shows
 'admitted' for hours while one it contains conflicts with `main`).
 
@@ -163,8 +163,9 @@ reverting on `checked` what that check fails, and fast-forwarding `main` to each
 `checked`.  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
 `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
 
-Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `@ci` and the owner's handle, once per PR head:
-drive tells each conflict its sync finds, and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
+Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `@ci` and the owners' handles: drive tells what
+its sync leaves out once per root cause, the PR that didn't merge or isn't admitted, naming every PR it takes out, and again only
+when its head, those PRs or its reason changes (`Driver.tell_out`), and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
 there reached its owner only when the VM that ran the sync pushed its notes, inside that lane's commit.
 
 `--shadow` builds `queue-shadow` instead of `next`, never pushes `main` and sends no notices, so the queue can run beside the trains
