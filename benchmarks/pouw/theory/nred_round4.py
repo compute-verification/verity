@@ -38,7 +38,8 @@ coin lanes against A′ = (1, 127, 1). `identical_columns` checks R1's check (b)
 replayed against −W_t[j] in order in the second half, so the final word is A·Bᵀ + code + tags. On chosen identical rows
 every lane has cancelled at the last step, and a column's final words differ only by the narrow tag and code, so they
 meet in a birthday pool of every row of the column. `salt` adds a per-row ρ_i (Q 2^18) to the last step, removed by
-the stock epilogue's `IADD3` row source as N-EXACT's xu does.
+the stock epilogue's `IADD3` row source as N-EXACT's xu does; `salt_bigw` also draws the window weights with
+|W| ∈ [64, 127]. `reversed` replays the lanes out and back instead of in order.
 
 `a5_lead` is round 2's A5 search (`nred_round2.a5_step_greedy`) on the lead: with s drawn per call after A_j a row's
 step-t vector holds the call's coins for every t ≥ 2, so only step 1 (16 a₁ codes) can be tabled; with s drawn a
@@ -332,8 +333,8 @@ def mirror_instance(k: int, m: int, n: int, rng: np.random.Generator, variant: s
     a1 = rng.integers(0, 2, (m, na.TAG_LANES))
     d0 = tags @ g + a1 @ na.code(n)
     u = rng.integers(-128, 128, (m, h))
-    wv = rng.integers(1, 128, (h, n)) * rng.choice([-1, 1], (h, n))
-    rho = rng.integers(-(1 << 17), 1 << 17, m) if variant == "salt" else np.zeros(m, dtype=np.int64)
+    wv = rng.integers(64 if variant.endswith("bigw") else 1, 128, (h, n)) * rng.choice([-1, 1], (h, n))
+    rho = rng.integers(-(1 << 17), 1 << 17, m) if variant.startswith("salt") else np.zeros(m, dtype=np.int64)
     word = d0.astype(np.int64)
     acc = {f"{p}/{when}": [0, 0] for p in ("column", "tile") for when in ("final", "interior")}
     entry_seen = []
@@ -381,8 +382,8 @@ def mirror_runs(seed: int = 103, n: int = 64) -> dict:
     """Mirror at Llama's shapes for N-CARD's row counts (64, 512 and 8,192 rows)."""
     rng = np.random.default_rng(seed)
     out = {}
-    for variant in ("narrow", "wide", "salt", "reversed"):
-        for m in ((64,) if variant == "reversed" else (64, 512, 8192)):
+    for variant in ("narrow", "wide", "salt", "salt_bigw", "reversed"):
+        for m in {"reversed": (64,), "salt_bigw": (8192,)}.get(variant, (64, 512, 8192)):
             insts = {kk: mirror_instance(kk, m, n, rng, variant) for kk in sorted({kk for _, kk in ns.LLAMA.values()})}
             stock = sum(nn * kk for nn, kk in ns.LLAMA.values())
             keys = mirror_shares(next(iter(insts.values())), 2048, 2048, m).keys()
@@ -489,6 +490,12 @@ def check(rep: dict) -> list[dict]:
        wid["P'32/column/final"] < min(0.01, nar["P'32/column/final"]), wid["P'32/column/final"])
     ok("mirror, per-row salt ρ_i in the final word: the final-step column pool ≤ 0.1% under P′",
        sal["P'32/column/final"] <= 0.001, sal["P'32/column/final"])
+    big = mr["salt_bigw/m8192"]["shares"]
+    ok("mirror, 8,192 rows, P′: the interior column pools pay > 0.1% with |W| ≥ 1 (a step whose pool holds one "
+       "small-weight lane); drawing |W| ≥ 64 cuts them, and salt + |W| ≥ 64 + A2r's walk stays < 1%",
+       sal["P'32/column/interior"] > 0.001 and big["P'32/column/interior"] < sal["P'32/column/interior"]
+       and big["P'32/column/final"] + max(big["P'32/column/interior"], 0) + big["P/a2r_entry"] < 0.01,
+       [sal["P'32/column/interior"], big["P'32/column/interior"], big["P/a2r_entry"]])
     ok("mirror's in-order replay: within-entry revisits < 1%; a reversed (out-and-back) replay retraces the path, "
        "> 10%", mr["narrow/m64"]["shares"]["P/a2r_entry"] < 0.01
        and mr["reversed/m64"]["shares"]["P/a2r_entry"] > 0.1,
