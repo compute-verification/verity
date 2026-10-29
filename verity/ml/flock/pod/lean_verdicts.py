@@ -23,14 +23,14 @@ challenger's interactive-run record ``rec-run.json`` and the V* parts' logs (the
 of that one rows file and of that inner shape, every part having read one set of the other inputs V*'s parts share and
 no two sessions one coin key (`RecCompose.Accepts`), and the record shows the parts are one run: the staging first, one
 session opened per part, each the composed one, the close last (`RecCompose.OneRun`); the step fails unless it does.
-Each forgery of a V* part, put in that part's place, must be refused by it too. Without a ``rec-run.json`` in DIR, the
-record is DIR's ``opens.jsonl`` (`loopback_records`): 85's oprove under MODES=firewall (one session per staged
-statement) lists there every session its loopback coin servers served, and the record stages ``rows.json`` and the
-shared set the files in ``rec-shared-args.txt`` give, opens each of those sessions for its statement's part (a forgery's
-in its part's place, ``rec-run-FORGERY.json``) and closes. It is assembled after the sessions from the coin servers'
-records, not logged at each ``Hello`` by a live challenger, which none does yet. A run of some of V*'s parts
-(``LEVELS``) is not composed, and says so; nor is a run with neither file (MODES=dev or host runs WARM + RUNS sessions a
-part), whose parts are not shown to be one run.
+Each forgery of a V* part, put in that part's place, must be refused by it too. With an ``opens.jsonl`` in DIR, each
+composition's record is built from it for the parts composed (`loopback_record`): 85's oprove under MODES=firewall (one
+session per staged statement) lists there every session its loopback coin servers served, and the record stages
+``rows.json`` and the shared set the files in ``rec-shared-args.txt`` give, opens each of those sessions for its
+statement's part (a forgery's in its part's place, ``rec-run-FORGERY.json``) and closes; without one, the record is
+DIR's ``rec-run.json``. It is assembled after the sessions from the coin servers' records, not logged at each ``Hello``
+by a live challenger, which none does yet. A run of some of V*'s parts (``LEVELS``) is not composed, and says so; nor is
+a run with neither file (MODES=dev or host runs WARM + RUNS sessions a part), whose parts are not shown to be one run.
 
     python3 verity/ml/flock/pod/lean_verdicts.py [--compose BIN] DIR PART...
     python3 verity/ml/flock/pod/lean_verdicts.py --cover KIND PART...   # exit 0 when a PART covers the forgery KIND
@@ -157,36 +157,35 @@ def part_of(d: Path, name: str) -> int | None:
     return int(a[a.index("--rec-part") + 1]) if "--rec-part" in a[:-1] else None
 
 
-def loopback_records(d: Path, vparts: list[str], forged: list[tuple[str, str]]) -> None:
-    """``rec-run.json`` from ``opens.jsonl``, and ``rec-run-FORGERY.json`` for each (forgery, the part it replaces) of
-    ``forged``, the forgery's sessions in that part's place: the staging of DIR's ``rows.json`` and of the shared set
-    ``rec-shared-args.txt``'s files give (`rec_compose.shared_of_args`, not any part's ``VERDICT``), every session of a
-    part's statement opened for it, the close. On loopback the pod is the challenger's host: the record is assembled
-    after the sessions, from every session their coin servers recorded, rather than logged at each ``Hello``."""
+def loopback_record(d: Path, names: list[str]) -> Path:
+    """The run's record for the parts ``names`` (each a statement, an honest part's or a forgery's in that part's place),
+    from ``opens.jsonl``: the staging of DIR's ``rows.json`` and of the shared set ``rec-shared-args.txt``'s files give
+    (`rec_compose.shared_of_args`, not any part's ``VERDICT``), every session of those statements opened for its
+    ``own-NAME.txt``'s part, the close; ``rec-run.json``, or ``rec-run-FORGERY.json`` with forgeries among ``names``. On
+    loopback the pod is the challenger's host: the record is assembled after the sessions, from every session their coin
+    servers recorded, rather than logged at each ``Hello``."""
     from verity_flock import rec_compose as RC
 
-    rows = RC.digest((d / "rows.json").read_bytes())
-    shared = RC.shared_of_args((d / "rec-shared-args.txt").read_text().split())
-    opens = opens_of(d)
-    parts = {p: part_of(d, p) for p in vparts}
-
-    def record(swap: tuple[str, str] | None) -> str:
-        at = {p: p for p in vparts} | ({swap[1]: swap[0]} if swap else {})
-        by = {s: p for p, s in at.items()}
-        return RC.run_record(rows, shared, [(s, parts[by[st]], k) for st, s, k in opens
-                                            if st in by and parts[by[st]] is not None])
-
-    (d / "rec-run.json").write_text(record(None))
-    for f, p in forged:
-        (d / f"rec-run-{f}.json").write_text(record((f, p)))
+    parts = {p: part_of(d, p) for p in names}
+    opens = [(s, parts[st], k) for st, s, k in opens_of(d) if st in parts and parts[st] is not None]
+    text = RC.run_record(RC.digest((d / "rows.json").read_bytes()),
+                         RC.shared_of_args((d / "rec-shared-args.txt").read_text().split()), opens)
+    forged = [p for p in names if p.startswith("forged-")]
+    run = d / (f"rec-run-{'+'.join(forged)}.json" if forged else "rec-run.json")
+    run.write_text(text)
+    return run
 
 
-def compose(binary: str, d: Path, logs: list[Path], run: Path | None = None) -> tuple[bool, str]:
-    """``binary rec-compose`` over ``logs`` at DIR's ``rec-inner.json``, ``rows.json`` and ``rec-run.json`` (or ``run``):
-    (accepted, its line)."""
+def compose(binary: str, d: Path, logs: list[Path]) -> tuple[bool, str]:
+    """``binary rec-compose`` over ``logs`` at DIR's ``rec-inner.json``, ``rows.json`` and the run's record:
+    ``rec-run.json``, or, with ``opens.jsonl``, the one `loopback_record` writes for those logs' parts. (accepted, its
+    line)."""
+    try:
+        run = loopback_record(d, [f.stem for f in logs]) if (d / "opens.jsonl").exists() else d / "rec-run.json"
+    except (OSError, ValueError, KeyError) as e:
+        return False, f"no interactive-run record from opens.jsonl ({e})"
     r = subprocess.run([binary, "rec-compose", "--rec-inner", str(d / "rec-inner.json"), "--rec-rows", str(d / "rows.json"),
-                        "--rec-run", str(run or d / "rec-run.json"), *map(str, logs)], capture_output=True, text=True,
-                       check=False)
+                        "--rec-run", str(run), *map(str, logs)], capture_output=True, text=True, check=False)
     line = next((ln for ln in r.stdout.splitlines() if ln.startswith("REC-COMPOSE ")), None)
     return r.returncode == 0 and line is not None, line or f"exit {r.returncode}: {r.stderr.strip()[-300:]!r}"
 
@@ -201,27 +200,20 @@ def composed(binary: str, d: Path, honest: list[str], groups: dict[str, list[str
     if len(vparts) < n or n == 0:
         print(f"lean compose: {len(vparts)} of V*'s {n} parts run, so the recursive statement is not composed")
         return True
-    forged = [(p, p.removeprefix(f"forged-{k}-")) for k, ps in groups.items() for p in ps]
-    forged = [(p, part) for p, part in forged if part in vparts and not results[p][2]]
-    given = (d / "rec-run.json").exists()
-    if not given and (d / "opens.jsonl").exists():
-        try:
-            loopback_records(d, vparts, forged)
-        except (OSError, ValueError, KeyError) as e:
-            print(f"lean compose: no interactive-run record from opens.jsonl ({e})  <- FAILS")
-            return False
-    elif not given:
+    if not (d / "rec-run.json").exists() and not (d / "opens.jsonl").exists():
         print("lean compose: no interactive-run record (rec-run.json, or a firewalled oprove's opens.jsonl), so the "
               "recursive statement is not composed: its parts are not shown to be one run (C10 OneRun)")
         return True
     ok, line = compose(binary, d, [d / f"{p}.log" for p in vparts])
     print(f"lean compose: {line}{'' if ok else '  <- FAILS'}")
-    for p, part in forged:
-        run = d / f"rec-run-{p}.json"
-        accepted, fline = compose(binary, d, [d / f"{p if q == part else q}.log" for q in vparts],
-                                  run if run.exists() else None)
-        print(f"lean compose {p}: {fline}{'  <- FAILS' if accepted else ''}")
-        ok = ok and not accepted
+    for k, ps in groups.items():
+        for p in ps:
+            part = p.removeprefix(f"forged-{k}-")
+            if part not in vparts or results[p][2]:
+                continue
+            accepted, fline = compose(binary, d, [d / f"{p if q == part else q}.log" for q in vparts])
+            print(f"lean compose {p}: {fline}{'  <- FAILS' if accepted else ''}")
+            ok = ok and not accepted
     return ok
 
 
