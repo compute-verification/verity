@@ -64,11 +64,13 @@ A session over PoUS's P2 store is of record here too (`P2Session`), as `p2_party
 can only veto: the process holds one P2 store and its sessions, each read from the bytes the verifier holds and the
 prover sends.
 
-* `{"op": "p2_hold", "bytes": n, "chunk"}` and then n bytes, the auditor's registration file
-  (`p2_party.registration_json`'s): the store held (`P2Session.heldOf`), `{"digest", "plan_units", "units"}`, and the
-  draws a thread checks;
+* `{"op": "p2_hold", "bytes": n, "chunk", "session"}` and then n bytes, the auditor's registration file
+  (`p2_party.registration_json`'s): the store held (`P2Session.heldOf`), the draws a thread checks, and the session
+  parameters every request must restate, `session` (`P2Session.Auditor.ofJson`, a toy party's) or, without one,
+  `P2Session.SESSION`; `{"digest", "plan", "plan_units", "session", "units"}`;
 * `{"op": "p2_session", "bytes": n, "not_before_ns"}` and then the prover's request line: `{"session": k}`, its coins
-  released one an event as `event`'s are (`withCoin`), or `{"refused": why}` (`P2Session.paramsOf`);
+  released one an event as `event`'s are (`withCoin`), or `{"refused": why}` (`P2Session.paramsOf` under the held
+  session parameters);
 * `{"op": "p2_event", "session", "event", "coin"}`: a start, a boundary or a close through P2 session k at two windows
   in flight and one window a coin (`eventOn 2 1`), `Difftest.resultJ`'s result;
 * `{"op": "p2_root", "session", "t", "i", "now", "bytes": n}` and then root i of window t's line as the prover sent it
@@ -123,6 +125,7 @@ structure Server where
   binding : Option Store.Binding := none
   workers : Nat := 1
   p2 : Option P2Session.Held := none
+  p2Auditor : P2Session.Auditor := P2Session.SESSION
   p2Chunk : Nat := 64
   p2Sessions : Array Session.State := #[]
 
@@ -351,12 +354,16 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
     if srv.p2.isSome then throwThe String "the verifier holds one P2 store"
     let held ← ofV (P2Session.heldOf bytes)
     let chunk ← ofV (nat req "chunk")
-    pure (held.json, { srv with p2 := some held, p2Chunk := max 1 chunk })
+    let auditor ← match req.getObjValD "session" with
+      | .null => pure P2Session.SESSION
+      | v => ofV (P2Session.Auditor.ofJson v)
+    pure (merge held.json [("session", auditor.json)],
+      { srv with p2 := some held, p2Auditor := auditor, p2Chunk := max 1 chunk })
   | "p2_session" =>
     let line ← readBytes stdin (← ofV (nat req "bytes"))
     let notBeforeNs ← ofV (nat req "not_before_ns")
     let some held := srv.p2 | throwThe String "no P2 store: p2_hold holds one first"
-    match P2Session.paramsOf held line with
+    match P2Session.paramsOf held srv.p2Auditor line with
     | .error why => pure (Json.mkObj [("refused", .str why)], srv)
     | .ok params =>
       let s := P2Session.init held params (Array.replicate (2 * params.windows) ByteArray.empty) notBeforeNs
