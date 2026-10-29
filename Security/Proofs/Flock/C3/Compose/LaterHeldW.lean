@@ -126,7 +126,7 @@ theorem laterCoins_of_held {r : ℕ} {CT : Fin r → Type} {e : ExecHolo} {Cm : 
     {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
     {m : FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin r) → CT k)} {sel selW : ℕ → String → ℕ → Prop}
     {pts : Array (Array Flock.F128) → Fin 2 → Fin e.cls.mPts → GF128} {spec : Flock.SessionSpec}
-    {sess : Flock.Session}
+    {sess : Flock.RunRecord}
     (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse m) (henc : CoinsEncoded sel m.coin)
     (hsel : ∀ i s q, sel i s q → m.selC i s q) (hencW : CoinWordsEncoded selW m.coin)
     (hselW : ∀ i s q, selW i s q → m.selC i s q)
