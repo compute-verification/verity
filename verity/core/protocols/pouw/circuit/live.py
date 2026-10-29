@@ -96,9 +96,9 @@ prompt length, so the pieces of a round that all accept bound each request's row
 them, and m is rule A's count as v2's ok makes it. A decode row (a request named in a later round than its own) has no
 interval here and is refused; a round of a block whose requests take one token each (max_tokens 1) has none. Requests past
 the first R are named by no row. The live Program at T past `PIECE_ROWS` (`program_rows`) calls it ceil(T/R) times a
-round, unit s·P + j round s's piece j, every one proved. The Lean statement is `LiveCredit.live_rows`
-(`rowsOk` is `rows_ok`): a round whose pieces all accept meets v2's `liveOk2` on its view with the headers past R empty
-(`cut`), and its rule-A count over its whole request table is m (`rowsOk_admitted`).
+round, unit s·P + j round s's piece j, every one proved. Its Lean statement, that a round whose pieces all accept meets
+v2's `liveOk2` (`Pouw.SecurityProofs.LiveCredit`) on its view with the headers past R empty (`cut`), and that its rule-A
+count over its whole request table is m, is not proved yet.
 """
 from __future__ import annotations
 
