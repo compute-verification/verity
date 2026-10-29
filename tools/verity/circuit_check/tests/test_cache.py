@@ -1058,10 +1058,67 @@ def test_a_run_of_imports_is_held_by_the_names_it_binds_not_their_order():
     assert norm("from a import *\nfrom b import y\n") != norm("from b import y\nfrom a import *\n")
 
 
+def _builds_a_name(v) -> bool:
+    """`v` only builds a string from names: an f-string, `+`, a literal's `join`/`format`, or a conditional of those."""
+    import ast
+
+    if isinstance(v, (ast.Constant, ast.Name)):
+        return True
+    if isinstance(v, ast.Attribute):
+        return isinstance(v.value, ast.Name)
+    if isinstance(v, ast.JoinedStr):
+        return all(isinstance(x, ast.Constant) or (isinstance(x, ast.FormattedValue) and _builds_a_name(x.value))
+                   for x in v.values)
+    if isinstance(v, ast.BinOp) and isinstance(v.op, ast.Add):
+        return _builds_a_name(v.left) and _builds_a_name(v.right)
+    if isinstance(v, ast.IfExp):
+        return isinstance(v.test, ast.Compare) and _builds_a_name(v.body) and _builds_a_name(v.orelse)
+    if isinstance(v, ast.Call) and isinstance(v.func, ast.Attribute) and v.func.attr in ("join", "format"):
+        return isinstance(v.func.value, ast.Constant) and not v.keywords and all(_builds_a_name(a) for a in v.args)
+    return False
+
+
+def _enumerator_misuses(tree) -> list[str]:
+    """Each `pkgutil` listing loop in `tree` whose names (or names only built from them) are used other than compared,
+    imported (``importlib.import_module``), written into an error, or queued on a work list (``todo``) whose entries are
+    popped and only imported; and the listing loops' count, so a body with none is caught."""
+    import ast
+
+    loops = [n for n in ast.walk(tree) if isinstance(n, ast.For) and "iter_modules" in ast.unparse(n.iter)]
+    bad = [] if loops else ["no pkgutil listing loop"]
+    for loop in loops:
+        allowed: set[int] = set()
+        tracked = {loop.target.id}
+        for n in ast.walk(loop):
+            if (isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)
+                    and any(isinstance(x, ast.Name) and x.id in tracked for x in ast.walk(n.value))
+                    and _builds_a_name(n.value)):
+                tracked.add(n.targets[0].id)
+                allowed |= {id(x) for x in ast.walk(n.value)}
+        for n in ast.walk(loop):
+            if isinstance(n, ast.Call) and ast.unparse(n.func) in ("importlib.import_module", "errors.append", "todo.append"):
+                allowed |= {id(x) for a in n.args for x in ast.walk(a)}
+            elif isinstance(n, ast.Compare):
+                allowed |= {id(x) for x in ast.walk(n)}
+        uses = [n for s in loop.body for n in ast.walk(s)
+                if isinstance(n, ast.Name) and n.id in tracked and isinstance(n.ctx, ast.Load)]
+        if not uses or not all(id(n) in allowed for n in uses):
+            bad.append(ast.unparse(loop))
+    if "todo.append" in ast.unparse(tree):
+        pops = [n for n in ast.walk(tree) if isinstance(n, ast.Assign) and ast.unparse(n.value) == "todo.pop()"]
+        popped = {ast.unparse(t.elts[0] if isinstance(t, ast.Tuple) else t) for p in pops for t in p.targets}
+        imported = {ast.unparse(c.args[0]) for c in ast.walk(tree)
+                    if isinstance(c, ast.Call) and ast.unparse(c.func) == "importlib.import_module"}
+        if not pops or not popped <= imported:
+            bad.append(f"work list: popped {sorted(popped)}, imported {sorted(imported)}")
+    return bad
+
+
 def test_each_enumerator_only_imports_what_it_lists():
     """`cache._ENUMERATORS` (and `targets.load_registries`) are held by the modules a package lists rather than by its
-    listing, on a claim about their bodies: each name a ``pkgutil`` listing yields is only compared, imported
-    (``importlib.import_module``) or written into an error."""
+    listing, on a claim about their bodies: each name a ``pkgutil`` listing yields, and each name only built from one, is
+    only compared, imported (``importlib.import_module``), written into an error, or queued on a work list (``todo``)
+    whose entries are popped and only imported."""
     import ast
     import importlib
     import inspect
@@ -1073,18 +1130,45 @@ def test_each_enumerator_only_imports_what_it_lists():
         fn = importlib.import_module(mod)
         for part in qual.split("."):
             fn = getattr(fn, part)
-        tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
-        loops = [n for n in ast.walk(tree) if isinstance(n, ast.For) and "iter_modules" in ast.unparse(n.iter)]
-        assert loops, (mod, qual)
-        for loop in loops:
-            allowed: set[int] = set()
-            for n in ast.walk(loop):
-                if isinstance(n, ast.Call) and ast.unparse(n.func) in ("importlib.import_module", "errors.append"):
-                    allowed |= {id(x) for a in n.args for x in ast.walk(a)}
-                elif isinstance(n, ast.Compare):
-                    allowed |= {id(x) for x in ast.walk(n)}
-            uses = [n for s in loop.body for n in ast.walk(s) if isinstance(n, ast.Name) and n.id == loop.target.id]
-            assert uses and all(id(n) in allowed for n in uses), (mod, qual, ast.unparse(loop))
+        assert not _enumerator_misuses(ast.parse(textwrap.dedent(inspect.getsource(fn)))), (mod, qual)
+
+
+def test_the_enumerator_rule_refuses_a_listed_name_used_for_anything_else():
+    """The rule `test_each_enumerator_only_imports_what_it_lists` holds bodies to: a work list of names built from the
+    listing passes, and a read keyed by a listed name, directly or through a name derived from it, fails."""
+    import ast
+
+    ok = """
+def load(pkg):
+    todo = [(pkg, True)]
+    while todo:
+        name, is_package = todo.pop()
+        importlib.import_module(name)
+        for m in pkgutil.iter_modules([]):
+            child = f"{name}.{m.name}" if name == "x" else name + "." + m.name
+            if m.name != "tests" and child != __name__:
+                todo.append((child, m.ispkg))
+"""
+    assert not _enumerator_misuses(ast.parse(ok))
+    for body in ("data = open(path_for(m.name)).read()",
+                 "path = f'{m.name}.json'\n        data = open(path).read()",
+                 "path = path_for(m.name)\n        importlib.import_module(path)"):
+        src = f"""
+def load(pkg):
+    for m in pkgutil.iter_modules([]):
+        {body}
+        importlib.import_module(m.name)
+"""
+        assert _enumerator_misuses(ast.parse(src)), body
+    stray = """
+def load(pkg):
+    todo = []
+    for m in pkgutil.iter_modules([]):
+        todo.append(m.name)
+    for name in todo:
+        open(name).read()
+"""
+    assert _enumerator_misuses(ast.parse(stray))
 
 
 def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_changed(tmp_path):
