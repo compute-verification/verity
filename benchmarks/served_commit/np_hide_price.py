@@ -28,8 +28,9 @@ work, priced a salt:
     eight warps' registers), its registers written counted from the shape, not compiled.
 The term is a salt's price times the salts a useful MAC, and the layout sets the salts:
   L0, today: one hm96 leaf per activation row of A per call (row-seg) and one per R-byte row of committed words;
-  L1, a leaf over a subtree: one hm96 instance per call, its inner digest a frame-v3-sha512 tree over the call's chunks
-    (the words and the next call's A), so A's public root stays a hiding root while openings cost a chunk and its path;
+  L1, a leaf over a subtree: one hm96 instance per call over A's chunks and one per forward over its committed words, each
+    inner digest a frame-v3-sha512 tree, so A's public root stays a hiding root while openings cost a chunk and its path;
+    no seed reads the words' root, so their hash stays off every call's seed path;
   L2, private roots: the call's roots enter the noise seed inside the drawn unit's proof only, so one instance hides a
     forward, or a window (WINDOW_STEP_S bounds a step's time from above, so a window holds at least 600 s over it forwards).
 The proof opens an instance by hashing what it covers in-circuit: an L0 row whole, an L1 chunk and its path (two compressions a
@@ -64,6 +65,7 @@ import sw_hash_price as S  # noqa: E402
 CLOCK = 1.98e9                                      # the hashing measurements' SM clock
 UNITS_S = N.RULER * CLOCK                           # MAC-times a second at it
 SHEET_MAC_S = 989.5e12                              # the H200's data-sheet dense int8 MACs a second
+MFU_SERVE = 0.4                                     # stock work held fixed: benchmarks/rho/data/reference.toml fleet.world-h200
 PRF_SHARE = S.ANDS_FROM_8 / S.ANDS_COMPRESSION      # a compression from round 8 over a whole one (W1 taken in the same ratio)
 # M_key·y in the H200 split form (byte table in shared memory), registers written a salt: 16 passes of 12 salt bytes, each
 # 5 LDS.128 (20 registers), 10 three-input XORs and 3 for the byte and its address; each pass 37 conditional word shifts and
@@ -191,16 +193,15 @@ def levels(leaves: int, arity: int) -> int:
 def seed_path(rows: int, k: int, row: str | int = "row-seg", arity: int = 2) -> int:
     """Compressions one after another from a call's A (rows of k bytes) to its first noise block under L1: A's leaf digests
     (a row-seg row: its segments side by side, then their outer hash, then the subtree's leaf; a flat SHA-512 row and its
-    leaf; or, for an int `row`, segments of that many bytes as the subtree's leaves), the subtree (NODE[arity] a level) and
-    the merge with the words' root, the instance's leaf (its salt, c and M_key·y precomputed), the seed past its fixed
-    prefix, and one noise block."""
+    leaf; or, for an int `row`, segments of that many bytes as the subtree's leaves), the subtree (NODE[arity] a level),
+    the instance's leaf (its salt, c and M_key·y precomputed), the seed past its fixed prefix, and one noise block."""
     if row == "row-seg":
         leaf, leaves = 9 + -(-(64 * -(-k // 1024) + 17) // 128) + frame_leaf(64), rows
     elif row == "flat":
         leaf, leaves = S.blocks(k) + frame_leaf(64), rows
     else:
         leaf, leaves = frame_leaf(row), rows * -(-k // row)
-    return leaf + NODE[arity] * levels(leaves, arity) + NODE[2] + HM96_LEAF + 2 + 1
+    return leaf + NODE[arity] * levels(leaves, arity) + HM96_LEAF + 2 + 1
 
 
 def v4(price: dict, lat: dict | None, sizes: list[int]) -> dict:
@@ -389,26 +390,26 @@ def main() -> None:
             d["points"][pname] = pt
         out["designs"][design] = d
     out["v4"] = v4(price, lat, sizes)
-    dc_mac_s = S.CENSUS["datacenter GPUs"] * S.CENSUS["H200 int8 dense ops/s"] / 2
-    scopes = {"datacenter": {"window": dc_mac_s * S.CENSUS["window s"], **{p: dc_mac_s * s for p, s in S.PERIODS.items()}},
-              "world": {p: S.CENSUS["world FLOP a year"] / 2 * s / S.PERIODS["year"] for p, s in S.PERIODS.items()}}
-    pooled: dict = {"stock_macs": scopes}
+    h200_mac_s = S.CENSUS["H200 int8 dense ops/s"] / 2 * MFU_SERVE
+    periods = {"window": S.CENSUS["window s"], **S.PERIODS}
+    scopes = {"one H200": {p: h200_mac_s * s for p, s in periods.items()},
+              "datacenter": {p: S.CENSUS["datacenter GPUs"] * h200_mac_s * s for p, s in periods.items()},
+              "world": {p: S.CENSUS["world FLOP a year"] / 2 * s / S.PERIODS["year"] for p, s in periods.items()}}
+    pooled: dict = {"stock_macs": scopes, "stock_ands": {sc: {p: m * S.ANDS_MAC for p, m in ps.items()} for sc, ps in scopes.items()}}
     for key in ("L0 16 KiB rows", "L0 256 KiB rows", "L1", "L2", "L2, a window"):
         for pname in ("T 8,192", "T 512, 64 real rows", "T 512, 512 real rows"):
             h = out["designs"]["ssn_1l"]["points"][pname]["hiding"][key]
             pooled[f"hiding {key}, {pname}"] = {
-                f: {sc: {p: {"w1_floor": mac * h[f]["floor"], "w1_alone": mac * h[f]["alone"],
-                             "ands": mac * S.ANDS_MAC * h["ands_of_stock"] if f == "unforced" else None}
+                f: {sc: {p: {"share_floor": h[f]["floor"], "ands_floor": mac * S.ANDS_MAC * h[f]["floor"],
+                             "ands_alone": mac * S.ANDS_MAC * h[f]["alone"]}
                          for p, mac in ps.items()} for sc, ps in scopes.items()}
                 for f in ("unforced", "forced (a)")}
     pt = out["designs"]["ssn_1l"]["points"]["T 8,192"]
-    for name, share in (("committer's SHA-512 build over the best, L1 16 KiB chunks",
-                         pt["shaspeed"]["L1 16 KiB chunks"]["committer_excess_of_stock"]),
-                        ("hashing before the noise, L1 flat rows", pt["pre_noise"]["L1 (flat SHA-512 rows in the call's subtree)"]["w1"]),
+    for name, share in (("hashing before the noise, L1 flat rows", pt["pre_noise"]["L1 (flat SHA-512 rows in the call's subtree)"]["w1"]),
                         ("hashing before the noise, L1 1 KiB segment leaves of the call's domain",
                          pt["pre_noise"]["L1 (1024 B frame-v3 segment leaves of the call's domain)"]["w1"])):
-        pooled[name] = {sc: {p: {"w1_floor": mac * share["floor"], "w1_alone": mac * share["alone"]} for p, mac in ps.items()}
-                        for sc, ps in scopes.items()}
+        pooled[name] = {sc: {p: {"share_floor": share["floor"], "ands_floor": mac * S.ANDS_MAC * share["floor"]}
+                             for p, mac in ps.items()} for sc, ps in scopes.items()}
     out["periods"] = pooled
     Path(sys.argv[4]).write_text(json.dumps(out, indent=1))
 
