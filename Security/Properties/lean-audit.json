@@ -234,6 +234,10 @@
    "owner": "@memory-accounting",
    "digest": "4a1d6a842a5a90a31cd8edb101f4323728eae66616fd84ee93952ebe4cb6a921"
   },
+  "Pous.Period.CountMeets": {
+   "owner": "@memory-accounting",
+   "digest": "2dd5770d9bba758689a23a1684b8878df4b5e70ac858cdccf9da4ee3fa831597"
+  },
   "Pous.Period.DeviceModel": {
    "owner": "@memory-accounting",
    "digest": "2a18edf5d0551da318e3b6d712c6373df33fd32b2f8053ad6f145e2e32337091"
@@ -4502,6 +4506,24 @@
    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": {
     "∀ (ξ : (i : I) → Ω i), Real.instLE.le (Pouw.pr fun x => And (acc ξ x) (Real.instLT.lt (fixed ξ x) (credit ξ x))) δ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest": {
+    "instLENat.le q.k MemoryChallenger.WipeProtocol.MAX_READS": "a bound on the lemma's own binder q's reads, inline on next when the rule came (#5186, above #6037 there, both under this PR): name it or state it as a guarantee's conclusion",
+    "instLENat.le (instHMul.hMul n 512) d.mem": "a bound of the lemma's own binders n and d, inline on next when the rule came (#5186, above #6037 there, both under this PR): name it or state it as a guarantee's conclusion"
+   },
+   "Pous.Component.SecurityProofs.runAccepts_meets": {
+    "Eq (Lms.key Lms.deployed I seed) (Except.ok k)": "an equation over the lemma's own binders, inline on next when the rule came (#5010, below #6037 there): name it or state it as a guarantee's conclusion"
+   },
+   "Pous.Component.SecurityProofs.runBinds_meets": {
+    "Eq (Lms.key Lms.deployed I seed) (Except.ok k)": "an equation over the lemma's own binders, inline on next when the rule came (#5010, below #6037 there): name it or state it as a guarantee's conclusion"
+   },
+   "Pous.Component.SecurityProofs.wipeAccepts_complete": {
+    "Eq c.server p.server": "an equation over the lemma's own binders, inline on next when the rule came (#5010, below #6037 there): name it or state it as a guarantee's conclusion",
+    "Eq c.session p.session": "an equation over the lemma's own binders, inline on next when the rule came (#5010, below #6037 there): name it or state it as a guarantee's conclusion",
+    "Eq e.signed (Option.some s)": "an equation over the lemma's own binders, inline on next when the rule came (#5010, below #6037 there): name it or state it as a guarantee's conclusion"
+   },
+   "Pous.Component.SecurityProofs.wipeAccepts_meets": {
+    "Eq (Lms.key Lms.deployed I seed) (Except.ok k)": "an equation over the lemma's own binders, inline on next when the rule came (#5010, below #6037 there): name it or state it as a guarantee's conclusion"
+   },
    "Pous.EndToEnd.SecurityProofs.endToEndRingAt": {
     "∀ (W : Pous.Bits (Pous.EndToEnd.schAt N).n) (A₁ : Pous.Preprocessor (Pous.EndToEnd.schAt N) S) (A₂ : Pous.SeqResponderOn (Pous.EndToEnd.schAt N) S D Q L), ENNReal.instLE.le (Pous.pr (Pous.seqAcceptsOn (Pous.EndToEnd.schAt N) 105 W A₁ A₂)) c": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -4544,25 +4566,26 @@
    "Pous.Period.SecurityProofs.periodHeldDeployed": {
     "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win Accounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Pous.Period.SecurityProofs.periodHeldHonest": {
+    "Eq P.sid.size 32": "an equation, inline on next when the rule came (#5101, above #6037 there, under this PR): name it or state it as a guarantee's conclusion"
+   },
    "Pous.Period.SecurityProofs.periodHeldNontrivial": {
     "∀ (x : Prod (Pous.ringRO (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065)).Ω (Prod Pous.EndToEnd.HmCoins Pous.EndToEnd.Streams)), Not (P.Break { fst := o.fst, snd := { fst := o.snd, snd := x } })": "a negation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
-    "Accounting.Gates.Property caps Aud Wc": "Accounting.Gates.Property taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Gates.Restricted B Wc": "Accounting.Gates.Restricted taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.RateSketch.LifetimeCapped (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) joined L": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.RateSketch.LifetimeCapped layout joined L": "Accounting.RateSketch.LifetimeCapped taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le E (instHMul.hMul (instHMul.hMul 3 Accounting.Gates.p1024.squarings) es)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le εden (instHMul.hMul (instHPow.hPow 2 64) εnum)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.RateSketch.LifetimeCapped layout joined L": "Accounting.RateSketch.LifetimeCapped taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.Gates.Restricted B Wc": "Accounting.Gates.Restricted taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.Gates.Property caps Aud Wc": "Accounting.Gates.Property taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (v : Nat), instLTNat.lt v Aud.windows → instLENat.le (Aud.reads v) (instHMul.hMul (instHMul.hMul P N) 4096)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (Properties.RemoteAudit.sessionLayout blocks dflt appended sent (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G), (p x).Deadlines (bind x) τ": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (w' : Fin n) (j' : Fin P), Or (instLTFin.lt w w') (And (Eq w w') (instLTFin.lt j j')) → instLTNat.lt (bind x w j) (bind x w' j')": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.OneBlockEach (ℓ x) (grp x) (Finset.instSDiff.sdiff (Accounting.Requirement.reads W (p x).toExecution (bind x w j)) (Accounting.Requirement.creditedReads W (p x).toExecution (ℓ x) (bind x w j)))": "Accounting.Requirement.OneBlockEach taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.PlanMatches W (p x).toExecution (ℓ x) (plan x w j) 32768 (bind x w j)": "Accounting.Requirement.PlanMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.StoreMatches W (p x).toExecution (ℓ x) (σ x) 32768 (bind x w j)": "Accounting.Requirement.StoreMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.PlanMatches W (p x).toExecution (ℓ x) (plan x w j) 32768 (bind x w j)": "Accounting.Requirement.PlanMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.OneBlockEach (ℓ x) (grp x) (Finset.instSDiff.sdiff (Accounting.Requirement.reads W (p x).toExecution (bind x w j)) (Accounting.Requirement.creditedReads W (p x).toExecution (ℓ x) (bind x w j)))": "Accounting.Requirement.OneBlockEach taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Set.InjOn (addr x) (Finset.instSetLike.coe (plan x w j))": "Set.InjOn taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G), (p x).Deadlines (bind x) τ": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.LiveSalt.epochRootBinding": {
     "Eq w.size 64": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -4656,27 +4679,6 @@
     "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest": {
-    "instLENat.le q.k MemoryChallenger.WipeProtocol.MAX_READS": "a bound on the lemma's own binder q's reads, inline on next when the rule came (#5186, above #6037 there, both under this PR): name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul n 512) d.mem": "a bound of the lemma's own binders n and d, inline on next when the rule came (#5186, above #6037 there, both under this PR): name it or state it as a guarantee's conclusion"
-   },
-   "Pous.Component.SecurityProofs.runAccepts_meets": {
-    "Eq (Lms.key Lms.deployed I seed) (Except.ok k)": "an equation over the lemma's own binders, inline on next when the rule came (#5010, below #6037 there): name it or state it as a guarantee's conclusion"
-   },
-   "Pous.Component.SecurityProofs.runBinds_meets": {
-    "Eq (Lms.key Lms.deployed I seed) (Except.ok k)": "an equation over the lemma's own binders, inline on next when the rule came (#5010, below #6037 there): name it or state it as a guarantee's conclusion"
-   },
-   "Pous.Component.SecurityProofs.wipeAccepts_complete": {
-    "Eq c.server p.server": "an equation over the lemma's own binders, inline on next when the rule came (#5010, below #6037 there): name it or state it as a guarantee's conclusion",
-    "Eq c.session p.session": "an equation over the lemma's own binders, inline on next when the rule came (#5010, below #6037 there): name it or state it as a guarantee's conclusion",
-    "Eq e.signed (Option.some s)": "an equation over the lemma's own binders, inline on next when the rule came (#5010, below #6037 there): name it or state it as a guarantee's conclusion"
-   },
-   "Pous.Component.SecurityProofs.wipeAccepts_meets": {
-    "Eq (Lms.key Lms.deployed I seed) (Except.ok k)": "an equation over the lemma's own binders, inline on next when the rule came (#5010, below #6037 there): name it or state it as a guarantee's conclusion"
-   },
-   "Pous.Period.SecurityProofs.periodHeldHonest": {
-    "Eq P.sid.size 32": "an equation, inline on next when the rule came (#5101, above #6037 there, under this PR): name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -7831,9 +7833,8 @@
    ]
   },
   "Definitions.Pous.Assumptions.P2": {
-   "digest": "924d4884f2de3b6f0b60772c529b1d861b9761e0a9ff24f6ad4e8ff54db43f7d",
+   "digest": "b768407b053bb76b905487cf76c06cc71831ee9399ad5c1507fa01b96b63f16f",
    "definitions": {
-    "Pous.P2.Assumptions.CoinCommitHides": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb",
     "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3",
     "Pous.P2.Assumptions.P2RingRoundSecure": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a",
     "Pous.P2.Assumptions.P2RingRoundSecureWide": "4a1d6a842a5a90a31cd8edb101f4323728eae66616fd84ee93952ebe4cb6a921"
@@ -11968,7 +11969,6 @@
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "Pous.Period.SecurityProofs.periodHeldCoins",
-    "Pous.Period.SecurityProofs.periodHeldCoinsAt",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldGame_honest",
     "Pous.Period.SecurityProofs.periodHeldHonest",
@@ -12018,7 +12018,7 @@
    ]
   },
   "PousCheck.Run": {
-   "digest": "57badf68f87601e42c6626f00e2e2d81d875a66e148386cf652c6014f26c7494",
+   "digest": "b6e6a4a08b29bc29b0d72dd828dee252f7fb2bfbd4c08abf12ea563f2e8cdf0a",
    "definitions": {
     "PousCheck.Run.ChallengerRecord": "36c9e530eb87d7234ad3b4590c03bd3b08900cf3b1770e9153e1b96c36785976",
     "PousCheck.Run.ChallengerRecord.commitment": "c876dd65211962079397693788c7ef3fc02dac8e40462e3d891181e8a5f446d6",
@@ -12033,12 +12033,6 @@
     "PousCheck.Run.Point.ofJson": "c2bb20f6fd34591994ccc2e1ae3d4e672f13d298578787747708d089b461fb40",
     "PousCheck.Run.Point.params": "d5135ac9ed3221e4a10b73e5d28571b91fe2bdf3351277df7ca5c5acf34a0692",
     "PousCheck.Run.SALT": "4b15ded1415d17a8d9013dd692a63b65ee85aa1b086e00362ab10540c87b8849",
-    "PousCheck.Run.Session": "1d62e1cc3fc14b2d00647f0d2fc7328c2ab489178f49fa447bfec4e85e382ba8",
-    "PousCheck.Run.Session.commitment": "ef31c5d44ea68c3131253dd6bce3490500f3d946faa84b6cffa98663993371bc",
-    "PousCheck.Run.Session.ofJson": "b9e1f1ff15a671bdab8f56dabf78bccedf3258b0161ce5e5283060005c8aa9c3",
-    "PousCheck.Run.Session.openings": "63d19092be62dfd2201edabdde3937d7ebd25f5f4b776c65bf4e101cd1ebf712",
-    "PousCheck.Run.Session.signed": "5000d4b52dd04637b2612857364320de435a207f072f73485903fcbe461852ca",
-    "PousCheck.Run.Session.toJson": "a144f669bafbe681f7ad3ac086a5c8d4e58c056e0006f817a0c7b716fe68e8ed",
     "PousCheck.Run.check": "a58ba5dbaafe39b4c22caea57646a40b99a1a9f08e1495f2451ccd594226768c",
     "PousCheck.Run.checkAt": "678b50a36a5f05188c9bede1e1f5d8d8b4c52cde3b57ce962a84c51aaa5e7b6e",
     "PousCheck.Run.decodeSetup": "320b8be1a9962db0a79929422432c33b812049dba2173da10c52cec5ac131356",
@@ -12080,11 +12074,10 @@
    ]
   },
   "PousCheck.RunProtocol": {
-   "digest": "e54f7239bc8a804dc6d4e3309eedb8327ac7804003d21079667aea63afcd641e",
+   "digest": "acc8d7ab8321ca841e48c5c0d0cb077afac018e9d2c29cbdb539ff5607fe7623",
    "definitions": {
     "PousCheck.RunProtocol.CERT_K_WIDE320": "02c15c700981b838b3e77b897d91ff41f4234fdb4df9d24f96f31cb4246263bc",
     "PousCheck.RunProtocol.CapacityBound.eps": "053ee7539de68fc211992b6c64d3e59fbb46ddc50ec300b0a568a5523a0d34b6",
-    "PousCheck.RunProtocol.Certificate.eps": "2ebaedcd1741237fd1d21eb760ab0dc0f84be817291c4f443b3595335096b09b",
     "PousCheck.RunProtocol.Evidence": "c40f350f17744434df16950a6f0c04a42005d69a002a994a92688cc9eb336d34",
     "PousCheck.RunProtocol.Evidence.digests": "37197fe3314ffd1607a6afbba8a188a108bd083fe20863db517fdf5dc7325c78",
     "PousCheck.RunProtocol.Evidence.session": "1dd89ce591d851a63ca39a54cfc7f24a087545d82779b9332023891399197cfe",
@@ -12109,7 +12102,7 @@
     "PousCheck.RunProtocol.WIDE320_CLAIMS": "90f951bab2bf49bbd467042d58f63c2a9810b00c0e1c7e5d5498f51552c1f0a3",
     "PousCheck.RunProtocol.WIDE_CLAIMS": "d8d07b83e7f9fdb9712a9fc95ed4ef63751a689ef1ae3448e0879240d5b97446",
     "PousCheck.RunProtocol.accepts": "ed76ffdd7cd79e3e05ba9fa4e635ffdec4f95fcc68ed3fa665de63e45fa0a6af",
-    "PousCheck.RunProtocol.certificate": "bfaa4298471adaac1723afeed145fbddf441ee5c14d0b5be6d8614279a4a8872",
+    "PousCheck.RunProtocol.certificate": "fb61b781f3b16c183a8460417b65b32960b9af7f82710d28bb5834c3e5b7d6c0",
     "PousCheck.RunProtocol.certify": "aca9affd72f7a36eff21f6e0f045797edca7a8b0557d7cf288f991b339c02f05",
     "PousCheck.RunProtocol.certify._sparseCasesOn_1": "4959e2d8ce2c6debc5071e6ce90a47db9b32bea105626248f46b40368b2e8c52",
     "PousCheck.RunProtocol.certify._sparseCasesOn_2": "1b7fb1d162dd299c0d6b16b11b12c85f93462c8cfac278d00cea10194b06c7e6",
@@ -12128,7 +12121,7 @@
     "PousCheck.RunProtocol.profileJson": "382592ef027f6bb990fcf4d60ae35a89ef4c6f520d7f1e79d5f3c9891de8b163",
     "PousCheck.RunProtocol.protocol": "61331fd5822d36ddabe87274353eb88c4ebca18af504c6e647024377ad903f1e",
     "PousCheck.RunProtocol.tie": "29813b62d2182181db2dfac52bae35a780226ee36e63aab91e3ffe32926b559e",
-    "PousCheck.RunProtocol.wide320Certificate": "3bd6a03863270608d9f2366f8fa2cc2d80b7de86bc69c2d115a3b01e45b116e6",
+    "PousCheck.RunProtocol.wide320Certificate": "66cc0e62da01e3d64b7469d72a250b36e72674a8046b8471566e2ac2d1096aa0",
     "PousCheck.RunProtocol.wideCertificate": "3585aacd3bd75d27cee07d47b03de077d89b5da5050eb00038228c7d7b852f79",
     "_private.PousCheck.RunProtocol.0.PousCheck.RunProtocol.hexJ": "ff8a918744c89cd27a6ea08a7a873b568ef72b41efc360c28b1539581c7671c9",
     "_private.PousCheck.RunProtocol.0.PousCheck.RunProtocol.natJ": "5dfabf7ec43a535e341beaced010298d5a02bb8b6ef82bf83d93c07a0a445ba1"
@@ -14138,7 +14131,7 @@
    ]
   },
   "Properties.Pous.EndToEnd": {
-   "digest": "4e3c04f63d6621f845f788c1f0036a3a20a6d2aacb6618a9b9ad9e876b5c5617",
+   "digest": "04df77c9c9fd986b962067a2b2435bd3951831dacb63759a7b9c02d797769f43",
    "definitions": {
     "Pous.EndToEnd.Accepted": "b4988c90e1415268a28713efc5c61c31baf18ff4c44d70e8cb263e14cf24d853",
     "Pous.EndToEnd.AnsweredOnTime": "c2870b618539d7df4b0ed74c56d7a427ea19457463d0c6ec11753c881fc1bdf8",
@@ -14168,7 +14161,6 @@
     "Pous.EndToEnd.bytesOf": "1bf6f26565e95dea60346de6431520966589eacd73df0320410d7d747c226223",
     "Pous.EndToEnd.coinKey": "9540c153e5c2897fb03cd7c41aa0ceedb261028f72ee3732fda73917fd95c6d0",
     "Pous.EndToEnd.coinView": "84f8a78ecaac791c71b62f5bb089305d4dc092b21b7dfcf6febc9fd7c1ce3700",
-    "Pous.EndToEnd.commitmentOf": "02ca7be6f758ad1d1b799a8f0a6826b1c117d98b3cf376b7b7719997f24815b4",
     "Pous.EndToEnd.flat": "36aaa534d20cdef95ad1ab95df0150cd6906aa5604a5f8e6536deff630573404",
     "Pous.EndToEnd.leafInput": "906fa4b0121a2eff546a362ebd7a4ffe8c753775559f66bb16661d85cfeec5aa",
     "Pous.EndToEnd.q": "62f6160eff44113e913056c82541f99919de20f246e8c2f03498b1888538f445",
@@ -14214,7 +14206,7 @@
    ]
   },
   "Properties.Pous.EndToEndAt": {
-   "digest": "d77cfcd9fc1d76da19e45775f3272e4d169813f3e4369025948f90a48ac68d54",
+   "digest": "104ae3f4e452337575954be86b6ca53f20ea25859680c4916c7b2e8d8078a4eb",
    "definitions": {
     "Pous.EndToEnd.AcceptedAt": "14a22bc0fa800306081004aeb7ebe8f9b11cdf1ab9e0bfe19924a4ec1277dbd1",
     "Pous.EndToEnd.AuditsSetupAt": "4eb6aff7826d6923fb27ddaee4b5d5dc2330e7cc2245fea890a5d9ba60dff270",
@@ -14233,7 +14225,6 @@
     "Pous.EndToEnd.ShapedAt": "857369acc67831231cebd3b4b5d8857402495356de19fd851f766be60ee86fb9",
     "Pous.EndToEnd.TableBreakAt": "eb392d286b2f089c538b22ad81d52718d02fced90a03279ddcf19729e329abab",
     "Pous.EndToEnd.coinViewAt": "4f706109cd608e2380fba196965f705b73283a34c7212f0cafb532bb2da2e260",
-    "Pous.EndToEnd.commitmentOfAt": "359f751b804d78142d38e88bdb62cc3d22a6196a9ce010584e38398b63604e42",
     "Pous.EndToEnd.schAt": "548c786e4696997154355dcfc507617cda29090f4bad2bd03b1b078ec893584a",
     "Pous.EndToEnd.tableStringsAt": "77f5ade10701bc2cab4eee863daad40e593d36573a2adf10e23f62399c176579"
    },
@@ -14260,13 +14251,11 @@
    ]
   },
   "Properties.Pous.MemoryChallenger": {
-   "digest": "694cc2be03d0faa3ea922e05475e468c7532ae5b2994731d884868f8f7d7516e",
+   "digest": "0578e3dd4cd206e8350cebd451a3ed771a9e41ac6fedfd12d180302fd1372e92",
    "definitions": {
     "MemoryChallenger.Properties.Accepted": "812d273231ae986d14633bee1380b0e4876b7c6f00ee1a7ac3fb1d49ec5b9d45",
     "MemoryChallenger.Properties.Challengers": "00e3bdbde512d0f364a05598a0a503fbbb391a380e195edd92901d3ee6e7373b",
     "MemoryChallenger.Properties.Challengers.sessions": "9080b7795ed1b376667e82efe8b43f1b208f5e88511d7b5a7658d1b152394da8",
-    "MemoryChallenger.Properties.Device": "ed4511488da53c85b9b883e3e5507cc6d495c8c85a88bed7b19b97e66c8bc6e8",
-    "MemoryChallenger.Properties.Device.sessions": "79e61bbfcb11a1b967607c821966405ff319e0037424cfee3617598cc179471c",
     "MemoryChallenger.Properties.JudgeAccepts": "d632cad4a2cae8a2bd09d1c9749b3fe87384725a63e39e84a4302dac291b3c97",
     "MemoryChallenger.Properties.JudgeSigned": "828fe6fa5c769c6f90deb2db0904c74385ec9012f3030866c842a69273e3c4fa",
     "MemoryChallenger.Properties.LmsVerifies": "f15c2a044fa38b89f26d9b48e279cb9807ae56e9ef2c70e7940ad8b4aa6708ad",
@@ -14431,15 +14420,15 @@
    ]
   },
   "Properties.Pous.PeriodGame": {
-   "digest": "6d4fac85a01bc2c2e64400054307fe424889d65bb1e71965c9d5ee58057d80ac",
+   "digest": "e222ba563997b04f7a810c1ced3b1c755a5c535db62c905be03eec37631b1f6d",
    "definitions": {
     "Pous.Period.AcceptedShort": "d172815a37c4ecb1923a7f4ab92e50e06c5282480cca2ca3ac31d2810958e594",
     "Pous.Period.AcceptedShortAt": "d318cf5d304e6d11a780f794a60ba5a6a321c0e2a153085f787978cc4ec83ed3",
     "Pous.Period.Fits": "f5b69f5f262a32475519e72979fc884fea1602140d3d6b9a07f4b7282ab185b9",
-    "Pous.Period.PeriodHeldCoins": "e60b0dcf4bbcb4d507beae745fdd37a1b98eac29ebd01f10a88665bce4a55a6a",
-    "Pous.Period.PeriodHeldCoinsAt": "3b1c927f6bf9f56628926de2c53759e3620e790c3c85bc51ca616f8185c21cf2",
-    "Pous.Period.PeriodHeldSha512": "fa51275e4192c6245bdeff11a0c8e130a7d399d80494a99f567ae954a3b9974e",
-    "Pous.Period.PeriodHeldSha512At": "9dce6aea28516e0a4995a15350534cb98c1ed254cfd9f16acbc4ca33736fcc1b",
+    "Pous.Period.PeriodHeldCoins": "dc2b3d2214b177af580f9d8b17bead0d775f3f72d3ecde6735eecaa79cf7a0ad",
+    "Pous.Period.PeriodHeldCoinsAt": "d00a682f6fd840f5f0cb9d8b83bd30888cc156317c28304d18dc5a176e072149",
+    "Pous.Period.PeriodHeldSha512": "ef7718d8cac69c09b255d1bbffbc17688534f99c598c67f09d30fe596861d11a",
+    "Pous.Period.PeriodHeldSha512At": "a54e68e1722c9c98f2deaa2399d51b66206cd8ca3675a75ecca437099d5ba8a2",
     "Pous.Period.ReadsNoPrimitive": "941286e788e84d808d5f58d95004d4e5cb4762a1eb9bf82b9f04d854577e552c",
     "Pous.Period.challengerStreams": "c6da2b60ee4fb154434632324d1b0284360caf2a1a20732a02f325d2fd351092",
     "Pous.Period.coinContext": "838ab78e56b936346dcb13ec7c0a73edc05ebc1cd81675bd27c996498abc722b",
@@ -14456,15 +14445,18 @@
     "Pous.Period.SecurityProofs.periodHeldCoinsAt",
     "Pous.Period.SecurityProofs.periodHeldGame_honest",
     "Pous.Period.SecurityProofs.periodHeldSha512",
-    "Pous.Period.SecurityProofs.periodHeldSha512At"
+    "Pous.Period.SecurityProofs.periodHeldSha512At",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Properties.Pous.Pooled": {
-   "digest": "fbe2f0c6edea19a69772e720259ee8adbe1850fe94f724be63c67fb7dead49c5",
+   "digest": "a806a0b2a29f497b3b9b50388e698aa806bfd4b655e2f6a1f917848f10bd9224",
    "definitions": {
+    "Pous.Period.CountMeets": "2dd5770d9bba758689a23a1684b8878df4b5e70ac858cdccf9da4ee3fa831597",
     "Pous.Period.FixedBefore": "b4e82606a80cb0c46bc33a3e9b3ed881173a07dd1e60fee5fc3bb2137bb9d50c",
-    "Pous.Period.PooledShortLog": "f418a975384990bab09688029b56c681ff8b6894351f77c21eceeb5740261fb7",
-    "Pous.Period.PooledShortLog_honest": "9c9d262884d77dd347daf6ca15d853626586338627b17bd7fa8cfcca322b20f3",
+    "Pous.Period.PooledShortLog": "089d803ae5e0a094b85b8579f561075ec546986eede02274fe31cb384771e573",
+    "Pous.Period.PooledShortLog_honest": "6ae5182d7405e612f227e5f20656da486b83b0aa48452853e9b675f649e5dac1",
     "Pous.Period.PooledShortLog_nontrivial": "0381700be935c15956a9c8563d69ed9db7657fd4a1735e40b3770b13aab084f1",
     "Pous.Period.ShortAccepted": "5f0c88920b892dd88e2a6b63b450bfb909c3a159e75657f068fdec14ac69b506",
     "Pous.Period.acceptAll": "b5ad9aea4487fe1a74c195a20dda866bf3d84b8f972cbee2f55e0b88e8642d0d",
