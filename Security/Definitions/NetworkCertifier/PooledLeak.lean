@@ -7,7 +7,7 @@ Definitions only. `RLeak δ` puts a window's observations among the sequences ac
 allows (`AccSeqsSampled`), so a monitoring period charged by it pays `log2 #faultySets(δ)` and `δ` in every window. Over
 a monitoring period the faulty set that matters is the one of the witness computed from each window's registration,
 before its draw: the draws bound how many units those sets hold in total, and the count pays for which units they are
-once. `LeakAt` is the leak relation at one faulty set, and `HorizonGood` is every window's at its own set, with the
+once. `LeakAt` is the leak relation at one faulty set, and `PooledGood` is every window's at its own set, with the
 sets' total below a bound.
 -/
 
@@ -27,7 +27,7 @@ def LeakAt {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : Audit
 
 /-- **A monitoring period's good event**: over the windows registered as `sw i`, the faulty sets `W i` hold fewer than
 `Fmax` units in total, and every window's observations `o i` meet its leak relation at its own set (`LeakAt`). -/
-def HorizonGood {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
+def PooledGood {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
     (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool)
     (Fmax : ℕ) (W : Fin m → Finset ℕ) (o : Fin m → List (Obs L K S)) : Prop :=
   ∑ i, (W i).card < Fmax ∧ ∀ i, LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W i) (o i)
