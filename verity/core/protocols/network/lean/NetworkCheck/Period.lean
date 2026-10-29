@@ -208,8 +208,8 @@ link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 
   unit is drawn, `drawn` its draw's `Σ k`, and `faulty_sets` every set of at most `b` of its 2T units, which holds the
   sets a stratified draw leaves possible too. `faulty_entries` is `E_w`, its slot entries' bits (`Scan.entries`:
   `lanes · T / every` entries of its `prog` ports' type, 8 · 112 = 896 at w63k4), when an audit its `prog` is tied to
-  is drawn in part with a `bound` of at least one wrong unit (`faultyEntries`), else 0. It is `β_w`, reported here
-  and charged in `K` only through `capacity`, once a period.
+  is sampled in part with a `bound` of at least one incorrect proof block (`faultyEntries`), else 0. It is `β_w`,
+  reported here and charged in `K` only through `capacity`, once a period.
 * `capacity` is `κ_t`, the tied audits' term over the monitoring period (`Pool.capacity`):
   `min(F_t · (R + ⌈log2 (N_t + 1)⌉), Σ_w β_w)`, `PooledLeakAccepted`'s tied factor, from sampled proofs' pooled bound
   at the tied audits' samples (`tiedPool`): `N_t` the tied audits' proof blocks over the link-windows, `q_t` the least
@@ -217,7 +217,7 @@ link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 
   strata), `δ_t` the least δ of a charged one, `F_t ≥ ln(1/δ_t)/q_t` (`tiedF`), and `R` its link-window's `E_w`, every
   entry bit a tied proof block's outputs can reach. `pool` is that pool, null when no tied audit is charged or a tied
   sample detects nothing, and then `κ_t = Σ_w β_w`, as it is when the pool's count is not the smaller.
-* `eps` is the scans' δ summed, `m · δ`, each tied audit's drawn in part (`chargedOf`), whose bound `faulty_entries`
+* `eps` is the scans' δ summed, `m · δ`, each tied audit's sampled in part (`chargedOf`), whose bound `faulty_entries`
   reads, and `δ_t` when `κ_t` is the pool's count, below `Σ_w β_w` (`Public.charging`): the δ part of the union over
   the monitoring period's windows that `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error
   and its collision errors, and of the tied audits' pooled bound, at `δ_t` plus their knowledge errors.
