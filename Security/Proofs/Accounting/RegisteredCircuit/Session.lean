@@ -1,11 +1,11 @@
 import Mathlib
-import Proofs.Accounting.DeclaredCircuit
-import Proofs.Accounting.DeclaredCircuit.Slack
+import Proofs.Accounting.RegisteredCircuit
+import Proofs.Accounting.RegisteredCircuit.Slack
 
 /-!
 # The session's passes, each priced at its prefix
 
-The pieces of `Accounting.SecurityProofs.DeclaredCircuitRequirement` that price the passes of the stacked session. The
+The pieces of `Accounting.SecurityProofs.RegisteredCircuitRequirement` that price the passes of the stacked session. The
 codec and the append coins and pass `j`'s own coins are uniform and independent of the prefix before the pass, so an
 event of the three is bounded at every prefix (`pr_at_pass_le`). At every store some candidate holds a correct tag of a
 tile it never queried with probability at most `G·N/2^h` (`pr_guess_family_le`). At signs of rank 12, some candidate

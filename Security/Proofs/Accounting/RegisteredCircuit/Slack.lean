@@ -1,10 +1,10 @@
 import Mathlib
-import Proofs.Accounting.DeclaredCircuit.Tiles
+import Proofs.Accounting.RegisteredCircuit.Tiles
 
 /-!
 # The slack's price: `k + 1` unobtained positions behind correct digests
 
-The pieces of `Accounting.SecurityProofs.DeclaredCircuitRequirement` that price `BadK`. Resampling the `K` unobtained
+The pieces of `Accounting.SecurityProofs.RegisteredCircuitRequirement` that price `BadK`. Resampling the `K` unobtained
 positions of a run together leaves its queries and what it obtained unchanged, so each correct digest query pins its
 position to the digest's fiber, at most `fib` values, and a stream position to one value (`card_resample_planes`,
 `Device.card_badK_ground_le`). Summed over the candidates of a pass and their `K`-tuples of query indices, a shared
