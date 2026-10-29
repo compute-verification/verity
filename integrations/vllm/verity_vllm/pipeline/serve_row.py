@@ -8,8 +8,10 @@ the Program's ``lag`` static is built from (LAG 1 under async scheduling, 0 sync
 must attest (GM-01 G1). serve-openai reads it (`of`; ``serve.json``'s ``row_scheduling``) and refuses a flag that
 disagrees with it before the model loads, and refuses a server whose engine resolved other than the flag (`checked`)
 before it listens. Under the flag ``serve.json``'s target declares async scheduling too (`serve_seal.target_of`), so the
-φ a served window's Programs are predicted from is specialized for LAG 1 by declaration. The flag serves only with
-``--no-commit`` for now (`commit_refusal`).
+φ a served window's Programs are predicted from is specialized for LAG 1 by declaration. The Commit (and H1 on it) serves
+under the flag as it does synchronously: the native collector learns the declared static shape's plans before the server
+listens (`serve_learn`), and an async step commits the rows the synchronous step does, under the same rows-sha512 root
+(``tests/pipeline/serve_async_commit_gpu.py``).
 """
 from __future__ import annotations
 
@@ -27,17 +29,6 @@ WORKLOAD_PROGRAM = Path("build_workload", "workload_program.json")
 
 def _flag(on: bool) -> str:
     return "--async-scheduling" if on else "--no-async-scheduling"
-
-
-def commit_refusal(opts: Any) -> str | None:
-    """Why ``--async-scheduling`` can't serve with the Commit on (nor H1, which serves on the Commit): the native collector's
-    staging isn't held to async scheduling yet. Served under it, the collector's learning step overran its transient host
-    budget and its windows committed nothing. None without the flag or under ``--no-commit``."""
-    if opts.async_scheduling and opts.commit:
-        return ("--async-scheduling serves only with --no-commit: the native collector's staging isn't held to async scheduling "
-                "yet (under it the learning step overruns its host budget and the windows commit nothing), so neither the "
-                "Commit nor H1 serves under it")
-    return None
 
 
 def of(opts: Any) -> dict[str, Any] | None:
