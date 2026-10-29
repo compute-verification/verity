@@ -889,6 +889,9 @@
    "assumptions": [],
    "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d"
   },
+  "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial": {
+   "owner": "@soundness"
+  },
   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
    "owner": "@network-accounting",
    "signature": ["NciCheck.Properties.SecurityProofs.RejectsExactly : NciCheck.Properties.RejectsExactly"],
@@ -4028,7 +4031,8 @@
    "Properties.Composition.acceptSame_honest": "completeness: AcceptSame's honest lemma: remote's checkSame accepts a composition that fits, with no components, under the binding of no digests",
    "Properties.Composition.acceptSame_nontrivial": "lemma: AcceptSame's nontrivial lemma: SameAccepted fails at parameters that name a component the composition doesn't have, which a verifier that accepts everything accepts",
    "Properties.Composition.acceptTied_honest": "completeness: AcceptTied's honest lemma: holdTies accepts an accepted outcome whose ties hold",
-   "Properties.Composition.acceptTied_nontrivial": "lemma: AcceptTied's nontrivial lemma: TiedAccepted fails at an outcome that rejected, which a verifier that accepts everything accepts"
+   "Properties.Composition.acceptTied_nontrivial": "lemma: AcceptTied's nontrivial lemma: TiedAccepted fails at an outcome that rejected, which a verifier that accepts everything accepts",
+   "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial": "lemma: ProtocolAccepts's nontrivial lemma: the check of record gives no verdict at a case whose α is no fraction, which a verifier that accepts everything accepts"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -22171,6 +22175,16 @@
   "Properties.Composition.acceptTied": {
    "honest": ["Properties.Composition.acceptTied_honest"],
    "nontrivial": "Properties.Composition.acceptTied_nontrivial"
+  },
+  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
+   "nontrivial": "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
+  }
+ },
+ "unwitnessed": {
+  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
+   "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
+   "missing": "honest",
+   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov"
   }
  }
 }
