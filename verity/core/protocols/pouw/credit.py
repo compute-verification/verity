@@ -1486,7 +1486,7 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
     registered finding is its statements' reads of the window's registered values, which `_proved` and `_registration`
     hold as a tile statement's. The Lean verdict (`PouwCheck.Verified`) refuses the lanes form until its mirror."""
     asks, refused = _asks(statements, files, raw, layout, entries, window, units, steps, salt, draw)
-    lanes = statements if isinstance(statements, dict) else None
+    lanes = statements if isinstance(statements, dict) and sorted(statements) == list(LANES_KEYS) else None
     listed = lanes["statements"] if lanes is not None else statements
     out: list[dict] = []
     held: dict = {}
@@ -1541,8 +1541,8 @@ def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, 
         return [], ("circuit", (isinstance(files, dict) and all(type(x) is str for x in files) and lanes_files(files))
                             or FILES_FORM)
     lanes = None
-    if isinstance(statements, dict):
-        if not (sorted(statements) == list(LANES_KEYS) and isinstance(statements["leaf_programs"], dict)
+    if isinstance(statements, dict) and sorted(statements) == list(LANES_KEYS):
+        if not (isinstance(statements["leaf_programs"], dict)
                 and all(type(x) is str and type(v) is str for x, v in statements["leaf_programs"].items())):
             return [], ("proof", LANES_FORM)
         lanes, statements = statements, statements["statements"]
