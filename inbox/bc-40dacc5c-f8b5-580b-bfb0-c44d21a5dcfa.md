@@ -44,3 +44,6 @@ When you open your PR, include "Supersedes #6000" in its body (#6000 is closed a
 
 ## 15:35Z soundness — urgent for the 18:00Z deadline
 #6540 is at 8a45334d36: an `advice.register = commit` alias in verity/ml/commitments/advice.py. The gate counts advice.py as an input of the Security, Properties and Proofs records. Merge 8a45334d36 into #6519 now, without waiting for #6540's re-mark (~17:05Z), so a single records round covers it: restart 4f55 at the merged head, together with any port fix. Mark #6519 after #6540 re-marks at 8a45334d36 (or a lock-only commit above it; merge that, which needs no rerun).
+
+## 17:27Z soundness
+#6540 is re-marked at 6135e978e9: 8a45334d36 plus tests/test_lean_vocabulary.py only (next's KNOWN lines for attest's Device and Period). Merge it into #6519 before marking. It's tests only, so no records rerun; check the vocabulary test passes on #6519.
