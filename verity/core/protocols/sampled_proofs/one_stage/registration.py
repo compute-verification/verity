@@ -1,4 +1,4 @@
-"""The registration record (README "The registration record"): what a window is committed to, fixed before the verifier draws.
+"""The registration record (README "The registration record"): what a window is committed to, fixed before the verifier samples.
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
@@ -9,8 +9,8 @@
      "anchors": [], "window": {"kind": "served" | "stand-in", ...provenance}, "previous": null | "<digest>"}
 
 * **Digest.** `SHA-512("verity/registration/v1\\0" || canon(record))`.
-* **Rule.** Everything a drawn proof block's statement can depend on is fixed by the record, or by objects the verifier already
-  holds, before the draw. The verifier checks R1-R6 (`check`) against its own copies, writes a `receipt` with its own
+* **Rule.** Everything a sampled proof block's statement can depend on is fixed by the record, or by objects the verifier already
+  holds, before the sample. The verifier checks R1-R6 (`check`) against its own copies, writes a `receipt` with its own
   clock, and only then draws.
 * **The checks** (`check`): the record has exactly these keys, and
   - R1: the format and protocol are these, the sampling design is the verifier's own expanded over its program and query
@@ -24,7 +24,7 @@
   - R6: `previous` is the digest of this prover's last record (null for the first), no earlier record has the same
     window, and for a bound verifier the window names its stream and prover (Binding).
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
-  %Y-%m-%dT%H:%M:%SZ>"}`, and the draw names it.
+  %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
   to the record. That they are the proved rows' is flock-verify's check of the public file (`checkPublic`), stated by
   the Lean guarantee `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
@@ -135,7 +135,7 @@ def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
 
 
 def receipt(rec: Mapping[str, Any], verifier: str, received: str | None = None) -> dict[str, Any]:
-    """The verifier's own log entry for a record it accepted, with its own clock; the draw names it."""
+    """The verifier's own log entry for a record it accepted, with its own clock; the sample names it."""
     return {"format": RECEIPT, "registration": digest(rec), "verifier": verifier,
             "received": received or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 

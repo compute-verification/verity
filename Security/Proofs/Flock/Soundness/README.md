@@ -101,13 +101,13 @@ link term per audit.
   `K = √(N₀/(e·Adv₀))` this is at most `ε_c⁻ + t·2^-244.7` (m = 33).
 - **`session_knowledge_sound`** (`Session.lean`) is the same form for one table inside a batched session.
   - The session is the protocol's (PROTOCOL.md §5). `Commit` carries every level-0 cap before any coin, the link
-    points are one draw, and then every table runs concurrently in any order. The rest of the session is arbitrary.
+    points are one sample, and then every table runs concurrently in any order. The rest of the session is arbitrary.
   - The extractor reruns everything after `Commit`.
   - `ε_c⁻` and `Adv₀` are the table's terms computed in the session (`epsS`, `adv₀S`).
   - It rests on `session_sound_of_table`, the compiled bound for any level-0 table in the session. The oracle
     prover plays the whole session there, and the table's value bounds it (`orcSess_value_le`).
 - **Several tables in one session** (`SessionBatch.lean`). `sessionB` is the protocol's batch: `Commit` with every
-  level-0 cap, one link-point draw, then every table concurrently.
+  level-0 cap, one link-point sample, then every table concurrently.
   - For each table `j`, `joint_le_B'` bounds `Pr[the session accepts] · Pr[table j's extraction fails]` by table `j`'s
     `ε_c⁻ + K·Adv₀ + N₀/(eK)` in the session (`ksBoundB`).
   - `one_le_fail_add_B'` is the audit's `cover`, for any link event that commitment implies.
@@ -125,7 +125,7 @@ link term per audit.
   carried becomes `Assumptions.HmRowComputes` (the circuit's row hashing computes the commit string, phase 2i) and the
   layout's facts (`Layout`, `HmRows`). `flock_e2e_count_hm96`, `flock_e2e_drawn_hm96` and their `_exec_hm96` forms are
   the end-to-end theorems with that binding. The headline, `Prog.flock_headline` (`Headline.lean`), is the count curve
-  with that binding on the statement's rows' circuit at the live draw under A3 (`ASSUMPTIONS.md`, The headline). Each
+  with that binding on the statement's rows' circuit at the live sample under A3 (`ASSUMPTIONS.md`, The headline). Each
   is proved under the assumptions its footprint lists, every hypothesis with its kind: hardness (`cr/sha-512`,
   `ecr/sha-512`), platform (A3, and A6, the coin server's OS randomness), model, intended to prove (`hHm`, the placements
   `pp` or `dp`, `lay`, `rs`, `tr`, `hConst`, `hZero`; `assumption-notes/e2e-checklist.md`), or a numeric condition.
@@ -137,7 +137,7 @@ link term per audit.
   views take the statement's avoidance of the mask slot from the setup (`Mask.lean`): `verify --zk` refuses a statement
   whose Δ or regions meet it (`Zk.maskFree`). `FailClosed.flock_verify_sound` (`One.lean`) is the one theorem: at every statement, with or without `--zk`, the
   headline of its case (public or hidden outputs; under `--zk`, one table or several).
-- **`registered_weights`** (`Binding/Weights.lean`). At each of a drawn unit's wires, the row a satisfying witness of
+- **`registered_weights`** (`Binding/Weights.lean`). At each of a sampled proof block's wires, the row a satisfying witness of
   its table holds is the registered row (any opening of the registered leaf: the weights and salt the registrant
   committed to), or `collide` of the two openings is a SHA-512 collision (`Layout.registered_weights`; from
   `HmRowComputes` for rows, `HmRows.registered_weights_hm96`; for the message the audit's extractor settles on,
@@ -150,7 +150,7 @@ link term per audit.
   the row a satisfying witness holds there is the row the registrant committed, or SHA-512 collides (`Reads.regLeaf_eq`,
   `Reads.registered_weights`). `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` add to the end-to-end
   bounds the event that a registered read's leaf under the prover's registration is not the registrant's, at
-  `δ_reg = qR²/2^513` (`Reads.prob_off_le`). With `--registered F` at hidden outputs, drawn units' reads are
+  `δ_reg = qR²/2^513` (`Reads.prob_off_le`). With `--registered F` at hidden outputs, sampled proof blocks' reads are
   checked: `SoundZHJR` (`--zk`), `SoundExecHR` (plain, `Discharge/PlainReg/`).
 
 ### 1.4 The pieces, by stage
@@ -233,7 +233,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   - A unit's input columns on one gate must carry one value in every satisfying witness (`UnitPlace.aliased`), as
     they do when they copy one source's position, or forced-zero rows. The trace reads each gate off one of its
     columns.
-  - `UnitPlace.correct` gives the audit's lowering hypothesis with one decoder per drawn unit. Two drawn units that
+  - `UnitPlace.correct` gives the audit's lowering hypothesis with one decoder per sampled proof block. Two sampled proof blocks that
     share a wire hold it in different columns. The link, not the lowering, makes them agree.
 - **The placement, from the executable's accept step** (`placement_of_setupH`, `ExecSetup.lean`). When `Stmt.setupH`
   accepts, VU `g`'s stacked unit slots are placed at `ur.slot (g·upv + u)`, the shared constant at the pin, in the model
@@ -358,13 +358,13 @@ term below 2^-170.
 
 ## 2. The model
 
-- **Interactive, live coins.** Each round's coins are drawn uniformly and independently after the prover has sent that
+- **Interactive, live coins.** Each round's coins are flipped uniformly and independently after the prover has sent that
   round. Nothing is derived from a hash. Fiat–Shamir (C-fs) is out of scope.
 - **Two layers.**
   - The *oracle layer* is where the statistical bound lives. There, a committed table is sent as a whole and the
     verifier reads the queried columns (§1.1).
   - The *compiled layer* replaces each table by its SHA-512 Merkle cap plus authentication paths, opened at the end of
-    the proof. The coin server keeps each round's bytes before drawing that round's coins, and the replay compares
+    the proof. The coin server keeps each round's bytes before flipping that round's coins, and the replay compares
     bytes, so no hash binds the rounds (§1.2).
   - **The compiled layer is the adopted variant, not yet the recorded sessions'.** PROTOCOL.md specifies SHA-256 trees
     (§14) and round digests (§6) for the sessions it records, following upstream, and SHA-512 trees as its target. The
@@ -488,7 +488,7 @@ The weights are committed once and every later proof opens that root. The analys
 - **Binding** must hold for the root's whole life. **Design change:** use the SHA-512 leaf and tree scheme, since
   `hm96-sha256/v1` binds only up to `t ≈ 2^64.5`. Rotate on evidence, with a proof that both roots open to the same
   weights.
-- **Hiding** is fixed by the leaf count, not by the number of proofs. **Design change:** draw the root's key at
+- **Hiding** is fixed by the leaf count, not by the number of proofs. **Design change:** sample the root's key at
   commitment, and never reuse salts.
 - **Zero knowledge** holds per batched, serialized session (§2, §3). Throughput comes from proving in parallel inside
   a session, not from concurrency.
