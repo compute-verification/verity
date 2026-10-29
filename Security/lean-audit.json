@@ -2697,7 +2697,6 @@
   "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": "489269136c34fdbbb4abbd2ee45cd3e3c5a72e8ec2322facf15516da3220425c",
   "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": "050a6a71067b4a587ac6b196844f86d1b35fe2ea863657b2695c575a06c1d95e",
   "Nci.SecurityProofs.ReadBound": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548",
-  "Nci.SecurityProofs.ReferenceTraining": "104a6c9425013ffea4548e58627a31cf0d67358b3da5a64e483d59379ff1566b",
   "Nci.SecurityProofs.ThreadedContainedInfo": "8381b224ed7e6895c5a477180f9e5b38f1557563376852e67628d1e84beb1006",
   "Nci.SecurityProofs.ThreadedContainedInfoFmt": "3ec412beb438ef31a1d608807ca766068f7d9e2d1cfc71c096fff047e308d5ef",
   "Nci.SecurityProofs.ThreadedContainedInfoFmt2": "cc1ccac8fbba5d4e3b45976c2fb5cf5d10484968ed7eb17ab5b8535fe9782d63",
@@ -14666,10 +14665,6 @@
    "Nci.SecurityProofs.ReferenceThreaded": {
     "Real.instLE.le S (instHMul.hMul 2 (instHPow.hPow 10 7))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.ReferenceTraining": {
-    "Real.instLE.le (instHMul.hMul α Γ.cast) (instHMul.hMul 2 (instHPow.hPow 10 7))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul κ (c.D.size c.D.computed).cast) (instHMul.hMul 2 T.M.card.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Nci.SecurityProofs.ThreadedContainedInfo": {
     "∀ (g : Fin c.D.N), Eq (c.D.isInput g) Bool.true → SetLike.instMembership.mem d.θ (M.emb g) → SetLike.instMembership.mem c.θ g": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Fin c.D.N), SetLike.instMembership.mem c.θ g → SetLike.instMembership.mem d.θ (M.emb g) → Eq (BitVec.cast ⋯ (θv (M.emb g))) (θc g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -26602,7 +26597,6 @@
    "definitions": {
     "Nci.Guarantees.LayeredTraining": "4bb7974bc11c8635764c0a32b8f8b7ea042662ca071e1a666d277a36440007ac",
     "Nci.Guarantees.ReferenceThreaded": "1a91b5a7a2c7a4a1128cbf6eb7f8dbdf41dbd81d214ddd34db7c4aecf3506419",
-    "Nci.Guarantees.ReferenceTraining": "7be36a5e95022aed82acbb21ab55fe48250772ccfcd580db274f3b185cec1e3a",
     "Nci.Guarantees.ThreadedOfLayered": "c28c1616164e63ed529d9946b5466e1a4e8757ac998d4236554ae258d303968a"
    },
    "guarantees": [
