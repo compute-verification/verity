@@ -68,8 +68,8 @@ def _silu_fused(gu: torch.Tensor, warps: int | None = None):
 
 
 @cuda
-@pytest.mark.parametrize("m,i,warps", [(1, 8192, None), (5, 8192, 4), (257, 8192, None), (64, 8192, 16), (7, 1536, None),
-                                       (9, 64, None), (4, 8, 1)])
+@pytest.mark.parametrize("m,i,warps", [(1, 8192, None), (5, 8192, 4), (3, 8192, 8), (257, 8192, None), (64, 8192, 16),
+                                       (6, 14336, 8), (7, 1536, None), (9, 64, None), (4, 8, 1)])
 def test_silu_mul_quant_is_silu_and_mul_then_the_quantizer(m, i, warps):
     """Random rows with an edge row of bf16's extremes (and a zero, a tiny and a spiked row), and served-like rows (gate wide,
     up narrow): h is vLLM's, and the codes and scales are `quant_rows`' of vLLM's h (and `quantize_rows`' on the CPU for its
@@ -86,6 +86,16 @@ def test_silu_mul_quant_is_silu_and_mul_then_the_quantizer(m, i, warps):
         cq, cs = E.quantize_rows(want.cpu()[fin])
         assert _same(xq.cpu()[fin], cq) and _same(s.cpu()[fin], cs)
         assert F.ptx_check(kernel)["ok"], F.ptx_check(kernel)
+
+
+def test_a_producer_takes_its_widths_first_plan_whose_floor_m_reaches():
+    """`PRODUCER_WARPS`: a width's first (M floor, num_warps) plan whose floor M reaches, and None (not fused) at a width or
+    architecture with no plan."""
+    pytest.importorskip("triton")
+    from verity_vllm.engine import int8_fused as F
+    assert F.producer_warps("silu", 767, 8192, "sm_90") == 16 and F.producer_warps("silu", 768, 8192, "sm_90") == 8
+    assert F.producer_warps("silu", 0, 8192, "sm_90") == 16 and F.producer_warps("norm", 32768, 2048, "sm_90") == 1
+    assert F.producer_warps("silu", 8192, 14336, "sm_90") is None and F.producer_warps("norm", 8192, 2048, "sm_120") is None
 
 
 @cuda
@@ -356,8 +366,8 @@ def test_the_producers_hand_their_codes_to_the_linears_they_feed():
     aside."""
     pytest.importorskip("vllm")
     from verity_vllm.engine import int8_fused as F
-    if F.producer_warps("norm", 2048) is None or F.producer_warps("silu", 8192) is None:
-        pytest.skip(f"{F.arch()} has no measured producer win at H 2048, I 8192 (`PRODUCER_WARPS`)")
+    if F.producer_warps("norm", 37, 2048) is None or F.producer_warps("silu", 37, 8192) is None:
+        pytest.skip(f"{F.arch()} has no measured producer win at M 37, H 2048, I 8192 (`PRODUCER_WARPS`)")
     r = subprocess.run([sys.executable, "-c", WIRING], check=True, capture_output=True, text=True,
                        env={**os.environ, "VLLM_BATCH_INVARIANT": "1", "VERITY_INT8_FUSED_PRODUCERS": "1"})
     import json
