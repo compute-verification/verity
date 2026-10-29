@@ -9,7 +9,7 @@ Input-gate qualifications (the `cos_sin_cache` table) are recorded here too, so 
 summary of the B1/B0 programs can be produced from this record without them.
 
 `tests/program/test_conformance_record.py` holds the record to the registry, and `tests/program/test_nan_conversion.py`
-holds its NaN entry to the store scans (`data/l8-nan-scan-2026-09-07/`) and the measured conversion words.
+holds its NaN entry to the L8 NaN store scan (the data directory that test names) and the measured conversion words.
 """
 
 from __future__ import annotations
