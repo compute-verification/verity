@@ -110,7 +110,10 @@ closes it into the run's earliest window, the one the run audits, and the gate's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
 form of the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
 of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
-its case, `case.json`, as `composite.py` reads a piece's (inline, about 83 MB on a served window). Only the protocol
+its case, `case.json`, as `composite.py` reads a piece's (inline, about 83 MB on a served window). Of the chain it
+publishes only what `PUBLIC` names, the report's verdicts and ε at δ and the scan's answers, and the leak guard
+(`--public`) moves any other file out of the piece's directory: the endpoint's report and the steps' summaries count
+the window's requests, steps and outputs and the advice's bits, and stay private beside the fetch. Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing.
 

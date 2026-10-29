@@ -44,18 +44,20 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's.
-  DIR also gets the chain's public report, job and leak-guard files and the check's three input files in DIR/period;
-  the record's leak guard (`leak_guard.py`) then reads DIR against the warden run's witness, and the period files it
-  leaves become DIR/`CASE` (`write_case`), the case as `composite.py` reads a piece's: ``{"commitment", "evidence",
-  "params"}``, the commitment and evidence hex and the params ``params.json``'s canonical JSON, all inline, since
-  certifier/v0 reads no blob (about 83 MB on a served window, nearly all of it the params). DIR/period then goes, so
-  the case has one copy; the guard reads the files before they are hex, which it searches only for a binary witness
-  file's pieces. Only the protocol rejects: a step that can't run (no kept run, a rehearsal the gate's check didn't
-  pass, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or SIGTERM
-  from the piece's time limit) is `NotRun`, and the piece then refuses: DIR keeps only its log and gets
-  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier missing. ``--draw K`` is the scan's K drawn units (every
-  unit by default); a CR_K=V goes to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report
-  and the scan's answers under RESEARCH_RUN_DIR/out).
+  DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ, and the scan's answers; never the
+  endpoint's report or a step's summary, whose counts are private) and the check's three input files in DIR/period;
+  the record's leak guard (`leak_guard.py`) then reads DIR against the warden run's witness, DIR declared to hold
+  those files alone (`PIECE_FILES`), and the period files it leaves become DIR/`CASE` (`write_case`), the case as
+  `composite.py` reads a piece's: ``{"commitment", "evidence", "params"}``, the commitment and evidence hex and the
+  params ``params.json``'s canonical JSON, all inline, since certifier/v0 reads no blob (about 83 MB on a served
+  window, nearly all of it the params). DIR/period then goes, so the case has one copy; the guard reads the files
+  before they are hex, which it searches only for a binary witness file's pieces. Only the protocol rejects: a step
+  that can't run (no kept run, a rehearsal the gate's check didn't pass, a build, a tool or the chain failing without
+  a report, an input missing, the leak guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and the
+  piece then refuses: DIR keeps only its log and gets DIR/`REFUSED` naming why, with no answer, which
+  `served_verdicts.py` reads as the certifier missing. ``--draw K`` is the scan's K drawn units (every unit by
+  default); a CR_K=V goes to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report and the
+  scan's answers under RESEARCH_RUN_DIR/out).
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
 """
 from __future__ import annotations
@@ -88,10 +90,25 @@ PRIVATE = Path("private") / "certifier"
 #: the endpoint's records the chain reads (network_e2e `chain.ENDPOINT`)
 ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
 PROTOCOL = "verity/certifier/v0"
+#: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
+#: every key at its level). Each is public as the protocol's output, its draw or its structure: the chain's and each
+#: step's verdict, ε at δ (the draw's law, population and size) and where it runs in the clear, what the path stubs
+#: and how its negatives came out; and the scan's answers, each link-window's answer and the registrations it is
+#: checked against (hiding commitments), the period check's evidence. Everything else stays under the kept run: the
+#: endpoint's report (each Commit window's request, step and output counts and its advice's bits), report.md and the
+#: report's other keys (the certified I/O's counts, the advice's bits as K's term), and the steps' summaries (the
+#: scan's admissions and response lengths, the tie's prompt lengths and releases, the warden's check of its witness).
+PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed", "negatives_refused",
+                                 "steps.*.verdict", "steps.*.eps_at_delta", "steps.*.in_the_clear"),
+          "scan/answers.json": ("format", "delta", "registration", "windows")}
 #: a piece's refusal to run, which `served_verdicts.py` reads as the subprotocol missing
 REFUSED = "refused.txt"
 #: the piece's case, as `composite.py` reads it
 CASE = "case.json"
+#: every file DIR may hold when the leak guard reads it (its ``--public``): the answer, the log `served_verdicts.py`
+#: writes, the period check's three input files and `PUBLIC`'s
+PIECE_FILES = ("answer.json", "piece.log", "period/commitment.bin", "period/evidence.json", "period/params.json",
+               *(f"chain/{rel}" for rel in PUBLIC))
 LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
@@ -343,12 +360,25 @@ def case_of(warden: Path, scan: Path) -> dict:
         raise NotRun(f"the period's rows case: {type(e).__name__}: {e}") from None
 
 
+def public(doc: dict, keys: tuple[str, ...]) -> dict:
+    """``doc`` with only the key paths ``keys`` name (`PUBLIC`'s form)."""
+    out = {}
+    for k, v in doc.items():
+        rest = [r for head, _, r in (p.partition(".") for p in keys) if head in ("*", k)]
+        if "" in rest:
+            out[k] = v
+        elif rest and isinstance(v, dict):
+            out[k] = public(v, tuple(rest))
+    return out
+
+
 def publish(chain_out: Path, d: Path) -> None:
-    for rel in ("report/report.json", "report/report.md", "job.json", "leak-guard.json", "certs.json",
-                "endpoint/report.json", "scan/summary.json", "scan/answers.json", "n2/summary.json", "tie/summary.json"):
+    """DIR/chain: each `PUBLIC` file the chain wrote, less every key `PUBLIC` doesn't name."""
+    for rel, keys in PUBLIC.items():
         if (chain_out / rel).is_file():
             (d / "chain" / rel).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(chain_out / rel, d / "chain" / rel)
+            doc = public(json.loads((chain_out / rel).read_text()), keys)
+            (d / "chain" / rel).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 
 
 def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, Path, int], int],
@@ -397,13 +427,13 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
 
 
 def guard(d: Path, unpacked: Path | None, quarantine: Path) -> int:
-    """The record's leak guard on DIR against the warden run's witness (0 when nothing of it was found)."""
-    if unpacked is None:
-        return 0
+    """The record's leak guard on DIR against the warden run's witness, DIR declared to hold only `PIECE_FILES`: a
+    file of another path, or one holding a piece of the witness, is moved to the quarantine (0 when none was found)."""
     quarantine.mkdir(mode=0o700, parents=True, exist_ok=True)
-    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(d), str(quarantine), "--gates",
-                          str(unpacked), "--report", str(quarantine / "piece-guard.json")],
-                         capture_output=True, text=True)
+    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(d), str(quarantine),
+                          *(["--gates", str(unpacked)] if unpacked is not None else []),
+                          *(x for f in PIECE_FILES for x in ("--public", f)),
+                          "--report", str(quarantine / "piece-guard.json")], capture_output=True, text=True)
     print(f"leak guard (exit {got.returncode}): {got.stdout.strip()[-400:]}", flush=True)
     return got.returncode
 
