@@ -1,6 +1,6 @@
-"""N-EXACT's fold test vectors, recorded for cpu_check.cc.
+"""The lead's Python fold's test vectors, recorded for cpu_check.cc.
 
-Runs N-EXACT's own checks of blc4a with the de-noise (`exact_blc.fold_extreme`, `exact_blc.exact_full` at Llama's K,
+Runs the Python fold's own checks of blc4a with the de-noise (`exact_blc.fold_extreme`, `exact_blc.exact_full` at Llama's K,
 both under `ROT_WEIGHTS` and `LIT_WEIGHTS`, and `exact_sweep.check_epilogue`) and records, as they happen, every call of
 its epilogue models and of `operands`:
 
@@ -8,12 +8,11 @@ its epilogue models and of `operands`:
   bf16 outputs, which ssn's fold (layout.h's `xu_fold`) must reproduce bit for bit from D, 0x4B400000 − ρ_i and minus the
   column term, with A·Bᵀ and stock's outputs on it where the call has them; one more for `fold_extreme`'s mutation
   (D + 2 at an output of 2²² − 1, so A·Bᵀ + 2 is 2²² + 1), with A·Bᵀ + 2 and stock's outputs on it;
-- a layout vector for each `operands` call: N-EXACT's data, coins and private values (A, B, a₁, a_t, u, G, the lane
+- a layout vector for each `operands` call: the Python's data, coins and private values (A, B, a₁, a_t, u, G, the lane
   coins), its scales and stock's bf16 outputs on A·Bᵀ, which ssn's lanes (layout.h's `lane_a`, `lane_b`) must serve
   through the fold bit for bit.
 
---theory is the directory holding exact_blc.py, exact_sweep.py and noise_sweep.py (benchmarks/pouw/theory on N-EXACT's
-branch). Writes index.txt (a line a vector: kind, label, file, weights, expectation on stock), index.json (the checks'
+--theory is the directory holding the Python fold (exact_blc.py, exact_sweep.py and noise_sweep.py). Writes index.txt (a line a vector: kind, label, file, weights, expectation on stock), index.json (the checks'
 own reports) and one .bin a vector: records of (u32 name length, name, dtype char, u32 ndim, u64 dims, little-endian
 data).
 """

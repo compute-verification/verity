@@ -3,7 +3,7 @@
 // Python (verity.ml.commitments' frame-v3-sha512 and hm96-sha512, pouw's call seed and noise blocks); l1_check.cpp
 // prints this header's.
 //
-// A call's seed path (N-HIDE's L1 + (a)), everything SHA-512, call j of forward f in a window with salt and ks:
+// A call's seed path (L1 + (a)), everything SHA-512, call j of forward f in a window with salt and ks:
 //   A_j's leaves   leaf(D_j, r, r, "pouw/a-seg/v1", A_j[1024 r, 1024 r + 1024)), D_j the range-u64 domain over the call's
 //                  leaves under binding SHA-512(salt || u64be(f) || u64be(j)) (the tree's domains take a 64-byte binding)
 //   x              the frame-v3-sha512 root over them (pads to a power of two)
