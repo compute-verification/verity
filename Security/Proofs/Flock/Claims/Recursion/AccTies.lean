@@ -39,7 +39,7 @@ noncomputable section
 
 /-- **A dense statement names no R**: candidate 3's statements leave `stacked` empty without a sparse part
 (`RecScope.candidate3_ok`). -/
-theorem stacked_none {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+theorem stacked_none {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) : r.shape.stacked = none := by
   obtain ⟨r', hr', ha, rfl⟩ := parse_read hst
   rw [hr] at hr'
@@ -67,7 +67,7 @@ theorem fast100_of_read {x : Msg} {r : XR} (hr : readX x = some r) : ∃ sch, fa
 
 /-- **The inner schedule is V\*'s** at a dense statement with a level part (`levelMatch`'s); ResStepsW's
 `schAt_fast100`, here so that this file needs no chain module. -/
-private theorem schAt_fast100A {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+private theorem schAt_fast100A {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
     (hsv : ss[s]? = some (.recOpen lv LANES HH n)) :
@@ -98,7 +98,7 @@ private theorem schAt_fast100A {x : Msg} {st : Claims.Recursion.Stmt} (hst : par
 
 /-- **A level's instances are its schedule level's two reps' queries** (`levelMatch`, at `schAt_fast100A`'s
 schedule). -/
-theorem recOpen_n {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some st)
+theorem recOpen_n {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {sch : Schedule}
     (hsch : fast100 r.shape.m = some sch) {s l LANES HH m : ℕ}
     (hsv : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.recOpen l LANES HH m)) :
@@ -339,7 +339,7 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ} {b : Brings}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg} (hRS : RegSetup b)
-    {x : Msg} {st : Claims.Recursion.Stmt} (hx : (DRL rd wE final w b elem).parse x = some st)
+    {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : (DRL rd wE final w b elem).parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {c : ℕ → Coin} {ws : List Claims.Flock.Wit}
     (hl : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2) {xs : List Msg}
     (hxs : ∀ s' (hs' : s' < ws.length), AccV rd wE final w b elem shape untr cmt s' x c (xs.getD s' []) ws[s']
@@ -411,7 +411,7 @@ collision (`hcol`): where part `s`'s unit `u` holds `acc` at row `p`, its `nm` p
 def AccCommitV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →
@@ -453,7 +453,7 @@ not needed: `held_rows_eq` takes prefixes of one length, `rowPfx_length`.) -/
 def InnerAccTieV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →

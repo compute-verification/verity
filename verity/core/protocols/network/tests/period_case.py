@@ -30,7 +30,7 @@ smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest 
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
 stratified or subset draw at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
-the checker form is a bad scan (`bad_scans`), as is each check's negative of what `NetTiming.Layout.Fits` asks
+the checker form is a bad scan (`bad_scans`), as is each check's negative of what `NetTiming.BoundaryGates.Fits` asks
 (`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold the
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
@@ -503,7 +503,7 @@ def _audit(a, ctx: str) -> Audit:
 def _scan(j, program: str, s: WardenParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
     form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
-    with a row among its parameters (the checker form) refused first. Then what `NetTiming.Layout.Fits` asks: the
+    with a row among its parameters (the checker form) refused first. Then what `NetTiming.BoundaryGates.Fits` asks: the
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
     leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's
@@ -555,22 +555,22 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if not any(a[:3] == ("n", ke, 0) and T * leaves_of(be["ret_type"]) <= a[3]
                for q in _parts(defs[j["root"]]["body"]["ret"], nodes) if (a := _affine(q))):
         raise D.Reject("scan: the root doesn't return every egress leaf, so an egress gate would be one the Program "
-                       "doesn't return (NetTiming.Layout.Fits)")
+                       "doesn't return (NetTiming.BoundaryGates.Fits)")
     if not _own_returns(j)(callees[xe["fn"]]):
         raise D.Reject("scan: the egress template returns a leaf it doesn't compute (a parameter's, passed through), "
-                       "so an egress gate would be an input (NetTiming.Layout.Fits)")
+                       "so an egress gate would be an input (NetTiming.BoundaryGates.Fits)")
     ingress = [xf, *(x for x, _ in later)]
     rows = [_input_arg(x["args"][0], nodes, j) if x["args"] else None for x in ingress]
     if None in rows:
         raise D.Reject("scan: an ingress template's row is not one input node's leaves, so an ingress gate would be no "
-                       "input (NetTiming.Layout.Fits)")
+                       "input (NetTiming.BoundaryGates.Fits)")
     own_args = [*xf["args"][:1], *(a for x, _ in later for a in x["args"][:2]), *xe["args"]]
     if (len(xf["args"]) != 1 + L or any(len(x["args"]) != 2 + L for x, _ in later)
             or any(_input_arg(a, nodes, j) is None for a in own_args)):
         raise D.Reject("scan: a template's row, state or egress argument is not one input node's leaves")
     if any(_input_arg(a, nodes, j) in rows for a in xe["args"]):
         raise D.Reject("scan: an egress template's argument is an ingress row's input node, so an egress gate would "
-                       "depend on the ingress (NetTiming.Layout.Fits)")
+                       "depend on the ingress (NetTiming.BoundaryGates.Fits)")
     r0 = [_member_ref(xf, 1 + i, 0, 0, j) for i in range(L)]
     pks = [r[1] for r in r0 if r is not None]
     if (len(pks) != L or any(r[0] == "p" for r in r0) or len(set(pks)) != L
@@ -1279,7 +1279,7 @@ def _checker_egress_sig(S):
 
 
 #: Stand-ins of the checker form's templates, which take the rows they compare as inputs (its egress row an input gate,
-#: which `NetTiming.Layout.Fits` refuses).
+#: which `NetTiming.BoundaryGates.Fits` refuses).
 CHECKER_INGRESS = CompositeDefinition(
     "NetworkPeriodScanIngress", 0, _STATICS, _checker_ingress_sig,
     lambda B, S, row, sin, prog, sout, view: B.call(BL.XOR, BL.operands(sin[0], sout[0])), register=False)
@@ -1962,7 +1962,7 @@ def bad_scans(p: dict) -> list[dict]:
     (its SHA-512 not `program`), and, each under its own SHA-512, the checker form (its egress row an input), templates
     with other parameters, another number of instances, rows not the schedule's, a lane's `prog<j>` another row of its
     input than its bucket's or another lane's input, an input gate no template's, and each negative of a check of what
-    `NetTiming.Layout.Fits` asks (`scan_negatives`)."""
+    `NetTiming.BoundaryGates.Fits` asks (`scan_negatives`)."""
     s, desc = p["schedule"], p["scan"]
     T, row, widths = s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc)
     L, every = s["lanes"], s["every"]
@@ -2004,7 +2004,7 @@ DEEP = 2 ** 30
 
 
 def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
-    """Rows-form parameters each refused by one of `scanOf`'s checks of what `NetTiming.Layout.Fits` asks and by none
+    """Rows-form parameters each refused by one of `scanOf`'s checks of what `NetTiming.BoundaryGates.Fits` asks and by none
     before it, each one change to `p`'s generator-form scan under its own SHA-512, with a fragment of both refusals:
     `walk`, the egress template calling a composite of `2^90` gates in three nested batches, unread, so the walk to an
     operand is past `FUEL`; `returns`, the root returning an input leaf for the last egress leaf; `computes`, the egress
