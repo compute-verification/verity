@@ -26,6 +26,10 @@ import Proofs.NetworkCertifier.Accepted
 import Proofs.NetworkCertifier.Tap
 import Proofs.NetworkCertifier.RecordRows
 import Proofs.NetworkCertifier.Witnesses
+import Proofs.NetworkCertifier.WitnessToys
+import Proofs.NetworkCertifier.CountWitnesses
+import Proofs.NetworkCertifier.PeriodWitnesses
+import Proofs.NetworkCertifier.Assumptions.SampledCode
 
 /-!
 # Proofs of the network certifier's guarantees
@@ -38,7 +42,8 @@ behind them. `SampledLeak` composes `SampledCharge`'s count with `SampledAuditAc
 PRF-144 proves it (`NetTiming.sampledLeak`), and `SampledLeakReg` moves its count to the registration's values
 (`NetTiming.sampledLeak_registered`);
 `SampledLeakRegPlain` states it at the deployed plain record (`NetTiming.sampledLeak_registered_plain_sha512`). `Sanity` shows every named assumption satisfiable, and `Witnesses` gives each acceptance guarantee its honest and
-nontrivial lemmas. `Code` proves the certifier's program
+nontrivial lemmas; `CountWitnesses` and `PeriodWitnesses` give the counts' and the monitoring period's, at the instances
+`WitnessToys` builds. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
