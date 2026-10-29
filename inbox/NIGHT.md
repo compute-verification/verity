@@ -105,6 +105,17 @@ T1 = forming(N, F) − forced(C) + de-noise(D) + final word(D, P) + uncommitted 
   stock work uncertified, in every class of design (exact, served, padded). Beside the per-word floor it adds nothing at
   k32. Sparse commitments in M0 cost an exact design L/K of stock (proved in Lean), and committing outputs only fails
   for every design. N-SAKU moves to hiding as N-SALT (§4).
+- **Road (d) (N-ALT final, 09:03Z, note 20261029T0903Z-report-np-alt):** no road outside DistinctWrites lowers the matmul
+  part. Two roads move the hashing part, and both put the network certifier (auditor-trusted) on the GPU's port.
+  - **R1:** every word is hashed by the certifier, so the prover needs no hashing premise. Rank 3 overall. Its T2 at
+    400 Gb/s is 97.5× at T 512 and 665× at T 8,192, so it works for decode and small batches only.
+  - **R1b:** the lead, with the salt and coins coming from the certifier after A_j arrives. T1 0.000%, T2 19× / 59× / 60×,
+    rank 4a. It ties for first in N-CARD's space.
+- **New term outside the core T1: egress.** The core spec gives the adversary no outside machine. In the full guarantee,
+  OutsourceWithinEgress bounds outsourced work by egress bits. One coin bit of the lead carries about 350,000 MACs, so
+  that bound is vacuous: 138–268% of stock at a 32-bit-a-token cap. It is the largest term of every design that hashes
+  on the prover. Closing it to 1% needs a coin bit every 1,300–2,500 MACs. That's N-EGRESS's (N-ALT resumed), and a
+  question for Daniel: does T1 include the network term?
 
 ## 4. The workers
 
@@ -130,7 +141,7 @@ T1 = forming(N, F) − forced(C) + de-noise(D) + final word(D, P) + uncommitted 
 | **N-LEAN** | SW-LEAN (07:35Z) | Lean for the lead: SSN's distinctness lemma, the grinding bound, and the path to locking DistinctWrites | proofs, axioms printed |
 | **N-PPL** | SW-PPL (07:35Z) | T3 for every SSN variant (b1, b4, ssn_a, ssn2) and for N-NOISE's and N-COVER's attention variants, at 2K and 8K | measured deltas with intervals |
 | **N-LIT** | SW-OLD (now) | The outside literature, mapped to our ranks: proofs of useful work from matmul, average-case and fine-grained matmul hardness and random self-reduction, proof-of-work hash optimization (ASICBoost) and SHA circuit lower bounds, bilinear lower bounds at small sizes, memory- and energy-based work models | an assumption catalogue with what each would buy here |
-| **N-ALT** | new | Roads outside DistinctWrites: bandwidth- or memory-forced work, capacity proofs (PoUS-style occupancy) combined with PoUW, energy as the price, and any other paradigm you can find | each road's best design and verdict |
+| **N-EGRESS** | N-ALT (09:10Z) | The network term N-ALT found: designs whose coins are dense enough (one bit every 1,300–2,500 MACs, perhaps per output element) that OutsourceWithinEgress bounds outsourcing to ≤ 1% of stock, with their T1, T2 and T3; how R1b's certifier coin release interacts; which of these could become the lead. Outside the core T1, for Daniel's ruling | the best design that closes the network term, priced in full, or the obstruction |
 | **N-SMELL** | SW-SMELL (07:35Z) | Smell-check every N-* note and the ranking as they land | a running smell catalogue |
 
 ## 5. How designs are scored
