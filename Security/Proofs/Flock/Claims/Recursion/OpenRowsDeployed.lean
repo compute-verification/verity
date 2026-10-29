@@ -625,7 +625,7 @@ theorem mem_proofPieces (r : XR) (h : 0 < r.w.parts.length) (k : ℕ) {ℓ : ℕ
 
 /-! ## `CopyOpensR` at `elemR` -/
 
-theorem stmtOf_xIOf {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) {r : XR}
+theorem stmtOf_xIOf {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) {r : XR}
     (hr : readX x = some r) : xIOf x = stmtOf r := by
   obtain ⟨r', hr', ha, rfl⟩ := parse_read hst
   rw [hr] at hr'
