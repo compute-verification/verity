@@ -305,6 +305,33 @@ def test_the_linear_audit_rings_each_lane_once_a_window_and_issues_with_no_lane_
     assert [to for to, _, _ in ring.rings[4:]] == ["top", "infra", "proofs"]
 
 
+def test_a_persons_ask_off_track_rings_its_lane_and_top_every_hour_until_it_holds_and_a_slip_once_per_new_date(tmp_path):
+    slip = {**finding("VLLM-3", "slipped", "vllm"), "fix": "its date moved later 2 times (2026-10-27 -> 2026-10-28 -> 2026-10-30)"}
+    asks = [finding("CI-285", "unstaffed", "ci"), finding("CI-285", "slipped", "ci"), finding("CMP-9", "parked", "compute-accounting"),
+            slip]
+    state, ring, log = {}, Ring(), tmp_path / T.AUDIT_LOG
+    T.linear_audit(state, ring, at(19, 12, 10), lambda: FOUND + asks, lambda: VOLUME, log)
+    rung = {to: body for to, body, _ in ring.rings if "a person's ask" in body or "people's asks" in body}
+    assert rung["ci"] == ("ci: a person's ask is off track on CI-285 (unstaffed 1, slipped 1): `research msg linear audit --lane "
+                          "ci` gives each fix; this rings every hour until it holds (a slip, once per new date).")
+    assert rung["vllm"].startswith("vllm: a person's ask is off track on VLLM-3 (slipped 1)")
+    assert rung["top"] == ("top: people's asks off track: ci 2, compute-accounting 1, vllm 1 (`research msg linear audit --asks` "
+                           "is the ledger)")
+    n = len(ring.rings)
+    T.linear_audit(state, ring, at(19, 12, 50), lambda: FOUND + asks, lambda: VOLUME, log)        # the same hour: nothing new
+    assert len(ring.rings) == n
+    T.linear_audit(state, ring, at(19, 13, 10), lambda: FOUND + asks, lambda: VOLUME, log)        # the next hour: the rest again
+    again = {to: body for to, body, _ in ring.rings[n:]}
+    assert sorted(again) == ["ci", "compute-accounting", "top"] and "(unstaffed 1)" in again["ci"]   # slips rang once
+    n = len(ring.rings)
+    later = [*asks[:3], {**slip, "fix": slip["fix"].replace("2 times", "3 times") + " -> 2026-11-02"}]
+    T.linear_audit(state, ring, at(19, 13, 40), lambda: FOUND + later, lambda: VOLUME, log)       # a new date: its slip again
+    assert [to for to, _, _ in ring.rings[n:]] == ["vllm"]
+    n = len(ring.rings)
+    T.linear_audit(state, ring, at(19, 14, 10), lambda: FOUND, lambda: VOLUME, log)               # held: the 12 h ring is done
+    assert ring.rings[n:] == []
+
+
 def test_a_clean_audit_rings_nobody_and_tops_daily_line_gives_the_change_from_the_line_24_h_earlier(tmp_path):
     state, ring, log = {}, Ring(), tmp_path / T.AUDIT_LOG
     T.linear_audit(state, ring, at(19, 20), lambda: FOUND, lambda: VOLUME, log)
@@ -336,7 +363,7 @@ def test_each_audit_pass_appends_its_line_with_the_volume_null_when_unread_and_a
     first, second = [T.json.loads(x) for x in log.read_text().splitlines()]
     assert first == {"t": "2026-10-19T20:00:00Z", "findings": 5,
                      "kinds": {"orphan": 1, "milestone": 0, "undated": 1, "overdue": 0, "quiet": 2, "stale": 0, "title": 0,
-                               "landed": 0, "lane": 1},
+                               "landed": 0, "lane": 1, "parked": 0, "unstaffed": 0, "slipped": 0, "repeated": 0},
                      "lanes": {"-": {"lane": 1}, "infra": {"orphan": 1, "quiet": 2}, "proofs": {"undated": 1}},
                      "volume": {"posts": 1758, "words": 197955, "over": 997}, "unread": []}
     assert second["findings"] == 1 and second["lanes"] == {"infra": {"orphan": 1}} and second["volume"] is None
