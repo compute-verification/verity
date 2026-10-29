@@ -16,9 +16,7 @@ step's roots at its round's close, so a call's tables hash beside the forward ra
 machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`); nvcc is `pouw_device`'s.
 
 `commit_tables` is `H1Run`'s commit of a call's tables, by `hiding_rows` (the reference) or by these kernels where `path`
-says, and `settle` records the roots of the calls the GPU has finished hashing, in call order. With a prover directory it
-keeps each served call's rows, scales and records there (`pouw_h1_prover.keep_call`), off the serving thread when the
-directory is open on a `pouw_h1_prover.Writer` (serve-openai's ``--h1-prover``).
+says, and `settle` records the roots of the calls the GPU has finished hashing, in call order.
 """
 from __future__ import annotations
 
