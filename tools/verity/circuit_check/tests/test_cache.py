@@ -525,8 +525,8 @@ def test_a_sidecars_binding_and_pin_are_held_as_targets_pys_are(tmp_path):
 
 def test_an_unpinned_target_reruns_when_its_pin_is_added_where_it_goes_or_to_its_shared_file(tmp_path):
     """SynK has no pin: its check read the absence in the pins file a new pin of it goes to (its module's sidecar) and in its
-    file of ``pins/``, so adding it to either reruns SynK alone.  (A new file in `syn` would rerun every target, whose imports
-    listed the directory, so the sidecar is there from the start.)"""
+    file of ``pins/``, so adding it to either reruns SynK alone.  (The sidecar is there from the start: a new one reruns the
+    targets that reached what its module registers, SynK among them.)"""
     root = _tree(tmp_path)
     _bindings(root, '(("_sized_roots",), sized)', families=("SynK_v1",))
     _edit(root, "syn/catalog.py", '(("_model_roots:SynOther_v1",), model), ', "")
