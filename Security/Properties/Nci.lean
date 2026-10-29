@@ -99,7 +99,9 @@ def IsInput (P : Prog) (g : ℕ) : Prop :=
   ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true
 
 /-- Gate `g` is bound at registration: its primitive's binding is `registration` (`RegisteredInput<w>_v1`,
-`Flock.Program.inputId?`), not `run` (`Input<w>_v1`). -/
+`Flock.Program.inputId?`), not `run` (`Input<w>_v1`). This reads the circuit file's public layout, which marks the
+gates whose values are θ, the registered information; which entry of the registration log holds each value is θ's
+provenance (`Properties.Nci.Baseline`). -/
 def IsRegistered (P : Prog) (g : ℕ) : Prop :=
   ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧
     (Flock.Program.inputId? (P.defs[p]!).key).map (·.1) = some Flock.Program.REGISTRATION

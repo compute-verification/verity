@@ -46,7 +46,7 @@ circuit `c`. -/
 theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (ch : Chain c.D) (dd : ℕ)
     (M : Containment c.D d.D) (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ)
     (hP : CompliesRate Γ α d)
-    (hB : Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M))
+    (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M))
     (hA : Assumptions.ActivationsIncompressible c ch Γ (α * Γ) b_w b_a)
     (hPS : Assumptions.PartialSumsIncompressible c ch Γ (α * Γ) b_w b_a) :
     F α (α * Γ) b_w b_a dd * (2 * ch.G) ≤ d.D.size d.D.computed := by
@@ -75,7 +75,7 @@ theorem ContainedMatMul_rate :
     ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (θv : c.D.Transcript) (ch : Chain c.D) (dd : ℕ)
       (M : Containment c.D d.D),
       0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → CompliesRate Γ α d →
-      Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M) →
+      Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
       Assumptions.ActivationsSupport c θv ch (α * Γ + b_w + b_a) b_w b_a →
       Assumptions.PartialSumsSupport c θv ch Γ (α * Γ) b_w b_a →
         F α (α * Γ) b_w b_a dd * (2 * ch.G) ≤ d.D.size d.D.computed := by
@@ -87,7 +87,7 @@ theorem ContainedTraining_rate :
     ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : Declaration) (θv : c.D.Transcript) (ch : Chain c.D) (dd : ℕ)
       (M : Containment c.D d.D),
       0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → CompliesRate Γ α d →
-      Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M) →
+      Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
       Assumptions.ActivationsSupport c θv ch (α * Γ + b_w + b_a) b_w b_a →
       Assumptions.PartialSumsSupport c θv ch Γ (α * Γ) b_w b_a →
       κ * c.D.size c.D.computed ≤ 2 * ch.G →
@@ -203,7 +203,7 @@ no more novel information. -/
 theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     (hα : 0 ≤ α) (hαK : α * Γ ≤ K)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
-    (hB : Assumptions.BaselineRegistered c d M) (u : Fin n) :
+    (hB : Assumptions.ThetaRegistered c d M) (u : Fin n) :
     c.D.size (piece M P u) ≤ Γ ∧ (novelReads c (piece M P u) : ℝ) ≤ K :=
   ⟨(card_piece_le u).trans (hP u).1, ((Nat.cast_le.2 (novelReads_piece hB u)).trans (hP u).2).trans
     ((mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα).trans hαK)⟩
@@ -212,7 +212,7 @@ theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialConta
 theorem withDark_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialContainment c d} {n : ℕ}
     {P : Partition d.D n} (hα : 0 ≤ α) (hαK : α * Γ ≤ K) (hΓ : 1 ≤ Γ)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
-    (hB : Assumptions.BaselineRegistered c d M) (hX : ∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K)
+    (hB : Assumptions.ThetaRegistered c d M) (hX : ∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K)
     (i : Fin (Fintype.card (Fin n ⊕ {v // v ∈ M.dark}))) :
     c.D.size ((withDark M P).gates i) ≤ Γ ∧ (novelReads c ((withDark M P).gates i) : ℝ) ≤ K := by
   obtain ⟨j, rfl⟩ := (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark})).surjective i
@@ -267,7 +267,7 @@ theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Declarati
     (ha : 0 < b_a) (hdd : 0 < dd) (hαK : α * Γ ≤ K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1) (hd : ∀ ℓ, dd ≤ ch.d ℓ)
     (he : ∀ ℓ, ch.e ℓ ≤ emax)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
-    (hB : Assumptions.BaselineRegistered c d M) (hA : Assumptions.ActivationsIncompressible c ch Γ K b_w b_a)
+    (hB : Assumptions.ThetaRegistered c d M) (hA : Assumptions.ActivationsIncompressible c ch Γ K b_w b_a)
     (h₂ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) + b_a / 2 * (outputsOther ch (piece M P u)).card) ≤
       ∑ u, (novelReads d (P.gates u) : ℝ) + B) :
     max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
@@ -314,7 +314,7 @@ theorem ContainedMatMulOn_rate :
     ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : Declaration) (θv : c.D.Transcript) (ch : Chain c.D) (dd emax : ℕ)
       (M : PartialContainment c d),
       0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
-      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.BaselineRegistered c d M →
+      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
       (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
       Assumptions.ActivationsSupport c θv ch (K + b_w + b_a) b_w b_a →
       Assumptions.PartialSumsSupport c θv ch Γ K b_w b_a →
@@ -362,7 +362,7 @@ theorem ContainedTrainingOn_rate :
     ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : Declaration) (θv : c.D.Transcript) (ch : Chain c.D) (dd emax : ℕ)
       (M : PartialContainment c d),
       0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
-      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.BaselineRegistered c d M →
+      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
       (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
       Assumptions.ActivationsSupport c θv ch (K + b_w + b_a) b_w b_a →
       Assumptions.PartialSumsSupport c θv ch Γ K b_w b_a →

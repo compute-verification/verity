@@ -20,7 +20,7 @@ activations of its earliest complete one, none of which the subcircuit completes
 
 Through a partial containment (`ActivationsBoundOn`) the bound holds for the counted multiplications the declaration
 computes, with no term for the dark gates: a partial sum added outside the declaration, or any other value computed
-off the books, enters it as an input, fresh input by `BaselineRegistered`, and does not make an activation whole in a
+off the books, enters it as an input, fresh input by `ThetaRegistered`, and does not make an activation whole in a
 piece. `ActivationsTrainingOn` is the training form, with the counted multiplications off the books as dark gates.
 -/
 
@@ -45,12 +45,12 @@ def ActivationsReads : Prop :=
 complies at `(c, k)` and contains the reference circuit `r` partly, computing the gates `S` of `r` and leaving the rest
 dark (`PartialContainment`), computes at most `(k / c) Λ size(d) / b_a` of `r`'s counted multiplications, with
 `Λ = max(e, c_r · K / (4 dd b_w))` at read cap `K ≥ k`, under `ActivationsIncompressibleAll` on `r` at `K` and
-`BaselineRegistered`. There is no term for the dark gates, so it holds however much of `r`, the partial sums included,
+`ThetaRegistered`. There is no term for the dark gates, so it holds however much of `r`, the partial sums included,
 is computed off the books. -/
 def ActivationsBoundOn : Prop :=
   ∀ (c k : ℕ) (K b_w b_a : ℝ) (r d : Declaration) (T : Threading r) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment r d),
-    0 < c → (k : ℝ) ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.BaselineRegistered r d M →
+    0 < c → (k : ℝ) ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
     (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
     (∀ a, (L.src a).Nonempty →
       dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →
@@ -59,13 +59,13 @@ def ActivationsBoundOn : Prop :=
 
 /-- **Training is slowed, by the activations bound, with dark gates**: when counted multiplications are a fraction `κ`
 of the reference circuit's flops (2 flops each), a declaration that complies at `(c, k)` and contains it partly, with
-its registered information free of the reference circuit's fresh input (`BaselineRegistered`), is larger by a factor of
+its registered information free of the reference circuit's fresh input (`ThetaRegistered`), is larger by a factor of
 at least `κ c b_a / (2 k Λ)`, less what its dark gates absorb:
 `κ b_a size(r) ≤ 2 b_a #dark + 2 (k / c) Λ size(d)`. -/
 def ActivationsTrainingOn : Prop :=
   ∀ (c k : ℕ) (K b_w b_a κ : ℝ) (r d : Declaration) (T : Threading r) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment r d),
-    0 < c → (k : ℝ) ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.BaselineRegistered r d M →
+    0 < c → (k : ℝ) ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
     (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
     (∀ a, (L.src a).Nonempty →
       dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →

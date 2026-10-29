@@ -123,7 +123,7 @@ theorem CoverTrainingChained_rate :
     ∀ (Γ : ℕ) (α : ℝ) (c d : Verity.Declaration) (M : Verity.Containment c.D d.D)
       (B : Nci.Covering.MulBlocks (bitDecl c)) (s D w₀ : ℕ) (cw ca : ℝ),
       0 ≤ α → Nci.CompliesRate Γ α d →
-      Nci.Assumptions.BaselineRegistered c d (Nci.PartialContainment.ofContainment M) →
+      Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →
       Nci.Assumptions.ParameterHardAt (bitDecl c) B s cw → α * Γ < cw * D → 0 < ca →
       (∀ g, c.D.w g ≤ w₀) → w₀ * Γ + α * Γ + c.D.width c.θ ≤ s →
         cw * ca * (Nci.Assumptions.chainedBlocksAt (bitDecl c) B D ca).card ≤

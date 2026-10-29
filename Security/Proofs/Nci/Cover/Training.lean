@@ -48,7 +48,7 @@ counted products, then `α₀ e size(c) ≤ (α² Γ + e α) size(d)`. `CoverTra
 theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.Declaration} (M : Verity.Containment c.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L) {s D w₀ : ℕ}
     (he : 0 ≤ e) (hα : 0 ≤ α) (hC : Nci.CompliesRate Γ α d)
-    (hB : Nci.Assumptions.BaselineRegistered c d (Nci.PartialContainment.ofContainment M)) (hk : α * Γ < b * D)
+    (hB : Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M)) (hk : α * Γ < b * D)
     (hw : ∀ g, c.D.w g ≤ w₀) (hs : w₀ * Γ + α * Γ + c.D.width c.θ ≤ s)
     (hα₀ : α₀ * c.D.size c.D.computed ≤ Mb.P.card)
     (hblk : ∀ R : Finset (Fin c.D.N), (block c R).card ≤ s →
@@ -103,7 +103,7 @@ theorem CoverTraining_rate :
       {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L)
       (A : J → Finset (Fin (Circuit.ofDecl c).N)) (s D w₀ : ℕ),
       0 < b → 0 ≤ α → Nci.CompliesRate Γ α d →
-      Nci.Assumptions.BaselineRegistered c d (Nci.PartialContainment.ofContainment M) →
+      Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →
       Assumptions.UpdateHardness Mb s b → Mb.Upstream A D → α * Γ < b * D →
       (∀ g, c.D.w g ≤ w₀) → w₀ * Γ + α * Γ + c.D.width c.θ ≤ s →
       α₀ * c.D.size c.D.computed ≤ Mb.P.card →

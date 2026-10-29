@@ -130,7 +130,7 @@ inference block per gate, meets every hypothesis of `Nci.Cover.Guarantees.CoverT
 theorem coverTrainingChained_nonvacuous :
     ∃ (c k : ℕ) (r d : Declaration) (M : Containment r.D d.D) (B : Nci.Covering.MulBlocks (bitDecl r))
       (s D w₀ : ℕ) (cw ca : ℝ),
-      Complies c k d ∧ Assumptions.BaselineRegistered r d (PartialContainment.ofContainment M) ∧
+      Complies c k d ∧ Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) ∧
       Assumptions.ParameterHardAt (bitDecl r) B s cw ∧ (k : ℝ) < cw * D ∧ 0 < ca ∧ (∀ g, r.D.w g ≤ w₀) ∧
       w₀ * c + k + r.D.width r.θ ≤ s ∧ cw ≠ ca ∧ (Assumptions.chainedBlocksAt (bitDecl r) B D ca).Nonempty :=
   ⟨1, 2, tcDecl, tcDecl, selfContainment, bBlocks, 3, 5, 1, 1 / 2, 1, complies,

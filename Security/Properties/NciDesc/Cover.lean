@@ -10,7 +10,7 @@ import Properties.NciDesc.Verdict
 `CoverTrained` is `Nci.Cover.Guarantees.CoverTraining`'s conclusion on a verdict, at the gate budget
 `c = gamma` and the fresh-input budget `k = α c`, `α = num / den`, in the shape of `Properties.Nci.Threads`'s
 statements: its premises on the reference training circuit's bit view (`UpdateHardness`, the upstream certificate
-`MulBlocks.Upstream`) and on the registered information (`BaselineRegistered`) are named assumptions, which the check
+`MulBlocks.Upstream`) and on the registered information (`ThetaRegistered`) are named assumptions, which the check
 does not see.
 
 The check of record is `NciCheck.Baseline.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's
@@ -29,7 +29,7 @@ open Flock.Program (Prog)
 
 /-- When the verdict `out` on `j` has `complies` `true`, every declaration `d` the Program lays out with the registered
 information `theta` names, containing a reference training circuit `r` with none of its fresh input registered
-(`BaselineRegistered`), pays the cover theorem's factor at `c = gamma`, `α = num / den` and `k = α c`,
+(`ThetaRegistered`), pays the cover theorem's factor at `c = gamma`, `α = num / den` and `k = α c`,
 `α₀ b c size(r) ≤ (k² + b k) size(d)` (`Nci.Cover.Guarantees.CoverTraining`'s conclusion, under its premises
 on `r`'s bit view). -/
 def CoverTrained (j out : Json) : Prop :=
@@ -43,7 +43,7 @@ def CoverTrained (j out : Json) : Prop :=
       {J L : Type} [DecidableEq J] [DecidableEq L]
       (Mb : Nci.Cover.MulBlocks (Nci.Cover.Circuit.ofDecl r) J L)
       (A : J → Finset (Fin (Nci.Cover.Circuit.ofDecl r).N)) (s D w₀ : ℕ),
-      0 < b → Nci.Assumptions.BaselineRegistered r d (Nci.PartialContainment.ofContainment M) →
+      0 < b → Nci.Assumptions.ThetaRegistered r d (Nci.PartialContainment.ofContainment M) →
       Nci.Cover.Assumptions.UpdateHardness Mb s b → Mb.Upstream A D → k < b * D →
       (∀ g, r.D.w g ≤ w₀) → w₀ * c + k + r.D.width r.θ ≤ s →
       α₀ * r.D.size r.D.computed ≤ Mb.P.card →

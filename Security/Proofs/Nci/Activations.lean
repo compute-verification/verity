@@ -115,7 +115,7 @@ theorem ActivationsReads : Guarantees.ActivationsReads := activations_reads
 theorem ActivationsBoundOn_rate :
     ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (L : T.Links) (dd e : ℕ)
       (M : PartialContainment c d),
-      0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d → Assumptions.BaselineRegistered c d M →
+      0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
       (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
       (∀ a, (L.src a).Nonempty →
         dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →
@@ -147,7 +147,7 @@ theorem ActivationsBoundOn_rate :
 theorem ActivationsTrainingOn_rate :
     ∀ (Γ : ℕ) (α K b_w b_a κ : ℝ) (c d : Declaration) (T : Threading c) (L : T.Links) (dd e : ℕ)
       (M : PartialContainment c d),
-      0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d → Assumptions.BaselineRegistered c d M →
+      0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
       (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
       (∀ a, (L.src a).Nonempty →
         dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →

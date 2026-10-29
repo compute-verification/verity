@@ -20,7 +20,7 @@ def PackedIncompressibleContainedMatMulOn : Prop :=
   ∀ (p c k : ℕ) (K b_w b_a μ : ℝ) (r d : Declaration) (ch : PackedChain r.D p) (T : Threading r) (dd emax : ℕ)
     (M : PartialContainment r d),
     0 < K → 0 < b_w → 0 < b_a → 0 < dd → 0 < c → (k : ℝ) ≤ K → 0 ≤ μ → μ ≤ 1 →
-    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.BaselineRegistered r d M →
+    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.ThetaRegistered r d M →
     (∀ v ∈ M.dark, (novelReads r {v} : ℝ) ≤ K) →
     Assumptions.PackedTrainingIncompressible r ch T c K b_w b_a →
       max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
@@ -37,7 +37,7 @@ def PackedIncompressibleContainedTrainingOn : Prop :=
   ∀ (p c k : ℕ) (K b_w b_a μ κ : ℝ) (r d : Declaration) (ch : PackedChain r.D p) (T : Threading r) (dd emax : ℕ)
     (M : PartialContainment r d),
     0 < K → 0 < b_w → 0 < b_a → 0 < dd → 0 < c → (k : ℝ) ≤ K → 0 ≤ μ → μ ≤ 1 →
-    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.BaselineRegistered r d M →
+    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.ThetaRegistered r d M →
     (∀ v ∈ M.dark, (novelReads r {v} : ℝ) ≤ K) →
     Assumptions.PackedTrainingIncompressible r ch T c K b_w b_a →
     κ * r.D.size r.D.computed ≤ 2 * ch.G →

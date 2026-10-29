@@ -28,27 +28,27 @@ open Verity
 
 /-- **A reference circuit's updated matrix multiplications are throttled**: a declaration `d` that contains `r` and
 complies at `(c, k)`, with its registered information free of the reference circuit's fresh input
-(`BaselineRegistered`), has at least `2 F` gates per product of a chain `ch` that `r` runs, when `r`'s weights,
+(`ThetaRegistered`), has at least `2 F` gates per product of a chain `ch` that `r` runs, when `r`'s weights,
 activations and partial sums are incompressible at `b_w` and `b_a` bits per entry, with `r`'s registered information at
 its committed values `θv`. `dd` is the chain's smallest inner dimension. -/
 def ContainedMatMul : Prop :=
   ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : Declaration) (θv : r.D.Transcript) (ch : Chain r.D) (dd : ℕ)
     (M : Containment r.D d.D),
     0 < c → 0 < k → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → Complies c k d →
-    Assumptions.BaselineRegistered r d (PartialContainment.ofContainment M) →
+    Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
     Assumptions.ActivationsSupport r θv ch (k + b_w + b_a) b_w b_a →
     Assumptions.PartialSumsSupport r θv ch c k b_w b_a →
       F (k / c) k b_w b_a dd * (2 * ch.G) ≤ d.D.size d.D.computed
 
 /-- **Training is slowed, by the partial-sum law**: when the chain's products, at 2 flops each, are a fraction `κ` of
 the reference circuit's size, every declaration that contains it and complies at `(c, k)`, with its registered
-information free of the reference circuit's fresh input (`BaselineRegistered`), is larger by a factor of at least `κ F`.
+information free of the reference circuit's fresh input (`ThetaRegistered`), is larger by a factor of at least `κ F`.
 -/
 def ContainedTraining : Prop :=
   ∀ (c k : ℕ) (b_w b_a κ : ℝ) (r d : Declaration) (θv : r.D.Transcript) (ch : Chain r.D) (dd : ℕ)
     (M : Containment r.D d.D),
     0 < c → 0 < k → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → Complies c k d →
-    Assumptions.BaselineRegistered r d (PartialContainment.ofContainment M) →
+    Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
     Assumptions.ActivationsSupport r θv ch (k + b_w + b_a) b_w b_a →
     Assumptions.PartialSumsSupport r θv ch c k b_w b_a →
     κ * r.D.size r.D.computed ≤ 2 * ch.G →
@@ -60,13 +60,13 @@ def ContainedTraining : Prop :=
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ (k / c) size(d) + (1 − μ) width(dark)` for each `μ ∈ [0, 1]`,
 where `min c₁ c₂` is `F`'s minimum at read cap `K` and smallest inner dimension `dd`, and `Λ = max e_max (K / (4 b_w dd))`
 with `e_max` the largest output dimension. The assumptions are on `r` at read cap `K ≥ k`, beside the
-registered-information premise `BaselineRegistered`, and each dark gate reads at most `K` itself, so that it is an
+registered-information premise `ThetaRegistered`, and each dark gate reads at most `K` itself, so that it is an
 inference block of its own: the dark gates absorb at most their width of the partial sums. -/
 def ContainedMatMulOn : Prop :=
   ∀ (c k : ℕ) (K b_w b_a μ : ℝ) (r d : Declaration) (θv : r.D.Transcript) (ch : Chain r.D) (dd emax : ℕ)
     (M : PartialContainment r d),
     0 < K → 0 < b_w → 0 < b_a → 0 < dd → 0 < c → (k : ℝ) ≤ K → 0 ≤ μ → μ ≤ 1 →
-    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.BaselineRegistered r d M →
+    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.ThetaRegistered r d M →
     (∀ v ∈ M.dark, (novelReads r {v} : ℝ) ≤ K) →
     Assumptions.ActivationsSupport r θv ch (K + b_w + b_a) b_w b_a →
     Assumptions.PartialSumsSupport r θv ch c K b_w b_a →
@@ -83,7 +83,7 @@ def ContainedTrainingOn : Prop :=
   ∀ (c k : ℕ) (K b_w b_a μ κ : ℝ) (r d : Declaration) (θv : r.D.Transcript) (ch : Chain r.D) (dd emax : ℕ)
     (M : PartialContainment r d),
     0 < K → 0 < b_w → 0 < b_a → 0 < dd → 0 < c → (k : ℝ) ≤ K → 0 ≤ μ → μ ≤ 1 →
-    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.BaselineRegistered r d M →
+    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.ThetaRegistered r d M →
     (∀ v ∈ M.dark, (novelReads r {v} : ℝ) ≤ K) →
     Assumptions.ActivationsSupport r θv ch (K + b_w + b_a) b_w b_a →
     Assumptions.PartialSumsSupport r θv ch c K b_w b_a →

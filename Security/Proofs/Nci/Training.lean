@@ -165,7 +165,7 @@ theorem IncompressibleContainedTraining_rate :
     ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd : ℕ)
       (M : Containment c.D d.D),
       0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → CompliesRate Γ α d →
-      Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M) →
+      Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
       Assumptions.TrainingIncompressible c ch T Γ (α * Γ) b_w b_a →
       κ * c.D.size c.D.computed ≤ 2 * ch.G →
         κ * F α (α * Γ) b_w b_a dd * c.D.size c.D.computed ≤ d.D.size d.D.computed := by
@@ -185,7 +185,7 @@ theorem IncompressibleContainedMatMulOn_rate :
     ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
       (M : PartialContainment c d),
       0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
-      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.BaselineRegistered c d M →
+      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
       (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
       Assumptions.TrainingIncompressible c ch T Γ K b_w b_a →
         max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
@@ -221,7 +221,7 @@ theorem IncompressibleContainedTrainingOn_rate :
     ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
       (M : PartialContainment c d),
       0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
-      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.BaselineRegistered c d M →
+      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
       (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
       Assumptions.TrainingIncompressible c ch T Γ K b_w b_a →
       κ * c.D.size c.D.computed ≤ 2 * ch.G →

@@ -28,7 +28,7 @@ def ThreadedOfLayered : Prop :=
 def LayeredTraining : Prop :=
   ∀ (c k : ℕ) (b_w b_a κ : ℝ) (r dcl : Declaration) (T : Threading r) (d e eLk b E : ℕ) (M : Containment r.D dcl.D),
     Layered T d e eLk b → 0 < c → 0 < b_w → 0 < b_a → E < d → Complies c k dcl →
-    Assumptions.BaselineRegistered r dcl (PartialContainment.ofContainment M) →
+    Assumptions.ThetaRegistered r dcl (PartialContainment.ofContainment M) →
     (k : ℝ) < ((E + 1) * b : ℕ) → Assumptions.WeightsIncompressible r T c k b_w b_a →
     κ * r.D.size r.D.computed ≤ 2 * T.M.card →
       κ * b_a * r.D.size r.D.computed ≤
@@ -46,7 +46,7 @@ whose inference blocks read at most `k ≤ 2·10⁷` bits, with `ReferenceThread
 def ReferenceTraining : Prop :=
   ∀ (c k : ℕ) (b_w b_a κ : ℝ) (r dcl : Declaration) (T : Threading r) (M : Containment r.D dcl.D),
     Assumptions.ReferenceLayered r T → 0 < c → 0 < b_w → 0 < b_a → Complies c k dcl →
-    Assumptions.BaselineRegistered r dcl (PartialContainment.ofContainment M) →
+    Assumptions.ThetaRegistered r dcl (PartialContainment.ofContainment M) →
     (k : ℝ) ≤ 2 * 10 ^ 7 → Assumptions.WeightsIncompressible r T c k b_w b_a →
     κ * r.D.size r.D.computed ≤ 2 * T.M.card →
       κ * b_a * r.D.size r.D.computed ≤ 2 * (k / c : ℝ) * T.bound k b_w 10 2328 * dcl.D.size dcl.D.computed

@@ -99,7 +99,7 @@ theorem CoverTrainingAligned_rate :
       {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L)
       (Aw : J → Finset (Fin c.D.N)) (s D w₀ f : ℕ),
       0 < b → 0 ≤ α → Nci.CompliesRate Γ α d →
-      Nci.Assumptions.BaselineRegistered c d (Nci.PartialContainment.ofContainment M) →
+      Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →
       Assumptions.UpdateHardness Mb s b → Mb.Upstream (fun j => wordBits c (Aw j)) D → α * Γ < b * D →
       (∀ j ∈ Mb.uses, ∀ a ∈ Aw j, f ≤ c.D.w a) →
       (∀ g, c.D.w g ≤ w₀) → w₀ * Γ + α * Γ + c.D.width c.θ ≤ s →

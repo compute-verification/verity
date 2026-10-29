@@ -16,9 +16,9 @@ The statements here join the two, so that the check's verdict carries the bound:
 
 * `Throttles`: `ThreadedThrottled`'s conclusion, for every `r` that `d` contains, `(dd, e)`-threaded at read cap `k`
   with its weights incompressible (`WeightsIncompressible`), with no fresh input of `r` in the registered information
-  `theta` names (`BaselineRegistered`), which the check does not see.
+  `theta` names (`ThetaRegistered`), which the check does not see.
 * `ThrottlesDark`: `ThreadedThrottledDark`'s, for every `r` that `d` contains partly (`PartialContainment`), with no
-  dark value or fresh input of `r` in the registered information `theta` names (`BaselineRegistered`), which the check
+  dark value or fresh input of `r` in the registered information `theta` names (`ThetaRegistered`), which the check
   does not see.
 * `ThrottlesSlots`, `ThrottlesDarkSlots`: the same with the weights charged per parameter slot
   (`WeightsIncompressibleSlots`).
@@ -38,7 +38,7 @@ open Flock.Program (Prog)
 /-- When the verdict `out` on `j` has `complies` `true`, every declaration `d` the Program lays out with the registered
 information `theta` names has at least `c b_a / (k Λ)` gates per counted multiplication of each reference circuit `r` it
 contains that is `(dd, e)`-threaded with incompressible weights, with no fresh input of `r` in `d`'s registered
-information (`BaselineRegistered`), `Λ` being Theorem 1's bound at read cap `k`, at `c = gamma`, `α = num / den` and
+information (`ThetaRegistered`), `Λ` being Theorem 1's bound at read cap `k`, at `c = gamma`, `α = num / den` and
 `k = α c` (`Nci.Guarantees.ThreadedThrottled`'s conclusion). -/
 def Throttled (j out : Json) : Prop :=
   ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
@@ -50,13 +50,13 @@ def Throttled (j out : Json) : Prop :=
     ∀ (b_w b_a : ℝ) (r : Verity.Declaration) (T : Nci.Threading r) (dd e : ℕ)
       (M : Verity.Containment r.D d.D),
       0 < b_w → 0 < b_a → 0 < dd →
-      Nci.Assumptions.BaselineRegistered r d (Nci.PartialContainment.ofContainment M) →
+      Nci.Assumptions.ThetaRegistered r d (Nci.PartialContainment.ofContainment M) →
       T.Threaded c k dd e → Nci.Assumptions.WeightsIncompressible r T c k b_w b_a →
         b_a * T.M.card ≤ α * T.bound k b_w dd e * d.D.size d.D.computed
 
 /-- **A verdict of compliance throttles every threaded reference circuit the declaration contains, if its weights are
 incompressible and none of its fresh input registered** (the named assumptions `WeightsIncompressible` and
-`BaselineRegistered`). On every instance with a verdict, the verdict is `Throttled`: the bound holds for each reference
+`ThetaRegistered`). On every instance with a verdict, the verdict is `Throttled`: the bound holds for each reference
 circuit `r` the declaration contains that is `(dd, e)`-threaded at read cap `k`, has incompressible weights and has no
 fresh input in the registered information `theta` names, and says nothing of any other. -/
 def Throttles : Prop :=
@@ -64,7 +64,7 @@ def Throttles : Prop :=
 
 /-- When the verdict `out` on `j` has `complies` `true`, every declaration `d` the Program lays out with the registered
 information `theta` names, containing a `(dd, e)`-threaded reference circuit `r` with incompressible weights partly,
-with no fresh input of `r` in `d`'s registered information (`BaselineRegistered`), has `r`'s counted multiplications
+with no fresh input of `r` in `d`'s registered information (`ThetaRegistered`), has `r`'s counted multiplications
 at most its dark gates plus `αΛ size(d) / b_a`, at `c = gamma`, `α = num / den` and `k = α c`
 (`Nci.Guarantees.ThreadedThrottledDark`'s conclusion). -/
 def ThrottledDark (j out : Json) : Prop :=
@@ -76,13 +76,13 @@ def ThrottledDark (j out : Json) : Prop :=
     let k : ℝ := α * c
     ∀ (b_w b_a : ℝ) (r : Verity.Declaration) (T : Nci.Threading r) (dd e : ℕ)
       (M : Nci.PartialContainment r d),
-      0 < b_w → 0 < b_a → 0 < dd → Nci.Assumptions.BaselineRegistered r d M → T.Threaded c k dd e →
+      0 < b_w → 0 < b_a → 0 < dd → Nci.Assumptions.ThetaRegistered r d M → T.Threaded c k dd e →
       Nci.Assumptions.WeightsIncompressible r T c k b_w b_a →
         (T.M.card : ℝ) ≤ M.dark.card + α * T.bound k b_w dd e * d.D.size d.D.computed / b_a
 
 /-- **A verdict of compliance puts counted multiplications off the books in dark gates**, for every threaded reference
 circuit the declaration contains partly, if its weights are incompressible and none of its fresh input registered
-(the named assumptions `WeightsIncompressible` and `BaselineRegistered`). On every instance with a verdict, the verdict
+(the named assumptions `WeightsIncompressible` and `ThetaRegistered`). On every instance with a verdict, the verdict
 is `ThrottledDark`: the bound holds for each reference circuit `r` the declaration contains partly that is
 `(dd, e)`-threaded at read cap `k`, has incompressible weights and has no dark value or fresh input in the registered
 information `theta` names, and says nothing of any other. -/
@@ -101,13 +101,13 @@ def ThrottledSlots (j out : Json) : Prop :=
     ∀ (b_w b_a : ℝ) (r : Verity.Declaration) (T : Nci.Threading r) (σ : T.Slots) (dd e : ℕ)
       (M : Verity.Containment r.D d.D),
       0 < b_w → 0 < b_a → 0 < dd →
-      Nci.Assumptions.BaselineRegistered r d (Nci.PartialContainment.ofContainment M) →
+      Nci.Assumptions.ThetaRegistered r d (Nci.PartialContainment.ofContainment M) →
       T.Threaded c k dd e → Nci.Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a →
         b_a * T.M.card ≤ α * T.bound k b_w dd e * d.D.size d.D.computed
 
 /-- **`Throttles` per parameter slot**: a verdict of compliance throttles every threaded reference circuit the
 declaration contains, if its weights are incompressible per parameter slot of a slot map `σ` and none of its fresh input
-registered (the named assumptions `WeightsIncompressibleSlots` and `BaselineRegistered`). On every instance with a
+registered (the named assumptions `WeightsIncompressibleSlots` and `ThetaRegistered`). On every instance with a
 verdict, the verdict is `ThrottledSlots`. -/
 def ThrottlesSlots : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → ThrottledSlots j out
@@ -123,13 +123,13 @@ def ThrottledDarkSlots (j out : Json) : Prop :=
     let k : ℝ := α * c
     ∀ (b_w b_a : ℝ) (r : Verity.Declaration) (T : Nci.Threading r) (σ : T.Slots) (dd e : ℕ)
       (M : Nci.PartialContainment r d),
-      0 < b_w → 0 < b_a → 0 < dd → Nci.Assumptions.BaselineRegistered r d M → T.Threaded c k dd e →
+      0 < b_w → 0 < b_a → 0 < dd → Nci.Assumptions.ThetaRegistered r d M → T.Threaded c k dd e →
       Nci.Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a →
         (T.M.card : ℝ) ≤ M.dark.card + α * T.bound k b_w dd e * d.D.size d.D.computed / b_a
 
 /-- **`ThrottlesDark` per parameter slot**: for every threaded reference circuit the declaration contains partly, if
 its weights are incompressible per parameter slot of a slot map `σ` and none of its fresh input registered (the
-named assumptions `WeightsIncompressibleSlots` and `BaselineRegistered`). On every instance with a verdict, the verdict
+named assumptions `WeightsIncompressibleSlots` and `ThetaRegistered`). On every instance with a verdict, the verdict
 is `ThrottledDarkSlots`. -/
 def ThrottlesDarkSlots : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → ThrottledDarkSlots j out

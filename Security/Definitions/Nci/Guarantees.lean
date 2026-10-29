@@ -17,12 +17,12 @@ open Verity
 open scoped ENNReal
 
 /-- **The read bound**: a declaration that contains the reference circuit `r` (`M`) and complies at `(c, k)`, with its
-registered information free of the reference circuit's fresh input (`BaselineRegistered`), has at least `Reads_c(r) / α`
+registered information free of the reference circuit's fresh input (`ThetaRegistered`), has at least `Reads_c(r) / α`
 gates, at the rate `α = k / c`. Lower bounds on the fresh input a computation reads become lower bounds on size when the
 declared circuit computes `r` the way `r` does. -/
 def ReadBound : Prop :=
   ∀ (c k : ℕ) (r d : Declaration) (M : Containment r.D d.D), Complies c k d →
-    Assumptions.BaselineRegistered r d (PartialContainment.ofContainment M) →
+    Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
     (Reads c r : ℝ) ≤ (k / c : ℝ) * d.D.size d.D.computed
 
 /-- **Inference complies as declared**: a Boolean declaration divided into sessions of exactly `c` gates, padding

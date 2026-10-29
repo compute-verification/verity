@@ -32,7 +32,7 @@ Without the cap it fails for honest training: an inference block that runs a tra
 first MLP at many positions reads the embeddings and attention weights once, and then computes the MLP's inputs at every
 position itself.
 
-Every bound through a containment, total or partial (`PartialContainment`), also rests on `BaselineRegistered`
+Every bound through a containment, total or partial (`PartialContainment`), also rests on `ThetaRegistered`
 (`Definitions/Nci/Assumptions/Baseline.lean`), a premise about what the protocol lets the registered
 information `θ` hold rather than about any circuit.
 -/
