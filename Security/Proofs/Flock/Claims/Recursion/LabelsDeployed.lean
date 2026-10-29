@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.QSort
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Properties.InferenceOnly.ReadsExact
+import Proofs.Properties.Nci.ReadsExact
 
 set_option Elab.async false
 

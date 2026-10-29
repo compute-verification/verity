@@ -27,8 +27,8 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
   verifier;
 - `RemoteChallenger` (`verity/core/protocols/sampled_proofs/remote.py`), the client of a challenger on another host;
 - `RemoteCertifier` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;
-- the overhead bound's remote regime, `InferenceOnly.Guarantees.DampenerRemote` (the inference-only policy's) and
-  `benchmarks/rho`'s `regime.remote`: a bound over this protocol (see the guarantee below), not a part of it;
+- the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
+  `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol (see the guarantee below), not a part of it;
 - "run remotely": a job run on a cluster node (`research run --on`), which has nothing to do with any protocol.
 
 ## Parties
@@ -58,7 +58,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 | Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the declared circuit outside the proof blocks the draw misses | `SampledProofs.OneStage.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
 | PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the declared work's | `PouwCheck.protocol` (`verity/core/protocols/pouw/lean/check`) | `verity/pouw/v1` |
 
-**Coming, not there yet:** the inference-only policy (`InferenceOnly`, its Lean check still named `NciCheck`) is to join as a third
+**Coming, not there yet:** the inference-only policy (its Lean is still named `Nci`, `NciCheck`) is to join as a third
 subprotocol. Under it, the declared circuit divides into inference blocks of bounded size, each reading a bounded amount
 of fresh input (input that isn't registered information). Its check reads only the declared circuit and the registered
 information, so it needs no hardware at the site. On `main`, `Core.Remote.components` holds only the two rows above.
@@ -122,8 +122,8 @@ PoUW `--zk`), and a chain can be "none" while each piece is proved.
 | PoUW's accept rule, and its accepted prefix tied to the period credit | `Properties.Pouw.Check.AcceptMeans`, and `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (`Security/Properties/Pouw/Period.lean`; proofs `Properties.Pouw.Check.acceptMeans`, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` and `checkedCreditPeriod`, all in `Security/Properties/lean-audit.json`) | **proved**, under the PoUW assumptions below | — |
 | PoUW's credit over a monitoring period | `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` | **proved** | — |
 | PoUW's proof layer | `Accounting.Guarantees.TS.SessionSoundAt`: proved, but it needs `AcceptedLive`, which no served path meets yet | **open** as a chain | PoUW `--zk`: broken at the proof layer |
-| The overhead over remote, per period | `InferenceOnly.Guarantees.DampenerRemote` (`Security/Definitions/InferenceOnly/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `InferenceOnly.Guarantees.DampenerRemotePeriod` (`RemotePeriod.lean`): only `DampenerRemotePeriodStated` is in the lock | **open** | — |
+| The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
+| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`RemotePeriod.lean`): only `DampenerRemotePeriodStated` is in the lock | **open** | — |
 | The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
 
 ## Assumptions
@@ -179,17 +179,17 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
 
 The overhead, `DampenerRemote`:
 
-- In `Security/Definitions/InferenceOnly/Assumptions/Remote.lean`, three:
-  - `InferenceOnly.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p. What backs p is
+- In `Security/Definitions/Nci/Assumptions/Remote.lean`, three:
+  - `Nci.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p. What backs p is
     the time credit `CircuitCredit`, which reads the data sheet; no PoUW guarantee instantiates it yet.
-  - `InferenceOnly.Assumptions.SampledDetection`: sampled proofs catch each faulty proof block with probability at least q,
+  - `Nci.Assumptions.SampledDetection`: sampled proofs catch each faulty proof block with probability at least q,
     whatever came before.
-  - `InferenceOnly.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
-- `InferenceOnly.Assumptions.BaselineRegistered` (`Security/Definitions/InferenceOnly/Assumptions/Baseline.lean`): the data the
+  - `Nci.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
+- `Nci.Assumptions.BaselineRegistered` (`Security/Definitions/Nci/Assumptions/Baseline.lean`): the data the
   registration names was public, not computed off the books before.
-- `InferenceOnly.Assumptions.WeightsIncompressible` (`Security/Definitions/InferenceOnly/Assumptions/Threads.lean`): no small subcircuit
+- `Nci.Assumptions.WeightsIncompressible` (`Security/Definitions/Nci/Assumptions/Threads.lean`): no small subcircuit
   rebuilds the weights it uses from fewer bits than their width.
-- `InferenceOnly.Complies` (`Security/Definitions/InferenceOnly.lean`): the declaration meets the inference-only policy.
+- `Nci.Complies` (`Security/Definitions/Nci.lean`): the declaration meets the inference-only policy.
 
 ## Results per monitoring period
 
