@@ -9,7 +9,7 @@ docstring gives: the declaration's circuit is the canonical layout of a descript
 gate `g` of width `Value<w>` bits, an input gate when its primitive is an input (`program.is_input`, with no operands),
 reading the gates its operands name; θ is a list of ids of input gates bound at registration (`program.is_registered`;
 one bound per run is refused, `theta-not-registered`); the division is one owner per gate, `"input"` or an IU index.
-A primitive is taken as the descriptor declares it, as C-Flock's decoder takes it, so no registry is needed.
+A primitive is taken as the descriptor declares it, as Flock's decoder takes it, so no registry is needed.
 
     check_desc(instance) -> the same, for `NciCheck.Desc`'s instance: θ and the owners per root node
 
@@ -31,7 +31,7 @@ import json
 from fractions import Fraction
 
 from verity.ml.circuits import codec
-from verity.ml.circuits.defs import PrimitiveDefinition, Registry
+from verity.ml.circuits.defs import PrimitiveDefinition, DefinitionTable
 from verity.ml.circuits.program import input_id, is_input, is_registered
 from verity.ml.circuits.types import type_from_json
 
@@ -52,9 +52,9 @@ def _unevaluated(*_a):
     raise NotImplementedError("the NCI check evaluates no gate")
 
 
-def declared(desc: dict) -> Registry:
+def declared(desc: dict) -> DefinitionTable:
     """A registry of the descriptor's primitives as it declares them (inputs aside, which the decoder makes itself)."""
-    reg = Registry()
+    reg = DefinitionTable()
     for fid, d in desc["definitions"].items():
         if d.get("form") == "primitive" and input_id(fid) is None:
             name, _, version = fid.rpartition("_v")

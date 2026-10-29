@@ -89,7 +89,7 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
         (out / case).mkdir(parents=True, exist_ok=True)
         for f in VERIFIER_FILES:
             shutil.copyfile(stmt / f, out / case / f)
-    # C-Flock's compact line (`verity_flock.circuit.public_file`), or the spaced one an earlier run's releases were staged with
+    # Flock's compact line (`verity_flock.circuit.public_file`), or the spaced one an earlier run's releases were staged with
     dump = next((d for d in (lambda h: FC.public_file(h, b""), lambda h: json.dumps(h, sort_keys=True).encode() + b"\n")
                  if d(ph) == pub[:pnl]), None)
     if dump is None:
