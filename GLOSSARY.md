@@ -197,8 +197,8 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | ε_gap, and its `gap.*` routes in `benchmarks/rho` (`gap.floor`, `gap.clock`) until renamed | ε_undecl (`undecl.gpu`, `undecl.clock`) |
 | ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | the free compute at that GPU, ε_undecl + ε_skip; the exchanged bits are fresh input (k_S's r_in and r_side), reported beside it in bits |
 | 𝒜_phys, "physical class", "the physical model's class"; "envelope" for 𝒜_p, "subprotocol application" for p; 𝒜′, "restricted class", "monitored class", "training class", "faithfulness" for 𝒜′; "class" for a set of computations; "initial information" for what both sides start from; the Lean's `Accounting.Overhead.physClass`, `envelope`, `restricted` and `Class` and `benchmarks/rho`'s, until renamed | the feasible set 𝓕; protocol p's admissible set 𝒜_p; the admissible set 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p; set; the initial state a, which Λ bounds |
-| "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `Accounting.Overhead.serverTime` (to count each server's GPUs) and `threshold`, until renamed | GPU-hours; the training cost T_𝒢(η; S) |
-| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until renamed | server block; the overhead lower bound's sum over server blocks |
+| "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `Accounting.Overhead.serverTime` (to count each server's GPUs) and `threshold`, until they are renamed | GPU-hours; the training cost T_𝒢(η; S) |
+| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the overhead lower bound's sum over server blocks |
 | "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; the network certifier's `blocks.Server`, `Blocks.window` and `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
 | "coverage", "materialization" and "work requirement" for what every successful training run must compute; η_cov's subscript | necessary subcomputation (the covering bounds and the inventory's coverage keep their names) |
 | "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", q, q_T(c, k), and `benchmarks/rho`'s `Cap`, until renamed | the overhead lower bound; the server-block yield q_S, and the inference-block yield q(c, k) |
@@ -233,7 +233,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | D_b^τ for the PRF distinguisher | 𝒟_b^τ |
 
 The `veritor.*` gate families of `verity/ml/circuits/targets/target.py` (`veritor.tc-ampere-bf16@1`, `veritor.tc-bf16.*@1`,
-`veritor.tensor-core.*@2`) keep their spelling, which the `*_FAMILY_DIGEST` pins, fixtures and recorded runs bake in. A new
+`veritor.tensor-core.*@2`) keep the spelling that the `*_FAMILY_DIGEST` pins, fixtures and recorded runs bake in. A new
 family takes a fresh id, never `veritor.*` (`verity/ml/circuits/tests/test_targets_frozen_families.py`).
 
 ## The ACCEL model and Dither
@@ -262,7 +262,7 @@ Some words keep a different, narrower sense:
 
 - A protocol's **ε_skip**, in Dither's `PROTOCOL.md` and the Credit statement, is that protocol's own skipped share of
   what it credits, the Notation's ε_W; the fleet's ε_skip is ε_W(1 − ε_undecl) plus the wrong certificates.
-- `verity.ml.circuits`'s `Circuit` is a Program's canonical gate layout, a `GateSelection` a set of its gates, and its query `Family` an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object (`verity_sp1.proofs.typed_obligation.Subcircuit`) are its shared gate bodies, and a sampled-proofs obligation's JSON `subcircuit` key holds its gate selection; both serialized names stay. Its gates are word-level, each outputting one `Value<w>` of w bits, as are the Lean model's in `Security/Definitions/Core/` (`Verity.Circuit`), whose Boolean profile is width 1.
+- `verity.ml.circuits`'s `Circuit` is a Program's canonical gate layout, a `GateSelection` a set of its gates, and its query `Family` an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object (`verity_sp1.proofs.typed_obligation.Subcircuit`) are its shared gate bodies, and a sampled-proofs obligation's JSON `subcircuit` key holds its gate selection; both serialized names stay. Its gates, like the Lean model's in `Security/Definitions/Core/` (`Verity.Circuit`), are word-level, each a `Value<w>` of w bits; the Boolean profile is width 1.
 - A **template instance** (the queries `Q_template_instance` and `Q_template_instances`) is one occurrence of a subcircuit template in a program, and in a claim id `property/instance`, such as `cr/sha-512`, the instance is the primitive an assumption is about; neither is an input.
 - A **universal unit** (`verity.ml.private_circuits.universal.UniversalUnit`) is a public Boolean Definition, one per size class, that
   runs any **private circuit** of the class, whose description (its gates and wiring) is given as a value. Circuit hiding is
