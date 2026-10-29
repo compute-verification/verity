@@ -461,6 +461,7 @@
   "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "1b82a49aa4304690a55b410ba0f355427a923988bc8c20a52915a714de747bcf",
   "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f",
   "Properties.Pouw.Served.SecurityProofs.servedWork": "0a5a8587306039ac56bd80bb22e51b54fd93b73bcbe024711dfededd8df676dd",
+  "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "7d4c471713d37a6d31db1e6c5edf681d9307b72177d18ecd4e657b9726c9f0cb",
   "Properties.Pouw.Strata.strataTile": "07c9b7e8a5f4540b0dffa844b4267783364faf2588a265c6864a012a27771566",
   "Properties.Pouw.Window.bucketCost": "d8d24f0d8121d7c9d0c53aaa3197391b2491522ee3c3498598ba7f64330b6be4",
   "Properties.Pouw.Window.bucketCost3": "d576553bc5479500276cb0a46dc9f2c1e7b7df255d7222456baa0fc54834001a",
@@ -523,8 +524,7 @@
   "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
   "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
   "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
-  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
-  "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "7d4c471713d37a6d31db1e6c5edf681d9307b72177d18ecd4e657b9726c9f0cb"
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
  },
  "layers": {
   "Properties.Pouw": {
@@ -4043,7 +4043,9 @@
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.PlanMatches W (p x).toExecution (ℓ x) (plan x w j) 32768 (bind x w j)": "Accounting.Requirement.PlanMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.OneBlockEach (ℓ x) (grp x) (Finset.instSDiff.sdiff (Accounting.Requirement.reads W (p x).toExecution (bind x w j)) (Accounting.Requirement.creditedReads W (p x).toExecution (ℓ x) (bind x w j)))": "Accounting.Requirement.OneBlockEach taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Set.InjOn (addr x) (Finset.instSetLike.coe (plan x w j))": "Set.InjOn taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.RateSketch.LifetimeCapped (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) joined L": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (Properties.RemoteAudit.sessionLayout blocks dflt appended sent (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.LiveSalt.epochRootBinding": {
     "Eq w.size 64": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -11565,9 +11567,9 @@
    ]
   },
   "Properties.Accounting.DeclaredCircuit": {
-   "digest": "977f9016c49fb0fc8997ae6a3d5b7db0e3807207a95e51d25c82b99b2a9a76b3",
+   "digest": "5a7ef1905ed2645dd4887ced6f50e7edf9d1abaf587532f8ff421c0f5155d536",
    "definitions": {
-    "Properties.DeclaredCircuit.ScheduledRequirement": "5154eb1080bff4b59306fcdc4c24fec38a718b041aabba484eb12631941be73f"
+    "Properties.DeclaredCircuit.ScheduledRequirement": "163b66a515b3bb7bcb842e6db3e004336935dd9bed80295efd3336095286856c"
    },
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },
@@ -13686,9 +13688,8 @@
    ]
   },
   "RemoteAudit.Schedule": {
-   "digest": "9fe8fa44ab3dfb6ac76d5987a66fad7b1dacc45b0334edd83883ae6ae22bb421",
+   "digest": "c48c341c59b2324131670cc35e2be99ac22af0e36d5fd94dfd0c543e792e3dd4",
    "definitions": {
-    "RemoteAudit.Schedule.Block": "1578971260af18cb33cc15d9fcdb29364f80d5df5df3d0174c27266afb640bfe",
     "RemoteAudit.Schedule.Chunk": "a200504cd231847b5bfcd280188530f3568186228e0b05f84eed01739f63ef7d",
     "RemoteAudit.Schedule.STEP_LIMIT": "43c3940b0e86acea846c9da637f9a815b206b375925f44f64c5562efc92d2792",
     "RemoteAudit.Schedule.Schedule": "6eb9fc396417b23596272ec96a0aea07c70d1240fb0456b7b05baa6f436b5a4b",
