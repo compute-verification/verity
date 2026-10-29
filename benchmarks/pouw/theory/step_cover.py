@@ -68,7 +68,9 @@ LOP3 a row a call, at α = 32/28. ssn_1l-tag's step counts are unchanged at ever
 distinctness on every data case (with mutations that must fail), the softmax chain's classes on a noisy row, the
 magic-number conversion's exact range, the degree-3 exp2's error, that dithered rounds vary across salts where plain
 ones don't and noise-keyed ones as often as independent u's would (`sim_dither`), that tags remove a coin-reading
-prover's row copies, and the small-m instruction choice. Output: a JSON
+prover's row copies, that two attention calls on equal data share last-step vectors unless the tags number rows across
+the step (`sim_cross_call`), `p_zero`'s weighting, that exact outputs leave only attention's lanes forced, and the
+small-m instruction choice. Output: a JSON
 report (`--json PATH`) and a text table (`--table`).
 """
 
@@ -1101,6 +1103,47 @@ def sim_ssn_sh(case: str, salts: int = 24, m: int = 4, n: int = 6, k: int = 4 * 
                   "vec_repeat_share": vec_repeat_share(words)}
 
 
+def sim_cross_call(global_tags: bool, salts: int = 64, m: int = 4, n: int = 6, k: int = 2 * 28, tag: int = TAG_LANES,
+                   seed: int = 3) -> dict:
+    """Two ssn_sh-tag calls on equal data (a repeated sequence's attention, one call each), each with its own coins
+    and the window's G: the share of the second call's row-step vectors equal to one of the first call's, which a
+    coin-reading prover copies. Each call's init cancels its own shared bytes, so the calls' last steps differ only by
+    the rows' code bits. Tags restart at row 0 in each call unless `global_tags` numbers the rows across the step."""
+    rng = np.random.default_rng(seed)
+    a, b = nsw._data("random", m, n, 128, rng)
+    s, d = steps_sh(k, tag), nsw.DATA_PER_STEP
+    first = d - tag
+    apad = np.zeros((m, first + d * (s - 1)), dtype=np.int64)
+    bpad = np.zeros((first + d * (s - 1), n), dtype=np.int64)
+    apad[:, :k], bpad[:k] = a[:, :k], b[:k]
+    code = nsw.ssn_a_w0(n, d)[0]
+    lane = np.zeros((4, n), dtype=np.int64)
+    lane[0] = 1
+    bias = np.rint(code.sum(axis=0) / 2).astype(np.int64)
+    tags = row_tags(2 * m, tag)
+    copied = 0
+    for _ in range(salts):
+        y = np.concatenate([bpad[:first], rng.integers(-3, 4, (tag, n)), code]
+                           + [z for t in range(1, s) for z in (bpad[first + d * (t - 1):first + d * t], lane)])
+        seen = []
+        for call in range(2):
+            h = rng.integers(0, 2 ** 32, (m,), dtype=np.int64)
+            rb = _bytes_s8(rng.integers(0, 2 ** 32, (s - 1,), dtype=np.int64))
+            parts = [apad[:, :first], tags[call * m:(call + 1) * m] if global_tags else tags[:m],
+                     np.stack([(h >> (8 * e)) & 1 for e in range(4)], axis=1)]
+            for t in range(1, s):
+                parts += [apad[:, first + d * (t - 1):first + d * t], np.broadcast_to(rb[t - 1], (m, 4))]
+            init = np.broadcast_to(-(sum(rb[t - 1] @ lane for t in range(1, s)) + bias), (m, n))
+            w = nsw._words(np.concatenate(parts, axis=1)[None], y[None], init[None])[0]
+            vecs = {w[i, :, t].tobytes() for i in range(m) for t in range(s)}
+            if call:
+                copied += len(vecs & seen[0])
+            seen.append(vecs)
+    bits = np.array(list(itertools.product((0, 1), repeat=4)))
+    p = float(np.mean([not ((u - v) @ code).any() for u in bits for v in bits]))
+    return {"copy_share": copied / (salts * m * s), "steps": s, "bits_collide": p, "expected_local": p / s}
+
+
 PV_CASES = ["random", "zero_row", "identical_rows", "uniform_p", "onehot_p", "identical_cols", "zero_vblock",
             "zero_pblock"]
 
@@ -1428,6 +1471,12 @@ def check() -> list[dict]:
        and abs(tb[64][0] * tb[64][1] - 2.0) < 1e-3 and abs(tb[8][0] * tb[8][1] - 3.004) < 2e-3
        and abs(tb[4][0] * tb[4][1] - 6.009) < 2e-2, {**{f"s8_{m}": v for m, v in tc.items()},
                                                      **{f"bf16_{m}": v for m, v in tb.items()}})
+    loc, glo = sim_cross_call(False), sim_cross_call(True)
+    ok("two ssn_sh-tag calls on equal data: tags that restart each call leave the second call's last-step vectors "
+       "copies wherever the rows' code bits differ by a vector the code's columns annihilate (1/16 once all 4 lanes "
+       "vary, 5/32 at n 6); tags numbered across the step leave none",
+       0.6 * loc["expected_local"] < loc["copy_share"] < 1.6 * loc["expected_local"] and glo["copy_share"] == 0,
+       {"local": loc, "global": glo})
     global PZERO
     sm = Comp("softmax", "softmax", 1.0, kind="softmax", span=(64, 1024))
     held, PZERO = PZERO, {"all": {"208": {"local_s8_d1": {"bins": {
