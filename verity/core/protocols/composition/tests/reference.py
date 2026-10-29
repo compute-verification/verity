@@ -226,4 +226,4 @@ class Product:
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids.
 REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
-ONSITE = Product("verity/onsite/v0", (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS))
+ONSITE = Product("verity/onsite/v0", (CERTIFIER, BANDWIDTH, POUS, POUW, SAMPLED_PROOFS))

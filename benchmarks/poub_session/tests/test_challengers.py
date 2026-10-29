@@ -17,6 +17,7 @@ import itertools
 import json
 import re
 import shlex
+import subprocess
 import sys
 import threading
 from datetime import datetime, timezone
@@ -41,7 +42,7 @@ from test_poub import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
-from verity.core.protocols.poub import coins  # noqa: E402
+from verity.core.protocols.poub import coins, retired  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
@@ -645,6 +646,36 @@ def test_a_session_earns_credit_only_under_the_commit_its_verifier_ran_at_on_mai
         assert s["credit"]["zero"] == [f"not credited: {why}"] and doc["credit"]["credited_sessions"] == []
     with pytest.raises(SystemExit, match=f"ran its verifier at {branch} .*pass --commit {branch}"):
         analysed(out, host, sessions, reg, desc, commit=VERIFIER)
+
+
+def test_a_commit_before_the_poub_move_names_its_verifier_by_the_tree_and_id_it_had_then(tmp_path):
+    """`verifier_tree` at a commit before MEM-152's move reads `RETIRED_TREE`'s tree and v0's id then, the descriptor a
+    period opened there committed; after it, `VERIFIER_TREE`'s and today's; at a commit with neither, it refuses."""
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", *args],
+                              check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q")
+    git("commit", "-q", "--allow-empty", "-m", "neither")
+    neither = git("rev-parse", "HEAD")
+    old = tmp_path / al.RETIRED_TREE / "audit.py"
+    old.parent.mkdir(parents=True)
+    old.write_text("v0\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "before")
+    before = git("rev-parse", "HEAD")
+    new = tmp_path / al.VERIFIER_TREE / "audit.py"
+    new.parent.mkdir(parents=True)
+    old.rename(new)
+    git("add", "-A")
+    git("commit", "-q", "-m", "after")
+    after = git("rev-parse", "HEAD")
+    tree = git("rev-parse", f"{after}:{al.VERIFIER_TREE}")
+    assert al.verifier_tree(before[:12], tmp_path) == (before, tree, retired.PROTOCOL_ID)
+    assert al.verifier_tree(after, tmp_path) == (after, tree, "verity/poub/v0")
+    assert al.descriptor(tree, retired.PROTOCOL_ID) == f"{retired.PROTOCOL_ID} verifier tree {tree}".encode()
+    with pytest.raises(SystemExit, match=f"no {al.VERIFIER_TREE} at commit {neither}"):
+        al.verifier_tree(neither, tmp_path)
 
 
 BOUNDARY_GRID = GridParams(buckets=4, allocation=2, frame_bytes=64)
