@@ -55,7 +55,7 @@ from .intervals import IntervalLimit, Intervals, contains, full, isect, norm, re
 from .layout import Scope, resolve_gate
 from .parts import Limits, Part, Unsupported, n_members
 from .refs import Affine, Refs, Strided, runs
-from .types import Array, Record, Tuple as TupleT, Type, Value
+from .types import Array, RecordType, Tuple as TupleT, Type, Value
 
 Key = tuple[str, int]  # (space, idx): "n" node output leaves, "s" scan-internal carry leaves, "p" parameter leaves
 
@@ -162,7 +162,7 @@ def _sum_widths(t: Type) -> int:
         return t.n * _sum_widths(t.elem)
     if isinstance(t, TupleT):
         return sum(_sum_widths(f) for f in t.fields)
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         return sum(_sum_widths(f) for _, f in t.fields)
     raise TypeError(t)
 
