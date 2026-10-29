@@ -124,9 +124,9 @@ def mock_global_program(workload_path: str, component_dirs: list[str], eos_token
         if lag not in (0, 1):
             raise ValueError(f"lag must be 0 or 1, got {lag!r}")
         engine["async_scheduling"] = bool(lag)
-        stop_rule.update({"eos_lag_rows": int(lag), "lag": int(lag), "eos_lag_source": "mock_global_program(lag=...) (R17-1 declared static)"})
+        stop_rule.update({"eos_lag_rows": int(lag), "lag": int(lag), "eos_lag_source": "mock_global_program(lag=...) (declared static)"})
         lag_block = {"value": int(lag), "async_scheduling": bool(lag), "source": "mock_global_program(lag=...)", "declared_explicitly": True}
-    return {"schema": GP_SCHEMA, "builder": "cb_a.global_match.mock_global_program (manifest + Build components; gprog's rooted Program replaces this)",
+    return {"schema": GP_SCHEMA, "builder": "cb_a.global_match.mock_global_program (manifest + Build components; the Build's rooted Program replaces this)",
             "workload": {"path": workload_path, "sha256": sha256_file(workload_path), "n_requests": len(reqs)},
             # the mock models GP-01's eager conditions; G1 fails closed on a Program without a declaration
             "applicability": {"execution": "bi-eager", "row_execution": "bi-eager", "engine": engine, "refusal": None},
@@ -236,7 +236,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
             if static_lag is None or claimed is None or int(static_lag) != int(claimed):
                 raise ValueError(f"{artifact_path}: lag.value {claimed!r} != the Program's Workload_v1 `lag` static {static_lag!r} (descriptor "
                                  f"program_fn {str(desc.get('program_fn'))[:40]}...{str(desc.get('program_fn'))[-24:]}, root "
-                                 f"{str(desc.get('root'))[:32]}...{str(desc.get('root'))[-24:]}): the artifact's lag declaration is not the Program's (R17-1)")
+                                 f"{str(desc.get('root'))[:32]}...{str(desc.get('root'))[-24:]}): the artifact's lag declaration is not the Program's")
             digest_verification["lag_static"] = int(static_lag)
     derived = (art.get("inputs") or {}).get("derived") or {}
     relocation = relocate_components(derived, artifact_path)
@@ -258,8 +258,8 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
         lp, cap = int(r["prompt_len"]), int(r["cap"])
         rid = r["request_id"]
         if rid != request_id_of(r["index"]):
-            raise ValueError(f"{artifact_path}: request {rid!r} at index {r['index']} is not the r<k> convention (COORD R15 ruling 2): "
-                             "rebuild the workload Program with the R15 global_program")
+            raise ValueError(f"{artifact_path}: request {rid!r} at index {r['index']} is not the r<k> convention: "
+                             "rebuild the workload Program with the current global_program")
         wrid = r.get("workload_request_id") or wl_uuids.get(rid)
         if wl is not None and wl_uuids.get(rid) is not None and wrid != wl_uuids[rid]:
             raise ValueError(f"{artifact_path}: {rid} carries workload_request_id {wrid!r} but the manifest at position {r['index']} has {wl_uuids[rid]!r}")
@@ -300,7 +300,7 @@ ENGINE_FACT_KEYS = ("enforce_eager", "enable_prefix_caching", "enable_chunked_pr
 
 
 def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
-    """How many rows the engine computes for a request AFTER its EOS sample (DP-pad-02).
+    """How many rows the engine computes for a request AFTER its EOS sample.
 
     vLLM's async scheduling (``async_scheduling=True``) schedules step t+1 before step t's sample is known, so a request whose
     sample at step t is an EOS is still forwarded once more at t+1 (a placeholder row whose input is the EOS and whose sample is
@@ -393,7 +393,7 @@ def requests_declared(run: MatchRun) -> tuple[dict, list[dict], dict, list[str]]
         c.fail(f"global Program lists requests more than once: {dup_g}")
     bad_conv = [r["request_id"] for r in gp["requests"] if r["request_id"] != request_id_of(r["index"])]
     if bad_conv:
-        c.fail(f"global Program request ids are not r<k> at their manifest index (COORD R15 ruling 2): {bad_conv[:6]}")
+        c.fail(f"global Program request ids are not r<k> at their manifest index: {bad_conv[:6]}")
     hdr_reqs, param_of, parent_of = CL.request_params(header)
     h_ids = [r["request_id"] for r in hdr_reqs]
     dup_h = [k for k, n in collections.Counter(h_ids).items() if n > 1]
@@ -451,26 +451,26 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
     res["moe_construction"] = ({"value": _mc.get("value"), "moe_block_present": _mc.get("moe_block_present"), "population_label": _mc.get("population_label"),
                                 "declared_explicitly": _mc.get("declared_explicitly"), "attested": False,
                                 "source": "GP-01 moe_construction block (TargetProfile.moe_construction, declared-and-bound; never attested by the record)"}
-                               if _mc else {"value": None, "source": "the Program carries no moe_construction block (pre-R17-42 Build): its Definitions "
+                               if _mc else {"value": None, "source": "the Program carries no moe_construction block (an older Build): its Definitions "
                                                                      "decide (MOE-01 ids = indexed-read); nothing declared, nothing assumed"})
     for k, (a, b, sa, sb) in facts["disagreements"].items():
         c.fail(f"the record's own sources disagree on {k}: {a!r} ({sa}) vs {b!r} ({sb}) -- the record does not attest one execution")
     for src, err in (facts.get("unreadable") or {}).items():
         c.fail(f"the record's {src} is present but unreadable ({err}): its engine conditions cannot be read, fail closed")
     if not app.get("engine"):
-        c.fail("the workload Program declares no applicability.engine (pre-M-0063 artifact): the record's engine conditions cannot be "
+        c.fail("the workload Program declares no applicability.engine (an older artifact): the record's engine conditions cannot be "
                "checked against it -- rebuild the Program on a release carrying GP-01 applicability")
     else:
         if not eff:
             c.fail("the record does not attest its engine conditions (no enforce_eager / enable_prefix_caching at RunHeader.profile.engine_kwargs, "
-                   "RunHeader.engine_kwargs or capture/versions.json engine_kwargs): applicability cannot be checked, fail closed (M-0261)")
+                   "RunHeader.engine_kwargs or capture/versions.json engine_kwargs): applicability cannot be checked, fail closed")
         # async_scheduling joins the compared keys only when the Program declares it (one source, two readers)
         for k in ("enforce_eager", "enable_prefix_caching") + (("async_scheduling",) if app["engine"].get("async_scheduling") is not None else ()):
             # EACH declared key must be attested -- a record that omits one knob (prefix caching: vLLM V1 default ON)
             # does not get applicability by absence
             if eff and k not in facts["values"]:
                 c.fail(f"the record does not attest {k}, which the Program's applicability declares ({k}={app['engine'].get(k)!r}): "
-                       f"fail closed (M-0464)")
+                       f"fail closed")
             for v in facts["values"].get(k, ()):
                 if v != app["engine"].get(k):
                     c.fail(f"record engine {k}={v!r} is outside the Program's declared applicability ({k}={app['engine'].get(k)!r})")
@@ -544,10 +544,10 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
         c.info["header_workload_sha256"] = hw
         c.info["workload_doc_sha256"] = have_doc
         if not hw:
-            c.fail("the record header carries no workload.sha256: the manifest of record cannot be tied to the run (fail closed) [M-0570]")
+            c.fail("the record header carries no workload.sha256: the manifest of record cannot be tied to the run (fail closed)")
         elif hw not in (have_doc, have):
             c.fail(f"manifest of record differs from the header: RunHeader.workload.sha256 {hw[:16]} != manifest {have_doc[:16]} "
-                   f"(canonical document; file {have[:16]}) -- the run was captured with another manifest [rev-pm M-0570]")
+                   f"(canonical document; file {have[:16]}) -- the run was captured with another manifest")
         hdr_by_id = {r["request_id"]: r for r in hdr_reqs}
         for i, w in enumerate(wl.requests):
             h = hdr_by_id.get(request_id_of(i))
@@ -555,23 +555,23 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                 continue
             ws, hs = w.seed, h.get("seed")
             if ws is None and hs is not None:
-                c.fail(f"no declared seed for {request_id_of(i)} but the run header records seed={hs} [M-0570]")
+                c.fail(f"no declared seed for {request_id_of(i)} but the run header records seed={hs}")
             elif ws is not None and hs is None:
-                c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records no seed [M-0570]")
+                c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records no seed")
             elif ws is not None and int(ws) != int(hs):
-                c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records seed={hs} [M-0570]")
+                c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records seed={hs}")
         m_s, h_s = manifest_sampling(wl), dict((header.get("workload") or {}).get("sampling") or {})
         c.info["sampling"] = {"manifest": m_s, "header": {k: h_s.get(k) for k in ("variant", "temperature", "top_p", "top_k") if k in h_s}}
         # the manifest's own sources (variants table = the driver's, label, explicit fields) must agree: fail closed
         for conf in m_s.get("conflict") or []:
-            c.fail(f"manifest of record is not one sampling declaration -- {conf} [M-0667 N5]")
+            c.fail(f"manifest of record is not one sampling declaration -- {conf}")
         for k in ("variant", "temperature", "top_p", "top_k"):
             mv, hv = m_s.get(k), h_s.get(k)
             if mv is None or hv is None:
                 continue
             same = (str(mv) == str(hv)) if k == "variant" else (abs(float(mv) - float(hv)) <= 1e-9)
             if not same:
-                c.fail(f"manifest of record declares sampling {k}={mv!r} but the run header records {k}={hv!r} [M-0570]")
+                c.fail(f"manifest of record declares sampling {k}={mv!r} but the run header records {k}={hv!r}")
         # a request pinning ANOTHER variant (vllm_adapter): its table entry vs the header's per-request fields
         for i, w in enumerate(wl.requests):
             h = hdr_by_id.get(request_id_of(i))
@@ -580,12 +580,12 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                 continue
             r_s = manifest_sampling(wl, variant=rv) if rv is not None else m_s
             for conf in (r_s.get("conflict") or []) if rv is not None else []:
-                c.fail(f"{request_id_of(i)}: manifest variant {rv!r} is not one declaration -- {conf} [M-0667 N5]")
+                c.fail(f"{request_id_of(i)}: manifest variant {rv!r} is not one declaration -- {conf}")
             # a manifest that pins a per-request variant against a header WITHOUT a per-request sampling
             # record is not agreement: the run was not pinned (mirror of the seed rule above) -- a pin added after the run fails closed
             if rv is not None and all(h.get(k) is None for k in ("variant", "temperature", "top_p", "top_k")):
                 c.fail(f"{request_id_of(i)}: manifest pins variant {rv!r} for the request but the run header records no per-request "
-                       f"sampling (variant/temperature/top_p/top_k) -- the pin was not what the run served [M-0717]")
+                       f"sampling (variant/temperature/top_p/top_k) -- the pin was not what the run served")
                 continue
             for k in ("variant", "temperature", "top_p", "top_k"):
                 mv, hv = r_s.get(k), h.get(k)
@@ -596,5 +596,5 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                     continue
                 same = (str(mv) == str(hv)) if k == "variant" else (abs(float(mv) - float(hv)) <= 1e-9)
                 if not same:
-                    c.fail(f"{request_id_of(i)}: manifest declares sampling {k}={mv!r} but the run header records {k}={hv!r} for the request [M-0570]")
+                    c.fail(f"{request_id_of(i)}: manifest declares sampling {k}={mv!r} but the run header records {k}={hv!r} for the request")
     return wl

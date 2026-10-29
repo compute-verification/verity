@@ -748,8 +748,8 @@ def test_under_an_attested_async_scheduler_the_placeholder_row_is_declared_activ
     """The SAME placeholder record under the LAG-1 Program (the workload Program's declared specialization
     parameter), attesting async_scheduling True with the driver's word for an EOS stop (generated_token_ids ends at the EOS, finish_step
     = the EOS step, the lag sample reported nowhere): G6 PASSES and the lag row IS r1's declared activity at step 2 (active internal
-    computation: VUs required, sampled token not served; the lifted Program's lag-1 live: live_s iff no EOS at an event <= s-2;
-    LIFTING-REVIEW PAD-05).  served_output_len 2, executed_prefix_len 3.  The live count at step 2 is 2, and the registered S holds
+    computation: VUs required, sampled token not served; the lifted Program's lag-1 live: live_s iff no EOS at an event <= s-2).
+    served_output_len 2, executed_prefix_len 3.  The live count at step 2 is 2, and the registered S holds
     there as everywhere.  One recorded fact, consumed by Build and Match alike, no inference: the attestation
     flipped to False on the very same record FAILS by name (the LAG-0 header on the LAG-1 Program; G1 + G6) before any S is certified,
     and the unattested record is refused by name rather than read as lag 0 or lag 1."""
@@ -783,7 +783,7 @@ def test_under_an_attested_async_scheduler_the_placeholder_row_is_declared_activ
     assert TGM._check(res_f, "G6")["stop_rule"]["eos_lag_rows"] == 1 and res_f["lag"]["agree"] is False
     TGM._set_async_scheduling(oracle, None)
     res_n = gm.check(gpd, oracle)
-    assert res_n["verdict"] == "FAIL" and any("does not attest async_scheduling" in p and "refuse by name (R17-1)" in p for p in TGM._check(res_n, "G6")["problems"])
+    assert res_n["verdict"] == "FAIL" and any("does not attest async_scheduling" in p and "refuse by name" in p for p in TGM._check(res_n, "G6")["problems"])
     assert TGM._check(res_n, "G6")["stop_rule"]["eos_lag_rows"] == 1 and res_n["lag"]["record_attests"] is None
     # the S the declared-to-cap schedule would prescribe never enters: at step 3 (declared live 1) there is no row to check
     declared = gp.declared_live_counts([{"arrive_step": g["arrive_step"], "cap": g["max_tokens"]} for g in gpd["requests"]])

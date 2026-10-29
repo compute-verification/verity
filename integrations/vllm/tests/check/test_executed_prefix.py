@@ -84,7 +84,7 @@ def test_served_past_the_first_eos_fails_by_name_f_r17_14():
     # the positive it must not touch: EOS at the last served index only
     ok = EP.executed_prefix_of_record(["r0"], {"r0": [7, 3, EOS]}, caps={"r0": 5}, eos_of_record=[EOS], lag=1)
     assert ok["ok"] and ok["requests"]["r0"]["first_eos_index"] == 2 and ok["requests"]["r0"]["executed_prefix_len"] == 4 and ok["requests"]["r0"]["lag_steps"] == [3]
-    # no declared EOS set: nothing to find (the length-stop request is fine; the early stop fails for its own reason, F-pm-24)
+    # no declared EOS set: nothing to find (the length-stop request is fine; the early stop fails for its own reason)
     nn = EP.executed_prefix_of_record(["r0"], {"r0": [7, 3, 9]}, caps={"r0": 3}, eos_of_record=None, lag=1)
     assert nn["ok"] and nn["requests"]["r0"]["first_eos_index"] is None
 
@@ -136,7 +136,7 @@ def test_b8_mixed_stop_population_over_the_executed_prefix_passes_and_the_cap_sh
 
 
 def _population_block(epr: dict, by_family: dict[str, int], *, applied: bool = True, n_exec: dict[str, int] | None = None) -> dict:
-    """reqval's population.not_executed_by_rule as sampled_replay writes it (the keys the reconciliation reads)."""
+    """population.not_executed_by_rule as sampled_replay writes it (the keys the reconciliation reads)."""
     reqs = {rid: {"n_exec": (n_exec or {}).get(rid, r["executed_prefix_len"])} for rid, r in epr["requests"].items()}
     return {"applied": applied, "by_request": reqs, "totals": {"by_family": {f: {"N_manifest": n + 1, "N_required": 1, "N_excluded": n} for f, n in by_family.items()}}}
 
@@ -169,7 +169,7 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
     o = rec["outside_population_reach"]["input_token_ids"]
     assert (o["kind"], o["commit"], o["population_N_excluded"], o["population_reaches"]) == (EP.KIND_INPUT, 20, 0, False) and "does not reach" in o["pending"]
     assert "input_token_ids" not in rec["by_family"]
-    # [reqval 699bf6ee2 / 8eeff13eb / d13ea5153] the population REACHES both kinds: kind_by_family names the named-input family and
+    # the population REACHES both kinds: kind_by_family names the named-input family and
     # N_excluded counts it like a row; the batch-level family states its (plane, request) cells -> both reconcile in by_family, nothing
     # outside the population's reach, and a disagreement on either FAILS by name
     pb = _population_block(epr, dict(row_fams, input_token_ids=20, fa2_hidden_m1_stream=0))
@@ -227,7 +227,7 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
     pb["totals"]["by_family"]["fa2_hidden_m1_stream"]["plane_cells_not_executed"] = {"identities": 0, "cells": plane_cells}
     rec = EP.reconcile_not_executed(cc3, pb, epr, manifest_identities=ids)
     assert rec["ok"] and rec["by_family"]["fa2_hidden_m1_stream"]["expected_from_population_facts"] == plane_cells and "fa2_hidden_m1_stream" not in rec["outside_population_reach"]
-    # no population block at all (a tree without reqval's mechanism) / not applied on an EOS-stopped record: FAIL by name
+    # no population block at all (a tree without the population's mechanism) / not applied on an EOS-stopped record: FAIL by name
     assert not EP.reconcile_not_executed(cc, None, epr)["ok"]
     rec = EP.reconcile_not_executed(cc, _population_block(epr, row_fams, applied=False), epr)
     assert not rec["ok"] and "not applied" in rec["problems"][0]
@@ -287,7 +287,7 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
     """#39 (qwen25-15b i4096, l40s4): match/capture/ was moved to /vault to free the disk while
     the Commit was queued; tokens.json went with it, a_r fell to the G6 leg and the class faulted 'a_r is not linked' / 'LAG rule not
     attested' after 47 min -- a missing INPUT read as a verdict.  The facts name the missing leg(s) (a_r_source suffix + account_missing),
-    and reqval's normaliser puts that fault FIRST, before (a) and (b), still fail-closed."""
+    and the population's normaliser puts that fault FIRST, before (a) and (b), still fail-closed."""
     from verity_vllm.check.replay import population as POP
     e = _mixed_epr()
     # tokens.json absent, global_match.json present: exactly #39's record after the move
@@ -299,7 +299,7 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
     assert f["r0"]["account_missing"] == ["tokens.json"] and f["r1"]["account_missing"] == ["tokens.json"]
     assert "G6 lengths_by_request" in f["r0"]["a_r_source"] and f["r0"]["a_r_source"].endswith("Match account leg(s) NOT beside the Commit: tokens.json")
     assert f["r0"]["linked"] is False and f["r0"]["lag_attested"] is False
-    # the consumer (reqval's normaliser) accepts the fact and faults on it by name, first
+    # the consumer (the population's normaliser) accepts the fact and faults on it by name, first
     facts = EP.facts_accepted_by(POP.executed_prefix_of_record, f)
     assert "account_missing" in facts["r0"]
     rec = POP.executed_prefix_of_record("r0", **facts["r0"])
@@ -318,10 +318,10 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
 
 
 def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_only(tmp_path):
-    """ONE mechanism for the class (sampled_replay.population.not_executed_by_rule, reqval): commit_delta is
+    """ONE mechanism for the class (sampled_replay.population.not_executed_by_rule): commit_delta is
     its CALLER -- _executed_prefix_facts derives every flag from a named record fact: a_r from the Match record's tokens.json (path + sha256
     in a_r_source), served_len_commit from this run, linked = Match-account link AND C2 boundary linkage, lag_attested from the link's legs,
-    eos_declared by F-pm-24, rows_past_stop from coverage.  With no Match record: a_r = the Commit's own count LABELLED so, linked False."""
+    eos_declared from the stop rule, rows_past_stop from coverage.  With no Match record: a_r = the Commit's own count LABELLED so, linked False."""
     e = _mixed_epr()
     link = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
     assert link["ok"] and link["lag_attested"] is True and link["tokens_json"]["served_by_request"] == {"r0": 11, "r1": 32}
@@ -332,7 +332,7 @@ def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_
                        "linked": True, "lag_attested": True, "rows_past_stop": 0, "account_missing": []}
     assert f["r0"]["a_r_source"].startswith("match record ") and "tokens.json" in f["r0"]["a_r_source"] and "sha256" in f["r0"]["a_r_source"]
     assert f["r1"]["a_r"] == 32 and f["r1"]["eos_declared"] is False and f["r1"]["linked"] is True
-    # the C2 boundary linkage failed -> linked False (the class faults by name in reqval's normaliser)
+    # the C2 boundary linkage failed -> linked False (the class faults by name in the population's normaliser)
     assert EP.executed_prefix_facts(e, binding, {"result": False}, {"r0": 0, "r1": 0}, stop)["r0"]["linked"] is False
     # committed rows of r0 past its prefix -> rows_past_stop counts them
     bm = {"entries": [{"kind": "leaf", "identity": {"request_id": "r0", "step": s}} for s in (12, 13, 14)]}
@@ -421,7 +421,7 @@ def test_the_committers_own_count_is_never_sufficient_by_itself(tmp_path):
     e = _mixed_epr()
     L = EPL.link_to_match_account(e, EPL.load_match_account(None), order=ORDER, declared_lag=1)
     assert not L["ok"] and L["required"]
-    assert any("on the committer's own served count alone" in p and "(R17-27 (a))" in p for p in L["problems"]), L["problems"]
+    assert any("on the committer's own served count alone" in p and "(executed-prefix condition (a))" in p for p in L["problems"]), L["problems"]
     # tokens.json present but no global_match.json: linked to the served output only, not to the Match account -> problem
     L2 = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path, write_gm=False)), order=ORDER, declared_lag=1)
     assert not L2["ok"] and any("GM-01's account (global_match.json) is not beside" in p for p in L2["problems"]), L2["problems"]
@@ -440,7 +440,7 @@ def test_a_transcript_that_is_not_the_matchs_or_an_unattested_lag_breaks_the_lin
     # (b) tokens.json attests LAG 0 under a Program declaring LAG 1 -> lag not attested on the record (its executed_prefix_len 11 != 12 too)
     d = _match_account(tmp_path / "b", tj_lag=0)
     L = EPL.link_to_match_account(e, EPL.load_match_account(d), order=ORDER, declared_lag=1)
-    assert not L["ok"] and any("lag not attested on the record" in p and "(R17-27 (b))" in p for p in L["problems"]), L["problems"]
+    assert not L["ok"] and any("lag not attested on the record" in p and "(executed-prefix condition (b))" in p for p in L["problems"]), L["problems"]
     assert any("executed_prefix_len 11 != this rule's 12" in p for p in L["problems"]), L["problems"]
     # GM-01 FAILED -> the account this prefix must be linked to did not pass
     d = _match_account(tmp_path / "c", gm_verdict="FAIL")

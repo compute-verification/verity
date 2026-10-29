@@ -4,11 +4,11 @@ import Definitions.Pouw.TileBound.Fp8Defs
 /-!
 # The FP8-tile model: the E4M3 count from the FP4-tile core (proofs)
 
-The TT_OUT restatements lane (bc-b58c6093). Every bound here comes from bc-d9842080's `quad_support`, the slice-rank count
+Every bound here comes from `quad_support`, the slice-rank count
 that holds for any quadratic program correct on the live entries, for any blocks, over any field. Nothing in it is
 format-specific.
 
-* The FP8 bounds are the shared cost lemma `cost_ge_supportAt` (in `Proofs.lean`, bc-d9842080) at `p₀ = price .fp8`,
+* The FP8 bounds are the shared cost lemma `cost_ge_supportAt` (in `Proofs.lean`) at `p₀ = price .fp8`,
   as the FP4 model's `cost_ge_support` is at `p₀ = price .fp4`.
 * **What it closes at E4M3:** `cost_ge8`, under `Representable8` and a format with `capacity8 f · price .fp8 ≤ price f`.
   That holds exactly for NVFP4 and E4M3 (`fmt8_closed_iff`). NVFP4's case holds only through the operands (its capacity

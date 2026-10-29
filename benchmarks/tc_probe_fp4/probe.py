@@ -49,8 +49,8 @@ The K=32 E2M1 rows, the gates, and the other instructions and modes:
   * ``--expect-uuid``: stops before any measurement unless the device CUDA opened has that UUID (identity is read from CUDA, and
     nvidia-smi is queried for that GPU only: on a multi-GPU host its first line is some other GPU).
   * ``--sass-only`` (the offline SASS gate: exactly one MMA per kernel, the row's kernel present), ``--fake-silicon MODEL`` (a CPU
-    dry run where MODEL's words stand in for the device; refused under a research run), ``--corrupt-word`` (one flipped bit in the
-    first gated family: the run must fail).
+    dry run where MODEL's words stand in for the device; refused with ``RESEARCH_RUN_ID`` set), ``--corrupt-word`` (one flipped
+    bit in the first gated family: the run must fail).
   * casts (``--instruction cvt_*``, ``cast.py``); the 2:4 sparse ``mma.sp`` m16n8k128 rows (``--instruction sp_nvf4 | sp_mxf4``,
     ``sparse.py``: a capture over named candidates, the first of which is the dense pinned model on the compressed operands);
     T1's merged k128 route (``--instruction sp_nvf4_t1``, ``t1_merged.py``: the sparse k128 from C = H against two chained dense
@@ -1221,7 +1221,8 @@ def model_words(model, A, Bt, SFA, SFB, C, k_mma: int, nblk: int) -> tuple[np.nd
 
 class FakeProbe:
     """A CPU stand-in for the device (``--fake-silicon MODEL``): every word is MODEL's, so a dry run exercises the build, the gates,
-    the families, the comparison and the verdict without a GPU.  ``main`` refuses it under a research run: it never publishes."""
+    the families, the comparison and the verdict without a GPU.  ``main`` refuses it with ``RESEARCH_RUN_ID`` set: it never
+    publishes."""
 
     tcgen05 = False
 
@@ -1511,7 +1512,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.chain < 1 or (args.chain > 1 and instr not in ROW_KIND):
         ap.error("--chain L (L >= 2) is for the mma.sync rows " + ", ".join(sorted(ROW_KIND)))
     if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     if args.sass_only:
         args.sass_check = True
 

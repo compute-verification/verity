@@ -39,8 +39,8 @@ The ledger check: its longest head verified under the pinned key (`ledger_head`,
 the period's lane, cap and circuit, and that it closed; each session reserved and opened by the lane for the peer under
 the pin at epoch k, opened at its window root R_k, ended closed with no refused hello, inside the period; σ_0 asked
 after R_k, and each coin released after its root's receipt. The peer is the verifier machine's name at the challenger
-host, as the run's own record gives it (`peer_of`): vy-nebius-1 for a verifier there, vy-auditor-1 for a host run.
-`--peer` overrides it, and a gate run whose record names none is refused. A session served by `--challenger serve`
+host, as the run's own record gives it (`peer_of`): the node's own name for a verifier on a node, the verifier host's
+for a host run. `--peer` overrides it, and a gate run whose record names none is refused. A session served by `--challenger serve`
 (the verifier's machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not
 the auditor's.
 
@@ -50,18 +50,18 @@ the auditor's.
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
   descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
   `git rev-parse COMMIT:verity/core/protocols/remote_bandwidth` of the run's recorded commit (`--commit`), so it counts
-  only toward a period that committed that verifier (PRF-126); and that commit is on the auditor's first-parent list
+  only toward a period that committed that verifier; and that commit is on the auditor's first-parent list
   of main (`--main`), as the challenger host's pin must be, so the verdict is that of a tree main's check ran on. A host
   run's request.json beside OUT records the commit its verifier ran at (`pinned`), and a `--commit` other than it is
   refused;
 - *complete*: its window's end, and its period's close, are complete: the challenger released every coin it committed
-  to, in every window of the period (PRF-132);
+  to, in every window of the period;
 - *accepted*: the Lean's verdict (the record's `verdict` lean or both, no disagreement) accepted it, since a refused
   session can still close complete;
 - *pinned*: its window reads through `challenger.pinned_session` with the challenger host's pins log (`--pins`, its
   lines as the gate served them) and the auditor's own first-parent list of main (`--main FILE`, `git rev-list
   --first-parent origin/main`): its open sealed the log as it stood, one of the sealed lines records the open's
-  `pinned`, and that commit is on main's first-parent line, a tree main's check ran on (RT4-INT-40, CMP-74). With no
+  `pinned`, and that commit is on main's first-parent line, a tree main's check ran on. With no
   log or no copy of main, no session is pinned or credited;
 - *bound*: the registered store is the model's (`bound_check`, the run's, so every session's): the verifier bound it
   (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose payload root isn't that of the store the
@@ -97,7 +97,7 @@ certifiers cover the gate node's boundary. A relay prover, a thin node forwardin
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
 as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
 grounded or not. The `memory-line-of-record` label names what the file names (`line_label`: `lean conditional on
-NoOutsideCompute, binding-split`), and `research data label` refuses one that doesn't.
+NoOutsideCompute, binding-split`), and the evidence store's labeller refuses one that doesn't.
 
 **The lockdown** (`--lockdown FILE`, `read_lockdown`, `lockdown_check`). Infra's record of the provider's lockdown of
 the gate node: the security group's allow list, each interval it was applied, with infra's records, and whether the
@@ -724,7 +724,7 @@ def conditional_on(rows: list[dict]) -> dict:
 
 def line_label(doc: dict) -> str:
     """The `memory-line-of-record` value naming the doc's line: who computed it and what it is conditional on, as
-    `research data label` holds it to this file (`vocab.check_line_of_record`)."""
+    the evidence store's labeller holds it to this file (`vocab.check_line_of_record`)."""
     return f"{doc['line_by']} conditional on {', '.join(doc['conditional_on'])}"
 
 
@@ -1131,10 +1131,9 @@ def main(argv: list[str] | None = None) -> int:
                     f"{VERIFIER_TREE} tree names the verifier a gate run's period must have committed")
     ap.add_argument("--repo", type=Path, default=HERE.parents[1], help="a git checkout holding --commit")
     ap.add_argument("--pins", type=Path, help="the challenger host's pins log as the gate served it (`pins`), a line a "
-                    "pin: without it no session is pinned (RT4-INT-40)")
+                    "pin: without it no session is pinned")
     ap.add_argument("--main", type=Path, metavar="FILE", help="the auditor's own first-parent list of main, a commit a "
-                    "line (`git rev-list --first-parent origin/main` in its checkout): without it no session is pinned "
-                    "(CMP-74)")
+                    "line (`git rev-list --first-parent origin/main` in its checkout): without it no session is pinned")
     ap.add_argument("--model-pin", type=Path, metavar="FILE",
                     help="the model the store must be bound to when the audit's period signs none: a pin in the "
                          "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either no session is "

@@ -61,7 +61,7 @@ are then the binding's, and verifier.json keeps the binding (`binding`: the pin'
 store's shape, both roots, the Lean's answer and `bound`), which `auditor_line.py` credits on. A process takes one
 hello, so its sessions share the one root it held; another process's payload key is fresh, so its root is another.
 
-The verdicts are the verifier of record's, the Lean process `remote-audit-verifier` (`lean_verifier.py`): it holds
+The verdicts are the Lean verifier's, the process `remote-audit-verifier` (`lean_verifier.py`): it holds
 the registry and every session, and each registration, session, event and window goes to it and to `audit.Session`
 at one reading of the clock (`Pair`). An accepted session's record is the Lean's (`Pair.record`), and its ledger
 reads that record. `audit.Session` keeps the driver's books (its coins, its plans, when the next boundary leaves) and
@@ -81,7 +81,7 @@ verifiers, rejections included. A message the driver couldn't read is in no even
 keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
 0.6 GB of JSON.
 
-A session's coins are an epoch of the proof service's one challenger (`coins.Coins`): from a challenger in this process
+A session's coins are an epoch of the proof system's one challenger (`coins.Coins`): from a challenger in this process
 (`--challenger local`, the default), from `benchmarks/live_challenger/serve.py`, started for the session on this
 machine and reached through `sampled_proofs.remote`'s client (`--challenger serve`, `challengers.Serve`), or from the
 auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
@@ -144,7 +144,7 @@ GPU_HBM_BYTES = 96 * 2 ** 30
 """One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`)."""
 HBM_BYTES = timing.GPUS * GPU_HBM_BYTES
 DISK_BYTES_PER_S = 4.4e9
-"""The node's disks' read ceiling, each disk's highest second summed (4.311e9, r20261018-155556-0b37) and rounded up:
+"""The node's disks' read ceiling, each disk's highest second summed (4.311e9) and rounded up:
 how much of a paced line's ingress charge is its disks (`ingress_bursts`)."""
 KINDS = ("weights", "kv", "filler", "activations")
 TIERS = ("hbm", "host")
@@ -1423,8 +1423,8 @@ class Verifier:
         measured, per window as declared, and the memory line's forms), on the verifier's node (`ledger.Node.stated`:
         every GPU's HBM and the host's DRAM, the node's S_chip and squaring ceiling, `--disk-bytes-per-s` and
         `--link-bytes-per-s`, and their bursts), whatever share of the node the store is on.  Both R are the verifier's, which the
-        prover's calibration can only raise: a prover reporting a slower read would shrink every term but the timing
-        (MEM-24).  Each reading (`spec`, `measured`) also carries the session's terms (`audit.Ledger`) and its
+        prover's calibration can only raise: a prover reporting a slower read would shrink every term but the timing.
+        Each reading (`spec`, `measured`) also carries the session's terms (`audit.Ledger`) and its
         certified bytes, `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node
         establishes, whose γ is the node's only once its store spans the node; and its timing term's parts
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window

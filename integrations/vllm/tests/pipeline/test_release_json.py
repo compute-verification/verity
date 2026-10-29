@@ -165,7 +165,7 @@ def test_cli_check_and_line_as_a_process(tmp_path):
 
 
 def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
-    """The row's REL-09 line: from `release-json line` (tree-local first), the record USED is the one copied into the evidence, and a
+    """The row's release line: from `release-json line` (tree-local first), the record USED is the one copied into the evidence, and a
     released tree takes the release's collector build dir unless the caller set NATIVE_COLLECT_BUILD."""
     from tests.pipeline.test_row import _row
     rel = tmp_path / "RELEASE.json"

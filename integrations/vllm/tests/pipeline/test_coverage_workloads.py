@@ -350,8 +350,7 @@ class _ChunkedStubEngine(_LaggedStubEngine):
 
 
 def test_arrival_loop_counts_partial_prefill_forwards_under_chunked_prefill():
-    """The chunked owner's finding (lead's request, 2026-09-17): a 155-token prompt at budget 64 = 3 chunks, the first two return
-    nothing; the old inference measured lag 3 and counted 15 forwards for 17.  Both sources now give 17 / lag 1."""
+    """A 155-token prompt at budget 64 is 3 chunks, the first two returning nothing: both sources count 17 forwards and lag 1."""
     va = _load_adapter()
     R = lambda rid, plen, n, a: types.SimpleNamespace(request_id=rid, prompt_token_ids=[1] * plen, max_tokens=n, arrive_step=a, _order=0)  # noqa: E731
     for scheduler, source in ((True, "scheduler"), (False, "clamped")):

@@ -1,4 +1,4 @@
-"""cb-fix (R10 §5): the applicability contract of an AOT-constructed Program, pure Python (no torch, no vLLM).
+"""The applicability contract of an AOT-constructed Program, pure Python (no torch, no vLLM).
 
 The Program digest is a COMPONENT of the artifact identity, never a function of the target: two targets that produce the same
 circuit share the digest and differ in identity; two hosts building the same profile share both; reuse under another profile or
@@ -11,7 +11,7 @@ import pytest
 from verity_vllm.program.frontend.target_profile import (ApplicabilityError, ArtifactIdentity, TargetProfile, canonical_bytes, check_reuse, load_artifact,
                                                parse_target_arg, profile_mismatches, reuse_mismatches)
 
-B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # B0 request 8/4 (cp-cba, cp-cbc, cp-cb8: identical)
+B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # B0 request 8/4 (identical on every build host)
 CV = {"schema": "cb-a/aot-artifact/v1", "rules": [{"id": "TritonGemm[vllm-bi]", "version": 1}], "sources_sha256": "ab" * 32}
 APPLIC = {"numerics_profile": "b1-eager-v3", "attention_impl": ["vllm.v1.attention.backends.flash_attn.FlashAttentionImpl"], "vllm_flash_attn_version": ["2"],
           "fused_add_rms_norm_dispatch": "batch_invariant", "vllm_version": "0.28.1rc1.dev472+gd9105ea80", "torch_version": "2.13.0+cu129",
@@ -21,7 +21,7 @@ APPLIC = {"numerics_profile": "b1-eager-v3", "attention_impl": ["vllm.v1.attenti
 def _applied(p: TargetProfile, **over) -> dict:
     d = {"compute_capability": list(p.compute_capability), "num_sms": p.num_sms, "batch_invariant": p.batch_invariant,
          "vllm_version": "0.28.1rc1.dev472+gd9105ea80", "attention_backend": p.attention_backend,
-         "tuned_gemm_arch_family": p.tuned_gemm_arch_family()}   # [R13 ampere] what vLLM's own family function answers for the capability
+         "tuned_gemm_arch_family": p.tuned_gemm_arch_family()}   # what vLLM's own family function answers for the capability
     d.update(over)
     return d
 
@@ -133,7 +133,7 @@ def test_parse_target_arg_overrides_the_default():
 
 
 def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
-    """[R15 compiled] `compilation="piecewise"` -> execution label `bi-compiled`, run-time engine args enforce_eager False + PIECEWISE CUDA
+    """`compilation="piecewise"` -> execution label `bi-compiled`, run-time engine args enforce_eager False + PIECEWISE CUDA
     graphs, derivation-side args unchanged (eager trace by construction), a declared engine block for GP-01/GM-01; eager profiles serialise
     and digest exactly as before the field existed; an unadmitted compilation is refused."""
     e = TargetProfile.default()
@@ -141,7 +141,7 @@ def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
     c = TargetProfile.from_json({**e.to_json(), "compilation": "piecewise"})
     assert c.execution_label == "bi-compiled" and TargetProfile(batch_invariant=False, compilation="piecewise").execution_label == "compiled"
     assert c.with_overrides(compute_capability=(9, 0), flash_attn_version=2).execution_label == "bi-compiled-fa2"
-    # [ruling M-0380] `piecewise` = vLLM's production DEFAULT compiled configuration (no precision-cast emulation): its Program is P_compiled;
+    # `piecewise` = vLLM's production DEFAULT compiled configuration (no precision-cast emulation): its Program is P_compiled;
     # `piecewise-emu` = the separate declared specialization with Inductor emulate_precision_casts (a different numerical computation)
     assert c.engine_args() == {"enforce_eager": False, "compilation_config": {"cudagraph_mode": "PIECEWISE",
                                                                               "inductor_compile_config": {"emulate_precision_casts": False}}}
@@ -166,8 +166,8 @@ def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
 
 
 def test_fp8_block_gemm_declares_the_cutlass_kernel_and_keeps_undeclared_digests():
-    """[R15 fp8] `fp8_block_gemm='cutlass'` applies VLLM_USE_DEEP_GEMM=0 and requires the read-back kernel class; an undeclared profile
-    serialises exactly as before (no key), so every pre-R15 profile digest and artifact identity is unchanged."""
+    """`fp8_block_gemm='cutlass'` applies VLLM_USE_DEEP_GEMM=0 and requires the read-back kernel class; an undeclared profile
+    serialises exactly as before (no key), so every earlier profile digest and artifact identity is unchanged."""
     e = TargetProfile(compute_capability=(9, 0), num_sms=132)
     assert "fp8_block_gemm" not in e.to_json() and TargetProfile.from_json(e.to_json()).digest() == e.digest()
     assert e.env() == {"VLLM_BATCH_INVARIANT": "1"} and e.fp8_block_gemm_kernel() is None
@@ -295,9 +295,9 @@ def test_parse_target_arg_accepts_the_fp8_field_that_the_default_omits():
 
 
 def test_parse_target_arg_lays_a_partial_declaration_over_the_host_profile():
-    """[R15 fp8] a row that declares only a knob is built for the pod it runs on: the JSON overrides lay over `base` (the device profile
-    on a CUDA host), never over the L40S default -- rc3's Build of the FP8 panel row declared capability 8.9 on the H100 and vLLM selected
-    the sm89 kernel, refused against the declared cutlass one."""
+    """A workload that declares only a knob is built for the pod it runs on: the JSON overrides lay over `base` (the device profile
+    on a CUDA host), never over the L40S default -- otherwise an FP8 Build on an H100 declares capability 8.9, vLLM selects the sm89
+    kernel, and it is refused against the declared cutlass one."""
     h100 = TargetProfile(compute_capability=(9, 0), num_sms=132)
     p = parse_target_arg('{"fp8_block_gemm": "cutlass"}', base=h100)
     assert p.compute_capability == (9, 0) and p.num_sms == 132 and p.fp8_block_gemm == "cutlass"
@@ -308,7 +308,7 @@ def test_parse_target_arg_lays_a_partial_declaration_over_the_host_profile():
 
 
 def test_moe_construction_is_a_declared_and_bound_static_never_applied_to_the_engine_and_keeps_undeclared_digests():
-    """[R17-42 route A (3)] `moe_construction` (None = indexed-read-ordered, `padded` = MoeFfnFixedL_v1 per token) is a Program static:
+    """`moe_construction` (None = indexed-read-ordered, `padded` = MoeFfnFixedL_v1 per token) is a Program static:
     an undeclared profile serialises exactly as before (no key, digest unchanged); `padded` changes the digest; it is NOT an engine knob
     (`engine_args` unchanged), NOT judged by `profile_mismatches` (nothing is read back: never attested), and one spelling only."""
     e = TargetProfile()

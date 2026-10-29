@@ -1,5 +1,5 @@
 """The first served H1 window end to end against a challenger gate: rehearsed against a local challenger gate on the serving node
-(`local_gate.py`), and the same script run live against vy-challenger-1's. Run by hand or as a research run; never collected. ``--red-team RUN_OUT`` reruns the red team's edited copies of a
+(`local_gate.py`), and the same script run live against the auditor host's. Run by hand or as a research run; never collected. ``--red-team RUN_OUT`` reruns the red team's edited copies of a
 fetched run on any CPU.
 
 **What it does.** Builds the window's declared Program first, on CPU (`build_program`: `pouw_h1_served.declared` for
@@ -8,11 +8,11 @@ circuit), unless ``--program DIR`` names a ``--program-only`` run's. With ``--se
 auditor's registration of `MODEL` under that circuit: each K's ``b/<K>`` committed from the published
 checkpoint under the auditor's own salt key, their root W. Against the local gate the rehearsal registers it first, as
 vy-admin does (`register_model`: ``admin model-register --model MODEL --circuit DIGEST --descriptor FILE --checkpoint
-DIR``, DIR ``--checkpoint``); on vy-challenger-1 vy-admin makes that registration. It builds each stratum's
+DIR``, DIR ``--checkpoint``); on the auditor host vy-admin makes that registration. It builds each stratum's
 circuit file with the auditor's lowering (`pouw_h1_circuits.build`: K's template lowered as ``h1_prove/stage.py``
 lowers it, bound to the Program and its partition), unless ``--circuits DIR`` names a built directory. Then it opens
 the lane's period (`period_open_argv`: ``period-open --name P --cap 1 --circuit DIGEST --draw-k K --model MODEL
---circuit-files FILES --length LENGTH``, which signs the registration's W, K the proof service's committed draw K, `declared_draw_k`, which core's credit reads as the
+--circuit-files FILES --length LENGTH``, which signs the registration's W, K the proof system's committed draw K, `declared_draw_k`, which core's credit reads as the
 open's ``draw_k``, FILES ``{"k<K>": SHA-512}``, each stratum's file's, which core's credit verifies statements
 against, `credit.committed_files`, and LENGTH `FILL`'s fixed length, `fill_length`, which core's credit holds the
 window's served rows to, `credit.committed_length`), reserves the window's challenge phase (``reserve --peer PEER --scheme S --families
@@ -50,7 +50,7 @@ the prover's own directory and published nowhere under ``$OUT`` (``key_custody``
 Its ``credit`` is the gate-passed rows beside core's (`pouw_h1_challenger.credit_reason`: ``manifest``, ``window``,
 ``calls``, ``eps``), which credits nothing until each drawn call's statement (its proof files) exists.
 
-**The rehearsal** (a research run on vy-nebius-2; the gate's tree is one whose serve.py ends a challenge phase with its record
+**The rehearsal** (a research run on the serving node; the gate's tree is one whose serve.py ends a challenge phase with its record
 leaf and refused hellos and seals ``hellos.jsonl``; with ``--served`` the tree must be one with the model registry,
 archived with the int8 checkpoints' manifest
 its ``model-register`` reads, and ``--checkpoint`` the pinned LLAMA31_8B_INT8 snapshot on the node):
@@ -67,10 +67,9 @@ its ``model-register`` reads, and ``--checkpoint`` the pinned LLAMA31_8B_INT8 sn
 Each stratum's circuit file is the long CPU step at the 32 × 32 tile, so build it once as its own run and send it with
 ``--circuits DIR``: ``python -m tests.protocols.pouw_h1_circuits --program PROGRAM_DIR --out $OUT``.
 
-**The live run** is the same command with the gate vy-challenger-1's, over the lane's own gate key (on
-vy-nebius-2), the auditor's pin, the declared Program's ``window-program.meta.json`` sent (a
-``--program-only`` run's, or a rehearsal's ``out/program/``),
-its circuit files' directory (``--circuits``), and no ``--tree``:
+**The live run** is the same command with the auditor host's gate, over the lane's own gate key (on the serving node),
+the auditor's pin, the declared Program's ``window-program.meta.json`` sent (a ``--program-only`` run's, or a
+rehearsal's ``out/program/``), its circuit files' directory (``--circuits``), and no ``--tree``:
 
     research run --on vy-nebius-2 --project verity --source . --cwd source --send window-program.meta.json \\
       --mem-gb 300 --mem-wait 600 --declared-output 'out/*' -- bash -lc 'cd integrations/vllm && \\
@@ -81,18 +80,18 @@ its circuit files' directory (``--circuits``), and no ``--tree``:
       --peer vy-nebius-2 --at 127.0.0.1:7811 --period vllm-h1-live-1 \\
       --key-sha512 27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc'
 
-What changes from the rehearsal: the gate is vy-challenger-1's forced command over ssh (``by`` the lane the key is
+What changes from the rehearsal: the gate is the auditor host's forced command over ssh (``by`` the lane the key is
 registered for, ``vllm``), not ``python -I local_gate.py DIR``; `MODEL`'s registration under the period's circuit is
 vy-admin's, made before the run (the run registers nothing); its key is ``lms.DEPLOYED``, pinned by ``--key-sha512``
 (the auditor's ``public_sha512``, which the run checks against ``GATE pubkey``), not a test key made in a
-temporary directory; serve.py on vy-challenger-1 reaches the serving node by its certifier coin link, the peer named
+temporary directory; serve.py on the auditor host reaches the serving node by its certifier coin link, the peer named
 in ``/etc/vy/peers`` (``--peer``, the serving node), whose 127.0.0.1:PORT the window connects to, PORT the one the open
 answers (7811..7899, `pouw_h1_window.at_port`), not 27811.. on the node itself; its coins are the Lean verifier's on
-vy-challenger-1; the challenge phase's end is read from ``GATE status`` (the live gate has no ``wait``); and no challenge phase is
+the auditor host; the challenge phase's end is read from ``GATE status`` (the live gate has no ``wait``); and no challenge phase is
 forged (each would be a live window of the lane's period). The gate checks only that ``--circuit`` is a SHA-512 (128 hex
 digits) and ``--circuit-files`` each K's (`auditor.circuit_files_of`), and records them; core's credit compares the
 files with each statement's circuit file, and the descriptor with the window's layout. Never run anything on
-vy-challenger-1 itself.
+the auditor host itself.
 """
 from __future__ import annotations
 
@@ -169,7 +168,7 @@ def declaration(layers: int = 32) -> tuple[list[tuple[int, int]], dict[int, str]
 
 
 def declared_draw_k(layers: int = 32) -> int:
-    """The draw K the period's open commits (``--draw-k``, ``draw_k``) for the declared window: the proof service's
+    """The draw K the period's open commits (``--draw-k``, ``draw_k``) for the declared window: the proof system's
     selection, `pouw_h1_challenger.draw_k` over `pouw_h1_served.declared_layout`, which `credit.strata` reads."""
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
@@ -234,7 +233,7 @@ def _poll_end(gate: Gate, session: str) -> dict[str, Any]:
 
 
 def register_model(gate: Gate, checkpoint: str, pdir: Path, circuit: str, scratch: Path) -> dict[str, Any]:
-    """The local gate's registration of `MODEL` under the period's `circuit`, as vy-admin makes it on vy-challenger-1
+    """The local gate's registration of `MODEL` under the period's `circuit`, as vy-admin makes it on the auditor host
     (``admin model-register``, `auditor.model_register`): the pinned checkpoint in `checkpoint` committed under
     a fresh auditor key for the declared Program's descriptor (`program_bytes`, written to `scratch`). ``ok`` when the
     registry has it under the circuit; its answer carries the roots, never the key."""

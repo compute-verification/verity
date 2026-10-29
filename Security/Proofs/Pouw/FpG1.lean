@@ -27,7 +27,7 @@ where the premise that the committed leaves are g1's narrows the windows and lea
 `Proofs.Accounting.Headline.FpG1` shows that an honest g1 window meets every premise. What
 these lemmas add is that g1's transcript is the record's: every entry plus its coin is an s8 value inside the record's
 operand ranges, and the int8 GEMM the record's MMA computes is the served model's exact product up to the coin's two
-rank-one terms. The record's premises read at g1's values as they do at any other (RT2-FP-13):
+rank-one terms. The record's premises read at g1's values as they do at any other:
 
 * the luck premises (`OperandHMu`, `ReceiptLuckAt`, `WholeLuckAt`) are Props of the receipt game over every level a
   prover commits, and nothing checks g1's grids, so a g1 prover is one of the record's provers;
@@ -38,7 +38,7 @@ rank-one terms. The record's premises read at g1's values as they do at any othe
   alphabet, which don't carry to a subset of it.
 
 A3 sums the types' MACs as "the types sharing the pipe's time", and on sm_120 QMMA does share IMMA's tensor pipe: timed
-together, `QMMA.16832` E4M3 and `IMMA.16832` give `t + s = 1.0002` and `0.9994` (r20261019-133013-1a12), so a run that
+together, `QMMA.16832` E4M3 and `IMMA.16832` give `t + s = 1.0002` and `0.9994`, so a run that
 splits its words between them is charged in full, for g1 as for the record.
 -/
 

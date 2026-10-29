@@ -19,8 +19,8 @@ structure, is not read.
 statement pinning the flat tile (`pins_h1`).
 
 Its premises are met: `Proofs.Pouw.Period.Accept` evaluates the deployed `PouwCheck.protocol.check` to an accept at
-#4351's parameters for every ascending draw of 24 of 144 units (`check_h1`), and `Proofs.Pouw.Period.Honest` builds a
-period of those windows, the salt each window's live coin, that meets every premise (`h1_meets`).
+the H1 loop's parameters for every ascending draw of 24 of 144 units (`check_h1`), and `Proofs.Pouw.Period.Honest`
+builds a period of those windows, the salt each window's live coin, that meets every premise (`h1_meets`).
 -/
 
 namespace Properties.Pouw.Period.SecurityProofs

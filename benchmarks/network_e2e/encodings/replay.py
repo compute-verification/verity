@@ -1,4 +1,4 @@
-"""ENC-REPLAY: the advice as vLLM V1's scheduler, replayed from what the certified I/O already shows.
+"""The scheduler replay: the advice as vLLM V1's scheduler, replayed from what the certified I/O already shows.
 
 The advice (I1) carries every batch row serving chose. vLLM V1's scheduler (`vllm/v1/core/sched/scheduler.py` at the pods'
 pin, d9105ea80) decides those rows deterministically from:
@@ -32,7 +32,7 @@ the step (`_Clock`), and its certified egress: the replay, forked at the open st
 now or a step later and nothing after it, says which of its steps emit its outputs, and an earlier request's output from
 each of those steps says which bucket it left in (`_Egress`). `decode` replays from that advice and the certified I/O
 alone, and
-`table` counts the bits per certifier window against I1 v0's (ADV-SPEC's `bits_by_window`, else `v0_widths`).
+`table` counts the bits per certifier window against I1 v0's (`advice.bits_by_window`, else `v0_widths`).
 """
 
 from __future__ import annotations
@@ -847,8 +847,8 @@ class Trace:
         return [[self.release_t[s] for s in ks] for ks in self.kept_steps()]  # type: ignore[misc]
 
     def origin(self, bucket_s: float) -> int:
-        """The session's first bucket, its earliest ingress's, which the certified record's buckets count from (ADV-SPEC's
-        session-global buckets); 0 without a clock."""
+        """The session's first bucket, its earliest ingress's, which the certified record's buckets count from (the
+        advice module's session-global buckets); 0 without a clock."""
         return min(bucket(t, bucket_s) for t in self.ingress_t) if self.clocked() else 0  # type: ignore[arg-type]
 
     def certified(self, bucket_s: float = 0.1) -> Certified:
@@ -952,17 +952,17 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
 
 def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block_size: int = 16,
                       egress: str = "engine", ingress: str = "client") -> Trace:
-    """One trace of TRACE-CORPUS (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`): its directory's
-    `steps.jsonl`, `requests.jsonl` and `meta.json` (the server's argv), and `server.log` for the KV pool's size unless
-    `num_gpu_blocks` is given. The hook records no arrivals, so a request's engine order and admission step are its first
-    scheduling (FCFS schedules new requests in arrival order), and a step's release is the time its output was back. With
-    `egress="client"` each kept output left when the client got the streamed chunk that carried it (its `chunks`), which
-    is what an egress certifier on the link sees.
+    """One trace of the trace corpus (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`): its
+    directory's `steps.jsonl`, `requests.jsonl` and `meta.json` (the server's argv), and `server.log` for the KV pool's
+    size unless `num_gpu_blocks` is given. The hook records no arrivals, so a request's engine order and admission step
+    are its first scheduling (FCFS schedules new requests in arrival order), and a step's release is the time its output
+    was back. With `egress="client"` each kept output left when the client got the streamed chunk that carried it (its
+    `chunks`), which is what an egress certifier on the link sees.
 
-    A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on today's link),
+    A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on the link),
     or with `ingress="warden"` the server's own arrival stamp (`arrival`, its body read), the order vLLM schedules in.
     That is not what design v3's warden certifies: behind it the engine still follows the body read, and the warden's
-    release order (a, ordinal) leaves order exceptions to charge (TRACE-CORPUS's `<trace>.released` traces carry it as
+    release order (a, ordinal) leaves order exceptions to charge (the corpus's `<trace>.released` traces carry it as
     their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give."""
     d = Path(d)
     argv = json.loads((d / "meta.json").read_text())["server_argv"]
@@ -1397,7 +1397,7 @@ def width(n: int) -> int:
 
 
 def v0_widths(trace: Trace, *, window_buckets: int) -> dict[str, int]:
-    """I1 v0's fields at fixed width (a stand-in until ADV-SPEC's `bits`): per request its id (an index), prompt_len,
+    """I1 v0's fields at fixed width (a stand-in for `advice.bits`): per request its id (an index), prompt_len,
     output_len and finish; per step its row count and release bucket; per row its request, kind, start, n, cache_hit and
     preempted."""
     e = trace.engine
@@ -1409,7 +1409,7 @@ def v0_widths(trace: Trace, *, window_buckets: int) -> dict[str, int]:
 
 
 def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
-    """The trace as ADV-SPEC's advice v0, built with its module `v0` (`verity.core.protocols.certifier.advice`): the
+    """The trace as advice v0, built with its module `v0` (`verity.core.protocols.certifier.advice`): the
     trace's rows in its batch order, each hit's sources from the replay's block map, and each kept output released in its
     step's release bucket. v0 validates it as it builds it."""
     rp = replay(trace.engine, trace.requests, admit=trace.before_step)
@@ -1440,8 +1440,9 @@ def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
 
 
 def v0_parts(v0: Any, adv: Any) -> dict[str, int] | None:
-    """I1 v0's bits by record (`header`, `requests`, `steps`, `release`), from ADV-SPEC's layout (`_layout`, None without
-    one). The residual advice replaces only the step records: the verifier reads the rest from the certified record."""
+    """I1 v0's bits by record (`header`, `requests`, `steps`, `release`), from the advice module's layout (`_layout`,
+    None without one). The residual advice replaces only the step records: the verifier reads the rest from the
+    certified record."""
     layout = getattr(v0, "_layout", None)
     if layout is None:
         return None
@@ -1451,13 +1452,13 @@ def v0_parts(v0: Any, adv: Any) -> dict[str, int] | None:
 
 
 def framed_bits(n: int) -> int:
-    """A window's residual of `n` bits with ADV-SPEC's `uvar` length prefix (a u6 width, then the length), for a transport
-    that doesn't frame windows."""
+    """A window's residual of `n` bits with the advice module's `uvar` length prefix (a u6 width, then the length), for
+    a transport that doesn't frame windows."""
     return n + 6 + n.bit_length()
 
 
 def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0: Any = None) -> dict[str, Any]:
-    """Per certifier window: I1 v0's bits (ADV-SPEC's `bits_by_window` when its module is given as `v0`, else
+    """Per certifier window: I1 v0's bits (`advice.bits_by_window` when the module is given as `v0`, else
     `v0_widths`), the steps the replay matched, and the residual advice's bits under each code (Elias gamma; the adaptive
     code, unclocked and clocked), each code checked by decoding it back to the trace's steps."""
     truth = replay(trace.engine, trace.requests, admit=trace.before_step)
@@ -1499,7 +1500,7 @@ V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" 
 
 
 def load_v0(spec: str | Path | None) -> Any:
-    """ADV-SPEC's advice module from `spec`, a path to its `advice.py`, else from `V0_PATH` when it is there, else None
+    """The advice module from `spec`, a path to its `advice.py`, else from `V0_PATH` when it is there, else None
     (`table` falls back to `v0_widths`)."""
     import importlib.util
     import sys
@@ -1527,16 +1528,18 @@ def main(argv: Sequence[str] | None = None) -> None:
     import argparse
     ap = argparse.ArgumentParser(description="Bits per certifier window: I1 v0 against the replay's residual advice.")
     ap.add_argument("traces", nargs="+", type=Path,
-                    help="step traces (*.jsonl; <name>.tokens.json beside one with prefix caching) or TRACE-CORPUS trace dirs")
+                    help="step traces (*.jsonl; <name>.tokens.json beside one with prefix caching) or trace-corpus "
+                         "trace dirs")
     ap.add_argument("--bucket-ms", type=float, default=100.0)
     ap.add_argument("--window-buckets", type=int, default=600)
-    ap.add_argument("--v0", help="path to ADV-SPEC's advice.py (default: V0_PATH in the tree, else fixed widths)")
+    ap.add_argument("--v0", help="path to the advice module's advice.py (default: V0_PATH in the tree, else fixed "
+                                 "widths)")
     ap.add_argument("--egress", choices=("engine", "client"), default="engine",
-                    help="a TRACE-CORPUS output's release time: its step's (engine) or its streamed chunk's (client)")
+                    help="a trace-corpus output's release time: its step's (engine) or its streamed chunk's (client)")
     ap.add_argument("--ingress", choices=("client", "warden"), default="client",
-                    help="a TRACE-CORPUS request's certified ingress: the client's send time (client) or the engine's arrival "
-                         "stamp (warden: the floor a server admitting in the warden's release order would give; today's "
-                         "warden certifies the release order, which a trace's .released view carries)")
+                    help="a trace-corpus request's certified ingress: the client's send time (client) or the engine's "
+                         "arrival stamp (warden: the floor a server admitting in the warden's release order would "
+                         "give; the warden certifies the release order, which a trace's .released view carries)")
     ap.add_argument("--out", type=Path, help="write {trace: table} as JSON")
     a = ap.parse_args(argv)
     v0 = load_v0(a.v0)

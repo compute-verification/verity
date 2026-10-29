@@ -1,4 +1,4 @@
-"""[moe F-moe-r17-06] The record that failed: OLMoE B2 i32/o32 mixedstop on the evaluator train (tree_int5 f43dbaa3c / tree_int6 c5efbed29) --
+"""The record that failed: OLMoE B2 i32/o32 mixedstop --
 the FIRST real record reading the aliased shared RotaryEmbedding through manifest.op_path_aliases: every sampled RoPE_v1 / Attention_v3 row
 of layers 1..15 UNEQUAL (whole row), layer 0 equal in every sample.  Cause: the collector publishes the shared module's 16 invocations per
 step under the SAME member name (`model.layers.0.self_attn.rotary_emb/0`, one meta each, distinct tensor_ordinal / stream offset); the

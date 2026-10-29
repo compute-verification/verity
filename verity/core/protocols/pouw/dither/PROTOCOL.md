@@ -367,7 +367,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
 
 - **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`). No machine
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
-  the certifier counts. In the Lean, `CoinsConfidential` is Dither's premise, and the placement premise
+  the certifier counts. Both it and its placement premise are prose only (no `.lean` file defines either): the premise
   `WitnessPathPrivate` discharges it: private messages (the devices' signed records and salts, the prover's witness, a
   server's coins) travel only on private links, and the certifier sits on the server's own uplink (Daniel, 26 Oct,
   4:41 PM PDT).

@@ -2,7 +2,7 @@ import Definitions.Pouw.D1
 import Definitions.Pouw.NCP.Defs
 
 /-!
-# NCP as a protocol (trusted; campaign 2 inbox 23:33Z, red-team N1–N5, NA1–NA2, P2-1, P2-3)
+# NCP as a protocol (trusted)
 
 Unit `u` of shape `(m, k, n)` with activations `A` and weight `B = B_{w(u)}`:
 * noise: `E₁` (`m × k`) per unit, an expansion `expAct` of `H`'s answers to `qAct s u A w(u)`; `F₁` (`k × n`) and
@@ -11,14 +11,14 @@ Unit `u` of shape `(m, k, n)` with activations `A` and weight `B = B_{w(u)}`:
 * `E₂ = E₁·R`, `F₂ = −R·F₁`, `E₃ = E₁ + E₂`, `F₃ = F₁ + F₂`, and the stacked operands, block-major:
   `X = [A + E₁ | A + E₂ | −(A + E₃)]` (`m × 3k`) and `Y = [B + F₁; B + F₂; B + F₃]` (`3k × n`);
 * checked values: the running sums of `X·Y` at inner depths `d, 2d, …`, the last capped at `3k`, mod `2^32` (the
-  int32 accumulator's two's-complement value, red-team NA2). The last one is `A·B` for int7 operands (`WrapInt7`), so
+  int32 accumulator's two's-complement value). The last one is `A·B` for int7 operands (`WrapInt7`), so
   the useful output is the final checked value;
 * `H_ref` computes them with an int32 accumulator and outputs the accumulator at `3k`;
 * `W_ref`, from the layout only (generic).
 
 The lead's parameters (`IsLead`): `d = 16`, `E₁` and `F₁` in `[−31, 32]` (6 bits), and every `R` a signed permutation
-that passes the rejection rule of red-team N1, NA1 and P2-1 (`Admissible`). The domain `leadDomain` is §3.2's default shape domain with at
-most `2^40` rows per weight (red-team N5).
+that passes the rejection rule (`Admissible`). The domain `leadDomain` is §3.2's default shape domain with at
+most `2^40` rows per weight.
 
 `GameProofs.shiftBy c k` is the cyclic shift by `c`; at `c = 24` it passes the rule for every `k ≥ 1024` with `16 ∣ k`
 (`Pouw.Guarantees.NCP.ShiftBy24Admissible`).
@@ -35,12 +35,12 @@ def InSmall (x : ℤ) : Prop := -31 ≤ x ∧ x ≤ 31
 statement's `[−63, 63]`). -/
 def InNoise6 (x : ℤ) : Prop := -31 ≤ x ∧ x ≤ 32
 
-/-- The rejection rule (red-team N1, NA1 and P2-1) for a `k × k` matrix `R` at depth `d`: `R` is a signed permutation
+/-- The rejection rule for a `k × k` matrix `R` at depth `d`: `R` is a signed permutation
 `x ↦ σ·e_{π x}`; for every step `S = [t·d, (t + 1)·d)` of a block (`t < k/d`), `π(S) ∩ S = ∅` (no column of `S` has
 its nonzero entry in a row of `S`) and `π(S)` lies inside no step `S′` (so, having `d` elements, it equals no step);
 and `R² ≠ I`, `R² ≠ −I` on `{0, …, k − 1}`. The first clause excludes N1's structures; the second excludes step-level
 involutions such as a step reversal, which a designer-chosen `R` could have (NA1); the third excludes `R² = ±I`, which
-makes the zero-input checked value at depth `2k`, `E₁·(I − R²)·F₁`, zero or twice the one at depth `k` (P2-1). -/
+makes the zero-input checked value at depth `2k`, `E₁·(I − R²)·F₁`, zero or twice the one at depth `k`. -/
 def Admissible (k d : ℕ) (R : Mat) : Prop :=
   SignedPerm k R ∧
   (∀ t < k / d,
@@ -86,7 +86,7 @@ def opY (H : Q → R) (s : S) (U : Workload) (u : ℕ) : Mat :=
   stackY (U.layout.shape u).k (U.weight (U.layout.wid u)) (P.wtNoise H s U u).2 (P.wtNoise H s U u).1
 
 /-- The checked values: block `t` is the running sum of `X·Y` up to `blockEnd d (3k) t`, mod `2^32` (its int32
-two's-complement value, `mmW`), so no int32 range bound is needed (red-team NA2). -/
+two's-complement value, `mmW`), so no int32 range bound is needed. -/
 def Y (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Checked :=
   fun t => mmW (D1.blockEnd P.d (3 * (U.layout.shape u).k) t) (P.opX H s U u A) (P.opY H s U u)
 
@@ -136,7 +136,7 @@ def nz (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) (i : ℕ) : Mat 
 
 end Params
 
-/-- The lead's domain: §3.2's default shapes, and at most `2^40` rows on any weight (red-team N5). -/
+/-- The lead's domain: §3.2's default shapes, and at most `2^40` rows on any weight. -/
 def leadDomain (L : Layout) : Prop := L.ShapesIn Shape.InDefaultDomain ∧ ∀ w, L.rowsOf w ≤ 2 ^ 40
 
 end Pouw.NCP

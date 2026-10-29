@@ -44,21 +44,23 @@ and after and each changed definition with its source; nothing waits on it, and 
 
 **Protocol soundness, `Verity.Soundness`: not yet in Lean on `main`.** It will be one theorem over all the subprotocols:
 the verifier accepts while a claim of the period fails with probability at most their errors summed, each subprotocol's
-guarantee entering as a target until that subprotocol's own proof discharges it. The memory wipe joins as the sixth
-subprotocol. Its building block on `main` is `Verity.Sound` (`Definitions/Core/Game.lean`).
+guarantee entering as a target until that subprotocol's own proof discharges it. The subprotocols are the table's first
+six rows, memory wipes among them; PoUB's row is outside it. Neither composite runs the bandwidth audit over PoUS's store
+or memory wipes yet, and onsite composes PoUB instead (below). Its building block on `main` is `Verity.Sound`
+(`Definitions/Core/Game.lean`).
 
 The table lists what it rests on, then one guarantee outside it; each is proved under `Proofs/`. A status names the statement's named assumptions; the
 conditions it places on its inputs and setup, which the lock also lists, are left out.
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
-| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Proofs/Flock/Bridge/Refused.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance for its finders, `TableCRZ` and `LinkCRZC` |
-| PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. No served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) yet |
+| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/Refused.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance for its finders, `TableCRZAt` and `LinkCRZC` |
+| PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean` | Proved under named assumptions: `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
 | Network certification | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, `Claims.Flock.ListWithin`, and sampled proofs' `Claims.Sampling.KS` and `Claims.Sampling.Commitment.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
-| PoUB (the remote bandwidth audit) | `Properties.RemoteAudit.Line.LineHeld`, `Properties/RemoteAudit/Line.lean` | Outside protocol soundness for now, that audit's own guarantee. Proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
+| PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/RemoteAudit/Line.lean` | Outside protocol soundness for now, that audit's own guarantee. Proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
 
 PoUW has other guarantees, outside protocol soundness.
 
@@ -68,20 +70,22 @@ Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite
 site. It composes two subprotocols, sampled proofs' one-stage audit and PoUW's window check, and accepts only when both
 accept and the commitment binds both (`Properties.Composition`, proved). Onsite adds PoUS, PoUB and network certification; memory wipes are a component of neither yet.
 
-- **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. On `main`, remote's sampled-proofs component is
-  one-stage v1, which takes the sessions' verdicts as evidence; the verifier's run of `flock-verify --zk` produces
-  them, and the link from remote's acceptance to that run's comes with v2. The composed statement for the
-  remote deployment is not on `main` yet.
-- **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZ`, `LinkCRZC`,
+- **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. The composed statement, `Verity.Soundness`, is
+  not in Lean yet (above), so the two compose by hand, and nothing ties the deployed verdicts to the theorems: on
+  `main`, remote's sampled-proofs component is one-stage v1, which takes the sessions' verdicts as evidence; the
+  verifier's run of `flock-verify --zk` produces them, and the link from remote's acceptance to that run's comes with
+  v2.
+- **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`, `LinkCRZC`,
   `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`,
   `ReceiptLuckAt` and `GuessLuckAt`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
-  with no Fiat–Shamir and no retries. The one auditor-trusted device remote relies on is the auditor's challenger, off
-  the site, which draws each coin after the commitment it challenges: `trusted-host`, with the premises
-  `CoinsConfidential` and `OneClock` (stated in `verity/core/protocols/sampled_proofs/README.md`, not in Lean). Network
-  certifiers and memory challengers are onsite's.
-- **Not PoUB.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB, the proof of useful bandwidth: the remote
-  bandwidth audit (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered
-  store. It is a different protocol from the remote composite, and a component of onsite only.
+  with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
+  draws each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
+  (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs,
+  `CoinsConfidential` and `OneClock`, are prose only (`verity/core/protocols/sampled_proofs/README.md`): no `.lean`
+  file defines either. Network certifiers and memory challengers are onsite's.
+- **Not PoUB.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB, the proof of useful bandwidth
+  (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
+  different protocol from the remote composite, and a component of onsite only.
 
 ## Building and checking
 

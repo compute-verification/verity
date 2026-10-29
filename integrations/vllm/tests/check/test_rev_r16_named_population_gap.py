@@ -1,18 +1,17 @@
-"""MAN-06f / MAN-06g move the by-name gaps (VUs fed by MoE block-stream planes; VUs fed by an interior producer without an evaluator, e.g.
+"""The population moves the by-name gaps (VUs fed by MoE block-stream planes; VUs fed by an interior producer without an evaluator, e.g.
 Qwen2.5's BiasAdd over Gemm_v2) out of the sampled population (`population.not_evaluable`), so the replay grades COMPLETE.  Such a gap is
 accepted on a PASS ONLY when form (B) (the Match-oracle compare) is complete over the values, and the population move holds under the same
 condition.  Before the fix the condition was enforced only in the PARTIAL branch (`_partial_replay_named_gap`) -- unreachable after the
 population move -- and a record with hundreds of by-name-excluded VUs that HAVE committed members and NO form (B) rendered a plain PASS.
 
 Behaviour of record (this file; two strict xfails flipped to plain tests): when `sampled_replay.population.not_evaluable` carries a
-MAN-06f/06g class (plane-fed / interior-composed-v2) with n > 0, the PASS requires the same complete form (B) the partial rule requires and
+by-name class (plane-fed / interior-composed-v2) with n > 0, the PASS requires the same complete form (B) the partial rule requires and
 carries the named gap in its text; without it the verdict FAILs 'C2 of record not established ...'.  The pre-existing
 NOT_YET exclusions (RoPE_v1 no evaluator, Attention_v3 state-linked) are the standard's stated applicability domain and are NOT gated.
 
-refinement: form (B) compares the Match record's dispatcher-level module outputs and has NO
-oracle family for the moe/ block-stream planes (oracle_compare.NO_ORACLE_FAMILY_PREFIXES), so a complete (B) covers an interior-composed
-(MAN-06g) gap -- the module's returned tensor IS an instance output -- but never a PLANE-FED (MAN-06f) one, whose committed members are the
-planes: those VUs are value-checked by neither form and the verdict FAILs by that name whatever form (B) says (C1 + C3 hold on them)."""
+Form (B) compares the Match record's dispatcher-level module outputs and has NO oracle family for the moe/ block-stream planes
+(oracle_compare.NO_ORACLE_FAMILY_PREFIXES): a complete (B) covers an interior-composed gap (its module's returned tensor IS an instance
+output), never a PLANE-FED one, whose planes neither form value-checks: that FAILs by name whatever (B) says (C1 + C3 hold on them)."""
 from __future__ import annotations
 
 import pytest
@@ -48,7 +47,7 @@ SR_COMPLETE_INTERIOR_ONLY = {**SR_COMPLETE_WITH_NAMED_EXCLUSIONS,
                              "population": {"vus": 2000, "not_evaluable": {K_06G: 140, K_ROPE: 32},
                                             "not_evaluable_by_family": {"BiasAdd_v1 (fed by interior Gemm_v2: composed evaluator, v2)": 140, "RoPE_v1": 32}}}
 
-# the same replay on a dense row: only the NOT_YET exclusions (the standard's applicability domain), no MAN-06f/06g gap
+# the same replay on a dense row: only the NOT_YET exclusions (the standard's applicability domain), no plane-fed or interior-composed gap
 SR_COMPLETE_NOT_YET_ONLY = {**SR_COMPLETE_WITH_NAMED_EXCLUSIONS,
                             "population": {"vus": 2000, "not_evaluable": {K_ROPE: 32, "state-linked K/V history (Attention_v3)": 16}, "not_evaluable_by_family": {"RoPE_v1": 32, "Attention_v3": 16}}}
 
@@ -61,20 +60,20 @@ OC_PARTIAL = {**OC_COMPLETE, "result": None, "grade": "partial", "complete": Fal
 @pytest.mark.parametrize("b", [1, 2])
 def test_named_population_exclusions_without_form_b_do_not_pass_f_r16_02(b):
     ok, why = commit_verdict({**BASE, "binding": _bnd(b), "sampled_replay": SR_COMPLETE_INTERIOR_ONLY}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (COORD M-0721 (1))"), (b, ok, why)
+    assert not ok and why.startswith("C2 of record not established: "), (b, ok, why)
     assert "140 VUs not evaluable by name" in why and "interior-composed-v2" in why and "MAN-06g" in why
     assert "form (B) absent" in why and "140 x fed by interior producer" in why
     assert "RoPE" not in why                                                     # the NOT_YET exclusion is not the gap named here
-    # the mixed population (rev's original fixture: 140 interior-composed + 64 plane-fed) without form (B): the plane-fed FAIL leads
+    # the mixed population (the original fixture: 140 interior-composed + 64 plane-fed) without form (B): the plane-fed FAIL leads
     # and names the interior-composed rest as not covered either
     ok, why = commit_verdict({**BASE, "binding": _bnd(b), "sampled_replay": SR_COMPLETE_WITH_NAMED_EXCLUSIONS}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs (MAN-06f)"), (b, ok, why)
+    assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs"), (b, ok, why)
     assert "64 x fed by moe_block_stream" in why and "the other 140 VUs not evaluable by name (interior-composed-v2) are not covered either: form (B) absent" in why
 
 
 @pytest.mark.parametrize("b", [1, 2])
 def test_interior_composed_exclusions_with_complete_form_b_pass_carrying_the_gap_f_r16_02(b):
-    """MAN-06g (Qwen2.5 BiasAdd over Gemm_v2): the module output IS an instance output form (B) compares -> a complete (B) covers the gap."""
+    """Interior-composed (Qwen2.5 BiasAdd over Gemm_v2): the module output IS an instance output form (B) compares -> a complete (B) covers the gap."""
     ok, why = commit_verdict({**BASE, "binding": _bnd(b), "sampled_replay": SR_COMPLETE_INTERIOR_ONLY, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
     assert ok and why.startswith("PASS (C2 of record by form (B) [oracle compare complete: 3 compared, 0 mismatch, instance outputs 2] over 140 VUs not evaluable by name"), (b, ok, why)
     assert "MAN-06g" in why and "interior-composed-v2" in why and "140" in why and "MAN-06f" not in why and "plane" not in why
@@ -82,22 +81,22 @@ def test_interior_composed_exclusions_with_complete_form_b_pass_carrying_the_gap
 
 @pytest.mark.parametrize("b", [1, 2])
 def test_plane_fed_exclusions_fail_by_name_even_with_complete_form_b_f_r16_07(b):
-    """MAN-06f: the plane-fed VUs' committed members are the moe/ planes; form (B) has no oracle family for moe/
+    """Plane-fed: the VUs' committed members are the moe/ planes; form (B) has no oracle family for moe/
     (NO_ORACLE_FAMILY_PREFIXES) and form (A) has no row->plane mapping -> value-checked by NEITHER form -> FAIL named, whatever (B) says.
     The interior-composed part of the same population is reported as covered by the complete (B) (so the text says exactly what is missing)."""
     from verity_vllm.check.oracle_compare import NO_ORACLE_FAMILY_PREFIXES
     assert "moe/" in NO_ORACLE_FAMILY_PREFIXES                                   # the fact the rule rests on
     ok, why = commit_verdict({**BASE, "binding": _bnd(b), "sampled_replay": SR_COMPLETE_WITH_NAMED_EXCLUSIONS, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs (MAN-06f) have committed moe/ plane members value-checked by NEITHER form"), (b, ok, why)
+    assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs have committed moe/ plane members value-checked by NEITHER form"), (b, ok, why)
     assert "no oracle family for moe/ planes" in why and "64 x fed by moe_block_stream" in why
     assert "the other 140 VUs not evaluable by name (interior-composed-v2) are covered by the complete form (B)" in why
-    assert "C2 needs form (A) over the planes (MAN-06f v3" in why and "RoPE" not in why
+    assert "C2 needs form (A) over the planes (a row->plane mapping)" in why and "RoPE" not in why
     # plane-fed alone (OLMoE: every expert-act row), with and without form (B): the same FAIL by name -- (B) neither lifts nor is required here
     sr_p = {**SR_COMPLETE_WITH_NAMED_EXCLUSIONS, "population": {"vus": 2000, "not_evaluable": {K_06F: 64, K_ROPE: 32}}}
     for oc in (OC_COMPLETE, None, OC_PARTIAL):
         rec = {**BASE, "binding": _bnd(b), "sampled_replay": sr_p, **({"oracle_compare": oc} if oc is not None else {})}
         ok, why = commit_verdict(rec, True, min_openings=64)
-        assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs (MAN-06f)") and "the other" not in why, (oc, why)
+        assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs") and "the other" not in why, (oc, why)
     # without form (B) the interior-composed rest is named as not covered either
     ok, why = commit_verdict({**BASE, "binding": _bnd(b), "sampled_replay": SR_COMPLETE_WITH_NAMED_EXCLUSIONS}, True, min_openings=64)
     assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs") and "are not covered either: form (B) absent" in why
@@ -125,7 +124,7 @@ def test_partial_or_mismatching_form_b_does_not_lift_the_gap():
     oracle mismatch it is."""
     rec = {**BASE, "binding": _bnd(2), "sampled_replay": SR_COMPLETE_INTERIOR_ONLY}
     ok, why = commit_verdict({**rec, "oracle_compare": OC_PARTIAL}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (COORD M-0721 (1))") and "form (B) result None (partial)" in why
+    assert not ok and why.startswith("C2 of record not established: ") and "form (B) result None (partial)" in why
     assert _form_b_complete_over_values(OC_PARTIAL).startswith("form (B) result None (partial)")
     assert "MATCH_SNAP_STEPS=all" in _form_b_complete_over_values({**OC_COMPLETE, "complete": False, "steps_not_snapshotted": [2]})
     no_io = {**OC_COMPLETE, "compared_by_family": {"input_token_ids": 3}, "not_compared_by_family": {"instance_outputs": 5}}
@@ -139,7 +138,7 @@ def test_partial_or_mismatching_form_b_does_not_lift_the_gap():
 
 def test_not_yet_exclusions_alone_are_the_applicability_domain_not_a_gap():
     """A complete replay whose population excluded only NOT_YET classes (RoPE_v1 no evaluator, Attention_v3 state-linked) PASSes plain with
-    or without form (B) -- the standard the 3 finalized workloads were graded by; a zero-count MAN-06 key is no gap either."""
+    or without form (B) -- the standard the 3 finalized workloads were graded by; a zero-count by-name class is no gap either."""
     for b in (1, 2):
         ok, why = commit_verdict({**BASE, "binding": _bnd(b), "sampled_replay": SR_COMPLETE_NOT_YET_ONLY}, True, min_openings=64)
         # the applicability domain is no gap; at B=2 without form (B) the PASS names the attribution gap (and only that)

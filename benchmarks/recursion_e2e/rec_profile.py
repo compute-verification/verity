@@ -323,8 +323,8 @@ def read(root: Path) -> dict[str, Any]:
         rows.append(r)
     for o in repeats(root, "inner")[:1]:
         for sub, stage, what in (("proxy", "inner M0", "the inner statement (plain leaves), ZK off, against the rec_live proxy"),
-                                 ("m0", "baseline M0", "today's hm96 statement, ZK off, loopback serve"),
-                                 ("zk", "baseline --zk", "today's hm96 statement with --zk, loopback serve")):
+                                 ("m0", "baseline M0", "the non-recursive hm96 statement, ZK off, loopback serve"),
+                                 ("zk", "baseline --zk", "the non-recursive hm96 statement with --zk, loopback serve")):
             if (o / "inner" / sub).exists():
                 rows.append(prover_row(o / "inner" / sub, stage, "inner", what))
     rows += tool_rows(repeats(root, "icheck"), "icheck", {

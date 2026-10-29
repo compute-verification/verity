@@ -1,5 +1,4 @@
-"""FP-STEP: every MMA an exact-integer FP8 route issues lies inside premise (a)'s small-grid regime, on every input
-(note:20261019T0457Z-draft-fpx-machine, round 2).
+"""FP-STEP: every MMA an exact-integer FP8 route issues lies inside premise (a)'s small-grid regime, on every input.
 
 Premise (a), `Accounting.Assumptions.TS.Fp8GridExact p` over `FpGridSmall` (Security/Definitions/Accounting/Assumptions/
 FpMma.lean), grants one k32 MMA step its exact sum when the accumulator's value c and the step's 32 products are integer

@@ -1,4 +1,4 @@
-# Dither's harness. Not a package: its launchers and benches run on GPU nodes through `research run`; numabind.py's plan
+# Dither's harness. Not a package: its launchers and benches run on GPU hosts, per their headers; numabind.py's plan
 # (the leased GPU's NUMA node, and each way a run goes unbound) runs here as a suite on a fake sysfs, and dbw.py's
 # calibration beside serving and its report on a fake side.
 [tool.pytest.ini_options]

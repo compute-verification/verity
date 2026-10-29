@@ -1,4 +1,4 @@
-"""(T0) The sampler VALUE check of a stochastic row reproduces (R15 stoch; row_pod.sh's `rcs`, `match_summary.json` `stoch_value_check`):
+"""(T0) The sampler VALUE check of a stochastic row reproduces (row_pod.sh's `rcs`, `match_summary.json` `stoch_value_check`):
 `match_stoch.json` -- every sampled row of the record recomputed with the Program's own sampler Definition (`GumbelTopPTokenSelect_v1{V,S}`,
 the registry interpreter walking the V lanes) from the Match record's snapshots of the device sampler chain, under the DECLARED seed /
 temperature / top-p.  Lifted: its verdict and reasons, the summary (engine steps in the record, sampled rows, rows checked, the row tally,

@@ -3,8 +3,9 @@
 # ptxas's register report and each row kernel's opcode counts; under one lease of at most LEASE_MIN minutes, the GPU tests,
 # check.py (every variant and the H200 layer against the CPU reference) and bench.py (the variants, then whole steps).
 #
-#   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
-#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/torch_gpu/sha512_rows/gpu.sh
+#   OUT=DIR bash benchmarks/torch_gpu/sha512_rows/gpu.sh
+#
+# Needs a CUDA GPU (an H200 for the H200 layer), CUDA torch, CUDA's nvcc and `gpu-lease` on PATH.
 # STEPS (default "tests check bench"; the bench times steps only on a variant check.json found bit-exact), BENCH_ARGS,
 # SHA512_ROWS_V (the default variant), LEASE_MIN (default 25), PY.
 set -uo pipefail

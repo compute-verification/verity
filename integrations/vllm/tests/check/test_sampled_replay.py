@@ -58,7 +58,7 @@ ABN = 16                                 # attn=True: the attention rows' key bl
 def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: bool = False, registered: bool = False):
     """One request Program: per token row Embedding -> RMSNormTriton -> Gemm(gate_up) -> SiluMul -> Gemm(down) -> RMSNormFused(norm) ;
     per step Gemm(logits, tied embed) -> TokenSelect.  Names / args in the Build's instance-sequence schema.
-    `bias`: the gate_up linear is BIASED (Qwen2.5 qkv_proj shape, MAN-07): Gemm -> BiasAdd_v1 under the one module, the module returns post-bias.
+    `bias`: the gate_up linear is BIASED (Qwen2.5 qkv_proj shape): Gemm -> BiasAdd_v1 under the one module, the module returns post-bias.
     `rope`: the token row also runs Gemm(qkv) -> RoPE_v1 query[k] (member `query`, NHEADS=NH) / key[k] (member `key`,
     NHEADS=KVH) exactly as the real Programs name them (`rotary_emb/rotary_embedding_{s}/query[k]`), arg 1 = ONE row of the `weights`
     field `...rotary_emb.cos_sin_cache` at the token's position (the Program's slice names the position); the rotated heads are leaves
@@ -201,7 +201,7 @@ class Honest:
             got = EV.evaluate(fam, d["statics"], inputs, wsl)
             if len(got) > 1:                                            # the relation's ports under their committed members, as the replay reads them
                 got = EV.by_member(got, pi.member_of_port(r["i"]))
-            if d.get("plane") and d["plane"] not in got and len(got) == 1:  # [MAN-06f v3] the act SiluMul's `out` IS its plane
+            if d.get("plane") and d["plane"] not in got and len(got) == 1:  # the act SiluMul's `out` IS its plane
                 got = {d["plane"]: next(iter(got.values()))}
             if not d["members"]:                                        # interior row (pre-bias Gemm): value flows on, nothing is committed
                 self.values[(rid, r["i"])] = np.asarray(next(iter(got.values()))).reshape(-1).astype(np.uint16)
@@ -412,7 +412,7 @@ def test_equal_shape_request_swap_of_an_input_member_fails_named(world):
     # the norm rows themselves (inputs = embeddings of the right request) and the gate_up Gemm rows (input = the other request's norm) fail
     assert {"RMSNormTriton_v1", "Gemm_v1"} <= specs
     assert {x["request_id"] for x in rep["mismatch"]} == {"r0", "r1"}
-    # [moe F-moe-r17-06] EVERY mismatch is counted by name on the record, uncapped (the detail list carries 12): the counts sum to mismatch_n
+    # EVERY mismatch is counted by name on the record, uncapped (the detail list carries 12): the counts sum to mismatch_n
     mb = rep["mismatch_by"]
     n = rep["sample"]["mismatch_n"]
     assert sum(mb["by_family"].values()) == sum(mb["by_request"].values()) == sum(mb["by_phase"].values()) == sum(mb["strata"].values()) == n
@@ -478,14 +478,14 @@ def _bnd(n_req):
 
 def test_verdict_c2_of_record_replay_plus_linkage_replaces_the_oracle_gate_at_b2():
     """At B>=2 a complete sampled replay + linked boundaries PASS without any Match oracle; a replay mismatch or
-    an unlinked boundary is a named FAIL at any B; a partial replay alone does not attribute (F-cb-23 stays closed)."""
+    an unlinked boundary is a named FAIL at any B; a partial replay alone does not attribute."""
     from verity_vllm.check.verdict import commit_verdict
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True}}
     ok_sr = {"result": True, "grade": "complete", "why": None}
     ok_lk = {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0}
     ok_wp = {"result": True, "compared": 98, "mismatched": [], "missing": []}
-    base["weights_pin"] = ok_wp                                                           # [MAN-09] the checkpoint pin is part of the record
+    base["weights_pin"] = ok_wp                                                           # the checkpoint pin is part of the record
     ok_, why_ = commit_verdict({**base, "binding": _bnd(2), "sampled_replay": ok_sr, "boundary_linkage": ok_lk}, True, min_openings=64)
     assert ok_ is True and why_.startswith("PASS (B=2: per-(step,request) attribution not verified on this record"), why_   # PASS, gap named
     # mismatch: named
@@ -534,7 +534,7 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
            "why": "no evaluator for RMSNormFusedCuda_v2{N=2048} variant (statics outside the registered relation)", "why_class": "no-evaluator"},
           {"spec": 'BiasAdd_v1{N=2048}', "request_id": "r0", "step": 1, "op_path": "model.layers.1.self_attn.qkv_proj", "row": 0,
            "why": "fed by interior producer(s) without an evaluator (Gemm_v2 (model.layers.1.self_attn.qkv_proj)): composition not possible in this replay (MAN-06g, v2)", "why_class": "interior-composed-v2"}]
-    # an older version of this test used a PLANE-FED (MAN-06f) second stratum and expected form (B) to cover it;
+    # an older version of this test used a PLANE-FED second stratum and expected form (B) to cover it;
     # form (B) has no oracle family for the moe/ planes those VUs commit (oracle_compare.NO_ORACLE_FAMILY_PREFIXES), so that PASS overclaimed
     # -- the second stratum is now an interior-composed one (Qwen2.5 BiasAdd: its instance output IS compared) and the plane-fed case FAILs below
     ne_plane = {"spec": 'SiluMul_v1{N=1024}', "request_id": "r0", "step": 1, "op_path": "model.layers.1.mlp.experts", "row": 0,
@@ -557,7 +557,7 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
         # a PLANE-FED stratum beside them: FAIL by name even with the same complete form (B) -- neither form checks the planes
         p3 = {**part, "strata_unevaluated": [K1, K2, K3], "unevaluated_strata": us + [us_plane], "not_evaluated": ne + [ne_plane]}
         ok, why = commit_verdict({**base, "binding": _bnd(b), "sampled_replay": p3, "oracle_compare": oc_ok}, True, min_openings=64)
-        assert not ok and why.startswith("C2 of record not established: 1 plane-fed strata (2 VUs; MAN-06f) have committed moe/ plane members value-checked by NEITHER form") \
+        assert not ok and why.startswith("C2 of record not established: 1 plane-fed strata (2 VUs) have committed moe/ plane members value-checked by NEITHER form") \
             and "no oracle family for moe/ planes" in why and "SiluMul_v1" in why and "moe_block_stream" in why and "3 strata named not evaluated" in why, why
         # the oracle under value_correspondence.oracle_compare is read too
         vc = {**base["value_correspondence"], "oracle_compare": oc_ok}
@@ -718,7 +718,7 @@ def test_biased_linear_member_is_the_post_bias_tensor_produced_by_biasadd(world,
 
 
 def test_biasadd_over_an_interior_gemm_without_evaluator_is_not_evaluable_by_name_hopper_m0748(biased_world, monkeypatch):
-    """A biased linear whose INTERIOR pre-bias Gemm has no registered evaluator: BiasAdd_v1 is the producer of record (MAN-07), its input
+    """A biased linear whose INTERIOR pre-bias Gemm has no registered evaluator: BiasAdd_v1 is the producer of record, its input
     is interior, and the BiasAdd VU cannot compose.  It is counted BY NAME as not evaluable (population), never sampled as a stratum that
     stays 'not evaluated' (partial = FAIL closed on every biased-linear row).  Over Gemm_v1 (Ada) the composition is unchanged: the
     BiasAdd rows are VUs and replay exact.  Gemm_v2 (the Hopper GEMM this finding was measured on) now HAS an evaluator -- see the Hopper
@@ -877,7 +877,7 @@ def test_hopper_honest_program_replays_bit_exactly_gemm_v2_in_the_population(hop
 
 
 def test_hopper_biased_linear_composes_the_interior_gemm_v2(hopper_worlds):
-    """The MAN-06g gap of record (32,228 'BiasAdd_v1 fed by interior Gemm_v2' VUs on the Qwen2.5 H100 row) closes:
+    """The interior-composed gap of record (32,228 'BiasAdd_v1 fed by interior Gemm_v2' VUs on the Qwen2.5 H100 row) closes:
     with the Gemm_v2 evaluator the BiasAdd VU composes the interior wgmma GEMM from ITS committed inputs and replays exact."""
     _plain, biased = hopper_worlds
     pi = IX.ProgramIndex(biased.inst)
@@ -941,7 +941,7 @@ def test_model_weights_provider_reads_buffers_as_well_as_parameters_the_set_the_
     """`model_weights_provider` is the replay's registered-input reader on the pods; the rotary table
     `...rotary_emb.cos_sin_cache` is a torch BUFFER (vLLM: `register_buffer(..., persistent=False)`, one shared RotaryEmbedding instance
     named once at layer 0).  A parameters-only reader returned None for it -> every RoPE_v1 row 'registered weight field ... not available
-    to the replay' (300/300 strata on the smollm2 int-2 canary, cp-can).  The reader's set must equal the set `register_weights` pins:
+    to the replay' (300/300 strata on the smollm2 canary).  The reader's set must equal the set `register_weights` pins:
     `named_parameters()` + `named_buffers()`; the wrapper prefix rule is unchanged; an unknown field is still None (unresolved by name)."""
     torch = pytest.importorskip("torch")
 
@@ -1370,7 +1370,7 @@ def test_device_retained_store_is_replayed_serially_and_a_child_device_fault_fal
     rep = SR.sampled_replay(_programs(world), bmap, device_reader, _weights(world), per_stratum=2, seed=3, workers=4, retention="device")
     assert rep["result"] is True and rep["grade"] == "complete", rep.get("why")
     assert rep["evaluator"] == {"retention": "device", "workers_requested": 4, "workers": 1, "mode": "serial (parent process)",
-                                "note": "device-retained committed store: forked evaluator disabled, serial replay in the parent's CUDA context (F-cb-44)",
+                                "note": "device-retained committed store: forked evaluator disabled, serial replay in the parent's CUDA context",
                                 "prewarmed_libraries": {}, "fork": {}}
     assert rep["timing"]["workers"] == 1 and calls["parent"] > 0
     # (b) no retention hint, a forked pool: the children's device fault is a pool failure, the parent replays serially and PASSES
@@ -1392,7 +1392,7 @@ def test_device_retained_store_is_replayed_serially_and_a_child_device_fault_fal
     assert strip(ser) == strip(rep3)
 
 
-# ------------------------------------------------------------------------------------------------ [MAN-06f v3] fused-MoE planes
+# ------------------------------------------------------------------------------------------------------------- fused-MoE planes
 E_MOE, TOPK, VPT = 16, 2, 8               # experts, routed slots, values per router thread (E/VPT = 2 threads -> a real xor butterfly)
 
 
@@ -1540,7 +1540,7 @@ def _plane_word(store, entries, rid, step, plane, elem, flip=0x0080, op_path="mo
 
 
 def test_moe_plane_faults_fail_named_at_the_pair_or_token(moe_world):
-    """[MAN-06f v3 negatives] a flipped committed word of one plane is caught BY NAME at its pair / token: an act word (the SiluMul@experts VU
+    """A flipped committed word of one plane is caught BY NAME at its pair / token: an act word (the SiluMul@experts VU
     of that pair and the down row that reads it), a sum word (the MoeSum VU of that token and the fused norm that reads it), an up word (the
     act VU whose input it is and the up VU that produced it), a router id (the router VU and every expert row of that slot); a flipped word
     of r1's plane never fails an r0 VU (the per-request plane split).  The MoeSum is the experts module's returned tensor `out` with the sum
@@ -1590,7 +1590,7 @@ def test_moe_plane_alias_check_is_a_fact_of_the_record_honest_true_aliased_false
     """The replay record states, per (request, step, MoE layer), that the committed up plane is
     not the committed down plane's bytes: honest world -> result True over every triple with both planes; the pre-FLUSH-03 alias replayed on
     one request's step -> result False naming that (request, step, layer) while the other request's triple still differs; a dense Program
-    (no moe/L<k> planes) -> None with 0 compared.  The aliased plane is also caught by the MAN-06f v3 relation (mismatch by name) -- the check
+    (no moe/L<k> planes) -> None with 0 compared.  The aliased plane is also caught by the plane relation (mismatch by name) -- the check
     is the direct fact beside it, not a second gate."""
     w = moe_world
     bmap, committed = w.bmap_and_reader()
@@ -1613,8 +1613,8 @@ def test_moe_plane_alias_check_is_a_fact_of_the_record_honest_true_aliased_false
 
 
 def test_moe_swapped_request_plane_split_fails_named(moe_world):
-    """[MAN-06f v3 negatives; binding.py MOE-B2] the binding's per-request plane split is what the mapping reads through: r1's `up` entry
-    pointed at r0's rows (the pre-MOE-B2 'whole plane to every request' shape) makes r1's act VUs read another request's up words ->
+    """The binding's per-request plane split is what the mapping reads through: r1's `up` entry
+    pointed at r0's rows (the older 'whole plane to every request' shape) makes r1's act VUs read another request's up words ->
     F_V != committed act, named at r1's pairs; r0 stays exact."""
     w = moe_world
 
@@ -1662,7 +1662,7 @@ def test_moe_planes_carrying_r0_rows_only_bound_whole_to_r1_fail_the_replay(moe_
 
 
 def test_moe_plane_mapping_refuses_a_program_that_is_not_pair_major(moe_world):
-    """[MAN-06f v3] the row -> plane mapping is checked against the Program, never guessed: an up row whose `[p]` name disagrees with its
+    """The row -> plane mapping is checked against the Program, never guessed: an up row whose `[p]` name disagrees with its
     Program-order ordinal, or whose args do not read router slot p % TOPK, is NAMED as a mapping failure (class `mapping`, never carried on
     a PASS) and removed from the evaluable population -- no plane word of another pair is ever read.  A dense Program has no MoE rows and
     its population is untouched."""
@@ -1702,7 +1702,7 @@ def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step
 
 
 def test_moe_evaluators_equal_the_registered_definitions():
-    """[MAN-06f v3 unit 2] the numpy / scalar-primitive evaluators of the MoE families are the registered `verity.ml.definitions.registry.moe`
+    """The numpy / scalar-primitive evaluators of the MoE families are the registered `verity.ml.definitions.registry.moe`
     Definitions (the bodies moe_kernel_xcheck checked against the real kernels): bit-equal to the reference evaluator on random
     words -- router (renormalize False / True, a tie), sum, up and down expert GEMMs (the gather by the committed expert id)."""
     from verity.ml.circuits.defs import bind
@@ -1851,7 +1851,7 @@ def test_a_fault_on_some_picks_inside_an_evaluated_stratum_is_partial_named_neve
     assert rep["strata_unevaluated"] == []                                       # no stratum is FULLY unevaluated: the old rule graded this complete
     assert rep["result"] is None and rep["grade"] == "partial"
     assert rep["why"].startswith(f"{rep['sample']['not_evaluated_n']} pick(s) not evaluated inside evaluated strata (missing-input x {rep['sample']['not_evaluated_n']}) -- run-time fault, not a gap on the record: ")
-    assert "not retained" in rep["why"] and "(F-r16-13)" in rep["why"]
+    assert "not retained" in rep["why"]
     assert RC.why_class("committed bytes not retained for (r0, step 0, x/out) [0, 16)") == "missing-input" and RC.why_class("ambiguous binding: 2 entries for (...)") == "missing-input"
     assert RC.why_class("committed bytes not retained ...") in RC.WHY_CLASSES_FAULT and "missing-input" not in RC.WHY_CLASSES_BY_NAME
     assert all(x["why_class"] == "missing-input" for x in rep["not_evaluated"])
@@ -1865,14 +1865,14 @@ def test_a_fault_on_some_picks_inside_an_evaluated_stratum_is_partial_named_neve
                                "compared_by_family": {"instance_outputs": 2, "input_token_ids": 1}, "not_compared_by_family": {},
                                "attribution": {"complete": True, "pairs": 3, "unverified_n": 0, "ambiguous_steps": []}}}
     ok, why = commit_verdict({**base, "binding": _bnd(2), "sampled_replay": rep}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (DECISIONS-2 §4): sampled replay partial") and "run-time fault" in why
+    assert not ok and why.startswith("C2 of record not established: sampled replay partial") and "run-time fault" in why
     # the honest replay of the same world is still complete
     rep_ok = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=64, seed=1)
     assert rep_ok["result"] is True and rep_ok["grade"] == "complete" and rep_ok["sample"]["not_evaluated_n"] == 0
 
 
 def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_member():
-    """[reqval 287783ec6 / 9f7a75f6b; moe MOE-PAD-SPEC route A (3)] `padded_moe_block` (the evaluator of MoeFfnFixedL_v1 / MoeFfnFixed_v1) is
+    """`padded_moe_block` (the evaluator of MoeFfnFixedL_v1 / MoeFfnFixed_v1) is
     value-equal to the MOE-01 composition the record's five kernels are replayed by -- MoeRouterTopK on the logits, per SELECTED slot
     MoeExpertGemm (up) -> SiluMul (act) -> MoeExpertGemmW (down, routed weight in the accumulator) -> MoeSum in id order -- and evaluates the
     UNSELECTED slots too (g = 0.0f: the construction computes them; their down words are f2fp(acc * 0) = +/-0).  Every member Q_module_v1
@@ -1944,7 +1944,7 @@ def test_lifted_slot_compare_bot_under_active_and_value_under_disabled_both_fail
     have = np.full(4, bot17, dtype=np.uint32); have[3] = bot17 | 0x0001              # bot with a nonzero payload (or INV): never accepted as bot
     eq, nd, first, v = CMP.lifted_compare(have, payload, False, "l17")
     assert not eq and "nonzero payload" in v
-    # revb n-52-2: an INV word (bot bit + nonzero payload) under an ACTIVE enable is named INV, never 'payload differs'
+    # an INV word (bot bit + nonzero payload) under an ACTIVE enable is named INV, never 'payload differs'
     have = payload.astype(np.uint32).copy(); have[3] |= bot17                          # payload[2] is 0x0000: bot bit there IS bot, so use [3]
     eq, nd, first, v = CMP.lifted_compare(have, payload, True, "l17")
     assert not eq and nd == 1 and first == 3 and "INV word" in v and "Active" in v
@@ -1986,8 +1986,8 @@ def test_population_stamps_on_every_reason_the_code_its_text_decodes_to(moe_worl
     from verity_vllm.check.replay import replay_codes as RC
 
     monkeypatch.delitem(RK.EVALUATORS, "RMSNormFusedCuda_v2")                  # direct no-evaluator gaps
-    monkeypatch.delitem(RK.EVALUATORS, "MoeRouterTopK_v1")                     # a plane producer without an evaluator (MAN-06f)
-    monkeypatch.delitem(RK.EVALUATORS, "Gemm_v1")                              # BiasAdd over an interior Gemm (MAN-06g) + direct Gemm gaps
+    monkeypatch.delitem(RK.EVALUATORS, "MoeRouterTopK_v1")                     # a plane producer without an evaluator (plane-fed)
+    monkeypatch.delitem(RK.EVALUATORS, "Gemm_v1")                              # BiasAdd over an interior Gemm (interior-composed) + direct Gemm gaps
     monkeypatch.setitem(RC.NOT_YET, "TokenSelect_v1", "not replayed by this version (test label)")     # the stated domain
     rows = [dict(r) for r in moe_world.inst["rows"]]
     ups = [k for k, r in enumerate(rows) if r["spec"].startswith("MoeExpertGemm_v1")][:2]

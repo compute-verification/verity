@@ -105,14 +105,14 @@ class WorkloadSampling:
     seed: int | None                                  # every writer writes it, null for greedy
     n: int | None                                     # absent: 1 (the driver's default)
     ignore_eos: bool | None                           # true: every request runs to its cap (`config.done_source`)
-    # explicit parameters beside the variant's table: no writer writes them; GM-01's G1 compares them when a hand edit adds them
+    # explicit parameters beside the variant's table: no writer writes them; the global match's G1 compares them when a hand edit adds them
     temperature: float | None
     top_p: float | None
     top_k: int | None
-    # stops before the cap: no writer writes them; `config.done_source_refusal` refuses them on a row of record
+    # stops before the cap: no writer writes them; `config.done_source_refusal` refuses them on a workload of record
     stop_token_ids: Sequence[Any] | None
     stop: Sequence[Any] | str | None
-    # the EOS set pinned into the workload: no writer writes it; GP-01's stop rule takes it as the declaration of record, and a
+    # the EOS set pinned into the workload: no writer writes it; the global Program's stop rule takes it as the declaration of record, and a
     # checkpoint given beside it must agree (`pipeline.global_program.stop_rule`)
     eos_token_ids: tuple[int, ...] | None = None
 

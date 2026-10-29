@@ -1,5 +1,5 @@
 """N2's advised counts (`advised`): the circuit held to its reference, and advised link-windows through the proof
-service on simulated vLLM serving written as I1's advice v0 (varied prompt, request and output lengths, chunked
+system on simulated vLLM serving written as I1's advice v0 (varied prompt, request and output lengths, chunked
 prefill, prefix-cache hits and their sources, a preemption and its resume, the async row past a finish, a step's rows
 out of request order, frames released after they're handed and responses spanning windows): honest traffic accepted
 in every window, salted or not, and an advice whose output length is one off, which misses a request or moves a
@@ -152,7 +152,7 @@ def test_the_simulated_sessions_are_varied():
 def test_honest_advised_traffic_is_accepted_in_every_window(tmp_path, own):
     """No egress profile and no FIXLEN: each window's egress counts are the advice's releases in its buckets, its
     ingress counts release every output's request in time, and every window of every session is accepted through the
-    proof service, salted (the certifier's own frame in each window) or not."""
+    proof system, salted (the certifier's own frame in each window) or not."""
     for seed in SEEDS:
         session = serve(seed, own)
         assert check(session, own=own) == [True] * WINDOWS
@@ -198,7 +198,7 @@ def test_the_ingress_ends_are_derived_from_v0s_prompt_lengths():
 
 
 def _signed_end(counts, own, end):
-    """CERT-VARLEN's rule: the first bucket where the ingress head's signed counts, less one own frame a window, reach
+    """The first bucket where the ingress head's signed counts, less one own frame a window, reach
     `end` request frames."""
     total = 0
     for t, n in enumerate(counts):
@@ -210,7 +210,7 @@ def _signed_end(counts, own, end):
 
 @pytest.mark.parametrize("own", [0, 1])
 def test_the_ingress_ends_are_where_the_signed_counts_put_them(own):
-    """CERT-VARLEN's rule: request k ends in the first bucket where the ingress head's signed counts, less one own frame
+    """Request k ends in the first bucket where the ingress head's signed counts, less one own frame
     a window, reach `advised.ends`'s k-th, Σ_{i ≤ k} request_frames[prompt_len_i − 1]. With each window's own frame at
     the head of its queue, ahead of carried request frames (`active.Bucketer`), that is the bucket that releases
     request k's last frame in every session, salted sessions whose windows start with frames carried in among them, and

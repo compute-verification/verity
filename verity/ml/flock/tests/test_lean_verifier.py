@@ -48,7 +48,9 @@ def test_no_escape_hatches():
     assert sources()
     hits = [f"{p.relative_to(LEAN)}:{i}: {line.strip()}" for p in sources()
             for i, line in enumerate(p.read_text().splitlines(), 1) if FORBIDDEN.search(line)]
-    assert not hits, hits
+    assert not hits, ("the verifier of record runs only the definitions its proofs are about: write each of these in "
+                      "plain Lean, with no @[extern], @[implemented_by], unsafe or native_decide (reword a comment that "
+                      "names one):\n" + "\n".join(hits))
 
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
@@ -635,6 +637,7 @@ def _one_stage_draw():
     return draw if hasattr(draw, "derive") else None
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None or _one_stage_draw() is None,
                     reason="no Lean toolchain or no stratified law in core (PRs #161, #164)")
 def test_stratified_draw_agrees_with_core(tmp_path):
@@ -725,6 +728,7 @@ def test_the_reference_vectors_exist():
     assert not missing, missing
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None,
                     reason="no Lean toolchain or no program format vectors (PR #120)")
 def test_qword_over_programs_agrees_with_the_reference(tmp_path):
@@ -748,6 +752,7 @@ def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
@@ -803,6 +808,7 @@ def test_pin_is_a_column_of_the_block(tmp_path):
     assert p.stdout.split("\n")[:2] == [f"({out}, {out})", '("ok 896", "ok 896")'], p.stdout
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
     """`HmRow.check` refuses a range whose slots are smaller than a 128-bit word (below 64 bits the fold is no
@@ -841,6 +847,7 @@ def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
         assert p.returncode == 1 and "a range's slots are smaller than a word or larger than the block" in p.stdout, (change, p.stdout)
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_hm96_header_sizes_are_refused_before_their_powers(tmp_path):
     """`HmRow.parse` refuses a `k_log` past 27 where it reads it, before `check` computes `2^k_log` and `2^slot_log`, and

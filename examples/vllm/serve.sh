@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# A LLAMA32_1B committing OpenAI endpoint whose Commit windows are sealed as deferred Commits' row dirs, for PROVE-PATH's served
-# windows (`--serve-run DIR --window K`): `verity-vllm serve-openai --scheme rows-sha512 --seal` (the bench row's Commit of record's
+# A LLAMA32_1B committing OpenAI endpoint whose Commit windows are sealed as deferred Commits' workload dirs, for PROVE-PATH's served
+# windows (`--serve-run DIR --window K`): `verity-vllm serve-openai --scheme rows-sha512 --seal` (the bench workload's Commit of record's
 # committer and acquire sources, built from its manifest ROW/manifest.json and taps HIDDEN_SO, NORM_TAP_SO: hm96-sha512 rows in
 # frame-v3-sha512 trees) on one leased RTX PRO 6000, a short varied load in bursts (each burst one window, closed at the engine's
 # idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a served run (`prove_path.py compiler
@@ -10,12 +10,11 @@
 # check against the checkpoint's manifest; each window's registration records its roots, one a weight parameter, so the window
 # circuit's weight reads count registered at the pins the verifier holds before the first window's coins, `window-circuit
 # --pins weights_registration.json`; without it, which steps.txt says, they count free),
-# then each window's request Programs and
-# manifest.json into its row dir (`tools/advice_compile.py RUN --window K`), and the row dir opened as PROVE-PATH opens it
-# (`deferred_rows.of_record`, `opening.CommittedStore`) with what the row's Programs read looked up (identities.txt). The
-# endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`, or until its filesystem has under DISK_FLOOR_GB free (default 300,
-# top's rule for n1: checked before serving and every 10 s). The serve dir's records (requests.jsonl, serve.json, windows.jsonl,
-# advice_trace.jsonl, summary.json) are copied into $OUT every 10 s, at the end and on SIGTERM, so custody keeps them.
+# then each window's request Programs and manifest.json into its workload dir (`tools/advice_compile.py RUN --window K`), and the
+# workload dir opened as PROVE-PATH opens it (`deferred_rows.of_record`, `opening.CommittedStore`) with what the workload's Programs
+# read looked up (identities.txt). The endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`, or until its filesystem has under
+# DISK_FLOOR_GB free (default 300, checked before serving and every 10 s). The serve dir's records (requests.jsonl, serve.json,
+# windows.jsonl, advice_trace.jsonl, summary.json) are copied into $OUT every 10 s, at the end and on SIGTERM, so custody keeps them.
 # VARIED=N (with ADMIT=release-order; VARIED_RUNS=3, VARIED_RATE=4, VARIED_JITTER_MS=400): before READY, VARIED_RUNS runs of N
 # varied requests (network-accounting's traffic, `serve_load.py --varied`), each numbered under a fresh release run and
 # sent up to the jitter late, then `tools/admit_rows_check.py` over the serve dir: every window's first rows must be in
@@ -32,7 +31,7 @@
 # shim and probes) as vllm does.
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under that registered compiler, and window K's
 # request Programs and manifest.json.
-# Needs on the node: vLLM's venv, the checkpoint in HF_HOME and CUDA (the collector's JIT build). The serve dir D (row dirs, bundles) stays on the node under `research keep`; $OUT keeps the records and logs.
+# Needs on the node: vLLM's venv, the checkpoint in HF_HOME and CUDA (the collector's JIT build). The serve dir D (workload dirs, bundles) stays on the node under `research keep`; $OUT keeps the records and logs.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}

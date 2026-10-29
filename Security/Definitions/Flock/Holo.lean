@@ -4,17 +4,17 @@ import Definitions.Flock.Session
 /-!
 # The holographic table: two reps with hidden units, then the registered opening
 
-F4 candidate 3's session (note:proofs/20261010T0250Z-draft-f4-bitsumcheck §1.3–§1.4, row M1 of its §4), on the pattern
+The session with hidden unit circuits, on the pattern
 of `Session.lean`, in the order the live session records it (`rec_live.schedule_for`, `rec_session.Relay`). A rep with
 hidden unit circuits (`holoRep`) runs the zerocheck, the lincheck on the public part with the prover's `h`
 (`holoLincheck`, L4′), and then the opening and Ligerito on the committed level-0 table, as `rep` does; it hands on its
 zerocheck's and lincheck's outputs, which its sparse phase reads. The session (`holoTable`) runs two such reps in any
 interleaving; then each rep's sparse phase on its `h` (`sparsePhase`, H1–H4), rep 0's and then rep 1's, each a child
 stream opened at its rep's end; then it opens both registered claims together, once, on the registered word `Creg`:
-level 0 of the registered schedule, committed at registration rather than in the session (§1.4).
+level 0 of the registered schedule, committed at registration rather than in the session.
 
 The sparse phase reads only its rep's zerocheck and lincheck outputs and `h`, all fixed before any of its coins, so the
-order is the record's rather than a reordering of the draft's (sparse phase before the rep's opening).
+order is the record's: running the sparse phase before the rep's opening would change nothing it reads.
 
 The registered table stacks the types' tables `R(t, p, k)` as bit `k + 2^ν·(p + 2^pLog·t)`, so the registered claim's
 point is `(r_k, ζ_p, ρ_t)` in that order (`RegClaim.toClaim`): skip weights `eq(point[0…6], ·)`, `x = point[6 …]`.
@@ -97,7 +97,7 @@ def regPhase {α : Type} (A : Arith F K) (S : Statement) (sh : SparseShape) (uni
         else pure no
   | _ => pure no
 
-/-- **One holographic table's session** (§1.4), in the recorded order: the prover commits the level-0 table `C₀`, the
+/-- **One holographic table's session**, in the recorded order: the prover commits the level-0 table `C₀`, the
 verifier draws the link points, and the prover runs two reps with hidden units in any interleaving; then the reps'
 sparse phases, rep 0's and then rep 1's, and the registered opening (`regPhase`), which Ligerito at the registered
 schedule `rsch` checks against the registered word `Creg`. Returns whether all of it accepted, and the committed

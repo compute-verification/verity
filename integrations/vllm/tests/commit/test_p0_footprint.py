@@ -1,4 +1,4 @@
-"""R13 P0 (C-COLLECTOR-FOOTPRINT) unit tests for the mechanism pieces that run without a GPU:
+"""Unit tests for the collector-footprint mechanism pieces that run without a GPU:
 
 * `_DeviceArena.take()` backpressure: the ring never grows while a fitting block is merely busy; the taker waits for `release()`;
   growth only when no block of the ring can ever fit (or VERITY_ARENA_GROW=1).
@@ -8,7 +8,7 @@
 * the declared leaf layout (`--layout`) reaches the collector as an argument and is refused where it is not implemented.
 
 The GPU end-to-end (roots of a windowed run == roots of the single-block run for the same manifest; B=2 green) is the pod acceptance
-run recorded in `out/gen/sweep/fixes/X-04.json` and can be re-run with VERITY_E2E_WORKLOAD/VERITY_E2E_CASE (see `test_e2e_windowed_roots`).
+run, re-run with VERITY_E2E_WORKLOAD/VERITY_E2E_CASE (see `test_e2e_windowed_roots`).
 """
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def test_take_best_fit_and_no_growth_while_busy(monkeypatch):
 
 def test_take_grows_only_when_nothing_could_ever_fit():
     a = _arena([64, 64])
-    b = a.take(1000)                                                 # larger than every block of the ring: growth (the X-02 refusal path is upstream)
+    b = a.take(1000)                                                 # larger than every block of the ring: growth (the arena-sizing refusal is upstream)
     assert b.numel() == 1000 and a.allocs == 3
 
 
@@ -160,7 +160,7 @@ def test_e2e_windowed_roots(tmp_path: Path):
     win = ["--window-mb", os.environ.get("VERITY_E2E_WINDOW_MB", "256"), "--window-slots", "8"]
     arms = [("block", ["--window-mb", "0"]), ("win", win + ["--no-bounded-staging"])]
     if os.environ.get("VERITY_E2E_BOUNDED", "1") != "0":
-        # [R17 fp8] the BOUNDED staging arms: same roots as the retained implementation -- (a) retain=host with the hidden family's
+        # the BOUNDED staging arms: same roots as the retained implementation -- (a) retain=host with the hidden family's
         # interior chunks excluded from host (they open by replay), (b) retain=none (everything by replay); both with openings after release
         fam = os.environ.get("VERITY_E2E_EXCLUDE", "fa3_hidden_m1")
         arms += [("win-bounded-x", win + ["--bounded-staging", "--retain-exclude", fam, "--open-after-release", "--learn-budget-mb", os.environ.get("VERITY_E2E_LEARN_MB", "4096")]),
@@ -173,10 +173,10 @@ def test_e2e_windowed_roots(tmp_path: Path):
         vp = tmp_path / name / "verdict.json"
         assert vp.exists(), f"{name}: exit {p.returncode}, no verdict\n{p.stdout[-2000:]}\n{p.stderr[-2000:]}"
         v = json.loads(vp.read_text())
-        # [R17 fp8] a MECHANISM fixture has no Build (no Programs), so C2 of record cannot run: the ONLY verdict failure this test accepts is
-        # the verdict naming exactly that (DECISIONS-2 §4, 'sampled replay None -- not run'; commit_delta exits 3 on it); every other check
-        # (bindings, openings, bounded staging, replay openings, admission) must hold -- the row's Commit of record runs the full verdict with Programs.
-        _c2_only = str(v.get("first_fail_reason") or "").startswith("C2 of record not established (DECISIONS-2 §4): sampled replay None -- not run")
+        # a MECHANISM fixture has no Build (no Programs), so C2 of record cannot run: the ONLY verdict failure this test accepts is
+        # the verdict naming exactly that ('sampled replay None -- not run'; commit_delta exits 3 on it); every other check (bindings,
+        # openings, bounded staging, replay openings, admission) must hold -- the workload's Commit of record runs the full verdict with Programs.
+        _c2_only = str(v.get("first_fail_reason") or "").startswith("C2 of record not established: sampled replay None -- not run")
         assert v["commit_pass"] is True or _c2_only, f"{name}: exit {p.returncode}: {v.get('first_fail_reason') or v.get('commit_fail_reason')}"
         assert p.returncode == 0 or (p.returncode == 3 and _c2_only), f"{name}: exit {p.returncode}\n{p.stdout[-2000:]}\n{p.stderr[-2000:]}"
         rows = [json.loads(l) for l in (tmp_path / name / "runs.jsonl").read_text().splitlines()]

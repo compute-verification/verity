@@ -3,8 +3,7 @@ import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
 /-!
 # `MH100`'s loop-free price table (Round 8; draft semantics)
 
-**Draft semantics, pending review** (`internal/pouw-fp8/genuine-fp8-interface.md` §0 and §1.1; the measurements are
-`internal/pouw/gpu-constants.md` §13, run `r20260928-161529-c85c`).
+**Draft semantics, pending review**.
 
 `h100LoopFree` is the table that Round 8 measured on one H100 SXM, unrolled so that the loop's own instructions no
 longer count, per 32-bit register written. Its unit is `Prices100`'s: one dense int8 MAC at the datasheet's 4,096 per
@@ -12,10 +11,10 @@ SM per clock. Each entry is the least loop-free price measured in its class, rou
 entry exceeds its measurement, and a lower bound on `cost100` at these prices holds for programs of the measured
 forms. Round 7's `h100Measured` is kept as it was measured.
 
-**A measurement, not a floor** (red team F18b-2). `int32 = 34` is two-source IADD and `other = 36` is two-source
+**A measurement, not a floor**. `int32 = 34` is two-source IADD and `other = 36` is two-source
 HADD2. The immediate forms (IADD a+K, HADD2 a+K) were never measured and could reach 32, the dispatch bound for a
 writer of one register. The floor is `h100Floor` (`Pouw.Dimension.H100Floor`): this table with `int32 = other = 32`,
-a floor except at `tc`, which both tables take from this board's legacy `mma.sync` (red team F18c-1). The hardware
+a floor except at `tc`, which both tables take from this board's legacy `mma.sync`. The hardware
 citations are `DistinctWritesLoopFree` (these prices, for the measured forms) and `DistinctWritesFloor` (every scalar
 form and every `wgmma` shape, and legacy tensor-core forms as measured).
 
@@ -25,7 +24,7 @@ form and every `wgmma` shape, and legacy tensor-core forms as measured).
 **Work, not time.** `H32` holds per instruction class, not per register in time. Writers on separate pipes co-issue:
 1:1 DADD + FADD writes a register every 26.75 units with two register sources, and as often as every 21.45 loop-free
 with one source and an immediate each, and 21.33 at full dispatch (the FP64 pipe's bound). So a bound on `cost100` at
-these prices bounds additive-W1 work. A time bound needs a maximum over resources (`docs/pouw/w1-time-model.md`).
+these prices bounds additive-W1 work. A time bound needs a maximum over resources.
 -/
 
 namespace Pouw.Dimension.H100

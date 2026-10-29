@@ -1,9 +1,9 @@
-"""(f) The pre-P5 `commit_summary.json` re-derives: `summarize(row_dir, rc)` (the harness's READER for old records -- the writer,
-`verity_vllm.pipeline.commit_summary`, is retired: F-r19-int-21 / P5, `verdict.json` is the verdict of record) with the CURRENT
+"""(f) The retired `commit_summary.json` re-derives: `summarize(row_dir, rc)` (the harness's READER for old records -- the writer,
+`verity_vllm.pipeline.commit_summary`, is retired: `verdict.json` is the verdict of record) with the CURRENT
 code over the row's `commit/summary.json`, `commit/runs.jsonl` and `commit.log` gives the recorded summary's stable fields (run
 counts, tokens_equal, committer, collector variant / retention, engine settings, engine steps, generated tokens, `pass`).
 
-NOTE (inventory 2026-09-22): `openings` and `coverage` are `None` on every reference row (stale keys: runs.jsonl no longer carries them),
+NOTE: `openings` and `coverage` are `None` on every reference row (stale keys: runs.jsonl no longer carries them),
 so `pass` degenerates to `rc == 0 and tokens_equal` here.  The Commit VERDICT of record is `commit/verdict.json` (`commit_pass`,
 `required_classes_source`) + `commit/sampled_replay_p*.json`, lifted beside the summary in `commit_verdict`; a v2 must state the same.
 STRONG on the lifted verdict fields; the summary itself is a derived convenience.  Wall-clock fields (`delta_wall*`, `*_wall`) are

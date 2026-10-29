@@ -30,15 +30,15 @@ served `z`, an s8 dot over `K = 32` of the committed A row and the registered B 
 beside the noised product its receipt folds (`witZ_beside`: `z` reads no coin, the receipt does), and
 `y = dq(z, s_a, s_w)`; `z`'s value is the dot on every typed input (`witZ_productOf`, its 32 products of s8 words
 within s32, so the clamp is the identity) and `y`'s is `dq` of it at the call's scales (`witZ_dequantOf`).
-`witCallCredit`: an honest `perCall` window in CMP-65's order meets `CreditTie`. Its `z` is peeled from the noised
+`witCallCredit`: an honest `perCall` window in the kernels' order meets `CreditTie`. Its `z` is peeled from the noised
 product,
 `m − coin·ΣB_k` with `m = Σ (A_k + coin)·B_k`, so its cone holds the coin (`witP_peeled`), and its value is the dot
 all the same (`witP_productOf`: `m` is `Σ A_k·B_k + coin·ΣB_k` within s32, `sum_zipWith_add`). `wit_notValueChecked`:
 the `beside` witness, whose unit has no `outY` word, fails `ValueChecked` at every `dq`. The refusals, each a tied
-window that met `CreditTie` before the restatement: `witTwice_notValueChecked` (RT4-LOGIC-13), two units whose second
+window that met `CreditTie` before the restatement: `witTwice_notValueChecked`, two units whose second
 `z' = 0 + 1·z` copies the first's product, at `witLayout2`, whose whole population is the two (`witTwice2_population`);
-`witWS_notValueChecked` (RT4-LOGIC-14), a `y` whose scales are the A row's and the B column's first words, which are
-s8 and so no scales; `witRaw_notValueChecked` (RT4-LOGIC-15), a raw product `w = 0 + 1·z` served as a `y` word. The
+`witWS_notValueChecked`, a `y` whose scales are the A row's and the B column's first words, which are
+s8 and so no scales; `witRaw_notValueChecked`, a raw product `w = 0 + 1·z` served as a `y` word. The
 last two are refused at one typed input, `witX3` (`s_a = 3`, every other word `2`), whose values `decide +kernel`
 computes. Each unit of these has no check word, so its checks hold on every input (`held_of_none`).
 
@@ -64,7 +64,7 @@ Compose's scope (`witRing_scope`, at a scheme whose luck is proved, `witScheme`)
 gate of another unit reads, committed at the draw, after that reader's coin, fails `Tie.readers`, and `LayerCommitted`
 too (`witCross_notLayerCommitted`).
 
-The cone clause (RT4-LOGIC-28): two tied windows of two units of `witLayout2`'s one call, in which unit 0 recomputes
+The cone clause: two tied windows of two units of `witLayout2`'s one call, in which unit 0 recomputes
 unit 1's product `Σ₁′` (the A row with the rotated B column, `witRotB`) and a word of unit 0 reads unit 1's computed
 `z₁`, the same dot after unit 1's own constant `0`, so `z₁ = Σ₁′` on every input. In `witConeCheck` it is the check
 word `ok₀ = (z₀ = Σ₀ ∧ y₀ = dq₀) ∨ z₁ ≠ Σ₁′`, whose escape never fires under `Gates.val`, so the record `z₀` is the
@@ -74,16 +74,16 @@ words, and both fail `ValueChecked`'s cone clause (`witConeCheck_notValueChecked
 time `z₁` is what an undrawn unit 1's prover committed. `computedFeeds_unit` reduces the clause to the circuit's
 computed-reads-computed edges.
 
-The old refusals on checked records (RT4-LOGIC-31): `held_complete` reads `ValueChecked`'s fifth clause through `Tie`,
+The old refusals on checked records: `held_complete` reads `ValueChecked`'s fifth clause through `Tie`,
 so under `CreditTie` every assignment of the `act`, `registered`, `pub` and coin gates has a typed input meeting every
-unit's checks, and a refutation at chosen operands and scales survives the checks. `witKTwice_notValueChecked`
-(RT4-LOGIC-13): two checked units, each its record held to its own dot of the same operands, inside the cone clause
+unit's checks, and a refutation at chosen operands and scales survives the checks. `witKTwice_notValueChecked`:
+two checked units, each its record held to its own dot of the same operands, inside the cone clause
 (`witKTwice_cone`), fail distinctness, their records' `z` one value wherever both checks hold (`witKTwice_same`).
 `witK mid` is `witC witOk` with the gates `mid` in place of its `dq`, the check holding the record's `y` to `mid`'s last
 gate, and `witK_notValueChecked` refuses one at a typed input its check holds on whose `y` isn't `dq` of its `z` at
-the call's scales: `witKWS_notValueChecked` (RT4-LOGIC-14, `dq(Σ, A_1, B_1)`, at `witXK 128 512`),
-`witKRaw_notValueChecked` (RT4-LOGIC-15, the raw product, at `witXK 128 128`) and `witKMix_notValueChecked`
-(RT3-INT-3, `0·Σ + 1·dq(p)` of another product `p`, at `witXM`, where `p = 0` and `z = 1`).
+the call's scales: `witKWS_notValueChecked` (`dq(Σ, A_1, B_1)`, at `witXK 128 512`),
+`witKRaw_notValueChecked` (the raw product, at `witXK 128 128`) and `witKMix_notValueChecked`
+(`0·Σ + 1·dq(p)` of another product `p`, at `witXM`, where `p = 0` and `z = 1`).
 -/
 
 namespace Properties.Served
@@ -1045,15 +1045,15 @@ theorem witP_valueChecked : ValueChecked witLayout witDq witP witPCls := by
       (by decide +kernel : ∀ r, r < witP.dag.length → witPCls r = .receipt → r = 105) r hr hrc
     exact ⟨104, by decide +kernel, by decide +kernel, rfl, by decide +kernel, by decide +kernel, witP_feeds⟩
 
-/-- **An honest `perCall` window meets `CreditTie`**, in the order CMP-65 gives kernels: the call's A table before its
+/-- **An honest `perCall` window meets `CreditTie`**, in the kernels' order: the call's A table before its
 coin, then the coin, the noise and the receipt, with the unit's `z` and `y` committed beside the receipt. Its `z` is
 peeled from the noised product (`witP_peeled`: its cone holds the coin, as `Tie.noised` asks of a `perCall` `outZ`
 word), and is value-checked all the same. -/
 theorem witCallCredit : CreditTie witLayout .perCall witDq witP witPCls :=
   ⟨witTieP, witP_valueChecked⟩
 
-/-! ## Refusals: one product for two units (RT4-LOGIC-13), an A and a B word as the scales (RT4-LOGIC-14), and a raw
-product served as `y` (RT4-LOGIC-15) -/
+/-! ## Refusals: one product for two units, an A and a B word as the scales, and a raw
+product served as `y` -/
 
 /-- A circuit whose every input gate admits the word `x s` at its slot `s` is typed at `x`. -/
 theorem typed_of_all {Cd : Declared ℕ} (x : ℕ → ℤ)
@@ -1078,8 +1078,8 @@ def witTwiceRest : Accounting.Gates.Dag ℕ :=
         Accounting.Gates.s32Max false,
       witGateR (.affine 0 [1]) [106] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
-/-- RT4-LOGIC-13's window (`witTwice`, `ServedTwice.lean`): two units of one call, unit 1's served product a copy of
-unit 0's, each unit with its own `y` and its own receipt over its own noised GEMM. -/
+/-- The window of one product for two units (`witTwice`, `ServedTwice.lean`): two units of one call, unit 1's served
+product a copy of unit 0's, each unit with its own `y` and its own receipt over its own noised GEMM. -/
 def witTwice : Declared ℕ where
   dag := witPre ++ witTwiceRest
   calls := 1
@@ -1151,7 +1151,7 @@ theorem witTwice_copy (x : ℕ → ℤ) :
   show (0 : ℤ) + (List.zipWith (· * ·) [1] [Accounting.Gates.val witTwice.dag x 68]).sum = _
   simp
 
-/-- **One product doesn't value-check two units** (RT4-LOGIC-13): `witTwice`'s two `outZ` words have one value on
+/-- **One product doesn't value-check two units**: `witTwice`'s two `outZ` words have one value on
 every input (`witTwice_copy`), so it fails `ValueChecked` at any layout and dequant. -/
 theorem witTwice_notValueChecked (L : Layout) (dq : List ℤ → ℤ) : ¬ ValueChecked L dq witTwice witTwiceCls := by
   rintro ⟨_, _, -, hinj, -, -, -⟩
@@ -1171,8 +1171,8 @@ def witWSRest : Accounting.Gates.Dag ℕ :=
         Accounting.Gates.s32Max false,
       witGateR (.affine 0 [1]) [102] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
-/-- RT4-LOGIC-14's window (`witWS`, `ServedTwice.lean`): `witZ` with its served `y`'s scales the A row's first word and
-the B column's first word. -/
+/-- The window of an A and a B word as the scales (`witWS`, `ServedTwice.lean`): `witZ` with its served `y`'s scales
+the A row's first word and the B column's first word. -/
 def witWS : Declared ℕ := { witZ with dag := witPre ++ witWSRest }
 
 theorem witTieWS : Tie witLayout .zTree witWS witZCls where
@@ -1210,7 +1210,7 @@ theorem witWS_vals : Accounting.Gates.val witWS.dag witX3 69 = 512 ∧ Accountin
     Accounting.Gates.val witWS.dag witX3 65 = 3 ∧ Accounting.Gates.val witWS.dag witX3 66 = 2 := by
   decide +kernel
 
-/-- **A served `y` whose scales are an A word and a B word fails `ValueChecked`** (RT4-LOGIC-14): the scales are words
+/-- **A served `y` whose scales are an A word and a B word fails `ValueChecked`**: the scales are words
 not declared s8, which in `witWS` are only `s_a` and `s_w`, and `y = 512` at `witX3` is not `dq(128, 3, 2) = 768`. -/
 theorem witWS_notValueChecked (L : Layout) : ¬ ValueChecked L witDq witWS witZCls := by
   rintro ⟨_, src, -, -, hY, -, -⟩
@@ -1230,8 +1230,8 @@ theorem witWS_notValueChecked (L : Layout) : ¬ ValueChecked L witDq witWS witZC
 theorem witWS_notCreditTie : ¬ CreditTie witLayout .zTree witDq witWS witZCls := fun h =>
   witWS_notValueChecked witLayout h.2
 
-/-- RT4-LOGIC-15's window: `witZ` with a second served word, `w = 0 + 1·z` (104), a raw product never dequantized,
-committed beside `z` and `y` under the round's root. -/
+/-- The window of a raw product served as `y`: `witZ` with a second served word, `w = 0 + 1·z` (104), a raw product
+never dequantized, committed beside `z` and `y` under the round's root. -/
 def witRaw : Declared ℕ :=
   { witZ with
     dag := witPre ++ (witZRest ++
@@ -1277,7 +1277,7 @@ theorem witRaw_vals : Accounting.Gates.val witRaw.dag witX3 104 = 128 ∧
     Accounting.Gates.val witRaw.dag witX3 66 = 2 := by
   decide +kernel
 
-/-- **A raw product served as `y` fails `ValueChecked`** (RT4-LOGIC-15): every `outY` word is `dq` of an `outZ` word,
+/-- **A raw product served as `y` fails `ValueChecked`**: every `outY` word is `dq` of an `outZ` word,
 and `w = 128` at `witX3` is not `dq(128, 3, 2) = 768`. Before `z` and `y` had their own classes, `w` passed as a
 product. -/
 theorem witRaw_notValueChecked (L : Layout) : ¬ ValueChecked L witDq witRaw witRawCls := by
@@ -1975,7 +1975,7 @@ theorem witCross_notLayerCommitted : ¬ LayerCommitted witCross := fun h => by
   · exact absurd h1 (by decide +kernel)
   · exact absurd (h2 5 (by unfold Declared.Reads; decide +kernel)) (by decide +kernel)
 
-/-! ## A unit's check, `outZ` and `outY` words read no other unit's computed word (RT4-LOGIC-28) -/
+/-! ## A unit's check, `outZ` and `outY` words read no other unit's computed word -/
 
 /-- The B column rotated by one, `B_2 … B_32, B_1` (gates 34–64, then 33): another product's operands. -/
 def witRotB : List ℕ := List.range' 34 31 ++ [33]
@@ -2021,7 +2021,7 @@ theorem computedFeeds_unit {ι : Type} {Cd : Declared ι}
   | refl => rfl
   | tail _ hr ih => exact ih.trans (h _ (reads_lt hr.1) hr.2.2.2 _ hr.2.1 hr.1 hr.2.2.1)
 
-/-- RT4-LOGIC-28's window with a check word: two units of `witLayout2`'s one call in `zTree`, after `witPre`. Unit 0
+/-- The cone clause's window with a check word: two units of `witLayout2`'s one call in `zTree`, after `witPre`. Unit 0
 is its record's `z₀` (68) and `y₀` (69), its dot `Σ₀` (70) and `dq₀` (71), its recomputation `Σ₁′` (74) of unit 1's
 product, its check word `ok₀ = (z₀ = Σ₀ ∧ y₀ = dq₀) ∨ z₁ ≠ Σ₁′` (75) and its receipt (77). Unit 1 is its own
 constant `0` (72), its served `z₁` (73), the dot of the A row with the rotated B column, computed and committed, its
@@ -2118,7 +2118,7 @@ theorem witConeCheck_productOf :
   exact witPre_dot witConeCheckRest x hx (i := 70) (h := 67) (bs := List.range' 33 32) (c := false) rfl
     (by decide +kernel) (witPre_val67 witConeCheckRest x) (by decide +kernel)
 
-/-- **A check reading another unit's computed word fails `ValueChecked`** (RT4-LOGIC-28): `ok₀` reads unit 1's computed
+/-- **A check reading another unit's computed word fails `ValueChecked`**: `ok₀` reads unit 1's computed
 `z₁`, which unit 0's proof sees as whatever unit 1's prover committed, so with unit 1 undrawn and `z₁ ≠ Σ₁′`,
 `ok₀ = 1` with any record. The window is tied (`witTieConeCheck`), and under `Gates.val` the escape never fires, so
 the record is the product on every input its check holds on (`witConeCheck_productOf`): only the cone clause refuses
@@ -2134,7 +2134,7 @@ theorem witConeCheck_notCreditTie (dq : List ℤ → ℤ) :
     ¬ CreditTie witLayout2 .zTree dq witConeCheck witConeCheckCls := fun h =>
   witConeCheck_notValueChecked witLayout2 dq h.2
 
-/-- RT4-LOGIC-28's window with no check word: two units of `witLayout2`'s one call in `zTree`, after `witPre`. Unit 0
+/-- The cone clause's window with no check word: two units of `witLayout2`'s one call in `zTree`, after `witPre`. Unit 0
 is its dot `Σ₀` (68), its recomputation `Σ₁′` (71) of unit 1's product, its served `z₀ = Σ₀ + (z₁ − Σ₁′)` (72), its
 `y₀ = dq(z₀)` (73) and its receipt (75). Unit 1 is its own constant `0` (69), its served `z₁` (70), the dot of the A
 row with the rotated B column, its `y₁ = dq(z₁)` (74) and its receipt (76). -/
@@ -2229,7 +2229,7 @@ theorem witConeZ_productOf :
   exact witPre_dot witConeZRest x hx (i := 68) (h := 67) (bs := List.range' 33 32) (c := false) rfl
     (by decide +kernel) (witPre_val67 witConeZRest x) (by decide +kernel)
 
-/-- **A computed `z` reading another unit's computed word fails `ValueChecked`** (RT4-LOGIC-28): unit 0's
+/-- **A computed `z` reading another unit's computed word fails `ValueChecked`**: unit 0's
 `z₀ = Σ₀ + (z₁ − Σ₁′)` is its dot on every input under `Gates.val` (`witConeZ_productOf`), but its proof sees `z₁` as
 whatever unit 1's prover committed, so with unit 1 undrawn `z₀` is any value. The window is tied (`witTieConeZ`). -/
 theorem witConeZ_notValueChecked (L : Layout) (dq : List ℤ → ℤ) : ¬ ValueChecked L dq witConeZ witConeZCls := by
@@ -2241,7 +2241,7 @@ theorem witConeZ_notValueChecked (L : Layout) (dq : List ℤ → ℤ) : ¬ Value
 theorem witConeZ_notCreditTie (dq : List ℤ → ℤ) : ¬ CreditTie witLayout2 .zTree dq witConeZ witConeZCls := fun h =>
   witConeZ_notValueChecked witLayout2 dq h.2
 
-/-! ## The old refusals on checked records (RT4-LOGIC-31) -/
+/-! ## The old refusals on checked records -/
 
 /-- A gate bound at `b` is an input gate bound at `b`. -/
 theorem binding_input {ι : Type} {Cd : Declared ι} {i : ℕ} {b : Accounting.Gates.Binding}
@@ -2254,7 +2254,7 @@ theorem binding_input {ι : Type} {Cd : Declared ι} {i : ℕ} {b : Accounting.G
   | input b' s => intro hb; cases hb; exact ⟨s, hg, rfl⟩
   | _ => intro hb; cases hb
 
-/-- **Every assignment of the served operands has an input the checks hold on** (RT4-LOGIC-31): under `CreditTie`, each
+/-- **Every assignment of the served operands has an input the checks hold on**: under `CreditTie`, each
 typed input has a typed input on which every unit's checks hold and which gives every `act`, `registered`, `pub` and
 coin gate the same word. It is `ValueChecked`'s fifth clause read through `Tie`, which makes each such gate an input and
 no record, so a refutation of `ProductOf`, `DequantOf` or the distinctness clause at chosen operands, scales, public
@@ -2280,9 +2280,9 @@ theorem held_complete {ι : Type} {L : Layout} {F : Form} {dq : List ℤ → ℤ
   rw [val_input Cd.dag x' hg hop, val_input Cd.dag x hg hop]
   exact hag i g b s hg hop hZ hY
 
-/-- RT4-LOGIC-13's window on checked records: two units of `witLayout2`'s one call in `zTree`, each with its record
-(`z`, `y`), its own dot of the A row with the B column, its `dq`, its check word `ok = (z = Σ ∧ y = dq)` and a receipt
-over its dot. Unit 0 is gates 68–72 and its receipt 79; unit 1 is its own constant `0` (73), gates 74–78 and its
+/-- The window of one product for two units, on checked records: two units of `witLayout2`'s one call in `zTree`,
+each with its record (`z`, `y`), its own dot of the A row with the B column, its `dq`, its check word
+`ok = (z = Σ ∧ y = dq)` and a receipt over its dot. Unit 0 is gates 68–72 and its receipt 79; unit 1 is its own constant `0` (73), gates 74–78 and its
 receipt 80. -/
 def witKTwiceRest : Accounting.Gates.Dag ℕ :=
   [witRecZ 68, witRecY 69, witDotOf 67 (List.range' 33 32) false, witDqOf 70 false,
@@ -2379,7 +2379,7 @@ theorem witKTwice_same (x : ℕ → ℤ) (h0 : Held witKTwice witKTwiceCls (witK
     simp only [witDotOf, witGateR, List.map_cons, h67, h73]
   exact (witOk_eq e0).1.trans (hd.trans (witOk_eq e1).1.symm)
 
-/-- **One product doesn't value-check two checked units** (RT4-LOGIC-13 on checked records): where both units' checks
+/-- **One product doesn't value-check two checked units**: where both units' checks
 hold, their records' `z` have one value (`witKTwice_same`), so `witKTwice`, tied (`witTieKTwice`) and within the cone
 clause (`witKTwice_cone`), fails `ValueChecked` at any layout and dequant. -/
 theorem witKTwice_notValueChecked (L : Layout) (dq : List ℤ → ℤ) : ¬ ValueChecked L dq witKTwice witKTwiceCls := by
@@ -2445,11 +2445,12 @@ theorem witK_notValueChecked (mid : Accounting.Gates.Dag ℕ) (L : Layout) (x : 
   rw [hZ _ hz hzo, hA _ hsa hsac hsa8, hR _ hsw hswc hsw8] at hv'
   exact hv (hv' x hx fun k hk hc _ => by rw [hchk k hk hc]; exact hok)
 
-/-- RT4-LOGIC-14's: `dq(Σ, A_1, B_1)` (gates 71, 1, 33), so the record's `y` is held to `dq` at an A and a B word. -/
+/-- An A and a B word as the scales: `dq(Σ, A_1, B_1)` (gates 71, 1, 33), so the record's `y` is held to `dq` at an A
+and a B word. -/
 def witMidWS : Accounting.Gates.Dag ℕ :=
   [witGateR (.budgeted .rounding witDq) [71, 1, 33] (-2 ^ 63) (2 ^ 63 - 1) false]
 
-/-- RT3-INT-3's: another product `p`, the dot of the A row with the rotated B column (72), its `dq(p, s_a, s_w)` (73)
+/-- Another product's dequant: `p`, the dot of the A row with the rotated B column (72), its `dq(p, s_a, s_w)` (73)
 and `0·Σ + 1·dq(p)` (74), which reads `Σ` and takes `dq(p)`'s value. -/
 def witMidMix : Accounting.Gates.Dag ℕ :=
   [witDotOf 67 witRotB false, witDqOf 72 false,
@@ -2489,7 +2490,7 @@ theorem witTieKWS : Tie witLayout .zTree (witK witMidWS) (witKCls 1) where
   readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
-/-- **A record `y` checked to `dq` at an A and a B word fails `ValueChecked`** (RT4-LOGIC-14 on a checked record): at
+/-- **A record `y` checked to `dq` at an A and a B word fails `ValueChecked`**: at
 `witXK 128 512` the check holds, with `z = Σ = 128` and `y = dq(128, A_1, B_1) = 512`, which isn't
 `dq(128, 3, 2) = 768`. -/
 theorem witKWS_notValueChecked (L : Layout) : ¬ ValueChecked L witDq (witK witMidWS) (witKCls 1) :=
@@ -2528,7 +2529,7 @@ theorem witTieKRaw : Tie witLayout .zTree (witK []) (witKCls 0) where
   readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
-/-- **A record `y` checked to the raw product fails `ValueChecked`** (RT4-LOGIC-15 on a checked record): at
+/-- **A record `y` checked to the raw product fails `ValueChecked`**: at
 `witXK 128 128` the check holds, with `z = y = Σ = 128`, which isn't `dq(128, 3, 2) = 768`. -/
 theorem witKRaw_notValueChecked (L : Layout) : ¬ ValueChecked L witDq (witK []) (witKCls 0) :=
   witK_notValueChecked [] L (witXK 128 128) (typed_of_all (witXK 128 128) (by decide +kernel))
@@ -2566,7 +2567,7 @@ theorem witTieKMix : Tie witLayout .zTree (witK witMidMix) (witKCls 3) where
   readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
-/-- **A record `y` checked to another product's dequant fails `ValueChecked`** (RT3-INT-3 on a checked record): at
+/-- **A record `y` checked to another product's dequant fails `ValueChecked`**: at
 `witXM` the check holds, with `z = Σ = A_1·B_1 = 1` and `y = 0·Σ + 1·dq(p) = 0`, the rotated product `p` being `0`
 there, which isn't `dq(1, 1, 1) = 1`. -/
 theorem witKMix_notValueChecked (L : Layout) : ¬ ValueChecked L witDq (witK witMidMix) (witKCls 3) :=

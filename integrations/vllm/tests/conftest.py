@@ -63,6 +63,6 @@ def pytest_collection_modifyitems(items) -> None:
 @pytest.fixture(autouse=True)
 def _sweep_dir_in_tmp(tmp_path_factory, monkeypatch):
     """`verity-vllm row`'s sweep directory default (`cli.MACHINE`'s /workspace/cp/sweep) exists on a GPU node, so a test that leaves
-    SWEEP_DIR unset would write rows there; every test gets its own instead, which a test can still override."""
+    SWEEP_DIR unset would write its workload dirs there; every test gets its own instead, which a test can still override."""
     monkeypatch.setenv("SWEEP_DIR", str(tmp_path_factory.mktemp("sweep")))
 

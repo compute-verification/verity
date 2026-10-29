@@ -2,7 +2,7 @@ import Proofs.Pouw.PearlC.Gamma
 import Proofs.Pouw.Sampling
 
 /-!
-# γ under the sampled audit, from TT_OUT per tile (the cheap-binding lane's file)
+# γ under the sampled audit, from TT_OUT per tile
 
 Staged; nothing pinned. The pins proposed are `pearlCSampled8192`, `pearlCSampled16384`, `pearlCTiles_total` and
 `ttOutTilePearlCWitness`.

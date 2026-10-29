@@ -26,7 +26,7 @@ ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
 #: The Glossary's second file, at the root only: no directory holds a glossary.
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
-#: Layout/spec documents left in place by the 2026-09-22 migration; a human folds them into PROTOCOL.md / README.md.
+#: Layout/spec documents left in place by the layout migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
     "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
 )
@@ -120,7 +120,7 @@ def test_generated_output_patterns() -> None:
     assert generated_output("lanes/x/evidence/run.log") == "under evidence/"
     assert generated_output("benchmarks/numerical/plot_overhead.png") == "a .png render"
     assert generated_output("integrations/vllm/20260929T0300Z-tables.json") == "a stamped render or note"
-    assert generated_output("benchmarks/numerical/python/verity_numerical/bench/tables.py") is None
+    assert generated_output("benchmarks/numerical/python/verity_numerical/bench/contract.py") is None
     assert generated_output("tools/research/tests/fixtures/run_v0.2/out/result.json") is None
 
 

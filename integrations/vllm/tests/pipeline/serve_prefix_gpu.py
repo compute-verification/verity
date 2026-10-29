@@ -1,7 +1,7 @@
 """commit-arb's shared-prefix traffic (`pipeline.commit_arb.traffic`: system prompts, conversations of several turns) sent to a
 running ``serve-openai --prefix-caching`` over HTTP, for its GPU arm: one thread a conversation, each turn a streamed
 ``/v1/completions`` of token ids with ``return_token_ids``, the next turn's prompt this turn's prompt, its streamed ids and the
-next question. ``top_p`` is left out (serve-openai refuses it below 1, CIR-87).
+next question. ``top_p`` is left out (serve-openai refuses it below 1).
 
     python -m tests.pipeline.serve_prefix_gpu --url URL --out FILE [--requests 32] [--seed 0] [--prompt-range 16:512]
         [--tokens 64] [--system-prompts 4] [--system-tokens 384] [--turns 2] [--max-model-len 2048]

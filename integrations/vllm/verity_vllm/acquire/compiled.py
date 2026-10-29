@@ -526,7 +526,7 @@ def build(inductor_dir: str, *, pieces: int, steps: int, prefill_tokens: int, re
                          "identity is the generated kernels' sources, not the wrapper bytes")
     launch_table = [[{"kernel": L["kernel"], "roles": [r for i, r in sorted(_roles(L).items())]} for L in pl] for pl in table]
     # the resolved role maps (arg index -> role, weight args, the generated kernel's pointer arity) per piece kind and
-    # launch site -- OUTSIDE the digest (the launch table above keeps its R15 form: the recorded v1/v2 digests are reproduced); the replay
+    # launch site -- OUTSIDE the digest (the launch table above keeps its earlier form, so the recorded v1/v2 digests are reproduced); the replay
     # (compiled_kernel_check) reads them so that a kernel name shared by two argument lists is never re-roled by name
     role_maps = {kind: [{"kernel": L["kernel"], "roles": {str(i): r for i, r in sorted(_roles(L).items())}, "weight_args": L.get("wargs"),
                          "pointer_arity": L.get("pointer_arity"), "signature": L.get("signature")} for L in pl]
@@ -545,7 +545,7 @@ def build(inductor_dir: str, *, pieces: int, steps: int, prefill_tokens: int, re
     for step in range(steps):
         # [B>=2] one identity per (request, launch, role): the request's token rows of the step's batched buffer (request-local element
         # range [0, tokens x width); the binding map splits the committed step buffer by the engine's row order, binding.build_binding_map).
-        # `step` is REQUEST-RELATIVE (the gprog reading binding.load_required_manifest applies to every lane manifest: engine step =
+        # `step` is REQUEST-RELATIVE (the gprog reading binding.load_required_manifest applies to every per-request manifest: engine step =
         # manifest step + the request's arrival step); `engine_step` records the absolute step the row was derived for.
         for rid, toks in tokens_at(schedule, step):
             rel_step = step - arrive_of[rid]

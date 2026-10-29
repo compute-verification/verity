@@ -207,8 +207,8 @@ def map_index(bmap: dict[str, Any]) -> dict[tuple, list[dict[str, Any]]]:
 def _op_key_index(idx: dict[tuple, Any]) -> dict[tuple, list[tuple]]:
     """(request, step, invocation, op_path, rank) -> the map keys of every member of that op, in map order.  The
     member-`*` identities (one per request x step x attention layer for the hidden family) used to scan the WHOLE index each: O(|*| x |map|)
-    = 132,096 x ~890k at B64 llama32-1b 1024/128 -- the serving thread sat hours at 100% CPU in coverage_check AFTER the run (attempt 2/3 of
-    the #23 device diagnostic, cp-r18-l40u 22:2xZ; B8: 16,512 x 111k, a few minutes, unnoticed).  Same keys, same order, built once."""
+    = 132,096 x ~890k at B64 llama32-1b 1024/128 -- the serving thread sat hours at 100% CPU in coverage_check AFTER the run (B8:
+    16,512 x 111k, a few minutes, unnoticed).  Same keys, same order, built once."""
     out: dict[tuple, list[tuple]] = {}
     for k in idx:
         out.setdefault((k[0], k[1], k[2], k[3], k[5]), []).append(k)

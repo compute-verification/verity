@@ -21,8 +21,8 @@ BLOCK_BYTES = 64 << 20
 PINNED_EXACT = os.environ.get("VERITY_PINNED_EXACT", "1") != "0"
 _PAGE = 4096
 # Growing the exact pool is page faulting: every page of a fresh shared mapping is allocated and zeroed when it is first touched, which
-# `cudaHostRegister` does one page at a time on the calling thread.  On vy-nebius-1 (a VM: first touch also faults on the host) that ran
-# 0.4-2.9 s/GiB, so the instrumented warm-up of a leased Commit grew its ~105 GiB pool in 40-270 s with the GPU idle (gm329: 266 s of
+# `cudaHostRegister` does one page at a time on the calling thread.  On the leased node (a VM: first touch also faults on the host) that
+# ran 0.4-2.9 s/GiB, so the instrumented warm-up of a leased Commit grew its ~105 GiB pool in 40-270 s with the GPU idle (266 s of
 # 271).  A pool's `populate_threads` helper threads fault the pages in first (MADV_POPULATE_WRITE, in pieces); the registration then pins
 # pages that are present.  Faults on one mapping (one shmem inode) scale less over threads than faults on separate mappings: 8 threads on
 # the node's 32-CPU dispatch slice, one 8 GiB mapping 0.15-0.2 s/GiB, 32 mappings 0.085-0.105, one thread 0.5.  0 = no population.

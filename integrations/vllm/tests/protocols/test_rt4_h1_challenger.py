@@ -570,7 +570,7 @@ def test_a_challenger_off_the_answers_commitment_is_refused_before_its_first_coi
 
 
 def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
-    """The gate's own bytes (vy-challenger-1's v2 head and seven challenge phases as its fetch gave
+    """The gate's own bytes (the auditor host's v2 head and seven challenge phases as its fetch gave
     them), through core's check: the head verifies under the key its challenge phases' key.json holds and the pin, v1
     entries then v2, and binds a window by its root; challenge phase s20261020T110845Z-1355 ended closed and complete under the
     commitment its end entry records (`held`), s20261020T105232Z-1281 (a hello without the secret),

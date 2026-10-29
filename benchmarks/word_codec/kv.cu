@@ -259,7 +259,7 @@ __device__ __forceinline__ void sqr_k1(const u32 (&a)[NL], u32 (&x)[NL]) {
   copy(x, y);
 }
 
-// KV_FOLD6=1: ra-squaring-ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`), the adversary's best squaring at 768 and
+// KV_FOLD6=1: the squaring ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`), the adversary's best squaring at 768 and
 // 1,024 bits. sqr_dbl_n is its FOLD 5 square: the off-diagonal products column by column, each column's accumulator
 // starting at the previous one's carry, then y = 2 S + sum a_i^2 2^(64 i) in one carry chain.
 template <int N>
@@ -1342,7 +1342,7 @@ static_assert(MT * HW % 32 == 0 && 32 % HW == 0, "whole decoder warps, a token's
 // Receipts inside mma-ws (RC = 1 unbound, 2 bound). A block is RT tiles of one (sequence, KV head) pair, at absolute
 // tile offsets of RT. Each decoder lane feeds its raw word of each tile, before decoding it, to mma.m16n8k32.s8 as the A
 // operand: step s (0..RS - 1, RS = NL / 4) is registers x[4s..4s+3], so the warp's 16 A rows are its 16 vectors of
-// 32 RS bytes a tile (ra-sketch-tag's fragment order: A register 2h + e is row g + 8e, column 16h + 4tq + b of lane
+// 32 RS bytes a tile (the sketch tag's fragment order: A register 2h + e is row g + 8e, column 16h + 4tq + b of lane
 // 4g + tq, byte b), and its B operand, the 16 sketch columns, is register q = 2 blk + h of step s, loaded from shared
 // memory: word (512 i mod ZW) + 128 s + 4 l + q of the tile's B slot (RC = 1: offset 0, not 512 i). kRcB holds a
 // block's sign rows, word 128 s + 4 l + q of tile τ (kv_receipt.rows): ±1 bytes (RC = 1), or 0x00/0xFF masks M (RC = 2,

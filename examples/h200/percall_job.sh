@@ -2,9 +2,9 @@
 # The skeleton at coverage f = 1 on one H200: run.py at the frozen shape with `e2e_h200.percall:$H1U`, every
 # served linear call's J10-R units through kernels' sm_90a build H1U (kraqwxsc, or kraq), receipts and z committed under
 # the step's salt key, sampled units held to the exact fallback. cwd = the source tree's root; the builds are sent, as
-# HASH-22's check held them:
+# the SHA-512 engine's check held them:
 #
-#   research run --on vy-dc-h200-2 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
+#   research run --on H200_NODE --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
 #     --send RUN/out/lib/sm_90a/h1u_kraqwxsc.so --send RUN/inputs/j10r_ref.so [--send PIN/sass_pins.json] -- \
 #     bash examples/h200/percall_job.sh
 #

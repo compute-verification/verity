@@ -29,7 +29,7 @@ DSV4_TOPK_PINS = {"kernel": "vllm.model_executor.layers.fused_moe.router.dsv4_to
 RMS_PINS = {"kernel": "vllm.model_executor.determinism.batch_invariant._rms_norm_kernel",
             "src_sha256": "aa15c9b0f34d3f78b63bc21b5373d1edca7a063b17ecc45ee1468e7b803f2524",
             "constexprs": {"BLOCK_SIZE": 1024, "HAS_WEIGHT": True}, "num_warps": 4, "dtype": "torch.bfloat16"}
-#: [R15 dense] `aten::mean.dim` under batch invariance: `enable_batch_invariant_mode()` (batch_invariant.py:1119) registers
+#: `aten::mean.dim` under batch invariance: `enable_batch_invariant_mode()` (batch_invariant.py:1119) registers
 #: `_batch_invariant_LIB.impl("aten::mean.dim", mean_batch_invariant, "CUDA")`, and `mean_batch_invariant` -> `mean_dim` launches the
 #: Triton `mean_kernel` (BLOCK_SIZE=1024, the JIT default 4 warps, the input viewed `(M, N, 1)`, one program per output element).  The
 #: override is a CUDA dispatch-key registration the meta-device export never runs, so the export graph shows the plain `aten.mean.dim`

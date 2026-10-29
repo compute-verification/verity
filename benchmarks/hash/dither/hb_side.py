@@ -2,14 +2,14 @@
 second stream after its coin, beside step s + 1) with h1u.cu's two-launch unit, `kh_unit_ws` (the noise
 grid-wide into a workspace, then the multiply and fold from it), in place of h1r's single-launch version 2.
 
-`install(win, path)` replaces the window's h1r object with `SideH1R`, which `Window._side_receipts` launches through:
+`install(win, path)` replaces the window's h1r object with `SideH1R`, which `DitherState._side_receipts` launches through:
 version 2 becomes h1r's own seeds (version 0, the same h1r_seeds kernel) and then `kh_unit_ws` over the plan's calls, one at
 a time on the side stream, into the plan's seeds and receipts buffers; a no-write launch (the gate's control) runs the
 seeds and none of the units. Every other version and every other attribute is h1r's, so the window's plans, tables, trees,
 coins, poisoning and `dither_fused.check` (every receipt against h1r v1, three units against h1tile.reference) are
 unchanged. What is committed, before which coin, and every receipt are the same as `dither-side`'s.
 
-The library is h1u.cu built by job.sh (a variant's .so, `HB_H1U`), sent to the run with --send.
+The library is h1u.cu built by job.sh (a variant's .so, `HB_H1U`), in the run's inputs.
 """
 from __future__ import annotations
 

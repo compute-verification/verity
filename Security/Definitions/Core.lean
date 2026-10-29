@@ -1,6 +1,7 @@
 import Definitions.Core.Circuit
 import Definitions.Core.Digest
 import Definitions.Core.Partition
+import Definitions.Core.Annotation
 import Definitions.Core.Advice
 import Definitions.Core.PrivatePartition
 import Definitions.Core.Declaration
@@ -12,6 +13,8 @@ import Definitions.Core.Scalar
 import Definitions.Core.Prims
 import Definitions.Core.TC
 import Definitions.Core.Fp32
+import Definitions.Core.Formalism
+import Definitions.Core.Expand
 import Definitions.Core.NaiveStrassen
 
 /-!

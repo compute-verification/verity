@@ -38,7 +38,7 @@ def test_b8_without_form_b_passes_with_the_gap_named():
     assert ok is True, reason                                                          # not mandatory: still a PASS
     assert reason.startswith("PASS (") and "B=8: per-(step,request) attribution not verified on this record" in reason
     assert "form (B) not armed on this attempt (no --match-dir oracle compare: no Match record)" in reason
-    assert "F-cb-23" in reason and "equal-shape request swap" in reason
+    assert "equal-shape request swap" in reason
 
 
 def test_b2_with_complete_attribution_passes_clean_even_when_value_partial():

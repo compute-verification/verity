@@ -1,4 +1,4 @@
-"""[R16 fp8] The vectorised twins of the block-scaled FP8 families (`derived_rows.tc_dot32_e4m3`, `fp8_group_quant_row`,
+"""The vectorised twins of the block-scaled FP8 families (`derived_rows.tc_dot32_e4m3`, `fp8_group_quant_row`,
 `scaled_mm_fp8_block_row`) are word-for-word the registered Definitions (`verity/ml/definitions/registry/fp8.py`) and the saved H100 kernel
 words (`data/fp8_block_operands.npz`: `_C.per_token_group_fp8_quant` + blockwise `_C.cutlass_scaled_mm`, on an H100).
 Python >= 3.12 (`veritor.core.silicon_total_fp8`, the scalar QGMMA step)."""

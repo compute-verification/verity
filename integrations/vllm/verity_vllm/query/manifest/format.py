@@ -606,7 +606,7 @@ def components_fold_digest(component_digests: Iterable[str]) -> str:
 
 def tp_ranks_fold_digest(rank_digests: Iterable[str]) -> str:
     """A merged TP manifest's header `program_digest`: the labelled fold of the per-rank Program digests
-    (`program_digest_kind: tp-ranks-fold`) -- one string for manbind's loader; every identity row keeps its own rank's digest."""
+    (`program_digest_kind: tp-ranks-fold`) -- one string for the manifest's loader; every identity row keeps its own rank's digest."""
     return hashlib.sha256(("tp-ranks/" + ",".join(sorted(str(d) for d in rank_digests))).encode()).hexdigest()
 
 

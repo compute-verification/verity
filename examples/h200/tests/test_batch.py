@@ -1,4 +1,4 @@
-"""The batch path at ALLP-IFACE's tiny shape on the CPU: kernels' per-slot commit (the host twin) gives the reference's roots,
+"""The batch path at the tiny shape on the CPU: kernels' per-slot commit (the host twin) gives the reference's roots,
 micro-batches and dropped tables change no root, the forward stays at most `LAG` groups ahead of a slow commit, rows at
 their own positions are the lockstep rows, a drawn slot opens by replaying its request alone, the network engine serves what
 lockstep serves, the torch softmax is the Definitions', the map is circuits' FAMILIES table at the frozen shape and each
@@ -279,7 +279,7 @@ class Toy:
         return [Family("sub:toy.argmax", "Toy_v1{}", "fixture", 1, replay)]
 
     def manifest(self):
-        return {"template": "Toy_v1{}", "issue": "CMP-126"}
+        return {"template": "Toy_v1{}"}
 
 
 def test_a_subcircuit_joins_the_registration_and_the_draw(params):

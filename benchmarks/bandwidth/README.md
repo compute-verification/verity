@@ -27,7 +27,7 @@ constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-
   the GPU is known.
 - The harness runs the verifier and its state on the GPU's node too, to measure. In a deployment the verifier is the
   auditor's hardware, on a machine the prover doesn't control, and what runs on the GPU's node (`challenger_device`,
-  `Prover`) is the prover's (`PROTOCOL.md` §0).
+  `Prover`) is the prover's (`PROTOCOL.md` §2).
 - `run.sh` is one Attempt on vy-nebius-2. It builds and runs the reference outside the lease, then under
   `gpu-lease 1 --wait` runs `bwtag`'s gates, its timing and `gpu.py windows`. A failed gate times nothing. Its header
   lists the outputs.

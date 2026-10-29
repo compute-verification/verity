@@ -470,7 +470,7 @@ def test_forge_after_runs_after_lean_whenever_its_kinds_are_forged(capsys) -> No
         return int(cmd[cmd.index("--timeout") + 1][:-1])
 
     assert limit("--forge", "coef") - limit() == pytest.approx(RUN.MARGIN * RUN.FW_S["L0"] / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
-    # the message forgery proves alg-p1, which it leaves honest, beside alg-p0 (r20261024-172707-4385)
+    # the message forgery proves alg-p1, which it leaves honest, beside alg-p0
     alg = RUN.FW_S["alg-p0"] + RUN.FW_S["alg-p1"]
     assert limit("--forge", "message") - limit() == pytest.approx(RUN.MARGIN * alg / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
     assert limit("--forge", "sum") - limit() == pytest.approx(RUN.MARGIN * (RUN.FW_S["L0"] + RUN.FW_S["L3"] + alg) / 60, abs=1)

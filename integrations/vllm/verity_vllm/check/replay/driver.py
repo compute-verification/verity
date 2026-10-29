@@ -1,4 +1,4 @@
-"""Sampled exact VU replay -- the local replay check of record (serialized as `C2`; DECISIONS-2 §4 C2).
+"""Sampled exact VU replay -- the local replay check of record (serialized as `C2`).
 
 For a sampled VU `V` (one Call of the Program) the check is
 
@@ -40,7 +40,6 @@ PROTOCOL SUMMARY (Commit stage: local replay (`C2`) of record = sampled exact VU
     request-relative steps >= n_exec leave the pool into a NAMED class before any draw; a request linked over fewer steps than its
     cap must end on a declared EOS id at steps[-1 - lag] (undeclared EOS / unattested lag = unlinked by name); weights_check.equal
     False fails the replay by name.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 
 The check runs here; its steps live beside it: `index` (the Program rows), `population` and `coverage` (what may be sampled
 and what the query population names), `sample` (the stratified draw and its seed), `opening` (committed words by
@@ -125,8 +124,8 @@ def _plain(x: Any) -> Any:
 
 def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, int, int], np.ndarray | None]) -> None:
     """Read every weight field the sample consumes into the provider's cache in the PARENT (the children must not touch the model) --
-    INCLUDING the weights of the interior producers a VU composes (the pre-bias Gemm under a BiasAdd, MAN-07): [measured on
-    the Qwen2.5 L40S B1 int-5 record] the BiasAdd VUs' own args name only the bias slice, the composed Gemm's qkv weight was first read
+    INCLUDING the weights of the interior producers a VU composes (the pre-bias Gemm under a BiasAdd): [measured on
+    a Qwen2.5 L40S B1 record] the BiasAdd VUs' own args name only the bias slice, the composed Gemm's qkv weight was first read
     in a forked child -> AcceleratorError 'CUDA initialization error' -> every BiasAdd stratum 'not evaluated' -> partial -> FAIL closed."""
     seen: set[str] = set()
 
@@ -158,7 +157,7 @@ _FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormTriton_v5": ("rms",), "RMS
                 # the attention rows' softmax reads the measured MUFU.EX2 / MUFU.RCP tables: loaded in the parent
                 "Attention_v3": ("fa2",), "Attention_v2": ("fa2",), "Attention_v4": ("fa2",), "Attention_v5": ("fa2",), "Attention_v18": ("fa2",),
                 "AttentionSoftcap_v2": ("fa2",),
-                # [MAN-06f v3 unit 2] the router's NvExpf reads the measured MUFU.EX2 table (fa2 tables, ~1.5 s to load): loaded in the parent
+                # the router's NvExpf reads the measured MUFU.EX2 table (fa2 tables, ~1.5 s to load): loaded in the parent
                 "MoeRouterTopK_v1": ("fa2",), "MoeRouterTopKNorm_v1": ("fa2",),
                 "MoeRouterTopKOrdered_v1": ("fa2",), "MoeRouterTopKOrderedNorm_v1": ("fa2",), "MoeExpertGemm_v1": (), "MoeExpertGemmW_v1": (), "MoeExpertGemm_v2": (),
                 "MoeExpertGemmW_v2": (), "MoeSum_v1": ()}
@@ -294,7 +293,7 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
         # the canary line (commit.log): the planner's `compare` reads it to model the record with 250 MiB workers
         print(f"[replay] fork gc.freeze={'on' if frozen else 'OFF'}: {workers} workers over {len(picked)} VUs"
               + (f", {_FORK_STATS['gc_frozen_objects']} objects frozen ({_FORK_STATS['gc_collected']} collected) before the fork" if frozen else
-                 " (VERITY_REPLAY_FORK_GC_FREEZE=0: the children may copy the parent's C2 heap on write, F-r17-24 (b))"), flush=True)
+                 " (VERITY_REPLAY_FORK_GC_FREEZE=0: the children may copy the parent's C2 heap on write)"), flush=True)
         oom0 = FK.oom_kills()
         with FK.fork_pool(workers) as pool:
             pids = {p.pid for p in pool._pool}
@@ -316,7 +315,7 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
         _FORK_FN, _FORK_VUS = None, []
 
 
-ENGINE_FACTS_RULE = ("the evaluators' semantics are the engine's configuration of record (dense M-0081: on cc 9.0 the Gemm_v2 Hopper chain "
+ENGINE_FACTS_RULE = ("the evaluators' semantics are the engine's configuration of record (on cc 9.0 the Gemm_v2 Hopper chain "
                      "equals cuBLASLt only under VLLM_BATCH_INVARIANT=1, which disables split-K by CUBLAS_WORKSPACE_CONFIG=:16:8 / "
                      "CUBLASLT_WORKSPACE_SIZE=1 / allow_bf16_reduced_precision_reduction False; on cc 8.x it installs the Triton persistent "
                      "matmul; without batch invariance on cc 9.0 the cuBLAS GEMMs are the route pin's, which holds only where `cublas` is "
@@ -617,7 +616,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     # AcceleratorError; every VU would come back 'not evaluated' and the honest row would FAIL closed): the caller names the retention and
     # the replay runs SERIAL in the parent's own CUDA context.  A child that hits the device anyway is a pool failure -> serial fallback.
     if retention == "device" and int(workers) > 1:
-        pool_note = "device-retained committed store: forked evaluator disabled, serial replay in the parent's CUDA context (F-cb-44)"
+        pool_note = "device-retained committed store: forked evaluator disabled, serial replay in the parent's CUDA context"
         workers = 1
     results, workers, note, prewarmed, memory = _evaluated(_one, picked, indices, weights, int(workers), worker_peak)
     pool_note = note or pool_note
@@ -646,9 +645,9 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     for k in strata:
         strata[k]["evaluated"] = int(strata_eval.get(k, 0))
         if strata_mism.get(k):
-            strata[k]["mismatch"] = int(strata_mism[k])                       # [moe F-moe-r17-06] the stratum's own count, uncapped
+            strata[k]["mismatch"] = int(strata_mism[k])                       # the stratum's own count, uncapped
     picks_by_request_step = _picks_by_request_step(results)
-    # [moe F-moe-r17-06] EVERY mismatch counted by name, uncapped (the first-12 list below carries the inputs/outputs detail only): a
+    # EVERY mismatch counted by name, uncapped (the first-12 list below carries the inputs/outputs detail only): a
     # reader of the record learns which mechanisms / requests / phases / modules disagree without re-running the replay
     mism_by = {"by_family": dict(Counter(m["spec"].split("{")[0] for m in mism)),
                "by_request": dict(Counter(str(m["request_id"]) for m in mism)),
@@ -684,7 +683,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
         result, grade = None, "partial"
         why = (f"{len(not_evald)} pick(s) not evaluated inside evaluated strata ({', '.join(f'{c} x {n}' for c, n in sorted(by_cls.items()))})"
                f"{' -- run-time fault, not a gap on the record' if faults else ''}: {first.get('spec')} {first.get('op_path')} "
-               f"(req {first.get('request_id')}, step {first.get('step')}): {str(first.get('why'))[:160]} (F-r16-13)")
+               f"(req {first.get('request_id')}, step {first.get('step')}): {str(first.get('why'))[:160]}")
     else:
         result, grade, why = True, "complete", None
     steps_seen = sorted({v["step"] for v in picked})
@@ -699,12 +698,12 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
             "population": {"vus": len(all_vus), "source": "Program instances.json.gz rows (every row; evaluable = families with a registered evaluator)",
                            "requests": sorted(programs), "by_family": dict(Counter(v["family"] for v in all_vus)), "not_evaluable_by_family": dict(not_ev_fam),
                            "not_evaluable": dict(not_ev), "not_evaluable_codes": {k: codes.get(k) or RC.reason_code("other") for k in not_ev}, "strata_n": len(strata),
-                           "authority": "Q(P) -- the required manifest (R17-3); `vus` above is the replay's enumeration of the Program rows, reconciled below",
+                           "authority": "Q(P) -- the required manifest; `vus` above is the replay's enumeration of the Program rows, reconciled below",
                            "query_total": qpop["query_total"], "sampled_strata": qpop["sampled_strata"], "uncovered_by_name": qpop["uncovered_by_name"],
                            "not_executed_by_family": qpop["not_executed_by_family"], "not_executed_rule": qpop["not_executed_rule"],
                            "not_executed_by_rule": dict(qpop["not_executed_by_rule"], vus=len(not_exec_vus),
                                                         vus_by_request=dict(Counter(v["request_id"] for v in not_exec_vus)),
-                                                        strata_excluded={k: {"population": int(n), "label": "not evaluable: unexecuted (R17-1)"}
+                                                        strata_excluded={k: {"population": int(n), "label": "not evaluable: unexecuted"}
                                                                          for k, n in sorted(Counter(v["stratum"] for v in not_exec_vus).items())}),
                            "uncovered_identities": qpop["uncovered_identities"], "controller": qpop.get("controller"),   # [R4] the lifted controller, by name
                            "query_checks": qpop["query_checks"], "scope": qpop["scope"]},
@@ -727,7 +726,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
             # how the committed store was read: the collector's retention and the evaluator that ran (forked pool / serial)
             "evaluator": {"retention": retention, "workers_requested": workers_requested, "workers": int(workers),
                           "mode": "forked pool" if int(workers) > 1 else "serial (parent process)", "note": pool_note,
-                          "prewarmed_libraries": prewarmed,               # [MAN-06g] twin .so's dlopen'ed in the parent before the fork
+                          "prewarmed_libraries": prewarmed,               # twin .so's dlopen'ed in the parent before the fork
                           # gc.freeze before the fork: the children's collections never traverse the
                           # inherited C2 heap (otherwise a 72 GB-per-child COW); {} when no pool was forked
                           "fork": dict(_FORK_STATS) if int(workers) > 1 else {}, **({"memory": memory} if memory else {})},
@@ -743,26 +742,26 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                             "phases": sorted({k.split("|")[3] for k in strata}),
                             "modules": len({k.split("|")[4] for k in strata if k.count("|") >= 4}),
                             "key": "spec | request | rank | phase | module op_path | lifetime (window); attention rows: spec with T -> NB = ceil(T/BN) "
-                                   "(the block-count mechanism; the row's own spec keeps T) [R17-11]",
+                                   "(the block-count mechanism; the row's own spec keeps T)",
                             "lifetime": {"values": dict(Counter(v["lifetime"] for v in all_vus)), "ring_slots": ring_slots,
                                          "rule": "engine step >= ring_slots -> recycled-window (storage the ring already committed under an earlier step's "
                                                  "identities); else fresh-window; unwindowed collectors: one value, stated",
                                          "sampled": dict(Counter(v["lifetime"] for v in picked))},
-                            "phase": ("prefill / first-decode / mid / last EXECUTED step of each request (F-r17b-39: `last` is anchored to n_exec - 1 "
+                            "phase": ("prefill / first-decode / mid / last EXECUTED step of each request (`last` is anchored to n_exec - 1 "
                                       "under the executed prefix -- the lag step of an EOS-stopped request -- else to the cap; steps past the "
                                       "prefix are 'not-executed', split out of the pool by name)"),
                             # per request: the step `last` is anchored to, the anchor's rule, and the lag step when there is one
                             "phase_anchor": {r: anchors[r] for r in sorted(anchors)}},
             "mismatch": [{k: m.get(k) for k in ("spec", "request_id", "step", "engine_step", "op_path", "row", "phase", "inputs", "outputs", "why")} for m in mism[:12]],
-            "mismatch_by": mism_by,                                       # [moe F-moe-r17-06] every mismatch by name, uncapped
+            "mismatch_by": mism_by,                                       # every mismatch by name, uncapped
             "not_evaluated": not_evald[:12],
             # mechanisms of the Program's rows this replay does NOT read even when the row IS evaluated (named, counted)
             "uncovered_mechanisms": _uncovered_mechanisms(all_vus, not_ev_fam),
             # Not-evaluable families BY NAME WITH COUNTS + reason (footnoted on the row; bounds the claim)
             "unreplayable": [{"family": f, "n": int(not_ev_fam[f]),
                               "why": NOT_YET.get(f.split(" (")[0], "structure / interior: no identity" if "(structure" in f
-                                                 else ("interior producer: composed into its consumer's VU (MAN-07)" if "(interior" in f
-                                                       else ("MoE plane row -> plane slice mapping failed (MAN-06f v3): see population.not_evaluable" if "(plane mapping failed)" in f
+                                                 else ("interior producer: composed into its consumer's VU" if "(interior" in f
+                                                       else ("MoE plane row -> plane slice mapping failed: see population.not_evaluable" if "(plane mapping failed)" in f
                                                              else "no registered evaluator")))}
                              for f in sorted(not_ev_fam)],
             "weights": (wc if wc is not None else {"equal": None, "note": "by reference, unverified at replay (no weights check supplied)"}),

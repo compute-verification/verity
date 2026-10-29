@@ -4,7 +4,8 @@ with its issue and given no verdict; and sampled proofs' accepted answer compose
 block record that `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing
 composes to reject with no block record. The wipe composes only when its answer accepts on the record's server. PoUW's development piece checks the window's gate session and credits nothing,
 and the gate is refused while the lane has a period open. `served_verdicts.sh`'s window circuits gate on every class of
-CLASSES, and the class of record's count after them gates nothing. Its load, `serve_load.py --varied`, writes each
+CLASSES, and the class of record's count after them gates nothing; its endpoint gets one token budget, T, with or without
+H1. Its load, `serve_load.py --varied`, writes each
 request's send, first-token and done times beside its record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
@@ -329,6 +330,38 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "2h")
 
 
+def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
+    """`served_verdicts.sh serve` in a toy tree whose venv python records serve-openai's argv and exits before listening,
+    under a no-op `sleep`: the exit status and that argv."""
+    tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
+    for d in (tree / "integrations" / "vllm", bin_, venv):
+        d.mkdir(parents=True)
+    for path, body in ((venv / "python", f"printf '%s\\n' \"$@\" > {tmp_path}/argv; exit 1"), (bin_ / "sleep", "exit 0")):
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(0o755)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+           "OUT": str(tmp_path / "out"), **env}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
+                        capture_output=True).returncode
+    return rc, (tmp_path / "argv").read_text().splitlines()
+
+
+@pytest.mark.parametrize("env, budget", [
+    ({}, "512"),
+    ({"H1_GATE": GATE}, "512"),
+    ({"H1_GATE": GATE, "H1_T": "8192"}, "8192"),
+    ({"H1_T": "8192"}, "8192"),
+    ({"T": "2048", "H1_T": "8192", "H1_GATE": GATE}, "2048"),
+])
+def test_the_engine_gets_one_token_budget_with_or_without_h1(tmp_path, env, budget):
+    """serve-openai gets ``--max-num-batched-tokens`` once, T (default H1_T, else 512), whether H1 serves or not; without
+    it the engine would take serve-openai's own 2048 with H1 off."""
+    rc, argv = _serve_argv(tmp_path, env)
+    assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
+    assert argv.count("--max-num-batched-tokens") == 1 and argv[argv.index("--max-num-batched-tokens") + 1] == budget
+    assert ("--protocols" in argv) == ("H1_GATE" in env)
+
+
 class _Response:
     """`urlopen`'s response, read whole or line by line; reading line i sets ``now[0]`` to ``times[i]``, and reading past the
     last line to ``end``."""
@@ -396,8 +429,8 @@ def test_serve_load_varied_writes_each_requests_timings_beside_its_record(tmp_pa
 
     monkeypatch.setattr(SL.urllib.request, "urlopen", urlopen)
     out = tmp_path / "load.jsonl"
-    a = argparse.Namespace(port=0, model="m", varied=3, rate=2.0, prompt_range="16:24", max_tokens=4, seed=1, release="run",
-                           jitter_ms=0.0, out=str(out))
+    a = argparse.Namespace(port=0, model="m", varied=3, fixed=0, rate=2.0, prompt_range="16:24", max_tokens=4, seed=1,
+                           release="run", jitter_ms=0.0, out=str(out))
     assert SL.run_varied(a, clock=clock, wall=lambda: 1.7e9, sleep=lambda s: None) == 0
     rows = [json.loads(line) for line in out.read_text().splitlines()]
     assert SL.timings_path(out) == tmp_path / "load.timings.json"

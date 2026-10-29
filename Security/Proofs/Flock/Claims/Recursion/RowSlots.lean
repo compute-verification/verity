@@ -27,7 +27,7 @@ the parts agree on the shared rows (`LayoutB.RowsAgree`).
 The commit is the registered-row binding: each part's hm96 slot outputs its row's commit string
 (`hmSlotsCommit_of_full`), which its public file names, and the verifier opens that digest at the row's registered root
 and position (`Registered.opens`). The climb's evaluations are the verifier's own, which `findColl (L.allCalls x ws)`
-doesn't search: the escape here is option A of the vcalls ask (`note:20261024T2340Z-draft-vcalls-ask`), and until it
+doesn't search: the escape here is option A, which charges a collision with them, and until it
 lands no route reaches a layout whose messages carry a shared row.
 -/
 

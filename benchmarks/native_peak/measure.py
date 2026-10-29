@@ -16,7 +16,7 @@ that binary is already on the machine, otherwise it is recorded as "not captured
 
 result.json (`research/result/v0.1`, kind `native-peak/v1`) carries the headline fields at the top level -- device, dtype,
 accumulate, method, flop_per_second, spec_flop_per_second, fraction_of_spec, sass, kernel, driver, cuda, clocks_mhz, power_w,
-sizes -- so `research data select --where meta.dtype=bf16` works, and the same identity in `workload_fingerprint`.  Spec peaks are
+sizes -- so a store query can select on them (`meta.dtype`), and the same identity in `workload_fingerprint`.  Spec peaks are
 datasheet dense (non-sparse) tensor-core numbers with FP32 accumulate; a card the table does not know gets `spec_flop_per_second:
 null`.  Nothing here is a proof; it is the native anchor for `overhead.vs_native_peak`.
 """
