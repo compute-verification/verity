@@ -13,7 +13,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    receipt kind, `bind`, the layout and the rows.  The verifier keeps one live registration a node (`Registry`): a
    second while one is live is refused and draws nothing, and a registration ends only when the verifier closes it,
    counting its sessions, an unended one as failed.
-2. Coins.  Before the session the proof service's challenger draws two live coins a window, its challenge `σ_t` and
+2. Coins.  Before the session the proof system's challenger draws two live coins a window, its challenge `σ_t` and
    its openings coin, and a coin an append, and commits to them (`coins.Coins`: session k's epoch of the one challenger,
    on its own host when it is remote).  The prover gets the commitment first (`Session.commitment`).  Each coin opens
    once, after the root the verifier recorded for it, which the challenger's signed log keeps
