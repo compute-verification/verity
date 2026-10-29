@@ -816,51 +816,51 @@
   },
   "Claims.ZKMal.RefSession.Causal": {
    "owner": "@proofs",
-   "digest": "fff029f2e8162fe6e3a68fa5cca2eff0622438862c8f315bb8c8cc6d43ea1a71"
+   "digest": "23a118310aac51ee54b1a52ca1dc50a75d6d7aa4b87f80c85a76d2fe89b2333e"
   },
   "Claims.ZKMal.RefSession.Complete": {
    "owner": "@proofs",
-   "digest": "6d4679840f388918374f8a117980737f86175642695120457a40300be7d6c296"
+   "digest": "622036ad64056aef354c84562df01af38f49b2b909be28fd58e98fb82ec5ec2d"
   },
   "Claims.ZKMal.RefSession.DummyReg": {
    "owner": "@proofs",
-   "digest": "87cc102c617ef899b09739843dd13508d92c66b8a5548f11134b596182d75de6"
+   "digest": "2b26adb0ef538d939f950d39c871d324cd9e5d7e63980729e039c172d2b3792f"
   },
   "Claims.ZKMal.RefSession.SwCausal": {
    "owner": "@proofs",
-   "digest": "10bf93308a7534391f7f5c9dec10ff1ba2d13f82273169497b5bd46742f37c1b"
+   "digest": "ab058d6ff058737b920a6d67ec5b6c8eec8acf905a7cedd1d63348c54a263fce"
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
-   "digest": "cf1535f428e17426afcb5a4760e881cd71864f8d718a061e4c3627246779609a"
+   "digest": "091d46cf53b159bcb43a6184e576ab45eaa65a4dd1e139a4c0e2c4c253a61f27"
   },
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
-   "digest": "ac5670ea95f568c94a1e6a8587177c6c1ebf2dde18567e3455507d4338408eb9"
+   "digest": "469524f318e76362a855556e10d3f73714fefe83d2c78a9e8d7c1ebade259672"
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "32d6ca999f185f8c18ed540b5453be5dabdf65f5a026f5906cdff6a358a22e2d"
+   "digest": "77592fb2b586dc7aef7ec6adb1cbe4c37d680478f7ad7d5697391e64cc458ce1"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "fe0ddca1347e8af72cb09debb1b90b45345efad8ae09cc221c5b1b98bb976341"
+   "digest": "e15de4171da3302f05c506a39c94e8da4395223a62a7ca254c5c4acca51a1d1a"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "c94295e3ebd68c338477280fdcbd647754e2799aeb659d65d2b298daed9ebe7d"
+   "digest": "f336a0ddbf24a53ab4fcdeb7d445406f69bbbad8ba1f25152da8e6aec24fff08"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "57f87b76fa66a898311d86b71a5f604f1dcbf438c47b6f610cccc8cd2efa9ee4"
+   "digest": "ad6724dfab9258b17dd1ace6125f005b261a1913789145fd8f4af4a355a7cdf9"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
-   "digest": "b937dbb7bbd16af3fc13f7c46621bace85d68a80993822f091ff9ad025ff0fd3"
+   "digest": "414dae49c8fb724f61ae2ae4d81c1d9fb9c4a6fdff65167a92387528387a41f2"
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "b9557267ee6a1dcbfaff953117b4a9c54db63f5d1a9fa6d7ea1cb3930eb0ee46"
+   "digest": "c8df3e73274e4a48fbf7de340addf351ece62ee167fda683c8c537a5919170d3"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -892,7 +892,7 @@
   },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs",
-   "digest": "a158c0c2db037116a93fafe145881a72b27c07bce6d947737e14b6c7d6c31b17"
+   "digest": "34989b0124448487f04fe32eb951188551f0666953e45f7867408ae9dfba86fc"
   },
   "Flock.Guarantees.OuterSessionsZK": {
    "owner": "@proofs",
@@ -916,7 +916,7 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "acc39f891ff1ed2bd52948e65a156df8810babb7e66b856821df74b2eb63b81f"
+   "digest": "a26f710e70df0dafe4dd5b9f029a844ea3a1090d2734226ba540f264724f1b11"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
@@ -2433,7 +2433,6 @@
    "Claims.Json.Wf": "a helper the claims read: a well-formed JSON value, which `JsonSpec` reads",
    "Claims.Out64": "a hypothesis `Complete` reads (the oracle's outputs are 64 bytes, SHA-512's whole output), no claim",
    "Claims.Recursion.Bound.Binds": "a premise of `Bridge` on the bound record (its row digest input is injective), a condition on the record like `decOK`, no claim",
-   "Claims.Recursion.Bound.LastBinds": "P4 as first stated, superseded by `Bound.LastBindsEC` with `Bound.LastCoinFree` (card ef47c02e): two accepted last messages that `final` keeps apart, after the same rounds and coins, give a collision; false at the deployed bound record before S0 (a trailing space in the record's text, which S0 refuses: `RecDeploy.LastGap.check_space`), kept because `RecDeploy.KSBoundRoute` reads it, a premise, no claim",
    "Claims.Recursion.Bound.PlainKSAbort": "a premise of `KSBound`'s route on the bound record (P1: the element-level Flock's KS against aborting provers at plain leaves, `Inner.KSAbort` at `DE`), which `Bridge` takes at each decoder and Flock's table bound at `DE` is to give, no claim",
    "Claims.Recursion.Bound.WeightCovers": "a premise of `Bridge` on the bound record (`γ`'s weight covers the bridge's loss, `N_I · k_I · √Pr[B]`: `√C_DE + N_I · √(k_I/32) ≤ √C_IVStar`), a condition on the record like `decOK`, no claim",
    "Claims.Recursion.Bridge": "option (d)'s inner claim (`KSBound` rests on it), a statement over every bound record, proved from Flock's KS at `DE`, `Bound.Binds` and `Bound.WeightCovers` wherever a decoder inverts the record's answers (`Bound.bridge_of_dec`), the deployed record among them (`RecDeploy.bridge_bdDeployed`); it reads no deployed record, so it has no antecedent there to witness, no claim",
@@ -3161,7 +3160,7 @@
    "Proofs.Flock.Claims.Witnesses.Flock": "a toy outer Flock record (`Claims.Witness.Flock.ksD`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.Claims.Witnesses.Recursion": "the toy recursion records and inner protocols (`ksR`, `compR`, `effR`, `accI`, `noI`, ...), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.Claims.Witnesses.Shared": "a toy oracle (`Claims.Witness.constH`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Flock.Claims.DeployInputs": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.Claims.Recursion.Deploy": "the claims' meets witnesses state antecedents at the recursion's deployed record (`RecDeploy.deployRec`, `Brings`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
@@ -5814,12 +5813,12 @@
    "signature": [
     "Claims.Witness.Recursion.Complete_meets :",
     "  And (Claims.Recursion.InScope (Claims.Witness.Recursion.denseStmt Bool.false))",
-    "    (And (Claims.Recursion.InScope (Claims.Witness.Recursion.denseStmt Bool.true))",
-    "      (And (Claims.Recursion.InScope (Claims.Witness.Recursion.sparseStmt Bool.false))",
-    "        (Claims.Recursion.InScope (Claims.Witness.Recursion.sparseStmt Bool.true))))"
+    "    (And (Not (Claims.Recursion.InScope (Claims.Witness.Recursion.denseStmt Bool.true)))",
+    "      (And (Not (Claims.Recursion.InScope (Claims.Witness.Recursion.sparseStmt Bool.false)))",
+    "        (Not (Claims.Recursion.InScope (Claims.Witness.Recursion.sparseStmt Bool.true)))))"
    ],
    "assumptions": [],
-   "type_hash": "0fa0c94d38cd2aa7013c2a2487b6e4890c2b69f192b0bbfae653665fba55f9b2"
+   "type_hash": "d7245d2f8caef7ed2beeee303338a8ffd31d06c73aa93add22b8700d9ab7ee5a"
   },
   "Claims.Witness.Recursion.Complete_meets_deployed": {
    "owner": "@proofs",
@@ -6108,12 +6107,12 @@
    "signature": [
     "Claims.Witness.Recursion.Nontrivial_meets :",
     "  And (Claims.Recursion.InScope (Claims.Witness.Recursion.denseStmt Bool.false))",
-    "    (And (Claims.Recursion.InScope (Claims.Witness.Recursion.denseStmt Bool.true))",
-    "      (And (Claims.Recursion.InScope (Claims.Witness.Recursion.sparseStmt Bool.false))",
-    "        (Claims.Recursion.InScope (Claims.Witness.Recursion.sparseStmt Bool.true))))"
+    "    (And (Not (Claims.Recursion.InScope (Claims.Witness.Recursion.denseStmt Bool.true)))",
+    "      (And (Not (Claims.Recursion.InScope (Claims.Witness.Recursion.sparseStmt Bool.false)))",
+    "        (Not (Claims.Recursion.InScope (Claims.Witness.Recursion.sparseStmt Bool.true)))))"
    ],
    "assumptions": [],
-   "type_hash": "0fa0c94d38cd2aa7013c2a2487b6e4890c2b69f192b0bbfae653665fba55f9b2"
+   "type_hash": "d7245d2f8caef7ed2beeee303338a8ffd31d06c73aa93add22b8700d9ab7ee5a"
   },
   "Claims.Witness.Recursion.ScopeMatches_fails": {
    "owner": "@proofs",
@@ -20572,7 +20571,7 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Recursion": {
-   "digest": "77d4d3ad45999deb7ebf9a0d6429bedf2b2aaeca489e5aea19c5e874fb599bff",
+   "digest": "92ae959ed10b5ef235e8d68ae75bd1cf27d951a07384a949fdeda23fc7803f7c",
    "definitions": {
     "Claims.Recursion.BAbort": "cc6d1eae158f7e9353eed3e76a1d0be441485fa6b07023915a3bfb5b17d469a6",
     "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
@@ -20656,7 +20655,7 @@
     "Claims.Recursion.Form.sparse": "cdde729c2d9e0ba6c593d6510429157f057864fdf3efa550165d2ab30240888d",
     "Claims.Recursion.Form.stacked": "1e9dd5f6621cad32c8f804f422be77b0d60f6a1fb32c20942d71223ef2695c44",
     "Claims.Recursion.Form.unitRangeInBlock": "e8acc5c08ba23484c86f51648a5fea16fedd2347e66c4689d533b75475ad75db",
-    "Claims.Recursion.InScope": "bb0073a40d8fbd34a861d112ba2831628f178946312b61c1455779bf4154c87b",
+    "Claims.Recursion.InScope": "4e356c7a0494e53bff59aeb102aaa4c05f6f91a6bc8e467c6a9f01ba3418d63d",
     "Claims.Recursion.Inner": "65cd0218b5669ad9b091267cdb5f14f7e38713bf6cd91c2914507cf8f017ba2c",
     "Claims.Recursion.Inner.E": "f6beaf3000fe0d8fb3c1a91ffe977178536fe55ae558163299a0b68968cb1161",
     "Claims.Recursion.Inner.KS": "6ad4decaf41fa1d3feb96b1b6448b340996a76240cb95405ca3f0627f617fea4",
@@ -24282,9 +24281,9 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Flock.Guarantees.RecursionClaims": {
-   "digest": "1a62e47b547370dc7b810bb9ae7e991d965f9f0a9baeec15b2d68edbeca6bc8a",
+   "digest": "c199c85fa24c7b91f2e41db3eafcc9ee117261a2c413bdec0968db72e5863a19",
    "definitions": {
-    "Flock.Guarantees.RecursionClaimsStated": "8f18e8f756910f940696e8402f3b721963d38cedabda4e43fa6c9785c3ed6ba7"
+    "Flock.Guarantees.RecursionClaimsStated": "4e79db28cf89e670d359e47ea661cdd6db5ef6c2e30501cae8739c3aa8e50587"
    },
    "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
   },
@@ -37638,60 +37637,6 @@
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
-  "Flock.Keccak": {
-   "digest": "565957974cae416a313bab0e59d716a90c9c16f1e31f657d41eec4012e1258fd",
-   "definitions": {
-    "Flock.Keccak.RATE": "173ec90bb58571003c07712a2dabdb29e5fe7896d79c89e2d1f814cea4938977",
-    "Flock.Keccak.RC": "cda370604250d6721e09bc011f7b4ce9d678de9c763df60fde5295e2636006a2",
-    "Flock.Keccak.ROT": "5d947171f7dc0eccfbb248d14ea852974eb8c025e7507db88361e2eb0a45da30",
-    "Flock.Keccak.lane": "14619de148843a7eb94c55e992345734e2b9f41ba79cdfa21c2228071653466d",
-    "Flock.Keccak.permute": "6e69a297b8e107a9f6718de2e2efe26306fe56a8c63e36542d45ff5612335ded",
-    "Flock.Keccak.rotl": "8be1f846fbfba34d198b97bbae71cf63d96d8159ab059f92cf6da5eaba9ec1a1",
-    "Flock.Keccak.shake256": "eba2f20c1d29f2ceb0c1a79158fd005a73d098c1f3788b183958c905437bb5b3"
-   },
-   "guarantees": [
-    "Claims.Flock.Complete_meets_plain",
-    "Claims.Flock.Complete_meets_zk",
-    "Claims.Flock.decoder_meets_plain",
-    "Claims.Flock.decoder_meets_zk",
-    "Claims.Flock.masked_meets_zk",
-    "Claims.Flock.scope_meets_plain",
-    "Claims.Flock.scope_meets_zk",
-    "Claims.Sampling.Binding_meets",
-    "Claims.Sampling.Binding_meets_one",
-    "Claims.Sampling.decoder_meets_plain",
-    "Claims.Sampling.decoder_meets_zk",
-    "Claims.Sampling.masked_meets_zk",
-    "Claims.Witness.Flock.ZK_meets",
-    "Claims.Witness.Recursion.BitsFlock_meets",
-    "Claims.Witness.Recursion.Bits_meets",
-    "Claims.Witness.Recursion.Complete_meets_deployed",
-    "Claims.Witness.Recursion.Efficient_meets",
-    "Claims.Witness.Recursion.Inner.KSAbort_meets",
-    "Claims.Witness.Recursion.Inner.KSAbort_meets_trim",
-    "Claims.Witness.Recursion.Inner.KS_meets",
-    "Claims.Witness.Recursion.Inner.KS_meets_trim",
-    "Claims.Witness.Recursion.KSBound_meets",
-    "Claims.Witness.Recursion.KSFlock_meets",
-    "Claims.Witness.Recursion.KSFlock_meets_trim",
-    "Claims.Witness.Recursion.KSPrivBound_meets",
-    "Claims.Witness.Recursion.KSPriv_meets",
-    "Claims.Witness.Recursion.KS_meets",
-    "Claims.Witness.Recursion.ScopeMatches_meets",
-    "Claims.Witness.Recursion.ZKPriv_meets",
-    "Claims.Witness.Recursion.ZKStop_meets",
-    "Claims.Witness.Recursion.ZKStop_meets_ready",
-    "Claims.Witness.Recursion.ZK_meets",
-    "Flock.Guarantees.recursiveKS_nontrivial",
-    "Flock.SecurityProofs.MaskedKS",
-    "Flock.SecurityProofs.MaskedZK",
-    "Flock.SecurityProofs.RecursiveAuditC3",
-    "Flock.SecurityProofs.RecursiveKS",
-    "RecDeploy.HonestHalfFixture.honest_half_fixture",
-    "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep"
-   ]
-  },
   "Flock.KnownRead": {
    "digest": "c664906d615fc1d6bc1b3fc90ada58efafa5d0e63aac75f0fc296affc5f21194",
    "definitions": {
@@ -40664,7 +40609,7 @@
    ]
   },
   "Flock.RecCoins": {
-   "digest": "8a21699d0c85401e8ce328e99b64c4817ffe3f6230f2d68cd6578ee7d6b4883a",
+   "digest": "84633d72e435f49725fd6e60033fb1160fa264ed247c441eaa8909e3c6ad15da",
    "definitions": {
     "Flock.RecCoins.C3": "ad22be988630c4ef35240abbc128d3f3b94009c8858477ff6dbfe4a2d71a68cf",
     "Flock.RecCoins.C3.coins": "fb0c0b18cbe96a25e62783a0293d3bcb904854eaddf13076a480f92d1489c427",
@@ -40736,10 +40681,10 @@
     "Flock.RecCoins.SparseCoins.rounds": "da35ba82b11460680dccb5dc6e401312afa2967791b1fb3a81559ff60ecc4256",
     "Flock.RecCoins.SparseCoins.zetaC": "2a80957b915c991cd35a5e6f651d18ff7049f148d6b11bae3745f47b2dc29b06",
     "Flock.RecCoins.SparseCoins.zetaP": "26f77954fcbd9d876cf2bc3eddc3af00311878771aeab62cf67f3a8ba34ee21c",
-    "Flock.RecCoins.VERIFIER_SALT": "37ab01cad62f53a5cfa7ed6be334c1576c82df0e1b6867a0e2ed3039a6cc64ae",
+    "Flock.RecCoins.VERIFIER_SALT": "0e7cee60244376d42f282e42c22aba043b3f9a2a20ee6c175c4c25f170c2c38a",
     "Flock.RecCoins.V_VALUE": "7cd1b5ad21979dd7e0df6dbdc810bb36a4c576e11cdf754aa15a18b1881512cf",
     "Flock.RecCoins.ZERO_COMB": "1ab99b1c11b5bce4a88c5012749e8e5851b0067303572010f62066a80c330441",
-    "Flock.RecCoins.ZERO_SALT": "8fee70f5c59ed1db56fbc397dd4d1a4088cf751f2e42c52077a9e02a739ff44d",
+    "Flock.RecCoins.ZERO_SALT": "500a6eedd1198dd46b14f5eba517b4b15f5c0631ef959bd85c580491e65b581a",
     "Flock.RecCoins.ZERO_VALUE": "27ee455a72c5f927e3b6a97776ad0dc3a87e42197ab0274008dba695dfe96c9a",
     "Flock.RecCoins.check": "09d542fbaf2a87aa499ba2eef769c1bb7136dd70fea3677a6a287bbaa5d9dbb2",
     "Flock.RecCoins.checkAtC3": "395489f1246df8bf0c966426ec2d4e14982c11fde05282ffda9c58be3252954d",
@@ -40774,14 +40719,15 @@
     "Flock.RecCoins.padTo": "5acce2e6dbd07c534fe76d7d853a89f80288f6d6d909a1e8bcaea00633b55a21",
     "Flock.RecCoins.recordDraw": "3597aab23de292c3ccacbd2a44e5f181448a5a0706ed63da8b9587a4b4c10905",
     "Flock.RecCoins.recordDraw._sparseCasesOn_1": "b48f16b447b67e75dcacb10671c7235ad9253c298ec0d17d0e5fd06c44835994",
+    "Flock.RecCoins.saltOf": "e5d66b584e3945e9c57192e878ccd94e6f3f7f787a92de2ddec4101338311f9a",
     "Flock.RecCoins.sparseCoins": "f49cb295170e33f39ebf7b1deb260a2c49c6b84ddb243f696c0ac322a7457eb1",
     "Flock.RecCoins.sparseV": "8b1ff69cae886d49ac3fdbd3bd0cdf6e1513f4558dd8cec83e04c6c1a95b38c0",
     "Flock.RecCoins.stackedParams": "c990ac16582954820e9fbdb87b21f7b1b7242a938a1a5a73c2e98f9dc1a42b76",
     "Flock.RecCoins.unitRangeOf": "c064e5df9e9559478cbfc9d3a13eab32a264bcd3cd9c94db02f0c9b38c41273f",
-    "Flock.RecCoins.verifierSalt": "49840e67bd772944d89b47f3fc9166d73cf5b75758c9cf2fc8741b56bc3a812e",
+    "Flock.RecCoins.verifierSalt": "515d76c4403f8354b5990e187e588f30f0ffc155c9ba7fdacf124cf40ee9b373",
     "Flock.RecCoins.words": "b1d5624f7e21ce0cb07cedde44e8247292d2e195853c40a6bf3a6bc1b0b020f7",
     "Flock.RecCoins.zeroRows": "cb35e6e312d87edca4b25c598512d6fe10eb8df377321f7de7c60945beb1d6f3",
-    "Flock.RecCoins.zeroSalt": "245e72bf3ac9daa44f4cf3fe1afc3b44d54be23f00d5e8f0ffee4419e11d9d30"
+    "Flock.RecCoins.zeroSalt": "987c7f232680c583668b4e70b39f76420bf10735c052fcfa2f2a94bdd804ce50"
    },
    "guarantees": [
     "Claims.Flock.Complete_meets_plain",
@@ -41413,7 +41359,7 @@
    ]
   },
   "Flock.RecSetup": {
-   "digest": "6d65a1efa0117e99fb86291b8c9bed0a4c850aa6460e32bc71076ad36a19c6d5",
+   "digest": "d5ef77fa5898ae3ffaa839a137d1b34f1d974b54f8686909991f86b83ca90c4e",
    "definitions": {
     "Flock.RecSetup.boundKey": "bb19420e84d8bd1bd6b4ad739912dde9d4f1e5f0cc6f9a196bce04dbe9939a2f",
     "Flock.RecSetup.c3": "9a2b0905ace053620940ce65ba89fede01f5fcc9a6d84679811cbd6df0be5aa1",
@@ -41426,6 +41372,7 @@
     "Flock.RecSetup.checkShape._sparseCasesOn_3": "a09d99ec9bebad9b86a2c3bb7ff8d83a7b08ab87a064e5882398429fb53ba79c",
     "Flock.RecSetup.checks": "0a2cb4a982168f40a7fa07b2679d6422f14fef3a20b68f314410cae2ad525992",
     "Flock.RecSetup.commits": "a016512792748f8c57ced32e64b2160c1a132a59b5c30242cc4733025b1b46c1",
+    "Flock.RecSetup.denseOnly": "f114ad71fbd72cc6b48c8bba5b7e7f80b127be276bb20a3b0cbb09d6bde7b955",
     "Flock.RecSetup.fullDraw": "68f3345bfd47cd79f331f1a489b19d6c10fc7772211b3d75798e35339e1eb723",
     "Flock.RecSetup.innerDrawn": "37cbb53d0c82e650b534601a6d4be393805ed14b4c014a3cfe12a5b5e02f8cac",
     "Flock.RecSetup.jsonRounds": "a77445621e9ba09b95388be87285e868cca7d225f1ec9c238671060727a566f5",
@@ -41433,6 +41380,7 @@
     "Flock.RecSetup.metaBound._sparseCasesOn_1": "aac6ddf7aaf7100d3152533e6ddf47f12f62a20321e884744b6bd6c8b5623fef",
     "Flock.RecSetup.noInner": "44753e750b675774036fa86f95efa4eaa971307420c15f1245cd093a5192a033",
     "Flock.RecSetup.noInnerDraw": "6ae0ffaa17f8241e562fa42d5d53b907846e6959272bb589b5f432183cedc264",
+    "Flock.RecSetup.notDense": "c2d8ea7032375b3a5ced7f5b9fdeb8494cb601457f38a06000ebb36e767b228f",
     "Flock.RecSetup.notOwnFormat": "1a51542b7d141cf8273737b2c71665cdbdfddfa4dd34fdb23465b87f93807380",
     "Flock.RecSetup.oneFull": "d48aca45e345f5d36d986ff5d0f4e72593558265ded73a316f7861410b9867b8",
     "Flock.RecSetup.repCommits": "b8d19c8d221e2db75846ad727115fcf4250005dd762c3704295b7dae3c46a4f7",
@@ -41644,18 +41592,19 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "3ccdf13138973687989d6f26a1fa2269cd83cf695889af17a8811a719382c07b",
+   "digest": "51c697dec9f82a86681ff5531831c94778c627bca2d6a2d64db43e16dfdf9882",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
-    "Flock.RecVStar.FORMAT": "b4d056af1f41ac38c2c75ba11438e278b3072d1fb87b4a0a9440fea97c0924bf",
+    "Flock.RecVStar.FORMAT": "e5d65265292cee6e3ad87dc1ac1acfa96e4c02188ed9135466ce0fdee4abf46b",
+    "Flock.RecVStar.FORMAT_V1": "1df7ecd021cd99f56845e81fc247bf9bc6cb259997ee9e65a8e46cd505377470",
     "Flock.RecVStar.HOLO_KEY": "4ffa727fdaaa9f26a71383c220b9b9a3b01e5c61fe886368fa37adc0bf122b9b",
     "Flock.RecVStar.Inner": "bb1843ccd13006d496597a21de7b50c55680dd97ce8c5c1e440e84eacdfb924a",
     "Flock.RecVStar.Inner.claims": "83cd212a25ec99d0838727a5d95e52a899638963b1dce33cf65e71ad62223096",
     "Flock.RecVStar.Inner.holo": "391d10ec1282d141a830d2dfc4aa47306aa80e11ab732cf5cf44cad5e84a51ca",
     "Flock.RecVStar.Inner.kLog": "3d931debeeb9a5a6c14ff188e2c13d814be643ad25c96aef052a32215fe27acf",
     "Flock.RecVStar.Inner.m": "5e2a9dc0c3410c24a777c86a46f6db6007f37911248cb05cfef7813e37af4f51",
-    "Flock.RecVStar.Inner.ofJson": "402760217cdc73dfe1e40f3b76d1291f2ad1fca365819777b0fa2607af8f7689",
+    "Flock.RecVStar.Inner.ofJson": "d05b0ad238a2e7235b89841d53ea068b8c3e9b737358136317efaa8b7d3e4c81",
     "Flock.RecVStar.Inner.ofJson._sparseCasesOn_1": "d992ec498a377056a97680381d1933700ef7b58f52031cb2ce16546cdab3296d",
     "Flock.RecVStar.Inner.ofJson._sparseCasesOn_4": "9361a9966726ccfd886596ccf344727b49fe6d75e5d762f7be0ad7980c1bff87",
     "Flock.RecVStar.Inner.ofJson._sparseCasesOn_5": "b92be73f8c8d979f46f1b2146a48913086da2761d7641caaad3b7691047b247f",
@@ -48566,7 +48515,7 @@
    ]
   },
   "Proofs.Flock.Claims.Recursion.DeployOuter": {
-   "digest": "ae526b54ca675d49ddee2e730a45f5fe05614452ef3c4e01a50c6901de2c77e7",
+   "digest": "840f793ed2b4ef80ac1408b2e51d57d647e0c55898be2ccfc6aa9a476b306e5d",
    "definitions": {
     "RecDeploy.N₀O": "647eef0c82836f0fc6a1d67b2fd36bb4832c1e253326ff2376bf863f9df6ca5c",
     "RecDeploy.VO": "e665827e8be153a2bc9d499e702e69c42bf22d4d088d797605e13250b3c4a6e5",
@@ -48576,7 +48525,7 @@
     "RecDeploy.actO": "a179b7db1d25e925d5e6b79de0b42629c23852ce00d6ef669bcb2f178c34d4ce",
     "RecDeploy.colsO": "fcf969be4a4c7b89151bdcf06ba5088aeefd2e0efecb63c3ff75be12ea85cf24",
     "RecDeploy.deployZkRec": "12e6b3752036862ec981312f5c9504cab57b9828e91db074fb6ae8a5b0726981",
-    "RecDeploy.fullDrawO": "5437589ecdf04d94a30cffaeb65e42a51cf5f2942d84d0b89c985729968e71fc",
+    "RecDeploy.fullDrawO": "0c167b262bfd0cdc34bbb8bab981c69c16e01f93f7d5eeb9b6e1a2dab8c4fa59",
     "RecDeploy.innerOfO": "0b82ad9d905fd3fa9675973ce30430de1264d4a22f1f4e6dd174b4528129fa6f",
     "RecDeploy.nextO": "d82b2c5fc1b104ec4a8e7fa793b231d5ff2111783e78627f461e5ad106535711",
     "RecDeploy.recOfO": "d891873c3e99826573ebb871807f7e486a8304c7b2d502e3ed98af50dffca639",
@@ -49098,7 +49047,7 @@
    "guarantees": ["RecDeploy.HonestHalfFixture.honest_half_fixture"]
   },
   "Proofs.Flock.Claims.Recursion.Scope": {
-   "digest": "714b2d344c8fd1014c55b22379a4df859420eb56f87ee6da991100ef5e5dc0aa",
+   "digest": "19c09ebce1764e874376a1ab6724bea4f36dfeb8abda9c6b919d633f432261af",
    "definitions": {
     "Flock.RecScope.Read": "deefa944299c79dce39d864a33f62c264ca283017f6fd57b39a5939a82d4ca4a",
     "Flock.RecScope.Read.inner": "e1cce33d9c82a9a067988d64eff40523da3ccb086d6bf5a12aae700526cc9d0a",
@@ -49107,6 +49056,7 @@
     "Flock.RecScope.Read.shape": "d3c7c5cace1ed0a05eac49ea50534e03b175f39a8b0d385e5fbdbeeec3c4493b",
     "Flock.RecScope.Read.src": "147f08b4e4795d14e2ea07981633554a625510462ab84ef7c43a955d71c75fc0",
     "Flock.RecScope.accepts": "8146c4bfd6bd52730e1fca0f97519bdc1ac4b1d67e529b613ed7336de3b67e4e",
+    "Flock.RecScope.dense": "827471ab71f1ec73f310391dff3aa8ac91e48502d19d66e48feef00a06d36ff3",
     "Flock.RecScope.drawOf": "a57c25f917ee795beeff7a973212299bbcc46f29c8257881320611d44dd721d6",
     "Flock.RecScope.drawOf._sparseCasesOn_1": "e7ad78c566150dc594791c47b86d4fb7e09833c1262fbc386694be1770617708",
     "Flock.RecScope.fullDrawOk": "970993def527734afe9a8514bb63dfd5514eead08163b82e49cd2643855c6867",
@@ -49117,7 +49067,7 @@
     "Flock.RecScope.parseOf": "703eec3b58a51da01a219a8b9286d729fec6d346d9b1f8cda64398804103c4b4",
     "Flock.RecScope.rangeOk": "b380353149a86e05befbcc10e8f5872c60f89bc3986c6eb9443a5a30ebf24098",
     "Flock.RecScope.recordDrawOf": "2ea203c070df095928f3a7f039ba382397c55a357d04873e32543911b04373d3",
-    "Flock.RecScope.scopeCheckOf": "757eb919267c13502e41c5040ac0fd4167848649e7ffd97ab00ee19bfd01a4f6",
+    "Flock.RecScope.scopeCheckOf": "b0582618953402b0b6206dac75e7be3e2b1c164605bc65a441fbf028be24df00",
     "Flock.RecScope.toStmt": "7fd2310fb2bb46ae5d7015ef997440bc606296b4f68e0edd5b96d3157ffd10fd"
    },
    "guarantees": [

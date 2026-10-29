@@ -1,18 +1,18 @@
 """Conformance of the Lean verifier's `Q_word` v1 over programs (`flock-verify qword-program`: `Flock.Program` decodes
-#120's `verity-ir/descriptor/v1`, `Flock.Extract` builds each Call's graph, `Flock.Qword` cuts it) with core's
+the `verity-ir/descriptor/v1`, `Flock.Extract` builds each Call's graph, `Flock.Qword` cuts it) with core's
 (`verity.ml.circuits.codec.decode_program`, `verity.ml.circuits.cut`, `verity.ml.circuits.partition_object`).
 
     python qword_program_agree.py --lean BIN --out DIR [--vectors partition_vectors.json] [--format format_vectors.json]
         [--program DESCRIPTOR]... [--registry MODULE]
 
-- `--vectors` (#111): the program's SHA-512, the population, every Call's units, owners, derived committed set and graph
+- `--vectors`: the program's SHA-512, the population, every Call's units, owners, derived committed set and graph
   (every field core pins), and every unit's `locate`.
-- `--format` (#120): the wide-gate Call's graph, the forward reference Q_word refuses (word for word), and every decoder
+- `--format`: the wide-gate Call's graph, the forward reference Q_word refuses (word for word), and every decoder
   refusal of `test_format_spec.REJECT` (the Lean decoder must refuse each; it holds no registry, so an unknown primitive is
   refused by the query instead).
-- `--qword-vectors` (#111): every evaluation, the order refusals, the verify refusals (the query's, and the cuts'), and
+- `--qword-vectors`: every evaluation, the order refusals, the verify refusals (the query's, and the cuts'), and
   every descriptor's cuts at several (X, W) against core's `verify`.
-- `--program` (a real descriptor, e.g. a #101 Build's): per Call its units; per Definition a Call names, its units, the
+- `--program` (a real descriptor, e.g. a served Build's): per Call its units; per Definition a Call names, its units, the
   SHA-512 of its owners and, for a flat cut, of its graph. `--registry` names the module that registers its primitives.
   With `--cuts`, per Definition its cut on its Call's whole graph against core's `check_cut` (`--core-skip PREFIX`: one core
   can't hold here, checked by Lean only).
@@ -114,7 +114,7 @@ def _text(x):
 
 
 def check_qword_vectors(a, out, bad):
-    """`qword_vectors.json` (#111): every evaluation (population, owners digest, every Call's graph, owners, kinds, units and
+    """`qword_vectors.json`: every evaluation (population, owners digest, every Call's graph, owners, kinds, units and
     committed set), every order refusal (the `order_violation` detail), and the verify refusals that are the query's
     (`query-inapplicable`); the cut refusals are the width rule and the invariant, which `qword-program` does not check."""
     v = json.loads(Path(a.qword_vectors).read_text())
