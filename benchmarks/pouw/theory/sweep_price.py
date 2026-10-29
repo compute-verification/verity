@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import copy
 import csv
+import itertools
 import json
 import math
 import os
@@ -49,7 +50,10 @@ from exact_kit.checks import Checks
 CARD = Path(__file__).with_name("sweep_price.toml")
 TERMS = ("final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise", "pre_noise_hashing", "final_rows",
          "hashing_slack")
-NOISE_FIELDS = ("r", "formed_x", "formed_y", "noise_x", "noise_y", "denoise", "pre_noise_bytes", "served", "source")
+NOISE_FIELDS = ("r", "formed_x", "formed_y", "noise_x", "noise_y", "denoise", "pre_noise_bytes", "operand_max", "served",
+                "source")
+STATUSES = ("proved", "measured", "ruled", "assumed", "scratch", "open", "refuted")
+UNSETTLED = ("open", "scratch")
 COMMIT_FIELDS = ("L", "word_bits", "operands", "rows_mix_final")
 CLASSES = {"formed_x": "forming", "formed_y": "forming", "noise_x": "noise_derivation", "noise_y": "noise_derivation"}
 REQUIRED = ("H32", "W1", "ShaSpeed")
@@ -78,24 +82,23 @@ def ev(s, **v) -> float:
 def load(path: Path = CARD) -> dict:
     card = tomllib.loads(path.read_text())
     for key, sw in card.get("sweep", {}).items():
-        for L in sw["L"]:
-            for tag, ops in sw["operands"].items():
-                for forming in sw["forming"]:
-                    if forming == "count" and {"formed_x", "formed_y"} <= set(ops):
-                        continue
-                    prem = list(sw["base"])
-                    if L > 32 or forming == "count":
-                        prem.append("k32-semantics")
-                    if ops:
-                        prem.append("commit-forced")
-                    if forming == "count":
-                        prem.append("forming-counting")
-                    what = ", ".join(ops) if ops else "words only"
-                    card["design"][f"{key}-k{L}-{tag}" + ("-count" if forming == "count" else "")] = {
-                        "title": f"{key.upper()}, a word every {L} steps, committed: {what}"
-                                 + ("; forming by the counting lemma" if forming == "count" else ""),
-                        "noise": sw["noise"], "premises": prem, "source": sw["source"], "swept": True,
-                        "commit": {"L": L, "word_bits": 32, "operands": list(ops), "rows_mix_final": True}}
+        for L, (tag, ops), count, least in itertools.product(sw["L"], sw["operands"].items(), (False, True),
+                                                               (False, True)):
+            if (count and {"formed_x", "formed_y"} <= set(ops)) or (least and {"noise_x", "noise_y"} <= set(ops)):
+                continue
+            prem = list(sw["base"])
+            if L > 32:
+                prem += sw["steps"].get(str(L), sw["steps"]["above"])
+            if ops:
+                prem.append("commit-forced")
+            prem += (sw["charge"]["count"] if count else []) + (sw["charge"]["min"] if least else [])
+            what = ", ".join(ops) if ops else "words only"
+            card["design"][f"{key}-k{L}-{tag}" + ("-count" if count else "") + ("-min" if least else "")] = {
+                "title": f"{key.upper()}, a word every {L} steps, committed: {what}"
+                         + ("; forming by the counting lemma" if count else "")
+                         + ("; the derivation by OneInstructionMinimal" if least else ""),
+                "noise": sw["noise"], "premises": list(dict.fromkeys(prem)), "source": sw["source"], "swept": True,
+                "commit": {"L": L, "word_bits": 32, "operands": list(ops), "rows_mix_final": True}}
     return card
 
 
@@ -135,6 +138,8 @@ def validate(card: dict, name: str, lenient: bool = False) -> list[str]:
     for p in ids:
         if p not in prem:
             out.append(f"premise {p!r} is not in the card")
+        elif prem[p].get("status") not in STATUSES:
+            out.append(f"premise {p!r} has status {prem[p].get('status')!r}, not one of {STATUSES}")
         elif prem[p].get("status") == "refuted":
             out.append(f"premise {p!r} is refuted ({prem[p].get('source', '')})")
         else:
@@ -149,11 +154,13 @@ def validate(card: dict, name: str, lenient: bool = False) -> list[str]:
     return out
 
 
-def effects(card: dict, ids: list[str]) -> tuple[set[str], bool, bool]:
+def effects(card: dict, ids: list[str]) -> tuple[set[str], bool, int]:
+    """The terms the premises close, whether committed registers are forced, and the largest L at which a committed
+    word forces its L/32 steps (32: only at every k32 word)."""
     prem = card["premise"]
     closes = set().union(*(set(prem[p].get("closes", [])) for p in ids if p in prem))
     forced = any(prem[p].get("forces_committed", False) for p in ids if p in prem)
-    steps = any(prem[p].get("word_forces_steps", False) for p in ids if p in prem)
+    steps = max([32] + [int(prem[p].get("word_forces_steps", 32)) for p in ids if p in prem])
     return closes, forced, steps
 
 
@@ -164,21 +171,25 @@ def calls(card: dict, point: str) -> list[dict]:
             for nm, n, K, cnt, frac in model["matmuls"]]
 
 
-def fast_saving(card: dict, L: int, m: float, n: float) -> tuple[float, int]:
+def fast_saving(card: dict, L: int, m: float, n: float, operand_max: float) -> tuple[float, int]:
     """The best-known scheme's saving against the k32 counting, as a share of a segment's mnL tensor units, and its levels.
 
-    ℓ levels of a <2,2,2; t> scheme run t^ℓ products of depth L/2^ℓ (whole k32 steps) for (t/8)^ℓ of the tensor units,
-    and pay its output-block additions (registers at `reg`) and operand-block additions (entries at reg/4) at each level:
-    saving_ℓ = 1 − (t/8)^ℓ − (out·reg/(4L) + (op/2)·(reg/epr)/4·(1/m + 1/n)) · Σ_{i<ℓ} (t/4)^i, with `op` the
+    A level of a <2,2,2; t> scheme runs t products of half the depth. A product's summed side is split into two s8 parts
+    when two operands' range passes the tensor's, so it costs c = Σ_p split^(summed sides of p) / 8 of the tensor units
+    (P1's floor). ℓ levels pay c^ℓ (a lower bound: sums of sums only split more), plus each level's output-block
+    additions (registers at `reg`) and operand-block additions (entries at reg/4):
+    saving_ℓ = 1 − c^ℓ − (out·reg/(4L) + (op/2)·(reg/epr)/4·(1/m + 1/n)) · Σ_{i<ℓ} (t/4)^i, with `op` the
     operand-block additions of both sides, each of a quarter of its operand."""
     f = card["price"]["fast_matmul"]
     reg, epr = card["price"]["reg"]["value"], card["price"]["entries_per_reg"]["value"]
-    t, best = f["products"], (0.0, 0)
+    split = 1 if 2 * operand_max <= f["tensor_max"] else 2
+    t, best = len(f["products"]), (0.0, 0)
+    c = sum(split ** (a + b) for a, b in f["products"]) / 8
     per_level = f["output_adds"] * reg / (4 * L) + f["operand_adds"] / 2 * (reg / epr) / 4 * (1 / m + 1 / n)
     for lv in range(1, f["max_levels"] + 1):
         if L / 2 ** lv < 32 or min(m, n) / 2 ** lv < 1:
             break
-        s = 1 - (t / 8) ** lv - per_level * sum((t / 4) ** i for i in range(lv))
+        s = 1 - c ** lv - per_level * sum((t / 4) ** i for i in range(lv))
         best = max(best, (s, lv))
     return best
 
@@ -214,14 +225,15 @@ def call_units(card: dict, name: str, m: float, n: float, K: float, lenient: boo
                        f"final word isn't noise-dependent"])
     stock = m * n * K
     words = r * K / L
+    steps = L <= steps
     u_word = reg * L / 32 if steps else reg
     final_free = "final_word" not in closes
     honest_tensor = r * m * n * K
     t = dict.fromkeys(TERMS, 0.0)
     t["final_word"] = m * n * u_word if final_free else 0.0
     t["uncommitted_steps"] = honest_tensor - m * n * words * u_word
-    if steps:
-        t["uncommitted_steps"] += fast_saving(card, L, m, n)[0] * honest_tensor
+    if steps and L > 32:
+        t["uncommitted_steps"] += fast_saving(card, L, m, n, get("operand_max"))[0] * honest_tensor
     committed = set(c.get("operands", []))
     ent = {k: get(k) for k in CLASSES}
     for k, term in CLASSES.items():
@@ -300,14 +312,17 @@ def evaluate(card: dict, name: str, point: str, delta: float = 0.0, lenient: boo
     rank_all = max(prem[p]["rank"] for p in ids)
     open_items = [{"premise": p, "owner": prem[p].get("owner", ""), "status": prem[p]["status"],
                    "rank": prem[p]["rank"], "source": prem[p]["source"]}
-                  for p in ids if prem[p]["status"] in ("open",)]
+                  for p in ids if prem[p]["status"] in UNSETTLED]
+    assumed = [{"premise": p, "rank": prem[p]["rank"], "source": prem[p]["source"]}
+               for p in ids if prem[p]["status"] == "assumed" and p not in REQUIRED]
     t3w = max(v for v in (t3["ctx2k"], t3["ctx8k"]) if v is not None) if t3["ctx2k"] is not None else None
     return {"design": name, "title": d["title"], "point": point, "t1": t1, "terms": terms, "t1_pass": t1 <= TARGET["t1"],
             "delta": delta, "delta_star": delta_star, "hash_units_per_mac": hash_share,
             "hash_bytes_per_mac": agg["credited_bytes"] / stock, "coin_bytes_per_mac": agg["coin_bytes"] / stock,
             "committer_gap": committer_gap, "t2": t2, "t2_pass": t2["judged"] <= TARGET["t2"],
             "t3": t3, "t3_worst": t3w, "t3_pass": t3w is not None and t3w <= TARGET["t3"], "rank": rank,
-            "rank_with_shaspeed": rank_all, "premises": ids, "open": open_items, "per_matmul": per_matmul,
+            "rank_with_shaspeed": rank_all, "premises": ids, "open": open_items, "assumed": assumed,
+            "per_matmul": per_matmul,
             "stock_macs_forward": stock, "commit": d["commit"]}
 
 
@@ -360,8 +375,15 @@ def ranking(card: dict, point: str, delta: float = 0.0, lenient: bool = False) -
     return sorted(rows, key=rank_key), refused
 
 
+def opened(row: dict) -> str:
+    return ", ".join(o["premise"] + (" (scratch)" if o["status"] == "scratch" else "") for o in row["open"]) or "-"
+
+
 def needs(row: dict) -> list[str]:
-    out = [f"{o['premise']} ({o['owner']}, rank {o['rank']} once settled): {o['source']}" for o in row["open"]]
+    out = [f"{o['premise']} ({o['owner']}, rank {o['rank']} once settled; "
+           f"{'proved outside the lock: lock it' if o['status'] == 'scratch' else 'open'}): {o['source']}"
+           for o in row["open"]]
+    out += [f"{a['premise']} (assumed, rank {a['rank']}): {a['source']}" for a in row["assumed"]]
     if not row["t1_pass"]:
         big = max(((k, v) for k, v in row["terms"].items()), key=lambda kv: kv[1])
         out.append(f"T1 {row['t1']:.2%} > 1%: its largest term is {big[0]} {big[1]:.2%}")
@@ -425,15 +447,18 @@ def period_table(card: dict, row: dict) -> list[str]:
 
 
 def if_refuted(card: dict, point: str, delta: float = 0.0) -> list[tuple[str, dict | None]]:
-    """The best design at the point if each open premise is refuted, and if all of them are."""
-    opened = [p for p, v in card["premise"].items() if v.get("status") == "open"]
+    """The best design at the point if each unsettled premise (open, scratch, or assumed beyond H32, W1 and ShaSpeed by a
+    swept design) is refuted, and if all of them are."""
+    swept = {p for d in card["design"].values() if d.get("swept") for p in d["premises"]}
+    unsettled = [p for p, v in card["premise"].items() if v.get("status") in UNSETTLED
+                 or (v.get("status") == "assumed" and p not in REQUIRED and p in swept)]
     out = []
-    for drop in [[p] for p in opened] + [opened]:
+    for drop in [[p] for p in unsettled] + [unsettled]:
         c = copy.deepcopy(card)
         for p in drop:
             c["premise"][p]["status"] = "refuted"
         rows, _ = ranking(c, point, delta)
-        out.append((" and ".join(drop) if len(drop) == 1 else "every open premise", rows[0] if rows else None))
+        out.append((drop[0] if len(drop) == 1 else "every unsettled premise", rows[0] if rows else None))
     return out
 
 
@@ -462,7 +487,7 @@ def render(card: dict, results: dict) -> str:
                 f"{pct(t['forming'])} | {pct(t['noise_derivation'])} | {pct(t['denoise'])} | {pct(t['pre_noise_hashing'])} | "
                 f"{pct(t['final_rows'])} | {e['sync']['ratio']:.1f}x / {e['async']['ratio']:.1f}x "
                 f"{'pass' if row['t2_pass'] else 'fail'} | {pct(row['t3_worst'])} | {row['delta_star']:.1e} | "
-                f"{', '.join(o['premise'] for o in row['open']) or '-'} |")
+                f"{opened(row)} |")
         lines += ["", "Refused (an unpriced term or outside the domain):", ""]
         lines += [f"- {k}: {'; '.join(v)}" for k, v in res["refused"].items()] or ["- none"]
         best = res["rows"][0] if res["rows"] else None
@@ -475,9 +500,15 @@ def render(card: dict, results: dict) -> str:
                 lines.append(f"| {drop} | - | - | - | - | - |" if b is None else
                              f"| {drop} | {b['design']} | {b['rank']} | {pct(b['t1'])} {'pass' if b['t1_pass'] else 'fail'} | "
                              f"{b['t2']['engines']['sync']['ratio']:.1f}x / {b['t2']['engines']['async']['ratio']:.1f}x | "
-                             f"{', '.join(o['premise'] for o in b['open']) or '-'} |")
+                             f"{opened(b)} |")
             lines += [""] + period_table(card, best)
-        clean = next((r for r in res["rows"] if not r["open"]), None)
+            nxt = next((r for r in res["rows"] if r["t1_pass"] and r["rank"] > best["rank"]), None)
+            if nxt:
+                e = nxt["t2"]["engines"]
+                lines += ["", f"Best at the next rank: {nxt['design']}, rank {nxt['rank']} "
+                              f"({', '.join(a['premise'] for a in nxt['assumed']) or 'no assumed premise'}), T1 "
+                              f"{pct(nxt['t1'])}, T2 {e['sync']['ratio']:.1f}x / {e['async']['ratio']:.1f}x."]
+        clean = next((r for r in res["rows"] if not r["open"] and not r["assumed"]), None)
         if clean and clean is not best:
             lines += ["", f"Best with nothing open: {clean['design']}, T1 {pct(clean['t1'])}, rank {clean['rank']}.", ""]
             lines += period_table(card, clean)
@@ -503,7 +534,7 @@ def main() -> int:
             print(f"  {i:2d}. {row['design']:<22} rank {row['rank']} ({row['rank_with_shaspeed']})  T1 {row['t1']:8.3%}  "
                   + " ".join(f"{k[:6]} {v:.3%}" for k, v in t.items() if v)
                   + f"  T2 {row['t2']['engines']['sync']['ratio']:.1f}x/{row['t2']['engines']['async']['ratio']:.1f}x"
-                  + f"  T3 {pct(row['t3_worst'])}  delta* {row['delta_star']:.1e}  open {[o['premise'] for o in row['open']]}")
+                  + f"  T3 {pct(row['t3_worst'])}  delta* {row['delta_star']:.1e}  open {opened(row)}")
         for k, v in res["refused"].items():
             print(f"   refused {k}: {'; '.join(v)}")
 
@@ -542,16 +573,17 @@ def main() -> int:
                  1.3e-5 < sh["delta_star"] < 1.6e-5, f"delta* {sh['delta_star']:.2e}, {sh['hash_units_per_mac']:.0f} units a MAC")
 
     swept = [n for n, d in card["design"].items() if d.get("swept")]
-    checks.check("the sweep generates every L x committed classes x forming charge, less the counting lemma beside "
-                 "committed X and Y: 7 x 4 x 2 - 14 = 42 designs", len(swept) == 42, f"{len(swept)} swept")
-    s256, s512 = fast_saving(card, 256, 8192, 8192), fast_saving(card, 512, 8192, 8192)
-    checks.check("Strassen-Winograd saves nothing against the k32 counting at L 256 (1/8 - 56/256 < 0) and 1/8 - 56/512 "
-                 "- 8(2/8192) = 1.37% at L 512, m = n = 8,192",
-                 s256[0] <= 0 and abs(s512[0] - (1 / 8 - 56 / 512 - 16 / 8192)) < 1e-12 and s512[1] == 1,
-                 f"L 256: {s256[0]:.2%}; L 512: {s512[0]:.3%} at {s512[1]} level")
-    k512 = row("t8192", "ncp-k512-xyef")
-    checks.check("so ncp-k512-xyef fails T1 at T 8,192 on its uncommitted steps alone",
-                 not k512["t1_pass"] and k512["terms"]["uncommitted_steps"] > 0.01, f"{k512['t1']:.2%}")
+    checks.check("the sweep generates every L x committed classes x forming charge x derivation charge, less a charge "
+                 "beside its class committed: 7 x 9 = 63 designs", len(swept) == 63, f"{len(swept)} swept")
+    s256, s63, s126 = (fast_saving(card, L, 8192, 8192, om) for L, om in ((256, 63), (512, 63), (512, 126)))
+    checks.check("Strassen-Winograd on operands within +-63 saves nothing against the k32 counting at L 256 "
+                 "(1/8 - 56/256 < 0) and 1/8 - 56/512 - 8(2/8192) = 1.37% at L 512, m = n = 8,192; on NCP's +-126 "
+                 "operands its sums leave s8 and it spends 18/8 of the steps, saving nothing (P1's floor)",
+                 s256[0] <= 0 and abs(s63[0] - (1 / 8 - 56 / 512 - 16 / 8192)) < 1e-12 and s63[1] == 1 and s126[0] == 0,
+                 f"+-63: L 256 {s256[0]:.2%}, L 512 {s63[0]:.3%}; +-126: L 512 {s126[0]:.2%}")
+    r64, r128 = row("t8192", "ncp-k64-xyef"), row("t8192", "ncp-k128-xyef")
+    checks.check("a word every 64 steps rests on merge-k64 at rank 3 (with W1); every 128 or more on OwnProducts, rank 4",
+                 r64["rank"] == 3 and r128["rank"] == 4, f"k64 rank {r64['rank']}, k128 rank {r128['rank']}")
 
     # (3) Refusals: what an unpriced term does.
     for name in ("dither-c", "fresh-u", "accel-d5-d6"):
@@ -598,12 +630,11 @@ def main() -> int:
         d1 = evaluate(card, "ncp-k32-xyef", "t8192", delta=1e-4)
         checks.mutation("a ShaSpeed slack of 0.01% breaks T1 for the all-forced design: hashing's work is 666x stock",
                         not d1["t1_pass"], f"T1 {d1['t1']:.2%}")
-        c = mutated(lambda c: c["price"]["fast_matmul"].__setitem__("products", 8))
+        c = mutated(lambda c: c["noise"]["ncp"].__setitem__("operand_max", 63))
         e = evaluate(c, "ncp-k512-xyef", "t8192")
-        top = ranking(c, "t8192")[0][0]
-        checks.mutation("without the fast scheme's price (8 products, nothing saved) ncp-k512-xyef passes T1 and a "
-                        "design past L 256 tops T 8,192: the term is what keeps them out",
-                        e["t1_pass"] and top["commit"]["L"] > 256, f"T1 {e['t1']:.2%}; top {top['design']}")
+        checks.mutation("NCP's operands at +-63 instead of +-126 let Strassen-Winograd's sums stay in s8, and "
+                        "ncp-k512-xyef fails T1 at T 8,192 on its uncommitted steps: the operand range keeps it out",
+                        not e["t1_pass"] and e["terms"]["uncommitted_steps"] > 0.01, f"T1 {e['t1']:.2%}")
         c = mutated(lambda c: c["point"]["t512"].__setitem__("tokens", 16))
         rows16, ref16 = ranking(c, "t512")
         priced = [r["design"] for r in results["t512"]["rows"]]
