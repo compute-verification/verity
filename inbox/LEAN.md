@@ -76,6 +76,21 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
     `TrustedNebiusHost` goes (F6).
   - N-PREM applies these after its current fix and adds a NETWORK stub. N-EGRESS proves against its own restatement
     meanwhile.
+- **17:22Z, the statement's fixes** (N-PREM, `cursor/compute-research-lean-statement-4457` at dd30c5c347, note
+  20261029T1722Z-report-lean-statement-fixes):
+  - `G` has no input hypotheses and covers every call. A call is committed over rows padded to 16 and columns padded
+    to 8; padding rows have zero data but carry their coin lanes, tag and coins. **KERNEL: the served kernel must do the
+    same.**
+  - `CoinStream` gives each coin once by definition. `DataInRange`, `LaneSemantics` and `TrustedNebiusHost` are gone
+    from `G`.
+  - Decode is stated (`GapAtDecode`): 0.265% of padded stock.
+  - Stub changes:
+    - COINBRANCH: `distinct_le_writes` takes `CoinStream`.
+    - TAGS: `repeats_le` drops the tile and data-range hypotheses.
+    - PSTAR: `table_le` drops the tile hypotheses and takes `CoinStream`.
+    - COMPOSE: `perCoin` drops the tile hypotheses.
+    - COMMIT: `CommitL1w` counts A's real rows and the padded words.
+  - Prove against the merged head, not 9a7028a28e.
 - **COUNTER, search first:** the coin-branch figure (0.084%) and the per-tile table constants (49⁻⁸ at step 0, 7⁻⁸ for at
   most 32 stream tiles, 2⁻¹⁰⁰ after). Both are analysis, not proved.
 
