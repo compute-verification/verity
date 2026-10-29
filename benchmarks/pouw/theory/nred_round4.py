@@ -30,7 +30,8 @@ The groups whose distinct values are counted:
 the requirement is that s and G come after root(B_j), and the row coins b after root(A_j).
 
 The fix for the tile pools is the wide tag (`wide_tags`): balanced base-255 digits of z_i + `WIDE_OFFSET` against
-G ∈ [−127, 127]. `identical_columns` checks R1's check (b) against chosen identical weight columns.
+G ∈ [−127, 127]. `blc4a-t64-e7-w127` is N-LIT's weighted lane (note 20261029T1108Z-report-np-lit §1): the same three
+coin lanes against A′ = (1, 127, 1). `identical_columns` checks R1's check (b) against chosen identical weight columns.
 
 `mirror_instance` is N-NOISE's frontier design `A/byte1/b13s4/mirror/s8/noc1/M0+tag+wv` (note
 20261029T1106Z-report-np-noise §1): a coin byte u_t(i) a row a step against a drawn nonzero int8 window weight W_t[j],
@@ -62,7 +63,8 @@ import nred_round2 as r2
 
 H32 = ns.H32
 LAYOUTS = {"blc4a-t64-e7": (64, 7, 3), "blc4a-t32-e7": (32, 7, 3), "blc7a-t64-e7": (64, 7, 6),
-           "blc1a-t128-e4": (128, 4, 1)}
+           "blc1a-t128-e4": (128, 4, 1), "blc4a-t64-e7-w127": (64, 7, 3)}
+LANE_WEIGHTS = {"blc4a-t64-e7-w127": (1, 127, 1)}
 PRICES = (32.0, 327.0)
 SHAPES = {"llama": ns.LLAMA, "v4_dense": ns.V4_DENSE}
 STEP1_DATA = ns.DATA_PER_STEP - na.TAG_LANES
@@ -137,6 +139,7 @@ def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pa
     odd = np.arange(-(2 ** e - 1), 2 ** e, 2)
     coin = rng.choice(odd, (lanes, ntiles, s - 1, n))
     c = np.where((np.arange(s - 1) % 2 == 1) & (pattern == "a2r"), 2, 1)
+    wts = np.array(LANE_WEIGHTS.get(cfg, (1,) * lanes), dtype=np.int64)
 
     x1 = np.concatenate([np.zeros((m, STEP1_DATA), dtype=np.int64), tags, a1], axis=1)
     y1 = np.concatenate([np.zeros((STEP1_DATA, n), dtype=np.int64), g, code], axis=0)
@@ -145,7 +148,7 @@ def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pa
     for tau in range(ntiles):
         rows = tile_of == tau
         xa = np.concatenate([np.ones((rows.sum(), s - 1, 1)), (1 + b[rows])[:, :, None],
-                             np.ones((rows.sum(), s - 1, lanes))], axis=2).astype(np.int64)
+                             np.broadcast_to(wts, (rows.sum(), s - 1, lanes))], axis=2).astype(np.int64)
         yb = np.concatenate([np.broadcast_to(-c[:, None, None], (s - 1, 1, n)), np.ones((s - 1, 1, n)),
                              coin[:, tau].transpose(1, 0, 2)], axis=1).astype(np.int64)
         honest[rows, 1:] = honest[rows, :1] + np.cumsum(np.einsum("itl,tln->itn", xa, yb), axis=1)
@@ -153,7 +156,8 @@ def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pa
 
     d0 = tags @ g + a1 @ code - beta[None]
     rpos = np.concatenate([np.zeros((m, 1), dtype=np.int64), np.cumsum(1 + b - c[None], axis=1)], axis=1)
-    cpos = np.concatenate([np.zeros((ntiles, 1, n), dtype=np.int64), np.cumsum(coin.sum(0), axis=1)], axis=1)
+    cpos = np.concatenate([np.zeros((ntiles, 1, n), dtype=np.int64),
+                           np.cumsum(np.einsum("l,ltsn->tsn", wts, coin), axis=1)], axis=1)
     w = d0[:, None, :] + rpos[:, :, None] + cpos[tile_of]
     per = m * n
 
@@ -217,8 +221,9 @@ def weighted(insts: dict, shape: dict) -> dict:
 def runs(seed: int = 97, m: int = 256, n: int = 64) -> dict:
     rng = np.random.default_rng(seed)
     out = {}
-    cases = [(cfg, "narrow") for cfg in LAYOUTS] + [("blc4a-t64-e7", "wide"), ("blc7a-t64-e7", "wide")]
-    v4_cfgs = {"blc4a-t64-e7", "blc7a-t64-e7"}
+    cases = [(cfg, "narrow") for cfg in LAYOUTS] + [(cfg, "wide") for cfg in
+                                                     ("blc4a-t64-e7", "blc7a-t64-e7", "blc4a-t64-e7-w127")]
+    v4_cfgs = {"blc4a-t64-e7", "blc7a-t64-e7", "blc4a-t64-e7-w127"}
     for cfg, tag in cases:
         for pattern in ("a2c", "a2r"):
             for shape_name, shape in SHAPES.items():
@@ -437,6 +442,17 @@ def check(rep: dict) -> list[dict]:
     b4 = r["blc4a-t64-e7+wide/a2r/v4_dense"]["shares"]["P'32/entry"]
     ok("wide tag, V4 dense, P′ at the floor: blc7a's 6 coin lanes hold within-entry under 1% with no check (b); "
        "blc4a's 3 pay > 1%", max(b7) < 0.01 < b4, [b7, b4])
+    for p in ("a2c", "a2r"):
+        base, wl = r[f"blc4a-t64-e7/{p}/llama"]["shares"], r[f"blc4a-t64-e7-w127/{p}/llama"]["shares"]
+        ok(f"{p}: N-LIT's weighted lane A′ = (1, 127, 1) leaves cross-row as it is (the coin still cancels between a "
+           "tile's rows) and closes within-entry under literal P", abs(wl["P/xrow"] - base["P/xrow"]) < 0.02
+           and wl["P/entry"] < 0 < base["P/entry"], [wl["P/xrow"], base["P/xrow"], wl["P/entry"]])
+    ww = [r[f"blc4a-t64-e7-w127+wide/{p}/{sh}"]["shares"] for p in ("a2c", "a2r") for sh in SHAPES]
+    ok("wide tag + weighted lane: P′ at the floor pays at no grain (Llama and V4 dense)",
+       max(v[f"P'32/{g}"] for v in ww for g in ("lag1", "entry", "xrow", "tilecol", "column")) <= 0)
+    ok("wide tag + weighted lane, literal P: lag-1, within-entry and cross-row close; the free-search tile-column "
+       "pool still pays > 1% (N-LEAN §4)", max(v[f"P/{g}"] for v in ww for g in ("lag1", "entry", "xrow")) < 0.001
+       and min(v["P/tilecol"] for v in ww) > 0.01, [[v["P/tilecol"], v["P/column"]] for v in ww])
     e4 = r["blc1a-t128-e4/a2c/llama"]["shares"]
     ok("P′ at the floor: blc1a-t128-e4's lag-1 still pays (> 1%), so e7 is what closes lag-1",
        e4["P'32/lag1"] > 0.01, e4["P'32/lag1"])
