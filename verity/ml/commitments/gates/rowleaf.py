@@ -11,7 +11,7 @@ d_j = SHA-512(S(j, s, m_j) || segment j), segment j the row's bits [8192 j, 8192
 fill, s = ceil(N_BITS / 8192) and every m_j 8192 but the last (`rowleaf.sha512_row_seg_segments`). Every Q and S is one
 constant 128-byte block, so the circuit starts each hash from its prefix's midstate and compresses only what follows it.
 
-**The parts,** each its own traced Definition (`trace.part`, which C-Flock lowers by its builder), so a unit of a proof holds
+**The parts,** each its own traced Definition (`trace.part`, which Flock lowers by its builder), so a unit of a proof holds
 at most one segment's hash:
 
     Sha512RowSegSegment_v1{M}         (cv: Digest, segment: Array<M, Value<1>>) -> Digest, 1 <= M <= 8192

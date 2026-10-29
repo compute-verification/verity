@@ -1,7 +1,7 @@
 """Sampled proofs as a protocol option: the Commit's own commitment and replay, declared here, with no hooks of its own.
 
 Its scheme, ``rows-sha512``, names what the Commit commits under: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte run
-roots (`verity_vllm.commit.step_rows`), over the required values of the row's Program, and the replay's draw: up to
+roots (`verity_vllm.commit.step_rows`), over the required values of the row's Program, and the replay's sample: up to
 `--replay-per-stratum` units of every stratum, uniformly (`commit.challenge.stratum_picks`).  Its hooks are the Commit's
 committer and taps, which the Commit installs exactly as before; this option adds none, and the Commit refuses an entry
 whose scheme is not its committer's (`protocol_options.commit_guard`).  ``vllm-v1`` (`verity_vllm.commit.scheme`, SHA-256,

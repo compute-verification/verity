@@ -25,7 +25,7 @@ theorem SameSizes.get {r r' : Array (Array F128)} (h : SameSizes r r') (k : Nat)
     r[k]?.map Array.size = r'[k]?.map Array.size := by
   simpa [List.getElem?_map] using congrArg (·[k]?) h
 
-/-- Two records' rounds of some coins, which `Coins.ofRounds` reads, hold as many coins each when the records' do. -/
+/-- Two records' rounds of some coins, which `CoinSource.ofRounds` reads, hold as many coins each when the records' do. -/
 theorem SameSizes.filter {r r' : Array (Array F128)} (h : SameSizes r r') :
     SameSizes (r.filter (·.size ≠ 0)) (r'.filter (·.size ≠ 0)) := by
   have e : ∀ l : List (Array F128), (l.filter (·.size ≠ 0)).map Array.size = (l.map Array.size).filter (· ≠ 0) :=
@@ -34,9 +34,9 @@ theorem SameSizes.filter {r r' : Array (Array F128)} (h : SameSizes r r') :
   rw [Array.toList_filter, Array.toList_filter, e, e, h]
 
 theorem round_sizes {r r' : Array (Array F128)} (h : SameSizes r r') {k n : Nat} {v : Array F128}
-    (hv : (Coins.ofRounds r).round k n = .ok v) : ∃ v', (Coins.ofRounds r').round k n = .ok v' := by
+    (hv : (CoinSource.ofRounds r).round k n = .ok v) : ∃ v', (CoinSource.ofRounds r').round k n = .ok v' := by
   have hk := h.filter.get k
-  simp only [Coins.ofRounds] at hv ⊢
+  simp only [CoinSource.ofRounds] at hv ⊢
   cases h1 : (r.filter (·.size ≠ 0))[k]? with
   | none => rw [h1] at hv; cases hv
   | some a =>
@@ -50,7 +50,7 @@ theorem round_sizes {r r' : Array (Array F128)} (h : SameSizes r r') {k n : Nat}
       · exact ⟨a', by simp [← hk, hn]⟩
       · simp [hn] at hv
 
-theorem coinVec_of {n k : Nat} {src : Coins} {v : Array F128} (hn : n ≠ 0) (h : src.round k n = .ok v) :
+theorem coinVec_of {n k : Nat} {src : CoinSource} {v : Array F128} (hn : n ≠ 0) (h : src.round k n = .ok v) :
     coinVec n k src = .ok (v, k + 1) := by
   unfold coinVec
   split
@@ -61,7 +61,7 @@ theorem coinVec_of {n k : Nat} {src : Coins} {v : Array F128} (hn : n ≠ 0) (h 
     rw [h]
     rfl
 
-theorem cm_bind_of {A B : Type} {x : CM A} {f : A → CM B} {k k₁ : Nat} {src : Coins} {a : A}
+theorem cm_bind_of {A B : Type} {x : CM A} {f : A → CM B} {k k₁ : Nat} {src : CoinSource} {a : A}
     (h : x k src = .ok (a, k₁)) : (x >>= f) k src = f a k₁ src := by
   have e : (x >>= f) k src = (x k src).bind (fun p => f p.1 p.2 src) := rfl
   rw [e, h]
@@ -72,8 +72,8 @@ theorem cm_bind_of {A B : Type} {x : CM A} {f : A → CM B} {k k₁ : Nat} {src 
 /-- `x` at a record and `y` at any record whose rounds have the same sizes: whenever `x` succeeds, `y` does, with as
 many coins drawn and related results. -/
 def RF {A B : Type} (R : A → B → Prop) (x : CM A) (y : CM B) : Prop :=
-  ∀ r r', SameSizes r r' → ∀ k a j, x k (Coins.ofRounds r) = .ok (a, j) →
-    ∃ b, y k (Coins.ofRounds r') = .ok (b, j) ∧ R a b
+  ∀ r r', SameSizes r r' → ∀ k a j, x k (CoinSource.ofRounds r) = .ok (a, j) →
+    ∃ b, y k (CoinSource.ofRounds r') = .ok (b, j) ∧ R a b
 
 namespace RF
 
@@ -113,9 +113,9 @@ theorem ite' {R : A → B → Prop} {c c' : Prop} [Decidable c] [Decidable c'] (
   · simp only [h, mt hc.mpr h, ↓reduceIte]
     exact h₂ h
 
-theorem read' : RF (fun s s' : Coins => ∀ k, s.drawnAll k = s'.drawnAll k) (read : CM Coins) read := by
+theorem read' : RF (fun s s' : CoinSource => ∀ k, s.drawnAll k = s'.drawnAll k) (read : CM CoinSource) read := by
   intro r r' hr k a j hx
-  have e : ∀ src : Coins, (read : CM Coins) k src = .ok (src, k) := fun _ => rfl
+  have e : ∀ src : CoinSource, (read : CM CoinSource) k src = .ok (src, k) := fun _ => rfl
   rw [e] at hx
   cases hx
   exact ⟨_, e _, fun k => by
@@ -124,7 +124,7 @@ theorem read' : RF (fun s s' : Coins => ∀ k, s.drawnAll k = s'.drawnAll k) (re
 
 theorem get' : RF (· = ·) (get : CM Nat) get := by
   intro r r' hr k a j hx
-  have e : ∀ src : Coins, (get : CM Nat) k src = .ok (k, k) := fun _ => rfl
+  have e : ∀ src : CoinSource, (get : CM Nat) k src = .ok (k, k) := fun _ => rfl
   rw [e] at hx
   cases hx
   exact ⟨_, e _, rfl⟩
@@ -532,13 +532,13 @@ end Run
 (RecAlgebra.lean:810–811, 532–539). -/
 theorem residualLins_sizes {sh : Shape} {r r' : Array (Array F128)} {extras extras' : Array Claim}
     {p : Array Lin × Info Lin} (hr : SameSizes r r') (hx : extras.size = extras'.size)
-    (h : residualLins sh (Coins.ofRounds r) extras = .ok p) :
-    ∃ p', residualLins sh (Coins.ofRounds r') extras' = .ok p' := by
+    (h : residualLins sh (CoinSource.ofRounds r) extras = .ok p) :
+    ∃ p', residualLins sh (CoinSource.ofRounds r') extras' = .ok p' := by
   obtain ⟨j, hj⟩ := residualLins_run h
   obtain ⟨p', hp', -⟩ := run_rf (M := symbolic sh) sh hx r r' hr 0 p j hj
   refine ⟨p', ?_⟩
   unfold residualLins
-  change (Prod.fst <$> run sh (symbolic sh) extras' 0 (Coins.ofRounds r')) = _
+  change (Prod.fst <$> run sh (symbolic sh) extras' 0 (CoinSource.ofRounds r')) = _
   rw [hp']
   rfl
 

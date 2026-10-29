@@ -230,7 +230,7 @@ pub struct Pads {
 }
 
 impl Pads {
-    /// Rep `rep`'s pads from the prover's randomness (OS bytes; never from the transcript), drawn once and kept in the rep's state.
+    /// Rep `rep`'s pads from the prover's randomness (OS bytes; never from the transcript), sampled once and kept in the rep's state.
     pub fn draw(rng: &mut crate::zk_hooks::ProverRng, lay: &Layout, rep: usize) -> Self {
         let s = lay.len();
         let base = (rep as u64) << 32;
@@ -294,7 +294,7 @@ impl Lin {
 
 /// Wraps the rep's challenger: from the zerocheck's label to the opening's, every absorbed field element gets its pad (in
 /// [`Layout::absorbed`] order); the pads' root is absorbed right after the zerocheck label, before its first coin. Every coin
-/// drawn in that phase is logged (the prover replays its own checks from them).
+/// sampled in that phase is logged (the prover replays its own checks from them).
 pub struct Masking<C: Challenger> {
     pub inner: C,
     order: Vec<usize>,
@@ -315,8 +315,8 @@ pub struct Masking<C: Challenger> {
     pub at_open: Option<Box<dyn FnMut(&[F128]) -> Result<(), String> + Send>>,
     /// the zerocheck's outer coins: `coins[K_SKIP..K_SKIP + n_outer]` ([`points_from_coins`]' `r_outer`)
     n_outer: usize,
-    /// Under the outer firewall the Lean frame decides the refusals (`Flock.Firewall.Frame`): this challenger's are kept in
-    /// `stopped` instead of stopping the proof, the firewall's cross-check of the frame's.
+    /// Under the outer ZK server the Lean frame decides the refusals (`Flock.Firewall.Frame`): this challenger's are kept in
+    /// `stopped` instead of stopping the proof, the ZK server's cross-check of the frame's.
     pub defer: bool,
     pub stopped: Option<String>,
 }
@@ -348,7 +348,7 @@ impl<C: Challenger> Masking<C> {
                 "masking: {} of {} values absorbed masked", self.at, self.order.len());
         (self.inner, self.coins, self.coins_l0)
     }
-    /// [`Masking::finish`] for a rep the firewall failed, whose rounds from its failure on are the Lean session loop's places
+    /// [`Masking::finish`] for a rep the ZK server failed, whose rounds from its failure on are the Lean session loop's places
     /// sent with no device round in them: this challenger absorbed none of their values.
     pub fn finish_failed(self) -> (C, Vec<F128>, Vec<F128>) {
         (self.inner, self.coins, self.coins_l0)
@@ -435,7 +435,7 @@ impl<C: Challenger> Challenger for Masking<C> {
     }
 }
 
-/// Logs every coin drawn through it (the inner phase's coins, for the simulator's input).
+/// Logs every coin flipped through it (the inner phase's coins, for the simulator's input).
 pub struct Logging<'a, C: Challenger> {
     pub inner: &'a mut C,
     pub coins: Vec<F128>,
@@ -663,7 +663,7 @@ pub struct Replayed {
 
 /// Re-run upstream's zerocheck and lincheck verifiers (`zerocheck::verify_with_grinding`, `lincheck::verify_with_grinding`,
 /// `verifier::verify_core_inner`; Fast100: grinding disabled) on the masked proof, absorbing exactly what they absorb and
-/// drawing exactly their coins, with every message-dependent quantity an affine form in the pads. `own_comb`: the prover's own
+/// sampling exactly their coins, with every message-dependent quantity an affine form in the pads. `own_comb`: the prover's own
 /// replay passes its lincheck's folded `comb` (upstream's `comb_partial`) instead of folding again; a verifier passes `None`
 /// and folds its own (a proof's field is never read).
 #[allow(clippy::too_many_arguments)]
@@ -1136,7 +1136,7 @@ pub fn failing(cons: &[(&'static str, Lin)], h: &[F128]) -> Vec<&'static str> {
     cons.iter().filter(|(_, l)| l.eval(h) != F128::ZERO).map(|c| c.0).collect()
 }
 
-/// The simulator's inner proof, drawing the verifier's coins from `coins` in the verifier's order (`ε`, the batching coins,
+/// The simulator's inner proof, flipping the verifier's coins from `coins` in the verifier's order (`ε`, the batching coins,
 /// `β`, the queries), for the public constraints `cons` (the triple's added here). `ρ, σ, Y` are uniform, `τ` is solved, and
 /// the opened columns are uniform subject to the column check. The tree holds the simulated columns at the opened positions
 /// and all-zero columns elsewhere (hm96 hides every leaf).

@@ -11,7 +11,7 @@ readers take it off `x` and the coins alone:
 * its `m` and `k_log` are the inner statement's table 0's (`Files.stmt` at the files `x` carries, which the deployed
   plain verifier sets up at the same numbers, `innerSetup_files`);
 * each rep `r`'s rounds, where its stream has any, are `canonRounds` of the coins after the link, up to rounds of no
-  coins (`Coins.ofRounds` drops them, so `verifierRows` reads only the rest: `verifierRows_filter`).
+  coins (`CoinSource.ofRounds` drops them, so `verifierRows` reads only the rest: `verifierRows_filter`).
 
 `staged_innerAt` proves it from the verifier's checks. The rounds are the coin server's record's (`coinTie_sized`, the
 coin tie with `repCoins`' round counts); `checkReads` holds that record to the schedule of the verifier's inner shape,
