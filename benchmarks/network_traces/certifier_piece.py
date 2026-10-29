@@ -56,9 +56,9 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   file's pieces. Only the protocol rejects: a step that can't run (no kept run, a rehearsal the gate's check didn't
   pass, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or SIGTERM
   from the piece's time limit) is `NotRun`, and the piece then refuses: DIR keeps only its logs and gets
-  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier missing. ``--draw K`` is the scan's K drawn units (every
-  unit by default); a CR_K=V goes to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report
-  and the scan's answers under RESEARCH_RUN_DIR/out).
+  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier missing. ``--draw K`` is
+  the scan's sample, K proof blocks (every proof block by default); a CR_K=V goes to the chain; ``--chain-cmd``
+  replaces the chain (a test's, which writes the report and the scan's answers under RESEARCH_RUN_DIR/out).
 * **chain** and **period** are the piece split in two around V3c (`served_verdicts.sh`'s ``CERTIFIER_CHAIN_CMD`` and
   ``CERTIFIER_PERIOD_CMD``, each run as ``bash -c CMD _ D K DIR V3C``, e.g. ``CERTIFIER_CHAIN_CMD='python
   benchmarks/network_traces/certifier_piece.py chain "$@"'``), so the period's compute audit is V3c's audit of the
@@ -625,7 +625,7 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("dir", type=Path)
     q.add_argument("--eos-ids", default="128001")
     q.add_argument("--lean", help="network-period, built (else built here)")
-    q.add_argument("--draw", type=int, help="the scan's K drawn units (every unit by default)")
+    q.add_argument("--draw", type=int, help="the scan's sample, K proof blocks (every proof block by default)")
     q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN ENDPOINT CR_K=V ...")
     q.add_argument("set", nargs="*", help="CR_K=V")
     for name in ("chain", "period"):
@@ -636,7 +636,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("v3c", type=Path, help="V3c's directory: window/ (window-commit's) and period.json")
     q = sub.choices["chain"]
     q.add_argument("--eos-ids", default="128001")
-    q.add_argument("--draw", type=int, help="the scan's K drawn units (every unit by default)")
+    q.add_argument("--draw", type=int, help="the scan's sample, K proof blocks (every proof block by default)")
     q.add_argument("--class", dest="scan_class", default=V3C_SCAN_CLASS,
                    help=f"the scan's class, V3c's window class's (default {V3C_SCAN_CLASS})")
     q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN ENDPOINT CR_K=V ...")

@@ -64,9 +64,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   j's ``prog<j>`` chunk j's o0 of its `SELECT_ENTRY` template (``<descriptor id>/c<j>/o0`` in its ``roots``, the rows
   and salts its member's prover body), each a `Held` tree at that registration's root and domain, refused by name where
   its rows aren't the scan's own. The honest round's ``scan/state`` and ``scan/prog<j>`` are then V3c's roots and
-  domains, the ties `NetworkCheck.Period`'s rows form checks against V3c's audit (`stateTied`, `wired`), and there is
-  no block round: V3c's audit proves the anchored Programs' slot entries, and ``answers.json`` carries no ``audits``
-  (the period reads V3c's ``period.json``, `scan_period.rows_case`).
+  domains, which the consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's
+  audit at any sample of it, and there is no block round: V3c's audit proves the anchored Programs' slot entries, and
+  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`).
 * **The honest round, one registration**: one Program of three templates (`TEMPLATES`) in the generator form
   (`scan_root`, the form `NetworkCheck.Period`'s `scanOf` reads): the first unit (`IngressScanFirst`, bucket 0), G·T − 1
   ingress units (buckets 1 … G·T − 1) and G·T egress units, each template one batch with its row, state and egress

@@ -115,7 +115,7 @@ rejecting the served window is a reject: with no fetch kept, a rehearsal the gat
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. Split in two
 around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed
 window (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period`
-checks the rows case whose one compute audit is V3c's `period.json`.
+runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's.
 
 ## The chain's run of record
 

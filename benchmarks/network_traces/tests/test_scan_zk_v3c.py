@@ -1,22 +1,21 @@
 """scan_zk.py --v3c: the scan's state and slot entries' trees are the ones V3c's window committed before its coins, at
-that registration's roots and domains, so the honest round's ``scan/state`` and ``scan/prog<j>`` are the roots
-`NetworkCheck.Period`'s rows form ties to V3c's audit (`stateTied`, `wired`), and no block round is proved. The window
-here is `prove_path.py window-commit`'s layout with roots made by the implementations the window commit uses (the
-`SCAN_STATE` by `registered.Registered`, each `SelectEntry_v1` chunk's o0 by `windows.rows.commit_ports`), so a held
-tree's root is theirs; a window whose rows, roots or chunks aren't the scan's is refused by name."""
+that registration's roots and domains, so the honest round's ``scan/state`` and ``scan/prog<j>`` are the roots the
+consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's audit, and no block round
+is proved. The window here is `prove_path.py window-commit`'s layout with roots made by the implementations the window
+commit uses (the `SCAN_STATE` by `registered.Registered`, each `SelectEntry_v1` chunk's o0 by
+`windows.rows.commit_ports`), so a held tree's root is theirs; a window whose rows, roots or chunks aren't the scan's
+is refused by name."""
 from __future__ import annotations
 
 import hashlib
 import json
 import os
-from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
 import pytest
-from test_scan_zk import PERIOD_CASE, sz
+from test_scan_zk import sz
 
-from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as D
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.windows import rows as RWS
@@ -136,33 +135,3 @@ def test_v3c_is_one_link_window_from_link_window_0(tmp_path, scanned):
     with pytest.raises(SystemExit, match="--v3c: V3c's window is link-window 0's, a group of 1, not 2 from 0"):
         sz.link(tmp_path, setup=S, group=2, v3c=scanned["window"])
 
-
-def test_v3cs_sample_reaches_the_period_check_whole_where_its_slot_entries_and_scan_slots_strata_are_whole():
-    """The served accept's sample: `drawsWhole` reads the audit's profile by template, so a stratified profile whose
-    slot entries' and scan slots' strata have k == size passes with every other template sampled in part, whatever
-    expansion gives those sizes. `stratified:K`'s own sizes short of the population, and `subset:1`, leave the honest
-    period at `UNDRAWN`."""
-    import scan_period as SP
-
-    PC = SP.mirror(PERIOD_CASE)
-    entry, slots, rest = TID, PC.SCAN_SLOTS, "Rest_v1"
-    sizes = {entry: 2 * S.cls.NR, slots: 4, rest: 4096}
-    at, ranges = 0, {}
-    for t, n in sizes.items():
-        ranges[t], at = [[at, at + n]], at + n
-    N, K = at, 10
-    audit = PC.Audit(free=0, steps=0, program="00" * 64, units=N, bits=1, entries=((entry, S.cls.NR, "00"),),
-                     scan_slots=(slots,))
-
-    def stratified(ks: dict) -> dict:
-        return {"law": "stratified", "k": K, "strata": [{"template": t, "units": ranges[t], "k": ks[t]} for t in sizes]}
-
-    def whole(law: dict) -> bool:
-        prof = {"levels": [{"size": N, "draw": AU.core_law(law, N).to_json()}], "delta": Fraction(1, 2 ** 40)}
-        return PC._draws_whole(audit, prof, PC._facts("audit 0", prof, {"bound": 0}))
-
-    assert whole(stratified({entry: sizes[entry], slots: sizes[slots], rest: 1}))
-    assert not whole(stratified({entry: sizes[entry], slots: sizes[slots] - 1, rest: 1}))
-    rule = stratified({t: D.stratum_k(K, n, N) for t, n in sizes.items()})
-    assert D.strata_problem(rule, N) is None and not whole(rule)
-    assert not whole({"law": "subset", "k": 1})

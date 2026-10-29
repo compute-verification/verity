@@ -30,9 +30,9 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
   and ``period.json``, each case's answers.
 * **V3c's audit** (``--v3c``, ``records_audit.py period``'s ``period.json``, for scans proved on V3c's trees,
   ``scan_zk.py --v3c``): the one compute audit, its Program's `SelectEntry_v1` chunks' o0 the scan's ``scan/prog<j>``
-  and its `SCAN_STATE` the scan's ``scan/state``. The honest case is then accepted where V3c's sample took every proof
-  block or its slot entries' and scan slots' templates whole, and refused at the sample (the mirror's ``UNDRAWN``)
-  where it took them in part, as ``subset:1`` does.
+  and its `SCAN_STATE` the scan's ``scan/state``. The honest case is then accepted at any sample of V3c's (``subset:1``
+  included): the period check is the consistency check, the committed I/O against the certificates, and what a
+  sample of one or two proof blocks leaves unproved is covert capacity, which K charges.
 """
 from __future__ import annotations
 
@@ -149,11 +149,9 @@ def main(argv=None) -> int:
         scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
         honest = not round_ and scan_said == {"accept"}
         if honest and a.v3c:
-            want = "accept, or reject at the sample where V3c took its slot entries in part"
-            good = (py.get("verdict") == lean.get("verdict") and py.get("public") == lean.get("public")
-                    and (py.get("verdict") == "accept"
-                         or py.get("verdict") == "reject" and m.UNDRAWN in py.get("reason", "")
-                         and m.UNDRAWN in lean.get("reason", "")))
+            want = "accept"
+            good = (py.get("verdict") == lean.get("verdict") == "accept"
+                    and py.get("public") == lean.get("public"))
         else:
             why = m.UNWIRED if honest else None
             want = "reject" + (" at the wiring" if why else "")
