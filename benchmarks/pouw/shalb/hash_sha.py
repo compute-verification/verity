@@ -31,6 +31,8 @@ Units: W1, 1/32 of a register write; stock is 1 W1 a useful MAC; h is honest has
 - Y. A packed M0 adversary for xor-m centred once a segment instead of each block, bit for bit, its writes modelled
   part by part with predicate writes free (W1 today) and priced as register writes: the price of a predicate decides
   XorWrites_m.
+- S. Honest's xor-m on the served form: its IGMMA accumulates in place, so honest folds one write a word (2 a word in
+  all, the xor-m-igmma candidates), and the adversaries against that.
 """
 from __future__ import annotations
 
@@ -122,6 +124,8 @@ CANDIDATES = {
     **{f"xor-{m}": {"bits": 32 / m, "honest": 1 + math.ceil((m - 1) / 2) / m, "credit_dw": 1 / m,
                     "credit_p": 1 + math.ceil((m - 1) / 2) / m, "premise": f"XorWrites_{m}"}
        for m in (2, 4, 8, 11, 16, 24, 31)},
+    **{f"xor-{m}-igmma": {"bits": 32 / m, "honest": 2.0, "credit_dw": 1 / m, "credit_p": 2.0,
+                          "premise": f"XorWrites_{m} at the served honest"} for m in (11, 16)},
     **{f"xorrot-{m}": {"bits": 32 / m, "honest": 1 + (m - 1) / m + math.ceil((m - 1) / 2) / m, "credit_dw": 1 / m,
                        "credit_p": 1 + (m - 1) / m + math.ceil((m - 1) / 2) / m, "premise": f"RotXorWrites_{m}"}
        for m in (11, 16, 24)},
@@ -677,6 +681,30 @@ def part_y(checks: Checks, rng: np.random.Generator, r: dict) -> dict:
     return out
 
 
+SERVED_HONEST = 2.0
+
+
+def part_s(checks: Checks, r: dict, y: dict) -> dict:
+    """Honest's xor-m on the served form. The served GEMM's IGMMA accumulates in place (served_sass.py), so a word is
+    gone at the next step and honest's fold is one write a word (xor_wgmma_probe.cu): 2 writes a word at every m. The
+    adversaries' writes against that."""
+    out = {}
+    for m in y:
+        bs = r["xor"][m]["adaptive"]
+        out[m] = {"honest_fresh": xor_honest_writes(m) / m, "honest_served": SERVED_HONEST,
+                  "packed_free": y[m]["w1_today"]["per_word"] / SERVED_HONEST,
+                  "packed_priced": y[m]["predicates_priced"]["per_word"] / SERVED_HONEST,
+                  "bitsliced": (bs["per_word"] + bs["uniform_per_word_t8192"]) / SERVED_HONEST}
+    priced = {m: min(v["packed_priced"], v["bitsliced"]) for m, v in out.items()}
+    checks.check("S: against honest on the served form (in-place IGMMA, 2 writes a word), the best adversary with "
+                 "predicate writes priced pays less than 5% more at m = 16 and less than 10% more at m = 11, and with "
+                 "predicates free at least 25% less at m = 16: XorWrites_m at the served honest stands only priced, "
+                 "and thinly", 1 < priced[16] < 1.05 and 1 < priced[11] < 1.10 and out[16]["packed_free"] < 0.75,
+                 ", ".join(f"m {m}: priced {priced[m]:.3f}x (packed {v['packed_priced']:.3f}x, bit-sliced "
+                           f"{v['bitsliced']:.3f}x), free {v['packed_free']:.3f}x" for m, v in out.items()))
+    return out
+
+
 def part_t(checks: Checks, rng: np.random.Generator) -> dict:
     out = {}
     for k in (1, 2, 4):
@@ -703,12 +731,14 @@ def main() -> int:
     t = part_t(checks, rng)
     r = part_r(checks, rng, x)
     y = part_y(checks, rng, r)
+    s = part_s(checks, r, y)
     if "--json" in args:
         Path(args[args.index("--json") + 1]).write_text(json.dumps(
             {"floor": f, "candidates": p, "xor": {str(k): v for k, v in x.items()},
              "trunc": {str(k): v for k, v in t.items()},
              "bitsliced": {n: {str(k): v for k, v in g.items()} for n, g in r.items()},
-             "packed_segment": {str(k): v for k, v in y.items()}},
+             "packed_segment": {str(k): v for k, v in y.items()},
+             "served_honest": {str(k): v for k, v in s.items()}},
             indent=1, sort_keys=True, default=float) + "\n")
     print("\ncandidate      bits  h@t8192  cut   T1 DW-only  T1 premise  T2 t512 s/a     T2 r512 s/a     T2 t8192 s/a")
     for n, v in p.items():
