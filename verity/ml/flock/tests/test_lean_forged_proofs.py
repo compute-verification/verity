@@ -33,7 +33,7 @@ LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: ``stage/`` (circuit.txt, partition.json, program.json), per case ``<case>/pub-4.bin`` and ``<case>/session/``, and
-#: ``cases.json`` (each case's flips, the prover's LIVE line, M0's verdict and Lean's at generation): `art:31c671f6`
+#: ``cases.json`` (each case's flips, the prover's LIVE line, M0's verdict and Lean's at generation)
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "forged-proofs"
 STATEMENT = "verity/flock-circuit"
 N = 4
