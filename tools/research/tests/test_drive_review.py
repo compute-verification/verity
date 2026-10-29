@@ -6,7 +6,6 @@ implicates once `main` passed that step before, bisecting when several PRs are i
 from __future__ import annotations
 
 import contextlib
-import calendar
 import json
 import os
 import subprocess
@@ -16,9 +15,8 @@ from pathlib import Path
 import pytest
 
 import research.queue as Q
-from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL
-from research.queue import PR, QueueError, StoreLabels, label_target
+from research.queue import QueueError, StoreLabels, label_target
 from research.store import vocab
 from test_queue import World, _git
 from test_queue_drive import Harness, _failed_run, _killed_run, _steps_run, _tip
