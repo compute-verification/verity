@@ -148,6 +148,19 @@ theorem w1FreshWords : W1FreshWords := by
     _ ≤ ∑ _g ∈ S, w := Finset.sum_le_sum fun g hg => (hrun g hg).2
     _ = S.card * w := by rw [Finset.sum_const, nsmul_eq_mul]
 
+/-- **W1's fresh-words bound at each content**, proved: `w1FreshWords` on the one-point grid. -/
+theorem w1FreshWordsAt : W1FreshWordsAt := by
+  intro ι c cap oracle cw canW hW f w D hf M hM Ls hLs
+  have h := w1FreshWords ι c cap oracle cw canW hW f w D hf Unit {()} (fun _ => M) (fun _ _ => hM) Ls hLs
+  have hc : (∑ l ∈ Ls, (({()} : Finset Unit).filter fun _ => f M l ≠ M l).card) =
+      (Ls.filter fun l => f M l ≠ M l).card := by
+    rw [Finset.card_filter]
+    refine Finset.sum_congr rfl fun l _ => ?_
+    rw [Finset.filter_singleton]
+    split_ifs <;> rfl
+  rw [hc] at h
+  simpa using h
+
 /-- **At `h200Measured`, W1 is 32 a word**, proved from `H100.h32H200Measured`. -/
 theorem w1H200Measured32 : W1H200Measured32 := fun _ _ _ _ h => by
   simpa using h 32 H100.h32H200Measured

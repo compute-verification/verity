@@ -100,6 +100,19 @@ def W1FreshWords : Prop :=
       ∀ Ls : Finset (Σ s : Store, Fin (c.size s)), (∀ l ∈ Ls, l.1 ≠ .reg) →
         cw * ((∑ l ∈ Ls, (S.filter fun g => f (M g) l ≠ M g l).card : ℕ) : ℚ≥0) ≤ S.card * w
 
+/-- **W1's fresh-words bound at each content** (draft semantics; the adaptive reading): under
+`CardWithinAccelW1 c cap oracle cw canW`, a code the card runs at W1 work at most `w` a content changes at most `w / cw`
+words outside the register file on each content `M` in `D`: `cw · #{l ∈ Ls : f M l ≠ M l} ≤ w`. The code may branch
+on any word of `M`, the coins included, and may store to addresses it computed from them; copies, loads and
+predicated-off instructions are words it writes. -/
+def W1FreshWordsAt : Prop :=
+  ∀ (ι : Type) (c : Accel.Card) (cap : ι → ℕ) (oracle : ℕ) (cw : ℚ≥0)
+    (canW : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop),
+    CardWithinAccelW1 c cap oracle cw canW →
+    ∀ f w D, canW f w D → ∀ M : c.Mem, D M →
+      ∀ Ls : Finset (Σ s : Store, Fin (c.size s)), (∀ l ∈ Ls, l.1 ≠ .reg) →
+        cw * ((Ls.filter fun l => f M l ≠ M l).card : ℚ≥0) ≤ w
+
 /-- **W1 on the H200 at a price table** (draft semantics): `CardWithinAccelW1` on the H200's instance at every `cw` the
 table floors (`H100.Floor cw pr`), `canW` read at the table's prices. The instance's `.mma` already computes the dot
 its capture pins (`Card.dot`), so a `wgmma` here is `MH100`'s `Op100.wgmma` narrowed to that dot. -/
