@@ -1,5 +1,5 @@
-//! `verity/flock-ir-frame/v3`: an IR template's units bound to their frame-v3 rows (lane flock-ir-lowering;
-//! `verity_flock.ir_frame` stages the instance file). One block R1CS for the CPU prover and Flock-CUDA's host-witness mode.
+//! `verity/flock-ir-frame/v3`: an IR template's units bound to their frame-v3 rows
+//! (`verity_flock.ir_frame` stages the instance file). One block R1CS for the CPU prover and Flock-CUDA's host-witness mode.
 //!
 //! A run is `nb` consecutive compressions of one BLAKE3 chunk (a chunk's block count, which the last chunk of a row may have
 //! short, is a multiple of `nb`): run `r` hashes the chunk's blocks

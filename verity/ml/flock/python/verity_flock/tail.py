@@ -1,4 +1,4 @@
-"""A template's tail in the circuit (lane flock-circuit, ``verity/flock-circuit``): the verifier evaluates no part of the
+"""A template's tail in the circuit (``verity/flock-circuit``): the verifier evaluates no part of the
 computation, so the gates a cut lowering left to the verifier (``ir_lower.tail_program``: RMSNorm's row tail, attention's
 softmax) become circuits here.
 

@@ -19,7 +19,7 @@ AUDIT = Path(__file__).resolve().parents[4] / "Security" / "Proofs" / "Flock" / 
 SUBSET_MISS = "(subset n k hk).miss K = ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞)"
 AUDIT_COUNT = "L.miss K + εks + δlink"
 
-#: The one-stage audits (lane one-stage-e2e): n units, k drawn, delta, the most wrong units admitted.
+#: The one-stage audits: n units, k drawn, delta, the most wrong units admitted.
 RUNS = [(1024, 16, 0.01, 254), (1024, 256, 2.0 ** -20, 46), (344, 128, 2.0 ** -20, 28), (183_680, 256, 2.0 ** -20, 9675)]
 
 
