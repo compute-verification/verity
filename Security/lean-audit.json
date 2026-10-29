@@ -832,51 +832,51 @@
   },
   "Claims.ZKMal.RefSession.Causal": {
    "owner": "@proofs",
-   "digest": "07bc7af221bd206a6762f63578570fcc490c3cdb6a282914685ed3ab7d250fc8"
+   "digest": "004534ad37b9a8b8520ef586fe75df53067f205547621ec7b54331551265b0f8"
   },
   "Claims.ZKMal.RefSession.Complete": {
    "owner": "@proofs",
-   "digest": "ed99ffa2124f765a4440f1377a837df3f0aaf21ec02487daef6894da5cff7d98"
+   "digest": "05c8137f583e2153d636f40954f9daa4c59be44a399b3834b81baf8a71d976f2"
   },
   "Claims.ZKMal.RefSession.DummyReg": {
    "owner": "@proofs",
-   "digest": "44166b88c36b415c25067485dac680baaa3acad5e5d33f668fdb397265587976"
+   "digest": "b949bce86540370ad195b712b41f34eaf6164c8687b43594e92c32617776a88c"
   },
   "Claims.ZKMal.RefSession.SwCausal": {
    "owner": "@proofs",
-   "digest": "cd0bec4022538b53b60fb1bf0f2416bcc51c10581906f1639bcfc7b6ebc03a67"
+   "digest": "7365d8ec0dc35f3be6cc9335ae40a276ea220f605af2a4f71c33a15b34317124"
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
-   "digest": "6e1896aa39cc28344469524ee6f2439c49a6b89e233e3212bd7e718b5332ce2a"
+   "digest": "8d39f1efbb9ef0f1306d07fa006fa23d25782d509cebcae542d5cf5ca5fb2ea7"
   },
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
-   "digest": "b14bf2c300d34f99503c71c64e01efca5fbb6e81460a552edcf05acbaa84d83a"
+   "digest": "72613fbebffe649d4991b0432d55dadde56c53a19ff4118a070cb6de2b351efc"
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "f1959c4eb323baf7ee259a1c6803f747d3b47f41ff083f497fe42eb0f468b64a"
+   "digest": "54ad15156219ea4e9cbe523a1f97044c76042ad2fbed2db0b0ea49d57bd82106"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "5d65df18b906168dfbccab5927c76cda8062f5607b8d3957e7c888d03c620c60"
+   "digest": "44f287647e58f0b76ef6fbea5ae2848e30e79df149b094fe2dcd8401089780b1"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "eaf350607e85f7b66cc1496c6c382bebfc14f96b28e8f20f67fb9762926f8841"
+   "digest": "814104cfd3b0a53072f59faae3194cf21101bc08f4346652a35eb5c794266a74"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "3a73f7e96829c6c49075268db520f4c5cc4c35d400c4d636c999515585bee1cc"
+   "digest": "732f0c72e814097accaf94d8e9e4d5ca90f8370f0f7d7db787bdb3811716668e"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
-   "digest": "226f19535218e3fc46a7ff1df4dd447ea3629798816ac427c93fe70b60971118"
+   "digest": "0a21afc8c8b43d077c3b3fc0144eba7b2833134544d6f359523d1d1adce60e4a"
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "fa7458ca30978a9a7f9a79f1400254bfb33c614eb0e2951f4806e0e3e0e70ab1"
+   "digest": "e855549798690f03386982673960fa80b752f6aab8611859d38cffa69e1ae71c"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -912,7 +912,7 @@
   },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs",
-   "digest": "a4b0f054b7ae203bc29974b458b7a638475797d27a30e349ba70adf1d9742a28"
+   "digest": "e7fbd20b46ebf0fddbda646c95b545fc61aef88fbb5d13fb5ccc469e1c287fbc"
   },
   "Flock.Guarantees.OuterSessionsZK": {
    "owner": "@proofs",
@@ -936,35 +936,35 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "746fc26deba5f558491cf2a41917baef813b152951254aeb0f0128c428425987"
+   "digest": "1b0ab70a718639f74515bc467ef921154e97301a500dac29a480346ab325432e"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
-   "digest": "78cd7087b4c728baf55fe03ff802f69249b6510dc76ff9ba4d471dab52132534"
+   "digest": "69705bda1f1d640ee4e51bc171ef58202a00de0b303f7954c01aeccec8596fdc"
   },
   "Flock.SoundAtBridge.OpenedPlurAt": {
    "owner": "@proofs",
-   "digest": "4c0094439a9ee5142304a4117b138ae12bb6a8feb3297902e6318aedc9280036"
+   "digest": "0da20e512415f15610fedc15a0a116c478fd0dc92ef0430fa46ce311d8567bf0"
   },
   "Flock.SoundAtBridge.RelOfRows": {
    "owner": "@proofs",
-   "digest": "8e735a8e4069f5dfd5261fafc1596fba5a18104b5f81429c205377c36f0e4fc1"
+   "digest": "0bfeea6fa7551291094ffdc8ff038ccee6adf450844317389c82e3d79db9c750"
   },
   "Flock.SoundAtBridge.RowsSession.CR": {
    "owner": "@proofs",
-   "digest": "1d3ef022fdf6096f3da84bb6abc8a0394cc7e424692fdf9dd4721b4d7d1a0c19"
+   "digest": "874eb9bca32e7a4c71e66cb96d7a8b030f7aa9a52c7c9394f422cf8b552d8c7d"
   },
   "Flock.SoundAtBridge.RowsSession.RowsAt": {
    "owner": "@proofs",
-   "digest": "aeacaeb180360ed233c97ea38cca59f72ddd96c78cf1aa7cca5737fe35df56d3"
+   "digest": "89cd453c712d2c74f309fde7f5dfcefb958624d044c61a1e4d4273f805d8e8e7"
   },
   "Flock.SoundAtBridge.RowsSession.ServedRegistered": {
    "owner": "@proofs",
-   "digest": "a68bded4835018e6dcd796bc8fc751b4335788b3517fe1ce2a77699bdd3aa78c"
+   "digest": "0fc89289e30f77d8f945a0befe0e70ebc4c86ccddfa9a5c9b1400f5c70d952d0"
   },
   "Flock.SoundAtBridge.WindowLaw": {
    "owner": "@proofs",
-   "digest": "0002e113af8ad0375df215df6c03a7b1207614bf77f3081effdd53b7a1b5cf5b"
+   "digest": "0c6470f98dc841ec85285bf8133d93c102dcb912c4325b21be7f1b8c76d254d0"
   },
   "FlockDeploy.PlainIn": {
    "owner": "@proofs",
@@ -38072,7 +38072,7 @@
    ]
   },
   "Flock.RecAlgebra": {
-   "digest": "1614478e2796805baffbc180dc65963e65677c0e1822d7dcba248504f75102ab",
+   "digest": "88fdb173ae5d7ec90ca4a0284d1bcfd9964785b1765e06e52cfa9bf346e4ed89",
    "definitions": {
     "Flock.RecAlgebra.AClaim": "7a6a8bfd94bfba4c3f8270cddba7e25617db71beba75b1d4f2a2d9d9de6049a8",
     "Flock.RecAlgebra.AClaim.skip": "d34f9921c61aedb3f71c192f9bfa96add4579ee7271b5f76412e10ede9e60751",
@@ -38094,11 +38094,6 @@
     "Flock.RecAlgebra.CoinSource.ofRounds": "3270539fd02373062c01a66af133eb7652c80b49a0551b72fffe3aa91252b761",
     "Flock.RecAlgebra.CoinSource.round": "64fe69cfae153cd9266b3b91b0c9711d20d2b1ee5eb39fb13108f4225ff04f9a",
     "Flock.RecAlgebra.CoinSource.zeros": "861d403f07ab77f62756554347a7b079fc28b09d079a9cde607c0ed5f6f88306",
-    "Flock.RecAlgebra.Coins": "47d1c8ab01103b895fb4d28888bc6faaae8a9d1e2f9ce43e81c3f25df6f7ae87",
-    "Flock.RecAlgebra.Coins.drawnAll": "38effabfe9b14acd9b907507e347bc4b0227925747bae16f3d0f7eb748c7b284",
-    "Flock.RecAlgebra.Coins.ofRounds": "92ece9839cbf0d28a9619ade682d49479521330dffa50ffd638ee576794dedf6",
-    "Flock.RecAlgebra.Coins.round": "afd13c997338d1ee50f9120077fe31690e83b3139d847f4c98cbbf9408e18eb4",
-    "Flock.RecAlgebra.Coins.zeros": "526834a44554b50ac998830d282aa71e21ace8d35fd7095f1977ec44034fa6cf",
     "Flock.RecAlgebra.FoldPts": "308e09bad27bc350a28f71debe87cc325345bbfeb47a8ce42b26bed6a571f5bf",
     "Flock.RecAlgebra.FoldPts.alpha": "2a3ea0eb39aac8e520c511c3ac44c34fc1ba66ad5d7cadd9f2196cab2e43be45",
     "Flock.RecAlgebra.FoldPts.beta": "03e39742c7e8f2dd841cacf043ce77d411751ac1f629edb9364195a322529555",
