@@ -4,7 +4,10 @@ an identifier at the one staged rows file and inner shape, every part naming one
 verifier's form and its own coin key. Each shared input changed in one part, a part checked against other rows or
 another inner shape, a shared set missing an input or holding check 5's coins, a reused or missing coin key, an
 identifier, a session without `--zk`, a refused session, a missing or repeated part, a log with no `VERDICT` or two, and a
-`VERDICT` that is not JSON are refused.
+`VERDICT` that is not JSON are refused. Against the challenger's interactive-run record, a part retried (two sessions
+opened for it), a part with no session opened, an opened session that is not the composed one, a session opened for a
+part V* lacks, a staging after the first Hello or a second one, other rows or another shared set staged, a record not
+closed or going on past its close, and a record that is not one or holds an event out of its form are refused.
 -/
 import Flock.RecCompose
 
@@ -36,10 +39,27 @@ def log (j : Nat) (v : String := verdict j) : String := s!"setup: 3 ms\n{v}\n"
 
 def honest : List (String × String) := [("L0", log 0), ("L1", log 1), ("alg-p0", log 2), ("cap", log 3)]
 
-def passes (n : Nat) (parts : List (String × String)) (at_ : String := inner) : Bool := (check n rows at_ parts).toBool
+/-- The challenger's interactive-run record's events as `challenger.RunRecord` writes them. -/
+def stageJ (r : String := rows) (s : Shared := sh) : Json :=
+  Json.mkObj [("event", .str "stage"), ("rec_rows_sha512", .str r), ("rec_shared", s.toJson)]
 
-def why (n : Nat) (parts : List (String × String)) : String :=
-  match check n rows inner parts with
+def openJ (j : Nat) (key : String := s!"k{j}") : Json :=
+  Json.mkObj [("event", .str "open"), ("session", .str s!"s{j}-{key}"), ("rec_part", .num j), ("coin_key", .str key)]
+
+def closeJ : Json := Json.mkObj [("event", .str "close")]
+
+def runText (evs : List Json) : String := (Json.mkObj [("kind", .str RUN_KIND), ("events", .arr evs.toArray)]).compress
+
+/-- The honest run of `n` parts: the staging, one session opened per part, the close. -/
+def opens (n : Nat) : List Json := (List.range n).map (openJ ·)
+
+def run (n : Nat) (s : Shared := sh) : String := runText (stageJ (s := s) :: opens n ++ [closeJ])
+
+def passes (n : Nat) (parts : List (String × String)) (at_ : String := inner) (r : String := run n) : Bool :=
+  (check n rows at_ r parts).toBool
+
+def why (n : Nat) (parts : List (String × String)) (r : String := run n) : String :=
+  match check n rows inner r parts with
   | .error e => e
   | .ok () => "accepted"
 
@@ -67,7 +87,7 @@ def tampered : List Shared :=
   !passes 2 [("L0", log 0 (verdict 0 s)), ("L1", log 1 (verdict 1 s))]
 -- what the compiled verifier leaves optional may be absent, alike in every part
 #guard passes 2 [("L0", log 0 (verdict 0 { sh with registration := none })),
-  ("L1", log 1 (verdict 1 { sh with registration := none }))]
+  ("L1", log 1 (verdict 1 { sh with registration := none }))] (r := run 2 { sh with registration := none })
 -- the composition's own inner shape
 #guard !passes 4 honest (hex 'f')
 -- a part checked against other rows
@@ -96,5 +116,40 @@ def tampered : List Shared :=
 #guard !passes 1 [("L0", log 0 ++ verdict 0 (key := "k9"))]
 #guard !passes 1 [("L0", "VERDICT {\"accepted\":true\n")]
 #guard !passes 0 []
+
+/-! ### One run: the challenger's interactive-run record -/
+
+-- part 1 retried: two sessions opened for it, whichever of them is composed
+#guard !passes 4 honest (r := runText (stageJ :: opens 2 ++ [openJ 1 "k1'"] ++ [openJ 2, openJ 3, closeJ]))
+#guard why 4 honest (runText (stageJ :: opens 2 ++ [openJ 1 "k1'"] ++ [openJ 2, openJ 3, closeJ])) ==
+  "part 1: 2 sessions opened in the run record, not one: a part is never retried"
+#guard !passes 4 honest (r := runText (stageJ :: [openJ 0, openJ 1 "k1'", openJ 1, openJ 2, openJ 3, closeJ]))
+-- a part's session not in the record, and a part with no session opened
+#guard why 4 honest (runText (stageJ :: opens 3 ++ [closeJ])) ==
+  "part 3: 0 sessions opened in the run record, not one: a part is never retried"
+-- the one session opened for part 1 is not the one composed
+#guard why 4 honest (runText (stageJ :: [openJ 0, openJ 1 "k9", openJ 2, openJ 3, closeJ])) ==
+  "run record: session s1-k9 was opened for part 1, and it is not the session composed for that part"
+-- a session opened for a part V* doesn't have
+#guard why 4 honest (runText (stageJ :: opens 4 ++ [openJ 4, closeJ])) ==
+  "run record: session s4-k4 was opened for part 4: V* has 4 statements"
+-- the staging after the first Hello, a second staging, another rows file or shared set staged
+#guard why 4 honest (runText (openJ 0 :: stageJ :: (opens 4).drop 1 ++ [closeJ])) ==
+  "run record: its first event is not the staging: V*'s statements are staged before the first part's Hello"
+#guard why 4 honest (runText (stageJ :: openJ 0 :: stageJ :: (opens 4).drop 1 ++ [closeJ])) ==
+  "run record: a second staging: V*'s statements are staged once, before the first part's Hello"
+#guard why 4 honest (runText (stageJ (hex 'b') :: opens 4 ++ [closeJ])) ==
+  s!"run record: it staged the rows file {hex 'b'}, not the composition's {rows}"
+#guard why 4 honest (run 4 { sh with transcript := some (hex 'f') }) ==
+  "L0: its rec_shared is not the one the run record staged before the first Hello"
+-- a record not closed, or going on past its close
+#guard !passes 4 honest (r := runText (stageJ :: opens 4))
+#guard why 4 honest (runText (stageJ :: opens 4 ++ [closeJ, openJ 1 "k1'"])) == "run record: an event after its close"
+-- no record, not one, an event out of its form
+#guard why 4 honest "" == "run record: not JSON"
+#guard why 4 honest "{\"kind\":\"verity/rec-run/v0\",\"events\":[]}" == "run record: not a verity/rec-run/v1 record"
+#guard why 4 honest "{\"kind\":\"verity/rec-run/v1\"}" == "run record: no list of events"
+#guard why 4 honest (runText (stageJ :: openJ 0 :: Json.mkObj [("event", .str "open"), ("session", .str "s1")] ::
+    (opens 4).drop 2 ++ [closeJ])) == "run record: its event 2 is not a stage, an open or a close in its form"
 
 end Flock.Test.RecCompose
