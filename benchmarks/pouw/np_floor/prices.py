@@ -1,10 +1,10 @@
-"""Prices from a probes.sh run of copy.cu, branch.cu, brx.cu, br2.cu and lut.cu, in W1's units: an SM-clock is 4096
-units (the floor, 32 a register, is 128 registers an SM-clock).
+"""Prices from a probes.sh run of copy.cu, branch.cu, brx.cu, br2.cu, lut.cu and lag.cu, in W1's units: an SM-clock is
+4096 units (the floor, 32 a register, is 128 registers an SM-clock).
 
 copy       a role's words an SM-clock (probe.py's rate x words a warp instruction), 4096 / that a word, and its share of
-           the floor's 128 words an SM-clock; beside honest (hs_*), the same for the role's words while the honest warps
-           ran, the honest MMA's rate as a share of its rate beside idle warps (honest_b, honest_l, honest_w), and the SM time
-           honest lost a word placed: (1 - kept) x 4096 / words an SM-clock.
+           the floor's 128 words an SM-clock; beside honest (hs_*, hw_*), the same for the role's words while the honest
+           warps ran, the honest MMA's rate as a share of its rate beside idle warps (honest_b, honest_l, honest_w,
+           honest_wl), and the SM time honest lost a word placed: (1 - kept) x 4096 / words an SM-clock.
 decisions  4096 x the median block's cycles / (iters x warps x decisions a trip) units a warp decision, its coin bits
            (bits a decision: one for the two-way forms, 4 for BRX16, a digit for a lookup), units a bit read by the
            warp and a lane-bit for the forms whose lanes read their own coins; the overhead is over the arms alone
@@ -42,7 +42,8 @@ ENTRY = ("cmp", "cpy", "l1", "l1w", "lag1", "lag2", "lag4", "lag8")
 HONEST = {"hs_g2s1k": "honest_b", "hs_g2s4k": "honest_b", "hs_g2s4kh": "honest_b", "hs_s2g4k": "honest_b",
           "hs_g2s16k": "honest_b", "hs_g2s4kz": "honest_b", "hs_g2s16kz": "honest_b", "hs_s2g4kz": "honest_b",
           "hw_g2s4k": "honest_w", "hw_g2s16k": "honest_w", "hw_g2s4kz": "honest_w", "hw_g2s4khz": "honest_w",
-          "hw_s2g4kz": "honest_w",
+          "hw_s2g4kz": "honest_w", "hw_ldgsts4": "honest_wl", "hw_ldgsts16": "honest_wl", "hw_ldssts4": "honest_wl",
+          "hw_ldssts16": "honest_wl",
           "hs_ldgsts4": "honest_l", "hs_ldgsts16": "honest_l", "hs_ldssts4": "honest_l", "hs_ldssts16": "honest_l"}
 
 

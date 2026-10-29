@@ -6,6 +6,8 @@
 // (nanosleep) after each pass of its poll, so the poll's own issue slots leave honest's and only the copies' cost stays.
 // `hw_*` puts the bulk role beside the lead's tensor kernel instead: race.cu's wa_s8_n256 (2 warpgroups, 4 wgmma
 // m64n256k32 s8 a commit group, operands in shared memory), which attains the floor; `honest_w` is it beside an idle warp.
+// `hw_ld*` puts the lane role there in WL warps (the wgmma's 152 registers a thread leave room for 13 warps); `honest_wl`
+// is it beside WL idle warps.
 //   bulk (one lane of one warp; the source pool 8 MB, L2-resident, or 256 MB for _hbm):
 //     g2s<B>    cp.async.bulk global -> shared (TMA, UBLKCP), B-byte tiles, one mbarrier a trip
 //     s2g<B>    cp.async.bulk shared -> global, bulk_group, at most 5 trips in flight
@@ -295,9 +297,38 @@ __device__ __forceinline__ void beside_wg(const OpArgs& a) {
   OP_SINK(fold_acc(d) ^ threadIdx.x ^ b.done)
 }
 
+// the wgmma warpgroups, and the lane role in warps WG..WG+WL-1 (SIDE false: idle)
+constexpr int WL = 4;
+template <int K, bool SIDE>
+__device__ __forceinline__ void beside_wgl(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  extern __shared__ __align__(128) unsigned char sb[];
+  const Tiles t = fill_tiles<F_s8_n256::TYPE>(sm, a.mode);
+  const int w = threadIdx.x >> 5;
+  F_s8_n256::Acc d[F_s8_n256::NA] = {};
+  Lane<K> l(a, w - WG, sb);
+  OP_BEGIN_STOP
+  if (w < WG) {
+    OP_LOOP(it) {
+      group4<F_s8_n256>(d, t);
+      wgmma_wait<1>();
+    }
+    wgmma_wait<0>();
+    wgmma_hold(d);
+    OP_DONE
+  } else if (SIDE) {
+    OP_UNTIL(n) { l.trip((uint32_t)n); }
+    OP_TRIPS(n)
+    l.finish();
+  }
+  OP_END_STOP
+  OP_SINK(fold_acc(d) ^ threadIdx.x ^ l.acc)
+}
+
 #define TB_BULK ((HW + 1) * 32)
 #define TB_WG ((WG + 1) * 32)
 #define TB_LANE ((HW + SW) * 32)
+#define TB_WGL ((WG + WL) * 32)
 #define SA_BULK(nm, K, B, CL) \
   extern "C" __global__ void CL __launch_bounds__(32, 1) sa_##nm(OpArgs a) { bulk_alone<K, B>(a); }
 #define HS_BULK(nm, K, B) \
@@ -306,6 +337,8 @@ __device__ __forceinline__ void beside_wg(const OpArgs& a) {
   extern "C" __global__ void __launch_bounds__(TB_BULK, 1) hs_##nm(OpArgs a) { beside<K, B, true, NS>(a); }
 #define HW_BULK(nm, K, B, NS) \
   extern "C" __global__ void __launch_bounds__(TB_WG, 1) hw_##nm(OpArgs a) { beside_wg<K, B, true, NS>(a); }
+#define HW_LANE(nm, K) \
+  extern "C" __global__ void __launch_bounds__(TB_WGL, 1) hw_##nm(OpArgs a) { beside_wgl<K, true>(a); }
 #define SA_LANE(nm, K) \
   extern "C" __global__ void __launch_bounds__(SW * 32, 1) sa_##nm(OpArgs a) { lane_alone<K>(a); }
 #define HS_LANE(nm, K) \
@@ -342,9 +375,14 @@ HS_LANE(ldgsts4, LDGSTS4)
 HS_LANE(ldgsts16, LDGSTS16)
 HS_LANE(ldssts4, LDSSTS4)
 HS_LANE(ldssts16, LDSSTS16)
+HW_LANE(ldgsts4, LDGSTS4)
+HW_LANE(ldgsts16, LDGSTS16)
+HW_LANE(ldssts4, LDSSTS4)
+HW_LANE(ldssts16, LDSSTS16)
 extern "C" __global__ void __launch_bounds__(TB_BULK, 1) honest_b(OpArgs a) { beside<G2S, 4096, false>(a); }
 extern "C" __global__ void __launch_bounds__(TB_LANE, 1) honest_l(OpArgs a) { beside<LDGSTS16, 0, false>(a); }
 extern "C" __global__ void __launch_bounds__(TB_WG, 1) honest_w(OpArgs a) { beside_wg<G2S, 4096, false>(a); }
+extern "C" __global__ void __launch_bounds__(TB_WGL, 1) honest_wl(OpArgs a) { beside_wgl<LDGSTS16, false>(a); }
 
 #define IMMA "IMMA.16832.S8.S8=8"
 #define IGMMA "IGMMA.64x256x32.S8.S8*=4"
@@ -366,6 +404,9 @@ constexpr int BULK_SMEM = STAGE + NB * 8, LANE_SMEM = LSRC + SW * R * 512;
 #define P_HS_LANE(nm, OP, CNT, W)                                                                                  \
   {.name = "hs_" #nm, .kernel = (const void*)hs_##nm, .tpb = TB_LANE, .expect = IMMA ";" OP, .counted = CNT,     \
    .warps = "16;8", .words = W, .dyn_smem = LANE_SMEM, .iters = 2048, .until = 2}
+#define P_HW_LANE(nm, OP, CNT, W)                                                                                  \
+  {.name = "hw_" #nm, .kernel = (const void*)hw_##nm, .tpb = TB_WGL, .expect = IGMMA ";" OP, .counted = CNT,    \
+   .warps = "8;4", .words = W, .dyn_smem = LANE_SMEM, .iters = 2048, .until = 2}
 
 static const OpProbe PROBES[] = {
     {.name = "honest_b", .kernel = (const void*)honest_b, .tpb = TB_BULK, .expect = IMMA, .warps = "16",
@@ -405,5 +446,11 @@ static const OpProbe PROBES[] = {
     P_HS_LANE(ldgsts16, "LDGSTS*=8", "LDGSTS*", 128),
     P_HS_LANE(ldssts4, "LDS*=9,STS*=8", "STS*", 32),
     P_HS_LANE(ldssts16, "LDS*=9,STS*=8", "STS*", 128),
+    {.name = "honest_wl", .kernel = (const void*)honest_wl, .tpb = TB_WGL, .expect = IGMMA, .warps = "8",
+     .dyn_smem = LANE_SMEM, .iters = 2048, .note = "the lead's wgmma beside 4 idle lane warps"},
+    P_HW_LANE(ldgsts4, "LDGSTS*=8", "LDGSTS*", 32),
+    P_HW_LANE(ldgsts16, "LDGSTS*=8", "LDGSTS*", 128),
+    P_HW_LANE(ldssts4, "LDS*=9,STS*=8", "STS*", 32),
+    P_HW_LANE(ldssts16, "LDS*=9,STS*=8", "STS*", 128),
 };
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
