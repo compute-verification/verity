@@ -42,7 +42,7 @@ _DOT_STATIC_FN = re.compile(r'^\{"fn":"([A-Za-z0-9_]+)"\}$')
 
 def prim_static(statics: dict[str, Any], key: str, family: str) -> str:
     """A function-valued static (`DOT` of `Gemm_v2{K,N,DOT}` / `Attention_v2{..., DOT, INV}`, `INV` of the latter)
-    -> the registered primitive id.  The spec text renders it as `DOT={"fn":"HopperBF16WgmmaDot16_v1"}` (verity.ml.circuits.codec._spec_id); a bare
+    -> the registered primitive id.  The spec text renders it as `DOT={"fn":"HopperBF16WgmmaDot16_v1"}` (verity.ml.circuits.codec.descriptor_id); a bare
     `<Name>_v<k>` id is accepted too.  Anything else is unresolved BY NAME: the evaluator never guesses the architecture from the target."""
     v = statics.get(key, "")
     raw = str(getattr(v, "id", v) or "")
