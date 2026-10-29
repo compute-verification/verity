@@ -193,47 +193,66 @@ def wide_tags(m: int) -> np.ndarray:
     return np.stack(out, axis=-1)
 
 
-def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pattern: str,
-                  tag: str = "narrow") -> dict:
-    """`tag` is the lead's (`narrow`: base-13 T against G ∈ [−3, 3]) or the fix (`wide`: base-255 T against
-    G ∈ [−127, 127], the served offset removed in the epilogue)."""
+def lead_draws(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, tag: str) -> dict:
+    """The lead's random parts, in `lead_instance`'s order: G (per column), a₁ and b (per row), the coin lanes (per
+    tile, step and column)."""
     tile, e, lanes = LAYOUTS[cfg]
-    s = ns.steps1l(k)
-    ntiles = -(-m // tile)
-    tile_of = np.arange(m) // tile
+    s, ntiles = ns.steps1l(k), -(-m // tile)
     if tag == "wide":
         tags, g = wide_tags(m), rng.integers(-127, 128, (na.TAG_LANES, n))
     else:
         tags, g = na.row_tags(m), rng.integers(-na.G_MAX, na.G_MAX + 1, (na.TAG_LANES, n))
-    code = na.code(n)
     a1 = rng.integers(0, 2, (m, na.TAG_LANES))
-    beta = na.bias(code, s, True)
     b = rng.integers(0, 2, (m, s - 1))
-    odd = np.arange(-(2 ** e - 1), 2 ** e, 2)
-    coin = rng.choice(odd, (lanes, ntiles, s - 1, n))
+    coin = rng.choice(np.arange(-(2 ** e - 1), 2 ** e, 2), (lanes, ntiles, s - 1, n))
+    return {"tags": tags, "g": g, "a1": a1, "b": b, "coin": coin}
+
+
+def lead_words(cfg: str, k: int, pattern: str, dr: dict, code: np.ndarray, honest_check: bool = True) -> dict:
+    """The lead's words w (m, s, n) from its draws `dr` and the columns' code, built from positions
+    (D0 + R_t(i) + C_t(tile, j)), and with `honest_check` compared to the explicit lane product."""
+    tile, e, lanes = LAYOUTS[cfg]
+    tags, g, a1, b, coin = dr["tags"], dr["g"], dr["a1"], dr["b"], dr["coin"]
+    m, n = tags.shape[0], g.shape[1]
+    s, ntiles = ns.steps1l(k), -(-m // tile)
+    tile_of = np.arange(m) // tile
+    beta = na.bias(code, s, True)
     c = np.where((np.arange(s - 1) % 2 == 1) & (pattern == "a2r"), 2, 1)
     wsel = np.array(LANE_WEIGHTS.get(cfg, (1,) * lanes), dtype=np.int64).reshape(-1, lanes)
     par = np.arange(m) % len(wsel)
-
-    x1 = np.concatenate([np.zeros((m, STEP1_DATA), dtype=np.int64), tags, a1], axis=1)
-    y1 = np.concatenate([np.zeros((STEP1_DATA, n), dtype=np.int64), g, code], axis=0)
-    honest = np.empty((m, s, n), dtype=np.int64)
-    honest[:, 0] = x1 @ y1 - beta[None]
-    for tau in range(ntiles):
-        rows = tile_of == tau
-        xa = np.concatenate([np.ones((rows.sum(), s - 1, 1)), (1 + b[rows])[:, :, None],
-                             np.broadcast_to(wsel[par[rows]][:, None, :], (rows.sum(), s - 1, lanes))],
-                            axis=2).astype(np.int64)
-        yb = np.concatenate([np.broadcast_to(-c[:, None, None], (s - 1, 1, n)), np.ones((s - 1, 1, n)),
-                             coin[:, tau].transpose(1, 0, 2)], axis=1).astype(np.int64)
-        honest[rows, 1:] = honest[rows, :1] + np.cumsum(np.einsum("itl,tln->itn", xa, yb), axis=1)
-    assert np.abs(x1).max() <= 127 and np.abs(y1).max() <= 127 and np.abs(odd).max() <= 127 or e > 7
 
     d0 = tags @ g + a1 @ code - beta[None]
     rpos = np.concatenate([np.zeros((m, 1), dtype=np.int64), np.cumsum(1 + b - c[None], axis=1)], axis=1)
     cpos = np.stack([np.concatenate([np.zeros((ntiles, 1, n), dtype=np.int64),
                                      np.cumsum(np.einsum("l,ltsn->tsn", wv, coin), axis=1)], axis=1) for wv in wsel])
     w = d0[:, None, :] + rpos[:, :, None] + cpos[par, tile_of]
+    eq = None
+    if honest_check:
+        x1 = np.concatenate([np.zeros((m, STEP1_DATA), dtype=np.int64), tags, a1], axis=1)
+        y1 = np.concatenate([np.zeros((STEP1_DATA, n), dtype=np.int64), g, code], axis=0)
+        honest = np.empty((m, s, n), dtype=np.int64)
+        honest[:, 0] = x1 @ y1 - beta[None]
+        for tau in range(ntiles):
+            rows = tile_of == tau
+            xa = np.concatenate([np.ones((rows.sum(), s - 1, 1)), (1 + b[rows])[:, :, None],
+                                 np.broadcast_to(wsel[par[rows]][:, None, :], (rows.sum(), s - 1, lanes))],
+                                axis=2).astype(np.int64)
+            yb = np.concatenate([np.broadcast_to(-c[:, None, None], (s - 1, 1, n)), np.ones((s - 1, 1, n)),
+                                 coin[:, tau].transpose(1, 0, 2)], axis=1).astype(np.int64)
+            honest[rows, 1:] = honest[rows, :1] + np.cumsum(np.einsum("itl,tln->itn", xa, yb), axis=1)
+        assert np.abs(x1).max() <= 127 and np.abs(y1).max() <= 127 and np.abs(coin).max() <= 127 or e > 7
+        eq = bool(np.array_equal(w, honest))
+    return {"w": w, "equal_to_honest": eq, "d0": d0, "rpos": rpos, "par": par, "wsel": wsel, "s": s,
+            "tile": tile, "ntiles": ntiles}
+
+
+def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pattern: str,
+                  tag: str = "narrow") -> dict:
+    """`tag` is the lead's (`narrow`: base-13 T against G ∈ [−3, 3]) or the fix (`wide`: base-255 T against
+    G ∈ [−127, 127], the served offset removed in the epilogue)."""
+    lw = lead_words(cfg, k, pattern, lead_draws(cfg, k, m, n, rng, tag), na.code(n))
+    w, d0, rpos, par, wsel = lw["w"], lw["d0"], lw["rpos"], lw["par"], lw["wsel"]
+    s, tile, ntiles = lw["s"], lw["tile"], lw["ntiles"]
     per = m * n
 
     t4 = w.reshape(ntiles, tile, s, n)
@@ -268,7 +287,7 @@ def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pa
     with_source = int(((tile - _distinct((rpos * classes + par[:, None]).reshape(ntiles, tile, s), 1))).sum())
     assert masked <= xrow + 1e-12
 
-    return {"equal_to_honest": bool(np.array_equal(w, honest)), "steps": s, "tile": tile,
+    return {"equal_to_honest": lw["equal_to_honest"], "steps": s, "tile": tile,
             "d0_range": [int(d0.min()), int(d0.max())], "masked_sources_a_row": with_source / m,
             "tile_grain": lead_tile_grain(w),
             "saved": {"entry": entry, "xrow": xrow, "tilecol": tilecol, "column": column, "lag1": lag1,
