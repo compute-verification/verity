@@ -46,6 +46,7 @@ from typing import Any
 
 import numpy as np
 
+from verity.core.protocols import registration
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import types as T
 from verity.ml.circuits.census import PRECISION, PRODUCTS, census, family
@@ -339,9 +340,11 @@ def _rows(words: list[int], bits: int) -> list[bytes]:
 
 
 @dataclass(frozen=True)
-class Registration:
-    """A Program's registered inputs and the occupancy profiles its developer may choose from, committed before any run:
-    `root` is public, and so is the number of profiles; the values, salts and profiles are the developer's."""
+class RegisteredInputs:
+    """The developer's side of a Program's registered inputs, which the registration log registers as one θ item
+    (`theta`): the values, their hiding commitment, and the occupancy profiles its developer may choose from, committed
+    before any run. `root` is public, and so is the number of profiles; the values, salts and profiles are the
+    developer's."""
 
     values: dict[str, int | tuple[int, ...]]
     rows: advice.Committed
@@ -357,9 +360,21 @@ class Registration:
     def salts(self) -> tuple[bytes, ...]:
         return self.rows.salts
 
+    def theta(self) -> dict[str, Any]:
+        """The θ item the registration log registers for these values (`registration.item_of`): the root, a row per
+        element, and the domain its leaves are hashed under, named by the registered parameters. θ's words are 16 or 32
+        bits, so the rows are its rows only when they are 16 bits or a multiple of 32; others are refused."""
+        n = self.rows.n_bits
+        if n != 16 and n % 32:
+            raise ValueError(f"{n}-bit rows are not θ's: its words are 16 or 32 bits")
+        item = {"domain": advice.domain(self.rows.binding, len(self.rows.rows)).domain_id.hex(), "kind": "theta",
+                "leaves": len(self.rows.rows), "root": self.root.hex(), "value": ",".join(self.values),
+                "words": 1 if n == 16 else n // 32}
+        return registration.item_of(item | ({} if n == 16 else {"word_bits": 32}))
+
 
 def register(program: Program, inputs: dict[str, int | Sequence[int]], salts: Sequence[bytes] | None = None,
-             profiles: Sequence[Mapping[Any, Mapping[int, int]] | bytes] = ()) -> Registration:
+             profiles: Sequence[Mapping[Any, Mapping[int, int]] | bytes] = ()) -> RegisteredInputs:
     """Commit the values of `program`'s registered parameters, a row per element, under a binding to the Program's
     digest and to the occupancy `profiles` the developer may choose from (each with its buckets counted from its
     epoch's first, or its `profile_digest`)."""
@@ -370,8 +385,9 @@ def register(program: Program, inputs: dict[str, int | Sequence[int]], salts: Se
     words = [w for n in regd for w in ([regd[n]] if isinstance(regd[n], int) else regd[n])]
     width = max(sum(e) for _, t in params for e in layout(t))
     digests = tuple(o if isinstance(o, bytes) else profile_digest(o) for o in profiles)
-    return Registration(regd, advice.commit(_rows(words, width), width,
-                                              _binding(b"datacenter/registration/v1", program, digests), salts), digests)
+    return RegisteredInputs(regd, advice.commit(_rows(words, width), width,
+                                                _binding(b"datacenter/registration/v1", program, digests), salts),
+                            digests)
 
 
 _committed: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
@@ -398,6 +414,6 @@ def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] 
                            width, _binding(b"datacenter/values/v1", program), salts)
 
 
-__all__ = ["REGISTRATION", "RUN", "Registration", "Value", "ands", "bind_inputs", "binding", "calls", "census_of",
+__all__ = ["REGISTRATION", "RUN", "RegisteredInputs", "Value", "ands", "bind_inputs", "binding", "calls", "census_of",
            "commit", "committed", "evaluate", "gates", "layout", "names", "nodes", "parameters", "reach",
            "read", "register", "rows", "values", "work"]

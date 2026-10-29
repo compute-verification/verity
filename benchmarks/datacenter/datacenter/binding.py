@@ -29,7 +29,7 @@ from verity.ml.circuits.census import NoBooleanWork
 from verity.ml.circuits.program import Program
 
 from . import logical as L
-from .logical import Registration, Value
+from .logical import RegisteredInputs, Value
 from .memory import StoreEntry
 from .physical import Datacenter, LinkEntry, Port
 from .plan import Plan
@@ -71,7 +71,7 @@ class Placed:
     #: registered state, each on the device the registration says holds it
     stores: tuple[StoreEntry, ...] = ()
     #: the registration of the Program's registered inputs
-    registration: Registration | None = None
+    registration: RegisteredInputs | None = None
     #: registered values (by census value id) kept in one copy, on this device, rather than in every reading block
     held: dict[int, str] = field(default_factory=dict)
 
@@ -279,7 +279,7 @@ class Profile:
 
 
 def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None = None,
-          stores: tuple[StoreEntry, ...] = (), registration: Registration | None = None, start: int = 0,
+          stores: tuple[StoreEntry, ...] = (), registration: RegisteredInputs | None = None, start: int = 0,
           ticks_per_step: int = 1, transfer_steps: int = 2, **where: str) -> Placed:
     """Place `program` on `dc`: each keyword names a root node (a parameter or a named Call) and the device it runs or
     enters on; any other Call or run input goes where its first reader runs, if that is in a block, else on `default`.
