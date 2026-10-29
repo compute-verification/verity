@@ -1,7 +1,5 @@
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Rat.Cast.Order
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.Group.Unbundled.Abs
 
 /-!
 # The lead's layout, coins and committed words (trusted definitions)
