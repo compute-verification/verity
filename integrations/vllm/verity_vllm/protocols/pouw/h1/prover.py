@@ -189,22 +189,26 @@ class Writer:
                 st["waits"] += 1
                 self._cv.notify_all()
                 self._cv.wait()
-            at, spans, device = lo, [], None
+            at, spans, stream = lo, [], None
             for b, dtype, shape in parts:
                 size = int(b.shape[0])
                 if isinstance(b, np.ndarray):
                     self._ring[at:at + size] = b
                 else:
+                    import torch
+
+                    stream = torch.cuda.current_stream(b.device)
                     self._pinned[at:at + size].copy_(b, non_blocking=True)
-                    device = b.device
+                    # the copy is still queued when this returns: the allocator gives its source to no other stream till then
+                    b.record_stream(stream)
                 spans.append((at, size, dtype, shape))
                 at += _up(size)
             copied = None
-            if device is not None:
+            if stream is not None:
                 import torch
 
                 copied = torch.cuda.Event(blocking=True)
-                copied.record(torch.cuda.current_stream(device))
+                copied.record(stream)
             self._jobs.append(_Job(key, int(index), lo, tuple(spans), copied))
             self._head = lo + n
             st["calls"] += 1

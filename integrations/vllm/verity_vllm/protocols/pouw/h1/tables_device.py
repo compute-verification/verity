@@ -332,7 +332,7 @@ def _keep(run: Any, call: Any, a: Any, s_a: Any, records: Any) -> None:
     writer = PV.writer_of(run.prover)
     if writer is not None and _dtype(a) == "int8" and _dtype(s_a) == "float32" and \
             (records is None or _dtype(records) == "uint8"):
-        writer.keep(run.prover, call.index, a, s_a, records)
+        writer.keep(run.prover, call.index, a.reshape(call.m, -1), s_a, records)
         return
     PV.keep_call(run.prover, call.index, row_words(a, call.m, "i1"), row_words(s_a, call.m, "<f4"), ZR.host(records))
 
