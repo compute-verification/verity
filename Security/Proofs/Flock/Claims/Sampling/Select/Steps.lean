@@ -206,8 +206,9 @@ theorem derive_ok (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (law' : F
 its template is of a base id in `whole`, else `wholeK` of them. -/
 theorem deriveWhole_ok (k : ℕ) (whole : Array String) (S : Array (String × Array (ℕ × ℕ))) (law' : Flock.Draw.Law)
     (h : Flock.Draw.deriveWhole k whole S = .ok law') :
-    1 ≤ k ∧ k ≤ strataSize S ∧ law' = .stratified k (S.map fun p => { template := p.1, units := p.2,
-      k := if whole.any (Flock.Draw.ofBase p.1) then rsSize p.2 else Flock.Draw.wholeK k (rsSize p.2) (strataSize S) }) := by
+    1 ≤ k ∧ k ≤ strataSize S ∧ law' = .stratified k (S.map fun p =>
+      { template := p.1, units := p.2,
+        k := if whole.any (Flock.Draw.ofBase p.1) then rsSize p.2 else Flock.Draw.wholeK k (rsSize p.2) (strataSize S) }) := by
   unfold Flock.Draw.deriveWhole at h
   dsimp only at h
   split at h
