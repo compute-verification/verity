@@ -76,7 +76,7 @@ ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"
 ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
 FORMATS = ("verity/registration/v1", "verity/registration/v2")
-#: a proof block's public outputs are at most 16 bits (the values it commits can be wider)
+#: a proof unit's public outputs are at most 16 bits (the values it commits can be wider)
 OUT_BITS = 16
 UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS

@@ -115,6 +115,9 @@ ALLOWED: dict[str, str] = {
                                                    "faulty names",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
+    "a proof unit's public outputs are at most 16 bits": "`verity/core/protocols/network/tests/period_case.py`'s comment on "
+                                                         "OUT_BITS: a queued PR on next rewrites the lines above it; renamed "
+                                                         "after it lands",
 }
 
 PENDING: dict[str, str] = {
