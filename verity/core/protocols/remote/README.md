@@ -20,7 +20,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 **Which "remote".** Six things in the tree are called "remote", and this page means the first:
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v0`);
-- PoUB, proof of useful bandwidth, an onsite subprotocol whose code still says "remote bandwidth": its package
+- PoUB, an onsite subprotocol whose code names still say "remote" until they are renamed: its package
   `verity/core/protocols/remote_bandwidth/`, its Lean verifier `RemoteAudit`, its Lean vocabulary `Accounting.Remote`
   (`Security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
   its whole-node benchmark `benchmarks/remote_session/`, and serve-openai's `--remote-verifier`, the address of PoUB's
@@ -208,7 +208,8 @@ over the monitoring period (`IntegrityHorizon`, `CircuitCreditPeriod`), not per 
 
 **No example runs the remote verifier yet:** `remote check` has no run of record; its first is due Wed 28 Oct, 11 AM
 PDT (D3). Lifecycle is the only example that steps through the whole remote composite, with a stand-in prover; h200
-and vllm each run remote's sampled-proofs half for real:
+runs remote's sampled-proofs half for real, and the vLLM demo runs both halves on one served run, PoUW's as a
+development run:
 
 - `verity example lifecycle` (`examples/lifecycle/README.md`): the remote composite stepped through one monitoring period
   on CPU in about 2 s: hardware registration, registration, declarations, live samples, each declaration's verdict and the
@@ -221,13 +222,14 @@ and vllm each run remote's sampled-proofs half for real:
   refused. At an 8-block sample, that allows at most 43.77% faulty proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
-- `verity example vllm` (`examples/vllm/README.md`): Llama-3.2-1B in bf16 served by vLLM on one RTX PRO 6000 (its run
-  of record), its values committed while serving, and a sampling period's proof blocks drawn by live coins, proved by
-  C-Flock `--zk` and checked by the Lean verifier. It runs, at proof level none: no remote guarantee exists for those
-  verdicts to reach (the open gap, above). The int8 served run on an H200 (`benchmarks/one_stage/served_verdicts.sh`'s
-  default) is tonight's, Tue 27 Oct, 6 PM PDT.
+- `verity example vllm` (`examples/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
+  values committed while serving, a sampling block's proof blocks sampled by live coins, proved by C-Flock `--zk` and
+  checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the
+  challenger's development key and credits nothing, and an H1 commitment's served execution blocks aren't yet a
+  `verity/pouw/v1` case, so no run of record of the remote verdict has passed: its run is moved, at proof level none,
+  and no remote guarantee exists for its verdicts to reach (the open gap, above).
 
-PoUW's half has no runner. `examples/dither_full_util/README.md` has no runner and no run of record. What of PoUW runs
+`examples/dither_full_util/README.md` has no runner and no run of record. What of PoUW's own check runs
 is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the suite
 `verity-pouw-check-difftest`; `verity/core/protocols/pouw/lean/check/README.md`), and the composite's difftest
 (`verity/core/protocols/composition/tests`).

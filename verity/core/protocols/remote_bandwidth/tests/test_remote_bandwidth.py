@@ -1,4 +1,4 @@
-"""The remote bandwidth audit end to end on a small store: an honest session replayed from `timing.honest` is accepted
+"""PoUB end to end on a small store: an honest session replayed from `timing.honest` is accepted
 and recorded, and each way a session goes wrong is rejected with its failure."""
 
 from __future__ import annotations

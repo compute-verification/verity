@@ -5,7 +5,7 @@
 # WAIT left out), which `check` holds them to.
 name = "e-l7qs"
 kernel = "e_l7qs"
-source = "PROFILE: ncu on e_l7qs at 18 shapes in 4 runs (22 observations), `eps_profile.py OUT --mm` (note:20261017T0444Z-draft-eps1-predict, r20261017-040135-d375 r20261017-041011-0965 r20261017-044318-93a5 r20261017-051201-3774); k2 fitted on 4 of its shapes and k3 on 3 predict the other observations within the tolerances below"
+source = "PROFILE: ncu on e_l7qs at 18 shapes in 4 runs (22 observations), `eps_profile.py OUT --mm`; k2 fitted on 4 of its shapes and k3 on 3 predict the other observations within the tolerances below"
 ctas = 188
 tile = [128, 128, 128]
 k3_above = 4096         # a longer k runs e_l7qs_k3 (the 3-atom peel)

@@ -264,7 +264,7 @@ AO = {"m": "per call, in the forward", "mn": "per call, in the forward; noise on
 NA = DA.NA_MULTI
 
 
-class SoWindow(DO.Window):
+class SoWindow(DO.DitherState):
     """dither_one's window with the rounds in the statement's order (the module docstring): its round coins through a
     `coins.RoundPipe`, its slots grouped a K so the ring copies them in a launch a K, the units of step s dispatched at
     the end of step s + D - 2's `after`."""
@@ -1756,7 +1756,7 @@ class Ov:
 
     @contextlib.contextmanager
     def phase(self, name: str):
-        """`Window.phase`'s NVTX range on this thread (stepprof joins a launch to its own thread's phase)."""
+        """`DitherState.phase`'s NVTX range on this thread (stepprof joins a launch to its own thread's phase)."""
         if not self.win.nvtx:
             yield
             return
@@ -2155,7 +2155,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
         torch.cuda.set_stream(torch.cuda.Stream(priority=-1))
         if settings.get(CAPTURE_PRIO_ENV):
             capture_at(-1)
-    DO.Window = SoWindow
+    DO.DitherState = SoWindow
     DA.side = side
 
 
