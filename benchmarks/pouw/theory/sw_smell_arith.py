@@ -15,6 +15,9 @@ Every figure is W1 priced work against stock's mnK (CORE.md §2a), at H32's floo
   DeepSeek-V3's public config, taken for the sweep's "V4-like" shape (not in the tree); the expert widths are SW-GPU's
   v4gu (4,096 × 7,168) and v4dn (7,168 × 2,048). T 64 is the demo's T 512 step (64 real tokens). Below 64 rows a call
   wgmma misses H32's 32 a register (`Shape100`), so there the floor is loose as well.
+- per monitoring period, each share times all compute: the world's 9.36e30 FLOP a year
+  (`benchmarks/census/adversary.json` world-inference-2027) and a datacenter of 100,000 H200s
+  (`deployments.json` dc-12500-machines-600s) at 1,979 TFLOP/s and 0.4 utilization; as if the design covered it all.
 
   python3 benchmarks/pouw/theory/sw_smell_arith.py [--json OUT]
 """
@@ -82,6 +85,26 @@ def main() -> int:
                 print(f"V4-like experts, T {T}, {label}: final {t['final_word']:.3%}  forming {t['forming']:.3%}  "
                       f"noise derivation {t['noise_derivation']:.3%}  total after the final-word fix "
                       f"{t['forming'] + t['noise_derivation']:.3%}")
+    world_year = 9.36e30
+    dc_rate = 100_000 * 1.979e15 * 0.4
+    periods = {"window 600 s": 600, "week": 7 * 86400, "month (30 d)": 30 * 86400, "year": 365 * 86400}
+    shares = {
+        "T1's bar, 1% of stock": 0.01,
+        "noise derivation at T 8,192, fused": out["llama"]["fused_m8192"]["noise_derivation"],
+        "noise derivation at T 512's 64 rows, fused": out["llama"]["fused_m64"]["noise_derivation"],
+        "V4-like experts after the final-word fix, T 8,192, dense reading": (
+            out["v4_expert"]["T8192_dense"]["forming"] + out["v4_expert"]["T8192_dense"]["noise_derivation"]),
+        "V4-like experts after the final-word fix, T 8,192, routed rows": (
+            out["v4_expert"]["T8192_routed"]["forming"] + out["v4_expert"]["T8192_routed"]["noise_derivation"]),
+    }
+    out["per_period"] = {}
+    for what, s in shares.items():
+        row = {p: {"world": s * world_year * sec / (365 * 86400), "datacenter": s * dc_rate * sec}
+               for p, sec in periods.items()}
+        out["per_period"][what] = {"share": s, **row}
+        print(f"{what} ({s:.3%} of covered compute), FLOP: world " +
+              " / ".join(f"{row[p]['world']:.1e}" for p in periods) + "; datacenter " +
+              " / ".join(f"{row[p]['datacenter']:.1e}" for p in periods))
     checks = (
         ("final word over the block linears is CORE-TIME's 1.239%", abs(out["llama"]["apart_m8192"]["final_word"] - 0.01239) < 5e-5),
         ("forming apart at T 8,192 is CORE-TIME's 1.10%", abs(out["llama"]["apart_m8192"]["forming"] - 0.01101) < 5e-5),
