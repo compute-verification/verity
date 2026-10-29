@@ -1,9 +1,9 @@
 """One execution phase's network certificates through the proof system (N2): the network `Spec`, the firewall's salted
 commitment to the execution phase's certified records, and the check's verifier of record.
 
-**What is committed.** One `Value`, `certificates`: four leaves under one salted root, the execution phase's two certified
-records (`CertifiedRecord`), egress leaf 0 and ingress leaf 1, and their heads, egress leaf 2 and ingress leaf 3
-(`rows`).
+**What is committed.** One `Value`, `certificates`: four leaves under one salted root, the execution phase's two
+certified records (`CertifiedRecord`), egress leaf 0 and ingress leaf 1, and their heads, egress leaf 2 and ingress leaf
+3 (`rows`).
 Each leaf is `hm96-sha512/row/v2` over its bytes, salted with its own fresh 192-byte salt, in a `frame-v3-sha512` tree
 under one-stage's served domain, whose run is the link and the window. A record leaf's bytes are `encode`'s (the record
 head, the certifier's salt for it, then the certificate), and a head leaf's are the head's alone (`RecordHead.encode`).
@@ -11,9 +11,10 @@ A proof that reads only the head, such as the head check's, opens a head leaf in
 compressions instead of the certificate's 272. The certificates, salts
 and heads are witness: the challenger sees the root, never a certificate, a salt or a head.
 
-**Selection** is `All`: every execution phase is checked, so an accepted outcome is the exhaustive fact. A registration is
-one execution phase, one proof block. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
-to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the execution phase. The
+**Selection** is `All`: every execution phase is checked, so an accepted outcome is the exhaustive fact. A registration
+is one execution phase, one proof block. Its `window` provenance is `{"kind": "served", "window": w}`, and the
+challenger holds w to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the
+execution phase. The
 network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
 credit: it accepts only when every window of the egress profile (a served or advised link's profile) is registered in
 order and its outcome of record accepted, so a rejected or late window, one with no outcome, and a gap in the
@@ -33,9 +34,9 @@ bound, one-stage's `wrong_units` over windows), so ε = bound / n at δ. The cha
 record's on those bytes (`lean_draw`: Flock's `flock-verify draw --population n --k K --stream-file`, the Lean
 `draw` the one-stage drivers run, `Flock.Draw.drawOn`), which the network verdict runs itself, as a registration's own
 sample is the Lean's `Select.select` on the bytes it read. The verdict accepts only when the windows registered and
-proved are exactly that sample's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever proof blocks the sample object it is
-handed lists. Selection `All` (K None) samples every window and reads no coin, and K = n leaves nothing to sample.
-The datacenter model (`benchmarks/datacenter`, a Python model) builds no
+proved are exactly that sample's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever proof blocks the sample
+object it is handed lists. Selection `All` (K None) samples every window and reads no coin, and K = n leaves nothing to
+sample. The datacenter model (`benchmarks/datacenter`, a Python model) builds no
 `LinkWindows` outcomes, so its account doesn't read it, though `Account.sound` is the same AND over its own port
 records.
 
@@ -54,50 +55,52 @@ has no such backing, since its occupancy is its record's own.
 **The check** is `LinkWindows.unit`, `NetworkLinkWindow` v5{EGRESS, INGRESS}: each end's head check,
 `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are those statics), a Boolean Definition over its
 end's signed digest (`certificate_digest`: the end's record digest hidden under the certifier's salt), its direction a
-constant of the proof block (egress 0, ingress 1). The head opens at leaf 2 + direction under the registered root, a hiding
-read; its link, direction and window are the execution phase's; its status is complete; its T, r,
+constant of the proof block (egress 0, ingress 1). The head opens at leaf 2 + direction under the registered root, a
+hiding read; its link, direction and window are the execution phase's; its status is complete; its T, r,
 B, τ_b and parameters digest are the end's declared grid's; on an end with an occupancy profile its T counts are the
 profile's row for the window; and its record digest under the certifier's salt is the signed digest, so the certificate
-signs the head the check opened. A window past the profile has no row to give, so it is rejected. The proof block's parameters
-are the two signed digests (``egress``, ``ingress``) and each end's head check's others, ``<end>_<name>``; its output is
-two bits, `OUTPUTS`: ``verdict``, the AND of the head checks (and on a served link the served counts' check), and
-``deadline``, the AND of the two heads' deadline bits. The certificates are not in the proof block: the verifier checks them on
-their public fields (`LinkWindows.certified`).
+signs the head the check opened. A window past the profile has no row to give, so it is rejected. The proof block's
+parameters are the two signed digests (``egress``, ``ingress``) and each end's head check's others, ``<end>_<name>``;
+its output is two bits, `OUTPUTS`: ``verdict``, the AND of the head checks (and on a served link the served counts'
+check), and ``deadline``, the AND of the two heads' deadline bits. The certificates are not in the proof block: the
+verifier checks them on their public fields (`LinkWindows.certified`).
 
-In the proof block's Program each head check is one gate that names the Definition and its circuit digest (`head_check.gate`,
-`Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2`), because the commitment gadgets' Boolean bodies encode to about
-140 MB and the proof system encodes the Program on every registration. The digest is core's `program_digest` of the
-Definition's Program (`head_check.circuit_digest`), the one a Flock statement names a template by, pinned in
-`head_check.circuit-check.json` and held to the Definition by circuit-check. So the Program's digest binds the head
-check's circuit, and the spec, the stream and each registration bind to it: a proof of another circuit with the same
-interface names another Program, which the verifier of record refuses (`LinkWindows.proved`), and a proof's circuit
+In the proof block's Program each head check is one gate that names the Definition and its circuit digest
+(`head_check.gate`, `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2`), because the commitment gadgets' Boolean bodies
+encode to about 140 MB and the proof system encodes the Program on every registration. The digest is core's
+`program_digest` of the Definition's Program (`head_check.circuit_digest`), the one a Flock statement names a template
+by, pinned in `head_check.circuit-check.json` and held to the Definition by circuit-check. So the Program's digest binds
+the head check's circuit, and the spec, the stream and each registration bind to it: a proof of another circuit with the
+same interface names another Program, which the verifier of record refuses (`LinkWindows.proved`), and a proof's circuit
 puts the Definition where its gate stands only once the digest is the gate's (`head_check.expand`). The digest is read
 from the pin, never computed, since tracing the gadgets takes minutes: a size class no sidecar pins has a gate that
-names none (`@unpinned`), and no proof of its proof block is accepted, while its verdict of record in the clear is unchanged.
+names none (`@unpinned`), and no proof of its proof block is accepted, while its verdict of record in the clear is
+unchanged.
 
 The count check is the part of the egress grid check that needs no frame's bytes, and the only grid check on ingress.
-It runs on every execution phase, as a structural check must. In a proof it is an equality of each head's 32·T count bits
-with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
+It runs on every execution phase, as a structural check must. In a proof it is an equality of each head's 32·T count
+bits with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
 
 N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system Spec, is
 retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `benchmarks/network_traces/scan_zk.py`
 proves in zero knowledge, outside this protocol.
 
-**The proof.** The prover proves the sampled proof block as one Flock statement of one instance: rows ``pub`` (the proof block's
-public parameters) and ``wit`` (each end's head, its leaf's salt, its two siblings and the certifier's salt), each the
-little-endian concatenation of its parameters' bits in whole u16 words (`LinkWindows.layout`, `LinkWindows.row`), and
-the output row ``o0``, one u16 word holding the two output bits (`OUT_BITS`); each row committed under a hiding salt. Its
-circuit is `LinkWindows.proof_unit`, the registered proof block with each gate the Definition its pinned digest names, bound to
-the registered partition and Program (`benchmarks/network_traces/n2_zk.py` proves it behind the firewall).
+**The proof.** The prover proves the sampled proof block as one Flock statement of one instance: rows ``pub`` (the proof
+block's public parameters) and ``wit`` (each end's head, its leaf's salt, its two siblings and the certifier's salt),
+each the little-endian concatenation of its parameters' bits in whole u16 words (`LinkWindows.layout`,
+`LinkWindows.row`), and the output row ``o0``, one u16 word holding the two output bits (`OUT_BITS`); each row committed
+under a hiding salt. Its circuit is `LinkWindows.proof_unit`, the registered proof block with each gate the Definition
+its pinned digest names, bound to the registered partition and Program (`benchmarks/network_traces/n2_zk.py` proves it
+behind the firewall).
 
 Its verifier of record is `LinkWindows.verify`, which decides on the delivered proof (`Delivered`) and public inputs
 alone. It accepts when
 - the verifier's own run of Flock's Lean verifier (`proofs.verify`, `verify --zk`) accepts every session on the circuit
-  file the auditor committed, the sessions prove this link's registered proof block (`LinkWindows.proved`: every gate names a
-  pinned circuit digest and every session names the registered Program) and the sampled proof block;
+  file the auditor committed, the sessions prove this link's registered proof block (`LinkWindows.proved`: every gate
+  names a pinned circuit digest and every session names the registered Program) and the sampled proof block;
 - the proof's ``pub`` row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the registered
-  root, the execution phase's public fields and both certificates' signed digests), and its ``o0`` row to the output word
-  delivered, whose verdict and deadline bits are both 1;
+  root, the execution phase's public fields and both certificates' signed digests), and its ``o0`` row to the output
+  word delivered, whose verdict and deadline bits are both 1;
 - the certificates' check accepts (`certified`: each verifies under the network certifier's public key in its certifier
   session over its public fields and its signed digest, and names the registered execution phase), and the window's
   declared sync is one of Σ_sync.
@@ -129,8 +132,8 @@ INGRESS, SERVED}: the checks above, and one gate naming `served.NetworkServedCou
 (`served.gate`, pinned in `served.circuit-check.json`), which holds the egress head's
 counts to the ones the ingress head's counts derive under the window's declared sync (`served`'s docstring has the
 derivation, its premises and the carry-over). Its public items are `PUBLIC_SERVED`: no egress profile, the served
-sizes, and the window's declared sync, the advice `charge` already counts, which the served counts read and the proof block
-takes as its ``sync`` parameter. The in-the-clear check runs `served_check` too.
+sizes, and the window's declared sync, the advice `charge` already counts, which the served counts read and the proof
+block takes as its ``sync`` parameter. The in-the-clear check runs `served_check` too.
 
 **An advised link** (`LinkWindows(advised=advised.AdvisedProfile(…))`) is a served link under arbitrary traffic:
 responses of any length, batched and timed as serving chose, carried across windows. The prover's advice
@@ -166,8 +169,8 @@ schedule's parameters digest (`warden.WardenParams.digest`, which its deployment
 each live connection and the rest padding (`warden.audit` reads them in the clear, the scan's proof blocks in zero
 knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms charge them
 (log2 #S_s and Σ_c log2(cap_c + 1)), and the warden runs no shaper clock, so a window declares no sync and the
-charge is 0. Its proof block is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each head check holding its end's
-head to the warden's grid and digest and to the warden's signed digest. Its public items are `PUBLIC_WARDEN`. The
+charge is 0. Its proof block is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each head check holding its
+end's head to the warden's grid and digest and to the warden's signed digest. Its public items are `PUBLIC_WARDEN`. The
 in-the-clear check is the opening's root and the head checks: the records' cells are the scan's, and the certifier's
 host audit doesn't read a warden's records.
 
@@ -181,14 +184,14 @@ counts, isn't the Program's: in its frames, which N2 doesn't hold, or because th
 move the Program's counts off the profile, which N2 holds the counts to instead.
 
 When the in-the-clear check's audit is the Lean check's (`lean_audit.Audit`), `audit.Audit` runs beside it as the
-reference: an execution phase where the two differ rejects, and the verdict says `"by": "lean"` and carries the reference's
-accept bit (`reference`), never a violation's kind.
+reference: an execution phase where the two differ rejects, and the verdict says `"by": "lean"` and carries the
+reference's accept bit (`reference`), never a violation's kind.
 
 **The verdict of record is the Lean's** on plain, served and warden links: `NetworkCheck.LinkWindow.verdict`
 (`verity/core/protocols/network/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
 line `OF_RECORD`. `verify` runs it and this module's `python_verdict` on every proof, records
-whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects an execution phase where they differ or the
-Lean refuses the case. On a warden link the Lean reads the warden's parameters digest (`lean_case`'s ``warden``) for
+whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects an execution phase where they differ or
+the Lean refuses the case. On a warden link the Lean reads the warden's parameters digest (`lean_case`'s ``warden``) for
 both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what `python_verdict` reads that the
 Lean takes as an input rather than checks:
 - an advised link's window view (`advised.view`, under the tie source's IoTieRequest verdict and the clock source's
@@ -279,8 +282,9 @@ HEADS = HC.HEADS
 _ENDS = ("egress", "ingress")
 #: the proof block's output, two bits in this order (`Check.public_outputs`)
 OUTPUTS = ("verdict", "deadline")
-#: the statement's rows: ``pub`` the proof block's public parameters, ``wit`` its witness (`LinkWindows.layout`), then its one
-#: output row ``o0``, the two output bits; each instance's commitments are in this order in a statement's public file
+#: the statement's rows: ``pub`` the proof block's public parameters, ``wit`` its witness (`LinkWindows.layout`), then
+#: its one output row ``o0``, the two output bits; each instance's commitments are in this order in a statement's public
+#: file
 ROWS = ("pub", "wit")
 PORTS = ROWS + ("o0",)
 #: the output row's length: Flock commits an output port as whole u16 words, so ``o0`` is one word, its bit 0 the
@@ -288,13 +292,14 @@ PORTS = ROWS + ("o0",)
 OUT_BITS = 16
 #: a head check's witness parameters; the rest of the proof block's parameters are public
 _WITNESS = ("head", "salt", "path", "salt_c")
-#: a head check's parameters the proof block fixes rather than takes: each end's direction is its own (egress 0, ingress 1)
+#: a head check's parameters the proof block fixes rather than takes: each end's direction is its own (egress 0, ingress
+#: 1)
 _FIXED = ("signed", "direction")
 
 
 def _heads(S_) -> tuple[tuple[str, Any], ...]:
-    """Each end's head check's parameters but its signed digest, which is the proof block's `egress` or `ingress`, and its
-    direction, which the proof block fixes."""
+    """Each end's head check's parameters but its signed digest, which is the proof block's `egress` or `ingress`, and
+    its direction, which the proof block fixes."""
     return tuple((f"{end}_{name}", t) for end, key in zip(_ENDS, (S_.EGRESS, S_.INGRESS))
                  for name, t in HC.gate(*key).params if name not in _FIXED)
 
@@ -428,7 +433,8 @@ PUBLIC = (
     S.Public("verdict", "output", "the link-window's verdict, accept or reject; a violation's kind stays hidden"),
     S.Public("deadline", "output", "the certifier settled both records by the verdict deadline"),
 )
-#: a served link's: no egress occupancy profile, its sizes instead, and the window's declared sync, which its proof block reads
+#: a served link's: no egress occupancy profile, its sizes instead, and the window's declared sync, which its proof
+#: block reads
 PUBLIC_SERVED = tuple(p for p in PUBLIC if p.item != "occupancy") + (
     S.Public("occupancy", "structure", "the ingress end's frames per bucket in each window where the placement fixes "
              "them, fixed before the run; none on egress, whose counts the unit derives"),
@@ -529,10 +535,10 @@ def _profile(rows: Sequence[Sequence[int]] | None) -> list[list[int]] | None:
 
 @dataclass(frozen=True)
 class Delivered:
-    """An execution phase's proof as the verifier receives it: the statement's proof files (`proofs.Proof`, its circuit file
-    the auditor's own lowering of the proof block), and for the sampled proof block the salts of its public row and its output row
-    (``pub``, ``o0``) and its output word, which the verifier opens against the public file's commitments to those rows.
-    Never the witness row's salt."""
+    """An execution phase's proof as the verifier receives it: the statement's proof files (`proofs.Proof`, its circuit
+    file the auditor's own lowering of the proof block), and for the sampled proof block the salts of its public row and
+    its output row (``pub``, ``o0``) and its output word, which the verifier opens against the public file's commitments
+    to those rows. Never the witness row's salt."""
 
     proof: PF.Proof
     salts: Mapping[str, bytes]
@@ -548,10 +554,10 @@ BC_BYTES = 128
 
 
 def _commitments(public: Path, unit: int) -> dict[str, bytes] | None:
-    """The row commitments a statement's public file holds for its one instance whose proof block index is `unit`, by port
-    (`PORTS`, in their order after the header line): instance-major, or in a shared-row file (header ``shared_rows``,
-    `verity_flock.circuit.write`) each port's table port-major, then every instance's refs into them (u32 LE,
-    instance-major, the ports in order); None when no one instance is, or the file is short."""
+    """The row commitments a statement's public file holds for its one instance whose proof block index is `unit`, by
+    port (`PORTS`, in their order after the header line): instance-major, or in a shared-row file (header
+    ``shared_rows``, `verity_flock.circuit.write`) each port's table port-major, then every instance's refs into them
+    (u32 LE, instance-major, the ports in order); None when no one instance is, or the file is short."""
     try:
         with open(public, "rb") as f:
             head = json.loads(f.readline())
@@ -597,8 +603,9 @@ def output_row(word: int) -> bytes:
 
 
 def _opened(delivered: Delivered, unit: int, public: bytes | None, bits: int) -> int | None:
-    """The proof block's output word, once the proof's public file holds the proof block's public row as `public` (the verifier's own
-    copy, `bits` long) and its output row as the word delivered, each under the salt delivered; else None."""
+    """The proof block's output word, once the proof's public file holds the proof block's public row as `public` (the
+    verifier's own copy, `bits` long) and its output row as the word delivered, each under the salt delivered; else
+    None."""
     bcs, word, salts = _commitments(delivered.proof.public, unit), delivered.output, delivered.salts
     if public is None or bcs is None or type(word) is not int or not 0 <= word < 1 << len(OUTPUTS):
         return None
@@ -776,8 +783,8 @@ class LinkWindows:
 
     @cached_property
     def proof_unit(self):
-        """The proof block a proof's circuit lowers: `unit` with each gate the Definition it names (`unit(proof=True)`), the
-        template of the registered query under the same id. The prover's and the auditor's lowering, never the
+        """The proof block a proof's circuit lowers: `unit` with each gate the Definition it names (`unit(proof=True)`),
+        the template of the registered query under the same id. The prover's and the auditor's lowering, never the
         registered Program, which holds the gates."""
         return unit(self.head_key(0), self.head_key(1), self.served_key(), self.advised_key(), proof=True)
 
@@ -795,7 +802,8 @@ class LinkWindows:
 
     @property
     def partition(self) -> dict[str, Any]:
-        """The registered partition object, which a statement proving the proof block binds (its digest and its ``program``)."""
+        """The registered partition object, which a statement proving the proof block binds (its digest and its
+        ``program``)."""
         return self._partition
 
     @cached_property
@@ -823,7 +831,8 @@ class LinkWindows:
         return S.Stream(self.spec, self.unit, **kwargs)
 
     def domain(self, window: int) -> CommitmentDomain:
-        """One-stage's window domain (`registration.window_domain`) for the execution phase: run `<run>/<link>/<window>`."""
+        """One-stage's window domain (`registration.window_domain`) for the execution phase: run
+        `<run>/<link>/<window>`."""
         binding = identity_digest_sha512(R.WINDOW_DOMAIN, {
             "program": self._partition["program"], "partition": P.digest(self._partition), "port": VALUE,
             "schema": SCHEMA, "leaves": LEAVES, "run": f"{self.run}/{self.link}/{window}"})
@@ -880,8 +889,8 @@ class LinkWindows:
         """`stream.register` with the link-window's own ports, after holding the record's `window` provenance to exactly
         `{"kind": "served", "window": w}`: the service declares the provenance one public item and doesn't read it,
         and anything else there would reach the auditor. w is the registration's order in the stream, or with `drawn`,
-        a period sample (`period_draw`) over this stream, the order-th sampled window, whose record's root must be the one
-        the period committed. Raises `Refused` (`window`, `period`) otherwise."""
+        a period sample (`period_draw`) over this stream, the order-th sampled window, whose record's root must be the
+        one the period committed. Raises `Refused` (`window`, `period`) otherwise."""
         order = len(stream.log)
         if drawn is None:
             window = order
@@ -901,8 +910,8 @@ class LinkWindows:
     def head_checks(self, opening: Opening, root: bytes) -> list[HC.Instance | None]:
         """Each end's head check on the opening under `root`, the registered root: the link-window's public inputs with
         the end's grid, its profile's row and its certificate's signed digest, and as witness the head, its salt, its
-        two siblings and the certifier's salt for the record. None where the proof block takes no instance: a window past the
-        end's profile, which has no row to give, or a head whose length isn't the proof block's."""
+        two siblings and the certifier's salt for the record. None where the proof block takes no instance: a window
+        past the end's profile, which has no row to give, or a head whose length isn't the proof block's."""
         w, dom = opening.window, self.domain(opening.window)
         levels = tree_levels(dom, self.leaves(opening))
         out: list[HC.Instance | None] = []
@@ -920,9 +929,9 @@ class LinkWindows:
 
     @cached_property
     def layout(self) -> dict[str, tuple[str, ...]]:
-        """The statement's two input rows (`ROWS`), each its parameters in the proof block's signature's order: ``pub`` the
-        public ones, ``wit`` each end's head, its leaf's salt, its two siblings and the certifier's salt. A row is the
-        little-endian concatenation of its parameters' bits, in whole u16 words, which each row fills exactly: every
+        """The statement's two input rows (`ROWS`), each its parameters in the proof block's signature's order: ``pub``
+        the public ones, ``wit`` each end's head, its leaf's salt, its two siblings and the certifier's salt. A row is
+        the little-endian concatenation of its parameters' bits, in whole u16 words, which each row fills exactly: every
         parameter is a multiple of 16 bits but each end's head, of 157 + L + 4T bytes, and the two heads together are.
         Raises `ValueError` for a proof block whose rows aren't whole words."""
         params, _ = self.unit.signature()
@@ -1058,11 +1067,11 @@ class LinkWindows:
         return out
 
     def proved(self, findings: Sequence[Finding]) -> bool:
-        """Whether `findings`, the verifier of record's run over a delivered proof of the proof block (`proofs.verify`), prove
-        this link's proof block: every gate of it names its Definition's pinned circuit digest (`head_check.pinned`), and one or
-        more sessions each accepted and named the link's registered Program (the partition object's `program`), which
-        binds those digests. A proof of another circuit with the same interface names another Program, and a proof block with
-        a size class no sidecar pins has no proof."""
+        """Whether `findings`, the verifier of record's run over a delivered proof of the proof block (`proofs.verify`),
+        prove this link's proof block: every gate of it names its Definition's pinned circuit digest
+        (`head_check.pinned`), and one or more sessions each accepted and named the link's registered Program (the
+        partition object's `program`), which binds those digests. A proof of another circuit with the same interface
+        names another Program, and a proof block with a size class no sidecar pins has no proof."""
         want = self._partition["program"]
         return all(HC.pinned(g) for g in self.gates()) and bool(findings) \
             and all(f.accepted and f.program == want for f in findings)
@@ -1198,8 +1207,8 @@ class LinkWindows:
         """The verdict of record on the link-window's delivered proof, from public inputs and the proof alone: accepted
         when
         - the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
-          `circuit_sha512`) accepts every session, and they prove this link's registered proof block (`proved`) and the sampled
-          unit;
+          `circuit_sha512`) accepts every session, and they prove this link's registered proof block (`proved`) and the
+          sampled unit;
         - the proof's public row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the
           registered root, the public fields and both certificates' signed digests, and on an advised link the window's
           view of `advice`, the link's advice, which `advised.view` takes under the tie from `ties` alone), and its
@@ -1419,9 +1428,9 @@ class LinkWindows:
 
     def network_verdict(self, stream: S.Stream, windows: int | None = None,
                         drawn: Mapping[str, Any] | None = None) -> dict[str, Any]:
-        """The link's network verdict of record: the AND over its execution phases 0 … `windows` − 1 (by default the egress
-        profile's windows, fixed before the run), with no ε and no share credit. It accepts only when, for every w,
-        the stream's w-th registration is window w and its outcome of record accepted. A window registered out of
+        """The link's network verdict of record: the AND over its execution phases 0 … `windows` − 1 (by default the
+        egress profile's windows, fixed before the run), with no ε and no share credit. It accepts only when, for every
+        w, the stream's w-th registration is window w and its outcome of record accepted. A window registered out of
         order or not at all (a gap, or a run that stops short), a registration past the last window, a registration
         with no outcome yet, and a rejected or late outcome each reject the link; `refused` lists their windows.
         `records` is each window's outcome record SHA-512 (`S.Outcome.record`, None without one), and `digest` binds
@@ -1438,11 +1447,12 @@ class LinkWindows:
         bound / of (the uniform K-subset's exact bound, one-stage's `wrong_units` over windows); `digest` binds the
         sample too.
 
-        The sampled windows are the sample of record's, never the proof blocks `drawn` lists: the verdict runs `lean_draw` on
-        `drawn`'s coins (`read`), and every window at K = n, which leaves nothing to sample. It refuses the link by name,
-        `why[PERIOD_DRAWN]` with the Lean's sample (or why there is none), `drawn`'s proof blocks and the windows registered,
-        when the Lean can't sample, when `drawn`'s proof blocks aren't the Lean's, and when a registered window isn't one the
-        Lean sampled; a sampled window not registered is in `refused`. `selection` is the sample of record, ``by`` ``lean``
+        The sampled windows are the sample of record's, never the proof blocks `drawn` lists: the verdict runs
+        `lean_draw` on `drawn`'s coins (`read`), and every window at K = n, which leaves nothing to sample. It refuses
+        the link by name, `why[PERIOD_DRAWN]` with the Lean's sample (or why there is none), `drawn`'s proof blocks and
+        the windows registered, when the Lean can't sample, when `drawn`'s proof blocks aren't the Lean's, and when a
+        registered window isn't one the Lean sampled; a sampled window not registered is in `refused`. `selection` is
+        the sample of record, ``by`` ``lean``
         (or ``all`` at K = n), and its units are the Lean's. Raises `ValueError` on a link with no egress occupancy,
         served or advised profile, as `verify` does, on a stream that isn't this link's, and on a draw that isn't this
         stream's period draw."""

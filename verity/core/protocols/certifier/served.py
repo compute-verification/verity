@@ -1,9 +1,10 @@
 """N2's served profile: on a served link, whose egress end has no public occupancy profile, the egress counts derived
 from the ingress counts under the declared clock sync, zero-knowledge. A Boolean Definition, a gated part of N2's
-served proof block (`service`'s `NetworkServedLinkWindow` v4), which runs on every execution phase; its one output is the ok
-bit. That proof block's Program holds it as one gate that names its circuit digest (`gate`), pinned in this module's sidecar
-and held to the Definition by circuit-check; N2's verifier of record reads its output from the proof block's proof, and the
-in-the-clear check (`LinkWindows.clear`) runs its `reference`, which the tests hold to the circuit.
+served proof block (`service`'s `NetworkServedLinkWindow` v4), which runs on every execution phase; its one output is
+the ok bit. That proof block's Program holds it as one gate that names its circuit digest (`gate`), pinned in this
+module's sidecar and held to the Definition by circuit-check; N2's verifier of record reads its output from the proof
+block's proof, and the in-the-clear check (`LinkWindows.clear`) runs its `reference`, which the tests hold to the
+circuit.
 
     NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}
         (ingress: Array<T, Array<4, Byte>>, egress: Array<T, Array<4, Byte>>, sync: Array<3, Array<16>>) -> Value<1>
@@ -481,8 +482,8 @@ def arguments(ingress: Sequence[int], egress: Sequence[int], sync: tuple[int, in
 
 def evaluate(key: tuple[int, int, int, int, int, int], cases: Sequence[tuple[Sequence[int], Sequence[int],
                                                                           tuple[int, int, int]]]) -> list[int]:
-    """The proof block's output on each case, (ingress, egress, sync) of one size class `key` = (T, F, FIN, R, RIN, OWN), in
-    one evaluation."""
+    """The proof block's output on each case, (ingress, egress, sync) of one size class `key` = (T, F, FIN, R, RIN,
+    OWN), in one evaluation."""
     args = [list(rows) for rows in zip(*(arguments(*c) for c in cases))]
     return [int(b) for b in evaluate_bits(unit(*key), *args).reshape(-1).tolist()]
 

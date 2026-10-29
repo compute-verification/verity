@@ -252,7 +252,8 @@ def _period(d: Path, case: dict, answer: dict) -> str:
 
 
 def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
-    """An accepted chain whose certifier session, execution phases, N2 registrations and compute audits are ``case``'s."""
+    """An accepted chain whose certifier session, execution phases, N2 registrations and compute audits are
+    ``case``'s."""
     from verity.core.protocols.sampled_proofs.one_stage import registration as R
     tmp_path.mkdir(parents=True, exist_ok=True)
     steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": "0", "scan": "0"}, "run": "r-chain"})

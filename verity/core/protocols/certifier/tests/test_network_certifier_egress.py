@@ -194,8 +194,8 @@ def test_the_bucket_circuit_computes_the_wardens_rows():
 
 
 def test_the_unit_reads_the_state_and_computes_the_row():
-    """The proof block's one input is the state's row (every switch computed, none witness); its outputs are o0, a u16, and
-    o1, the row of R B-byte cells, gates of the circuit and never an input."""
+    """The proof block's one input is the state's row (every switch computed, none witness); its outputs are o0, a u16,
+    and o1, the row of R B-byte cells, gates of the circuit and never an input."""
     for sh in (shape(PARAMS, NR, K), EG.Shape(256, 16, 4, 4, 64, 17, 22)):
         params, out = _fn(sh).signature()
         assert [(name, t.leaves) for name, t in params] == [("state", sh.state_words * 16)]
@@ -208,9 +208,10 @@ def _committed(served, w):
 
 
 def test_the_registered_read_holds_the_row_output_to_the_wardens_rows():
-    """The verifier's registered read of the proof block's row output o1 (`warden_rows.refusal` on `bucket_port`: proof block 3 + t
-    reads row t) accepts the rows a window's proof blocks compute from its states, committed under the warden's salts, and
-    refuses a row with one bit flipped and a row moved to another bucket, at its own position and at the other's."""
+    """The verifier's registered read of the proof block's row output o1 (`warden_rows.refusal` on `bucket_port`: proof
+    block 3 + t reads row t) accepts the rows a window's proof blocks compute from its states, committed under the
+    warden's salts, and refuses a row with one bit flipped and a row moved to another bucket, at its own position and at
+    the other's."""
     served = busy(6, PARAMS, 14, 15, 6)
     T, sh = PARAMS.window, shape(PARAMS, NR, K)
     w = max(range(len(served.records)), key=lambda w: len(set(WR.window_rows(served.records[w], PARAMS))))

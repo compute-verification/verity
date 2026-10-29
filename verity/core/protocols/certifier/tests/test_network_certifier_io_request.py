@@ -295,9 +295,9 @@ def test_a_client_that_ends_after_its_last_byte_is_refused():
 
 
 def test_each_buckets_row_is_the_wardens_registered_row(link):
-    """The proof block's row is the warden's registration v2 (`warden_rows`): bucket t's row is row t of the ingress record the
-    grid closed, the rows open the warden's root, the verifier's port (`bucket_port`) has proof block t read row t, and the
-    host's registered read refuses rows out of place or edited."""
+    """The proof block's row is the warden's registration v2 (`warden_rows`): bucket t's row is row t of the ingress
+    record the grid closed, the rows open the warden's root, the verifier's port (`bucket_port`) has proof block t read
+    row t, and the host's registered read refuses rows out of place or edited."""
     assert len(link.records) == 2
     for w, record in enumerate(link.records):
         cells = WR.Cells.of("requests", Direction.INGRESS, record, PARAMS, hashlib.sha512(b"session").digest())

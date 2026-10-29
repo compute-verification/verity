@@ -4,12 +4,13 @@ import Lms.Sign
 /-!
 # N2's execution phase verdict of record: what its Lean code (`NetworkCheck.LinkWindow`) does
 
-The property of `NetworkCheck.LinkWindow.verdict`, the verdict of record on one execution phase of N2 (`service.OF_RECORD`
-in `verity/core/protocols/certifier/service.py`), stated against its functions as they run: for every case, if the
-verdict accepts, the execution phase's proof block was proved, its rows opened to an output word of 3, both certificates are the
-certifier's, its declared sync is one of Σ_sync (on a warden link, which declares none, nothing is asked of the syncs,
-and the public row its ``pub`` commitment opens to holds both ends' grids at the warden's parameters digest), and its
-public outputs are verdict 1 and deadline 1. `Proofs.Properties.NetworkCertifier.LinkWindow` proves it.
+The property of `NetworkCheck.LinkWindow.verdict`, the verdict of record on one execution phase of N2
+(`service.OF_RECORD` in `verity/core/protocols/certifier/service.py`), stated against its functions as they run: for
+every case, if the verdict accepts, the execution phase's proof block was proved, its rows opened to an output word of
+3, both certificates are the certifier's, its declared sync is one of Σ_sync (on a warden link, which declares none,
+nothing is asked of the syncs, and the public row its ``pub`` commitment opens to holds both ends' grids at the warden's
+parameters digest), and its public outputs are verdict 1 and deadline 1. `Proofs.Properties.NetworkCertifier.LinkWindow`
+proves it.
 
 The predicates below say what the findings, the public file's row commitments, the certificates and the sync are, in the
 verdict's own terms. The public row (`pubRow`), the commitments' parse (`commitments`), the LMS verifier and the
@@ -17,9 +18,9 @@ certificate's message are the code's own functions, read as they are.
 
 Its two lemmas (`Proofs.Properties.NetworkCertifier.LinkWindow`) read the predicates below that, which put another
 function in the verdict's place (`LinkWindowAcceptMeansBy`, `AcceptsAll`) and say what the certifier's device signs
-(`CertifierSigned`): the honest one, that an execution phase the property's conclusion holds of is accepted, and on a warden
-link one whose certificates the device signed whatever its syncs; the nontrivial one, that no verifier accepting every
-execution phase has the property.
+(`CertifierSigned`): the honest one, that an execution phase the property's conclusion holds of is accepted, and on a
+warden link one whose certificates the device signed whatever its syncs; the nontrivial one, that no verifier accepting
+every execution phase has the property.
 -/
 
 open NetworkCheck NetworkCheck.LinkWindow
@@ -27,9 +28,9 @@ open Lean (Json toJson)
 
 namespace Properties.NetworkCertifier
 
-/-- The verifier's own run of C-Flock's verifier proved the link's proof block and the sample: every gate of the proof block names a
-pinned circuit digest, and it found one or more sessions, each accepted, naming the registered Program and proving
-exactly the sampled proof blocks. -/
+/-- The verifier's own run of C-Flock's verifier proved the link's proof block and the sample: every gate of the proof
+block names a pinned circuit digest, and it found one or more sessions, each accepted, naming the registered Program and
+proving exactly the sampled proof blocks. -/
 def WindowProved (c : Case) : Prop :=
   (∀ g ∈ c.gates, pinned g = true) ∧ ∃ fs, c.findings = some fs ∧ fs ≠ #[] ∧
     ∀ f ∈ fs, f.accepted = true ∧ f.program = some c.program ∧ f.units = c.units
@@ -94,8 +95,8 @@ def LinkWindowAcceptMeans : Prop :=
 def WindowVerdictBy (v : Case → Flock.V Verdict) (c : Case) : Prop :=
   ∃ w, v c = .ok w ∧ w.outputs = acceptedOutputs c ∧ verdictDigest c true w.outputs = .ok w.digest
 
-/-- `LinkWindowAcceptMeans` with `v` in place of the verdict of record: `v`'s acceptance of an execution phase establishes
-what the property says the verdict's does. -/
+/-- `LinkWindowAcceptMeans` with `v` in place of the verdict of record: `v`'s acceptance of an execution phase
+establishes what the property says the verdict's does. -/
 def LinkWindowAcceptMeansBy (v : Case → Flock.V Verdict) : Prop :=
   ∀ c : Case, (v c).map Verdict.accepted = .ok true → WindowAccepted c ∧ WindowVerdictBy v c
 
@@ -103,10 +104,10 @@ def LinkWindowAcceptMeansBy (v : Case → Flock.V Verdict) : Prop :=
 def AcceptsAll (v : Case → Flock.V Verdict) : Prop :=
   ∀ c : Case, (v c).map Verdict.accepted = .ok true
 
-/-- The execution phase's two certificates as the certifier's device issues them under its key `k` (on a warden link, where
-it functions as an active warden): the link's key is `k`'s public key, and each end's certificate (egress first) names
-the link, the end and the window, carries `k`'s identifier, and its signature is the encoding of the one `Lms.signAt`
-gives, at a leaf of `k`, over the certificate's message in the session. -/
+/-- The execution phase's two certificates as the certifier's device issues them under its key `k` (on a warden link,
+where it functions as an active warden): the link's key is `k`'s public key, and each end's certificate (egress first)
+names the link, the end and the window, carries `k`'s identifier, and its signature is the encoding of the one
+`Lms.signAt` gives, at a leaf of `k`, over the certificate's message in the session. -/
 def CertifierSigned (c : Case) (k : Lms.PrivateKey) : Prop :=
   c.key = k.publicKey ∧ c.certificates.size = 2 ∧ ∀ d < 2, ∃ x m q sig, c.certificates[d]? = some (some x) ∧
     x.link = c.link ∧ x.direction.code = d ∧ x.window = c.window ∧ x.keyId = k.I ∧

@@ -14,21 +14,23 @@ execution phases' buckets:
      "ingress": {"template": "<id>", "frame": "<parameter>", "links": LI, "buckets": T, "slots": RI, "frame_bytes": BI,
                  "first": "<id>"}}
 
-Proof block ℓ·T + t of a side's template, in its proof blocks' order (the partition's), is bucket t of link ℓ: the template has exactly
-links·T proof blocks. With ``first`` (optional, ingress only, T ≥ 2), proof block ℓ of that template is bucket 0 of link ℓ and proof block
-ℓ·(T − 1) + t − 1 of ``template`` is bucket t ≥ 1, so the two have links and links·(T − 1) proof blocks, and both read the
-frame row. Step t is bucket t of the window on both sides, so the sides share T, the horizon k. An integration writes
-the field with `Boundary.record`, and the verifier reads it with `parse`.
+Proof block ℓ·T + t of a side's template, in its proof blocks' order (the partition's), is bucket t of link ℓ: the
+template has exactly links·T proof blocks. With ``first`` (optional, ingress only, T ≥ 2), proof block ℓ of that
+template is bucket 0 of link ℓ and proof block ℓ·(T − 1) + t − 1 of ``template`` is bucket t ≥ 1, so the two have links
+and links·(T − 1) proof blocks, and both read the frame row. Step t is bucket t of the window on both sides, so the
+sides share T, the horizon k. An integration writes the field with `Boundary.record`, and the verifier reads it with
+`parse`.
 
 * **Egress** (`egress.EgressBucket`, the scan's egress side, in generator form): ``frame`` is an output row of R·B
-  bytes, the row the proof block computes from its state, slot σ's cell at bytes σ·B … (σ + 1)·B − 1, row bit 8k + i bit i of
-  byte k, which the proof block's statement commits under the salt of the warden's egress row t of link ℓ and registers as a
-  read of it (`warden_rows.bucket_port`), so the proof opens only when the row the proof block computes is the warden's.
-  ``verdict`` is an output row of one u16 word whose bit 0 is every slot's presence gate: 1 (`egress.ACCEPT`) exactly
-  when the state renders a row. So `Layout.egress t ℓ σ` is (bit 0 of proof block ℓ·T + t's verdict row, bits 8σB …
-  8(σ + 1)B − 1 of its frame row), gates the proof block computes and returns, none an input. Only the verdict is public: a
-  proof block's public output is at most 16 bits, and the frame is a committed output. v2's checked row, whose frame was a
-  parameter row (an input) its verdict held to the cells the proof block rendered, is retired with v2.
+  bytes, the row the proof block computes from its state, slot σ's cell at bytes σ·B … (σ + 1)·B − 1, row bit 8k + i bit
+  i of byte k, which the proof block's statement commits under the salt of the warden's egress row t of link ℓ and
+  registers as a read of it (`warden_rows.bucket_port`), so the proof opens only when the row the proof block computes
+  is the warden's. ``verdict`` is an output row of one u16 word whose bit 0 is every slot's presence gate: 1
+  (`egress.ACCEPT`) exactly when the state renders a row. So `Layout.egress t ℓ σ` is (bit 0 of proof block ℓ·T + t's
+  verdict row, bits 8σB … 8(σ + 1)B − 1 of its frame row), gates the proof block computes and returns, none an input.
+  Only the verdict is public: a proof block's public output is at most 16 bits, and the frame is a committed output.
+  v2's checked row, whose frame was a parameter row (an input) its verdict held to the cells the proof block rendered,
+  is retired with v2.
 * **Ingress** (`ingress_scan.IngressScanBucket`, and `IngressScanFirst` its ``first``): ``frame`` is a parameter row of
   RI·BI bytes, the warden's ingress row t of link ℓ, which the proof block reads as its registered input port.
   `Layout.ingress t` is the ingress links' frame rows at bucket t, in link order, each in row order.
@@ -36,7 +38,8 @@ the field with `Boundary.record`, and the verifier reads it with `parse`.
 Every bucket's gates are the same whatever the load, so no arrival step, prompt length or occupancy is public: a
 request's token ids are values the window's proof blocks parse from the cells, like every other value (arrival steps and
 prompt lengths stay private: the certifiers' observations are witness). The I/O tie reads row t of
-link ℓ at proof block `Boundary.unit` (``reads_from`` of a member's `warden_rows.bucket_port` is its proof block of bucket t, less t).
+link ℓ at proof block `Boundary.unit` (``reads_from`` of a member's `warden_rows.bucket_port` is its proof block of
+bucket t, less t).
 
 **The check** (`refusal`, the verifier's), by `Layout.Fits`' conjuncts over the horizon: every egress gate is one `C`
 returns (`C.outs`) and not an input (the verdict and the frame are output rows of the egress template, and every unit's
@@ -52,8 +55,8 @@ input and its view output egress unit t's state input: each chain is one registe
 by the other under one `b ‖ c`, so the record declares it a wire.
 
 `Fits` is structural, never semantic: a served window fits in the step-indexed scan's form (`ingress_scan`), whose
-bucket t proof block reads bucket t's ingress row and the state bucket t − 1 carries (bucket 0's, `IngressScanFirst`'s, the
-empty state, constants of its circuit), and whose Programs start at fixed boundaries and read their slots there, so
+bucket t proof block reads bucket t's ingress row and the state bucket t − 1 carries (bucket 0's, `IngressScanFirst`'s,
+the empty state, constants of its circuit), and whose Programs start at fixed boundaries and read their slots there, so
 an egress bucket reaches ingress only through earlier buckets' state, whatever the arrival steps and prompt lengths. A
 window in any other form, such as an egress bucket that reads every request's ids, is refused: the verifier gains no
 form ahead of its proof. The record must also name the boundary's rows, and no
@@ -101,7 +104,8 @@ class Side:
         return {self.first: self.links, self.template: self.links * (self.buckets - 1)}
 
     def at(self, link: int, t: int) -> tuple[str, int]:
-        """The template that holds bucket t of link ``link`` and its proof block there, in the template's proof blocks' order."""
+        """The template that holds bucket t of link ``link`` and its proof block there, in the template's proof blocks'
+        order."""
         if self.first is None:
             return self.template, link * self.buckets + t
         return (self.first, link) if t == 0 else (self.template, link * (self.buckets - 1) + t - 1)
@@ -174,8 +178,8 @@ def parse(doc: Mapping[str, Any]) -> Boundary | None:
 
 
 def _template_units(doc: Mapping[str, Any]) -> dict[str, tuple[int, int]]:
-    """Each template's global proof blocks ``[lo, lo + n)``: the templates' proof blocks consecutive from 0 in the record's order, each
-    template's its members' consecutive chunks."""
+    """Each template's global proof blocks ``[lo, lo + n)``: the templates' proof blocks consecutive from 0 in the
+    record's order, each template's its members' consecutive chunks."""
     out, at = {}, 0
     for tid, n in doc["templates"]:
         lo = at
@@ -191,7 +195,8 @@ def _template_units(doc: Mapping[str, Any]) -> dict[str, tuple[int, int]]:
 
 
 def _readers(doc: Mapping[str, Any], total: int) -> list[list[int]]:
-    """Each global proof block's readers: the proof blocks one of whose input rows is a wire from that proof block's output row."""
+    """Each global proof block's readers: the proof blocks one of whose input rows is a wire from that proof block's
+    output row."""
     readers: list[list[int]] = [[] for _ in range(total)]
     for m in doc["members"]:
         for _port, _out, writers in m["wired"]:

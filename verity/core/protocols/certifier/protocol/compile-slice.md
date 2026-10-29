@@ -2,9 +2,9 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The compile slice's charge, and a served window at its engine's class
 
-`CompileSlice_v1` (`compile_slice`) is one window of the compile slice's proof block in one Boolean Definition. Its circuit, rows,
-verdict flags, reference and stand-ins are `compile_slice`'s docstring. This file covers how the slice charges a
-window, what binds the charge's inputs, and a served window at its engine's class. `CompileSlice_v2`
+`CompileSlice_v1` (`compile_slice`) is one window of the compile slice's proof block in one Boolean Definition. Its
+circuit, rows, verdict flags, reference and stand-ins are `compile_slice`'s docstring. This file covers how the slice
+charges a window, what binds the charge's inputs, and a served window at its engine's class. `CompileSlice_v2`
 (`compile_slice_v2`) is the same slice with vLLM's block pool (`CacheStep_v2`) in place of the evictable and returned
 counts' stand-in; its charge is this one. `CompileSlice_v3` (`compile_slice_v3`) is v2 computing its schedule rather
 than checking it, with no ChargeLink, the served rows and last rows registered reads it holds to the computed ones: its
@@ -46,13 +46,13 @@ and its carry are witness until the slice binds them):
 - *`bit` is the committed decisions:* ``adv``'s row, which the verifier holds to the advice registration's leaf.
 - *The carry is the session's:* ``cout`` must be the charge's carry' from ``cin`` (``code``). The verifier holds ``cin``
   and ``cout`` by their b‖c to the session's carry chain (`charge_chain.check_chain`), beside the advice, served-row and
-  certified-record bindings. The proof block accepts a restarted carry-in (the priors, or counts fitted to the window), and
-  the chain refuses it: ``CH-first`` on a session's first window, ``CH-carry`` after it.
+  certified-record bindings. The proof block accepts a restarted carry-in (the priors, or counts fitted to the window),
+  and the chain refuses it: ``CH-first`` on a session's first window, ``CH-carry`` after it.
 - The slice-level cases are `verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_phase14.py`.
 
-**Every advised window is proved, never sampled.** The chain binds only proved proof blocks: an unproved window's carry-out is
-whatever the prover likes. And `en` is pinned only by the slice's own scan. So the compile slice (the load proof block, where
-the replay is split into proof blocks) is sampled `All`, as N2's proof blocks are (PROTOCOL.md, A3).
+**Every advised window is proved, never sampled.** The chain binds only proved proof blocks: an unproved window's
+carry-out is whatever the prover likes. And `en` is pinned only by the slice's own scan. So the compile slice (the load
+proof block, where the replay is split into proof blocks) is sampled `All`, as N2's proof blocks are (PROTOCOL.md, A3).
 
 **A served window at its engine's class: w212.** A window's request and step counts are private, and the
 class is protocol structure. So a session proves every window at its engine's class: (R, W, A) = (8, 1, 9), Q 4,
@@ -86,14 +86,16 @@ held to its request's slot through ``map``.
   - The sync replay (`slice_inputs` at AS = 0) asks the same decisions on 309 windows, asks others on 5 (30, 59, 118,
     147 and 235) and refuses 25. So the chain is the class's, each window's decisions as the AsyncScheduler asks them.
 - The phase-10 attack's passes (a pass at every ask, where the served window admitted requests 309 and 310 at the seventh
-  and fourteenth: twenty-one at the class, at the asks of its 21 proof blocks, and twenty at the sync class) charge 23 bits.
+  and fourteenth: twenty-one at the class, at the asks of its 21 proof blocks, and twenty at the sync class) charge 23
+  bits.
   - With the served rows in ``srv``, they are refused by ``rows``.
   - With their own rows there, the proof block accepts them, and the native ``srv`` b‖c check refuses them.
 
-**In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py --slice w212`, and `--slice demo`), each proof block is
-proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`. The verifier opens only ``pub``
-and the verdict, and runs the bindings, the carry chain's among them, on the proof blocks' b‖c. What the verifier received
-holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows whole.
+**In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py --slice w212`, and `--slice demo`), each proof
+block is proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`. The verifier opens only
+``pub`` and the verdict, and runs the bindings, the carry chain's among them, on the proof blocks' b‖c. What the
+verifier received holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout``
+rows whole.
 - The scan's rule is the lane's one, field-aligned (`leak_scan.scan`, `benchmarks/network_traces/leak_scan.py`). It
   replaces the phase-18 attack's rule.
   - A find of a witness piece or carry row counts only if it lies inside one field: one read Flock's proof format

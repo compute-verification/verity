@@ -17,8 +17,8 @@ step's statics are zero.
   opened to the verifier's own copy;
 - ``srb``, the block's served rows, leaf w·(P / G) + j of the served-rows registration (`served_rows.block_bits`: G steps of
   R slots of (valid, request, kind, start, n), `compile_slice.rows_bits`' packing). Its b‖c is held to that leaf by the Lean
-  verifier's registered reads (`served_rows.reads_port`, ``flock-verify verify --registered``), so the proof block hashes the
-  block's rows and no more.
+  verifier's registered reads (`served_rows.reads_port`, ``flock-verify verify --registered``), so the proof block
+  hashes the block's rows and no more.
 
 **The statement** (`check`). For every step of the block and every slot k: bit 0 ``count``, the served row's valid and n
 are the statics'; bit 1 ``pos``, its start is the statics'. ``ACCEPT`` = 0x3. A slot the Program has no row in is zero in
@@ -30,11 +30,11 @@ sample.
 position. The compiled path's RoPE reads ``c00.input/positions``, a committed value (`verity_vllm.program.predict.compiled`); there
 the committed positions are what the compute read, and `served_tie`'s routed form holds the served rows to them.
 
-**Selection: every proof block, always proved**, the idle blocks too (`Selection` All, as a transfer-gate proof block is). The tie is a
-binding, not a check on work: a block left untied makes its served rows the prover's word, and the compile slice reads
-every step's rows, an idle one's included, so nothing but its tie shows an idle block's rows zero. The charge feeds the
-network verdict, an AND over every window with no ε. A window is its P / G proof blocks, block j = 0 … P / G − 1 each once,
-under one template.
+**Selection: every proof block, always proved**, the idle blocks too (`Selection` All, as a transfer-gate proof block
+is). The tie is a binding, not a check on work: a block left untied makes its served rows the prover's word, and the
+compile slice reads every step's rows, an idle one's included, so nothing but its tie shows an idle block's rows zero.
+The charge feeds the network verdict, an AND over every window with no ε. A window is its P / G proof blocks, block j =
+0 … P / G − 1 each once, under one template.
 
 **Cost** (`size`): R·(1 + LW + TW) − 2 ANDs a step, the equalities ANDed, and 2·(G − 1) to AND the steps' flags; the
 proof block's Flock block is set by its two rows' in-circuit hashing, G·R·(3 + IW + 2·(LW + TW)) bits.
@@ -121,9 +121,9 @@ ServedStaticsTie = CompositeDefinition(
 
 
 def statics(S, G: int | None = None) -> dict:
-    """The tie's statics for a compile slice's statics `S` (its R, P, IW, and ReplayStep_v1's L and T) and a proof block's G steps
-    (the whole window by default), G dividing P as the served rows' blocks are (`served_rows.register`): the tie's
-    statics don't hold P, so this is where G is held to it."""
+    """The tie's statics for a compile slice's statics `S` (its R, P, IW, and ReplayStep_v1's L and T) and a proof
+    block's G steps (the whole window by default), G dividing P as the served rows' blocks are (`served_rows.register`):
+    the tie's statics don't hold P, so this is where G is held to it."""
     return {"R": S.R, "G": SR._blocks(S, G), "IW": S.IW, "L": S.L, "T": S.T}
 
 
@@ -188,7 +188,8 @@ class Case:
 
 
 def unit_rows(S, srb: Sequence[int], programs: Sequence[Program]) -> dict:
-    """A proof block's rows: its block's served rows as registered (`served_rows.block_bits`) and its steps' Programs."""
+    """A proof block's rows: its block's served rows as registered (`served_rows.block_bits`) and its steps'
+    Programs."""
     out = {"pub": statics_bits(S, programs), "srb": list(srb)}
     for r, n in rows(S):
         if len(out[r]) != n:

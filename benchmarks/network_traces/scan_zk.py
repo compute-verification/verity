@@ -30,8 +30,8 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   the group in ``cells.jsonl``, its head's signature verified under that key; the prover's rows are the records under
   ``cells.salts``, held to that head. Each is refused by name where it doesn't hold, as is a schedule the class doesn't
   serve and a response that isn't id-form.
-* **The group** (``--group G``, default 1; `link`'s ``start``, its first execution phase, 0): G execution phases of each link,
-  one registration, the scan's buckets 0 … G·T − 1 from the empty state, T an execution phase's.
+* **The group** (``--group G``, default 1; `link`'s ``start``, its first execution phase, 0): G execution phases of each
+  link, one registration, the scan's buckets 0 … G·T − 1 from the empty state, T an execution phase's.
 * **The scan's rows**, committed by the prover before the draw as hiding rows (`verity.ml.commitments.advice`, each
   tree's root in the registration), G·T leaves each: ``state``, leaf t S_t; ``prog``, leaf t the Programs' row t (each
   request's response ids at its anchor, standing in for the anchored Programs' outputs); and ``view``, leaf t S_t's
@@ -135,8 +135,8 @@ _spec.loader.exec_module(traffic)
 class Setup(NamedTuple):
     """A class the scan is proved at, the warden's schedule it serves and the synthetic run's traffic: request i's
     prompt ``prompts[i]`` (max_tokens ``max_tokens`` + i, seed ``seed``·i) arrives at bucket ``arrivals[i]`` and is
-    answered ``responses[i]``, and the warden serves ``windows`` execution phases, every connection ended by the last's end;
-    the chain round swaps S_A and S_{A+1}."""
+    answered ``responses[i]``, and the warden serves ``windows`` execution phases, every connection ended by the last's
+    end; the chain round swaps S_A and S_{A+1}."""
 
     name: str
     cls: IS.Class
@@ -292,8 +292,8 @@ def tree_refusal(port: dict, reg: ADV.Registration, entry: dict, bcs: list[bytes
 # --- the run --------------------------------------------------------------------------------------------------------
 
 def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
-    """The synthetic run (`scan_traffic.serve`), each execution phase of `windows` of each link committed by the warden and
-    its head signed by the driver's test-size LMS key (`warden_rows.attest`), each registration read back by the
+    """The synthetic run (`scan_traffic.serve`), each execution phase of `windows` of each link committed by the warden
+    and its head signed by the driver's test-size LMS key (`warden_rows.attest`), each registration read back by the
     verifier."""
     setup.cls.serves(setup.params)
     reqs = [_request(setup, i, p) for i, p in enumerate(setup.prompts)]
@@ -335,14 +335,14 @@ def _found(run: Path, name: str) -> Path:
 
 
 def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> SimpleNamespace:
-    """A warden_serve run's execution phases `windows` as the verifier reads them, refused by name where they don't hold:
-    the deployment's schedule (its digest, and the class serving it) and public key; each link's registration of each
-    execution phase in ``cells.jsonl`` verified under that key and session (`warden_rows.check_registration`: the warden's
+    """A warden_serve run's execution phases `windows` as the verifier reads them, refused by name where they don't
+    hold: the deployment's schedule (its digest, and the class serving it) and public key; each link's registration of
+    each execution phase in ``cells.jsonl`` verified under that key and session (`warden_rows.check_registration`: the warden's
     signature over the head of the rows' root); and the records' rows under ``cells.salts`` (`warden_rows.Cells.of`)
     that head. The units read those rows. The Programs' outputs (the ``prog`` row's stand-in) are each connection's ids
     as its egress record carries them (`io_tie.parse_cell`), every egress cell an id-form one or a `FAIL` (a void run:
-    ``failed`` the reasons its ``fails`` record has in the execution phases, ``fail_buckets`` the buckets they're in, and
-    ``failed_why`` the run's ``check.json`` problems that name a connection failed closed). The tampered round's
+    ``failed`` the reasons its ``fails`` record has in the execution phases, ``fail_buckets`` the buckets they're in,
+    and ``failed_why`` the run's ``check.json`` problems that name a connection failed closed). The tampered round's
     re-signed execution phase is signed by a key of the driver's own (``out``), under which the verifier reads it."""
     import warden_serve as WS
 
@@ -763,7 +763,8 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     values the round's ports (each member's frame ports and the scan's trees, under their hiding ``schemas``), its
     public items what the registration shows (N, each template's stratum, the group, the leaf layer and each port's
     layout), its selection ``stratified:k``, its proof deadline `MEMBER_DEADLINE_S` a member and its context the
-    group's root. -> (the spec, its proof blocks, `Stream.register`'s counts: each template's proof blocks, over its members)."""
+    group's root. -> (the spec, its proof blocks, `Stream.register`'s counts: each template's proof blocks, over its
+    members)."""
     units = [pg.stagers[tp].defn for tp in pg.templates]
     law = S.Law(f"stratified:{k}")
     n = sum(m["n"] for m in members)
@@ -842,8 +843,8 @@ def coins_outcome(a, coins: SimpleNamespace, spec: S.Spec, units: list, counts: 
 
 def warden_roots(members) -> list[dict]:
     """The registration's ``rows/<direction>/<w>`` roots: each warden row registration its members' warden ports read
-    (an ingress proof block's ``row``, an egress proof block's ``o1``), its root and domain as the warden registered them
-    (`warden_rows.registration`, read back by the verifier), its T rows the leaves. A period check
+    (an ingress proof block's ``row``, an egress proof block's ``o1``), its root and domain as the warden registered
+    them (`warden_rows.registration`, read back by the verifier), its T rows the leaves. A period check
     (`NetworkCheck.Period`'s rows form) holds an execution phase's answer to its rows by these, by root and domain.
 
     A port is never the row registration's value (``warden/<direction>/<w>``, the name Lean reports the reads under):
@@ -1031,10 +1032,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
 
 
 def charge_terms(M, result: dict, members: list[dict], delta: float) -> dict | None:
-    """An accepted audit's terms (prove_path's `charge_terms`): ε, at most ``wrong_units.bound`` of its ``of`` proof blocks
-    wrong except with probability δ; λ_δ (``location_bits``), β_δ (``harm_bound``: each template's proof blocks weighing the
-    bits one of its proof blocks commits, `partition._template_bits`) and ``exfiltration_bound`` = β_δ + λ_δ. None where the
-    audit isn't accepted, which bounds nothing."""
+    """An accepted audit's terms (prove_path's `charge_terms`): ε, at most ``wrong_units.bound`` of its ``of`` proof
+    blocks wrong except with probability δ; λ_δ (``location_bits``), β_δ (``harm_bound``: each template's proof blocks
+    weighing the bits one of its proof blocks commits, `partition._template_bits`) and ``exfiltration_bound`` = β_δ +
+    λ_δ. None where the audit isn't accepted, which bounds nothing."""
     if not result.get("accepted"):
         return None
     p = AU.profile(result["registration"], result["draw"], delta)

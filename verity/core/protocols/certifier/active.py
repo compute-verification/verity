@@ -100,11 +100,11 @@ ingress record holds exactly one salt frame of p, the placeholder's, and the rev
 the link, off the prover's node, and the auditor's challenger on an auditor host. With the keys, `reveal` and
 `committed` take the challenger's `request`: its LMS signature under `challenger_key`, the key the auditor's
 deployment record (never the prover's configuration) registered for it, over `reveal_request_message(signer.key_id,
-run_id, ingress link, p, registration.digest, SALT_KIND or WEIGHTS_KIND)`, where `run_id` is the 32 bytes the proxy sampled
-at construction (`Proxy.run_id`). They refuse one that doesn't verify before reading anything else, so no one else
-spends p's one reveal, nor does a request for another certifier or another run, and a registration counts only if the
-challenger signed its digest, which binds its record. They answer a `Revealed`: the value, the certifier's key id and
-run id, and its own signature (`signer`, the network certifier's key) over `reveal_response_message`, which binds the
+run_id, ingress link, p, registration.digest, SALT_KIND or WEIGHTS_KIND)`, where `run_id` is the 32 bytes the proxy
+sampled at construction (`Proxy.run_id`). They refuse one that doesn't verify before reading anything else, so no one
+else spends p's one reveal, nor does a request for another certifier or another run, and a registration counts only if
+the challenger signed its digest, which binds its record. They answer a `Revealed`: the value, the certifier's key id
+and run id, and its own signature (`signer`, the network certifier's key) over `reveal_response_message`, which binds the
 value too, so a consumer can key p on the certifier run, (key id, run id, link) (`Proxy.certifier_run`, the same on a
 `RemoteCertifier`), where two proxies on one link name don't collide. The
 salt needs authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
@@ -1491,9 +1491,9 @@ class Proxy:
         """PoUW window `window`'s salt, for the verifier, given the window's registration as the proof system returned
         it, once. It fails closed (`RuntimeError`): without a registration whose receipt is its own and off which
         `registered` reads `window`, while the window's last ingress record is unpublished (t_d), once the certifier's
-        clock is more than `reveal_deadline` past the window's end, for a window whose salt wasn't sampled (one this proxy
-        was down for at its start), and for a window whose salt it has revealed already. So a registration made after
-        the window's work, or a second one naming the same window, gets no salt.
+        clock is more than `reveal_deadline` past the window's end, for a window whose salt wasn't sampled (one this
+        proxy was down for at its start), and for a window whose salt it has revealed already. So a registration made
+        after the window's work, or a second one naming the same window, gets no salt.
 
         With a challenger key it first refuses a `request` that isn't the registered challenger's signature over
         `reveal_request_message(signer.key_id, run_id, ingress link, window, registration.digest, SALT_KIND)`, so no

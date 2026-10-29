@@ -2,10 +2,10 @@
 (`service.LinkWindows`) is the execution phase's, complete, under the declared grid, and, where its end has an occupancy
 profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
 certifier. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkLinkWindow` v5, one per end),
-which runs on every execution phase; its one output is the ok bit. That proof block's Program holds it as one gate that names its
-circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's verifier of
-record reads its output from the proof block's proof, and the in-the-clear check (`LinkWindows.clear`) runs its `reference`,
-which the tests hold to the circuit.
+which runs on every execution phase; its one output is the ok bit. That proof block's Program holds it as one gate that
+names its circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's
+verifier of record reads its output from the proof block's proof, and the in-the-clear check (`LinkWindows.clear`) runs
+its `reference`, which the tests hold to the circuit.
 
     NetworkHeadCheck_v2{L, T, COUNTS}
         (record, record_domain: Digest, link: Array<L, Byte>, direction: Array<1>, window: Array<64>,
@@ -35,8 +35,8 @@ digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2). (2) Its fields
 (`NetworkHeadCounts`). (4) The certificate signs this head: R, the record digest of the head (`NetworkRecordDigest`,
 `tagged_sha512` of the record tag and the head), salted by `salt_c` is `signed`,
 SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fields are free: the deadline byte, which N2's
-proof block reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root, which nothing
-in N2 reads.
+proof block reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root, which
+nothing in N2 reads.
 
 `salt_c` is not committed: (4) holds it, up to a SHA-512 collision, to the one the certifier signed under, so the
 certificate binds the head the check opens, and the head leaf stays the head's bytes alone.
@@ -383,8 +383,8 @@ def gate_of(d, digest: str | None, what: str) -> PrimitiveDefinition:
 def gate(L: int, T: int, counts: bool) -> PrimitiveDefinition:
     """`unit(L, T, counts)` as one gate of N2's proof block (`service.LinkWindows.unit`), whose id names the Definition and
     its pinned circuit digest (`pinned_digest`): `Gate[NetworkHeadCheck_v2{L=..,T=..,COUNTS=..}@<digest>]_v2`. So the
-    proof block's Program digest, which the spec's check and each registration bind, binds the head check's circuit, and a
-    proof of another circuit of the same interface names another Program. A size class no sidecar pins names no digest
+    proof block's Program digest, which the spec's check and each registration bind, binds the head check's circuit, and
+    a proof of another circuit of the same interface names another Program. A size class no sidecar pins names no digest
     (`@unpinned`), and no proof of its proof block is accepted: give it a root in the sidecar's bindings and pin it with
     `circuit-check --update-pins`. The Program holds the gate rather than the Definition's body because the commitment
     gadgets' Boolean bodies (`Hm96Sha512Leaf`, `FrameV3Node`, `FrameV3Leaf`, `Sha512Compress`) encode to about 140 MB,

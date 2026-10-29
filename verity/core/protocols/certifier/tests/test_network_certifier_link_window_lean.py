@@ -34,8 +34,8 @@ def lean(monkeypatch):
 
 
 class Case:
-    """One execution phase's sample, certificates, syncs and delivered proof, with the findings of the stand-in Lean run on
-    the honest proof."""
+    """One execution phase's sample, certificates, syncs and delivered proof, with the findings of the stand-in Lean run
+    on the honest proof."""
 
     def __init__(self, lw, opening, draw, syncs, tmp, advice=None):
         self.lw, self.draw, self.syncs, self.tmp, self.advice = lw, draw, syncs, tmp, advice
@@ -113,8 +113,8 @@ def _file(head, body):
 
 
 def _shared(data, extra=0, first=False):
-    """The public file as a shared-row file: each port's table, `extra` instances of proof block 1 beside the sampled proof block (the
-    sampled one first or last), then the refs."""
+    """The public file as a shared-row file: each port's table, `extra` instances of proof block 1 beside the sampled
+    proof block (the sampled one first or last), then the refs."""
     head, body = _header(data)
     unit, k = head["units"]["indices"][0], len(SVC.PORTS)
     bcs = [body[j * SVC.BC_BYTES:(j + 1) * SVC.BC_BYTES] for j in range(k)]

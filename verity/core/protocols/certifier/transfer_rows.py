@@ -7,9 +7,9 @@ registered read opened against the certifier's signed root by the Lean verifier'
 
 **The commitment** is a registered value's (`one_stage.registered`), as the prover would commit it, under the
 certifier's own salts. The value is `rows` rows of `words` leaves of `word_bits` bits (16, or 32: the reading
-parameter's width, `registered.width`), row r its leaves in the order the proof blocks read them, each row the bit row a proof block's
-port carries in its `schema` (`SCHEMAS`: ``hm96-sha512/row/v2``, or ``hm96-sha512/row-seg/v1`` for a row a port reads
-in segments, as `EmbeddingRead_v1` reads a token's embedding):
+parameter's width, `registered.width`), row r its leaves in the order the proof blocks read them, each row the bit row a
+proof block's port carries in its `schema` (`SCHEMAS`: ``hm96-sha512/row/v2``, or ``hm96-sha512/row-seg/v1`` for a row a
+port reads in segments, as `EmbeddingRead_v1` reads a token's embedding):
 
     b‖c_r  = hm96.SHA512.commit_string(default_key, registered.row_digest(row r, word_bits, schema), salt_r)
     leaf_r = row_leaf(D, r, hm96.SHA512.tree_leaf(default_key, b‖c_r), schema)
@@ -295,8 +295,9 @@ def check_registration(doc: Any, key: PublicKey, session: bytes, *, link: str, d
 
 
 def port(head: TransferHead, reads: Sequence[int | None], reads_from: int = 0) -> dict[str, Any]:
-    """The verifier's own `--registered` port (`verity/registered-reads/v1`) of a proof block population that reads the head's
-    value: proof block `reads_from + i` opens row `reads[i]` (None: it reads none) at the certifier's signed root."""
+    """The verifier's own `--registered` port (`verity/registered-reads/v1`) of a proof block population that reads the
+    head's value: proof block `reads_from + i` opens row `reads[i]` (None: it reads none) at the certifier's signed
+    root."""
     if any(r is not None and not (type(r) is int and 0 <= r < head.rows) for r in reads):
         raise ValueError(f"a read is a row of the value's {head.rows}, or None")
     e = {"leaves": head.rows, "words": head.words, "word_bits": head.word_bits, "domain": head.domain.hex()}

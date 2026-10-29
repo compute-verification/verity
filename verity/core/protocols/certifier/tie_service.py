@@ -10,16 +10,16 @@ link, ingress and the window), whose root the warden's signed head names (`warde
 that root with the challenger (`IngressTie.registration`, on the head `warden_rows.check_registration` reads off the
 warden's signed registration); the rows and their salts are the prover's, which the warden hands it privately, and
 the challenger and the verifier see the root. A registration is one execution phase, its `window` provenance
-`{"kind": "served", "window": w}` held to the registration's order (`IngressTie.register`), and T proof blocks, proof block t
-bucket row t. Selection is `All`.
+`{"kind": "served", "window": w}` held to the registration's order (`IngressTie.register`), and T proof blocks, proof
+block t bucket row t. Selection is `All`.
 
 **The check** is `IngressTie.unit`, `NetworkIngressTieBucket` v1{B, L, R}: one gate naming
 `io_request.IoTieRequest_v1{B, L, R}` and its circuit digest, pinned in `io_request.circuit-check.json` and held to the
 Definition by circuit-check (`gate`, as `head_check.gate` holds the head check), with one output bit, IoTieRequest's.
 Its witness row is the bucket row itself, which the proof system's registered read holds to the warden's root
-(`warden_rows.bucket_port`: proof block t reads row t, the verifier's own `--registered` port, `IngressTie.registered`), so
-no gate hashes it. A size class no sidecar pins has a gate that names no digest, and no proof of its proof block is accepted
-(`proved`).
+(`warden_rows.bucket_port`: proof block t reads row t, the verifier's own `--registered` port, `IngressTie.registered`),
+so no gate hashes it. A size class no sidecar pins has a gate that names no digest, and no proof of its proof block is
+accepted (`proved`).
 
 **The statement is the verifier's own** (`io_request.lanes`): proof block t's public row is bucket t's lanes, from the
 advice's v0 prompt lengths and the warden's ingress release (`io_request.Release`: each connection's first bucket and
@@ -237,8 +237,8 @@ class IngressTie:
 
     @cached_property
     def proof_unit(self):
-        """The proof block a proof's circuit lowers: `unit` with its gate the Definition it names (`head_check.expand`, a
-        `ValueError` for an unpinned size class)."""
+        """The proof block a proof's circuit lowers: `unit` with its gate the Definition it names (`head_check.expand`,
+        a `ValueError` for an unpinned size class)."""
         return bind(_PROOF_UNIT, **dict(zip(_STATICS, self.key)))
 
     @cached_property
@@ -332,8 +332,8 @@ class IngressTie:
             return None
 
     def arguments(self, row: bytes, lanes: Sequence[Q.Lane]) -> dict[str, list[int]] | None:
-        """One proof block's arguments on its bucket `row` and `lanes`, by parameter, each its leaves' bits: the prover's side.
-        None where the row isn't the proof block's N cells of B bytes or a lane isn't five u32s."""
+        """One proof block's arguments on its bucket `row` and `lanes`, by parameter, each its leaves' bits: the
+        prover's side. None where the row isn't the proof block's N cells of B bytes or a lane isn't five u32s."""
         sh = self.shape
         if len(row) != sh.N * sh.B:
             return None
@@ -349,8 +349,8 @@ class IngressTie:
         return None if args is None else {n: args[n] for n in self.layout["pub"]}
 
     def outputs(self, row: bytes, lanes: Sequence[Q.Lane]) -> int:
-        """A proof block's output bit on its row by its gate's reference (`io_request.reference`), which the tests hold to the
-        circuit: what the prover claims."""
+        """A proof block's output bit on its row by its gate's reference (`io_request.reference`), which the tests hold
+        to the circuit: what the prover claims."""
         sh = self.shape
         if len(row) != sh.N * sh.B:
             return 0
@@ -358,9 +358,9 @@ class IngressTie:
 
     @cached_property
     def layout(self) -> dict[str, tuple[str, ...]]:
-        """The statement's two input rows (`ROWS`), each its parameters in the proof block's signature's order: ``pub`` the
-        lanes, ``wit`` the bucket row (`WITNESS`), each the little-endian concatenation of its parameters' bits in whole
-        u16 words, so a proof block's ``wit`` row is its bucket row's bytes."""
+        """The statement's two input rows (`ROWS`), each its parameters in the proof block's signature's order: ``pub``
+        the lanes, ``wit`` the bucket row (`WITNESS`), each the little-endian concatenation of its parameters' bits in
+        whole u16 words, so a proof block's ``wit`` row is its bucket row's bytes."""
         params, _ = self.unit.signature()
         out = {r: tuple(n for n, _ in params if (n in WITNESS) == (r == "wit")) for r in ROWS}
         for r, names in out.items():
@@ -385,8 +385,8 @@ class IngressTie:
         return [gate(*self.key)]
 
     def proved(self, findings: Sequence[Finding]) -> bool:
-        """Whether `findings` prove this tie's proof block: its gate names IoTieRequest's pinned circuit digest, and one or
-        more sessions each accepted and named the registered Program."""
+        """Whether `findings` prove this tie's proof block: its gate names IoTieRequest's pinned circuit digest, and one
+        or more sessions each accepted and named the registered Program."""
         want = self._partition["program"]
         return all(HC.pinned(g) for g in self.gates()) and bool(findings) \
             and all(f.accepted and f.program == want for f in findings)

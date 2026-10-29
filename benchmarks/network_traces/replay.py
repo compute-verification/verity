@@ -196,8 +196,8 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prio
     """One configuration through prover, shaper, certifier, records and audit, raw, committed and certified. The prover's
     syncs are `syncs` (`parse_sync_policy`), and an online rule starts from `prior` and reads the frames ready by `lag`
     buckets before each window (`online.declare`). The verifier is `audit` (a class with `audit.Audit`'s interface).
-    Returns one row per execution phase, the configuration's tallies and the online prover's history (empty for the other
-    policies)."""
+    Returns one row per execution phase, the configuration's tallies and the online prover's history (empty for the
+    other policies)."""
     sync_set = setup.sync_set
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
     raw, committed, certified = audit(), audit(), audit()

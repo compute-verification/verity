@@ -89,9 +89,9 @@ def test_two_windows_and_an_idle_tail(x):
 
 
 def test_the_slices_block_rows_are_the_registered_leaves(x):
-    """At G < P (G = 1 on the corpus's P = 7) the slice's ``srv`` rows are the registration's rows of its blocks: proof block w's
-    row ``srv{j}`` is leaf w·(P / G) + j, held there by its b‖c and at no other leaf; the six passes with the registered
-    rows in ``srv0`` … are refused at ``rows``, as at G = P."""
+    """At G < P (G = 1 on the corpus's P = 7) the slice's ``srv`` rows are the registration's rows of its blocks: proof
+    block w's row ``srv{j}`` is leaf w·(P / G) + j, held there by its b‖c and at no other leaf; the six passes with the
+    registered rows in ``srv0`` … are refused at ``rows``, as at G = P."""
     G = 1
     st = CS.with_block(x.st, G)
     S = SimpleNamespace(**st)

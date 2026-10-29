@@ -17,9 +17,9 @@ The frames all have the fixed size B, so the encoding is unambiguous. A row that
 Here `h` is the canonical JSON of {link, window, buckets, allocation, frame_bytes, bucket_ms, status}.
 
 **The check.** The verifier recomputes the digest from the Program's grid, with a complete status. It accepts the
-execution phase only if the digests are equal. Under the collision resistance of SHA-256 (`cr/sha-256`), equal digests mean
-equal records, so the audit stays exact. It never needs the certifier's raw grid, since the Program fixes every egress
-frame's content. The capacity bounds on accepted runs then hold up to a SHA-256 collision.
+execution phase only if the digests are equal. Under the collision resistance of SHA-256 (`cr/sha-256`), equal digests
+mean equal records, so the audit stays exact. It never needs the certifier's raw grid, since the Program fixes every
+egress frame's content. The capacity bounds on accepted runs then hold up to a SHA-256 collision.
 """
 
 from __future__ import annotations
@@ -60,8 +60,8 @@ def record_digest(link: str, window: int, grid: Grid, status: Status, params: Gr
 
 @dataclass(frozen=True, slots=True)
 class CommittedRecord:
-    """What the certifier publishes per execution phase: the record digest, and the status in the clear so a violation can be
-    classified. The digest binds the status too, so a status that disagrees with it is a mismatch."""
+    """What the certifier publishes per execution phase: the record digest, and the status in the clear so a violation
+    can be classified. The digest binds the status too, so a status that disagrees with it is a mismatch."""
 
     link: str
     window: int

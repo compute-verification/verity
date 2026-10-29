@@ -22,9 +22,9 @@ block's bits as u16 words, as a proof commits a row, under `binding` of the run 
 one row, the slice's ``srv``; at G < P block j is the slice's ``srv{j}`` (`compile_slice.srv_rows`). `Served.record` is
 the public part: the root, the count, the row width and G. The rows and their salts stay the prover's.
 
-**The verifier's side.** `leaf_ok` holds a proof block's row by its b‖c to its registered leaf (`leaf`: window w's block j), as
-the advice's ``adv`` row is held; `reads_port` is the same registration as the Lean verifier's registered reads take it
-(`flock-verify verify --registered`), each proof block's leaf its own.
+**The verifier's side.** `leaf_ok` holds a proof block's row by its b‖c to its registered leaf (`leaf`: window w's block
+j), as the advice's ``adv`` row is held; `reads_port` is the same registration as the Lean verifier's registered reads
+take it (`flock-verify verify --registered`), each proof block's leaf its own.
 
 That the served rows are the rows the served compute ran is the tie's to bind (`served_tie`: each row's valid, start and
 n against its step's Program, and the ids IoTieRequest's); nothing here checks it.

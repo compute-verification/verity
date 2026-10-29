@@ -7,14 +7,15 @@ import Identity.Tagged
 /-!
 # N2's execution phase verdict of record
 
-`verdict` decides one execution phase of N2 (`verity/core/protocols/certifier/service.py`, `LinkWindows.verify`) from the
-proof as the verifier receives it and the link's public fields, and nothing else: it is accepted exactly when
+`verdict` decides one execution phase of N2 (`verity/core/protocols/certifier/service.py`, `LinkWindows.verify`) from
+the proof as the verifier receives it and the link's public fields, and nothing else: it is accepted exactly when
 
 * the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, whose findings `Case.findings` carries) refused
-  nothing, every gate of the link's proof block names a pinned circuit digest (`pinned`), one or more sessions each accepted
-  and named the registered Program, and each proved exactly the sampled proof blocks;
-* the statement's public file holds, for the sampled proof block, a ``pub`` row commitment that opens under the delivered salt to
-  the verifier's own public row (`pubRow`: the registered root, the execution phase's served domain (`domainId`), the link,
+  nothing, every gate of the link's proof block names a pinned circuit digest (`pinned`), one or more sessions each
+  accepted and named the registered Program, and each proved exactly the sampled proof blocks;
+* the statement's public file holds, for the sampled proof block, a ``pub`` row commitment that opens under the
+  delivered salt to the verifier's own public row (`pubRow`: the registered root, the execution phase's served domain
+  (`domainId`), the link,
   the window, each end's declared grid and its profile's row, both certificates' signed digests, and on a served link the
   window's declared sync, on an advised link the window's view of the advice) and an ``o0`` row commitment that opens to
   the delivered output word, whose verdict and deadline bits are both 1 (`opened`);
@@ -22,9 +23,9 @@ proof as the verifier receives it and the link's public fields, and nothing else
   link, their end (egress first) and the window (`certified`);
 * the window's declared sync is one of Σ_sync.
 
-A warden link (`Kind.warden`, `service.WardenProfile`) is the plain proof block under the active warden's records: both ends'
-grids are the warden's one grid, with no profile, and both carry the warden's parameters digest (`gridBytes`) in place
-of a certifier's; the warden runs no shaper clock, so a window declares no sync and nothing is read of the syncs
+A warden link (`Kind.warden`, `service.WardenProfile`) is the plain proof block under the active warden's records: both
+ends' grids are the warden's one grid, with no profile, and both carry the warden's parameters digest (`gridBytes`) in
+place of a certifier's; the warden runs no shaper clock, so a window declares no sync and nothing is read of the syncs
 (`synced`). Its outputs are a plain link's.
 
 Its public outputs are `verdict` and the proved `deadline` bit (on an advised link the advice it read, as given), and
@@ -234,8 +235,8 @@ end Decode
 
 /-! ## The public row -/
 
-/-- A 64-byte digest as the proof block reads it (`head_check._digest_bits`, packed): each 8-byte big-endian word's bits least
-significant first, so each word's bytes reversed. -/
+/-- A 64-byte digest as the proof block reads it (`head_check._digest_bits`, packed): each 8-byte big-endian word's bits
+least significant first, so each word's bytes reversed. -/
 def digestRow (d : ByteArray) : ByteArray :=
   ⟨(Array.range d.size).map fun i => d.get! (8 * (i / 8) + 7 - i % 8)⟩
 
@@ -281,8 +282,8 @@ def gridBytes (c : Case) (d : Nat) : V ByteArray := do
     | _ => parametersDigest g (if d = 0 then some (manifestSet c) else none)
   return be 4 g.buckets ++ be 4 g.allocation ++ be 4 g.frameBytes ++ be 4 g.bucketMs ++ digest
 
-/-- The served proof block's `sync` input (`served.sync_words`): δ, then ρ's numerator and denominator in lowest terms, each a
-u16; none past 2^16. -/
+/-- The served proof block's `sync` input (`served.sync_words`): δ, then ρ's numerator and denominator in lowest terms,
+each a u16; none past 2^16. -/
 def syncWords (s : Sync) : Option (Nat × Nat × Nat) :=
   let g := Nat.gcd s.num s.den
   let w := (s.delta, s.num / g, s.den / g)
@@ -338,9 +339,9 @@ def pinned (g : String) : Bool :=
     !defn.isEmpty && !defn.contains '\n' && rest.head? == some '@' && (rest.drop 1).all hex
   else false
 
-/-- Whether the findings prove this link's proof block and the sample (`LinkWindows.proved`, then each session's proof blocks): nothing
-refused, every gate pinned, one or more sessions, each accepted, naming the registered Program and proving exactly the
-sampled proof blocks. -/
+/-- Whether the findings prove this link's proof block and the sample (`LinkWindows.proved`, then each session's proof
+blocks): nothing refused, every gate pinned, one or more sessions, each accepted, naming the registered Program and
+proving exactly the sampled proof blocks. -/
 def proved (c : Case) : Bool :=
   match c.findings with
   | none => false
@@ -398,8 +399,8 @@ def opens (row : ByteArray) (bits : Nat) (salt : Option ByteArray) (bc : ByteArr
   | some s => s.size == saltBytes && Flock.Hm96.Default512.commitString (rowDigest row bits) s == bc
   | none => false
 
-/-- The sampled proof block's output word, once its public row commitment opens to `row` and its output row commitment to the
-delivered word, each under the salt delivered (`service._opened`); else none. -/
+/-- The sampled proof block's output word, once its public row commitment opens to `row` and its output row commitment
+to the delivered word, each under the salt delivered (`service._opened`); else none. -/
 def opened (c : Case) (row : Option ByteArray) : Option Nat := do
   let row ← row
   let file ← c.statement

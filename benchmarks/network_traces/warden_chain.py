@@ -9,8 +9,8 @@ none of its records enters the chain.
 * `link`: N2's link on the run (`service.LinkWindows` with its `service.WardenProfile`): the warden's link name, its
   one grid both ends', its key and session, its windows and parameters digest, and no sync (the warden runs no shaper
   clock and signs none, so no clock certificate enters N2 here).
-* `pairs`: each execution phase's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the first
-  window missing one.
+* `pairs`: each execution phase's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the
+  first window missing one.
 * `certificates`: the warden's own offline check (`warden_serve.check`: every execution phase of the three records
   certified under the warden's key and session with its head the record's, its rows' registration, the audit, and the
   client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's, `auditor.warden_outcome`)

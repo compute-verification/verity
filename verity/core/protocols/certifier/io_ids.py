@@ -306,9 +306,9 @@ def reference(shape: Shape, inst: Instance) -> int:
 
 def port_reads(maps: Sequence[Map], root: bytes, domain_id: bytes, count: int, P: int,
                reads_from: int = 0) -> dict[str, dict[str, Any]]:
-    """The verifier's own `--registered` ports of the buckets' proof blocks over the Commit's `count` rows of P input ids
-    under its registration's `root` and `domain_id`, never an instance's (`io_tie.port_reads`): proof block `reads_from + u`
-    reads the verifier's map u's steps."""
+    """The verifier's own `--registered` ports of the buckets' proof blocks over the Commit's `count` rows of P input
+    ids under its registration's `root` and `domain_id`, never an instance's (`io_tie.port_reads`): proof block
+    `reads_from + u` reads the verifier's map u's steps."""
     return IT.port_reads([m.steps for m in maps], root, domain_id, count, P, INPUT_IDS, reads_from)
 
 
@@ -337,8 +337,8 @@ def route_switches(shape: Shape, inst: Instance) -> list[int]:
 
 
 def sort_switches(shape: Shape, inst: Instance) -> list[int]:
-    """The members' sort as the proof block forms them: each slot position its field's class (the sink but at a field), each
-    entry its class, by (class, slot before entry, position)."""
+    """The members' sort as the proof block forms them: each slot position its field's class (the sink but at a field),
+    each entry its class, by (class, slot before entry, position)."""
     sh = shape
     got = scan(sh, inst.request)
     keys = [sh.sink] * sh.NK

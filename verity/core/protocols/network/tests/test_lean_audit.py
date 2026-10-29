@@ -139,9 +139,9 @@ SESSION = bytes(range(lms.SESSION_BYTES))
 
 
 def _service_rounds(tmp_path, W, record=lambda w, r: r, certified=lambda w, e: e):
-    """`service.py`'s rounds on link "responses": each window's (execution phases, stream, opening, sample, syncs), the egress
-    record passed through `record(w, r)`, certified, then through `certified(w, e)`. The link declares the honest egress
-    records' occupancy, and none on ingress."""
+    """`service.py`'s rounds on link "responses": each window's (execution phases, stream, opening, sample, syncs), the
+    egress record passed through `record(w, r)`, certified, then through `certified(w, e)`. The link declares the honest
+    egress records' occupancy, and none on ingress."""
     g, ss = GridParams(3, 2, 2), SyncSet((0, 1), (Fraction(1),))
     syncs = [ClockSync(w % 2, Fraction(1)) for w in range(W)]
     signer = LmsSigner.create(lms.keygen(lms.Params(8, 8, 4, toy=True), bytes(range(8))), tmp_path / "signer-state.json")

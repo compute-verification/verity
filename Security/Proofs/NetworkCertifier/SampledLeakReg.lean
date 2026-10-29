@@ -10,10 +10,10 @@ import Proofs.Flock.Claims.Finder
 `RAcc` pins the circuit's inputs to the trace's committed values, and holds every faulty proof block's committed gate as
 advice. At a registered input that is a free input:
 
-* in a faulty proof block, the gate is held (`FaultyGate`: an input is on its proof block's boundary), so its input value is never
-  read;
-* in any other proof block, the proof block is correct on its committed values, so the trace opens the gate (`val_some_of_input`) and
-  its value there is the opened one (`traceVal_of_val`).
+* in a faulty proof block, the gate is held (`FaultyGate`: an input is on its proof block's boundary), so its input
+  value is never read;
+* in any other proof block, the proof block is correct on its committed values, so the trace opens the gate
+  (`val_some_of_input`) and its value there is the opened one (`traceVal_of_val`).
 
 So when the trace agrees with the registration at the registered inputs it opens, the accepted advice can be moved to
 the inputs pinned at the registration's values (`rLeak_reg_of_rAcc`), a set the statement and the registration fix. An

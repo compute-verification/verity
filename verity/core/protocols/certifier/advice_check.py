@@ -1,5 +1,5 @@
-"""Advice v0's validity as a Boolean Definition: the first part of the compile slice's proof block, "this committed bit string decodes to
-a well-formed v0 advice" (`advice`, PROTOCOL.md "Advice v0").
+"""Advice v0's validity as a Boolean Definition: the first part of the compile slice's proof block, "this committed bit
+string decodes to a well-formed v0 advice" (`advice`, PROTOCOL.md "Advice v0").
 
     AdviceCheck_v1{L} (bits: Array<L, Value<1>>, length: Array<LW, Value<1>>) -> Value<1>
 
@@ -672,7 +672,8 @@ def unit(L: int):
 
 
 def arguments(data: bytes, L: int) -> list[list[int]]:
-    """The proof block's arguments for `data`: its bits in stream order, zero beyond its length, and its length in bytes."""
+    """The proof block's arguments for `data`: its bits in stream order, zero beyond its length, and its length in
+    bytes."""
     Z = _widths(L)
     if 8 * len(data) > L or len(data) >= 1 << Z.LW:
         raise ValueError(f"{len(data)} bytes don't fit L = {L} bits")

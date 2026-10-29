@@ -12,9 +12,9 @@ default `hm96-sha512/row/v2`, a proof block's bit-row port), committed as `Regis
 
 the domain `registered_entries` derives for a value the verifier pins: `registration.check` holds its pinned values
 across windows, so D leaves the window's open root out. `program` is the reading program's digest
-(`partition.program_digest`), public. salt_r is 192 bytes the certifier samples from the operating system for row r and no
-other row. The salts are witness, which the certifier hands to the prover alone (`CertifiedOut.salts`, `witness`); the
-rows are what the server sent, which the prover holds.
+(`partition.program_digest`), public. salt_r is 192 bytes the certifier samples from the operating system for row r and
+no other row. The salts are witness, which the certifier hands to the prover alone (`CertifiedOut.salts`, `witness`);
+the rows are what the server sent, which the prover holds.
 
 **The signed head** (`OutHead`) is public, as a hiding root is:
 
@@ -220,8 +220,8 @@ def read_witness(blob: bytes) -> list[bytes]:
 def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | Issuer, session: bytes, window: int,
                link: str = LINK, salts: Sequence[bytes] | None = None) -> CertifiedOut:
     """The output value the certifier relayed, committed at the registration's `shape` under the domain the verifier
-    derives for the reading program's pinned value, and its head signed for the egress execution phase `(link, window)` in
-    certifier session `session`.
+    derives for the reading program's pinned value, and its head signed for the egress execution phase `(link, window)`
+    in certifier session `session`.
 
     `rows`: the value's rows, exactly `shape.rows` of `shape.words` leaves of `shape.word_bits` bits. `key`: the
     certifier's signer (which starts `session` at its first signature and refuses any other session), or its running

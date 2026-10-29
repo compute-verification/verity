@@ -135,7 +135,8 @@ class WardenParams:
 
     @property
     def program_slots(self) -> int:
-        """A slot stride's Program slots, one a lane (`ingress_scan.Class.SLOTS`, for a class that serves the warden)."""
+        """A slot stride's Program slots, one a lane (`ingress_scan.Class.SLOTS`, for a class that serves the
+        warden)."""
         return self.lanes
 
     @property

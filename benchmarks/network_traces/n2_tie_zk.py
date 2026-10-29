@@ -1,6 +1,6 @@
 """The ingress tie in zero knowledge: each ingress execution phase's T bucket rows of the warden's cells, each proved as
-IoTieRequest (`tie_service.IngressTie`, its proof block `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`), registered on the link's
-own stream, proved by Flock `prove --zk` behind the Lean firewall with each proof block's witness row read off the warden's
+IoTieRequest (`tie_service.IngressTie`, its proof block `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`), registered on the
+link's own stream, proved by Flock `prove --zk` behind the Lean firewall with each proof block's witness row read off the warden's
 root (`warden_rows.bucket_port`), delivered, decided by the tie's verifier of record on its own lanes from the advice
 and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `advised.IoTieVerdict` on the link
 and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read through
@@ -313,10 +313,10 @@ def link_windows(tie: TS.IngressTie, link: Q.Link, adv: AD.LinkAdvice, edit=None
     """Every link-window of the member as the warden and the prover hold it before it registers: the warden's cells
     (`warden_rows.Cells`: a warden run's own, else fresh salts) and its head, the verifier's lanes of `adv` (``own``,
     None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a tuple, the
-    lanes of those prompt lengths), the prover's rows (the warden's, or a `Forge`'s), each proof block's arguments on the
-    prover's lanes and rows and the verifier's public arguments on its own, each output word by the gate's reference,
-    whether each proof block's public row is the verifier's (``opens``) and the host's read of the registered rows (``held``,
-    `warden_rows.refusal`: None where every row opens the warden's root)."""
+    lanes of those prompt lengths), the prover's rows (the warden's, or a `Forge`'s), each proof block's arguments on
+    the prover's lanes and rows and the verifier's public arguments on its own, each output word by the gate's
+    reference, whether each proof block's public row is the verifier's (``opens``) and the host's read of the registered
+    rows (``held``, `warden_rows.refusal`: None where every row opens the warden's root)."""
     out = []
     for w, rec in enumerate(link.records):
         cells = link.cells[w] if getattr(link, "cells", None) else \
@@ -429,8 +429,8 @@ def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNa
 
 def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleNamespace, out: Path,
            port: int) -> dict:
-    """The member's execution phases on its own stream, in order: the warden registers, the challenger selects, the prover
-    proves the statement live behind the firewall and delivers, and the verifier of record decides on the proof
+    """The member's execution phases on its own stream, in order: the warden registers, the challenger selects, the
+    prover proves the statement live behind the firewall and delivers, and the verifier of record decides on the proof
     (`IngressTie.outcome`); then the tie from the stream's outcomes of record (`IngressTie.tie`). Writes what the
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each window's files prefixed by its window."""
     stream = tie.stream(budget=len(rd.windows), delta=cs.DELTA, challenger="n2-tie-zk", coins=cs._no_coins,
@@ -637,8 +637,8 @@ def prove(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="n2_tie_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("prove", help="each ingress execution phase's bucket rows proved --zk as IoTieRequest, decided by "
-                                     "the tie's verifier of record, and the tie built from the outcomes")
+    p = sub.add_parser("prove", help="each ingress execution phase's bucket rows proved --zk as IoTieRequest, "
+                                     "decided by the tie's verifier of record, and the tie built from the outcomes")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)

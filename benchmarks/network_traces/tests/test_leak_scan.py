@@ -131,8 +131,8 @@ def test_a_counted_piece_the_statement_fixes_is_public(tmp_path):
 
 
 def test_a_found_piece_the_driver_cant_name_is_leaked(tmp_path):
-    """`rescan` takes a run's ``received`` again with the pieces its driver recomputes: one it can't (a salt the run sampled)
-    is leaked, and the run's own verdict is kept as ``was``."""
+    """`rescan` takes a run's ``received`` again with the pieces its driver recomputes: one it can't (a salt the run
+    sampled) is leaked, and the run's own verdict is kept as ``was``."""
     vdir = _streams(tmp_path, {39: (POS[:1], POS[:1]), 40: (bytes(16), bytes(16))})
     got = {**_found(vdir), "leaked": ["pos @0"]}
     got["verifier_found"] = sorted(got["verifier_found"] + ["wit salt 3 @0"])

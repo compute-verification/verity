@@ -131,10 +131,10 @@ def test_the_members_are_the_programs_ranges(G):
 
 def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int | None = None,
               late: tuple[int, ...] = ()) -> Path:
-    """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as warden_serve's
-    `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration and salts),
-    under a warden key of its own, beside its `deployment.json`; the connections of ``late`` failed late (a void run,
-    their reasons in ``fails.records``)."""
+    """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
+    warden_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
+    and salts), under a warden key of its own, beside its `deployment.json`; the connections of ``late`` failed late (a
+    void run, their reasons in ``fails.records``)."""
     windows = windows or setup.windows
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = sz.traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses, windows,
@@ -180,9 +180,9 @@ def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp
     """The rows form's hold (`NetworkCheck.Period`: the scan's registration names each of W's row registrations' root
     and domain): a G = 2 group's honest round names, as ``rows/<direction>/<w>``, each of the four row registrations
     of the run's ``cells.jsonl``, T leaves each (ingress's row ports and egress's o1 read them); the tampered round,
-    egress only, names the egress rows alone, the re-signed execution phase's in its place. No root is named as the value
-    Lean reports a read under, so the audit's registered reads (`audit.session_registered`, Lean's ``registered`` of
-    each member) hold none of them, as the registration registers none."""
+    egress only, names the egress rows alone, the re-signed execution phase's in its place. No root is named as the
+    value Lean reports a read under, so the audit's registered reads (`audit.session_registered`, Lean's ``registered``
+    of each member) hold none of them, as the registration registers none."""
     G, T = 2, sz.TEST.params.window
     run = published(tmp_path / "run", sz.TEST, windows=G)
     h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
@@ -206,8 +206,8 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
     """The verifier's own ``--registered`` file of each member (`registered_file`: `stage` writes it, `a0.lean_verify`
     passes it, and a Lean verdict's ``registered`` reports its roots) holds each warden port at the root and domain of
     the row registration the deployment's key signed (`warden_rows.check_registration`, read here afresh from the
-    run's ``cells.jsonl``), the root `warden_roots` registers for that direction and execution phase. A member whose rows
-    the prover committed afresh, under salts of its own, is still read at the signed root, and refused there; and a
+    run's ``cells.jsonl``), the root `warden_roots` registers for that direction and execution phase. A member whose
+    rows the prover committed afresh, under salts of its own, is still read at the signed root, and refused there; and a
     statement whose header names a port registered that the verifier's file doesn't is refused, as Lean refuses it
     (`header_refusal`, `Flock.Registered.check`)."""
     G = 2
@@ -250,10 +250,10 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
 
 
 def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
-    """`window_answer` as the rows form reads an execution phase's scan answer (`pouw.core_check.answer_of` and `integrity`,
-    the period mirror's own reads): every proof block of a G = 2 group sampled, one level sampled stratified over the three
-    templates, its bound 0, for the group's registration; a refused audit a reject of the same registration naming
-    why; an accepted record of another registration the driver's error."""
+    """`window_answer` as the rows form reads an execution phase's scan answer (`pouw.core_check.answer_of` and
+    `integrity`, the period mirror's own reads): every proof block of a G = 2 group sampled, one level sampled
+    stratified over the three templates, its bound 0, for the group's registration; a refused audit a reject of the same
+    registration naming why; an accepted record of another registration the driver's error."""
     from verity.core.protocols.pouw import core_check as CC
 
     G, T = 2, 4
@@ -299,7 +299,8 @@ def test_an_audit_refused_with_every_member_held_answers_each_link_window_naming
 
 
 def _program(G: int, T: int) -> tuple:
-    """The scan's Program, query and sampling design (every proof block sampled) for a group of G execution phases of T buckets."""
+    """The scan's Program, query and sampling design (every proof block sampled) for a group of G execution phases of T
+    buckets."""
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
     defs = {"first": FIRST, "ingress": ING, "egress": EG}
     return (sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
@@ -443,8 +444,8 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
 def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outside_the_group_is_not_read(tmp_path):
     """A connection's reason in the warden's ``fails`` record is in the bucket of its egress `FAIL` (a void run, whose
     execution phases the scan answers refused): a reason in a scanned bucket whose egress row has no `FAIL` is refused,
-    naming the run's ``check.json`` problems that say a connection failed closed; one in an execution phase past the group
-    is another group's, and the group is read as if it weren't there."""
+    naming the run's ``check.json`` problems that say a connection failed closed; one in an execution phase past the
+    group is another group's, and the group is read as if it weren't there."""
     run = published(tmp_path / "run")
     rec = WS.ar.unpack_record(WS.ar.read_blobs(run / "responses.records")[0], sz.PARAMS.cell_bytes)
     t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None)

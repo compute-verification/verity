@@ -20,12 +20,12 @@ b‖c is the same, and the verifier checks they're equal (`check_chain`). Window
 public salt (`start_salt`), whose opening the verifier computes (`start_opening`). Row 1 is under a fresh salt.
 
 **Why a restart is refused.** The verifier holds window 0's carry-in to the priors (`CH-first`) and each later
-window's to the last one's carry-out (`CH-carry`), on every session, and the proof block holds each window's carry-out to its
-charge's carry' from its carry-in (ok). So, window by window, the carry each window is charged from is the one `code_v1`
-carries over the whole session. A prover that restarts the counts mid-session, at the priors or at counts fitted to the
-window, either breaks the chain, which `check_chain` refuses, or claims a proof block whose ok is 0, which fails that proof block's
-proof as any false proof block does. A carry row's padding needs no check: window 0's is the priors' row, and every later one
-a proved proof block's carry-out.
+window's to the last one's carry-out (`CH-carry`), on every session, and the proof block holds each window's carry-out
+to its charge's carry' from its carry-in (ok). So, window by window, the carry each window is charged from is the one
+`code_v1` carries over the whole session. A prover that restarts the counts mid-session, at the priors or at counts
+fitted to the window, either breaks the chain, which `check_chain` refuses, or claims a proof block whose ok is 0, which
+fails that proof block's proof as any false proof block does. A carry row's padding needs no check: window 0's is the
+priors' row, and every later one a proved proof block's carry-out.
 
 **Why a value of its own.** `replay_chain.ReplayLoad` writes the window row and checks it in full at the window's
 start, before any decision is coded, so a carry-out there would need ReplayLoad to leave a field unchecked and change

@@ -31,8 +31,8 @@ class Reason(enum.Enum):
 
 @dataclass(frozen=True, slots=True)
 class Status:
-    """One untimed coverage status per execution phase: complete when `reason` is None, otherwise not established. It carries
-    no bucket index, time or count, so it never shows when within the window something happened."""
+    """One untimed coverage status per execution phase: complete when `reason` is None, otherwise not established. It
+    carries no bucket index, time or count, so it never shows when within the window something happened."""
 
     reason: Reason | None = None
 

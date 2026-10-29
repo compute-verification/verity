@@ -306,9 +306,9 @@ def test_an_advice_whose_received_isnt_the_release_refuses_every_window(tmp_path
 
 
 def test_a_row_that_isnt_the_wardens_is_refused(tmp_path):
-    """Each proof block's witness row is read off the warden's root at its own bucket (`warden_rows.bucket_port`): a proof on
-    another row (window 1's bucket 1, which IoTieRequest accepts on its own lanes) or on the window's rows read by
-    swapped proof blocks fails the registered read, and so do its sessions."""
+    """Each proof block's witness row is read off the warden's root at its own bucket (`warden_rows.bucket_port`): a
+    proof on another row (window 1's bucket 1, which IoTieRequest accepts on its own lanes) or on the window's rows read
+    by swapped proof blocks fails the registered read, and so do its sessions."""
     advice = _advice(SPAN)
     run = Run(tmp_path / "row")
     lanes = run.tie.lanes(advice, SERVED.releases, 0)
@@ -356,8 +356,8 @@ def test_the_tie_gate_names_its_pinned_circuit_digest():
 
 
 def test_an_unpinned_size_class_is_refused(tmp_path):
-    """IoTieRequest at L = 3 has no pinned circuit digest, so its gate names none and no proof of its proof block is accepted,
-    even one Lean accepts."""
+    """IoTieRequest at L = 3 has no pinned circuit digest, so its gate names none and no proof of its proof block is
+    accepted, even one Lean accepts."""
     params = W.WardenParams(cell_bytes=B, slots=2, lanes=3, window=4, delay=1)
     served = _serve(params=params, windows=2)
     run, advice = Run(tmp_path, params=params, served=served), _advice(SPAN)

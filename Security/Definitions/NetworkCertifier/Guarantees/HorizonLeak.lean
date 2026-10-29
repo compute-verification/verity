@@ -22,8 +22,9 @@ relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escape
 argument with the escape as the input); and the secrets whose every window meets its relation, with the faulty sets
 under `Fmax` (`HorizonGood`), number at most
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i` the
-period's proof blocks and `b` each proof block's committed bits: `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits for the faulty proof blocks,
-plus the advice and timing terms and the schedule terms. A proof block's outputs are at most 16 bits, so `b = 16`.
+period's proof blocks and `b` each proof block's committed bits: `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits for the
+faulty proof blocks, plus the advice and timing terms and the schedule terms. A proof block's outputs are at most 16
+bits, so `b = 16`.
 
 The network certifier is one device on the server's uplink, as in `PeriodLeakAccepted`
 (`Definitions.NetworkCertifier.Tap`): one run of its code gives the cells the client receives (it functions as an
@@ -45,8 +46,8 @@ set_option linter.unusedVariables false
 
 /-- **The leak through the network certifier over a monitoring period of accepted sampled audits** (conditional on its
 two per-window inputs). Over `m` windows on independent live coins, window `i` registered as `sw i` (partition `Pw i`,
-values `ρ i` at the registered inputs, operator `op i`), with `n i` proof blocks, each committing at most `b` bits; with the
-network certifier running its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
+values `ρ i` at the registered inputs, operator `op i`), with `n i` proof blocks, each committing at most `b` bits; with
+the network certifier running its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
 (`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
 and its record of them in the format `f`,
 the windows' observations; and a covert sender in the server whose secrets `z ∈ Zs` a decoder recovers from the

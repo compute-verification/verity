@@ -33,8 +33,8 @@ endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an ou
 `egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends it to
 the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
 (`read_prompts`, `prompt_traffic`: request j's the (j mod n)-th, each with exactly `--max-tokens`), and
-`--window-per-group` sends them in groups of the n, group g's half a bucket into execution phase g·G (`group_windows`), so
-that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
+`--window-per-group` sends them in groups of the n, group g's half a bucket into execution phase g·G (`group_windows`),
+so that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
 loop's period of requests a group, as the gate's `warden-rehearse --scan --prompts --window-per-group` runs it.
 
 **Subcommands**, from the repository root or with `benchmarks/network_traces` on the path:
@@ -198,8 +198,8 @@ def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_t
                top_p: float | None = None) -> list[dict]:
     """n warden-form id requests (`active.id_request`'s fields), each {"at": seconds after the origin, "ids": its
     fields}: Poisson arrivals at `rate`, prompts of log-uniform length of ids below 2^17, `max_tokens` log-uniform, and
-    the sampling parameters picked as `varied_traffic` picks them (top_p 1), or `temperature` and `top_p`, when given, every
-    request's; the arrivals, prompts, lengths and seeds are the seed's either way. The scan (`ingress_scan`) reads
+    the sampling parameters picked as `varied_traffic` picks them (top_p 1), or `temperature` and `top_p`, when given,
+    every request's; the arrivals, prompts, lengths and seeds are the seed's either way. The scan (`ingress_scan`) reads
     exactly these."""
     rng = random.Random(seed)
     at, out = start_s, []
@@ -269,7 +269,8 @@ def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: Ward
 
 
 def groups(n: int, per: int, params: WardenParams, max_tokens: int) -> list[dict]:
-    """`prompt_traffic`'s groups under ``window_per_group``: each group's requests (indices) and its execution phases."""
+    """`prompt_traffic`'s groups under ``window_per_group``: each group's requests (indices) and its execution
+    phases."""
     G = group_windows(params, max_tokens)
     return [{"group": g, "requests": list(range(g * per, min(n, (g + 1) * per))), "windows": [g * G, (g + 1) * G]}
             for g in range(-(-n // per))]
@@ -855,8 +856,8 @@ def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], Certifi
 
 
 def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
-    """`cells.jsonl` and `cells.salts`, line by line: each execution phase's registration (or refusal) and cost, its rows'
-    salts and its wiring's (`warden_rows.read_witness`)."""
+    """`cells.jsonl` and `cells.salts`, line by line: each execution phase's registration (or refusal) and cost, its
+    rows' salts and its wiring's (`warden_rows.read_witness`)."""
     path = run / "cells.jsonl"
     lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
     salts = ar.read_blobs(run / "cells.salts")

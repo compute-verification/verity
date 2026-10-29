@@ -563,7 +563,8 @@ def advice_edit(edit: Callable) -> Callable[[Path, Path, Path], Path]:
 
 def wrong_token(commit: dict, step: int = 0, row: int = 0, vocab: int | None = None) -> dict:
     """The committed sampled id of `row` at `step` changed after the run (+1, mod `vocab` when given), the Commit's
-    registered root kept: its opening no longer reproduces the root, so the tie and the step proof block each refuse it."""
+    registered root kept: its opening no longer reproduces the root, so the tie and the step proof block each refuse
+    it."""
     out = json.loads(json.dumps(commit))
     ids = out["steps"][step][SAMPLED]
     ids[row] = (ids[row] + 1) % vocab if vocab else ids[row] + 1

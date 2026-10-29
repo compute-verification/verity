@@ -2,8 +2,8 @@
 honest served rows against the honest batch's committed positions are accepted, and the six-pass run's rows, which
 the slice accepts under their own registered row, are refused against the batch the server ran. Each negative is refused
 by exactly the checks `check` names, in the circuit's verdict; the circuit is `reference` under any switches and accepts
-only what `check` accepts; a window's blocks (G < P) are each the whole proof block's; the port's shared read gives back the ids
-and the positions; and a positions chunk is bound by its b‖c to its leaf of the step's tree."""
+only what `check` accepts; a window's blocks (G < P) are each the whole proof block's; the port's shared read gives back
+the ids and the positions; and a positions chunk is bound by its b‖c to its leaf of the step's tree."""
 from __future__ import annotations
 
 import hashlib
@@ -190,8 +190,9 @@ def test_a_run_start_routed_away_is_refused(x):
 
 
 def test_a_windows_blocks_are_its_units(x):
-    """G = 1: the window is P proof blocks, block j each, the served row whole in each. Every block of the honest window is
-    accepted; the short negative's step 0 refuses block 0 only; a proof block naming another block, or none, is refused."""
+    """G = 1: the window is P proof blocks, block j each, the served row whole in each. Every block of the honest window
+    is accepted; the short negative's step 0 refuses block 0 only; a proof block naming another block, or none, is
+    refused."""
     st = {**x.st, "G": 1}
     S1 = SimpleNamespace(**st)
     honest = [ST.case(S1, _srv(x, x.rows), x.batch, j) for j in range(x.T.P)]
@@ -221,8 +222,8 @@ def test_the_shared_read_gives_the_ids_and_positions(x):
 
 def test_a_positions_chunk_is_bound_by_bc_to_its_leaf(x):
     """The step's stream: the port's chunk, then two more of other values, under the rows-sha512 step's hiding leaves. The
-    proof block's row, committed as a proof commits a row (its sha512/row/v2 digest under the leaf's salt), has the leaf's b‖c;
-    `chunk_ok` takes it to the tree's root at its index only, and refuses another row's b‖c."""
+    proof block's row, committed as a proof commits a row (its sha512/row/v2 digest under the leaf's salt), has the
+    leaf's b‖c; `chunk_ok` takes it to the tree's root at its index only, and refuses another row's b‖c."""
     T = x.T
     key, ks, n_bits = hm96.SHA512.default_key, bytes(range(64)), 8 * ST.CHUNK
     stream = ST.port_chunks(T, *x.batch[6]) + [bytes([7]) * ST.CHUNK, bytes([9]) * ST.CHUNK]

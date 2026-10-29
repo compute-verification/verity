@@ -282,8 +282,8 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
 - **The warden's channel bound** (`NetTiming.SecurityProofs.Warden`): `WardenViewEqClientView`, `EncardWardenViewsLe`,
   `EncardWardenDecodableLe`, under `trusted-host` (`Verity.Assumptions.TrustedHost`).
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KS`'s bound at
-  `RAcc δ` on the statements whose layout fits the program: no faulty proof block is sampled `all`, and the advice holding the
-  faulty proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries.
+  `RAcc δ` on the statements whose layout fits the program: no faulty proof block is sampled `all`, and the advice
+  holding the faulty proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries.
   `SampledAuditInstance.lean` discharges its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`'s `KS`
   conjunct: `sampledAuditAccepted_of` over any Flock record, `sampledAuditAccepted_zk` and `sampledAuditAccepted_plain`
   at the masked and plain records.
@@ -339,11 +339,12 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   every window meets its leak relation) with probability at most `δ + Σ_i e_i + Σ_i e'_i`, and at each draw the secrets
   meeting it number at most
   `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i`: the
-  faulty proof blocks cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a proof
-  block's output limit. The network certifier is one device, as in the period's bound: on every schedule its record
-  format holds, the cells the client receives read back from its record (`tap_cells_read`), so its one named assumption is `trusted-host`. Over live audits the two
-  inputs are `Flock.Guarantees.SampledKSLive` at each window's history and the live `SampledLeakAccepted` (P2),
-  neither discharged, so it is not the deployed system's bound over a monitoring period until they are.
+  faulty proof blocks cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a
+  proof block's output limit. The network certifier is one device, as in the period's bound: on every schedule its
+  record format holds, the cells the client receives read back from its record (`tap_cells_read`), so its one named
+  assumption is `trusted-host`. Over live audits the two inputs are `Flock.Guarantees.SampledKSLive` at each window's
+  history and the live `SampledLeakAccepted` (P2), neither discharged, so it is not the deployed system's bound over a
+  monitoring period until they are.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references

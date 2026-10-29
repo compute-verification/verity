@@ -1,5 +1,5 @@
-"""IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on the warden's own ingress: the proof block a
-bucket row that binds each request's prompt_len and arrival ordinal to the warden's certified ingress cells, its
+"""IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on the warden's own ingress: the proof
+block a bucket row that binds each request's prompt_len and arrival ordinal to the warden's certified ingress cells, its
 reference in the clear and the Boolean Definitions it is built from. Nothing here is in a Spec or proved.
 
 **The cells are the warden's** (`warden.Warden._ingress`, its rows as `warden_rows` registers them, a row a bucket).
@@ -41,8 +41,8 @@ proof system's registered read, outside the proof block (`warden_rows.bucket_por
     IoTieRequest{B, L, R}(row: Array<8·L·R·B>, lanes: Array<L, Array<160>>) -> Value<1>
         a lane: q, left, fields, left_out, fields_out, u32 each, LSB first
 
-`IoTieRequest` is the proof block, one a bucket row: in each lane, one `IoTieRequestFrame` and one `IoTieRequestStep` a cell
-from the carry-in, then `IoTieRequestEnd` against the carry-out. The frame reads its cell's header (kind, ordinal
+`IoTieRequest` is the proof block, one a bucket row: in each lane, one `IoTieRequestFrame` and one `IoTieRequestStep` a
+cell from the carry-in, then `IoTieRequestEnd` against the carry-out. The frame reads its cell's header (kind, ordinal
 against q, length) and its payload against the bytes its request has left (0: the request starts here) both ways, a
 first cell's reading and a continuation's, each with its slots at fixed places and `]}` where the bytes left put it.
 The step keeps (left, fields, over, padded, ok), and a request cell after a pad or the `END` drops ok. Public: the
@@ -659,7 +659,8 @@ def frame_arguments(cells: Sequence[bytes], lefts: Sequence[int], qs: Sequence[i
 
 
 def lane_bits(lanes_: Sequence[Lane]) -> list[int]:
-    """The lanes' bits as the proof block reads them, u32s least significant bit first. Raises `ValueError` past a u32."""
+    """The lanes' bits as the proof block reads them, u32s least significant bit first. Raises `ValueError` past a
+    u32."""
     if any(type(x) is not int or not 0 <= x < 1 << 32 for ln in lanes_ for x in ln):
         raise ValueError(f"a lane is five u32s, not {lanes_!r:.200}")
     return [b for ln in lanes_ for x in ln for b in HC._int_bits(x, 32)]

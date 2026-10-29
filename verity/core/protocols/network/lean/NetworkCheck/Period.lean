@@ -79,8 +79,8 @@ in the clock form, and in the rows form each link-window
             "row_schema", "rows", "value", "window", "wiring", "word_bits", "words"}
 
 the requests', responses' and fails' records' certificates (`certified.jsonl`'s), and the ingress and the egress rows'
-registrations (`warden_rows.registration`, `cells.jsonl`'s); an execution phase of the other form than the parameters' is
-refused.
+registrations (`warden_rows.registration`, `cells.jsonl`'s); an execution phase of the other form than the parameters'
+is refused.
 
 In the clock form: each audit's and each link-window's one-stage answer (`Core.Answer.ofJson`), and per link-window
 the two certificates (`certificate.Certificate`, egress first) and the clock certificate the certifier, the auditor's
@@ -128,14 +128,15 @@ against that salted digest is a later change to its circuit (the certifier PROTO
      "cells": Σ_c ⌈log2 (cap_c + 1)⌉, "eps": Σ_i δ_i, "schedules": ⌈log2 #Σ_sync^m⌉, "windows": m}
 
 with `b` the audit's bound on faulty proof blocks at its δ (one-stage's `bound`, `Bound.boundOf`), `faulty_sets` =
-`⌈log2 Σ_{j ≤ b} C(N, j)⌉` (every set of at most `b` proof blocks, which holds the sets a `subset:k` or a stratified sample leaves
-possible; `drawn` is the sample's `k`, or its `Σ k` stratified),
-`faulty_bits` = `b · bits`, with `bits` the most one of its Program's proof blocks commits (its template's return, `bitsOf`:
-the committed values `faultyBits` counts, the outputs a faulty proof block computes and other proof blocks or the client read),
-`jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedules term counts every assignment of a sync of
-Σ_sync to the `m` execution phases, so it is the same whichever syncs the certifier ran them under, and needs none of them.
-`eps` is the probability that `K` fails to bound the period's leak, the union of its audits' `δ`: their exact sum in
-lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics carry theirs.
+`⌈log2 Σ_{j ≤ b} C(N, j)⌉` (every set of at most `b` proof blocks, which holds the sets a `subset:k` or a stratified
+sample leaves possible; `drawn` is the sample's `k`, or its `Σ k` stratified),
+`faulty_bits` = `b · bits`, with `bits` the most one of its Program's proof blocks commits (its template's return,
+`bitsOf`: the committed values `faultyBits` counts, the outputs a faulty proof block computes and other proof blocks or
+the client read), `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedules term counts every assignment
+of a sync of Σ_sync to the `m` execution phases, so it is the same whichever syncs the certifier ran them under, and
+needs none of them. `eps` is the probability that `K` fails to bound the period's leak, the union of its audits' `δ`:
+their exact sum in lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics
+carry theirs.
 
 In the rows form the terms are `PeriodLeakAccepted`'s over its windows, the link-windows' scans, whose statements read
 the network certifier's rows; the compute audits read none, so they are in no term (they are acceptance conditions):
@@ -405,10 +406,10 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
          units := templates.foldl (· + ·.1) 0, bits := templates.foldl (fun b t => max b t.2) 0 }
 
 /-- The scan's terms from its Program's descriptor (`Flock.Program.decode` of its canonical bytes), which must be the
-registered Program (`program`, its SHA-512) and the generator form of the schedule's execution phase: its root batches one
-instance of bucket 0's template, `T - 1` of the later ingress buckets' (no such template when `T = 1`), both returning
-the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of the egress template, which returns a u16
-and the schedule's row, and every input gate is a template's parameter. The types are the Boolean profile's, as the
+registered Program (`program`, its SHA-512) and the generator form of the schedule's execution phase: its root batches
+one instance of bucket 0's template, `T - 1` of the later ingress buckets' (no such template when `T = 1`), both
+returning the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of the egress template, which
+returns a u16 and the schedule's row, and every input gate is a template's parameter. The types are the Boolean profile's, as the
 scan's Definitions have them: a byte 8 bits, a u16 16. An egress template with a row among its parameters, the checker
 form, is refused first, by name: there the egress row is an input gate, which `NetTiming.Layout.Fits` refuses, and `K`
 would count the free inputs of a Program that only compares its egress rows. -/
@@ -619,8 +620,8 @@ def windowCheck (p : Params) (clear : List ByteArray) (earlier : Array ByteArray
       prof.drawn == #[(unitLevel, 1)] do
     refuse s!"{what}: profile: not the link-window's one unit proved"
 
-/-- `warden_rows.domain`'s id: the frame-v3-sha512 domain of execution phase `w`'s rows in direction `d`, in the session,
-under the schedule whose digest is `sd`. -/
+/-- `warden_rows.domain`'s id: the frame-v3-sha512 domain of execution phase `w`'s rows in direction `d`, in the
+session, under the schedule whose digest is `sd`. -/
 def rowsDomain (s : Schedule) (sd session : ByteArray) (link : String) (d : Direction) (w : Nat) : V ByteArray := do
   let binding ← Identity.identityDigestSha512 domainTag (Json.mkObj [
     ("parameters", .str (Flock.hexOf sd)), ("session", .str (Flock.hexOf session)), ("link", .str link),
@@ -666,8 +667,8 @@ def holds (reg : Registration) (r : Rows) : Bool :=
 def records (link : String) : Array (String × Direction) :=
   #[(link, .ingress), (link, .egress), (link ++ "-fails", .egress)]
 
-/-- An accepted scan's or audit's facts: one level sampled `subset:k` or stratified (a work sample's profile is stratified,
-its `Σ k_s` sampled), and its bound. -/
+/-- An accepted scan's or audit's facts: one level sampled `subset:k` or stratified (a work sample's profile is
+stratified, its `Σ k_s` sampled), and its bound. -/
 def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts := do
   let #[l] := prof.levels | refuse s!"{what}: profile: not one level"
   let drawn ← match l.draw with

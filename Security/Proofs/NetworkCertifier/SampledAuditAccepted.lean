@@ -8,10 +8,10 @@ import Proofs.Flock.Claims.Prob
 bound with a stronger relation on a smaller scope, so it is `KS` once `R δ x w` gives `RAcc δ x w` at every statement in
 the audit's scope (`rAcc_of_r`), `PrBad` monotone in the relation (`Claims.Pr_mono`). On that scope:
 
-* **No faulty proof block is sampled `all`** (`disjoint_allSlots`): a set that meets a class sampled `all` has that class's
-  `P_a` factor `0` (`classesPa_eq_zero`), so it is in no `M_δ` at `δ ≥ 0`.
-* **The advice** (`heldAdv`): every faulty proof block's committed gate (`FaultyGate`) held at the trace's value there, and the
-  other inputs the trace's values.
+* **No faulty proof block is sampled `all`** (`disjoint_allSlots`): a set that meets a class sampled `all` has that
+  class's `P_a` factor `0` (`classesPa_eq_zero`), so it is in no `M_δ` at `δ ≥ 0`.
+* **The advice** (`heldAdv`): every faulty proof block's committed gate (`FaultyGate`) held at the trace's value there,
+  and the other inputs the trace's values.
 * **`Accepted`** (`accepted_of`): at each step before the horizon, `C` run on the ingress up to the step and the advice
   holds the trace's value at every egress gate (`valOver_out`). A gate of a proof block that isn't faulty computes what its
   proof unit computes on its committed values and interior (`valOver_unit`, by strong induction on the gate, every unit
@@ -157,8 +157,8 @@ theorem val_ne_none {rd : ℕ → Option Bool} {o : Option Bool} {x : BGate} (hx
   | and ws => simpa [BGate.val] using mapM_ne_none (ws := ws) h
   | xor ws => simpa [BGate.val] using mapM_ne_none (ws := ws) h
 
-/-- **A correct proof block computes every gate of it**: at a topological program, each gate of a correct proof block `u` has a
-value computed in `u`. -/
+/-- **A correct proof block computes every gate of it**: at a topological program, each gate of a correct proof block
+`u` has a value computed in `u`. -/
 theorem runIn_ne_none {C : Prog} (hT : C.Topological) {ref : ℕ → Option Bool} {u : List ℕ} (hc : C.Correct ref u)
     (hlen : ∀ g ∈ u, g < C.gates.length) : ∀ g ∈ u, C.runIn ref u g ≠ none := by
   intro g

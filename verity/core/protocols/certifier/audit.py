@@ -33,15 +33,16 @@ violation. A head settled after the verdict deadline is a `no-verdict`. The stat
 digest binds. On egress the grid check compares the head's record digest with the digest of the Program's grid's head,
 under the parameters digest of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest certifier
 every certificate verifies, and the verdicts are those of the raw records. N2 (`service.LinkWindows`) makes no grid
-comparison: `check_link(grid=False)` leaves the grid to its proof block's head check (`head_check`), which holds the head's
-status, grid parameters and counts on every execution phase, so N2's claim is counts only, and nothing here holds the
-frames.
+comparison: `check_link(grid=False)` leaves the grid to its proof block's head check (`head_check`), which holds the
+head's status, grid parameters and counts on every execution phase, so N2's claim is counts only, and nothing here holds
+the frames.
 
 An ingress link's rows are the Program's input, which it reads rather than predicts, so `check_ingress_link` checks only
-its statuses: an execution phase is accepted if it has exactly one record and its status is complete (Lean `StatusComplete`).
-On a committed record it reads the status in the clear, which the digest binds. With no Program grid to recompute the
-digest from, it can't catch a published status that disagrees with the digest, as the egress check does. A certified
-ingress record's status is the signed head's, and its grid parameters and parameters digest must be `params`'s, or it
+its statuses: an execution phase is accepted if it has exactly one record and its status is complete (Lean
+`StatusComplete`). On a committed record it reads the status in the clear, which the digest binds. With no Program grid
+to recompute the digest from, it can't catch a published status that disagrees with the digest, as the egress check
+does. A certified ingress record's status is the signed head's, and its grid parameters and parameters digest must be
+`params`'s, or it
 is a `mismatch`.
 """
 
@@ -95,8 +96,8 @@ class Audit:
         """Check one egress link's records for windows 0 … len(syncs) − 1 against the Program's grids under the
         declared syncs. A window whose declared sync differs from the unit's for it, set by an earlier link, is an
         `advice` violation. Certified records are checked against the certifier's `key` in its `session`. With `grid`
-        False no grid is compared: each certified head's check in N2's proof block (`head_check`) holds its status, grid and
-        counts instead, and nothing holds its frames, so a raw or committed record, which has neither, raises
+        False no grid is compared: each certified head's check in N2's proof block (`head_check`) holds its status, grid
+        and counts instead, and nothing holds its frames, so a raw or committed record, which has neither, raises
         `ValueError`. N2 checks with `grid` False."""
         by_window = _by_window(link, records, Direction.EGRESS, key, session)
         if not grid and any(not isinstance(r, CertifiedRecord) for rs in by_window.values() for r in rs):
@@ -177,8 +178,8 @@ def _mismatch(record: Published, link: str, window: int, expected, params: GridP
 
 
 def _status_violation(found: Sequence[Published], key: PublicKey | None, session: bytes | None) -> str | None:
-    """The violations every execution phase can have, in order: no record, more than one, a certificate that doesn't verify,
-    a record settled after the deadline, or an incomplete status."""
+    """The violations every execution phase can have, in order: no record, more than one, a certificate that doesn't
+    verify, a record settled after the deadline, or an incomplete status."""
     if not found:
         return "no-verdict"
     if len(found) > 1:

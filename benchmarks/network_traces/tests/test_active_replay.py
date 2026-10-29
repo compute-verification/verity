@@ -450,8 +450,9 @@ def _live_run(setup, run, syncs: str, strategy: str = "honest", lag: int = 1) ->
 @pytest.mark.parametrize("syncs", ["envelope", "cover-2-1"])
 def test_a_live_shim_that_holds_its_writes_is_accepted(setup, tmp_path, syncs):
     """A live endpoint that answers at once, behind a shim that holds each event to the bucket before its hand time
-    (`spread`): accepted on every execution phase. Under the envelope its wire is honest's; under an online rule the proxy
-    declares from what it read, so the later windows' syncs, and with them the wire, may move, never window 0's."""
+    (`spread`): accepted on every execution phase. Under the envelope its wire is honest's; under an online rule the
+    proxy declares from what it read, so the later windows' syncs, and with them the wire, may move, never window
+    0's."""
     _, honest = _live_run(setup, tmp_path / "honest", syncs)
     plan, audit = _live_run(setup, tmp_path / "spread", syncs, "spread")
     assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"]) and len(audit["rows"]) == 6
@@ -472,7 +473,8 @@ def test_a_live_shim_that_holds_its_writes_is_accepted(setup, tmp_path, syncs):
 
 def test_a_lagged_prover_in_front_of_a_live_shim_is_accepted(setup, tmp_path):
     """The lagged prover's choices wake the driver on the injected clock, so a run behind the live shim, where nothing
-    else may move the proxy, still ends: every execution phase accepted, no window declared the envelope for want of a choice."""
+    else may move the proxy, still ends: every execution phase accepted, no window declared the envelope for want of a
+    choice."""
     _, audit = _live_run(setup, tmp_path, "cover-2-1", lag=5)
     assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"]) and len(audit["rows"]) == 6
     import gzip

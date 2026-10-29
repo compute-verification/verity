@@ -681,7 +681,8 @@ def verifier_domain(program: str) -> Callable[[Value], CommitmentDomain]:
 
 def heads(link: str, program: str, values: Sequence[Value], roots: Mapping[str, bytes],
           domain: Callable[[Value], CommitmentDomain]) -> list[TR.TransferHead]:
-    """Each value's head for the load's execution phase (`transfer_rows.TransferHead`: kind ``load``, ingress, window 0)."""
+    """Each value's head for the load's execution phase (`transfer_rows.TransferHead`: kind ``load``, ingress, window
+    0)."""
     return [TR.TransferHead(link, Direction.INGRESS, WINDOW, KIND, v.name, bytes.fromhex(program), v.reg_words, v.leaves,
                             domain(v).domain_id, roots[v.name], v.word_bits, v.schema) for v in values]
 

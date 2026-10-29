@@ -45,8 +45,8 @@ def _sync_outside(rng: random.Random, ss: SyncSet) -> ClockSync:
 
 
 def _frames(rng: random.Random, horizon: int, buckets: int, allocation: int, size: int) -> list[LogicalFrame]:
-    """Sessions of frames, each at one anchor (some past the horizon), with indices 0, 1, … or sampled, some bursts beyond
-    the allocation, and in anchor order or not."""
+    """Sessions of frames, each at one anchor (some past the horizon), with indices 0, 1, … or sampled, some bursts
+    beyond the allocation, and in anchor order or not."""
     sessions = []
     for _ in range(rng.randrange(0, 2 + horizon)):
         anchor = rng.randrange(horizon) if rng.random() < 0.85 else rng.randrange(horizon, horizon + buckets + 1)

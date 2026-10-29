@@ -1,8 +1,8 @@
 """The I/O tie (`PROTOCOL.md`, "The I/O tie"), a prototype on a fake upstream: the reference of one egress
-execution phase's tie, a proof block a bucket row that opens every cell of it, and the Boolean Definitions it is built from.
-Nothing here is in a Spec or proved. The cells are the warden's (`warden`, its rows as `warden_rows` registers them,
-registration v2); no Commit writes the port yet, so the fake upstream commits it as the design has the Commit commit
-it, under `hm96-sha512/row/v2` rows in a `frame-v3-sha512` tree.
+execution phase's tie, a proof block a bucket row that opens every cell of it, and the Boolean Definitions it is built
+from. Nothing here is in a Spec or proved. The cells are the warden's (`warden`, its rows as `warden_rows` registers
+them, registration v2); no Commit writes the port yet, so the fake upstream commits it as the design has the Commit
+commit it, under `hm96-sha512/row/v2` rows in a `frame-v3-sha512` tree.
 
 **The cells are the warden's.** An execution phase's egress is T rows, row t bucket t's R = lanes·r slots of B bytes, so
 cell i is slot i mod R of bucket ⌊i / R⌋. A bucket's live connections hold r slots each, ranked by ordinal (slots
@@ -23,14 +23,14 @@ from the warden's; v0's is the identity) and was admitted at bucket admitted[i],
 non-decreasing in arrival order; its output k must be released at admitted[i] + D + ⌊k / r⌋, so advice v0's release
 is held to the schedule. No prover value says where a cell goes. The advice is private; here the verifier computes
 the map in the clear from the opened advice and the admissions (which the warden's wiring gives, opened to the
-verifier for now), the named gap ("the advice is opened to the verifier until the compile slice's proof block exists"). The target
-reads the map inside the proof under the advice's hiding root.
+verifier for now), the named gap ("the advice is opened to the verifier until the compile slice's proof block exists").
+The target reads the map inside the proof under the advice's hiding root.
 
 **The port is the Commit's**: its sampled ids, one hiding row a step (`port_row`: the step's P ids, u32be in
 batch-row order, zero past its batch) in a dense frame-v3-sha512 tree of the session's steps, whose root the Commit
 registers (`verity.ml.commitments.advice`'s registration: `hm96-sha512/row/v2` leaves under `domain`). Bucket t's
-proof block reads S rows (`Shape.S`), at the steps its bucket's outputs were sampled in (`window_map`'s steps, public with the
-map), and its entry e = σ·P + r is read row σ's r-th id. The real port is vLLM's Commit (its binding map's
+proof block reads S rows (`Shape.S`), at the steps its bucket's outputs were sampled in (`window_map`'s steps, public
+with the map), and its entry e = σ·P + r is read row σ's r-th id. The real port is vLLM's Commit (its binding map's
 `sampled_token_ids` under the run root), which this fake upstream stands in for.
 
 **What 1 means** (`reference`): every bucket row is row t of the warden's registered root, and every port row bucket t
@@ -52,15 +52,15 @@ fabricated output, an early, late or missing `END`, a `FAIL`, a wrong id and a f
     IoTieBucket{B, R, P, S}(row: Array<8·R·B>, map, port: Array<S, Array<4P, Byte>>, switches) -> Value<1>
         E = S·P port entries a bucket, M = 2^D ≥ max(R, E)
 
-`IoTieBucket` is the proof block, one a bucket row. Its `row` is the warden's registered row t and its `port` S rows of the
-Commit's registered port, which the proof system reads (the Lean verifier's registered reads, `flock-verify
+`IoTieBucket` is the proof block, one a bucket row. Its `row` is the warden's registered row t and its `port` S rows of
+the Commit's registered port, which the proof system reads (the Lean verifier's registered reads, `flock-verify
 --registered`: proof block t reads row t by `warden_rows.bucket_port`, and its `port[s]` its bucket's s-th step by
 `port_reads`), so no gate of it hashes. It holds every cell to the map (`IoTieContent`): the port's E entries, each its
 id and its index e, routed to the slots by the prover's switches; any setting is a permutation, and `IoTieMatch` holds
-each `DATA` cell's id to the entry the map names, by its index. An execution phase's tie is its T proof blocks. Public: the
-warden's root and domain id (its registration), the port's root and domain id (the Commit's), and, until the named gap
-closes, the steps (the port's read positions) and the map. Witness: the rows and the read port rows (each with its salt
-and path, the registered reads'), and the switches.
+each `DATA` cell's id to the entry the map names, by its index. An execution phase's tie is its T proof blocks. Public:
+the warden's root and domain id (its registration), the port's root and domain id (the Commit's), and, until the named
+gap closes, the steps (the port's read positions) and the map. Witness: the rows and the read port rows (each with its
+salt and path, the registered reads'), and the switches.
 """
 from __future__ import annotations
 
@@ -283,8 +283,8 @@ def window_map(shape: Shape, outputs: Sequence[Output], release: Sequence[int], 
                ) -> tuple[tuple[MapEntry, ...], tuple[tuple[int, ...], ...]]:
     """The verifier's map of egress window `window` (buckets window·T … window·T + T − 1), from the advice's outputs
     (`advice.outputs(a)`) and release buckets (`a.release`), each request's admission bucket `admitted[i]`, and the
-    warden's D = `delay` and r = `slots`; with each bucket's S steps, whose port rows its proof block opens. Advice request
-    i is on stream order[i] + 1, its ingress ordinal on the wire (order[i] its arrival order from 0, advice v1's
+    warden's D = `delay` and r = `slots`; with each bucket's S steps, whose port rows its proof block opens. Advice
+    request i is on stream order[i] + 1, its ingress ordinal on the wire (order[i] its arrival order from 0, advice v1's
     order permutation; None is v0's identity). Its output k must be released at admitted[i] + D + ⌊k / r⌋, and its
     `END` is its cell n_i, so it holds r slots of every bucket from admitted[i] to admitted[i] + D + ⌊n_i / r⌋, at
     rank ρ among that bucket's live requests by stream: slot ρ·r + j is a `PAD` before admitted[i] + D, then its cell
@@ -498,12 +498,12 @@ def reference(inst: Instance) -> bool:
 
 def port_reads(steps: Sequence[Sequence[int]], root: bytes, domain_id: bytes, count: int, P: int,
                value: str = SAMPLED, reads_from: int = 0) -> dict[str, dict[str, Any]]:
-    """The verifier's own `--registered` ports (`warden_rows.reads_file`'s `ports`) of a population of proof blocks that each
-    read S rows of the Commit's port, its `count` rows of P ids under `root` in the domain `domain_id`: `port[s]` (`port`
-    when S = 1, as `registered.reads` keys a parameter of one row), the proof block's s-th port row, has proof block `reads_from + u`
-    read row steps[u][s]. The steps are the verifier's map's, so every read is at a public position, and the Lean
-    verifier holds each read row to its leaf of the Commit's root by its b ‖ c (`registered.verify_read`), as it holds
-    a bucket row to the warden's (`warden_rows.bucket_port`)."""
+    """The verifier's own `--registered` ports (`warden_rows.reads_file`'s `ports`) of a population of proof blocks that
+    each read S rows of the Commit's port, its `count` rows of P ids under `root` in the domain `domain_id`: `port[s]`
+    (`port` when S = 1, as `registered.reads` keys a parameter of one row), the proof block's s-th port row, has proof
+    block `reads_from + u` read row steps[u][s]. The steps are the verifier's map's, so every read is at a public
+    position, and the Lean verifier holds each read row to its leaf of the Commit's root by its b ‖ c
+    (`registered.verify_read`), as it holds a bucket row to the warden's (`warden_rows.bucket_port`)."""
     widths = {len(st) for st in steps}
     if len(widths) != 1 or 0 in widths:
         raise ValueError("every unit reads the same S >= 1 port rows")

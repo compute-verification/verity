@@ -1,7 +1,7 @@
-"""The ingress side of the step-indexed scan: one proof block a certifier bucket t, `IngressScanBucket`, which reads bucket
-t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's egress
-view, its outputs beside an ok bit (the generator form); the first bucket's, `IngressScanFirst`, reads no state and
-starts from the empty one. Every switch is computed from the state and the rows; none is witness. Nothing here is
+"""The ingress side of the step-indexed scan: one proof block a certifier bucket t, `IngressScanBucket`, which reads
+bucket t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's
+egress view, its outputs beside an ok bit (the generator form); the first bucket's, `IngressScanFirst`, reads no state
+and starts from the empty one. Every switch is computed from the state and the rows; none is witness. Nothing here is
 in a Spec.
 
 **The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
@@ -35,9 +35,9 @@ Each field is least significant bit first, the fields in `layout`'s order, then 
 (S_t's zero, `sin`'s not read). The empty state (`empty`) is all zeros.
 
 **The token-id row** (`token_row`): the Programs at boundary b read the scan's state row b − 1, o1 of bucket b − 1's
-proof block, committed under its hiding leaf and registered as `verity/certifier/scan-state/v1`'s row b − 1: slot j's `occ`,
-1 where the slot's Program starts at b and 0 for an empty slot, its `fields`, the request's prompt length, and its
-prompt ids, prompt position p at `ids[position(p)]` for p below `fields`, each IDB bits, beside the request's
+proof block, committed under its hiding leaf and registered as `verity/certifier/scan-state/v1`'s row b − 1: slot j's
+`occ`, 1 where the slot's Program starts at b and 0 for an empty slot, its `fields`, the request's prompt length, and
+its prompt ids, prompt position p at `ids[position(p)]` for p below `fields`, each IDB bits, beside the request's
 `max_tokens`, `seed`, `temperature` and `top_p`. The ids are the scan's own reading of the certified cells, each the
 decimal field of the warden's signed ingress row its request came in on, so the row is held to the certified bytes by
 the scan's gates and needs no other tie. A Program that reads its slot as i32s (occupancy, prompt length and NP ids;
@@ -95,9 +95,9 @@ request's cells, not its ids) at the cell that takes its `fields` past KI, and a
 outputs (`SlotEntry_v1`'s n = KO + 1 for a request that doesn't fit its window circuit's class) at its anchor, so
 the execution phase fails visibly at the scan's proof block.
 
-**Structural Fits.** A proof block reads only bucket t's row and S_{t−1}, so the scan's carried state is its only path from
-one bucket's ingress to a later bucket's gates: each step reads the state the step before wrote, whatever the arrivals
-and the prompt lengths, which stay private.
+**Structural Fits.** A proof block reads only bucket t's row and S_{t−1}, so the scan's carried state is its only path
+from one bucket's ingress to a later bucket's gates: each step reads the state the step before wrote, whatever the
+arrivals and the prompt lengths, which stay private.
 
 **Where it runs.** `row`, `sin` and `prog` are each a registered read, an input port `Registered.checkPort` accepts:
 `row` the warden's signed row t (`warden_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog` the Programs'
@@ -144,11 +144,12 @@ STATICS = ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN", "D", "KO", "KI")
 @dataclass(frozen=True)
 class Class:
     """The scan's public class: B-byte cells, r a connection a bucket, `lanes` connections at once (as many request
-    slots), C cells a request at most, IDB bits a prompt or output id, a slot stride of EVERY buckets (a boundary at each
-    bucket t ≡ 0 mod EVERY of the scan, with SLOTS = lanes Program slots) and WITHIN, the buckets a request's ingress
-    may take (δ): a request admitted at s is anchored at the first boundary at or after s + WITHIN, whose Programs
-    read the state before it; the warden's delay D, at least WITHIN + EVERY − 1 so that a request's anchor is at most
-    admitted + D, KO outputs a request at most and KI prompt ids a request at most, at most the ids a slot holds."""
+    slots), C cells a request at most, IDB bits a prompt or output id, a slot stride of EVERY buckets (a boundary at
+    each bucket t ≡ 0 mod EVERY of the scan, with SLOTS = lanes Program slots) and WITHIN, the buckets a request's
+    ingress may take (δ): a request admitted at s is anchored at the first boundary at or after s + WITHIN, whose
+    Programs read the state before it; the warden's delay D, at least WITHIN + EVERY − 1 so that a request's anchor is
+    at most admitted + D, KO outputs a request at most and KI prompt ids a request at most, at most the ids a slot
+    holds."""
 
     B: int
     r: int
@@ -559,8 +560,8 @@ SCAN_STATE = "verity/certifier/scan-state/v1"
 def window_state(cls: Class, rows: Sequence[Sequence[int]], t0: int, buckets: int) -> list[list[int]]:
     """The state rows a window circuit of the execution phase of `buckets` buckets from scan bucket t0 reads (the module
     docstring's token-id row), row a the state boundary a's Programs read: the scan's rows t0 − 1 … t0 + buckets − 2
-    of `rows` (S_0, S_1, … as the proof blocks register them), row −1 the empty state's. ValueError, naming the fix, unless
-    the execution phase is whole slot strides and `rows` reach its last."""
+    of `rows` (S_0, S_1, … as the proof blocks register them), row −1 the empty state's. ValueError, naming the fix,
+    unless the execution phase is whole slot strides and `rows` reach its last."""
     if t0 < 0 or buckets < 1 or t0 % cls.EVERY or buckets % cls.EVERY:
         raise ValueError(f"a link-window starts at a boundary and is whole timesteps: t0 >= 0 and buckets >= 1, each "
                          f"a multiple of EVERY = {cls.EVERY}, not t0 = {t0}, buckets = {buckets}")

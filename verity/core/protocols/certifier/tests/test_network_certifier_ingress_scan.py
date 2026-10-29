@@ -352,7 +352,8 @@ def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_rando
         == [(1, True)] * len(other)
     moved = [o1 != ch.outputs(t)[0] for t, (o0, o1, _) in zip(at, got[T + len(negs):]) if o0]
     assert sum(moved) >= 5, moved
-    # the first bucket's proof block is the ingress proof block at the empty state, its outputs bit for bit where a check fails too
+    # the first bucket's proof block is the ingress proof block at the empty state, its outputs bit for bit where a
+    # check fails too
     starts = [(c[0], c[2]) for c in cases if c[1] == ch.states[0]]
     for _ in range(20):
         row, prog = bytearray(ch.ingress[0]), list(ch.progs[0])

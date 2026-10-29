@@ -280,8 +280,8 @@ def test_n2_compares_no_grid_and_holds_no_frames(tmp_path):
 
 
 def test_a_head_of_another_size_class_is_a_reject(tmp_path):
-    """An ingress head of 8 buckets on a link whose ingress grid has 4 is longer than the proof block's head, so no head check
-    takes it: rejected, though its certificate verifies and its status is complete."""
+    """An ingress head of 8 buckets on a link whose ingress grid has 4 is longer than the proof block's head, so no head
+    check takes it: rejected, though its certificate verifies and its status is complete."""
     run = Run(tmp_path)
     wide = GridParams(8, PARAMS.allocation, PARAMS.frame_bytes)
     ingress = Certifier(LINK, wide)
@@ -304,10 +304,11 @@ def test_an_occupancy_row_is_t_counts_within_the_allocation(tmp_path):
 
 
 def test_the_unit_is_each_ends_head_check(tmp_path):
-    """N2's proof block is each end's head check, at the link's size class: L the name's bytes, T the end's buckets and COUNTS
-    whether the end has a profile, each head check one gate that names its Definition, reads the proof block's signed digest
-    for its end and its own direction, a constant. Its two outputs are the verdict and the deadline. A profile changes
-    the proof block, and so the spec's Program. Its public row is whole u16 words, as its witness row is."""
+    """N2's proof block is each end's head check, at the link's size class: L the name's bytes, T the end's buckets and
+    COUNTS whether the end has a profile, each head check one gate that names its Definition, reads the proof block's
+    signed digest for its end and its own direction, a constant. Its two outputs are the verdict and the deadline. A
+    profile changes the proof block, and so the spec's Program. Its public row is whole u16 words, as its witness row
+    is."""
     lw = replace(Run(tmp_path).lw, occupancy=(None, None))
     declared = replace(lw, occupancy=(honest_occupancy()[0], None))
     assert lw.unit.id == "NetworkLinkWindow_v5{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
@@ -334,9 +335,9 @@ def test_the_unit_is_each_ends_head_check(tmp_path):
 
 
 def test_the_proof_unit_is_the_registered_template(tmp_path):
-    """The proof block a proof's circuit lowers has the registered proof block's id, signature and descriptor id, so the registered
-    query names it as its template; it is bound without tracing, since each gate's expansion traces the head check
-    (`head_check.expand`, minutes), which the proving run (`benchmarks/network_traces/n2_zk.py`) lowers and checks
+    """The proof block a proof's circuit lowers has the registered proof block's id, signature and descriptor id, so the
+    registered query names it as its template; it is bound without tracing, since each gate's expansion traces the head
+    check (`head_check.expand`, minutes), which the proving run (`benchmarks/network_traces/n2_zk.py`) lowers and checks
     against the IR reference."""
     lw = Run(tmp_path).lw
     assert lw.proof_unit.id == lw.unit.id and lw.proof_unit.signature() == lw.unit.signature()
@@ -346,17 +347,18 @@ def test_the_proof_unit_is_the_registered_template(tmp_path):
 
 def test_n2s_program_reads_no_registered_value(tmp_path):
     """N2's verifier of record runs Lean without registered reads (`proofs.verify` with `registered` None), which
-    `proofs.verify` refuses for a program that reads registered values; N2's proof block reads none, so its proofs reach Lean."""
+    `proofs.verify` refuses for a program that reads registered values; N2's proof block reads none, so its proofs reach
+    Lean."""
     assert not PF.reads_registered(Run(tmp_path).lw.program)
 
 
 def test_the_verdict_of_record_is_the_proofs(tmp_path):
     """The verifier of record decides on the delivered proof and public inputs alone, and reads the opening only for
-    the debug comparison it is given. Each of these rejects an honest execution phase's sample: the Lean run rejecting the
-    session, a circuit file other than the committed one, a public file whose instance is another proof block, the public or
-    the output row's salt not the one committed, a proof on a head whose counts are off the profile (its verdict bit
-    0), with or without a forged output word, a forged signature, a certificate whose signed digest isn't the one the
-    proof's public row holds, the certificates swapped, and no declared sync or one outside Σ_sync."""
+    the debug comparison it is given. Each of these rejects an honest execution phase's sample: the Lean run rejecting
+    the session, a circuit file other than the committed one, a public file whose instance is another proof block, the
+    public or the output row's salt not the one committed, a proof on a head whose counts are off the profile (its
+    verdict bit 0), with or without a forged output word, a forged signature, a certificate whose signed digest isn't
+    the one the proof's public row holds, the certificates swapped, and no declared sync or one outside Σ_sync."""
     run = Run(tmp_path)
     lw = run.lw
     opening = run.honest(0)
@@ -404,11 +406,12 @@ def _finding(program, accepted=True):
 
 
 def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path):
-    """Each head-check gate names its Definition's pinned circuit digest, so the proof block's Program, which the spec and each
-    registration bind, binds the head check's circuit. A head check with the same id and signature that accepts every
-    head has another circuit digest: the pinned gate doesn't expand to it, its own gate is another gate, and a proof block
-    holding that gate is another Program, whose proof the verifier of record refuses while it accepts one of the
-    registered Program. A size class no sidecar pins names no digest, and no proof of its proof block is accepted."""
+    """Each head-check gate names its Definition's pinned circuit digest, so the proof block's Program, which the spec
+    and each registration bind, binds the head check's circuit. A head check with the same id and signature that accepts
+    every head has another circuit digest: the pinned gate doesn't expand to it, its own gate is another gate, and a
+    proof block holding that gate is another Program, whose proof the verifier of record refuses while it accepts one of
+    the registered Program. A size class no sidecar pins names no digest, and no proof of its proof block is
+    accepted."""
     run = Run(tmp_path)
     lw = run.lw
     key = lw.head_key(0)
@@ -683,11 +686,11 @@ WARDEN_DIGEST = bytes(range(64))
 
 
 def test_a_warden_link_holds_both_heads_to_the_wardens_digest_and_reads_no_sync(tmp_path):
-    """A warden link (`WardenProfile`) is the plain proof block on the warden's records: its public items are `PUBLIC_WARDEN`
-    and its charge 0, a window whose two records the warden certified under its parameters digest is accepted with no
-    sync declared, by the Lean's verdict of record, the Python beside it and the in-the-clear check alike, and a window
-    whose egress record was certified under the certifier's digest instead is a reject. It takes no occupancy profile,
-    and its two ends are one grid."""
+    """A warden link (`WardenProfile`) is the plain proof block on the warden's records: its public items are
+    `PUBLIC_WARDEN` and its charge 0, a window whose two records the warden certified under its parameters digest is
+    accepted with no sync declared, by the Lean's verdict of record, the Python beside it and the in-the-clear check
+    alike, and a window whose egress record was certified under the certifier's digest instead is a reject. It takes no
+    occupancy profile, and its two ends are one grid."""
     run = Run(tmp_path)
     run.lw = lw = replace(run.lw, occupancy=(None, None), warden=SVC.WardenProfile(3, WARDEN_DIGEST))
     run.stream = lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
