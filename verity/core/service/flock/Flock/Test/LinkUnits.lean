@@ -15,7 +15,7 @@ open Flock.Test.RegProgram (plain)
 
 def prog : Program.Prog := (Program.decode plain).toOption.getD default
 
-def ns : List Node := nodes prog
+def ns : List NodeUnits := nodes prog
 
 def at_ (idx : List Nat) : Public :=
   { pub with header := Json.mkObj [("units", Json.mkObj [("indices", Lean.toJson idx)])] }

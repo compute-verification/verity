@@ -11,44 +11,44 @@ the reference they are proved equal to (`unitAt_eq`, `ownerAt_eq`, `count_eq`).
 namespace Flock.HmLinks
 
 /-- A root node's units: its index, members, first gate and gates per member. -/
-abbrev Node := Nat × Nat × Nat × Nat
+abbrev NodeUnits := Nat × Nat × Nat × Nat
 
 /-- One node's units, unrolled: per member `(k, m, lo, hi)`. -/
-def block : Node → List (Nat × Nat × Nat × Nat)
+def block : NodeUnits → List (Nat × Nat × Nat × Nat)
   | (k, mm, off, g) => (List.range mm).map fun m => (k, m, off + m * g, off + m * g + g)
 
 /-- Every unit, unrolled, in node order. -/
-def unitsRef (ns : List Node) : List (Nat × Nat × Nat × Nat) := ns.flatMap block
+def unitsRef (ns : List NodeUnits) : List (Nat × Nat × Nat × Nat) := ns.flatMap block
 
 /-- Unit `u`'s node and member in the unrolled units. -/
-def unitRef (ns : List Node) (u : Nat) : Option (Nat × Nat) := (unitsRef ns)[u]?.map fun (k, m, _, _) => (k, m)
+def unitRef (ns : List NodeUnits) (u : Nat) : Option (Nat × Nat) := (unitsRef ns)[u]?.map fun (k, m, _, _) => (k, m)
 
 /-- The first unrolled unit whose gates hold gate `x`. -/
-def ownerRef (ns : List Node) (x : Nat) : Option Nat := (unitsRef ns).findIdx? fun (_, _, a, b) => a ≤ x && x < b
+def ownerRef (ns : List NodeUnits) (x : Nat) : Option Nat := (unitsRef ns).findIdx? fun (_, _, a, b) => a ≤ x && x < b
 
 /-- The number of units. -/
-def count (ns : List Node) : Nat := (ns.map (·.2.1)).sum
+def count (ns : List NodeUnits) : Nat := (ns.map (·.2.1)).sum
 
 /-- Unit `u`'s node and member. -/
-def unitAt : List Node → Nat → Option (Nat × Nat)
+def unitAt : List NodeUnits → Nat → Option (Nat × Nat)
   | [], _ => none
   | (k, mm, _, _) :: ns, u => if u < mm then some (k, u) else unitAt ns (u - mm)
 
 /-- The unit whose gates hold gate `x`: the first node whose members' gates hold it, and its member there. -/
-def ownerAt : List Node → Nat → Option Nat
+def ownerAt : List NodeUnits → Nat → Option Nat
   | [], _ => none
   | (_, mm, off, g) :: ns, x => if off ≤ x && x < off + mm * g then some ((x - off) / g) else (ownerAt ns x).map (· + mm)
 
-theorem block_length (n : Node) : (block n).length = n.2.1 := by
+theorem block_length (n : NodeUnits) : (block n).length = n.2.1 := by
   obtain ⟨k, mm, off, g⟩ := n
   simp [block]
 
-theorem count_eq (ns : List Node) : count ns = (unitsRef ns).length := by
+theorem count_eq (ns : List NodeUnits) : count ns = (unitsRef ns).length := by
   induction ns with
   | nil => rfl
   | cons n ns ih => simp [count, unitsRef, block_length] at ih ⊢
 
-theorem unitAt_eq (ns : List Node) : unitAt ns = unitRef ns := by
+theorem unitAt_eq (ns : List NodeUnits) : unitAt ns = unitRef ns := by
   funext u
   induction ns generalizing u with
   | nil => rfl
@@ -87,7 +87,7 @@ theorem block_findIdx (k mm off g x : Nat) :
         simp [h2, h3]
         omega
 
-theorem ownerAt_eq (ns : List Node) : ownerAt ns = ownerRef ns := by
+theorem ownerAt_eq (ns : List NodeUnits) : ownerAt ns = ownerRef ns := by
   funext x
   induction ns with
   | nil => rfl
