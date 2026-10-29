@@ -53,7 +53,8 @@ The network term is reported beside T1 and outside it: DitherInstance's egress s
 n_max the most MACs a coin bit over the point's matmuls, W_mac the honest work a MAC (the stacked product's and the
 credited hashing's) and E the egress cap a served token (`price.egress_cap`). It bounds only a design whose coins stream
 from the challenger a call (`certifier-coins`); a design seeded from the window's salt is outsourced by one message, so
-none bounds it (`network` is null, `network_streamed` what streaming would give).
+none bounds it (`network` is null, `network_streamed` what streaming would give). A point that is one matmul has no
+forward's egress to divide, so the term isn't priced there.
 
 Hashing is priced at the best known SHA-512 compression's register count per form (N-SHALB): a chained compression
 (`price.hash_work`, 3,532), the bulk of every hm96 row, and a row digest's first, from the constant chaining value
@@ -748,7 +749,7 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
         terms["host"] = host_route
     w_mac = (stock + agg["extra_macs"]) / stock + hash_share
     egress = card["price"]["egress_cap"]
-    network_streamed = bit_macs * w_mac * egress["value"] * pt["tokens"] / stock
+    network_streamed = None if pt.get("matmul_only") else bit_macs * w_mac * egress["value"] * pt["tokens"] / stock
     streamed = "certifier-coins" in d["premises"]
     network = network_streamed if streamed else None
     terms["hashing_slack"] = delta * hash_share
@@ -899,13 +900,14 @@ def needs(row: dict) -> list[str]:
                    f"them the host hashes f_host = {row['f_host']:.2%} of the rows and computes their words off the card "
                    f"(N-FLOOR's route H), {row['host_route']:.2f}x stock, {row['host_route'] / TARGET['t1']:.0f}x T1's "
                    f"allowance")
-    out.append(f"the network term, reported beside T1 and outside it pending Daniel (N-ALT): DitherInstance's slack "
-               f"n_max · W_mac · E over stock, at E = {row['egress_cap']:g} bits a token, n_max "
-               f"{row['macs_per_coin_bit']:,.0f} MACs a coin bit and W_mac {row['w_mac']:.1f} W1 a MAC, is "
-               f"{row['network_streamed']:.1%} of stock if the call's coins stream from the challenger"
-               + (" (certifier-coins, taken)" if row["coins_streamed"] else
-                  "; this design's coins are seeded from the window's salt, so one message outsources the window and "
-                  "OutsourceWithinEgress gives no bound"))
+    if row["network_streamed"] is not None:
+        out.append(f"the network term, reported beside T1 and outside it pending Daniel (N-ALT): DitherInstance's slack "
+                   f"n_max · W_mac · E over stock, at E = {row['egress_cap']:g} bits a token, n_max "
+                   f"{row['macs_per_coin_bit']:,.0f} MACs a coin bit and W_mac {row['w_mac']:.1f} W1 a MAC, is "
+                   f"{row['network_streamed']:.1%} of stock if the call's coins stream from the challenger"
+                   + (" (certifier-coins, taken)" if row["coins_streamed"] else
+                      "; this design's coins are seeded from the window's salt, so one message outsources the window "
+                      "and OutsourceWithinEgress gives no bound"))
     if not row["t1_pass"]:
         big = max(((k, v) for k, v in row["terms"].items()), key=lambda kv: kv[1])
         out.append(f"T1 {row['t1']:.2%} > 1%: its largest term is {big[0]} {big[1]:.2%}")
@@ -1084,6 +1086,8 @@ def row_line(i, row: dict) -> str:
 
 def net(row: dict) -> str:
     """The network term (DitherInstance's egress slack over stock), outside the core T1: none bounds a seeded design."""
+    if row["network_streamed"] is None:
+        return "n/a (one matmul; the term is a forward's)"
     s = f"{row['network_streamed']:.0%}"
     return s + " (streamed)" if row["coins_streamed"] else f"unbounded, seeded ({s} if streamed)"
 
@@ -1359,9 +1363,10 @@ def main() -> int:
     checks.check("the network term is N-ALT final's: on the tagged lead at T 8,192 gate_up's 349,525 MACs a coin bit, and "
                  "N-ALT's 137.6% of stock at its W_mac of 119.7 (908 W1 a byte) is this card's at the card's W_mac; a "
                  "design whose coins are seeded from the window's salt has no bound, and N-ALT's R1b, its coins streamed "
-                 "under certifier-coins, has one",
+                 "under certifier-coins, has one; a point that is one matmul (V4-like) has no forward's egress to divide",
                  abs(lead["macs_per_coin_bit"] - 349525.33) < 1 and abs(at_alt / 1.376 - 1) < 0.005
-                 and lead["network"] is None and alt["coins_streamed"] and alt["network"] is not None,
+                 and lead["network"] is None and alt["coins_streamed"] and alt["network"] is not None
+                 and all(r["network_streamed"] is None for r in results["v4like"]["rows"]),
                  f"{lead['macs_per_coin_bit']:,.0f} MACs a coin bit, W_mac {lead['w_mac']:.1f}, "
                  f"{lead['network_streamed']:.1%} ({at_alt:.1%} at 119.7); R1b {alt['network']:.1%}")
     epi = {p: row(p, nm("ssn-1l-tag", "epilogue", "s8", "k32", "w", "r256k", "cert", "min"))
@@ -1728,7 +1733,8 @@ def main() -> int:
                             f"{e['sync']['ratio']:.4g}", f"{e['async']['ratio']:.4g}", f"{r['t2']['unfused']:.4g}",
                             "" if r["t3_worst"] is None else f"{r['t3_worst']:.4g}",
                             f"{r['delta_star']:.4g}", f"{r['hash_bytes_per_mac']:.4g}",
-                            f"{r['network_streamed']:.4g}", int(r["coins_streamed"]),
+                            "" if r["network_streamed"] is None else f"{r['network_streamed']:.4g}",
+                            int(r["coins_streamed"]),
                             " ".join(o["premise"] for o in r["open"]), " ".join(r["attacks"])])
     print(f"wrote {out / 'ranking.md'}, {out / 'pouw_space.json'}, {out / 'ranking.csv'}")
     return checks.finish()
