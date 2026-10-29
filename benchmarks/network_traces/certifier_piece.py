@@ -2,7 +2,8 @@
 the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
-        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--height 10] [--minutes M] [--warmup N]
+        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--scan-class w63k4] [--height 10]
+        [--minutes M] [--warmup N]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--draw K] [--chain-cmd CMD]
         [CR_K=V ...]
     python certifier_piece.py relay --listen PORT --to PORT
@@ -14,7 +15,9 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   its cells are link-window 0's alone (``--tokens`` at most 4 keeps the group in one link-window), so the engine admits
   the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
   ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
-  defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs). ``--warmup N``
+  defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs), and the gate runs
+  the warden at its scan class's schedule (``--scan-class``, `V3C_SCAN_CLASS`: w63k4, at 5 egress cells), the one
+  the chain's scan at that class takes. ``--warmup N``
   first sends N plain completions straight to PORT (`warmup`: no warden, no release header), one at a time, each of
   the group's shape and awaited, so the endpoint's first window (H1's first reservation, the kernels' first compile)
   is behind it; it then waits until serve-openai records each in `served_session.USERS`, which it does only once the
@@ -92,6 +95,8 @@ PROTOCOL = "verity/certifier/v0"
 REFUSED = "refused.txt"
 #: the piece's case, as `composite.py` reads it
 CASE = "case.json"
+#: the scan class of V3c's default window class (`served_verdicts.sh`'s V3C_CLASS)
+V3C_SCAN_CLASS = "w63k4"
 LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
@@ -491,6 +496,8 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
     f.add_argument("--tokens", type=int, default=TOKENS)
     f.add_argument("--vocab", type=int, default=SS.VOCAB)
+    f.add_argument("--scan-class", choices=sorted(SS.A.SCAN_CLASSES), default=V3C_SCAN_CLASS,
+                   help=f"the gate's scan class, the schedule its warden runs at (default {V3C_SCAN_CLASS})")
     f.add_argument("--height", type=int, default=HEIGHT)
     f.add_argument("--minutes", type=int)
     f.add_argument("--warmup", type=int, default=0, metavar="N",

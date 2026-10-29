@@ -325,7 +325,7 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key")]) == 0
     assert (tmp_path / "request").read_text() == (
         "warden-rehearse --peer vy-dc-h200 --port 18190 --minutes 7 --requests 4 --height 10 --scan --prompts "
-        "--tokens 4 --window-per-group")
+        "--tokens 4 --scan-class w63k4 --window-per-group")
     prompts = json.loads((tmp_path / "prompts.json").read_text())
     assert [len(p) for p in prompts] == [CP.PROMPT_IDS] * CP.PROMPTS and all(t < 128000 for p in prompts for t in p)
     kept = serve / CP.PRIVATE / RUN / "fetch.tar.gz"
@@ -334,6 +334,11 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert json.loads((out / "session.json").read_text())["keep"] == str(kept)
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
     assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
+    assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "5"]) == 2
+    assert "1 to KO = 4 ids" in json.loads((out / "session.json").read_text())["refused"]
+    assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--key",
+                    str(tmp_path / "key"), "--scan-class", "w63"]) == 0
+    assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
 
 
 def _serve_windows(d: Path, windows: list[list[str]]) -> Path:
@@ -415,7 +420,7 @@ def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_g
     assert len(set(users)) == 2 and all(u.startswith("warmup-") for u in users)
     assert (tmp_path / "request").read_text() == (
         f"warden-rehearse --peer vy-dc-h200 --port {port} --minutes 7 --requests 4 --height 10 --scan --prompts "
-        "--tokens 4 --window-per-group")
+        "--tokens 4 --scan-class w63k4 --window-per-group")
     warm = json.loads((out / "warmup.json").read_text())["requests"]
     assert [(w["user"], w["finish_reason"]) for w in warm] == [(u, "length") for u in users]
     assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "session.json", "start.json", "status.json",
