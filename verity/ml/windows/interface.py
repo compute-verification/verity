@@ -7,8 +7,7 @@ at a time, in four records:
    names the ports that are the system's external I/O, ``wires`` the units that read another unit's output row whole
    (:class:`Wire`, one pattern for many units), ``boundary`` its I/O layout as the network certifier states it, and
    ``entries`` the slot entries it registers for the certifier's scan (:class:`Entries`: its entry templates by closure
-   digest, the vocabulary size and stop ids they bind, and the templates an audit tied to the scan draws whole). The
-   window's ``circuit.json`` (`circuit_record`) holds the whole layout the verifier reads, stated per template and wire
+   digest, and the vocabulary size and stop ids they bind). The window's ``circuit.json`` (`circuit_record`) holds the whole layout the verifier reads, stated per template and wire
    rather than per member, and the registration binds its SHA-512.
 2. **A compiler and its advice** (optional, `advice_binding`): the registered compiler's name and digest (which carries the
    public cap on the advice's length; `compiler_digest`, over its code) with the commit that code is at, and the advice's
@@ -991,30 +990,25 @@ class Entries:
     (`NetworkCheck.Period`) reads from the circuit record and never from the model: ``templates``, by descriptor id, the
     templates whose ``o0`` is a slot's entry (one-stage's chunk j of it is lane j's, the scan's ``prog<j>``);
     ``vocabulary`` and ``stop``, the vocabulary size and stop ids each entry template binds (its ``V`` and its ``STOP``,
-    where it binds them); and ``whole``, the templates beside them that an audit tied to the scan draws whole. Its record
-    (`record`) names each entry template with its closure digest (`entry_digest`), which the period check holds the
-    audit's Program's template to."""
+    where it binds them). Its record (`record`) names each entry template with its closure digest (`entry_digest`),
+    which the period check holds the audit's Program's template to."""
     templates: tuple[str, ...]
     vocabulary: int
     stop: tuple[int, ...]
-    whole: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "templates", tuple(self.templates))
         object.__setattr__(self, "stop", tuple(self.stop))
-        object.__setattr__(self, "whole", tuple(self.whole))
         if not self.templates or len(set(self.templates)) != len(self.templates):
             raise ValueError(f"entry templates {list(self.templates)}: at least one, each once")
         if not _ints(self.vocabulary, *self.stop) or self.vocabulary < 1 or min(self.stop, default=0) < 0:
             raise ValueError(f"a vocabulary of {self.vocabulary!r} ids and stop ids {list(self.stop)}: a positive size and "
                              "natural ids")
-        if len(set(self.whole)) != len(self.whole) or set(self.whole) & set(self.templates):
-            raise ValueError(f"whole {list(self.whole)}: each once, and none an entry template, which is drawn whole anyway")
 
     def check(self, fns: Mapping[str, Any]) -> None:
         """Refuse (ValueError) entries naming a template that isn't one of ``fns`` (the circuit's, by descriptor id), or an
         entry template that binds a ``STOP`` other than ``stop`` or a ``V`` other than ``vocabulary``."""
-        if bad := sorted({*self.templates, *self.whole} - set(fns)):
+        if bad := sorted(set(self.templates) - set(fns)):
             raise ValueError(f"entries name {bad}, no template of the circuit")
         for t in self.templates:
             b = fns[t].bindings
@@ -1023,10 +1017,10 @@ class Entries:
                                  f"registered stop ids {list(self.stop)} and vocabulary {self.vocabulary}")
 
     def record(self, fns: Mapping[str, Any]) -> dict[str, Any]:
-        """The circuit record's ``entries``: ``{"templates": [[id, closure digest], …], "vocabulary", "stop", "whole"}``."""
+        """The circuit record's ``entries``: ``{"templates": [[id, closure digest], …], "vocabulary", "stop"}``."""
         self.check(fns)
         return {"stop": list(self.stop), "templates": [[t, entry_digest(fns[t])] for t in self.templates],
-                "vocabulary": self.vocabulary, "whole": list(self.whole)}
+                "vocabulary": self.vocabulary}
 
 
 @dataclass(frozen=True)

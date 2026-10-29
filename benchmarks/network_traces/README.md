@@ -227,10 +227,9 @@ and ignores it outside due and occupied slots, so a sampling block's entries are
 lane's `scan/prog<j>` is chunk j of the entries of a slot entry template a compute audit's circuit record registers
 (`<descriptor id>/c<j>/o0`, one member a lane), the read bit is the prover's word (an entry of read 1 and no outputs
 passes the scan), so `NetworkCheck.Period` refuses the sampling block by name (`wired`). The integration registers its
-entry templates in the circuit record (`interface.Entries`: each template's whole body by its closure digest, the
-vocabulary size and stop ids they bind, and the templates the audit samples whole beside them), the audit's
-registration binds the record's digest before any coin, and `wired` holds the audit's template to the registered digest,
-so no constant of the check names a model. The block round's audit registers no entry template, so its `prog<j>`, the o0
+entry templates in the circuit record (`interface.Entries`: each template's whole body by its closure digest, and the
+vocabulary size and stop ids they bind), the audit's registration binds the record's digest before any coin, and
+`wired` holds the audit's template to the registered digest, so no constant of the check names a model. The block round's audit registers no entry template, so its `prog<j>`, the o0
 of scan_zk's `SlotEntry_v1` stand-in's lane-j member, whose entries, read bit included, are the prover's, is refused
 there (scan_period.py). A slot's Program reads the requests from its own registered `SCAN_STATE`, and the check refuses,
 last, by name, a sampling block whose scan's

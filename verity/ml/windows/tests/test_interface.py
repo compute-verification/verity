@@ -1282,26 +1282,24 @@ def test_a_window_commits_its_table_reads_and_verdicts_as_registered_reads():
 
 def test_a_circuit_registers_its_slot_entries_by_closure_digest():
     """`Entries` in the circuit record: each entry template with its closure digest, the same in the circuit's population
-    as in its own, and the vocabulary size, stop ids and whole templates as given. Entries naming no template of the
-    circuit, a template twice or a whole one among them, a vocabulary not a positive int, a stop id not natural, or an
-    entry template binding another ``STOP`` or ``V`` than the registered ones are refused; a template binding neither
-    takes any."""
-    e = I.Entries((TID,), 256, (3,), (AID,))
+    as in its own, and the vocabulary size and stop ids as given. Entries naming no template of the circuit, a template
+    twice, a vocabulary not a positive int, a stop id not natural, or an entry template binding another ``STOP`` or
+    ``V`` than the registered ones are refused; a template binding neither takes any."""
+    e = I.Entries((TID,), 256, (3,))
     c = I.Circuit("two", ((COORD, 3), (ACC, 2)), entries=e)
     digest = AN.closure_digest(codec.encode_program(population.population_program(COORD, 1)), TID)
-    assert c.entries_record() == {"stop": [3], "templates": [[TID, digest]], "vocabulary": 256, "whole": [AID]}
+    assert c.entries_record() == {"stop": [3], "templates": [[TID, digest]], "vocabulary": 256}
     mixed = codec.encode_program(population.mixed_population_program([(COORD, 3), (ACC, 2)]))
     assert AN.closure_digest(mixed, TID) == digest != AN.closure_digest(mixed, AID)
     assert json.loads(I.circuit_bytes(I.Window(c, RUN, LAW, 2).circuit_record()))["entries"] == c.entries_record()
     assert "entries" not in json.loads(I.circuit_bytes(I.Window(I.Circuit("two", c.templates), RUN, LAW, 2).circuit_record()))
     for args, why in [(((), 256, ()), "at least one"), (((TID, TID), 256, ()), "at least one"),
                       (((TID,), 0, ()), "a positive size"), (((TID,), True, ()), "a positive size"),
-                      (((TID,), 256, (-1,)), "natural ids"), (((TID,), 256, (True,)), "natural ids"),
-                      (((TID,), 256, (), (TID,)), "none an entry template"), (((TID,), 256, (), (AID, AID)), "each once")]:
+                      (((TID,), 256, (-1,)), "natural ids"), (((TID,), 256, (True,)), "natural ids")]:
         with pytest.raises(ValueError, match=why):
             I.Entries(*args)
     with pytest.raises(ValueError, match="no template of the circuit"):
-        I.Circuit("one", ((COORD, 3),), entries=e)
+        I.Circuit("one", ((ACC, 2),), entries=e)
     for bindings in ({"V": 256, "STOP": (3,)}, {"V": 256}, {}):
         e.check({TID: SimpleNamespace(bindings=bindings), AID: ACC})
     for bindings in ({"V": 512}, {"STOP": (3, 7)}, {"STOP": ()}):

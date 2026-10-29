@@ -538,7 +538,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert entries == [f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block', lane=j))}/o0"
                        for j in range(cls.NR)]
     digest = AN.closure_digest(encode_program(block), key)
-    registered = {"entries": {"stop": [], "templates": [[key, digest]], "vocabulary": 1 << cls.IDB, "whole": []},
+    registered = {"entries": {"stop": [], "templates": [[key, digest]], "vocabulary": 1 << cls.IDB},
                   "format": PC.CIRCUIT, "program": PC.program_sha512(encode_program(block))}
 
     def block_audit(o0: list[dict], ports: list[str] = entries, scan_state: dict | None = state,

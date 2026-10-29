@@ -24,8 +24,7 @@ past ``prompt`` ids, or outputs that don't end within ``outputs``) has ``outputs
 the anchor and the egress never renders. A collector's rows and an entry's are a few words at a small class, too narrow for
 a proof block of their own, so none is a unit of its own. The state rows and the entries are the circuit's external ports,
 and the circuit registers its entries (`IF.Entries`): the `SelectEntry_v1` template by its closure digest, the V it binds
-and `stop_ids`, with its `ScanSlots_v2` template drawn whole beside it, which the network certifier's period check reads
-from the circuit record. A slot's Program
+and `stop_ids`, which the network certifier's period check reads from the circuit record. A slot's Program
 hands all its outputs to the scan at its anchor, which carries them across windows (`SC_GROUP`), so no Program runs into the
 next window. `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window the class's slots don't take and
 emits its circuit.
@@ -743,7 +742,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings))
     etid = progs[0].entry_unit[0]
-    entries = IF.Entries((etid,), b.fns[etid].bindings["V"], stop_ids(registered), (descriptor_id(scan),))
+    entries = IF.Entries((etid,), b.fns[etid].bindings["V"], stop_ids(registered))
     circuit = IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
                          external=(f"{descriptor_id(scan)}/state", f"{etid}/o0"), entries=entries,
                          wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg,
