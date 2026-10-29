@@ -122,7 +122,7 @@ run side by side are one workload. vLLM's workload files (`integrations/vllm/wor
 
 ## Older names
 
-Older names stay where they are baked into a digest, a frozen fixture, a recorded artifact field or a pinned vector. They mean:
+Older names stay where they are baked into a digest, a frozen fixture, a recorded artifact field or a pinned vector.
 
 | Old name, where it stays | Term |
 |---|---|
