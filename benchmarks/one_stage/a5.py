@@ -912,9 +912,9 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
     verifier's own partition object, which v2 verifies the sessions against), in ``out/case.json``, and
-    the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case onsite's
-    evidence carries for sampled proofs, `SampledProofs.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, or why there
-    is none in ``out/case-v2-error.txt``."""
+    the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case of the
+    audit on the proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, or why there is
+    none in ``out/case-v2-error.txt``."""
     try:
         import replay as RP
 
