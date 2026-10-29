@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # synth.py's cases in parallel, one JSON a case under $OUT (a `research run` job; the scratch venv is outside the run dir).
 #   research run --on NODE --project verity --send benchmarks/pouw/sketch/synth.py \
-#     --send benchmarks/pouw/sketch/run_synth.sh --timeout 110m -- bash run_synth.sh [PARALLEL] [SECONDS_A_QUERY]
+#     --send benchmarks/pouw/sketch/run_synth.sh --timeout 110m -- bash inputs/run_synth.sh [PARALLEL] [SECONDS_A_QUERY]
 set -euo pipefail
 par=${1:-24}
 per=${2:-3000}
