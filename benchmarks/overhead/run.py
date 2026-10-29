@@ -1,4 +1,4 @@
-"""`verity bench overhead`: the slowdown for every scenario, how it moves, and where it falls below a target.
+"""`verity bench rho`: the slowdown for every scenario, how it moves, and where it falls below a target.
 
     uv run python benchmarks/overhead/run.py [--scenario NAME ...] [--target 10 --target 100] [--set KEY=VALUE ...]
                                         [--out DIR] [--figures DIR]

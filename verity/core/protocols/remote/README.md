@@ -193,7 +193,7 @@ The overhead, `DampenerRemote`:
 
 ## Results per monitoring period
 
-The overhead calculator is `benchmarks/overhead` (`verity bench overhead`). Its `periods.py`
+The overhead calculator is `benchmarks/overhead` (`verity bench rho`; it is being renamed to overhead). Its `periods.py`
 gives the overhead's lower bound for monitoring periods of a week, a month and a year. It covers one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`:
 
