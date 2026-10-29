@@ -7,9 +7,6 @@ import Proofs.Properties.CertifierDevice.Lms
 `NetworkCheck.Period.check` accepts only when no finding is left (`firstFinding … = none`), so each link-window's
 check of the parameters' form returned `ok`: `windowCheck` in the clock form, `rowsWindowCheck` in the rows form. Each
 returns `ok` only past every refusal, which is `PeriodWindowAccepted` or `PeriodRowsWindowAccepted`.
-
-Stubbed (`sorry`) where the check's clock form came to run one-stage v2 on the blobs: `answered_ok`, `windowCheck_ok`,
-`rowsWindowCheck_ok`, `periodAcceptMeans` and the honest lemma, until the restated statements are agreed.
 -/
 
 open NetworkCheck.Period
@@ -19,6 +16,10 @@ open Lean (Json)
 namespace Properties.NetworkCertifier
 
 namespace Period
+
+local instance instLawfulBEqByteArrayPeriod : LawfulBEq ByteArray where
+  eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
+  rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
 theorem firstFinding_none {fs : List (Option (Core.Verdict × String))} (h : firstFinding fs = none) :
     ∀ f ∈ fs, f = none := by
@@ -37,12 +38,123 @@ theorem answered_ok {what : String} {reg : Json} {a : Core.Answer} {v : Core.Int
     a.protocol = oneStage ∧ (∃ d, Flock.WindowRecord.digest reg = .ok d ∧ (a.digest == some d) = true) ∧
       a.verdict = .accept ∧
       ∃ prof, a.published = some v.2 ∧ a.profile = some prof ∧ Core.Integrity.ofJson prof = .ok v.1 := by
-  sorry
+  simp only [answered, refuse, pure, Except.pure] at h
+  split at h
+  · cases h
+  rename_i d1
+  split at h
+  · cases h
+  rename_i d2
+  split at h
+  · rename_i pub prof hv hp hpr
+    split at h
+    · rename_i i hi
+      cases h
+      refine ⟨?_, ?_, hv, prof, hp, hpr, hi⟩
+      · simpa [bne_iff_ne] using d1
+      · have hn : a.digest.isNone = false := by
+          cases hh : a.digest.isNone
+          · rfl
+          · simp [hh] at d2
+        have he : (a.digest != (Flock.WindowRecord.digest reg).toOption) = false := by
+          cases hh : (a.digest != (Flock.WindowRecord.digest reg).toOption)
+          · rfl
+          · simp [hh] at d2
+        have he' : a.digest = (Flock.WindowRecord.digest reg).toOption := by simpa [bne] using he
+        cases hr : Flock.WindowRecord.digest reg with
+        | error e =>
+          rw [hr] at he'
+          simp [he', Except.toOption] at hn
+        | ok d =>
+          rw [hr] at he'
+          refine ⟨d, rfl, ?_⟩
+          rw [he']
+          simp [Except.toOption]
+    · cases h
+  · cases h
+  · cases h
+
+theorem opening_ok {p : Params} {l : ClockLink} {w : Nat} {reg : Json} {certs : Array Certificate} {s : Salts}
+    {e : SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs} (h : opening p l w reg certs s e bs = .ok ()) :
+    ∃ file row, bs.get e.pub "public file" = .ok file ∧
+      NetworkCheck.LinkWindow.pubRow (linkCase p l w (rootOf reg) certs e.base.provedUnits (some file) s) =
+        .ok (some row) ∧
+      NetworkCheck.LinkWindow.opened (linkCase p l w (rootOf reg) certs e.base.provedUnits (some file) s) (some row) =
+        some 3 := by
+  simp only [opening, refuse, pure, Except.pure] at h
+  split at h
+  case h_2 => cases h
+  rename_i file hfile
+  split at h
+  · cases h
+  · cases h
+  · rename_i row hrow
+    split at h
+    · rename_i c
+      exact ⟨file, row, hfile, hrow, by simpa using c⟩
+    · cases h
 
 theorem windowCheck_ok {p : Params} {l : ClockLink} {earlier : Array ByteArray} {log : Array Json} {w : Nat}
     {reg : Json} {x : Window} {bs : Core.Blobs} (h : windowCheck p l (clearClocks l.syncSet) earlier log w reg x bs = .ok ()) :
     PeriodWindowAccepted p l earlier log w reg x bs := by
-  sorry
+  simp only [windowCheck, refuse, bind, Except.bind, pure, Except.pure] at h
+  split at h
+  case h_2 => cases h
+  rename_i clock salts ev hx
+  split at h
+  · rename_i c1
+    split at h
+    · rename_i c2
+      split at h
+      · rename_i c3
+        split at h
+        · cases h
+        · rename_i c4
+          split at h
+          · cases h
+          · rename_i c5
+            split at h
+            case h_2 => cases h
+            rename_i dom hdom
+            obtain ⟨ps, hps⟩ : ∃ ps, windowParams l dom log = .ok ps := by
+              rcases hps : windowParams l dom log with err | ps
+              · simp only [hps] at h; cases h
+              · exact ⟨ps, rfl⟩
+            simp only [hps] at h
+            split at h
+            case h_2 => cases h
+            rename_i d hd
+            obtain ⟨pub, prof, hv⟩ :
+                ∃ pub prof, SampledProofs.OneStageZk.checkBlobs ps ⟨reg, d⟩ ev bs = .accept pub prof := by
+              rcases hv : SampledProofs.OneStageZk.checkBlobs ps ⟨reg, d⟩ ev bs with ⟨pub, prof⟩ | r | r
+              · exact ⟨pub, prof, rfl⟩
+              all_goals (simp only [hv] at h; cases h)
+            simp only [hv] at h
+            split at h
+            · rename_i c6
+              have ho : opening p l w reg x.certificates salts ev bs = .ok () := h
+              obtain ⟨file, row, hfile, hrow, hop⟩ := opening_ok ho
+              have r1 := (Bool.and_eq_true _ _).mp c1
+              have q := (Bool.and_eq_true _ _).mp c6
+              refine ⟨⟨r1.1, by simpa using r1.2⟩, ?_,
+                ⟨clock, salts, ev, hx, c3, by simpa using c4, by simpa using c5⟩,
+                ⟨clock, salts, ev, hx, dom, ps, d, pub, prof, hdom, hps, hd, hv, q.1, q.2⟩,
+                ⟨clock, salts, ev, hx, file, row, hfile, hrow, hop⟩⟩
+              obtain ⟨hs, hall⟩ := (Bool.and_eq_true _ _).mp c2
+              unfold PeriodWindowCertified
+              generalize x.certificates = cs at hs hall
+              rcases cs with ⟨_ | ⟨a, _ | ⟨b, _ | ⟨y, ys⟩⟩⟩⟩
+              · simp at hs
+              · simp at hs
+              · refine ⟨a, b, rfl, ?_⟩
+                simp [Array.zip, Array.all] at hall
+                revert hall
+                cases certifies p .egress w a <;> cases certifies p .ingress w b <;> simp [Id.run, pure]
+              · simp at hs
+            · cases h
+      · cases h
+    · cases h
+  · cases h
 
 theorem rowsCheck_ok {p : Params} {s : Schedule} {sd : ByteArray} {w : Nat} {d : NetworkCheck.Direction} {r : Rows}
     (h : rowsCheck p s sd w d r = .ok ()) : PeriodRowsChecked p s sd w d r := by
@@ -121,7 +233,73 @@ theorem factsOf_ok {what : String} {prof : Core.Integrity} {pub : Lean.Json} {f 
 theorem rowsWindowCheck_ok {p : Params} {s : Schedule} {sd : ByteArray} {audits : Array Json} {w : Nat}
     {reg : Json} {x : Window} {f : Facts × Nat} (h : rowsWindowCheck p s sd audits w reg x = .ok f) :
     PeriodRowsWindowAccepted p s sd w reg x := by
-  sorry
+  simp only [rowsWindowCheck, refuse, bind, Except.bind, pure, Except.pure] at h
+  split at h
+  case h_2 => cases h
+  rename_i rs answer hx
+  split at h
+  · rename_i c1
+    split at h
+    · rename_i c2
+      split at h
+      · rename_i c3
+        rcases rs with ⟨_ | ⟨ri, _ | ⟨re, _ | ⟨y, ys⟩⟩⟩⟩
+        · simp at c3
+        · simp at c3
+        · split at h
+          · cases h
+          · rename_i v hloop
+            rw [← Array.forIn_toList] at hloop
+            simp only [Array.toList_zip, List.zip_cons_cons, List.zip_nil_left, List.forIn_cons,
+              List.forIn_nil] at hloop
+            split at hloop
+            · cases hloop
+            rename_i u hi
+            split at hloop
+            · cases hloop
+            rename_i u' he
+            cases u
+            cases u'
+            split at h
+            · rename_i c4
+              split at h
+              · rename_i c5
+                split at h
+                · cases h
+                · rename_i v ha
+                  obtain ⟨a1, a2, a3, prof, a4, a5, a6⟩ := answered_ok ha
+                  split at h
+                  · cases h
+                  rename_i f' hf
+                  obtain ⟨l, b, hl, hu, hd, hb⟩ := factsOf_ok hf
+                  have hun : l.size = 2 * s.window := by
+                    rw [← hu]
+                    cases hc : (f'.units == 2 * s.window) with
+                    | true => exact beq_iff_eq.mp hc
+                    | false => simp [hc] at h
+                  have hh : holds reg ri = true ∧ holds reg re = true :=
+                    ⟨Array.all_eq_true.mp c4 0 (by simp), Array.all_eq_true.mp c4 1 (by simp)⟩
+                  refine ⟨c1, ?_, ⟨ri, re, answer, hx, rowsCheck_ok hi, rowsCheck_ok he, hh.1, hh.2⟩,
+                    ⟨_, answer, hx, a1, a2, a3, v.2, prof, v.1, l, b, a4, a5, a6, hl, hun, hd, hb⟩⟩
+                  obtain ⟨hs, hall⟩ := (Bool.and_eq_true _ _).mp c2
+                  unfold PeriodRowsCertified
+                  generalize x.certificates = cs at hs hall
+                  rcases cs with ⟨_ | ⟨q1, _ | ⟨q2, _ | ⟨q3, _ | ⟨q4, qs⟩⟩⟩⟩⟩
+                  · simp at hs
+                  · simp at hs
+                  · simp at hs
+                  · refine ⟨q1, q2, q3, rfl, ?_⟩
+                    simp [records, Array.zip, Array.all] at hall
+                    revert hall
+                    cases certifiesOn p p.link .ingress w q1 <;> cases certifiesOn p p.link .egress w q2 <;>
+                      cases certifiesOn p (p.link ++ "-fails") .egress w q3 <;> simp [Id.run, pure]
+                  · simp at hs
+              · cases h
+            · cases h
+        · simp at c3
+      · cases h
+    · cases h
+  · cases h
 
 theorem map_ok {α β : Type} {g : α → β} {r : Found α} {b : β} (h : g <$> r = .ok b) : ∃ a, r = .ok a := by
   cases r with
@@ -131,7 +309,42 @@ theorem map_ok {α β : Type} {g : α → β} {r : Found α} {b : β} (h : g <$>
 end Period
 
 theorem periodAcceptMeans : PeriodAcceptMeans := by
-  sorry
+  intro p c e bs pub prof h
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  rename_i h1 h2 h3 h4
+  dsimp only at h
+  split at h
+  · cases h
+  · cases h
+  rename_i hf
+  have hall := Period.firstFinding_none hf
+  refine ⟨by omega, by omega, fun i reg x hc he => ?_⟩
+  have hmem : ((reg, x), i) ∈ (c.windows.zip e.windows).zipIdx := by
+    rw [Array.mem_zipIdx_iff_getElem?, Array.getElem?_zip_eq_some]
+    exact ⟨hc, he⟩
+  rcases hform : p.form with l | ⟨s, sd, scan⟩
+  · simp only [hform] at hall
+    have h0 := hall _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+      (List.mem_append_left _ (List.mem_append_right _ (List.mem_map.2 ⟨_, Array.mem_toList_iff.2
+        (Array.mem_map.2 ⟨_, hmem, rfl⟩), rfl⟩))))))
+    obtain ⟨_, ha⟩ := Period.findingOf_none h0
+    obtain ⟨u, hu⟩ := Period.map_ok ha
+    exact Period.windowCheck_ok hu
+  · simp only [hform] at hall
+    have h0 := hall _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+      (List.mem_append_left _ (List.mem_append_right _ (List.mem_map.2 ⟨_, Array.mem_toList_iff.2
+        (Array.mem_map.2 ⟨_, hmem, rfl⟩), rfl⟩))))))
+    obtain ⟨_, ha⟩ := Period.findingOf_none h0
+    obtain ⟨f, hu⟩ := Period.map_ok ha
+    exact Period.rowsWindowCheck_ok hu
 
 theorem periodAcceptMeans_iff : PeriodAcceptMeans ↔ PeriodAcceptMeansOf check := Iff.rfl
 
@@ -143,9 +356,7 @@ build the key's 2^20-leaf tree. -/
 
 namespace Period
 
-local instance instLawfulBEqByteArrayPeriod : LawfulBEq ByteArray where
-  eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
-  rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
+attribute [local instance] instLawfulBEqByteArrayPeriod
 
 theorem except_bind_ok {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a : Except ε α).bind f = f a := rfl
 
@@ -210,6 +421,47 @@ theorem certifies_honest (l : ClockLink) (prog : String) (d : NetworkCheck.Direc
   rw [hsig]
   exact hdec
 
+theorem opening_of {p : Params} {l : ClockLink} {w : Nat} {reg : Json} {certs : Array Certificate} {s : Salts}
+    {e : SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs} {file row : ByteArray}
+    (hfile : bs.get e.pub "public file" = .ok file)
+    (hrow : NetworkCheck.LinkWindow.pubRow (linkCase p l w (rootOf reg) certs e.base.provedUnits (some file) s) =
+      .ok (some row))
+    (hop : NetworkCheck.LinkWindow.opened (linkCase p l w (rootOf reg) certs e.base.provedUnits (some file) s)
+      (some row) = some 3) :
+    opening p l w reg certs s e bs = .ok () := by
+  simp [opening, hfile, hrow, hop, pure, Except.pure]
+
+theorem windowCheck_of_accepted {p : Params} {l : ClockLink} {earlier : Array ByteArray} {log : Array Json} {w : Nat}
+    {reg : Json} {x : Window} {bs : Core.Blobs} (ha : PeriodWindowAccepted p l earlier log w reg x bs) :
+    windowCheck p l (clearClocks l.syncSet) earlier log w reg x bs = .ok () := by
+  obtain ⟨⟨hp, hw⟩, ⟨eg, ig, hc, heg, hig⟩, ⟨clock, salts, ev, hx, hcl, hclear, hearlier⟩,
+    ⟨clock₂, salts₂, ev₂, hx₂, dom, ps, d, pub, prof, hdom, hps, hd, hv, hl, hdr⟩,
+    ⟨clock₃, salts₃, ev₃, hx₃, file, row, hfile, hrow, hop⟩⟩ := ha
+  have hclear' : clock.digest ∉ clearClocks l.syncSet := by simpa using hclear
+  have hearlier' : clock.digest ∉ earlier := by simpa using hearlier
+  have hp' : (reg.getObjValD "program" == .str p.program) = true := hp
+  rw [hx] at hx₂ hx₃
+  cases hx₂
+  cases hx₃
+  have hop' := opening_of hfile hrow hop
+  rw [hc] at hop'
+  have hdr' := hdr
+  try simp only [beq_iff_eq] at hdr'
+  simp only [windowCheck, hx, hp', hw, hc, beq_self_eq_true, Bool.and_true, Bool.true_and, Array.size,
+    List.length_cons, List.length_nil]
+  simp [Array.zip, Array.all, heg, hig, hcl, hclear', hearlier', hdom, hps, hd, hv, hl, hdr', hop', bind,
+    Except.bind, pure, Except.pure, Id.run]
+
+theorem check_one {p : Params} {l : ClockLink} {reg : Json} {x : Window} {r : ByteArray} {bs : Core.Blobs}
+    (hf : p.form = .clock l) (hw : p.windows = 1) (ha : p.audits = #[])
+    (h : windowCheck p l (clearClocks l.syncSet) #[] #[] p.first reg x bs = .ok ()) :
+    check p ⟨#[], #[reg], r⟩ ⟨#[], #[x]⟩ bs =
+      .accept (terms #[] #[] p.cells p.jitter (l.syncSet.deltas.length * l.syncSet.rhos.length) 1)
+        { link := p.link, windows := 1 } := by
+  unfold check
+  simp [hf, hw, ha, h, auditChecks, wiredChecks, stateChecks, Functor.map, Except.map, findingOf, firstFinding,
+    Except.toOption]
+
 end Period
 
 /-- **An honest period is accepted** (`PeriodAcceptMeans`' honest lemma): under `HonestWindowProved`, the check
@@ -220,7 +472,20 @@ theorem periodAcceptMeans_honest (hv : HonestWindowProved) :
       (ev : SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs),
       check (honestParams l prog) (honestCommitment reg) (honestEvidence de di s ev) bs =
         .accept (terms #[] #[] #[] 0 1 1) { link := "link", windows := 1 } := by
-  sorry
+  obtain ⟨l, prog, reg, de, di, s, ev, bs, hsync, hde, hdi, hreg, hv2, hop⟩ := hv
+  refine ⟨l, prog, reg, de, di, s, ev, bs, ?_⟩
+  have hw := Period.windowCheck_of_accepted (p := honestParams l prog) (l := l) (earlier := #[]) (log := #[]) (w := 0)
+    (reg := reg) (x := honestWindow de di s ev) (bs := bs) ⟨hreg,
+    ⟨honestCert .egress 0 0 de, honestCert .ingress 0 1 di, rfl, Period.certifies_honest l prog .egress 0 de
+      (by decide) hde, Period.certifies_honest l prog .ingress 1 di (by decide) hdi⟩,
+    ⟨honestCert .egress 0 2 ⟨Array.replicate 64 7⟩, s, ev, rfl,
+      Period.certifies_honest l prog .egress 2 _ (by decide) (by decide), by rw [hsync]; decide +kernel,
+      by first | rfl | simp⟩,
+    hv2, hop⟩
+  have := Period.check_one (p := honestParams l prog) (l := l) (reg := reg) (x := honestWindow de di s ev)
+    (r := .empty) (bs := bs) rfl rfl rfl hw
+  rw [hsync] at this
+  exact this
 
 /-- **No period check that accepts every period has `PeriodAcceptMeans`' property** (its nontrivial lemma): such a check
 accepts the honest parameters' period with a commitment that registers no link-window, and none of it was accepted. -/
