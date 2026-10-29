@@ -1,6 +1,6 @@
 """C-Flock's generic IR lowering: an IR Definition becomes a Flock binary circuit by composing :mod:`fp` pieces.
 
-:func:`lower` walks the Definition's gates in canonical order, as ``verity.ml.circuits.evaluate`` does, and maps each primitive to
+:func:`lower` walks the Definition's gates in canonical order, as ``verity.ml.circuits.evaluation.reference`` does, and maps each primitive to
 its piece in :data:`PIECES` (a primitive without one is an error naming it). Constant gates, and gates whose operands are
 all constant, are evaluated by the primitive's own evaluator and become constant wires. An activation of a Boolean
 Definition that the walk holds whole is lowered by the Definition's builder instead of its gates (:func:`lower_gates`).
@@ -1110,7 +1110,7 @@ def lowering(definition, name: str, cut: Callable | None = None, group: int = 1,
 def cut_words(low: Lowering, flat_inputs: np.ndarray) -> np.ndarray:
     """``(n, len(cut))``: every instance's cut words by the IR reference evaluator (the verifier's own computation; the
     native tail's values included)."""
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation.reference import evaluate_call
 
     prog, call = standalone(low.definition)
     out = np.zeros((len(flat_inputs), len(low.units.cut)), dtype=np.uint64)
