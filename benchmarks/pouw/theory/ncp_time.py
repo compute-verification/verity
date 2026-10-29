@@ -9,22 +9,25 @@ three readings: `products`, the product instructions alone at 4 a IDP.4A, 2 a DF
 FFMA and 1/2 a HFMA2; `ideal`, adding the word's own extraction (no operand delivery); and `honest`, adding operand
 delivery and conversion (an estimate until the honest kernel is timed). The `floor` reading is `ncp_p32_check.py`'s:
 the fewest issue slots a word that check finds, with three products a DFMA in chains of 8 and Strassen inside the k32
-step, and it sits under the products reading on DFMA and FFMA. The `delivered` adversary pays honest's costs, so its
-rate is honest's. IDP.4A's 8 a word holds in every reading: a sum of two NCP entries leaves the byte. The tensor pipe's
-other forms (`TENSOR_FORMS`) make fewer words a tensor slot than s8 wgmma and share its slots.
+step, and it sits under the products reading on DFMA and FFMA. The `slot2` reading is the rank-1 capacity bound that no
+CUDA instruction buys more than 2 MACs an issue slot (IDP.4A's rate, measured on sm_120). The `delivered` adversary pays
+honest's costs, so its rate is honest's. IDP.4A's 8 a word holds in every reading: a sum of two NCP entries leaves the
+byte. The tensor pipe's other forms (`TENSOR_FORMS`) make fewer words a tensor slot than s8 wgmma and share its slots.
 
 Time is the polytope the H200 census measured (`machine_model/data/devices/sm_90/rows.csv`). Per SMSP-cycle, the
 tensor pipe's IGMMA_S8_N256 rate g and each lane class's warp instructions n_c satisfy the joint rows
   JI90_k: a_k g + b_k Σ_c n_c ≤ 1,   JPI90_k: a g + b n_IMAD ≤ 1,   JPA90_k: a g + b n_ALU ≤ 1,
-each pipe's alone ceiling, and for honest the shared-memory port beside SS wgmma (`--no-smem` drops it; the adversary's
-ideal routes read no operands at all). Two placements are estimates, not
-measurements: IDP.4A on the IMAD pipe at IMAD's cost, and DFMA under the generic JI90 rows only (`ESTIMATES`; the
-`wgU_idp4a`, `wgU_dfma` and `p_*` rows of dc/probes measure them). The LP maximises words a SMSP-cycle,
-4096 g + Σ_r w_r, over the routes a party runs.
+each pipe's alone ceiling, the FP64 pipe's share of the tensor pipe (`FP64_ROW`: DFMA beside a saturated wgmma, dc/probes'
+wgU_dfma), and for honest the shared-memory port beside SS wgmma (`--no-smem` drops it; the adversary's ideal routes read
+no operands at all). IDP.4A is the IMAD class (p_idp4a_imad). The LP maximises words a SMSP-cycle, 4096 g + Σ_r w_r,
+over the routes a party runs.
 
-T1 reads word production with hashing excluded (ShaSpeed: both parties hash the same bytes). The final word of each dot
-product is A·Bᵀ, which the adversary holds as advice, so it makes 3K/32 − 1 of honest's 3K/32 words:
+T1 is per SM-clock (the clock is a term of its own) and reads word production with hashing excluded (ShaSpeed: both
+parties hash the same bytes). The final word of each dot product is A·Bᵀ, which the adversary holds as advice, so it
+makes 3K/32 − 1 of honest's 3K/32 words:
   t_adv / t_H = (1 − 32/(3K)) · R_H / R_A.
+Forming X and Y is charged to honest alone, two ways: the certificate's additive 8/n + 8/m on t_H, and `FORM_LANE`'s
+instructions and bytes beside the wgmma.
 
   uv run --with scipy==1.18.1 python benchmarks/pouw/theory/ncp_time.py [--no-smem] [--json OUT] [--mutations]
       [--verdict PATH]
@@ -57,19 +60,34 @@ CLASSES = ("IMAD", "ALU", "FMA", "FP64", "MIO", "UNI")
 #: Each class's warp instructions a SMSP-cycle alone: the census (IMAD, ALU, FFMA at issue, uniform), the sheet (FP64,
 #: 64 lanes a SM-clock) and LDS.128's 127.96 B a SM-clock (a 512-byte warp instruction every 16 SMSP-cycles).
 ALONE = {"IMAD": 0.5, "ALU": 0.5, "FMA": 1.0, "FP64": 0.5, "MIO": 1 / 16, "UNI": 0.5}
+#: FP64 shares the tensor pipe: DFMA beside a saturated s8 wgmma (dc/probes wgU_dfma, wgU_dfma_ffma, wgU_idp4a_dfma)
+#: keeps under 1% of its alone rate and slows the wgmma, as DMMA does, so g/G_SAT + n_FP64/ALONE_FP64 ≤ 1. IDP.4A shares
+#: the IMAD pipe (p_idp4a_imad), so it is IMAD's class.
+FP64_ROW = "tensor share + FP64 share <= 1"
 ESTIMATES = {
-    "IDP4A on IMAD": "IDP.4A issues to the IMAD pipe at IMAD's cost (dc/probes p_idp4a_imad, wgU_idp4a measure it)",
-    "DFMA beside": "DFMA beside a saturated wgmma holds only the generic JI90 rows and the FP64 pipe's sheet ceiling "
-                   "0.5 a SMSP-cycle (wgU_dfma, p_dfma_* measure it)",
+    "IDP4A beside": "IDP.4A beside a saturated wgmma at the IMAD class's joint rows (JPI90; wgU_idp4a sits under them)",
+    "FP64_ROW between points": "t + s <= 1 between the alone rates and the probed point beside the saturated wgmma",
     "operand delivery": "honest routes load int8 operands from shared memory in a register tile (8x8 for IDP.4A, "
                         "FFMA, IMAD and HFMA2; 16 rows as 8 packed pairs x 8 for DFMA) and convert them in registers",
     "smem port": "beside SS wgmma s8 n256 (80 B a SM-clock of operand reads) the port serves 123 B a SM-clock in all "
                  "(the n128 joint, RT-H200-EMP)",
+    "forming": "FORM_LANE's issue and port cost of an entry beside the wgmma; the H200's forming price is unmeasured",
 }
 INSTR = {
-    "IDP4A": ("IMAD", 1), "IMAD": ("IMAD", 1), "IADD3": ("ALU", 1), "FFMA": ("FMA", 1), "FADD": ("FMA", 1),
-    "HFMA2": ("FMA", 1), "DFMA": ("FP64", 1), "DADD": ("FP64", 1), "LDS128": ("MIO", 1), "UIMAD": ("UNI", 1),
+    "IDP4A": ("IMAD", 1), "IMAD": ("IMAD", 1), "IADD3": ("ALU", 1), "PRMT": ("ALU", 1), "FFMA": ("FMA", 1),
+    "FADD": ("FMA", 1), "HFMA2": ("FMA", 1), "DFMA": ("FP64", 1), "DADD": ("FP64", 1), "LDS128": ("MIO", 1),
+    "STS128": ("MIO", 1), "UIMAD": ("UNI", 1),
 }
+#: Forming the operands: X's 3mK entries every call, and Y's 3Kn when F is fresh every call, so 32/n + 32/m entries a
+#: word. `FORM_CERT` is NCP's certificate's forming charge on honest's work (24 units an entry of A against 32 a word,
+#: 8/n; the same for Y, 8/m), at the 4090's W1 price. `FORM_LANE` is an H200 estimate beside the wgmma: a biased packed
+#: IADD3 forms 4 entries, the permutation and negation take a PRMT or LOP3 per 6, and an STS.128 stores 16 into the
+#: wgmma's tiles, one shared-memory byte an entry (operands arrive by LDG; the noise's SHA-512 is hashing, outside T1).
+FORM_CERT = 8.0
+FORM_LANE = {"IADD3": 1 / 4, "PRMT": 1 / 6, "STS128": 1 / 16}
+FORM_BYTES = 1.0
+#: (n, m): m None when F is reused across calls and Y is formed once; m < 64 is below wgmma's tight N.
+FORM_SHAPES = ((2048, None), (2048, 8192), (2048, 512), (2048, 64), (2048, 16))
 #: Each route's lane instructions a word: `products` the product instructions alone, `ideal` adding the word's own
 #: extraction, `honest` adding operand delivery and conversion (an estimate), and `bytes` the shared-memory bytes an honest
 #: word reads.
@@ -110,7 +128,18 @@ def _floor_reading() -> None:
         ROUTES[r]["floor"] = v
 
 
+def _slot_reading() -> None:
+    """The rank-1 capacity bound that no CUDA instruction buys more than 2 MACs an issue slot (IDP.4A's; measured on
+    sm_120): a class issuing a warp instruction every 1/ALONE SMSP-cycles makes at most 2/ALONE products an instruction,
+    so a word takes at least 16·ALONE. The uniform path keeps its products reading."""
+    for v in ROUTES.values():
+        (ins, _), = v["products"].items()
+        cls = INSTR[ins][0]
+        v["slot2"] = v["products"] if cls == "UNI" else {ins: 16 * ALONE[cls]}
+
+
 _floor_reading()
+_slot_reading()
 #: The tensor pipe's other exact forms, alone, in k32 words a SM-clock: each shares the s8 wgmma's slots (measured for
 #: mma.sync and DMMA; b1, f16 and sparse s8 an estimate), so beside a saturated s8 wgmma each adds none.
 TENSOR_FORMS = {
@@ -142,10 +171,12 @@ def joint_rows(path: Path = ROWS) -> dict[str, tuple[str, float, float]]:
 
 
 def solve(routes: dict[str, dict], rows: dict, smem: bool = False, tensor: bool = True, scale: dict | None = None,
-          free: tuple[str, ...] = ()):
+          free: tuple[str, ...] = (), form: tuple[dict, float] | None = None, fp64_shares: bool = True):
     """Max words a SMSP-cycle. routes: name → {INSTR: lane instructions a word}; scale: name → a factor on the route's
     instructions and bytes; free: classes the generic joint rows (JI90) don't count, though each still takes an issue
-    slot. Returns (words/SMSP-cycle, g, {r: w})."""
+    slot; form: (lane instructions, shared-memory bytes) every word's operand forming adds, the tensor's words included;
+    fp64_shares: the FP64 pipe shares the tensor pipe's slots (FP64_ROW), else only the generic rows bind it.
+    Returns (words/SMSP-cycle, g, {r: w})."""
     names = list(routes)
     nv = 1 + len(names)
     use = np.zeros((len(CLASSES), nv))
@@ -153,6 +184,11 @@ def solve(routes: dict[str, dict], rows: dict, smem: bool = False, tensor: bool 
         for ins, cnt in routes[r].items():
             cls, w = INSTR[ins]
             use[CLASSES.index(cls), j] += cnt * w / LANES * (scale or {}).get(r, 1.0)
+    form_ins, form_bytes = form or ({}, 0.0)
+    for ins, cnt in form_ins.items():
+        cls, w = INSTR[ins]
+        use[CLASSES.index(cls), 0] += WORDS_PER_IGMMA * cnt * w / LANES
+        use[CLASSES.index(cls), 1:] += cnt * w / LANES
     A, b = [], []
     allv = use.sum(0)
     generic = use[[i for i, c in enumerate(CLASSES) if c not in free]].sum(0)
@@ -167,16 +203,21 @@ def solve(routes: dict[str, dict], rows: dict, smem: bool = False, tensor: bool 
     for i, cls in enumerate(CLASSES):
         A.append(use[i] / ALONE[cls])
         b.append(1.0)
+    if fp64_shares:
+        line = use[CLASSES.index("FP64")] / ALONE["FP64"]
+        line[0] = 1 / G_SAT
+        A.append(line)
+        b.append(1.0)
     line = allv.copy()
     line[0] = 1.0
     A.append(line)
     b.append(1.0)
     if smem:
         line = np.zeros(nv)
-        line[0] = SS_BYTES_PER_IGMMA
+        line[0] = SS_BYTES_PER_IGMMA + WORDS_PER_IGMMA * form_bytes
         for j, r in enumerate(names, start=1):
             base, _, kind = r.partition(":")
-            line[j] = ROUTES[base]["bytes"] * (scale or {}).get(r, 1.0) if kind == "honest" else 0
+            line[j] = (ROUTES[base]["bytes"] * (scale or {}).get(r, 1.0) if kind == "honest" else 0) + form_bytes
         A.append(line)
         b.append(SMEM_SHARED)
     c = np.zeros(nv)
@@ -194,6 +235,12 @@ def reading(kind: str, names) -> dict[str, dict]:
 
 def gap(r_h: float, r_a: float, k: int) -> float:
     return 1 - (1 - 32 / (3 * k)) * r_h / r_a
+
+
+def forming(n: int, m: int | None) -> tuple[float, tuple[dict, float]]:
+    """Entries formed a word at (n, m), and FORM_LANE's (instructions, bytes) a word for `solve`'s form."""
+    e = 32 / n + (32 / m if m else 0)
+    return e, ({ins: c * e for ins, c in FORM_LANE.items()}, FORM_BYTES * e)
 
 
 def kmin(r_h: float, r_a: float) -> float:
@@ -244,9 +291,10 @@ def main() -> int:
     for name, (w, why) in TENSOR_FORMS.items():
         print(f"  tensor {name:42s} {w:7.2f} alone ({why})")
     pr = {r: v["beside"]["products"] for r, v in per_route.items()}
-    checks.check("beside a saturated s8 wgmma (products reading): IDP.4A leads, then DFMA; IMAD and FFMA trail, HFMA2 "
-                 "and the uniform path last", pr["idp4a"] > pr["dfma2"] > max(pr["imad2"], pr["ffma"])
-                 > pr["hfma2"] > pr["uimad"], ", ".join(f"{r} {v:.2f}" for r, v in pr.items()))
+    checks.check("beside a saturated s8 wgmma (products reading): IDP.4A leads, FFMA and IMAD trail, HFMA2 and the "
+                 "uniform path last, and DFMA makes none (the FP64 pipe shares the tensor's slots)",
+                 pr["idp4a"] > max(pr["imad2"], pr["ffma"]) > pr["hfma2"] > pr["uimad"] > pr["dfma2"] == 0.0,
+                 ", ".join(f"{r} {v:.2f}" for r, v in pr.items()))
     checks.check("no other tensor form makes more words a tensor slot than s8 wgmma",
                  all(w <= 128.0 + 1e-9 for w, _ in TENSOR_FORMS.values()),
                  ", ".join(f"{n.split(' (')[0]} {w:.1f}" for n, (w, _) in TENSOR_FORMS.items()))
@@ -264,7 +312,7 @@ def main() -> int:
 
     # (3) The adversary's best in each reading, against honest on every route.
     adv = {}
-    for kind in ("products", "floor", "ideal", "delivered"):
+    for kind in ("slot2", "products", "floor", "ideal", "delivered"):
         r_a, g_a, w_a = solve(reading("honest" if kind == "delivered" else kind, ROUTES), rows, smem=smem)
         adv[kind] = {"rate": r_a, "words_sm_clk": sm * r_a, "g": g_a, "side": sm * (r_a - WORDS_PER_IGMMA * g_a),
                      "routes": {k.split(":")[0]: sm * v for k, v in w_a.items() if v > 1e-12},
@@ -288,12 +336,17 @@ def main() -> int:
                  "from K 1,067", all(abs(gap(r_h, adv["delivered"]["rate"], k) - 32 / (3 * k)) < 1e-9 for k in KS)
                  and abs(adv["delivered"]["kmin"] - 32 / 0.03) < 1e-6, f"K 2,048 {32 / 6144:.2%}")
     km = {k: a["kmin"] for k, a in adv.items()}
-    checks.check("no product-count premise gives T1 at K 2,048: against the products and floor adversaries honest's "
-                 "side falls short (estimate: honest's delivery is modelled, not timed)",
-                 min(gap(r_h, adv[k]["rate"], 2048) for k in ("products", "floor")) > 0.01
-                 and km["delivered"] < km["ideal"] < km["products"] < km["floor"],
+    checks.check("the floor premise gives T1 at K 2,048 with honest's side on IDP.4A and FFMA beside the wgmma (honest's "
+                 "schedule at the polytope's rates, its delivery modelled)",
+                 gap(r_h, adv["floor"]["rate"], 2048) < 0.01
+                 and km["delivered"] < km["ideal"] < km["products"] < km["floor"] < 2048,
                  ", ".join(f"{gap(r_h, adv[k]['rate'], 2048):.2%} ({k})" for k in ("products", "floor", "ideal"))
                  + " at K 2,048; T1 from K " + ", ".join(f"{v:,.0f} ({k})" for k, v in km.items()))
+    checks.check("the rank-1 slot bound alone (no CUDA instruction above 2 MACs a slot) gives T1 at no K: at the bound "
+                 "FFMA words outrun honest's side", km["slot2"] == math.inf,
+                 f"adversary {adv['slot2']['words_sm_clk']:.2f} (side {adv['slot2']['side']:.2f}: "
+                 + ", ".join(f"{r} {v:.2f}" for r, v in adv["slot2"]["routes"].items()) + f"); gap at K 2,048 "
+                 f"{gap(r_h, adv['slot2']['rate'], 2048):.2%}, K 16,384 {gap(r_h, adv['slot2']['rate'], 16384):.2%}")
 
     # (4) Margins: how much cheaper than its reading an adversary's side word may be with T1 holding at K, and the side
     # honest must reach at K 2,048.
@@ -303,7 +356,7 @@ def main() -> int:
         return gap(r_h, solve(reading(base, ROUTES), rows, smem=smem, scale=sc)[0], k)
 
     margins = {}
-    for kind, k in (("delivered", 2048), ("ideal", 4096), ("products", 8192), ("floor", 16384), ("floor", 8192)):
+    for kind, k in (("delivered", 2048), ("floor", 2048), ("products", 2048), ("floor", 8192), ("floor", 16384)):
         s = bisect(lambda s: gap_scaled(kind, s, k) > 0.01, 0.05, 8.0)
         s_idp = bisect(lambda s: gap_scaled(kind, s, k, "idp4a") > 0.01, 0.05, 8.0)
         margins[f"{kind}@{k}"] = {"every_route": s, "idp4a": s_idp}
@@ -316,25 +369,61 @@ def main() -> int:
               f"instructions (IDP.4A alone: >= {8 * m['idp4a']:.2f} a word)")
     print(f"  honest side at K 2,048: modelled {sm * side_h:.2f} words/SM-clk; T1 needs >= "
           + ", ".join(f"{v:.2f} ({k})" for k, v in need.items()))
-    # The placement estimates: were a class's warp instructions free of the generic rows beside wgmma (both parties).
+    # The placements, for both parties: FP64 under the generic rows only (the estimate the probe replaced), and the IMAD
+    # class free of the generic rows beside wgmma.
     placement = {}
-    for cls in ("FP64", "IMAD"):
-        rh_f = solve(reading("honest", ROUTES), rows, smem=smem, free=(cls,))[0]
-        placement[cls] = {"honest": sm * rh_f}
+    for name, kw in (("FP64 under JI90 only", {"fp64_shares": False}), ("IMAD free of JI90", {"free": ("IMAD",)})):
+        rh_f = solve(reading("honest", ROUTES), rows, smem=smem, **kw)[0]
+        placement[name] = {"honest": sm * rh_f}
         for kind in ("products", "floor", "ideal"):
-            ra_f = solve(reading(kind, ROUTES), rows, smem=smem, free=(cls,))[0]
-            placement[cls][kind] = {"adversary": sm * ra_f, "gap_k2048": gap(rh_f, ra_f, 2048), "kmin": kmin(rh_f, ra_f)}
-        print(f"  were {cls} free of JI90 beside wgmma: honest {sm * rh_f:.2f}, gap at K 2,048 "
-              + ", ".join(f"{placement[cls][k]['gap_k2048']:.2%} ({k}, T1 from K {placement[cls][k]['kmin']:,.0f})"
+            ra_f = solve(reading(kind, ROUTES), rows, smem=smem, **kw)[0]
+            placement[name][kind] = {"adversary": sm * ra_f, "gap_k2048": gap(rh_f, ra_f, 2048),
+                                     "kmin": kmin(rh_f, ra_f)}
+        print(f"  were {name}: honest {sm * rh_f:.2f}, gap at K 2,048 "
+              + ", ".join(f"{placement[name][k]['gap_k2048']:.2%} ({k}, T1 from K {placement[name][k]['kmin']:,.0f})"
                           for k in ("products", "floor", "ideal")))
-    mf = margins["floor@16384"]["every_route"]
-    checks.check("premise P32's margin at K 16,384 (the floor reading): T1 holds while an off-tensor word costs at least "
-                 "that fraction of the floor's issue slots; at K 8,192 the floor already breaks it",
-                 mf < 1.0 < margins["floor@8192"]["every_route"],
-                 f"{mf:.3f}x (margin {1 / mf:.2f}x); at K 8,192 {margins['floor@8192']['every_route']:.3f}x")
+    # Forming, charged to honest alone: the adversary's tensor words need formed operands too, but nothing proved says so.
+    form_table = {}
+    print("  forming (honest only)       certificate 8/n + 8/m on t_H  |  H200 estimate beside the wgmma (FORM_LANE)")
+    for n, m in FORM_SHAPES:
+        e, form = forming(n, m)
+        cert = FORM_CERT * e / 32
+        rh_f = solve(reading("honest", ROUTES), rows, smem=smem, form=form)[0]
+        row = {"entries_a_word": e, "certificate_charge": cert, "honest_words_sm_clk": sm * rh_f}
+        for kind in ("floor", "products", "delivered"):
+            ra = adv[kind]["rate"]
+            row[kind] = {"certificate": {k: 1 - (1 - gap(r_h, ra, k)) / (1 + cert) for k in (2048, 8192)},
+                         "beside": {k: gap(rh_f, ra, k) for k in (2048, 8192)},
+                         "kmin_certificate": kmin(r_h / (1 + cert), ra), "kmin_beside": kmin(rh_f, ra)}
+        form_table[f"n {n}, m {m or 'F reused'}"] = row
+        print(f"  n {n:5d} m {str(m or 'F reused'):>8s}  +{cert:6.2%}: "
+              + "  ".join(f"{k} K2048 {row[k]['certificate'][2048]:6.2%}" for k in ("floor", "delivered"))
+              + f"  |  honest {sm * rh_f:6.2f}: "
+              + "  ".join(f"{k} K2048 {row[k]['beside'][2048]:6.2%} (T1 from K {row[k]['kmin_beside']:,.0f})"
+                          for k in ("floor", "delivered")))
+    f0, f512 = form_table["n 2048, m F reused"], form_table["n 2048, m 512"]
+    checks.check("forming at the certificate's 8/n makes the delivered gap at K 2,048 about 0.91%, and with fresh F "
+                 "every call (8/m) T1 fails at m 512 even against the delivered adversary",
+                 abs(f0["delivered"]["certificate"][2048] - 0.0091) < 5e-4 and f512["delivered"]["certificate"][2048]
+                 > 0.01, f"{f0['delivered']['certificate'][2048]:.2%} (F reused), "
+                 f"{f512['delivered']['certificate'][2048]:.2%} (m 512)")
+    checks.check("beside the wgmma (estimate) forming at m >= 512 costs honest less than the certificate's additive "
+                 "charge; with F reused T1 holds at K 2,048 against the floor adversary, and fresh F at m 512 needs a "
+                 "larger K", all(form_table[f"n 2048, m {m}"]["delivered"]["beside"][2048]
+                                 < form_table[f"n 2048, m {m}"]["delivered"]["certificate"][2048] for m in (512, 8192))
+                 and f0["floor"]["beside"][2048] < 0.01 < f512["floor"]["beside"][2048],
+                 f"floor at K 2,048: {f0['floor']['beside'][2048]:.2%} (F reused), {f512['floor']['beside'][2048]:.2%} "
+                 f"(m 512, T1 from K {f512['floor']['kmin_beside']:,.0f}); additive {f0['floor']['certificate'][2048]:.2%}"
+                 f" and {f512['floor']['certificate'][2048]:.2%}")
+    mf = margins["floor@2048"]["every_route"]
+    checks.check("premise P32's margin at K 2,048 (the floor reading): T1 holds while an off-tensor word costs at least "
+                 "that fraction of the floor's issue slots, and the margin grows with K",
+                 mf < 1.0 and margins["floor@16384"]["every_route"] < margins["floor@8192"]["every_route"] < mf,
+                 f"{mf:.3f}x (margin {1 / mf:.2f}x); K 8,192 {margins['floor@8192']['every_route']:.3f}x, K 16,384 "
+                 f"{margins['floor@16384']['every_route']:.3f}x")
     md = margins["delivered@2048"]["every_route"]
-    checks.check("at K 2,048 T1 needs the delivered reading: it holds while an adversary's side word costs at least "
-                 "that fraction of honest's instructions", 0.5 < md < 1.0, f"{md:.3f}x (margin {1 / md:.2f}x)")
+    checks.check("against the delivered adversary at K 2,048 T1 holds while its side word costs at least that fraction "
+                 "of honest's instructions", 0.5 < md < mf, f"{md:.3f}x (margin {1 / md:.2f}x)")
 
     if checks.mutations:
         no_imad = {k: v for k, v in rows.items() if not k.startswith("JPI90")}
@@ -348,6 +437,10 @@ def main() -> int:
                       8192)
         checks.mutation("a b1 pipe beside the s8 wgmma (not sharing its slots) breaks T1 at every K", free_b1 > 0.01,
                         f"gap at K 8,192 {free_b1:.2%}")
+        fp = placement["FP64 under JI90 only"]["floor"]
+        checks.mutation("FP64 under the generic rows only (not sharing the tensor) breaks T1 at K 2,048 against the floor "
+                        "adversary: the FP64 row binds", fp["gap_k2048"] > 0.01,
+                        f"gap {fp['gap_k2048']:.2%}, T1 from K {fp['kmin']:,.0f}")
     if out:
         Path(out).write_text(json.dumps({
             "smem": smem, "per_route": per_route, "tensor_forms": TENSOR_FORMS, "generous_words_sm_clk": sm * generous,
@@ -355,7 +448,7 @@ def main() -> int:
             "adversary": {k: {kk: vv for kk, vv in v.items() if kk != "rate"} for k, v in adv.items()},
             "gap": {kind: {k: gap(r_h, a["rate"], k) for k in KS} for kind, a in adv.items()},
             "margins": margins, "honest_side_need_k2048": need, "honest_side": sm * side_h, "placement": placement,
-            "estimates": ESTIMATES, "routes": ROUTES}, indent=1, default=str) + "\n")
+            "forming": form_table, "estimates": ESTIMATES, "routes": ROUTES}, indent=1, default=str) + "\n")
     return checks.finish()
 
 
