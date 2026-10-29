@@ -337,6 +337,8 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
     match (do
         Flock.Registered.checkProgram program registered.isSome
         Flock.RecSetup.checkInner inner recCoins h.bound
+        Flock.RecBudget.regs inner registered
+        Flock.RecBudget.statements inner
         let r ← OneStageZk.buildSessionOf parsed tags circuitB pubB coins tables count draw partition program registered
         if complete then r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c (registered.getD #[])
         r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkCover st.c program partition registered regParams
@@ -344,6 +346,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
         Flock.RecSetup.checks inner recCommits tags0 tables r.2 circuitB partition program registered (some j) (some bindings)
           rows
         Flock.RecSetup.oneFull inner r.2
+        Flock.RecBudget.table inner r.2
         r.2.forM Flock.Zk.shapeOk
         r.2.forM (Flock.RecCoins.check · registered (Flock.RecCoins.Source.atC3 recCoins inner recCommits)
           (Flock.RecSetup.c3 inner recCommits))
