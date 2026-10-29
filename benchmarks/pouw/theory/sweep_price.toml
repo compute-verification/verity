@@ -217,6 +217,13 @@ ctx8k = "?"
 kind = "unmeasured"
 source = "SW-NOISE final §8's served format ssn-1l-b1-v1 (P' = P + a1·C + rowsum(a_l)·1 - beta, stock int8 +-127), SW-PPL's first arm; SW-NOISE estimates T3 at about 0 (std 6.0 / 9.2 units), but its row-common part (std 4.1 / 8.1) is outside SW-PPL's ladder; SW-PPL to measure"
 
+[t3.int8-act124-v1]
+models = []
+ctx2k = "?"
+ctx8k = "?"
+kind = "unmeasured"
+source = "SW-NOISE final §8: benchmarks/ppl's int8 step with act_top 124 and no noise (per2's served format: its noise cancels, and A + V·P stays in s8 at +-124 + [-4, 3]); SW-NOISE estimates T3 at about 0; SW-PPL to measure"
+
 [t3.int8-stock]
 ctx2k = 0.0
 ctx8k = 0.0
@@ -260,7 +267,14 @@ source = "SW-SMELL P3: adding ShaSpeed's credit for hashed bytes to DistinctWrit
 rank = 2
 status = "open"
 owner = "SW-LEAN"
-source = "SW-SMELL S8: the final-word lemma's distinctness fails on a zero or duplicate column of the fixed weights B (a free constant, or one target for two) and on padding rows; a CPU check per checkpoint (and real rows only), not yet run"
+source = "SW-SMELL S8: the final-word lemma's distinctness fails on a zero or duplicate column of the fixed weights B (a free constant, or one target for two) and on padding rows; a CPU check per checkpoint (and real rows only). Llama-3.2-1B's int8 weights have no zero and no identical rows (SW-NOISE final §6, run r20261029-052919-f1b2, art:4883945f0b33c0cee74f80dd90ee15e64c61d46ae862e328c707492c07c04792); V4's are unchecked, and no lemma states the check's sufficiency, so it stays open"
+
+[premise.per2-distinct]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+requires = ["weights-distinct"]
+source = "SW-NOISE final §2-3: per2's committed words (the data's partial dots plus V·P·B's and the limbs' affine terms in V) are pairwise distinct and non-free but the final word, on distinct weight columns; checked on six degenerate data cases by run r20261029-054725-38d8; like SSN it rests on DistinctOn's set semantics, not a span argument (SW-NOISE's smell). Not stated in Lean"
 
 [premise.salt-forced]
 rank = 0
@@ -469,6 +483,24 @@ final_target = true
 variant = "ssn-a-b1-v1"
 source = "SW-NOISE final §2-3 (run r20261029-054725-38d8, art:d90a3d9d0ed503b9190dabc34367dd25ad30f3b247e2cfd0b855122c8a09fafc), the runner-up: each of ceil(K/28) k32 steps holds 28 of A's entries and a register a = (h >> q) & 0x01010101 of a raw 32-bit coin word h a row (a SHF and a LOP3 a row a step; candidate 1 forces the LOP3's output, and the SHF stays gap: SW-NOISE's run prices 0.054% without candidate 1 and 0.027% with it, where its §2 and §5 tables still read one LOP3); Y's 4 rows a step are the public W0, so nothing is formed or de-noised; the noise is served, so the final word is a target; stock int8 +-127 on both sides, so no lane fix. Coins: 4 bits a row a step. Every k32 word is committed. The extra width is priced at the plain GEMM's time a MAC (estimate: no 28 + 4 kernel exists)"
 
+[noise.per2]
+r = "1 + 32*(12 if K <= 2048 else 21)/K"
+formed_x = "m*(K + 32)"
+formed_y = "0"
+noise_x = "32*m"
+noise_y = "0"
+derive_extra = "0"
+denoise = "0"
+pre_noise_bytes = "m*K"
+operand_max = 127
+served = "int8-act124-v1"
+lane_fix = { none = "0" }
+coin_calls = { coins = ["12*m"] }
+wide = "proportional"
+final_target = false
+variant = "per2"
+source = "SW-NOISE final §2-3 (run r20261029-054725-38d8, art:d90a3d9d0ed503b9190dabc34367dd25ad30f3b247e2cfd0b855122c8a09fafc): one-sided noise that cancels, X = [A + V·P | V (x) limbs], Y = [B; -limbs(fold32 B)], V in [-4, 3]^(m x 32). Forming X is A + V·P (K entries a row) and the limb block (32); Y is weights only, formed once at load; V's 32 entries a row are derived from 96 coin bits (12 bytes). The limbs are measured on Llama-3.2-1B's weights, 12 at K 2,048 and 21 at K 8,192 (run r20261029-052919-f1b2); K's other than 2,048 take 12 if K <= 2,048 and 21 above (an estimate, for V4). act_top 124 keeps A + V·P in s8, so no lane fix. The output is exact, so the final word is free until the final-word lemma (M1). The extra width is priced at the plain GEMM's time a MAC (estimate)"
+
 # The hm96 row layouts: a_row is A's commitment's leaf ("row": one activation row of K bytes, the shortest chain before
 # the call's noise; else bytes, capped at A's), row the leaf of the committed words and operands.
 [layout.r16k]
@@ -539,6 +571,16 @@ hiding = { open = [], salt = ["salt-forced"], mask = ["salt-forced", "mask-optim
 routes = { none = [] }
 base = ["H32", "W1", "atomic-call", "period-inventory", "ssn-distinct", "ssn-success-set", "ShaSpeed", "hash-compose"]
 source = "SW-NOISE final §4-5 (served sparse noise under M0: no final-word lemma, so no weights-distinct; PeriodInventory with the atomic call for hashing A before its noise, SW-PREMISES final); candidate 1 commits the formed noise registers (e); SW-HASH §5, §7 (rows, hiding)"
+
+[sweep.per2]
+noise = ["per2"]
+L = [32]
+operands = { w = [], x = ["formed_x"], xe = ["formed_x", "noise_x"] }
+layouts = ["r16k", "r256k", "r1m"]
+hiding = { open = [], salt = ["salt-forced"], mask = ["salt-forced", "mask-optimal"], hr = ["hiding-ruled"] }
+routes = { none = [] }
+base = ["H32", "W1", "atomic-call", "period-inventory", "weights-distinct", "final-word-lemma", "per2-distinct", "ShaSpeed", "hash-compose"]
+source = "SW-NOISE final §2-3 (per2 under M1: the final-word lemma closes its free final word); candidate 1 commits X's formed entries (x) and V (xe); SW-HASH §5, §7 (rows, hiding)"
 
 # Designs the calculator must refuse until their terms are priced (CORE-RANK's top three led only because of that).
 [design.dither-c]

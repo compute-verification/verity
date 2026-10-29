@@ -811,8 +811,16 @@ def main() -> int:
     swept = [n for n, d in card["design"].items() if d.get("swept")]
     checks.check("the sweep generates, for NCP, every L (L > 32 under each of 2 credits) x committed classes x forming "
                  "charge x derivation charge x layout x hiding charge x route, less a charge beside its class committed: "
-                 "(1 + 6 x 2) x 9 x 3 x 4 x 2 = 2,808; for the two SSNs 2 x 2 x 3 x 4 = 48",
-                 len(swept) == 2856, f"{len(swept)} swept")
+                 "(1 + 6 x 2) x 9 x 3 x 4 x 2 = 2,808; for the two SSNs 2 x 2 x 3 x 4 = 48; for per2 3 x 3 x 4 = 36",
+                 len(swept) == 2892, f"{len(swept)} swept")
+    pw, px = row("t8192", "per2-k32-w-r16k-hr"), row("t8192", "per2-k32-xe-r16k-hr")
+    pr = [call_units(card, "per2-k32-w-r16k-hr", 64, 2048, K)["r"] for K in (2048, 8192)]
+    checks.check("per2 under the final-word lemma reproduces SW-NOISE final §3's 0.190% without candidate 1 (8/n + "
+                 "256/(nK), plus V's derivation, 256/(nK)) and 0 with X and V committed, at widths 1 + 32·12/2,048 and "
+                 "1 + 32·21/8,192 (its measured limbs)",
+                 abs(pw["t1"] - 0.0019) < 0.00003 and px["t1"] < 1e-12 and pw["terms"]["final_word"] == 0
+                 and abs(pr[0] - 1.1875) < 1e-12 and abs(pr[1] - (1 + 672 / 8192)) < 1e-12,
+                 f"T1 {pw['t1']:.4%}, with C1 {px['t1']:.4%}, widths {pr[0]:.4f} / {pr[1]:.4f}")
     for nz, want in (("ssn-1l", (0.00049, 0.00025)), ("ssn-a", (0.00054, 0.00027))):
         s, se = row("t8192", f"{nz}-k32-w-r16k-hr"), row("t8192", f"{nz}-k32-e-r16k-hr")
         checks.check(f"{nz} with hiding ruled reproduces SW-NOISE final §3's {want[0]:.3%} without candidate 1 and "
