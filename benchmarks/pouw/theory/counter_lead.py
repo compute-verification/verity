@@ -21,6 +21,9 @@ work − gap" breaks when a strategy's saving exceeds the gap at the same instan
   literal P and P′ at word grain (what a tile-grain premise excludes) beside tile grain (`W/tile`, `W/whole`).
 - **The tag collapse** (`--g-zero`): G's chosen tag lanes set to 0 in every column. A 64-row tile's wide tags differ
   in lane 0 and a carry into lane 1, so on this event (1/255 a column a lane) its rows' T·G take one or two values.
+- **The lane law** (`lanes`): exact, by convolution over the odd 7-bit coins. A step's coin term C = w·x for each
+  parity's weights (p*, its largest point mass), the opposite-parity difference (w_even − w_odd)·x at walk depth 1
+  and 2, and the fold's worst word against 2²⁴ and 2³¹ under |A·Bᵀ| ≤ 2²² at Llama's depths.
 
 The draws are made the lead's way: G and the coin lanes per column, drawn a column block at a time; the row tags, a₁ and b
 per row, drawn once, so a tile's columns share their rows as in one instance.
@@ -149,9 +152,55 @@ def grains(m: int, n: int, seed: int, pattern: str, tag: str = "wide", cfg: str 
                       for kk, v in insts.items()}}
 
 
+def _law(weights: np.ndarray, e: int) -> dict[int, int]:
+    """Counts of w·x over x in the odd e-bit coins, one coordinate a weight (exact convolution)."""
+    law = {0: 1}
+    for wt in weights:
+        nxt: dict[int, int] = {}
+        for v, c in law.items():
+            for x in range(-(2 ** e - 1), 2 ** e, 2):
+                nxt[v + int(wt) * x] = nxt.get(v + int(wt) * x, 0) + c
+        law = nxt
+    return law
+
+
+def _summary(law: dict[int, int], total: int) -> dict:
+    vmax = max(law, key=law.get)
+    return {"p_star": law[vmax] / total, "p_star_count": law[vmax], "total": total, "at": vmax,
+            "support": len(law), "p_zero": law.get(0, 0) / total, "gcd": int(np.gcd.reduce([abs(v) for v in law]))}
+
+
+def lanes(cfg: str = LEAD, a_b: int = 2 ** 22) -> dict:
+    """The lane law of `cfg`'s coin term, exact."""
+    _, e, nl = r4.LAYOUTS[cfg]
+    wsel = np.array(r4.LANE_WEIGHTS.get(cfg, (1,) * nl), dtype=np.int64).reshape(-1, nl)
+    per = 2 ** (e * nl)
+    out = {"cfg": cfg, "weights": wsel.tolist(), "per_parity": {}, "opposite": {}, "fold": {}}
+    for p, wv in enumerate(wsel):
+        out["per_parity"][str(p)] = _summary(_law(wv, e), per)
+    if len(wsel) == 2:
+        dw = wsel[0] - wsel[1]
+        one = _law(dw, e)
+        two: dict[int, int] = {}
+        for v1, c1 in one.items():
+            for v2, c2 in one.items():
+                two[v1 + v2] = two.get(v1 + v2, 0) + c1 * c2
+        out["opposite"] = {"diff_weights": dw.tolist(), "depth1": _summary(one, per), "depth2": _summary(two, per ** 2)}
+    cmax = int(np.abs(wsel).sum(axis=1).max()) * (2 ** e - 1)
+    tg = na.TAG_LANES * 127 * 127
+    for kk in sorted({kk for _, kk in ns.LLAMA.values()}):
+        s = ns.steps1l(kk)
+        beta = (na.TAG_LANES * 127 + 3 * (s - 1)) // 2 + 1
+        worst = a_b + tg + na.TAG_LANES * 127 + beta + 2 * s + (s - 1) * cmax
+        out["fold"][f"k{kk}"] = {"steps": s, "coin_step_max": cmax, "coin_walk_max": (s - 1) * cmax, "tag_max": tg,
+                                 "worst_word": worst, "log2_worst": float(np.log2(worst)),
+                                 "below_2_24": bool(worst < 2 ** 24), "below_2_31": bool(worst < 2 ** 31)}
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--mode", choices=("copier", "grains"), default="copier")
+    ap.add_argument("--mode", choices=("copier", "grains", "lanes"), default="copier")
     ap.add_argument("--rows", type=int, nargs="+", default=[64, 512])
     ap.add_argument("--cols", type=int, default=256)
     ap.add_argument("--seeds", type=int, nargs="+", default=[1])
@@ -162,6 +211,11 @@ def main() -> None:
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
     rep = {}
+    if args.mode == "lanes":
+        for cfg in args.cfgs:
+            rep[cfg] = lanes(cfg)
+            print(json.dumps(rep[cfg], indent=1))
+        args.cfgs = []
     for cfg in args.cfgs:
         for tag in args.tags:
             for m in args.rows:
