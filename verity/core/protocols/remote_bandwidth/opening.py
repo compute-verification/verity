@@ -172,7 +172,7 @@ def witness(d: Draw, ps: audit.Pass, store: Store, plan_row: Sequence[int], S, v
 
 def commit(bits: int, words: Sequence[int], salt: bytes) -> bytes:
     """A bit row's ``b || c`` under ``salt``: hm96-sha512 over its sha512/row/v2 digest, the row of ``bits`` bits held in
-    ``words`` (u16, low bit first), as the proof service commits a unit's witness row."""
+    ``words`` (u16, low bit first), as the proof system commits a unit's witness row."""
     if len(words) != -(-bits // 16):
         raise ValueError(f"a row of {bits} bits is {-(-bits // 16)} u16 words, not {len(words)}")
     row = b"".join(int(w).to_bytes(2, "little") for w in words)[:-(-bits // 8)]
