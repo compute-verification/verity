@@ -7,8 +7,9 @@
 #   LEASE_MIN (25), CHECK (1; 0 skips the exact check), TIME (1; 0 skips the timings), NOT_AFTER (a UTC time past which
 #   the leased part does no GPU work), CAPS (0: beside's caps on a row hash launch's blocks, each a pass
 #   over MS; time_m<M>_cap<C>.jsonl), ROOT_A (0; 1 puts root(A_j), its leaves and the tree above them, in the forward ahead
-#   of each call's coins, by the words' scheme or by ROOT_A_ROWS's: row bytes, 0 row-seg), ROOT_A_LIST (the schemes root(A_j)
-#   is timed by a call; default ROWS)
+#   of each call's coins, by the words' scheme or by ROOT_A_ROWS's: row bytes, 0 row-seg over A_j's rows), ROOT_A_LIST (the
+#   schemes root(A_j) is timed by a call; default ROWS), WORDS_TREE (0; 1 builds the tree above each chunk's leaves in the
+#   forwards). VERITY_ROWS_PHASES and VERITY_ROWS_FORM reach the served committer (native_rows.cu).
 set -uo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }

@@ -48,6 +48,7 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
             "coins_forming_us": 1e3 * g("coins_forming")["ms"],
             "hash": {h: {"ms": r["ms"], "units_per_byte": r["units_per_byte"], "gb_per_s": 4 * words / (r["ms"] * 1e6)}
                      for h in hashers if (r := g("hash_pass", h))},
+            "tree_ms": {h: r["ms"] for h in hashers if (r := g("hash_tree", h))},
             "root_a_us": {h: 1e3 * r["ms"] for h in hashers if (r := g("root_a_hash", h))},
             "root_a_root_us": {h: 1e3 * r["ms"] for h in hashers if (r := g("root_a_root", h))},
         }
@@ -58,7 +59,8 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
                 fwd[f"{sched}/{h}"] = r
     clock = next((r for r in rows if r["what"] == "clock"), {})
     out = {"M": rows[0]["M"], "mhz": rows[0]["mhz"], "root_a_in_forward": clock.get("root_a_in_forward", 0),
-           "root_a_rows": clock.get("root_a_rows", -1), "root_a_tree": clock.get("root_a_tree", 0), "linears": lin,
+           "root_a_rows": clock.get("root_a_rows", -1), "root_a_tree": clock.get("root_a_tree", 0),
+           "words_tree": clock.get("words_tree", 0), "rowseg_leaf": clock.get("rowseg_leaf", "segment digests"), "linears": lin,
            "forward": {k: {"ms": r["ms"], "units": r["units"], "units_per_stock_mac": r["units_per_stock_mac"],
                            "units_per_word": r["units_per_word"], "words": r["words"], "stock_macs": r["stock_macs"]}
                        for k, r in fwd.items() if r}}
@@ -105,6 +107,9 @@ def main() -> None:
                   f"{x['alpha_layout']:.3f} | {x['export_ms']:.3f} | {x['export_units_per_word_over_ssn']:.0f} | "
                   f"{x['coins_us']:.1f} | {x['forming_us']:.1f} | {x['coins_forming_us']:.1f} | {hs} |")
         for n, x in r["linears"].items():
+            if x["tree_ms"]:
+                print(f"- the words' tree above their leaves, {n}: " + "; ".join(f"{h} {v:.3f} ms ({v / x['hash'][h]['ms']:.1%} "
+                                                                                 "of the leaves)" for h, v in x["tree_ms"].items()))
             if x["root_a_us"]:
                 print(f"- root(A_j) leaves, {n}: " + "; ".join(f"{h} {v:.1f} µs" for h, v in x["root_a_us"].items()))
             if x["root_a_root_us"]:
@@ -114,6 +119,8 @@ def main() -> None:
             by_scheme = "the words' scheme" if ra < 0 else f"rows{ra}" if ra else "rowseg"
             what = "root(A_j), leaves and tree," if r["root_a_tree"] else "A_j's leaves"
             print(f"- the forwards below compute {what} ahead of each call's coins, by {by_scheme}")
+        print(f"- the forwards below hash the words' leaves{' and the tree above each chunk' if r['words_tree'] else ''}; "
+              f"rowseg's leaf: {r['rowseg_leaf']}")
         for w, x in r["forward"].items():
             print(f"- forward {w}: {x['ms']:.3f} ms, {x['units_per_stock_mac']:.3f} units a stock MAC")
         for k, v in r.get("t2", {}).items():

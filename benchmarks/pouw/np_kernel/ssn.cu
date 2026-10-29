@@ -365,16 +365,46 @@ extern "C" int verity_rows_leaves_sf_launch(const void* params, const uint8_t* r
 extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level,
                                          uint64_t base, int n_levels, cudaStream_t st);
 
-// The hash pass over a run of exported words. rb 0: served_zk's row-seg rows (sz_segments), one row an exported block: its
-// 1 KiB segments, then its segment digests. rb > 0: the served committer's hm96-sha512/row/v2 leaves of rb-byte rows over
-// the words (salts derived, the split form), one thread a row. The constants (prefixes, key, nibble table) are stand-ins of
-// the scheme's lengths: they set no compression count.
+// frame-v3-sha512's message heads (verity.ml.commitments.merkle): a leaf's before its 64-byte value (169 to 173 bytes by the
+// leaf's index) and a node's before its left child; with what follows them, 2 and 3 compressions
+constexpr int LEAF_HEAD = 171, NODE_HEAD = 139;
+// n bytes of stand-in constants; slot > 0: each slot's first u32 is len, a message head's length (hm96_rows.cu's SLOT)
+__global__ void fill_k(uint8_t* p, u64 n, u64 seed, int slot, int len) {
+  for (u64 i = blockIdx.x * (u64)blockDim.x + threadIdx.x; i < n / 8; i += (u64)gridDim.x * blockDim.x) {
+    u64 z = (i + seed) * 0x9E3779B97F4A7C15ull;
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+    z ^= z >> 31;
+    if (slot && (i * 8) % slot == 0) z = (z & ~0xffffffffull) | (u32)len;
+    ((u64*)p)[i] = z;
+  }
+}
+static uint8_t* dev_fill(u64 bytes, u64 seed, int slot = 0, int len = 0) {
+  uint8_t* p;
+  bytes = (bytes + 7) / 8 * 8;
+  CK(cudaMalloc(&p, bytes));
+  fill_k<<<1024, 256>>>(p, bytes, seed, slot, len);
+  CK(cudaGetLastError());
+  return p;
+}
+
+// The hash pass over a run of exported words, and roots. Every row is an hm96-sha512 leaf of a frame-v3-sha512 tree.
+//   rb > 0: the served committer's hm96-sha512/row/v2 leaves of rb-byte rows (native_rows.cu: salts derived, the split
+//           form), one thread a row; its tree by verity_rows_levels_launch.
+//   rb 0:   served_zk's sha512/row-seg/v1 rows (hm96_rows.cu): sz_segments hashes every 1 KiB segment, then sz_finish, a
+//           thread a row, x = SHA-512(Q || the row's segment digests), the hm96 leaf under the row's salt and the frame
+//           leaf; its tree by sz_level, a launch a level, or in sz_finish's one CTA for at most 256 rows.
+// The constants (prefixes, keys, tables, salts, message heads) are stand-ins of the schemes' lengths: they set no
+// compression count. A level of odd width reads a pad node from the slot past it.
 struct Hasher {
   int rb = 0;
   u64* mids = nullptr;
-  uint8_t *dig = nullptr, *dig2 = nullptr, *tn = nullptr, *leaves = nullptr, *scratch = nullptr, *lv = nullptr;
+  uint8_t *dig = nullptr, *tn = nullptr, *leaves = nullptr, *scratch = nullptr, *lv = nullptr;
+  uint8_t *hm = nullptr, *tables = nullptr, *salts = nullptr, *lheads = nullptr, *nheads = nullptr, *x = nullptr, *bc = nullptr,
+          *tree = nullptr;
   std::vector<uint8_t> params;
-  void init(size_t max_bytes, int row_bytes) {
+  // max_bytes: the most bytes a call hashes; max_rows: the most rows (row-seg's rows are at least 32 KiB, or a root's rows)
+  void init(size_t max_bytes, int row_bytes, u64 max_rows = 0) {
     rb = row_bytes;
     if (rb) {
       std::vector<uint8_t> c(1024);
@@ -390,23 +420,46 @@ struct Hasher {
       tn = up(t);
       const size_t rows = max_bytes / rb + 2;
       CK(cudaMalloc(&leaves, rows * 64));
-      CK(cudaMalloc(&lv, rows * 64));
+      CK(cudaMalloc(&lv, (rows + 128) * 64));
       CK(cudaMalloc(&scratch, rows * 192));
       return;
     }
-    std::vector<uint32_t> pre(64 * 32);
+    const u64 rows = std::max<u64>(max_bytes / 32768 + 2, max_rows);
+    // 64 segment prefixes' states (a row has at most 64 segments) and Q's; hm96's salt and leaf prefixes' states
+    std::vector<uint32_t> pre(67 * 32);
     for (size_t i = 0; i < pre.size(); i++) pre[i] = (u32)mix64(i + 77);
     uint32_t* dpre = up(pre);
-    CK(cudaMalloc(&mids, 64 * 8 * sizeof(u64)));
+    CK(cudaMalloc(&mids, 67 * 8 * sizeof(u64)));
     Args a{};
     a.p[0] = (unsigned long long)dpre;
     a.p[1] = (unsigned long long)mids;
-    a.i[0] = 64;
-    sz_mid<<<1, 64>>>(a);
+    a.i[0] = 67;
+    sz_mid<<<1, 96>>>(a);
     CK(cudaGetLastError());
-    CK(cudaMalloc(&dig, max_bytes / 16 + 64));
-    CK(cudaMalloc(&dig2, max_bytes / 256 + 64));
+    hm = (uint8_t*)(mids + 65 * 8);
+    tables = dev_fill(192 * 256 * 64, 3);
+    salts = dev_fill(rows * 192, 4);
+    lheads = dev_fill(rows * SLOT, 5, SLOT, LEAF_HEAD);
+    nheads = dev_fill(rows * SLOT, 6, SLOT, NODE_HEAD);
+    CK(cudaMalloc(&dig, std::max<u64>(max_bytes, rows * 1024) / 16 + 64));
+    CK(cudaMalloc(&x, rows * 64));
+    CK(cudaMalloc(&bc, rows * 128));
+    CK(cudaMalloc(&tree, (2 * rows + 128) * 64));
     CK(cudaFuncSetAttribute(sz_segments, cudaFuncAttributeMaxDynamicSharedMemorySize, 8 * 32 * 33 * 4));
+  }
+  // sz_finish over rows rows of s segments each (their digests in dig): frame leaves into tree's level 0; one CTA (at most
+  // 256 rows) with width > 1 also builds the tree above them
+  void finish(u64 rows, int s, int width, bool one_cta, cudaStream_t st) {
+    Args a{};
+    const void* p[10] = {dig, mids + 64 * 8, tables, salts, hm, lheads, nheads, x, bc, tree};
+    for (int t = 0; t < 10; t++) a.p[t] = (unsigned long long)p[t];
+    a.i[0] = (int)rows;
+    a.i[1] = s;
+    a.i[3] = 2;
+    a.i[6] = width;
+    const unsigned block = one_cta ? (unsigned)std::min<u64>(256, 32 * ((rows + 31) / 32)) : 128;
+    sz_finish<<<one_cta ? 1 : (unsigned)((rows + 127) / 128), block, 0, st>>>(a);
+    CK(cudaGetLastError());
   }
   void seg(const void* data, long long rows, int stride, int s, uint8_t* o, cudaStream_t st) {
     Args a{};
@@ -421,46 +474,73 @@ struct Hasher {
     sz_segments<<<(unsigned)((total + 255) / 256), 256, 8 * 32 * 33 * 4, st>>>(a);
     CK(cudaGetLastError());
   }
-  void run(const uint4* W, long long blocks, int block_bytes, cudaStream_t st, u64 cap = 0) {
+  // The leaves of `rows` rows of row_bytes bytes each (row-seg: whole KiB), and their count. rb > 0 reads the rows' bytes
+  // as rb-byte rows.
+  u64 leaves_of(const uint8_t* data, u64 rows, u64 row_bytes, cudaStream_t st, u64 cap = 0) {
     if (rb) {
-      const u64 n = ((u64)blocks * block_bytes + rb - 1) / rb;
-      const int rc = verity_rows_leaves_sf_launch(params.data(), (const uint8_t*)W, rb, n, nullptr, tn, 0, n, n, leaves, nullptr,
-                                                  nullptr, scratch, cap, st);
+      const u64 n = (rows * row_bytes + rb - 1) / rb;
+      const int rc = verity_rows_leaves_sf_launch(params.data(), data, rb, n, nullptr, tn, 0, n, n, leaves, nullptr, nullptr,
+                                                  scratch, cap, st);
       if (rc) {
         fprintf(stderr, "ERR verity_rows_leaves_sf_launch %d\n", rc);
         exit(2);
       }
-      return;
+      return n;
     }
-    const int s = block_bytes / 1024;
-    seg(W, blocks, block_bytes, s, dig, st);
-    seg(dig, blocks, s * 64, s * 64 / 1024, dig2, st);
+    const int s = (int)(row_bytes / 1024);
+    seg(data, (long long)rows, (int)row_bytes, s, dig, st);
+    finish(rows, s, 1, false, st);
+    return rows;
   }
-  // A root over `bytes` (a multiple of 64 KiB). rb > 0: the leaves, then the frame tree's nodes above them, up to ten levels
-  // a launch (the leaf count a power of two, so no pads). Row-seg: its segment and block digests, with no tree above them.
-  void root(const uint8_t* data, u64 bytes, cudaStream_t st) {
-    run((const uint4*)data, (long long)(bytes / 65536), 65536, st);
-    if (!rb) return;
-    u64 n = bytes / rb;
-    if (n & (n - 1)) {
-      fprintf(stderr, "ERR root over %llu leaves: not a power of two\n", (unsigned long long)n);
-      exit(2);
+  // The frame tree above n leaves (the last leaves_of's)
+  void tree_of(u64 n, cudaStream_t st) {
+    if (!rb) {
+      for (u64 off = 0, w = n; w > 1; w = (w + 1) / 2) {
+        Args a{};
+        a.p[0] = (unsigned long long)tree;
+        a.p[1] = (unsigned long long)nheads;
+        a.i[0] = (int)off;
+        a.i[1] = (int)((w + 1) / 2);
+        sz_level<<<(unsigned)((w + 1) / 2 + 127) / 128, 128, 0, st>>>(a);
+        CK(cudaGetLastError());
+        off += w + (w & 1);
+      }
+      return;
     }
     const uint8_t* in = leaves;
     uint8_t* out = lv;
     for (int level = 0; n > 1;) {
+      const u64 w = n + (n & 1);
       int L = 0;
-      while (L < 10 && (n >> L) > 1) L++;
-      const int rc = verity_rows_levels_launch(params.data(), in, out, n, level, 0, L, st);
+      while (L < 10 && !((w >> L) & 1)) L++;
+      const int rc = verity_rows_levels_launch(params.data(), in, out, w, level, 0, L, st);
       if (rc) {
         fprintf(stderr, "ERR verity_rows_levels_launch %d\n", rc);
         exit(2);
       }
-      in = out + 64 * (n - (n >> (L - 1)));
-      out += 64 * (n - (n >> L));
-      n >>= L;
+      n = w >> L;
+      in = out + 64 * (w - 2 * n);
+      out += 64 * (w - n + 1);
       level += L;
     }
+  }
+  // The hash pass over an exported run: a row an exported block (row-seg) or rb bytes; with_tree, the tree above them too
+  void run(const uint4* W, long long blocks, int block_bytes, cudaStream_t st, u64 cap = 0, bool with_tree = false) {
+    const u64 n = leaves_of((const uint8_t*)W, (u64)blocks, (u64)block_bytes, st, cap);
+    if (with_tree) tree_of(n, st);
+  }
+  // A root over `rows` rows of row_bytes bytes (A_j's rows: row-seg's rows, or rb-byte rows over their bytes): the leaves,
+  // then the tree. Row-seg with at most 256 rows: one sz_finish CTA does both.
+  void root(const uint8_t* data, u64 rows, u64 row_bytes, cudaStream_t st) {
+    if (!rb && rows <= 256) {
+      const int s = (int)(row_bytes / 1024);
+      seg(data, (long long)rows, (int)row_bytes, s, dig, st);
+      int width = 1;
+      while ((u64)width < rows) width *= 2;
+      finish(rows, s, width, true, st);
+      return;
+    }
+    tree_of(leaves_of(data, rows, row_bytes, st), st);
   }
 };
 
@@ -689,10 +769,13 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   for (int r : ras) hra[r];
   for (int r : rbs) hra[r];
   if (root_a_rows >= 0) hra[root_a_rows];
-  for (auto& [r, h] : hra) h.init((size_t)M * 8192, r);
+  for (auto& [r, h] : hra) h.init((size_t)M * 8192, r, (u64)M);
   auto fwd_root_a = [&](const LinDev& d, cudaStream_t st) {
-    if (root_a) hra[root_a_rows >= 0 ? root_a_rows : rbs[hi]].root(d.A0, (u64)M * d.K, st);
+    if (root_a) hra[root_a_rows >= 0 ? root_a_rows : rbs[hi]].root(d.A0, (u64)M, (u64)d.K, st);
   };
+  // WORDS_TREE=1: each chunk's hash in the forwards builds the frame tree above its leaves (the levels above the chunks'
+  // subtrees, a few nodes a linear, aren't run)
+  const bool words_tree = getenv("WORDS_TREE") && atoi(getenv("WORDS_TREE"));
   auto rname = [](int rb) { return rb ? "rows" + std::to_string(rb) : std::string("rowseg"); };
   auto hname = [&](int h) { return h < 0 ? std::string("none") : rname(rbs[h]); };
   int* dout;
@@ -723,16 +806,22 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     line("ssn_gemm", &d, T.ms(reps, [&] { gemm(d.BN, false, d.A, d.B, d.beta, M, d.n, d.S, nullptr, nullptr, nullptr, 0); }),
          macs, 0, 0);
     double ex = 0;
-    std::vector<double> hsh(rbs.size(), 0.0);
+    std::vector<double> hsh(rbs.size(), 0.0), tre(rbs.size(), 0.0);
     for (int r0 = 0; r0 < M; r0 += d.chunk) {
       const int mc = std::min(d.chunk, M - r0);
       const uint8_t* A = d.A + (size_t)(r0 / 64) * d.S * TA;
       ex += T.ms(reps, [&] { gemm(d.BN, true, A, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, 0); });
       const long long blocks = (long long)(mc / 64) * (d.n / d.BN) * d.S;
-      for (size_t h = 0; h < rbs.size(); h++) hsh[h] += T.ms(reps, [&] { hsv[nbuf * h].run(Wb[0], blocks, 64 * d.BN * 4, 0); });
+      for (size_t h = 0; h < rbs.size(); h++) {
+        Hasher& hs = hsv[nbuf * h];
+        u64 n = 0;
+        hsh[h] += T.ms(reps, [&] { n = hs.leaves_of((const uint8_t*)Wb[0], (u64)blocks, 64ull * d.BN * 4, 0); });
+        tre[h] += T.ms(reps, [&] { hs.tree_of(n, 0); });
+      }
     }
     line("ssn_gemm_export", &d, ex, macs, words, d.chunk);
     for (hi = 0; hi < (int)rbs.size(); hi++) line("hash_pass", &d, hsh[hi], macs, words, d.chunk);
+    for (hi = 0; hi < (int)rbs.size(); hi++) line("hash_tree", &d, tre[hi], macs, words, d.chunk);
     hi = -1;
     line("coins", &d, T.ms(std::max(reps, 51), [&] { coins_form(d.msg, d.coins, d.A, M, d.S, 0, true, false); }), macs,
          words, (double)coin_blocks(M, d.S));
@@ -743,10 +832,10 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     const u64 abytes = (u64)M * d.K;
     for (int r : ras) {
       Hasher& h = hra[r];
-      line("root_a_hash", &d, T.ms(std::max(reps, 51), [&] { h.run((const uint4*)d.A0, (long long)(abytes / 65536), 65536, 0); }),
-           macs, abytes / 4.0, (double)abytes, rname(r));
-      line("root_a_root", &d, T.ms(std::max(reps, 51), [&] { h.root(d.A0, abytes, 0); }), macs, abytes / 4.0, (double)abytes,
-           rname(r));
+      line("root_a_hash", &d, T.ms(std::max(reps, 51), [&] { h.leaves_of(d.A0, (u64)M, (u64)d.K, 0); }), macs, abytes / 4.0,
+           (double)abytes, rname(r));
+      line("root_a_root", &d, T.ms(std::max(reps, 51), [&] { h.root(d.A0, (u64)M, (u64)d.K, 0); }), macs, abytes / 4.0,
+           (double)abytes, rname(r));
     }
   }
   double fwd_words = 0;
@@ -765,7 +854,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
         for (int r0 = 0; r0 < M; r0 += d.chunk) {
           const int mc = std::min(d.chunk, M - r0);
           gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, s1);
-          hsv[nbuf * hi].run(Wb[0], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s1);
+          hsv[nbuf * hi].run(Wb[0], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s1, 0, words_tree);
         }
       }
   };
@@ -787,7 +876,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
           gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[b], nullptr, nullptr, s1);
           CK(cudaEventRecord(full[b], s1));
           CK(cudaStreamWaitEvent(s2[b], full[b]));
-          hsv[nbuf * hi + b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2[b], hash_cap);
+          hsv[nbuf * hi + b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2[b], hash_cap, words_tree);
           CK(cudaEventRecord(done[b], s2[b]));
         }
       }
@@ -798,8 +887,8 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     line("fwd_beside", nullptr, T.ms(reps, fwd_beside, s1), fwd_macs, fwd_words, 0);
   }
   printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d, \"hash_cap\": %llu, "
-         "\"root_a_in_forward\": %d, \"root_a_rows\": %d, \"root_a_tree\": 1}\n", f0, sm_mhz(dclk), nbuf,
-         (unsigned long long)hash_cap, root_a, root_a_rows);
+         "\"root_a_in_forward\": %d, \"root_a_rows\": %d, \"root_a_tree\": 1, \"words_tree\": %d, \"rowseg_leaf\": "
+         "\"sz_finish\"}\n", f0, sm_mhz(dclk), nbuf, (unsigned long long)hash_cap, root_a, root_a_rows, (int)words_tree);
   return 0;
 }
 
