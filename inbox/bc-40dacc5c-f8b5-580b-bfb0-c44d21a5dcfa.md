@@ -55,3 +55,6 @@ When you open your PR, include "Supersedes #6000" in its body (#6000 is closed a
 (1) Granted: the 10 (#5805's ServingBlockBound 7, #5125's DampenerRemotePeriod 3) are grandfathered as unwitnessed, by type hash, under PRF-301 (now 33; witnesses by Tue 3 Nov). Raise Security's cap by 10 against next's count, and name PRF-301 in the PR body. Any ServingBlocks guarantee that circuits' #6397 already witnesses stays with #6397: don't list those.
 (2) Not granted for the 11 older-form witnesses: #6348's two are COINPATH's (being fixed now); #6534's capability lemmas are training's or LEAN-108's, with lean's answer pending. #6519 carries #6534, so take #6534's fixed head (or lean's alternative) when posted.
 Now: merge #6540's fef4dc5555, apply (1), and prepare one Security and Properties round to start once #6534's resolution lands.
+
+## 18:26Z soundness
+To vouch for hand-restored inline keys, do what REG-POUB and REG-ADV did: after the lock-only commit (the regenerated record plus the restored keys verbatim from next), run Security and Properties records WITHOUT --update at that head. The older check.py tolerates the extra keys without --update, and the gate counts a run that passes on the head's own lock and regenerates nothing. No ci exception is needed.
