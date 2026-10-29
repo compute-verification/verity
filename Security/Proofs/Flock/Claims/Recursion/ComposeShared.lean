@@ -19,7 +19,8 @@ open Flock
 
 /-- **What V*'s parts share** of their recursive statements, as files: the verifier's own inner shape, V*'s shared
 rows, the inner statement's three files, a record of check 5's coins, the inner session's record, the coin server's
-transcript, the circuit registration, and how the inner statement is set up (its id, coins, lookup tables and draw). -/
+transcript, the circuit registration, and how the inner statement is set up (its id, coins, lookup tables and draw);
+and the inner population's link table (`--rec-links`, its root and row count). -/
 structure RecShared where
   recInner : Option ByteArray
   recRows : Option ByteArray
@@ -34,6 +35,7 @@ structure RecShared where
   innerStatementCoins : Option Bool
   innerTables : Option (List (String × ByteArray))
   innerDraw : Option ByteArray
+  links : Option (ByteArray × ℕ)
 
 /-- Every file of it. -/
 def RecShared.files (S : RecShared) : List ByteArray :=
@@ -44,7 +46,7 @@ def RecShared.files (S : RecShared) : List ByteArray :=
 /-- The digests a `VERDICT`'s `rec_shared` names of it (`RecCompose.Shared.ofFiles`). -/
 def RecShared.digests (S : RecShared) : RecCompose.Shared :=
   RecCompose.Shared.ofFiles S.recInner S.innerCircuit S.innerPublic S.innerPartition S.innerCoins S.innerSession
-    S.transcript S.registration S.innerStatement S.innerStatementCoins S.innerTables S.innerDraw
+    S.transcript S.registration S.innerStatement S.innerStatementCoins S.innerTables S.innerDraw S.links
 
 /-- **The compiled verifier's form** (`RecDeploy.partRaw`): every input a part reads is held, and no record of check
 5's coins. -/
@@ -111,13 +113,33 @@ theorem map_tables_eq : ∀ {t t' : List (String × ByteArray)},
     have hab := hinj a (by simp) b (by simp) (digest_hash hd)
     rw [hn, hab, map_tables_eq (fun x hx y hy => hinj x (List.mem_cons_of_mem _ hx) y (List.mem_cons_of_mem _ hy)) ht]
 
+/-- **The link table as `rec_shared` names it is the table**: its root's hex is the root. -/
+theorem linksOf_inj {a b : Option (ByteArray × ℕ)} (h : RecCompose.linksOf a = RecCompose.linksOf b) : a = b := by
+  cases a with
+  | none => cases b with
+    | none => rfl
+    | some _ => simp only [RecCompose.linksOf, Option.map_none, Option.map_some, reduceCtorEq] at h
+  | some x => cases b with
+    | none => simp only [RecCompose.linksOf, Option.map_none, Option.map_some, reduceCtorEq] at h
+    | some y =>
+      obtain ⟨x1, x2⟩ := x
+      obtain ⟨y1, y2⟩ := y
+      simp only [RecCompose.linksOf, Option.map_some, Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨h1, h2⟩ := h
+      have e := FlockComplete.JsonRT.unhex_hexOf x1
+      rw [h1, FlockComplete.JsonRT.unhex_hexOf] at e
+      cases Except.ok.inj e
+      cases h2
+      rfl
+
 /-- **Two shared sets with one set of digests are one**, unless two of their files collide. -/
 theorem shared_eq {S T : RecShared} (hinj : ∀ a ∈ S.files, ∀ b ∈ T.files, Sha512.hash a = Sha512.hash b → a = b)
     (h : S.digests = T.digests) (hr : S.recRows.map RecCompose.digest = T.recRows.map RecCompose.digest) : S = T := by
-  obtain ⟨s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13⟩ := S
-  obtain ⟨t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13⟩ := T
+  obtain ⟨s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14⟩ := S
+  obtain ⟨t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14⟩ := T
   simp only [RecShared.digests, RecCompose.Shared.ofFiles, RecCompose.Shared.mk.injEq] at h
-  obtain ⟨h1, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13⟩ := h
+  obtain ⟨h1, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩ := h
+  have e14 := linksOf_inj h14
   dsimp only at hr
   have e1 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h1
   have e2 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) hr
@@ -139,18 +161,18 @@ theorem shared_eq {S T : RecShared} (hinj : ∀ a ∈ S.files, ∀ b ∈ T.files
       | some ts' =>
         simp only [Option.map_some, Option.some.injEq] at h12
         rw [map_tables_eq (fun a ha b hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h12]
-  subst e1 e2 e3 e4 e5 e6 e7 e8 e9 e13 e12 h10 h11
+  subst e1 e2 e3 e4 e5 e6 e7 e8 e9 e13 e12 e14 h10 h11
   rfl
 
 /-- **The composition read back to the parts' files**: where `rec-compose` accepts the verdicts the parts' runs wrote
 (`RecCompose.Accepts`, which `check_accepts` proves of every composition it accepts), either two of the parts' shared
 files are distinct with one SHA-512, or there is one `RecShared` in the compiled verifier's form, at the composition's
-own inner shape and rows, that every part read; one part per V* statement, each accepted at one of them under `--zk`
-without an identifier, and no two on one coin key. -/
-theorem composed_views {n : Nat} {rows inner : String} {vs : List PartView}
-    (h : RecCompose.Accepts n rows inner (vs.map PartView.verdict)) :
+own inner shape, link table and rows, that every part read; one part per V* statement, each accepted at one of them
+under `--zk` without an identifier, and no two on one coin key. -/
+theorem composed_views {n : Nat} {rows inner : String} {links : Option (String × ℕ)} {vs : List PartView}
+    (h : RecCompose.Accepts n rows inner links (vs.map PartView.verdict)) :
     Collides vs ∨ ∃ S : RecShared, S.Form ∧ S.recInner.map RecCompose.digest = some inner ∧
-      S.recRows.map RecCompose.digest = some rows ∧ vs.length = n ∧
+      RecCompose.linksOf S.links = links ∧ S.recRows.map RecCompose.digest = some rows ∧ vs.length = n ∧
       (∀ j, j < n → (vs.map (·.part)).count (some j) = 1) ∧ (vs.map (·.coinKey)).Nodup ∧
       ∀ v ∈ vs, v.shared = S ∧ v.accepted = true ∧ v.zk = true ∧ v.identifier = false ∧ v.coinKey.isSome ∧
         ∃ j, v.part = some j ∧ j < n := by
@@ -178,8 +200,9 @@ theorem composed_views {n : Nat} {rows inner : String} {vs : List PartView}
   rw [← hs0] at hform
   simp only [RecCompose.Shared.Complete, RecShared.digests, RecCompose.Shared.ofFiles, Option.isSome_map,
     Option.map_eq_none_iff] at hform
-  obtain ⟨hi, hc1, hp1, hq1, hk0, hse1, ht1, hst1, hco1, hta1⟩ := hform
-  refine ⟨v0.shared, ⟨?_, ?_, hc1, hp1, hq1, hk0, hse1, ht1, hst1, hco1, hta1⟩, hi, hr0, by simpa using hlen, ?_, ?_, ?_⟩
+  obtain ⟨hi, hc1, hp1, hq1, hk0, hse1, ht1, hst1, hco1, hta1, hl1⟩ := hform
+  refine ⟨v0.shared, ⟨?_, ?_, hc1, hp1, hq1, hk0, hse1, ht1, hst1, hco1, hta1⟩, hi, hl1, hr0, by simpa using hlen, ?_, ?_,
+    ?_⟩
   · cases h : v0.shared.recInner <;> simp_all
   · cases h : v0.shared.recRows <;> simp_all
   · intro j hj

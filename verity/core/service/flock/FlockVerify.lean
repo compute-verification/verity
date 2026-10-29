@@ -360,11 +360,14 @@ def fileDigest (args : List String) (flag : String) : IO (Except String (Option 
 
 /-- **What every part of a recursive statement shares** (`RecCompose.Shared`, the `VERDICT`'s `rec_shared`), from the
 files `verify` read: `--rec-inner` as `recInnerInput` reads it, the inner statement's and session's files at their paths
-as `RecCoins.filesInput` and `recTranscriptInput` read them, and how the inner statement is set up as
-`RecCoins.formInput` reads it. -/
+as `RecCoins.filesInput` and `recTranscriptInput` read them, how the inner statement is set up as
+`RecCoins.formInput` reads it, and the link table as `RecLinkTree.linksArg` reads it. -/
 def recSharedInput (args : List String) : IO (Except String RecCompose.Shared) := do
   let recInner ← match ← fileDigest args "--rec-inner" with
     | .ok h => pure h
+    | .error e => return .error e
+  let links ← match RecLinkTree.linksArg args with
+    | .ok l => pure l
     | .error e => return .error e
   let file := fun (path : Option String) => path.mapM fun f => RecCompose.digest <$> IO.FS.readBinFile f
   let statement := argOf args "--rec-inner-statement"
@@ -384,7 +387,8 @@ def recSharedInput (args : List String) : IO (Except String RecCompose.Shared) :
                  innerStatement := statement
                  innerStatementCoins := statement.map fun _ => argOf args "--rec-inner-statement-coins" == some "os"
                  innerTables := tables.map (·.map fun t => (t.1, RecCompose.digest t.2))
-                 innerDraw := ← file (argOf args "--rec-inner-draw") }
+                 innerDraw := ← file (argOf args "--rec-inner-draw")
+                 links := RecCompose.linksOf links }
   catch e => return .error s!"rec shared inputs: {e}"
 
 /-- The SHA-512, in hex, of the inner session's record (`--rec-inner-session DIR`'s `session.json`) and of the coin
@@ -1654,14 +1658,15 @@ every part naming one set of the other shared inputs, the first at this inner sh
 verifier's form; and no coin key twice; and `RecCompose.OneRun` holds of the record (`RecCompose.check_oneRun`): the
 staging first, exactly one session opened per part, every opened session a composed part's and every part's opened,
 the close last. A record that can't be read is refused. `--rec-links ROOT:N`, the link table's registered root and row
-count, is read (`RecLinkTree.linksArg`) and refused (`RecLinks.NO_LINKS`): no guarantee covers a table yet. One
-`REC-COMPOSE` line; exit 0 when accepted, 1 when refused, 2 on its inputs. -/
+count, is the composition's own table, which every part's `rec_shared` must name (`Shared.Complete`); it is read
+(`RecLinkTree.linksArg`) and refused (`RecLinks.NO_LINKS`): no guarantee covers a table yet. One `REC-COMPOSE` line;
+exit 0 when accepted, 1 when refused, 2 on its inputs. -/
 def recComposeCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG..."
-  match RecLinkTree.linksArg args with
-  | .error e => IO.eprintln e; return 2
-  | .ok (some (t, n)) => IO.eprintln s!"{RecLinks.NO_LINKS} (table root {hexOf t}, {n} rows)"; return 2
-  | .ok none => pure ()
+  let usage := "usage: flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--rec-links ROOT:N] [--archive DIR] LOG..."
+  let links : Option (ByteArray × Nat) ← match RecLinkTree.linksArg args with
+    | .error e => IO.eprintln e; return 2
+    | .ok (some (t, n)) => IO.eprintln s!"{RecLinks.NO_LINKS} (table root {hexOf t}, {n} rows)"; return 2
+    | .ok none => pure none
   let i ← match ← recInnerInput args with
     | .ok (some i) => pure i
     | .ok none => IO.eprintln usage; return 2
@@ -1682,14 +1687,15 @@ def recComposeCmd (args : List String) : IO UInt32 := do
   let mut flag := false
   for a in args do
     if flag then flag := false
-    else if a == "--rec-inner" || a == "--rec-rows" || a == "--rec-run" || a == "--archive" then flag := true
+    else if a == "--rec-inner" || a == "--rec-rows" || a == "--rec-run" || a == "--rec-links" || a == "--archive" then
+      flag := true
     else logs := logs.push a
   -- a log that can't be read is a part that never ran: no VERDICT, so refused
   let parts : List (String × String) ← logs.toList.mapM fun f => do
     try pure (f, ← IO.FS.readFile ⟨f⟩) catch _ => pure (f, "")
   -- a record that can't be read is no record: not JSON, so refused
   let run ← try IO.FS.readFile ⟨runFile⟩ catch _ => pure ""
-  let res := RecCompose.check n digest innerDigest run parts
+  let res := RecCompose.check n digest innerDigest (RecCompose.linksOf links) run parts
   let line := Lean.Json.mkObj [("accepted", Lean.Json.bool res.toBool), ("why", Lean.Json.str (match res with
       | .ok () => "" | .error e => e)), ("statements", Lean.toJson n), ("parts", Lean.toJson parts.length),
     ("rec_rows_sha512", Lean.Json.str digest), ("rec_inner_sha512", Lean.Json.str innerDigest),

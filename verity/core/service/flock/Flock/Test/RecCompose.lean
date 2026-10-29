@@ -4,7 +4,8 @@ an identifier at the one staged rows file and inner shape, every part naming one
 verifier's form and its own coin key. Each shared input changed in one part, a part checked against other rows or
 another inner shape, a shared set missing an input or holding check 5's coins, a reused or missing coin key, an
 identifier, a session without `--zk`, a refused session, a missing or repeated part, a log with no `VERDICT` or two, and a
-`VERDICT` that is not JSON are refused. Against the challenger's interactive-run record, a part retried (two sessions
+`VERDICT` that is not JSON are refused, and so are parts at a link table other than the composition's own (`--rec-links`)
+and a part at another table than the first part's. Against the challenger's interactive-run record, a part retried (two sessions
 opened for it), a part with no session opened, an opened session that is not the composed one, a session opened for a
 part V* lacks, a staging after the first Hello or a second one, other rows or another shared set staged, a record not
 closed or going on past its close, and a record that is not one or holds an event out of its form are refused.
@@ -24,7 +25,12 @@ def inner : String := hex '1'
 
 def sh : Shared :=
   ⟨some inner, some (hex '2'), some (hex '3'), some (hex '4'), none, some (hex '5'), some (hex '6'), some (hex '7'),
-    some "batched", some true, some [("range8", hex '8')], none⟩
+    some "batched", some true, some [("range8", hex '8')], none, none⟩
+
+/-- A statement carrying the link table: its root and 18 rows. -/
+def table : Option (String × Nat) := some (hex 'c', 18)
+
+def shL : Shared := { sh with links := table }
 
 /-- A part's `VERDICT` line as `verify --zk --rec-part J` writes it. -/
 def verdict (j : Nat) (s : Shared := sh) (digest : String := rows) (ok : Bool := true) (zk : Bool := true)
@@ -55,16 +61,43 @@ def opens (n : Nat) : List Json := (List.range n).map (openJ ·)
 
 def run (n : Nat) (s : Shared := sh) : String := runText (stageJ (s := s) :: opens n ++ [closeJ])
 
-def passes (n : Nat) (parts : List (String × String)) (at_ : String := inner) (r : String := run n) : Bool :=
-  (check n rows at_ r parts).toBool
+def passes (n : Nat) (parts : List (String × String)) (at_ : String := inner) (r : String := run n)
+    (links : Option (String × Nat) := none) : Bool :=
+  (check n rows at_ links r parts).toBool
 
-def why (n : Nat) (parts : List (String × String)) (r : String := run n) : String :=
-  match check n rows inner r parts with
+def why (n : Nat) (parts : List (String × String)) (r : String := run n) (links : Option (String × Nat) := none) :
+    String :=
+  match check n rows inner links r parts with
   | .error e => e
   | .ok () => "accepted"
 
 #guard passes 4 honest
 #guard passes 1 [("L0", log 0)]
+
+/-! ### The link table: every part's is the composition's own -/
+
+def honestL : List (String × String) :=
+  [("L0", log 0 (verdict 0 shL)), ("L1", log 1 (verdict 1 shL)), ("alg-p0", log 2 (verdict 2 shL)),
+    ("link", log 3 (verdict 3 shL)), ("cap", log 4 (verdict 4 shL))]
+
+#guard Shared.ofJson? shL.toJson == some shL
+#guard Shared.ofJson? sh.toJson == some sh
+#guard (Shared.ofJson? (sh.toJson.setObjVal! "rec_links" (Json.arr #[.str (hex 'c')]))).isNone
+#guard (Shared.ofJson? (sh.toJson.setObjVal! "rec_links" (Json.arr #[.str (hex 'c'), .str "18"]))).isNone
+#guard linksOf (some (ByteArray.mk #[0xab, 0x01], 18)) == some ("ab01", 18)
+#guard passes 5 honestL (r := run 5 shL) (links := table)
+-- the composition's own table, and none where the parts carry one
+#guard why 5 honestL (run 5 shL) (some (hex 'd', 18)) ==
+  s!"L0: verified at the link table {hex 'c'}:18, not the composition's own --rec-links {hex 'd'}:18"
+#guard why 5 honestL (run 5 shL) == s!"L0: verified at the link table {hex 'c'}:18, not the composition's own --rec-links none"
+#guard why 4 honest (links := table) == s!"L0: verified at the link table none, not the composition's own --rec-links {hex 'c'}:18"
+-- one part at another table, or at none
+#guard why 5 (honestL.set 3 ("link", log 3 (verdict 3 { sh with links := some (hex 'c', 34) }))) (run 5 shL) table ==
+  s!"link: its rec_links (the inner population's link table, --rec-links) is {hex 'c'}:34, not {hex 'c'}:18 as the first part's"
+#guard why 5 (honestL.set 2 ("alg-p0", log 2 (verdict 2 sh))) (run 5 shL) table ==
+  s!"alg-p0: its rec_links (the inner population's link table, --rec-links) is none, not {hex 'c'}:18 as the first part's"
+-- the run record staged another table
+#guard why 5 honestL (run 5 sh) table == "L0: its rec_shared is not the one the run record staged before the first Hello"
 
 /-- Each shared input changed in one part: another digest, or none where the first part held one. -/
 def tampered : List Shared :=
@@ -73,7 +106,8 @@ def tampered : List Shared :=
     { sh with innerCoins := some (hex 'f') }, { sh with innerSession := some (hex 'f') },
     { sh with transcript := some (hex 'f') }, { sh with registration := none },
     { sh with innerStatement := some "unbatched" }, { sh with innerStatementCoins := some false },
-    { sh with innerTables := some [("range8", hex 'f')] }, { sh with innerDraw := some (hex 'f') }]
+    { sh with innerTables := some [("range8", hex 'f')] }, { sh with innerDraw := some (hex 'f') },
+    { sh with links := table }]
 
 #guard tampered.all fun s => s != sh
 #guard tampered.all fun s => !passes 4 (honest.set 2 ("alg-p0", log 2 (verdict 2 s)))

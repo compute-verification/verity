@@ -1,8 +1,9 @@
 """`flock-verify rec-compose` (`RecCompose.check`) and its Python mirror (`verity_flock.rec_compose`) agree, verdict and
 reason, on an honest part set at a real inner shape and on that set with one thing changed: each shared input in one part
 (another file, or none where the compiled verifier reads one), an inner shape or rows file other than the composition's,
-a session without `--zk`, with an identifier or refused, a reused or missing coin key, and a part missing, repeated, out
-of range or in a log with two `VERDICT`s or none; and, against the challenger's interactive-run record (written by
+a session without `--zk`, with an identifier or refused, a reused or missing coin key, a part missing, repeated, out
+of range or in a log with two `VERDICT`s or none, and parts at a link table the composition doesn't hold (one part, or
+every part); and, against the challenger's interactive-run record (written by
 `challenger.RunRecord`), a part retried, a part whose session the record lacks, an opened session that is not the composed
 one, a session for a part V* lacks, a staging after the first Hello or a second one, other rows or another shared set
 staged, a record not closed or going on past its close, and a record that is none, of another kind or with an event out
@@ -109,6 +110,10 @@ def _cases(n: int, inner: bytes) -> dict[str, list[tuple[str, str]]]:
     cases["two-verdicts"] = _set(h, 1, f"{v(1)}\n{v(1, key=key(9001))}")
     cases["no-verdict"] = _set(h, 1, "setup: refused")
     cases["no-parts"] = []
+    table = (bytes(range(64)), 18)
+    cases["rec_links-one-part"] = _set(h, 1, v(1, shared=_shared(inner, rec_links=table)))
+    cases["rec_links-every-part"] = [(name, f"{v(j, shared=_shared(inner, rec_links=table))}\n")
+                                     for j, (name, _) in enumerate(h)]
     return cases
 
 
@@ -141,7 +146,7 @@ def _runs(n: int, inner: bytes) -> dict[str, str]:
 CASES = ["honest", *(f"{k}-one-part" for k in ("rec_inner", *FILES, "inner_coins")), *(f"{k}-none" for k in FILES),
          "inner_coins-every-part", "other-inner-every-part", "other-rows-one-part", "other-rows-every-part", "not-zk",
          "identifier", "refused", "coin-key-reused", "no-rec-shared", "part-missing", "part-twice", "part-out-of-range",
-         "one-part-too-many", "two-verdicts", "no-verdict", "no-parts"]
+         "one-part-too-many", "two-verdicts", "no-verdict", "no-parts", "rec_links-one-part", "rec_links-every-part"]
 RUNS = ["run-part-retried", "run-part-retried-composed-second", "run-part-unrecorded", "run-opened-not-composed",
         "run-part-out-of-range", "run-staged-after-hello", "run-staged-twice", "run-other-rows-staged",
         "run-other-shared-staged", "run-not-closed", "run-event-after-close", "run-none", "run-other-kind",
