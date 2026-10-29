@@ -18,8 +18,8 @@ NVCC=${NVCC:-$(command -v nvcc || true)}
 INC=()
 if [ -z "$NVCC" ]; then
   uv venv -q "$SCRATCH/v" && uv pip install -q --python "$SCRATCH/v/bin/python" nvidia-cuda-nvcc==13.4.92 \
-    nvidia-cuda-cuobjdump==13.4.92 nvidia-cuda-runtime==13.4.92 nvidia-cuda-crt==13.4.92 nvidia-nvvm==13.4.92 \
-    nvidia-cuda-cccl==13.3.4.3.1 || exit 1
+    nvidia-cuda-cuobjdump==13.4.92 nvidia-cuda-nvdisasm==13.4.92 nvidia-cuda-runtime==13.4.92 \
+    nvidia-cuda-crt==13.4.92 nvidia-nvvm==13.4.92 nvidia-cuda-cccl==13.3.4.3.1 || exit 1
   T=$("$SCRATCH/v/bin/python" -c 'import nvidia, os; print(os.path.join(list(nvidia.__path__)[0], "cu13"))')
   export PATH="$T/bin:$T/nvvm/bin:$PATH"
   NVCC="$T/bin/nvcc"
