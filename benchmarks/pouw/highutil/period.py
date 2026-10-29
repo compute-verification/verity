@@ -89,7 +89,7 @@ LINEARS = (("qkv", 6144, 4096), ("o", 4096, 4096), ("up", 28672, 4096), ("down",
 LAYERS = LINEARS
 M = 16384
 NB = 32       # transformer blocks: step g runs block g mod NB
-LP, L = 512, 16384   # the noise period L' (a call's least; `lp_of`) and the word interval L: S = ceil(K / L) = 1 at every call's K
+LP, L = 512, 16384   # noise tiles of L' (a call's least; `lp_of`) and the word interval L: S = ceil(K / L) = 1 at every call's K
 #: Dither's argument covers segments of at most T_MAX L' inner indices (a proof block's cost goes as c_t / t; v3.2 proves it
 #: for t <= 8), and v31's Fill takes L' <= LP_MAX, so a call takes a longer L' (`lp_of`), and a linear no L' covers runs as
 #: K-slices (`calls`)
@@ -1158,7 +1158,7 @@ def main(argv: list[str]) -> int:
     p = sub.add_parser("prep")
     p.add_argument("cfg")
     p.add_argument("--row", type=int, default=8192, help="leaf row bytes")
-    p.add_argument("--lp", type=int, default=LP, help="the least noise period L'")
+    p.add_argument("--lp", type=int, default=LP, help="the least noise tile length L'")
     p.add_argument("--lp-max", type=int, default=LP_MAX, help="the longest L' (v31's Fill takes up to 1024)")
     p.add_argument("--L", type=int, help=f"the word interval L (default {L}; --small's 512)")
     g = p.add_mutually_exclusive_group(required=True)
