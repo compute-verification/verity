@@ -5,12 +5,12 @@ import Proofs.Population.Leakage
 # Exfiltration before detection: from the draw and the population to the probability of theft
 
 * `indepDraw_acceptCoins`, `indepDraw_isDist`: the draw that catches unit `u` independently with probability `a u` lets the
-  wrong set `B` escape with probability exactly `Π_{u ∈ B} (1 - a u)`.
+  incorrect set `B` escape with probability exactly `Π_{u ∈ B} (1 - a u)`.
 * `pressure_of_draw`, `pressure_indepDraw`: **detection pressure from the draw and the cone.** A window whose leak is at
   most its faulty proof blocks' cone egress `Σ_{u ∈ B} E(u)`, under a draw that catches `u` with probability
   `a u ≥ κ E(u)`, meets `DetectionPressure κ`.
 * `Dataflow.card_changed_le`: **a checked population is cone-local.** The egress slots where an assignment differs from
-  the honest one, with the same inputs, number at most `Σ_{u ∈ wrong} E(u)` (POP1's `eq_off_cone`, `card_coneEgress_le`).
+  the honest one, with the same inputs, number at most `Σ_{u ∈ incorrect} E(u)` (POP1's `eq_off_cone`, `card_coneEgress_le`).
 * `guess_le`: **bits to probability.** A view that is a deviation `d ∈ 𝓓` applied to the honest view gives up the target
   with probability at most `Pr[d ∉ 𝓓] + #𝓓 · g`, when the honest view alone gives it with probability at most `g`.
 * `card_devBall_le`: the deviations that change at most `K` of `m` slots number at most `Σ_{j ≤ K} C(m, j) · |V| ^ K`.
@@ -30,7 +30,7 @@ open Finset
 
 /-! ## Detection pressure from the draw and the cone -/
 
-/-- **The independent draw's acceptance probability**: the wrong set `B` escapes with probability
+/-- **The independent draw's acceptance probability**: the incorrect set `B` escapes with probability
 `Π_{u ∈ B} (1 - a u)`. -/
 theorem indepDraw_acceptCoins {U : Type} [Fintype U] [DecidableEq U] (a : U → ℝ) (B : Finset U) :
     ∑ c ∈ acceptCoins B, indepDraw a c = ∏ u ∈ B, (1 - a u) := by
@@ -77,7 +77,7 @@ theorem pressure_of_draw {Ω U : Type} [Fintype Ω] {μ : Ω → ℝ} {κ : ℝ}
   have h2 : κ * A.leak h ≤ κ * ∑ u ∈ B h, E u := mul_le_mul_of_nonneg_left (hleak h) hκ
   linarith
 
-/-- **The independent draw gives detection pressure**: a strategy whose window escapes exactly when its wrong set `B h`
+/-- **The independent draw gives detection pressure**: a strategy whose window escapes exactly when its incorrect set `B h`
 does, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` under the draw catching `u` with probability
 `a u ≥ κ E(u)`. -/
 theorem pressure_indepDraw {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (E a : U → ℝ)
@@ -257,14 +257,14 @@ open Finset
 variable {U S : Type} (P : Dataflow U S)
 
 /-- **A checked population is cone-local**: an assignment that holds the honest run's inputs differs from it on at most
-`Σ_{u ∈ wrong} E(u)` egress slots, `E(u) = |coneEgress O {u}|`. -/
+`Σ_{u ∈ incorrect} E(u)` egress slots, `E(u) = |coneEgress O {u}|`. -/
 theorem card_changed_le [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [DecidableEq V] (f : P.Fns V)
     (O : Finset S) {σ honest : S → V} (hin : ∀ t ∈ P.input, σ t = honest t) (hh : ∀ u, P.Correct f honest u) :
-    (O.filter fun s => σ s ≠ honest s).card ≤ ∑ u ∈ P.wrong f σ, (P.coneEgress O {u}).card := by
-  refine (card_le_card fun s hs => ?_).trans (P.card_coneEgress_le O (P.wrong f σ))
+    (O.filter fun s => σ s ≠ honest s).card ≤ ∑ u ∈ P.incorrect f σ, (P.coneEgress O {u}).card := by
+  refine (card_le_card fun s hs => ?_).trans (P.card_coneEgress_le O (P.incorrect f σ))
   obtain ⟨hsO, hne⟩ := mem_filter.1 hs
   refine P.mem_coneEgress.2 ⟨hsO, ?_⟩
   by_contra hw
-  exact hne (P.eq_off_cone hc ha f hin le_rfl (by simp [P.wrong_eq_empty hh]) hw)
+  exact hne (P.eq_off_cone hc ha f hin le_rfl (by simp [P.incorrect_eq_empty hh]) hw)
 
 end Population.Dataflow

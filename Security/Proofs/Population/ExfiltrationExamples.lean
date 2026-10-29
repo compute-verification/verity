@@ -203,7 +203,7 @@ theorem seed_egress (k : ℕ) :
     intro w
     simp only [Dataflow.egress, mem_image, mem_filter, mem_univ, true_and, subset_empty]
     refine ⟨Sum.elim w w, ⟨fun s hs hsX => absurd hs hsX, ?_⟩, rfl⟩
-    refine (seedCopy k).wrong_eq_empty fun i s => ?_
+    refine (seedCopy k).incorrect_eq_empty fun i s => ?_
     obtain ⟨s, hs⟩ := s
     simp only [seedCopy, mem_singleton] at hs
     subst hs

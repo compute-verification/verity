@@ -14,7 +14,7 @@ program, no larger than the padding's cones, and no obliviousness assumed.
 * `card_leak_le_coneOver`, `card_leak_le_coneEgressOver`, **the uniform form for a program**: at most `m` faulty proof
   blocks and every unit's cone egress over `C` at most `E` give `#honest · C(|U|, m) · |V| ^ (m E)` egress values.
 * `skipped_work_le_wt_over`, **T4 for a program**: every cone over `C` at most `F` times its root's weight gives skipped
-  work at most `F · wt(wrong)` plus the lucky work.
+  work at most `F · wt(incorrect)` plus the lucky work.
 
 What these do not give is isolation: they count the egress a faulty proof block's cone can carry, not where it comes
 from. `vm_honest_wiring_fails` is the pointer machine meeting this bound (its pointer step's cone holds every output)
@@ -41,7 +41,7 @@ theorem downAt_mono {σ : S → V} {B B' : Finset U} (hB : B ⊆ B') {v : U} (hv
 blocks inside `B`, shows the honest value at every slot outside the writes of the cone over `C` of `B`. -/
 theorem eq_honest_off_downOver [Fintype U] (hsa : D.SingleAssignment) (hac : D.AddressClosed) {step : U → ℕ}
     (ht : D.TimeOrdered step) {C : Set (S → V)} {h σ : S → V} (hhC : h ∈ C) (hh : ∀ u, D.Correct h u)
-    (hin : ∀ s ∈ D.input, σ s = h s) {B : Finset U} (hB : D.wrong σ ⊆ B) {s : S}
+    (hin : ∀ s ∈ D.input, σ s = h s) {B : Finset U} (hB : D.incorrect σ ⊆ B) {s : S}
     (hs : s ∉ D.writesOf (D.downOver C B)) : σ s = h s := by
   classical
   by_cases hsi : s ∈ D.input
@@ -77,7 +77,7 @@ theorem card_leak_le_coneOver [Fintype U] [Fintype V] [DecidableEq V] (hsa : D.S
     (hac : D.AddressClosed) {step : U → ℕ} (ht : D.TimeOrdered step) (C : Set (S → V)) (O : Finset S)
     (𝓑 : Finset (Finset U)) {ι : Type} (Cl : Finset ι) (σ honest : ι → S → V) (hhC : ∀ i ∈ Cl, honest i ∈ C)
     (hin : ∀ i ∈ Cl, ∀ t ∈ D.input, σ i t = honest i t) (hh : ∀ i ∈ Cl, ∀ u, D.Correct (honest i) u)
-    (hB : ∀ i ∈ Cl, ∃ B ∈ 𝓑, D.wrong (σ i) ⊆ B) :
+    (hB : ∀ i ∈ Cl, ∃ B ∈ 𝓑, D.incorrect (σ i) ⊆ B) :
     (Cl.image fun i (o : O) => σ i o).card ≤
       (Cl.image fun i (o : O) => honest i o).card *
         ∑ B ∈ 𝓑, Fintype.card V ^ (D.coneEgressOver C O B).card := by
@@ -111,11 +111,11 @@ theorem card_leak_le_coneEgressOver [Fintype U] [Fintype V] [DecidableEq V] [Non
     (C : Set (S → V)) (O : Finset S) {m E : ℕ} (hmU : m ≤ Fintype.card U)
     (hE : ∀ u, (D.coneEgressOver C O {u}).card ≤ E) {ι : Type} (Cl : Finset ι) (σ honest : ι → S → V)
     (hhC : ∀ i ∈ Cl, honest i ∈ C) (hin : ∀ i ∈ Cl, ∀ t ∈ D.input, σ i t = honest i t)
-    (hh : ∀ i ∈ Cl, ∀ u, D.Correct (honest i) u) (hm : ∀ i ∈ Cl, (D.wrong (σ i)).card ≤ m) :
+    (hh : ∀ i ∈ Cl, ∀ u, D.Correct (honest i) u) (hm : ∀ i ∈ Cl, (D.incorrect (σ i)).card ≤ m) :
     (Cl.image fun i (o : O) => σ i o).card ≤
       (Cl.image fun i (o : O) => honest i o).card * (Fintype.card U).choose m * Fintype.card V ^ (m * E) := by
   classical
-  have hB : ∀ i ∈ Cl, ∃ B ∈ powersetCard m (univ : Finset U), D.wrong (σ i) ⊆ B := by
+  have hB : ∀ i ∈ Cl, ∃ B ∈ powersetCard m (univ : Finset U), D.incorrect (σ i) ⊆ B := by
     intro i hi
     obtain ⟨B, hsub, hcard⟩ := Finset.exists_superset_card_eq (hm i hi) hmU
     exact ⟨B, mem_powersetCard.2 ⟨subset_univ _, hcard⟩, hsub⟩
@@ -135,27 +135,27 @@ theorem card_leak_le_coneEgressOver [Fintype U] [Fintype V] [DecidableEq V] [Non
         simp
 
 /-- **T4 for a program, over the honest runs' cones**: in a time-ordered, address-closed trace, every cone over `C`
-(holding the honest run) at most `F` times its root's weight gives skipped work at most `F · wt(wrong)` plus the
+(holding the honest run) at most `F` times its root's weight gives skipped work at most `F · wt(incorrect)` plus the
 lucky work. -/
 theorem skipped_work_le_wt_over [Fintype U] [DecidableEq U] (hac : D.AddressClosed) {step : U → ℕ}
     (ht : D.TimeOrdered step) {C : Set (S → V)} {h σ : S → V} (hhC : h ∈ C) (hh : ∀ u, D.Correct h u)
     (hin : ∀ s ∈ D.input, σ s = h s) {K L : Finset U} (hl : D.SkipsLucky h σ K L) (wt : U → ℕ) (F : ℕ)
     (hF : ∀ u, ∑ v ∈ D.downOver C {u}, wt v ≤ F * wt u) :
-    ∑ u ∈ univ \ K, wt u ≤ F * ∑ u ∈ D.wrong σ, wt u + ∑ u ∈ L, wt u := by
-  have hsub : univ \ K ⊆ ((D.wrong σ).biUnion fun u => D.downOver C {u}) ∪ L := by
+    ∑ u ∈ univ \ K, wt u ≤ F * ∑ u ∈ D.incorrect σ, wt u + ∑ u ∈ L, wt u := by
+  have hsub : univ \ K ⊆ ((D.incorrect σ).biUnion fun u => D.downOver C {u}) ∪ L := by
     intro v hv
     rcases D.skipped_mem_downAt hac ht hh hin hl v (mem_sdiff.1 hv).2 with ⟨u, hu, huv⟩ | hvL
     · exact mem_union_left _ (mem_biUnion.2 ⟨u, hu, D.mem_downOver.2 ⟨h, hhC, u, mem_singleton_self u, huv⟩⟩)
     · exact mem_union_right _ hvL
-  calc ∑ u ∈ univ \ K, wt u ≤ ∑ u ∈ ((D.wrong σ).biUnion fun u => D.downOver C {u}) ∪ L, wt u :=
+  calc ∑ u ∈ univ \ K, wt u ≤ ∑ u ∈ ((D.incorrect σ).biUnion fun u => D.downOver C {u}) ∪ L, wt u :=
         sum_le_sum_of_subset hsub
-    _ ≤ ∑ u ∈ (D.wrong σ).biUnion (fun u => D.downOver C {u}), wt u + ∑ u ∈ L, wt u := Dataflow.sum_union_le _ _ _
-    _ ≤ F * ∑ u ∈ D.wrong σ, wt u + ∑ u ∈ L, wt u := by
+    _ ≤ ∑ u ∈ (D.incorrect σ).biUnion (fun u => D.downOver C {u}), wt u + ∑ u ∈ L, wt u := Dataflow.sum_union_le _ _ _
+    _ ≤ F * ∑ u ∈ D.incorrect σ, wt u + ∑ u ∈ L, wt u := by
         refine Nat.add_le_add_right ?_ _
-        calc ∑ u ∈ (D.wrong σ).biUnion (fun u => D.downOver C {u}), wt u
-            ≤ ∑ u ∈ D.wrong σ, ∑ v ∈ D.downOver C {u}, wt v := Dataflow.sum_biUnion_le _ _ _
-          _ ≤ ∑ u ∈ D.wrong σ, F * wt u := sum_le_sum fun u _ => hF u
-          _ = F * ∑ u ∈ D.wrong σ, wt u := (mul_sum _ _ _).symm
+        calc ∑ u ∈ (D.incorrect σ).biUnion (fun u => D.downOver C {u}), wt u
+            ≤ ∑ u ∈ D.incorrect σ, ∑ v ∈ D.downOver C {u}, wt v := Dataflow.sum_biUnion_le _ _ _
+          _ ≤ ∑ u ∈ D.incorrect σ, F * wt u := sum_le_sum fun u _ => hF u
+          _ = F * ∑ u ∈ D.incorrect σ, wt u := (mul_sum _ _ _).symm
 
 end Population.DynPopulation
 

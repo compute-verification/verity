@@ -47,7 +47,7 @@ theorem maxRule_le {I U : Type} {claims : Finset I} {κ : I → ℝ} {harm : I �
   (Finset.fold_max_le _).2 ⟨h0, h⟩
 
 /-- **One draw gives every claim its pressure.** Each claim `i` reads the window's one escape set `esc h` with its own
-leak `leak i h`, at most its harm over the window's wrong set `B h`. A draw whose window escapes with probability at
+leak `leak i h`, at most its harm over the window's incorrect set `B h`. A draw whose window escapes with probability at
 most `Π_{u ∈ B h} (1 - a u)`, with catch probabilities `a u` at least the max rule, meets `DetectionPressure (κ i)` for
 every claim. -/
 theorem pressure_maxRule {Ω U I : Type} [Fintype Ω] {μ : Ω → ℝ} {claims : Finset I} {κ : I → ℝ}
@@ -132,7 +132,7 @@ theorem joint_tail_withheld {I : Type} (hμ : IsDist μ) [DecidableEq Ω] {claim
       exact tail_cum hμ (hκ i hi) (hP i hi) (hL i hi) n h (x i))
 
 /-- **One draw certifies every claim**: catch probabilities at least the max rule, a window escaping with probability at
-most `Π_{u ∈ B h} (1 - a u)`, and each claim's leak at most its harm over the wrong set and at most `ℓ_i` a window. Then
+most `Π_{u ∈ B h} (1 - a u)`, and each claim's leak at most its harm over the incorrect set and at most `ℓ_i` a window. Then
 every claim leaks at most `ℓ_i + ln (1/δ_i) / κ_i` through the first detection, all together, except with probability
 at most `Σ_i δ_i`. -/
 theorem joint_of_maxRule {I U : Type} (hμ : IsDist μ) [DecidableEq Ω] {claims : Finset I} {κ ℓ δ : I → ℝ}
@@ -210,7 +210,7 @@ theorem subsetDraw_acceptProb_le {U : Type} [Fintype U] [DecidableEq U] (k : ℕ
   exact choose_ratio_le _ k hk hN B.card
 
 /-- **A stratum drawn as a uniform `k`-subset gives detection pressure**: a strategy whose window escapes exactly when
-the drawn subset misses its wrong set `B h`, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` when
+the drawn subset misses its incorrect set `B h`, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` when
 `κ E(u) ≤ k / N` for every unit. -/
 theorem pressure_subsetDraw {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (k : ℕ)
     (hk : k ≤ Fintype.card U) (hN : 0 < Fintype.card U) (E : U → ℝ)
