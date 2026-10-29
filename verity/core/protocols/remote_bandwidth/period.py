@@ -290,7 +290,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """Bandwidth's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): the session on the
     period's records, the verifier and its challenger a party of their own on `period.json`'s `challenger_host`
     (`verifier_party.Party.of`; on this node by default, as a process of its own, with its own coins) and the prover
-    here. With `remote-audit-protocol` among the period's tools the Lean answers (the verifier of record) and must agree
+    here. With `remote-audit-protocol` among the period's tools the Lean verifier answers and must agree
     with the Python; it writes `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host
     ran each party, and whether `trusted-host`'s premise holds (`verifier_party.placement`), go in
     `bandwidth.json` and in an accepted answer's profile (`placement`)."""
