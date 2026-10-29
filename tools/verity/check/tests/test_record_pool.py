@@ -66,6 +66,13 @@ def test_a_pooled_deferred_record_is_a_post_landing_run_of_those_steps(launched)
     assert tail[-2:] == ["--deferred", "lean-agreement"] and post_landing(tail, TOOL) == "lean-agreement"
 
 
+def test_a_pool_a_node_keeps_of_its_own_is_taken_by_name(launched):
+    """node 1's leanrec pool is no pool every node has, but a records run takes it by name, as slot.py's line there."""
+    assert CHECK.record(["--base", "HEAD", "--on", CPU1, "--pool", "leanrec", "--deferred", "lean-agreement"]) == 0
+    [cmd] = launched
+    assert "CHECK_SLOTS=/workspace/research/locks/leanrec/slots" in cmd
+
+
 def test_a_records_timeout_is_its_runs_not_the_checks(launched):
     assert CHECK.record(["--base", "HEAD", "--on", CPU1, "--pool", "research", "--timeout", "14400", "--deferred", "lean-agreement"]) == 0
     [cmd] = launched
@@ -74,7 +81,7 @@ def test_a_records_timeout_is_its_runs_not_the_checks(launched):
 
 
 @pytest.mark.parametrize("argv, why", [
-    (["--on", CPU1, "--pool", "nope"], "nope: no such pool; the pools are "),
+    (["--on", CPU1, "--pool", "../nope"], "../nope: no such pool; a pool is a name of letters, digits"),
     (["--pool", "research"], f"needs --on MACHINE, the one machine whose pool it waits in (`--on {CPU1} --pool research`)"),
     (["--on", "auto", "--pool", "research"], "needs --on MACHINE"),
     (["--on", f"{CPU1},vy-nebius-cpu-5", "--pool", "research"], "needs --on MACHINE"),
