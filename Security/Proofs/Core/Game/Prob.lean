@@ -1,4 +1,5 @@
 import Proofs.Core.Game.Union
+import Definitions.Core.Game.Prob
 
 /-!
 # Probabilities for a fixed prover strategy
@@ -12,6 +13,8 @@ they use:
 * `prob_and_const`: an event conjoined with a fact fixed by the strategy;
 * `prob_map`, `Strategy.toMap_ofMap`: relabelling the output (`map`) keeps the game's strategies (`Strategy.ofMap` and
   `Strategy.toMap`, in `Protocol`).
+
+The definitions are in `Definitions.Core.Game.Prob`.
 -/
 
 namespace Verity.Game
@@ -144,12 +147,6 @@ theorem prob_true : ∀ (g : Game α) (s : Strategy g), prob (fun _ => True) g s
   | @Game.coin _ _ _ _ k, s => by
       rw [prob_coin]
       exact (congrArg avg (funext fun c => prob_true (k c) (s c))).trans (avg_const 1)
-
-/-- A strategy for `g.bind f`, restricted to `g`. -/
-def Strategy.ofBind (f : α → Game β) : (g : Game α) → Strategy (g.bind f) → Strategy g
-  | .ret _, _ => PUnit.unit
-  | .send _ k, s => ⟨s.1, Strategy.ofBind f (k s.1) s.2⟩
-  | @Game.coin _ _ _ _ k, s => fun c => Strategy.ofBind f (k c) (s c)
 
 /-- **Additive composition, for a fixed strategy.** If from every doomed output of `g` the
 continuation succeeds with probability at most `ε₂` whatever the prover does, the composition
