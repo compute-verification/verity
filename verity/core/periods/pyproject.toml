@@ -15,7 +15,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # What the tests import of `verity` beside this unit, and what `lake` reads to build `core-periods-difftest`: the core
-# interface's package, the difftest harness's Lean, and these files of C-Flock's verifier (`Flock.Canon` and what it
+# interface's package, the difftest harness's Lean, and these files of Flock's verifier (`Flock.Canon` and what it
 # imports, and the package's configuration).
 inputs = ["verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/interface",
           "verity/core/difftest/lean", "verity/core/service/flock/lakefile.toml",
