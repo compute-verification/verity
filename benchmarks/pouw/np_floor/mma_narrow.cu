@@ -65,44 +65,30 @@ OP_KERNEL(bmma_xor_k128, TPB) { body<XorK128>(a); }
 OP_KERNEL(bmma_and_m8k128, TPB) { body<AndM8k128>(a); }
 OP_KERNEL(bmma_xor_m8k128, TPB) { body<XorM8k128>(a); }
 
-#ifndef EXPECT_S4K64
-#define EXPECT_S4K64 "IMMA.16864.S4.S4=8"
-#endif
-#ifndef EXPECT_S4K32
-#define EXPECT_S4K32 "IMMA.16832.S4.S4=8"
-#endif
-#ifndef EXPECT_S4M8
-#define EXPECT_S4M8 "IMMA.8832.S4.S4=8"
-#endif
-#ifndef EXPECT_B256
-#define EXPECT_B256(op) "BMMA.168256." op ".POPC=8"
-#endif
-#ifndef EXPECT_B128
-#define EXPECT_B128(op) "BMMA.168128." op ".POPC=8"
-#endif
-#ifndef EXPECT_BM8
-#define EXPECT_BM8(op) "BMMA.88128." op ".POPC=8"
-#endif
+// sm_90 has no s4 and no XOR.POPC tensor op: ptxas calls a subroutine for each such MMA (s4: nibbles sign-extended to
+// bytes by LOP3, SHF and IMAD.SHL, then two IMMA.S8; XOR: two BMMA.AND.POPC on an operand and its complement), so those
+// loops are gated on their 8 calls and their rate is the whole emulated MMA's.
+#define EMULATED "CALL.REL.NOINC=8"
 static const OpProbe PROBES[] = {
     {.name = "imma_s8_k32", .kernel = (const void*)imma_s8_k32, .tpb = TPB, .expect = "IMMA.16832.S8.S8=8",
      .words = 128, .iters = 4096, .note = "int8 m16n8k32: 128 s32 registers a warp instruction"},
-    {.name = "imma_s4_k64", .kernel = (const void*)imma_s4_k64, .tpb = TPB, .expect = EXPECT_S4K64, .words = 128,
+    {.name = "imma_s4_k64", .kernel = (const void*)imma_s4_k64, .tpb = TPB, .expect = EMULATED, .words = 128,
      .iters = 4096, .note = "s4 m16n8k64: 128 s32 registers a warp instruction"},
-    {.name = "imma_s4_k32", .kernel = (const void*)imma_s4_k32, .tpb = TPB, .expect = EXPECT_S4K32, .words = 128,
+    {.name = "imma_s4_k32", .kernel = (const void*)imma_s4_k32, .tpb = TPB, .expect = EMULATED, .words = 128,
      .iters = 4096, .note = "s4 m16n8k32: 128 s32 registers a warp instruction"},
-    {.name = "imma_s4_m8k32", .kernel = (const void*)imma_s4_m8k32, .tpb = TPB, .expect = EXPECT_S4M8, .words = 64,
+    {.name = "imma_s4_m8k32", .kernel = (const void*)imma_s4_m8k32, .tpb = TPB, .expect = EMULATED, .words = 64,
      .iters = 4096, .note = "s4 m8n8k32: 64 s32 registers a warp instruction"},
-    {.name = "bmma_and_k256", .kernel = (const void*)bmma_and_k256, .tpb = TPB, .expect = EXPECT_B256("AND"),
+    {.name = "bmma_and_k256", .kernel = (const void*)bmma_and_k256, .tpb = TPB, .expect = "BMMA.168256.AND.POPC=8",
      .words = 128, .iters = 4096, .note = "b1 AND.POPC m16n8k256: 128 s32 registers a warp instruction"},
-    {.name = "bmma_xor_k256", .kernel = (const void*)bmma_xor_k256, .tpb = TPB, .expect = EXPECT_B256("XOR"),
+    {.name = "bmma_xor_k256", .kernel = (const void*)bmma_xor_k256, .tpb = TPB, .expect = EMULATED,
      .words = 128, .iters = 4096, .note = "b1 XOR.POPC m16n8k256: 128 s32 registers a warp instruction"},
-    {.name = "bmma_and_k128", .kernel = (const void*)bmma_and_k128, .tpb = TPB, .expect = EXPECT_B128("AND"),
+    {.name = "bmma_and_k128", .kernel = (const void*)bmma_and_k128, .tpb = TPB, .expect = "BMMA.168128.AND.POPC=8",
      .words = 128, .iters = 4096, .note = "b1 AND.POPC m16n8k128: 128 s32 registers a warp instruction"},
-    {.name = "bmma_xor_k128", .kernel = (const void*)bmma_xor_k128, .tpb = TPB, .expect = EXPECT_B128("XOR"),
+    {.name = "bmma_xor_k128", .kernel = (const void*)bmma_xor_k128, .tpb = TPB, .expect = EMULATED,
      .words = 128, .iters = 4096, .note = "b1 XOR.POPC m16n8k128: 128 s32 registers a warp instruction"},
-    {.name = "bmma_and_m8k128", .kernel = (const void*)bmma_and_m8k128, .tpb = TPB, .expect = EXPECT_BM8("AND"),
+    {.name = "bmma_and_m8k128", .kernel = (const void*)bmma_and_m8k128, .tpb = TPB, .expect = "BMMA.88128.AND.POPC=8",
      .words = 64, .iters = 4096, .note = "b1 AND.POPC m8n8k128: 64 s32 registers a warp instruction"},
-    {.name = "bmma_xor_m8k128", .kernel = (const void*)bmma_xor_m8k128, .tpb = TPB, .expect = EXPECT_BM8("XOR"),
+    {.name = "bmma_xor_m8k128", .kernel = (const void*)bmma_xor_m8k128, .tpb = TPB, .expect = EMULATED,
      .words = 64, .iters = 4096, .note = "b1 XOR.POPC m8n8k128: 64 s32 registers a warp instruction"},
 };
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
