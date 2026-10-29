@@ -277,6 +277,22 @@ def costs() -> dict:
     return out
 
 
+def uw_vectors(design: str, t: int) -> float:
+    """A row's possible step-t vectors under a uw design: 16 a₁ codes, times |X| at each later step (w per window, so
+    known to advice). `…_call_w`: step 2's w drawn per call, after any advice, so nothing past step 1 can be tabled."""
+    if design.endswith("_call_w"):
+        return 16 if t == 1 else float("inf")
+    return 16 * len(DESIGNS[design][0]) ** (t - 1)
+
+
+def a5_exact() -> dict:
+    """A5 on a uw design served through an exact epilogue: the served chain carries no noise, so each linear's input is
+    known before its noise (the premise nred_requant.py measured noise to destroy), and A5 is round 2's search with
+    uw's vector counts."""
+    res = r2.a5_step_greedy(designs=("uw4", "uw6", "uw8", "uw6_call_w"), vectors=uw_vectors)
+    return {k: v for k, v in res.items() if isinstance(v, dict)}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--json", help="write the report here")
@@ -290,7 +306,13 @@ def main(argv: list[str] | None = None) -> int:
                    "detail": {k: v for k, v in sc.items() if "/m" in k}})
     checks.append({"check": "A8 at scale, model W: fix2 > 1% of stock at every m",
                    "pass": min(sc[f"fix2/m{m}"]["model_W"] for m in na.MS) > 0.01, "detail": ""})
-    rep = {"checks": checks, "small": det, "at_scale": sc, "costs": cs,
+    a5 = a5_exact()
+    checks.append({"check": "A5 on uw6 through an exact epilogue: > 1% of stock at m 64 with w per window; step 2's w "
+                   "per call takes it to 0 at every m",
+                   "pass": a5["uw6/m64"]["gap_share_of_stock"] > 0.01
+                   and max(a5[f"uw6_call_w/m{m}"]["gap_share_of_stock"] for m in na.MS) == 0,
+                   "detail": {k: v["gap_share_of_stock"] for k, v in a5.items()}})
+    rep = {"checks": checks, "small": det, "at_scale": sc, "costs": cs, "a5_exact_epilogue": a5,
            "periods": {f"A8_P_{d}_m8192": ns.periods(sc[f"{d}/m8192"]["model_P"], 1.044) for d in ("fix2", "fix2w2")}
            | {f"A8_W_{d}_m8192": ns.periods(sc[f"{d}/m8192"]["model_W"], 1.044) for d in ("fix2", "fix2w2")}}
     text = json.dumps(rep, indent=1, default=float)

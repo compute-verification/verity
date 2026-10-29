@@ -621,11 +621,11 @@ def a5_vectors(design: str, t: int) -> float:
     return 16 if t == 1 else float("inf")
 
 
-def a5_step_greedy(designs=("ssn_1l", "fix2", "fix2_call_w")) -> dict:
+def a5_step_greedy(designs=("ssn_1l", "fix2", "fix2_call_w"), vectors=a5_vectors) -> dict:
     """A5 corrected: advice tables each row's earliest steps (every possible vector of steps 1..τ_ℓ of linear ℓ) in one
     H200's HBM, so those words are copies; the row then resumes the k32 chain, a 32-a-word load of its step-τ vector,
     unless τ_ℓ = S. The best (τ_ℓ) by exhaustive search, its saving as a share of stock. Interim 1's `advice_table`
-    tabled whole linears and understated it."""
+    tabled whole linears and understated it. `vectors(design, t)` counts a row's possible step-t vectors."""
     out = {}
     lins = [(n, k, ns.steps1l(k)) for n, k in ns.LLAMA.values()]
     for design in designs:
@@ -635,7 +635,7 @@ def a5_step_greedy(designs=("ssn_1l", "fix2", "fix2_call_w")) -> dict:
                 unit = n * m * ns.LLAMA_LAYERS
                 cost, opts = 0.0, [(0.0, 0.0, 0)]
                 for t in range(1, s + 1):
-                    cost += a5_vectors(design, t) * 4 * unit
+                    cost += vectors(design, t) * 4 * unit
                     if cost > na.HBM_BYTES:
                         break
                     opts.append((cost, ns.H32 * unit * (t if t == s else t - 1), t))
