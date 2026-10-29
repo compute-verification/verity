@@ -64,7 +64,7 @@ def reference(case: Any) -> dict:
 
 def _digest(e: G.Entry) -> str:
     """`G.Entry.digest` through `D.canonical`, the same bytes on ASCII, which also writes an entry past ASCII or with
-    DEL, so a log can hold one anywhere for the check to refuse."""
+    DEL (`wire.canonical` raises on one), so a log can hold one anywhere for the check to refuse."""
     return hashlib.sha512(e.format.encode() + b"\0" + D.canonical(e.to_json()).encode()).hexdigest()
 
 
