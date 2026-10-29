@@ -3,13 +3,13 @@
 # restart. A flag given on the command line overrides its key here. ci owns this file; infra runs drive from it on the control pod.
 
 # the machines train.sh launches drive's Lean checks and its after-landing run on (a machine, or `auto`)
-on = ["vy-nebius-cpu-3", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
+on = ["vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 # ready marks written before this don't count
 marked_after = "2026-10-12T06:00:00Z"
 # land a prefix whose Lean check passed by committing the lock records it regenerated on top
 regenerate_locks = true
 # ready PRs to put at the bottom of `next`, in this order, ahead of members that keep their place (a fix `main` needs)
-first = []
+first = [4888, 6498, 6547, 6552, 6508, 6546, 5915, 5334, 6248, 6037, 6241]
 # scripts each PR passes, run from `main` as `python3 PATH MAIN TOP --json`: TOP is its head at the ready mark's preflight, and
 # its merge onto `next` at the sync, which leaves out what they refuse (a Markdown file over its cap); the
 # vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source. A sync's TOP holds every PR
@@ -26,20 +26,21 @@ land = "review"
 # step on the merge gate (not circuit-check, `gate = false` in ci.toml), and a red step's culprit is reverted on `checked`,
 # never on `main`. "main" lands on `main` and checks it after. Only drive's App pushes `checked`
 land_into = "checked"
-# the after-landing run reuses no suite, Lean or step pass (`check.py --no-cache`), until a suite's reuse is per test; circuit-check
-# alone reuses its per-target passes (`--circuit-cache`), each keyed by everything that target read, since a cold `--all` (~4 h,
-# ten SHA-512 Definitions at 141-167 GB one at a time) outlasts the after-landing runs. The nightly `audit-main`
-# (`--no-cache`, no circuit cache) still checks every part cold, so it checks that reuse daily
-after_landing_no_cache = true
+# the after-landing run reuses every pass whose declared inputs are unchanged, as any check does: it gates `main`, and a cold
+# run (pytest 74 min, lean-audit 73 min, circuit-check hours) holds every landing; circuit-check reuses its per-target passes
+# either way. The nightly `audit-main` (`--no-cache`, no circuit cache) checks every part cold, so it checks that reuse daily
+after_landing_no_cache = false
 # after_landing_shards = N runs the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`train.sh
 # --deferred STEPS --shard K/N`), so it takes about its longest shard; 1 (absent) is one run of every step
+after_landing_shards = 3
 # the most review-landing Lean checks running at once: one, and those stacked above it on `next` for Lean changes it doesn't hold
-max_lean_checks = 5
+max_lean_checks = 10
 # a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members on `next` never move)
-nonlean_first = true
+nonlean_first = false
 # while no Lean check of `next` runs, members with a land verdict go below those waiting for one, so a member waiting for its
 # review holds only itself (nor below a running Lean check's commit); a held member goes to `next`'s top every sync, this on or not
-reviewed_first = true
+reviewed_first = false
+# off, as nonlean_first: next lands as one checked commit, and a reorder rebuilds what its check covers
 # days an open PR not marked ready at its head stays idle (its head commit, and its ready, eject and review labels there) before
 # it is stale: `research queue status` says so and drive rings its owner once a day (`research.stale`); 0 is off
 stale_days = 3
