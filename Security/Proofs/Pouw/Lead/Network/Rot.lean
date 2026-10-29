@@ -1,3 +1,4 @@
+import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Fintype.BigOperators
@@ -5,14 +6,15 @@ import Mathlib.Data.Fintype.Pi
 import Mathlib.Basic.Real.Basic
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.NormNum
+import Proofs.Pouw.Lead.Network.Defs
 
 /-!
 # What one exchanged bit carries under `-rot`'s weights
 
 The lead's coin lanes on a 64-row tile are three odd coins in `±127` a (tile, step, column), which a k32 word reads
 through the public weights `A' = (127, 1, 1)` on the tile's even rows and `(1, 127, 1)` on its odd rows (`foldEven`,
-`foldOdd`). A step has at most 28 data lanes (21 on step 1), and at a tile of 64 rows every step carries the three
-lanes.
+`foldOdd`). A step has at most 28 data lanes (20 on step 1), and at a tile of 64 rows every step carries the three
+lanes (`Cells`).
 
 * `rot_fold_injective`, `rotRead_injective`: the two folds determine the three coins, so a tile with rows of both
   classes reads all 21 of its coin bits a step and column (`card_triple`: `2 ^ 21` coin triples). One fold alone
@@ -215,11 +217,8 @@ theorem rot_cells_macs_le {ι : Type*} (s : Finset ι) (c : ι → Cell) (h : �
 exchanged and `macs` MACs a token. -/
 noncomputable def netShare (nmax Wmac E macs : ℝ) : ℝ := nmax * Wmac * E / macs
 
-/-- Llama-3.2-1B's linears' MACs a token: 16 layers of `2048 × 3072`, `2048 × 2048`, `2048 × 16384` and
-`8192 × 2048`. -/
-def leadMacs : ℕ := 16 * (2048 * 3072 + 2048 * 2048 + 2048 * 16384 + 8192 * 2048)
-
-theorem leadMacs_eq : leadMacs = 973078528 := by norm_num [leadMacs]
+theorem leadMacs_eq : leadMacs = 973078528 := by
+  norm_num [leadMacs, llamaShapes, Fin.sum_univ_four]
 
 theorem netShare_mono {nmax nmax' Wmac Wmac' E macs : ℝ} (hn : 0 ≤ nmax) (hn' : nmax ≤ nmax') (hW : 0 ≤ Wmac)
     (hW' : Wmac ≤ Wmac') (hE : 0 ≤ E) (hm : 0 < macs) : netShare nmax Wmac E macs ≤ netShare nmax' Wmac' E macs := by
