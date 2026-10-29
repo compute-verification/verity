@@ -2,7 +2,8 @@
 // whose coordinate it computes from a register, one coordinate a tile, as an adaptive prover's would come from the
 // coins. Each role alone (`sa_*`: its words an SM-clock, so 4096 / (rate x words) units a word) and beside the honest
 // kernel (`hs_*`: ../opcode_probe/probes/honest.cuh's 16 IMMA warps, the role an until loop, as side.cu), so a copy
-// unit that works off the SM's issue slots shows what it adds beside saturated MMAs.
+// unit that works off the SM's issue slots shows what it adds beside honest's MMAs and folds. `hs_*z` sleeps
+// (nanosleep) after each pass of its poll, so the poll's own issue slots leave honest's and only the copies' cost stays.
 //   bulk (one lane of one warp; the source pool 8 MB, L2-resident, or 256 MB for _hbm):
 //     g2s<B>    cp.async.bulk global -> shared (TMA, UBLKCP), B-byte tiles, one mbarrier a trip
 //     s2g<B>    cp.async.bulk shared -> global, bulk_group, at most 5 trips in flight
@@ -213,8 +214,9 @@ __device__ __forceinline__ void lane_alone(const OpArgs& a) {
   OP_SINK(l.acc)
 }
 
-// the honest warps, and the bulk role in warp HW (one lane) or the lane role in warps HW.. (SIDE false: idle)
-template <int K, int B, bool SIDE>
+// the honest warps, and the bulk role in warp HW (one lane) or the lane role in warps HW.. (SIDE false: idle); NS > 0:
+// the bulk role sleeps NS ns after each pass
+template <int K, int B, bool SIDE, int NS = 0>
 __device__ __forceinline__ void beside(const OpArgs& a) {
   extern __shared__ __align__(128) unsigned char sb[];
   const int w = threadIdx.x >> 5;
@@ -230,7 +232,10 @@ __device__ __forceinline__ void beside(const OpArgs& a) {
       OP_DONE
     } else if (SIDE && w == HW && l0) {
 #pragma unroll 1
-      while (!*(volatile int*)&op_stop_) b.pass(~0u);
+      while (!*(volatile int*)&op_stop_) {
+        b.pass(~0u);
+        if constexpr (NS > 0) __nanosleep(NS);
+      }
       atomicAdd(&op_trips_, b.done);
     }
     OP_END_STOP
@@ -259,6 +264,8 @@ __device__ __forceinline__ void beside(const OpArgs& a) {
   extern "C" __global__ void CL __launch_bounds__(32, 1) sa_##nm(OpArgs a) { bulk_alone<K, B>(a); }
 #define HS_BULK(nm, K, B) \
   extern "C" __global__ void __launch_bounds__(TB_BULK, 1) hs_##nm(OpArgs a) { beside<K, B, true>(a); }
+#define HS_BULKZ(nm, K, B, NS) \
+  extern "C" __global__ void __launch_bounds__(TB_BULK, 1) hs_##nm(OpArgs a) { beside<K, B, true, NS>(a); }
 #define SA_LANE(nm, K) \
   extern "C" __global__ void __launch_bounds__(SW * 32, 1) sa_##nm(OpArgs a) { lane_alone<K>(a); }
 #define HS_LANE(nm, K) \
@@ -277,6 +284,10 @@ HS_BULK(g2s1k, G2S, 1024)
 HS_BULK(g2s4k, G2S, 4096)
 HS_BULK(g2s4kh, G2S_HBM, 4096)
 HS_BULK(s2g4k, S2G, 4096)
+HS_BULK(g2s16k, G2S, 16384)
+HS_BULKZ(g2s4kz, G2S, 4096, 256)
+HS_BULKZ(g2s16kz, G2S, 16384, 256)
+HS_BULKZ(s2g4kz, S2G, 4096, 256)
 SA_LANE(ldgsts4, LDGSTS4)
 SA_LANE(ldgsts16, LDGSTS16)
 SA_LANE(ldssts4, LDSSTS4)
@@ -324,6 +335,10 @@ static const OpProbe PROBES[] = {
     P_HS_BULK(g2s4k, 8, 1024),
     P_HS_BULK(g2s4kh, 8, 1024),
     P_HS_BULK(s2g4k, 8, 1024),
+    P_HS_BULK(g2s16k, 2, 4096),
+    P_HS_BULK(g2s4kz, 8, 1024),
+    P_HS_BULK(g2s16kz, 2, 4096),
+    P_HS_BULK(s2g4kz, 8, 1024),
     P_SA_LANE(ldgsts4, "LDGSTS*=8", 32, 1024),
     P_SA_LANE(ldgsts16, "LDGSTS*=8", 128, 512),
     P_SA_LANE(ldssts4, "LDS*=8,STS*=8", 32, 2048),

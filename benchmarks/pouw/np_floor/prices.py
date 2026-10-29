@@ -3,7 +3,8 @@ floor, 32 a register, is 128 registers an SM-clock).
 
 copy       a role's words an SM-clock (probe.py's rate x words a warp instruction), 4096 / that a word, and its share of
            the floor's 128 words an SM-clock; beside honest (hs_*), the same for the role's words while the honest warps
-           ran, and the honest IMMA's rate as a share of its rate beside idle warps (honest_b, honest_l).
+           ran, the honest IMMA's rate as a share of its rate beside idle warps (honest_b, honest_l), and the SM time
+           honest lost a word placed: (1 - kept) x 4096 / words an SM-clock.
 decisions  4096 x the median block's cycles / (iters x warps x decisions a trip) units a warp decision, its coin bits
            (bits a decision: one for the two-way forms, 4 for BRX16, 8 for a lookup), units a bit read by the warp and a
            lane-bit for the forms whose lanes read their own coins; the overhead is over the arms alone (`arm`,
@@ -34,6 +35,7 @@ DECIDE = {
     "lu": (4, 1, False, "larm"), "lw": (4, 1, False, "larm"), "ld": (4, 1, True, "larm"), "larm": (4, 1, False, None),
 }
 HONEST = {"hs_g2s1k": "honest_b", "hs_g2s4k": "honest_b", "hs_g2s4kh": "honest_b", "hs_s2g4k": "honest_b",
+          "hs_g2s16k": "honest_b", "hs_g2s4kz": "honest_b", "hs_g2s16kz": "honest_b", "hs_s2g4kz": "honest_b",
           "hs_ldgsts4": "honest_l", "hs_ldgsts16": "honest_l", "hs_ldssts4": "honest_l", "hs_ldssts16": "honest_l"}
 
 
@@ -80,7 +82,9 @@ def main(out: Path) -> None:
             rec.update(kind="copy", words_an_sm_clock=round(w, 3), units_a_word=round(SM_CLOCK / w, 1),
                        share_of_floor=round(w / FLOOR_WORDS, 5))
             if name in HONEST and HONEST[name] in rows:
-                rec["honest_kept"] = round(imma(r) / rows[HONEST[name]]["rate"], 4)
+                kept = imma(r) / rows[HONEST[name]]["rate"]
+                rec["honest_kept"] = round(kept, 4)
+                rec["lost_units_a_word"] = round((1 - kept) * SM_CLOCK / w, 1)
                 rec["stop_gap"] = r.get("stop_gap")
         else:
             rec.update(kind="honest", imma_rate=round(r["rate"], 4))
