@@ -17,6 +17,8 @@
   (each leaf's prefix through the domain id, each level's node midstate, the domain id), the per-item work split into
   data and data-independent, and what an exact repeat of a leaf's value shares: its blocks' schedules, ASICBoost's reuse
   across chaining values.
+- **Honest against DistinctOn** (`distinct_writes`): the minimal kernel's 3,534 registers, simulated, on a random grid:
+  pairwise distinct, none constant, none an input half plus a constant, so they witness ShaWrites' R for it.
 - **The bound ladder** (rungs B0–B3): what each rank's premise proves about any program's registers written a compression, and the
   check its fan-in rungs read: every output register of the compression depends on every input register (a witness
   pair each, from a stdlib SHA-512 held to hashlib).
@@ -356,6 +358,64 @@ def dependence(seed: int = 1, max_trials: int = 8) -> dict:
     return {"pairs": 16 * 48, "witnessed": 16 * 48 - len(need), "trials": trials, "missing": sorted(need)}
 
 
+def honest_writes(cv: list[int], block: list[int]) -> tuple[list[int], list[int]]:
+    """The 32-bit registers sha512_min.cuh's compression (a variable chaining value and block) writes, in its dataflow:
+    each 64-bit rotation's two SHF windows, each three-way XOR's or Ch's or Maj's two LOP3 halves, and each add's partial
+    sums, three terms an IADD3 pair (K_t in the round's first). Returns the registers and the output words."""
+    regs: list[int] = []
+
+    def put(x: int) -> int:
+        regs.extend((x & 0xFFFFFFFF, x >> 32))
+        return x
+
+    def xor3(x: int, rots: tuple[int, int, int], shift: int = 0) -> int:
+        parts = [put(_rotr(x, n)) if n & 31 else _rotr(x, n) for n in rots]
+        if shift:
+            parts[2] = put(x >> shift)
+        return put(parts[0] ^ parts[1] ^ parts[2])
+
+    def add(*terms: int) -> int:
+        acc = terms[0]
+        for i in range(1, len(terms), 2):
+            acc = put(sum(terms[i:i + 2], acc) & M64)
+        return acc
+
+    w = list(block)
+    for t in range(16, ROUNDS):
+        w.append(add(xor3(w[t - 2], (19, 61, 0), 6), w[t - 7], xor3(w[t - 15], (1, 8, 0), 7), w[t - 16]))
+    a, b, c, d, e, f, g, h = cv
+    for t in range(ROUNDS):
+        u = add(h, w[t], SHA_K[t])
+        s1, ch = xor3(e, (14, 18, 41)), put(e & f ^ ~e & g & M64)
+        t1 = add(u, s1, ch)
+        s0, mj = xor3(a, (28, 34, 39)), put(a & b ^ a & c ^ b & c)
+        if t == ROUNDS - 1:
+            out = [add(t1, s0, mj, cv[0]), add(cv[1], a), add(cv[2], b), add(cv[3], c), add(t1, d, cv[4]),
+                   add(cv[5], e), add(cv[6], f), add(cv[7], g)]
+        else:
+            h, g, f, e, d, c, b, a = g, f, e, add(d, t1), c, b, a, add(t1, s0, mj)
+    return regs, out
+
+
+def distinct_writes(samples: int = 6, seed: int = 2) -> dict:
+    """Checks honest's registers against ShaWrites' DistinctOn on a random grid of `samples` inputs: each register is a
+    function on the grid (its values there), and none may equal another, a constant, an input half, or an input half
+    plus a constant (a carrier). The outputs are held to `sha512_compress`."""
+    import random
+    rng = random.Random(seed)
+    runs = []
+    for _ in range(samples):
+        words = [rng.getrandbits(64) for _ in range(24)]
+        regs, out = honest_writes(words[:8], words[8:])
+        assert out == sha512_compress(words[:8], words[8:])
+        runs.append((words, regs))
+    fns = list(zip(*(r for _, r in runs)))
+    inputs = list(zip(*([x >> 32 * s & 0xFFFFFFFF for x in ws for s in (0, 1)] for ws, _ in runs)))
+    carriers = sum(len({(v - x) & 0xFFFFFFFF for v, x in zip(f, i)}) == 1 for f in fns for i in inputs)
+    return {"registers": len(fns), "samples": samples, "distinct": len(set(fns)),
+            "constant": sum(len(set(f)) == 1 for f in fns), "carriers_of_inputs": carriers}
+
+
 def ladder(honest: int) -> list[dict]:
     """Each rung: the premise, its rank, and the registers any program writes a compression under it."""
     inputs, outputs = 2 * (16 + 8), 16
@@ -448,6 +508,12 @@ def main() -> None:
     for row in out["l1"][-1]["rows"]:
         print(f"  - {row['what']}: {row['n']} × {row['registers']} ({row['compressions']} compressions, "
               f"{row['per_item']} per item; {', '.join(f'{LEVELS[k]} {v}' for k, v in row['by_level'].items())})")
+
+    dw = distinct_writes()
+    out["distinct_writes"] = dw
+    print(f"## Honest's registers against ShaWrites' DistinctOn (checked on {dw['samples']} random inputs): "
+          f"{dw['registers']} written, {dw['distinct']} distinct, {dw['constant']} constant, "
+          f"{dw['carriers_of_inputs']} an input half plus a constant")
 
     dep = dependence()
     out["dependence"] = dep
