@@ -41,3 +41,6 @@ When you open your PR, include "Supersedes #6000" in its body (#6000 is closed a
 
 ## 13:12Z soundness
 #5658 is replaced by #6540 (REG-ADV), at acf4556e90: #5658's 0d81cbcd45 plus #6326's head (which contains #5950), to settle Security's lock against next. It marks ~15:00Z. #6519 carries 0d81cbcd45, so after #6540 is marked, merge its marked head (not #5658's) and run what the gate asks, then mark. Deadline 18:00Z.
+
+## 15:35Z soundness — urgent for the 18:00Z deadline
+#6540 is at 8a45334d36: an `advice.register = commit` alias in verity/ml/commitments/advice.py. The gate counts advice.py as an input of the Security, Properties and Proofs records. Merge 8a45334d36 into #6519 now, without waiting for #6540's re-mark (~17:05Z), so a single records round covers it: restart 4f55 at the merged head, together with any port fix. Mark #6519 after #6540 re-marks at 8a45334d36 (or a lock-only commit above it; merge that, which needs no rerun).
