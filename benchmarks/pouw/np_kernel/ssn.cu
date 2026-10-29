@@ -638,6 +638,14 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   // beside's cap on a row hash launch's blocks (HASH_CAP; 0 none): the committer's max_blocks, which leaves SM slots to the
   // GEMM stream's export
   const u64 hash_cap = getenv("HASH_CAP") ? strtoull(getenv("HASH_CAP"), nullptr, 10) : 0;
+  // root(A_j), which each call's seed reads: the hasher's leaves over A_j's M·K bytes (the tree above them untimed), on its
+  // own Hasher so it never shares buffers with the words' hash streams. ROOT_A=1 puts it in the forward, ahead of the coins.
+  const int root_a = getenv("ROOT_A") ? atoi(getenv("ROOT_A")) : 0;
+  std::vector<Hasher> hra(rbs.size());
+  for (size_t h = 0; h < rbs.size(); h++) hra[h].init((size_t)M * 8192, rbs[h]);
+  auto hash_a = [&](const LinDev& d, int h, cudaStream_t st) {
+    hra[h].run((const uint4*)d.A0, (long long)M * d.K / 65536, 65536, st);
+  };
   auto hname = [&](int h) { return h < 0 ? std::string("none") : rbs[h] ? "rows" + std::to_string(rbs[h]) : std::string("rowseg"); };
   int* dout;
   CK(cudaMalloc(&dout, (size_t)M * 16384 * 4));
@@ -683,6 +691,9 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
          words, (double)M * d.S);
     line("coins_forming", &d, T.ms(std::max(reps, 51), [&] { coins_form(d.msg, d.coins, d.A, M, d.S, 0); }), macs, words,
          (double)M * d.S);
+    for (hi = 0; hi < (int)rbs.size(); hi++)
+      line("root_a_hash", &d, T.ms(std::max(reps, 51), [&] { hash_a(d, hi, 0); }), macs, (double)M * d.K / 4, (double)M * d.K);
+    hi = -1;
   }
   double fwd_words = 0;
   for (const LinDev& d : lins) fwd_words += 16.0 * M * d.n * d.S;
@@ -695,6 +706,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   auto fwd_serial = [&] {
     for (int l = 0; l < 16; l++)
       for (const LinDev& d : lins) {
+        if (root_a) hash_a(d, hi, s1);
         coins_form(d.msg, d.coins, d.A, M, d.S, s1);
         for (int r0 = 0; r0 < M; r0 += d.chunk) {
           const int mc = std::min(d.chunk, M - r0);
@@ -713,6 +725,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     for (int b = 0; b < nbuf; b++) CK(cudaEventRecord(done[b], s2[b]));
     for (int l = 0; l < 16; l++)
       for (const LinDev& d : lins) {
+        if (root_a) hash_a(d, hi, s1);
         coins_form(d.msg, d.coins, d.A, M, d.S, s1);
         for (int r0 = 0; r0 < M; r0 += d.chunk, c++) {
           const int mc = std::min(d.chunk, M - r0), b = c % nbuf;
@@ -730,8 +743,8 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     line("fwd_serial", nullptr, T.ms(reps, fwd_serial, s1), fwd_macs, fwd_words, 0);
     line("fwd_beside", nullptr, T.ms(reps, fwd_beside, s1), fwd_macs, fwd_words, 0);
   }
-  printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d, \"hash_cap\": %llu}\n", f0,
-         sm_mhz(dclk), nbuf, (unsigned long long)hash_cap);
+  printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d, \"hash_cap\": %llu, "
+         "\"root_a_in_forward\": %d}\n", f0, sm_mhz(dclk), nbuf, (unsigned long long)hash_cap, root_a);
   return 0;
 }
 

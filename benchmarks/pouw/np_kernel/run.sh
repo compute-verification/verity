@@ -6,7 +6,7 @@
 #   hash chunk holds), ROWS (0 65536 16384: the hash pass's row bytes, 0 for row-seg), CUDA_HOME (/usr/local/cuda-13.0),
 #   LEASE_MIN (25), CHECK (1; 0 skips the exact check), TIME (1; 0 skips the timings), NOT_AFTER (a UTC time past which
 #   the leased part does no GPU work), CAPS (0: beside's caps on a row hash launch's blocks, each a pass
-#   over MS; time_m<M>_cap<C>.jsonl)
+#   over MS; time_m<M>_cap<C>.jsonl), ROOT_A (0; 1 puts root(A_j)'s leaf hash in the forward ahead of each call's coins)
 set -uo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }

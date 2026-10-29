@@ -48,13 +48,15 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
             "coins_forming_us": 1e3 * g("coins_forming")["ms"],
             "hash": {h: {"ms": r["ms"], "units_per_byte": r["units_per_byte"], "gb_per_s": 4 * words / (r["ms"] * 1e6)}
                      for h in hashers if (r := g("hash_pass", h))},
+            "root_a_us": {h: 1e3 * r["ms"] for h in hashers if (r := g("root_a_hash", h))},
         }
     fwd = {"plain_gemm": by.get(("fwd_plain_gemm", "all", "none"))}
     for h in hashers:
         for sched in ("serial", "beside"):
             if (r := by.get((f"fwd_{sched}", "all", h))):
                 fwd[f"{sched}/{h}"] = r
-    out = {"M": rows[0]["M"], "mhz": rows[0]["mhz"], "linears": lin,
+    clock = next((r for r in rows if r["what"] == "clock"), {})
+    out = {"M": rows[0]["M"], "mhz": rows[0]["mhz"], "root_a_in_forward": clock.get("root_a_in_forward", 0), "linears": lin,
            "forward": {k: {"ms": r["ms"], "units": r["units"], "units_per_stock_mac": r["units_per_stock_mac"],
                            "units_per_word": r["units_per_word"], "words": r["words"], "stock_macs": r["stock_macs"]}
                        for k, r in fwd.items() if r}}
@@ -100,6 +102,11 @@ def main() -> None:
             print(f"| {n} | {x['S']} | {x['BN']} | {x['plain_ms']:.4f} | {x['ssn_ms']:.4f} | {x['alpha_time']:.3f} / "
                   f"{x['alpha_layout']:.3f} | {x['export_ms']:.3f} | {x['export_units_per_word_over_ssn']:.0f} | "
                   f"{x['coins_us']:.1f} | {x['forming_us']:.1f} | {x['coins_forming_us']:.1f} | {hs} |")
+        for n, x in r["linears"].items():
+            if x["root_a_us"]:
+                print(f"- root(A_j) leaves, {n}: " + "; ".join(f"{h} {v:.1f} µs" for h, v in x["root_a_us"].items()))
+        if r["root_a_in_forward"]:
+            print("- the forwards below hash A_j ahead of each call's coins")
         for w, x in r["forward"].items():
             print(f"- forward {w}: {x['ms']:.3f} ms, {x['units_per_stock_mac']:.3f} units a stock MAC")
         for k, v in r.get("t2", {}).items():
