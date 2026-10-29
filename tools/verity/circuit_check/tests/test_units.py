@@ -536,6 +536,35 @@ def test_a_pin_added_after_the_records_keeps_its_target_from_them(tmp_path):
     assert out["values"] == _fresh(root, harness)["values"]
 
 
+@pytest.mark.slow
+def test_bindings_built_apart_keep_a_pinned_target_and_read_no_pin(tmp_path):
+    """Built apart, each binding's process describes the ids pinned here whatever their size (`targets.pinned`, handed down by
+    `units.built_apart`): with `targets.MAX_GATES` at 2 gates, the pinned SynK at K = 5 is checked from what SynKBig's process
+    reached, with the values and keys a full build gives and no body built here.  No binding's build reads a pin, so a new pin
+    rebuilds no binding and changes only its own target's key."""
+    from test_cache import _set_pin
+
+    trees = []
+    for name in ("t", "here"):
+        root = _tree(tmp_path / name)
+        (root / "syn/kbig.py").write_text(KBIG.lstrip("\n"))
+        _edit(root, "syn/catalog.py", "BINDINGS = [", KBIG_BINDING + "BINDINGS = [")
+        _bindings(root, *BINDINGS, '(("_kbig_roots",), kbig)')
+        _set_pin(root, "SynK_v1{K=5}", {"and": 1})
+        trees.append(root)
+    root, here = trees
+    forked = FORKED.replace("rep = cli.run(", "TG.MAX_GATES = 2\nrep = cli.run(")
+    whole = _run(here, forked.replace(", jobs=2, isolate=True, fork=True)", ")"))
+    assert whole["values"]["SynK_v1{K=5}"] == [3 + 5 * 0x0105], whole["values"]
+    first = _run(root, forked)
+    assert first["stats"]["units"]["reused"] == 0 and first["here"] == [], (first["stats"]["units"], first["here"])
+    assert first["values"] == whole["values"] and first["keys"] == whole["keys"]
+    _set_pin(root, "SynK_v1{K=2}", {"and": 1})
+    out = _run(root, forked)
+    units = out["stats"]["units"]
+    assert units["rebuilt"] == [] and units["reused"] == first["stats"]["units"]["stored"], units
+    assert out["values"] == whole["values"] and out["hits"] == sorted(set(out["values"]) - {"SynK_v1{K=2}"}), out["hits"]
+
 
 def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_kinds(monkeypatch):
     """`units.call_families` gives `targets.call_families`' Calls: a word Call family made on demand (`Const32[0x..]_v1`) has

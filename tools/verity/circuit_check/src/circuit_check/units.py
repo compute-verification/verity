@@ -425,7 +425,7 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
         side = [u for e in entries if e.units != REGISTERED and not e.root_ids for u in e.units] if CC.tracing() else None
         if side is not None:
             CC.warm()
-        kept, _, grew = built_apart(todo, *apart, described=True, side=side, strict=True)
+        kept, _, grew = built_apart(todo, *apart, described=True, side=side, strict=True, pinned=pinned)
         if log:
             over = sorted(((gb, n) for n, gb in grew.items() if gb > apart[2].get(n, APART_GB)), reverse=True)
             log(f"circuit-check: {len(kept)} of {len(todo)} bindings built apart" + (
@@ -552,12 +552,12 @@ def _from_id(fid: str) -> Any | None:
     return fn if fn.id == fid else None
 
 
-def _reach_one(e: Entry, described: bool = False) -> dict[str, dict]:
+def _reach_one(e: Entry, described: bool = False, pinned: frozenset[str] | None = None) -> dict[str, dict]:
     """``e``'s nodes (`_reach`), each body built here (a model's under its units, as the catalog builds it)."""
     if e.kind == "model":
         with CC.producing(e.units):
             _ = e.roots[0].body
-    nodes, objs = _reach(e.roots, described=described)
+    nodes, objs = _reach(e.roots, described=described, pinned=pinned)
     _by_id(nodes, objs)
     return nodes
 
@@ -575,12 +575,13 @@ def _words(before: set[str]) -> list[list[str]]:
     return out
 
 
-def _child(e: Entry, out: Path, described: bool = False, side: list[str] | None = None, untraced: int = 0) -> None:
+def _child(e: Entry, out: Path, described: bool = False, side: list[str] | None = None, untraced: int = 0,
+           pinned: frozenset[str] | None = None) -> None:
     """In a process forked for ``e``: its nodes or its error to ``out``, and out through `os._exit`, so nothing of the parent's
     (its atexit, its buffers) runs twice.  With ``side`` (traced: the units of the bindings that make no root): what its build
     read (`cache.unit_reads`), its share of the task list's reads (`cache.task_list_reads` of its roots) and what it did that
     the tracer cannot see (`cache.untraced`, past the parent's ``untraced``); and the Boolean Definitions its build registered
-    (`_words`)."""
+    (`_words`).  ``pinned``: the parent's (`targets.pinned`), so the pins are no read of the binding's build."""
     from verity.ml.circuits.defs import REGISTRY
 
     from . import cli
@@ -591,7 +592,7 @@ def _child(e: Entry, out: Path, described: bool = False, side: list[str] | None 
         start = cli._rss_gb()
         before = set(REGISTRY.defs)
         try:
-            got = {"nodes": _reach_one(e, described), "start": start, "words": _words(before)}
+            got = {"nodes": _reach_one(e, described, pinned), "start": start, "words": _words(before)}
             if side is not None:
                 got.update(reads=CC.unit_reads((*e.units, *side) if e.units != REGISTERED else side, e.roots),
                            listed=CC.task_list_reads(e.roots), untraced=CC.untraced()[untraced:])
@@ -610,10 +611,11 @@ APART_GB = 2.0
 
 
 def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), weights: dict[str, float] | None = None, *,
-                described: bool = False, side: list[str] | None = None, strict: bool = False) \
-        -> tuple[list[Entry], list[tuple[str, ...]], dict[str, float]]:
-    """``entries`` (`made_entries`) with each one's nodes (`_reach_one`, ``described`` or not), each binding built in a process
-    forked from this one for it alone: this process builds no body, and each binding's bodies go with its process.  Up to
+                described: bool = False, side: list[str] | None = None, strict: bool = False,
+                pinned: frozenset[str] | None = None) -> tuple[list[Entry], list[tuple[str, ...]], dict[str, float]]:
+    """``entries`` (`made_entries`) with each one's nodes (`_reach_one`, ``described`` or not, with this process's ``pinned``:
+    `_child`), each binding built in a process forked from this one for it alone: this process builds no body, and each
+    binding's bodies go with its process.  Up to
     ``jobs`` at once, the heaviest first, each started only while the ``weights`` (GiB by binding name, `cli.heavy`; `APART_GB`
     unlisted) of those running and its own fit ``budget``, as `cli.run` schedules its targets (`cli.admit`).  A model whose body
     raises, or whose process dies (but with ``strict``), is dropped (its units returned beside) and named in
@@ -648,7 +650,7 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
                         warnings.simplefilter("ignore", DeprecationWarning)    # an xdist worker's idle threads
                         pid = os.fork()
                     if pid == 0:
-                        _child(entries[i], Path(tmp, f"{i}.json"), described, side, untraced)
+                        _child(entries[i], Path(tmp, f"{i}.json"), described, side, untraced, pinned)
                     running[pid] = i
                 queue = [i for i in queue if i not in running.values()]
                 pid, status, usage = os.wait4(-1, 0)
