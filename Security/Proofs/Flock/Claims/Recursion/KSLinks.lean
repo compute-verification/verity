@@ -127,7 +127,8 @@ theorem EL_eval_fst (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO :
     show ((((EO D I DO decO).ext x r₀ (judgedC c)).bind fun ws => RP.ret (some (w, rows x (ws.getD [])))).eval H
         (run H P D.V x ω)).1 =
       some (w, rows x ((((EO D I DO decO).ext x r₀ (judgedC c)).eval H (run H P D.V x ω)).1.getD []))
-    rw [(RP.eval_bind H (run H P D.V x ω) _ _).1] <;> rfl
+    rw [(RP.eval_bind H (run H P D.V x ω) _ _).1]
+    rfl
 
 /-- **The union bound**: the linked extractor fails where `E*` fails at `R`, or where it recovers a witness in `R` whose
 link clause fails, which, where the links bind, `B_L` turns into a collision. -/
@@ -197,7 +198,8 @@ theorem prBL_of_E_none (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (D
   refine (Pr_congr fun (s : Ω × (Fin (D.V.k x) → Coin) × (E H D I DO decO).C x) => iff_false_intro ?_).trans Pr_false
   rintro ⟨u, v, h, -⟩
   have he : ((EL H D I DO decO rows).eval H P x s.1 s.2.1 s.2.2).1 = none := by
-    rw [EL_eval_fst, hE] <;> rfl
+    rw [EL_eval_fst, hE]
+    rfl
   change (match ((EL H D I DO decO rows).eval H P x s.1 s.2.1 s.2.2).1 with
     | some p => findColl ((linkInputs H D I DO decO ins P x s.1 s.2.1 s.2.2 p.1 p.2).map fun u => (u, H u))
     | none => none) = some (u, v) at h

@@ -100,7 +100,10 @@ theorem recursiveKSLink_nontrivial {Tb : Type} (Q : Msg → Claims.Flock.Wit →
   intro decI _ decO _ y hy Ω _ _ P
   change y = x at hy
   subst hy
-  exact Claims.Recursion.prBL_of_E_none _ _ _ _ _ _ _ P y fun ω r₀ c =>
-    Claims.Recursion.E_none_of_vstar_nil _ _ _ _ decO y (fun _ => rfl) hS (RecDeploy.zkRec_parse_nil _) P ω r₀ c
+  refine Claims.Recursion.prBL_of_E_none _ _ _ _ _ _ _ P y fun ω r₀ c => ?_
+  refine Claims.Recursion.E_none_of_vstar_nil _ _ _ _ decO y ?_ ?_ ?_ P ω r₀ c
+  · exact fun _ => rfl
+  · exact hP.2.1
+  · exact RecDeploy.zkRec_parse_nil _
 
 end Flock.Guarantees
