@@ -17,6 +17,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.numerics.ir_rows import f64_statics
 from verity.ml.definitions.numerics.kernel_registry import Declined, prim_static
 
@@ -74,13 +75,14 @@ EVALUATORS = {
                                "scale ex2, div.full and min.xorsign.abs to e4m3) -> CHUNKS*QG e4m3 bytes, CHUNKS f32 scales",
 }
 
+_MHC_IDS = EVIDENCE["dsv4_mhc_capture"]
 _MHC_PROVENANCE = {
     "property": "dsv4_mhc_capture (verity-vllm/dsv4-mhc-capture/v1), tests/properties/dsv4_mhc_capture_gpu.py",
-    "run": "r20261013-205619-36e8",
-    "art": "art:b5b410ee8690cc67d2bb638073b2528ef4d66b12a76d12949efc7f8f41983cd8",
-    "step_fit": "r20261013-115825-580e (the probe that fitted HopperTf32WgmmaDot8_v1's k8 step alone)",
+    "run": _MHC_IDS["run"],
+    "art": _MHC_IDS["art"],
+    "step_fit": f"{EVIDENCE['hopper_tf32_k8_step_probe']['run']} (the probe that fitted HopperTf32WgmmaDot8_v1's k8 step alone)",
     "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80, DeepGEMM on (VLLM_USE_DEEP_GEMM=1, vLLM's default)",
-    "captured_utc": "2026-10-13",
+    "captured_utc": _MHC_IDS["captured_utc"],
     "cases": "the fused post + pre at 1, 2, 7, 8, 9, 15 and 16 tokens; the TF32 post + pre at 17, 64, 65, 128 and 129 (MhcPost_v1 "
              "among its pieces); the layer-0 broadcast at 1, 16, 64 and 65 with every residual_out copy; hc_head at 1, 7, 16, 64 and 129",
     "tests": ["tests/program/test_mhc.py (every mHC word Definition against mhc_twin, word for word)",
@@ -89,12 +91,13 @@ _MHC_PROVENANCE = {
     "definitions": "verity/ml/definitions/registry/mhc.py (the reference; the twin is checked against it, never the other way round)",
 }
 
+_COMPRESSOR_IDS = EVIDENCE["dsv4_compressor_capture"]
 _COMPRESSOR_PROVENANCE = {
     "property": "dsv4_compressor_capture (verity-vllm/dsv4-compressor-capture/v1), tests/properties/dsv4_compressor_capture_gpu.py",
-    "run": "r20261013-211655-2a70",
-    "art": "art:914dd281ad207ce67db3affd9378d3fa2088a27e00508046ab9f9dce09922048",
+    "run": _COMPRESSOR_IDS["run"],
+    "art": _COMPRESSOR_IDS["art"],
     "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80, nvidia-cutlass-dsl 4.6.2",
-    "captured_utc": "2026-10-13",
+    "captured_utc": _COMPRESSOR_IDS["captured_utc"],
     "cases": "a ratio-4 layer (state width 1024, the 8-row window) and a ratio-128 layer (W 8, R 16) into fp8_ds_mla caches: every "
              "byte of every compressed cache row",
     "tests": ["tests/program/test_kernel_self_check.py (dsv4-compressor-twin and each row kernel against its Definition)",
@@ -102,12 +105,13 @@ _COMPRESSOR_PROVENANCE = {
     "definitions": "verity/ml/definitions/registry/dsv4_compressor.py (the reference; the twin is checked against it, never the other way round)",
 }
 
+_FLASHMLA_IDS = EVIDENCE["dsv4_flashmla_capture"]
 _FLASHMLA_PROVENANCE = {
     "property": "dsv4_flashmla_capture (verity-vllm/dsv4-flashmla-capture/v1), tests/properties/dsv4_flashmla_capture_gpu.py",
-    "run": "r20261013-115825-52cf",
-    "art": "art:b937e7c8f60098ab98711b04f2180fe1c70b179aba05dacd3fd5dfb50cb50974",
+    "run": _FLASHMLA_IDS["run"],
+    "art": _FLASHMLA_IDS["art"],
     "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80 vendoring FlashMLA 6bc49418",
-    "captured_utc": "2026-10-13",
+    "captured_utc": _FLASHMLA_IDS["captured_utc"],
     "cases": "decode swa, c4, c128, lone, batch and edge at the token's SPLITS; every gathered workspace row; the prefill cases at "
              "the token's NP (16 heads padded to 64, the 128-token window, the sink)",
     "tests": ["tests/program/test_flashmla.py, tests/program/test_flashmla_prefill.py (the twins against registry.flashmla and "
@@ -118,12 +122,13 @@ _FLASHMLA_PROVENANCE = {
                    "never the other way round)",
 }
 
+_INSERT_IDS = EVIDENCE["dsv4_qnorm_insert_capture"]
 _INSERT_PROVENANCE = {
     "property": "dsv4_qnorm_insert_capture (verity-vllm/dsv4-qnorm-insert-capture/v1), tests/properties/dsv4_qnorm_insert_capture_gpu.py",
-    "run": "r20261013-205619-f8bf",
-    "art": "art:b460c496817d865da135f44c882eae879f27a82cc5e59ae864ab4a4e66388819",
+    "run": _INSERT_IDS["run"],
+    "art": _INSERT_IDS["art"],
     "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80",
-    "captured_utc": "2026-10-13",
+    "captured_utc": _INSERT_IDS["captured_utc"],
     "cases": "every word of the q the fused q-norm / RoPE / KV-quant insert returns and every byte it writes to the fp8_ds_mla cache "
              "at 16 query heads of 512 padded to 64",
     "tests": ["tests/program/test_dsv4_qnorm_insert.py (the twin against registry.dsv4_qnorm_insert)",
@@ -133,15 +138,16 @@ _INSERT_PROVENANCE = {
                    "way round)",
 }
 
+_MOE_IDS = EVIDENCE["dsv4_moe_capture"]
 _MOE_PROVENANCE = {
     "property": "dsv4_moe_capture (verity-vllm/dsv4-moe-capture/v1), tests/properties/dsv4_moe_capture_gpu.py",
-    "run": "r20261013-205619-5c39",
-    "run_record": "art:f3edad8b2c91931e15028a0ba468b894452223415e86a3f16583d6430dc0cf50",
+    "run": _MOE_IDS["run"],
+    "run_record": _MOE_IDS["run_record"],
     "art": None,
     "gap": "the capture ran with VLLM_BATCH_INVARIANT=1, where vLLM's default is 0, so the served row's publish job names "
            "dsv4_moe_capture a gap and cites no art of it; there is none at the defaults yet",
-    "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80, the harness at a9be5ce66",
-    "captured_utc": "2026-10-13",
+    "device": f"cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80, the harness at {_MOE_IDS['harness']}",
+    "captured_utc": _MOE_IDS["captured_utc"],
     "cases": "8,192 _dsv4_topk_kernel rows and 8,192 dsv4HashTopkSoftplusSqrt rows at E=384, SCALE=2.5 drawn to the routers' edges; "
              "act_and_mul_kernel with HAS_CLAMP at LIMIT=10, vectorised at I=384 (7,510 rows) and scalar at I=9 (1,024); each "
              "launch run twice, bit-exact against the twins, and the Programs evaluated on every row (--check)",
@@ -152,24 +158,25 @@ _MOE_PROVENANCE = {
                    "round)",
 }
 
+_Q_NORM_IDS = EVIDENCE["dsv4_q_norm_commit"]
 _BLOCK_NORM_PROVENANCE = {
     "property": None,
-    "run": "r20261021-092814-0b1c",
+    "run": _Q_NORM_IDS["run"],
     "art": None,
     "device": "cc 9.0, the eight devices of the row's attempt-3 Commit (the run above), vLLM d9105ea80, Triton 3.7.1",
-    "captured_utc": "2026-10-21",
+    "captured_utc": _Q_NORM_IDS["captured_utc"],
     "cases": "the q norm (N 1536 of a 2048 block on 8 warps, eps 1e-6): 1,230 committed rows (308 distinct) on 8 ranks, read by "
-             "r20261021-180952-300c (out/rows.npz) from the Commit's bundles and the checkpoint's q_norm weights, every committed "
+             f"{_Q_NORM_IDS['rows']} (out/rows.npz) from the Commit's bundles and the checkpoint's q_norm weights, every committed "
              "output the Definition's; eps + DivFullScaleA(sum, N) * DivFullRcp(N) in two roundings misses 5 of the 308 by 1-4 "
              "bf16 words, which tests/properties/fixtures/dsv4_q_norm_commit_20261021.json holds with 4 controls",
-    "sass": "r20261021-181759-65f9: the served kernel's cc 9.0 SASS (Triton 3.7.1, 8 warps at BLOCK 2048) is MUFU.RCP of the scaled "
-            "SIZE, FFMA rcp, scaled sum, eps, then MUFU.RSQ",
+    "sass": f"{_Q_NORM_IDS['sass']}: the served kernel's cc 9.0 SASS (Triton 3.7.1, 8 warps at BLOCK 2048) is MUFU.RCP of the "
+            "scaled SIZE, FFMA rcp, scaled sum, eps, then MUFU.RSQ",
     "gap": "no probe launch of _fused_q_kv_rmsnorm_kernel: the reduction tree is the PTX's, pinned on the device only by committed "
            "rows; the kv norm (N 512, a power of two, so either epilogue) only by the re-judge's sampled kv rows (306 a rank, all "
-           "equal, r20261021-171352-1d9c and r20261021-171402-5673)",
+           f"equal, {_Q_NORM_IDS['kv_rows'][0]} and {_Q_NORM_IDS['kv_rows'][1]})",
     "model": "tests/program/test_dsa_norm.py::test_block_definition_matches_the_ptx_model (the Definition against a model of that "
              "PTX and SASS at the served (N, BLOCK, WARPS) = (1536, 2048, 8) and (512, 2048, 8), and four other blocks)",
-    "related": "glm53_fused_rmsnorm_capture (art:e98ef16cd853c142ba5f8fa7f82335e8e26d73fcb7bae2ad3e5d2888d8394e74): the same "
+    "related": f"glm53_fused_rmsnorm_capture ({EVIDENCE['glm53_fused_rmsnorm_capture']['art']}): the same "
                "tl.sum lowering at the unmasked four-warp block (DsaRMSNorm_v1, TritonBlockRMSNorm_v1{N, N, 4, EPS}) in GLM-5.3's "
                "_fused_norm_rope_kernel",
     "tests": ["tests/properties/test_dsv4_q_norm_commit.py (the Definition and the row kernel against the committed rows)",
@@ -186,12 +193,13 @@ _INDEXER_TESTS = ["tests/properties/test_dsv4_indexer_capture.py (NumpyOps' step
 _INDEXER_DEFINITIONS = ("verity/ml/definitions/registry/dsv4_indexer.py (the reference; the twins run its bodies and are checked against "
                         "it, never the other way round)")
 
+_INDEXER_IDS = EVIDENCE["dsv4_indexer_capture"]
 _INV_ROPE_PROVENANCE = {
     "property": "dsv4_indexer_capture (verity-vllm/dsv4-indexer-capture/v1), tests/properties/dsv4_indexer_capture_gpu.py",
-    "run": "r20261013-090135-4fbc",
-    "art": "art:87f0fbe8e76cbbc95828f7676225a4e5eefce363f0c9e98cf83bd10602c8488f",
+    "run": _INDEXER_IDS["run"],
+    "art": _INDEXER_IDS["art"],
     "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80",
-    "captured_utc": "2026-10-13",
+    "captured_utc": _INDEXER_IDS["captured_utc"],
     "cases": "inv_rope/served: fused_inv_rope_fp8_quant as deep_gemm_fp8_o_proj calls it, twice, on 16 heads of 512 of a 64-head "
              "FlashMLA output over 510 tokens with special heads and rotary rows: each of the 8,160 (token, head)s' 512 e4m3 bytes "
              "and 4 f32 scales against heads_twin and Dsv4InvRopeQuantHead_v1{4,128,64}, 0 mismatches",
@@ -201,15 +209,15 @@ _INV_ROPE_PROVENANCE = {
 
 _SCORE_PROVENANCE = {
     "property": "dsv4_compressor_capture (verity-vllm/dsv4-compressor-capture/v1), tests/properties/dsv4_compressor_capture_gpu.py",
-    "run": "r20261013-211655-2a70",
-    "art": "art:914dd281ad207ce67db3affd9378d3fa2088a27e00508046ab9f9dce09922048",
+    "run": _COMPRESSOR_IDS["run"],
+    "art": _COMPRESSOR_IDS["art"],
     "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80",
-    "captured_utc": "2026-10-13",
+    "captured_utc": _COMPRESSOR_IDS["captured_utc"],
     "cases": "score/c4 (W 1024, the ratio-4 attention state, the served row's width; 2,308 rows) and score/c128 (W 512; 6,146 "
              "rows): each state row save_partial_states writes, its score half against Dsv4CompressorScore_v1{W} of its score row and "
              "ape[pos % ratio], with zero, infinite and NaN scores, 0 mismatches",
-    "also": {"property": "dsv4_indexer_capture", "run": "r20261013-090135-4fbc",
-             "art": "art:87f0fbe8e76cbbc95828f7676225a4e5eefce363f0c9e98cf83bd10602c8488f",
+    "also": {"property": "dsv4_indexer_capture", "run": _INDEXER_IDS["run"],
+             "art": _INDEXER_IDS["art"],
              "cases": "score/served (W 256, the indexer's state; 4,868 rows): each score half against score_twin and the Definition, "
                       "0 mismatches"},
     "tests": _INDEXER_TESTS,

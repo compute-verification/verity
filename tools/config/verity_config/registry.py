@@ -1,4 +1,5 @@
-"""Canonical GPU and machine names; naming systems remain distinct fields."""
+"""Canonical GPU names; naming systems remain distinct fields.  A card's figures (memory, bandwidth, SMs, clocks) are
+the card files', not this registry's."""
 
 from __future__ import annotations
 
@@ -19,8 +20,6 @@ class Gpu:
     nebius_platform: str
     nebius_preset: str
     runpod_type_id: str
-    memory_bytes: int
-    spec_bandwidth_bytes_per_second: int
     count_per_node: int
 
 
@@ -30,24 +29,7 @@ class GpuRegistry:
     gpu: tuple[Gpu, ...]
 
 
-@dataclass(frozen=True)
-class Machine:
-    id: str
-    research_name: str
-    provider: str
-    platform: str
-    preset: str
-    gpu_id: str | None = None
-    gpu_count: int = 0
-
-
-@dataclass(frozen=True)
-class MachineRegistry:
-    schema: str
-    machine: tuple[Machine, ...]
-
-
-def _unique(items: tuple[Gpu, ...] | tuple[Machine, ...], kind: str) -> None:
+def _unique(items: tuple[Gpu, ...], kind: str) -> None:
     ids = [item.id for item in items]
     if len(ids) != len(set(ids)):
         raise ConfigError(f"{kind} registry has duplicate ids")
@@ -61,15 +43,3 @@ def gpus(path: str | Path = REGISTRY / "gpus.toml") -> dict[str, Gpu]:
     _unique(doc.gpu, "GPU")
     return {gpu.id: gpu for gpu in doc.gpu}
 
-
-@cache
-def machines(path: str | Path = REGISTRY / "machines.toml") -> dict[str, Machine]:
-    doc = load(path, MachineRegistry)
-    if doc.schema != "verity-config/machines/v0":
-        raise ConfigError(f"{path}: unknown machine registry schema {doc.schema!r}")
-    _unique(doc.machine, "machine")
-    known = gpus()
-    bad = sorted({machine.gpu_id for machine in doc.machine if machine.gpu_id is not None} - set(known))
-    if bad:
-        raise ConfigError(f"{path}: machines name unknown GPU ids: {bad}")
-    return {machine.id: machine for machine in doc.machine}

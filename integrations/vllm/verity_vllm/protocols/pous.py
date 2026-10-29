@@ -10,7 +10,7 @@ with the memory challenger a party of its own on the challenger host (`verity.co
 * **Commit** (`commit_weights`, the composition's first phase, model untouched): ``setup.commit(params, W)`` before any
   salt exists, recorded in the composition record's ``weights``.
 * **Install**, in order: the same commitment recomputed, refused if the weights changed since; the salt
-  ``setup.draw_salt(source, commitment)``, ``source`` the auditor's coin drawn after the commitment (``salt_source``);
+  ``setup.draw_salt(source, commitment)``, ``source`` the auditor's coin flipped after the commitment (``salt_source``);
   ``C*`` encoded a segment at a time (`store.GpuEncoder`, ``libp2v1.so`` on the weights' GPU, which checks its own decode
   of the whole segment; `store.CpuEncoder` on the CPU), two blocks of each segment held to ``W`` by the reference decode,
   and ``C*`` held as one [blocks, block_bytes] uint8 tensor on the weights' device; the memory challenger's table of it
@@ -23,7 +23,7 @@ with the memory challenger a party of its own on the challenger host (`verity.co
 * **The period** (`PousOption.audit`, `PousOption.leg`): `period.audit` of what setup published, the prover answering
   each index from ``C*`` where it is held, and the verifier's answer: setup's own inputs tied to the run (`period.tie`,
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
-  point no certificate covers).  In the leg the memory challenger runs at ``period.json``'s ``challenger_host``
+  point no certificate covers).  In `PousOption.leg` the memory challenger runs at ``period.json``'s ``challenger_host``
   (`challenger_party.Party.of`) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
   keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
@@ -237,7 +237,7 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
 
 
 def _source(entry: str, setting: Any, commitment: bytes, params: Any) -> tuple[bytes, str]:
-    """The auditor's coin for the salt, drawn after ``commitment``, and how it came."""
+    """The auditor's coin for the salt, sampled after ``commitment``, and how it came."""
     if callable(setting):
         return bytes(setting(commitment)), "callable"
     if isinstance(setting, str):

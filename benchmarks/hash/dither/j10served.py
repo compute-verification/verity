@@ -1,6 +1,6 @@
-"""J10 banded noise served (kernels-j10; measured only, nothing here is served or credited): sbench.py through hb_sbench.py,
+"""J10 banded noise served (measured only, nothing here is served or credited): sbench.py through hb_sbench.py,
 plus each credited one-stream arm's twin on J10 banded noise at bands of G column tiles, paired with it in one run. Every
-banded arm's gate holds it to CA's banded reference itself (`banded.banded_reference` under the tree
+banded arm's gate holds it to credit's banded reference itself (`banded.banded_reference` under the tree
 `j10b_ref.ca_tree` finds: send banded-1a4d1de024.tar.gz) and requires it; its check docs carry `j10b_ref.CA_LABEL`.
 
     dither-1s-hbk-bG     (H200, B200) dither-1s-hbk with h1u.cu's kh_one_peel_band at G in place of kh_one_peel, from the
@@ -8,12 +8,13 @@ banded arm's gate holds it to CA's banded reference itself (`banded.banded_refer
                          workspace region, and every unit's columns. Gated as dither-1s-hbk (hb_peel.check, its tokens
                          equal to exact's on the gate and every rep), with the receipts reference h1r_launch_band at G
                          (j10rtx.BandH1R), the CPU units' rows from their band leader's seed_j (j10b_ref.rows_of: in
-                         dither_one.h1v3_unit and hb_peel.peel_cpu), and CA's banded_reference on the same units in place
-                         of H1V3's tree (per-unit noise, which a non-leader doesn't use; CA's reference at G = 1 is it).
+                         dither_one.h1v3_unit and hb_peel.peel_cpu), and credit's banded_reference on the same units in
+                         place of H1V3's tree (per-unit noise, which a non-leader doesn't use; the reference at G = 1 is
+                         it).
     dither-a-hbk*-bG     (H200, B200) a dither-a arm on the hbk unit (option A, labelled by `forms.form_of`: beside) with
                          kh_one_band at G in its side unit's kh_one place, from the same .so. Gated as its base
                          (dither_a.check: commitments, z = int_mm, y, the no-write control and the fault), with the
-                         same three swaps in dither_a's check: h1r_launch_band at G, leader rows, CA's banded_reference.
+                         same three swaps in dither_a's check: h1r_launch_band at G, leader rows, credit's banded_reference.
     dither-1s-mix-cpeel-bG[s][p]  (RTX PRO 6000) dither-1s-mix-cpeel on j10rtx.BandWindow (h1o_band_launch; s: block2's
                          rows staged, p: the units as the band-rows pass's programmatic dependents), gated by
                          j10rtx.band_check and, on the gate step, j10rtx.noise_check of the band workspace.
@@ -65,8 +66,8 @@ def leader_rows(seed_l: bytes):
 
 
 def layout(win, s: int, g: int):
-    """For step s of the window's layout: lead(pos), the position of its unit's band leader, and cell(pos), CA's (I, J, g,
-    row_positions) for it."""
+    """For step s of the window's layout: lead(pos), the position of its unit's band leader, and cell(pos), the banded
+    reference's (I, J, g, row_positions) for it."""
     offs = list(win.offs)
 
     def where(pos: int) -> tuple[int, int, int, int]:
@@ -222,7 +223,7 @@ class BandH:
 
     def __init__(self, h, g: int):
         if not hasattr(h, "kh_one_band"):
-            raise RuntimeError("the hbk .so has no kh_one_band: rebuild h1u.cu at kernels-j10's branch")
+            raise RuntimeError("the hbk .so has no kh_one_band: rebuild h1u.cu from this tree")
         h.kh_one_band.argtypes = [*h.kh_one.argtypes[:-1], C.c_uint, C.c_int, C.c_void_p]
         fn, self._h = h.kh_one_band, h
         self.kh_one = lambda *a: fn(*a[:-1], g, 0, a[-1])
@@ -238,7 +239,7 @@ def band_one(base, g: int):
             super().__init__(path, win, peel)
             h = self.h
             if not peel or not hasattr(h, "kh_one_peel_band"):
-                raise RuntimeError(f"{path} has no kh_one_peel_band: rebuild h1u.cu at kernels-j10's branch")
+                raise RuntimeError(f"{path} has no kh_one_peel_band: rebuild h1u.cu from this tree")
             h.kh_one_peel_band.argtypes = [*h.kh_one.argtypes[:-1], C.c_uint, C.c_int, C.c_void_p]
             fn = h.kh_one_peel_band
             self.fn = lambda *a: fn(*a[:-1], g, 0, a[-1])
@@ -250,7 +251,7 @@ def build(arm: str, scratch, gpu_mem: float):
     if da:
         base, g = da
         if not JB.ca_tree():
-            raise RuntimeError(f"{arm}: no CA tree: send banded-{JB.CA_SHA}.tar.gz")
+            raise RuntimeError(f"{arm}: no banded reference tree: send banded-{JB.CA_SHA}.tar.gz")
         import dither_a as DA
 
         class BandSide(DA.Side):
@@ -267,7 +268,7 @@ def build(arm: str, scratch, gpu_mem: float):
         if flags:
             raise ValueError(f"{arm}: {HBK}'s banded twin takes no s or p")
         if not JB.ca_tree():
-            raise RuntimeError(f"{arm}: no CA tree: send banded-{JB.CA_SHA}.tar.gz")
+            raise RuntimeError(f"{arm}: no banded reference tree: send banded-{JB.CA_SHA}.tar.gz")
         import hb_one
         hb_one.One = band_one(hb_one.One, g)
         llm = _build(HBK, scratch, gpu_mem)
@@ -276,7 +277,7 @@ def build(arm: str, scratch, gpu_mem: float):
     if rtx:
         g, flags = rtx
         if not JB.ca_tree():
-            raise RuntimeError(f"{arm}: no CA tree: send banded-{JB.CA_SHA}.tar.gz")
+            raise RuntimeError(f"{arm}: no banded reference tree: send banded-{JB.CA_SHA}.tar.gz")
         import dither_one as DO
         import j10rtx as JR
 
@@ -284,7 +285,7 @@ def build(arm: str, scratch, gpu_mem: float):
             def __init__(self, t, key, h1c, h1o, gate, dev):
                 super().__init__(t, key, h1c, h1o, gate, dev, g, "s" in flags, "p" in flags)
 
-        DO.Window = Served
+        DO.DitherState = Served
         llm = _build(MIX, scratch, gpu_mem)
         llm.dither_mod = RTXBand(llm.dither_win)
         return llm

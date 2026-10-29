@@ -1,5 +1,5 @@
-"""Red-team (REDTEAM-ADVICE, phase 9 target 2) against ENC-DERIVED's CacheStep_v1 (`cache_step`), which fixes the prefix
-hit `ReplayStep_v1` takes as bounded witness. The author's suite shows the hit is pinned to the cached prefix; these
+"""Adversarial cases against CacheStep_v1 (`cache_step`), which fixes the prefix hit `ReplayStep_v1`
+takes as bounded witness. Its own suite shows the hit is pinned to the cached prefix; these
 cases pin down what the piece does NOT constrain.
 
 Findings, each confirmed executably below:

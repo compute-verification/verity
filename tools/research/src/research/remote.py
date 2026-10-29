@@ -334,6 +334,11 @@ def sender(environ: dict[str, str] | None = None) -> str | None:
 
 WAKE_WAIT_S, WAKE_POLL_S = 900.0, 15.0
 NEBIUS_KEY_ENV = ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", "NEBIUS_SA_PRIVATE_KEY_B64")
+# A VM stopped since before USN-8944-1 boots trusting the roots that cross-signed the compromised eMudhra intermediates, and its
+# image's apt timers are off, so a wake upgrades ca-certificates before the run; a patched VM skips it at once.
+TRUST_UPGRADE = ("ls /etc/ssl/certs | grep -q -E 'emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root' || exit 0; "
+                 "sudo -n apt-get -o DPkg::Lock::Timeout=120 update -qq && sudo -n env DEBIAN_FRONTEND=noninteractive "
+                 "NEEDRESTART_MODE=l apt-get -o DPkg::Lock::Timeout=120 install -y -qq --only-upgrade ca-certificates 'libnss3*'")
 CONTROL_WAKE = "PYTHONPATH=/data/infra/store-index-src/src python3.12 -m research.pods.nebius.wake start"   # pods/nebius/wake.py
 
 
@@ -392,6 +397,10 @@ def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, control=None, 
     while clock() < end:
         sleep(WAKE_POLL_S)
         if ssh_run(ssh, ["true"], timeout=30).returncode == 0:
+            r = ssh_run(ssh, ["sh", "-c", TRUST_UPGRADE], timeout=600)
+            if r.returncode != 0:
+                print(f"research: {machine['name']}: its ca-certificates upgrade failed (exit {r.returncode}); "
+                      f"`research deploy drift --on {machine['name']}` lists a distrusted root it still trusts", file=sys.stderr)
             return f"started from {state}"
     raise Refused(f"{machine['name']} ({iid}) was started from {state} but its ssh didn't answer in {WAKE_WAIT_S / 60:g} min")
 

@@ -23,14 +23,14 @@ from the warden's; v0's is the identity) and was admitted at bucket admitted[i],
 non-decreasing in arrival order; its output k must be released at admitted[i] + D + ⌊k / r⌋, so advice v0's release
 is held to the schedule. No prover value says where a cell goes. The advice is private; here the verifier computes
 the map in the clear from the opened advice and the admissions (which the warden's wiring gives, opened to the
-verifier tonight), the named gap ("the advice is opened to the verifier until the compile unit exists"). The target
+verifier for now), the named gap ("the advice is opened to the verifier until the compile unit exists"). The target
 reads the map inside the proof under the advice's hiding root.
 
 **The port is the Commit's**: its sampled ids, one hiding row a step (`port_row`: the step's P ids, u32be in
 batch-row order, zero past its batch) in a dense frame-v3-sha512 tree of the session's steps, whose root the Commit
 registers (`verity.ml.commitments.advice`'s registration: `hm96-sha512/row/v2` leaves under `domain`). Bucket t's
 unit reads S rows (`Shape.S`), at the steps its bucket's outputs were sampled in (`window_map`'s steps, public with the
-map), and its entry e = σ·P + r is read row σ's r-th id. The real port is vllm's Commit (its binding map's
+map), and its entry e = σ·P + r is read row σ's r-th id. The real port is vLLM's Commit (its binding map's
 `sampled_token_ids` under the run root), which this fake upstream stands in for.
 
 **What 1 means** (`reference`): every bucket row is row t of the warden's registered root, and every port row bucket t

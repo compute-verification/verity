@@ -28,6 +28,7 @@ view; the Program calls the Boolean Definition whose `word` that is):
 | ``ScaledMmS8ResidualCoordinateRows_v1{K, R, BlackwellS8ImmaDot32_v1}`` (``fused`` ``residual``) | ``ScaledMmS8ResidualCoordinateRows_v2{K, R, BlackwellS8ImmaDot32_v2}``, r the stream's word |
 | ``QkSoftmaxRowPad_v1{T, D}`` | ``QkSoftmaxRowPad_v1{T, D, HopperBF16WgmmaDot16_v2}`` |
 | ``PvRow_v1{T, K, D, HopperBF16WgmmaDot16_v1}`` | ``PvRowPad_v2{T, K, D, HopperBF16WgmmaDot16_v2}``: keys at n and past read as 0 |
+| ``QkSoftmaxPvPad_v1{T, K, D, HopperBF16WgmmaDot16_v2}`` (``fused`` ``pv``) | the same |
 | ``Bf16AddRow_v2{N}``, ``Argmax_v2{V}`` | the same |
 | ``AllGather_v1{WORLD, N}`` | none: a gather is the references its parts' outputs are (`GATHER`) |
 
@@ -176,11 +177,15 @@ def program(shape: Shape, fused: frozenset[str] = frozenset()) -> Program:
             ks.append(linear(p + "wk", qa))
             vs.append(linear(p + "wv", qa))
             keys, values = a["keys"][i], a["values"][i]
-            probs = B.batch(bind(SR.QkSoftmaxRowPad, T=PV_K, D=d, DOT=BF16_DOT), qh, keys, n, axes=(0, None, None),
-                            name=p + "softmax")
             vrows = [values[t] for t in range(PV_K)] + [n]
-            att = B.batch(bind(BG.PvRowPad, T=PV_K, K=PV_K, D=d, DOT=BF16_DOT), probs, *vrows, axes=(0,) + (None,) * len(vrows),
-                          name=p + "pv")
+            if "pv" in fused:
+                att = B.batch(bind(SR.QkSoftmaxPvPad, T=PV_K, K=PV_K, D=d, DOT=BF16_DOT), qh, keys, *vrows,
+                              axes=(0,) + (None,) * (len(vrows) + 1), name=p + "pv")
+            else:
+                probs = B.batch(bind(SR.QkSoftmaxRowPad, T=PV_K, D=d, DOT=BF16_DOT), qh, keys, n, axes=(0, None, None),
+                                name=p + "softmax")
+                att = B.batch(bind(BG.PvRowPad, T=PV_K, K=PV_K, D=d, DOT=BF16_DOT), probs, *vrows,
+                              axes=(0,) + (None,) * len(vrows), name=p + "pv")
             x = projection(p + "wo", quant(p + "o", att.reshape(Array(h * d, BF16)), False), x, p + "attn_residual")
             up = linear(p + "wup", normed(p + "mlp", p + "up", x, a[p + "mlp_norm"]))
             x = projection(p + "wdown", quant(p + "down", up, True), x, p + "mlp_residual")

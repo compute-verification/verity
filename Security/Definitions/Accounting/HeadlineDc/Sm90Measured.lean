@@ -16,9 +16,9 @@ this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
   measured issue slot alone, and are off the writer menu, as they were when the catch-all counted them: `NoSum` carries
   their words.
 * `d2s`, `model`: `dither-2s-licpw-redux-p1-l32` on that machine, its writer kinds honest's form and the uniform `UNI`
-  (2, a UR pair: RT-HOPPER-7): the census prices every other tensor form on the joint rows at the scalar coefficient, a
-  lower bound on its issue cost, so they are off the menu and `NoSum` carries them; `Sm90.d2s`'s vector classes, fold
-  routes, floors and `N_w`.
+  (2, a UR pair): the census prices every other tensor form on the joint rows at the scalar coefficient, a lower bound
+  on its issue cost, so they are off the menu and `NoSum` carries them; `Sm90.d2s`'s vector classes, fold routes, floors
+  and `N_w`.
 * `flatFold`, `flatSkip`, `flat`: ♭ is `Sm90.flat`'s word production and filler, its fold DC-90-ri's (the fold routes'
   cheapest mix, by share of the words: cp-red2-generic 0.6632, cp-red8-generic 0.3368), with ε_skip's skippable work at
   DC-90-ri's 0.592731% (`eps_budget.design_skip` on DC-90-ri), at ALU's price.

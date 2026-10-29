@@ -3,9 +3,9 @@ import Definitions.Pous.P2.Cost
 /-!
 # A location's window with the ring's oracle locations (trusted)
 
-The vocabulary of B2's oracle-location form (`note:console/20261012T0645Z-draft-actual-circuit-model`, B2's row at
-13:50Z and 14:05Z). The ring's multiplications, its additions and `one`, and its keys sit at oracle locations of their
-own, each stateless and answering only its querier a fixed number of ticks after it is asked.
+The vocabulary of B2's oracle-location form in the actual-circuit model. The ring's multiplications, its additions
+and `one`, and its keys sit at oracle locations of their own, each stateless and answering only its querier a fixed
+number of ticks after it is asked.
 
 A `RingWindow` is what a location does with them during one window of `span` ticks, given its state and challenge
 there: at tick `n < span` it asks `ask ds`, a function of the batches of answers delivered at the ticks before `n`

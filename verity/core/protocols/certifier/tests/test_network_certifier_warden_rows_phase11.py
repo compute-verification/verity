@@ -1,20 +1,18 @@
-"""REDTEAM phase 11 against the warden's bucket rows with reads tied to the layout (#3698, `warden_rows`): my phase 8
-reads channel re-run, and the lead's question on the PAD cells. Cases from cursor/redteam-phase11-warden-061a
-@c362293b5c, with ordinals from 1 (#3730) and the residual case flipped now that the Program pins the units' wiring.
+"""The warden's bucket rows with reads tied to the layout (`warden_rows`), held as regressions: a unit reads only its
+connection's own cells, and a PAD cell is no content channel.
 
-Phase 8 found the reads (the units' wiring) unconstrained: a unit could open any of the N = T·S rows of the correct
-link-window — a foreign connection's cell, a cell twice, or an empty/padding slot — an ≈ log2(N) bits a read channel.
-#3698 closes the open vectors: the warden signs the wiring in its head, and `Wiring.place`/`port` confine every read to
-a connection's own cells, refusing a foreign connection, a cell past the connection's, a read twice, an empty slot and
-a wiring the head didn't sign. Here those are re-run against the v2 layout and shown refused.
+With the reads (the units' wiring) unconstrained, a unit could open any of the N = T·S rows of the correct link-window
+— a foreign connection's cell, a cell twice, or an empty/padding slot — an ≈ log2(N) bits a read channel. The warden
+signs the wiring in its head, and `Wiring.place`/`port` confine every read to a connection's own cells, refusing a
+foreign connection, a cell past the connection's, a read twice, an empty slot and a wiring the head didn't sign. Here
+each is run against the v2 layout, with ordinals from 1, and shown refused.
 
-The new shape the lead asks about: a PAD cell now carries its connection's ordinal (`cell(PAD, q, b"")`) and sits in
-the connection's own slots, so it counts toward the connection's cells and `place` will open it. These cases show it is
-not a new *content* channel — a pad's bytes are fixed by (PAD, q): header and zero fill, no prover-chosen bits — and that
-carrying the ordinal *narrows* the read space to a connection's own cells. The residual was the named gap: which of a
-connection's own cells each unit reads was the prover's, so it could read a pad where a data cell is intended. The
-Program now pins it (`warden_rows.Units`), and the port's value names its digest, so a statement made for the pad is
-refused by the verifier's registered reads.
+A PAD cell carries its connection's ordinal (`cell(PAD, q, b"")`) and sits in the connection's own slots, so it counts
+toward the connection's cells and `place` will open it. These cases show it is not a *content* channel — a pad's bytes
+are fixed by (PAD, q): header and zero fill, no prover-chosen bits — and that carrying the ordinal *narrows* the read
+space to a connection's own cells. Which of a connection's own cells each unit reads is the Program's
+(`warden_rows.Units`), and the port's value names its digest, so a statement made for a pad where a data cell is
+intended is refused by the verifier's registered reads.
 """
 
 from __future__ import annotations
@@ -58,7 +56,7 @@ def test_a_pad_carries_its_connections_ordinal_and_counts_toward_its_cells():
 
 
 def test_my_phase8_reads_are_refused_foreign_duplicate_cell_past_and_empty():
-    """The open phase 8 vectors, re-run on the v2 layout: a foreign connection, a cell past the connection's (which
+    """The open read vectors on the v2 layout: a foreign connection, a cell past the connection's (which
     is the only way an empty slot could be addressed), and a read twice are refused by `port`, and a wiring the head
     didn't sign is refused; so every read opens a connection's own cell and no empty, foreign or repeated row."""
     cells_ = _cells()

@@ -118,7 +118,7 @@ def P2RingRoundSecure (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=
 /-- **`P2RingRoundSecure` to `2^27` blocks (conjectured; unchecked in `N` above `2^25`).** The same statement as
 `P2RingRoundSecure`, at every block count from `2^19` to `2^27`, so that it reaches the demo's store, `1038·2^16 ≈
 2^26.02` blocks (139.7 GB of payload). Nobody has checked the `ε₀` a proof would give against `N` above `2^25`: that
-analysis is pending (the memory-accounting lane's pous-chain report). Its range contains `P2RingRoundSecure`'s, so it
+analysis is pending. Its range contains `P2RingRoundSecure`'s, so it
 implies that one (`Pous.SecurityProofs.roundSecure_of_wide`) and every refutation of that one refutes it: the
 falsification tests there (`PousP2Rounds.round_tight`, `PousP2Rounds.round_trunc`) and its scaled-point test. -/
 def P2RingRoundSecureWide (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=

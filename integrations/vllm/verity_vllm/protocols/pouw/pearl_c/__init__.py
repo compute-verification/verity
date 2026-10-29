@@ -42,7 +42,7 @@ torch's current stream, in the device's primary context:
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.  A pass's state and its end
   are `ends`'s (`PassEnds`).
 
-The per-call host work is kept small (the decode profile, research store ``internal/pouw/rtx-pro/pouw-mvp-decode-profile.md``):
+The per-call host work is kept small:
 the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`, the index numbered across the epoch: `pouw_pass.call_index`)
 and their upload through a pinned ring (`_Uploads`); the records' screen as one fused kernel (`screen_into`, Triton, its
 compiled kernel launched directly after the first launch; `screen` where Triton can't run); A's roots copied into a pass
@@ -376,7 +376,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             if self.graphs else None,
             "pass_end": ("an engine step's commitment read back at the next end" + (", its tile tree on a stream of its own"
                                                                                      if aside_ends else "")) if lag_ends else "read back at its end",
-            "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
+            "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound"}
         self.cur: _Pass | None = None
         self.begin()
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# sweep/stoch_negatives.sh — the two named negatives of a `Sampling=stochastic` row (R15 lane stoch, PLAN §2 row 10 task 3).
+# stoch_negatives.sh — the two named negatives of a `Sampling=stochastic` workload.
 #
 #   N1 wrong-seed      the RUN is served with a different per-request seed than the MANIFEST OF RECORD declares
 #   N2 chain-mutation  the RUN is served with a different sampler chain (top_p 0.9) than the Program was BUILT for (top_p 0.95)

@@ -1,6 +1,6 @@
 """`pous.period`, the period hook, in Python: which points it certifies at (`certificate`, `point_for`), its encode split
 over processes, a node's store kept and reloaded, what an audit at the certified point publishes, and the records it
-stores, every copy of the auditor's ledger in them cut to the entries their window cites (`cite`, MEM-103). Its answers
+stores, every copy of the auditor's ledger in them cut to the entries their window cites (`cite`). Its answers
 against the Lean's are `check/tests/test_run_protocol.py`'s."""
 
 from __future__ import annotations

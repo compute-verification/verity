@@ -14,11 +14,11 @@ states the `rec-residuals` pieces' half.
   among the split's).
 * **The composition at the shares** (`decompB_lastSplitP_shares`): `decompB_lastSplitP` with `hlow` given as the two
   shares, so the pieces' share can be proved apart from the reading, the salts and the rows.
-* **The `rec-residuals` pieces' share** (`ResPiece`, `ResZero`, `resHolds`, `resPieces_computes`): a piece keyed by a
-  copy `(t, o, g, u)` of a residuals table holds where its group's residuals vanish at the values the opened messages
-  give (`elemAt`) and the verifier's values at the coins (`vvAt`). At an `.inner` part, `partAccepts_resZero` gives it
-  from two hypotheses: check 5's tie at those verifier values (`ResTie`, waiting on the vcalls ask,
-  `note:20261024T2340Z-draft-vcalls-ask`), and the layout fact `hcopy`: each piece `ownQ` gives the part is one of its
+* **The `rec-residuals` pieces' share** (`ResPiece`, `ResZero`, `resHolds`, `resPieces_computes`): a piece keyed by its
+  group and a copy of its part's residuals table, `(jj, o, g, u)`, holds where its group's residuals vanish at the
+  values the opened messages give (`elemAt`) and the verifier's values at the coins (`vvAt`). At an `.inner` part,
+  `partAccepts_resZero` gives it from two hypotheses: check 5's tie at those verifier values (`ResTie`, which is
+  open), and the layout fact `hcopy`: each piece `ownQ` gives the part is one of its
   statement's copies, with that copy's group, and the elements the copy reads are those `elemAt` reads off the opened
   messages. `rowsRead_msgs` gives the second half of `hcopy` at the raw messages wherever a port is a carried row; the
   step to the opened messages reads `final`, the concrete statement's.
@@ -172,8 +172,10 @@ end Shares
 
 /-! ## The `rec-residuals` pieces -/
 
-/-- **A `rec-residuals` piece**: a copy of a residuals table, `(t, o, g, u)` as `Readable.copyOf` indexes it, and the
-group of residuals it computes. -/
+/-- **A `rec-residuals` piece**: its key `(jj, o, g, u)`, the verifier's group `jj` its part computes and instance
+`o + g`'s unit `u` of that part's one table (`ResLower.keyCopy`, block `(o + g) / c.g` and VU `(o + g) % c.g` at the
+part's own `c.g`; `ResLower.resPieces_computesAt`; `resPieces_computes` reads the first component as the table
+instead), and the group of residuals it computes. -/
 structure ResPiece where
   key : ℕ × ℕ × ℕ × ℕ
   S : _root_.Flock.RecOpen.GfS
@@ -184,12 +186,12 @@ def ResZero (S : _root_.Flock.RecOpen.GfS) (E vv : ℕ → _root_.Flock.F128) : 
     FlockVBridge.resVal (FlockVBridge.gfsOf S) (FlockVBridge.termVal E vv) (FlockVBridge.resOf S.res[q]) = 0
 
 /-- **What a `rec-residuals` piece says** at the inner statement `x`, the opened messages `ms` and the coins `cs`: its
-group's residuals vanish at the elements `elemAt` reads off the messages at its copy and the verifier's values `vvAt`
-at the coins there. -/
-def resHolds (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+group's residuals vanish at the elements `elemAt` reads off the messages and the coins at its copy (the accumulators'
+ports are a chain the coins step) and the verifier's values `vvAt` at the coins there. -/
+def resHolds (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128) (q : ResPiece) (x : Msg) (ms : List Msg)
     (cs : List Coin) : Prop :=
-  ResZero q.S (elemAt x ms q.key) (vvAt x cs q.key)
+  ResZero q.S (elemAt x ms cs q.key) (vvAt x cs q.key)
 
 /-- **The `rec-residuals` pieces' share at an `.inner` part**: `partAccepts_resZero` at the verifier's values the coins
 give (`vvAt`), where check 5's tie holds there (`htie`) and the layout places each piece `ownQ` gives the part at one
@@ -202,7 +204,7 @@ theorem resPieces_computes {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} 
     {j : ℕ} {nm : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm pt))
     (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
     (pieces : Msg → List ResPiece) (ownQ : Msg → ResPiece → Option ℕ)
-    (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (htie : ∀ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
       _root_.Flock.Readable.parseBytes readOfO xO = some p → L.Agrees cmt x s w xO ms →
@@ -231,7 +233,8 @@ theorem resPieces_computes {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} 
               os.length + 1 = Bd.DE.V.k (Claims.Recursion.xI D x) →
               _root_.Flock.Readable.rowsRead ns nv
                   (_root_.Flock.Readable.copyOf p q.key.1 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) =
-                elemAt (Claims.Recursion.xI D x) (Bd.opened os last) q.key) :
+                elemAt (Claims.Recursion.xI D x) (Bd.opened os last)
+                  ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) :
     PiecesComputes Bd D pieces (resHolds elemAt vvAt) ownQ s x c ms := by
   obtain ⟨xO, w, p, hx, hRR, hall⟩ := partAccepts_resZero h hr hss hsv
     (fun t o g u => vvAt (Claims.Recursion.xI D x)

@@ -71,7 +71,7 @@ skill).
 | Done | the done-condition holds. The owner closes it with one line and its evidence |
 | Canceled | dropped, with a one-line reason |
 
-- **PRs.** A PR names its issue in its body (`Part of CMP-171`), which attaches it in Linear. Merging a PR doesn't close
+- **PRs.** A PR names its issue in its body (`Part of CMP-<n>`), which attaches it in Linear. Merging a PR doesn't close
   the issue; the owner does.
 - **Sub-issues** split a deliverable into pieces that move separately: one per worker. A parent is In Progress while any
   child is, and Done once every child is and its own done-condition holds.
@@ -92,7 +92,7 @@ skill).
 
 ## Workers
 
-- **A worker works on one issue**, usually its own sub-issue, and is named after it (`CMP-171 DEPLOYSP`). The issue's
+- **A worker works on one issue**, usually its own sub-issue, and is named after it (`CMP-<n> DEPLOYSP`). The issue's
   Workers line names it and its `bc-` id.
 - **Its brief starts with the issue's URL and done-condition.** It tells the worker to comment each run id, verdict line
   and PR on the issue with `research msg linear comment ISSUE 'TEXT' --worker NAME`.

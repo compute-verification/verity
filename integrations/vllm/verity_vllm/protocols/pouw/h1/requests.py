@@ -1,4 +1,4 @@
-"""H1's requests and rounds (`Accounting.Served`: a request entry is an `act` value, a run input under the root of the round that admits it, committed before that round's coin; RT3-INT-9).
+"""H1's requests and rounds (`Accounting.Served`: a request entry is an `act` value, a run input under the root of the round that admits it, committed before that round's coin).
 `pouw_h1.H1Run` builds them as it serves; this module holds what they are and how they are checked.
 
 * **Rounds.** Round s is step s, one round a step. vLLM's scheduler admits a request in the step that first schedules it
@@ -28,8 +28,8 @@
 * **Admission** (`ADMISSIONS`, the pouw setting ``admission``): the period fixes a window's live tiles before its
   first coin, so by default (``round-0``) a window admits requests only in round 0, and an entry under a later round is
   refused (`request_reason`); ``per-round`` admits in every round, for a statement that fixes each round's live tiles
-  before that round's coin (RT4-INT-22).
-* **Round values** (the live order, RT4-INT-20): each call's A table (its T slots' s8 rows and f32 scales) and, when
+  before that round's coin.
+* **Round values** (the live order): each call's A table (its T slots' s8 rows and f32 scales) and, when
   its arm hands them over, its z table (one leaf a proof block, its z/y record: z, then y = dq(z)) are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
   so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
   table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round

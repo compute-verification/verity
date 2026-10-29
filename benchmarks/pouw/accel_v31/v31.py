@@ -47,7 +47,8 @@ mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments 
     python3 v31.py fill-params DIR NAME:M:N:K ... [--L L] [--served]   CGP1 params of Dither's no-fold calls for
                                                 `v31 fill-bench` (served: O committed; else the filler's)
     python3 v31.py fill-sample DIR              a fill-bench shape's two sampled tiles against the no-fold reference
-    python3 v31.py fill-table BENCH.jsonl ...   the no-fold call's gamma over cuBLASLt and CUTLASS, and where its time goes
+    python3 v31.py fill-table BENCH.jsonl ... [--bar B]   the no-fold call's gamma over cuBLASLt and CUTLASS, where its
+                                                time goes, and the commit's compressions a SM-cycle over the ruler (and B)
 
 Dither's no-fold call (verity/core/protocols/pouw/circuit/dither.py), served or the filler's, is `Fill` below: its
 reference and verifier here, its GPU prover v31.cu's Fill, and its per-call binding v31lib.py.
@@ -915,6 +916,13 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
     return 0 if rep["exact"] else 1
 
 
+def commit_labels(r: dict) -> str:
+    """A fill-bench line's commit knobs off their defaults, as fill-table labels its rows after the call's knobs."""
+    return ((f" m{r['lminb']}" if r.get("lminb", 5) not in (4, 5) else "")
+            + (f" sm{r['sminb']}" if r.get("sminb", 4) != 4 else "") + (" cf" if r.get("lfold") == 1 else "")
+            + (" nofull" if r.get("full") == 0 else "") + (f" mk{r['mask']}" if r.get("mask") else ""))
+
+
 def cmd_fill_table(a: argparse.Namespace) -> int:
     """`v31 fill-bench`'s JSON lines: gamma of Dither's no-fold call overlapped (a served call's, or a filler's), over
     cuBLASLt and CUTLASS, with the weight side a period's (v3.2: ovl), a call's (the run of record's per-call weight coins:
@@ -922,8 +930,12 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
     registers; wrong roots, timing only), the GEMM's tensor duty (cuBLASLt's time over the call's period, per-call weight
     coins) and where the call's time goes. An arm the call doesn't run (a served call's pad) is "-". Then wgmma.linear's
     time (a -DV31_WG build's served bench), gamma ovl_w over it, and the share of O's rows the GEMM's hash warps hashed
-    (V31_RP 4, the last overlapped call)."""
-    rows = []
+    (V31_RP 4, the last overlapped call).
+
+    Then the commit's parts alone (lines that carry them): each part's SHA-512 compressions a SM-cycle at its median time
+    and clock, over the build's own compression rate (the sha arm, commit_gpu's ruler), and with ``--bar`` (the card's
+    fastest full-output compression a SM-cycle) over that bar."""
+    rows, named = [], []
     for path in a.files:
         for line in Path(path).read_text().splitlines():
             if line.startswith("{") and '"fill": true' in line:
@@ -934,7 +946,7 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
 
     print("| shape | m x N x K | L | S | variant | lt ms | CUTLASS ms | ovl ms | gamma ovl | / CUTLASS | gamma ovl_w | / CUTLASS "
           "| gamma ovl_pad | gamma nomem | gamma call | gamma gemm | tensor duty | coins, coins_w, pad, form_a, form_b, gemm, "
-          "commit ms | wgl ms | gamma ovl_w / wgl | O hashed in the GEMM: rows / chunks |")
+          "commit ms | wgl ms | gamma ovl_w / wgl | rows hashed in the GEMMs: rows / chunks |")
     print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         ms = r["arms"]
@@ -943,21 +955,47 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
                    + (f" wg{r.get('wbn', '')}" if r.get("wg") else "") + (f" rp{r['rp']}" if r.get("wg") and r.get("rp") else "")
                    + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
                    + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
+                   + (" r5w0" if r.get("rp") == 5 and r.get("W") and r.get("wgw", 1) and not r.get("r5w", 1) else "")
+                   + (" tst" if r.get("rp") == 5 and r.get("tst") else "")
                    + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else ""))
+        variant += commit_labels(r)
+        named.append((r, variant))
         fused = "-"
-        if r.get("fused_leaves", -1) >= 0 and r.get("o_leaves"):
-            fused = f"{100 * r['fused_leaves'] / r['o_leaves']:.1f}%"
+        rows_all = r.get("leaves") or r.get("o_leaves")
+        if r.get("fused_leaves", -1) >= 0 and rows_all:
+            fused = f"{100 * r['fused_leaves'] / rows_all:.1f}%"
             if r.get("fused_blocks", -1) >= 0 and r.get("row_blocks"):
-                fused += f" / {100 * r['fused_blocks'] / (r['o_leaves'] * r['row_blocks']):.1f}%"
+                fused += f" / {100 * r['fused_blocks'] / (rows_all * r['row_blocks']):.1f}%"
         cut = g(ms["cutlass"]["ms"]) if "cutlass" in ms else "-"
         gcut, gcut_w = (r.get("gamma_ovl_cutlass"), r.get("gamma_ovl_w_cutlass")) if "cutlass" in ms else (None, None)
         parts = ", ".join(g(ms[x]["ms"]) if x in ms else "-" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
         duty = r.get("gamma_ovl_w") if r.get("o") else r["gamma_ovl"]
-        print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {g(ms['lt']['ms'])} | {cut} | "
-              f"{g(ms['ovl']['ms'])} | {g(r['gamma_ovl'])} | {g(gcut)} | {g(r.get('gamma_ovl_w'))} | {g(gcut_w)} | "
+        lt, ovl = (g(ms[x]["ms"]) if x in ms else "-" for x in ("lt", "ovl"))
+        print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {lt} | {cut} | "
+              f"{ovl} | {g(r['gamma_ovl'])} | {g(gcut)} | {g(r.get('gamma_ovl_w'))} | {g(gcut_w)} | "
               f"{g(r.get('gamma_ovl_pad'))} | {g(r.get('gamma_ovl_nomem'))} | {g(r['gamma_call'])} | {g(r['gamma_gemm'])} | "
-              f"{100 / duty:.1f}% | {parts} | {g(ms['wgl']['ms']) if 'wgl' in ms else '-'} | {g(r.get('gamma_ovl_w_wgl'))} | "
+              f"{f'{100 / duty:.1f}%' if duty else '-'} | {parts} | {g(ms['wgl']['ms']) if 'wgl' in ms else '-'} | {g(r.get('gamma_ovl_w_wgl'))} | "
               f"{fused} |")
+    parts = [(r, variant) for r, variant in named if "per_sm_cycle" in r]
+    if not parts:
+        return 0
+
+    def c(x) -> str:
+        return "-" if x is None else f"{x:.5f}"
+
+    def of(x, bar) -> str:
+        return "-" if x is None or not bar else f"{x / bar:.3f}"
+
+    print()
+    print("| shape | variant | sha / SM-cycle | part | ms | MHz | compressions | / SM-cycle | of sha | of bar |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for r, variant in parts:
+        pc, cm = r["per_sm_cycle"], r["comp"]
+        for part, comp in (("leaf", cm["leaf"]), ("leaf_nomem", cm["leaf"]), ("salt", cm["salt"]),
+                           ("commit", cm["leaf"] + cm["salt"])):
+            arm = r["arms"].get(part, {})
+            print(f"| {r['shape']} | {variant} | {c(pc['sha'])} | {part} | {g(arm.get('ms'))} | {arm.get('mhz', '-')} | "
+                  f"{comp:.0f} | {c(pc[part])} | {g(r['of_sha'][part])} | {of(pc[part], a.bar)} |")
     return 0
 
 
@@ -1335,6 +1373,8 @@ def main(argv: list[str]) -> int:
     p.add_argument("dir")
     p = sub.add_parser("fill-table")
     p.add_argument("files", nargs="+")
+    p.add_argument("--bar", type=float, default=None,
+                   help="the card's fastest full-output SHA-512 compressions a SM-cycle, for the commit's parts")
     a = ap.parse_args(argv[1:])
     return {"cpu-run": cmd_cpu_run, "gpu-prep": cmd_gpu_prep, "gpu-check": cmd_gpu_check, "gpu-sample": cmd_gpu_sample,
             "params": cmd_params, "table": cmd_table, "timeline": cmd_timeline, "fill-params": cmd_fill_params,

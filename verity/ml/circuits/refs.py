@@ -96,7 +96,7 @@ class Strided(Refs):
     (e.g. one KV head's rows out of a `[T][KVH][D]` cache, or a `[D][16]` column block of V).
 
     Zero strides denote repetition of the *same* reference: `Strided(s, i, b, 1, 0, 0, n)` is the leaf `b`
-    of `(s, i)` referenced `n` times — one produced value, broadcast (frontend rulings §8.5). It is what
+    of `(s, i)` referenced `n` times — one produced value, broadcast. It is what
     `concat` normalises `[z.refs] * n` to; it never merges distinct produced values."""
 
     __slots__ = ("space", "idx", "base", "inner", "outer_stride", "inner_stride", "count")

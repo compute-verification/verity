@@ -67,7 +67,7 @@ theorem filesJ_tied {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claim
   have hms0 : (tabsOf sts)[k / 2].merkle = MerkleScheme.hm96Sha512 ∨
       (tabsOf sts)[k / 2].merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
     rw [tabsOf_getElem hi]
-    rcases checksAtJ_leaf hck hsu (k / 2) hsts with e | ⟨-, e⟩
+    rcases checksAtJ_leafL hck hsu (k / 2) hsts with e | ⟨-, e⟩
     · exact Or.inl e
     · exact Or.inr e
   generalize hst : (tabsOf sts)[k / 2] = st at hsch hr₁ hr₂ hms0

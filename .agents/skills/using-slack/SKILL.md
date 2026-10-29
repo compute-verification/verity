@@ -49,7 +49,7 @@ msg owners PATH...` names each path's owner (longest prefix).
 - **One thread per request**: the root is the ask or announcement, and everything about it is a reply (`research msg
   read --thread T` shows the conversation so far).
 - **Only the names a post starts with ring** (`@name`s, user-group tags, or `handle:` as the first word; slack.py's
-  docstring has the rule), so start with the owner you need (`@circuits #1585 failed`), even under an announcement. A
+  docstring has the rule), so start with the owner you need (`@circuits #<pr> failed`), even under an announcement. A
   reply that names no one rings the root's poster, or, from the poster, everyone the root addressed, so a progress note
   is `send --kind fyi` (or `--quiet`), ringing only its `--to` names.
 - **Status.** On an ask or alert, the owner `pickup`s (👀), `reply`s only when the asker must act or decide, and
@@ -65,7 +65,9 @@ msg owners PATH...` names each path's owner (longest prefix).
   Daniel card's page no longer Waiting on Daniel, else a reply or reaction in the thread. `research msg traffic` lists
   the unanswered; take a linked ask on its issue.
 - **Work items are Linear issues**: filing, titling, placing, commenting on and closing them, and how long each message
-  is, are the coordinating skill's (`.agents/skills/coordinating/SKILL.md`).
+  is, are the coordinating skill's (`.agents/skills/coordinating/SKILL.md`). In #agent-coordination, `send`, `reply`,
+  `ask` and `announce` warn past 60 words (150 for an announcement) and refuse past twice that: put the body in its issue
+  (`research msg linear comment ISSUE --file BODY.md --as ME`) and post a line that links it.
 - **Alerts** in `#agent-alerts` take the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
 - **Retract** a post sent by mistake with `research msg retract --as NAME --ts TS` (needs `SLACK_BOT_TOKEN`; the doorbells
   it rang keep their copy).
@@ -88,8 +90,8 @@ id is missing).
 - **Subscribe to your inbox thread**, never to `#agent-coordination`'s top level, and to your Linear team's issue events
   (`subscribe_linear_issue`, creations and state changes), never its comments: every handle writes through one bot and
   one Linear app, so other subscriptions wake you for your own writes.
-- **Subscribe to a thread only where a human may answer** (your `#ask-daniel` card, a chat thread, a thread a named
-  human posted in), and unsubscribe when it's done; your inbox already carries every reply addressed to you. `@infra`
+- **Subscribe to a thread only where a human may answer** (your `#ask-daniel` card, a thread a named human posted
+  in), and unsubscribe when it's done; your inbox already carries every reply addressed to you. `@infra`
   also subscribes to `#agent-alerts` and `#ask-daniel`, `topLevelOnly: true`.
 - **Timers are for schedules and absence checks, never for polling.** A run you launched rings your inbox when it ends
   (`from runs, run R rc N`), and the agent watch wakes you 10 minutes after an unread doorbell. Ask for 30 days
@@ -119,7 +121,8 @@ publishes the person as `people.d/NAME.json` in the notes, read into `collaborat
 service routes each post to the lanes it starts with, a reply naming no one to the lanes in its thread, else to `@top`,
 and its watchdog rings again when nobody picks it up (`infra/slack-events/`'s README). Doorbells carry no text (the
 channel is private, the inboxes aren't): read with `research msg read --channel chat-NAME --thread T`, answer with
-`research msg reply --as ME --channel chat-NAME --thread T`, and subscribe to that thread. One agent answers each
+`research msg reply --as ME --channel chat-NAME --thread T`; their next reply rings you as a doorbell (no subscription
+reaches a private chat). One agent answers each
 question (the first to 👀), short and plain, with links the person can open.
 
 ## Norms

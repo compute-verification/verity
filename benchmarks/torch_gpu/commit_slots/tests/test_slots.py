@@ -1,5 +1,5 @@
 """The call's reference (slots.py): the checked-in fixture, its leaves and trees rebuilt from verity's own frame and hm96
-primitives, C-Flock's salt stream, ``open_unit``'s openings and their refusals, layouts written and loaded back through
+primitives, Flock's salt stream, ``open_unit``'s openings and their refusals, layouts written and loaded back through
 ``commitments.layout`` to the same digests and roots, and the frozen H200 layout."""
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 
 CTX = bytes(range(64))
 KEY = bytes(range(100, 132))
-#: FAMILIES' shared-row layout at 1 KiB rows (art:16f2faa0…), fetched with commitments' layout fixtures, its sha256,
+#: FAMILIES' shared-row layout at 1 KiB rows, fetched with commitments' layout fixtures, its sha256,
 #: slots' digest of it (the artifact's ``layout_digest``), ``commitments.layout``'s ``json_digest`` of it, and a step root
 #: over it, from the loader slots had before ``commitments.layout``
 FAMILIES = (Path(__file__).resolve().parents[4] / "verity" / "ml" / "commitments" / "tests" / "fixtures" / "layouts"

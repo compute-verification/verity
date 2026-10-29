@@ -1,16 +1,16 @@
-"""REDTEAM phase 11, target 1, against N2-ADVICE's floor (#3681), held as regressions of its fix. The floor bucket is
-the Program's eligibility b − δ − ⌊λ/ρ⌋ with no `max(1, ·)`, so a release in its request's own bucket is accepted at
-δ = 0, a served clock's (an engine's first output in its request's bucket). That is sound only for the δ the window's
-traffic was certified under: the floor read the declared δ, held to Σ_sync alone, so a prover declared δ = 0 for a
-window the certifier ran at δ = 1 and an output coincident with its request's last ingress frame was accepted. Now
-every floor reads the sync the certifier ran, which the verifier of record takes only from its own clock source
-(`LinkWindows.clock_source`, here the stand-in `advised_traffic.StandInClocks`; of record, the certifier's signed
-clock syncs, `test_network_certifier_advised_signed_clocks.py`), and `advised.view` refuses a window whose declared
-sync isn't that one (only that window: REDTEAM phase 15, `test_network_certifier_advised_phase15_window.py`).
+"""The advised link's floor (`advised`), held as regressions. The floor bucket is the Program's eligibility
+b − δ − ⌊λ/ρ⌋ with no `max(1, ·)`, so a release in its request's own bucket is accepted at δ = 0, a served clock's (an
+engine's first output in its request's bucket). That is sound only for the δ the window's traffic was certified under:
+a floor that read the declared δ, held to Σ_sync alone, would accept an output coincident with its request's last
+ingress frame in a window the certifier ran at δ = 1 and the prover declared at δ = 0. So every floor reads the sync
+the certifier ran, which the verifier of record takes only from its own clock source (`LinkWindows.clock_source`, here
+the stand-in `advised_traffic.StandInClocks`; of record, the certifier's signed clock syncs,
+`test_network_certifier_advised_signed_clocks.py`), and `advised.view` refuses a window whose declared sync isn't that
+one (only that window: `test_network_certifier_advised_phase15_window.py`).
 
-The rest of the phase's hunt stays closed: no release strictly before its request's last ingress frame passes under
-any δ ≥ 0, the phase-3 ingress-end forgery is refused by the tie, a sync outside Σ_sync is refused, bucket 0 holds
-the certifier's own frame within R_in, and the advice digest moves with every input it reads.
+The rest stays closed: no release strictly before its request's last ingress frame passes under any δ ≥ 0, the
+ingress-end forgery (`test_network_certifier_advised_adversarial.py`) is refused by the tie, a sync outside Σ_sync is
+refused, bucket 0 holds the certifier's own frame within R_in, and the advice digest moves with every input it reads.
 """
 
 import inspect
@@ -174,7 +174,7 @@ def test_the_verifier_of_record_takes_the_certified_syncs_only_from_its_own_sour
 
 
 def test_the_verifier_of_record_refuses_a_link_declared_off_its_certified_syncs(tmp_path):
-    """Through the proof service (stand-in proofs): an honest session is accepted in every window where the clock
+    """Through the proof system (stand-in proofs): an honest session is accepted in every window where the clock
     source holds the declared syncs, and refused in every window where it says the certifier ran each window at a δ
     above the declared one, or where there is no source."""
     session = serve(1)

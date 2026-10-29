@@ -1,4 +1,4 @@
-"""The proof service's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
+"""The proof system's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
 
 The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
 prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session of the auditor host,
@@ -21,7 +21,7 @@ challenger  {"type": "commitment", "commitment"}, {"type": "opening", "opening"}
 
 Every message is fail-closed.  The challenger refuses a frame that isn't the next of that sequence in exactly that form,
 a coin other than its family's next (coin i after the family's i-th root, once: `LiveRecord`) and a root that isn't 64
-bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never redraws).  It appends each
+bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never resamples).  It appends each
 release to `releases.jsonl` (`LiveRecord.log`'s two events, a line each in canonical JSON, integer nanoseconds on its
 monotonic clock), fsynced, before the opening leaves its host, and answers the client's close only once its signed close
 is written.  A session served with a `secret` (the auditor host's gate gives one to the window's opener, RT4-INT-29)
@@ -38,7 +38,8 @@ connects with `connect_when_listening`: until the session's tunnel listens, the 
 so it is tried again, up to `TUNNEL_WAIT_S`, then refused; nothing else is retried.
 
 The verifier reads the challenger's directory from the auditor's side (the challenger's own run), never from the prover's
-bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head infra published
+bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head the auditor
+host's operator published
 (`ledger_lines`, `challenger.ledger_head`): the commitment the challenger signed and the roots its signed release log
 shows it received (`challenger.session_named`), its record, close and refused hellos the files the ledger's end sealed,
 against which a family's openings are `order_reason`'s.  An
@@ -238,7 +239,7 @@ def _hello_reason(head: dict, secret: bytes | None) -> str | None:
 def greet(sock: socket.socket, secret: bytes | None = None) -> str | None:
     """Read the client's hello on `sock`: None when it is the session's (`serve(..., greeted=True)` then serves the
     stream), else why it is refused, which is sent before the stream is hung up.  It releases nothing, so a server may
-    take another connection after a refused hello without redrawing anything."""
+    take another connection after a refused hello without resampling anything."""
     try:
         why = _hello_reason(_Wire(sock).recv(), secret)
     except CoinError as e:
@@ -356,7 +357,7 @@ class RemoteChallenger:
         """`open` of each (label, index, after) of `requests` in one round trip: every open frame written back to back,
         then the replies read in order, each checked as `open` checks its own (`live_reason` against its request).  A
         refusal, a reply of another form, or a coin that isn't its request's, opened after its `after`, ends the session
-        and raises: none of the batch's openings is returned, and a retry never redraws.  The challenger answers frames
+        and raises: none of the batch's openings is returned, and a retry never resamples.  The challenger answers frames
         in order (`serve`), so its release log is the one the same coins opened one at a time would have written.  At
         most `MAX_BATCH` coins: their frames are written before any reply is read."""
         asked = [(label, index, bytes(after)) for label, index, after in requests]
@@ -460,7 +461,7 @@ def session_files(directory: str | os.PathLike) -> dict[str, Any]:
 
 
 def ledger_lines(path: str | os.PathLike) -> list[str]:
-    """One published head of the auditor's ledger at `path` (infra's ``windows.jsonl``), its lines without their
+    """One published head of the auditor's ledger at `path` (its operator's ``windows.jsonl``), its lines without their
     newlines; a missing or unreadable head raises `CoinError`."""
     text = _read(Path(path), "auditor's ledger")
     if text is None:
@@ -470,7 +471,8 @@ def ledger_lines(path: str | os.PathLike) -> list[str]:
 
 def main_lines(path: str | os.PathLike) -> list[str]:
     """The verifier's copy of main's first-parent history at `path`, one commit a line, newest first, without their
-    newlines; a missing or unreadable file raises `CoinError`.  infra writes the file at each re-pin from
+    newlines; a missing or unreadable file raises `CoinError`.  The auditor host's operator writes the file at each
+    re-pin from
     ``git rev-list --first-parent origin/main`` (vy-auditor-1 reads it from /opt/vy-verifier/main-first-parent.txt), so
     the line is main's first-parent commits.  A deployment that wants `pouw.credit`'s freshness floor measured against the
     checked train heads instead (the commits whose own ``check`` passed and landed them, less a reverted train's) writes
@@ -484,7 +486,8 @@ def main_lines(path: str | os.PathLike) -> list[str]:
 def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathLike], window: Any, key: ChallengerKey,
                     verify: Verify) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the verifier takes from the challenger's directory for window `window`, read on the auditor's side: the
-    auditor's ledger as infra published it, every head at `heads` checked and the longest taken (`challenger.ledger_head`);
+    auditor's ledger as the auditor host's operator published it, every head at `heads` checked and the longest taken
+    (`challenger.ledger_head`);
     the one session it opens for the window, under the challenger key the window's deployment pins, `key`
     (`challenger.audited_session`); its record, close and refused hellos the files the ledger's end sealed; and from that
     session's directory the coin commitment the challenger signed and the roots its signed release log shows it received

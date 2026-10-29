@@ -1,4 +1,4 @@
-"""A client's abort on a compact run (NET-67): the certified I/O (`certifier_serve.certified_io`) and the I/O tie's rule
+"""A client's abort on a compact run: the certified I/O (`certifier_serve.certified_io`) and the I/O tie's rule
 (`active.compact_finish_violations`) on test_compact_eos_phase12's honest rehearsal, its target response (finish
 `length` at `max_tokens`) cut short as the link carries one its client aborted: its kept records, none marked.
 

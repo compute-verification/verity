@@ -4,7 +4,7 @@ import Definitions.Accounting.Physical
 # Ingress by source
 
 `ingress X I` counts every gate placed outside `X` that `A[X, I]` reads, wherever it was placed. The bandwidth audit's
-guarantee on the actual circuit (B3 in `note:console/20261012T0645Z-draft-actual-circuit-model`) is about one source:
+guarantee on the actual circuit (B3) is about one source:
 the bits the cores read *from HBM* in the window, beside what they read over the side links, which count against the
 side budget `β_side (T + RTT)`. So it needs ingress from a location `Y`, and the capacity of the links from `Y`:
 

@@ -1,4 +1,4 @@
-"""[GEN sampling] the torch-free Gumbel-max recomputation (`bench/gen_sampling_rng.py`) and the sampling workloads."""
+"""The torch-free Gumbel-max recomputation (`bench/gen_sampling_rng.py`) and the sampling workloads."""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ def test_sampled_token_paths():
     assert 0 <= d["token"] < 49152
 
 
-# --- the workloads + `load_workload`'s sampling block (the adapter imports torch; exec the pure function instead) ---
+# --- the workloads + `load_workload`'s sampling parameters (the adapter imports torch; exec the pure function instead) ---
 
 def _adapter_fn(name: str):
     src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "engine" / "vllm_adapter.py").read_text()

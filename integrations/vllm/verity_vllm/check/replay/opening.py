@@ -17,7 +17,7 @@ from verity_vllm.records.required_manifest import RequiredManifest
 #: the binding map's `encoding.dtype` is the collector's torch dtype name; the manifest's short names are accepted too
 _ITEMSIZE = {"bf16": 2, "f16": 2, "u16": 2, "i32": 4, "u32": 4, "f32": 4, "i64": 8, "u64": 8,
              "bfloat16": 2, "float16": 2, "int16": 2, "uint16": 2, "float32": 4, "int32": 4, "uint32": 4, "int64": 8, "uint64": 8, "float64": 8,
-             # [revb F-r17b-52 (iii)] the LIFTED words of the padded MoE construction (manifest_format.LIFTED_DTYPES): Value<17> -> u32, Value<33> -> u64
+             # the LIFTED words of the padded MoE construction (manifest_format.LIFTED_DTYPES): Value<17> -> u32, Value<33> -> u64
              "l17": 4, "l33": 8, "w8": 1, "uint8": 1, "int8": 1, "float8_e4m3fn": 1, "float8_e5m2": 1}
 _NPDTYPE = {1: np.uint8, 2: np.uint16, 4: np.uint32, 8: np.uint64}
 
@@ -70,7 +70,7 @@ class CommittedStore:
                 continue
             key = (str(ident.get("request_id", "r0")), int(ident["step"]), str(ident.get("op_path")), str(ident.get("output_member")))
             self.idx.setdefault(key, []).append(e)
-        # [moe F-moe-r17-06] a shared module's invocations share ONE member name in the collector's layouts: the reader is asked for the
+        # a shared module's invocations share ONE member name in the collector's layouts: the reader is asked for the
         # entry's EXACT meta (`<name>#ord<tensor_ordinal>`, oracle_compare.entry_read_name) whenever more than one invocation is bound under
         # that name at the step -- by the bare name every layer read layer 0's words (the OLMoE mixedstop record: layers 1..15 unequal)
         self.name_inv: dict[tuple[int, str], int] = _same_name_invocations(bmap)
@@ -109,7 +109,7 @@ class CommittedStore:
         if len(cov) > 1:
             where = ", ".join(f"{x.get('name')}@{x.get('stream_offset')}" for x in cov[:4])
             return None, (f"ambiguous binding: {len(cov)} entries for ({rid}, step {step}, {op_path}/{member}) [invocation {inv_min}] cover "
-                          f"[{elo}, {ehi}) -- {where}; C1 requires one unambiguous binding per required identity (F-r16-08)")
+                          f"[{elo}, {ehi}) -- {where}; C1 requires one unambiguous binding per required identity")
         e = cov[0] if cov else es[0]
         ident = e.get("identity") or {}
         rng = ident.get("element_range") or [0, None]
@@ -146,7 +146,7 @@ def model_weights_provider(model, prefix: str) -> Callable[[str, int, int], np.n
         if name not in cache:
             import torch
             x = t.detach()
-            # [R16 fp8] the words in the parameter's OWN width: bf16 -> u16; the block-scaled FP8 linear's e4m3 `weight` ([N, K], the
+            # the words in the parameter's OWN width: bf16 -> u16; the block-scaled FP8 linear's e4m3 `weight` ([N, K], the
             # checkpoint's stored bytes; the cutlass kernel reads it through a `.T` view, the storage is not re-laid) -> u8; its f32
             # `weight_scale_inv` ([N/G, K/G]) -> u32; an int32 table (DeepSeek-V4's hash-routed `ffn.gate.tid2eid`) -> u32.  The replay
             # checks the width against the Program's declared leaf (weight_bits).

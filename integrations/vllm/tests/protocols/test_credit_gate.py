@@ -385,7 +385,7 @@ def test_todays_path_without_a_retained_z_is_refused_as_no_z():
 
 
 def test_serve_h1s_wrapper_is_refused_too():
-    """SERVE-H1's run tree (cursor/serve-h1-run-ea24, `pouw_h1.served`): the arm's apply serves y, then the wrapper
+    """The served H1 run's tree (`pouw_h1.served`): the arm's apply serves y, then the wrapper
     quantizes the same activations again and takes z from `int_mm`; the trace refuses it the same way."""
     layer = Linear(32, 1, TodayArm())
     x = (torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
@@ -406,7 +406,7 @@ def test_records_from_a_second_scaled_mm_zy_beside_the_served_scaled_mm_are_refu
 
 
 def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_nothing():
-    """RT4-INT-21: the call passes the gate, but the window's coins were held in the serving process (no pouw setting
+    """The call passes the gate, but the window's coins were held in the serving process (no pouw setting
     'challenger'), so no verifier trusts them and the window credits nothing, naming why."""
     _y, run = _serve(FusedArm())
     (v,) = run.verdicts.values()
@@ -562,6 +562,22 @@ def test_the_honest_forgery_stand_in_is_credited():
         FORGE.pop()
     (v,) = run.verdicts.values()
     assert v["credit"], v
+
+
+@pytest.mark.parametrize("name", [None, *FORGERIES])
+def test_the_value_check_on_the_device_is_the_hosts(name):
+    """`pouw_h1_records.reason` of a call's records, scales and served y left on a CUDA device, as the arm leaves them, is
+    what it is of their host copies: None for honest records, and each forgery's own refusal."""
+    if not torch.cuda.is_available():
+        pytest.skip("needs CUDA")
+    w = Linear(64, 1, None)
+    xq, s_a = int8_ops.row_quant((torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16())
+    y, zy = E.scaled_mm_zy(xq, s_a, w.weight, w.weight_scale, ROWS)
+    if name is not None:
+        y, zy = FORGERIES[name][0](y.clone(), zy.clone(), xq, s_a, w.weight, w.weight_scale)
+    host = ZR.reason(zy.numpy(), ROWS, 64, y, s_a, w.weight_scale)
+    assert host == (None if name is None else FORGERIES[name][1])
+    assert ZR.reason(zy.cuda(), ROWS, 64, y.cuda(), s_a.cuda(), w.weight_scale.cuda()) == host
 
 
 def test_a_z_written_outside_the_trace_is_refused_as_untraced():
@@ -724,7 +740,7 @@ def _one_row(xq):
     (lambda: ZyArm(), [0, 7, 2], "round 0's input-ids table h1/ids@0 is not the Commit's input-ids/0"),
 ], ids=["a-all-zero", "one-a-row-off", "ids-off-the-prompt"])
 def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, monkeypatch, arm, ids, want):
-    """ROOTS1, by core's credit (`credit._arow`): H1 handed every A code zero (the RT4 A = 0 probe) or one A
+    """ROOTS1, by core's credit (`credit._arow`): H1 handed every A code zero (the A = 0 probe) or one A
     row off the codes the Commit acquired at the linear's row_quant, or the Commit acquired an input id other than the
     prompt's (round 0's ids table is the prompt's, fixed before the salt), each with an honest Commit, whose record
     registers its own tree for those rows. The serving process credits nothing (`pouw_h1_commit.UNTIED`); a prover

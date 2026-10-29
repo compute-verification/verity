@@ -1,4 +1,4 @@
-// Verity R13 lane hopper: host-declared configuration of the FA3 M1 tap (see verity_tap_fa3.h).  Plain C++ so flash.h (host and
+// Verity: host-declared configuration of the FA3 M1 tap (see verity_tap_fa3.h).  Plain C++ so flash.h (host and
 // device translation units) can carry it in Flash_fwd_params; the launch template copies it into the mainloop arguments.
 #pragma once
 #include <cstdint>

@@ -3,9 +3,7 @@
 # also waits out node 2's booked windows: build reader.cu, gate it byte for byte against the remote bandwidth driver
 # (small, under compute-sanitizer, then at --gate-blocks), then time one pass. Results go to $RESEARCH_RUN_DIR/out.
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 64 \
-#     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-codec-tensor \
-#     -- taskset -c 48-95 bash benchmarks/codec_tensor/reader.sh
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-codec-tensor taskset -c 48-95 bash benchmarks/codec_tensor/reader.sh
 #
 # ENV_DIR holds the shared torch venv (as step.sh's); GIB sizes the timed pass (default 8); SANITIZE=0 skips the
 # sanitizer's gate.

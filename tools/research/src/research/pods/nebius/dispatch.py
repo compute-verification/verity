@@ -27,8 +27,8 @@ logs) and a copy is kept at `$VY_DISPATCH_ROOT/templates.by-sha/<sha>/<template>
 Commit of its chain renders from that copy, never from the live `sky/jobs/`, so a template refreshed mid-chain applies only to items
 submitted after it. A Job whose pinned copy is gone is held (left unseen, printed each tick), never chained on another template.
 Every task starts under `taskset -c`: a `provers` task on $VY_PROVER_CPUS (128-175, three 16-core slices: the floor of 2 GPUs plus 1
-borrowed), every other task on $VY_DISPATCH_CPUS (96-127,176-191), so vLLM jobs never run on a prover's slice (Daniel 1 Oct 01:35Z;
-note:20261001T0137Z-handoff-from-proofs-flock-fp-vllm-jobs-on-prover-slices). 0-7 are k3s's, 8-95 the RC's three train-check slots.
+borrowed), every other task on $VY_DISPATCH_CPUS (96-127,176-191), so vLLM jobs never run on a prover's slice
+(they skew its timed CPU verifier). 0-7 are k3s's, 8-95 the RC's three train-check slots.
 
 **Ready files.** One JSON file per item, `$VY_READY/<workstream>/<id>.json` (default /workspace/jobs/ready, which the steward's
 exporter counts as `vy_ready_jobs{lane}` for the idle alert), written by the workstream's owner (write a temp name, then rename):
@@ -155,7 +155,7 @@ def load_settings(path: Path) -> None:
 CALLER_ENV = dict(os.environ)   # before dispatch.env: what each of the loop's ticks starts from
 load_settings(ROOT / "dispatch.env")
 PINNED = ROOT / "templates.by-sha"
-IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
+IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "verity-sky-gpu:3dbe60044f88c462")
 READY = Path(os.environ.get("VY_READY", "/workspace/jobs/ready"))
 CPUS = os.environ.get("VY_DISPATCH_CPUS", "96-127,176-191")
 PROVER_CPUS = os.environ.get("VY_PROVER_CPUS", "128-175")

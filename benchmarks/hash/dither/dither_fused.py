@@ -18,9 +18,9 @@ Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
              step s + 1's launches read
 
 The window's coins are served_h1's (`coins.open_coins`, a live window of `ROUNDS` rounds at epoch 1): with
-``$POUW_CHALLENGER`` (HOST:PORT), ``$POUW_CHALLENGER_SESSION`` and ``$POUW_CHALLENGER_SECRET_FILE`` (the session infra's
-gate opened, and its secret: `coins.session`) the challenger off the node, one session a window, opened at the window's
-build; else `window.live_challenger` in this process.  `stats` says which (``coins``: ``off-node session ID at
+``$POUW_CHALLENGER`` (HOST:PORT), ``$POUW_CHALLENGER_SESSION`` and ``$POUW_CHALLENGER_SECRET_FILE`` (the session the
+challenger's gate opened, and its secret: `coins.session`) the challenger off the node, one session a window, opened at
+the window's build; else `window.live_challenger` in this process.  `stats` says which (``coins``: ``off-node session ID at
 HOST:PORT (unchecked)`` or ``in-process (not certified)``).  Only the round's coin changes source: the salt, the seeds
 and what they read are the same either way.
 
@@ -68,7 +68,7 @@ RC_MODES = ("fused", "side")
 LIB = "dither"
 REG: dict[int, tuple[str, torch.nn.Module]] = {}
 CFG: dict = {}
-WIN: "Window | None" = None
+WIN: "DitherState | None" = None
 
 
 def index_of(prefix: str) -> int:
@@ -82,7 +82,7 @@ class _F(C.Structure):
                 ("ydump", C.c_void_p), ("t", C.c_int), ("n", C.c_int), ("k", C.c_int), ("pad", C.c_int)]
 
 
-class Window:
+class DitherState:
     """A window's device state: per linear two parities of A, scale and z slots; the h1c sets (B tables once; per parity
     the A, admit and z tables, the step trees and the round); the receipts' call tables (one per parity, sharing one seeds
     and one receipts buffer) and the receipt trees; the `h1f` table and step struct; the live coins."""
@@ -384,10 +384,10 @@ class Window:
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------
 
-def _window(dev) -> Window:
+def _window(dev) -> DitherState:
     global WIN
     if WIN is None:
-        WIN = Window(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1f"], CFG["gate"], dev, CFG["rc"])
+        WIN = DitherState(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1f"], CFG["gate"], dev, CFG["rc"])
     return WIN
 
 
@@ -433,7 +433,7 @@ def patch(t: int, h1c: str, h1f: str, key: bytes | None = None, gate: bool = Fal
     IV.Int8PlainLinearMethod.apply = apply
 
 
-def hook(llm) -> Window:
+def hook(llm) -> DitherState:
     """The step hook around the engine's runner (`execute_model`), and the window (built at the engine's first forward)."""
     from verity_vllm.engine import handle
     runner = handle.model_runner(llm)
@@ -471,9 +471,9 @@ def int8_checkpoint(pin: str, scratch: Path) -> Path:
 
 # -- the gate ----------------------------------------------------------------------------------------------------------------
 
-def check(win: Window, lib_h1r: str, which: str = "gate", n_ref_units: int = 3,
+def check(win: DitherState, lib_h1r: str, which: str = "gate", n_ref_units: int = 3,
           cpu_calls: tuple = (0, 1, 2, 3, 126, 127)) -> dict:
-    """Capture `which`'s checks (`Window.arm`), after the step after it ran (its receipts): per call z = torch._int_mm
+    """Capture `which`'s checks (`DitherState.arm`), after the step after it ran (its receipts): per call z = torch._int_mm
     (cuBLASLt) on the slots' rows < m and zero above, y (dumped) = int8_ops.scaled_mm's body on the same rows (today's served y),
     every receipt = h1r v1 (another unit implementation than the served v2's, gated against receipts.py) on the saved
     slots, a few units = h1tile.reference (z and receipt),

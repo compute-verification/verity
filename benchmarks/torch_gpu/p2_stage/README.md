@@ -7,15 +7,16 @@ on that buffer.
 - `layout.py`: where a layer's matrices lie in the store (`StoreLayout`), read by `store_layout` from the store's
   layout JSON (memory-accounting's `p2_v1/store.py layout`, or its toy's `toy.json`): each tensor from a label boundary,
   zero past its end, and at its `staging_offset` in its layer's staging buffer. `Weights` is the plaintext, the seeded
-  weights stream (`e2e_h200.served_weights`), and `payloads` lays it out as the store's W. `decode_block` is P2's
-  reference decode of one label, the check's ground truth. `open_store` takes the store: memory-accounting's encoded
-  store (`p2_v1/store.py encode`'s segment files, read by `segment_rows`), under `store_salt`, `setup.draw_salt` of the
-  coin and commitment its `setup.json` is held to; or a development store under a public test salt.
+  weights stream (`e2e_h200.served_weights`), and `payloads` lays it out as the store's W. `check_blocks` holds
+  rows to it by P2's reference decode of one label (`p2_v1/store.py`'s `decode_block`), the check's ground truth.
+  `open_store` takes the store: memory-accounting's encoded store (`p2_v1/store.py encode`'s segment files, read by
+  `segment_rows`), under `store_salt`, `setup.draw_salt` of the coin and commitment its `setup.json` is held to; or a
+  development store under a public test salt.
 - `stage.py`: `decode_matrix(store, layer, tensor, out_buf)` and the fixture's `decode_layer(store, layer, staging)`,
   built on `libp2v1.so` through `p2_v1.gpu.Kernels` (keys by `p2v1_keys` v4, then `p2v1_decode`). A chunk of labels is
   decoded at a time, and each row's payload bytes are scattered to their place in the buffer. What the reference refuses
   raises `StoreError` with the fixture's flag bits: 2 for a row that isn't a codeword or isn't below p, 3 for a last
-  block nonzero past its tensor's end, 0 for the library's own flag.
+  block nonzero past its tensor's end, 0 for the library's own flag. `timed` is the one timer the drivers below use.
 - `gemm.py`: the GEMM's check. `twin` checks every output word by an independent exact path, and `definition_words`
   evaluates `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}` on samples.
 - `layer.py`: the GPU driver for one layer (the fixture's toy, encode a development store across leases, stage, gemm at
@@ -25,7 +26,7 @@ on that buffer.
 - `full.py`: the whole store a step: every tensor of the 52 layers and the head staged one at a
   time from the store's segment files (each held to its SHA-512), the last timed decode of each held to the weights
   manifest's SHA-256, the step's decode summed tensor by tensor with the peak HBM, then one layer's exact GEMM by
-  KS8-SIMPLE (`int_mm.linear`) against the twin. `check.py --sample N` checks N blocks of every tensor of the store
+  `int_mm.linear` against the twin. `check.py --sample N` checks N blocks of every tensor of the store
   against the reference afterwards.
 - `sketch.py`: the remote bandwidth audit's receipts beside the decode (Demo B's bandwidth leg; the interface is
   `verity/core/protocols/remote_bandwidth/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
@@ -44,7 +45,5 @@ on that buffer.
   with the run) or a development store. `full.sh` runs `full.py` on the demo card over memory-accounting's finished
   store in place, read only. Each script's header gives its command line.
 
-KP2-DEC (#4453, f254735dd2) staged a layer with its own kernel and measured it beside this path: its `decode_p2v1` arm
-is the same libp2v1 decode plus a payload copy. This directory uses that library unchanged and none of KP2-DEC's kernels.
-Both GEMMs are KS8-SIMPLE's `int_mm.linear` (#4472; `benchmarks/torch_gpu/s8_linear/int_mm.py`, the exact W8A8
-linear's int_mm backend): `layer.py`'s with its eager epilogue, `full.py`'s with its fused one.
+The decode is libp2v1's, unchanged. Both GEMMs are `int_mm.linear` (`benchmarks/torch_gpu/s8_linear/int_mm.py`, the
+exact W8A8 linear's int_mm backend): `layer.py`'s with its eager epilogue, `full.py`'s with its fused one.

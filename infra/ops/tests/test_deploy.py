@@ -41,8 +41,10 @@ def local(node: str, argv: list[str], stdin: bytes | None) -> subprocess.Complet
 
 
 @pytest.fixture
-def world(tmp_path):
+def world(tmp_path, monkeypatch):
     origin, repo, node = tmp_path / "origin.git", tmp_path / "repo", tmp_path / "node"
+    (tmp_path / "certs").mkdir()
+    monkeypatch.setattr(deploy, "CERTS", str(tmp_path / "certs"))       # this machine's own trust store is no fixture
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
     subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
     _git(repo, "remote", "add", "origin", str(origin))
@@ -356,6 +358,19 @@ def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsy
                        repo=world["repo"]) == 2                                   # a repeated --on adds, never replaces
     err = capsys.readouterr().err                                                  # --node: the old spelling, a hidden alias
     assert "no node 'zz'" in err and err.count("research deploy: --node is now --on") == 1
+
+
+def test_a_trust_store_that_holds_a_distrusted_root_is_drift_until_the_upgrade_removes_it(world, capsys):
+    n, certs = world["nodes"]["n"], Path(deploy.CERTS)
+    deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])
+    (world["node"] / "bin" / "unit.service").write_text("[Unit]\n")
+    (certs / "ISRG_Root_X1.pem").write_text("kept\n")
+    (certs / "emSign_ECC_Root_CA_-_G3.pem").write_text("distrusted\n")
+    rep = deploy.drift(n, "origin/main", local, world["repo"])
+    assert rep["distrusted"] == ["emSign_ECC_Root_CA_-_G3.pem"] and not deploy.clean(rep)
+    assert "root     " in deploy.render("n", "origin/main", rep) and "--only-upgrade ca-certificates" in deploy.render("n", "origin/main", rep)
+    (certs / "emSign_ECC_Root_CA_-_G3.pem").unlink()
+    assert deploy.clean(deploy.drift(n, "origin/main", local, world["repo"]))
 
 
 def test_a_node_ssh_cannot_connect_to_is_unreachable_and_any_other_failed_probe_is_an_error(world, capsys):

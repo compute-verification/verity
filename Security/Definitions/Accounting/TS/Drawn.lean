@@ -3,11 +3,10 @@ import Definitions.Accounting.TS.ProofLayer
 /-!
 # A sampled window's proofs: what (I8) reads of its drawn units (trusted)
 
-`ProofLayer`'s counterpart for 𝒫_samp. A round's coins are `Paths C m × B`: on `Paths C m` the `m` coins
-released before the draws, in order (the round's σ, or a window's call sites' coins, each after the values it follows
-are committed), and on `B` the live draw coin, which names `s` units (`DrawnLayer.draw`), with the proofs' coins. Each
-drawn unit is proved alone, with its own noise's generation (decision 105); a unit is one output coordinate, or a
-K-chunk committing its running sum (decision 107).
+`ProofLayer`'s counterpart for 𝒫_samp. A round's coins are `Paths C m × B`: on `Paths C m` the `m` coins released before
+the draws, in order (the round's σ, or a window's call sites' coins, each after the values it follows are committed),
+and on `B` the live draw coin, which names `s` units (`DrawnLayer.draw`), with the proofs' coins. Each drawn unit is
+proved alone, with its own noise's generation; a unit is one output coordinate, or a K-chunk committing its running sum.
 
 Values are per committed position, not per unit: a unit reads its slots' positions (`DrawnLayer.pos`: its operand rows,
 its seed's inputs, a running sum, its outputs), and a position one unit writes is the position another reads, so one
@@ -35,9 +34,9 @@ Proofs exist for drawn units only: round `w`'s proof `i` is drawn unit `drawnAt 
 * `WriterReads`: a position's writer has it among its slots, checked for each layer.
 * `Mode`: a unit's mode in the run: paid (computed), folded (skipped, its committed words folded) or whole (skipped
   with its fold).
-* `Late`, `Good`, `coneWt`: a unit writes a position another reads, committed after the coin the reader's noise reads
-  (decision 119); a unit whose late cone (itself included) the run paid for, under the run's modes; a unit's late
-  cone's weight, which the share charges a skipped unit.
+* `Late`, `Good`, `coneWt`: a unit writes a position another reads, committed after the coin the reader's noise reads; a
+  unit whose late cone (itself included) the run paid for, under the run's modes; a unit's late cone's weight, which the
+  share charges a skipped unit.
 * `Of`: the play's tie to its drawn units' proofs; `Covers`: the ideal game's share counts every unit that isn't good,
   a property of the share's definition, proved for each game.
 
@@ -187,8 +186,8 @@ rightness speaks of it. Protocol structure, checked for each layer. -/
 def WriterReads : Prop := ∀ ℓ u, pf.src ℓ = some u → ∃ k, pf.pos u.1 u.2 k = ℓ
 
 /-- **Unit `u` writes, after `v`'s coin, a position that unit `v` reads**: the position's cut is after the coin `v`'s
-noise reads, so its value can be chosen after that coin (under decision 107, a K-chunk's running sum). A position
-committed before `v`'s coin is fixed when `v`'s noise is drawn, whether its writer is right or not, so it is no edge. -/
+noise reads, so its value can be chosen after that coin (such as a K-chunk's running sum). A position committed before
+`v`'s coin is fixed when `v`'s noise is drawn, whether its writer is right or not, so it is no edge. -/
 def Late (u v : Fin S × J) : Prop :=
   ∃ k, pf.src (pf.pos v.1 v.2 k) = some u ∧
     (v.1 < (pf.cut (pf.pos v.1 v.2 k)).1 ∨

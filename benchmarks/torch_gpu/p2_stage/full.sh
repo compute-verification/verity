@@ -49,8 +49,8 @@ LEASE_MIN=${LEASE_MIN:-20}
 RECEIPTS=${RECEIPTS:-}
 ARCH=${ARCH:-90a}
 BW_SAMPLE=${BW_SAMPLE:-100000}
-# the card's periods no lease may reach, START/END in UTC
-QUIET=${QUIET:-2026-10-26T22:45:00Z/2026-10-27T01:00:00Z 2026-10-27T05:00:00Z/2026-10-27T10:00:00Z}
+# the card's periods no lease may reach, each START/END in UTC, space-separated (none by default)
+QUIET=${QUIET:-}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 LAYOUT=$IN/store-layout.json; MANIFEST=$IN/h200-manifest.json
 export O D PY S ENC LAYOUT MANIFEST MANIFEST_SHA256 LEASE_MIN ARCH QUIET PATH=$CUDA/bin:$PATH \
@@ -106,7 +106,7 @@ env -u GPU_LEASE_TIMED gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   for w in $QUIET; do
     w0=$(date -u -d "${w%/*}" +%s); w1=$(date -u -d "${w#*/}" +%s)
     if [ $((now + 60 * LEASE_MIN)) -gt "$w0" ] && [ "$now" -lt "$w1" ]; then
-      echo "a lease from now could reach the window $w: released unused" >> "$O/rc.txt"
+      echo "a lease from now could reach the quiet period $w: released unused" >> "$O/rc.txt"
       step window 3; exit 3
     fi
   done

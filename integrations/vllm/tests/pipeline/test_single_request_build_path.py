@@ -34,7 +34,7 @@ from verity_vllm.records import workload as WL
 from verity.ml.definitions.registry import b1
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
-#: workload 101's Build (run r20260928-160311-303b): `build_request/` (the derived request Program) and
+#: workload 101's Build: `build_request/` (the derived request Program) and
 #: `build_workload/` (the workload Program GP-01 composed)
 BUILD_101 = "art:2d65d5d7bdc21af3df01c041272e5a72b40a86bc74cc09075c7e726cc01f1fd0"
 #: the workload's manifest command (`row_stages.required_manifest`): every tap policy on, the word check at its default 16/32
@@ -117,7 +117,7 @@ def _build_101(tmp_path) -> Path:
 
 
 def _rekey_sha512(d: Path) -> None:
-    """#101's Build recorded its Program digest under SHA-256, before the identities moved to SHA-512. The record must be the SHA-256
+    """Workload 101's Build recorded its Program digest under SHA-256, before the identities moved to SHA-512. The record must be the SHA-256
     digest of the descriptor the Build wrote; each file of the request dir then carries that same descriptor's SHA-512 digest in its
     place, so nothing but the digest changes."""
     desc = json.load(gzip.open(d / "descriptor.json.gz"))
@@ -134,7 +134,7 @@ def _run(code: str, *args: str) -> subprocess.CompletedProcess:
 
 @pytest.mark.slow
 def test_101s_request_program_composes_as_its_build_does(tmp_path):
-    """#101's request Program (V = 128256, S = 32, 23.26 x 10^9 word gates once composed) through GP-01 and a cold decode."""
+    """Workload 101's request Program (V = 128256, S = 32, 23.26 x 10^9 word gates once composed) through GP-01 and a cold decode."""
     build = _build_101(tmp_path)
     r = _compose(VLLM_DIR / "workloads" / f"{ROW_101}.json", build / "build_request", tmp_path / "build_workload", eos=128001)
     assert r["requests"] == 1 and r["gates"] == 23_256_312_239

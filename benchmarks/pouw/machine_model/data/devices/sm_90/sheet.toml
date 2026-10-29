@@ -1,9 +1,8 @@
-# DS-90 as a data sheet (note:20261019T0511Z-draft-mm-sheets, G1): each constant the data-sheet machine
-# (`Accounting.TS.Sheet.machine`) reads on the H200, its value, the vendor document that states it and its grade, and
-# each DS-90 class's tensor form or pipe. `machine-model sheet --device sm_90` derives every DS-90 line from it and
-# checks them against census/DS-90.csv; `--lean` prints the Lean module `lean` names, which the tests hold to it.
-# Scope: one GPU's own SMs. A peer GPU's work over NVLink or NVSwitch is outside the sheet, and Device.lean's side
-# channels don't list it (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).
+# DS-90 as a data sheet (G1): each constant the data-sheet machine (`Accounting.TS.Sheet.machine`) reads on the H200,
+# its value, the vendor document that states it and its grade, and each DS-90 class's tensor form or pipe.
+# `machine-model sheet --device sm_90` derives every DS-90 line from it and checks them against census/DS-90.csv;
+# `--lean` prints the Lean module `lean` names, which the tests hold to it. Scope: one GPU's own SMs. A peer GPU's work
+# over NVLink or NVSwitch is outside the sheet, and Device.lean's side channels don't list it (RT-SCOPE-1).
 name = "H200"
 gpu = "H200 SXM (sm_90a)"
 vector = "DS-90"
@@ -12,7 +11,7 @@ lean = "Security/Definitions/Accounting/Sheets/H200.lean"
 [fmax]
 mhz = 1980
 grade = "whitepaper (H100 SXM5), and measured"
-source = "H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the H200 data sheet states no clock; the driver's maximum on vy-dc-h200 is 1980 MHz (EPS1 DC, note:20261017T0452Z-draft-eps1-dc)"
+source = "H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the H200 data sheet states no clock; the driver's maximum on vy-dc-h200 is 1980 MHz (EPS1 DC)"
 
 [sms]
 value = 132
@@ -30,7 +29,7 @@ source = "CUDA C++ Programming Guide 12.9 §18.8.1 (CC 9.0): '4 warp schedulers 
 [uniform_issue]
 slots = 1
 grade = "measured only (no vendor document states it)"
-source = "no vendor document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the uniform pipe with no rate, and CUDA Binary Utilities §4.3 lists the Hopper uniform opcodes (integer only); measured at saturation beside an async wgmma: each uniform instruction costs 1.08 to 1.19 SMSP-cycles at issue 0.87 with no dual issue (RT-H200-EMP, dc/probes/sm90_emp.cu emp_pack3, r20261019-064443-0ae6, note:20261019T0533Z-draft-rt-h200-emp), and 0.984 of a slot beside a saturated lane stream (the census's UNI issue line, DC-90)"
+source = "no vendor document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the uniform pipe with no rate, and CUDA Binary Utilities §4.3 lists the Hopper uniform opcodes (integer only); measured at saturation beside an async wgmma: each uniform instruction costs 1.08 to 1.19 SMSP-cycles at issue 0.87 with no dual issue (dc/probes/sm90_emp.cu emp_pack3), and 0.984 of a slot beside a saturated lane stream (the census's UNI issue line, DC-90)"
 
 [clocks.tensor]
 label = "tensor boost clock"
@@ -111,7 +110,7 @@ tol = 0.5
 clock = "fp64"
 element_words = 2
 grade = "data sheet and whitepaper; per clock derived (figure over SMs and the FP64 clock) and measured"
-source = "H200 data sheet, H200 SXM: 'FP64 Tensor Core 67 TFLOPS' (no sparsity footnote); measured alone, DMMA.16x8x16 128 MACs an SM clock and DMMA.8x8x4 64, and beside a saturated wgmma s8 form t + s = 0.935 to 0.958, so f64 shares the tensor pipe's time with the other types (RT-ISA-1, unpriced90.cu, r20261019-085210-4776, note:20261019T0520Z-draft-rt-isa)"
+source = "H200 data sheet, H200 SXM: 'FP64 Tensor Core 67 TFLOPS' (no sparsity footnote); measured alone, DMMA.16x8x16 128 MACs an SM clock and DMMA.8x8x4 64, and beside a saturated wgmma s8 form t + s = 0.935 to 0.958, so f64 shares the tensor pipe's time with the other types (unpriced90.cu)"
 
 # A6's ω for each tensor class (`omega` in sheet.py), read off the PTX accumulator fragments.
 [omega]
@@ -139,22 +138,19 @@ source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 'warp shuffle
 [pipes.uniform]
 width = "3200000000/49027679"
 grade = "measured only (no vendor document states the uniform datapath's rate)"
-source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest of 11 forms alone (uz_128i) at 0.4999 uniform instructions a SMSP-cycle, at decision 76's 2% margin 1.96110716 SMSP-cycles each (r20261017-095350-02ff, r20261017-103944-a0bf, r20261017-112709-e43e, r20261017-113207-6aa4, r20261017-113541-675b); the width counts a uniform instruction as a warp instruction's 32 results, as the pipe row reads a width"
+source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest of 11 forms alone (uz_128i) at 0.4999 uniform instructions a SMSP-cycle, at a 2% margin 1.96110716 SMSP-cycles each (five runs); the width counts a uniform instruction as a warp instruction's 32 results, as the pipe row reads a width"
 
 # Each DS-90 class: a tensor form (operand type, m, n, k, and the warps that issue one MMA: a wgmma's warpgroup is 4,
 # each warp's instruction a quarter of it; PTX ISA 9.4 §9.7.17), a pipe, or neither (issue only: FFMA at 128 results a
 # clock is the issue ceiling; b1 has no peak on any sheet). `sparse` marks a 2:4 sparse form, k its logical k and its
-# dense MACs half m · n · k: each `wgmma.mma_async.sp` N256 form is a class at its dense twin's demand (RT-H200-EMP-2,
-# note:20261019T0533Z-draft-rt-h200-emp: wgsprs_s8 runs at its dense twin's instruction rate with A from registers,
-# 4095.6 physical MACs a SM-clock, and the shared-memory forms at 0.889 of it; r20261019-063344-f650,
-# r20261019-062628-43df). The census has no measured line for them. Each `mma.sync .f64` shape is a DMMA class at the
-# f64 peak (RT-ISA-1): DMMA.16x8x16 runs at it, DMMA.8x8x4 at half (its line here is half the time it takes), and
-# m16n8k4 and m16n8k8 are untimed.
-# The census's memory, atomic and control classes (ATOMS32, ATOME32, LDS128, STS32, STS128, STG32, STG128, REDUX,
-# REDG32, ISETP, NOROW and the catch-all UNLISTED) are issue only: no document gives them a line on a row of the
-# sheet, so A2 prices each at its issue slot alone (DC-CENSUS-1, note:20261019T2245Z-draft-dc-census). On DC-90-ri
-# the ones a run timed beside the IGMMA, the catch-all among them, carry the census's JI90 lines too
-# (r20261021-070616-d06c, r20261021-074303-da7f).
+# dense MACs half m · n · k: each `wgmma.mma_async.sp` N256 form is a class at its dense twin's demand (RT-H200-EMP-2:
+# wgsprs_s8 runs at its dense twin's instruction rate with A from registers, 4095.6 physical MACs a SM-clock, and the
+# shared-memory forms at 0.889 of it). The census has no measured line for them. Each `mma.sync .f64` shape is a DMMA
+# class at the f64 peak (RT-ISA-1): DMMA.16x8x16 runs at it, DMMA.8x8x4 at half (its line here is half the time it
+# takes), and m16n8k4 and m16n8k8 are untimed. The census's memory, atomic and control classes (ATOMS32, ATOME32,
+# LDS128, STS32, STS128, STG32, STG128, REDUX, REDG32, ISETP, NOROW and the catch-all UNLISTED) are issue only: no
+# document gives them a line on a row of the sheet, so A2 prices each at its issue slot alone (DC-CENSUS-1). On DC-90-ri
+# the ones a run timed beside the IGMMA, the catch-all among them, carry the census's JI90 lines too.
 [kinds]
 ALU = { pipe = "alu" }
 ATOME32 = {}

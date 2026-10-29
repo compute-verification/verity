@@ -56,6 +56,7 @@ from verity.ml.circuits.defs import (REGISTRY, Builder, CompositeDefinition, Fun
                     composite)
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat, tuple_of
 from verity.ml.circuits.types import Array, Record, Tuple, Type, Value
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1, operand_widths
 
 LIFTING_VERSION = "v1"  # the `lifting: v1` the derive report names
@@ -1421,7 +1422,7 @@ def check_lag(lag: int) -> int:
     return int(lag)
 
 
-DP_PAD_02 = "DP-pad-02(b), RULED R17-1"  # LAG is a declared specialization parameter, no default
+DP_PAD_02 = f"DP-pad-02(b), RULED {EVIDENCE['lifted_post_eos_lag']['ruling']}"  # LAG is a declared specialization parameter, no default
 
 
 def guard_gate_count(cap: int, n_eos: int, lag: int) -> int:
@@ -1458,8 +1459,8 @@ def lserve_validate(C: dict, LP: int, STEPS: int, eos: Sequence[int], guard: str
            conformance="protocol-defined")
 def LServe(B, S, prompt, weights):
     """The ⊥-lifted padded serving Program (§5) for one request, **guard on the input** (`GUARD = "in"`, DP-pad-01
-    option (a), padrev's recommendation — the spec's §4.2 letter puts the guard on the event's output and is inconsistent with
-    its own §4.3/§6/§7 at step `a_r`; the choice is a labelled candidate, not a ruling):
+    option (a) — the spec's §4.2 letter puts the guard on the event's output and is inconsistent with its own §4.3/§6/§7 at
+    step `a_r`; the choice is a labelled candidate, not a settled rule):
     `Lifted[Prefill_v1]` emits `out[0]` unguarded (event 0 unconditionally live); for each of the `STEPS`
     structurally present decode steps `s ≥ 1` (`STEPS = cap − 1` under the Build's convention, as `Serve_v2{STEPS}`; the event
     population is `STEPS + 1 = cap = D_MAX_r`: the static is named for what it counts)
@@ -1609,7 +1610,7 @@ W_MAX_LIFTED_STATUS = ("accepted-revb-M-0042 (LIFTING-SPEC v0.5.1 B1: w_max_lift
                        "parameter's existence is AGREED, A4.3; B1's condition met on the first real-row lifted use document -- OLMoE B2 "
                        "r17_1653 r0, out/gen/sweep/evidence/pad/olmoe-1b-7b__…b2…/r17_1653_lane9c1e1f79f_mech_lifted/use_document_r0: "
                        "w_max_lifted 64, max_seen 33, n_out histogram (exact walk 50,000 sets = 1; structural bound complete over "
-                       "7,004,686,199 sets <= 1); coord ruling on the constant pending)")
+                       "7,004,686,199 sets <= 1); the constant's value itself is proposed, its confirmation pending)")
 
 
 def lifted_width_summary(out_widths_payload: Sequence[int], *, w_max_lifted: int = W_MAX_LIFTED) -> dict:
@@ -1631,7 +1632,7 @@ def lifted_width_summary(out_widths_payload: Sequence[int], *, w_max_lifted: int
         "ok": w_lifted <= int(w_max_lifted),
         "active_reference_rule_on_lifted_width_ok": w_lifted <= W_MAX,  # information: the 32-bit rule on the true width
         "violations": [f"w_out_lifted {w_lifted} > w_max_lifted {int(w_max_lifted)}"] if w_lifted > int(w_max_lifted) else [],
-        "rule": "w_out_lifted = sum(w+1) over escaping leaves <= w_max_lifted (R17-6(b); no activity/payload split; no n_max)",
+        "rule": f"w_out_lifted = sum(w+1) over escaping leaves <= w_max_lifted ({EVIDENCE['lifted_width']['ruling']}; no activity/payload split; no n_max)",
     }
 
 
@@ -1997,7 +1998,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
         raise ValueError(f"no {boundary_prefix} node in the body: not a request Program")
     if int(max_tokens) != cap:
         raise ValueError(f"the component has {cap} sampling events but the manifest declares max_tokens={max_tokens}: a Program derived at a served "
-                         f"shape is not the fixed population (F-pad-15; refuse, never lift the served length)")
+                         f"shape is not the fixed population ({EVIDENCE['lifted_served_shape']['finding']}; refuse, never lift the served length)")
     cached = _LREQUEST_CACHE.get(key)
     if cached is not None:
         if tuple(cached.boundaries) != tuple(bounds):  # type: ignore[attr-defined]  # one identity, one segmentation
@@ -2181,7 +2182,7 @@ def live_count_hook(B: Builder, outs: Sequence[Coll], arrivals: Sequence[int], c
             raise ValueError(f"request {r}: cap {c} < 1")
         if out.type.leaves != c:
             raise ValueError(f"request {r}: out has {out.type.leaves} events but its declared cap is {c}: the hook takes the FIXED population "
-                             f"(cap_r events per request), never a served length (F-pad-19)")
+                             f"(cap_r events per request), never a served length ({EVIDENCE['lifted_per_request_cap']['finding']})")
     assert_splits_domain(R)
     horizon = max(a + c for a, c in zip(arrivals, caps))
     live: list[list[Coll]] = [[] for _ in range(R)]

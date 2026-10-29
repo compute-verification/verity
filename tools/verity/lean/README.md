@@ -38,12 +38,11 @@ python tools/verity/lean/upstream.py PKG [--lean]        what the pinned depende
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 
-A lane's edit loop is `verity lean try FILE [--on NODE]`: through `research run` (default vy-nebius-cpu-1's `research` pool) it runs
-`lean_changed.py --try FILE` on this checkout, its uncommitted edits included, which takes one of the node's `build` Lean slots and
-that slot's tree, the one `--records` keeps warm, syncs the closure of the package that owns FILE and its dependencies there, runs
-`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`, and prints Lean's output with the
-run's wall time, exiting with lean's status. It never runs this audit and never writes a record: `--records PKG --update` is for the
-lock and the mark only (`lean_changed.py`'s docstring).
+The edit loop is `verity lean try FILE`: `lake env lean FILE` in the Lake package that holds FILE (the nearest lakefile above it),
+against its built imports, exiting with lean's status. With `--on NODE`, through `research run`, it runs `lean_changed.py --try
+FILE` on this checkout, uncommitted edits included: in one of the node's `build` Lean slots, on the tree `--records` keeps warm,
+`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`. Neither runs this audit or writes
+a record: `--records PKG --update` is for the lock and the mark only (`lean_changed.py`'s docstring).
 
 ## What it checks
 
@@ -267,7 +266,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   (`c.root = c'.root`, `Facts.lean`'s `shares`), whose proof nothing mentions, is allowed: it is the field bound once
   (`⟨s, e, fs, r⟩` and `⟨s', e', fs', r⟩`). A guarantee under `frozen` (with why it doesn't fit yet) is
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
-  with a `Guarantees` component) must be the statement of a
+  with a `Guarantees` name part) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
   `lemma`, `completeness`, `falsified`, or `unstated` for a statement no guarantee states), so a record counts its
   guarantees by category. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
@@ -459,7 +458,7 @@ watch list names what a statement is about, and the status comes from the depend
 A hit is a theorem whose statement mentions every constant under `mentions`. There are two passes.
 
 - **No build.** The pass reads each `scan` package's sources with `git show`, in its checkout under `.lake/packages/`, at
-  the pinned revision. It matches the constants' last components as words in each theorem's statement (comments aside),
+  the pinned revision. It matches the constants' last name parts as words in each theorem's statement (comments aside),
   and takes proved or not from the package's own transitive baseline. ArkLib keeps `scripts/axiom_baseline.json` current
   with its `validate.sh --axioms` gate. The audit runs this pass for every package with an `upstream` section: a bump
   that brings a proof about a watched statement fails the audit until the proof is acknowledged. It takes a few seconds.

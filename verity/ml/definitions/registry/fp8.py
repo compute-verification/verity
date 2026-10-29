@@ -49,6 +49,7 @@ from verity.ml.circuits.refs import Coll as _Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Record, Tuple, Value
 from verity.ml.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import hopper as H
 from verity.ml.definitions.registry import prims as P
@@ -141,8 +142,14 @@ def Fp8ActQuant(B, S, x):
 # ---------------------------------------------------------------------------------------------------------
 
 
+_SCALED_MM_CONF = ("exact-model-tested; _C.cutlass_scaled_mm vs the model at 320/320 sampled coordinates over five B1 shapes (K=1536/8960, "
+                   "N=1536/2048/17920, bias on/off; gpu/tc-fp8/vllm_fp8_kernels_probe.py --gemm, "
+                   f"{EVIDENCE['vllm_fp8_kernels_probe']['captured_utc']}) and 0 mismatches at every coordinate-sampled quantised gemm "
+                   "leaf of the production capture (corr-A/B, fp8.md §5); the k32 step pinned by the tc-fp8 campaign")
+
+
 @composite("DotE4m3", 1, ["K"], lambda S: ((("xq", Array(S.K, E4M3)), ("wq", Array(S.K, E4M3))), F32),
-           conformance="exact-model-tested; _C.cutlass_scaled_mm vs the model at 320/320 sampled coordinates over five B1 shapes (K=1536/8960, N=1536/2048/17920, bias on/off; gpu/tc-fp8/vllm_fp8_kernels_probe.py --gemm, 2026-09-08) and 0 mismatches at every coordinate-sampled quantised gemm leaf of the production capture (corr-A/B, fp8.md §5); the k32 step pinned by the tc-fp8 campaign")
+           conformance=_SCALED_MM_CONF)
 def DotE4m3(B, S, xq, wq):
     """f32 accumulator after K/32 `HopperE4m3QgmmaDot32` steps in ascending k from `+0` (`scale-d = 0` on the first
     wgmma of the CUTLASS mainloop; FastAccum: no promotion between the 256-wide k-tiles)."""
@@ -156,7 +163,7 @@ def DotE4m3(B, S, xq, wq):
 @composite("ScaledMmFp8Coordinate", 1, ["K", "BIAS"],
            lambda S: (((("xq", Array(S.K, E4M3)), ("sx", F32), ("wrow", Array(S.K, E4M3)), ("sw", F32))
                        + ((("b", BF16),) if S.BIAS else ())), BF16),
-           conformance="exact-model-tested; _C.cutlass_scaled_mm vs the model at 320/320 sampled coordinates over five B1 shapes (K=1536/8960, N=1536/2048/17920, bias on/off; gpu/tc-fp8/vllm_fp8_kernels_probe.py --gemm, 2026-09-08) and 0 mismatches at every coordinate-sampled quantised gemm leaf of the production capture (corr-A/B, fp8.md §5); the k32 step pinned by the tc-fp8 campaign")
+           conformance=_SCALED_MM_CONF)
 def ScaledMmFp8Coordinate(B, S, xq, sx, wrow, sw, *bias):
     """One output word: `bf16(fma(s_w, s_x * acc, f32(b)))` (ScaledEpilogueColumnBias, swap_ab: ScaleA = s_w,
     ScaleB = s_x) or `bf16(s_w * (s_x * acc))` (ScaledEpilogue); the bf16 store is `cvt.rn.bf16.f32` (F2FP)."""
@@ -173,7 +180,7 @@ def ScaledMmFp8Coordinate(B, S, xq, sx, wrow, sw, *bias):
            lambda S: (((("xq", Array(S.K, E4M3)), ("sx", F32), ("w", Array(S.N, Array(S.K, E4M3))), ("sw", F32))
                        + ((("b", Array(S.N, BF16)),) if S.BIAS else ())),
                       Array(S.N, BF16)),
-           conformance="exact-model-tested; _C.cutlass_scaled_mm vs the model at 320/320 sampled coordinates over five B1 shapes (K=1536/8960, N=1536/2048/17920, bias on/off; gpu/tc-fp8/vllm_fp8_kernels_probe.py --gemm, 2026-09-08) and 0 mismatches at every coordinate-sampled quantised gemm leaf of the production capture (corr-A/B, fp8.md §5); the k32 step pinned by the tc-fp8 campaign")
+           conformance=_SCALED_MM_CONF)
 def ScaledMmFp8(B, S, xq, sx, w, sw, *bias):
     """`_C.cutlass_scaled_mm` on one token row: the N output coordinates (`ScaledMmFp8Coordinate`, one k32 chain + the
     fused epilogue each) over the quantised row `xq` with its scale `sx`, the e4m3 weight rows and the per-tensor `sw`.
@@ -195,13 +202,16 @@ def DotE4m3V2(B, S, xq, wq):
     return acc
 
 
+_EPILOGUE, _BLACKWELL = EVIDENCE["cc12_scaled_mm_epilogue_probe"], EVIDENCE["blackwell_fp8_capture"]
+
+
 @composite("ScaledMmFp8NoSwapCoordinate", 1, ["K", "BIAS", "DOT"],
            lambda S: (((("xq", Array(S.K, E4M3)), ("sx", F32), ("wrow", Array(S.K, E4M3)), ("sw", F32))
                        + ((("b", BF16),) if S.BIAS else ())), BF16),
            conformance="exact-model-tested; the RTX PRO 6000's _C.cutlass_scaled_mm (cc 12.0) against this order over the cc 12.0 "
                        "step's chain at K = 4096, per-row/per-column and scalar scales: without a bias 15,728,640 of 15,728,640 "
-                       "coordinates exact (run r20260930-041842-76a2; the swapped order misses 89 of the 125 discriminating ones); "
-                       "with a bias 786,432 of 786,432 (run r20260930-090150-a42a: two roundings, the swapped FMA and (s_x*s_w)*acc + b "
+                       f"coordinates exact (run {_EPILOGUE['no_bias']}; the swapped order misses 89 of the 125 discriminating ones); "
+                       f"with a bias 786,432 of 786,432 (run {_EPILOGUE['bias']}: two roundings, the swapped FMA and (s_x*s_w)*acc + b "
                        "miss 8, 9 and 13 of the 17 discriminating ones), and this Definition by the IR reference on 576 sampled "
                        "coordinates, every discriminating one included, exact")
 def ScaledMmFp8NoSwapCoordinate(B, S, xq, sx, wrow, sw, *bias):
@@ -279,14 +289,15 @@ C_EPS_QUANT = b1.const(32, bits_of(1e-10))   # `eps` of per_token_group_quant_fp
 #: are true ones: G changes nothing but the group's width.
 QUANT_GROUPS = (64, 128)
 
-_BLOCK_CONF = ("exact-model-tested; H100 80GB 2026-09-19 (vLLM d9105ea80, CUTLASS v4.7.1, VLLM_USE_DEEP_GEMM=0): _C.cutlass_scaled_mm "
+_H100_CAPTURED = EVIDENCE["hopper_fp8_block_capture"]["captured_utc"]
+_BLOCK_CONF = (f"exact-model-tested; H100 80GB {_H100_CAPTURED} (vLLM d9105ea80, CUTLASS v4.7.1, VLLM_USE_DEEP_GEMM=0): _C.cutlass_scaled_mm "
                "blockwise vs the model at 2400/2400 sampled coordinates over seven Qwen3-4B shapes (K 2560/4096/9728, N 2560/6144/19456, M 1..16, "
                "both kernel variants), 0 mismatches; the f32 promotion pinned by adversarial operands (FFMA vs mul+add: 160/160 FFMA, ascending "
                "vs descending k: 160/160 ascending, s = FMUL(sfa, sfb) vs the other associations: 240/240) — out/gen/sweep/evidence/fp8/")
-_QUANT_CONF = ("exact-model-tested; H100 80GB 2026-09-19: _C.per_token_group_fp8_quant vs the model on 290,304 e4m3 words and 2,268 group scales "
+_QUANT_CONF = (f"exact-model-tested; H100 80GB {_H100_CAPTURED}: _C.per_token_group_fp8_quant vs the model on 290,304 e4m3 words and 2,268 group scales "
                "(seven shapes, rows of varying magnitude with outliers), 0 mismatches — out/gen/sweep/evidence/fp8/check_block_gemm.json; "
                "all at G = 128; G = 64 (QUANT_GROUPS) and G = 128 on cc 12.0: property blackwell_fp8_capture on an RTX PRO 6000, run "
-               "r20261003-220018-3f6a, record 0d346c79c642a0a1 (#1000 @ 2fd4e257f), cases "
+               f"{_BLACKWELL['run']}, record {_BLACKWELL['record']} (#{_BLACKWELL['pr']} @ {_BLACKWELL['commit']}), cases "
                "quant/K4096/G64 and quant/K192/G64 (the fused-MoE experts' inputs, 300 rows each) and quant/K4096/G128 and quant/K1024/G128, "
                "with every quant call its dense and MoE GEMM cases received, 7,941 rows, 0 mismatches")
 
@@ -442,8 +453,8 @@ def ScaledMmFp8BlockSharedScale(B, S, xq, sx, w, ws):
 
 _BLOCK_DOT_CONF = ("exact-model-tested; at DOT = HopperE4m3QgmmaDot32_v1 the function of the version 1 form (tests/program/"
                    "test_fp8_block_dot.py, every word equal), which is exact-model-tested on Hopper; at DOT = BlackwellE4m3QmmaDot32_v1, "
-                   "G = 128 (cc 12.0): property blackwell_fp8_capture on an RTX PRO 6000, run r20261003-220018-3f6a, record "
-                   "0d346c79c642a0a1 (#1000 @ 2fd4e257f), cases cutlass/qkv_proj (K 4096, N 1280) "
+                   f"G = 128 (cc 12.0): property blackwell_fp8_capture on an RTX PRO 6000, run {_BLACKWELL['run']}, record "
+                   f"{_BLACKWELL['record']} (#{_BLACKWELL['pr']} @ {_BLACKWELL['commit']}), cases cutlass/qkv_proj (K 4096, N 1280) "
                    "and cutlass/o_proj (K 1024, N 4096) x M in {1, 2, 64, 65, 256, 257, 300}: CutlassFp8BlockScaledMMKernel's blockwise "
                    "_C.cutlass_scaled_mm in all three cc 12.0 dispatch variants, 5,080,320 words, 0 mismatches; Hopper's step, both Triton "
                    "scale orders and an unfused mul + add each refuted (30,354, 13,159, 13,278 and 13,222 words)")

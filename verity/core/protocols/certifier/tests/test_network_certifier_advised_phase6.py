@@ -1,12 +1,11 @@
-"""REDTEAM phases 6, 7 and 10, target 1 and target 3, against N2's advised counts (`advised`), held as regressions of
-the tie (IoTieRequest's verdict, `advised.IoTieVerdict`; here its stand-in, `advised_traffic.StandInTie`): on one
-certified ingress and egress record, a prover who splits the request frames among the requests otherwise (a short
-prompt and a long one swapped) lowers an early request's end and so the floor, and the verdict on the certified record
-refuses it.
-A tie the prover states (phase 7: one stating the swapped split reopened phase 6) isn't one, nor is a verdict it builds
-and delivers (phase 10 and ci's reproduction: one for the forged advice's digest, every window accepted, got the
-swapped split's ends (1, 3) accepted through the verifier of record), the honest advice's verdict doesn't carry to
-another advice, and without a verdict from the verifier's own source the link is refused, never accepted.
+"""N2's advised counts (`advised`), held as regressions of the tie (IoTieRequest's verdict, `advised.IoTieVerdict`;
+here its stand-in, `advised_traffic.StandInTie`): on one certified ingress and egress record, a prover who splits the
+request frames among the requests otherwise (a short prompt and a long one swapped) lowers an early request's end and
+so the floor, and the verdict on the certified record refuses it.
+A tie the prover states (one stating the swapped split reopens its acausal release) isn't one, nor is a verdict it
+builds and delivers (one for the forged advice's digest, every window accepted, would get the swapped split's ends
+(1, 3) accepted through the verifier of record), the honest advice's verdict doesn't carry to another advice, and
+without a verdict from the verifier's own source the link is refused, never accepted.
 """
 
 import inspect
@@ -24,7 +23,7 @@ import signers
 from advised_traffic import LINK, StandInClocks, StandInTie, held
 
 T, R, RIN = 4, 32, 9
-#: CERT-VARLEN's id-request framing at B = 4096 (`active.id_request_frames`): a prompt of up to 337 tokens is one
+#: The id-request framing at B = 4096 (`active.id_request_frames`): a prompt of up to 337 tokens is one
 #: frame, of 338 to 399 two
 RF = (1,) * 337 + (2,) * 62
 SHORT, LONG = 16, 338
@@ -84,8 +83,8 @@ def test_a_split_other_than_the_certified_prompts_is_refused_by_the_tie():
 
 
 def test_a_tie_the_prover_states_is_refused():
-    """REDTEAM phase 7, target 3's residual gap: a tie stating the forged split (16 then 338) accepted it, which
-    reopened phase 6's acausal release. The tie is only IoTieRequest's verdict, on the advice digest the verifier
+    """A tie stating the forged split (16 then 338) would accept it, reopening the swapped split's acausal release.
+    The tie is only IoTieRequest's verdict, on the advice digest the verifier
     computed its view from: the advice carries no tie, so prompt lengths a prover states have nowhere to go, the
     honest advice's verdict doesn't carry to the forged advice, and the verdict on the certified record refuses it."""
     for stated in ((SHORT, LONG), {"prompt_len": (SHORT, LONG), "order": (0, 1)}):
@@ -107,8 +106,8 @@ def _phase6_link(key, ties):
 
 
 def test_a_verdict_the_prover_builds_never_reaches_the_verifier_of_record(tmp_path):
-    """REDTEAM phase 10 and ci's reproduction: a verdict the prover built for the forged split's digest, every window
-    accepted, got its ends (1, 3) accepted through `LinkWindows.verify`, which read it off the delivered advice. The
+    """A verdict the prover built for the forged split's digest, every window accepted, would get its ends (1, 3)
+    accepted through a `LinkWindows.verify` that read it off the delivered advice. The
     reference functions trust the verdict they're given (under the self-built one the split's ends are (1, 3)), so
     the verifier gives them only its own source's: the advice carries no tie, no entry point of the verifier of record
     takes one, and its view (`_view`, which `public_arguments`, `arguments` and `advised_check` read) of the forged

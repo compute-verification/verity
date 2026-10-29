@@ -42,11 +42,13 @@ from verity.ml.circuits.defs import composite
 from verity.ml.circuits.refs import Coll, concat
 
 from verity.ml.circuits.types import Array
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.b1 import ZERO32, f32c
 from verity.ml.definitions.registry.prims import BF16, F32
 
 SEMANTIC_ID = "ln/LayerNormAten@v1"
+_COV_LN = EVIDENCE["cov_ln_quarantine"]["by"]
 
 VEC = 4            # elements per vector load (`constexpr int vec_size = 4`, independent of dtype)
 WARP = 32
@@ -138,7 +140,7 @@ def _stats(B, xf, N: int) -> tuple:
 
 @composite("LayerNormAten", 1, ["N", "EPS"],
            lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16)), ("b", Array(S.N, BF16))), Array(S.N, BF16)),
-           conformance="quarantine (lane cov-ln): difftest vs torch.nn.functional.layer_norm (bf16, sm_89) on the pod")
+           conformance=f"quarantine ({_COV_LN}): difftest vs torch.nn.functional.layer_norm (bf16, sm_89) on the pod")
 def LayerNormAten(B, S, x, w, b, eps=None):
     """One row of torch's vectorized CUDA LayerNorm (see the module docstring): Welford statistics over the 128-thread /
     4-warp reduction tree, `rstd = rsqrtf(var + eps)`, `y_j = bf16(w_j * (rstd * (x_j - mean)) + b_j)`."""
@@ -158,7 +160,7 @@ def LayerNormAten(B, S, x, w, b, eps=None):
 
 @composite("LayerNormAten", 2, ["N"],
            lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16)), ("b", Array(S.N, BF16)), ("eps", F32)), Array(S.N, BF16)),
-           conformance="quarantine (lane cov-ln): LayerNormAten_v1's body with eps an input")
+           conformance=f"quarantine ({_COV_LN}): LayerNormAten_v1's body with eps an input")
 def LayerNormAtenV2(B, S, x, w, b, eps):
     """`LayerNormAten_v1{N, EPS}` with the epsilon an input (the f32 word `vectorized_layer_norm_kernel` reads)."""
     return LayerNormAten.body(B, S, x, w, b, eps)

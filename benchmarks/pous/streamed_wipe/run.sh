@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# The streamed-label wipe's timing on one RTX PRO 6000 of vy-nebius-2, as one Attempt (cwd = the source tree):
+# The streamed-label wipe's timing on one RTX PRO 6000 of a GPU node, as one run (cwd = the source tree):
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign streamed-wipe -- \
-#     bash benchmarks/pous/streamed_wipe/run.sh
+#   bash benchmarks/pous/streamed_wipe/run.sh
 #
 # Outside the lease: build `wipelabels` (refused on a register spill) and the Lean verdict `streamed-wipe-verdict`, which
 # judges the session step.  Under `gpu-lease 1 --wait --max-min 20`: `bench.py all` (its docstring lists the steps; a

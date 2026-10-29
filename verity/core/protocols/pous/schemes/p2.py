@@ -1,7 +1,6 @@
 """P2, **experimental**: the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
 `internal/efficient-crypto/p2-verdict.md`; its spec is the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
-v1 of 29 Sep 2026, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`, amended to v1.1 by Daniel's
-ruling of 4 Oct 2026 and to v4 by his ruling of 6 Oct 2026, one hash, SHA-512, in `../p2/PROTOCOL.md`, which this
+v1, amended to v1.1 (the RTT cap) and to v4 (one hash, SHA-512) in `../p2/PROTOCOL.md`, which this
 module implements).  Every block is independent, and its decode is two big-integer squarings.  Two codecs differ only
 in how a block's keys are expanded:
 
@@ -19,7 +18,7 @@ sq(a)      a² mod p, negated (p − a² mod p) when a is odd
 σ_K(r)     r ⊕ K if r ⊕ K < p, else r             an involution on [0, p)
 encode     c = ρ(σ_K(ρ(m + t mod p)))            two roots: slow (w − 2 squarings each)
 decode     m = sq(σ_K(sq(c))) − t mod p           two squarings
-keys       fresh per block j of segment s, drawn after W through the salt, and expanded where they are used (on the
+keys       fresh per block j of segment s, sampled after W through the salt, and expanded where they are used (on the
            device), so nothing key-sized is stored.  K is the first w/8-byte big-endian word of a stream, and t the first
            later word below p (exact rejection sampling; a candidate is ≥ p with probability c0 / 2^w).
   v4       prefix = Z("verity/pous/p2/keys/v4\0" ‖ frame("p2/v4") ‖ frame(prime id) ‖ frame(salt)), Z zero-pads to
@@ -140,7 +139,7 @@ DELTA_NS = 500_000
 """Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node (`p2/PROTOCOL.md` §6, decision F2)."""
 
 RTT_ALLOWANCE_CAP_NS = 354_000
-"""The cap on the measured RTT allowance in spec v1.1, Daniel's ruling of 4 Oct 2026 (`p2/PROTOCOL.md` §12): the
+"""The cap on the measured RTT allowance in spec v1.1 (`p2/PROTOCOL.md` §12): the
 largest whole µs with `Δ + cap < ROOT_CALL_NS`, so `Δ + RTT ≤ 854 µs`.  The certificate refuses every whole µs past
 it, and the verifier any RTT past it or any Δ but `DELTA_NS` (`P2.deadline_refusals`), which the certificate's sum
 alone admits up to `ROOT_CALL_NS − 1`."""

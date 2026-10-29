@@ -14,7 +14,7 @@ warden fails the connection closed there, with one fail cell that carries no rea
 end with padding. The end of the data counts as a cell too: the server's end of stream must reach the warden by the
 bucket of the cell after the data's last, or the connection fails there.
 
-NCI's transfer gates `T` are these cells' bits (compute-accounting's `transfers`, `Definitions.Nci`): their number per
+NCI's transfer gates `T` are these cells' bits (`transfers`, `Definitions.Nci`): their number per
 window is the schedule's, so it is public.
 
 **What is abstract.** A cell's `B` bytes are a value of `Cell`. Whatever the server does (its accept time, its send

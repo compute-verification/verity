@@ -34,14 +34,6 @@ than `D` weights are that cheap. `c_a > 0` is needed as in `CoveringBoundTwoCost
 `k = 1` MB and `c_a = 16`. At `p = fun _ => c_w` and `t = c_w` the slowdown form is `CoveringBoundTwoCosts`'s, and `U`
 and the rest give its count.
 
-**Kimi K2** at `k = 1` MB and bf16, `θ` registered mid-training and the products counted from 1,000 steps after it
-(note:training-20261022T1045Z-cover-assumptions-realism, §3–4): `ρ ≈ ρ(1) · c_w · c_a` with `ρ(1) = 75–104` at K2's
-`s = 4.52 · 10¹⁶`. Priced per parameter, the weights' cost is about their mean, 6.7 bits; a uniform `c_w` is at most the
-cheapest 1%'s, 2.3–3.4. With `c_a` at the weights' cost, as one shared `c`: priced `75 · 6.7² ≈ 3.4 · 10³` to
-`104 · 6.7² ≈ 4.7 · 10³`, against `75 · 2.3² ≈ 4 · 10²` to `104 · 3.4² ≈ 1.2 · 10³` uniform. With `c_a = 16`:
-priced `75 · 6.7 · 16 ≈ 8.0 · 10³` to `104 · 6.7 · 16 ≈ 1.1 · 10⁴`, against `75 · 2.3 · 16 ≈ 2.8 · 10³` to
-`104 · 3.4 · 16 ≈ 5.7 · 10³` uniform.
-
 The counts are stated multiplied out, with no division, so they say something when `k = 0`; in the slowdown form a
 division by zero is zero. -/
 def CoveringBoundPriced : Prop :=

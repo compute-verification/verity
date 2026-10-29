@@ -6,8 +6,8 @@ import Properties.Pouw.Period
 /-!
 # The joint period's PoUW guarantee from H1's checked credit over the torch loop
 
-`Accounting.Guarantees.JointPeriod` takes each audit's per-period guarantee (`Accounting.PeriodRun.Sound`) as a
-hypothesis. `WorkOfH1CheckedCreditPeriodAt p macs u b_unit` gives PoUW's, at the work certificate `W` and price `p`,
+Each audit's per-period guarantee in the coins model is `Accounting.PeriodRun.Sound`, which the one theorem's targets
+couple into the causal game (`Accounting.PeriodLive`). `WorkOfH1CheckedCreditPeriodAt p macs u b_unit` gives PoUW's, at the work certificate `W` and price `p`,
 for a period whose PoUW audit credits H1's checked words (`Accounting.RealizesCreditedWords` at the play's acceptance
 and the check's credit over the accepted prefix, `m = Accounting.Compose.minWordMacs Sc Cd macs` multiply-adds a word,
 `u` a unit and `b_unit` bits a unit), from `Properties.Pouw.Period.H1CheckedCreditPeriod` and its premises, with its
@@ -23,7 +23,7 @@ salts, the period's live tiles, the play, its folded words and the right words i
 declared circuit, the number of windows, the check's parameters, the salt's encoding, the staged and flat statements
 and the errors are the protocol's and are fixed. The premises are the source's, unchanged; the gaps it names
 (`RegisteredBeforeDraw` and the binding it reads on today's tags, `SaltIsLiveCoin`, `StagedPins`) stay premises here.
-The bridge adds two (RT4-LOGIC-6): each right word of a unit the device didn't outsource cost `m` multiply-adds of
+The bridge adds two: each right word of a unit the device didn't outsource cost `m` multiply-adds of
 priced work on it (`Accounting.Assumptions.WordCostsMacs`, at `n` times the run's fixed words), and it outsourced at
 most `K / b_unit` units (`Accounting.Assumptions.HelpWithinCertifier`).
 -/

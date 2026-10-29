@@ -3,10 +3,9 @@ import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
 /-!
 # `MH100`'s measured price table (Round 7; draft semantics)
 
-**Draft semantics, pending review** (`internal/pouw-fp8/genuine-fp8-interface.md` §0 and §1.1; the measurements are
-`internal/pouw/gpu-constants.md` §12.11).
+**Draft semantics, pending review**.
 
-`h100Measured` is the table that Round 7 measured on one H100 SXM (28 Sep 2026; driver 580.126.09, ptxas 12.4.131),
+`h100Measured` is the table that Round 7 measured on one H100 SXM (driver 580.126.09, ptxas 12.4.131),
 per 32-bit register written. Its unit is `Prices100`'s: one dense int8 MAC at the datasheet's 4,096 per SM per clock,
 which m64n128k32 and m64n64k32 e4m3 reach to within 2 ppm. Each entry is the least price of its class that Round 7
 measured, rounded down to a natural number. It is a measurement, not a floor, and since Round 8 it does not bound the
@@ -14,13 +13,12 @@ hardware from below (below).
 
 `h32Measured` (`Pouw.Dimension.H100MeasuredProofs`) proves `H32 h100Measured` by `decide`, so a re-measured entry
 changes only this definition. `DistinctWritesMeasured` (`Pouw.Dimension.H100Cite`) is the distinct-writes bound at
-these prices, with no hypothesis on the tensor-core instructions' multiplicands (red team F18-2).
+these prices, with no hypothesis on the tensor-core instructions' multiplicands.
 
-**Round 8 found part of this table to be loop overhead** (`internal/pouw/gpu-constants.md` §13, run
-`r20260928-161529-c85c`). Unrolled, FADD's 33.5 is 32.0–32.1 and legacy k8's 34.0 is 32.00. DADD's 34.6 is 32.0,
-half2's 40.1 is 36.0 and F2FP's 66.7 is 64.0.
+**Round 8 found part of this table to be loop overhead**. Unrolled, FADD's 33.5 is 32.0–32.1 and legacy k8's 34.0 is
+32.00. DADD's 34.6 is 32.0, half2's 40.1 is 36.0 and F2FP's 66.7 is 64.0.
 
-**The largest gap is `int32`, and it is not loop overhead** (red team F18b-1). Two-source IADD measured 34.68 against
+**The largest gap is `int32`, and it is not loop overhead**. Two-source IADD measured 34.68 against
 this table's 64, because ptxas now splits it across IMAD.IADD and IADD3, a lowering Round 7 did not see. Round 8 also
 measured FADD at 32.29, DADD at 32.16 and half2 at 36.11 before any loop-free correction, all below this table's
 entries. So a program's hardware cost can be below its `cost100` at this table, and bounds at it do not transfer to

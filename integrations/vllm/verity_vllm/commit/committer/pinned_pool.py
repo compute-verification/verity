@@ -21,8 +21,8 @@ BLOCK_BYTES = 64 << 20
 PINNED_EXACT = os.environ.get("VERITY_PINNED_EXACT", "1") != "0"
 _PAGE = 4096
 # Growing the exact pool is page faulting: every page of a fresh shared mapping is allocated and zeroed when it is first touched, which
-# `cudaHostRegister` does one page at a time on the calling thread.  On vy-nebius-1 (a VM: first touch also faults on the host) that ran
-# 0.4-2.9 s/GiB, so the instrumented warm-up of a leased Commit grew its ~105 GiB pool in 40-270 s with the GPU idle (gm329: 266 s of
+# `cudaHostRegister` does one page at a time on the calling thread.  On the leased node (a VM: first touch also faults on the host) that
+# ran 0.4-2.9 s/GiB, so the instrumented warm-up of a leased Commit grew its ~105 GiB pool in 40-270 s with the GPU idle (266 s of
 # 271).  A pool's `populate_threads` helper threads fault the pages in first (MADV_POPULATE_WRITE, in pieces); the registration then pins
 # pages that are present.  Faults on one mapping (one shmem inode) scale less over threads than faults on separate mappings: 8 threads on
 # the node's 32-CPU dispatch slice, one 8 GiB mapping 0.15-0.2 s/GiB, 32 mappings 0.085-0.105, one thread 0.5.  0 = no population.
@@ -94,20 +94,20 @@ def _register(blk: Any, mm: Any, times: dict[str, float] | None = None) -> None:
 def _pinned_block(nbytes: int, exact: bool, threads: int, times: dict[str, float] | None = None) -> tuple[Any, Any, str]:
     """One page-locked host block of `nbytes`.  Returns (block view, its owner tensor, mode).
 
-    [F-fp8-POW2] `torch.empty(n, pin_memory=True)` goes through torch's CachingHostAllocator, which rounds EVERY request up to
+    `torch.empty(n, pin_memory=True)` goes through torch's CachingHostAllocator, which rounds EVERY request up to
     the next power of two and never returns a freed block to the OS (torch 2.13.0+cu129 on cp-h100, measured: 3 GiB -> RSS +4 GiB,
     5 GiB + 7 B -> +8 GiB, 1 GiB + 1 B -> +2 GiB; `del` -> +0).  Pinned pages are committed at allocation, so the process RSS and the
-    cgroup (as shmem) take the ROUNDED size at once while `bytes_total` counts the requested one: on the B8 FP8 row that gap was
-    21,152 MiB of run-phase RSS outside any term of the host bound (FP8-STAGING §6 `run_overhead`), and §5.4's "released pools" at B1.
+    cgroup (as shmem) take the ROUNDED size at once while `bytes_total` counts the requested one: on the B8 FP8 workload that gap was
+    21,152 MiB of run-phase RSS outside any term of the host bound.
     exact=True: a MAP_SHARED|MAP_ANONYMOUS mmap of the page-rounded size + `cudaHostRegister` on it -> page-locked for the D2H copies
     (measured 29 GB/s, = torch's pinned blocks), RSS == the pool's accounting, `cudaHostUnregister` + munmap on `release()` returns it to
     the OS.
-    [F-fp8-FORKPIN (B8 attempt 2, 03:0xZ)] the block MUST be a SHARED mapping, not private anonymous memory: Linux >= 5.9 copies
-    DMA-pinned PRIVATE pages eagerly at fork() (copy_present_pte -> page_needs_cow_for_dma), so every child the C2 sampled replay forks
-    (its evaluator Pool) got its own copy of the whole 59,350 MiB frozen pool at fork time -- cgroup anon 135 -> 239 GB (the cap) in a
-    minute, 20 OOM-killed children in three (measured on a 2 GiB block: private-registered fork -> cgroup anon +2,653 MiB; shared-registered
-    -> +336, the child's RssShmem 2,048 = the shared pages).  Shared mappings are never copy-on-write, so children read the committed
-    store in place, as they did on torch's (also MAP_SHARED) blocks; the cgroup accounts them as shmem, like torch's."""
+    The block MUST be a SHARED mapping, not private anonymous memory: Linux >= 5.9 copies DMA-pinned PRIVATE pages eagerly at fork()
+    (copy_present_pte -> page_needs_cow_for_dma), so every child the C2 sampled replay forks (its evaluator Pool) would get its own copy
+    of the whole frozen pool at fork time -- on a 59,350 MiB pool, cgroup anon 135 -> 239 GB (the cap) in a minute and 20 OOM-killed
+    children in three (measured on a 2 GiB block: private-registered fork -> cgroup anon +2,653 MiB; shared-registered -> +336, the
+    child's RssShmem 2,048 = the shared pages).  Shared mappings are never copy-on-write, so children read the committed store in place,
+    as on torch's (also MAP_SHARED) blocks; the cgroup accounts them as shmem, like torch's."""
     import torch
 
     if exact and torch.cuda.is_available():
@@ -118,14 +118,14 @@ def _pinned_block(nbytes: int, exact: bool, threads: int, times: dict[str, float
     return (b := torch.empty(int(nbytes), dtype=torch.uint8, pin_memory=True)), b, "torch-pinned-pow2"
 
 
-EXACT_MODES = ("exact-registered-shared", "exact-registered")      # the second is the F-fp8-POW2 private-anon variant, retired by F-fp8-FORKPIN
+EXACT_MODES = ("exact-registered-shared", "exact-registered")      # the second, the private-anonymous variant, is no longer allocated: fork() copies its pages
 
 
 class PinnedPool:
     """Pinned host blocks; `take(n)` returns a uint8 tensor view of n bytes (a tensor never straddles blocks).  Blocks are
     retained for the run (openings read them) and returned by `reset()`; the pool grows only when the free list is empty
     (the warm-up instrumented pass sizes it, so steady-state runs allocate nothing).  `bytes_total` is the process RSS the pool
-    holds when `mode == "exact-registered-shared"` (F-fp8-POW2 / F-fp8-FORKPIN; default, env VERITY_PINNED_EXACT=0 for torch's allocator).
+    holds when `mode == "exact-registered-shared"` (the default; env VERITY_PINNED_EXACT=0 for torch's allocator).
     `populate_threads` (default `POPULATE_THREADS`; the commit command's --pinned-populate-threads) fault a fresh exact block's pages in."""
 
     def __init__(self, block_bytes: int = BLOCK_BYTES, exact: bool | None = None, populate_threads: int | None = None) -> None:

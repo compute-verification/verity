@@ -21,8 +21,8 @@ live). Its 485.5 s serve is 439.1 s of receipts (284 µs a unit, launch-bound to
 empty steps and about 45 s of eager int8 serving; the receipt trees add 12.6 s. The period counts 439.1 s a window,
 and 32 times that at 4×8 units unless the receipts are fused into the kernel.
 
-**A window's certification** is its K_d drawn units, proved by C-Flock (`--zk`, live coins) and checked by the Lean
-verifier (`flock-verify`). A drawn unit costs its outputs × K in lanes of the measured H1 tile (`PouwH1Tile_v1`, 4×8
+**A window's certification** is its K_d sampled proof blocks, proved by Flock (`--zk`, live coins) and checked by the Lean
+verifier (`flock-verify`). A sampled proof block costs its outputs × K in lanes of the measured H1 tile (`PouwH1Tile_v1`, 4×8
 outputs at K = 4,096: 46.7 M ANDs, `k_log` 27, the most `Stmt.InRange` admits): 32 at K = 4,096, 39.6 at the served mean
 K. down's units need a narrower lane to fit a block (a 4×8 tile at K = 14,336 is 164 M ANDs). A statement holds at most
 256 instances (`m = k_log + nbl ≤ 35`), each a lane, and no more than its prover's memory allows on one node. Its cost is
@@ -39,11 +39,11 @@ certification: its statements in parallel, but no sooner than one statement's pr
 **One window long enough on its own** (`long_window`) is n = 1: Compose's `CircuitWork`, with no period statement and
 no record check. It needs Λ·ln(1/δ_s)/u under the budget, and Λ falls with M only to `lam_limit`, so a K_d below
 r·max(a/(1 − p), b/(1 − p0))·ln(1/δ_s)/(u·budget) never gets there. Its certification starts when its serving ends,
-and it holds custody of M/18 served windows' values until its draw.
+and it holds custody of M/18 served windows' values until its sample.
 
 **Levers** (`LEVERS`): one change each, with its owner and a work class (1 a parameter, 2 one module, 3 a new path in one
 component, 4 a new circuit or proof form), applied alone to today's configuration and in sequence along `route`. δ_s is
-Daniel's claim parameter and ε_♭ the machine model's: both are shown (`sensitivity`), neither is a lever here.
+the claim's parameter and ε_♭ the machine model's: both are shown (`sensitivity`), neither is a lever here.
 """
 
 from __future__ import annotations
@@ -80,13 +80,13 @@ SPEND = "certifying nodes 2 → 8"
 
 
 def k_factor(units: dict[str, tuple[int, int]] = SERVED_UNITS_PER_LAYER) -> float:
-    """A uniformly drawn served unit's mean K over the measured tile's 4,096."""
+    """A uniformly sampled served unit's mean K over the measured tile's 4,096."""
     n = sum(c for c, _ in units.values())
     return sum(c * k for c, k in units.values()) / n / LANE_K
 
 
 def lanes_per_unit(unit_outputs: int = UNIT_ROWS * UNIT_COLS, k: float | None = None) -> float:
-    """A drawn unit's lanes of the measured tile: its outputs over the tile's, times its K over 4,096."""
+    """A sampled proof block's lanes of the measured tile: its outputs over the tile's, times its K over 4,096."""
     return unit_outputs / LANE_OUTPUTS * (k_factor() if k is None else k)
 
 
@@ -360,7 +360,7 @@ def apply(lv: Lever, c: Config) -> Config:
 def route(base: Config = TODAY) -> list[Config]:
     """The fastest route: from `base`, the lever that most shortens the time to the first period, then the next on
     that, while one shortens it by more than 1%. A tuned lever may be applied again later; the spend lever is left
-    out (it is Daniel's)."""
+    out (spend is a budget decision, not a tuning step)."""
     c, left, out = base, [lv for lv in LEVERS if lv.name != SPEND], []
     while left:
         steps = [(apply(lv, c), lv) for lv in left]
@@ -380,7 +380,7 @@ NEAR_TERM = ("u: every row slot of a served step filled", "r → 1: units of equ
 
 def near_term(base: Config = TODAY) -> list[Config]:
     """`NEAR_TERM`'s levers, which need no new receipt kernel, served unit or proof form, in order, each on the last;
-    then the last on eight nodes (Daniel's spend), its draws tuned again."""
+    then the last on eight nodes (the spend lever), its samples tuned again."""
     out, c = [], base
     for name in NEAR_TERM:
         c = apply(lever(name), c)
@@ -447,7 +447,7 @@ def scan(c: Config, field: str, values) -> list[dict]:
 
 
 def sensitivity() -> dict:
-    """Windows to ε < 1% at today's served shape and u = 1, by δ_s (Daniel's) and by ε_♭ (the machine model's)."""
+    """Windows to ε < 1% at today's served shape and u = 1, by δ_s (the claim's) and by ε_♭ (the machine model's)."""
     base = Config("sensitivity", u=1.0)
     return dict(
         delta_s_log2={str(d): windows(replace(base, delta_s_log2=d)) for d in (20, 30, 40, 64, 80)},

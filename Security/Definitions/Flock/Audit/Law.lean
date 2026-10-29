@@ -1,4 +1,5 @@
 import Definitions.Flock.Game.Prob
+import Definitions.Core.Draw
 import Mathlib.Data.Fintype.Powerset
 import Mathlib.Data.Nat.Choose.Basic
 import Mathlib.Data.Fintype.Fin
@@ -6,8 +7,9 @@ import Mathlib.Data.Fintype.Fin
 /-!
 # Draw laws
 
-A draw law is the verifier's coin space `Ω`, uniform, and the set of units each coin draws. What a
-law gives a consumer is its escape function: the probability that a draw misses a set `B` of units.
+A draw law is the verifier's coin space `Ω`, uniform, and the set of units each coin draws, core's `Verity.Law`
+(`Definitions.Core.Draw`) over `Fin n`. What a law gives a consumer is its escape function: the probability that a draw
+misses a set `B` of units.
 
 * `escape L B`: the draw is disjoint from `B`;
 * `miss L K`: the largest escape over sets of at least `K` units, the sampling term of the count
@@ -28,30 +30,12 @@ namespace FlockSoundness.Audit
 open Game
 open scoped ENNReal
 
-/-- A draw law over `n` units: the verifier's uniform coins, and the unit set each draws. -/
-structure Law (n : ℕ) where
-  Ω : Type
-  [fintype : Fintype Ω]
-  [nonempty : Nonempty Ω]
-  draw : Ω → Finset (Fin n)
-
-attribute [instance] Law.fintype Law.nonempty
+/-- A draw law over `n` units: core's draw law over `Fin n`. -/
+abbrev Law (n : ℕ) : Type 1 := Verity.Law (Fin n)
 
 namespace Law
 
 variable {n : ℕ}
-
-/-- The probability that a draw misses every unit of `B`. -/
-noncomputable def escape (L : Law n) (B : Finset (Fin n)) : ℝ≥0∞ :=
-  prCoin fun ω => Disjoint (L.draw ω) B
-
-/-- The count curve's sampling term: the largest escape over sets of at least `K` units. -/
-noncomputable def miss (L : Law n) (K : ℕ) : ℝ≥0∞ :=
-  ⨆ (B : Finset (Fin n)) (_ : K ≤ B.card), L.escape B
-
-/-- The inclusion probability of a unit. -/
-noncomputable def incl (L : Law n) (u : Fin n) : ℝ≥0∞ :=
-  prCoin fun ω => u ∈ L.draw ω
 
 /-! ## The uniform `k`-subset -/
 

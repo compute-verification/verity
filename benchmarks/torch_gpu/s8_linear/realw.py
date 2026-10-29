@@ -1,5 +1,5 @@
 """run.py's gate on the demo's seeded weights at the frozen H200 shape: compute-accounting's generator
-(`e2e_h200.served_weights`, ALLP-IFACE, CMP-95), every row of one layer's linears (wq, wk, wv, wo, wup, wdown) and of the
+(`e2e_h200.served_weights`), every row of one layer's linears (wq, wk, wv, wo, wup, wdown) and of the
 head, each with its f32 scales, against activations of all of s8 with run.py's structured rows and `fixture`'s activation
 scales (the special ones included): the kernel's picked config and its others, every cell against the Definition's twin.
 `--gen` writes the weights into --weights as .npy (in parallel, no GPU: run.sh's "cpu:" step, outside the lease); the gate

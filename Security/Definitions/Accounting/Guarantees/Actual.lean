@@ -6,9 +6,9 @@ import Definitions.Nci.Assumptions
 /-!
 # The actual circuit's runtime statements (trusted)
 
-Section 7 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2). The developer runs at `n` locations
-`X 0, …, X (n − 1)`, pairwise disjoint, and its region over `[0, t)`, as a circuit whose inputs are what it reads with
-the baseline `θ_A` (`Placed.declaration`), is the declaration NCI's statements are about.
+In the actual-circuit model, the developer runs at `n` locations `X 0, …, X (n − 1)`, pairwise disjoint, and its region
+over `[0, t)`, as a circuit whose inputs are what it reads with the baseline `θ_A` (`Placed.declaration`), is the
+declaration NCI's statements are about.
 
 * `WindowsAt` (the capacity form at any cuts): for any cuts `τ` of `[0, t)` and any set `G` of gates, the windows
   `A[X i, [τ j, τ (j + 1))]` divide that declaration's computed gates into `n J` IUs, each of at most
@@ -18,7 +18,7 @@ the baseline `θ_A` (`Placed.declaration`), is the declaration NCI's statements 
   gates into `n ⌈t/ω⌉` IUs, each of at most `Φ_X ω` gates (work priced at one per gate) and reading at most
   `M_X + β_X ω` novel bits. It takes the four physical constraints it uses (`Causal`, `ComputeRate`, `Memory`, `Links`).
 * `Runtime` (the corollary): when, in a run, the developer's region before every `t` by which it holds `P`'s outputs
-  at positions fixed across the values of `P`'s inputs (the runtime reads the strategy, v2.8: `Actual.runtime`) runs a
+  at positions fixed across the values of `P`'s inputs (the runtime reads the strategy: `Actual.runtime`) runs a
   chain of at least `G` products, under NCI's two incompressibility assumptions at `(Γ_A, K_A)`, the runtime is at least
   `ω (G f(K_A) / (n K_A) − 1)`, where `f = Nci.readFactor` (`F = f(K)/(2α)`) and `Γ_A ≥ Φ_X ω`, `K_A ≥ M_X + β_X ω` at
   every location.
@@ -71,7 +71,7 @@ def Windows : Prop :=
 `S v` of a strategy with each value `v` of `P`'s inputs in place (`Actual.runtime`), one of them, `S v`, whose actual
 circuit `A` meets the constraints of `Windows` at the locations and `ω` as there, caps `Γ ≥ Φ_{X i} ω` and
 `K ≥ M_{X i} + β_{X i} ω` at every location, and such that at every `t` by which positions of the developer's before
-`t`, the same in every run, hold `P`'s outputs (`Actual.Computes`, v2.8), `A[X, [0, t))` runs a chain of at least `G`
+`t`, the same in every run, hold `P`'s outputs (`Actual.Computes`), `A[X, [0, t))` runs a chain of at least `G`
 products, of inner dimensions at least `d`, under NCI's two incompressibility assumptions at `(Γ, K)`: every `t` at or
 past the runtime `t_A(P)` is at least `ω (G f(K) / (n K) − 1)`, `f = Nci.readFactor`, so `t_A(P)` is. -/
 def Runtime : Prop :=

@@ -2,7 +2,7 @@ import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
 import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
 
 /-!
-# TT_OUT under the chain-only reading at an FP4 record (the price-twins lane's file; staged, nothing pinned)
+# TT_OUT under the chain-only reading at an FP4 record (staged, nothing pinned)
 
 The two chain-only forms of `TTOutFp4`: `TTOut` and `TTOutTile` at the chain-only protocol and tiles
 (`DeviceFp4ChainOnly`), unit and per audit tile. Each is implied by the record's own TT_OUT

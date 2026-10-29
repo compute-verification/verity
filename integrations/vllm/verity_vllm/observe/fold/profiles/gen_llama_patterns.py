@@ -1,4 +1,4 @@
-"""GEN llama: pattern specializations found necessary by the LLAMA32_1B capture (none by QWEN05).
+"""Pattern specializations found necessary by the LLAMA32_1B capture (none by QWEN05).
 
 `GemmLaunchTuned` — vLLM d9105ea80's batch-invariant GEMM does not always launch with the tiling the base profile pins.
 `vllm/model_executor/determinism/batch_invariant.py::matmul_persistent` passes the launch through

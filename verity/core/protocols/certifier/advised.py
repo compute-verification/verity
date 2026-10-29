@@ -25,7 +25,7 @@ ingress certifier's own frames a window (1 with its salt on, else 0), as `served
   schedule vLLM couldn't have run;
 - `received[w]`, the request frames the ingress certifier releases in window w, which the unit holds to the certified
   ingress head;
-- the tie (`IoTieVerdict`): IO-TIE's `IoTieRequest` verdict on each of the link's ingress windows for this advice (its
+- the tie (`IoTieVerdict`): the `IoTieRequest` verdict on each of the link's ingress windows for this advice (its
   `digest`), that the link's j-th certified request is advice request j and its prompt v0's `prompt_len` ids, which
   the verifier of record takes only from its own tie source (`TieSource`, `service.LinkWindows.ties`: IoTieRequest
   proofs it verified itself), never beside the delivered advice, and holds to the link and its ingress windows'
@@ -88,17 +88,17 @@ released its request's `ends[j]` request frames, δ + ⌊λ/ρ⌋ buckets earlie
 are the link's first j + 1 requests whole because v0's prompt lengths are theirs, in arrival order: the tie,
 IoTieRequest's verdict for the same advice digest. Without it, a prover who splits the same request frames among the
 requests otherwise (a short prompt and a long one swapped) lowers an early request's end, and so the floor, on the
-same certified record: REDTEAM phase 6's case. The certified prompts are witness, so the verifier can't derive the
-tie from them on the host, and a tie the prover states is no tie (REDTEAM phase 7: one stating the swapped split
-reopens phase 6's acausal release), nor is a verdict it delivers (REDTEAM phase 10: a verdict built from its own
-advice's digest, every window accepted, reopened it through the verifier of record), so `LinkAdvice` carries none. The
+same certified record: the swapped split. The certified prompts are witness, so the verifier can't derive the tie
+from them on the host, and a tie the prover states is no tie (one stating the swapped split reopens its acausal
+release), nor is a verdict it delivers (a verdict built from its own advice's digest, every window accepted, would
+reopen it through the verifier of record), so `LinkAdvice` carries none. The
 tie is only IoTieRequest's verdict from the verifier's own tie source (`tie_service.Ties`), on the link and the
 ingress registrations it holds, so a verdict on another link or ingress record isn't reused, built from the
 IoTieRequest proofs the verifier of record verified on its own lanes (`tie_service.IngressTie.tie`). No proof of
 an unpinned size class is accepted, and the served size isn't pinned, so there every advised link is refused
 (PROTOCOL.md, fail closed). The floor's syncs are held the same way: a δ below the one the window's traffic was
-certified under loosens the floor (REDTEAM phase 11: δ = 0 declared for a window the certifier ran at δ = 1 accepted
-an output in its request's own bucket), so every floor is under the sync the certifier ran, which the verifier takes
+certified under loosens the floor (δ = 0 declared for a window the certifier ran at δ = 1 accepts an output in its
+request's own bucket), so every floor is under the sync the certifier ran, which the verifier takes
 only from its own clock source (`ClockSource`, `service.LinkWindows.clock_source`), never from the prover:
 `SignedClocks`, the sync the certifier signed for each egress window beside its record, salted as a record digest is
 (`certificate.CertifiedClock`), read through its opening against the signed digest under the verifier's own certifier
@@ -118,16 +118,16 @@ count passes its allocation doesn't exist (`certificate.RecordHead`). With RIN r
 the certified count is RIN, one of them the own frame, and the last request frame is released in bucket 1; with RIN
 or more carried in, the own frame still leaves in bucket 0.
 
-**The ends are where the signed counts put them** (CERT-VARLEN's rule): request j ends in the first bucket where the
+**The ends are where the signed counts put them**: request j ends in the first bucket where the
 ingress head's signed counts, less one own frame a window, reach `ends[j]`, the prefix sums the floor reads. That is
 the bucket that releases its last frame, since each window's own frame leaves in its first bucket.
 
 **Premises** of "an honest advised link is accepted", which N2's claim doesn't rest on: `release` is the certified
-egress record's (each kept output one egress frame, in the link's canonical order, which IO-TIE fixes); the releases
+egress record's (each kept output one egress frame, in the link's canonical order, which the tie fixes); the releases
 fall in the link's windows, each with a declared sync in Σ_sync; `received` is the ingress record's; the link's j-th
 request is advice request j (FCFS admission, which IoTieRequest checks, its ordinals being the verifier's: v0
-numbered by a runner's batch order, which ENC-DERIVED's `walk.order` maps back, is refused), an id request of its
-prompt length (`request_frames`); each window's declared sync is the one the certifier ran it under, with a δ and
+numbered by a runner's batch order, which the derived encoding's `walk.order` maps back, is refused), an id request of
+its prompt length (`request_frames`); each window's declared sync is the one the certifier ran it under, with a δ and
 ρ that every frame released in it meets (a small δ, a ρ at least a stream's rate); and both ends share T and τ_b.
 
 **Cost** (`size`): about 105 ANDs a bucket, the ingress floor and the egress equality: 63,031 at T = 600, RIN = 1,
@@ -197,7 +197,7 @@ def _sha512_hex(x: Any) -> bool:
 @dataclass(frozen=True)
 class IoTieVerdict:
     """The tie of an advised link's requests to the certified ingress (the module docstring, "The ingress ends"):
-    IO-TIE's `IoTieRequest` verdict on each of the link's ingress windows, `accepted[w]`, on the link named `link`
+    the `IoTieRequest` verdict on each of the link's ingress windows, `accepted[w]`, on the link named `link`
     (`service.LinkWindows.link`), whose ingress windows the challenger registered as `registrations` (each one's
     `registration.digest`, in window order), on the request view the verifier computed from the advice whose `digest`
     is `advice`. An accepted verdict on every window says the link's j-th certified request is advice request j and
@@ -316,8 +316,8 @@ class SignedClocks:
 class LinkAdvice:
     """What the prover delivers on an advised link beside its public profile and syncs: I1's advice and `received[w]`,
     window w's request frames, which the unit holds to the certified ingress head. It carries no tie: one delivered
-    beside the advice is the prover's (REDTEAM phase 10: a verdict built from its own advice's digest reopened phase
-    6), so `ends` and `view` take IoTieRequest's verdict apart, from the verifier's own tie source (`TieSource`).
+    beside the advice is the prover's (a verdict built from its own advice's digest reopens the swapped split), so
+    `ends` and `view` take IoTieRequest's verdict apart, from the verifier's own tie source (`TieSource`).
     Construction refuses (`advice.MalformedAdvice`) an advice that isn't an `advice.Advice` and a `received` that
     isn't u32s."""
 

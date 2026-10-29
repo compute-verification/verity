@@ -30,7 +30,7 @@ The Johnson count is `johnsonCount k agree = ⌊(k+1)/agree²⌋ + 1`, the small
   message that agrees with all of them, at a cost at least their number
   (`Flock.ListComplete.card_le_eval_of_agree`).
 
-Before ruling 2 (16 Oct) `ListComplete` had no `nMin`, which is `nMin = 0`: it put every message in the list of the
+In its first form `ListComplete` had no `nMin`, which is `nMin = 0`: it put every message in the list of the
 empty input (`Flock.ListComplete.mem_nil`), so a `DecoderComplexity` whose step count is at least its output's length
 had `|T| ≤ p(size [])` (`Flock.ListComplete.card_le_eval`).
 -/
@@ -42,8 +42,8 @@ open Polynomial
 /-! ## The `nMin` form of the list-decoding spec -/
 
 /-- **List decoding from `nMin` opened columns**: from opened columns at distinct positions, at least `nMin M` of them,
-`decode` lists every trace `M` whose encoding agrees with at least a fraction `agree` of them. The spec's form until
-16 Oct, when the radius form (`Flock.ListWithin`) replaced it; the decoders here still meet it, with `nMin M` the
+`decode` lists every trace `M` whose encoding agrees with at least a fraction `agree` of them. The spec's form before
+the radius form (`Flock.ListWithin`) replaced it; the decoders here still meet it, with `nMin M` the
 smallest count above the Johnson bound of `M`'s code. -/
 def Flock.ListComplete {Col T : Type} [DecidableEq Col] (enc : T → ℕ → Col) (agree : ℝ) (nMin : T → ℕ)
     (decode : List (ℕ × Col) → List T) : Prop :=

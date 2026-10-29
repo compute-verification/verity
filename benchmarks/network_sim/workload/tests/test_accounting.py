@@ -4,7 +4,7 @@ from collections import Counter
 
 import pytest
 
-D = pytest.importorskip("datacenter", reason="benchmarks/datacenter isn't importable (it lands with PR #2475)")
+D = pytest.importorskip("datacenter", reason="benchmarks/datacenter isn't importable")
 
 from workload import accounting as A  # noqa: E402
 from workload.block import Context  # noqa: E402

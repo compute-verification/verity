@@ -4,7 +4,9 @@
                      `circuit_check.bodies`; a vLLM Definition's is its registered evaluator) on the edge and random vectors
                      of `circuit_check.vectors`: it must be total (a Definition whose
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
-                     kernel (`verity.ml.circuits.evaluation.self_check`), a template's evaluated target where it is another Definition, and
+                     kernel (`verity.ml.circuits.evaluation.self_check`, which must be `SelfCheck.ok`: some vector compared, and
+                     none declined inside the reference's domain unless the kernel is partial; else ``kernel-<fault>``), a
+                     template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
                      proof blocks otherwise) and, under ``Options.struct_max_gates``, the structural lowering's template
                      (``c-flock:struct_lower``, `struct_lowering`, evaluated from the template); the word Definition a
@@ -20,8 +22,8 @@
                      interval the transfer gives; recorded only for a Definition that declares either
     redundant gates  a value computed twice inside one proof block: the gates `verity.ml.definitions.word.Graph` finds recomputed
                      (same primitive, same operands by value) that `word.units` puts in one proof block, and the ANDs of a
-                     Boolean proof block on identical operands; counted, with where (primitive @ activation, or the named
-                     subcircuit)
+                     Boolean proof block on identical operands, its commits apart (`redundant_ands`); counted, with where
+                     (primitive @ activation, or the named subcircuit)
     dead gates       gates no output depends on (`verity.ml.circuits.liveness.dead_gates`, transitive), by primitive @ activation
     partition        `Q_word_v1{X,W,R=no-recompute}` (`word.unit_rule` per Definition, `word.check_query` over a workload's
                      Program): every gate certified by exactly one proof block, reads across proof blocks only through
@@ -32,8 +34,8 @@
                      in its entry and the summary, and every other code fails as under v1.  `Q_call` v1 {X = 32} is recorded
                      beside it (`q_call`: proof blocks, committed bits, values computed in two proof blocks; or why it refuses,
                      a warning).
-                     Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned (a
-                     warning, ``partition/unchecked``)
+                     Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned,
+                     nor is one over ``partition_max_gates`` gates (each a warning, ``partition/unchecked``)
     lowering pins    a lowering's AND/XOR/NOT counts and its circuit's digest (``type``, `lowering_type`) against its pin, which
                      must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template proof block's, in the sidecar of the module that defines it or its file in ``pins/``,
@@ -42,10 +44,15 @@
                      export's gate lists checked against the proof block's circuit (`verity_flock.boolean_export`); a gated
                      Definition's circuit digest (``gated``: a Program holds it as one gate naming the digest, such as N2's
                      head check) against its ``digests`` pin
+    block            the witness bits a whole Definition needs as one C-Flock unit, read off it (its ANDs and port bits,
+                     `verity_flock.circuit.unit_witness`), within C-Flock's proved range of 2^``K_MAX`` (`block_range`): past
+                     it, `UnitStager` refuses the unit before lowering, and `compose` would have refused it after.  Failed
+                     for the Definitions staged whole as one unit (PoUW's, `UNIT_OWNERS`), recorded for the rest
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
 gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering,
-and a pin without its lowering's ``type``, is a warning.
+and a pin without its lowering's ``type``, is a warning.  A warning never fails (unless ``--fail-on-warnings``): it is a
+property left unchecked, and the report prints it under ``unchecked``, apart from what passed.
 """
 from __future__ import annotations
 
@@ -241,11 +248,14 @@ def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.nd
         except ValueError as e:
             rec["realizations"].append({"via": f"kernel:{name}", "declines": str(e)[:200]})
             continue
-        rec["realizations"].append({"via": f"kernel:{name}", "compared": sc.n - sc.declined, "declined": sc.declined,
-                                    "mismatches": len(sc.mismatches)})
-        if sc.mismatches:
+        rec["realizations"].append({"via": f"kernel:{name}", "compared": sc.compared, "declined": sc.declined,
+                                    "mismatches": len(sc.mismatches), **({"fault": sc.fault} if sc.fault else {})})
+        if sc.fault == "mismatch":
             F.fail("correspondence", "kernel-mismatch", t.id, f"[{name}]: {len(sc.mismatches)} of {sc.n} vectors", via=f"kernel:{name}",
                    examples=[{"instance": i, "args": _short(a), "kernel": _short(k), "reference": _short(r)} for i, a, k, r in sc.mismatches[:_EXAMPLES]])
+        elif sc.fault:
+            F.fail("correspondence", f"kernel-{sc.fault}", t.id, f"[{name}]: declined {sc.declined} of {sc.n} vectors, "
+                   f"{sc.outside} outside the reference's domain", via=f"kernel:{name}")
     return rec, arrays, ref
 
 
@@ -422,27 +432,49 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
 
 # --- Boolean circuits -------------------------------------------------------------------------------------------------------
 
+def is_commit(C: Any, v: int) -> bool:
+    """Whether bit ``v`` of the `gf2.Circuit` ``C`` is a commit row (``A = form, B = 1``: `forms.Circuit.commit`,
+    `sha512.commit`), the copy of a form into one bit that a builder writes so a carried form stops growing: no product."""
+    return C.kind[v] == "and" and not C.data[v][1].s and bool(C.data[v][1].c)
+
+
 def redundant_ands(C: Any, owner: Callable[[int], str] | None = None) -> tuple[int, Counter]:
-    """Live ANDs of the `gf2.Circuit` ``C`` whose operands, with earlier duplicates replaced by their first copy, are those of an
-    earlier AND (in either order), are equal, or are constant: values computed again.  Returns (count, count by ``owner(bit)``)."""
+    """Live ANDs of the `gf2.Circuit` ``C``, commits apart (`is_commit`), whose operands, each bit read as the form it stands
+    for, are those of an earlier AND (in either order), are equal, or are constant: values computed again.  A commit never
+    counts (the lowering check counts them as ``commits``), but reading one reads its form: a duplicate AND stands for its
+    first copy, a commit of a constant or of one bit for that form, and a commit of a form committed before for the first
+    commit.  Returns (count, count by ``owner(bit)``)."""
     live = C.live()
-    rep: dict[int, int] = {}
+    rep: dict[int, tuple] = {}
     seen: dict[tuple, int] = {}
+    copies: dict[tuple, tuple[int, int]] = {}
     by: Counter = Counter()
 
     def canon(f):
         par: dict[int, int] = {}
+        c = f.c
         for x in f.s:
-            y = rep.get(x, x)
-            par[y] = par.get(y, 0) ^ 1
-        return tuple(sorted(k for k, p in par.items() if p)), f.c
+            bits, k = rep.get(x, ((x,), 0))
+            c ^= k
+            for y in bits:
+                par[y] = par.get(y, 0) ^ 1
+        return tuple(sorted(y for y, p in par.items() if p)), c
 
     n = 0
     for v, kind in enumerate(C.kind):
         if kind != "and" or v not in live:
             continue
         a, b = C.data[v]
-        ka, kb = canon(a), canon(b)
+        ka = canon(a)
+        if is_commit(C, v):
+            if len(ka[0]) <= 1:
+                rep[v] = ka
+            else:
+                u, c = copies.setdefault(ka[0], (v, ka[1]))
+                if u != v:
+                    rep[v] = ((u,), c ^ ka[1])
+            continue
+        kb = canon(b)
         if not ka[0] or not kb[0] or ka[0] == kb[0]:
             n += 1
             by[owner(v) if owner else "circuit"] += 1
@@ -452,7 +484,7 @@ def redundant_ands(C: Any, owner: Callable[[int], str] | None = None) -> tuple[i
         if u is None:
             seen[key] = v
             continue
-        rep[v] = u
+        rep[v] = ((u,), 0)
         n += 1
         by[owner(v) if owner else "circuit"] += 1
     return n, by
@@ -667,7 +699,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
         from verity.ml.circuits.evaluation.bits import compile as compile_bits
 
         own = rec["definition_ands"] = compile_bits(t).counts["and"]
-        commits = rec["commits"] = sum(1 for v in C.live() if C.kind[v] == "and" and not C.data[v][1].s)
+        commits = rec["commits"] = sum(1 for v in C.live() if is_commit(C, v))
         if counts["ands"] - commits > own:
             F.fail("lowering", "ands-added", t.id, f"[c-flock]: {counts['ands'] - commits} ANDs (and {commits} commits) for the "
                    f"Definition's {own} And gates", via="c-flock:ir_lower", ands=counts["ands"], commits=commits, definition_ands=own)
@@ -792,6 +824,7 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
         elif v["class"] == "too-large":
             rec["checked"] = False
             rec["reason"] = f"{v['gates']} gates: over the partition budget {v['limit']}"
+            P.warn("partition", "unchecked", d, 1, rec["reason"])
         else:
             P.fail("partition", "width", d, f"{v['class']}: |out(S)| = {v['out_bits']} b over {v['out_gates']} gate(s), limit "
                    f"{v['limit'][0]} b or one gate of {v['limit'][1]} b", unit_class=v["class"], units=v.get("units"))
@@ -858,10 +891,17 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     warnings.  ``memo`` shares the word query's `word.unit_rule` results and the entries across calls;
     ``lower_whole=False`` leaves the Boolean lowering to a template's proof blocks; ``as_call`` says whether the partition
     invariant applies (default: its family is a Call of a served Program, `circuit_check.targets.is_call`).  A Boolean Definition held as a Call is judged by `Q_word` v2
-    (`partition`), a word Definition by v1."""
+    (`partition`), a word Definition by v1.  A by-calls root (`circuit_check.targets.is_by_calls`) is checked by its calls
+    alone (`circuit_check.by_calls`)."""
+    from .targets import is_by_calls
+
+    t = resolve(fn)
+    if is_by_calls(t):
+        from . import by_calls
+
+        return by_calls.check(t)
     memo = {} if memo is None else memo
     pins = load_pins() if pins is None else pins
-    t = resolve(fn)
     done = memo.setdefault("entries", {})
     if as_call is None:
         from .targets import family, is_call
@@ -923,9 +963,31 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     if getattr(getattr(t, "defn", t), "gated", False):
         with spent("digest"):
             entry["digest"] = circuit_digest_pin(t, pins, F)
+    if kind != "reference":
+        with spent("block"):
+            entry["block"] = block_range(t, F, applies=lower_whole and (SC.owner(t) or "").startswith(UNIT_OWNERS))
     entry["failures"], entry["warnings"] = F.failures, F.warnings
     done[(t.id, lower_whole, as_call)] = entry
     return entry
+
+
+#: the packages whose Definitions are each staged whole as one C-Flock unit (`verity_flock.class_statement.UnitStager`), so
+#: `block_range` fails one past the range: PoUW's.  A served Program's Call is proved as its partition's proof blocks
+#: (`partition`), so a Call's whole count bounds none of them and is recorded, not failed.
+UNIT_OWNERS = ("verity.core.protocols.pouw.",)
+
+
+def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
+    """The witness bits ``t`` needs as one C-Flock unit, read off its Definition (`verity_flock.circuit.unit_witness`), against
+    C-Flock's proved range of 2^``K_MAX``; past it a failure where ``t`` is one unit (``applies``: checked whole, not as a
+    subcircuit whose units are its template's proof blocks, and owned under `UNIT_OWNERS`), the one `UnitStager` raises
+    before lowering."""
+    from verity_flock import circuit as FC
+
+    w = FC.unit_witness(t)
+    if applies and (why := FC.past_range(w)) is not None:
+        F.fail("block", "past-range", t.id, why, **w)
+    return {**w, "applies": applies}
 
 
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
@@ -955,12 +1017,12 @@ def _traced(build: Callable[[], Any]) -> tuple[Any, Any]:
 
 
 def _export_counts(build: Callable[[], Any], name: str) -> dict:
-    """The Boolean export of one proof block's circuit (`boolean_export.Registry.type_of`): its circuit types' AND/XOR/NOT counts, each
+    """The Boolean export of one proof block's circuit (`boolean_export.CircuitTypeTable.type_of`): its circuit types' AND/XOR/NOT counts, each
     distinct sub-circuit once, every type validated and the root evaluated against the circuit on random inputs (raises on a
     disagreement); ``flat_ands`` the circuit's own, fewer by the ANDs it shares across a call (``shared_across_types``)."""
     from verity_flock import boolean_export as BE
 
-    reg = BE.Registry()
+    reg = BE.CircuitTypeTable()
     rid = reg.type_of(build, name, "proof-unit")
     node = reg.nodes[rid]
     _, flat, typed = reg.shared[-1]
@@ -1108,7 +1170,7 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
     try:
         from verity.ml.definitions import cross_call
     except ImportError:
-        out["cross_call"] = {"checked": False, "reason": "verity.ml.definitions.cross_call is not on this tree (PR #98)"}
+        out["cross_call"] = {"checked": False, "reason": "verity.ml.definitions.cross_call is not on this tree"}
     else:
         x = cross_call.check_program(lambda: iter_instance_rows(str(inst)), strict=False)
         out["cross_call"] = {"checked": True, **{k: x[k] for k in ("check", "ok", "calls", "recomputed_gates", "unrefined")}}
@@ -1143,8 +1205,10 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
 def summarize(entries: Iterable[dict]) -> dict:
     """Totals over entries: failures by name, new (`ok` is no new failure) and known (`circuit_check.known`, with the cause),
     warnings' counts by check and by Definition (a finding two entries share, such as a template's Definition checked on its own
-    too, once), ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two proof blocks, with its count, and
-    ``q_call_refused``: each Definition `Q_call` v1 does not apply to, with why."""
+    too, once), ``unchecked``: how many warnings (each a property no check enforces: it never fails) on how many Definitions,
+    ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two proof blocks, with its count, and
+    ``q_call_refused``: each Definition `Q_call` v1 does not apply to, with why; ``by_calls``: each root checked by its calls
+    (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on."""
     from .known import known
     entries = list(entries)
     fails: dict[str, dict] = {}
@@ -1160,25 +1224,35 @@ def summarize(entries: Iterable[dict]) -> dict:
         by_check[k] += w["count"]
         by_def.setdefault(k, Counter())[w["definition"]] += w["count"]
     new = [f["name"] for f in fails if known(f) is None]
-    across, refused = {}, {}
+    across, refused, by_calls = {}, {}, {}
     for e in entries:
         p = e.get("partition") or {}
         if p.get("q_word") == 2 and p.get("recomputed_across"):
             across[e.get("definition") or e.get("target")] = p["recomputed_across"]
         if "inapplicable" in (p.get("q_call") or {}):
             refused[e.get("definition") or e.get("target")] = p["q_call"]["inapplicable"].get("why")
+        if e.get("mode") == "by-calls":
+            by_calls[e.get("definition") or e.get("target")] = sorted({c["binding"] for c in (e.get("by_calls") or {}).get("callees", [])
+                                                                     if c.get("binding")})
     return {"ok": not new, "failures": len(fails), "failure_names": [f["name"] for f in fails], "new_failures": new,
             "recomputed_across": dict(sorted(across.items())), "q_call_refused": dict(sorted(refused.items())),
+            "by_calls": dict(sorted(by_calls.items())),
             "known_failures": {f["name"]: known(f) for f in fails if known(f) is not None},
+            "unchecked": {"items": len(warns), "definitions": len({w["definition"] for w in warns})},
             "warnings": {k: {"total": v, "definitions": len(by_def[k]), "by_definition": dict(by_def[k].most_common())}
                          for k, v in by_check.most_common()}}
 
 
 def report(targets: list[dict], opts: Options) -> dict:
+    """The report over ``targets``, each by-calls root with its callees' targets' verdicts (`circuit_check.by_calls.joined`)."""
+    from .by_calls import joined
+
+    targets = joined(targets)
     return {"schema": SCHEMA, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}, "summary": summarize(targets),
             "targets": targets}
 
 
-__all__ = ["Findings", "Options", "SCHEMA", "check_definition", "check_row", "check_subcircuit", "correspondence", "dead_gates",
-           "load_pins", "partition", "redundant_ands", "redundant_gates", "report", "summarize", "target_equivalence", "template_lowering",
+__all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "block_range", "check_definition", "check_row", "check_subcircuit",
+           "correspondence", "dead_gates", "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report",
+           "summarize", "target_equivalence", "template_lowering",
            "whole_lowering"]

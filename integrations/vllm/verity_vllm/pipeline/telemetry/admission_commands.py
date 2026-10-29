@@ -30,9 +30,9 @@ class PlanOptions:
     host_limit_bytes: int | None = option("--host-limit-bytes", default=None, type=int, help="default: this cgroup's memory.max")
     largest_vu_in_parent: bool = option("--largest-vu-in-parent", default=False, action="store_true")
     retain: str | None = option("--retain", default=None, choices=["host", "device", "none", "sample"], help="the run's --retain (default: the workload's / host)")
-    bounded_staging: bool = option("--bounded-staging", default=False, action="store_true", help="the run uses --bounded-staging (R19 admit fix (a) with --retain host --retain-exclude hidden_m1)")
+    bounded_staging: bool = option("--bounded-staging", default=False, action="store_true", help="the run uses --bounded-staging (with --retain host --retain-exclude hidden_m1)")
     retain_exclude: str | None = option("--retain-exclude", default=None, help="the run's --retain-exclude families (hidden_m1 = fa2_hidden_m1,fa3_hidden_m1)")
-    no_fork_gc_freeze: bool = option("--no-fork-gc-freeze", default=False, action="store_true", help="model the pre-R19 forked pool (no gc.freeze before the fork: two children may copy the C2 heap, F-r17-24)")
+    no_fork_gc_freeze: bool = option("--no-fork-gc-freeze", default=False, action="store_true", help="model a forked pool without gc.freeze before the fork (two children may copy the C2 heap)")
     cmd: str = field(default="plan", init=False)
 
 
@@ -43,7 +43,7 @@ class CompareOptions:
     md: bool = option("--md", default=False, action="store_true")
     points: bool = option("--points", default=False, action="store_true", help="also print the commit-point tables")
     largest_vu_in_parent: bool = option("--largest-vu-in-parent", default=False, action="store_true", help="predict with the FIX: the largest strata evaluated in the parent, forked workers are 250 MiB workers")
-    no_fork_gc_freeze: bool = option("--no-fork-gc-freeze", default=False, action="store_true", help="predict with the pre-R19 forked pool (the R17/R18 records were made without gc.freeze)")
+    no_fork_gc_freeze: bool = option("--no-fork-gc-freeze", default=False, action="store_true", help="predict with a forked pool without gc.freeze (as records made without it ran)")
     json_out: str | None = option("--json-out", default=None)
     cmd: str = field(default="compare", init=False)
 

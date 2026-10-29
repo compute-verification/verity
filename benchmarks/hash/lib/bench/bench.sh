@@ -8,8 +8,8 @@
 set -uo pipefail
 : "${O:?}" "${W:?}" "${VC_LIB:?}"
 D=benchmarks/hash/lib
-SR=4369ae628de156b7d9115a0e1ad6cf107c132a9e   # cursor/verity-hash-15ad: sharaw (benchmarks/hash/sharaw), commit_gpu unchanged since
-NR=934d0bcbdf3f838d51696b78d34b85235e44e931   # cursor/commit-speed-21f3: native_rows.cu as libvc vendored it
+SR=4369ae628de156b7d9115a0e1ad6cf107c132a9e   # sharaw (benchmarks/hash/sharaw), commit_gpu unchanged since
+NR=934d0bcbdf3f838d51696b78d34b85235e44e931   # native_rows.cu as libvc vendored it
 URL=https://github.com/compute-verification/verity.git
 cc=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i 0 | head -1 | tr -d .)
 GEN="-gencode arch=compute_${cc}a,code=sm_${cc}a"

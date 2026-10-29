@@ -11,7 +11,7 @@ coins that differ only in the last message. Here what both halves read:
   the last message only for what no frame reads (`readRep_last`, `readPs_last`), so the round messages agree.
 * `decideR_runs`, `verdictR_within`: an accepted decision runs the verdict at `jAt sha512` and the read proofs' files
   within its own log, so the verdict accepts with SHA-512 answered only within that log (`decisionE_runs`,
-  `verdictE_within` at `nextR`). `checksAtJ_leaf`: the checks pin every table's Merkle scheme (`checks_leaf`).
+  `verdictE_within` at `nextR`). `checksAtJ_leafL`: the checks pin every table's Merkle scheme (`checks_leaf`).
 * The plain verdict at a parsed value, at any `keep` (`verifyJWithMK`): its tables and reps
   (`verifyJWithMK_tables`, `verifyJWithMK_rep`, `verifyJWithMK_proofs_size`), its round counts
   (`rep_plainJK`, `streams_ns_plainJK`, `rounds_ns_plainJK`, `streams_sizes_plainJK`), and two records under one
@@ -154,7 +154,7 @@ theorem verdictR_within {spec : SessionSpec} {tabs : Array Setup} {j : Json} {pr
 
 /-- **`checksAtJ` pins the tables' Merkle scheme** (`checks_leaf` at a parsed value): every table the statement sets up
 commits under `hm96Sha512`, or, for a statement read without `--zk`, under plain SHA-512 leaves. -/
-theorem checksAtJ_leaf {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
+theorem checksAtJ_leafL {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json} {sts : Array Stmt}
     (hc : checksAtJ s spec x link c₁ mids f v = .ok ()) (hs : s.setup = .ok (spec, sts)) :
     ∀ (j : ℕ) (hj : j < sts.size), sts[j].merkle = MerkleScheme.hm96Sha512 ∨

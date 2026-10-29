@@ -22,7 +22,7 @@ from the Commit record's token ids.  Each kept output's `release` bucket is the 
 the first step, in which the engine emitted it (the step's clock reading): with no certifier on the path, the earliest bucket
 its frame could be released in.  A trace without a clock takes the step index as the bucket.
 
-The advice is not published (Daniel, 24 Oct): its canonical encoding is committed as hiding rows (`advice_windows.commit_advice`:
+The advice is not published: its canonical encoding is committed as hiding rows (`advice_windows.commit_advice`:
 hm96-sha512 rows under `verity.ml.commitments.advice`, the tree's domain bound to the registered compiler), and only the root and
 the advice's length go public, as the binding a window's registration carries (`advice_windows.binding`, the window provenance's
 ``binding``, which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
@@ -618,7 +618,7 @@ class Options:
     compiler_digest: str | None = option("--compiler-digest", default=None,
                                          help="its digest, 128 hex digits (default: SHA-512 of the name and the tree's code identity)")
     cap: int = option("--cap", type=int, default=CAP_BITS,
-                      help="ℓ, the cap on the advice's length in bits the compiler is total up to (PRF-143): the registered compiler is "
+                      help="ℓ, the cap on the advice's length in bits the compiler is total up to: the registered compiler is "
                            "advice_windows.Capped over the one named, whose digest covers ℓ (default 2^23, 1 MiB)")
     T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window")
     tau: float = option("--tau", type=float, default=0.1, help="the egress bucket's width in seconds, for each output's release bucket")

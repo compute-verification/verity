@@ -4,8 +4,7 @@
 # all 20); cgemm_ref.py then recomputes the dumped tiles on the CPU; only if every gate and the reference passed does lease 2
 # time the arms, interleaved. summary writes result.json (bench-result/v1) and out/table.md. Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
-#     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/kbench.sh
+#   RESEARCH_RUN_DIR=DIR OUT=DIR/out GPU_LEASE_WHO=WHO bash benchmarks/hash/dither/kbench.sh
 set -uo pipefail
 export O=${OUT:?}
 CUDA=${CUDA:-/usr/local/cuda-13.0}

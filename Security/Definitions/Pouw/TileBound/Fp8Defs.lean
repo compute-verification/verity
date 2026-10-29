@@ -3,7 +3,7 @@ import Definitions.Pouw.TileBound.Defs
 /-!
 # The FP8-tile model at sm_120's E4M3 atom (trusted definitions)
 
-The TT_OUT restatements lane (bc-b58c6093), on bc-d9842080's FP4-tile model (`Pouw.TileBound`, reused as is). The honest
+On the FP4-tile model (`Pouw.TileBound`, reused as is). The honest
 source is the E4M3 atom `mma.sync ... kind::f8f6f4 ... m16n8k32` (`BLACKWELL_SM120_E4M3_M16N8K32`, one group of 32 on a
 26-bit adder), priced by its whole fragment: 16·8·32 = 4,096 slots at `price .fp8 = 1` each. The adversary may use every
 multiplier in `Fmt` at `price`, the FP4-tile model's measured table: NVFP4 0.5 per slot, E4M3 or int8 1, BF16 or FP16 2,
@@ -22,7 +22,7 @@ cheapest multiplier; NVFP4 is.
   - BF16 holds 16 (8 bits), FP16 128 (11 bits), TF32 128 (11 bits) and FFMA 2²⁰ (24 bits).
   - int8, and `dp4a` on int8 operands, hold 8 E4M3 significands at one scale (15·8 ≤ 127).
   - NVFP4 holds 0 on in-domain operands. A block-scaled E2M1 value has 6 significant bits, but the 16 entries of a block
-    share one UE4M3 scale, and no in-domain 16-block of E4M3 codes is one NVFP4 limb (0%, `r20260930-055203-10e8`).
+    share one UE4M3 scale, and no in-domain 16-block of E4M3 codes is one NVFP4 limb.
     That zero is a measured fact about the operands, not a format width: the hypothesis `fp8-limb-rate/sm120`. So
     NVFP4 is closed only through the operands, and limb splitting is nonlinear forming, the residue `a2/fp8-tile`.
 

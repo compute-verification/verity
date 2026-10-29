@@ -1,4 +1,4 @@
-"""X-03 per-layer attention plane classes (F-r19-int-22): the expected hidden-plane inventory of a step is DERIVED per attention layer from
+"""X-03 per-layer attention plane classes: the expected hidden-plane inventory of a step is DERIVED per attention layer from
 the Program's attention Call statics (NH, KVH, D, window) x the step's active-sequence set; uniformity across layers is a consequence for
 one-class Programs, not a rule.  Synthetic declarations and inventories only (class labels A/B; no model is named).  Offline (no CUDA)."""
 from __future__ import annotations
@@ -74,7 +74,7 @@ def test_one_class_uniform_step_passes_under_both_rules():
 
 
 def test_one_class_failure_cases_give_the_old_rule_verdict():
-    """The R13 test vectors (test_x03_identities): a layer's row dropped + another doubled, a layer outside the attention set, a zero count."""
+    """The uniformity rule's test vectors (test_x03_identities): a layer's row dropped + another doubled, a layer outside the attention set, a zero count."""
     decls = one_class(2)
     good = observed_pattern(decls, 1)                                           # g4x2 whole rows, one per layer
     dropped_doubled = [n for n in good if "/L1/" not in n] + whole(0, KVH, NH // KVH)
@@ -84,7 +84,7 @@ def test_one_class_failure_cases_give_the_old_rule_verdict():
     decls4 = one_class(4)
     nothing_for_1 = [n for n in observed_pattern(decls4, 1) if "/L1/" not in n]
     assert _both(decls4, decode(1), nothing_for_1) == ({1: 0}, {1: 0})
-    # the R13 rule's tie artifact (2 layers, counts {1, 0}: the modal count is ambiguous, the smaller wins, the GOOD layer is named too);
+    # the uniformity rule's tie artifact (2 layers, counts {1, 0}: the modal count is ambiguous, the smaller wins, the GOOD layer is named too);
     # the derived rule needs no mode and names only the layer that disagrees with its own expectation
     assert _both(decls, decode(1), [n for n in good if "/L1/" not in n]) == ({1: 0}, {0: 1, 1: 0})
     # per-sequence class, one plane of one sequence dropped in layer 1
@@ -95,7 +95,7 @@ def test_one_class_failure_cases_give_the_old_rule_verdict():
 
 
 def test_every_layer_uniformly_wrong_is_where_the_derived_rule_is_stronger():
-    """The one divergence from the R13 rule, by design: an inventory that is uniform AND wrong (every layer 5 planes per sequence) is invisible
+    """The one divergence from the uniformity rule, by design: an inventory that is uniform AND wrong (every layer 5 planes per sequence) is invisible
     to a uniformity rule and is named by the derived one."""
     decls = one_class(3, window=4096)
     names = sum((per_seq(k, [0, 1], planes=FP.PLANES[:5]) for k in range(3)), [])
@@ -120,7 +120,7 @@ def test_two_class_pattern_passes_when_declared_and_fails_when_one_class_is_decl
     assert v["ok"], v["layers_bad"]
     assert sorted(v["classes"]) == [f"per_seqx{6 * n_seq}", "wholex1"]
     assert v["classes"][f"per_seqx{6 * n_seq}"] == even and v["classes"]["wholex1"] == odd
-    # the R13 rule refuses exactly this step (the finding): the tie between 13 and 13 resolves to the smaller count, the even layers are named
+    # the uniformity rule refuses exactly this step: the tie between 13 and 13 resolves to the smaller count, the even layers are named
     assert uniform_rule(counts_by_layer(names), [d.layer for d in decls]) == {k: 6 * n_seq for k in even}
     # one class declared (all A): every even layer is named, with its class contradiction
     va = check_step(one_class(), decode(n_seq), names)
@@ -344,7 +344,7 @@ def test_committer_derives_the_per_layer_expectation_when_declarations_are_hande
     com = _com(4)
     for s, n in enumerate((8, 7, 3, 1)):
         com._layouts[s] = _layout(_step(decls, n), n_seq=n, tokens=n)
-    r0 = com.identity_check()                                             # no declarations: the R13 rule fails the two-class steps, as today
+    r0 = com.identity_check()                                             # no declarations: the uniformity rule fails the two-class steps
     assert r0["ok"] is False and r0["violations_n"] == 3 and r0["fa2_rule"]["steps"] == {"uniform": 4}
     assert r0["violations"][0]["fa2_layers_bad"] == {0: 48, 2: 48}
     com.attention_layer_decls = decls
@@ -359,7 +359,7 @@ def test_committer_reads_the_active_set_from_step_rows_first_and_names_the_layer
     decls = two_class(4)
     com = _com(4)
     com.attention_layer_decls = decls
-    com.step_rows = {0: [(f"r{i}", i, i + 1) for i in range(8)]}         # BIND-01 record: 8 active sequences, one row each
+    com.step_rows = {0: [(f"r{i}", i, i + 1) for i in range(8)]}         # the binding record: 8 active sequences, one row each
     names = _step(decls, 8)
     names = [n for n in names if "/L2/" not in n] + whole(2, 8 * KVH, NH // KVH)   # layer 2 (class B) committed class A's row
     com._layouts[0] = _layout(names, n_seq=8, tokens=8)
@@ -386,7 +386,7 @@ def test_committer_falls_back_to_the_uniform_rule_for_a_step_without_an_active_s
     com._layouts[0] = [m for m in metas if m.name != "runner.sampler/sampled_token_ids"]   # no sampler ids: n_seq unknown
     r = com.identity_check()
     assert r["fa2_rule"]["steps"] == {"uniform": 1}
-    assert r["ok"] is False and r["violations"][0]["fa2_layers_bad"] == {0: 18}           # the R13 verdict (and the sampler-ids miss)
+    assert r["ok"] is False and r["violations"][0]["fa2_layers_bad"] == {0: 18}           # the uniformity rule's verdict (and the sampler-ids miss)
 
 
 def test_existing_single_class_vectors_are_unchanged_under_declarations():

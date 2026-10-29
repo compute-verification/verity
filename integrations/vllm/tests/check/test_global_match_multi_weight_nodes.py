@@ -1,4 +1,4 @@
-"""F-fp8-GM1 (R15 fp8 BLOCKER M-0823, R16 fp8): GM-01 / X-09 over a fold whose weights Record is NOT width-homogeneous.
+"""F-fp8-GM1: GM-01 / X-09 over a fold whose weights Record is NOT width-homogeneous.
 
 `verity.ml.circuits.program._lower_input` lowers a homogeneous-width Input type to ONE `Input<w>` batch node and recurses into a
 Record/Array/Tuple whose leaves have several widths -- one node per homogeneous field.  The block-scaled FP8 checkpoint
@@ -54,7 +54,7 @@ def test_fixture_lowers_the_record_to_several_weight_input_nodes(memory, inhomog
     assert B.n_input_nodes == 7 and nodes == list(range(7))
     assert sorted(B.input_base) == [2, 3, 4, 5, 6]          # load_oracle: weight nodes = every node >= the weights parameter index
     assert B.inputs[6] == ("Input32_v1", 4)                 # the appended f32 field is the LAST node -- no instance reads it
-    read = {run[1] for r in B.inst for a in r["args"] for run in a if run[0] == "n" and run[1] in B.inputs}   # runs | [R17 mfast] progressions
+    read = {run[1] for r in B.inst for a in r["args"] for run in a if run[0] == "n" and run[1] in B.inputs}   # runs | progressions
     assert 6 not in read and {2, 3, 4, 5} <= read           # the GEMMs/norms/rope read nodes 2..5, never n_in - 1
 
 
@@ -69,7 +69,7 @@ def test_x09_decompose_attributes_every_weight_read_as_shared_not_cross_request(
     assert res["attribution"]["unattributed"] == 0
     for r in res["requests"]:
         assert r.get("error") is None, r
-        assert r["xreq"]["counts"] == {}, r["xreq"]         # M-0823: 2,074,230 'prompt-param' reads here before the fix
+        assert r["xreq"]["counts"] == {}, r["xreq"]         # 2,074,230 'prompt-param' reads here before the fix
         assert r["canonical_equal"], r
         assert r["totals"]["operands_different"] == 0 and r["totals"]["operands_equal"] > 0
 

@@ -1,4 +1,4 @@
-"""CHECKED-STRIP's exact check: CO-Dither, a two-sided dither whose served output is a checked word.
+"""CO-Dither's exact check: a two-sided dither whose served output is a checked word.
 
 Coordinates are Lean's (`Definitions.Pouw.RelativeSecurity`): the peeled side P (n×k, in [−63, 62]) carries U, the
 served side V (k×n′) carries the dither b. U(i, ρ) = −64 + Σ_p w_p β_p(i, ρ) over 7 planes, wRe = (1, 2, 4, 8, 16, 32, 65),
@@ -33,7 +33,7 @@ Parts:
 - F. Served error: exact mean and variance of O − PV over the coins (Fractions, every coin point), against Dither's.
 - G. Theorem N's bound ε ≥ (1 − θ)/(q − 1 + θ) for schemes whose q checked products are recovered by a per-coordinate
   identity, and the q it needs for ε < 1% and < 0.1%.
-- H. The tensor–scalar model (note:20261017T0310Z-report-eps1-program): a 128-cell tile's MMAs and other warp
+- H. The tensor–scalar model: a 128-cell tile's MMAs and other warp
   instructions, honest against the cheapest cheater found, timed on the measured facets (the tensor pipe and JI3e), for
   CO at r = 32 (co32, co32c), CO at r = k/2 (cohalf) and Dither as built, at fold costs 3, 1.5 and 1 a word, on
   Llama-3.1 8B and 70B linears and on QKᵀ (k = 128). At A = B = 0, O = c·b is a depth-k binary product with no commit
@@ -537,7 +537,7 @@ def theorem_n(q, theta):
     return (1 - theta) / (q - 1 + theta)
 
 
-# ---------------------------------------------------------------- H: the tensor–scalar model (note:20261017T0310Z)
+# ---------------------------------------------------------------- H: the tensor–scalar model
 
 #: (row, MMA coefficient, coefficient of every other vector-pipe warp instruction) in SMSP-cycles:
 #: `M` (the tensor pipe) and JI3e_0..2, benchmarks/pouw/machine_model/data/rows.csv on main.
@@ -582,7 +582,7 @@ def ts_tile(design, k, n, fold):
     return honest, cheat
 
 
-#: SMSP-cycles a warp b1 and.popc m16n8k256 MMA takes on sm_120, which emulates it (note:20261015T0608Z-draft-census-sm120).
+#: SMSP-cycles a warp b1 and.popc m16n8k256 MMA takes on sm_120, which emulates it.
 B1_EMULATED = 193.0
 
 
@@ -624,15 +624,15 @@ def word_routes(design, k, x):
     return routes
 
 
-#: P·V's vector work a tile beyond the folds, as BC-KERNEL measured cpv.cu's pv_l7qs (exact ncu counts,
-#: r20261017-075345-b394, note:20261017T0645Z-draft-bc-kernel). PV_DIGIT_OPS is per-thread instructions an entry a digit
+#: P·V's vector work a tile beyond the folds, as measured on cpv.cu's pv_l7qs (exact ncu counts).
+#: PV_DIGIT_OPS is per-thread instructions an entry a digit
 #: (4 entries a lane, so 4·m·PV_DIGIT_OPS warp instructions a tile): vdig's 7 without z's hashing, which any prover
 #: committing the D_d words does (11.0 with it; co32c's quantizer 6.0). PV_SERVE_OPS is warp instructions a tile, the
 #: served epilogue's 2.8 a cell over a dequantizing one (2O, 127S and the add).
 PV_DIGIT_OPS = 7.0
 PV_SERVE_OPS = 11.2
-#: Adopted P·V's tile as BC-KERNEL r2 measured apv_l7qs (exact ncu counts, r20261017-090559-fd46 and
-#: r20261017-092503-35ff, note:20261017T0837Z-draft-bc-kernel-r2). PV_LIMB_OPS is per-thread instructions an entry a
+#: Adopted P·V's tile as measured on apv.cu's apv_l7qs (exact ncu counts).
+#: PV_LIMB_OPS is per-thread instructions an entry a
 #: limb, 7.16 for Ycum's two limbs in the in-register sum loop. APV_SERVE_OPS is warp instructions a tile, the served
 #: f over a plain epilogue (the O + 64S IMAD and its loads; at most 8.1). APV_TAIL_OPS is the tail stage's warp
 #: instructions a tile besides its IMMAs: the 256·Y1 combine's 4 IMADs, 3 LDGs, 2.4 NOPs, an LDSM and 1.5 of control.

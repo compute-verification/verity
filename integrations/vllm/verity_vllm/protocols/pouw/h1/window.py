@@ -1,4 +1,4 @@
-"""H1's, ncp-v2's and Pearl-C's session on the proof service's challenger on its auditor host
+"""H1's, ncp-v2's and Pearl-C's session on the proof system's challenger on its auditor host
 (`verity.core.protocols.sampled_proofs.remote`), as the serving process opens and closes it; `pouw_h1_challenger` is
 the verifier's check of what it served.
 
@@ -13,7 +13,7 @@ the gate open S on its salt epoch's root R = `salt.epoch_open_root` of the weigh
 over W (`EPOCHS`), its salt coin opened after R (`salt_session`); its salt is `audit.salt_of` over W. ncp-v2's `session` is
 the gate's open answer, and opens its salt after the weights' root. Round s's coin opens after round s's root
 (`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the
-root its session was opened on (serve.py's ``--root``, RT4-INT-24), H1's R. The challenger is auditor-trusted
+root its session was opened on (serve.py's ``--root``), H1's R. The challenger is auditor-trusted
 (`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it on its own
 127.0.0.1, through its certifier coin link.
 

@@ -1,17 +1,15 @@
-# The H200 walking skeleton's step driver, run by `verity example h200`, and its CPU replay of drawn units
+# The H200 walking skeleton's step driver, run by `verity example h200`, and its CPU replay of sampled proof blocks
 # (`replay.py`, `cpu_step.py`). Not a package: its tests run in the workspace environment (torch from the workspace's
 # torch-cpu extra), and `run.py` puts this directory on its path.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".", "../../integrations/torch_loop"]
+pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 inputs = [
     # the Definitions replay evaluates, P2's keys, and the commitments the commit call builds on
     "verity",
-    # the torch loop replay reads
-    "integrations/torch_loop",
     # the per-step commit call (`row_tables.step_roots`, and `host_step`'s C++ twin with the sources it builds)
     "integrations/vllm/verity_vllm/__init__.py",
     "integrations/vllm/verity_vllm/commit/__init__.py",

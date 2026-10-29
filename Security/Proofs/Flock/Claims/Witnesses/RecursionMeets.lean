@@ -259,7 +259,7 @@ theorem ZKStop_meets_ready {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, 
           (RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H (RecDeploy.stopRounds IV x) x ms =
             false := by
   refine ⟨fun hA => ?_, fun H x ms hs hl hfit hlen hc hb => ?_⟩
-  · obtain ⟨inner, hr, -, hS, hR⟩ := RecDeploy.ready_of_admitted hA
+  · obtain ⟨inner, hr, hS, hR⟩ := RecDeploy.ready_of_admitted hA
     refine ⟨inner, hS, hR, fun H x ms hs hx hlen hc hb => ?_⟩
     exact RecDeploy.halted_live IV ivScope b tapeOf SO nAt innerMsg H x ms hs (by rw [hx]; exact hr) hlen hc hb
   obtain ⟨s, spec, sts, hset, -, hiff⟩ := RecDeploy.ready_inScope_iff hs

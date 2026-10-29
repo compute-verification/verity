@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Two-stage steering against STEER-1 (note:20261017T0324Z-draft-eps1-spec §2.6, Lemma C's premise).
+"""Two-stage steering against STEER-1 (Lemma C's premise).
 
-SPEC's one-stage attack writes ≈ d/2 + 1 served values of the attention-output row wrong so that gate/up's C1′ operand,
+The one-stage attack writes ≈ d/2 + 1 served values of the attention-output row wrong so that gate/up's C1′ operand,
 round(127·γ⊙z/max|γ⊙z|) with z = h + o_out, lands on −R (gate/up's noise) and zeroes its words. Recomputing the producer
 one stage back (SAMPLING's r = 1 closure) catches that. STEER-1 assumes steering through a consistent stage costs at
 least what it saves. This checks the two-stage form: the cheater writes P·V's served row (the o_proj operand x, int8 with
@@ -9,7 +9,7 @@ a free dynamic scale s_x), o_proj is computed honestly (o_out = s_x·x·W_o), an
 
   C = {z : round(127·γ_i z_i / max_k |γ_k z_k|) = −R_i for every i ≠ j},
 
-with coordinate j the outlier (its product survives, as in SPEC's attack). The cone is scale-invariant, so a large s_x
+with coordinate j the outlier (its product survives, as in the one-stage attack). The cone is scale-invariant, so a large s_x
 makes h negligible. The construction is Babai rounding: x = round(λ·t·W⁻¹) for the cone's centre t, λ as large as the
 int8 box allows. W_o is a stand-in (Gaussian, σ = 0.02, and a heavier-tailed variant): Llama's weights are not read.
 

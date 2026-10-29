@@ -1,6 +1,6 @@
 """memory-map/v1 under deferred residency against the map that writes each block at the step that completed it: vllm's
 rules for moving one to the other (`deferred`, its compare.py in run r20261018-070848-81e2, the Store's map against
-circuits' oracle) under the coordinator's rulings of 18 Oct, on hand histories and on seeded ones.  The moved map is
+circuits' oracle), on hand histories and on seeded ones.  The moved map is
 one `Replay` accepts, every index the oracle wrote is written once or withdrawn once, a block is withdrawn exactly
 when its last structural reader is at or before the line its encode landed in, each written block is in the plans of
 the passes after that line through its last structural reader, and a session the moved map drives is accepted."""
@@ -25,14 +25,14 @@ STEPS = 24
 def deferred(osteps: list[Step], encodes: list[list], first: int, n: int) -> list[Step]:
     """`osteps`, a map that records each write at the step w that completed its block and each free at its values' last
     structural reader f, moved to deferred residency by the session's public `encodes` ([step made, step landed or
-    None, first, count] per append, steps from `first`), as compare.py moves it, with rulings 1 and 3:
+    None, first, count] per append, steps from `first`), as compare.py moves it except where noted:
 
     - a write at w moves to the line r(w) its append's encode landed in, its index unchanged, and is in no line if the
       encode never landed;
     - the filler a completed block's slot held (a slot below `n` not touched before) is freed at its reach, w;
-    - a re-key, a write over a slot whose block is live, frees the old index at the re-key's step (ruling 3);
+    - a re-key, a write over a slot whose block is live, frees the old index at the re-key's step;
     - a written block's free at f stays at f if f > r(w); otherwise the block is withdrawn at r(w), with no write and
-      no free (ruling 1, where compare.py moved the free to r(w) + 1);
+      no free (where compare.py moved the free to r(w) + 1);
     - a free is dropped where its line writes the slot: the write releases what the slot held.
 
     compare.py's last rule, moving a line's second write of a slot to the next line, is left nothing to move: a slot's
@@ -143,7 +143,7 @@ def test_a_block_freed_before_its_encode_lands_is_withdrawn_in_the_line_its_writ
 ], ids=["read-after-landing", "read-before-landing"])
 def test_a_re_key_frees_its_old_index_at_its_step_and_writes_the_new_one_when_its_encode_lands(last_read, line,
                                                                                               held) -> None:
-    """Ruling 3: block 8 in slot 4 is re-keyed at step 5 (its payload appended again, at 9) and the re-key's encode
+    """Block 8 in slot 4 is re-keyed at step 5 (its payload appended again, at 9) and the re-key's encode
     lands in step 7's line.  Step 5 frees the slot, an exception to a free at the last structural reader, so 8 is in
     the passes through step 5, neither is in those at 6 and 7, and 9 is from step 8 through its last structural reader;
     with that reader before the re-key landed, 9 is withdrawn."""
@@ -157,7 +157,7 @@ def test_a_re_key_frees_its_old_index_at_its_step_and_writes_the_new_one_when_it
 
 
 def test_deferred_a_re_key_falls_at_age_l_minus_one_so_a_lifetime_of_one_credits_nothing() -> None:
-    """Ruling 2, L = 2 over three windows of three passes: block 8, appended after step 1 (window 0, which it joins),
+    """L = 2 over three windows of three passes: block 8, appended after step 1 (window 0, which it joins),
     lands in step 3's line, so it is resident from window 1, and is re-keyed at step 5, window 1's last, at age
     L − 1 = 1; the re-key (9) joins window 2 and is resident from step 7.  The session is accepted.  At L = 1 the block
     is stale in the window it becomes resident in (`lifetime`), so a session that defers residency is refused at

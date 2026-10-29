@@ -1,9 +1,9 @@
-"""[R15 compiled S3] P_compiled x query required manifest (verity_vllm/acquire/compiled.py) -- torch-free.
+"""P_compiled x query required manifest (verity_vllm/acquire/compiled.py) -- torch-free.
 
 The manifest is built from a process's Inductor output code (the wrappers' `Runner.call` launch programs + buffer allocations + the split
-graph's piece wiring), never from what the collector emitted.  Pinned against the row of record's committed output code of BOTH arms
-(out/gen/sweep/evidence/compiled/<B1 row>/r15_0100_b1_dataflow_row/p_compiled_{control,treatment}_r1_output_code): the same 17-piece /
-354-per-step population, program digest (kernel set x launch table x dataflow, rev-pm M-0589) and manifest digest the pod built
+graph's piece wiring), never from what the collector emitted.  Pinned against a B1 workload's committed output code of BOTH arms
+(`p_compiled_{control,treatment}_r1_output_code`): the same 17-piece / 354-per-step population, program digest (kernel set x launch
+table x dataflow) and manifest digest the pod built
 (compiled_manifest*.json, commit/summary.json program_digests) -- reproducible offline, and the treatment's own code derives the same Program.
 """
 from __future__ import annotations
@@ -29,8 +29,8 @@ pytestmark = pytest.mark.skipif(not os.path.isdir(CODE), reason="row-of-record o
 
 
 def _build(steps=32, prefill=256, code=CODE, sg=SG, v1=True):
-    # v1 = the digest of the records built on <= 2b6573893 (weight routing not in program_digest; rev-pm F-pm-29); the row-of-record pins
-    # below are v1 because that is the code that ran them.  _build_v2 = the current default (weight routing in the digest).
+    # v1 = the digest of the records built before weight routing entered program_digest; the pins below are v1 because that is the code
+    # that ran them.  _build_v2 = the current default (weight routing in the digest).
     return CM.build(code, pieces=17, steps=steps, prefill_tokens=prefill, kernel_set_sha256=KSET, split_graph=sg, weights_in_dataflow=not v1)
 
 
@@ -39,7 +39,7 @@ def _build_v2(**kw):
 
 
 def test_f_pm_29_weight_routing_is_in_the_v2_program_digest(tmp_path):
-    """[rev-pm BLOCKER M-0687 / F-pm-29] exchanging which served weight a norm launch consumes (post_attention_layernorm.weight <->
+    """Exchanging which served weight a norm launch consumes (post_attention_layernorm.weight <->
     the next input_layernorm.weight, both [2048] bf16) must change the Program: v2 digests differ, v1 (the recorded digest) does not."""
     import re, shutil
     v1, v2 = _build(steps=4, prefill=16), _build_v2(steps=4, prefill=16)
@@ -74,7 +74,7 @@ def test_f_pm_29_weight_routing_is_in_the_v2_program_digest(tmp_path):
         f.write_text(new); swapped += 1
     assert swapped >= 1
     m1, m2_ = _build(steps=4, prefill=16, code=str(mut)), _build_v2(steps=4, prefill=16, code=str(mut))
-    assert m1["program_digest"] == v1["program_digest"]                        # v1 cannot see the swap (F-pm-29, as rev-pm measured)
+    assert m1["program_digest"] == v1["program_digest"]                        # v1 cannot see the swap
     assert m2_["program_digest"] != v2["program_digest"]                       # v2 does
 
 
@@ -82,7 +82,7 @@ def test_manifest_reproduces_the_row_of_record_digests():
     m = _build()
     rec = json.load(open(os.path.join(ATT, "compiled_manifest.json")))
     assert m["program_digest"] == rec["program_digest"]
-    # the population is the record's row for row; the digest formula is the consumer's (required_manifest.manifest_digest, rel/int-6:
+    # the population is the record's row for row; the digest formula is the consumer's (required_manifest.manifest_digest;
     # binding.load_required_manifest recomputes it over the rows) -- the record's own field predates that formula
     from verity_vllm.query.manifest import format as RM
     assert m["schema"] == RM.SCHEMA and m["manifest_digest"] == RM.manifest_digest(rec["identities"]) == RM.manifest_digest(m["identities"])
@@ -98,7 +98,7 @@ def test_manifest_reproduces_the_row_of_record_digests():
 
 
 def test_treatment_output_code_derives_the_same_program():
-    """rev-pm M-0589 TIP2: the treatment's wrappers carry Inductor's debug-printer statements (the seam the hooks ride) -- not launches; the
+    """The treatment's wrappers carry Inductor's debug-printer statements (the seam the hooks ride) -- not launches; the
     Program derived from them (kernel set x launch table x dataflow) is the control's, so the treatment executed the Program of record."""
     c, t = _build(steps=4, prefill=16), _build(steps=4, prefill=16, code=CODE_T, sg=SG_T)
     assert c["program_digest"] == t["program_digest"] and c["manifest_digest"] == t["manifest_digest"]
@@ -145,7 +145,7 @@ def test_identities_are_program_x_query_with_widths_from_the_wrappers():
     assert roles_of("triton_poi_fused_1", ["in_ptr0", "in_ptr1", "in_ptr2", "out_ptr0", "out_ptr1", "xnumel_0", "xnumel_1", "XBLOCK : tl.constexpr"])[0] == {0: "qkv", 1: "pos", 3: "k", 4: "q"}
     assert roles_of("triton_poi_fused_3", arity=6)[0] == {0: "qkv", 1: "bias", 2: "pos", 4: "k", 5: "qkv_b"}
     assert roles_of("triton_poi_fused_3", arity=7) == ({}, set())
-    assert roles_of("matmul_kernel_persistent_2") == ({0: "a", 2: "out"}, {1})                  # one arity: the name suffices (R15 callers)
+    assert roles_of("matmul_kernel_persistent_2") == ({0: "a", 2: "out"}, {1})                  # one arity: the name suffices
 
 
 def test_program_digest_is_the_artifact_not_the_workload():
@@ -155,7 +155,7 @@ def test_program_digest_is_the_artifact_not_the_workload():
     assert b["populations"]["identities"] == 8 * 354
 
 
-# ---------------------------------------------------------------------------------------------- dataflow identity (rev-pm M-0589)
+# ---------------------------------------------------------------------------------------------- dataflow identity
 
 def _copy_code(tmp_path, edit=None):
     """A copy of the row-of-record output code with an optional line edit applied to every wrapper (returns the copy's root)."""
@@ -184,7 +184,7 @@ def test_dataflow_edges_are_declared_and_complete():
 
 
 def test_n1_rewiring_changes_the_program_digest(tmp_path):
-    """rev-pm N1: swap the two inputs of the second fused add+rmsnorm in the middle wrappers (which buffer is the residual) -> a different
+    """Swap the two inputs of the second fused add+rmsnorm in the middle wrappers (which buffer is the residual) -> a different
     compiled implementation must have a different P_compiled identity."""
     swapped = _copy_code(tmp_path, lambda t: t.replace("triton_red_fused_fused_add_rms_norm_t_2.run(buf6, buf0, ", "triton_red_fused_fused_add_rms_norm_t_2.run(buf0, buf6, "))
     a = CM.build(CODE, pieces=17, steps=4, prefill_tokens=16, kernel_set_sha256=KSET, split_graph=SG)
@@ -194,7 +194,7 @@ def test_n1_rewiring_changes_the_program_digest(tmp_path):
 
 
 def test_n3_unparsed_launch_is_refused(tmp_path):
-    """rev-pm N3: a `.run(*args, ...)` line the parser cannot read is an undeclared part of the implementation -> refusal, not silence."""
+    """A `.run(*args, ...)` line the parser cannot read is an undeclared part of the implementation -> refusal, not silence."""
     bad = _copy_code(tmp_path, lambda t: t.replace("triton_poi_fused_mul_silu_slice_t_1.run(buf3, buf7, ", "triton_poi_fused_mul_silu_slice_t_1.run(*args, ") if "def call(self, args)" in t else t)
     with pytest.raises(SystemExit, match="did not read"):
         CM.build(bad, pieces=17, steps=4, prefill_tokens=16, kernel_set_sha256=KSET, split_graph=SG)

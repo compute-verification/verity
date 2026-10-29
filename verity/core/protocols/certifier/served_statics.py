@@ -1,6 +1,6 @@
 """The served rows held to their steps' Programs: each block of G steps of a window's committed served rows (`served_rows`,
 one registered row a block) against the RoPE statics of the Programs those steps ran, so a prover can't register cheaper
-rows at serve time than the batch it ran. REDTEAM phase 10's six passes (user-1 never admitted) give step 6 no row for
+rows at serve time than the batch it ran. The six-pass run's rows (user-1 never admitted) give step 6 no row for
 the 29 prefill tokens its Program computes, and the tie refuses them.
 
     ServedStaticsTie_v1{R, G, IW, L, T} (pub, srb) -> verdict[16]
@@ -26,7 +26,7 @@ both. The request ids and kinds are not the Program's to show: ``IoTieRequest`` 
 certified request's prompt ids at those positions, and the egress tie each decode slot's input to the request's last
 sample.
 
-**Positions.** The tie reads the Program's positions, not the Commit's: on vllm's eager path no Program reads a committed
+**Positions.** The tie reads the Program's positions, not the Commit's: on vLLM's eager path no Program reads a committed
 position. The compiled path's RoPE reads ``c00.input/positions``, a committed value (`verity_vllm.program.predict.compiled`); there
 the committed positions are what the compute read, and `served_tie`'s routed form holds the served rows to them.
 
@@ -37,7 +37,7 @@ network verdict, an AND over every window with no ε. A window is its P / G unit
 under one template.
 
 **Cost** (`size`): R·(1 + LW + TW) − 2 ANDs a step, the equalities ANDed, and 2·(G − 1) to AND the steps' flags; the
-unit's C-Flock block is set by its two rows' in-circuit hashing, G·R·(3 + IW + 2·(LW + TW)) bits.
+unit's Flock block is set by its two rows' in-circuit hashing, G·R·(3 + IW + 2·(LW + TW)) bits.
 """
 from __future__ import annotations
 

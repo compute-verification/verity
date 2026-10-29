@@ -86,7 +86,7 @@ def _f32_to_bf16(bits):
     is_nan = exponent_all_ones & ((bits & np.uint32(0x007FFFFF)) != 0)
     return np.where(is_nan, np.uint32(0x7FC0), rounded).astype(np.uint16)
 
-MODEL_VERSION = "gemm.bf16.v1 = ampere_bf16_m16n8k16 chain (silicon.AMPERE_BF16_M16N8K16: groups (8,8), width 25, exponent floor -132) + epilogue; A100 validation 2026-09-07"
+MODEL_VERSION = "gemm.bf16.v1 = ampere_bf16_m16n8k16 chain (silicon.AMPERE_BF16_M16N8K16: groups (8,8), width 25, exponent floor -132) + epilogue; validated on the A100"
 EPILOGUES = {
     "none": 0,
     "bias_fp32_in_kernel": 1,  # vLLM matmul_kernel_persistent via aten::addmm; cuBLASLt bias epilogue

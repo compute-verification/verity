@@ -1,6 +1,6 @@
-"""[GEN cov-ln] the lane's tests: the Pythia-160M profile is `analytic.config_of` + `build_profile` with the listed hand fields;
+"""The Pythia-160M profile is `analytic.config_of` + `build_profile` with the listed hand fields;
 its weight-name map binds every parameter / buffer name of vLLM's `GPTNeoXForCausalLM` and nothing else; the LayerNorm-family
-weights Record; the shared-code adapters (F16 checkpoint words, the fused-QKV permutation); the lane's Definitions (GeluErfBf16's measured-table facts, LayerNormAten's body on a small row); the patterns'
+weights Record; the shared-code adapters (F16 checkpoint words, the fused-QKV permutation); the Definitions (GeluErfBf16's measured-table facts, LayerNormAten's body on a small row); the patterns'
 placement in the profile's list.  Bit-exactness of the Definitions is the pod difftest's business, not this file's."""
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def test_config_is_config_of_plus_the_listed_hand_fields():
     assert C["BIAS"] is True and C["tie_word_embeddings"] is False and C["BN"] == b1.fa2_kblock_n(64) == 128
     hand = pythia.PROFILE.notes["hand_fields"]
     assert hand == sorted(pythia.HAND)
-    assert {k for k, v in pythia.PROVENANCE.items() if v == "hand"} <= set(hand)     # [P6] a `key` fact's value is config.json's (hf-config)
+    assert {k for k, v in pythia.PROVENANCE.items() if v == "hand"} <= set(hand)     # a `key` fact's value is config.json's (hf-config)
     assert set(hand) == {"model", "revision", "ROPE_THETA", "ROT", "NORM", "hidden_act", "use_parallel_residual", "layer_norms", "dense_bias"}
     assert C["ROT"] == 16 == int(64 * pythia.HF_CONFIG["rotary_pct"]) and analytic.rotary_dim(C) == 16
 

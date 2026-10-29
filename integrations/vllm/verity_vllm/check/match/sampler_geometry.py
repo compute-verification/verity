@@ -7,7 +7,7 @@ import re
 
 _S_STATIC_RE = re.compile(r"[{,]S=(\d+)(?=[,}])")
 _TOPP_FAMILY = "GumbelTopPTokenSelect_v1"
-_SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temperature, splits): the derived S operand (stoch M-0254)
+_SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temperature, splits): the derived S operand
 
 
 def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None:
@@ -20,7 +20,7 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
         v = getattr(B, "splits_values", {}).get(inst.get("k"))
         if v is not None:
             return int(v)
-        # an unbound instance sequence (a Prog-shaped reader without compare's binding, stoch M-0268 (A)): the 6th operand must be ONE run
+        # an unbound instance sequence (a Prog-shaped reader without compare's binding): the 6th operand must be ONE run
         # ("n", k, 0, 1) onto a `Const32[0x<S>]_v1` instance emitted for the select (fold._const, patterns._stage3 Const(32, S, "splits"))
         args = inst.get("args") or []
         if len(args) > _SPLITS_OPERAND and len(args[_SPLITS_OPERAND]) == 1:
@@ -216,7 +216,7 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
             hist[f"live={live}:S={x}"] += 1
         if None in Ss:
             problems.append(f"engine step {s}: a top-p TokenSelect carries no readable split count S (neither a Const32[S] splits operand -- the 6th "
-                            f"-- nor an S static of the R15 form)")
+                            f"-- nor an S static)")
         bad = sorted(x for x in Ss if x is not None and x != exp)
         if bad:
             mism.append({"step": s, "live": live, "registered_S": exp, "fold_S": bad})

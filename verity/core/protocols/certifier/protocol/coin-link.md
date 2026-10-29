@@ -64,8 +64,8 @@ and so does a link that ends while `serve.py` still serves, because its tunnel e
 - **One clock (RP8).** The ticks read the host's monotonic clock from one origin, and `serve.py`'s release log reads
   the same clock. A tick later than `slack` (25 ms) faults both grids for the rest of the link-window
   (`monitor-unavailable`). It never shifts the grid.
-- **Release order** (the soundness ruling of 27 Oct, 01:02Z: a challenger device releases its coin-commitment root only
-  after the prover's commitment is in). The open entry, which binds the prover's root, comes before `serve.py` starts.
+- **Release order.** A challenger device releases its coin-commitment root only
+  after the prover's commitment is in. The open entry, which binds the prover's root, comes before `serve.py` starts.
   The record comes before `serve.py` listens, and the link starts after it listens, so no challenger frame reaches the
   prover before the prover's root is in the ledger. The gate's `open` answer carries the commitment root too. It is
   given after the open entry, and on the gate's own ssh channel, which carries no coin.
@@ -100,4 +100,4 @@ are D7's, under which each grid's timing charge is 600 bits a link-window:
 - `charge_bits`: each grid's timing, (ticks)·log2(r + 1), and its content, 8 bits a counted byte.
 
 Each bucket's occupancy and every frame's content stay witness. No audit reads the record yet. The charge reaches K
-once the certifier's records go through the proof service (`publish`).
+once the certifier's records go through the proof system (`publish`).

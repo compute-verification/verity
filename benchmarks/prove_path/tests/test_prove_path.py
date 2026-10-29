@@ -1,15 +1,15 @@
-"""The prove path's compiler, its advice commitment and its draw-order check, and its prover's and verifier's windows on the CPU
+"""The prove path's compiler, its advice commitment and its sample-order check, and its prover's and verifier's windows on the CPU
 TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without proving.
 
 * The compiler is total: every byte string is the requests or a `ValueError` naming why, the same on every run; random and
   truncated advice is refused, advice over the registered cap ℓ is refused before it is read, and a malformed opening is
   refused the same way.
-* The advice is fixed before the draw: `advice_before_draw` holds the registration the verifier opens the advice under to the
-  one the draw's receipt names, and refuses the advice re-committed after the coins.
+* The advice is fixed before the sample: `advice_before_draw` holds the registration the verifier opens the advice under to the
+  one the sample's receipt names, and refuses the advice re-committed after the coins.
 * On the stand-in: each rank's window over the compiler's Programs for the advice is held to the verifier's own from the
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
-  changed, every check before the draw passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
-  only inside plain's interim scope, one table under a stratified draw (`a5.plain_refusal`).
+  changed, every check before the sample passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
+  only inside plain's interim scope, one table under a stratified sample (`a5.plain_refusal`).
 * An accepted audit's charge terms: λ_δ, β_δ and their sum, off the audit's profile (`charge_terms`).
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
   the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
@@ -292,7 +292,7 @@ def test_a_forged_rank_passes_only_when_lean_refuses_its_drawn_forged_unit(summa
 
 @pytest.fixture(scope="module")
 def tp(tmp_path_factory):
-    """The deferred stand-in TP Commit and its declared advice; both ranks' windows over every unit (subset:8), and rank 0's again
+    """The deferred stand-in TP Commit and its advice; both ranks' windows over every unit (subset:8), and rank 0's again
     with member 0's unit 1 forged, each commit with its own opening."""
     pytest.importorskip("torch")
     root = tmp_path_factory.mktemp("prove-path")
@@ -402,8 +402,8 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
 
 @pytest.mark.slow
 def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_draw(tp):
-    """`--plain` covers one table under a stratified draw (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
-    unit, is inside it under stratified:8, and refused before the draw under its own subset:8, drawn outside a stream, with a
+    """`--plain` covers one table under a stratified sample (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
+    unit, is inside it under stratified:8, and refused before the sample under its own subset:8, drawn outside a stream, with a
     second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
     _c, _b, _o, mine, _held = _mine(tp, "honest", 0)
     plain, zk = (argparse.Namespace(plain=p, coins=None, verifier_coins=True) for p in (True, False))
@@ -716,7 +716,7 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     """A serve-openai run dir with one closed window (w0, the stand-in workload's two requests by their `user`) and a request of
     another window, its advice committed as `verity-vllm advice` commits it under the served compiler (or, ``uncapped``, under
     the inner compiler alone; ``gates``, under the server's listing those instead of the model's of record), and its row dir's
-    request Programs as vllm's advice compiler writes them (``manifest.json``);
+    request Programs as vllm's registered compiler writes them (``manifest.json``);
     the server's compiler identity, I2's compile and the row dir's record stubbed."""
     from verity_vllm.program.predict import steps as ST
 
@@ -945,7 +945,7 @@ def test_a_served_window_under_another_serve_json_than_its_advice_was_registered
 
 def test_a_served_run_registers_the_public_default_seed_and_one_that_records_another_or_none_is_refused(tmp_path, monkeypatch,
                                                                                                          capsys):
-    """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's advice compiler does: a run
+    """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's registered compiler does: a run
     whose serve.json says its server filled in another seed (7, 0, the public one as a string or a float) or none is refused
     by name, by the served compiler and its commands, never compiled under the seed the run recorded."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
@@ -974,7 +974,7 @@ def test_a_served_run_registers_the_public_default_seed_and_one_that_records_ano
 def test_a_stand_in_records_the_public_default_seed_and_its_seedless_sampled_requests_bring_the_records(tmp_path, monkeypatch):
     """`serve-standin` lays a declared Commit out as serve-openai does, so its serve.json records the public default seed and
     passes `registered_seed`; a sampled request of the record that named no seed brings the declared run's default seed, the
-    one its draw used, and a greedy or seeded one brings what the record served it under."""
+    one its sample used, and a greedy or seeded one brings what the record served it under."""
     phi = SimpleNamespace(model={"repo": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"},
                           execution="bi-eager", target=TARGET)
     ingress = {"r0": {"prompt": [0, 1, 2, 3, 4], "max_tokens": 3, "temperature": 0.0},
@@ -1075,17 +1075,22 @@ def _tiny_checkpoint(d: Path, model: str, revision: str, int8: bool = False) -> 
 
 def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(tmp_path, capsys, monkeypatch):
     """``weights-registration``, the committer's: the served run's weights (`window_weights.weights_registration` under the
-    φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts drawn from ``--key``, a 32-byte
+    φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts sampled from ``--key``, a 32-byte
     file drawn there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
     against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
     advice --weights-of-record` records and ``window-circuit --pins`` takes (the embedding's table its own, its ``row-seg``
     rows), and what the verifier holds to its own weights
-    record's shapes (`registration_pins`) without computing a root. Another key gives other roots for every weight; a key
+    record's shapes (`registration_pins`) without computing a root. With the engine's served rotary table in the run's
+    ``private/cos_sin_cache.npy`` (serve-openai's) it roots that too, the other roots unchanged, and refuses by name a
+    table outside the analytic table's bound. Another key gives other roots for every weight; a key
     file of another length, a checkpoint the manifest pins as another model than the run served, or a shard other than the
     one the manifest pins, is refused by name, nothing registered."""
     import functools
 
+    import numpy as np
+
     from verity_vllm.pipeline import advice as ADV
+    from verity_vllm.program import model as M
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.window_weights import Grain
 
@@ -1114,9 +1119,23 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     assert [p for p in pins if p.endswith("/table")] == ["weights/model.embed_tokens.weight@64/table"]
     assert said["unrooted"] == sorted(reg["unrooted"]) and all("rotary_emb" in p for p in said["unrooted"])
     registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
-    assert WW.registration_pins(reg, WW.weights_record(registered, str(ck), str(man), grain=grain)) == pins
+    record = WW.weights_record(registered, str(ck), str(man), grain=grain)
+    assert WW.registration_pins(reg, record) == pins
     assert register(key) == 0 and json.loads(out.read_text()) == reg
+    C = next(f for f in record["fields"] if f.get("pinned") == "analytic")["analytic"]["C"]
+    table = run / "private" / "cos_sin_cache.npy"
+    table.parent.mkdir()
+    np.save(table, M.cos_sin_table(C))
     capsys.readouterr()
+    assert register(key) == 0
+    rooted, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
+    assert said["roots"] == 17 and said["unrooted"] == [] == list(rooted["unrooted"])
+    assert {p: e for p, e in rooted["values"].items() if p not in reg["unrooted"]} == reg["values"]
+    assert WW.registration_pins(rooted, record) == ADV.registered_weights(rooted, serve)
+    np.save(table, M.cos_sin_table({**C, "ROPE_THETA": 2 * C["ROPE_THETA"]}))
+    assert register(key) == PP.REFUSED
+    assert "served words outside the analytic table's bound" in capsys.readouterr().err
+    table.unlink()
     assert register(tmp_path / "other.key") == 0
     other = ADV.registered_weights(json.loads(out.read_text()), serve)
     assert sorted(other) == sorted(pins) and all(other[p] != pins[p] for p in pins)
@@ -1139,7 +1158,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
 
 
 def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears_and_tied_embedding(tmp_path, capsys, monkeypatch):
-    """Wed 28's model is an exact-int8 checkpoint (`engine.int8_checkpoint`'s v1: each decoder linear an s8 weight and an f32
+    """The int8 Llama-3.2-1B is an exact-int8 checkpoint (`engine.int8_checkpoint`'s v1: each decoder linear an s8 weight and an f32
     row scale, the embedding bf16 and tied to the LM head), served under a target whose ``int8_exact`` is ``linears``, and
     ``weights-registration`` roots its weight parameters as the window circuit reads them: the s8 weights and their scales of
     q|k|v and gate|up fused as vLLM serves them, o and down, the norms, and the tied embedding at the embedding's and the LM

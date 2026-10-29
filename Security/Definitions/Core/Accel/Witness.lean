@@ -7,7 +7,7 @@ An honest run meets every hypothesis (rule I): the resident `wgmma` kernel below
 `n × n` `s8` matrices `A` and `B` (`n` a multiple of 256, at most 2048), meets G1, G2 and the code fetch on the H200
 instance at every value of its open parameters with a backlog of at least a tick (θ's floor), and takes at most
 `2n + 21n³/10485760 + n²/604 + 1` ticks. At `n = 2048` that is 28,244 ticks against the 15,888 the tensor core's
-rate needs for the products alone (17,190 at the data sheet's 1830 MHz, RT-MODEL M1). `Witness` is the statement.
+rate needs for the products alone (17,190 at the data sheet's 1830 MHz). `Witness` is the statement.
 
 **The kernel.** `A` sits in HBM row-major and `B` column-major, a byte an entry, four to a word; `C` row-major, a word
 an entry. Three phases, one after the other:
@@ -17,7 +17,7 @@ an entry. Three phases, one after the other:
 * **MMAs** (`mma`): `n³/524288` `wgmma.m64n256k32.s32.s8.s8` with `A` and `B` from shared memory, one a tick (524,288
   of the tensor core's 540,672 units at the tick's clock, 2,560 of the banks' 4,224 words) with an idle tick after
   every 20 (`mmaTick`: 20 · 524,288 ≤ 21 · 499,712, so with a tick of backlog every window meets `tensorLong` even at
-  M1's 1830 MHz cap, which M14 lifted until CALIB's clock check), slice
+  the 1830 MHz cap, lifted until a clock check on the H200 rules on it), slice
   by slice along `k`, each adding its 64 × 256 block's products of the slice to the block's accumulators in registers
   (zero at the first slice);
 * **stores** (`store`): `n²/4` four-word copies registers → HBM, 151 a tick (604 of HBM's 606 words).

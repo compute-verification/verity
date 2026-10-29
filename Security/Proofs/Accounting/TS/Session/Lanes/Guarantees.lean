@@ -53,8 +53,8 @@ placement from the window's committed descriptor and round log (`PouwCheck.LeafO
 on how the file was built. Each file marks its reads of the A, B and partials rows `read_in_full`
 (`PouwWindow.Lanes.readFull`), which the known-read check holds to one row of the registered words: so lane `l`'s
 partials row and the combine's `p<l>` are one row, the partials record is the rows the 33 statements read, and nothing
-of it is asked. The leaf is one unit of the declared circuit, and the partials are proof-layer values (RT4-LOGIC-30's
-ruling). Each proof is then accepted with a leaf that fails the unit's checks, and no collision in hand, with
+of it is asked. The leaf is one unit of the declared circuit, and the partials are proof-layer values.
+Each proof is then accepted with a leaf that fails the unit's checks, and no collision in hand, with
 probability at most `33 δ`: `δ` a session from `CheckedSessionSound`, joined by a union bound.
 It sits in the proofs package because the sessions do (`reads_exempt`).
 -/
@@ -67,7 +67,7 @@ open scoped ENNReal
 
 /-- **A leaf's 33 linked C-Flock sessions realize one unit, fully checked.** For any window whose proof `i` of round
 `w` on the path `x` is a leaf proved as its lanes' sessions `sess x w i (some l)` and its combine's `sess x w i none`,
-each a session `sess₀ x w i k` (#2909's `RowsSession`) at its registrants' openings `op x w i k`, its registered reads
+each a session `sess₀ x w i k` (a `RowsSession`) at its registrants' openings `op x w i k`, its registered reads
 built from `own` (`RowsSession.canon`: each unit reads its row of every circuit port `own` names, through `own`'s first
 port of that name at that port's one position, the registrants committing only the rows, salts and paths, each opening
 `own`'s root there), with outcomes `out x w i k`, and the leaf layer

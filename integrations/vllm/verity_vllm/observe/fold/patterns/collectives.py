@@ -5,10 +5,10 @@ rank's partial (the fold's `peers_<request>` root parameter, root class `collect
 RECEIVED storage (`node.outs`), written to memory so the rank's next kernel (RMSNorm / lm_head / sampler) reads a resolved value.
 
 What this pattern decides from the rank's own log alone: kind, the issuing module (`node.enter.module` -- the site; a collective without a
-module hint is REFUSED, fail closed: the cross-rank leg locates the peer by (step, k, site)), the partial's geometry (row-major bf16 [M, N]),
+module hint is REFUSED, fail closed: the cross-rank check locates the peer by (step, k, site)), the partial's geometry (row-major bf16 [M, N]),
 the received geometry ([M, N] for all_reduce; [M, world*N] for all_gather along the trailing axis), world size 2 and, for all_gather, `dim`
 = -1 / last.  What it does NOT decide: the step/k numbering (the fold's, `fold._collective_prepare`), the rows' requests (the fold's
-attribution), the peer's value (a declared input; its linkage to the other rank's committed partial is the cross-rank leg's and root
+attribution), the peer's value (a declared input; its linkage to the other rank's committed partial is the cross-rank check's and root
 policy's, never the fold's assumption).  The Definitions are the registered TP2 composites (`verity.ml.definitions.registry.b1_tp2`): the same ones the
 rank Program binds through `vllm_bindings.AllReduce2Rule` / `AllGather2Rule`, so the two sides compare instance by instance.
 """
@@ -75,11 +75,11 @@ class TpCollective:
                 return unsupported(node, f"all_gather: gathers along dim {dim}; AllGather2_v1 states the trailing axis only", dim=dim)
             if out.shape != (M, self.world * N) or out.dtype != "bfloat16" or not is_row_major(out):
                 return unsupported(node, f"all_gather: received view is not a row-major bf16 [{M},{self.world * N}] view", received=repr(out))
-            spec = b1_tp2.all_gather(self.world, N)      # [lane vllm-tp-n] AllGather2_v1{N} at world 2, AllGather_v1{WORLD,N} beyond
+            spec = b1_tp2.all_gather(self.world, N)      # AllGather2_v1{N} at world 2, AllGather_v1{WORLD,N} beyond
         else:
             if out.shape != (M, N) or out.dtype != "bfloat16" or not is_row_major(out):
                 return unsupported(node, f"all_reduce: received view is not a row-major bf16 [{M},{N}] view", received=repr(out))
-            spec = b1_tp2.all_reduce(self.world, N)      # [lane vllm-tp-n] AllReduce2_v1{N} at world 2, AllReduce_v2{WORLD,N} beyond
+            spec = b1_tp2.all_reduce(self.world, N)      # AllReduce2_v1{N} at world 2, AllReduce_v2{WORLD,N} beyond
         if out.alloc == x.alloc:
             return unsupported(node, f"{kind}: in-place collective (received storage is the partial's); the fold states a fresh received storage", partial=repr(x), received=repr(out))
         attribution = attribution_for(ctx, M, node.phase)

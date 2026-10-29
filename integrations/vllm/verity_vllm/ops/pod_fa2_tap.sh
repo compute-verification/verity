@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# R13 lane fa2 (C-FA2-HDIM): build the head-dim-portable FA2 M1 hidden-value tap `verity_fa2_matReq.so` (R9 CMT-2 export-and-commit
+# Build the head-dim-portable FA2 M1 hidden-value tap `verity_fa2_matReq.so` (the export-and-commit
 # tap, VERITY_TAP=3 / VERITY_MAT_SRC=59) for THIS pod's GPU with the bf16 split-KV kernels of head dims 64, 96, 128 and 256 in ONE .so,
 # so Phi-3 (hd 96), Qwen2.5 / Mistral-7B / OLMoE / Qwen3 (hd 128) and Gemma-2 (hd 256) can bind the FA2 hidden family next to SmolLM2/Llama
-# (hd 64).  [R17 rel, exec M-0048 / coord M-0070] 256 is in the DEFAULT since r17-int-1: the gemma2-2b B1 Commit on r16-int-5 failed closed
-# ('fa2 launch 0: head_dim 256 not ...', 390 hidden rows of the manifest missing) on a tap built for 64,96,128; a default (not an env var at
-# ship time) so no later ship without the variable rebuilds the tap back to three head dims (a build-config difference triggers a REBUILD
-# both ways).
+# (hd 64).  256 is in the DEFAULT: on a tap built for 64,96,128 a gemma2-2b B1 Commit fails closed ('fa2 launch 0: head_dim 256 not ...',
+# the manifest's hidden rows missing).  It is a default, not an env var at ship time, so no later ship without the variable rebuilds the
+# tap back to three head dims (a build-config difference triggers a REBUILD both ways).
 #
 #   cd <tree>/integrations/vllm && bash verity_vllm/ops/pod_fa2_tap.sh                # ~10-15 min first time (nvcc), seconds after
 #   -> prints  FA2-TAP-OK <sha256 of verity_fa2_matReq.so> hdims=<mask> <path>          (or FA2-TAP-FAIL <reason>, exit 1)
@@ -13,18 +12,18 @@
 # What it does: (1) clones vllm-project/flash-attention at the pinned 506341a1 (+ cutlass submodule) into /workspace/cp/vllm-flash-attn
 # when absent; (2) copies it to $FA2/trees/tap8 and applies verity_tap_v7.patch + apply_v8.py (parametric (kBlockN, kHeadDim) M1
 # layout; see fa2_tap_src/apply_v8.py); (3) builds with `verity-vllm fa2-tap-build` (fa2_tap_src/build_ext.py; same flags as the pinned CMake build, sm arch from the
-# device) into $FA2/build/matReq (the path row_pod.sh / commit_delta --hidden-so use; the R9 hd-64-only .so is kept as
+# device) into $FA2/build/matReq (the path row_pod.sh / commit_delta --hidden-so use; an earlier hd-64-only .so is kept as
 # build/matReq_hd64_r9/); (4) verifies: the .so loads, exposes verity_set_tap_v8 / verity_tap_hdims, tap mode 3 / src 59, and the
 # hdims mask contains every requested head dim.  Exactness per head dim is a separate step: tests/properties/fa_tap_exactness_gpu.py (needs the GPU).
 # Env: VENV (default /workspace/venv-cu129), CUDA_HOME (default: first of /usr/local/cuda-12.9, /usr/local/cuda), FA2 (default
 # /workspace/cp/fa2), FA2_TAP_HDIMS (alias HDIMS; default 64,96,128,256), FA2_TAP_ARCH (default: the device's compute capability, e.g. 8.9
-# on L40S -- the arch the R13 exactness evidence was produced with; the pinned vLLM _vllm_fa2_C ships sm_80 SASS, pass FA2_TAP_ARCH=8.0
+# on L40S -- the arch the exactness evidence was produced with; the pinned vLLM _vllm_fa2_C ships sm_80 SASS, pass FA2_TAP_ARCH=8.0
 # to mirror that instead and record it), MAX_JOBS (default 32), REPO (default: this tree), TREE_ONLY=1 (prepare tree, no build),
 # FA2_TAP_ROW_GUARD=1 (the guarded-max build `verity_fa2_matReqG.so` in $FA2/build/matReqG: the same tree with VERITY_ROW_GUARD=1, ROW
 # word 3 = GuardNegInfZero(row_max) after a row's first key block, and VERITY_MAT_SRC=123, the MS class = each block's max * scale; neither in the default build).
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
-VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # [R19] the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
+VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
 if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export MAX_JOBS=${MAX_JOBS:-32}
@@ -58,7 +57,7 @@ ARCH=${FA2_TAP_ARCH:-$($PY -c "import torch; cc=torch.cuda.get_device_capability
 [ -n "$ARCH" ] || fail "no CUDA device (set FA2_TAP_ARCH)"
 OUT=$FA2/build/$BUILD
 if [ "$ROW_GUARD" != "1" ] && [ -f "$OUT/verity_fa2_matReq.so" ] && ! $PY -c "import torch,sys; torch.ops.load_library('$OUT/verity_fa2_matReq.so'); sys.exit(0 if hasattr(torch.ops.verity_fa2_matReq,'verity_tap_hdims') else 1)" 2>/dev/null; then
-  log "existing $OUT is the R9 hd-64 build -> kept as $FA2/build/matReq_hd64_r9"; rm -rf "$FA2/build/matReq_hd64_r9"; mv "$OUT" "$FA2/build/matReq_hd64_r9"
+  log "existing $OUT is the hd-64-only build -> kept as $FA2/build/matReq_hd64_r9"; rm -rf "$FA2/build/matReq_hd64_r9"; mv "$OUT" "$FA2/build/matReq_hd64_r9"
 fi
 NEED=$($PY - "$HDIMS" <<'EOF'
 import sys; print(sum(1 << (int(h) // 32) for h in sys.argv[1].split(',') if h))
@@ -68,7 +67,7 @@ HAVE=0
 if [ -f "$OUT/$NAME.so" ]; then
   HAVE=$($PY -c "import torch; torch.ops.load_library('$OUT/$NAME.so'); print(int(torch.ops.$NAME.verity_tap_hdims()))" 2>/dev/null || echo 0)
 fi
-# [R16 sys, BRIEF §8 #4 (3)] rebuild only when the SOURCE SET or the BUILD CONFIG changed: sha256 over every file of fa2_tap_src (patch, apply_v8,
+# Rebuild only when the SOURCE SET or the BUILD CONFIG changed: sha256 over every file of fa2_tap_src (patch, apply_v8,
 # build_ext, stubs, headers) + the pinned FA tree commit + arch + hdims + defines + the nvcc version, recorded beside the .so
 # ($OUT/source_set.sha256) after a successful build.  Decision recorded in the release log: REBUILD (why) | REBUILD-SKIP (hash equal) |
 # ADOPT (an existing hdims-complete build from before this gate is taken as the baseline for the current source set WITHOUT rebuilding -- the
@@ -85,8 +84,8 @@ elif [ "$OLD_SHA" != "$SRC_SHA" ]; then WHY="source set / build config changed (
 fi
 if [ -n "$WHY" ]; then
   log "REBUILD $BUILD hdims=$HDIMS arch=$ARCH (nvcc $NVCC_VER) MAX_JOBS=$MAX_JOBS -- $WHY; source-set ${SRC_SHA:0:16}"
-  # build BESIDE the live .so and swap when done: the live tap stays loadable for a row / a second release running on this pod meanwhile
-  # (05:14Z cp-sys: two pod_release.sh at once, the second's `rm -rf` emptied the first's build dir mid-nvcc -> FA2-TAP-FAIL, pod without a tap)
+  # build BESIDE the live .so and swap when done: the live tap stays loadable for a workload / a second release running on this pod
+  # meanwhile (with two pod_release.sh at once, a shared build dir would be emptied mid-nvcc by the second's `rm -rf`)
   NEW="$OUT.build-$$"; rm -rf "$NEW"; mkdir -p "$NEW"
   BLOG=$FA2/logs/build_${BUILD}_v8.log
   PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm fa2-tap-build --tree "$FA2/trees/tap8/csrc" --name "$NAME" --build-dir "$NEW" --arch "$ARCH" --hdims "$HDIMS" \

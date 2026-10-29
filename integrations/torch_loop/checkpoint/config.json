@@ -1,7 +1,0 @@
-{
- "hidden_size": 128,
- "model_type": "torch-loop-mlp-w8a8",
- "num_hidden_layers": 2,
- "seed": 0,
- "vocab_size": 16
-}

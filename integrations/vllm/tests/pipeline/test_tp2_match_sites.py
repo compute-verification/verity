@@ -1,4 +1,4 @@
-"""[R15 tp, rev-pm M-0398 / M-0470] tp2_match STRUCTURE = site identity per k, failing CLOSED by absence -- CPU-only, torch-free
+"""tp2_match STRUCTURE = site identity per k, failing CLOSED by absence -- CPU-only, torch-free
 (no stored provenance steps, so `_check_main` runs the structure criterion and skips provenance).
 
   * positive: every recorded collective's module == the link's module_path (minus 'inner.model.' / ' (Class)') at every k, both ranks
@@ -99,7 +99,7 @@ def test_record_without_module_name_fails_closed(tmp_path):
 
 
 def test_v1_links_without_a_recorded_model_root_match_by_dotted_suffix_and_still_catch_a_swap(tmp_path):
-    """[lane vllm-tp-n] a frozen v1 tp_links.json spells the traced wrapper's path and records no `model_root`: the site leg compares by
+    """a frozen v1 tp_links.json spells the traced wrapper's path and records no `model_root`: the site check compares by
     dotted-suffix identity (no spelled prefix) -- the positive passes, an order swap of two same-(kind, width) sites still fails at k 0."""
     s = _run(tmp_path, "v1pos", _recs(), _recs(), _links(0, v1=True), _links(1, v1=True))
     assert s["pass"] is True and s["per_rank"]["0"]["model_root"] is None

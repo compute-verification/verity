@@ -5,7 +5,7 @@ carries at its parameters (`Certificate`).  It implements `encode_segment` and `
 honest answer is more than the stored label.  Everything else is written once, here:
 
 1. **Commit.** The server commits to `W` before any salt exists (`commit`).
-2. **Salt.** The verifier draws the salt after the commitment (`draw_salt`).
+2. **Salt.** The verifier samples the salt after the commitment (`draw_salt`).
 3. **Encode.** The server computes `C = Enc(W, salt)` (`encode`).  The verifier builds `vk` (`verifier_key`) either by
    encoding `W` itself (`PRIVATE`) or by decoding the server's `C*` and checking `Dec(C*)` against the commitment
    (`PUBLIC`).  The two give the same guarantee (Lean `pubAuditSecure_exact_iff`).
@@ -14,7 +14,7 @@ honest answer is more than the stored label.  Everything else is written once, h
    The memory challenger refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit
    gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
 
-Every coin is drawn here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
+Every coin is flipped here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
 none.  The claims a certificate rests on are ids in `verity.core.claims`' format (`claim`).
 """
 
@@ -60,14 +60,14 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
     Entry("feistel-indifferentiability", "assumption",
           "REFUTED: a 10-round Feistel network over SHAKE256 in place of the ideal permutation keeps the storage bound. "
           "It does not: a prover keeps five 200-byte post-absorb round states per 64 KiB block (1.53% of C) and "
-          "rebuilds any label in 481 sequential Keccak-f (red team, 4 Oct 2026, art:7617c8017e80)",
+          "rebuilds any label in 481 sequential Keccak-f",
           "Feistel-SHAKE256 as ideal (refuted)", "conjectured"),
     Entry("m1-ideal-permutations", "model",
           "Model M1: independent forward-only ideal permutations, one per block, each block the inverse image of its "
           "data", "M1"),
     Entry("sms-m1-instantiation", "assumption",
           "Square-mask-square with fresh per-block keys instantiates M1's slow-inverse permutation (novel and "
-          "algebraic; pending Daniel)", "SMS as M1", "conjectured"),
+          "algebraic; not accepted)", "SMS as M1", "conjectured"),
     Entry("seq-root", "assumption",
           "One modular square root at the scheme's width takes longer than twice the deadline on the fastest core, "
           "with up to 8 cores of one chiplet cooperating", "SeqRoot", "measured"),
@@ -237,7 +237,7 @@ def commit(scheme: Scheme, w: bytes | Iterable[bytes]) -> bytes:
 
 
 def draw_salt(source: bytes, commitment: bytes) -> bytes:
-    """The verifier's salt, drawn after the commitment from its own secret or a later beacon round (`setup.draw_salt`)."""
+    """The verifier's salt, sampled after the commitment from its own secret or a later beacon round (`setup.draw_salt`)."""
     return setup.draw_salt(source, commitment)
 
 

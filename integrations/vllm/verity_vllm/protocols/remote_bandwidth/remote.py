@@ -615,7 +615,7 @@ class CommitSession:
     target       before the build: the row's target declares synchronous scheduling (its Program's LAG 0)
     install      before the build: ``binder.Binder(store, passes=False, kv=False)`` on vLLM's model runner, block pool
                  and scheduler, registering weight tensors up to ``weight_blocks`` blocks.  The KV pool stays outside
-                 the registration (served writes do, memory accounting's MEM-39 ruling: live KV is uncredited for chat),
+                 the registration (served writes do, and live KV is uncredited for chat),
                  so no step writes a registered block and every pass reads every one
     check        after the build: the engine core in this process, scheduling synchronous, no KV pool registered; then
                  ``filler_gib`` GiB of zeros on the engine's GPU registered as the store's filler (`Binder.register_filler`)

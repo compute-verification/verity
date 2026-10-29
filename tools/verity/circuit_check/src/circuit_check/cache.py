@@ -54,7 +54,8 @@ the checker's own: those, like the checker code that ran, are held by the checke
 own version is the digest of this package's code (each module's AST without its docstrings, `_code`, so an edit to its prose or
 comments reruns no target) less `targets.py`, ``pins/``, `heavy.json` (`HEAVY`: the scheduler's
 peaks, which decide which targets run beside which, never what a check computes, and which no recording holds either,
-`cli.heavy`) and the known failures (`KNOWN`, which decide only the run's summary).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
+`cli.heavy`), the known failures (`KNOWN`, which decide only the run's summary) and `SHARD` (which targets a shard checks and how
+shards' records are joined).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
 entry, `descriptor`), the modules the registries import for having a sidecar (`registries`: a new or removed sidecar, or a
 moved module that has one, reruns every target, as a new import line in `targets.py` would) and the ``VERITY_*`` /
@@ -132,7 +133,7 @@ from . import entries as E
 
 SCHEMA = "circuit-check-cache/v3"
 _ROOT: list[Path] = []
-#: each link in an import path directory outside the tree that leads into it, with where it leads (`_links`): `research run`
+#: each link in an import path directory outside the tree that leads into it, with where it leads (`_links`): a remote run
 #: puts such a shim first on the path (``pyshim/<key>/verity -> <tree>/verity``), so the tree's modules have their files there
 _LINKS: dict[str, str] = {}
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
@@ -149,6 +150,9 @@ HEAVY = _HERE / "heavy.json"
 #: the failures `main` already has (`circuit_check.known`): no input of any target, since they decide only the run's summary
 #: (`checks.summarize`, over every target's stored report, recomputed each run) and no check imports them
 KNOWN = (_HERE / "known.py", _HERE / "known")
+#: which targets a ``--shard`` checks and how ``--combine`` joins the shards' records (`circuit_check.shard`): no input of any
+#: target, since no check imports it
+SHARD = _HERE / "shard.py"
 #: a sidecar's name beside its module's (`sidecars`): ``fp8.circuit-check.py`` and ``.json`` of ``fp8.py``
 SUFFIX = ".circuit-check"
 #: the binding files beside `targets.py` (each Definition module's sidecar, `sidecars`), absolute; the pins files (``pins/``'s
@@ -1218,7 +1222,7 @@ def _kernels_now(key: str) -> str | None:
         return None
     reg = batch._KERNELS
     keys = sorted(dict.keys(reg)) if key == "*" else [key]
-    got = {k: {n: [kn.domain, kn.version, _where(kn.fn), _where(kn.sample)] for n, kn in sorted(dict.get(reg, k, {}).items())}
+    got = {k: {n: [kn.domain, kn.version, kn.partial, _where(kn.fn), _where(kn.sample)] for n, kn in sorted(dict.get(reg, k, {}).items())}
            for k in keys}
     got = {k: v for k, v in got.items() if v}
     return hashlib.sha512(json.dumps(got, sort_keys=True).encode()).hexdigest() if got else None
@@ -1670,12 +1674,12 @@ def _code(p: Path) -> bytes:
 
 def version() -> str:
     """The checker's own version: the digest of this package's code (`_code`: no docstring or comment), less `targets.py` and
-    ``pins/`` (each target holds its own parts of them), `HEAVY` and `KNOWN` (no target's input)."""
+    ``pins/`` (each target holds its own parts of them), `HEAVY`, `KNOWN` and `SHARD` (no target's input)."""
     h = hashlib.sha512()
     _INTERNAL.append(True)
     try:
         for p in sorted(_HERE.rglob("*")):
-            if (p.is_file() and "__pycache__" not in p.parts and p not in (TARGETS, HEAVY, KNOWN[0])
+            if (p.is_file() and "__pycache__" not in p.parts and p not in (TARGETS, HEAVY, KNOWN[0], SHARD)
                     and PINS not in p.parents and KNOWN[1] not in p.parents):
                 h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + _code(p) + b"\0")
     finally:
@@ -1709,9 +1713,13 @@ _OWN: dict[int, tuple[Any, str]] = {}
 def descriptor(fn: Any) -> str:
     """The digest of every primitive and specialization ``fn`` reaches (through body nodes and function statics), each by its
     descriptor id and the digest of its canonical descriptor entry (`verity.ml.circuits.codec`): what the target is, whatever module or
-    path it was written in.  A body that cannot be built gives the error's type, so no stored entry matches."""
+    path it was written in.  A by-calls root (`targets.is_by_calls`) is its own entry (`by_calls.entry`), without what its body
+    calls.  A body that cannot be built gives the error's type, so no stored entry matches."""
     from verity.ml.circuits import codec as C
     from verity.ml.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+
+    from . import by_calls as BC
+    from . import targets as TG
 
     def statics(v: Any) -> Iterator[Any]:
         if isinstance(v, FunctionDefinition):
@@ -1730,13 +1738,16 @@ def descriptor(fn: Any) -> str:
                 if id(f) in seen:
                     continue
                 seen.add(id(f))
+                by_calls = TG.is_by_calls(f)
                 if isinstance(f, (PrimitiveDefinition, SpecializedDefinition)):
                     e = _OWN.get(id(f))
                     if e is None or e[0] is not f:
-                        e = _OWN[id(f)] = (f, hashlib.sha512(C.canonical_json(C.definition_entry(f))).hexdigest())
+                        own = BC.entry(f) if by_calls else C.definition_entry(f)
+                        e = _OWN[id(f)] = (f, hashlib.sha512(C.canonical_json(own)).hexdigest())
                     parts.append([C.descriptor_id(f), e[1]])
                 if isinstance(f, SpecializedDefinition):
-                    stack.extend(n.fn for n in f.body.nodes)
+                    if not by_calls:
+                        stack.extend(n.fn for n in f.body.nodes)
                     stack.extend(statics(f.bindings))
         except Exception as e:  # noqa: BLE001  (its check raises too, and an errored check is never stored)
             return f"error:{type(e).__name__}"

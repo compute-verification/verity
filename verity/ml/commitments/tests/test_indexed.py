@@ -1,7 +1,8 @@
 import pytest
 
 from verity.ml.commitments.identity import identity_digest
-from verity.ml.commitments.indexed import ExplicitIndexedDomain, IndexedDomain, RangeIndexedDomain, domains_equal, iter_domain
+from verity.ml.commitments.indexed import (ExplicitIndexedDomain, IndexedDomain, RangeIndexedDomain, RangeU64Domain, domains_equal,
+                                           iter_domain, iter_members)
 from verity.errors import InvalidArtifact
 
 
@@ -80,6 +81,43 @@ def test_range_domain_supports_empty_and_huge_counts_without_materialization():
 def test_range_domain_rejects_invalid_bounds(args):
     with pytest.raises(InvalidArtifact):
         RangeIndexedDomain(*args)
+
+
+def test_range_u64_domain_ranks_from_its_start_with_step_one():
+    domain = RangeU64Domain(2**32 - 1, 3)
+
+    assert isinstance(domain, IndexedDomain)
+    assert domain.count == len(domain) == 3
+    assert tuple(domain) == tuple(iter_domain(domain)) == tuple(iter_members(domain)) == (2**32 - 1, 2**32, 2**32 + 1)
+    assert [domain.rank(p) for p in domain] == [0, 1, 2]
+    assert domain.unrank(2) == domain.at_rank(2) == 2**32 + 1
+    assert 2**32 in domain and 2**32 - 2 not in domain and 2**32 + 2 not in domain and not domain.contains(True)
+    with pytest.raises(KeyError):
+        domain.rank(2**32 + 2)
+    with pytest.raises(IndexError):
+        domain.unrank(3)
+    assert tuple(RangeU64Domain(5, 0)) == ()
+
+
+def test_range_u64_domain_reaches_2_64_without_materialization():
+    whole, top = RangeU64Domain(0, 2**64 - 1), RangeU64Domain(2**64 - 2, 1)
+
+    assert whole.unrank(2**64 - 2) == 2**64 - 2 and whole.rank(2**64 - 2) == 2**64 - 2
+    assert tuple(top) == (2**64 - 2,) and top.rank(2**64 - 2) == 0
+    with pytest.raises(OverflowError):
+        len(whole)
+
+
+@pytest.mark.parametrize("args", [(True, 1), (0, True), (-1, 1), (0, -1), (0, 2**64), (1, 2**64 - 1), (2**64 - 1, 1), (2**64, 0), (0.0, 1)])
+def test_range_u64_domain_refuses_what_is_not_below_2_64(args):
+    with pytest.raises(InvalidArtifact):
+        RangeU64Domain(*args)
+
+
+def test_range_u64_domain_has_no_positions_identity():
+    with pytest.raises(InvalidArtifact, match="no positions identity"):
+        _ = RangeU64Domain(0, 4).identity_digest
+    assert not hasattr(RangeU64Domain(0, 4), "identity_sha512")
 
 
 def test_domains_equal_compares_semantics_across_implementations():

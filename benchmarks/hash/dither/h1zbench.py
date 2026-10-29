@@ -1,4 +1,4 @@
-"""Iteration 5: the one-stream form of H1 + fx1 (h1u.cu's kh_one, CA's PouwH1Tile_v3 with the exact wrap correction) on one
+"""The one-stream form of H1 + fx1 (h1u.cu's kh_one, PouwH1Tile_v3 with the exact wrap correction) on one
 H200 or B200. The call's served z and y come from the MMAs whose words its receipts fold, so the call costs this kernel
 alone (seeds, noise, unit), against the plain int8 GEMM it replaces: gamma = os / plain. Each build's receipts-only
 kh_unit_ws is timed beside it (arm NAME-ws, a second product: gamma 1 + ws / plain), and so is H1's noise floor.
@@ -6,13 +6,13 @@ kh_unit_ws is timed beside it (arm NAME-ws, a second product: gamma 1 + ws / pla
     python h1zbench.py --lib h1u.so [--variant NAME=h1u_x.so ...] --ref-lib h1zref.so [--noise-lib h1noise.so]
                        --out OUT [--reps 5] [--ms ...] [--linears ...] [--fused] [--no-ws] [--peel] [--j10r ARM]
 
---peel adds arm NAME-osp per build: kh_one_peel, CA's peel (11:02Z), whose z is A B^T (y today's) from the same stream
+--peel adds arm NAME-osp per build: kh_one_peel, the peel, whose z is A B^T (y today's) from the same stream
 (z - X c^T - b B^T + 256 xa B^T, xa where X = A + b wraps). Its gates are the os arms' with z held to A B^T instead: the
 anchors' z against the exact A B^T on the CPU (receipts v3's), every shape's z on the selected row tiles against A B^T
 in float64, and both faults unchanged (a perturbed word and a flipped wb bit still move only their own z, y and receipt).
 
 --j10r ARM adds arm ARM-j10r (label arm=ARM-j10r:j10r-unsound, noise=j10r): build ARM's one-stream unit on J10-R's
-call-scale noise (kh_one_j10; CA's RT-ALGO r3), measured only, never served or credited. Its gate is gate_one's on
+call-scale noise (kh_one_j10; the form j10r_ca.py twins), measured only, never served or credited. Its gate is gate_one's on
 j10r_ca.py's CPU twin (receipts and z on three units a shape, the noise and z checks of `gate_j10`) after anchors on
 every unit of two small calls.
 
@@ -31,7 +31,7 @@ Gates before any timing (a failed gate exits 4 and its build is not timed):
       receipt and no other, nothing else in z, and y = dequantize(z);
     - F_FAULT_WB (unit 0's column-0 wb+ at k = 0 flipped) must move exactly the cells (i, 0) of unit 0 with X[i][0] != 0,
       each by 256 dWB X[i][0], no receipt, nothing else in z, and y = dequantize(z);
-    - the peeled arms only, F_FAULT_XA (unit 0's xa at row 0, k = 0 flipped; CA's flipped-xa fault, 12:03Z) must move
+    - the peeled arms only, F_FAULT_XA (unit 0's xa at row 0, k = 0 flipped) must move
       exactly the cells (0, j) of unit 0 with B[j][0] != 0, each by 256 dxa B[j][0], no receipt, nothing else in z, and
       y = dequantize(z).
 The wrap bits' density (wb+ and wb- over the checked units' entries, from h1zref) is recorded per shape, never assumed.

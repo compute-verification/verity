@@ -1,4 +1,4 @@
-// The gate's reference for the one-stream z (h1u.cu's kh_one; CA's PouwH1Tile_v3): z = X W-hat^T mod 2^32, X = A + b
+// The gate's reference for the one-stream z (h1u.cu's kh_one; PouwH1Tile_v3): z = X W-hat^T mod 2^32, X = A + b
 // (mod 2^8, the s8 the MMA reads) and W-hat = B + c, which v3's O' - sum_d 128^d D_d + 256 X (wb+ - wb-)^T equals for
 // every int8 B. Computed another way: no peel, no digits, no wrap bits, no MMA. One warp a unit of the selected row
 // blocks, lane r its row r; the noise from full SHA-512 compressions of NOISE_TAG || seed_j || u64be t (not the

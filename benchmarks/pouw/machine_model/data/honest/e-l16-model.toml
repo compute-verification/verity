@@ -3,7 +3,7 @@
 # other class is e_l7qs's a k-step, half its count a MMA.
 name = "e-l16-model"
 status = "provisional"
-source = "SAT-120 from PROFILE's e_l7qs (r20261017-040135-d375): the fold kept a MMA, the rest halved a MMA at k = 16 (note:20261017T0842Z-draft-sat-120)"
+source = "SAT-120 from PROFILE's e_l7qs: the fold kept a MMA, the rest halved a MMA at k = 16"
 L = 16
 
 [mma]

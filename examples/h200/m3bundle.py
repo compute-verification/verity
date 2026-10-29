@@ -1,6 +1,6 @@
-"""M3 proper's drawn blocks (PRF-172, CMP-161): after the live coin, each drawn proof block of the registered H200 step as the
-tree DRAWPROVE's ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a one-member window of the block, registered
-``subset:1``) and ``blocks/<g>/bundle.{json,bin}`` (`replay_bundle` v2, one unit, its draw the step's live one).
+"""M3 proper's sampled proof blocks: after the live coin, each sampled proof block of the registered H200 step as the
+tree ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a one-member window of the block, registered
+``subset:1``) and ``blocks/<g>/bundle.{json,bin}`` (`replay_bundle` v2, one unit, its sample the step's live one).
 
     python examples/h200/m3bundle.py weights --state DIR --registration REG.json --draw DRAW.json --out OPEN.json
     python examples/h200/m3bundle.py replay --private DIR --secret FILE --registered ROOTS.json \\
@@ -11,14 +11,14 @@ tree DRAWPROVE's ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a on
 * **Which block.** Drawn g is slot ``g // units_per_slot``'s layout unit ``g % units_per_slot`` (`replay_bundle.block_of`),
   unit ``index`` of its family (`m3draw.families`). A gather's unit is no proof block (the Program has its parts'
   references and no Definition for it), and an embedding at a prompt position reads ingress: each is a visible failure,
-  written to ``summary.json``, and never redrawn. A norm's gain (one registered word a row) is a port of
+  written to ``summary.json``, and never resampled. A norm's gain (one registered word a row) is a port of
   `RegisteredRead`\\ s, the embedding's token past the prompt the argmax its sequence committed a step before, and a PV
   block's V row past n a row of no reads (all zero).
-* **weights** (where CMP-160's witness is): every registered row a drawn block reads (`window.Window.locate`'s
+* **weights** (where the weights registration's witness is): every registered row a drawn block reads (`window.Window.locate`'s
   `Registered` pieces), opened from the commit's state (`weights_commit.State`): its bytes, salt, string and path,
   each checked against the registered root (``REG.verify_read``).
-* **replay** (the card's part): the run again under the prover's salt secret with kv_reads' `KeepingDriver` for the drawn
-  blocks' slots, every step root and slot root held to the registered ``roots.json`` (exit 5 otherwise), and the drawn
+* **replay** (the card's part): the run again under the prover's salt secret with kv_reads' `KeepingDriver` for the sampled
+  proof blocks' slots, every step root and slot root held to the registered ``roots.json`` (exit 5 otherwise), and the drawn
   slots' committed rows at every step written to ``--private`` (0600, the prover's).
 * **build** (CPU only): per block, its ports' bytes from the committed rows (`Window.inputs`, `Window.outputs`) and the
   opened weights, as one unit of the Program's Definition of its family (`definition`); the window commits each whole
@@ -28,7 +28,7 @@ tree DRAWPROVE's ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a on
   with circuits' `Window.bundle` pieces; then `replay_bundle.check` against the window's registration and `check_step`
   against the step registration at g must both be empty.
 
-Exit 0 when every drawn block is bundled and checks; 3 when one isn't (a visible failure); 5 when a root differs.
+Exit 0 when every sampled proof block is bundled and checks; 3 when one isn't (a visible failure); 5 when a root differs.
 """
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ UNBUNDLED = {"AllGather_v1": "a gather is its parts' references in the Program, 
 
 
 class Visible(Exception):
-    """A drawn block with no bundle: reported, never redrawn."""
+    """A sampled proof block with no bundle: reported, never resampled."""
 
 
 def definition(win: Window, fam: str) -> Any:
@@ -308,7 +308,7 @@ def _words(b: bytes, words: int, what: str) -> np.ndarray:
 
 def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Window, weights: dict[str, Opened], reg: dict,
                  receipt: dict, out: Path, workers: int) -> dict:
-    """One drawn block's window and bundle in ``out`` (module docstring) -> its record."""
+    """One sampled proof block's window and bundle in ``out`` (module docstring) -> its record."""
     S, _ = _slots()
     lay, step, b, fam, idx = com.layout, reg["step"], blk["slot"], blk["family"], blk["index"]
     fn = definition(win, fam)
@@ -351,7 +351,7 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Window, weights: 
     run_root = hashlib.sha512(f"{LOOP}/{reg['run']}/{blk['g']}".encode()).hexdigest()
     iw = IF.Window(circuit, run_root, D.parse_law("subset:1"), 1)
     tid = circuit.ids[0]
-    iw._recorded[tid] = [IF._Recorded([], [], [*data["rows"].values(), *data["outs"].values()], c, 1)]
+    iw._recorded[tid] = [IF._Recorded([], [], [*data["rows"].values(), *data["outs"].values()], c, 1, 0)]
     (m,) = iw.window.members
     salts_of = {}
     for p, ans in answers.items():
@@ -458,7 +458,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--registration", required=True)
     ap.add_argument("--draw", required=True)
     ap.add_argument("--private", default="", help="replay, build: the prover's state between them (0700)")
-    ap.add_argument("--state", default="", help="weights: CMP-160's commit state")
+    ap.add_argument("--state", default="", help="weights: the weights registration's commit state")
     ap.add_argument("--secret", default="")
     ap.add_argument("--registered", default="", help="replay: m3draw commit's roots.json")
     ap.add_argument("--receipt", default="")

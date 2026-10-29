@@ -1,5 +1,5 @@
 """The night's summary and its expected verdicts (`run.py`), on summaries in the shape mockdc and lab_run write them,
-with the recorded night's verdicts and timings (`r20261023-075024-27ea`): those are the expected ones, and a differing
+with a recorded night's verdicts and timings: those are the expected ones, and a differing
 verdict or answer, a step that exited nonzero, a missing summary or a proxy tick past its slack each fails the night,
 named in `summary.txt`."""
 

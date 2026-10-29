@@ -6,7 +6,7 @@ The channel is a pair of byte streams carrying one JSON object of one key a line
 latency changes nothing in its verdict. The verifier holds its own registration (`--registration FILE`, the auditor's
 record of PoUS's setup, `registration_json`), never the prover's word for it, and draws its coins from its own host's OS.
 The record's `plan` is the units every pass reads (`plan_of`): the units holding a tensor's block, so not the store's
-padding past the last tensor, which is PoUS's and which the decode never reads (MEM-72); without one, every unit.
+padding past the last tensor, which is PoUS's and which the decode never reads; without one, every unit.
 
 - The prover opens with the request `{"request": {"deadline_ns", "node", "passes", "samples", "window_ns",
   "windows"}}`, whose node must be the registration's.

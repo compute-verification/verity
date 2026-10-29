@@ -87,7 +87,7 @@ def test_the_claims_gaps_are_the_ones_the_certifier_readme_names():
     readme = (ROOT / e2e.README).read_text()
     gaps = readme.split("## Zero knowledge: what N2's verdict reads, and what's open", 1)[1]
     for named, ours in (("A run that proves nothing", "N2's verdicts here are decided in the clear"),
-                        ("NET-42", "NET-42"), ("CertifiedRecord.verify", "CertifiedRecord.verify")):
+                        ("CertifiedRecord.salt", "CertifiedRecord.salt"), ("CertifiedRecord.verify", "CertifiedRecord.verify")):
         assert named in gaps and any(ours in g for g in e2e.CLAIM["zero_knowledge_gaps"]), named
     assert "counts only" in readme and any("N3" in x for x in e2e.CLAIM["not_covered"])
 
@@ -115,7 +115,7 @@ def _member(name: str, windows: int, bad: int | None, held: bool = True) -> dict
 
 
 def _cost(windows: int) -> dict:
-    """n2_zk's cost pass as `a8.cost` records it: per end, one session whose verifier draws one of the staged units."""
+    """n2_zk's cost pass as `a8.cost` records it: per end, one session whose verifier samples one of the staged units."""
     return {end: [{"arm": "fw", "k": 1, "rep": 0, "units": 1, "staged": windows, "accepted": True, "prove_total_s": 3.0,
                    "max_child_rss_gb": 3.6, "lean": {"accepted": True, "verify_s": 2.5, "why": ""}}]
             for end in ("egress", "ingress")}

@@ -8,7 +8,7 @@ bytes: c_rho reads, the nonlinear units the audit allows a second, is the honest
 an encode of one 1024-bit word costs (E / 128 a byte); L is a carrier's lifetime in seconds and R_in the node's run-input bytes a
 second. f past 1 means the stock outgrows the pool: no KV is credited.
 
-Nonlinear units are #4622's gate model (`Security/Definitions/Accounting/Gates/Model.lean`, `nonlinear`): property/v1's
+Nonlinear units are the gate model's (`Security/Definitions/Accounting/Gates/Model.lean`, `nonlinear`): property/v1's
 budgeted units plus data products, one a product of two run-time values. `units.py` counts the budgeted ones; the data
 products are the attention row's Q′K′ᵀ, H·D a (query row, key) pair, and its P V′, H·D a key with the row's keys padded to the
 s8 step's `PAD` (`products_coefficients`, as `products_pass.py` counts the Program), and nothing else's: a MAC by a weight is
@@ -53,10 +53,10 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-#: E, the nonlinear units (#4622's gate model: budgeted units plus data products) an encode of one 1024-bit word costs over 3
-#: rounds of 1,021 squarings: SquaringFloor and ChainSum at ε = 2^-40 and at the carrier threshold 2^-20
-#: (note:memory-accounting/20261026T0110Z-report-s5-lowerbounds), and the cheapest construction found, the seam square at
-#: 16,544 a squaring, which no E exceeds. No E is proved: counting caps a squaring's bound near its output bits (`FoolingCap`).
+#: E, the nonlinear units (the gate model's: budgeted units plus data products) an encode of one 1024-bit word costs over 3
+#: rounds of 1,021 squarings: SquaringFloor and ChainSum at ε = 2^-40 and at the carrier threshold 2^-20, and the
+#: cheapest construction found, the seam square at 16,544 a squaring, which no E exceeds. No E is proved: counting caps a
+#: squaring's bound near its output bits (`FoolingCap`).
 E_WORD = {"2^-40": 1_145_562, "2^-20": 1_151_688, "best found": 16_544 * 3 * 1021}
 LIFETIMES = {"10 min": 600, "1 h": 3600}
 R_INS = (100_000, 1_000_000)
@@ -65,11 +65,11 @@ WIDTH = 1.0
 CLASSES = ("roundings", "compare_select", "gathers", "folds", "products")
 COEFFICIENTS = ("r0", "b_q", "b_kv", "w0", "w_start", "b_qp")
 #: the attention row whose Q′K′ᵀ and P V′ are data products, (S + PAD ⌈S / PAD⌉)·D a head's row
-#: (`property_redteam/products_pass.py` on the census's 8B Program, r20261026-085548-0287)
+#: (`property_redteam/products_pass.py` on the census's 8B Program)
 ATTENTION_ROW = "Int8LutAttentionRow_v1"
 #: the s8 step's lanes (`stacking.FAMILY`'s k): P V′ reads a row's keys PAD at a time, and Q′K′ᵀ its D
 PAD = 32
-#: bytes a second the audit certifies (`P·N·4096/T` at 61 ms a pass; note:memory-accounting/20261018T0230Z-report-declared-circuit-g):
+#: bytes a second the audit certifies (`P·N·4096/T` at 61 ms a pass):
 #: c = caps.total is R_cap over it
 CERTIFIED_B_PER_S = 1.294e13
 #: `Security/Proofs/Accounting/DeclaredCircuit/Witness.lean`'s `bounds_8b` and `bounds_70b`, at the thin-lane prices: c at most

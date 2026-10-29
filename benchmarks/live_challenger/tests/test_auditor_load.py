@@ -180,7 +180,7 @@ def test_a_loads_minutes_are_its_weights_and_witness_at_the_links_rate_and_the_e
 
 
 def test_the_longest_minutes_fit_in_the_rehearsal_units_runtime_and_leave_an_h200_load_100_of_serving():
-    """The gate's cap and 10 minutes for the tunnels and the outcome are within the unit's RuntimeMaxSec (infra's)."""
+    """The gate's cap and 10 minutes for the tunnels and the outcome are within the unit's RuntimeMaxSec."""
     limit = re.search(r"^RuntimeMaxSec=(\d+)h$", UNIT.read_text(), re.M)
     assert limit and A.CERTIFIER_MINUTES[1] + 10 <= int(limit[1]) * 60
     assert A.CERTIFIER_MINUTES[1] - A.load_minutes("h200") >= 100

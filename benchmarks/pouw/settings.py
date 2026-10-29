@@ -103,6 +103,9 @@ REGISTRY = Registry(
     S("PEARLC_CAPTURE_SIZES", ints, None, VALUE, "the whole-step arm's CUDA graph capture sizes; unset, 1, 8, 32 and 128"),
     S("VLLM_ENABLE_V1_MULTIPROCESSING", str, None, WHERE, "vLLM's engine core in a process of its own; the arm's scripts set 0, "
                                                           "so its hooks and profiles see the engine in theirs"),
+    S("VERITY_INDUCTOR_DIR_PER_PROCESS", one, False, WHERE, "1: TORCHINDUCTOR_CACHE_DIR is this process's own (the vLLM "
+                                                            "integration's engine.env.INDUCTOR_DIR_MARK), else served_step.py "
+                                                            "gives a serving-defaults arm a fresh one"),
     S("E2E_GPU_UUID", str, "0", WHERE, "the GPU nvidia-smi reads (window.sh sets the lease's), since NVML ignores "
                                        "CUDA_VISIBLE_DEVICES"),
     S("POUW_COIN_STATE", str, None, WHERE, "a file holding the challenger's entropy (e2e.py's epoch coins), whose commitment "
@@ -116,6 +119,7 @@ REGISTRY = Registry(
     S("POUW_HARNESS_LT2", str, None, VALUE, "the second cuBLASLt's library; unset, libpouw_lt2.so beside the harness's if "
                                             "built; none leaves it out"),
     S("POUW_LIBNVML", str, "libnvidia-ml.so.1", WHERE, f"NVML, for the harness's clocks and power: {LIB}"),
+    S("POUW_LIBCUDA", str, "libcuda.so.1", WHERE, f"the CUDA driver gemm_rate's torch_rate.py loads its stamp cubin through: {LIB}"),
     S("POUW_TIER", str, "2a", VALUE, "the evidence tier verify.py records a variant at (ledger.TIERS)"),
     S("POUW_LEDGER_PUBLISH", one, False, WHERE, "1: verify.py publishes the variant's record to the ledger"),
     # ---------------------------------------------------------------- served H1

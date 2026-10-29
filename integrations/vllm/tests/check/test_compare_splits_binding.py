@@ -1,4 +1,4 @@
-"""[R16 stoch/global, COORD M-0169 (4) / stoch M-0254] compare binds the fold's `Const32[S]` splits operand of every top-p TokenSelect to
+"""Compare binds the fold's `Const32[S]` splits operand of every top-p TokenSelect to
 the request Program's request-owned `splits` Input entry of the same sampling event; GM-01 reads S from the bound operand.
 
 The fold (patterns.TokenSelectGumbelTopP._stage3) emits `Const32[S]` "splits" as the 6th operand of `GumbelTopPTokenSelect_v1{V}` from the
@@ -29,7 +29,7 @@ def _prog(label: str, *, splits_form: str, S: list[int], tok=0, seed=1, splits_n
           shared_const: bool = False, discard_first: bool = False) -> C.Prog:
     """An instance sequence of `len(S)` sampling events.  Per event: a Gemm reading the prompt/previous select + the weights, the three
     constant operands of the select (top_p, pos, temperature), then the select.  `splits_form`: "const" (the fold: Const32[S] before the
-    select, 6th operand) | "input" (the Program: 6th operand reads splits[read_entry(e)] of the `splits_node` Input) | "static" (the R15
+    select, 6th operand) | "input" (the Program: 6th operand reads splits[read_entry(e)] of the `splits_node` Input) | "static" (the older
     {V,S} form: five operands).  `discard_first`: event 0 is a chunked prefill's discarded chunk sample (nothing reads its token, its row
     is the one before the last prompt row); the served events follow it."""
     P = C.Prog.__new__(C.Prog)
@@ -91,7 +91,7 @@ def test_fold_const32_splits_binds_to_the_programs_splits_input_entry_of_the_sam
     for e, (i_f, i_a) in enumerate(zip((st[-1] for st in F.steps), (st[-1] for st in A.steps))):
         assert F.inst[i_f]["spec"] == A.inst[i_a]["spec"] == SEL
         assert F.canon(i_f)[SPLITS_OPERAND] == A.canon(i_a)[SPLITS_OPERAND] == [("SPLITS", e, e + 1)]
-        # the constant's value is what GM-01 reads for the relation check; the static-form reader still works for R15 Programs
+        # the constant's value is what GM-01 reads for the relation check; the static-form reader still works for older Programs
         assert SG.top_p_split_count(F.inst[i_f]["spec"], F, F.inst[i_f]) == S[e]
         assert SG.top_p_split_count(A.inst[i_a]["spec"], A, A.inst[i_a]) is None
     res = C.compare_steps(F, A)
@@ -120,7 +120,7 @@ def test_a_program_reading_the_wrong_splits_entry_or_an_unbound_fold_constant_is
     A = _prog("program", splits_form="input", S=S, splits_node=2, weights=3)
     res = C.compare_steps(F_shared, A)
     assert not res["canonical_sha256"]["equal"] and res["totals"]["steps_spec_equal"] < 3
-    # (c) the R15 static form {V,S} against the operand-form Program: different specs, no binding on either side, named
+    # (c) the older static form {V,S} against the operand-form Program: different specs, no binding on either side, named
     F_static = _prog("fold-static", splits_form="static", S=S, weights=2)
     assert F_static.n_splits_consts_bound == 0 and SG.top_p_split_count(F_static.inst[F_static.steps[0][-1]]["spec"], F_static,
                                                                           F_static.inst[F_static.steps[0][-1]]) == 32
@@ -206,7 +206,7 @@ def test_x09_refuses_a_component_whose_constant_S_is_not_the_folds(tmp_path, mon
 
 
 def test_a_fold_without_top_p_selects_binds_nothing():
-    """Greedy folds (TokenSelect_v1, five-operand R15 stochastic forms) are untouched: no instance removed, no splits node."""
+    """Greedy folds (TokenSelect_v1, five-operand older stochastic forms) are untouched: no instance removed, no splits node."""
     P = _prog("greedy-like", splits_form="static", S=[1, 1, 1], weights=2)
     assert P.n_splits_consts_bound == 0 and not P.splits_values and not P.splits_nodes and len(P.inst) == 5 * 3
     # the bound fold keeps every other instance and its node ids (k2i is rebuilt over the reduced sequence)

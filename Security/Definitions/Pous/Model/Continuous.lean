@@ -223,7 +223,7 @@ noncomputable def epsProof (sch : Scheme M) (β : ℕ) : ℝ :=
 
 /-! ## Arrivals drawn by the memory challenger, and the memory at every time
 
-Added on 3 Oct 2026, with `Pous.Guarantees.ContinuousTimeAverage`. Red team: needed.
+Its statement is `Pous.Guarantees.ContinuousTimeAverage`. Red team: needed.
 
 The memory challenger draws the arrivals itself. Time is cut into `T` slots of one unit each, the unit of `Prog.depth`
 and of `arr` above. At slot `t` the memory challenger draws `x t = (c, i) ∈ Fin b × Fin B`, uniform and independent of

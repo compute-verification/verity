@@ -300,6 +300,22 @@ def test_export_copies_every_entry_and_verify_url_reads_it_all_back(tmp_path, se
     assert not F.verify_url(repo, url)["ok"]
 
 
+def test_export_also_copies_an_artifact_it_is_named_and_reports_one_nobody_holds(tmp_path):
+    origin, private = _store(tmp_path, "origin"), FsRemote(tmp_path / "private")
+    repo, _ = _repo(tmp_path, origin, private)
+    doc = tmp_path / "status" / "status.json"
+    doc.parent.mkdir()
+    doc.write_text('{"schema": "verity/status/v0"}')
+    extra = origin.put_artifact("verity/status/v0", {"commit": "ab" * 20}, None, file=doc)
+    _publish(origin, extra, private)
+    rep = F.export(_store(tmp_path, "exporter"), repo, FsRemote(tmp_path / "public"), srcs=[private], arts=[extra])
+    assert rep["ok"] and rep["ids"] == 4
+    assert (tmp_path / "public" / manifest_key(extra.split(":")[1])).is_file()
+    nobody = "art:" + "2" * 64
+    rep = F.export(_store(tmp_path, "again"), repo, FsRemote(tmp_path / "public"), srcs=[private], arts=[nobody])
+    assert not rep["ok"] and any(nobody in e for e in rep["errors"])
+
+
 def test_export_recovers_superseded_ids_from_history_and_warns_on_lost_ones(tmp_path):
     origin, private = _store(tmp_path, "origin"), FsRemote(tmp_path / "private")
     repo, a = _repo(tmp_path, origin, private)

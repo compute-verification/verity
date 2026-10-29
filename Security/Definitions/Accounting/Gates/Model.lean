@@ -7,9 +7,9 @@ import Mathlib.Data.Finset.Card
 /-!
 # The circuit model: a declared circuit's gates, their classes, its window and its census (trusted)
 
-One model of what a declared circuit `W` computes, for the lower bounds every resource lane proves over it: the stacking
-property's carry and encode bounds, the requirement `A1` reads, and compute accounting's work statement and fan-in
-floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so that census/v1 and property/v1
+One model of what a declared circuit `W` computes, for the lower bounds every resource audit proves over it: the
+stacking property's carry and encode bounds, the requirement `A1` reads, and compute accounting's work statement and
+fan-in floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so that census/v1 and property/v1
 (`verity/ml/circuits/census.py`, `stacking.py`) can be held to it by difftest.
 
 * **Values.** Every value is an integer (`ℤ`): a `Value<w>` leaf read as the integer its Definition gives it, two's
@@ -277,13 +277,13 @@ def Role.isTail : Role → Bool
 /-- Where a gate sits in the Definition that made it, as the IR binds it:
 * `dot K L tail s`: step `s` of an `S8Dot_v1` coordinate's body (an `S8Matmul_v1` row's among them), whose statics
   are `K` products committed every `L` (`T_t` after `t·L`) and the tail groups' atom counts (`TAIL`);
-* `receipt dot K w a b`: word `w` of an H1 + fx1 tile's CP-W receipt (`PouwH1Tile`, decision 104,
+* `receipt dot K w a b`: word `w` of an H1 + fx1 tile's CP-W receipt (`PouwH1Tile`,
   `verity/core/protocols/pouw/circuit/h1tile.py`): the XOR over the tile's lanes of half `w % 2` of each lane's fx1
-  state after set `w / 2` of `[T_0 … T_{KS−1}, O′, D_1 … D_{m−1}]`, `2·(KS + m)` words at contraction `K`
-  (`KS = K/32` segments). `dot` is the tile's dot kind (its `EXACT`: `S8Dot_v2` or `GemmAccumulatorS8_v2`), and `a`
-  and `b` are the gates of its `A` and `B` operand rows (its call's arguments), from which a word's kind reads whether
-  each operand is an activation, so that a kind reading two (H1 + fx1's attention) stays uncredited under seeded coins
-  (Compose's `Scheme.SeedPriced`);
+  state after set `w / 2` of `[T_0 … T_{KS−1}, O′, D_1 … D_{m−1}]`, `2·(KS + m)` words at contraction `K` (`KS = K/32`
+  segments). `dot` is the tile's dot kind (its `EXACT`: `S8Dot_v2` or `GemmAccumulatorS8_v2`), and `a` and `b` are the
+  gates of its `A` and `B` operand rows (its call's arguments), from which a word's kind reads whether each operand is
+  an activation, so that a kind reading two (H1 + fx1's attention) stays uncredited under seeded coins (Compose's
+  `Scheme.SeedPriced`);
 * `other`: any other place. Every other gate of an H1 + fx1 tile is here: its `z` (each cell's exact product, `EXACT` on
   its rows, which no noise reaches and PIN's warp check never compares), its noise, its sets and folds, and each lane's
   own `PouwXinFinal` words, which aren't committed: only their XOR over lanes is. -/
@@ -314,8 +314,8 @@ An H1 + fx1 tile's receipt word `w` after checkpoint `T_s` (`w < 2·(K/32)`, `s 
 `K`-segment of the tile's products, whose floor its dot kind prices (GRIND's fold premise, `HMu`'s Lemma B′), and its
 two halves share it (`Site.parts`). The last `2·m` words, after `O′ = T_{KS−1} − U·A_0` and `D_d = U·A_d`, are `other`:
 they bind the check's cancellation of the columns' keyed word `U` against the rows' digits, which no segment's floor
-prices, so they carry no floor (RT-COMPOSE r4's check 6). A receipt word's role reads its site alone, not the primitive
-that computes it (the lanes' `PouwXor32`).
+prices, so they carry no floor. A receipt word's role reads its site alone, not the primitive that computes it (the
+lanes' `PouwXor32`).
 
 Off a dot body and a receipt, `S32ByteCarry` and `S32ClampRest` are a limb split's carries (`N − 1` a split, in
 either form), `S32LowByte` and `S32ClampS8` its limb reads, and `PouwDuoAbsorb_v1` the receipt fold's step. -/
@@ -493,8 +493,8 @@ def FanIn (f : ℕ) (C : Dag ι) : Prop :=
 /-- Every value's declared interval lies within `[−2^w, 2^w)`: `w` bits and a sign, so s32 is `Width 31`. -/
 def Width (w : ℕ) (C : Dag ι) : Prop := ∀ g ∈ C, -2 ^ w ≤ g.lo ∧ g.hi < 2 ^ w
 
-/-- **The chain's restriction** (the red team's `B`): every budgeted gate reads at most `B` operand bits, the declared
-bits of the operands it reads. A gather is exempt: its value is one of its operands. -/
+/-- **The chain's restriction**: every budgeted gate reads at most `B` operand bits, the declared bits of the operands
+it reads. A gather is exempt: its value is one of its operands. -/
 def OperandBits (B : ℕ) (C : Dag ι) : Prop :=
   ∀ g ∈ C, ∀ cls f, g.op = .budgeted cls f → (g.args.map fun j => (C[j]?.map Gate.bits).getD 0).sum ≤ B
 
