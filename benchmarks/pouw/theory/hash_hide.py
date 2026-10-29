@@ -28,18 +28,23 @@ The parts:
   T1 (the card's honest-only first-block excess) and, credited, a padding block, a part-filled block and a node in h.
   Beside them, the round root's wait on the critical path, priced as the card prices A's root (its latencies), as a
   multiple of that per-call wait.
-- ``grinding``: tries a window at a Fiat-Shamir seed, for each re-roll knob: an hm96 leaf's blind (an unforced mask,
-  the seed reading the public leaf) or the data (the seed reading a private root or a keyed digest, any mask), each
-  priced in compressions at ShaWrites' cheapest form against one H200's, a datacenter's and the world's compute a
-  window. The window's live salt bounds a grind to its window. From T: the noised coordinates m a steer needs at
-  mu = 1/2 a coordinate for 2^-40 a window and pooled over a week, month and year, and the premium ln(T/delta_g)
-  against the T_q = 2^128 the grinding premium reads.
+- ``grinding``: tries a window at a Fiat-Shamir seed, for each re-roll knob: an hm96 leaf's blind (an unforced mask),
+  that blind moved within M_key's kernel, the data (under hm96 with the forced mask, and under the keyed leaf) and the
+  floor any knob pays (a fresh root and the seed's last block), each priced in compressions at ShaWrites' cheapest
+  form against one H200's, a datacenter's and the world's compute a window. The window's live salt bounds a grind to
+  its window. From T: the noised coordinates m a steer needs at mu = 1/2 a coordinate for 2^-40 a window and pooled
+  over a week, month and year, and the premium ln(T/delta_g) against the T_q = 2^128 the grinding premium reads (and
+  2^80, its other reading).
 - ``fold_seal``: the XOR fold of a cell's words sealed with the cell's final word O' (one sigma a cell or a row of 8
   cells): h in the words tree and with each seal hidden on its own, counting sigma alone and sigma with its O's; a drawn
   unit's committed output bits and size class; and, a chunk size at a time, the drawn unit's in-circuit opening against
   T1's `chunk_head`.
 - ``xor_m``: the XOR of m consecutive words, one register for m: the same output bits, opening and `chunk_head` rows,
   and h with each XOR hidden on its own.
+- ``per_output``: one or two u32 values an output in place of its words (a multiply-xor fold's state, alone or with the
+  last word, and a quadratic sketch): hiding's T1 under the keyed leaf and under L1 + (a), h with each output hidden on
+  its own, a SHA-512 keystream pad over the values on a link, a drawn unit's output bits, size class and opening, and
+  `chunk_head` on Llama-3.2-1B's linears a chunk size at a time.
 - ``leak``: a published sketch. A linear sketch s = sum_t r_t w_t (mod p) with public coins r is a public linear function
   of the running words; S sketches with independent r over an S-step chain recover every word, hence every step's
   partial product (checked exactly here on random int8 data), and its bits count in leakage as a share of a unit's
@@ -242,16 +247,24 @@ def grinding() -> dict:
                 "premium_over_tq": (log2_t + DELTA_G_LOG2) / (TQ_LOG2 + DELTA_G_LOG2)}
 
     out = {"budget_macs_a_window": scopes, "windows_a_period": windows, "compression_w1": compression_w1,
-           "at T_q = 2^128": at(TQ_LOG2), "points": {}}
+           "at T_q = 2^128": at(TQ_LOG2), "at T_q = 2^80": at(80), "points": {}}
     for point, rows in POINT_ROWS.items():
         d = min(_a_tree(rows, k) for _, k, _ in LLAMA)
-        # an hm96 leaf's blind: c = H(sp || y) one compression, the leaf H(lp || b || c) two, the seed's two blocks
-        # that hold the roots two (b moves by a column of M_key, an XOR); the data: the last leaf's last block, three
-        # compressions a level of A's tree, the seed's two
-        blind, data = 1 + 2 + 2, 1 + 3 * d + 2
-        knobs = {"hm96 blind, seed from the public leaf (unforced mask)": blind,
-                 "data, seed from a private root or a keyed digest (any mask)": data}
-        row = {"cheapest_a_tree_levels": d, "knobs": {}, "bits_a_forced_mask_removes": math.log2(data / blind)}
+        # an hm96 leaf's blind: c = H(sp || y) one compression (y's second-block bytes), the leaf H(lp || b || c) two,
+        # the seed's two blocks that hold the roots two (b moves by M_key's image of the change, an XOR). y has 1,536
+        # bits against M_key's 512 rows, so a change in its kernel leaves b and the leaf's first block alone. The data:
+        # the last leaf's last block, three compressions a level of A's tree, the seed's two, and under hm96 the leaf
+        # over the new root. Any try needs a fresh root, a SHA-512 output, and the seed's last block: the floor
+        blind, kernel, keyed, floor = 1 + 2 + 2, 1 + 1 + 2, 1 + 3 * d + 2, 2
+        knobs = {"hm96 blind (unforced mask)": blind,
+                 "hm96 blind in M_key's kernel (unforced mask)": kernel,
+                 "data under hm96 with the forced mask": keyed + 2,
+                 "data under the keyed leaf": keyed,
+                 "any knob, the floor": floor}
+        row = {"cheapest_a_tree_levels": d, "knobs": {},
+               "bits_the_forced_mask_removes": math.log2((keyed + 2) / kernel),
+               "bits_the_keyed_leaf_removes": math.log2(keyed / kernel),
+               "bits_any_knob_adds_over_the_kernel_blind": math.log2(kernel / floor)}
         for knob, c in knobs.items():
             row["knobs"][knob] = {"compressions_a_try": c, "by_scope": {
                 s: at(math.log2(macs / (c * compression_w1))) for s, macs in scopes.items()}}
@@ -313,6 +326,40 @@ def xor_m(sha: int) -> dict:
     return out
 
 
+def per_output(sha: int) -> dict:
+    """u32 values committed an output in place of its words: the multiply-xor fold's state N_T (with the last word D_T,
+    or alone with D_T bound by the output's own commitment) and the quadratic sketch sum_t w_t^2 mod 2^32."""
+    recompute = UNIT_WORDS * 32 * ANDS_MAC
+    keep = (KEYED, HM96A)
+    out = {}
+    for name, c in (("fold, N_T and D_T", 2), ("fold, N_T alone", 1), ("quadratic sketch", 1)):
+        mech = per_value(WORD_BYTES * c)["mechanisms"]
+        row = {"u32_an_output": c, "by_K": {}, "by_point": {}}
+        for k in (2048, 8192):
+            tree = H_LEAD["basis"] * c / lead_steps(k)
+            outs = UNIT_WORDS / lead_steps(k)
+            unit_b = WORD_BYTES * c * outs
+            row["by_K"][k] = {
+                "h_hashing_in_tree": tree,
+                "h_each_output_hidden": {x: tree + H_LEAD["basis"] * mech[x]["total"] / k / LEAD_C_MAC for x in keep},
+                "h_sha512_pad_on_a_link": tree * BLOCK / 64,
+                "unit_outputs": outs, "committed_output_bits": 8 * unit_b, "size_class": size_class(8 * unit_b),
+                "class_share_of_lead": size_class(8 * unit_b) / 262_144,
+                "opening_by_chunk_kib": {ch // 1024: {
+                    "ands": max(1, math.ceil(unit_b / ch)) * blocks(ch) * sha,
+                    "over_recompute": max(1, math.ceil(unit_b / ch)) * blocks(ch) * sha / recompute}
+                    for ch in (1024, 4096, 16384)}}
+        for point, rows in POINT_ROWS.items():
+            stock = rows * LAYERS * sum(k * n for _, k, n in LLAMA)
+            row["by_point"][point] = {
+                "hiding_t1_pct": {KEYED: 0.0, "L1 + (a), floor / alone": L1_TERM[point]},
+                "t1_chunk_head_pct_by_chunk_kib": {ch // 1024: 100 * LAYERS * CHUNK_HEAD_REGS * REG * sum(
+                    math.ceil(rows * n * WORD_BYTES * c / ch) for _, _, n in LLAMA) / stock
+                    for ch in (1024, 4096, 16384, 65536, 262144)}}
+        out[name] = row
+    return out
+
+
 def _solve_mod(m: list[list[int]], y: list[int], p: int) -> list[int] | None:
     n = len(m)
     a = [row[:] + [y[i]] for i, row in enumerate(m)]
@@ -362,7 +409,8 @@ def main() -> None:
     a = ands()
     sha = a["a_word"]["SHA-512 compression"]["ands_32_words"]
     out = {"ands": a, "per_value": pv, "sketch": sketch(pv), "rounds": rounds(), "rounds_keyed": rounds_keyed(),
-           "grinding": grinding(), "fold_seal": fold_seal(sha), "xor_m": xor_m(sha), "leak": leak()}
+           "grinding": grinding(), "fold_seal": fold_seal(sha), "xor_m": xor_m(sha), "per_output": per_output(sha),
+           "leak": leak()}
     out_path.write_text(json.dumps(out, indent=1, sort_keys=False))
     a = out["ands"]["a_word"]
     print("in-circuit ANDs a 32-bit word (x SHA-512):")
@@ -388,7 +436,8 @@ def main() -> None:
             f"R {r}: {x['t1_chunk_head_pct']:.4f} / {x['h_credited_over_lead']:.5f} / "
             f"{x['added_wait_over_lead_a_root_wait']:.2f}" for r, x in v["by_R"].items()))
     g = out["grinding"]
-    print(f"grinding: at T_q = 2^128, m {g['at T_q = 2^128']['m_a_window']} a window")
+    print(f"grinding: at T_q = 2^128, m {g['at T_q = 2^128']['m_a_window']} a window; at 2^80, m "
+          f"{g['at T_q = 2^80']['m_a_window']}, premium x{g['at T_q = 2^80']['premium_over_tq']:.2f}")
     for p, v in g["points"].items():
         for knob, x in v["knobs"].items():
             print(f"  {p:16s} {knob[:30]:30s} {x['compressions_a_try']:3d} compressions: " + ", ".join(
@@ -406,6 +455,14 @@ def main() -> None:
         print(f"  {p:18s} class {v['size_class']:7d}; {v['h_hashing_in_tree']:.2f}; "
               f"{v['h_each_hidden'][KEYED]:.1f}; "
               f"{c16['opening_ands']:,.0f} / {c16['t1_chunk_head_pct']:.4f}%")
+    print("u32s an output (h in tree, keyed leaf each, pad; class; 1 KiB opening; T1 chunk_head 1 / 16 / 256 KiB):")
+    for p, v in out["per_output"].items():
+        for k, x in v["by_K"].items():
+            print(f"  {p:18s} K {k:5d} {x['h_hashing_in_tree']:.3f}, {x['h_each_output_hidden'][KEYED]:.2f}, "
+                  f"{x['h_sha512_pad_on_a_link']:.3f}; class {x['size_class']}; "
+                  f"{x['opening_by_chunk_kib'][1]['ands']:,.0f}")
+        print("    " + ", ".join(f"{q}: " + " / ".join(f"{y:.4f}" for c, y in z["t1_chunk_head_pct_by_chunk_kib"].items()
+                                                         if c in (1, 16, 256)) for q, z in v["by_point"].items()))
     print("leak: all recovered =", out["leak"]["all_recovered"])
 
 
