@@ -25,7 +25,7 @@ open Finset Pouw.Dimension.Pointwise
 open Classical in
 /-- **What one run keeps**: a run that holds every `R i`, `i ∈ I`, in some slot at some point writes at least `|I|`
 less the ordered pairs of `I` with equal values and the indices whose value an initial slot already holds. -/
-theorem held_card_le {A V ι : Type} [DecidableEq V] [Inhabited V] [LinearOrder ι]
+theorem held_card_le {A V ι : Type} [DecidableEq A] [DecidableEq V] [Inhabited V] [LinearOrder ι]
     (m₀ : A → Fin 1 → V) (P : List (Step A V 1)) (I : Finset ι) (R : ι → V)
     (hR : ∀ i ∈ I, ∃ k a, run m₀ (P.take k) a 0 = R i) :
     I.card ≤ writes P + ((I ×ˢ I).filter fun p => p.1 < p.2 ∧ R p.1 = R p.2).card +
@@ -48,7 +48,7 @@ theorem held_card_le {A V ι : Type} [DecidableEq V] [Inhabited V] [LinearOrder 
 open Classical in
 /-- **Distinct values cost writes**: a run that holds every `R i`, `i ∈ I`, in some slot at some point writes at least
 the distinct values of `R` on `I` less the indices whose value an initial slot already holds. -/
-theorem image_card_le {A V ι : Type} [DecidableEq V] [Inhabited V]
+theorem image_card_le {A V ι : Type} [DecidableEq A] [DecidableEq V] [Inhabited V]
     (m₀ : A → Fin 1 → V) (P : List (Step A V 1)) (I : Finset ι) (R : ι → V)
     (hR : ∀ i ∈ I, ∃ k a, run m₀ (P.take k) a 0 = R i) :
     (I.image R).card ≤ writes P + (I.filter fun i => ∃ a, m₀ a 0 = R i).card := by
