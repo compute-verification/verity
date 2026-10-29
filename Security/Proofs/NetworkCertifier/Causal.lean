@@ -63,23 +63,23 @@ theorem tick_causal (T W m : ℕ) (syncs syncs' : Fin W → ClockSync)
   · rcases hl with rfl | ⟨hl, hl'⟩
     · left
       by_cases hw : f.anchor / T < W
-      · simp only [tick, dif_pos hw, hs ⟨_, hw⟩ hm]
-      · simp only [tick, dif_neg hw]
+      · simp only [tick, dite_eq_left hw, hs ⟨_, hw⟩ hm]
+      · simp only [tick, dite_eq_right hw]
     · right
       by_cases hw : f.anchor / T < W
-      · simp only [tick, dif_pos hw]
+      · simp only [tick, dite_eq_left hw]
         exact ⟨le_trans hl (le_max_right _ _), le_trans hl' (le_max_right _ _)⟩
-      · simp only [tick, dif_neg hw]
+      · simp only [tick, dite_eq_right hw]
         exact ⟨le_trans hl (le_trans (le_max_left _ _) (le_max_left _ _)),
           le_trans hl' (le_trans (le_max_left _ _) (le_max_left _ _))⟩
   · right
     have ha : m * T ≤ f.anchor :=
       le_trans (Nat.mul_le_mul_right T (Nat.le_of_not_lt hm)) (Nat.div_mul_le_self _ _)
     by_cases hw : f.anchor / T < W
-    · simp only [tick, dif_pos hw]
+    · simp only [tick, dite_eq_left hw]
       exact ⟨le_trans ha (le_trans (anchor_le_eligible f _) (le_max_left _ _)),
         le_trans ha (le_trans (anchor_le_eligible f _) (le_max_left _ _))⟩
-    · simp only [tick, dif_neg hw]
+    · simp only [tick, dite_eq_right hw]
       exact ⟨le_trans ha (le_max_right _ _), le_trans ha (le_max_right _ _)⟩
 
 /-- **The hand ticks are causal.** Under syncs that agree on the windows before `m`, from ticks that are equal or both
@@ -239,7 +239,7 @@ theorem encardProgramRunsLeWindows : EncardProgramRunsLeWindows := by
     obtain ⟨h2, hr', hs'⟩ := acc' t ht
     apply NetTiming.Obs.ext'
     · rw [hr, hr', NetTiming.ingressUpTo_congr op hpre, hone o, hone o']
-      have hc : (adv o 0).1 = (adv o' 0).1 := congrArg Prod.fst hσ
+      have hc : (adv o 0).1 = (adv o' 0).1 := by have h := congrArg Prod.fst hσ; exact h
       rw [hc]
       apply tiedRows_causal
       intro w hw
