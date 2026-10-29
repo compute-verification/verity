@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """OneInstructionMinimal for ssn-1l: no single sm_90 integer lane instruction places coin bit p ≠ 24 of a raw XOF word
-at bit 24 of a data register, so each later step's funnel-shift rotate (`derive_extra`) is a distinct coin-dependent write.
+at bit 24 of a data register, so each later step's register takes a second, coin-dependent instruction. That instruction
+can serve several steps of one coin word (`shared_word`): the 32 steps of a word take 47 instructions, not honest's 63, so
+`derive_extra`'s rotates are not each a distinct required write.
 
 ssn-1l's later k32 steps each serve one noise lane, lane 3 of a register whose lanes 0-2 are data: X = A | (rotr(h_w,
 (p - 24) mod 32) & 0x01000000), A < 2^24, p the lane's bit of the row's coin word h_w (`noise_sweep.py`'s
@@ -37,7 +39,9 @@ The positive control p = 24: `bitwise` must fail to refute (one LOP3 forms X) an
 Outside the check (printed with the verdict): the floating-point lane instructions, DPX VIADDMNMX, products of h with
 itself (IMAD(h, h, ·), IDP(h, h)), and warp instructions reading another lane's register (MATCH, REDUX, VOTE). It
 assumes `lane-semantics` (each instruction computes its documented function), and like `derive_minimal.py` it shows
-only that X takes two instructions: that the first one's register can't serve two targets is the open sharing lemma.
+only that X takes two instructions. The sharing checks show the first one's register can serve up to four steps: the eight
+masked words rotr(h, k) & 0x01010101 and a PRMT a step (`shared_word`), or one LOP3 for two steps through IMAD and IMAD.HI
+(`shared_pair`).
 
   uv run --no-project --with-editable . --with-editable benchmarks/pouw/exact_kit python -B
       benchmarks/pouw/theory/derive_minimal_ssn.py [--mutations] [--verdict PATH]
@@ -260,6 +264,25 @@ def absdiff(t, p) -> tuple[bool, str]:
     return True, f"no K, accumulator or layout moves F as T moves over byte {b} of h"
 
 
+BYTE_BITS = 0x01010101
+SHARED_WORD = 1 + 2 * 7 + 32  # Y_0 (LOP3), Y_1..Y_7 (SHF and LOP3 each), a PRMT a step
+
+
+def shared_word(h: int, a: list[int]) -> list[int]:
+    """All 32 steps of one coin word in SHARED_WORD instructions: Y_k = rotr(h, k) & 0x01010101 holds bits k, 8 + k,
+    16 + k and 24 + k at bit 0 of its bytes, and step p = 8e + k is PRMT(A_p, Y_k) taking A_p's bytes 0-2 and Y_k's byte
+    e as byte 3."""
+    y = [h & BYTE_BITS] + [shf(h, h, k, False, False, False) & BYTE_BITS for k in range(1, 8)]
+    return [prmt(a[p], y[p % 8], 0x0210 | (4 + p // 8) << 12) for p in range(32)]
+
+
+def shared_pair(p1: int, p2: int, h: int, a1: int, a2: int) -> tuple[int, int]:
+    """Two steps of one word in three instructions when p1 ≤ 24 and p2 > p1 + 24: Y = h & (2^p1 | 2^p2) (LOP3), then
+    IMAD(Y, 2^(24 - p1), A1) drops bit p2 past bit 31 and IMAD.HI(Y, 2^(56 - p2), A2) drops bit p1 below bit 0."""
+    y = h & (1 << p1 | 1 << p2)
+    return (y * (1 << (LANE - p1)) + a1) & M32, ((y * (1 << (56 - p2))) >> 32) + a2 & M32
+
+
 def families(p, rng) -> dict[str, tuple[bool, str]]:
     t = functools.partial(target, p)
     a0 = rng.getrandbits(24)
@@ -291,6 +314,17 @@ def main() -> int:
                              not ok, detail)
             else:
                 checks.check(f"p {p}: no {name} instruction forms X", ok, detail)
+    words = [(rng.getrandbits(32), [rng.getrandbits(24) for _ in range(32)]) for _ in range(SAMPLES)]
+    words += [(h, [0] * 32) for h in (0, M32, 1 << 31, 1)] + [(1 << q, [(1 << 24) - 1] * 32) for q in range(32)]
+    honest = 32 + sum(1 for p in range(32) if p != LANE)
+    checks.check(f"sharing: one coin word's 32 steps take {SHARED_WORD} instructions (honest {honest}): 8 masked words "
+                 "Y_k = rotr(h, k) & 0x01010101 and a PRMT a step",
+                 all(shared_word(h, a) == [target(p, a[p], h) for p in range(32)] for h, a in words))
+    pairs = [(p1, p2) for p1 in range(LANE + 1) for p2 in range(32) if p2 > p1 + LANE]
+    checks.check(f"sharing: two steps of one word take 3 instructions (one LOP3, IMAD, IMAD.HI) at each of the "
+                 f"{len(pairs)} pairs with p2 > p1 + 24",
+                 bool(pairs) and all(shared_pair(p1, p2, h, a[0], a[1]) == (target(p1, a[0], h), target(p2, a[1], h))
+                                     for p1, p2 in pairs for h, a in words[:256]))
     if checks.mutations:
         def w_of(f):
             return weights(f, 0x123456)
@@ -312,8 +346,12 @@ def main() -> int:
         }
         for name, refutes in own.items():
             checks.mutation(f"the {name} family's own function: its certificate refuses to rule it out", not refutes())
+        checks.mutation("sharing: PRMT reading byte e + 1 of Y_k is caught",
+                        any(prmt(a[p], h & BYTE_BITS, 0x0210 | (5 + p // 8 % 3) << 12) != target(p, a[p], h)
+                            for h, a in words[:64] for p in (0, 8, 16)))
     print("outside the check: floating-point lane instructions, DPX VIADDMNMX, products of h with itself, warp "
-          "instructions reading another lane's register; assumes lane-semantics; the sharing lemma stays open")
+          f"instructions reading another lane's register; assumes lane-semantics. Sharing: {SHARED_WORD} instructions "
+          f"a coin word, not {32 + 31}, so the rotates are not each a distinct required write")
     return checks.finish()
 
 
