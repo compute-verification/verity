@@ -75,7 +75,8 @@ definition here is looser. The measurements:
     reaches no LDL.LU, so those two are the gated LDL probes with the load's cache-op field set to last use.
   - `LEPC` writes the address of the code, a constant of the program.
   - The 21 `LDGMC` forms (`multimem.ld_reduce`) read a multicast object, which the measured node, one H200 with no
-    NVLink peer, can't create.
+    NVLink peer, can't create. On plain device memory each one faults (an illegal memory access), so no program
+    there completes one.
 * **Lane forms**: each of 58 integer forms, warp forms included, captured on 65,536 inputs against its documented
   function, with 0 mismatches. Every output was checked: its 32-bit words a lane (two for IMAD.WIDE) and its
   predicates.

@@ -46,8 +46,8 @@ review lists the measurements.
   - Sparse `mma.sp` costs at least 48.25, and sparse `wgmma` 32.003 with A from registers.
   - The entries are floors on the H200 for every priced form. The local loads cost at least 85.75 a register their
     loop writes, above `other`'s 32, and `LEPC`'s constant is free in the model. The 21 `LDGMC` forms are `other`, and
-    they need GPUs that share an NVSwitch, which the measured node doesn't have. So the marker stays until they are
-    priced on such a node.
+    they need GPUs that share an NVSwitch: on the measured node, which has none, each one faults. So the marker stays
+    until they are priced on such a node.
 * **`h100LoopFree`**: **looser** than the H200 at `int32` and `other`. IMAD beside LOP3 costs 32.277 and IADD with an
   immediate 32.35, against its 34, and two-source HADD2 with an immediate 32.28, against its 36. So a bound at it
   doesn't transfer to the H200, except for programs of the forms it was measured on.

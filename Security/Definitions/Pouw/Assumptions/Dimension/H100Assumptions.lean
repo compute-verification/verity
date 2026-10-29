@@ -65,8 +65,9 @@ Each definition below was checked against what was measured on one H200 SXM (`sm
     loop writes (`Pouw.Dimension.H100W`'s review).
   - `LEPC` writes a constant, which `MH100w` gives free, so `H32` doesn't read its price.
   - The 21 `LDGMC` forms read a multicast object, which needs GPUs that share an NVSwitch. The measured node, one H200
-    with no NVLink peer, can't create one, so they are unpriced. Its marker stays until they are priced on such a
-    node.
+    with no NVLink peer, can't create one, and on plain device memory each form faults. So `H32` holds there for
+    every form a program can complete, and the `LDGMC` forms are unpriced where they run. Its marker stays until they
+    are priced on such a node.
 * **`FragLanes`**: it restricts the adversary's multiplicands, which no measurement can check, so its marker stays.
   The H200 doesn't need it, since no tensor-core form there costs under 32 a register.
 -/
