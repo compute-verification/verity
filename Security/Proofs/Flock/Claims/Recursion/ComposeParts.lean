@@ -26,14 +26,16 @@ namespace RecDeploy
 open Flock
 open FlockDeploy (Raw)
 
-/-- **What a part's recursive statement shares** with the other parts: every field but its Flock statement, its index
-and its bindings. -/
+/-- **What a part's recursive statement shares** with the other parts: every field but its Flock statement, its index,
+its bindings and its link table. -/
 def RecRaw.shared (w : RecRaw) : RecShared :=
   ⟨w.recInner, w.recRows, w.innerCircuit, w.innerPublic, w.innerPartition, w.innerCoins, w.innerSession, w.transcript,
     w.registration, w.innerStatement, w.innerStatementCoins, w.innerTables, w.innerDraw⟩
 
-/-- **Part `s`'s recursive statement** from what every part shares `S`, its Flock statement `base` and its bindings. -/
-def RecRaw.ofShared (S : RecShared) (base : Raw) (s : ℕ) (bindings : Option ByteArray) : RecRaw where
+/-- **Part `s`'s recursive statement** from what every part shares `S`, its Flock statement `base`, its bindings and
+its link table (`--rec-links`, which every `verify` refuses: `RecLinks.refuseLinks`). -/
+def RecRaw.ofShared (S : RecShared) (base : Raw) (s : ℕ) (bindings : Option ByteArray)
+    (links : Option (ByteArray × ℕ)) : RecRaw where
   base := base
   recInner := S.recInner
   recPart := some s
@@ -50,9 +52,10 @@ def RecRaw.ofShared (S : RecShared) (base : Raw) (s : ℕ) (bindings : Option By
   innerStatementCoins := S.innerStatementCoins
   innerTables := S.innerTables
   innerDraw := S.innerDraw
+  recLinks := links
 
 theorem RecRaw.ofShared_shared {w : RecRaw} {s : ℕ} (h : w.recPart = some s) :
-    RecRaw.ofShared w.shared w.base s w.recBindings = w := by
+    RecRaw.ofShared w.shared w.base s w.recBindings w.recLinks = w := by
   cases w
   cases h
   rfl
@@ -63,12 +66,13 @@ def stagedShared (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg �
     none, some (st.record x ms), some (st.transcript x ms), r.w.registration, some r.innerRaw.statement,
     some r.innerRaw.osCoins, some r.innerRaw.tables, r.innerRaw.draw⟩
 
-/-- **Part `s` of the compiled verifier is `RecRaw.ofShared`** at what every part shares, its staged Flock statement
-and its bindings. -/
+/-- **Part `s` of the compiled verifier is `RecRaw.ofShared`** at what every part shares, its staged Flock statement,
+its bindings and its link table. -/
 theorem partRaw_ofShared (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ)
     (p : PartX) :
     partRaw r st x ms s p =
-      RecRaw.ofShared (stagedShared r st x ms) { p.base with publicFile := st.pub x ms s } s (some p.bindings) :=
+      RecRaw.ofShared (stagedShared r st x ms) { p.base with publicFile := st.pub x ms s } s (some p.bindings)
+        r.w.links :=
   rfl
 
 /-- **One part's run**: the recursive statement its `verify` held, its session's verdict and reason, its coin key, and
@@ -87,14 +91,15 @@ def PartRun.view (p : PartRun) : PartView :=
 /-- **`rec-compose` holds the parts to the compiled verifier's**: where it accepts the verdicts the parts' runs wrote,
 either two of the parts' shared files are distinct with one SHA-512, or there is one shared set `S` in the compiled
 verifier's form, at the composition's own inner shape and rows, such that every part's recursive statement is
-`RecRaw.ofShared S` at its own Flock statement, an index `s < n` and its own bindings (`partRaw_ofShared`); one part per
-index, each accepted under `--zk` without an identifier, and no two sessions on one coin key. -/
+`RecRaw.ofShared S` at its own Flock statement, an index `s < n`, its own bindings and its own link table
+(`partRaw_ofShared`); one part per index, each accepted under `--zk` without an identifier, and no two sessions on one
+coin key. -/
 theorem composed_parts {n : ℕ} {rows inner : String} {ps : List PartRun}
     (h : RecCompose.Accepts n rows inner (ps.map (·.view.verdict))) :
     Collides (ps.map PartRun.view) ∨ ∃ S : RecShared, S.Form ∧ S.recInner.map RecCompose.digest = some inner ∧
       S.recRows.map RecCompose.digest = some rows ∧ ps.length = n ∧
       (∀ j, j < n → (ps.map (·.w.recPart)).count (some j) = 1) ∧ (ps.map (·.coinKey)).Nodup ∧
-      ∀ p ∈ ps, (∃ s, s < n ∧ p.w = RecRaw.ofShared S p.w.base s p.w.recBindings) ∧ p.accepted = true ∧
+      ∀ p ∈ ps, (∃ s, s < n ∧ p.w = RecRaw.ofShared S p.w.base s p.w.recBindings p.w.recLinks) ∧ p.accepted = true ∧
         p.w.base.zk = true ∧ p.identifier = false ∧ p.coinKey.isSome := by
   have h' : RecCompose.Accepts n rows inner ((ps.map PartRun.view).map PartView.verdict) := by
     rw [List.map_map]
