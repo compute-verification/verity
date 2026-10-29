@@ -28,6 +28,9 @@ Units: W1, 1/32 of a register write; stock is 1 W1 a useful MAC; h is honest has
   cells a register, so rotation is free; an add over the low bits only; the step's coins uniform across the warp, so
   each increment bit is a predicated LOP3 case (the warp's uniform writes shared by its 32 threads, as at T 8,192)
   and the b bits one register a step.
+- Y. A packed M0 adversary for xor-m centred once a segment instead of each block, bit for bit, its writes modelled
+  part by part with predicate writes free (W1 today) and priced as register writes: the price of a predicate decides
+  XorWrites_m.
 """
 from __future__ import annotations
 
@@ -559,6 +562,121 @@ def part_r(checks: Checks, rng: np.random.Generator, x: dict) -> dict:
     return out
 
 
+LAYOUTS = ((16, 1), (8, 2))
+FORMING, FORMING_PREDS, FORMING_ROWS = 36, 4, 256
+
+
+def packed_segment_writes(m: int, steps: int, priced: bool, later: bool, rows: int, pairs: int) -> dict:
+    """Writes a word of packed_segment_adversary, by part, a thread holding `pairs` pairs (three cells of a row, lanes
+    at 0, L and 2L of 64 bits) in each of `rows` rows of one parity: a pair's two running sums, its fold and a cell's
+    one or two constants are 9 to 12 registers, so rows * pairs = 16 fits the register file.
+
+    A pair a step: the 64-bit add (two IADD3s and their carry predicate) of the variant its row's b predicate picks; the
+    row's b predicate (one a row and step) and the b register (one a thread and step); the two variants' four loads,
+    shared by the thread's rows; and their forming once a (step, three columns, parity) for a parity's 256 rows (T 512):
+    three loads (a column's four coin bytes), twelve byte extractions, a column's two variants (IMAD, IADD3, IADD3) and
+    two packings (six and two carry predicates each). A pair a block: the fold of its two registers by 3-input LOP3s,
+    the block's first sum written into the fold's register. A cell a block: its lane out of the pair (lane 0 none, the
+    others a shift or a funnel) and the LOP3 merging the constant its lane's top bit picks (a predicate). A cell a
+    segment: W0 (the first step's IMMA), W0 + 2^(L-2), beta 2^(L-1), v, H' 2^L (an IADD3 and a mask), H' 2^L - 2^L,
+    the constants (one at even m, two at odd), its share of building the pair (three a pair) and, priced, beta's
+    predicate; a later segment takes its W back out of the pair (a lane and an IADD3) instead of an IMMA."""
+    pred = 1 if priced else 0
+    step = (2 + pred) + pred / pairs + 1 / (rows * pairs) + 4 / rows + (FORMING + pred * FORMING_PREDS) / FORMING_ROWS
+    fold = 2 * xor_fold_writes(m)
+    end = sum(1 + lane + pred for lane in (0, 1, 1)) / 3
+    setup = 9 + (m & 1) + pred + (1 if later else 0)
+    blocks = steps // m
+    parts = {"add": step / 3, "fold": fold * blocks / 3 / steps, "end": end * blocks / steps, "setup": setup / steps}
+    return parts | {"per_word": sum(parts.values()), "rows": rows, "pairs": pairs}
+
+
+def best_layout(m: int, steps: int, priced: bool, later: bool) -> dict:
+    return min((packed_segment_writes(m, steps, priced, later, r, p) for r, p in LAYOUTS), key=lambda v: v["per_word"])
+
+
+def packed_segment_adversary(d: dict, m: int) -> tuple[np.ndarray, dict]:
+    """A packed M0 adversary for xor-m, centred once a segment (the draw's steps) instead of each block: three cells of
+    a row a 64-bit pair, in lanes of L bits, L the narrowest that holds the segment's reach of its three columns (the
+    coins are known before the segment). A cell's state is W = H' 2^L + v - beta 2^(L-1), with v in the middle half of
+    [0, 2^L) at the segment's start, so no lane wraps in the segment: the pair adds the row's packed increment (the
+    variant for its b bit, by predicate) each step and XORs into its fold; a block's XOR is the lane's L bits with bit
+    L-1 flipped where beta at odd m, and high bits from beta, m's parity and the lane's top bit."""
+    rows, cols = d["w0"].shape
+    steps = d["delta"].shape[0]
+    assert cols % 3 == 0 and steps % m == 0
+    reach = block_reach(d, steps)
+    out = np.zeros((steps // m, rows, cols), dtype=np.int64)
+    widths = []
+    for g in range(cols // 3):
+        cs = range(3 * g, 3 * g + 3)
+        width = lo_bits_for(max(reach[c] for c in cs))
+        assert 3 * width <= 64
+        widths.append(width)
+        top = 1 << (width - 1)
+        mask = (1 << width) - 1
+        for i in range(rows):
+            w0 = [int(d["w0"][i, c]) for c in cs]
+            beta = [int(((w >> (width - 1)) & 1) == ((w >> (width - 2)) & 1)) for w in w0]
+            v = [(w & mask) ^ (b * top) for w, b in zip(w0, beta)]
+            hs = [(w + b * top) & M32 & ~mask for w, b in zip(w0, beta)]
+            assert all((h + x - b * top) & M32 == w for h, x, b, w in zip(hs, v, beta, w0))
+            q = sum(x << (width * j) for j, x in enumerate(v))
+            for blk in range(steps // m):
+                y = 0
+                for t in range(blk * m, (blk + 1) * m):
+                    q += sum(int(d["delta"][t, i, c]) << (width * j) for j, c in enumerate(cs))
+                    assert 0 <= q < 1 << 64
+                    y ^= q
+                for j, c in enumerate(cs):
+                    f = (y >> (width * j)) & mask
+                    p = f >> (width - 1)
+                    if not beta[j]:
+                        hi = hs[j] if m & 1 else 0
+                    else:
+                        f ^= top if m & 1 else 0
+                        hi = (hs[j] if p else 0) ^ (((hs[j] - (1 << width)) & M32) if (m ^ p) & 1 else 0)
+                    out[blk, i, c] = f ^ hi
+    honest = xor_honest_writes(m) / m
+    model = {name: best_layout(m, steps, priced, False) for name, priced in
+             (("w1_today", False), ("predicates_priced", True))}
+    return out, {"widths": sorted(set(widths)), "honest_per_word": honest,
+                 **{k: v | {"ratio": v["per_word"] / honest} for k, v in model.items()},
+                 "later_segment": {k: best_layout(m, steps, k == "predicates_priced", True)["per_word"] / honest
+                                   for k in model}}
+
+
+def part_y(checks: Checks, rng: np.random.Generator, r: dict) -> dict:
+    out = {}
+    for m in (8, 11, 16):
+        steps = m * (64 // m)
+        d = m0_draw(rng, rows=64, cols=24, steps=steps)
+        honest = np.bitwise_xor.reduce(d["words"].reshape(steps // m, m, 64, 24), axis=1)
+        adv, info = packed_segment_adversary(d, m)
+        ok = np.array_equal(adv, honest)
+        out[m] = info | {"exact": bool(ok), "steps": steps}
+        checks.check(f"Y: xor-{m} at M0, the packed adversary centred once a {steps}-step segment matches honest's XOR "
+                     f"bit for bit ({steps // m} blocks x 64 rows x 24 columns)", ok,
+                     f"lanes of {info['widths']} bits; {info['w1_today']['per_word']:.3f} writes a word with "
+                     f"predicates free ({info['w1_today']['ratio']:.3f}x honest's {info['honest_per_word']:.3f}), "
+                     f"{info['predicates_priced']['per_word']:.3f} priced ({info['predicates_priced']['ratio']:.3f}x)")
+    checks.check("Y: with predicate writes free (today's W1) it pays at least 5% less than honest at m = 16 in every "
+                 "segment, so XorWrites_16 is false unless predicate writes are priced; at m = 11 it ties honest within "
+                 "2%, and at m = 8 it pays no less",
+                 out[16]["w1_today"]["ratio"] < 0.95 and out[16]["later_segment"]["w1_today"] < 0.95
+                 and abs(out[11]["w1_today"]["ratio"] - 1) < 0.02 and abs(out[11]["later_segment"]["w1_today"] - 1) < 0.02
+                 and out[8]["w1_today"]["ratio"] > 1 - 1e-9,
+                 ", ".join(f"m {m}: {v['w1_today']['ratio']:.4f}x (a later segment {v['later_segment']['w1_today']:.4f}x)"
+                           for m, v in out.items()))
+    best = {m: min(out[m]["predicates_priced"]["ratio"], r["xor"][m]["adaptive"]["ratio"]) for m in out}
+    checks.check("Y: with predicate writes priced as register writes, it and the bit-sliced adversary both pay more "
+                 "than honest at m = 8, 11 and 16, so XorWrites_m stands there",
+                 all(v > 1 for v in best.values()),
+                 ", ".join(f"m {m}: packed {out[m]['predicates_priced']['ratio']:.3f}x, bit-sliced "
+                           f"{r['xor'][m]['adaptive']['ratio']:.3f}x" for m in out))
+    return out
+
+
 def part_t(checks: Checks, rng: np.random.Generator) -> dict:
     out = {}
     for k in (1, 2, 4):
@@ -584,11 +702,13 @@ def main() -> int:
     x = part_x(checks, rng)
     t = part_t(checks, rng)
     r = part_r(checks, rng, x)
+    y = part_y(checks, rng, r)
     if "--json" in args:
         Path(args[args.index("--json") + 1]).write_text(json.dumps(
             {"floor": f, "candidates": p, "xor": {str(k): v for k, v in x.items()},
              "trunc": {str(k): v for k, v in t.items()},
-             "bitsliced": {n: {str(k): v for k, v in g.items()} for n, g in r.items()}},
+             "bitsliced": {n: {str(k): v for k, v in g.items()} for n, g in r.items()},
+             "packed_segment": {str(k): v for k, v in y.items()}},
             indent=1, sort_keys=True, default=float) + "\n")
     print("\ncandidate      bits  h@t8192  cut   T1 DW-only  T1 premise  T2 t512 s/a     T2 r512 s/a     T2 t8192 s/a")
     for n, v in p.items():
