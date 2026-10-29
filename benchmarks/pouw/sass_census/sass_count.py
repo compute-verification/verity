@@ -130,6 +130,32 @@ def summary(census: dict) -> str:
     return "\n".join(rows)
 
 
+#: 32-bit registers a warp instruction writes for each register a `writes` key counts: a GPR or a predicate a lane, a
+#: uniform register or uniform predicate a warp
+WARP_BITS = {"GPR": 32, "PRED": 1, "UGPR": 1, "UPRED": 1 / 32}
+
+
+def lane_regs(key: str) -> float:
+    """A `writes` key's 32-bit registers a warp instruction writes, over 32: a lane's registers' worth."""
+    if key == "-":
+        return 0.0
+    return sum(WARP_BITS[n] * int(k) for n, k in (kv.split("=") for kv in key.split())) / 32
+
+
+def writes(census: dict, fam: str, dispatch: float, unit: float) -> list[dict]:
+    """A form a row: its count, sources, write histogram, its most registers a lane, and its dispatch floor, the least
+    price per register it could have at `dispatch` warp instructions a SM a clock (`unit` over its registers a clock);
+    None where its instructions carried no life ranges."""
+    out = []
+    for op, e in sorted(census[fam]["ops"].items()):
+        hist = e.get("writes")
+        most = max(map(lane_regs, hist), default=0.0) if hist else None
+        floor = unit / (dispatch * 32 * most) if most else None
+        out.append({"op": op, "base": e["base"], "count": e["count"], "sources": len(e["sources"]),
+                    "writes": hist, "lane_regs": most, "dispatch_floor": floor, "example": e["example"]})
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -140,7 +166,20 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("files", type=Path, nargs="+")
     s = sub.add_parser("summary")
     s.add_argument("census", type=Path)
+    w = sub.add_parser("writes", help="a form a TSV line: its writes and dispatch floor")
+    w.add_argument("census", type=Path)
+    w.add_argument("--family", default="sm_90")
+    w.add_argument("--dispatch", type=float, default=4, help="warp instructions a SM a clock (4 SMSPs, 1 each)")
+    w.add_argument("--unit", type=float, default=4096, help="the price unit's rate a SM a clock (dense int8 MACs)")
     a = p.parse_args(argv)
+    if a.cmd == "writes":
+        print("op\tbase\tcount\tsources\tlane_regs\tdispatch_floor\twrites\texample")
+        for r in writes(json.loads(a.census.read_text()), a.family, a.dispatch, a.unit):
+            hist = ";".join(f"{k}:{n}" for k, n in sorted((r["writes"] or {}).items(), key=lambda kv: -kv[1]))
+            fl = "" if r["dispatch_floor"] is None else f"{r['dispatch_floor']:.3f}"
+            lr = "" if r["lane_regs"] is None else f"{r['lane_regs']:.4f}"
+            print(f"{r['op']}\t{r['base']}\t{r['count']}\t{r['sources']}\t{lr}\t{fl}\t{hist}\t{r['example']}")
+        return 0
     if a.cmd == "count":
         json.dump(count(sys.stdin, a.source, a.arch), sys.stdout)
     elif a.cmd == "merge":

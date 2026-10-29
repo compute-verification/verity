@@ -84,8 +84,14 @@ def test_count_reads_the_writes_off_nvdisasm_life_ranges():
     assert w["LOP3.LUT"] == {"GPR=1 PRED=1": 1} and w["S2UR"] == {"UGPR=1": 1}
     assert w["IMAD.WIDE.U32"] == {"GPR=2": 1} and w["TLD.LZ"] == {"GPR=4": 1} and w["R2P"] == {"-": 1}
     assert w["IADD3"] == {"GPR=1": 1, "GPR=1 PRED=1": 1}
-    merged = sass_count.merge([obj, {**obj, "source": "again"}])["sm_90"]["ops"]
-    assert merged["IADD3"]["writes"] == {"GPR=1": 2, "GPR=1 PRED=1": 2}
+    merged = sass_count.merge([obj, {**obj, "source": "again"}])
+    assert merged["sm_90"]["ops"]["IADD3"]["writes"] == {"GPR=1": 2, "GPR=1 PRED=1": 2}
+    # the dispatch floor: 4,096 over 4 warp instructions x 32 lanes x a form's most registers a lane
+    rows = {r["op"]: r for r in sass_count.writes(merged, "sm_90", dispatch=4, unit=4096)}
+    assert rows["LDC"]["dispatch_floor"] == 32 and rows["IMAD.WIDE.U32"]["dispatch_floor"] == 16
+    assert abs(rows["LOP3.LUT"]["dispatch_floor"] - 4096 / (128 * 33 / 32)) < 1e-9
+    assert rows["S2UR"]["dispatch_floor"] == 1024 and rows["TLD.LZ"]["dispatch_floor"] == 8
+    assert rows["BRA"]["dispatch_floor"] is None and rows["R2P"]["lane_regs"] == 0
 
 
 # ---- the classification ---------------------------------------------------------------------------------------------------
