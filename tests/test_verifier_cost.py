@@ -6,7 +6,10 @@ range or loop bounded by a Definition's gate count (`List.range (P.defs[P.root]!
 array or loop bounded by a name bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`), a range or
 loop over a node's members (`for m in [0:node.members]`, `List.range node.members`: every batch member or scan iteration),
 and outside the tests a templated unit unrolled (`Tmpl.unroll`, `Tmpl.unrollAt`, `Tmpl.unitFull`, `Tmpl.posMap`, `Tmpl.foldRef`):
-a templated unit is read from its description (`Tmpl.unrollOk`, `Tmpl.unitNet`, `Tmpl.foldUnit`). The fix is in the
+a templated unit is read from its description (`Tmpl.unrollOk`, `Tmpl.unitNet`, `Tmpl.foldUnit`). Outside the tests it
+also refuses the recursive inner's two: the comb (`.folded`) in a file that sets the inner statement up from its flat
+file (`Stmt.setupTables innerTags …`), which `partialRangesT` folds row by row since a flat file carries no template, and
+V*'s circuit text emitted outside V*'s namespace (`VStar.emitCircuitOf`), the whole unit laid out again. The fix is in the
 scan's failure message: summarize once per specialized Definition and multiply through batch members and scan
 iterations, as `NciCheck.Desc` does (its docstring), so a Definition's summary serves every activation of it.
 
@@ -44,6 +47,13 @@ ALLOWED: dict[str, str] = {
     "verity/core/service/sampled_proofs/SampledProofs/PartitionRef.lean":
         "committedBitsRef, the walk of one activation Partition.committedBits replaced by reading Flock.Qcall.gates' "
         "layout (Gates.readTo): the reference the committed_bits difftest piece holds it to; the verifier never runs it",
+    "verity/core/service/flock/Flock/RecCoins.lean":
+        "open (PRF-283 Decision 1): Inner.load's comb, CircuitFold.folded on the inner statement set up from its flat "
+        "file, folds every row of the unrolled inner unit, until PR 8 folds a templated inner once per Definition "
+        "(InnerSuccinct)",
+    "verity/core/service/flock/Flock/RecVStar.lean":
+        "open (PRF-283 Decision 1): circuitFile regenerates V*'s unrolled circuit text (VStar.emitCircuitOf) for "
+        "checkFile's byte comparison, until PR 8 folds a templated inner once per Definition (InnerSuccinct)",
     "verity/core/service/flock/Flock/NetAt.lean":
         "Tmpl.unrollAt, a templated unit's rows at their committed positions: the reference Tmpl.unitNet is proved "
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
@@ -74,6 +84,12 @@ BOUND = re.compile(r"\blet\s+(?:mut\s+)?(\w+)\s*(?::\s*\w+\s*)?:=[^\n]*\.gates\s
 MEMBERS = re.compile(r"\b(?:List|Array)\.range\s*\(?[\w.!\[\]()]*\.members\b|\[\s*\w*\s*:\s*[\w.!\[\]]*\.members\s*\]")
 #: a templated unit unrolled: its rows, every column's position, or the fold over its rows
 UNROLLED = re.compile(r"(?<![\w'])(?:unrollAt|unitFull|posMap|foldRef)\b(?!')|(?<![\w'])Tmpl\.unroll\b(?![\w'])")
+#: the recursive inner statement set up from its flat file, which carries no template
+INNER = re.compile(r"\bStmt\.setup\w*\s+(?:\w+\.)*innerTags\b")
+#: the lincheck's comb (`CircuitFold.folded`, `Stmt.foldedPartial`)
+COMB = re.compile(r"\.(?:folded|foldedPartial)\b(?![\w'])")
+#: V*'s circuit text emitted from outside V*'s namespace: the unit laid out and written again
+EMIT = re.compile(r"(?<![\w'.])VStar\.emitCircuit(?:Of|Holo)?\b(?![\w'])")
 
 
 def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
@@ -82,6 +98,9 @@ def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
     hits = [(m.start(), "the gate locator") for m in LOCATOR.finditer(src)]
     if not test:
         hits += [(m.start(), "a templated unit unrolled") for m in UNROLLED.finditer(src)]
+        if INNER.search(src):
+            hits += [(m.start(), "the comb over the flat inner circuit") for m in COMB.finditer(src)]
+        hits += [(m.start(), "V*'s unrolled circuit text regenerated") for m in EMIT.finditer(src)]
     hits += [(m.start(), "a range over a gate count") for m in RANGE.finditer(src)]
     hits += [(m.start(), "a range over a node's members") for m in MEMBERS.finditer(src)]
     for b in BOUND.finditer(src):
@@ -121,6 +140,16 @@ def test_the_scan_sees_each_form():
     def j (t : Tmpl) := Tmpl.unrollOk t lays && Tmpl.unitNet t lays == n && Tmpl.unrolled t
     def k (node : Node) := for m in [0:node.members] do pure ()
     def l (body : Body) := (List.range (body.nodes[k]!).members).map id ++ List.range node.membersOf
+    def n (f : Files) := do
+      let (_, sts) ← Stmt.setupTables innerTags f.circuit f.pub Coins.os 1
+      (Setup.ofCircuit sts[0]!).fold.folded a b lw rho ts
+    def o (s : VStar.Stmt) := VStar.emitCircuitOf holo put u l s.sub b
+    def p (t : Tmpl) := Tmpl.foldUnit t lays sl a lw rho rr
     """
-    assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 12, 13, 15, 16]
+    assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 12, 13, 15, 16, 19, 20]
     assert [line for line, _ in offenses(src, test=True)] == [3, 4, 7, 8, 15, 16]
+    plain = """
+    def lincheck (c : CircuitFold) := c.folded alpha beta lw rho ts
+    def stage := emitCircuitOf holo put u l sub b
+    """
+    assert offenses(plain) == []
