@@ -666,7 +666,7 @@ def _build(C, S, *ins):
     p, a, c, ci, co, w = (split[r] for r in ("pub", "adv", "cert", "cin", "cout", "wit"))
     served = [e for r in CS.srv_names(S) for e in split[r]["rows"]]
     states, win = w["state"], w["window"][0]
-    load_ok = RC._build_load(C, Sc, CS._consts(RC.encode(RC.empty(Sc), Sc)), CS._consts(RC.encode_window(RC.Window(), Sc)),
+    load_ok = RC._build_load(C, Sc, CS._consts(RC.encode(RC.empty(Sc), Sc)), CS._consts(RC.encode_window(RC.QueueRow(), Sc)),
                              RC._flat(c, RC.arrival_fields(Sc)), [e[0] for e in a["dec"]], a["count"][0], a["steps"][0],
                              states[0], win)[0]
     CA, R = S.W + S.A, S.R
@@ -818,7 +818,7 @@ def check(S, rows: dict) -> dict[str, bool | None]:
     dec = [e[0] for e in a["dec"]]
     if count > S.D or any(dec[count:]):
         raise RC.MalformedRow(f"the advice's count {count} with a decision past it")
-    loaded = RC.load(Sc, RC.empty(Sc), RC.Window(), cert, dec[:count], CS._int(a["steps"][0]))
+    loaded = RC.load(Sc, RC.empty(Sc), RC.QueueRow(), cert, dec[:count], CS._int(a["steps"][0]))
     flags: dict[str, bool | None] = {"load": loaded == (states[0], win)}
     ok, length, carried = AE.reference_charge(S.D, CS._book(S, p), CC.carry_of([int(b) for b in rows["cin"]]),
                                               [int(k < count) for k in range(S.D)], dec)
@@ -868,7 +868,7 @@ def scan(S, sl: CS.Slice, *, overstate: dict[int, int] | None = None, made_up: d
     Sc, St = CS.chain(S), CS.step_statics(S)
     arrivals = tuple(map(tuple, sl.arrivals))
     toks = {x[0]: tuple(t) for x, t in zip(arrivals, sl.tokens)}
-    loaded = RC.load(Sc, RC.empty(Sc), RC.Window(), arrivals, sl.decisions, sl.steps)
+    loaded = RC.load(Sc, RC.empty(Sc), RC.QueueRow(), arrivals, sl.decisions, sl.steps)
     if loaded is None:
         raise ValueError("the load refuses the slice")
     cur, win = loaded
@@ -961,7 +961,7 @@ def case(S, sl: CS.Slice, book: dict, *, carry: AE.Carry | None = None, cout: AE
             "adv": CS._pack(S, "adv", {"dec": padded, "count": [len(dec)], "steps": [sl.steps]}),
             **CS.srv_rows(S, served),
             "cin": list(CC.encode(carry)), "cout": list(CC.encode(cout))}
-    cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.Window(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
+    cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.QueueRow(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
                                   RC.encode(sc.states[0], Sc), RC.encode_window(sc.window, Sc))[2]
     n = S.CU * S.B
     held = [tuple(sc.tokens[x[0]])[:n] for x in sc.arrivals] + [()] * (S.K - len(sc.arrivals))
