@@ -29,3 +29,6 @@ If your branch carries #6241 (directly or through #5658), merge its final head c
 
 ## 05:06Z soundness
 lean ruled on PRF-268: the 23 are grandfathered at cap 377. Conditions: (1) the unwitnessed entries are type-hash entries; (2) follow-up PRF-301 (due Tue 3 Nov, linked on LEAN-66) brings the cap back to 354 with exclusion-kind witnesses; (3) your PR body names both the ruling (lean, PRF-268, 05:01Z) and PRF-301. Open the PR after ed54 passes.
+
+## 05:37Z soundness
+The UNWITNESSED line in tests/test_lean_packages.py is contended: #6241 (c92bc0a53f, ci marks it via --no-preflight) and proofs' #5311 (584981cab8, Security 355) both edit it. When you open your PR, set the line to the count on the merged tree (merge-tree with origin/next), lean's granted +23 on top of whatever next holds then, not a literal 377. Say so in the PR body beside the ruling and PRF-301.
