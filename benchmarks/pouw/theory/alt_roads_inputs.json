@@ -26,14 +26,31 @@
     "export_units_per_word": 848,
     "source": "SW-HASH (H32 floor), SW-PRICE (HASH-38's bar), H200.lean (IMAD-balanced SHA-512, 58.1 SM-clocks a compression), SW-GPU (hm96 rows alone at 64 KiB, best beside the served step, STG export at L 32; runs r20261029-045936-22a0, -050641-3a03, -050431-e695)"
   },
+  "r0_merge_instructions": {
+    "rows": [["3-source 32-bit writer (IMAD, LOP3, IDP4A, HFMA2)", 3, 1],
+             ["IMAD.WIDE", 4, 2],
+             ["DFMA", 6, 2],
+             ["wgmma m64n8k32 s8 (A 512, B 64, C 512 words)", 1088, 512],
+             ["mma.sync m16n8k32 s8 (A 128, B 64, C 128 words)", 320, 128],
+             ["mma.sp m16n8k64 s8 (A 128, metadata 1, B 128, C 128 words)", 385, 128]],
+    "source": "PTX ISA operand shapes (sources and destinations in 32-bit registers; constant-bank and immediate operands are free values); MH100w prices every tensor-core instruction at pr.tc or more a register written and every other writer by its table, so H32's 32 a register is the floor"
+  },
+  "v4": {
+    "dense": [7168, 7168],
+    "expert": [[7168, 4096], [2048, 7168]],
+    "experts": 256,
+    "top_k": 8,
+    "source": "SW-NOISE's assumed V4-like shapes (noise_sweep.py V4_DENSE, V4_EXPERT, 8/256 of the rows): K = n = 7,168 dense; expert gate-up K 7,168 n 4,096 and down K 2,048 n 7,168"
+  },
   "ssn_1l": {
     "alpha": 1.044,
-    "t1_credited_coins": 0.00048,
-    "t1_uncredited_coins": 0.00297,
+    "t1_credited_coins": 0.00049,
+    "t1_uncredited_coins": 0.00255,
+    "t1_v4_dense_credited_coins": 0.00029,
     "t2_t8192": [62.9, 34.2],
     "t2_t64": [6.5, 4.0],
     "coin_latency_s": 0.0006,
-    "source": "SW-NOISE final (note compute-research/20261029T0551Z-report-sw-noise; run r20261029-065659-8f24, art:63ed96b1...)"
+    "source": "SW-NOISE final (note compute-research/20261029T0551Z-report-sw-noise; run r20261029-065659-8f24, art:63ed96b1...); T1 as NIGHT.md section 3 states it at 07:28Z"
   },
   "ncp3": {
     "alpha": 3.0,

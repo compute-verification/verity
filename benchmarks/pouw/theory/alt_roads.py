@@ -61,15 +61,17 @@ def t2_on_gpu(inp: dict, point: dict, macs: float, alpha: float, u: float) -> fl
 def r0_barrier(inp: dict) -> dict:
     """Any design that forces work by counting committed words, with every committed byte hashed on the GPU."""
     w1, s = inp["w1"], inp["sha512"]
+    # A commitment that depends on all N committed words ends with at most O components holding them, and an
+    # instruction reading r source words merges at most r of them into one, while H32 charges each of its w registers.
+    merge = []
+    for name, r, w in inp["r0_merge_instructions"]["rows"]:
+        merge.append({"instruction": name, "source_words": r, "registers_written": w,
+                      "units_per_byte": w1["h32_units_per_write"] * w / (r - 1) / 4.0})
+    p_floor = min(x["units_per_byte"] for x in merge)
     rows = []
     for credit, why in ((32, "H32 alone (rank 1)"), (64, "N-DENSE's target: a word every 64 fully credited at rank <= 3")):
         b_min = 4.0 * (1.0 - 0.01) / credit
         p_allowed = 0.01 / b_min
-        # A compression tree of 3-source 32-bit writes consumes at most two fresh words a write: 16 units a word.
-        p_lane = w1["h32_units_per_write"] / 2.0 / 4.0
-        # wgmma's smallest n is 8, so a byte read as operand A takes at least 8 MACs.
-        p_tensor = 8.0
-        p_floor = min(p_lane, p_tensor)
         rows.append({
             "credit_units_per_word": credit, "why": why,
             "min_bytes_per_useful_mac": b_min,
@@ -92,7 +94,8 @@ def r0_barrier(inp: dict) -> dict:
     # BamFloor credits 64 - 1024/L for a word every L MACs; the 1% budget needs 64 - 1024/L >= 0.99 L.
     disc = 64.0 ** 2 - 4 * 0.99 * 1024.0
     bam_window = [(64.0 - math.sqrt(disc)) / (2 * 0.99), (64.0 + math.sqrt(disc)) / (2 * 0.99)]
-    return {"rows": rows, "credited_hash_precision": precision, "bamfloor_interval_within_1pct": bam_window}
+    return {"rows": rows, "merge_floor": merge, "credited_hash_precision": precision,
+            "bamfloor_interval_within_1pct": bam_window}
 
 
 def r1_egress(inp: dict, ll: dict) -> dict:
@@ -165,6 +168,56 @@ def r1_egress(inp: dict, ll: dict) -> dict:
     }
 
 
+def stock_step_s(inp: dict, m: float, field: str = "t_stock_s") -> float:
+    """Stock's step at m rows, linear between the decode, 64-token and T 8,192 points (an estimate)."""
+    pts = sorted(inp["points"].values(), key=lambda p: p["m"])
+    for lo, hi in zip(pts, pts[1:]):
+        if m <= hi["m"]:
+            return lo[field] + (hi[field] - lo[field]) * (m - lo["m"]) / (hi["m"] - lo["m"])
+    return pts[-1][field] * m / pts[-1]["m"]
+
+
+def r1_shapes(inp: dict, ll: dict) -> dict:
+    """R1's T2 against a stock at the HBM roofline (any model), Llama between its points, and V4's dense and experts."""
+    alpha, hbm, pk = inp["ssn_1l"]["alpha"], inp["h200"]["hbm_bytes_per_s"], peak(inp)
+    b = words_bytes_per_mac(alpha)
+    links = {"census_100g": inp["links"]["census_reference_bytes_per_s"],
+             "gpu_400g": inp["links"]["per_gpu_400g_bytes_per_s"]}
+    # Against a stock that reads its int8 weights once a step at HBM's rate, r rows a weight byte make r MACs a weight
+    # byte, so the link's time over stock's is (b + 1/n)·r·HBM/link until r reaches peak/HBM and stock turns compute-bound.
+    roofline = {}
+    for name, (k, n) in (("llama_min_n", (2048, 2048)), ("v4_dense", tuple(inp["v4"]["dense"]))):
+        be = b + 1.0 / n
+        roofline[name] = {ln: {"t2_per_row": be * hbm / rate, "rows_t2_le_100": 100.0 * rate / (be * hbm),
+                               "rows_t2_le_10": 10.0 * rate / (be * hbm), "compute_bound_t2": be * pk / rate}
+                          for ln, rate in links.items()}
+    knee_rows = pk / hbm
+    e, kk = inp["v4"]["experts"], inp["v4"]["top_k"]
+    be_x = b + 1.0 / min(n for _, n in inp["v4"]["expert"])
+
+    def rows_per_expert(m: int) -> float:
+        return m * kk / (e * (1.0 - (1.0 - kk / e) ** m))
+
+    experts = {}
+    for ln, rate in links.items():
+        cap = 100.0 * rate / (be_x * hbm)
+        experts[ln] = {"max_tokens_t2_le_100": max((m for m in range(1, 65537) if rows_per_expert(m) <= cap), default=0),
+                       "rows_per_expert_allowed": cap}
+    per_row = b * ll["macs_per_token"] + ll["a_bytes_per_token"]
+    base = lambda m: (stock_step_s(inp, m) + (alpha - 1.0) * stock_step_s(inp, m, "t_gemm_s")
+                      + inp["ssn_1l"]["coin_latency_s"])
+    llama = {}
+    for ln, rate in links.items():
+        t2 = lambda m: max(base(m), per_row * m / rate) / stock_step_s(inp, m)
+        fit = max((m for m in range(1, 8193) if t2(m) <= 100.0), default=0)
+        llama[ln] = {"t2_overlapped_512_rows": t2(512), "t2_overlapped_256_rows": t2(256),
+                     "max_rows_t2_le_100": fit, "stock_step_at_max_rows_s": stock_step_s(inp, fit),
+                     "stock_share_at_max_rows": ll["macs_per_token"] * fit / stock_step_s(inp, fit) / pk}
+    return {"roofline": roofline, "roofline_knee_rows": knee_rows,
+            "v4_experts_uniform_routing": experts, "v4_rows_per_expert_at": {m: rows_per_expert(m) for m in (64, 256, 512, 8192)},
+            "llama_interpolated": llama}
+
+
 def r2_memory(inp: dict, ll: dict) -> dict:
     """Store every word in HBM and let a memory challenger demand random ones against a deadline."""
     alpha = inp["ssn_1l"]["alpha"]
@@ -226,8 +279,17 @@ def r4_capacity_reading(inp: dict, ll: dict) -> dict:
     point = inp["points"]["t8192"]
     values_b = (ll["a_bytes_per_token"] + 2 * ll["outs_per_token"]) / ll["macs_per_token"]
     v4_values_b = 1.0 / 7168 + 2.0 / 7168
+    # Decision 74 credits T_cred = B_flat/f_max, a time. With the words' floor priced on the tensor pipe alone, an
+    # adversary writing a share of them on the lanes beside it frees s/(1+s) of the credited tensor time; a floor that
+    # takes the maximum over pipes closes that, and then the honest kernel trails it by s unless it co-issues too.
+    lane = inp["w1"]["lane_useful_share_of_tensor"]
+    t_cred = {"on_gpu_hashing_over_credit_if_sha_speed_attained": {f"{r['point']}_{r['schedule']}": r["excess_idle_stock_macs_per_stock_mac"]
+                                                                  for r in rows},
+              "certifier_commit_over_credit_tensor_only_floor": lane / (1.0 + lane),
+              "certifier_commit_honest_gap_co_issued_floor": lane}
     return {
         "rows": rows,
+        "t_cred_reading": t_cred,
         "word_commit_hash_over_tensor_time_at_rank3_min": {"sha_floor": ratio_floor, "sha_measured_rate": ratio_sha,
                                                            "tensor_idle_share_at_least": 1.0 - 1.0 / ratio_floor},
         "values_only_bytes_per_mac_llama": values_b,
@@ -328,6 +390,17 @@ def checks(inp: dict, ll: dict, res: dict) -> list[tuple[str, bool, str]]:
          res["R2"]["rtt_over_recompute"] > 1, f"{res['R2']['rtt_over_recompute']:.0f}x"),
         ("R4: every SSN schedule leaves more than 1% of stock idle on the tensor pipe",
          all(r["over_budget"] > 1 for r in res["R4"]["rows"]), ""),
+        ("R0: the merge floor's minimum is sparse mma.sync's 8/3 units a byte",
+         abs(min(x["units_per_byte"] for x in res["R0"]["merge_floor"]) - 8.0 / 3.0) < 1e-9,
+         f"{min(x['units_per_byte'] for x in res['R0']['merge_floor']):.3f}"),
+        ("R1: the interpolated stock step meets every point it is drawn through",
+         all(abs(stock_step_s(inp, p["m"]) - p["t_stock_s"]) < 1e-12 for p in pts.values()), ""),
+        ("R1: Llama's interpolated fit at 400 Gb/s agrees with the measured-point rows (passes at 64, fails at 8,192)",
+         64 <= res["R1"]["shapes"]["llama_interpolated"]["gpu_400g"]["max_rows_t2_le_100"] < 8192,
+         str(res["R1"]["shapes"]["llama_interpolated"]["gpu_400g"]["max_rows_t2_le_100"])),
+        ("R1: at the roofline's knee the per-row slope meets the compute-bound T2",
+         all(abs(v["t2_per_row"] * res["R1"]["shapes"]["roofline_knee_rows"] / v["compute_bound_t2"] - 1) < 1e-9
+             for d in res["R1"]["shapes"]["roofline"].values() for v in d.values()), ""),
         ("R4 at C26's co-run share reproduces its ~51 stock forwards for NCP at 160x (T 8,192)",
          abs(inp["accounting"]["co_run_peak_share_beside_hash"] * 160.0 / stock_tensor_share(inp, ll, pts["t8192"], False) / 51.0 - 1) < 0.1,
          f"{inp['accounting']['co_run_peak_share_beside_hash'] * 160.0 / stock_tensor_share(inp, ll, pts['t8192'], False):.1f}"),
@@ -342,9 +415,11 @@ def table(res: dict) -> str:
     for r in r0["rows"]:
         lines.append(f"    credit {r['credit_units_per_word']:>3} a word ({r['why']}): >= {r['min_bytes_per_useful_mac']:.4f} B a "
                      f"useful MAC; uncredited hashing needs <= {r['uncredited_price_allowed_units_per_byte']:.3f} units a byte; the "
-                     f"cheapest on-GPU commitment is {r['cheapest_on_gpu_commitment_units_per_byte']:.0f} ({r['factor_over_allowed']:.0f}x); "
+                     f"cheapest on-GPU commitment is {r['cheapest_on_gpu_commitment_units_per_byte']:.2f} ({r['factor_over_allowed']:.0f}x); "
                      f"SHA-512 at its floor {r['sha512_floor_factor']:,.0f}x, hashing {r['hashing_share_of_stock_at_sha_floor']:.0f}-"
                      f"{r['hashing_share_of_stock_at_bar']:.0f}x stock")
+    lines.append("    merge floor (H32 units a byte merged): " + "; ".join(
+        f"{x['instruction'].split(' (')[0]} {x['units_per_byte']:.2f}" for x in r0["merge_floor"]))
     lo, hi = r0["bamfloor_interval_within_1pct"]
     lines.append(f"    BamFloor's 64 - 1024/L meets the 1% budget only for L in [{lo:.1f}, {hi:.1f}]")
     for r in r0["credited_hash_precision"]:
@@ -373,6 +448,19 @@ def table(res: dict) -> str:
     lines.append("    T2 added by 64 serial coin round trips a step: "
                  + "; ".join(f"{r}: " + ", ".join(f"{k} +{v:.2f}" for k, v in d.items())
                              for r, d in r1["t2_added_by_coin_round_trips_64_calls"].items()))
+    sh = r1["shapes"]
+    for name, d in sh["roofline"].items():
+        lines.append(f"    against a stock at the HBM roofline ({name}): " + "; ".join(
+            f"{ln} T2 {v['t2_per_row']:.1f} a row, fits to {v['rows_t2_le_100']:.1f} rows (T2 <= 10 to {v['rows_t2_le_10']:.2f}), "
+            f"{v['compute_bound_t2']:,.0f} once compute-bound" for ln, v in d.items())
+                     + f"; the knee is {sh['roofline_knee_rows']:.0f} rows")
+    lines.append("    V4 routed experts at the roofline, uniform top-8 of 256: " + "; ".join(
+        f"{ln} fits to {v['max_tokens_t2_le_100']} tokens ({v['rows_per_expert_allowed']:.2f} rows an expert)"
+        for ln, v in sh["v4_experts_uniform_routing"].items()))
+    lines.append("    Llama on the interpolated stock step: " + "; ".join(
+        f"{ln} T2 {v['t2_overlapped_256_rows']:.0f} at 256 rows and {v['t2_overlapped_512_rows']:.0f} at 512, fits to "
+        f"{v['max_rows_t2_le_100']} rows (stock at {v['stock_share_at_max_rows']:.2%} of the peak there)"
+        for ln, v in sh["llama_interpolated"].items()))
     for r in res["R4"]["certifier_rows"]:
         lines.append(f"    capacity reading of certifier commit at {r['point']} (400 Gb/s): T2 {r['t2']:.1f}, excess idle "
                      f"{r['excess_idle_stock_macs_per_stock_mac']:.1f} stock a stock MAC")
@@ -390,6 +478,11 @@ def table(res: dict) -> str:
                      f"{r['stock_tensor_share_with_attention']:.1%} of the tensor peak, excess idle {r['excess_idle_stock_macs_per_stock_mac']:.1f} "
                      f"({r['over_budget']:,.0f}x the 1% budget; {r['excess_at_co_run_rate']:.1f} at C26's co-run rate); "
                      f"T2 allowed {r['t2_allowed']:.4f}")
+    tc = r4["t_cred_reading"]
+    lines.append("    T_cred reading: on-GPU hashing over-credits the idle tensor pipe by "
+                 + ", ".join(f"{k} {v:.1f}" for k, v in tc["on_gpu_hashing_over_credit_if_sha_speed_attained"].items())
+                 + f" stock a stock MAC; certifier commit {tc['certifier_commit_over_credit_tensor_only_floor']:.2%} of its credit "
+                 f"(tensor-only floor) or 0 with the honest {tc['certifier_commit_honest_gap_co_issued_floor']:.2%} behind (co-issued floor)")
     w = r4["word_commit_hash_over_tensor_time_at_rank3_min"]
     lines.append(f"    any word-commit design at rank <= 3: hashing / forced tensor time >= {w['sha_floor']:.0f} (SHA floor), "
                  f"{w['sha_measured_rate']:.0f} (measured rate); tensor idle >= {w['tensor_idle_share_at_least']:.1%}")
@@ -415,6 +508,7 @@ def main() -> int:
     ll = llama(inp)
     res = {"R0": r0_barrier(inp), "R1": r1_egress(inp, ll), "R2": r2_memory(inp, ll),
            "R3": r3_capacity_occupancy(inp, ll), "R4": r4_capacity_reading(inp, ll), "R6": r6_algebraic(inp)}
+    res["R1"]["shapes"] = r1_shapes(inp, ll)
     res["R4"]["certifier_rows"] = certifier_capacity(inp, ll, res["R1"])
     res["periods"] = per_period(inp, ll, res["R4"])
     cks = checks(inp, ll, res)
