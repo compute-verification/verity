@@ -2,7 +2,7 @@
 # One served H1 leaf proved as its 32 lanes and its combine (h1zy's PouwH1LaneZy_v1 and PouwH1Combine_v1, pouw.leaf_lanes),
 # one C-Flock --zk statement each, verified by the Lean verifier against the verifier's own files (run.py's docstring has
 # the protocol and the negatives).
-#   research run --on vy-nebius-cpu-1 --pool proofs --project verity --campaign proofs-24h --source . --cwd source \
+#   research run --on MACHINE --pool proofs --project verity --source . --cwd source \
 #     --mem-gb G --declared-output 'out/*' --env H1L_MEM_GB=G -- bash benchmarks/pouw/h1_lanes/job.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving build, the Lean flock-verify, a venv), PoUW's pouw-leaf-own-window
 #      and, under H1_TMPL=structural, the prover's flock-tmpl-unit (verity/ml/flock/tests/lean/TmplUnit.lean, which
