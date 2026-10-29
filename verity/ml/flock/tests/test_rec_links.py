@@ -19,16 +19,16 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-rec-links"
 
 
 def test_a_link_row_is_its_kind_and_four_u32s_then_zeros():
-    row = R.encode(R.Link(1, 2, 70000, 4))
+    row = R.encode(R.LinkEntry(1, 2, 70000, 4))
     assert row == struct.pack("<5I", R.KIND_LINK, 1, 2, 70000, 4) + bytes(R.ROW_BYTES - R.FIELD_BYTES)
-    assert R.decode(row) == R.Link(1, 2, 70000, 4)
+    assert R.decode(row) == R.LinkEntry(1, 2, 70000, 4)
     with pytest.raises(ValueError):
-        R.encode(R.Link(2 ** 32, 0, 0, 0))
+        R.encode(R.LinkEntry(2 ** 32, 0, 0, 0))
 
 
 @pytest.mark.parametrize("n, rows", [(1, 1), (15, 15), (16, 16), (17, 18), (33, 36), (100, 104)])
 def test_the_table_is_its_links_then_fillers_on_the_grid(n, rows):
-    links = [R.Link(u + 1, 0, u, 0) for u in range(n)]
+    links = [R.LinkEntry(u + 1, 0, u, 0) for u in range(n)]
     t = R.table(links)
     assert len(t) == rows == R.grid(n)
     assert [R.decode(r) for r in t] == links + [None] * (rows - n)
@@ -47,7 +47,7 @@ def test_every_vector_has_its_verdict_and_every_refusal_is_exercised():
 
 
 def test_the_committed_table_opens_row_by_row_and_reveals_only_its_count_and_root():
-    links = [R.Link(u + 1, 0, u, 0) for u in range(17)]
+    links = [R.LinkEntry(u + 1, 0, u, 0) for u in range(17)]
     reg = R.register(links)
     n, bits = len(reg.rows), 8 * R.ROW_BYTES
     assert n == R.grid(17) == 18
@@ -55,7 +55,7 @@ def test_the_committed_table_opens_row_by_row_and_reveals_only_its_count_and_roo
         o = reg.open(i)
         assert advice.verify(reg.root, n, bits, R.BINDING, o)
         assert R.decode(o.row) == (links[i] if i < 17 else None)
-    forged = advice.Opening(3, R.encode(R.Link(9, 0, 2, 0)), reg.salts[3], reg.open(3).path)
+    forged = advice.Opening(3, R.encode(R.LinkEntry(9, 0, 2, 0)), reg.salts[3], reg.open(3).path)
     assert not advice.verify(reg.root, n, bits, R.BINDING, forged)
     assert R.register(links).root != reg.root
 

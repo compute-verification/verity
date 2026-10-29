@@ -26,7 +26,7 @@ def _population(seed: int = 1):
         return bytes(g.getrandbits(8) for _ in range(n))
     outs = {(u, o): (rnd(64), rnd(192)) for u in range(UNITS) for o in range(OUTS)}
     ins = {(u, p): (rnd(64), rnd(192)) for u in range(UNITS) for p in range(INS)}
-    links = [RL.Link(u + 1, 0, u, 1) for u in range(UNITS - 1)]
+    links = [RL.LinkEntry(u + 1, 0, u, 1) for u in range(UNITS - 1)]
     for l in links:
         ins[l.reader, l.port] = (outs[l.writer, l.out][0], rnd(192))
     def tree(rows):
@@ -57,13 +57,13 @@ def _cases():
     ins, outs, links, tin, tout = _population()
     rows = RL.table(links)
     honest = [(_instance(r, ins, outs, tin, tout), True) for r in rows + [bytes(RL.ROW_BYTES)]]
-    bad_link = RL.encode(RL.Link(2, 0, 0, 1))
+    bad_link = RL.encode(RL.LinkEntry(2, 0, 0, 1))
     forged = [
         (_instance(bad_link, ins, outs, tin, tout), False),
         (_instance(struct.pack("<I", 2) + rows[0][4:], ins, outs, tin, tout, (1, 0), (0, 1)), False),
         (_instance(rows[0][:-1] + b"\1", ins, outs, tin, tout), False),
-        (_instance(RL.encode(RL.Link(4, 0, 0, 1)), ins, outs, tin, tout, (0, 0), (0, 1)), False),
-        (_instance(RL.encode(RL.Link(1, 2, 0, 1)), ins, outs, tin, tout, (1, 0), (0, 1)), False),
+        (_instance(RL.encode(RL.LinkEntry(4, 0, 0, 1)), ins, outs, tin, tout, (0, 0), (0, 1)), False),
+        (_instance(RL.encode(RL.LinkEntry(1, 2, 0, 1)), ins, outs, tin, tout, (1, 0), (0, 1)), False),
         (_instance(struct.pack("<5I", 0, 1, 0, 0, 0) + bytes(108), ins, outs, tin, tout, (0, 0), (0, 0)), False),
     ]
     return honest + forged, tin, tout
@@ -92,7 +92,7 @@ def test_a_reader_row_committed_to_another_value_is_refused_whatever_its_salt():
     """The reader's opening is of a row whose digest is not the writer's: an honest leaf of the input tree, at the position the
     row names, still gives zero roots."""
     ins, outs, links, tin, tout = _population()
-    row = RL.encode(RL.Link(1, 1, 0, 1))
+    row = RL.encode(RL.LinkEntry(1, 1, 0, 1))
     rin, rout = R.link_ref(UB, PB, *_instance(row, ins, outs, tin, tout))
     assert rin == rout == [0] * R.OUT_WORDS
 
