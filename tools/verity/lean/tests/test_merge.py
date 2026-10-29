@@ -423,8 +423,7 @@ def test_a_lean_file_whose_sides_only_add_imports_merges_and_any_other_conflict_
 def test_an_import_one_side_removed_stays_removed_where_the_other_side_moved_it(tmp_path):
     """Ours removes `G.B` and adds `G.F`; theirs moves `G.B` to the end.  Git sees the removal on both sides where `G.B` was
     and two additions at the end, so a merge of that hunk alone brings `G.B` back (#4690 onto `next`)."""
-    def imports(*ms):
-        return "".join(f"import G.{m}\n" for m in ms) + "\ntheorem t : True := trivial\n"
+    imports = lambda *ms: "".join(f"import G.{m}\n" for m in ms) + "\ntheorem t : True := trivial\n"
     text, left = _lean(tmp_path, imports("A", "B", "C", "D", "E"), imports("A", "C", "D", "E", "F"), imports("A", "C", "D", "E", "B"))
     assert left == 0 and text == imports("A", "C", "D", "E", "F")
 

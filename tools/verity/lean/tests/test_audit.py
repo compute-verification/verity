@@ -1046,10 +1046,8 @@ def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
     A.dump(pkg, pol | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.Sub.twice", "Control.Sub.refl",
                                                                         "Control.Sub.pick")},
                        "layers": pol["layers"] | {"Control.Guarantees": {"imports": ["Control.Defs"]}}})
-    def build():
-        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    def audit(**kw):
-        return A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
+    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    audit = lambda **kw: A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
     build()
     assert unshaped(audit(update=True)) == []
     rep = audit(lifts={"Control.Sub.twice": {"as": "Control.Guarantees.Twice", "into": "Control.Guarantees"},
