@@ -37,7 +37,7 @@ the earlier blocks' coins, so `Reg w` holds every instance a prover may commit f
 service verdict on the transcript and the auditor's devices' readings (`Verdict`, `Readings`), every selection `sel`
 of a block by its check coin, every period `Pd` whose credited use `hon` is the sampling blocks' honest use (their
 commit phases and work and the selected blocks' answers), and every price `μ` that is the period's dual price at one
-credit (`Period.DualOpt μ 1`): if
+credit (`Jobs.DualOpt μ 1`): if
 each sampling block's honest cost is `H w = H_mm w + H_sha w + H_o w` at `μ` (its words and commitment, both
 positive, and the rest, `H_o w ≥ 0`, its operand root and answer among it), its public bests cost
 `pub_mm w ≤ H_mm w` and `pub_sha w ≤ H_sha w` at every instance of `Reg w`, the blocks' honest costs sum to
@@ -119,7 +119,7 @@ Open (stated so the red team can aim at them):
   they are devices of the period). -/
 def WorkSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (Obs : Type)
-    (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ)
+    (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Jobs G) (μ : G.Res → ℝ)
     (Hmm Hsha Ho pubmm pubsha : Fin k → ℝ) (η δ β K κS Q : ℝ) (κdmm κdsha : ℕ → ℝ) (sel : P.Chk → Prop)
     (Badv : Prover G P k → ℕ) (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ),
     Pd.DualOpt μ 1 →
@@ -149,7 +149,7 @@ no luck term (`ln(1/1)/η = 0`) plus the walk and log `μ · ξ_A / C`. Markov a
 luck `ln(1/δ_coin)/η` added to `ε_A C`. -/
 def WorkMoment : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (Obs : Type)
-    (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ)
+    (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Jobs G) (μ : G.Res → ℝ)
     (Hmm Hsha Ho pubmm pubsha : Fin k → ℝ) (η β K κS Q : ℝ) (κdmm κdsha : ℕ → ℝ) (sel : P.Chk → Prop)
     (Badv : Prover G P k → ℕ) (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ),
     Pd.DualOpt μ 1 →
@@ -198,7 +198,7 @@ The log's term `μ · q ξl / C` is `q` log entries' upkeep against the credited
 call (`Accel.shaPub`); `WorkSound` keeps each prover's own `q_A`. -/
 def WorkSoundNoFold : Prop :=
   ∀ (G : Accel) (nf : NoFold) (k : ℕ) (Reg : Fin k → Set (noFoldRound nf).Inst)
-    (Obs : Type) (verdict : Verdict (noFoldRound nf) k Obs) (dev : Readings G (noFoldRound nf) k Obs) (Pd : Period G)
+    (Obs : Type) (verdict : Verdict (noFoldRound nf) k Obs) (dev : Readings G (noFoldRound nf) k Obs) (Pd : Jobs G)
     (μ : G.Res → ℝ) (Hmm Hsha Ho pubmm pubsha : Fin k → ℝ) (η δ β K κS Q κsha : ℝ)
     (κdmm κdsha : ℕ → ℝ) (sel : (noFoldRound nf).Chk → Prop) (Badv V : ℕ) (X D : Type) [Fintype X] [DecidableEq X]
     [Fintype D] [DecidableEq D]
@@ -267,7 +267,7 @@ Its rate stays one replica's: replicas that cheat on one shared coin attain it (
 independent after its root and (c) independent dithers; this bound needs only (c), as `OwnDither`. -/
 def FleetSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k N : ℕ) (Obs : Type) (verdict : Fin N → Verdict P k Obs)
-    (dev : Fin N → Readings G P k Obs) (Pd : Fin N → Period G) (ε κ : Fin N → Prover G P k → ℝ)
+    (dev : Fin N → Readings G P k Obs) (Pd : Fin N → Jobs G) (ε κ : Fin N → Prover G P k → ℝ)
     (C η κmax : Fin N → ℝ) (δcoin : ℝ) (Ω : Type) [Fintype Ω] (coin : Ω → Fin N → Fin k → P.Draw × P.Chk)
     (A : Fin N → Ω → Prover G P k),
     (∀ u, 0 < η u) → 0 < δcoin → (∀ u, 0 ≤ κmax u) →
@@ -279,7 +279,7 @@ def FleetSound : Prop :=
       ¬ ∃ d : Fin N → ℝ, (∀ u ∈ S, 0 ≤ d u ∧ (Pd u).FreedWithin 1 (z u) (ε u (A u oω.2) + d u / C u) (C u)) ∧
         ∑ u ∈ S, d u ≤ fleetLuck η S δcoin) ≤ δcoin + ∑ u, κmax u
 
-/-- **Freed compute is at most `ε C` at the period's dual price**. On a period's devices (`Period`), let
+/-- **Freed compute is at most `ε C` at the period's dual price**. On a period's devices and their other jobs (`Jobs`), let
 `μ ≥ 0` be a dual price for the other work (every job worth at most its use at `μ`) at which an honest strategy
 credited `W` with other work `z'` is optimal (its other work worth exactly the capacity it leaves, at `μ`:
 complementary slackness). Any strategy credited the same `W`, whose credited part uses `X` and whose other work `z`
@@ -287,7 +287,7 @@ fits beside it, and whose credited part meets the work floor at `μ` (`μ · X �
 `ε C` with `C = μ · W hon`, the credited rounds' honest cost at the dual price. The floor on the whole
 run would not be enough here: it would count the other work `z` toward the credited part's floor. -/
 def FreedOfFloor : Prop :=
-  ∀ (G : Accel) (Pd : Period G) (W ε : ℝ) (X μ : G.Res → ℝ) (z z' : Pd.J → ℝ),
+  ∀ (G : Accel) (Pd : Jobs G) (W ε : ℝ) (X μ : G.Res → ℝ) (z z' : Pd.J → ℝ),
     (∀ r, 0 ≤ μ r) → (∀ j r, 0 ≤ Pd.needs j r) → (∀ j, Pd.val j ≤ ∑ r, μ r * Pd.needs j r) → 0 ≤ W → 0 ≤ ε →
     Pd.Fits (fun r => W * Pd.hon r) z' → ∑ j, Pd.val j * z' j = ∑ r, μ r * (Pd.cap r - W * Pd.hon r) →
     Pd.Fits X z → (1 - ε) * ∑ r, μ r * (W * Pd.hon r) ≤ ∑ r, μ r * X r →

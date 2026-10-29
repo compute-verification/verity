@@ -9,7 +9,7 @@ outside it, and an accepted period's priced work on it is at least `p` a credite
 `ServedFreed` is the onsite form at the same check (the J10-R period, `PouwCheck.Credit.window` on each window): the
 inventory is the registered devices, a network certifier counts the bits their window programs exchange with machines
 outside them, and an accepted period that the certifier also accepts frees at most `ε C` of the registered devices'
-capacity at the period's dual price (`Pouw.Dither.Period.FreedWithin`). It composes:
+capacity at the period's dual price (`Pouw.Dither.Jobs.FreedWithin`). It composes:
 
 * `ServedWork` at an exchange-free replacement of the window programs;
 * the price of an exchanged bit over the period's window programs together (`OutsourceWithinEgressServed`): the
@@ -79,7 +79,7 @@ def CertifiedExchange {Ω : Type} [Fintype Ω] (cert : Ω → Prop) (ext : Ω �
 /-- **The served PoUW protocol's freed compute, onsite** (the J10-R period, `Credit.window`'s verdict).
 Under `ServedWork`'s premises and setting, with the inventory's closure (`ext = 0`) dropped: let the window programs
 `work` run on the registered devices, one machine `G` of 𝓜 at its device premises, and exchange bits with machines
-outside them; let `Pd` be the registered devices' period with `μ` its dual price at one credit (`Period.DualOpt μ 1`),
+outside them; let `Pd` be the registered devices' period with `μ` its dual price at one credit (`Jobs.DualOpt μ 1`),
 `C = μ · hon > 0`, and `β ≥ 0`. If an exchanged bit replaces at most `β` of priced work over the period's window
 programs (`OutsourceWithinEgressServed`) and the certifier's check `cert` accepts a period whose window programs
 exchanged more than `K` bits but with probability `δ` (`CertifiedExchange`), then except with probability
@@ -103,7 +103,7 @@ def ServedFreed : Prop :=
     (κdeg : ℕ → ℝ) (B : ℕ) (inst : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → I)
     (state : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → St)
     (work : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → G.Mc.Alg (St × C) (Fin (tileCount σ sT) → W))
-    (Pd : Pouw.Dither.Period G) (cert : Paths (Coin C Ξ Cd.rounds σ sT) n → Prop) (β Kc δ : ℝ),
+    (Pd : Pouw.Dither.Jobs G) (cert : Paths (Coin C Ξ Cd.rounds σ sT) n → Prop) (β Kc δ : ℝ),
     Scope Sc Cd δs →
     0 < ρ → ρ ≤ 1 →
     (∀ t : Fin (tileCount σ sT), ρ * (tileCount σ sT) * shareCone Sc Cd (tileCount σ sT) t ≤ 1) →

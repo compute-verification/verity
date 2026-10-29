@@ -25,7 +25,7 @@ Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated ove
   `Prover.calls`: its sampling blocks' commit phases and work), the cap on its calls (`Prover.WithinCap`, the
   selected blocks' answers among them), and the service's verdict on the transcript and the auditor's devices'
   readings (`Verdict`, `Readings`, `Prover.Passes`);
-* **freed compute** (`Period`, `Period.FreedWithin`, `Period.DualOpt`, `FreedSound`): its definition, kept in
+* **freed compute** (`Jobs`, `Jobs.FreedWithin`, `Jobs.DualOpt`, `FreedSound`): its definition, kept in
   this one place, and its probability form, the headline's conclusion, with the selected blocks' answers within the
   period (`AnswersFit`);
 * **a replica's moment** (`MomentSound`): the probability form before its Markov step, which a fleet pools at its
@@ -445,12 +445,12 @@ end Prover
 
 section Freed
 
-/-- **A monitoring period's devices and the other work they could do**, in resource units: the period's length `T`
+/-- **The other jobs the devices could do over a monitoring period**, in resource units: the period's length `T`
 (seconds), the other jobs `J`, each with its value `val` per unit and its use `needs` per unit, and the honest use
 `hon` of the credited work and its value `rv` (its credit, in the jobs' units: its honest cost at the dual price).
 `WorkSound` reads it at `W = 1`, one credit: `hon` is the period's sampling blocks' total honest use, their commit
 phases, their work and the selected blocks' answers beside it, whose blocks differ, and `rv` their credit. -/
-structure Period (G : Accel) where
+structure Jobs (G : Accel) where
   T : ℝ
   J : Type
   [instJ : Fintype J]
@@ -459,11 +459,11 @@ structure Period (G : Accel) where
   hon : G.Res → ℝ
   rv : ℝ
 
-attribute [instance] Period.instJ
+attribute [instance] Jobs.instJ
 
-namespace Period
+namespace Jobs
 
-variable {G : Accel} (Pd : Period G)
+variable {G : Accel} (Pd : Jobs G)
 
 /-- What the devices can do in the period (G2): `ρ_r T` of resource `r`. -/
 def cap (r : G.Res) : ℝ := G.rate r * Pd.T
@@ -491,16 +491,16 @@ def DualOpt (μ : G.Res → ℝ) (W : ℝ) : Prop :=
   (∀ r, 0 ≤ μ r) ∧ (∀ j r, 0 ≤ Pd.needs j r) ∧ (∀ j, Pd.val j ≤ ∑ r, μ r * Pd.needs j r) ∧
     ∃ z' : Pd.J → ℝ, Pd.Fits (fun r => W * Pd.hon r) z' ∧ ∑ j, Pd.val j * z' j = ∑ r, μ r * (Pd.cap r - W * Pd.hon r)
 
-end Period
+end Jobs
 
 /-- **An accepted period's selected answers run within it**: for every prover whose period the verdict
 accepts, each selected sampling block's answer (`sel` of its check coin) uses, resource by resource, at most the
-period's capacity `Period.cap`. With (G3) and `cap_r ≤ Q callUse_r` it puts the answer's oracle calls under the cap
+period's capacity `Jobs.cap`. With (G3) and `cap_r ≤ Q callUse_r` it puts the answer's oracle calls under the cap
 (`Prover.WithinCap`). It is what the deadlines buy on the card (`Definitions.Pouw.Guarantees.DitherInstance`: an
 answer reads its block's work, which reads coins issued inside the period, and arrives before its end), not a
 hypothesis on the prover's queries. -/
 def AnswersFit (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
-    (dev : Readings G P k Obs) (sel : P.Chk → Prop) (Pd : Period G) : Prop :=
+    (dev : Readings G P k Obs) (sel : P.Chk → Prop) (Pd : Jobs G) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x →
     ∀ b, sel (x b).2 → ∀ r, G.use (A.answer b) (A.answerIn o x b) r ≤ Pd.cap r
 
@@ -508,13 +508,13 @@ def AnswersFit (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Ve
 probability over the oracle and the verifier's coins that the service accepts its period (`Prover.Passes`, on its
 transcript and the devices' readings `dev`) and some other work `z` fits on the period's devices beside its sampling
 blocks' timed work (`Prover.timedUse`) with `W rv + W_other(z) > OPT_honest + ε C`
-(`¬ Period.FreedWithin`) is at most
+(`¬ Jobs.FreedWithin`) is at most
 `κ`. `W` is the credited work. `ε` and `κ` are the prover's own: a prover whose commitment path makes more queries
 has a larger walk-and-log cost and extraction error (`ExtractAdv`). Wrap corrections and peels are
 serving work outside the words: they are other work here, never credit, so skipping them isn't a soundness
 question. -/
 def FreedSound (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
-    (dev : Readings G P k Obs) (Pd : Period G) (W : ℝ) (ε : Prover G P k → ℝ) (C : ℝ) (κ : Prover G P k → ℝ) :
+    (dev : Readings G P k Obs) (Pd : Jobs G) (W : ℝ) (ε : Prover G P k → ℝ) (C : ℝ) (κ : Prover G P k → ℝ) :
     Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => A.Passes verdict dev ox.1 ox.2 ∧
     ∃ z, Pd.Fits (A.timedUse ox.1 ox.2) z ∧ ¬ Pd.FreedWithin W z (ε A) C) ≤ κ A
@@ -528,7 +528,7 @@ devices beside its sampling blocks' timed work, `e^{η D} ≤ M` and the period 
 `δ_coin` gives `FreedSound` at `ε + ln(1/δ_coin)/(η C)` and `δ_coin + κ`; a fleet adds its replicas' shortfalls by
 convexity instead (`Definitions.Pouw.Guarantees.Dither.FleetSound`). -/
 def MomentSound (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
-    (dev : Readings G P k Obs) (Pd : Period G) (W : ℝ) (ε : Prover G P k → ℝ) (C η : ℝ) (κ : Prover G P k → ℝ) :
+    (dev : Readings G P k Obs) (Pd : Jobs G) (W : ℝ) (ε : Prover G P k → ℝ) (C η : ℝ) (κ : Prover G P k → ℝ) :
     Prop :=
   ∀ A : Prover G P k, ∃ (D M : P.Orc × (Fin k → P.Draw × P.Chk) → ℝ) (Bad : P.Orc × (Fin k → P.Draw × P.Chk) → Prop),
     (∀ ox, 0 ≤ D ox) ∧ (∀ ox, 0 ≤ M ox) ∧ avg M ≤ 1 ∧ prob Bad ≤ κ A ∧
