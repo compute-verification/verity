@@ -1,6 +1,7 @@
 """A served H1 window's drawn J10-R units staged as C-Flock statements, and the statements file core's credit verifies
 (``--statements``, `credit.STATEMENT_KEYS`), from the serve dir and the prover's own state. ``benchmarks/pouw/h1_prove/drawn.py``
-is its CLI, which reads ``--checkpoint`` with the live challenger's model registry (`main`'s ``checkpoint``).
+is its CLI, which reads ``--checkpoint`` with the live challenger's model registry (`main`'s ``checkpoint``) and binds
+``check`` to credit's own verification (`main`'s ``verified``).
 
     drawn stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
                 [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
@@ -35,8 +36,9 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
 ``statements``: after each W/c<call>/ is proved (`hidden_zk/job.sh`'s ``session``: exactly one session, all its
 instances drawn), the statements file: each call's `challenger.statement` (circuit, pub.bin, its session).
 
-``check``: credit's own verification of those statements (`credit._verified` with the Lean ``flock-verify`` at
-FLOCK_VERIFY, then `credit._proved`), the prover's look before it hands them over: ``PROVED`` or ``REFUSED``.
+``check``: credit's own verification of those statements over the window's drawn units (`main`'s ``verified``: the
+CLI's is `credit._verified` with the Lean ``flock-verify`` at FLOCK_VERIFY, then `credit._proved`), the prover's look
+before it hands them over: ``PROVED`` or ``REFUSED``.
 """
 from __future__ import annotations
 
@@ -77,6 +79,9 @@ _random = os.urandom
 #: ``--checkpoint``'s reader: (checkpoint dir, the window's linears ``(name, K, n)``, K) -> each of K's linears' int8 codes
 #: (n, K) and f32 s_w (n,), in the window's order
 CheckpointWeights = Callable[[Path, Sequence[tuple[str, int, int]], int], list[tuple[np.ndarray, np.ndarray]]]
+#: ``check``'s verifier: (the statements, ``{k<K>: SHA-512}`` of --circuits' manifest, the window (`window_of`), its drawn
+#: units, the Lean ``flock-verify``) -> each drawn unit's proof outcomes and None, or None and credit's refusal
+Verified = Callable[[Any, dict, dict, list[int], Path], tuple[Any, tuple[str, str] | None]]
 
 
 class Refused(Exception):
@@ -85,18 +90,20 @@ class Refused(Exception):
 
 # -- J10-R's statement ---------------------------------------------------------------------------------------------------
 
-def template(k: int, tile: Sequence[int]) -> Any:
-    """J10-R's statement Definition at K: the window's template (`h1window.template`) of one call of J10-R's tile unit
-    (`h1tile.PouwH1Tile5` under `h1window.tile_unit`, chunked as `h1window.program` declares it)."""
-    return HW.template(k, HW._chunked(k, HW.tile_unit(k, tuple(tile), HT.PouwH1Tile5)))
+def template(k: int, tile: Sequence[int], m: int) -> Any:
+    """J10-R's statement Definition at K: the template a window Program over J10-R's tile unit (`h1tile.PouwH1Tile5`
+    under `h1window.tile_unit`) at slot `m` declares for K (its ``TILES``), the one its partition lists."""
+    r, c = tile
+    program = HW.program([("j10r", k, c)], [("j10r", 0)], m, (r, c), unit=lambda kk: HW.tile_unit(kk, (r, c), HT.PouwH1Tile5))
+    return dict(program.fn.bindings["TILES"])[k]
 
 
-def stager(k: int, tile: Sequence[int], circuit: Path, bind: dict) -> Any:
+def stager(k: int, tile: Sequence[int], m: int, circuit: Path, bind: dict) -> Any:
     """K's flat statement's `UnitStager` (the form the Lean verifier accepts) on `h1window.statement_rows`, its circuit
     built once and written to `circuit`, bound to `bind` (``{"partition", "program"}``), as `pouw_h1_circuits` builds K's
     file."""
     from verity_flock import class_statement as CS
-    t = template(k, tile)
+    t = template(k, tile, m)
     return CS.UnitStager(t, NAME, HW.statement_rows(t), HW.STATEMENT_OUT_ROWS, circuit=circuit, bind=bind)
 
 
@@ -179,15 +186,17 @@ def window_of(serve_dir: Path, window: int) -> dict[str, Any]:
     if why is not None:
         raise Refused(f"the declared Program's layout: {why[1]}")
     c = record["commitment"]
-    served = c.get("served") or {}
+    served = c.get("served")
+    if not isinstance(served, dict) or not isinstance(served.get("entries"), list):
+        raise Refused("the window's record names no served trees: drawn rebuilds the values they registered")
     if served.get("refused"):
         raise Refused(f"the window's served trees were refused: {served['refused']}")
     roots: dict[str, list[str]] = {}
-    for e in served.get("entries") or ():
+    for e in served["entries"]:
         roots.setdefault(e.get("value"), []).append(e.get("root"))
     return {"record": record, "raw": raw, "program": hashlib.sha512(raw).hexdigest(), "layout": layout,
             "shape": CR.shape_of(raw), "root": c["session"]["root"], "steps": len(c["rounds"]),
-            "salt": PHC.program_salt_of(c).hex(), "entries": list(served.get("entries") or ()), "roots": roots}
+            "salt": PHC.program_salt_of(c).hex(), "entries": list(served["entries"]), "roots": roots}
 
 
 def draw_k(serve_dir: Path, k: int | None) -> int:
@@ -388,17 +397,18 @@ def reference_check(z: dict, outs: dict, win: dict, k: int, roots: tuple[bytes, 
 
 
 class FileStager:
-    """`UnitStager`'s ``stage`` on the circuit file `path` the period committed for J10-R's statement at K (`template`),
+    """`UnitStager`'s ``stage`` on the circuit file `path` the period committed for J10-R's statement at K (`template`
+    at slot `m`),
     read and never composed (the K 2048 J10-R composition takes some hundreds of GB): its META (its second line), its pin
     and class digest (`circuit.digest`, `circuit.class_digest`) streamed from the file, the statement's rows `UnitStager`'s
     for the template (`h1window.statement_rows`), and each unit's outputs the word reference's (`unit_outputs`), which
     ``outs`` gives. `circuit.write` reads only these of a circuit; the files it writes are the recomposed stager's byte for
     byte."""
 
-    def __init__(self, k: int, tile: Sequence[int], path: Path, name: str = NAME) -> None:
+    def __init__(self, k: int, tile: Sequence[int], m: int, path: Path, name: str = NAME) -> None:
         from types import SimpleNamespace
         from verity_flock import circuit as FC
-        t = template(k, tile)
+        t = template(k, tile, m)
         in_rows, out_rows = HW.statement_rows(t), HW.STATEMENT_OUT_ROWS
         with open(path, "rb") as f:
             first, second = f.readline(), f.readline()
@@ -498,11 +508,11 @@ def stage(a: argparse.Namespace) -> int:
         circuit = (Path(a.circuits) / f"k{k}.circuit.txt").resolve()
         if a.recompose:
             built = work / f"k{k}.circuit.txt"
-            st = stager(k, lay["tile"], built, manifest["bind"])
+            st = stager(k, lay["tile"], lay["m"], built, manifest["bind"])
             got = PF.file_sha512(built)
             built.unlink()
         else:
-            st = FileStager(k, lay["tile"], circuit)
+            st = FileStager(k, lay["tile"], lay["m"], circuit)
             got = st.pin
         if got != manifest["files"][f"k{k}"]:
             raise Refused(f"K = {k}'s statement circuit (SHA-512 {got[:16]}...) is not --circuits' k{k} file "
@@ -557,8 +567,8 @@ def statements(a: argparse.Namespace) -> int:
 
 
 def check(a: argparse.Namespace) -> int:
-    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-    PF.executable = lambda: Path(a.lean)
+    if a.verified is None:
+        raise Refused("check is credit's own verification, which benchmarks/pouw/h1_prove/drawn.py binds: run that CLI")
     serve_dir = Path(a.serve_dir)
     win = window_of(serve_dir, a.window)
     k = draw_k(serve_dir, a.k)
@@ -566,18 +576,16 @@ def check(a: argparse.Namespace) -> int:
     units = sorted(u for us in drawn.values() for u in us)
     files = json.loads((Path(a.circuits) / MANIFEST).read_text())["files"]
     sts = json.loads(Path(a.statements).read_text())
-    proofs, why = CR._verified(sts, files, win["raw"], win["layout"], win["entries"], win["root"], units, win["steps"],
-                               PF.verify, win["salt"])
-    if why is None:
-        why = CR._proved(units, proofs)
+    proofs, why = a.verified(sts, files, win, units, Path(a.lean))
     print(("PROVED " + json.dumps({"units": units, "outcomes": len(proofs)})) if why is None else
           f"REFUSED {why[0]}: {why[1]}", flush=True)
     return 0 if why is None else 1
 
 
-def main(argv: Sequence[str] | None = None, checkpoint: CheckpointWeights | None = None) -> int:
+def main(argv: Sequence[str] | None = None, checkpoint: CheckpointWeights | None = None,
+         verified: Verified | None = None) -> int:
     """``stage``, ``statements`` or ``check`` on `argv`; ``stage --checkpoint`` reads the served weights with
-    `checkpoint`."""
+    `checkpoint`, and ``check`` verifies with `verified`."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("stage")
@@ -604,7 +612,7 @@ def main(argv: Sequence[str] | None = None, checkpoint: CheckpointWeights | None
     c.add_argument("--lean", required=True)
     c.add_argument("--k", type=int)
     a = ap.parse_args(argv)
-    a.checkpoint_weights = checkpoint
+    a.checkpoint_weights, a.verified = checkpoint, verified
     try:
         return {"stage": stage, "statements": statements, "check": check}[a.cmd](a)
     except Refused as e:
@@ -612,7 +620,7 @@ def main(argv: Sequence[str] | None = None, checkpoint: CheckpointWeights | None
         return 1
 
 
-__all__ = ["CheckpointWeights", "MANIFEST", "PLAN", "Refused", "main"]
+__all__ = ["CheckpointWeights", "MANIFEST", "PLAN", "Refused", "Verified", "main"]
 
 if __name__ == "__main__":
     raise SystemExit(main())

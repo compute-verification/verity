@@ -20,6 +20,7 @@ import pytest
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import serve_h1 as SH
 from verity_vllm.protocols.pouw.h1 import drawn as DRAWN
@@ -146,13 +147,24 @@ def _prove(plan: dict, d: Path) -> None:
             {"unit_draw": {"units": drew}, "proof": hashlib.sha512(bound + json.dumps(drew).encode()).hexdigest()}))
 
 
+def _verified(monkeypatch):
+    """`drawn.check`'s verifier as ``benchmarks/pouw/h1_prove/drawn.py`` binds it: `credit._verified` with the Lean
+    verifier at ``--lean``, then `credit._proved`."""
+    def verified(statements, files, win, units, lean):
+        monkeypatch.setattr(PF, "executable", lambda: lean)
+        proofs, why = CR._verified(statements, files, win["raw"], win["layout"], win["entries"], win["root"], units,
+                                   win["steps"], PF.verify, win["salt"])
+        return proofs, why if why is not None else CR._proved(units, proofs)
+    return verified
+
+
 def _seeded():
     count = iter(range(1 << 30))
     return lambda n: hashlib.shake_256(next(count).to_bytes(8, "little")).digest(n)
 
 
 @pytest.mark.slow
-def test_a_served_windows_drawn_calls_are_staged_proved_and_credits_proved_accepts_them(served, capsys):
+def test_a_served_windows_drawn_calls_are_staged_proved_and_credits_proved_accepts_them(served, monkeypatch, capsys):
     DR, d, tmp = served
     assert _stage(DR, d, tmp, "--weights-key", str(tmp / "wkey"), "--recompose") == 0, capsys.readouterr().err
     plan = json.loads((tmp / "work" / DR.PLAN).read_text())
@@ -167,7 +179,8 @@ def test_a_served_windows_drawn_calls_are_staged_proved_and_credits_proved_accep
     assert [s["call"] for s in json.loads(st.read_text())] == [x["call"] for x in plan["calls"]]
     capsys.readouterr()
     assert DR.main(["check", str(d), "0", "--circuits", str(tmp / "circuits"), "--statements", str(st), "--lean",
-                    str(tmp / "flock-verify"), "--k", str(_PeriodAuditor.K)]) == 0
+                    str(tmp / "flock-verify"), "--k", str(_PeriodAuditor.K)],
+                   verified=_verified(monkeypatch)) == 0
     got = capsys.readouterr().out
     assert got.startswith("PROVED ") and json.loads(got.split(" ", 1)[1])["units"] == sorted(
         u for x in plan["calls"] for u in x["units"])
@@ -175,7 +188,8 @@ def test_a_served_windows_drawn_calls_are_staged_proved_and_credits_proved_accep
     first[0]["sessions"] = []
     st.write_text(json.dumps(first))
     assert DR.main(["check", str(d), "0", "--circuits", str(tmp / "circuits"), "--statements", str(st), "--lean",
-                    str(tmp / "flock-verify"), "--k", str(_PeriodAuditor.K)]) == 1
+                    str(tmp / "flock-verify"), "--k", str(_PeriodAuditor.K)],
+                   verified=_verified(monkeypatch)) == 1
     assert capsys.readouterr().out.startswith("REFUSED ")
 
 
