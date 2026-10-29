@@ -2573,14 +2573,16 @@ def test_a_reply_with_a_retired_term_posts_with_a_note_naming_what_to_write(fake
 
 
 def test_the_retired_terms_name_what_to_write_and_skip_code_and_quoted_mentions():
+    """`research msg` reads the table from tests/test_retired_terms.py, its one home."""
     from research import vocabulary
+    doc = vocabulary.table()["DOC_TERMS"]
     service = "proof " + "service"                                   # the tree's own scan refuses the term written whole
     assert vocabulary.retired(f"two legs, the NCI, a commit period and the {service}") == [
-        (service, "proof system"), ("legs", vocabulary.DOC_TERMS["leg"]),
-        ("NCI", vocabulary.DOC_TERMS["NCI, novel communication intensity"]),
-        ("commit period", vocabulary.DOC_TERMS["sampling period, sampling block, PoUW's commit period"])]
+        (service, "proof system"), ("legs", doc["leg"]), ("NCI", doc["NCI, novel communication intensity"]),
+        ("commit period", doc["sampling period, sampling block, PoUW's commit period"])]
     assert vocabulary.retired('a proof block, `drawn.py` and "draw"') == []
     assert vocabulary.instead("nothing like it") == "see GLOSSARY.md's older names"
+    assert vocabulary.table(Path("no/such/table.py")) == {} and vocabulary.retired("a draw", {}) == []
 
 
 def test_a_121_word_reply_is_refused_with_the_fix_and_nothing_is_posted(fake, registry, capsys):
