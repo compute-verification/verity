@@ -51,7 +51,10 @@ is a constant), rescaled to the running max at the block's end; `best_p4_exact` 
 and the router's output exactly (N-EXACT's epilogue fold, plus two IDP4A an output for the lead's non-separable code
 and tag terms), so every lane but attention's own (`EXACT_REACHED`) reads salt-independent values and forces nothing;
 `best_p4_exact_sep` is the same for a separable noise, with no IDP4A (the lanes' own cost of exactness);
-`best_p4_smlite` commits only the softmax's MUFU outputs. The free part of the de-noise alone (the later steps' row
+`best_p4_nkd_bmax_pad64` pads every matmul below 64 rows to wgmma's 64; `best_p4_nkd_bmax_coin` fills the padding
+rows' data lanes with raw coin bytes (`Plan.pad_fill`; the default is zero padding, whose later-step words are the
+previous word plus the shared coin byte, so TensorSemantics prices them at the floor, as it does P·V's real words
+whose P chunk rounds to 0, `p_chunk_zero`); `best_p4_smlite` commits only the softmax's MUFU outputs. The free part of the de-noise alone (the later steps' row
 bits at the magic conversion, the column mean in the FFMA) leaves the code and the tags served, and the lanes covered.
 
 P's zero share is `ZERO_P` (assumed) until `--pzero FILE` reads attn_pzero.py's measurement: then each softmax takes
@@ -70,8 +73,9 @@ distinctness on every data case (with mutations that must fail), the softmax cha
 magic-number conversion's exact range, the degree-3 exp2's error, that dithered rounds vary across salts where plain
 ones don't and noise-keyed ones as often as independent u's would (`sim_dither`), that tags remove a coin-reading
 prover's row copies, that two attention calls on equal data share last-step vectors unless the tags number rows across
-the step (`sim_cross_call`), `p_zero`'s weighting, that exact outputs leave only attention's lanes forced, and the
-small-m instruction choice. Output: a JSON
+the step (`sim_cross_call`), that zero padding's later steps need no tensor instruction and coin padding's do
+(`sim_pad_fill`) and how each is priced, `p_zero`'s weighting, that exact outputs leave only attention's lanes
+forced, and the small-m instruction choice. Output: a JSON
 report (`--json PATH`) and a text table (`--table`).
 """
 
@@ -474,7 +478,7 @@ def components(model: str, point: str) -> list[Comp]:
         out.append(Comp("qk", "qk", scores * cfg["dk"], m=m_att, dk=cfg["dk"], dv=cfg["dv"], keys=keys, rows=rows_att,
                         calls=L))
         out.append(Comp("pv", "pv", scores * cfg["dv"], m=m_att, dk=cfg["dk"], dv=cfg["dv"], keys=keys,
-                        rows=rows_att, calls=L))
+                        rows=rows_att, calls=L, span=span))
         out.append(Comp("softmax", "softmax", scores, kind="softmax", dv=cfg["dv"], span=span))
         out.append(Comp("attn_out", "lane", t * cfg["heads"] * cfg["dv"] * L, kind="attn_out"))
         out.append(Comp("quant_o", "lane", t * cfg["d"] * L, kind="quant"))
@@ -511,7 +515,7 @@ def components(model: str, point: str) -> list[Comp]:
     scores = t * cfg["heads"] * keys
     rows_att = t * cfg["heads"]
     out.append(Comp("qk", "qk", scores * dk, m=m_att, dk=dk, dv=dv, keys=keys, rows=rows_att))
-    out.append(Comp("pv", "pv", scores * dv, m=m_att, dk=dk, dv=dv, keys=keys, rows=rows_att))
+    out.append(Comp("pv", "pv", scores * dv, m=m_att, dk=dk, dv=dv, keys=keys, rows=rows_att, span=span))
     out.append(Comp("softmax", "softmax", scores, kind="softmax", dv=dv, span=span))
     out.append(Comp("attn_out", "lane", t * cfg["heads"] * dv, kind="attn_out"))
     out.append(Comp("quant_o", "lane", t * cfg["heads"] * cfg["v"], kind="quant"))
@@ -548,6 +552,7 @@ class Plan:
     block_max: bool = False
     exact: bool = False
     exact_idp4a: int = 2
+    pad_fill: str = "zero"
     note: str = ""
 
 
@@ -603,6 +608,12 @@ PLANS = [
          premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
          note="best_p4_nkd_bmax with every matmul below 64 rows padded to wgmma's 64, whose padding words are forced "
               "at the floor whatever they hold"),
+    Plan("best_p4_nkd_bmax_coin", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
+         static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
+         noise_dither=True, block_max=True, pad_fill="coin",
+         premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="best_p4_nkd_bmax with the padding rows' data lanes holding raw coin bytes, so TensorSemantics prices "
+              "their words at the instruction's own shape"),
     Plan("best_p4_exact", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
          static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
          noise_dither=True, block_max=True, exact=True,
@@ -652,27 +663,43 @@ T3 = {
 PZERO: dict | None = None
 
 
+def _pz_bins(c: Comp, plan: Plan) -> tuple[list[dict], str]:
+    """The measured bins inside `c.span` against the plan's max reference and block, and their label."""
+    ref = ("local_s8_d1" if plan.rowmax_stride > 1 else "local") if plan.block_max else "run"
+    blocks = PZERO["all"]
+    b = str(plan.max_block) if str(plan.max_block) in blocks else min(blocks, key=lambda x: abs(int(x) - plan.max_block))
+    lo, hi = c.span
+    got = [s for label, s in blocks[b][ref]["bins"].items()
+           if int(label.split("-")[0]) < hi and int(label.split("-")[1]) >= lo]
+    if not got:
+        raise ValueError(f"--pzero has no rows in {c.span} at block {b}")
+    return got, f"measured: {ref} max, {b}-key block, rows {lo}-{hi - 1}"
+
+
 def p_zero(c: Comp, plan: Plan) -> tuple[float, float, str]:
     """(value share, pack share, source) of u8 P rounding to 0 under dither, for softmax `c` under `plan`: the measured
     share over the row positions in `c.span` (keys- and packs-weighted), against the running max, or the block's own
     (strided) max under `block_max`, at the plan's max block."""
     if PZERO is None:
         return ZERO_P, ZERO_P, "assumed"
-    ref = ("local_s8_d1" if plan.rowmax_stride > 1 else "local") if plan.block_max else "run"
-    blocks = PZERO["all"]
-    b = str(plan.max_block) if str(plan.max_block) in blocks else min(blocks, key=lambda x: abs(int(x) - plan.max_block))
-    lo, hi = c.span
-    keys = packs = zero = pack = 0.0
-    for label, s in blocks[b][ref]["bins"].items():
-        a, z = (int(x) for x in label.split("-"))
-        if a < hi and z >= lo:
-            keys += s["keys"]
-            packs += s["packs"]
-            zero += s["zero_nkd"] * s["keys"]
-            pack += s["pack_zero_nkd"] * s["packs"]
-    if not keys:
-        raise ValueError(f"--pzero has no rows in {c.span} at block {b}")
-    return zero / keys, pack / packs, f"measured: {ref} max, {b}-key block, rows {lo}-{hi - 1}"
+    bins, src = _pz_bins(c, plan)
+    keys, packs = sum(s["keys"] for s in bins), sum(s["packs"] for s in bins)
+    return (sum(s["zero_nkd"] * s["keys"] for s in bins) / keys,
+            sum(s["pack_zero_nkd"] * s["packs"] for s in bins) / packs, src)
+
+
+def p_chunk_zero(c: Comp, plan: Plan) -> tuple[float, str]:
+    """(share, source) of P·V `c`'s real row-step words whose P chunk (attn_pzero's `CHUNK`) rounds to 0 in every key,
+    under the plan's rounding: such a word is its previous word plus the shared coin byte, which a prover writes at the
+    floor without the tensor instruction. A measurement without chunk counts gives the pack share, an upper bound."""
+    if PZERO is None:
+        return ZERO_P, "assumed"
+    bins, src = _pz_bins(c, plan)
+    rnd = "nkd" if plan.noise_dither or plan.dither else "rint"
+    if "chunks" not in bins[0]:
+        return sum(s[f"pack_zero_{rnd}"] * s["packs"] for s in bins) / sum(s["packs"] for s in bins), \
+            f"bound (the pack share): {src}"
+    return sum(s[f"chunk_zero_{rnd}"] * s["chunks"] for s in bins) / sum(s["chunks"] for s in bins), src
 
 
 #: the one per-period basis, stock work held fixed (pouw_space.toml's [scale] and [price]): one H200 serves stock int8
@@ -736,13 +763,18 @@ def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
         _ = scores
     a = t["alpha"]
     honest = c.count * a * hp * hpad
-    tile_forced = hp if "TensorSemantics" in plan.premises else min(hp, H32 / TENSOR["s8"]["kreg"])
+    floor_t = min(hp, H32 / TENSOR["s8"]["kreg"])
+    ts = "TensorSemantics" in plan.premises
+    tile_forced = hp if ts else floor_t
+    zc, zsrc = p_chunk_zero(c, plan) if fam == "pv" and ts and hp > floor_t else (0.0, None)
     pad_c = hpad if plan.commit_pad else 1.0
-    forced = c.count * a * pad_c * tile_forced
+    forced = c.count * a * ((1 - zc) * tile_forced + zc * floor_t
+                            + (pad_c - 1) * (tile_forced if plan.pad_fill == "coin" else floor_t))
     words = c.count * a * pad_c / TENSOR["s8"]["kreg"]
     return {"stock": stock_units, "honest": honest + forming, "forced": forced, "words": words, "forming": forming,
             "coins": coins, "coin_calls": coin_calls, "instr": hinstr, "design": t["design"], "alpha": a,
-            "unforced": forming + (honest - forced if not plan.commit_pad else 0.0), "pad": hpad}
+            "unforced": forming + (honest - forced if not plan.commit_pad else 0.0), "pad": hpad,
+            **({"zero_chunk": (zc, zsrc)} if zsrc else {})}
 
 
 def lane_variant(c: Comp, plan: Plan) -> tuple[str, bool]:
@@ -1161,6 +1193,42 @@ def sim_cross_call(global_tags: bool, salts: int = 64, m: int = 4, n: int = 6, k
     return {"copy_share": copied / (salts * m * s), "steps": s, "bits_collide": p, "expected_local": p / s}
 
 
+def sim_pad_fill(fill: str, salts: int = 16, m: int = 2, pad: int = 6, n: int = 6, k: int = 2 * 28 + 24,
+                 tag: int = TAG_LANES, seed: int = 4) -> dict:
+    """ssn_sh-tag over m real and `pad` padding rows: the share of padding rows' later steps whose word is the previous
+    word plus the step's shared coin byte in every column, which a prover writes without the tensor instruction. `zero`
+    padding leaves the data lanes 0; `coin` fills each padding row's with one chunk of raw coin bytes, every step."""
+    rng = np.random.default_rng(seed)
+    rows = m + pad
+    s, d = steps_sh(k, tag), nsw.DATA_PER_STEP
+    first = d - tag
+    b = rng.integers(-127, 128, (first + d * (s - 1), n))
+    code = nsw.ssn_a_w0(n, d)[0]
+    lane = np.zeros((4, n), dtype=np.int64)
+    lane[0] = 1
+    bias = np.rint(code.sum(axis=0) / 2).astype(np.int64)
+    tags = row_tags(rows, tag)
+    trivial = 0
+    for _ in range(salts):
+        apad = np.zeros((rows, first + d * (s - 1)), dtype=np.int64)
+        apad[:m] = rng.integers(-127, 128, (m, apad.shape[1]))
+        if fill == "coin":
+            c = rng.integers(-128, 128, (pad, d))
+            apad[m:] = np.concatenate([c[:, :first]] + [c] * (s - 1), axis=1)
+        y = np.concatenate([b[:first], rng.integers(-3, 4, (tag, n)), code]
+                           + [z for t in range(1, s) for z in (b[first + d * (t - 1):first + d * t], lane)])
+        h = rng.integers(0, 2 ** 32, (rows,), dtype=np.int64)
+        rb = _bytes_s8(rng.integers(0, 2 ** 32, (s - 1,), dtype=np.int64))
+        parts = [apad[:, :first], tags, np.stack([(h >> (8 * e)) & 1 for e in range(4)], axis=1)]
+        for t in range(1, s):
+            parts += [apad[:, first + d * (t - 1):first + d * t], np.broadcast_to(rb[t - 1], (rows, 4))]
+        init = np.broadcast_to(-(sum(rb[t - 1] @ lane for t in range(1, s)) + bias), (rows, n))
+        w = nsw._words(np.concatenate(parts, axis=1)[None], y[None], init[None])[0]
+        trivial += sum(bool((w[i, :, t] - w[i, :, t - 1] == rb[t - 1][0]).all()) for i in range(m, rows)
+                       for t in range(1, s))
+    return {"trivial_share": trivial / (salts * pad * (s - 1)), "steps": s}
+
+
 PV_CASES = ["random", "zero_row", "identical_rows", "uniform_p", "onehot_p", "identical_cols", "zero_vblock",
             "zero_pblock"]
 
@@ -1494,6 +1562,25 @@ def check() -> list[dict]:
        "vary, 5/32 at n 6); tags numbered across the step leave none",
        0.6 * loc["expected_local"] < loc["copy_share"] < 1.6 * loc["expected_local"] and glo["copy_share"] == 0,
        {"local": loc, "global": glo})
+    pz, pc = sim_pad_fill("zero"), sim_pad_fill("coin")
+    ok("ssn_sh-tag padding rows: with zero data every later step's word is the previous word plus the shared coin "
+       "byte (a write without the tensor instruction); a chunk of raw coin bytes in each padding row leaves none",
+       pz["trivial_share"] == 1.0 and pc["trivial_share"] == 0.0, {"zero": pz, "coin": pc})
+    dec = {p: {r["name"]: r for r in evaluate("llama", "dec64_2k", PLAN[p])["components"]}
+           for p in ("best_p4_nkd_bmax", "best_p4_nkd_bmax_coin", "best_p4_nkd_bmax_pad64")}
+    qz, qc = dec["best_p4_nkd_bmax"]["qk"], dec["best_p4_nkd_bmax_coin"]["qk"]
+    hp_q = qc["forced"] / (qc["count"] * qc["alpha"] * qc["pad"])
+    ok("under TensorSemantics zero padding's words are forced at the floor and coin padding's at the instruction's "
+       "price (Llama decode QKᵀ, mma.sync at 2 rows a real row); P·V's real words whose P chunk rounds to 0 at the "
+       "floor; wgmma's 64-row padding is the same either way",
+       qc["pad"] == 2 and hp_q > 1.4 and abs(qz["forced"] - qz["count"] * qz["alpha"] * (hp_q + 1.0)) < 1e-6 * qz["forced"]
+       and 0 < dec["best_p4_nkd_bmax"]["pv"]["zero_chunk"][0] < 1
+       and dec["best_p4_nkd_bmax"]["pv"]["forced"] < dec["best_p4_nkd_bmax_coin"]["pv"]["forced"]
+       < dec["best_p4_nkd_bmax_coin"]["pv"]["honest"]
+       and all(dec["best_p4_nkd_bmax_pad64"][x]["honest"] - dec["best_p4_nkd_bmax_pad64"][x]["forming"]
+               - dec["best_p4_nkd_bmax_pad64"][x]["forced"] < 1e-3 * dec["best_p4_nkd_bmax_pad64"][x]["honest"]
+               for x in ("qk", "pv")),
+       {p: {x: (v[x]["forced"], v[x]["honest"]) for x in ("qk", "pv")} for p, v in dec.items()})
     global PZERO
     sm = Comp("softmax", "softmax", 1.0, kind="softmax", span=(64, 1024))
     held, PZERO = PZERO, {"all": {"208": {"local_s8_d1": {"bins": {
@@ -1585,7 +1672,8 @@ def report(lookup: bool = False) -> dict:
 
 
 PERIOD_PLANS = ("linears", "best", "best_p4", "best_p4_dither", "best_p4_max", "best_p4_max_s8", "best_p4_all",
-                "best_p4_nkd", "best_p4_nkd_bmax", "best_p4_nkd_bmax_pad64", "best_p4_exact", "best_p4_exact_sep")
+                "best_p4_nkd", "best_p4_nkd_bmax", "best_p4_nkd_bmax_pad64", "best_p4_nkd_bmax_coin", "best_p4_exact",
+                "best_p4_exact_sep")
 #: pouw_space.py's points (and this file's further ones) to this file's (model, point)
 CARD_POINTS = {"t512": ("llama", "T512_64"), "t512r512": ("llama", "T512_512"), "t8192": ("llama", "T8192_8x1k"),
                "t8192_1x8k": ("llama", "T8192_1x8k"), "decode_b64_2k": ("llama", "dec64_2k"),
