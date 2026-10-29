@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.Dimension.H100W
+import Proofs.Pouw.Dimension.SsnProofs
 import Mathlib.Combinatorics.Enumerative.DoubleCounting
 
 /-!
@@ -26,12 +26,9 @@ free value, and `DistinctWritesFloor` charges only the rest. This file bounds ho
 
 namespace Pouw.Dimension.Grind
 
-open Finset Pouw.Dimension.H100
+open Finset Pouw.Dimension.H100 Pouw.Dimension.Ssn
 
 variable {ι : Type} [Fintype ι] {q : ℕ}
-
-/-- An affine function of `q`-ary digits: `c + Σ_k a k · x k`. -/
-def aff (c : ℚ) (a : ι → ℚ) : (ι → Fin q) → ℚ := fun x => c + ∑ k, a k * ((x k : ℕ) : ℚ)
 
 /-- **Triangular relations shrink the set**: if every point of `S` satisfies the relations `R`, each with a nonzero
 coefficient at its pivot and a zero coefficient at every later relation's pivot, then `|S|·q^|R| ≤ q^|ι|`. -/
@@ -97,14 +94,6 @@ theorem card_le_of_measure {S : Finset (ι → Fin q)} {g r : ℕ} (hq : 1 < q)
     · exact h
   have hle : q ^ r * S.card ≤ q ^ g * S.card := by rw [mul_comm]; exact hr.trans hS
   exact (pow_le_pow_iff_right₀ (by exact_mod_cast hq)).1 (Nat.le_of_mul_le_mul_right hle hpos)
-
-/-- Affine functions of the digits that agree everywhere have the same coefficients. -/
-theorem coef_eq_of_aff_eq [DecidableEq ι] (hq : 1 < q) {c c' : ℚ} {a a' : ι → ℚ} (h : aff (q := q) c a = aff c' a') (k : ι) :
-    a k = a' k := by
-  have h0 := congrFun h fun _ => ⟨0, by omega⟩
-  have h1 := congrFun h fun k' => ⟨if k' = k then 1 else 0, by split_ifs <;> omega⟩
-  simp [aff] at h0 h1
-  linarith
 
 /-- **Words lost on a success set.** Digits sit in blocks `blk` ordered by `ord`. The target words `u ∈ Ω` (the
 affine functions `aff (wc u) (wa u)`) are ranked by `ν`, and each has a window `win u` of blocks. A word and any word

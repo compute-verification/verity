@@ -1,26 +1,17 @@
-import Mathlib.InformationTheory.Hamming
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Definitions.Pouw.Dimension.Pointwise
 
 /-!
-# What a run at fixed coins must write, whatever program produced it (scratch; not in a lock)
+# What a run at fixed coins must write, whatever program produced it: proofs
 
-**Draft.** `DistinctWritesMH100On` bounds one straight-line program fixed before the coins. A prover that holds the
-coins while it computes runs a different program at every coin value. This file bounds each such run on its own.
-
-* **The model.** Memory is slots `A` of `w`-word chunks. A run is any list of steps. `write a p v` sets word `p` of
-  slot `a` to `v`. It is the only priced step, and stands for whatever produced `v`: an arithmetic op, a load or a
-  per-word copy. `copy s d` copies slot `s` to slot `d` whole, free at any address. Memory starts at `m₀`: the
-  salt-free tables and the coin words. A run that branches or computes addresses is just another list.
-* **Provenance** (`good_run`). Copies create no chunk value, and each write creates at most one, a word away from a
-  chunk value already present. So the chunk values a run ever holds are the initial ones and `writes P` new ones,
-  each within one word of an earlier one or an initial one (`Chained`).
+* **Provenance** (`good_prefix`, `good_run`). Copies create no chunk value, and each write creates at most one, a word
+  away from a chunk value already present. So the chunk values a run ever holds, at any point, are the initial ones
+  and `writes P` new ones, each within one word of an earlier one or an initial one (`Chained`).
 * **Per position** (`run_pairs_le`). Each write brings at most one (position, value) pair no initial chunk has. So a
-  run that leaves the target chunks in memory writes at least the number of such pairs among them.
+  run that holds the target chunks at some point writes at least the number of such pairs among them. With `w = 1`
+  that is the number of distinct target values outside the initial memory (`run_values_le`).
 * **Balls** (`run_ball_le`). Take radii `r y` for the targets, with each target further than `r y` from every initial
-  chunk and any two further apart than the sum of their radii. Then the run writes at least `Σ_y (r y + 1)`: the
-  chain of new values that reaches `y` passes through every distance `0, …, r y` from it, and the balls are disjoint.
-
-With `w = 1` the per-position bound counts distinct target values outside the initial memory.
+  chunk and any two further apart than the sum of their radii. Then the run writes at least `Σ_y (r y + 1)`: the chain
+  of new values that reaches `y` passes through every distance `0, …, r y` from it, and the balls are disjoint.
 -/
 
 namespace Pouw.Dimension.Pointwise
@@ -29,30 +20,6 @@ open Finset
 
 variable {A V : Type} {w : ℕ}
 
-/-- One step of a run: a priced word write, or a free whole-chunk copy. -/
-inductive Step (A V : Type) (w : ℕ)
-  | write (a : A) (p : Fin w) (v : V)
-  | copy (s d : A)
-
-variable [DecidableEq A]
-
-/-- A step's effect on memory. -/
-def Step.apply : Step A V w → (A → Fin w → V) → A → Fin w → V
-  | .write a p v, m => Function.update m a (Function.update (m a) p v)
-  | .copy s d, m => Function.update m d (m s)
-
-/-- A step's price in word writes. -/
-def Step.cost : Step A V w → ℕ
-  | .write .. => 1
-  | .copy .. => 0
-
-/-- The memory after a run. -/
-def run (m₀ : A → Fin w → V) (P : List (Step A V w)) : A → Fin w → V :=
-  P.foldl (fun m st => st.apply m) m₀
-
-/-- A run's word writes. -/
-def writes (P : List (Step A V w)) : ℕ := (P.map Step.cost).sum
-
 /-- `N` new chunk values `L 0, …, L (N−1)`, each within one word of an initial chunk value or an earlier new one. -/
 def Chained [DecidableEq V] (I : Set (Fin w → V)) (N : ℕ) (L : ℕ → Fin w → V) : Prop :=
   ∀ k < N, ∃ x, (x ∈ I ∨ ∃ j < k, L j = x) ∧ hammingDist x (L k) ≤ 1
@@ -60,6 +27,13 @@ def Chained [DecidableEq V] (I : Set (Fin w → V)) (N : ℕ) (L : ℕ → Fin w
 /-- Every slot of `m` holds an initial chunk value or one of the `N` new ones. -/
 def Covered (I : Set (Fin w → V)) (N : ℕ) (L : ℕ → Fin w → V) (m : A → Fin w → V) : Prop :=
   ∀ a, m a ∈ I ∨ ∃ k < N, L k = m a
+
+theorem covered_mono {I : Set (Fin w → V)} {N N' : ℕ} {L L' : ℕ → Fin w → V} {m : A → Fin w → V}
+    (h : Covered I N L m) (hN : N ≤ N') (hL : ∀ k < N, L' k = L k) : Covered I N' L' m := by
+  intro a
+  rcases h a with h | ⟨k, hk, hkm⟩
+  · exact Or.inl h
+  · exact Or.inr ⟨k, by omega, by rw [hL k hk, hkm]⟩
 
 theorem hammingDist_update_le [DecidableEq V] (x : Fin w → V) (p : Fin w) (v : V) :
     hammingDist x (Function.update x p v) ≤ 1 := by
@@ -71,6 +45,8 @@ theorem hammingDist_update_le [DecidableEq V] (x : Fin w → V) (p : Fin w) (v :
         by_contra hne
         exact hi.2 (by rw [Function.update_of_ne hne])
     _ = 1 := card_singleton p
+
+variable [DecidableEq A]
 
 theorem good_step [DecidableEq V] {I : Set (Fin w → V)} {N : ℕ} {L : ℕ → Fin w → V} {m : A → Fin w → V}
     (hL : Chained I N L) (hm : Covered I N L m) (st : Step A V w) :
@@ -113,32 +89,50 @@ theorem good_step [DecidableEq V] {I : Set (Fin w → V)} {N : ℕ} {L : ℕ →
         · exact Or.inl h
         · exact Or.inr ⟨j, by omega, by simp [hj.ne, hjm]⟩
 
-theorem good_foldl [DecidableEq V] {I : Set (Fin w → V)} (P : List (Step A V w)) :
+omit [DecidableEq A] in
+theorem writes_cons (st : Step A V w) (P : List (Step A V w)) : writes (st :: P) = st.cost + writes P := by
+  simp [writes]
+
+/-- One chain covers the memory after every prefix of a run. -/
+theorem good_all [DecidableEq V] {I : Set (Fin w → V)} (P : List (Step A V w)) :
     ∀ (N : ℕ) (L : ℕ → Fin w → V) (m : A → Fin w → V), Chained I N L → Covered I N L m →
-      ∃ L' : ℕ → Fin w → V, Chained I (N + writes P) L' ∧
-        Covered I (N + writes P) L' (P.foldl (fun m st => st.apply m) m) := by
+      ∃ L' : ℕ → Fin w → V, Chained I (N + writes P) L' ∧ (∀ k < N, L' k = L k) ∧
+        ∀ i, Covered I (N + writes P) L' ((P.take i).foldl (fun m st => st.apply m) m) := by
   induction P with
-  | nil => intro N L m hL hm; exact ⟨L, by simpa [writes] using hL, by simpa [writes] using hm⟩
+  | nil =>
+    intro N L m hL hm
+    refine ⟨L, by simpa [writes] using hL, fun _ _ => rfl, fun i => ?_⟩
+    simpa [writes] using hm
   | cons st P ih =>
     intro N L m hL hm
-    obtain ⟨L₁, hL₁, hm₁, -⟩ := good_step hL hm st
-    obtain ⟨L', hL', hm'⟩ := ih (N + st.cost) L₁ (st.apply m) hL₁ hm₁
-    refine ⟨L', ?_, ?_⟩
-    · simpa [writes, add_assoc] using hL'
-    · simpa [writes, add_assoc] using hm'
+    obtain ⟨L₁, hL₁, hm₁, hag₁⟩ := good_step hL hm st
+    obtain ⟨L', hL', hag', hcov⟩ := ih (N + st.cost) L₁ (st.apply m) hL₁ hm₁
+    have hw : N + st.cost + writes P = N + writes (st :: P) := by rw [writes_cons, add_assoc]
+    have hag : ∀ k < N, L' k = L k := fun k hk => by rw [hag' k (by omega), hag₁ k hk]
+    refine ⟨L', hw ▸ hL', hag, fun i => ?_⟩
+    cases i with
+    | zero =>
+      simp only [List.take_zero, List.foldl_nil]
+      exact covered_mono hm (by omega) hag
+    | succ i =>
+      simp only [List.take_succ_cons, List.foldl_cons]
+      exact hw ▸ hcov i
+
+/-- **Provenance at every point of a run**: after every prefix of `P`, every slot holds an initial chunk value or one
+of `writes P` new ones, each within one word of an earlier or initial one. -/
+theorem good_prefix [DecidableEq V] [Inhabited V] (m₀ : A → Fin w → V) (P : List (Step A V w)) :
+    ∃ L : ℕ → Fin w → V, Chained (Set.range m₀) (writes P) L ∧
+      ∀ i, Covered (Set.range m₀) (writes P) L (run m₀ (P.take i)) := by
+  obtain ⟨L, hL, -, hm⟩ := good_all (I := Set.range m₀) P 0 (fun _ _ => default) m₀
+    (fun k hk => absurd hk (Nat.not_lt_zero k)) (fun a => Or.inl ⟨a, rfl⟩)
+  exact ⟨L, by simpa using hL, fun i => by simpa [run] using hm i⟩
 
 /-- **Provenance**: every slot after a run holds an initial chunk value or one of `writes P` new ones, each within
 one word of an earlier or initial one. -/
 theorem good_run [DecidableEq V] [Inhabited V] (m₀ : A → Fin w → V) (P : List (Step A V w)) :
     ∃ L : ℕ → Fin w → V, Chained (Set.range m₀) (writes P) L ∧ Covered (Set.range m₀) (writes P) L (run m₀ P) := by
-  obtain ⟨L, hL, hm⟩ := good_foldl (I := Set.range m₀) P 0 (fun _ _ => default) m₀
-    (fun k hk => absurd hk (Nat.not_lt_zero k)) (fun a => Or.inl ⟨a, rfl⟩)
-  exact ⟨L, by simpa using hL, by simpa [run] using hm⟩
-
-/-! ## Counting the new values -/
-
-/-- A chunk's (position, value) pairs. -/
-def pairs [DecidableEq V] (x : Fin w → V) : Finset (Fin w × V) := univ.image fun p => (p, x p)
+  obtain ⟨L, hL, hm⟩ := good_prefix m₀ P
+  exact ⟨L, hL, by simpa using hm P.length⟩
 
 theorem mem_pairs [DecidableEq V] {x : Fin w → V} {pv : Fin w × V} : pv ∈ pairs x ↔ x pv.1 = pv.2 := by
   constructor
@@ -160,7 +154,8 @@ theorem pairs_le [DecidableEq V] {I : Set (Fin w → V)} {N : ℕ} {L : ℕ → 
     (Y : Finset (Fin w → V)) (hY : ∀ y ∈ Y, y ∈ I ∨ ∃ k < N, L k = y) :
     ((Y.biUnion pairs).filter fun pv : Fin w × V => ∀ x ∈ I, x pv.1 ≠ pv.2).card ≤ N := by
   classical
-  have hex : ∀ pv ∈ (Y.biUnion pairs).filter (fun pv : Fin w × V => ∀ x ∈ I, x pv.1 ≠ pv.2), ∃ k, k < N ∧ L k pv.1 = pv.2 := by
+  have hex : ∀ pv ∈ (Y.biUnion pairs).filter (fun pv : Fin w × V => ∀ x ∈ I, x pv.1 ≠ pv.2),
+      ∃ k, k < N ∧ L k pv.1 = pv.2 := by
     intro pv hpv
     obtain ⟨hpv, hnew⟩ := mem_filter.1 hpv
     obtain ⟨y, hy, hyp⟩ := mem_biUnion.1 hpv
@@ -272,25 +267,42 @@ theorem ball_sum_le [DecidableEq V] {I : Set (Fin w → V)} {N : ℕ} {L : ℕ �
 
 open Classical in
 /-- **A run writes at least its targets' new (position, value) pairs**, whatever the program: any branching, any
-copy addresses, chosen after the coins. `Y` are chunk values the run leaves in memory. -/
+copy addresses, chosen after the coins. `Y` are chunk values the run holds at some point. -/
 theorem run_pairs_le [DecidableEq V] [Inhabited V] (m₀ : A → Fin w → V) (P : List (Step A V w))
-    (Y : Finset (Fin w → V)) (hY : ∀ y ∈ Y, ∃ a, run m₀ P a = y) :
+    (Y : Finset (Fin w → V)) (hY : ∀ y ∈ Y, ∃ i a, run m₀ (P.take i) a = y) :
     ((Y.biUnion pairs).filter fun pv : Fin w × V => ∀ a, m₀ a pv.1 ≠ pv.2).card ≤ writes P := by
-  obtain ⟨L, hL, hm⟩ := good_run m₀ P
-  have := pairs_le hL Y fun y hy => by obtain ⟨a, rfl⟩ := hY y hy; exact hm a
+  obtain ⟨L, hL, hm⟩ := good_prefix m₀ P
+  have := pairs_le hL Y fun y hy => by obtain ⟨i, a, rfl⟩ := hY y hy; exact hm i a
   refine le_trans (card_le_card fun pv hpv => ?_) this
   obtain ⟨h1, h2⟩ := mem_filter.1 hpv
   exact mem_filter.2 ⟨h1, fun x ⟨a, hx⟩ => hx ▸ h2 a⟩
 
-/-- **A run writes at least `Σ_y (r y + 1)`** for target chunk values `Y` it leaves in memory, when each is further
+/-- **A run writes at least `Σ_y (r y + 1)`** for target chunk values `Y` it holds at some point, when each is further
 than `r y` from every initial chunk and any two are further apart than the sum of their radii. -/
 theorem run_ball_le [DecidableEq V] [Inhabited V] (m₀ : A → Fin w → V) (P : List (Step A V w))
-    (Y : Finset (Fin w → V)) (hY : ∀ y ∈ Y, ∃ a, run m₀ P a = y) (r : (Fin w → V) → ℕ)
+    (Y : Finset (Fin w → V)) (hY : ∀ y ∈ Y, ∃ i a, run m₀ (P.take i) a = y) (r : (Fin w → V) → ℕ)
     (hI : ∀ y ∈ Y, ∀ a, r y < hammingDist (m₀ a) y)
     (hYY : ∀ y ∈ Y, ∀ y' ∈ Y, y ≠ y' → r y + r y' < hammingDist y y') :
     ∑ y ∈ Y, (r y + 1) ≤ writes P := by
-  obtain ⟨L, hL, hm⟩ := good_run m₀ P
-  exact ball_sum_le hL Y r (fun y hy => by obtain ⟨a, rfl⟩ := hY y hy; exact hm a)
+  obtain ⟨L, hL, hm⟩ := good_prefix m₀ P
+  exact ball_sum_le hL Y r (fun y hy => by obtain ⟨i, a, rfl⟩ := hY y hy; exact hm i a)
     (fun y hy x ⟨a, hx⟩ => hx ▸ hI y hy a) hYY
+
+/-- **One-word chunks: a run writes at least its distinct new values.** With `w = 1` (every copy moves one word, free),
+the distinct values a run holds at some point and no initial slot holds number at most its writes. -/
+theorem run_values_le [DecidableEq V] [Inhabited V] (m₀ : A → Fin 1 → V) (P : List (Step A V 1)) (Y : Finset V)
+    (hY : ∀ v ∈ Y, ∃ i a, run m₀ (P.take i) a 0 = v) (hnew : ∀ v ∈ Y, ∀ a, m₀ a 0 ≠ v) : Y.card ≤ writes P := by
+  classical
+  have h := run_pairs_le m₀ P (Y.image fun v _ => v) fun y hy => by
+    obtain ⟨v, hv, rfl⟩ := mem_image.1 hy
+    obtain ⟨i, a, ha⟩ := hY v hv
+    exact ⟨i, a, funext fun p => (congrArg (run m₀ (P.take i) a) (Subsingleton.elim p 0)).trans ha⟩
+  refine le_trans ?_ h
+  calc Y.card = (Y.image fun v => ((0 : Fin 1), v)).card :=
+        (card_image_of_injective _ fun v v' h => (Prod.ext_iff.1 h).2).symm
+    _ ≤ _ := card_le_card fun pv hpv => by
+      obtain ⟨v, hv, rfl⟩ := mem_image.1 hpv
+      refine mem_filter.2 ⟨mem_biUnion.2 ⟨fun _ => v, mem_image.2 ⟨v, hv, rfl⟩, mem_pairs.2 rfl⟩, ?_⟩
+      exact fun a => hnew v hv a
 
 end Pouw.Dimension.Pointwise

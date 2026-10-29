@@ -1,3 +1,4 @@
+import Proofs.Pouw.Dimension.SsnProofs
 import Proofs.Pouw.Dimension.H100FloorProofs
 import Proofs.Pouw.Dimension.H100Proofs
 import Proofs.Pouw.Dimension.RouteUProofs
@@ -41,7 +42,7 @@ floor table `h100Floor`, which is the H200's measured table (`h200Measured = h10
 
 namespace Pouw.Dimension.SwLean
 
-open Finset Pouw.NCP Pouw.NCP.Relation Pouw.Dimension Pouw.Dimension.H100
+open Finset Pouw.NCP Pouw.NCP.Relation Pouw.Dimension Pouw.Dimension.H100 Pouw.Dimension.Ssn
 
 /-! ## Separation on a grid -/
 
@@ -90,22 +91,6 @@ theorem distinctOn_union [DecidableEq (G → ℚ)] {S : Set G} {F : Set (G → �
 theorem card_union_of_cross [DecidableEq (G → ℚ)] {S : Set G} {T₁ T₂ : Finset (G → ℚ)}
     (hx : ∀ t ∈ T₁, ∀ t' ∈ T₂, ¬ ∀ g ∈ S, t g = t' g) : (T₁ ∪ T₂).card = T₁.card + T₂.card := by
   refine Finset.card_union_of_disjoint (Finset.disjoint_left.2 fun t h₁ h₂ => hx t h₁ t h₂ fun _ _ => rfl)
-
-/-- The image of a family that differs pairwise on `S` has one element per index. -/
-theorem card_image_of_differ {ι : Type} [DecidableEq (G → ℚ)] {S : Set G} (s : Finset ι) (t : ι → G → ℚ)
-    (h : ∀ i ∈ s, ∀ j ∈ s, i ≠ j → ¬ ∀ g ∈ S, t i g = t j g) : (s.image t).card = s.card := by
-  classical
-  refine Finset.card_image_of_injOn fun i hi j hj hij => ?_
-  by_contra hne
-  exact h i hi j hj hne fun g _ => by rw [hij]
-
-/-- **The floor charges every target**: at `h100Floor` (the H200's measured table), a well-formed `MH100w` program on
-free inputs that matches on `S` a target set distinct and non-free on `S` costs at least 32 a target. -/
-theorem charged (F : Set (G → ℚ)) (hF : ∀ q : ℚ, (fun _ : G => q) ∈ F) (S : Set G) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ)
-    (L : List (G → ℚ)) (P : List (Op100 G)) (T : Finset (G → ℚ)) (hL : ∀ f ∈ L, f ∈ F)
-    (hP : ∀ o ∈ P, o.WFw h100Floor F) (hT : DistinctOn S F T) (hO : OutputsOn fpSem S P L T) :
-    32 * T.card ≤ cost100 h100Floor P :=
-  distinctWritesFloor G F hF S fpSem L P T hL hP hT hO
 
 /-- **A free value costs nothing**: one `operand` word outputs it, at cost 0. So no bound charges a target that
 equals a free value on `S`. -/
@@ -234,21 +219,21 @@ section RawDither
 variable {ι : Type} [DecidableEq ι]
 
 /-- The raw coin bytes: one 4-byte coin word a register. -/
-abbrev Coins (ι : Type) : Type := ι → Fin 4 → ℤ
+abbrev DitherVals (ι : Type) : Type := ι → Fin 4 → ℤ
 
 /-- The grid points whose coin bytes are bytes. -/
-def rawS (ι : Type) : Set (Unit × Coins ι) := {g | ∀ r t, 0 ≤ g.2 r t ∧ g.2 r t < 256}
+def rawS (ι : Type) : Set (Unit × DitherVals ι) := {g | ∀ r t, 0 ≤ g.2 r t ∧ g.2 r t < 256}
 
 /-- The raw coin words: register `r`'s coin bytes, packed. -/
-def rawCoins (ι : Type) : Set (Unit × Coins ι → ℚ) := {c | ∃ r, c = reg fun g => g.2 r}
+def rawCoins (ι : Type) : Set (Unit × DitherVals ι → ℚ) := {c | ∃ r, c = reg fun g => g.2 r}
 
 /-- The formed register `A r + D r`, with `D r` register `r`'s raw coin bytes. -/
-def rawX (A : ι → Fin 4 → ℤ) (r : ι) : Unit × Coins ι → Fin 4 → ℤ := fun g => A r + g.2 r
+def rawX (A : ι → Fin 4 → ℤ) (r : ι) : Unit × DitherVals ι → Fin 4 → ℤ := fun g => A r + g.2 r
 
 /-- **The raw-byte dither, exactly**: on the data slice with the noise every byte value, the formed registers whose data
 register is not `0` mod 256 are distinct and non-free (one target each), and each one whose data register is `0` mod
 256 equals its coin word on the grid, so it is free. -/
-theorem rawDither_exact [DecidableEq (Unit × Coins ι → ℚ)] (A : ι → Fin 4 → ℤ) (ρ : Finset ι) :
+theorem rawDither_exact [DecidableEq (Unit × DitherVals ι → ℚ)] (A : ι → Fin 4 → ℤ) (ρ : Finset ι) :
     (DistinctOn (rawS ι) (FreeC1 (rawCoins ι)) ((ρ.filter fun r => ∃ t, byte (A r t) ≠ 0).image fun r => reg (rawX A r)) ∧
       ((ρ.filter fun r => ∃ t, byte (A r t) ≠ 0).image fun r => reg (rawX A r)).card =
         (ρ.filter fun r => ∃ t, byte (A r t) ≠ 0).card) ∧
@@ -1528,8 +1513,6 @@ theorem ssnPt_mem {r : Fin m} {s : Fin S} {x : ℕ} (hx : x < 2 ^ 32) : ssnPt r 
 
 theorem zero_mem_ssnGrid : (0 : SsnCoins m S) ∈ ssnGrid m S := fun _ _ => by simp
 
-theorem fin0_le (hS : 0 < S) (t : Fin S) : (⟨0, hS⟩ : Fin S) ≤ t := Fin.le_iff_val_le_val.2 (Nat.zero_le _)
-
 theorem ssnWord_zero {lane : ℕ → Fin 4 → ℕ} (hM : Mask lane) (κ : Fin m → ℕ → Fin S → ℤ)
     (W : Fin S → Fin 4 → ℕ → ℤ) (i : Fin m) (j : ℕ) (t : Fin S) :
     ssnWord lane κ W i j t (0 : SsnCoins m S) = κ i j t := by
@@ -1678,58 +1661,8 @@ theorem ssn_charged [DecidableEq (SsnCoins m S → ℚ)] {lane : ℕ → Fin 4 �
 
 /-! ### SW-NOISE's weights -/
 
-/-- Column `j`'s code number: `j + 1`, skipping `14,280`, whose base-13 digits are all `6`. -/
-def ssnC (j : ℕ) : ℕ := if j + 1 < 14280 then j + 1 else j + 2
-
-/-- Digit `e` of `c` in base 13. -/
-def ssnDigit (c : ℕ) (e : Fin 4) : ℕ := c / 13 ^ (e : ℕ) % 13
-
-/-- Step 0's injective column code: `C[e, j] = digit e of c_j − 6`, in `[−6, 6]⁴ ∖ {0}`. -/
-def ssnCode (e : Fin 4) (j : ℕ) : ℤ := (ssnDigit (ssnC j) e : ℤ) - 6
-
-theorem ssnDigit_eq (c : ℕ) : ssnDigit c 0 = c % 13 ∧ ssnDigit c 1 = c / 13 % 13 ∧ ssnDigit c 2 = c / 169 % 13 ∧
-    ssnDigit c 3 = c / 2197 % 13 := by
-  refine ⟨?_, ?_, ?_, ?_⟩ <;> simp [ssnDigit]
-
-theorem ssnCode_ne_zero {j : ℕ} (hj : j < 28559) : ∃ q, ssnCode q j ≠ 0 := by
-  by_contra h
-  push_neg at h
-  obtain ⟨d0, d1, d2, d3⟩ := ssnDigit_eq (ssnC j)
-  have h0 := h 0
-  have h1 := h 1
-  have h2 := h 2
-  have h3 := h 3
-  simp only [ssnCode] at h0 h1 h2 h3
-  unfold ssnC at d0 d1 d2 d3 h0 h1 h2 h3
-  split_ifs at d0 d1 d2 d3 h0 h1 h2 h3 <;> omega
-
-theorem ssnCode_inj {j j' : ℕ} (hj : j < 28559) (hj' : j' < 28559) (hne : j ≠ j') :
-    ∃ q, ssnCode q j ≠ ssnCode q j' := by
-  by_contra h
-  push_neg at h
-  obtain ⟨d0, d1, d2, d3⟩ := ssnDigit_eq (ssnC j)
-  obtain ⟨d0', d1', d2', d3'⟩ := ssnDigit_eq (ssnC j')
-  have h0 := h 0
-  have h1 := h 1
-  have h2 := h 2
-  have h3 := h 3
-  simp only [ssnCode] at h0 h1 h2 h3
-  unfold ssnC at d0 d1 d2 d3 d0' d1' d2' d3' h0 h1 h2 h3
-  split_ifs at d0 d1 d2 d3 d0' d1' d2' d3' h0 h1 h2 h3 <;> omega
-
-/-- `ssn_1l`'s weights: step 0 the code on four lanes, every later step one lane of weight 1 for every column. -/
-def w1l (s : Fin S) (q : Fin 4) (j : ℕ) : ℤ := if (s : ℕ) = 0 then ssnCode q j else if q = 0 then 1 else 0
-
 /-- `ssn_a`'s weights: step 0 the code, later steps one-hot on lane `(j + s) mod 4`. -/
 def wA (s : Fin S) (q : Fin 4) (j : ℕ) : ℤ := if (s : ℕ) = 0 then ssnCode q j else if (q : ℕ) = (j + s) % 4 then 1 else 0
-
-theorem w1l_reach (n : ℕ) (hn : n ≤ 28559) : ∀ s : Fin S, ∀ j ∈ range n, ∃ q, w1l s q j ≠ 0 := by
-  intro s j hj
-  have hj' : j < 28559 := by have := Finset.mem_range.1 hj; omega
-  by_cases hs : (s : ℕ) = 0
-  · obtain ⟨q, hq⟩ := ssnCode_ne_zero hj'
-    exact ⟨q, by simp only [w1l, if_pos hs]; exact hq⟩
-  · exact ⟨0, by simp [w1l, hs]⟩
 
 theorem wA_reach (n : ℕ) (hn : n ≤ 28559) : ∀ s : Fin S, ∀ j ∈ range n, ∃ q, wA s q j ≠ 0 := by
   intro s j hj
@@ -1738,12 +1671,6 @@ theorem wA_reach (n : ℕ) (hn : n ≤ 28559) : ∀ s : Fin S, ∀ j ∈ range n
   · obtain ⟨q, hq⟩ := ssnCode_ne_zero hj'
     exact ⟨q, by simp only [wA, if_pos hs]; exact hq⟩
   · exact ⟨⟨(j + s) % 4, Nat.mod_lt _ (by norm_num)⟩, by simp [wA, hs]⟩
-
-theorem code_cols (hS : 0 < S) (W : Fin S → Fin 4 → ℕ → ℤ) (hW : ∀ q j, W ⟨0, hS⟩ q j = ssnCode q j) (n : ℕ)
-    (hn : n ≤ 28559) : ∀ j ∈ range n, ∀ j' ∈ range n, j ≠ j' → ∃ q, W ⟨0, hS⟩ q j ≠ W ⟨0, hS⟩ q j' := by
-  intro j hj j' hj' hne
-  obtain ⟨q, hq⟩ := ssnCode_inj (by have := Finset.mem_range.1 hj; omega) (by have := Finset.mem_range.1 hj'; omega) hne
-  exact ⟨q, by rw [hW, hW]; exact hq⟩
 
 /-- **`ssn_1l` is charged**: at every data case, for `n ≤ 28,559` columns, `S ≥ 1` steps and either mask (bits or
 nibbles), every well-formed `MH100w` program on constants and raw coin words that outputs `ssn_1l`'s committed words
@@ -2055,29 +1982,10 @@ theorem bit_coin {used : Fin S → Fin 4 → Prop} [∀ s q, Decidable (used s q
     rw [h0]
     norm_num
 
-theorem ssnCode_le (e : Fin 4) (j : ℕ) : ssnCode e j ≤ 6 := by
-  have h := Nat.mod_lt (ssnC j / 13 ^ (e : ℕ)) (by norm_num : 13 > 0)
-  simp only [ssnCode, ssnDigit]
-  generalize ssnC j / 13 ^ (e : ℕ) % 13 = d at h ⊢
-  omega
-
-theorem w1l_ne (s : Fin S) (q : Fin 4) (j : ℕ) : w1l s q j ≠ 2 ^ 31 := by
-  have := ssnCode_le q j
-  unfold w1l
-  split_ifs <;> norm_num <;> omega
-
 theorem wA_ne (s : Fin S) (q : Fin 4) (j : ℕ) : wA s q j ≠ 2 ^ 31 := by
   have := ssnCode_le q j
   unfold wA
   split_ifs <;> norm_num <;> omega
-
-/-- `ssn_1l` weighs step 0's four lanes and lane 0 of every later step: `S + 3` coin bits a row. -/
-theorem w1l_used (s : Fin S) (q : Fin 4) (j : ℕ) (h : w1l s q j ≠ 0) : (s : ℕ) = 0 ∨ q = 0 := by
-  unfold w1l at h
-  split_ifs at h with h1 h2
-  · exact Or.inl h1
-  · exact Or.inr h2
-  · exact absurd rfl h
 
 /-- **`ssn_1l` is charged with shared coin words**: at every data case, for `n ≤ 28,559` columns and `S ≥ 1` steps,
 for every layout that reads step 0's four lanes and every later step's lane 0 from distinct bits (`pos`) of the
