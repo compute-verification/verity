@@ -100,6 +100,15 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
   - **Open, for Daniel's copy model:** `TileGrain` charges a patched word the whole tile's 128 registers. The
     measurements back that in effect (patching loses 6.4–7.6% once selection is priced), but not to the letter (W1:
     one register a patch). COUNTER is computing the gap under measured prices.
+- **17:23Z, COMMIT is done** (N-HIDE, `cursor/compute-research-lean-commit-67bb` at 7fa8be0e2a):
+  - proved: `RowBound` and `LeafFirstBlock` (a row digest binds its position), and `RoundsOpenAfterRoots` (g-private's
+    ordering);
+  - named assumptions `SubtreeLayout` and `SaltDerivation`, which `G` doesn't read;
+  - carried-words needs no premise;
+  - hiding's hybrid bound is moved in.
+  - On the integration head, two things are broken: Compose's `G_of_wordsFloor` lacks the coin-stream binder, so
+    COMPOSE must fix it against `CoinStream`; and `tests/test_lean_vocabulary.py` fails on `Pouw.Lead.Coins`,
+    `Pouw.Lead.Layout` and `CoinBranch.Priced.Prog`, which their owners list or rename.
 - **COUNTER, search first:** the coin-branch figure (0.084%) and the per-tile table constants (49⁻⁸ at step 0, 7⁻⁸ for at
   most 32 stream tiles, 2⁻¹⁰⁰ after). Both are analysis, not proved.
 
