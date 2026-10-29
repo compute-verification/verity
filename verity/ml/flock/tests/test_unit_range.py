@@ -4,6 +4,8 @@ range is staged as before. The count is held to the flat lowering's ANDs on stag
 refuses unless the lowering lays out fewer than half the witness bits counted."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from test_class_statement_unit_stager import STATEMENTS, TOY, TOY_ROWS
 from verity.ml.circuits.boolean import AND, BIT, and_gate
@@ -12,6 +14,7 @@ from verity.ml.circuits.types import Array
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
+from verity_flock import ir_lower as IL
 
 
 def wide(log: int):
@@ -54,6 +57,20 @@ def test_a_unit_in_range_is_staged(monkeypatch):
     monkeypatch.setattr(CS, "unit_lowering", lambda *a, **k: pytest.fail("lowered"))
     with pytest.raises(ValueError, match=rf"^unit/stager-toy: the unit needs a slot of 2\^{w['k']} witness bits"):
         CS.UnitStager(TOY, "unit/stager-toy", TOY_ROWS, [(V2, (0,))])
+
+
+def test_a_piece_lowered_only_on_a_constant_operand_is_counted_by_its_stated_ands(monkeypatch):
+    """A piece that can't be lowered on free operands (PoUW's scratch rotations by a constant count) counts the ``ands`` it
+    states, under a tracer's wrapper too (`boolean_export`'s sets ``__wrapped__``), and is never lowered on free ones."""
+    def piece(C, *ops):
+        raise NotImplementedError("lowered on free operands")
+
+    piece.ands = 7
+    traced = lambda *a: piece(*a)  # noqa: E731
+    traced.__wrapped__ = piece
+    monkeypatch.setattr(IL, "_PIECE_ANDS", {})
+    monkeypatch.setitem(IL.PIECES, "UnitRangeConstOnly_v1", traced)
+    assert IL._piece_ands(SimpleNamespace(id="UnitRangeConstOnly_v1")) == 7
 
 
 @pytest.mark.parametrize("which", list(STATEMENTS))
