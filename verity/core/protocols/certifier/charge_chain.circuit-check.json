@@ -1,10 +1,12 @@
 {
  "definitions": {
   "ChargeLink_v1{N=14}": {
-   "and": 50760
+   "and": 53119,
+   "type": "b4a07a89e72307b25899f6637a297af85fc8a2d507a1405b898626d3c1dcf2781f10628a37c2f2a4522b8374f805d26f37dbc82e63f76a3e70a097bd98f87848"
   },
   "ChargeLink_v1{N=2}": {
-   "and": 19632
+   "and": 19957,
+   "type": "6e3ea2ab9b58940a49ee3576012afa18a0ce645ae22e47aedf68c9de6ef2c278986928db22be9fcb57e832aae3d12287dccf266f679e313596efacf07528c2ce"
   }
  }
 }
