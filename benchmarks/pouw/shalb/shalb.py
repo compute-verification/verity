@@ -621,11 +621,15 @@ def main() -> None:
         comp = regs / per_comp
         row = {"scope": scope, "period": p, "stock_macs": macs, "compressions": comp, "hash_and": comp * ands,
                "stock_and": macs * AND_PER_MAC, "R": (1 - delta) * regs, "delta_registers": delta * regs,
-               "over_credit_and": over * comp * ands, "data_independent_and": di * comp * ands}
+               "over_credit_and": over * comp * ands, "data_independent_and": di * comp * ands,
+               "t1_allowance_w1": 0.01 * macs, "over_credit_w1": over * args.lead_w1 * macs,
+               "data_independent_w1": di * args.lead_w1 * macs}
         out["sha_writes_l1"]["periods"].append(row)
         print(f"- {scope}, {p}: {comp:.3g} compressions ({row['hash_and']:.3g} AND gates; stock {row['stock_and']:.3g}"
-              f"); R = {row['R']:.4g} registers, δ·R = {row['delta_registers']:.3g}; over-credit at 3,532 "
-              f"{row['over_credit_and']:.3g} AND gates; data-independent {row['data_independent_and']:.3g}")
+              f"); R = {row['R']:.4g} registers, δ·R = {row['delta_registers']:.3g}; T1 allows "
+              f"{row['t1_allowance_w1']:.3g} W1; over-credit at 3,532 {row['over_credit_w1']:.3g} W1 "
+              f"({row['over_credit_and']:.3g} AND gates); data-independent {row['data_independent_w1']:.3g} W1 "
+              f"({row['data_independent_and']:.3g} AND gates)")
 
     if args.minimal:
         out["minimal"] = json.loads(Path(args.minimal).read_text())["summary"]
