@@ -94,7 +94,7 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   this supremum is not stated here.
 -/
 
-namespace Accounting.Remote.Draw
+namespace Accounting.Remote.Sample
 
 open Finset
 open scoped ENNReal
@@ -207,7 +207,7 @@ def wrong (ω : DrawCoins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good 
 
 /-- The session's pooled bound at `δ`, at the sizes and draw counts of outcome `ω`. -/
 noncomputable def pooled (δ : ℝ) (ω : DrawCoins n κ X) : ℝ :=
-  Draw.pooled n (fun t => D.size t ω) (fun t => D.draws t ω) δ
+  Sample.pooled n (fun t => D.size t ω) (fun t => D.draws t ω) δ
 
 end Session
 
@@ -296,4 +296,4 @@ noncomputable def binding [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Session
 
 end Receipts
 
-end Accounting.Remote.Draw
+end Accounting.Remote.Sample

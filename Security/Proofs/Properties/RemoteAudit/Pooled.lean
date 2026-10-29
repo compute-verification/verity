@@ -104,8 +104,8 @@ theorem root_le {S : ℕ} {δ : ℚ} (hS : S ≠ 0) (hδ : 0 < δ) :
     exact Real.rpow_nonneg hδ' _
 
 theorem budget_le {S : ℕ} {δ : ℚ} (hS : S ≠ 0) (hδ : 0 < δ) :
-    Accounting.Remote.Draw.budget S δ ≤ (budget S δ : ℝ) := by
-  unfold Accounting.Remote.Draw.budget budget
+    Accounting.Remote.Sample.budget S δ ≤ (budget S δ : ℝ) := by
+  unfold Accounting.Remote.Sample.budget budget
   push_cast
   exact mul_le_mul_of_nonneg_left (sub_le_sub_left (root_le hS hδ) 1) (by positivity)
 
@@ -278,12 +278,12 @@ theorem pooledCovers : PooledCovers := by
     have := (hwin ⟨0, hn'⟩).1
     omega
   set B := budget (ws.toList.map (·.2)).sum δ with hB
-  have hBle : Accounting.Remote.Draw.budget (∑ t, d t) δ ≤ (B : ℝ) := by
+  have hBle : Accounting.Remote.Sample.budget (∑ t, d t) δ ≤ (B : ℝ) := by
     rw [hB, hS]; exact budget_le hSpos hδ0
   have hδ1 : (δ : ℝ) ≤ 1 := by exact_mod_cast (le_of_lt ‹δ < 1›)
   have hB0 : (0 : ℝ) ≤ B := by
     refine le_trans ?_ hBle
-    unfold Accounting.Remote.Draw.budget
+    unfold Accounting.Remote.Sample.budget
     have := Real.rpow_le_one (by exact_mod_cast hδ0.le : (0 : ℝ) ≤ δ) hδ1 (by positivity : (0 : ℝ) ≤ ((∑ t, d t : ℕ) : ℝ)⁻¹)
     have : (0 : ℝ) ≤ ((∑ t, d t : ℕ) : ℝ) := by positivity
     nlinarith

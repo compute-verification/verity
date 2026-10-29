@@ -1,11 +1,11 @@
-import Definitions.Accounting.Remote.Draw
+import Definitions.Accounting.Remote.Sample
 import Definitions.Accounting.Remote.Held
 
 /-!
 # What the remote audit's opening draw assumes (trusted)
 
 The premises of `Accounting.Guarantees.Remote.PooledDraw`, which derives the memory line's `LiveCoins` from the
-verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a session and the trace over its coins:
+verifier's opening draw (`Accounting.Remote.Sample`), each a named `Prop` on a session and the trace over its coins:
 
 * `Live`: window `t`'s size and correct receipts are fixed before its openings coin is released, by the other coins and
   the earlier windows' openings coins, never by its own or a later one. The verifier releases the coin after the
@@ -30,7 +30,7 @@ The draw is the deployed one, not a premise: each window's openings are `Key.sub
 independent of the other coins, as the challenger draws them (the trace's uniform measure on `DrawCoins`).
 -/
 
-namespace Accounting.Remote.Draw.Assumptions
+namespace Accounting.Remote.Sample.Assumptions
 
 open Accounting.Remote.Held
 
@@ -56,4 +56,4 @@ windows' wrong receipts. -/
 def Counted (D : Session n m s κ X) (T : Trace (DrawCoins n κ X)) : Prop :=
   ∀ ω, T.accepts ω → T.wrong ω ≤ D.wrong ω
 
-end Accounting.Remote.Draw.Assumptions
+end Accounting.Remote.Sample.Assumptions

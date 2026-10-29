@@ -432,9 +432,9 @@ KNOWN: dict[str, str] = {
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
     "Security/Definitions/Accounting/RateAuditSketchInteractive.lean::Accounting.RateSketch.InteractiveDevice":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
-    "Security/Definitions/Accounting/Remote/Draw.lean::Accounting.Remote.Draw.Coins":
+    "Security/Definitions/Accounting/Remote/Sample.lean::Accounting.Remote.Sample.Coins":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "Security/Definitions/Accounting/Remote/Draw.lean::Accounting.Remote.Draw.Session":
+    "Security/Definitions/Accounting/Remote/Sample.lean::Accounting.Remote.Sample.Session":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/Remote/Node.lean::Accounting.Remote.Node":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: a node's projection (memory-accounting)",
