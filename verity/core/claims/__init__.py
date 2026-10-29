@@ -497,21 +497,6 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
           "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
           "uniform draws the tape models", "Firewall OS source", "standard"),
-    # `Pouw.Assumptions.SubtreeLayout`, `SaltDerivation` and `CarriedWords` (Security/Definitions/Pouw/Assumptions/
-    # LeadCommit.lean): the lead's commitment premises that no Lean function computes yet
-    Entry("pouw-subtree-layout", "assumption",
-          "Each hm96 instance hides one frame-v3 subtree under its own domain: a row a drawn unit's proof opens climbs, "
-          "under its instance's domain, to the inner digest whose hm96 leaf is the instance's registered root (a call's A "
-          "rows or a forward's words)", "PoUW subtree layout", "standard"),
-    Entry("pouw-salt-derivation", "assumption",
-          "Every hm96 salt derives from a key committed before the window's salt: a drawn unit's proof opens the key ks "
-          "against its committed hm96 leaf and checks the salt is y = F2(k_w, pos), with k_w = F1(ks, salt_w), so no salt "
-          "is chosen after a coin", "PoUW salt derivation", "standard"),
-    Entry("pouw-carried-words", "assumption",
-          "Every program the card runs that outputs the committed words' SHA-512 digests writes, for each committed word, "
-          "a register equal to it plus a constant on the coin grid (a carrier), before any byte swap or conversion the "
-          "hash reads; false over all of MH100w, where an instruction may write any encoding of a word",
-          "PoUW carried words", "measured"),
 )}
 
 
