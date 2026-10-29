@@ -140,7 +140,8 @@ RATCHET_FAILED_RE = re.compile(r"^  (\S+) \(([0-9a-f]{12})\): failed: (.*)$", re
 REVIEWED = "a land verdict at each head"
 #: the keys of drive's state that only train landing kept, dropped from a state that has them
 TRAIN_STATE = ("launched", "deferred", "resent", "base", "bisect", "orphans", "per_pr", "prewarm")
-#: the after-landing run of a review landing: every ci.toml job (`--deferred` takes jobs; the preflights are none)
+#: the after-landing run of a review landing: every ci.toml job (`--deferred` takes jobs; the preflights are none), those off the
+#: merge gate (`gate = false`: circuit-check) among them, which no check before landing runs
 AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
 #: the after-landing steps a run may skip by name: lean-agreement when nothing it checks changed, lean-changed under --no-cache
 AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
