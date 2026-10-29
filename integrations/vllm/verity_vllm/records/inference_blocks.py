@@ -16,7 +16,7 @@ ROOT = re.compile(r"[0-9a-f]{128}")
 
 
 @dataclass(frozen=True)
-class Statement:
+class InferenceBlocks:
     query: Mapping[str, Any]                          # the label rule over the root's template instances
     c: int                                            # every block's gates
     k: int                                            # every block's fresh input, in bits
@@ -25,7 +25,7 @@ class Statement:
     root: str                                         # the table's hiding root, 64 bytes in hex
 
     @classmethod
-    def of(cls, doc: Any, where: str) -> Statement:
+    def of(cls, doc: Any, where: str) -> InferenceBlocks:
         """The statement as its writer wrote it, refused by field (`fields.RecordError`) where it isn't one: another
         format, a field no writer writes, or a root that isn't 64 bytes in hex."""
         if not isinstance(doc, Mapping):

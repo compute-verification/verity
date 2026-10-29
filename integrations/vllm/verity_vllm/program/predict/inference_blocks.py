@@ -11,7 +11,7 @@ when its units run, not which block holds them, so the table doesn't carry it.
 
     {"format": FORMAT, "query": QUERY, "c": c, "k": k, "blocks": grid(m), "rows": grid(R), "root": "<hex>"}
 
-as `records.inference_blocks.Statement` types it.
+as `records.inference_blocks.InferenceBlocks` types it.
 
 ``m`` is the block count, ``R`` the table's rows, each rounded up to the public grid (`partition_v2.grid`), so the statement
 gives a grid level of each and never the counts; the entries, and which units make which block, stay in the table.
@@ -125,7 +125,8 @@ def commit(circuit: IF.Circuit, program: str | None = None,
     padded = rs + [bytes(ROW_BYTES)] * (PV2.grid(len(rs)) - len(rs))
     reg = AC.commit(padded, ROW_BITS, BINDING, salts)
     c, k = budgets(circuit)
-    st = RIB.Statement(query=QUERY, c=c, k=k, blocks=PV2.grid(_blocks(circuit).slots), rows=len(padded), root=reg.root.hex())
+    st = RIB.InferenceBlocks(query=QUERY, c=c, k=k, blocks=PV2.grid(_blocks(circuit).slots), rows=len(padded),
+                             root=reg.root.hex())
     return st.dump(), reg
 
 
