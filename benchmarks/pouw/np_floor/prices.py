@@ -1,14 +1,14 @@
-"""Prices from a probes.sh run of copy.cu, branch.cu, brx.cu and br2.cu, in W1's units: an SM-clock is 4096 units (the
-floor, 32 a register, is 128 registers an SM-clock).
+"""Prices from a probes.sh run of copy.cu, branch.cu, brx.cu, br2.cu and lut.cu, in W1's units: an SM-clock is 4096
+units (the floor, 32 a register, is 128 registers an SM-clock).
 
 copy       a role's words an SM-clock (probe.py's rate x words a warp instruction), 4096 / that a word, and its share of
            the floor's 128 words an SM-clock; beside honest (hs_*), the same for the role's words while the honest warps
            ran, the honest IMMA's rate as a share of its rate beside idle warps (honest_b, honest_l), and the SM time
            honest lost a word placed: (1 - kept) x 4096 / words an SM-clock.
 decisions  4096 x the median block's cycles / (iters x warps x decisions a trip) units a warp decision, its coin bits
-           (bits a decision: one for the two-way forms, 4 for BRX16, 8 for a lookup), units a bit read by the warp and a
-           lane-bit for the forms whose lanes read their own coins; the overhead is over the arms alone (`arm`,
-           `larm`), scaled by decisions a trip where the arms differ.
+           (bits a decision: one for the two-way forms, 4 for BRX16, a digit for a lookup), units a bit read by the
+           warp and a lane-bit for the forms whose lanes read their own coins; the overhead is over the arms alone
+           (`arm`, `larm`), scaled by decisions a trip where the arms differ.
 
   python prices.py OUT_DIR   # OUT_DIR: a probes.sh run's out/ (one directory a binary); prints JSON lines
 """
@@ -33,6 +33,7 @@ DECIDE = {
     "brxd": (2, 4, True, "arm"),
     "x2u": (8, 1, False, "arm"), "x2w": (8, 1, False, "arm"), "x2d": (8, 1, True, "arm"),
     "lu": (4, 1, False, "larm"), "lw": (4, 1, False, "larm"), "ld": (4, 1, True, "larm"), "larm": (4, 1, False, None),
+    "lut8": (4, 8, True, None), "lut10": (3, 10, True, None), "lut12": (2, 12, True, None),
 }
 HONEST = {"hs_g2s1k": "honest_b", "hs_g2s4k": "honest_b", "hs_g2s4kh": "honest_b", "hs_s2g4k": "honest_b",
           "hs_g2s16k": "honest_b", "hs_g2s4kz": "honest_b", "hs_g2s16kz": "honest_b", "hs_s2g4kz": "honest_b",
