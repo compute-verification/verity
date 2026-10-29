@@ -15,7 +15,9 @@
 #   the leaves of any launch of fewer than SMALL_ROWS_MAX rows), TAG (0; 1 times the ssn-1l-tag layout; the check runs both),
 #   L1 (0; 1 puts L1 + (a)'s seed path, root(A_j) through the seed and noise blocks, before each call's forming; 2 the same
 #   path shaped for latency, its noise blocks, G and forming in one launch), L1_CTA (64; L1=2's least CTA size, 64 or 128),
-#   BARE (0; 1 also times beside with nothing ahead of each call's GEMM, the schedule's floor).
+#   BARE (0; 1 also times beside with nothing ahead of each call's GEMM, the schedule's floor), VARIANTS (unset; else
+#   passes of the timings, each a comma-separated NAME=VALUE list over the environment above, e.g. "L1=1 L1=2,PRIO=1":
+#   time_m<M>_<the list with = as - and , as _>.jsonl).
 #   VERITY_ROWS_PHASES and VERITY_ROWS_FORM reach the served committer (native_rows.cu).
 set -uo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
@@ -84,13 +86,17 @@ if [ "${CHECK:-1}" = 1 ]; then
   worst=$?; say "check rc $worst"; cat "$OUT/check.jsonl"
 fi
 [ "${TIME:-1}" = 1 ] || exit "$worst"
-for cap in ${CAPS:-0}; do
-  for m in ${MS:-64 512 8192}; do
-    f=time_m$m; [ "$cap" = 0 ] || f=time_m${m}_cap$cap
-    # shellcheck disable=SC2086
-    HASH_CAP=$cap "$BUILD_DIR/ssn" time "${REPS:-5}" "$m" "${BUDGET_GB:-16}" ${ROWS:-0 65536 16384} > "$OUT/$f.jsonl" 2> "$OUT/$f.err"
-    rc=$?; say "time M $m cap $cap rc $rc ($(wc -l < "$OUT/$f.jsonl") lines)"
-    [ "$rc" = 0 ] || { worst=$rc; tail -5 "$OUT/$f.err"; }
+for v in ${VARIANTS:--}; do
+  vars=(); [ "$v" = - ] || IFS=, read -ra vars <<< "$v"
+  for cap in ${CAPS:-0}; do
+    for m in ${MS:-64 512 8192}; do
+      f=time_m$m; [ "$cap" = 0 ] || f=${f}_cap$cap; [ "$v" = - ] || f=${f}_$(tr = - <<< "${v//,/_}")
+      # shellcheck disable=SC2086
+      env "${vars[@]}" HASH_CAP=$cap "$BUILD_DIR/ssn" time "${REPS:-5}" "$m" "${BUDGET_GB:-16}" ${ROWS:-0 65536 16384} \
+        > "$OUT/$f.jsonl" 2> "$OUT/$f.err"
+      rc=$?; say "time M $m cap $cap ${vars[*]} rc $rc ($(wc -l < "$OUT/$f.jsonl") lines)"
+      [ "$rc" = 0 ] || { worst=$rc; tail -5 "$OUT/$f.err"; }
+    done
   done
 done
 exit "$worst"
