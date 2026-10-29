@@ -36,7 +36,7 @@ floor give, outside both regions.
 The step from the deployed device to the ring model is two premises, and no theorem here discharges either: the device
 model (`DeviceModel`: the state at each round boundary within `B + S_chip + ∑ cap_i · round`, and each on-time answer
 within `(D, Q, L)`, the budget this module fixes from `Δ + RTT` and the measured floor), falsifiable by measurement; and
-the instantiation in reduction form (`Instantiates`, `pous-ring-instantiation` and `prf/sha-512`), which bounds no
+the instantiation in reduction form (`Instantiates`, `pous-ring-instantiation`), which bounds no
 strategy. Both are stated for every prover strategy, and the ring game's server is the fixed extractor's
 (`Pous.Period.extract`), never a witness the prover picks.
 -/
