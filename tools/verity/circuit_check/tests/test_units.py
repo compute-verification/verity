@@ -71,12 +71,12 @@ def _run(root: Path, harness: str = HARNESS) -> dict:
     return out
 
 
-def _fresh(root: Path) -> dict:
+def _fresh(root: Path, harness: str = HARNESS) -> dict:
     """``root``'s verdicts as a full build gives them now: a copy of the tree without its cache."""
     copy = root.parent / f"{root.name}-fresh"
     shutil.rmtree(copy, ignore_errors=True)
     shutil.copytree(root, copy, ignore=shutil.ignore_patterns("cache"))
-    out = _run(copy)
+    out = _run(copy, harness)
     assert "reused" not in out["stats"]["units"]
     return out
 
@@ -320,6 +320,53 @@ def test_two_definitions_of_one_id_are_the_one_the_catalog_keeps(tmp_path):
     out = _run(root)
     assert sorted(out["stats"]["units"]["rebuilt"]) == ["_bound_roots", "_unbound_roots"], out["stats"]["units"]
     assert out["values"] == _fresh(root)["values"]
+
+
+#: SynK at K = 2 and K = 5 inside another Definition's body, so a record holds K = 5 as reached, not as a root (a root is always
+#: described), beside a smaller member of its family (a binding's smallest of a family is too)
+KBIG = """
+from verity.ml.circuits import composite
+from verity.ml.circuits.defs import bind
+
+from syn.kdef import SynK
+from syn.prims import V
+
+
+@composite("SynKBig", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynKBig(B, S, a, b):
+    return B.call(bind(SynK, K=5), B.call(bind(SynK, K=2), a, b), b)
+"""
+KBIG_BINDING = """def kbig():
+    from syn import kbig
+    return [bind(kbig.SynKBig)]
+
+
+"""
+
+
+@pytest.mark.slow
+def test_a_pin_added_after_the_records_keeps_its_target_from_them(tmp_path):
+    """SynK is reached at K = 2 (a root, and in SynKBig's body) and at K = 5 (in SynKBig's body), with `targets.MAX_GATES` at 2
+    gates: the full build checks K = 2 alone, and its records describe no K = 5.  A pin of K = 5 then keeps it
+    (`targets.pinned`): the run from the records reuses every one, makes K = 5 from SynKBig's binding and describes it (no
+    `units.Stale`, which would build the whole catalog), checks it with its pin, reuses every other target, and gives the
+    verdicts a full build gives."""
+    from test_cache import _set_pin
+
+    root = _tree(tmp_path / "t")
+    (root / "syn/kbig.py").write_text(KBIG.lstrip("\n"))
+    _edit(root, "syn/catalog.py", "BINDINGS = [", KBIG_BINDING + "BINDINGS = [")
+    _bindings(root, *BINDINGS, '(("_kbig_roots",), kbig)')
+    harness = HARNESS.replace("rep = cli.run(", "TG.MAX_GATES = 2\nrep = cli.run(")
+    first = _run(root, harness)
+    assert first["stats"]["units"] == {"stored": 6}, first["stats"]["units"]
+    assert {"SynK_v1{K=2}", "SynKBig_v1"} <= set(first["values"]) and "SynK_v1{K=5}" not in first["values"]
+    _set_pin(root, "SynK_v1{K=5}", {"and": 1})
+    out = _run(root, harness)
+    assert out["stats"]["units"] == {"reused": 6, "rebuilt": [], "stored": 0}, out["stats"]["units"]
+    assert out["values"]["SynK_v1{K=5}"] == [3 + 5 * 0x0105]
+    assert out["hits"] == sorted(set(out["values"]) - {"SynK_v1{K=5}"})
+    assert out["values"] == _fresh(root, harness)["values"]
 
 
 def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_kinds(monkeypatch):
