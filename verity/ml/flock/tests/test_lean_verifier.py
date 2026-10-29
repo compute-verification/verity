@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 PROOFS = Path(__file__).resolve().parents[4] / "Security" / "Proofs"
 TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the security packages' Mathlib and ArkLib pin v4.34.0

@@ -177,8 +177,8 @@ reverted on `checked` (how a PR lands: the team skill).
   area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
   (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
-  executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
-  `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  executable verifier and the ZK server (`verity/core/proof_system/flock/`, with the release side in
+  `verity/core/proof_system/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `Security/`, three trees: definitions

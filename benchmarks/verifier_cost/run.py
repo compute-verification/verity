@@ -192,7 +192,7 @@ def measure(args) -> int:
     return 0
 
 
-PIECES = ROOT / "verity/core/service/sampled_proofs/.lake/build/bin/sampled-proofs-difftest"
+PIECES = ROOT / "verity/core/proof_system/sampled_proofs/.lake/build/bin/sampled-proofs-difftest"
 PARTITION_SCHEMA = "verity/verifier-cost-partition/v1"
 POPULATION = (1, 30, 1000, 1_000_000)
 

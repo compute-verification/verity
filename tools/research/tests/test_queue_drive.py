@@ -337,7 +337,7 @@ def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
     train."""
     from research.drive import lean_errors
 
-    flock = "verity/core/service/flock"
+    flock = "verity/core/proof_system/flock"
     log = (f"AUDIT /w/lean-audit-scratch-1-x/{flock}: FAIL  14588 declarations in 159 modules\n"
            "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
            " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"

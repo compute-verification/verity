@@ -1516,6 +1516,11 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "verity/core/service/": "verity/core/proof_system/"
+      }
     }
   ]
 }

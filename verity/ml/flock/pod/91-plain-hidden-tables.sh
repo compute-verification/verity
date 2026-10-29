@@ -38,14 +38,14 @@ trap 'rm -rf $S' EXIT
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$PH_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-}"; } > $O/host.txt 2>&1
 
 # Lean's flock-verify, built once per source, while the prover builds
-LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+LSHA=$(cd verity/core/proof_system/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 LEAN_BIN=$L/lean-$LSHA/flock-verify
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ]; then
-    rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
+    rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/proof_system/flock/. $L/lean-src/ \
       && (cd $L/lean-src && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $L/lean-src/.lake/build/bin/flock-verify $LEAN_BIN
   fi
 ) > $O/build-lean.log 2>&1 &

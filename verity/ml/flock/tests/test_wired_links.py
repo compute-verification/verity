@@ -37,7 +37,7 @@ NC = N_IN + N_OUT
 WIRED = ((("c", 0, N_IN),), (("c", N_IN, NC), ("u", 0, 0, N_OUT)))
 FLAT = ((("c", 0, N_IN),),)
 SPEC = "q-template-instance"
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 
 #: the stagings every test reads take about 20 s

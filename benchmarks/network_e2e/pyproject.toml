@@ -29,4 +29,4 @@ inputs = ["benchmarks/network_traces", "benchmarks/network_e2e/encodings/derived
           "integrations/vllm/verity_vllm/pipeline/window_advice.py",
           "verity/core/protocols/certifier/README.md", "benchmarks/live_challenger/auditor.py",
           "benchmarks/live_challenger/host.json",
-          "verity/core/protocols/network/lean/lakefile.toml", "verity/core/service/sampled_proofs/lakefile.toml"]
+          "verity/core/protocols/network/lean/lakefile.toml", "verity/core/proof_system/sampled_proofs/lakefile.toml"]

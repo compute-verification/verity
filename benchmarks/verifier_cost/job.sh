@@ -12,7 +12,7 @@ cmd=${1:?usage: job.sh measure|partition [ARGS...]}
 shift
 case $cmd in
   measure) pkg=verity/core/protocols/network/nci/lean exe=nci-check ;;
-  partition) pkg=verity/core/service/sampled_proofs exe=sampled-proofs-difftest ;;
+  partition) pkg=verity/core/proof_system/sampled_proofs exe=sampled-proofs-difftest ;;
   *) echo "job.sh: COMMAND is measure or partition, not $cmd" >&2; exit 2 ;;
 esac
 uv sync -q --all-packages --extra torch-cpu

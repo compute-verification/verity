@@ -1181,7 +1181,7 @@ An input node is `Input<w>_v1` (bound per run) or `RegisteredInput<w>_v1` (bound
 check, as `Flock.Qcall` documents them.
 
 **σ, a Boolean Program's lift of its word Program** (`Flock.Sigma`, `flock-verify sigma-check WORD BITS`; the mirror is
-`verity.ml.definitions.boolean.sigma_check`, held to it by the `verity/core/service/sigma` difftest). A Boolean Program's
+`verity.ml.definitions.boolean.sigma_check`, held to it by the `verity/core/proof_system/sigma` difftest). A Boolean Program's
 partition of record is its word Program's, lifted by σ (each word Definition to its Boolean version), and the verifier checks
 the lift on the two descriptors, in their size and never over the unrolled circuit. The Boolean descriptor carries σ as data:
 `"word": {"program_sha512": <the word descriptor's SHA-512, hex>, "sigma": {<word definition id>: <Boolean definition id>}}`,
@@ -1919,7 +1919,7 @@ expectation):
   `rec-open/l<LANES>-h<H>` (or `rec-open-stacked/l<LANES>-h<H>`) at valid parameters, one whose port bits are not the
   opening's at them, one whose rows or copies' leaves are not the opening's inputs in order, and one whose net differs
   from the verifier's. No vector exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs
-  the bits' refusal on the Lean verifier, `verity/core/service/flock/Flock/Test/RecOpenLeaves.lean` the rows' and
+  the bits' refusal on the Lean verifier, `verity/core/proof_system/flock/Flock/Test/RecOpenLeaves.lean` the rows' and
   leaves', and `test_the_lean_verifier_reads_rs_level_under_its_own_name_as_the_opening` a stacked unit's acceptance and
   its net's.
 - **D14:** U4 (§7.3, §16.10): a drawn statement must draw in full each unit that reads a round's commitment. Upstream
@@ -2037,7 +2037,7 @@ The lowering theorems are proved about a certified checker, over all inputs. The
 files at setup and refuses a circuit it cannot certify. So no proof evaluates a pinned file in the kernel, and no proof
 uses `native_decide`.
 
-Level-3 status (`lean/FlockProofs`, kernel-checked; the Lean audit, `tools/verity/lean/check.py` with `../../../core/service/flock/lean-audit.json`,
+Level-3 status (`lean/FlockProofs`, kernel-checked; the Lean audit, `tools/verity/lean/check.py` with `../../../core/proof_system/flock/lean-audit.json`,
 allows only `propext`, `Classical.choice` and `Quot.sound`):
 - **1b, Merkle: an explicit collision extractor.** A fixed hash with 32- or 64-byte digests has collisions by counting, so
   a proposition "a collision exists" holds outright and says nothing about the verifier. The statements therefore carry the

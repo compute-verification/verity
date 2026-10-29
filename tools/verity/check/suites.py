@@ -186,7 +186,7 @@ CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity-core-evaluate", "verity-core-firewall",
-              "verity/core/service/vstar", "verity/core/service/sigma", "verity-core-sampled-proofs",
+              "verity/core/proof_system/vstar", "verity/core/proof_system/sigma", "verity-core-sampled-proofs",
               "verity/core/protocols/remote_bandwidth/lean",
               "verity/core/protocols/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/core/protocols/pouw/lean/commit", "memory-challenger-lean", "benchmarks/pous",
@@ -616,7 +616,7 @@ def roots(suite: Suite, pkgs: dict[str, str]) -> list[str]:
 
 def flock_lean() -> Path:
     """The Lean verifier of record, the package check's `lean-build` step builds (check.py's `FLOCK_LEAN`)."""
-    return ROOT / "verity" / "core" / "service" / "flock"
+    return ROOT / "verity" / "core" / "proof_system" / "flock"
 
 
 def lean_on_path() -> None:

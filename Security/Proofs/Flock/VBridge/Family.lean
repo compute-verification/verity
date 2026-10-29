@@ -7,7 +7,7 @@ import Flock.RecVStar
 # VBridge G at V*'s statement family
 
 `vbridge_of_vstar` (`Top.lean`) takes V*'s statements as free objects. `VStarFamily` ties them to V*'s executable Lean
-(`verity/core/service/vstar`):
+(`verity/core/proof_system/vstar`):
 
 * the statements are `VStar.statements` at the inner session's shape (`Stage.lean:56-66`: each Ligerito level's
   `RecOpen{LANES, H}` over `2 q` instances, then each part's `InnerRepCheck{S}` over two), the verifier's shape the one

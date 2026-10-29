@@ -19,7 +19,7 @@ import pytest
 from verity_flock.record_text import session_text
 
 FLOCK = Path(__file__).resolve().parents[1]
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: RoPE d64 (4 instances) with a seeded and an FC_COINS=os loopback session of a proving build; the circuit is #306's
 FIXTURE = "art:12f95e2a"

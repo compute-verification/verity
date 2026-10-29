@@ -7,7 +7,7 @@ doesn't exist yet. What runs today, and what the ZK point (``job.sh ZK=1``, ``zk
 
 - ``flock-circuit prove --zk --gpu``: Flock's masked protocol (M1, ``verity/ml/flock/live/PROTOCOL.md``), the device
   proving and the host masking, with the session's B units sampled by the stratified law as in configuration 1;
-- the ZK server (``FC_FIREWALL=1``, PROTOCOL §10): the Lean (``verity/core/service/flock/Flock/Firewall``, the
+- the ZK server (``FC_FIREWALL=1``, PROTOCOL §10): the Lean (``verity/core/proof_system/flock/Flock/Firewall``, the
   ``flock-firewall`` processes the prover starts on its node), which commits level 0 under its own salts and computes the
   opening, the inner proof and the proof file, and ``flock-circuit``'s checks (the skeleton, the end check) on the
   prover's host threads. That is the ZK server's work today (the draft's §3), so the server's CPU is the prover process's

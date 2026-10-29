@@ -131,7 +131,7 @@ PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-
 KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
   $(find verity/ml/flock/cuda verity/ml/flock/live -type f ! -name '*.md' | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g$GPU-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
-LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+LSHA=$(cd verity/core/proof_system/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 LEAN_BIN=$L/lean-$LSHA/flock-verify
 # the Lean frame a firewalled prover (MODES=ZK server) releases through, built beside flock-verify
 export FC_FIREWALL_LEAN=$L/lean-$LSHA/flock-firewall
@@ -425,7 +425,7 @@ lean_build() {
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
     if [ ! -x $LEAN_BIN ] || [ ! -x $FC_FIREWALL_LEAN ]; then
-      rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
+      rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/proof_system/flock/. $L/lean-src/ \
         && (cd $L/lean-src && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA \
         && cp $L/lean-src/.lake/build/bin/flock-verify $L/lean-src/.lake/build/bin/flock-firewall $L/lean-$LSHA/
     fi
@@ -441,7 +441,7 @@ fold_build() {
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/fold.lock; flock 9
     if [ ! -x $FOLD_BIN ]; then
-      C=$L/fold-src; rm -rf $C && mkdir -p $C && cp -r verity/core/service/flock/. $C/ && cp verity/ml/flock/tests/lean/InnerFold.lean $C/ \
+      C=$L/fold-src; rm -rf $C && mkdir -p $C && cp -r verity/core/proof_system/flock/. $C/ && cp verity/ml/flock/tests/lean/InnerFold.lean $C/ \
         && printf '\n[[lean_exe]]\nname = "inner-fold"\nroot = "InnerFold"\n' >> $C/lakefile.toml \
         && (cd $C && lake build inner-fold) && mkdir -p $L/fold-$FSHA && cp $C/.lake/build/bin/inner-fold $FOLD_BIN
     fi

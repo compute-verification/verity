@@ -12,7 +12,7 @@ set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 [ $# -gt 0 ] || { echo "usage: flock_unroll.sh K..." >&2; exit 2; }
 MODE=${MODE:-iv/hybrid/4}
-L=$PWD/verity/core/service/flock
+L=$PWD/verity/core/proof_system/flock
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"

@@ -51,7 +51,7 @@ path = "../../verity/core/protocols/network/lean"
 
 [[require]]
 name = "core_sampled_proofs"
-path = "../../verity/core/service/sampled_proofs"
+path = "../../verity/core/proof_system/sampled_proofs"
 
 [[require]]
 name = "verity_evaluate"

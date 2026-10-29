@@ -17,7 +17,7 @@ import json
 import re
 from pathlib import Path
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 
 #: forms no entry of vectors.json exercises yet; an entry leaves this list in the change that adds its vector

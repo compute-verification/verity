@@ -144,7 +144,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   local run leanb m0 rc
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for window $K in windows.jsonl"; return 1; }
-  leanb=$TREE/verity/core/service/flock/.lake/build/bin
+  leanb=$TREE/verity/core/proof_system/flock/.lake/build/bin
   m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/ml/flock/python:$TREE/integrations/vllm
   mkdir -p "$OUT/v3c-audit"
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout "${V3C_AUDIT_TIMEOUT:-180m}" \
@@ -272,8 +272,8 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
-  (cd verity/core/service/flock && lake build flock-verify flock-firewall) || return 7
-  (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) || return 7
+  (cd verity/core/proof_system/flock && lake build flock-verify flock-firewall) || return 7
+  (cd verity/core/proof_system/sampled_proofs && lake build sampled-proofs-verifier) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
   RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/ml/flock/pod/60-circuit.sh || return 6

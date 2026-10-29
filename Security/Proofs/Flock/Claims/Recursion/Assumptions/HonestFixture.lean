@@ -60,7 +60,7 @@ on it:
 Prop in two ways: only Python joins the 10 per-part verdicts (no single compiled verdict exists), and its prover is
 Python's builder with C-Flock's CPU prover, not `refP`.
 
-What ties the two provers is `verity/core/service/vstar/tests/test_vstar_trace_difftest.py`. `refP`'s V\* parts are
+What ties the two provers is `verity/core/proof_system/vstar/tests/test_vstar_trace_difftest.py`. `refP`'s V\* parts are
 `bringsAt`'s `refPartsFin (A0 mask)`: each part's `VStar.Trace.assign` at its fitted port inputs (`VStar.In.partIn`,
 which `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
 C-Flock's CPU prover's witness (`flock-trace`: `Stmt::row_inputs`, `unit_inputs`, `converge`, `witness`), block for
