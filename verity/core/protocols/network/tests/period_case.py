@@ -88,9 +88,9 @@ OUT_BITS = 16
 UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
-PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
-ROWS_PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule",
-                    "session", "windows"]
+PARAMS_KEYS = ["audits", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
+ROWS_PARAMS_KEYS = ["audits", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session",
+                    "windows"]
 SCHEDULE_KEYS = sorted(f.name for f in dataclasses.fields(WardenParams))
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 CLOCK_WINDOW_KEYS = ["answer", "certificates", "clock"]
@@ -160,7 +160,6 @@ class Audit:
 @dataclasses.dataclass(frozen=True)
 class Params:
     audits: tuple[Audit, ...]
-    cells: tuple[int, ...]
     first: int
     jitter: int
     link: str
@@ -586,7 +585,6 @@ def params(j) -> Params:
     if sorted(j) not in (PARAMS_KEYS, ROWS_PARAMS_KEYS):
         raise D.Reject(f"the object: the keys must be {PARAMS_KEYS} or {ROWS_PARAMS_KEYS}, not {sorted(j)}")
     audits = [_audit(a, "an audit") for a in _of(j["audits"], list, "audits")]
-    cells = tuple(_nat(x, "cells") for x in _of(j["cells"], list, "cells"))
     first = _nat(j["first"], "first")
     jitter = _nat(j["jitter"], "jitter")
     if jitter < 1:
@@ -617,7 +615,7 @@ def params(j) -> Params:
     windows = _nat(j["windows"], "windows")
     if windows < 1:
         raise D.Reject("windows: a period has at least one link-window")
-    return Params(tuple(audits), cells, first, jitter, link, LmsKey(lp, key), session, program, sync_set, windows,
+    return Params(tuple(audits), first, jitter, link, LmsKey(lp, key), session, program, sync_set, windows,
                   schedule, scan)
 
 
@@ -997,20 +995,16 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | 
     link-windows' scans (`scans`, each its facts, its tied audits' free inputs and its `β_w`; None in the clock form),
     where a compute audit's own terms are in none, a tied audit's free inputs are in its link-window's `free` and its
     incorrect proof blocks in its `faulty_entries`, and the δ of a tied audit drawn in part (`charged`) is in `eps`."""
-    cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
-        schedules = clog2((len(p.sync_set.deltas) * len(p.sync_set.rhos)) ** p.windows)
         out = {"audits": units}
     else:
         s = p.scan
         units = [_terms(s.free + tied, s.steps, max(s.ingress, s.egress), f, p.jitter, b) for f, tied, b in scans]
-        schedules = cells
         out = {"audits": [_facts_json(f) for f in facts], "scans": units}
-    K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
-                                + t.get("faulty_entries", 0) for t in units)
+    K = sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"] + t.get("faulty_entries", 0) for t in units)
     eps = sum((Fraction(t["delta"]) for t in units), Fraction(0)) + sum((f.delta for f in charged), Fraction(0))
-    return out | {"K": K, "cells": cells, "eps": str(eps), "schedules": schedules, "windows": p.windows}
+    return out | {"K": K, "eps": str(eps), "windows": p.windows}
 
 
 def check(p: Params, c: Commitment, e) -> tuple:
@@ -1847,10 +1841,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         audit_regs.append(rec)
         audits.append(answer)
 
-    case_params = {"audits": audit_params, "cells": [r.randint(0, 100) for _ in range(r.randint(0, 3))], "first": first,
-                   "jitter": r.randint(1, 5), "key": lms.public_key(key).hex(), "link": link,
-                   "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
-                   "windows": n_windows}
+    case_params = {"audits": audit_params, "first": first, "jitter": r.randint(1, 5), "key": lms.public_key(key).hex(),
+                   "link": link, "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program,
+                   "session": session.hex(), "windows": n_windows}
     if rows:
         case_params |= {"scan": scan, "schedule": schedule_json(bound)}
     else:
@@ -1890,7 +1883,7 @@ def _bad_params(p: dict, n: int) -> list:
            p | {"program": p["program"].upper()}, p | {"program": 0},
            p | {"lms": p["lms"] | {"W": 3}}, p | {"lms": p["lms"] | {"H": 0}}, p | {"lms": p["lms"] | {"toy": 0}},
            p | {"lms": p["lms"] | {"x": 0}}, p | {"lms": {k: v for k, v in p["lms"].items() if k != "toy"}},
-           p | {"cells": [-1]}, p | {"cells": [True]}, p | {"first": -1}, p | {"first": True}, p | {"first": "0"},
+           p | {"first": -1}, p | {"first": True}, p | {"first": "0"},
            *bad_audits(p)]
     if "sync_set" in p:
         ss = p["sync_set"]

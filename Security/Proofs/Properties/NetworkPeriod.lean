@@ -4,9 +4,9 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 /-!
 # Each form's `K` bounds `PeriodLeakAccepted`'s count: the proofs of `ClockKBoundsCount` and `RowsKBoundsCount`
 
-Each factor is at most 2 to the power of the ceiling of its `log2` (`le_two_pow_clog2`), and `K`'s sums over the
-connections and the windows (the compute audits, or the scans) are sums over `Fin m` and `Fin n` (`Array.ofFn`), so
-`2 ^ K` is at least the product of the windows' factors' bounds: the terms over the connections only add to it.
+Each factor is at most 2 to the power of the ceiling of its `log2` (`le_two_pow_clog2`), and `K`'s sum over the
+windows (the compute audits, or the scans) is a sum over `Fin n` (`Array.ofFn`), so `2 ^ K` is the product of the
+windows' factors' bounds.
 
 `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every finding is none
 (`firstFinding_none`), each link-window's `wiredCheck` and `stateCheck` among them.
@@ -31,53 +31,37 @@ theorem foldl_add (l : List ℕ) (a : ℕ) : l.foldl (· + ·) a = a + l.sum := 
 theorem foldl_ofFn {n : ℕ} (g : Fin n → ℕ) : (Array.ofFn g).foldl (· + ·) 0 = ∑ i, g i := by
   rw [← Array.foldl_toList, Array.toList_ofFn, foldl_add, List.sum_ofFn, zero_add]
 
-theorem capsTerm_ofFn {m : ℕ} (caps : Fin m → ℕ) : capsTerm (Array.ofFn caps) = ∑ j, clog2 (caps j + 1) := by
-  unfold capsTerm
-  rw [Array.map_ofFn]
+theorem K_ofFn (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {n : ℕ} (w : Fin n → Facts)
+    (tied faulty : Fin n → ℕ) (charged : Array Facts) :
+    (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) jitter windows charged).K =
+      ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter).bits := by
+  simp only [Public.K, rowsTerms, Array.map_ofFn]
   exact foldl_ofFn _
-
-theorem K_ofFn (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ)
-    (w : Fin n → Facts) (tied faulty : Fin n → ℕ) (charged : Array Facts) :
-    (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows charged).K =
-      (∑ j, clog2 (caps j + 1)) + (∑ j, clog2 (caps j + 1)) +
-        ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter).bits := by
-  simp only [Public.K, rowsTerms, capsTerm_ofFn, Array.map_ofFn]
-  rw [foldl_ofFn]
-  rfl
 
 theorem zip_ofFn {α β : Type} {n : ℕ} (f : Fin n → α) (g : Fin n → β) :
     (Array.ofFn f).zip (Array.ofFn g) = Array.ofFn fun i => (f i, g i) := by
   ext <;> simp
 
-theorem clockK_ofFn (jitter syncs windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (a : Fin n → Audit)
-    (w : Fin n → Facts) :
-    (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K =
-      clog2 (syncs ^ windows) + (∑ j, clog2 (caps j + 1)) + ∑ i, (AuditTerms.of (a i) (w i) jitter).bits := by
-  simp only [Public.K, terms, capsTerm_ofFn, zip_ofFn, Array.map_ofFn]
-  rw [foldl_ofFn]
-  rfl
+theorem clockK_ofFn (jitter windows : ℕ) {n : ℕ} (a : Fin n → Audit) (w : Fin n → Facts) :
+    (terms (Array.ofFn a) (Array.ofFn w) jitter windows).K = ∑ i, (AuditTerms.of (a i) (w i) jitter).bits := by
+  simp only [Public.K, terms, zip_ofFn, Array.map_ofFn]
+  exact foldl_ofFn _
 
 theorem clockKBoundsCount : ClockKBoundsCount := by
-  intro jitter syncs windows m n caps a w
-  rw [clockK_ofFn]
-  calc _ ≤ 2 ^ ∑ i, (AuditTerms.of (a i) (w i) jitter).bits := by
-        rw [← Finset.prod_pow_eq_pow_sum]
-        refine Finset.prod_le_prod fun i _ => ?_
-        simp only [AuditTerms.bits, AuditTerms.of, add_zero, pow_add]
-        exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
-    _ ≤ _ := Nat.pow_le_pow_right (by omega) (Nat.le_add_left _ _)
+  intro jitter windows n a w
+  rw [clockK_ofFn, ← Finset.prod_pow_eq_pow_sum]
+  refine Finset.prod_le_prod fun i _ => ?_
+  simp only [AuditTerms.bits, AuditTerms.of, add_zero, pow_add]
+  exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
 
 theorem rowsKBoundsCount : RowsKBoundsCount := by
-  intro facts scan jitter windows m n caps w tied faulty charged
-  rw [K_ofFn]
-  calc _ ≤ 2 ^ ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter).bits := by
-        rw [← Finset.prod_pow_eq_pow_sum]
-        refine Finset.prod_le_prod fun i _ => ?_
-        simp only [AuditTerms.bits, Scan.terms, pow_add]
-        exact Nat.mul_le_mul
-          (Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _))
-          le_rfl
-    _ ≤ _ := Nat.pow_le_pow_right (by omega) (Nat.le_add_left _ _)
+  intro facts scan jitter windows n w tied faulty charged
+  rw [K_ofFn, ← Finset.prod_pow_eq_pow_sum]
+  refine Finset.prod_le_prod fun i _ => ?_
+  simp only [AuditTerms.bits, Scan.terms, pow_add]
+  exact Nat.mul_le_mul
+    (Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _))
+    le_rfl
 
 /-! ## The rows form's scan reads a compute audit's slot entries -/
 
@@ -162,7 +146,7 @@ accepts a rows-form period of one link-window with no audit, whose scan's `prog`
 theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   have hw : wired #[] slotSchedule #[] tiedWindow = true :=
     h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
   rw [tiedWindow_unwired] at hw
@@ -182,7 +166,7 @@ lemma at the pin): such a check accepts a rows-form period whose scan's `prog` i
 `SlotEntry_v1` template's entries port, one member a slot, whose body is none of the pinned Definitions'. -/
 theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
-  let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
+  let p : Params := ⟨#[renamedAudit], 0, 1, "", Lms.deployed, .empty, .empty, "",
     .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedWindow = true :=
     h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
@@ -254,7 +238,7 @@ that audit's `SCAN_STATE`, which skips or alters a transition of the scan's. -/
 theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[slotAudit], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = true :=
     h p ⟨#[stateReg "t"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
       stateWindow rfl

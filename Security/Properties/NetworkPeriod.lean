@@ -11,8 +11,8 @@ the count, not equal to it; `ClockKBoundsCount` and `RowsKBoundsCount` say the c
 `2 ^ K`. `Proofs.Properties.NetworkPeriod` proves both.
 
 The count is the statement's, factor by factor, over the period's `n` windows:
-`∏_i (2^#(free inputs) · #faultySets · 2^β · Dj^k)`. The schedule adds no factor: the network certifier's record
-holds it. `K` still sums the check's `schedules` and `cells` terms, so it bounds the count with room to spare. A reader
+`∏_i (2^#(free inputs) · #faultySets · 2^β · Dj^k)`. The schedule adds no factor, and `K` no term for it: the network
+certifier's record holds it. A reader
 of `K` (the communication audit's bridge to `PeriodLeakAccepted`) instantiates it at the windows' facts, and supplies
 each of the statement's quantities as at most the check's number:
 
@@ -44,28 +44,27 @@ namespace Properties.NetworkPeriod
 open NetworkCheck.Period
 
 /-- **The clock form's `K` bounds `PeriodLeakAccepted`'s count at the check's numbers.** For `n` compute audits `a`
-and their facts `w` and the jitter bound `jitter`, at any caps `caps` of `m` connections, `#Σ_sync` `syncs` and
-`windows` link-windows: audit `i`'s `2^#(free inputs)` at `2 ^ (a i).free`, `#faultySets` at `atMost N b`, `2^β` at
-`2 ^ (b · (a i).bits)` (each of its at most `b` incorrect proof blocks commits at most its Program's widest proof
-block's bits) and `Dj^k` at `jitter ^ (a i).steps`, their product is at most `2 ^ K`. -/
+and their facts `w`, the jitter bound `jitter` and `windows` link-windows: audit `i`'s `2^#(free inputs)` at
+`2 ^ (a i).free`, `#faultySets` at `atMost N b`, `2^β` at `2 ^ (b · (a i).bits)` (each of its at most `b` incorrect
+proof blocks commits at most its Program's widest proof block's bits) and `Dj^k` at `jitter ^ (a i).steps`, their
+product is at most `2 ^ K`. -/
 def ClockKBoundsCount : Prop :=
-  ∀ (jitter syncs windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (a : Fin n → Audit) (w : Fin n → Facts),
+  ∀ (jitter windows : ℕ) {n : ℕ} (a : Fin n → Audit) (w : Fin n → Facts),
     ∏ i, (2 ^ (a i).free * atMost (w i).units (w i).wrong * 2 ^ ((w i).wrong * (a i).bits) * jitter ^ (a i).steps) ≤
-      2 ^ (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K
+      2 ^ (terms (Array.ofFn a) (Array.ofFn w) jitter windows).K
 
 /-- **The rows form's `K` bounds `PeriodLeakAccepted`'s count at the check's numbers.** For the facts `w` of `n`
 link-windows' scans, their tied audits' free inputs `tied` (`tiedAudits`) and the slot entry bits their tied audits'
 incorrect proof blocks can set `faulty` (`faultyEntries`), under one scan's terms `scan`, the jitter bound `jitter` and
-the charged audits' facts `charged`, at any caps `caps` of `m` connections: window `i`'s `2^#(free inputs)` at
-`2 ^ (scan.free + tied i)`, `#faultySets` at `atMost N b`, `2^β` at `2 ^ (b · max(b_ing, b_eg))` times `2 ^ faulty i`
-and `Dj^k` at `jitter ^ scan.steps`, their product is at most `2 ^ K`. -/
+the charged audits' facts `charged`: window `i`'s `2^#(free inputs)` at `2 ^ (scan.free + tied i)`, `#faultySets` at
+`atMost N b`, `2^β` at `2 ^ (b · max(b_ing, b_eg))` times `2 ^ faulty i` and `Dj^k` at `jitter ^ scan.steps`, their
+product is at most `2 ^ K`. -/
 def RowsKBoundsCount : Prop :=
-  ∀ (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (w : Fin n → Facts)
-    (tied faulty : Fin n → ℕ) (charged : Array Facts),
+  ∀ (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {n : ℕ} (w : Fin n → Facts) (tied faulty : Fin n → ℕ)
+    (charged : Array Facts),
     ∏ i, (2 ^ (scan.free + tied i) * atMost (w i).units (w i).wrong *
         2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps * 2 ^ faulty i) ≤
-      2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows
-        charged).K
+      2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) jitter windows charged).K
 
 /-- What `RowsProgWired` says of a period its check accepted: in the rows form, each link-window's scan's registration
 is wired to the audits' slot entries (`wired`). -/
@@ -115,6 +114,6 @@ def RowsStateTied : Prop :=
 `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsProgWired` and `RowsStateTied` (each its `…Of` at
 `check`) to say something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
-  .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
+  .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] p.jitter p.windows) { link := p.link, windows := p.windows }
 
 end Properties.NetworkPeriod

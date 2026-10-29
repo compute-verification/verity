@@ -27,7 +27,7 @@ read.
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
-    {"audits": [{"free": f, "program": descriptor, "steps": k}, …], "cells": [cap, …], "first": w₀, "jitter": Dj,
+    {"audits": [{"free": f, "program": descriptor, "steps": k}, …], "first": w₀, "jitter": Dj,
      "key": hex(I ‖ T[1]), "link": name, "lms": {"H": h, "N": n, "W": w, "toy": bool}, "program": hex,
      "session": hex(session), "sync_set": {"deltas": [δ, …], "rhos": [[num, den], …]}, "windows": m}
 
@@ -35,10 +35,8 @@ each compute audit's layout terms (`free`, the free inputs it doesn't register, 
 monitoring period `k`) and its Program, the descriptor (`verity-ir/descriptor/v1`) of the window's population program,
 which must decode (`Flock.Program.decode`) with a template in its root: the audit's units are the root's template
 instances, and each commits its template's return, the outputs it computes that other units or the client read, which
-can be wider than a proof unit's 16-bit public output; each network certifier connection's cell cap over the period
-(`cap_c`), the session's window
-the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
-periods),
+can be wider than a proof unit's 16-bit public output; the session's window the period starts at (`w₀`: its
+link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many periods),
 the observations' jitter bound `Dj ≥ 1`, the network certifier's LMS public key and parameters and the certifier session
 (32 bytes) every certificate binds, the link (at most 65,535 UTF-8 bytes), the SHA-512 of N2's registered Program for
 the link (the partition object's `program`, `LinkWindows.partition`), Σ_sync, and the period's `m ≥ 1` link-windows.
@@ -162,15 +160,16 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 
     {"K": K, "audits": [{"delta", "drawn": k, "faulty_bits", "faulty_sets", "free", "jitter", "units": N,
                          "wrong_units": b}, …],
-     "cells": Σ_c ⌈log2 (cap_c + 1)⌉, "eps": Σ_i δ_i, "schedules": ⌈log2 #Σ_sync^m⌉, "windows": m}
+     "eps": Σ_i δ_i, "windows": m}
 
 with `b` the audit's bound on wrong units at its δ (one-stage's `bound`, `Bound.boundOf`), `faulty_sets` =
 `⌈log2 Σ_{j ≤ b} C(N, j)⌉` (every set of at most `b` units, which holds the sets a `subset:k` or a stratified draw leaves
 possible; `drawn` is the draw's `k`, or its `Σ k` stratified),
 `faulty_bits` = `b · bits`, with `bits` the most one of its Program's units commits (its template's return, `bitsOf`:
 the committed values `faultyBits` counts, the outputs a wrong unit computes and other units or the client read),
-`jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedules term counts every assignment of a sync of
-Σ_sync to the `m` link-windows, so it is the same whichever syncs the certifier ran them under, and needs none of them.
+`jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedule adds no term: the statement counts the
+network certifier's records, which hold it, so `K` needs neither the syncs the certifier ran the link-windows under nor
+Σ_sync's size.
 `eps` is the probability that `K` fails to bound the period's leak, the union of its audits' `δ`: their exact sum in
 lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics carry theirs.
 
@@ -188,15 +187,13 @@ at any sample; sampled in part, its at most `b` incorrect proof blocks can set a
 link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b ≥ 1`, and its δ is in
 `eps`:
 
-    {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ + Σ δ_i,
-     "scans": [terms, …], "schedules": c, "windows": m}
+    {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "eps": m · δ + Σ δ_i,
+     "scans": [terms, …], "windows": m}
 
-* `schedules` is `cells`, c = Σ_c ⌈log2 (cap_c + 1)⌉, as the statement multiplies `#Ss` and `∏_c (cap_c + 1)`. A
-  schedule (`WardenSchedule`) is r and D, fixed, and each connection's admission bucket and lane length. The server
-  sets a lane's length, when its stream ends, at most `cap_c` cells, and nothing else of it: the network certifier
-  admits a queued connection at the first lane that frees, in the clients' arrival order, so the admissions are a
-  function of the lengths, and `#Ss ≤ ∏_c (cap_c + 1)`. The second factor is the fail cell's position (`failCell`). A
-  failed lane ends at its fail cell, so in a run the two coincide; `K` charges the product as the statement states it.
+* the schedule adds no term. A schedule (`WardenSchedule`) is r and D, fixed, and each connection's admission bucket
+  and lane length, which the server sets when its stream ends, and its fail cell's position (`failCell`) with it; the
+  network certifier's rows record holds each lane's admission padding, cells and fail cell, and reads back on its own
+  (`RowsFormat.read_record`), so the statement counts records and neither `#Ss` nor a connection's cap is a factor.
 * each scan's terms, from the scan's Program and its tied audits: `free` the parameters' `free` of the audits its
   `prog` is an output of, summed (`tiedAudits`, each once; the scan's own is 0, as it registers the rows, its `prog` is
   those audits' output, and bucket 0 starts from the empty state, constants of `IngressScanFirst`: the egress tie
@@ -219,8 +216,7 @@ verifier of record checks inside the answer (`LinkWindows.verify`, with C-Flock'
 the clock form's link-window registration's domain; in the rows form, the records' certificates' digests against the
 rows (each signs its salted record, witness) and the scan's statements against its registration (lane `j`'s slot
 entries' input node the value it registers as `scan/prog<j>`), which one-stage's verifier of record checks inside the
-answer, and each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
-`egress_cells`); that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
+answer; that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
 its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
 and that the audits' answers are the sampled-proofs component's own,
 which the composition's theorem is to bind.
@@ -306,7 +302,6 @@ inductive Form where
 
 structure Params where
   audits : Array Audit
-  cells : Array Nat
   first : Nat
   jitter : Nat
   link : String
@@ -400,10 +395,10 @@ def syncSetOf (j : Json) : V NetworkCertifier.SyncSet := do
   else throw "sync_set: non-empty, each delta and each rho listed once"
 
 def paramsKeys : List String :=
-  ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
+  ["audits", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
 
 def rowsParamsKeys : List String :=
-  ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session", "windows"]
+  ["audits", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session", "windows"]
 
 def scheduleOf (j : Json) : V Schedule := do
   exactly j ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes",
@@ -750,7 +745,6 @@ def paramsOf (j : Json) : V Params := do
       throw s!"the object: the keys must be {paramsKeys} or {rowsParamsKeys}, not {keysOf j}"
   | _ => throw "the object: not an object"
   let audits ← (← Flock.J.arr j "audits" "the object").mapM (auditOf · "an audit")
-  let cells ← (← Flock.J.arr j "cells" "the object").mapM (Flock.J.asNat · "cells")
   let first ← Flock.J.nat j "first" "the object"
   let jitter ← Flock.J.nat j "jitter" "the object"
   unless 1 ≤ jitter do throw "jitter: the observations' jitter bound is at least 1"
@@ -772,7 +766,7 @@ def paramsOf (j : Json) : V Params := do
       pure (Form.rows s (← s.digest) (← scanOf (← Flock.J.get j "scan" "the object") program s))
   let windows ← Flock.J.nat j "windows" "the object"
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
-  pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows }
+  pure { audits, first, jitter, link, lms, key, session, program, form, windows }
 
 /-- A window record of one of `Flock.WindowRecord.FORMATS`. -/
 def registrationOf (j : Json) (ctx : String) : V Json := do
@@ -1213,19 +1207,17 @@ def Scan.terms (s : Scan) (f : Facts) (tied faulty jitter : Nat) : AuditTerms :=
 structure Public where
   /-- The compute audits' facts. -/
   audits : Array Facts
-  cells : Nat
   /-- The terms of `PeriodLeakAccepted`'s windows: the clock form's compute audits', the rows form's scans', one a
   link-window. -/
   units : Array AuditTerms
   /-- The rows form, whose units are its scans. -/
   rows : Bool := false
-  schedules : Nat
   windows : Nat
   /-- The facts of the rows form's tied audits drawn in part (`chargedOf`), whose bounds `faulty_entries` reads, so
   whose δ is in `eps`. -/
   charged : Array Facts := #[]
 
-def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.units.map (·.bits)).foldl (· + ·) 0
+def Public.K (x : Public) : Nat := (x.units.map (·.bits)).foldl (· + ·) 0
 
 /-- `Σ_i δ_i` over the units and the charged audits, exactly, in lowest terms: the union bound on `K` failing. -/
 def Public.eps (x : Public) : Core.Ratio :=
@@ -1233,27 +1225,19 @@ def Public.eps (x : Public) : Core.Ratio :=
     (fun (n, d) f => (n * f.delta.den + f.delta.num * d, d * f.delta.den)) (0, 1)
   ⟨n / Nat.gcd n d, d / Nat.gcd n d⟩
 
-/-- `Σ_c ⌈log2 (cap_c + 1)⌉`. -/
-def capsTerm (cells : Array Nat) : Nat := (cells.map fun cap => clog2 (cap + 1)).foldl (· + ·) 0
-
-/-- The bound's terms from the audits' layout terms, Programs' bits and facts, the cells' caps, the jitter bound,
-`#Σ_sync` and the link-windows. -/
-def terms (audits : Array Audit) (facts : Array Facts) (cells : Array Nat) (jitter syncs windows : Nat) : Public :=
+/-- The bound's terms from the audits' layout terms, Programs' bits and facts, the jitter bound and the link-windows. -/
+def terms (audits : Array Audit) (facts : Array Facts) (jitter windows : Nat) : Public :=
   { audits := facts
-    cells := capsTerm cells
     units := (audits.zip facts).map fun (a, f) => AuditTerms.of a f jitter
-    schedules := clog2 (syncs ^ windows)
     windows }
 
-/-- The rows form's terms: the cells' as the clock form's, the schedules' the same count (each connection's lane
-length, one of `cap_c + 1`, fixes its admission and the lanes it frees), and each link-window's scan's from the scan's
-terms, its facts, its tied audits' free inputs and the entry bits their wrong units can set (`scans`, a triple a
-link-window). The compute audits' own terms are in none: a tied audit's free inputs and wrong units are in its
-link-window's, and the δ of one drawn in part (`charged`) in `eps`. -/
-def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array (Facts × Nat × Nat)) (cells : Array Nat)
-    (jitter windows : Nat) (charged : Array Facts := #[]) : Public :=
-  { audits := facts, cells := capsTerm cells, units := scans.map fun (f, t, b) => scan.terms f t b jitter,
-    rows := true, schedules := capsTerm cells, windows, charged }
+/-- The rows form's terms: each link-window's scan's, from the scan's terms, its facts, its tied audits' free inputs
+and the entry bits their wrong units can set (`scans`, a triple a link-window). The compute audits' own terms are in
+none: a tied audit's free inputs and wrong units are in its link-window's, and the δ of one drawn in part (`charged`)
+in `eps`. -/
+def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array (Facts × Nat × Nat)) (jitter windows : Nat)
+    (charged : Array Facts := #[]) : Public :=
+  { audits := facts, units := scans.map fun (f, t, b) => scan.terms f t b jitter, rows := true, windows, charged }
 
 /-- Audit `i`'s facts when the rows form charges it: accepted, tied to a link-window's scan (`tiedOf`) and drawn in
 part, so its at most `b` wrong units are in its link-windows' terms (`faultyEntries`) and its δ in `eps`. -/
@@ -1274,7 +1258,7 @@ tied audits' free inputs and `β_w` (`faultyEntries`), and the charged audits (`
 def rowsPublic (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan : Scan) (scans : Array (Facts × Nat)) :
     Public :=
   rowsTerms (as.filterMap (·.toOption)) scan
-    ((scans.zip c.windows).map fun ((f, t), reg) => (f, t, faultyEntries p c as scan reg)) p.cells p.jitter p.windows
+    ((scans.zip c.windows).map fun ((f, t), reg) => (f, t, faultyEntries p c as scan reg)) p.jitter p.windows
     ((Array.range as.size).filterMap (chargedOf p c as))
 
 structure Profile where
@@ -1309,8 +1293,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
     | some (_, r) => .undecided r
     | none =>
       .accept (match p.form with
-          | .clock ss =>
-            terms p.audits (as.filterMap (·.toOption)) p.cells p.jitter (ss.deltas.length * ss.rhos.length) p.windows
+          | .clock _ => terms p.audits (as.filterMap (·.toOption)) p.jitter p.windows
           | .rows _ _ scan => rowsPublic p c as scan scans)
         { link := p.link, windows := p.windows }
 
@@ -1328,8 +1311,8 @@ def factsJson (fs : Array Facts) : Json :=
 
 def publicJson (x : Public) : Json :=
   Json.mkObj ([
-    ("K", toJson x.K), ("audits", if x.rows then factsJson x.audits else termsJson x.units), ("cells", toJson x.cells),
-    ("eps", .str x.eps.toString), ("schedules", toJson x.schedules), ("windows", toJson x.windows)] ++
+    ("K", toJson x.K), ("audits", if x.rows then factsJson x.audits else termsJson x.units),
+    ("eps", .str x.eps.toString), ("windows", toJson x.windows)] ++
     (if x.rows then [("scans", termsJson x.units true)] else []))
 
 def profileJson (pr : Profile) : Json :=
@@ -1352,52 +1335,50 @@ def protocol : Core.Protocol where
 
 #guard clog2 0 == 0 && clog2 1 == 0 && clog2 2 == 1 && clog2 3 == 2 && clog2 4 == 2 && clog2 5 == 3
 #guard atMost 10 0 == 1 && atMost 10 1 == 11 && atMost 10 2 == 56 && atMost 4 9 == 16 && atMost 0 3 == 1
--- an audit of 10 units, each committing 16 bits, drawn subset:3 at δ = 1/10 (at most 4 wrong), 7 cells on one
--- connection and none on another, 2 syncs over 3 link-windows, and jitter below 2 over 3 steps
-#guard (terms #[⟨0, 3, "", 10, 16, #[]⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] #[7, 0] 2 2 3
-  ).K == 3 + 3 + (0 + 9 + 64 + 3)
+-- an audit of 10 units, each committing 16 bits, drawn subset:3 at δ = 1/10 (at most 4 wrong), over 3 link-windows,
+-- and jitter below 2 over 3 steps
+#guard (terms #[⟨0, 3, "", 10, 16, #[]⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] 2 3
+  ).K == 0 + 9 + 64 + 3
 -- the same audit with a unit committing 40 bits: its 4 wrong units carry 160 bits, not 16 · 4
-#guard (terms #[⟨0, 3, "", 10, 40, #[]⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] #[7, 0] 2 2 3
-  ).K == 3 + 3 + (0 + 9 + 160 + 3)
+#guard (terms #[⟨0, 3, "", 10, 40, #[]⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] 2 3
+  ).K == 0 + 9 + 160 + 3
 -- two audits at δ = 1/100 and 1/10^6: ε = 10001/1000000
 #guard (terms #[⟨0, 1, "", 4, 16, #[]⟩, ⟨0, 1, "", 4, 16, #[]⟩]
   #[{ units := 4, drawn := 1, delta := ⟨1, 100⟩, wrong := 0 }, { units := 4, drawn := 1, delta := ⟨1, 1000000⟩, wrong := 0 }]
-  #[] 1 1 1).eps.toString == "10001/1000000"
+  1 1).eps.toString == "10001/1000000"
 -- eps over audits at δ = 1/10, 1/15 and 1/6 is 1/3; over none it is 0
 #guard (terms #[⟨0, 0, "", 1, 16, #[]⟩, ⟨0, 0, "", 1, 16, #[]⟩, ⟨0, 0, "", 1, 16, #[]⟩]
-  #[⟨1, 1, ⟨1, 10⟩, 0⟩, ⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 6⟩, 0⟩] #[] 1 1 1).eps.toString == "1/3"
-#guard (terms #[] #[] #[] 1 1 1).eps.toString == "0"
--- the rows form over 1 link-window: 7 cells on one connection and 2 on another (3 + 2 bits, for the schedules and
--- again for the fail cells), an audit whose own terms are in none, and one scan of 20 units (T = 10) drawn at
+  #[⟨1, 1, ⟨1, 10⟩, 0⟩, ⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 6⟩, 0⟩] 1 1).eps.toString == "1/3"
+#guard (terms #[] #[] 1 1).eps.toString == "0"
+-- the rows form over 1 link-window: an audit whose own terms are in none, and one scan of 20 units (T = 10) drawn at
 -- δ = 1/15 with at most 3 wrong, 1,120 free inputs, ingress and egress instances committing 300 and 512 bits, and
 -- jitter below 2 over its 10 steps: 1351 sets of at most 3 of 20 units
 #guard atMost 20 3 == 1351 && clog2 1351 == 11
 #guard (rowsTerms #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] ⟨10, 1120, 300, 512, 0⟩
-  #[({ units := 20, drawn := 5, delta := ⟨1, 15⟩, wrong := 3 }, 0, 0)] #[7, 2] 2 1).K ==
-  (3 + 2) + (3 + 2) + (1120 + 11 + 3 * 512 + 10)
+  #[({ units := 20, drawn := 5, delta := ⟨1, 15⟩, wrong := 3 }, 0, 0)] 2 1).K == 1120 + 11 + 3 * 512 + 10
 -- every unit drawn: no wrong unit, so no faulty set and no faulty bits
-#guard (rowsTerms #[] ⟨4, 0, 300, 512, 0⟩ #[({ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0)] #[] 1 1
+#guard (rowsTerms #[] ⟨4, 0, 300, 512, 0⟩ #[({ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0)] 1 1
   ).K == 0
 -- w63's class with the egress tie: T = 32, the scan's own free inputs none, every unit drawn, and its tied audit (the
 -- slot entries' `SlotEntry_v1` template) of 8 units, a slot at each of the 2 boundaries, whose free inputs are their
 -- entries, 1,136 bits each: K is the tied audit's 9,088
 #guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512, 0⟩
-  #[({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }, 8 * 1136, 0)] #[] 1 1).K == 9088
+  #[({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }, 8 * 1136, 0)] 1 1).K == 9088
 -- eps over the scans' δ = 1/15 and 1/15 is 2/15; the audit's 1/10 is in it no more
-#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0), (⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[]
+#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0), (⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)]
   1 2).eps.toString == "2/15"
 -- w63k4: T = 32, 4 lanes, every 16, so 8 slot entries of 112 bits a link-window; its tied audit drawn in part, with at
 -- most 2 wrong units, which can set any entry: its link-window's term charges E_w = 896 bits beside its free inputs
 #guard (rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112⟩
-  #[({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }, 9088, 8 * 112)] #[] 1 1).K == 9088 + 896
+  #[({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }, 9088, 8 * 112)] 1 1).K == 9088 + 896
 -- a charged audit's δ = 1/10 is in eps beside its scan's 1/15: 1/6
-#guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[] 1 1 #[⟨2, 1, ⟨1, 10⟩, 0⟩]
+#guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] 1 1 #[⟨2, 1, ⟨1, 10⟩, 0⟩]
   ).eps.toString == "1/6"
 -- w63k4's tied audit of 16 proof blocks sampled at one (`subset:1`), with a bound of 2 incorrect ones: charged, its
 -- link-window's β_w every one of the scan's E_w = 896 entry bits; sampled whole, uncharged and β_w = 0
 #guard
   let scan : Scan := ⟨32, 0, 300, 512, 8 * 112⟩
-  let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[]⟩], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
+  let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[]⟩], 0, 1, "", Lms.deployed, .empty, .empty, "",
     .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32⟩ .empty scan, 1⟩
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", .str q), ("root", .str "r"), ("domain", .str "d")]])]

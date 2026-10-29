@@ -530,7 +530,7 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
     clock form's audits', the rows form's scans' and its tied audits' drawn in part), and its profile names no sync; in
     the clock form its evidence holds
     each clock certificate alone, and in the rows form each link-window's three records' certificates and two row
-    registrations, with one scan a link-window, all at one δ, and a schedules term equal to the cells';
+    registrations, with one scan a link-window, all at one δ; neither form publishes a schedules or a cells term;
     `cases(seed, form)` is one of each with its answer; and Lean gives every one of them the mirror's answer."""
     kinds = PC.kinds(form)
     assert kinds == KINDS, kinds
@@ -554,8 +554,8 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
     else:
         assert all(sorted(w) == PC.ROWS_WINDOW_KEYS and len(w["certificates"]) == 3 and len(w["registrations"]) == 2
                    for w in shown)
-        assert all(x["schedules"] == x["cells"] and len(x["scans"]) == x["windows"]
-                   and len({t["delta"] for t in x["scans"]}) == 1 for x in accepted)
+        assert all(len(x["scans"]) == x["windows"] and len({t["delta"] for t in x["scans"]}) == 1 for x in accepted)
+    assert all("schedules" not in x and "cells" not in x for x in accepted)
     assert PC.cases(3, form) == {k: (drawn[k, 3], answers[k, 3]) for k in kinds}
     D.run(dataclasses.replace(PORT, inputs=st.sampled_from(list(drawn.values()))), examples=2 * len(drawn),
           server=server)
@@ -563,16 +563,14 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
 
 def test_the_bound_counts_what_it_says():
     """K's terms on a period worked by hand: 10 units, each committing 16 bits, drawn subset:3 at δ = 1/10 with at most
-    4 incorrect, 7 cells on one connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3
-    steps; the same audit with units committing 40 bits, its incorrect proof blocks' bits 4 · 40; and eps over audits at
+    4 incorrect, over 3 link-windows, jitter below 2 over 3 steps; the same audit with units committing 40 bits, its incorrect proof blocks' bits 4 · 40; and eps over audits at
     δ = 1/10, 1/15 and 1/6, and over none (Lean's `#guard`s)."""
-    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 0), 0, 2, "a", None, b"", "",
-               SyncSet((0,), (Fraction(1), Fraction(2))), 3)
+    p = Params((PC.Audit(0, 3, "", 10, 16),), 0, 2, "a", None, b"", "", SyncSet((0,), (Fraction(1), Fraction(2))), 3)
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
-    assert (out["schedules"], out["cells"], out["audits"][0]["faulty_sets"], out["audits"][0]["faulty_bits"],
-            out["audits"][0]["jitter"], out["K"]) == (3, 3, 9, 64, 3, 3 + 3 + 9 + 64 + 3)
+    assert (out["audits"][0]["faulty_sets"], out["audits"][0]["faulty_bits"], out["audits"][0]["jitter"],
+            out["K"]) == (9, 64, 3, 9 + 64 + 3)
     wide = public(dataclasses.replace(p, audits=(PC.Audit(0, 3, "", 10, 40),)), [Facts(10, 3, Fraction(1, 10), 4)])
-    assert (wide["audits"][0]["faulty_bits"], wide["K"]) == (160, 3 + 3 + 9 + 160 + 3)
+    assert (wide["audits"][0]["faulty_bits"], wide["K"]) == (160, 9 + 160 + 3)
     assert [clog2(x) for x in range(6)] == [0, 0, 1, 2, 2, 3]
     assert [at_most(10, 0), at_most(10, 1), at_most(10, 2), at_most(4, 9), at_most(0, 3)] == [1, 11, 56, 16, 1]
     assert out["eps"] == "1/10"
@@ -582,32 +580,30 @@ def test_the_bound_counts_what_it_says():
 
 
 def test_the_rows_forms_bound_counts_what_it_says():
-    """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): 7 cells on one connection and 2 on another, 5
-    bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 link-window
-    one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3 incorrect (1351 sets), 1,120 free inputs, instances
+    """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): an audit whose own terms are in none, and over 1
+    link-window one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3 incorrect (1351 sets), 1,120 free inputs, instances
     committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no term for incorrect
     proof blocks; at w63's class with the egress tie (T = 32, every unit drawn), K the tied slot entries' free inputs,
     8 · 1,136 = 9,088 bits; at w63k4's (8 slot entries of 112 bits) with its tied audit drawn in part with at most 2
     incorrect, K those and its E_w = 896 bits; and eps over the scans' δ alone, or with a charged audit's beside
     them."""
-    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
+    p = Params((PC.Audit(0, 3, "", 10, 16),), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0)])
     (scan,) = out["scans"]
     assert at_most(20, 3) == 1351 and clog2(1351) == 11
-    assert (out["schedules"], out["cells"], scan["free"], scan["faulty_sets"], scan["faulty_bits"], scan["jitter"],
-            scan["faulty_entries"], out["K"]) == (5, 5, 1120, 11, 3 * 512, 10, 0, 5 + 5 + (1120 + 11 + 3 * 512 + 10))
+    assert (scan["free"], scan["faulty_sets"], scan["faulty_bits"], scan["jitter"], scan["faulty_entries"],
+            out["K"]) == (1120, 11, 3 * 512, 10, 0, 1120 + 11 + 3 * 512 + 10)
     assert out["audits"] == [{"delta": "1/10", "drawn": 3, "units": 10, "wrong_units": 4}]
-    drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
+    drawn = dataclasses.replace(p, audits=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
     assert public(drawn, [], [(Facts(8, 8, Fraction(1, 100), 0), 0, 0)])["K"] == 0
-    w63 = dataclasses.replace(p, audits=(PC.Audit(8 * 1136, 0, "", 8, 1136),), cells=(), jitter=1,
-                              scan=PC.Scan(32, 0, 300, 512))
+    w63 = dataclasses.replace(p, audits=(PC.Audit(8 * 1136, 0, "", 8, 1136),), jitter=1, scan=PC.Scan(32, 0, 300, 512))
     tied = public(w63, [Facts(8, 8, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 8 * 1136, 0)])
     assert (tied["scans"][0]["free"], tied["K"]) == (9088, 9088)
     k4 = dataclasses.replace(w63, scan=PC.Scan(32, 0, 300, 512, 8 * 112))
     part = public(k4, [Facts(16, 9, Fraction(1, 100), 2)], [(Facts(64, 64, Fraction(1, 100), 0), 9088, 8 * 112)])
     assert (part["scans"][0]["faulty_entries"], part["K"]) == (896, 9088 + 896)
-    two = dataclasses.replace(p, cells=(), windows=2, scan=PC.Scan(0, 0, 0, 0))
+    two = dataclasses.replace(p, windows=2, scan=PC.Scan(0, 0, 0, 0))
     assert public(two, [Facts(1, 1, Fraction(1, 10), 0)],
                   [(Facts(1, 1, Fraction(1, 15), 0), 0, 0)] * 2)["eps"] == "2/15"
     one = dataclasses.replace(two, windows=1)
