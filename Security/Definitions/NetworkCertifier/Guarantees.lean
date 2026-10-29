@@ -63,7 +63,7 @@ observation sequences of length `n` with jitter below `D` number at most `2^(E·
 execution block plus jitter. Every advice value has the same length, so the charge is `k` whatever an honest session
 used, and nothing used is counted: no cap per sampling block, no Kraft inequality and no `BitsCount`. -/
 def EncardAccSeqsLeAdviceBits : Prop :=
-  ∀ {L K S : ℕ} {In : Type} (E k : ℕ) (P : Program L S In (Fin E → Fin k → Bool))
+  ∀ {L K S : ℕ} {In : Type} (E k : ℕ) (P : EgressPrediction L S In (Fin E → Fin k → Bool))
     (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
     (AccSeqs P op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞)
 

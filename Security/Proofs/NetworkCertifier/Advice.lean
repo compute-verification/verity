@@ -100,7 +100,7 @@ theorem encard_accSeqs_le_advice {Adv : Type} [Fintype Adv] (P : EgressPredictio
 
 /-- **Theorem 3, the fixed advice budget.** With the advice `E` strings of exactly `k` bits, one per execution block,
 the accepted sequences number at most `2^(E·k) · D^n`. -/
-theorem encard_accSeqs_le_adviceBits (E k : ℕ) (P : Program L S In (Fin E → Fin k → Bool))
+theorem encard_accSeqs_le_adviceBits (E k : ℕ) (P : EgressPrediction L S In (Fin E → Fin k → Bool))
     (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
     (AccSeqs P op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞) := by
   have := encard_accSeqs_le_advice P op n D
