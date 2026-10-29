@@ -31,8 +31,10 @@ Its proofs are in `Lead/PStar/`, its new declarations in `Pouw.SecurityProofs.Le
   the tile's 24 lanes once at most, so at least 5 of its columns compare an even and an odd row with words that don't
   move with the lanes.
 * `Table`: the statement's pieces. `pStar_eq`: a value of a step's lanes and tag bit, `127 s₀ + s₁ + s₂ + 1 + b`, is
-  taken by at most 130 of the `2 · 128³` draws and one by exactly 130, `Lanes`' bound on an even row; `table_le`, the
-  pre-coin tables' and coin stream's term, is still a stub.
+  taken by at most 130 of the `2 · 128³` draws and one by exactly 130, `Lanes`' bound on an even row. `table_le`: a
+  memory of `mem` pre-coin tiles and `mem` streamed ones holds a committed tile at any step on at most a
+  `(2 · mem + 1) · 2^−100` share of the coins (`Call` against the tables' values and zero, `Stream` against the
+  streamed tiles), within `tableGap`.
 * `Tile`: at tile grain, the even and odd rows together fix each column's triple, so a 16 × 8 MMA tile's step is
   injective in its `2^184` draws: `p* = 2^−184` exactly.
 * `Walks`: the same lanes summed over steps: an entry's own walk keeps `p*` over any nonempty set of steps; an even
