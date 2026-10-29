@@ -9,8 +9,8 @@
                  [--skip-layer L] [--expect accept|reject] [--device cuda] [--ref-decode]
 
 **The plan.** A pass reads the units of the registration's plan (`p2_party.plan_of`), which the verifier holds and sends
-with it: `tensor_plan`, the units holding a tensor's block, so not the store's padding past the last tensor (MEM-72:
-it is PoUS's, and the decode never reads it). `registration --layout` writes it into the registration.
+with it: `tensor_plan`, the units holding a tensor's block, so not the store's padding past the last tensor (it is
+PoUS's, and the decode never reads it). `registration --layout` writes it into the registration.
 
 **The step.** Each pass of the session is one engine step's weight reads: every tensor of the store, in block order, from
 its segment files onto the device (`full.Segments`, kernels' reader) and through kernels' staging decode
@@ -440,7 +440,7 @@ def pieces(lay: Any, total: int) -> list[Piece]:
 
 def tensor_plan(layout: dict, units: int) -> receipts.Plan:
     """The plan of the units holding a block of a tensor of `layout` (the store's layout JSON, or the toy's, which holds
-    it as `layout`), in store order, in a store of `units` units: not the store's padding past them (MEM-72)."""
+    it as `layout`), in store order, in a store of `units` units: not the store's padding past them."""
     doc = layout.get("layout", layout)
     cols = doc["tensor_columns"]
     f, n = cols.index("first_block"), cols.index("blocks")

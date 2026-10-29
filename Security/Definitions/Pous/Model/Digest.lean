@@ -6,11 +6,10 @@ import Definitions.Pous.Game.Prob
 
 The fill check of the secure-erasure audit (`Security/Definitions/Pous/Model/SecureErasure.lean`) asks for a
 digest of the whole filled region under a fresh key: a keyed two-level polynomial hash over a finite field `F` (the bulk
-read's digest, `benchmarks/pous/hbm_audit/digest.py`, PR #935). A block is `W` words in `F`; the key is two evaluation
+read's digest, `benchmarks/pous/hbm_audit/digest.py`). A block is `W` words in `F`; the key is two evaluation
 points `(g, z)`. `Pous.Guarantees.DigestAU` bounds how often two different regions share a digest.
 
-Ported from PR #1010, the digest only: the bulk read's responder and the
-host-link assumption `TwoTierBandwidth` (dropped on 3 Oct 2026) are not here.
+The digest only: the bulk read's responder and a host-link bandwidth assumption are not modelled here.
 -/
 
 namespace Pous.Digest

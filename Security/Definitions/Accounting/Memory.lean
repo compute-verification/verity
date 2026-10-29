@@ -4,13 +4,13 @@ import Definitions.Pous.Model.SampledAudit
 /-!
 # Memory adds, by counting: the vocabulary (trusted)
 
-Lemma M of the actual-circuit model (note `console/20261012T0645Z-draft-actual-circuit-model`, section 5). During a
-PoUS audit, PoUS's responder is the location `X` together with its helper table, and before each challenge `j` it holds
-a state of `mem_X(t_j) + 2^{e_j} h_j ≤ M + H` bits: what `X` holds, read as the string of its values in a fixed order of
-position (leaf, then tick) without the positions, and the table. Besides the PoUS store `X` keeps a `q`-bit value `z`,
-uniform and independent of PoUS's setup and challenges, that can be read back from that state. Fixing `z` leaves a
-PoUS adversary whose states are those that read back as `z`: the fibre of `z` (`fibre`). Fibres of different `z` are
-disjoint, so few `z` have a large one, and PoUS's own guarantee bounds the acceptance of the rest.
+Lemma M of the actual-circuit model. During a PoUS audit, PoUS's responder is the location `X` together with its helper
+table, and before each challenge `j` it holds a state of `mem_X(t_j) + 2^{e_j} h_j ≤ M + H` bits: what `X` holds, read
+as the string of its values in a fixed order of position (leaf, then tick) without the positions, and the table. Besides
+the PoUS store `X` keeps a `q`-bit value `z`, uniform and independent of PoUS's setup and challenges, that can be read
+back from that state. Fixing `z` leaves a PoUS adversary whose states are those that read back as `z`: the fibre of `z`
+(`fibre`). Fibres of different `z` are disjoint, so few `z` have a large one, and PoUS's own guarantee bounds the
+acceptance of the rest.
 
 `fibre` is what the counting statement counts, and `Determines` is the condition on a family of PoUS adversaries,
 one for each `z`, that the state held before every challenge reads back as `z`. The statements are in

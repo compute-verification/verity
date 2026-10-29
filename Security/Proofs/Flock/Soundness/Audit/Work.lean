@@ -5,7 +5,7 @@ import Definitions.Flock.Guarantees.Audit
 /-!
 # The work law
 
-The draw law's second version (Daniel, Sep 28): the stratified law's strata, with each stratum's draw sized by the PoUW
+The draw law's second version: the stratified law's strata, with each stratum's draw sized by the PoUW
 work its units do instead of by their number. Stratum `s` has `n_s` units, each doing work `w_s` (zero for units that do no
 PoUW work: dequantization, the quantizer, attention), and the population does `W = Σ_s w_s n_s`. Stratum `s` draws
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))` (`Law.workRule`, the executable's `Flock.Draw.workK`) above its floor `f_s ≥ 1`,
@@ -471,7 +471,7 @@ theorem sizing_iff (K : ℕ) :
     ← ENNReal.div_eq_inv_mul, ENNReal.le_div_iff_mul_le (Or.inl (by norm_num)) (Or.inl (by norm_num))]
   norm_cast
 
-/-- **The sizing of record** (Daniel, Sep 29: `δ = 2^-40`, `ε = 0.1%`): `(1 − 1/1000)^27713 ≤ 2^-40`. -/
+/-- **The sizing of record** (`δ = 2^-40`, `ε = 0.1%`): `(1 − 1/1000)^27713 ≤ 2^-40`. -/
 theorem record_sizing : ((999 : ℝ≥0∞) / 1000) ^ 27713 ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ :=
   (sizing_iff 27713).2 (by decide +kernel)
 

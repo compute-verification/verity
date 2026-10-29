@@ -142,7 +142,7 @@ def test_with_pous_on_the_selector_refuses_an_option_that_keeps_a_weight_copy(mo
 
 def test_a_tiny_int8_model_is_held_as_p2_and_served_bit_exact(toy):
     """W is the int8 weights in the store's layout (each from a block, zero past it); C* = P2-Enc(W, salt) under the salt
-    drawn from the auditor's source after the commitment; every use decodes the layer's weight from C*, so the outputs are
+    sampled from the auditor's source after the commitment; every use decodes the layer's weight from C*, so the outputs are
     the plaintext's to the bit, and closing restores W decoded from C*."""
     before, served = hooks.live(), toy.outputs()
     comp = PO.install(toy, _ctx(ENTRY))
@@ -243,7 +243,7 @@ def _period_dir(tmp_path, n: int):
 
 
 def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_it_certifies(toy, tmp_path, monkeypatch):
-    """The leg: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
+    """`PousOption.leg`: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
     the setup case and its check; an accepted period says plainly that this point certifies 0 bits."""
     session, calls = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
     monkeypatch.setattr(CP, "session", session)

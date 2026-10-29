@@ -14,7 +14,7 @@ verdict.
         little-endian, a byte string in order (bit t is bit t & 7 of byte t >> 3); ``mid`` is SHA-512's eight words, each
         64 bits LSB first
 
-**Public** (the verifier's own, `opening_public`), each of the four kinds the rules allow: the draw (block j, its position
+**Public** (the verifier's own, `opening_public`), each of the four kinds the rules allow: the sample (block j, its position
 pos in the pass, whose leaf is pos >> 4 and whose receipt is entry pos & 15 of it) and the registration's codec key at j
 (the seed's codec key, `codec.key`: c, tau and mask; t0 = tau W j mod p for the block's W words; the seed itself), the
 append's coin c_a (``bound``, an appended block; zero bytes and unbound for a registered one), the pass's receipt prefix
@@ -56,7 +56,7 @@ hm96-sha512/row/v2, so under the salt of another commitment of the same words it
 verifier holds the plan row's to the certified plan row of the pass's step (the plan unit's) by ``b || c`` alone. The other
 rows' ``b || c`` are hiding and nothing reads them.
 
-**The parts**, each its own traced Definition lowered by its builder (``build``), so a C-Flock unit gets the builder's
+**The parts**, each its own traced Definition lowered by its builder (``build``), so a Flock unit gets the builder's
 commits and the Definition the trace's ANDs:
 
     RowCompress_v1                  (cv: Array<8, Word>, block: Array<16, Word>) -> Array<8, Word>, one SHA-512 compression
@@ -77,25 +77,24 @@ folds of the high half by C; a round adds about 9 N for its additions, negation 
 2 + ceil((BYTES + 17) / 128) compressions (about 15.6 M ANDs at p512/k2, 13.4 M of rounds; about 32 M at p1024/k3/masked);
 the receipt ROWS sketch rows of about 9 BYTES ANDs each and one compression (0.66 M at 16 rows); the receipt leaf's digest
 ceil((64 LEAF + 17) / 128) compressions, each hm96 leaf four, each read's leaf two and each level three, so DR + DP + DV
-levels. The C-Flock lowering adds about half again, ANDs on identical operands (circuit-check's redundant-gates/boolean).
+levels. The Flock lowering adds about half again, ANDs on identical operands (circuit-check's redundant-gates/boolean).
 At A7's binding (p512/k2 unmasked, 4,096-byte blocks, 16 rows, LEAF 16, P 48, DR 2, DP 5, DV 6) the unit lowers to
-29,142,550 ANDs, k_log 26, within C-Flock's K_MAX of 27: checks 1-3 and 5 are one unit. p1024/k3/masked would be past K_MAX.
+29,142,550 ANDs, k_log 26, within Flock's K_MAX of 27: checks 1-3 and 5 are one unit. p1024/k3/masked would be past K_MAX.
 
 `opening_check` is the reference, over an instance's u16 words; `opening_args` an instance's arguments, `opening_public` its
-public rows' (the verifier's own), `opening_rows` its rows (C-Flock's ``in_rows`` params), `row_words` its rows' words and
+public rows' (the verifier's own), `opening_rows` its rows (Flock's ``in_rows`` params), `row_words` its rows' words and
 `verdict` the name its verdict word says.
 """
 from __future__ import annotations
 
 import hashlib
 import struct
-from functools import lru_cache
-from types import SimpleNamespace
-from typing import Callable, Sequence
+from typing import Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ONE, ZERO, OR, and_reduce, const_bits, maj, mux, or_reduce
+from verity.ml.circuits.boolean.trace import part as _part
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
@@ -195,7 +194,7 @@ def _join(ws: Sequence[Sequence]) -> list:
 
 
 # --- arithmetic over forms ---------------------------------------------------------------------------------------------------
-# Integers are bit lists LSB first. A long form is committed (`sha512.commit`): a row of its own in C-Flock's lowering, and in a
+# Integers are bit lists LSB first. A long form is committed (`sha512.commit`): a row of its own in Flock's lowering, and in a
 # trace a copy with no gate, written once as its XORs, so neither a row nor a traced form compounds.
 
 def _short(C, x, limit: int = LIMIT):
@@ -341,26 +340,6 @@ def _sha(C, data: list[list]) -> list[list]:
 
 
 # --- the parts ---------------------------------------------------------------------------------------------------------------
-
-def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str) -> CompositeDefinition:
-    """A Definition traced from ``build(C, S, *elements)`` once per binding of ``statics``, which C-Flock lowers by ``build``."""
-
-    @lru_cache(maxsize=None)
-    def traced(*key) -> TR.Traced:
-        S = SimpleNamespace(**dict(zip(statics, key)))
-        params, ret = signature(S)
-        return TR.trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
-
-    def body(B, S, *colls):
-        params, ret = signature(S)
-        return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
-
-    d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
-    # a lowering passes the statics only to a Definition that has some (`ir_lower._boolean_activation`)
-    d.build = build if statics else (lambda C, *e: build(C, SimpleNamespace(), *e))  # type: ignore[attr-defined]
-    d.traced = traced  # type: ignore[attr-defined]
-    return d
-
 
 def _f(S):
     return Array(S.N, BIT)

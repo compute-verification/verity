@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.TmplSplitEq
 
 /-!
-# A templated unit slot's fold is the flat slot's (PRF-133, part 3)
+# A templated unit slot's fold is the flat slot's
 
 `Tmpl.foldUnit` is `foldSplit` behind the checks a verifier can make in `O(1)`: the point is the slot's, and the root is
 one chunk of 64 to `2^sl` columns. On a well-formed template at `layoutM`'s layouts, whose `unrollAt` net has `sl` bits,

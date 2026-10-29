@@ -5,7 +5,8 @@
 A command is a library module with an options dataclass -- `Options`, or `COMMANDS = {name: <options class>}` for a
 command with subcommands -- whose fields are `config.option`s, and `main(options)`.  This module is the only place that
 parses a command line: it builds the parser from the dataclass fields, takes the environment defaults the fields name
-(`option(env=...)`), and reports a `config.UsageError` as a usage error (exit 2).  A process it starts refuses a `VERITY_*`
+(`option(env=...)`), and reports a `config.UsageError`, the command's or an option type's, as a usage error with its message
+(exit 2).  A process it starts refuses a `VERITY_*`
 variable nothing in the tree reads (`settings.validate_environ`), naming it, also exit 2.  `python -m verity_vllm.pipeline.cli`
 is the same program, for interpreters without the `verity-vllm` launcher.
 """
@@ -17,7 +18,7 @@ import dataclasses
 import importlib
 import os
 import sys
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
 from typing import Any
 
 from verity_vllm import settings
@@ -100,7 +101,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "resolve-log": ("verity_vllm.observe.fold.resolve_log", "resolve an observation log against a profile"),
     "rmsnorm-fused-sweep": ("verity_vllm.program.rmsnorm_fused_sweep", "fused rms-norm summation-tree sweep"),
     "row": ("verity_vllm.pipeline.row", "run a sweep row's stages: Build, Match, Commit (run, stage, chain, shed)"),
-    "sweep": ("verity_vllm.pipeline.sweep", "a night's config runs on one host, packed onto its GPUs by RAM and CPU (plan, run)"),
     "runtime-tree": ("verity_vllm.observe.runtime_tree", "the runtime's module tree"),
     "sampling-rng": ("verity_vllm.program.sampling_rng", "sampler noise recomputation"),
     "serving-rows": ("verity_vllm.pipeline.deferred_rows", "a deferred Commit's serving rows and one-stage registration, from its sealed replay bundle"),
@@ -122,6 +122,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "verdict": ("verity_vllm.pipeline.verdict_record", "a row's Commit verdict record, rebuilt from its evidence"),
     "weights-of-record": ("verity_vllm.check.weights_of_record", "the weights of record"),
     "workload": ("verity_vllm.pipeline.workload", "the deterministic sweep workload generator"),
+    "workload-file": ("verity_vllm.pipeline.workload_file", "workload files fetched by their art ids and checked against SHA256SUMS"),
 }
 
 
@@ -182,7 +183,21 @@ def _add_options(parser: argparse.ArgumentParser, cls: type, environ: Mapping[st
             kw["dest"] = f.name
             if "default" not in kw:
                 kw["required"] = True
+        if "type" in kw:
+            kw["type"] = _typed(kw["type"])
         parser.add_argument(*flags, **kw)
+
+
+def _typed(convert: Callable[[str], Any]) -> Callable[[str], Any]:
+    """An option's ``type`` whose `config.UsageError` argparse reports with its message (of a ValueError it says only "invalid
+    <type> value")."""
+    def typed(s: str) -> Any:
+        try:
+            return convert(s)
+        except UsageError as e:
+            raise argparse.ArgumentTypeError(str(e)) from e
+    typed.__name__ = getattr(convert, "__name__", repr(convert))
+    return typed
 
 
 def _options(cls: type, ns: argparse.Namespace, environ: Mapping[str, str]) -> Any:

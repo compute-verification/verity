@@ -2,7 +2,7 @@ import Proofs.Flock.Claims.ZK.FrameSched
 import Flock.Firewall.Frames
 
 /-!
-# The loop places a rep's rounds as `Drive.reqs` does (Stage B)
+# The loop places a rep's rounds as `Drive.reqs` does
 
 `Frames.placeOf` places a rep's next round on what the loop kept of the rep: its algebraic phase's scheduled rounds,
 then its opening (`Drive.openStep`), begun at the first round past them and fed each round's coins (`Frames.coinsStep`).

@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.TmplSplitTab
 
 /-!
-# A class's table, valued at a chunk origin (PRF-133, part 3, stage 3)
+# A class's table, valued at a chunk origin
 
 `walk` folds a class at local offset `off` in chunks of `2^al`; placed at chunk origin `H` (so at `h = H · 2^al + off`
 in `foldDef`'s terms), an entry at row chunk `cx` and column chunk `cy` has high factors `eq(ρ[L ..], H + cx)` and

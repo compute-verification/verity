@@ -1,4 +1,4 @@
-"""The red team's P3 / band / dense `Π₂` state attack (art:7617c8017e80, `pi2_state_attack.py`), on this tree's band and
+"""The red team's P3 / band / dense `Π₂` state attack, on this tree's band and
 dense codecs: any whole label `C_v` of the overwrite-chain schemes, rebuilt from five 200-byte post-absorb SHAKE256
 states of the label's final (pad) `Π₂` call, about 1,000 bytes a 64 KiB block, in 481 sequential Keccak-f, with no
 `Π₂` call and no chain walk.

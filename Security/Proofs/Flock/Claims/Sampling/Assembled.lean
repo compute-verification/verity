@@ -75,7 +75,7 @@ hash `H`, the conjunction of the sampling claims below but `ZK`, reading of `F` 
   from Flock's masked completeness and the sampled verifier's and the code's facts (`SamplingDeploy.complete_deploy`).
 * `hZK : ZK H (D.mask Nz Ωz tapeOf S) εzk γzk`: the zero knowledge of the record's reference prover on the masked tapes
   `tapeOf (ν, r)`, with the leaf layer's simulator `S`, its binding term `γzk` times `Fork`'s collisions among the
-  honest prover's calls in two real runs on one nonce (#2201); `Sampling.ZK` reduces it to a committed-coin protocol's
+  honest prover's calls in two real runs on one nonce; `Sampling.ZK` reduces it to a committed-coin protocol's
   models (`SamplingDeploy.zk_deploy_of_models_gap`).
 -/
 

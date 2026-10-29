@@ -53,7 +53,7 @@ def test_byte_swap_is_wiring():
 
 
 def _decode_cases(params: P2.P2Params, n_random: int):
-    """Codewords from the reference encode, edge blocks, and random blocks, with their expansion bases."""
+    """Codewords from the reference encode, edge labels, and random labels, with their expansion bases."""
     salt = bytes(RNG.getrandbits(8) for _ in range(24))
     w = bytes(RNG.getrandbits(8) for _ in range(params.segment_bytes))
     blocks = P2.encode_segment(params, None, salt, 0, w)
@@ -79,7 +79,7 @@ def _reference(params: P2.P2Params, prefix: bytes, j: int, block: bytes) -> tupl
 @pytest.mark.parametrize(("w", "c0"), [(64, 189), (128, 173)])
 def test_decode_is_the_reference(w, c0):
     """At 64 bits Karatsuba squarings, at 128 a Toom-3 level: codewords decode to their payload byte for byte, and every
-    block the reference rejects (c ≥ p, or a result wider than the payload) has ok = 0."""
+    label the reference rejects (c ≥ p, or a result wider than the payload) has ok = 0."""
     params = P2.P2Params(w, c0, 4)
     salt, cases = _decode_cases(params, 8)
     prefix = P2.expand_prefix(params, salt)
@@ -96,7 +96,7 @@ def test_decode_is_the_reference(w, c0):
 
 def test_finish_refuses_a_first_t_candidate_at_or_above_p():
     """`schemes.p2` reads t's next candidate when the first is ≥ p; the circuit reads only the first and says ok = 0
-    (probability C0 / 2^W per block, so the full decode never meets it on a test vector).  Below p, the payload is
+    (probability C0 / 2^W per label, so the full decode never meets it on a test vector).  Below p, the payload is
     (u − t) mod p."""
     w, c0 = 64, 189
     p, pay = (1 << w) - c0, (w - 16) // 8
@@ -141,7 +141,7 @@ def test_counts_at_p2():
 
 @SLOW
 def test_decode_at_p2_is_the_registered_vector():
-    """The registered scheme's pinned small instance (`fixtures/schemes/p2-16448-v4.json`): both blocks decode to W."""
+    """The registered scheme's pinned small instance (`fixtures/schemes/p2-16448-v4.json`): both labels decode to W."""
     v = json.loads((FIXTURES / "schemes" / "p2-16448-v4.json").read_text())["small"]
     params = P2.P2Params(**{k: v["params"][k] for k in ("w", "c0", "blocks_per_segment", "segments")})
     salt, blocks = bytes.fromhex(v["salt"]), [bytes.fromhex(b) for b in v["blocks"][0]]

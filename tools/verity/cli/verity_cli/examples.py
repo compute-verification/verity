@@ -22,7 +22,7 @@ AXES = {"run": ("moved", "runs", "placed"), "proof": ("none", "stated", "proved"
 #: the roles a placement names -> whose they are; the auditor's run only on an `auditor-host` (AGENTS.md "Auditor-trusted
 #: devices"). A new example's role goes here with its side.
 ROLES = {"prover": "prover", "endpoint": "prover", "store": "prover",
-         "verifier": "auditor", "challenger": "auditor", "certifier": "auditor"}
+         "verifier": "auditor", "challenger": "auditor", "certifier": "auditor", "memory_challenger": "auditor"}
 #: machine classes: a node the prover runs (`gpu-node`, `cpu-node`), a machine it doesn't control (`auditor-host`), or one
 #: CPU machine holding every role (`local`: a laptop or a suite)
 MACHINES = ("gpu-node", "cpu-node", "auditor-host", "local")
@@ -30,8 +30,8 @@ RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}|art:[0-9a-f]{64}")
 NAME = re.compile(r"[a-z0-9_]+")
 PROOF = re.compile(r"\w+(\.\w+)*\.SecurityProofs\.\w+(\.\w+)*")
 KEYS = {"protocol", "workload", *AXES, "placement", "evidence"}
-#: the retired single ladder's `level` -> (run, proof), read from a file that gives neither axis: #4928 adds
-#: `examples/toy_network` with `level = 1` below this change on `next`. Remove once no example.toml says `level`.
+#: the retired single ladder's `level` -> (run, proof), read from a file that gives neither axis. Remove once no
+#: example.toml says `level`.
 LEVEL = {0: ("moved", "none"), 1: ("runs", "none"), 2: ("placed", "none"), 3: ("placed", "stated"), 4: ("placed", "proved"),
          5: ("placed", "measured")}
 EVIDENCE = {"runs", "tests", "guarantee", "honest", "nontrivial", "proof", "premises"}
@@ -47,13 +47,13 @@ class Example:
     name: str
     data: dict | None       # example.toml, or None when it is missing or doesn't parse (`error`)
     error: str = ""
-    runner: str = ""        # run.py or run.sh, what `verity example NAME` runs
+    runner: str = ""        # config.toml (`verity run`), run.py or run.sh, what `verity example NAME` runs
 
 
 def examples(root: Path) -> list[Example]:
     out = []
     for d in sorted(p for p in (root / "examples").iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
-        runner = next((r for r in ("run.py", "run.sh") if (d / r).is_file()), "")
+        runner = next((r for r in ("config.toml", "run.py", "run.sh") if (d / r).is_file()), "")
         f = d / "example.toml"
         if not f.is_file():
             out.append(Example(d.name, None, f"no example.toml: add one ({SCHEMA})", runner))

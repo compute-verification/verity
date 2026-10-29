@@ -76,7 +76,7 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
 
 
 def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path):
-    """IO-TIE's group (``--group G``) at the test class: link-windows 0 and 1 in one registration, the trees G·T
+    """The I/O tie's group (``--group G``) at the test class: link-windows 0 and 1 in one registration, the trees G·T
     leaves, each member's warden port its own link-window's registration, and the chains running across the windows."""
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path, setup=sz.TEST, group=G)
@@ -386,7 +386,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
-        "forged": ("reject", "window 0: certificates"), "tampered": ("reject", "window 0: registration"),
+        "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "
+                   "connection)"), "tampered": ("reject", "window 0: registration"),
         "chain": ("reject", "window 0: service: the scan's chain round refused: {'x': 'y'}")}
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
     with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):

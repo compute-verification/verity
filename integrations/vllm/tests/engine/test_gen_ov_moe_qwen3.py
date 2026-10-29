@@ -1,8 +1,8 @@
-"""[R19 qwen3, row #75] `profiles.gen_ov_moe_qwen3`: the Match-grade constructive Qwen3-30B-A3B rank profile.
+"""`profiles.gen_ov_moe_qwen3`: the Match-grade constructive Qwen3-30B-A3B rank profile.
 
-What is proved here, CPU only (no rank log exists yet -- R17's Qwen3 TP2 rank logs died with cp-tp; the capture recipe is on the R19 board):
-  * the rank-local configuration and the weights Record reproduce the Build of record's per-rank parameter shapes EXACTLY (veritor
-    `lane/r17-tp` .../r17int9/build_summary.json `tp.sharded_params.by_class`, transcribed below) and the fold's `weights` parameter has the
+What is proved here, CPU only (no rank log exists yet):
+  * the rank-local configuration and the weights Record reproduce the Build of record's per-rank parameter shapes EXACTLY (the
+    Build summary's `tp.sharded_params.by_class`, transcribed below) and the fold's `weights` parameter has the
     Build's element count (+ the rotary table);
   * on synthetic `vllm.moe_forward` scope events at the RANK shapes (E=128, TOPK=8, H=2048, I_r=384; the recorded kernel bodies of the
     OLMoE capture with Qwen3's `renormalize=True`) the scope folds to the six-part pair-major Group over `MoeRouterTopKOrderedNorm_v1{128,8,8}`,

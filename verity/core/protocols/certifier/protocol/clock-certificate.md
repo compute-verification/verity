@@ -3,7 +3,7 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 ## The clock certificate (`certificate.CertifiedClock`)
 
 N2's advised floor reads each egress window's sync (δ, ρ), and a δ below the one the window's traffic was certified
-under loosens it (REDTEAM phase 11). So `advised.view` refuses a window whose declared sync isn't the one the certifier
+under loosens it (the phase-11 attack). So `advised.view` refuses a window whose declared sync isn't the one the certifier
 ran it under, which the verifier takes only from its own clock source (`advised.ClockSource`). The clock certificate
 makes that source the certifier's signed record.
 
@@ -20,22 +20,22 @@ makes that source the certifier's signed record.
   the link, `egress` and the window). `CertifiedClock` is the sync, the salt and that certificate. A rehearsal's
   certifier (`certifier_serve.ServedProxy`, which hands its `CertifierProcess` each egress record with its shaper's
   sync) writes one line of its `clocks.jsonl` a window, with the opening (`certifier_serve.read_clocks`).
-- **What is public.** What the certifier signs is witness (AGENTS.md, "Auditor-trusted devices", applied to the clock
-  certificate on 25 Oct): the sync and its salt never reach the auditor in the clear. Only the certificate is public, a signature over
+- **What is public.** What the certifier signs is witness (AGENTS.md, "Auditor-trusted devices"): the sync and its
+  salt never reach the auditor in the clear. Only the certificate is public, a signature over
   a hiding commitment: its key id, link, direction and window, the salted digest and the LMS signature. The reveal
   endpoint serves that alone (`CertifyingPublisher.public`), and the client keeps it in its `clocks.jsonl`
   (`certifier_serve.keep_certificates`), checked under the deployment's key and session; it holds no opening.
 - **A fresh salt each window.** The clock digest is a function of the sync alone, so under one salt two windows of one
   sync would sign one digest, which shows anyone holding the certificates that their syncs are equal. The issuer never
-  signs a clock under a salt it drew for an earlier one (`Issuer.salted_clock` raises), the verifier refuses two
+  signs a clock under a salt it sampled for an earlier one (`Issuer.salted_clock` raises), the verifier refuses two
   openings sharing a salt, and the client, holding no salt, refuses a clock certificate whose signed digest an earlier
   window's signs.
 - **A certificate of its own, not a head field.** Signing the sync inside the egress head (`RecordHead.encode`) would
   change the head encoding that the head check's circuit, the Lean records and the CertifierDevice pin. The record
   certificate, the head and `active.py` are unchanged.
-- **Domain separation.** The record certificate of the same link-window signs SHA-512("verity/net-cert/v1" ‖ salt_c ‖
+- **Domain separation.** The record certificate of the same execution phase signs SHA-512("verity/net-cert/v1" ‖ salt_c ‖
   R), R a record digest, and the clock certificate the same over a clock digest, each digest under its own tag. So one
-  opens as the other only on a SHA-512 collision, as with the warden's cells certificate (`warden_rows`). Nor can the
+  opens as the other only on a SHA-512 collision, as with the network certifier's cells certificate (`warden_rows`). Nor can the
   head check take a clock certificate as a record's: that needs a head whose record digest is the clock digest.
 - **The verifier of record** is `LinkWindows(certified_clocks=…)`, whose `clock_source` is `advised.SignedClocks` under
   the link's own certifier key and session. It reads each window's sync through its opening, against the salted digest
@@ -44,7 +44,7 @@ makes that source the certifier's signed record.
   hold, and the windows run from 0 to the first one without exactly one such sync. `SignedClocks.refused` names each
   opening it took no sync from and why: not a salted clock's opening, not egress, another key's, a sync and salt that
   don't open the signed digest (an altered digest or sync), a signature that doesn't verify (forged, another
-  session's, or relabelled to another link or window), a salt another link-window's opening has too, or two signed
+  session's, or relabelled to another link or window), a salt another execution phase's opening has too, or two signed
   syncs for one window. Once a frame is released in a window without a sync no floor is under a signed sync, and
   every window of the link is refused. The link's verdict is the AND over its windows, so the link is refused either
   way. Whoever delivers the openings, the prover included, can't change what they open to.
@@ -80,7 +80,7 @@ makes that source the certifier's signed record.
   `test_client_certificates.py` that the client keeps every clock certificate's public part and nothing of a sync or
   salt, and refuses a forged signature, an altered digest, a wrong window and a reused salt by name.
 - **The Lean device** signs the same salted form: `CertifierDevice.Issuer.clock`, and `clockWith` against the world,
-  which draws `salt_c` from the issuer's coins as `certifyWith` does, beside `certify` in
+  which samples `salt_c` from the issuer's coins as `certifyWith` does, beside `certify` in
   `verity/core/devices/certifier/lean/CertifierDevice/Issuer.lean`. It signs `clockCommitment salt sync`
   (`certificateDigest salt (clockDigest sync)`), refuses a salt one of its signed clock certificates took
   (`clockSalts`, carried beside the `Issuer`, whose structure `Properties.CertifierDevice.issuerVerifies` reads), and

@@ -1,4 +1,4 @@
-"""[GEN cov-ln] GPT-NeoX (Pythia) patterns: what vLLM d9105ea80's `GPTNeoXForCausalLM` runs that the base κ pattern list
+"""GPT-NeoX (Pythia) patterns: what vLLM d9105ea80's `GPTNeoXForCausalLM` runs that the base κ pattern list
 (`vllm_d9105ea80_sm89_eager.make_patterns`) does not explain, eager, `VLLM_BATCH_INVARIANT=1`, bf16.
 
     nn.LayerNorm(H, eps) with bias          aten.layer_norm(x[M,H], [H], w, b, eps, cudnn) {vectorized_layer_norm_kernel}

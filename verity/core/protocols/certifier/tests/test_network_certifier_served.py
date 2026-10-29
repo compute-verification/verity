@@ -1,5 +1,5 @@
 """N2's served profile (`served`): the circuit held to its reference, the derivation held to the Program's grid on an
-idle run, and served link-windows through the proof service: honest traffic accepted in every window, salted or not,
+idle run, and served link-windows through the proof system: honest traffic accepted in every window, salted or not,
 and a late block, an extra frame, a dropped frame and a request whose response straddles the window's end each
 refused."""
 

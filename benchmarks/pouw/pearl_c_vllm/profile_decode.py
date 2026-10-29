@@ -30,7 +30,6 @@ import cProfile
 import csv
 import io
 import json
-import os
 import pstats
 import statistics
 import sys
@@ -38,7 +37,10 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+from verity_config.settings import of
+
+settings = of(__file__)
+settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parent)]
 
@@ -244,7 +246,7 @@ def run(args) -> dict:
     chat_pass("pearlc-cprofile", True, cprof=cprof)
     buf = io.StringIO()
     pstats.Stats(cprof, stream=buf).sort_stats("tottime").print_stats(30)
-    return {"schema": "verity-pouw/pearl-c-vllm-profile/v1", "run": os.environ.get("RESEARCH_RUN_ID"), "install_s": install_s,
+    return {"schema": "verity-pouw/pearl-c-vllm-profile/v1", "run": settings.RESEARCH_RUN_ID, "install_s": install_s,
             "host": run_.details["host"], "gate_ok": all(g["ok"] for g in gate), "gate": gate,
             "prompts": len(chat), "max_tokens": 48, "pass_wall_s": walls, "passes": prof.report(),
             "cprofile_top_tottime": buf.getvalue().splitlines()[:60]}

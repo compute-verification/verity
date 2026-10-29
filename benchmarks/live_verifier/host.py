@@ -1,10 +1,10 @@
-"""The auditor host's verifier service (vy-auditor-1; INF-179): the remote bandwidth audit's verifier
-(`benchmarks/remote_session/verifier.py`, the Lean verdict by default) runs only as the `auditor` user, from a tree infra
-pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
+"""The auditor host's verifier service: the remote bandwidth audit's verifier
+(`benchmarks/remote_session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
+from a tree infra pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
 
     vy-verifier-gate run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS]
                          | --sessions N [--windows W] [--window-ms MS] [--samples S])
-                         [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] [--verdict lean|both]
+                         [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L]
                          [--model ROLE [--engines E] --arena-blocks A]
     vy-verifier-gate status [RUN] | fetch RUN [--transcripts] | replay RUN | stop RUN | close NODE_HEX
 
@@ -20,12 +20,12 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   (`pinned`): a run whose pin moved before its unit started doesn't run. pin.sh appends each pin (commit, UTC time) to
   `/opt/vy-verifier/pins.jsonl`, root's and append-only (`record_pin`, `chattr +a`), before it moves `current`; a run
   starts only from the log's last pin, and its request names that line (`pin_log`), so every session can be held to a
-  pin infra made (RT4-INT-40). State is `auditor`'s, in `/var/lib/vy-verifier`
+  pin infra made. State is `auditor`'s, in `/var/lib/vy-verifier`
   (0700): `runs/<run>/`, the verifier's registry (`registry.json`, kept across runs, `verifier.py --registry`) and the key
   that reaches the challenger's gate (`.ssh/vy-challenger-gate`, which infra registers there for the lane in
   `verifier.json`).
 - **A run** (`run`) is verifier.py with the whitelisted parameters and the host's own: it listens on 127.0.0.1 at
-  `--port` (one of `PORTS`), takes each session's coins from vy-challenger-1 through its gate (`--challenger gate`, the
+  `--port` (one of `PORTS`), takes each session's coins from the challenger host through its gate (`--challenger gate`, the
   host's key and this host's name there, under the lane's `--period` and `--pin`), holds each session's pin to the
   challenger's pins log, which it fetches through the same gate (`pins`), and to main's first-parent history at
   `/opt/vy-verifier/main-first-parent.txt` (`--challenger-main`; infra writes `git rev-list --first-parent origin/main`
@@ -61,7 +61,7 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   against the sha256 and bytes `verifier.json` recorded for it, and replays them through both verifiers
   (`verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript --record verifier.json`), or the record
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
-- **The memory challenger's parties** (INF-258): `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
+- **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/core/protocols/pous/wipe_party.py`, port 47611) and its block challenger
   (`challenger_party.py`, port 47610) as `auditor` from the pinned tree, one session per ssh connection: the request line
   on the gate's stdin, `{"listening"}` and the signed report on its stdout, as a lane's `--challenger-command` expects
@@ -73,8 +73,8 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
   count reaches the host. A session waits for no verifier unit to run, each party serves one session at a time, and the
   gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
-- **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` (`research
-  data put --kind verifier-run/v1 --tree ... --preserve`, from the pinned tree) with the credential infra keeps in
+- **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` in the
+  evidence store (a preserved tree of kind `verifier-run/v1`, by the pinned tree's store client) with the credential infra keeps in
   `/etc/vy/verifier-store.env`, which only that unit reads.
 """
 from __future__ import annotations
@@ -122,7 +122,6 @@ DECIMAL = re.compile(r"[0-9]{1,6}(?:\.[0-9]{1,3})?")
 READ_ONLY = "-"
 HOST_ACCOUNTS = ("root", "vy-admin", "research", "auditor", "prover", "challenger")
 QUANTILES = ("p50", "p99", "p999", "max")
-VERDICTS = ("lean", "both")
 MINUTES = (1, 720)
 SPECS = 16
 INTS = {"--sessions": (1, 16), "--windows": (1, 64), "--samples": (1, 100_000), "--lifetime": (1, 1024),
@@ -267,7 +266,7 @@ def parse_run(argv: list[str], settings: dict) -> dict:
     for flag in ("--peer", "--port", "--period", "--pin"):
         p.add_argument(flag, required=True)
     p.add_argument("--paced", nargs="+")
-    for flag in (*INTS, *DECIMALS, "--quantile", "--verdict", "--model", *STORE):
+    for flag in (*INTS, *DECIMALS, "--quantile", "--model", *STORE):
         p.add_argument(flag)
 
     def refuse(why: object) -> None:
@@ -306,10 +305,6 @@ def parse_run(argv: list[str], settings: dict) -> dict:
         if a.quantile not in QUANTILES:
             raise Refused(f"--quantile {a.quantile!r}: one of {QUANTILES}")
         req["quantile"] = a.quantile
-    if a.verdict is not None and a.verdict not in VERDICTS:
-        raise Refused(f"--verdict {a.verdict!r}: one of {VERDICTS} (the Lean verifier decides; under both "
-                      "audit.Session checks beside it)")
-    req["verdict"] = a.verdict or "lean"
     if a.paced is not None:
         if len(a.paced) > SPECS or not all(PACED.fullmatch(s) for s in a.paced):
             raise Refused(f"--paced: 1 to {SPECS} specs K:T_MS:DRAWS:WINDOWS (K, DRAWS, WINDOWS positive integers of "
@@ -364,7 +359,6 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
     argv = [python, "-I", str(tree / "benchmarks" / "remote_session" / "verifier.py"),
             "--host", "127.0.0.1", "--port", str(req["port"]), "--out", str(host.runs / run / "out"),
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
-            "--verdict", req["verdict"],
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],
             "--challenger-pin", req["pin"], "--challenger-period", req["period"], "--challenger-main", str(host.main)]
     for key in (*INTS, *DECIMALS, "--quantile"):
@@ -708,7 +702,7 @@ def run_keygen(argv: list[str]) -> str:
 
 USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS] | --sessions N "
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
-         "[--verdict lean|both] [--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
+         "[--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
          "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] (the request line "
          "on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
@@ -936,8 +930,8 @@ def replay_run(host: Host, run: str, *, now: Callable[[], datetime],
 
 
 def publish(host: Host, run: str, *, put: Callable[[list[str]], int] | None = None) -> int:
-    """Put the run's directory in the evidence store (`research data put --tree --preserve`, the pinned tree's
-    `research`), its request as the artifact's meta."""
+    """Put the run's directory in the evidence store as a preserved tree, through the pinned tree's store client, its
+    request as the artifact's meta."""
     req = request_of(host, run)
     meta = {k: req.get(k) for k in ("run", "by", "pinned", "peer", "period", "requested_utc")}
     meta["end"] = {k: (read_json(host.runs / run / "end.json") or {}).get(k) for k in ("rc", "ended_utc")}

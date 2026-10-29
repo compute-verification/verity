@@ -4,13 +4,13 @@ import Proofs.Accounting.Actual.Confidence
 /-!
 # A location as a transducer over what reaches it
 
-In a strategy causal from every tick (v2.4 of `note:console/20261012T0645Z-draft-actual-circuit-model`), what a location
-`X` does during `[t, t + n)` is a function of its state's content at `t` and of what crosses into it at each tick of
-`[t, t + n)` (`transducer`), read through any per-tick observation that fixes what crosses in. What crosses in at a tick
-is fixed by the signals the links deliver to `X`'s leaves then (`crossing_of_signals`). So `X` is a transducer whose state
-is its content and whose input at each tick is its links' signals: the step "`X` is the prover of the protocol's model"
-of B2 and B3, and the split of I. `Recall` is the case where nothing that crosses in depends on the coins. With `X`'s
-state at most `M` bits, the content padded to `M + 1` bits (`pad`, injective on such strings) serves as the state
+In a strategy causal from every tick, as the actual-circuit model defines it, what a location `X` does during
+`[t, t + n)` is a function of its state's content at `t` and of what crosses into it at each tick of `[t, t + n)`
+(`transducer`), read through any per-tick observation that fixes what crosses in. What crosses in at a tick is fixed by
+the signals the links deliver to `X`'s leaves then (`crossing_of_signals`). So `X` is a transducer whose state is its
+content and whose input at each tick is its links' signals: the step "`X` is the prover of the protocol's model" of B2
+and B3, and the split of I. `Recall` is the case where nothing that crosses in depends on the coins. With `X`'s state at
+most `M` bits, the content padded to `M + 1` bits (`pad`, injective on such strings) serves as the state
 (`transducer_bits`): the model prover with a state of `Bits (M + 1)`, as B2's responder and B3's `Ticked.Chip` take it.
 
 Counting (`acts_encard_le`): with `mem X t ≤ M` in every run and at most `2^β` observations a tick, what `X` does during

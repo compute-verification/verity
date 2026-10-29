@@ -1,9 +1,9 @@
-"""J10 banded noise on one H200 or B200 at kernel level (kernels-j10; measured only, nothing here is served or credited):
+"""J10 banded noise on one H200 or B200 at kernel level (measured only, nothing here is served or credited):
 the credited one-stream call (kh_one_peel's two-launch form: h1s_noise into the workspace, then h1u, or h1k in a K-split
 build; z = A B^T) on per-unit noise, against the same call on J10 banded noise at bands of g column tiles
-(kh_one_peel_band: h1j_noise hashes each band's row blocks once, into its leader's workspace region, and every unit's
-columns; the units read their rows from the leader's region), gated against CA's banded reference (#2866,
-`banded.banded_reference` under the tree `j10b_ref.ca_tree` finds: send banded-1a4d1de024.tar.gz) and labelled
+(kh_one_peel_band: h1j_noise hashes each band's row tiles once, into its leader's workspace region, and every unit's
+columns; the units read their rows from the leader's region), gated against credit's banded reference
+(`banded.banded_reference` under the tree `j10b_ref.ca_tree` finds: send banded-1a4d1de024.tar.gz) and labelled
 `j10b_ref.CA_LABEL`.
 
     arms  NAME-osp              per-unit noise (kh_one_peel), the baseline
@@ -13,10 +13,10 @@ columns; the units read their rows from the leader's region), gated against CA's
           NAME-osp-bG-noise     its noise launch alone (mode 2): the noise share, one way
           NAME-osp-bG-units     its unit launch alone (mode 1)
     gate  before any timing, per shape and gated arm: h1zbench.gate_one (0xA5 over receipts, z, zo, y and the workspace;
-          z = A B^T on the selected row blocks against float64; y = dequantize(z); the no-write control refused;
+          z = A B^T on the selected row tiles against float64; y = dequantize(z); the no-write control refused;
           F_FAULT, F_FAULT_WB and F_FAULT_XA conforming on unit 0, a band leader). The per-unit arm's receipts against
           served_h1/receipts.py on its picks. A banded arm's receipts and z: unit 0 and non-leaders (the first, the last, one
-          drawn) against CA's banded_reference itself (without CA's tree the gate fails), every band leader's receipt
+          drawn) against credit's banded_reference itself (without its tree the gate fails), every band leader's receipt
           equal to the per-unit arm's (a leader's noise is its own) and every non-leader's different; its workspace with no 0xA5 block left in a leader's rows or in any unit's columns, and drawn blocks
           against seeds.noise_block of their unit's seed_j.
     time  CUDA graphs replayed between events, the arms interleaved (h1zbench.bench's loop).
@@ -41,9 +41,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import h1zbench as Z
 import j10b_ref as JB
 from h1bench import auto_j, plain_arms
@@ -121,7 +120,7 @@ def ws_check(lib: Z.OneLib, c: Call, g: int, rng: random.Random, draws: int = 24
 
 
 def ca_ref(c: Call, picks: list[int], g: int, workers: int) -> tuple[dict, float]:
-    """CA's banded_reference on the picked units of call c: JB.ca_reference's doc."""
+    """credit's banded_reference on the picked units of call c: JB.ca_reference's doc."""
     ncb = c.b.shape[0] // 32
     a8 = c.a.cpu().numpy().astype(np.int64) & 0xFF
     b8 = c.b.cpu().numpy().astype(np.int64) & 0xFF
@@ -146,7 +145,7 @@ def gate_band(oc: Z.OneCall, per_out: torch.Tensor, g: int, ref_ab: dict, shift:
     ca, cpu_s = ca_ref(c, picks, g, workers)
     if "units" not in ca:
         return {"ok": False, "picks": picks, "ca_reference": {x: v for x, v in ca.items() if x != "units"},
-                "error": "CA's banded reference did not run (send banded-1a4d1de024.tar.gz)"}
+                "error": "credit's banded reference did not run (send banded-1a4d1de024.tar.gz)"}
     ref_t = torch.from_numpy(np.array([x["receipt"] for x in ca["units"]], dtype=np.uint32).view(np.int32)).cuda()
     doc = Z.gate_one(oc, picks, ref_t, ref_ab, shift)
     doc["ca_reference"] = {"sha": ca["sha"], "banded": ca.get("banded"), "noise": ca.get("noise"), "cpu_s": cpu_s,
@@ -181,13 +180,13 @@ def noise_runner(noise: NoiseLib, *a):
 
 
 class NoiseLib:
-    """h1noise.cu's kn_band: an r x c tile layout's noise blocks (h1tile.Layout's order), per-unit (band 1) or J10 banded."""
+    """h1noise.cu's kn_band: an r x c tile layout's noise chunks (h1tile.Layout's order), per-unit (band 1) or J10 banded."""
 
     def __init__(self, path: str):
         h = self.h = ctypes.CDLL(path)
         vp, u32 = ctypes.c_void_p, ctypes.c_uint
         if not hasattr(h, "kn_band"):
-            raise RuntimeError(f"{path} has no kn_band: rebuild h1noise.cu at kernels-j10's branch")
+            raise RuntimeError(f"{path} has no kn_band: rebuild h1noise.cu from this tree")
         h.kn_band.argtypes = [vp, u32, u32, u32, u32, u32, u32, u32, vp, vp]
 
     def run(self, seeds: torch.Tensor, S: int, ncb: int, nb: int, rows_nb: int, band: int, J: int,
@@ -207,9 +206,9 @@ def tw_arms(c: Call, lib: Z.OneLib, noise: NoiseLib, gs: list[int], rng: random.
     its 4x units' positions, unit (ri, cj) at base + ri (N / 8) + cj) and its noise (kn_band at h1tile.Layout(32, 8, K)'s
     counts), per-unit and banded at each g, beside today's 32 x 32 tile's through the same kernel. Gated before timing:
     the kernel's counts are the Layout's; each arm's buffer 0xA5 first, then no 0xA5 block in any block a unit hashes, every
-    non-leader row block still 0xA5, and drawn blocks against seeds.noise_block of the unit's seed_j; CA's
-    banded_reference on two 32 x 8 tiles (a leader and a non-leader at the first g), which holds the shape to CA's
-    definition (h1tile.Layout's 4 | r, 8 | c; its fold over (r / 4)(c / 8) lanes)."""
+    non-leader row tile still 0xA5, and drawn blocks against seeds.noise_block of the unit's seed_j; credit's
+    banded_reference on two 32 x 8 tiles (a leader and a non-leader at the first g), which holds the shape to the
+    Definition (h1tile.Layout's 4 | r, 8 | c; its fold over (r / 4)(c / 8) lanes)."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
     rows, n, k = c.a.shape[0], c.b.shape[0], c.a.shape[1]
     nrb, sms = rows // 32, torch.cuda.get_device_properties(0).multi_processor_count
@@ -262,7 +261,7 @@ def tw_arms(c: Call, lib: Z.OneLib, noise: NoiseLib, gs: list[int], rng: random.
 
 
 def tw_ca(c, g0: int, workers: int) -> dict:
-    """CA's banded_reference on row block 0's 32 x 8 tiles J = g0 (a band leader) and g0 + 1 (a non-leader) at g0, unit
+    """credit's banded_reference on row tile 0's 32 x 8 tiles J = g0 (a band leader) and g0 + 1 (a non-leader) at g0, unit
     (0, J) at c.base + J: z = A B^T, 2 sets receipt words each, both read the leader's position, and the leader's receipt
     is h1tile.reference's at its own position (its noise is its own) while the non-leader's is not."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
@@ -486,8 +485,8 @@ def main() -> int:
            "sms": props.multi_processor_count, "l2_bytes": l2, "torch": torch.__version__,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "builds": builds, "ref_lib": args.ref_lib,
            "gs": gs, "fault_shift": shift,
-           "reference": "per-unit: served_h1/receipts.py, h1zref.cu (z = A B^T in float64); banded: CA's banded_reference "
-                        f"(#2866 @ {JB.CA_SHA}) on 4 units a shape and arm, the leaders against the per-unit arm",
+           "reference": "per-unit: served_h1/receipts.py, h1zref.cu (z = A B^T in float64); banded: credit's banded_reference "
+                        f"(at {JB.CA_SHA}) on 4 units a shape and arm, the leaders against the per-unit arm",
            "timing": "seeds (kh_seeds) included in every arm; -noise and -units arms are the two launches alone",
            "shapes": []}
     xs: dict = {}

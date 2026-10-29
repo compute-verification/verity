@@ -1,4 +1,4 @@
-"""The encoded weights store (CMP-95 item 2): the frozen MQA model's INT8 weights as `W` under the registered P2
+"""The encoded weights store: the frozen MQA model's INT8 weights as `W` under the registered P2
 (`p2-16448/v4`), laid out so that one layer, or one matrix, decodes alone into a staging buffer, and the reference
 decode a kernel's `decode_layer` matches byte for byte.
 
@@ -21,11 +21,11 @@ no encoding.
 
 `commit` is `setup.commit` of the real `W` under the layout's manifest, before any salt exists, into `setup.json` in
 `--store` and `--out` (p2_v1/p2-encode's `commit`, with `W` laid out here). `W` is regenerated from the seeded generator
-(`Generated`: `verity_torch_loop.weights`, a module name or its `.py` file) by `--workers` forked processes, and each of
+(`Generated`: `e2e_h200.served_weights`, a module name or its `.py` file) by `--workers` forked processes, and each of
 the generator's s8 tensors is held to `--manifest`'s SHA-256 (the generator's `manifest(digests=True)`) as the pass reads
 it.
 
-`encode` draws the salt, `setup.draw_salt(source, commitment)` with `source` the auditor's coin drawn after the
+`encode` draws the salt, `setup.draw_salt(source, commitment)` with `source` the auditor's coin flipped after the
 commitment, and encodes every segment of C* on the node's GPUs (`libp2v1.so` through `gpu.Kernels`, one process a GPU,
 `--p2-lib`) or by the scheme's CPU codec, each segment checked by the device's decode of all of it and by
 `reference.decode` of two of its blocks before it is written. The store (`--store`, scratch outside the run directory):
@@ -122,7 +122,7 @@ STAGING_ALIGN = 256
 TOY_SOURCE = hashlib.sha512(b"verity-pous/p2-store/toy/setup-source").digest()
 TOY_W = b"verity-pous/p2-store/toy/w/v1\0"
 SETUP_FORMAT = "verity-pous/p2/store/v1"
-GENERATOR = "verity_torch_loop.weights"
+GENERATOR = "e2e_h200.served_weights"
 TIE_TAG = "verity-pous/p2/store-tie/v1"
 TIE_FIELDS = ("manifest", "program", "stream_bytes", "layout_sha512", "commitment", "salt", "root", "w_root", "registration")
 SPOTS_PER_SEGMENT = 2
@@ -396,7 +396,7 @@ def git_blob(path: str) -> str | None:
 
 
 class Generated:
-    """`W` from a seeded weights generator (`verity_torch_loop.weights`: `tensors`, `tensor_bytes`, `stream_bytes`,
+    """`W` from a seeded weights generator (`e2e_h200.served_weights`: `tensors`, `tensor_bytes`, `stream_bytes`,
     `program`) at a shape and seed, laid out by `build`: each of the layout's tensors is its `generator_parts`' bytes
     back to back, each part an s8 tensor of the layout tensor's `K` columns."""
 
@@ -657,7 +657,7 @@ def tie(doc: dict[str, Any]) -> str:
 
 
 def spot_blocks(salt: bytes, s: int, n: int, count: int = SPOTS_PER_SEGMENT) -> list[int]:
-    """Segment `s`'s spot-checked blocks at encode: its first, then `count − 1` drawn from the salt and `s`."""
+    """Segment `s`'s spot-checked blocks at encode: its first, then `count − 1` sampled from the salt and `s`."""
     rng = random.Random(hashlib.sha512(b"verity-pous/p2/store-spot/v1\0" + salt + s.to_bytes(8, "big")).digest())
     return sorted({0, *(rng.randrange(n) for _ in range(count - 1))})
 
@@ -1197,7 +1197,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                            help="w,c0,blocks_per_segment (default the registered point; others only in tests)")
         p.add_argument("--p2-lib", default="", help="libp2v1.so's directory (v4 keys); without it, the scheme's CPU codec")
     e = sub.choices["encode"]
-    e.add_argument("--source", type=_bytes_arg, help="the auditor's coin, drawn after the commitment (hex:..., hexfile:PATH)")
+    e.add_argument("--source", type=_bytes_arg, help="the auditor's coin, flipped after the commitment (hex:..., hexfile:PATH)")
     e.add_argument("--gpus", type=int, default=None)
     e.add_argument("--cpu-encoders", type=int, default=1)
     e.add_argument("--registration", default=None, help="the weights' registration digest, hex")

@@ -1,4 +1,4 @@
-"""General structural query API over Programs (query track, 2026-09-17): `GateSet`, `Family`, the query AST, `evaluate`.
+"""General structural query API over Programs: `GateSet`, `Family`, the query AST, `evaluate`.
 
 One general API, not a proof-block language: a query returns a `GateSet` or an ordered lazy `Family` of GateSets.  Results may
 overlap or omit gates; nothing here assumes partitions and Definitions know nothing about proof blocks.  The Program hierarchy

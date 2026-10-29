@@ -1,6 +1,6 @@
 """Dither-a's units launch on one GPU, as served (`-hbr -aomn`): each call's noise (`kh_one_noise`, h1s_noise into its
 workspace), then its units (`kh_one_units` of a receipts-only build: h1k where the call's live units fit, h1u past
-H1K_MAXU), at Llama-3.1-8B's four linears, a window of T rows with M live (decode B32 at T = 64: one live row block of
+H1K_MAXU), at Llama-3.1-8B's four linears, a window of T rows with M live (decode B32 at T = 64: one live row tile of
 two). Each build in `--lib NAME=PATH` (the first is the base, today's) is gated, then timed against the others:
 
     python unitsbench.py --lib base=h1u_kr.so --lib NAME=h1u_x.so ... --out OUT [--t 64] [--m 32] [--reps 7]
@@ -12,7 +12,7 @@ Gates before any timing, on every build and linear (a failed gate exits 4 and it
     seeds against seeds.py;
   * a variant's receipts equal the base build's on every unit and word (the units compute what they computed);
   * the no-write control (the units launched over zero rows, under the same poison) refused;
-  * the fault: one bit of unit 0's first noise block flipped in the workspace moves unit 0's receipt and no other.
+  * the fault: one bit of unit 0's first noise chunk flipped in the workspace moves unit 0's receipt and no other.
 Timing (CUDA graphs, builds interleaved rep by rep): each call's units alone (`units`) and its noise (`noise`, the base
 build's), and the step's units stream: 32 layers x the four calls' units in order on two alternating weight copies
 (`step`, 128 launches, what the served units stream runs apart from the z tables). --profile skips the timing and runs
@@ -25,7 +25,7 @@ same calls: every live unit's receipt against j10r_units.py's (J10R's h1tile.j10
 zero, no 0xA5 left in the receipts (the row workspaces poisoned too), nothing written past any workspace (each the
 build's own size, j10r_ws.py's, with a sentinel tail; under H1U_JW its last bytes written), the call seeds against
 seeds.call_seed and receipt_seed, the no-write control refused, one bit of call 0's row workspace moving exactly call
-0's units of row block 0 and one bit of unit 0's seed_c moving unit 0 alone; then the step in one launch pair
+0's units of row tile 0 and one bit of unit 0's seed_c moving unit 0 alone; then the step in one launch pair
 (step_multi_j10r: the rows once a call, then the units) and its rows alone (step_rows_j10r), beside the build's
 step_multi. --j10r-sm (with --j10r) gates
 kh_units_multi_j10r_sm on every SM (on the SMs whose id % D < Q alone under --smq Q/D, as $DITHER_SO_UNITS_SMQ), the
@@ -34,10 +34,10 @@ kh_units_multi_j10r's rows and units alone, the same kernels), and times step_mu
 --profile-multi skips the
 timing and runs each gated build's step_multi and step_multi_j10r once between torch.cuda.profiler.start and stop.
 
-A build with kh_units_multi_j10rc (h1u.cu's H1U_JRC: each call's column blocks hashed once a call too, into its workspace
-after its rows) is gated the same way under --j10r, its workspaces' column blocks poisoned too. Its units read no
-seed_c, so its seed fault flips unit 0's sigma_R (unit 0 alone moves), and one bit of call 0's first column block moves
-exactly call 0's units of column block 0. It is timed as step_multi_j10rc and step_blocks_j10rc (its rows and columns).
+A build with kh_units_multi_j10rc (h1u.cu's H1U_JRC: each call's column tiles hashed once a call too, into its workspace
+after its rows) is gated the same way under --j10r, its workspaces' column tiles poisoned too. Its units read no
+seed_c, so its seed fault flips unit 0's sigma_R (unit 0 alone moves), and one bit of call 0's first column tile moves
+exactly call 0's units of column tile 0. It is timed as step_multi_j10rc and step_blocks_j10rc (its rows and columns).
 With --j10r-sm, a build with kh_units_multi_j10rc_sm too is gated the same way under it, on the SMs --smq names (its
 faults through kh_units_multi_j10rc's blocks and units alone), and timed as step_multi_j10rc_sm. --probe NAME (with
 --j10r): build NAME is a timing probe whose J10-R receipts are wrong by construction (h1u.cu's H1U_JPROBE): its J10-R
@@ -57,10 +57,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "pouw" / "served_h1"))
-sys.path.insert(0, str(HERE.parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "served_h1"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import j10r_units as J10R
 import j10r_ws as JWS
 import receipts as RC
@@ -122,7 +121,7 @@ UCALL = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"), 
 
 class Multi:
     """kh_units_multi over (call, B, out) entries on one build, the three-digit calls first (as dither_so's
-    $DITHER_SO_FUSED tables): every unit of every entry in one launch, each entry's seeds and live row blocks its call's."""
+    $DITHER_SO_FUSED tables): every unit of every entry in one launch, each entry's seeds and live row tiles its call's."""
 
     def __init__(self, lib: Lib, entries: list):
         if int(lib.h.kh_ucall_bytes()) != UCALL.itemsize:
@@ -188,7 +187,7 @@ WS_TAIL, WS_SENTINEL = 1 << 20, 0x5C
 class MultiJ10R:
     """kh_units_multi_j10r over (call, B, out) entries on one build, the three-digit calls first as Multi: each entry its
     call's J10-R seeds (Call.j10r_seed) and a workspace of its own (rws[i], entry i's), the build's size for the call
-    (j10r_ws.workspace_bytes: an H1U_JW build's column blocks and W' after its rows), with WS_TAIL bytes of WS_SENTINEL
+    (j10r_ws.workspace_bytes: an H1U_JW build's column tiles and W' after its rows), with WS_TAIL bytes of WS_SENTINEL
     past it (tails[i]).  sm: a whole run (mode 0) is the served launch pair, kh_units_multi_j10r_sm on every SM (its
     warps taking units from a counter); its rows alone and units alone (modes 1, 2) stay kh_units_multi_j10r's, the same
     rows kernel and unit.  rc: kh_units_multi_j10rc, each workspace its call's rows and then its columns
@@ -249,10 +248,10 @@ def j10r_gate(lib: Lib, cs: list, refs: list, sm: bool = False, rc: bool = False
     word), its dead units zero, under 0xA5 over the receipts and the row workspaces; seeds against seeds.call_seed and
     receipt_seed; the no-write control (zero units) refused; one bit of call 0's row workspace (row 0's first block, or
     the build's kh_j10r_row_fault_word: under H1U_JAP A'[0][0], which its units read for the block) moving exactly call
-    0's units of row block 0; one bit of unit 0's seed_c, flipped after the rows, moving unit 0 alone.  sm:
+    0's units of row tile 0; one bit of unit 0's seed_c, flipped after the rows, moving unit 0 alone.  sm:
     the receipts, seeds and control under kh_units_multi_j10r_sm (MultiJ10R's sm), the faults under its modes 1 and 2.
     rc (kh_units_multi_j10rc): its units read no seed_c, so the seed fault flips unit 0's sigma_R instead, and one bit of
-    call 0's first column block (column 0's, after the rows) moves exactly call 0's live units of column block 0.  An
+    call 0's first column tile (column 0's, after the rows) moves exactly call 0's live units of column tile 0.  An
     H1U_JW build's units read no seed_c either (its column pass, in the units' launch, reads the call's): the seed fault
     flips unit 0's sigma_R, and one bit of call 0's seed_c moves every live unit of call 0.  Every workspace is the
     build's size (j10r_ws), and no launch of the gate writes the WS_TAIL bytes past it (ws_tail_written 0); under H1U_JW
@@ -348,7 +347,7 @@ def j10r_gate(lib: Lib, cs: list, refs: list, sm: bool = False, rc: bool = False
 
 
 class Call:
-    """One call's buffers on one build: the A slot [T, K] (rows >= M zero), B [N, K], live row blocks, seeds, the
+    """One call's buffers on one build: the A slot [T, K] (rows >= M zero), B [N, K], live row tiles, seeds, the
     workspace, receipts, and the receipts-only units' z/y scratch and flagless step (dither_a's s_unit)."""
 
     def __init__(self, lib: Lib, a: torch.Tensor, b: torch.Tensor, m: int, salt: bytes, roots: tuple, base: int, sms: int):
@@ -436,7 +435,7 @@ def gate(c: Call, picks: list[int], ref_t: torch.Tensor, base_out: torch.Tensor 
     c.run_units(rows=0)
     torch.cuda.synchronize()
     k_bad = int((c.out[pk] != ref_t).sum())
-    # the fault: bit 0 of unit 0's first noise block in the workspace, the units again
+    # the fault: bit 0 of unit 0's first noise chunk in the workspace, the units again
     c.out.fill_(POISON)
     c.ws.view(torch.int32)[0] ^= 1
     c.run_units()

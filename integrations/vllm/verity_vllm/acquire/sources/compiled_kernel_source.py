@@ -1,4 +1,4 @@
-"""S3 acquisition of R(P_compiled, Q) under torch.compile + PIECEWISE CUDA graphs (DECISIONS-2 §7).
+"""S3 acquisition of R(P_compiled, Q) under torch.compile + PIECEWISE CUDA graphs.
 
 The Program of an `Execution=compiled` row is P_compiled at Inductor-kernel granularity (compiled_relations.py); its VU boundaries are
 the buffers the production implementation already materializes (every kernel argument).  This source acquires exactly those buffers
@@ -93,7 +93,7 @@ class CompiledKernelSource:
         """Take the argument roles from the manifest's program.role_maps (resolved per launch site from the kernel's
         SIGNATURE, e.g. Qwen's 6-pointer fused RoPE+QKV-bias kernel vs Llama's 5-pointer RoPE): the hook binds exactly the roles the
         identities were derived from.  Without them the name-keyed table is ambiguous for such kernels and every argument is 'unknown'
-        (Qwen B8 S3 05:47Z: 67,760 of 353,320 identities unbound, all of them the RoPE kernel's).  Must run BEFORE the engine compiles so
+        (on Qwen B8, 67,760 of 353,320 identities unbound, all of them the RoPE kernel's).  Must run BEFORE the engine compiles so
         capture-time copies use the same roles."""
         prog = (manifest or {}).get("program") if isinstance(manifest, dict) else None
         rm = (prog or {}).get("role_maps")

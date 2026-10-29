@@ -1,7 +1,7 @@
 """Half-open integer interval sets, and the leaf intervals a reference sequence names.
 
 An `Intervals` value is a tuple of `(lo, hi)` pairs, sorted, disjoint and non-empty; `norm` makes one from any pairs.
-The IR analyses (`liveness`, `boundary`, `query_ast`) keep sets of leaves, members and gates in this form, so a
+The Program analyses (`liveness`, `boundary`, `query_ast`) keep sets of leaves, members and gates in this form, so a
 weight table, a KV cache or a `batch` output stays O(#runs) instead of O(#leaves).
 """
 from __future__ import annotations

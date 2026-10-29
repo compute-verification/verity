@@ -1,7 +1,7 @@
 """The remote bandwidth session's prover over the P2 store (`p2_v1/bandwidth.py`): SHA-512's midstate and the device's
 receipts held to hashlib and `p2.Sketcher`, the sketch of stored rows held to the unit sketch, the receipt tree built in
 worker processes held to `receipts.tree`, PoUS's vk paths from row digests held to the verifier's tree, the plan of a
-layout's tensors' units (the tracked registration's, the real layout's: MEM-72), and the toy's store served through
+layout's tensors' units (the tracked registration's, the real layout's), and the toy's store served through
 kernels' staging decode (P2's reference on the CPU) to `p2_party`'s verifier in its own process: accepted honest, under
 the toy's plan or one of fewer units, and rejected when the prover skips a layer's reads."""
 from __future__ import annotations
@@ -108,7 +108,7 @@ def test_the_plan_is_the_units_holding_a_tensors_block() -> None:
 
 
 def test_the_tracked_registrations_plan_is_the_real_layouts_tensors_units() -> None:
-    """MEM-72: a pass over mem69-v2 reads the units of the 209 tensors' blocks, not the 12,745 blocks of padding past
+    """A pass over mem69-v2 reads the units of the 209 tensors' blocks, not the 12,745 blocks of padding past
     lm_head (PoUS's, which the decode never reads): the 3,186 units wholly padding are out, lm_head's last unit, three
     of its blocks and one of padding, in."""
     from p2_v1 import store as ST

@@ -1,14 +1,14 @@
 """Explicit-expansion evaluator (the oracle, IR §6).
 
-An execution transcript is an indexed assignment gate index -> encoding (Python int bit pattern). Evaluation
-walks a gate selection gate by gate in canonical order, reading operands from the transcript and applying the
+An execution trace is an indexed assignment gate index -> encoding (Python int bit pattern). Evaluation
+walks a gate selection gate by gate in canonical order, reading operands from the trace and applying the
 primitive's total evaluator. `Input` gates are never evaluated: their values must already be in the
-transcript (they are the prescribed inputs; the correspondence tool authenticates them separately).
+trace (they are the prescribed inputs; the correspondence tool authenticates them separately).
 """
 
 from __future__ import annotations
 
-from typing import Iterable, Mapping
+from typing import Iterable
 
 from .layout import FunctionCall, Circuit, GateSelection
 

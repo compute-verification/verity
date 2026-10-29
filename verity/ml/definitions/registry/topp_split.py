@@ -1,4 +1,4 @@
-"""[R15 stoch] Exact-fp32 model of vLLM d9105ea80 `topk_topp_triton._apply_topp_split` — the p-only split top-p pipeline
+"""Exact-fp32 model of vLLM d9105ea80 `topk_topp_triton._apply_topp_split` — the p-only split top-p pipeline
 (`_topp_sb_stats_kernel` -> `_topp_sb_step_kernel` x 5 -> `_topp_sb_mask_kernel`; batch <= 64, no top-k) for ONE logits row,
 as Triton 3.7.1 + ptxas lower it on sm_89 (num_warps=8, F=8 pivots, 5 rounds, BLOCK 2048 / 8192).
 
@@ -22,7 +22,7 @@ Every fp32 op is one IEEE RN-even step (numpy float32).  `tl.exp` = MUFU.EX2(x *
 
 Validated bit-exact (stats, the partials of every executed round, masked output) on 63 captured rows (55 real Llama-3.2-1B T=0.8
 rows + 8 edge rows at V=128256) and on 40/40/40/24/24/40/40/24/40/16/40 random bf16-valued rows at V = 3000, 1025, 1040, 1088,
-2112, 1024, 4096, 32000, 49152, 151936, 128256 (out/gen/sweep/evidence/stoch/topp_split_model/).  The registry primitive
+2112, 1024, 4096, 32000, 49152, 151936, 128256.  The registry primitive
 `TopPMaskWordx{V}s{S}` (sampling.py) calls `topp_keep_row`.
 
 Public: `topp_split_row(x_in_f32, p, S, F, R, cfg) -> (x_out_f32, stats[S,4], parts[R,S,F,3], trace)`; `topp_keep_row(x_in_f32, p, S)`.
@@ -68,7 +68,7 @@ class Cfg:
     spt_step: int = 1           # sizePerThread of the [F, 2048] broadcast tensor the step kernel reduces (fitted: 1)
     num_warps: int = 8
     fma_exp_sum: bool = True    # `exp_sum * rescale + tl.sum(e)` contracted to fma (only observable when a slice spans > 1 BLOCK, i.e.
-                                #   V / S > 8192: S <= 8 at V = 128256; fitted on the R16 fixture, 7/7 multi-block rows; the single-block
+                                #   V / S > 8192: S <= 8 at V = 128256; fitted on the GPU fixture, 7/7 multi-block rows; the single-block
                                 #   case is unchanged: exp_sum = 0, rescale = 0 -> fma(0, 0, se) = se)
     fma_z: bool = True          # `tl.sum(exp_s * w)`: the lane product fused into the first butterfly stage (fitted: True)
     fma_ok: bool = False        # `mass - gmin * nmin` contracted to fma(-gmin, nmin, mass)

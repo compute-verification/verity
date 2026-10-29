@@ -107,7 +107,7 @@ def test_malformed_values_are_refused_loudly(bad, monkeypatch):
         gc.set_threshold(*saved)
 
 
-def test_fold_content_is_identical_under_default_and_tuned_thresholds(memory, monkeypatch):  # noqa: F811
+def test_fold_content_is_identical_under_default_and_tuned_thresholds(memory, monkeypatch):
     saved = gc.get_threshold()
     try:
         monkeypatch.setenv(gc_tuning.ENV, "default")

@@ -14,7 +14,7 @@ event's can.
 - **The I/O tie.** So the check that refuses a wrong length or finish is the I/O tie's, required of compact framing,
   against the Commit's sampled ids: ordinal o's cells are `compact_records_of` o's sampled ids, one for one, so each
   carries its sampled id, the response is as long as the Commit's, it stops only where the Commit sampled EOS, and its
-  `COMPACT_LAST` alone is at `max_tokens` exactly (`compact_finish_violations`). IO-TIE's egress tie holds each compact
+  `COMPACT_LAST` alone is at `max_tokens` exactly (`compact_finish_violations`). The I/O tie's egress tie holds each compact
   cell's token field to this rule as well as to its id.
 - **A client's abort.** A response its client aborted ends on an unmarked record. Both checks accept that end only
   where the Commit's finish for the request is an abort (`aborted`), after 1 ≤ k < `max_tokens` outputs, none of them
@@ -22,7 +22,7 @@ event's can.
   refuses every unmarked end. The link is one connection with no per-request cancel, so the certifier observes no
   abort, and an abort on a certified run comes from the prover's side (the shim's cut at the horizon, or an error).
   What bounds it is the advice charging each `output_len` in full, not an observation.
-- **History.** Until REDTEAM phase 12 a stop was one reserved field (all ones) with no id, and `certified_io` accepted
-  it at any length up to `max_tokens`, so a server could cut a `length` response short at a stop the model never
-  sampled; that field is now a stop on id 2^30 − 1, which isn't EOS. Until NET-67 the tie accepted a `COMPACT_LAST`
-  short of `max_tokens` when the records were the Commit's ids.
+- **Why a stop carries its id.** A stop that was one reserved field (all ones) with no id, accepted at any length up
+  to `max_tokens`, would let a server cut a `length` response short at a stop the model never sampled; the all-ones
+  field is a stop on id 2^30 − 1, which isn't EOS. For the same reason the tie refuses a `COMPACT_LAST` short of
+  `max_tokens`, even when the records are the Commit's ids.

@@ -6,8 +6,7 @@ import Definitions.Core.Advice
 A private partition is the prover's advice, registered under a hidden root before any coin that depends on it: its rows,
 under salts of the prover's choosing, in the advice tree (`Advice`). The verifier never sees it: it holds the public
 predicates `Q` and the root, and the registration proves that the circuit has a partition meeting `Q` whose advice has
-that root (`Registered`). This is `verity/partition/v2` (note:circuits/20261006T0615Z-draft-private-partitions, X1);
-`verity/partition/v1`'s public partition is unchanged.
+that root (`Registered`). This is `verity/partition/v2`; `verity/partition/v1`'s public partition is unchanged.
 
 `Partition`'s type already gives covering and disjointness: every computed gate is in exactly one unit, and inputs are in
 none. The predicates add the rest of the draft's global ones:
@@ -71,8 +70,8 @@ end Partition
 /-- `r` registers `root` under `Q`: its partition meets `Q`, and the advice tree over the partition's rows (`A`) under
 `r`'s salts, framed by `F` and hashed by `H`, has root `root`. The registration's statement is that some `r` does; the
 verifier holds `Q` and `root`, never `r`. -/
-def Registered {C : Circuit} (H : List UInt8 → Advice.Digest) (F : Advice.Framing) (A : Advice.Rows C) (Q : Predicates)
-    (r : Advice.Registration C) (root : Advice.Digest) : Prop :=
+def Registered {C : Circuit} (H : List UInt8 → Digest) (F : Advice.Framing) (A : Advice.Rows C) (Q : Predicates)
+    (r : Advice.Registration C) (root : Digest) : Prop :=
   r.P.Meets Q ∧ r.root H F A = root
 
 /-- The circuit's computed gates grouped into its root Calls `0, …, m − 1`, with the gates the Calls return. A value read

@@ -46,7 +46,6 @@ from __future__ import annotations
 
 import ctypes as C
 import importlib.util
-import os
 import sys
 from pathlib import Path
 from typing import Any, Callable
@@ -68,6 +67,9 @@ from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity_config.settings import of  # noqa: E402
+
+settings = of(__file__)
 
 
 def _be(b: bytes) -> np.ndarray:
@@ -297,7 +299,7 @@ class Receipts:
             raise ValueError(f"a batch takes at least one launch, not {launches}")
         self.served, self.run, self.units, self.launches, self.cubin = served, run, units, launches, cubin
         self._j10r = j10r
-        self.skip_dead = os.environ.get("H1_SKIP_DEAD") == "1" if skip_dead is None else bool(skip_dead)
+        self.skip_dead = settings.H1_SKIP_DEAD if skip_dead is None else bool(skip_dead)
         d = torch.device(device if device is not None else ("cuda" if units is not None or cubin is not None else "cpu"))
         self.device = torch.device("cuda", torch.cuda.current_device()) if d.type == "cuda" and d.index is None else d
         self._weight, self._roots, self._keep = weight, roots, keep

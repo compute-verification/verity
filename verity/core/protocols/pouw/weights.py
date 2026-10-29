@@ -1,4 +1,4 @@
-"""An H1 period's registered weights (VLLM-71, RT4-INT's model registry): each contraction K's ``<prefix>b/<K>``, the B
+"""An H1 period's registered weights (the model registry): each contraction K's ``<prefix>b/<K>``, the B
 rows of the window Program's linears of that K, and `weights_root`, their fold, the weights' root a period-open signs.
 
 * **A B row** (`row_bytes`) is one output row of a linear: its K int8 codes, then the 4 bytes of its f32 scale s_w,
@@ -63,7 +63,7 @@ def b_words(k: int) -> int:
     return (k + 5) // 2
 
 
-#: the largest K an H1 lane is proved at whole, and a chunk's largest: K = 4096's lane fills C-Flock's 2^27 block
+#: the largest K an H1 lane is proved at whole, and a chunk's largest: K = 4096's lane fills Flock's 2^27 block
 CHUNK_MAX = 4096
 #: a chunk is whole blocks of its rows' and columns' noise streams (`circuit.seeds.BLOCK_BITS`, 512 bits)
 CHUNK_ALIGN = 512

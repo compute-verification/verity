@@ -78,7 +78,7 @@ def test_each_ratio_pairs_the_arms_reps_and_takes_their_median_min_and_max():
 
 
 def test_the_harness_commit_arms_are_read_as_the_served_arms_are():
-    """llama31-8b-fp8-1gpu-commit-served's arms (#3407): `commit` is eager by its spec, `commit@compiled` compiled by its own."""
+    """llama31-8b-fp8-1gpu-commit-served's arms: `commit` is eager by its spec, `commit@compiled` compiled by its own."""
     d = doc(fp8=True, commits=(COMMIT, COMMIT_COMPILED))
     ms = {(m.ratio, m.metric): m for m in S.measures(d, run="r-harness")}
     assert {r for r, _ in ms} == set(S.RATIOS)

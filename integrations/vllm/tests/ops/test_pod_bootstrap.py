@@ -4,7 +4,7 @@ The script is infra (venv, wheels, checkpoints, native taps) and cannot run here
 that `--dry-run` resolves the mode the way the header promises (nvidia-smi on PATH -> gpu; absent -> cpu; `--cpu` forces), that a
 dry run touches nothing, that step 3 marks a checkpoint staged only when it downloaded and checked it, and that the step-5 readiness
 heredoc is valid Python that, in cpu mode, writes a `verity-vllm/readiness/v1` record with `mode: cpu`, `cuda_available`, the CPU
-checks and no GPU check.  (Before 2026-09-23 a GPU-less pod died at step 4 with BOOTSTRAP_FAIL_CUDA before readiness.json existed.)"""
+checks and no GPU check, so a GPU-less pod gets its readiness.json instead of dying at step 4 with BOOTSTRAP_FAIL_CUDA."""
 
 from __future__ import annotations
 
@@ -135,7 +135,7 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
 
 
 def test_gpu_mode_record_shape_is_unchanged() -> None:
-    """The gpu-mode record carries no `mode` key and the same check names as before 2026-09-23 (readers treat 'no mode' as gpu)."""
+    """The gpu-mode record carries no `mode` key and the GPU check names (readers treat 'no mode' as gpu)."""
     src = _readiness_source()
     assert 'if not gpu:\n    r["mode"] = mode' in src
     for name in ("torch_cuda", "hidden_gpu_so", "fa2_tap_so", "fa3_tap_so"):

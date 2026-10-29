@@ -1,5 +1,5 @@
 """Norm-tap exactness: the tapped norm kernels the norm-scale source launches compute exactly the installed kernels' outputs, and each
-row's scale word is the IR model's scale.
+row's scale word is the circuit's scale.
 
 `acquire.sources.norm_scale_source` launches, in place of vLLM's kernels, the tapped CUDA op `verity_norm_tap.fused_add_rms_norm_scale`
 (`ops/pod_norm_tap.sh`) and the Triton copy `acquire/norm_tap_src/rms_norm_tap.py`.  One GPU process checks, per kernel and case
@@ -9,10 +9,10 @@ and NaN):
   (a) the outputs are bit-identical to the installed kernel's (CUDA: `input` and `residual`, both written in place; Triton: `output`),
       and for CUDA to the same build with the tap off; Triton's direct launch is also checked against vLLM's `rms_norm_batch_invariant`;
   (b) every row's scale word is written: two tapped launches over scale buffers filled with `FILLS` agree on every word;
-  (c) every scale word equals the IR model's scale bit for bit (`RMSNormFusedCuda_v2`'s `RsqrtApprox` gate, `RMSNormTriton_v1`'s `inv`
+  (c) every scale word equals the circuit's scale bit for bit (`RMSNormFusedCuda_v2`'s `RsqrtApprox` gate, `RMSNormTriton_v1`'s `inv`
       gate): every row against the vectorised twin (`program.kernels.derived_rows`, gate-checked in tests/program/test_derived_rows.py),
-      and the first `IR_ROWS` rows of each case, every special row included, against the IR's own evaluation (`ir_scale`: the gate's
-      value in the `verity.ml.circuits.evaluate.evaluate_call` transcript);
+      and the first `IR_ROWS` rows of each case, every special row included, against the circuit's own evaluation (`ir_scale`: the gate's
+      value in the `verity.ml.circuits.evaluation.evaluate_call` transcript);
   (d) Triton: the installed kernel's source is the pinned one, the copy is that source plus exactly `rms_norm_tap.TAP_LINES`
       (`source_diff`), and at every case's specialization the two kernels' PTX has the same sequence of floating-point, conversion and
       shuffle instructions (`arith_ops`), the copy adding one global store;
@@ -36,7 +36,7 @@ RECORD = "norm_tap_exactness.json"
 KERNELS = ("cuda", "triton")
 #: two scale-buffer fills (NaN payloads the kernels never write): a word both launches leave at their fill was not written
 FILLS = (0x7FC00001, 0x7FC00002)
-#: rows per case checked against the IR's own evaluation (every special row besides)
+#: rows per case checked against the circuit's own evaluation (every special row besides)
 IR_ROWS = 3
 #: (hidden width N, epsilon) of the served norms: SmolLM2, Qwen2.5-1.5B, Llama-3.2-1B / OLMoE / Qwen3-30B-A3B, Gemma-2-2B, Qwen3-4B,
 #: Mistral-7B; and the q/k-norm head widths (64, 128, 256)
@@ -68,7 +68,7 @@ def cases(quick: bool = False) -> list[dict[str, Any]]:
     return [c for c in cs if c["name"] in QUICK] if quick else cs
 
 
-# ------------------------------------------------------------------------------------------------------------------------ the IR
+# ------------------------------------------------------------------------------------------------------------------------ the circuit
 def _scale_gate(kernel: str, call: Any) -> int:
     prims = [c for c in call.children() if c.is_primitive]
     if kernel == "cuda":
@@ -78,11 +78,11 @@ def _scale_gate(kernel: str, call: Any) -> int:
 
 
 def ir_scale(kernel: str, N: int, eps: float, x: list[int], res: list[int] | None, w: list[int]) -> int:
-    """The IR model's scale word of one row: evaluate `RMSNormFusedCuda_v2{N,EPS}` (x, res, w) or `RMSNormTriton_v1{N,EPS}` (x, w) as a
+    """The circuit's scale word of one row: evaluate `RMSNormFusedCuda_v2{N,EPS}` (x, res, w) or `RMSNormTriton_v1{N,EPS}` (x, w) as a
     standalone Call and read its scale gate from the transcript."""
     from verity.ml.circuits.evaluation.reference import standalone_call
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
 
     spec = bind(b1.RMSNormFusedCuda if kernel == "cuda" else b1.RMSNormTriton, N=N, EPS=eps)
@@ -93,7 +93,7 @@ def ir_scale(kernel: str, N: int, eps: float, x: list[int], res: list[int] | Non
 
 
 def twin_scales(kernel: str, x: Any, res: Any, w: Any, eps: float) -> Any:
-    """Every row's IR scale word by the vectorised twin (uint32): `derived_rows.rmsnorm_fused_v2_rows(...)["s"]` / `rmsnorm_triton_rows(...)["inv"]`."""
+    """Every row's circuit scale word by the vectorised twin (uint32): `derived_rows.rmsnorm_fused_v2_rows(...)["s"]` / `rmsnorm_triton_rows(...)["inv"]`."""
     import numpy as np
 
     from verity.ml.definitions.numerics import derived_rows as D

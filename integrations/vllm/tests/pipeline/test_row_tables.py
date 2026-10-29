@@ -427,7 +427,7 @@ def test_window_bytes_are_the_bytes_the_window_writes(monkeypatch, tmp_path, row
         assert b["x_private"] == x * UNITS and b["x_public"] == 128 * UNITS
 
 
-#: Llama-3.1-8B's int8 linears (K, N), its layers, and the chunk caps of record (r20261018-084708-1e58's partition file)
+#: Llama-3.1-8B's int8 linears (K, N), its layers, and the chunk caps of record
 LLAMA8B = {"self_attn.qkv_proj": (4096, 6144), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (4096, 28672), "mlp.down_proj": (14336, 4096)}
 LAYERS, B = 32, 32
 CAPS = {4096: 2048, 14336: 1024}

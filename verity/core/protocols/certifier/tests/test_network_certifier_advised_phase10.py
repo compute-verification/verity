@@ -1,12 +1,11 @@
-"""REDTEAM phase 10, target 1, against #3502's tie (`advised.IoTieVerdict`), held as regressions of its fix. The
-verdict is meant to come only from IoTieRequest proofs the verifier of record verified, so that without them every
-advised link is refused (PROTOCOL.md, "The tie is IoTieRequest's verdict"). The
-verifier read it off the delivered `LinkAdvice`, and the verdict held only the advice's digest, which the delivered
-advice fixes: a prover that delivered its own verdict reopened phase 6's acausal release through the verifier of
-record. Now the advice carries no tie, the verifier takes the verdict only from its own tie source
-(`LinkWindows.ties`: `tie_service.Ties` in the package, here the stand-in `advised_traffic.StandInTie`), and the
-verdict names the
-link and its ingress registrations, which `view` holds to the verifier's, so one link's verdict isn't another's.
+"""The advised link's tie (`advised.IoTieVerdict`), held as regressions. The verdict comes only from IoTieRequest
+proofs the verifier of record verified, so that without them every advised link is refused (PROTOCOL.md, "The tie is
+IoTieRequest's verdict"). Were the verifier to read it off the delivered `LinkAdvice`, with the verdict holding only
+the advice's digest, which the delivered advice fixes, a prover that delivered its own verdict would reopen the
+swapped split's acausal release through the verifier of record. So the advice carries no tie, the verifier takes the
+verdict only from its own tie source (`LinkWindows.ties`: `tie_service.Ties` in the package, here the stand-in
+`advised_traffic.StandInTie`), and the verdict names the link and its ingress registrations, which `view` holds to the
+verifier's, so one link's verdict isn't another's.
 """
 
 import ast
@@ -170,8 +169,8 @@ def test_the_stand_in_is_unreachable_from_the_package_and_only_the_tie_service_b
 
 
 def test_a_verdict_on_another_link_or_ingress_record_isnt_reused(tmp_path):
-    """REDTEAM phase 10 (4): a verdict named no link or registration, so one link's verdict passed on another's view.
-    Now `view` takes the link and the registrations the verifier holds, and refuses a verdict naming another link or
+    """A verdict that named no link or registration would pass one link's verdict on another's view, so `view` takes
+    the link and the registrations the verifier holds, and refuses a verdict naming another link or
     other registrations: the verifier of link A's tie source gives a verdict that link B's view refuses, and a
     verdict on other registrations than the source records (another ingress record of the same link) is refused."""
     assert list(inspect.signature(AD.view).parameters) == ["link", "window", "T", "R", "syncs", "sync_set",

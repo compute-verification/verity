@@ -1,11 +1,11 @@
-"""ROOTS1 (VLLM-73) on vllm's side: the Commit in H1's serving engine, whose record registers each step's A table of K
-``a/<K>@<s>`` as its AROW of the step's calls of K (VLLM-77) and each round's input-ids table ``ids@<s>`` as its step's
+"""ROOTS1 on vllm's side: the Commit in H1's serving engine, whose record registers each step's A table of K
+``a/<K>@<s>`` as its AROW of the step's calls of K and each round's input-ids table ``ids@<s>`` as its step's
 input token ids, layer 0's input. Core's credit holds each to the Commit's value of the same rows (`credit._arow`).
 
 * **The Commit** (`acquire.h1_commit.attach`): the windowed collector under rows-sha512 (`SCHEME`: hm96-sha512 rows in
   frame-v3-sha512 trees, 64-byte roots; with no Build, so not a Commit of record) with the int8 source
   (`acquire.h1_commit.H1Source`) at each linear H1 records, at the linear's Int8RowQuant_v1 site `site(module)` at every
-  engine step (`Sites`: no Build names its fx node), a routed expert's by its H1 name (VLLM-80: under its call, an idle
+  engine step (`Sites`: no Build names its fx node), a routed expert's by its H1 name (under its call, an idle
   expert's zero rows too), and the step-input port (`served_record.StepInputPort`): the step's input token ids, taken
   at the model's forward, so also on a model that gathers its embedding fused and never calls it (GLM-5.3 and
   DeepSeek-V3.2 at TP1). `CommitTap` wraps
@@ -27,7 +27,7 @@ input token ids, layer 0's input. Core's credit holds each to the Commit's value
   tree, one commitment; rows off them make a tree of the Commit's own under the same domain and salts, at another root.
 * **The record** (`CommitTap.record`, the commitment's ``commit``, `CommitTap.hex`): a ``verity/registration/v2`` record
   (one-stage's `registration`) of those values, with what the tap refused, its canonical JSON in hex as
-  `credit.commit_of` reads it. `pouw_h1.calls_root` binds its digest (`credit.calls_root`), so the draw coin follows it.
+  `credit.commit_of` reads it. `pouw_h1.calls_root` binds its digest (`credit.calls_root`), so the sampling coin follows it.
 * **The serving process's own check** (`roots1`, at the window's close): each step's A table of each K and each round's
   input-ids table is the Commit's value of the same rows (`credit._arow`'s rule), the tap refused nothing, and each
   prefill row's input id is its request's prompt token (`ids_reason`, until Served.lean's layer-0 tie holds it in core).
@@ -73,7 +73,7 @@ class Sites(dict):
 
 
 class _EveryStep(dict):
-    """`Int8Source`'s names at each engine step (its ``_at``, X-03's targets): step 0's at every step."""
+    """`Int8Source`'s names at each engine step (its ``_at``, the targets): step 0's at every step."""
 
     def get(self, key: Any, default: Any = None) -> Any:
         return self[0] if 0 in self else default
@@ -104,6 +104,8 @@ class CommitTap:
     own: int = 0
     #: each round's input ids as the Commit acquired them
     round_ids: dict[int, list[int]] = field(default_factory=dict)
+    #: (engine step, site, ``0`` x_q or ``1`` s_a) -> the member name the Commit acquired it under, which its store keys
+    acquired: dict[tuple[int, str, str], str] = field(default_factory=dict)
     #: site -> [engine step, x_q, s_a] the Commit acquired last; engine step -> its ids, the port's cut to the step's
     #: scheduled tokens; H1 step -> engine step
     _x: dict[str, list[Any]] = field(default_factory=dict)
@@ -145,6 +147,7 @@ class CommitTap:
         op = self.ops.get(op, op)
         if not op.endswith("/row_quant") or port not in ("0", "1"):
             return
+        self.acquired[(step, op, port)] = name
         if port == "0":
             x = _host(t)
             self._x[op] = [step, x.reshape(len(x), int(np.prod(x.shape[1:]))).astype(np.int8), None]

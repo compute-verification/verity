@@ -2,7 +2,7 @@
 
 A label is `n` components of `wc` bits (Lean `Lab n wc`), so its width is `m = n * wc`; component `v` of every lower
 label feeds top label `v` (the transpose).  `W` is `segments * n` lower inputs, and the codeword `C` is the
-`segments * n` top labels: `B = segments * n` blocks of `m` bits, rate 1.
+`segments * n` top labels: `B = segments * n` labels of `m` bits, rate 1.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 SALT_BITS = 192
-"""The salt, drawn by the verifier after `W` is committed, and published as `pp` (`docs/p3-instantiation.md` §1: 24 B;
+"""The salt, sampled by the verifier after `W` is committed, and published as `pp` (`docs/p3-instantiation.md` §1: 24 B;
 Lean's `p3Scheme` has 128 bits)."""
 
 TAG_BITS = 256
@@ -44,12 +44,12 @@ class Params:
 
     @property
     def blocks_per_segment(self) -> int:
-        """`n`: one block per top label (`codec.Geometry`)."""
+        """`n`: one label per top label (`codec.Geometry`)."""
         return self.n
 
     @property
     def blocks(self) -> int:
-        """`B`: the number of codeword blocks, one top label each."""
+        """`B`: the number of codeword labels, one top label each."""
         return self.segments * self.n
 
     @property

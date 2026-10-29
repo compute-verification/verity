@@ -21,11 +21,11 @@ The per-thread ownership (`SIZE_PER_THREAD = 4`, two repetitions) is the layout 
 f32 load whose row pointer is provably 16-byte aligned (the same as the b1 `RMSNormTriton_v1` body's).  Evidence that it is
 the production order: the difftest adapter (`mean_triton_difftest.py`) is bit-exact against `mean_batch_invariant` on the
 pod at N = 2304 (Gemma-2's H: two full blocks + a masked 256-tail), 1024, 1280, 2048 and 256 with random f32 rows — a
-different register order or per-thread width changes the rounding of most random rows.  [cov-dense 2026-09-17] The 32-case
+different register order or per-thread width changes the rounding of most random rows.  The 32-case
 seed-7 difftest found the layout is *specialisation-dependent*: for `N % 16 != 0` Triton cannot prove the alignment and
 the layout is `sizePerThread=1` (`size_per_thread`, below); the body follows the same rule.
 
-[R15 dense, F-dense-05] PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.MeanTriton`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.MeanTriton`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations

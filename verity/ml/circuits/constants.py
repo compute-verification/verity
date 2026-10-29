@@ -1,4 +1,4 @@
-"""What a program brings, and when it is bound (Daniel's ruling, 1 Oct 2026, 3:06 PM PDT).
+"""What a program brings, and when it is bound.
 
 An operation's own definition is gates: the floating-point formats' constants, SHA-512's and the measured GPU tables (exp2,
 rcp, tanh) are gates of the operations that read them. Everything a program or a request brings is a value, committed under a

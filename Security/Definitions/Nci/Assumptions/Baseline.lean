@@ -11,12 +11,12 @@ namespace Nci.Assumptions
 
 open Verity
 
-/-- **The baseline is registered** ([BASELINE-REGISTERED]; CMP-66). The protocol's baseline rule: every entry of a
+/-- **The baseline is registered** ([BASELINE-REGISTERED]). The protocol's baseline rule: every entry of a
 declaration's baseline `θ` holds registered public data, registered at the start of the deployment, and the reference
 circuit `c` takes as its own baseline `c.θ` exactly the inputs it reads of that kind. An output of an earlier run,
-certified or not, is never baseline (Daniel, 21 Oct: registration happens at the start of a deployment and essentially
-never changes). One registration log is one deployment, and its baseline is what the log's first record registers
-(compute-accounting, 21 Oct): the first run's `θ` cites its own record, which opens the log, every later run's cites
+certified or not, is never baseline: registration happens at the start of a deployment and essentially
+never changes. One registration log is one deployment, and its baseline is what the log's first record registers:
+the first run's `θ` cites its own record, which opens the log, every later run's cites
 that same record, and registering new public data takes a new log, a new deployment the auditor sees as such. So no
 value computed off the books, before the run or during it, is ever registered as baseline, and neither is any novel
 input of `c`.

@@ -8,7 +8,7 @@ to those rows of its registered roots and to nothing else (a tampered window's, 
 in-proof negative's window changes the one value it names and makes
 the unit's word reference compute ok = 0 exactly where its record moved, a registration of z alone is refused, the public
 row lays out the unit's salt, position and roots as its parameters read them, and the verifier's shared-row file over the
-opened ``b || c`` and paths is C-Flock's own over the rows."""
+opened ``b || c`` and paths is Flock's own over the rows."""
 from __future__ import annotations
 
 import hashlib
@@ -174,7 +174,8 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
 
     assert T == 2 * (8 // R) * (16 // C) == win.tp.population
     assert win.query["params"]["templates"] == [P.template_instance_query(U.Shape(K).definition())["params"]["template"]]
-    assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["templates"][0], u, 1) for u in range(T)]
+    assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["templates"][0], c["tile0"], c["tiles"])
+                                                                    for c in com["calls"]]
     assert [n for n, _t in win.program.fn.signature()[0]] == [f"a/{K}", f"b/{K}", "zy", "salt", "position", "roots"]
     assert U.window_ports(win.program) == {**{f"a_k{K}[{i}]": f"a{i}" for i in range(R)},
                                            **{f"b_k{K}[{j}]": f"b{j}" for j in range(C)}, "zy": "zy"}
@@ -245,7 +246,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
         assert why in U.check_known(win.obj["program"], wr, "o1", dict(o1, known=known))
     assert "is not the root of its" in U.check_known(win.obj["program"], U.open_root("v", bytes(64)), "o1", o1)
 
-    # window credit's registration step takes the window's evidence: one drawn unit of each call, its finding its call's
+    # window credit's registration step takes the window's evidence: one sampled proof block of each call, its finding its call's
     # --registered ports, under the descriptor whose SHA-512 is the Program's; and refuses each per-window value without
     # the window root, and another window's root
     desc, calls = RN.credit_descriptor(win), U.HW.call_units(win.program)
@@ -253,19 +254,32 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     drawn = [calls[0][0] + 1, calls[1][0]]
     found = {u: RN.findings_of(docs[c]) for c, u in enumerate(drawn)}
     assert found[drawn[1]]["o1"] == {"value": "ok", "root": okr.root.hex()}
-    entries = [*com["registered"], okr.entry()]
-    assert RN.credit_registration(desc, drawn, entries, found, wr) is None
+    entries, ok = com["registered"], {"value": "ok", "root": okr.root.hex()}
+    assert RN.credit_registration(desc, drawn, entries, found, wr, ok) is None
     okd = G.domain(win.obj["program"], "ok", 1, T).domain_id.hex()
-    assert RN.credit_registration(desc, drawn, [*com["registered"], dict(okr.entry(), domain=okd)], found, wr) is None, (
+    assert RN.credit_registration(desc, drawn, [*entries, dict(okr.entry(), domain=okd)], found, wr, ok) is None, (
         "the ok rows are the verifier's own, which credit builds and `_verified` holds each session to: registration "
         "reads no entry of them")
-    for bad_entries, root, why in (
-            ([*RN.unrooted(com)["registered"], okr.entry()], wr, f"registered value a/{K}@0's domain is not"),
-            (entries, U.open_root("v", bytes(64)), f"registered value a/{K}@0's domain is not"),
-            (entries[1:], wr, f"against b/{K}, which the window registers not")):
-        got = RN.credit_registration(desc, drawn, bad_entries, found, root)
+    # ok-unrooted: the sessions opened ok at its rows registered without the window root (the domain a file states
+    # without it, which flock-verify roots its known rows at), and credit's step-5 rule refuses them
+    oku = RN.unrooted_ok(win, com)
+    assert oku.root != okr.root and oku.domain.domain_id.hex() == okd
+    assert oku.root == G.Registered.commit(win.obj["program"], "ok", [[1]] * T, [U.ok_salt("w", u) for u in range(T)],
+                                           16, U.V2, None).root
+    bad_found = {u: dict(f, o1=dict(f["o1"], root=oku.root.hex())) for u, f in found.items()}
+    for bad, why in ((bad_found, f"call 0's session of unit {drawn[0]} opened the ok rows at another port, value or root"),
+                     ({drawn[0]: found[drawn[0]], drawn[1]: {p: e for p, e in found[drawn[1]].items() if p != "o1"}},
+                      f"call 1's session of unit {drawn[1]} opened the ok rows"),
+                     ({u: dict(f, o2=f["o1"]) for u, f in found.items()}, "opened the ok rows at another port")):
+        got = RN.credit_registration(desc, drawn, entries, bad, wr, ok)
         assert got is not None and got[0] == "registration" and why in got[1], got
-    assert RN.credit_registration(desc, [*drawn, 0], entries, found, wr)[0] == "missing"
+    for bad_entries, root, why in (
+            (RN.unrooted(com)["registered"], wr, f"registered value a/{K}@0's domain is not"),
+            (entries, U.open_root("v", bytes(64)), f"registered value a/{K}@0's domain is not"),
+            ([e for e in entries if e["value"] != f"b/{K}"], wr, f"against b/{K}, which the window registers not")):
+        got = RN.credit_registration(desc, drawn, bad_entries, found, root, ok)
+        assert got is not None and got[0] == "registration" and why in got[1], got
+    assert RN.credit_registration(desc, [*drawn, 0], entries, found, wr, ok)[0] == "missing"
 
     salt = U.unit_salt(U.stand_in_reveal(b"\x09" * 32), 1)
     served = window("serve", str(tmp_path / "w"), salt.hex(), str(tmp_path / "served.json"), "--workers", "2")
@@ -279,7 +293,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
 
 @pytest.mark.slow
 def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
-    """A drawn unit's opening passes its own window's roots and no other's (a flipped record's, a receipt of another salt's,
+    """A sampled proof block's opening passes its own window's roots and no other's (a flipped record's, a receipt of another salt's,
     another window's), its ok row is the one word 1 under its public salt and row u of the verifier's registered ``ok``
     (a 0 row there opens no root; ``--unregistered-ok`` states no ok registration), a prover's rows with a tampered A row
     (`window.py open --tamper-a`, at every unit that reads it) open no registered root through the path they keep, and
@@ -511,7 +525,7 @@ def test_the_numpy_records_are_h1zys_words():
 
 def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no_root(tmp_path):
     """Three units of a window, units 0 and 2 reading the same A rows and units 0 and 1 the same B rows, each its own
-    record: the prover's shared-row statement (`h1unit.statement_tables` through C-Flock's `circuit.write`, as `stage.py`
+    record: the prover's shared-row statement (`h1unit.statement_tables` through Flock's `circuit.write`, as `stage.py`
     stages it) and the verifier's own file (`h1unit.verifier_pub`, from the units' ``b || c``, positions and paths alone)
     are one file byte for byte, every A, B, record and ok table row opening its registered root (`run.registered_opens`,
     flock-verify --registered's check; ok's the verifier's own, `h1unit.register_ok`). An ok row of 0 opens none, ok rows

@@ -3,7 +3,7 @@ import Proofs.Pous.Period
 import Proofs.Pouw.Prob
 
 /-!
-# PoUS's per-period guarantee is `JointPeriod`'s `.pous` input
+# PoUS's per-period guarantee is the coins model's `.pous` input
 
 At any value `ξ` of the period's coins, PoUS's event over its own coordinate (it accepts while the capacity account held
 fewer than `S · len` bit-ticks) maps, through `RealizesSpaceOfPeriodHeld`'s coin equivalence, into `PeriodHeld`'s event

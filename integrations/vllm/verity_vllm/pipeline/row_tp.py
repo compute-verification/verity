@@ -15,7 +15,7 @@
 * **Match**: the capture under the observer and collective recorder, the ``--no-observer`` control, the collective-level
   check (``tp-match --arm check``); a request that stopped before its cap gets its served-shape Program derived per rank
   and GP-01 recomposed (``eos-truncated``); then, with a rank profile (default ``derived_<ROLE>_tp<W>``; ``--fold-profile ''``
-  = collective-level only, named), the per-rank fold Match (``tp-fold-match``), its concurrent legs sized to the run's ``--mem-gb``
+  = collective-level only, named), the per-rank fold Match (``tp-fold-match``), its concurrent stages sized to the run's ``--mem-gb``
   (`TpRow.fold_sizing`).  A leased item's capture and control each hold the
   task's GPUs from right before their engine to their exit (``Row.run_gpu``); everything after them runs on the CPU, unleased.
   ``--match-phase gpu`` runs the capture and control alone (no Build needed: they can overlap it), ``--match-phase cpu`` the rest.
@@ -178,7 +178,7 @@ class TpRow(Row):
 
     def reads_device(self) -> bool:
         """Whether a stage of this run reads this host's GPU, so the target-family precheck reads it too: the Commit, the Match's GPU
-        legs, a Build whose target is the device.  ``--match-phase cpu`` reads only legs whose device the GPU half's precheck read, and a
+        stages, a Build whose target is the device.  ``--match-phase cpu`` reads only stages whose device the GPU half's precheck read, and a
         declared-target Build derives for its declaration, so a CPU host runs those stages."""
         return (stage_on(self.stages, "commit") or (stage_on(self.stages, "match") and self.cm.match_phase != "cpu")
                 or (stage_on(self.stages, "build") and not R.declared_target(self.path(self.wl), row=self.row)))
@@ -263,7 +263,7 @@ class TpRow(Row):
         return (r, out or f"{self.rank(r)}/build_step", "--wrapper", "step", "--M", str(self.B), "--pos0", "8")
 
     def request(self, r: int, lp: int, t: int) -> tuple[Any, ...]:
-        """A request derive; the AOT Build's predicts its launch batch from the row's requests (`predict.build.launch_batch`)."""
+        """A request derive; the AOT Build's predicts its launch batch from the row's requests (`predict.common.launch_batch`)."""
         out = f"{self.rank(r)}/build_request_LP{lp}_T{t}"
         shutil.rmtree(out, ignore_errors=True)
         return (r, out, "--wrapper", "request", "--LP", str(lp), "--T", str(t), *([] if self.aot is not None else self.launch_of(lp, t)))
@@ -299,7 +299,7 @@ class TpRow(Row):
                 f.result()
 
     def manifest_global(self, stage: str) -> int:
-        """The v2 query (Q_module_body_v1 + TP-04) over the W rank Programs, merged by rank -> manifest.json, under the manifest's own
+        """The v2 query (Q_module_body_v1) over the W rank Programs, merged by rank -> manifest.json, under the manifest's own
         limit: ``--manifest-timeout``, else `row_records.manifest_timeout` of its W x declared requests component builds (0 = none),
         never one derive's."""
         n = self.W * self.requests
@@ -379,9 +379,9 @@ class TpRow(Row):
 
     # ------------------------------------------------------------------------------------------------ Match
     def fold_sizing(self) -> tuple[int, int, int]:
-        """The fold Match's ``--rank-workers``, ``--fold-workers`` and one leg's limit: `row_records.fold_plan` over the declared shapes
+        """The fold Match's ``--rank-workers``, ``--fold-workers`` and one stage's limit: `row_records.fold_plan` over the declared shapes
         in ``--fold-mem-gb`` (research run's --mem-gb, else the headroom) wherever a flag leaves them to it, marked ``match.fold_plan``;
-        every rank and 7200 s when the checkpoint's layers are unknown.  Memory that holds no planned GM-01 leg beside one fold runs
+        every rank and 7200 s when the checkpoint's layers are unknown.  Memory that holds no planned GM-01 stage beside one fold runs
         one rank at a time and says so: the plan's ratios are fitted on GLM-5.3 B8 alone."""
         cm, layers = self.cm, R.model_layers(self.ck)
         if not layers or not self.shapes:
@@ -392,16 +392,16 @@ class TpRow(Row):
         to = cm.fold_timeout or p["leg_s"]
         self.tl("match.fold_plan", "mark", ("rank_workers", rw), ("fold_workers", fw), ("leg_s", to), ("fits", p["fits"]),
                 *((f"{k}_gb", v) for k, v in gb.items()))
-        short = "" if p["fits"] or cm.fold_rank_workers else f"; WARNING: {gb['mem']} GB holds no planned GM-01 leg beside one fold (a larger --mem-gb)"
-        self.log(f"fold Match: {rw} ranks' compare and GM-01 legs at once ({gb['gm']} GB planned each), {fw or rw} folds ({gb['fold']} GB each), "
-                 f"{to}s a leg, in {gb['mem']} GB ({'--mem-gb' if cm.fold_mem_gb else 'the headroom'}){short}")
+        short = "" if p["fits"] or cm.fold_rank_workers else f"; WARNING: {gb['mem']} GB holds no planned GM-01 stage beside one fold (a larger --mem-gb)"
+        self.log(f"fold Match: {rw} ranks' compare and GM-01 stages at once ({gb['gm']} GB planned each), {fw or rw} folds ({gb['fold']} GB each), "
+                 f"{to}s a stage, in {gb['mem']} GB ({'--mem-gb' if cm.fold_mem_gb else 'the headroom'}){short}")
         return rw, fw, to
 
     def match(self) -> None:
-        """The capture and the control, the GPU legs, each under the item's lease when it has one (`Row.run_gpu`: all the task's GPUs from
-        right before the leg's engine to its exit, recorded in ``match/lease/<leg>/``); the check, the served-shape derives and the fold
-        Match after them, on the CPU, with no device and no lease.  ``--match-phase gpu`` runs the GPU legs alone, which need no Build, and
-        stops the row; ``--match-phase cpu`` runs the rest over the legs ``match/gpu_legs.json`` records."""
+        """The capture and the control, the GPU stages, each under the item's lease when it has one (`Row.run_gpu`: all the task's GPUs from
+        right before the stage's engine to its exit, recorded in ``match/lease/<stage>/``); the check, the served-shape derives and the fold
+        Match after them, on the CPU, with no device and no lease.  ``--match-phase gpu`` runs the GPU stages alone, which need no Build, and
+        stops the row; ``--match-phase cpu`` runs the rest over the stages ``match/gpu_legs.json`` records."""
         cm, M, phase = self.cm, self.M, self.cm.match_phase
         to_m = cm.match_timeout or 3600
         self.to_b = self.cb.build_timeout or 7200
@@ -418,12 +418,12 @@ class TpRow(Row):
         if phase == "cpu":
             legs = R.load_json(f"{M}/gpu_legs.json")
             if not legs:
-                self.verdict("match", "FAIL", f"MATCH_PHASE=cpu without {M}/gpu_legs.json: run the GPU legs first (--match-phase gpu or all)")
+                self.verdict("match", "FAIL", f"MATCH_PHASE=cpu without {M}/gpu_legs.json: run the GPU stages first (--match-phase gpu or all)")
                 raise Stop(11)
             rc_cap, rc_ctl = legs["capture_rc"], legs["control_rc"]
-            self.log(f"match: MATCH_PHASE=cpu over the GPU legs already in {M} (capture rc={rc_cap}, control rc={rc_ctl})")
+            self.log(f"match: MATCH_PHASE=cpu over the GPU stages already in {M} (capture rc={rc_cap}, control rc={rc_ctl})")
         else:
-            shutil.rmtree(f"{M}/fold_match", ignore_errors=True)      # an earlier capture's folds and legs, which --match-reuse must never keep
+            shutil.rmtree(f"{M}/fold_match", ignore_errors=True)      # an earlier capture's folds and stages, which --match-reuse must never keep
             rc_cap = self.run_gpu("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"],
                                   lease_dir=f"{M}/lease/capture", kept=GL.MATCH_LEG_KEPT)
             ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdigit() and ":" in s[11:]))
@@ -472,7 +472,7 @@ class TpRow(Row):
                 fargs += ["--reuse-fold", *(["--reuse-legs"] if cm.match_reuse == "legs" else [])]
             if cm.match_pipeline == "shared":
                 fargs.append("--shared-x09")
-            # --timeout bounds each subprocess: a rank runs three in turn (fold, compare, GM-01), and the cross-rank leg follows them
+            # --timeout bounds each subprocess: a rank runs three in turn (fold, compare, GM-01), and the cross-rank check follows them
             ranks_at_once = min(rw or self.W, self.W)
             phase_s = R.fold_phase_s(to_f, self.W, ranks_at_once, min(fw or ranks_at_once, self.W))
             rc_fold = self.run_tl("match.fold_match", phase_s, f"{M}/fold_match.log",

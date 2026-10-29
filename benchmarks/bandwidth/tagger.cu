@@ -1,4 +1,4 @@
-// The bandwidth audit's GPU tagger (verity/core/protocols/bandwidth/PROTOCOL.md §3-4): every block's tag over the store E
+// The bandwidth audit's GPU tagger (verity/core/protocols/bandwidth/PROTOCOL.md §4): every block's tag over the store E
 // in device memory, the tags' leaves and the RFC 6962 root, for the three tag constructions.
 //
 //   ro-blake3/v1  two lanes per block, one per 1,024-byte chunk of the message u64be j ‖ E_j (16 compressions each under
@@ -14,7 +14,7 @@
 //   ro-sha512/v1  one thread per block, the warp staging each 128-byte chunk of its 32 rows through shared memory
 //                 (coalesced), 17 compressions after the prefix's midstate, and the block's leaf fused (one leaf per tag).
 //   tree          bottom-up, an odd last node promoted, which is RFC 6962's shape: one launch per level while a level
-//                 has more than 2^15 nodes, then nine levels per launch, each block reducing 512 nodes to one
+//                 has more than 2^15 nodes, then nine levels per launch, each CTA reducing 512 nodes to one
 //                 (`node_span`); every level stays in the workspace for openings.
 //
 // Built two ways from this file: `bwtag` (BW_MAIN: validate against the Python reference, then time) and `libbwtag.so`
@@ -614,9 +614,9 @@ __global__ void __launch_bounds__(128, 4) node_level(const uint64_t* __restrict_
   if (i < (n + 1) / 2) level_step(in, n, out, i);
 }
 
-// Up to SPAN levels in one launch: block b of SPAN_THREADS threads takes nodes [b·2^SPAN, (b + 1)·2^SPAN) of the first
-// level and every node above them, one level per barrier.  Ranges stay aligned, so a block's inputs at each level are
-// its own outputs of the level below, and the odd last node of a level falls in the last block.
+// Up to SPAN levels in one launch: CTA b of SPAN_THREADS threads takes nodes [b·2^SPAN, (b + 1)·2^SPAN) of the first
+// level and every node above them, one level per barrier.  Ranges stay aligned, so a CTA's inputs at each level are
+// its own outputs of the level below, and the odd last node of a level falls in the last CTA.
 constexpr int SPAN = 9, SPAN_THREADS = 1 << (SPAN - 1);
 
 struct Span {

@@ -1,7 +1,7 @@
 """Each stratum's circuit file of the declared window Program, built with the auditor's lowering, is what the period's
 open commits (`pouw_h1_circuits.build`, `pouw_h1_rehearsal.period_open_argv`): ``--circuit-files`` carries the SHA-512
 of each K's file, as infra's gate parses it (`auditor.circuit_files_of`), its ledger's open records it and core's credit
-reads it (`credit.committed_files`). The real lowering (C-Flock's `UnitStager`) is the rehearsal's long CPU step, so
+reads it (`credit.committed_files`). The real lowering (Flock's `UnitStager`) is the rehearsal's long CPU step, so
 here a stand-in writes each file, over the served tests' stand-in unit."""
 from __future__ import annotations
 
@@ -16,15 +16,15 @@ import pytest
 
 pytest.importorskip("torch")
 
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.ml.circuits import partition_object as PO  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
+from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.circuits import partition_object as PO
+from verity_vllm.protocols.pouw.h1 import served as SV
 
-from tests.protocols import challenger_host as CH  # noqa: E402
-from tests.protocols import pouw_h1_circuits as PC  # noqa: E402
-from tests.protocols import pouw_h1_rehearsal as RH  # noqa: E402
-from tests.protocols.test_pouw_h1_served import _unit  # noqa: E402
+from tests.protocols import challenger_host as CH
+from tests.protocols import pouw_h1_circuits as PC
+from tests.protocols import pouw_h1_rehearsal as RH
+from tests.protocols.test_pouw_h1_served import _unit
 
 AUDITOR = Path(__file__).resolve().parents[4] / "benchmarks" / "live_challenger" / "auditor.py"
 #: two linears at K = 64 and one at K = 128: two strata

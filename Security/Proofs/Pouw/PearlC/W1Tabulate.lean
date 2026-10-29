@@ -7,7 +7,7 @@ import Proofs.Pouw.Prob
 
 `TTOutW1` (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`), `Gγ` and `GγPerCoin` bound every adversary by its cost and
 its oracle calls. W1 itself bounds a program's text (`W1.Prog.bounded`: at every layout `2^64` code nodes and `2^64`
-constants, W1RT-1's fix F2), and nothing else bounds an adversary. These lemmas make that exact, as red-team tools for
+constants), and nothing else bounds an adversary. These lemmas make that exact, as attack tools for
 the TT family restated at `W1.w1Priced`.
 
 - `exec_ite_untaken`: an `ite` runs one branch, so a run is the same whatever its untaken branch is. That branch may be
@@ -16,7 +16,7 @@ the TT family restated at `W1.w1Priced`.
   leaf the memory reaches (`pathOf`), whatever the other leaves are. At `n = 256` on the salt's bits, that would be a
   table of one leaf per salt, selected for 256 INT32.
 - `size_tree`, `tree_not_code`: a tree of depth `n` has at least `2^n` nodes, so no program's code is a tree of depth
-  above 64. W1RT-1's table (`tree leaf 256 []`) is not a W1 program.
+  above 64. The table `tree leaf 256 []` is not a W1 program.
 - `not_ttOutW1_of_win`, `not_gγ_of_win`, `not_gγPerCoin_of_win`: one adversary within `T` and `q ≤ 2^64` calls that
   wins with probability above the error refutes each form. They are the forms read at that adversary.
 - `schema_not_ttOutW1` (and `schema_not_gγ`, `schema_not_gγPerCoin`): the forms as schemas carry no guard of their own.
@@ -27,7 +27,7 @@ the TT family restated at `W1.w1Priced`.
 What these do not do: refute a named form at the deployed protocol. At `NoiseSha512.sha512Sem` with the game's salt the
 reference reads no oracle. Without the text bound a program could tabulate it per salt in `tree` at depth 256 and pay
 for one path (`exec_tree`). The rest of that program (the salt's bits, the word tables, the leaf's writes) and its
-transcript are the red team's arithmetic (`note:compute-accounting/20261024T1730Z-report-w1-redteam`, W1RT-1). Under
+transcript are arithmetic. Under
 the bound it is not a program (`tree_not_code`).
 
 **What the bound leaves, an argument and not a theorem here.**
@@ -126,7 +126,7 @@ theorem size_tree (leaf : List Bool → W1.Code) : ∀ (n : ℕ) (path : List Bo
       omega
 
 /-- **No W1 program's code is a tree of `ite`s of depth above 64**, at any layout and whatever the tree's leaves: the
-tree has at least `2^n` nodes (`size_tree`), and W1's text bound (`Prog.bounded`) allows `2^64`. W1RT-1's table of one
+tree has at least `2^n` nodes (`size_tree`), and W1's text bound (`Prog.bounded`) allows `2^64`. The table of one
 leaf per salt, `tree leaf 256 []` on the salt's 256 bits, is one of them. -/
 theorem tree_not_code (leaf : List Bool → W1.Code) {n : ℕ} (hn : 64 < n) (path : List Bool) (pr : Prog)
     (L : Layout) : pr.code L ≠ tree leaf n path := by

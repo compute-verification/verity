@@ -41,7 +41,7 @@ set -euo pipefail
 N1=${VY_N1:-vy-n1} N2=${VY_N2:-vy-n2}
 GUEST=/workspace/verity-guest
 # the fill prio of node 2's vLLM guests: above every other guest's (proofs' are 5 and 10), since circuits' vLLM work goes first
-# on both nodes (Daniel 1 Oct 01:35Z)
+# on both nodes
 PRIO=${VY_N2_PRIO:-20}
 DISPATCH=${VY_DISPATCH:-/workspace/jobs/dispatch/infra/nebius/dispatch.py}
 OWNER=${VY_N2_COMMIT_OWNER:-bc-698052e1-8e2b-5736-997e-8fa229b85b3c}

@@ -4,15 +4,12 @@ import Definitions.Accounting.Physical
 # Ingress by source
 
 `ingress X I` counts every gate placed outside `X` that `A[X, I]` reads, wherever it was placed. The bandwidth audit's
-guarantee on the actual circuit (B3 in `note:console/20261012T0645Z-draft-actual-circuit-model`) is about one source:
+guarantee on the actual circuit (B3) is about one source:
 the bits the cores read *from HBM* in the window, beside what they read over the side links, which count against the
 side budget `β_side (T + RTT)`. So it needs ingress from a location `Y`, and the capacity of the links from `Y`:
 
 * `ingressFrom X Y I`: `in_X(I; Y)`, the width of the gates placed in `Y` and outside `X` that `A[X, I]` reads;
 * `linkCapacityFrom ends β X Y`: the total capacity of the links across `X`'s boundary whose end outside `X` is in `Y`.
-
-Ingress is the sum over a partition of the outside into sources, and at most the sum over a cover, and under `Links`
-ingress from `Y` is at most `linkCapacityFrom` a tick (`Accounting.SecurityProofs.Actual.ingressFrom_le`).
 -/
 
 namespace Accounting

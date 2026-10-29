@@ -5,7 +5,7 @@ shape with no row takes the kernel's default (`wgmma.default_cfg`, `int8_fused.p
 from __future__ import annotations
 
 CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
-    # vy-dc-h200, tune.py in r20261026-011518-951f (cubin 3d5b95a4), gated in its step 4 (1,915 cases, 0 mismatches)
+    # the H200's: tune.py's winners, each gated before it was timed
     "wgmma:sm_90": {
         (16384, 16384): [
             (1, "64x256:c0:g16"), (16, "64x256:c0:g16"), (32, "64x128:c0:g2"), (64, "64x128:c0:g8"),

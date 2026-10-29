@@ -2,9 +2,9 @@
 // (benchmarks/pouw/commit_gpu/sha512.cuh, included by path); the rest is vendored from three seeds, each piece re-pointed
 // from __constant__ memory to kernel parameters (__grid_constant__) so that plans of many domains run back to back on one
 // stream with no symbol copy:
-//   * native_rows.cu (circuits, cursor/commit-speed-21f3 934d0bcbd): LeafK / NodeK, the frame leaf, pad and node templates,
+//   * native_rows.cu (934d0bcbd): LeafK / NodeK, the frame leaf, pad and node templates,
 //     hash_after_block, salt_prf, salt_digest, the nibble-table mask, the leaf, the level kernels and the host builder;
-//   * sharaw.cu (hash, cursor/verity-hash-15ad 4369ae62): the byte-table mask (mask8) and the salt / data split (sr_salt8,
+//   * sharaw.cu (4369ae62): the byte-table mask (mask8) and the salt / data split (sr_salt8,
 //     sr_data), with commit_gpu's tree schedule (a level a launch while a level is wider than 512 nodes, then one block for
 //     the rest); sr_data's fold and climb (k_leaf_fold), its nodes by length or (sm_100) through compress_compact /
 //     node_rt; sr_leaf4 (k_leaf_spec) with mask_roll;
@@ -41,7 +41,7 @@ struct RowK {
   u64 kw_xpad[80];                   // row/v2: the all-padding last block (lb % 128 == 0)
   u64 kw_segpad[80];                 // row-seg: a whole segment's padding block
   u64 kw_fold[80];                   // row-seg rows of an even s: the fold's all-padding last block
-  u64 mid_Q[2][8];                   // row-seg: after Q, per shape (tiles: full tiles, the last row block's)
+  u64 mid_Q[2][8];                   // row-seg: after Q, per shape (tiles: full tiles, the last row tile's)
   u32 scheme, lb, xpad;
   u32 s[2];                          // segments a unit, per shape
   u32 last[2];                       // the last segment's bytes, per shape
@@ -174,7 +174,7 @@ __global__ void __launch_bounds__(128, 2) k_row_segs(const __grid_constant__ Row
 }
 
 // Pearl-C's tiles: segment j of tile (ti, tj) is the tile's rows 2j and 2j + 1, each row's two 32-column chunks as le32 C~ ||
-// le32 U; the full row blocks' tiles first (32 segments each), then the last row block's (s = R / 2).
+// le32 U; the full row tiles' tiles first (32 segments each), then the last row tile's (s = R / 2).
 __global__ void __launch_bounds__(128, 2) k_tile_segs(const __grid_constant__ RowK R, const uint8_t* __restrict__ tab,
                                                       const uint8_t* __restrict__ C, const uint8_t* __restrict__ U, u64* __restrict__ dig) {
   const u32 rows = R.rows, cols = R.cols, tn = cols / 64;
@@ -218,7 +218,7 @@ template <bool SH> DEV void ld_dig(const u64* p, u64* d, int n) {
 }
 // a unit's digest over its s segment digests (words; SH, in shared memory) from the Q state, into out (byte order); an even
 // s's all-padding last block through kw_pad, its schedule from the host, when given. k_rows_seg passes it: on sm_120 its fold
-// compressing that block of constants came out wrong for some rows (37cc862b6's probe, r20261018-232746-4eed).
+// compressing that block of constants came out wrong for some rows.
 template <bool SH> DEV void seg_fold(const u64* qst, const u64* dig, u32 s, uint8_t* out, const u64* kw_pad) {
   u64 st[8], w[16];
   cpy8(st, qst);

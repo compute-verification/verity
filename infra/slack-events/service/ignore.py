@@ -1,7 +1,7 @@
 """Vercel's `ignoreCommand` (vercel.json): exit 0 skips the build, 1 builds.  A Git deployment builds only for `main`, and
 only when the service's inputs changed since the deployment before it (VERCEL_GIT_PREVIOUS_SHA), so a landing that touches
-the service deploys itself and nothing else deploys.  Git deployments were off from 19 Oct,
-after 286 failed builds of branches that lacked the root; every deploy since went through console by hand.
+the service deploys itself and nothing else deploys.  No other branch builds: one that lacks the service's root fails
+its build.
 
 A deployment with no Git branch (console's `vercel deploy --prod`) always builds, and so do a branch's first deployment
 (no previous SHA: the commit before may be the top of a train whose service change sits lower) and one whose diff git

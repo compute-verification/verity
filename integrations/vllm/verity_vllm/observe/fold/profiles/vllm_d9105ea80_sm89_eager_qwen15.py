@@ -5,14 +5,14 @@ the SAME pins as `vllm_d9105ea80_sm89_eager` (vLLM d9105ea80, torch 2.13.0+cu129
 What changes with the configuration (all derived from `C`): H=1536 NL=28 NH=12 KVH=2 D=128 I=8960 V=151936, QKV=2048 GU=17920,
 EPS=1e-6, ROPE_THETA=1e6, MAX_POS=131072, `BIAS=True` (Qwen2's fused QKV projection carries a bias -> the batch-invariant
 linear's separate `aten.add` -> `BiasAdd_v1{N=2048}`, the `qkv_b` weight field), and the FA2 static `BN = fa2_kblock_n(128) = 64`
-(the head-dim-128 split-KV trait `Flash_fwd_kernel_traits<128, 64, 64, 4>`; DESIGN §1 / b1.py D54).
+(the head-dim-128 split-KV trait `Flash_fwd_kernel_traits<128, 64, 64, 4>`; `b1.fa2_kblock_n`).
 """
 
 from __future__ import annotations
 
 from verity.ml.definitions.registry import b1
 
-from verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager import (build_profile, make_check_header, make_root_class, make_weight_field,  # noqa: F401
+from verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager import (build_profile, make_check_header, make_root_class, make_weight_field,
                                         with_geometry)
 
 PROFILE_ID = "vllm-d9105ea80-sm89-eager-bf16-qwen2.5-1.5b"

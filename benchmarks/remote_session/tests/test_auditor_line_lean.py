@@ -2,14 +2,14 @@
 `line_record` request off the record, or its `line` of groups and windows given), held exactly to `line.py`'s on the
 same inputs: a disagreement refuses the line, naming both values, whether
 the Lean's answer or line.py's is the one that moved, and on gate runs 5-7's credited sessions the Lean's line gives
-the line at each T the recorded `auditor_line.json` holds, every share bit for bit once the half block the chips'
-whole blocks add to the record's S is given back (gate run 7's all of them) but for four of gate runs 5 and 6's
+the line at each T the recorded `auditor_line.json` holds, every share bit for bit once the half chunk the chips'
+whole chunks add to the record's S is given back (gate run 7's all of them) but for four of gate runs 5 and 6's
 (`ULP`), where the record's float arithmetic is a float off the exact share's nearest.
 
 `fixtures/gate_run_<G>.json.gz` holds each credited session's line inputs on the auditor's clock, of groups and windows
 given (`line`), as `verifier.recorded_inputs` read them from the run's record before the line read the Lean's record,
 with no bursts (the reading of gate runs up to 7), its groups as rows in `line.GROUP`'s order, beside the recorded
-shares and line (r20261024-090248-249f, which reran each run's `auditor_line.analyse` through the Lean)."""
+shares and line (from a run that reran each run's `auditor_line.analyse` through the Lean)."""
 from __future__ import annotations
 
 import copy
@@ -53,7 +53,7 @@ RECORD = {**{k: INPUTS[k] for k in ("per", "block_bytes", "chip_bytes", "node_by
                                  for t, g in enumerate(GROUPS)],
                      "blocks": 1000, "appended": 0, "released": 0, "lifetime": 2, "pace": {"k": 2, "window_ns": 10 ** 9},
                      "appends": None, "registration": REGISTRATION.digest.hex()}}
-"""`INPUTS`' session read off its record of `REGISTRATION`: window t group t, two passes over the 1000 blocks, 1500 of
+"""`INPUTS`' session read off its record of `REGISTRATION`: window t group t, two passes over the 1000 chunks, 1500 of
 its 2000 receipts drawn (`line.record_inputs_json`'s form)."""
 
 
@@ -169,8 +169,8 @@ analysed in floats, before line.py, and these four came out the next float over,
 @pytest.mark.parametrize("g", [5, 6, 7])
 def test_the_leans_line_is_the_record_of_gate_runs_5_to_7(lean, g):
     """Each credited session's shares, both forms, over time and at the passes, weights and filler, with its worst
-    stretch, through the Lean's line are the recorded floats bit for bit once the half block the chips' rounding up
-    adds is given back: the record charged S = chip_bytes/b = 743590.5 blocks, the line charges 743591, so every
+    stretch, through the Lean's line are the recorded floats bit for bit once the half chunk the chips' rounding up
+    adds is given back: the record charged S = chip_bytes/b = 743590.5 chunks, the line charges 743591, so every
     share above zero is the recorded one's exact value less (S·b - chip_bytes)/node_bytes, and the worst stretch is
     the same. That holds but for `ULP`'s, each the float beside the exact share's nearest and no nearer it; and the
     line at each T is the recorded one, its session the record's."""

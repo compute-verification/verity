@@ -1,9 +1,9 @@
 """The bandwidth audit's pinned vectors (`vectors.json`): `python bandwidth_vectors.py` rewrites them, and
 `test_bandwidth_vectors.py` holds the code to them.
 
-Blocks are generated, not stored: block `j` of `block_bytes` bytes is the first bytes of
+Labels are generated, not stored: label `j` of `block_bytes` bytes is the first bytes of
 `SHA512("verity/bandwidth/test-block/v1\\0" ‖ u64be j ‖ u32be 0) ‖ SHA512(… ‖ u32be 1) ‖ …`.  A GPU tagger fills its
-store with the same blocks and checks its tags and roots against these.
+store with the same labels and checks its tags and roots against these.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def block(j: int, block_bytes: int = BLOCK_BYTES) -> bytes:
 
 
 def store(blocks: int, block_bytes: int = BLOCK_BYTES) -> audit.Store:
-    """`blocks` generated blocks under a one-segment P2 geometry and `SALT`, `DEVICE`'s salt under `COMMITMENT`."""
+    """`blocks` generated labels under a one-segment P2 geometry and `SALT`, `DEVICE`'s salt under `COMMITMENT`."""
     params = P2Params(8 * block_bytes, 21065 if block_bytes == BLOCK_BYTES else 173, blocks, 1)
     return audit.Store(params, SALT, [block(j, block_bytes) for j in range(blocks)])
 
@@ -80,14 +80,14 @@ def _window_vectors() -> list[dict]:
 
 
 def _root_vectors() -> list[dict]:
-    """Every tag's root over the 37 generated blocks under `SEED`: the GPU tagger's small case."""
+    """Every tag's root over the 37 generated labels under `SEED`: the GPU tagger's small case."""
     s = store(37)
     return [{"tag": name, "blocks": 37, "seed": SEED.hex(), "tag_root": audit.tag_pass(s, name, SEED).root.hex()}
             for name in sorted(tags.TAGS)]
 
 
 def _audit_vectors() -> list[dict]:
-    """A whole honest window over 37 blocks (not a power of two, and a short last leaf for the polynomial tag)."""
+    """A whole honest window over 37 labels (not a power of two, and a short last leaf for the polynomial tag)."""
     s = store(37)
     vk = vk_of(s)
     out = []

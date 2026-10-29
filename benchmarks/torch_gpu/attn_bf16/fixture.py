@@ -15,8 +15,8 @@ not read hold junk (NaN, infinities and huge values): the cache past lens[b], P 
 CASES, each CHECK/<case>.npz (Q, K, V, P, lens, nq: the inputs; S, O: the buffers after the kernels):
   h200_decode        the H200 model's decode step (MQA: 256 query heads of head dim 64 on one KV head, every KV length
                      1..32), 2,048 of its 20,480 sequences, with specials
-  h200_ctx96         compute-accounting's 22:45Z shape (the same heads, every KV length 1..96), 512 sequences
-  mha_decode_d64     the 22:20Z sketch (128 heads of head dim 64, each its own KV head, every KV length 1..32)
+  h200_ctx96         the H200 model's heads at every KV length 1..96, 512 sequences
+  mha_decode_d64     MHA decode (128 heads of head dim 64, each its own KV head, every KV length 1..32)
   decode_d128        head dim 128, GQA with 2 query heads a KV head, every KV length 1..160
   prefill_d64        MQA causal prefill and a prefill chunk, head dim 64
   prefill_d128       GQA (8 query heads a KV head) causal prefill and a chunk, head dim 128
@@ -27,6 +27,10 @@ CASES, each CHECK/<case>.npz (Q, K, V, P, lens, nq: the inputs; S, O: the buffer
   s16_mqa_d64        the s16 kernels' bounds (every query sees at most 32 keys): MQA, 2 head groups, PV's K = 32, specials
                      and decode, prefill and chunks in turn
   s16_gqa_d128       the same at head dim 128, GQA with 16 query heads a KV head (4 KV heads), PV padded to 16 alone
+  kinds_d64          the H200 model's decode shape over KINDS' generators, 4 sequences
+                     of each kind, each at every KV length 1..32: normal, softmax rows, clustered exponents, the unit binade,
+                     subnormal products, 5% specials, cancellation inside a step and across steps, uniform words, and PV
+                     accumulators that are FP32 subnormals after the first step (subacc: K = 32's second step reads them)
 FULL, CHECK/<case>.full.npz: the H200 model's whole decode step (20,480 sequences), its inputs made by gen.py from a seed
 on both sides, so the file holds each sequence's digest of S and O (and of the inputs, by chunk) instead of the arrays.
 CHECK/fixture.json lists the cases, their word counts and the reference sample's.
@@ -48,13 +52,15 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as G
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import gen  # noqa: E402
+import gen
 
 POISON = 0xA5A5
 SPECIALS = gen.SPECIALS
 JUNK = np.array([0x7FC0, 0xFFC1, 0x7F80, 0xFF80, 0x7F7F, 0xFF7F], np.uint16)
 CHUNK = 1 << 20
 BINDING = G.GEMM_HOPPER
+KINDS = ("normal", "softmax", "wide", "unit", "tiny", "specials", "cancel_in", "cancel_across", "uniform", "subacc")
+KIND_SEED = 20261026
 
 
 def _decode(lens: np.ndarray) -> np.ndarray:
@@ -82,9 +88,10 @@ CASES = {
     "long_d128": (2, 2, 2, 128, 4100, lambda B: np.array([4100, 3000]), lambda lens: np.array([1, 40]), 0.001, 1),
     "s16_mqa_d64": (36, 32, 1, 64, 32, lambda B: 1 + np.arange(B) % 32, _mixed, 0.05, 2),
     "s16_gqa_d128": (24, 64, 4, 128, 32, lambda B: np.array([32, 31, 30, 17, 16, 15, 9, 8, 1, 2, 3, 24] * 2), _mixed, 0.05, 1),
+    "kinds_d64": (4 * len(KINDS) * 32, 256, 1, 64, 32, lambda B: 1 + np.arange(B) % 32, _decode, 0.0, 0),
 }
 # PV's least K by case (default 0: pad16(len) alone)
-KPV = {"h200_decode": 32, "mha_decode_d64": 32, "specials_d64": 48, "h200_decode_full": 32, "s16_mqa_d64": 32}
+KPV = {"h200_decode": 32, "mha_decode_d64": 32, "specials_d64": 48, "h200_decode_full": 32, "s16_mqa_d64": 32, "kinds_d64": 32}
 # name: B, H, Hkv, D, Lcap, seed (gen.py's inputs: lens 1 + b mod Lcap, one query each)
 FULL = {"h200_decode_full": (20480, 256, 1, 64, 32, 20261026)}
 SEQ_CHUNK = 256
@@ -103,19 +110,88 @@ def seen(lens: np.ndarray, nq: np.ndarray, b: int, q: int) -> int:
     return int(lens[b] - nq[b] + q + 1)
 
 
+def clustered(rng: np.random.Generator, shape: tuple, centre: np.ndarray, spread: int = 6) -> np.ndarray:
+    """Finite words whose exponent fields sit within ``spread`` of a per-row ``centre`` (so products align and cancel), a
+    random mantissa and sign."""
+    e = np.clip(centre[..., None] + rng.integers(-spread, spread + 1, size=shape), 0, 254)
+    m = rng.integers(0, 128, size=shape)
+    s = rng.integers(0, 2, size=shape)
+    return ((s << 15) | (e << 7) | m).astype(np.uint16)
+
+
+def kind_sequence(i: int, H: int = 256, D: int = 64, L: int = 32) -> dict:
+    """Sequence ``i`` of kinds_d64: Q (H, D), K and V (L, D) and P (H, L) of KINDS[i % len(KINDS)], from its own seed."""
+    kind = KINDS[i % len(KINDS)]
+    rng = np.random.default_rng([KIND_SEED, i])
+    normal = lambda *shape: bf16(rng.standard_normal(shape, np.float32))  # noqa: E731
+    Q, K, V = normal(H, D), normal(L, D), normal(L, D)
+    z = rng.standard_normal((H, L)) * 2
+    P = bf16((np.exp(z) / np.exp(z).sum(1, keepdims=True)).astype(np.float32))
+    if kind == "softmax":
+        q, k = rng.standard_normal((H, D)), rng.standard_normal((L, D))
+        Q, K = bf16(q.astype(np.float32)), bf16(k.astype(np.float32))
+        sc = (q @ k.T) / 8.0
+        e = np.exp(sc - sc.max(1, keepdims=True))
+        P = bf16((e / e.sum(1, keepdims=True)).astype(np.float32))
+    elif kind in ("wide", "unit", "tiny"):
+        def centre(n):
+            if kind == "wide":
+                return rng.integers(1, 255, size=n)
+            if kind == "unit":
+                return 127 + rng.integers(-2, 3, size=n)
+            return 57 + rng.integers(-4, 5, size=n)
+        Q, K, V, P = (clustered(rng, (n, c), centre(n)) for n, c in ((H, D), (L, D), (L, D), (H, L)))
+        if kind == "tiny":
+            for a in (Q, K, V, P):
+                sub = rng.random(a.shape) < 0.25
+                a[sub] = (a[sub] & 0x807F) | rng.integers(1, 128, size=int(sub.sum())).astype(np.uint16)
+    elif kind == "specials":
+        for a in (Q, K, V, P):
+            hit = rng.random(a.shape) < 0.05
+            a[hit] = rng.choice(SPECIALS, int(hit.sum()))
+    elif kind == "cancel_in":
+        # every second 8 of each 16-wide k segment negates the first 8: Q's heads 1 mod 4 against K's keys 1 mod 4, and P's
+        # heads 1 mod 4 against every V column, cancel inside each step
+        for s in range(D // 16):
+            Q[1::4, 16 * s + 8:16 * s + 16] = Q[1::4, 16 * s:16 * s + 8] ^ 0x8000
+            K[1::4, 16 * s + 8:16 * s + 16] = K[1::4, 16 * s:16 * s + 8]
+        for s in range(L // 16):
+            P[1::4, 16 * s + 8:16 * s + 16] = P[1::4, 16 * s:16 * s + 8] ^ 0x8000
+            V[16 * s + 8:16 * s + 16] = V[16 * s:16 * s + 8]
+    elif kind == "cancel_across":
+        # the second half of the k range negates the first: the cancellation spans steps, through the truncating adder
+        Q[2::4, D // 2:] = Q[2::4, :D // 2] ^ 0x8000
+        K[2::4, D // 2:] = K[2::4, :D // 2]
+        P[2::4, L // 2:] = P[2::4, :L // 2] ^ 0x8000
+        V[L // 2:] = V[:L // 2]
+    elif kind == "uniform":
+        Q, K, V, P = (rng.integers(0, 1 << 16, size=a.shape).astype(np.uint16) for a in (Q, K, V, P))
+    elif kind == "subacc":
+        # products around 2^-130, so PV's accumulator after its first step is a nonzero FP32 subnormal for most words at
+        # n <= 16, where K = 32's second step is all +0
+        P = clustered(rng, (H, L), 55 + np.arange(H) % 10, spread=2)
+        V = clustered(rng, (L, D), 63 + rng.integers(-1, 2, size=L), spread=2)
+    return dict(Q=Q, K=K, V=V, P=P)
+
+
 def build(name: str):
     """The case's inputs: random normal Q, K and V, P uniform in [0, 1), specials in the live words of every n-th sequence
-    (with exact cancellations and overflows), and junk wherever the kernels must not read."""
+    (with exact cancellations and overflows), or kinds_d64's generators; and junk wherever the kernels must not read."""
     B, H, Hkv, D, Lcap, lens_f, nq_f, frac, every = CASES[name]
     rng = np.random.default_rng(int.from_bytes(name.encode(), "little") % 2**32)
     lens = np.asarray(lens_f(B), np.int32)
     nq = np.asarray(nq_f(lens), np.int32)
     Mq = int(nq.max())
     assert len(lens) == B and (nq >= 1).all() and (nq <= lens).all() and (lens <= Lcap).all() and H % Hkv == 0, name
-    Q = bf16(rng.standard_normal((B, H, Mq, D), np.float32))
-    K = bf16(rng.standard_normal((B, Hkv, Lcap, D), np.float32))
-    V = bf16(rng.standard_normal((B, Hkv, Lcap, D), np.float32))
-    P = bf16(rng.random((B, H, Mq, Lcap), np.float32))
+    if name == "kinds_d64":  # sequence b is kind sequence b // Lcap at KV length 1 + b mod Lcap
+        seqs = [kind_sequence(i, H, D, Lcap) for i in range(B // Lcap)]
+        Q, K, V, P = (np.stack([s[k] for s in seqs])[np.arange(B) // Lcap] for k in "QKVP")
+        Q, K, V, P = Q[:, :, None], K[:, None], V[:, None], P[:, :, None]
+    else:
+        Q = bf16(rng.standard_normal((B, H, Mq, D), np.float32))
+        K = bf16(rng.standard_normal((B, Hkv, Lcap, D), np.float32))
+        V = bf16(rng.standard_normal((B, Hkv, Lcap, D), np.float32))
+        P = bf16(rng.random((B, H, Mq, Lcap), np.float32))
     for b in range(B):
         if not (every and b % every == 0):
             continue
@@ -127,7 +203,7 @@ def build(name: str):
         h = b % H
         kh = h // (H // Hkv)
         if L >= 2:
-            # QK^T: the first query against key 0 cancels exactly in every 16-wide k block (its second 8 products negate the
+            # QK^T: the first query against key 0 cancels exactly in every 16-wide k segment (its second 8 products negate the
             # first 8), and against key 1 every product is |q| x the largest finite, so the sum leaves FP32's range
             q, k0 = Q[b, h, 0].reshape(-1, 2, 8), K[b, kh, 0].reshape(-1, 2, 8)
             q[:, 1], k0[:, 1] = q[:, 0] ^ 0x8000, k0[:, 0]

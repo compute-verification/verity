@@ -14,7 +14,7 @@ A session has four steps:
 2. **Rounds.** Round `j` reveals index `j` (`challenge`), receives the whole answer block (`receive`), reads its clock
    for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
    `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
-   retried, and no index is redrawn.
+   retried, and no index is resampled.
 3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records root)`: the header is
    the commitment's fields and how the session ended, and the records root is the frame-v3-sha512 root of the round
    records.  The records are witness: the prover proves things about them, and they never reach the auditor in the
@@ -391,8 +391,7 @@ class SessionLog:
     One session an id rests on the host keeping this file as written: it is never restored from a snapshot, a backup or
     another older copy, and the memory challenger is never restarted onto host-held state older than the sessions it
     has run.  A file can see neither.  The claim that the host does neither is `trusted-host`
-    (`verity.core.claims`) as network-accounting widens it, in Daniel's words: its host "never restores an earlier copy
-    of the state the device keeps there" (pending network-accounting's widening, Daniel decision 2)."""
+    (`verity.core.claims`): its host never restores an earlier copy of the state the device keeps there."""
 
     def __init__(self, path: str | os.PathLike) -> None:
         self.path = Path(path)

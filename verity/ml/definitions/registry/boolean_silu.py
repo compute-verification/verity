@@ -23,7 +23,7 @@ a fixed XOR of low minterms (or its complement, whichever has fewer terms). `Sil
 batch of I `SiluMulBf16_v3` Calls over (gu[i], gu[I + i]), so each member's 16 output bits are one unit under `Q_word_v1`.
 
 The v4 pair (`SiluMulBf16Expf`, `SiluMulExpf`) computes the served `SiluMulBf16_v2` / `SiluMul_v2{I}` (`registry.act`,
-vLLM `_C.silu_and_mul` on the red-team's sm_120 edge words: ``f / (1 + expf(-f))`` with expf's overflow) the same way:
+vLLM `_C.silu_and_mul` on the measured sm_120 edge words: ``f / (1 + expf(-f))`` with expf's overflow) the same way:
 `silu_bf16_expf` sends NaN and -inf to 0x7FFF, keeps -0, and reads `expf_band_table`, where the gates whose ``expf(-g)``
 overflows (g <= -89) are -0; the up word passes ``+ 0.0f`` (-0 to +0), and every NaN result is 0x7FFF.  No sub-Call is a word
 Definition.

@@ -1,5 +1,5 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
-vendored from #1036's trial, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
+of onsite and remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
 `Core.Protocol.case` and `answer` decode a case), and each component's own Python: PoUW's `core_check.case`
 (`verity/pouw/v1`), the network certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python
 mirror over the certifier's certificates and one-stage's answers,
@@ -9,22 +9,19 @@ mirror over the certifier's certificates and one-stage's answers,
 (`verity/remote-bandwidth/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each component's own difftest holds its Lean to that Python; this one holds the composition of them.
 
-The rule is the trial's onsite and remote over their components' statements, from danielreuter/verity#1036, branch
-`cursor/protocol-interfaces-c3b2` at 46820ebcb, which no branch this one builds on carries:
+The trial's rule, onsite's and remote's over their components' statements:
 
-* `trial/verity/protocols/onsite.py` and `remote.py`: a product's fields are its components, and its verifier is the list
-  of their verifiers' actors;
-* `trial/verity/run.py`: an actor that raises records `Raised`, and what it would have established is missing: "whatever
-  reads it waits for it forever: a missing statement fails closed";
-* `trial/verity/primitives/events.py` `gather`, which `Reconcile.verifier` (`accounting/reconcile.py`) uses to wait for
-  each resource's statement and `Nci.verifier` (`compliance/nci.py`) for the stream and the balance: a statement with
-  reasons explains nothing, and the epoch complies only with no reasons.
+* a product's fields are its components, and its verifier is the list of their verifiers' actors;
+* an actor that raises records `Raised`, and what it would have established is missing: whatever reads it waits for it
+  forever, so a missing statement fails closed;
+* the product waits for each component's statement (`gather`): a statement with reasons explains nothing, and the epoch
+  complies only with no reasons.
 
 Reduced to answers: a component that accepts records a statement with no reasons, one that rejects a statement with
 reasons, and one that is undecided no statement yet. `trial_verdict` is that reduction, with one change already made:
-every component's reasons fail the product. Of the components' statements the trial's NCI fails the epoch on work's
+every component's reasons fail the product. Of the components' statements the trial's inference-only check fails the epoch on work's
 reasons alone (integrity's reach it through them), and space's or communication's reasons only zero their explained usage
-in the balance. The port follows top's rule (Oct 7, binding), `verdict`, which changes the reduction in one place more:
+in the balance. The port follows the composition's rule, `verdict`, which changes the reduction in one place more:
 
 * **reject dominates**: in the trial a missing statement leaves the product with no verdict even when another component's
   statement has failed (`gather` waits on), so a prover could hide a rejection by leaving another component undecided;
@@ -67,7 +64,7 @@ def module(name: str, path: Path) -> ModuleType:
 
 #: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, and its strategies
 #: draw audits.
-ONE_STAGE = module("one_stage_difftest", CORE / "service/sampled_proofs/tests/test_difftest.py")
+ONE_STAGE = module("one_stage_difftest", CORE.parents[1] / "verity/core/service/sampled_proofs/tests/test_difftest.py")
 #: PoUW's check difftest's cases: honest windows and one mutation each.
 POUW_CASES = module("pouw_check_cases", CORE / "protocols/pouw/lean/check/tests/pouw_check_cases.py")
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
@@ -83,7 +80,7 @@ def trial_verdict(verdicts: list[str]) -> str:
 
 
 def verdict(verdicts: list[str]) -> str:
-    """Top's rule, which the port follows: any rejection rejects, then any undecided component leaves it undecided."""
+    """The composition's rule, which the port follows: any rejection rejects, then any undecided component leaves it undecided."""
     if REJECT in verdicts:
         return REJECT
     return UNDECIDED if UNDECIDED in verdicts else ACCEPT
@@ -100,7 +97,7 @@ class Ported:
 @dataclass(frozen=True)
 class Recorded:
     """A component on the cases recorded for it: `cases` holds each kind's case and the answer its Python verifier gave
-    it (`periods.build` fills it), and `answer` is that answer. The composition hands a component the case it was drawn,
+    it (`periods.build` fills it), and `answer` is that answer. The composition hands a component the case it was sampled,
     or one whose commitment is no longer JSON (`bad-hex` under a `0`), which both recorded components refuse with no
     digest, as they do params that don't decode; any other case is a difference."""
 

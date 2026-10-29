@@ -1,17 +1,17 @@
 """serve-openai's admissions: what a request brings to the engine (`Admission`, and `Delta`, what goes back), and the order
 they are added in (``--admit``). ``arrival`` adds each request to the engine as soon as the frontend has parsed it, in the
-API server's body-read order; ``release-order`` adds them in the warden's release order, so the advice needn't carry the
-permutation between the two (VLLM-89: 3,669 bits on TRACE-CORPUS's heavy trace).
+API server's body-read order; ``release-order`` adds them in the network certifier's release order, so the advice needn't carry the
+permutation between the two (3,669 bits on TRACE-CORPUS's heavy trace).
 
 `ReleaseOrder` is a reorder buffer in front of the engine loop's ``submit``: it forwards request n of the release order
 once the frontend holds every earlier-released request, each forwarded, refused or dropped, and holds it until then. There
-is no hold to a bucket boundary (settled 11:23Z: the boundary saves no step bits).
+is no hold to a bucket boundary (the boundary saves no step bits).
 
-**What the warden sends.** Each request it releases carries ``x-verity-release: N``, N its 0-based index in the release
+**What the network certifier sends.** Each request it releases carries ``x-verity-release: N``, N its 0-based index in the release
 order of its run (the certifier's ``Proxy.requests_released`` before the release counts it): dense, each N once, every
 released request numbered, a request a fault drops before its release unnumbered. With ``x-verity-release-run: ID`` (the
 certifier run's id, hex) the numbering is per run: a new ID starts a new order at 0, and what the old run still held is
-forwarded at once. The warden's shim (`benchmarks/network_traces/active_replay.LiveServer`) copies both onto the POST it
+forwarded at once. The network certifier's shim (`benchmarks/network_traces/active_replay.LiveServer`) copies both onto the POST it
 sends the endpoint; it doesn't today, so ``release-order`` holds nothing until it does.
 
 What a request without the header gets: it is forwarded at once (``unordered``), as the served plan's probes are. A
@@ -20,7 +20,7 @@ frontend, or whose body doesn't arrive, would hold every later one: once a later
 it is skipped and the held ones go on; if it comes after all it is forwarded at once (``late``). Both are counted
 (`summary`), and so are the runs.
 
-**A step's rows** (VLLM-98). The advice numbers requests by their first row, so the order of the rows inside a step is a
+**A step's rows**. The advice numbers requests by their first row, so the order of the rows inside a step is a
 choice the engine must not make. vLLM's scheduler (FCFS) lists a step's requests as its running ones in running order, then
 the ones it newly schedules in waiting-queue order, which is the admission order; Model Runner V2 then lays the step out by
 its own `sort_batch_req_ids` (vLLM d9105ea8: decode-length rows first, every other row by its row count, shortest first),
@@ -73,7 +73,7 @@ class Admission:
     deliver: Callable[[Delta], None]
     ingress: dict[str, Any]
     user: str | None = None
-    release: tuple[str, int] | None = None   # (the warden's run, the request's place in its release order)
+    release: tuple[str, int] | None = None   # (the network certifier's run, the request's place in its release order)
     times: dict[str, float] = field(default_factory=dict)   # wall-clock stamps (telemetry): head, received, submitted, admitted
 
 

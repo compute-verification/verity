@@ -23,7 +23,7 @@ K. Each rank ships each call's A rows and scales, its z/y records and, once, its
 ``b/<K>``: the period's registration of a rank's shards (`Weights`, a registry) is refused here, since no public rule
 slices the pinned checkpoint into shards yet.
 
-With ``commit`` (ROOTS1, VLLM-81) the Commit runs on every rank (`acquire.h1_commit.RankCommit`, the engine's
+With ``commit`` (ROOTS1) the Commit runs on every rank (`acquire.h1_commit.RankCommit`, the engine's
 ``worker_extension_cls`` then: the rows-sha512 committer, the int8 source and the step-input port on the rank's model),
 and the rank's tap (`RankTap`) ships what it acquired to the holder: each H1 linear's x_q and s_a at its site, renamed to
 the window's name of the linear (``…qkv_proj@tp1/row_quant``), and the port's input ids, cut to the step's scheduled
@@ -50,6 +50,7 @@ from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import commit as CT
 from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.protocols.pouw.h1 import records as ZR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 ENTRY = f"pouw:{PH.SCHEME}"
@@ -89,7 +90,7 @@ class RankRun(PH.H1Run):
                 self._held[w] = weight
             self.shipped[call.index] = {
                 "a": None if a is None else np.array(PH.numpy_of(a)),
-                "s_a": None if s_a is None else np.array(PH.numpy_of(s_a)), "records": records,
+                "s_a": None if s_a is None else np.array(PH.numpy_of(s_a)), "records": ZR.host(records),
                 "weight": np.array(PH.numpy_of(weight)) if new else None,
                 "weight_scale": np.array(PH.numpy_of(weight_scale)) if new and weight_scale is not None else None}
         return call
@@ -177,15 +178,14 @@ class RankExtension:
     def h1rank_install(self, entry: str, los: Mapping[tuple[int, int], int], shapes: Sequence[Sequence[int]],
                        modules: Mapping[int, str], rows: int, steps: int, key: bytes, ship: bool = False) -> dict[str, Any]:
         """This rank's `RankRun` from linear ``los[(pp, tp)]`` on, its hooks wired (``ship``: its calls' rows go to the
-        holder's `Served`); returns its weights' roots by global index (`pouw_h1.weight_root`, as `pouw.commit_weights`)."""
+        holder's `Served`); returns its weights' roots by global index (`pouw_h1_hooks.weight_roots`, as `pouw.commit_weights`)."""
         _, layers = self._h1rank_layers()
         lo = int(los[self._h1rank_rank()])
         run = RankRun(entry, modules, [tuple(s) for s in shapes], rows, steps, lo, lo + len(layers), key, ship=ship)
         hooks = Hooks(tag=f"{entry}/rank{lo}")
         wire_rank(run, hooks, layers, rows)
         self._h1rank = {"run": run, "hooks": hooks, "sent": 0}
-        return {"lo": lo, "roots": {lo + i: PH.weight_root(lo + i, PH.numpy_of(m.weight)).hex()
-                                    for i, m in enumerate(layers)}}
+        return {"lo": lo, "roots": {w: r.hex() for w, r in PHK.weight_roots(layers, lo).items()}}
 
     def h1rank_open(self, salt: bytes) -> None:
         self._h1rank["run"]._salt = bytes(salt)

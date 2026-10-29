@@ -1,7 +1,7 @@
 [project]
 name = "verity-sha512-rows"
 version = "0.0.0"
-description = "The serve-time commit's SHA-512 engine on sm_90a: hm96-sha512 rows under hiding leaves and frame-v3-sha512 levels (HASH-20)."
+description = "The serve-time commit's SHA-512 engine on sm_90a: hm96-sha512 rows under hiding leaves and frame-v3-sha512 levels."
 requires-python = ">=3.12"
 dependencies = ["verity", "numpy"]
 
@@ -17,4 +17,5 @@ testpaths = ["tests"]
 
 [tool.verity.tests]
 # rows.cu includes commit_gpu's SHA-512 (the "pouw" variant), and engine.device_lib hashes it into the build's cache key.
-inputs = ["benchmarks/pouw/commit_gpu/sha512.cuh"]
+# engine.py reads its variables through settings.py, on verity_config.settings.
+inputs = ["benchmarks/pouw/commit_gpu/sha512.cuh", "tools/config/verity_config"]

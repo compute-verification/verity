@@ -13,7 +13,7 @@ import Mathlib.Tactic.Ring
 
 `ConditionalUpdateHardness` implies `UpdateHardness` (`updateHardness_of_conditional`). When a block's charges come from
 disjoint inputs, `x + y ≤ k`, AM–GM bounds the rectangle they price, `4 x y ≤ k²` (`four_mul_le_sq`): the fan-out and
-partial-sum tiers use it, and so does `Nci.Cover.Guarantees.CoveringBoundAdditive`, in Daniel's vocabulary.
+partial-sum tiers use it, and so does `Nci.Cover.Guarantees.CoveringBoundAdditive`, in `Nci.Covering`'s vocabulary.
 -/
 
 namespace Nci.Cover.SecurityProofs

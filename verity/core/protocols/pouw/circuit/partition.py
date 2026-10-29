@@ -195,7 +195,7 @@ def separator(shape: Shape, kind: str = "shift24") -> Separator:
 
 
 #: The separator ports the protocol pins, not the registrant: a template role and the return field that crosses the
-#: separator. For NCP-INT's layout (a) it is the tile's Z, field 1 of `NcpTile`'s return (the red team's X-SPC-66).
+#: separator. For NCP-INT's layout (a) it is the tile's Z, field 1 of `NcpTile`'s return.
 SEPARATOR_PORTS: dict[str, int] = {"tile": 1}
 
 

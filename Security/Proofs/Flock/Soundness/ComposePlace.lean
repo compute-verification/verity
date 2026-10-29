@@ -12,9 +12,9 @@ those facts are one proposition, and they are discharged for a flat statement `S
 - **`Compose.BlockFacts`**: 1e's form of the same facts, over the unit's block rows (`blockRow`, Δ applied), for the
   verifier's own `deriveChecked` run. `BlockFacts.realizes` turns them into `Realizes` for the unit's composed rows
   (`ofBlock`), and `BlockFacts.placement` is a table class's `placed` at a slot (the soundness lane's `TableClass`).
-- **`Layout.realizes`**: in the model of a statement `setupH` accepted (#177's `Layout`, carried through #257 by #284),
+- **`Layout.realizes`**: in the model of a statement `setupH` accepted (`Layout`),
   at unit slot `s₀` with positions `slot s₀ + c`, `Realizes` holds for every `Logical` whose rows are the unit net's
-  (`Compose.NetRows`). It reads Δ only as #177's `Layout` does, for statements without a typed template.
+  (`Compose.NetRows`). It reads Δ only as `Layout` does, for statements without a typed template.
 
 `NetRows st.c.unit (ofBlock words done u)` is the link between the unit net `setupH` accepted and the rows the verifier
 derives. For a typed flat class, whose unit net is built from those rows (`Typed.netOfD`), it is `netRows_flat`
@@ -163,8 +163,8 @@ theorem BlockFacts.realizes {types : String → Option CircuitType} {ls : Array 
     · rw [hr'] at hp; cases hp
     · rw [hr'] at hp; cases hp
 
-/-- **A table class's placement at one slot**, from 1e's facts there: the unit's composed rows, exactly as #256 and #287
-state them, placed at `composePlace`. -/
+/-- **A table class's placement at one slot**, from 1e's facts there: the unit's composed rows, placed at
+`composePlace`. -/
 theorem BlockFacts.placement {types : String → Option CircuitType} {ls : Array Flock.Layout}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {S : Model.Statement} {one : ℕ} {pos : ℕ → ℕ}

@@ -1,9 +1,7 @@
-"""PoUW's audit window as the proof service sees it: what the window makes public, the grid its tile count is padded to,
-the size of the uniform draw, and the window's advice (its per-call entries and the map from a drawn index to a tile),
-with the window statement's reference (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`,
-PoUW; the joint note's L2, L3 and L4).
+"""PoUW's audit window as the proof system sees it: what the window makes public, the grid its tile count is padded to,
+the size of the uniform draw, and the window's advice (its per-call entries and the map from a drawn index to a tile).
 
-**Public items** (`PUBLIC`), the draft's list and the rows' fixed length (19 Oct).  The service refuses a registration
+**Public items** (`PUBLIC`), the draft's list and the rows' fixed length.  The service refuses a registration
 that makes anything else public; the window's own root and W's root are salted roots, which the rule allows.
 
     item       kind         source     what it is
@@ -12,31 +10,29 @@ that makes anything else public; the window's own root and W's root are salted r
     check      structure    parameter  the tile template every unit instantiates, its work per tile, the commitment scheme
     sampling   structure    parameter  ε, δ, the grid and the law subset:K′ they fix with the work level (`k_prime`)
     length     structure    parameter  the rows of record's fixed length: each slot's public max_tokens (`length_item`)
-    drawn      coins        outcome    the verifier's own draw, after the receipt
+    flipped      coins        outcome    the verifier's own draw, after the receipt
     root_W     commitment   parameter  the weights' salted root
 
 **The grid** (`GRID_BITS` = s): the positive integers with at most s + 1 significant bits, so consecutive points above
 2^(s+1) differ by a factor of at most 1 + 2^-s (9/8 at s = 3).  A window with N_real real tiles registers one level ℓ, the
 largest point g_ℓ <= N_real: it is credited g_ℓ tiles' work and pads its tiles to N = g_(ℓ+1) > N_real with filler tiles,
 at least one.  So N is `pad(N_real + 1)`, the least grid point at or above the real tiles and the one filler a window
-always has: the private partition's unit-count bucket n_b (`note:circuits/20261006T0615Z-draft-private-partitions`,
-G6) on the same grid, one bucket and not two.  Both outputs are fixed by ℓ, so the window's influenceable public output is one grid level, and over a
+always has: the private partition's unit-count bucket n_b on the same grid, one bucket and not two.  Both outputs are fixed by ℓ, so the window's influenceable public output is one grid level, and over a
 declared range [lo, hi] it takes `levels(lo, hi)` = q values: log2 q bits in the draft's leakage bound.  The honest cost is
 under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <= 1 + 2^-s in K′.
 
-**The draw** (L3): uniform subset:K′ over the N equal tiles, K′ the smallest K with (1 − ε·W/(N·w_max))^K <= δ, W the
+**The sample** (L3): uniform subset:K′ over the N equal tiles, K′ the smallest K with (1 − ε·W/(N·w_max))^K <= δ, W the
 credited work and w_max the most work a tile does (`k_prime`).  A wrong set holding a share ε of W has at least ε·W/w_max
-tiles, so a draw of K′ without replacement misses it with probability at most δ.  Filler tiles are credited nothing.
+tiles, so a sample of K′ without replacement misses it with probability at most δ.  Filler tiles are credited nothing.
 
-**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work (Daniel, 19 Oct,
-ASK-39).  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
+**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
 public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": [...]}``, one entry a slot, and
 `length_problem` refuses an EOS-keyed row (`window-form: eos-keyed-row`) and a slot that served another length
 (`window-form: length-mismatch`).  A registration made before the rule carries `LEGACY_REGISTERED`, without the item,
 and is not of record.
 
 **The advice** (L2): one entry per committed call, then one filler entry, then empty entries up to the public bound P, each
-an `Entry` row committed in one window root registered before the draw.  A call's sides are dense: each side tree holds only
+an `Entry` row committed in one window root registered before the sample.  A call's sides are dense: each side tree holds only
 the rows its tiles keep (a row the scheme refused is no tile's), in order, so its tiles are the products of A's rows and
 B's, row-major, and index u of its range is (u div n_b, u mod n_b); each side row carries its place in the call (I, J), and
 the call's record, which the entry binds by SHA-512, lists them (``keep``).  A call's entry also holds the root of its
@@ -48,7 +44,7 @@ is its tiles, the filler covers the rest, every call's -h3 root is the pass's, t
 disjoint, and the registered level is `bucket` of the real tiles; given the records and the side rows' indices it also
 holds those to the entries.  It is not proved yet: no Program states it.
 
-**The layout for gates** (`note:proofs/20261006T1940Z-draft-units-to-inner-layout`, §2) is specified in PoUW's PROTOCOL.md,
+**The layout for gates** is specified in PoUW's PROTOCOL.md,
 "The served audit window": the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the dense side trees of 2^D
 leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`,
 `side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
@@ -56,9 +52,9 @@ leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domain
 
 **Live windows** (decision 36).  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
 (`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
-derivation from the salt and the prover's roots.  A live window's comes from the proof service's challenger
+derivation from the salt and the prover's roots.  A live window's comes from the proof system's challenger
 (`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout
-`live_families(R)` under `LIVE_SCHEME`, its salt coin, its draw coin and R round coins (``pouw/round``, rounds numbered
+`live_families(R)` under `LIVE_SCHEME`, its salt coin, its sampling coin and R round coins (``pouw/round``, rounds numbered
 from 0 as Compose's `Declared.round` numbers them), all committed before the epoch.  The salt coin opens once, after the
 window's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the
 rule is `core_check.salt`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
@@ -104,9 +100,9 @@ PUBLIC = (
     ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
 )
-#: the items a registration carries; the verdict and the draw come after it
+#: the items a registration carries; the verdict and the sample come after it
 REGISTERED = ("work", "check", "sampling", "length", "root_W")
-#: what a registration made before the fixed-length rule (19 Oct) carries: no `length`, so not of record
+#: what a registration made before the fixed-length rule carries: no `length`, so not of record
 LEGACY_REGISTERED = ("work", "check", "sampling", "root_W")
 KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`
@@ -196,7 +192,7 @@ def bucket(real: int, bits: int = GRID_BITS) -> Work:
     return Work.at(level(floor_point(real, bits), bits), bits)
 
 
-# ---- the draw -----------------------------------------------------------------------------------------------------------
+# ---- the sample -----------------------------------------------------------------------------------------------------------
 
 #: (a/b)^k is compared exactly in integers while k·bitlength(b) is at most this many bits
 EXACT_BITS = 1 << 14
@@ -261,7 +257,7 @@ EPS_BITS = 32
 
 def eps_at(k: int, delta: Fraction, credited: int, n: int, w_max: int) -> Fraction:
     """`k_prime` inverted: the least ε = j/2^`EPS_BITS` (1 <= j <= 2^`EPS_BITS`) whose K′ at δ and the window's inputs
-    (`k_prime(ε, δ, credited, n, w_max)`) is at most `k`, so a draw of `k` establishes ε at δ, rounded up to the grid.
+    (`k_prime(ε, δ, credited, n, w_max)`) is at most `k`, so a sample of `k` establishes ε at δ, rounded up to the grid.
     Bisection over j, K′ being nonincreasing in ε; ValueError when `k` isn't a positive integer, the inputs are outside
     `k_prime`'s domain, or not even ε = 1 has K′ <= `k`."""
     if not _positive(k):
@@ -731,7 +727,7 @@ def _registered_root(registration: Mapping[str, Any]) -> tuple[bytes, bytes]:
 
 
 def instance_ts(registration: Mapping[str, Any], drawn: Sequence[int], sigma: int, cap: int) -> list[int]:
-    """Session σ's tile indices: drawn[σ·cap + s] while that is drawn, N − 1 after.  Raises ValueError unless `drawn` is
+    """Session σ's tile indices: drawn[σ·cap + s] while that is sampled, N − 1 after.  Raises ValueError unless `drawn` is
     the registration's K′ distinct indices of [0, N), ascending, and σ one of its S sessions."""
     n, law = registration.get("population"), registration.get("law")
     if not _positive(n) or n > 1 << T_BITS:
@@ -771,12 +767,12 @@ def mode(check: Mapping[str, Any]) -> str:
 
 
 def live_families(rounds: int) -> tuple[tuple[str, int], ...]:
-    """A live epoch's coin layout: its salt coin, its draw coin and `rounds` round coins, the most rounds a window takes."""
+    """A live epoch's coin layout: its salt coin, its sampling coin and `rounds` round coins, the most rounds a window takes."""
     return ((SALT, 1), (DRAW, 1), (ROUND, rounds))
 
 
 def live_challenger(epoch: int, rounds: int, entropy: Callable[[int], bytes]) -> Ch.LiveChallenger:
-    """A live epoch's challenger, its coins and hm96 salts drawn from `entropy`: a served one's is the Lean verifier of
+    """A live epoch's challenger, its coins and hm96 salts sampled from `entropy`: a served one's is the Lean verifier of
     record's (`verifier.coins`, `IO.getRandomBytes`, A3)."""
     return Ch.LiveChallenger(LIVE_SCHEME, epoch, live_families(rounds), entropy)
 

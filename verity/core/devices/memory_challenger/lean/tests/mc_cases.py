@@ -77,7 +77,7 @@ def list_(j: Any, k: str) -> list:
 
 
 def digests(j: Any, k: str) -> dict[int, bytes]:
-    """`MemoryChallenger.Digests.ofJson`: an object of hex digests keyed by block index, decimal with no leading zero."""
+    """`MemoryChallenger.Digests.ofJson`: an object of hex digests keyed by label index, decimal with no leading zero."""
     v = _get(j, k)
     if not isinstance(v, dict):
         raise D.Reject(f"{k}: not an object")

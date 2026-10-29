@@ -1,6 +1,6 @@
-"""[R16 fp8] The vectorised twins of the block-scaled FP8 families (`derived_rows.tc_dot32_e4m3`, `fp8_group_quant_row`,
+"""The vectorised twins of the block-scaled FP8 families (`derived_rows.tc_dot32_e4m3`, `fp8_group_quant_row`,
 `scaled_mm_fp8_block_row`) are word-for-word the registered Definitions (`verity/ml/definitions/registry/fp8.py`) and the saved H100 kernel
-words (`data/fp8_block_operands.npz`: `_C.per_token_group_fp8_quant` + blockwise `_C.cutlass_scaled_mm`, cp-h100 2026-09-19).
+words (`data/fp8_block_operands.npz`: `_C.per_token_group_fp8_quant` + blockwise `_C.cutlass_scaled_mm`, on an H100).
 Python >= 3.12 (`veritor.core.silicon_total_fp8`, the scalar QGMMA step)."""
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ import pytest
 if sys.version_info < (3, 12):  # pragma: no cover
     pytest.skip("veritor.core needs Python 3.12", allow_module_level=True)
 
-from verity.ml.circuits import Program, bind  # noqa: E402
-from verity.ml.definitions.numerics import derived_rows as D  # noqa: E402
-from verity.ml.definitions.registry import fp8 as F  # noqa: E402
+from verity.ml.circuits import Program, bind
+from verity.ml.definitions.numerics import derived_rows as D
+from verity.ml.definitions.registry import fp8 as F
 
-from tests.program.test_fp8 import _evaluate_returns  # noqa: E402
+from tests.program.test_fp8 import _evaluate_returns
 
 DATA = Path(__file__).parent / "data"
 

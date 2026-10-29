@@ -74,9 +74,8 @@ WORDS_FORM = os.environ.get("PEARLC_WORDS_FORM", "1") != "0"
 #: takes every SM it may
 GRID_BALANCE = os.environ.get("PEARLC_GRID_BALANCE", "1") != "0"
 #: pd_commit and pd_tree launch a shape's variant without PD_GROUP, which only pd_tiles reads (the same code and bytes), so
-#: every call's A commitment runs one function, its code warm (at decode's 16 rows gate_up's pd_commit_979 took ~95 us
-#: against the other k = 4096 calls' pd_commit_851 at ~81, r20261025-014522-4f0a; pearl_c_sm120's run.py made this cut,
-#: r20261024-104625-7b57).  PEARLC_ONE_COMMIT=0 launches the shape's variant
+#: every call's A commitment runs one function, its code warm (pearl_c_sm120's run.py makes the same cut).
+#: PEARLC_ONE_COMMIT=0 launches the shape's variant
 ONE_COMMIT = os.environ.get("PEARLC_ONE_COMMIT", "1") != "0"
 #: PEARLC_PDL=0 launches PDL_KERNELS and PDL_ENTRY_KERNELS (below PD_SERVED) plainly
 PDL = os.environ.get("PEARLC_PDL", "1") != "0"
@@ -376,8 +375,8 @@ PL_VARIANT, PL_ROWS, PL_LEVELS, PL_SEEDS, PL_MAX_ROWS, CHAINS = 851, 16, 7, 32, 
 
 def pd_variant(m_real: int, n: int, k: int) -> int | None:
     """The pd variant a decode shape takes: 979 (PD_GROUP's tiles, four a CTA) where the tile grid is wide (n at least 16,384)
-    or every row block is full, else 851, the fastest at Llama-3.1-8B's linears at m16 = 32 and 128 (runs
-    r20261018-225110-fbef and r20261018-230602-5632); None outside pd_commit's rows and k."""
+    or every row block is full, else 851, the fastest at Llama-3.1-8B's linears at m16 = 32 and 128; None outside
+    pd_commit's rows and k."""
     if m_real > PD_MAX_ROWS or k > PD_MAX_K:
         return None
     return 979 if n >= 16384 or m_real % TILE == 0 else 851

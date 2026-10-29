@@ -1,10 +1,10 @@
-"""The J10-R units `check.py` and `bench.py` drive, through ctypes on torch's current stream:
+"""The J10-R kernels `check.py` and `bench.py` drive, through ctypes on torch's current stream:
 
-* `H1u`: a build of benchmarks/hash/dither/h1u.cu (KCOMMIT-FB's sm_90a arms, HASH-21; any build exporting
+* `H1u`: a build of benchmarks/hash/dither/h1u.cu (its sm_90a arms; any build exporting
   kh_seeds_j10r and kh_units_multi_j10r): one call's seeds (kh_seeds_j10r: seed_c at the call's first position, sigma_R
-  at base + u) and every unit's receipt (kh_units_multi_j10r, mode 0: the call's row blocks, then its units; with ``sm``
+  at base + u) and every unit's receipt (kh_units_multi_j10r, mode 0: the call's row tiles, then its proof blocks; with ``sm``
   kh_units_multi_j10r_sm on every SM, the served launch). Receipts only: z is the served GEMM's.
-* `Ref`: j10r_ref.so (j10r_ref.cu), the fallback: seeds, receipts and z of listed units.
+* `Ref`: j10r_ref.so (j10r_ref.cu), the fallback: seeds, receipts and z of listed proof blocks.
 
 Both take A [M, K] and B [N, K] int8 on the GPU, and the call's (salt, root_a, root_b, base).
 """
@@ -93,7 +93,7 @@ class H1u:
         return int(self.h.kh_words(k))
 
     def ws_bytes(self, m: int, n: int, k: int) -> int:
-        """A call's row workspace: kh_j10r_jw_bytes (h1u_jw.patch's builds: its column blocks and W' too), else
+        """A call's row workspace: kh_j10r_jw_bytes (an H1U_JW build's: its column blocks and W' too), else
         kh_j10r_rows_bytes."""
         if hasattr(self.h, "kh_j10r_jw_bytes"):
             self.h.kh_j10r_jw_bytes.restype = ctypes.c_ulonglong

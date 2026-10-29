@@ -4,18 +4,18 @@ import Definitions.Nci.Assumptions.CoverAdditive
 /-!
 # The cover theorem's vocabulary on a declaration's gates
 
-Daniel's covering bound (`Nci.Covering`) is stated over a declaration's gates; the cover theorem's tiers over a bare
+The covering bound (`Nci.Covering`) is stated over a declaration's gates; the cover theorem's tiers over a bare
 wiring (`Nci.Cover.Circuit`), which also reads a declaration bit by bit (`Circuit.ofDecl`). On the gates they agree.
 `ofGates d` is the gate view: the gates of `d`, their wires and its registered parameters.
 
 * A subcircuit's inputs hold every gate that the gate view hands its gates (`inputs_subset_ins`), so it computes at most
   what the gate view says its gates compute (`inner_subset_computed`); any set of gates, with the inputs the gate view
   hands it, is a subcircuit computing exactly that (`toSubcircuit`).
-* So the gate view's inference blocks are Daniel's (`inferenceBlock_iff`), an `(s, k)`-covering by `n` blocks gives a
-  cover of the gate view by at most `n` inference blocks (`cover_of_covering`), and a cover gives a covering by as many
-  blocks (`covering_of_cover`): the cover theorem's bounds count the blocks of Daniel's coverings.
-* Daniel's multiplication blocks are products of the gate view, a token's use of a weight (`mulBlocksOf`), the reach
-  condition giving each its one output gate (`outputs_eq_of_reach`). On them `UpdateHardness` is `ParameterHardAt`
+* So the gate view's inference blocks are `Nci.Covering`'s (`inferenceBlock_iff`), an `(s, k)`-covering by `n` blocks
+  gives a cover of the gate view by at most `n` inference blocks (`cover_of_covering`), and a cover gives a covering by
+  as many blocks (`covering_of_cover`): the cover theorem's bounds count the blocks of `Nci.Covering`'s coverings.
+* `Nci.Covering`'s multiplication blocks are products of the gate view, a token's use of a weight (`mulBlocksOf`), the
+  reach condition giving each its one output gate (`outputs_eq_of_reach`). On them `UpdateHardness` is `ParameterHardAt`
   (`updateHardness_iff`), and `ConditionalParameterHardAt` implies `ConditionalUpdateHardness` with the token
   computations as the regions (`conditionalUpdateHardness_of_conditional`).
 -/
@@ -64,12 +64,12 @@ def toSubcircuit (d : Verity.Declaration) (I : Finset (Fin d.D.N)) : Nci.Coverin
 
 theorem toSubcircuit_inner (I : Finset (Fin d.D.N)) : (toSubcircuit d I).inner = (ofGates d).computed I := rfl
 
-/-- On a declaration's gates the inference blocks are Daniel's. -/
+/-- On a declaration's gates the inference blocks are `Nci.Covering`'s. -/
 theorem inferenceBlock_iff (s k : ℕ) (I : Finset (Fin d.D.N)) :
     (ofGates d).InferenceBlock s k I ↔ Nci.Covering.InferenceBlock d s k (toSubcircuit d I) := Iff.rfl
 
-/-- **Daniel's coverings are covers of the gate view**: an `(s, k)`-covering of `d` by `n` blocks gives a cover of the
-gate view by at most `n` inference blocks, the blocks' gates. -/
+/-- **`Nci.Covering`'s coverings are covers of the gate view**: an `(s, k)`-covering of `d` by `n` blocks gives a
+cover of the gate view by at most `n` inference blocks, the blocks' gates. -/
 theorem cover_of_covering {s k n : ℕ} {I : Fin n → Nci.Covering.Subcircuit d.D} (h : Nci.Covering.Covers d s k I) :
     ∃ 𝓘 : Finset (Finset (Fin d.D.N)), 𝓘.card ≤ n ∧ (∀ J ∈ 𝓘, (ofGates d).InferenceBlock s k J) ∧
       (ofGates d).Covers 𝓘 := by
@@ -83,8 +83,8 @@ theorem cover_of_covering {s k n : ℕ} {I : Fin n → Nci.Covering.Subcircuit d
     obtain ⟨u, hu⟩ := h.2 g fun hs => hg.ne_empty (mem_sources.1 hs)
     exact ⟨(I u).gates, mem_image.2 ⟨u, mem_univ _, rfl⟩, inner_subset_computed (I u) hu⟩
 
-/-- **Covers of the gate view are Daniel's coverings**: a cover of the gate view by inference blocks, each with the
-inputs the gate view hands it, is an `(s, k)`-covering of `d` by as many blocks. -/
+/-- **Covers of the gate view are `Nci.Covering`'s coverings**: a cover of the gate view by inference blocks, each with
+the inputs the gate view hands it, is an `(s, k)`-covering of `d` by as many blocks. -/
 theorem covering_of_cover {s k : ℕ} {𝓘 : Finset (Finset (Fin d.D.N))}
     (hI : ∀ J ∈ 𝓘, (ofGates d).InferenceBlock s k J) (hcov : (ofGates d).Covers 𝓘) :
     Nci.Covering.Covers d s k fun u : Fin 𝓘.toList.length => toSubcircuit d (𝓘.toList.get u) := by
@@ -131,9 +131,9 @@ theorem mem_swap {B : Nci.Covering.MulBlocks d} {p : Fin B.nt × Fin B.nw} :
   · intro hp
     exact mem_image.2 ⟨p.swap, hp, Prod.swap_swap p⟩
 
-/-- **Daniel's multiplication blocks as products of the gate view**: the multiplication `m_{i,j}` is the product of the
-use `j`, its token, and the updated parameter `i`, its weight, all of them counted. Its output gate is the one gate of
-`m_{i,j}` that no gate of it reads (`outputs_eq_of_reach`). -/
+/-- **`Nci.Covering`'s multiplication blocks as products of the gate view**: the multiplication `m_{i,j}` is the
+product of the use `j`, its token, and the updated parameter `i`, its weight, all of them counted. Its output gate is
+the one gate of `m_{i,j}` that no gate of it reads (`outputs_eq_of_reach`). -/
 def mulBlocksOf (B : Nci.Covering.MulBlocks d) : MulBlocks (ofGates d) (Fin B.nt) (Fin B.nw) where
   Pall := B.P.image Prod.swap
   P := B.P.image Prod.swap
@@ -176,7 +176,7 @@ theorem image_snd_subset (B : Nci.Covering.MulBlocks d) {S : Finset (Fin d.D.N)}
   obtain ⟨p, hp, rfl⟩ := mem_image.1 hi
   exact mem_image.2 ⟨p.swap, mem_filter.2 ⟨mem_swap.1 (hB' hp), hB'S p hp⟩, rfl⟩
 
-/-- **On a declaration's gates, `UpdateHardness` is Daniel's parameter-hardness** at the same cost. -/
+/-- **On a declaration's gates, `UpdateHardness` is the covering bound's parameter-hardness** at the same cost. -/
 theorem updateHardness_iff (B : Nci.Covering.MulBlocks d) (s : ℕ) (c : ℝ) :
     Nci.Assumptions.ParameterHardAt d B s c ↔ Assumptions.UpdateHardness (mulBlocksOf B) s c := by
   classical

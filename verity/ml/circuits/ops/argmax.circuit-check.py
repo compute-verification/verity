@@ -5,7 +5,7 @@ from typing import Any
 
 
 def _core_roots() -> list[Any]:
-    """The CMP-92 row's chunks and combine, V = 256 in two chunks of 128 (Phase 1's and Phase 2's vocabulary), a ragged row (V =
+    """The e2e demo's row's chunks and combine, V = 256 in two chunks of 128 (Phase 1's and Phase 2's vocabulary), a ragged row (V =
     200 in chunks of 64, its last of 8), and the index word's select and add."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops import argmax as A

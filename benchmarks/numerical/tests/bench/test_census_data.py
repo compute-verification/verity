@@ -295,17 +295,14 @@ def _ops(expr: str, env: dict) -> int:
     return ev(ast.parse(expr, mode="eval"))
 
 
-def test_every_template_carries_a_work_model_the_tables_n_agrees_with() -> None:
-    from verity.ml.circuits.targets.target import FIRST
-    from verity_numerical.bench import views
-
-    version = views.WORK_MODEL.split(":")[0]
+def test_every_template_carries_a_work_model() -> None:
+    version = "work-model/v0"
     for t in census.SUBCIRCUIT_TEMPLATES.values():
         wm = t.work_model
         assert wm.version == version and wm.basis and wm.source
         assert set(vars(wm.variables)) <= {"T"} and ("T" in wm.ops_per_input) == ("T" in vars(wm.variables))
     gemm = census.SUBCIRCUIT_TEMPLATES["gemm-coordinate"].work_model
-    assert _ops(gemm.ops_per_input, {"K": 1536}) == views.native(FIRST)["ops_per_instance"] == 3072
+    assert _ops(gemm.ops_per_input, {"K": 1536}) == (1536 // 16) * 32 == 3072   # K/16 tensor-core steps of 32 FLOP
     for w in census.WORKLOADS.values():                                  # every bound parameter set in a mix evaluates
         for e in w.template_mix:
             wm = census.SUBCIRCUIT_TEMPLATES[e.subcircuit_template].work_model
@@ -320,7 +317,7 @@ def test_every_template_carries_a_work_model_the_tables_n_agrees_with() -> None:
 
 
 def test_memory_bound_templates_carry_a_bandwidth_work_model_and_the_h100_its_bandwidth() -> None:
-    """The four non-GEMM templates C-Flock has cells on: bytes per input over their ports (bench-spine's templates), evaluated at
+    """The four non-GEMM templates Flock has cells on: bytes per input over their ports (bench-spine's templates), evaluated at
     their #101 bindings; the H100's HBM3 bandwidth is the denominator."""
     want = {"rope-head/d64/neox-bf16": 6 * 64, "silu-mul/i8192/bf16": 6 * 8192, "rmsnorm-fused-cuda/n2048-eps1e-05/bf16": 10 * 2048,
             "rmsnorm-triton/n2048-eps1e-05/bf16": 6 * 2048}

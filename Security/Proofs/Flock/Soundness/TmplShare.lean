@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.TmplUnit
 import Proofs.Flock.Soundness.TmplUnrollAt
 
 /-!
-# The templated unit's share is the flat slot's (PRF-133, part 3)
+# The templated unit's share is the flat slot's
 
 `Stmt.partialRangesT` folds a range whose net is a read template's unrolled net (`Stmt.unitShare`) with `Tmpl.foldUnit`
 instead of projecting the slot's `2^sl` base. Its entries are the projection's (`unitShare_get`, by `foldUnit_eq_project`

@@ -1,4 +1,4 @@
-"""The switches that select a served engine's kernels: what a row's config declares, what every serving process reads back, and the
+"""The switches that select a served engine's kernels: what a workload's config declares, what every serving process reads back, and the
 verdict that holds one to the other.
 
 A switch is an environment variable vLLM reads when it builds an engine, or an engine argument its config resolves; `DEFAULTS` has each
@@ -6,9 +6,9 @@ at vLLM d9105ea80's own value.  `declared` layers what sets them, in the order a
 one and keeping its reason when the two agree:
 
 * the integration's engine profile, `engine.env.ENGINE`, with `engine.env.REASONS`;
-* the row's execution label (`EXECUTIONS`): a ``bi-*`` row is batch invariant, an eager row eager;
-* a tensor-parallel row's transport (`engine.profiles.transport`);
-* the row file: ``engine.env``, ``engine.args``, its ``engine.target``'s `TargetProfile.env()` and ``engine_args()``, and
+* the workload's execution label (`EXECUTIONS`): a ``bi-*`` workload is batch invariant, an eager one eager;
+* a tensor-parallel workload's transport (`engine.profiles.transport`);
+* the workload file: ``engine.env``, ``engine.args``, its ``engine.target``'s `TargetProfile.env()` and ``engine_args()``, and
   ``engine.reasons``, a reason by switch name;
 * vLLM's own config, last: under batch invariance its ``ParallelConfig`` turns the custom all-reduce off (`BATCH_INVARIANT`).
 
@@ -76,7 +76,7 @@ EXECUTIONS: dict[str | None, tuple[dict[str, Any], str]] = {
     "bi-eager-fa2": ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": True, "flash_attn_version": 2}, f"{_BI}, with attention_config.flash_attn_version 2"),
     "bi-compiled": ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": False, "cudagraph_mode": "PIECEWISE"}, f"{_BI}; {_COMPILED}"),
 }
-#: The ``enforce_eager`` each row execution label builds its engine with.
+#: The ``enforce_eager`` each execution label builds its engine with.
 ENFORCE_EAGER = {k: v[0]["enforce_eager"] for k, v in EXECUTIONS.items() if k is not None}
 #: What vLLM's config sets under ``VLLM_BATCH_INVARIANT``, over every argument (`ParallelConfig._verify_args`), and why.
 BATCH_INVARIANT: tuple[dict[str, Any], str] = ({"disable_custom_all_reduce": True},

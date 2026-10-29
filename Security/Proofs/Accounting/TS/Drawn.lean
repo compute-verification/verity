@@ -3,11 +3,9 @@ import Proofs.Accounting.TS.Fork
 /-!
 # (I8) for a sampled window
 
-Stated after RT-I8 (note:20261018T0728Z-draft-rt-i8, decisions 114 and 119) and RT-COMPOSE r2's R2-B1
-(note:20261018T1200Z-draft-rt-compose-r2: good reads the run's modes), with E1(c) per unit (`UnitFixed`) as decided
-(ASK-17 = A). `DrawnRightOff` and `DrawnBindingOfFork` don't read `UnitFixed`; `DrawnLayer.covers_of_cone` is the
-share's side of `Covers`: a share that charges each unit the run didn't pay for its late cone's weight covers every unit
-that isn't good.
+A unit's `Good` reads the run's modes, and E1(c) is per unit (`UnitFixed`). `DrawnRightOff` and `DrawnBindingOfFork`
+don't read `UnitFixed`; `DrawnLayer.covers_of_cone` is the share's side of `Covers`: a share that charges each unit the
+run didn't pay for its late cone's weight covers every unit that isn't good.
 
 `DrawnRightOff`: the event is "in some round, binding fails (`MovedIn`) or some drawn unit's proof is unsound", which
 the union bound puts at `S·(δ_bind + δ_ks)`. Off it, an accepted proof opens its unit's committed values (not
@@ -228,8 +226,7 @@ theorem moved_of_movedIn {x : Paths (Paths C m × B) S} {w : Fin S} (h : pf.Move
 omit [Fintype C] [Fintype B] [Nonempty V] in
 open Classical in
 /-- **A share that charges each unit the run didn't pay for its late cone's weight covers**: a unit that isn't good has
-a unit of its late cone the run didn't pay for, whose cone weight counts it. RT-I8 r2's `covers_of_cone`, at the run's
-modes (RT-COMPOSE r2's R2-B1). -/
+a unit of its late cone the run didn't pay for, whose cone weight counts it, at the run's modes. -/
 theorem covers_of_cone [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S K T L U)
     (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (wt : Fin S → J → ℝ) (Nw : ℝ) (hw : ∀ w j, 0 ≤ wt w j)
     (h : ∀ x, P.accepts x →

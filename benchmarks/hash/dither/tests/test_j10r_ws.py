@@ -9,9 +9,10 @@ from types import SimpleNamespace
 
 import pytest
 
-DITHER = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(DITHER))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import j10r_ws as JWS
+
+DITHER = Path(__file__).resolve().parents[1]
 
 #: the frozen shape's up and down (j10r90.py's, kraqwxsc's served shapes on the H200) and Llama-3.1-8B's four linears
 #: at served_h1's 64-row slot, (M, N, K)
@@ -24,13 +25,13 @@ def _cb(k: int) -> int:
 
 
 def _rows(jx: bool):
-    """h1u.cu's kh_j10r_rows_bytes: JX's X and A_d after the row blocks, or the row blocks alone (kr)."""
+    """h1u.cu's kh_j10r_rows_bytes: JX's X and A_d after the row tiles, or the row tiles alone (kr)."""
     return (lambda m, k: _cb(k) * m + m * k + 4 * (m // 32) * 3 * 8 * 32) if jx else (lambda m, k: _cb(k) * m)
 
 
 def _build(jw: bool = False, jrc: bool = False, jx: bool = True, query: bool = True, jw_export: bool = True,
            flags: int | None = None, workspace=None) -> SimpleNamespace:
-    """A stand-in h1u.cu build: H1U_JW's workspace the rows, then each column block's 64 bytes, then W' [N, K]."""
+    """A stand-in h1u.cu build: H1U_JW's workspace the rows, then each column tile's 64 bytes, then W' [N, K]."""
     rows = _rows(jx)
 
     def jw_bytes(m, n, k):
@@ -54,7 +55,7 @@ def _build(jw: bool = False, jrc: bool = False, jx: bool = True, query: bool = T
 
 @pytest.mark.parametrize("m,n,k", SHAPES)
 def test_an_h1u_jw_build_is_sized_with_its_column_blocks_and_w_prime(m, n, k):
-    """kraqwxsc's form (H1U_JW, its flags saying so): the workspace is its rows, then 64 bytes a column block and W'
+    """kraqwxsc's form (H1U_JW, its flags saying so): the workspace is its rows, then 64 bytes a column tile and W'
     (N K bytes), past kh_j10r_rows_bytes by at least W' (1 GiB at up's 65536 x 16384), the size the build asks for."""
     h = _build(jw=True)
     rows = _rows(True)(m, k)
@@ -73,7 +74,7 @@ def test_any_other_build_is_sized_by_its_rows(m, n, k, jx):
 
 
 def test_a_jrc_build_is_sized_by_its_rows_and_columns_under_rc_and_by_its_rows_otherwise():
-    """H1U_JRC: kh_units_multi_j10rc's workspace (rows, then column blocks) under rc, which kh_units_multi_j10r may run
+    """H1U_JRC: kh_units_multi_j10rc's workspace (rows, then column tiles) under rc, which kh_units_multi_j10r may run
     on too, and its rows for kh_units_multi_j10r alone."""
     h = _build(jrc=True)
     m, n, k = 64, 28672, 4096
@@ -83,7 +84,7 @@ def test_a_jrc_build_is_sized_by_its_rows_and_columns_under_rc_and_by_its_rows_o
 
 
 def test_builds_from_before_the_flags_query_are_sized_by_what_they_export():
-    """A build without kh_j10r_flags: H1U_JW's (KP2-DEC's patched builds, and the fold before the query) by its
+    """A build without kh_j10r_flags: H1U_JW's (patched builds, and the fold before the query) by its
     kh_j10r_jw_bytes, one from before H1U_JW by its rows, and an H1U_JRC build's rc workspace by kh_j10r_ws_bytes."""
     m, n, k = 4096, 65536, 16384
     old_jw = _build(jw=True, query=False)

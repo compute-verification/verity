@@ -13,7 +13,7 @@ as `EndToEndRegisteredDrawn` is, and `EndToEndRegisteredRowsFlat` is the same st
 `D = Desc.single c`.
 
 It is the C-Flock side of PoUW's proof premise (`Accounting.TS.ProofLayer.SoundAt`), and does not discharge it: the
-bridge is open (PRF-107). That needs a probability bridge from a window's round and proof `(w, i)` to a C-Flock session,
+bridge is open. That needs a probability bridge from a window's round and proof `(w, i)` to a C-Flock session,
 the link from `ProofLayer`'s opening to the extracted plurality `XplurZC`, and a union bound over the `n` units, since
 `OwnReadsHJ` here is over all of a session's registered reads, not per unit.
 

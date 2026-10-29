@@ -3,7 +3,7 @@ import Flock.Firewall.SessionPlan
 import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 /-!
-# The algebraic phase's coin counts (Stage B, R2)
+# The algebraic phase's coin counts
 
 The loop requests each rep round's coins at the plan's count (`Session.repPlan`, `Loop.loopNr_succ`), and the frame
 checks the device against the rep's scheduled rounds (`schedSoFar`), so a round's frame takes its coins only where the

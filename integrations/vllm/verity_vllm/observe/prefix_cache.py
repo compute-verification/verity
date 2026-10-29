@@ -255,7 +255,7 @@ GEMM_ARCH_TAGS = resources.files("verity_vllm") / "engine" / "profiles" / "gemm_
 def _jload(p: Path) -> Any:
     try:
         return json.loads(p.read_text()) if p.exists() else None
-    except (OSError, ValueError) as e:  # noqa: PERF203
+    except (OSError, ValueError) as e:
         return {"error": repr(e)[:200]}
 
 

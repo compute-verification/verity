@@ -7,8 +7,8 @@
     window.verdict([commitment.open(j, store_tree) for j in samples])
 
 `tag_pass` is the honest prover's timed step (`audit.tag_pass` on the GPU): it returns once the root is on the host.
-`open` is untimed: the block is read back from the device, the tags of its leaf come from the device (`gf31-poly/v1`,
-`ro-blake3/v1`) or are recomputed from the block (`ro-sha512/v1`, whose kernel keeps only the leaves), and the tag path is RFC 6962's
+`open` is untimed: the label is read back from the device, the tags of its leaf come from the device (`gf31-poly/v1`,
+`ro-blake3/v1`) or are recomputed from the label (`ro-sha512/v1`, whose kernel keeps only the leaves), and the tag path is RFC 6962's
 `PATH(c)` read from the tree levels the pass left in the workspace.  `store_tree` is the store's own tree under `vk`
 (`pous.verifier.MerkleTree`), which the prover keeps from setup.  The checks are the core verifier's (`audit.Window`).
 
@@ -152,7 +152,7 @@ class Tagger:
         return tuple(sizes[:self.lib.bw_levels(TAG_IDS[tag], blocks, sizes)])
 
     def tag_pass(self, tag: str, store: int, blocks: int, seed: bytes, workspace: int, stream: int = 0) -> Commitment:
-        """Every block's tag, the leaves and the root; returns when the root is on the host."""
+        """Every label's tag, the leaves and the root; returns when the root is on the host."""
         if len(seed) != tags.SEED_BYTES:
             raise ValueError(f"a seed is {tags.SEED_BYTES} bytes")
         root = ctypes.create_string_buffer(DIGEST_BYTES)
@@ -161,7 +161,7 @@ class Tagger:
 
     def tag_pass_prefix(self, tag: str, store: int, blocks: int, tagged: int, seed: bytes, workspace: int,
                         stream: int = 0) -> Commitment:
-        """A dishonest pass (negative controls): only blocks `0..tagged-1` are tagged; the rest of the tree is built
+        """A dishonest pass (negative controls): only labels `0..tagged-1` are tagged; the rest of the tree is built
         over whatever the workspace held."""
         root = ctypes.create_string_buffer(DIGEST_BYTES)
         self._ok(self.lib.bw_tag_pass_prefix(TAG_IDS[tag], store, blocks, tagged, seed, workspace, root, stream),
@@ -231,8 +231,8 @@ class Prover:
 
     def commit(self, window: audit.Window, tagged: int | None = None) -> tuple[Commitment, tuple[int, ...], float]:
         """One window: open it, prepare, take `σ` (`window.start`), run the pass and commit its root.  Returns the
-        commitment, the samples and the host call's time in ms.  `tagged` below the store's blocks is a negative control
-        that tags only blocks `0..tagged-1` over a poisoned workspace."""
+        commitment, the samples and the host call's time in ms.  `tagged` below the store's labels is a negative control
+        that tags only labels `0..tagged-1` over a poisoned workspace."""
         t, tag, tagged = self.tagger, window.params.tag, self.blocks if tagged is None else tagged
         ws = self.workspace(tag)
         window.open()
@@ -257,7 +257,7 @@ def uuid_text(device: bytes) -> str:
 def challenger_device(tagger: Tagger, gpu: str) -> bytes:
     """The device the windows audit, as the on-node challenger reads it on this node (`audit.read_device`: nvidia-smi's
     `GPU-…` UUID for `gpu`, a MIG slice refused), refused unless the tagger runs on that GPU: the UUID CUDA gives the
-    tagger's device (`Tagger.device`) must be the same 16 bytes.  Both are the prover's word (`PROTOCOL.md` §0)."""
+    tagger's device (`Tagger.device`) must be the same 16 bytes.  Both are the prover's word (`PROTOCOL.md` §2)."""
     device = audit.read_device(gpu)
     ran = tagger.device()
     if ran != device:

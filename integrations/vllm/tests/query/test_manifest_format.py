@@ -1,4 +1,4 @@
-"""The required-value manifest FORMAT (`manifest_format`, MAN-01): name / spec parsing, the identity digest, the coverage check's negatives
+"""The required-value manifest FORMAT (`manifest_format`): name / spec parsing, the identity digest, the coverage check's negatives
 the manifest makes detectable BY CONSTRUCTION (omit a whole producer family; omit one step; drop one member and bind another twice; a member
 committed short) and the binding loader's two engine-step shapes -- over manifests of record built by the v2 query
 (`test_sampled_replay.v2_manifest`) on a synthetic wired Program (no torch, no pod)."""
@@ -95,8 +95,7 @@ def test_coverage_positive_and_negatives():
 def test_a_batch_hidden_row_is_covered_by_the_planes_no_manifest_row_spells():
     """A B>1 batch-level hidden row (request `*`, one FA2 launch per layer per engine step) names the padded whole-step geometry.  The
     tap commits per-sequence planes at a segmented prefill and one whole launch at decode, under spellings no row has, so the binder
-    binds none of them; coverage holds them to the launch's whole stream (the R19 reference rows 23, 60, 67, 68, 73 and 74; red-team
-    claim 3): one plane set per executing sequence at its scheduled rows, every tensor the words its name's geometry declares."""
+    binds none of them; coverage holds them to the launch's whole stream: one plane set per executing sequence at its scheduled rows, every tensor the words its name's geometry declares."""
     rows_of = {0: {"r0": 64, "r1": 48}, 1: {"r0": 1, "r1": 1}}
     geo = {0: (8, 64, 1, 128, 64), 1: (8, 1, 1, 128, 64)}                     # fa2_geometry: (HB, M, NB, BN, D), 4 heads a sequence
     rows = [{"family": "fa2_hidden_m1_stream", "request_id": "*", "requests": ["r0", "r1"], "rank": 0, "step": "*", "engine_step": s,
@@ -155,7 +154,7 @@ def _members_by_step_op(ids: list[dict]) -> dict[tuple[int, str], set[str]]:
 
 
 def test_fresh_b1_manifest_loads_in_binding_and_composition_skips(tmp_path):
-    """rel M-0213/M-0245: a B=1 manifest writes engine_steps as the request's engine-step NUMBERS (ints); binding.load_required_manifest
+    """A B=1 manifest writes engine_steps as the request's engine-step NUMBERS (ints); binding.load_required_manifest
     keeps them as numbers and declares no composition (composition_check skips, named).  A B>=2 GLOBAL manifest declares the dict
     composition and the loader keeps it; a manifest mixing the two shapes is refused by name."""
     inst, _woff = _program()

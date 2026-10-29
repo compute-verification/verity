@@ -3,7 +3,7 @@ import Definitions.Accounting.Guarantees.Stacking
 /-!
 # A declared circuit's space and bandwidth from an accepted audit (trusted)
 
-Daniel's goal in one statement, `DeclaredCircuitRequirement`: for any declared circuit `W` that passes the stacking
+The goal in one statement, `DeclaredCircuitRequirement`: for any declared circuit `W` that passes the stacking
 property, any prover, and an accepted audit at the deployed parameters (sketch receipts, a store per pass, the
 append-coin rule), except with probability `δ_G` the prover system read, from the appended blocks of `W`'s values each
 pass's step reads, `W`'s credited bits there less an explicit share `ε` of the store. It is a layer-1 bound in decision
@@ -33,22 +33,22 @@ open scoped ENNReal
 audit instantiates `G` by verifying a uniform 2,773 of its draws, and a paced session's when each group draws at least
 2,773), and a store per pass made by the append-coin rule (`RateSketch.steeredStore`: the blocks of `T` appends of `M`
 positions, each append's choices `choose c ω a κ_<a` fixed before its own coin keys its blocks). `P` is fixed before
-the session's coins, and the code holds a window to it only in a paced session (#3786), whose windows are its groups of
+the session's coins, and the code holds a window to it only in a paced session, whose windows are its groups of
 at most `k` passes (the audit refuses a group's root `k + 1`, `order`, in Python and Lean): a paced session reads `G` at
-`P = k`, a group of fewer passes as one padded with passes that hold no tile of `W`
-(note:memory-accounting/20261024T1630Z-report-carrier-life). The code caps no unpaced window's passes yet, so a
+`P = k`, a group of fewer passes as one padded with passes that hold no tile of `W`.
+The code caps no unpaced window's passes yet, so a
 KV-credited session meets `G` when it is paced. Pass `j` of window `w` certifies the `N` blocks at `layout c y`, where
 `c` is the session's coins before the pass (`RateSketch.SketchPrefix`) and `y` the codec and every append's coin, so
 the layout may follow inputs chosen after those coins: it reads `y` only through the `a`-bit summary `steer c y`
 (`Accounting.Assumptions.SteeredLayout`). That holds of every layout at `a = |Y|`; what makes `a` small is the schedule
-check (#3828) at a cap fixed before the coins. `SteeredLayout` fixes one `a` at every coin, and
+check at a cap fixed before the coins. `SteeredLayout` fixes one `a` at every coin, and
 `Properties.RemoteAudit.steered_of_checked` gives it at `a = a₀ + 1` when, at every prefix and every append coin, the
 check accepts a schedule of at most `a₀` bits holding the plan the pass sent, under the named gap
 `Properties.RemoteAudit.ScheduleLayoutGap` (the model's layout of a pass is the verifier's positions of the session's
 appends and the plan the pass sent). So `a₀` is the steering cap the prover commits before the first coin
-(`audit.Params.schedule_cap`, credited as `audit.Ledger.steering`, #4021), over which the check refuses a schedule, not
+(`audit.Params.schedule_cap`, credited as `audit.Ledger.steering`), over which the check refuses a schedule, not
 the bits of the one schedule a session published: a prover whose schedule is 200 bits on most coins and 300 where it
-steers would meet `SteeredLayout` only at 301 (RD-18, note:memory-accounting/20261024T2155Z-report-redteam-5, which the
+steers would meet `SteeredLayout` only at 301 (which the
 committed cap fixes). `Properties.DeclaredCircuit.ScheduledRequirement` is `G` with `SteeredLayout` so discharged, on
 the sessions the check accepts at every pass, with `2^(a + (cap + 1))` in the query term
 (`Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement`). A layout that follows a
@@ -56,8 +56,8 @@ coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_sc
 `a` does not collapse to `|Y|`. Each append has its own coin, uniform and independent of the others', so a re-key,
 which appends a block again, draws a fresh one. Each append's blocks are read within `L` windows of the window
 `joined x t` it joined (`RateSketch.LifetimeCapped`, the remote audit's `lifetime`). The remote audit's `L` is a life
-of `D = 30` s in whole windows of length `T_w`, `L = max(L_min, ⌊D/T_w⌋)` (`audit.LIFETIME_NS`, `lifetime_windows`,
-#3786), with `L_min` 2 when the prover defers residency and 1 otherwise; a paced session counts its groups at their
+of `D = 30` s in whole windows of length `T_w`, `L = max(L_min, ⌊D/T_w⌋)` (`audit.LIFETIME_NS`, `lifetime_windows`),
+with `L_min` 2 when the prover defers residency and 1 otherwise; a paced session counts its groups at their
 nominal length.
 
 *The prover system.* Its pass devices are verbatim (`rate-sketch-verbatim`), and they are told their pass's summary:
@@ -83,7 +83,7 @@ squarings a root) under `Accounting.Assumptions.SquaringFloor` at `e_s` nonlinea
 value's device `leaf` and the tick `ticks d s` at which device `d` begins engine step `s`), the layout of values in
 blocks `ℓ x` (with each block's first encoded read: deferred residency credits a block from it), the groups `grp x` (a
 KV value's sequence, layer, plane and page parity), the step `bind x w j` each pass is bound to,
-strictly increasing over the passes (#2378), the memory map `σ x`, each pass's plan `plan x w j` (its blocks), and the
+strictly increasing over the passes, the memory map `σ x`, each pass's plan `plan x w j` (its blocks), and the
 store position `addr x k` of each block `k`. On device `d`'s clock pass `j` of window `w` is the `τ` ticks from the one
 at which `d` begins the pass's step (`Requirement.Placement.passTicks`), window `w` its passes' ticks
 (`Requirement.Placement.windowTicks`), and no device tick is in two windows or two passes of one
@@ -138,7 +138,7 @@ moved, what the step reads from appended blocks. The shortfall is a share of the
 `W` (the requirement's wiring) are one circuit (requirement.py and census/v1 read one IR), that the memory map and the
 plans hold `W`'s credited blocks (`StoreMatches`, `PlanMatches`: `core_requirement`'s one-sided check, and the
 memory-map and plan units), that the payloads at `addr` are the store's blocks, each at its own append (the appends'
-digests, by `remote_bandwidth`'s Replay), that each pass's plan is its step's (#2378), and that the pass ran in its
+digests, by `remote_bandwidth`'s Replay), that each pass's plan is its step's, and that the pass ran in its
 ticks (a certifier stamping step records and pass roots on one clock). A credit across circuits needs their credited blocks
 disjoint, and a device tick credited to a pass here and to another window elsewhere is joint accounting's. Which of the
 node's devices held the tiles, and that the bits taken from outside the store are every bit crossing the node's
@@ -147,18 +147,18 @@ node that registers `R` times pays `δ_G` once a registration.
 
 `G` credits nothing once `γ ≥ 1 − 0.0015`, because a pass's credit is at most its `N` tiles' bits and the event's
 threshold is then negative. The carrier term grows with the carrier's life, `128·L·P·c/E` of the store with `P·N·4096`
-bytes certified a window and `c = caps.total`, so `G` is useful only when the life `L·T_w` is short: at the 18 Oct caps
+bytes certified a window and `c = caps.total`, so `G` is useful only when the life `L·T_w` is short: at caps
 (c = 0.442 for 8B, 0.0918 for 70B TP8, 61 ms passes) `ε` a session is 10% at a life of 35 s for 8B and 171 s for 70B.
 At remote_bandwidth's deployed life of 30 s it is 8.62% for 8B and 2.57% for 70B at 1 s windows (`L = 30`, the same
 492 passes as a paced session of 12 groups of `k = 82` a 60 s stretch at `L = 6`). At the stated 60 s window
 `⌊D/T_w⌋ = 0`, so `L = L_min`: 16.25% and 4.16% at `L = 1`, and 31.52% and 7.33% at `L = 2` for a prover that defers
-residency, as the vLLM serving store does (note:memory-accounting/20261024T1630Z-report-carrier-life; the earlier
+residency, as the vLLM serving store does (the earlier
 60 windows of 60 s put it past 100% for both). These are `G`'s at a paced session whose groups each draw at least
 2,773 openings, which no deployed KV-credited session is yet. An honest run meets every hypothesis but the world's, with
 its credit at least the store's bits, so the bound says something whenever `0.0015 + γ < 1`, at a decode schedule and
-at a prefill. The decode witness (#3924, `Accounting.SecurityProofs.DeclaredCircuitWitness`) decodes one token a step a
-sequence, each page's coin back two steps after it completes, with page-parity groups. The prefill witness (#3994,
-`Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill`) is a chunked prefill and then the first decode step, with a
+at a prefill. The decode witness (`Accounting.SecurityProofs.DeclaredCircuitWitness`) decodes one token a step a
+sequence, each page's coin back two steps after it completes, with page-parity groups. The prefill witness
+(`Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill`) is a chunked prefill and then the first decode step, with a
 group a page, so a chunk may complete several pages while their coins are out; its credit is exactly its tiles' bits,
 and both of `G`'s thresholds are positive at the 30 s life for 8B and for 70B (`life30_8b`, `life30_70b`).
 

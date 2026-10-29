@@ -8,7 +8,7 @@ each late answer at each τ attributed to one cause:
   challenger-cpu      the challenger lost its CPU during the challenge (the harness)
   responder-cpu       the responder lost its CPU since the previous challenge arrived, and the time outside the
                       responder dominates (the challenge waited in its socket)
-  device              the device leg (request arrival to the copy or kernel complete: launch, GPU scheduling and PCIe)
+  device              the device part (request arrival to the copy or kernel complete: launch, GPU scheduling and PCIe)
                       is the largest part; the condition says which of those it is
   responder-host      the responder's time outside the copy is the largest part
   network             the time outside the responder (both kernels, the wire or loopback, both NIC paths) is the largest

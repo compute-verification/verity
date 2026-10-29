@@ -467,7 +467,7 @@ def test_on_proofs_boolean_mufu_the_norm_is_boolean_and_pinned(which) -> None:
 @pytest.mark.parametrize("which", ["cuda", "triton"])
 def test_on_proofs_boolean_mufu_only_the_divisions_mufu_share_a_gate(which) -> None:
     """`DivFullRcp_v2` recomputes one gate of `DivFullScaleA_v3` (both read the divisor): a recompute across two opaque Boolean
-    Calls, which `Q_word` v2 allows (#667); no other value is computed twice."""
+    Calls, which `Q_word` v2 allows; no other value is computed twice."""
     r = members_check(_on_bits(which, 16, 1e-5, CUDA_BITS if which == "cuda" else TRITON_BITS))
     if which == "cuda":
         assert r["ok"] and r["recomputed_gates"] == 0, r["recomputes"]

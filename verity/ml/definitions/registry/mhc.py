@@ -24,7 +24,7 @@ What nvcc makes of TileLang's expressions, in the CUDA and its PTX: `a + b * c` 
 (`F32Fmaxf_v1`); a bf16 store is `cvt.rn.bf16.f32` (`F2fpBf16_v1`).  `a - b` is `sub.f32`, written `add(a, neg(b))`: the same
 word but for a NaN's payload.  Each `T.reduce_*` / reducer finalisation and each `warp_reduce` is TileLang's xor butterfly (lane
 t takes `op(v[t], v[t ^ h])` for h = n/2 .. 1: `dsa.halving_tree`), each accumulator and each cross-warp sum a chain from +0
-in index order (`chain`).  A NaN word is IR's (0x7FC00000) where a leaf's is, and the GPU's 0x7FFFFFFF elsewhere; no output reads
+in index order (`chain`).  A NaN word is the evaluator's (0x7FC00000) where a leaf's is, and the GPU's 0x7FFFFFFF elsewhere; no output reads
 a NaN's payload on finite operands.
 
 The Sinkhorn normalisation (tilelang_kernels.py:247-266, and :410-429 in the broadcast), on the 4 x 4 logits x[r][c] = `fma(mixes[8 + 4r + c], scale[2],
@@ -38,7 +38,7 @@ from shared memory), both operands rounded RNE to TF32, from a zero accumulator,
 `HopperTf32WgmmaDot8_v1`.  A's conversion is unobservable here because widened bf16 has thirteen zero low bits.  The squared sum
 of each block: thread lane e < 4 of a quad adds `fma(x[k], x[k], x[k+4] * x[k+4])`, k = 64 st + 8 i + e, into its own chain
 from +0, and the quad's shuffles add `(v0 + v2) + (v1 + v3)`; these are GPU FMUL/FFMA/FADD operations, whose NaN result is
-0x7FFFFFFF.  Run r20261013-115825-580e's H200 probe fitted `HopperTf32WgmmaDot8_v1` alone: the Hopper BF16 step's adder on
+0x7FFFFFFF.  An H200 probe fitted `HopperTf32WgmmaDot8_v1` alone: the Hopper BF16 step's adder on
 TF32 products.  Core's instruction catalog remains `unprobed` because it has no core-owned model to pin;
 tests/properties/dsv4_mhc_capture_gpu.py reruns the gate.
 
@@ -84,6 +84,7 @@ from verity.ml.circuits.ops.scalar import F32Neg
 from verity.ml.circuits.silicon.models import HOPPER_BF16_WGMMA_K16, GroupSum
 from verity.ml.circuits.silicon.term import TF32, tf32_product
 from verity.ml.circuits.silicon.total import NAN, Inf, fp32_value, group_step_total, pack_value
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import dsa as D
 from verity.ml.definitions.registry import moe as M
 from verity.ml.definitions.registry import prims as P
@@ -94,18 +95,20 @@ F_ONE, F_NEG_INF = 0x3F800000, 0xFF800000
 
 _CONF = ("model-untested: read from the TileLang kernels' generated CUDA and PTX at the commits the module docstring pins; "
          "tests/properties/dsv4_mhc_capture_gpu.py is its hardware check")
-_TF32_CONF = ("exact-model-tested: r20261013-115825-580e's probe on a cc 9.0 GPU (132 SMs) fitted this k8 step alone (one group, "
+_STEP_PROBE = EVIDENCE["hopper_tf32_k8_step_probe"]["run"]
+_TF32_CONF = (f"exact-model-tested: {_STEP_PROBE}'s probe on a cc 9.0 GPU (132 SMs) fitted this k8 step alone (one group, "
               "26 bits, floor -133) on exact products after each f32 operand is rounded RNE to TF32")
 _DG_CONF = ("model-untested: read from DeepGEMM 8b1392b9's cc 9.0 TF32 hc-prenorm GEMM (the header and lines :150-240 the module "
             "docstring names) on the candidate HopperTf32WgmmaDot8_v1; tests/properties/dsv4_mhc_capture_gpu.py is its hardware check")
 _BROADCAST_CONF = ("exact-model-tested: vLLM d9105ea80 tilelang_kernels.py:453-454 copies each loaded bf16 embedding word to "
-                   "every hc_mult stream; r20261013-205619-36e8 checked every residual_out copy in the cc 9.0 broadcast cases")
+                   f"every hc_mult stream; {EVIDENCE['dsv4_mhc_capture']['run']} checked every residual_out copy in the cc 9.0 broadcast "
+                   "cases")
 
 #: The candidate k8 step's grouped sum: the sm_90 BF16 step's adder (`HOPPER_BF16_WGMMA_K16`) over the eight products
 TF32_GROUPS, TF32_WIDTH, TF32_FLOOR = (8,), 26, -133
 HOPPER_TF32_WGMMA_K8_CANDIDATE = GroupSum(
     name="hopper_tf32_wgmma_k8_candidate", arch=HOPPER_BF16_WGMMA_K16.arch, dtype="tf32", operand_bits=19, groups=TF32_GROUPS,
-    width=TF32_WIDTH, zero_exponent=TF32_FLOOR, validated="r20261013-115825-580e: the cc 9.0 probe (132 SMs) fitted this step alone")
+    width=TF32_WIDTH, zero_exponent=TF32_FLOOR, validated=f"{_STEP_PROBE}: the cc 9.0 probe (132 SMs) fitted this step alone")
 
 
 class Ops(D.Ops):

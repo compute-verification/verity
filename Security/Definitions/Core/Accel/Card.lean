@@ -11,7 +11,7 @@ capture fixes yet (`Open`). Both instances (`Accel.H200`, `Accel.Sm120`) are tab
 * **Resources** (`Res`): the tensor core (one pipe every format shares, a MAC of format `f` using `weight f` units:
   the formats' peaks are one pipe's rate at different widths), twice: at the tick's clock (`tensor`, the per-clock
   peak) and at a measured sustained clock (`tensorLong`, which over any window longer than the backlog caps the MMAs
-  there; at `tensor`'s on both instances for now, RT-MODEL M14), the warp schedulers' issue slots, the integer `alu` and
+  there; at `tensor`'s on both instances for now), the warp schedulers' issue slots, the integer `alu` and
   `imad` pipes, the shuffle pipe, the FP64 pipe, shared memory's banks, and device memory's bandwidth. The FP32 pipe's
   rate is the issue rate, so it is not a resource of its own; L2's bandwidth and the register file's ports are in no
   document, so they are free.
@@ -48,8 +48,8 @@ inductive Res
   /-- the tensor core, in s8 MACs, at the tick's clock: its per-clock peak, the short-window cap -/
   | tensor
   /-- the tensor core over long windows, in s8 MACs: a sustained clock below the tick's, where a measurement shows
-  the card can't exceed it (RT-MODEL M1, M14: θ never caps a rate below what the card might reach, so both instances
-  set it at `tensor`'s until CALIB's H200 clock check rules on 1830 MHz). Every tensor-core instruction, DMMA included (one
+  the card can't exceed it (θ never caps a rate below what the card might reach, so both instances
+  set it at `tensor`'s until a clock check on the H200 rules on 1830 MHz). Every tensor-core instruction, DMMA included (one
   datapath for every format, FP64 too: A100 whitepaper, 'Third-generation Tensor Cores'), uses as many units of it as
   of `tensor`, so the formats share one long-window budget -/
   | tensorLong
@@ -59,7 +59,7 @@ inductive Res
   | alu
   /-- the integer multiply-add pipe, in lanes -/
   | imad
-  /-- the shuffle pipe, in lanes (its own pipe beside the `alu`, CALIB: SHFL 32 lanes a SM-clock on both cards) -/
+  /-- the shuffle pipe, in lanes (its own pipe beside the `alu`; SHFL measured 32 lanes a SM-clock on both cards) -/
   | shfl
   /-- the FP64 pipe, in lanes (`Lane.dfma`) -/
   | f64
@@ -67,7 +67,7 @@ inductive Res
   | smem
   /-- device memory's bandwidth, in words -/
   | dram
-  /-- the L2's read bandwidth, in words the L2 serves (RT-MODEL M6(b)) -/
+  /-- the L2's read bandwidth, in words the L2 serves -/
   | l2
   deriving DecidableEq
 
@@ -84,12 +84,12 @@ def rd (s : Store) (r : Res) : ℚ≥0 := port s r + if s = .l2 ∧ r = .l2 then
 operand words read from shared memory pay its banks, a word a bank unit, as a copy's do (`wgmma` reads `B`, and
 maybe `A`, there). Every unit is per word or per product, so a price vector over the resources prices an MMA per
 product, a lane function per result, and a copy per word moved; an MMA with `D ≠ C` delivers its accumulators to
-new words at no units beyond its own (P2's fork, RT-MODEL M5), so no such pricing covers a per-seed delivery cost.
+new words at no units beyond its own (P2's fork), so no such pricing covers a per-seed delivery cost.
 An `IMAD.HI` uses `hi` lanes of `imad`, its own
 price, not tied to `IMAD`'s, and an `IMAD.WIDE` 2 (CUDA C++ Programming Guide §6.4.1 Table 7, footnote 6: 32 lanes
-for extended precision against 64; RT-UNITS U13). A broadcast load to `k` lanes pays `k` lanes' share of a slot and its `n` words once at
+for extended precision against 64). A broadcast load to `k` lanes pays `k` lanes' share of a slot and its `n` words once at
 its source, as the card's port serves lanes that read one word at once (CUDA C++ Programming Guide, 'Shared
-Memory'; RT-MODEL M6(c): as `k` copies it paid `k·n` bank units, 32 × the card's on a whole-warp broadcast). -/
+Memory'; as `k` copies it would pay `k·n` bank units, 32 × the card's on a whole-warp broadcast). -/
 def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) : Op Store → Res → ℚ≥0
   | .mma fa fb _ sh sa sb, r =>
     (if r = .tensor ∨ r = .tensorLong then (sh.m * sh.n * sh.k : ℕ) * weight fa * scale sh else 0) + (if r = .issue then 1 else 0) +
@@ -119,14 +119,15 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) 
 structure Open where
   /-- the in-flight backlog, in ticks: work issued in a window completes within `slack` ticks after it -/
   slack : ℕ
-  /-- the tensor units a `b1` MAC uses: no data sheet gives a `b1` peak. CALIB (CMP-115) measured 1/8 on the H200;
-  sm_120's is unmeasured. A floor that needs `1/8 ≤ b1` (PEARLC-MODEL's) takes it as a hypothesis on this parameter. -/
+  /-- the tensor units a `b1` MAC uses: no data sheet gives a `b1` peak. On the H200 it measured 1/8;
+  sm_120's is unmeasured. A floor that needs `1/8 ≤ b1` (the Pearl-C model's) takes it as a hypothesis on this
+  parameter. -/
   b1 : ℚ≥0
   /-- on a card whose data-sheet tensor rate is another instruction's (the H200's is `wgmma`'s), the factor by which
-  an `mma.sync` MAC uses more tensor units than that instruction's; unmeasured until CALIB measures it -/
+  an `mma.sync` MAC uses more tensor units than that instruction's; unmeasured until a calibration run measures it -/
   sync : ℚ≥0
   /-- the `imad` lanes an `IMAD.HI` uses. The Programming Guide gives `IMAD.HI` 32 lanes a SM-clock against `IMAD`'s 64
-  (§6.4.1 Table 7), so 2, θ's floor on both cards; CALIB measured 30.6 lanes on the H200 (r20261017-095350-02ff) -/
+  (§6.4.1 Table 7), so 2, θ's floor on both cards; on the H200 it measured 30.6 lanes a SM-clock -/
   madHi : ℚ≥0
   /-- the dot of every format pair and `k` that no capture pins, by formats, saturation and `k` -/
   dot : Fmt → Fmt → Bool → ℕ → Dot
@@ -201,7 +202,7 @@ namespace Card
 /-- The card's stores' contents: a word at every location (`Machine.Mem` of `machine` at any parameters). -/
 abbrev Mem (c : Card) : Type := (Σ s : Store, Fin (c.size s)) → Word
 
-/-- **The card's contents as the model reads them** under register encodings `e` (RT-LEAN-2 L30): register word `q`
+/-- **The card's contents as the model reads them** under register encodings `e`: register word `q`
 read by `e q` (an FP64 code's other word at `q + 1` for `f64lo`, `q - 1` for `f64hi`), so a float code that
 represents an integer exactly, within its format's exact range, reads as that integer's two's complement, and every
 other word, and every word of every other store, as it is. Each word's reading depends on at most it and one

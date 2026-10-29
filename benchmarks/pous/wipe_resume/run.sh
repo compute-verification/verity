@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# The resume attack (art:7617c8017e80) against the streamed-label wipe and the band fill, on CPU, as one Attempt. cwd =
+# The red team's resume attack against the streamed-label wipe and the band fill, on CPU, as one Attempt. cwd =
 # a clone (the Lean verdict builds into it):
 #
-#   research run --on NODE --project verity --source . --cwd clone --timeout 60m -- \
-#     bash benchmarks/pous/wipe_resume/run.sh [--labels N] [--k K] [--blocks B]
+#   bash benchmarks/pous/wipe_resume/run.sh [--labels N] [--k K] [--blocks B]
 #
 #   --labels N   the streamed fill in labels (default 2^19: one 32 MiB segment)
 #   --k K        reads a session (default 2152)

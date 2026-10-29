@@ -5,7 +5,7 @@
 #                     and the SASS's only floating-point instructions are HMMA.16816.F32.BF16 and the cvt (sass_gate.py)
 #   sass.<arch>.json, ptxas.<arch>.txt   registers and HMMA, F2FP and local-memory counts per kernel; ptxas's report
 #   check/            fixture.py's cases: inputs and the buffers the kernels must leave, and FULL's digests (needs verity)
-#   run.py, attn.py, gen.py, session.sh, toolchain.txt (nvcc --version and the nvcc command lines), source.txt (the verity commit),
+#   run.py, attn.py, gen.py, run.sh, toolchain.txt (nvcc --version and the nvcc command lines), source.txt (the verity commit),
 #   MANIFEST.sha256
 # Usage: bash benchmarks/torch_gpu/attn_bf16/build.sh [OUT [CASE ...]]   (default /tmp/attn-bf16-ship, every case; CUDA names
 #        the toolkit, default the first of /usr/local/cuda, /usr/local/cuda-13.0 with nvcc; CUBIN_ONLY=1 stops after the
@@ -37,7 +37,7 @@ if [ -n "${FIXTURE_PY:-}" ]; then
 else
   uv run python benchmarks/torch_gpu/attn_bf16/fixture.py "$OUT/check" "$@"
 fi
-cp "$HERE/run.py" "$HERE/attn.py" "$HERE/gen.py" "$HERE/session.sh" "$OUT/"
+cp "$HERE/run.py" "$HERE/attn.py" "$HERE/gen.py" "$HERE/run.sh" "$OUT/"
 { git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/torch_gpu/attn_bf16 verity; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "tree:"

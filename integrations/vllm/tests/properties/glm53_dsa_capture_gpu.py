@@ -48,7 +48,7 @@ the verdict without stopping the others.
   bind       the Programs bind at the served statics.
 
 The RoPE contraction.  GLM-5.3's capture map named `RoPEHeadGptJ_v1` for the k_pe and q_pe RoPE (`fused-rope-triton`) before a run
-measured it; run r20261012-222325-ce92 settled both on `RoPEHeadGptJ_v2`, which the map now names, and every run settles it again.
+measured it; a run settled both on `RoPEHeadGptJ_v2`, which the map now names, and every run settles it again.
 The kernels compute `r1 = x1*cos - x2*sin`, `r2 = x2*cos + x1*sin` in f32
 from bf16 words (kernels.py:233-236, 718-731), so nvcc/ptxas may contract either product into an FMA: L_a = bf16(fma(x1, c, -RN(x2 s)))
 (`RoPEHeadGptJ_v1`'s `RopeOut_v1`), L_b = bf16(fma(-x2, s, RN(x1 c))), L_n = bf16(RN(x1 c) - RN(x2 s)); H_a = bf16(fma(x2, c, RN(x1

@@ -1,4 +1,4 @@
-"""The IR-registered primitives of `verity.ml.circuits.ops.prims` are exactly the `verity.ml.circuits.silicon` functions, under their registered ids."""
+"""The registered primitives of `verity.ml.circuits.ops.prims` are exactly the `verity.ml.circuits.silicon` functions, under their registered ids."""
 from __future__ import annotations
 
 import random
@@ -224,7 +224,7 @@ def test_the_sm120_e5m2_step_is_the_e4m3_pipeline_with_e5m2_products_on_every_en
 
 
 def test_the_sm120_e5m2_step_reproduces_the_pro_6000_capture_on_every_encoding() -> None:
-    """Every word of run r20260930-063527-4d6b's specials and signed-zero tiles (RTX PRO 6000, one QMMA.16832.F32.E5M2.E5M2 per
+    """Every word of the tc_probe capture's specials and signed-zero tiles (RTX PRO 6000, one QMMA.16832.F32.E5M2.E5M2 per
     tile; fixtures/README.md), including the 4,824 words with a NaN or infinite operand or accumulator, which the run recorded
     but did not assert."""
     import numpy as np
@@ -271,7 +271,7 @@ def test_the_sm120_nvfp4_step_is_the_pinned_block_scaled_model() -> None:
 
 
 def test_the_sm120_nvfp4_step_is_total_as_measured_outside_ue4m3() -> None:
-    """r20260930-093614-53fd: a NaN-coded scale byte gives NaN over any accumulator; else NaN / ±inf accumulators pass through;
+    """Measured on the RTX PRO 6000: a NaN-coded scale byte gives NaN over any accumulator; else NaN / ±inf accumulators pass through;
     else bit 7 of a scale byte is ignored."""
     step = P.BlackwellNvf4OmmaDot64
     rng = random.Random(10)
@@ -336,7 +336,7 @@ def test_the_sm120_mxfp4_step_is_total() -> None:
 
 
 def test_the_sm120_mxfp4_step_reproduces_the_pro_6000_edge_capture() -> None:
-    """Every word of run r20261001-000520-2440's four record-only MXFP4 edge families (RTX PRO 6000, one
+    """Every word of the tc_probe_fp4 capture's four record-only MXFP4 edge families (RTX PRO 6000, one
     OMMA.SF.16864.F32.E2M1.E2M1.E8 per tile; fixtures/README.md), which the run recorded but did not assert: 73,728 words, 9,216
     of them under a 0xFF scale byte, the rest overflowing or cancelling blocks and ±inf / NaN accumulators."""
     import numpy as np

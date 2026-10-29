@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.TmplFoldClassOk
 import Flock.TmplSplit
 
 /-!
-# The split fold's tables, valued (PRF-133, part 3, stage 3)
+# The split fold's tables, valued
 
 `Tmpl.walk` keeps a class's fold in sparse tables (`Tab`, `HashMap`s keyed by chunks). A table's value under a key
 weight `f` is `hsum`: each entry's value times its key's weight.

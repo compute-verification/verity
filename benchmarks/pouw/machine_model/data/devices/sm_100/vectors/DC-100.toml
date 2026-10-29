@@ -2,6 +2,6 @@
 name = "DC-100"
 epoch = "DC-100"
 summary = "the B200 (sm_100) census: the pipes, the tensor pipe of every tcgen05.mma and mma.sync form, the TMEM read port (TL), UTCIMMA.128x256's joint rows with tcgen05.ld (TM100) and issue (JI100), the uniform pipe (UP), and the TMA bulk-async facet (TMAB, HBM-bound, no tensor issue). No ALU joint row: beside the saturated tcgen05.mma the exact tclaneU_lop3 keeps the tensor at 0.999 and LOP3 at 0.991 of alone, so census.py writes none (RT-BLACKWELL-16)"
-note = "note:20261017T0452Z-draft-eps1-dc (r20261017-062812-a7a7 r20261017-063727-4f9a r20261017-063734-4b49; the uniform datapath r20261017-095350-0a80; its issue price r20261017-113207-4cb8 r20261017-113541-9d33); the exact lane points beside the MMA r20261019-092015-829f r20261019-091347-5764 (note:20261019T1110Z-draft-rt2-blackwell)"
+note = "the uniform datapath; its issue price; the exact lane points beside the MMA"
 rows = ["issue", "M", "A", "I", "SHFL", "TL", "TM100_0", "JI100_0", "UP", "TMAB"]
 credits = []

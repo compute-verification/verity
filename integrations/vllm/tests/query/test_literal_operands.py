@@ -1,7 +1,7 @@
 """The literal-operand rule of `Q_module_body_v1`: a Call that reads no Value is a literal of the Program (its output is written in the
 descriptor), never a boundary Value and never required -- wherever the correspondence places it and whatever it is named.
 
-`sampler_program()` is #101's seeded-Gumbel shape under the v1-annotation fallback (a v1-frontend Build carries no correspondence
+`sampler_program()` is a seeded-Gumbel shape under the v1-annotation fallback (a v1-frontend Build carries no correspondence
 record), two steps::
 
     ids --Embedding[model.model.embed]--> h --Gemm[model.model.lm_head]--> logits --GumbelTopPTokenSelect[root]--> tok --Embedding--> ...
@@ -9,7 +9,7 @@ record), two steps::
 
 The frontend names the three literals `<select node>/top_p` ...; the fallback parses `<a>/<b>` as `<module>/<fx node>`, so they form a
 body `gumbel_topp_token_select` of their own and their Values cross into the root body: the 32 extra `gumbel_topp_token_select_<s>/out`
-identities (and the `two producers` incompleteness) #101 showed under ENGINE=v2.
+identities (and the `two producers` incompleteness) under ENGINE=v2.
 """
 
 from __future__ import annotations

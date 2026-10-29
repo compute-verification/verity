@@ -1,8 +1,8 @@
-"""The CPU half of a staging session's check, run on the node after the GPU is released:
+"""The CPU half of a staging run's check, run on the node after the GPU is released:
 
 - **decode**: every encoded block of the layer, from the development store or an encoded store's segment files (as
-  `layer.py` takes them), against P2's reference (`layout.check_blocks`: the spec's `reference.decode` under
-  `reference.keys_after` of the store's prefix, refusing rows not below p and non-codewords), each block's 2,054 bytes
+  `layer.py` takes them), against P2's reference (`layout.check_blocks`: `p2_v1/store.py`'s `decode_block`, the spec's
+  `reference.decode` under `reference.keys_after` of the store's prefix, refusing rows not below p and non-codewords), each block's 2,054 bytes
   against the store's W (`layout.payloads`: the stream's bytes, from `W` or else the seeded generator, zero past each
   tensor's end), in a process pool;
 - **gemm**: each `samples-<matrix>-m<M>.npz` that `layer.py` wrote, every sampled word against
@@ -11,8 +11,8 @@
     python check.py --layout LAYOUT --weights M [--w W] (--store DIR --salt HEX | --encoded DIR --source HEX
                     --commitment HEX) --out OUT [--layer 0] [--workers N] [--blocks N] [--sample N --seed S]
 
-With `--sample N` the decode half takes N blocks of every tensor of the encoded store instead (`sample_blocks`: each
-tensor's first and last block among them), for `full.py`'s whole-store session.
+With `--sample N` the decode half takes N labels of every tensor of the encoded store instead (`sample_blocks`: each
+tensor's first and last label among them), for `full.py`'s whole-store run.
 
 Writes `OUT/check.json`; exits 1 if anything differs.
 """
@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import layout as L  # noqa: E402
+import layout as L
 
 _JOB: dict = {}
 
@@ -53,7 +53,7 @@ def _rows(j0: int, n: int) -> bytes:
 def _blocks(r: tuple[int, int]) -> list[tuple[int, str]]:
     j0, j1 = r
     lay, n = _JOB["layout"], j1 - j0
-    return L.check_blocks(lay.spec, lay.prefix, j0, _rows(j0, n), L.payloads(lay, _JOB["src"], _JOB["read"], j0, n))
+    return L.check_blocks(lay.params, lay.prefix, j0, _rows(j0, n), L.payloads(lay, _JOB["src"], _JOB["read"], j0, n))
 
 
 def check_decode(args, lay: L.StoreLayout, src: L.Weights) -> dict:
@@ -84,7 +84,7 @@ def check_decode(args, lay: L.StoreLayout, src: L.Weights) -> dict:
 
 
 def sample_blocks(tensors: list[L.Tensor], per_tensor: int, seed: int) -> list[int]:
-    """Each tensor's first and last block and `per_tensor - 2` others of its blocks drawn by `seed` (all of them when it
+    """Each tensor's first and last block and `per_tensor - 2` others of its blocks sampled by `seed` (all of them when it
     has no more than `per_tensor`), in block order."""
     rng, out = random.Random(seed), set()
     for t in tensors:
@@ -129,7 +129,7 @@ def main(argv=None) -> int:
     ap.add_argument("--layout", type=Path, required=True)
     ap.add_argument("--weights", type=Path, required=True)
     ap.add_argument("--w", type=Path, help="the stream's bytes at their offsets (else the generator's)")
-    ap.add_argument("--generator", default="verity_torch_loop.weights")
+    ap.add_argument("--generator", default="e2e_h200.served_weights")
     ap.add_argument("--shape", default="h200")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1")
     store = ap.add_mutually_exclusive_group(required=True)
@@ -144,7 +144,7 @@ def main(argv=None) -> int:
     ap.add_argument("--blocks", type=int, help="check only the layer's first N encoded blocks")
     ap.add_argument("--sample", type=int, help="instead of one layer's every block, N blocks of every tensor of the "
                     "encoded store (its first and last among them)")
-    ap.add_argument("--seed", type=int, default=12, help="the draw of the sampled blocks")
+    ap.add_argument("--seed", type=int, default=12, help="the sample of the sampled blocks")
     args = ap.parse_args(argv)
     if args.sample is not None and args.encoded is None:
         ap.error("--sample reads an encoded store")

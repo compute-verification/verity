@@ -3,7 +3,7 @@ import Proofs.Pous.B5.ExPostFacto
 /-!
 # Chain work: a hash-chain receipt takes one oracle query a label
 
-The core lemma of a costed-random-oracle receipt (note:20261018T0659Z-draft-replace-phys): the receipt is the last of
+The core lemma of a costed-random-oracle receipt: the receipt is the last of
 `N + 1` data-carrying labels on a line, `ℓ_i = H(i, ℓ_{i−1}) ⊕ d_i` (`Pous.Labelling.label` on `line`), and an oracle
 program that outputs it after at most `N` queries, fewer than one a label, is right with probability at most
 `2^m · 4(N + 1)³ / 2^w`, with `m` bits of advice computed from the oracle and the data. Rounds of no queries and the

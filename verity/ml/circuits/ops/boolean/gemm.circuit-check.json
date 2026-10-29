@@ -124,6 +124,10 @@
    "and": 13556,
    "type": "b1be73b5fc559d01db34c5d90594afc1f722ef10c8a8009f6c2a46f8180f98a0ee1c0457b0a734cca2c49b76b6662357490683c1165c41afe5b93cd3363054dd"
   },
+  "ScaledMmS8ResidualCoordinateRows_v2{K=64,R=2,DOT=BlackwellS8ImmaDot32_v2}": {
+   "and": 14273,
+   "type": "c1271fb65c55d7ac2188006e638570982b7ba7a28b06e587dcef6dfdd72663e6c9467a4097082488c597a9cca609ed799c1c21ad60dd13c426f5ee2477e6b14e"
+  },
   "ScaledMmS8_v2{K=64,N=3,DOT=BlackwellS8ImmaDot32_v2}": {
    "and": 40668,
    "type": "bc5dd2663810eecc6f74cd0ab9755ee791c3b69e67115b676513ba5fdfc034f790843acc8a1e592dfbd5675284ddfd2f4a2f38a5228d471caba79ad1e2e30e0b"

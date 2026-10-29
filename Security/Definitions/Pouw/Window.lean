@@ -6,6 +6,7 @@ import Mathlib.Order.CompleteLattice.Basic
 import Mathlib.Data.Fintype.Perm
 import Mathlib.Data.Fintype.Pi
 import Mathlib.Data.Fintype.Sigma
+import Definitions.Core.Draw
 
 /-!
 # A window of calls: one draw that depends on the registration, then the calls' sessions in order (trusted)
@@ -19,9 +20,11 @@ This is the vocabulary of that game, in the form of C-Flock's one-stage audit (`
 guarantee `audit_window_split_of_record` is stated over), on its own so that a guarantee can be stated over it:
 
 * `Game`, `Strategy`, `prob`: a public-coin interaction with live coins, a deterministic prover strategy, and the exact
-  probability of an outcome over the verifier's coins; `avg` and `prCoin`, the uniform average and probability;
-* `Law`, `Law.escape`: a draw law over units, and the probability that its draw misses a set; `Law.prod`, the calls' laws
-  each drawn on its own coins, the product law that distinct contexts give (M1);
+  probability of an outcome over the verifier's coins; `avg` and `prCoin`, the uniform average and probability, core's
+  (`Verity.Game`);
+* `Law`, a draw law over units, and its escape (`L.escape B`), the probability that its draw misses a set, both core's
+  (`Verity.Law`, `Definitions.Core.Draw`); `Law.prod`, the calls' laws each drawn on its own coins, the product law that
+  distinct contexts give (M1);
 * `auditReg`: the registration, then the coin of the law at that registration, then the session on its draw (C1);
 * `WUnit`, `slice`, `seqCalls`, `windowSession`: a window's units (a call and a unit of that call), a call's share of a
   draw, and the calls' sessions in order;
@@ -121,29 +124,11 @@ noncomputable def thenExp {f : α → Game β} (F : (a : α) → Strategy (f a) 
   | .send _ k, s => thenExp F (k s.1) s.2
   | @Game.coin _ C iF _ k, s => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * thenExp F (k c) (s c)
 
-/-- The uniform average over a finite type. -/
-noncomputable def avg {Ω : Type} [Fintype Ω] (f : Ω → ℝ≥0∞) : ℝ≥0∞ :=
-  ∑ c : Ω, (Fintype.card Ω : ℝ≥0∞)⁻¹ * f c
-
-open Classical in
-/-- The probability that a uniform coin satisfies `p`. -/
-noncomputable def prCoin {Ω : Type} [Fintype Ω] (p : Ω → Prop) : ℝ≥0∞ :=
-  avg fun c => if p c then 1 else 0
+export Verity.Game (avg prCoin)
 
 /-! ## Draw laws and the audit whose draw depends on the registration -/
 
-/-- A draw law over the units `U`: the verifier's uniform coins, and the unit set each draws. -/
-structure Law (U : Type) where
-  Ω : Type
-  [fintype : Fintype Ω]
-  [nonempty : Nonempty Ω]
-  draw : Ω → Finset U
-
-attribute [instance] Law.fintype Law.nonempty
-
-/-- The probability that a draw misses every unit of `B`. -/
-noncomputable def Law.escape {U : Type} (L : Law U) (B : Finset U) : ℝ≥0∞ :=
-  prCoin fun ω => Disjoint (L.draw ω) B
+export Verity (Law)
 
 /-- **The audit whose draw depends on the registration** (C1): the prover registers `R`; the verifier draws by `L R`;
 the session on the drawn units runs against `R`. Output: the verdict and the draw. -/
@@ -356,7 +341,7 @@ noncomputable def coll {Reg : Type} (Lw : Reg → Law (WUnit n))
   avg fun ω => along (fun c => sess c (slice ((Lw R).draw ω) c) R)
     (fun c τc => g c (slice ((Lw R).draw ω) c) R τc) (List.finRange C) (τ ω)
 
-/-- **The window's collision term at the sessions' counted queries** (premise, open; the random-oracle card's, with gap
+/-- **The window's collision term at the sessions' counted queries** (premise, open; the random-oracle claim's, with gap
 (4)'s `ε_id`): for windows indexed by the oracle `H`, uniform on a finite `O` (the window's game, its laws, sessions
 and state terms at each oracle), every prover's plays `σ H` whose sessions make at most `q` oracle calls by the count
 `qs` have collision term at most `f q` on average over the oracle.
@@ -371,10 +356,10 @@ non-uniform adversary that bound doesn't cover, and `qs` is free:
   otherwise some `Q` with `f Q ≥ 1`, meets it for every game.
 `qs` is meant to be the prover model's count of its sessions' calls (gap (4)'s `ProverModel.sessCalls`, which its
 `Prover.Bounded` counts), and that field isn't tied to an oracle program either. No guarantee reads `CollCounted`, and
-before the random-oracle card discharges it, it is restated with gap (4)'s session-query tie, one definition for both:
+before the random-oracle claim discharges it, it is restated with gap (4)'s session-query tie, one definition for both:
 over an oracle strategy of the window's game, one `QTree` per prover move, with `H` only in the verdict, so the plays
-and their count can depend on `H` only through queries (note:compute-accounting/20261018T2336Z-finding-pw8-rered,
-the recheck's (c)). -/
+and their count can depend on `H` only through queries (the
+recheck's (c)). -/
 def CollCounted {O Reg : Type} [Fintype O] (Lw : O → Reg → Law (WUnit n))
     (sess : O → (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (g : (H : O) → (c : Fin C) → (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess H c S R) → ℝ≥0∞)

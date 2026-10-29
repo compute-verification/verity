@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.ExecParse
 import Flock.NetAt
 
 /-!
-# A net committed at a position map holds exactly when its logical net does (PRF-133, part 3)
+# A net committed at a position map holds exactly when its logical net does
 
 `Net.ofRowsAt` (`Flock.NetAt`) commits the logical rows `Net.ofRows` checked at positions `pos`: committed row `pos[x]`
 is logical row `x` with every reference `v` read as `pos[v]`, and every other row of the slot is empty. So column values

@@ -22,7 +22,7 @@ to run the same words through another architecture's instruction of the same sha
                                                                        by ADA_E4M3_M16N8K32, no epilogue (the bare FP32 word)
     bench-instances-bf16-hopper/v1/vu-k1536-bf16-hopper   BF16_HOPPER (sm90.mma.m16n8k16.bf16)  4,096 inputs x 96 steps of random_finite_bf16
                                                                        words from seed 20260922, HOPPER_BF16_M16N8K16 accumulators,
-                                                                       f32_to_bf16 epilogue (relchain.instances, lane b-hopper)
+                                                                       f32_to_bf16 epilogue (relchain.instances)
     bench-instances-fp8-hopper/v1/vu-k1536-fp8-hopper     FP8_HOPPER_WGMMA (sm90.wgmma.m64n8k32.e4m3)  4,096 inputs x 48 E4M3 steps from
                                                                        seed 20260922, HOPPER_E4M3_K32 accumulators, bare FP32 word
 
@@ -41,7 +41,7 @@ are ``out of domain``.  Positive tiers must have none; the negative tier's ``rej
 have ``hardware != claimed`` and ``hardware == correct``).
 
 Outputs under ``--out``: ``probe_results.json``, ``capture_<tier>.npz`` (the hardware accumulator of every instance at every step,
-the final words, the ids), ``sass_<kernel>_<arch>.txt`` with ``--sass-check``, and under ``research run`` a ``result.json`` of kind
+the final words, the ids), ``sass_<kernel>_<arch>.txt`` with ``--sass-check``, and in a recorded run (``RESEARCH_RUN_ID`` set) a ``result.json`` of kind
 ``tc-evidence/v1`` whose ``tc_evidence`` is the meta contract: ``{instruction, target, instances_dataset, instances_tier, range,
 manifest_sha256, elements, mismatches, first_mismatch | null, per_step_checked, sass, device, driver, cuda, model_agrees, ...}``.
 ``mismatches`` counts hardware words that differ from the reference words: the tier's expected (model-recorded) words, and on the
@@ -64,17 +64,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from verity_config.settings import SHARED
 
-HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[1]
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
 from verity.ml.circuits.silicon import silicon as S
 from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 from verity.ml.circuits.targets import target as T
 
+REPO = Path(__file__).resolve().parents[2]
 N = P.N
 FIRST_MISMATCHES = 20
 BENCH_INSTANCES = "bench-instances/v1"
@@ -216,7 +215,7 @@ def fp8_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
 
 def bf16_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
     """Finite BF16 words with exponent fields in [96, 160), one in ten a signed zero, one in ten a subnormal
-    (``archive.direct.ligero.relations.random_finite_bf16`` of lane b-hopper, verbatim)."""
+    (``archive.direct.ligero.relations.random_finite_bf16``, verbatim)."""
 
     sign = rng.integers(0, 2, size=shape, dtype=np.int64) << 15
     t = rng.integers(96, 160, size=shape, dtype=np.int64)
@@ -274,7 +273,7 @@ class Synthetic:
         return a, b, accs
 
 
-# lane b-hopper's BF16_HOPPER target (dc3c141) is not in every tree this script runs from: its name and instruction as pinned there
+# The BF16_HOPPER target is not in every tree this script runs from: its name and instruction as pinned there
 _BF16_HOPPER = getattr(T, "BF16_HOPPER", None)
 BF16_HOPPER_TARGET = _BF16_HOPPER.name if _BF16_HOPPER else "bf16-hopper-mma-draft/2026-09-22"
 BF16_HOPPER_INSTRUCTION = _BF16_HOPPER.instruction if _BF16_HOPPER else "sm90.mma.m16n8k16.bf16"
@@ -290,13 +289,13 @@ BF16_HOPPER_SYNTHETIC = Synthetic(
     target=BF16_HOPPER_TARGET, instruction=BF16_HOPPER_INSTRUCTION, model=S.HOPPER_BF16_M16N8K16,
     operands=bf16_random_finite_operands, dtype=np.uint16, epilogue=EPILOGUE_BF16,
     recipe="a, b = random_finite_bf16 (exponent fields [96, 160), 1/10 signed zeros, 1/10 subnormals); accs = tc_dot(HOPPER_BF16_M16N8K16) "
-           "chained from +0 (archive.direct.ligero.relchain.instances, relation bf16-hopper, lane b-hopper dc3c141)")
+           "chained from +0 (archive.direct.ligero.relchain.instances, relation bf16-hopper)")
 FP8_HOPPER_SYNTHETIC = Synthetic(
     dataset_id="bench-instances-fp8-hopper/v1", dataset="bench-instances-fp8-hopper/v1", tier="vu-k1536-fp8-hopper", relation="fp8-hopper",
     target=T.FP8_HOPPER_WGMMA.name, instruction=T.FP8_HOPPER_WGMMA.instruction, model=S.HOPPER_E4M3_K32,
     operands=fp8_random_finite_operands, dtype=np.uint8, epilogue=None,
     recipe="a, b = uniform finite E4M3 bytes (NaN codes -> 0x77 | sign); accs = tc_dot(HOPPER_E4M3_K32) chained from +0 "
-           "(archive.direct.ligero.relchain.instances, relation fp8-hopper, lane b-hopper dc3c141)")
+           "(archive.direct.ligero.relchain.instances, relation fp8-hopper)")
 SYNTHETIC = {s.spec: s for s in (FP8_ADA_SYNTHETIC, BF16_HOPPER_SYNTHETIC, FP8_HOPPER_SYNTHETIC)}
 
 
@@ -365,8 +364,8 @@ DATASETS = {
     f"{BENCH_INSTANCES}/tu-k16": "FIRST: 4,096 single transitions with arbitrary finite c",
     f"{BENCH_INSTANCES}/vu-k1536-neg": "FIRST: 52 claimed-wrong / out-of-domain inputs (the harness must detect all)",
     FP8_ADA_SYNTHETIC.spec: "FP8_ADA_MMA: 4,096 inputs x 48 E4M3 steps generated from seed 20260922, bare FP32 word",
-    BF16_HOPPER_SYNTHETIC.spec: "BF16_HOPPER: 4,096 inputs x 96 BF16 steps generated from seed 20260922, f32_to_bf16 epilogue (lane b-hopper)",
-    FP8_HOPPER_SYNTHETIC.spec: "FP8_HOPPER_WGMMA: 4,096 inputs x 48 E4M3 steps generated from seed 20260922, bare FP32 word (lane b-hopper)",
+    BF16_HOPPER_SYNTHETIC.spec: "BF16_HOPPER: 4,096 inputs x 96 BF16 steps generated from seed 20260922, f32_to_bf16 epilogue",
+    FP8_HOPPER_SYNTHETIC.spec: "FP8_HOPPER_WGMMA: 4,096 inputs x 48 E4M3 steps generated from seed 20260922, bare FP32 word",
 }
 
 
@@ -674,7 +673,7 @@ def main(argv: list[str] | None = None) -> int:
         "gpu_seconds": rep0["gpu_seconds"],
         "wall": results["seconds"],
     }
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         status = "failed" if failures else "passed"
         checker = (f"instances_hw: hardware words vs {inst.dataset}/{inst.tier} expected words ({inst.model})" if inst.negative is None else

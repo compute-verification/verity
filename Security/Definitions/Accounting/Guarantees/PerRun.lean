@@ -23,7 +23,7 @@ server's state, in the capacity embedding.
 
 **Priced.** The machine charges a PoUW run's arithmetic, at W1's instruction prices with no fetch charge and no refund,
 to the compute account, and its first fetches of pre-salt or supplied bytes, deduplicated within the run, to the
-bandwidth account at the device's price of a bit read (Daniel's decision 9, 11 Oct). What the compute audit certifies is
+bandwidth account at the device's price of a bit read. What the compute audit certifies is
 the priced sum: the compute account's work plus `pRead` per bit it read from device memory
 (`Accounting.Run.ComputeSoundPerRunPriced`). Tables cite the work and the bits separately. Pearl-C's game gives that
 guarantee by the same truncation, from its γ-gap property at a priced cost model that truncates

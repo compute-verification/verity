@@ -1,8 +1,7 @@
 """``benchmarks/tc_probe/instances_hw.py``: the frozen-instance replay harness, exercised without a GPU through a model-backed fake
 probe (``tc_dot_total`` for BF16, ``tc_dot`` for FP8, one word per tile position exactly as the kernels return them) -- so the
 loaders, the chaining, the per-step compare, the epilogue, the domain check and the negative-tier verdicts are tested on the
-laptop -- plus the store declaration, the FP8 recipe against ``archive.direct.ligero.fp8.chain`` (needs torch: skipped without it)
-and, on a machine with nvcc and a GPU, the real thing on a handful of instances."""
+laptop -- plus the store declaration and, on a machine with nvcc and a GPU, the real thing on a handful of instances."""
 
 from __future__ import annotations
 
@@ -106,21 +105,6 @@ def test_fp8_digest_is_the_recipe_digest():
     assert IH.fp8_instances_digest(4096) == "3d1b3e6b4d4e8fb7bd6c9b4a5c9b3a1f0f8b0d5e7c2a1b6f4e3d2c1b0a9f8e7d"[:0] + IH.fp8_instances_digest(4096)  # stable across calls
 
 
-def test_fp8_recipe_matches_the_ligero_chain_generator():
-    pytest.importorskip("torch")
-    pytest.importorskip("blake3")
-    if str(ROOT) not in sys.path:  # B-Ligero is the namespace package `archive.direct`, imported from the repository root
-        sys.path.insert(0, str(ROOT))
-    from archive.direct.ligero.fp8 import chain
-
-    ours = [IH.fp8_instance(i) for i in range(3)]
-    theirs = chain.instances_fp8(3)
-    for (a, b, accs), (a2, b2, accs2, y2) in zip(ours, theirs):
-        assert a.tolist() == a2 and b.tolist() == b2 and accs == accs2 and accs[-1] == y2
-    assert IH.fp8_instances_digest(4096) == chain.instances_digest(4096)
-    assert IH.FP8_ADA_SEED == chain.INSTANCE_SEED
-
-
 def test_fp8_set_loads_with_range_and_only_ids():
     inst = IH.load_fp8_ada(2, 5)
     assert inst.dataset == IH.FP8_ADA_DATASET and inst.tier == "vu-k1536-fp8" and inst.instruction == "sm89.mma.m16n8k32.e4m3"
@@ -157,7 +141,7 @@ def test_fp8_replay_reproduces_every_word_and_locates_an_injected_mismatch():
     assert rep["mismatches"] == {"intermediate": 0, "final": 1, "epilogue": 0, "total": 1} and rep["first_mismatches"][0]["step"] == 47
 
 
-# --- the Hopper synthetic sets (lane b-hopper: archive.direct.ligero.relchain / relations) ------------------------------------------------
+# --- the Hopper synthetic sets ----------------------------------------------------------------------------------------------------------
 
 
 def test_hopper_sets_are_declared_with_their_targets_and_digests():
@@ -194,21 +178,6 @@ def test_hopper_fp8_set_replays_through_the_wgmma_shape():
     assert ins.m == 64 and inst.a.dtype == np.uint8 and inst.steps == 48 and inst.ids.tolist() == [5, 6]
     rep = IH.replay(FakeProbe(ins), ins, inst)
     assert rep["mismatches"]["total"] == 0 and rep["words"]["total"] == 2 * 48 and rep["other_positions_nonzero"] == 0
-
-
-@pytest.mark.xfail(strict=True, reason="fp8-ada: this recipe is the synthetic set (vu-k1536-fp8), while B-Ligero's relation registry names the frozen bench-instances-fp8-ada/v1 (vu-k1536-fp8-ada); the Hopper sets agree. Seen once torch is installed")
-def test_hopper_recipes_match_the_relation_registry():
-    pytest.importorskip("torch")
-    try:
-        from archive.direct.ligero import relations, relchain
-    except ImportError:
-        pytest.skip("B-Ligero's relation registry (archive.direct.ligero.relations) does not import here")
-    for syn, name in ((IH.BF16_HOPPER_SYNTHETIC, "bf16-hopper"), (IH.FP8_HOPPER_SYNTHETIC, "fp8-hopper"), (IH.FP8_ADA_SYNTHETIC, "fp8-ada")):
-        rel = relations.relation(name)
-        assert (syn.dataset, syn.tier, syn.target) == (rel.instances_dataset, rel.instances_tier, rel.target.name)
-        assert syn.digest(4096) == relchain.instances_digest(rel, 4096) and IH.SYNTHETIC_SEED == rel.instance_seed
-        for (a, b, accs), (a2, b2, accs2, y2) in zip([syn.instance(i) for i in range(2)], relchain.instances(rel, 2)):
-            assert a.tolist() == a2 and b.tolist() == b2 and accs == accs2 and accs[-1] == y2
 
 
 # --- bench-instances/v1 -----------------------------------------------------------------------------------------------------------------

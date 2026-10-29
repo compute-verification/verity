@@ -5,7 +5,7 @@ import Flock.TmplOrder
 import Flock.NetAt
 
 /-!
-# A templated unit's port reads, from its description (PRF-133)
+# A templated unit's port reads, from its description
 
 `ProvedScope.portReadsB` walks every computed row of the unit's net. On a templated unit's net (`Tmpl.unrollAt`) it holds
 whenever the template is ordered (`portReadsB_unrollAt`): `Tmpl.ordered` makes every logical row read port bits among

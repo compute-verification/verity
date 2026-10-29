@@ -32,7 +32,7 @@ finds (`NetTiming.sampledLeak_registered`).
 run, not an assumption. Under the decided composition the registered inputs are fixed by the registration, and the
 advice is advice v1. Its charge, the coded length counted by the in-circuit encoder, is at most the declared public `c`,
 and there are at most `2^c` advice values charged `c` or less (Kraft, proved for advice v1's charge:
-`Guarantees.EncardChargedLe`). Advice charged per window with `BitsCount` (#3533's form, which advice v1's charge meets)
+`Guarantees.EncardChargedLe`). Advice charged per window with `BitsCount` (the advice string's form, which advice v1's charge meets)
 gives `c = Σ_w b w`.
 -/
 

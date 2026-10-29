@@ -1,5 +1,4 @@
-"""The vLLM integration's quality scorecard: the numbers note:20261024T0615Z-draft-verity-vllm-vision's quality bar
-(section 5) is measured by, read from the tree alone.
+"""The vLLM integration's quality scorecard: the numbers its quality bar is measured by, read from the tree alone.
 
     python3 integrations/vllm/tools/scorecard.py [--json] [--top N] [--root REPO]
 

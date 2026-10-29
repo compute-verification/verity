@@ -1,5 +1,5 @@
 """`Value<w>` and tensors: a dtype's width, the `Type` of a tensor or pytree, its maximal tensor chunks, and a collection of
-references split into and joined from those chunks. Width only; numerical interpretation belongs to functions (IR §3.1)."""
+references split into and joined from those chunks. Width only; numerical interpretation belongs to functions."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from verity_vllm.program.frontend.errors import FrontendError
 WIDTH_OF_DTYPE = {torch.bool: 1, torch.uint8: 8, torch.int8: 8, torch.int16: 16, torch.uint16: 16, torch.bfloat16: 16,
                   torch.float16: 16, torch.int32: 32, torch.uint32: 32, torch.float32: 32, torch.int64: 64,
                   torch.uint64: 64, torch.float64: 64,
-                  # [R15 fp8] the OCP FP8 words of a block-scaled checkpoint (e4m3 weights/activations, UE8M0 scale bytes): 8-bit
+                  # the OCP FP8 words of a block-scaled checkpoint (e4m3 weights/activations, UE8M0 scale bytes): 8-bit
                   # VALUES, carried as uint8 (`CARRIER[8]`); their arithmetic is the registered Definitions' (registry.fp8, .marlin_moe)
                   torch.float8_e4m3fn: 8, torch.float8_e5m2: 8, torch.float8_e8m0fnu: 8}
 CARRIER = {1: torch.bool, 8: torch.uint8, 16: torch.bfloat16, 32: torch.float32, 64: torch.int64}

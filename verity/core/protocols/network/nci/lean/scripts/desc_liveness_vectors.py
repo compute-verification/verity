@@ -8,11 +8,11 @@ small and past anything walked one by one (2^22 to 2^52). `NciCheck/DescLiveness
 `NciCheck.Desc.check` gives on `small` what `NciCheck.check` gives on it expanded gate by gate, and on `big` a verdict
 equal to `small`'s (`mode` `same`) or with the same novel reads per IU (`novel`, where the gates grow with `n`).
 
-The shapes are PRF-151's (training's fuzzer, `cursor/nci-desc-fuzz-4207` at 292b190044), on which `NciCheck.Desc` once
+The shapes are the fuzzer's, on which `NciCheck.Desc` once
 overflowed its stack, ran for a time linear in `n` or ran out of memory, and the closed forms that replaced those walks:
 
-* `passscan`: a gate reading the carry of a scan of `n` iterations of a step that passes its carry through (training's
-  `hand-passscan`, 983 bytes at 2^22: a stack overflow);
+* `passscan`: a gate reading the carry of a scan of `n` iterations of a step that passes its carry through
+  (`hand-passscan`, 983 bytes at 2^22: a stack overflow);
 * `unread`: the same scan, which nothing reads (2^52 in 814 bytes: about a year);
 * `batch-ret`, `batch-gate`, `batch-mapped`: a batch of `n` members of `W`, which passes its argument through, sharing
   the input, read whole by a Definition's return (`batch-ret`, a gate then reading two leaves of its call), by a gate
@@ -122,7 +122,7 @@ def finish(P: Program, root: Body, ret_node: int, theta: tuple[int, ...] = ()) -
 
 
 def passscan(n: int, read: bool = True) -> dict:
-    """Training's `passscan`: an input, a scan of `n` iterations of `Step_v1` (which passes its carry through) from it,
+    """The `passscan` shape: an input, a scan of `n` iterations of `Step_v1` (which passes its carry through) from it,
     and a gate reading the scan's carry (`read`) or the input."""
     P = Program()
     root = Body(P, [])

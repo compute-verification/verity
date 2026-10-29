@@ -14,7 +14,7 @@ but a `2^-64` fraction of the keys (`hm96_sha512_bad_keys`), so what remains is 
 
 These are zero-knowledge statements, about what the prover's messages reveal (at fixed coins for Lemma B, against any
 `V*` for Lemma C), over any tables `T`. None is a soundness statement, so the `--zk` verifier's place for `final_c'`
-(#793) is outside them.
+is outside them.
 -/
 
 namespace FlockSoundness.CROnly

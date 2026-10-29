@@ -62,7 +62,7 @@ def _at_once(said: queue.SimpleQueue, release, calls) -> tuple[list, list]:
 
 
 def test_concurrent_sessions_on_one_leaf_state_each_sign_at_a_leaf_of_their_own(monkeypatch):
-    """Three sessions at once, each with a signer of its own over one key and one leaf state (as three windows' legs
+    """Three sessions at once, each with a signer of its own over one key and one leaf state (as three windows' subprotocols
     share their device's), wait on the state's lock while it is held, then all sign once it is let go, each at a leaf of
     its own: none is refused and no leaf is used twice."""
     one = ts.TestSigner(b"shared key", height=3)

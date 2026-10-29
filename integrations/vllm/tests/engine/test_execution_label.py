@@ -1,4 +1,4 @@
-"""[R15 EXEC-02 / COORD M-0063 (2)] the row's execution label decides enforce_eager -- never a harness literal.
+"""The workload's execution label decides enforce_eager -- never a harness literal.
 
 Torch-free part (run_config's laptop mirror) always runs; the adapter part (execution_of_workload / build_engine refusal) needs torch and
 runs on a pod (`/workspace/venv-cu129/bin/python -m pytest tests/engine/test_execution_label.py`).  The build_engine

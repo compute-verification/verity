@@ -4,7 +4,7 @@ A GPU keeps an encoding `C` of model weights `W` in its memory and decodes `W` f
 certify that the GPU still holds more than a `ρ` fraction of `C`. In the ideal-permutation model, answering a random
 block within the deadline requires the block itself, because rebuilding it from a smaller state takes more sequential
 oracle rounds than the deadline allows. At the reference Feistel-SHAKE256 `Π₂` this does not hold: a prover rebuilds a
-label from 1.53% of `C` in 481 Keccak-f (red team, 4 Oct 2026, art:7617c8017e80; "Main caveat"). This directory
+label from 1.53% of `C` in 481 Keccak-f (red team; "Main caveat"). This directory
 holds the reference implementation, `verity.core.protocols.pous` ("Codecs" through "Tests" below), and the Lean formalization,
 `lean/` (from "In Lean" on): the definitions, the guarantees and the proofs so far.
 
@@ -25,7 +25,7 @@ for dense, and its DAG-generic form `ChainExPostFactoG` for the band, with the g
 was taken as a heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
 `docs/band-vs-dense.md`.
 
-**The reference `Π₂` breaks the same way (red team, 4 Oct 2026, art:7617c8017e80).** The overwrite chain fixes the
+**The reference `Π₂` breaks the same way, as the red team showed.** The overwrite chain fixes the
 narrow-state attack only over an ideal `Π₂`; the reference Feistel-SHAKE256 `Π₂` has the weakness inside it. Each
 round function `F_i` is a long SHAKE256 squeeze from a 200-byte post-absorb state, and a chain key, the first `m`
 bits of the pad call's output, is the first `m` bits of `pad ⊕ F_1 ⊕ F_3 ⊕ F_5 ⊕ F_7 ⊕ F_9` (each `F_i` at its
@@ -52,14 +52,14 @@ ideal-permutation model only, and none bounds an adversary at the reference `Π�
   else. The memory challenger issues `k` uniform block indices, all at once or one at a time. Each answer is due within
   the deadline, so the responder is `(D, Q)`-bounded, with no outside help. Whenever a challenge arrives the adversary's
   state is at most `ρ|C|` bits; `W` and `pp` are free.
-- **Deployment: help is accounted, not excluded.** No guarantee assumes trusted prover hardware (Daniel, 12 Oct 2026),
+- **Deployment: help is accounted, not excluded.** No guarantee assumes trusted prover hardware,
   so nothing attests the prover's machine and nothing asks that its responder be isolated. The game's "no outside
   help" is read through the help-accounted row of console's actual-circuit model, the model a certificate cites under
   the id `perfect-isolation` (kept from the earlier model, since certificates pin it): on PoUS's challenge schedule,
   some challenge tick `t_j` has `mem_X(t_j) + 2^e·h ≥ S` for the audited location `X`, where `h` is the help `X`
-  received. It is proved at `e = 0` for a location that does no arithmetic modulo `p` (PR #1860), for challenges on a
+  received. It is proved at `e = 0` for a location that does no arithmetic modulo `p`, for challenges on a
   fixed schedule. PoUS keeps sending each challenge when the last answer arrives, and the model's bridge is to cover
-  that schedule (Daniel, 12 Oct); that bridge is not written yet. An accepted audit bounds what `X` held plus what it
+  that schedule; that bridge is not written yet. An accepted audit bounds what `X` held plus what it
   was helped, never `X`'s memory alone.
 - **Requirement.** `Pr[every answer correct and on time] ≤ δ + ε_crypto`. The honest prover stores `C` and answers by
   lookup.
@@ -83,7 +83,7 @@ The concrete primitives are those of POUS `docs/p3-instantiation.md`. Each set o
 (`params.codec`), and every function that takes a codec defaults to it. P2 (`schemes/p2.py`, experimental) is a
 `protocol.Scheme` and not a codec: see "The generic protocol".
 
-The secure-first scheme is the band graph with in-degree `d = 12` (Daniel, 28 Sep 2026, 01:10Z; POUS
+The secure-first scheme is the band graph with in-degree `d = 12` (POUS
 `docs/band-vs-dense.md`), superseding the dense choice of `docs/scheme-choice-e2e.md`. Dense stays selectable
 (`dense.POINT_64K`).
 
@@ -217,7 +217,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
 ## Public outputs
 
-Under the proof service (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, "PoUS"), an
+Under the proof system, an
 audit makes public its verdict and nothing about a single round:
 
 - the verdict;
@@ -267,8 +267,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   counts are gaps in the storage profile. P2 (`schemes/p2.py`) is **experimental**:
   - It is the squaring-based scheme: two big-integer squarings per 2,056-byte block to decode.
   - It follows the P2 spec (`p2/PROTOCOL.md`, v4: the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
-    v1, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`, with SHA-512 for every hash since Daniel's
-    ruling of 6 Oct 2026) in its maps and values:
+    v1, with SHA-512 for every hash) in its maps and values:
     - the payload is 2,054 bytes per block, which is the spec's profile `p2-2054B`, and the manifest names it;
     - every block, payload and key is a fixed-width, unsigned, big-endian integer;
     - the tweak is rejection-sampled below p, never reduced.
@@ -282,8 +281,8 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
       commitment and a 32-byte setup salt. That goes with the rest of the spec's setup framing (its leaves and
       challenge derivation), which the generic protocol does not yet follow;
     - `p2-16448/v2`: ChaCha8 keyed by a 32-byte seed per segment (`SHAKE256("verity/pous/p2/seed/v1" ‖ tag_s)`), with
-      nonce = the block index. It is **nonconforming** to F4, and its `experimental` reason says so. It is kept
-      because its keys cost about 1% of the device's decode work, and `benchmarks/pous`'s `p2-gpu` arm measures it.
+      nonce = the block index. It is **nonconforming** to F4, and its `experimental` reason says so. Its keys cost
+      about 1% of the device's decode work.
   - Both certificates are the pinned `Pous.SecurityProofs.P2SlackFamilyUncond` at the spec's k = 105 (decision F6):
     its `λ = 128` row, for every block count from 2^8 to 2^23 and every payload width in range, `p2-2054B`'s among
     them, with no hypothesis; the certified store is 2^19 blocks (8 segments of 2^16). It is an abstract-M1 result, and
@@ -295,24 +294,21 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     model `RingDeviceAt` and the coin commitments' hiding at that count (`p2.WIDE_CLAIMS`).
   - SeqRoot sets `call_ns` (`ROOT_CALL_NS` = 854,029 ns), half the fastest 16,448-bit root with 8 cores of one chiplet
     cooperating, which the spec allows. No root may fit within twice `Δ + RTT`. v1's 1 ms RTT allowance
-    (`Δ + RTT = 1.5 ms`) kept only 1.14× of that margin, so spec v1.1 (`p2/PROTOCOL.md` §12), Daniel's ruling of
-    2026-10-04, keeps w = 16,448 and caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS` = 354 µs, so
+    (`Δ + RTT = 1.5 ms`) kept only 1.14× of that margin, so spec v1.1 (`p2/PROTOCOL.md` §12) keeps w = 16,448 and caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS` = 354 µs, so
     `Δ + RTT ≤ 854 µs`.
     - The single-core floor is the timing red team's Zen 5 core at 5.7 GHz with full-rate IFMA and its best
       Toom-4/Karatsuba plan: τ_F = 361.55 ns per squaring (`regate.py` at w = 16,448).
     - A root is 16,446 squarings plus about 20 multiplications (40 squaring-equivalents), so
-      16,486 × 361.55 ns = 5,960.5 µs. The note's 5.97 ms rounds τ_F to 362 ns first.
-    - The cooperation speedup is the measured 8-core one, 2,716.7 / 778.5 = 3.490× per squaring on one Zen 4 chiplet
-      (run `r20260929-060834-0ec4`, art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).
+      16,486 × 361.55 ns = 5,960.5 µs. The red team's 5.97 ms rounds τ_F to 362 ns first.
+    - The cooperation speedup is the measured 8-core one, 2,716.7 / 778.5 = 3.490× per squaring on one Zen 4 chiplet.
     - The cooperating root is 5,960.5 / 3.490 = 1,708.1 µs, and half of it is 854,029.18 ns, rounded down to
       `ROOT_CALL_NS`. The cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`: 500 + 354 = 854 µs. The
       memory challenger accepts it and refuses 355 µs and v1's 1 ms, and the margin at the cap is 2.0001×.
     - **Caveats** (§12): the 3.490× was measured on an untuned Zen 4 kernel and is applied to a modelled floor. The red
       team's sync model (t_sync = 20–40 ns per squaring, `coop.log`) gives 4.24× and 5.55× at 8 cores, and under it
       the margin at the cap is 1.64× and 1.26×. The cap rests on the measured speedup.
-    - **Sources:** `note:20261004T2102Z-report-relay-p2-redteam-timing`, with its scripts and logs in
-      art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57. The review that found v1's cap unsafe is
-      art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c.
+    - **Sources:** the timing red team's scripts and logs (`regate.py`, `coop.log`), and the P2 assumption review,
+      which found v1's cap unsafe.
   - `Scheme.experimental` carries the remaining reasons: the SMS-to-M1 instantiation is not accepted, and the
     XOR-then-reduce compression attack on it is open. The memory challenger audits an experimental scheme only with
     `experimental=True`, and its profile's statement begins with it. No experimental scheme is ever the default.
@@ -368,7 +364,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
 `continuous.ContinuousMemoryChallenger(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the memory challenger
 of the continuous audit's model, `Security/Definitions/Pous/Model/Continuous.lean`, with the guarantee
-`Pous.SecurityProofs.ContinuousAudit` (#954): `n` challenges over time, drawn as the timed audit's indices, accepted
+`Pous.SecurityProofs.ContinuousAudit`: `n` challenges over time, drawn as the timed audit's indices, accepted
 when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
 stream, so the stream is never stopped or extended on misses, though it may reject early (`exceeded`). It is one
 `audit.UnsignedRounds` over the stream with a hard deadline, and it enforces the three requirements that
@@ -394,10 +390,10 @@ stream, so the stream is never stopped or extended on misses, though it may reje
 Run the continuous audit only on `ContinuousMemoryChallenger`, never on a bare `UnsignedRounds` with `late_deadline_ns`. Its
 `respond(block)` names no challenge, so once challenge `j` expires, an answer to `j` still in flight is credited to
 `j + 1`, a hit when both ask for the same block. That block was on the wire, not in the memory the model measures at
-the send time, so the audit would credit storage the responder does not hold (#954's red team).
+the send time, so the audit would credit storage the responder does not hold, as the red team found.
 
 **The audit's duration cap.** `audit.AUDIT_CAP = 1,505` (`Pous.Rebuild.auditCap`) is the cap on a graded audit's
-window that `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the memory challenger to enforce (#953).
+window that `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the memory challenger to enforce.
 `UnsignedRounds(..., audit_cap=...)` and `ContinuousMemoryChallenger(..., audit_cap=...)` enforce it on the memory
 challenger's clock, counted in calls of the parameters' `call_ns` as `D` and `D_late` are, so the limit is 1,505 × 241.5
 µs ≈ 363.5 ms.
@@ -426,9 +422,9 @@ requirement.
 
 ## The streamed-label wipe (experimental, `streamed_wipe`)
 
-A proof of secure erasure for a memory wipe (Daniel's tier 3, 19 Oct 2026), in place of the permutation-based retention
+A proof of secure erasure for a memory wipe, in place of the permutation-based retention
 for wipes: C8, the ideal-permutation premise, is false at the reference Feistel10-SHAKE256 `Π₂`, where 1.53% of the fill
-rebuilds any label (verity#1122, art:7617c8017e80). Here the labels need no permutation and no graph. They are the
+rebuilds any label ("Main caveat"). Here the labels need no permutation and no graph. They are the
 auditor's own PRF outputs, so a label the server didn't keep is a label it can't answer, and a server that kept its
 prior content through the wipe had no room for the labels. The reference is `streamed_wipe.py`, its tests
 `tests/test_pous_streamed_wipe.py`, its verdict's Lean port `MemoryChallenger.StreamedWipe`
@@ -489,7 +485,7 @@ and the Python's alike, rejects such a session however it ran (`batch size B is 
 verdict and the certified egress in whole MiB, rounded up and saturating at `2^15 − 1` (`Verdict.public()`, the
 protocol's outputs, 16 bits in all), and the coins once the session is signed (`Challenger.coins()`, the verifier's draws). The
 signed session (its times, its batch records and the exact egress) is witness, as a memory-challenger session is: the
-prover proves `verdict` of it through the proof service, and only the verdict is published. The labels and `K` are the
+prover proves `verdict` of it through the proof system, and only the verdict is published. The labels and `K` are the
 auditor's; nothing of the prover's is committed, opened or read.
 
 **The bound.** For every prover of the sequential wipe, with `M` bits inside the boundary when the fill ends (every
@@ -552,6 +548,39 @@ an efficient prover. The physical premises are the game's shape, and the deploym
 - C5, *no side channel*: no label leaves except through that egress, and nothing reaches the server during the
   challenges but the indices and what the outside sends.
 
+The `+ N` in `StreamedWipeMeetsReads`'s threshold is the count `C(N, m) ≤ 2^N` of the sets of `m = ⌈N/r⌉ − 1`
+missing labels, `N/512` bytes, 29.5 GB on a whole 8×H200 server. `StreamedWipeMeetsReadsTight`
+(`Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`, proved in
+`Security/Proofs/Pous/StreamedWipe/Server.lean`) replaces it with `m · (⌊log₂⌊3N/m⌋⌋ + 1)` (`C(N, m) ≤ (e·N/m)^m`), so the fill's share is about `(N/r) · (512 + log₂(e·r))`. Per server (the
+wipe leaves at most 5 GB of the server's assumed memory capacity), `StreamedWipeMeetsServer` states it against the
+assumed capacity `M_s = 512 · N + R` over every tier, `R` being every bit outside the fill (the boot disk and the GPU
+contexts included): a server keeps at most `B(N, r, k, R) + E` bits, `B` the fill's share plus `R`.
+`StreamedWipeMeetsServer5GB` is it at the 5 GB point `B ≤ 4·10^10`, and the servers that reach it, at the least `r`
+and its least `k` (the H200 also at its deployed `k`), are:
+
+| server | fill | `R` | `r` | `k` | fill's share | `B` | statement |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| one H200, measured | 148.48 GB | 2.276 GB | 56 | 4,963 | 2.693 GB | 4.969 GB | |
+| one H200, deployed | 148.48 GB | 2.276 GB | 62 | 5,500 | 2.432 GB | 4.709 GB | `StreamedWipeMeetsServerH200` |
+| 8×H200, HBM | 1,128 GB | 8 × 0.3 + 1.5 GB | 1,050 | 93,843 | 1.0995 GB | 4.9995 GB | `StreamedWipeMeetsServer8H200HBM` |
+| 8×H200, HBM and 2 TB RAM | 3,128 GB | 8 × 0.3 + 1.5 GB | 2,922 | 261,229 | 1.0998 GB | 4.9998 GB | `StreamedWipeMeetsServer8H200HBMRAM` |
+| 8×H200, and 12 TB disk | 15,128 GB | 8 × 0.3 + 1.5 GB | 14,183 | 1,268,143 | 1.1000 GB | 4.99996 GB | `StreamedWipeMeetsServer8H200` |
+
+The H200 is vy-dc-h200-2's card as r20261026-003454-bfd2 measured it (`Pous.StreamedWipe.h200`): 143,771 MiB in all
+and a fill of 4,425 segments of 32 MiB, so `R` is 18,211,667,968 bits; the deployed row is `wipe_party --reads 5500` at
+its published `r = 62`. With today's fill-process contexts at zero reserve, `R = 8 × 1.2 GB = 9.6 GB` on its own, and no
+`r` reaches 5 GB. `8 × 0.3 GB + 1.5 GB` is a minimal context per GPU and a host OS, unmeasured: the minimal-context
+probe in Tuesday's window on vy-dc-h200-2 is to measure it, and the 8×H200 rows' honest lemmas wait on it.
+
+Each of `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsServer`, `StreamedWipeMeetsServer5GB` and
+`StreamedWipeMeetsServerH200` is its claim (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) at the wipe's
+verdict, with two lemmas beside it (`Security/Proofs/Pous/StreamedWipe/Witnesses.lean`). The honest one
+(`Pous.Claims.<name>_meets`): its numeric premises, `M_s = 512·N + R`, `0 < N`, `(r − 1)^k · 2^129 ≤ r^k` and the
+5 GB point, hold at the measured H200 at `k = 5500`. The nontrivial one (`Pous.Claims.<name>_fails`): against a verdict
+that accepts everything, a prover that writes its prior content into its memory and reads it back is accepted and
+keeps it with probability 1, while the PRF's advantage against the distinguisher built from it
+(`wipeDistinguisher P`) is 0. A prover that keeps nothing stays within `2^-q` (`Pous.Claims.keepNothing_within`).
+
 **Measured** (`r20261019-061002-ee6b`, one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
 `benchmarks/pous/streamed_wipe/run.sh`; every gate passed, 76 vectors against `streamed_wipe.label`):
 
@@ -584,7 +613,7 @@ which was not measured. The node's load average was about 930 during the run, wh
   fetch from outside the boundary, neither measured.
 - **The guarantee isn't stated against the Lean verdict, and there is no Program.** `MemoryChallenger.StreamedWipe.verdict`
   decides the verdict, but the guarantees read the game's `Accepts`, not that function, so they stay frozen (no-function)
-  until restated against it. `verdict` has no circuit for the proof service, so it is not yet proved in zero knowledge.
+  until restated against it. `verdict` has no circuit for the proof system, so it is not yet proved in zero knowledge.
 
 ## API
 
@@ -892,6 +921,7 @@ The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger
 | `DenseMeets64`, `SegMeets14`, `SegTagMeets14` | the dense scheme at 64 KB, `D = 5`, `k = 106`, in the ideal-hash model: one segment, 448 segments (14 GB), and the 448 segments keyed as the implementation keys them, for every salt | proved |
 | `SegTagAuditSecure`, `DomainSepEquiv`, `TagInjective14` | the tagged keying's transfer: the tagged scheme is as secure as the global one, and the tags relabel the global indices injectively (448 distinct tags) | proved |
 | `BandTwoWay220_12`, `BandTwoWay220_12D11`, `BandTwoWay220_16` | the band certificate for the two-directional column game (`Pous.ColumnGame`): `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels | proved |
+| `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsServer`, `StreamedWipeMeetsServer5GB`, `StreamedWipeMeetsServerH200`, `StreamedWipeMeetsServer8H200HBM`, `StreamedWipeMeetsServer8H200HBMRAM`, `StreamedWipeMeetsServer8H200` | the streamed-label wipe as `StreamedWipeMeetsReads` states it, with the count of the missing labels, `m·(⌊log₂⌊3N/m⌋⌋ + 1)` for `m = ⌈N/r⌉ − 1`, in place of `N`; per server against its assumed memory capacity `M_s = 512·N + R`, at most `2^-128 + Adv_PRF` for `q ≥ B(N, r, k, R) + E`, and at the 5 GB point `B ≤ 4·10^10` for `q ≥ 4·10^10 + E`; one H200 as measured at its deployed `k = 5500`, and an 8×H200 server with 3.9 GB outside the fill, its HBM at `k = 93,843`, with RAM at `k = 261,229` and every tier at `k = 1,268,143` | proved |
 | `StreamedWipe`, `StreamedWipeMeets2600GB` | the streamed-label wipe ("The streamed-label wipe"): for every prover of the sequential wipe, `Pr[accepted ∧ the prior content survives] ≤ (g/N)^k + k·C(N, g+1)·2^(M+E)/2^(q+(g+1)·b) + Adv_PRF`, with no named assumption; at 2.6 TB and `k = 74,000`, at most `2^-40 + Adv_PRF` for `q ≥ E + 8.6·10⁹` bits | proved |
 | `StreamedWipeMeetsFamily`, `StreamedWipeMeets96GiB`, `StreamedWipeMeets141GB` | the streamed-label wipe at `k = 2152` reads: for every fill of at least one 32 MiB segment, at most `2^-128 + Adv_PRF` for `q ≥ ⌈M/19⌉ + E`; at 96 GiB and 141 GB the explicit thresholds | proved |
 | `StreamedWipeMeetsReads`, `StreamedWipeMeets141GB5` | the streamed-label wipe at any `k` reads with `(1 − 1/r)^k ≤ 2^-129`, `verity/wipe/v0`'s figure at the session's `k`: for every fill and `R` bits outside it, at most `2^-128 + Adv_PRF` for `q ≥ 512·(⌈N/r⌉ − 1) + N + ⌊log₂ k⌋ + 130 + R + E`; an H200 (141 GB and its 2.3 GB reserve) at `k = 5231`, `q ≥ 39,721,768,854 + E` bits, at most 5 GB | proved |
@@ -936,8 +966,8 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   `HonestPassesAccepts` prove that the honest full-state server passes P2's ring audit, and the end-to-end event, with
   probability 1.
 
-`P2RingAuditSecure` is also derived from the per-round conjecture `P2RingRoundSecure p ε₀ D Q L` (Daniel's ruling of
-12 Oct, item 5): at every block count from `2^19` to `2^25`, at a boundary where the server holds at most `⌊ρ·|C|⌋`
+`P2RingAuditSecure` is also derived from the per-round conjecture `P2RingRoundSecure p ε₀ D Q L`:
+at every block count from `2^19` to `2^25`, at a boundary where the server holds at most `⌊ρ·|C|⌋`
 bits, a uniform challenge is answered with probability at most `1 − p` given the earlier answers, outside an event of
 mass `k·ε₀` over `k` rounds (one `ε₀` per round, the same at every block count). `Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure` gives `P2RingAuditSecure` from it when
 `(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (`p = 0.043` with `ε₀ = 2^-137` suffices; `p < 0.04291` doesn't), and
@@ -950,14 +980,12 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 
 - `pous-ring-device` (the model): the deployed server is a `Server`, its state bounded between setup, the session and
   its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its host never restores an
-  earlier copy: `trusted-host` (pending network-accounting's widening, Daniel decision 2)) and the coins drawn
+  earlier copy: `trusted-host`) and the coins drawn
   online;
 - `pous-ring-speed` (the numbers): within `Δ + RTT` no allowed hardware finishes a 16,447th sequential multiplication
   round (`D = 16,446`), more than `2^20` key queries or `2^64` ring operations per answer. It rests on the floor
   behind `ROOT_CALL_NS` (SeqRoot, under P2 in "The generic protocol"), a model cut by a measurement: the timing red
-  team's modelled single-core floor, `note:20261004T2102Z-report-relay-p2-redteam-timing`
-  (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation speedup measured
-  in run `r20260929-060834-0ec4` (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); its margin is
+  team's modelled single-core floor and the 8-core cooperation speedup measured on one Zen 4 chiplet; its margin is
   1.995×, and 1.64× and 1.25× under the red team's sync model;
 - `pous-ring-instantiation`: P2 with the identity labeling and SHA-512-CTR keys is no easier than `p2ring` with
   uniform ω;
@@ -966,8 +994,7 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 Two gaps stood between these statements and the deployed verifier:
 
 - G-1, one session per audit: the check's half is fixed in code; one session per id is the memory challenger's
-  `SessionLog` under its host presumption, which `trusted-host` covers as network-accounting widens it
-  (pending network-accounting's widening, Daniel decision 2). Every session names its setup: a `SessionCommitment`'s
+  `SessionLog` under its host presumption, which `trusted-host` covers. Every session names its setup: a `SessionCommitment`'s
   `binding` has no default, the `MemoryChallenger` refuses one that is not a 64-byte root, and the harness's memory
   challenger (`benchmarks/pous/memory_challenger/live.py`) binds every session to the root the setup publishes for the
   `C*` its digests describe (`VerifierKey.from_row_digests`). Every session is also its audit's: its id (`session`, in
@@ -977,7 +1004,7 @@ Two gaps stood between these statements and the deployed verifier:
   so a session that never runs has used its id too. A used id is refused, a log that is missing or unreadable refuses
   every session, and nothing rewrites, truncates or remakes a log. A file cannot see its host restore an earlier copy of
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
-  `trusted-host` (`verity.core.claims`; Daniel decision 2): "the auditor's device runs its stated code, timing
+  `trusted-host` (`verity.core.claims`): "the auditor's device runs its stated code, timing
   included, on a host the prover doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
   host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
@@ -1001,7 +1028,7 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
   `M1Meets`.
 - Retracted: `InvertibleLabels`, which was N10's statement. It is false (`N10Refuted`).
 
-## Provisional, waiting on Daniel
+## Provisional
 
 - `|C| ≥ |W|` in `Meets` (so `|pp| ≤ 0.05·|W|`): otherwise a scheme can keep `W` in the free `pp`.
 - `ε_crypto ≤ 2^-128`: an unbounded `ε` makes the requirement vacuous.
@@ -1024,8 +1051,8 @@ the dense chain scheme and P3 with the concrete `H` ("Guarantees"), in
 `Security/Proofs/Pous/Chain/Flat.lean`. Pending:
 
 - P3's certificate: the code's `h_0` and Lean's `iv(domP3 tag L v)` differ ("P3 (research)").
-- A GPU codec for the dense scheme (#172's is P3's).
+- A GPU codec for the dense scheme (the GPU codec there is P3's).
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
 - The bulk bandwidth audit that would pin storage to HBM rather than the whole server.
 - In `lean/`: N10′ (`ColumnAwareDraft`, `ForwardCoreDraft`, `n10prime`; its core `n10prime_core` is open) and
-  `p3-meets` (P3 with a random-oracle `H`) come in later PRs.
+  `p3-meets` (P3 with a random-oracle `H`).

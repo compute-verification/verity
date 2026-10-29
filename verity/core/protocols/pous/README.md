@@ -101,7 +101,11 @@ prior content, with no named assumption, for the sequential reveal, the only one
 fill of a 32 MiB segment or more, the egress plus `⌈M/19⌉` bits at `2^-128` (`StreamedWipeMeetsFamily`, with
 `StreamedWipeMeets96GiB` and `StreamedWipeMeets141GB`); at any `k` with `(1 − 1/r)^k ≤ 2^-129`, the egress plus
 `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130` bits and the memory outside the fill (`StreamedWipeMeetsReads`), an H200 at
-`k = 5231` within 5 GB with its driver reserve (`StreamedWipeMeets141GB5`). `PROTOCOL.md` ("The
+`k = 5231` within 5 GB with its driver reserve (`StreamedWipeMeets141GB5`); with the count of the missing labels in
+place of `n`, per server against its assumed memory capacity `M_s` over every tier (`StreamedWipeMeetsReadsTight`,
+`StreamedWipeMeetsServer`), and at 5 GB a server (`StreamedWipeMeetsServer5GB`): one H200 as measured at its deployed `k = 5500`, and a whole
+8×H200 server, HBM, 2 TB of RAM and 12 TB of disk, at `k = 1,268,143` with 3.9 GB outside the fill
+(`StreamedWipeMeetsServer8H200`). `PROTOCOL.md` ("The
 streamed-label wipe") has the messages, the bound, the measured fill and round trips, and the holes. The verdict is decided by its Lean port, `MemoryChallenger.StreamedWipe`
 (`streamed-wipe-verdict` in `verity/core/devices/memory_challenger/lean/`), through `wipe_verdict.judge` there;
 `streamed_wipe.verdict` is the reference it is difftested against, and runs beside it under `both`.
@@ -127,6 +131,13 @@ memory challenger chose (`wipe_party --reads`, 2152 by default; the prover never
 foreign content it may leave, `StreamedWipeMeetsReads`' `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `2^-128` with
 the egress counted (`R` the declared memory past the fill), and `M` (vacuous) otherwise; an unsigned session is
 undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's leg of the all-protocols period runner.
+`wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
+every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
+except with δ (`prCoin_count_le_choose`'s count bound, which the remote bandwidth audit's period shares), every one
+meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers and devices).
+`wipe_parties` is the same memory challenger and prover as parties of the deployment layer (`verity.core.deploy`), the
+reads the challenger's machine gives it: on the same coins, clock readings, key and reads it signs the bytes
+`wipe_party.serve` signs.
 On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: the CUDA driver through ctypes, gated
 before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
 and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its
@@ -135,8 +146,19 @@ past the published figure, which must reject), its `reads` the reads the leg exp
 one on its own host. The leg's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's leg
-declares whole, the host's DRAM, its disks) and an egress signed `UNCOUNTED`. It also carries the session's window, `t0` (the prover connected) and `t1` (the
-session signed) on the challenger's clock, which a network certifier counts the egress over.
+declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the leg declares the larger
+of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an egress signed `UNCOUNTED`. It
+also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
+which a network certifier counts the egress over.
+`wipe.disk` puts the node's disks in the same session (`wipe_store.Disk`, laid ahead of the card or host memory by
+`wipe_store.Joint`; `demo.sh --disk PATH`): a fill file of the session's own in each target directory, or a raw block
+device, written with `O_DIRECT` and synced before the prover acknowledges the fill. The whole disks under the targets
+are declared, with `spare_bytes` for each drive's spare area and cache, so what the fill doesn't overwrite (the used
+filesystem, its metadata, the reserve, the spare area) counts in `R`. That is `Pous.Guarantees.StreamedWipeMeetsDisk`.
+A virtual disk's backing store, an undeclared spare area, buffered I/O and the disks outside the targets go in
+`uncertified`: every block device in `/sys/block` but loop and RAM devices, mounted or not, each whole. `wipe.dram` puts the host's DRAM in that session too, after the card (`demo.sh --dram`): the fill takes
+what `MemAvailable` says less a reserve, and the whole DRAM is declared (`wipe_store.HostMemory(whole=True)`), so the
+rest counts in `R`.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with

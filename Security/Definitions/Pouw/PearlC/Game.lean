@@ -4,7 +4,7 @@ import Definitions.Pouw.Basic.QTree
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
-# Pearl-C's γ-gap game and accounting (trusted; the cheap-binding lane's file)
+# Pearl-C's γ-gap game and accounting (trusted)
 
 The game of the integer statement (§3.3, `Pouw.Game.Defs`), for a protocol whose bound words are output words: per unit,
 the ticket words (Pearl-C's pre-peel accumulator `C̃`) and the useful output words (`U`, after the checked clean-up and
@@ -168,18 +168,18 @@ def Gγ [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R 
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S => Wins P U γ T (A.transcript U x.1 x.2) x.1 x.2) ≤ η q U.layout.N
 
-/-! ## Pearl-C's accounting and domain (H100 units; `docs/pouw/cheap-binding.md` §1 and §5) -/
+/-! ## Pearl-C's accounting and domain (H100 units) -/
 
 /-- The forming costs per activation element (H100 units): `fs` depends on the salt (credited), `qa` on the activations
 alone (not credited: an adversary that chose its activations can skip it). The unit's input is the model's clean
-quantizer output; whatever that quantizer computes is outside the unit for both programs (the forming red team's
-reading 1), and every operation inside the unit is charged at its price to every program. -/
+quantizer output; whatever that quantizer computes is outside the unit for both programs, and every operation inside the
+unit is charged at its price to every program. -/
 structure Costs where
   fs : ℕ
   qa : ℕ
 
 /-- §5 with Pearl's headroom scale `α = 448/(s + 4δρ)` adopted as the model's quantizer, even with PoUW off: the
-model's FP8 path uses exactly this α (the kernel lane's pins for s, ρ's order, α's rounding and `mul.rn(α, x)`) whether
+model's FP8 path uses exactly this α (the kernel's pins for s, ρ's order, α's rounding and `mul.rn(α, x)`) whether
 or not PoUW runs; otherwise `Costs.current` applies. The input is `α·x`; the noise atom (32) and the salt-dependent
 cast `A′ = e4m3(D)` (32) are credited; the sampled statistic ρ (4) is A-only. -/
 def Costs.adopted : Costs := ⟨64, 4⟩
@@ -197,7 +197,7 @@ def creditOf (p : Params) (c : Costs) (s : Shape) : ℚ :=
   let mkn : ℚ := (s.m : ℚ) * s.k * s.n
   mkn + (if p.G = 0 then 0 else mkn / p.G) + (s.m : ℚ) * s.k * p.r + 4 * (p.r : ℚ) * s.m * s.n + (c.fs : ℚ) * s.m * s.k
 
-/-- A unit's replayed debit (`internal/pouw-fp8/pearl-c-lean-split.md` §5): `atoms`, its flagged atom-words (P1's
+/-- A unit's replayed debit: `atoms`, its flagged atom-words (P1's
 `jointFlags` over every output word, on the noisy codes under the ticket's promotion schedule: every atom of a one-group
 joint skip that leaves the word unchanged); `elems`, its forming elements that are salt-dead or needed by no unflagged
 atom (P3). Cross-group joint skips are in neither: no replay-local count bounds them (`joint_cross_group`), and the named
@@ -213,7 +213,7 @@ def debitOf (p : Params) (c : Costs) (d : Debit) : ℚ :=
 
 /-- The honest reference's work: the credited work plus the forming that depends on the activations alone. Neither this
 nor `creditOf` has a weight-side term (`B̃·F_A`, `P_B`, the forming of B̃), whether that work runs per call or once per
-weight and epoch, so a verifier's `W_ref` and its draw's tickets must use exactly `wrefOf` (the red team's F2). -/
+weight and epoch, so a verifier's `W_ref` and its draw's tickets must use exactly `wrefOf`. -/
 def wrefOf (p : Params) (c : Costs) (s : Shape) : ℚ := creditOf p c s + (c.qa : ℚ) * s.m * s.k
 
 /-- The credited work when forming is not credited at all. -/
@@ -231,7 +231,7 @@ def PearlCAccounting (P : Protocol Q R S) (p : Params) (c : Costs) (ρ : ℚ) : 
 
 /-- Pearl-C's shape domain: positive dimensions, a whole number of promotion groups, `k ≤ 2^16`, and promotion every
 4 atoms, which confines freezing to one group (P1). What freezing remains is debited per unit, and the cap on the debit is
-in `Correct`, since it depends on the activations and the noise (the aligned-spike census `r20260930-003714-d2ba`). The
+in `Correct`, since it depends on the activations and the noise (the aligned-spike census). The
 noise law, the seeds and the chain live in the protocol's reference functions.
 
 **The channel split** is part of the model's own FP8 path, adopted as `Costs.adopted` adopts Pearl's α.
@@ -239,7 +239,7 @@ noise law, the seeds and the chain live in the protocol's reference functions.
   model's BF16 side GEMM with PoUW on and off, so they are the model's work (glue), outside the unit and outside `W_ref`.
 - **The unit's k channels** are the kept channels, padded with zero channels to a whole number of promotion groups.
 - **How `S_ℓ` is chosen.** Once per model, before any salt or request, by one pinned implementation of the greedy rule:
-  `split_channels` in `benchmarks/pouw/pearlc_headline.py` (PR #451 at `f6f05bd8`), with its batch of 4 channels per
+  `split_channels` in `benchmarks/pouw/pearlc_headline.py` (at `f6f05bd8`), with its batch of 4 channels per
   step, its tie-break (equal offence counts go to the lower channel index) and its budget of `⌊k/100⌋` channels, which S
   never exceeds. It moves the input channels that offend the most failing rows until every row of the calibration
   activations and of the weights passes Π's rules, or the budget is spent. The input is the committed calibration data: a
@@ -250,7 +250,7 @@ noise law, the seeds and the chain live in the protocol's reference functions.
   steer which channels the unit leaves out.
 - **Rows that still fail.** An activation row that fails Π's rules with the fixed `S_ℓ` (a token-specific massive
   activation, which no fixed set covers: Qwen2.5-7B's early `down_proj` layers) stays in its unit: its words are computed
-  and bound, it earns no credit, and the verifier checks that it fails (`docs/pouw/pearl-c-vllm-plan.md` §13). Excluding a
+  and bound, it earns no credit, and the verifier checks that it fails. Excluding a
   row only lowers the prover's credit, so γ needs no check that the exclusion was forced. The per-tile statement
   (`Tile.lean`) credits a tile's passing rows; this unit-level game, whose `actOK` reads the whole unit, credits nothing of
   a unit with such a row. -/

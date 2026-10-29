@@ -31,7 +31,7 @@
 // the levels from 7 up are launches of their own.  H1C_LMINB = B (H1C_HB) asks the leaves kernel's registers to leave
 // room for B blocks an SM (with H1C_MK and H1C_MID the leaves hold 200 registers on sm_120a, 160 on sm_90a and 192 on
 // sm_100a; B = 4 caps them at 128 on all three, with 64 to 96 bytes more stack).  H1C_LT = N (H1C_LVF) gives h1c_levels'
-// block N threads, 256 by default: at 128 registers a 256-thread block fits 2 an SM, so a build of more tables than
+// block N threads, 256 by default: at 128 registers a 256-CTA fits 2 an SM, so a build of more tables than
 // twice the SMs runs its levels' serial chain in two waves.  H1C_APW = 1: h1c_a_pre_k reads a row's M_key byte-table
 // rows a y word at a time, the word's 8 rows' loads issued before any is folded and y rotated in registers (as hb_mk),
 // rather than one row after another with y indexed at run time.  H1C_SEGMID = 1 (H1C_HB): a segment's first block
@@ -105,10 +105,7 @@ static_assert(H1C_MK || !H1C_MKN, "H1C_MKN is H1C_MK's M_key a nibble at a time"
 static_assert(H1C_MK || !H1C_LVB, "H1C_LVB's subtrees are H1C_MK's leaves kernel's");
 static_assert(H1C_HB || !H1C_SEGJ, "H1C_SEGJ is H1C_HB's segments kernel's");
 
-namespace sh {
-typedef unsigned long long u64;
-#include "../../codec_tensor/sha512.cuh"
-}  // namespace sh
+#include "../../torch_gpu/sha512_rows/sha512x.cuh"
 typedef unsigned long long u64;
 typedef unsigned int u32;
 
@@ -161,15 +158,14 @@ struct Hs {
   u64 tot;
 };
 __device__ __forceinline__ void hs_init(Hs& s) {
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s.h[j] = sh::kSha512Iv[j];
+  sx::iv(s.h);
 #pragma unroll
   for (int j = 0; j < 16; ++j) s.w[j] = 0;
   s.n = 0;
   s.tot = 0;
 }
 __device__ __forceinline__ void hs_flush(Hs& s) {
-  sh::sha512_compress(s.h, s.w);
+  sx::compress<0, 2>(s.h, s.w);
 #pragma unroll
   for (int j = 0; j < 16; ++j) s.w[j] = 0;
   s.n = 0;
@@ -213,7 +209,7 @@ __device__ void hs_final(Hs& s, u64 out[8]) {
   ++s.n;
   if (s.n > 112) hs_flush(s);
   s.w[15] = bits;
-  sh::sha512_compress(s.h, s.w);
+  sx::compress<0, 2>(s.h, s.w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) out[j] = s.h[j];
 }
@@ -479,8 +475,7 @@ struct Hb {
   u64 tot;
 };
 __device__ __forceinline__ void hb_init(Hb& s, uint8_t* b) {
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s.h[j] = sh::kSha512Iv[j];
+  sx::iv(s.h);
   s.b = b;
   s.n = 0;
   s.tot = 0;
@@ -504,8 +499,8 @@ __device__ __forceinline__ u64* ap_base(int p) {
   return ap_smem + AP_WORDS * p;
 }
 __device__ __forceinline__ void ap_round(u64& a, u64& b, u64& c, u64& d, u64& e, u64& f, u64& g, u64& h, u64 kw) {
-  const u64 t1 = h + (sh::rotr64(e, 14) ^ sh::rotr64(e, 18) ^ sh::rotr64(e, 41)) + ((e & f) ^ (~e & g)) + kw;
-  const u64 t2 = (sh::rotr64(a, 28) ^ sh::rotr64(a, 34) ^ sh::rotr64(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+  const u64 t1 = h + (sx::rotr<0, 14>(e) ^ sx::rotr<0, 18>(e) ^ sx::rotr<0, 41>(e)) + ((e & f) ^ (~e & g)) + kw;
+  const u64 t2 = (sx::rotr<0, 28>(a) ^ sx::rotr<0, 34>(a) ^ sx::rotr<0, 39>(a)) + ((a & b) ^ (a & c) ^ (b & c));
   h = g;
   g = f;
   f = e;
@@ -523,7 +518,7 @@ __device__ __noinline__ void ap_cmp(u64* h, const u64* w) {
 #pragma unroll
   for (int t = 0; t < 16; ++t) {
     x[32 * (80 + t)] = w[t];
-    x[32 * t] = sh::kSha512K[t] + w[t];
+    x[32 * t] = sx::K_DEV[t] + w[t];
   }
   if (lane == 0) base[96 * 32] = 0;
   ap_arrive(bar, 64);
@@ -554,7 +549,7 @@ __device__ __forceinline__ void ap_cmp_in(u64 h[8], const u64 w[16]) {
 #pragma unroll
   for (int t = 0; t < 16; ++t) {
     x[32 * (80 + t)] = w[t];
-    x[32 * t] = sh::kSha512K[t] + w[t];
+    x[32 * t] = sx::K_DEV[t] + w[t];
   }
   if (lane == 0) base[96 * 32] = 0;
   ap_arrive(bar, 64);
@@ -593,11 +588,11 @@ __device__ void ap_serve(int p) {
 #pragma unroll
       for (int t = 0; t < 16; ++t) {
         const u64 w15 = w[(t + 1) & 15], w2 = w[(t + 14) & 15];
-        w[t] += (sh::rotr64(w15, 1) ^ sh::rotr64(w15, 8) ^ (w15 >> 7)) + w[(t + 9) & 15] +
-                (sh::rotr64(w2, 19) ^ sh::rotr64(w2, 61) ^ (w2 >> 6));
+        w[t] += (sx::rotr<0, 1>(w15) ^ sx::rotr<0, 8>(w15) ^ (w15 >> 7)) + w[(t + 9) & 15] +
+                (sx::rotr<0, 19>(w2) ^ sx::rotr<0, 61>(w2) ^ (w2 >> 6));
       }
 #pragma unroll
-      for (int i = 0; i < 16; ++i) x[32 * (16 * q + i)] = sh::kSha512K[16 * q + i] + w[i];
+      for (int i = 0; i < 16; ++i) x[32 * (16 * q + i)] = sx::K_DEV[16 * q + i] + w[i];
       ap_arrive(bar + q, 64);
     }
   }
@@ -616,7 +611,7 @@ __device__ __noinline__ void hb_block(u64* h, const uint8_t* b) {
   for (int k = 0; k < 16; ++k) w[k] = (u64)bswap32(q[2 * k]) << 32 | bswap32(q[2 * k + 1]);
 #pragma unroll
   for (int j = 0; j < 8; ++j) v[j] = h[j];
-  sh::sha512_compress(v, w);
+  sx::compress<0, 2>(v, w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) h[j] = v[j];
 }
@@ -783,7 +778,7 @@ __device__ __forceinline__ void hb_row(Hb& s, const H1Tab& T, long long i, int o
         w[2 * k] = (u64)bswap32(v.x) << 32 | bswap32(v.y);
         w[2 * k + 1] = (u64)bswap32(v.z) << 32 | bswap32(v.w);
       }
-      sh::sha512_compress(s.h, w);
+      sx::compress<0, 2>(s.h, w);
       s.tot += 128;
       p += 128;
     } else {
@@ -1374,7 +1369,7 @@ __device__ __forceinline__ void tail_node(const H1Tab& T, uint8_t* b, int lv, lo
         for (int i = 3; i < 15; ++i) w[i] = 0;
         w[15] = bits;
       }
-      sh::sha512_compress(h, w);
+      sx::compress<0, 2>(h, w);
     }
     u64* o = T.level + 8 * (off + (width >> lv) + idx);
 #pragma unroll
@@ -1637,7 +1632,7 @@ extern "C" __global__ void __launch_bounds__(32 * AW) h1c_a_call_k(const H1Tab* 
 #pragma unroll
               for (int j = 0; j < 8; ++j) nx[j] = __ldg(q + j);
             }
-            sh::sha512_compress(s.h, w);
+            sx::compress<0, 2>(s.h, w);
             s.tot += 128;
             if (!more) break;
           }
@@ -1675,7 +1670,7 @@ extern "C" __global__ void __launch_bounds__(32 * AW) h1c_a_call_k(const H1Tab* 
   if (threadIdx.x == 0) *reinterpret_cast<unsigned*>(P + A_CNT) = 0;
 }
 
-// segment block q of a row (the bytes after the segment's prefix block: L of them, then SHA-512's padding) as message words;
+// segment block q of a row (the bytes after the segment's prefix chunk: L of them, then SHA-512's padding) as message words;
 // row's bytes below k, the tail's (sa's) at k and above
 __device__ __forceinline__ void a_seg_words(u64 w[16], const uint8_t* row, const uint8_t* tl, int k, int p0, int L, int nb,
                                             int q) {

@@ -28,12 +28,11 @@ step gate unless the step completes an entry of the multiplication before. As in
 rationale is that `R` must read each input entry it uses, its linked output entry or a partial sum of it, and each weight
 entry it uses, whichever of its gates hold them.
 
-Daniel's #approvals card of 20 Oct 2026 (card badb84c0) adopted it by default, with `PackedTrainingIncompressible`, as
-the `k`-generalization of the carded per-product premises `ActivationsIncompressible` and `TrainingIncompressible`. It
+It is adopted, with `PackedTrainingIncompressible`, as the `k`-generalization of the per-product premises
+`ActivationsIncompressible` and `TrainingIncompressible`. It
 covers a reference training circuit with at most `k` of the chain's products to a gate, such as one in `Dot16` steps,
 whose weights and first inputs depend on more than `Γ` work of training since the commitment, as
-`ActivationsIncompressible` does (card 7d82eba8), and is false on a declared circuit, whose wiring the prover controls
-(Daniel, 9 Oct 2026, 02:46Z). -/
+`ActivationsIncompressible` does, and is false on a declared circuit, whose wiring the prover controls. -/
 def PackedActivationsIncompressible {k : ℕ} (D : Declaration) (c : PackedChain D.D k) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
   ∀ R ⊆ D.D.computed, D.D.size R ≤ Γ → (novelReads D R : ℝ) ≤ K →
     b_w * (c.weightsUsed R).card +

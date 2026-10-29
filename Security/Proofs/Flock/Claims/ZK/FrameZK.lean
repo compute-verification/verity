@@ -2,7 +2,7 @@ import Proofs.Flock.Claims.ZK.FrameInner
 import Flock.Firewall.Session
 
 /-!
-# `Flock.zk_server_lean` at the session loop's own frames (Stage B)
+# `Flock.zk_server_lean` at the session loop's own frames
 
 `Flock.zk_server_lean_loop` took the transport's frame state as given (`ProgReads`, at a `pc` of the caller's). At
 `LeanRelease.ofLoop` that state is a Lean function, so `ProgReads` holds by definition (`ofLoop_progReads`) and what it

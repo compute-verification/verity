@@ -4,7 +4,7 @@ import Definitions.Accounting.Assumptions.Stages
 /-!
 # Sampled proofs under per-stage coins (trusted)
 
-STEER-PROOF's route A (note:20261018T0303Z-draft-steer-proof), each `def G : Prop` proved as
+STEER-PROOF's route A, each `def G : Prop` proved as
 `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS.Stages`:
 
 * `SampledBudget`: a sampled window with `s ≥ 2` draws a round whose share is at most `r` times the draws' mass on saved

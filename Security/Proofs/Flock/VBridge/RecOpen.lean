@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Refine.Paths
 # V*'s opening, both outputs
 
 `_steps` of `verity_flock.rec_open`'s `RecOpen_v3` (rec-step3 `273017068`, `rec_open.py:197-200`) and
-`RecOpen_v4` (#1347, `:200-203`), as the verifier's builder (`Flock.HmNets`) states it. First the consistency term:
+`RecOpen_v4`, as the verifier's builder (`Flock.HmNets`) states it. First the consistency term:
 `residual_forms` at `cons_structure(LANES)` over the row's elements and `acc`'s first two (`row + acc[:256]`) and the
 coefficients `coef`, then `_climb` at the directions `dirs[:32]` (`climbRow`). `out` is the climb; `acc_out` is the two
 residuals and then `acc[256:]`. The two versions share `_steps` and `cons_structure`. v4's `dirs` is 64 words where

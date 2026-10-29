@@ -1,4 +1,4 @@
-"""RMSNorm on bf16 rows in circuits' form (CMP-92's plan, section 1b; the CMP-96 replay's RmsSumSqPart_v1, F32SumPart_v1,
+"""RMSNorm on bf16 rows in circuits' form (the CPU replay's RmsSumSqPart_v1, F32SumPart_v1,
 RmsNormRecip_v1 and RmsNormOut_v1): units_rmsnorm, one CTA per row, and its twin.
 
 OPS, a row x of N bf16 words and the gain w (N), C = min(128, N), nc = N / C chunks, G = min(64, nc), ng = nc / G groups

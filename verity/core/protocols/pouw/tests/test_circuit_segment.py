@@ -1,5 +1,5 @@
-"""The receipt spot checks (`verity.core.protocols.pouw.circuit.segment`): LEDGER's meet-in-the-middle
-(note:20261017T1723Z-draft-ledger) opens any committed window word through `PouwSegCheck_v2`, whose prefix sets are
+"""The receipt spot checks (`verity.core.protocols.pouw.circuit.segment`): the meet-in-the-middle check
+opens any committed window word through `PouwSegCheck_v2`, whose prefix sets are
 witness, and `PouwSegCheck_v3`, which recomputes every absorbed word, refuses the same committed data; each new check
 on bits is its word view, 1 on an honest instance and 0 once one receipt bit changes; and census/v1 counts the segment dots
 on bits as unserved `tc:int8` steps."""
@@ -302,7 +302,7 @@ def test_segment_dots_are_unserved_int8_tensor_core_steps():
 
 
 def test_call_words_take_no_witness():
-    """Every port of the new checks is committed, the coin's or the draw's: none carries a prefix word."""
+    """Every port of the new checks is committed, the coin's or the sample's: none carries a prefix word."""
     committed, coin, draw = {"a", "b", "x", "w", "rc"}, {"u", "f", "c", "z", "st"}, {"asel", "bsel", "xsel", "wsel", "rsel"}
     for d in (bind(SG.PouwSegCheckV3, KS=2, S=1, FOLD="duo"), bind(SG.PouwCallCheck, KS=2, FOLD="fx1", OUT="state"),
               bind(SG.PouwWarpCheck, KS=2, NL=1), bind(SG.PouwWarpCheckV2, KS=2, NL=1, FOLD="duo")):

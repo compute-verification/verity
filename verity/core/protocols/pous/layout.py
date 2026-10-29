@@ -73,7 +73,7 @@ class Layout:
         return range(p.offset // seg, -(-(p.offset + p.size) // seg)) if p.size else range(0)
 
     def blocks(self, name: str) -> range:
-        """The blocks `decode_tensor` reads for tensor `name`."""
+        """The labels `decode_tensor` reads for tensor `name`."""
         segs, n = self.segments(name), self.params.blocks_per_segment
         return range(segs.start * n, segs.stop * n)
 
@@ -98,7 +98,7 @@ class Layout:
 
 def decode_tensor(layout: Layout, prims: Primitives, salt: bytes, name: str, block: Callable[[int], bytes],
                   codec: Codec | None = None) -> bytes:
-    """Tensor `name` from the blocks of the segments it overlaps; `block(i)` returns block `i` of `C`.  The codec
+    """Tensor `name` from the labels of the segments it overlaps; `block(i)` returns label `i` of `C`.  The codec
     defaults to the layout's parameters' own."""
     params, p = layout.params, layout.placement(name)
     codec = codec or params.codec

@@ -1,4 +1,4 @@
-"""A verifier of record costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules", Daniel, 18 Oct).
+"""A verifier of record costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
 
 A scan over the Lean under `verity/core/` (the verifiers of record and the code they run) refuses the forms an unrolled
 walk takes there: locating gates one by one through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a

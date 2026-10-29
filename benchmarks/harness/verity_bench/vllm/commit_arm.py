@@ -3,8 +3,8 @@
 (``commit@compiled``, at vLLM's compiled serving defaults) in ``arm_modules`` and the arm's id in ``arms``.
 
 ``sampled-proofs:rows-sha512`` can't be a protocol arm: `verity_vllm.LLM` builds its options at stage ``serve``, where sampled
-proofs refuses (`protocol_options.sampled_proofs.refusals`: it runs in a row's Commit stage). So these arms install the Commit's
-committer on the served engine themselves, configured as a row's Commit stage runs it (`config.CommitConfig`,
+proofs refuses (`protocol_options.sampled_proofs.refusals`: it runs in a row's Commit phase). So these arms install the Commit's
+committer on the served engine themselves, configured as a row's Commit phase runs it (`config.CommitConfig`,
 `pipeline.commit.make_committer`): ``native_collect_v2b`` (gather windows, size-adaptive blocks, native worker, GPU tree, fast
 copy) over a ring of 8 x 256 MiB device windows, with bounded learning, under the committer's default scheme, which each arm
 requires: ``rows-sha512`` (`verity_vllm.commit.step_rows`). Each 4 KiB chunk of a step's stream is a row, committed as an
@@ -29,7 +29,7 @@ What differs from a row:
   before it starts, by name, rather than being killed partway through.
 
 The weights' registration is once per engine and outside steady state, so it isn't run. Each harness run is one Commit:
-``begin_run`` resets and installs the committer before the clock starts, and ``end_run`` finalizes inside the timed window, so
+``begin_run`` resets and installs the committer before the clock starts, and ``end_run`` finalizes inside the timed run, so
 a run's time includes the hashing backlog. The gate and warm-up runs are learn-only passes: a step whose plan is new and whose
 host copy exceeds the learning budget is discarded and leaves that run without a root. A measured run must end with a root
 and no collector or source error (and for ``commit``, every expected tensor committed), or ``end_run`` raises and the point

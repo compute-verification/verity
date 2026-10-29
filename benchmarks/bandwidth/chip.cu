@@ -151,9 +151,9 @@ static std::string unified_ptx(int n) {
 }
 
 // Where constants go when code evicts them: clevel(out, cyc, warm, n, y, mask, scrub, words, flags, thrash) is unified
-// with STEPS steps in block 0's first warp (its j at out[128], its cycles at cyc[lane]), and when thrash is 1 every
-// other block (one an SM) reads its `words` of `scrub` through
-// L2 (four times L2's size in all) after block 0's code and before its timed chase.  If the constants then come back
+// with STEPS steps in label 0's first warp (its j at out[128], its cycles at cyc[lane]), and when thrash is 1 every
+// other label (one an SM) reads its `words` of `scrub` through
+// L2 (four times L2's size in all) after label 0's code and before its timed chase.  If the constants then come back
 // at the latency they had without the thrash, the level that holds them is not L2.  glevel is the control: the same
 // with the chases through L2 (ld.global.cg) over a 64 KiB buffer `g`, which shows what the thrash leaves of lines L2
 // holds.
@@ -514,7 +514,7 @@ static int run_clevel(std::string& j, const std::string& dir, const Dev& d, bool
 }
 
 // clevel's bank after other modules' constants: between clevel's code and its timed chase, K copies of cpoll (each
-// its own module and 64 KiB bank, one block an SM) chase their banks.  A constant level beside L2 that holds C bytes
+// its own module and 64 KiB bank, one label an SM) chase their banks.  A constant level beside L2 that holds C bytes
 // loses clevel's bank once K·64 KiB passes C; L2 keeps it until K·64 KiB nears L2's size.
 static int run_cpollute(std::string& j, const std::string& dir, const Dev& d) {
   constexpr int KMAX = 4096;
@@ -553,7 +553,7 @@ static int run_cpollute(std::string& j, const std::string& dir, const Dev& d) {
   OK(cudaStreamCreateWithFlags(&sa, cudaStreamNonBlocking));
   OK(cudaStreamCreateWithFlags(&sb, cudaStreamNonBlocking));
   // A module's first launch loads it (lazy loading), which waits for running kernels: launch each once alone first,
-  // or the modules run only after clevel's wait gives up (run r20261012-083549-7727).
+  // or the modules run only after clevel's wait gives up.
   {
     const uint32_t one = 1;
     int n1 = 1;

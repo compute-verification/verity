@@ -1,4 +1,4 @@
-"""The greedy argmax's units on bits: the next version of each word Definition of `ops.argmax`, the same function.
+"""The greedy argmax's proof blocks on bits: the next version of each word Definition of `ops.argmax`, the same function.
 
     ArgmaxChunkBest_v2{C}     (x: Array<C, Array<16, Value<1>>>) -> Array<16, Value<1>>        word view: ArgmaxChunkBest_v1{C}
     ArgmaxChunkIdx_v2{C}      (x: Array<C, Array<16, Value<1>>>) -> Array<16, Value<1>>        word view: ArgmaxChunkIdx_v1{C}

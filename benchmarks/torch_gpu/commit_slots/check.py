@@ -111,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     def run(fn: Any, *args: Any) -> None:
         try:
             r = fn(*args)
-        except Exception as e:  # a failing check is a result, and the rest still run
+        except Exception as e:  # noqa: BLE001  (a failing check is a result, and the rest still run)
             r = {"name": getattr(fn, "__name__", str(fn)), "args": [str(x) for x in args], "ok": False, "error": repr(e)}
         results.append(r)
         print(json.dumps(r), flush=True)

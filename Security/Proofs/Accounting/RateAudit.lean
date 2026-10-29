@@ -42,17 +42,17 @@ the table that reads only the digest (`Accounting.SecurityProofs.RateSketchTable
 `RateChainPass`, `RateChainRO`, `RateChain`), and conservation at every count, for a pass and for a window
 (`Accounting.SecurityProofs.RatePaidRO`, `RatePaid`, `RateChainPaidRO`, `RateChainPaid`), and for a window whose roots
 are ground against the Fiat–Shamir seed (`Accounting.SecurityProofs.RateGrindPaidRO`, `RateGrindPaid`), and the causal
-horizon bound on the samples (`Accounting.SecurityProofs.HorizonSampling`, `RateHorizon`) with the route `Sampled` it
-gives a window (`Accounting.SecurityProofs.RateChainSampledRO`, `RateChainSampled`), and conservation with the
-compression naming words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`, `RatePaidNamedRO`), with
-its route `Sampled` (`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled draw of a window and of a
-session of windows, over the horizon and in every window (`Accounting.SecurityProofs.RateWindowDraw`,
+bound over the monitoring period on the samples (`Accounting.SecurityProofs.HorizonSampling`, `RateHorizon`) with the
+route `Sampled` it gives a window (`Accounting.SecurityProofs.RateChainSampledRO`, `RateChainSampled`), and conservation
+with the compression naming words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`, `RatePaidNamedRO`),
+with its route `Sampled` (`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled draw of a window and of a
+session of windows, over the monitoring period and in every window (`Accounting.SecurityProofs.RateWindowDraw`,
 `RateSessionDraw`), with its route `Sampled` (`Accounting.SecurityProofs.RateSessionSampledNamedRO`), and the remote
 bandwidth audit as deployed, one guarantee over a session of ground, chained windows of devices with partial completion
 (`Accounting.SecurityProofs.RemoteSessionConservation`, at the deployed parameters
 `RemoteSessionConservationDeployed`), and the same session as a run of the remote audit, meeting its routes
-(`Accounting.SecurityProofs.RemoteSessionRoutes`) and conserving over the horizon and in each window at the same `γ`
-(`RemoteSessionRunConservation`, `RemoteWindowRunConservation`), and all three with side sources that may relay
+(`Accounting.SecurityProofs.RemoteSessionRoutes`) and conserving over the monitoring period and in each window at the
+same `γ` (`RemoteSessionRunConservation`, `RemoteWindowRunConservation`), and all three with side sources that may relay
 receipts (`RemoteSessionConservationRelay`, `RemoteSessionRunConservationRelay`, `RemoteWindowRunConservationRelay`),
 and the composed verbatim-sector tensor-sketch session (`RemoteSessionConservationSketch`; at the deployed 16-row
 parameters, under the per-pass hash budget, `RemoteSessionConservationSketchDeployed`, with the budgeted session bound

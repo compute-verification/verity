@@ -31,7 +31,7 @@ SITES = (("vllm.model_executor.layers.linear", "tensor_model_parallel_all_reduce
          ("vllm.model_executor.layers.vocab_parallel_embedding", "tensor_model_parallel_all_reduce", "all_reduce"),
          ("vllm.model_executor.layers.logits_processor", "tensor_model_parallel_all_gather", "all_gather"),
          ("vllm.model_executor.layers.logits_processor", "tensor_model_parallel_gather", "gather"),
-         # [R15 tp TP-06, moe M-0249] the fused-MoE block's final all-reduce is issued by MoERunner (`model.layers.<L>.mlp.experts`, the
+         # the fused-MoE block's final all-reduce is issued by MoERunner (`model.layers.<L>.mlp.experts`, the
          # module the rank Program names `.../mlp.experts/all_reduce2[k]`): its input is the rank-local fused expert output (width H per
          # routed token row) -- the block's `sum` plane on THIS rank's expert shards, before the ranks are summed
          *((m, "tensor_model_parallel_all_reduce", "all_reduce") for m in MOE_COLLECTIVE_MODULES))
@@ -100,24 +100,24 @@ class TPPartialSource:
                  flip_site: str | None = None) -> None:
         self.c = committer
         self.rank, self.world = int(rank), int(world)
-        # NEGATIVE (R16 tp TP-12, rev F-r16-18): at ONE site this rank COMMITS its genuine partial (the GEMM's output on the shard -- the per-rank
+        # NEGATIVE: at ONE site this rank COMMITS its genuine partial (the GEMM's output on the shard -- the per-rank
         # sampled replay stays clean) but feeds the collective a DIFFERENT tensor (element 0 of the partial moved by 2x+1024): the received
         # all-reduce output on every rank is then NOT the definition over the committed partials -> the cross-rank collective-output pass
         # must FAIL naming the site.  A per-rank check cannot see this (each rank's record is self-consistent).  Never set on the honest path.
-        # `<site>` = element 0 moved by 2x+1024 (gross: tokens change, several legs fire); `<site>:ulp` = element 0 moved by ONE bf16 ulp (the
+        # `<site>` = element 0 moved by 2x+1024 (gross: tokens change, several checks fire); `<site>:ulp` = element 0 moved by ONE bf16 ulp (the
         # DISCRIMINATING case: the received all-reduce differs from the definition in one element of one row at one site; tokens are
         # expected to be unchanged, so token equality / attribution are blind and only a check that evaluates the collective output
-        # against the committed partials -- TP-12 -- can name it)
+        # against the committed partials can name it)
         self.flip_site, self.flip_mode = self.parse_flip(flip_site)
         self.flipped = 0
-        # NEGATIVE (R15 TP-04 "relabel rank 0 as rank 1"): tag this rank's partials with another rank's member name.  The identity's
+        # NEGATIVE ("relabel rank 0 as rank 1"): tag this rank's partials with another rank's member name.  The identity's
         # `rank` field is fixed by the committing rank (the binding map is built with rank=self.rank); only the MEMBER name lies, so the
         # manifest's `part_rank<self.rank>` identities find no binding -> coverage FAIL naming this rank.  Never set on the honest path.
         self.label_rank = int(relabel_rank) if relabel_rank is not None else self.rank
-        # NEGATIVE (rev-cb M-0214): drop the partial of ONE site only (module name suffix match, e.g. "layers.3.mlp.down_proj") -- the rest
+        # NEGATIVE: drop the partial of ONE site only (module name suffix match, e.g. "layers.3.mlp.down_proj") -- the rest
         # of the family is bound; per-identity coverage must FAIL naming this rank and that site.  Never set on the honest path.
         self.omit_site = str(omit_site) if omit_site else None
-        # [R15 TP-04 C2] optional reference tap for the value check: CPU clones of every partial at bind time (+ the module input of the
+        # optional reference tap for the value check: CPU clones of every partial at bind time (+ the module input of the
         # first `ref_reexec_steps` steps for a re-execution of the rank-local GEMM on the shard) -- one extra instrumented run only
         self.reference = False
         self.ref_reexec_steps = 4
@@ -134,7 +134,7 @@ class TPPartialSource:
                 self.sites.append((n, cls))
             if row:
                 self.reexec_sites.append(n)
-        # [R15 rev-cb M-0359 T6-1 / moe M-0386] one fused-MoE site per block: when a fused-MoE wrapper holds a fused-MoE runner submodule
+        # one fused-MoE site per block: when a fused-MoE wrapper holds a fused-MoE runner submodule
         # (SharedFusedMoE -> .runner), the block's all-reduce is attributed to the OUTERMOST hooked MoE module = the Program's module path
         # (tp_links: 'layers.N.mlp.experts (MoERunner)'; the MoeSum row's path), never to both.  On Qwen3-30B-A3B / OLMoE the runner IS
         # `.experts` (no nesting) and this drops nothing.  Nested non-MoE sites (a RowParallelLinear inside a hooked module) stay their
@@ -143,7 +143,7 @@ class TPPartialSource:
         nested = [(n, c) for n, c in self.sites if c in MOE_SITE_CLASSES and any(n.startswith(p + ".") for p in moe_paths)]
         self.sites = [s for s in self.sites if s not in nested]
         self.nested_moe_sites_dropped = [n for n, _c in nested]
-        # [R19 moe F-r19-moe-1, row #70] MID-module sites: model classes that call a collective name bound in THEIR OWN python module
+        # MID-module sites: model classes that call a collective name bound in THEIR OWN python module
         # (OlmoeAttention: q and k all-gathered inside `self_attn`, twice per layer).  `collective_sites.mid_module_sites` is the one finder
         # (shared with the Match recorder); this source hooks the modules for attribution, patches their modules' collective names, binds
         # each call's rank-local input (`<module>/shard_rank<r>` | `/part_rank<r>`) AND received output (`<module>/out`; no layer module
@@ -202,13 +202,13 @@ class TPPartialSource:
                 per_seq += -(-vocab // max(1, self.world)) * 2
             elif cls in MOE_SITE_CLASSES:
                 # the fused expert output before the all-reduce: (tokens, hidden) in the activation dtype (H from the module / its config)
-                # -- and the RECEIVED all-reduced block output (`<module>/out`, same shape), which this source also binds (M-0350 C3)
+                # -- and the RECEIVED all-reduced block output (`<module>/out`, same shape), which this source also binds
                 cfg = getattr(m, "moe_config", None) or getattr(m, "moe", None)
                 h = int(getattr(m, "hidden_size", 0) or getattr(cfg, "hidden_dim", 0) or getattr(cfg, "hidden_size", 0) or 0)
                 per_token += 2 * h * isz
                 n_moe_out += 1
             elif n in self.mid_sites:
-                # [R19 moe] per call: the rank-local input (<= H per token) and the received output (<= H per token: a gathered q/k row is the
+                # per call: the rank-local input (<= H per token) and the received output (<= H per token: a gathered q/k row is the
                 # module's full head width); H from the module, else its config -- an upper bound for the arena, exact bytes are the run's
                 cfg = getattr(m, "config", None)
                 h = int(getattr(m, "hidden_size", 0) or (int(getattr(m, "total_num_heads", 0) or 0) * int(getattr(m, "head_dim", 0) or 0))
@@ -251,7 +251,7 @@ class TPPartialSource:
                 continue
         if self.mid_sites or self.mid_sites_ruled_out:
             from verity_vllm.engine.collectives.collective_sites import patch_targets
-            targets += patch_targets(list(self.mid_sites.values()) + self.mid_sites_ruled_out)   # [R19 moe] the model classes' own imports
+            targets += patch_targets(list(self.mid_sites.values()) + self.mid_sites_ruled_out)   # the model classes' own imports
         done: set[tuple[int, str]] = set()
         for mod, attr, kind in targets:
             if (id(mod), attr) in done or not hasattr(mod, attr):
@@ -305,7 +305,7 @@ class TPPartialSource:
         member = f"{name}/{what}_rank{self.label_rank}"
         self.c._acquire(member, x, job)      # op_path = the issuing module, output_member = part_rank<r> | shard_rank<r>
         step = int(getattr(job, "step", len(self.ref)))
-        occ = self._occ.get((step, member), 0)                          # [R19 moe] a mid-module site commits this member once per CALL (occurrence k)
+        occ = self._occ.get((step, member), 0)                          # a mid-module site commits this member once per CALL (occurrence k)
         self._occ[(step, member)] = occ + 1
         if self.reference:
             self.ref.setdefault(step, {})[_ref_key(member, occ)] = _bytes(x)   # independent clone of the collective INPUT at the moment it exists
@@ -328,7 +328,7 @@ class TPPartialSource:
         job = getattr(self.c, "_cur", None)
         if job is None or y is None or self.cur is None:
             return
-        # [R19 moe F-r19-moe-1] a MID-module site's received output too (any kind: OLMoE's gathered q / k rows are `self_attn/out`, the
+        # a MID-module site's received output too (any kind: OLMoE's gathered q / k rows are `self_attn/out`, the
         # module's k-th collective identity; no layer-module hook binds them) -- the same lifetime rule as the MoE block output below: the
         # gathered row is consumed by q_norm / k_norm (out of place) but its storage is the module's to reuse, so flush right here.
         mid = self.cur[0] in self.mid_sites
@@ -341,7 +341,7 @@ class TPPartialSource:
             return
         member = f"{name}/out"
         self.c._acquire(member, y, job)     # snapshot AFTER the collective (stream-ordered behind the NCCL call on the compute stream)
-        # [rev-cb M-0424 T6-4] LIFETIME: under the row committer (native_collect gather mode) _acquire STAGES a held reference that is copied
+        # LIFETIME: under the row committer (native_collect gather mode) _acquire STAGES a held reference that is copied
         # at the next legal collection point (GATHER_FLUSH_LEAVES = qkv_proj / o_proj / down_proj hooks + step end).  A fused-MoE block has
         # no down_proj hook, and its received output y IS the next layer's fused-norm input, which vLLM's fused_add_rms_norm overwrites IN
         # PLACE before layer L+1's qkv_proj flush (the last layer's y meets model.norm before step end) -> the committed /out would be the
@@ -373,7 +373,7 @@ class TPPartialSource:
         def w(x, *a, **k):
             me._bind(kind, x)            # snapshot BEFORE the collective (D2D on the compute stream: stream-ordered ahead of the NCCL call)
             if me.flip_site and me.cur is not None and me.cur[0].endswith(me.flip_site) and hasattr(x, "device") and x.device.type == "cuda":
-                # [TP-12 negative] the committed partial above is genuine; the collective's INPUT is not it
+                # the flip negative: the committed partial above is genuine; the collective's INPUT is not it
                 x = x.clone()
                 import torch
                 if me.flip_mode == "ulp" and x.dtype == torch.bfloat16:
@@ -405,7 +405,7 @@ class TPPartialSource:
         for step, refs in sorted(self.ref.items()):
             by_name = _metas_by_name(self.c._layouts.get(step, []))
             for rkey, ref in refs.items():
-                member, occ = _split_ref_key(rkey)                        # [R19 moe] the occ-th commit of the member (mid-module sites)
+                member, occ = _split_ref_key(rkey)                        # the occ-th commit of the member (mid-module sites)
                 kind = member.rsplit("/", 1)[-1].split("_rank")[0]
                 bm = res["by_member"].setdefault(kind, {"tensors": 0, "tap_equal": 0, "reexec": 0, "reexec_equal": 0})
                 m = _nth(by_name, member, occ)
@@ -498,7 +498,7 @@ class TPPartialSource:
                                "missing_in_commit": [], "not_verified": [], "committed_not_in_oracle": [],
                                "witnesses": {"equal": 0, "differs": [], "unpaired": []},
                                "families_covered": ["tp_rank_partials"], "families_not_covered": ["instance_outputs", "fa2_hidden_m1_stream", "input_token_ids", "weights"],
-                               # [rev-pm M-0585 TIP3] the pairing key is (step, MODULE): the committed member is named by its issuing module (one partial per
+                               # the pairing key is (step, MODULE): the committed member is named by its issuing module (one partial per
                                # site per step is what identity_check requires), the oracle record by (step, k, module); a module recorded twice in one
                                # step is refused (a second oracle collective would be compared against the same committed member)
                                "rule": ("committed bytes == tp2_match capture recorder's stored collective input (part_rank/shard_rank) / output (MoE /out), "
@@ -522,7 +522,7 @@ class TPPartialSource:
                     w = recorded.setdefault(int(x["step"]), {}).setdefault(x["module"], {"k": int(x["k"]), "sha256": {}})
                     w["sha256"][x["member"]] = x["sha256"]
         received = set(self.received_site_names())
-        # [rev-pm M-0585 TIP1] exhaustive in both directions: an oracle step the committer never reached (a Commit that stopped early) FAILs
+        # exhaustive in both directions: an oracle step the committer never reached (a Commit that stopped early) FAILs
         res["oracle_steps_not_committed"] = sorted(s for s in by_step if s not in self.c._layouts)
         mid_counts = {n: int(s["per_step"]) for n, s in self.mid_sites.items()}
         for step in sorted(self.c._layouts):
@@ -534,12 +534,12 @@ class TPPartialSource:
                 continue
             v = torch.load(pt)
             xs = sorted(by_step[step], key=lambda x: int(x["k"]))
-            # [TIP2] a truncated / inconsistent oracle (the .pt holds fewer tensors than the jsonl names) is a named verdict, not a crash string
+            # a truncated / inconsistent oracle (the .pt holds fewer tensors than the jsonl names) is a named verdict, not a crash string
             n_part, n_out = len(v.get("part") or []), len(v.get("out") or [])
             if n_part < len(xs) or (any(x.get("module") in received for x in xs) and n_out < len(xs)):
                 res["oracle_inconsistent"].append({"step": step, "jsonl_names": len(xs), "pt_part": n_part, "pt_out": n_out})
                 continue
-            # [TIP3] one oracle record per module per step, else refused for this step -- except a MID-module site (R19 moe: OlmoeAttention
+            # one oracle record per module per step, else refused for this step -- except a MID-module site (OlmoeAttention
             # gathers q then k), which is recorded exactly its static call count of times and paired by (step, module, occurrence j) with the
             # committer's j-th commit of the member (the binder's occurrence j); any other multiplicity is still refused
             # an all-reduce + norm site's partial is `<norm>/part_rank<r>` while the recorder names the collective's enclosing module (a
@@ -641,19 +641,19 @@ class TPPartialSource:
                  "bytes": self.stats["bytes"], "tensors": self.stats["launches"], "rank": self.rank, "world": self.world,
                  "sites": len(self.site_names()), "site_names": self.site_names(),
                  "received_site_names": self.received_site_names(), "nested_moe_sites_dropped": self.nested_moe_sites_dropped,
-                 "mid_module_sites": {n: {"cls": s["cls"], "calls": s["calls"]} for n, s in self.mid_sites.items()},          # [R19 moe F-r19-moe-1]
+                 "mid_module_sites": {n: {"cls": s["cls"], "calls": s["calls"]} for n, s in self.mid_sites.items()},
                  "mid_module_sites_ruled_out": self.mid_sites_ruled_out,
                  "allreduce_norm": self.far.record(),
-                 "evidence": ("TP-03 source: wraps tensor_model_parallel_all_reduce (linear, vocab_parallel_embedding) and "
+                 "evidence": ("TP partial source: wraps tensor_model_parallel_all_reduce (linear, vocab_parallel_embedding) and "
                               "tensor_model_parallel_all_gather/gather (logits_processor) in THIS rank's process, plus the same names in the "
-                              "python module of every model class that calls one directly (mid-module sites, R19 moe: OlmoeAttention's q/k "
+                              "python module of every model class that calls one directly (mid-module sites: OlmoeAttention's q/k "
                               "gathers); the collective INPUT "
                               f"(rank {self.rank}'s partial GEMM / masked embedding / logits shard / mid-module operand) is snapshotted into the packed step "
                               "stream before the collective, attributed to the issuing module by a forward pre-hook; identity_check requires "
                               f"exactly the declared count of partials per site per step ({len(self.sites)} sites; 1 each, a mid-module site its "
                               "static call count); value correspondence: tp/match.py cross-rank "
                               "provenance (received == AllReduce2/AllGather2(part_rank0, part_rank1) bit-exact; part_rank_r == Gemm_v1{K/W} "
-                              f"on the shard, R13 tp2_semantics); kinds seen {self.stats['kinds']}; shapes seen {self.stats['shapes']}")}]
+                              f"on the shard); kinds seen {self.stats['kinds']}; shapes seen {self.stats['shapes']}")}]
 
 
 __all__ = ["TPPartialSource", "SITES", "COVERS_FAMILIES"]
@@ -702,9 +702,9 @@ def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
             if eq or step < 2 or len(pairs) < 96:
                 pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "out_sha": hashlib.sha256(a).hexdigest()[:16],
                               "next_norm_sha": hashlib.sha256(b).hexdigest()[:16], "nbytes": len(a), "equal": eq})
-    # [tp fold of moe cf29c7e72] a dense TP row (Llama: no fused-MoE `/out` member in any step) has nothing for this detector to
-    # compare -- record NOT APPLICABLE (result None, applicable False) rather than a False that reads as a detected late read;
-    # on a MoE row the rule is moe's: True only with > 0 pairs compared, 0 equal, 0 missing
+    # a dense TP workload (Llama: no fused-MoE `/out` member in any step) has nothing for this detector to compare -- record NOT
+    # APPLICABLE (result None, applicable False) rather than a False that reads as a detected late read; on a MoE workload the rule is
+    # the MoE one: True only with > 0 pairs compared, 0 equal, 0 missing
     applicable = steps > 0
     return {"schema": "verity/commit-integ/t6_4-check/v1", "rank": int(rank), "applicable": applicable,
             "result": (bool(compared > 0 and equal == 0 and missing == 0 and not_verified == 0) if applicable else None),

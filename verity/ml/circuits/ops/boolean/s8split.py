@@ -1,12 +1,12 @@
 """A W8A8 coordinate (`ScaledMmS8Coordinate_v2{K, GEMM_SM90_S8}`) split along K into Boolean Definitions that each output at
-most 16 bits (a proof block's outputs, the 16-bit forms of CIR-100's fallback).
+most 16 bits (a proof block's outputs, the 16-bit fallback forms).
 
     S8AccumulatorPartHalf_v1{K, HALF}  (x, wrow: Array<K, Array<8, Value<1>>>) -> Array<16, Value<1>>
     I32SumPartHalf_v1{G, HALF}         (s: Array<G, Array<32, Value<1>>>) -> Array<16, Value<1>>
     ScaledMmS8Epilogue_v1{G}           (s: Array<G, Array<32, Value<1>>>, sx, sw: Array<32, Value<1>>) -> Array<16, Value<1>>
 
 Under the 16-bit rule a coordinate reads x as K/2 rows of `QuantS8Pair_v1`'s two codes, so the unsplit coordinate at K = 512
-reads 260 rows with sx's two halves, wrow and sw, past the 255 a unit reads, and at K = 16,384 about 8,200. The split:
+reads 260 rows with sx's two halves, wrow and sw, past the 255 a proof block reads, and at K = 16,384 about 8,200. The split:
 
 - `S8AccumulatorPartHalf` is the low (HALF = 0) or high (HALF = 1) 16 bits of a chunk's s32 accumulator,
   `GemmAccumulatorS8_v1{K, GEMM_SM90_S8}`'s: K/32 of the H200's IMMA k32 steps (`integer.HOPPER_SM90_S8_K32` on bits,
@@ -15,7 +15,7 @@ reads 260 rows with sx's two halves, wrow and sw, past the 255 a unit reads, and
 - `ScaledMmS8Epilogue` sums its G s32 words the same way and applies the coordinate's epilogue to the sum:
   ``F2fpBf16_v2((S32ToF32Rn_v2(acc) * sx) * sw)`` with `F32Mul_v4`, the token's scale first.
 
-A later unit reads an s32 as its two halves' rows. The split computes the unsplit coordinate's function on every input when
+A later proof block reads an s32 as its two halves' rows. The split computes the unsplit coordinate's function on every input when
 its chunks' K sum to less than `S8_K_LIMIT` = 2^17. Every partial sum of fewer than 2^17 s8 products from 0 lies in s32
 (`integer.exact_k_limit`), so no step clamps, no add wraps, and every grouping gives the same exact sum. Chunks whose K sum to
 2^17 or more don't give the coordinate's function.

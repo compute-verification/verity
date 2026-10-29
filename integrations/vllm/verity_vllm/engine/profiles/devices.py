@@ -1,4 +1,4 @@
-"""The name a row class's GPU reports (`torch.cuda.get_device_name`), for the classes one name covers, and the tuned kernel configs vLLM
+"""The name a workload class's GPU reports (`torch.cuda.get_device_name`), for the classes one name covers, and the tuned kernel configs vLLM
 keys by it.
 
 vLLM keys its tuned kernel configs by that name (`get_device_name_as_file_name`: GLM-5.3's fused-MoE tiles, `program.registry.fp8_moe`),
@@ -27,7 +27,7 @@ FUSED_MOE_CONFIGS: dict[str, dict[int, tuple[int, int, int, int, int, int]]] = {
 
 
 def device_name_of_row(row_id: str) -> str | None:
-    """The name a GPU of the row's class reports; None for a class `DEVICE_NAME` does not list."""
+    """The name a GPU of the workload's class reports; None for a class `DEVICE_NAME` does not list."""
     return DEVICE_NAME.get(device_token_of_row(row_id or "") or "")
 
 

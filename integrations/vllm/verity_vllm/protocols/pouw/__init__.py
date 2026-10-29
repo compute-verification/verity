@@ -176,7 +176,7 @@ class Settings:
     #: which the install opens itself, on H1's window-open root or Pearl-C's weights' root (`pouw_h1_settings.OPENS`)
     challenger: str | None = None
     session: Mapping[str, Any] | None = None
-    #: H1's admissions (`pouw_h1_requests.ADMISSIONS`): None or ``round-0``, admit in round 0 only (#2722's live tiles
+    #: H1's admissions (`pouw_h1_requests.ADMISSIONS`): None or ``round-0``, admit in round 0 only (the live tiles
     #: are fixed before the first coin), or ``per-round``
     admission: str | None = None
     #: H1's and Pearl-C's ``gate(session, root)``: the challenger gate's open of the reserved session on that root
@@ -647,10 +647,10 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
 def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     """The composition's first phase, with the model untouched and no coin opened: every linear layer's int7 weight rows
     committed (`verity.core.protocols.pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``.
-    Under H1, the int8_exact arm's int8 weight rows as they are served (`pouw_h1.weight_root`)."""
+    Under H1, the int8_exact arm's int8 weight rows as they are served, once a process (`pouw_h1_hooks.weight_roots`)."""
     if scheme == PH.SCHEME:
         layers = PHK.layers(target.model, linear_types())
-        return {"weight_roots": {str(w): PH.weight_root(w, PH.numpy_of(m.weight)).hex() for w, m in enumerate(layers)},
+        return {"weight_roots": {str(w): r.hex() for w, r in PHK.weight_roots(layers).items()},
                 "shapes": {str(w): list(m.weight.shape) for w, m in enumerate(layers)}}
     _, layers, shapes = _layers(scheme, target)
     if scheme in PPD.SCHEMES:

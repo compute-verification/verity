@@ -43,13 +43,13 @@ FAMILY_RULES: dict[str, dict[str, Any]] = {
     "gemma2": {"qkv_bias_key": "attention_bias", "default_theta": 10_000.0},
     "phi3": {"qkv_bias_key": "attention_bias", "default_theta": 10_000.0},
     "olmoe": {"qkv_bias_key": "attention_bias", "default_theta": 10_000.0, "default_eps": 1e-5},
-    # [R15 fp8] Qwen3 (vLLM `Qwen3Attention`, models/qwen3.py): the Llama-architecture dense block PLUS a per-head RMSNorm on q and on k
+    # Qwen3 (vLLM `Qwen3Attention`, models/qwen3.py): the Llama-architecture dense block PLUS a per-head RMSNorm on q and on k
     # before RoPE (`self.q_norm = RMSNorm(head_dim, eps=rms_norm_eps)`, applied to `q.view(..., NH, head_dim)`; likewise k over KVH
     # heads), no QKV bias (`attention_bias` False), head_dim in config.json.  `qk_norm: "head"` is the family fact (`C["QK_NORM"]`).
     "qwen3": {"qkv_bias_key": "attention_bias", "default_theta": 1_000_000.0, "qk_norm": "head"},
 }
 
-#: [R15 fp8] the FP8 checkpoint quantization the sweep serves (the other is `INT8_EXACT_QUANT`): vLLM `Fp8Config` from a `quantization_config` with `quant_method: fp8`,
+#: the FP8 checkpoint quantization the sweep serves (the other is `INT8_EXACT_QUANT`): vLLM `Fp8Config` from a `quantization_config` with `quant_method: fp8`,
 #: `fmt: e4m3`, `weight_block_size: [G, G]` (block-scaled weights `weight` e4m3 [N, K] + `weight_scale_inv` f32 [N/G, K/G]) and
 #: `activation_scheme: dynamic` (per-token-group activation quantisation, group G, at run time).  `config_of` records it as
 #: `C["FP8_BLOCK"] = G`; any other quantization_config is refused (`quant_refusal`) -- never served as a looser approximation.
@@ -131,7 +131,7 @@ def config_of(hf_config: str | Path | dict, *, model: str | None = None, revisio
         raise KeyError(f"config.json has none of {hf_keys} for {key}")
 
     family = str(cfg.get("model_type", "")).lower()
-    rules = {**FAMILY_RULES, **(family_rules or {})}.get(family, {})    # lanes pass their family's facts here (no edit of this file)
+    rules = {**FAMILY_RULES, **(family_rules or {})}.get(family, {})    # callers pass their family's facts here (no edit of this file)
     C["model"], prov["model"] = model, "hand" if model else "derived"
     C["revision"], prov["revision"] = revision, "hand" if revision else "derived"
     C["family"], prov["family"] = family, "hf-config"
@@ -178,10 +178,10 @@ def config_of(hf_config: str | Path | dict, *, model: str | None = None, revisio
         rs = None                                    # v5 `rope_parameters` with only the theta: no scaling
     C["rope_scaling"], prov["rope_scaling"] = rs, "hf-config"
     C["BN"], prov["BN"] = b1.fa2_kblock_n(C["D"]), "derived"
-    # [R15 fp8] family fact: the per-head q/k RMSNorm (Qwen3) -- "hand" because vLLM's model code applies it, config.json does not say
+    # family fact: the per-head q/k RMSNorm (Qwen3) -- "hand" because vLLM's model code applies it, config.json does not say
     if rules.get("qk_norm"):
         C["QK_NORM"], prov["QK_NORM"] = rules["qk_norm"], "hand"
-    # [R15 fp8] checkpoint quantization: block-scaled dynamic e4m3 FP8 (`C["FP8_BLOCK"] = G`), exact int8 (`C["INT8_EXACT"]`) or none
+    # checkpoint quantization: block-scaled dynamic e4m3 FP8 (`C["FP8_BLOCK"] = G`), exact int8 (`C["INT8_EXACT"]`) or none
     qc = cfg.get("quantization_config")
     if qc:
         why = quant_refusal(qc, cfg)
@@ -200,7 +200,7 @@ def config_of(hf_config: str | Path | dict, *, model: str | None = None, revisio
 
 
 def moe_layer_weights_type(C: dict[str, Any]) -> Record:
-    """PROPOSED (lane moe, OLMoE): the per-layer Record of a fused-MoE decoder layer.  `b1.layer_weights_type(C)` with the
+    """The per-layer Record of a fused-MoE decoder layer (OLMoE).  `b1.layer_weights_type(C)` with the
     dense MLP (`gate_up_w`, `down_w`) replaced by the router and the expert stacks, plus the qk-norm weights when the family
     applies them (`C["QK_NORM"]`, a "hand" fact of vLLM's `OlmoeAttention`).  Shapes are vLLM d9105ea80's parameters:
     `mlp.gate.weight [E][H]`, `mlp.experts.routed_experts.w13_weight [E][2I][H]` (gate|up fused), `w2_weight [E][H][I]`.
@@ -211,7 +211,7 @@ def moe_layer_weights_type(C: dict[str, Any]) -> Record:
     if C.get("BIAS", True):
         fields.append(("qkv_b", Array(QKV, BF16)))
     if C.get("QK_NORM") == "head":
-        # [R19 qwen3] Qwen3-MoE (`Qwen3MoeAttention`): the per-head q/k RMSNorm of the dense Qwen3 family -- ONE `[D]` vector shared by every
+        # Qwen3-MoE (`Qwen3MoeAttention`): the per-head q/k RMSNorm of the dense Qwen3 family -- ONE `[D]` vector shared by every
         # head (`dense_layer_weights_type`), not OLMoE's all-heads `[NH*D]` / `[KVH*D]` norm.  Same field names, so every reader is unchanged.
         fields += [("q_norm", Array(C["D"], BF16)), ("k_norm", Array(C["D"], BF16))]
     elif C.get("QK_NORM"):
@@ -271,13 +271,13 @@ def _fp8_fields(fields: list[tuple[str, Any]], G: int, g: int) -> list[tuple[str
 
 
 def layernorm_layer_weights_type(C: dict[str, Any]) -> Record:
-    """[SHARED-CODE lane cov-ln, GPT-NeoX / Pythia] the per-layer Record of a LayerNorm-with-bias decoder layer whose every
+    """GPT-NeoX / Pythia: the per-layer Record of a LayerNorm-with-bias decoder layer whose every
     dense projection carries a bias (vLLM d9105ea80 `GPTNeoXLayer`): `input_layernorm.{weight,bias}` -> `ln1`, `ln1_b`;
     `attention.query_key_value.{weight,bias}` -> `qkv_w` [QKV][H], `qkv_b` [QKV]; `attention.dense.{weight,bias}` -> `o_w`
     [H][NH*D], `o_b` [H]; `post_attention_layernorm.{weight,bias}` -> `ln2`, `ln2_b`; `mlp.dense_h_to_4h.{weight,bias}` ->
     `up_w` [I][H], `up_b` [I] (no gate: the MLP is `down(gelu(up(x)))`); `mlp.dense_4h_to_h.{weight,bias}` -> `down_w`
     [H][I], `down_b` [H].  The base field names (`ln1`, `qkv_w`, `qkv_b`, `o_w`, `ln2`, `down_w`) keep b1's meaning; the
-    bias / `up_w` fields are the family's additions.  Selected by `C["NORM"] == "layernorm"` (a hand fact of the lane's
+    bias / `up_w` fields are the family's additions.  Selected by `C["NORM"] == "layernorm"` (a hand fact of the family's
     profile: `nn.LayerNorm` with bias, `use_parallel_residual`); RMSNorm families are unchanged."""
     H, QKV, I = C["H"], C["QKV"], C["I"]
     return Record(("ln1", Array(H, BF16)), ("ln1_b", Array(H, BF16)),
@@ -289,14 +289,14 @@ def layernorm_layer_weights_type(C: dict[str, Any]) -> Record:
 
 
 def rotary_dim(C: dict[str, Any]) -> int:
-    """[SHARED-CODE lane cov-ln] the rotary width: `C["ROT"]` when the family rotates only part of each head (GPT-NeoX
+    """The rotary width: `C["ROT"]` when the family rotates only part of each head (GPT-NeoX
     `rotary_pct`: Pythia rot_dim = D/4 = 16, vLLM `get_rope(head_size, rotary_dim=int(head_size * rotary_pct))`), else `D`.
     The cos/sin table vLLM builds is `[MAX_POS, ROT]` (`[cos(t·inv_freq) | sin(t·inv_freq)]`, inv_freq over `arange(0, ROT, 2) /
     ROT`), so every analytic-table function below reads this width; full-rotary configurations (no `ROT`) are unchanged."""
     return int(C.get("ROT") or C["D"])
 
 
-#: [R15 fp8] the block-scaled FP8 linears of a layer (a MoE layer has the first two): base weight field -> (vLLM parameter suffix, scale field).  The scale
+#: the block-scaled FP8 linears of a layer (a MoE layer has the first two): base weight field -> (vLLM parameter suffix, scale field).  The scale
 #: field `<w>s` is f32 `[cdiv(N, G)][K/G]` (`weight_scale_inv`, one scale per GxG weight block, the last one partial when N ends
 #: mid-block; vLLM's `process_fp8_weight_block_strategy` only re-lays it out) and follows its weight field so every earlier leaf
 #: interval of the layer Record is unchanged.
@@ -364,7 +364,7 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
     fields += linear("q_b_w", NH * (DN + DR), QL)
     fields += [("kv_a_ln", Array(L, BF16))]
     fields += linear("kv_b_w", NH * (DN + DV), L)
-    if G:   # vLLM's MLAAttention dequantises kv_b into its own bf16 storage at load: W_UK_T [NH][DN][L], W_UV [NH][L][DV] (VLLM-14)
+    if G:   # vLLM's MLAAttention dequantises kv_b into its own bf16 storage at load: W_UK_T [NH][DN][L], W_UV [NH][L][DV]
         fields += [("w_uk_t", Array(NH, mat(DN, L))), ("w_uv", Array(NH, mat(L, DV)))]
     fields += linear("o_w", H, NH * DV)
     fields += [("ln2", Array(H, BF16))]
@@ -422,10 +422,10 @@ def mla_weights_type(C: dict[str, Any]) -> Record:
 
 def weights_type(C: dict[str, Any]) -> Record:
     """`b1.weights_type(C)` (embed, layers, norm, cos_sin) plus an `lm_head` field `[V][H]` when the checkpoint does not tie
-    the output projection to the embedding.  `b1.py` is frozen (D57); tied configurations get the identical Record.
-    PROPOSED (lane moe): a configuration with `NUM_EXPERTS` (a fused-MoE family: OLMoE) gets `moe_layer_weights_type(C)` as
+    the output projection to the embedding.  `b1.py` is frozen; tied configurations get the identical Record.
+    A configuration with `NUM_EXPERTS` (a fused-MoE family: OLMoE) gets `moe_layer_weights_type(C)` as
     its `layers` element instead of the dense `b1.layer_weights_type(C)`; dense configurations are unchanged.
-    [SHARED-CODE lane cov-ln] a configuration with `C["NORM"] == "layernorm"` (GPT-NeoX / Pythia) gets
+    A configuration with `C["NORM"] == "layernorm"` (GPT-NeoX / Pythia) gets
     `layernorm_layer_weights_type(C)` as its `layers` element, a `norm_b` `[H]` field (the final LayerNorm's bias) after
     `norm`, and a `cos_sin` table of width `rotary_dim(C)` (partial rotary); RMSNorm configurations are unchanged.
     `C["QK_NORM"] == "head"` (Qwen3) and/or `C["FP8_BLOCK"]` (block-scaled FP8 checkpoint) get
@@ -448,9 +448,9 @@ def weights_type(C: dict[str, Any]) -> Record:
         fields = [(n, Array(C["NL"], moe_layer_weights_type(C))) if n == "layers" else (n, t) for n, t in fields]
     extra = tuple(C.get("extra_layer_norms") or ())
     if extra:
-        # [SHARED-CODE lane dense, re-created from wave-1 dense2] families with more than two norms per layer (Gemma-2:
+        # families with more than two norms per layer (Gemma-2:
         # pre-/post-feedforward RMSNorms) declare the extra `[H]` bf16 fields in `C["extra_layer_norms"]` (a hand field of
-        # the lane's profile); appended to each layer Record after the base fields so every existing path
+        # the family's profile); appended to each layer Record after the base fields so every existing path
         # (`("layers", L, "ln1")`, ...) is unchanged.
         i = next(k for k, (n, _) in enumerate(fields) if n == "layers")
         layer = fields[i][1].elem
@@ -463,7 +463,7 @@ def weights_type(C: dict[str, Any]) -> Record:
         i = next(k for k, (n, _) in enumerate(fields) if n == "lm_head")
         fields[i:i + 1] = [("lm_head", Array(C["V"], Array(C["H"], Value(8)))), ("lm_head_ws", Array(C["V"], Array(1, F32)))]
     if C.get("embed_normalizer") is not None:
-        # [ADAPTER lane cov-dense, 2026-09-17] Gemma-2 scales the embedding by `model.normalizer`, a 0-d bf16 *buffer* vLLM's
+        # Gemma-2 scales the embedding by `model.normalizer`, a 0-d bf16 *buffer* vLLM's
         # `Gemma2Model.__init__` registers as `torch.tensor(hidden_size ** 0.5)` at the model dtype — a root with no checkpoint
         # tensor.  It is an analytic table of one word (`normalizer_word(H)`, validated by `check_normalizer`, root class
         # `analytic-table` like `cos_sin`); declared as the LAST field so every existing leaf interval is unchanged.
@@ -516,9 +516,9 @@ def check_normalizer(C: dict[str, Any], captured: np.ndarray | list[int] | int) 
 # --- the rotary table --------------------------------------------------------------------------------------------
 
 def _inv_freq(C: dict[str, Any]) -> np.ndarray:
-    D = rotary_dim(C)                       # [SHARED-CODE lane cov-ln] the rotary width (== D unless C["ROT"], partial rotary)
+    D = rotary_dim(C)                       # the rotary width (== D unless C["ROT"], partial rotary)
     base = np.float32(C["ROPE_THETA"])
-    # [PROPOSED GEN dense2] vLLM builds the cache on the CUDA device (`RotaryEmbedding._compute_inv_freq`: `torch.arange(0, D, 2) /
+    # vLLM builds the cache on the CUDA device (`RotaryEmbedding._compute_inv_freq`: `torch.arange(0, D, 2) /
     # D` under the model's device context), and ATen's CUDA true division by a CPU scalar is a multiplication by the fp32
     # reciprocal (BinaryDivTrueKernel.cu: `a * (1/b)`), not a correctly rounded division.  For power-of-two D the two agree
     # bit for bit (Llama 64/128, Qwen 128, Gemma-2 256); for D=96 (Phi-3-mini) they differ by one fp32 ulp at 15 of the 48
@@ -599,7 +599,7 @@ def check_cos_sin(C: dict[str, Any], captured: str | Path | np.ndarray, *, max_u
     got = np.load(captured) if not isinstance(captured, np.ndarray) else captured
     out: dict[str, Any] = {"status": "fail", "max_ulp_allowed_informational": max_ulp, "shape": list(got.shape),
                            "pow_ulps": POW_ULPS, "trig_ulps": TRIG_ULPS}
-    D = rotary_dim(C)                       # [SHARED-CODE lane cov-ln] table width = the rotary width (partial rotary: ROT < D)
+    D = rotary_dim(C)                       # table width = the rotary width (partial rotary: ROT < D)
     n = got.shape[0] if got.ndim == 2 else 0
     try:
         inv = _inv_freq(C)

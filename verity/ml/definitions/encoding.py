@@ -1,6 +1,6 @@
 """A specialization's Definitions in the codec's v0 form (`encode_specialization`), a Definition's digest (`definition_digest`), and the
 values of a varying static a row's graph is partitioned at (`word_values`): what a row's Program graph
-(`verity_vllm.pipeline.program_graph`) and C-Flock's statements (`verity_flock.boolean_export`, `class_statement`) share.
+(`verity_vllm.pipeline.program_graph`) and Flock's statements (`verity_flock.boolean_export`, `class_statement`) share.
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def definition_digest(d: dict[str, Any]) -> str:
 
 #: a varying group with more values than this is partitioned at fewer: with a key-block size BN (attention's T), at its first values and
 #: every multiple of BN with the value before it and the three after it -- a head's unit count is affine in T between those, its gates
-#: and committed words nearly so (the k16 PV steps; within 0.1 % of the exact count on #101) -- else at WORD_SAMPLES values; the rest
+#: and committed words nearly so (the k16 PV steps; within 0.1 % of the exact count) -- else at WORD_SAMPLES values; the rest
 #: are interpolated
 WORD_EXACT = 320
 WORD_SAMPLES = 12

@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.TmplSplitOk
 
 /-!
-# Every walk means its class's (PRF-133, part 3, stage 3)
+# Every walk means its class's
 
 - `walkCall_exp`, `walkCall_sum`: a call's step (`walkCall`), from its callee's table (`walkChild_ok`), adds the callee's
   copies' `refVal`s (`callVal`), for an explicit and a summed class.

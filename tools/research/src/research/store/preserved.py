@@ -6,8 +6,9 @@ A target is a run id (every artifact its manifest names under `outputs` and `tel
 an `art:` id.  Three legs, each reported by name (`legs`: `manifest`, `artifacts`, `labels`):
   manifest   the attempt manifest is on the remote (HEAD);
   artifacts  an artifact is PRESERVED when the remote holds its manifest (read back, sha256 == id) and every blob: remote size ==
-             manifest size and, per `mode`, `head` = single-part ETag == local MD5 when the blob is local and the remote gives an
-             MD5 ETag, otherwise a full read-back sha256; `readback` = always read back; `recorded` = trust the local catalog's
+             manifest size and, per `mode`, `head` = when the blob is local, the remote ETag == its MD5 (single-part) or the
+             `md5(md5s)-n` its parts yield (multipart, `etag-multipart`), otherwise a full read-back sha256 (any size);
+             `readback` = always read back; `recorded` = trust the local catalog's
              verified remote replica (what `push --verify`/`verify` recorded), and where there is none (an upload made from a
              pod or another machine) run the `head` check against the remote, which records the replica when it passes -- so the
              verdict does not depend on which machine uploaded; offline only for artifacts already recorded;
@@ -29,6 +30,7 @@ from . import ids
 from . import labels_sync as LS
 from .local import (
     VERIFY_HEAD,
+    VERIFY_MULTIPART,
     VERIFY_READBACK,
     LocalStore,
     attempt_key,
@@ -37,7 +39,7 @@ from .local import (
     utc_now,
 )
 from .remote import md5_file
-from .remote_s3 import SINGLE_PUT_MAX, is_md5_etag
+from .remote_s3 import PART_SIZE, choose_part_size_for, hash_parts, is_md5_etag, multipart_etag, parts_of, plan_parts
 
 MODES = ("head", "readback", "recorded")
 #: in a head-mode verdict: the attempt key is write-once on the remote, so no push makes this run preserved (store.reconcile)
@@ -52,6 +54,16 @@ def attempt_artifacts(doc: dict[str, Any]) -> dict[str, str]:
             if isinstance(v, str) and v.startswith("art:"):
                 out[f"{sec}.{name}"] = v
     return out
+
+
+def _local_multipart_etag_matches(path, size: int, etag: str, part_size: int) -> bool:
+    """Does the local blob yield the remote's multipart ETag `md5(md5s)-n`?  The part size is not on the object: try the one an
+    upload from here picks, then an even split into `n` parts (an upload made elsewhere, as `put_multipart` does)."""
+    n = parts_of(etag)
+    for ps in dict.fromkeys((choose_part_size_for(size, part_size), -(-size // n))):
+        if len(plan_parts(size, ps)) == n and multipart_etag([p["md5"] for p in hash_parts(path, ps)]) == etag:
+            return True
+    return False
 
 
 def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool = True) -> dict[str, Any]:
@@ -100,9 +112,6 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool 
         if head["bytes"] != size:
             rep["errors"].append(f"{key}: remote size {head['bytes']} != {size}")
             continue
-        if size > SINGLE_PUT_MAX:
-            rep["errors"].append(f"{key}: > 5 GiB; per-part check is not implemented")
-            continue
         local = st.object_path(h)
         if mode == "head" and local.is_file() and is_md5_etag(head.get("etag")):
             if head["etag"] == md5_file(local):
@@ -110,6 +119,13 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool 
                 methods.add(VERIFY_HEAD)
             else:
                 rep["errors"].append(f"{key}: remote ETag {head['etag']} != local MD5")
+            continue
+        if mode == "head" and local.is_file() and parts_of(head.get("etag")):
+            if _local_multipart_etag_matches(local, size, head["etag"], getattr(r, "part_size", PART_SIZE)):
+                rep["checked"] += 1
+                methods.add(VERIFY_MULTIPART)
+            else:
+                rep["errors"].append(f"{key}: remote multipart ETag {head['etag']} is not what the local blob yields")
             continue
         err = st._readback(r, key, h)  # noqa: SLF001
         if err:

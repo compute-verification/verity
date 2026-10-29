@@ -3,7 +3,8 @@ import Mathlib
 /-!
 # Loomis–Whitney, and Hong–Kung's count of a product's segments
 
-CMP-167 item 2 (SAK-LB): the combinatorial core of the data-movement lower bound for an exact matrix product.
+A part of the SAK lower bound (`Pouw.SakLb`): the combinatorial core of the data-movement lower bound for an exact
+matrix product.
 
 * `loomis_whitney`: a finite set `S` of triples `(i, j, l)` has `|S|² ≤ |S_ij| · |S_jl| · |S_il|`, its three
   projections (the discrete Loomis–Whitney inequality, by Cauchy–Schwarz on the fibres over `(i, j)`).
@@ -15,8 +16,8 @@ CMP-167 item 2 (SAK-LB): the combinatorial core of the data-movement lower bound
 Hong–Kung's argument reads `parts_le` at `h = 2M` (scaled by the words an entry takes): a run with `M` words of fast
 memory, cut into segments of `M` words moved, touches in each segment at most the `M` words it holds at the segment's
 start and the `M` it moves, so it moves at least `M (T − 1) ≥ m k n / (2√2 √M) − M` words. At the served shapes and the
-cards' rates this is at most 2.8% of the tensor units' time (`note:compute-research/20261026T2345Z-draft-sak-lb`), so
-the bound does not bind: P1's floor on the tensor units does.
+cards' rates this is at most 2.8% of the tensor units' time, so the bound does not bind: P1's floor on the tensor
+units does.
 -/
 
 namespace Verity.Accel.HongKung

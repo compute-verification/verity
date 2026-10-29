@@ -1,4 +1,4 @@
-"""Iteration 5: the one-stream form of H1 + fx1 (h1u.cu's kh_one, CA's PouwH1Tile_v3 with the exact wrap correction) on one
+"""The one-stream form of H1 + fx1 (h1u.cu's kh_one, PouwH1Tile_v3 with the exact wrap correction) on one
 H200 or B200. The call's served z and y come from the MMAs whose words its receipts fold, so the call costs this kernel
 alone (seeds, noise, unit), against the plain int8 GEMM it replaces: gamma = os / plain. Each build's receipts-only
 kh_unit_ws is timed beside it (arm NAME-ws, a second product: gamma 1 + ws / plain), and so is H1's noise floor.
@@ -6,24 +6,24 @@ kh_unit_ws is timed beside it (arm NAME-ws, a second product: gamma 1 + ws / pla
     python h1zbench.py --lib h1u.so [--variant NAME=h1u_x.so ...] --ref-lib h1zref.so [--noise-lib h1noise.so]
                        --out OUT [--reps 5] [--ms ...] [--linears ...] [--fused] [--no-ws] [--peel] [--j10r ARM]
 
---peel adds arm NAME-osp per build: kh_one_peel, CA's peel (11:02Z), whose z is A B^T (y today's) from the same stream
+--peel adds arm NAME-osp per build: kh_one_peel, the peel, whose z is A B^T (y today's) from the same stream
 (z - X c^T - b B^T + 256 xa B^T, xa where X = A + b wraps). Its gates are the os arms' with z held to A B^T instead: the
-anchors' z against the exact A B^T on the CPU (receipts v3's), every shape's z on the selected row blocks against A B^T
+anchors' z against the exact A B^T on the CPU (receipts v3's), every shape's z on the selected row tiles against A B^T
 in float64, and both faults unchanged (a perturbed word and a flipped wb bit still move only their own z, y and receipt).
 
 --j10r ARM adds arm ARM-j10r (label arm=ARM-j10r:j10r-unsound, noise=j10r): build ARM's one-stream unit on J10-R's
-call-scale noise (kh_one_j10; CA's RT-ALGO r3), measured only, never served or credited. Its gate is gate_one's on
+call-scale noise (kh_one_j10; the form j10r_ca.py twins), measured only, never served or credited. Its gate is gate_one's on
 j10r_ca.py's CPU twin (receipts and z on three units a shape, the noise and z checks of `gate_j10`) after anchors on
 every unit of two small calls.
 
 Gates before any timing (a failed gate exits 4 and its build is not timed):
   * anchors (CPU): every build's kh_one, fused and two-launch, against h1v3_ca.reference(stream=True) (v3's unpeeled
-    unit on h1tile's word functions) on every unit of a 64 x 64 x 512 call whose second row block is dead and of a
+    unit on h1tile's word functions) on every unit of a 64 x 64 x 512 call whose second row tile is dead and of a
     32 x 32 x 4608 call (m = 3), z and receipt, B over all of int8 (-128 included); the reference kernel (h1zref.cu)
     against the same z;
   * every timed shape, 0xA5 poison over receipts, z, zo, y and the workspace first:
     - the receipts on sampled units against served_h1/receipts.py's call_receipts, the seeds against seeds.py;
-    - z against h1zref (X (B + c)^T by dp4a from full compressions) on every cell of the selected row blocks (all of
+    - z against h1zref (X (B + c)^T by dp4a from full compressions) on every cell of the selected row tiles (all of
       them up to 8, else the first, the last and 6 random), no poison left in z, zo = z's rows < M, and y =
       int8_exact.dequantize(z) bit for bit;
     - the no-write control (F_NW_TILES | F_NW_UNITS) must be refused, on z and on the receipts;
@@ -31,7 +31,7 @@ Gates before any timing (a failed gate exits 4 and its build is not timed):
       receipt and no other, nothing else in z, and y = dequantize(z);
     - F_FAULT_WB (unit 0's column-0 wb+ at k = 0 flipped) must move exactly the cells (i, 0) of unit 0 with X[i][0] != 0,
       each by 256 dWB X[i][0], no receipt, nothing else in z, and y = dequantize(z);
-    - the peeled arms only, F_FAULT_XA (unit 0's xa at row 0, k = 0 flipped; CA's flipped-xa fault, 12:03Z) must move
+    - the peeled arms only, F_FAULT_XA (unit 0's xa at row 0, k = 0 flipped) must move
       exactly the cells (0, j) of unit 0 with B[j][0] != 0, each by 256 dxa B[j][0], no receipt, nothing else in z, and
       y = dequantize(z).
 The wrap bits' density (wb+ and wb- over the checked units' entries, from h1zref) is recorded per shape, never assumed.
@@ -51,9 +51,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import h1v3_ca as V3
 import j10r_ca as J10
 from h1bench import KEY_BLOCKS, auto_j, plain_arms
@@ -115,7 +114,7 @@ class OneLib(Lib):
 
 
 class OneCall:
-    """One call in the one-stream form: a Call (A padded to whole row blocks, B, seeds, receipts) and z [rows, N], zo and
+    """One call in the one-stream form: a Call (A padded to whole row tiles, B, seeds, receipts) and z [rows, N], zo and
     y [M, N], s_a [rows] (0 past M), s_w [N] and the step {0, M, 0, flags} on the device."""
 
     def __init__(self, lib: OneLib, c: Call, M: int, sa: torch.Tensor, sw: torch.Tensor):
@@ -148,7 +147,7 @@ class OneCall:
 
 
 class Ref:
-    """h1zref.cu: z = X (B + c)^T at the selected row blocks, the wrap counts, unit 0's probe."""
+    """h1zref.cu: z = X (B + c)^T at the selected row tiles, the wrap counts, unit 0's probe."""
 
     def __init__(self, path: str):
         h = self.h = ctypes.CDLL(path)
@@ -298,7 +297,7 @@ def gate_j10(jc: J10Call, rng: random.Random, rsel: list[int], shift: int) -> di
     """J10-R's gate, on top of gate_one's (receipts, z, zo, y, poison, the no-write control, both faults): its receipts and
     z on three units (the first, the last, one drawn) against j10r_ca's CPU twin; the workspace with no 0xA5 block left,
     sampled blocks against seeds.noise_block of the call's seed, and its bits and U equal to the twin's on those units'
-    rows and columns; z on the selected row blocks against X (B + c)^T exactly (float64 over the workspace's bits, itself
+    rows and columns; z on the selected row tiles against X (B + c)^T exactly (float64 over the workspace's bits, itself
     equal to the twin on its units); the wrap bits' density over all of B against its own call-scale noise."""
     c = jc.c
     rows, n, k = c.a.shape[0], c.b.shape[0], c.a.shape[1]
@@ -355,7 +354,7 @@ def gate_j10(jc: J10Call, rng: random.Random, rsel: list[int], shift: int) -> di
 
 
 def anchors_j10(arm: str, lib: OneLib, rng: random.Random) -> list[dict]:
-    """kh_one_j10 against j10r_ca's CPU twin on every unit of a 64 x 96 x 512 call whose second row block is dead (a
+    """kh_one_j10 against j10r_ca's CPU twin on every unit of a 64 x 96 x 512 call whose second row tile is dead (a
     column's blocks sit past the call's rows, so N != rows checks the offsets) and of a 32 x 64 x 4608 call (m = 3); and
     the twin's unit on a unit's own noise against h1v3_ca.reference."""
     g = random.Random(rng.getrandbits(32))
@@ -406,7 +405,7 @@ def anchors_j10(arm: str, lib: OneLib, rng: random.Random) -> list[dict]:
 
 def anchors(libs: dict[str, OneLib], ref: Ref, rng: random.Random) -> list[dict]:
     """Every one-stream build, and the reference kernel, against v3's words on the CPU (h1v3_ca.reference, stream=True)
-    on two small calls, a dead row block included."""
+    on two small calls, a dead row tile included."""
     res = []
     for m, n, k, dead in ((64, 64, 512, (1,)), (32, 32, 4608, ())):
         g = torch.Generator().manual_seed(rng.getrandbits(32))

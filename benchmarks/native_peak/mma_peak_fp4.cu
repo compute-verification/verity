@@ -1,4 +1,4 @@
-// Instruction-peak microbenchmark for the sm_120 block-scaled FP4 tensor-core instruction (lane fp4-proof):
+// Instruction-peak microbenchmark for the sm_120 block-scaled FP4 tensor-core instruction:
 //
 //   mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3
 //

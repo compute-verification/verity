@@ -1,4 +1,4 @@
-"""``benchmarks/tc_probe/tc_probe.py`` tile generation without a device (lane pin-bf16): the FP8 families of tc-probe-fp8 are byte-identical
+"""``benchmarks/tc_probe/tc_probe.py`` tile generation without a device: the FP8 families are byte-identical
 for a fixed seed, the accumulator / adder families now exist for BF16 with shapes, dtypes and determinism, the adder-width ratios
 bracket every BF16 pipeline's width so the survive/truncate boundary is observable, and the D15(b) floor probe cannot tell any
 adder floor in [-152, -126] apart under the pinned Hopper FP8 model (the structural reason is tested on ``group_sum`` directly).
@@ -21,7 +21,7 @@ REPO_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").
 SEED = 20260902
 N_RANDOM = 64
 
-# sha256[:16] of A || Bt || C for families(rng(SEED), N_RANDOM, fmt, M, K), recorded on main 156bf21 before pin-bf16 touched
+# sha256[:16] of A || Bt || C for families(rng(SEED), N_RANDOM, fmt, M, K), recorded before the BF16 families were added to
 # families(): the FP8 tile generation must stay byte-identical (the H100 / 4090 FP8 sweeps and canaries are keyed on these draws).
 FP8_BASELINE = {
     ("e4m3", 16, 32): {

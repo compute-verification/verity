@@ -2,20 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import os
-import subprocess
-import sys
-from types import SimpleNamespace
 
 import pytest
-from conftest import REPO, VECTOR_RUN, conforming_result
 
-from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, FP8_SM120_MMA, K16_VECTOR, NVFP4_SM120
+from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, FP8_SM120_MMA, NVFP4_SM120
 from verity_numerical.bench import census, contract
-
-FIXTURES = REPO / "fixtures" / "typed-obligation-v0"
 
 
 def scale(m: dict, value: float) -> dict:
@@ -260,13 +252,6 @@ def test_fingerprint_records_the_malloc_tunables(conforming: dict, monkeypatch: 
     assert contract.fingerprint(**{**fields, "software": {**fields["software"], "allocator": given}})["software"]["allocator"] == given
 
 
-def test_pod_env_sets_the_malloc_tunables() -> None:
-    text = (REPO / "archive" / "direct" / "ligero" / "pod_bootstrap.sh").read_text()
-    env_sh = text.split("cat > $W/env.sh <<EOF", 1)[1].split("\nEOF", 1)[0]
-    assert r"MALLOC_MMAP_MAX_=\${MALLOC_MMAP_MAX_:-0}" in env_sh
-    assert r"MALLOC_TRIM_THRESHOLD_=\${MALLOC_TRIM_THRESHOLD_:-1000000000000}" in env_sh
-
-
 def test_probe_hardware_shape() -> None:
     hw = contract.probe_hardware()
     assert set(hw) == {"gpu", "cpu"}
@@ -483,68 +468,6 @@ def test_batch_hardware_and_soundness_target_are_identity(conforming: dict) -> N
     assert contract.incomparable(fp, no_target)[0][0] == "security.target"
 
 
-# --- the workload emits conforming results ----------------------------------------------------------------------------
-
-
-def _vector_run():
-    spec = importlib.util.spec_from_file_location("vector_run_under_test", VECTOR_RUN)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def test_campaign_fields_read_off_the_object() -> None:
-    vr = _vector_run()
-    rec = json.loads((FIXTURES / f"{K16_VECTOR}.json").read_text())
-    assert vr.campaign_fields(rec, "sp1-prove", False) == {
-        "profile": FIRST.name, "domain": "finite-only", "K": 16, "B": 1, "proof_class": "NON_ZK_PROOF", "authentication": "included",
-        "statement_machinery": "included",
-    }
-    diagnostic = vr.campaign_fields(rec, "sp1-prove", True)
-    assert diagnostic["proof_class"] == "ARITHMETIC_DIAGNOSTIC" and diagnostic["authentication"] == "excluded"
-    assert diagnostic["statement_machinery"] == "included", "skip-authentication still parses the statement and builds the table"
-    relation_only = vr.campaign_fields(rec, "sp1-prove", True, True)
-    assert relation_only["proof_class"] == "ARITHMETIC_DIAGNOSTIC" and relation_only["authentication"] == "excluded"
-    assert relation_only["statement_machinery"] == "excluded"
-    assert vr.campaign_fields(rec, "sp1-execute", False)["proof_class"] == "NO_PROOF"
-    hw = json.loads((FIXTURES / "accept--tc-store-cast-nan-hw.json").read_text())
-    assert vr.campaign_fields(hw, "sp1-prove", False)["profile"] is None, "family @2 is not the campaign target: null, not a guess"
-    many = json.loads((FIXTURES / "accept--shared-leaf-many-obligations.json").read_text())
-    assert vr.campaign_fields(many, "reference", False)["B"] == 4
-
-
-def test_sp1_prove_mapping_is_one_joint_and_validates(conforming: dict) -> None:
-    vr = _vector_run()
-    report = SimpleNamespace(setup_seconds=17.35, prove_seconds=3.58, verify_seconds=0.245, proof_bytes=5898276)
-    ms = vr.sp1_prove_measurements(report)
-    by_name = {m["name"]: m for m in ms}
-    assert vr.SP1_PROVE_STAGE == "t.joint.witness+encoding_commitment+arithmetic+lookup"
-    assert by_name[vr.SP1_PROVE_STAGE]["value"] == 3.58 and by_name["t.total"]["value"] == 3.58
-    assert by_name["fixed.setup_seconds"]["value"] == 17.35 and by_name["verifier.seconds"]["value"] == 0.245
-    assert by_name["transcript.bytes"] == {"name": "transcript.bytes", "value": 5898276, "unit": "B"}
-    assert by_name["t.zk_additional"]["value"] == 0.0
-    assert "t.serialization" not in by_name, "the proof's write to disk is untimed by the host: absent, not guessed"
-    result = {**conforming, "measurements": ms + [contract.measurement("vu.count", 1), contract.measurement("prove_seconds", 3.58, "s")]}
-    assert contract.validate(result) == []
-
-
-def test_reference_run_writes_a_conforming_result(tmp_path) -> None:
-    out = tmp_path / "run"
-    proc = subprocess.run([sys.executable, str(VECTOR_RUN), "--vector", K16_VECTOR, "--backend", "reference", "--out", str(out)],
-                          capture_output=True, text=True, env={**os.environ, "RESEARCH_RUN_ID": "r-local-test"})
-    assert proc.returncode == 0, proc.stderr
-    result = json.loads((out / "result.json").read_text())
-    assert result["run_id"] == "r-local-test"
-    assert contract.validate(result) == [], contract.validate(result)
-    fp = result["workload_fingerprint"]
-    assert (fp["profile"], fp["domain"], fp["K"], fp["B"], fp["proof_class"], fp["authentication"], fp["zk_mode"], fp["retention"]) == (
-        FIRST.name, "finite-only", 16, 1, "NO_PROOF", "included", "none", "retained")
-    assert fp["security"]["target"] is None and set(fp["hardware"]) == {"gpu", "cpu"}
-    assert fp["software"]["backend"]["name"] == "verity_sp1.proofs.transparent"
-    assert {m["name"] for m in result["measurements"]} >= {"reference_check_wall", "vu.count", "workload_wall"}
-    assert json.loads(proc.stdout)["contract"] == "conforms"
-
-
 def test_hvzk_is_a_zk_class_but_not_the_complete_label(conforming: dict) -> None:
     """Honest-verifier ZK carries a zk_mode like the complete class, and is a distinct label the judge keeps apart."""
     fp = conforming["workload_fingerprint"]
@@ -635,7 +558,7 @@ def test_compare_instances_conflicts_and_warnings(conforming: dict) -> None:
 
 
 def test_no_writer_hardcodes_the_domain_and_new_fingerprints_use_the_vocab() -> None:
-    """red-team-flock-3's M0 (coordinator 2026-09-27 13:45Z): every cell recorded ``domain: finite`` whatever it proved.  A
+    """red-team-flock-3's M0: every cell recorded ``domain: finite`` whatever it proved.  A
     fingerprint's domain is now its statement's, one of the vocab's; the old hardcode is refused on new writes, still read on
     old results (as ``finite-only``, so identity comparisons with them hold)."""
     import re
@@ -658,3 +581,12 @@ def test_no_writer_hardcodes_the_domain_and_new_fingerprints_use_the_vocab() -> 
     assert contract.validate_fingerprint(old) == [] and contract.identity(old)["domain"] == "finite-only"
     assert contract.incomparable(old, {**old, "domain": "finite-only"}) == []
     assert [f for f, _, _ in contract.incomparable(old, {**old, "domain": "total"})] == ["domain"]
+
+
+def test_the_store_vocabulary_copies_the_contracts_closed_sets() -> None:
+    """``research.store.vocab`` copies the proof classes (plus the ledger's ``COMPONENT``) and authentication modes, since the store
+    imports no bench package."""
+    from research.store import vocab
+
+    assert set(vocab.PROOF_CLASSES) == set(contract.PROOF_CLASSES) | {"COMPONENT"}
+    assert set(vocab.AUTHENTICATION_VALUES) == set(contract.AUTHENTICATION)

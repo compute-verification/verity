@@ -3,11 +3,11 @@ import Definitions.Core.NaiveStrassen
 /-!
 # Naive tiled against Strassen: D4's guarantees
 
-ACCEL NAIVE-STRASSEN (CMP-110). Theorem 1 at the served depth, and its size form, on all four instances
-(`Verity.Accel.NaiveStrassen`): the H200 SXM and the RTX PRO 6000, each at its data sheet's and its measured
-instruction `k`. Served dimensions are at most 65536, and a leaf is at least 16 (sm_120 has no `wgmma`, and the H200
-is taken at `Open.sync = 1`), so a recursion on a served product is at most `log₂(65536 / 16) = 12` deep, and the size
-form's `c` is `65536 / 16 = 4096`. Both are about int8 operands at `(256, 256)`.
+Theorem 1 at the served depth, and its size form, on all four instances (`Verity.Accel.NaiveStrassen`): the H200
+SXM and the RTX PRO 6000, each at its data sheet's and its measured instruction `k`. Served dimensions are at most
+65536, and a leaf is at least 16 (sm_120 has no `wgmma`, and the H200 is taken at `Open.sync = 1`), so a recursion
+on a served product is at most `log₂(65536 / 16) = 12` deep, and the size form's `c` is `65536 / 16 = 4096`. Both are
+about int8 operands at `(256, 256)`.
 -/
 
 namespace Verity.Guarantees

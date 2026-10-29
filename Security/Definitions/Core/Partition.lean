@@ -3,12 +3,12 @@ import Definitions.Core.Circuit
 /-!
 # Partitions, committed wires, and the correctness of a unit
 
-A partition puts every computed gate of a circuit in exactly one of `n` units; input gates are in none. Proof units
-(PUs), replay units (RUs) and isolation units (IUs) are partitions in three roles, and `Refines` nests them (PUs inside
-RUs). The committed wires are derived, never stored: the inputs, the outputs, and every gate that a gate of another unit
-reads (`committed`). Unit `u`'s committed gates are `out(R)` for its gates `R` (`gates u`).
+A partition puts every computed gate of a circuit in exactly one of `n` units; input gates are in none. Proof blocks,
+replay blocks and isolation blocks are partitions in three roles, and `Refines` nests them (proof blocks inside replay
+blocks). The committed wires are derived, never stored: the inputs, the outputs, and every gate that a gate of another
+unit reads (`committed`). Unit `u`'s committed gates are `out(R)` for its gates `R` (`gates u`).
 
-Unit `u` is **correct** in a transcript `X` when its committed gates hold what its gates compute from `X` on the gates
+Unit `u` is **correct** in a trace `X` when its committed gates hold what its gates compute from `X` on the gates
 it reads from outside, in(R) (`Correct`): recompute `u`'s gates in order, reading every other gate from `X`
 (`localEval`), and compare with `X` on `u`'s committed gates. Only committed values are bound, and `wrong X` is the set
 of units that are not correct.
@@ -43,7 +43,7 @@ def Correct (X : C.Transcript) (u : Fin n) : Prop :=
   ∀ g ∈ P.committed, P.unit g = some u → X g = P.localEval X u g
 
 open Classical in
-/-- The wrong units of a transcript. -/
+/-- The faulty proof blocks of a trace. -/
 noncomputable def wrong (X : C.Transcript) : Finset (Fin n) :=
   univ.filter fun u => ¬ P.Correct X u
 

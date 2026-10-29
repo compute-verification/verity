@@ -10,15 +10,13 @@ exactly in a wide integer adder, and the sum is normalised to a fixed internal s
 (round toward zero).  The result of one group is the accumulator of the next.  No IEEE rounding happens anywhere;
 this is what NVIDIA's silicon does and it is *not* what a sequence of FP32 FMAs would do.
 
-Since the silicon Phase-0 consolidation this module is a thin shim: the terms live in :mod:`verity.ml.circuits.silicon.term`
+This module is a thin shim: the terms live in :mod:`verity.ml.circuits.silicon.term`
 (``Term``, ``bf16_product``, ``e4m3_product``, ``fp32_term``, ``pack_fp32`` and the new E5M2 / E2M1 products and
 decoders), the models in :mod:`verity.ml.circuits.silicon.models` (``GroupSum`` -- of which :class:`Pipeline` is the alias --
 ``group_sum``, ``tc_dot``, ``tc_dot_chain``, the validated instances, and autoproof's ``BlockScaledAlignAdd``),
 and the instruction registry in :mod:`verity.ml.circuits.silicon.instructions`.  Every name this module exported before is
 re-exported here with the same behaviour; ``tc_dot`` on ``AMPERE_BF16_M16N8K16`` is still the executable
 definition ``verity.ml.circuits.targets.target.FIRST`` names.
-
-Originally promoted verbatim from ``veritor`` ``src/veritor/core/silicon.py`` lines 77-395 (commit eb865ce29).
 """
 from __future__ import annotations
 

@@ -6,19 +6,19 @@ import Proofs.Population.Work
 # The damage theorems need no obliviousness
 
 Locality holds in the honest run's own dataflow for every time-ordered, address-closed trace
-(`eq_honest_off_downAt`). Leakage in Daniel's form and the skipped work are counted from locality alone, so both hold
+(`eq_honest_off_downAt`). Leakage in the uniform form and the skipped work are counted from locality alone, so both hold
 for every such program, at the cones over its honest runs (`downOver C`, `C` a set holding them): a property of the
 program, no larger than the padding's cones, and no obliviousness assumed.
 
 * `eq_honest_off_downOver`: off the writes of the cone over `C`, a run shows the honest values.
-* `card_leak_le_coneOver`, `card_leak_le_coneEgressOver`, **Daniel's form for a program**: at most `m` wrong units and
-  every unit's cone egress over `C` at most `E` give `#honest · C(|U|, m) · |V| ^ (m E)` egress values.
+* `card_leak_le_coneOver`, `card_leak_le_coneEgressOver`, **the uniform form for a program**: at most `m` faulty proof
+  blocks and every unit's cone egress over `C` at most `E` give `#honest · C(|U|, m) · |V| ^ (m E)` egress values.
 * `skipped_work_le_wt_over`, **T4 for a program**: every cone over `C` at most `F` times its root's weight gives skipped
   work at most `F · wt(wrong)` plus the lucky work.
 
-What these do not give is isolation: they count the egress a wrong unit's cone can carry, not where it comes from.
-`vm_honest_wiring_fails` is the pointer machine meeting this bound (its pointer step's cone holds every output) while
-the honest wiring's upstream would bound it by `2`.
+What these do not give is isolation: they count the egress a faulty proof block's cone can carry, not where it comes
+from. `vm_honest_wiring_fails` is the pointer machine meeting this bound (its pointer step's cone holds every output)
+while the honest wiring's upstream would bound it by `2`.
 -/
 
 namespace Population.DynPopulation
@@ -37,8 +37,8 @@ theorem downAt_mono {σ : S → V} {B B' : Finset U} (hB : B ⊆ B') {v : U} (hv
   obtain ⟨u, hu, huv⟩ := hv
   exact ⟨u, hB hu, huv⟩
 
-/-- **Locality over the honest runs' cones**: a run holding the inputs of an honest run in `C`, with its wrong units
-inside `B`, shows the honest value at every slot outside the writes of the cone over `C` of `B`. -/
+/-- **Locality over the honest runs' cones**: a run holding the inputs of an honest run in `C`, with its faulty proof
+blocks inside `B`, shows the honest value at every slot outside the writes of the cone over `C` of `B`. -/
 theorem eq_honest_off_downOver [Fintype U] (hsa : D.SingleAssignment) (hac : D.AddressClosed) {step : U → ℕ}
     (ht : D.TimeOrdered step) {C : Set (S → V)} {h σ : S → V} (hhC : h ∈ C) (hh : ∀ u, D.Correct h u)
     (hin : ∀ s ∈ D.input, σ s = h s) {B : Finset U} (hB : D.wrong σ ⊆ B) {s : S}
@@ -71,8 +71,8 @@ theorem card_coneEgressOver_le [Fintype U] (C : Set (S → V)) (O : Finset S) (B
 
 /-- **Leakage is at most the honest egress times the cone egress over the honest runs**, for any time-ordered,
 single-assignment, address-closed trace: let the prover commit `σ i`, holding the inputs of the honest run
-`honest i ∈ C`, with its wrong units inside some `B ∈ 𝓑`. The egress takes at most `#honest · Σ_{B ∈ 𝓑} |V| ^ E_C(B)`
-values. -/
+`honest i ∈ C`, with its faulty proof blocks inside some `B ∈ 𝓑`. The egress takes at most
+`#honest · Σ_{B ∈ 𝓑} |V| ^ E_C(B)` values. -/
 theorem card_leak_le_coneOver [Fintype U] [Fintype V] [DecidableEq V] (hsa : D.SingleAssignment)
     (hac : D.AddressClosed) {step : U → ℕ} (ht : D.TimeOrdered step) (C : Set (S → V)) (O : Finset S)
     (𝓑 : Finset (Finset U)) {ι : Type} (Cl : Finset ι) (σ honest : ι → S → V) (hhC : ∀ i ∈ Cl, honest i ∈ C)
@@ -103,9 +103,9 @@ theorem card_leak_le_coneOver [Fintype U] [Fintype V] [DecidableEq V] (hsa : D.S
         rw [card_product, card_univ, Fintype.card_fun, Fintype.card_coe]
     _ = _ := by rw [mul_sum]
 
-/-- **Daniel's form for a program**: in a time-ordered, single-assignment, address-closed trace, at most `m` wrong units
-and every unit's cone egress over the honest runs `C` at most `E` give `#honest · C(|U|, m) · |V| ^ (m E)` egress
-values. Obliviousness is not assumed. -/
+/-- **The uniform form for a program**: in a time-ordered, single-assignment, address-closed trace, at most `m` faulty
+proof blocks and every unit's cone egress over the honest runs `C` at most `E` give `#honest · C(|U|, m) · |V| ^ (m E)`
+egress values. Obliviousness is not assumed. -/
 theorem card_leak_le_coneEgressOver [Fintype U] [Fintype V] [DecidableEq V] [Nonempty V]
     (hsa : D.SingleAssignment) (hac : D.AddressClosed) {step : U → ℕ} (ht : D.TimeOrdered step)
     (C : Set (S → V)) (O : Finset S) {m E : ℕ} (hmU : m ≤ Fintype.card U)
@@ -163,8 +163,8 @@ namespace Population
 
 open Finset
 
-/-- **The pointer machine meets Daniel's form at its honest cones**: in every run the copy steps read the pointer, so
-the pointer step's cone over any nonempty `C` holds every output word. With one wrong unit the bound is
+/-- **The pointer machine meets the uniform form at its honest cones**: in every run the copy steps read the pointer, so
+the pointer step's cone over any nonempty `C` holds every output word. With one faulty proof block the bound is
 `#honest · (N + 1) · 2 ^ N`, which `vm_leak`'s `2 ^ N` meets. -/
 theorem vm_coneEgressOver_ptr {N : ℕ} {C : Set (Slot N → Bool)} {h : Slot N → Bool} (hhC : h ∈ C) :
     (vm N).coneEgressOver C (univ.filter fun s => s.isOut) {none} = univ.filter fun s => s.isOut := by

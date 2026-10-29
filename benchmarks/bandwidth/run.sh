@@ -6,7 +6,7 @@
 #   (a timed run: `--no-sampler` on research run, and TIMED=1 here, which takes the lease with --timed)
 #
 # Outside the lease: build `bwtag` and `libbwtag.so` (refused on any register spill), and compute with the core reference
-# the expected roots over the full store and over the pinned vectors' 37 blocks.  Under
+# the expected roots over the full store and over the pinned vectors' 37 labels.  Under
 # `gpu-lease 1 --wait --max-min 20`: `bwtag`'s gates (SHA-512's and keyed BLAKE3's known answers; every tag's roots
 # against the reference with the output buffers poisoned; a control without the tag kernel that must not match), then its
 # timing; a failed gate times nothing (exit 3).  Then `gpu.py windows`: the leased GPU's id, read by the challenger from

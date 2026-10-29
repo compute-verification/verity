@@ -142,7 +142,7 @@ def test_status_counts_an_item_by_its_last_done_line(dispatch):
 
 
 def test_a_provers_task_runs_on_the_prover_slices_and_every_other_task_off_them(dispatch, tmp_path):
-    """Daniel 1 Oct 01:35Z: vLLM jobs ran unpinned across the provers' 16-core slices and skewed the timed CPU verifier."""
+    """vLLM jobs ran unpinned across the provers' 16-core slices and skewed the timed CPU verifier."""
     _live(dispatch, TWO)
     dispatch.submit(_item(tmp_path), "lane/a")
     dispatch.submit({**_item(tmp_path), "id": "p", "queue": "provers"}, "lane/p")

@@ -1,4 +1,4 @@
-"""[ov-sampling] SHARED-CODE tests for fold.py: (1) n>1 child request ids (`{index}_{parent}`, header `workload.children`)
+"""Tests for fold.py: (1) n>1 child request ids (`{index}_{parent}`, header `workload.children`)
 bind to the parent's prompt parameter and the served sequences are per child; (2) the sampled-row fallback matches the
 step's instance by its output element (family-agnostic), not only `TokenSelect_v*` by row."""
 

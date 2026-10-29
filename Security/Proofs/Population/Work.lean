@@ -3,24 +3,24 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.BigOperators.Ring.Finset
 
 /-!
-# Skippable work: what the wrong units' cones and luck bound
+# Skippable work: what the faulty proof blocks' cones and luck bound
 
 A run commits `σ` while computing only the units `K`; the units it skips are `univ \ K`. A skipped unit can be correct
-for three reasons: it is downstream of a wrong unit (its inputs are garbage the prover chose, which may make it easy,
-as `A = −b` zeroes a product), it was copied from a unit computing the same thing on the same inputs, or luck.
+for three reasons: it is downstream of a faulty proof block (its inputs are garbage the prover chose, which may make it
+easy, as `A = −b` zeroes a product), it was copied from a unit computing the same thing on the same inputs, or luck.
 
-* `skipped_sub`, **the population's part**: in a checked population, every skipped unit is downstream of a wrong
-  unit or lucky (`SkipsLucky`: a skipped unit correct on honest inputs is lucky). Units outside the wrong units' cone
-  read exactly their honest inputs (`eq_honest_off_down`), which is where the per-unit premise applies.
+* `skipped_sub`, **the population's part**: in a checked population, every skipped unit is downstream of a faulty
+  proof block or lucky (`SkipsLucky`: a skipped unit correct on honest inputs is lucky). Units outside the faulty proof
+  blocks' cone read exactly their honest inputs (`eq_honest_off_down`), which is where the per-unit premise applies.
 * `skipped_work_le`: so the skipped work is at most `|wrong| · F` plus the lucky work, `F` bounding the work of any
   unit's downstream cone, which the verifier computes from the public dataflow.
 * `skipped_work_le_of_luck`: if the lucky work is at most a `p = num/den` share of the skipped work plus a slack, the
   skipped work `W` satisfies `(den − num) · W ≤ den · (m F + slack)`, that is `W ≤ (m F + slack) / (1 − p)`:
   compute-accounting's `F m / (1 − p) + slack`.
 * `skipped_work_le_wt`, `skipped_work_le_wt_of_luck`: the same with every cone at most `F` times its root's weight, so
-  the bound reads the wrong units' weight, which weighted sampling bounds: `W ≤ (F · wt(B) + slack) / (1 − p)`.
+  the bound reads the faulty proof blocks' weight, which weighted sampling bounds: `W ≤ (F · wt(B) + slack) / (1 − p)`.
 * `twin_copy`, **why luck needs distinct units**: two units computing the same function of the same input: the run
-  that computes one and copies it has no wrong unit, and every hardness premise must count the copy as luck. The
+  that computes one and copies it has no faulty proof block, and every hardness premise must count the copy as luck. The
   premise holds only when no two credited units share (function, inputs, coin), which is the compile pass's job
   (a coin per unit), not the population's.
 -/
@@ -31,7 +31,7 @@ open Finset
 
 variable {U S : Type} (P : Dataflow U S)
 
-/-- **Every skipped unit is downstream of a wrong unit, or lucky.** -/
+/-- **Every skipped unit is downstream of a faulty proof block, or lucky.** -/
 theorem skipped_sub [Fintype U] [DecidableEq U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
     {honest σ : S → V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)
     (hσ : ∀ s ∈ P.input, σ s = a s) {K L : Finset U} (hl : P.SkipsLucky f honest σ K L) :
@@ -71,7 +71,7 @@ theorem down_subset_biUnion [Fintype U] [DecidableEq U] (B : Finset U) :
   obtain ⟨u, hu, huv⟩ := (P.mem_down).1 hv
   exact mem_biUnion.2 ⟨u, hu, (P.mem_down).2 ⟨u, mem_singleton_self u, huv⟩⟩
 
-/-- **The skipped work** is at most the wrong units' cones and the lucky work. -/
+/-- **The skipped work** is at most the faulty proof blocks' cones and the lucky work. -/
 theorem skipped_work_le [Fintype U] [DecidableEq U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
     {honest σ : S → V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)
     (hσ : ∀ s ∈ P.input, σ s = a s) {K L : Finset U} (hl : P.SkipsLucky f honest σ K L) (wt : U → ℕ) (F : ℕ)
@@ -123,8 +123,8 @@ theorem skipped_work_le_wt [Fintype U] [DecidableEq U] (h : P.Checked) {V : Type
           _ ≤ ∑ u ∈ P.wrong f σ, F * wt u := sum_le_sum fun u _ => hF u
           _ = F * ∑ u ∈ P.wrong f σ, wt u := (mul_sum _ _ _).symm
 
-/-- **The skipped work under weighted sampling and a luck rate** `p = num/den`: if sampling bounds the wrong units'
-weight by `M`, then `(den − num) · W ≤ den · (F M + slack)`, that is `W ≤ (F · wt(B) + slack) / (1 − p)`. -/
+/-- **The skipped work under weighted sampling and a luck rate** `p = num/den`: if sampling bounds the faulty proof
+blocks' weight by `M`, then `(den − num) · W ≤ den · (F M + slack)`, that is `W ≤ (F · wt(B) + slack) / (1 − p)`. -/
 theorem skipped_work_le_wt_of_luck [Fintype U] [DecidableEq U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
     {honest σ : S → V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)
     (hσ : ∀ s ∈ P.input, σ s = a s) {K L : Finset U} (hl : P.SkipsLucky f honest σ K L) (wt : U → ℕ) (F : ℕ)
@@ -151,7 +151,7 @@ def twin : Dataflow (Fin 2) (Fin 3) where
 def twinFns {V : Type} (g : V → V) : twin.Fns V := fun _ r _ => g (r ⟨0, by simp [twin]⟩)
 
 /-- **A copy is correct work that was never done**: the run that computes unit `0` and copies its output to unit `1`
-has no wrong unit, so any hardness premise for it must count unit `1` as lucky. -/
+has no faulty proof block, so any hardness premise for it must count unit `1` as lucky. -/
 theorem twin_copy {V : Type} (g : V → V) (a : Fin 3 → V) :
     let σ : Fin 3 → V := fun s => if s = 0 then a 0 else g (a 0)
     (∀ u, twin.Correct (twinFns g) σ u) ∧

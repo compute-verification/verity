@@ -8,8 +8,9 @@ testpaths = ["tests"]
 # frame-v3-sha512, rowleaf, multiproof), pouw's audit, pearl_c (A's tree, -h3), SPLITK's vectors and their generator
 # (pouw/tests/splitk_rows_vectors.py: h1zy's chunk leaves under sampled_proofs' Registered.commit), and commit_gpu's
 # reference.py (the PRF salts); circuits, crypto and randomness are what those import, and kernels' tc what pouw's
-# circuit reaches.
+# circuit reaches. vclib reads its variables through settings.py, on verity_config.settings.
 inputs = [
+  "tools/config/verity_config",
   "verity/__init__.py",
   "verity/errors.py",
   "verity/ml/__init__.py",

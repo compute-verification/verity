@@ -1,7 +1,0 @@
-ligerito-relation-3 2b0f87a6 live_session_gpu_test (pod /workspace/lr3/r37/fp8-ada-zk, 00:21Z), fp8-ada --zk (LGSC0004),
-l = 256, 28 live rounds, real ChallengeServerSession records on a loopback verifier. Statement and key are
-fixtures/lgto/fp8ada_l256_zk_lgsc4/{honest.stmt,key.bin} (same bytes).
-  honest.lgto            the prover used the verifier's coins (session ...1324 batch 0)
-  label_grinding.lgto    R3-7 A: slots re-derived with ground labels; valid under its own .coins, not under the record
-  context_grinding.lgto  R3-7 B: slots re-derived from a ground context; likewise
-  verifier_sessions/     1324 (honest), cf42 (A), c03c (B) accepted; 5a2f aborted after 1 round (R3-10 attempt)

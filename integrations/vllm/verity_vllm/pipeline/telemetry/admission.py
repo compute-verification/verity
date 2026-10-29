@@ -14,13 +14,13 @@ the pinned pool under `--retain host`) is modelled as a term with a longer lifet
 
 Two data paths feed the planner:
 
-  (a) increment A telemetry (`lane/r17-mprof` ac6b86b4d, shipped as r18-int-1 b6784cac1; field names checked against
-      zk/campaign/telemetry/{events,sample,cgroup,procs}.py there): `events*.jsonl` spans (`span_start`/`span_end`, `stage`) and
+  (a) increment A telemetry (field names as zk/campaign/telemetry/{events,sample,cgroup,procs}.py writes them):
+      `events*.jsonl` spans (`span_start`/`span_end`, `stage`) and
       named-allocation marks (`kind="mark", name="alloc"|"free", obj=<term>, bytes=<n>, alloc_id=<id>`), plus
       `resources*.jsonl` `kind="cgroup"` (memory_current_bytes, memory_stat.anon/shmem/file) and `kind="process"` rows
       (per-pid rss_bytes / rss_anon_bytes) — `observe_increment_a`.
   (b) the pre-telemetry fallback: `resources.jsonl` ({utc|t, max_python_rss_mib, cgroup_current_mib, cgroup_anon_shmem_mib,
-      gpu_used_mib}) + `timeline.jsonl` (`ev` start/end per `stage`/`proc`) + `stages.txt`, the F-dA-15 admission JSON
+      gpu_used_mib}) + `timeline.jsonl` (`ev` start/end per `stage`/`proc`) + `stages.txt`, the admission JSON
       under `commit/`, `match/fold_summary.json`, `commit.log` ledger lines and `cgroup_memory.events.txt` /
       `commit_oom_cgroup.txt` — `observe_r17` and `row_config_from_attempt`.
 
@@ -41,7 +41,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROW_ID_PATTERN, row_tokens
+from verity_vllm.config import ROW_ID_PATTERN, row_tokens, workload_file
 from verity_vllm.engine.profiles.admission_calibration import (CALIBRATION, DENSE_DEFAULT, DEFAULT_MODEL, MODELS, uncalibrated_model_note,
                                                                unknown_model_note)
 
@@ -50,7 +50,7 @@ GiB = 1 << 30
 SCHEMA = "verity/admission-plan/v1"
 
 
-#: [R19 admit fix (a)] the value families `--retain-exclude hidden_m1` names (native_collect.retain_exclude_families): the attention launch's
+#: the value families `--retain-exclude hidden_m1` names (native_collect.retain_exclude_families): the attention launch's
 #: M1 export stream, FA2 (Ada/Ampere) or FA3 (Hopper) -- the families no C2 consumer reads back from host.
 HIDDEN_M1_FAMILIES = ("fa2_hidden_m1", "fa3_hidden_m1")
 RETAIN_EXCLUDE_ALIASES = {"hidden_m1": HIDDEN_M1_FAMILIES, "hidden": HIDDEN_M1_FAMILIES}
@@ -83,7 +83,7 @@ INVENTORY: dict[str, dict[str, str]] = {
     "commit.c2.match_oracle": {"stage": "commit", "where": "oracle_compare: match/instances parsed", "freed": "pair end (heap residual retained)", "scales": "instances x per-model bytes"},
     "commit.c2.programs": {"stage": "commit", "where": "sampled_replay pair 0: Program graph load", "freed": "pair-0 replay end (heap residual retained; replay cache reuses the record)", "scales": "instances x per-model bytes"},
     "commit.c2.heap_residual": {"stage": "commit", "where": "pymalloc/glibc arenas after pair-0 C2 frees", "freed": "process exit", "scales": "0.91 x pair-0 C2 heap"},
-    "commit.c2.replay_workers": {"stage": "commit", "where": "forked replay pool children (sampled_replay._parallel_replay)", "freed": "pool close", "scales": "workers x per-worker COW private pages (F-r17-24)"},
+    "commit.c2.replay_workers": {"stage": "commit", "where": "forked replay pool children (sampled_replay._parallel_replay)", "freed": "pool close", "scales": "workers x per-worker COW private pages"},
     "fa2.tap_window": {"stage": "commit", "where": "device: FA2 hidden-M1 window ring", "freed": "commit_delta exit", "scales": "heads x prompt x NB (largest step)"},
 }
 
@@ -118,13 +118,13 @@ class RowConfig:
     host_cpus: int = 128
     retain: str = "host"
     replay_cache: bool = True
-    largest_vu_in_parent: bool = False   # (R18 candidate (b)) the largest strata are evaluated serially in the parent, never in a forked worker
-    # [R19 admit, F-r18-admit-1 fix (c)] sampled_replay._parallel_replay gc.freeze()s the parent's heap before the fork (default-on in the
-    # code, env VERITY_REPLAY_FORK_GC_FREEZE=0 opts out): a child's collections never traverse the inherited C2 heap, so the "72 GB child"
-    # of R17 #23 (= the parent's programs + oracle heap copied on write, NOT 2.9 x the largest tensor -- a VU reads its own rows only) is a
-    # 250 MiB worker.  False models the pre-R19 code for `compare` against the R17/R18 records.
+    largest_vu_in_parent: bool = False   # the largest strata are evaluated serially in the parent, never in a forked worker
+    # sampled_replay._parallel_replay gc.freeze()s the parent's heap before the fork (default-on in the code, env
+    # VERITY_REPLAY_FORK_GC_FREEZE=0 opts out): a child's collections never traverse the inherited C2 heap, so a child that would copy
+    # the parent's programs + oracle heap on write (not 2.9 x the largest tensor -- a VU reads its own rows only) is a 250 MiB worker.
+    # False models a forked pool without gc.freeze, for `compare` against records made without it.
     fork_gc_freeze: bool = True
-    # [R19 admit, F-r18-admit-1 fix (a)] the RETAIN-windowed pool: `--bounded-staging --retain host --retain-exclude hidden_m1` keeps the
+    # the RETAIN-windowed pool: `--bounded-staging --retain host --retain-exclude hidden_m1` keeps the
     # C2 byte source (module outputs) and drops the M1 export stream's chunk-aligned interior (no C2 consumer reads it; opens by replay)
     bounded_staging: bool = False
     retain_exclude: list[str] = field(default_factory=list)
@@ -133,7 +133,7 @@ class RowConfig:
     largest_tensor_bytes: int | None = None   # 'largest tensor bound' ledger line when the row has run before
     host_limit_bytes: int | None = None
     device_limit_bytes: int | None = None
-    # measured-at-plan-time overrides (F-dA-15 admission JSON, fold_summary.json, commit.log)
+    # measured-at-plan-time overrides (admission JSON, fold_summary.json, commit.log)
     scheduled_raw_bytes: int | None = None
     token_bytes: int | None = None
     hidden_bytes: int | None = None
@@ -286,7 +286,7 @@ def _decision(reserved: int, limit: int | None, live: dict[str, int], margin_byt
 
     A stage whose reservation carries a lower-bound term never reads as a plain admit -- the model knows it
     under-fits that object (rows #57 and #60 were killed at 1.4-1.6x the prediction); admit is None with verdict LOWER_BOUND naming the
-    terms and the observation, so the runner/coord decide by name.  Over the limit it is still REFUSE (a lower bound above the limit is a refusal).
+    terms and the observation, so the runner decides by name.  Over the limit it is still REFUSE (a lower bound above the limit is a refusal).
     """
     if limit is None:
         return {"admit": None, "verdict": "NO_LIMIT", "reason": "no host limit given"}
@@ -314,7 +314,7 @@ def predict(cfg: RowConfig) -> dict[str, Any]:
     tok_b = cfg.token_bytes_est()
     hid_b = cfg.hidden_bytes_est()
     layers = sp["layers"]
-    # models whose capture observer the R17 data under-fits carry the flag on the term itself (never silently admitted)
+    # models whose capture observer the recorded data under-fits carry the flag on the term itself (never silently admitted)
     lb = f" [lower_bound: {sp['capture_lower_bound']}]" if sp.get("capture_lower_bound") else ""
     margin_terms = [
         Term("margin.pod_cotenants", C["margin.pod_cotenants"]["value"], "", "", C["margin.pod_cotenants"]["what"], "margin"),
@@ -354,19 +354,19 @@ def predict(cfg: RowConfig) -> dict[str, Any]:
     excl_hidden = bool(set(cfg.retain_exclude) & set(HIDDEN_M1_FAMILIES))
     pool_kept = raw
     if cfg.bounded_staging and cfg.retain == "host" and excl_hidden:
-        # fix (a): the M1 export stream's interior is not copied off the staging window; the pool holds the C2-read families + levels
+        # the M1 export stream's interior is not copied off the staging window; the pool holds the C2-read families + levels
         pool_kept = max(0, raw - hid_b)
         pool = pool_kept + int(raw * (lf - 1.0))
-        pool_basis = f"bounded staging, --retain host --retain-exclude {','.join(sorted(cfg.retain_exclude))}: (raw {raw // MiB} - hidden M1 {hid_b // MiB}) MiB + levels over every leaf raw {raw // MiB} MiB x {lf - 1.0:.2f} (R19 admit fix (a))"
+        pool_basis = f"bounded staging, --retain host --retain-exclude {','.join(sorted(cfg.retain_exclude))}: (raw {raw // MiB} - hidden M1 {hid_b // MiB}) MiB + levels over every leaf raw {raw // MiB} MiB x {lf - 1.0:.2f}"
     elif cfg.bounded_staging and cfg.retain != "host":
         pool = int(raw * (lf - 1.0))
         pool_basis = f"bounded staging, --retain {cfg.retain}: Merkle levels only, raw {raw // MiB} MiB x {lf - 1.0:.2f} (raw released per window; openings by replay)"
     else:
-        # F-dA-15 correction (R19 admit): the unbounded windowed collector copies every window to the pinned pool as the hit-plan hedge /
-        # learning re-hash source WHATEVER --retain says (R18 #60 `--retain none` datum: the 112 GiB pool was allocated anyway) -- the pool is a
-        # whole-run term under every retention on that path, never 0 MiB by name
+        # the unbounded windowed collector copies every window to the pinned pool as the hit-plan hedge / learning re-hash source
+        # WHATEVER --retain says (`--retain none` still allocates the whole pool) -- the pool is a whole-run term under every retention on
+        # that path, never 0 MiB by name
         pool = int(raw * lf)
-        pool_basis = f"raw {raw // MiB} MiB x {lf} (--retain {cfg.retain}{'' if cfg.retain == 'host' else ': allocated regardless of retention on the unbounded windowed path, F-dA-15 correction'})"
+        pool_basis = f"raw {raw // MiB} MiB x {lf} (--retain {cfg.retain}{'' if cfg.retain == 'host' else ': allocated regardless of retention on the unbounded windowed path'})"
     leaves = int(cfg.leaves or raw // C["commit.run_record.bytes_per_leaf"]["value"])
     leaf_digests = leaves * 32
     pool_until = last
@@ -378,17 +378,17 @@ def predict(cfg: RowConfig) -> dict[str, Any]:
     workers = cfg.workers()
     small_w = int(C["commit.c2.replay_workers.small_vu"]["value"])
     big_w = int(C["commit.c2.replay_workers.largest_vu"]["value"] * cfg.largest_tensor())
-    # [R19 admit fix (c)] with gc.freeze before the fork the children's private pages are scratch + refcount-dirtied pages of the rows they
-    # touch: every worker is a 250 MiB worker; the "2.9 x largest tensor" child was the parent's C2 heap copied on write by the child's GC
+    # with gc.freeze before the fork the children's private pages are scratch + refcount-dirtied pages of the rows they
+    # touch: every worker is a 250 MiB worker; without it the "2.9 x largest tensor" child is the parent's C2 heap copied on write by the child's GC
     n_big = 0 if (cfg.largest_vu_in_parent or cfg.fork_gc_freeze) else min(workers, int(C["commit.c2.replay_workers.largest_vu_picks"]["value"]))
     if workers > 1:
         workers_b = n_big * big_w + (workers - n_big) * small_w
         w_basis = (f"{n_big} workers x 2.9 x largest tensor {cfg.largest_tensor() // MiB} MiB + {workers - n_big} workers x 250 MiB"
-                   if n_big else f"{workers} workers x 250 MiB (" + ("gc.freeze before the fork: the children never copy the C2 heap, R19 admit fix (c)"
+                   if n_big else f"{workers} workers x 250 MiB (" + ("gc.freeze before the fork: the children never copy the C2 heap"
                                                                       if cfg.fork_gc_freeze else "largest strata evaluated in the parent") + ")")
     else:
         workers_b, w_basis = 0, "serial replay"
-    # the parent evaluating the largest VU serially holds the same working set itself (R18 model of candidate (b)); under the R19 reading a
+    # the parent evaluating the largest VU serially holds the same working set itself; a
     # VU's working set is its own rows, so no separate parent term is charged when gc.freeze governs
     parent_big = big_w if (workers == 1 or cfg.largest_vu_in_parent) and not cfg.fork_gc_freeze else 0
     c_terms = [
@@ -412,7 +412,7 @@ def predict(cfg: RowConfig) -> dict[str, Any]:
     c_terms.append(Term("fa2.tap_window", C["fa2.tap_window.device"]["value"], "warmup", last, C["fa2.tap_window.device"]["what"], "device"))
     c_terms += margin_terms
     plan = _stage_plan(c_terms, pts, cfg.host_limit_bytes)
-    # the actionable knob for the F-r17-24 term: how many workers fit beside the parent at the replay point
+    # the actionable knob for the replay-workers term: how many workers fit beside the parent at the replay point
     if cfg.host_limit_bytes:
         parent_at_replay = sum(t.bytes for t in c_terms if t.kind in ("host", "base") and t.name != "commit.c2.replay_workers"
                                and pts.index(t.live_from) <= pts.index("p0.replay") <= pts.index(t.live_until)) + sum(t.bytes for t in margin_terms)
@@ -428,10 +428,10 @@ def predict(cfg: RowConfig) -> dict[str, Any]:
                 adm = 0 if spare < big_w else 1
         plan["replay_workers_admissible"] = min(adm, 32)
         plan["replay_workers_requested"] = workers
-        plan["replay_workers_note"] = ("gc.freeze before the fork (R19 admit fix (c), default-on): every forked worker is a 250 MiB worker; the children never copy the C2 heap"
+        plan["replay_workers_note"] = ("gc.freeze before the fork (default-on): every forked worker is a 250 MiB worker; the children never copy the C2 heap"
                                        if cfg.fork_gc_freeze else
                                        "largest strata in the parent: every forked worker is a 250 MiB worker" if cfg.largest_vu_in_parent else
-                                       f"two forked workers may hold the largest VU ({big_w // MiB} MiB each, F-r17-24); pass --replay-workers <= admissible or evaluate the largest strata in the parent")
+                                       f"two forked workers may hold the largest VU ({big_w // MiB} MiB each); pass --replay-workers <= admissible or evaluate the largest strata in the parent")
     plan["parent_c2_heap_mib"] = (c2_heap_p0 + base_b) // MiB
     plan["largest_tensor_mib"] = cfg.largest_tensor() // MiB
     plan["pinned_pool"] = {"bytes": pool, "kept_raw_bytes": pool_kept, "basis": pool_basis, "bounded_staging": cfg.bounded_staging, "retain": cfg.retain,
@@ -442,7 +442,7 @@ def predict(cfg: RowConfig) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Data path (b): R17 attempt directories.
+# Data path (b): attempt directories.
 # ---------------------------------------------------------------------------------------------------------------------
 def _ts(s: str) -> float:
     s = s.replace("Z", "")
@@ -502,7 +502,7 @@ def r17_spans(attempt_dir: str) -> list[dict[str, Any]]:
     return sorted(sp, key=lambda s: s["t0"])
 
 
-# R17 substage -> plan point
+# substage -> plan point
 _R17_POINT = {
     "build.derive_request": ("build", "derive"), "build.derive_step": ("build", "derive"),
     "work.match_capture": ("match", "capture"), "work.capture_run": ("match", "capture"), "work.match_control": ("match", "control"),
@@ -578,7 +578,7 @@ def observe_r17(attempt_dir: str) -> dict[str, Any]:
 
 
 def row_config_from_attempt(attempt_dir: str) -> RowConfig:
-    """Plan-time inputs from an attempt directory's artifacts (preflight row, workload program, F-dA-15 JSON, fold summary)."""
+    """Plan-time inputs from an attempt directory's artifacts (preflight row, workload program, admission JSON, fold summary)."""
     notes: list[str] = []
     row = None
     pf = os.path.join(attempt_dir, "preflight.json")
@@ -603,12 +603,12 @@ def row_config_from_attempt(attempt_dir: str) -> RowConfig:
         o_ = next((int(p[1:]) for p in parts if re.fullmatch(r"o\d+", p)), 128)
         K = i_ + o_
     cfg = RowConfig(model=model, requests=requests, max_context=K, notes=notes)
-    # [R19 admit] an attempt is modelled as it ran: the R17/R18 records pre-date gc.freeze (fork_gc_freeze False -> the F-r17-24 (b) children
-    # term); a record whose commit.log carries the frozen-fork line is modelled with 250 MiB workers
+    # an attempt is modelled as it ran: a record whose commit.log lacks the frozen-fork line ran without gc.freeze (fork_gc_freeze False
+    # -> the forked-children term); one that carries it is modelled with 250 MiB workers
     cl = os.path.join(attempt_dir, "commit.log")
     cfg.fork_gc_freeze = bool(os.path.exists(cl) and re.search(r"\[replay\] fork gc\.freeze=on", Path(cl).read_text(errors="replace")))
     if not cfg.fork_gc_freeze:
-        notes.append("modelled without gc.freeze before the fork (pre-R19 record; --no-fork-gc-freeze equivalent)")
+        notes.append("modelled without gc.freeze before the fork (no frozen-fork line in commit.log; --no-fork-gc-freeze equivalent)")
     if model not in MODELS:
         notes.append(unknown_model_note(model))
     # timeline row start carries B/LP/T
@@ -658,7 +658,7 @@ def row_config_from_attempt(attempt_dir: str) -> RowConfig:
                 cfg.largest_request_rows, cfg.largest_request_ctx = int(big.get("cap", 0)) + lag, int(big.get("prompt_len", 0)) + int(big.get("cap", 0)) + lag
         except Exception as e:  # noqa: BLE001
             notes.append(f"workload_program unreadable: {e!r}")
-    # F-dA-15 admission JSON (the runner's own schedule)
+    # the admission JSON (the runner's own schedule)
     adm = glob.glob(os.path.join(attempt_dir, "commit", "admission_*.json"))
     if adm:
         j = json.loads(Path(adm[0]).read_text())
@@ -712,7 +712,7 @@ def row_config_from_attempt(attempt_dir: str) -> RowConfig:
                     cfg.host_limit_bytes = int(mx.group(1))
                     break
     if cfg.host_limit_bytes is None:
-        # the sampler's cgroup peak is a lower bound on the limit; the R17 pods were 175 GiB (cp-r3/cp-can), 351 GiB (cp-big), 125 GiB (L40S 2x)
+        # the sampler's cgroup peak is a lower bound on the limit; the pods measured were 175 GiB, 351 GiB and 125 GiB (L40S 2x)
         S = r17_samples(attempt_dir)
         pk = max((s["cgroup"] or 0) for s in S) if S else 0
         for lim in (119_209, 179_290, 359_535):
@@ -816,7 +816,7 @@ def compare(attempt_dir: str, cfg: RowConfig | None = None) -> dict[str, Any]:
     out: dict[str, Any] = {"schema": "verity/admission-compare/v1", "attempt_dir": attempt_dir, "row": asdict(cfg), "derived": pred["derived"], "observed_source": obs["source"],
                            "stages": {}, "points": {}, "kill": obs.get("kill"), "notes": list(cfg.notes) + list(obs.get("notes", []))}
     limit = cfg.host_limit_bytes
-    # hand-recorded observations for attempts whose sampler did not see the peak (kill-time cgroup/ps numbers from the R17 notes)
+    # hand-recorded observations for attempts whose sampler did not see the peak (kill-time cgroup/ps numbers)
     override: dict[str, Any] = {}
     ov = os.path.join(attempt_dir, "admit_observed.json")
     if os.path.exists(ov):
@@ -840,7 +840,7 @@ def compare(attempt_dir: str, cfg: RowConfig | None = None) -> dict[str, Any]:
             how = f"override: {o.get('how', '')}"
         verdict = st_obs.get("verdict")
         killed = bool(obs.get("kill")) and stage == _killed_stage(obs)
-        # parent-only prediction: the R17 observation is one process's RSS; forked replay workers are charged to the cgroup, not the parent
+        # parent-only prediction: the observation is one process's RSS; forked replay workers are charged to the cgroup, not the parent
         children = sum(t["bytes"] for t in p["terms"] if t["name"] == "commit.c2.replay_workers" and t["live"][0] == p["peak_point"]) if stage == "commit" else 0
         parent_pred = (p["reserved_bytes"] - children - sum(p["margin"].values()) * MiB) // MiB
         rec = {"predicted_mib": p["reserved_bytes"] // MiB, "predicted_parent_mib": parent_pred, "predicted_admit": p["admit"], "predicted_verdict": p["verdict"], "observed_mib": o_mib, "observed_all_mib": o_all,
@@ -873,7 +873,7 @@ def compare(attempt_dir: str, cfg: RowConfig | None = None) -> dict[str, Any]:
             out[k] = obs[k]
     out["replay_workers"] = {"requested": pred["commit"].get("replay_workers_requested"), "admissible": pred["commit"].get("replay_workers_admissible"),
                              "parent_c2_heap_mib": pred["commit"].get("parent_c2_heap_mib"), "largest_tensor_mib": pred["commit"].get("largest_tensor_mib"),
-                             "regime": "largest strata in the parent" if cfg.largest_vu_in_parent else "two forked workers may hold the largest VU (F-r17-24)",
+                             "regime": "largest strata in the parent" if cfg.largest_vu_in_parent else "two forked workers may hold the largest VU",
                              "note": pred["commit"].get("replay_workers_note")}
     return out
 
@@ -911,7 +911,7 @@ def render_compare_md(results: list[dict[str, Any]]) -> str:
 
 
 def render_points_md(r: dict[str, Any]) -> str:
-    lines = [f"**{os.path.basename(r['attempt_dir'].rstrip('/'))}** — commit points (predicted = Σ live terms + margin; observed = R17 max python RSS / cgroup current / cgroup anon+shmem, MiB)", "",
+    lines = [f"**{os.path.basename(r['attempt_dir'].rstrip('/'))}** — commit points (predicted = Σ live terms + margin; observed = max python RSS / cgroup current / cgroup anon+shmem, MiB)", "",
              "| point | predicted parent | predicted row (+workers +margin) | observed rss | observed cgroup | observed anon+shmem | residual parent | residual row | live terms |", "|---|---|---|---|---|---|---|---|---|"]
     for key, p in r["points"].items():
         if not key.startswith("commit/"):
@@ -940,7 +940,7 @@ def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | 
                              host_limit_bytes: int | None = None, snapshot_steps: str | None = None, snapshot_max_bytes: int | None = None,
                              stages: str = "build,match,commit") -> RowConfig:
     """Plan-time config from the sweep workload (workloads/<row>.json, or its parsed dict): the same facts row_pod.sh reads for B/I/O/LP/T."""
-    w = workload_path if isinstance(workload_path, dict) else json.loads(Path(workload_path).read_text())
+    w = workload_path if isinstance(workload_path, dict) else json.loads(workload_file(workload_path).read_text())
     sw = w.get("sweep") or {}
     row = row_id or sw.get("row_id") or ("" if isinstance(workload_path, dict) else Path(workload_path).stem)
     reqs = w.get("requests") or []
@@ -995,7 +995,7 @@ def plan_row(cfg: RowConfig, out_path: str | None, advisory: bool = True) -> dic
                    "pairs": cfg.pairs, "replay_workers": cfg.workers(), "prefill_rows": getattr(cfg, "prefill_rows", None),
                    "snapshot_steps": getattr(cfg, "snapshot_steps", None), "snapshot_max_bytes": getattr(cfg, "snapshot_max_bytes", None),
                    "largest_vu_in_parent": cfg.largest_vu_in_parent, "n_instances_est": cfg.instances(), "largest_tensor_bytes_est": cfg.largest_tensor(),
-                   # [R19 admit, F-r18-admit-1] the host-working-set mechanisms the plan models (fix (c) default-on in the code; fix (a) by flags)
+                   # the host-working-set mechanisms the plan models (gc.freeze default-on in the code; bounded staging by flags)
                    "fork_gc_freeze": cfg.fork_gc_freeze, "retain": cfg.retain, "bounded_staging": cfg.bounded_staging, "retain_exclude": sorted(cfg.retain_exclude)},
         "notes": list(cfg.notes), "stages": {}, "would_refuse": [], "lower_bound": [],
     }

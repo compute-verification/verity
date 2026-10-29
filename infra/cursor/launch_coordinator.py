@@ -42,7 +42,8 @@ NEW_SLICES = ("vllm", "benchmarks")
 
 HEAD = """\
 You are the {handle} coordinator for Verity (compute-verification/verity), {role}. You are a plain Cursor cloud agent \
-on "{env_name}". Read origin/main's AGENTS.md and the lane contract first.
+on "{env_name}". Read origin/main's AGENTS.md, its team skill \
+(`.agents/skills/team/SKILL.md`) and the lane contract first.
 Your slice: {remit} Your paths: {owns}. Your Linear team: {team}. {scope}
 First hour, in order:
 0. Put the agent guard and research on this VM (the environment's start does so since 18 Oct; this covers a VM booted \
@@ -172,7 +173,7 @@ def launch(args: argparse.Namespace) -> None:
         "name": f"verity: {args.handle}",
         "prompt": {"text": brief(args.handle, author, new_slice, args.pairing_thread, env_name, new_id, text)},
         "env": {"type": "cloud", "name": env_name},
-        # No PR gate on coordinators (Daniel, 14 Oct 11:34 AM PDT): leave PR creation to the team's
+        # No PR gate on coordinators: leave PR creation to the team's
         # "Create PRs" setting instead of pinning it off per run.
     }
     body["model"] = {"id": args.model, "params": [{"id": "effort", "value": args.effort}]}
@@ -210,7 +211,7 @@ def main() -> None:
     src.add_argument("--charter-from", help="a new slice: the charter author's agent id (reads artifacts/charter-HANDLE.md)")
     q.add_argument("--pairing-thread", required=True, help="ts of the handover or launch thread in #agent-coordination")
     q.add_argument("--generation", type=int, help="default: 2 for a successor, 1 for a new slice")
-    q.add_argument("--model", default=MODEL, help=f"a canonical model id from GET /v1/models; default {MODEL} (Daniel, 14 Oct: coordinators run Opus 5.5 High, never the account default)")
+    q.add_argument("--model", default=MODEL, help=f"a canonical model id from GET /v1/models; default {MODEL} (coordinators run Opus 5.5 High, never the account default)")
     q.add_argument("--effort", default=EFFORT, help=f"the model's effort parameter; default {EFFORT}")
     q.add_argument("--text-file", help="read the handoff or charter from this file instead of the author's artifacts")
     q.add_argument("--dry-run", action="store_true", help="print the create request and send nothing")

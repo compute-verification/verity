@@ -30,7 +30,7 @@ def _resolves(script: str, rel: str) -> bool:
 def test_pythonpath_entries_exist() -> None:
     dead = []
     for script in _tracked():
-        if not script.endswith((".sh", ".py")) or script.startswith("archive/"):
+        if not script.endswith((".sh", ".py")):
             continue
         for value in _ASSIGN.findall((ROOT / script).read_text(errors="replace")):
             for entry in value.strip("\"'").split(":"):

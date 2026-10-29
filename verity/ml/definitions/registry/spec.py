@@ -6,7 +6,7 @@ and the *state transition* of one speculative step as represented computations, 
 * `Accept_v1{K}`: greedy verification of `K` draft candidates against the target's `K+1` argmaxes — per-slot
   verdicts (prefix of agreements), the accepted length, and the `K+1` appended-token slots with dead slots
   holding `-1`.  Liveness of slot `j` is *derived* from the verdicts (`live[0] = 1`, `live[j] = verdict[j-1]`):
-  the bounded-slot answer to "a variable number of live positions" in a static-shape IR.
+  the bounded-slot answer to "a variable number of live positions" in a static-shape circuit.
 * `Advance_v1{K}`: the per-request state transition — next committed length, per-slot KV liveness (which of
   the `K+1` slot rows are committed, which discarded), and their counts.
 * `VerifyBranch_v1{C, LP, K}`: the target model's half of one step as a standalone program: prefill of the
@@ -17,7 +17,7 @@ and the *state transition* of one speculative step as represented computations, 
   length of every decode step).  The dynamic accepted length is a value (`Accept`'s output); the shapes it
   would have to drive (how many slot rows are committed, where the next block starts) are fixed by `A`, and
   the program's `accepted` outputs are checked against `A` (an equality obligation of the record).  A program
-  whose *shapes* depend on `Accept`'s value is not expressible in this IR — that is the finding, not a
+  whose *shapes* depend on `Accept`'s value is not expressible as a circuit — that is the finding, not a
   construct built here.
 
 Naming: static parameters in CAPITALS; `Coll` arguments in lower case; composite names `Name_vN`.

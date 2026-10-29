@@ -4,7 +4,7 @@ import Definitions.Accounting.Assumptions.TS.Fixed
 /-!
 # `UnitFixed` from a fixed word (trusted)
 
-ASK-40's option A (`Definitions.Accounting.TS.Fixed`). Each `def G : Prop` is proved as `Accounting.SecurityProofs.TS.G`
+Option A (`Definitions.Accounting.TS.Fixed`). Each `def G : Prop` is proved as `Accounting.SecurityProofs.TS.G`
 (`Proofs.Accounting.TS.Fixed`), with its non-vacuity witness in `Proofs.Accounting.TS.FixedMeets`.
 
 * `UnitFixedOfWords`: `UnitFixed` (E1(c) per unit, with its fold clause) on a word layer whose credited units are fixed

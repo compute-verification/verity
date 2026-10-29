@@ -146,7 +146,7 @@ def test_sm120_lifecycle_and_work_audit():
 
 
 def test_the_cap_is_the_records(monkeypatch):
-    """ρ is the device record's: 1/1,000 on sm120 (Daniel, 9:43 AM PDT on 2 Oct; Lean `…Rev1Cap1000`), 1/400 on the H100,
+    """ρ is the device record's: 1/1,000 on sm120 (Lean `…Rev1Cap1000`), 1/400 on the H100,
     at either record's prices, and Pearl-C4's own 1/400.  The certificate names it, and the credit, the tile rule and V-EX's
     remedy all read it: a tile whose debit lies between the two caps fails on sm120, passes on the same record at 1/400,
     and `volunteer` gives rows up for it on sm120 alone."""

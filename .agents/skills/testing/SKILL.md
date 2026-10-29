@@ -33,7 +33,8 @@ $R "$S --fresh"                 # ignore the cache
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
 
-To record a check of your clean commit as an Attempt, the whole check or some of its steps (`--deferred lean-agreement`),
+To record a check of your clean commit as an Attempt, the whole check (every job on the merge gate: circuit-check and
+ratchet-gate, off it, only with `--deferred circuit-check,ratchet-gate`) or some of its steps (`--deferred lean-agreement`),
 launch `uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research [--deferred STEP,...]` from
 your checkout. It starts its own `research run` in a slot of that lane pool (the CPU nodes' check slots take train checks only),
 so inside a `research run` it is refused, naming this command.
@@ -96,7 +97,7 @@ nothing, so list what they read, and list a path a test only checks the existenc
 - **A test that needs the evidence store** skips where it can't reach it with a reason containing `the evidence store is
   not reachable` (a recorded `check`, `VERITY_STORE_REQUIRED=1`, fails that skip). Inside `check` and `research run --on`
   the store is reachable only through the run's custody key, so fetch through a helper that hands it to the store CLI
-  (integrations/vllm's `store_io`, C-Flock's `verifier/ci.py` `fetch`).
+  (integrations/vllm's `store_io`, Flock's `verifier/ci.py` `fetch`).
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`, once it passes `suites.py SUITE
   --fresh` a few times, and its tests then spread over pytest-xdist workers: they must run in any order and process, and
   session and module fixtures are built once per worker, so keep them cheap. A suite whose workers are big declares
@@ -116,14 +117,13 @@ nothing, so list what they read, and list a path a test only checks the existenc
   `monkeypatch`; the runner fails a run whose tests changed a repository file, naming it.
 - **Exact:** compare bit-exact code's words, digests and pinned vectors, not approximations; a negative checks that the
   code rejects by name, not merely that it raises.
-- **Statistical floors from a sweep:** a bound on a sampled quantity (a rate, a spread, a count over random draws) comes
+- **Statistical floors from a sweep:** a bound on a sampled quantity (a rate, a spread, a count over random samples) comes
   from a sweep over many seeds, with margin past the worst seed's value; its docstring names the sweep (seeds and worst
   value).
 - **Fixtures:** small ones sit in the suite's own `fixtures/`, shared ones under the root `fixtures/`, registered in
   `fixtures/artifacts.json`. One over the 256 KiB cap is registered there and gitignored instead: `research data put
-  --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`,
-  then an INF issue asking infra, with branch and commit, to run `research data export` (only the control pod holds the
-  export key). `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before
+  --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`.
+  The control pod exports `next`'s registry every 5 minutes, so the fixture needs no ask. `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before
   `cargo test`), checks every byte against its id, and keys the suite on the id. A verifier's fixtures are the prover's
   bytes, never regenerated in its test; when a test can recompute an expected output, pin its digest, not the file.
 

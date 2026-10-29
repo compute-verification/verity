@@ -82,4 +82,4 @@ def test_against_warmup_fails_a_run_whose_schedule_differs_from_the_warmups():
 def test_host_prefix_cache_refusal():
     assert ss.host_prefix_cache_refusal(False) is None and ss.host_prefix_cache_refusal(None) is None
     msg = ss.host_prefix_cache_refusal(True)
-    assert "enable_prefix_caching=false" in msg and "VLLM-31" in msg
+    assert "enable_prefix_caching=false" in msg and "circuit-native form" in msg

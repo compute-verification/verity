@@ -1,6 +1,6 @@
-"""[#57] Form (B) over a `v2-query` manifest: the oracle's producer facts come from the Programs of record by dataflow.
+"""Form (B) over a `v2-query` manifest: the oracle's producer facts come from the Programs of record by dataflow.
 
-Row #57's Commit (r20260924-011108-8cb4, gemma2-2b L40S b8) left 45,360 `instance_outputs` not compared under a v2 manifest, whose rows
+The gemma2-2b L40S b8 Commit left 45,360 `instance_outputs` not compared under a v2 manifest, whose rows
 carry none of the v1 producer annotations: 44,928 fused-norm narrowings ("ambiguous producer: 2 instances of NarrowF32ToBf16_v1 per
 row") and 432 `model/out` ("no fold instance of this op at this step": the embed scale is hinted `model.normalizer` by the fold).
 `producers_of_programs` reads, per required Value, the producing family, the family its first operand reads and the modules reading it
@@ -176,7 +176,7 @@ def test_consumers_are_not_consulted_when_the_fold_names_the_producer_under_the_
 
 
 def test_handed_down_member_is_observed_at_its_first_consumer_input():
-    """#57's rerun (r20260924-061950-2148): with the v2 row unannotated the acquisition hooked Gemma2Model's forward output for
+    """#57's rerun: with the v2 row unannotated the acquisition hooked Gemma2Model's forward output for
     `model/out` (the final norm's rows) while the Value is the embed scale model's body hands to layer 0 -- 432 form (B) mismatches.
     Marked promoted from the Program's consumers, the manifest's own observation rule arms `<first consumer>/in` for it and nothing else."""
     P = gemma_like_program()

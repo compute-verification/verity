@@ -11,7 +11,7 @@ mappings are retried), so nothing hard-codes an ip/port that changes when a pod 
 plus untracked files that are not ignored -- no `.git`, no `.venv`, no build products, nothing gitignored.  It ships them to DEST
 (default /workspace/src; rsync, or one tar stream when the machine has no rsync yet), removes the files a previous sync shipped that are gone from SRC now (only those: pod-side venvs,
 caches and results are never touched), and writes `DEST/.research-source.json` with the commit / tree / dirty facts of SRC as
-`research run` would record them (`env.source_conditions`), which `archive/direct/ligero/live.py` reads for its session record.
+`research run` would record them (`env.source_conditions`).
 """
 from __future__ import annotations
 

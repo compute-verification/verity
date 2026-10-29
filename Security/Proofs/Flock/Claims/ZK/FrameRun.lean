@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.ZK.FrameState
 
 The session loop drives each rep's frame on one schedule of requests (`Flock.Firewall.Drive.reqs`), each a pure step of
 the rep's state (`Frame.step`), folded by `Frame.run` up to the first answer that ends the rep. These are the fold's and
-the step's equations that the loop's release (Stage B, `note:20261022T0001Z-report-zkfin-stageb`) reads:
+the step's equations that the loop's release reads:
 
 * `run_append`: the fold over `qs ++ rs` is the fold over `qs`, then, where that did not end the rep, the fold over `rs`
   from its state.

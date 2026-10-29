@@ -3,7 +3,7 @@
 Each rank's run of the node's body is its rank Program's body node for node, every operand leaf the same leaf of the node's
 parameters or of the rank's own nodes, except that a peer Input's leaf is a node of the peer rank: every rank's collective k reads
 one operand where its rank Program reads its peers, each rank's rows its own (its other operands, a fused norm's residual and
-weight, stay its own). So no peer Input is left, and an isolation unit over the node reads only its prompt besides
+weight, stay its own). So no peer Input is left, and an isolation block over the node reads only its prompt besides
 θ (`nci_reference.check_desc`, `NciCheck.Desc`'s reference)."""
 
 from __future__ import annotations

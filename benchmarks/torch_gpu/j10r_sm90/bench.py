@@ -1,6 +1,6 @@
-"""J10-R's units against plain exact INT8 at the frozen shape's linears, interleaved, on one GPU (HASH-22):
+"""J10-R's proof blocks against plain exact INT8 at the frozen shape's linears, interleaved, on one GPU:
 
-    python bench.py --fixtures DIR --out OUT --scratch S [--h1u NAME=PATH ...] [--ref PATH] [--sm] [--s8-simple FILE]
+    python bench.py --fixtures DIR --out OUT --scratch S [--h1u NAME=PATH ...] [--ref PATH] [--sm]
                     [--wgmma DIR] [--check check.json] [--ms 4096,16384] [--linears q,kv,o,up,down,head] [--reps 7]
                     [--ref-reps 2]
 
@@ -8,16 +8,16 @@ One call a linear and M, every row live, its operands `shape.whole`'s (the demo'
 scales `shape.weight_scales` and `activation_scales`. The arms, timed by CUDA events one call at a time, in an order that
 rotates each rep:
 
-* `plain`: s8_simple's `linear(x, sx, w, sw)` (#4472; --s8-simple names its file: `torch._int_mm` and the fused
-  epilogue), else `torch._int_mm` and s8_simple's eager `scale`, restated;
+* `plain`: s8_linear's `int_mm.linear(x, sx, w, sw)` (the exact W8A8 linear's int_mm backend: `torch._int_mm` and
+  the fused epilogue, the eager one where there is no Triton);
 * `int_mm`: `torch._int_mm` alone, the s32 GEMM;
-* `wgmma` (--wgmma DIR, s8_linear's wgmma.py and configs.py, #4520): KP2-S8's exact linear, wgmma.scaled_mm at its tuned
+* `wgmma` (--wgmma DIR, s8_linear's wgmma.py and configs.py): s8_linear's exact linear, wgmma.scaled_mm at its tuned
   config for the linear and M, into an output allocated once, held to plain's output on every cell;
 * each h1u build NAME: the call's J10-R receipts, kh_seeds_j10r then kh_units_multi_j10r (with --sm
   kh_units_multi_j10r_sm on every SM, the served launch);
-* `plain+NAME`, `wgmma+NAME`: that plain arm, then NAME's units, in one timed region (what serving them one after the
+* `plain+NAME`, `wgmma+NAME`: that plain arm, then NAME's proof blocks, in one timed region (what serving them one after the
   other costs);
-* `ref` (--ref, --ref-reps reps): the fallback's seeds and receipts over every unit of the call (jr_seeds, jr_units).
+* `ref` (--ref, --ref-reps reps): the fallback's seeds and receipts over every proof block of the call (jr_seeds, jr_units).
 
 After the reps, every units arm runs once more under each poison (`units.twice`: no word unwritten or unstable) and is
 held to the fixtures: its sampled receipts and seed words, and plain's s32 sums at the sampled tiles, so every number
@@ -40,8 +40,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import shape as S
 import units as UN
 
@@ -50,26 +49,17 @@ import fixtures as F
 #: the plain arms a units arm is measured against, each with its serial arms (BASE+NAME)
 BASELINES = ("plain", "wgmma")
 
-def plain_of(path: str | None):
-    """(name, fn(x, sx, w, sw)): s8_simple's linear from its file, else int_mm and its eager scale restated."""
-    if path:
-        spec = importlib.util.spec_from_file_location("s8_simple", path)
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules["s8_simple"] = mod
-        spec.loader.exec_module(mod)
-        epi = "fused" if getattr(mod, "triton", None) is not None else "eager"
-        return f"s8_simple.linear ({epi})", lambda x, sx, w, sw: mod.linear(x, sx, w, sw, epilogue=epi)
-
-    def eager(x, sx, w, sw):
-        y = torch._int_mm(x, w.t()).to(torch.float32)
-        y.mul_(sx[:, None])
-        y.mul_(sw[None, :])
-        return y.to(torch.bfloat16)
-    return "torch._int_mm + scale (eager, restated)", eager
+def plain_of():
+    """(name, fn(x, sx, w, sw)): s8_linear's `int_mm.linear`, the fused epilogue where Triton is, else the eager one."""
+    spec = importlib.util.spec_from_file_location("int_mm", Path(__file__).resolve().parents[1] / "s8_linear" / "int_mm.py")
+    mod = sys.modules["int_mm"] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    epi = "fused" if mod.triton is not None else "eager"
+    return f"int_mm.linear ({epi})", lambda x, sx, w, sw: mod.linear(x, sx, w, sw, epilogue=epi)
 
 
 def wgmma_of(path: str | None) -> dict | None:
-    """KP2-S8's exact linear (s8_linear's wgmma.py and configs.py in the directory `path`, the cubin $S8_WGMMA_CUBIN):
+    """s8_linear's exact linear (its wgmma.py and configs.py in the directory `path`, the cubin $S8_WGMMA_CUBIN):
     its identity, `cfg(m, n, k)` (configs.CONFIGS' tuned pick for (N, K) at M, as its run.py's table_cfg, else wgmma's
     default) and `fn(x, sx, w, sw, y, cfg)`, wgmma.scaled_mm into y."""
     if not path:
@@ -241,7 +231,6 @@ def main() -> int:
     ap.add_argument("--h1u", action="append", default=[], metavar="NAME=PATH")
     ap.add_argument("--ref")
     ap.add_argument("--sm", action="store_true")
-    ap.add_argument("--s8-simple")
     ap.add_argument("--wgmma", metavar="DIR")
     ap.add_argument("--check")
     ap.add_argument("--ms", default=",".join(map(str, S.MS)))
@@ -255,7 +244,7 @@ def main() -> int:
     scratch.mkdir(parents=True, exist_ok=True)
     doc_f, arrays = F.load(Path(args.fixtures))
     libs = libs_of(args.h1u, args.ref, args.sm)
-    pname, plain = plain_of(args.s8_simple)
+    pname, plain = plain_of()
     wg, wg_error = None, None
     try:
         wg = wgmma_of(args.wgmma)

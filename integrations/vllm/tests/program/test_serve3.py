@@ -1,14 +1,13 @@
-"""Lane PAD-IMPL: `Serve@3` at TINY-PAD against PAD-SPEC v1's frozen semantics — the prefix property
-(§13, `n ∈ {0, 3, D_MAX}`), the absorbing property and the inactive step-boundary
-relation (§6), output interpretation (§8), digest distinctness (§10), the measured gate budget (§14.1), and
-the vectorized reference evaluator (§11/§12, `verity/ml/definitions/numerics/serve3_reference.py`) bit-for-bit against
-the gate-level evaluation.
+"""`Serve@3` at TINY-PAD against its frozen semantics — the prefix property (`n ∈ {0, 3, D_MAX}`), the absorbing
+property and the inactive step-boundary relation, output interpretation, digest distinctness, the measured gate budget,
+and the vectorized reference evaluator (`verity/ml/definitions/numerics/serve3_reference.py`) bit-for-bit against the
+gate-level evaluation.
 
-Fixture: TINY-PAD dims (spec §14: the test-suite TINY with `MAX_POS` 8 → 16), random bf16 weights
+Fixture: TINY-PAD dims (the test-suite TINY with `MAX_POS` 8 → 16), random bf16 weights
 (`default_rng(1001)`, scale 0.05) and prompt (`default_rng(2002)`), chosen so the greedy raw samples of the
 frozen `Serve_v1{TINY, LP=4, STEPS=8}` program are `[15, 23, 26, 17, 26, 17, 26, 17, 26]` — first
 occurrences 15@0, 23@1, 26@2, 17@3, so binding `EOS_ID = 15 / 17 / 63` realizes exactly `ℓ = 0 / 3 / 8`
-live decode steps (`EOS_ID` is a prescribed static; each value is its own `Serve_v3` binding, spec §2/§10).
+live decode steps (`EOS_ID` is a prescribed static; each value is its own `Serve_v3` binding).
 """
 
 from __future__ import annotations
@@ -22,11 +21,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ml.circuits import Program, bind  # noqa: E402
-from verity.ml.circuits.codec import program_digest  # noqa: E402
-from verity.ml.definitions.registry import b1, serve3  # noqa: E402
-from verity.ml.definitions.numerics import serve3_reference as ref  # noqa: E402
-from verity.ml.definitions.registry.b1 import weights_type  # noqa: E402
+from verity.ml.circuits import Program, bind
+from verity.ml.circuits.codec import program_digest
+from verity.ml.definitions.registry import b1, serve3
+from verity.ml.definitions.numerics import serve3_reference as ref
+from verity.ml.definitions.registry.b1 import weights_type
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True,
@@ -34,12 +33,12 @@ TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, 
 LP, D_MAX = 4, 8
 #: raw greedy samples of `Serve_v1{TINY, LP=4, STEPS=8}` on the fixture inputs (pinned; y[3]=17 is fresh)
 Y_RAW = [15, 23, 26, 17, 26, 17, 26, 17, 26]
-#: EOS_ID -> realized live decode-step count ℓ on the fixture (spec §13 targets: n ∈ {0, 3, D_MAX})
+#: EOS_ID -> realized live decode-step count ℓ on the fixture (targets: n ∈ {0, 3, D_MAX})
 EOS_FOR = {0: 15, 3: 17, 8: 63}
 
 
 def c3(eos: int) -> dict:
-    return {**TINY, "EOS_ID": eos}  # spec §10: C₃ = {**C, "EOS_ID": id} at the binding site
+    return {**TINY, "EOS_ID": eos}  # C₃ = {**C, "EOS_ID": id} at the binding site
 
 
 @functools.lru_cache(maxsize=None)
@@ -81,7 +80,7 @@ def _steps_v3(prog):
 
 
 def _named_v3(prog):
-    """The static gate map φ's target intervals (spec §13): body-node names -> calls, prefill/final/guard at
+    """The static gate map φ's target intervals: body-node names -> calls, prefill/final/guard at
     root and each decode step's body nodes inside its `PadDecodeStep` call."""
     m = {}
     for c in prog.circuit.root_calls():
@@ -102,7 +101,7 @@ def test_fixture_raw_samples_are_pinned():
 
 
 def test_gate_budget_matches_the_spec():
-    """Spec §14.1 (measured): 56,936 = 56,361 body + 575 guard gates, the same in every execution; the
+    """Measured: 56,936 = 56,361 body + 575 guard gates, the same in every execution; the
     guard is 6 gates; a decode step carries 71 guard/mux gates."""
     assert bind(serve3.PadGuard, EOS=7).gates == 6
     sp3 = serve3.serve_v3(c3(7), LP, D_MAX)
@@ -110,12 +109,12 @@ def test_gate_budget_matches_the_spec():
     assert (sp3.gates, sp1.gates) == (56936, 56361)
     step = bind(serve3.PadDecodeStep, C=c3(7), T=LP + 5, GEMM=b1.GEMM_AMPERE, ATTENTION=b1.ATTENTION_FA2,
                 NORM=b1.norm_bundle(TINY))
-    assert step.gates == 4967 + 71  # step 5 body (spec §14.1) + 6 guard + 1 zero + 2*NL*KVH*D selects
+    assert step.gates == 4967 + 71  # step 5 body + 6 guard + 1 zero + 2*NL*KVH*D selects
 
 
 @pytest.mark.parametrize("n", [0, 3, D_MAX])
 def test_prefix_property(n):
-    """Spec §13: the padded circuit's live region equals `Serve_v1{TINY, LP, STEPS=n}` **gate-for-gate**
+    """The padded circuit's live region equals `Serve_v1{TINY, LP, STEPS=n}` **gate-for-gate**
     under the static map φ_n (prefill nodes -> prefill nodes, step-s body nodes -> the same-named nodes of
     `PadDecodeStep{T=LP+s}`), when the realized live count is ℓ = n."""
     p1, t1, y1 = _v1(n)
@@ -130,13 +129,13 @@ def test_prefix_property(n):
         covered += c1.hi - c1.lo
     # the named nodes tile all of Serve_v1's computed gates: the comparison really is gate-for-gate
     assert covered == p1.gates - p1.input_gates
-    # wire caveat (spec §13): on the live region the guard's SelectI32 is the identity, so the padded
+    # wire caveat: on the live region the guard's SelectI32 is the identity, so the padded
     # circuit's token slots out[0..n] equal Serve_v1{STEPS=n}'s n+1 raw samples
     assert out[:n + 1] == y1
 
 
 def test_absorbing_property_and_inactive_boundary():
-    """Spec §6: once `live_s = 0` — every later token slot is the pad constant 0, every appended k/v word
+    """Once `live_s = 0` — every later token slot is the pad constant 0, every appended k/v word
     is the zero row, the flag stays 0; and the `PadDecodeStep` boundary relation holds: `live_in = 0` ⟹
     boundary outputs are constants, while live steps' muxes are the identity on the computed rows."""
     KVD = TINY["KVH"] * TINY["D"]
@@ -150,7 +149,7 @@ def test_absorbing_property_and_inactive_boundary():
             tok_out, live_out = t3[r[0]], t3[r[1]]
             k_new = [t3[g] for g in r[2:2 + 2 * KVD]]
             v_new = [t3[g] for g in r[2 + 2 * KVD:2 + 4 * KVD]]
-            if s > ell:  # inactive: the §6 boundary relation, constants only
+            if s > ell:  # inactive: the boundary relation, constants only
                 bt, bl, bk, bv = ref.inactive_boundary(TINY)
                 assert (tok_out, live_out) == (bt, bl), s
                 assert k_new == [int(x) for x in bk.ravel()] and v_new == [int(x) for x in bv.ravel()], s
@@ -166,7 +165,7 @@ def test_absorbing_property_and_inactive_boundary():
 
 @pytest.mark.parametrize("ell", [0, 3, 8])
 def test_output_interpretation(ell):
-    """Spec §8: `n = Σ live[0..D_MAX-1]`; EOS-exclusive transcript `out[0..n-1]`; the sampled EOS committed
+    """`n = Σ live[0..D_MAX-1]`; EOS-exclusive transcript `out[0..n-1]`; the sampled EOS committed
     at slot `n` as stop evidence (when stopping by EOS); suffix slots equal `PAD_TOKEN_ID = 0`."""
     eos = EOS_FOR[ell]
     _, _, out, live = _v3(eos)
@@ -177,13 +176,13 @@ def test_output_interpretation(ell):
         assert out[ell + 1:] == [0] * (D_MAX - ell)
     else:
         assert out[D_MAX] == Y_RAW[D_MAX]  # length cap: slot D_MAX committed, never a semantic output
-    # well-formedness (spec §8) — theorems of the circuit, checked on its outputs
+    # well-formedness — theorems of the circuit, checked on its outputs
     assert all(live[g] <= live[g - 1] for g in range(1, D_MAX + 1))
     assert all(live[g] == (live[g - 1] and out[g] != eos) for g in range(1, D_MAX + 1) if live[g - 1] == 1)
 
 
 def test_reference_evaluator_matches_the_gates():
-    """The vectorized padding-layer reference (spec §11: inactive branches are validated against the
+    """The vectorized padding-layer reference (inactive branches are validated against the
     registered specification): `pad_chain` on the raw samples reproduces the committed `(out, live)`
     bit-for-bit, and `mux_rows` reproduces every appended row of every step."""
     KVD = TINY["KVH"] * TINY["D"]
@@ -219,19 +218,19 @@ def test_reference_evaluator_matches_the_gates():
 
 
 def test_digest_distinctness():
-    """Spec §10: `Serve_v3` digests are distinct from the frozen `Serve_v2{STEPS=D_MAX}` binding (the guard
+    """`Serve_v3` digests are distinct from the frozen `Serve_v2{STEPS=D_MAX}` binding (the guard
     gates alone force it) and distinct across `D_MAX` and across `EOS_ID`; `Serve_v1/v2` stay untouched."""
     d = lambda sp: program_digest(Program(sp))  # noqa: E731
     v3 = d(serve3.serve_v3(c3(17), LP, D_MAX))
     assert v3 != d(b1.serve_v2(TINY, LP, D_MAX))
     assert v3 != d(serve3.serve_v3(c3(17), LP, D_MAX - 1))  # across D_MAX
     assert v3 != d(serve3.serve_v3(c3(63), LP, D_MAX))  # across EOS_ID
-    # and the readable ids are distinct too (the specialization identity, spec §10)
+    # and the readable ids are distinct too (the specialization identity)
     assert serve3.serve_v3(c3(17), LP, D_MAX).id != serve3.serve_v3(c3(63), LP, D_MAX).id
 
 
 def test_validity_and_config_discipline():
-    """Spec §2/§10: v3 rejects a config without EOS_ID and LP + D_MAX > MAX_POS; binding never mutates the
+    """`Serve_v3` rejects a config without EOS_ID and LP + D_MAX > MAX_POS; binding never mutates the
     base config dict."""
     base = dict(TINY)
     with pytest.raises(ValueError, match="EOS_ID"):

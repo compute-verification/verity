@@ -44,6 +44,7 @@ from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.refs import Coll, broadcast
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import cublas_bf16 as CB
 
 __all__ = ["LL_FMA_STEP", "LL_MUL_ADD_STEP", "LlBf16DotprodDot", "LlBf16DotprodDotWord", "LlBf16DotprodGemm", "LlBf16DotprodGemmWord",
@@ -53,11 +54,11 @@ __all__ = ["LL_FMA_STEP", "LL_MUL_ADD_STEP", "LlBf16DotprodDot", "LlBf16DotprodD
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
 WARP = 32
+_CAPTURE = EVIDENCE["glm53_bf16_gemm_capture"]
 CONFORMANCE = ("exact-model-tested: every gate word at K/N = 6144/256 and 7168/384, at the captured router M to 16, each launch the "
                "kernel bf16_gemm_check's dispatch table names, FMA 1 as the words decide it (FMA 0 misses 483 of the 7,040 dotprod "
                "words, FMA 1 none), on cc 9.0 with 132 SMs under vLLM's served default and the split-K-off variant: property "
-               "glm53_bf16_gemm_capture, run r20261016-234133-bbc8, record c0e09902b0a2057a, "
-               "art:5fcc5a4937ac75ceec31bd22abc11194ec0c55d27e77ffd3690b1ad8976feeaf "
+               f"glm53_bf16_gemm_capture, run {_CAPTURE['run']}, record {_CAPTURE['record'][:16]}, {_CAPTURE['art']['record']} "
                "(tests/properties/glm53_bf16_gemm_capture_gpu.py)")
 
 

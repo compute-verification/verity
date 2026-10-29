@@ -171,7 +171,7 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
 
 def test_the_copy_is_taken_from_hard_links_after_the_dependencies_lock_is_released(repo, tmp_path, monkeypatch):
     """A copy of some 8 GB under `lean-deps/<k>.lock` held check's lean-audit, which moves the dependencies in under that lock,
-    for as long as it took (red team, #966). Under the lock only hard links are made; the copy is taken from them after, and
+    for as long as it took (red team). Under the lock only hard links are made; the copy is taken from them after, and
     they are gone once it's done, or at the next run in that tree when one died mid-copy."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     k = LC.LA.deps_key(repo / "a")
@@ -241,7 +241,7 @@ def test_a_links_file_left_empty_by_a_failed_write_is_no_links(repo, tmp_path, c
 
 def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tmp_path, monkeypatch, capsys):
     """`--records Security` left `Security/Properties`' records, which read `Security`'s build, unchecked, and an unintended
-    change to three of them surfaced only at a train's check (#1793). `a` requires `p` by path and lists a guarantee, so
+    change to three of them surfaced only at a train's check. `a` requires `p` by path and lists a guarantee, so
     `--records p` audits `a` after it, never with `--update`; `c`, which doesn't require `p`, and a package that lists no
     guarantee are not audited."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
@@ -360,7 +360,7 @@ def test_a_run_waits_for_the_one_that_holds_its_tree_and_then_runs(repo, tmp_pat
 
 def test_it_refuses_a_tree_outside_its_own(repo, tmp_path, capsys):
     """`--tree` naming check's lean-changed tree, whose links.json says its dependencies are linked: the fast path kept those
-    hard links to check's lean-deps and built on them unsandboxed (red team, #966). Only a tree under lean-records/ is its own."""
+    hard links to check's lean-deps and built on them unsandboxed (red team). Only a tree under lean-records/ is its own."""
     deps, cache = tmp_path / "deps", tmp_path / "cache"
     k = LC.LA.deps_key(repo / "a")
     (deps / k / "dep").mkdir(parents=True)
@@ -397,7 +397,7 @@ def test_it_takes_no_check_slot(repo, tmp_path, monkeypatch):
 
 
 def test_a_package_whose_records_passed_on_the_same_inputs_runs_nothing(reuse, tmp_path, monkeypatch, capsys):
-    """LEAN-47: a records run of Security costs 30 to 50 minutes, most of it Lake rebuilding a tree another branch left, and
+    """A records run of Security costs 30 to 50 minutes, most of it Lake rebuilding a tree another branch left, and
     a head whose Lean inputs are those of a pass kept on this node needs none. A changed input, a failure, `--rebuild` and
     `--moved` run it; with nothing to run no slot or tree is taken, and a recorded run's result says `reused`."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"

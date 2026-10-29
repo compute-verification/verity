@@ -38,6 +38,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import config as C
 from verity_vllm.config import option
 
 SCHEMA = "verity-vllm/tp-serving-rows/v1"
@@ -240,7 +241,7 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
     rank, world = int(rank), int(rec["world"])
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank} is not a rank of the world of {world}")
-    doc = json.loads(Path(workload_file).read_text())
+    doc = json.loads(C.workload_file(workload_file).read_text())
     got = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     if got != rec["workload_sha256"]:
         raise ValueError(f"{workload_file}: workload sha256 {got[:16]} is not the record's {str(rec['workload_sha256'])[:16]}")

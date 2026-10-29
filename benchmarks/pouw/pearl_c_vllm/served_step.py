@@ -41,7 +41,10 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+from verity_config.settings import of
+
 HERE = Path(__file__).resolve().parent
+settings = of(__file__)
 _STEPS: list[dict] = []
 _CUR: dict | None = None
 _PHASE: dict = {"name": "start", "rep": -1}
@@ -158,7 +161,7 @@ def _engine(spec_name: str, arm_id: str):
     arms = resolve_arms(names, spec.arm_modules, {k: v for k, v in spec.arm_settings.items() if k in names})
     arm, reserved = _live(next(x for x in arms if x.id == arm_id))
     preset, eager = arm_execution(arm, preset, eager)
-    if preset.engine_settings.get("serving_defaults") and os.environ.get(INDUCTOR_DIR_MARK) != "1":
+    if preset.engine_settings.get("serving_defaults") and not settings.get(INDUCTOR_DIR_MARK):
         import tempfile
         os.environ["TORCHINDUCTOR_CACHE_DIR"] = tempfile.mkdtemp(prefix="served_step_inductor_")
         os.environ[INDUCTOR_DIR_MARK] = "1"
@@ -211,7 +214,7 @@ def run(a) -> int:
         _PHASE.update(name="end", rep=-1)
         doc = {"schema": "verity-pouw/served-step/v1", "spec": spec.id, "arm": arm.to_json(), "point": point.to_json(),
                "identity": dict(engine.identity), "gate": gate, "reps": reps,
-               "numa": json.loads(os.environ["DITHER_NUMA_RECORD"]) if os.environ.get("DITHER_NUMA_RECORD") else None}
+               "numa": settings.DITHER_NUMA_RECORD}
         (out / "reps.json").write_text(json.dumps(doc, indent=1, default=str))
         (out / "steps.json").write_text(json.dumps(_STEPS))
         print(json.dumps({"arm": arm.id, "point": point.id, "gate": bool(gate.get("passed")),

@@ -1,7 +1,7 @@
 import Flock.TmplLayout
 
 /-!
-# `posMap` puts every copy at its place (PRF-133, part 3, stage 2)
+# `posMap` puts every copy at its place
 
 `posMap` is `fillMap`'s writes over the call tree (`fillMap_writes`). When every Definition's layout is in order
 (`DefPos`: runs and calls ascending and apart, each column in one, copies side by side, callees earlier), every column

@@ -346,8 +346,10 @@ def test_a_transfer_gives_each_instance_its_operands_interval():
 def test_a_composite_over_exact_steps_declares_what_its_bounds_prove():
     """The s8 chain declares its words' intervals and the Build holds its body to them; a limb split's bound then reads its
     producer's word: T_1 is within it, T_2 is not. A word from an incoming accumulator with no interval proves none."""
-    use = lambda name, T, t: comp(name, [("x", Array(8, V16))], V8,
-                                  lambda B, S, x: B.call(Split17, B.call(T, B.batch(Quant, x, axes=(0,)), B.batch(Quant, x, axes=(0,)))[t]))
+    def use(name, T, t):
+        return comp(name, [("x", Array(8, V16))], V8,
+                    lambda B, S, x: B.call(Split17, B.call(T, B.batch(Quant, x, axes=(0,)), B.batch(Quant, x, axes=(0,)))[t]))
+
     T = chain("PortsTestChainDecl", T_S8)
     roundtrip(Program(use("PortsTestSplitT1", T, 0)))
     refused("E_PORT_BOUND", lambda: Program(use("PortsTestSplitT2", T, 1)), "parameter 'y' leaf 0: its declared bound "

@@ -2,8 +2,8 @@
 replay's (its rows, and its asks the committed decisions in commit order), its charge `ChargeLink_v1`'s from the
 window's carry-in, and `check`'s verdict on each negative (a decision flipped in the window row, a charge one below the
 advice's, an arrival not the certified one, served rows not the run's, advice that drops an asked decision, a
-carry-out not the charge's carry') and on each of REDTEAM's phase 9 choices the slice still has (a prefix hit, the heads
-left in place) and the prefix cache's (a made-up table, made-up tokens). The circuit is its reference on the
+carry-out not the charge's carry') and on each choice free in a piece alone that the slice still has (a prefix hit, the
+heads left in place) and the prefix cache's (a made-up table, made-up tokens). The circuit is its reference on the
 demonstration slice (`compile_slice.demo`), whose candidates take real prefix hits (the corpus class, about 7.6M ANDs,
 is past what a test evaluates), where a served batch in another order than the slots is refused (AS = 0); on the
 asynchronous demonstration slice (`compile_slice.demo_async`, AS = 1) its ``map`` takes that batch by request, and
@@ -102,7 +102,7 @@ def test_the_scan_is_the_replay(slice_):
 
 def test_the_negatives(slice_):
     """Each negative is refused by exactly the checks the reference names: advice that leaves the window's last asked
-    decision uncommitted (REDTEAM phase 14's cleared enable) by ``load``, since the window row still holds it, and a
+    decision uncommitted (a cleared enable) by ``load``, since the window row still holds it, and a
     carry-out other than the charge's carry' by ``code``."""
     cases = _negatives(slice_, 5)
     flags = {k: _refused(c) for k, c in cases.items()}
@@ -111,7 +111,7 @@ def test_the_negatives(slice_):
 
 
 def test_redteams_phase9_choices_are_refused(slice_):
-    """Every interface REDTEAM's phase 9 found free in a piece alone (`compile_slice.phase9`) is the unit's own here: no
+    """Every interface free in a piece alone (`compile_slice.phase9`) is the unit's own here: no
     witness field carries a context, a frequency, an eviction, a return or a consumed count, and each choice the slice
     still has is refused by the verdict. The hit schedules 32 tokens fewer, and CacheStep_v1 refuses it (the table is
     empty at step 0); the heads must move by ReplayStep_v1's own taken and used."""
@@ -125,8 +125,8 @@ def test_redteams_phase9_choices_are_refused(slice_):
 
 
 def test_the_cache_binds_the_hit(slice_):
-    """REDTEAM phase 9 (4)'s binding on the corpus: CacheStep_v1's hit pinned to the committed table and its tokens free
-    in the piece alone (`test_network_certifier_cache_step_phase9.py`) are bound in the slice. A made-up first table
+    """The prefix cache's binding on the corpus: CacheStep_v1's hit pinned to the committed table and its tokens free
+    in the piece alone (`test_network_certifier_cache_step_free_hit.py`) are bound in the slice. A made-up first table
     (request 1's first block under ROOT) gives request 1 a free 16-token hit at step 6, and the unit refuses it by its
     ``cache`` check alone when the prover serves that schedule (its own rows in ``srv``), since the table chains from
     the empty row; made-up tokens (request 1's first block as request 0's) give the same hit through a consistent
@@ -147,7 +147,7 @@ def test_the_circuit_is_its_reference(synth):
     """The unit's verdict word is the reference's on a synthetic slice where every hit path is taken: request 1 is the
     first candidate left unadmitted at steps 0 and 1 (its 2-block hit looked up at the step's last table), is admitted
     at step 2 with that hit, and request 2 is left unadmitted at steps 2 and 3 with a 1-block hit, after request 1 in
-    the same step. Then on every negative, the hits claimed shorter or made up by a table or tokens, REDTEAM's phase 9
+    the same step. Then on every negative, the hits claimed shorter or made up by a table or tokens, the free prefix
     hit, and a restarted carry-in, which the unit accepts at its lower charge (the chain refuses it,
     `test_network_certifier_compile_slice_phase14.py`)."""
     x = synth

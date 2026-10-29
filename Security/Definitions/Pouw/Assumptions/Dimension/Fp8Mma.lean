@@ -3,11 +3,11 @@ import Definitions.Pouw.Assumptions.Dimension.Embed
 /-!
 # The RTX 4090's tensor-core shapes in `M4090`, FP8 included (trusted statements; draft semantics)
 
-**Draft semantics, S-1 to S-11 pending Daniel's review** (`barrier-assets/embed/DESIGN.md` §5).
+**Draft semantics, pending review**.
 
 `Op.mma outs p` is `M4090`'s tensor-core class: any functions `outs`, one per 32-bit accumulator register written, at
 the full instruction's price `p`, well-formed when `16·len(outs) ≤ p`. `Shape4090` names the 4090's `mma.sync` shapes
-with their measured prices (`internal/pouw/gpu-constants.md` §1, Round 1; units of one int8 MAC), and
+with their measured prices (units of one int8 MAC), and
 `mmaOp s outs = Op.mma outs (regPrice s · len(outs))` is the instruction of shape `s`. Nothing in `Op` changes: the
 shapes are instances of `Op.mma`, so every `M4090` theorem (`EmbedM4090`, `PerWordM4090`, `PerWordM4090Gap`) covers
 programs that use them.
@@ -25,7 +25,7 @@ programs that use them.
   | FP16 m16n8k16, FP32 accumulate | 4 | 64 | 64 |
   | FP16 m16n8k16, FP16 accumulate | 2 | 32 | 64 |
   | BF16 m16n8k16, FP32 accumulate | 4 | 64 | 64 |
-  | FP16 m8n8k4 (legacy, S-4), FP32 or FP16 accumulate | 4 or 2 | 16 or 8 | 16 |
+  | FP16 m8n8k4 (legacy), FP32 or FP16 accumulate | 4 or 2 | 16 or 8 | 16 |
 
 * **Semantics.** Each shape computes any function, which is generous to the adversary. Semantics matter only for the
   honest side: the honest atom is `sm89.mma.m16n8k32.e4m3` with FP32 accumulate, `verity.ml.tc`'s
@@ -39,8 +39,7 @@ namespace Pouw.Dimension.Fp8Mma
 
 open Finset Pouw.NCP Pouw.NCP.Relation Pouw.Dimension Pouw.Dimension.Assumptions Pouw.Dimension.Embed
 
-/-- A tensor-core shape of the RTX 4090 (`mma.sync`, `sm_89`) with a measured price (Round 1), or the legacy m8n8k4
-(S-4). -/
+/-- A tensor-core shape of the RTX 4090 (`mma.sync`, `sm_89`) with a measured price (Round 1), or the legacy m8n8k4. -/
 inductive Shape4090 where
   /-- FP8 E4M3 m16n8k32, FP32 accumulate: the honest atom. -/
   | e4m3F32
@@ -93,7 +92,7 @@ def Shape4090.regPrice (s : Shape4090) : ℕ := s.k * s.elems * s.mac2 / 2
 /-- The `M4090` instruction of shape `s` writing the accumulator registers `outs` (any functions). -/
 def mmaOp {G : Type} (s : Shape4090) (outs : List (G → ℚ)) : Op G := Op.mma outs (s.regPrice * outs.length)
 
-/-! ## Pinned statements (draft semantics, S-1 to S-11 pending Daniel's review) -/
+/-! ## Pinned statements (draft semantics, pending review) -/
 
 /-- **The shape table** (Round 1): every shape costs at least 16 per register written, int8 m16n8k16 costs exactly
 16, and FP8 m16n8k32 with FP32 accumulate costs 64. -/
@@ -106,7 +105,7 @@ theorems cover programs that use the FP8 classes. -/
 def ShapeWF4090 : Prop :=
   ∀ (N m n k : ℕ) (s : Shape4090) (outs : List (Noise N m n k → ℚ)), (mmaOp s outs).WF
 
-/-- **No bound in `M4090` exceeds 16 per target word** (draft semantics, S-1 to S-11 pending Daniel's review): for
+/-- **No bound in `M4090` exceeds 16 per target word** (draft semantics, pending review): for
 every FP32 semantics and every finite set `W` of functions of the noise, a lower bound `b` on the cost of every
 `M4090` program that outputs all of `W` satisfies `b ≤ 16·|W|`. On FP8 atom words, whose honest cost is 64 each,
 that is at most a quarter: `4·b ≤ 64·|W|`. -/

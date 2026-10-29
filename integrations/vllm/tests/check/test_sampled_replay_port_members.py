@@ -1,6 +1,6 @@
 """A multi-output relation's values compare against the members its ports are committed as.  `DeepGemmFp8Linear_v1` returns (q, s, y) on
 ports 0 / 1 / 2 and the manifest commits them as `x_q` / `x_s` / `0` (`part_rank<r>` on a row-parallel TP linear): the GLM-5.3 TP8 Commit
-r20261016-151308-b727 left every DeepGemm prefill stratum 'evaluator produced no member x_q' (411 per rank), and port 0's q stood where
+left every DeepGemm prefill stratum 'evaluator produced no member x_q' (411 per rank), and port 0's q stood where
 member 0 (y) was.  The committed q is e4m3 (`float8_e4m3fn`, one byte a word), read like any other 8-bit plane.  A MoE plane row has no
 port map: its ports are its plane members in return order (`Fp8GroupQuantUe8m0_v1` on the in_quant plane: 0 -> in_q, 1 -> in_scale)."""
 from __future__ import annotations

@@ -12,8 +12,8 @@ equal maxima stays, a NaN logits[0] is never left and a row with no number above
 iff ``Bf16GtStrict_v1(best[c], run)``. The best after chunks 0 .. c-1 is at least every number in them, so it takes chunk c's
 first maximum exactly when the scan would. These are `verity_vllm`'s ``TokenSelectChunk_v2{C}`` (its bf16, and its i32 index's
 low 16 bits) and ``TokenSelectCombine_v2{V, C}`` (its i32's low 16 bits), the pieces of ``TokenSelect_v4{V}``, one output word
-each: a row's argmax is n best units, n index units and one combine, each chunk unit reading its C logits and the combine 2n + 1
-words. The last chunk of a row V does not divide is ``[V - V mod C, V)``, a chunk unit of its own width.
+each: a row's argmax is n best proof blocks, n index proof blocks and one combine, each chunk proof block reading its C logits and
+the combine 2n + 1 words. The last chunk of a row V does not divide is ``[V - V mod C, V)``, a chunk proof block of its own width.
 
 **The index word** is ``Value<16>``: `SelectU16_v1` and `U16Add_v1` (wrapping) are `scalar`'s ``SelectI32_v1`` and
 ``I32Add_v1`` at 16 bits, and V <= 2^16 keeps every index in it. Each select keeps the running value as its *then* branch, under

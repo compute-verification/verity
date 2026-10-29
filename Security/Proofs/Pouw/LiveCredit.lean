@@ -10,8 +10,7 @@ gate-signed request table under the window-open root. Round `s`'s request table 
 tables, never round 0's by construction. Both tables are hiding leaves, so credit counts round `s`'s
 served rows `m_s` through one proof a round, every round, of `PouwLiveSlots_v1{T}`
 (`verity/core/protocols/pouw/circuit/live.py`) at the public `m_s`. `T` is the tables' leaf count, the pouw setting
-`rows`; credit's tile grid is over the window's slot `M ≥ T` (`h1window.slot`, a power of two), and `m_s ≤ T`. Its
-interface is note:compute-accounting/20261024T0212Z-draft-liveunit-interface.
+`rows`; credit's tile grid is over the window's slot `M ≥ T` (`h1window.slot`, a power of two), and `m_s ≤ T`.
 
 * `liveOk`: **the unit on words** (`circuit.live.live_ok`) at round `s`. `m ≤ T`; the entries (prompt length ≠ 0) are a
   prefix, each at its own index; every slot below `m` names an entry (`1 ≤ slot ≤ N`, `N` the entries' count), and every
@@ -209,7 +208,7 @@ theorem liveOk_decode_round {T : ℕ} {v : LiveView} (h : liveOk T v) (hd : ∀ 
 /-! ## The named premise -/
 
 /-- `LiveSlotsChecks` (a fact of `circuit.live.PouwLiveSlots_v1{T}`'s circuit, backed by circuit-check and
-`test_circuit_live`'s agreement of its gates with `live_ok`, not proved; owner @compute-accounting; no guarantee takes
+`test_circuit_live`'s agreement of its gates with `live_ok`, not proved; no guarantee takes
 it yet, so it has no claim id or lock entry). **The unit's circuit computes its Definition at its port rows**: at round
 `s`'s session `sess`, whose circuit is `PouwLiveSlots_v1{T}`'s lowering, on every wire assignment `vals` the key
 program's evaluation agrees with on every unit's wires, if the `ok` word `dec` reads from `vals`' port rows

@@ -40,7 +40,7 @@ O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/pouw/pearl_c_sm90
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
-export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
+export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
 TIMING=${TIMING-2624:6144} TILES=${TILES-512:6144 3072:6144 6144:1536} PROFILE=${PROFILE:-1} GROUPED=${GROUPED:-0}
 SCHEDULES=${SCHEDULES:-serial} TIMING_M=${TIMING_M:-} GRAPHS=${GRAPHS:-} STAMPS=${STAMPS:-0} PASSES=${PASSES:-}
 STAMPS_SHAPES=${STAMPS_SHAPES:-} STAMPS_M=${STAMPS_M:-}

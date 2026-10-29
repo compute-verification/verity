@@ -101,7 +101,7 @@ def removed(plan: Plan, gone: set) -> tuple:
 
 @st.composite
 def shaped(draw, shared: bool = False) -> dict:
-    """An honest session of a drawn shape over the default world's six blocks: at most four pages appended, a page no
+    """An honest session of a drawn shape over the default world's six chunks: at most four pages appended, a page no
     plan held yet released either way or named withdrawn. `shared`: two to four windows, drawn two to four a coin."""
     windows = draw(st.integers(2, 4) if shared else st.integers(1, 2))
     per_coin = draw(st.integers(2, 4)) if shared else 1

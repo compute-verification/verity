@@ -1,4 +1,4 @@
-"""circuit-check over every registered Definition and subcircuit template, a served row's request Program, and the checks' own
+"""circuit-check over every registered Definition and subcircuit template, a served workload's request Program, and the checks' own
 negatives (each check fires by name on a circuit built to break it).
 
 A failure is a correctness or invariant violation.  The ones `main` already has are listed in `circuit_check.known` with their
@@ -137,28 +137,81 @@ def test_the_partition_applies_to_the_calls_of_served_programs():
     assert not {"AttnBlock_v3", "DotBf16_v1", "Serve_v1", "TopPMask_v1"} & calls
 
 
-def _without_the_catalog(monkeypatch, fallback=None) -> None:
-    """`is_call` from scratch, failing a test that builds the catalog; with ``fallback``, `call_families` answers from it."""
+def _without_the_catalog(monkeypatch) -> None:
+    """`is_call` from scratch, failing a test that builds the catalog or asks for its Calls."""
     monkeypatch.setattr(TG, "_CALLS", set())
     monkeypatch.setattr(TG, "_SHORT", {})
     monkeypatch.setattr(TG, "suite", lambda: pytest.fail("the catalog was built"))
-    monkeypatch.setattr(TG, "call_families", (lambda: pytest.fail("call_families was asked")) if fallback is None else fallback)
+    monkeypatch.setattr(TG, "call_families", lambda found=None: pytest.fail("call_families was asked"))
 
 
 @pytest.mark.slow
 def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, suite):
     """`is_call` decides without the catalog by a superset of the Boolean Calls (`boolean_call_candidates`, the Boolean table's
-    links) and a subset of them (`certified_boolean_calls`, the catalog's roots), and asks `call_families` for the rest: on every
-    family the suite checks, every registered one and every Call it answers as `call_families` does."""
+    links) and a subset of them (`certified_boolean_calls`, the catalog's roots), and refuses the rest (`Undecided`) rather than
+    build the catalog: on every family the suite checks, every registered one and every Call, each one it decides it decides as
+    `call_families` does, and it decides most."""
     calls = TG.call_families()
     words = TG.word_call_families()
-    assert calls - words <= TG.boolean_call_candidates(words)
     assert TG.certified_boolean_calls(words) <= calls
-    asked: list[int] = []
-    _without_the_catalog(monkeypatch, lambda: asked.append(1) or calls)
+    _without_the_catalog(monkeypatch)
     fams = set(TG.REGISTERED) | {TG.family(fn) for fn in suite.values()} | calls
-    assert {f for f in fams if TG.is_call(f)} == fams & calls
-    assert len(asked) < len(fams) // 10, "most families need no catalog"
+    decided: dict[str, bool] = {}
+    undecided: dict[str, str] = {}
+    for f in fams:
+        try:
+            decided[f] = TG.is_call(f)
+        except TG.Undecided as e:
+            undecided[f] = str(e)
+    assert {f for f, call in decided.items() if call} == set(decided) & calls
+    assert len(undecided) < len(fams) // 10, f"most families need no catalog: {sorted(undecided.values())[:20]}"
+
+
+@pytest.mark.slow
+def test_the_boolean_call_candidates_drop_only_families_boolean_version_refuses(suite):
+    """`boolean_call_candidates`, narrowed to the statics a binding of the word Call family could give, drops only Boolean
+    families `boolean_version` refuses: on the real catalog, the Boolean version `boolean_version` accepts for each suite
+    Definition of a word Call family (`boolean_call_families`) is a candidate, unless its family is a word Call family itself,
+    which is decided as one first.  `units.call_families` looks for ``--all``'s Boolean Calls only among the candidates, and
+    `is_call` says a family outside them is no Call, so a family dropped here would leave both short of `call_families`."""
+    words = TG.word_call_families()
+    accepted = TG.boolean_call_families(words, suite) - words
+    assert accepted, "the served word Calls have Boolean versions"
+    missing = sorted(accepted - TG.boolean_call_candidates(words))
+    assert not missing, f"Boolean versions boolean_version accepts that the candidates drop: {missing}"
+
+
+def test_a_boolean_version_whose_statics_no_word_call_binds_is_not_a_candidate(monkeypatch):
+    """A Boolean Definition linked to its word by name is the Boolean version only at a binding that gives each of its statics
+    (`verity.ml.definitions.boolean._find`), so one with a static no word Call family of its name has is not a candidate, and
+    `is_call` says it is no Call without the catalog: a new port shape (``{K,R}`` beside the word Call's ``{K}``) is not
+    refused."""
+    from types import SimpleNamespace
+
+    from verity.ml.definitions import boolean as BV
+
+    TG.load_registries()
+    exact, by_name, errors = BV._load()
+    wider = SimpleNamespace(name="Int8RowQuant", version=99, statics=("K", "R"))
+    monkeypatch.setattr(BV, "_load", lambda: (exact, {**by_name, "Int8RowQuant": [*by_name.get("Int8RowQuant", ()), wider]}, errors))
+    got = TG.boolean_call_candidates({"Int8RowQuant_v1"})
+    assert "Int8RowQuant_v2" in got and "Int8RowQuant_v99" not in got
+
+
+def test_a_family_is_call_cannot_decide_alone_is_refused_by_name_with_the_flags_that_decide_it(monkeypatch):
+    """`is_call` never builds the catalog for one family: a Boolean candidate no catalog root certifies is `Undecided`, and a
+    targeted run fails on that target by name, naming ``--as-call`` and ``--no-as-call``, in place of building it."""
+    from circuit_check import cli
+
+    _without_the_catalog(monkeypatch)
+    TG.word_call_families()
+    TG._SHORT["candidates"] = {"RoPEHead_v2"}
+    monkeypatch.setattr(TG, "certified_boolean_calls", lambda words, only=None: set())
+    with pytest.raises(TG.Undecided, match="give --as-call or --no-as-call"):
+        TG.is_call("RoPEHead_v2")
+    (target,) = cli.run(["RoPEHead_v2{D=8}"], OPTS, log=None, isolate=False)["targets"]
+    (f,) = target["failures"]
+    assert f["code"] == "error" and "Undecided" in f["name"] and "--no-as-call" in f["name"], f["name"]
 
 
 @pytest.mark.slow
@@ -185,7 +238,7 @@ DECIDED = {"TokenSelect_v1{V=16}": "words", "RoPEHead_v1{D=8}": "words", "RoPEHe
 @pytest.mark.slow
 @pytest.mark.usefixtures("suite")
 def test_a_targeted_run_without_the_catalog_reports_what_one_with_it_does(monkeypatch):
-    """CIR-30: a targeted run built the whole catalog (`call_families`) before checking a target, 75 minutes at #2397.  The same
+    """A targeted run does not build the whole catalog (`call_families`) before checking a target.  The same
     targets checked with each `as_call` read off `call_families` and with it decided by `is_call` without the catalog get the
     same report."""
     from circuit_check import cli
@@ -215,7 +268,7 @@ def test_the_cli_resolves_each_targets_call_without_the_catalog(monkeypatch):
     attention = "Attention_v8{T=40,NH=2,KVH=1,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=2}"
     cli._calls(["TokenSelect_v1{V=16}", "RoPEHead_v2{D=8}", attention, "F32Add_v1", "rope-head", "RoPEHead_v1{Q=8}"])
     assert {"TokenSelect_v1", "RoPEHead_v1"} <= TG._SHORT["words"]
-    assert {"RoPEHead_v2", "Attention_v8"} <= TG._SHORT["certified"], "a template's binding, and a root function's (CIR-42)"
+    assert {"RoPEHead_v2", "Attention_v8"} <= TG._SHORT["certified"], "a template's binding, and a root function's"
 
 
 @pytest.mark.slow
@@ -300,8 +353,8 @@ def test_row(tmp_path, results):
 
 @pytest.mark.slow
 def test_a_call_output_no_commitment_holds_is_named(tmp_path):
-    """The attention fixture's o_proj Gemm returns a value no later Call reads and the query does not require: a unit would end
-    at an uncommitted value, across Calls."""
+    """The attention fixture's o_proj Gemm returns a value no later Call reads and the query does not require: a proof block
+    would end at an uncommitted value, across Calls."""
     r = CK.check_row(_request_program(tmp_path, attn=True), OPTS, memo=MEMO, pins=PINS)
     assert "partition/output-not-committed Gemm_v1{K=48,N=16} (4 Call(s) under model.model.layers.0.self_attn.o_proj)" in \
         [f["name"] for f in r["failures"]]
@@ -385,7 +438,7 @@ def test_the_probed_entries_are_the_ends_and_each_regions_edges():
 
 def test_a_registered_table_is_probed_and_never_flattened(monkeypatch):
     """A Definition whose table parameter is over the input budget is checked on its other parameters' vectors plus one
-    instance per probed entry, each reading the table lazily; the record names the probed entries and counts the words read."""
+    vector per probed entry, each reading the table lazily; the record names the probed entries and counts the words read."""
     from verity.ml.circuits.evaluation import evaluate
 
     read, holds = _table_read(), _holds()
@@ -468,7 +521,7 @@ def test_a_value_computed_twice_in_one_unit_is_a_redundant_gate():
 
 
 def test_a_value_computed_in_two_units_is_a_recompute_failure():
-    """Two identical calls, each returned by its own unit (the body reads only its parameters, which `word.unit_rule` partitions
+    """Two identical calls, each returned by its own proof block (the body reads only its parameters, which `word.unit_rule` partitions
     node by node; the whole Definition's cut compares them)."""
     from verity.ml.circuits.refs import array_of
     from verity.ml.circuits.types import Array, Value
@@ -485,7 +538,22 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
     assert [w["count"] for w in inner["warnings"] if w["check"] == "redundant-gates" and w["code"] == "ir"] == [1]
 
 
-#: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two units
+def test_a_definition_over_the_partition_budget_is_an_unchecked_warning():
+    """Over ``partition_max_gates`` the partition is not run: a ``partition/unchecked`` warning names the Definition and the
+    summary counts it, so its entry does not read as a pass."""
+    from verity.ml.circuits.types import Value
+    from verity.ml.definitions.registry import prims as P
+
+    fn = _composite("CircuitCheckOverBudget", (_f32x2(), Value(32)),
+                    lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), x[1]))
+    e = CK.check_definition(fn, dataclasses.replace(OPTS, partition_max_gates=1), as_call=True)
+    assert e["partition"]["checked"] is False and not e["failures"]
+    (w,) = [w for w in e["warnings"] if w["check"] == "partition"]
+    assert w["code"] == "unchecked" and w["definition"] == fn.id and w["name"].endswith("over the partition budget 1")
+    assert CK.summarize([e])["unchecked"] == {"items": len(e["warnings"]), "definitions": 1}
+
+
+#: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two proof blocks
 BOOL_RECOMPUTE = "RoPEHead_v2{D=8}"
 
 
@@ -499,7 +567,7 @@ def _partition(fn, q_word, opts=OPTS):
 @pytest.mark.slow
 @pytest.mark.usefixtures("suite")
 def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
-    """A Boolean Call is judged by `Q_word` v2: the values two units compute are recorded, in the entry and the summary, not
+    """A Boolean Call is judged by `Q_word` v2: the values two proof blocks compute are recorded, in the entry and the summary, not
     failed; under v1 the same cut fails by name."""
     from verity.ml.circuits import boolean as BL
 
@@ -535,7 +603,8 @@ def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
 
 
 def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
-    """`Q_call` v1 beside `Q_word`: a Boolean Call's units, committed bits and the values two units compute (reported); a Call with
+    """`Q_call` v1 beside `Q_word`: a Boolean Call's proof blocks, committed bits and the values two proof blocks compute
+    (reported); a Call with
     a 64-bit gate is refused, a warning and the summary's `q_call_refused`, not a failure."""
     from verity.ml.circuits.defs import PrimitiveDefinition
     from verity.ml.circuits.types import Array, Value
@@ -554,7 +623,7 @@ def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
     assert CK.summarize([{"definition": wide.id, "partition": rec, "failures": [], "warnings": []}])["q_call_refused"] == {wide.id: "gate-too-wide"}
 
 
-#: `Q_call{32}` on `BOOL_RECOMPUTE`: its eight 16-bit outputs, two to a unit, and the same values computed in two units as v2 reports
+#: `Q_call{32}` on `BOOL_RECOMPUTE`: its eight 16-bit outputs, two to a proof block, and the same values computed in two proof blocks as v2 reports
 QCALL_ROPE = {"X": 32, "checked": True, "units": 8, "committed": 128, "committed_bits": 128, "recomputed_across": 1120, "redundant_gates": 0,
               "codes": []}
 
@@ -573,8 +642,8 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
 #: Calls the suite checks over `Options.partition_max_gates`, each with why it is allowed: both are σ Definitions at their
 #: smallest bindings (`boolean_sigma.circuit-check.py`), and splitting them moves GLM-5.3's and DeepSeek-V4's word digests
 OVER_PARTITION_BUDGET = {
-    "AllReduceRmsNormMnnvl_v2{WORLD=2,N=256,SHOT=1,CLUSTER=1,EPS=1e-05,FMA=False}": "split pending, CIR-44",
-    "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending, CIR-44",
+    "AllReduceRmsNormMnnvl_v2{WORLD=2,N=256,SHOT=1,CLUSTER=1,EPS=1e-05,FMA=False}": "split pending",
+    "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending",
 }
 
 
@@ -584,7 +653,7 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
     at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
     smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, apart from `OVER_PARTITION_BUDGET`, which holds
     only Calls that are still over it.  Gate counts are the catalog's (`Catalog.reached`): a target made from its record has
-    no body built, and building every Call's took 1,653 s (r20261022-011739-f87f)."""
+    no body built, and building every Call's would take about half an hour."""
     from verity.ml.circuits.evaluation.reference import signature_of
 
     suite = catalog.suite
@@ -718,6 +787,31 @@ def test_a_kernel_wrong_only_on_edge_words_is_caught():
     assert f["name"].startswith("correspondence/kernel-mismatch CircuitCheckKernel_v1 [numpy]")
 
 
+def test_a_kernel_that_compared_nothing_or_declined_inside_the_domain_is_not_reported_checked():
+    """A kernel that declines every vector, and one not registered partial that declines vectors the reference accepts,
+    each fail `correspondence` under their `SelfCheck.fault`; the partial one that computes some vectors passes."""
+    from verity.ml.circuits.evaluation import register_kernel
+    from verity.ml.circuits.evaluation.batch import _KERNELS
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.types import Value
+
+    prim = PrimitiveDefinition("CircuitCheckDeclines", 1, (("a", Value(16)),), Value(16), lambda a: a ^ 1, register=False)
+    odd = lambda a: (a ^ 1, a % 2 == 1)  # noqa: E731
+    register_kernel(prim, lambda a: (a ^ 1, np.ones(a.shape, dtype=bool)), kernel="every")
+    register_kernel(prim, odd, kernel="odd")
+    register_kernel(prim, odd, kernel="odd-partial", partial=True)
+    try:
+        e = CK.check_definition(prim, OPTS)
+    finally:
+        del _KERNELS[prim.id]
+    assert sorted(f["name"].split(":")[0] for f in e["failures"]) == [
+        "correspondence/kernel-compared-nothing CircuitCheckDeclines_v1 [every]",
+        "correspondence/kernel-declined-in-domain CircuitCheckDeclines_v1 [odd]"]
+    via = {r["via"]: r for r in e["correspondence"]["realizations"] if r["via"].startswith("kernel:")}
+    assert (via["kernel:every"]["compared"], via["kernel:every"]["fault"]) == (0, "compared-nothing")
+    assert via["kernel:odd-partial"]["compared"] > 0 and "fault" not in via["kernel:odd-partial"]
+
+
 def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
     """The Boolean Definition is the definition: the word Definition it names must equal its gates through the word view."""
     from verity.ml.circuits import boolean as BL
@@ -745,7 +839,7 @@ def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
 
 def test_a_boolean_constant_is_checked_on_its_one_instance():
     """A Boolean constant (`Const<w>[0x..]_v2`, `verity.ml.circuits.ops.boolean.scalar.const_word`) takes no operands: its lowering
-    and its word view each compare its one instance, every bit, so a constant one bit off its word constant is named."""
+    and its word view each compare its one vector, every bit, so a constant one bit off its word constant is named."""
     from verity.ml.circuits import boolean as BL
     from verity.ml.circuits.boolean.forms import const_bits
     from verity.ml.circuits.boolean.trace import definition
@@ -779,6 +873,21 @@ def test_a_lowering_count_off_its_pin_is_named():
     pins = {"pieces": {"F32Mul_v1": {"and": 1}}, "units": {}}
     e = CK.check_definition(P.F32Mul, OPTS, pins=pins)
     assert any(f["name"].startswith("lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: and 1 -> ") for f in e["failures"])
+
+
+def test_a_proof_blocks_export_counts_its_circuit_types():
+    """`checks._export_counts`, which every lowered template's check reads, exports one proof block's circuit through
+    `boolean_export` and counts it: four ANDs of 4-bit inputs are one circuit type of 4 ANDs, none shared."""
+    from verity_flock import gf2
+
+    def build():
+        C = gf2.Circuit(cse=True)
+        a, b = C.input("a", 4), C.input("b", 4)
+        C.output("out0", [C.AND(x, y) for x, y in zip(a, b)])
+        return C
+
+    assert CK._export_counts(build, "test unit") == {"and": 4, "xor": 0, "not": 0, "subcircuit_types": 1, "flat_ands": 4,
+                                                      "shared_across_types": 0}
 
 
 def _lowering_pin(e: dict) -> dict:
@@ -876,6 +985,73 @@ def test_redundant_ands_are_counted():
     z = C.AND(x ^ b, y ^ b)               # equal operands once y is x
     C.output("o", [x, y, z])
     assert CK.redundant_ands(C)[0] == 2
+
+
+def test_a_commit_is_a_copy_not_a_redundant_and():
+    """A commit row (``A = form, B = 1``) is never a redundant AND, whatever it copies; an AND that reads one reads its form."""
+    from verity_flock import gf2
+
+    C = gf2.Circuit()
+    a, b, c = C.input("a", 3)
+    (x,) = C.commit([a ^ b])              # a carried form committed: a row, no product
+    (y,) = C.commit([a ^ b])              # the same form again, and one bit's NOT: copies too
+    (n,) = C.commit([c.inv()])
+    C.output("o", [x, y, n, C.AND(x, c)])
+    assert CK.redundant_ands(C)[0] == 0 and sum(CK.is_commit(C, v) for v in C.live()) == 3
+    C.output("p", [C.AND(y, c), C.AND(n, c)])   # AND(x, c) again once y is x, and c AND NOT c
+    assert CK.redundant_ands(C)[0] == 2
+
+
+def test_a_genuine_and_with_one_is_a_redundant_and():
+    """An AND whose operand is the constant 1 once a duplicate is replaced is a product computed for nothing, not a commit."""
+    from verity_flock import gf2
+
+    C = gf2.Circuit()
+    a, b, c = C.input("a", 3)
+    p, q = C.AND(a, b), C.AND(a, b)       # one product twice
+    g = C.AND(c, p ^ q ^ gf2.ONE)         # c AND 1 once q is p
+    C.output("o", [g])
+    (gv,), (qv,) = g.s, q.s
+    assert not CK.is_commit(C, gv)
+    assert CK.redundant_ands(C, owner=str) == (2, {str(qv): 1, str(gv): 1})
+
+
+def _whole_boolean(name, build):
+    """`checks.whole_lowering` of the Boolean Definition of three bits that ``build`` computes: its record and findings."""
+    from verity.ml.circuits.boolean.trace import definition
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation.reference import resolve, signature_of
+    from verity.ml.circuits.ops.boolean import scalar as SB
+
+    t = resolve(bind(definition(name, 1, build, (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT)), SB.BIT, register=False)))
+    F = CK.Findings()
+    _corr, arrays, ref = CK.correspondence(t, OPTS, F)
+    return CK.whole_lowering(t, signature_of(t)[0], arrays, ref, OPTS, F, PINS), F
+
+
+def test_a_builders_commit_is_a_row_of_its_lowering_and_no_redundant_gate():
+    """A builder that commits a carried form (`forms.Circuit.commit`, as `ChargeCount_v1` commits its carries) lowers to a
+    commit row, counted under ``commits``, and no redundant-gates warning.  One that commits a form twice and ANDs c with
+    their sum plus one writes a genuine AND(c, 1), no commit: that warns, and is an AND its Definition doesn't have."""
+    from verity_flock.gf2 import ONE
+
+    def once(C, a, b, c):
+        (x,) = C.commit([a[0] ^ b[0]])
+        return [C.AND(x, c[0])]
+
+    def twice(C, a, b, c):
+        (x,), (y,) = C.commit([a[0] ^ b[0]]), C.commit([a[0] ^ b[0]])
+        return [C.AND(c[0], x ^ y ^ ONE) ^ C.AND(a[0], b[0])]
+
+    def redundant(F):
+        return [w["count"] for w in F.warnings if (w["check"], w["code"]) == ("redundant-gates", "boolean")]
+
+    rec, F = _whole_boolean("CircuitCheckCommitOnce", once)
+    assert (rec["mismatches"], rec["ands"], rec["commits"], rec["definition_ands"], rec["redundant_ands"]) == (0, 2, 1, 1, 0)
+    assert redundant(F) == [] and F.failures == []
+    rec, F = _whole_boolean("CircuitCheckCommitTwice", twice)
+    assert (rec["mismatches"], rec["ands"], rec["commits"], rec["definition_ands"], rec["redundant_ands"]) == (0, 4, 2, 1, 1)
+    assert redundant(F) == [1] and [f["code"] for f in F.failures] == ["ands-added"]
 
 
 @pytest.mark.slow
@@ -989,8 +1165,8 @@ def test_a_result_is_not_stored_when_the_tree_changed_while_it_ran(tmp_path):
 
 
 def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
-    """16 Oct, r20261016-231951-72a9: two checks on one node stored the same entry; they shared its temporary file, and the second's
-    rename found it gone (FileNotFoundError), which failed the whole check."""
+    """Two checks on one node that store the same entry don't share its temporary file, where the second's rename would find
+    it gone (FileNotFoundError) and fail the whole check."""
     import subprocess
 
     from circuit_check import cache as CC

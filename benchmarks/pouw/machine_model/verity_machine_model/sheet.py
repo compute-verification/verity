@@ -350,13 +350,12 @@ def lean(s: Sheet, data: Path) -> str:
     out += [""] + _wrap("Scope: the machine is one GPU's own SMs. Work a peer GPU on the node does over NVLink or "
                         "NVSwitch and sends back (whole tiles as 64-byte digests) is outside it: the sheet bounds what "
                         "the credited GPU's SMs compute, not which GPU computed a tile, and `Device.lean`'s side "
-                        "channels don't list NVLink peer offload (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).", "")
+                        "channels don't list NVLink peer offload.", "")
     out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from `{_rel(s)}`, and "
-                        "the machine model's tests hold it to that output. The grades, and where the sm_120 sheet's "
-                        "structure doesn't fit this device: note:20261019T0511Z-draft-mm-sheets.", "")
+                        "the machine model's tests hold it to that output.", "")
     out += ["-/", "", f"namespace Accounting.TS.Sheets.{s.name}", "", "noncomputable section", ""]
     # Not `deriving Fintype`: Mathlib's handler for an enumeration fails its own `rw [Finset.mem_mk, …]` under this
-    # toolchain (r20261019-053835-0e45), so each instance lists the constructors.
+    # toolchain, so each instance lists the constructors.
     out += [*_doc(f"The classes of the `{epoch}` census (its kinds)."), "inductive Kind", *(f"  | {k}" for k in kinds),
             "  deriving DecidableEq", "", "instance instFintypeKind : Fintype Kind :=",
             *_wrap(f"Fintype.ofList [{', '.join(f'.{k}' for k in kinds)}]", "  ", "    "),
@@ -448,7 +447,7 @@ def lean(s: Sheet, data: Path) -> str:
             "  | .smem, _ => 0",
             ""]
     # One lemma a row, so that each row's case split has a declaration's heartbeats to itself: the whole census in one
-    # proof ran out of them (r20261019-053835-0e45).
+    # proof ran out of them.
     unfold = ["Sheet.machine", "sheet", "census"]
     out += [*_doc(f"The issue row: every class holds it for 1, on the sheet as in the census. A2 (a SMSP issues one warp "
                   f"instruction a SMSP-cycle). Grade: {s.issue.grade}. Source: {s.issue.source}. A2u (a uniform "
@@ -457,7 +456,7 @@ def lean(s: Sheet, data: Path) -> str:
             "theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by",
             "  simp [Sheet.machine, census]", ""]
     # The tensor row's case split unfolds `Kind.form` in every class's case, so its cost grows with the square of the
-    # class count: 200000 ran out at 50 classes on sm_90 and 52 on sm_100 (r20261020-053329-30da).
+    # class count: 200000 ran out at 50 classes on sm_90 and 52 on sm_100.
     out += ["-- the case split unfolds `Kind.form` in every class's case: its cost grows with the square of the class "
             "count",
             "set_option maxHeartbeats 1000000 in",

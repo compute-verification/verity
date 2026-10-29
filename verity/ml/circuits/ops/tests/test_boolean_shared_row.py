@@ -185,7 +185,7 @@ def test_the_writer_is_its_producer_then_the_check(FN, ROW: int, OFF: int, G: in
 
 @pytest.mark.parametrize("FN,ROW,OFF,G", PRODUCERS)
 def test_the_all_zero_instance_writes_zero(FN, ROW: int, OFF: int, G: int) -> None:
-    """C-Flock pads every proof block with the all-zero instance, whose pinned outputs must be zero: there the writer's d is 0
+    """Flock pads every proof block with the all-zero instance, whose pinned outputs must be zero: there the writer's d is 0
     for every family that writes a shared row. The quant chunk's scale is 1.0 there, and it writes no shared row: its row is
     its own output row."""
     target = bind(SR.SharedRowWindow, FN=FN, ROW=ROW, OFF=OFF, G=G)
@@ -296,7 +296,10 @@ def test_j_and_port_j_are_position_kind_ports_and_fns_ports_carry_over() -> None
     assert [facts.node(i).one.kind == "position" for i in range(len(names))] == [False, False, True, True, False, True]
 
 
-def _clash(name: str, t=Array(16, BL.BIT)) -> CompositeDefinition:
+_BITS16 = Array(16, BL.BIT)
+
+
+def _clash(name: str, t=_BITS16) -> CompositeDefinition:
     return CompositeDefinition(f"SharedRowTestClash{name}", 1, (), lambda S: (((name, t), ("a", U16)), U16),
                                lambda B, S, x, a: a, register=False)
 

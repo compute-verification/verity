@@ -2,7 +2,7 @@
 candidate models the capture decides between, and the families that separate them.
 
 Both kinds lower to the QMMA datapath (SASS ``QMMA.16832.F32.<a>.<b>``, ``QMMA.SF.16832.F32.<a>.<b>.E8``), the one the vLLM port
-measured for E4M3 x E4M3 on the RTX PRO 6000 (``GroupSum`` groups (32,), width 26, floor -133; lane ``vllm-sm120-tc-gemm``), while
+measured for E4M3 x E4M3 on the RTX PRO 6000 (``GroupSum`` groups (32,), width 26, floor -133), while
 ``kind::mxf4nvf4`` lowers to OMMA, whose step is ``BlockScaledAlignAdd``.  Which of the two an E2M1 operand gets on QMMA is what the
 capture decides; nothing here is a validated model, every candidate is a hypothesis with its name.
 

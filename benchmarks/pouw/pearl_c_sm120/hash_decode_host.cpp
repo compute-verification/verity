@@ -1,5 +1,5 @@
-// hash_decode.cuh and the hash_h3.cuh / hash_fast.cuh kernels built for the host (tests/test_pearl_c_hash_decode.py,
-// benchmarks/hash/pouw_decode/host_check.py): the CUDA builtins they use, and
+// hash_decode.cuh and the hash_h3.cuh / hash_fast.cuh kernels built for the host (tests/test_pearl_c_hash_decode.py):
+// the CUDA builtins they use, and
 // `pd_run`, which runs a 1-D grid's CTAs in order, a CTA's threads as host threads under one barrier (__syncthreads), a
 // barrier per warp (__syncwarp) and the named barriers (pd_bar_sync / pd_bar_arrive, each made at its first use with its
 // thread count).  Buffers are host memory: Args' pointers are host addresses.

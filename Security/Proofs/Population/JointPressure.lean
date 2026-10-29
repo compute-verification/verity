@@ -5,9 +5,9 @@ import Proofs.Population.ExfiltrationBound
 # One draw for several claims: the max rule and the union bound
 
 Several claims read one deployment through one draw: PoUW's credited work, the end-to-end skipped work, exfiltration
-(the egress slots a window changes), each with its own harm `harm i u` for a wrong unit `u`. The proof service draws
-once a window, after the window's commitments, and halts serving at the first failed proof; every claim reads that one
-escape set and that one halt, each with its own leak.
+(the egress slots a window changes), each with its own harm `harm i u` for a faulty proof block `u`. The proof service
+draws once a window, after the window's commitments, and halts serving at the first failed proof; every claim reads that
+one escape set and that one halt, each with its own leak.
 
 * `le_maxRule`, `maxRule_le`: the max rule `a u = max_i κ_i harm_i(u)` meets every claim's inclusion bound
   `κ_i harm_i(u) ≤ a u`, and is the least inclusion that does.

@@ -3,8 +3,7 @@ import Definitions.Pouw.RelativeSecurity
 /-!
 # The filler's cell check (trusted)
 
-What the filler's per-check luck is about (decision 47; RS-E-REF r6 Part VI.2, note:20261015T1931Z-draft-theorem-e-referee),
-as `benchmarks/pouw/filler/pfill_ref.py` computes a tile and the service checks it:
+What the filler's per-check luck is about, as `benchmarks/pouw/filler/pfill_ref.py` computes a tile and the service checks it:
 
 * **The noise** (`Noise`): a round's A rows, `K` bits each, and its B columns. The tile's noise is SHA-512 of the
   round's live coins (`pfill_ref.digest`, one counter per row block and per column block), read here as uniform and

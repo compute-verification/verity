@@ -6,7 +6,7 @@ A Build vouches for its own device only.  What the served Program binds is the d
     (wgmma), on cc 10.0 (tcgen05.mma kind::f16, silicon `sm100.tcgen05.mma.bf16`) and on cc 12.0 (mma.sync m16n8k16, silicon
     `sm120.mma.m16n8k16.bf16`): the same pipeline;
   * the attention kernel, FLASH_ATTN at the version `ATTENTION` names for the step family: vLLM's selection at its defaults on cc 9.0
-    (FA3, `fa3_launch`) and cc 12.0 (FA2, `fa2_launch`); on cc 10.0, where vLLM's default is FLASHINFER, the row declares FLASH_ATTN
+    (FA3, `fa3_launch`) and cc 12.0 (FA2, `fa2_launch`); on cc 10.0, where vLLM's default is FLASHINFER, the workload declares FLASH_ATTN
     FA2 (`engine.args`, with its `engine.reasons`), whose mma.sync m16n8k16 there is the same pipeline (`sm100.mma.m16n8k16.bf16`);
   * the Triton kernels' compile target (`inductor_templates.FLAGS`).
 

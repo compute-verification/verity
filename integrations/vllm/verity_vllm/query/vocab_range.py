@@ -37,7 +37,7 @@ def _s32(x: int) -> int:
 
 
 def values(tok: int, start: int, vs: int) -> tuple[int, int, int]:
-    """(local, ge, le) of one token id, as signed int32 / 0-1: the IR's I32Add (wrapping) and I32Le (signed) on the id's 32-bit word."""
+    """(local, ge, le) of one token id, as signed int32 / 0-1: the circuit's I32Add (wrapping) and I32Le (signed) on the id's 32-bit word."""
     t = _s32(tok)
     return _s32(t - start), int(_s32(start) <= t), int(t <= _s32(start + vs - 1))
 

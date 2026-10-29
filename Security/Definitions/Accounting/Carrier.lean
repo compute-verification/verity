@@ -59,7 +59,7 @@ pass after it, so its coin was drawn after every pass of the windows before. `Li
 game's form: at the session's coins, every pass whose layout holds a block of append `t` is in a window from `joined t`
 to `joined t + L − 1`. The game draws every append's coin with the codec, so `joined` is the game's only record of when.
 
-**A pass on the devices' clocks.** A pass is bound to an engine step (#2378), and a placed execution
+**A pass on the devices' clocks.** A pass is bound to an engine step, and a placed execution
 (`Requirement.Placement`) says at which tick each device begins each step. Pass `j` of window `w` on device `d` is
 the `τ` ticks from the one at which `d` begins the pass's step (`Placement.passTicks`), and window `w` on `d` is its
 passes' ticks (`Placement.windowTicks`). On one clock with a placed execution's other windows (compute accounting's

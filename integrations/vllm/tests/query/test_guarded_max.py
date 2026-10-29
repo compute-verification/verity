@@ -19,7 +19,7 @@ def _call(family, **statics):
 
 
 def _program():
-    """#101's attention shape: one Call per query row, T keys, 32 heads, kBlockN 128 -- rows up to 128 keys visit one key block, 129..256 two,
+    """A Llama-shaped attention: one Call per query row, T keys, 32 heads, kBlockN 128 -- rows up to 128 keys visit one key block, 129..256 two,
     257..384 three -- plus a legacy Call without BN (64) and a non-attention Call."""
     calls = [_call("Attention_v3", T=t, NH=32, KVH=8, D=64, BN=128) for t in (1, 128, 129, 256, 287)]
     return SimpleNamespace(calls=calls + [_call("Attention_v1", T=130, NH=2, KVH=2, D=128), _call("Gemm_v1", K=64, N=8)])
@@ -140,7 +140,7 @@ def test_the_source_refuses_a_build_whose_word_3_or_ms_class_is_not_the_manifest
     with pytest.raises(RuntimeError, match="mode 1 .*no guarded-max policy and needs mode 0"):
         _source(1).require_row3(False)
     with pytest.raises(RuntimeError, match="source mask 59 lacks the MS class"):
-        _source(1, src=59).require_row3(True)                       # #95's guarded build: word 3 without the MS class
+        _source(1, src=59).require_row3(True)                       # the guarded build: word 3 without the MS class
     with pytest.raises(RuntimeError, match="source mask 123 writes the MS class"):
         _source(0, src=123).require_row3(False)
 

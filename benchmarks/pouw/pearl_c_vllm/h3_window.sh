@@ -25,7 +25,7 @@ SCREEN=${SCREEN_DIR:-$S/screen}
 stamp() { echo "h3-window: $* at $(date -u +%H:%M:%SZ)"; }
 # under the queue's lease (research run --queue --gpus 1, node 1's GPUs) the workload already holds its GPU
 lease() { if [ -n "${GPU_LEASE_UUID:-}" ]; then while [ "$1" != -- ]; do shift; done; shift; "$@"; else gpu-lease "$@"; fi; }
-export PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 
 if has build; then
   stamp "ship build"

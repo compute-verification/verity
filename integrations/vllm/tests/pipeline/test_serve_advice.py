@@ -2,7 +2,8 @@
 the steps it served: a stand-in server (its HTTP side and engine loop as `main` runs them, the scheduler `tests.engine.fake_scheduler`
 under the committer stand-in of `test_serve_openai`) serves two waves of requests, the engine idle between them, so in at least
 two Commit windows; requests.jsonl
-carries each body's `user`, advice_trace.jsonl the scheduler's steps and each window's open and close, and each window's advice,
+carries each body's `user`, request_users.jsonl its engine id and `user` alone, advice_trace.jsonl the scheduler's steps and
+each window's open and close, and each window's advice,
 committed under w<k>/, compiles (`predict.steps.compile_steps`) to the rows the trace recorded, each request at the shape it ran.
 At windows of 3 steps a request runs in two windows or more: the next window carries it at the state the last one left
 (`window_advice`), each window's advice binds and rebuilds, and the windows' rows place its Program's positions once each; a row
@@ -176,6 +177,16 @@ def test_the_server_records_each_requests_user_and_the_scheduler_trace_with_its_
     assert len(wins) >= len(WAVES) and all((w, "open") in marks and (w, "close") in marks for w in wins)
     assert {r["request"] for r in recs if r["kind"] == "arrive"} == {r["engine_id"] for r in reqs}
     assert records(out, "step_trace.jsonl")[0]["step_root"]          # the committer's trace is still its own file
+
+
+def test_request_users_is_requests_jsonls_engine_id_and_user_alone_and_is_mirrored(tmp_path):
+    out = _served(tmp_path)
+    reqs, users = records(out, "requests.jsonl"), records(out, sc.REQUEST_USERS)
+    assert len(users) == sum(map(len, WAVES)) and all(set(u) == {"engine_id", "user"} for u in users)
+    assert [(u["engine_id"], u["user"]) for u in users] == [(r["engine_id"], r["user"]) for r in reqs]
+    assert None in {u["user"] for u in users}                      # a body with no `user` is recorded as such, not dropped
+    sc.Mirror(out, tmp_path / "OUT")()
+    assert (tmp_path / "OUT" / sc.REQUEST_USERS).read_bytes() == (out / sc.REQUEST_USERS).read_bytes()
 
 
 def test_each_commit_windows_advice_is_committed_and_compiles_to_the_steps_it_served(tmp_path):

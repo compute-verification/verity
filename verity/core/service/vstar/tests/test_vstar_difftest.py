@@ -2,7 +2,7 @@
 parameters: the SHA-512 gadget, the climb and the GF(2^128) residuals as laid-out netlists, the algebra's structure and its
 parts (`rec_algebra.structure`, `rec_residuals.spec`, `rec_residuals.parts`), V*'s statements over an inner session's shape
 (`rec_vstage.stage`'s), each statement's unit (`rec_outer.lowering`, `rec_residuals.lowering`) as its lowering text, and its
-whole `flock-circuit` file (`circuit.compose`) under drawn bindings, and the prover's reading of an inner session's draw
+whole `flock-circuit` file (`circuit.compose`) under drawn bindings, and the prover's reading of an inner session's sample
 (`rec_live.inner_draw`) against the verifier's (`RecSetup.innerDrawn`). Big outputs are compared as digest and size;
 `test_*_file_is_byte_equal` compares whole files.
 
@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -21,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 from hypothesis import strategies as st
+from verity_difftest import settings
 
 import verity_difftest as D
 from verity.ml.circuits.boolean.forms import Circuit
@@ -35,7 +35,7 @@ from verity_flock import rec_residuals as RR
 
 LEAN = Path(__file__).resolve().parents[1]
 #: inner sessions' shapes, ``M,K_LOG,CLAIMS`` separated by ``;``, whose whole stage `test_stage_is_byte_equal` compares
-STAGE = os.environ.get("VERITY_VSTAR_STAGE", "")
+STAGE = settings.get("VERITY_VSTAR_STAGE")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 HEX = "0123456789abcdef"
@@ -241,7 +241,8 @@ def _given(**_):
 
 def _sub(id_: str, template: str, inputs: list[str], outputs: list[str], digests) -> SimpleNamespace:
     """`rec_outer.subcircuit`'s and `rec_residuals.subcircuit`'s shape, its `program_digests` the given ones."""
-    port = lambda nm: SimpleNamespace(name=nm, dtype="u16")
+    def port(nm):
+        return SimpleNamespace(name=nm, dtype="u16")
     return SimpleNamespace(id=id_, template=SimpleNamespace(id=template), inputs=[port(nm) for nm in inputs],
                            outputs=[port(nm) for nm in outputs], definition=_given, program_digests=lambda statics: digests)
 
@@ -405,8 +406,9 @@ def _one(*strategies):
 def _shapes(claims: int):
     """Inner sessions' shapes, three times in four: fast100's m (each of three ranges a branch), k_log from 6, 2 to
     ``claims`` claims; else m, k_log or claims just outside, or not a shape."""
-    valid = lambda lo, hi: st.fixed_dictionaries({"m": st.integers(lo, hi), "k_log": st.integers(6, 40),
-                                                  "claims": st.integers(2, claims)})
+    def valid(lo, hi):
+        return st.fixed_dictionaries({"m": st.integers(lo, hi), "k_log": st.integers(6, 40), "claims": st.integers(2, claims)})
+
     return st.one_of(valid(22, 26), valid(27, 30), valid(31, 35), _one(
         st.fixed_dictionaries({"m": st.sampled_from([0, 21, 36, -1, True]), "k_log": st.just(20), "claims": st.just(2)}),
         st.fixed_dictionaries({"m": st.just(22), "k_log": st.sampled_from([0, 5, -1]), "claims": st.just(2)}),
@@ -444,7 +446,7 @@ INNER = st.fixed_dictionaries({"S": rep_s(), "name": NAME, "partition": DIGEST, 
                                "program_digests": DIGESTS})
 
 
-#: an inner session's record: a draw (any JSON value), one null or absent, and text that is no JSON object
+#: an inner session's record: a sample (any JSON value), one null or absent, and text that is no JSON object
 _REST = st.dictionaries(st.sampled_from(["verdict", "streams"]), JSON, max_size=2)
 RECORDS = st.one_of(
     st.builds(lambda d, rest: json.dumps({**rest, "unit_draw": d}, ensure_ascii=False), JSON, _REST),
@@ -601,7 +603,7 @@ def test_the_verifiers_holo_part_nets_are_vstars_units(server, shape):
 
 # --- the units ------------------------------------------------------------------------------------------------------------------
 
-#: H = 0 and 17 take a minute to lower, so `test_rec_open_unit_agrees` replays them once rather than drawing them.
+#: H = 0 and 17 take a minute to lower, so `test_rec_open_unit_agrees` replays them once rather than sampling them.
 REC_OPEN = st.one_of(st.just({"LANES": 8, "H": 1}),
                      st.fixed_dictionaries({"LANES": st.sampled_from([0, 4, 7, 9, 12, -8, True]), "H": st.just(1)}),
                      st.fixed_dictionaries({"LANES": st.just(8), "H": st.sampled_from([33, -1, True])}),
@@ -613,9 +615,10 @@ def test_inner_unit_agrees(server):
     """Drawn, and replayed on an S whose GfResiduals S is in range but whose row ports repeat a name (`checkRepS`'s refusal)
     and on one whose ports are right but whose add term is past w (`checkS`'s): Lean's `residualForms` reads such a term as
     zero, so without its own check `innerUnit` would emit a unit where `unit_circuit` refuses. A drawn invalid S is
-    usually refused by `checkRepS` first, so the draws alone rarely reach `checkS`."""
+    usually refused by `checkRepS` first, so the samples alone rarely reach `checkS`."""
     p = port("inner_unit", inner_unit, st.fixed_dictionaries({"S": REPS, "name": NAME}) | JSON)
-    gf = lambda t: {"nw": 2, "nv": 0, "ops": [], "res": [{"mul": [], "add": [t]}]}
+    def gf(t):
+        return {"nw": 2, "nv": 0, "ops": [], "res": [{"mul": [], "add": [t]}]}
     good = {"S": {"gf": gf(["w", 1]), "ports": [["a", 2]]}, "name": "row0"}
     assert D.replay(p, good, server)[0] == "output"
     for S in ({"gf": gf(["w", 1]), "ports": [["a", 1], ["a", 1]]}, {"gf": gf(["w", 2]), "ports": [["a", 2]]}):
@@ -626,7 +629,7 @@ def test_inner_unit_agrees(server):
 
 @pytest.mark.slow
 def test_rec_open_unit_agrees(server):
-    """`RecOpen{LANES, H}`'s lowering, drawn at H = 1 and at parameters both refuse, and replayed at the climb's edges: H = 0
+    """`RecOpen{LANES, H}`'s lowering, sampled at H = 1 and at parameters both refuse, and replayed at the climb's edges: H = 0
     (`aux` one row the unit does not read) and 17 (the first height whose side bits are `dirs`' word 1). Lowering H = 17
     takes about a minute; no cheaper test compares V*'s builder with `rec_open` at those heights."""
     p = port("rec_open_unit", rec_open_unit, REC_OPEN)
@@ -653,7 +656,7 @@ def test_inner_draw_agrees(server):
 @pytest.mark.slow
 def test_inner_circuit_agrees(server):
     """`compose` on small InnerRepCheck units under drawn bindings: META, the zero instance's outputs and `b ‖ c`, the slot
-    ranges and the block size. A binding that is not a digest is replayed in each place, not drawn: drawn, it refused
+    ranges and the block size. A binding that is not a digest is replayed in each place, not sampled: drawn, it refused
     most of the five units, and which ones moved with the source of modules the reference loads (Hypothesis draws their
     constants too)."""
     p = port("inner_circuit", inner_circuit, INNER)
@@ -803,7 +806,7 @@ def test_stage_is_byte_equal(tmp_path, shape):
         record.append({**s, "python_sha512": hashlib.sha512(python).hexdigest(), "python_bytes": len(python),
                        "equal": data == python, "partition": b["partition"], "program": b["program"]})
         del data, python
-    if out := os.environ.get("VERITY_VSTAR_STAGE_OUT"):
+    if out := settings.get("VERITY_VSTAR_STAGE_OUT"):
         Path(out).mkdir(parents=True, exist_ok=True)
         (Path(out) / f"stage-{'-'.join(map(str, shape))}.json").write_text(json.dumps(record, indent=1))
     assert all(r["equal"] for r in record), [r["dir"] for r in record if not r["equal"]]

@@ -46,9 +46,9 @@ def test_the_bundled_registry_passes_research_msgs_own_check():
 
 
 def test_the_service_pyproject_pins_what_the_suite_tests_and_declares_no_push_subscriber():
-    """Vercel installs service/pyproject.toml.  It declares no `[[tool.vercel.subscribers]]`: this build never compiled
-    one (19-23 Oct, nothing consumed the topic), and if a later build did, a second consumer group would route every post
-    twice beside the drain's."""
+    """Vercel installs service/pyproject.toml.  It declares no `[[tool.vercel.subscribers]]`: this build never compiles
+    one, so nothing would consume the topic through it, and if a later build did, a second consumer group would route
+    every post twice beside the drain's."""
     service = tomllib.loads((SERVICE / "pyproject.toml").read_text())
     suite = tomllib.loads((SUITE / "pyproject.toml").read_text())["project"]
     pins = service["project"]["dependencies"]
@@ -146,8 +146,7 @@ def test_a_retry_is_rescheduled_not_acknowledged_and_the_drain_stops_at_its_budg
 
 
 def test_a_git_deployment_builds_only_main_and_only_when_the_service_changed():
-    """Git deployments, off since 19 Oct, come back for main alone, filtered by the service's inputs (ignore.py), so a
-    landing deploys itself.  Console's CLI deploy (no branch) and an unanswerable diff both build."""
+    """Git deployments build main alone, filtered by the service's inputs (ignore.py), so a landing deploys itself.  Console's CLI deploy (no branch) and an unanswerable diff both build."""
     ignore = load_module("ignore")
     asked = []
 

@@ -8,7 +8,7 @@ Programs (`--role programs`: `build_request*/instances.json.gz`, 50-300 MB per r
 put from the machine that holds them (a pod with a minted temporary credential: `research data mint-credential --ttl 6h --env`).
 Every put goes through `store_io.put_fixture`; the resulting `art:` ids are written into `fixtures.toml` (`[rows.<row>.artifacts]`)
 and the snapshot id into its `snapshot_artifact`, so the resolver can fetch what a machine lacks.  Rows whose Programs are not put keep
-`programs_state = "pending_upload"` (their sha256s are already frozen in the files table).
+`programs_state = "pending_upload"` (their sha256s are already frozen in `files.toml`).
 """
 from __future__ import annotations
 

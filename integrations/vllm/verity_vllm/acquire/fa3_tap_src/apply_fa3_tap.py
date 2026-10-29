@@ -211,7 +211,7 @@ patch(os.path.join(hop, "flash_fwd_launch_template.h"), [
 src = open(os.path.join(hop, "flash_api_torch_lib.cpp")).read()
 assert "verity_set_tap_v9" not in src
 ops_cpp = r'''
-// ---- [verity fa3 tap] host-side tap configuration (R13 lane hopper; mirrors the FA2 tap's v8 ops, layout version 9)
+// ---- [verity fa3 tap] host-side tap configuration (mirrors the FA2 tap's v8 ops, layout version 9)
 #include "verity_tap_params.h"
 Verity_tap g_verity_tap = {};
 int64_t g_verity_tap_skipped = 0;

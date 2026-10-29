@@ -1,6 +1,6 @@
-"""Lane B200-FP8: capture and score the B200's (sm_100a) ``tcgen05.mma`` FP8 step, ``kind::f8f6f4`` and ``kind::mxf8f6f4``.
+"""Capture and score the B200's (sm_100a) ``tcgen05.mma`` FP8 step, ``kind::f8f6f4`` and ``kind::mxf8f6f4``.
 
-Three phases, so that only the capture holds a GPU (``f8_sm100.sh`` runs them in order under ``research run``)::
+Three phases, so that only the capture holds a GPU (``f8_sm100.sh`` runs them in order)::
 
     python f8_sm100.py gen     --scratch DIR [--seed S] [--tiles N] [--bulk-scale F]   # CPU: every family's operands, .npy
     python f8_sm100.py capture --scratch DIR --lib libtcgen05_f8.so --out OUT          # GPU: layout gate, then every family
@@ -18,7 +18,7 @@ adder-width probe), ``subnormal_operands``, ``acc_only`` (zero products, every F
 ``signed_zero``, ``enable0`` (enable_input_d = 0 with a garbage accumulator), ``chain2/4/8`` (K = 64..256 on one accumulator,
 random and binade-growing), ``specials`` (record-only: NaN/inf operands and accumulators), and for mxf8f6f4 ``scale_sweep``,
 ``scale_extremes`` (products pushed to 2^-254: the floor), ``scale_overflow`` and ``scale_random``.  ``bulk`` is the random set
-(``--bulk-scale`` 1.0 = 10^8 outputs over the kinds), drawn from its own seed after the adversarial families.
+(``--bulk-scale`` 1.0 = 10^8 outputs over the kinds), sampled from its own seed after the adversarial families.
 
 ``eval`` scores every in-domain output against ``f8_model.candidates`` (sm_120's QMMA step ``GroupSum (32,)/26/-133`` first) and
 writes ``summary.json`` (per kind and family: outputs, asserted outputs, mismatches per candidate, observed -0 / subnormal / inf
@@ -40,7 +40,9 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parents[1] / "tools" / "config"))
 import f8_model as FM  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 
 M_T, N_T, K_STEP = 128, 32, 32
 SEED = 20261019
@@ -879,7 +881,7 @@ def main(argv=None) -> int:
     ap.add_argument("--run-out", help="pin: a run's out/ (summary.json, fixture.json, capture.json)")
     ap.add_argument("--run", help="pin: that run's id")
     ap.add_argument("--uniform", type=int, default=2, help="pin: uniform records a family")
-    ap.add_argument("--out", default=os.environ.get("OUT", "."))
+    ap.add_argument("--out", default=SHARED.OUT or ".")
     ap.add_argument("--lib")
     ap.add_argument("--seed", type=int, default=SEED)
     ap.add_argument("--tiles", type=int, default=24, help="tiles per adversarial family (x its multiplier); 4,096 outputs a tile")

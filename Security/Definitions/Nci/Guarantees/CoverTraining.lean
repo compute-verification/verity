@@ -20,7 +20,7 @@ its IU's size; it has at most `w₀ Γ + α Γ + width(θ)` bits when no gate of
 `c`'s bits, each finishes at most `(k² + b k) / b` counted products at its own `k ≤ α σ`, and summed over the IUs the
 counted products are at most `(α² Γ + b α) / b · size(d)`.
 
-With `k = α Γ` this is `size(d) ≥ α₀ b Γ / (k² + b k) · size(c)`: Daniel's covering bound's per-block count at
+With `k = α Γ` this is `size(d) ≥ α₀ b Γ / (k² + b k) · size(c)`: the covering bound's per-block count at
 `c_w = b`, `c_a = 1` (with the upstream certificate in place of activation-chaining), at `s = Γ` word gates, when the
 counted products are a fraction `α₀` of `c`'s gates. The products are counted at the granularity of `c`'s gates
 (a Dot16 step, not a scalar product), and `UpdateHardness` is needed at the block size in bits,

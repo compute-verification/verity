@@ -1,6 +1,6 @@
 """The Python of the remote audit's verifier held to the Lean's pieces (`remote-audit-difftest`, the definition), each on
 drawn inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
-and an append's coin), a plan (`receipts.Plan`: its length, digest and blocks) and its change (`Plan.changed`), a receipt
+and an append's coin), a plan (`receipts.Plan`: its length, digest and chunks) and its change (`Plan.changed`), a receipt
 (`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.ml.commitments.verify_opening`
 over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`Session.close`'s), a
 registration's digest (`audit.Registration.digest`), and the registration `audit.register` makes, its codec seed drawn
@@ -51,7 +51,7 @@ def sized(n: int, *, near: bool = True) -> st.SearchStrategy:
 
 
 def blocks() -> st.SearchStrategy:
-    """A 4096-byte block: drawn bytes, or one of every byte's extremes as int8."""
+    """A 4096-byte chunk: drawn bytes, or one of every byte's extremes as int8."""
     return st.one_of(st.binary(max_size=8).map(lambda s: expand(s, codec.BLOCK_BYTES)),
                      st.sampled_from([b"\x80", b"\x7f", b"\xff", b"\0", b"\x80\x7f"]).map(
                          lambda b: (b * codec.BLOCK_BYTES)[:codec.BLOCK_BYTES]))
@@ -62,7 +62,7 @@ CODECS = (M.P512, M.P512_K3, codec.FALLBACK, codec.DEFAULT)
 
 @functools.cache
 def encoded() -> tuple[dict, ...]:
-    """Blocks that decode: one payload a codec, under the seed's key, its bound key, and its bound key with a coin."""
+    """Chunks that decode: one payload a codec, under the seed's key, its bound key, and its bound key with a coin."""
     out = []
     for n, c in enumerate(CODECS):
         seed, j, payload = expand(b"seed %d" % n, 32), 5 + 1000 * n, M.payload(b"unit %d" % n)
@@ -151,7 +151,7 @@ def fault(draw, n: int) -> int:
 
 @st.composite
 def plan_runs(draw, extent: int) -> list:
-    """A plan of distinct blocks of a store of `extent`, in a drawn order."""
+    """A plan of distinct chunks of a store of `extent`, in a drawn order."""
     order = draw(st.permutations(sorted(draw(st.sets(st.integers(0, min(extent, 2 ** 64 - 1) - 1), min_size=1,
                                                      max_size=10)))))
     return [list(r) for r in Plan.of(order, min(extent, 2 ** 64 - 1)).runs]
@@ -185,8 +185,8 @@ def plan_changed(v) -> list:
 
 @st.composite
 def change_inputs(draw) -> dict:
-    """A plan's change: blocks it holds removed along its runs and blocks it then doesn't hold added, or one of a
-    shrinking store, drawn runs for the change, a change that removes every block, or drawn runs for the plan."""
+    """A plan's change: chunks it holds removed along its runs and chunks it then doesn't hold added, or one of a
+    shrinking store, drawn runs for the change, a change that removes every chunk, or drawn runs for the plan."""
     f = fault(draw, 4)
     blocks = draw(st.integers(1, 10))
     extent = blocks - 1 if f == 1 else blocks + draw(st.integers(0, 4))
@@ -217,8 +217,8 @@ def receipt(v) -> str:
 
 @st.composite
 def receipt_inputs(draw) -> dict:
-    """A receipt of either kind at its rows, or one of an unknown kind, rows the kind doesn't take, a seed or a block
-    of the wrong size, or a block index past u64."""
+    """A receipt of either kind at its rows, or one of an unknown kind, rows the kind doesn't take, a seed or a chunk
+    of the wrong size, or a chunk index past u64."""
     kind = draw(st.sampled_from([receipts.SKETCH_SHA512, receipts.BLOCK_SHA512]))
     v = {"kind": kind, "rows": draw(st.sampled_from([16, 64] if kind == receipts.SKETCH_SHA512 else [0])),
          "seed": expand(draw(st.binary(max_size=8)), 64).hex(), "j": draw(st.integers(0, 2 ** 64 - 1)),

@@ -1,6 +1,5 @@
-"""The library: the hardware and protocol objects core owns, the only objects the verifier holds (Project doc
-`constant-api-public.md` §2.9, as Daniel ruled on 1 Oct 2026: an operation's own definition is gates, and everything a program
-or a request brings is a value).
+"""The library: the hardware and protocol objects core owns, the only objects the verifier holds (an operation's own
+definition is gates, and everything a program or a request brings is a value).
 
 Every circuit type and every table a statement names carries a label. It is ``library`` exactly when the object is on this
 list, and ``program`` otherwise:
@@ -18,7 +17,7 @@ The library holds the measured MUFU tables only. A table derived from a model's 
 ``gelu_tanh_bf16``, or a software function such as ``tanh_rn``) stays ``program``, a registered input: it names the
 architecture, and a library table is folded in every session whether a unit reads it or not.
 
-**Definitions** are the IR primitives whose circuits are library types: the tensor-core steps and the casts that core
+**Definitions** are the primitives whose circuits are library types: the tensor-core steps and the casts that core
 registers. The row-hashing circuits (``sha512x3``, ``hm96``) join by their type digests once the hierarchical circuit format
 defines them.
 """
@@ -65,12 +64,12 @@ TABLES: tuple[Table, ...] = (
     # region, by its low 27 bits
     Table("tanh_mufu", 27, 31, "4c25bacba332fda09d215e64dc5ca3ec9a7dfdc98a3ea7971f5422054b2943e0",
           "f83e87737a231de2ec109f5a7ea9f8dac78089ef9978ac19ce540c03cefd356ce542948ba8ffb11952b68a2d0f63fe4c6e2e84d218739a262a9b4bb07dd66985"),
-    # MUFU.LG2 (`lg2.approx.ftz.f32`) of 1.m by m, measured on the RTX PRO 6000 (cc 12.0) in run r20261004-060203-ba52; +0 at m = 0
+    # MUFU.LG2 (`lg2.approx.ftz.f32`) of 1.m by m, measured on the RTX PRO 6000 (cc 12.0); +0 at m = 0
     Table("lg2", 23, 31, "7fd9be9a924e40a0ee18ba20e7f5158135112947597c8dd86131d3d4d8f9dbfa",
           "6f498dcd26e75335dcec0acdbfadae425c206b36d5a071a417c646db018a53b0b5482455c913c9ed94ab09c0aa5ccbc8d2e4188abae767050df4544ec4d3e550"),
 )
 
-#: The IR primitives whose circuits are library types: the tensor-core steps and the casts `verity.ml.circuits.ops.prims` registers.
+#: The primitives whose circuits are library types: the tensor-core steps and the casts `verity.ml.circuits.ops.prims` registers.
 DEFINITIONS: frozenset[str] = frozenset({
     "AmpereBF16TcDot16_v2", "HopperBF16WgmmaDot16_v1", "HopperE4m3QgmmaDot32_v1",
     "Bf16ToF32_v1", "F32ToBf16Rn_v1", "F2fpBf16_v1", "F32ToE4m3Sat_v1",
@@ -94,7 +93,7 @@ def table_label(sha512: str) -> str:
 
 
 def definition_label(definition_id: str) -> str:
-    """``library`` for a Definition whose circuit is a library type, by its IR id; ``program`` otherwise."""
+    """``library`` for a Definition whose circuit is a library type, by its id; ``program`` otherwise."""
     return LIBRARY if definition_id in DEFINITIONS else PROGRAM
 
 

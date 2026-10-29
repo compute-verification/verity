@@ -47,7 +47,7 @@ theorem plainCols_le (i : PlainIdx) : plainCols i ≤ 40 := by
   have := plainShape_table i
   omega
 
-/-- **The deployed plain level-0 code at index `i`**: #2104's `levelZero` in the executable's arithmetic, `2^k0` lanes
+/-- **The deployed plain level-0 code at index `i`**: `levelZero` in the executable's arithmetic, `2^k0` lanes
 of `2^cols` columns. -/
 noncomputable def flockPlainLevelZero (i : PlainIdx) :
     IRS 𝔽 (Message 𝔽 (plainLanes i) (plainCols i)) (2 ^ plainLanes i) :=

@@ -21,11 +21,11 @@ MAJ = definition("StructuralTestMaj", 1, lambda C, a, b, c: [maj(C, a[0], b[0], 
                  (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT)), SB.BIT, register=False)
 
 W = ST.WORD
-K = 3 * W  # a hand-built unit's constant: its inputs from column 0, its rows from W, its outputs from 2 W
+K = 3 * W  # a hand-built template's constant: its inputs from column 0, its rows from W, its outputs from 2 W
 
 
 def _unit(ins: list[int], outs: list[int], rows, calls=(), callees=()) -> TM.Tmpl:
-    """A unit with input ports of widths ``ins`` from column 0, ``rows`` (their columns from W) and ``calls``, and output
+    """A template with input ports of widths ``ins`` from column 0, ``rows`` (their columns from W) and ``calls``, and output
     ports of widths ``outs`` from 2 W: its root is the last Definition, after ``callees``."""
     groups = [1, 0, 1, len(ins), *ins, 1, 2, 1, len(outs), *outs]
     inputs = tuple((c, (c,), (c,)) for c in range(sum(ins)))
@@ -74,7 +74,7 @@ def test_a_verdict_does_not_depend_on_the_labels_draw():
 # --- accepted --------------------------------------------------------------------------------------------------------
 
 def _emitted(target) -> TM.Tmpl:
-    """``target``'s flat ``flock-ir-unit/v2`` unit as `tmpl.emit` templates it."""
+    """``target``'s flat ``flock-ir-unit/v2`` lowering as `tmpl.emit` templates it."""
     C, _ins, words = ST._lowered(target)
     lay = IL.layout(C, list(C.inputs), [f"o{j}" for j in range(len(words))])
     return TM.emit(TM.parse_flat(IL.netlist(lay, "t").splitlines()))[0]
@@ -247,12 +247,12 @@ def test_the_struct_lower_realization_is_held_to_the_reference_from_its_template
     assert [f["code"] for f in F.failures] == ["lowering-mismatch"] and CK.STRUCT_VIA in F.failures[0]["name"]
 
 
-# --- a unit on its row ports -----------------------------------------------------------------------------------------
+# --- a proof block on its row ports ----------------------------------------------------------------------------------
 
 def test_a_structural_stagers_unit_is_the_flat_unit_on_its_ports_by_construction():
-    """`check_unit`: the unit a structural stager writes (`struct_lower` on `class_statement.unit_ports`' u16 row ports) is
-    the flat unit the flat stager lays out on those ports (`class_statement.unit_circuit`) by construction, with the bound
-    on a wrong verdict recorded. The same template held to rows pairing each x with the next w computes another function
+    """`check_unit`: the proof block a structural stager writes (`struct_lower` on `class_statement.unit_ports`' u16 row
+    ports) is the flat proof block the flat stager lays out on those ports (`class_statement.unit_circuit`) by construction,
+    with the bound on a wrong verdict recorded. The same template held to rows pairing each x with the next w computes another function
     and is refused; the Definition's own template, on its leaves, is refused by its ports."""
     S = pytest.importorskip("verity_flock.struct_lower")
     from verity_flock import class_statement as CS

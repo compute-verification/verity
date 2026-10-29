@@ -11,7 +11,7 @@ Tiers (``fixtures/bench-instances/v1/``; the byte layout is in that directory's 
 
     vu-k1536       4,096 valid VU instances, K=1536, ids 0..4095.  B=1 / 64 / 4096 are the prefixes [0:1], [0:64],
                    [0:4096]; sub-batches are contiguous id ranges.  Every 64-block holds 54 real and 10 corner instances.
-                   id 0 is seed qkv_proj_decode_0 (the target's K1536_VECTOR).
+                   id 0 is seed qkv_proj_decode_0.
     tu-k16         4,096 transition units: (c, a[16], b[16]) -> out, c an arbitrary finite FP32 word; 2,816 real chain
                    states of vu-k1536, 512 corner-chain states, 768 designed corners.
     vu-k1536-neg   claimed-wrong instances derived from vu-k1536 positives, each tagged with the implementation mistake
@@ -655,7 +655,7 @@ def _plan_tu(kinds: list[str], x: array, w: array, accs: list[list[int]], seeds:
 
 
 def _draw_states(rng: G.Rng, ids: list[int], accs: list[list[int]], n: int) -> list[tuple[int, int]]:
-    """``n`` distinct (instance, step >= 1) pairs over ``ids``, drawn uniformly; the incoming accumulator is finite by
+    """``n`` distinct (instance, step >= 1) pairs over ``ids``, sampled uniformly; the incoming accumulator is finite by
     construction (only a chain's last accumulator can be infinite)."""
 
     seen: set[tuple[int, int]] = set()
