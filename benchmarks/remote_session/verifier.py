@@ -1,4 +1,4 @@
-"""The verifier's process: the remote bandwidth audit v0's `Session` (verity/core/protocols/remote_bandwidth/audit.py)
+"""The verifier's process: the remote bandwidth audit v0's `AuditRun` (verity/core/protocols/remote_bandwidth/audit.py)
 driven over the wire against a prover on another process or machine, with a secret of its own.
 
 One connection serves one registration and then `--sessions` sessions over it, each of `--windows` windows of
@@ -7,7 +7,7 @@ One connection serves one registration and then `--sessions` sessions over it, e
 1. registration: the prover's hello names its node, N, payload root and, if it has one, its store's layout (each
    region's kind and tier, `regions_of`, the memory line's labels), and whether it defers an appended block's
    residency to its encode (`deferred`, `audit.Params.deferred`: refused with `bye` under `--lifetime` 1, since a
-   block appended in window w is resident from w or w + 1 and its re-key falls at age L − 1); the verifier draws the
+   block appended in window w is resident from w or w + 1 and its re-key falls at age L − 1); the verifier samples the
    codec seed from its
    secret (`audit.register`) and sends the registration; the prover encodes its store and answers `ready` with its
    calibration (pass times, the gap, its measured read rate);
@@ -15,27 +15,28 @@ One connection serves one registration and then `--sessions` sessions over it, e
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
    and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
    (`--lifetime`, windows, by default those of `--window-ms` in 30 s, `audit.lifetime_windows`, sent with the
-   session so the prover re-keys in time); the coin commitment sent first, then
-   σ_0, a boundary message every window, each append answered with its coin (`Verifier.append`), each root fed to
-   `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, and
+   session so the prover re-keys in time); σ_0, then a boundary message every window, each coin sent as its value and
+   the root it was opened after (`coins.Released`), each append answered with its coin (`Verifier.append`), each root
+   fed to `AuditRun.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
    `Verifier.root`), each window closed
-   (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
+   (`AuditRun.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked by the Lean verifier on its threads as their frames arrive (`Pair.verify`), so a window's checks run while
-   the next window's passes arrive; once every window is accepted the record (`Session.record`), its declared outputs
+   the next window's passes arrive; once every window is accepted the record (`AuditRun.record`), its declared outputs
    (`ledger.declared`'s: γ at both R and the memory line, snapshot and, paced, time-held and link-charged), and as
    diagnostics the node's HBM it shows held by kind (`memory`: the credited share and the residual, at ε, held at
    every pass and held on average), and with `--host-bytes` the same by kind against the node's HBM and host DRAM
-   (`node_line`).
+   (`node_line`); last, once the prover has answered the session's `end` with `ended`, the coin commitment and every
+   released coin's opening (`coins`, `audit.AuditRun.disclose`), which the prover checks each coin it was sent against.
 
 With `--paced K:T_MS:DRAWS:WINDOWS[:F]` each session is paced (`pace_of`, `audit.Pace(K, T, F)`): a coin every K
-passes, each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
+passes, each boundary message at `AuditRun.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
 `--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
-(`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is drawn at its k-th
+(`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is sampled at its k-th
 root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
 fixes each group's end there, and `auditor_line.py` reads the line on the challenger's clock from it. A boundary due by
 then leaves right behind the close, so its coin, after the same root, is asked for in the same round trip, second
-(`coins.Coins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.  At F = 1 a group's
+(`coins.SessionCoins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.  At F = 1 a group's
 boundary is due at its k-th root, so its coin is asked for first, after that root, and the close second, and the
 prover waits a round trip on each coin.
 
@@ -62,35 +63,35 @@ store's shape, both roots, the Lean's answer and `bound`), which `auditor_line.p
 hello, so its sessions share the one root it held; another process's payload key is fresh, so its root is another.
 
 The verdicts are the Lean verifier's, the process `remote-audit-verifier` (`lean_verifier.py`): it holds
-the registry and every session, and each registration, session, event and window goes to it and to `audit.Session`
+the registry and every session, and each registration, session, event and window goes to it and to `audit.AuditRun`
 at one reading of the clock (`Pair`). An accepted session's record is the Lean's (`Pair.record`), and its ledger
-reads that record. `audit.Session` keeps the driver's books (its coins, its plans, when the next boundary leaves) and
+reads that record. `audit.AuditRun` keeps the driver's books (its coins, its plans, when the next boundary leaves) and
 is the reference: an event, a window's verdict or a record field on which the two differ refuses the session at that
 window as `disagreement`. It checks no openings: it takes the Lean's window verdicts (`Checks.settle`), and the
 Python check of a window's openings beside the Lean's is the transcript's replay (`--transcript`). `--close` closes
 a registration in both registries alike. While a session runs the driver doesn't wait on
 the Lean: an event both take goes out on the books' result and the Lean's answer is held to it as it comes, and
 openings frames and window checks go to the Lean the same way, so a slow Lean answer or check delays the session's
-verdict, never a coin, a root's intake, a boundary or a draw. A session is accepted only once every one of its
+verdict, never a coin, a root's intake, a boundary or a sample. A session is accepted only once every one of its
 Lean answers has come and agreed.
 
-`--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.Transcript`): every
+`--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.DifftestCase`): every
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
 was set, which `replay.py transcript` (verity/core/protocols/remote_bandwidth/lean/tests) replays through both
 verifiers, rejections included. A message the driver couldn't read is in no event: the case ends before it. A run
 keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
 0.6 GB of JSON.
 
-A session's coins are an epoch of the proof system's one challenger (`coins.Coins`): from a challenger in this process
+A session's coins are an epoch of the proof system's one challenger (`coins.SessionCoins`): from a challenger in this process
 (`--challenger local`, the default), from `benchmarks/live_challenger/serve.py`, started for the session on this
 machine and reached through `sampled_proofs.remote`'s client (`--challenger serve`, `challengers.Serve`), or from the
 auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
-window root (`--challenger gate`, `challengers.Gate`). Each coin is asked for after the root it follows, the Lean takes
-it with the event that released it, and once the session ends what the challenger signed holds the session's coins
-(`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`, which also holds the
-session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
+window root (`--challenger gate`, `challengers.ChallengerGate`). Each coin is asked for after the root it follows, the
+Lean takes it with the event that released it, and once the session ends what the challenger signed holds the session's
+coins (`AuditRun.released_reason`, and under the gate the auditor's ledger, `AuditRun.trusted_reason`, which also holds
+the session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
 whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, ⌈W/G⌉
-openings coins (`--groups-per-coin` G, 1 by default: each draw's G windows drawn together at its last window's close,
+openings coins (`--groups-per-coin` G, 1 by default: each sample's G windows drawn together at its last window's close,
 at two windows in flight, as the Lean's `session` refuses one in flight at G > 1) and `--appends` append coins,
 `coins.APPENDS` by default, or none, and no append family, when the prover's hello says its sessions append nothing
 (a plan of honest and skip sessions, `Verifier.appends_of`), so the challenger's close of such a session that ran to
@@ -124,6 +125,7 @@ import secrets
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -132,6 +134,9 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.core import site  # noqa: E402
+from verity.hardware import load, skus  # noqa: E402
+from verity.hardware import node as hardware  # noqa: E402
 
 import challengers  # noqa: E402
 import lean_verifier as lv  # noqa: E402
@@ -140,9 +145,32 @@ from checks import Checks  # noqa: E402
 
 CHECK_BATCH = 1024
 """Openings a Lean thread checks at once (`checkWindowChunked`)."""
+NODE = hardware.node(*hardware.VY_NEBIUS)
+"""The audited node's figures, read off its cards (`verity.hardware.node`): `--site`'s host's node (`site_node`), by
+default a vy-nebius node."""
 GPU_HBM_BYTES = 96 * 2 ** 30
 """One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`)."""
-HBM_BYTES = timing.GPUS * GPU_HBM_BYTES
+
+
+def device_memory(node: hardware.NodeFigures) -> int:
+    """The node's device memory, bytes: each device's card's `store.dram`."""
+    return sum(int(load(d.sku)["store"]["dram"]["value"]) for d in node.devices)
+
+
+HBM_BYTES = device_memory(NODE)
+
+
+def site_node(log: Path, host: str, keys: Path | None = None, host_card: str = hardware.VY_NEBIUS[1],
+              placeholders: Sequence[str] = hardware.VY_NEBIUS[2]) -> hardware.NodeFigures:
+    """The figures of host `host`'s node in the Site a registration log registers (`ledger.figures`), on host card
+    `host_card` with the placeholders `placeholders` names read as open (by default a vy-nebius node's): the log
+    (`verity.core.site.Registration`'s JSON) checked entry by entry (`site.check`) against the auditor's data sheets,
+    every GPU card file's, and its own devices' keys, `keys` (a JSON object of id to key)."""
+    auditor = site.Auditor.of_files([load(sku) for sku in skus("gpu")], keys=json.loads(keys.read_text()) if keys else None)
+    return ledger.figures(site.check(site.Registration.of_json(json.loads(log.read_text())), auditor), host,
+                          host_card, placeholders)
+
+
 DISK_BYTES_PER_S = 4.4e9
 """The node's disks' read ceiling, each disk's highest second summed (4.311e9) and rounded up:
 how much of a paced line's ingress charge is its disks (`ingress_bursts`)."""
@@ -171,7 +199,7 @@ def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, read
     `receipts_beyond_read`."""
     s = span_ns / passes / 1e9
     whole = capacity_bytes_per_s * s
-    gpus, host = timing.GPUS * timing.GPU_READ_BYTES_PER_S, timing.HOST_READ_BYTES_PER_S
+    gpus, host = NODE.device_read_bytes_per_s, NODE.host.read_bytes_per_s
     hbm_bytes, host_bytes = tiers["hbm"]["bytes"], tiers.get("host", {}).get("bytes", 0)
     hbm_s, pass_s = tiers["hbm"]["ms"] / 1e3, pass_ns / 1e9
     return {"above_stated_tiers": (capacity_bytes_per_s - gpus - host) / capacity_bytes_per_s,
@@ -184,7 +212,7 @@ def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, read
 
 def regions_of(layout, blocks: int) -> tuple[tuple[str, str, int, int], ...] | None:
     """The hello's layout of the registered store as regions `(kind, tier, first, blocks)` in index order, covering its
-    `blocks` exactly (`verity_vllm.protocols.remote_bandwidth.registry.Store.layout`'s), or None without one.  The labels are the prover's,
+    `blocks` exactly (`verity_vllm.protocols.remote_bandwidth.registry.NodeMemory.layout`'s), or None without one.  The labels are the prover's,
     public as protocol structure: that a plan's weights blocks hold the circuit's weights is the plan unit's to show
     (`audit.RequirementLink`), not this."""
     if layout is None:
@@ -253,7 +281,7 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
     """The node's memory a session's record shows held, against its HBM, in two forms.
 
     Held at every pass (`WORST_PASS`, the worst pass's): each window's passes each read the distinct blocks of their
-    plan (`plans`, a list of each window's, as `Session` received them) inside the window's span, so at every pass the
+    plan (`plans`, a list of each window's, as `AuditRun` received them) inside the window's span, so at every pass the
     node held them, but for the receipts the pooled event leaves wrong (`audit.floors`, f_t of the window's U_t, every
     window's at once except with the record's δ), the blocks its GPUs could re-encode from their payloads in the
     span instead (`rebuild`, its squarings at `codec.encode_squarings` a block), and the blocks its on-chip storage
@@ -266,7 +294,7 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
     A registered block counts as the layout labels it (`regions_of`; None, the drivers' stores: the whole store
     filler in HBM), HBM only toward the share; an appended block
     (index N and up) is KV the session wrote, in HBM, and is credited only on the property's verdict and the session's
-    schedule check (`schedule`, `audit.Session.scheduled`, as `audit.ledger` requires them), less the most its carriers
+    schedule check (`schedule`, `audit.AuditRun.scheduled`, as `audit.ledger` requires them), less the most its carriers
     hold (`credit_post_seed`, as `audit.ledger`'s μ_carrier).  Weights and KV are each credited on their
     own: the lost blocks come off each.  The session's line is its worst window's: `credited_bytes`, `share` of
     `hbm_bytes` and `residual` = 1 − share, the HBM it doesn't show used, with ε, the share of the window's held
@@ -275,7 +303,7 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
     if credit_post_seed is not None and (type(schedule) is not audit.Scheduled or not schedule.of(record)):
-        raise ValueError("KV is credited only on this session's schedule check (`audit.Session.scheduled`)")
+        raise ValueError("KV is credited only on this session's schedule check (`audit.AuditRun.scheduled`)")
     if len(plans) != len(record.windows) or any(len(p) != w.passes for p, w in zip(plans, record.windows)):
         raise ValueError("a plan for each pass of each window of the record")
     if rebuild.codec != record.codec:
@@ -333,7 +361,7 @@ def summed(windows: list[dict], *, hbm_bytes: int, block_bytes: int, delta: floa
             "windows": windows}
 
 
-def recorded_memory(session: dict, *, chip_bytes: int = timing.CHIP_BYTES, host_bytes: int = 0) -> dict:
+def recorded_memory(session: dict, *, chip_bytes: int = NODE.chip_bytes, host_bytes: int = 0) -> dict:
     """An accepted session's memory line in both forms, from its record in `verifier.json` (`Verifier.session`'s),
     for one written before the average form (`averaged`): each window's mean held per pass is its read weights over its
     passes, and its registered receipts over its passes less its least host tier for HBM, exact while every pass reads
@@ -370,7 +398,7 @@ def recorded_memory(session: dict, *, chip_bytes: int = timing.CHIP_BYTES, host_
 def memory_error(ledgers: dict) -> float | None:
     """The memory line's failure probability from `Verifier.ledgers`' output: its floors are the pooled event's, so the
     horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`), plus the coin
-    commitment's hiding terms, the receipts' binding term and the draw's rejection (`ledger.hiding`, `ledger.binding`,
+    commitment's hiding terms, the receipts' binding term and the sample's rejection (`ledger.hiding`, `ledger.binding`,
     `ledger.rejection`, the ledger's `delta` parts); `delta` alone understates it by the passes' slack.  None when no
     reading has a ledger."""
     for name in ("spec", "measured"):
@@ -433,7 +461,7 @@ TIME_HELD = "held over time"
 
 
 def pace_of(spec: str, pass_ms: float) -> dict:
-    """`K:T_MS:DRAWS:WINDOWS[:F]` as a session's pacing: groups of K passes, each a `Session` window of its own whose
+    """`K:T_MS:DRAWS:WINDOWS[:F]` as a session's pacing: groups of K passes, each a `AuditRun` window of its own whose
     coin is a live coin, WINDOWS credited stretches of T_MS and a closing one after them, `groups` groups a stretch (at
     `pass_ms` a pass) and `draws` = DRAWS/groups openings a group, so a stretch draws as an unpaced T_MS window would;
     F the windows in flight (`audit.Pace.in_flight`, 2 when absent, named only at 1)."""
@@ -473,10 +501,10 @@ def paced_groups(mem: dict, seen: list[dict], *, block_bytes: int) -> list[line.
 def ingress_bursts(ingress_bytes_per_s: float, disk_bytes_per_s: float = DISK_BYTES_PER_S) -> float:
     """B, the bytes the routes back into node memory bring at once beyond their rates at an ingress charge of
     `ingress_bytes_per_s`, `ledger.Node.stated`'s bursts: one rebuild batch in flight (S_chip), one second at the disks'
-    ceiling (the charge up to `disk_bytes_per_s`), and one link window (`timing.LINK_WINDOW_BYTES`) when the charge is
-    above that, the boundary links charged too."""
+    ceiling (the charge up to `disk_bytes_per_s`), and one link window (the host card's `link.window`) when the
+    charge is above that, the boundary links charged too."""
     disk = min(ingress_bytes_per_s, disk_bytes_per_s)
-    n = ledger.Node.stated(disk_bytes_per_s=disk, link_bytes_per_s=ingress_bytes_per_s - disk)
+    n = ledger.Node.stated(NODE, disk_bytes_per_s=disk, link_bytes_per_s=ingress_bytes_per_s - disk)
     return n.rebuild_burst_bytes + n.disk_burst_bytes + n.link_burst_bytes
 
 
@@ -528,10 +556,11 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
 
 
 def recorded_chip_bytes(mem: dict) -> int:
-    """S_chip as a recorded session's line deducts it: the record's, or the auditor's `timing.CHIP_BYTES` where that is
-    larger. A record keeps the S_chip its verifier ran at, which can be short of the node's: gate runs 7 to 9's
-    3,045,746,688 B took the host's term from an estimate of its caches, 59,906,048 B under `timing.HOST_CHIP_BYTES`."""
-    return max(mem["chip_bytes"], timing.CHIP_BYTES)
+    """S_chip as a recorded session's line deducts it: the record's, or the auditor's node's (`NODE.chip_bytes`) where
+    that is larger. A record keeps the S_chip its verifier ran at, which can be short of the node's: gate runs 7 to 9's
+    3,045,746,688 B took the host's term from an estimate of its caches, 59,906,048 B under the host card's
+    `store.chip`."""
+    return max(mem["chip_bytes"], NODE.chip_bytes)
 
 
 def recorded_paced(session: dict, registration: dict, *, host_bytes: int, ingress_bytes_per_s: float = 0.0) -> dict:
@@ -578,7 +607,7 @@ def lean_record(session: dict) -> dict:
 
 
 def recorded_windows(session: dict) -> tuple[list[tuple[int, int]], float]:
-    """The pooled bound's inputs (`pooled.bound`) from an accepted session's record in `verifier.json`: each draw's
+    """The pooled bound's inputs (`pooled.bound`) from an accepted session's record in `verifier.json`: each sample's
     receipts and draws (`audit.pooled_windows`: a window's own at `groups_per_coin` g = 1, its g windows' together
     above), and δ, the ones the line reads off the Lean verifier's record (`lean_record`) and the session."""
     g, ws = session["record"]["public"].get("groups_per_coin", 1), session["record"]["profile"]["windows"]
@@ -604,7 +633,7 @@ def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates
     each window beside it (`record_seen`, on the clock its `windows_seen` read: `clock` record, the verifier's, which
     the record's times must be, or another, `line.CLOCKS`), against its HBM and `host_bytes`, at `rates`
     (`recorded_rates`), with its S_chip at least the auditor's (`recorded_chip_bytes`); with `transcript`, the
-    session's (`lean_verifier.Transcript`'s file), from which the Lean makes the record itself. Refused unless the
+    session's (`lean_verifier.DifftestCase`'s file), from which the Lean makes the record itself. Refused unless the
     record is of `registration` (`wire.registration_json`'s form), which the inputs name as the Lean reads one, so
     that the line refuses a record not of it too (`line.unregistered`)."""
     mem, record = session["ledger"]["memory"], lean_record(session)
@@ -712,10 +741,10 @@ def hold_store(lean: lv.Lean, bound: dict | None, b: rstore.Binding, node: bytes
 
 
 class Pair:
-    """Session k through the verifiers, with `audit.Session`'s interface: each event goes to `s`, the driver's books,
+    """Session k through the verifiers, with `audit.AuditRun`'s interface: each event goes to `s`, the driver's books,
     and to the Lean process's session k, at one reading of the verifier's clock. The result is the one
     they agree on; where they differ, the session is refused at the event's window as `disagreement` (in both
-    verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.Session` returns no verdict.
+    verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.AuditRun` returns no verdict.
     Everything else is read from `s`. The Lean's session takes its coins live (`"coins": null`): each the challenger
     releases goes with the event that released it, σ_t with its start or boundary, window t's openings coin with its
     close and an append's coin with the append.
@@ -726,7 +755,7 @@ class Pair:
     events in order with their clock readings, so its answers are the ones it would give were each waited on. An
     event the books reject or refuse is waited on, behind every one before it."""
 
-    def __init__(self, v: Verifier, s: audit.Session, k: int, case: lv.Transcript | None = None) -> None:
+    def __init__(self, v: Verifier, s: audit.AuditRun, k: int, case: lv.DifftestCase | None = None) -> None:
         self.v, self.s, self.k, self.lean, self.case = v, s, k, v.lean, case
         self.node, self.disagreement, self.outcome_json = s.registration.node.hex(), None, None
         self.late: tuple | None = None
@@ -841,7 +870,7 @@ class Pair:
                           lambda: self.s.receive(t, i, root, change=change, step=step), lv.done_json, clocked=True)[0]
 
     def close(self, t: int):
-        """Window t's close: at `groups_per_coin` g, its draw's (t // g), whose openings coin goes with it."""
+        """Window t's close: at `groups_per_coin` g, its sample's (t // g), whose openings coin goes with it."""
         return self._step(t, lambda: {"kind": "close", "t": t}, lambda: self.s.close(t), lv.drew_json, clocked=True,
                           coin=lambda out: self._released(coins.OPENINGS, t // self.s.params.groups_per_coin))[0]
 
@@ -922,7 +951,7 @@ class Pair:
 
     def record(self) -> audit.Record:
         """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it, with the
-        session's bounds, `audit.Session.bounded`)."""
+        session's bounds, `audit.AuditRun.bounded`)."""
         return self.s.bounded(lv.record_of(self.outcome_json["record"], self.s.registration, self.s.commitment.root,
                                            self.s.params.delta, self.s.params.samples))
 
@@ -939,7 +968,7 @@ class Verifier:
                  ingress_bytes_per_s: float = 0.0, lean_exe: Path | None = None,
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
-                 challenger: challengers.Local | challengers.Serve | challengers.Gate | None = None,
+                 challenger: challengers.Local | challengers.Serve | challengers.ChallengerGate | None = None,
                  appends: int | None = None, payload_key: bytes | None = None,
                  binding: rstore.Binding | None = None, groups_per_coin: int = 1) -> None:
         coins.openings_coins(1, groups_per_coin)
@@ -1105,7 +1134,7 @@ class Verifier:
     def session(self, k: int, allowance_ns: int, not_before_ns: int | None, pace: dict | None = None) -> dict:
         """One session.  With `pace` (`pace_of`), the protocol paces it (`audit.Pace(k, T)`, T its stretch, over which
         γ is declared): its windows are groups of `pace["k"]` passes, and each boundary leaves at
-        `Session.next_boundary_ns`: once its group has k − 1 roots (the pass in flight is its last), or for k = 1 once
+        `AuditRun.next_boundary_ns`: once its group has k − 1 roots (the pass in flight is its last), or for k = 1 once
         the group before has its root (the first group's at once), so the honest prover never waits on a coin; and at
         the latest at max(its coin + (k − 1)·A, the group before's deadline), so its roots are due within about k
         allowances of its coin.  The lifetime cap, unless `lifetime` states it, is the windows of T in 30 s, or paced,
@@ -1128,11 +1157,10 @@ class Verifier:
         appends = self.appends_of()
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
                                       challenger=lambda e: self.challenger.open(reg.digest, e, W, appends, **per))
-        case = None if self.transcript is None else lv.Transcript(
+        case = None if self.transcript is None else lv.DifftestCase(
             self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
         session = Pair(self, books, k, case)
-        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
-                        "commitment": session.commitment.to_json(), "pace": K} | one | shared)
+        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime, "pace": K} | one | shared)
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -1197,7 +1225,7 @@ class Verifier:
                 decide(t)
 
         def close(t: int) -> None:
-            """Window t's draw, at its draw's last window (`Params.draw_of`; every window at g = 1): each window's
+            """Window t's sample, at its sample's last window (`Params.draw_of`; every window at g = 1): each window's
             share goes to the prover, and one whose share is none is accepted as the close accepted it."""
             nonlocal failure
             group = params.draw_of(t)
@@ -1348,6 +1376,8 @@ class Verifier:
             head, _, _ = self.expect("ended")
             if head["k"] == k:
                 break
+        commitment, opened = session.disclose()
+        self.conn.send({"type": "coins", "k": k, "commitment": commitment.to_json()}, wire.openings_json(opened))
         out = shared | {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
                "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
                "lifetime": params.lifetime,
@@ -1374,13 +1404,13 @@ class Verifier:
             out["ledger"] = self.ledgers(record, [list(w.arrived_ns) for w in record.windows],
                                          [w.plans for w in session.windows])
             if pace is not None:
-                rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
+                rebuild = audit.Rebuild(record.codec, NODE.squarings_per_s[record.codec.field.name])
                 try:
                     out["ledger"]["paced"] = paced_line(
                         out["ledger"]["memory"], out["windows_seen"], groups=pace["groups"],
                         wrong=audit.pooled(record)[0], blocks=reg.blocks,
                         rebuild_per_ns=line.number(rebuild.squarings_per_s) / record.codec.encode_squarings / line.NS,
-                        chip_bytes=timing.CHIP_BYTES, block_bytes=record.block_bytes,
+                        chip_bytes=NODE.chip_bytes, block_bytes=record.block_bytes,
                         node_bytes=self.hbm_bytes + self.host_bytes,
                         burst_bytes=ingress_bursts(self.ingress_bytes_per_s),
                         ingress_per_ns=line.number(self.ingress_bytes_per_s) / record.block_bytes / line.NS)
@@ -1389,8 +1419,8 @@ class Verifier:
         return out
 
     @staticmethod
-    def append(session: audit.Session, head: dict) -> dict | audit.Verdict:
-        """An append's message to the session (`Session.append`), `{"type": "append", "root": hex, "count": n}`: the
+    def append(session: audit.AuditRun, head: dict) -> dict | audit.Verdict:
+        """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`: the
         reply `{"type": "appended", "first": j, "coin": hex}`, its first index and its coin `c_a`, drawn now, or the
         rejection."""
         got = session.append(bytes.fromhex(head["root"]), head["count"])
@@ -1400,10 +1430,10 @@ class Verifier:
         return {"type": "appended", "first": first, "coin": coin.hex()}
 
     @staticmethod
-    def root(session: audit.Session, head: dict) -> audit.Verdict | None:
+    def root(session: audit.AuditRun, head: dict) -> audit.Verdict | None:
         """A root's message to the session in the order the prover sends it: the blocks it releases, with those among
-        them it withdrew (`Session.release`), then the root with its plan, a change from the last plan if it carries
-        one and the registered store otherwise, and its step (`Session.receive`).  The first rejection, if any.
+        them it withdrew (`AuditRun.release`), then the root with its plan, a change from the last plan if it carries
+        one and the registered store otherwise, and its step (`AuditRun.receive`).  The first rejection, if any.
         Appends come as messages of their own (`append`), each answered with its coin: a root's message carrying any
         is malformed."""
         if "appends" in head:
@@ -1424,7 +1454,7 @@ class Verifier:
         every GPU's HBM and the host's DRAM, the node's S_chip and squaring ceiling, `--disk-bytes-per-s` and
         `--link-bytes-per-s`, and their bursts), whatever share of the node the store is on.  Both R are the verifier's, which the
         prover's calibration can only raise: a prover reporting a slower read would shrink every term but the timing.
-        Each reading (`spec`, `measured`) also carries the session's terms (`audit.Ledger`) and its
+        Each reading (`spec`, `measured`) also carries the session's terms (`audit.GammaTerms`) and its
         certified bytes, `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node
         establishes, whose γ is the node's only once its store spans the node; and its timing term's parts
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
@@ -1436,15 +1466,16 @@ class Verifier:
         (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
-        stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
+        stated = ledger.Node.stated(NODE, reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
                                     link_bytes_per_s=self.link_bytes_per_s, disk_burst_bytes=self.disk_burst_bytes,
                                     link_burst_bytes=self.link_burst_bytes)
         spec, measured = stated.spec_bytes_per_s, stated.read_bytes_per_s
         rebuild = stated.rebuild(record.codec)
-        node = {"gpus": timing.GPUS, "gpu_spec_bytes_per_s": timing.GPU_SPEC_BYTES_PER_S,
-                "gpu_read_bytes_per_s": timing.GPU_READ_BYTES_PER_S, "host_spec_bytes_per_s": timing.HOST_SPEC_BYTES_PER_S,
-                "host_read_bytes_per_s": timing.HOST_READ_BYTES_PER_S, "gpu_chip_bytes": timing.GPU_CHIP_BYTES,
-                "host_chip_bytes": timing.HOST_CHIP_BYTES}
+        gpu = NODE.devices[0]
+        node = {"gpus": len(NODE.devices), "gpu_spec_bytes_per_s": gpu.spec_bytes_per_s,
+                "gpu_read_bytes_per_s": gpu.read_bytes_per_s, "host_spec_bytes_per_s": NODE.host.spec_bytes_per_s,
+                "host_read_bytes_per_s": NODE.host.read_bytes_per_s, "gpu_chip_bytes": gpu.chip_bytes,
+                "host_chip_bytes": NODE.host.chip_bytes, "host": NODE.host.sku, "placeholders": list(NODE.placeholders)}
         out = {"inputs": {"spec_bytes_per_s": spec, "measured_read_bytes_per_s": measured,
                           "reported_read_bytes_per_s": reported, "node": node,
                           "disk_bytes_per_s": stated.disk_bytes_per_s, "link_bytes_per_s": stated.link_bytes_per_s,
@@ -1493,7 +1524,7 @@ class Verifier:
                                                                            blocks=record.blocks, outside=outside))}
         if plans is not None:
             out["memory"] = memory(record, plans, self.regions, hbm_bytes=self.hbm_bytes, rebuild=rebuild,
-                                   chip_bytes=timing.CHIP_BYTES)
+                                   chip_bytes=NODE.chip_bytes)
             if (error := memory_error(out)) is not None:
                 out["memory"]["error"] = error
             if self.host_bytes:
@@ -1517,6 +1548,7 @@ def save_registry(path: Path | None, registry: audit.Registry | dict) -> None:
 
 
 def main() -> int:
+    global NODE
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=7781)
@@ -1540,8 +1572,18 @@ def main() -> int:
     ap.add_argument("--registry", type=Path,
                     help="the verifier's registrations, kept across its processes (`audit.Registry`): a node with a "
                          "live registration there is refused (default: this process's own)")
-    ap.add_argument("--hbm-bytes", type=int, default=HBM_BYTES,
-                    help="the node's HBM, the memory line's capacity (default: its GPUs' at 96 GiB each)")
+    ap.add_argument("--site", nargs=2, metavar=("LOG", "HOST"),
+                    help="the audited node: host HOST of the Site the registration log LOG registers (`site_node`), "
+                         "its figures read off its devices' cards (default: a vy-nebius node, `hardware.VY_NEBIUS`)")
+    ap.add_argument("--site-keys", type=Path, metavar="KEYS",
+                    help="--site: the auditor's devices' keys, a JSON object of id to key")
+    ap.add_argument("--host-card", default=hardware.VY_NEBIUS[1], metavar="SKU",
+                    help="--site: the host's card, which the Site doesn't register (default: a vy-nebius node's)")
+    ap.add_argument("--placeholder", action="append", metavar="NAME",
+                    help="--site: a placeholder figure the node is read with, '<sku> <table>.<key>', repeated "
+                         "(default: a vy-nebius node's, `hardware.VY_NEBIUS`)")
+    ap.add_argument("--hbm-bytes", type=int,
+                    help="the node's HBM, the memory line's capacity (default: its devices' cards' memory)")
     ap.add_argument("--host-bytes", type=int, default=0,
                     help="the node's host DRAM: with it the memory line is also by kind against HBM and DRAM "
                          "(`node_line`)")
@@ -1552,7 +1594,7 @@ def main() -> int:
     ap.add_argument("--disk-burst-bytes", type=float,
                     help="the most the disks bring back at once beyond their ceiling (default: a second of it)")
     ap.add_argument("--link-burst-bytes", type=float,
-                    help="one link window, charged with the links (default: `timing.LINK_WINDOW_BYTES`)")
+                    help="one link window, charged with the links (default: the host card's `link.window`)")
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
@@ -1560,7 +1602,7 @@ def main() -> int:
                     help="a built remote-audit-verifier (default: `lake build` it in its package)")
     ap.add_argument("--transcript", type=Path, metavar="DIR",
                     help="write each session's difftest case to DIR (`lean_verifier.Transcript`: about 0.6 GB a "
-                         "window at 33,273 openings), its path, bytes and sha256 in verifier.json")
+                         f"window at {audit.SAMPLES:,} openings), its path, bytes and sha256 in verifier.json")
     ap.add_argument("--paced", nargs="+", metavar="K:T_MS:DRAWS:WINDOWS[:F]",
                     help="pace each session's passes, one spec a session (`pace_of`; replaces --sessions, --windows, "
                          "--window-ms and --samples): groups of K passes under a live coin each (`audit.Pace`), "
@@ -1600,7 +1642,7 @@ def main() -> int:
     ap.add_argument("--groups-per-coin", type=int, default=1, metavar="G",
                     help="each session's windows drawn on one openings coin (`audit.Params.groups_per_coin`): its "
                          "draw's last window's close draws them together, ⌈W/G⌉ openings coins in all, and the line "
-                         "of record's pooled bound reads its draws (`line.draws_of`); none is at one window in "
+                         "of record's pooled bound reads its samples (`line.draws_of`); none is at one window in "
                          "flight (a `--paced` F = 1), which no property covers (`line.SHARED`)")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
@@ -1617,8 +1659,9 @@ def main() -> int:
                          "{file: SHA-512 hex}, checkpoint_sha512}), the registry's models.jsonl and its lines "
                          "of ROLE, or core's models.json ({ROLE: {checkpoint_sha512, files, ...}}) and its entry "
                          "of ROLE")
-    ap.add_argument("--engines", type=int, default=timing.GPUS,
-                    help="--model's store: its arenas, an engine's at one GPU each, in GPU order")
+    ap.add_argument("--engines", type=int,
+                    help="--model's store: its arenas, an engine's at one GPU each, in GPU order (default: one a "
+                         "device of the node)")
     ap.add_argument("--arena-blocks", type=int, metavar="A",
                     help="--model's store: each arena's blocks, its weights then zero filler; the store's blocks "
                          "past the arenas are host filler")
@@ -1626,9 +1669,15 @@ def main() -> int:
                     help="processes hashing the pinned files and recomputing the expected payload root, and the Lean "
                          "verifier's threads recomputing it at the same time")
     a = ap.parse_args()
+    if a.site:
+        NODE = site_node(Path(a.site[0]), a.site[1], a.site_keys, a.host_card,
+                         hardware.VY_NEBIUS[2] if a.placeholder is None else a.placeholder)
+    a.hbm_bytes = device_memory(NODE) if a.hbm_bytes is None else a.hbm_bytes
+    a.engines = len(NODE.devices) if a.engines is None else a.engines
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
-        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, host_bytes=a.host_bytes)} | (
+        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=NODE.chip_bytes,
+                                                                  host_bytes=a.host_bytes)} | (
             {"paced": recorded_paced(s, v["registration"], host_bytes=a.host_bytes,
                                      ingress_bytes_per_s=a.ingress_bytes_per_s)} if s.get("pace") else {})
                           for s in v["sessions"] if s["accepted"]], indent=1))

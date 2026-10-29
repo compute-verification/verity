@@ -13,9 +13,9 @@ of 2, 4 and 8 CTAs an SM, `kv_bench.chain`):
                 checksum against the encode's first
     decode      likewise, k squarings a word
 
-each over the reference (`kv.cu` before FOLD 6, 1.499e10) and the stated ceiling's GPU part, `timing.GPU_SQUARINGS_PER_S`
-(1.67 × the reference) less the host's share h = 12.5% (s ≈ 1.485, `kv.cu`'s FOLD 6 less its
-MOV and SEL). Then the encode
+each over the reference (`kv.cu` before FOLD 6, 1.499e10) and the stated ceiling's GPU part, the card's `squaring`
+(`verity/hardware/cards/rtx-pro-6000-server.toml`, 1.67 × the reference) less the host's share h = 12.5% (s ≈ 1.485,
+`kv.cu`'s FOLD 6 less its MOV and SEL). Then the encode
 through memory (`kv_encode_bound` of --blocks blocks, each under an offset of its own, in place) alone and on a
 low-priority stream beside a bf16 GEMM loop (--gemm M,K,N) on a high-priority one, at grids of two CTAs an SM, one, and
 a word a thread (CTAs that end after one word each, so the GEMM's take the SMs as they free): the encode's rate under a
@@ -41,7 +41,7 @@ sys.path[:0] = [str(HERE), str(HERE.parents[1])]
 
 import kv as K  # noqa: E402
 import kv_bench as KB  # noqa: E402
-from verity.core.protocols.remote_bandwidth import timing  # noqa: E402
+from verity.hardware import node as hardware  # noqa: E402
 
 REFERENCE = 1.499e10
 HOST_SHARE = 0.125
@@ -72,7 +72,7 @@ def main() -> int:
 
     lib = KB.Lib(*a.lib.split("=", 1))
     f = lib.field
-    stated = timing.GPU_SQUARINGS_PER_S[f.name]
+    stated = hardware.device_of("rtx-pro-6000-server").squarings_per_s[f.name]
     gpu_part = stated / (1 + HOST_SHARE)
     props = torch.cuda.get_device_properties(0)
     sms = props.multi_processor_count

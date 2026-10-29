@@ -40,7 +40,7 @@ A result here is about a monitoring period: the stretch of time it covers, not o
 for a week, a month and a year, over all compute, the adversary resource model (`world-inference-2027` in
 `benchmarks/census/adversary.json`), with the datacenter's figure beside it, even though the demo checks two nodes. Lead with
 the pooled total over the period and its share of the compute it covers, at δ = 1% and 10⁻⁶, with the per-epoch figure
-beside it, never alone. Each epoch draws its own live coins, so the pooled total stays about the same as the period
+beside it, never alone. Each epoch flips its own live coins, so the pooled total stays about the same as the period
 grows. The datacenter's size and the epoch's length are stated parameters (from `benchmarks/census`), and a figure
 scaled up from the demo's machines says which parts are proved and which are scaled.
 
@@ -72,7 +72,7 @@ section. `benchmarks/network_sim/workload/accounting.py` accounts for the networ
 verity_vllm's serving Program the same way.
 
 The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, a `DeviceEntry` is
-`Accounting.Device` (the node's constants are its one Python mirror's, `verity.core.protocols.remote_bandwidth.timing`),
+`Accounting.Device` (the node's figures are its one Python mirror's, `verity.hardware.node`, read off its cards),
 `Zone` is `Hardware.SpatialUnit` with `Covered`, `Placed` is `Accounting.Placed` (and
 `Accounting.Requirement.Placement`) at the census's grain, a `StoreEntry` is `Accounting.Requirement.Store`, and an
 `Interval` is `Accounting.Window`.

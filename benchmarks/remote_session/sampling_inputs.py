@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's inputs to a joint sampling plan (PoUW and the memory claim under one partition): the
+"""PoUB's inputs to a joint sampling plan (PoUW and the memory claim under one partition): the
 memory line's ε against the openings proved, the pass rate and pacing, and the window; the rebuilds the plan leaves in
 the line; and the serving cost of passes and of proved openings, at three served operating points.
 
@@ -48,17 +48,20 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit  # noqa: E402
 from verity.core.protocols.sampled_proofs import costfit  # noqa: E402
+from verity.hardware import node as hardware  # noqa: E402
 
 import wire  # noqa: E402
 
 LN = -math.log(audit.DELTA)
+NODE = hardware.node(*hardware.VY_NEBIUS)
+"""The node the operating points serve on (`verity.hardware.node`)."""
 BLOCK = 4096
 STATEMENT = 512
-"""Openings a statement: C-Flock's ceiling, m = k_log + nbl ≤ 35, at the unit's k_log 26."""
+"""Openings a statement: Flock's ceiling, m = k_log + nbl ≤ 35, at the unit's k_log 26."""
 FLOOR_GPU_S = 0.0799
-"""An opening's GPU device phase at a full statement, firewall on: measured."""
+"""An opening's GPU device phase at a full statement, ZK server on: measured."""
 DEPLOYED_EXTRA_ANDS = (45.4e6 - 20.3e6) + 5e6
 """p1024/k3/masked's decode over p512/k2's, and the deployed trees' depths, per opening: modeled."""
 MEMSAT = {"run": "r20261018-222953-fbf1", "plain": 4260.0, "codec": 3271.0,
@@ -103,7 +106,7 @@ def span_line(g: SimpleNamespace, lo: int, hi: int, *, wrong: float, blocks: int
 
 def record_of(windows: list[tuple[int, int]], per_coin: int = 1) -> SimpleNamespace:
     """What `audit.pooled` reads of a record: each window's receipts and draws, and the windows an openings coin
-    draws over (`groups_per_coin`)."""
+    selects over (`groups_per_coin`)."""
     return SimpleNamespace(groups_per_coin=per_coin, windows=[SimpleNamespace(receipts=u, profile=SimpleNamespace(
         delta=audit.DELTA, drawn={"receipt": d})) for u, d in windows])
 
@@ -177,7 +180,7 @@ def reproduce(v: dict, ingress_bytes_per_s: float) -> list[dict]:
 
 def check_closed_form() -> list[dict]:
     """The closed form against `span_line` on uniform sessions, a group spilling into the rest (β > 1) and not, and
-    one openings coin drawing over m groups (d = s/m), at two groups in flight and at one (each root c after its coin,
+    one openings coin sampling over m groups (d = s/m), at two groups in flight and at one (each root c after its coin,
     the next coin a period after it). It holds while the wrong receipts fit in the stretch (β < G)."""
     out = []
     for s, m, G, W, k, r, c, N, f in ((1, 1, 40, 3, 1, 8.0, 0.057, 10_000, 2), (2, 1, 40, 3, 2, 12.0, 0.03, 10_000, 2),
@@ -252,7 +255,7 @@ def points(recorded: list[dict]) -> dict:
 
 def pass_s(p: dict) -> float:
     """A pass: each GPU reads its shard."""
-    return p["shard_bytes"] / timing.GPU_READ_BYTES_PER_S
+    return p["shard_bytes"] / NODE.devices[0].read_bytes_per_s
 
 
 def c_at(p: dict, flight: int) -> float:
@@ -305,10 +308,10 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, f
     2·k/r + c) k/r ≤ τ/2 and k/r·(β + min(1, β)) + min(1, β)·c ≤ ε·Θ; at one (L_max = k/r) k/r ≤ τ + c and k/r·β ≤
     ε·Θ, and r is also at most k / `least_period`, the chain's.
 
-    A group is a window of `audit.pooled`'s, and a window it draws nothing from may be wrong throughout, so d ≥ 1.
-    `shared` lets one openings coin draw over m groups' receipts after all their roots (d = 1/m, m ≤ 512): no session
+    A group is a window of `audit.pooled`'s, and a window it samples nothing from may be wrong throughout, so d ≥ 1.
+    `shared` lets one openings coin select over m groups' receipts after all their roots (d = 1/m, m ≤ 512): no session
     has run it, so it is modeled, with the same closed form. `per_coin` is the code's (`audit.Params.groups_per_coin`,
-    g): one openings coin over g groups, the pooled bound's window a draw of g groups, so d is s/g at s ≥ 1 draws a
+    g): one openings coin over g groups, the pooled bound's window a sample of g groups, so d is s/g at s ≥ 1 draws a
     coin."""
     tau = eps * p["blocks"] / (2 * p["xi"]) if line_rule else math.inf
     t_s, c = pass_s(p), c_at(p, flight)
@@ -344,7 +347,7 @@ def coin_check(p: dict, s: dict) -> dict:
     """A plan `s` drawn g = `s["per_coin"]` groups a coin, read by the code: its closed form's held-over-time sampling
     term against `span_line`'s arithmetic on the uniform session it describes (whole coins over Θ, then one more),
     whose wrong receipts are `audit.pooled`'s on a record of each group's receipts and draws naming `groups_per_coin`
-    (all of a coin's draws on its last group, as `Session.close` may share them: the code pools them over the coin's
+    (all of a coin's draws on its last group, as `AuditRun.close` may share them: the code pools them over the coin's
     groups). At one group in flight (`s["flight"]` 1) each group's root comes `least_period` after its coin, before the
     next coin as a record naming f = 1 must have it. Refuses to go on unless they agree."""
     g, k, r, N, f = s["per_coin"], s["k"], s["r"], p["blocks"], s.get("flight", 2)
@@ -439,7 +442,7 @@ def main() -> None:
     p32 = pts["32B x8"]
     r32 = next((x for x in recorded if x["t_ms"] == T * 1e3), recorded[0])["passes_per_s"]
     rows = []
-    for s_T in (206, 759, 2773, 6072, 11091, 33273):
+    for s_T in (206, 759, 2773, 6072, 11091, audit.SAMPLES):
         k = max(1, math.ceil(r32 * T / s_T))
         d = s_T * k / (r32 * T)
         o = s_T / T
@@ -563,7 +566,7 @@ def main() -> None:
             meas = [arm for arm in MEMSAT["arms"] if arm[0] == r] if name.startswith("8B") else []
             sweep.append({"point": name, "r": r, "o": o, "k": k, "d": d, **two, "one_in_flight": one,
                           **costs(p, prices, o=o, r=r),
-                          "reads_over_R": r * p["blocks"] * BLOCK / timing.SPEC_BYTES_PER_S,
+                          "reads_over_R": r * p["blocks"] * BLOCK / NODE.spec_bytes_per_s,
                           "measured": {"serving_share": meas[0][0] * meas[0][1], "gamma_spec": meas[0][2],
                                        "tokens_per_s": meas[0][3]} if meas else None})
     def one(x: dict, cell: str) -> str:

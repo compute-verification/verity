@@ -37,7 +37,7 @@ chunk a pass leaves out can be absent across it with neither a wrong read nor a 
 The JSON form (`inputs_json`, `run_json`; `record_inputs_json`, `record_run_json` for the record's) is the Lean's:
 integers, each rational a string `n` or `n/d`, and the windows a list of [receipts, draws].  A float given here is
 the rational its shortest decimal writes, which is what its JSON text says (`number`), except δ, which is the float's
-exact value (`pooled.number`): the value the session drew at."""
+exact value (`pooled.number`): the value the session sampled at."""
 from __future__ import annotations
 
 import operator
@@ -46,6 +46,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any
+
+from verity.core import site
 
 from . import audit, codec, pooled
 from . import receipts as _receipts
@@ -482,12 +484,12 @@ def receipts(window: Mapping) -> int:
 SHARED = ("a record drawn more than one window a coin (groups_per_coin) at one window in flight has no line: no "
           "property of the code covers its draws there")
 """Why a record drawn more than one window a coin (`audit.Params.groups_per_coin`) at one window in flight
-(`audit.Pace.in_flight` 1) has no line: no property of the code covers its draws there (`LiveIsRun` is at two)."""
+(`audit.Pace.in_flight` 1) has no line: no property of the code covers its samples there (`LiveIsRun` is at two)."""
 
 
 def draws_of(g: int, ws: Sequence[Mapping]) -> list[tuple[int, int]]:
-    """The draws of a record drawn `g` windows a coin, as the pooled bound reads them (`audit.pooled_windows`): draw c is
-    windows cg … min((c + 1)g, W) − 1, its receipts U and its draws theirs summed."""
+    """The samples of a record drawn `g` windows a coin, as the pooled bound reads them (`audit.pooled_windows`): draw c is
+    windows cg … min((c + 1)g, W) − 1, its receipts U and its samples theirs summed."""
     return [(sum(receipts(w) for w in ws[a:a + g]), sum(w["drawn"] for w in ws[a:a + g])) for a in range(0, len(ws), g)]
 
 
@@ -497,10 +499,10 @@ def of_summary(record: Mapping, samples: int, seen: Sequence[Seen],
     request writes it) and what the auditor saw of each of its windows: group t is window t, its passes the record's
     and its times and reads `seen[t]`'s, and window t's receipts and draws are the record's (Σ lengths_t, drawn_t).
     Refused unless the auditor saw each of the record's windows and each window drew min(s, U_t) of its receipts at
-    the session's `samples` s, as the verifier's draw does. Drawn `g` > 1 windows a coin (`groups_per_coin`), the
-    windows are the record's draws (`draws_of`), each refused unless it drew min(s, U) of its U receipts and has fewer
-    than `audit.RECEIPT_LIMIT` (2^64), as `receive` holds each window to: the memory model's draw reads at most
-    2^64 − 1 receipts (`Properties.RemoteAudit.Line.receiptMax`), and a draw's windows' receipts need not be."""
+    the session's `samples` s, as the verifier's sample does. Drawn `g` > 1 windows a coin (`groups_per_coin`), the
+    windows are the record's samples (`draws_of`), each refused unless it sampled min(s, U) of its U receipts and has fewer
+    than `audit.RECEIPT_LIMIT` (2^64), as `receive` holds each window to: the memory model's sample reads at most
+    2^64 − 1 receipts (`Properties.RemoteAudit.Line.receiptMax`), and a sample's windows' receipts need not be."""
     ws = record["windows"]
     if len(seen) != len(ws):
         raise Refused(f"the auditor saw {len(seen)} windows, not the record's {len(ws)}")
@@ -557,7 +559,7 @@ def line_of_record(record: Mapping, *, registration: audit.Registration, samples
                    per: int, block_bytes: int, chip_bytes: int, node_bytes: int, delta: object, rates: Rates,
                    clock: str = "record") -> Line:
     """The line of an accepted session's record: `line` at its groups and windows (`of_summary`, at the record's
-    `groups_per_coin` g, 1 when it doesn't name it: above 1 the windows are its draws) and its registered chunks (the
+    `groups_per_coin` g, 1 when it doesn't name it: above 1 the windows are its samples) and its registered chunks (the
     record's `blocks`, the registration the session ran on). Refused for a record drawn more than one window a coin at
     one window in flight (`SHARED`), then for a record not of `registration` (`unregistered`, the Lean's
     `lineOfRegistered`), whose chunks the line would credit. On the record's `clock` the times seen are held to the
@@ -712,3 +714,57 @@ def record_run_json(j: Mapping) -> dict:
         return line_of_record(**args).to_json()
     except Refused as e:
         return {"refused": str(e)}
+
+
+def node_run_json(j: Mapping) -> dict:
+    """The line's inputs off the Site (`RemoteAudit.Line.ofSite`, `remote-audit-difftest`'s `node`), as
+    `ledger.Node.of_site` reads them: host `host`'s node in the Site its `log` folds to (`site.check` against
+    `auditor`), each device by the SKU its sheet names with that SKU's card figures (`gpus`: `chip_bytes` and
+    `squarings_per_s` by width), the host card's (`host_card`: `chip_bytes` and `link_window_bytes`) and the run's
+    statements (`stated`).  Its rates are the devices' squarings at `stated.field` summed, the stated encode, disks and
+    links, a rebuild's burst S_chip, the disks' one second unless stated and the links' one host link window where they
+    are charged unless stated; `chip_bytes` is S_chip, the devices' and the host's, and `node_bytes` the node's HBM and
+    DRAM leaves.  `{"refused": why}` where there are none."""
+    reg, auditor = site.Registration.of_json(_field(j, "log")), site.Auditor.of_json(_field(j, "auditor"))
+    gpus: dict[str, tuple[int, dict[str, Fraction]]] = {}
+    for g in reversed(_field(j, "gpus")):
+        sq = _field(g, "squarings_per_s")
+        if not isinstance(sq, Mapping):
+            raise Malformed("squarings_per_s: not an object")
+        gpus[_field(g, "sku")] = (_nat(g, "chip_bytes"), {w: _rational(sq, w) for w in sq})
+    hc, st = _field(j, "host_card"), _field(j, "stated")
+    host_chip, window = _nat(hc, "chip_bytes"), Fraction(_nat(hc, "link_window_bytes"))
+    field, encode = _field(st, "field"), _nat(st, "encode_squarings")
+    disk, link = _rational(st, "disk_bytes_per_s"), _rational(st, "link_bytes_per_s")
+    disk_burst, link_burst = (None if _field(st, k) is None else _rational(st, k)
+                              for k in ("disk_burst_bytes", "link_burst_bytes"))
+    h = _field(j, "host")
+    try:
+        s = site.check(reg, auditor)
+    except site.Refused as e:
+        return {"refused": f"the Site's log is refused at entry {e.entry}: {e.name}"}
+    n = s.node(h)
+    if n is None:
+        return {"refused": f"{h} is no host the Site registers"}
+    if not n.units:
+        return {"refused": f"host {h} holds no device the Site registers"}
+    fs = []
+    for d in n.units:
+        k = n.sheet(d)
+        if k is None:
+            return {"refused": f"device {d} names no registered sheet"}
+        if k.sku not in gpus:
+            return {"refused": f"no card figures for {k.sku}"}
+        fs.append(gpus[k.sku])
+    if any(field not in sq for _, sq in fs):
+        return {"refused": f"the node states no squaring ceiling at {field}, the record's codec's width"}
+    for name, q in (("disk_bytes_per_s", disk), ("link_bytes_per_s", link), ("disk_burst_bytes", disk_burst or 0),
+                    ("link_burst_bytes", link_burst or 0)):
+        if q < 0:
+            return {"refused": f"{name} is nonnegative"}
+    chip = sum(c for c, _ in fs) + host_chip
+    tiers = s.tiers(h)
+    rates = Rates(sum((sq[field] for _, sq in fs), Fraction(0)), encode, disk, link, Fraction(chip),
+                  disk if disk_burst is None else disk_burst,
+                  (window if link else Fraction(0)) if link_burst is None else link_burst)
+    return {"chip_bytes": chip, "node_bytes": tiers["hbm"] + tiers["dram"], "rates": rates.to_json()}

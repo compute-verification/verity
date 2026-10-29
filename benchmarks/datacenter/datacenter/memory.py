@@ -54,7 +54,7 @@ class Challenge:
 
 @dataclass(frozen=True)
 class ReadWindow:
-    """One window of a bandwidth audit (the remote audit's window t): `challenger` sends its challenge at `start`, the
+    """One window of a bandwidth audit (PoUB's window t): `challenger` sends its challenge at `start`, the
     prover reads store `store` and commits receipts until `boundary`, and its roots are due by `deadline` (the boundary
     plus the allowance A), before an openings coin checks them. How many bits were read is the window's output."""
 

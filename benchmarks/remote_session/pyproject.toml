@@ -22,9 +22,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
           "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
+          # the audited node's figures: the Site's node (`verity.core.site`, on the wire's canonical JSON), read off its
+          # cards (`verity.hardware.node`)
+          "verity/core/site/__init__.py", "verity/core/wire",
+          "verity/hardware/__init__.py", "verity/hardware/node.py", "verity/hardware/cards",
           # the challenger's coins name their claim instance (sampled_proofs/challenger.py's `coin_claim`)
           "verity/core/claims/__init__.py",
-          # the Lean verifier the sessions run beside audit.Session, which computes auditor_line.py's line
+          # the Lean verifier the sessions run beside audit.AuditRun, which computes auditor_line.py's line
           # (lean_verifier.py): what `lake build remote-audit-verifier` reads, the remote audit's package and its
           # path requires
           "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",
