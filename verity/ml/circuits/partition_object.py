@@ -19,7 +19,7 @@
 * **Q_word v2**, the same parameters: v1's evaluation exactly (the same Calls, units, owners and committed sets, so the same
   `owners_digest`; the object's digest differs by its version), and `verify` checks every Call's cut as v1 does but for one rule: a
   value computed in two units is reported (`recomputed_across`), not refused (`gate-recomputed`) (`cut`'s "Q_word v2").  v2's proof
-  blocks may compute a common value, so a count of them bounds the faulty ones' size but counts a shared value more than once;
+  blocks may compute a common value, so a count of them bounds the incorrect ones' size but counts a shared value more than once;
   a consumer that credits size takes v1.
 * **Q_call v1**, `params = {"X": <bits>}` (`call_query`, 32 in use; `CallPartition`; the algorithm in `cut`'s "Q_call v1",
   `PROTOCOL.md` §11).  The same Calls, each cut in isolation; a unit is a gate interval of the Call (the Call, a body node, a member or
