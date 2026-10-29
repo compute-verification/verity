@@ -5,7 +5,8 @@
 A RUN_DIR is a fetched `research run` directory (`research fetch --all RUN`): its `out/*/` hold train.py's `config.json`,
 `curve.json` and `result.json`, and its `gpu-lease-usage.jsonl` the GPU time it held. A configuration is a size, a family with
 its rank or sync interval, and a token budget. At each size a configuration takes its best learning rate on the shared grid
-(lowest final held-out loss); a size trained at one learning rate per configuration takes that one. Then, per size:
+(lowest final held-out loss); a size trained at one learning rate per configuration takes that one. The runs at a size share
+one seed (another seed's runs are analyzed on their own). Then, per size:
 
 - the fit L(C) = E + A * C^-b to each configuration's checkpoints from a tenth of its run on, C its analytic training FLOPs;
 - per comparison (dense with the per-window low-rank configurations; dense with the local-SGD ones), three loss targets every
@@ -277,6 +278,12 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     runs, skipped, gpu = load(a.run_dirs, a.tokens_per_param)
+    seeds: dict[str, set[int]] = {}
+    for r in runs:
+        seeds.setdefault(r["size"], set()).add(r["config"]["seed"])
+    if mixed := {size: sorted(s) for size, s in seeds.items() if len(s) > 1}:
+        ap.error(f"runs of more than one seed at a size {mixed}: the best rate would pick across seeds; analyze each seed's "
+                 "runs on their own")
     grid, best = best_runs(runs)
     report = {"schema": "learning-frontier/analysis/v1", "tokens_per_param": a.tokens_per_param, "lr_grid": grid,
               "skipped": skipped, "gpu": gpu, "gpu_held_hours": sum(g["held_hours"] for g in gpu.values()),
