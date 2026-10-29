@@ -11448,6 +11448,9 @@
    "assumptions": [],
    "type_hash": "0a0d2cf2d114fd42f47757951d0c484436447b2716e0fa51a0098ff033328483"
   },
+  "Verity.SecurityProofs.SampleAfterRecorded_nontrivial_log": {
+   "owner": "@soundness"
+  },
   "Verity.SecurityProofs.ServingBlockSum": {
    "owner": "@lean",
    "signature": ["Verity.SecurityProofs.ServingBlockSum : Verity.Guarantees.ServingBlockSum"],
@@ -12633,8 +12636,9 @@
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
    "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
    "Verity.SecurityProofs.SampleAfterRecorded": "frozen (no-function): It is stated over an arbitrary sample law, challenger log and verifier, and says what a coin read from a challenger's log, released after the commitments it samples were recorded, establishes about the sample drawn with it, rather than a Lean function's acceptance.",
-   "Verity.SecurityProofs.SampleAfterRecorded_honest": "completeness: SampleAfterRecorded's honest lemma (its witnesses entry): a challenger that releases a coin, records a commitment, then releases the coin that samples it meets all three premises, with the verifier reading both coins from its log, so the bound is not vacuous at a log that releases coins.",
-   "Verity.SecurityProofs.SampleAfterRecorded_nontrivial": "completeness: SampleAfterRecorded's nontrivial lemma (its witnesses entry): a challenger that flips its coin before recording the commitment it samples meets ChallengerLogsCoins and VerifierReadsLog but not FlipsAfterRecorded, and a block set chosen after the coin breaks the bound, a counterexample for another challenger, not a property of a deployed one."
+   "Verity.SecurityProofs.SampleAfterRecorded_honest": "completeness: SampleAfterRecorded's honest lemma (its witnesses entry): at a built instance, a challenger flipping two fair bits that releases a coin, records a commitment, then releases the coin that samples it, the three premises hold with the verifier reading both coins from its log, and the bound holds there, so it is not vacuous at a log that releases coins.",
+   "Verity.SecurityProofs.SampleAfterRecorded_nontrivial": "completeness: SampleAfterRecorded's nontrivial lemma (its witnesses entry): the bound fails (¬ prCoin … ≤ miss 1) at the challenger of SampleAfterRecorded_nontrivial_log, which flips its coin before recording the commitment it samples, a counterexample for another challenger, not a property of a deployed one.",
+   "Verity.SecurityProofs.SampleAfterRecorded_nontrivial_log": "completeness: the challenger SampleAfterRecorded's nontrivial lemma is at meets ChallengerLogsCoins and VerifierReadsLog but not FlipsAfterRecorded, so that lemma's failing bound is FlipsAfterRecorded's to prevent."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
