@@ -15,7 +15,7 @@ from verity_flock import ir_lower as IL
 from verity_flock.fp import ceil_pow2
 
 
-def _reference(C, in_names, out_names, in_split=None, out_split=None) -> IL.Layout:
+def _reference(C, in_names, out_names, in_split=None, out_split=None) -> IL.LoweredUnit:
     live = C.live()
     col: dict[int, int] = {}
     rows_a: list = []
@@ -109,7 +109,7 @@ def _reference(C, in_names, out_names, in_split=None, out_split=None) -> IL.Layo
     for rows in (rows_a, rows_b):
         for i, r in enumerate(rows):
             rows[i] = fix(r)
-    lay = IL.Layout(rows_a, rows_b, const, in_groups, out_groups, {})
+    lay = IL.LoweredUnit(rows_a, rows_b, const, in_groups, out_groups, {})
     read_rows = sum(r.rows for r in reads.values())
     lay.counts = {"ands": len(ands) + read_rows, "asserts": len(C.asserts), "rows": len(rows_a), "in_words": lay.in_words,
                   "out_words": lay.out_words, "nnz_a": sum(map(len, rows_a)), "nnz_b": sum(map(len, rows_b)),

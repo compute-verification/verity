@@ -29,14 +29,14 @@ open Flock
 
 /-! ## Coins -/
 
-/-- Where the verifier's coins come from (`rec_algebra.Coins`, rec_algebra.py:229–249): `round k n` is round `k`'s coins
+/-- Where the verifier's coins come from (`rec_algebra.CoinSource`, rec_algebra.py:229–249): `round k n` is round `k`'s coins
 when the verifier draws `n` of them, `drawnAll k` that every recorded round is drawn once `k` are. -/
 structure Coins where
   round : Nat → Nat → Except String (Array F128)
   drawnAll : Nat → Bool
 
-/-- A session record's coins by round (`Coins(rounds)`, rec_algebra.py:232–242). A recorded round of no coins is no
-draw (§6.2), so it is skipped (`Coins.__init__`): z_partial's round in a holo session absorbs elements and draws none. -/
+/-- A session record's coins by round (`CoinSource(rounds)`, rec_algebra.py:232–242). A recorded round of no coins is no
+draw (§6.2), so it is skipped (`CoinSource.__init__`): z_partial's round in a holo session absorbs elements and draws none. -/
 def Coins.ofRounds (recorded : Array (Array F128)) : Coins :=
   let rounds := recorded.filter (·.size ≠ 0)
   { round := fun k n => match rounds[k]? with
@@ -51,7 +51,7 @@ def Coins.zeros : Coins := ⟨fun _ n => .ok (Array.replicate n 0), fun _ => tru
 /-- The coins drawn so far, read from a source. -/
 abbrev CM := StateT Nat (ReaderT Coins (Except String))
 
-/-- `Coins.vec` (rec_algebra.py:235–242): a draw of `n` coins is one round of `n`; none is no round (§6.2). -/
+/-- `CoinSource.vec` (rec_algebra.py:235–242): a draw of `n` coins is one round of `n`; none is no round (§6.2). -/
 def coinVec (n : Nat) : CM (Array F128) := do
   if n = 0 then return #[]
   let src ← read
@@ -65,10 +65,10 @@ def liftE {A : Type} : Except String A → CM A
   | .ok a => pure a
   | .error e => throw e
 
-/-- `Coins.one` (rec_algebra.py:244–245). -/
+/-- `CoinSource.one` (rec_algebra.py:244–245). -/
 def coinOne : CM F128 := do return (← coinVec 1)[0]!
 
-/-- `Coins.k2` (rec_algebra.py:247–249): two coins as a K element. -/
+/-- `CoinSource.k2` (rec_algebra.py:247–249): two coins as a K element. -/
 def coinK2 : CM F256 := do
   let v ← coinVec 2
   return ⟨v[0]!, v[1]!⟩
