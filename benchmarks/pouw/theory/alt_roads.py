@@ -281,20 +281,35 @@ def r1b_arrival_t2(inp: dict, ll: dict) -> dict:
 
 def egress_outsourcing(inp: dict, ll: dict) -> dict:
     """OutsourceWithinEgress's term at caps of served traffic, as a share of stock: an outside machine does the work
-    a counted bit carries (DitherInstance: beta = n_max W_mac, W_mac with the block's hashing)."""
+    a counted bit carries, beta = n_max W_mac (DitherInstance), n_max the most MACs one call's coin bit carries (a node
+    that forwards a call's coins and gets back the root has the call's MACs done) and W_mac with the block's hashing."""
     cfg, e, s = inp["llama_3_2_1b"], inp["egress"], inp["sha512"]
     alpha, c = inp["ssn_1l"]["alpha"], e["code_lanes"]
     steps = lambda k: 1 + math.ceil(max(0, k - (32 - c)) / 31)
-    coin_bits = 32 * cfg["layers"] * sum(math.ceil((steps(k) + e["coin_bits_over_steps"]) / 32) for k, _ in cfg["linears"])
+    row_bits = lambda k: 32 * math.ceil((steps(k) + e["coin_bits_over_steps"]) / 32)
+    coin_bits = cfg["layers"] * sum(row_bits(k) for k, _ in cfg["linears"])
+    per_call = {f"k{k}_n{n}": k * n / row_bits(k) for k, n in cfg["linears"]}
+    n_max = max(per_call.values())
     w_mac = {price: alpha + e["credited_hash_bytes_per_mac"] * s[price]
              for price in ("floor_units_per_byte", "bar_units_per_byte")}
     mac_per_word_bit = 1.0 / (8.0 * words_bytes_per_mac(alpha))
+    t8192 = inp["space_t2"]["designs"]["ssn-1l-tag/served/s8/k32/w/r256k/cert/min"]["t8192"]
+    tokens_per_s = {"honest": t8192["m"] / (t8192["t_h_ms"] * 1e-3), "stock": t8192["m"] / (t8192["stock_ms"] * 1e-3)}
     caps = {}
     for cap in e["cap_bits_per_token"]:
+        n_req = {p: 0.01 * ll["macs_per_token"] / (cap * w) for p, w in w_mac.items()}
+        elem_bits = {p: cfg["layers"] * sum(n * math.ceil(k / nr) for k, n in cfg["linears"]) for p, nr in n_req.items()}
         caps[str(cap)] = {
-            "r1b_live_coins": {p: cap / coin_bits * w for p, w in w_mac.items()},
+            "r1b_live_coins": {p: cap * n_max * w / ll["macs_per_token"] for p, w in w_mac.items()},
+            "n_max_for_1pct": n_req,
+            "row_coins_meet_it_up_to_columns": {p: min(nr * row_bits(k) / k for k, _ in cfg["linears"])
+                                                for p, nr in n_req.items()},
+            "element_coins_bits_per_token": elem_bits,
+            "element_coins_bytes_per_s_t8192": {pace: {p: b / 8.0 * tps for p, b in elem_bits.items()}
+                                                for pace, tps in tokens_per_s.items()},
             "r1_words_through_the_port": cap * mac_per_word_bit * alpha / ll["macs_per_token"]}
-    return {"coin_bits_per_token": coin_bits, "macs_per_coin_bit": ll["macs_per_token"] / coin_bits,
+    return {"coin_bits_per_token": coin_bits, "macs_per_coin_bit_by_call": per_call, "n_max": n_max,
+            "macs_per_coin_bit_mean": ll["macs_per_token"] / coin_bits,
             "w_mac": w_mac, "r1_macs_per_imported_bit": mac_per_word_bit,
             "seeded_lead": f"false: {e['seed_bits_per_window']} bits (the window's salt) carry every call's noise, "
                            "so one counted message outsources the window", "share_of_stock_at_cap": caps}
@@ -508,6 +523,8 @@ def checks(inp: dict, ll: dict, res: dict) -> list[tuple[str, bool, str]]:
              for pts in res["R1b"]["arrival_t2"]["designs"].values() for v in pts.values()), ""),
         ("Egress: ssn_1l_hw's coins are N-PREM's 3 words a row at K 2,048 and 9 at K 8,192 (18 a layer, 9,216 bits a token)",
          res["egress"]["coin_bits_per_token"] == 9216, str(res["egress"]["coin_bits_per_token"])),
+        ("Egress: n_max is gate-up's 2,048 x 16,384 MACs a row over its 96 coin bits",
+         abs(res["egress"]["n_max"] - 2048 * 16384 / 96) < 1e-6, f"{res['egress']['n_max']:,.2f}"),
         ("Egress: the credited hashing at the bar is N-CARD's 232 units a MAC",
          abs(inp["egress"]["credited_hash_bytes_per_mac"] * inp["sha512"]["bar_units_per_byte"] / 232.0 - 1) < 0.002,
          f"{inp['egress']['credited_hash_bytes_per_mac'] * inp['sha512']['bar_units_per_byte']:.2f}"),
@@ -605,11 +622,20 @@ def table(res: dict) -> str:
                              f"{ln} {x[0]:.1f}-{x[1]:.1f}" for ln, x in v["arrival_t2"].items()) for k, v in pts.items()))
     eg = res["egress"]
     lines.append(f"Egress (OutsourceWithinEgress at served-traffic caps, share of stock): ssn_1l_hw streams {eg['coin_bits_per_token']:,} "
-                 f"coin bits a token ({eg['macs_per_coin_bit']:,.0f} MACs a bit); W_mac {eg['w_mac']['floor_units_per_byte']:.1f}-"
+                 f"coin bits a token; one call's coin bit carries up to n_max {eg['n_max']:,.0f} MACs (" + ", ".join(
+                     f"{k} {v:,.0f}" for k, v in eg["macs_per_coin_bit_by_call"].items()) +
+                 f"; mean {eg['macs_per_coin_bit_mean']:,.0f}); W_mac {eg['w_mac']['floor_units_per_byte']:.1f}-"
                  f"{eg['w_mac']['bar_units_per_byte']:.1f} (SHA floor - bar); R1 imports words at {eg['r1_macs_per_imported_bit']:.3f} MACs a bit")
     for cap, v in eg["share_of_stock_at_cap"].items():
-        lines.append(f"    cap {cap} bits a token: R1b's live coins {v['r1b_live_coins']['floor_units_per_byte']:.1%}-"
-                     f"{v['r1b_live_coins']['bar_units_per_byte']:.1%}; R1 {v['r1_words_through_the_port']:.2e}; the seeded lead {eg['seeded_lead']}")
+        f, b = "floor_units_per_byte", "bar_units_per_byte"
+        lines.append(f"    cap {cap} bits a token: R1b's live coins {v['r1b_live_coins'][f]:.1%}-{v['r1b_live_coins'][b]:.1%}; "
+                     f"R1 {v['r1_words_through_the_port']:.2e}; the seeded lead {eg['seeded_lead']}")
+        st = v["element_coins_bytes_per_s_t8192"]
+        lines.append(f"        a 1% term needs n_max <= {v['n_max_for_1pct'][f]:,.0f}-{v['n_max_for_1pct'][b]:,.0f} MACs a bit: coins a row "
+                     f"meet it only up to {v['row_coins_meet_it_up_to_columns'][f]:.0f}-{v['row_coins_meet_it_up_to_columns'][b]:.0f} "
+                     f"columns; coins an output element need {v['element_coins_bits_per_token'][f]:,}-"
+                     f"{v['element_coins_bits_per_token'][b]:,} bits a token, at T 8,192 {st['honest'][f]:.2e}-{st['honest'][b]:.2e} B/s "
+                     f"at the honest pace and {st['stock'][f]:.2e}-{st['stock'][b]:.2e} at stock's")
     r2 = res["R2"]
     lines.append(f"R2  stored words: {r2['words_bytes_per_step_t8192']:.3e} B a step at T 8,192 ({r2['step_over_hbm']:.1f}x HBM); "
                  f"one word recomputes in {r2['recompute_one_word_s'] * 1e6:.2f} us: census RTT {r2['rtt_over_recompute']:,.0f}x, "
