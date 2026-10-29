@@ -63,7 +63,6 @@ X1(hfma2_rr, O_HFMA2_RR)
 X1(badd2_r, O_BADD2_R)
 X1(bfma2_ri, O_BFMA2_RI)
 X1(hmnmx2, O_HMNMX2)
-X1(f2fp_h, O_F2FP_H)
 X1(f2fp_b, O_F2FP_B)
 OP_KERNEL(x_e4m3, 1024) { h_run<256, O_E4M3>(a); }
 X1(fmnmx, O_FMNMX)
@@ -71,7 +70,7 @@ X1(fsel, O_FSEL)
 X1(sel, O_SEL)
 X1(prmt, O_PRMT)
 X1(ex2, O_EX2)
-X1(rcp, O_RCP)
+X1(rsq, O_RSQ)
 X1(f2i, O_F2I)
 X1(frnd, O_FRND)
 X1(shfl, O_SHFL)
@@ -119,9 +118,9 @@ static const OpProbe PROBES[] = {
     P(x_ffma_ri, "FFMA=512", "c=ffma w=FFMA:1"),
     P(x_ffma_rr, "FFMA=512", "c=ffma w=FFMA:1"),
     P(x_ffma_ii, "FFMA=512", "c=ffma w=FFMA:1"),
-    P(x_iadd_r, "*IADD*=512", "c=int32 w=*IADD*:1"),
+    P(x_iadd_r, "IMAD.IADD=261,IADD3=251", "c=int32 w=IMAD.IADD:1,IADD3:1"),
     P(x_iadd3_rr, "IADD3=512", "c=int32 w=IADD3:1"),
-    P(x_addxor_i, "*IADD*=256,LOP3.LUT=256", "c=int32 w=*IADD*:1,LOP3.LUT:1"),
+    P(x_addxor_i, "VIADD=256,LOP3.LUT=256", "c=int32 w=VIADD:1,LOP3.LUT:1"),
     P(x_mulxor_i, "IMAD=256,LOP3.LUT=256", "c=int32 w=IMAD:1,LOP3.LUT:1"),
     P(x_lop3_r, "LOP3.LUT=512", "c=int32 w=LOP3.LUT:1"),
     P(x_lop3_rr, "LOP3.LUT=512", "c=int32 w=LOP3.LUT:1"),
@@ -142,18 +141,17 @@ static const OpProbe PROBES[] = {
     P(x_dmul_r, "DMUL=512", "c=fp64 w=DMUL:2"),
     P(x_dfma_ri, "DFMA=512", "c=fp64 w=DFMA:2"),
     P(x_dfma_rr, "DFMA=512", "c=fp64 w=DFMA:2"),
-    P(x_dmnmx, "DMNMX=512", "c=fp64 w=DMNMX:2"),
+    P(x_dmnmx, "DSETP.MIN.AND=512,SEL=512,FSEL=512", "c=fp64 w=SEL:1,FSEL:1"),
     P(x_f2f64, "F2F.F64.F32=256,F2F.F32.F64=256", "c=fp64 w=F2F.F64.F32:2,F2F.F32.F64:1"),
     P(x_hadd2_i, "HADD2=512", "c=other w=HADD2:1"),
-    P(x_hadd2_r, "HADD2=512", "c=other w=HADD2:1"),
-    P(x_hmul2_i, "HMUL2=512", "c=other w=HMUL2:1"),
-    P(x_hmul2_r, "HMUL2=512", "c=other w=HMUL2:1"),
-    P(x_hfma2_ri, "HFMA2=512", "c=other w=HFMA2:1"),
-    P(x_hfma2_rr, "HFMA2=512", "c=other w=HFMA2:1"),
+    P(x_hadd2_r, "HFMA2.MMA=256,HADD2=256", "c=other w=HFMA2.MMA:1,HADD2:1"),
+    P(x_hmul2_i, "HFMA2.MMA=256,HMUL2=256", "c=other w=HFMA2.MMA:1,HMUL2:1"),
+    P(x_hmul2_r, "HFMA2.MMA=256,HMUL2=256", "c=other w=HFMA2.MMA:1,HMUL2:1"),
+    P(x_hfma2_ri, "HFMA2.MMA=256,HFMA2=256", "c=other w=HFMA2.MMA:1,HFMA2:1"),
+    P(x_hfma2_rr, "HFMA2.MMA=256,HFMA2=256", "c=other w=HFMA2.MMA:1,HFMA2:1"),
     P(x_badd2_r, "*BF16*=512", "c=other w=*BF16*:1"),
-    P(x_bfma2_ri, "HFMA2.BF16*=512", "c=other w=HFMA2.BF16*:1"),
+    P(x_bfma2_ri, "HFMA2.MMA.BF16_V2=256,HFMA2.BF16_V2=256", "c=other w=HFMA2.MMA.BF16_V2:1,HFMA2.BF16_V2:1"),
     P(x_hmnmx2, "HMNMX2=512", "c=other w=HMNMX2:1"),
-    P(x_f2fp_h, "F2FP*=256,HADD2.F32=256", "c=other w=F2FP*:1,HADD2.F32:1"),
     P(x_f2fp_b, "F2FP.BF16*=256", "c=other w=F2FP.BF16*:1"),
     P(x_e4m3, "F2FP*=512", "c=other w=F2FP*:1"),
     P(x_fmnmx, "FMNMX=512", "c=other w=FMNMX:1"),
@@ -161,23 +159,23 @@ static const OpProbe PROBES[] = {
     P(x_sel, "SEL=512", "c=other w=SEL:1"),
     P(x_prmt, "PRMT=512", "c=other w=PRMT:1"),
     P(x_ex2, "MUFU.EX2=512", "c=other w=MUFU.EX2:1"),
-    P(x_rcp, "MUFU.RCP=512", "c=other w=MUFU.RCP:1"),
+    P(x_rsq, "MUFU.RSQ=512", "c=other w=MUFU.RSQ:1"),
     P(x_f2i, "F2I*=256,I2F*=256", "c=other w=F2I*:1,I2F*:1"),
     P(x_frnd, "FRND=256,FADD=256", "c=mix w=FRND:1,FADD:1"),
     P(x_shfl, "SHFL.BFLY=512", "c=other w=SHFL.BFLY:1"),
     P(x_vote, "VOTE*=512", "c=other w=VOTE*:1"),
     P64(x_fadd_i_r64, "FADD=64", "c=ffma w=FADD:1"),
     P64(x_ffma_rr_r64, "FFMA=64", "c=ffma w=FFMA:1"),
-    P64(x_iadd_r_r64, "*IADD*=64", "c=int32 w=*IADD*:1"),
+    P64(x_iadd_r_r64, "IMAD.IADD=37,IADD3=27", "c=int32 w=IMAD.IADD:1,IADD3:1"),
     P64(x_dadd_i_r64, "DADD=64", "c=fp64 w=DADD:2"),
     P64(x_dfma_rr_r64, "DFMA=64", "c=fp64 w=DFMA:2"),
-    P64(x_hadd2_r_r64, "HADD2=64", "c=other w=HADD2:1"),
+    P64(x_hadd2_r_r64, "HFMA2.MMA=32,HADD2=32", "c=other w=HFMA2.MMA:1,HADD2:1"),
     P(m_imad_lop3, "IMAD=256,LOP3.LUT=256", "c=int32 w=IMAD:1,LOP3.LUT:1"),
-    P(m_imad_iadd, "IMAD=256,*IADD*=256", "c=int32 w=IMAD:1,*IADD*:1"),
-    P(m_lop3_iadd, "LOP3.LUT=256,*IADD*=256", "c=int32 w=LOP3.LUT:1,*IADD*:1"),
+    P(m_imad_iadd, "IMAD=256,IADD3=244,IMAD.IADD=12", "c=int32 w=IMAD:1,IADD3:1,IMAD.IADD:1"),
+    P(m_lop3_iadd, "LOP3.LUT=256,IMAD.IADD=256", "c=int32 w=LOP3.LUT:1,IMAD.IADD:1"),
     P(m_imadw_lop3, "IMAD.WIDE.U32=256,LOP3.LUT=256", "c=int32 w=IMAD.WIDE.U32:2,LOP3.LUT:1"),
     P(m_hadd2_prmt, "HADD2=256,PRMT=256", "c=other w=HADD2:1,PRMT:1"),
-    P(m_hfma2_lop3, "HFMA2=256,LOP3.LUT=256", "c=mix w=HFMA2:1,LOP3.LUT:1"),
+    P(m_hfma2_lop3, "HFMA2.MMA=128,HFMA2=128,LOP3.LUT=256", "c=mix w=HFMA2.MMA:1,HFMA2:1,LOP3.LUT:1"),
     P(m_ffma_lop3, "FFMA=256,LOP3.LUT=256", "c=mix w=FFMA:1,LOP3.LUT:1"),
     P(m_dadd_fadd, "DADD=256,FADD=256", "c=mix w=DADD:2,FADD:1"),
     P(m_daddr_faddr, "DADD=256,FADD=256", "c=mix w=DADD:2,FADD:1"),

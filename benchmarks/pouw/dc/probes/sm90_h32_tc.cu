@@ -6,7 +6,9 @@
 //   mm_<form>_<mix>   the same, each mma.sync followed by one round of the scalar mix
 //   wu_<mix>          2 warpgroups of s8 m64n128k32 fixed; 2 lane warps a SMSP run the mix only while they do
 //   wu256_<mix>       the same at m64n256k32, 1 lane warp a SMSP (the register file holds no more)
-// CUDA 13.0 lowers m16n8k32 e4m3 to 2 HMMA.16816.F32 and 4 FADD (sm_90 has no FP8 mma.sync of its own).
+// CUDA 13.0 lowers m8n8k4 to a CALL into an emulation routine (ms_*_m8k4 time the call, per D register), min.f64 to
+// DSETP and two selects, and m16n8k32 e4m3 to 2 HMMA.16816.F32 on a zero accumulator and 4 FADD (sm_90 has no FP8
+// mma.sync of its own), whose HMMAs ptxas hoists out of a loop with fixed operands: it is not timed.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
 #include "h32_mma.cuh"
@@ -52,7 +54,6 @@ MS(bf16_k16, 442, "m16n8k16.row.col.f32.bf16.bf16.f32", float, "f", uint32_t, "r
 MS(tf32_k8, 442, "m16n8k8.row.col.f32.tf32.tf32.f32", float, "f", uint32_t, "r", 4, 4, 2, 3)
 MS(s8_k32, 442, "m16n8k32.row.col.s32.s8.s8.s32", int, "r", uint32_t, "r", 4, 4, 2, 0)
 MS(b1_k256, 442, "m16n8k256.row.col.s32.b1.b1.s32.and.popc", int, "r", uint32_t, "r", 4, 4, 2, 0)
-MS(e4m3_k32, 442, "m16n8k32.row.col.f32.e4m3.e4m3.f32", float, "f", uint32_t, "r", 4, 4, 2, 1)
 MS(f16f16_k8, 221, "m16n8k8.row.col.f16.f16.f16.f16", uint32_t, "r", uint32_t, "r", 2, 2, 1, 4)
 MS(f16f16_k16, 242, "m16n8k16.row.col.f16.f16.f16.f16", uint32_t, "r", uint32_t, "r", 2, 4, 2, 4)
 MS(s8_m8k16, 211, "m8n8k16.row.col.s32.s8.s8.s32", int, "r", uint32_t, "r", 2, 1, 1, 0)
@@ -76,7 +77,6 @@ MSK(bf16_k16)
 MSK(tf32_k8)
 MSK(s8_k32)
 MSK(b1_k256)
-MSK(e4m3_k32)
 MSK(f16f16_k8)
 MSK(f16f16_k16)
 MSK(s8_m8k16)
@@ -93,7 +93,6 @@ OP_KERNEL(mm_f16k8_fadd3, 512) { mm_run<M_f16_k8, 64, O_FADD_I, O_FADD_I, O_FADD
 OP_KERNEL(mm_f16k8_dadd_imad, 512) { mm_run<M_f16_k8, 64, O_DADD_I, O_IMAD_R>(a); }
 OP_KERNEL(mm_s8k16_dadd2_fadd, 512) { mm_run<M_s8_k16, 64, O_DADD_I, O_DADD_I, O_FADD_I>(a); }
 OP_KERNEL(mm_b1k128_dadd2_fadd, 512) { mm_run<M_b1_k128, 64, O_DADD_I, O_DADD_I, O_FADD_I>(a); }
-OP_KERNEL(mm_f16m8k4_dadd2_fadd, 512) { mm_run<M_f16_m8k4, 64, O_DADD_I, O_DADD_I, O_FADD_I>(a); }
 OP_KERNEL(mm_f64m8k4_fadd3, 512) { mm_run<M_f64_m8k4, 64, O_FADD_I, O_FADD_I, O_FADD_I>(a); }
 
 // ---- wgmma beside the scalar pipes ---------------------------------------------------------------------------------
@@ -185,14 +184,12 @@ static const OpProbe PROBES[] = {
     P_MS(tf32_k8, "HMMA.1688.F32.TF32", 128, "c=tc w=HMMA.1688.F32.TF32:4"),
     P_MS(s8_k32, "IMMA.16832.S8.S8", 128, "c=tc w=IMMA.16832.S8.S8:4"),
     P_MS(b1_k256, "BMMA.168256.AND.POPC", 128, "c=tc w=BMMA.168256.AND.POPC:4"),
-    {.name = "ms_e4m3_k32", .kernel = (const void*)ms_e4m3_k32, .tpb = 512, .expect = "HMMA.16816.F32=256,FADD=512",
-     .iters = 512, .note = "c=tc w=HMMA.16816.F32:2,FADD:1"},
     P_MS(f16f16_k8, "HMMA.1688.F16", 128, "c=tc w=HMMA.1688.F16:2"),
     P_MS(f16f16_k16, "HMMA.16816.F16", 128, "c=tc w=HMMA.16816.F16:2"),
     P_MS(s8_m8k16, "IMMA.8816.S8.S8", 128, "c=tc w=IMMA.8816.S8.S8:2"),
     P_MS(b1_m8k128, "BMMA.88128.AND.POPC", 128, "c=tc w=BMMA.88128.AND.POPC:2"),
-    P_MS(f16_m8k4, "HMMA.884.F32*", 128, "c=tc w=HMMA.884.F32*:8"),
-    P_MS(f16f16_m8k4, "HMMA.884.F16*", 128, "c=tc w=HMMA.884.F16*:4"),
+    P_MS(f16_m8k4, "CALL.REL.NOINC", 128, "c=tc w=CALL.REL.NOINC:8"),
+    P_MS(f16f16_m8k4, "CALL.REL.NOINC", 128, "c=tc w=CALL.REL.NOINC:4"),
     P_MS(f64_m8k4, "DMMA.8x8x4*", 128, "c=tc w=DMMA.8x8x4*:4"),
     P_MS(f64_k4, "DMMA.16x8x4*", 128, "c=tc w=DMMA.16x8x4*:8"),
     P_MS(f64_k8, "DMMA.16x8x8*", 128, "c=tc w=DMMA.16x8x8*:8"),
@@ -203,7 +200,6 @@ static const OpProbe PROBES[] = {
     P_MM(mm_s8k16_dadd2_fadd, "IMMA.16816.S8.S8=64,DADD=128,FADD=64", "c=mix w=IMMA.16816.S8.S8:4,DADD:2,FADD:1"),
     P_MM(mm_b1k128_dadd2_fadd, "BMMA.168128.AND.POPC=64,DADD=128,FADD=64",
          "c=mix w=BMMA.168128.AND.POPC:4,DADD:2,FADD:1"),
-    P_MM(mm_f16m8k4_dadd2_fadd, "HMMA.884.F32*=64,DADD=128,FADD=64", "c=mix w=HMMA.884.F32*:8,DADD:2,FADD:1"),
     P_MM(mm_f64m8k4_fadd3, "DMMA.8x8x4*=64,FADD=192", "c=mix w=DMMA.8x8x4*:4,FADD:1"),
     P_WU(dadd, "DADD=64", "DADD:2"),
     P_WU(fadd, "FADD=64", "FADD:1"),

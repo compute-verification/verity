@@ -17,7 +17,7 @@ enum : int {
   O_DADD_I, O_DADD_R, O_DMUL_I, O_DMUL_R, O_DFMA_RI, O_DFMA_RR, O_DMNMX, O_F2F64,
   // other: half2 and bf16x2, packs and conversions, select, min/max, MUFU, byte permute, warp exchange
   O_HADD2_I, O_HADD2_R, O_HMUL2_I, O_HMUL2_R, O_HFMA2_RI, O_HFMA2_RR, O_BADD2_R, O_BFMA2_RI, O_HMNMX2,
-  O_F2FP_H, O_F2FP_B, O_E4M3, O_FMNMX, O_FSEL, O_SEL, O_PRMT, O_EX2, O_RCP, O_F2I, O_FRND, O_SHFL, O_VOTE,
+  O_F2FP_B, O_E4M3, O_FMNMX, O_FSEL, O_SEL, O_PRMT, O_EX2, O_RSQ, O_F2I, O_FRND, O_SHFL, O_VOTE,
 };
 
 // The chains a form touches (fold reads only those): 1 u32, 2 f32, 4 f64, 8 f16x2.
@@ -27,9 +27,9 @@ DC_HD constexpr unsigned h32_uses(int x) {
   if (x == O_F2F64) return 4 | 2;
   if (x >= O_DADD_I && x <= O_DMNMX) return 4;
   if (x >= O_HADD2_I && x <= O_HMNMX2) return 8;
-  if (x == O_F2FP_H || x == O_F2FP_B) return 8 | 2;
+  if (x == O_F2FP_B) return 8 | 2;
   if (x == O_E4M3) return 8;
-  if (x == O_FMNMX || x == O_FSEL || x == O_EX2 || x == O_RCP || x == O_FRND) return 2;
+  if (x == O_FMNMX || x == O_FSEL || x == O_EX2 || x == O_RSQ || x == O_FRND) return 2;
   if (x == O_F2I) return 1 | 2;
   return 1;
 }
@@ -113,12 +113,6 @@ struct HLane {
     if constexpr (X == O_BFMA2_RI)
       asm volatile("fma.rn.bf16x2 %0,%0,%1,%2;" : "+r"(h[s]) : "r"(h[t]), "r"(0x3F803F80u));
     if constexpr (X == O_HMNMX2) asm volatile("min.f16x2 %0,%0,%1;" : "+r"(h[s]) : "r"(h[t]));
-    // f32 pair -> f16x2 (F2FP pack), then the low half back to f32 (HADD2.F32)
-    if constexpr (X == O_F2FP_H) {
-      if (odd)
-        asm volatile("{\n.reg .f16 lo, hi;\nmov.b32 {lo,hi},%1;\ncvt.f32.f16 %0,lo;\n}" : "=f"(f[s]) : "r"(h[s]));
-      else asm volatile("cvt.rn.f16x2.f32 %0,%1,%2;" : "=r"(h[s]) : "f"(f[t]), "f"(f[s]));
-    }
     // f32 pair -> bf16x2 (F2FP pack), then the low half back to f32 (a shift: bf16 is f32's high half)
     if constexpr (X == O_F2FP_B) {
       if (odd) asm volatile("shl.b32 %0,%1,16;" : "=f"(f[s]) : "r"(h[s]));
@@ -134,7 +128,7 @@ struct HLane {
       asm volatile("{\n.reg .pred p;\nsetp.ne.u32 p,%2,0;\nselp.b32 %0,%0,%1,p;\n}" : "+r"(r[s]) : "r"(r[t]), "r"(sel));
     if constexpr (X == O_PRMT) asm volatile("prmt.b32 %0,%0,%1,0x6420;" : "+r"(r[s]) : "r"(r[t]));
     if constexpr (X == O_EX2) asm volatile("ex2.approx.ftz.f32 %0,%0;" : "+f"(f[s]));
-    if constexpr (X == O_RCP) asm volatile("rcp.approx.ftz.f32 %0,%0;" : "+f"(f[s]));
+    if constexpr (X == O_RSQ) asm volatile("rsqrt.approx.ftz.f32 %0,%0;" : "+f"(f[s]));
     if constexpr (X == O_F2I) {
       if (odd) asm volatile("cvt.rn.f32.s32 %0,%1;" : "=f"(f[s]) : "r"(r[s]));
       else asm volatile("cvt.rzi.s32.f32 %0,%1;" : "=r"(r[s]) : "f"(f[s]));
