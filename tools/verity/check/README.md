@@ -62,3 +62,29 @@ with every job, those off the gate too (`train.sh --deferred`), and `main` moves
 on the gate, where `post_train.py` runs the vLLM regression's rebuilds. A red job off the gate reverts its culprit on `checked`
 but doesn't hold `main`. The team skill's "Landing" is the procedure. A pure move that `move_check.py` certifies
 (`verity check move BASE HEAD`) lands ahead of the queue.
+
+## Running from another repository
+
+The check and research are to move out of verity into the team's ops repository. Three seams let the check run from there
+against a verity checkout, so that the move changes paths alone:
+
+- research is reached only through `ops.py`, which names each module and attribute the check and its tests take from it
+  (`tests/test_ops.py` fails on any other import of research here).
+- `ci.toml`, `drive.toml` and `queue.toml` sit at `declaration.HOME` from the root of the repository they configure, and
+  `research.queue.CHECK_HOME` names the same directory. Each reader takes that root (`declaration.load(root)`,
+  `queue.flags_at(repo, ref)`, `merge.declared_jobs(repo, commit)`) and never reads the working directory.
+- A suite's key holds the runner (`suites.RUNNER`) as each file's git blob id, read where the runner is (`runner_ids`), under
+  its name at `tools/verity/check/`. Today's keys are unchanged, and a runner elsewhere with the same bytes earns and reuses
+  the same passes. A runner change moves every key, but `--changed` sees it only while the runner is in the tree it checks.
+  `check.py`'s step keys hold none of the check's own files.
+
+Still bound to the layout: `ROOT` is the runner's own `parents[3]`, and `--plan` plans a commit with that commit's
+`tools/verity/check/check.py`.
+
+### Landing in the ops repository
+
+A change to the ops repository lands on its owner's review once the ops repository's own tests pass. Those are the check's
+suite and research's, run by its runner on its own tree. No verity check gates it. Drive runs the ops repository's `main`, so
+a landed change applies at drive's next tick. A runner change re-keys every verity suite, so the next verity check reruns
+them all, and its full check of `checked` is what judges the change against verity. A red there that the change caused is
+reverted in the ops repository.
