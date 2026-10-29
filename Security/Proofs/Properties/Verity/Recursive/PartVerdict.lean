@@ -242,6 +242,8 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     rename_i spec' sts' hsu
     obtain ⟨_, -, hsu⟩ := bind_ok hsu
     obtain ⟨_, -, hsu⟩ := bind_ok hsu
+    obtain ⟨_, -, hsu⟩ := bind_ok hsu
+    obtain ⟨_, -, hsu⟩ := bind_ok hsu
     obtain ⟨r, hbs, hsu⟩ := bind_ok hsu
     have hr' : r = (spec', sts') := by
       try dsimp only at hsu
