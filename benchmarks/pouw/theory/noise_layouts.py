@@ -50,7 +50,7 @@ import os
 import re
 import sys
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, replace
 from types import SimpleNamespace
 
 import numpy as np
