@@ -13,7 +13,7 @@ and `in_place.py`, which `tests/test_boundaries.py` lists), the audit's Lean ver
 reference (`CpuBackend`) as the prover's backend, and the Lean line test where `lake` is. `run.sh` is the GPU run.
 
 - `verifier.py`: the verifier's process. It runs the Lean verifier of record, `remote-audit-verifier` (`lean_verifier.py`),
-  beside `audit.Session`, and refuses a run where the two differ.
+  beside `audit.AuditRun`, and refuses a run where the two differ.
 - `prover.py`: the prover's process; its GPU backend is `device.py` with `session.cu` (which includes
   `benchmarks/codec_tensor/reader.cu`), `inplace.py` reads vLLM's tensors in place, and `serve.py` serves vLLM as the prover.
 - `auditor_line.py`: the memory line on the auditor's clock, computed by the Lean (`line_record`) and held equal to `line.py`'s.

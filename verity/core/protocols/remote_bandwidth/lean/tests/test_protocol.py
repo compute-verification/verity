@@ -1,5 +1,5 @@
 """`remote-audit-protocol serve` (`RemoteAudit.Protocol`, onsite Verity's bandwidth component) against the Python verifier
-of the same case (`protocol`: the case decoded as the Lean decodes it, its events through `audit.Session` as
+of the same case (`protocol`: the case decoded as the Lean decodes it, its events through `audit.AuditRun` as
 `ra_cases.session` replays them, and `remote_bandwidth.period.answer` of the session after them): every field of the
 answer but its reason, the certified `q_bytes`, `eps` and the profile among them. Both refuse a session paced at one
 window in flight, which no property of the Lean covers.
@@ -63,8 +63,9 @@ def _check(p: dict, reg: audit.Registration, e: dict) -> tuple:
             events = [M.event_of(x) for x in e["events"]]
             params = M.params_of(reg, kw)
         clock = M.Clock()
-        s = audit.Session(params, reg, None, M.replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
-                          not_before_ns=not_before, clock=clock)
+        s = audit.AuditRun(params, reg, None,
+                           M.replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
+                           not_before_ns=not_before, clock=clock)
         for x in events:
             M.apply(s, clock, x)
     except M.REFUSALS as why:
@@ -109,20 +110,6 @@ PORT = D.ProtocolPort(EXE, protocol, st.nothing(), package=M.PACKAGE)
 server = D.server_fixture(PORT)
 
 
-class Clock:
-    """The verifier's clock: each reading a microsecond after the last, and waiting moves it on."""
-
-    def __init__(self) -> None:
-        self.now = 10 ** 9
-
-    def __call__(self) -> int:
-        self.now += 1_000
-        return self.now
-
-    def sleep_until(self, clock, t: int) -> None:
-        self.now = max(self.now, t)
-
-
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(3 * 4032 - 17)
 COINS = hashlib.sha512(b"the period's live coins").digest()
 
@@ -132,7 +119,7 @@ def periods() -> dict[str, period.Period]:
     to its first window."""
     out = {}
     for name, kw in (("honest", {}), ("dropping", {"cheat": M.dropping(lambda j: j % 2 == 1)}), ("unverified", {"verify": 1})):
-        c = Clock()
+        c = M.Clock(10 ** 9, 1_000)
         out[name] = period.run("n0", STORE, COINS, clock=c, sleep_until=c.sleep_until, entropy=M.Entropy(b"salts"), **kw)
     return out
 

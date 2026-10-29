@@ -25,7 +25,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import forms as F
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation.reference import evaluate_region
 from verity.ml.circuits.layout import Circuit, Gate
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import Coll, concat

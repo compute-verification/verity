@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remote bandwidth sessions (cwd = the source tree): the verifier's process on cores of its own, the prover's on GPUS
+# PoUB sessions (cwd = the source tree): the verifier's process on cores of its own, the prover's on GPUS
 # GPUs (default 1) whose HBM holds one store, a contiguous shard each, over TCP. Everything runs under one
 # gpu-lease $GPUS --wait (with TIMED=1, --timed: the fill queue pauses, for a whole-node session): build session.cu and
 # kv.cu (p1024, masked), start the verifier, then the prover, which gates its devices against the driver before
@@ -77,10 +77,11 @@
 # (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). VERIFIER_ARGS=--host-bytes N puts the serving
 # node's host DRAM (its MemTotal) in the memory line. The north-star run, the verifier on a second node's CPUs:
 #
-#   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=33273 QUANTILE=max \
-#     JITTER_MS=50 VERIFIER_ARGS='--host-bytes 1843153879040' bash benchmarks/remote_session/run.sh   # 16 CPUs
+#   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=<audit.SAMPLES> \
+#     QUANTILE=max JITTER_MS=50 VERIFIER_ARGS='--host-bytes 1843153879040' \
+#     bash benchmarks/remote_session/run.sh                         # 16 CPUs
 #   ROLE=prover PORT=7799 SERVE=node PLAN=honest,skip:0.0625 ENGINE_CPUS=0-23 PROVER_CPUS=24-47 \
-#     ENGINE_ARGS='--step-hz 2 --align-steps' NODE_ARGS='--decode-s 60 --warm-openings 33273' \
+#     ENGINE_ARGS='--step-hz 2 --align-steps' NODE_ARGS='--decode-s 60 --warm-openings <audit.SAMPLES>' \
 #     bash benchmarks/remote_session/run.sh                         # the whole 8-GPU node, 200 GB of host memory
 #
 # Start the prover first: its lease waits for all 8 GPUs, and once it holds them it waits for the verifier's tunnel;

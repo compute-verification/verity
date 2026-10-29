@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's inputs to a joint sampling plan (PoUW and the memory claim under one partition): the
+"""PoUB's inputs to a joint sampling plan (PoUW and the memory claim under one partition): the
 memory line's ε against the openings proved, the pass rate and pacing, and the window; the rebuilds the plan leaves in
 the line; and the serving cost of passes and of proved openings, at three served operating points.
 
@@ -48,12 +48,15 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit  # noqa: E402
 from verity.core.protocols.sampled_proofs import costfit  # noqa: E402
+from verity.hardware import node as hardware  # noqa: E402
 
 import wire  # noqa: E402
 
 LN = -math.log(audit.DELTA)
+NODE = hardware.node(*hardware.VY_NEBIUS)
+"""The node the operating points serve on (`verity.hardware.node`)."""
 BLOCK = 4096
 STATEMENT = 512
 """Openings a statement: C-Flock's ceiling, m = k_log + nbl ≤ 35, at the unit's k_log 26."""
@@ -252,7 +255,7 @@ def points(recorded: list[dict]) -> dict:
 
 def pass_s(p: dict) -> float:
     """A pass: each GPU reads its shard."""
-    return p["shard_bytes"] / timing.GPU_READ_BYTES_PER_S
+    return p["shard_bytes"] / NODE.devices[0].read_bytes_per_s
 
 
 def c_at(p: dict, flight: int) -> float:
@@ -344,7 +347,7 @@ def coin_check(p: dict, s: dict) -> dict:
     """A plan `s` drawn g = `s["per_coin"]` groups a coin, read by the code: its closed form's held-over-time sampling
     term against `span_line`'s arithmetic on the uniform session it describes (whole coins over Θ, then one more),
     whose wrong receipts are `audit.pooled`'s on a record of each group's receipts and draws naming `groups_per_coin`
-    (all of a coin's draws on its last group, as `Session.close` may share them: the code pools them over the coin's
+    (all of a coin's draws on its last group, as `AuditRun.close` may share them: the code pools them over the coin's
     groups). At one group in flight (`s["flight"]` 1) each group's root comes `least_period` after its coin, before the
     next coin as a record naming f = 1 must have it. Refuses to go on unless they agree."""
     g, k, r, N, f = s["per_coin"], s["k"], s["r"], p["blocks"], s.get("flight", 2)
@@ -439,7 +442,7 @@ def main() -> None:
     p32 = pts["32B x8"]
     r32 = next((x for x in recorded if x["t_ms"] == T * 1e3), recorded[0])["passes_per_s"]
     rows = []
-    for s_T in (206, 759, 2773, 6072, 11091, 33273):
+    for s_T in (206, 759, 2773, 6072, 11091, audit.SAMPLES):
         k = max(1, math.ceil(r32 * T / s_T))
         d = s_T * k / (r32 * T)
         o = s_T / T
@@ -563,7 +566,7 @@ def main() -> None:
             meas = [arm for arm in MEMSAT["arms"] if arm[0] == r] if name.startswith("8B") else []
             sweep.append({"point": name, "r": r, "o": o, "k": k, "d": d, **two, "one_in_flight": one,
                           **costs(p, prices, o=o, r=r),
-                          "reads_over_R": r * p["blocks"] * BLOCK / timing.SPEC_BYTES_PER_S,
+                          "reads_over_R": r * p["blocks"] * BLOCK / NODE.spec_bytes_per_s,
                           "measured": {"serving_share": meas[0][0] * meas[0][1], "gamma_spec": meas[0][2],
                                        "tokens_per_s": meas[0][3]} if meas else None})
     def one(x: dict, cell: str) -> str:

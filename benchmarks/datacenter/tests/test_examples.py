@@ -7,12 +7,12 @@ import pytest
 from verity.core.protocols.remote_bandwidth import ledger
 
 from datacenter import Cadence, Port, route
-from datacenter.examples import GB, leaf_spine, rack, rtx_node, two_sites, with_dpu
+from datacenter.examples import GB, NODE, leaf_spine, rack, rtx_node, two_sites, with_dpu
 
 
 def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie_tree():
-    """Its devices add up to the remote audit's node, `ledger.Node`: `Accounting.Device`'s one Python mirror."""
-    dc, node = rtx_node("n"), ledger.Node.stated()
+    """Its devices add up to PoUB's node, `ledger.Node`: `Accounting.Device`'s one Python mirror."""
+    dc, node = rtx_node("n"), ledger.Node.stated(NODE)
     ds = dc.devices.values()
     assert sum(float(d.on_chip) for d in ds if d.on_chip) == node.chip_bytes * 8
     assert sum(float(d.bandwidth) for d in ds if d.bandwidth) == pytest.approx(node.read_bytes_per_s * 8)

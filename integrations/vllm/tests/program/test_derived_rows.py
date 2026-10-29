@@ -627,7 +627,7 @@ def test_rmsnorm_triton_rows_vs_gates(N, eps):
         x = _rand_bf16(rng, N, scale)
         w = _rand_bf16(rng, N)
         t = {}
-        out = evaluate_call(prog.circuit, call, [int(v) for v in x] + [int(v) for v in w], transcript=t)
+        out = evaluate_call(prog.circuit, call, [int(v) for v in x] + [int(v) for v in w], trace=t)
         got = D.rmsnorm_triton_rows(x[None], w, eps)
         assert np.array_equal(got["out"][0], np.array(out, dtype=np.uint16))
         assert int(got["sum"][0]) == t[fma.args[1]]
@@ -651,7 +651,7 @@ def test_rmsnorm_fused_v2_rows_vs_gates():
         t = {}
         out = np.array(evaluate_call(prog.circuit, call,
                                      [int(v) for v in x] + [int(v) for v in res] + [int(v) for v in w],
-                                     transcript=t), dtype=np.uint16)
+                                     trace=t), dtype=np.uint16)
         got = D.rmsnorm_fused_v2_rows(x[None], res[None], w, eps)
         assert np.array_equal(got["normed"][0], out[:N]) and np.array_equal(got["resid"][0], out[N:])
         assert int(got["var"][0]) == t[div.args[0]]
@@ -703,7 +703,7 @@ def test_attention_head_states_vs_gates(T, D_):
     t = {}
     out = evaluate_call(prog.circuit, call,
                         [int(x) for x in q] + [int(x) for x in k.ravel()] + [int(x) for x in v.ravel()],
-                        transcript=t)
+                        trace=t)
     got = D.attention_head_states(q[None], k[None], v[None])
     assert not got["nonfinite"][0]
     assert np.array_equal(got["out"][0], np.array(out, dtype=np.uint16))
@@ -772,7 +772,7 @@ def test_attention_head_v3_states_vs_gates(T, D_):
     t = {}
     out = evaluate_call(prog.circuit, call,
                         [int(x) for x in q] + [int(x) for x in k.ravel()] + [int(x) for x in v.ravel()],
-                        transcript=t)
+                        trace=t)
     got = D.attention_head_states(q[None], k[None], v[None], BN=BN)
     assert not got["nonfinite"][0]
     assert np.array_equal(got["out"][0], np.array(out, dtype=np.uint16))
@@ -829,7 +829,7 @@ def test_v1_and_v3_attention_heads_are_gate_for_gate_equal_within_one_block(T):
     for defn, extra in ((b1.AttentionHead, {}), (b1.AttentionHeadV3, {"BN": 128})):
         prog, call = _standalone(bind(defn, T=T, D=64, **extra))
         t = {}
-        out = evaluate_call(prog.circuit, call, args, transcript=t)
+        out = evaluate_call(prog.circuit, call, args, trace=t)
         words.append((call.hi - call.lo, tuple(out), tuple(t[g] for g in sorted(t))))
     assert words[0][0] == words[1][0]
     assert words[0][1] == words[1][1]
@@ -852,6 +852,6 @@ def test_attention_head_v3_at_bn_64_is_attention_head_v1_gate_for_gate():
     for defn, extra in ((b1.AttentionHead, {}), (b1.AttentionHeadV3, {"BN": 64})):
         prog, call = _standalone(bind(defn, T=T, D=64, **extra))
         t = {}
-        out = evaluate_call(prog.circuit, call, args, transcript=t)
+        out = evaluate_call(prog.circuit, call, args, trace=t)
         words.append((call.hi - call.lo, tuple(out), tuple(t[g] for g in sorted(t))))
     assert words[0] == words[1]

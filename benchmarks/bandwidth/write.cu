@@ -1,6 +1,6 @@
 // Write ceilings on one RTX PRO 6000 (sm_120): the fastest a fill writes into the card's memory by each path a prover
-// has, for remote_bandwidth's `timing.GPU_WRITE_BYTES_PER_S`, and the card's PCIe link into host DRAM, for
-// `timing.HOST_WRITE_BYTES_PER_S`.
+// has, for the remote audit's device write ceiling (`verity.hardware.node`'s `device_write_bytes_per_s`), and the
+// card's PCIe link into host DRAM, for its host write ceiling (`host_write_bytes_per_s`).
 //
 //   st<U>      labels derived on the device: grid-stride, each thread U independent 16-byte stores of labels it computes
 //              (`label`, a 32-bit mix of the word's index), `cs` with st.global.cs (evict-first streaming stores)

@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's declared outputs (`PROTOCOL.md` §7, "Declared outputs") from an accepted session's
+"""PoUB's declared outputs (`PROTOCOL.md` §7, "Declared outputs") from an accepted session's
 record: γ against both R, per window and over the session, and the memory line, a session total in three forms, each
 with its ε and δ.  They are computed here, the memory line's charges and paced forms by `line`'s arithmetic in floats,
 and nowhere else: the benchmark and every other consumer reads them from `declared`.
@@ -23,15 +23,18 @@ pass) plus the coin commitment's hiding terms (`hiding`), the receipts' binding 
 `timing.sketch_failure` over the session, and the draw's rejection (`rejection`): the statements' δc and δs, and
 `LineHeld`'s Σ_t hide_t, bind and Σ_t k_t/2^64 at the record's `samples`.  `LineHeld`'s error also carries the
 windows' PRF advantages, which are named (`PRF_CLAIM`) and in no δ here.  γ's errors carry `PooledDraw`'s terms beyond
-δ by name (`draw`), the advantages named with their claim and priced in neither."""
+δ by name (`draw`), which have no hiding term since the prover is sent the coin commitment only at the end, the
+advantages named with their claim and priced in neither."""
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
 from verity.core.protocols.profile import IntegrityProfile
+from verity.core.site import Site
+from verity.hardware import node as hardware
 
 from . import audit, coins, line, receipts, timing
 
@@ -56,6 +59,21 @@ def _rate(x: object, what: str) -> float:
     return float(x)
 
 
+def figures(site: Site, h: str, host: str, placeholders: Sequence[str] = ()) -> hardware.NodeFigures:
+    """The figures of host `h`'s node as `site` registers it (`Site.node h`): for each of its devices, in the log's
+    order, the GPU card its sheet names (`Sheet.sku`), on the host of host card `host` (a host carries no sheet in the
+    Site, so its card is named), reading the placeholders `placeholders` names as open figures.  An `h` the site
+    registers as no host and a node without a device are refused, as `verity.hardware.node` refuses a placeholder
+    figure it isn't told to read."""
+    n = site.node(h)
+    if n is None:
+        raise ValueError(f"{h!r} is no host the Site registers")
+    skus = [n.sheet(d).sku for d in n.units]
+    if not skus:
+        raise ValueError(f"host {h!r} holds no device the Site registers")
+    return hardware.node(skus, host, placeholders)
+
+
 @dataclass(frozen=True, slots=True)
 class Node:
     """The verifier's capacities for the node a session audits, each protocol structure, never the prover's report: its
@@ -68,21 +86,21 @@ class Node:
     maximal rebuild batch, one maximal disk read and one link window.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
     and the host DRAM's (bytes a second), how fast a fill can write labels into each tier, which a wipe's timing reads;
-    the node states no DPU's (`timing.HOST_WRITE_BYTES_PER_S`).  `stated` takes `timing`'s, which a reported read rate
-    can only raise."""
+    the node states no DPU's.  `of_site` reads them off the Site's node (`Site.node h`, `figures`), and `stated` off
+    the node's figures (`verity.hardware.node`), which a reported read rate can only raise."""
 
     spec_bytes_per_s: float
     read_bytes_per_s: float
     chip_bytes: int
     squarings_per_s: Mapping[str, float]
-    sha512_per_s: float = timing.SHA512_PER_S
+    sha512_per_s: float
+    gpu_write_bytes_per_s: float
+    host_write_bytes_per_s: float
     disk_bytes_per_s: float = 0.0
     link_bytes_per_s: float = 0.0
     rebuild_burst_bytes: float = 0.0
     disk_burst_bytes: float = 0.0
     link_burst_bytes: float = 0.0
-    gpu_write_bytes_per_s: float = timing.GPU_WRITE_BYTES_PER_S
-    host_write_bytes_per_s: float = timing.HOST_WRITE_BYTES_PER_S
     sketch_outside: int = timing.SKETCH_OUTSIDE
 
     def __post_init__(self) -> None:
@@ -102,26 +120,39 @@ class Node:
         object.__setattr__(self, "squarings_per_s", MappingProxyType(squarings))
 
     @classmethod
-    def stated(cls, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
+    def of_site(cls, site: Site, h: str, host: str, placeholders: Sequence[str] = (), **stated) -> Node:
+        """The node of host `h` as `site` registers it on host card `host` (`figures`), stated (`stated`)."""
+        return cls.stated(figures(site, h, host, placeholders), **stated)
+
+    @classmethod
+    def stated(cls, figures: hardware.NodeFigures, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
                link_bytes_per_s: float = 0.0, disk_burst_bytes: float | None = None,
                link_burst_bytes: float | None = None, sketch_outside: int = timing.SKETCH_OUTSIDE) -> Node:
-        """`timing`'s node: R measured is the larger of `timing.READ_BYTES_PER_S` and the prover's reported read, R
-        at spec the larger of `timing.SPEC_BYTES_PER_S` and that, so a prover reporting a slower read can't shrink
-        a term (MEM-24).  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
-        second at the disks' ceiling, which is a one-second peak; its link burst `timing.LINK_WINDOW_BYTES` when the
-        links are charged."""
-        measured = max(timing.READ_BYTES_PER_S, _rate(reported_read_bytes_per_s, "a reported read"))
+        """The node of the Site's `figures` (`Site.node h`): R measured is the larger of its devices' and host DRAM's
+        measured reads and the prover's reported read, R at spec the larger of their ceilings and that, so a prover
+        reporting a slower read can't shrink a term.  Its rebuild burst is S_chip, what a batch in flight
+        holds on the chips; its disk burst one second at the disks' ceiling, which is a one-second peak; its link
+        burst the host's link window when the links are charged."""
+        measured = max(figures.read_bytes_per_s, _rate(reported_read_bytes_per_s, "a reported read"))
         disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
-        link = (timing.LINK_WINDOW_BYTES if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
-        return cls(max(timing.SPEC_BYTES_PER_S, measured), measured, timing.CHIP_BYTES, timing.SQUARINGS_PER_S,
-                   timing.SHA512_PER_S, disk_bytes_per_s, link_bytes_per_s, float(timing.CHIP_BYTES), disk, link,
-                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S, sketch_outside)
+        window = float(figures.host.link_window_bytes)
+        link = (window if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
+        return cls(max(figures.spec_bytes_per_s, measured), measured, figures.chip_bytes, figures.squarings_per_s,
+                   figures.sha512_per_s, figures.device_write_bytes_per_s, figures.host_write_bytes_per_s,
+                   disk_bytes_per_s, link_bytes_per_s, float(figures.chip_bytes), disk, link, sketch_outside)
 
     def rebuild(self, codec: audit.Codec) -> audit.Rebuild:
         """μ_rebuild's model at the record's codec: the node's squaring ceiling at its width."""
         if codec.field.name not in self.squarings_per_s:
             raise ValueError(f"the node states no squaring ceiling at {codec.field.name}, the record's codec's width")
         return audit.Rebuild(codec, self.squarings_per_s[codec.field.name])
+
+    def rates(self, codec: audit.Codec) -> line.Rates:
+        """The node's ways back into its memory as the line reads them (`line.Rates`): its squaring ceiling at the
+        codec's width over the codec's encode, and its disks' and links' ceilings and bursts."""
+        return line.Rates(self.rebuild(codec).squarings_per_s, codec.encode_squarings, self.disk_bytes_per_s,
+                          self.link_bytes_per_s, self.rebuild_burst_bytes, self.disk_burst_bytes,
+                          self.link_burst_bytes)
 
     def to_json(self) -> dict:
         return {"chip_bytes": self.chip_bytes, "disk_burst_bytes": self.disk_burst_bytes,
@@ -164,10 +195,11 @@ def rejection(record: audit.Record) -> float:
 
 
 def hiding(record: audit.Record) -> float:
-    """The coin commitment's hiding terms over the record's n windows (`Committed.hide`,
-    `Accounting.Guarantees.Remote.PooledDraw`): window t's two distances between coin t's hm96 leaf and a leaf
-    committing zeros, each within 2^-192 under the pinned key, n·2^-191 in all (claims `statistical-hiding`,
-    `common-reference-string`, `hash-derived-key`)."""
+    """The coin commitment's hiding terms over the record's n windows, `LineHeld`'s Σ_t hide_t (`Committed.hide`):
+    window t's two distances between coin t's hm96 leaf and a leaf committing zeros, each within 2^-192 under the
+    pinned key, n·2^-191 in all (claims `statistical-hiding`, `common-reference-string`, `hash-derived-key`).  The
+    prover is sent the commitment only at the session's end (`coins.py`), so `PooledDraw` reads no hiding term and
+    `draw` charges none; the memory line's δ keeps it while `LineHeld` states it."""
     return hiding_over(len(record.windows))
 
 
@@ -213,9 +245,10 @@ def binding(record: audit.Record, node: Node) -> float:
     term's t is a draw, one openings coin over g windows (`LineHeld`'s `Receipts` over `Node.draws`): ⌈W/g⌉ of them,
     each opening at most g·|L_t| receipts, its windows' together, at the cap s over them.  Where the cut fixes the
     roots, split_t = 0 and the term is Σ_t √(|L_t|·s_t)·q_t/2^256.5 (`Binding.binding_le_of_fixed`), this charge.  The
-    deployed prover holds the coin commitment, from which it may compute a window's roots, so split_t has no bound
-    yet: this charge takes it as 0, pending the change that sends the prover no commitment to a window's openings coin
-    before its roots (the gap `binding-split`, `PROTOCOL.md` §8)."""
+    prover is sent no coin commitment before the session's end (`coins.Released`, `audit.AuditRun.disclose`), so
+    nothing it holds before a window's openings coin is released depends on that coin; the statement that the play
+    then fixes each window's roots by its cut is not yet in Lean, and this charge takes split_t as 0 (the gap
+    `binding-split`, `PROTOCOL.md` §8)."""
     if record.samples is None or record.append_coins is None:
         raise ValueError("the binding term is charged at the session's bounds, its draw cap and its append coins, "
                          "which a record no session made doesn't state")
@@ -226,29 +259,28 @@ def binding(record: audit.Record, node: Node) -> float:
 
 
 @dataclass(frozen=True, slots=True)
-class Draw:
-    """`PooledDraw`'s terms beyond its δ, each by name: the rejection (`rejection`), the hiding terms (`hiding`) and
-    the receipts' binding term (`binding`), what reading the record's openings as the deployed draw over receipts its
-    roots hold costs.  `total` is their sum.  The windows' PRF advantages Σ_t Adv(prf t) are the fourth term, which
-    `PRF_CLAIM` prices with no numeric value: `to_json` names it, and `total` holds none of it."""
+class SamplingTerms:
+    """`PooledDraw`'s terms beyond its δ, each by name: the rejection (`rejection`) and the receipts' binding term
+    (`binding`), what reading the record's openings as the deployed draw over receipts its roots hold costs.  `total`
+    is their sum.  The windows' PRF advantages Σ_t Adv(prf t) are the third term, which `PRF_CLAIM` prices with no
+    numeric value: `to_json` names it, and `total` holds none of it."""
 
     rejection: float
-    hiding: float
     binding: float
 
     @property
     def total(self) -> float:
-        return self.rejection + self.hiding + self.binding
+        return self.rejection + self.binding
 
     def to_json(self) -> dict:
-        return {"binding": self.binding, "hiding": self.hiding, "rejection": self.rejection,
+        return {"binding": self.binding, "rejection": self.rejection,
                 "named": {"prf_advantage": {"claim": PRF_CLAIM, "term": "Σ_t Adv(prf t)", "value": None,
                                             "in_total": False}}}
 
 
-def draw(record: audit.Record, node: Node) -> Draw:
+def draw(record: audit.Record, node: Node) -> SamplingTerms:
     """The record's draw terms on `node`."""
-    return Draw(rejection(record), hiding(record), binding(record, node))
+    return SamplingTerms(rejection(record), binding(record, node))
 
 
 def windows(record: audit.Record) -> list[tuple[int, int]]:
@@ -263,17 +295,17 @@ def windows(record: audit.Record) -> list[tuple[int, int]]:
 
 @dataclass(frozen=True, slots=True)
 class Gamma:
-    """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.Ledger`, read per window at Wδ, `gamma`,
+    """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.GammaTerms`, read per window at Wδ, `gamma`,
     and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each span γ is declared over (`windows`:
     a paced session's fixed windows), each as a fraction of R over its own span.  `error` and `error_horizon` are the
-    ledger's with the sketch's term and the draw's (`draw`: `PooledDraw`'s rejection, hiding and binding terms, the
-    PRF advantages named) added: both readings read the record's openings, each window's or pooled."""
+    ledger's with the sketch's term and the draw's (`draw`: `PooledDraw`'s rejection and binding terms, the PRF
+    advantages named) added: both readings read the record's openings, each window's or pooled."""
 
     capacity_bytes_per_s: float
-    ledger: audit.Ledger
+    ledger: audit.GammaTerms
     windows: tuple[audit.WindowLedger, ...]
     sketch: float
-    draw: Draw
+    draw: SamplingTerms
 
     @property
     def gamma(self) -> float:
@@ -300,7 +332,8 @@ class Gamma:
                              "window": w.window} for w in self.windows]}
 
 
-def _fixed(record: audit.Record, lg: audit.Ledger, chip_bytes: int, capacity: float) -> tuple[audit.WindowLedger, ...]:
+def _fixed(record: audit.Record, lg: audit.GammaTerms, chip_bytes: int,
+           capacity: float) -> tuple[audit.WindowLedger, ...]:
     """The ledger's window terms over a paced record's fixed windows (`windows`).  A pass is in the fixed window that
     holds it whole, from its challenge's release to its root's arrival, and in none if it straddles a boundary; each
     term is its passes': their credited receipts, chip and counting, and of each window they are from, its wrong
