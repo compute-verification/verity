@@ -60,9 +60,10 @@ def pStarGap (L : Layout) : ℚ := 35 / 1000000 * stockRegs L
 /-- Work outsourced within the egress cap: 0.036% of stock a 32 bits of cap. -/
 def networkGap (L : Layout) : ℚ := 36 / 100000 * (L.cap / 32 : ℚ) * stockRegs L
 
-/-- Pre-coin tables: the node's memory in tiles, times the call's tiles and their words, at `2^-150`, a bound on the
-chance that a fixed tile is a given committed tile. -/
-def tableGap (L : Layout) : ℚ := L.mem * (L.rowBlocks * L.colBlocks * L.S * tileWords : ℚ) / 2 ^ 150
+/-- Pre-coin tables and the coin stream holding a committed tile: twice the node's memory in tiles, times the call's
+tiles and their words, at `2^-100`, a bound on the chance that a tile fixed before the coins, or a fixed arrangement of
+coins, is a given committed tile. -/
+def tableGap (L : Layout) : ℚ := 2 * L.mem * (L.rowBlocks * L.colBlocks * L.S * tileWords : ℚ) / 2 ^ 100
 
 /-- **The gap** in registers: the sum of the six terms. -/
 def gapRegs (L : Layout) (C : Commit L) : ℚ :=

@@ -68,6 +68,23 @@ def Strategy.init {L : Layout} (σ : Strategy L) (stream : Coins L → ℕ → F
     Addr → Fin 1 → Fin tileWords → ℤ :=
   Sum.elim (fun a _ => σ.pre a) (fun c _ => stream ω c)
 
+/-- A coin's index: a tag bit, a step-1 bit, a tag weight or a coin lane. -/
+abbrev CoinIdx (L : Layout) : Type :=
+  (Fin L.m × Fin L.S) ⊕ (Fin L.m × Fin 4) ⊕ (Fin 4 × Fin L.n) ⊕ (Fin L.S × Fin L.tiles × Fin 3 × Fin L.n)
+
+/-- A coin's value at `ω`. -/
+def coinAt {L : Layout} (ω : Coins L) : CoinIdx L → ℤ
+  | .inl (i, t) => ((ω.1 i t : ℕ) : ℤ)
+  | .inr (.inl (i, q)) => ((ω.2.1 i q : ℕ) : ℤ)
+  | .inr (.inr (.inl (q, j))) => ω.G q j
+  | .inr (.inr (.inr (t, k, ℓ, j))) => ω.s t k ℓ j
+
+/-- **The coin stream is raw coins in a fixed arrangement**: each word the certifier streams is zero or one coin, at a
+position fixed before the coins (`ι`), in at most the node's memory of tiles. -/
+def RawStream (L : Layout) (stream : Coins L → ℕ → Fin tileWords → ℤ) : Prop :=
+  ∃ ι : ℕ → Fin tileWords → Option (CoinIdx L), (∀ c p, L.mem ≤ c → ι c p = none) ∧
+    ∀ ω c p, stream ω c p = (ι c p).elim 0 (coinAt ω)
+
 /-- **The priced W1 work** of a strategy at a coin value: its trace at the W1 table `pr`. -/
 def Strategy.work {L : Layout} (pr : Prices100) (σ : Strategy L) (ω : Coins L) : ℕ :=
   cost100 pr (σ.exec ω).trace
