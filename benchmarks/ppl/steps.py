@@ -1036,7 +1036,8 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, tag: bool = False):
     {0, ..., 2^bits - 1}^(m x (S - 1)), one lane a row a later step; `ssn2` adds a b - S, a and b bits (m x S x 4 and
     S x 4 x n); `raw_byte` adds sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred.
     `tag` (ssn_1l only: ssn-1l-tag) gives step 0's `TAG_LANES` data lanes to the row tags, S = 1 + ceil((k - 24) / 31),
-    and serves T(i) G as well (`row_tags`), G uniform on [-3, 3]^(4 x n), a call's last draw.
+    and serves T(i) G as well (`row_tags`), G uniform on [-3, 3]^(4 x n), a call's last draw; its later lanes' 1 + l
+    serve as l does, the 1s being centred out.
     torch.round rounds half to even, as rint does."""
     acc = nxt(mm).double()
     (m, k), n = mm.x.shape, acc.shape[1]
@@ -1367,8 +1368,9 @@ SSNFP_STATS: list = []
 
 def zero_chunks(where: str, xq: torch.Tensor, first: int = 24, later: int = 31) -> dict:
     """ssn-1l-tag's later-step data chunks of int8 rows (`later` entries a step after step 1's `first`) that are all
-    zero: there a row's step vector is the previous step's plus its coin bit, so a coin-reading prover copies it
-    whenever the bit is 0. `ZCHUNK=1` records one a linear call (`SSNFP_STATS`' file)."""
+    zero: there, under ssn_1l's later lane (a coin bit), a row's step vector is the previous step's plus its bit, so a
+    coin-reading prover copies it whenever the bit is 0 (ssn-1l-tag's 1 + bit moves it every step). `ZCHUNK=1` records
+    one a linear call (`SSNFP_STATS`' file)."""
     m, k = xq.shape
     s = -(-(k - first) // later)
     z = torch.nn.functional.pad(xq[:, first:], (0, s * later - (k - first))).reshape(m, s, later).eq(0).all(dim=2)
