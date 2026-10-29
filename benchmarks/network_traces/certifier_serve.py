@@ -238,7 +238,7 @@ from verity.core.protocols.certifier.schedule import ClockSync, expected_grids, 
 from verity.core.protocols.certifier.served import Admission, ServedProfile
 from verity.core.protocols.certifier.service import LinkWindows
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.service import Registration
+from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
 
 HERE = Path(__file__).resolve().parent
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
@@ -1409,7 +1409,8 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
         opening = lw.commit(w, *pair)
         if advice:
             record = lw.registration(opening, previous)
-            registration = Registration(record, R.receipt(record, CHALLENGER, received=str(w)), R.digest(record), w)
+            registration = WindowCommitmentRecord(record, R.receipt(record, CHALLENGER, received=str(w)), R.digest(record),
+                                                  w)
         else:
             registration = lw.register(stream, lw.registration(opening, previous))
         previous = registration.digest
