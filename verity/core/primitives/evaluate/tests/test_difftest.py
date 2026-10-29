@@ -1,6 +1,6 @@
 """The Lean evaluator (`verity-evaluate`, `Evaluate.evaluateFn`) against the Python reference, output for output and refusal
 for refusal, on Programs encoded as descriptor v1 (`verity/ml/circuits/PROTOCOL.md`), through the difftest harness
-(`verity_difftest`: one server open per module, reject parity, Hypothesis drawing deterministically).
+(`verity_difftest`: one server open per module, reject parity, Hypothesis sampling deterministically).
 
 The reference is `python_answer`: `codec.decode_program`, then `evaluate.evaluate_region` over each of the root's nodes that
 is not an input node, with the inputs bound by runs (a registered table as `reference`'s `RegisteredTable`, read where a gate
@@ -10,7 +10,7 @@ applies them by name: a primitive the Lean does not implement (one outside the r
 reads), and an input word at or above `2^w` (the oracle stores whatever it is given).
 
 The Programs: seeded random Boolean composites built with the IR builder, which reach every node form (primitive, call,
-batch of a gate and of a composite over an axis, scan with xs and a shared argument) and both constants, drawn by a
+batch of a gate and of a composite over an axis, scan with xs and a shared argument) and both constants, sampled by a
 Hypothesis strategy with their inputs and, for a quarter of them, a mutation both sides must refuse; and explicit examples:
 the pinned 2-bit adder of `boolean_vectors.json` on its whole truth table, real Boolean Definitions traced from
 `verity.ml.boolean`'s builders on their one-call Programs, also held to the word Definition each computes, and the malformed
@@ -373,7 +373,7 @@ def _mutated(desc: dict, inputs: list, k: int) -> tuple[dict, list] | None:
 
 @st.composite
 def composite_requests(draw) -> dict:
-    """A random composite on random input bits; one draw in four is mutated by an entry of `REFUSE` (an input word of 2 where
+    """A random composite on random input bits; one sample in four is mutated by an entry of `REFUSE` (an input word of 2 where
     the drawn one does not apply)."""
     text, leaves = _random_desc(draw(st.integers(0, RANDOM_SEEDS - 1)))
     desc = json.loads(text)
@@ -542,7 +542,7 @@ def _one_call_text(fid: str) -> str:
 
 @st.composite
 def scalar_requests(draw) -> dict:
-    """A scalar primitive on words drawn from its operands' edges and their whole range; one word in ten is out of its
+    """A scalar primitive on words sampled from its operands' edges and their whole range; one word in ten is out of its
     range (2^w, 2^w + 1 or -1), which both sides refuse."""
     fn = draw(st.sampled_from(SCALARS))
     words = []
@@ -755,7 +755,7 @@ def test_the_fmas_on_their_edge_grids(server):
 
 @st.composite
 def float_requests(draw) -> dict:
-    """An FP32 or BF16 primitive on eight rows of words, each drawn from its operand's edges or its whole range; one request
+    """An FP32 or BF16 primitive on eight rows of words, each sampled from its operand's edges or its whole range; one request
     in ten has a word out of its range (2^w, 2^w + 1 or -1), which both sides refuse."""
     fn = draw(st.sampled_from(FLOATS))
     rows = [tuple(draw(st.one_of(st.sampled_from(_edges(fn, t)), st.integers(0, (1 << t.w) - 1))) for _, t in fn.params)
@@ -922,7 +922,7 @@ def _tc_pairs(fn: PrimitiveDefinition) -> list[list[tuple]]:
 
 def _tc_scales(fn: PrimitiveDefinition) -> list[list[tuple]]:
     """The block-scaled steps: every pair of edge scale bytes on the first and on the last block, the others one, over the
-    largest codes times one and over a draw of codes, under seven accumulators (zero, ±1, the least subnormal, the largest
+    largest codes times one and over a sample of codes, under seven accumulators (zero, ±1, the least subnormal, the largest
     normal, -inf, a NaN)."""
     f = TC_FMT[fn]
     if f.scales is None:
@@ -974,7 +974,7 @@ def test_tc_steps_on_the_accumulator_sweep(server):
 
 @st.composite
 def tc_requests(draw) -> dict:
-    """A dot step on four rows, the accumulator and every code and scale byte drawn from its edges or its whole range; one
+    """A dot step on four rows, the accumulator and every code and scale byte sampled from its edges or its whole range; one
     request in ten has a word out of its range, which both sides refuse."""
     fn = draw(st.sampled_from(TCS))
     f = TC_FMT[fn]
@@ -1370,7 +1370,7 @@ def _word_leaf_w(t) -> int:
 
 @st.composite
 def word_requests(draw) -> dict:
-    """A word primitive on four rows, each leaf drawn from its width's edges or its whole range; one request in ten has a
+    """A word primitive on four rows, each leaf sampled from its width's edges or its whole range; one request in ten has a
     word out of its range, which both sides refuse."""
     fn = draw(st.sampled_from(WORDS))
 
@@ -1553,7 +1553,7 @@ def test_the_gpu_log_probe(server, tmp_path):
 
 @st.composite
 def sampler_requests(draw) -> dict:
-    """A sampler primitive on eight rows of words drawn from its grid's words or the whole range; one request in ten has a
+    """A sampler primitive on eight rows of words sampled from its grid's words or the whole range; one request in ten has a
     word out of its range, which both sides refuse."""
     fn = draw(st.sampled_from(SAMPLER))
     pools = {TW.NvLogf: (LOG_SWEEP,), TW.NvLogfV2: (LOG_SWEEP,), SPL.GumbelStreamKey: (EDGES[64], EDGES[64]),
@@ -1673,7 +1673,7 @@ def test_the_tanh_table_is_the_library_table(server):
 
 @st.composite
 def mufu_requests(draw) -> dict:
-    """A MUFU primitive on eight words, each drawn from `MUFU_SWEEP` or the whole range; one request in ten has a word out
+    """A MUFU primitive on eight words, each sampled from `MUFU_SWEEP` or the whole range; one request in ten has a word out
     of its range, which both sides refuse."""
     fn = draw(st.sampled_from(MUFU))
     x = [[draw(st.one_of(st.sampled_from(MUFU_SWEEP), st.integers(0, (1 << 32) - 1))) for _ in range(8)]]
@@ -1721,7 +1721,7 @@ def test_decimal_primitives_on_their_grids(server):
 
 @st.composite
 def decimal_requests(draw) -> dict:
-    """A decimal primitive on eight words, each drawn from `DEC_SWEEP`, the words of magnitude below 16, or the whole
+    """A decimal primitive on eight words, each sampled from `DEC_SWEEP`, the words of magnitude below 16, or the whole
     range; one request in ten has a word out of its range, which both sides refuse."""
     fn = draw(st.sampled_from(DECIMALS))
     small = st.builds(lambda s, m: s | m, st.sampled_from([0, 1 << 31]), st.integers(0, 0x41800000))
@@ -1809,7 +1809,7 @@ def test_the_l40s_silu_and_rope_captures(server):
 
 @st.composite
 def act_requests(draw) -> dict:
-    """An activation or RoPE output on eight rows of words, each drawn from its grid's words or the whole range; one request
+    """An activation or RoPE output on eight rows of words, each sampled from its grid's words or the whole range; one request
     in ten has a word out of its range, which both sides refuse."""
     fn = draw(st.sampled_from(ACTS))
     pool = {VP.RopeOut: (BF16_EDGES, BF16_EDGES, ROPE_CS, ROPE_CS), VP.RopeOutAdd: (BF16_EDGES, BF16_EDGES, ROPE_CS, ROPE_CS),

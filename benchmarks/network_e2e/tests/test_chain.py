@@ -316,7 +316,7 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
 
 
 def test_at_serve_time_is_before_its_draw_and_no_later_than_the_next_windows_close(tmp_path):
-    """A Commit window's advice was registered at serve time when it was registered before its draw (every rank's
+    """A Commit window's advice was registered at serve time when it was registered before its sample (every rank's
     `advice_before_draw`, the verifier's receipt of the registration before any coin) and no later than the next
     window's close in the endpoint's trace; after serving when either fails, and unknown
     while either is. Its lag after its own window's close is always printed, in seconds."""

@@ -3,7 +3,7 @@ statement on the serving rows' ports (an input row per parameter and an output r
 ``hm96-sha512/row/v2`` row of its u16 words), flat (`ir_lower`; ``--reads slots``: its MUFU reads in lookup slots,
 `read_slots`) or structural (``--structural``: `struct_lower`'s template, the flat unit never built), and with ``--bin`` and ``--lean`` one round of ``--n`` units staged on finite bf16 values (every
 parameter of a bf16 family; a stand-in for the served values, which only the window reads), proved by M0 under ``--zk``
-(`a0.session`: serve and prove, the verifier's subset draw of all of them) and verified by the Lean verifier of record
+(`a0.session`: serve and prove, the verifier's subset sample of all of them) and verified by the Lean verifier of record
 (`a0.lean_verify`).  A coordinate template (`serving_rows.COORDS`: the expert-indexed pair GEMMs and FlashInfer's FP8 linear at
 N = 1) with ``--call-n N``
 stages instead the ``--units`` of a synthetic Call at N read through the serving rows' split (`split_call`), each held to the
