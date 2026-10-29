@@ -22,6 +22,8 @@ lanes, which the IADD3 removes through its column source loaded per tile.
   when the word's coins land in it. The best top-set tables over steps 1..T by a Lagrangian DP, allotted over HBM and
   the call's chains; `linear_bound` bounds every table; under model C a copy moves 4 columns, whose coins its one
   address must hold jointly.
+- `LIT_WEIGHTS`: N-LIT's coin-lane weighting A′ = (1, 127, 1) through the same fold, with A5's bound for it
+  (`weighted_bound`).
 
 Output: JSON (`--json`); exit 0 iff every check passes.
 """
@@ -44,6 +46,9 @@ import noise_sweep as ns  # noqa: E402
 FIRST = 21
 DATA = 28
 COIN_LANES = 3
+#: the coin lanes' A′: blc4a's, and N-LIT's weighting
+COIN_WEIGHTS = (1, 1, 1)
+LIT_WEIGHTS = (1, 127, 1)
 TILE = 64
 KS = (2048, 7168, 8192)
 FIXED = es.TAGX_FIXED
@@ -147,9 +152,9 @@ def price_added_step() -> dict:
 
 # ---------------------------------------------------------------- the words on blc4a's lane layout
 
-def operands(a, b, s, e, tile, a1, at, u, g, coins, kappa):
+def operands(a, b, s, e, tile, a1, at, u, g, coins, kappa, weights=COIN_WEIGHTS):
     """One salt's X (m × 32s) and Y (tiles × 32s × n) on blc4a with the de-noise in step s, the row offset ρ and the
-    column source c (m × n: κ·G_j + σ_{tile(i), j})."""
+    column source c (m × n: κ·G_j + σ_{tile(i), j}, σ the coin lanes' sum weighted by their A′)."""
     m, k = a.shape
     n = b.shape[1]
     tiles = -(-m // tile)
@@ -170,7 +175,8 @@ def operands(a, b, s, e, tile, a1, at, u, g, coins, kappa):
         lx, ly = np.concatenate(lx, axis=1), np.concatenate(ly, axis=0)
         pad = 32 - COIN_LANES - lx.shape[1] - dl[t]
         assert pad >= 0
-        xs += [a[:, lo:lo + dl[t]], np.zeros((m, pad), np.int64), lx, np.ones((m, COIN_LANES), np.int64)]
+        xs += [a[:, lo:lo + dl[t]], np.zeros((m, pad), np.int64), lx,
+               np.broadcast_to(np.asarray(weights, np.int64), (m, COIN_LANES))]
         for q in range(tiles):
             ys[q] += [b[lo:lo + dl[t]], np.zeros((pad, n), np.int64), ly, coins[t, :, q, :]]
         lo += dl[t]
@@ -178,7 +184,7 @@ def operands(a, b, s, e, tile, a1, at, u, g, coins, kappa):
     x, y = np.concatenate(xs, axis=1), np.stack([np.concatenate(v, axis=0) for v in ys])
     assert x.min() >= -128 and x.max() <= es.LANE_MAX and np.abs(y).max() <= es.LANE_MAX
     rho = (u0 + es.LANE_MAX * u1 + es.LANE_MAX * e * u2)[:, 0] + at[:, 1:].sum(1)
-    sigma = coins.sum(axis=(0, 1))
+    sigma = np.einsum("l,tlqn->qn", np.asarray(weights, np.int64), coins)
     col = (kap @ g)[None, :] + sigma[np.arange(m) // tile]
     return x, y, rho, col
 
@@ -207,7 +213,7 @@ SIM_CASES = ns.CASES + ["identical_rows_tiles", "zero_all", "identical_all"]
 
 
 def sim_blc(case: str, k: int, s: int, e: int, salts: int = 24, m: int = 4, n: int = 6, tile: int = 2,
-            seed: int = 1) -> dict:
+            seed: int = 1, weights=COIN_WEIGHTS) -> dict:
     """blc4a + de-noise on s steps over a salt grid (raw coin words, G and the lane coins free; T(i) a constant)."""
     rng = np.random.default_rng(seed)
     a, b = ns._data(case if case in ns.CASES else "random", m, n, k, rng)
@@ -227,7 +233,7 @@ def sim_blc(case: str, k: int, s: int, e: int, salts: int = 24, m: int = 4, n: i
         a1 = np.stack([(hr >> q) & 1 for q in range(4)], axis=1)
         at = np.stack([np.zeros(m, dtype=np.int64)] + [1 + ((hr >> (4 + t)) & 1) for t in range(s - 1)], axis=1)
         u = (hu[:, None] & 0x7F, _signed(hu[:, None] >> 8), _signed(hu[:, None] >> 16))
-        x, y, rho, col = operands(a, b, s, e, tile, a1, at, u, g, coins, es.TAGX_KAPPA)
+        x, y, rho, col = operands(a, b, s, e, tile, a1, at, u, g, coins, es.TAGX_KAPPA, weights)
         xs.append(x), ys.append(y), rhos.append(rho), cols.append(col)
         raw.append(np.concatenate([hr, hu, g.ravel(), coins.ravel()]))
     words = tile_words(np.stack(xs), np.stack(ys), tile)
@@ -238,7 +244,7 @@ def sim_blc(case: str, k: int, s: int, e: int, salts: int = 24, m: int = 4, n: i
     return out
 
 
-def exact_full(k: int, m: int = 128, n: int = 8, salts: int = 2, seed: int = 5) -> dict:
+def exact_full(k: int, m: int = 128, n: int = 8, salts: int = 2, seed: int = 5, weights=COIN_WEIGHTS) -> dict:
     """blc4a + de-noise at Llama's K with its step count, on 64-row tiles: the final word minus ρ_i and the per-tile
     column source is A·Bᵀ, and the magic epilogue equals stock's bit for bit (22-bit column scales)."""
     rng = np.random.default_rng(seed)
@@ -251,7 +257,7 @@ def exact_full(k: int, m: int = 128, n: int = 8, salts: int = 2, seed: int = 5) 
         at = np.concatenate([np.zeros((m, 1), np.int64), 1 + rng.integers(0, 2, (m, s - 1))], axis=1)
         u = (rng.integers(0, 128, (m, 1)), rng.integers(-128, 128, (m, 1)), rng.integers(-128, 128, (m, 1)))
         g = rng.integers(-3, 4, (4, n))
-        x, y, rho, col = operands(a, b, s, e, TILE, a1, at, u, g, _coins(rng, s, tiles, n), es.TAGX_KAPPA)
+        x, y, rho, col = operands(a, b, s, e, TILE, a1, at, u, g, _coins(rng, s, tiles, n), es.TAGX_KAPPA, weights)
         w = tile_words(x[None], y[None], TILE)[0]
         peak = max(peak, int(np.abs(w).max()))
         p = a @ b
@@ -451,6 +457,28 @@ def linear_bound(ch: Chain, m: int, grain: int = 1, gfac: float = 1.0, pairs: bo
     return ns.H32 * HBM_BYTES / ENTRY_BYTES * p / stock(m)
 
 
+def sigma_pmax(weights, t: int) -> float:
+    """The likeliest σ_t, the sum of t steps' coin lanes weighted by their A′ (FFT convolution)."""
+    parts = []
+    for w in weights:
+        p = np.zeros(254 * w + 1)
+        p[::2 * w] = 1 / 128
+        parts += [p] * t
+    size = sum(len(p) - 1 for p in parts) + 1
+    nfft = 1 << (size - 1).bit_length()
+    spec = np.ones(nfft // 2 + 1, dtype=complex)
+    for p in parts:
+        spec *= np.fft.rfft(p, nfft)
+    return float(np.fft.irfft(spec, nfft)[:size].max())
+
+
+def weighted_bound(weights, m: int, gfac: float = 1.0, pairs: bool = True) -> float:
+    """`linear_bound` with the coin lanes weighted by `weights`: a pair's second hit is at step 2 or later, where the
+    walk's likeliest value is 1/2 (1 at step 1)."""
+    p = sigma_pmax(weights, 2) * 0.5 if pairs else sigma_pmax(weights, 1)
+    return ns.H32 * HBM_BYTES / ENTRY_BYTES * p * gfac / CODES / stock(m)
+
+
 def a5_words(ch: Chain, old: Chain) -> dict:
     """Per-word tables on blc4a: G known to advice (a window coin, or advice after G), and G per call as built, where
     the column index carries G's digits (one digit on rows 0..11, two on a tile below row 168); gross (index writes
@@ -583,12 +611,33 @@ def report() -> dict:
        max(words[f"m{m}"]["C_G_known_bound_resume_free"] for m in MS) < 1e-6,
        {m: words[f"m{m}"]["C_G_known_bound_resume_free"] for m in MS})
 
+    lit_sims = {case: sim_blc(case, FIRST + DATA * 3 - 5, 5, 12, weights=LIT_WEIGHTS) for case in SIM_CASES}
+    lit_full = {str(k): exact_full(k, weights=LIT_WEIGHTS) for k in KS}
+    ok("N-LIT's weighting A′ = (1, 127, 1) on the coin lanes keeps the fold: on the salt grid every word distinct and "
+       "non-free and the final word exact after the per-tile column source; at Llama's K exact, the magic equal to "
+       "stock's, no word near 2^31",
+       all(r["bad_share"] == 0 and r["final_bad"] == 0 and r["exact_after_epilogue"] for r in lit_sims.values())
+       and all(v["exact_after_epilogue"] and v["magic_equals_stock"] and v["peak_word_log2"] < 30
+               for v in lit_full.values()),
+       {"sim": {c: (r["bad_share"], r["final_bad"], r["exact_after_epilogue"]) for c, r in lit_sims.items()},
+        "full": lit_full})
+    lit = {"sigma_pmax_step1": {"blc4a": sigma_pmax(COIN_WEIGHTS, 1), "lit": sigma_pmax(LIT_WEIGHTS, 1)},
+           "sigma_pmax_step2": {"blc4a": sigma_pmax(COIN_WEIGHTS, 2), "lit": sigma_pmax(LIT_WEIGHTS, 2)}}
+    for m in MS:
+        lit[f"m{m}"] = {"P_G_known_bound": weighted_bound(LIT_WEIGHTS, m),
+                        "P_G_known_bound_resume_free": weighted_bound(LIT_WEIGHTS, m, pairs=False),
+                        "P_G_call_bound": weighted_bound(LIT_WEIGHTS, m, gfac=1 / 7)}
+    ok("the FFT pmf agrees with the chain's at blc4a's weights, and with N-LIT's weighting any per-word table under "
+       "bare P saves under 0.01% of stock at m 64 with G known",
+       abs(weighted_bound(COIN_WEIGHTS, 64) - words["m64"]["P_G_known_bound"]) < 1e-12
+       and lit["m64"]["P_G_known_bound"] < 1e-4, lit)
+
     alpha = price_added_step()["alpha_blcx"]
     per = {f"{key}_m{m}": ns.periods(words[f"m{m}"][key], alpha)
            for m in MS for key in ("P_G_known_gross", "P_G_call_gross", "P_G_call_net")}
     return {"checks": checks, "layout": lay, "price_added_step": price_added_step(), "sim": sims, "full": full,
             "a5_rows_old": rows_old, "a5_rows_blc4a": rows_blc, "a5_words": words, "a5_monte_carlo": mc,
-            "periods": per}
+            "lit_weighting": {"sim": lit_sims, "full": lit_full, "a5": lit}, "periods": per}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -603,7 +652,8 @@ def main(argv: list[str] | None = None) -> int:
     for c in rep["checks"]:
         print(("PASS " if c["pass"] else "FAIL ") + c["check"])
     print(json.dumps({"layout": rep["layout"], "price_added_step": rep["price_added_step"],
-                      "a5_words": rep["a5_words"], "a5_monte_carlo": rep["a5_monte_carlo"]}, indent=1, default=float))
+                      "a5_words": rep["a5_words"], "a5_monte_carlo": rep["a5_monte_carlo"],
+                      "lit_a5": rep["lit_weighting"]["a5"]}, indent=1, default=float))
     return 0 if all(c["pass"] for c in rep["checks"]) else 1
 
 
