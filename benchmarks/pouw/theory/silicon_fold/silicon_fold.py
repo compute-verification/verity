@@ -392,6 +392,72 @@ def e4_cinject(rng: np.random.Generator, T: int = 16, rows: int = 4, cols: int =
             "checks": {"C-injection reproduces the transcript only with every instruction issued": honest == cheat}}
 
 
+def e5_keccak_bitsliced(rng: np.random.Generator) -> dict:
+    """The cheater's best-known software for FT-Keccak, run: Keccak-f[1600]'s round bit-sliced over 32 instances, one
+    32-bit register a (lane, z) bit, every 3-input LOP3 counted as one write, rho/pi as renaming, iota folded into chi's
+    truth table. Its output must equal rho.keccak_round on every instance."""
+    n = 32
+    states = [[int(x) for x in rng.integers(0, 1 << 63, size=25, dtype=np.uint64)] for _ in range(n)]
+    states = [[x | ((i & 1) << 63) for x in s] for i, s in enumerate(states)]
+    msgs = [[int(x) for x in rng.integers(0, 1 << 63, size=16, dtype=np.uint64)] for _ in range(n)]
+    t = 5
+    bits = {}
+    for x in range(5):
+        for y in range(5):
+            for z in range(64):
+                bits[(x, y, z)] = sum(((states[i][x + 5 * y] >> z) & 1) << i for i in range(n))
+    mb = {(i5 % 5, i5 // 5, z): sum(((msgs[i][i5] >> z) & 1) << i for i in range(n)) for i5 in range(16) for z in range(64)}
+    writes = {"absorb": 0, "theta_parity": 0, "theta_apply": 0, "chi": 0}
+    for key, v in mb.items():
+        bits[key] ^= v
+        writes["absorb"] += 1
+    C = {}
+    for x in range(5):
+        for z in range(64):
+            C[(x, z)] = bits[(x, 0, z)] ^ bits[(x, 1, z)] ^ bits[(x, 2, z)] ^ bits[(x, 3, z)] ^ bits[(x, 4, z)]
+            writes["theta_parity"] += 2
+    A = {}
+    for x in range(5):
+        for y in range(5):
+            for z in range(64):
+                A[(x, y, z)] = bits[(x, y, z)] ^ C[((x - 1) % 5, z)] ^ C[((x + 1) % 5, (z - 1) % 64)]
+                writes["theta_apply"] += 1
+    B = {}
+    for x in range(5):
+        for y in range(5):
+            r = rho.KECCAK_ROT[x][y]
+            for z in range(64):
+                B[(y, (2 * x + 3 * y) % 5, (z + r) % 64)] = A[(x, y, z)]
+    full = (1 << n) - 1
+    rc = rho.KECCAK_RC64[t]
+    out = {}
+    for x in range(5):
+        for y in range(5):
+            for z in range(64):
+                v = B[(x, y, z)] ^ (~B[((x + 1) % 5, y, z)] & full & B[((x + 2) % 5, y, z)])
+                if x == 0 and y == 0 and (rc >> z) & 1:
+                    v ^= full
+                out[(x, y, z)] = v
+                writes["chi"] += 1
+    ok = 0
+    for i in range(n):
+        lanes = [states[i][k] ^ (msgs[i][k] if k < 16 else 0) for k in range(25)]
+        want = rho.keccak_round(lanes, rc, 64)
+        got = [sum(((out[(k % 5, k // 5, z)] >> i) & 1) << z for z in range(64)) for k in range(25)]
+        ok += got == want
+    round_only = (writes["theta_parity"] + writes["theta_apply"] + writes["chi"]) / n
+    return {
+        "instances_exact": f"{ok}/{n}",
+        "writes": writes,
+        "writes_per_instance_round": round_only,
+        "writes_per_instance_with_absorb": round_only + writes["absorb"] / n,
+        "checks": {
+            "bit-sliced Keccak round equals the reference on all 32 instances": ok == n,
+            "bit-sliced round is 120 writes an instance (the c_sw the margin uses)": round_only == 120.0,
+        },
+    }
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 
 
@@ -433,6 +499,7 @@ def run(synth: dict, margin: float, k: int, fast_ratio: float) -> dict:
         "e2_affine_lemma": e2_affine_lemma(rng),
         "e3_placement": e3_placement(rng),
         "e4_cinject": e4_cinject(rng),
+        "e5_keccak_bitsliced": e5_keccak_bitsliced(rng),
     }
     return {
         "baseline": base,
