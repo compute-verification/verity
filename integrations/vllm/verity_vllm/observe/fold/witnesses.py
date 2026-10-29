@@ -5,7 +5,7 @@ refused, since it would shift the input layout."""
 from __future__ import annotations
 
 from verity.ml.circuits.refs import Affine
-from verity.ml.circuits.types import Array, Record, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Type, Value
 
 from verity_vllm.observe.fold.resolver import WitnessParam
 
@@ -21,7 +21,7 @@ class WitnessInputs:
         for name in names:
             for i in range(n_requests):
                 self.param[(i, name)], self.fields[(i, name)] = len(params), []
-                params.append((name if n_requests == 1 else f"{name}_{i}", Record()))
+                params.append((name if n_requests == 1 else f"{name}_{i}", RecordType()))
 
     def leaves(self, op: WitnessParam, i: int, ptype: Type, what: str, req_index: dict[str, int], read: dict,
                err: type[Exception] = ValueError) -> Affine:
@@ -45,7 +45,7 @@ class WitnessInputs:
                 req = requests[ri]["request_id"]
                 empty.append((f"request {req!r}: no read took its {params[pidx][0]!r} witness parameter, which would be empty (input layout "
                               f"shift); refused", {"request": req, "param": params[pidx][0]}))
-            params[pidx] = (params[pidx][0], Array(n, Value(32)) if n else Record())
+            params[pidx] = (params[pidx][0], Array(n, Value(32)) if n else RecordType())
         return tuple(params), empty
 
     def layout(self, params: tuple, requests: list[dict]) -> list[dict]:
