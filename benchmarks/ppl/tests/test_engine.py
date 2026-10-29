@@ -308,8 +308,8 @@ def test_blc_coin_lanes_are_a_tile_column_term(coin_a):
     """`ssn_1l_tag` with blc4a's coin lanes against its k32 layout written out: step 0 holds 24 data lanes, the row tags
     against G and a1 against C; each later step 28 data lanes, three coin lanes against A' = (1, coin_a, 1) (odd coins
     on +-127 a 64-row tile, step and column) and the row lane 1 + l_t against 1. The accumulator less the public bias
-    and each tile's weighted column sum of coins is what the step serves, and de-noised the product; at k 86 it takes
-    one step more than the lead's 31 data lanes."""
+    and each tile's weighted column sum of coins is what the step serves, the same bytes at either weighting, and
+    de-noised the product; at k 86 it takes one step more than the lead's 31 data lanes."""
     g = torch.Generator().manual_seed(3)
     m, k, n = 128, 86, 40
     s = 1 + -(-(k - steps.SSN_TAG_DATA) // 28)
@@ -319,10 +319,10 @@ def test_blc_coin_lanes_are_a_tile_column_term(coin_a):
     run = types.SimpleNamespace(seed=4, li=2, window=1, rotations={}, gates=matmul.G.Gates(),
                                 arm=types.SimpleNamespace(name="t"), checking=False, cache={})
 
-    def served(denoise, rows=m):
+    def served(denoise, rows=m, a=coin_a):
         mm = matmul.MM("linear", "mlp.down_proj", run, x[:rows], w).integer(x[:rows], w)
         return steps.served_linear(mm, lambda _m: x[:rows].long() @ w.long().T, rule="ssn_1l_tag", coin_lanes=3,
-                                   coin_a=coin_a, denoise=denoise)
+                                   coin_a=a, denoise=denoise)
 
     mm = matmul.MM("linear", "mlp.down_proj", run, x, w)
     lanes, a1, key = mm.coins((m, s - 1)).double(), mm.coins((m, 4)).double(), mm.coins((steps.TAG_LANES,), 2 ** 16)
@@ -345,6 +345,7 @@ def test_blc_coin_lanes_are_a_tile_column_term(coin_a):
         r = slice(64 * tile, 64 * (tile + 1))
         folded[r] = xa[r] @ wa.T - (weights * coins[tile]).sum((0, 1))
     assert torch.equal(served(False), folded - torch.round(code.sum(0) / 2 + 1.5 * (s - 1)))
+    assert torch.equal(served(False), served(False, a=1))
     assert torch.equal(served(True), (x.long() @ w.long().T).double())
     assert run.gates.log["accumulator"]["failed"] == 0
     with pytest.raises(ValueError, match="leave a tile under 64"):
