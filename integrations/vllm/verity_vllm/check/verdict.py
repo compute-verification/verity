@@ -10,7 +10,7 @@ names being the field names they grew under -- `weights_pin`, `linkage`, `covera
 `pass` degenerated to `rc == 0 and tokens_equal` once `openings` / `coverage` stopped being carried on runs.jsonl.  The
 verdict of record was `commit/verdict.json` + `commit/sampled_replay_p*.json`, read together by whoever knew to.
 
-WHAT.  A `Verdict` = the seven named checks (groups) and the R*/X* rules under them, each a `CheckResult`:
+WHAT.  A `CommitChecks` = the seven named checks (groups) and the R*/X* rules under them, each a `CheckResult`:
 
     name        `<group>` for the group, `<group>/<rule>` for a rule                    (human names: see GROUPS)
     claim       one sentence: what PASS establishes
@@ -23,7 +23,7 @@ WHAT.  A `Verdict` = the seven named checks (groups) and the R*/X* rules under t
     notes       prose the PASS carries (named gaps, `structural_leak: <table>` where the rule rests on a name table, not on the Program)
 
 The decisions are v1's, unchanged: every rule (`check.commit_rules`, `check.c2_rules`) is `commit_pass.commit_verdict`'s own predicate, evaluated
-one by one instead of first-failure-wins, so `Verdict.outcome == PASS` iff v1's `commit_pass` (the record's own `commit_pass` is read
+one by one instead of first-failure-wins, so `CommitChecks.outcome == PASS` iff v1's `commit_pass` (the record's own `commit_pass` is read
 back and a disagreement is named on the record, `compat.reconstruction_mismatch`, never silently resolved).  What changes is the
 representation: a missing INPUT (no weights pin supplied, a Match account leg moved away, no sampled replay run) is INSUFFICIENT_EVIDENCE,
 a finding against the claim is FAIL; both are "not PASS", as before.
@@ -68,7 +68,7 @@ SCHEMA = "vllm-verdict/v1"
 # ---------------------------------------------------------------------------------------------------------------------- the records
 
 @dataclass
-class Verdict:
+class CommitChecks:
     checks: list[CheckResult]
     outcome: str
     program_digest: str | None = None
@@ -106,7 +106,7 @@ class Verdict:
         return d
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Verdict":
+    def from_dict(cls, d: dict[str, Any]) -> "CommitChecks":
         if d.get("schema") not in (None, SCHEMA):
             raise ValueError(f"not a {SCHEMA} document: schema {d.get('schema')!r}")
         kw = {k: d.get(k) for k in cls.__dataclass_fields__ if k in d and k != "checks"}
@@ -121,7 +121,7 @@ class Verdict:
         return p
 
     @classmethod
-    def load(cls, path: str | os.PathLike) -> "Verdict":
+    def load(cls, path: str | os.PathLike) -> "CommitChecks":
         with open(path) as f:
             return cls.from_dict(json.load(f))
 
@@ -320,8 +320,8 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
 
 def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | None, *, summary: dict | None = None, manifest_verify: dict | None = None,
           file_digests: dict[str, str] | None = None, row: str | None = None, min_openings: int | None = None, declaration: dict | None = None,
-          rc: int | None = None, build_summary: BuildSummary | None = None, build_results: Mapping[str, dict] | None = None, execution: dict | None = None) -> Verdict:
-    """The Verdict from the Commit's own documents: `rows` = runs.jsonl entries (control + instrumented; `records.commit_run`, a parsed
+          rc: int | None = None, build_summary: BuildSummary | None = None, build_results: Mapping[str, dict] | None = None, execution: dict | None = None) -> CommitChecks:
+    """The `CommitChecks` from the Commit's own documents: `rows` = runs.jsonl entries (control + instrumented; `records.commit_run`, a parsed
     line is read as one), `verdict_doc` = commit/verdict.json,
     `manifest_verify` = commit/manifest_verify.json, `execution` = `execution_of_record(row_dir)` (the Commit's own configuration record);
     `summary` = an older record's commit_summary.json (old rows only: its execution fields stand in for `execution`, its `rc` for a missing `rc`).
@@ -409,18 +409,18 @@ def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | Non
     runs_ = {"instrumented": len(treatment), "failed": sum(1 for _, rec, _ in recorded if rec is False), "control": sum(1 for r in runs if r.arm == "control"),
              "not_pass_by_reconstruction": sum(1 for _, ch in per_run if run_outcome(ch) != PASS), "pairs": [p for p, _ in per_run]}
     cdig, csrc, cdigs = correspondence_of_build(build_summary, result_jsons=build_results)
-    return Verdict(checks=groups + rules, outcome=outcome, program_digest=ctx.get("program_digest"), manifest_digest=ctx.get("manifest_digest"), query_id=query_id,
-                   correspondence_digest=cdig, correspondence_digest_source=csrc, correspondence_digests=cdigs,
-                   row=row, run_roots=list(dict.fromkeys(str(x) for x in (vd.get("run_roots") or [r.commit.run_root for r in treatment]) if x)),
-                   runs=runs_, inputs=dict(file_digests or {}), execution=execution, compat=compat, notes=notes)
+    return CommitChecks(checks=groups + rules, outcome=outcome, program_digest=ctx.get("program_digest"), manifest_digest=ctx.get("manifest_digest"), query_id=query_id,
+                        correspondence_digest=cdig, correspondence_digest_source=csrc, correspondence_digests=cdigs,
+                        row=row, run_roots=list(dict.fromkeys(str(x) for x in (vd.get("run_roots") or [r.commit.run_root for r in treatment]) if x)),
+                        runs=runs_, inputs=dict(file_digests or {}), execution=execution, compat=compat, notes=notes)
 
 
 RECORD_FILES = ("commit/verdict.json", "commit/runs.jsonl", "commit_summary.json", "commit/manifest_verify.json", "commit/summary.json", "commit.log", "global_match.json",
                 "match_summary.json", "build_summary.json")
 
 
-def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: str | None = None) -> Verdict:
-    """Rebuild the Verdict from a row dir's evidence (`commit/runs.jsonl`, `commit/verdict.json`, `commit/summary.json` + `commit.log`
+def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: str | None = None) -> CommitChecks:
+    """Rebuild the `CommitChecks` from a row dir's evidence (`commit/runs.jsonl`, `commit/verdict.json`, `commit/summary.json` + `commit.log`
     (`execution_of_record`), `commit/manifest_verify.json`, `commit/sampled_replay_p*.json` for their digests; an older row's
     `commit_summary.json` is read when present).  A row whose Commit never ran gives NOT_RUN with the missing files named.
     `rc` = commit_delta's exit code when the caller (row_pod.sh) knows it; `stage_ok` = a stage decision made OUTSIDE this verdict (older
