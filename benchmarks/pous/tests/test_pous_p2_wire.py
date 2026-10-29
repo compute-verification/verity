@@ -18,6 +18,7 @@ sys.path.insert(0, str(BENCH))
 from p2_v1 import reference as R  # noqa: E402
 from p2_v1 import vectors as V  # noqa: E402
 from p2_v1 import wire as Wi  # noqa: E402
+from verity.core.protocols.pous.verifier import MerkleTree  # noqa: E402
 
 
 def _load(path: Path) -> dict:
@@ -118,7 +119,7 @@ def _setup_with_block(small, setup, i, block):
     salt, bps = bytes.fromhex(small["setup_salt"]), V.SMALL.blocks_per_segment
     blocks = [bytes.fromhex(b) for b in small["blocks"]]
     blocks[i] = block
-    root = R.root([R.leaf(salt, j // bps, j % bps, b) for j, b in enumerate(blocks)])
+    root = MerkleTree([R.leaf(salt, j // bps, j % bps, b) for j, b in enumerate(blocks)]).root
     return Wi.setup_messages(small["manifest"].encode(), bytes.fromhex(small["w_commitment"]), salt, blocks, root)
 
 
