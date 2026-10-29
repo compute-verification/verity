@@ -9,6 +9,8 @@ decisions  4096 x the median block's cycles / (iters x warps x decisions a trip)
            (bits a decision: one for the two-way forms, 4 for BRX16, a digit for a lookup), units a bit read by the
            warp and a lane-bit for the forms whose lanes read their own coins; the overhead is over the arms alone
            (`arm`, `larm`), scaled by decisions a trip where the arms differ.
+entries    lag.cu: 4096 x the median block's cycles / (iters x warps x 8) units a warp entry (a word folded into the
+           hash input), a lane's (over 32), and a lane's over `cmp`, where every word is computed.
 
   python prices.py OUT_DIR   # OUT_DIR: a probes.sh run's out/ (one directory a binary); prints JSON lines
 """
@@ -35,6 +37,8 @@ DECIDE = {
     "lu": (4, 1, False, "larm"), "lw": (4, 1, False, "larm"), "ld": (4, 1, True, "larm"), "larm": (4, 1, False, None),
     "lut8": (4, 8, True, None), "lut10": (3, 10, True, None), "lut12": (2, 12, True, None),
 }
+# lag.cu: 8 entries a trip, each priced over `cmp` (every word computed)
+ENTRY = ("cmp", "cpy", "l1", "l1w", "lag1", "lag2", "lag4", "lag8")
 HONEST = {"hs_g2s1k": "honest_b", "hs_g2s4k": "honest_b", "hs_g2s4kh": "honest_b", "hs_s2g4k": "honest_b",
           "hs_g2s16k": "honest_b", "hs_g2s4kz": "honest_b", "hs_g2s16kz": "honest_b", "hs_s2g4kz": "honest_b",
           "hw_g2s4k": "honest_w", "hw_g2s16k": "honest_w", "hw_g2s4kz": "honest_w", "hw_g2s4khz": "honest_w",
@@ -63,7 +67,7 @@ def main(out: Path) -> None:
         rows.update(r)
         times.update(t)
     per_trip = {}
-    for name in DECIDE:
+    for name in (*DECIDE, *ENTRY):
         if name in times:
             per_trip[name] = statistics.median(SM_CLOCK * statistics.median(t["cyc"]) / (t["iters"] * WARPS)
                                                for t in times[name])
@@ -80,6 +84,11 @@ def main(out: Path) -> None:
             if base and base in per_trip:
                 bd = DECIDE[base][0]
                 rec["overhead_a_warp_decision"] = round((per_trip[name] - per_trip[base] * d / bd) / d, 1)
+        elif name in ENTRY:
+            u = per_trip[name] / 8
+            rec.update(kind="entry", units_a_warp_entry=round(u, 1), units_a_lane_entry=round(u / 32, 2))
+            if "cmp" in per_trip:
+                rec["over_cmp_a_lane_entry"] = round((u - per_trip["cmp"] / 8) / 32, 2)
         elif r.get("words"):
             w = r["rate"] * r["words"]
             rec.update(kind="copy", words_an_sm_clock=round(w, 3), units_a_word=round(SM_CLOCK / w, 1),

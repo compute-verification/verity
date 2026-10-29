@@ -70,14 +70,17 @@ OP_KERNEL(lag8, TPB) { body<LAG, 8>(a); }
 
 #define P(NM, EXP, NOTE) \
   {.name = #NM, .kernel = (const void*)NM, .tpb = TPB, .expect = EXP, .iters = 4096, .note = NOTE}
+// ptxas 13.0: the fold is LOP3, SHF.L.W and IMAD; the word is one IMAD. l1 and l1w predicate the word's IMAD from a LOP3
+// on the digit. lag1 reduces to l1 (ptxas sees the held position is the previous one), and lag2 to lag8 select the
+// held word with SEL, one a lag an entry, after about two ISETP a lag.
 static const OpProbe PROBES[] = {
-    P(cmp, "BRA=1", "every word computed and folded"),
-    P(cpy, "BRA=1", "every word held and folded"),
-    P(l1, "BRA=1", "a lane's lag-1 copy on its own digit: predicated IMAD"),
-    P(l1w, "BRA=1", "lag-1 copy on a run-time-uniform digit: predicated IMAD"),
-    P(lag1, "BRA=1", "lag 1 by comparing held positions"),
-    P(lag2, "BRA=1", "lag 2 by comparing held positions"),
-    P(lag4, "BRA=1", "lag 4 by comparing held positions"),
-    P(lag8, "BRA=1", "lag 8 by comparing held positions"),
+    P(cmp, "SHF.L.W.U32.HI=8,IMAD=16,LOP3.LUT=16", "every word computed and folded"),
+    P(cpy, "SHF.L.W.U32.HI=8,IMAD=8,LOP3.LUT=16", "every word held and folded"),
+    P(l1, "SHF.L.W.U32.HI=8,IMAD=16,LOP3.LUT=23", "a lane's lag-1 copy on its own digit: predicated IMAD"),
+    P(l1w, "SHF.L.W.U32.HI=8,IMAD=16,LOP3.LUT=25", "lag-1 copy on a run-time-uniform digit: predicated IMAD"),
+    P(lag1, "SHF.L.W.U32.HI=8,IMAD=16,ISETP*=3,LOP3.LUT=16", "lag 1 by comparing held positions"),
+    P(lag2, "SHF.L.W.U32.HI=8,IMAD=16,ISETP*=19,SEL=9", "lag 2 by comparing held positions"),
+    P(lag4, "SHF.L.W.U32.HI=8,IMAD=18,ISETP*=45,SEL=32", "lag 4 by comparing held positions"),
+    P(lag8, "SHF.L.W.U32.HI=8,IMAD=18,ISETP*=109,SEL=64", "lag 8 by comparing held positions"),
 };
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
