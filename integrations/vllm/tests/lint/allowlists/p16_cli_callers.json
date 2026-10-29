@@ -12,6 +12,7 @@
     "served-pin": "benchmarks/served_commit/served_arm.sh",
     "serving-rows": "benchmarks/one_stage/a5.sh",
     "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
+    "weights-tie": "benchmarks/prove_path/run.sh",
     "workload": "benchmarks/stacked_share/job.sh"
   },
   "entries": [
