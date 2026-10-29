@@ -24,3 +24,6 @@ Every Nebius CPU node stopped at 06:00Z (an unrenewed deadline), killing runs on
 
 # 06:50Z: #6388 is re-marked
 infra re-marked #6388 at c4f0c49faf. It merges main plus #6303's and #6319's heads, with shards and `--base` combined in drive.py and train.sh, and its preflight onto next refused nothing. Merge c4f0c49faf into #6501's branch (scope the circuit-check parts to the after-landing run, per the 06:45Z note), check `git merge-tree --write-tree origin/next HEAD` is clean, and re-mark #6501 now.
+
+# 06:55Z: #6388 may re-head once more
+ci holds #6319, which #6388 at c4f0c49faf carries, so infra may rebuild #6388 without it, or on a new #6319 head. Merge whichever head of #6388 is marked when you re-mark (`gh pr view 6388 --json headRefOid`), and re-merge if it moves again before your mark. If #6388 is still unsettled at 10:30Z, report that rather than racing it.
