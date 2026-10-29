@@ -3,8 +3,8 @@ itself: the same verdicts, clock, `accepted` and `violations` on `test_network_r
 committed, certified and mixed, with each egress link checked over a prefix of the windows of its own, so the unit's clock
 comes from several links; on `service.py`'s calls; and a refusal, never a Python verdict, outside the Lean's domain. The
 client's certificate refusals (`certificate_refusals`) and a link's signed syncs read through its clock openings
-(`signed_clocks`) are their references' (`audit.certificate_refusals`, `advised.SignedClocks`) on crafted and generated
-inputs, a disagreement refusing, and outside the Lean's domain each raises."""
+(`signed_clocks`) are their references' (`audit.certificate_refusals`, `certificate.SignedClocks`) on crafted and
+generated inputs, a disagreement refusing, and outside the Lean's domain each raises."""
 
 from __future__ import annotations
 
@@ -27,9 +27,9 @@ import test_network_records_protocol as R
 import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import advised, audit, lean_audit, service
+from verity.core.protocols.certifier import audit, lean_audit, service
 from verity.core.protocols.certifier.certificate import (CertifiedClock, CertifiedRecord, Direction, Issuer, LmsKey,
-                                                        LmsSigner, clock_commitment, parameters_digest)
+                                                        LmsSigner, SignedClocks, clock_commitment, parameters_digest)
 from verity.core.protocols.certifier.commitment import commit
 from verity.core.protocols.certifier.grid import Certifier, GridParams, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
@@ -514,11 +514,11 @@ def _openings():
 
 
 def _signed(lean, openings, session=SESSION, link="n2"):
-    """The Lean's signed syncs and refusals of `openings`, which must be `advised.SignedClocks`'s: its syncs and each
-    opening's refusal code."""
+    """The Lean's signed syncs and refusals of `openings`, which must be `certificate.SignedClocks`'s: its syncs and
+    each opening's refusal code."""
     key = _openings()[0]
     syncs, refused = lean_audit.signed_clocks(key, session, link, openings, server=lean)
-    ref = advised.SignedClocks(key, session, tuple(openings))
+    ref = SignedClocks(key, session, tuple(openings))
     assert lean_audit.DISAGREEMENT not in refused
     assert syncs == ref.syncs(link) and tuple(refused) == ref.codes
     return syncs, refused
@@ -526,7 +526,7 @@ def _signed(lean, openings, session=SESSION, link="n2"):
 
 def test_the_signed_syncs_are_the_references(lean):
     """`lean_audit.signed_clocks` (`network-records verdicts`' ``clocks``, `NetworkCheck.Period.signedSyncs`) gives
-    `advised.SignedClocks`'s syncs, window 0's on up to the first without exactly one signed sync, and refuses each
+    `certificate.SignedClocks`'s syncs, window 0's on up to the first without exactly one signed sync, and refuses each
     opening it does: not an egress certificate's, another key's, a sync and salt that don't open the signed digest,
     a signature that doesn't verify (forged, relabelled, or another session's), and both openings sharing a salt. The
     same opening twice is one, and so is one sync signed twice for a window; two syncs for a window give it none."""
@@ -548,8 +548,8 @@ def test_the_signed_syncs_are_the_references(lean):
 
 def test_on_generated_openings_the_lean_is_the_reference(lean):
     """On openings drawn from those of `_openings` in any order and number, in `SESSION` or another: the Lean's syncs
-    are `advised.SignedClocks`', and so are each opening's refusal and the link-windows with two signed syncs, every
-    refusal among them."""
+    are `certificate.SignedClocks`', and so are each opening's refusal and the link-windows with two signed syncs,
+    every refusal among them."""
     _, honest, bad, beside = _openings()
     pool = [*honest, *bad.values(), *beside.values()]
     found = set()
@@ -596,7 +596,7 @@ def test_clock_refusals_are_compared_by_opening_and_link_window(lean, monkeypatc
     key, honest, bad, beside = _openings()
     openings = [bad["forged"], *honest[1:], beside["second"]]
     assert _signed(lean, openings) == ((), ["signature", None, None, None, None])
-    real = advised.SignedClocks
+    real = SignedClocks
     assert real(key, SESSION, tuple(openings)).split == (("n2", 1),)
     for change in ({"codes": ("key", None, None, None, None)}, {"codes": (None, "signature", None, None, None)},
                    {"split": (("n2", 2),)}, {"split": (("m", 1),)}):
