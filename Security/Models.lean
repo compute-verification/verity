@@ -36,7 +36,7 @@ import Definitions.Pouw.Assumptions
 import Definitions.Pouw.Guarantees
 import Definitions.NetworkCertifier.Assumptions
 import Definitions.NetworkCertifier.Guarantees
-import Definitions.NetworkCertifier.Guarantees.Horizon
+import Definitions.NetworkCertifier.Guarantees.Pooled
 import Definitions.Flock.Guarantees
 import Definitions.Accounting.Assumptions.Remote
 import Definitions.Accounting.Assumptions.RemoteOutside
@@ -46,7 +46,7 @@ import Definitions.Accounting.Assumptions.Parties
 import Definitions.Accounting.Guarantees
 import Definitions.Hash.Guarantees
 import Definitions.NetworkCertifier.Guarantees.Period
-import Definitions.NetworkCertifier.Guarantees.HorizonLeak
+import Definitions.NetworkCertifier.Guarantees.PooledLeak
 import Definitions.Core.Assumptions.Transport
 import Definitions.Core.Guarantees.Transport
 
