@@ -1,4 +1,4 @@
-"""The remote bandwidth audit over PoUS's P2 store (`p2-unit4/v0`): the node's registered store is PoUS's `C*`, the
+"""PoUB over PoUS's P2 store (`p2-unit4/v0`): the node's registered store is PoUS's `C*`, the
 weights `W` encoded under P2 (`pous.schemes.p2`, `p2-16448/v4`) at PoUS's setup, and each receipt is of a unit of four
 of its 2,056-byte blocks, which a GPU sketches as it decodes them while serving.
 
@@ -8,7 +8,7 @@ unit g        blocks 4g … 4g + 3, 8,224 bytes at byte 8224·g: 257 whole 32-by
               N − 4U blocks (none in a store of whole units, as PoUS's of 2^16-block segments) are in no unit, and no
               receipt certifies them
 registration  node, P2's parameters, PoUS's commitment to W, PoUS's salt, the vk root, k_s: PoUS's setup's, the salt
-              drawn after the commitment (`setup.draw_salt`) and the root the verifier built from the C* it decoded to
+              sampled after the commitment (`setup.draw_salt`) and the root the verifier built from the C* it decoded to
               the committed W (`setup.verifier_key_from_encoding`); the node the one whose store the deployment's
               registration log registers (`stored`)
 digest        SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u32be w ‖ u32be c0 ‖ u32be blocks_per_segment ‖
@@ -31,11 +31,12 @@ byte 8j mod 32 of the store, so a receipt of one block would leave a sector half
 guessed receipt (`SketchBoundSession`, over sectors) would lose a factor 2^32 a receipt.
 
 An opening (`Opening`) is the unit's four blocks, each with its path to the registration's root, and the receipt
-leaf with its salt and path to the pass's root.  The verifier (`Session.verify`) checks the leaf on the pass's root,
-each block on the vk root under PoUS's leaf (`pous.verifier.leaf_hash`; `payload-path` if one fails), and the receipt
-recomputed from the four blocks.  It decodes nothing: vk's leaves are of the C* the verifier decoded to the committed W
-at PoUS's setup, so a block on its path is C*'s block j, by SHA-512's collision resistance.  A P2 store is fixed at
-setup: a session appends nothing to it (`append` rejects with `append`).  `audit.Rebuild` refuses a P2 codec, so
+leaf with its salt and path to the pass's root.  The verifier, the audit's session over a P2 codec
+(`audit.AuditRun.verify`, by `check`), checks the leaf on the pass's root, each block on the vk root under PoUS's leaf
+(`pous.verifier.leaf_hash`; `payload-path` if one fails), and the receipt recomputed from the four blocks.  It decodes
+nothing: vk's leaves are of the C* the verifier decoded to the committed W at PoUS's setup, so a block on its path is
+C*'s block j, by SHA-512's collision resistance.  A P2 store is fixed at setup: a session appends nothing to it
+(`audit.AuditRun.append` rejects with `append`).  `audit.Rebuild` refuses a P2 codec, so
 `audit.ledger` refuses a P2 record until μ_rebuild at P2's encode is stated (`codec.P2Codec`).
 
 The decode kernel's side of the receipts is `PROTOCOL.md` §11: per block it decodes, π from the pass's sign bits, and
@@ -47,7 +48,6 @@ from __future__ import annotations
 import hashlib
 import os
 import struct
-import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
@@ -58,7 +58,7 @@ from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.protocols.pous.verifier import MerkleTree, VerifierKey, leaf_hash
 from verity.ml.randomness import frame
 
-from . import audit, coins, receipts
+from . import audit, receipts
 from .codec import P2_LAYOUT, P2Codec
 from .receipts import DIGEST_BYTES, PER_LEAF, SALT_BYTES, Plan
 
@@ -154,7 +154,7 @@ def register(source: bytes, view: log.View, store: str, commitment: bytes, vk: V
 
 def _draw(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
           rows: int | None = None) -> Public:
-    """The verifier's registration of a node's P2 store from its PoUS setup: the salt it draws from its own secret
+    """The verifier's registration of a node's P2 store from its PoUS setup: the salt it samples from its own secret
     `source` after the commitment (`setup.draw_salt`), which `vk`, the key it built from the C* it decoded at setup
     (`setup.verifier_key_from_encoding`), must be under."""
     salt = setup.draw_salt(source, _bytes(commitment, DIGEST_BYTES, "PoUS's commitment to W"))
@@ -316,29 +316,3 @@ def check(registration: Public, seed: bytes, plan: Plan, root: bytes, i: int, p:
     if (sketcher or Sketcher(seed, registration.rows))(g, b"".join(o.blocks)) != y:
         return "receipt"
     return None
-
-
-class Session(audit.AuditRun):
-    """The verifier's side of one session over a P2 store: the audit's session (`audit.AuditRun`) with units for blocks,
-    its openings checked on PoUS's vk (`_check`), and no appends."""
-
-    codecs = (P2Codec,)
-    block_bytes = UNIT_BYTES
-
-    def __init__(self, params: audit.Params, registration: Public, coins_: coins.SessionCoins, *,
-                 not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
-        if type(registration) is not Public:
-            raise ValueError("a P2 session is over a P2 store's Public")
-        super().__init__(params, registration, None, coins_, not_before_ns=not_before_ns, clock=clock)
-
-    def append(self, root: bytes, count: int) -> tuple[int, bytes] | audit.Verdict:
-        """Refused (`append`): a P2 store is fixed at PoUS's setup."""
-        self._live()
-        return self._fail(self.filling, "append")
-
-    def _check(self, t: int, i: int, p: int, o: Opening, key: VerifierKey, receipters: dict) -> str | None:
-        w = self.windows[t]
-        seed = receipts.seed(w.challenge, i, self._previous(t, i))
-        if i not in receipters:
-            receipters[i] = Sketcher(seed, self.registration.rows)
-        return check(self.registration, seed, w.plans[i], w.roots[i], i, p, o, receipters[i])
