@@ -7,7 +7,7 @@ set -euo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 d=$(mktemp -d); trap 'rm -rf "$d"' EXIT
 python3 -m venv "$d/v"
-"$d/v/bin/pip" install -q nvidia-cuda-nvcc nvidia-cuda-crt nvidia-cuda-runtime nvidia-cuda-cuobjdump
+"$d/v/bin/pip" install -q nvidia-cuda-nvcc nvidia-cuda-crt nvidia-cuda-runtime nvidia-cuda-cuobjdump nvidia-cuda-nvdisasm
 CU=$(ls -d "$d"/v/lib/python3*/site-packages/nvidia/cu13)
 export PATH="$CU/bin:$CU/nvvm/bin:$PATH"
 { nvcc --version; cuobjdump --version; } > "$OUT/tools.txt"

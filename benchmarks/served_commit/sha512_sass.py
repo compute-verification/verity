@@ -6,11 +6,10 @@ PROBE_SASS is `cuobjdump -sass` of sha512_probe.cu, whose loop trip is one block
 count a compression is the loop's instructions a trip, its loads (LDG) left out; with SHA_ROLL=1 the rounds' inner loop
 runs 4 trips a compression, so its body counts 4 times. ROWS_SASS, if given, is native_rows.cu's, summarized by kernel.
 
-Each instruction is priced in W1 units (one dense int8 MAC = 1) at two readings of CORE-H32's H200 table
-(r20261029-021534-a5a3): the floor, 32 a register written (`h200Measured`, what the rank bound charges); and each
-instruction alone (LOP3, SHF, IADD3, LEA, PRMT, SEL, MOV 64.13; IMAD 64.0; IMAD.WIDE 80.3 for its two registers; the
-uniform datapath 2,048 a word over a warp's 32 lanes). Against HASH-38's bar (0.01803 compressions an SM-clock, 4,096
-MACs an SM-clock) a compression takes 227,180 MAC-times.
+Each instruction is priced in W1 units (one dense int8 MAC = 1) at two readings of the H200's priced table: the floor,
+32 a register written (`h200Measured`, what the rank bound charges); and each instruction alone (LOP3, SHF, IADD3, LEA,
+PRMT, SEL, MOV 64.13; IMAD 64.0; IMAD.WIDE 80.3 for its two registers; the uniform datapath 2,048 a word over a warp's 32
+lanes). BAR_RATE is the row hash's target rate in compressions an SM-clock, against 4,096 MACs an SM-clock.
 """
 from __future__ import annotations
 
@@ -28,7 +27,8 @@ TARGET = re.compile(r"BRA\s+(?:\S+\s+)?(?:`\((\.L_x_\d+)\)|0x([0-9a-f]+))")
 FLOOR = 32.0
 ALONE = {"IMAD": 64.0, "IMAD.WIDE": 80.3, "UNIFORM": 2048.0 / 32}
 ALONE_DEFAULT = 64.13
-BAR_MAC_TIMES = 4096 / 0.01803
+BAR_RATE = 0.01803
+BAR_MAC_TIMES = 4096 / BAR_RATE
 NO_WRITE = ("BRA", "EXIT", "BSYNC", "BSSY", "NOP", "STG", "STS", "ST", "RET", "CALL", "BAR", "WARPSYNC", "DEPBAR")
 
 
