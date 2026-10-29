@@ -17,7 +17,9 @@ targets that merge on a cell are the design's: a word that equals another on eve
 there, earns nothing at the points of that cell. For served sparse noise (`ssnWordB_eq_of_zero`), a row's words after
 two steps with equal data constants merge on the cell where the bits between them are 0 (`ssnWordB_step_merge` for
 consecutive steps). In the served 4-lane layout (`l4_step_merge`) that is one bit: reading it merges a row's `n` words
-of a step into the step before on half the points, so `lost_le`'s `M` is at least `n` there.
+of a step into the step before on half the points, so `lost_le`'s `M` is at least `n` there. Counted
+(`l4_cell_loss`): on that cell every set of words distinct and non-free is at least `n` short of the layout's
+`m·n·S`, so the floor there credits at most `c·(m·n·S − n)`.
 -/
 
 namespace Pouw.Dimension.H100
@@ -80,6 +82,8 @@ theorem adaptive_lost {ι : Type} [Fintype ι] [DecidableEq ι] {q : ℕ} (hq : 
 end Pouw.Dimension.H100
 
 namespace Pouw.Dimension.Ssn
+
+open Finset Pouw.Dimension.H100
 
 variable {m S C L : ℕ}
 
@@ -144,5 +148,64 @@ theorem l4_step_merge (hC : S + 3 ≤ 32 * C) (κ : Fin m → ℕ → Fin S → 
   have hq0 : q = 0 := hq.resolve_left (by omega)
   subst hq0
   simpa using hp.symm
+
+/-- `n` disjoint pairs inside `T`, each meeting `D ⊆ T` at most once, leave `D` at least `n` short of `T`. -/
+theorem card_add_le_of_pairs {α : Type} [DecidableEq α] {n : ℕ} (T D : Finset α) (a b : Fin n → α) (hD : D ⊆ T)
+    (ha : ∀ j, a j ∈ T) (hb : ∀ j, b j ∈ T)
+    (hdisj : ∀ j j', j ≠ j' → a j ≠ a j' ∧ a j ≠ b j' ∧ b j ≠ a j' ∧ b j ≠ b j')
+    (hone : ∀ j, ¬ (a j ∈ D ∧ b j ∈ D)) : D.card + n ≤ T.card := by
+  let e : Fin n → α := fun j => if a j ∈ D then b j else a j
+  have he : Function.Injective e := by
+    intro j j' h
+    by_contra hne
+    obtain ⟨h1, h2, h3, h4⟩ := hdisj j j' hne
+    simp only [e] at h
+    split_ifs at h <;> contradiction
+  have hdis : Disjoint D (univ.image e) := by
+    rw [disjoint_left]
+    intro x hxD hxE
+    obtain ⟨j, -, rfl⟩ := mem_image.1 hxE
+    simp only [e] at hxD
+    split_ifs at hxD with h
+    · exact hone j ⟨h, hxD⟩
+    · exact h hxD
+  have hsub : D ∪ univ.image e ⊆ T := union_subset hD fun x hx => by
+    obtain ⟨j, -, rfl⟩ := mem_image.1 hx
+    simp only [e]
+    split_ifs
+    exacts [hb j, ha j]
+  calc D.card + n = (D ∪ univ.image e).card := by
+        rw [card_union_of_disjoint hdis, card_image_of_injective _ he, card_univ, Fintype.card_fin]
+    _ ≤ T.card := card_le_card hsub
+
+/-- **On the cell of one bit, the 4-lane layout loses a row's `n` words.** For `t ≥ 1` and a row `i` whose data
+constants are equal across step `t` in every column, any words `D` of the layout pairwise distinct and non-free on a
+set `X` of coin points where row `i`'s bit `l4Pos t 0` of word `l4Src t` is 0 number at least `n` fewer than the
+layout's: `adaptive_floor` there credits at most `c·(m·n·S − n)`. -/
+theorem l4_cell_loss (hC : S + 3 ≤ 32 * C) (κ : Fin m → ℕ → Fin S → ℤ) (hS : 0 < S) (n : ℕ) (hn : n ≤ 28559)
+    (i : Fin m) {t t' : Fin S} (htt : (t' : ℕ) + 1 = t) (hκ : ∀ j < n, κ i j t = κ i j t') (X : Set (Bits m C))
+    (hX : ∀ x ∈ X, ∀ k : Fin m × Fin C × Fin 32, k.1 = i → k.2.1 = l4Src hC t → (k.2.2 : ℕ) = l4Pos t 0 → x k = 0)
+    (D : Finset (Bits m C → ℚ)) (hD : D ⊆ l4Words hC κ n) (hDd : DistinctOn X (FreeB m C) D) :
+    D.card + n ≤ (l4Words hC κ n).card := by
+  classical
+  set φ : Fin m × ℕ × Fin S → Bits m C → ℚ := fun x =>
+    ssnWordB (l4Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l4Pos s q) κ w1l x.1 x.2.1 x.2.2 with hφ
+  have hdom : (univ ×ˢ range n ×ˢ univ : Finset (Fin m × ℕ × Fin S)).card = m * (n * S) := by
+    simp [card_product]
+  have hinj : Set.InjOn φ (univ ×ˢ range n ×ˢ univ : Finset (Fin m × ℕ × Fin S)) :=
+    card_image_iff.1 ((ssn1lServed_full hC κ hS n hn).2.trans hdom.symm)
+  have hmem : ∀ (j : Fin n) (s : Fin S), ((i, (j : ℕ), s) : Fin m × ℕ × Fin S) ∈ (univ ×ˢ range n ×ˢ univ) :=
+    fun j s => by simp
+  have hne : t ≠ t' := fun h => by rw [h] at htt; omega
+  refine card_add_le_of_pairs _ D (fun j => φ (i, j, t)) (fun j => φ (i, j, t')) hD
+    (fun j => mem_image.2 ⟨_, hmem j t, rfl⟩) (fun j => mem_image.2 ⟨_, hmem j t', rfl⟩) ?_ ?_
+  · intro j j' hjj
+    have hv : (j : ℕ) ≠ j' := fun h => hjj (Fin.ext h)
+    refine ⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩ <;>
+      exact hv (congrArg (fun x : Fin m × ℕ × Fin S => x.2.1) (hinj (hmem _ _) (hmem _ _) h))
+  · rintro j ⟨h1, h2⟩
+    have heq : φ (i, j, t) = φ (i, j, t') :=
+      hDd.1 _ h1 _ h2 fun x hx => l4_step_merge hC κ i j htt (hκ j j.isLt) x (hX x hx)
+    exact hne (congrArg (fun x : Fin m × ℕ × Fin S => x.2.2) (hinj (hmem _ _) (hmem _ _) heq))
 
 end Pouw.Dimension.Ssn
