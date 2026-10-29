@@ -46,9 +46,10 @@ sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parent), str(ROOT / "ben
 
 import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
+import round_coins as RC  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from test_served_session import RUN, STUB  # noqa: E402
-from test_warden_chain import WC, gate_run  # noqa: E402
+from test_warden_chain import BASE, WC, gate_run  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
@@ -488,10 +489,10 @@ def _numbers(p: Path) -> set[int]:
     return {int(x) for x in re.findall(rb"(?<![0-9A-Za-z])[0-9]+(?![0-9A-Za-z])", p.read_bytes())}
 
 
-def _private_chain_out(out: Path) -> Path:
+def _private_chain_out(out: Path, monkeypatch) -> Path:
     """What the chain's warden path leaves in out/ on a served window, the endpoint's report the served node's: each
     step's file carrying the window's private values where the chain writes them, and the report and report.md that
-    ``chain_record.py report`` makes of them."""
+    ``chain_record.py report`` makes of them, its scan rounds' roots over `test_warden_chain.BASE`."""
     docs = {
         "custody.json": {"verdict": "accepted", "gate_runs": [{"gate_run": RUN, "strategies": {}}]},
         "certs.json": {"warden_run": RUN, "verdict": "accepted", "windows": 1, "sync_bits": 0.0,
@@ -504,16 +505,17 @@ def _private_chain_out(out: Path) -> Path:
                 {"window": K, "requests": REQUESTS, "carried": 0, "steps": STEPS, "outputs": OUTPUTS,
                  "committed_bits": COMMITTED, "v0_bits": V0, "derived_bits": DERIVED, "bound": True, "rebuilt": True}],
                 "windows": [{"window": 0, "v0_bits": V0, "derived_bits": DERIVED, "in_run": True}]}}},
-        "n2/summary.json": {"warden_run": RUN, "ok": True, "link": {"unit": "n2"}, "members": {"honest": {
-            "network": {"accepted": True}, "windows": [{"window": 0, "accepted": True, "as_expected": True}]}}},
+        "n2/summary.json": {"warden_run": RUN, "ok": True, "link": {"unit": "n2"}, "draw": {"selection": "all"},
+                             "members": {"honest": {"network": {"accepted": True}, "windows": [
+                                 {"window": 0, "accepted": True, "as_expected": True}]}}},
         "tie/summary.json": {"warden_run": RUN, "class": "warden", "ok": True, "prompt_lens": PROMPT_LENS,
                              "releases": [[0, 1]], "link": {"unit": "tie", "T": 30},
                              "tie": {"honest": [True], "forged": [False]}},
         "scan/summary.json": {"warden_run": RUN, "T": 30, "ok": True, "responses": {"0": OUTPUTS}, "rounds": {
             "honest": {"ok": True, "audit": {"accepted": True, "window_accepted": True}},
             "chain": {"ok": True, "audit": {"accepted": False, "window_accepted": False}}},
-            "coins": {"rounds": {r: {"source": "challenger:local", "session": r, "root": c * 128, "ok": True}
-                                 for r, c in (("honest", "a"), ("chain", "b"))}}},
+            "coins": {"rounds": {r: {"source": "challenger:local", "session": r, "root": RC.root(BASE, "scan", r),
+                                     "ok": True} for r in ("honest", "chain")}}},
         "scan/answers.json": {"format": "answers", "delta": "1/100", "registration": {"program": "ab" * 64},
                               "windows": [{"window": 0, "answer": {"verdict": "accept"}, "registrations": []}]},
         "job.json": {"path": CR.WARDEN, "run": "r-chain", "rc": {"n2": "0", "scan": "0", "tie": "0"}},
@@ -521,6 +523,7 @@ def _private_chain_out(out: Path) -> Path:
     for rel, doc in docs.items():
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
         (out / rel).write_text(json.dumps(doc, indent=1))
+    monkeypatch.setattr(CR, "scan_base", lambda answers, run: {"root": BASE, "why": None})
     CR.main(["report", *(x for f, rel in (("custody", "custody.json"), ("certs", "certs.json"), ("endpoint",
              "endpoint/report.json"), ("n2", "n2/summary.json"), ("scan", "scan/summary.json"), ("job", "job.json"),
              ("tie", "tie/summary.json")) for x in (f"--{f}", str(out / rel))), "--warden-run", RUN,
@@ -528,7 +531,8 @@ def _private_chain_out(out: Path) -> Path:
     return out
 
 
-def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_moves_out_what_isnt_declared(tmp_path):
+def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_moves_out_what_isnt_declared(tmp_path,
+                                                                                                            monkeypatch):
     """The chain's out/ holds the window's private values: the endpoint's report (its Commit window's request, step and
     output counts and its advice's bits), the report made of it (the certified I/O's counts, the advice's bits as K's
     term) and report.md, the certificates step's view of the warden's check and the tie's prompt lengths. `publish`
@@ -536,7 +540,7 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     put past `publish`, in the hold (the endpoint's report copied whole, as the piece once published it) or in DIR (the
     certificates step's), though neither holds a witness piece, is one the leak guard moves to the quarantine and never
     releases: DIR declares only `PIECE_FILES`."""
-    out = _private_chain_out(tmp_path / "out")
+    out = _private_chain_out(tmp_path / "out", monkeypatch)
     held = {p.relative_to(out).as_posix(): _numbers(p) & PRIVATE for p in out.rglob("*") if p.is_file()}
     assert held["endpoint/report.json"] == PRIVATE - set(PROMPT_LENS) and held["tie/summary.json"] == set(PROMPT_LENS)
     assert held["report/report.json"] >= {REQUESTS, OUTPUTS, V0, DERIVED} and held["report/report.md"] >= {
