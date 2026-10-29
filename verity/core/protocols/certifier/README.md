@@ -174,10 +174,10 @@ A spec-level reference for network accounting's timing channel:
   whose unit ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s frame, the row it computes and returns,
   committed as a registered read of the warden's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
   ingress link ℓ (its frame parameter row, the warden's registered row; with ``first``, `IngressScanFirst` holds bucket
-  0), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.Layout`); its
+  0), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.BoundaryGates`); its
   format is `verity/boundary/v3`. `refusal`, the verifier's check before it draws, checks that the layout fits the
-  circuit (`NetTiming.Layout.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
-  grain, which contains the gate grain's, held to `prog_fits`, `Layout.Fits` itself on a flattened program; the scan's
+  circuit (`NetTiming.BoundaryGates.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
+  grain, which contains the gate grain's, held to `prog_fits`, `BoundaryGates.Fits` itself on a flattened program; the scan's
   state and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits`
   stays structural: a served window fits in the step-indexed scan's form, and a window in any other form is refused;
 - the transfer rows (`transfer_rows`): every value that crosses a server block's boundary, the weights' load, a
