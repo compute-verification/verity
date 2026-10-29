@@ -104,7 +104,7 @@ class RecordingCoins(RL.CoinServer):
 
 
 class InnerRun:
-    """One inner session through a ZK server: ``handle`` answers the workers' requests as the ZK server does and keeps what
+    """One inner run through a ZK server: ``handle`` answers the workers' requests as the ZK server does and keeps what
     the transcript needs. ``proxy`` is the ZK server under test (`rec_live.Proxy` or a subclass). The challenger's coins are
     live, as `rec_live.serve`'s are, unless ``commit``: then it commits to them before the run
     (`rec_live.CoinServer.commit_coins`, each commitment under a salt from ``coin_salt``, the challenger's own, never the

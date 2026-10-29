@@ -206,7 +206,7 @@ def test_a_recorded_session_replays_to_its_record(lean, tmp_path, commit):
 
 
 def test_the_inner_sessions_coins_are_live():
-    """The inner session's challenger commits to no coin (`rec_live.serve`'s, `firewall_transcript.Session`'s by default):
+    """The inner session's challenger commits to no coin (`rec_live.serve`'s, `firewall_transcript.InnerRun`'s by default):
     its public input holds no commitment, no coin item of the honest transcript carries an opening, and each coin item
     comes after every commitment the schedule owes before it, so each round's coins are flipped after its commitments."""
     s = FA.run_case("honest", FA.requests(), RL.Proxy, None)
