@@ -176,9 +176,9 @@ theorem structureOf_rsT {S : GfS} (hS : RecOpening.structureOf sh = .ok S) {i : 
   cases cm_pure hk
   have hn : (RecOpening.claimsLike (α := Lin) sh).size = sh.claims := by simp [RecOpening.claimsLike]
   obtain ⟨betas, -, hbs, hg, -, hT, -, hj⟩ := ringSwitch_spec (by omega) h1
-  simp only [Coins.zeros, Except.ok.injEq] at hg
+  simp only [CoinSource.zeros, Except.ok.injEq] at hg
   obtain ⟨c, hc, -, hbi, -⟩ := hj i (by omega)
-  simp only [Coins.zeros, Except.ok.injEq] at hc
+  simp only [CoinSource.zeros, Except.ok.injEq] at hc
   obtain ⟨hbl, hbe⟩ := Array.getElem?_eq_some_iff.1 hbi
   have hM : (symbolic sh).rsT[i]! = (Array.range 128).map fun u => Lin.var (.rsT i u) := by
     have hi' :

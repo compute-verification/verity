@@ -11,7 +11,7 @@ credits nothing (the coins aren't a challenger's) but makes the two windows' com
 ``--compare ONE_DIR OTHER_DIR`` (no GPU) holds the served tokens equal and both layouts static and complete (every one of
 the window's steps × linears called). At one TP (pipeline stages only) the layout is the same, so it also holds every
 call's (index, step, linear, module, m, k, n, base, rows) equal in count and order, and each call's A and z table roots,
-every round's root and coin, the calls root and the draw root equal. Across TPs the linears are shards, so it holds the
+every round's root and coin, the calls root and the sample root equal. Across TPs the linears are shards, so it holds the
 window's MACs a step equal instead (each linear's shard n·K summed over the ranks).
 
 ``--commit`` (TP N > 1, PP 1; ROOTS1 across ranks) serves the window with ``served`` and the Commit on every
