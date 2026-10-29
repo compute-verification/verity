@@ -73,7 +73,7 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
     for name in ("ncp-smooth", "ncp-rotate", "ncp-smooth-rotate", "lin-a63-w127", "lin-a127-w63",
                  *(f"lin-t{t}" for t in (31, 47, 79, 95, 111)), *(f"rot-t{t}" for t in (15, 31, 47))):
         want[name] = ("linears", stock, False)
-    for name in ("ncp-v1-served-qk", "ncp-pv-sink", "ncp-pv-p127", "ncp-pv-p127-sink"):
+    for name in ("ncp-v1-served-qk", "ncp-pv-sink", "ncp-pv-sink-b128", "ncp-pv-p127", "ncp-pv-p127-sink"):
         want[name] = ("all", stock, False)
     for name in ("ncp-qk-rot", "ncp-attn-fix", "ncp-linears-attn-fix"):
         want[name] = ("all", stock, True)
