@@ -44,10 +44,11 @@ in a lock, and nothing imports it.
   outsourced hashing goes uncounted on `I` (`costOn_outside`, `outsourced_uncredited`); a toy instance meets every
   hypothesis and attains the bound (`toy_attained`).
 * **The hosts inside T1** (`PeriodInventoryT1`, `HostsWithinRow`, `hostsW1`; `hostsCounted_closes`,
-  `hostsCounted_call`, `hostRow_residual`, `routeH_gains_nothing`, `routeH_toy`): inside the network certifier's
+  `hostsCounted_call`, `hostsCounted_capacity`, `hostRow_residual`, `routeH_toy`): inside the network certifier's
   boundary every device is a card or one of its hosts, and the hosts are counted at θ's rows (`HostRow`, as
   `HostsCounted` counts them), so a host's hashing is credited as hashing. The credited W1 is at most the cards' cost,
-  the hosts' counted W1 and what came from outside the boundary. A row below the hosts' best leaves
+  the hosts' counted W1 and what came from outside the boundary, and with the other work on the cards it fits the
+  period's capacity with the hosts at their rows (`hostsCounted_capacity`). A row below the hosts' best leaves
   `Σ_r Tp·n·w_r·(best_r − rate_r)⁺`, resource by resource.
 * **Lifting a data-case result to the call grid** (`distinctOn_lift`, `sepBy_lift`): a target set distinct at one
   data case, with that case's free values, is distinct on the call grid with the call's free values, when each call
@@ -1084,13 +1085,15 @@ theorem hostsCounted_call {G Dev : Type} {c : ℕ} {pr : Prices100} (hpr : Floor
   have := hostsCounted_closes hinv hrow
   linarith
 
-/-- **Route H gains nothing against an honest optimum that may use the hosts** (rank 0): if the adversary's credited
-W1 is at most its cards' cost, the hosts' counted W1 `Hw` and the outside's (`hostsCounted_closes`), and honest, running
-its hosts at their row, pays on its cards at most the credited W1 less `Hw` plus its excess `E_h`, the adversary saves
-at most `E_h + W_out` on the cards. Against an honest whose hosts idle (`costH ≤ Wc + E_h`) it saves up to `Hw` more,
-which is route H. -/
-theorem routeH_gains_nothing {Wc costA costH Wout Eh Hw : ℝ} (hA : Wc ≤ costA + Hw + Wout) (hH : costH + Hw ≤ Wc + Eh) :
-    costH - costA ≤ Eh + Wout := by
+/-- **Route H gains no capacity** (rank 0 given `PeriodInventoryT1` and `HostsWithinRow`): if the cards' share is
+at most the adversary's card cost and that cost, with the other work `W_other` it runs on the cards, fits the cards'
+capacity `C_card` for the period, then the credited W1 and the other work together fit the period's capacity with the
+hosts counted at their rows, plus what came from outside the boundary. So hashing moved to the hosts frees no card
+capacity the period doesn't count. -/
+theorem hostsCounted_capacity {Wc Wcard Wout Tp costA Wother Ccard : ℝ} {n : ℕ} {hr : HostRow} {w hc : HostRes → ℝ}
+    (hinv : PeriodInventoryT1 Wc Wcard hc Wout) (hrow : HostsWithinRow n hr w Tp hc) (hcard : Wcard ≤ costA)
+    (hcap : costA + Wother ≤ Ccard) : Wc + Wother ≤ Ccard + hostsW1 n hr w Tp + Wout := by
+  have := hostsCounted_closes hinv hrow
   linarith
 
 /-- **Route H on a toy, and the host row that closes it**: the card writes the word `tw` (32) and a host hashes the
@@ -1168,5 +1171,5 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.hostsCounted_closes
 #print axioms Pouw.Dimension.NCompose.hostRow_residual
 #print axioms Pouw.Dimension.NCompose.hostsCounted_call
-#print axioms Pouw.Dimension.NCompose.routeH_gains_nothing
+#print axioms Pouw.Dimension.NCompose.hostsCounted_capacity
 #print axioms Pouw.Dimension.NCompose.routeH_toy
