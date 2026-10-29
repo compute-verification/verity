@@ -73,6 +73,7 @@ theorem hidden_layout' : HiddenLayout := by
     unit_kind := L.unit_kind
     unit_count := L.unit_count
     unit_built := L.unit_built
+    unit_at := L.unit_at
     unit_lookup := L.unit_lookup
     unit_in := L.unit_in
     unit_const := L.unit_const

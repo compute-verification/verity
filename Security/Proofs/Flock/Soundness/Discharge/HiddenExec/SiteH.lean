@@ -146,16 +146,16 @@ theorem copy_siteH (a : AcceptedH T) {z : Witness T.m} (hz : T.Satisfies z) (o :
   · exact absurd (by simp only at hk ⊢; rw [hk]; exact hin) hn
 
 /-- **An accepted statement's template instance column of copy `u'`'s computed column `c0`** is column `c0` of the unit
-slot `vu · upv + u'`. -/
+slot `vu · upv + u'`, through `upos`. -/
 theorem col_val_compH (a : AcceptedH T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) {u' c0 : ℕ}
     (hu' : u' < a.st.c.upv) (h1 : (unitRows a.st a.L.unit_built).nIn ≤ c0)
     (h2 : c0 < (unitRows a.st a.L.unit_built).nIn + (unitRows a.st a.L.unit_built).nComp)
     (hx : x.val = a.st.c.upv * (unitRows a.st a.L.unit_built).nIn +
       (u' * ((unitRows a.st a.L.unit_built).nComp + 1) + (1 + (c0 - (unitRows a.st a.L.unit_built).nIn)))) :
-    (a.col hg x).val = a.st.c.unitRange.slot (g * a.st.c.upv + u') + c0 := by
+    (a.col hg x).val = a.st.c.unitRange.slot (g * a.st.c.upv + u') + upos a.st.c c0 := by
   unfold AcceptedH.col
   rw [Fin.val_cast]
-  exact Layout.stackPlace_val_comp _ _ _ _ _ hu' h1 h2 x hx
+  exact a.L.col_val_comp a.regs hg hu' h1 h2 x hx
 
 /-- **A drawn unit's returned output holds its output row's message bit**: in a satisfying witness of an accepted
 statement whose unit returns the outputs and whose rows are covered (`hrf`), at block `o` and template
@@ -182,6 +182,7 @@ theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
   have s := Hidden.setupHidden_spec' h
   obtain ⟨hpa, hcr⟩ := Hidden.parse_untyped ht' s.parse
   have P := parse_facts hpa
+  rw [upos_flat P.tmpl] at hcol
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
   have L0 := flat_layout ht' h

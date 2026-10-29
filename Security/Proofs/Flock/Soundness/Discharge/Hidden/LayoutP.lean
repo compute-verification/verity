@@ -40,7 +40,7 @@ theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tab
     cases he : pi.ports.isEmpty
     · by_contra hk
       have hq : HmIn.publicCol st.c pi a = true := by simpa [keepCol, he] using hk
-      obtain ⟨k, hk', jj, -, t, -, hq1, hlt, -⟩ := publicCol_at s.ports he C L.unit_built hq
+      obtain ⟨k, hk', jj, -, t, -, hq1, hlt, -⟩ := publicCol_at s.ports he C (L.built_flat P.tmpl) hq
       rw [hq1] at hab
       exact L.constPairs_not_below L.unit_mem L.unit_kind hk' (lt_of_lt_of_le hlt L.unit_in) b hab
     · exact keepCol_noPorts he _
@@ -53,6 +53,7 @@ theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tab
     unit_kind := L.unit_kind
     unit_count := L.unit_count
     unit_built := L.unit_built
+    unit_at := L.unit_at
     unit_lookup := L.unit_lookup
     unit_in := L.unit_in
     unit_const := L.unit_const

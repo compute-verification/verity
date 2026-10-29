@@ -209,7 +209,7 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
   have hsrc : FlockSoundness.flatSrcAt st.c (g * st.c.upv) ((Flock.portCols st.c.unit.inGroups)[x]!.1 + t) =
       FlockSoundness.Typed.msgCol st.c g q (i / 8) (i % 8) := by
     unfold FlockSoundness.flatSrcAt
-    rw [FlockSoundness.portOf_eq (FlockSoundness.Discharge.Aliased.portBits_nodup L.unit_built) hxp ht16,
+    rw [FlockSoundness.portOf_eq (FlockSoundness.Discharge.Aliased.portBits_nodup (L.built_flat F.parse.tmpl)) hxp ht16,
       Nat.add_sub_cancel_left]
     unfold FlockSoundness.Flat.flatSrc FlockSoundness.Flat.leafSrc
     rw [ite_eq_left hxg, Nat.mul_mod_left, hl]
