@@ -21,8 +21,9 @@ duplicate name, or an owner the registry doesn't know. Reading the file runs non
 
 A `[[plan]]` is one way to split a check over several machines (`check.py --shard K/N`): `shards`, a list of N lists of
 selectors, shard K the K-th. A selector is a job's name, or for a job in `SPLIT`, `JOB:PART` (one part: for `lean-audit`, a
-Lake package with a `lean-audit.json`) or `JOB:*` (its parts no other selector of the plan names). Every job is in exactly one
-shard, whole or, for a split job, as named parts plus exactly one `*`; a shard holds what each of its jobs `needs` or runs
+Lake package with a `lean-audit.json`) or `JOB:*` (its parts no other selector of the plan names). Every job on the gate is in
+exactly one shard, whole or, for a split job, as named parts plus exactly one `*`, and a job off it in at most one (a shard skips
+it either way: a plan that keeps it puts it back on the gate in one line); a shard holds what each of its jobs `needs` or runs
 `after`; no two plans have the same N (`plans`). `resolve` turns a plan into each shard's parts for a tree's parts
 (`parts_of`), and refuses a named part the tree lacks, so a stale plan stops the shard instead of leaving something out.
 """
@@ -163,7 +164,7 @@ def parse_plans(text: str, jobs: list[Job], source: str = "ci.toml") -> dict[int
                 (whole.setdefault(job, []).append(k) if part is None else parts.setdefault(job, []).append((k, part)))
         for j in jobs:
             w, p = whole.get(j.name, []), parts.get(j.name, [])
-            if not w and not p:
+            if not w and not p and j.gate:
                 raise DeclarationError(f"{where}: no shard runs {j.name}")
             if w and (len(w) > 1 or p):
                 raise DeclarationError(f"{where}: {j.name} is in more than one shard")

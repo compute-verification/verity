@@ -36,7 +36,8 @@ def test_the_declaration_names_check_pys_jobs_in_their_groups_and_order(tmp_path
 def test_check_runs_the_groups_order_and_halts_as_they_were_before_ci_toml_held_them(tmp_path):
     runs = [[name for name, _argv, _cwd in g] for g in CHECK.groups(tmp_path, 2)]
     assert runs == [["pytest"], ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
-                    ["lean-build", "lean-unit-cut", "lean-agreement"], ["lean-audit"], ["lean-changed"], ["lean-suites"]]
+                    ["lean-build", "lean-unit-cut", "lean-agreement"], ["lean-audit"], ["lean-changed"], ["lean-suites"],
+                    ["ratchet-gate"]]
     assert CHECK.HALTS == {"lean-changed"} and CHECK.HALTS_ON == {"flock-circuit-build": "error: could not compile"}
     assert CHECK.AFTER == {"lean-suites": "lean-build"}
 
@@ -88,11 +89,14 @@ def test_a_malformed_declaration_is_refused_with_the_reason(body, why):
         _parse(body)
 
 
-def test_a_job_off_the_gate_parses_and_ci_toml_takes_circuit_check_alone_off_it():
-    """circuit-check runs after landing, off the gate, until `circuit-check --all` fits inside the rest of the check."""
+def test_a_job_off_the_gate_parses_and_ci_toml_takes_circuit_check_and_ratchet_gate_off_it():
+    """circuit-check runs after landing, off the gate, until `circuit-check --all` fits inside the rest of the check; ratchet-gate
+    runs there too, reporting without blocking a merge, and no plan names it."""
     a, b = _parse('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\n')
     assert (a.gate, b.gate) == (False, True) and D.gated([a, b]) == [b]
-    assert [j.name for j in D.load() if not j.gate] == ["circuit-check"] and CHECK.OFF_GATE == ("circuit-check",)
+    assert [j.name for j in D.load() if not j.gate] == ["circuit-check", "ratchet-gate"]
+    assert CHECK.OFF_GATE == ("circuit-check", "ratchet-gate")
+    assert not any("ratchet-gate" in shard for plan in D.plans().values() for shard in plan)
 
 
 @pytest.mark.parametrize("body, why", [
@@ -154,7 +158,7 @@ def test_a_step_declared_after_a_step_that_failed_is_stopped_without_starting(tm
 def test_each_part_runs_its_jobs_and_what_they_need_and_the_parts_cover_every_job():
     assert all(j.part in D.PARTS for j in D.load())
     jobs = CHECK.JOBS
-    assert D.select(jobs, ["tests"]) == {"pytest", "lean-suites", "lean-build"}
+    assert D.select(jobs, ["tests"]) == {"pytest", "lean-suites", "lean-build", "ratchet-gate"}
     assert D.select(jobs, ["circuits"]) == {"flock-circuit-build", "circuit-check", "flock-rust-tests"}
     assert D.select(jobs, ["lean"]) == {"lean-build", "lean-unit-cut", "lean-agreement", "lean-audit", "lean-changed"}
     assert D.select(jobs, list(D.PARTS)) == {j.name for j in jobs}
