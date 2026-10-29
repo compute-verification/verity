@@ -133,5 +133,5 @@ skill).
 - **On a launch:** file the sub-issue first, then launch the worker named after it.
 
 top's hourly sweep (`infra/control/top_watch.py`) runs the same audit. It rings a lane with findings once every 12
-hours, a person's ask off track every hour (and @top) until it holds, and records the counts in `linear-audit.jsonl`.
+hours, a person's ask off track every hour (and @top) until it holds (a slip once per new date), and records the counts in `linear-audit.jsonl`.
 top reads the campaign's state from Linear, not from Slack.
