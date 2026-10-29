@@ -58,8 +58,9 @@
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
-#     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
-#     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), draws the
+#     registration's root; its circuit.json less its run fields and work table (the audit's to hold, by V3C_WHOLE) is held
+#     to the verifier's own window-circuit record at the class; then `records_audit.py audit --circuit --registered`,
+#     within V3C_AUDIT_TIMEOUT (default 30m), draws the
 #     registration's members (V3C_LAW, default subset:1) and proves them. `served_verdicts.sh v3c` runs only that step on an
 #     existing serve dir (D and its window K set), the build first, its limits 120m and 180m.
 # Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
@@ -164,9 +165,11 @@ v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its c
   VW=$D/v3c-w$K-$vtag
   [ -f "$D/window-circuit-w$K-$vtag.json" ] || { say "WINDOW-COMMIT class $V3C: no window-circuit record at it (CLASSES '$CLASSES')"; return 1; }
   [ -f "$WREG" ] || { say "WINDOW-COMMIT class $V3C: $NO_WEIGHTS"; return 1; }
+  local whole; mapfile -t whole < <(v3c_whole)
   # off the GPU (it isn't leased here): the weights hashed by h1.registered's NumPy path, the reference
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "$V3C_TIMEOUT" "$PY" benchmarks/prove_path/prove_path.py window-commit --serve-run "$D" \
     --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
+    --law "${V3C_LAW:-subset:1}" "${whole[@]}" \
     --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --out "$VW/window") \
     > "$OUT/window-commit-$vtag.json" 2> "$OUT/window-commit-$vtag.err"
   local rc=$?
@@ -182,18 +185,30 @@ v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its c
 import json, sys
 from verity.ml.windows import interface as IF
 mine, theirs = (json.load(open(f)) for f in sys.argv[1:3])
-ok = IF.circuit_of(theirs) == mine
-print(f"WINDOW-CIRCUIT-HELD class {sys.argv[3]}: the committed circuit.json less its run fields is the verifier's own "
-      f"window-circuit record: {'PASS' if ok else 'FAIL'}")
+ok = IF.circuit_of({**theirs, "work_table": None}) == mine
+print(f"WINDOW-CIRCUIT-HELD class {sys.argv[3]}: the committed circuit.json less its run fields and work table (which the "
+      f"audit holds to the verifier's own) is the verifier's own window-circuit record: {'PASS' if ok else 'FAIL'}")
 sys.exit(0 if ok else 1)
 EOF
   [ "${PIPESTATUS[0]}" = 0 ] && v3c_ok=1
 }
-# The audit's sessions listen on V3C_PORTS ports (default 16, a5's RANK_PORTS), a draw needing more refused before any
-# listens: a subset:K draw opens one for each of at most K members, and records_audit's own default, a port for every
+# V3C_LAW is the law the window registers under and the audit samples by. Under work:K, every unit of each family V3C_WHOLE
+# names (default ScanSlots_v2 SelectEntry_v1: each slot's scan and its entry) is proved and at least one unit of every
+# other template, in the work table window-commit registers under and the audit builds from the circuit's templates
+# itself (`records_audit.whole_table`), holding the record's to it.
+v3c_whole() {  # V3C_LAW's --whole flags, one a line: V3C_WHOLE's families under work:K, none under any other law
+  [[ ${V3C_LAW:-subset:1} == work:* ]] || return 0
+  local f
+  for f in ${V3C_WHOLE-ScanSlots_v2 SelectEntry_v1}; do printf '%s\n' --whole "$f"; done
+}
+# The audit's sessions listen on V3C_PORTS ports (default 16, a5's RANK_PORTS, and 256 under a work law, which opens one
+# for every template it samples and more for K's share of the largest), a sample needing more refused before any
+# listens: a subset:K sample opens one for each of at most K members, and records_audit's own default, a port for every
 # member, finds no free span in `records_audit.PORTS` at a class window.
 v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
-  local run leanb m0 rc
+  local run leanb m0 rc whole ports=16
+  mapfile -t whole < <(v3c_whole)
+  [[ ${V3C_LAW:-subset:1} == work:* ]] && ports=256
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for window $K in windows.jsonl"; return 1; }
   leanb=$TREE/verity/core/service/flock/.lake/build/bin
@@ -201,9 +216,9 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   mkdir -p "$OUT/v3c-audit"
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
-    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" \
+    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${whole[@]}" \
     --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
-    --firewall "$leanb/flock-firewall" --ports "${V3C_PORTS:-16}" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
+    --firewall "$leanb/flock-firewall" --ports "${V3C_PORTS:-$ports}" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
   say "V3C-AUDIT class $V3C (records_audit.py exit $rc): $(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log" | cut -c1-3000)"
