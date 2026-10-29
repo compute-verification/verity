@@ -48,7 +48,7 @@ import types
 
 from verity.ml.circuits.defs import CompositeDefinition, bind, composite
 from verity.ml.circuits.refs import Coll as _Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Record, Tuple, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 from verity.ml.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf
 from verity.ml.definitions.evidence import EVIDENCE
@@ -507,7 +507,7 @@ FP8_BLOCK_COMPOSITES = [Fp8GroupScale, Fp8GroupQuant, ScaledMmFp8BlockCoordinate
 # ---------------------------------------------------------------------------------------------------------
 
 
-def layer_weights_type_fp8(C: dict) -> Record:
+def layer_weights_type_fp8(C: dict) -> RecordType:
     H_, QKV, GU, I = C["H"], C["QKV"], C["GU"], C["I"]
     fields = [("ln1", Array(H_, BF16)), ("qkv_w", Array(QKV, Array(H_, E4M3))), ("qkv_s", F32)]
     if C.get("BIAS", True):
@@ -515,11 +515,11 @@ def layer_weights_type_fp8(C: dict) -> Record:
     fields += [("o_w", Array(H_, Array(C["NH"] * C["D"], E4M3))), ("o_s", F32),
                ("ln2", Array(H_, BF16)), ("gate_up_w", Array(GU, Array(H_, E4M3))), ("gate_up_s", F32),
                ("down_w", Array(H_, Array(I, E4M3))), ("down_s", F32)]
-    return Record(*fields)
+    return RecordType(*fields)
 
 
-def weights_type_fp8(C: dict) -> Record:
-    return Record(("embed", Array(C["V"], Array(C["H"], BF16))),
+def weights_type_fp8(C: dict) -> RecordType:
+    return RecordType(("embed", Array(C["V"], Array(C["H"], BF16))),
                   ("layers", Array(C["NL"], layer_weights_type_fp8(C))),
                   ("norm", Array(C["H"], BF16)),
                   ("cos_sin", Array(C["MAX_POS"], Array(C["D"], BF16))))

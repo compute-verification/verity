@@ -1,17 +1,17 @@
-"""F-fp8-GM1: GM-01 / X-09 over a fold whose weights Record is NOT width-homogeneous.
+"""F-fp8-GM1: GM-01 / X-09 over a fold whose weights RecordType is NOT width-homogeneous.
 
 `verity.ml.circuits.program._lower_input` lowers a homogeneous-width Input type to ONE `Input<w>` batch node and recurses into a
-Record/Array/Tuple whose leaves have several widths -- one node per homogeneous field.  The block-scaled FP8 checkpoint
-(Qwen3-4B-FP8: e4m3 weights, f32 `weight_scale_inv` 128x128 block scales, bf16 norms) therefore lowers its weights Record to
+RecordType/Array/Tuple whose leaves have several widths -- one node per homogeneous field.  The block-scaled FP8 checkpoint
+(Qwen3-4B-FP8: e4m3 weights, f32 `weight_scale_inv` 128x128 block scales, bf16 norms) therefore lowers its weights RecordType to
 435 Input nodes, while every bf16 model lowers it to a single node = `n_input_nodes - 1`.  `batch_decomp.decompose`,
 `batch_decomp.Projection` and `global_match.check` hard-coded that single node: on the FP8 B1 record GM-01 raised
 `program has 436 input nodes but the header has 1 requests + 0 seeds (+1 weights expected)` on the X-09 path and, on the
 global path, counted every weight read as a cross-request 'prompt-param' read (2,074,230) and gave 0 canonical addresses.
 
-CPU reproduction on the GM-01 toy (`test_global_match`): the toy's weights Record gets one extra f32 field APPENDED
+CPU reproduction on the GM-01 toy (`test_global_match`): the toy's weights RecordType gets one extra f32 field APPENDED
 (`analytic.weights_type` monkeypatched for the fold), so the fold lowers it to 5 weight Input nodes (embed, layers, norm,
 cos_sin, scale32) -- the last node is one no instance reads, exactly the FP8 shape of the defect (n_in - 1 is not the node
-the GEMMs read).  Both the batched record and the B=1 components are folded under the same Record, as on the pod.
+the GEMMs read).  Both the batched record and the B=1 components are folded under the same RecordType, as on the pod.
 """
 
 from __future__ import annotations
@@ -25,18 +25,18 @@ from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import global_match as gm
 from tests.check import test_global_match as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401 - fixture
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 
 SCALE_FIELD = ("scale32", Array(4, Value(32)))
 
 
 @pytest.fixture
 def inhomogeneous_weights(monkeypatch):
-    """The toy weights Record + one f32 field: width set {16, 32} -> one Input node per homogeneous field (5 weight nodes)."""
+    """The toy weights RecordType + one f32 field: width set {16, 32} -> one Input node per homogeneous field (5 weight nodes)."""
     base = analytic.weights_type
 
     def wt(C):
-        return Record(*base(C).fields, SCALE_FIELD)
+        return RecordType(*base(C).fields, SCALE_FIELD)
 
     monkeypatch.setattr(fold_mod.analytic, "weights_type", wt)
     return wt

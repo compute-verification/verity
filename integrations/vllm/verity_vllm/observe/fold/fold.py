@@ -12,7 +12,7 @@ Contract:
 
 Root parameters (in order):
     prompt  : one `Array(LP_r, I32)` per request (in `header.workload["requests"]` order) from `Root(role="prompt_token")`;
-    weights : `verity.ml.definitions.registry.b1.weights_type(C)` Record, fields populated from `Root(role="weight"|"buffer")`
+    weights : `verity.ml.definitions.registry.b1.weights_type(C)` RecordType, fields populated from `Root(role="weight"|"buffer")`
               events through `profile.weight_field(name)`; a Root whose field is None is a Note: nothing is written
               under its view, so a later read of it is Unresolved (raised under an accepted profile) — the M1 log's
               120 per-layer fp8 `_k/_v/_q/_prob_scale` fp32 scalars are such roots and nothing reads them;
@@ -95,7 +95,7 @@ from verity.ml.circuits.refs import Affine, Coll, Refs, array_of, concat, runs, 
 from verity_vllm.program import sampling_event as SE
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.replay import replayer
-from verity.ml.circuits.types import Array, Record, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Type, Value
 from verity.ml.circuits.types import Tuple as TupleT
 
 from verity_vllm.program import model as analytic
@@ -248,8 +248,8 @@ def config_for_weights(config: dict) -> dict:
     return C
 
 
-def weights_type_of(profile: Any, config: dict) -> Record:
-    """The fold's `weights` Record: the profile's own when it states one (`Profile.weights_type`), else `analytic.weights_type`
+def weights_type_of(profile: Any, config: dict) -> RecordType:
+    """The fold's `weights` RecordType: the profile's own when it states one (`Profile.weights_type`), else `analytic.weights_type`
     over the configuration (`b1.weights_type(C)`, + `lm_head` when untied; b1.py is frozen)."""
     own = getattr(profile, "weights_type", None)
     return own if own is not None else analytic.weights_type(config_for_weights(config))
@@ -314,7 +314,7 @@ class _Fold:
         self.seed_colls: dict[int, Coll] = {}
         # a TP rank log: `tp` = {"rank", "world"} from RunHeader.notes.tp2 (None on a TP1 log: nothing below is allocated);
         # `peers_param[i]` = the `peers_<i>` parameter index of request i; `peers_fields[i]` = its fields in issue order (finalised into a
-        # Record at `_finish`); `peers_leaves[i]` = leaves allocated so far; `collectives` = one record per collective the fold executed
+        # RecordType at `_finish`); `peers_leaves[i]` = leaves allocated so far; `collectives` = one record per collective the fold executed
         self.tp: dict[str, int] | None = None
         self.peers_param: dict[int, int] = {}
         self.peers_fields: dict[int, list[dict]] = {}
@@ -423,10 +423,10 @@ class _Fold:
                     params.append(("seed" if len(reqs) == 1 else f"seed_{i}", Array(1, Value(64))))
         # a TENSOR-PARALLEL rank log (RunHeader.notes.tp2 = {rank, world_size} written by the rank observer,
         # tp2_worker.tp2_install): every request gets ONE `peers` / `peers_<i>` root parameter (root class `collective_received`) between
-        # the seeds and the weights -- a Record whose fields, in issue order, are the OTHER rank's partials of the collectives whose rows the
+        # the seeds and the weights -- a RecordType whose fields, in issue order, are the OTHER rank's partials of the collectives whose rows the
         # request owns (`s<step>_k<k>`: Array<M_r, Array<N, Bf16>>), filled in as the fold executes the collectives and finalised at
         # `_finish`.  Layout: prompts..., seeds..., peers..., weights (weights stay the LAST input node; the codec lowers a homogeneous bf16
-        # Record to ONE Input16 node per request, so the request-owned Input nodes stay the leading ones -- batch_decomp).  A TP1 log
+        # RecordType to ONE Input16 node per request, so the request-owned Input nodes stay the leading ones -- batch_decomp).  A TP1 log
         # (no tp2 note) allocates nothing here: its layout and digests are unchanged.
         tp = dict((h.notes or {}).get("tp2") or {})
         self.tp = None
@@ -443,7 +443,7 @@ class _Fold:
                 self.peers_param[i] = len(params)
                 self.peers_fields[i] = []
                 self.peers_leaves[i] = 0
-                params.append(("peers" if len(reqs) == 1 else f"peers_{i}", Record()))   # placeholder type: fields finalised at _finish
+                params.append(("peers" if len(reqs) == 1 else f"peers_{i}", RecordType()))   # placeholder type: fields finalised at _finish
         self.witness_inputs.declare(params, tuple(getattr(self.profile, "witnesses", ())), len(reqs))
         if getattr(self.profile, "registered_values", False):
             self.supplied_inputs.declare(params, len(reqs))
@@ -849,13 +849,13 @@ class _Fold:
         return leaf
 
     def _weight_field(self, op: WeightField, ptype: Type, what: str) -> Coll:
-        """The weights Record's field at `op.path`, whole: the parameter's leaves, no memory read."""
+        """The weights RecordType's field at `op.path`, whole: the parameter's leaves, no memory read."""
         coll = self.weights_coll
         try:
             for k in op.path:
                 coll = coll[k]
         except (KeyError, IndexError, TypeError, AttributeError) as e:
-            raise FoldError(f"{what}: weight field path {op.path!r} is not in the weights Record: {e}") from None
+            raise FoldError(f"{what}: weight field path {op.path!r} is not in the weights RecordType: {e}") from None
         if coll.type.leaves != ptype.leaves or _width_of(coll.type) != _width_of(ptype):
             raise FoldError(f"{what}: field {op.path!r} is {coll.type!r}, the parameter wants {ptype!r}")
         return Coll(ptype, coll.refs)
@@ -1237,7 +1237,7 @@ class _Fold:
                 self.notes.append(f"request {rid!r}: {n} served steps, max_tokens {expect}")
         out = outs[0] if len(outs) == 1 else tuple_of(*outs)
         self.B.ret_type = out.type
-        # finalise every `peers_<i>` parameter: the Record of the request's collective fields in issue order (the refs the
+        # finalise every `peers_<i>` parameter: the RecordType of the request's collective fields in issue order (the refs the
         # collective instances hold, ("p", pidx, offset, N), were allocated against exactly these offsets).  A request whose rows met no
         # collective would lower to NO Input node (0 leaves) and shift the weights node: refused by name rather than encoded.
         if self.tp is not None:
@@ -1250,7 +1250,7 @@ class _Fold:
                     if self.strict:
                         raise FoldError(msg)
                     self._problem("PeersEmpty", msg, {"request": self.requests[ri]["request_id"], "param": params[pidx][0]})
-                params[pidx] = (params[pidx][0], Record(*[(f["name"], f["type"]) for f in flds]))
+                params[pidx] = (params[pidx][0], RecordType(*[(f["name"], f["type"]) for f in flds]))
             self.params = tuple(params)
             self.B.params = self.params
         self.params, empty = self.witness_inputs.finalise(self.params, self.requests)

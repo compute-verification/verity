@@ -77,7 +77,7 @@ from verity.ml.circuits.boolean.forms import NOT, ONE, OR, add, and_reduce, comp
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, primitive
 from verity.ml.circuits.refs import Coll, array_of, concat
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 
 from . import compile as C
 from . import seeds as SD
@@ -621,7 +621,7 @@ def _signature(S: Any, admit: bool = False) -> tuple:
     D, P = SD.types(True)
     return ((("a", Array(S.R, a)), ("b", Array(S.C, b)), *((("admit", Array(S.R, BIT)),) if admit else ()), ("salt", D),
              ("position", P), ("roots", Array(2, D))),
-            Record(("z", Array(len(S.PAIRS), S.EXACT.signature()[1])), ("receipt", Array(2 * _layout(S).sets, U32))))
+            RecordType(("z", Array(len(S.PAIRS), S.EXACT.signature()[1])), ("receipt", Array(2 * _layout(S).sets, U32))))
 
 
 def _signature_v4(S: Any) -> tuple:
