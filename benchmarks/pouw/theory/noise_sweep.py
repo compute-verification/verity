@@ -15,22 +15,27 @@ write costs at least 32 (H32). A design's T1 gap is the honest work that no such
   (candidate 1, `--c1`); 0 otherwise.
 - final word: free under M0 (free set: constants, salt-independent functions of the input, raw coin words) when the
   noise cancels, so the last word is A·Bᵀ; under M1 (the call's own words, CORE-TIME's lemma, unproved) it is a target.
+- coins: raw coin words are free in M0, so expanding them is honest work no word forces. `gap` takes it as credited
+  (forced under the premise that credits hashing); `gap_coins_uncredited` adds it at COIN_PRICED_BYTE a packed byte.
 
 Two families avoid both the final word and most forming:
 
-- served sparse noise (`ssn_*`): each k32 step holds 28 data entries and one register of noise bits against a public
-  pattern W₀, so every word carries fresh noise, the final word is the served output A·Bᵀ + noise, and the only forming
-  is one mask a row a step;
+- served sparse noise (`ssn_*`): every k32 step carries fresh noise bits against a public pattern W₀, so every word
+  carries fresh noise, the final word is the served output A·Bᵀ + noise, and the only forming is a shift and a mask a
+  row a step. `ssn_1l` codes the column in step 1's four lanes and then needs one lane a step (31 data entries);
 - stacked periodic noise (`per2`): X = [A + V·P | V⊗L], Y = [B; −limbs of fold(B)], exact, with only weights-only
   corrections.
+
+`--data` reads noise_data.py's output (real activations and weights): the share of words a data-dependent design
+repeats, and per2's limbs. Without it those stay estimates (per2's limbs) or unpriced ("+dup").
 
 `check()` verifies each stacked design's exact cancellation, the impossibility of a two-sided 2-block cancellation with
 scalar coefficients, and the functional distinctness (pairwise distinct and non-free on a salt grid, M0's free set) of
 every committed word on small instances, degenerate data included.
 
 All prices and shapes are inputs: H32's 32 (measured on the H200), Llama-3.2-1B's linears, an assumed V4-like dense
-and routed-expert shape, and CORE-NCP's measured step parts for the T2 estimate. Output: a JSON report on stdout or
-`--json PATH`, and a text table with `--table`.
+and routed-expert shape, CORE-NCP's measured step parts and the coin expansion's measured call times for the T2
+estimate. Output: a JSON report on stdout or `--json PATH`, and a text table with `--table`.
 """
 
 from __future__ import annotations
@@ -139,7 +144,7 @@ def designs() -> list[Design]:
                "~0 (clamp 124, estimate)", "F2 int8-tok124", lambda m, n, k: 2 / n,
                "dominated by per2 (alpha 2)", coin_bits=lambda m, n, k: 3 * m * k),
         Design("per2", "X=[A+V.P | V x L], Y=[B; -limbs(fold32 B)], V in [-4,3] per row, L limbs (PER2_LIMBS_REAL)",
-               lambda k: 1 + H32 * PER2_LIMBS_REAL / k,
+               lambda k: 1 + H32 * per2_limbs(k) / k,
                lambda m, n, k: P_ENTRY / n + 256 / (n * k), _zero,
                lambda m, n, k: P_ENTRY / n + 256 / (n * k), _zero, _zero, True,
                "weights-only for words; X registers repeat on zero A blocks", "activations clamped to +-124; limbs keep Y int8",
@@ -179,7 +184,7 @@ def designs() -> list[Design]:
                "F0 int8-channel127-v1", _zero, "needs M1; dup; a noise-dependent address may price as `other` (8/n + 8/m)",
                coin_bits=lambda m, n, k: k / 32 * math.log2(max(2, k / 32))),
         Design("lowrank1", "X=[A+u vᵀ | u x L], v public, u fresh per row; Kronecker and block-diagonal reduce to this or per2",
-               lambda k: 1 + H32 * PER2_LIMBS_REAL / k, lambda m, n, k: 2 * P_ENTRY / n, _zero,
+               lambda k: 1 + H32 * per2_limbs(k) / k, lambda m, n, k: 2 * P_ENTRY / n, _zero,
                lambda m, n, k: P_ENTRY / n, _zero, _zero, True, "weights-only", "clamp to fit u v",
                "~0 (estimate)", "F2 int8-tok124", lambda m, n, k: 1 / n, "dominated by per2 (a table select per register)",
                coin_bits=lambda m, n, k: 8 * m),
@@ -205,6 +210,37 @@ def designs() -> list[Design]:
 
 DUP_ESTIMATE = {"ncp3": 0.0, "os2": 0.0, "per2": 0.0, "ssn_a": 0.0, "ssn_1l": 0.0, "ssn2": 0.0, "lowrank1": 0.0, "dither32": 0.0,
                 "nsf": None, "disp2s": None, "perm": None, "rowsign": None, "signs2": 1.0, "init": None}
+#: the share of words a data-dependent design repeats, from noise_data.py's summary: nsf and disp2s repeat a word on a
+#: zero k32 block dot product (zero rows included); perm's words are equal functions of the salt only on identical rows
+DUP_KIND = {"nsf": "zero_dot_share", "disp2s": "zero_dot_share", "perm": "identical_row_share"}
+#: noise_data.py's scope for each row count: 64 rows of one request, one 2,048-token request, four requests
+DATA_SCOPE = {64: "m64", 512: "ctx", 8192: "all"}
+DATA: dict = {}
+
+
+def load_data(path: str) -> None:
+    """Read noise_data.py's output: the duplicate shares and per2's limbs a linear, by K (the largest at that K)."""
+    global PER2_LIMBS_REAL
+    with open(path) as fh:
+        d = json.load(fh)
+    DATA["summary"] = d["summary"]
+    by_k = {}
+    for name, limbs in d["per2_limbs_max"].items():
+        k = LLAMA[name][1]
+        by_k[k] = max(by_k.get(k, 0), limbs)
+    DATA["per2_limbs_by_k"] = by_k
+    PER2_LIMBS_REAL = max(by_k.values())
+
+
+def per2_limbs(k: int) -> int:
+    return DATA.get("per2_limbs_by_k", {}).get(k, PER2_LIMBS_REAL)
+
+
+def dup_share(d: Design, m: int) -> float | None:
+    if DUP_ESTIMATE[d.name] is not None or d.name not in DUP_KIND or "summary" not in DATA:
+        return DUP_ESTIMATE[d.name]
+    scope = DATA_SCOPE[min(DATA_SCOPE, key=lambda r: abs(math.log(max(m, 1) / r)))]
+    return DATA["summary"][scope][DUP_KIND[d.name]]
 
 
 def gap_terms(d: Design, m: int, n: int, k: int, model: str, c1: bool) -> dict:
@@ -212,13 +248,14 @@ def gap_terms(d: Design, m: int, n: int, k: int, model: str, c1: bool) -> dict:
     fx, fy = d.form_x(m, n, k), d.form_y(m, n, k)
     cx, cy = (d.forced_x(m, n, k), d.forced_y(m, n, k)) if c1 else (0.0, 0.0)
     final = H32 / k if (d.final_free_m0 and model == "M0") else 0.0
-    dup = DUP_ESTIMATE[d.name]
+    dup = dup_share(d, m)
     terms = {"alpha": a, "forming_x": fx - cx, "forming_y": fy - cy, "denoise": d.denoise(m, n, k), "final_word": final,
              "dup": a * dup if dup is not None else 0.0}
     terms["gap"] = sum(v for key, v in terms.items() if key != "alpha")
     terms["coins"] = d.coin_bits(m, n, k) / 8 * COIN_PRICED_BYTE / (m * n * k)
     terms["gap_coins_uncredited"] = terms["gap"] + terms["coins"]
     terms["dup_data_dependent"] = float(dup is None)
+    terms["dup_from_data"] = float(dup is not None and DUP_ESTIMATE[d.name] is None)
     return terms
 
 
@@ -582,7 +619,7 @@ def report(c1_only: bool = False) -> dict:
             "noise_std": [ssn_noise_std(k) for k in (2048, 8192)], "checks": check(),
             "params": {"H32": H32, "p_entry": P_ENTRY, "data_per_step": DATA_PER_STEP, "llama": LLAMA, "v4_dense": V4_DENSE,
                        "v4_expert": V4_EXPERT, "v4_expert_share": V4_EXPERT_SHARE, "rows": ROWS, "hash_GBps": HASH_GBPS,
-                       "step": STEP, "per2_limbs": PER2_LIMBS_REAL, "dup": DUP_ESTIMATE,
+                       "step": STEP, "per2_limbs_default": PER2_LIMBS_REAL, "dup": DUP_ESTIMATE,
                        "coin_priced_byte": COIN_PRICED_BYTE, "coin_call_us": COIN_CALL_US}}
 
 
@@ -601,7 +638,8 @@ def table(rep: dict) -> str:
     lines.append(" | ".join(hdr))
     for r in rep["rows"]:
         def f(key, gap="gap"):
-            return f"{100 * r[key][gap]:.3f}%" + ("+dup" if r[key]["dup_data_dependent"] else "")
+            mark = "+dup" if r[key]["dup_data_dependent"] else ("(data)" if r[key]["dup_from_data"] else "")
+            return f"{100 * r[key][gap]:.3f}%" + mark
         lines.append(" | ".join([r["design"], r["model"], "y" if r["c1"] else "n", f("llama_T512_64tok"),
                                  f("llama_T512_512tok"), f("llama_T8192"), f("v4dense_T512_64tok"), f("v4dense_T8192"),
                                  f("v4expert_T8192"), f("llama_T512_64tok", "gap_coins_uncredited"),
@@ -618,9 +656,14 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--json", help="write the report here")
     ap.add_argument("--table", action="store_true", help="print the text table")
+    ap.add_argument("--data", help="noise_data.py's JSON: real duplicate shares and per2's limbs (else estimates)")
     args = ap.parse_args(argv)
+    if args.data:
+        load_data(args.data)
     rep = report()
-    for name in ("ssn_1l", "ssn_a", "ncp3"):
+    rep["data"] = {"path": args.data, "per2_limbs_by_k": DATA.get("per2_limbs_by_k"), "scopes": DATA_SCOPE,
+                   "dup_kind": DUP_KIND}
+    for name in ("ssn_1l", "ssn_a", "ncp3", "nsf", "per2"):
         r = next(r for r in rep["rows"] if r["design"] == name and r["model"] == "M0" and not r["c1"])
         for gap in ("gap", "gap_coins_uncredited"):
             rep[f"periods_{name}_M0_noC1_llama_T8192_{gap}"] = periods(r["llama_T8192"][gap], r["llama_T8192"]["alpha"])
