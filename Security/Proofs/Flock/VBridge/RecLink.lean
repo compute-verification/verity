@@ -25,8 +25,9 @@ The gadgets and the check are in `Proofs.Flock.VBridge.RecLinkGadgets`.
   XOR zero exactly when they are equal (`allZero_xor`).
 * The leaf. `sound_hm96Leaf`: the commit string `b ‖ c` (`b = x ⊕ M·y` word by word, `c` the salt's SHA-512 from its
   prefix's midstate) and its SHA-512 from the leaf prefix's midstate are `RecLinkTree.leaf (commitString x y)`.
-* The steps. `sound_linkSteps`: the climbs' direction bits are the bits of `dirIdx`, which is `posOf` wherever the row
-  passes `okRef` (`dirIdx_eq`), and each root is ANDed with `ok` (`carries_gate`).
+* The steps. `sound_side`: each side's leaf, climbed by its siblings and ANDed with `ok` (`carries_gate`), carries
+  `SideP`; `sound_linkSteps`: the climbs' direction bits are the bits of `dirIdx`, which is `posOf` wherever the row
+  passes `okRef` (`dirIdx_eq`).
 * The unit. `linkUnit_ok` (its builder is `linkRun`, the steps on the seven ports' input bits), `laid_linkUnit` (the
   laid-out unit's output columns hold `linkB` wherever its rows and input columns hold) and `unit_linkUnit` (a copy of it
   in a unit of any partition).
@@ -65,6 +66,8 @@ theorem midstate_eq {p : ByteArray} (hp : p.size = 128) : VStar.midstate p = pre
   unfold VStar.midstate toBV
   rw [hp, show (128 : ℕ) / 128 = 1 from rfl, List.range_one, List.foldl_cons, List.foldl_nil, Nat.mul_zero] <;> rfl
 
+theorem size_leaf (b : ByteArray) : (RecLinkTree.leaf b).size = 64 := Sha512.hash_size _
+
 theorem catBytes_eq (a b : ByteArray) : catBytes a.data.toList b.data.toList = a ++ b :=
   ByteArray.ext (Array.toList_inj.1 (by rw [data_catBytes, ByteArray.toList_data_append]))
 
@@ -94,7 +97,7 @@ theorem bitL_xorPart (Dg Sl : ByteArray) {q : ℕ} (hq : q < 512) :
 
 theorem carries_xorPart {z : Var → Bool} {bw x y : List Lin} {Dg Sl : ByteArray} (hx : Carries z x Dg)
     (hy : Carries z y Sl)
-    (hbw : bw.length = 512 ∧ ∀ i (h : i < (List.range 512).length), bit z bw i =
+    (hbw : bw.length = (List.range 512).length ∧ ∀ i (h : i < (List.range 512).length), bit z bw i =
       (ev z (x.getD (wordBit (List.range 512)[i]) Lin.zero) ^^
         maskV Hm96.Default512.key (bit z y) (wordBit (List.range 512)[i]))) :
     Carries z ((List.range 512).map fun t => bw.toArray.getD (wordBit t) Lin.zero) (xorPart Dg Sl) := by
@@ -127,10 +130,10 @@ theorem sound_hm96Leaf (x y : List Lin) : Sound (VStar.hm96Leaf x y) fun z out =
   have hbc := carries_append (carries_xorPart hx hy hbw) hcc
   rw [← commitString_eq] at hbc
   obtain ⟨hol, hob⟩ := hout Hm96.Default512.leafPrefix.data.toList (Hm96.Default512.commitString Dg Sl).data.toList
-    (by rw [Array.length_toList]; exact size_leafPrefix) (by rw [Array.length_toList]; exact hbc.1) hbc.2
-    (midstate_eq size_leafPrefix)
+    (by rw [Array.length_toList, ByteArray.size_data, size_leafPrefix])
+    (hbc.1.trans (by rw [Array.length_toList, ByteArray.size_data])) hbc.2 (midstate_eq size_leafPrefix)
   rw [catBytes_eq] at hob
-  exact ⟨by rw [hol]; exact (congrArg (8 * ·) (Sha512.hash_size _)).symm, fun t ht => hob t (by omega)⟩
+  exact ⟨by rw [hol, size_leaf], fun t ht => hob t (by omega)⟩
 
 /-! ## The steps -/
 
@@ -176,6 +179,17 @@ def linkB (UB PB : ℕ) (T Xr Yr Xw Yw : ByteArray) (sr sw : List ByteArray) : B
       (Flock.climb RecLinkRef.scheme (RecLinkTree.leaf (Hm96.Default512.commitString Xw Yw))
         (RecLinkRef.posOf T 3 4 PB (UB + PB)) sw))
 
+theorem size_linkB (UB PB : ℕ) (T Xr Yr Xw Yw : ByteArray) (sr sw : List ByteArray) :
+    (linkB UB PB T Xr Yr Xw Yw sr sw).1.size = 128 ∧ (linkB UB PB T Xr Yr Xw Yw sr sw).2.size = 128 := by
+  dsimp only [linkB]
+  exact ⟨size_rootB _ (AccChain.climb_size_of RecLinkRef.scheme (fun _ _ => rfl) _ _ _ (size_leaf _)),
+    size_rootB _ (AccChain.climb_size_of RecLinkRef.scheme (fun _ _ => rfl) _ _ _ (size_leaf _))⟩
+
+theorem carries_rootB {z : Var → Bool} {w : List Lin} {ok : Bool} {r r' : ByteArray} (h : ok = true → r = r')
+    (hc : Carries z w ((if ok then r' else zeroB 64) ++ zeroB 64)) : Carries z w (rootB ok r) := by
+  rw [rootB_eq h]
+  exact hc
+
 /-- The climb's direction bits as a number: the row field `r`'s low `PB` bits, the unit field `u`'s low `UB` above. -/
 def dirIdx (T : ByteArray) (u r UB PB : ℕ) : ℕ :=
   2 ^ PB * (RecLinkRef.field T u % 2 ^ UB) + RecLinkRef.field T r % 2 ^ PB
@@ -220,6 +234,32 @@ theorem carries_linkZeros (z : Var → Bool) :
     Carries z (List.replicate (16 * (VStar.LINK_OUT_WORDS - VStar.NODE_WORDS)) Lin.zero) (zeroB 64) :=
   carries_zeros z 64
 
+theorem length_sibForms (aux : List Lin) (D : ℕ) : (VStar.sibForms aux D).length = D := by
+  simp [VStar.sibForms]
+
+/-- What one side of the steps carries (`sound_side`): on forms that carry a 64-byte digest `Dg`, a 192-byte salt `Sl`,
+siblings `ss` and the bits of `idx`, the climb of `Dg, Sl`'s leaf when `ok` holds and 64 zero bytes when it doesn't. -/
+def SideP (ok : Lin) (d x y aux : List Lin) (D : ℕ) (z : Var → Bool) (g : List Lin) : Prop :=
+  ∀ (Dg Sl : ByteArray) (idx : ℕ) (ss : List ByteArray), Dg.size = 64 → Sl.size = 192 → Carries z x Dg →
+    Carries z y Sl → List.Forall₂ (fun w b => b.size = 64 ∧ Carries z w b) (VStar.sibForms aux D) ss →
+    (∀ j < D, ev z (d.getD (0 + j) Lin.zero) = idx.testBit j) →
+    Carries z g (if ev z ok then
+      Flock.climb RecLinkRef.scheme (RecLinkTree.leaf (Hm96.Default512.commitString Dg Sl)) idx ss else zeroB 64)
+
+/-- **One side of the steps**: the leaf of `x, y`, its climb by the siblings in `aux` along `d`, ANDed with `ok`
+(`carries_gate`), carries `SideP` into the rest `k`. -/
+theorem sound_side {ok : Lin} {d x y aux : List Lin} {D : ℕ} {β : Type} {k : List Lin → M β}
+    {Q : (Var → Bool) → β → Prop} (hk : ∀ g, Sound (k g) fun z b => SideP ok d x y aux D z g → Q z b) :
+    Sound (VStar.hm96Leaf x y >>= fun l => climbFrom d 0 l (VStar.sibForms aux D) >>= fun c =>
+      c.mapM (Flock.HmNets.and ok) >>= k) Q :=
+  Sound.bind' (sound_hm96Leaf x y) fun l =>
+    Sound.bind' (sound_climbFrom RecLinkRef.scheme (fun _ _ => rfl) d 0 l _) fun c =>
+    Sound.bind' (sound_mapM _ (fun z w => ev z ok && ev z w) (fun w => sound_and ok w) c) fun g =>
+    Sound.mono (hk g) fun z _ hb hg hc hl => hb fun Dg Sl idx ss hDg hSl hx hy hss hdir =>
+      carries_gate (hc (RecLinkTree.leaf (Hm96.Default512.commitString Dg Sl)) idx ss (size_leaf _)
+          (hl Dg Sl hDg hSl hx hy) hss fun j hj => hdir j (by rwa [length_sibForms] at hj))
+        (AccChain.climb_size_of RecLinkRef.scheme (fun _ _ => rfl) _ _ _ (size_leaf _)) hg
+
 /-- **V*'s link steps compute the unit's reference outputs**: whenever their rows hold, on forms that carry a 128-byte
 table row `T`, the reader's digest and salt `Xr, Yr` and siblings `sr`, and the writer's `Xw, Yw` and `sw`, the outputs
 carry `linkB`: each opened row's leaf climbed to the position the row names, gated by `okRef`, then 64 zero bytes. -/
@@ -233,39 +273,20 @@ theorem sound_linkSteps (UB PB : ℕ) (hUB : UB ≤ 32) (hPB : PB ≤ 32) (trow 
         Carries z o.1 (linkB UB PB T Xr Yr Xw Yw sr sw).1 ∧ Carries z o.2 (linkB UB PB T Xr Yr Xw Yw sr sw).2 := by
   unfold VStar.linkSteps
   simp only [OfVStar.climbFrom_eq]
-  refine Sound.bind' (sound_okForms UB PB hUB hPB trow xr xw) fun ok =>
-    Sound.bind' (sound_hm96Leaf xr yr) fun lr =>
-    Sound.bind' (sound_climbFrom RecLinkRef.scheme (fun _ _ => rfl) _ 0 lr _) fun cr =>
-    Sound.bind' (sound_mapM _ (fun z x => ev z ok && ev z x) (fun x => sound_and ok x) cr) fun rin =>
-    Sound.bind' (sound_hm96Leaf xw yw) fun lw =>
-    Sound.bind' (sound_climbFrom RecLinkRef.scheme (fun _ _ => rfl) _ 0 lw _) fun cw =>
-    Sound.bind' (sound_mapM _ (fun z x => ev z ok && ev z x) (fun x => sound_and ok x) cw) fun rout =>
-    Sound.pure' fun z hrout hcw hlw hrin hcr hlr hok T Xr Yr Xw Yw sr sw hT hXr hYr hXw hYw htrow hxr hyr hxw hyw
-      hsr hsw => ?_
-  have hls : ∀ Dg Sl : ByteArray, (RecLinkTree.leaf (Hm96.Default512.commitString Dg Sl)).size = 64 :=
-    fun _ _ => Sha512.hash_size _
-  have hD : ∀ aux : List Lin, (VStar.sibForms aux (UB + PB)).length = UB + PB := fun _ => by simp [VStar.sibForms]
-  have hcr' := hcr _ (dirIdx T 1 2 UB PB) sr (hls Xr Yr) (hlr Xr Yr hXr hYr hxr hyr) hsr fun j hj =>
-    dirs_ok htrow hT hUB hPB 1 2 (by norm_num) (by norm_num) j (by rw [hD] at hj; exact hj)
-  have hcw' := hcw _ (dirIdx T 3 4 UB PB) sw (hls Xw Yw) (hlw Xw Yw hXw hYw hxw hyw) hsw fun j hj =>
-    dirs_ok htrow hT hUB hPB 3 4 (by norm_num) (by norm_num) j (by rw [hD] at hj; exact hj)
+  refine Sound.bind' (sound_okForms UB PB hUB hPB trow xr xw) fun _ =>
+    sound_side fun _ => sound_side fun _ =>
+    Sound.pure' fun z hW hR hok T Xr Yr Xw Yw sr sw hT hXr hYr hXw hYw htrow hxr hyr hxw hyw hsr hsw => ?_
   have hok' := hok T Xr Xw hT hXr hXw htrow hxr hxw
-  have hR := carries_append (carries_gate hcr' (AccChain.climb_size_of _ (fun _ _ => rfl) _ _ _ (hls Xr Yr)) hrin)
-    (carries_linkZeros z)
-  have hW := carries_append (carries_gate hcw' (AccChain.climb_size_of _ (fun _ _ => rfl) _ _ _ (hls Xw Yw)) hrout)
-    (carries_linkZeros z)
-  rw [hok'] at hR hW
-  refine ⟨?_, ?_⟩
-  · show Carries z _ (rootB _ _)
-    rw [rootB_eq (r' := Flock.climb RecLinkRef.scheme (RecLinkTree.leaf (Hm96.Default512.commitString Xr Yr))
-      (dirIdx T 1 2 UB PB) sr) fun hk => by
-        rw [dirIdx_eq (RecLinkRef.okRef_fits hk).2.1 (RecLinkRef.okRef_fits hk).2.2.2.1]]
-    exact hR
-  · show Carries z _ (rootB _ _)
-    rw [rootB_eq (r' := Flock.climb RecLinkRef.scheme (RecLinkTree.leaf (Hm96.Default512.commitString Xw Yw))
-      (dirIdx T 3 4 UB PB) sw) fun hk => by
-        rw [dirIdx_eq (RecLinkRef.okRef_fits hk).2.2.1 (RecLinkRef.okRef_fits hk).2.2.2.2]]
-    exact hW
+  have hR' := carries_append (hR Xr Yr (dirIdx T 1 2 UB PB) sr hXr hYr hxr hyr hsr fun j hj =>
+    dirs_ok htrow hT hUB hPB 1 2 (by norm_num) (by norm_num) j hj) (carries_linkZeros z)
+  have hW' := carries_append (hW Xw Yw (dirIdx T 3 4 UB PB) sw hXw hYw hxw hyw hsw fun j hj =>
+    dirs_ok htrow hT hUB hPB 3 4 (by norm_num) (by norm_num) j hj) (carries_linkZeros z)
+  rw [hok'] at hR' hW'
+  refine ⟨?_, ?_⟩ <;> dsimp only [linkB]
+  · exact carries_rootB (fun hk => by
+      rw [dirIdx_eq (RecLinkRef.okRef_fits hk).2.1 (RecLinkRef.okRef_fits hk).2.2.2.1]) hR'
+  · exact carries_rootB (fun hk => by
+      rw [dirIdx_eq (RecLinkRef.okRef_fits hk).2.2.1 (RecLinkRef.okRef_fits hk).2.2.2.2]) hW'
 
 /-! ## Freshness -/
 
@@ -335,8 +356,8 @@ theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = 
       omega
     simp only [OfVStar.run_input_bind]
     rw [hn, OfVStar.slices_vars, varSlices_linkPorts, Nat.add_zero]
-    refine ⟨rfl, ?_, rfl, rfl⟩
-    exact congrArg List.toArray (congr (congrArg HAppend.hAppend rfl) rfl)
+    simp only [linkRun, linkIn]
+    refine ⟨?_, ?_, ?_, ?_⟩ <;> first | rfl | trivial
 
 theorem checkShape_ok {UB PB : ℕ} {x : Unit} (h : RecLinkTree.checkShape UB PB = .ok x) : UB ≤ 32 ∧ PB ≤ 32 := by
   unfold RecLinkTree.checkShape at h
@@ -382,28 +403,31 @@ theorem laid_linkUnit {UB PB : ℕ} {U : VStar.UnitC} (hU : VStar.linkUnit UB PB
       VStar.LINK_Y_WORDS, auxBits]
     omega
   have hA := aux_ge (UB + PB)
+  have hle : ∀ m, m ≤ 5120 + 2 * auxBits UB PB → m ≤ (Array.replicate U.inWords 16).foldl (· + ·) 0 :=
+    fun m hm => by rw [hN]; exact hm
   have hg : Good ((Array.replicate U.inWords 16).foldl (· + ·) 0) U.st := by
     rw [hst, hN, ← linkIn_eq]
     exact fresh_linkSteps UB PB _ _ _ _ _ _ _ (linkIn UB PB) ⟨linkIn UB PB, []⟩ ⟨by simp, fun k r h => by simp at h⟩
   rw [OfVStar.laid_ok hl] at h
   have hz := laid_rows U.st _ _ U.outs v hg h
   rw [hst] at hz
-  have hP := (sound_linkSteps UB PB hUB hPB (vars 0 1024) (vars 1024 512) (vars 1536 1536) (vars 3072 (auxBits UB PB))
-    (vars (3072 + auxBits UB PB) 512) (vars (3584 + auxBits UB PB) 1536) (vars (5120 + auxBits UB PB) (auxBits UB PB))
-    ⟨linkIn UB PB, []⟩).2 _ hz
-  obtain ⟨h1, h2⟩ := hP T Xr Yr Xw Yw sr sw hT hXr hYr hXw hYw
-    (carries_vars (by omega) (by omega) htrow) (carries_vars (by omega) (by omega) hxr)
-    (carries_vars (by omega) (by omega) hyr) (carries_vars (by omega) (by omega) hxw)
-    (carries_vars (by omega) (by omega) hyw) (forall₂_sibs sr hsr hA (by omega) hraux)
-    (forall₂_sibs sw hsw hA (by omega) hwaux)
-  have hls : ∀ Dg Sl : ByteArray, (RecLinkTree.leaf (Hm96.Default512.commitString Dg Sl)).size = 64 :=
-    fun _ _ => Sha512.hash_size _
+  have hS : Sound (linkRun UB PB) _ := sound_linkSteps UB PB hUB hPB (vars 0 1024) (vars 1024 512) (vars 1536 1536)
+    (vars 3072 (auxBits UB PB)) (vars (3072 + auxBits UB PB) 512) (vars (3584 + auxBits UB PB) 1536)
+    (vars (5120 + auxBits UB PB) (auxBits UB PB))
+  obtain ⟨h1, h2⟩ := (hS ⟨linkIn UB PB, []⟩).2 _ hz T Xr Yr Xw Yw sr sw hT hXr hYr hXw hYw
+    (carries_vars (by omega) (hle _ (by omega)) htrow) (carries_vars (by omega) (hle _ (by omega)) hxr)
+    (carries_vars (by omega) (hle _ (by omega)) hyr) (carries_vars (by omega) (hle _ (by omega)) hxw)
+    (carries_vars (by omega) (hle _ (by omega)) hyw) (forall₂_sibs sr hsr hA (hle _ (by omega)) hraux)
+    (forall₂_sibs sw hsw hA (hle _ (by omega)) hwaux)
+  have hw : (Array.replicate U.outWords 16).foldl (· + ·) 0 = 2048 := by
+    rw [OfVStar.foldl_replicate, VStar.UnitC.outWords, hop]
+    rfl
+  have hsz := size_linkB UB PB T Xr Yr Xw Yw sr sw
   have hlen : (((linkRun UB PB).run ⟨linkIn UB PB, []⟩).1.1 ++ ((linkRun UB PB).run ⟨linkIn UB PB, []⟩).1.2).length ≤
-      (Array.replicate U.outWords 16).foldl (· + ·) 0 := by
-    rw [OfVStar.foldl_replicate, VStar.UnitC.outWords, hop, List.length_append]
-    show _ + _ ≤ 2048
-    rw [h1.1, h2.1, linkB, size_rootB _ (AccChain.climb_size_of _ (fun _ _ => rfl) _ _ _ (hls Xr Yr)),
-      size_rootB _ (AccChain.climb_size_of _ (fun _ _ => rfl) _ _ _ (hls Xw Yw))]
+      (Array.replicate U.outWords 16).foldl (· + ·) 0 :=
+    calc _ = 8 * 128 + 8 * 128 := by rw [List.length_append, h1.1, h2.1, hsz.1, hsz.2]
+      _ ≤ 2048 := by norm_num
+      _ = _ := hw.symm
   rw [houts] at h
   exact colsHold_outs (st := U.st) hlen h (carries_append h1 h2)
 
