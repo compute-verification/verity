@@ -743,11 +743,11 @@ cannot know what it verifies), then a record not in its canonical text (`RecordT
 `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, or two
 ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
 different domains; `Flock.Guarantees.SampledKSLiveV3` is over that acceptance; `--ks-form`, which used to turn this on,
-is accepted under `--zk` and changes nothing), and last a plain session whose coins are not the OS's: one without
-`--coins os`, or with it at a statement whose prover seeds (`ProvedScope.plainCoins`, `ProvedScope.SEED_COINS`, §7.2,
-§17.2: every plain soundness claim reads its coins as unknown to the prover before its round), all after every
+is accepted under `--zk` and changes nothing), all after every
 check has passed (so the reason is the refusal only when nothing else
-fails; the form's first). Exit 0 iff every
+fails; the form's first). Last of all for a plain session, one whose coins are not the OS's (without `--coins os`, or
+with it at a statement whose prover seeds) is refused (`ProvedScope.plainCoins`, `ProvedScope.SEED_COINS`, §7.2, §17.2:
+every plain soundness claim reads its coins as unknown to the prover before its round). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`.
 `--upstream-plain`: the plain proof files are upstream's form, without the zk patch's `zk_level0 = None` tag that every
@@ -762,12 +762,12 @@ public file is refused. Without it a plain session has at most one table. Not wi
 def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
-  let stmtName := (argOf args "--statement").getD Tags.circuit.name
-  if let some why := ProvedScope.legacyWhy stmtName then
+  if let some why := (argOf args "--statement").bind ProvedScope.legacyWhy then
     for dir in (args.dropWhile (· != "--session")).drop 1 do
       let line := Lean.Json.mkObj [("session", Lean.Json.str dir), ("accepted", Lean.Json.bool false), ("why", Lean.Json.str why)]
       IO.println s!"VERDICT {line.compress}"
     return 1
+  let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let templated := Tags.templated.any (·.name == stmtName)
   let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
@@ -942,8 +942,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
       -- short of every unit, then a session's over an inner record without a draw, then a session's without the program,
       -- then a record not in its canonical text (S0), then under --zk files whose rows, names or port roots the
-      -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then a plain session not on the OS's
-      -- coins (`ProvedScope.plainCoins`)
+      -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
@@ -951,8 +950,10 @@ def verifyCmd (args : List String) : IO UInt32 := do
       RecSetup.innerDrawn recCoins
       ProvedScope.programHeld program
       RecordText.check record
-      ksFiles
+      -- a plain session not on the OS's coins (`ProvedScope.plainCoins`): last for a plain session, since the --zk
+      -- checks below pass every plain one, and a --zk session's coin tree passes it
       ProvedScope.plainCoins stmtTags coins
+      ksFiles
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok

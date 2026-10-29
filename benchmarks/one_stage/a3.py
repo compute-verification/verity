@@ -16,8 +16,7 @@ one integrity profile.
   draw is the verifier's; without it, the Lean draw fixes only how many units fall in each template and each server draws
   a uniform subset of that size, which is still exactly `Subset(k)` over the union (conditioned on the counts, a uniform
   k-subset of the union is uniform within each template). The per-template sessions are one table each (M0 has no
-  multi-table statement yet). Each runs on per-round OS coins (``FC_COINS=os``), which Lean verifies under ``--coins os``:
-  it refuses a plain session on a seed's coins.
+  multi-table statement yet).
 * **Stand-in.** The values are #101's served values, committed afresh; every record says so.
 """
 from __future__ import annotations
@@ -165,6 +164,7 @@ def main() -> int:
             local = sorted(u - m["base"] for u in split["units"] if m["base"] <= u < m["base"] + m["n"])
             dfile.write_text(json.dumps({"law": "subset", "population": m["n"], "k": k_t, "units": local}, sort_keys=True))
         t = time.time()
+        # per-round OS coins, verified under --coins os: Lean refuses a plain session on a seed's coins
         record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{k_t}", a.port + j, sdir, draw_file=dfile,
                                   env={"FC_COINS": "os"})
         m["session_s"] = round(time.time() - t, 1)
@@ -180,7 +180,7 @@ def main() -> int:
                                                 and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
                                                 "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
-        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, flags=("--coins", "os")), "tool": "flock-verify verify --archive (PR #118)"}
+        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, flags=("--coins", "os")), "tool": "flock-verify verify --archive"}
         statement[m["name"]] = {k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest", "public_sha512", "sigma")}
         statement[m["name"]]["timing"] = {k: (live or {}).get(k) for k in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")}
         statement[m["name"]]["timing"]["verify_s"] = ((record or {}).get("verdict") or {}).get("verify_s")
