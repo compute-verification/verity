@@ -1052,7 +1052,7 @@ def joint(results: dict, points: tuple[str, ...]) -> list[dict]:
     if len(by) != len(points):
         return []
     out = []
-    for name in set.intersection(*(set(b) for b in by)):
+    for name in sorted(set.intersection(*(set(b) for b in by))):
         rs = [b[name] for b in by]
         t3s = [r["t3_worst"] for r in rs]
         out.append({"design": name, "rows": rs, "t1_pass": all(r["t1_pass"] for r in rs),
