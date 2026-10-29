@@ -1,4 +1,4 @@
-"""PoUW's live window, the proof service's challenger's first client (`window.live_challenger`, `rounds_reason`,
+"""PoUW's live window, the proof system's challenger's first client (`window.live_challenger`, `rounds_reason`,
 `round_key`, `mode`): the epoch's coins are committed before it and each round's coin opens once, after the verifier
 recorded that round's root; the verifier refuses a round coin opened twice, one opened before its round's root was
 recorded and a foreign epoch's; each round's noise key is its own coin's and root's; the check item's ``coins`` names
@@ -108,7 +108,7 @@ def test_the_round_key_is_its_own_coin_and_root():
 
 def test_core_checks_rounds_reads_the_challengers_own_session():
     """The round rule of record reads the challenger's coins only through the session the auditor's signed ledger opens
-    and ends for the window, under the window's pinned key: a window whose coins an in-process challenger drew, whose
+    and ends for the window, under the window's pinned key: a window whose coins an in-process challenger sampled, whose
     log no one signed, or whose ledger is cut before the session's end, is refused however honest its coins."""
     d, s = rounds_cases.honest_rounds(random.Random("a"))
     d = rounds_cases.with_ledger(d, s, random.Random("l"))

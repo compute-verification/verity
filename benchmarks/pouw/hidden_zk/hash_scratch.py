@@ -1,5 +1,5 @@
-"""DEVELOPMENT BINDING, NOT FOR REVIEW: scratch C-Flock pieces for the PoUW word primitives Keccak-f[1600] is written in
-(`verity.core.protocols.pouw.circuit.words`: PouwXor32_v1, PouwChi32_v1, PouwRotl64Lo_v1, PouwRotl64Hi_v1), which C-Flock has no piece for
+"""DEVELOPMENT BINDING, NOT FOR REVIEW: scratch Flock pieces for the PoUW word primitives Keccak-f[1600] is written in
+(`verity.core.protocols.pouw.circuit.words`: PouwXor32_v1, PouwChi32_v1, PouwRotl64Lo_v1, PouwRotl64Hi_v1), which Flock has no piece for
 on this branch. `stage.py` puts them in `ir_lower.PIECES` for the hiding tile only, and every result staged with them is
 labelled 'hash scratch'. Xor is free, χ is 32 ANDs and 32 committed bits, and a rotation by a constant is wiring; a rotation by a variable count
 is refused (Keccak's are constants). χ's output is committed (`sha512_circuit.commit`, one row a bit), or the XOR forms
@@ -21,10 +21,20 @@ def _rotl(lo, hi, c):
     return [x[(i - r) % 64] for i in range(64)]
 
 
+def _rotl_lo(C, lo, hi, c):
+    return _rotl(lo, hi, c)[:32]
+
+
+def _rotl_hi(C, lo, hi, c):
+    return _rotl(lo, hi, c)[32:]
+
+
+_rotl_lo.ands = _rotl_hi.ands = 0     # `ir_lower._piece_ands` can't lower them on a free count
+
 PIECES = {"PouwXor32_v1": lambda C, a, b: [x ^ y for x, y in zip(a, b)],
           "PouwChi32_v1": lambda C, a, b, c: commit(C, [x ^ C.AND(y.inv(), z) for x, y, z in zip(a, b, c)]),
-          "PouwRotl64Lo_v1": lambda C, lo, hi, c: _rotl(lo, hi, c)[:32],
-          "PouwRotl64Hi_v1": lambda C, lo, hi, c: _rotl(lo, hi, c)[32:]}
+          "PouwRotl64Lo_v1": _rotl_lo,
+          "PouwRotl64Hi_v1": _rotl_hi}
 
 
 def check(n: int = 512, seed: int = 20261003) -> dict:
