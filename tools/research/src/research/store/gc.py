@@ -45,6 +45,7 @@ from typing import Any, Callable, Iterator
 TTL_DAYS: dict[str, float] = {
     "run-record/v1": 7,
     "vllm-replay-bundle/v1": 7,
+    "vllm-replay-slim/v1": 7,         # clear values, which no stage publishes
     "vllm-rowdir-tar/v1": 3,
     "run-files/v1": 14,
     "vllm-row-meta/v1": 14,
