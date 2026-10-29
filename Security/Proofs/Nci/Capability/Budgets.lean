@@ -14,7 +14,7 @@ import Mathlib.Tactic.Linarith
 * `RecoveredBudget`: the proof block's program followed by the recovery's complement is a description of the source, of
   at most `a_blk + ⌈log₂ B⌉ + k + ℓz − βv J + amb` bits, and source hardness bounds it below by `ℓz − δ`;
 * `StatHeldBudget`: in an honest run a proof block's held values are a function of its unregistered input bits
-  (`Registration.recompute_congr`), at most `2^k` views, so one view, and the held value it gives, has probability at
+  (`Committed.recompute_congr`), at most `2^k` views, so one view, and the held value it gives, has probability at
   least `2^-k`, which min-entropy hardness bounds by `2^(Λ − price)`.
 -/
 
@@ -59,7 +59,7 @@ theorem RecoveredBudget : Guarantees.RecoveredBudget := by
   linarith
 
 /-- In an honest run, what a proof block holds is determined by its unregistered inputs. -/
-theorem eval_eq_of_unregistered (R : Registration) {u : Fin R.B} {a a' : R.d.D.Transcript} (ha : R.Honest a)
+theorem eval_eq_of_unregistered (R : Committed) {u : Fin R.B} {a a' : R.d.D.Transcript} (ha : R.Honest a)
     (ha' : R.Honest a') (h : ∀ g ∈ R.d.unregistered (R.P.gates u), R.d.D.eval a g = R.d.D.eval a' g) :
     ∀ g ∈ holds R.d.D (R.P.gates u), R.d.D.eval a g = R.d.D.eval a' g := by
   intro g hg

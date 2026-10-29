@@ -51,7 +51,7 @@ theorem IncidenceCap : Guarantees.IncidenceCap := by
 
 /-- The slots and the operands a proof block's completed products read are selections it holds: with uniform prices,
 `βw |U| ≤ hw` and `βx |V| ≤ hx` for separate budgets, `βw |U| + βx |V| ≤ h` for a joint one. -/
-theorem held_slots_operands (R : Registration) (B : Nci.Covering.MulBlocks R.d) {κ : Type} [DecidableEq κ]
+theorem held_slots_operands (R : Committed) (B : Nci.Covering.MulBlocks R.d) {κ : Type} [DecidableEq κ]
     (W : Items R.d.D (Fin B.nw)) (O : Items R.d.D κ) (I : Incidence B W O) (u : Fin R.B) :
     (∃ σ, Selects W ((completedIn B (R.P.gates u)).image Prod.fst) σ ∧
       ∀ i ∈ (completedIn B (R.P.gates u)).image Prod.fst, σ i ⊆ holds R.d.D (R.P.gates u)) ∧
