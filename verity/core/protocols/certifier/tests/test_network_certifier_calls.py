@@ -166,6 +166,18 @@ def test_a_call_whose_coins_arent_flipped_is_refused_and_never_opens():
     assert calls.summary()[0]["coins"] is None and calls.summary()[0]["verdict"] == Verdict.NO_COINS.value
 
 
+def test_once_the_entropy_fails_the_window_flips_nothing_more():
+    feed = Feed(bytes(SMALL_ENTROPY))
+    calls = Calls(LEAD, feed)
+    with pytest.raises(RuntimeError, match="ran out"):
+        calls.a_root(0, ROOT_A, CallShape(64, 64, 64))
+    read = feed.read
+    with pytest.raises(ValueError, match="failed earlier"):
+        calls.a_root(1, ROOT_A, SMALL)
+    assert feed.read == read < SMALL_ENTROPY
+    assert calls.close() == {0: Verdict.NO_COINS, 1: Verdict.NO_COINS}
+
+
 def test_timing_bits_are_ceil_log2_of_r_plus_1():
     assert [timing_bits(r) for r in range(9)] == [0, 1, 2, 2, 3, 3, 3, 3, 4]
     assert all(timing_bits(r) == math.ceil(math.log2(r + 1)) for r in range(1, 5000))

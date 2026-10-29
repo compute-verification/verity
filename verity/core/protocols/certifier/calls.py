@@ -194,6 +194,10 @@ def timing_bits(allocation: int) -> int:
     return allocation.bit_length()
 
 
+def _spent(k: int) -> bytes:
+    raise ValueError("the certifier's entropy failed earlier in the window")
+
+
 def _root(root: bytes, what: str) -> bytes:
     if not isinstance(root, bytes | bytearray) or len(root) != 64:
         raise CallRefusal(f"{what} is a 64-byte SHA-512 root")
@@ -227,8 +231,9 @@ class Calls:
 
     def a_root(self, call: int, root: bytes, shape: CallShape) -> bytes:
         """Register call `call`'s A root and shape, open its count, and release its coins: the stream, once, as the only
-        reply to this registration. A registration it refuses flips no coin; a call whose coins aren't flipped is
-        refused (`NO_COINS`) and never opens."""
+        reply to this registration. A registration it refuses flips no coin. A call whose coins aren't flipped is
+        refused (`NO_COINS`) and never opens, and so is every later call of the window: once the entropy fails, the
+        certifier flips nothing more."""
         self._live()
         if type(call) is not int or call < 0:
             raise CallRefusal(f"a call id is an integer ≥ 0, not {call!r}")
@@ -237,7 +242,11 @@ class Calls:
         if not isinstance(shape, CallShape):
             raise CallRefusal(f"a call's shape is a CallShape, not {type(shape).__name__}")
         c = self._calls[call] = _Call(shape, _root(root, "an A root"), Verdict.NO_COINS)
-        out = stream(flip(shape, self._entropy))
+        try:
+            out = stream(flip(shape, self._entropy))
+        except Exception:
+            self._entropy = _spent
+            raise
         c.coins, c.verdict = tagged_sha512(STREAM_TAG, out), None
         self._open.add(call)
         return out
