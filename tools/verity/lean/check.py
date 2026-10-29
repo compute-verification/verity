@@ -1571,6 +1571,20 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     return fails
 
 
+def ranges_dropped(body: dict) -> dict:
+    """``body`` without the conjuncts that are an order between terms that apply no definition (`0 ≤ 0`, a plain range's
+    premise at the deployed numbers), when another conjunct is left: an `honest` lemma states such a premise as written."""
+    kept = [k for k in body.get("conclusion") or [] if not (k.get("head") in BOUND_HEADS and not k.get("defs"))]
+    return {**body, "conclusion": kept} if kept else body
+
+
+def negates_a_conjunct(body: dict, heads: list[str]) -> bool:
+    """``body`` is a conjunction one of whose conjuncts is `¬ C …` with C one of ``heads``: the premises hold and the
+    conclusion fails, which says more than `¬ C …` alone."""
+    return body.get("head") == "And" and any(k.get("negated") and k.get("inner") in heads
+                                             for k in body.get("conclusion") or [])
+
+
 def vacuous_meets(body: dict, claim: str) -> str | None:
     """Why a `meets` witness's statement (``body``, `Facts.lean`'s `conclusionOf`) says nothing about the deployment, or None."""
     if not isinstance(body.get("conclusion"), list) or not body["conclusion"]:
@@ -1843,7 +1857,7 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
             for k in read.get("conclusion") or []:
                 covered |= {k.get("head"), *(k.get("defs") or [])}
                 reached |= set(k.get("defs") or [])
-            for v in [*([x] if (x := vacuous_meets(read, None)) else []), *assumes(hp, policy, own)]:
+            for v in [*([x] if (x := vacuous_meets(ranges_dropped(read), None)) else []), *assumes(hp, policy, own)]:
                 fails.append(Failure("witnesses.honest-form", n, f"witnesses: {n}, {g}'s `honest` witness, {v}: an honest "
                                      f"lemma concludes, at the deployed instance, what {g} takes, assuming nothing beyond "
                                      f"named assumptions the lock lists"))
@@ -1874,7 +1888,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
         where = "the verifier that accepts everything" if kind == "acceptance" else "an explicit circuit"
         if kind == "exclusion":
             fails += exclusion_failures(n, g, read, np_, pin, heads)
-        elif not (read.get("negated") and {read.get("head"), *(read.get("chain") or [])} & set(heads)):
+        elif not (read.get("negated") and {read.get("head"), *(read.get("chain") or [])} & set(heads)) and \
+                not negates_a_conjunct(read, heads):
             fails.append(Failure("witnesses.nontrivial-form", n, f"witnesses: {n} does not state that {g}'s conclusion "
                                  f"fails at {where}: past its ∀ and ∃ binders its statement must be `¬ C …` with C one of "
                                  f"{', '.join(heads) or 'its heads (none reported)'} or a definition unfolding to one, and "
