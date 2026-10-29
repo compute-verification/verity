@@ -1,7 +1,13 @@
-# Drive's flags of record: `research queue drive --config tools/verity/check/drive.toml` reads this file at `main` in the queue's
-# clone on every tick (`DriveFlags` in tools/research/src/research/queue.py), so a change here is a reviewed commit and needs no
-# restart. A flag given on the command line overrides its key here. ci owns this file; infra runs drive from it on the control pod.
+# Drive's flags, their one source: `research queue drive` reads this file at `main` in the queue's clone on every tick
+# (`DriveFlags`, `drive_flags` in tools/research/src/research/queue.py), so a change here is a reviewed commit and needs no
+# restart, and a temporary setting is a commit here too. A `--config FILE` on drive's machine is refused, naming each key, unless
+# every key it sets has this file's value; a command-line flag overrides its key only where `command_line` lets it. Before it
+# syncs, each tick refuses, with the fix, a name used here that doesn't exist: the `land_into` branch and drive's push to it,
+# each machine of `on`, each of `landing_gates` (`drive_names`). ci owns this file; infra runs drive from it on the control pod.
 
+# the keys drive's command line may override: `--on` and `--first`, which the control pod's drive args (/data/drive/args) pass;
+# any other flag there refuses the tick
+command_line = ["on", "first"]
 # the machines train.sh launches drive's Lean checks and its after-landing run on (a machine, or `auto`)
 on = ["vy-nebius-cpu-3", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 # ready marks written before this don't count: drive's cutoff
@@ -31,15 +37,19 @@ land_into = "checked"
 # ten SHA-512 Definitions at 141-167 GB one at a time) outlasted every after-landing run from 24 Oct. The nightly `audit-main`
 # (`--no-cache`, no circuit cache) still checks every part cold, so it checks that reuse daily
 after_landing_no_cache = true
-# after_landing_shards = N runs the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`train.sh
-# --deferred STEPS --shard K/N`), so it takes about its longest shard; 1 (absent) is one run of every step
+# the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`train.sh --deferred STEPS --shard K/N`),
+# so it takes about its longest shard rather than every step on one slot; 1 (absent) is one run of every step
+after_landing_shards = 3
 # the most review-landing Lean checks running at once: one, and those stacked above it on `next` for Lean changes it doesn't hold
-max_lean_checks = 5
-# a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members on `next` never move)
-nonlean_first = true
-# while no Lean check of `next` runs, members with a land verdict go below those waiting for one, so a member waiting for its
-# review holds only itself (never past a held member, nor below a running Lean check's commit)
-reviewed_first = true
+max_lean_checks = 10
+# true: a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members on `next` never
+# move). Off, with reviewed_first: drive's lift (`Driver._lift`) reorders `next` while either is on, and while `next` holds
+# hundreds of members a reorder merges again, and judges again at the landing gates, every member above the lowest one it
+# moves; so `next` keeps its admission order
+nonlean_first = false
+# true: while no Lean check of `next` runs, members with a land verdict go below those waiting for one, so a member waiting for
+# its review holds only itself (never past a held member, nor below a running Lean check's commit). Off: see nonlean_first
+reviewed_first = false
 # days an open PR not marked ready at its head stays idle (its head commit, and its ready, eject and review labels there) before
 # it is stale: `research queue status` says so and drive rings its owner once a day (`research.stale`); 0 is off
 stale_days = 3
