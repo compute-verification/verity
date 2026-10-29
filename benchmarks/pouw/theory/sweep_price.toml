@@ -38,7 +38,39 @@ source = "SHA-512 leaves and the level-form tree over 64 GiB of 16 KiB hm96 rows
 value = 4.449e9
 unit = "SHA-512 compressions/s"
 kind = "measured"
-source = "the committer's leaves, run r20261029-013634-94e5 (CORE-NCP final); a fresh noise matrix's coins are one XOF byte an entry, 64 a compression"
+source = "the committer's leaves, run r20261029-013634-94e5 (CORE-NCP final); a fresh noise matrix's coins are one XOF byte an entry, 64 a compression. Read only by T2's CORE-NCP reading"
+
+[price.hash_rows]
+rows = [16384, 65536, 262144, 1048576]
+time_ratio = [1.0, 0.911, 0.893, 0.899]
+ns_leaf = [31.787, 125.18, 494.424, 1989.076]
+hide_share = [0.0553, 0.0151, 0.0043, 0.0012]
+mask_share = [0.0345, 0.0096, 0.0029, 0.0008]
+comp_ns = 0.2255
+fixed_compressions = 16.5
+kind = "measured"
+source = "SW-HASH interim §1, §5, §7 (art:59be6851ab4ee9a27d8f1d999a2684dd0ed912c7d511877742036eb35d15f1cc, run r20261029-045843-97a0, on runs r20261029-044941-ad5c and r20261029-044436-1926, vy-dc-h200-5): hm96 leaves' kernel time a byte against 16 KiB rows; the salt side's hiding (PRF, M_key·y and c) and M_key·y alone as shares of a leaf's hash time; the data kernel's 0.2255 ns a compression. Below 16 KiB a leaf's time is (leaf/128 + fixed_compressions) compressions, fitted to 256 KiB's ratio, and its hiding is 16 KiB's per leaf (estimates)"
+
+[price.coinsncp]
+entries = [131072, 458752, 524288, 1048576, 3670016, 4194304, 6291456, 14680064, 16777216, 29360128, 33554432, 51380224, 58720256, 67108864, 262668288, 1073741824]
+ms = [0.011485, 0.01153, 0.011666, 0.012316, 0.019577, 0.020197, 0.026735, 0.054965, 0.061657, 0.102019, 0.11485, 0.1701, 0.19591, 0.222792, 0.832288, 3.372896]
+kind = "measured"
+source = "SW-GPU interim §1-2: coinsncp, one operand's NCP noise from SHA-512 counter-mode coins and its three formed copies (E2 = E1 shifted 24) written to HBM, a whole call, checked bit-exact, run r20261029-044623-0ed1 (r20261029-045206-f69c within 0.4%), vy-dc-h200-5 (art:0e8dd09b9791fed32c68cea5d1c8514345307fcdb290a00f6a752b265bed180e); log-log between sizes, the smallest call's time below it (one compression's dependency chain), linear above"
+
+[price.extract]
+sts_units_per_word = 125.96
+sts_mhz = 1814.2
+stg_units_per_word = 855.98
+stg_mhz = 1807.0
+units_per_clock = 540672
+kind = "measured"
+source = "SW-GPU interim §3: k32's persistent wgmma m64n256k32 s8 on smem-resident tiles; every k32 word exported to shared memory (sts, 2 CTAs an SM: 158.08 units a word over plain's 32.12) or to HBM (stg, 3 CTAs: 888.10), run r20261029-044623-0ed1, at each mode's sampled clock; rates without a served GEMM's operand traffic (SW-GPU's smell)"
+
+[price.latency]
+compression_s = 7.3e-6
+launch_s = 2.7e-6
+kind = "estimate"
+source = "SW-GPU interim §2: one compression's dependency chain floors a coins call at 9.28 us (131,072 entries, compress_from<8>) where a copy of the same size takes 2.70 us (run r20261029-044623-0ed1): 6.6 us for 72 rounds, 7.3 us for 80; a kernel launch 2.7 us. Prices A's root, which the call's noise seed reads, on the step's critical path: its leaf chain, three compressions a tree level, the seed, and a launch a level (no measurement of this chain exists)"
 
 [price.coin_bytes]
 value = 2
@@ -54,12 +86,6 @@ max_levels = 4
 tensor_max = 127
 kind = "estimate"
 source = "Strassen-Winograd on 2x2 blocks, the best-known bilinear scheme by additions: 7 products ([A summed, B summed] each), 7 output-block and 4 + 4 operand-block additions a level. A summed operand side whose range passes the s8 tensor's 127 is split into two s8 parts, so its product costs two k32 steps a side (P1's floor, scheme_floor; SW-OLD A11); FP16 at k16 costs the same. Charged against the k32 counting whenever it saves (a lower bound on the adversary's saving, not a proof that nothing saves more)"
-
-[price.hbm_rate]
-value = 4.8e12
-unit = "B/s"
-kind = "estimate"
-source = "the H200's data-sheet HBM3e bandwidth; prices writing the committed bytes to HBM before hashing them (T2's unfused reading only)"
 
 [price.mac_rate_peak]
 value = 9.89e14
@@ -81,7 +107,8 @@ datacenter_source = "benchmarks/census/deployments.json dc-12500-machines-600s: 
 world_mac_per_year = 4.68e30
 world_source = "benchmarks/census/adversary.json world-inference-2027: 9.36e30 FLOP a year, 2 FLOP a MAC"
 
-# The models: each matmul is [name, n out, K in, calls a forward, rows a call as a multiple of the point's tokens].
+# The models: each matmul is [name, n out, K in, calls a forward, rows a call as a multiple of the point's tokens, and
+# optionally the serial steps its calls run in (default: one a call; a layer's experts run side by side, batched)].
 [model."llama-3.2-1b"]
 title = "Llama-3.2-1B int8, its 16 layers' linears as vLLM serves them (qkv and gate_up fused; the bf16 head and attention outside)"
 layers = 16
@@ -99,10 +126,10 @@ source = "inbox/CORE.md §7: K = n = 7,168, m >= 8,192"
 title = "DeepSeek-V4-Pro's active matmuls a forward, int8-priced (experts' gate and up fused; head, compressors and mHC outside; routing uniform)"
 layers = 61
 matmuls = [["wq_a", 1536, 7168, 61, 1.0], ["wkv", 512, 7168, 61, 1.0], ["wq_b", 65536, 1536, 61, 1.0],
-           ["wo_a", 1024, 4096, 976, 1.0], ["wo_b", 7168, 16384, 61, 1.0], ["indexer_wq_b", 8192, 1536, 30, 1.0],
+           ["wo_a", 1024, 4096, 976, 1.0, 61], ["wo_b", 7168, 16384, 61, 1.0], ["indexer_wq_b", 8192, 1536, 30, 1.0],
            ["router", 384, 7168, 61, 1.0], ["shared_gate_up", 6144, 7168, 61, 1.0], ["shared_down", 7168, 3072, 61, 1.0],
-           ["expert_gate_up", 6144, 7168, 23424, 0.015625], ["expert_down", 7168, 3072, 23424, 0.015625]]
-source = "benchmarks/rho/data/models.toml model.deepseek-v4-pro.matrices (from integrations/vllm/tests/check/fixtures/deepseek_v4/config.json); an expert's call holds T x 6/384 rows on average (estimate: uniform routing)"
+           ["expert_gate_up", 6144, 7168, 23424, 0.015625, 61], ["expert_down", 7168, 3072, 23424, 0.015625, 61]]
+source = "benchmarks/rho/data/models.toml model.deepseek-v4-pro.matrices (from integrations/vllm/tests/check/fixtures/deepseek_v4/config.json); an expert's call holds T x 6/384 rows on average (estimate: uniform routing); a layer's 384 experts and wo_a's 16 groups run side by side"
 
 # The points: tokens a call, and the T2 inputs that exist for them.
 [point.t512]
@@ -149,8 +176,9 @@ model = "v4-like"
 tokens = 8192
 matmul_only = true
 gemm_from = "t8192"
-gemm_kind = "estimate"
-gemm_source = "the matmul alone at Llama's measured cuBLASLt rate at m 8,192, with its parts' ratios (no V4 kernel timed on the H200)"
+plain_gemm_ms = 0.598181
+gemm_kind = "measured plain GEMM; estimate for the 3K product's ratio"
+gemm_source = "the plain cuBLASLt int8 GEMM at 8,192 x 7,168 x 7,168 (v4sq), 0.598 ms at 1,755 MHz, SW-GPU run r20261029-042633-0c24 (GD-DENOISE's harness, another H200 instance); the 3K-wide part's ratio is Llama's at m 8,192"
 
 [point.v4pro]
 title = "DeepSeek-V4-Pro's forward at 8,192 tokens (experts at 128 rows a call)"
@@ -177,7 +205,8 @@ source = "the served product is stock's own int8 product (the noise cancels exac
 
 # The premises. rank: CORE.md §2's ladder (0 theorem, 1 measured hardware floor, 2 CPU-checkable fact, 3 model
 # faithfulness, 4 SAK, 5 hardness). status: proved, measured, ruled, assumed, scratch (proved outside the lock), open
-# (stated, not yet proved or run), refuted. A premise closes T1 terms (`closes`), forces honest's committed registers
+# (stated, not yet proved or run), refuted. A premise closes T1 terms (`closes`; hiding_salt credits the salt side's PRF
+# and c as hashing, hiding_mask closes M_key·y, hiding the whole salt side), forces honest's committed registers
 # (`forces_committed`), makes a word committed every L <= `word_forces_steps` force its L/32 steps, and may require others.
 [premise.H32]
 rank = 1
@@ -195,7 +224,48 @@ source = "MH100w is faithful to the H200: CardWithinAccel, in the lock (CORE.md 
 rank = 0
 status = "ruled"
 owner = "Daniel"
-source = "each A·B call is atomic, with fresh noise every call (Daniel, Wed 28 Oct 4:30 and 4:49 PM PDT; CORE.md §1, §2a)"
+closes = ["pre_noise_hashing", "final_rows"]
+source = "each A·B call is atomic, with fresh noise every call (Daniel, Wed 28 Oct 4:30 and 4:49 PM PDT; CORE.md §1, §2a). The call's noise seed reads root(A), so A's commitment is hashed by any program that gets the noise: credited hashing under ShaSpeed (SW-SMELL P3; CORE-SMELL C28), as are rows of final words"
+
+[premise.hash-compose]
+rank = 4
+status = "open"
+owner = "SW-LEAN"
+source = "SW-SMELL P3: adding ShaSpeed's credit for hashed bytes to DistinctWrites' bound (MH100w) needs a composition of MH100w with ShaSpeed (Accel) that no lemma states; every design that credits hashing takes it, beside ShaSpeed"
+
+[premise.weights-distinct]
+rank = 2
+status = "open"
+owner = "SW-LEAN"
+source = "SW-SMELL S8: the final-word lemma's distinctness fails on a zero or duplicate column of the fixed weights B (a free constant, or one target for two) and on padding rows; a CPU check per checkpoint (and real rows only), not yet run"
+
+[premise.salt-forced]
+rank = 0
+status = "open"
+owner = "SW-HASH"
+closes = ["hiding_salt"]
+source = "SW-HASH interim §7 (a): each drawn unit's proof checks y = PRF_ks(pos) against a committed ks, and c = H(salt_prefix ‖ y), so a fixed-salt prover is caught and ShaSpeed credits the PRF and c; M_key·y stays unforced. A protocol change, not built; the drawn unit's added proof work is outside the served step"
+
+[premise.mask-optimal]
+rank = 4
+status = "open"
+owner = "SW-HASH"
+requires = ["salt-forced"]
+closes = ["hiding_mask"]
+source = "SW-HASH interim §7: honest's table product M_key·y (960 shared-memory loads and XORs a leaf, a GF(2) product) is the cheapest way to compute it; unstated, rank 4 like SAK for one map"
+
+[premise.hiding-ruled]
+rank = 0
+status = "open"
+owner = "Daniel (through the coordinator)"
+closes = ["hiding"]
+source = "SW-HASH interim §7 (c): zero knowledge is mandated, so the salt side's hiding work is credited by ruling, not by a premise about the adversary; no ruling yet"
+
+[premise.route-u2]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+source = "SW-SMELL S9: route U' (X s8, Y + gamma u8, the row init) needs its own Lean definition of the checked values (mmWU is u8 x s8); with it honest takes, per linear, the cheaper of route U's Y lane fix (24/m) and route U''s (32/n)"
 
 [premise.period-inventory]
 rank = 3
@@ -207,16 +277,16 @@ source = "every device the prover runs in the monitoring period is counted on bo
 rank = 0
 status = "scratch"
 owner = "SW-LEAN"
-requires = ["atomic-call", "period-inventory"]
-closes = ["final_word", "pre_noise_hashing", "final_rows"]
-source = "SW-LEAN interim: finalWordTarget / finalWord_charged, proved in Security/Proofs/Pouw/Dimension/Scratch/SwLean.lean (cursor/compute-research-sw-lean-fa5d at 19904038b9, art:bef3acdfa62b1252ed4478a6915fd140997ab6a9bd2d1f4ee52030717e42ab9c; axioms clean, run r20261029-044839-bed3), in no lock; on the grid uniform in the call's input, so rank 0 given the atomic call and PeriodInventory. Padding rows, repeated rows and replayed requests make A_i·B free. With the call atomic, work before the noise inside the call (A's commitment, rows of final words) is charged too (CORE-SMELL C28)"
+requires = ["atomic-call", "period-inventory", "weights-distinct"]
+closes = ["final_word"]
+source = "SW-LEAN interim: finalWordTarget / finalWord_charged, proved in Security/Proofs/Pouw/Dimension/Scratch/SwLean.lean (cursor/compute-research-sw-lean-fa5d at 19904038b9, art:bef3acdfa62b1252ed4478a6915fd140997ab6a9bd2d1f4ee52030717e42ab9c; axioms clean, run r20261029-044839-bed3), in no lock; on the grid uniform in the call's input, so rank 0 given the atomic call and PeriodInventory. Padding rows, repeated rows and replayed requests make A_i·B free, as do zero or equal weight columns (SW-SMELL S8: weights-distinct)"
 
 [premise.commit-forced]
 rank = 0
 status = "open"
 owner = "SW-LEAN"
 forces_committed = true
-source = "SWEEP.md candidate 1. SW-LEAN interim: formed_charged (scratch, no atomicity needed) charges each committed register that moves with the salt and equals no coin word, pairwise-different ones once each, and is exact; beside the final-word lemma (allTarget) each operand register needs (a)-(d), proved for no concrete register yet, and two's-complement X fails (a) (the biased packing passes it, with a u8 x s8 product and a 128·colsum(Y) correction that nothing prices). NCP's R must have no fixed point with sign -1 (X3 = -A there is free: the shift by 24 avoids it); committed E1/F1 need an 8-bit coin grid"
+source = "SWEEP.md candidate 1. SW-LEAN interim: formed_charged (scratch, no atomicity needed) charges each committed register that moves with the salt and equals no coin word, pairwise-different ones once each, and is exact; beside the final-word lemma (allTarget) each operand register needs (a)-(d), proved for no concrete register yet, and two's-complement X fails (a) (the biased packing passes it: route U's u8 x s8 product, whose c0 = -beta·colsum(Y) is fixed per weight, SW-SMELL). NCP's R must have no fixed point with sign -1 (X3 = -A there is free: the shift by 24 avoids it); committed E1/F1 need an 8-bit coin grid. It forces the committed register once, not route U's second write to it (lane_fix)"
 
 [premise.tensor-semantics]
 rank = 1
@@ -288,37 +358,61 @@ denoise = "0"
 pre_noise_bytes = "m*K"
 operand_max = 126
 served = "int7-pm63"
-source = "verity/core/protocols/pouw/schemes/ncp.py: X = [A+E1 | A+E2 | -(A+E3)], Y = [B+F1; B+F2; B+F3], E2 = E1·R and F2 = -R·F1 word moves (word_perm), E3, F3 inside IADD3s; F1 fresh every call; the noise cancels inside the 3K-wide product, no de-noise; E1's seed reads root(A)"
+lane_fix = { U = "3*n*K", "U'" = "4*m*K" }
+variant = "ncp-k32-sha512-fresh"
+source = "verity/core/protocols/pouw/schemes/ncp.py's structure: X = [A+E1 | A+E2 | -(A+E3)], Y = [B+F1; B+F2; B+F3], E2 = E1·R and F2 = -R·F1 word moves (word_perm), E3, F3 inside IADD3s; the noise cancels inside the 3K-wide product, no de-noise; E1's seed reads root(A). The variant priced here is not the tree's ncp-v1 (SW-SMELL P5): k32 words, not every 16-deep step; SHA-512, not SHAKE256; F1 fresh every call, not per (epoch, weight); Y and c0 formed every call, not once per run (circuit/ncp2.py). lane_fix (SW-SMELL S9, entries at reg/4): route U makes X + beta u8 and Y s8, and Y's signed bytes cross zero under the noise, so each Y register takes a second write (24/m); route U' makes X s8 and Y + gamma u8, a second write a X register and the row init -gamma·sum_k A_ik (24/n + 8/n). c0 is fixed per weight on route U (SW-SMELL: the F's cancel in Y's column sums)"
+
+# The hm96 row layouts: a_row is A's commitment's leaf ("row": one activation row of K bytes, the shortest chain before
+# the call's noise; else bytes, capped at A's), row the leaf of the committed words and operands.
+[layout.r16k]
+a_row = 16384
+row = 16384
+source = "CORE-NCP's measured layout: 16 KiB rows everywhere (r20261029-013634-94e5)"
+
+[layout.r256k]
+a_row = "row"
+row = 262144
+source = "SW-HASH §5: 256 KiB rows save 10.7% of hash time a byte and leave 0.43% of it to hiding; A per activation row keeps its root's chain short"
+
+[layout.r1m]
+a_row = 262144
+row = 1048576
+source = "SW-HASH §7 (b): the fewest leaves, so the least hiding (0.12% at 1 MiB); A at 256 KiB rows trades a long chain before the noise for less hiding"
 
 # The designs: a noise × a commitment × a premise set. commit.L is the depth between committed words (32 = every k32
 # step), commit.word_bits their width, commit.operands the formed and noise classes committed (formed_x, formed_y,
-# noise_x, noise_y), commit.rows_mix_final whether every hm96 row mixes final words with noise-dependent ones.
+# noise_x, noise_y), commit.rows_mix_final whether every hm96 row mixes final words with noise-dependent ones,
+# commit.layout the rows, commit.route the operands' packing (U, or "mix": per linear the cheaper of U and U').
 [design.ncp-k32]
 title = "NCP + the rank bound, every k32 word committed (tonight's #1, CORE-TIME / CORE-NCP finals)"
 noise = "ncp"
-commit = { L = 32, word_bits = 32, operands = [], rows_mix_final = true }
-premises = ["H32", "W1", "atomic-call", "ShaSpeed"]
+commit = { L = 32, word_bits = 32, operands = [], rows_mix_final = true, layout = "r16k", route = "U" }
+premises = ["H32", "W1", "atomic-call", "ShaSpeed", "hash-compose"]
 source = "CORE-TIME final; CORE-NCP final"
 
 [design.ncp-k64-nosem]
 title = "NCP, a word every 64 steps without the k32 semantics (a control: the uncommitted steps are gap)"
 noise = "ncp"
-commit = { L = 64, word_bits = 32, operands = ["formed_x", "formed_y", "noise_x", "noise_y"], rows_mix_final = true }
-premises = ["H32", "W1", "atomic-call", "period-inventory", "final-word-lemma", "commit-forced", "ShaSpeed"]
+commit = { L = 64, word_bits = 32, operands = ["formed_x", "formed_y", "noise_x", "noise_y"], rows_mix_final = true, layout = "r16k", route = "U" }
+premises = ["H32", "W1", "atomic-call", "period-inventory", "weights-distinct", "final-word-lemma", "commit-forced", "ShaSpeed", "hash-compose"]
 source = "a control: density without candidate 2"
 
 # The sweep: every combination of a word every L, the classes committed, how forming is charged when X and Y aren't
-# committed (`count`: the counting lemma) and how the derivation is charged when E and F aren't (`min`:
-# OneInstructionMinimal). Each takes `base`; L in `steps` adds that entry's premises, a committed class adds
-# commit-forced, and `count` / `min` add `charge`'s. Named ncp-k<L>-<classes>[-count][-min].
+# committed (`count`: the counting lemma), how the derivation is charged when E and F aren't (`min`:
+# OneInstructionMinimal), the row layout, how the salt side's hiding is charged (`hiding`), and the route. Each takes
+# `base`; L in `steps` adds that entry's premises, a committed class adds commit-forced, and `count`, `min`, `hiding` and
+# `routes` add theirs. Named ncp-k<L>-<classes>[-count][-min]-<layout>[-<hiding>][-u2].
 [sweep.ncp]
 noise = "ncp"
 L = [32, 64, 128, 256, 512, 1024, 2048]
 operands = { w = [], ef = ["noise_x", "noise_y"], xy = ["formed_x", "formed_y"], xyef = ["formed_x", "formed_y", "noise_x", "noise_y"] }
 steps = { 64 = ["tensor-semantics", "merge-k64"], above = ["own-products"] }
 charge = { count = ["tensor-semantics", "forming-counting"], min = ["lane-semantics", "one-instruction-minimal"] }
-base = ["H32", "W1", "atomic-call", "period-inventory", "final-word-lemma", "ShaSpeed"]
-source = "SWEEP.md candidates 1 (commit X and Y), 2 (the k32 semantics) and 3 (the final-word lemma); CORE-SMELL C28 (the noise's derivation)"
+layouts = ["r16k", "r256k", "r1m"]
+hiding = { open = [], salt = ["salt-forced"], mask = ["salt-forced", "mask-optimal"], hr = ["hiding-ruled"] }
+routes = { U = [], mix = ["route-u2"] }
+base = ["H32", "W1", "atomic-call", "period-inventory", "weights-distinct", "final-word-lemma", "ShaSpeed", "hash-compose"]
+source = "SWEEP.md candidates 1 (commit X and Y), 2 (the k32 semantics) and 3 (the final-word lemma); CORE-SMELL C28 (the noise's derivation); SW-HASH §5, §7 (rows, hiding); SW-SMELL S9 (routes)"
 
 # Designs the calculator must refuse until their terms are priced (CORE-RANK's top three led only because of that).
 [design.dither-c]
