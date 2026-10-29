@@ -33,7 +33,7 @@ source = "named assumption: duo at 3 lane instructions a word is the cheapest im
 
 [clock]
 eps = 0.063830
-source = "EPS1 AMPERE r2 (40 s holds a kernel): f_max = 1410 MHz (NVML's max SM clock, which every light probe ran at, clocks never set), egemm80 e64 at L = 64 1320 MHz at steady state under the node's 400 W limit (SW power cap, throttle 0x4) in both runs, 1 − 1320/1410"
+source = "EPS1 AMPERE r2 (40 s holds a kernel): f_max = 1410 MHz (NVML's max SM clock, which every light probe ran at, clocks never set), egemm80 e64 at L = 64 1320 MHz at steady state in both runs, 1 − 1320/1410"
 
 [luck]
 delta = 4.547473508864641e-13

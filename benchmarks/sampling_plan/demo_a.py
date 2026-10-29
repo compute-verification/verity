@@ -33,8 +33,8 @@ budget, and what it certifies.
 delta split by subcircuit, its leak's location term counting the wrong units by the unit-weighted harm bound in place of
 the exact `count_bound` (`certificate`). The bound of record is `Flock.Guarantees.JointStratified`
 (Security/Proofs/Flock/EndToEnd/Joint/Statement.lean): per verification phase, one detection budget
-`sum_s k_s x_s / n_s <= ln(1/delta)` over every subcircuit, and the ANDs and output bits of an accepted block's wrong
-units each at most `StratifiedBlock.maxHarm`, their exact supremum over the sets escaping with probability at least
+`sum_s k_s x_s / n_s <= ln(1/delta)` over every subcircuit, and the ANDs and output bits of an accepted block's incorrect
+proof blocks each at most `StratifiedBlock.maxHarm`, their exact supremum over the sets escaping with probability at least
 delta, from one sample at one delta. A difftest holds `certify`'s fields to that supremum.
 
 **Cost.** `h200.Rates`' fit with statements shared (`CostModel.shared`: one session a subcircuit an execution phase,

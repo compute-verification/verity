@@ -1,5 +1,6 @@
-"""run.sh's summary: the gates (the device's and hgref.py's), the per-call ratio to plain cuBLASLt of each arm at each linear
-(with the flush, per 8 calls, and steady, calls 1..7), against E2E r4's 2.40x at o_proj, and ncu's counters at o_proj.
+"""run.sh's summary: the gates (the device's and hgref.py's), the per-call ratio to plain cuBLASLt of each arm at each
+linear (with the flush, per 8 calls, and steady, calls 1..7), against the earlier 2.40x at o_proj, and ncu's counters at
+o_proj.
 python3 summary.py OUT_DIR"""
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ import json
 import sys
 from pathlib import Path
 
-E2E = {"o_proj": 2.40}   # note:20261016T0713Z-draft-e2e-slice r4: edited:w_l3qm_s16 and its commitments, pipelined
+E2E = {"o_proj": 2.40}   # the e2e slice: edited:w_l3qm_s16 and its commitments, pipelined
 
 
 def jl(p: Path) -> list[dict]:

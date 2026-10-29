@@ -136,7 +136,7 @@ advice `(traceVal C ref, free)`, its inputs the trace's committed values and `fr
 faulty units' committed gates (`FaultyGate`), makes `Accepted` by the circuit's Program, over the horizon, every observation
 sequence and operator the trace's transfer gates carry (`Carries`) with every status complete (`Covered`). The inputs
 are pinned to the trace, so the registered ones are what the registration commits. -/
-def RAcc (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
+def RAcc (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
     (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ RelS H Cm δ s P w ∧
     Disjoint (faulty H Cm s P w) (allSlots s.design P) ∧
