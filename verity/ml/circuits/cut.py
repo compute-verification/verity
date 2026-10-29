@@ -59,7 +59,7 @@ specified in `verity/ml/circuits/PROTOCOL.md` (pinned by `verity/ml/circuits/tes
 (`RECOMPUTE[2]`, "report") the pairs across units are `detail["recomputed_across"]` (count and first pairs) instead of the code
 `gate-recomputed`; `redundant_gates` counts the pairs within one unit, as in v1; every other code is unchanged.  Each copy is its own
 gate, certified by one unit from that unit's gates and committed values, so v2's proof blocks may compute a common value: a count of
-them bounds the faulty ones' size but counts a shared value more than once.  `check_cut`'s default, and so `validate_unit_cut`'s, stays v1's refusal.
+them bounds the incorrect ones' size but counts a shared value more than once.  `check_cut`'s default, and so `validate_unit_cut`'s, stays v1's refusal.
 
 **Cost.**  `owners` runs one backward pass per round of promotions, so O(n · (n + E)) for n computing gates and E edges in the worst
 case.  `evaluate` shortcuts separable bodies, but `verify` builds the flat `CallGraph` of every distinct Definition, separable ones
