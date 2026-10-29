@@ -18,8 +18,11 @@ import Proofs.NetworkCertifier.Assumptions.SampledCode
 * `PeriodLeakAccepted_nontrivial`: the per-window bound fails at the accepting verifier `tapD` at SHA-512, at
   `δ = 1/8` (`tapD_bound_fails`).
 * `PooledLeakAccepted_honest`: its premises on the schedules, at `fxQueue`'s alone: each fits the format (`hfit`) and
-  sends at most 6 cells a connection (`hcap`). Stated as their conjunction, not as `fits` alone: the witnesses rule
-  reads a statement that is one definition applied by unfolding it once, and `fits` is a field.
+  sends at most 6 cells a connection (`hcap`); and sampled proofs' pooled bound at the tied audits' samples
+  (`hpool`, `TiedIncorrectBlocksLe`) at the demo's tied sample, `F_t = 574205` and `ε_t = 0`, which an honest prover,
+  whose tied audits hold no incorrect proof block, meets at every `F_t ≥ 1`. Stated as their conjunction, not as
+  `fits` alone: the witnesses rule reads a statement that is one definition applied by unfolding it once, and `fits`
+  is a field.
 * `PooledLeakAccepted_nontrivial`: its bound fails at an audit that always accepts, at `δ = 1/2` with one window of
   one step tied to `tiedToy`, whose one proof block is incorrect (`pooled_bound_fails`). There sampled proofs' pooled
   bound (`hpool`) fails: every audit accepts with that proof block incorrect on every coin, and `ε_t = 0`.
@@ -68,16 +71,22 @@ theorem PeriodLeakAccepted_nontrivial :
           (fun _ => tapOps) Unit silentP []).Pr shaD :=
   tapD_bound_fails shaD
 
-/-- **`PooledLeakAccepted`'s schedule premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone:
-each fits its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`). -/
+/-- **`PooledLeakAccepted`'s premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone: each fits
+its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`); and sampled proofs' pooled bound at the
+tied audits' samples (`hpool`) at the demo's tied sample, `F_t = 574205` (`tiedF` at `δ_t = 10^-6` and
+`q_t = 169/7,000,000`) and `ε_t = 0`, for an honest prover, whose tied audits have no incorrect proof block. -/
 theorem PooledLeakAccepted_honest :
     (∀ s ∈ ({fxQueueSched} : Set (WardenSchedule (Fin 3))), (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits s) ∧
-      ∀ s ∈ ({fxQueueSched} : Set (WardenSchedule (Fin 3))), ∀ c, s.cells c ≤ 6 := by
-  refine ⟨fun s hs => ?_, fun s hs c => ?_⟩
+      (∀ s ∈ ({fxQueueSched} : Set (WardenSchedule (Fin 3))), ∀ c, s.cells c ≤ 6) ∧
+      TiedIncorrectBlocksLe (Set.univ : Set Unit) (fun (_ : Unit) (_ : Fin 1) (_ : Fin 1 → Unit) (_ : Unit) => True)
+        (fun _ _ _ => ∅) 574205 0 := by
+  refine ⟨fun s hs => ?_, fun s hs c => ?_, ?_⟩
   · rw [Set.mem_singleton_iff.1 hs]
     exact fxQueue_fits
   · rw [Set.mem_singleton_iff.1 hs]
     fin_cases c <;> decide
+  · intro z _
+    simp [Pr]
 
 /-- **`PooledLeakAccepted`'s bound fails at an audit that always accepts**, at one window of one step tied to
 `tiedToy`, whose one proof block is incorrect, `Fmax = Ft = 1`, `δ = 1/2`, `ε_t = 0` and `e = e' = 0`

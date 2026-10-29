@@ -77,4 +77,13 @@ def PooledGood {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L S) (k :
   ∑ i, (W i).card < Fmax ∧ ∑ i, (Wt i).card < Ft ∧
     ∀ i, LeakAt lay k (fun s => reg s \ tiedReach (T i) (Wt i)) Dj (sw i) (Pw i) (ρ i) (op i) (W i) (o i)
 
+/-- **The tied audits' incorrect proof blocks over a monitoring period, pooled**: for each secret `z ∈ Zs`, every
+window's audits accept at the period's coins (`acc z i ω (ω i)`) while the windows' tied audits hold `Ft` or more
+incorrect proof blocks in total (`Wt z ω i`) with probability at most `et`. It is sampled proofs' pooled bound at the
+tied audits' samples (`PooledIncorrectBlocksLe`'s conclusion, `et = (1 - q_t)^Ft + Σ ε`). With no incorrect tied proof
+block, an honest prover's, it holds at every `Ft ≥ 1` and `et ≥ 0`. -/
+def TiedIncorrectBlocksLe {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
+    (Wt : Z → (Fin m → Ω) → Fin m → Finset ℕ) (Ft : ℕ) (et : ℝ) : Prop :=
+  ∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧ Ft ≤ ∑ i, (Wt z ω i).card) ≤ et
+
 end NetTiming

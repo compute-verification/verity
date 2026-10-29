@@ -314,8 +314,9 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   (no draw's form: a uniform `kd_i`-of-`n_i` draw meets it at `q = kd_i/n_i`), and the leak relation at that set
   `hleak`, `Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i`, read on the network certifier's record with the scan inputs the tied
   audits' incorrect proof blocks `Wt_i` reach unpinned (`tiedReach`); and sampled proofs' pooled bound at the tied
-  audits' samples, as it is (`hpool`): every audit accepts while the tied audits hold `F_t` or more incorrect proof
-  blocks with probability at most `ε_t`. From them every window accepts outside the monitoring period's good event
+  audits' samples, as it is (`hpool`, `TiedIncorrectBlocksLe`): every audit accepts while the tied audits hold `F_t`
+  or more incorrect proof blocks with probability at most `ε_t`. From them every window accepts outside the monitoring
+  period's good event
   (`PooledGood`: the faulty sets hold under `Fmax ≥ ln(1/δ)/q` units, the tied ones under `F_t`, and every window
   meets its leak relation) with probability at most `δ + ε_t + Σ_i e_i + Σ_i e'_i`, and at each draw the secrets
   meeting it number at most

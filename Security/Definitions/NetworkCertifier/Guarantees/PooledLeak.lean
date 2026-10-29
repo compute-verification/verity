@@ -22,10 +22,11 @@ own sampling design. Their witness has a set `Wt i` of incorrect proof blocks, a
 the leak relation holds with the scan inputs those proof blocks reach unpinned (`tiedReach`: the returned values in each
 one's downstream cone in its audit's Program, `inCone`; a returned value outside every incorrect proof block's cone is
 the value the tied audit's Program computes, `NetTiming.TiedAudit.valOver_eq_of_notMem_reach`). How many there are over
-the period is sampled proofs' pooled bound, taken as it is (`hpool`): every audit accepts while the tied audits hold
-`F_t` or more incorrect proof blocks with probability at most `ε_t`, `PooledIncorrectBlocksLe`'s conclusion at the tied
-audits' samples, `(1 - q_t)^F_t + Σ_i ε_i`. An empty list of tied audits is the statement without them: no tied proof
-block, nothing unpinned, and the tied factor and error `1` and `0` at `F_t = 1`, `ε_t = 0` (`horizonLeak_untied`).
+the period is sampled proofs' pooled bound, taken as it is (`hpool`, `TiedIncorrectBlocksLe`): every audit accepts
+while the tied audits hold `F_t` or more incorrect proof blocks with probability at most `ε_t`,
+`PooledIncorrectBlocksLe`'s conclusion at the tied audits' samples, `(1 - q_t)^F_t + Σ_i ε_i`. An empty list of tied
+audits is the statement without them: no tied proof block, nothing unpinned, and the tied factor and error `1` and `0`
+at `F_t = 1`, `ε_t = 0` (`horizonLeak_untied`).
 
 From them, every audit accepts while the incorrect proof blocks number `Fmax ≥ ln(1/δ)/q` or more, or the tied audits'
 `F_t` or more, or some window's leak relation fails, with probability at most `δ + ε_t + Σ_i e_i + Σ_i e'_i` (the
@@ -72,9 +73,10 @@ blocks (indices into `tiedReaches (T i)`; one past them reaches nothing). Given
 
 * `hesc`, the conditional escape: `Pr_x[acc z i ω x] ≤ (1 - q)^|W z ω i| + e i`, `q` the sampling design's per-window
   detection probability (`Flock.Guarantees.SampledKSLive` at the history, not yet discharged);
-* `hpool`, sampled proofs' pooled bound at the tied audits' samples: every audit accepts while the tied audits hold
-  `Ft` or more incorrect proof blocks over the period with probability at most `et` (`PooledIncorrectBlocksLe`'s
-  conclusion at their samples, `et = (1 - qt)^Ft + Σ ε`, or `SampledKSLive`'s; not yet discharged);
+* `hpool`, sampled proofs' pooled bound at the tied audits' samples (`TiedIncorrectBlocksLe`): every audit accepts
+  while the tied audits hold `Ft` or more incorrect proof blocks over the period with probability at most `et`
+  (`PooledIncorrectBlocksLe`'s conclusion at their samples, `et = (1 - qt)^Ft + Σ ε`, or `SampledKSLive`'s; not yet
+  discharged);
 * `hleak`, the leak relation at that witness: `Pr[acc_i ∧ ¬LeakAt (W z ω i)] ≤ e' i` on the record's observations, with
   the registered inputs `tiedReach (T i) (Wt z ω i)` unpinned (the live `SampledLeakAccepted`, P2, not yet discharged);
 
@@ -111,7 +113,7 @@ def PooledLeakAccepted : Prop :=
     (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
     (hesc : ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i)
     (Ft : ℕ) (et : ℝ)
-    (hpool : ∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧ Ft ≤ ∑ i, (Wt z ω i).card) ≤ et)
+    (hpool : TiedIncorrectBlocksLe Zs acc Wt Ft et)
     (hleak : ∀ z ∈ Zs, ∀ i, Pr (fun ω => acc z i ω (ω i) ∧
       ¬LeakAt lay k (fun s => reg s \ tiedReach (T i) (Wt z ω i)) Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i)
         ((run tap (schedOf z ω, srvOf z ω)).2 i)) ≤ e' i)

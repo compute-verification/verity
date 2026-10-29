@@ -236,6 +236,17 @@ theorem tiedReach_nil (F : Finset ℕ) : tiedReach [] F = ∅ := by
 
 theorem tiedSpan_nil : tiedSpan [] = ∅ := tiedReach_nil _
 
+/-- With no incorrect tied proof block, sampled proofs' pooled bound at the tied audits' samples holds at every
+`Ft ≥ 1` and `et ≥ 0`: the event that they hold `Ft` or more is empty. -/
+theorem tiedIncorrectBlocksLe_none {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Set Z)
+    (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (et : ℝ) (het : 0 ≤ et) {Ft : ℕ} (hFt : 1 ≤ Ft) :
+    TiedIncorrectBlocksLe Zs acc (fun _ _ _ => ∅) Ft et := by
+  intro z _
+  refine ((Pr_mono fun ω (h : (∀ i, acc z i ω (ω i)) ∧ Ft ≤ ∑ i : Fin m, (∅ : Finset ℕ).card) => ?_).trans_eq
+    Pr_false).trans het
+  simp only [Finset.card_empty, Finset.sum_const_zero] at h
+  exact absurd h.2 (by omega)
+
 theorem tiedWidth_nil : tiedWidth [] = 0 := by simp [tiedWidth, tiedReaches]
 
 theorem sup_tiedWidth_nil {m : ℕ} : ((univ : Finset (Fin m)).sup fun _ => tiedWidth []) = 0 :=
@@ -571,7 +582,7 @@ theorem horizonLeak_untied {L K S : ℕ} (lay : AuditStatement → BoundaryGates
     simp [PooledGood, tiedReach_nil]
   obtain ⟨h1, h2⟩ := horizonLeak lay k reg Dj sw Pw ρ op (fun _ => []) n b hb arr f tap run htrust cap Ss hcap hfit
     Zs schedOf srvOf hs dec hdz acc hacc W hW hWn (fun _ _ _ => ∅) e e' he
-    q hq0 hq1 hesc 1 0 (fun z _ => (Pr_mono fun ω h => by simp at h).trans_eq Pr_false)
+    q hq0 hq1 hesc 1 0 (tiedIncorrectBlocksLe_none Zs acc 0 le_rfl le_rfl)
     (fun z hz i => by simpa [tiedReach_nil] using hleak z hz i)
     δ hδ Fmax hF
   refine ⟨fun z hz => ?_, fun ω => ?_⟩
