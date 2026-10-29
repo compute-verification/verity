@@ -1,7 +1,9 @@
 import Definitions.Pouw.Lead.Layout
 import Definitions.Pouw.Dimension.Ssn
+import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Tactic.FinCases
 import Mathlib.Tactic.Ring
 import Mathlib.Tactic.Linarith
 
@@ -19,8 +21,8 @@ none is a free value plus a constant, for at most 28,560 rows and columns, any d
 nonzero coin tiles and coin lanes of at least one bit. Step `t ≥ 1`'s words are separated by their rows' tag bits
 `b_t` and, in a row, by the coin lanes of their columns under `-rot`'s weights; step 0's by the row tag against `G`,
 whose digits are distinct and nonzero below 28,560 rows (`rowTag_inj`, `rowTag_ne_zero`), and a step-0 word reads a
-second coin through the column code against `a₁` (`colCode_ne_zero`). From 28,561 columns a column's code can vanish:
-row 0's step-0 word in that column is then a function of one tag weight.
+second coin through the column code against `a₁` (`colCode_ne_zero`). From 28,561 columns they are not
+(`leadWords_not_shift`): column 28,560's code is zero, and row 0's step-0 word there is one tag weight plus a constant.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Tags
@@ -346,5 +348,41 @@ theorem leadWords_shift (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : L.m
       · have := P ω₁
         rw [key ω₁ y₁ hy₁ h1, sub_self] at this
         exact hω₁ (by exact_mod_cast this.symm)
+
+theorem rowTag_zero : rowTag 0 = Pi.single 0 1 := by
+  funext q; fin_cases q <;> rfl
+
+theorem colCode_28560 : colCode 28560 = 0 := by
+  funext q; fin_cases q <;> rfl
+
+/-- **From 28,561 columns the words are not shift-separated**: column 28,560's code is zero, and row 0's tag is
+`(1, 0, 0, 0)`, so row 0's step-0 word there is its tag weight `g[0, 28560]` less a constant. -/
+theorem leadWords_not_shift (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : 0 < L.m) (hS : 0 < L.S)
+    (hn : 28561 ≤ L.n) : ¬ ShiftSeparatedOn Set.univ (FreeLead L) (leadWords L κ) := by
+  classical
+  intro h
+  let i₀ : Fin L.m := ⟨0, hm⟩
+  let t₀ : Fin L.S := ⟨0, hS⟩
+  let j₀ : Fin L.n := ⟨28560, by omega⟩
+  have hw : ∀ ω : Coins L,
+      word L κ ω i₀ t₀ j₀ = -bias L.S 28560 + κ i₀ t₀ j₀ + ((ω.2.2.1 0 j₀ : ℕ) : ℤ) - 3 := fun ω => by
+    unfold word
+    rw [Finset.sum_eq_single t₀]
+    · rw [ite_eq_left le_rfl]
+      unfold coinTerm
+      have hi : ((i₀ : Fin L.m) : ℕ) = 0 := rfl
+      have hj : ((j₀ : Fin L.n) : ℕ) = 28560 := rfl
+      rw [ite_eq_left rfl, hi, hj, rowTag_zero, colCode_28560, Fin.sum_univ_four]
+      simp [Coins.G]
+      ring
+    · intro τ _ hτ
+      exact ite_eq_right fun hle => hτ (le_antisymm hle (Fin.le_def.2 (Nat.zero_le _)))
+    · simp
+  refine h.2 _ (Finset.mem_image.2 ⟨(i₀, t₀, j₀), Finset.mem_univ _, rfl⟩) (fun ω => ((ω.2.2.1 0 j₀ : ℕ) : ℚ))
+    (Or.inr ⟨.inr (.inr (.inl (0, j₀))), fun ω ω' hc => by simp only [coord] at hc; simp [hc]⟩)
+    ⟨(bias L.S 28560 : ℚ) - κ i₀ t₀ j₀ + 3, fun ω _ => ?_⟩
+  simp only [hw]
+  push_cast
+  ring
 
 end Pouw.SecurityProofs.Lead.Tags

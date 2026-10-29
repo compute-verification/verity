@@ -14,7 +14,8 @@ Its proofs are in `Lead/Tags/`, its new declarations in `Pouw.SecurityProofs.Lea
   inner dimension of at most 128,460.
 * `Fold`: the epilogue's IADD3 and FFMA give stock's word while `|A·Bᵀ| ≤ 2^22`, whatever the row and column sources.
 * `Shift`: the lead's committed words (`Pouw.Lead.word`) are shift-separated on its coins: no two differ by a constant,
-  and none is a function of one coin plus a constant, for at most 28,560 rows and columns.
+  and none is a function of one coin plus a constant, for at most 28,560 rows and columns. From 28,561 columns they
+  are not.
 * `SsnProofs`: served sparse noise's committed words on the full coin grid, for the 4- and 5-lane layouts. They are
   distinct, and no two differ by a constant (carrier separation).
 * `Tile`: two of the lead's MMA tiles of committed words (`Pouw.Lead.tileOf`) at different places, or one and a tile
