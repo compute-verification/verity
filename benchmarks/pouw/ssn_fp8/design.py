@@ -165,8 +165,9 @@ class Formed:
 
 
 def form(dtype: str, A: np.ndarray, B: np.ndarray, mode: str, coins: np.random.Generator, block: int | None = None,
-         bound: str = "partial", rmin: int | None = None, rmax: int | None = None) -> Formed:
-    """The formed operands of one call: A (m, K) and B (n, K) data words, coins for this salt."""
+         bound: str = "partial", rmin: int | None = None, rmax: int | None = None, signed: bool = False) -> Formed:
+    """The formed operands of one call: A (m, K) and B (n, K) data words, coins for this salt. `signed` (pin): each coin
+    is the sign of its lane's 2^r (a coin lane carries +-2^r, never 0), so the noise is zero-mean and needs no centring."""
     p_ = pipe_of(dtype)
     m, K = A.shape
     n = B.shape[0]
@@ -192,20 +193,23 @@ def form(dtype: str, A: np.ndarray, B: np.ndarray, mode: str, coins: np.random.G
         Bp[:, lane] = encode(dtype, C[e].astype(np.float64) * 2.0**sigma * (1 if b % 2 == 0 else -1))
     for lane, s in noise_lane:
         Bp[:, lane] = encode(dtype, np.array([2.0**sigma]))[0]
+    if signed and mode != "pin":
+        raise ValueError("signed coin lanes are the pinned design's")
     a1 = coins.integers(0, 2, (m, nb, CODE_LANES))
     at = coins.integers(0, 2, (m, S))
+    s1, st = (2 * a1 - 1, 2 * at - 1) if signed else (a1, at)
     # integer noise of each step's word: the block's code term plus the block's later noise lanes so far
     noise = np.zeros((m, n, S), np.int64)
     # block b's code lanes carry (-1)^b C, so the code term's mean, sum_e C[e, j] / 2 a block, cancels over block pairs
     alt = np.where(np.arange(nb) % 2 == 0, 1, -1)
-    code_term = np.einsum("mbe,en->mnb", a1, C) * alt[None, None, :]
+    code_term = np.einsum("mbe,en->mnb", s1, C) * alt[None, None, :]
     first = np.r_[True, step_block[1:] != step_block[:-1]]
     run = np.zeros((m,), np.int64)
     for s in range(S):
         if first[s]:
             run = np.zeros((m,), np.int64)
         else:
-            run = run + at[:, s]
+            run = run + st[:, s]
         noise[:, :, s] = code_term[:, :, step_block[s]] + run[:, None]
     if mode == "fixed":
         u = np.ones(m)
@@ -248,15 +252,16 @@ def form(dtype: str, A: np.ndarray, B: np.ndarray, mode: str, coins: np.random.G
         uw = pow2_word(dtype, ra)
         if not np.array_equal(decode(dtype, uw), np.exp2(ra.astype(np.float64))):
             raise ValueError("noise lane outside the format's exact powers of two")
-        centre = np.rint((S / nb - 1) / 2.0)
+        centre = 0.0 if signed else np.rint((S / nb - 1) / 2.0)
         epi = np.broadcast_to((1.5 * np.exp2(p.astype(np.float64)))[:, None, None], (m, n, nb)).copy()
         bias = epi - (centre * u)[:, None, None]
     else:
         raise ValueError(mode)
+    off = (uw | word(0x8000 if dtype == "bf16" else 0x80)) if signed else np.zeros_like(uw)
     for lane, b, e in code_lane:
-        Ap[:, lane] = np.where(a1[:, b, e] == 1, uw, 0)
+        Ap[:, lane] = np.where(a1[:, b, e] == 1, uw, off)
     for lane, s in noise_lane:
-        Ap[:, lane] = np.where(at[:, s] == 1, uw, 0)
+        Ap[:, lane] = np.where(at[:, s] == 1, uw, off)
     init = bias.astype(np.float32).view(np.uint32)
     if not np.array_equal(init.view(np.float32).astype(np.float64), bias):
         raise ValueError("accumulator init not exact in FP32")

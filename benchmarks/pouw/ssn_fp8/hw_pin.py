@@ -39,7 +39,7 @@ def layout_check(probe: TP.Probe, fmt) -> None:
         raise RuntimeError(f"layout check failed: {int(np.count_nonzero(want != got))} words differ")
 
 
-def one(so: Path, dtype: str, instances: int, salts: int, seed: int, out: Path) -> dict:
+def one(so: Path, dtype: str, instances: int, salts: int, seed: int, out: Path, signed: bool = False) -> dict:
     ins_id, K = CASES[dtype]
     ins = TP.INSTRUCTIONS[ins_id]
     base = TP.Probe(so, ins)
@@ -51,7 +51,7 @@ def one(so: Path, dtype: str, instances: int, salts: int, seed: int, out: Path) 
     for d in range(instances):
         A, B, *_ = St.data(dtype, 64, 8, K, np.random.default_rng([seed, d]))
         for s in range(salts):
-            f = D.form(dtype, A, B, "pin", np.random.default_rng([seed, d, s]), block=4, bound="partial")
+            f = D.form(dtype, A, B, "pin", np.random.default_rng([seed, d, s]), block=4, bound="partial", signed=signed)
             if f.steps != 4 or f.blocks != 1:
                 raise RuntimeError(f"expected one block of four steps, got {f.steps} steps in {f.blocks} blocks")
             w, bad = D.run(dtype, f)
@@ -67,7 +67,7 @@ def one(so: Path, dtype: str, instances: int, salts: int, seed: int, out: Path) 
             biases.append(f.bias[:, :, 0])
     A, Bt, C, W = map(np.stack, (As, Bs, Cs, want))
     Dw = probe.tiles(A, Bt, C)
-    np.savez_compressed(out / f"pin_{dtype}.npz", A=A, Bt=Bt, C=C, D=Dw)
+    np.savez_compressed(out / f"pin_{dtype}{'_signed' if signed else ''}.npz", A=A, Bt=Bt, C=C, D=Dw)
     mism = int(np.count_nonzero(Dw != W))
     p = np.stack(ps)
     e = ((Dw.astype(np.int64) >> 23) & 0xFF) - 127
@@ -77,7 +77,7 @@ def one(so: Path, dtype: str, instances: int, salts: int, seed: int, out: Path) 
     affine_fail = int((~(core == core[:, :1]).all(1)).sum())
     noise_span = np.stack(last_noise).reshape(instances, salts, 64, 8)
     varies = int(((noise_span != noise_span[:, :1]).any(1)).sum())
-    return {"format": dtype, "instruction": ins_id, "kernel": probe.kernel, "tiles": int(A.shape[0]), "words": int(Dw.size),
+    return {"format": dtype, "signed": signed, "instruction": ins_id, "kernel": probe.kernel, "tiles": int(A.shape[0]), "words": int(Dw.size),
             "data_entries_a_block": K, "mismatches_vs_sim": mism, "pin_fail": pin_fail, "affine_fail": affine_fail,
             "outputs_whose_noise_varies_over_salts": varies, "outputs": instances * 64 * 8}
 
@@ -89,6 +89,7 @@ def main() -> int:
     ap.add_argument("--salts", type=int, default=8)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--formats", nargs="+", default=list(CASES))
+    ap.add_argument("--signed", action="store_true", help="also run the signed coin lanes (+-2^r)")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -96,9 +97,10 @@ def main() -> int:
     probe = TP.Probe(so, TP.INSTRUCTIONS["sm90.wgmma.m64n8k32.e4m3"])
     doc = {"toolchain": ident, "device": probe.identity(), "results": []}
     for dtype in args.formats:
-        r = one(so, dtype, args.instances, args.salts, args.seed, out)
-        doc["results"].append(r)
-        print(json.dumps(r), flush=True)
+        for signed in (False, True) if args.signed else (False,):
+            r = one(so, dtype, args.instances, args.salts, args.seed, out, signed)
+            doc["results"].append(r)
+            print(json.dumps(r), flush=True)
     (out / "hw_pin.json").write_text(json.dumps(doc, indent=1))
     bad = any(r["mismatches_vs_sim"] or r["pin_fail"] or r["affine_fail"] for r in doc["results"])
     return 1 if bad else 0
