@@ -23,15 +23,13 @@
   instances: a Program of one `batch` of the unit per layer (`wired_program`), whose wiring is the public layout's. Checked
   against `interpret` composed along the topology and `verity.ml.circuits.evaluation` of the Program; `Q_template_instance` makes every
   member one unit, and the topology the partition derives (`derived_topology`) must be the one built. One class statement of
-  `4 n` instances staged with `class_statement.Wiring` (PROTOCOL.md §16.13, Linking: each cut source a link row under its
-  writer's salt, META `links` and `definition`), proved live with the verifier's own `--links` file (`class_statement.links_file`)
-  and Lean-verified with `--program`, which derives the units and checks every cut wire (`without_program` records the
-  refusal without it). Then two cheating provers on the same circuit: one whose layer 1 reads a made-up input in place of
-  layer 0's outputs, every unit correct on what it is given, and one whose link rows hold the right values under salts of
-  their own. Each must be refused by the live verifier with its links before serving, and by Lean with its program on the
-  sessions a live verifier given an empty links list records. Before it, the one-unit statement at `4 n` instances, the
-  cost comparison. Linking binds a public topology; it does not hide the topology: the Program is the verifiers', so the
-  wiring and the descriptor are public, a leak beyond the size class.
+  `4 n` instances staged with `class_statement.Wiring` (each cut source a link port, a row committed under a salt of its own;
+  META `definition` and no `links`), proved live and Lean-verified with `--program`, which derives the units
+  (`without_program` records the verdict without it). C-Flock verifies the statement alone, over its own rows and salts:
+  that a link row is its writer's output row is the recursive statement's to check, so a prover whose layer 1 reads a
+  made-up input in place of layer 0's outputs, every unit correct on what it is given, is accepted by both verifiers here
+  (`made_up_input`), and a live verifier given a links file refuses before serving (`links_file`). Before it, the one-unit
+  statement at `4 n` instances, the cost comparison.
 """
 from __future__ import annotations
 
@@ -126,7 +124,7 @@ def lean_verify(lean: str, circuit: Path, pub: Path, partition: Path, sessions: 
 
 
 def live_session(a, stage: Path, n: int, d: Path, pin: str, warm: int, runs: int, links: Path | None = None) -> tuple[dict, list[Path]]:
-    """``serve --zk`` on 127.0.0.1 (``links``: the verifier's ``--links`` file) and ``prove --zk`` against it, ``warm + runs``
+    """``serve --zk`` on 127.0.0.1 (``links``: a ``--links`` file, which the verifier refuses) and ``prove --zk`` against it, ``warm + runs``
     sessions recorded under ``d/sessions``: the median timed run's LIVE record, and the recorded session directories. A verifier
     that refuses the statement before serving is the record's ``why`` (its REFUSED line), with no session."""
     d.mkdir(parents=True, exist_ok=True)
@@ -410,13 +408,8 @@ def run_wired(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
     desc.write_bytes(canonical_json(encode_program(program)))
     text = (stage / "circuit.txt").read_text()
     pin = FC.digest(text)
-    # the live verifier's own links, derived from its program and query; and none, under which it records a cheating session for Lean
-    links, no_links = stage / "links.json", d / "no-links.json"
-    t0 = time.monotonic()
-    own = CS.links_file(program, query, text, wiring.indices)
-    links_s = time.monotonic() - t0
-    links.write_text(json.dumps(own))
-    no_links.write_text(json.dumps(own | {"links": []}))
+    links = d / "links.json"
+    links.write_text(json.dumps({"format": "verity/flock-links/v1", "links": []}))
 
     # the cheat: layer 1's x has layer 0's output bits flipped, so its committed input row is not layer 0's committed output row
     off = sum(p[2] - p[1] if p[0] == "c" else p[3] - p[2] for p in topo[1][:next(k for k, p in enumerate(topo[1]) if p[0] == "u")])
@@ -425,9 +418,8 @@ def run_wired(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
     bxs, bys = compose(nets, cs, topo, flip)
     broken = sum(bxs[1][t][off:off + w0] != bys[0][t][:w0] for t in range(a.n))
     wrong = sum(bys[-1][t] != ys[-1][t] for t in range(a.n))
-    bad, salt = d / "made-up-input", d / "wrong-salt"
+    bad = d / "made-up-input"
     sb = CS.stage(units, SPEC, shape, cl, staged_lanes(bxs, bys), bad, salt_key, packed=True, wiring=replace(wiring, strict=False))
-    ss = CS.stage(units, SPEC, shape, cl, staged_lanes(xs, ys), salt, salt_key, packed=True, wiring=replace(wiring, writer_salts=False))
     pa, pb = (stage / f"pub-{n}.bin").read_bytes(), (bad / f"pub-{n}.bin").read_bytes()
 
     row = {"class": {"G": G, "N_IN": N_IN, "N_OUT": N_OUT, "W": N_IN + G, "K": U.index_bits(G, N_IN)}, "wired": True,
@@ -438,14 +430,11 @@ def run_wired(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
            "unit": {"ands_lowered": st["ands"], "unit_rows": st["unit_rows"], "unit_nnz": st["unit_nnz"],
                     "ands_per_hidden_gate": round(st["ands"] / G, 2)},
            "statement": {k: st[k] for k in ("n", "k_log", "vus_per_block", "w_in", "w_out", "ports", "shared_rows", "circuit_sha512",
-                                            "class_sha512", "circuit_bytes", "links", "definition")} | {"shape": shape, "stage_s": round(stage_s, 3)},
-           "links": {"triples": len(own["links"]), "ports": own["ports"], "derive_s": round(links_s, 3)},
+                                            "class_sha512", "circuit_bytes", "link_ports", "definition")} | {"shape": shape, "stage_s": round(stage_s, 3)},
            "agree_before_staging": agree, "seed": a.seed,
            "made_up_input": {"layer": 1, "reads": _render(topo[1]), "flipped_bits": [off, off + w0], "instances_wire_broken": broken,
                              "instances_circuit_output_wrong": wrong, "same_circuit": sb["circuit_sha512"] == st["circuit_sha512"],
-                             "pub_bytes": len(pa), "pub_bytes_differing": sum(x != y for x, y in zip(pa, pb)) + abs(len(pa) - len(pb))},
-           "wrong_salt": {"rows": "every link row holds its writer's output row, committed under a salt of its own",
-                          "same_circuit": ss["circuit_sha512"] == st["circuit_sha512"]}}
+                             "pub_bytes": len(pa), "pub_bytes_differing": sum(x != y for x, y in zip(pa, pb)) + abs(len(pa) - len(pb))}}
     if not all(agree.values()):
         raise AssertionError(f"wired {G},{N_IN},{N_OUT}: the outputs disagree before staging: {agree}")
     if a.stage_only:
@@ -459,34 +448,33 @@ def run_wired(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
                 "why": sorted({x["why"] for x in v}), "wall_s": round(dt, 3), "wall_s_per_session": round(dt / max(1, len(v)), 3),
                 "partition": (v[0].get("partition") if v else None), **({"stderr_tail": err} if not v else {})}
 
-    # honest: the live verifier with its own links, then Lean with its own program; without the program Lean cannot check the links
+    # honest: the live verifier, then Lean with its own program and without it
     dd = d / "honest-sessions"
     dd.mkdir(parents=True, exist_ok=True)
-    live, recorded = live_session(a, stage, n, dd, pin, a.warm, a.runs, links=links)
+    live, recorded = live_session(a, stage, n, dd, pin, a.warm, a.runs)
     row["honest"] = {"live": live}
     if a.lean and recorded:
         row["honest"]["lean"] = lean_rec(stage, recorded)
         x = (lean_verify(a.lean, stage / "circuit.txt", stage / f"pub-{n}.bin", part, recorded[:1])[0] or [none])[0]
-        row["honest"]["lean"]["without_program"] = {"refused": not x["accepted"], "why": x["why"][:200]}
+        row["honest"]["lean"]["without_program"] = {"accepted": x["accepted"], "why": x["why"][:200],
+                                                    "units": (x.get("partition") or {}).get("units")}
         x = (lean_verify(a.lean, stage / "circuit.txt", bad / f"pub-{n}.bin", part, recorded[:1], program=desc)[0] or [none])[0]
         row["honest"]["lean"]["against_the_other_public_file"] = {"refused": not x["accepted"], "why": x["why"][:160]}
-    # each cheat: the live verifier with its own links refuses it before serving; a live verifier given no links records its
-    # sessions, which Lean must refuse from its own program
-    for tag, sdir in (("made_up_input", bad), ("wrong_salt", salt)):
-        rec = row[tag]
-        dd = d / f"{tag}-sessions"
-        dd.mkdir(parents=True, exist_ok=True)
-        rec["live"], _ = live_session(a, sdir, n, dd / "own-links", pin, 0, 1, links=links)
-        rec["live_without_links"], recorded = live_session(a, sdir, n, dd / "no-links", pin, 0, a.runs, links=no_links)
-        if a.lean and recorded:
-            rec["lean"] = lean_rec(sdir, recorded)
-        rec["refused_live"] = not rec["live"]["accepted"]
-        rec["refused_lean"] = not (rec.get("lean") or {}).get("accepted") if a.lean and recorded else None
-        rec["verdict"] = ("refused by both verifiers" if rec["refused_live"] and rec["refused_lean"] else
-                          "ACCEPTED: a binding gap" if not rec["refused_live"] and rec["refused_lean"] is False else
-                          f"split or unchecked: live refused {rec['refused_live']}, Lean refused {rec['refused_lean']}")
+    row["links_file"], _ = live_session(a, stage, n, d / "links-file-sessions", pin, 0, 1, links=links)
+    # the made-up input: each statement verified alone, so both verifiers accept it; the cut is the recursive statement's
+    rec = row["made_up_input"]
+    dd = d / "made_up_input-sessions"
+    dd.mkdir(parents=True, exist_ok=True)
+    rec["live"], recorded = live_session(a, bad, n, dd, pin, 0, a.runs)
+    if a.lean and recorded:
+        rec["lean"] = lean_rec(bad, recorded)
+    rec["accepted_live"] = bool(rec["live"]["accepted"])
+    rec["accepted_lean"] = bool((rec.get("lean") or {}).get("accepted")) if a.lean and recorded else None
+    rec["verdict"] = ("accepted by both verifiers: the cut is the recursive statement's to check"
+                      if rec["accepted_live"] and rec["accepted_lean"] is not False else
+                      f"refused: live accepted {rec['accepted_live']}, Lean accepted {rec['accepted_lean']}")
     if not a.keep_stage:
-        for s in (stage, bad, salt):
+        for s in (stage, bad):
             for f in [s / "circuit.txt", *s.glob("inst-*.bin")]:
                 f.unlink(missing_ok=True)
     return row
@@ -502,7 +490,7 @@ def write_result(rows: list[dict], a) -> None:
         c = r["class"]
         tag = f"{'wired4_' if r.get('wired') else ''}G{c['G']}_N{c['N_IN']}_O{c['N_OUT']}_n{(r.get('statement') or {}).get('n')}"
         live, lean = ((r.get("honest") or {}).get("live"), (r.get("honest") or {}).get("lean")) if r.get("wired") else (r.get("live"), r.get("lean"))
-        mu, ws = r.get("made_up_input") or {}, r.get("wrong_salt") or {}
+        mu = r.get("made_up_input") or {}
         for name, v, unit in (("ands", (r.get("unit") or {}).get("ands_lowered"), "count"),
                               ("ands_per_hidden_gate", (r.get("unit") or {}).get("ands_per_hidden_gate"), "count"),
                               ("k_log", (live or {}).get("k_log"), "count"),
@@ -510,10 +498,8 @@ def write_result(rows: list[dict], a) -> None:
                               ("proof_bytes", sum((live or {}).get("proof_bytes") or []) or None, "B"),
                               ("live_verify_s", (live or {}).get("verify_s"), "s"),
                               ("lean_verify_s_per_session", (lean or {}).get("wall_s_per_session"), "s"),
-                              ("made_up_input_accepted_live", None if "refused_live" not in mu else int(not mu["refused_live"]), "count"),
-                              ("made_up_input_accepted_lean", None if mu.get("refused_lean") is None else int(not mu["refused_lean"]), "count"),
-                              ("wrong_salt_accepted_live", None if "refused_live" not in ws else int(not ws["refused_live"]), "count"),
-                              ("wrong_salt_accepted_lean", None if ws.get("refused_lean") is None else int(not ws["refused_lean"]), "count")):
+                              ("made_up_input_accepted_live", None if "accepted_live" not in mu else int(mu["accepted_live"]), "count"),
+                              ("made_up_input_accepted_lean", None if mu.get("accepted_lean") is None else int(mu["accepted_lean"]), "count")):
             if v is not None:
                 ms.append({"name": f"{tag}/{name}", "value": v, "unit": unit})
     doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
@@ -523,7 +509,7 @@ def write_result(rows: list[dict], a) -> None:
                           "checker": "flock-circuit serve --zk (live) and Lean flock-verify verify --zk, outputs against verity.ml.circuits.evaluation",
                           "detail": f"{sum(r['pass'] for r in rows)} of {len(rows)} rows passed" + "".join(
                               f"; wired {r['class']['G']},{r['class']['N_IN']},{r['class']['N_OUT']} made-up input: "
-                              f"{(r.get('made_up_input') or {}).get('verdict')}, wrong salt: {(r.get('wrong_salt') or {}).get('verdict')}"
+                              f"{(r.get('made_up_input') or {}).get('verdict')}"
                               for r in rows if r.get("wired")), "evidence": ["out/rows.jsonl"]},
            "measurements": ms, "measurement_files": ["out/rows.jsonl"], "artifacts": []}
     Path(run_dir, "result.json").write_text(json.dumps(doc, sort_keys=True, indent=1))
@@ -560,12 +546,11 @@ def main(argv=None) -> int:
             row = {"class": {"G": G, "N_IN": N_IN, "N_OUT": N_OUT}, "wired": kind == "wired", "broke": f"{type(e).__name__}: {e}"[:800]}
         if kind == "wired":
             h = row.get("honest") or {}
-            cheats = [row.get(t) or {} for t in ("made_up_input", "wrong_salt")]
-            passed = "broke" not in row and all(c.get("same_circuit") for c in cheats) and (a.stage_only or (
-                h["live"]["accepted"] and all(c.get("refused_live") for c in cheats) and (not a.lean or (
-                    h.get("lean", {}).get("accepted") and h["lean"]["against_the_other_public_file"]["refused"]
-                    and h["lean"]["without_program"]["refused"]
-                    and all(c.get("refused_lean") for c in cheats)))))
+            mu = row.get("made_up_input") or {}
+            passed = "broke" not in row and mu.get("same_circuit") and (a.stage_only or (
+                h["live"]["accepted"] and mu.get("accepted_live") and row["links_file"].get("refused_before_serving")
+                and (not a.lean or (h.get("lean", {}).get("accepted") and h["lean"]["against_the_other_public_file"]["refused"]
+                                    and mu.get("accepted_lean")))))
         else:
             passed = "broke" not in row and (a.stage_only or (row["live"]["accepted"] and (not a.lean or (
                 row.get("lean", {}).get("accepted") and all(x["refused"] for x in row["lean"]["negatives"].values())

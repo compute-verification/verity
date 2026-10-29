@@ -1620,34 +1620,11 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
   instance's (`dummy.outputs`) under zero salts, each row's `dummy.bc` checked.
 - **Identity** adds `outputs`: `"hidden: each output port an hm96-sha512/row/v1 row hashed in the circuit; the public file
   has no output word"` (`v2` under `row_schemas`).
-- **Linking** is a check (`Flock.HmLinks`). It binds a public topology; it does not hide the topology: both verifiers
-  read the wiring from their own program (the descriptor, the links file), which is the circuit's, so publishing it is a
-  known leak beyond the size class that later work removes. An output row is committed as an input row of the same words, so a reader
-  committing it under the producer's salt has the producer's `b ‖ c` as its input leaf. META `links`
-  (`[{port, leaves: [lo, hi]}]`, at least one) names the link rows: each an input row (by name) that holds template parameter
-  leaves `[lo, hi)` as the one output row holds outputs, a `hm96-sha512/row/v1` row of that row's words, at most that many
-  leaves, a row once, the ranges disjoint. Staging (`class_statement.Wiring`) gives each reading instance its own link-row
-  table row under its writer's output-row salt. The check holds for a hidden-output statement under a template query with
-  the verifier's own program (`--program`, `--partition`), over every unit of the registered population, before any draw, so
-  a drawn reader is held to its writer's committed row whether the writer is drawn or not. Per unit, from the program
-  (`Program.operands` of its root node and member): every parameter leaf that is another unit's output (its gate inside a
-  unit's interval) lies in a link's range; each link's leaves are either all circuit inputs (an ordinary input row there) or
-  exactly one writer unit's outputs, all of them, in order; that writer is a unit of the public file; and the reader's
-  link-row `b ‖ c` equals the writer's output-row `b ‖ c`. Otherwise the verifier refuses, naming the leaves, the row, the
-  writer and the reader (`links: cut wire [lo, hi) from unit v to unit u: …`). A template-query statement with no META
-  `links` is held to the same check, so any cut wire between its units refuses it. META `links` without the program and
-  partition, under any other query, or on a statement with public outputs (`setupH`) is refused. The live verifier
-  (`flock-circuit serve`, `replay`, `statement`) makes the same comparison on the population's file against the
-  verifier's own `--links F` (`verity/flock-links/v1`: `circuit_sha512`, the partition digest, META's link ports, and every
-  `[reader, port, writer]` instance triple, derived from its program by `class_statement.links_file`); a circuit with
-  `links` needs the file and one without refuses it. Not checked: a link across statements (refused), that the class
-  circuit reads leaf `lo + k` from word `k` of the link row (the class lowering's claim, like the Definition it lowers), and
-  public-output statements' links (their outputs are words, not rows). A salt commits one row value: reused for another
-  row value, it reveals `b₁ ⊕ b₂ = x₁ ⊕ x₂`; a link row holds its writer's value, so the shared salt reveals `b₁ = b₂`,
-  that the two rows are equal: the wire itself, which a hidden topology would have to hide too. A link is as good
-  as both proofs (under a draw, an undrawn writer's output is unproven: the check binds the reader's input to the writer's
-  committed output, not to a correct one), and a deduplicated reader table (`shared_rows`) links at most one producer
-  instance per row.
+- **Links** between proof blocks are recursion's, not C-Flock's: `verify` sets up each proof block's statement alone,
+  over its own rows and salts. A statement that declares links (META `links`) is refused (`HmRow.LINKS`), and so is a
+  links file (`--links`) to either verifier. Staging (`class_statement.Wiring`) commits each reader's link port, the row of
+  exactly its writer's output row's words, under a salt of its own, so the public file shows no wire; that the link row is
+  its writer's output row is the recursive statement's check, against the committed partition table.
 - **Registered reads** are §16.10's, of `v1` rows. A registered port is an input row or an output row: a registered output
   row opens the registered root at its unit's read position, under the registered row's salt, so the instance's output is
   that row (a `row-seg/v1` or `v2` row is refused: its leaf is not the registration's `row/v1` leaf).
