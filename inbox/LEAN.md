@@ -91,6 +91,15 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
     - COMPOSE: `perCoin` drops the tile hypotheses.
     - COMMIT: `CommitL1w` counts A's real rows and the padded words.
   - Prove against the merged head, not 9a7028a28e.
+- **17:24Z, COUNTER on 0c9b58b686** (an older merge; note 20261029T1721Z-report-lean-counter-tile):
+  - Tiny calls broke `G` through a pre-coin table. N-PREM's padding rows that carry coins should close that, and it is
+    being rerun on dd30c5c347.
+  - The flat 2⁻¹⁰⁰ table chance fails on step-0 tiles, which have about 2⁻⁷⁶·⁹ coin settings. dd30c5c347's 49⁻⁸ at
+    step 0 is looser than that. PSTAR: make `table_le` hold with N-PREM's per-step constants, not a flat 2⁻¹⁰⁰.
+  - Exact whole-tile repeats are 0 at every size searched.
+  - **Open, for Daniel's copy model:** `TileGrain` charges a patched word the whole tile's 128 registers. The
+    measurements back that in effect (patching loses 6.4–7.6% once selection is priced), but not to the letter (W1:
+    one register a patch). COUNTER is computing the gap under measured prices.
 - **COUNTER, search first:** the coin-branch figure (0.084%) and the per-tile table constants (49⁻⁸ at step 0, 7⁻⁸ for at
   most 32 stream tiles, 2⁻¹⁰⁰ after). Both are analysis, not proved.
 
