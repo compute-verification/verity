@@ -67,7 +67,7 @@ namespace Top
 
 /-- **A dense inner statement**: the inner statement of a compiled statement read at the dense form. -/
 def DenseInner (x : Msg) : Prop :=
-  ∃ (xo : Msg) (sto : Claims.Recursion.Stmt), parse xo = some sto ∧ Claims.Recursion.Form.Dense sto.form ∧
+  ∃ (xo : Msg) (sto : Claims.Recursion.CompiledStatement), parse xo = some sto ∧ Claims.Recursion.Form.Dense sto.form ∧
     x = xIOf xo
 
 /-- **Where the rows are asked**: at a dense inner statement, where the last step reads, the four base checks hold and
@@ -358,11 +358,11 @@ circuit accepting implies its share of the other checks (`hlowR`) and of the pie
 `RecKSDecompR` holds. -/
 theorem recKSDecompR_of_targets (h : Top.Targets rd rows holds acc) (ownB : Msg → VerdictR → Option ℕ)
     (ownQ : Msg → Top.Piece Q → Option ℕ)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →
       Claims.Recursion.Form.Dense st.form →
       ∀ r ∈ (splitR rd rows holds acc h).checks (Claims.Recursion.xI (recR rd b aux nOf hd rest fin wE final w) x),
         ∀ s, ownP ownB ownQ x r = some s → s < (recR rd b aux nOf hd rest fin wE final w).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →
       Claims.Recursion.Form.Dense st.form →
       ∀ q ∈ ivChecks (bdR rd wE final w)
           (deploySplit FlockDeploy.sha512 _root_.Flock.Readable.relation (nextR rd)
