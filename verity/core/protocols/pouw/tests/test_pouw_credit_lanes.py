@@ -1,4 +1,4 @@
-"""`credit`'s lanes form (`leaf_lanes`, TOP-138): at a K the period-open commits as ``lane<K>`` and ``combine<K>``, credit
+"""`credit`'s lanes form (`leaf_lanes`): at a K the period-open commits as ``lane<K>`` and ``combine<K>``, credit
 still draws the window's leaves, and each drawn leaf is proved as `leaf_lanes.statements` (R/4)(C/8) lanes and the
 combine, each verified against its own one-call leaf Program, a population of one, with the ``--registered`` file credit
 builds at the leaf's served place, its partials ``<prefix>partials@<u>`` held to one produced record under the window's

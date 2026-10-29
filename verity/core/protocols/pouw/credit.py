@@ -1872,13 +1872,13 @@ def _leaf_asks(lanes: dict | None, leafs: list[tuple[int, dict]], files: dict, r
                                        f"the one-call Program of {LEAF_FN[kind]} over the TILE of the window's own "
                                        "template at K")
             progs[name] = (leaf, unit)
+    if not (isinstance(draw, dict) and _digest(draw.get("root")) is not None):
+        return [], ("registration", "the window's draw root, the produced record's registration, is not a SHA-512 "
+                                    "digest")
     try:
-        coin = Ch.LiveOpening.from_json(draw.get("coin")).coin.hex() if isinstance(draw, dict) else None
-    except Ch.CoinError:
-        coin = None
-    if coin is None or _digest(draw.get("root")) is None:
-        return [], ("registration", "the window's draw root and coin, the produced record's registration and draw, are "
-                                    "not a SHA-512 digest and a live opening")
+        coin = Ch.LiveOpening.from_json(draw.get("coin")).coin.hex()
+    except Ch.CoinError as e:
+        return [], ("registration", f"the window's draw coin, the produced record's draw, is not a live opening: {e}")
     produced, why = _lanes_record(lanes, layout, shape, program, draw["root"], coin, drawn)
     if why is not None:
         return [], why
