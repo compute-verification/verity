@@ -1,9 +1,10 @@
 """PoUB-P2's core case (`p2_case.py`) replayed by `remote-audit-p2-protocol serve` (`RemoteAudit.P2Protocol`): the case
-`p2_party.session` sends the prover for each session of `test_p2_party.py`'s, its answer the core form of the session's
-own (`p2_case.answer`), and every field equal: an honest session accepted with its credited reads, one whose receipts
-skip a unit's reads and one whose openings are out of form rejected, and one stopped before its last window is
-verified undecided. Edits of a root, a coin or the plan are rejected, and the plan is bound by the commitment's
-digest. A session the books veto has no case. And a session over the `C*` of PoUS's
+`p2_party.session` sends the prover for each session of `test_p2_party.py`'s held to the auditor's session (`SESSION`),
+its answer the core form of the session's own (`p2_case.answer`), and every field equal: an honest session accepted
+with its credited reads, one whose receipts skip a unit's reads and one whose openings are out of form rejected, and
+one stopped before its last window is verified undecided. A toy party's case, and a case whose request is edited off
+`SESSION` in any value, are refused naming each one. Edits of a root, a coin or the plan are rejected, and the plan is
+bound by the commitment's digest. A session the books veto has no case. And a session over the `C*` of PoUS's
 own setup names PoUS's store: onsite's `same_store` takes the two as one store, and the Lean accepts the case."""
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from test_p2_party import Lying, Prover, exe, request, run, store  # noqa: F401
+from test_p2_party import TOY, Lying, Prover, exe, request, run, store  # noqa: F401
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period as pous
 from verity.core.protocols.pous import run as R
@@ -52,15 +53,17 @@ class Keeping(Prover):
         self.case_ = doc
 
 
-def session(exe, store, *, plan=None, lean_of=lambda lean: lean, **kw) -> tuple[dict, dict | None]:
-    """One session of `test_p2_party.run` with a `Keeping` prover: the answer and the case it kept."""
+def session(exe, store, *, plan=None, lean_of=lambda lean: lean, auditor=p2_party.SESSION,
+            **kw) -> tuple[dict, dict | None]:
+    """One session of `test_p2_party.run` with a `Keeping` prover, held to the auditor's `auditor` (`SESSION`, whose
+    case alone the replay takes): the answer and the case it kept."""
     kept = []
 
     def prover_of(clock):
         kept.append(Keeping(store, clock, **kw))
         return kept[-1]
 
-    proved, answer = run(exe, store, prover_of, request(store), plan, lean_of)
+    proved, answer = run(exe, store, prover_of, request(store, auditor), plan, lean_of, auditor)
     assert proved == answer
     return answer, kept[0].case_
 
@@ -87,9 +90,42 @@ def test_an_honest_sessions_case_is_accepted_with_its_credited_reads(exe, lean, 
     assert got["commitment"] == p2_case.digest(case).hex()
     assert sorted(case) == ["commitment", "evidence", "params", "store_root"]
     assert case["store_root"] == store.registration.root.hex() == p2_case.store_root(case).hex()
-    assert case["params"]["request"] == request(store)
+    assert case["params"]["request"] == request(store, p2_party.SESSION)
     ops = [x["op"] for x in _evidence(case)["log"]]
-    assert ops[0] == "p2_event" and ops.count("p2_openings") == 2 and ops.count("p2_root") == 4
+    windows, passes = p2_party.SESSION["windows"], p2_party.SESSION["passes"]
+    assert ops[0] == "p2_event" and ops.count("p2_openings") == windows and ops.count("p2_root") == windows * passes
+
+
+def test_a_toy_partys_case_is_refused_naming_each_value_off_the_auditors_session(exe, lean, store) -> None:
+    """A session a toy party held to its own parameters (`test_p2_party.TOY`), accepted live: its case's replay holds
+    the request to `SESSION` alone, so it is refused, naming every value, before its log; `p2_case.answer`, which takes
+    the live verifier's word, answers it as its session was."""
+    answer, case = session(exe, store, auditor=TOY)
+    assert answer["verdict"] == "accept" and p2_case.answer(case, answer)["verdict"] == "accept"
+    got = replayed(lean, case)
+    why = "; ".join(f"the request's {k} is not the auditor's ({TOY[k]}, not {v})" for k, v in p2_party.SESSION.items())
+    assert got["verdict"] == "reject" and got["reason"] == f"the request is refused: {why}", got
+    assert got["public"] is None and got["commitment"] == p2_case.digest(case).hex()
+
+
+@pytest.fixture(scope="module")
+def honest(exe, store) -> dict:
+    answer, case = session(exe, store)
+    assert answer["verdict"] == "accept"
+    return case
+
+
+@pytest.mark.parametrize("off", [{"deadline_ns": 2 * 10 ** 9}, {"passes": 1}, {"samples": 1}, {"window_ns": 10 ** 9},
+                                 {"windows": 1}, {"passes": 1, "windows": 1}], ids=lambda off: "+".join(off))
+def test_a_cases_request_edited_off_the_auditors_session_is_refused_by_name(lean, honest, off) -> None:
+    """An honest case of `SESSION`'s session, its request edited after (which no digest binds) to a longer allowance,
+    fewer passes, windows or openings or a shorter window: refused naming each value, never replayed at the edit's."""
+    edited = honest | {"params": honest["params"] | {"request": honest["params"]["request"] | off}}
+    got = replayed(lean, edited)
+    why = "; ".join(f"the request's {k} is not the auditor's ({off[k]}, not {v})" for k, v in p2_party.SESSION.items()
+                    if k in off)
+    assert got["verdict"] == "reject" and got["reason"] == f"the request is refused: {why}", got
+    assert replayed(lean, honest)["verdict"] == "accept"
 
 
 @pytest.mark.parametrize(("kw", "failure"), [({"skip": 1}, "receipt"), ({"garble": True}, "malformed")])
