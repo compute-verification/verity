@@ -478,9 +478,9 @@ The weights are committed once and every later proof opens that root. The analys
   2^-128 holds while `N·t ≤ 2^110.7`. This counts proofs as statements about committed values. **Decision:** state security
   per table, or as a lifetime budget.
 - **Partial integrity counts audits, and needs knowledge soundness** (the lifetime-soundness desk study, §2–§5).
-  - In a sampled audit only the first faulty sampled unit matters. So an audit costs one table's hash term plus one
+  - In a sampled audit only the first faulty sampled proof block matters. So an audit costs one table's hash term plus one
     serving-tree term (DESIGN.md §1.2): about `t·2^-(222…238)` per audit.
-  - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a unit is faulty only relative
+  - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a proof block is faulty only relative
     to extracted values. Each audit therefore also pays the table's knowledge error and a link term (§1.3).
   - Under A2 that term is `t·Q_s(8N₀/e)/2^256` (audit B: 2^-129.4 at `t = 2^80`; under strict time alone, proved
     for the non-ZK session, 2^-70.2), and it dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^78.4`

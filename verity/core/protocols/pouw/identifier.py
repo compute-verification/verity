@@ -2,7 +2,7 @@
 that names the oracle, the salt and the workload the proof is for.
 
 ``{"format": "verity/pouw/identifier/v1", "scheme": <the scheme's registered name>, "salt": <the epoch's salt, lowercase
-hex>, "workload": <lowercase hex SHA-512 of the declared workload's canonical bytes>}``.  The scheme names the oracle H, so
+hex>, "workload": <lowercase hex SHA-512 of the registered workload's canonical bytes>}``.  The scheme names the oracle H, so
 there is no seed digest.  The proof binds the object through ``pub.sha``, which seeds its Fiat-Shamir transcript.  The
 verifier recomputes the bytes from the epoch it audits (`identifier_bytes`), and Flock's verifier compares the proof's
 object with them byte for byte (``--identifier F``).
@@ -29,7 +29,7 @@ CERTIFIED_SALT_BYTES = 64
 
 
 def workload_json(epoch: Epoch) -> dict[str, Any]:
-    """The declared workload: every matmul in declaration order, then the weights root, which binds every weight's row root.
+    """The registered workload: every matmul in declaration order, then the weights root, which binds every weight's row root.
     The index and the weight id are 64-bit, so they are decimal strings: RFC 8785 writes a number as an IEEE 754 double,
     which is exact only up to 2^53."""
     return {"matmuls": [{"index": str(u.index), "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": str(u.weight)}
@@ -45,12 +45,12 @@ def _canonical(obj: Any) -> bytes:
 
 
 def workload_bytes(epoch: Epoch) -> bytes:
-    """The declared workload's canonical bytes."""
+    """The registered workload's canonical bytes."""
     return _canonical(workload_json(epoch))
 
 
 def workload_digest(epoch: Epoch) -> bytes:
-    """SHA-512 of the declared workload's canonical bytes."""
+    """SHA-512 of the registered workload's canonical bytes."""
     return hashlib.sha512(workload_bytes(epoch)).digest()
 
 
