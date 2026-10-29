@@ -26,14 +26,14 @@ open Claims Claims.Sampling
 
 /-! ### `RAcc δ` implies the leak relation -/
 
-theorem faulty_mem_faultySets {H : Msg → Msg} {Cm : Commitment Bool} {δ : ℝ} {s : AuditStatement} {P : Partition} {w : Wit}
+theorem faulty_mem_faultySets {H : Msg → Msg} {Cm : CommitmentScheme Bool} {δ : ℝ} {s : AuditStatement} {P : Partition} {w : Wit}
     (hRel : RelS H Cm δ s P w) (hdisj : Disjoint (faulty H Cm s P w) (allSlots s.design P)) :
     faulty H Cm s P w ∈ faultySets s.design P δ := by
   classical
   simp only [faultySets, Finset.mem_filter, Finset.mem_powerset]
   exact ⟨fun _ hv => (Finset.mem_filter.mp hv).1, hRel, hdisj⟩
 
-theorem rLeak_of_rAcc {H : Msg → Msg} {Cm : Commitment Bool} {parse : Msg → Option AuditStatement}
+theorem rLeak_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse : Msg → Option AuditStatement}
     {partition : AuditStatement → Option Partition} {L K S : ℕ} {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ}
     {As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)} {Dj : ℕ}
     (hin : ∀ s P, partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ) (x : Msg)
@@ -51,7 +51,7 @@ theorem ext_mono {W : Type} {R R' : Rel W} {x : Msg} (h : ∀ w, R x w → R' x 
 
 /-- **`KSLinOn` moves from `RAcc δ` to the leak relation**, at any verifier, scope, extractor and errors. -/
 theorem ksLinOn_rLeak {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
-    (Cm : Commitment Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition) (L K S : ℕ)
+    (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ)
     (V : Verifier Coin) (Scope : Msg → Prop) (E : Extractor Coin Wit V) (κ γ β : Msg → ℝ) (Fe : FinderFamily)
     (hin : ∀ s P, partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ)

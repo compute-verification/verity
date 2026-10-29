@@ -17,7 +17,9 @@ wire's position under `Cm` and `roots`. It reads the transport only at the right
 * `need_posOf`: every gate of `need` that the unit reads from outside or commits is the position of a wire in `P.io u`
   (`boundary_inner` excludes a row's two XORs).
 * `witDep_val`: `witDep` opens a wire's position at its value wherever some datum passes there (`posOf_injective`).
-* The interior is the evaluation at `wireAt`, so `lowers` gives every proof unit correct.
+* The interior is the evaluation at `wireAt`, so `lowers` gives the unit's proof unit correct (`ref_slotOf`).
+* Each input the unit owns is one of its committed wires (`mem_io_of_owner`), so its row opens, and its one-gate proof
+  unit is correct (`correct_input`).
 -/
 
 namespace Flock.Bridge
@@ -31,6 +33,28 @@ theorem mem_io_of_read {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : F
   simp only [FlockSoundness.Audit.Partition.io, FlockSoundness.Audit.Partition.committed, Finset.mem_filter,
     Finset.mem_univ, true_and]
   exact ⟨Or.inr (Or.inr ⟨h, ha, hne⟩), Or.inr ⟨h, hh, ha⟩⟩
+
+/-- **An input a unit owns is one of its committed wires**: an input is committed, and its owner reads it. -/
+theorem mem_io_of_owner {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {a : Fin C.N}
+    (ha : a ∈ insOf P κ u) : a ∈ P.io u := by
+  obtain ⟨hin, -, ho⟩ := mem_insOf.1 ha
+  obtain ⟨h, hh, hr⟩ := reads_of_owner ho
+  refine mem_io_of_read hh hr ?_
+  rw [hh, (P.input_iff a).2 (by simp [hin, Op.isInput])]
+  simp
+
+/-- **A one-gate proof unit of an input is correct** wherever its committed value is opened. -/
+theorem correct_input {Cp : Claims.Sampling.Prog} {ref : ℕ → Option Bool} {p : ℕ} (hp : Cp.gates[p]? = some .input)
+    (h : ref p ≠ none) : Cp.Correct ref [p] := by
+  intro g hg
+  obtain rfl : g = p := List.mem_singleton.1 hg
+  refine ⟨fun x hx i hi _ => ?_, fun _ => ?_⟩
+  · rw [hp] at hx
+    obtain rfl := Option.some.inj hx
+    simp [BGate.reads] at hi
+  · cases hv : ref g with
+    | none => exact absurd hv h
+    | some b => exact ⟨b, rfl, by rw [Boundary.runIn_eq, hp]; simpa [BGate.val] using hv⟩
 
 /-- **A position the unit commits is a wire of `P.io u`**: a gate of `unitGates P u` that `Boundary` commits is the
 position of one of `u`'s wires, and that wire is committed. -/
@@ -104,7 +128,7 @@ theorem need_posOf {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n
       · exact hin (mem_unitGates.2 ⟨g, hu, 0, by omega, by rw [Nat.add_zero]⟩)
       · exact hin (mem_unitGates.2 ⟨g, hu, 1, by omega, rfl⟩)
 
-theorem witDep_mem {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
+theorem witDep_mem {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
     {xv : Fin C.N → Bool} {o : Opening Bool} (h : o ∈ (witDep C Cm H roots xv).vals) :
     ∃ g, o.pos = posOf C g ∧ o.val = C.eval xv g := by
   simp only [witDep, List.mem_map, List.mem_finRange, true_and] at h
@@ -114,7 +138,7 @@ theorem witDep_mem {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots
   split <;> exact ⟨rfl, rfl⟩
 
 /-- **`witDep` opens a wire's position at its value** wherever some datum passes there. -/
-theorem witDep_val {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
+theorem witDep_val {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
     {xv : Fin C.N → Bool} (s : Claims.Sampling.AuditStatement) (hs : s.roots = roots) (a : Fin C.N)
     (hex : ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C a, C.eval xv a, d⟩ = true) :
     (witDep C Cm H roots xv).val H Cm s (posOf C a) = some (C.eval xv a) := by
@@ -139,7 +163,7 @@ theorem witDep_val {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots
 other wire it reads is transported. -/
 theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
-    (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg)
+    (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (roots : List Claims.Msg)
     (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
     (hright : ∃ op : Pos → Opn, ∀ g ∈ P.io u,
@@ -148,7 +172,7 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
       ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C g, bit (val o) g, d⟩ = true)
     (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → C.eval Xr g = b)
     (kd : ℕ) (desc : Claims.Msg) (q : Query) :
-    u.val ∉ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) (witDep C Cm H roots Xr) := by
+    u.val ∉ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) (witDep C Cm H roots Xr) := by
   obtain ⟨op, hop⟩ := hright
   have hval : ∀ a ∈ P.io u, κ a = none →
       (witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots) (posOf C a) = some (C.eval Xr a) := by
@@ -167,10 +191,19 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
   apply hmem.2
   by_cases hN : Nonempty (Fin C.N)
   · obtain ⟨d⟩ := hN
-    refine ⟨[unitGates P u], rus_partOf_getElem? P u, fun i => C.eval Xr (wireAt C d i),
-      lowers P u (wireAt C d) (wireAt_posOf d) Xr hκ' _ fun i hi hc => ?_⟩
-    change RU.ref (progOf C κ) [unitGates P u] ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots))
-      (fun i => C.eval Xr (wireAt C d i)) i = some (C.eval Xr (wireAt C d i))
+    refine ⟨slotOf P κ u, rus_partOf_getElem? P u, fun i => C.eval Xr (wireAt C d i), ?_⟩
+    change ∀ pu ∈ slotOf P κ u, (progOf C κ).Correct (RU.ref (progOf C κ) (slotOf P κ u)
+      ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots)) (fun i => C.eval Xr (wireAt C d i))) pu
+    rw [ref_slotOf]
+    intro pu hpu
+    rcases List.mem_append.1 (show pu ∈ [unitGates P u] ++ _ from hpu) with hpu | hpu
+    swap
+    · obtain ⟨a, ha, rfl⟩ := List.mem_map.1 hpu
+      obtain ⟨hin, hk, -⟩ := mem_insOf.1 ha
+      refine correct_input (gates_posOf_input hin hk) ?_
+      rw [Boundary.ref_input _ (gates_posOf_input hin hk), hval a (mem_io_of_owner ha) hk]
+      simp
+    refine lowers P u (wireAt C d) (wireAt_posOf d) Xr hκ' _ (fun i hi hc => ?_) pu hpu
     unfold RU.ref
     split_ifs with hin
     · rfl
@@ -188,12 +221,15 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
           exact absurd (gates_posOf_const (input_of_isInput (hκin a b hk)) hk) (hc b)
       rw [wireAt_posOf]
       exact hval a ha hnone
-  · refine ⟨[unitGates P u], rus_partOf_getElem? P u, fun _ => false, ?_⟩
+  · refine ⟨slotOf P κ u, rus_partOf_getElem? P u, fun _ => false, ?_⟩
     intro pu hpu g hg
-    rw [List.mem_singleton] at hpu
-    subst hpu
-    obtain ⟨w, -⟩ := mem_unitGates.1 hg
-    exact absurd ⟨w⟩ hN
+    rcases List.mem_append.1 (show pu ∈ [unitGates P u] ++ _ from hpu) with hpu | hpu
+    · rw [List.mem_singleton] at hpu
+      subst hpu
+      obtain ⟨w, -⟩ := mem_unitGates.1 hg
+      exact absurd ⟨w⟩ hN
+    · obtain ⟨a, -, -⟩ := List.mem_map.1 hpu
+      exact absurd ⟨a⟩ hN
 
 /-- **`FaultyRightTargetC`**, at any `canon` (`Bridge.Canon`): `faultyRightC`. -/
 theorem faultyRightTargetC : FaultyRightTargetC := by
