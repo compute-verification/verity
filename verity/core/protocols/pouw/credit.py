@@ -317,8 +317,7 @@ STATEMENTS_FORM = ("the window's statements are not a list of {call, circuit, pu
 #: ``{k<K>: SHA-512, live: SHA-512}``
 CIRCUIT_FILES = "circuit_files"
 FILES_FORM = (f"the committed circuit files are not {{k<K>: SHA-512, live: SHA-512}} (the period-open's "
-              f"{CIRCUIT_FILES}, each digest 128 lowercase hex; a K proved as lanes lane<K> and combine<K>, with "
-              "leaf_programs {lane<K>: SHA-512, combine<K>: SHA-512})")
+              f"{CIRCUIT_FILES}, each digest 128 lowercase hex)")
 _TEMPLATE = re.compile(r"k[1-9][0-9]*|live")
 #: the lanes form (`leaf_lanes`): a K whose drawn leaves are proved as their lanes and the combine commits the two
 #: circuit files ``lane<K>`` and ``combine<K>``, and in `LEAF_PROGRAMS` each one's leaf Program's descriptor digest
@@ -1539,7 +1538,8 @@ def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, 
     call statements' (`_leaf_asks`, each with its ``leaf`` file name, ``unit``, ``known`` openings and
     ``window_ports``), under the window's `draw`."""
     if not _files(files):
-        return [], ("circuit", (isinstance(files, dict) and lanes_files(files)) or FILES_FORM)
+        return [], ("circuit", (isinstance(files, dict) and all(type(x) is str for x in files) and lanes_files(files))
+                            or FILES_FORM)
     lanes = None
     if isinstance(statements, dict):
         if not (sorted(statements) == list(LANES_KEYS) and isinstance(statements["leaf_programs"], dict)
