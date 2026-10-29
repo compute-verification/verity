@@ -18,7 +18,7 @@ import pytest
 
 from verity.ml.circuits import Program, bind
 from verity.ml.circuits import query_ast as G
-from verity.ml.circuits.partition import Level, members_per_parent, validate_partition
+from verity.ml.circuits.partition import Level, validate_partition
 from verity.ml.circuits.ops import gemm
 from verity.core.protocols.profile import HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
 
@@ -231,10 +231,10 @@ def test_a_chain_read_off_a_program_gives_the_profile_its_sizes():
     computed = [(32 + 4 * 32, program.gates)]
     assert validate_partition(program, coarse, within=computed).status == "exact"
     assert validate_partition(program, fine, within=computed).status == "exact"
-    per = members_per_parent(program, coarse, fine)
-    assert per == (2, 2, 2, 2)
+    per, rest = divmod(fine.count(), coarse.count())   # `each` nests fine in coarse, the same count in every coordinate
+    assert (per, rest) == (2, 0)
     a = IntegrityProfile((Level("coordinate", G.query_id(coarse_q)), Level("call", G.query_id(fine_q))),
-                         (coarse.count(), per[0]), {"coordinate": Bernoulli(Fraction(1, 2)), "call": Subset(1)}, 0.01)
+                         (coarse.count(), per), {"coordinate": Bernoulli(Fraction(1, 2)), "call": Subset(1)}, 0.01)
     assert a.count("call") == fine.count() == 8 and a.accept(2) == Fraction(1, 2)
 
 
