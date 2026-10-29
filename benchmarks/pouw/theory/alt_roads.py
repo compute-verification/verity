@@ -58,6 +58,11 @@ def t2_on_gpu(inp: dict, point: dict, macs: float, alpha: float, u: float) -> fl
     return t / point["t_stock_s"]
 
 
+def export_s(inp: dict, word_bytes: float) -> float:
+    """The words' store to HBM at SW-GPU's export price, as time at the peak rate."""
+    return word_bytes * inp["sha512"]["export_units_per_word"] / 4.0 / peak(inp)
+
+
 def r0_barrier(inp: dict) -> dict:
     """Any design that forces work by counting committed words, with every committed byte hashed on the GPU."""
     w1, s = inp["w1"], inp["sha512"]
@@ -106,7 +111,8 @@ def r1_egress(inp: dict, ll: dict) -> dict:
     for key, point in inp["points"].items():
         macs = ll["macs_per_token"] * point["m"]
         byts = b * macs + ll["a_bytes_per_token"] * point["m"]
-        base = point["t_stock_s"] + (alpha - 1.0) * point["t_gemm_s"] + inp["ssn_1l"]["coin_latency_s"]
+        base = (point["t_stock_s"] + (alpha - 1.0) * point["t_gemm_s"] + inp["ssn_1l"]["coin_latency_s"]
+                + export_s(inp, b * macs))
         row = {"point": key, "label": point["label"], "bytes_per_step": byts,
                "rate_at_stock_speed_bytes_per_s": byts / point["t_stock_s"],
                "hbm_factor_at_stock_speed": byts / point["t_stock_s"] / inp["h200"]["hbm_bytes_per_s"]}
@@ -205,7 +211,7 @@ def r1_shapes(inp: dict, ll: dict) -> dict:
                        "rows_per_expert_allowed": cap}
     per_row = b * ll["macs_per_token"] + ll["a_bytes_per_token"]
     base = lambda m: (stock_step_s(inp, m) + (alpha - 1.0) * stock_step_s(inp, m, "t_gemm_s")
-                      + inp["ssn_1l"]["coin_latency_s"])
+                      + inp["ssn_1l"]["coin_latency_s"] + export_s(inp, b * ll["macs_per_token"] * m))
     llama = {}
     for ln, rate in links.items():
         t2 = lambda m: max(base(m), per_row * m / rate) / stock_step_s(inp, m)

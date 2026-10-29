@@ -75,6 +75,7 @@
   "points": {
     "t8192": {"m": 8192, "t_stock_s": 0.03777, "t_gemm_s": 0.01249, "label": "T 8,192 (measured, CORE-NCP r20261029-013634-94e5)"},
     "t64": {"m": 64, "t_stock_s": 0.00342, "t_gemm_s": 0.000571, "label": "T 512 = the demo's 64 real tokens (stock an estimate, CORE-NCP)"},
+    "t512": {"m": 512, "t_stock_s": 0.00404, "t_gemm_s": 0.001194, "label": "512 real rows (stock an estimate, CORE-NCP: the 64-token step with its GEMMs at m 512; GEMM measured, GD-DENOISE r20261028-194021-247f)"},
     "decode1": {"m": 1, "t_stock_s": 0.001, "t_stock_band_s": [0.0003, 0.003], "t_gemm_s": 0.000203, "label": "decode, 1 row (estimate: GEMM at HBM rate for the linears' int8 weights; step band 0.3-3 ms)"}
   },
   "llama_3_2_1b": {
