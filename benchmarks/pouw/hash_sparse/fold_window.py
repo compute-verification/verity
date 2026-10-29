@@ -30,6 +30,8 @@ Modes (transformed-state loops):
            windows share their boundary's basis (three chained key groups), as a loop must: with independent bases
            at a window's two ends, the exit basis absorbs the window's last multiply, an edge effect a loop pays back
            at the next window
+  basisrc  basis with a row's and a column's own xor and add offsets at each boundary:
+           ((N ^ a ^ x_i ^ y_j) b ^ c) d + e + u_i + v_j
   carry    the state is two words (u, v) with N = u + v (or u ^ v, the solver's choice, the same at both ends), u
            arbitrary (examples draw it), on entry and on exit: carry-save forms that accept any split
 
@@ -214,14 +216,16 @@ def instance(spec, w, seed):
         word_v = lambda: rng.randrange(-(1 << 27), 1 << 27) & mask
     else:
         row_v = col_v = word_v = lambda: rng.randrange(0, 1 << w)
-    nk, nr, nc, nn = spec.get("grid", (3, 2, 3, 4) if mode == "basis" else (2, 3, 3, 4))
-    # basis mode chains its key groups: group a's window reads keys[a + 1] and maps basis a to basis a + 1, so a
-    # boundary's basis is one function for the window that ends there and the one that starts there
+    chained = mode in ("basis", "basisrc")
+    nk, nr, nc, nn = spec.get("grid", (3, 2, 3, 4) if chained else (2, 3, 3, 4))
+    # basis modes chain their key groups: group a's window reads keys[a + 1] and maps basis a to basis a + 1, so a
+    # boundary's basis is one function for the window that ends there and the one that starts there; on the lead's
+    # walks group a reads the walk's a-th segment, as consecutive windows do
     chain = [[odd() for _ in range(s)] for _ in range(nk + 1)]
-    keys = chain[1:] if mode == "basis" else chain[:nk]
+    keys = chain[1:] if chained else chain[:nk]
     start = spec.get("start")
     if spec.get("layout"):
-        row_walk, col_walk = layout_walks(rng, s, 1 if start else 40 + spec["phase"])
+        row_walk, col_walk = layout_walks(rng, nk * s if chained else s, 1 if start else 40 + spec["phase"])
         rows = [[x & mask for x in row_walk()] for _ in range(nr)]
         cols = [[x & mask for x in col_walk()] for _ in range(nc)]
     else:
@@ -244,8 +248,9 @@ def instance(spec, w, seed):
                 examples.append((a, elem, [], [], fold_ref(n, ds, ks, mask), ks, n))
             names = ["N"] + [f"D{t + 1}" for t in range(s)]
             continue
-        for r, rr in enumerate(rows):
-            for c, cc in enumerate(cols):
+        seg = slice(a * s, (a + 1) * s) if len(rows[0]) > s else slice(0, s)
+        for r, rr in enumerate(row[seg] for row in rows):
+            for c, cc in enumerate(col[seg] for col in cols):
                 for _ in range(nn):
                     n = rng.randrange(0, 1 << w)
                     lead = [n]
@@ -269,10 +274,20 @@ def instance(spec, w, seed):
     prog = Program("p", L, len(names), w, full=spec.get("full", False))
     sol.add(prog.constraints())
     basis = {}
-    if mode == "basis":
+    if chained:
         basis = [[z3.BitVec(f"basis{x}_{b}", w) for x in "abcde"] for b in range(nk + 1)]
         for b in range(nk + 1):
             sol.add(z3.Extract(0, 0, basis[b][1]) == 1, z3.Extract(0, 0, basis[b][3]) == 1)
+        zero = z3.BitVecVal(0, w)
+        # basisrc: a row's and a column's own xor and add offsets at each boundary, as precomputation may give them
+        rb = [[[z3.BitVec(f"rbasis{x}_{b}_{r}", w) if mode == "basisrc" else zero for x in "xa"] for r in range(nr)]
+              for b in range(nk + 1)]
+        cb = [[[z3.BitVec(f"cbasis{x}_{b}_{c}", w) if mode == "basisrc" else zero for x in "xa"] for c in range(nc)]
+              for b in range(nk + 1)]
+
+        def phi(x, b, r, c):
+            p = basis[b]
+            return ((((x ^ p[0] ^ rb[b][r][0] ^ cb[b][c][0]) * p[1]) ^ p[2]) * p[3]) + p[4] + rb[b][r][1] + cb[b][c][1]
     if mode == "carry":
         xor_form = z3.Bool("carry_xor")
     W = lambda x: z3.BitVecVal(x & mask, w)
@@ -284,11 +299,10 @@ def instance(spec, w, seed):
         if target != "words":
             r_idx, c_idx = rr[0][0], cc[0][0]
             srcs += [rf[f][a][r_idx] for f in range(F)] + [cf[f][a][c_idx] for f in range(F)]
-        if mode == "basis":
-            ba, bo = basis[a], basis[a + 1]
-            srcs[0] = ((((srcs[0] ^ ba[0]) * ba[1]) ^ ba[2]) * ba[3]) + ba[4]
-            goal = ((((W(want) ^ bo[0]) * bo[1]) ^ bo[2]) * bo[3]) + bo[4]
-            sol.add(prog.run(srcs)[-1] == goal)
+        if chained:
+            r_idx, c_idx = (rr[0][0], cc[0][0]) if target != "words" else (0, 0)
+            srcs[0] = phi(srcs[0], a, r_idx, c_idx)
+            sol.add(prog.run(srcs)[-1] == phi(W(want), a + 1, r_idx, c_idx))
         elif mode == "carry":
             u = W(rng.randrange(0, 1 << w))
             v = z3.If(xor_form, W(n) ^ u, W(n) - u)
@@ -331,12 +345,13 @@ def specs(width, timeout, quick, which="window"):
     if which == "layout":
         for target in ("zero", "offset"):
             for p in (0, 1):
-                for mode in ("plain", "basis", "carry"):
+                for mode in ("plain", "basis", "basisrc", "carry"):
                     add(target, 1, mode, 2, width, phase=p)
                     add(target, 2, mode, 5, 6, phase=p)
                 add(target, 2, "plain", 5, width, phase=p)
                 add(target, 3, "plain", 8, 6, phase=p)
             add(target, 1, "plain", 3, width, phase=0)
+        add("zero", 1, "basisrc", 3, width, phase=0)
         for start, Ls in (("zero", {1: (1,), 2: (3, 4)}), ("key", {1: (2, 3), 2: (5,)}), ("rowcol", {1: (2, 3), 2: (5,)})):
             for s, ls in Ls.items():
                 for L in ls:
