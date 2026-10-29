@@ -95,6 +95,7 @@ def test_a_publish_that_fails_leaves_the_run_dir_record_and_says_so_once(tmp_pat
 def test_progress_that_cannot_be_read_is_recorded_as_such_and_never_stops_the_check(tmp_path, clock):
     live = LIVE.Live(tmp_path, run_id="r1")
     live.started("circuit-check")
+    assert LIVE.progress_text(live.write()["steps"][0]["progress"]) == "targets 0 done, 0 failed"
     (tmp_path / "circuit-check.json.progress.jsonl").write_text("not json\n")
     live.ended({"step": "circuit-check", "status": "passed", "seconds": 3.0})
     p = live.write()["steps"][0]["progress"]
