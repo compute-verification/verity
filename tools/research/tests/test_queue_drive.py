@@ -11,8 +11,8 @@ from test_queue import World, _git
 
 
 class Harness:
-    """A drive on ``world`` whose Lean-check launches are recorded (`launched`) and whose after-landing launches are recorded
-    (`posted`) as `r-post-N`, each running until a test sets its state in `run_state`."""
+    """A drive on ``world`` whose launches through `launch` are recorded (`launched`) and whose after-landing launches are
+    recorded (`posted`) as `r-post-N`, each running until a test sets its state in `run_state`."""
 
     def __init__(self, world: World, monkeypatch, **kw):
         self.world, self.launched, self.posted, self.posts, self.after, self.cancelled = world, [], [], [], [], []
@@ -28,7 +28,6 @@ class Harness:
                         cancel=lambda repo, ids, reason: self.cancelled.extend(ids), evidence=lambda repo, ids: self.evidence)
         self.evidence: list = []
         self.d.launch_postland = self.launch_post
-        self.d.lean_runs = lambda commits, since: {}
 
     def launch(self, repo, commit, machine, agreement):
         rid = f"r20261012-0000{len(self.launched):02d}-abcd"
@@ -423,30 +422,6 @@ def test_a_branch_sweep_at_its_limit_sweeps_again_the_next_tick(world, monkeypat
     h.tick()
     h.tick()
     assert len(calls) == 2
-
-
-def _live_run(tmp_path, rid: str, commit: str, records: dict[str, str | None]):
-    """A check still running, as `merge.fetch_run` reads its run dir from its node: (that dir, a fetch of it, the fetches made).
-    Its Lean report names a regenerated lock for each package of ``records``, holding its text (None: the report names it, and
-    the file isn't there)."""
-    import json
-
-    d = tmp_path / "live" / rid
-    (d / "lean-audit").mkdir(parents=True)
-    regen = {}
-    for pkg, text in records.items():
-        rel = f"lean-audit/audit-{pkg.replace('/', '-')}/lean-audit.json"
-        regen[pkg] = f"/workspace/research/runs/{rid}/{rel}"
-        if text is not None:
-            (d / rel).parent.mkdir(parents=True, exist_ok=True)
-            (d / rel).write_text(text)
-    (d / "lean-audit" / "audit.json").write_text(json.dumps({"passed": True, "regenerated": regen}))
-    fetched: list[tuple[str, list[str]]] = []
-
-    def fetch(r, names):
-        fetched.append((r, names))
-        return (d, {"dir": str(d), "tree_sha": commit}) if r == rid else None
-    return d, fetch, fetched
 
 
 def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_cache(tmp_path):
