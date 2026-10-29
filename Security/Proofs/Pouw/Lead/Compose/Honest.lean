@@ -12,7 +12,7 @@ every coin stream and every commitment format it meets every premise of `G` but 
 from, and the honest run writes every committed tile. So the honest lemma holds at every stream and every commitment
 meeting `CommitL1w` (`honestOfCommit`), and at a deployed instance it is `CommitL1w` at the deployed commitment. That
 holds where the commitment's messages include frame-v3 leaves, at ranks below `2^64`, over the words' bytes in the
-lead's chunks and over A's rows (`commitL1w_of_leaves`): a frame leaf carries its domain's id and its rank
+lead's chunks and over A's bytes (`commitL1w_of_leaves`): a frame leaf carries its domain's id and its rank
 (`leafMsg_id_inj`, `leafMsg_rank_inj`), so leaves at distinct ranks are distinct messages however their values repeat,
 and its header puts one more compression on its value's (`blocks_leafMsg`). `honest` is `honestOfCommit` at a
 one-message commitment and the empty stream; `Compose/Deployed.lean` has it at the deployed instance (`honestL1w`).

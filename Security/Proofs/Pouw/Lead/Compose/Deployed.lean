@@ -5,14 +5,15 @@ import Proofs.Pouw.Lead.Compose.Honest
 # The lead's honest lemma at the deployed instance
 
 At the deployed commitment (`l1wCommit`) and form classifier (`l1wIsA`), `CommitL1w` holds (`commitL1w_l1w`) when the
-two domains' ids differ and the words chunks and A's rows number at most `2^64` (`range-u64` domains refuse more): each
-words chunk and each row of A is its tree's frame leaf at its own rank, so `commitL1w_of_leaves` applies. A words leaf
-is no message of A's instance (`leafMsg_not_mem_aMsgs`): A's leaves carry A's id (`leafMsg_id_inj`), and its pads,
-nodes, empty root and hm96 messages differ from a leaf in a header byte. The chunks cover the words' bytes
-(`sum_chunks`), and A's rows its `rows · K` bytes (`sum_aRow`).
+two domains' ids differ, the call's rows and columns are whole MMA tiles, and the words chunks and A's segments number
+at most `2^64` (`range-u64` domains refuse more): each words chunk and each segment of A is its tree's frame leaf at
+its own rank, so `commitL1w_of_leaves` applies. A words leaf is no message of A's instance (`leafMsg_not_mem_aMsgs`):
+A's leaves carry A's id (`leafMsg_id_inj`), and its pads, nodes, empty root and hm96 messages differ from a leaf in a
+header byte. The stream's tiles are the call's `S · rowBlocks · colBlocks` (`wordsTiles_length`), so the chunks are
+`wordChunks` and cover the words' bytes (`sum_chunks`), and A's segments its `rows · K` bytes.
 
 `honestL1w` is the honest lemma at the deployed instance: `honestOfCommit` at `l1wCommit`, `l1wIsA` and the certifier's
-stream `certStream`, at every admitted call of at most `2^64` rows; the chunks' bound follows from the call's
+stream `certStream`, at every admitted call whose A is at most `2^64` bytes; the chunks' bound follows from the call's
 admission.
 -/
 
@@ -132,7 +133,7 @@ theorem leafMsg_not_mem_hm96 {D : Hash.Tree.Domain} {r : ℕ} {s : String} {v : 
 /-- **A words leaf is no message of A's instance**, when the two domains' ids differ. -/
 theorem leafMsg_not_mem_aMsgs (L : Pouw.Lead.Layout) (P : L1w) (H₀ : Hash.Msg → Hash.Digest)
     (A : Fin L.rows → Fin L.K → UInt8) (hid : P.idw ≠ P.ida) (r : ℕ) (v : Hash.Msg) :
-    Hash.Tree.leafMsg (P.wordsDom L) r P.sw v ∉ (l1wCommit L P H₀ A).aMsgs := by
+    Hash.Tree.leafMsg (P.wordsDom L) r wordsSchema v ∉ (l1wCommit L P H₀ A).aMsgs := by
   intro h
   simp only [l1wCommit, List.mem_append] at h
   rcases h with h | h
@@ -143,10 +144,18 @@ theorem leafMsg_not_mem_aMsgs (L : Pouw.Lead.Layout) (P : L1w) (H₀ : Hash.Msg 
     · exact leafMsg_ne_nodeMsg h
   · exact leafMsg_not_mem_hm96 _ _ _ _ h
 
-theorem wordsBytes_length (L : Pouw.Lead.Layout) (w : Fin L.m → Fin L.S → Fin L.n → ℤ) :
-    (wordsBytes L w).length = 4 * (L.m * L.n * L.S) := by
-  simp only [wordsBytes, wordBytes, List.length_flatten, List.map_ofFn, Function.comp_def, List.length_reverse,
-    Hash.BindingProofs.be_length, List.sum_ofFn, Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
+theorem wordBytes_length (x : ℤ) : (wordBytes x).length = 4 := by
+  simp [wordBytes, Hash.BindingProofs.be_length]
+
+theorem tileFrag_length (L : Pouw.Lead.Layout) (w : Fin L.m → Fin L.S → Fin L.n → ℤ) (x : ℕ × ℕ × ℕ) :
+    (tileFrag L w x).length = tileWords := by
+  obtain ⟨rb, cb, t⟩ := x
+  simp [tileFrag]
+
+theorem wordsBytes_length (L : Pouw.Lead.Layout) (nb : ℕ) (w : Fin L.m → Fin L.S → Fin L.n → ℤ) :
+    (wordsBytes L nb w).length = 4 * (tileWords * (wordsTiles L nb).length) := by
+  simp only [wordsBytes, List.length_flatMap, wordBytes_length, tileFrag_length, List.map_const', List.sum_replicate,
+    smul_eq_mul]
   ring
 
 /-- Chunks of `b` from the start cover `min |xs| (b k)` of a list's elements. -/
@@ -159,25 +168,74 @@ theorem sum_chunks {α : Type} (xs : List α) (b : ℕ) :
       Nat.mul_succ]
     omega
 
-/-- A's rows below `k ≤ rows` are `k · K` bytes. -/
-theorem sum_aRow (L : Pouw.Lead.Layout) (A : Fin L.rows → Fin L.K → UInt8) :
-    ∀ k ≤ L.rows, ((List.range k).map fun r => (aRow L A r).length).sum = k * L.K
-  | 0, _ => by simp
-  | k + 1, hk => by
-    rw [List.range_succ, List.map_append, List.sum_append, sum_aRow L A k (by omega)]
-    simp [aRow, show k < L.rows by omega, Nat.succ_mul]
+/-- The values below `k` that stay below `M` past `a`, while `Q` holds. -/
+theorem count_filter (a M k : ℕ) (Q : Prop) [Decidable Q] :
+    ((List.range k).filter fun w => decide (a + w < M ∧ Q)).length = if Q then min k (M - a) else 0 := by
+  induction k with
+  | zero => split_ifs <;> simp
+  | succ k ih =>
+    rw [List.range_succ, List.filter_append, List.length_append, ih]
+    by_cases hQ : Q <;> by_cases h : a + k < M <;> simp [hQ, h] <;> omega
 
-/-- **`CommitL1w` at the deployed commitment**: for all parameters whose two domain ids differ and every A, at
-every hash and data, when the call's words chunks and A's rows number at most `2^64`. -/
-theorem commitL1w_l1w (L : Pouw.Lead.Layout) (hcw : 0 < L.chunkWords) (hkw : wordChunks L ≤ 2 ^ 64)
-    (hka : L.rows ≤ 2 ^ 64) (P : L1w) (hid : P.idw ≠ P.ida) (H₀ : Hash.Msg → Hash.Digest)
-    (A : Fin L.rows → Fin L.K → UInt8) (H : Hash.Msg → Hash.Digest) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) :
+theorem sum_ite_min (c a M : ℕ) :
+    ∀ k, ((List.range k).map fun i => if a + i < M then c else 0).sum = c * min k (M - a)
+  | 0 => by simp
+  | k + 1 => by
+    rw [List.range_succ, List.map_append, List.sum_append, sum_ite_min c a M k]
+    by_cases h : a + k < M
+    · simp only [h, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, ite_true, add_zero]
+      rw [show min (k + 1) (M - a) = min k (M - a) + 1 by omega, Nat.mul_succ]
+    · simp only [h, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, ite_false, add_zero]
+      rw [show min (k + 1) (M - a) = min k (M - a) by omega]
+
+theorem sum_min (N C : ℕ) : ∀ B, ((List.range B).map fun i => min N (C - N * i)).sum = min (N * B) C
+  | 0 => by simp
+  | B + 1 => by
+    rw [List.range_succ, List.map_append, List.sum_append, sum_min N C B]
+    simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.mul_succ]
+    omega
+
+/-- **The stream's tiles are the call's**: `S · rowBlocks · colBlocks` of them, for a column tile of `nb > 0` blocks. -/
+theorem wordsTiles_length (L : Pouw.Lead.Layout) {nb : ℕ} (hnb : 0 < nb) :
+    (wordsTiles L nb).length = L.S * (L.rowBlocks * L.colBlocks) := by
+  simp only [wordsTiles, List.length_flatMap, List.length_map, count_filter, sum_ite_min, List.map_const',
+    List.sum_replicate, List.length_range, smul_eq_mul, ← mul_assoc, List.sum_map_mul_left, List.sum_map_mul_right,
+    sum_min]
+  have hA : min (4 * ((L.rowBlocks + 3) / 4)) L.rowBlocks = L.rowBlocks := by omega
+  have hB : min (nb * ((L.colBlocks + nb - 1) / nb)) L.colBlocks = L.colBlocks := by
+    have := Nat.div_add_mod (L.colBlocks + nb - 1) nb
+    have := Nat.mod_lt (L.colBlocks + nb - 1) hnb
+    omega
+  rw [hA, hB]
+
+theorem aBytes_length (L : Pouw.Lead.Layout) (A : Fin L.rows → Fin L.K → UInt8) :
+    (aBytes L A).length = L.rows * L.K := by
+  simp only [aBytes, List.length_flatten, List.map_ofFn, Function.comp_def, List.length_ofFn, List.sum_ofFn,
+    Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
+
+/-- **`CommitL1w` at the deployed commitment**: for all parameters whose two domain ids differ and whose column tile
+is a positive number of blocks, and every A, at every hash and data, when the call's rows and columns are whole MMA
+tiles and its words chunks and A's segments number at most `2^64`. -/
+theorem commitL1w_l1w (L : Pouw.Lead.Layout) (hm : 16 ∣ L.m) (hn : 8 ∣ L.n) (hcw : 0 < L.chunkWords)
+    (hkw : wordChunks L ≤ 2 ^ 64) (hka : aLeaves L ≤ 2 ^ 64) (P : L1w) (hnb : 0 < P.nb) (hid : P.idw ≠ P.ida)
+    (H₀ : Hash.Msg → Hash.Digest) (A : Fin L.rows → Fin L.K → UInt8) (H : Hash.Msg → Hash.Digest)
+    (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) :
     CommitL1w H (l1wCommit L P H₀ A) (l1wIsA L P H₀ A) κ := by
-  refine commitL1w_of_leaves H _ _ κ rfl (P.wordsDom L) (P.aDom L) P.sw P.sa (wordChunks L) L.rows hkw hka le_rfl
-    (fun ω => wordsChunk L (word L κ ω)) (aRow L A) (fun ω => ?_) (sum_aRow L A _ le_rfl).ge
+  have hw : tileWords * (wordsTiles L P.nb).length = L.m * L.n * L.S := by
+    rw [wordsTiles_length L hnb]
+    obtain ⟨a, ha⟩ := hm
+    obtain ⟨b, hb⟩ := hn
+    simp only [Pouw.Lead.Layout.rowBlocks, Pouw.Lead.Layout.colBlocks, ha, hb, tileWords]
+    rw [show (16 * a + 15) / 16 = a by omega, show (8 * b + 7) / 8 = b by omega]
+    ring
+  have hch : wordsLeaves L P.nb = wordChunks L := by
+    rw [wordsLeaves, hw]
+    rfl
+  refine commitL1w_of_leaves H _ _ κ hch (P.wordsDom L) (P.aDom L) wordsSchema aSchema (wordsLeaves L P.nb)
+    (aLeaves L) (hch.le.trans hkw) hka le_rfl (fun ω => wordsChunk L P.nb (word L κ ω)) (aSeg L A) (fun ω => ?_) ?_
     (fun ω r hr => ?_) (fun ω r hr => ?_) (fun ω r _ => ?_) (fun r hr => ?_)
   · simp only [wordsChunk]
-    rw [sum_chunks, wordsBytes_length]
+    rw [sum_chunks, wordsBytes_length, hw, hch]
     have hq := Nat.div_add_mod (L.m * L.n * L.S + L.chunkWords - 1) L.chunkWords
     have hr := Nat.mod_lt (L.m * L.n * L.S + L.chunkWords - 1) hcw
     unfold wordChunks
@@ -185,6 +243,10 @@ theorem commitL1w_l1w (L : Pouw.Lead.Layout) (hcw : 0 < L.chunkWords) (hkw : wor
     generalize (L.m * L.n * L.S + L.chunkWords - 1) % L.chunkWords = e at hq hr
     generalize L.m * L.n * L.S = a at hq ⊢
     have : 4 * L.chunkWords * q = 4 * (L.chunkWords * q) := by ring
+    omega
+  · simp only [aSeg]
+    rw [sum_chunks, aBytes_length]
+    unfold aLeaves aSegment
     omega
   · exact List.mem_append_left _ (List.mem_append_left _ (leaf_mem_msgs H _ _ _ hr))
   · exact List.mem_append_right _ (List.mem_append_left _ (leaf_mem_msgs H₀ _ _ _ hr))
@@ -321,13 +383,19 @@ theorem wordChunks_le (T m n K : ℕ) (hadm : (lead T m n K).Admits) : wordChunk
   simp only [lead] at h ⊢
   omega
 
-/-- **The honest lemma at the deployed instance**: at every admitted call of the lead of at most `2^64` rows, every
-hash and data, all commitment parameters whose two domain ids differ and every A, committed under the same hash,
-some set of strategies meets every premise of `G` at the deployed commitment `l1wCommit`, its classifier `l1wIsA` and
-the certifier's stream `certStream`, and holds an honest strategy accepted at every coin value. -/
-theorem honestL1w (T m n K : ℕ) (hadm : (lead T m n K).Admits) (hm : m ≤ 2 ^ 64) (H : Hash.Msg → Hash.Digest)
-    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ) (P : L1w) (hid : P.idw ≠ P.ida)
-    (A : Fin (lead T m n K).rows → Fin (lead T m n K).K → UInt8) :
+/-- An A of at most `2^64` bytes has at most `2^64` segments. -/
+theorem aLeaves_le (T m n K : ℕ) (hA : m * K ≤ 2 ^ 64) : aLeaves (lead T m n K) ≤ 2 ^ 64 := by
+  simp only [aLeaves, aSegment, lead]
+  omega
+
+/-- **The honest lemma at the deployed instance**: at every admitted call of the lead whose A is at most `2^64` bytes,
+every hash and data, all commitment parameters whose two domain ids differ and whose column tile is a positive number
+of blocks, and every A, committed under the same hash, some set of strategies meets every premise of `G` at the
+deployed commitment `l1wCommit`, its classifier `l1wIsA` and the certifier's stream `certStream`, and holds an honest
+strategy accepted at every coin value. -/
+theorem honestL1w (T m n K : ℕ) (hadm : (lead T m n K).Admits) (hA : m * K ≤ 2 ^ 64) (H : Hash.Msg → Hash.Digest)
+    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ) (P : L1w) (hnb : 0 < P.nb)
+    (hid : P.idw ≠ P.ida) (A : Fin (lead T m n K).rows → Fin (lead T m n K).K → UInt8) :
     ∃ (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
       CommitL1w H (l1wCommit _ P H A) (l1wIsA _ P H A) κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧
       TileGrain H (l1wCommit _ P H A) κ (certStream _) Real ∧ OneInstructionMinimal Real ∧ CardWithinAccelW1 Real Real ∧
@@ -335,6 +403,7 @@ theorem honestL1w (T m n K : ℕ) (hadm : (lead T m n K).Admits) (hm : m ≤ 2 ^
       OutsourceWithinEgressLead h100Nominal (betaLead (lead T m n K) (l1wCommit _ P H A)) H (l1wCommit _ P H A) κ Real ∧
       Real σ ∧ ∀ ω, Accepted (lead T m n K) H (l1wCommit _ P H A) κ σ ω :=
   honestOfCommit T m n K H κ (certStream _) (l1wCommit _ P H A) (l1wIsA _ P H A)
-    (commitL1w_l1w _ (show 0 < 65536 by norm_num) (wordChunks_le T m n K hadm) hm P hid H A H κ) hadm
+    (commitL1w_l1w _ (Dvd.intro _ rfl) (Dvd.intro _ rfl) (show 0 < 65536 by norm_num) (wordChunks_le T m n K hadm)
+      (aLeaves_le T m n K hA) P hnb hid H A H κ) hadm
 
 end Pouw.SecurityProofs.Lead.Compose
