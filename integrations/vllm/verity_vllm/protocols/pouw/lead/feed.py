@@ -7,7 +7,7 @@ as the served kernel reads them, and the in-process certifier that stands in for
 * **Its sizes** (`Shape`): S = 1 + ⌈(K − 21)/28⌉ k32 steps (step 0 holds 21 data lanes, each later step 28; Lean's
   `stepsFor`), H = ⌈(S + 3)/32⌉ row words, R = 16⌈m/16⌉ committed rows and C = 8⌈n/8⌉ committed columns (whole MMA tiles,
   Lean's `padRows` and `padCols`) and T = ⌈R/64⌉ coin tiles.
-* **The coins** (`Coins`, Lean's `Coins L`, each `Fin` value a small integer): b [R, S] step bits, a1 [R, 4] step-0 bits,
+* **The coins** (`CallCoins`, Lean's `Coins L`, each `Fin` value a small integer): b [R, S] step bits, a1 [R, 4] step-0 bits,
   g [4, C] in 0..6 (the tag weight G = g − 3) and u [S, T, 3, C] in 0..127 (the coin lane s = 2u − 127). b[:, 0]
   enters no word.
 * **The feed** (`Feed`, one release a call, in the order the link sends it):
@@ -156,7 +156,7 @@ def g_digits(u: int) -> tuple[int, int, int, int] | None:
 
 
 @dataclass(frozen=True)
-class Coins:
+class CallCoins:
     """A call's coins (Lean's `Coins L`): ``b`` [R, S] and ``a1`` [R, 4] in {0, 1}, ``g`` [4, C] in 0..6 and ``u``
     [S, T, 3, C] in 0..127, all uint8."""
 
@@ -175,7 +175,7 @@ class Coins:
                 raise FeedError(f"coins.{name}: {a.dtype} {a.shape}, want uint8 {dims} in 0..{top}")
 
     @classmethod
-    def sample(cls, shape: Shape, rand: Rand) -> Coins:
+    def sample(cls, shape: Shape, rand: Rand) -> CallCoins:
         """The call's coins from ``rand``'s bytes: a byte for each bit and each 7-bit coin (its low bits), and G by
         rejection from little-endian u32s."""
         sh = shape
@@ -215,7 +215,7 @@ class Feed:
     sigma: np.ndarray
 
     @classmethod
-    def of(cls, call: Call, coins: Coins) -> Feed:
+    def of(cls, call: Call, coins: CallCoins) -> Feed:
         sh = call.shape
         if coins.shape != sh:
             raise FeedError(f"coins of {coins.shape} for a call of {sh}")
@@ -282,4 +282,4 @@ class InProcessCertifier:
         if (why := call.shape.refusal()) is not None:
             raise FeedError(why)
         self.roots[key] = bytes(root)
-        return Feed.of(call, Coins.sample(call.shape, self.rand))
+        return Feed.of(call, CallCoins.sample(call.shape, self.rand))
