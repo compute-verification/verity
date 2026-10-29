@@ -72,7 +72,7 @@ BLOCKS = {"h200": "AttnBlock_v4", "sm120": "AttnBlock_v5"}
 EXACT_KEYS = 128
 #: a shared output row's bytes (`P`): 1 KiB rows
 ROW_BYTES = 1024
-#: a member's units: V3c's cap
+#: a member's units: the window's member cap
 CAP = 64
 #: one port root's entry in `registration.json` (``indent=1``): a port name of about 40 characters, 128 hex of root and of
 #: domain, leaves
@@ -442,7 +442,7 @@ def served_ands(rest: list[Unit], heads: Heads, levers: frozenset[str], target: 
 
 def pad_pass(heads: Heads, traffic: Traffic, levers: frozenset[str], base_ands: float, step_s: float, target: str) -> dict:
     """The positions whose values the engine never computed, recomputed as batched decode steps over every slot at once, a
-    slot's run from its first such position (V3c's model: its continuation): an empty slot's every position and a request's
+    slot's run from its first such position (the class's model: its continuation): an empty slot's every position and a request's
     positions past its end, unless ``L2``; without ``L1``, from `EXACT_KEYS` on in a slot whose prompt passes it (its later
     positions read its inexact keys). Its positions, steps, seconds and ANDs (``base_ands`` a position and its heads')."""
     BN = EXACT_KEYS if "L1" in levers else heads.BN
@@ -718,7 +718,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("census", help="class_rows.py --out's JSON")
     ap.add_argument("--target", choices=("h200", "sm120"), default="h200")
-    ap.add_argument("--served-s", type=float, default=1.7, help="the served window's seconds (V3c's estimate: 4 prefill and 63 "
+    ap.add_argument("--served-s", type=float, default=1.7, help="the served window's seconds (an estimate: 4 prefill and 63 "
                     "decode steps)")
     ap.add_argument("--step-ms", type=float, default=23.0, help="a batch decode step's ms (a dry run's)")
     ap.add_argument("--project", default=None, metavar="SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]",
