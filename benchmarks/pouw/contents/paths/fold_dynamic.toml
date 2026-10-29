@@ -1,0 +1,4 @@
+order = 347
+path = "`theory/fold_dynamic.py`, `fold_dyn.c`"
+runs_on = "CPU"
+what = "FOLD/DYNAMIC: fold families whose structure and constants are live coins drawn per step (rotadd, rotxoradd, rotmuladd, mulrotadd, xormul, xorrot, lik, arxm, rand). `fold_dyn.c` is an average-case superoptimizer over random members, single and multi-step and at zero data, at width at most 8 with every constant free (depth 2 by meet in the middle); `fold_dynamic.py` runs it with its controls and mutations, COUNTER's decomp test (each state bit's GF(2) rank over row and column parts, and the additive residue), the symmetry count of each family's members, and the counting theorem's bound a step at the lead's window shapes (`--tier quick|full`)"

@@ -1,0 +1,4 @@
+order = 347
+path = "`theory/fold_dyn_sass.sh`, `fold_dyn_sass.cu`"
+runs_on = "CPU"
+what = "FOLD/DYNAMIC's honest steps in SASS: each family's step over 64 unrolled steps and 8 outputs a thread, with its coins in constant memory and its rotation a register or an immediate, built for sm_90a and sm_120 and counted a step and output (`fold_dyn_sass.json`); needs nvcc and cuobjdump, from a toolkit or CUDA's redistributable archives"
