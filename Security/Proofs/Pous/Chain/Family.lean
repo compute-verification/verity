@@ -238,8 +238,7 @@ theorem band_meets_family_14 (hepf : ChainExPostFactoG) (d : ℕ) (hd : 5 ≤ d)
 
 /-! ## Injective domains are necessary at every `N ≥ 2`; `N = 1` is the one-segment band
 
-`shared_breaks_S` and `shared_domain_breaks_fam` generalize `shared_domain_breaks` from `N = 448` to every `N ≥ 2`
-(`internal/p3-instantiation/band-family-pin-redteam-verdict.md` §2). -/
+`shared_breaks_S` and `shared_domain_breaks_fam` generalize `shared_domain_breaks` from `N = 448` to every `N ≥ 2`. -/
 
 /-- With the shared domain, storing segment 0's labels answers every challenge with no query, so the audit of `N`
 segments accepts with probability 1 at every state bound of at least one segment's `2^28` bits. -/
@@ -263,7 +262,7 @@ theorem shared_breaks_S (N : ℕ) [NeZero (N * 2 ^ 9)] (d : ℕ) (salt : Bits 25
   let sch := chainBandSeg N (2 ^ 9) d 524288 512 (sharedDom salt (2 ^ 9))
   let A₁ : Preprocessor sch S := fun _ _ C _ => enc0 fun i => C (gIdx s0 i)
   let A₂ : SeqResponder sch S D Q :=
-    { step := fun _ _ _ σ i => Prog.ret (dec0 σ (locOf (N := N) (B := 2 ^ 9) i), σ)
+    { step := fun _ _ _ σ i => OracleAlgorithm.ret (dec0 σ (locOf (N := N) (B := 2 ^ 9) i), σ)
       bounded := fun _ _ _ _ _ _ => ⟨Nat.zero_le _, Nat.zero_le _⟩ }
   have hacc : ∀ x, seqAccepts sch k (fun _ => false) A₁ A₂ x := by
     intro x
@@ -272,7 +271,7 @@ theorem shared_breaks_S (N : ℕ) [NeZero (N * 2 ^ 9)] (d : ℕ) (salt : Bits 25
     let C := labelG (bandSegDAG N (2 ^ 9) d) f (sharedDom salt (2 ^ 9))
       (Dense.blocks (N * 2 ^ 9) 524288 (fun _ => false))
     show seqAnswers ((idealPerm (524288 + (524288 + 512))).answer x.1)
-        (fun _ σ i => Prog.ret (dec0 σ (locOf (N := N) (B := 2 ^ 9) i), σ)) 0 (List.ofFn x.2.2)
+        (fun _ σ i => OracleAlgorithm.ret (dec0 σ (locOf (N := N) (B := 2 ^ 9) i), σ)) 0 (List.ofFn x.2.2)
         (enc0 fun i => C (gIdx s0 i)) = List.ofFn fun j => C (x.2.2 j)
     refine (seqAnswers_ret_ofFn _ _ _ x.2.2).trans ?_
     congr 1

@@ -1,4 +1,5 @@
-"""The memory challenger (`memory_challenger`): the coin tree's commit and openings, the signed session record, the
+"""The memory challenger (`memory_challenger`): the coin tree, released with its openings only once the session is
+signed, the signed session record, the
 verdict that fails closed, the whole block hashed under `sha512/row/v2`, a late round that ends the session with no retry,
 no garbage collection inside the rounds, and the session log that refuses a used id.  Every clock is injected."""
 from __future__ import annotations
@@ -68,15 +69,25 @@ def judge(c, signed, signer, *, schemes_=ts.SCHEMES, openings=None):
                       trusted={signer.public_key}, schemes=schemes_)
 
 
-def test_coin_tree_commits_before_and_opens_after():
+def test_coin_tree_is_released_after_the_last_answer():
     tree = coins()
     want = mc.derive(SOURCE, mc.COIN_DOMAIN, {"session": SESSION, "blocks": BLOCKS, "k": K})
     assert tree.indices == tuple(want.uniform(BLOCKS, j) for j in range(K))
     c = mc.MemoryChallenger(tree, ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
                             block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())
-    assert c.commitment.coin_root == tree.root and len(tree.root) == 64
-    with pytest.raises(RuntimeError, match="opened after the session"):
-        c.openings()
+    for j in range(K):
+        with pytest.raises(RuntimeError, match="released after the session"):
+            _ = c.commitment
+        with pytest.raises(RuntimeError, match="opened after the session"):
+            c.openings()
+        assert c.challenge() == tree.indices[j]
+        c.receive(block(tree.indices[j]))
+    assert c.done
+    with pytest.raises(RuntimeError, match="released after the session"):
+        _ = c.commitment
+    signed = c.close()
+    assert c.commitment == signed.commitment and c.commitment.coin_root == tree.root and len(tree.root) == 64
+    assert c.openings() == tuple(tree.opening(j) for j in range(K))
     for j in range(K):
         assert mc.verify_coin(c.commitment, tree.opening(j))
     o = tree.opening(3)
@@ -315,10 +326,39 @@ def test_a_session_log_that_is_missing_unreadable_or_made_twice_is_refused(tmp_p
     assert not path.exists()
 
 
+def test_a_salt_log_holds_one_salt_an_audit_and_fails_closed(tmp_path):
+    """A salt is logged once for its audit, fsynced, and read back by every opening; a second for the audit is refused
+    and the first kept. A log made twice, missing, or whose lines are not whole entries of distinct audits refuses."""
+    path = tmp_path / "salts"
+    mc.SaltLog.create(path)
+    with pytest.raises(mc.SessionLogError, match="never made again"):
+        mc.SaltLog.create(path)
+    audit, commitment, salt = bytes(range(64)), bytes(range(64, 128)), bytes(range(24))
+    log = mc.SaltLog(path)
+    assert log.get(audit) is None
+    log.record(audit, commitment, salt)
+    for again in (log, mc.SaltLog(path)):
+        assert again.get(audit) == (commitment, salt)
+        with pytest.raises(mc.SessionLogError, match="draws one salt an audit, and a retry never redraws it"):
+            again.record(audit, commitment, bytes(24))
+    entry = f"{audit.hex()} {commitment.hex()} {salt.hex()}"
+    assert path.read_text() == f"{mc.SALT_LOG}\n{entry}\n"
+    with pytest.raises(ValueError, match="a salt 24"):
+        log.record(bytes(64), commitment, salt[:23])
+    for text in ("", f"{mc.SALT_LOG}", f"{mc.SESSION_LOG}\n", f"{mc.SALT_LOG}\n{entry}", f"{mc.SALT_LOG}\n{entry[:-2]}\n",
+                 f"{mc.SALT_LOG}\n{entry}\n{entry}\n", f"{mc.SALT_LOG}\n{entry.upper()}\n"):
+        bad = tmp_path / "bad"
+        bad.write_text(text)
+        with pytest.raises(mc.SessionLogError, match="unreadable"):
+            mc.SaltLog(bad)
+    with pytest.raises(mc.SessionLogError, match="missing"):
+        mc.SaltLog(tmp_path / "none")
+
+
 def test_the_test_signer_leaves_nothing_outside_basetemp(tmp_path_factory, monkeypatch):
     """`pous_test_signer`'s leaf states and session logs are made under the suite's basetemp (`DIR`, the conftest's), which
     the check removes when the suite ends, or in a directory the caller passes, and never in `$TMPDIR`, where nothing
-    removes them (`pous-session-log-*` and `pous-test-signer-*` held 82% of vy-nebius-2's /workspace inodes, 19 Oct);
+    removes them (`pous-session-log-*` and `pous-test-signer-*` held 82% of a GPU node's /workspace inodes);
     with neither, they refuse."""
     tmp = tmp_path_factory.mktemp("tmpdir")
     monkeypatch.setattr(tempfile, "tempdir", str(tmp))

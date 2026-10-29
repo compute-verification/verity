@@ -168,7 +168,7 @@ passes every sequential audit with probability 1 (the timed form of `redesign.md
 def A6RederiveTimed : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (κ D Q k : ℕ)
     (z : Bits sch.n → M.Ω → sch.Coins → Bits κ)
-    (R : Bits sch.n → Bits sch.t → Bits κ → Fin sch.B → Prog M (Bits sch.ℓ))
+    (R : Bits sch.n → Bits sch.t → Bits κ → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ))
     (hRb : ∀ W pp s i, (R W pp s i).Bounded D Q)
     (hR : ∀ W ω r i, (R W (sch.enc W ω r).1 (z W ω r) i).run (M.answer ω) = (sch.enc W ω r).2 i),
     ∃ (A₁ : Preprocessor sch κ) (A₂ : SeqResponder sch κ D Q), ∀ W, pr (seqAccepts sch k W A₁ A₂) = 1
@@ -242,7 +242,7 @@ tweaked chain with probability at most `(D·q + 1)/m`. (The memo's `(D + 1)·q/m
 untweaked chain `x_{i+1} = H(x_i)`, which can cycle back onto queried points.) -/
 def B3Chain : Prop :=
   ∀ (m D q : ℕ) [NeZero m] (x₀ : Fin m)
-    (P : Prog (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m)) (hP : P.RoundBounded D q),
+    (P : OracleAlgorithm (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m)) (hP : P.RoundBounded D q),
     pr (fun H : Fin (D + 1) × Fin m → Fin m => P.run H = chain H x₀ (D + 1)) ≤ ((D * q + 1 : ℕ) : ℝ≥0∞) / m
 
 /-! ## Fisch Claims 13–14 and B5 -/
@@ -300,7 +300,7 @@ def B5ExPostFactoBounded : Prop :=
   ∀ (N w m s D Q k : ℕ) (G : TopoDAG N) (VC : Finset (Fin N)) (d : Fin N → Bits w)
     (hard : PebblingHard G VC s D k)
     (A₁ : (LabelQry N w → Bits w) → Bits m)
-    (A₂ : Bits m → Fin N → Prog (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w))
+    (A₂ : Bits m → Fin N → OracleAlgorithm (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w))
     (hA₂ : ∀ σ c, (A₂ σ c).Bounded D Q),
     pr (fun H : LabelQry N w → Bits w =>
         k ≤ (VC.filter fun c => (A₂ (A₁ H) c).run H = label G d H c).card) ≤
@@ -309,7 +309,7 @@ def B5ExPostFactoBounded : Prop :=
 open Labelling in
 /-- **Pinned as drafted** (`lean/submissions/pebbling/B5ExPostFactoDraft.lean`, `b5_ex_post_facto`).
 
-**B5** in the parallel-query model (`Prog.RoundBounded D q`, at most `D·q` queries per challenge).
+**B5** in the parallel-query model (`OracleAlgorithm.RoundBounded D q`, at most `D·q` queries per challenge).
 
 Scoped to one-way labels: the standard (forward-only) pebbling game. It gives no bound for invertible,
 locally decodable labels (P3), whose decoding is Fisch's reverse move. -/
@@ -317,7 +317,7 @@ def B5ExPostFacto : Prop :=
   ∀ (N w m s D q k : ℕ) (G : TopoDAG N) (VC : Finset (Fin N)) (d : Fin N → Bits w)
     (hard : PebblingHard G VC s D k)
     (A₁ : (LabelQry N w → Bits w) → Bits m)
-    (A₂ : Bits m → Fin N → Prog (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w))
+    (A₂ : Bits m → Fin N → OracleAlgorithm (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w))
     (hA₂ : ∀ σ c, (A₂ σ c).RoundBounded D q),
     pr (fun H : LabelQry N w → Bits w =>
         k ≤ (VC.filter fun c => (A₂ (A₁ H) c).run H = label G d H c).card) ≤
@@ -364,7 +364,7 @@ def InvExPostFactoTwoLayer : Prop :=
     (hwc : 0 < wc)
     (hard : WhiteGreenHard G s D k)
     (A₁ : (p3Model n wc).Ω → Bits m)
-    (A₂ : Bits m → Fin n → Prog (p3Model n wc) (Lab n wc))
+    (A₂ : Bits m → Fin n → OracleAlgorithm (p3Model n wc) (Lab n wc))
     (hA₂ : ∀ σ c, (A₂ σ c).Bounded D Q),
     pr (fun ω : (p3Model n wc).Ω =>
         k ≤ (Finset.univ.filter fun v => (A₂ (A₁ ω) v).run ((p3Model n wc).answer ω) = topLabel G W ω v).card) ≤
@@ -446,7 +446,7 @@ def StackedAuditSeq : Prop :=
     (t : Fin ℓ) (ht : (t : ℕ) + 1 = ℓ)
     (w S Q tt : ℕ) (d : Fin N → Bits w)
     (A₁ : (LabelQry N w → Bits w) → Bits S)
-    (step : ℕ → Bits S → Fin n → Prog (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w × Bits S))
+    (step : ℕ → Bits S → Fin n → OracleAlgorithm (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w × Bits S))
     (hstep : ∀ j σ b, (step j σ b).Bounded (⌊β * n⌋₊ - 1) Q),
     pr (fun x : (LabelQry N w → Bits w) × (Fin tt → Fin n) =>
         seqAnswers x.1 step 0 (List.ofFn x.2) (A₁ x.1) = List.ofFn fun j => label G d x.1 (e (node t (x.2 j)))) ≤
@@ -476,7 +476,7 @@ def StackedAuditOnePercent : Prop :=
     (t : Fin ℓ) (ht : (t : ℕ) + 1 = ℓ) (d : Fin (2 ^ 17) → Bits 8192)
     (A₁ : (LabelQry (2 ^ 17) 8192 → Bits 8192) → Bits 508614548)
     (step : ℕ → Bits 508614548 → Fin (2 ^ 16) →
-      Prog (IdealModel.randomOracle (LabelQry (2 ^ 17) 8192) (Bits 8192)) (Bits 8192 × Bits 508614548))
+      OracleAlgorithm (IdealModel.randomOracle (LabelQry (2 ^ 17) 8192) (Bits 8192)) (Bits 8192 × Bits 508614548))
     (hstep : ∀ j σ b, (step j σ b).Bounded (⌊β * (2 ^ 16 : ℕ)⌋₊ - 1) (2 ^ 20)),
     pr (fun x : (LabelQry (2 ^ 17) 8192 → Bits 8192) × (Fin 210 → Fin (2 ^ 16)) =>
         seqAnswers x.1 step 0 (List.ofFn x.2) (A₁ x.1) = List.ofFn fun j => label G d x.1 (e (node t (x.2 j)))) ≤
@@ -632,7 +632,7 @@ def B5Stacked : Prop :=
     (t : Fin ℓ) (ht : (t : ℕ) + 1 = ℓ)
     (w m Q : ℕ) (d : Fin N → Bits w)
     (A₁ : (LabelQry N w → Bits w) → Bits m)
-    (A₂ : Bits m → Fin N → Prog (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w))
+    (A₂ : Bits m → Fin N → OracleAlgorithm (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w))
     (hA₂ : ∀ σ c, (A₂ σ c).Bounded (⌊β * n⌋₊ - 1) Q),
     pr (fun H : LabelQry N w → Bits w =>
         n - ⌈ε / 2 * n⌉₊ + 1 ≤ ((Finset.univ.image fun b => e (node t b)).filter fun c =>
@@ -685,41 +685,5 @@ open ColumnGame in
 `PousP3Column.band_twoWay_220_16`. -/
 def BandTwoWay220_16 : Prop :=
   ColumnHard (PousP3Column.bandGraph 220 16) 12 220 3
-
-/-! ## Secure erasure (`Security/Definitions/Pous/Guarantees/SecureErasure.lean`'s game) -/
-
-open Pous.Digest in
-/-- **The digest is almost universal.** Two different lists of `R` blocks of `W` words over a finite field `F` have the
-same digest at a uniform key `(g, z)` with probability at most `((W − 1) + (R − 1)) / |F|`: either some block hash
-differs, and the digests agree at at most `R − 1` points `z`, or every block hash agrees, which a block that differs
-allows at at most `W − 1` points `g`. A word enters as an element of `F`: two `uint32` words that agree mod `p` count as
-equal. Unconditional. This is what makes the fill check's digest catch a region that differs from the fill; the
-secure-erasure bounds below hold for every digest and do not use it. Proof: `PousDigest.digestAU`. -/
-def DigestAU : Prop :=
-  ∀ (R W : ℕ) (F : Type) [Field F] [Fintype F] (xs ys : Fin R → Blk W F), xs ≠ ys →
-    pr (fun k : Key F => digest k.1 k.2 xs = digest k.1 k.2 ys) ≤
-      ((W - 1 + (R - 1) : ℕ) : ℝ≥0∞) / Fintype.card F
-
-/-- **Secure erasure from the timed audit (general).** For every scheme whose sequential audit accepts every prover with
-`S'` bits of state at each arrival with probability at most `δ + ε`, the secure-erasure audit over it, with any digest
-`dig`, accepts a prover with `S` bits of volatile memory that keeps `S_φ` bits of foreign content at every spot read's
-arrival with probability at most `δ + ε + s · 2^S / (2^S' · 2^S_φ)`. So at `S_φ ≥ S − S' + λ + log₂ s` the foreign
-content costs the prover `2^-λ`: whatever it keeps of `z` takes the place of the fill.
-
-The proof counts. For each round `j`, the memories from which `keep j` reads `z` are disjoint as `z` varies, so fewer
-than `2^S / 2^S'` values of `z` have more than `2^S'` of them, and a uniform `z` is such a value at some round with
-probability at most `s · 2^S / (2^S' · 2^S_φ)`. For every other `z`, the memories at the arrivals that keep it have an
-`S'`-bit code, and the prover run on the code is an `S'`-bit sequential responder (same programs, same `(D, Q)`), which
-the audit's bound covers.
-
-It rests on what `AuditSecure` rests on for the scheme (for the band: the ideal-primitive model, the keyed fill's
-incompressibility and the `(D, Q)` game), and on nothing else: no named assumption and no bandwidth-separation premise
-(`TwoTierBandwidth`, which is dropped, is not used). The memory is bounded at every spot read's arrival; the fill
-and the digest are unbounded. Proof: `PousErase.secure_erasure_meets`. -/
-def SecureErasureMeets : Prop :=
-  ∀ {M : IdealModel} (sch : Scheme M) (K V : Type) [Fintype K] [Nonempty K] (dig : K → sch.Code → V)
-    (S S' S_φ D Q s : ℕ) (δ ε : ℝ≥0∞),
-    AuditSecure sch .sequential S' D Q s δ ε →
-      EraseSecure sch dig S S_φ D Q s (δ + ε + (s : ℝ≥0∞) * 2 ^ S / (2 ^ S' * 2 ^ S_φ))
 
 end Pous.Guarantees

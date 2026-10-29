@@ -4,7 +4,7 @@ import MemoryChallenger.SignedMessage
 /-!
 # The verdict on a signed session
 
-`memory_challenger.verdict`: the check of a signed session against the commitment published before it. It checks the
+`memory_challenger.verdict`: the check of a signed session against its commitment, released with it. It checks the
 signature under a trusted key and an accepted scheme, the header against the commitment, every revealed index against
 its coin opening, every `H(block)` against the expected digest of that block of `C`, and every round on time within
 `Δ + RTT`. It fails closed: an unknown scheme, an untrusted key or a bad signature rejects, whatever the rounds. The
