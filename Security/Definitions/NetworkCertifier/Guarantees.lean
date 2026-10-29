@@ -61,7 +61,7 @@ def EncardFifoGrids : Prop :=
 string of exactly `k` bits for each of `E` execution blocks, padded to that length whatever is used. The accepted
 observation sequences of length `n` with jitter below `D` number at most `2^(E·k) · D^n`, that is `k` bits per
 execution block plus jitter. Every advice value has the same length, so the charge is `k` whatever an honest session
-used, and nothing used is counted: no cap per sampling block, no Kraft inequality and no `BitsCount`. -/
+used, and nothing used is counted: no cap per `T` buckets, no Kraft inequality and no `BitsCount`. -/
 def EncardAccSeqsLeAdviceBits : Prop :=
   ∀ {L K S : ℕ} {In : Type} (E k : ℕ) (P : Program L S In (Fin E → Fin k → Bool))
     (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
@@ -70,8 +70,8 @@ def EncardAccSeqsLeAdviceBits : Prop :=
 /-! ## Theorem 3 for the shipped schedule: the constant-rate Program
 
 `constantRate T g E frames` (`Definitions.NetworkCertifier.Schedule`) is the Program of one link's monitoring period:
-`E` execution blocks, each of `g` sampling blocks of `T` buckets, each block's frames and send ticks `frames ins e v ℓ`
-read from the ingress and that block's advice `v`, a string of `k = |a|` bits. None of these guarantees has a dataflow
+`E` execution blocks, each of `g·T` buckets, each block's frames and send ticks `frames ins e v ℓ` read from the
+ingress and that block's advice `v`, a string of `k = |a|` bits. None of these guarantees has a dataflow
 hypothesis. The counts take a horizon within the `E` blocks (`hn : n ≤ E·(g·T)`): the audit gives verdicts for those
 blocks only, so every step counted is a step it checks. -/
 
@@ -253,7 +253,7 @@ For a served Program the content part of the advice is the schedule: the per-ste
 circuit is built. The schedule reaches the egress frames through their canonical order, which is step-major, through
 how many tokens each event holds, and through any batch-variant numerics. Today the schedule is whatever the workload
 manifest declares: each request's `arrive_step` and the engine's scheduler settings. A monotone map from buckets to
-steps that is free at up to s_max steps per bucket is worth `T·log2(s_max + 1)` bits per sampling block, which `|a|`
+steps that is free at up to s_max steps per bucket is worth `T·log2(s_max + 1)` bits per `T` buckets, which `|a|`
 would have to hold: 2,400 bits at s_max = 15. The declaration below makes it a few bits.
 
 ### The declaration
@@ -272,8 +272,8 @@ would have to hold: 2,400 bits at s_max = 15. The declaration below makes it a f
 - **A registered list of profiles.** `P_cap = (p_0, …, p_{N−1})`. Each profile holds κ and every scheduler setting the
   schedule reads: the batch caps (sequences and tokens per step), the chunked-prefill threshold, the KV block count,
   which fixes preemption, and the output lag of asynchronous scheduling. The list is a public parameter of the audit,
-  registered with `|a|`, (T, r, B, τ_b, Q), r_in and τ_in before the audit's first sampling block and before any coin.
-  Like `|a|`, it is the deployment's structure.
+  registered with `|a|`, (T, r, B, τ_b, Q), r_in and τ_in before the audit's first execution phase and before any
+  coins are flipped. Like `|a|`, it is the deployment's structure.
   - If the developer wants the profiles hidden, the list is a frame-v3-sha512 root over hm96-sha512 rows, one per
     profile, with N public. A sender inside X could then pick the list itself, so a hidden list also costs its own size
     once per registration: at most N·b_p bits for b_p-bit rows. A public list costs nothing.
@@ -290,7 +290,7 @@ needed.
 
 **At the recorded parameters.** The recordings use one scheduler configuration. κ needs a grid that covers the honest
 step rate, and κ has none. Taking 8 values of κ gives N = 8, 3 bits of each execution block's `|a|`. A codec that spends
-7 bits per sampling block on send ticks, as an offset and a rate from 16 × 8 values, then needs `|a| = 7g + 3`: 17 bits
+7 bits per `T` buckets on send ticks, as an offset and a rate from 16 × 8 values, then needs `|a| = 7g + 3`: 17 bits
 at g = 2, which is 12,240 bits a day of 720 execution blocks.
 
 ### The coins (D7)

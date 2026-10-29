@@ -66,7 +66,7 @@ Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap of k bit
                                          causality, the blocks opened, the composed statement) and its witness
 Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
 PerWindow.lean  the last two over the run's first `m` whole execution blocks, and the ingress bound
-                                         over the first `m` whole windows: the factor per block and per link-window
+                                         over the first `m` periods of `T` buckets: the factor per block and per period
 Warden.lean     the warden's code is the client view: its lane is the client view of its first late
                                          cell (wardenLane_eq), and so are its code's cells (wardenCode_eq), which
                                          Tap reads the network certifier's cells from

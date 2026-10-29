@@ -998,8 +998,8 @@ Program's grids are computed from each link's syncs as declared, out-of-set valu
 a schedule), and every other window is checked against them. A window's grid reads only the syncs of its own and
 earlier windows: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue
 carries forward, for any clock-sync values, in the set or not (`expected_grids`, held to it by
-`test_network_certifier_capacity.py`). So a window before the violating one gets the same verdict whatever that window
-declared, and a later one is checked against the grid the declared advice gives it. Lean doesn't state this of the
+`test_network_certifier_capacity.py`). So a window before the violating one gets the same verdict whatever sync that window
+gave, and a later one is checked against the grid its advice gives it. Lean doesn't state this of the
 program's syncs: its reference Program takes the send ticks the program computes from them, and states only that an
 execution block's rows read its own advice and the ingress (`SecurityProofs.ExpectedRowCausal`).
 

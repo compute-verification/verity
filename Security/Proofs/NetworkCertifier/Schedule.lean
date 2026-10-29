@@ -165,7 +165,7 @@ instance instDecidableAcceptedOneFrame (k : ℕ) (op : ℕ → List (Obs 1 1 1) 
     (a : Fin 1 → Fin 1 → Bool) : Decidable (Accepted (constantRate (S := 1) 2 1 1 oneFrame) op k o a) := by
   unfold Accepted; infer_instance
 
-/-- **The blocks bound is met by a covert sender.** One execution block of one sampling block of two buckets,
+/-- **The blocks bound is met by a covert sender.** One execution block of two buckets (`g = 1`, `T = 2`),
 `oneFrame`, and one advice bit. The sender's secret bit delays its frame by one bucket, and each run is accepted with
 the matching bit. Every hypothesis of `EncardDecodableLeConstantRate` holds (W2, J with `D = 1`, acceptance, a wire
 decoder, a horizon of `n = 2` within `m = 1` block), and both secrets are decoded, which is the bound

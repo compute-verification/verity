@@ -4,10 +4,10 @@ import Definitions.NetworkCertifier.Run
 # The Program's schedule: frames at their send ticks, one FIFO per execution block
 
 The Program gives every real frame a **send tick**: the bucket, on the network certifier's bucket clock, at which B(a_j)
-hands it over. An execution block's span is `g` consecutive sampling blocks of `T` buckets. Its frames are handed in
-canonical order, each at `h(k) = max(send(k), h(k−1))` from the span's first bucket, and the certifier's own rule (FIFO
-at the allocation, left-packed: `fifoGrid`) fixes every row. The FIFO starts empty at each span's first bucket, and a
-frame handed at or after the span's end is never enqueued.
+hands it over. An execution block's span is `g·T` consecutive buckets. Its frames are handed in canonical order, each
+at `h(k) = max(send(k), h(k−1))` from the span's first bucket, and the certifier's own rule (FIFO at the allocation,
+left-packed: `fifoGrid`) fixes every row. The FIFO starts empty at each span's first bucket, and a frame handed at or
+after the span's end is never enqueued.
 
 **What the Program reads.** `constantRate T g E frames` is a `Program` whose advice is one value per execution block,
 `Fin E → Adv`; the protocol's is a string of `|a|` bits, `Adv = Fin k → Bool`. Execution block `e`'s frames (content,
@@ -54,11 +54,11 @@ canonical order. -/
 def expectedRow (S N base : ℕ) (frames : List LogicalFrame) (u : ℕ) : Row S (List Bool) :=
   fifoGrid (u + 1) S (payloads frames) (enqueued N base frames) (Fin.last u)
 
-/-- **The constant-rate Program.** `E` execution blocks, each of `g` sampling blocks of `T` buckets, and block `e`'s
-frames `frames ins e v ℓ` on each egress link `ℓ`, in canonical order, from the ingress `ins` and its advice `v`. With
-advice `a`, link `ℓ`'s row at step `t` is `expectedRow` of block `t / (g·T)`'s frames under that block's advice, at
-bucket `t mod (g·T)` of its span. Past the `E` blocks no slot holds a frame. Every link reads the same advice, one clock
-per spatial unit (`Proofs/NetworkCertifier/README.md`, modelling choice 15). -/
+/-- **The constant-rate Program.** `E` execution blocks, each of `g·T` buckets, and block `e`'s frames
+`frames ins e v ℓ` on each egress link `ℓ`, in canonical order, from the ingress `ins` and its advice `v`. With advice
+`a`, link `ℓ`'s row at step `t` is `expectedRow` of block `t / (g·T)`'s frames under that block's advice, at bucket
+`t mod (g·T)` of its span. Past the `E` blocks no slot holds a frame. Every link reads the same advice, one clock per
+spatial unit (`Proofs/NetworkCertifier/README.md`, modelling choice 15). -/
 def constantRate {L S : ℕ} {In Adv : Type} (T g E : ℕ)
     (frames : List In → Fin E → Adv → Fin L → List LogicalFrame) : Program L S In (Fin E → Adv) where
   rows t ins a ℓ :=

@@ -6,7 +6,7 @@ import Proofs.NetworkCertifier.Ingress
 
 `docs/network-transparency/timing-channel.md` states its bounds per link-window. The guarantees count steps; these read
 a horizon of whole blocks and factor each bound per block: the shipped schedule's `2^k · D^(g·T)` per execution block
-(`encard_accSeqs_le_constantRate_windows_bits` at `n = m·(g·T)`), and the ingress bound's `(r ℓ + 1)^T` per link-window
+(`encard_accSeqs_le_constantRate_windows_bits` at `n = m·(g·T)`), and the ingress bound's `(r ℓ + 1)^T` per `T` buckets
 (`encard_ingress_obsDecodable_le` and its content version at `n = m·T`). Each takes its parent's hypotheses at that
 horizon and no other.
 -/
