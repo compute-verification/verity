@@ -8,7 +8,7 @@ shared definitions of `Definitions.Claims`, in the template's eight items and th
 the deployed sampled verifier (`Deploy`), as Flock's block is in `Flock.Deploy`: binding it to the compiled verifier is
 the code side's.
 
-1. **Statement** (`Stmt`): the program `C` (named by its digest; both parties hold it), as its descriptor and its gates,
+1. **Statement** (`AuditStatement`): the program `C` (named by its digest; both parties hold it), as its descriptor and its gates,
    the partition query `Q` (named, versioned, with its parameters), the sampling design, and the roots the trace is
    committed under. The partition is public: `P = Q(C)`, which the verifier evaluates itself on the statement it parsed,
    descriptor and gates (`Deploy.partition`), gives the proof units (sets of gates of `C`, every gate but a constant in
@@ -352,7 +352,7 @@ structure Query where
 /-- **The sampling statement**: the program (named by its digest; both parties hold it), as its descriptor's canonical
 bytes (`desc`, `verity-ir/descriptor/v1`, which a template query reads) and its gates (`prog`, the descriptor
 flattened), the partition query, the sampling design, and the roots the trace is committed under. -/
-structure Stmt where
+structure AuditStatement where
   desc : Msg
   prog : Prog
   query : Query
@@ -368,43 +368,43 @@ structure Wit where
 /-! ## 3. Relation -/
 
 /-- The committed value `w` opens at gate `g`'s position: its first opening there that passes. -/
-def Wit.val (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (w : Wit) (g : ℕ) : Option Bool :=
+def Wit.val (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (w : Wit) (g : ℕ) : Option Bool :=
   (w.vals.find? fun o => o.pos == g && Cm.Opens H s.roots o).map (·.val)
 
 /-- **A faulty unit** at slot `v` of the partition `P` under `w`: unless some interior values make every proof unit of
 the replay unit there correct on its committed values. For a proof unit (one-stage) that is its committed outputs
 differing from its gates applied to its committed inputs, or a value it reads or writes unopened. -/
-def Faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
+def Faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
   ¬ ∃ r, P.rus[v]? = some r ∧ ∃ ι : ℕ → Bool, ∀ u ∈ r, s.prog.Correct (RU.ref s.prog r (w.val H Cm s) ι) u
 
 /-- **A faulty unit, on the boundary trace** (the glossary's form): the replay unit's committed boundary outputs differ
 from its gates applied to its committed boundary inputs. -/
-def BoundaryFaulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
+def BoundaryFaulty (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
   ¬ ∃ r, P.rus[v]? = some r ∧ s.prog.Correct (w.val H Cm s) (RU.gates r)
 
 open Classical in
 /-- **The faulty set** of the trace `w`'s openings define. -/
-noncomputable def faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) : Finset ℕ :=
+noncomputable def faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (P : Partition) (w : Wit) : Finset ℕ :=
   (Finset.range P.rus.length).filter (Faulty H Cm s P w)
 
 /-- **The sampling relation** at `δ`, on a parsed statement and its partition: the faulty set is in `M_δ`. -/
-def RelS (H : Msg → Msg) (Cm : Commitment Bool) (δ : ℝ) (s : Stmt) (P : Partition) (w : Wit) : Prop :=
+def RelS (H : Msg → Msg) (Cm : Commitment Bool) (δ : ℝ) (s : AuditStatement) (P : Partition) (w : Wit) : Prop :=
   faulty H Cm s P w ∈ s.design.M P δ
 
 /-- **The sampling relation** at `δ`, on the statement's bytes: it parses (`parse`, the verifier's own), its query
 evaluates on its program, descriptor and gates (`partition`, the verifier's own), and `RelS` holds. -/
-def R (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Stmt → Option Partition)
+def R (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
     (δ : ℝ) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ RelS H Cm δ s P w
 
 /-- The count form: fewer than `t` units are faulty. -/
-def RCount (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt)
-    (partition : Stmt → Option Partition) (t : ℕ) : Rel Wit :=
+def RCount (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement)
+    (partition : AuditStatement → Option Partition) (t : ℕ) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ (faulty H Cm s P w).card < t
 
 /-- The honest relation: no unit is faulty. -/
-def Rhon (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt)
-    (partition : Stmt → Option Partition) : Rel Wit :=
+def Rhon (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement)
+    (partition : AuditStatement → Option Partition) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ faulty H Cm s P w = ∅
 
 /-! ## 4. Scope -/
@@ -433,7 +433,7 @@ well-formed design.
 
 The query: whatever its own width parameter, every unit, input units included, commits at most its class's width
 `w_{c(u)}` (`unitClasses`, up to `unitClassMax`). A unit that commits more than the widest class is out of scope. -/
-def InScope (P : Partition) (s : Stmt) : Prop :=
+def InScope (P : Partition) (s : AuditStatement) : Prop :=
   s.prog.Topological ∧ P.Partitions s.prog ∧ s.design.WellFormed P
 
 /-! ## 5. Named pieces -/
@@ -461,9 +461,9 @@ completeness is its (`Complete`), at its completeness error as the deployment st
 `H`). -/
 structure Deploy (Coin Col T : Type) where
   V : Verifier Coin
-  parse : Msg → Option Stmt
+  parse : Msg → Option AuditStatement
   scopeCheck : Msg → Bool
-  partition : Stmt → Option Partition
+  partition : AuditStatement → Option Partition
   commit : Commitment Bool
   universal : SizeClass → Prog
   flock : Flock.Deploy Coin Col T
@@ -471,7 +471,7 @@ structure Deploy (Coin Col T : Type) where
   checked : (x : Msg) → (Fin (V.k x) → Coin) → List (ℕ × ℕ)
   rounds : (x : Msg) → ℕ × ℕ → Finset (Fin (V.k x))
   session : Msg → ℕ × ℕ → Seen → Option (Msg × Seen)
-  reveal : Stmt → ℕ × ℕ → Seen → Flock.Wit → List (List Msg × Opening Bool)
+  reveal : AuditStatement → ℕ × ℕ → Seen → Flock.Wit → List (List Msg × Opening Bool)
   innerWaits : Msg → ℕ
   innerN₀ : Msg → ℝ
   innerCap : Msg → ℕ
@@ -486,7 +486,7 @@ structure Deploy (Coin Col T : Type) where
 instance Deploy.instNonemptyTape {Coin Col T : Type} (D : Deploy Coin Col T) : Nonempty D.Tape := D.tapeNonempty
 
 /-- The statement's partition, as the verifier evaluates its query; empty when the query doesn't apply. -/
-def Deploy.part {Coin Col T : Type} (D : Deploy Coin Col T) (s : Stmt) : Partition :=
+def Deploy.part {Coin Col T : Type} (D : Deploy Coin Col T) (s : AuditStatement) : Partition :=
   (D.partition s).getD ⟨[]⟩
 
 /-! ### Rerun programs -/
@@ -567,7 +567,7 @@ def checkRevealed {R : Type} (Cm : Commitment Bool) :
 without its replay (the run accepted), its reruns fresh on the session's rounds and `r`'s elsewhere, so the prover makes
 the same session; then what its witness reveals that passes its opening check. -/
 noncomputable def unitExt (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : Stmt) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x) :
+    (s : AuditStatement) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x) :
     RP (Fin (D.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
   match D.session x u v with
   | none => .ret []
@@ -580,7 +580,7 @@ noncomputable def unitExt (D : Deploy Coin Col T) (decode : List (ℕ × Col) �
       | some wF => checkRevealed D.commit (D.reveal s u v wF)
 
 /-- **The assemble step**: the openings of committed values under the statement's roots. -/
-def assemble (s : Stmt) (found : List (List Msg × Opening Bool)) : Wit where
+def assemble (s : AuditStatement) (found : List (List Msg × Opening Bool)) : Wit where
   vals := found.filterMap fun p => if p.1 = s.roots then some p.2 else none
 
 /-- The extractor's coins: the outer wait's `K` coin vectors; for each of its `k` accepted runs, the inner wait's `K`
@@ -686,7 +686,7 @@ def SimLeak.given (S : SimLeak) (l : Msg → List Msg) : Simulator where
 
 /-- **The published leaf layer** at `(x, w)`: the leaves under the statement's roots of the values `w` opens, empty on a
 statement that doesn't parse. A fixed function of `(x, w)`. -/
-def leafLayer (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (x : Msg) (w : Wit) : List Msg :=
+def leafLayer (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement) (x : Msg) (w : Wit) : List Msg :=
   match parse x with
   | some s => Cm.layer H s.roots w.vals
   | none => []
@@ -787,7 +787,7 @@ def Universal (D : Deploy Coin Col T) : Prop :=
 units are disjoint sets of its gates is faulty exactly when its committed boundary outputs differ from its gates applied
 to its committed boundary inputs. -/
 def FaultyBoundary : Prop :=
-  ∀ (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) (r : RU),
+  ∀ (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) (r : RU),
     s.prog.Topological → P.rus[v]? = some r → (RU.gates r).Nodup → (∀ g ∈ RU.gates r, g < s.prog.gates.length) →
     (Faulty H Cm s P w v ↔ BoundaryFaulty H Cm s P w v)
 

@@ -139,7 +139,7 @@ theorem witDep_mem {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots
 
 /-- **`witDep` opens a wire's position at its value** wherever some datum passes there. -/
 theorem witDep_val {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
-    {xv : Fin C.N → Bool} (s : Claims.Sampling.Stmt) (hs : s.roots = roots) (a : Fin C.N)
+    {xv : Fin C.N → Bool} (s : Claims.Sampling.AuditStatement) (hs : s.roots = roots) (a : Fin C.N)
     (hex : ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C a, C.eval xv a, d⟩ = true) :
     (witDep C Cm H roots xv).val H Cm s (posOf C a) = some (C.eval xv a) := by
   unfold Wit.val
