@@ -1348,12 +1348,14 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     CK(cudaEventCreateWithFlags(&done[b], cudaEventDisableTiming));
     CK(cudaEventCreateWithFlags(&full[b], cudaEventDisableTiming));
   }
-  auto fwd_beside = [&] {
+  // BARE=1 also times beside with nothing ahead of each call's GEMM (no root(A_j), coins, G or forming): the schedule's floor
+  const bool bare = getenv("BARE") && atoi(getenv("BARE"));
+  auto fwd_beside_of = [&](bool with_pre) {
     int c = 0;
     for (int b = 0; b < nbuf; b++) CK(cudaEventRecord(done[b], s2[b]));
     for (int l = 0; l < 16; l++)
       for (const LinDev& d : lins) {
-        pre(d, l, s1);
+        if (with_pre) pre(d, l, s1);
         for (int r0 = 0; r0 < M; r0 += d.chunk, c++) {
           const int mc = std::min(d.chunk, M - r0), b = c % nbuf;
           CK(cudaStreamWaitEvent(s1, done[b]));
@@ -1368,7 +1370,8 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   };
   for (hi = 0; hi < (int)rbs.size(); hi++) {
     line("fwd_serial", nullptr, T.ms(reps, fwd_serial, s1), fwd_macs, fwd_words, 0);
-    line("fwd_beside", nullptr, T.ms(reps, fwd_beside, s1), fwd_macs, fwd_words, 0);
+    line("fwd_beside", nullptr, T.ms(reps, [&] { fwd_beside_of(true); }, s1), fwd_macs, fwd_words, 0);
+    if (bare) line("fwd_beside_bare", nullptr, T.ms(reps, [&] { fwd_beside_of(false); }, s1), fwd_macs, fwd_words, 0);
   }
   printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d, \"hash_cap\": %llu, "
          "\"root_a_in_forward\": %d, \"root_a_rows\": %d, \"root_a_tree\": 1, \"words_tree\": %d, \"rowseg_leaf\": "

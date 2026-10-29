@@ -9,7 +9,7 @@ if known) and the stock GEMMs' time a forward, all in ms. T2 is the step with ss
 where forward is the 16 layers' four linears with coins, forming, every k32 word exported and hashed, run serially (one
 stream) or beside (each chunk's hash on a second stream while the next chunk's GEMM runs), for each hash scheme (hasher:
 rowseg, rows<B> for the served committer's hm96 leaves of B-byte rows, or plain<B> for L1's plain frame-v3 leaves of B-byte
-rows).
+rows). beside_bare (BARE=1) is beside with nothing ahead of each call's GEMM, a control and not a forward of ssn_1l.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
         }
     fwd = {"plain_gemm": by.get(("fwd_plain_gemm", "all", "none"))}
     for h in hashers:
-        for sched in ("serial", "beside"):
+        for sched in ("serial", "beside", "beside_bare"):
             if (r := by.get((f"fwd_{sched}", "all", h))):
                 fwd[f"{sched}/{h}"] = r
     clock = next((r for r in rows if r["what"] == "clock"), {})
@@ -84,7 +84,7 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
         plain = fwd["plain_gemm"]["ms"]
         t2 = {}
         for k, r in fwd.items():
-            if k == "plain_gemm" or not r:
+            if k == "plain_gemm" or k.startswith("beside_bare/") or not r:
                 continue
             for kind in ("sync", "async"):
                 st = stock.get(kind)
@@ -160,6 +160,10 @@ def main() -> None:
             print("- the GEMM stream runs at the greatest stream priority, the hash streams at the least")
         for w, x in r["forward"].items():
             print(f"- forward {w}: {x['ms']:.3f} ms, {x['units_per_stock_mac']:.3f} units a stock MAC")
+        for w, x in r["forward"].items():
+            if w.startswith("beside_bare/") and (full := r["forward"].get("beside/" + w.split("/")[1])):
+                print(f"- the work ahead of each call's GEMM costs beside/{w.split('/')[1]} {full['ms'] - x['ms']:.3f} ms a "
+                      f"forward over beside_bare, which runs none")
         for k, v in r.get("t2", {}).items():
             print(f"- T2 {k}: {v:.2f}x")
         print()

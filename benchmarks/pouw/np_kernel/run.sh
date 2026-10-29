@@ -14,7 +14,8 @@
 #   SMALL_THREADS (unset; N builds native_rows.cu a second time with blocks of N threads, a build-time edit of a copy, for
 #   the leaves of any launch of fewer than SMALL_ROWS_MAX rows), TAG (0; 1 times the ssn-1l-tag layout; the check runs both),
 #   L1 (0; 1 puts L1 + (a)'s seed path, root(A_j) through the seed and noise blocks, before each call's forming; 2 the same
-#   path shaped for latency, its noise blocks, G and forming in one launch), L1_CTA (64; L1=2's least CTA size, 64 or 128).
+#   path shaped for latency, its noise blocks, G and forming in one launch), L1_CTA (64; L1=2's least CTA size, 64 or 128),
+#   BARE (0; 1 also times beside with nothing ahead of each call's GEMM, the schedule's floor).
 #   VERITY_ROWS_PHASES and VERITY_ROWS_FORM reach the served committer (native_rows.cu).
 set -uo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
