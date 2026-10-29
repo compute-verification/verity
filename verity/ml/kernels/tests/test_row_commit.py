@@ -1,8 +1,9 @@
 """``row_commit.cuh`` against ``verity.ml.commitments``: its frame-v3-sha512 leaf, pad and node are `CommitmentDomain`'s at
-every length of uint below 2^32, through the compile-time and the run-time forms, and its builders' leaf at a rank and a
-position apart is too; its trees give ``frame_v3/vectors_sha512.json``'s leaves, pads and roots; its hm96-sha512 leaf, through
-every table and loop of the mask, gives ``hm96/vectors_sha512.json``'s commit strings and leaves under both keys, the gates'
-reference on fresh rows and salts and the vectors' hiding leaves; and the gates' Definitions compute what it does.
+every length of uint below 2^32, through the compile-time and the run-time forms (the node's also through `Compact`), and
+its builders' leaf at a rank and a position apart is too; its trees give ``frame_v3/vectors_sha512.json``'s leaves, pads and
+roots; its hm96-sha512 leaf, through every table and loop of the mask, gives ``hm96/vectors_sha512.json``'s commit strings
+and leaves under both keys, the gates' reference on fresh rows and salts and the vectors' hiding leaves; and the gates'
+Definitions compute what it does.
 ``row_commit_cases.cu`` runs the cases, built by the host's C++ compiler and, where nvcc and a GPU are present, on the
 device; the device build is cached (`cuda_build`), so a GPU job builds it (``cuda_lib``) before it leases a GPU."""
 from __future__ import annotations
@@ -138,8 +139,8 @@ def _check_pads_and_nodes(run: Run) -> None:
     for level in (0, 1, 7, 31, 32):
         for index in EDGES:
             left, right = rng.randbytes(64), rng.randbytes(64)
-            cases += [case(NODE, form, did=did, level=level, pos=index, L=left, R=right) for form in (0, 1)]
-            want += [d.node(level, index, left, right)] * 2
+            cases += [case(NODE, form, did=did, level=level, pos=index, L=left, R=right) for form in (0, 1, 2)]
+            want += [d.node(level, index, left, right)] * 3
     cases.append(case(EMPTY, did=did))
     want.append(d.empty_root())
     assert [bytes(o.out) for o in run(cases)] == want
@@ -165,7 +166,7 @@ def _check_trees(run: Run) -> None:
     for t in trees:
         assert t["domain"]["range"][0] == 0
         did = _hex(t["domain"]["domain_id"])
-        for form in (0, 1):
+        for form in (0, 1, 2):
             leaves, pads, root = _tree(run, did, t["schema"], [_hex(v) for v in t["digests"]], form)
             assert (leaves, pads, root) == ([_hex(v) for v in t["leaves"]], [_hex(v) for v in t["pads"]], _hex(t["root"]))
     e = FV["empty_root"]
