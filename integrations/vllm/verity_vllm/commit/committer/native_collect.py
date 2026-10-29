@@ -883,7 +883,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             raise RuntimeError(f"{step_rows.NAME}: step {job.step} was not staged through the window ring (enable_windows before the run)")
         job.metas = self._metas_for(job)
         if self.fault == "release_before_keep":
-            return self._commit_step_gpu_faulty(job)
+            return self._commit_step_gpu_release_before_keep(job)
         if self.native_worker and job.arena is not None and not job.overflow:
             return self._commit_step_native(job)
         return super()._commit_step(job)
@@ -1565,7 +1565,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._done[job.step] = StepCommitment(job.step, root, mr, n, nbytes, len(metas), layout_dig, job.t_step_end, t2, job.backlog,
                                               hashing_s=t1 - t0, root_finalisation_s=t2 - t1)
 
-    def _commit_step_gpu_faulty(self, job: _StepJob) -> None:
+    def _commit_step_gpu_release_before_keep(self, job: _StepJob) -> None:
         """DELIBERATE ordering bug (negative test only): the arena block is handed back for reuse before the retained copy is taken; the
         worker then waits until the serving thread has reused it.  The tree was computed over the step's bytes; the retained copy holds the
         next step's bytes -> openings must fail against the (correct) root.  Same code as `_commit_step_gpu` otherwise."""
