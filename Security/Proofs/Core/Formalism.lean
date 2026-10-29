@@ -7,8 +7,8 @@ import Mathlib.Tactic.Ring
 /-!
 # Proofs of the working draft's Lemma 1 and Theorem 3
 
-* `Registration.recompute_eval`: in a run of the registered circuit, a proof block recomputed from the registration and
-  the run is the run: a proof block's values are determined by its unregistered inputs and `θ`;
+* `Committed.recompute_eval`: in a run of the registered circuit, a proof block recomputed from the committed
+  declaration and the run is the run: a proof block's values are determined by its unregistered inputs and `θ`;
 * `length_blockProgram`: on a Boolean circuit, proof block `u`'s program has `|e| + ⌈log₂ B⌉ + |in(I) \ θ|` bits;
 * `Partition.sum_blocks`: a sum over operation gates is the sum, over the proof blocks, of the sums over their gates.
 -/
@@ -26,7 +26,7 @@ theorem Circuit.length_bits {C : Circuit} (hC : C.Boolean) (X : C.Transcript) (l
     rw [ih, hC.one_bit g]
     omega
 
-theorem Registration.recompute_eval (R : Registration) {a : R.d.D.Transcript} (ha : R.Honest a) (u : Fin R.B) :
+theorem Committed.recompute_eval (R : Committed) {a : R.d.D.Transcript} (ha : R.Honest a) (u : Fin R.B) :
     R.recompute (R.d.D.eval a) u = R.d.D.eval a := by
   funext g
   induction g using WellFoundedLT.induction with
@@ -43,7 +43,7 @@ theorem Registration.recompute_eval (R : Registration) {a : R.d.D.Transcript} (h
       exact R.d.D.op_congr g _ _ fun x hx => ih x (R.d.D.reads_lt g x hx)
     · rw [recompute, R.d.D.run_fixed (b := R.d.D.eval a g) (by simp [hθ, hu])]
 
-theorem length_blockProgram (R : Registration) (hC : R.d.D.Boolean) (e : List Bool) (X : R.d.D.Transcript)
+theorem length_blockProgram (R : Committed) (hC : R.d.D.Boolean) (e : List Bool) (X : R.d.D.Transcript)
     (u : Fin R.B) :
     (blockProgram R e X u).length = e.length + Nat.clog 2 R.B + (R.d.unregistered (R.P.gates u)).card := by
   simp [blockProgram, indexCode, Circuit.length_bits hC, Finset.length_sort]
