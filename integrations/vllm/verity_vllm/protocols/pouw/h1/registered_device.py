@@ -7,7 +7,8 @@ computes (`registered.domain`).
 records are, it reads in place), hashes each row (its ``sha512/row/v2`` digest, salt, hm96-sha512 string, tree leaf and
 frame leaf) and then the pads and levels, on a stream of its own, and returns the strings and levels as `Registered`
 holds them (64-byte nodes, 128-byte strings, as bytes). `device_hash` launches the same and returns at once, its
-`Hashing` reading them out once the stream is done. `host_commit` runs
+`Hashing` reading them out once the stream is done; a public table's salts it derives on that stream, in the buffer it
+hashes from, and rows written there (under `hashing`) it reads with no wait. `host_commit` runs
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
 (`row_tables_device._build`, keyed by sources, flags and compiler); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s,
@@ -18,6 +19,8 @@ from __future__ import annotations
 import ctypes
 import shutil
 import warnings
+from collections.abc import Iterator
+from contextlib import contextmanager
 from functools import cache
 from typing import Any
 
@@ -26,7 +29,7 @@ import numpy as np
 from verity_vllm.commit import row_tables_device as RTD
 
 __all__ = ["CHUNK_BYTES", "Hashing", "Pub", "Table", "available", "device_commit", "device_hash", "device_lib",
-           "device_public_salts", "host_commit", "host_lib", "host_public_salts", "nvcc", "pub", "table"]
+           "device_public_salts", "hashing", "host_commit", "host_lib", "host_public_salts", "nvcc", "pub", "table"]
 
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows_host.cpp")
@@ -235,11 +238,14 @@ def device_commit(words: Any, key: bytes, nonce: int, row_salts: bytes | None,
     return device_hash(words, key, nonce, row_salts, domain_id).result()
 
 
-def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, domain_id: bytes) -> Hashing:
+def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, domain_id: bytes,
+                public: tuple[bytes, int] | None = None) -> Hashing:
     """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 hashed on the current CUDA device, on its own
     stream, nothing waiting on the host but a host ``words``' copy. ``words`` on the host are copied there; a u16 tensor
     on that device is read in place, after everything its current stream has enqueued (the stream that wrote it), and is
-    held until the hash is done."""
+    held until the hash is done. ``public`` ``(head, first)``: the rows' salts are the public salts from position
+    ``first`` under ``head`` (`device_public_salts`'), derived on the stream where the hash reads them, ``row_salts``
+    unread."""
     import torch
 
     d = _device(torch)
@@ -249,14 +255,17 @@ def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, dom
         raise ValueError(f"words {tuple(words.shape)} of {words.dtype} on {words.device}: not (n, W) u16 on {dev}")
     rows = words.contiguous().view(torch.uint8) if held else _rows(words)
     n, rb = (int(v) for v in rows.shape)
-    t = table(n, rb, key, nonce, row_salts is not None, domain_id)
+    t = table(n, rb, key, nonce, row_salts is not None or public is not None, domain_id)
     per = max(1, CHUNK_BYTES // rb)
     if held:
         written = torch.cuda.Event()
         written.record(torch.cuda.current_stream(dev))
         st.wait_event(written)
     with torch.cuda.stream(st):
-        salts = None if row_salts is None else torch.from_numpy(_salts(row_salts, n)).to(dev)
+        if public is not None:
+            salts = _public_salts(d, pub(*public, n))
+        else:
+            salts = None if row_salts is None else torch.from_numpy(_salts(row_salts, n)).to(dev)
         t.salts = 0 if salts is None else salts.data_ptr()
         bcs = torch.empty(16 * n, dtype=torch.int64, device=dev)
         levels = torch.empty(8 * (2 * t.W - 1), dtype=torch.int64, device=dev)
@@ -282,14 +291,31 @@ def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, dom
     return Hashing(done, got_bcs, got_levels, t.W, (words, rows, salts, bcs, levels, chunks))
 
 
+def _public_salts(d: Any, p: Pub) -> Any:
+    import torch
+
+    out = torch.empty(24 * p.n, dtype=torch.int64, device=d.hm.device)
+    rc = d.lib.rr_public_salts(d.stream.cuda_stream, ctypes.byref(p), out.data_ptr())
+    if rc:
+        raise RuntimeError(f"rr_public_salts: CUDA error {rc}")
+    return out
+
+
 def device_public_salts(head: bytes, first: int, n: int) -> bytes:
     """`pouw_h1_registered.public_salts` on the current CUDA device, on its stream, returned once done."""
     import torch
 
-    d, p = _device(torch), pub(head, first, n)
+    d = _device(torch)
     with torch.cuda.stream(d.stream):
-        out = torch.empty(24 * n, dtype=torch.int64, device=d.hm.device)
-        rc = d.lib.rr_public_salts(d.stream.cuda_stream, ctypes.byref(p), out.data_ptr())
-        if rc:
-            raise RuntimeError(f"rr_public_salts: CUDA error {rc}")
-        return out.cpu().numpy().tobytes()
+        return _public_salts(d, pub(head, first, n)).cpu().numpy().tobytes()
+
+
+@contextmanager
+def hashing() -> Iterator[Any]:
+    """The current CUDA device, the stream `device_hash` hashes on made current meanwhile: a tensor written there is read
+    in place by a hash launched there after it, which waits on nothing else."""
+    import torch
+
+    d = _device(torch)
+    with torch.cuda.stream(d.stream):
+        yield d.hm.device
