@@ -26,6 +26,10 @@ lanes, which the IADD3 removes through its column source loaded per tile.
   (`weighted_bound`).
 - `SMALL_COIN_BITS`: coins of 4 bits (odd in ±15), which suffice under the tile-grain copy model, through the same fold,
   with the bound for any per-word table under bare P at that width.
+- `ROT_WEIGHTS` (`blc4a-t64-e7-rot`): A′ by row parity, so the column source is one a (tile, row class, column).
+  `fold_extreme` puts every coin at its extreme at K 8,192, a column source near 2^22.2 beside outputs at ±2²²: the
+  IADD3 subtracts it in integers mod 2³², so only A·Bᵀ must lie in the magic's range, and the accumulator fits int32
+  for any operands.
 
 Output: JSON (`--json`); exit 0 iff every check passes.
 """
@@ -54,6 +58,8 @@ LIT_WEIGHTS = (1, 127, 1)
 #: a coin of b bits is odd in ±(2^b − 1): the lead's 7, and the 4 the tile-grain copy model needs
 COIN_BITS = 7
 SMALL_COIN_BITS = 4
+#: `blc4a-t64-e7-rot`: A′ by row parity, (127, 1, 1) on even rows and (1, 127, 1) on odd rows
+ROT_WEIGHTS = ((127, 1, 1), (1, 127, 1))
 TILE = 64
 KS = (2048, 7168, 8192)
 FIXED = es.TAGX_FIXED
@@ -159,7 +165,8 @@ def price_added_step() -> dict:
 
 def operands(a, b, s, e, tile, a1, at, u, g, coins, kappa, weights=COIN_WEIGHTS):
     """One salt's X (m × 32s) and Y (tiles × 32s × n) on blc4a with the de-noise in step s, the row offset ρ and the
-    column source c (m × n: κ·G_j + σ_{tile(i), j}, σ the coin lanes' sum weighted by their A′)."""
+    column source c (m × n: κ·G_j + σ_{tile(i), j}, σ the coin lanes' sum weighted by their A′, one source a row class
+    when `weights` holds row classes)."""
     m, k = a.shape
     n = b.shape[1]
     tiles = -(-m // tile)
@@ -167,6 +174,7 @@ def operands(a, b, s, e, tile, a1, at, u, g, coins, kappa, weights=COIN_WEIGHTS)
     assert dl is not None, (k, s, e)
     tag, code = es.tag_digits(m), ns.ssn_a_w0(n, ns.DATA_PER_STEP)[0]
     one, kap = np.ones((1, n), dtype=np.int64), np.asarray(kappa)
+    w_rows = row_weights(weights, m)
     u0, u1, u2 = u
     xs, ys, lo = [], [[] for _ in range(tiles)], 0
     for t in range(s):
@@ -180,8 +188,7 @@ def operands(a, b, s, e, tile, a1, at, u, g, coins, kappa, weights=COIN_WEIGHTS)
         lx, ly = np.concatenate(lx, axis=1), np.concatenate(ly, axis=0)
         pad = 32 - COIN_LANES - lx.shape[1] - dl[t]
         assert pad >= 0
-        xs += [a[:, lo:lo + dl[t]], np.zeros((m, pad), np.int64), lx,
-               np.broadcast_to(np.asarray(weights, np.int64), (m, COIN_LANES))]
+        xs += [a[:, lo:lo + dl[t]], np.zeros((m, pad), np.int64), lx, w_rows]
         for q in range(tiles):
             ys[q] += [b[lo:lo + dl[t]], np.zeros((pad, n), np.int64), ly, coins[t, :, q, :]]
         lo += dl[t]
@@ -189,9 +196,15 @@ def operands(a, b, s, e, tile, a1, at, u, g, coins, kappa, weights=COIN_WEIGHTS)
     x, y = np.concatenate(xs, axis=1), np.stack([np.concatenate(v, axis=0) for v in ys])
     assert x.min() >= -128 and x.max() <= es.LANE_MAX and np.abs(y).max() <= es.LANE_MAX
     rho = (u0 + es.LANE_MAX * u1 + es.LANE_MAX * e * u2)[:, 0] + at[:, 1:].sum(1)
-    sigma = np.einsum("l,tlqn->qn", np.asarray(weights, np.int64), coins)
-    col = (kap @ g)[None, :] + sigma[np.arange(m) // tile]
+    sigma = np.einsum("il,lin->in", w_rows, coins.sum(0)[:, np.arange(m) // tile])
+    col = (kap @ g)[None, :] + sigma
     return x, y, rho, col
+
+
+def row_weights(weights, m: int) -> np.ndarray:
+    """Each row's A′: one triple for every row, or row classes (a triple each) taken by row index mod their count."""
+    w = np.asarray(weights, np.int64)
+    return np.broadcast_to(w, (m, COIN_LANES)) if w.ndim == 1 else w[np.arange(m) % len(w)]
 
 
 def tile_words(x: np.ndarray, y: np.ndarray, tile: int) -> np.ndarray:
@@ -274,6 +287,66 @@ def exact_full(k: int, m: int = 128, n: int = 8, salts: int = 2, seed: int = 5, 
         epi &= bool((es.magic_epilogue(w[..., -1], rho, col, s_col, s_row) == es.stock_epilogue(p, s_col, s_row)).all())
     return {"S": s, "e": e, "exact_after_epilogue": exact, "magic_equals_stock": epi, "peak_word_log2": math.log2(peak),
             "max_abs_out_log2": math.log2(np.abs(a @ b).max()), "in_magic_range": bool(np.abs(a @ b).max() < es.MAGIC_RANGE)}
+
+
+def _recover(acc: np.ndarray, r: np.ndarray, c: np.ndarray) -> np.ndarray:
+    """The integer the magic epilogue reads: IADD3(D, MAGIC_BITS − r_i, −c) mod 2³² as fp32, less MAGIC."""
+    bits = (acc.astype(np.int64) + (es.MAGIC_BITS - r)[:, None] - c) & 0xFFFFFFFF
+    return bits.astype(np.uint32).view(np.float32).astype(np.float64) - es.MAGIC
+
+
+def fold_extreme(k: int = 8192, weights=ROT_WEIGHTS, bits: int = COIN_BITS, seed: int = 11) -> dict:
+    """The fold at its largest coin offset: every coin at ±(2^bits − 1), signed per tile and column to add to the planted
+    outputs ±(2²² − 1) and ±2²² (rows 0, 1 of tile 0, both row classes) or to cancel them (tile 1), with ρ and κ·G at
+    their maxima, on 64-row tiles at Llama's K. The epilogue reads A·Bᵀ exactly and equals stock's; an output at
+    2²² + 1 doesn't read back, and an FFMA fold of the same offsets (I2F, then ρ_i + c in the FFMA's addend) doesn't
+    match stock's."""
+    rng = np.random.default_rng(seed)
+    s, e = blcx_steps(k), blcx_extra(k)
+    m, n, cmax = 2 * TILE, 8, 2 ** bits - 1
+    lead = 261
+    targets = [es.MAGIC_RANGE - 1, -(es.MAGIC_RANGE - 1), es.MAGIC_RANGE, -es.MAGIC_RANGE]
+    a = rng.integers(-128, 128, (m, k))
+    b = rng.integers(-127, 128, (k, n))
+    planted = [0, 1, TILE, TILE + 1]
+    for i in planted:
+        a[i] = 0
+        a[i, :lead], a[i, lead] = 127, 1
+    for j, t in enumerate(targets):
+        q, rem = divmod(abs(t), 127)
+        col = np.zeros(k, np.int64)
+        col[:lead] = q // lead + (np.arange(lead) < q % lead)
+        col[lead] = rem
+        b[:, j] = np.sign(t) * col
+    p = a @ b
+    sign = np.sign(np.array(targets + [0] * (n - len(targets))))
+    coins = 2 * rng.integers(0, 2 ** bits, (s, COIN_LANES, 2, n)) - cmax
+    coins[:, :, 0, :len(targets)] = cmax * sign[None, None, :len(targets)]
+    coins[:, :, 1, :len(targets)] = -cmax * sign[None, None, :len(targets)]
+    g = np.full((4, n), 3) * np.where(sign == 0, 1, sign)[None, :]
+    a1 = rng.integers(0, 2, (m, 4))
+    at = np.concatenate([np.zeros((m, 1), np.int64), np.full((m, s - 1), 2)], axis=1)
+    u = (np.full((m, 1), 127), np.full((m, 1), 127), np.full((m, 1), 127))
+    x, y, rho, col = operands(a, b, s, e, TILE, a1, at, u, g, coins, es.TAGX_KAPPA, weights)
+    acc = tile_words(x[None], y[None], TILE)[0][..., -1]
+    any_operands = 32 * s * 128 * 127
+    s_col = es.round_scale(es._f32(rng.uniform(1e-4, 1e-2, n)))
+    s_row = es._f32(rng.uniform(1e-3, 1.0, m))
+    stock = es.stock_epilogue(p, s_col, s_row)
+    got = _recover(acc, rho, col)
+    mut = acc.copy()
+    mut[0, 0] += 2
+    return {"S": s, "e": e, "targets": targets, "planted_p": [[int(p[i, j]) for j in range(len(targets))] for i in planted],
+            "max_abs_col_source": int(np.abs(col).max()), "max_abs_col_source_log2": math.log2(np.abs(col).max()),
+            "max_abs_acc_log2": math.log2(np.abs(acc).max()), "max_abs_out_log2": math.log2(np.abs(p).max()),
+            "acc_bound_any_operands_log2": math.log2(any_operands), "acc_fits_int32": bool(any_operands < 2 ** 31),
+            "col_source_fits_int32": bool(np.abs(col).max() < 2 ** 31),
+            "exact_after_iadd3": bool((acc - rho[:, None] - col == p).all()),
+            "reads_back_exactly": bool((got == p).all()),
+            "magic_equals_stock": bool((es.magic_epilogue(acc, rho, col, s_col, s_row) == stock).all()),
+            "mutation_2p22_plus_1_reads": float(_recover(mut, rho, col)[0, 0]),
+            "mutation_caught": bool(_recover(mut, rho, col)[0, 0] != p[0, 0] + 2),
+            "ffma_fold_mismatch_share": float((es.ffma_epilogue(acc, rho[:, None] + col, s_col, s_row) != stock).mean())}
 
 
 # ---------------------------------------------------------------- A5: advice tables
@@ -659,13 +732,30 @@ def report() -> dict:
        {"sim": {c: (r["bad_share"], r["final_bad"], r["exact_after_epilogue"]) for c, r in small_sims.items()},
         "full": small_full, "a5": small})
 
+    rot_sims = {case: sim_blc(case, FIRST + DATA * 3 - 5, 5, 12, weights=ROT_WEIGHTS) for case in SIM_CASES}
+    rot_full = {str(k): exact_full(k, weights=ROT_WEIGHTS) for k in KS}
+    rot_extreme = {"rot": fold_extreme(), "lit": fold_extreme(weights=LIT_WEIGHTS)}
+    ok("blc4a-t64-e7-rot (A′ by row parity, one column source a row class) keeps the fold: on the salt grid every word "
+       "distinct and non-free and exact; at Llama's K exact and the magic equal to stock's; with every coin at ±127 at "
+       "K 8,192 (column source ≈ 2^22.2) and outputs planted at ±(2²² − 1) and ±2²², the IADD3 reads A·Bᵀ back exactly "
+       "and the magic equals stock's, the accumulator fits int32 for any operands, and an output at 2²² + 1 doesn't read "
+       "back",
+       all(r["bad_share"] == 0 and r["final_bad"] == 0 and r["exact_after_epilogue"] for r in rot_sims.values())
+       and all(v["exact_after_epilogue"] and v["magic_equals_stock"] for v in rot_full.values())
+       and all(v["max_abs_col_source_log2"] > 22.1 and v["max_abs_out_log2"] <= 22 and v["acc_fits_int32"]
+               and v["exact_after_iadd3"] and v["reads_back_exactly"] and v["magic_equals_stock"]
+               and v["mutation_caught"] for v in rot_extreme.values()),
+       {"sim": {c: (r["bad_share"], r["final_bad"], r["exact_after_epilogue"]) for c, r in rot_sims.items()},
+        "full": rot_full, "extreme": rot_extreme})
+
     alpha = price_added_step()["alpha_blcx"]
     per = {f"{key}_m{m}": ns.periods(words[f"m{m}"][key], alpha)
            for m in MS for key in ("P_G_known_gross", "P_G_call_gross", "P_G_call_net")}
     return {"checks": checks, "layout": lay, "price_added_step": price_added_step(), "sim": sims, "full": full,
             "a5_rows_old": rows_old, "a5_rows_blc4a": rows_blc, "a5_words": words, "a5_monte_carlo": mc,
             "lit_weighting": {"sim": lit_sims, "full": lit_full, "a5": lit},
-            "small_coins": {"sim": small_sims, "full": small_full, "a5": small}, "periods": per}
+            "small_coins": {"sim": small_sims, "full": small_full, "a5": small},
+            "rot": {"sim": rot_sims, "full": rot_full, "extreme": rot_extreme}, "periods": per}
 
 
 def main(argv: list[str] | None = None) -> int:
