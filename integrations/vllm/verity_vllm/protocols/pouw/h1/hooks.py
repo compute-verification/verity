@@ -12,8 +12,9 @@ from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 
-def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
-    """The linear layers by type in module order; ValueError names every one not on the int8_exact plain arm
+def layers(model: Any, types: tuple[type, ...], ks: tuple[int, ...] | None = None) -> list[Any]:
+    """The linear layers by type in module order, with ``ks`` only those whose weight's K is one of them (the pouw setting
+    ``ks``; the others serve on their arm, unhooked); ValueError names every one not on the int8_exact plain arm
     (`engine.int8_vllm.Int8PlainLinearMethod`, whose ``observe`` the option wraps) with its int8 weight and scales.
 
     A MoE layer's routed experts (a module whose quant method is a ``FusedMoEMethodBase``) count in its place as their
@@ -32,6 +33,10 @@ def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
             out += list(getattr(qm, "sites", None) or [m])
     if not out:
         raise ValueError(f"pouw:{PH.SCHEME}: the model has no linear layer")
+    if ks is not None:
+        out = [m for m in out if not hasattr(m, "weight") or int(m.weight.shape[-1]) in ks]
+        if not out:
+            raise ValueError(f"pouw:{PH.SCHEME}: the model has no linear layer at K {list(ks)} (the pouw setting 'ks')")
     bad = []
     for w, layer in enumerate(out):
         method = layer.quant_method
@@ -67,6 +72,13 @@ def weight_roots(layers: list[Any], lo: int = 0) -> dict[int, bytes]:
         if key is not None:
             _ROOTS[(salt, w)] = (weakref.ref(weight), key, out[w])
     return out
+
+
+def committed(layers: list[Any]) -> dict[str, Any]:
+    """`pouw.commit_weights` under H1: ``layers``' `weight_roots` and weight shapes by index, ``{"weight_roots": {id: hex},
+    "shapes": {id: [n, k]}}``."""
+    return {"weight_roots": {str(w): r.hex() for w, r in weight_roots(layers).items()},
+            "shapes": {str(w): list(m.weight.shape) for w, m in enumerate(layers)}}
 
 
 def _tensor_key(t: Any) -> tuple | None:
@@ -122,10 +134,14 @@ def admitting(run: PH.H1Run, orig: Any, runner: Any) -> Any:
     return execute_model
 
 
-def wire(run: PH.H1Run, hooks: Any, layers: list[Any], runner: Any, rows: int) -> None:
+def wire(run: PH.H1Run, hooks: Any, layers: list[Any], runner: Any, rows: int, ks: tuple[int, ...] | None = None) -> None:
     """The run's hooks on ``hooks`` (the option's `Hooks`): ``runner``'s ``execute_model`` (`admitting`), if given, and
     each layer's ``observe`` (`observer`) and ``apply`` (`traced`); a committing run's layer on an arm with ``zy_rows``
-    whose N is whole tile columns serves z/y records over ``rows`` slots."""
+    whose N is whole tile columns serves z/y records over ``rows`` slots. With ``ks`` (the pouw setting `layers` took
+    ``layers`` at), the run's ``details["uncovered"]`` names every linear at another K, which serves on its arm unhooked."""
+    if ks is not None:
+        run.details["uncovered"] += (f", and every linear at a K outside the pouw setting 'ks' {list(ks)}, which serves on "
+                                     "its arm unrecorded")
     if runner is not None:
         hooks.wrap(runner, "execute_model", lambda orig: admitting(run, orig, runner))
     for w, layer in enumerate(layers):
@@ -171,4 +187,4 @@ def warm_zy(layers: list[Any], rows: int, *, pick: Any = None, call: Any = None)
     return len(seen)
 
 
-__all__ = ["admitting", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots", "wire"]
+__all__ = ["admitting", "committed", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots", "wire"]
