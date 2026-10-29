@@ -8,7 +8,8 @@ assumed V4-like MoE layer, at the points in `POINTS`:
   each at its shape (`tc_best`: `wgmma` either orientation, `mma.sync` either orientation, with the padding each needs);
 - lane components (`lane_ops`): the dequant epilogue, fused add + RMSNorm + per-token quant, RoPE, SiLU·mul, the
   quantizes, softmax (per score), the attention output's normalization, the MoE combine and router, and the sampler,
-  each an instruction idiom per element, counted from the kernels' structure (an estimate until a SASS census);
+  each an instruction idiom per element with the registers its loads write and its address arithmetic (`MEM`),
+  counted from the kernels' structure (an estimate until a SASS census);
 - moves: the embedding gather and the KV-cache write are input-addressed moves, free (`Op100.move`) in the headline;
   `--lookup` prices them as L2 lookups instead.
 
@@ -30,13 +31,18 @@ non-free on the salt grid; premises (`PREMISES`) raise that per class. Each op's
   the rounding step on most elements, so the output is its salt-independent value (free under M0) there; `flip_shares`
   measures the share of elements whose output still varies, which the headline does not credit.
 - X: a shuffle or a reduction to memory (a copy or a sum another word already holds); H: bf16x2 arithmetic (rounded).
+- A: a load or address arithmetic (a copy of a committed word, or a function of indices alone), never a target.
 
 Designs (`PLANS`): `linears` is today (ssn_1l on the linears, the rest stock and uncovered); `lean` adds lean lane
 idioms; `best` adds an int8 lm_head under ssn_1l, int8 attention (`ssn_sh` on QKᵀ and PV), fused C-all lanes and
 committed noise-carrying padding at small m; `best_p3` and `best_p4` add premises up to ranks 3 and 4a; `best_sh` puts
 ssn_sh on the linears too; `best_pad64` pads every matmul below 64 rows to wgmma's 64; `best_dither` and
 `best_p4_dither` round every int8 / u8 quantize as floor(x·s + u), u from an in-kernel xorshift stream seeded by a raw
-coin word (`dithered`), which makes the rounded values and their packs targets at a T3 cost (`T3["dither"]`).
+coin word (`dithered`), which makes the rounded values and their packs targets at a T3 cost (`T3["dither"]`);
+`best_max` and `best_p4_max` add static activation scales and an int8 router gate, `best_p4_max_s8` the softmax's
+row max over every 8th score, and `best_p4_all` resident epilogue scales and norm rows (`MEM`), the sampler's
+two-pass argmax and the row max once every two PV calls (`max_block`);
+`best_p4_smlite` commits only the softmax's MUFU outputs.
 
 `ssn_sh` is ssn_1l's sibling for small n: step 1 holds 28 data lanes and 4 bits a row against the injective column
 code, and every later step 28 data lanes and one register shared by every row, a raw coin word (a move), against W₀ =
@@ -72,10 +78,11 @@ PRICE = {
     "IADD3": (32, 32.35, 64.13), "LOP3": (32, 32.31, 64.13), "SHF": (32, 32.31, 64.13), "PRMT": (32, 32.28, 64.13),
     "FMNMX": (32, 32.3, 64.13), "UNPK": (32, 32.28, 64.13), "F2FP": (32, 65.5, 65.5), "F2I": (32, 128.2, 128.2),
     "I2F": (32, 128.0, 128.0), "MUFU": (32, 256.0, 256.0), "SHFL": (32, 128.0, 128.0), "HFMA2": (32, 32.28, 32.28),
-    "RED": (32, 1000.0, 1000.0), "LOOKUP": (32, 472.0, 472.0),
+    "RED": (32, 1000.0, 1000.0), "LOOKUP": (32, 472.0, 472.0), "LD": (32, 32, 32), "ADDR": (32, 32.35, 64.13),
 }
-#: I2F.F32.S32 is unmeasured (F2I's 128.2 assumed); RED's is a measured lower bound for a reduction to memory
-PRICE_ESTIMATED = ("I2F", "RED", "HFMA2", "FMNMX")
+#: I2F.F32.S32 is unmeasured (F2I's 128.2 assumed); RED's is a measured lower bound for a reduction to memory; LD, a
+#: register a load writes, is unmeasured (H32's floor assumed); ADDR is address and loop arithmetic at IADD3's prices
+PRICE_ESTIMATED = ("I2F", "RED", "HFMA2", "FMNMX", "LD")
 TENSOR = {"s8": {"kreg": 32, "mma": 48.07}, "bf16": {"kreg": 16, "mma": 48.07}}
 REFINED_FLOOR = 32.26
 
@@ -146,7 +153,7 @@ def ssn_sh_terms(m: int, n: int, k: int) -> dict:
 
 # ---------------------------------------------------------------- lane idioms (op, count an element, class)
 
-def lane_ops(kind: str, variant: str, exp: str = "mufu", dv: int = 64) -> list[tuple[str, float, str]]:
+def lane_ops(kind: str, variant: str, exp: str = "mufu", dv: int = 64, mb: int = I8_BLOCK) -> list[tuple[str, float, str]]:
     red_s, red_l = 5 / EPT_STOCK, 5 / EPT_LEAN
     if kind == "epi":
         return {"stock": [("I2F", 1, "C"), ("FMUL", 2, "T"), ("F2FP", 0.5, "R")],
@@ -198,12 +205,14 @@ def lane_ops(kind: str, variant: str, exp: str = "mufu", dv: int = 64) -> list[t
             return [("FMNMX", 1, "S"), ("FFMA", 1, "T"), ("MUFU", 1, "M"), ("FADD", 1, "T"), ("F2FP", 0.5, "R"),
                     ("FMUL", dv / b, "T"), ("SHFL", 2 / q, "X"), ("FMNMX", 2 / q, "S"), ("MUFU", 1 / q, "M"),
                     ("FMUL", 1 / q, "T")]
-        b, q = I8_BLOCK, I8_BLOCK / 4
+        # each PV call spans b keys (the magic conversion's exact range); the row max, its quad shuffle tree and O's
+        # rescale run once every mb keys, a multiple of b
+        b, q = I8_BLOCK, mb / 4
         ex = [("MUFU", 1, "M")] if exp == "mufu" else [
             ("FMNMX", 1, "S"), ("FADD", 2, "R"), ("FADD", 1, "T"), ("FFMA", 3, "T"), ("SHF", 1, "R"), ("IADD3", 1, "T")]
         return [("IADD3", 1, "T"), ("FADD", 1, "T"), ("FMUL", 1, "T"), ("FMNMX", 1, "S"), ("FFMA", 1, "T")] + ex + [
             ("FADD", 1, "T"), ("FFMA", 1, "R"), ("PRMT", 0.75, "R"), ("IADD3", dv / b, "T"), ("FADD", dv / b, "T"),
-            ("FMUL", dv / b, "T"), ("FADD", dv / b, "T"), ("SHFL", 2 / q, "X"), ("FMNMX", 2 / q, "S"),
+            ("FMUL", dv / mb, "T"), ("FADD", dv / b, "T"), ("SHFL", 2 / q, "X"), ("FMNMX", 2 / q, "S"),
             ("MUFU", 1 / q, "M")]
     if kind == "combine":
         return {"stock": [("UNPK", 9, "R"), ("FADD", 8, "T"), ("F2FP", 0.5, "R")],
@@ -213,10 +222,56 @@ def lane_ops(kind: str, variant: str, exp: str = "mufu", dv: int = 64) -> list[t
         score = [("FMUL", 1, "T"), ("MUFU", 2, "M"), ("FADD", 2, "T"), ("FMNMX", 8, "S")]
         return ([("I2F", 1, "C")] if variant == "fused" else [("UNPK", 1, "R")]) + score
     if kind == "sampler":
+        # greedy argmax: a compare, a value select and an index select a logit; two_pass keeps only a running max a
+        # logit and recovers the index by rescanning the winning warp's logits alone
+        if variant == "fused_two_pass":
+            return [("FMNMX", 1, "S")]
         return [("UNPK", 1, "R"), ("FMNMX", 3, "S")] if variant == "stock" else [("FMNMX", 3, "S")]
     if kind == "move":
         return [("LOOKUP", 1, "G")]
     raise ValueError(kind)
+
+
+#: registers loads write an element (a 128-bit load: 8 bf16, 16 int8 or 4 f32 into 4 registers) and address or loop
+#: arithmetic an element (about one op a 128-bit access), by lane kind and variant. Stock and lean are separate
+#: kernels, each reading its inputs from memory, the norm and the quantize again for their second pass over a row;
+#: fused takes its input from the producing GEMM's accumulator registers and reloads only what a second pass over a
+#: row needs (the norm's bf16 copy of x, a dynamic quantize's stash; a static scale needs none). The epilogue loads a
+#: per-column scale for the rows a thread holds (2 at m64, 4 at a 256-row tile). Class A: a load is a copy of a
+#: committed word and address arithmetic a function of indices alone, so neither is ever a target. Estimate, from the
+#: kernels' structure, until a SASS census of the served and fused kernels. `resident` (a plan's lever) keeps what a
+#: fused lane reloads in registers: the epilogue's per-channel scales across a persistent kernel's tiles (column-
+#: stationary at prefill; at decode the swapped orientation, whose per-token scales stay resident), and a norm's row
+#: in its producing GEMM's cluster, whose CTAs reduce the row through distributed shared memory (8 CTAs of 256
+#: columns at d 2,048; V4's 7,168 needs a non-portable cluster of 14 of 512); the residual's load stays.
+MEM = {
+    "epi": {"stock": (0.5, 0.125), "fused": (0.25, 0.0625), "resident": (1 / 32, 0.0625)},
+    "epi_bf16": {"stock": (0.0, 0.125), "fused": (0.0, 0.125)},
+    "norm": {"stock": (3.0, 0.5), "fused": (1.5, 0.25), "resident": (1.0, 0.125)},
+    "norm_nores": {"stock": (2.0, 0.375), "fused": (1.0, 0.125), "resident": (0.0, 0.0625)},
+    "rope": {"stock": (1.0, 0.25), "fused": (0.125, 0.0)},
+    "kvq": {"stock": (0.0, 0.0), "fused": (0.0, 0.0625)},
+    "silu": {"stock": (1.0, 0.125), "fused": (0.0, 0.0625)},
+    "quant": {"stock": (1.0, 0.25), "fused": (0.5, 0.125), "fused_static": (0.0, 0.0625)},
+    "attn_out": {"stock": (0.0, 0.0625), "fused": (0.0, 0.0625)},
+    "softmax": {"stock": (0.0, 0.0), "fused": (0.0, 0.0)},
+    "combine": {"stock": (4.0, 0.5), "fused": (4.0, 0.5)},
+    "router": {"stock": (0.5, 0.125), "fused": (0.0, 0.0)},
+    "sampler": {"stock": (0.5, 0.125), "fused": (0.0, 0.0)},
+    "move": {"stock": (0.0, 0.0), "fused": (0.0, 0.0)},
+}
+
+
+def mem_ops(kind: str, variant: str, resident: bool = False) -> list[tuple[str, float, str]]:
+    """A lane's loads and address arithmetic an element (`MEM`) under its variant: fused for every fused or int8
+    variant, its static form where it has one, else its resident form under `resident`, stock otherwise."""
+    base = "fused" if variant.startswith(("fused", "i8")) else "stock"
+    if base == "fused" and "static" in variant and "fused_static" in MEM[kind]:
+        base = "fused_static"
+    elif base == "fused" and resident and "resident" in MEM[kind]:
+        base = "resident"
+    ld, addr = MEM[kind][base]
+    return [o for o in (("LD", ld, "A"), ("ADDR", addr, "A")) if o[1]]
 
 
 def dithered(ops: list[tuple[str, float, str]]) -> list[tuple[str, float, str]]:
@@ -420,6 +475,9 @@ class Plan:
     softmax_targets: str = "TMC"
     router: str = "stock"
     rowmax_stride: int = 1
+    resident: bool = False
+    two_pass_argmax: bool = False
+    max_block: int = I8_BLOCK
     note: str = ""
 
 
@@ -454,6 +512,11 @@ PLANS = [
          static_scales=True, router="i8", rowmax_stride=8,
          premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
          note="best_p4_max with the softmax row max over every 8th score plus a margin, P saturated"),
+    Plan("best_p4_all", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused", dither=True,
+         static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
+         premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="best_p4_max_s8 with resident epilogue scales and norm rows (`MEM`), the sampler's two-pass argmax and "
+              "the row max over 224-key blocks (two PV calls)"),
 ]
 PLAN = {p.name: p for p in PLANS}
 
@@ -476,6 +539,8 @@ T3 = {
     "router": ("unmeasured: the router's gate in int8 can flip an expert choice", None, None),
     "rowmax": ("unmeasured: a strided row max with a margin costs P the margin's bits and clamps the scores it misses",
                None, "rowmax-s8-v1"),
+    "max_block": ("unmeasured: P's u8 round against a max over two PV calls' keys loses bits where one call's own "
+                  "scores sit below the other's", None, "rowmax-s8-b224-v1"),
 }
 
 
@@ -580,18 +645,19 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
         s_ops = lane_ops(c.kind, sv)
     if c.kind == "move" and not lookup:
         s_ops = []
+    s_ops = s_ops + mem_ops("epi_bf16" if c.family == "lm_epi" else c.kind, sv)
     st = lane_cost(s_ops, reading, frozenset(), False)
     if stock:
         h, design, ops = st, "stock", s_ops
     else:
         v, reach = lane_variant(c, plan)
         if c.family == "lm_epi" and v == "bf16":
-            ops = lane_ops("epi_bf16", "stock")
+            ops = s_ops
         elif c.kind == "softmax":
             if v == "stock":
                 ops = s_ops
             else:
-                cands = {e: lane_ops("softmax", "i8", exp=e, dv=c.dv) for e in ("mufu", "poly")}
+                cands = {e: lane_ops("softmax", "i8", exp=e, dv=c.dv, mb=plan.max_block) for e in ("mufu", "poly")}
                 if plan.rowmax_stride > 1:
                     cands = {e: strided_max(o, plan.rowmax_stride) for e, o in cands.items()}
                 if plan.dither:
@@ -601,17 +667,23 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
                         lane_cost(cands[e], reading, plan.premises, True, plan.softmax_targets)))
                 else:
                     e = plan.exp
-                ops, v = cands[e], f"i8_{e}" + ("_dither" if plan.dither else "")
+                ops, v = cands[e] + mem_ops("softmax", "i8"), f"i8_{e}" + ("_dither" if plan.dither else "")
                 if plan.softmax_targets != "TMC":
                     v += f"_commit_{plan.softmax_targets}"
                 if plan.rowmax_stride > 1:
                     v += f"_max{plan.rowmax_stride}"
+                if plan.max_block != I8_BLOCK:
+                    v += f"_mb{plan.max_block}"
         else:
+            if c.kind == "sampler" and plan.two_pass_argmax and v == "fused":
+                v = "fused_two_pass"
             ops = s_ops if (c.kind == "move") else lane_ops(c.kind, v)
             if plan.static_scales and v == "fused" and c.kind in ("quant", "norm", "norm_nores", "kvq"):
                 ops, v = static_scaled(ops), "fused_static"
             if plan.dither and v.startswith("fused") and any(cls == "R" for _, _, cls in ops):
                 ops, reach, v = dithered(ops), True, v + "_dither"
+            if c.kind != "move":
+                ops = ops + mem_ops(c.kind, v, plan.resident)
         h = lane_cost(ops, reading, plan.premises, reach, plan.softmax_targets if c.kind == "softmax" else "TMC")
         design = v
     return {"stock": st["honest"] * c.count, "honest": h["honest"] * c.count, "forced": h["forced"] * c.count,
@@ -704,6 +776,7 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
     if plan.dither:
         t3 += T3["dither"][1]
     t3_unmeasured = ((["static"] if plan.static_scales else []) + (["rowmax"] if plan.rowmax_stride > 1 else []) +
+                     (["max_block"] if plan.max_block != I8_BLOCK and plan.attention == "i8" else []) +
                      (["router"] if plan.router == "i8" and any(r["family"] == "router_gemm" for r in rows) else []))
     t3_formats = sorted({r["t3"][2] for r in rows if len(r["t3"]) > 2 and r["t3"][2]}
                         | {T3[k][2] for k in t3_unmeasured + (["dither"] if plan.dither else []) if T3[k][2]})
@@ -1149,7 +1222,7 @@ def report(lookup: bool = False) -> dict:
                  "sampler"):
         idioms[kind] = {}
         for v in ("stock", "lean", "fused"):
-            ops = lane_ops(kind, v)
+            ops = lane_ops(kind, v) + mem_ops(kind, v)
             idioms[kind][v] = {"ops": ops, **{r: lane_cost(ops, r, frozenset(), v == "fused") for r in READINGS}}
     for v, e in (("stock", "mufu"), ("i8", "mufu"), ("i8", "poly")):
         ops = lane_ops("softmax", v, exp=e)
@@ -1177,7 +1250,7 @@ def report(lookup: bool = False) -> dict:
     return out
 
 
-PERIOD_PLANS = ("linears", "best", "best_p4", "best_p4_dither", "best_p4_max", "best_p4_max_s8")
+PERIOD_PLANS = ("linears", "best", "best_p4", "best_p4_dither", "best_p4_max", "best_p4_max_s8", "best_p4_all")
 #: pouw_space.py's points (and this file's further ones) to this file's (model, point)
 CARD_POINTS = {"t512": ("llama", "T512_64"), "t512r512": ("llama", "T512_512"), "t8192": ("llama", "T8192_8x1k"),
                "t8192_1x8k": ("llama", "T8192_1x8k"), "decode_b64_2k": ("llama", "dec64_2k"),
