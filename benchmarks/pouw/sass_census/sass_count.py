@@ -163,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--source", required=True)
     c.add_argument("--arch", help="count only this architecture's sections")
     m = sub.add_parser("merge")
-    m.add_argument("files", type=Path, nargs="+")
+    m.add_argument("files", type=Path, nargs="+", help="count files, or directories of them (*.json)")
     s = sub.add_parser("summary")
     s.add_argument("census", type=Path)
     w = sub.add_parser("writes", help="a form a TSV line: its writes and dispatch floor")
@@ -184,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
         json.dump(count(sys.stdin, a.source, a.arch), sys.stdout)
     elif a.cmd == "merge":
         objs = []
-        for f in a.files:
+        for f in (g for f in a.files for g in (sorted(f.glob("*.json")) if f.is_dir() else [f])):
             if f.stat().st_size:
                 objs.append(json.loads(f.read_text()))
         json.dump(merge(objs), sys.stdout, indent=1, sort_keys=True)

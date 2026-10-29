@@ -6,14 +6,18 @@
 # flashinfer's cubins), Verity's own sm_90a probes and Pearl-C, and CUTLASS's Hopper examples. Writes under $OUT:
 #   toolkit.txt     nvcc, cuobjdump and nvdisasm --version, and the wheels downloaded
 #   corpus.tsv      a cubin a line: sha256, bytes, architecture, the file it came from
-#   counts/*.json   `sass_count.py count` of each cubin's life-range listing; failed.txt the cubins nvdisasm refused
+#   counts/*.json   `sass_count.py count` of each cubin's life-range listing; failed.txt the cubins nvdisasm refused or
+#                   took longer than CUBIN_S seconds on (counted from cuobjdump -sass, without writes); skipped.txt
+#                   the cubins not reached BUDGET seconds after the start
 #   census.json     `sass_count.py merge` of them all; summary.txt its totals; writes.tsv `sass_count.py writes`
-#   build.log       the Verity and CUTLASS builds (a source that fails is named and skipped)
+#   build.log       the wheels' extraction and the Verity and CUTLASS builds (a source that fails is named and skipped)
 #
 #   research run --on auto --cwd source --mem-gb 96 -- bash benchmarks/pouw/sass_census/life.sh
-# ARCHS (default "sm_90 sm_90a") the cubins kept; CUTLASS=0 skips CUTLASS (CUTLASS_JOBS builds at once, default 6).
+# ARCHS (default "sm_90 sm_90a") the cubins kept; CUTLASS=0 skips CUTLASS (CUTLASS_JOBS builds at once, default 6);
+# BUDGET (default 6000) and CUBIN_S (default 900) bound the disassembly within the check slot's two hours.
 set -uo pipefail
 OUT=${OUT:?run under research run}
+DEADLINE=$(($(date +%s) + ${BUDGET:-6000}))
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 ARCHS=${ARCHS:-sm_90 sm_90a}
@@ -26,7 +30,7 @@ WHEELS=${WHEELS:-"torch==2.14.0 vllm sgl-kernel flashinfer-cubin"}
 uv venv -q --seed --python 3.12 "$WORK/tools" || exit 2
 PY=$WORK/tools/bin/python
 uv pip install -q --python "$PY" nvidia-cuda-nvcc==13.0.88 nvidia-cuda-crt==13.0.88 nvidia-nvvm==13.0.88 \
-  nvidia-cuda-runtime==13.0.96 nvidia-cuda-cccl==13.0.85 || exit 2
+  nvidia-cuda-runtime==13.0.96 nvidia-cuda-cccl==13.0.85 nvidia-curand==10.4.0.35 || exit 2
 uv pip install -q --python "$PY" --no-deps nvidia-cuda-cuobjdump nvidia-cuda-nvdisasm || exit 2
 CU=$("$PY" -c 'import nvidia, os; print(os.path.join(nvidia.__path__[0], "cu13"))')
 export PATH="$CU/bin:$PATH" CUDA_HOME=$CU LIBRARY_PATH=$CU/lib NVCC=$CU/bin/nvcc POUW_CUDA_BIN=$CU/bin
@@ -43,7 +47,14 @@ for s in "${specs[@]}"; do
 done
 ls "$WORK/wheels" | sed 's/^/wheel /' >>"$OUT/toolkit.txt"
 for w in "$WORK"/wheels/*.whl; do
-  unzip -q -o "$w" '*.so' '*.so.*' '*.cubin' '*.fatbin' -d "$WORK/corpus/$(basename "$w" .whl)" 2>/dev/null
+  "$PY" - "$w" "$WORK/corpus/$(basename "$w" .whl)" >>"$OUT/build.log" 2>&1 <<'EOF' || echo "life.sh: unzip failed: $w" >&2
+import re, sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as z:
+    names = [n for n in z.namelist() if re.search(r"\.(so(\.\d+)*|cubin|fatbin)$", n)]
+    z.extractall(sys.argv[2], names)
+    print(f"life.sh: {len(names)} binaries from {sys.argv[1].rsplit('/', 1)[-1]}")
+EOF
+  rm -f "$w"
 done
 
 # Verity's sm_90a code: the dc probes and Pearl-C
@@ -86,7 +97,8 @@ while read -r f; do
   *.cubin)
     a=$(nvdisasm "$f" 2>/dev/null | grep -m1 -o '\.target\s*sm_[0-9a-z]*' | grep -o 'sm_[0-9a-z]*')
     case " $ARCHS " in *" $a "*) cp "$f" "$d/$(basename "$f" .cubin).$a.cubin" ;; esac ;;
-  *) for a in $ARCHS; do (cd "$d" && cuobjdump -arch "$a" -xelf all "$f" >/dev/null 2>&1); done ;;
+  *) for a in $ARCHS; do (cd "$d" && cuobjdump -arch "$a" -xelf all "$f" </dev/null >/dev/null 2>&1); done
+     case "$f" in "$WORK"/corpus/*) rm -f "$f" ;; esac ;;
   esac
   for c in "$d"/*.cubin; do
     [ -f "$c" ] || continue
@@ -99,20 +111,23 @@ while read -r f; do
 done <"$WORK/files" >"$OUT/corpus.tsv"
 wc -l <"$OUT/corpus.tsv" | xargs echo "life.sh: cubins"
 
-export HERE OUT WORK
+export HERE OUT WORK DEADLINE CUBIN_S=${CUBIN_S:-900}
 : >"$OUT/failed.txt"
+: >"$OUT/skipped.txt"
 sort -t$'\t' -k2,2nr "$OUT/corpus.tsv" | tr '\n' '\0' | xargs -0 -P "$JOBS" -I{} bash -c '
   set -o pipefail
   IFS=$'"'"'\t'"'"' read -r sha bytes arch src <<<"$1"
   lib=$(basename "$src")
-  if ! nvdisasm -plr -lrm narrow "$WORK/cubins/$sha.cubin" 2>/dev/null \
+  [ "$(date +%s)" -lt "$DEADLINE" ] || { echo "$sha $src" >>"$OUT/skipped.txt"; exit 0; }
+  if ! timeout "$CUBIN_S" nvdisasm -plr -lrm narrow "$WORK/cubins/$sha.cubin" 2>/dev/null \
       | python3 "$HERE/sass_count.py" count --source "$lib@$sha" >"$OUT/counts/$sha.json"; then
     echo "$sha $src" >>"$OUT/failed.txt"
     cuobjdump -sass "$WORK/cubins/$sha.cubin" | python3 "$HERE/sass_count.py" count --source "$lib@$sha" --arch "$arch" \
       >"$OUT/counts/$sha.json"
   fi' _ {}
 
-python3 "$HERE/sass_count.py" merge "$OUT"/counts/*.json >"$OUT/census.json"
+python3 "$HERE/sass_count.py" merge "$OUT/counts" >"$OUT/census.json"
 python3 "$HERE/sass_count.py" summary "$OUT/census.json" | tee "$OUT/summary.txt"
 python3 "$HERE/sass_count.py" writes "$OUT/census.json" --family sm_90 >"$OUT/writes.tsv"
 wc -l <"$OUT/failed.txt" | xargs echo "life.sh: nvdisasm refused"
+wc -l <"$OUT/skipped.txt" | xargs echo "life.sh: past the budget"
