@@ -73,6 +73,13 @@ def test_the_record_follows_each_step_and_each_write_is_a_new_key(tmp_path, cloc
     assert by["circuit-check"]["seconds"] == 185 and final["commit"] == "c" * 40 and final["machine"] == "vy-node"
 
 
+def test_the_record_names_the_machine_research_placed_the_run_on(tmp_path, clock):
+    (tmp_path / "job.json").write_text(json.dumps({"run": {"remote": {"machine": "vy-nebius-cpu-1"}}}))
+    assert LIVE.Live(tmp_path, run_id="r1").doc()["machine"] == "vy-nebius-cpu-1"
+    (tmp_path / "job.json").write_text("{}")
+    assert LIVE.Live(tmp_path, run_id="r1").doc()["machine"] == LIVE.platform.node()
+
+
 def test_a_publish_that_fails_leaves_the_run_dir_record_and_says_so_once(tmp_path, clock, capsys):
     def put(key, data):
         raise OSError("denied")
