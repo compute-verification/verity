@@ -1,5 +1,5 @@
 """`remote-audit-protocol serve` (`RemoteAudit.Protocol`, onsite Verity's bandwidth component) against the Python verifier
-of the same case (`protocol`: the case decoded as the Lean decodes it, its events through `audit.Session` as
+of the same case (`protocol`: the case decoded as the Lean decodes it, its events through `audit.AuditRun` as
 `ra_cases.session` replays them, and `remote_bandwidth.period.answer` of the session after them): every field of the
 answer but its reason, the certified `q_bytes`, `eps` and the profile among them. Both refuse a session paced at one
 window in flight, which no property of the Lean covers.
@@ -63,8 +63,9 @@ def _check(p: dict, reg: audit.Registration, e: dict) -> tuple:
             events = [M.event_of(x) for x in e["events"]]
             params = M.params_of(reg, kw)
         clock = M.Clock()
-        s = audit.Session(params, reg, None, M.replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
-                          not_before_ns=not_before, clock=clock)
+        s = audit.AuditRun(params, reg, None,
+                           M.replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
+                           not_before_ns=not_before, clock=clock)
         for x in events:
             M.apply(s, clock, x)
     except M.REFUSALS as why:

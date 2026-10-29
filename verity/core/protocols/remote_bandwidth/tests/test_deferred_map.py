@@ -101,7 +101,7 @@ def plans(dm: list[Step], steps: int) -> dict[int, list[int]]:
 
 def drive(run: Run, dm: list[Step], appends: dict[int, list[bytes]], steps: int, boundaries=()) -> audit.Verdict | None:
     """The moved map through a session: at each step t the pass at t (its change `Replay.take(t)`), then the append t
-    made, answered with its coin, then line t's releases, its withdrawn blocks named (`Session.release(released,
+    made, answered with its coin, then line t's releases, its withdrawn blocks named (`AuditRun.release(released,
     withdrawn)`); a window ends before each step in `boundaries` and after the last.  The first rejection, if any."""
     replay, lines = Replay(Header(run.store.registration.digest, N), run.store.registration), {s.step: s for s in dm}
     digests: dict[int, bytes] = {}
