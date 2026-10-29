@@ -1,4 +1,4 @@
-"""The NCI literature catalog: loading and validation.
+"""The inference-only policy's literature catalog: loading and validation.
 
 Four JSON files, each an array of entries (README.md, "Files"):
 
