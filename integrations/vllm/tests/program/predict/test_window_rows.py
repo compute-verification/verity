@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN, state_row
+from tests.program.predict.test_window_circuit import CLASS, GRAIN, SPLIT, SPLIT_GRAIN, state_row
 from tests.program.predict.test_window_circuit_fa3 import H200
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_builder as WB
@@ -78,26 +78,30 @@ def _weights(fn) -> dict[str, np.ndarray]:
     return out
 
 
-def _registered():
-    """TINY at its bf16 checkpoint on the H200."""
-    return S.Registered.of(S.Phi(model={"repo": "org/m", "revision": "r", "hf_config": S.TINY}, target=H200), default_seed=7)
+def _registered(config=S.TINY):
+    """``config`` (TINY) at its bf16 checkpoint on the H200."""
+    return S.Registered.of(S.Phi(model={"repo": "org/m", "revision": "r", "hf_config": config}, target=H200), default_seed=7)
 
 
-@pytest.fixture(scope="module")
-def window():
+def _window(config=S.TINY, grain=GRAIN):
     """The class circuit lowered, its weights, its registered values (each weight's parameter under `KEY`, and the scan
     state's, `STATE` committed as a stand-in for the network certifier's, in ``row/v2`` rows as the scan's units commit
     their state rows, as `Rows` and `Window` take them) and each slot's `Slot` of its lane's row (`scan_slots`)."""
-    low = WC.lower(_registered(), CLASS, None, GRAIN, provable=False)
+    low = WC.lower(_registered(config), CLASS, None, grain, provable=False)
     fields = _weights(low.fn)
     state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
                                  schema=CR.SCHEMA_V2)
-    values = {**WW.weight_values(_registered(), fields, KEY, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
+    values = {**WW.weight_values(_registered(config), fields, KEY, grain, keep_rows=True), SS.SCAN_STATE: state}
 
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
         return fields[label][lo:hi]
 
     return low, fields, values, weights, [WR.Slot(low.fn, CLASS, row, weights) for row, _ in WR.scan_slots(low, STATE)]
+
+
+@pytest.fixture(scope="module")
+def window():
+    return _window()
 
 
 def _position(fn, family: str) -> list[int]:
@@ -525,6 +529,29 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     seen = {lab["form"] for m in labels["members"] for *_, lab in m["labels"]}
     assert seen == set(WR.FORMS) and all(m["labels"] for m in labels["members"])
     assert {int(x) for v in rows.source.values() for x in v} == {WR.SERVED, WR.COMPUTED, WR.EVALUATED}
+
+
+def test_a_cut_norms_parts_hold_its_sum_and_its_tail_the_nodes_value():
+    """At a class whose norm after down_proj is cut at its residual add (`test_window_circuit.SPLIT`), each add part holds its
+    words of the node's sum, which is `RMSNormFusedCudaAdd_v1` on the node's x and res, and the tail the node's value, which
+    is `RMSNormFusedCudaTail_v1` on the parts' sums in order of AT; every unit is filled."""
+    low, _f, values, _w, slots = _window(SPLIT, SPLIT_GRAIN)
+    rows = WR.Rows(low, slots, values)
+    nodes, seen = low.fn.body.nodes, 0
+    for P, s in zip(low.programs, slots):
+        for j, parts in P.norms.items():
+            x, res = (s.operand(a) for a in nodes[j].args[:2])
+            sums = [rows.outs[r.tid][0][r.unit] for r in parts]
+            for at, (r, got) in enumerate(zip(parts, sums)):
+                add = rows.fns[r.tid]
+                assert add.bindings["AT"] == at and np.array_equal(
+                    np.asarray(evaluate_batch(add, x[None, 16 * at:16 * (at + 1)], res[None])).reshape(-1), got)
+            (_, _, normed), (_, _, r) = P.outs[j]
+            tail = rows.fns[normed.tid]
+            want = np.asarray(evaluate_batch(tail, np.concatenate(sums)[None], s.operand(nodes[j].args[2])[None])).reshape(-1)
+            assert np.array_equal(want, WR._words(s.values[j])) and np.array_equal(rows.outs[r.tid][1][r.unit], want[64:])
+            seen += 1
+    assert seen == 2 * 2 * CLASS.positions
 
 
 class _Runs:
