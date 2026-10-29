@@ -144,9 +144,11 @@ def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_rho(name)
     terms = analysis.attribution(r)
     assert sum(t.share for t in terms) == pytest.approx(1.0)
     assert terms == sorted(terms, key=lambda t: -t.part)
-    fam = min(r.families, key=lambda f: f.lo)
-    assert sum(t.part for t in terms) == pytest.approx(fam.profile.efficiency / r.lo)
-    assert all(t.ceiling >= r.lo * (1 - 1e-9) for t in terms)
+    fam = min(r.families, key=lambda f: (f.lo, f.combined.padded))
+    rate = sum(t.part for t in terms)
+    assert rate == pytest.approx(math.fsum(fam.combined.overhead.rates().values()))
+    assert r.lo == pytest.approx(max(1.0, 1 / rate))
+    assert all(t.ceiling >= min(r.lo, 1 / rate) * (1 - 1e-9) for t in terms)
     assert any(t.name == "dark" for t in terms) == (r.scenario.context.fleet.eps_dark > 0)
 
 
@@ -168,40 +170,41 @@ def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, ca
     monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", NAMES[0]])
     run.main()
     text = capsys.readouterr().out
-    assert text.startswith("# The overhead") and "## Where the overhead falls below target" in text
+    assert text.startswith("# The slowdown") and "## Where the slowdown falls below target" in text
     assert "**Corner:**" in text
     assert (tmp_path / "rho.md").read_text() == text
     record = json.loads((tmp_path / "rho.json").read_text(), parse_constant=lambda c: pytest.fail(f"JSON has {c}"))
     assert set(record["scenarios"]) == {NAMES[0]}
-    assert {"corner", "overhead_by_status", "attribution", "dangers", "rescues"} <= set(record["scenarios"][NAMES[0]])
+    assert {"corner", "slowdown_by_status", "attribution", "dangers", "rescues"} <= set(record["scenarios"][NAMES[0]])
     assert drawn == [(tmp_path / "figures", [10.0])]
 
 
-def test_run_prints_one_overhead_with_its_comparator_and_the_attack_in_a_table_of_its_own(tmp_path, monkeypatch,
-capsys):
-    """One number a scenario, the lower bound, flagged vacuous against `μ / MFU`, with the inference overhead beside
-    it (not modeled); the best known attack only in the attacks table, never as an interval's end."""
+def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_table_of_its_own(tmp_path, monkeypatch,
+                                                                                               capsys):
+    """One number a scenario, the lower bound: the hardware multiple over the reference at its MFU (3.04 remotely at
+    the H200, its padded size ratio under reference efficiency, a hair under the best attack's 3.042) and the inference overhead beside it (not modeled); the
+    best known attack only in the attacks table, never as an interval's end. No comparator: no protocol gives 1."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import run
 
     monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: {})
     monkeypatch.setenv("OUT", str(tmp_path))
-    # nothing credited (residual 1) keeps remote below the comparator whatever the other inputs are
-    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "reference-remote-h200",
-                                      "--set", "regime.remote.residual=1"])
+    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "reference-remote-h200"])
     run.main()
     text = capsys.readouterr().out
     summary, rest = text.split("## Attacks", 1)
     attacks = rest.split("\n## ", 1)[0]
     row = next(line for line in summary.splitlines() if line.startswith("| reference-remote-h200 |"))
-    assert "(vacuous)** |" in row and "| 2.5 | not modeled |" in row and "[" not in row
+    assert "| **3.04** |" in row and "| 3.04 | not modeled |" in row and "[" not in row
     record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]["reference-remote-h200"]
     attack = record["attack"]
     assert f"| reference-remote-h200 | {attack['argument']} | {attack['family']} | {attack['status']} | " in attacks
-    assert run.fmt(attack["rho"]) not in row.split("|")[2]
-    assert "With no protocol the adversary sits at **overhead 2.5**" in text and "**vacuous**" in text
-    assert record["vacuous"] and record["unmonitored"] == pytest.approx(2.5)
-    assert record["overhead"] < record["unmonitored"] <= attack["rho"]
+    assert attack["argument"] not in row
+    assert "Lean's `hardwareMultiple`, at least 1, so no protocol gives 1" in text and "vacuous" not in text
+    assert record["mfu"] == pytest.approx(0.4) and record["padded"] == pytest.approx(3.04, abs=0.01)
+    assert record["slowdown"] == pytest.approx(3.04, abs=5e-3) and record["slowdown"] <= attack["rho"]
+    assert attack["rho"] == pytest.approx(max(1.0, 0.4 * attack["padded"]))
+    assert not {"unmonitored", "vacuous", "multiple"} & set(record)
     assert record["inference_overhead"]["value"] is None and record["inference_overhead"]["source"].startswith(
         "not modeled")
     assert "hi" not in record and "lo" not in record
@@ -255,10 +258,11 @@ def test_periods_writes_each_fleet_and_period_as_the_scenario_with_those_choices
     assert [(x["fleet"], x["period"]) for x in rows] == [(f, p) for f, _ in periods.FLEETS for p in periods.PERIODS]
     for x in rows:
         at = REG.override(periods.choices(name, x["fleet"], x["period"]))
-        assert x["overhead"] == analysis.result(at, name).lo
+        assert x["slowdown"] == analysis.result(at, name).lo
         (block,) = x["scaled"]["blocks"]
         assert block["count"] == REG[f"fleet.{x['fleet']}.count"]
         assert block["seconds"] == pytest.approx(x["period_s"]) == pytest.approx(REG[f"horizon.{x['period']}.seconds"])
-        assert x["range"][0] <= x["overhead"] <= x["range"][1] and x["corner"] <= x["overhead"]
+        assert x["range"][0] <= x["slowdown"] <= x["range"][1] and x["corner"] <= x["slowdown"]
+        assert x["without_hosts"] <= x["slowdown"]
         assert [r["decades"] for r in x["ranking"]] == sorted((r["decades"] for r in x["ranking"]), reverse=True)
         assert any(r["what"] == "draft:no-straddle" for r in x["ranking"])

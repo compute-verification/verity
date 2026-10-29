@@ -352,7 +352,7 @@
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 7},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "RUF100", "symbol": "<module>", "detail": "Unused `noqa` directive (unused: `F401`)"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "F541", "symbol": "summarize_md", "detail": "f-string without any placeholders"},
-    {"file": "verity_vllm/pipeline/serve_http.py", "kind": "BLE001", "symbol": "HttpThread.run", "detail": "Do not catch blind exception: `BaseException`"},
+    {"file": "verity_vllm/pipeline/serve_openai.py", "kind": "BLE001", "symbol": "HttpThread.run", "detail": "Do not catch blind exception: `BaseException`"},
     {"file": "verity_vllm/pipeline/served_match.py", "kind": "E731", "symbol": "main", "detail": "Do not assign a `lambda` expression, use a `def`", "count": 2},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "E731", "symbol": "observe_increment_a", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 3},

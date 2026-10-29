@@ -23,7 +23,8 @@
 #      pins the job to, so that runs in two slots of one machine never share a session's port)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
 # nor a circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's). A
-# rehearsal's public files go in $OUT/warden, its records and salts (the prover's) nowhere.
+# rehearsal's public files go in $OUT/warden; its records and salts (the prover's) and its request values (traffic.json's
+# requests, client.json's responses) nowhere.
 set -uo pipefail
 export HZ_CONFIGS=sczk HZ_MEM_GB=${SC_MEM_GB:?}
 SC_CACHE=${SC_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -64,7 +65,7 @@ if [ -n "${SC_REHEARSE:-}" ]; then
     | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
   log "sczk: rehearsal rc ${PIPESTATUS[0]}"
   mkdir -p "$OUT/warden"
-  for f in deployment.json cells.jsonl certified.jsonl check.json client.json warden.json serve.log traffic.json; do
+  for f in deployment.json cells.jsonl certified.jsonl check.json warden.json serve.log; do
     [ -f "$W/warden/$f" ] && cp "$W/warden/$f" "$OUT/warden/"
   done
   SC_WARDEN_RUN=$W/warden
