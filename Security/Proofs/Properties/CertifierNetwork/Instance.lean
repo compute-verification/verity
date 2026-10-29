@@ -1,4 +1,5 @@
 import Proofs.Properties.CertifierNetwork.Accepted
+import Properties.CertifierNetwork.Runs
 
 /-!
 # The completeness statements' honest cases, instantiated
