@@ -45,6 +45,8 @@ The parts:
   last word, and a quadratic sketch): hiding's T1 under the keyed leaf and under L1 + (a), h with each output hidden on
   its own, a SHA-512 keystream pad over the values on a link, a drawn unit's output bits, size class and opening, and
   `chunk_head` on Llama-3.2-1B's linears a chunk size at a time.
+- ``periods``: the rows above that a report gives per monitoring period, in AND gates a window, week, month and year
+  for one H200, a datacenter and the world, scaled from each row's share of stock.
 - ``leak``: a published sketch. A linear sketch s = sum_t r_t w_t (mod p) with public coins r is a public linear function
   of the running words; S sketches with independent r over an S-step chain recover every word, hence every step's
   partial product (checked exactly here on random int8 data), and its bits count in leakage as a share of a unit's
@@ -224,10 +226,13 @@ def rounds_keyed() -> dict:
                         "t1_chunk_head_pct": 100 * extra * CHUNK_HEAD_REGS * REG / stock,
                         "h_credited_w1_a_mac": h_extra, "h_credited_over_lead": h_extra / H_LEAD["basis"],
                         "round_wait_us_by_linear": {name: 1e6 * w for (name, _, _), w in zip(LLAMA, waits)},
-                        "added_wait_over_lead_a_root_wait": (r - 1) * sum(waits) / sum(a_wait)}
+                        "added_wait_over_lead_a_root_wait": (r - 1) * sum(waits) / sum(a_wait),
+                        "added_wait_ms_a_forward": 1e3 * (r - 1) * LAYERS * sum(waits),
+                        "added_coin_round_trips_a_forward": (r - 1) * CALLS}
         fits = [r for r, v in per_r.items() if v["t1_chunk_head_pct"] <= TARGET]
         out[point] = {"stock_macs_a_forward": stock, "chunks_a_forward_at_R1": chunks(1), "hiding_t1_pct": 0.0,
                       "lead_a_root_wait_us_by_linear": {name: 1e6 * w for (name, _, _), w in zip(LLAMA, a_wait)},
+                      "lead_a_root_wait_ms_a_forward": 1e3 * LAYERS * sum(a_wait),
                       "by_R": per_r, "max_R_listed_within_0.1pct": max(fits) if fits else 0}
     return out
 
@@ -349,6 +354,9 @@ def per_output(sha: int) -> dict:
                     "ands": max(1, math.ceil(unit_b / ch)) * blocks(ch) * sha,
                     "over_recompute": max(1, math.ceil(unit_b / ch)) * blocks(ch) * sha / recompute}
                     for ch in (1024, 4096, 16384)}}
+        row["h_mac_weighted"] = {
+            "in_tree": mac_weighted({k: v["h_hashing_in_tree"] for k, v in row["by_K"].items()}),
+            "sha512_pad_on_a_link": mac_weighted({k: v["h_sha512_pad_on_a_link"] for k, v in row["by_K"].items()})}
         for point, rows in POINT_ROWS.items():
             stock = rows * LAYERS * sum(k * n for _, k, n in LLAMA)
             row["by_point"][point] = {
@@ -358,6 +366,23 @@ def per_output(sha: int) -> dict:
                     for ch in (1024, 4096, 16384, 65536, 262144)}}
         out[name] = row
     return out
+
+
+def mac_weighted(by_k: dict) -> float:
+    macs = {k: sum(kk * n for _, kk, n in LLAMA if kk == k) for k in by_k}
+    return sum(macs[k] * v for k, v in by_k.items()) / sum(macs.values())
+
+
+def periods(rows: dict[str, float]) -> dict:
+    """Each row's share of stock (h as a multiple of it, a T1 term as a fraction) in AND gates a window, week, month
+    and year, for one H200, the datacenter and the world: scaled from the share, at stock's ANDs a MAC."""
+    h200 = H200_MACS_S * ANDS_MAC
+    rate = {"one H200": h200, "datacenter": h200 * DC_GPUS, "world": WORLD_MACS_YEAR * ANDS_MAC / PERIOD_S["year"]}
+    spans = {"window": WINDOW_S, **PERIOD_S}
+    stock = {s: {p: r * t for p, t in spans.items()} for s, r in rate.items()}
+    return {"stock_ands": stock,
+            "rows": {name: {"share_of_stock": x, "ands": {s: {p: x * v for p, v in by.items()} for s, by in stock.items()}}
+                     for name, x in rows.items()}}
 
 
 def _solve_mod(m: list[list[int]], y: list[int], p: int) -> list[int] | None:
@@ -411,6 +436,21 @@ def main() -> None:
     out = {"ands": a, "per_value": pv, "sketch": sketch(pv), "rounds": rounds(), "rounds_keyed": rounds_keyed(),
            "grinding": grinding(), "fold_seal": fold_seal(sha), "xor_m": xor_m(sha), "per_output": per_output(sha),
            "leak": leak()}
+    fs, po, rk = out["fold_seal"], out["per_output"], out["rounds_keyed"]
+    o_seal = "sigma and its cells' O'"
+    out["periods"] = periods({
+        "the lead, h": H_LEAD["basis"],
+        "fold seal, K 2,048, a cell, in the tree, h": fs["K 2,048, a seal a cell"][o_seal]["h_in_tree"],
+        "fold seal, K 2,048, a cell, a keyed leaf a seal, h": fs["K 2,048, a seal a cell"][o_seal]["h_each_seal_hidden"][KEYED],
+        "fold seal, K 8,192, a row of 8, in the tree, h": fs["K 8,192, a seal a row of 8 cells"][o_seal]["h_in_tree"],
+        "xor-16, in the tree, h": out["xor_m"]["xor-16"]["h_hashing_in_tree"],
+        "fold N_T and D_T, in the tree, h (hashing only)": po["fold, N_T and D_T"]["h_mac_weighted"]["in_tree"],
+        "fold N_T and D_T, a SHA-512 pad on a shared link, h": po["fold, N_T and D_T"]["h_mac_weighted"]["sha512_pad_on_a_link"],
+        "quadratic sketch, in the tree, h (hashing only)": po["quadratic sketch"]["h_mac_weighted"]["in_tree"],
+        "T1's allowance": BUDGET / 100,
+        "keyed rounds, T 512, 64 rows, R 16: T1 chunk_head": rk["T 512, 64 rows"]["by_R"][16]["t1_chunk_head_pct"] / 100,
+        "keyed rounds, decode, 1 row, R 16: T1 chunk_head": rk["decode, 1 row"]["by_R"][16]["t1_chunk_head_pct"] / 100,
+        "L1 + (a) rounds, decode, 1 row, R 1: T1 hiding (floor)": L1_TERM["decode, 1 row"][0] / 100})
     out_path.write_text(json.dumps(out, indent=1, sort_keys=False))
     a = out["ands"]["a_word"]
     print("in-circuit ANDs a 32-bit word (x SHA-512):")
@@ -432,9 +472,11 @@ def main() -> None:
     print("chained rounds:", json.dumps(out["rounds"], indent=None)[:2000])
     print("chained rounds under the keyed leaf (T1 chunk_head %, h over the lead's, added wait over the lead's A-root wait):")
     for p, v in out["rounds_keyed"].items():
-        print(f"  {p:16s} max R within 0.1%: {v['max_R_listed_within_0.1pct']}; " + ", ".join(
-            f"R {r}: {x['t1_chunk_head_pct']:.4f} / {x['h_credited_over_lead']:.5f} / "
-            f"{x['added_wait_over_lead_a_root_wait']:.2f}" for r, x in v["by_R"].items()))
+        print(f"  {p:16s} max R within 0.1%: {v['max_R_listed_within_0.1pct']}; lead's A-root wait "
+              f"{v['lead_a_root_wait_ms_a_forward']:.2f} ms a forward; " + ", ".join(
+                  f"R {r}: {x['t1_chunk_head_pct']:.4f} / {x['h_credited_over_lead']:.5f} / "
+                  f"{x['added_wait_over_lead_a_root_wait']:.2f} ({x['added_wait_ms_a_forward']:.1f} ms)"
+                  for r, x in v["by_R"].items()))
     g = out["grinding"]
     print(f"grinding: at T_q = 2^128, m {g['at T_q = 2^128']['m_a_window']} a window; at 2^80, m "
           f"{g['at T_q = 2^80']['m_a_window']}, premium x{g['at T_q = 2^80']['premium_over_tq']:.2f}")
@@ -464,6 +506,10 @@ def main() -> None:
         print("    " + ", ".join(f"{q}: " + " / ".join(f"{y:.4f}" for c, y in z["t1_chunk_head_pct_by_chunk_kib"].items()
                                                          if c in (1, 16, 256)) for q, z in v["by_point"].items()))
     print("leak: all recovered =", out["leak"]["all_recovered"])
+    print("per monitoring period, AND gates (window / week / month / year):")
+    for name, v in out["periods"]["rows"].items():
+        print(f"  {name[:56]:56s} {v['share_of_stock']:10.4g}  " + "  ".join(
+            f"{s}: " + " / ".join(f"{x:.2e}" for x in by.values()) for s, by in v["ands"].items()))
 
 
 if __name__ == "__main__":
