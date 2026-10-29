@@ -1000,7 +1000,7 @@ theorem setupH_flatCopy (g : Fin st.c.unitRange.count)
           ite_eq_right (by have := j.isLt; intro he; exact hlt (he ▸ this))]
     rw [hZ.block_eq hz o, flatZero_block ht h hr regs g hz o]
 
-/-- **A flat class's table class** (the soundness lane's `TableClass`), from the statement `Stmt.setupH` accepted: its
+/-- **A flat class's table class** (the soundness model's `TableClass`), from the statement `Stmt.setupH` accepted: its
 unit slots, the unit's composed rows placed at each (`setupH_flatPlacement`), each input's copy position
 (`setupH_flatCopy`) and the slots' forced-zero rows (`setupH_flatZero`). -/
 def setupH_flatTableClass : TableClass ((setupH_flatLayout ht h hr).2.2.model regs) where
