@@ -7,7 +7,7 @@ depends on every decision before it, and `ChargeCount_v1{N}` takes that carry (`
 input and returns the next window's. The session's first carry is the registered book's priors and run 0, public.
 Every later carry is a function of the session's decisions so far: a value, committed like any other.
 
-**The chain.** Each window has a produced value `replay-charge` of two hm96 rows (frame-v3-sha512, `hm96-sha512/row/v2`,
+**The chain.** Each window has a produced value `replay-charge` of two hiding commitments (frame-v3-sha512, `hm96-sha512/row/v2`,
 96 bits each: n0 3×15, n1 3×15, run 2, zero padding): its carry-in (row 0) and its carry-out (row 1).
 
 - Window w's row 0 is window w − 1's row 1 under the same salt, so its opening b‖c is the same.
@@ -209,7 +209,7 @@ A class whose windows send hits or order entries does the following:
 - Its H and O are fixed per class, like D. A window that sends more hits or entries than its slots can't be charged,
   so that window's unit fails.
 
-**Cost** (`size`, ANDs). `window_charge.circuit-check.json` pins C-Flock's lowering, which adds one row for each commit
+**Cost** (`size`, ANDs). `window_charge.circuit-check.json` pins Flock's lowering, which adds one row for each commit
 copy of the carry: 53,734 at `{1, 1, 1}` and 40,280 at `{2, 2, 0}`.
 
 | unit | ANDs |
