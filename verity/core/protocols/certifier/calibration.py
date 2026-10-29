@@ -442,7 +442,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--headroom", type=float, default=2.0)
     ap.add_argument("--epsilon", type=float, default=1e-4, help="target honest miss rate per window")
     ap.add_argument("--k-bits", type=float, default=None,
-                    help="K, the policy's budget per isolation unit in bits (NCI's inference-only policy: 9.12e7); "
+                    help="K, the policy's budget per isolation unit in bits (the inference-only policy: 9.12e7); "
                          "without it the ingress charge is reported in bits only")
     ap.add_argument("--target-k-share", type=float, default=None, help="with --k-bits")
     ap.add_argument("--target-span-s", type=int, default=3600)

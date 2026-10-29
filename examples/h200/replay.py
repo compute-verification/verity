@@ -1,4 +1,4 @@
-"""The CPU replay of the H200 demo's drawn units: given a step's drawn units, each with its opened input rows and its
+"""The CPU replay of the H200 demo's sampled proof blocks: given a step's sampled proof blocks, each with its opened input rows and its
 committed output rows, recompute every unit's outputs on the CPU and compare them bit for bit with the GPU's.
 
 **Templates.** One replay function per template of the frozen shape (MQA decoder, width 16,384, 52 layers, 256 query heads of
@@ -41,13 +41,13 @@ of its statics, so a tiny instance of the architecture replays through the same 
 where e_j = ``MufuEx2Ftz``(RN(RN(x_j - m) * RN32(log2 e))). A 32-bit value that one unit outputs as two 16-bit halves (a part's
 s32, a scale, rs, a softmax reciprocal) is one 32-bit input word of its readers here: a bundle joins the halves (`join16`).
 
-**Bundles.** `replay` takes a step's drawn units as ``{"units": [{"unit", "template", "inputs": {param: words},
+**Bundles.** `replay` takes a step's sampled proof blocks as ``{"units": [{"unit", "template", "inputs": {param: words},
 "outputs": words}, ...]}`` (words as unsigned integers of each parameter's width, in its row-major order), groups them by
 template, evaluates each group in one batch and reports every unit whose outputs differ. The drawn-unit bundle maps
 onto it in `units_of`.
 
-**The draw** (`draw`): the units of a step to replay, from live coins (a key holder's bytes, never a commitment) through
-`verity.ml.randomness`, as core's draw object (`one_stage.draw`): ``uniform:K`` (a K-subset of all units), ``stratified:K``
+**The sample** (`draw`): the units of a step to replay, from live coins (a key holder's bytes, never a commitment) through
+`verity.ml.randomness`, as core's sample object (`one_stage.draw`): ``uniform:K`` (a K-subset of all units), ``stratified:K``
 (core's per-template sizes, `draw.stratum_k`) or an explicit plan ``{template: k}`` (proofs' stratified plan).
 """
 from __future__ import annotations
@@ -585,7 +585,7 @@ def _row(words: Any, p: tuple[str, int, int]) -> np.ndarray:
 
 
 def replay(units: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Replay a step's drawn units (module docstring): ``{"units", "matched", "mismatched": [{"unit", "template", "got",
+    """Replay a step's sampled proof blocks (module docstring): ``{"units", "matched", "mismatched": [{"unit", "template", "got",
     "want"}], "malformed": [{"unit", "template", "error"}], "templates": {key: {"status", "units", "mismatched"}}}``. A unit
     is matched only when its committed outputs are its template's outputs on its opened inputs, word for word."""
     groups: dict[str, list[Mapping[str, Any]]] = {}
@@ -672,14 +672,14 @@ def units_of(bundle: Mapping[str, Any], payload: bytes | None = None) -> list[di
     return out
 
 
-# ---- the draw ----------------------------------------------------------------------------------------------------------
+# ---- the sample ----------------------------------------------------------------------------------------------------------
 
 def draw(population: Sequence[tuple[str, int]], plan: str | Mapping[str, int], coins: bytes,
          context: Mapping[str, randomness.Part]) -> dict[str, Any]:
     """The units of one step to replay. ``population``: each template's unit count in the step's unit order (template-major:
     global unit = the template's base + its index); ``plan``: ``uniform:K``, ``stratified:K`` or ``{template: k}``;
-    ``coins``: the challenger's live bytes; ``context``: what the draw must follow (the step's committed root, at least).
-    -> core's draw object: ``{"law", "population", "k", ["strata"], "units"}``, units ascending; an explicit plan's law is
+    ``coins``: the challenger's live bytes; ``context``: what the sample must follow (the step's committed root, at least).
+    -> core's sample object: ``{"law", "population", "k", ["strata"], "units"}``, units ascending; an explicit plan's law is
     ``plan`` (its strata's k are the plan's, not core's `stratum_k`)."""
     n = sum(c for _, c in population)
     key = randomness.derive(coins, DRAW_DOMAIN, context)
