@@ -299,6 +299,25 @@ def ncp3_sparse(L, m, shapes, c1):
     return agg
 
 
+H200_MACS = 989.5e12
+DATACENTER_H200 = 100_000
+WINDOW_S = 600
+WORLD_MACS_YEAR = 9.36e30 / 2
+AND_PER_MAC = 2079 / 16
+PERIOD_S = {"window": WINDOW_S, "week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
+
+
+def per_period(share, alpha):
+    """A per-call gap `share` of stock, pooled in AND gates over each period, on SW-PREMISES' basis: one H200 at its int8
+    peak covers H200_MACS / alpha stock MACs a second, a datacenter is DATACENTER_H200 of them, the world is
+    world-inference-2027's FLOP a year as MACs over alpha."""
+    out = {}
+    for scope, macs_s in (("one H200", H200_MACS / alpha), ("datacenter", DATACENTER_H200 * H200_MACS / alpha),
+                          ("world", WORLD_MACS_YEAR / alpha / PERIOD_S["year"])):
+        out[scope] = {p: share * macs_s * s * AND_PER_MAC for p, s in PERIOD_S.items()}
+    return out
+
+
 def main():
     rng = np.random.default_rng(20261029)
     checks = {"ncp_zero": [ncp_zero(rng, L=L) for L in (32, 64, 128)],
@@ -340,6 +359,12 @@ def main():
     sparse = {f"{wl} m{m} L{L}{' C1' if c1 else ''}": ncp3_sparse(L, m, shapes, c1)
               for wl, shapes in (("llama", LLAMA), ("v4 dense", V4)) for m in (64, 512, 8192)
               for L in (32, 64, 128) for c1 in (False, True)}
+    periods = {"allowance, 1% at alpha 3": per_period(0.01, 3.0),
+               "skip L64, llama": per_period(skip["llama linears L64"], 3.0),
+               "skip L128, llama": per_period(skip["llama linears L128"], 3.0),
+               "skip L64, v4 dense": per_period(skip["v4 dense L64"], 3.0),
+               "ncp3 L64 C1, llama T8192": per_period(sparse["llama m8192 L64 C1"]["T1_credited_coins"], 3.0),
+               "ncp3 L64 C1, v4 dense m8192": per_period(sparse["v4 dense m8192 L64 C1"]["T1_credited_coins"], 3.0)}
 
     for name, rs in checks.items():
         print(name, json.dumps(rs))
@@ -358,11 +383,14 @@ def main():
     for key, a in sparse.items():
         print(f"ncp3 M0 {key:24s} T1 {100 * a['T1_credited_coins']:.3f}% (skip {100 * a['skip']:.3f}, forming "
               f"{100 * a['forming']:.3f}; coins uncredited {100 * a['T1_uncredited_coins']:.2f}%)")
+    for key, v in periods.items():
+        for scope, ps in v.items():
+            print(f"per period {key:28s} {scope:10s} " + " ".join(f"{p} {g:.2e}" for p, g in ps.items()))
     print("PASS" if ok else "FAIL", "checks")
     if len(sys.argv) > 1:
         json.dump({"checks": checks, "pricing": pricing, "zero_data_gap": zero, "served_zero_gap": served,
-                   "exact_skip_gap": skip, "exact_skip_max_L": skip_max_L, "ncp3_sparse_m0": sparse, "pass": ok},
-                  open(sys.argv[1], "w"), indent=1, default=float)
+                   "exact_skip_gap": skip, "exact_skip_max_L": skip_max_L, "ncp3_sparse_m0": sparse,
+                   "per_period_and_gates": periods, "pass": ok}, open(sys.argv[1], "w"), indent=1, default=float)
     sys.exit(0 if ok else 1)
 
 
