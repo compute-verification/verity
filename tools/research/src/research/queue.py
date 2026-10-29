@@ -38,7 +38,8 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    with --on on vy-nebius-cpu-3), naming the PR on `next` that owns it, or
                                                    drops from a Lean lock it changes a shape.inline premise or shape.frozen
                                                    key `next`'s statements still need (naming each; the sync leaves such a
-                                                   head off `next` too); --no-preflight skips it (the lander's)
+                                                   head off `next` too);
+                                                   --no-preflight skips it (the lander's)
     research queue drive (--on MACHINE | --config PATH [--config-from-tree]) [--marked-after TS] [--first N,...]
                          [--[no-]regenerate-locks] [--[no-]after-landing-no-cache] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): sync and land the
