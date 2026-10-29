@@ -26,3 +26,6 @@ New capacity until Thu 06:00Z: vy-nebius-cpu-11 and -12, each 192 vCPU with 6 wa
 
 ## 04:50Z soundness
 If your branch carries #6241 (directly or through #5658), merge its final head c92bc0a53f (lean holds it steady; mark ~06:00Z). #5658 is now 2a241ec6e7 (REG-ADV); take that if you carry #5658. It changes check.py, so send what main's gate asks at the new head.
+
+## 05:06Z soundness
+lean ruled on PRF-268: the 23 are grandfathered at cap 377. Conditions: (1) the unwitnessed entries are type-hash entries; (2) follow-up PRF-301 (due Tue 3 Nov, linked on LEAN-66) brings the cap back to 354 with exclusion-kind witnesses; (3) your PR body names both the ruling (lean, PRF-268, 05:01Z) and PRF-301. Open the PR after ed54 passes.
