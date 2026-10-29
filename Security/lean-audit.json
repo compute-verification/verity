@@ -816,51 +816,51 @@
   },
   "Claims.ZKMal.RefSession.Causal": {
    "owner": "@proofs",
-   "digest": "8a4eaeaa87664dc1635ae63fb4c9c59f911e72020b190da0ffda38fded0d61c3"
+   "digest": "df170d16e78e07c49b96f434ae6b835d537ea5c7615abc6595ffe7b46cbe0e50"
   },
   "Claims.ZKMal.RefSession.Complete": {
    "owner": "@proofs",
-   "digest": "d34dc52a121683b72b11069f972779cef5035c9071d32acabc7f20c9ef92d87f"
+   "digest": "8d589ee0d203688b49a7ff87f61e5a72f03a68e9129b29d0c6e41dabc6dacccd"
   },
   "Claims.ZKMal.RefSession.DummyReg": {
    "owner": "@proofs",
-   "digest": "4613724eb484a13c5312c5d1a82f731d35d8265e3490ef96d009cbebd594d10f"
+   "digest": "0d3f7f04434aa2728bb6359095bed80ccc69091980796f6f05a13ec11e0df4ac"
   },
   "Claims.ZKMal.RefSession.SwCausal": {
    "owner": "@proofs",
-   "digest": "65f5077911fb462cd3ed1cc7b61fad6f8d2a7a3db68fbf9ed65e72e4874bdb17"
+   "digest": "73ad1a8550bed544ae285d6d02f28f6e3ef295e736e1f7b5429113667c18bcd8"
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
-   "digest": "086777261fb2a41921ddaf16f2b11aea59b92884e678ab8e65b4c04bf75154a4"
+   "digest": "5a644afdd18518f4938b3e99bd5001552c15b3c3cb842dc5dcf9b18bea503c52"
   },
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
-   "digest": "f2522a5976bc0851bbd38381200334473f7e01eb85726d5fb982a8815fc08767"
+   "digest": "1c6dee27d55d15296972ec7358496e251ab8e5df24a33eb308ead48ff2d9ee94"
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "2991a65a8f37ad472054c827d2e307a510d6805337140172046dd4fcdbc5da9d"
+   "digest": "328e48a1973c66f02174dfc71d953ae6a28fe959434373241e6cbd574a231577"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "315168c2b12a99c95c9e418ceea514e1494f8a1a7f21d93ccc5a59cb4be8c264"
+   "digest": "8a27523c031fe037940987949ff220e52a64f5417e6dafad6bd1180abfe683f1"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "2caa8866ee34ec5d56d941983083e8000d031ad440e5c53804888beef8e81ef7"
+   "digest": "9c3c1d9579fab9512e2377888aa3817fcdbbce49be46b11c87c5145099acafcd"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "86522ef9455c9b6f7e880ef21e43dca838e6d1ee64593cd831b3d227a62fd49c"
+   "digest": "85b453df9c9cf141ce7690232b30ad9b25c9a43d654362fb40be92692ab81733"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
-   "digest": "2e3e685ea19066499bf20be75d262c2b6b006711ddcdfe6b3077a2c07b3d7f06"
+   "digest": "b67ad5fbdbd30050e307340c45bac8187626f53c364146a356f38406b013aaf2"
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "da4b40318c787942270bd6e1bca80080132cdc0264c84c2ef4072b6b0b616305"
+   "digest": "cb8ac3b10f328118969d4678c194c75232ef5bcd013e6869d8ba5e492fcea775"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -892,7 +892,7 @@
   },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs",
-   "digest": "8c8be48bf735e894591bc3749e03326319dd6e139391043141c7779695ff6840"
+   "digest": "617bdffd77234099358abd723b3e38a80ebb29d3b4ebd7996f970d5358a3dfc4"
   },
   "Flock.Guarantees.OuterSessionsZK": {
    "owner": "@proofs",
@@ -916,35 +916,35 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "34a22610112c066a08189370af71d811e01442cfab3ac10a758f4fa55134027d"
+   "digest": "92238f96a2ebb6f3001fedccfdd41c75b77223a7255192958672a0a965211f00"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
-   "digest": "bcc08f2aa095253a0708659d8ae3fd36c6e9673dc9f3af3b8eeb350b4b7d5639"
+   "digest": "e8d32f014b365b5250729d4d560b71104b3aa577478dc0bf6c8c9507ed26e4a6"
   },
   "Flock.SoundAtBridge.OpenedPlurAt": {
    "owner": "@proofs",
-   "digest": "02732764b08a33cf34c5b9805dece5ccf8c24d7a5fee82870e323cf7808f575e"
+   "digest": "8a8665db98c72665e93357a870da007c6fa9494c07e420e5d474f885e95c6c59"
   },
   "Flock.SoundAtBridge.RelOfRows": {
    "owner": "@proofs",
-   "digest": "dc607b5a81ea3c225dd6edf8f4c6af0a8116df6820eedb364b231180187564c0"
+   "digest": "b103536e439bd146bac8027ac3775654a3aef54fbef00403e5ab96767daf34b8"
   },
   "Flock.SoundAtBridge.RowsSession.CR": {
    "owner": "@proofs",
-   "digest": "052e95cba194e6252b2f45b5df3cbba73d5422b22bcb40572e72229a5b0971da"
+   "digest": "2a3f8b6fa758b4507134bc76f56f54a6477d838a0ba9bb92775da2fe1cdd449f"
   },
   "Flock.SoundAtBridge.RowsSession.RowsAt": {
    "owner": "@proofs",
-   "digest": "1f805b90c0ae22f8effb4ccf8fe64e27ac34d76ff2d0cc7469bfb6a4e0763288"
+   "digest": "0b0b020dcc82876d96bc92816e80eb77d20f86122527faf2aecb4be31d0d6840"
   },
   "Flock.SoundAtBridge.RowsSession.ServedRegistered": {
    "owner": "@proofs",
-   "digest": "2a2aef11dc4ec1c710eb141e1fb355b4e84a8fcca52c8577e9758e1bc420ac50"
+   "digest": "d6797a7482ae3c22351244a08cf6b4aa4c00804e89d8d801b8dfce8c2532eb92"
   },
   "Flock.SoundAtBridge.WindowLaw": {
    "owner": "@proofs",
-   "digest": "a18319237970e30ccd1b216bc11db0228ebd8bf5793dbe5f9c4fccefad90c24d"
+   "digest": "f7583b83ec85912b135076cc85f42c31b8934e50fd87b924cdc788d2b7e30d68"
   },
   "FlockDeploy.PlainIn": {
    "owner": "@proofs",
@@ -5177,10 +5177,11 @@
     "          { name := \"\", value := \"\", root := Claims.Sampling.bytes root, leaves := 1, words := Option.none,",
     "            wordBits := 16, domain := dom, readsRel := List.nil.toArray }",
     "          List.nil).toArray) :",
-    "  Eq (Claims.Sampling.Commitment.Opens Claims.Sampling.sha512Msg (SamplingDeploy.deploy rel c).commit roots o) Bool.true"
+    "  Eq (Claims.Sampling.CommitmentScheme.Opens Claims.Sampling.sha512Msg (SamplingDeploy.deploy rel c).commit roots o)",
+    "    Bool.true"
    ],
    "assumptions": [],
-   "type_hash": "228d2031db26cf931eafbc26dda441a509a744c6aae755ff0e636ff293ff2297"
+   "type_hash": "4a1317dddcb169b5fecb54f61bb61966bc49e4006529e09c5ad4a182bb32d143"
   },
   "Claims.Sampling.BitsLin_fails": {
    "owner": "@proofs",
