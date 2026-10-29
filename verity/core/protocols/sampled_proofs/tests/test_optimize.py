@@ -15,13 +15,13 @@ import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
-from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, ReplayDomain,
                                                            TemplateCost, _hit, _miss, certify, density_bound, density_exact,
                                                            for_budget, for_target, frontier, ln_bound, ln_upper, max_harm,
                                                            max_harm_check, needs_benchmark,
                                                            overlaps, perturb, replay_cost, row_ands, sensitivity,
                                                            template_cost, touched, weigh, work_law)
+from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
 
