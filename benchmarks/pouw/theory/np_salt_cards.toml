@@ -58,7 +58,7 @@ source = "N-SALT's forced mask: hm96-sha512/v1 kept bit for bit, M_key·y comput
 [card.np-salt-tag-l1-pad]
 title = "the lead with L1 and N-LIT's pad"
 origin = "N-SALT"
-note = "compute-research/20261029T1100Z-report-np-salt"
+note = "compute-research/20261029T1016Z-report-np-salt"
 modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "pad", final = "none", forming = "none", derivation = "min" }
 source = "benchmarks/pouw/theory/salt.py on cursor/compute-research-np-salt-fb20: L1's salts at the pad's 16 XORs"
 claims.t512 = { gap = 5.344e-7, terms = ["hiding"], tol = 2e-9, kind = "estimate", source = "salt.py: 65 public digests a forward at 512 W1, 64 rows" }
@@ -67,7 +67,7 @@ claims.t512r512 = { gap = 6.68e-8, terms = ["hiding"], tol = 2e-10, kind = "esti
 [card.np-salt-tag-r256k-pad]
 title = "the lead with 256 KiB rows (L0) and the pad: every leaf's digest public, its XOR charged"
 origin = "N-SALT"
-note = "compute-research/20261029T1100Z-report-np-salt"
+note = "compute-research/20261029T1016Z-report-np-salt"
 modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "pad", final = "none", forming = "none", derivation = "min" }
 source = "salt.py: the pad's XOR at L0, one public digest a leaf"
 claims.t512 = { gap = 2.885e-4, terms = ["hiding"], tol = 3e-6, kind = "estimate", source = "salt.py: 0.0288% at 256 KiB rows (its count of leaves differs from the card's by under 1%)" }
@@ -75,7 +75,7 @@ claims.t512 = { gap = 2.885e-4, terms = ["hiding"], tol = 3e-6, kind = "estimate
 [card.np-salt-tag-r16k-pad]
 title = "the lead with 16 KiB rows (L0) and the pad: N-LIT's '0 at every layout' fails here, the XOR alone 0.41%"
 origin = "N-SALT"
-note = "compute-research/20261029T1100Z-report-np-salt"
+note = "compute-research/20261029T1016Z-report-np-salt"
 modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r16k", hiding = "pad", final = "none", forming = "none", derivation = "min" }
 source = "salt.py: the pad's XOR at L0 with 16 KiB rows"
 claims.t512 = { gap = 4.084e-3, terms = ["hiding"], tol = 4e-5, kind = "estimate", source = "salt.py: 0.411% at 16 KiB rows" }
@@ -83,7 +83,7 @@ claims.t512 = { gap = 4.084e-3, terms = ["hiding"], tol = 4e-5, kind = "estimate
 [card.np-salt-tag-l1-keyed]
 title = "the lead with L1 and the keyed digest"
 origin = "N-SALT"
-note = "compute-research/20261029T1100Z-report-np-salt"
+note = "compute-research/20261029T1016Z-report-np-salt"
 modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "keyed", final = "none", forming = "none", derivation = "min" }
 source = "salt.py: the keyed digest's compression, credited by pad-checked"
 claims.t512 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", source = "salt.py" }
@@ -91,7 +91,7 @@ claims.t512 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", s
 [card.np-salt-tag-r256k-kleaf]
 title = "the lead with 256 KiB rows (L0) and the keyed leaf: no salt work and no subtree layout"
 origin = "N-SALT"
-note = "compute-research/20261029T1100Z-report-np-salt"
+note = "compute-research/20261029T1016Z-report-np-salt"
 modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "kleaf", final = "none", forming = "none", derivation = "min" }
 source = "salt.py: the keyed leaf adds nothing a public digest at any layout"
 claims.t512 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", source = "salt.py" }
@@ -100,7 +100,7 @@ claims.t8192 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", 
 [card.np-salt-tag-l1-kleaf]
 title = "the lead with L1 and the keyed leaf"
 origin = "N-SALT"
-note = "compute-research/20261029T1100Z-report-np-salt"
+note = "compute-research/20261029T1016Z-report-np-salt"
 modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "kleaf", final = "none", forming = "none", derivation = "min" }
 source = "salt.py"
 claims.t512 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", source = "salt.py" }
@@ -108,7 +108,7 @@ claims.t512 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", s
 [card.np-salt-tag-l1-fm]
 title = "the lead with L1, (a) and the forced mask: hm96 kept, its mask committed int8 partials"
 origin = "N-SALT"
-note = "compute-research/20261029T1100Z-report-np-salt"
+note = "compute-research/20261029T1016Z-report-np-salt"
 modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "fm", final = "none", forming = "none", derivation = "min" }
 source = "salt.py: FM's interface at 896 registers a salt (estimate) on L1's salts"
 claims.t512 = { gap = 2.9926e-5, terms = ["hiding"], tol = 3e-7, kind = "estimate", source = "salt.py: 0.0030% at 64 rows" }
