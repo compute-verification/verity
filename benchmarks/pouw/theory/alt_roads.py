@@ -270,6 +270,26 @@ def r1b_salt_and_arrival(inp: dict, ll: dict) -> dict:
             "premises_added": ["trusted-host (3)"]}
 
 
+def r1b_arrival_t2(inp: dict, ll: dict) -> dict:
+    """N-CARD's T2 for R1b's designs with arrival-order coins: A's root chain before each call's noise leaves the prover,
+    and each call waits instead for its A_j to reach the certifier and its coins to come back."""
+    s = inp["space_t2"]
+    links = {"census_100g": inp["links"]["census_reference_bytes_per_s"],
+             "gpu_400g": inp["links"]["per_gpu_400g_bytes_per_s"]}
+    out = {}
+    for design, pts in s["designs"].items():
+        out[design] = {}
+        for key, v in pts.items():
+            a_bytes = ll["a_bytes_per_token"] * v["m"]
+            rest_ms = v["t_h_ms"] - v["a_root_ms"]
+            out[design][key] = {
+                "space_t2": v["t_h_ms"] / v["stock_ms"], "space_t2_judged": v["judged"],
+                "a_root_share_of_honest_step": v["a_root_ms"] / v["t_h_ms"],
+                "arrival_t2": {ln: [(rest_ms + (a_bytes / rate + s["serial_calls"] * rtt) * 1e3) / v["stock_ms"]
+                                    for rtt in s["rtt_s"]] for ln, rate in links.items()}}
+    return {"design": "R1b's arrival-order coins on N-CARD's T2 (async engine)", "rtt_s": s["rtt_s"], "designs": out}
+
+
 def r2_memory(inp: dict, ll: dict) -> dict:
     """Store every word in HBM and let a memory challenger demand random ones against a deadline."""
     alpha = inp["ssn_1l"]["alpha"]
@@ -470,6 +490,9 @@ def checks(inp: dict, ll: dict, res: dict) -> list[tuple[str, bool, str]]:
          all(abs(v["t2_per_row"] * res["R1"]["shapes"]["roofline_knee_rows"] / v["compute_bound_t2"] - 1) < 1e-9
              for d in res["R1"]["shapes"]["roofline"].values() for v in d.values()), ""),
         ("R1b: A_j is SW-HASH's 229,376 bytes a token", ll["a_bytes_per_token"] == 229_376, str(ll["a_bytes_per_token"])),
+        ("R1b: N-CARD's judged T2 reproduces from its async parts (t_H / stock) at every point",
+         all(abs(v["space_t2"] / v["space_t2_judged"] - 1) < 0.005
+             for pts in res["R1b"]["arrival_t2"]["designs"].values() for v in pts.values()), ""),
         ("R1: a 400 Gb/s port fits inside the measured PCIe Gen5 x16 device-to-host rate",
          max(res["R1"]["pcie_egress_measured"]["port_400g_share_of_pcie"]) < 1.0,
          ", ".join(f"{x:.3f}" for x in res["R1"]["pcie_egress_measured"]["port_400g_share_of_pcie"])),
@@ -558,6 +581,12 @@ def table(res: dict) -> str:
     lines.append("    removes at T 8,192 (W1 floor / alone, x stock): hiding " + ", ".join(
         f"{k} {v[0]}/{v[1]}" for k, v in r1b["terms_removed_t8192"]["hiding_k32"].items()) + "; hashing before the noise "
         + ", ".join(f"{k} {v[0]}/{v[1]}" for k, v in r1b["terms_removed_t8192"]["hashing_before_noise"].items()))
+    at = r1b["arrival_t2"]
+    for design, pts in at["designs"].items():
+        lines.append(f"    {design} on N-CARD's T2 (A's root chain's share of the honest step; T2 now -> with arrival coins at "
+                     f"{at['rtt_s'][0] * 1e6:g}-{at['rtt_s'][1] * 1e6:g} us): " + "; ".join(
+                         f"{k} ({v['a_root_share_of_honest_step']:.0%}) {v['space_t2']:.1f} -> " + ", ".join(
+                             f"{ln} {x[0]:.1f}-{x[1]:.1f}" for ln, x in v["arrival_t2"].items()) for k, v in pts.items()))
     r2 = res["R2"]
     lines.append(f"R2  stored words: {r2['words_bytes_per_step_t8192']:.3e} B a step at T 8,192 ({r2['step_over_hbm']:.1f}x HBM); "
                  f"one word recomputes in {r2['recompute_one_word_s'] * 1e6:.2f} us: census RTT {r2['rtt_over_recompute']:,.0f}x, "
@@ -609,6 +638,7 @@ def main() -> int:
            "R3": r3_capacity_occupancy(inp, ll), "R4": r4_capacity_reading(inp, ll), "R6": r6_algebraic(inp)}
     res["R1"]["shapes"] = r1_shapes(inp, ll)
     res["R1b"] = r1b_salt_and_arrival(inp, ll)
+    res["R1b"]["arrival_t2"] = r1b_arrival_t2(inp, ll)
     res["R4"]["certifier_rows"] = certifier_capacity(inp, ll, res["R1"])
     res["period_bounds"] = per_period_bounds(inp, res)
     cks = checks(inp, ll, res)

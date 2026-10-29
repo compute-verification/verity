@@ -85,6 +85,23 @@
     "head_dim": 64,
     "source": "Llama-3.2-1B config: hidden 2048, intermediate 8192, 32 q heads, 8 kv heads, head dim 64; fused qkv and gate-up as served"
   },
+  "space_t2": {
+    "serial_calls": 64,
+    "rtt_s": [2e-6, 10e-6],
+    "designs": {
+      "ssn-1l/served/s8/k32/w/r256k/cert/min": {
+        "t512": {"m": 64, "t_h_ms": 41.504, "stock_ms": 1.67, "a_root_ms": 24.742, "judged": 24.85},
+        "t512r512": {"m": 512, "t_h_ms": 146.184, "stock_ms": 2.29, "a_root_ms": 29.466, "judged": 63.84},
+        "t8192": {"m": 8192, "t_h_ms": 1888.752, "stock_ms": 31.33, "a_root_ms": 35.763, "judged": 60.29}
+      },
+      "ssn-1l/served/s8/k32/w/r16k/cert/min": {
+        "t512": {"m": 64, "t_h_ms": 85.991, "stock_ms": 1.67, "a_root_ms": 67.526, "judged": 51.49},
+        "t512r512": {"m": 512, "t_h_ms": 202.352, "stock_ms": 2.29, "a_root_ms": 72.250, "judged": 88.36},
+        "t8192": {"m": 8192, "t_h_ms": 2145.672, "stock_ms": 31.33, "a_root_ms": 78.547, "judged": 68.49}
+      }
+    },
+    "source": "pouw_space.py and pouw_space.toml at N-CARD's 2558e9ecaf (cursor/compute-research-np-card-7c2d) with --add alt_roads_cards.toml, the async engine's honest step t_H, stock's step and A's root chain before each call's noise (an estimate nobody has timed) for R1b's top designs (run r20261029-081541-bf69); 64 serial calls a Llama-3.2-1B forward (16 layers x qkv, o, gate-up, down); round trips 2 us (RDMA) to 10 us"
+  },
   "links": {
     "census_reference_bytes_per_s": 12.5e9,
     "per_gpu_400g_bytes_per_s": 50e9,
