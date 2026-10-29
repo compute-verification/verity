@@ -1,6 +1,7 @@
 import Lean.Data.Json
 import Flock.Canon
 import Flock.Hash
+import CoreProtocol.Ratio
 
 /-!
 # The Site in code
@@ -9,12 +10,14 @@ The spec's `Verity.Site` (`Security/Definitions/Core/Site.lean`) as code, on Lea
 SHA-512: the registered hardware, folded from the registration log (`Site.ofLog`), the check each entry passes
 (`Registration.Entry.refusal`), and the views the protocols read. Its checks are the spec's, clause for clause and in
 the spec's order, over this file's own types, each decidable; `Properties.Core.Site` states that each is the spec's, and
-`verity.core.site` is its Python mirror, held to it by the difftest (`site-difftest`).
+`verity.core.site` is its Python mirror, held to it by the difftest (`site-difftest`). A sheet carries its device's
+figures (`DeviceFigures`, the spec's `Definitions/Core/DeviceFigures.lean`), nonnegative rationals (`Figure`, the spec's
+`ℚ≥0`).
 
 The digests are parameters as in the spec (`Registration.Digests`); the deployed ones (`Registration.sha512`) are
-`SHA-512(tag ‖ 0 ‖ canon(j))` over the JSON `verity.core.site` writes, under `verity/registration/{site,sheet,genesis}/v1`.
-The views (`Site.sheetOf`, `device`, `node`, `tiers`, `boundary`, `units`, `registered`, `host`) are functions of the
-site alone.
+`SHA-512(tag ‖ 0 ‖ canon(j))` over the JSON `verity.core.site` writes, under `verity/registration/{site,sheet,genesis}/v1`,
+a rational written as `Core.Ratio` writes one. The views (`Site.sheetOf`, `device`, `node`, `tiers`, `boundary`, `units`,
+`registered`, `host`) are functions of the site alone, but `device`, which reads the auditor's sheet too.
 -/
 
 namespace Core
@@ -65,14 +68,87 @@ inductive Owner
   | auditor
   deriving DecidableEq, Repr
 
-/-- The auditor's data sheet for an SKU, in the device model's terms. -/
-structure Sheet where
+/-- A nonnegative rational, the spec's `ℚ≥0`: a clock in Hz, a peak rate in MACs a second, a tolerance, or a tick in
+seconds. -/
+abbrev Figure : Type := {q : Rat // 0 ≤ q}
+
+/-- The larger of two figures. -/
+def Figure.max (a b : Figure) : Figure := if a.1 ≤ b.1 then b else a
+
+/-- The operand class of a tensor-core MAC (`Verity.OperandClass`): int8 operands drawn uniformly over [-128, 127],
+[-2, 1], [0, 3] or [0, 15], or the one value 0. -/
+inductive OperandClass
+  | uniformS8
+  | uniformS2
+  | uniformU2
+  | uniformU4
+  | zero
+  deriving DecidableEq, Repr
+
+/-- Every operand class. -/
+def OperandClass.all : List OperandClass := [.uniformS8, .uniformS2, .uniformU2, .uniformU4, .zero]
+
+theorem OperandClass.mem_all (c : OperandClass) : c ∈ OperandClass.all := by cases c <;> simp [OperandClass.all]
+
+/-- A device's compute figures (`Verity.DeviceFigures`): its SKU, its tensor clock in Hz, and the peak rate of
+tensor-core MACs a second of each operand class. -/
+structure DeviceFigures where
   sku : String
-  tc : Nat
+  clock : Figure
+  peakRate : OperandClass → Figure
+
+/-- Two figures are equal when their SKUs, clocks and peak rates are. -/
+instance DeviceFigures.instDecidableEq : DecidableEq DeviceFigures := fun a b =>
+  decidable_of_iff (a.sku = b.sku ∧ a.clock = b.clock ∧ ∀ c ∈ OperandClass.all, a.peakRate c = b.peakRate c) <| by
+    cases a; cases b
+    simp only [DeviceFigures.mk.injEq]
+    constructor
+    · rintro ⟨h1, h2, h3⟩; exact ⟨h1, h2, funext fun c => h3 c (OperandClass.mem_all c)⟩
+    · rintro ⟨h1, h2, rfl⟩; exact ⟨h1, h2, fun _ _ => rfl⟩
+
+/-- The auditor's estimate of one SKU's figures, with the relative tolerance registration allows around them
+(`Verity.DeviceEstimate`). -/
+structure DeviceEstimate where
+  figures : DeviceFigures
+  tolerance : Figure
+
+/-- `x` is within relative tolerance `τ` of `e`, in both directions (`Verity.WithinTolerance`): `(1 - τ)·e ≤ x ≤
+(1 + τ)·e`, `1 - τ` truncated at 0. -/
+def WithinTolerance (τ e x : Figure) : Prop := max (1 - τ.1) 0 * e.1 ≤ x.1 ∧ x.1 ≤ (1 + τ.1) * e.1
+
+instance instDecidableWithinTolerance (τ e x : Figure) : Decidable (WithinTolerance τ e x) := by
+  unfold WithinTolerance; infer_instance
+
+/-- Registration's check of a device's figures `d` against the auditor's estimate `est` (`DeviceFigures.Accepted`): the
+SKU is the estimate's, the clock and every peak rate are within the tolerance of the estimate's in both directions, and
+every peak rate is positive. -/
+def DeviceFigures.Accepted (est : DeviceEstimate) (d : DeviceFigures) : Prop :=
+  d.sku = est.figures.sku ∧ WithinTolerance est.tolerance est.figures.clock d.clock ∧
+    (∀ c ∈ OperandClass.all, WithinTolerance est.tolerance (est.figures.peakRate c) (d.peakRate c)) ∧
+    ∀ c ∈ OperandClass.all, 0 < (d.peakRate c).1
+
+instance DeviceFigures.instDecidableAccepted (est : DeviceEstimate) (d : DeviceFigures) : Decidable (d.Accepted est) := by
+  unfold DeviceFigures.Accepted; infer_instance
+
+/-- The figures the bound reads (`DeviceFigures.bounding`): the larger clock and the larger peak rate of each class, of
+`d`'s and the estimate's. The SKU is `d`'s. -/
+def DeviceFigures.bounding (est : DeviceEstimate) (d : DeviceFigures) : DeviceFigures where
+  sku := d.sku
+  clock := Figure.max d.clock est.figures.clock
+  peakRate c := Figure.max (d.peakRate c) (est.figures.peakRate c)
+
+/-- A sheet, a card: the figures the prover states for an SKU. Its compute figures (`figures`), and its memory figures
+in the device model's terms: bits from device memory to the chip a tick (`bw`), bits of on-chip state (`chip`) and bytes
+of device memory (`mem`). -/
+structure Sheet where
+  figures : DeviceFigures
   bw : Nat
   chip : Nat
   mem : Nat
-  deriving DecidableEq, Repr
+  deriving DecidableEq
+
+/-- A sheet's SKU, its figures'. -/
+def Sheet.sku (k : Sheet) : String := k.figures.sku
 
 /-- A location, and who owns it. -/
 structure Loc where
@@ -102,7 +178,7 @@ structure Entry where
   sheets : List Sheet := []
   locs : List Loc := []
   links : List Link := []
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 end Site
 
@@ -111,12 +187,12 @@ structure Site where
   sheets : List Site.Sheet
   locs : List Site.Loc
   links : List Site.Link
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- An entry of the registration, by its kind, naming the head of the log it follows: the site entry. -/
 inductive Site.Registration.Entry
   | site (previous : String) (entry : Site.Entry)
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- **The registration**: the log the Site is folded from, oldest entry first. -/
 abbrev Site.Registration : Type := List Site.Registration.Entry
@@ -210,10 +286,15 @@ structure Digests where
   entry : Entry → String
   genesis : Composite → String
 
-/-- What the auditor brings to the check: its data sheet for each SKU, and the key of each of its own devices. -/
+/-- What the auditor brings to the check: its data sheet for each SKU, public, whose figures are its estimate of the
+SKU's; the tolerance registration allows around an estimate; and the key of each of its own devices. -/
 structure Auditor where
   sheet : String → Option Sheet
+  tolerance : Figure
   key : String → Option String
+
+/-- The auditor's estimate its sheet `a` states: `a`'s figures, at the auditor's tolerance. -/
+def Auditor.estimate (A : Auditor) (a : Sheet) : DeviceEstimate := ⟨a.figures, A.tolerance⟩
 
 /-- The log's head: the digest of its last entry, or of its composite's genesis when it is empty. -/
 def head (D : Digests) (c : Composite) (log : Registration) : String :=
@@ -228,6 +309,7 @@ inductive Refusal
   | unknownRef
   | kind
   | sheetDigest
+  | figures
   | capacity
   | owner
   | uncertified
@@ -258,10 +340,15 @@ def Kinds : Prop :=
     ∀ x ∈ (S.add e).locs, x.kind = .certifier →
       (((S.add e).far x.id).map (S.add e).kind?).Perm [some .host, some .outside]
 
-/-- `sheetDigest`: each new sheet is the auditor's data sheet for its SKU, and each new device names a registered
+/-- `sheetDigest`: each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered
 sheet's digest. -/
 def Sheets : Prop :=
-  (∀ k ∈ e.sheets, A.sheet k.sku = some k) ∧ ∀ x ∈ e.locs, x.kind = .device → x.sheet ∈ (S.add e).sheets.map D.sheet
+  (∀ k ∈ e.sheets, (A.sheet k.sku).isSome) ∧ ∀ x ∈ e.locs, x.kind = .device → x.sheet ∈ (S.add e).sheets.map D.sheet
+
+/-- `figures`: each new sheet is accepted against the auditor's sheet `a` for its SKU: its figures against `a`'s
+estimate, and its memory figures exactly `a`'s. -/
+def Figures : Prop :=
+  ∀ k ∈ e.sheets, ∀ a ∈ A.sheet k.sku, k.figures.Accepted (A.estimate a) ∧ k.bw = a.bw ∧ k.chip = a.chip ∧ k.mem = a.mem
 
 /-- `capacity`: each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory. -/
 def Capacity : Prop :=
@@ -285,6 +372,7 @@ instance instDecidableFresh : Decidable (Fresh D S e) := by unfold Fresh; infer_
 instance instDecidableRefs : Decidable (Refs S e) := by unfold Refs; infer_instance
 instance instDecidableKinds : Decidable (Kinds S e) := by unfold Kinds; infer_instance
 instance instDecidableSheets : Decidable (Sheets D A S e) := by unfold Sheets; infer_instance
+instance instDecidableFigures : Decidable (Figures A e) := by unfold Figures; infer_instance
 instance instDecidableCapacity : Decidable (Capacity D S e) := by unfold Capacity; infer_instance
 instance instDecidableOwners : Decidable (Owners A e) := by unfold Owners; infer_instance
 instance instDecidableCovered : Decidable (Covered c S e) := by unfold Covered; infer_instance
@@ -296,6 +384,7 @@ def refusal : Option Refusal :=
   else if ¬Refs S e then some .unknownRef
   else if ¬Kinds S e then some .kind
   else if ¬Sheets D A S e then some .sheetDigest
+  else if ¬Figures A e then some .figures
   else if ¬Capacity D S e then some .capacity
   else if ¬Owners A e then some .owner
   else if ¬Covered c S e then some .uncertified
@@ -351,10 +440,41 @@ def sheetOf (digest : Sheet → String) (d : String) : Option Sheet :=
   | some x => if x.kind = .device then S.sheet? digest x else none
   | none => none
 
-/-- The device model's view of device `d`: its sheet's rate, bandwidth and on-chip state, and as its memory the bytes
-of the memory leaves under it. -/
-def device (digest : Sheet → String) (d : String) : Option Sheet :=
-  (S.sheetOf digest d).map fun k => { k with mem := S.held d }
+/-- The classes of op a device model counts a tick (`Accounting.OpClass`): tensor-core MACs, CUDA-core ops and oracle
+queries. -/
+inductive OpClass
+  | tc
+  | cuda
+  | oracle
+  deriving DecidableEq, Repr
+
+/-- A device's model (`Accounting.Device`): bits of on-chip state, bits of device memory, ops of each class a tick, bits
+from device memory to the chip a tick, and bits in over each side channel `i` a tick. -/
+structure DeviceModel (ι : Type) where
+  chip : Nat
+  mem : Nat
+  rate : OpClass → Nat
+  bw : Nat
+  cap : ι → Nat
+
+/-- **Device `d`'s model** (`Site.device`), read off its sheet `k` and the auditor's sheet `a` for `k`'s SKU: `k`'s
+on-chip state and bandwidth, `k`'s device memory in bits, and as its tensor-core MACs a tick the highest peak rate of
+the figures the bound reads (`DeviceFigures.bounding`) over a tick of `tick` seconds, rounded up. No sheet states CUDA-core
+ops or oracle queries a tick, or side channels, so they are parameters. `none` when `d` names no registered sheet or the
+auditor has none for its SKU. -/
+def device (digest : Sheet → String) (A : Registration.Auditor) (d : String) (tick : Figure) {ι : Type}
+    (cuda oracle : Nat) (cap : ι → Nat) : Option (DeviceModel ι) :=
+  (S.sheetOf digest d).bind fun k => (A.sheet k.sku).map fun a =>
+    let f := k.figures.bounding (A.estimate a)
+    let peak := OperandClass.all.foldl (fun m c => max m (f.peakRate c).1) 0
+    { chip := k.chip
+      mem := 8 * k.mem
+      rate := fun
+        | .tc => (tick.1 * peak).ceil.toNat
+        | .cuda => cuda
+        | .oracle => oracle
+      bw := k.bw
+      cap := cap }
 
 /-- The host a location is in: itself when it is a host. -/
 def host (i : String) : Option String :=
@@ -402,8 +522,8 @@ def SITE : String := "verity/registration/site/v1"
 def SHEET : String := "verity/registration/sheet/v1"
 def GENESIS : String := "verity/registration/genesis/v1"
 
-/-- `SHA-512(tag ‖ 0 ‖ canon(j))` as hex. Every JSON these types write holds integers only, which `Flock.canon` always
-writes, so the fallback is never taken. -/
+/-- `SHA-512(tag ‖ 0 ‖ canon(j))` as hex. Every JSON these types write holds integers and strings only, which
+`Flock.canon` always writes, so the fallback is never taken. -/
 def tagged (tag : String) (j : Json) : String :=
   Flock.hexOf (Flock.Sha512.hash (tag.toUTF8.push 0 ++ ((Flock.canon j).toOption.getD "").toUTF8))
 
@@ -423,16 +543,28 @@ def Registration.Composite.name : Registration.Composite → String
 /-- A refusal's name in `verity.core.site` (`REFUSALS`): the constructor's, in kebab case. -/
 def Registration.Refusal.name : Registration.Refusal → String
   | .previous => "previous" | .duplicateId => "duplicate-id" | .unknownRef => "unknown-ref" | .kind => "kind"
-  | .sheetDigest => "sheet-digest" | .capacity => "capacity" | .owner => "owner" | .uncertified => "uncertified"
-  | .challengerReach => "challenger-reach"
+  | .sheetDigest => "sheet-digest" | .figures => "figures" | .capacity => "capacity" | .owner => "owner"
+  | .uncertified => "uncertified" | .challengerReach => "challenger-reach"
+
+/-- An operand class's name in `verity.core.site` (`OPERAND_CLASSES`): the constructor's, in kebab case. -/
+def OperandClass.name : OperandClass → String
+  | .uniformS8 => "uniform-s8" | .uniformS2 => "uniform-s2" | .uniformU2 => "uniform-u2" | .uniformU4 => "uniform-u4"
+  | .zero => "zero"
 
 private def optJson {α : Type} (f : α → Json) : Option α → Json
   | none => .null
   | some x => f x
 
+/-- A figure as `Core.Ratio` writes a ratio: `n`, or `n/d` in lowest terms (`Rat`'s `toString`). -/
+def Figure.toJson (q : Figure) : Json := .str (toString q.1)
+
+def DeviceFigures.toJson (d : DeviceFigures) : Json :=
+  Json.mkObj [("clock", d.clock.toJson),
+    ("peak_rate", Json.mkObj (OperandClass.all.map fun c => (c.name, (d.peakRate c).toJson))), ("sku", .str d.sku)]
+
 def Sheet.toJson (k : Sheet) : Json :=
-  Json.mkObj [("bw", Lean.toJson k.bw), ("chip", Lean.toJson k.chip), ("mem", Lean.toJson k.mem), ("sku", .str k.sku),
-    ("tc", Lean.toJson k.tc)]
+  Json.mkObj [("bw", Lean.toJson k.bw), ("chip", Lean.toJson k.chip), ("figures", k.figures.toJson),
+    ("mem", Lean.toJson k.mem)]
 
 def Loc.toJson (x : Loc) : Json :=
   Json.mkObj [("bytes", Lean.toJson x.bytes), ("id", .str x.id), ("key", .str x.key), ("kind", .str x.kind.name),
@@ -476,9 +608,30 @@ private def optOf {α : Type} (f : Json → V α) : Json → V (Option α)
   | .null => pure none
   | j => some <$> f j
 
+/-- A figure as `Figure.toJson` writes it, and only so (`Core.Ratio.ofString`). -/
+def Figure.ofJson (j : Json) (what : String) : V Figure := do
+  let r ← Ratio.ofString (← Flock.J.asStr j what) what
+  let q := mkRat r.num r.den
+  if h : 0 ≤ q then pure ⟨q, h⟩ else throw s!"{what}: negative"
+
+def DeviceFigures.ofJson (j : Json) : V DeviceFigures := do
+  exactly j ["clock", "peak_rate", "sku"] "a sheet's figures"
+  let rates ← Flock.J.get j "peak_rate" "a sheet's figures"
+  exactly rates ["uniform-s2", "uniform-s8", "uniform-u2", "uniform-u4", "zero"] "the peak rates"
+  let rate : OperandClass → V Figure := fun c => do
+    Figure.ofJson (← Flock.J.get rates c.name "the peak rates") s!"{c.name}'s peak rate"
+  let s8 ← rate .uniformS8
+  let s2 ← rate .uniformS2
+  let u2 ← rate .uniformU2
+  let u4 ← rate .uniformU4
+  let z ← rate .zero
+  pure { sku := ← Flock.J.str j "sku" "a sheet's figures",
+         clock := ← Figure.ofJson (← Flock.J.get j "clock" "a sheet's figures") "clock",
+         peakRate := fun | .uniformS8 => s8 | .uniformS2 => s2 | .uniformU2 => u2 | .uniformU4 => u4 | .zero => z }
+
 def Sheet.ofJson (j : Json) : V Sheet := do
-  exactly j ["bw", "chip", "mem", "sku", "tc"] "a sheet"
-  pure { sku := ← Flock.J.str j "sku" "a sheet", tc := ← Flock.J.nat j "tc" "a sheet", bw := ← Flock.J.nat j "bw" "a sheet",
+  exactly j ["bw", "chip", "figures", "mem"] "a sheet"
+  pure { figures := ← DeviceFigures.ofJson (← Flock.J.get j "figures" "a sheet"), bw := ← Flock.J.nat j "bw" "a sheet",
          chip := ← Flock.J.nat j "chip" "a sheet", mem := ← Flock.J.nat j "mem" "a sheet" }
 
 def Loc.ofJson (j : Json) : V Loc := do
@@ -517,15 +670,17 @@ def Registration.ofJson (j : Json) : V (Registration.Composite × Registration) 
   pure (← Registration.Composite.ofJson (← Flock.J.get j "composite" "the log"),
     ← (← Flock.J.arr j "entries" "the log").toList.mapM Registration.Entry.ofJson)
 
-/-- The auditor as `Auditor.to_json` writes it: its devices' keys, and its data sheets, the first under an SKU or a
-device being the one the check reads. -/
+/-- The auditor as `Auditor.to_json` writes it: its devices' keys, its data sheets, the first under an SKU or a device
+being the one the check reads, and its tolerance. -/
 def Registration.Auditor.ofJson (j : Json) : V Registration.Auditor := do
-  exactly j ["keys", "sheets"] "the auditor"
+  exactly j ["keys", "sheets", "tolerance"] "the auditor"
   let keys ← (← Flock.J.arr j "keys" "the auditor").toList.mapM fun k => do
     exactly k ["id", "key"] "a key"
     pure (← Flock.J.str k "id" "a key", ← Flock.J.str k "key" "a key")
   let sheets ← (← Flock.J.arr j "sheets" "the auditor").toList.mapM Sheet.ofJson
-  pure { sheet := fun sku => sheets.find? (·.sku == sku), key := fun i => (keys.find? (·.1 == i)).map (·.2) }
+  pure { sheet := fun sku => sheets.find? (·.sku == sku),
+         tolerance := ← Figure.ofJson (← Flock.J.get j "tolerance" "the auditor") "the auditor's tolerance",
+         key := fun i => (keys.find? (·.1 == i)).map (·.2) }
 
 end Site
 
