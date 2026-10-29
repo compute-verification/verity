@@ -13,7 +13,7 @@ cryptography's advantage:
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
   whose certificates may be wrong, and `δ` the chance more are.
 * `Detection`, sampled proofs with terminal detection: their slack is `break` (the verdict lag `JΔ/H` and, sampled,
-  the incorrect blocks accepted before detection `θ`) and `exfil.faulty`, Lean's `χ` (the compute that bits injected by
+  the incorrect blocks accepted before detection `θ`) and `exfil.incorrect`, Lean's `χ` (the compute that bits injected by
   accepted incorrect blocks buy, at `chord` products a bit; not double counting, §8 "Channels"). Its δ is the escape
   bound's.
 * `Wipe`: at each wipe a server keeps at most `k_wipe` bits of the earlier content of its whole memory `M_s` (`per =
@@ -199,7 +199,7 @@ class Detection:
         cheat = self.cheat if self.cheat is not None else (
             u.gates(2 * self.chord * self.injected() / self.chord_kappa) / c if self.sampled else 0.0)
         if cheat:
-            out["exfil.faulty"] = min(1.0, cheat)
+            out["exfil.incorrect"] = min(1.0, cheat)
         return out
 
     def delta(self, ctx: Context) -> tuple[float, float]:
@@ -311,7 +311,7 @@ class Certifier:
     `Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`; the egress at the same requests). The
     bound is stated per link-window, so the rate is too: this package never cites less than the bound states. This is
     its honest-δ form, at a δ where only the empty incorrect set is possible. An incorrect ingress unit adds
-    `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is drawn. The
+    `incorrect_block_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is drawn. The
     bound is a draft until Lean proves it, so `declared_x` keeps the line rate as the ingress's upper end: the ingress
     is `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is below the prompt rate of
     the serving credited at the location can't feed that serving, so `declared` is off by default until a deployment
@@ -385,7 +385,7 @@ class Certifier:
         return int(self.lanes) * clog2(self.cell_rate + 2)
 
     @property
-    def faulty_unit_bits(self) -> float:
+    def incorrect_block_bits(self) -> float:
         """Bits an incorrect ingress unit adds, which the honest-δ form excludes and which are 0 when every ingress unit is
         drawn: its bucket's whole row, `8 B lanes r`, and two requests more a lane, its forged state's own and one
         admission its reset allows (`faultyIngressBits`)."""

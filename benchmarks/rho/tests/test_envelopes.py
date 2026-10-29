@@ -73,8 +73,8 @@ def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
     slack = sampled.slack(ctx)
     assert sampled.detection.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
     assert sampled.detection.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
-    assert math.fsum(v for k, v in slack.items() if k != "exfil.faulty") == pytest.approx(t5["residual"], rel=1e-9)
-    assert slack["exfil.faulty"] == pytest.approx(t5["cheat"], rel=1e-7)
+    assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["residual"], rel=1e-9)
+    assert slack["exfil.incorrect"] == pytest.approx(t5["cheat"], rel=1e-7)
 
 
 def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remote_at_full_capacity():
@@ -159,7 +159,7 @@ def test_the_layout_gets_only_what_an_abiding_strategy_gets():
     layout = sampled.partition(ctx).serving[0].layout
     assert set(layout.uncertified) == set(Remote.ABIDING)
     assert set(sampled.slack(ctx)) - set(layout.uncertified) == {"skip.certs", "break.lag", "break.escape",
-                                                                 "exfil.faulty"}
+                                                                 "exfil.incorrect"}
     used = ctx.location.phi * ctx.horizon.seconds * ctx.fleet.mfu_train
     assert layout.uncertified["undecl.gpu"] == pytest.approx(sampled.pouw.residual * used)
 
@@ -245,7 +245,7 @@ def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest
     assert c.window_bits(32) == (291_440, 8_760) == (8 * 36_382 + 32 * 12, 8 * 1_095)
     assert (c.r_in, c.r_out) == (pytest.approx(91_075), pytest.approx(8_760 / 3.2))
     assert (round(c.r_in / 1e3, 1), round(c.r_out / 1e3, 1), c.warden_rate) == (91.1, 2.7, 655_360)
-    assert c.faulty_unit_bits == 356_592 and round(c.faulty_unit_bits / c.window_bits(32)[0], 2) == 1.22
+    assert c.incorrect_block_bits == 356_592 and round(c.incorrect_block_bits / c.window_bits(32)[0], 2) == 1.22
     # a slot is held D + 1 = 28 buckets from its admission, so the ceiling steps past 28
     assert c.window_bits(28) == (4 * 36_382 + 28 * 12, 4 * 1_095)
     assert c.window_bits(29) == (8 * 36_382 + 29 * 12, 8 * 1_095)
