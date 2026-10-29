@@ -114,6 +114,7 @@
 """
 from __future__ import annotations
 
+import concurrent.futures
 import errno
 import fcntl
 import hashlib
@@ -2066,6 +2067,11 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         raise
 
 
+#: `adopt` asks the ssh machines at once, ADOPT_JOBS at a time, each with this connect timeout and this bound: one at a time with
+#: 15 s and 60 s, `research status` on a run another VM launched sat silent 80 to 90 s behind 28 machines, stopped ones among them
+ADOPT_CONNECT_S, ADOPT_PROBE_S, ADOPT_JOBS = 5, 20, 16
+
+
 def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None,
           unique: bool = False) -> Path:
     """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine, write
@@ -2081,7 +2087,8 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         raise Refused(f"{local} exists already")
     ms = load_machines() if machines is None else machines
     names = [on] if on else sorted(n for n, m in ms.items() if m.get("provider") == "ssh")
-    answers, held = [], []
+    answers: dict[str, str] = {}
+    targets = []
     for name in names:
         m = ms.get(name)
         if m is None:
@@ -2089,22 +2096,39 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         try:
             tgt = pod_target(m)
         except Refused as e:
-            answers.append(f"{name}: {e}")
+            answers[name] = f"{name}: {e}"
             continue
         m = {**m, "root": m.get("root") or DEFAULT_ROOT}
-        rd = f"{m['root']}/runs/{run_id}"
-        ssh = ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"))
+        targets.append((name, m, tgt, f"{m['root']}/runs/{run_id}"))
+    if len(targets) > 1:
+        print(f"research: looking for {run_id} on {len(targets)} machines (--on NAME skips this)", file=sys.stderr, flush=True)
+
+    def probe(t: tuple) -> str | None:
+        name, _, tgt, rd = t
+        ssh = ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"), connect_timeout=ADOPT_CONNECT_S)
         try:
-            r = ssh_run(ssh, ["test", "-d", rd], timeout=60)
+            r = ssh_run(ssh, ["test", "-d", rd], timeout=ADOPT_PROBE_S)
         except subprocess.TimeoutExpired:
-            answers.append(f"{name}: no answer in 60 s")
-            continue
+            return f"{name}: no answer in {ADOPT_PROBE_S} s"
         if r.returncode != 0:
-            answers.append(f"{name}: " + (f"no {rd}" if r.returncode == 1 else f"ssh rc {r.returncode}: {r.stderr.decode(errors='replace').strip()[-160:]}"))
-            continue
-        held.append((name, m, tgt, rd))
-        if not unique:
-            break
+            return f"{name}: " + (f"no {rd}" if r.returncode == 1 else f"ssh rc {r.returncode}: {r.stderr.decode(errors='replace').strip()[-160:]}")
+        return None
+
+    held = []
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(ADOPT_JOBS, len(targets))))
+    try:
+        futures = {ex.submit(probe, t): t for t in targets}
+        for f in concurrent.futures.as_completed(futures):
+            t = futures[f]
+            if (why := f.result()) is not None:
+                answers[t[0]] = why
+                continue
+            held.append(t)
+            if not unique:
+                break
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+    held.sort(key=lambda h: h[0])
     if len(held) > 1:
         raise Refused(f"{' and '.join(h[0] for h in held)} each hold a run {run_id}: name one with --on")
     if held:
@@ -2117,7 +2141,8 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
             "remote_run_dir": rd})
         fetch(local)
         return local
-    raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers)})" if answers else " (no ssh machine is registered)"))
+    raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers[n] for n in sorted(answers))})" if answers
+                                                       else " (no ssh machine is registered)"))
 
 
 def _runner_gone(ssh: list[str], local_dir: Path, pid: int, *, timeout: float = 120) -> str | None:
