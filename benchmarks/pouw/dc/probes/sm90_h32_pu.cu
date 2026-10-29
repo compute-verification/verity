@@ -2,8 +2,8 @@
 // ../h32.py prices them per general register a lane writes, so a note counts no carry, which is a predicate a lane.
 // ptxas 13.0.88 splits addc across IMAD.X and IADD3.X, so each note names both. One 1024-thread block an SM, 8
 // independent chains a thread, each written from itself and its neighbour so ptxas can neither fold nor hoist. The
-// uniform datapath's probes are ../../opcode_probe/probes/uniform.cu's: ptxas puts a warp-uniform chain there only in a
-// loop with MMAs.
+// uniform datapath's probes are sm90_uniform.cu's (uniform.cuh's sm_90a table): a uniform instruction writes one word
+// a warp.
 //   c_add64     add.cc + addc: a 64-bit add (IADD3 writes its word and the carry; IMAD.X or IADD3.X the high word)
 //   c_add128    add.cc + 2 addc.cc + addc: a 128-bit add (IADD3.X with a carry in and out writes a word and a carry)
 #include "../../opcode_probe/probe.cuh"
