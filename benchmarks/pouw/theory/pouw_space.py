@@ -1703,17 +1703,40 @@ def main() -> int:
 
     loads = b1n["terms"]["noise_derivation"] - tagn["terms"]["noise_derivation"]
     checks.check("N-EGRESS's coin lanes reproduce its arithmetic at T 8,192: blc1a-t128's 550 MACs a coin bit, network "
-                 "term 0.217% at 3,532 (2.17% at 320 bits) and lane loads 0.209% uncredited; blc4a-t64's 0.36% at 320 "
-                 "bits (0.37% at the floor); each A2c/A8 residual under model P is (S - 1)·p*·32/K on its own S (0.415% "
-                 "and 0.334%, where N-EGRESS's 0.40% and 0.30% scale the lead's S), and 0 at tile grain",
+                 "term 0.217% at 3,532 (2.17% at 320 bits) and lane loads 0.209% uncredited; blc4a-t64's 0.95% at 320 "
+                 "bits (N-EGRESS final 2's 0.965% at the floor); each A2c/A8 residual under model P is (S - 1)·p*·32/K "
+                 "on its own S (0.415% and 0.334%, where N-EGRESS's 0.40% and 0.30% scale the lead's S), and 0 at tile "
+                 "grain",
                  abs(b1["macs_per_coin_bit"] / 550 - 1) < 0.005 and abs(b1["network_streamed"] - 0.00217) < 0.00005
                  and abs(b1["network_streamed_alt"] - 0.0217) < 0.0005 and abs(loads - 0.00209) < 0.00005
-                 and 0.0035 < b4["network_streamed_alt"] < 0.0038
+                 and 0.0092 < b4["network_streamed_alt"] < 0.0097
                  and all(b["terms"]["coin_branch"] == 0 and abs(b["t1_p"] - b["t1"] - residual(nz)) < 1e-9
                          for b, nz in ((b1, "tag-blc1a-t128"), (b4, "tag-blc4a-t64"))),
                  f"{b1['macs_per_coin_bit']:,.1f} MACs a bit, {b1['network_streamed']:.4%} / {b1['network_streamed_alt']:.3%}, "
                  f"loads {loads:.4%}; blc4a {b4['network_streamed_alt']:.3%}; P residuals {b1['t1_p'] - b1['t1']:.4%} / "
                  f"{b4['t1_p'] - b4['t1']:.4%}")
+    egr2 = {nz: row("t8192", nm(nz, "served", "s8", "k32", "w", "r256k", "cert", "min"))
+            for nz in ("tag-blc4a-t64", "tag-blc4a-t64-a127", "tag-blc4a-t64-rot")}
+    egr2_floor = {"tag-blc4a-t64": 0.000965, "tag-blc4a-t64-a127": 0.000555, "tag-blc4a-t64-rot": 0.00037}
+    checks.check("N-EGRESS final 2's network term: against A' = 1 the lead's words read 8.04 of its 21 coin bits, "
+                 "(1, 127, 1) 13.99 and the row-parity -rot all 21, so at cap 32 / 320 the card gives N-EGRESS's floor "
+                 "figures 0.0965% / 0.965%, 0.0555% / 0.555% and 0.037% / 0.370% within 3% (this card prices hashing at "
+                 "3,532 registers, not 908 units a byte)",
+                 all(abs(r["network_streamed"] / egr2_floor[nz] - 1) < 0.03
+                     and abs(r["network_streamed_alt"] / egr2_floor[nz] / 10 - 1) < 0.03 for nz, r in egr2.items()),
+                 ", ".join(f"{nz} {r['network_streamed']:.4%} / {r['network_streamed_alt']:.3%}" for nz, r in egr2.items()))
+    kern = {"t512": (10.90, 21.28), "t512r512": (37.34, 65.12), "t8192": (62.08, 74.63)}
+    kern_rows = {p: row(p, nm("tag-blc4a-t64", "served", "s8", "k32", "w", "r256k", "cert", "min")) for p in kern}
+    kern_ratio = {p: tuple(kern_rows[p]["t2"]["engines"][e]["ratio"] / v for e, v in zip(("sync", "async"), kern[p]))
+                  for p in kern}
+    checks.check("N-KERNEL final's measured T2 on the lead (ssn-1l-tag + blc4a-t64-e7 with step-1 coins and A' = (1, 127, "
+                 "1), sync / async 10.90 / 21.28, 37.34 / 65.12 and 62.08 / 74.63 at the three points; runs "
+                 "r20261029-115734-aaa5 and r20261029-115600-9b5d): the card's estimate is below the measured at every "
+                 "point and within 13% of it, so the frontier reports the measured figure",
+                 all(0.87 < x < 1.0 for xs in kern_ratio.values() for x in xs),
+                 ", ".join(f"{p} {kern_rows[p]['t2']['engines']['sync']['ratio']:.1f} / "
+                           f"{kern_rows[p]['t2']['engines']['async']['ratio']:.1f} ({a:.3f} / {b:.3f} of measured)"
+                           for p, (a, b) in kern_ratio.items()))
     salted = {lf: row("t8192", nm("ssn-1l-tag", "served", "s8", "k32", "w", lf, "cert", "min")) for lf in ("r256k", "r16k")}
     masked = row("t8192", nm("ssn-1l-tag", "served", "s8", "k32", "w", "r256k", "salt", "min"))
     red = {"r256k": (3886, 0.0153), "r16k": (245, 0.00097)}

@@ -694,10 +694,10 @@ owner = "the PoUW owner (protocol)"
 source = "N-RED interim 1 §3: ssn_1l-tag's tag weights G in [-3, 3]^(4 x n) are drawn from live coins after the model's root is committed and are unknown when B is chosen; with G public, a B holding G's rows cancels the tags and A1 saves 84.8% again (`public_g`). Drawn once a window its coins and forming are about 0. A protocol rule, not built. N-RED interim 2 (note compute-research/20261029T0940Z-report-np-red; nred_round2.py run r20261029-084132-2bfb, art:bfe76ff2c3fe560bcb11f64926c10b20ed9fc39357382b582e0b0a27a18dad1a; nred_round3.py run r20261029-093222-46ee, art:752f2bd5b9e0fa22bfa6aefd9001b4ee68e6efb173e81fb611e9ac3a1e67d718) §1: G guards step 1 only; A2c compares a row with its own previous step, where T(i)·G cancels, so it never reads G and g-private is orthogonal to it"
 
 [premise.tile-grain]
-rank = 1
+rank = 3
 status = "measured"
 owner = "N-FLOOR"
-source = "N-FLOOR final §7 (note compute-research/20261029T1148Z-report-np-floor; every sm_90 MMA form in its interim 1 §5b and final §5, gated, N-SAKU's emulated forms in r20261029-091418-b409, art:1dd5b5ac3c7a13e732c1ba1b33dbf5a9f49c0946fec41f14562fc533fd42e583; lag.cu's held word against computed, time5 r20261029-110224-c481, art:ec42decb8261d2461f1e41d9aa2f628b31d41e27ceeeb2953be5200759d6b1e8): on sm_90 the tensor pipe's work, which binds the lead's kernel, is skipped only a whole MMA at a time, at least 128 words a warp at the floor's price (m16n8; wgmma m64nN is 128 a warp too), 64 for m8n8 at about twice it; a copy or a selection that replaces fewer words saves no time. T1's copy model (NIGHT §8 decision 2's default): model W on the tensor pipe, so a coin lane's step leaves nothing (branch_rows_w), N-ADAPT's masked channel saves nothing (a whole m16n8 tile coincides at most 7^-8 a row pair), and per-word patches in A1's tile closure save nothing (copy-floor's role there). What it leaves is CORE-TIME's co-issue class, a time reading capped at 29.3 units a word, not a copy model. Test: opcode_probe's MMA census on sm_90a, refuted by a form with fewer than 128 output words a warp at under twice the floor's price a register"
+source = "N-FLOOR final 2 (note compute-research/20261029T1225Z-report-np-floor) restates tile-grain as work, rank 3. N-FLOOR final §7 (note compute-research/20261029T1148Z-report-np-floor; every sm_90 MMA form in its interim 1 §5b and final §5, gated, N-SAKU's emulated forms in r20261029-091418-b409, art:1dd5b5ac3c7a13e732c1ba1b33dbf5a9f49c0946fec41f14562fc533fd42e583; lag.cu's held word against computed, time5 r20261029-110224-c481, art:ec42decb8261d2461f1e41d9aa2f628b31d41e27ceeeb2953be5200759d6b1e8): on sm_90 the tensor pipe's work, which binds the lead's kernel, is skipped only a whole MMA at a time, at least 128 words a warp at the floor's price (m16n8; wgmma m64nN is 128 a warp too), 64 for m8n8 at about twice it; a copy or a selection that replaces fewer words saves no time. T1's copy model (NIGHT §8 decision 2's default): model W on the tensor pipe, so a coin lane's step leaves nothing (branch_rows_w), N-ADAPT's masked channel saves nothing (a whole m16n8 tile coincides at most 7^-8 a row pair), and per-word patches in A1's tile closure save nothing (copy-floor's role there). What it leaves is CORE-TIME's co-issue class, a time reading capped at 29.3 units a word, not a copy model. Test: opcode_probe's MMA census on sm_90a, refuted by a form with fewer than 128 output words a warp at under twice the floor's price a register"
 
 [premise.a127-attacks]
 rank = 2
@@ -913,7 +913,7 @@ source = "N-EXACT final §1, §6 and §9 (ssn_1l_tag_xu, exact_sweep.py): step S
 # public lane (A2c), charged in T1 with or without model-public.
 [N.tag-blc1a-t128]
 title = "ssn-1l-tag with one certifier-streamed 7-bit odd coin lane a later step a 128-row tile and column, at 30 data lanes (blc1a-t128-e7)"
-fields = { c = 4, tag = 4, blc_lanes = 30, blc_tile = 128, blc_bits = 7, blc_p = 0.00390625, blc_loads = 1, S = "1 + ceil(max(0, K - (32 - c - tag))/blc_lanes)", bits = "S - 1 + c", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", blc_steps = "ceil((S - 1)*min(m, blc_tile)/blc_tile)", blc_entries = "n*ceil(m/blc_tile)*blc_steps", stream_bits = "blc_bits*blc_entries", noise_x = "4*m*S", noise_y = "blc_loads*blc_entries", derive_extra = "4*m*rot", dup = 0, noise_max = 3, n_max = 28559, s8_ok = 1, branch_rows = "m*(blc_steps*blc_p + (S - 1 - blc_steps)/2)", branch_rows_w = "m*(S - 1 - blc_steps)/2", masked_p = "0.0965*(K/2048)**-0.212" }
+fields = { c = 4, tag = 4, blc_lanes = 30, blc_tile = 128, blc_bits = 7, blc_read = "blc_bits", blc_p = 0.00390625, blc_loads = 1, S = "1 + ceil(max(0, K - (32 - c - tag))/blc_lanes)", bits = "S - 1 + c", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", blc_steps = "ceil((S - 1)*min(m, blc_tile)/blc_tile)", blc_entries = "n*ceil(m/blc_tile)*blc_steps", stream_bits = "blc_read*blc_entries", noise_x = "4*m*S", noise_y = "blc_loads*blc_entries", derive_extra = "4*m*rot", dup = 0, noise_max = 3, n_max = 28559, s8_ok = 1, branch_rows = "m*(blc_steps*blc_p + (S - 1 - blc_steps)/2)", branch_rows_w = "m*(S - 1 - blc_steps)/2", masked_p = "0.0965*(K/2048)**-0.212" }
 coins = { coins = ["4*m*ceil(bits/32)"] }
 premises = ["ssn-tag-distinct", "g-private", "adaptive-pointwise", "trusted-host", "certifier-coins", "fold-range"]
 t3 = { s8 = "ssn-1l-tag-v1" }
@@ -938,8 +938,8 @@ source = "N-EGRESS §2c: blc1a-t64-e7, twice the stream and lane loads of t128 f
 [N.tag-blc4a-t64]
 like = "tag-blc1a-t128"
 title = "ssn-1l-tag with three certifier-streamed 7-bit coin lanes a later step a 64-row tile and column by one 4-byte cp.async, at 28 data lanes (blc4a-t64-e7)"
-fields = { blc_lanes = 28, blc_tile = 64, blc_bits = 21, blc_p = 0.00293, blc_loads = 0 }
-source = "N-EGRESS interim 2 §2b: lanes 28-30 hold coins against A' = 1 beside the row lane 31, at 28 data lanes a later step; one 4-byte cp.async a (64-row tile, step, column) carries the three coins and lane 31's public weight, so no register is written (forming 0.001%, unpriced here); words ×1.105; the three lanes' sum is a column term the fold removes; p* 0.00293 (N-EGRESS), about 0.30% under model P. The layout for a 320-bit cap"
+fields = { blc_lanes = 28, blc_tile = 64, blc_bits = 21, blc_read = 8.04, blc_p = 0.00293, blc_loads = 0 }
+source = "N-EGRESS interim 2 §2b: lanes 28-30 hold coins against A' = 1 beside the row lane 31, at 28 data lanes a later step; one 4-byte cp.async a (64-row tile, step, column) carries the three coins and lane 31's public weight, so no register is written (forming 0.001%, unpriced here); words ×1.105; the three lanes' sum is a column term the fold removes; p* 0.00293 (N-EGRESS), about 0.30% under model P. N-EGRESS final 2 §1 (note compute-research/20261029T1224Z-report-np-egress; run r20261029-122322-2c11, art:0d52d45d11e0649f57bff794d911ff5ffa0566d56f5d7feef4ab27f406e9090b): against A' = 1 a step's words read only s1 + s2 + s3, 8.04 bits of the 21 (checked, the exact law), so blc_read is 8.04 and the network term misses cap 320 at the bar (0.965% / 1.879%)"
 
 [N.tag-blc4a-t64-e4]
 like = "tag-blc1a-t128"
@@ -950,9 +950,16 @@ source = "N-EGRESS final §4 (note compute-research/20261029T1136Z-report-np-egr
 [N.tag-blc4a-t64-a127]
 like = "tag-blc1a-t128"
 title = "blc4a-t64-e7 with its three coin lanes weighted A' = (1, 127, 1) in A's producer"
-fields = { blc_lanes = 28, blc_tile = 64, blc_bits = 21, blc_p = 3.0994e-5, blc_loads = 0 }
+fields = { blc_lanes = 28, blc_tile = 64, blc_bits = 21, blc_read = 13.99, blc_p = 3.0994e-5, blc_loads = 0 }
 premises = ["a127-attacks"]
-source = "N-LIT final §2 (note compute-research/20261029T1153Z-report-np-lit; C17, run r20261029-114138-ff7b, exact over every unit-lane triple): A' = (1, 127, 1) is the best weighting with a unit lane, p* 65/2,097,152 with the same coins, 94.5x below (1, 1, 1); one byte constant in A's producer and a multiply-add a coin in the certifier. It moves only model P's column (tile grain prices the coin lanes at 0 either way). The weighting moves σ out of the column FFMA's exact range (N-LIT C16), so it needs xu's IADD3 column source"
+source = "N-LIT final §2 (note compute-research/20261029T1153Z-report-np-lit; C17, run r20261029-114138-ff7b, exact over every unit-lane triple): A' = (1, 127, 1) is the best weighting with a unit lane, p* 65/2,097,152 with the same coins, 94.5x below (1, 1, 1); one byte constant in A's producer and a multiply-add a coin in the certifier. It moves only model P's column (tile grain prices the coin lanes at 0 either way). The weighting moves σ out of the column FFMA's exact range (N-LIT C16), so it needs xu's IADD3 column source. Its words read 13.99 bits of the 21 (N-EGRESS final 2 §2, checked): 0.555% / 1.081% at cap 320, missing at the bar"
+
+[N.tag-blc4a-t64-rot]
+like = "tag-blc1a-t128"
+title = "blc4a-t64-e7 with its coin lanes weighted by row parity, A' = (127, 1, 1) on even rows and (1, 127, 1) on odd (blc4a-t64-e7-rot)"
+fields = { blc_lanes = 28, blc_tile = 64, blc_bits = 21, blc_read = 21, blc_p = 3.0994e-5, blc_loads = 0 }
+premises = ["a127-attacks"]
+source = "N-EGRESS final 2 §3-4 (note compute-research/20261029T1224Z-report-np-egress; run r20261029-122322-2c11, art:0d52d45d11e0649f57bff794d911ff5ffa0566d56f5d7feef4ab27f406e9090b): two row classes, so a tile's words read all 21 bits and each row's coin law is N-LIT's (1, 127, 1), with its A2c; the network term is 0.037% / 0.072% at cap 32 and 0.370% / 0.721% at cap 320 at every point (checked), and no proper row subset carries more work a bit than the tile (checked). The fold's column vector becomes one a row class, picked by row parity in the epilogue, which is unbuilt (N-EXACT); the stream grows 4 bytes a tile and column (+1.1% at T 8,192, unpriced here); T2 is the lead's"
 
 [N.ssn-a]
 title = "ssn-a, served sparse noise: each k32 step 28 entries and a register a = (h >> q) & 0x01010101 a row against public W0"
