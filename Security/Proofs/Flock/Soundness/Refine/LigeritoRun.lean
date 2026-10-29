@@ -395,7 +395,7 @@ theorem qbOut_rel (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteAr
 out-of-domain sample, the first message and the `k0` folds (`hfold`), the level-1 cap, its two out-of-domain samples
 (`htwo`), the level-0 queries with their message, and any run of the recursive rounds from the resulting state
 (`hrec`). -/
-theorem ligeritoC_model (r : ℕ) (sch : FlockSoundness.Accounting.Schedule) (T : 𝔽) (b : ℕ → 𝔽) (lv₀ lv₁ : Accounting.Level)
+theorem ligeritoC_model (r : ℕ) (sch : Accounting.Schedule) (T : 𝔽) (b : ℕ → 𝔽) (lv₀ lv₁ : Accounting.Level)
     (rest : List Accounting.Level) (hl : sch.levels = lv₀ :: lv₁ :: rest)
     (z₀ c₀ : Array F128) (hz₀ : z₀.size = sch.m - 7) (hm7 : sch.m - 7 ≠ 1) (hc₀ : c₀.size = 1) (y₀ : F128)
     (m₀ : F256 × F256)

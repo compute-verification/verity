@@ -128,7 +128,7 @@ theorem johnsonCount_le_len {k n : ℕ} (hn : 0 < n) (hnk : 10000 < n * k) :
   omega
 
 /-- Every `fast100` schedule's level 0 has `n·k > 10^4`: at least `2^9` message columns, and `n ≥ k`. -/
-theorem fast100_level₀_nk {m : ℕ} {sch : FlockSoundness.Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
+theorem fast100_level₀_nk {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
     10000 < 2 ^ sch.level₀.logLen * 2 ^ sch.level₀.logCols := by
   have hc := (Flock.fast100_level₀_queries h).2
   have hl : sch.level₀.logCols ≤ sch.level₀.logLen := by unfold Accounting.Level.logLen; omega
@@ -136,16 +136,16 @@ theorem fast100_level₀_nk {m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
     _ ≤ _ := Nat.mul_le_mul (Nat.pow_le_pow_right (by norm_num) (hc.trans hl)) (Nat.pow_le_pow_right (by norm_num) hc)
 
 /-- **The radius decoder's agreement** `√ρ + 1/200`, with `ρ = 2^logCols / 2^logLen` level 0's rate. -/
-noncomputable def agreeR (sch : FlockSoundness.Accounting.Schedule) : ℝ :=
+noncomputable def agreeR (sch : Accounting.Schedule) : ℝ :=
   Real.sqrt ((2 : ℝ) ^ sch.level₀.logCols / 2 ^ sch.level₀.logLen) + 1 / 200
 
-theorem agreeR_pos (sch : FlockSoundness.Accounting.Schedule) : 0 < agreeR sch := by
+theorem agreeR_pos (sch : Accounting.Schedule) : 0 < agreeR sch := by
   unfold agreeR
   positivity
 
 /-- **The Johnson count fits Flock's level-0 codeword**: at agreement `√ρ + 1/200` it is at most `n = 2^logLen`, for
 every `fast100` schedule. -/
-theorem johnsonCount_flock_le {m : ℕ} {sch : FlockSoundness.Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
+theorem johnsonCount_flock_le {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
     johnsonCount (2 ^ sch.level₀.logCols) (agreeR sch) ≤ 2 ^ sch.level₀.logLen := by
   have := johnsonCount_le_len (k := 2 ^ sch.level₀.logCols) (n := 2 ^ sch.level₀.logLen) (by positivity)
     (fast100_level₀_nk h)
@@ -156,12 +156,12 @@ theorem johnsonCount_flock_le {m : ℕ} {sch : FlockSoundness.Accounting.Schedul
 
 /-- **The radius decoder at Flock's level-0 code**: the zero-filled word of length `n = 2^logLen`, then `flockDecode`
 on its `n` points at agreement `√ρ + 1/200`. -/
-noncomputable def flockDecodeR {m : ℕ} {sch : FlockSoundness.Accounting.Schedule} (h : Accounting.fast100 m = some sch)
+noncomputable def flockDecodeR {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch)
     (os : List (ℕ × (Fin (2 ^ sch.k0) → GF128))) : List (Message GF128 sch.k0 sch.level₀.logCols) :=
   flockDecode h (agreeR sch) (fillPts (2 ^ sch.level₀.logLen) os)
 
 /-- `flockDecodeR` with its count: the fill step's (`fillPtsC`), then `flockCounted`'s on the `n` points. -/
-noncomputable def flockCountedR {m : ℕ} {sch : FlockSoundness.Accounting.Schedule} (h : Accounting.fast100 m = some sch)
+noncomputable def flockCountedR {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch)
     (os : List (ℕ × (Fin (2 ^ sch.k0) → GF128))) : List (Message GF128 sch.k0 sch.level₀.logCols) × ℕ :=
   ((flockCounted h (agreeR sch) (fillPtsC (2 ^ sch.level₀.logLen) os).1).1,
     (fillPtsC (2 ^ sch.level₀.logLen) os).2 + (flockCounted h (agreeR sch) (fillPtsC (2 ^ sch.level₀.logLen) os).1).2)
@@ -172,7 +172,7 @@ noncomputable def flockPolyR : Polynomial ℕ := flockPoly + X ^ 2 + X
 
 /-- **The radius decoder meets `ListWithin`** at Flock's level-0 code, at `θ = 1 − √ρ − 1/200`, for every `fast100`
 schedule. -/
-theorem listWithin_flockDecodeR {m : ℕ} {sch : FlockSoundness.Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
+theorem listWithin_flockDecodeR {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
     Flock.ListWithin (fun _ => 2 ^ sch.level₀.logLen) (Flock.levelZeroEnc execArith sch.k0 sch.level₀.logCols)
       (fun _ => 1 - Real.sqrt ((2 : ℝ) ^ sch.level₀.logCols / 2 ^ sch.level₀.logLen) - 1 / 200) (flockDecodeR h) := by
   intro os M hM
@@ -186,7 +186,7 @@ theorem listWithin_flockDecodeR {m : ℕ} {sch : FlockSoundness.Accounting.Sched
   exact hM
 
 /-- **The radius decoder's complexity**: at most `flockPolyR` at the size `(os.length + n)·2^k0·128`. -/
-theorem flockDecodeR_complexity {m : ℕ} {sch : FlockSoundness.Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
+theorem flockDecodeR_complexity {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
     DecoderComplexity (flockDecodeR h) (flockCountedR h)
       (fun os => (os.length + 2 ^ sch.level₀.logLen) * 2 ^ sch.k0 * 128) flockPolyR := by
   intro os

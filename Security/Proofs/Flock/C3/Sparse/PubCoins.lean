@@ -43,7 +43,7 @@ theorem layoutFactors_ok_of_size {sh : RecSparse.Shape} {xs ys xs' ys' : Array F
 
 /-- **A rep's unit fixes its points' sizes**: `verifierRows` at the unit's rounds, at a shape of the statement's `m` and
 `k_log`, returns `x_rest` and `y_rest` of `k_log − 6` coordinates (`holoRows_coins`). -/
-theorem points_size_of_unit {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+theorem points_size_of_unit {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {cap₀ : Model.Cap Refine.Dig} {os : Model.Opens 𝔽 Refine.Dig} {r : ℕ} {ts : List Game.Step}
     (U : RepUnit S sch₀ extra cap₀ os r ts) {ash : Flock.Shape} {xs : Array Flock.Claim} {cb v : Array Flock.F128}
     {info : RecAlgebra.Info RecAlgebra.Lin} {kappa : Array (Array (Array Flock.F128))}
@@ -76,7 +76,7 @@ theorem scOf_cs (e : ExecHolo) (rng : Flock.Range) (sh : Flock.Shape) (cs : Arra
 /-- **`SparsePubRead` at `scOf`**: at a rep's unit, `verifierRows` accepts its values at its shape (`AlgebraHolds`),
 at the statement's `m` and `k_log`, and its points have `k_log − 6` coordinates, so the layout factors pass there where
 they pass at zero points of that size (`hok`). -/
-theorem sparsePubRead_scOf {e : ExecHolo} {sch₀ : FlockSoundness.Accounting.Schedule}
+theorem sparsePubRead_scOf {e : ExecHolo} {sch₀ : Accounting.Schedule}
     {extra : List (Model.Claim 𝔽 (e.cls.pubStatement e.regs).m)} {cap₀ : Model.Cap Refine.Dig}
     {os : Model.Opens 𝔽 Refine.Dig} {r : ℕ} {ts : List Game.Step}
     (U : RepUnit (e.cls.pubStatement e.regs) sch₀ extra cap₀ os r ts) {rng : Flock.Range}

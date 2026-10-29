@@ -103,7 +103,7 @@ theorem layoutFactors_U {sh : RecSparse.Shape} {xs ys U : Array Flock.F128} {rng
 
 section Unit
 
-variable {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+variable {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
   {cap₀ : Model.Cap Refine.Dig} {os : Model.Opens 𝔽 Refine.Dig} {r : ℕ} {ts : List Game.Step}
 
 /-- **A rep's unit issues coins at every round below `z_partial`'s**: the zerocheck's (`n₀` … `nr`) and the

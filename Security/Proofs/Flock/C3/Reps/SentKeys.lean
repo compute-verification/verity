@@ -51,7 +51,7 @@ open FlockSoundness.Discharge.Exec (weave)
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
 
 /-- `unitWeave`'s shape at `S`, `nX` extra claims and `sch₀`. -/
-def unitShape (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (nX : ℕ) : List Discharge.Exec.Kind :=
+def unitShape (S : Model.Statement) (sch₀ : Accounting.Schedule) (nX : ℕ) : List Discharge.Exec.Kind :=
   holoRepShape 𝔽 𝕂 Dig S.m S.kLog nX sch₀
 
 /-- `unitWeave`'s messages at `nX` extra claims. -/
@@ -63,7 +63,7 @@ def unitCoins (S : Model.Statement) (v : UnitVals) : List Game.Msg :=
   (consumed v.t.rounds v.t.k (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6)) ++
     consumed v.t.rounds (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6) + 1) v.t₄.k).map (coinArr fOf)
 
-theorem unitWeave_eq (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (nX : ℕ) (sh : Flock.Shape)
+theorem unitWeave_eq (S : Model.Statement) (sch₀ : Accounting.Schedule) (nX : ℕ) (sh : Flock.Shape)
     (d : FlockVBridge.Compiled.RepData) (v : UnitVals) :
     unitWeave S sch₀ nX sh d v = weave (unitShape S sch₀ nX) (unitMsgs nX sh d v) (unitCoins S v) := rfl
 

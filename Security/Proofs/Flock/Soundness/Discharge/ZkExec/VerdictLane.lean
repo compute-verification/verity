@@ -537,7 +537,7 @@ theorem claim0_rel (lay : Zk.PadLayout) (i : Fin lay.len) (hi : i.val = lay.lgOo
 set_option maxHeartbeats 1000000 in
 /-- **Every run of the compiled masked level 0 returns the lane phase's row** (`laneLhs`), at the record whose
 target, out-of-domain coin, lane coins and pair coins the run's coins are. -/
-theorem ligeritoPadZC_row (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len 2) (S : FlockSoundness.Accounting.Schedule)
+theorem ligeritoPadZC_row (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len 2) (S : Accounting.Schedule)
     (sch : Flock.Schedule) (tp : ℕ) (c₀ : 𝔽) (r : ℕ) (Tm : 𝔽) (b : ℕ → 𝔽) (lg : LigeritoProof)
     (zl : Zk.Level0Msgs) (rec : Zk.L0Rec) (lv₀ : Accounting.Level) (rest : List Accounting.Level)
     (hlv : S.levels = lv₀ :: rest) (hk : S.k0 = lay.k0) (hk' : sch.k0 = lay.k0) (hk1 : 1 ≤ lay.k0)

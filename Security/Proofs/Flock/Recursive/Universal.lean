@@ -33,7 +33,7 @@ theorem fast100_some {m : ℕ} (h1 : 22 ≤ m) (h2 : m ≤ 35) : ∃ sch, Accoun
 `flock_inner_sound_compiled`. -/
 theorem compiledForkSound_of_fast100 {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
-    (sch : FlockSoundness.Accounting.Schedule) (hsch : Accounting.fast100 cls.m = some sch)
+    (sch : Accounting.Schedule) (hsch : Accounting.fast100 cls.m = some sch)
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts) :
     Flock.Premises.CompiledForkSound T CT cls regs sch := by
   let _ : Inhabited Refine.Dig := ⟨Refine.H512 []⟩

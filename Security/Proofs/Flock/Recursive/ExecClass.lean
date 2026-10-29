@@ -89,7 +89,7 @@ theorem acceptsStmt_merkle {st : Flock.Stmt} (h : AcceptsStmt st) :
 structure ExecClass where
   cls : HClass
   regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog))
-  sch : FlockSoundness.Accounting.Schedule
+  sch : Accounting.Schedule
 
 /-- **The fixed class**, a constant: 13 variables, `k_log` 6, zero matrices, no hidden entries. -/
 def HClass.fixed : HClass where
@@ -111,7 +111,7 @@ def HClass.fixed : HClass where
 def ExecClass.fixed : ExecClass := ⟨HClass.fixed, [], default⟩
 
 /-- `fast100`'s schedule at `m`, as the model's; the default where `fast100` has none. -/
-def schedAt (m : ℕ) : FlockSoundness.Accounting.Schedule :=
+def schedAt (m : ℕ) : Accounting.Schedule :=
   match Flock.fast100 m with
   | some s₀ => Refine.schedOf s₀
   | none => default

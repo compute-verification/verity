@@ -103,7 +103,7 @@ open FlockC3.Compose (C3Run)
 
 /-- **A rep unit plays `holoRepC` to an output whose `h` is the unit's `hOfW`** (`rep_of_unit`, keeping
 `holoRep_refines`' `lc.h`). -/
-theorem rep_of_unit_h {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+theorem rep_of_unit_h {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step} (hm : 13 ≤ S.m)
     (U : RepUnit S sch₀ extra cap₀ os r ts) :
     ∃ zc lc pend, Game.PlaysT (holoRepC (D := Dig) execArith r S sch₀ hm extra) ts (some (zc, lc), pend) ∧

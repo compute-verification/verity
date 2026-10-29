@@ -118,7 +118,7 @@ is `fast100`'s where it covers `mReg` and the default (empty levels) elsewhere, 
 theorem holoAt_rsch (st : Flock.Stmt) (hp : HoloParams) :
     (holoAt st hp).rsch.sch.levels = [] ∨
       Accounting.fast100 (holoAt st hp).cls.shape.mReg = some (holoAt st hp).rsch.sch := by
-  have key : ∀ (M : ℕ) (s : FlockSoundness.Accounting.Schedule), (s = default ∨ s = schedAt M) →
+  have key : ∀ (M : ℕ) (s : Accounting.Schedule), (s = default ∨ s = schedAt M) →
       s.levels = [] ∨ Accounting.fast100 M = some s := by
     rintro M s (rfl | rfl)
     · exact Or.inl rfl

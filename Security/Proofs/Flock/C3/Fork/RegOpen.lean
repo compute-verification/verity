@@ -24,7 +24,7 @@ open scoped ENNReal
 
 /-- **`fast100`'s schedule at `M` holds `M` bits at level 0 at rate `1/2`**: level 0 has `k₀` lanes of `2^logCols`
 packed elements of 128 bits, `k₀ + logCols + 7 = M`, for every `M` it covers. -/
-theorem fast100_uniqueDecoding (M : ℕ) (s : FlockSoundness.Accounting.Schedule) (hs : Accounting.fast100 M = some s) :
+theorem fast100_uniqueDecoding (M : ℕ) (s : Accounting.Schedule) (hs : Accounting.fast100 M = some s) :
     s.levels ≠ [] ∧ s.m = M ∧ s.level₀.lanes = s.k0 ∧ s.k0 + s.level₀.logCols + 7 = M ∧
       1 ≤ s.level₀.logInvRate := by
   by_cases hm : M < 40

@@ -644,7 +644,7 @@ end Sim
 open Classical in
 /-- `tableC` is the model table with the compiled reps and its verdict. -/
 theorem tableC_eq_modelTable {K D : Type} [Field K] [Fintype K] [DecidableEq K] (A : Model.Arith 𝔽 K)
-    (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (S : Model.Statement) (sch : FlockSoundness.Accounting.Schedule) (hm : 13 ≤ S.m)
+    (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) :
     Model.tableC A H E S sch hm ptLocal mPts =
       modelTable (fun pts (r : Fin 2) => Model.repC A r.val S sch hm (Model.extraClaims S ptLocal mPts pts))

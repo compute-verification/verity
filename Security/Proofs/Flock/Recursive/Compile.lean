@@ -230,7 +230,7 @@ stage slack, and the interactive table's error. From `flock_inner_sound_compiled
 `zk_sessions_recursive_fork_inner` (gap 2). -/
 theorem recursive_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
-    (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : FlockSoundness.Accounting.Schedule)
+    (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Accounting.Schedule)
     (hsch : Accounting.fast100 cls.m = some sch)
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts)
     (zs : Reg → L.Ω → List (Cm × (flockInnerCL T CT A H E Lf cls regs sch).Coin) → Reg₂ → (j : Fin S) →
@@ -264,7 +264,7 @@ theorem recursive_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] 
 range. -/
 theorem recursive_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
-    (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : FlockSoundness.Accounting.Schedule)
+    (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Accounting.Schedule)
     (hsch : Accounting.fast100 cls.m = some sch) (hm1 : 22 ≤ cls.m) (hm2 : cls.m ≤ 33)
     (hshape : (⟨cls.kLog, regs.length, cls.mPts⟩ : Accounting.Stmt).InRange)
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts)
