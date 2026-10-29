@@ -15,6 +15,8 @@ scheme names, the schedules a pass may run under, and what one pass publishes.
   reads and writes, the shapes it takes, and the device gate that admits it to serving (`variant_refusals`).  Loading a
   kernel directory is the runtime's; naming, gating and selecting one is here, so a bench or a ledger names a variant
   without importing a runtime.
+* The lead (`POUW_V2`): its kernel's variant (`lead_variant`), the run-time choices that select its layout
+  (`LEAD_CONFIG`), the linears it takes (`LEAD_SHAPES`) and its fold's bound (`LEAD_FOLD_BOUND`), which its gate holds.
 
 Stdlib and `verity` only (``tests/test_boundaries.py``).
 """
@@ -238,7 +240,9 @@ class ShapeRule:
 class KernelVariant:
     """A kernel, named by what it was built from: ``id`` is ``{family}-{device}/{source_sha256[:12]}``, so a tuned choice
     that changes a source is a new variant.  ``prices`` names the priced path it implements (the cast and store the
-    published γ reads), ``loader`` how the runtime loads it."""
+    published γ reads), ``loader`` how the runtime loads it.  ``fold_bound``, when set, is the largest |p| whose output
+    the epilogue serves bit for bit, p the integer its fold reads back: past it the output is wrong and nothing on the
+    device flags it, so the gate holds outputs within it and the scheme's Definition refuses one past it."""
 
     family: str
     device: str
@@ -250,6 +254,7 @@ class KernelVariant:
     loader: str
     prices: str | None = None
     steps: Mapping[str, StepIO] = field(default_factory=dict, compare=False)
+    fold_bound: int | None = None
 
     @property
     def id(self) -> str:
@@ -260,7 +265,8 @@ class KernelVariant:
 class GateRecord:
     """The device gate's result for one variant: bit-exact at ``shapes`` against the scheme's reference, poisoned
     transcripts accepted, controls rejected, every declared schedule committing the serial schedule's bytes, and the SASS
-    rule held under the pinned ``toolkit``.  ``gates`` is the gate code's version, so a row's validity is derived from it."""
+    rule held under the pinned ``toolkit``.  ``gates`` is the gate code's version, so a row's validity is derived from it.
+    ``fold_bound`` is the |p| within which ``exact`` held every served output (None: every output), the variant's own."""
 
     variant: str
     run: str
@@ -273,16 +279,22 @@ class GateRecord:
     sass_ok: bool
     toolkit: str
     prices: str | None = None
+    fold_bound: int | None = None
 
     @property
     def passed(self) -> bool:
         return self.exact and self.poisoned_accepted and self.controls_rejected and self.schedules_equal and self.sass_ok
 
 
+def _within(bound: int | None) -> str:
+    return "every output" if bound is None else f"|p| <= {bound}"
+
+
 def variant_refusals(v: KernelVariant, scheme: str, schedule: str, shapes: Sequence[tuple[int, int]],
                      gate: GateRecord | None) -> list[str]:
     """Why `v` can't serve `scheme` under `schedule` at every (n, k) of `shapes` (empty: it can): it must compute both, take
-    every shape, and hold a passing gate of its own that covers every shape."""
+    every shape, and hold a passing gate of its own that covers every shape and held its outputs exact within its fold's
+    bound, no narrower and no wider."""
     out = []
     if scheme not in v.schemes:
         out.append(f"{v.id} computes {', '.join(sorted(v.schemes))}, not {scheme}")
@@ -303,10 +315,35 @@ def variant_refusals(v: KernelVariant, scheme: str, schedule: str, shapes: Seque
             out.append(f"{v.id}: its gate didn't cover {missing}")
         if v.prices is not None and gate.prices != v.prices:
             out.append(f"{v.id}: gated on priced path {gate.prices}, declares {v.prices}")
+        if gate.fold_bound != v.fold_bound:
+            out.append(f"{v.id}: its gate held outputs exact within {_within(gate.fold_bound)}, its fold serves "
+                       f"{_within(v.fold_bound)}")
     return out
 
 
-__all__ = ["DEFERRED", "DEFERRED_A", "DEFERRED_CALLER", "FP4_PRECISIONS", "FP8_DEVICES", "FP8_FORMINGS", "GROUPS", "HASH_FORMATS", "MAIN_PRIORITIES",
-           "MANIFEST_SCHEMA", "MANIFEST_SCHEMAS_READ", "MOVABLE", "SCHEDULES", "SERIAL", "SIDE_PRIORITIES", "GateRecord",
-           "HashFormat", "KernelVariant", "PassCommitment", "Schedule", "SchemeId", "ShapeRule", "StepIO", "hash_format",
+#: PoUW's lead, the scheme its kernel computes
+POUW_V2 = "verity/pouw/v2"
+#: the lead's IADD3 fold (the word plus 0x4B400000 - sigma read as fp32, then FFMA(v, s_j, -1.5 2^23 s_j) and FMUL s_i)
+#: serves stock's epilogue on the noisy word p bit for bit while |p| <= 2^22 and s_j has a 22-bit significand; 2^22 + 1
+#: reads back as 2^22 + 2
+LEAD_FOLD_BOUND = 1 << 22
+#: the run-time choices that select the lead's layout (blc4a-t64-e7-s1 under ROT and FOLD) from its kernel directory's
+#: binary, which builds the other layouts too: they enter the source digest, so the id is the lead's, and serving runs
+#: under exactly these
+LEAD_CONFIG: Mapping[str, str] = {"BLC": "2", "ROT": "1", "FOLD": "1"}
+#: rows commit in 16s (pad_rows); n whole 256-column tiles, so a served linear has no padding columns at either tile width
+LEAD_SHAPES = ShapeRule(n_multiple=256, m_align=16)
+
+
+def lead_variant(source_sha256: str, binary_sha256: str, loader: str) -> KernelVariant:
+    """The lead's kernel on the H200 built from sources whose digest, `LEAD_CONFIG` included, is `source_sha256`: serial
+    only (a schedule that moves its hashing comes with a gate that holds it to serial's bytes)."""
+    return KernelVariant("pouw-lead", "h200", frozenset({POUW_V2}), frozenset({SERIAL.name}), LEAD_SHAPES, source_sha256,
+                         binary_sha256, loader, fold_bound=LEAD_FOLD_BOUND)
+
+
+__all__ = ["DEFERRED", "DEFERRED_A", "DEFERRED_CALLER", "FP4_PRECISIONS", "FP8_DEVICES", "FP8_FORMINGS", "GROUPS", "HASH_FORMATS",
+           "LEAD_CONFIG", "LEAD_FOLD_BOUND", "LEAD_SHAPES", "MAIN_PRIORITIES", "MANIFEST_SCHEMA", "MANIFEST_SCHEMAS_READ",
+           "MOVABLE", "POUW_V2", "SCHEDULES", "SERIAL", "SIDE_PRIORITIES", "GateRecord", "HashFormat", "KernelVariant",
+           "PassCommitment", "Schedule", "SchemeId", "ShapeRule", "StepIO", "hash_format", "lead_variant",
            "schedule_refusals", "variant_refusals"]
