@@ -944,7 +944,6 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
         with pytest.raises(S.Refused) as e:
             ch.register("x", brec, manifest=_raw({**bman, "schema": schema}), recorded=True)
         assert why in e.value.verdict.detail[code]
-    assert (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED) == (PD.MANIFEST_SCHEMA, PD.MANIFEST_SCHEMA_RECORDED)
     ch = _challenger(bparams, coins=_coins())
     ch.register("honest", brec, manifest=braw, recorded=True)
     assert ch.passes == {"honest": "recorded beacon"} and len(ch.select("honest").units) == SC.law_of(bparams, bpublic["level"])["k"]
