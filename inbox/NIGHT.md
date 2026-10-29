@@ -324,6 +324,11 @@ certifier streams them raw after A_j (R1b). Hiding is L1 + (a), and de-noise is 
 ### Decisions for Daniel (gathered; each with a default)
 
 1. Is rank 4a, ShaWrites / ShaSpeed on SHA-512, "milder than SAK"? Default: yes, reported as 4a.
+   **Measured (N-SHALB final, 1234Z): the best honest committer built tonight** writes 3,517.36 registers a compression
+   against R = 3,515.38, bit for bit with the host. That is 0.056% over R, short of δ (4.3e-5), so it **leaves 0.131×
+   stock of honest hashing uncredited, 13× T1's budget** (the served committer: 5.0–7.7×). Only Daniel's "the honest
+   program is the best possible honest program" waives it, so the hashing part's T1 rests on that ruling as well as on
+   ShaWrites. It is also 19% slower than served.
 2. The copy model. **Default revised at 12:05Z: `tile-grain`**, model W on the tensor pipe (N-FLOOR final,
    20261029T1148Z-report-np-floor). The lead's words leave the tensor pipe in tiles of ≥ 128 words, so a copy saves
    time only when a whole tile repeats; a lane's predicated copy costs 13.5–50.5 units more than computing the word.

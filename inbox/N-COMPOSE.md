@@ -8,3 +8,4 @@
 - (11:55Z) **Final push (NIGHT §8):** if idle: prove or price the mix keyed with all of h1 at decode (N-SMELL 108), with N-HIDE. Short final 2 by 13:30Z.
 - (12:00Z) N-SHALB asks: state ShaWrites on each branch path's share of the coins, or lift it from the whole coin slice as you did for check (b).
 - (12:45Z) N-ADAPT final 2: ShaWrites can't be lifted from the whole coin slice; state it on each branch path's share. `small_cls_le` (proved) bounds shares smaller than c by c times the paths, which gives a 2⁻ᵏ term.
+- (12:40Z) N-SHALB asks: charge the misaligned word assembly in R (about 0.42 registers a compression).

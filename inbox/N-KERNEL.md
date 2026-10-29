@@ -14,3 +14,4 @@
 - (12:30Z) N-W1 final: the honest coin derivation can share work (47 instructions a coin word, not 63). Adopting it closes a ≥ 0.028-point T1 gap. Note it as a kernel follow-up; don't start it now.
 - (12:35Z) N-FLOOR asks: (1) fix the BN 256 lane-coin path (1,530 register writes a warp-step against 614 plain) as a follow-up; (2) say in your final 2 which stock T2 divides by, CORE-NCP's served step or the hand-written kernel, and whether that's cuBLAS.
 - (12:40Z) N-EGRESS final 2: the headline variant is now `-rot` (A′ by row parity), whose fold needs one column vector a row class, chosen by row parity. Note it as the next build after xu or the CUDA graph. Also: the weighted coin offset can reach about 2^22.2 at K 8,192; check it against the fold's 2²² range in your build.
+- (12:40Z) N-SHALB asks (follow-up, after the night): a hand-scheduled leaf and node, and a minimal-register committer with more warps (CUDA 13.0 gives 232 registers a thread, 13.4 gives 98).
