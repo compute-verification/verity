@@ -7,6 +7,7 @@ import Proofs.Flock.VBridge.Full
 import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Claims.Sampling.Select.Misses
 import Proofs.Accounting.Served
+import Proofs.Pouw.Period.Accept
 
 /-!
 # Proofs: the ε a served window's credit reports (`WorkDrawMisses`, `EpsAtSound`, `EstablishedSound`)
@@ -376,7 +377,8 @@ theorem groupedDrawMisses : GroupedDrawMisses := by
 /-! ## `GroupedDrawMisses`'s witnesses
 
 The compiled `strata` and `law` run on the lanes window in the kernel (`decide +kernel`, through the `DecidableEq` the
-draw's structures derive here); `kPrime`'s `K′` is pinned by `kPrime_least` as `Proofs.Pouw.Period.Accept` pins H1's. -/
+draw's structures derive here), past `strata`'s key sort, which the kernel doesn't reduce (`keys_lanes`, as
+`Proofs.Pouw.Period.Accept` reads H1's items); `kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
 
 deriving instance DecidableEq for Flock.Draw.Stratum
 deriving instance DecidableEq for Flock.Draw.WorkStratum
@@ -384,8 +386,14 @@ deriving instance DecidableEq for Flock.Draw.WorkStratum
 theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
   cases x <;> simp_all [Except.toOption]
 
-theorem strata_lanes : PouwCheck.Credit.strata lanesLayout = .ok lanesStrata :=
-  ok_of_toOption (by decide +kernel)
+theorem keys_lanes : PouwCheck.keys lanesLayout = some PouwCheck.Credit.LAYOUT_KEYS :=
+  Properties.Pouw.Period.SecurityProofs.Accept.keys_of (by decide) (by decide +kernel)
+
+theorem strata_lanes : PouwCheck.Credit.strata lanesLayout = .ok lanesStrata := by
+  apply ok_of_toOption
+  unfold PouwCheck.Credit.strata
+  rw [keys_lanes]
+  decide +kernel
 
 theorem law_lanes : PouwCheck.Credit.law lanesStrata (toJson lanesK) = .ok lanesLaw :=
   ok_of_toOption (by decide +kernel)
@@ -451,7 +459,10 @@ theorem groupedDrawMisses_nontrivial :
   have h1 : Pouw.RelativeSecurity.prob
       (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) = 1 := by
     unfold Pouw.RelativeSecurity.prob
-    rw [Finset.filter_true_of_mem fun g _ => hall g, Finset.card_univ]
+    have hf : ∀ inst : DecidablePred (fun g : (i : Fin idleLaw.size) → Fin idleLaw[i].need → Fin 256 =>
+        ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d),
+        @Finset.filter _ _ inst Finset.univ = Finset.univ := fun _ => Finset.filter_true_of_mem fun g _ => hall g
+    rw [hf, Finset.card_univ]
     exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
   rw [h1]
   norm_num
