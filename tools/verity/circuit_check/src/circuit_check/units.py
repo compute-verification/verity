@@ -42,9 +42,10 @@ A ``--catalog-units`` run that forks its targets' processes (`cli.run` with ``--
 binding whose record doesn't count, and every one when none does or there are none, is built in a process forked for it alone
 (``apart`` in `plan`), which returns what its roots reach with each one's descriptor, what its build read (its record's reads,
 `cache.unit_reads`) and its share of the task list's reads (`cache.task_list_reads` of its roots).  This process builds no
-body.  A target that misses through such a binding is made in the process that checks it (`cli._made`, `make`), which builds
-the bodies its check reads under its own recording and holds the target to the descriptor its binding's build gave; a
-primitive its id makes, which has no body, is made here (`built_here`).  A binding whose process dies fails the run, as it
+body.  A target that misses through such a binding is made where it is checked (`cli._made`, `make`): by the zygote that forks
+the checks of that binding's targets, each under a recording its check then holds (`cli._prepare`), so the bodies they share
+are built once, as a full build builds them; the target is held to the descriptor its binding's build gave.  A primitive its
+id makes, which has no body, is made here (`built_here`).  A binding whose process dies fails the run, as it
 would kill a build in one process.  When every binding was built apart, the task list's entry is stored as a full build stores
 it, its reads every binding's share and this process's own; it and each record are digested where this process stores them,
 as a full build's are (a full build digests none of its reads where it builds them either).
@@ -76,7 +77,7 @@ class Entry:
     """One binding as this run has it: its units, kind and label (`targets.catalog_units`), its key, the roots it made now,
     what they reach (its record's, or `_reach` of the bodies built now) and whether its record counted.  Built in a process of
     its own (``apart``, `built_apart`), with what that process read: its record's reads and its share of the task list's
-    (``listed``)."""
+    (``listed``), and the CPU seconds it took (``seconds``)."""
     units: tuple[str, ...]
     kind: str
     label: str
@@ -87,6 +88,7 @@ class Entry:
     apart: bool = False
     reads: dict[str, list[str]] | None = None
     listed: dict[str, list[str]] | None = None
+    seconds: float | None = None
 
     @property
     def root_ids(self) -> list[str]:
@@ -603,6 +605,7 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
                     e = entries[i]
                     e.nodes, e.apart = got["nodes"], True
                     e.reads, e.listed = got.get("reads"), got.get("listed")
+                    e.seconds = round(usage.ru_utime + usage.ru_stime, 2)
                     CC._UNTRACED.extend(got.get("untraced", ()))
     finally:
         gc.unfreeze()

@@ -94,6 +94,8 @@ def _checked(task: tuple) -> tuple[dict, dict | None]:
     info = _info(task)
     with CC.recording() as fr:
         r = _one(kind, label, fn)
+    if (made := info.get("made")) is not None:
+        fr.merge(made[2])
     return r, CC.attributed(fr, info.get("units", ()), info.get("roots", ()))
 
 
@@ -231,8 +233,14 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
 
 
 def _made(plan: UN.Plan, fid: str, want: str, info: dict) -> Any:
-    """A target `_planned` left to the process that checks it: made there (`units.make`), so the bodies its check reads are
-    built under its own recording, and held to the descriptor its binding's build gave (`units.Stale`, its check's error)."""
+    """A target `_planned` left to the process that checks it: made there (`units.make`) under its check's recording, or by the
+    zygote that forked it (`_prepare`), and held to the descriptor its binding's build gave (`units.Stale`, its check's
+    error)."""
+    if (made := info.get("made")) is not None:
+        fn, err, _ = made
+        if err is not None:
+            raise err
+        return fn
     fn = UN.make(plan, fid)
     info["roots"] = [fn]
     if CC.descriptor(fn) != want:
@@ -240,11 +248,33 @@ def _made(plan: UN.Plan, fid: str, want: str, info: dict) -> Any:
     return fn
 
 
+def _prepare(x: int | tuple[int, ...]) -> None:
+    """In a zygote, before it forks the process that checks ``x``: each target `_planned` left to be made where it is checked
+    made here (`_made`), under a recording of its own that its check's recording then holds (`_checked`), as if it were made
+    there; what that raised is its check's error.  `_checked_all` sends every target of one binding to one zygote, so each body
+    they share is built once, as a full build builds it once before any check."""
+    import gc
+
+    for i in x if isinstance(x, tuple) else (x,):
+        info = _info(_TASKS[i])
+        if "make" not in info or "made" in info:
+            continue
+        fn, err = None, None
+        with CC.recording(merge=False) as fr:
+            try:
+                fn = _made(*info["make"], info)
+            except Exception as e:  # noqa: BLE001  (its check's error, raised again where it is checked)
+                err = e
+        info["made"] = (fn, err, fr)
+    gc.freeze()                       # what it built stays shared with the processes this zygote forks
+
+
 def _planned(plan: UN.Plan, opts: CK.Options, cache: Path) -> tuple[list[tuple], list[dict], dict[int, tuple[dict, str]]]:
     """`_tasks` of ``--all`` from the bindings' records (`units.plan`), each target's key and the entries reused.  A target that
     misses through a binding whose record counted is made here from a binding that reaches it (`units._materialize`), and
     `units.Stale` when its descriptor is not its record's; through one built apart, a primitive is made here when its id makes
-    it (`units.built_here`), and anything else in the process that checks it (`_made`)."""
+    it (`units.built_here`), and anything else where it is checked (`_made`): by the zygote that forks its check, which makes
+    every such target of its binding (`_prepare`, `_owners`), or else by its check's process."""
     d = plan.derived
     memo = lambda: {}  # noqa: E731
     pins = CC.recorded_pins(CK.load_pins())
@@ -269,6 +299,7 @@ def _planned(plan: UN.Plan, opts: CK.Options, cache: Path) -> tuple[list[tuple],
         TG.BINDINGS.setdefault(fid, set()).update(units)
         info = {"as_call": call, "units": sorted(units), "roots": [fn] if fn is not None else [], "gates": node["g"]}
         if later:
+            info.update(make=(plan, fid, node["d"]), via=d.via[fid].name)
             check = lambda fid=fid, want=node["d"], call=call, info=info: CK.check_definition(  # noqa: E731
                 _made(plan, fid, want, info), opts, memo=memo(), pins=pins, as_call=call)
         else:
@@ -335,8 +366,12 @@ def _init(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | 
 
 def _rss_gb() -> float | None:
     """This process's resident set now, in GiB (``VmRSS``; None without /proc)."""
+    return _vmrss_gb("self")
+
+
+def _vmrss_gb(pid: int | str) -> float | None:
     try:
-        for ln in Path("/proc/self/status").read_text().splitlines():
+        for ln in Path(f"/proc/{pid}/status").read_text().splitlines():
             if ln.startswith("VmRSS:"):
                 return round(int(ln.split()[1]) / (1 << 20), 2)
     except OSError:
@@ -369,10 +404,10 @@ def _child(w: int, fn: Callable, item: Any) -> None:
     os._exit(0)
 
 
-def _zygote(conn, fn: Callable, initializer: Callable | None, initargs: tuple) -> None:
+def _zygote(conn, fn: Callable, initializer: Callable | None, initargs: tuple, prepare: Callable | None = None) -> None:
     """`parallel`'s one worker: ``initializer`` once, then a forked child per item ``conn`` sends, each running that item alone and
-    exiting.  Each child is reaped with ``wait4``, whose ``ru_maxrss`` is that child's own peak RSS even when it was killed, and
-    the zygote knows which item each child had, so a death is named by its item."""
+    exiting, ``prepare(item)`` run here first.  Each child is reaped with ``wait4``, whose ``ru_maxrss`` is that child's own peak
+    RSS even when it was killed, and the zygote knows which item each child had, so a death is named by its item."""
     import gc
     import pickle
     import selectors
@@ -398,6 +433,8 @@ def _zygote(conn, fn: Callable, initializer: Callable | None, initargs: tuple) -
                         os.waitpid(pid, 0)
                     return
                 ticket, item = msg
+                if prepare is not None:
+                    prepare(item)
                 r, w = os.pipe()
                 with warnings.catch_warnings(), CC.internal():
                     warnings.simplefilter("ignore", DeprecationWarning)        # the numeric libraries' idle threads
@@ -450,12 +487,15 @@ class Zygote:
     deadlocked), and builds what it needs itself.  With ``fork`` it is forked from this process as it is now, with everything this
     process has built: the CLI's process, which runs no thread that could hold a lock across the fork, so the task list is
     built once, not again in the zygote, and the children share its pages with this process.  Collected and frozen first
-    (`gc.freeze`), so neither process's collections copy those pages."""
+    (`gc.freeze`), so neither process's collections copy those pages.  With ``prepare`` (forked only), the zygote runs it on
+    each item before it forks that item's child (`_zygote`), and what that builds stays in the zygote: `grown_gb` says how
+    much."""
 
-    def __init__(self, fn: Callable, initializer: Callable | None = None, initargs: tuple = (), *, fork: bool = False) -> None:
+    def __init__(self, fn: Callable, initializer: Callable | None = None, initargs: tuple = (), *, fork: bool = False,
+                 prepare: Callable | None = None) -> None:
         import multiprocessing as mp
 
-        self._proc, self._pid, self._code, self._closed = None, None, None, False
+        self._proc, self._pid, self._code, self._closed, self._start = None, None, None, False, 0.0
         if not fork:
             ctx = mp.get_context("forkserver")
             self.conn, there = ctx.Pipe()
@@ -481,7 +521,7 @@ class Zygote:
             _FORKED.clear()
             code = 0
             try:
-                _zygote(there, fn, initializer, initargs)
+                _zygote(there, fn, initializer, initargs, prepare)
             except BaseException:  # noqa: BLE001  (printed; the parent names the exit when its pipe ends)
                 import traceback
 
@@ -492,7 +532,14 @@ class Zygote:
             os._exit(code)
         there.close()
         self._pid = pid
+        self._start = _vmrss_gb("self") or 0.0
         _FORKED.append(self.conn)
+
+    def grown_gb(self) -> float:
+        """How far a forked zygote's RSS has grown past this process's when it was forked (0 for one started by forkserver, or
+        ended)."""
+        now = _vmrss_gb(self._pid) if self._pid is not None and self._code is None else None
+        return max(0.0, now - self._start) if now is not None else 0.0
 
     def exitcode(self) -> int | None:
         """The zygote's exit code once it has ended (a signal as its negative), waiting for it: its pipe has ended."""
@@ -535,10 +582,11 @@ def zygotes(jobs: int) -> int:
 
 def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None = None, initargs: tuple = (), *,
              weight: Callable[[Any], float] | None = None, budget: float | Callable[[], float] | None = None,
-             zygote: Zygote | list[Zygote] | None = None):
+             zygote: Zygote | list[Zygote] | None = None, route: Callable[[Any], int | None] | None = None):
     """``(item, fn(item), peak_gb, start_gb)`` for each item, yielded as each finishes, each item run alone in a process of its
     own: up to ``jobs`` at once, forked from a `Zygote` process, one of ``zygote`` (forked already, running ``fn``; each item
-    goes to the one with the fewest running) or else one started by forkserver that runs ``initializer(*initargs)``.
+    goes to the one ``route`` names for it, else to the one with the fewest running) or else one started by forkserver that
+    runs ``initializer(*initargs)``.
     ``peak_gb`` is that process's peak RSS (``ru_maxrss``, GiB): the item's own, plus ``start_gb``, the RSS it was forked
     with, which it shares with the zygote (what ``initializer`` built).  An item whose process died (the OOM killer) yields a
     `Killed` for ``fn(item)``, with the peak it reached; the others run on.  With ``weight`` and ``budget`` an item starts only
@@ -558,7 +606,8 @@ def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None 
         while queue or running:
             for k in admit([weigh(x) for _, x in queue], [w for _, w, _ in running.values()], jobs, limit()):
                 t, x = queue[k]
-                z = min(zs, key=lambda z: busy[id(z)])
+                to = route(x) if route is not None else None
+                z = zs[to % len(zs)] if to is not None else min(zs, key=lambda z: busy[id(z)])
                 z.conn.send((t, x))
                 busy[id(z)] += 1
                 running[t] = (x, weigh(x), z)
@@ -616,8 +665,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     Definition. Any other run builds the list; with ``units``, from the catalog bindings' records (`circuit_check.units`),
     building only the bindings whose record misses, and a full build stores them.  With ``units``, ``fork`` and more than one
     job, the bindings are built so even with no record to reuse: each in a process of its own, up to ``jobs`` at once within
-    `budget_gb` (`units.plan`'s ``apart``), this process building no body, and each target they reach made in the process
-    that checks it (`_planned`); a run that built every binding so stores the task list too."""
+    `budget_gb` (`units.plan`'s ``apart``), this process building no body; each target they reach is made by the one zygote
+    that forks the checks of its binding's targets, before it forks that target's (`_planned`, `_prepare`), and what the
+    zygotes grow by comes off the budget.  A run that built every binding so stores the task list too."""
     tracing = cache is not None and CC.tracing()
     isolated = jobs > 1 if isolate is None else isolate
     listed = None
@@ -657,7 +707,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
         if tracing:
             CC.warm()
         # before the keys: they hold what `_init` would have built
-        zygote = [Zygote(_work, _forked, fork=True) for _ in range(zygotes(jobs))]
+        zygote = [Zygote(_work, _forked, fork=True, prepare=_prepare) for _ in range(zygotes(jobs))]
     try:
         if keys is None and tracing:
             keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks]
@@ -672,6 +722,19 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
         else:
             rep["cache"]["units"] = {**_record_units(cache, opts, tasks, keys), **({"stale": why} if why else {})}
     return rep
+
+
+def _owners(plan: UN.Plan, tasks: list[tuple], n: int) -> dict[str, int]:
+    """Which of ``n`` zygotes makes the targets ``tasks`` leave to be made where they are checked (`_prepare`), by the binding
+    built apart that they are made through: each binding to the zygote whose bindings took the least CPU to build so far
+    (`units.built_apart`'s ``seconds``), the longest first, so the bodies those targets share are built by one zygote."""
+    vias = {_info(t)["via"] for t in tasks if "make" in _info(t)}
+    load, out = [0.0] * n, {}
+    for e in sorted((e for e in plan.entries if e.name in vias), key=lambda e: -(e.seconds or 0.0)):
+        k = min(range(n), key=load.__getitem__)
+        out[e.name] = k
+        load[k] += e.seconds or 0.0
+    return out
 
 
 def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, log, jobs: int,
@@ -740,13 +803,15 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
                 if peaks.get(tasks[i][1], 0) > budget:
                     log(f"warn {tasks[i][1]} peaked at {peaks[tasks[i][1]]} GiB, over the {budget:.1f} GiB budget: it runs alone")
         def now() -> float:
-            return budget if (g := granted_gb(mem_file)) is None else budget_gb(g)
+            return (budget if (g := granted_gb(mem_file)) is None else budget_gb(g)) - sum(z.grown_gb() for z in zygote or ())
 
         def members(x: int | tuple[int, ...]) -> tuple[int, ...]:
             return x if isinstance(x, tuple) else (x,)
 
+        owner = _owners(plan, [tasks[i] for i in todo], len(zygote)) if plan is not None and zygote else {}
         for x, got_, peak, start in parallel(_work, _batched(order, tasks), jobs, _init, init, budget=now, zygote=zygote,
-                                             weight=lambda x: max(peaks.get(tasks[i][1], HEAVY_GB) for i in members(x))):
+                                             weight=lambda x: max(peaks.get(tasks[i][1], HEAVY_GB) for i in members(x)),
+                                             route=lambda x: owner.get(_info(tasks[members(x)[0]]).get("via"))):
             each = got_ if isinstance(x, tuple) and not isinstance(got_, Killed) else [got_] * len(members(x))
             for i, g in zip(members(x), each):
                 if isinstance(g, Killed):
