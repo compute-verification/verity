@@ -123,14 +123,19 @@ def view(run_dir: Path, now: datetime, basis: Path | None = None) -> list[str]:
     return out
 
 
+def targets(run_dir: Path) -> list[dict]:
+    """circuit-check's lines so far (`PROGRESS`), one per target it ended; `verity ci`'s live record reads them here too."""
+    return [d for d in _jsonl(run_dir / PROGRESS) if isinstance(d.get("target"), str)]
+
+
 def _circuit_check(run_dir: Path, basis: Path | None, so_far: float) -> tuple[str, float | None]:
     """circuit-check's progress in words, and its ETA: the basis's targets not yet done here at this run's pace."""
-    done = [d for d in _jsonl(run_dir / PROGRESS) if isinstance(d.get("target"), str)]
+    done = targets(run_dir)
     failed = sum(1 for d in done if d.get("failures"))
     text = f"{len(done)} target(s) done" + (f", {failed} with failures" if failed else ", none failed")
     if basis is None:
         return text, None
-    ref = [d for d in _jsonl(basis / PROGRESS) if isinstance(d.get("target"), str)]
+    ref = targets(basis)
     if not ref:
         return f"{text}; the basis has no circuit-check targets", None
     seen = {d["target"] for d in done}

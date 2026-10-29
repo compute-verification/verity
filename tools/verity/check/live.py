@@ -92,16 +92,13 @@ def suites_progress(out: Path, step: str) -> dict | None:
 
 def circuit_progress(out: Path, step: str) -> dict | None:
     """Targets checked so far and how many failed, by circuit-check's progress lines, and the first failed targets' names: none
-    before the first line (a check's out dir is new, so the file holds this run's lines only)."""
-    done, failed = 0, []
-    if not (log := out / "circuit-check.json.progress.jsonl").is_file():
-        return {"targets_done": 0, "targets_failed": 0, "failed": []}
-    for line in log.read_text(errors="replace").split("\n")[:-1]:       # the last is the line being written, or empty
-        r = json.loads(line)
-        done += 1
-        if r.get("failures") or r.get("killed"):
-            failed.append(str(r.get("target")))
-    return {"targets_done": done, "targets_failed": len(failed), "failed": failed[:10]}
+    before the first line (a check's out dir is new, so the file holds this run's lines only). The lines are read by `research
+    status RUN`'s reader (`research.checkview.targets`)."""
+    from research.checkview import targets
+
+    done = targets(out)
+    failed = [d["target"] for d in done if d.get("failures") or d.get("killed")]
+    return {"targets_done": len(done), "targets_failed": len(failed), "failed": failed[:10]}
 
 
 PROGRESS: dict[str, Callable[[Path, str], dict | None]] = {
