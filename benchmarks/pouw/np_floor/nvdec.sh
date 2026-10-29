@@ -15,7 +15,7 @@ uv pip install -q --python "$WORK/v/bin/python" PyNvVideoCodec imageio-ffmpeg nu
 "$WORK/v/bin/python" "$HERE/nvdec.py" make "$WORK" "${@:1:3}" >>"$OUT/setup.log" 2>&1
 ls -l "$WORK"/*.mp4 >>"$OUT/setup.log"
 gpu-lease 1 --wait --max-min 15 -- bash -c '
-  nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=timestamp,clocks.sm,clocks.dec,power.draw --format=csv -lms 500 >"$0/smi.csv" &
+  nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=timestamp,clocks.sm,clocks.video,power.draw --format=csv -lms 500 >"$0/smi.csv" &
   p=$!
   nvidia-smi dmon -i "$GPU_LEASE_UUID" -s u -o T >"$0/dmon.txt" 2>&1 &
   q=$!
