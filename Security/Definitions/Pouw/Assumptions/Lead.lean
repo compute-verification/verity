@@ -81,7 +81,7 @@ words message. -/
 def shaCredit (isA : Hash.Msg → Bool) (x : Hash.Msg) : ℚ :=
   (if isA x then shaARegs else shaWordsRegs) * blocks x
 
-/-- `pouw-sha-writes` (proposed; Daniel's ruling of 29 October, 16:00Z: a premise milder than SAK). **A SHA-512
+/-- `pouw-sha-writes` (proposed; a standing ruling admits it, a premise milder than SAK). **A SHA-512
 compression writes about 3,500 registers**, credited per form: at every coin value, a realizable strategy's
 compressions write at least `3,515.38` registers each for the words and `3,449.05` for A (`shaCredit`), over the
 messages it hashes.

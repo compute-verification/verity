@@ -23,7 +23,8 @@ hiding L1 + (a).
   - step `τ ≥ 1`: the tag lane `1 + b_τ[i]`, and the three coin lanes `Σ_ℓ A′[i, ℓ] · s_τ[⌊i/64⌋, ℓ, j]`, with
     `A′ = (127, 1, 1)` on even rows and `(1, 127, 1)` on odd rows.
 
-  The words are integers. That the served 32-bit register holds each one exactly is the TAGS lane's exactness piece.
+  The words are integers. That the served 32-bit register holds each one exactly is the tags piece's exactness proof
+  (`Proofs.Pouw.Lead.Tags`).
 -/
 
 namespace Pouw.Lead
