@@ -62,7 +62,9 @@ nothing there, since a prover that picks the data can make a later step's data p
 previous one plus coin terms, an IADD3 at the floor; `lead_blc4a_coin_hd` is the coin plan on honest data, and
 `lead_blc4a_pad64_xu` the lead de-noised by N-EXACT's xu (exact served outputs, as `best_p4_exact_sep`). Each
 evaluation gives the chosen-data term (`t1_attack`) and its copy part (`t1_copy`, revisits of a value the entry held);
-the rest is TensorSemantics' credit lost to chosen data. Without xu the
+the rest is TensorSemantics' credit lost to chosen data. `t1_tile_copy` is the copy part left at tile grain, where a
+copy saves only when a whole tile's words repeat: ssn_sh's coin is one word a step for the whole call, so data that is
+constant over a tile revisits the tile together, while the lead's coins differ by column. Without xu the
 lead's coin term, a (tile, column) sum, folds in the epilogue's IADD3 column source, so its served noise is the tag
 lead's;
 `best_p4_smlite` commits only the softmax's MUFU outputs. The free part of the de-noise alone (the later steps' row
@@ -210,7 +212,7 @@ def blc4a_terms(m: int, n: int, k: int, code_lanes: int = 4, tag: int = 0, tile_
     return {"design": f"ssn_1l({code_lanes})-tag+blc4a-t64-e7", "alpha": H32 * s / k,
             "forming": H32 * nsw.ssn_1l_forming_writes(s) / (n * k),
             "coins": 4 * words * nsw.COIN_PRICED_BYTE / (n * k), "coin_bytes_call": 4 * words * m, "steps": s,
-            "p_attack": coined * BLC_P_COINED + (1 - coined) / 256}
+            "p_attack": coined * BLC_P_COINED + (1 - coined) / 256, "tile_shared": False}
 
 
 @functools.lru_cache(maxsize=None)
@@ -265,7 +267,7 @@ def ssn_sh_terms(m: int, n: int, k: int, tag: int = 0) -> dict:
     coin_b = 0.5 * m + 4 * (s - 1)
     return {"design": "ssn_sh" + ("-tag" if tag else ""), "alpha": H32 * s / k, "forming": H32 / (n * k),
             "coins": coin_b * nsw.COIN_PRICED_BYTE / (m * n * k), "coin_bytes_call": coin_b, "steps": s,
-            "p_attack": sh_walk(s)}
+            "p_attack": sh_walk(s), "tile_shared": True}
 
 
 # ---------------------------------------------------------------- lane idioms (op, count an element, class)
@@ -896,7 +898,7 @@ def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
     return {"stock": stock_units, "honest": honest + forming, "forced": forced, "words": words, "forming": forming,
             "coins": coins, "coin_calls": coin_calls, "instr": hinstr, "design": t["design"], "alpha": a,
             "unforced": forming + (honest - forced if not plan.commit_pad else 0.0), "pad": hpad, "attack": attack,
-            "copy": copy,
+            "copy": copy, "tile_copy": copy if t.get("tile_shared") else 0.0,
             **({"zero_chunk": (zc, zsrc)} if zsrc and not plan.chosen else {})}
 
 
@@ -1111,6 +1113,7 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
             "t1_coins_uncredited": t1_mm + cov + coins, "uncovered_share": tot["unforced"] / st,
             "t1_attack": sum(r.get("attack", 0.0) for r in rows) / st,
             "t1_copy": sum(r.get("copy", 0.0) for r in rows) / st,
+            "t1_tile_copy": sum(r.get("tile_copy", 0.0) for r in rows) / st,
             "linears_attack": sum(r.get("attack", 0.0) for r in lin) / max(1e-30, sum(r["stock"] for r in lin)),
             "slack_share": (tot["honest"] - tot["forced"] - tot["unforced"]) / st,
             "hash_bytes": 4 * tot["words"], "groups": groups, "t2": t2, "t3_estimate": t3,
@@ -1774,6 +1777,14 @@ def check() -> list[dict]:
        "the word an IADD3 at the floor), wgmma's 64 rows need none",
        ch["lead_blc4a_coin"] > 5 * ch["lead_blc4a_coin_hd"] and ch["lead_blc4a_pad64"] < ch["lead_blc4a_coin"] / 5,
        ch)
+    tg = {(m, p): evaluate(m, p, PLAN["lead_blc4a_pad64"]) for m, p in (("llama", "dec64_8k"), ("v4", "T512_64"))}
+    ok("tile grain: only ssn_sh's copies survive it, since its coin is one word a step for the whole call; the lead's "
+       "differ by column, so its copy part leaves the tile-grain term",
+       all(0 < e["t1_tile_copy"] <= e["t1_copy"]
+           and all(r.get("tile_copy", 0.0) == (r.get("copy", 0.0) if r["family"] in ("qk", "pv") else 0.0)
+                   for r in e["components"])
+           for e in tg.values()),
+       {f"{m} {p}": (e["t1_copy"], e["t1_tile_copy"]) for (m, p), e in tg.items()})
     for plan in PLANS:
         for model in ("llama", "v4"):
             for point in POINTS:
