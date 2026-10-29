@@ -373,11 +373,9 @@ theorem laid_linkUnit {UB PB : ℕ} {U : VStar.UnitC} (hU : VStar.linkUnit UB PB
       ((linkB UB PB T Xr Yr Xw Yw sr sw).1 ++ (linkB UB PB T Xr Yr Xw Yw sr sw).2) := by
   obtain ⟨hst, houts, hin, hop⟩ := linkUnit_ok hU
   obtain ⟨hUB, hPB⟩ := linkUnit_shape hU
-  have hN : (Array.replicate U.inWords 16).foldl (· + ·) 0 = 5120 + 2 * auxBits UB PB := by
-    rw [OfVStar.foldl_replicate, VStar.UnitC.inWords, hin]
-    simp only [VStar.linkPorts, List.foldl_cons, List.foldl_nil, VStar.LINK_ROW_WORDS, VStar.LINK_X_WORDS,
-      VStar.LINK_Y_WORDS, auxBits]
-    omega
+  have hN : (Array.replicate U.inWords 16).foldl (· + ·) 0 = 5120 + 2 * auxBits UB PB := foldl_inWords_link hin
+  have hle : ∀ {k : ℕ}, k ≤ 5120 + 2 * auxBits UB PB → k ≤ (Array.replicate U.inWords 16).foldl (· + ·) 0 :=
+    fun hk => hk.trans hN.ge
   have hA := aux_ge (UB + PB)
   have hg : Good ((Array.replicate U.inWords 16).foldl (· + ·) 0) U.st := by
     rw [hst, hN, ← linkIn_eq]
@@ -389,10 +387,10 @@ theorem laid_linkUnit {UB PB : ℕ} {U : VStar.UnitC} (hU : VStar.linkUnit UB PB
     (vars (3072 + auxBits UB PB) 512) (vars (3584 + auxBits UB PB) 1536) (vars (5120 + auxBits UB PB) (auxBits UB PB))
     ⟨linkIn UB PB, []⟩).2 _ hz
   obtain ⟨h1, h2⟩ := hP T Xr Yr Xw Yw sr sw hT hXr hYr hXw hYw
-    (carries_vars (by omega) (by omega) htrow) (carries_vars (by omega) (by omega) hxr)
-    (carries_vars (by omega) (by omega) hyr) (carries_vars (by omega) (by omega) hxw)
-    (carries_vars (by omega) (by omega) hyw) (forall₂_sibs sr hsr hA (by omega) hraux)
-    (forall₂_sibs sw hsw hA (by omega) hwaux)
+    (carries_vars (by omega) (hle (by omega)) htrow) (carries_vars (by omega) (hle (by omega)) hxr)
+    (carries_vars (by omega) (hle (by omega)) hyr) (carries_vars (by omega) (hle (by omega)) hxw)
+    (carries_vars (by omega) (hle (by omega)) hyw) (forall₂_sibs sr hsr hA (hle (by omega)) hraux)
+    (forall₂_sibs sw hsw hA (hle (by omega)) hwaux)
   have hls : ∀ Dg Sl : ByteArray, (RecLinkTree.leaf (Hm96.Default512.commitString Dg Sl)).size = 64 :=
     fun _ _ => Sha512.hash_size _
   have hlen : (((linkRun UB PB).run ⟨linkIn UB PB, []⟩).1.1 ++ ((linkRun UB PB).run ⟨linkIn UB PB, []⟩).1.2).length ≤
