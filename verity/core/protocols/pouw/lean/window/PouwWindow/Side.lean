@@ -1,6 +1,7 @@
 import PouwWindow.Entry
 import Identity.Tagged
 import PouwCommit.Py
+import Identity.Domains
 
 /-!
 # The side trees (`window.py`, "The side trees")
@@ -17,7 +18,7 @@ namespace PouwWindow
 open Lean (Json)
 open PouwCommit (Domain)
 
-def SIDE_DOMAIN : String := "verity/pouw/window/side-domain/v1"
+def SIDE_DOMAIN : String := Domains.POUW_PERIOD_SIDE_DOMAIN
 /-- `OWNER`: the frame's owner, as C-Flock's statement domains have it. -/
 def owner : Int := -1
 /-- `SIDE_INDEX_WORDS`: a side row's index field, one 128-bit word. -/
