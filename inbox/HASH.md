@@ -92,3 +92,57 @@ design question is which function gives the mildest premise.** Lanes:
 
 Each lane: h, T1, T2, T3 (estimate if unmeasured), the premise exactly with its rank and falsification test, and
 whether it is about our construction, a random family, or a standard primitive. Checkpoint at 23:00Z.
+
+## §interim-1 (coordinator, 21:10Z)
+
+**Answer: nothing yet cuts the hashing at a premise Daniel has accepted.** At ShaWrites' rank (4a) and below, the
+lead's h = 127.5 stands. h ≥ 108.6 is proved in core Lean for credit by register writes alone (N-SHALB,
+`HashFloor.lean`). Every real cut needs a premise about the function that consumes the words, by N-SALT's zero-data
+bound (proved): no premise about the operands can let a design commit only outputs or every k-th step. The only
+exception is a threat-model change, public weights.
+
+**The lesson that shapes the rest** (COUNTER, note 20261029T2053Z-report-hash-counter-nh, checked):
+- At zero data the lead's words are w_t(i,j) = x + R_t(i) + C_t(class(i), j): a data term, a row walk and a column
+  walk.
+- So any credited function that decomposes over those sums is cheap. Row-only sums are shared by every column,
+  column-only sums by a class's rows, and the cross terms batch onto IMMA as u8 digits.
+- A fold or sketch must mix non-linearly across the sum, or the noise must not leave words that are row-plus-column
+  at zero data.
+
+**Closed (checked unless marked):**
+- sparse commits, every k-th step (SPARSE, NOISE);
+- chained coins, and checkpoints drawn after commitment (SPARSE);
+- truncated words (NOISE, SHA, COUNTER);
+- linear sketches and projections, which fold (SKETCH);
+- Module-SIS (earlier);
+- xor-m (SHA: the served IMMA works in place, so the margin is 3%, and with near-free predicates it is false);
+- the unkeyed XOR fold (COUNTER `pack`: 28–36% of stock);
+- **NH/nh2, refuted by `decomp`** (COUNTER: PairWrites fails T1 by 68–71% of stock);
+- crediting HBM traffic or MMA issue (ALT);
+- the card/certifier split, which only moves the hashing (about 62 Genoa cores a GPU).
+
+**Still standing, each about our own construction unless noted:**
+
+| design | h | premise and rank | status |
+|---|---|---|---|
+| multiply–xor fold (SPARSE) | 1.57–2.94 | FOLD-OPT, 4, our construction (SAK's shape) | single steps searched; multi-step and `decomp` not yet; T2 est. 6.7–9.7× (standalone) |
+| thin fold, alternating XOR3/IADD3 (ASSUME → EGRESS) | 2.31–3.50 | FoldMaterial + ThinFoldOpt, 5 | two-instruction windows hold; one packing route is 1.9× honest; `decomp` not yet; T2 unmeasured |
+| mirror-π quadratic sketch (NOISE) | 2.37–4.55 | SketchWrites2, 4b (SAK's rung) | network term closed with tiled coins; decode stream 72.7 MB a token; `decomp` not yet |
+| D-OUT, outputs-only, public weights (ALT) | 0.91–1.39 with attention uncredited (64–98% credited), 3.4–43 with all credited | SAK-UF on the registered weights, 4 (not about our noise); needs public weights, against everything-ZK | survives every priced attack at 1-bit noise (T1 0.74%); T3 pending |
+
+**Rules (confirmed):** a fold committed under SHA-512 and credited only by a cost premise binds nothing, so it isn't a
+hash. The one-hash rule needs no exception for it (HIDE, SKETCH). What does change is PoUW's statement: it commits a
+function of the words, which is a claims change for Daniel when a candidate is ready. Hiding is free inside the
+forward's tree if sketches and folds stay inside it, in small chunks (HIDE).
+
+**No ask to Daniel yet.** Every surviving candidate's premise is about our own construction, except D-OUT, which needs
+public weights. The FOLD swarm (dynamic families, SHA-512 rounds, tensor folds, the literature) is aiming at a premise
+about random families or a standard primitive, and it checkpoints at 23:00Z.
+
+**Re-targeted:**
+- COUNTER (N-FP8): `decomp` against the multiply–xor fold, the thin fold and mirror-π; multi-step windows; D-OUT's
+  routes; then the family harness.
+- EGRESS: the thin fold's three-instruction and cross windows and its 32-bit fibres, plus `decomp`.
+- NOISE: noise layouts whose zero-data words aren't row-plus-column (higher-rank coins at a priced bandwidth), the
+  lever every fold needs.
+- Every FOLD lane: design against `decomp` first.
