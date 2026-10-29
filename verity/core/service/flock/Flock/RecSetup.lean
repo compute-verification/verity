@@ -144,17 +144,19 @@ def checkMeta (cf : ByteArray) (bound : V (Option String × Option RecVStar.Stac
 
 /-- **The inner statement is set up as its files set it up**: how Flock's plain verifier is told to set the inner
 statement up (`form`) is how `RecCoins.Files.stmt` sets it up from its files, `st`: as a
-`Tags.circuitPlainLeaves` statement (`--rec-inner-statement`) on the coin server's coins
-(`--rec-inner-statement-coins os`), with no lookup table (`--rec-inner-tables`), at a draw (`--rec-inner-draw`) that
-proves every one of `st`'s units in order, so its `m` and regions are `st`'s. A session without `form` is refused. -/
+`Tags.circuitPlainLeaves` statement (`--rec-inner-statement`) whose tags name no per-round OS coins (no
+`--rec-inner-statement-coins os`: the files set it up on the challenger's coin tree, `RecVStar.innerTree`), with no
+lookup table (`--rec-inner-tables`), at a draw (`--rec-inner-draw`) that proves every one of `st`'s units in order, so
+its `m` and regions are `st`'s. A session without `form` is refused. -/
 def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
   let some fm := form
     | throw ("rec-inner: the verifier holds no setup of the inner statement (--rec-inner-statement, " ++
         "--rec-inner-statement-coins, --rec-inner-draw) to hold to its files' setup")
   if fm.statement != Tags.circuitPlainLeaves.name then
     throw s!"rec-inner: the inner statement is a {fm.statement} statement, not {Tags.circuitPlainLeaves.name}, as its files set it up"
-  if !fm.os then
-    throw "rec-inner: the inner statement's coins are not the coin server's (--rec-inner-statement-coins os), as its files set it up"
+  if fm.os then
+    throw ("rec-inner: the inner statement names per-round OS coins (--rec-inner-statement-coins os), and its files set " ++
+      "it up on the challenger's coin tree")
   if !fm.tables.isEmpty then
     throw "rec-inner: the inner statement names lookup tables (--rec-inner-tables), and its files set it up with none"
   let some b := fm.draw | throw "rec-inner: the inner statement has no draw (--rec-inner-draw)"

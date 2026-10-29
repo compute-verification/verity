@@ -67,13 +67,23 @@ structure Inner where
   stacked : Option StackedShape := none
   deriving Repr, BEq, Inhabited
 
-/-- A recursive session's inner statement (§16.16) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
-def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
+/-- The inner session's keyed coin tree: the session's stream (the link points), the circuit table's two reps, each rep's
+sparse phase and candidate 3's stacked table R (`rec_live.INNER_COIN_STREAMS`), 512 rounds of at most 512 coins each, as
+`Zk.coinSpec` has them. A session that opens fewer streams leaves the rest unopened. -/
+def innerCoinSpec : CoinTree.Spec :=
+  ⟨#["session", "circuit/rep0", "circuit/rep1", "sparse/rep0", "sparse/rep1", "stacked/rep0"], 9, 512⟩
+
+/-- A recursive session's inner statement's coins: the challenger's keyed coin tree (`innerCoinSpec`). -/
+def innerTree : Coins := .tree innerCoinSpec
+
+/-- A recursive session's inner statement (§16.16), on the challenger's coin tree (`innerTree`), whose tags are the
+statement's own (`Tags.withCoins` changes no tags on a tree). -/
+def innerTags : Tags := Tags.circuitPlainLeaves
 
 /-- The inner statement's shape, from its circuit, public file and the verifier's own partition object and program. -/
 def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) (holo : Bool := false) :
     V Inner := do
-  let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB Coins.os 1 (partition := partition) (program := program)
+  let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB innerTree 1 (partition := partition) (program := program)
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
   pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo }
 

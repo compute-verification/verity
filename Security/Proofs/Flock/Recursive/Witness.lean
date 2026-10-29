@@ -186,8 +186,8 @@ theorem one_ok {sts : Array Flock.Stmt} {st : Flock.Stmt} (h : Flock.Witness.one
 accepts its `m`. -/
 theorem acceptsStmt_setup {cf pf : ByteArray} {p : Option Lean.Json} {g : Option ByteArray} {st : Flock.Stmt}
     (h : Flock.Witness.acceptsStmt cf pf p g = .ok st) :
-    (∃ spec, Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.Coins.os 1 (partition := p) (program := g) =
-      .ok (spec, #[st])) ∧ ∃ q, Flock.Zk.schedule st.m = .ok q := by
+    (∃ spec, Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.RecVStar.innerTree 1 (partition := p)
+      (program := g) = .ok (spec, #[st])) ∧ ∃ q, Flock.Zk.schedule st.m = .ok q := by
   unfold Flock.Witness.acceptsStmt Flock.Witness.acceptsStmtAt Flock.Witness.innerSetup at h
   obtain ⟨⟨spec, sts⟩, h1, h⟩ := bind_ok h
   obtain ⟨st', h2, h⟩ := bind_ok h

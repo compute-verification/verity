@@ -606,7 +606,7 @@ theorem stmt_unit {f : RecCoins.Files} {u u' : String} {p : SessionSpec × Stmt}
     f.stmt u' = .ok p := by
   unfold RecCoins.Files.stmt at h ⊢
   revert h
-  cases Stmt.setupTables RecCoins.innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition) with
+  cases Stmt.setupTables RecCoins.innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := some f.partition) with
   | error e => intro h; cases h
   | ok q =>
     obtain ⟨spec, sts⟩ := q
