@@ -25,6 +25,14 @@ Every figure is W1 priced work against stock's mnK (CORE.md §2a), at H32's floo
   (`benchmarks/census/adversary.json` world-inference-2027) and a datacenter of 100,000 H200s
   (`deployments.json` dc-12500-machines-600s) at 1,979 TFLOP/s and 0.4 utilization; as if the design covered it all.
   In AND gates at 2,079/16 an int8 MAC (CORE-TIME's figure, relayed), 2 FLOP a MAC.
+- the T1 allowance a year under each period basis the sweep's notes use: the world as the census's served FLOP (stock
+  work) or divided by a design's tensor width α; the datacenter at the int8 peak, at `mfu_serve` 0.4
+  (`benchmarks/rho/data/reference.toml`'s fleet card) or at the peak over α.
+- the bits a token a challenger would stream if it issued one side's noise as a signed coin stream (the network term's
+  condition in `Pouw.Guarantees.DitherInstance`): NCP's E₁ at 6 bits an X entry (E₂ and E₃ are E₁'s moves), SSN-A's
+  4 bits (b1) or 16 (b4) a row a step of 28 entries; per GPU at the design's served rate, stock's 8,192 tokens in
+  37.77 ms (CORE-NCP) over its T2 (estimates). SSN-A's step-1 column code, base 13 in four lanes less the zero vector,
+  holds n ≤ 13⁴ − 2.
 
   python3 benchmarks/pouw/theory/sw_smell_arith.py [--json OUT]
 """
@@ -74,6 +82,22 @@ def single_add_lanes() -> list[int]:
         if not any(len({(c + r) // 256 for r in range(64)}) == 1 for c in cs):
             bad.append(b)
     return bad
+
+
+def period_bases(world_flop_year: float, h200_mac_s: float, gpus: int, and_per_mac: float) -> dict[str, float]:
+    """T1's allowance (1% of covered stock) a year in AND gates, under each basis a sweep note uses."""
+    year = 365 * 86400
+    world, dc_peak = world_flop_year / 2, gpus * h200_mac_s * year
+    return {f: 0.01 * v * and_per_mac for f, v in {
+        "world, census": world, "world, census / 3 (NCP's α)": world / 3, "world, census / 1.153 (SSN-A's α)": world / 1.153,
+        "datacenter, peak": dc_peak, "datacenter, mfu_serve 0.4": 0.4 * dc_peak,
+        "datacenter, peak / 3 (NCP's α)": dc_peak / 3, "datacenter, peak / 1.153 (SSN-A's α)": dc_peak / 1.153}.items()}
+
+
+def stream_bits_per_token(linears, layers: int) -> dict[str, float]:
+    steps = sum(-(-k // 28) for _, _, k in linears)
+    return {"ncp_e1": layers * 6 * sum(k for _, _, k in linears), "ssn_a_b1": layers * 4 * steps,
+            "ssn_a_b4": layers * 16 * steps}
 
 
 def delta(bytes_per_mac: float, h: float) -> float:
@@ -149,6 +173,21 @@ def main() -> int:
         print(f"{what} ({s:.3%} of covered compute), AND gates: world " +
               " / ".join(f"{row[p]['world'] / 2 * and_per_mac:.1e}" for p in periods) + "; datacenter " +
               " / ".join(f"{row[p]['datacenter'] / 2 * and_per_mac:.1e}" for p in periods))
+    bases = period_bases(world_year, 1.979e15 / 2, 100_000, and_per_mac)
+    out["period_bases_t1_allowance_year"] = bases
+    for what, v in bases.items():
+        print(f"T1 allowance a year, {what}: {v:.3g} AND gates")
+    stock_tok_s = 8192 / 37.77e-3
+    bits = stream_bits_per_token(LLAMA_FUSED, 16)
+    rate = {"ncp_e1": stock_tok_s / T2_SYNC, "ssn_a_b1": stock_tok_s / 59.6, "ssn_a_b4": stock_tok_s / 59.6}
+    out["stream"] = {k: {"bits_per_token": b, "gbit_s_per_gpu": b * rate[k] / 1e9,
+                         "gbit_s_per_gpu_at_stock_rate": b * stock_tok_s / 1e9} for k, b in bits.items()}
+    for k, v in out["stream"].items():
+        print(f"stream one side, {k}: {v['bits_per_token']:,.0f} bits a token (Llama fused, 16 layers); "
+              f"{v['gbit_s_per_gpu']:.2f} Gbit/s a GPU at the design's served rate, "
+              f"{v['gbit_s_per_gpu_at_stock_rate']:.1f} at stock's (estimates)")
+    out["ssn_a_max_n"] = 13 ** 4 - 2
+    print(f"SSN-A's step-1 code holds n ≤ {out['ssn_a_max_n']:,}; Llama's head has n 128,256, DeepSeek-V3's 129,280")
     checks = (
         ("final word over the block linears is CORE-TIME's 1.239%", abs(out["llama"]["apart_m8192"]["final_word"] - 0.01239) < 5e-5),
         ("forming apart at T 8,192 is CORE-TIME's 1.10%", abs(out["llama"]["apart_m8192"]["forming"] - 0.01101) < 5e-5),
@@ -160,6 +199,12 @@ def main() -> int:
          abs(out["ncp_k32_atomic"][8192] - (0.44221 - 0.41837)) < 5e-5),
         ("route U's Y fix equals the Y side's forming term (one more write a Y register)",
          abs(out["routes"][64]["route_u_y_fix"] - out["llama"]["fused_m64"]["forming_y"]) < 1e-12),
+        ("the bases reproduce the notes' year allowances: SW-PREMISES 2.03e30 / 1.35e27, SW-NOISE 5.27e30 / 3.52e27",
+         abs(bases["world, census / 3 (NCP's α)"] / 2.03e30 - 1) < 0.01
+         and abs(bases["datacenter, peak / 3 (NCP's α)"] / 1.35e27 - 1) < 0.01
+         and abs(bases["world, census / 1.153 (SSN-A's α)"] / 5.27e30 - 1) < 0.01
+         and abs(bases["datacenter, peak / 1.153 (SSN-A's α)"] / 3.52e27 - 1) < 0.01),
+        ("SSN-A's code: the zero vector (6,6,6,6) is c = 14,280, skipped", sum(6 * 13 ** e for e in range(4)) == 14280),
     )
     ok = True
     for what, passed in checks:
