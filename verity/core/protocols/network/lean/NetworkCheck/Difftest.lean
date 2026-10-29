@@ -107,7 +107,7 @@ def evaluate (j : Json) : Except String Json := do
     ("root", orNull hexJson (framesRoot frames p)),
     ("opens", .arr (opens.map fun k => orNull (.arr ∘ Array.map hexJson) (openFrame frames p k))),
     ("verifies", .arr (verifies.map fun (r, k, f, path) => toJson (verifyFrame r p k f path))),
-    ("manifest", orNull Json.str (canon (parametersManifest p ss))),
+    ("manifest", orNull Json.str (canonUtf8 (parametersManifest p ss))),
     ("parameters", orNull hexJson parameters),
     ("record_head", headJson do recordHead link direction window grid status p (← parameters) deadline),
     ("heads", .arr (heads.map (headJson ∘ pure))),
