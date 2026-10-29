@@ -21,8 +21,8 @@ verity-exact-kit = { workspace = true }
 # lean_headline.py writes, and test_lean_headline_dc the data-centre ones' (Security/Definitions/Accounting/HeadlineDc)
 # with what lean_headline_dc.py writes, and each statement's ε literal in Models' HeadlineDc.lean against the export's
 # ε/B_♭ pair.
-# Test-only: test_hidden_zk_stage runs hidden_zk/stage.py, which stages through C-Flock's Python; harness/price_twins.py
-# reads the lifted PoUW guarantees' sources and Security's lock. The PoUW × C-Flock statement's Guarantees definition is
+# Test-only: test_hidden_zk_stage runs hidden_zk/stage.py, which stages through Flock's Python; harness/price_twins.py
+# reads the lifted PoUW guarantees' sources and Security's lock. The PoUW × Flock statement's Guarantees definition is
 # in Proofs (`reads_exempt` in the lock). Of `verity`, the difftest harness, vLLM's integration and `research`, what the
 # tests import, in place of those trees; the Lean the served challenger's `lake build` reads is keyed by the binaries it
 # builds (`artifacts`), and the C++ the tests compile is this suite's own but for the SHA-512 pearl_c/sha512.cuh includes
