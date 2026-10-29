@@ -25,12 +25,17 @@ in a lock, and nothing imports it.
   (`bswap32`, little-endian rows read by SHA-512's big-endian words): a carrier `w + s` with `s ≠ 0` does not survive
   the swap up to a constant (`bswap32_shift_not_const`), and the swapped word is no carrier of the word
   (`bswap32_not_carrier`) but encodes it (`bswap32_bswap32`).
-* **The call model** (`Run`, `costOn`, `PeriodInventory`, `AtomicCall`; `preNoiseHash_credited`): instructions on
-  devices, cost counted on the period's inventory `I`. `PeriodInventory` puts both sides' runs on `I`, and
-  `AtomicCall` makes the call one program from the call's free words. Together with `ShaWrites` over every digest of
-  the call, `root(A)`'s included, the adversary's cost on `I` is at least `c·(|T| + R_A + R_W)`. Without either premise
-  the credit is zero (`costOn_outside`, `shaWrites_false_of_free`); a toy instance meets every hypothesis and attains
-  the bound (`toy_attained`).
+* **The atomic call, T1's layer** (`AtomicCall`; `atomicCall_closes`): T1's adversary is a program on the card alone.
+  `AtomicCall` makes the call one program from the call's free words, so `root(A)` is not free. With `ShaWrites` over
+  every digest of the call, `root(A)`'s included, the card's cost is at least `c·(|T| + R_A + R_W)`: the pre-noise
+  hashing of `A` is charged to the card, beside the targets. Without it the hash's credit is zero
+  (`shaWrites_false_of_free`, under a free set holding `root(A)`).
+* **The egress layer** (`Run`, `costOn`, `PeriodInventory`; `costOn_split`, `egress_charged`,
+  `preNoiseHash_credited`): instructions on devices, cost counted on the card's devices `I`. The card is charged the
+  bound less what devices outside `I` ran (`egress_charged`); bounding that is the egress layer's. `PeriodInventory`,
+  every device of both runs in `I`, makes it zero. Without it, outsourced hashing goes uncounted on `I`
+  (`costOn_outside`, `outsourced_uncredited`); a toy instance meets every hypothesis and attains the bound
+  (`toy_attained`).
 * **Lifting a data-case result to the call grid** (`distinctOn_lift`, `sepBy_lift`): a target set distinct at one
   data case, with that case's free values, is distinct on the call grid with the call's free values, when each call
   free value restricts to a data-case free value.
@@ -549,11 +554,33 @@ theorem bswap32_not_carrier : (bswap32 1 : ℤ) - 1 ≠ (bswap32 0 : ℤ) - 0 :=
 
 end Bswap
 
-/-! ## 6. The call model: `AtomicCall` and `PeriodInventory` -/
+/-! ## 6. The call model: `AtomicCall` (T1's layer) and `PeriodInventory` (the egress layer's) -/
 
 section Call
 
 variable {G Dev : Type}
+
+/-- **`AtomicCall pr Fcall L P`** (named premise; rank 3): the card's call is one program. Its inputs `L` and its
+operand words are the call's free words `Fcall` (the constants, the call's input words and its raw coin words), so no
+function of the call's input computed before the noise (such as `root(A)`) enters free; the grid it is judged on
+ranges over the call's input. -/
+def AtomicCall (pr : Prices100) (Fcall : Set (G → ℚ)) (L : List (G → ℚ)) (P : List (Op100 G)) : Prop :=
+  (∀ f ∈ L, f ∈ Fcall) ∧ ∀ o ∈ P, o.WFw pr Fcall
+
+/-- **What the atomic call alone closes** (rank 0 given `AtomicCall` and `ShaWrites`; T1's layer, the card alone): on
+the call grid `S`, with `ShaWrites` over every digest of the call (`root(A)`'s `DigA` and the committed rows' `DigW`,
+`R_A + R_W` registers jointly), the card's program, admissible, writing a register in `Rel` to each separated target
+and outputting every digest, costs at least `c·(|T| + R_A + R_W)`. -/
+theorem atomicCall_closes {c : ℕ} {pr : Prices100} (hpr : Floor c pr)
+    {Adm : List (Op100 G) → List (G → ℚ) → Prop} {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {S : Set G}
+    {Fcall X : Set (G → ℚ)} (hconst : ∀ q : ℚ, (fun _ : G => q) ∈ Fcall) (hFX : Fcall ⊆ X)
+    {Rel : (G → ℚ) → (G → ℚ) → Prop} (hS : OnS S Rel) {T DigA DigW : Finset (G → ℚ)} {RA RW : ℕ}
+    [DecidableEq (G → ℚ)] (hRX : RelOf Rel T ⊆ X) (hsha : ShaWrites pr Adm fpSem S X (DigA ∪ DigW) (RA + RW))
+    (hsep : SepBy Rel Fcall T) {L : List (G → ℚ)} {P : List (Op100 G)} (hatom : AtomicCall pr Fcall L P)
+    (hadm : Adm P L) (hw : WritesBy Rel fpSem P L T) (hOD : OutputsOn fpSem S P L (DigA ∪ DigW)) :
+    c * (T.card + RA + RW) ≤ cost100 pr P := by
+  rw [Nat.add_assoc]
+  exact hashCompose_by hpr hconst hFX hS hRX hsha hatom.1 hatom.2 hadm hsep hw hOD
 
 /-- A run of the call model: its instructions, each on a device. -/
 abbrev Run (Dev G : Type) := List (Dev × Op100 G)
@@ -569,18 +596,11 @@ open Classical in
 noncomputable def costOn (pr : Prices100) (I : Set Dev) (P : Run Dev G) : ℕ :=
   cost100 pr (ops (P.filter fun p => p.1 ∈ I))
 
-/-- **`PeriodInventory I Ph Pa`** (named premise; rank 3), the call model's form of the Accel premise of that name: the
-honest run `Ph` and the adversary's run `Pa` use only devices of the period's inventory `I`, so what either computes
-in the period is counted on `I`. On the H200 alone, `I` is its units and the premise holds by the adversary's
-definition; a device outside the card is the egress layer's. -/
+/-- **`PeriodInventory I Ph Pa`** (named premise; rank 3; the egress layer's, not T1's), the call model's form of the
+Accel premise of that name: the honest run `Ph` and the adversary's run `Pa` use only devices of `I`, so what either
+computes in the period is counted on `I`. T1's adversary is the card alone, whose runs meet it with `I` the card by
+definition; with a device outside the card it is an outsourcing premise, which `OutsourceWithinEgress` replaces. -/
 def PeriodInventory (I : Set Dev) (Ph Pa : Run Dev G) : Prop := devs Ph ⊆ I ∧ devs Pa ⊆ I
-
-/-- **`AtomicCall pr Fcall L P`** (named premise; rank 3): the call is one program. Its inputs `L` and its operand
-words are the call's free words `Fcall` (the constants, the call's input words and its raw coin words), so no
-function of the call's input computed before the noise (such as `root(A)`) enters free; the grid it is judged on
-ranges over the call's input. -/
-def AtomicCall (pr : Prices100) (Fcall : Set (G → ℚ)) (L : List (G → ℚ)) (P : Run Dev G) : Prop :=
-  (∀ f ∈ L, f ∈ Fcall) ∧ ∀ o ∈ ops P, o.WFw pr Fcall
 
 theorem costOn_eq (pr : Prices100) {I : Set Dev} {P : Run Dev G} (h : devs P ⊆ I) :
     costOn pr I P = cost100 pr (ops P) := by
@@ -603,24 +623,59 @@ theorem costOn_outside (pr : Prices100) {I : Set Dev} {d : Dev} (hd : d ∉ I) (
   rw [this]
   rfl
 
-/-- **The pre-noise hashing of `A` is credited** (rank 0 given `PeriodInventory`, `AtomicCall` and `ShaWrites`): on
-the call grid `S`, with `ShaWrites` over every digest of the call (`root(A)`'s `DigA` and the committed rows' `DigW`,
-`R_A + R_W` registers jointly), the adversary's run, admissible, writing a register in `Rel` to each separated target
-and outputting every digest, costs at least `c·(|T| + R_A + R_W)` on the inventory `I`. -/
+/-- The run's cost is its cost on `I` plus its cost off `I`. -/
+theorem costOn_split (pr : Prices100) (I : Set Dev) (P : Run Dev G) :
+    costOn pr I P + costOn pr Iᶜ P = cost100 pr (ops P) := by
+  classical
+  unfold costOn
+  induction P with
+  | nil => rfl
+  | cons p P ih =>
+    by_cases h : p.1 ∈ I
+    · have h' : p.1 ∉ Iᶜ := fun h' => h' h
+      simp only [List.filter_cons, h, h', decide_true, decide_false, Bool.false_eq_true, ↓reduceIte, ops,
+        List.map_cons, cost100, List.sum_cons] at ih ⊢
+      omega
+    · have h' : p.1 ∈ Iᶜ := h
+      simp only [List.filter_cons, h, h', decide_true, decide_false, Bool.false_eq_true, ↓reduceIte, ops,
+        List.map_cons, cost100, List.sum_cons] at ih ⊢
+      omega
+
+/-- **The card is charged the bound less what ran off it** (rank 0 given `AtomicCall` over the joint run and
+`ShaWrites`; the egress layer's interface): if the adversary's joint run, on the card's devices `I` and outside, meets
+`atomicCall_closes`'s hypotheses, and the egress layer bounds the outside devices' cost by `E`, the card's cost is at
+least `c·(|T| + R_A + R_W) − E`. -/
+theorem egress_charged {c : ℕ} {pr : Prices100} (hpr : Floor c pr)
+    {Adm : List (Op100 G) → List (G → ℚ) → Prop} {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {S : Set G}
+    {Fcall X : Set (G → ℚ)} (hconst : ∀ q : ℚ, (fun _ : G => q) ∈ Fcall) (hFX : Fcall ⊆ X)
+    {Rel : (G → ℚ) → (G → ℚ) → Prop} (hS : OnS S Rel) {T DigA DigW : Finset (G → ℚ)} {RA RW : ℕ}
+    [DecidableEq (G → ℚ)] (hRX : RelOf Rel T ⊆ X) (hsha : ShaWrites pr Adm fpSem S X (DigA ∪ DigW) (RA + RW))
+    (hsep : SepBy Rel Fcall T) {I : Set Dev} {Pa : Run Dev G} {L : List (G → ℚ)} {E : ℕ}
+    (hatom : AtomicCall pr Fcall L (ops Pa)) (hadm : Adm (ops Pa) L) (hw : WritesBy Rel fpSem (ops Pa) L T)
+    (hOD : OutputsOn fpSem S (ops Pa) L (DigA ∪ DigW)) (hE : costOn pr Iᶜ Pa ≤ E) :
+    c * (T.card + RA + RW) ≤ costOn pr I Pa + E := by
+  have h := atomicCall_closes hpr hconst hFX hS hRX hsha hsep hatom hadm hw hOD
+  rw [← costOn_split pr I Pa] at h
+  omega
+
+/-- **The pre-noise hashing of `A` is credited on `I`** (rank 0 given `PeriodInventory`, `AtomicCall` and
+`ShaWrites`; the egress layer's form): with every device of both runs in `I`, the adversary's cost on `I` is at least
+`c·(|T| + R_A + R_W)`. -/
 theorem preNoiseHash_credited {c : ℕ} {pr : Prices100} (hpr : Floor c pr)
     {Adm : List (Op100 G) → List (G → ℚ) → Prop} {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {S : Set G}
     {Fcall X : Set (G → ℚ)} (hconst : ∀ q : ℚ, (fun _ : G => q) ∈ Fcall) (hFX : Fcall ⊆ X)
     {Rel : (G → ℚ) → (G → ℚ) → Prop} (hS : OnS S Rel) {T DigA DigW : Finset (G → ℚ)} {RA RW : ℕ}
     [DecidableEq (G → ℚ)] (hRX : RelOf Rel T ⊆ X) (hsha : ShaWrites pr Adm fpSem S X (DigA ∪ DigW) (RA + RW))
     (hsep : SepBy Rel Fcall T) {I : Set Dev} {Ph Pa : Run Dev G} {L : List (G → ℚ)}
-    (hinv : PeriodInventory I Ph Pa) (hatom : AtomicCall pr Fcall L Pa) (hadm : Adm (ops Pa) L)
+    (hinv : PeriodInventory I Ph Pa) (hatom : AtomicCall pr Fcall L (ops Pa)) (hadm : Adm (ops Pa) L)
     (hw : WritesBy Rel fpSem (ops Pa) L T) (hOD : OutputsOn fpSem S (ops Pa) L (DigA ∪ DigW)) :
     c * (T.card + RA + RW) ≤ costOn pr I Pa := by
-  rw [costOn_eq pr hinv.2, Nat.add_assoc]
-  exact hashCompose_by hpr hconst hFX hS hRX hsha hatom.1 hatom.2 hadm hsep hw hOD
+  rw [costOn_eq pr hinv.2]
+  exact atomicCall_closes hpr hconst hFX hS hRX hsha hsep hatom hadm hw hOD
 
-/-- **Both sides on one inventory**: T1's numerator on `I` is honest's whole cost less the adversary's bound. -/
-theorem t1_on_inventory {c : ℕ} {pr : Prices100} {I : Set Dev} {Ph Pa : Run Dev G} {B : ℕ}
+/-- **Both sides on one inventory** (the egress layer's form): the gap on `I` is at most honest's whole cost less the
+adversary's bound. -/
+theorem gap_on_inventory {c : ℕ} {pr : Prices100} {I : Set Dev} {Ph Pa : Run Dev G} {B : ℕ}
     (hinv : PeriodInventory I Ph Pa) (hB : c * B ≤ costOn pr I Pa) :
     (costOn pr I Ph : ℤ) - costOn pr I Pa ≤ (cost100 pr (ops Ph) : ℤ) - c * B := by
   rw [costOn_eq pr hinv.1]
@@ -652,7 +707,7 @@ theorem toy_attained :
     let Adm : List (Op100 Bool) → List (Bool → ℚ) → Prop := fun P L => td ∈ regs100 (fun _ _ _ _ => 0) P L
     let Pa : Run Unit Bool := [((), Op100.int tw), ((), Op100.int td)]
     ShaWrites h100Floor Adm (fun _ _ _ _ => 0) S X ({td} ∪ ∅) (1 + 0) ∧ SepBy (Carries S) (Consts Bool) {tw} ∧
-      PeriodInventory Set.univ Pa Pa ∧ AtomicCall h100Floor (Consts Bool) [] Pa ∧ Adm (ops Pa) [] ∧
+      PeriodInventory Set.univ Pa Pa ∧ AtomicCall h100Floor (Consts Bool) [] (ops Pa) ∧ Adm (ops Pa) [] ∧
       WritesBy (Carries S) (fun _ _ _ _ => 0) (ops Pa) [] {tw} ∧
       OutputsOn (fun _ _ _ _ => 0) S (ops Pa) [] ({td} ∪ ∅) ∧
       costOn h100Floor Set.univ Pa = 32 * (({tw} : Finset (Bool → ℚ)).card + 1 + 0) := by
@@ -708,6 +763,26 @@ theorem toy_attained :
   · rw [costOn_eq (I := Set.univ) h100Floor (fun _ _ => Set.mem_univ _), Finset.card_singleton]
     decide
 
+/-- **Outsourced hashing goes uncounted on the card** without `PeriodInventory`: the toy's run with its digest
+computed on a device outside the card (`false ∉ I = {true}`) meets `ShaWrites`, `AtomicCall` over the joint run,
+admissibility and the digest's output, yet costs the card `32`, below `32·(1 + 1)`. -/
+theorem outsourced_uncredited :
+    let S : Set Bool := Set.univ
+    let X : Set (Bool → ℚ) := Consts Bool ∪ RelOf (Carries S) {tw}
+    let Adm : List (Op100 Bool) → List (Bool → ℚ) → Prop := fun P L => td ∈ regs100 (fun _ _ _ _ => 0) P L
+    let Pa : Run Bool Bool := [(true, Op100.int tw), (false, Op100.int td)]
+    ShaWrites h100Floor Adm (fun _ _ _ _ => 0) S X ({td} ∪ ∅) (1 + 0) ∧
+      AtomicCall h100Floor (Consts Bool) [] (ops Pa) ∧ Adm (ops Pa) [] ∧
+      OutputsOn (fun _ _ _ _ => 0) S (ops Pa) [] ({td} ∪ ∅) ∧ ¬ PeriodInventory {true} Pa Pa ∧
+      costOn h100Floor {true} Pa < 32 * (({tw} : Finset (Bool → ℚ)).card + 1 + 0) := by
+  intro S X Adm Pa
+  obtain ⟨hsha, -, -, hatom, hadm, -, hOD, -⟩ := toy_attained
+  refine ⟨hsha, hatom, hadm, hOD, fun h => ?_, ?_⟩
+  · have hm : false ∈ devs Pa := ⟨Op100.int td, by simp [Pa]⟩
+    simpa using h.1 hm
+  · simp [costOn, Pa, ops]
+    decide
+
 end Call
 
 /-! ## 7. Lifting a data-case result to the call grid -/
@@ -752,10 +827,14 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.bswap32_bswap32
 #print axioms Pouw.Dimension.NCompose.bswap32_shift_not_const
 #print axioms Pouw.Dimension.NCompose.bswap32_not_carrier
+#print axioms Pouw.Dimension.NCompose.atomicCall_closes
 #print axioms Pouw.Dimension.NCompose.costOn_outside
+#print axioms Pouw.Dimension.NCompose.costOn_split
+#print axioms Pouw.Dimension.NCompose.egress_charged
 #print axioms Pouw.Dimension.NCompose.preNoiseHash_credited
-#print axioms Pouw.Dimension.NCompose.t1_on_inventory
+#print axioms Pouw.Dimension.NCompose.gap_on_inventory
 #print axioms Pouw.Dimension.NCompose.hashTerm_closes
 #print axioms Pouw.Dimension.NCompose.toy_attained
+#print axioms Pouw.Dimension.NCompose.outsourced_uncredited
 #print axioms Pouw.Dimension.NCompose.distinctOn_lift
 #print axioms Pouw.Dimension.NCompose.sepBy_carries_lift
