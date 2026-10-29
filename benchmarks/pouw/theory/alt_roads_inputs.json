@@ -109,15 +109,15 @@
         "t8192": {"m": 8192, "t_h_ms": 2113.547, "stock_ms": 31.33, "a_root_ms": 46.423, "judged": 67.46}
       }
     },
-    "source": "pouw_space.py and pouw_space.toml at N-CARD's a93377e30d (cursor/compute-research-np-card-7c2d) with --add alt_roads_cards.toml, the async engine's honest step t_H, stock's step and A's root chain before each call's noise (an estimate nobody has timed) for R1b's top designs; ssn-1l-hw's parts are the same (run r20261029-083932-46da); 64 serial calls a Llama-3.2-1B forward (16 layers x qkv, o, gate-up, down); round trips 2 us (RDMA) to 10 us"
+    "source": "pouw_space.py and pouw_space.toml at N-CARD's a93377e30d (cursor/compute-research-np-card-7c2d) with --add alt_roads_cards.toml, the async engine's honest step t_H, stock's step and A's root chain before each call's noise (an estimate nobody has timed) for R1b's top designs; ssn-1l-hw's parts are the same (run r20261029-084240-46c8); 64 serial calls a Llama-3.2-1B forward (16 layers x qkv, o, gate-up, down); round trips 2 us (RDMA) to 10 us"
   },
   "links": {
     "census_reference_bytes_per_s": 12.5e9,
     "per_gpu_400g_bytes_per_s": 50e9,
     "nvlink_domain_bytes_per_s": [900e9, 1800e9],
-    "pcie_d2h_measured_bytes_per_s": [54.92e9, 55.25e9],
-    "gemm_slowdown_under_d2h_measured": [1.0146, 1.0454],
-    "source": "benchmarks/census/networks.json dc-1ms-100gbps (reference); 400 Gb/s a GPU is an HGX H200's compute-fabric NIC (sensitivity, not a census entry); NVLink 4 (900 GB/s a Hopper GPU) and NVLink 5 (1.8 TB/s a Blackwell GPU) are a what-if for an NVLink domain that spans machines, which an HGX H200 doesn't have; PCIe Gen5 x16 device-to-host into pinned host memory (min-max of 3 x 8 GiB) and int8 cuBLAS GEMMs' slowdown under a concurrent device-to-host stream that outlasts them (min-max over 5 Llama and square shapes), alt_roads_egress.sh on one H200 at 1980 MHz (run r20261029-080123-0158, art:33b1cc829b8f2735773529db549d0ecde8b6cfd090001d793eff2db40f5be898)"
+    "pcie_d2h_measured_bytes_per_s": [55.26e9, 55.26e9],
+    "gemm_slowdown_under_d2h_measured": [1.0162, 1.0467],
+    "source": "benchmarks/census/networks.json dc-1ms-100gbps (reference); 400 Gb/s a GPU is an HGX H200's compute-fabric NIC (sensitivity, not a census entry); NVLink 4 (900 GB/s a Hopper GPU) and NVLink 5 (1.8 TB/s a Blackwell GPU) are a what-if for an NVLink domain that spans machines, which an HGX H200 doesn't have; PCIe Gen5 x16 device-to-host into pinned host memory (min-max of 3 x 8 GiB) and int8 cuBLAS GEMMs' slowdown under a concurrent device-to-host stream that outlasts them (min-max over 5 interleaved alone / under-stream trials of 5 Llama and square shapes, median 1.0371), alt_roads_egress.sh on one H200 at 1980 MHz (run r20261029-085305-730e, art:02070740a6d1e6726f1d21a8168b09d2bea082ce8dc1fc73db66ac0be7237664)"
   },
   "accounting": {
     "and_per_int8_mac": 129.9375,
