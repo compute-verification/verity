@@ -1,6 +1,6 @@
-"""CPU tests for MOE-TP-01 (moe): a rank Program's TP member (`part_rank<r>` / `shard_rank<r>`) compares against the relation's one output
+"""CPU tests for MOE-TP-01: a rank Program's TP member (`part_rank<r>` / `shard_rank<r>`) compares against the relation's one output
 when the evaluator did not name it -- `0` / `out` (TP-08d, the row-parallel / lm_head Gemm) and now MoeSum's `sum` (the rank's MoE-block
-partial before the all-reduce: the Qwen3-30B-A3B TP2 B2 Commit on r16-int-4 537a9362d left every MoeSum_v1 stratum on both ranks
+partial before the all-reduce: a Qwen3-30B-A3B TP2 B2 Commit left every MoeSum_v1 stratum on both ranks
 'evaluator produced no member part_rank<r>' -- 336 strata per rank not evaluated, grade partial).  Never a guess between two outputs;
 never for a member that is not a TP member."""
 from __future__ import annotations

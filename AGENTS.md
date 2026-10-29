@@ -10,15 +10,16 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
-    package per protocol: sampled proofs, PoUW, PoUS, the bandwidth audit, the remote bandwidth audit and the network
-    certifier, each a Python verifier until its Lean verifier (its `lean/`) replaces it; NCI is Lean only. `claims`
-    holds the security claims' ids, `service/flock/` C-Flock's Lean verifier and the ZK server
-    (`Flock.Firewall`), `service/firewall/` the ZK server's release side, and `difftest` the Python held to each Lean.
+    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit, proof of useful
+    bandwidth (PoUB) and network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces
+    it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims' ids,
+    `service/flock/` C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
+    release side, and `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
-    (the served workloads' Definitions) and `flock/` (`verity_flock`, its own distribution: C-Flock, the proof system,
-    with its verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its
+    (the served workloads' Definitions) and `flock/` (`verity_flock`, its own distribution: C-Flock, the proof
+    system's prover, with its verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its
     Python verifier reads are on the soundness path: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`,
     `ml.kernels`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which only shrinks). The rest
     can't affect soundness.
@@ -65,17 +66,17 @@ The rules in force, each stated as itself.
   16-bit limit). A plain path, C-Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `flock-verify`
   refuses a plain session past what the plain theorem covers (one table today).
-- **One proof service** for PoUW, PoUS and network accounting: the workers behind the firewall, the challenger and the
+- **One proof system** for PoUW, PoUS and network accounting: the workers behind the firewall, the challenger and the
   verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
-  does with the outcome; the service owns commitments, live coins, the record, the selection, proving, verifying and the
+  does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its draw established (ε at δ), and the
   model's size is public.
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hm96 rows in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
   named premise H-μ⁺, not yet in a lock.
-- **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: the remote bandwidth
-  audit's pass seeds inside a window, from the window's live challenge and the previous pass's root; and PoUW's
+- **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
+  inside a window, from the window's live challenge and the previous pass's root; and PoUW's
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the window's
   live salt (`pouw.salt`) and the operands' committed roots, which a drawn unit's proof derives. Grinding is a term
   of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try. No
@@ -94,7 +95,9 @@ The rules in force, each stated as itself.
   Nothing the prover runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
-  and later from a separate physical calibration.
+  and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute
+  capacity, and nothing else: no power certifier, power ceiling, energy floor or meter enters a protocol, premise or
+  plan.
 - **Lean is the definition and the verifier.** Python in `verity.ml` mirrors it for the prover's
   speed, held to it by difftest. A protocol's verifier switches from Python to Lean only on evidence: its gap list shows
   nothing the Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's
@@ -212,11 +215,12 @@ check must agree, and a disagreement is fixed in the check.
   refactored onto the shared one.
 - **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and draws,
   probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
-  area and protocol reads; an area defines only its own, and no new Lean adds a second definition.
+  area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
+  (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
   executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
-  `verity/core/service/firewall/`), the PoUS grader, the certifier program, the NCI check and the remote bandwidth
-  audit's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
+  `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `Security/`, three trees: definitions
   (`Definitions/`, the package `security`, Mathlib only: the vocabulary, named assumptions and guarantee

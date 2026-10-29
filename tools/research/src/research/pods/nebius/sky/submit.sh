@@ -15,7 +15,7 @@
 #      jobs run from there (SRC), not from an upload;
 #   3. runs `sky jobs launch` with the R2 credentials as secrets (from this environment) and prints the job's queue line.
 # config-run's two tasks: VY_ROW_CLASS=small|dense|long|moe|b64|tp2 (its header's table), or VY_BUILD_MEMORY / VY_GPU_MEMORY
-# in GB per cell (e.g. `verity-vllm sweep plan`'s ram_gb), which win over the class.
+# in GB per cell, which win over the class.
 # VY_LANE defaults to this checkout's branch name. KUBECONFIG is unset: the SkyPilot client forwards it to the server.
 # Another server's cluster (its own API server): VY_MACHINE=vy-nebius-2 VY_POOL=vy-nebius-2 VY_SKY_PORT=46581.
 set -euo pipefail
