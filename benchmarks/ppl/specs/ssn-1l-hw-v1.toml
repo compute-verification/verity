@@ -1,0 +1,10 @@
+description = "ssn-1l-b1-fused-v1 hardened (SSN-1L-HW): stock int8, then the integer product plus a1 C + sum_t s_t[j] (1 + 2 b_t) less rint(7.5 sum C + 2 sum_t s_t[j]) per column, S = 1 + ceil((k - 28) / 31), a1 fresh nibbles m x 4 against C (SSN-A's step-0 column code on the fused linear's columns), b fresh bits m x (S - 1) against public pseudo-random column signs s_t[j] in {-1, +1}, row coins one draw per fused call, served uncorrected; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "ssn_1l_hw"
+fused = true

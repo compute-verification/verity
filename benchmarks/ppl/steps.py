@@ -1036,7 +1036,7 @@ def noise_linear(mm, nxt, *, x_width: int = 0, w_width: int = 0, period: int = 0
 
 
 #: the noise rules `served` adds to the integer product and serves
-SERVED_RULES = ("ssn_a", "ssn_1l", "ssn_1l5", "ssn2", "raw_byte")
+SERVED_RULES = ("ssn_a", "ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn2", "raw_byte")
 #: data entries in a k32 step (the other 4 are noise); `ssn_1l`'s later steps hold 31 and one noise lane
 SSN_DATA = 28
 SSN_1L_DATA = 31
@@ -1069,6 +1069,19 @@ def ssn_code5(n: int, offset: int = 0) -> torch.Tensor:
     if bool((r != 0).any()):
         raise ValueError(f"ssn_1l5: {offset + n} columns outrun the 5-digit balanced base-13 code")
     return torch.stack(digits).double()
+
+
+def column_signs(steps: int, n: int, offset: int = 0) -> torch.Tensor:
+    """`ssn_1l_hw`'s public column signs s_t[j] in {-1, +1}, steps x n, for steps t = 1..steps and columns offset ..
+    offset + n - 1 of the fused linear: a fixed integer hash of (t, j), so every projection of a fused linear reads the
+    same signs for its columns."""
+    mask = 2 ** 31 - 1
+    j = torch.arange(offset, offset + n, dtype=torch.int64)[None, :]
+    t = torch.arange(1, steps + 1, dtype=torch.int64)[:, None]
+    x = (j * 1103515245 + t * 2654435 + 0x9E3779B) & mask
+    for mul, shift in ((1597334677, 13), (1013904223, 16), (668265263, 15)):
+        x = ((x ^ (x >> shift)) * mul) & mask
+    return (1 - 2 * ((x >> 17) & 1)).double()
 
 
 def ssn_a_w0(n: int, k: int, offset: int = 0) -> torch.Tensor:
@@ -1105,7 +1118,9 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False):
     {0, ..., 2^bits - 1}^(m x S x 4); `ssn_1l` (S = 1 + ceil((k - 28) / 31)) adds a1 C + rowsum(l) less
     rint(sum C / 2 + (2^bits - 1) (S - 1) / 2) per column, C step 0 of W0, a1 bits (m x 4) and l uniform on
     {0, ..., 2^bits - 1}^(m x (S - 1)), one lane a row a later step; `ssn_1l5` the same with five step-0 lanes
-    (S = 1 + ceil((k - 27) / 31), a1 bits m x 5, C `ssn_code5`); `ssn2` adds a b - S, a and b bits (m x S x 4 and
+    (S = 1 + ceil((k - 27) / 31), a1 bits m x 5, C `ssn_code5`); `ssn_1l_hw` is `ssn_1l` hardened: a1 uniform on
+    {0, ..., 15}^(m x 4) and every later step t adds s_t[j] (1 + 2 b_t), b bits m x (S - 1) and s the public column
+    signs (`column_signs`), less rint(7.5 sum C + 2 sum_t s_t[j]); `ssn2` adds a b - S, a and b bits (m x S x 4 and
     S x 4 x n); `raw_byte` adds sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred.
     `fused`: the row coins are one draw per fused call (`FUSED`), shared by q, k and v and by gate and up, as served;
     otherwise each projection draws its own. torch.round rounds half to even, as rint does."""
@@ -1130,7 +1145,16 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False):
         bound = k * G.absmax(mm.x.float()) * G.absmax(mm.weight().float()) + top
         mm.gate("accumulator", bound <= G.S32, bound)
         return acc
-    if rule == "raw_byte":
+    if rule == "ssn_1l_hw":
+        s = 1 + -(-(k - SSN_DATA) // SSN_1L_DATA)
+        off = fused_offset(mm.name, k, n)
+        code = mm.shared(("ssn_code", n, off, str(acc.device)), lambda: ssn_a_w0(n, SSN_DATA, off)[0].to(acc.device))
+        signs = mm.shared(("ssn_signs", s - 1, n, off, str(acc.device)),
+                          lambda: column_signs(s - 1, n, off).to(acc.device))
+        steps_t = 1 + 2 * mm.coins((m, s - 1), 2, name=stream).double()
+        a1 = mm.coins((m, 4), 16, name=stream).double()
+        noise = a1 @ code + steps_t @ signs - torch.round(7.5 * code.sum(0) + 2 * signs.sum(0))
+    elif rule == "raw_byte":
         noise = (mm.coins((m, s), 256, name=stream) - 128).double().sum(1, keepdim=True).expand(m, n)
     elif rule == "ssn2":
         noise = mm.coins((m, 4 * s), 2).double() @ mm.coins((4 * s, n), 2).double() - s
