@@ -139,10 +139,11 @@ def test_a_slots_tokens_are_its_prompt_then_its_selects(window):
 def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
     """Every unit is filled: an embedding read's row is the table's at its token and its opening (row, salt and path, as
     `gates.embedding.arguments` encodes them) opens to the table's root, its verdict 1; each token select's group units, ``x0``
-    and combine give the node's token; each feed (every position but the first
-    below the prompt cap) holds its token and carried slot; each slot's scan read every lane's first token and carried slot,
-    occupancy word and head of the state row at its anchor (`io_shell.scan_reference`), its last collector the 2 outputs
-    from its prompt's last position on and its entry their count and ids; each head's first
+    and combine give the node's token, every position's but the last's a row of its collector; each feed (every position
+    but the first below the prompt cap) holds its token and carried slot; each slot's scan read every lane's first token and
+    carried slot, occupancy word and head of the state row at its anchor (`io_shell.scan_reference`), its last collector
+    (the next-to-last position's) the outputs so far from its prompt's last position on and its entry the 2 outputs' count
+    and ids; each head's first
     key block (`Attention_v20`'s cut) is evaluated, and its end's Definition on that block's state is the node's value, the
     row kernel's. With no served values every unit is computed or evaluated."""
     low, fields, tables, _w, slots = window
@@ -179,17 +180,20 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
                 for g, (best, idx) in enumerate(zip(bests, idxs)):
                     if _gt(best, run):
                         run, run_i = best, c * 64 + g * WC.GROUP + idx
-            assert run_i == token
-            (_, _, r), = P.outs[j]
-            assert _i32(rows.outs[r.tid][0][r.unit]) == [token]
+            assert run_i == token and (j in P.outs) == (j != max(P.selects))
+            if j in P.outs:
+                (_, _, r), = P.outs[j]
+                assert _i32(rows.outs[r.tid][0][r.unit]) == [token]
         st, su = P.scan_unit
         lanes = [[[r[2]], s_.carried[0], r[:1], [r[1], 2]] for r, s_ in zip(SLOTS, slots)]
         assert [_i32(rows.outs[st][k][su]) for k in range(8)] == [v for lane in lanes for v in lane]
         assert lanes == [[[tok], slot, [occ], head] for tok, slot, occ, head in WR._lanes(P, STATE, IO.scan_reference)]
         lp, picks = row[1], [int(s.values[j][0][0]) for j in P.selects]
         outs, (ct, cu), (et, eu) = picks[lp - 1:lp + 1], P.collects[-1], P.entry_unit
-        assert len(P.collects) == len(picks) == CLASS.positions and len(outs) == CLASS.outputs
-        assert _i32(rows.outs[ct][0][cu]) == [(lp - 1 - CLASS.positions) & 0xFFFFFFFF, 2, *outs]
+        assert len(P.collects) + 1 == len(picks) == CLASS.positions and len(outs) == CLASS.outputs
+        n = min(CLASS.outputs, CLASS.positions - lp)
+        assert _i32(rows.outs[ct][0][cu]) == [picks[-2]]
+        assert _i32(rows.outs[ct][1][cu]) == [(lp - CLASS.positions) & 0xFFFFFFFF, 2, *[0] * (CLASS.outputs - n), *outs[:n]]
         assert sum(int(w) << 16 * k for k, w in enumerate(rows.outs[et][0][eu])) == 2 | outs[0] << 32 | outs[1] << 49
         assert len(P.heads) == 2 * (CLASS.prompt + CLASS.outputs - 1)
         for j, (plan, calls) in P.heads.items():
