@@ -303,7 +303,7 @@ structure Resources where
   sent : ℕ
 
 /-- At most in every resource. -/
-instance : LE Resources where
+instance instLEResources : LE Resources where
   le r r' := r.blocks ≤ r'.blocks ∧ r.work ≤ r'.work ∧ r.fresh ≤ r'.fresh ∧ r.peakFresh ≤ r'.peakFresh ∧
     r.carried ≤ r'.carried ∧ r.sent ≤ r'.sent
 
