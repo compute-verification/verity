@@ -1240,14 +1240,16 @@ def main(argv: list[str] | None = None) -> int:
         load_noise(args.noise_data)
     rep = report()
     rep["best"] = best(rep)
-    for name in ("rc_magic", "rc_ffma", "rc_hybrid", "rc_hw", "rc_hw_mix", "rc_hg", "rc_hg_mix", "ssn_1l",
-                 "ssn_1l_hw", "ssn_1l_hg", "per2"):
+    for name in ("rc_magic", "rc_ffma", "rc_hybrid", "rc_hw", "rc_hw_mix", "rc_hw_ffma", "rc_hg", "rc_hg_mix",
+                 "rc_hg_ffma", "ssn_1l", "ssn_1l_hw", "ssn_1l_hg", "per2"):
         for model in ("M0", "M1u"):
             r = next(r for r in rep["rows"] if r["design"] == name and r["model"] == model and not r["c1"])
             for basis in ("gap", "gap_coins_uncredited", "gap_chosen", "gap_chosen_weights"):
-                g = r["llama_T8192"][basis]
-                if not math.isnan(g):
-                    rep[f"periods_{name}_{model}_noC1_llama_T8192_{basis}"] = ns.periods(g, r["llama_T8192"]["alpha"])
+                for shape in ("llama", "v4dense"):
+                    g = r[f"{shape}_T8192"][basis]
+                    if not math.isnan(g):
+                        rep[f"periods_{name}_{model}_noC1_{shape}_T8192_{basis}"] = ns.periods(
+                            g, r[f"{shape}_T8192"]["alpha"])
     text = json.dumps(rep, indent=1, default=float)
     if args.json:
         with open(args.json, "w") as fh:
