@@ -1,4 +1,4 @@
-"""V*'s statements over one inner session (hiding model architectures, lane rec-v0): each Ligerito level's `RecOpen`
+"""V*'s statements over one inner session (hiding model architectures): each Ligerito level's `RecOpen`
 statement (`verity_flock.rec_outer`) and the algebra's `InnerRepCheck` (`verity_flock.rec_residuals`), staged from the inner
 session's directory (`verity_flock.rec_live.Proxy.write`: ``public.json``, ``private.json``, ``session/``). The algebra is
 staged as its parts (`rec_residuals.parts`, ``alg/p<j>/``), each within --zk's coin schedule, and holds when every part does.
