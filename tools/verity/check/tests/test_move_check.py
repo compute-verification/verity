@@ -1146,3 +1146,98 @@ def test_moves_entry_the_range_agrees_with_is_certified(tmp_path):
 def test_moves_entry_the_range_contradicts_is_refused(tmp_path):
     [f] = _moves(tmp_path, {"pkg/app/store/": "pkg/app/protocols/storage/"})["refusals"]
     assert f["path"] == MC.MOVES and "pkg/app/protocols/storage/" in f["reason"]
+
+
+JOIN = ('import sys\nfrom pathlib import Path\n\nHERE = Path(__file__).resolve().parent\n'
+        'sys.path.insert(0, str(HERE.parent / "rho"))\n')
+CIRCUITS = "# Steps as Boolean circuits (rho/circuits.py): what the census counts\nx = 1\n"
+RHO = {"bench/rho/rho/__init__.py": "", "bench/rho/rho/classes.py": "Y = 1\n",
+       "bench/rho/rho/circuits.py": 'X = 1\nSOURCE = f"circuit.{X}: its gates over its FLOPs (rho/circuits.py units)"\n',
+       "bench/rho/data/circuits.toml": CIRCUITS, "bench/nci/statement.py": JOIN, "bench/nci/notes.toml": CIRCUITS}
+
+
+def _rho(tmp_path: Path, edits: dict[str, str], files: dict[str, str] | None = None) -> dict:
+    """`bench/rho` renamed `bench/overhead` and its package `rho` with it, the directory's pair given as a range's
+    `moves.json` entry gives it."""
+    repo, base = _repo(tmp_path, {**RHO, **(files or {})})
+    _move(repo, "bench/rho/rho", "bench/overhead/overhead")
+    _move(repo, "bench/rho/data", "bench/overhead/data")
+    _write(repo, edits)
+    return _check(repo, base, {"bench/rho": "bench/overhead"})
+
+
+def test_join_on_the_files_own_place_naming_a_moved_directory_is_certified(tmp_path):
+    r = _rho(tmp_path, {"bench/nci/statement.py": JOIN.replace('"rho"', '"overhead"')})
+    assert r["certified"], r["refusals"]
+    assert {"path": "bench/nci/statement.py", "kind": "python"} in r["edits"]
+
+
+def test_join_with_any_other_change_or_on_a_shadowed_name_is_refused(tmp_path):
+    [f] = _rho(tmp_path / "a", {"bench/nci/statement.py": JOIN.replace('(0, str(HERE.parent / "rho"',
+                                                                         '(1, str(HERE.parent / "overhead"')})["refusals"]
+    assert f["path"] == "bench/nci/statement.py" and '+sys.path.insert(1, str(HERE.parent / "overhead"))' in f["hunk"]
+    shadowed = JOIN + '\n\ndef f(HERE):\n    return HERE.parent / "rho"\n'
+    [f] = _rho(tmp_path / "b", {"bench/nci/statement.py": shadowed.replace('"rho"', '"overhead"')},
+               {"bench/nci/statement.py": shadowed})["refusals"]
+    assert f["path"] == "bench/nci/statement.py" and '+sys.path.insert(0, str(HERE.parent / "overhead"))' in f["hunk"]
+
+
+def test_mention_of_a_moved_file_inside_its_moved_package_is_certified(tmp_path):
+    circuits = RHO["bench/rho/rho/circuits.py"].replace("(rho/", "(overhead/")
+    r = _rho(tmp_path, {"bench/overhead/data/circuits.toml": CIRCUITS.replace("(rho/", "(overhead/"),
+                        "bench/overhead/overhead/circuits.py": circuits})
+    assert r["certified"], r["refusals"]
+    assert {e["path"] for e in r["edits"]} == {"bench/overhead/data/circuits.toml", "bench/overhead/overhead/circuits.py"}
+
+
+def test_mention_with_any_other_change_elsewhere_or_outside_the_package_is_refused(tmp_path):
+    for i, (path, text) in enumerate([
+            ("bench/overhead/data/circuits.toml", CIRCUITS.replace("(rho/", "(overhead/").replace("counts", "measures")),
+            ("bench/overhead/data/circuits.toml", CIRCUITS.replace("(rho/circuits.py", "(overhead/classes.py")),
+            ("bench/nci/notes.toml", CIRCUITS.replace("(rho/", "(overhead/"))]):
+        [f] = _rho(tmp_path / str(i), {path: text})["refusals"]
+        assert f["path"] == path and "+" + text.splitlines()[0] in f["hunk"]
+
+
+VECTORS = ('"""The vectors.\n\n    vectors.py --out ../../../proto/certifier/tests/v.json\n"""\n'
+           "# reads ../../../proto/certifier/ for the schema\nX = 1\n")
+WHY = "instances on which L.f gives what proto/certifier/cert.py gives, byte for byte"
+
+
+def _why(why: str) -> str:
+    return _lock(guarantees={}, runs={"L.Difftest": {"why": why, "args": ["10"]}})
+
+
+def _certifier(tmp_path: Path, edits: dict[str, str]) -> dict:
+    """`proto/certifier` renamed `proto/network_certifier`, which a script three levels down and a lock's run name."""
+    repo, base = _repo(tmp_path, {"proto/certifier/cert.py": "X = 1\n", "proto/certifier/tests/v.json": "{}\n",
+                                  "bench/e2e/enc/vectors.py": VECTORS, "L/lean-audit.json": _why(WHY)})
+    _move(repo, "proto/certifier", "proto/network_certifier")
+    _write(repo, edits)
+    return _check(repo, base)
+
+
+def test_relative_path_in_a_comment_naming_a_moved_place_is_certified(tmp_path):
+    r = _certifier(tmp_path, {"bench/e2e/enc/vectors.py": VECTORS.replace("/certifier/", "/network_certifier/")})
+    assert r["certified"], r["refusals"]
+    assert {"path": "bench/e2e/enc/vectors.py", "kind": "python"} in r["edits"]
+
+
+def test_relative_path_with_any_other_change_or_resolving_elsewhere_is_refused(tmp_path):
+    moved = VECTORS.replace("/certifier/", "/network_certifier/")
+    for i, (text, line) in enumerate([
+            (moved.replace("the schema", "its schema"), "+# reads ../../../proto/network_certifier/ for its schema"),
+            (moved.replace("../../../", "../../"), "+    vectors.py --out ../../proto/network_certifier/tests/v.json")]):
+        [f] = _certifier(tmp_path / str(i), {"bench/e2e/enc/vectors.py": text})["refusals"]
+        assert f["path"] == "bench/e2e/enc/vectors.py" and line in f["hunk"]
+
+
+def test_runs_why_naming_a_moved_path_from_the_root_is_certified(tmp_path):
+    r = _certifier(tmp_path, {"L/lean-audit.json": _why(WHY.replace("/certifier/", "/network_certifier/"))})
+    assert r["certified"], r["refusals"]
+
+
+def test_runs_why_with_any_other_change_is_refused(tmp_path):
+    why = WHY.replace("/certifier/", "/network_certifier/").replace("byte for byte", "bit for bit")
+    [f] = _certifier(tmp_path, {"L/lean-audit.json": _why(why)})["refusals"]
+    assert f["path"] == "L/lean-audit.json" and "changed beyond moved paths" in f["reason"] and "bit for bit" in f["hunk"]
