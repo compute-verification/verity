@@ -1,0 +1,27 @@
+/* A generic gate library for SI's MAC baselines. Areas are gate equivalents (GE):
+   the Nangate 45 nm open cell library's X1 cell areas divided by NAND2_X1's 0.798 um^2.
+   No timing: synth.py reports logic depth from the AND/XOR mapping instead. */
+library (generic_ge) {
+  delay_model : table_lookup;
+  time_unit : "1ns";
+  voltage_unit : "1V";
+  current_unit : "1mA";
+  capacitive_load_unit (1, pf);
+  pulling_resistance_unit : "1kohm";
+  leakage_power_unit : "1nW";
+  cell (INV)    { area : 0.667; pin (A) { direction : input; } pin (Y) { direction : output; function : "!A"; } }
+  cell (BUF)    { area : 1.000; pin (A) { direction : input; } pin (Y) { direction : output; function : "A"; } }
+  cell (NAND2)  { area : 1.000; pin (A) { direction : input; } pin (B) { direction : input; } pin (Y) { direction : output; function : "!(A&B)"; } }
+  cell (NOR2)   { area : 1.000; pin (A) { direction : input; } pin (B) { direction : input; } pin (Y) { direction : output; function : "!(A|B)"; } }
+  cell (AND2)   { area : 1.333; pin (A) { direction : input; } pin (B) { direction : input; } pin (Y) { direction : output; function : "(A&B)"; } }
+  cell (OR2)    { area : 1.333; pin (A) { direction : input; } pin (B) { direction : input; } pin (Y) { direction : output; function : "(A|B)"; } }
+  cell (XOR2)   { area : 2.000; pin (A) { direction : input; } pin (B) { direction : input; } pin (Y) { direction : output; function : "(A^B)"; } }
+  cell (XNOR2)  { area : 2.000; pin (A) { direction : input; } pin (B) { direction : input; } pin (Y) { direction : output; function : "!(A^B)"; } }
+  cell (NAND3)  { area : 1.333; pin (A) { direction : input; } pin (B) { direction : input; } pin (C) { direction : input; } pin (Y) { direction : output; function : "!(A&B&C)"; } }
+  cell (NOR3)   { area : 1.333; pin (A) { direction : input; } pin (B) { direction : input; } pin (C) { direction : input; } pin (Y) { direction : output; function : "!(A|B|C)"; } }
+  cell (AOI21)  { area : 1.333; pin (A) { direction : input; } pin (B) { direction : input; } pin (C) { direction : input; } pin (Y) { direction : output; function : "!((A&B)|C)"; } }
+  cell (OAI21)  { area : 1.333; pin (A) { direction : input; } pin (B) { direction : input; } pin (C) { direction : input; } pin (Y) { direction : output; function : "!((A|B)&C)"; } }
+  cell (AOI22)  { area : 1.667; pin (A) { direction : input; } pin (B) { direction : input; } pin (C) { direction : input; } pin (D) { direction : input; } pin (Y) { direction : output; function : "!((A&B)|(C&D))"; } }
+  cell (OAI22)  { area : 1.667; pin (A) { direction : input; } pin (B) { direction : input; } pin (C) { direction : input; } pin (D) { direction : input; } pin (Y) { direction : output; function : "!((A|B)&(C|D))"; } }
+  cell (MUX2)   { area : 2.333; pin (A) { direction : input; } pin (B) { direction : input; } pin (S) { direction : input; } pin (Y) { direction : output; function : "((A&!S)|(B&S))"; } }
+}

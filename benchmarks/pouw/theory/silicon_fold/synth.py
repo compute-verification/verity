@@ -5,7 +5,11 @@ For each module it reports cells by type, gate equivalents (NAND2 = 1, Nangate45
 gates (`ltp`), and the AND count of a second mapping to {AND, XOR, NOT}: an upper bound on the multiplicative complexity
 a Boolean proof pays (C-Flock's ANDs). Needs `yowasp-yosys` on PATH (`pip install yowasp-yosys`).
 
-    python3 synth.py OUT.json [--vectors N] [--scratch DIR]
+`--lib generic.lib` maps instead in SI-ALG's flow (its `generic.lib`, copied from `benchmarks/pouw/silicon_alg/` on
+`cursor/compute-research-silicon-alg-8e03`, and its ABC script), reports the liberty area, and checks the mapped
+netlist the same way, so the rho areas and SI-ALG's baselines come from one flow.
+
+    python3 synth.py OUT.json [--vectors N] [--scratch DIR] [--lib generic.lib] [--only M ...]
 """
 
 from __future__ import annotations
@@ -34,6 +38,7 @@ GE = {
     "$_AOI3_": 1.33, "$_OAI3_": 1.33, "$_AOI4_": 1.67, "$_OAI4_": 1.67,
 }
 GE_DFF = 5.67  # DFF_X1 4.522 um^2
+SI_ALG_ABC = "+strash;dc2;strash;&get,-n;&dch,-f;&nf;&put"  # SI-ALG's ABC script (its default less SAT sweeping)
 
 
 def _bits(rng: random.Random, n: int) -> int:
@@ -152,7 +157,14 @@ def _cells(stat: str) -> dict[str, int]:
     return out
 
 
-def synth_one(name: str, scratch: Path, vectors: int, seed: int) -> dict:
+def _eval_results(d: Path) -> list[int]:
+    return [
+        int(m.group(2), 2) if m.group(2) else int(m.group(3)) & rho.M32
+        for m in re.finditer(r"Eval result: \\y = (?:(\d+)'([01]+)|(-?\d+))\.", (d / "eval.txt").read_text())
+    ]
+
+
+def synth_one(name: str, scratch: Path, vectors: int, seed: int, lib: str | None = None) -> dict:
     d = scratch / name
     d.mkdir(parents=True, exist_ok=True)
     (d / "m.v").write_text(rtl.verilog(name))
@@ -169,6 +181,32 @@ def synth_one(name: str, scratch: Path, vectors: int, seed: int) -> dict:
         for i, _ in cases
     )
     (d / "eval.txt").write_text("")
+    if lib:
+        _yosys(
+            f"read_verilog -sv m.v; synth -flatten -noabc -top {name}; abc -liberty {lib} -script {SI_ALG_ABC}; "
+            f"opt_clean; tee -q -o stat.txt stat -liberty {lib}; read_liberty -ignore_miss_func {lib}; "
+            f"hierarchy -top {name}; flatten; {evals}",
+            d,
+        )
+        stat = (d / "stat.txt").read_text()
+        got = _eval_results(d)
+        lib_area = {m.group(1): float(m.group(2))
+                    for m in re.finditer(r"cell \((\w+)\)\s*\{\s*area : ([\d.]+)", Path(lib).read_text())}
+        counts = {}
+        for m in re.finditer(r"^\s*(\d+)\s+\S+\s+(\w+)\s*$", stat, re.M):  # yosys >= 0.5x: count, area, cell
+            if m.group(2) in lib_area:
+                counts[m.group(2)] = int(m.group(1))
+        if not counts:
+            sys.exit(f"synth.py: {name}: no liberty cells in stat output")
+        n_cells, area = sum(counts.values()), sum(lib_area[c] * n for c, n in counts.items())
+        return {
+            "cells": counts,
+            "ge": round(area, 2),
+            "cells_total": n_cells,
+            "vectors": len(cases),
+            "vectors_ok": sum(g == w for g, (_, w) in zip(got, cases)),
+            "checked": len(got) == len(cases) and all(g == w for g, (_, w) in zip(got, cases)),
+        }
     flatten = "synth -flatten -top " + name + (" -booth" if name == "mac4_s8" else "")
     _yosys(
         f"read_verilog -sv m.v; {flatten}; abc -g {GATES}; opt_clean; tee -q -o stat.txt stat; "
@@ -183,10 +221,7 @@ def synth_one(name: str, scratch: Path, vectors: int, seed: int) -> dict:
     ge = sum(GE[c] * n for c, n in cells.items())
     depth = int(re.search(r"length=(\d+)", (d / "ltp.txt").read_text()).group(1))
     ax = _cells((d / "stat_ax.txt").read_text())
-    got = [
-        int(m.group(2), 2) if m.group(2) else int(m.group(3)) & rho.M32
-        for m in re.finditer(r"Eval result: \\y = (?:(\d+)'([01]+)|(-?\d+))\.", (d / "eval.txt").read_text())
-    ]
+    got = _eval_results(d)
     ok = len(got) == len(cases) and all(g == w for g, (_, w) in zip(got, cases))
     return {
         "cells": cells,
@@ -207,14 +242,19 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--scratch")
     ap.add_argument("--only", nargs="*")
+    ap.add_argument("--lib")
     a = ap.parse_args()
     scratch = Path(a.scratch) if a.scratch else Path(tempfile.mkdtemp(prefix="si-fold-synth-"))
+    lib = str(Path(a.lib).resolve()) if a.lib else None
     res = {}
     for name in a.only or rtl.MODULES:
-        res[name] = synth_one(name, scratch, a.vectors, a.seed)
+        res[name] = synth_one(name, scratch, a.vectors, a.seed, lib)
         r = res[name]
-        print(f"{name:16s} GE {r['ge']:9.1f}  depth {r['depth']:3d}  ANDs {r['ands']:6d}  eval {r['vectors_ok']}/{r['vectors']}", flush=True)
+        print(f"{name:16s} GE {r['ge']:9.1f}  depth {r.get('depth', '-'):>3}  ANDs {r.get('ands', '-'):>6}  "
+              f"eval {r['vectors_ok']}/{r['vectors']}", flush=True)
     meta = {"ge_weights": GE, "ge_dff": GE_DFF, "gates": GATES, "selftest": rho.selftest()}
+    if lib:
+        meta = {"flow": "SI-ALG: generic.lib, abc -script " + SI_ALG_ABC, "ge_dff": GE_DFF, "selftest": meta["selftest"]}
     Path(a.out).write_text(json.dumps({"modules": res, "meta": meta}, indent=1, sort_keys=True))
     if not a.scratch:
         shutil.rmtree(scratch)

@@ -52,6 +52,9 @@ CYCLE_DEPTH = 0  # gate levels a cycle; 0 takes the s8 MAC's own depth
 # 16.2 and IMAD 16.3 against W1's 32 a write; INT32 adds 8.29 as ptxas merges them, which also prices decomp's forming
 SM120_WRITE = 16.2
 SM120_ADD = 8.29
+# SI-ALG's shared baseline, GE a MAC with the accumulator register (note compute-research/20261029T2215Z-report-silicon-
+# baseline, run r20261029-220924-1126): s8 4-wide into s32; FP8 E4M3 into FP32 1-wide (conservative); exact FP8 4-wide
+SI_ALG = {"s8": 817.9, "fp8": 2285.5, "fp8x4_k64": 841.7, "run": "r20261029-220924-1126"}
 
 
 @dataclass(frozen=True)
@@ -141,13 +144,33 @@ def mac_baselines(synth: dict) -> dict:
     dff = _ge_dff(synth)
     s8 = (m["mac4_s8"]["ge"] + 32 * dff) / 4
     fp8 = m["fp8_mac"]["ge"] + 32 * dff
-    return {
+    base = {
         "s8_ge_per_mac": round(s8, 2),
         "fp8_ge_per_mac": round(fp8, 2),
         "s8_depth": m["mac4_s8"]["depth"],
         "fp8_depth": m["fp8_mac"]["depth"],
         "label": "checked RTL, synthesized (yosys + ABC, generic gates, Nangate45 GE); SI-ALG's baseline supersedes it",
     }
+    if synth["meta"].get("flow") == "si-alg":
+        base.update({
+            "s8_ge_per_mac": SI_ALG["s8"], "fp8_ge_per_mac": SI_ALG["fp8"], "fp8x4_k64_ge_per_mac": SI_ALG["fp8x4_k64"],
+            "own_rtl_s8_ge_per_mac": round(s8, 2), "own_rtl_fp8_ge_per_mac": round(fp8, 2),
+            "label": f"SI-ALG's baseline (run {SI_ALG['run']}); every rho mapped in SI-ALG's flow (generic.lib), checked",
+        })
+    return base
+
+
+def adopt_lib_flow(synth: dict, lib: dict) -> dict:
+    """Take each module's area from SI-ALG's flow; depth and AND counts stay from the generic-gate mapping."""
+    for name, m in synth["modules"].items():
+        if name not in lib["modules"]:
+            sys.exit(f"silicon_fold.py: {name} missing from the SI-ALG-flow synthesis")
+        lm = lib["modules"][name]
+        m["ge_own_flow"], m["ge"] = m["ge"], lm["ge"]
+        m["checked"] = m["checked"] and lm["checked"]
+    synth["meta"]["flow"] = "si-alg"
+    synth["meta"]["selftest"] = synth["meta"]["selftest"] + lib["meta"]["selftest"]
+    return synth
 
 
 def price(r: Rho, synth: dict, base: dict, margin: float) -> dict:
@@ -649,8 +672,11 @@ def main() -> None:
     ap.add_argument("--cycle-depth", type=int, default=0)
     ap.add_argument("--mutations", action="store_true")
     ap.add_argument("--verdict")
+    ap.add_argument("--synth-lib", help="synth.py --lib output: price every area in SI-ALG's flow against its baseline")
     a = ap.parse_args()
     synth = json.loads(Path(a.synth).read_text())
+    if a.synth_lib:
+        synth = adopt_lib_flow(synth, json.loads(Path(a.synth_lib).read_text()))
     global CYCLE_DEPTH
     CYCLE_DEPTH = a.cycle_depth
     res = run(synth, a.margin, a.K, a.fast_ratio)
