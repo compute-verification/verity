@@ -8,7 +8,7 @@ returning the actions it takes:
 - `Send(channel, message)`: a message to the party at the other end of `channel` (a peer's name, or a source's:
   `clock`, `coins`);
 - `Timer(at)`: wake me when my clock reads `at` (its clock source answers with `ClockTimer`);
-- `Record(entry, kind)`: an entry of one of the public kinds for the record, or `private`, kept in the transcript only;
+- `LogEntry(entry, kind)`: an entry of one of the public kinds for the record, or `private`, kept in the transcript only;
 - `Finish(outcome, refused, kind)`: the party's conclusion, or its refusal by name; it receives nothing after. A
   refusal's name is public; the outcome is of `kind`.
 
@@ -75,7 +75,7 @@ class Timer:
 
 
 @dataclass(frozen=True)
-class Record:
+class LogEntry:
     entry: Mapping[str, Any]
     kind: str
 
@@ -97,7 +97,7 @@ class Finish:
             raise ValueError(f"an outcome's kind is one of {KINDS}, not {self.kind!r}")
 
 
-type Action = Send | Timer | Record | Finish
+type Action = Send | Timer | LogEntry | Finish
 
 
 class Party(Protocol):
@@ -106,4 +106,4 @@ class Party(Protocol):
     def on(self, msg: Received) -> list[Action]: ...
 
 
-__all__ = ["Action", "Finish", "Identity", "Params", "Party", "Received", "Record", "Send", "Timer"]
+__all__ = ["Action", "Finish", "Identity", "Params", "Party", "Received", "LogEntry", "Send", "Timer"]
