@@ -103,6 +103,8 @@ struct OpProbe {
   const char* fn = "";         // the kernel's name when the probe shares another's kernel ("": `name`)
   int blocks = 0;              // blocks, one an SM (0: every SM, a whole number of clusters)
   int until = 0;               // the OP_UNTIL loop, 1-based in `expect`'s order (0: none)
+  const char* allow = "";      // opcodes the gate's forbid check lets this probe hold, "LDL,STL" for one that times
+                               // local memory ("": none)
 };
 
 namespace op {
@@ -125,11 +127,12 @@ inline void list(const OpProbe* p, size_t n) {
     const OpProbe& q = p[i];
     printf(" {\"name\": %s, \"tpb\": %d, \"kind\": %s, \"row\": %s, \"expect\": %s, \"counted\": %s, \"warps\": %s, "
            "\"words\": %.17g, \"smem_ops\": %s, \"dyn_smem\": %d, \"cluster\": %d, \"mode\": %d, \"iters\": %d, "
-           "\"refuse\": %s, \"note\": %s, \"fn\": %s, \"blocks\": %d, \"until\": %d",
+           "\"refuse\": %s, \"note\": %s, \"fn\": %s, \"blocks\": %d, \"until\": %d, \"allow\": %s",
            json_str(q.name).c_str(), q.tpb, json_str(q.kind).c_str(), json_str(q.row).c_str(),
            json_str(q.expect).c_str(), json_str(q.counted).c_str(), json_str(q.warps).c_str(), q.words,
            json_str(q.smem_ops).c_str(), q.dyn_smem, q.cluster, q.mode, q.iters, json_str(q.refuse).c_str(),
-           json_str(q.note).c_str(), json_str(*q.fn ? q.fn : q.name).c_str(), q.blocks, q.until);
+           json_str(q.note).c_str(), json_str(*q.fn ? q.fn : q.name).c_str(), q.blocks, q.until,
+           json_str(q.allow).c_str());
     printf(", \"smem\": [");
     if (q.smem && *q.smem_ops) {
       std::vector<std::string> ops;

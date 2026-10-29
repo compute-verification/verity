@@ -88,6 +88,8 @@ by the check it names, or nothing is timed at all.
    - The kernel's `OpArgs` carries `g` as two texture objects, `tex1` (1D u32, TLD) and `tex2` (pitch-2D float4,
      linear filtering, TEX).
    - `refuse` (`loops`, `smem`, `sink` or `forbid`): a known-invalid probe, kept as the gate's regression test.
+   - `allow`: opcodes the `forbid` check lets this probe hold (`"LDL,STL"` for a probe that times local memory). Every
+     other probe still refuses them as spills.
 
 3. **Gate it on the CPU**, then run it on a GPU from a pushed commit:
 

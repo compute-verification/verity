@@ -98,7 +98,9 @@ def judge(binary: Path, probes: list[dict], fns: list | None = None, tools: dict
     out = []
     for p in probes:
         fn = p.get("fn") or p["name"]
-        v = G.gate(binary, [fn], expects(p), smem=p["smem"] if p["smem_ops"] else None, fns=fns)
+        allow = set(filter(None, p.get("allow", "").split(",")))
+        v = G.gate(binary, [fn], expects(p), forbid=tuple(o for o in G.FORBID if o not in allow),
+                   smem=p["smem"] if p["smem_ops"] else None, fns=fns)
         rec = v["kernels"][0] if v["kernels"] else {"kernel": fn, "ok": False, "sass_sha256": None,
                                                      "reasons": [f"no kernel {fn} in {binary}"]}
         if p["refuse"]:
