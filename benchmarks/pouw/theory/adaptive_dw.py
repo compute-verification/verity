@@ -7,6 +7,8 @@ The committed word is word(i, j, t) = −β_j + Σ_{τ ≤ t} (data dot of k32 s
 - `hw` (`ssn-1l-hw`): step 1 holds 28 data lanes and a₁·C[:, j] (a₁ ∈ {0..15}⁴); each later step holds 31 data lanes
   and (1 + 2b_t[i])·σ_t[j], σ_t ∈ {±1}ⁿ public.
 - `fix2`: `tag` with each later step's (1 + b_t[i])·w_t[j], w_t ∈ {±1}ⁿ drawn after B.
+- `blc` (`ssn-1l-tag + blc4a-t64-e7`): `tag` with 28 data lanes a later step and three coin lanes, A′ = 1 against
+  B′ = s_t[tile, ℓ, j], odd and uniform in ±127 for each tile of 64 rows and column, drawn after A.
 
 Chosen data is zero except one lane a later step: B's row there is a pattern p_t fixed before the coins, and every
 row's A entry is x_t.
@@ -43,6 +45,7 @@ import numpy as np
 
 TILE = 4
 TAG_LANES = 4
+BLC_TILE, BLC_LANES, BLC_E = 64, 3, 7
 STEPS = {"K 2,048": 67, "K 8,192": 265}
 
 
@@ -78,15 +81,22 @@ def coins(design: str, m: int, n: int, s: int, rng: np.random.Generator) -> dict
     """The coins, drawn after the data: a₁, the step bits, and G and w for the tagged designs."""
     co = {"b": rng.integers(0, 2, size=(m, s))}
     co["a1"] = rng.integers(0, 16 if design == "hw" else 2, size=(m, 4))
-    if design in ("tag", "fix2"):
+    if design in ("tag", "fix2", "blc"):
         co["G"] = rng.integers(-3, 4, size=(TAG_LANES, n))
     if design == "fix2":
         co["w"] = rng.choice(np.array([-1, 1]), size=(s, n))
+    if design == "blc":
+        tiles = -(-m // BLC_TILE)
+        co["s"] = 2 * rng.integers(0, 2 ** BLC_E, size=(s, tiles, BLC_LANES, n)) - (2 ** BLC_E - 1)
     return co
 
 
 def first_data(design: str) -> int:
     return 28 if design == "hw" else 24
+
+
+def later_data(design: str) -> int:
+    return 32 - 1 - BLC_LANES if design == "blc" else 31
 
 
 def step_weights(design: str, pub: dict, co: dict, n: int, s: int) -> np.ndarray:
@@ -104,8 +114,8 @@ def step_lanes(design: str, co: dict) -> np.ndarray:
 
 def data(case: str, design: str, m: int, n: int, s: int, pub: dict, rng: np.random.Generator):
     """A (m × data lanes) and B (data lanes × n), fixed before the coins."""
-    d1 = first_data(design)
-    k = d1 + 31 * (s - 1)
+    d1, dl = first_data(design), later_data(design)
+    k = d1 + dl * (s - 1)
     a = np.zeros((m, k), dtype=np.int64)
     b = np.zeros((k, n), dtype=np.int64)
     a[:, :d1] = rng.integers(-127, 128, size=(1 if case == "same" else m, d1))
@@ -113,7 +123,7 @@ def data(case: str, design: str, m: int, n: int, s: int, pub: dict, rng: np.rand
     if case in ("zero", "same"):
         return a, b
     for t in range(1, s):
-        lane = d1 + 31 * (t - 1)
+        lane = d1 + dl * (t - 1)
         if case == "a2r":
             sig, e = pub["sigma"][t], t % 2
             b[lane] = -sig * (1 + 2 * np.where(sig == 1, e, 1 - e))
@@ -131,21 +141,28 @@ def bias(c: np.ndarray, s: int) -> np.ndarray:
 def honest(design: str, a, b, pub: dict, co: dict, s: int) -> np.ndarray:
     """The committed words (m × S × n): the served layout X·Y by k32 steps, from −β."""
     m, n = a.shape[0], b.shape[1]
-    d1 = first_data(design)
+    d1, dl = first_data(design), later_data(design)
     xp, yp = [a[:, :d1]], [b[:d1]]
-    if design in ("tag", "fix2"):
+    if design in ("tag", "fix2", "blc"):
         xp.append(row_tags(m))
         yp.append(co["G"])
     xp.append(co["a1"])
     yp.append(pub["C"])
     lanes, wts = step_lanes(design, co), step_weights(design, pub, co, n, s)
     for t in range(1, s):
-        lo = d1 + 31 * (t - 1)
-        xp += [a[:, lo:lo + 31], lanes[:, t:t + 1]]
-        yp += [b[lo:lo + 31], wts[t:t + 1]]
+        lo = d1 + dl * (t - 1)
+        xp.append(a[:, lo:lo + dl])
+        yp.append(b[lo:lo + dl])
+        if design == "blc":
+            xp.append(np.ones((m, BLC_LANES), dtype=np.int64))
+            yp.append(np.zeros((BLC_LANES, n), dtype=np.int64))
+        xp.append(lanes[:, t:t + 1])
+        yp.append(wts[t:t + 1])
     x, y = np.concatenate(xp, axis=1), np.concatenate(yp, axis=0)
     assert x.shape[1] == 32 * s and np.abs(x).max() <= 127 and np.abs(y).max() <= 127
     steps = np.einsum("mtk,tkn->mtn", x.reshape(m, s, 32), y.reshape(s, 32, n))
+    if design == "blc":
+        steps[:, 1:] += co["s"][1:, np.arange(m) // BLC_TILE].sum(axis=2).transpose(1, 0, 2)
     return np.cumsum(steps, axis=1) - bias(pub["C"], s)[None, None, :]
 
 
@@ -309,7 +326,7 @@ def small(seed: int = 7, m: int = 48, n: int = 64, s: int = 67) -> tuple[list[di
     rng = np.random.default_rng(seed)
     rows, checks = [], []
     for design, cases in (("tag", ("zero", "same", "cancel", "walk")), ("hw", ("zero", "same", "cancel", "a2r")),
-                          ("fix2", ("zero", "same", "cancel", "walk"))):
+                          ("fix2", ("zero", "same", "cancel", "walk")), ("blc", ("zero", "same", "cancel", "walk"))):
         for case in cases:
             pub = public(design, n, s, rng)
             a, b = data(case, design, m, n, s, pub, rng)
@@ -323,7 +340,7 @@ def small(seed: int = 7, m: int = 48, n: int = 64, s: int = 67) -> tuple[list[di
                                                               row["forest_saving_copy_0"])})
             checks.append({"name": f"{design}/{case} check (b) ≤ model W's payment + excess (adaptive_lanes_le)",
                            "ok": row["credit_b"] <= row["model_w_pays"] + row["model_w_excess"] + 1e-12})
-            if design != "fix2" and case in ("cancel", "walk"):
+            if design in ("tag", "hw") and case in ("cancel", "walk"):
                 adv, writes, pointers = adversary(design, case, a, b, pub, co, s)
                 ok = bool(np.array_equal(adv, words))
                 mut, _, _ = adversary(design, case, a, b, pub, co, s, key_bits=False)
