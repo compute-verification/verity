@@ -763,16 +763,27 @@ def test_moved_paths_in_a_lean_comment_and_markdown_relative_paths_are_a_move(tm
     assert r["certified"], r["refusals"]
 
 
-def test_a_lean_edit_beyond_a_moved_path_is_refused(tmp_path):
-    [f] = _doc_paths(tmp_path, "/-! `P/y/A.lean` states `a`. -/\ndef b := 2\n",
-                     "`../P/y/A.lean` states it ([A](../P/y/A.lean)).\n")["refusals"]
-    assert f["path"] == "S/B.lean"
+def test_a_lean_comment_edit_that_is_not_path_only_is_refused(tmp_path):
+    """Only a moved path may change in a Lean comment: not its prose, not a path the move didn't make, nor the code."""
+    md = "`../P/y/A.lean` states it ([A](../P/y/A.lean)).\n"
+    for case, lean in {"prose": "/-! `P/y/A.lean` states `b`. -/\ndef b := 1\n",
+                       "unmade": "/-! `P/z/A.lean` states `a`. -/\ndef b := 1\n",
+                       "code": "/-! `P/y/A.lean` states `a`. -/\ndef b := 2\n"}.items():
+        (tmp_path / case).mkdir()
+        [f] = _doc_paths(tmp_path / case, lean, md)["refusals"]
+        assert f["path"] == "S/B.lean", case
 
 
-def test_a_markdown_relative_path_that_names_another_file_is_refused(tmp_path):
-    [f] = _doc_paths(tmp_path, "/-! `P/y/A.lean` states `a`. -/\ndef b := 1\n",
-                     "`../P/y/A.lean` states it ([A](../../P/y/A.lean)).\n")["refusals"]
-    assert f["path"] == "docs/README.md"
+def test_a_markdown_relative_path_the_move_did_not_make_is_refused(tmp_path):
+    """A Markdown relative path may only follow the move: one naming a path the move didn't make, or another file, is
+    refused, in a link's target and in backticks."""
+    lean = "/-! `P/y/A.lean` states `a`. -/\ndef b := 1\n"
+    for case, md in {"link": "`../P/y/A.lean` states it ([A](../P/z/A.lean)).\n",
+                     "backticks": "`../P/z/A.lean` states it ([A](../P/y/A.lean)).\n",
+                     "outside": "`../P/y/A.lean` states it ([A](../../P/y/A.lean)).\n"}.items():
+        (tmp_path / case).mkdir()
+        [f] = _doc_paths(tmp_path / case, lean, md)["refusals"]
+        assert f["path"] == "docs/README.md", case
 
 
 def test_a_moves_record_of_a_path_that_did_not_move_whole_is_refused(tmp_path):
