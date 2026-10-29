@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn a_hello_the_record_cannot_hold_is_refused() {
         let gone = std::env::temp_dir().join(format!("fc-run-record-{}-none.jsonl", std::process::id()));
-        assert!(RunLog::new(&gone, 0).unwrap_err().contains("no run record there"));
+        assert!(matches!(RunLog::new(&gone, 0), Err(e) if e.contains("no run record there")));
         let p = staged("seed");
         let log = RunLog::new(&p, 1).unwrap();
         let mut s = Server::try_new(cfg(false), Box::new(NoProofs)).unwrap();
