@@ -77,6 +77,7 @@ __global__ void __launch_bounds__(TPB) probe_k(int iters, const u32* __restrict_
   }
   u32 sink = 0x9e3779b9u ^ gid;
   u32 noise = noise0(gid);
+  const u32 mulv = (u32)iters | 1u;  // a runtime value ptxas can't fold
   const long long c0 = clk();
 #pragma unroll 1
   for (int it = 0; it < iters; it++) {
@@ -86,7 +87,7 @@ __global__ void __launch_bounds__(TPB) probe_k(int iters, const u32* __restrict_
 #pragma unroll
       for (int k = 0; k < WPT; k++) {
         u32 w;
-        asm volatile("iadd3.s32 %0, %1, %2, 0;" : "=r"(w) : "r"(base[k]), "r"(noise));
+        asm volatile("add.s32 %0, %1, %2;" : "=r"(w) : "r"(base[k]), "r"(noise));
         acc ^= w;
       }
     } else if constexpr (MODE == ADVMIX) {
@@ -94,9 +95,10 @@ __global__ void __launch_bounds__(TPB) probe_k(int iters, const u32* __restrict_
       for (int k = 0; k < WPT; k++) {
         u32 w;
         if (k % 3 == 0) {
-          asm volatile("iadd3.s32 %0, %1, %2, 0;" : "=r"(w) : "r"(base[k]), "r"(noise));
+          asm volatile("add.s32 %0, %1, %2;" : "=r"(w) : "r"(base[k]), "r"(noise));
         } else if (k % 3 == 1) {
-          asm volatile("mad.lo.s32 %0, %1, 1, %2;" : "=r"(w) : "r"(base[k]), "r"(noise));  // IMAD pipe
+          // IMAD pipe: a runtime multiplier, so ptxas can't strength-reduce it to an add or LEA on the ALU pipe
+          asm volatile("mad.lo.s32 %0, %1, %2, %3;" : "=r"(w) : "r"(base[k]), "r"(mulv), "r"(noise));
         } else {
           // FADD pipe. The operands are masked to finite normals in [1,2) so the sum is bit-reproducible on host and
           // device; a real adversary's words above 2^24 are not exact in f32 (a reported caveat), but the rate is the point.
@@ -140,7 +142,8 @@ __global__ void __launch_bounds__(TPB) probe_k(int iters, const u32* __restrict_
 #pragma unroll
       for (int k = 0; k < WPT; k += 4) {
         u32 r0, r1, r2, r3;
-        u32* ptr = sh + (((threadIdx.x & 31) * 8 + (k + it) % 8) % (TPB * WPT));
+        // one 16-byte row a lane (ldmatrix needs each row address 16-byte aligned); 4 u32 a row
+        u32* ptr = sh + ((((threadIdx.x & 31) + (k / 4) * 32 + it * 8) * 4) % (TPB * WPT));
         u32 addr = (u32)__cvta_generic_to_shared(ptr);
         asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0,%1,%2,%3}, [%4];"
                      : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(addr));
@@ -180,7 +183,7 @@ static u32 ref_sink(int m, int t, int iters, const std::vector<u32>& hbase) {
         w = base[k] + noise;
       } else if (m == ADVMIX) {
         if (k % 3 == 0) w = base[k] + noise;
-        else if (k % 3 == 1) w = base[k] * 1u + noise;
+        else if (k % 3 == 1) w = base[k] * ((u32)iters | 1u) + noise;
         else {
           u32 bb = (base[k] & 0x007fffffu) | 0x3f800000u, nn = (noise & 0x007fffffu) | 0x3f800000u;
           float fb, fn; std::memcpy(&fb, &bb, 4); std::memcpy(&fn, &nn, 4);
