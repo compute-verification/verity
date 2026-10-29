@@ -50,7 +50,9 @@ attacks, then the effective overall rank, then the nominal, then T2's and T3's t
 then T1, T2 and T3.
 Per-period figures are on the card's one basis (`scale.basis`): stock work held fixed.
 
-  uv run python benchmarks/pouw/theory/pouw_space.py [--card PATH] [--out DIR] [--delta D] [--mutations]
+  uv run python benchmarks/pouw/theory/pouw_space.py [--card PATH] [--add PATH ...] [--out DIR] [--delta D] [--mutations]
+
+`--add` merges a lane's card file (its cards and any modules, premises, prices or attacks they need) into the card.
 """
 from __future__ import annotations
 
@@ -181,8 +183,22 @@ class Fields:
         return self._at[k]
 
 
-def load(path: Path = CARD) -> dict:
+def merge(into: dict, add: dict, where: str) -> None:
+    """`add`'s tables into `into`; a key both define is a card error, so an added file never overrides the card."""
+    for k, v in add.items():
+        if isinstance(v, dict) and isinstance(into.get(k), dict):
+            merge(into[k], v, f"{where}.{k}")
+        elif k in into:
+            raise CardError(f"{where}.{k} is already defined: an added file adds, never overrides")
+        else:
+            into[k] = v
+
+
+def load(path: Path = CARD, adds: list[Path] = ()) -> dict:
+    """The card, with each added file's modules, premises, prices, attacks and cards merged in (a lane's card file)."""
     card = tomllib.loads(path.read_text())
+    for p in adds:
+        merge(card, tomllib.loads(p.read_text()), p.name)
     for (axis, slot) in card["space"]["slots"]:
         mods = modules(card, axis, slot)
         for mid, mod in list(mods.items()):
@@ -988,7 +1004,8 @@ def main() -> int:
     card_path = Path(args[args.index("--card") + 1]) if "--card" in args else CARD
     out = Path(args[args.index("--out") + 1]) if "--out" in args else Path(".")
     delta = float(args[args.index("--delta") + 1]) if "--delta" in args else 0.0
-    card = load(card_path)
+    adds = [Path(args[i + 1]) for i, a in enumerate(args) if a == "--add"]
+    card = load(card_path, adds)
     designs, incompatible, dropped = space(card)
     cds = card_designs(card)
     n_modules = sum(len(modules(card, a, s)) for a, s in card["space"]["slots"])
@@ -1177,6 +1194,14 @@ def main() -> int:
     checks.check("decode (16 rows a call) is refused for every design as outside the bound's domain (C15), not priced",
                  not results["decode"]["rows"] and all("domain" in v[0] for v in results["decode"]["refused"].values()),
                  f"{len(results['decode']['refused']):,} refused")
+
+    try:
+        merge(copy.deepcopy(card), {"price": {"reg": {"value": 16}}}, "added.toml")
+        merged = "merged"
+    except CardError as e:
+        merged = str(e)
+    checks.check("an added card file adds and never overrides: one that redefines price.reg.value is a card error",
+                 "already defined" in merged, merged[:80])
 
     # (4) Refusals: what an unpriced term does.
     for name in ("dither-c", "fresh-u", "accel-d5-d6"):
