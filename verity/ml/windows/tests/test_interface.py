@@ -20,10 +20,12 @@ import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
+from verity.ml.circuits import annotations as AN, codec, population
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -1276,6 +1278,35 @@ def test_a_window_commits_its_table_reads_and_verdicts_as_registered_reads():
     win.registered = {**win.registered, "embed/opened": Held("embed/opened", np.ones((1, 3), dtype=np.uint16))}
     with pytest.raises(ValueError, match="rows of 3 words"):
         win.close(salt_key=bytes(32))
+
+
+def test_a_circuit_registers_its_slot_entries_by_closure_digest():
+    """`Entries` in the circuit record: each entry template with its closure digest, the same in the circuit's population
+    as in its own, and the vocabulary size, stop ids and whole templates as given. Entries naming no template of the
+    circuit, a template twice or a whole one among them, a vocabulary not a positive int, a stop id not natural, or an
+    entry template binding another ``STOP`` or ``V`` than the registered ones are refused; a template binding neither
+    takes any."""
+    e = I.Entries((TID,), 256, (3,), (AID,))
+    c = I.Circuit("two", ((COORD, 3), (ACC, 2)), entries=e)
+    digest = AN.closure_digest(codec.encode_program(population.population_program(COORD, 1)), TID)
+    assert c.entries_record() == {"stop": [3], "templates": [[TID, digest]], "vocabulary": 256, "whole": [AID]}
+    mixed = codec.encode_program(population.mixed_population_program([(COORD, 3), (ACC, 2)]))
+    assert AN.closure_digest(mixed, TID) == digest != AN.closure_digest(mixed, AID)
+    assert json.loads(I.circuit_bytes(I.Window(c, RUN, LAW, 2).circuit_record()))["entries"] == c.entries_record()
+    assert "entries" not in json.loads(I.circuit_bytes(I.Window(I.Circuit("two", c.templates), RUN, LAW, 2).circuit_record()))
+    for args, why in [(((), 256, ()), "at least one"), (((TID, TID), 256, ()), "at least one"),
+                      (((TID,), 0, ()), "a positive size"), (((TID,), True, ()), "a positive size"),
+                      (((TID,), 256, (-1,)), "natural ids"), (((TID,), 256, (True,)), "natural ids"),
+                      (((TID,), 256, (), (TID,)), "none an entry template"), (((TID,), 256, (), (AID, AID)), "each once")]:
+        with pytest.raises(ValueError, match=why):
+            I.Entries(*args)
+    with pytest.raises(ValueError, match="no template of the circuit"):
+        I.Circuit("one", ((COORD, 3),), entries=e)
+    for bindings in ({"V": 256, "STOP": (3,)}, {"V": 256}, {}):
+        e.check({TID: SimpleNamespace(bindings=bindings), AID: ACC})
+    for bindings in ({"V": 512}, {"STOP": (3, 7)}, {"STOP": ()}):
+        with pytest.raises(ValueError, match="registered stop ids"):
+            e.check({TID: SimpleNamespace(bindings=bindings), AID: ACC})
 
 
 def test_the_boundary_is_carried_as_given():

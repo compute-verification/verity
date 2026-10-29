@@ -62,6 +62,20 @@ def definition_digest(desc: Mapping[str, Any], fid: str) -> str:
     return hashlib.sha512(canonical_json(_resolved(desc, desc["definitions"][fid]))).hexdigest()
 
 
+def closure_digest(desc: Mapping[str, Any], fid: str) -> str:
+    """SHA-512 of the canonical JSON object that maps each definition ``fid`` reaches (itself, its nodes' callees, theirs,
+    …), by descriptor id, to its `definition_digest`: the definition's whole body, the same in any program
+    (`NetworkCheck.Period.closureDigest`)."""
+    defs, seen, todo = desc["definitions"], {}, [fid]
+    while todo:
+        k = todo.pop()
+        if k not in seen:
+            seen[k] = definition_digest(desc, k)
+            if defs[k].get("form") == "composite":
+                todo += [_callee(desc, n) for n in defs[k]["body"]["nodes"]]
+    return hashlib.sha512(canonical_json(seen)).hexdigest()
+
+
 def _stem(fid: str) -> str:
     return fid.split("{", 1)[0]
 

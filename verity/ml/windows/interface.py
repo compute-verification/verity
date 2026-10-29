@@ -5,7 +5,9 @@ at a time, in four records:
    (`catalog`), with its unit count, in order. Their population program and template query (`rows.population_program`)
    partition it into proof blocks, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
    names the ports that are the system's external I/O, ``wires`` the units that read another unit's output row whole
-   (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as the network certifier states it. The
+   (:class:`Wire`, one pattern for many units), ``boundary`` its I/O layout as the network certifier states it, and
+   ``entries`` the slot entries it registers for the certifier's scan (:class:`Entries`: its entry templates by closure
+   digest, the vocabulary size and stop ids they bind, and the templates an audit tied to the scan draws whole). The
    window's ``circuit.json`` (`circuit_record`) holds the whole layout the verifier reads, stated per template and wire
    rather than per member, and the registration binds its SHA-512.
 2. **A compiler and its advice** (optional, `advice_binding`): the registered compiler's name and digest (which carries the
@@ -93,8 +95,8 @@ from typing import Any, ClassVar, Protocol
 
 import numpy as np
 
-from verity.ml.circuits import boolean as B, partition_object as PO
-from verity.ml.circuits.codec import canonical_json, descriptor_id
+from verity.ml.circuits import annotations as AN, boolean as B, partition_object as PO, population
+from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.types import Array
@@ -977,19 +979,71 @@ def server_ends(network: Mapping[str, Any] | None, units: Mapping[str, int]) -> 
     return {t: tuple(sorted(e)) for t, e in sorted(ends.items())}
 
 
+def entry_digest(fn: Any) -> str:
+    """A template's closure digest (`annotations.closure_digest`, over a population of one instance): its whole body, the
+    same in any program."""
+    return AN.closure_digest(encode_program(population.population_program(fn, 1)), descriptor_id(fn))
+
+
+@dataclass(frozen=True)
+class Entries:
+    """The slot entries a circuit registers for the network certifier's scan, which the period check
+    (`NetworkCheck.Period`) reads from the circuit record and never from the model: ``templates``, by descriptor id, the
+    templates whose ``o0`` is a slot's entry (one-stage's chunk j of it is lane j's, the scan's ``prog<j>``);
+    ``vocabulary`` and ``stop``, the vocabulary size and stop ids each entry template binds (its ``V`` and its ``STOP``,
+    where it binds them); and ``whole``, the templates beside them that an audit tied to the scan draws whole. Its record
+    (`record`) names each entry template with its closure digest (`entry_digest`), which the period check holds the
+    audit's Program's template to."""
+    templates: tuple[str, ...]
+    vocabulary: int
+    stop: tuple[int, ...]
+    whole: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "templates", tuple(self.templates))
+        object.__setattr__(self, "stop", tuple(self.stop))
+        object.__setattr__(self, "whole", tuple(self.whole))
+        if not self.templates or len(set(self.templates)) != len(self.templates):
+            raise ValueError(f"entry templates {list(self.templates)}: at least one, each once")
+        if not _ints(self.vocabulary, *self.stop) or self.vocabulary < 1 or min(self.stop, default=0) < 0:
+            raise ValueError(f"a vocabulary of {self.vocabulary!r} ids and stop ids {list(self.stop)}: a positive size and "
+                             "natural ids")
+        if len(set(self.whole)) != len(self.whole) or set(self.whole) & set(self.templates):
+            raise ValueError(f"whole {list(self.whole)}: each once, and none an entry template, which is drawn whole anyway")
+
+    def check(self, fns: Mapping[str, Any]) -> None:
+        """Refuse (ValueError) entries naming a template that isn't one of ``fns`` (the circuit's, by descriptor id), or an
+        entry template that binds a ``STOP`` other than ``stop`` or a ``V`` other than ``vocabulary``."""
+        if bad := sorted({*self.templates, *self.whole} - set(fns)):
+            raise ValueError(f"entries name {bad}, no template of the circuit")
+        for t in self.templates:
+            b = fns[t].bindings
+            if tuple(b.get("STOP", self.stop)) != self.stop or b.get("V", self.vocabulary) != self.vocabulary:
+                raise ValueError(f"entry template {t} binds STOP={b.get('STOP')!r} and V={b.get('V')!r}, not the "
+                                 f"registered stop ids {list(self.stop)} and vocabulary {self.vocabulary}")
+
+    def record(self, fns: Mapping[str, Any]) -> dict[str, Any]:
+        """The circuit record's ``entries``: ``{"templates": [[id, closure digest], …], "vocabulary", "stop", "whole"}``."""
+        self.check(fns)
+        return {"stop": list(self.stop), "templates": [[t, entry_digest(fns[t])] for t in self.templates],
+                "vocabulary": self.vocabulary, "whole": list(self.whole)}
+
+
 @dataclass(frozen=True)
 class Circuit:
     """An integration's circuit in proof blocks: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
     and of its own descriptor id; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O;
     ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
-    layout (the network certifier's, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
-    ports read as several rows (`Layout.cut`); ``registered`` and ``ingress``, what fills its other inputs
-    (`check_inputs`); ``blocks``, its proof, inference and server blocks (`Blocks`)."""
+    layout (the network certifier's, ``verity/boundary/v1``), a JSON object carried as given; ``entries``, the slot entries
+    it registers for the network certifier's scan (`Entries`); ``cuts``, by template, the ports read as several rows
+    (`Layout.cut`); ``registered`` and ``ingress``, what fills its other inputs (`check_inputs`); ``blocks``, its proof,
+    inference and server blocks (`Blocks`)."""
     name: str
     templates: tuple[tuple[Any, int], ...]
     external: tuple[str, ...] = ()
     wires: tuple[Wire, ...] = ()
     boundary: Mapping[str, Any] | None = None
+    entries: Entries | None = None
     cuts: Mapping[str, Mapping[str, int]] = field(default_factory=dict)
     registered: Registered | None = None
     ingress: tuple[Ingress, ...] = ()
@@ -1020,6 +1074,10 @@ class Circuit:
             if not isinstance(self.boundary, Mapping):
                 raise ValueError(f"{self.name}: its boundary is a JSON object, not {self.boundary!r}")
             object.__setattr__(self, "boundary", json.loads(json.dumps(self.boundary)))
+        if self.entries is not None:
+            if not isinstance(self.entries, Entries):
+                raise ValueError(f"{self.name}: its entries are `Entries`")
+            self.entries.check(self.fns)
         if self.blocks is not None:
             if not isinstance(self.blocks, Blocks):
                 raise ValueError(f"{self.name}: its blocks are `Blocks`")
@@ -1053,6 +1111,15 @@ class Circuit:
     @property
     def ids(self) -> list[str]:
         return list(self._ids)
+
+    @property
+    def fns(self) -> dict[str, Any]:
+        """Each template, by descriptor id."""
+        return {tid: fn for tid, (fn, _lay, _n) in self._by_id.items()}
+
+    def entries_record(self) -> dict[str, Any] | None:
+        """The record's ``entries`` (`Entries.record`), or None."""
+        return self.entries.record(self.fns) if self.entries is not None else None
 
     @property
     def layouts(self) -> dict[str, tuple[Layout, int]]:
@@ -1330,14 +1397,15 @@ def circuit_record(w: CS.Window, name: str, templates: Sequence[tuple[str, int]]
                    statements: Mapping[str, Mapping[str, Any]] | None = None, external: Sequence[str] = (), *,
                    cap: int | None = None, wires: Sequence[Wire] = (),
                    boundary: Mapping[str, Any] | None = None, declared: Mapping[str, Any] | None = None,
-                   blocks: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                   blocks: Mapping[str, Any] | None = None, entries: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """``circuit.json``: everything the verifier's window is (`of_records`), none of its values. ``templates``: each
     ``(descriptor id, units)`` in the program's order; ``statements``: by template, how its unit's statement reads its rows
     (``in_rows``, ``out_rows``, ``reads``, as C-Flock's `UnitStager` takes them), for a template whose members are bit rows.
     The members are listed, or with ``cap`` stated: the verifier derives them from the templates, ``cap``, ``wires``, cuts
     and server blocks (`members`), so the record grows with its templates and wires, not its units. ``boundary``: the
     circuit's I/O layout (`Circuit.boundary`), carried as given; ``declared``: its cuts, registered reads and ingress
-    (`Circuit.declared`); ``blocks``: its blocks (`Circuit.blocks_record`)."""
+    (`Circuit.declared`); ``blocks``: its blocks (`Circuit.blocks_record`); ``entries``: the slot entries it registers for
+    the network certifier's scan (`Circuit.entries_record`)."""
     if (declared or blocks is not None) and cap is None:
         raise ValueError("a record that lists its members has no cuts, registered reads, ingress or blocks; they are stated "
                          "with a cap")
@@ -1345,7 +1413,8 @@ def circuit_record(w: CS.Window, name: str, templates: Sequence[tuple[str, int]]
                       w.context, w.work_table, w.row_tables),
             **(_stated(cap, wires, declared) if cap is not None else _listed(w, wires)),
             **({"boundary": json.loads(json.dumps(boundary))} if boundary is not None else {}),
-            **({"blocks": json.loads(json.dumps(dict(blocks)))} if blocks is not None else {})}
+            **({"blocks": json.loads(json.dumps(dict(blocks)))} if blocks is not None else {}),
+            **({"entries": json.loads(json.dumps(dict(entries)))} if entries is not None else {})}
 
 
 def _record(name: str, templates: Sequence[tuple[str, int]], statements: Mapping[str, Mapping[str, Any]] | None,
@@ -1391,7 +1460,8 @@ def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
                      part["program"], PO.digest(part), "", "", None, ()),
            **_stated(cap, circuit.wires, circuit.declared()),
            **({"boundary": circuit.boundary} if circuit.boundary is not None else {}),
-           **({"blocks": circuit.blocks.doc(sum(circuit.units.values()), PO.digest(part))} if circuit.blocks else {})}
+           **({"blocks": circuit.blocks.doc(sum(circuit.units.values()), PO.digest(part))} if circuit.blocks else {}),
+           **({"entries": circuit.entries_record()} if circuit.entries is not None else {})}
     return circuit_of(json.loads(circuit_bytes(doc)))
 
 
@@ -1902,7 +1972,8 @@ class Window:
         return circuit_record(self.window, self.circuit.name, list(zip(self.circuit.ids, (n for _, n in self.circuit.templates))),
                               sts, self.circuit.external, cap=self.cap, wires=self.circuit.wires, boundary=self.circuit.boundary,
                               declared=self.circuit.declared(),
-                              blocks=blocks.doc(sum(self.circuit.units.values()), self.window.partition_digest) if blocks else None)
+                              blocks=blocks.doc(sum(self.circuit.units.values()), self.window.partition_digest) if blocks else None,
+                              entries=self.circuit.entries_record())
 
     def write(self, c: CS.Committed, out_dir: str | Path, provenance: Mapping[str, Any], *, registrar: Any,
               kind: str = "served", index_salt: bytes | None = None) -> dict[str, Any]:
