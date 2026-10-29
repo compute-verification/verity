@@ -1866,14 +1866,18 @@ class Driver:
         `next` running or not: a check that holds one of them is of a prefix that can't land, and what a check covers below the
         lowest of them keeps its place.  A member whose labels can't be read stays where it is."""
         out: list[int] = []
+        unread: list[tuple[int, QueueError]] = []
         for m in chain:
             try:
                 why = unreviewed(self.reviews(m.pr, m.head), ())
             except QueueError as e:
-                self.q.log(f"research queue drive: #{m.pr}'s hold verdict can't be read, so it stays where it is: {e}")
+                unread.append((m.pr, e))
                 continue
             if why and why.startswith("held"):
                 out.append(m.pr)
+        if unread:
+            self.q.log(f"research queue drive: {len(unread)} member(s)' hold verdicts can't be read, so they stay where they are "
+                       f"(#{unread[0][0]}: {unread[0][1]})")
         return out
 
     def _lift(self, drive: dict, chain: list[Member]) -> list[int]:
