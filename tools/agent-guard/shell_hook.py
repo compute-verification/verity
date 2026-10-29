@@ -493,8 +493,8 @@ def main() -> int:
             message = None
         try:
             merge_drivers(command, cwd)
-        except Exception:                               # nor a merge driver git couldn't set
-            pass
+        except Exception as e:                          # nor a merge driver git couldn't set
+            print(f"shell_hook: merge drivers not set in {cwd}: {type(e).__name__}: {e}", file=sys.stderr)
         if message:
             note = ("MESSAGE FROM YOUR COORDINATOR, delivered by the shell hook (tools/agent-guard/inbox.py). This command was "
                     "refused only to deliver it: nothing is wrong with it, so re-run it exactly as it was, then act on the "
