@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.Harm
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Analysis.SpecialFunctions.Log.Base
 
