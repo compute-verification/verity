@@ -1,14 +1,14 @@
 import NciCheck.Desc
 
 /-!
-# θ's provenance: the baseline is registered (CMP-66)
+# θ's provenance: the baseline is registered
 
 `NciCheck.Desc.evaluate` takes θ as given: every entry is a registered input node (`theta-not-registered`), but nothing
 says what value it holds, so a developer could put values computed on unmonitored hardware in θ and read them for free.
 `Nci.Assumptions.BaselineRegistered` states what θ must hold: registered public data, registered at the start of the
 deployment. An output of an earlier run, certified or not, is never θ (registration happens at the start
 of a deployment and essentially never changes). One registration log is one deployment, and θ holds what its first
-record registers (compute-accounting, 21 Oct): the first run's θ cites its own record, which opens the log, and every
+record registers: the first run's θ cites its own record, which opens the log, and every
 later run's cites that same record, so new public data takes a new log, a new deployment the auditor sees as such.
 `evaluate` checks it: the policy check (`NciCheck.Desc.evaluate`) first, unchanged, then each θ entry's provenance
 against what the proof service holds.
