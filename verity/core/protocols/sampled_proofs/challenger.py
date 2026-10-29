@@ -65,6 +65,23 @@ own (`record_message`), which binds the close to the commitment and host.  `sess
 session: the record under its key, the close signed under it, the log the one the close signs, line for line, and a
 session its client closed; then the roots it received (`released_roots_of`).  A session that ends unclosed is no window's.
 
+**A recursive run's interactive-run record** (`RunRecord`, `RUN_KIND`) is the challenger's log of one recursive
+statement's run, which `flock-verify rec-compose --rec-run` reads (`Flock.RecCompose.checkRun`, C10 `OneRun`).  Its
+parts' sessions are proved separately, each on its own keyed coin tree, so only this record shows they are one run:
+
+    record  = {events, kind}                                       kind: RUN_KIND
+    stage   = {event: "stage", rec_rows_sha512, rec_shared}        first, once: V*'s shared rows and the shared set
+    open    = {event: "open", session, rec_part, coin_key}         each Hello answered for the run's parts, in order
+    close   = {event: "close"}                                     last, once
+
+The challenger stages before any session opens, logs every session it opens for the run's parts at the prover's
+`Hello`, before the answer that carries the session's fresh coin key, a retry's as any other's, and closes the record
+when the run ends.  `rec-compose` refuses unless each part has exactly one session and the sessions are the composed
+parts', so a retried part shows and is refused, never hidden.  The record holds no coin: each session's coins are its
+coin tree's, drawn at its `Hello` (fresh per round, never committed before the run, unlike an epoch's coins above).
+The verifier reads the record from the challenger's host, never from the prover's bundle; that it logs every `Hello`
+it answers is the auditor-trusted challenger's (`trusted-host`).
+
 **The auditor's ledger** names the one challenger session each window's coins come from (`audited_session`).  The
 auditor (`benchmarks/live_challenger/auditor.py` on the challenger's host, run by the host's operator) appends a signed
 entry, under the
@@ -127,23 +144,6 @@ main's history, but main's check ran on the merge's tree, never on the branch co
 its open names is the auditor-trusted host's word (`trusted-host`).  Every path that credits a session reads it
 through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
 `audited_session` checks no pin and credits nothing.
-
-**A recursive run's interactive-run record** (`RunRecord`, `RUN_KIND`) is the challenger's log of one recursive
-statement's run, which `flock-verify rec-compose --rec-run` reads (`Flock.RecCompose.checkRun`, C10 `OneRun`).  Its
-parts' sessions are proved separately, each on its own keyed coin tree, so only this record shows they are one run:
-
-    record  = {events, kind}                                       kind: RUN_KIND
-    stage   = {event: "stage", rec_rows_sha512, rec_shared}        first, once: V*'s shared rows and the shared set
-    open    = {event: "open", session, rec_part, coin_key}         each Hello answered for the run's parts, in order
-    close   = {event: "close"}                                     last, once
-
-The challenger stages before any session opens, logs every session it opens for the run's parts at the prover's
-`Hello`, before the answer that carries the session's fresh coin key, a retry's as any other's, and closes the record
-when the run ends.  `rec-compose` refuses unless each part has exactly one session and the sessions are the composed
-parts', so a retried part shows and is refused, never hidden.  The record holds no coin: each session's coins are its
-coin tree's, drawn at its `Hello` (fresh per round, never committed before the run, unlike an epoch's coins above).
-The verifier reads the record from the challenger's host, never from the prover's bundle; that it logs every `Hello`
-it answers is the auditor-trusted challenger's (`trusted-host`).
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
@@ -1523,8 +1523,9 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "LOG_MALFORMED", "LOG_TAG", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
            "MAIN_FORM", "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
            "NO_MAIN", "NO_PINS", "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE",
+           "RUN_KIND", "RunRecord",
            "RECORD_FORM", "RECORD_ROLE",
-           "RESERVED", "RUN_KIND", "RunRecord", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "audited_session",
+           "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "audited_session",
            "cap_of", "circuit_of", "circuit_reason", "close_message", "credited_session", "extends", "first_parent_reason", "key_of_record", "lane_of", "later", "layout_problem",
            "leaf_of", "ledger_head", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
