@@ -1689,23 +1689,26 @@ def leaf_unit_id(shape: dict, k: int, kind: str) -> str | None:
 
 def leaf_of(leaf: Any, unit: str, k: int, kind: str) -> bool:
     """Whether `leaf` (descriptor bytes) is `h1window.leaf_program`'s at K = `k` for `kind`: canonical JSON of `SCHEMA`
-    whose program function is ``LEAF_FN[kind]{UNIT={"fn": unit},K=k}``, that composite bound to that UNIT and K, and
-    whose root is one call of it. A specialization's id spells its bindings, so this is the derivation's own Program,
-    checked over the descriptor's bytes."""
+    whose program function is ``LEAF_FN[kind]{UNIT={"fn": unit},K=k}``, whose definition of `unit` is the composite
+    ``LEAF_UNIT[kind]`` bound to the TILE its id spells, and whose root, the wrapper's one call inlined, is one call of
+    `unit`. A specialization's id spells its bindings, so this is the derivation's own Program, checked over the
+    descriptor's bytes."""
     d = _parsed(leaf)
     fn = f"{LEAF_FN[kind]}{{UNIT={_canonical({'fn': unit})},K={k}}}"
     if d is None or d["program_fn"] != fn:
         return False
-    dj, root = d["definitions"].get(fn), d["definitions"].get(d["root"])
-    if not (isinstance(dj, dict) and dj.get("form") == "composite" and dj.get("id") == LEAF_FN[kind]
-            and dj.get("bindings") == {"K": k, "UNIT": {"fn": unit}}):
+    dj, root = d["definitions"].get(unit), d["definitions"].get(d["root"])
+    b = dj.get("bindings") if isinstance(dj, dict) else None
+    if not (isinstance(b, dict) and dj.get("form") == "composite" and dj.get("id") == LEAF_UNIT[kind]
+            and sorted(b) == ["TILE"] and f"{LEAF_UNIT[kind]}{{TILE={_canonical(b['TILE'])}}}" == unit):
         return False
-    nodes = root.get("body", {}).get("nodes") if isinstance(root, dict) and isinstance(root.get("body"), dict) else None
+    body = root.get("body") if isinstance(root, dict) and root.get("form") == "composite" else None
+    nodes = body.get("nodes") if isinstance(body, dict) else None
     if type(nodes) is not list or not all(isinstance(x, dict) and _nat(x.get("fn")) and x["fn"] < len(d["callees"])
                                           for x in nodes):
         return False
     calls = [(d["callees"][x["fn"]], x.get("form")) for x in nodes if not _INPUT.fullmatch(d["callees"][x["fn"]])]
-    return calls == [(fn, "call")]
+    return calls == [(unit, "call")]
 
 
 def leaf_partition_of(program: str, unit: str) -> dict:
