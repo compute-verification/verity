@@ -29,15 +29,18 @@ costs `reg`. Under DistinctWrites each committed, pairwise-distinct, noise-depen
 - lane fix: F's route's second write to each register whose signed bytes cross zero under the noise (SW-SMELL S9);
 - noise derivation: the noise entries derived from XOF bytes (one LOP3 a packed register, CORE-SMELL C28), the same way,
   and the derivation's intermediates no commitment holds, always;
-- de-noise: the de-noise's correction work, unless forced;
+- de-noise: the de-noise's correction work, unless forced (N-EXACT's `xu`: step S cancels the code and the tags and
+  salts the final word a row, and the stock epilogue's IADD3 and FFMA remove the separable rest, so the served output is
+  stock's while |A·Bᵀ| < 2^22; its final-word meets on chosen identical rows are its coin branch);
 - pre-noise hashing: bytes hashed before the noise (A's commitment feeds the call's seed), credited once the call is
   atomic; so are rows holding only final words (`final_rows`, C28);
 - row repeat: an hm96 row digest is a function of the row alone, so a prover that branches on equal compression inputs
   hashes a repeated row once, and in M0 padding, chosen repeated tokens and a replayed request repeat every row of A
   and of the final words: that credited hashing is gap (N-COMPOSE), unless each row digest's prefix block binds
   (salt, forward, position) (`row-bound`), which costs one compression a row, credited;
-- hiding: each salt's work (the PRF and c, and M_key·y, which salt-forced credits; `price.salt`, N-HIDE's W1 count at
-  the floor), which a prover with one fixed salt skips with nothing checked changing (SW-HASH §7), unless forced. The
+- hiding: each salt's work (the PRF and c, which salt-forced, or on the L1 layout salt-derivation (N-HIDE's L1 + (a)),
+  credits, and M_key·y; `price.salt`, N-HIDE's W1 count at the floor), which a prover with one fixed salt skips with
+  nothing checked changing (SW-HASH §7), unless forced. The
   rows module's `layout` says how many salts: l0 one a leaf, l1 one for A's call and `forward_salts` a forward, l2
   only `forward_salts` (N-HIDE's subtree layouts, private roots). A card's `salt_basis = "leaf-time"` prices a salt as
   SW-HASH's claims did, the salt kernel's share of the leaf's hash time. Hiding is required (NIGHT.md §1 default 2), so
@@ -65,17 +68,19 @@ certifier, which commits them, so the prover hashes nothing (the module drops th
 the bytes over `price.link` in hashing's place. Its check (b) (`distinct_loss`, N-RED) credits only an entry's
 distinct values: it closes the attacks that list it in `closed_by` and costs the honest its chance revisits.
 
-T1's copy model is model P with N-FLOOR's measured floors (`select-floor`, `copy-floor`, in the base; NIGHT §7's
-default): a coin lane's step repeats a word with its coin's chance p*, and masked cross-row copies cost more than they
-save. `t1_bare_p` is T1 without the floors, adding a noise's `masked_p` share (N-ADAPT's masked channel) where it is
-priced; `t1_model_c` is T1 under CopyGrain(4), where a copy needs four entries' coins to agree, so a coin lane's steps
-leave nothing (`branch_rows_c`, the rows whose branch survives under C). The ranking reads the default.
+T1's copy model is tile grain (`tile-grain`, in the base; NIGHT §8 decision 2's default, N-FLOOR final): the tensor
+pipe is skipped only a whole MMA at a time, so a copy saves only a whole repeated tile, which is N-ADAPT's model W:
+a coin lane's steps leave nothing and the masked cross-row copies save nothing (`branch_rows_w`, the rows whose branch
+survives at tile grain). `t1_p` is T1 under model P, a coin lane's step repeating a word with its coin's chance p*
+(`branch_rows`), and `t1_bare_p` adds a noise's `masked_p` share (N-ADAPT's masked channel) where it is priced: the
+conservative column. The ranking reads the default.
 
-Hashing is priced at the best known SHA-512 compression's register count per form (N-SHALB): a chained compression
-(`price.hash_work`, 3,532), the bulk of every hm96 row, and a row digest's first, from the constant chaining value
-(`price.hash_work_iv`, 3,510), which the row binding's prefix block is. W1 counts registers and the honest program is
-the best, so every term that prices hashing reads them, and the served committer's excess (3,632) is printed as its
-own gap.
+Hashing is credited per form (N-SHALB final), at ShaWrites' constant for each: the words and operands at their chunk's,
+a chained compression's 3,532 (`price.hash_work`) less `sha_forms.chunk_k` over the chunk's compressions (its padding
+block and first block); the row binding's prefix block from the constant chaining value at 3,510
+(`price.hash_work_iv`); and A's leaves at 3,449.05. Honest's first block from a constant midstate writes
+`sha_forms.chunk_head` registers a chunk more, a T1 term (`chunk_head`), and the served committer's excess (3,632) is
+printed as its own gap.
 
 T2 is t_H / t_S, a serial sum: the stock step, the stacked product's extra over the plain GEMM, the noise's coins a call
 and NCP's formed copies, A's root before each call's noise (an estimate), exporting each committed word, and hashing at
@@ -118,7 +123,7 @@ from pathlib import Path
 from exact_kit.checks import Checks
 
 CARD = Path(__file__).with_name("pouw_space.toml")
-TERMS = ("final_word", "uncommitted_steps", "coin_branch", "forming", "lane_fix", "noise_derivation", "denoise",
+TERMS = ("final_word", "uncommitted_steps", "coin_branch", "forming", "lane_fix", "noise_derivation", "denoise", "chunk_head",
          "distinct_loss", "pre_noise_hashing", "final_rows", "row_repeat", "hiding", "host", "hashing_slack")
 GAP_TERMS = ("final_word", "uncommitted_steps", "forming", "lane_fix", "noise_derivation", "denoise")
 PRICED = ("r", "formed_x", "formed_y", "noise_x", "noise_y", "derive_extra", "denoise", "pre_noise_bytes", "operand_max",
@@ -600,8 +605,8 @@ def call_units(card: dict, d: dict, m: float, n: float, K: float, g: float = 1.0
     if fast and L > 32:
         t["uncommitted_steps"] += fast_saving(card, L, m, n, f["operand_max"])[0] * honest_tensor
     t["uncommitted_steps"] += dup * honest_tensor
-    t["coin_branch"] = f["branch_rows"] * n * u_word * 32 / L
-    branch_c = f["branch_rows_c"] * n * u_word * 32 / L
+    t["coin_branch"] = f["branch_rows_w"] * n * u_word * 32 / L
+    branch_p = f["branch_rows"] * n * u_word * 32 / L
     committed = {k for k in CLASSES if f[f"commit_{k}"]}
     ent = {k: f[k] for k in CLASSES}
     for k, term in CLASSES.items():
@@ -652,7 +657,13 @@ def call_units(card: dict, d: dict, m: float, n: float, K: float, g: float = 1.0
     xof_b = sum(map(sum, xof.values()))
     coin_b = 0.0 if "coin_hashing" in closes else xof_b * price["coin_bytes"]["value"]
     coin_bits = 8 * xof_b + f["stream_bits"]
-    credited_b = 0.0 if off else word_b + op_b + coin_b + salt_b + bound_b + (pre_b if "pre_noise_hashing" in closes else 0.0)
+    pre_cred = 0.0 if off or "pre_noise_hashing" not in closes else pre_b
+    credited_b = 0.0 if off else word_b + op_b + coin_b + salt_b + bound_b + pre_cred
+    sha = price["sha_forms"]
+    hw_row = (sha["chain"] - sha["chunk_k"] / (row / BLOCK + sha["chunk_extra"])) * reg / BLOCK
+    over = 0.0 if off else (word_b + op_b) * (hw - hw_row) + pre_cred * (hw - sha["a_leaf"] * reg / BLOCK)
+    chunks = sum(math.ceil(b / row) for b in (word_b, op_b) if b)
+    t["chunk_head"] = 0.0 if off else chunks * sha["chunk_head"] * reg
     link_s = (word_b + op_b + pre_b) / price["link"]["value"] if off else 0.0
 
     lat = price["latency"]
@@ -676,7 +687,8 @@ def call_units(card: dict, d: dict, m: float, n: float, K: float, g: float = 1.0
             "noise_y": ent["noise_y"], "mK": m * K, "nK": n * K, "words": nwords, "word_units": nwords * u_word,
             "extra_macs": (r - 1) * stock,
             "macs_per_coin_bit": m * n * K / coin_bits if coin_bits else math.inf,
-            "macs_per_salt_bit": min(row, word_b) / WORD_BYTES * stock / nwords / SALT_BITS, "coin_branch_c": branch_c,
+            "macs_per_salt_bit": min(row, word_b) / WORD_BYTES * stock / nwords / SALT_BITS, "coin_branch_p": branch_p,
+            "over_credit": over,
             "macs_per_word_bit": stock / nwords / 32 if off else math.inf, "link_ms": link_s * 1e3,
             "masked": f["masked_p"] * stock if f["masked_p"] >= 0 else math.nan,
             "coinform_ms": sum(coinsncp_ms(card, b * g, table) for table, bs in xof.items() for b in bs) / g,
@@ -724,7 +736,7 @@ SUM_KEYS = ("stock", "credited_bytes", "bound_bytes", "hashed_bytes", "word_byte
             "x_entries", "y_entries", "noise_y", "mK", "nK", "words", "word_units", "coinform_ms", "a_ms", "a_chain",
             "bulk_hash_ms",
             "sts_ms", "stg_ms", "extra_macs", "hiding_closed", "hiding_a", "hiding_words", "hiding_operands", "salts",
-            "coin_branch_c", "link_ms", "masked")
+            "coin_branch_p", "link_ms", "masked", "over_credit")
 
 
 def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
@@ -776,7 +788,7 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
         if "hiding_salt" in closes and "hiding" not in closes:
             agg["credited_bytes"] += fs * sw / card["price"]["hash_work_floor"]["value"]
     hash_share = ((agg["credited_bytes"] - agg["bound_bytes"]) * hw
-                  + agg["bound_bytes"] * card["price"]["hash_work_iv"]["value"]) / stock
+                  + agg["bound_bytes"] * card["price"]["hash_work_iv"]["value"] - agg["over_credit"]) / stock
     host = card["price"]["host_sha"]["value"]
     f_host = host / (rate + host)
     host_route = f_host * (hash_share + agg["word_units"] / stock)
@@ -798,8 +810,8 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
     terms["hashing_slack"] = delta * hash_share
     rest = sum(v for k, v in terms.items() if k != "hashing_slack")
     t1 = rest + terms["hashing_slack"]
-    t1_model_c = t1 - terms["coin_branch"] + agg["coin_branch_c"] / stock
-    t1_bare_p = None if math.isnan(agg["masked"]) else t1 + agg["masked"] / stock
+    t1_p = t1 - terms["coin_branch"] + agg["coin_branch_p"] / stock
+    t1_bare_p = None if math.isnan(agg["masked"]) else t1_p + agg["masked"] / stock
     delta_star = max(0.0, TARGET["t1"] - rest) / hash_share if hash_share else math.inf
     committer_gap = agg["credited_bytes"] * (card["price"]["hash_work_floor"]["value"] - hw) / stock
     t2 = t2_of(card, point, agg, r, bool(wide_measured))
@@ -829,7 +841,7 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
             "network_alt": None if network is None else network * alt, "egress_cap_alt": egress["alt"],
             "macs_per_salt_bit": salt_macs, "certifier_salted": salted,
             "network_bound": None if network is None else bound_by, "macs_per_word_bit": word_macs,
-            "t1_model_c": t1_model_c, "t1_model_c_pass": t1_model_c <= TARGET["t1"], "t1_bare_p": t1_bare_p,
+            "t1_p": t1_p, "t1_p_pass": t1_p <= TARGET["t1"], "t1_bare_p": t1_bare_p,
             "row_bound_share": agg["bound_bytes"] / agg["credited_bytes"] if agg["credited_bytes"] else 0.0,
             "t2": t2, "t2_pass": t2["judged"] <= TARGET["t2"],
             "t3": t3, "t3_worst": t3w, "t3_pass": t3w is not None and t3w <= TARGET["t3"], "ranks": rk,
@@ -968,14 +980,13 @@ def needs(row: dict) -> list[str]:
                       f"{row['macs_per_word_bit']:.3f} MACs a bit, so the term is {row['network']:.1e} (N-ALT final; "
                       f"the word stream ends at the certifier and is excluded from E)"
                       if row["network_bound"] == "words" else ""))
-    if row["t1_bare_p"] is not None:
-        out.append(f"under bare model P, without select-floor and copy-floor, masked cross-row copies are credited and "
-                   f"unpaid: T1 {row['t1_bare_p']:.2%} (N-ADAPT final, checked at toy shapes); T1 rests on P with the "
-                   f"two measured floors (NIGHT §7, 11:30Z), under which that channel is 0 by argument")
-    if row["t1_model_c"] != row["t1"]:
-        out.append(f"under model C (CopyGrain(4)) T1 would be {row['t1_model_c']:.3%} against P's {row['t1']:.3%}, the "
-                   f"coin branch {row['terms']['coin_branch']:.3%} under P; CopyGrain(4) is false on sm_90 (N-FLOOR), so "
-                   f"on the H200 C reduces to P with copy-floor")
+    if row["t1_p"] != row["t1"] or row["t1_bare_p"] is not None:
+        bare = (f", and with N-ADAPT's masked cross-row copies credited and unpaid (bare P) {row['t1_bare_p']:.2%}"
+                if row["t1_bare_p"] is not None else "")
+        out.append(f"T1 is tile-grain's (model W on the tensor pipe, NIGHT §8 decision 2's default): under model P the "
+                   f"coin branch is {row['t1_p'] - row['t1'] + row['terms']['coin_branch']:.3%} and T1 "
+                   f"{row['t1_p']:.3%}{bare}; select-floor and copy-floor, which would close the masked channel under "
+                   f"P, fail beside the lead's wgmma (N-FLOOR final)")
     if not row["t1_pass"]:
         big = max(((k, v) for k, v in row["terms"].items()), key=lambda kv: kv[1])
         out.append(f"T1 {row['t1']:.2%} > 1%: its largest term is {big[0]} {big[1]:.2%}")
@@ -1171,11 +1182,12 @@ def net(row: dict) -> str:
 
 
 def copy_models(row: dict) -> str:
-    """T1 under bare model P (no measured floors: N-ADAPT's masked cross-row copies, where priced) and under model C."""
-    return f"{pct(row['t1_bare_p'])} / {pct(row['t1_model_c'])}"
+    """T1 under model P (the coin lanes' one-step repeats at p*) and bare P (N-ADAPT's masked cross-row copies too, where
+    priced), against the default's tile grain."""
+    return f"{pct(row['t1_p'])} / {pct(row['t1_bare_p'])}"
 
 
-HEADER = ["| # | design | rank m/h (overall) | effective | T1 (P + floors) | bare P / model C | +coins | final word | uncommitted | "
+HEADER = ["| # | design | rank m/h (overall) | effective | T1 (tile-grain W) | P / bare P | +coins | final word | uncommitted | "
           "coin branch | forming | lane fix | derivation | de-noise | hiding (closed) | host (route H) | "
           "T2 sync / async (unfused) | T3 | delta* | network, cap 32 / 320 (not in T1) | open (matmul) | open attacks |",
           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -1214,7 +1226,7 @@ def render(card: dict, results: dict, space_info: dict) -> str:
             continue
         for key, what in (("rank_effective", "effective rank (open premises at 5)"), ("rank", "nominal rank (open premises settled at their own rank)")):
             lines += [f"Pareto frontier of the T1-passing designs over (T1, T2, T3), at each {what}:", "",
-                      "| up to rank | design | rank m/h (overall) | T1 (P + floors) | bare P / model C | +coins | "
+                      "| up to rank | design | rank m/h (overall) | T1 (tile-grain W) | P / bare P | +coins | "
                       "network, cap 32 / 320 (not in T1) | T2 sync / async | T3 | open |",
                       "|---|---|---|---|---|---|---|---|---|---|"]
             frs = res["frontier_effective" if key == "rank_effective" else "frontier_nominal"]
@@ -1298,11 +1310,12 @@ def render(card: dict, results: dict, space_info: dict) -> str:
 CLAIM_BASES = ("gap", "t1", "hiding_words", *TERMS)
 
 
-def claim_value(row: dict, basis: str, terms: list[str] | None = None) -> float:
+def claim_value(row: dict, basis: str, terms: list[str] | None = None, less: list[str] | None = None) -> float:
+    """The row's figure on a claim's basis; `less` names terms the claim's calculator didn't price."""
     if basis == "gap":
         return sum(row["terms"][k] for k in (terms or GAP_TERMS))
     if basis == "t1":
-        return row["t1"]
+        return row["t1"] - sum(row["terms"][k] for k in (less or []))
     if basis == "hiding_words":
         return row["hiding_words"]
     if basis in TERMS:
@@ -1378,11 +1391,16 @@ def main() -> int:
         for point, cl in c.get("claims", {}).items():
             v = card_rows[cid][point]
             if isinstance(v, list):
-                checks.check(f"card {cid} at {point} is priced", False, "; ".join(v)[:120])
+                gone = [x for x in v if " is refuted (" in x]
+                if gone and len(gone) == len(v):
+                    checks.check(f"card {cid} at {point} is refused: it takes a refuted premise, so its claim no longer "
+                                 f"prices a design in the space", True, gone[0][:120])
+                else:
+                    checks.check(f"card {cid} at {point} is priced", False, "; ".join(v)[:120])
                 continue
             for basis in CLAIM_BASES:
                 if basis in cl:
-                    got = claim_value(v, basis, cl.get("terms"))
+                    got = claim_value(v, basis, cl.get("terms"), cl.get("less"))
                     ok = abs(got - cl[basis]) <= cl["tol"]
                     v["claim_text"] = (v.get("claim_text", "") + f" {basis} {cl[basis]:.4g} ({c.get('origin')}) vs "
                                        f"{got:.4g}{' ok' if ok else ' MISMATCH'};")
@@ -1419,14 +1437,17 @@ def main() -> int:
     checks.check("deriving E1 and F1 from XOF bytes is 8/n + 8/m: 0.29% fused at T 8,192 (CORE-SMELL C28)",
                  abs(r["terms"]["noise_derivation"] - 0.0029) < 0.0002, f"{r['terms']['noise_derivation']:.3%}")
     grid = {"data_model": "grid"}
-    sh = evaluate(card, designs[nm("ncp", "cancel", "int7-U", "k32", "xyef", "r16k", "mask", "fw")] | grid, "t8192")
+    sh = evaluate(card, designs[nm("ncp", "cancel", "int7-U", "k32", "xyef", "r16k", "cert", "fw")] | grid, "t8192")
     rest = sum(v for k, v in sh["terms"].items() if k != "hashing_slack")
     checks.check("with every honest write forced and the salt side closed, credited hashing is about 346x stock at "
                  "T 8,192 at ShaLB's count, CORE-SMELL C27's 670x at the bar's issue-time price, and on the grid "
-                 "delta* spends what route U's lane fix leaves of 1%",
-                 660 < sh["hash_units_per_mac"] * bar < 700 and abs(sh["delta_star"] * sh["hash_units_per_mac"] + rest - 0.01)
-                 < 1e-12, f"delta* {sh['delta_star']:.2e}, {sh['hash_units_per_mac']:.0f} units a MAC, other terms {rest:.3%}")
-    lead = row("t8192", nm("ssn-1l-tag", "served", "s8", "k32", "w", "r256k", "mask", "min"))
+                 "delta* spends what the other terms leave of 1%: at 16 KiB rows honest's first-block excess "
+                 "(chunk_head, N-SHALB final) alone is over 1% of stock there, so delta* is 0",
+                 660 < sh["hash_units_per_mac"] * bar < 700 and sh["terms"]["chunk_head"] > 0.01
+                 and abs(sh["delta_star"] * sh["hash_units_per_mac"] - max(0.0, 0.01 - rest)) < 1e-12,
+                 f"delta* {sh['delta_star']:.2e}, {sh['hash_units_per_mac']:.0f} units a MAC, other terms {rest:.3%} "
+                 f"(chunk_head {sh['terms']['chunk_head']:.3%})")
+    lead = row("t8192", nm("ssn-1l-tag", "served", "s8", "k32", "w", "r256k", "salt", "min"))
     served = lead["f_host"] * (lead["hash_bytes_per_mac"] * card["price"]["hash_work_floor"]["value"]
                                + lead["host_route"] / lead["f_host"] - lead["hash_units_per_mac"])
     checks.check("route H on ssn_1l at T 8,192 is N-FLOOR final's: the host hashes 4.04% of the rows and computes their "
@@ -1435,7 +1456,7 @@ def main() -> int:
                  abs(lead["f_host"] - 0.0404) < 0.0001 and abs(served / 4.83 - 1) < 0.01
                  and abs(lead["host_route"] / 4.71 - 1) < 0.01 and lead["terms"]["host"] == 0,
                  f"f_host {lead['f_host']:.3%}, {served:.2f}x at 908, {lead['host_route']:.2f}x at 3,532")
-    s1l = row("t8192", nm("ssn-1l", "served", "s8", "k32", "w", "r256k", "mask", "min"))
+    s1l = row("t8192", nm("ssn-1l", "served", "s8", "k32", "w", "r256k", "salt", "min"))
     over = 2 / 3532 * s1l["hash_units_per_mac"]
     checks.check("crediting 3,534 to a chained compression (N-SHALB interim 1's count) would credit 2 registers a "
                  "compression no program writes: on ssn_1l at T 8,192, 6.5% of stock (N-SHALB interim 2), so the card "
@@ -1454,17 +1475,23 @@ def main() -> int:
                  and all(r["network_streamed"] is None for r in results["v4like"]["rows"]),
                  f"{lead['macs_per_coin_bit']:,.0f} MACs a coin bit, W_mac {lead['w_mac']:.1f}, "
                  f"{lead['network_streamed']:.1%} ({at_alt:.1%} at 119.7); R1b {alt['network']:.1%}")
-    epi = {p: row(p, nm("ssn-1l-tag", "epilogue", "s8", "k32", "w", "r256k", "cert", "min"))
-           for p in ("t512", "t512r512", "t8192")}
-    fw = 32 * 23552 / 60817408
-    checks.check("N-EXACT's epilogue fold on the tagged lead (code and tags cancelled in one more k32 step, the separable "
-                 "row term removed by the IADD3 and FFMA) serves stock's int8 product, T3 0, but its final word is then "
-                 "fixed by r_i alone on chosen identical rows, so the coin branch copies its repeats: under 1% at 64 "
-                 "rows only, and at T 8,192 nearly the whole final word",
-                 all(r["t3_worst"] == 0 and r["terms"]["coin_branch"] > 0.99 * r["gap"] for r in epi.values())
-                 and epi["t512"]["t1_pass"] and not epi["t512r512"]["t1_pass"] and not epi["t8192"]["t1_pass"]
-                 and 0.99 * fw < epi["t8192"]["terms"]["coin_branch"] < fw,
-                 ", ".join(f"{p} T1 {r['t1']:.3%} (branch {r['terms']['coin_branch']:.3%})" for p, r in epi.items()))
+    xu_pts = ("t512", "t512r512", "t8192")
+    xu = {p: row(p, nm("ssn-1l-tag", "xu", "s8", "k32", "w", "r256k", "cert", "min")) for p in xu_pts}
+    xl = {p: row(p, nm("ssn-1l-tag", "served", "s8", "k32", "w", "r256k", "cert", "min")) for p in xu_pts}
+    inc = {p: xu[p]["t1"] - xl[p]["t1"] for p in xu_pts}
+    want = {"t512": 0.00063, "t512r512": 0.00013, "t8192": 0.00021}
+    checks.check("N-EXACT final's xu on the tagged lead adds its chosen-request increments over the lead, +0.063 | +0.013 | "
+                 "+0.021 points at Llama 64 rows | 512 rows | T 8,192 (estimate), within 0.002 points at 64 and 512 rows "
+                 "and 15% at T 8,192 (N-EXACT's final-word meets 0.016 against this card's stock-weighted share of the "
+                 "same m(m - 1)/(2Q)); its T3 is the 22-bit recipe's, and A5's timing (replay-exact) stays open on the old "
+                 "lead and doesn't reach blc4a",
+                 abs(inc["t512"] - want["t512"]) < 2e-5 and abs(inc["t512r512"] - want["t512r512"]) < 2e-5
+                 and abs(inc["t8192"] / want["t8192"] - 1) < 0.15
+                 and all(r["t3_worst"] == card["t3"]["xu-s22"]["ctx2k"] for r in xu.values())
+                 and all("replay-exact" in r["attacks"] for r in xu.values())
+                 and "replay-exact" not in row("t8192", nm("tag-blc4a-t64", "xu", "s8", "k32", "w", "r256k", "cert",
+                                                           "min"))["attacks"],
+                 ", ".join(f"{p} +{inc[p]:.4%} (branch {xu[p]['terms']['coin_branch']:.4%})" for p in xu_pts))
     for point, want in (("t8192", 0.024), ("t512", 0.520)):
         t = cardrow("ncp-k32", point)["terms"]
         got = t["final_word"] + t["forming"] + t["noise_derivation"]
@@ -1488,13 +1515,17 @@ def main() -> int:
     ncp = [n for n, d in designs.items() if d["choice"]["noise"] == "ncp"]
     hmods = modules(card, "H", "hiding")
     hidings = [h for h, m in hmods.items() if f"H.hiding.{h}" not in dropped and m.get("enumerate", True)]
-    pinned = [h for h in hidings if "when" in hmods[h]]
+    pinned = {"r1": 1, "r1-db": 1, "l1a": 2}
     checks.check("the space holds, for NCP, every density (k32, and 6 L's under each of 2 credits) x 3 formats (int7 "
-                 "route U, the cheaper route, rotated) x 6 row layouts (3 leaf sizes salted every leaf, N-HIDE's l1, l2f "
-                 "and l2w) x each hiding module the card and its added files hold (R1's at one layout, the certifier's "
-                 "rows) x 2 final-word charges x the 9 (operands, forming, derivation) choices a charge doesn't "
-                 "duplicate: 13 x 3 x (6 x H + R) x 2 x 9; hiding-ruled is out (default 2)",
-                 len(ncp) == 13 * 3 * (6 * (len(hidings) - len(pinned)) + len(pinned)) * 2 * 9 and "H.hiding.hr" in dropped,
+                 "route U, the cheaper route, rotated) x 7 row layouts (3 leaf sizes salted every leaf, N-HIDE's l1 at "
+                 "16 KiB and 256 KiB words chunks, l2f and l2w) x each hiding module the card and its added files hold "
+                 "(R1's two at r256k alone, L1 + (a) at the two l1 layouts, the rest at every layout) x 2 final-word "
+                 "charges x the 9 (operands, forming, derivation) choices a charge doesn't duplicate: "
+                 "13 x 3 x (7 x H + 4) x 2 x 9; hiding-ruled (default 2) and the mask (mask-optimal, refuted by N-HIDE "
+                 "final) are out",
+                 {h for h in hidings if "when" in hmods[h] or "needs" in hmods[h]} == set(pinned)
+                 and len(ncp) == 13 * 3 * (7 * (len(hidings) - len(pinned)) + sum(pinned.values())) * 2 * 9
+                 and "H.hiding.hr" in dropped and "H.hiding.mask" in dropped,
                  f"{len(ncp):,} NCP designs, {len(hidings)} hiding modules ({', '.join(hidings)}); dropped {sorted(dropped)}")
     w = [call_units(card, designs[nm("ssn-1l", "served", "s8", "k32", "w", "r16k", "open")], 64, 2048, K) for K in (2048, 8192)]
     got = [(u["r"], u["coin_bytes"] / card["price"]["coin_bytes"]["value"] * 8 / 64) for u in w]
@@ -1502,7 +1533,7 @@ def main() -> int:
                  "(96 bits) at K 2,048, 8,480/8,192 and 9 words (288 bits) at K 8,192 (ssn_1l_layout)",
                  all(abs(g[0] - x[0]) < 1e-12 and abs(g[1] - x[1]) < 1e-9
                      for g, x in zip(got, ((2144 / 2048, 96), (8480 / 8192, 288)))), f"{got}")
-    pw, px = (evaluate(card, designs[nm("per2", "cancel", "act124", "k32", o, "r16k", "mask", "fw")] | grid, "t8192")
+    pw, px = (evaluate(card, designs[nm("per2", "cancel", "act124", "k32", o, "r16k", "cert", "fw")] | grid, "t8192")
               for o in ("w", "xyef"))
     checks.check("per2 under the final-word lemma on the grid with the salt side closed is SW-NOISE's 0.190% plus its "
                  "words' leftover hiding, and 0 gap with X and V committed", abs(pw["gap"] - 0.0019) < 0.00003 and px["gap"] < 1e-12,
@@ -1534,8 +1565,8 @@ def main() -> int:
                  and r64["terms"]["uncommitted_steps"] == 0
                  and abs(r256["terms"]["uncommitted_steps"] - 3 * (1 - 48 / 256)) < 1e-9,
                  f"k64 rank {rk(r64)}, k256 uncommitted {r256['terms']['uncommitted_steps']:.1%}")
-    t = row("t8192", nm("ncp", "cancel", "int7-U", "k32", "w", "r16k", "mask", "fw"))
-    checks.check("ranks split by part: ShaWrites (ShaSpeed's form its theorem) and mask-optimal are 4a on the hashing "
+    t = row("t8192", nm("ncp", "cancel", "int7-U", "k32", "w", "r16k", "salt", "fw"))
+    checks.check("ranks split by part: ShaWrites (ShaSpeed's form its theorem) is 4a on the hashing "
                  "part, W1 (card-within-accel-w1) and PeriodInventory 3 on the matmul part, and the overall rank is the "
                  "larger; PeriodInventory "
                  "is open, so the effective rank is 5", t["ranks"]["hashing"] == 4.0 and t["ranks"]["matmul"] == 3.0
@@ -1626,14 +1657,15 @@ def main() -> int:
             for nz in ("tag-blc1a-t128", "tag-blc1a-t64") for p in ("t512", "t8192")}
     r1 = lambda r: r["choice"]["hiding"] in ("r1", "r1-db")  # noqa: E731
     first_off_r1 = {p: next(r for r in results[p]["rows"] if not r1(r)) for p in llama}
-    checks.check("on Llama R1 with the certifier's check (b) ranks first (NIGHT §5), and N-EGRESS's coin lanes first off "
-                 "R1: (b) closes A2c, A8 and the walk within an entry at the honest's revisit cost, and a later-step "
-                 "weight the certifier streams after A_j leaves them a residual the coin branch prices (p* a step, model "
-                 "P), neither with an open attack; every tagged design with neither carries fix2-quadrant, A2c and the "
-                 "walk, each needing chosen weights, and with the model fixed (model-public) a tagged design with "
-                 "neither ranks first again; blc1a-t128 fails at 64 rows a call, where half its tile's later steps carry "
-                 "the public lane, and blc1a-t64 passes there; on V4-like an unattacked per2 ranks first",
-                 all(results[p]["rows"][0]["choice"]["hiding"] == "r1-db" and results[p]["rows"][0]["t1_pass"]
+    checks.check("on Llama at tile grain R1 with N-EGRESS's coin lanes ranks first (NIGHT §5), and the coin lanes first "
+                 "off R1: a later-step weight the certifier streams after A_j closes A2c, A8 and the walk, and at tile "
+                 "grain its steps leave nothing (model P's p* a step is the P column), while R1 hashes nothing, so no "
+                 "chunk head; every tagged design with neither a lane nor the certifier's check (b) carries "
+                 "fix2-quadrant, A2c and the walk, each needing chosen weights, and with the model fixed (model-public) "
+                 "a tagged design without a lane ranks first again; blc1a-t128 fails at 64 rows a call, where half its "
+                 "tile's later steps carry the public lane, and blc1a-t64 passes there; on V4-like an unattacked per2 "
+                 "ranks first",
+                 all(r1(results[p]["rows"][0]) and blc(results[p]["rows"][0]) and results[p]["rows"][0]["t1_pass"]
                      and not results[p]["rows"][0]["attacks"] and blc(first_off_r1[p]) and first_off_r1[p]["t1_pass"]
                      and not first_off_r1[p]["attacks"] for p in llama)
                  and all(cw <= set(r["attacks"]) for p in llama for r in results[p]["rows"]
@@ -1655,7 +1687,7 @@ def main() -> int:
                  "lead's noise derivation is 0.048% (N-SMELL interim 2 item 7's 0.0483%), and a coin lane's own loads add "
                  "to it where it has them",
                  "one-instruction-minimal" in lead["premises"] and oim is not None and oim["t1_pass"]
-                 and 0.00045 < tag0["t1"] < 0.00052,
+                 and 0.00045 < tag0["t1"] - tag0["terms"]["chunk_head"] < 0.00052,
                  f"{oim['design']} {oim['t1']:.4%}; tag lead {tag0['t1']:.4%}" if oim else "none")
     xs = calls(card, "t8192")
     b1, b4 = (row("t8192", nm(nz, "served", "s8", "k32", "w", "r256k", "cert", "min")) for nz in
@@ -1672,18 +1704,18 @@ def main() -> int:
     loads = b1n["terms"]["noise_derivation"] - tagn["terms"]["noise_derivation"]
     checks.check("N-EGRESS's coin lanes reproduce its arithmetic at T 8,192: blc1a-t128's 550 MACs a coin bit, network "
                  "term 0.217% at 3,532 (2.17% at 320 bits) and lane loads 0.209% uncredited; blc4a-t64's 0.36% at 320 "
-                 "bits (0.37% at the floor); each A2c/A8 residual is (S - 1)·p*·32/K on its own S (0.415% and 0.334%, "
-                 "where N-EGRESS's 0.40% and 0.30% scale the lead's S)",
+                 "bits (0.37% at the floor); each A2c/A8 residual under model P is (S - 1)·p*·32/K on its own S (0.415% "
+                 "and 0.334%, where N-EGRESS's 0.40% and 0.30% scale the lead's S), and 0 at tile grain",
                  abs(b1["macs_per_coin_bit"] / 550 - 1) < 0.005 and abs(b1["network_streamed"] - 0.00217) < 0.00005
                  and abs(b1["network_streamed_alt"] - 0.0217) < 0.0005 and abs(loads - 0.00209) < 0.00005
                  and 0.0035 < b4["network_streamed_alt"] < 0.0038
-                 and abs(b1["terms"]["coin_branch"] - residual("tag-blc1a-t128")) < 1e-9
-                 and abs(b4["terms"]["coin_branch"] - residual("tag-blc4a-t64")) < 1e-9,
+                 and all(b["terms"]["coin_branch"] == 0 and abs(b["t1_p"] - b["t1"] - residual(nz)) < 1e-9
+                         for b, nz in ((b1, "tag-blc1a-t128"), (b4, "tag-blc4a-t64"))),
                  f"{b1['macs_per_coin_bit']:,.1f} MACs a bit, {b1['network_streamed']:.4%} / {b1['network_streamed_alt']:.3%}, "
-                 f"loads {loads:.4%}; blc4a {b4['network_streamed_alt']:.3%}; residuals {b1['terms']['coin_branch']:.4%} / "
-                 f"{b4['terms']['coin_branch']:.4%}")
+                 f"loads {loads:.4%}; blc4a {b4['network_streamed_alt']:.3%}; P residuals {b1['t1_p'] - b1['t1']:.4%} / "
+                 f"{b4['t1_p'] - b4['t1']:.4%}")
     salted = {lf: row("t8192", nm("ssn-1l-tag", "served", "s8", "k32", "w", lf, "cert", "min")) for lf in ("r256k", "r16k")}
-    masked = row("t8192", nm("ssn-1l-tag", "served", "s8", "k32", "w", "r256k", "mask", "min"))
+    masked = row("t8192", nm("ssn-1l-tag", "served", "s8", "k32", "w", "r256k", "salt", "min"))
     red = {"r256k": (3886, 0.0153), "r16k": (245, 0.00097)}
     checks.check("N-RED final §3's leaf bound: the certifier's fresh salt a leaf (certifier-salt) bounds n_max at a leaf's "
                  "MACs over 512 whatever the coins, 3,886 and 1.53% at cap 32 and W_mac 119.7 for a 256 KiB leaf, 245 and "
@@ -1718,14 +1750,48 @@ def main() -> int:
     b1p = row("t512", nm("tag-blc1a-t128", "served", "s8", "k32", "w", "r256k", "cert", "min"))
     half = sum(x["count"] * x["m"] * x["n"] * 32 * (lambda g: (g["S"] - 1 - g["blc_steps"]) / 2)(
         designs[b1p["design"]]["fields"].at(x["m"], x["n"], x["K"])) for x in calls(card, "t512")) / b1p["stock_macs_forward"]
-    checks.check("model C against model P (N-RED final §4): under CopyGrain(4) the coin lanes' steps leave nothing, so "
-                 "blc4a-t64's T1 drops by its whole coin branch; a 128-row tile on 64 rows keeps A2c's ½ on its "
-                 "public-lane steps; a design without coin lanes prices the same under both",
-                 abs(b4p["t1_model_c"] - (b4p["t1"] - b4p["terms"]["coin_branch"])) < 1e-12 and b4p["terms"]["coin_branch"] > 0
-                 and abs(b1p["t1_model_c"] - (b1p["t1"] - b1p["terms"]["coin_branch"] + half)) < 1e-9 and half > 0.25
-                 and tagn["t1_model_c"] == tagn["t1"] and masked["t1_model_c"] == masked["t1"],
-                 f"blc4a-t64 {b4p['t1']:.3%} P, {b4p['t1_model_c']:.3%} C; blc1a-t128 at 64 rows {b1p['t1']:.2%} P, "
-                 f"{b1p['t1_model_c']:.2%} C")
+    p_branch = {k: x["t1_p"] - x["t1"] + x["terms"]["coin_branch"] for k, x in (("b4", b4p), ("b1", b1p))}
+    checks.check("tile-grain W against model P (NIGHT §8 decision 2, N-FLOOR final §7, N-RED final §4): at tile grain "
+                 "the coin lanes' steps leave nothing, so blc4a-t64's coin branch is 0 and model P's column adds its "
+                 "whole p* branch; a 128-row tile on 64 rows keeps A2c's ½ on its public-lane steps under both; a design "
+                 "without coin lanes prices the same under both",
+                 b4p["terms"]["coin_branch"] == 0 and p_branch["b4"] > 0
+                 and abs(b1p["terms"]["coin_branch"] - half) < 1e-9 and half > 0.25 and p_branch["b1"] > half
+                 and tagn["t1_p"] == tagn["t1"] and masked["t1_p"] == masked["t1"],
+                 f"blc4a-t64 {b4p['t1']:.3%} W, {b4p['t1_p']:.3%} P; blc1a-t128 at 64 rows {b1p['t1']:.2%} W, "
+                 f"{b1p['t1_p']:.2%} P")
+    bare = b4p["t1_bare_p"] - b4p["t1_p"]
+    checks.check("bare model P beside the default (N-ADAPT final, NIGHT §8 decision 2): without a copy model the coin "
+                 "lanes' masked cross-row copies are credited and unpaid, about 8.9% of Llama stock (9.3-10.0% at "
+                 "K 2,048, 6.8-7.6% at K 8,192), within 0.3 points; adaptive-dw is proved given tile-grain, which the "
+                 "base takes, and both floors are refuted beside the lead's wgmma; a noise without a priced masked "
+                 "channel has no bare-P figure",
+                 abs(bare - 0.089) < 0.003 and card["premise"]["adaptive-dw"]["status"] == "proved"
+                 and card["premise"]["adaptive-dw"]["requires"] == ["tile-grain"] and "tile-grain" in card["space"]["base"]
+                 and all(card["premise"][q]["status"] == "refuted" and q not in card["space"]["base"]
+                         for q in ("select-floor", "copy-floor"))
+                 and tagn["t1_bare_p"] is None,
+                 f"blc4a-t64 bare P {b4p['t1_bare_p']:.2%} ({bare:+.2%} over P)")
+    mir = {p: row(p, nm("nn-mirror-tag", "served", "s8", "k32", "w", "r256k", "cert", "min")) for p in xu_pts}
+    mir_w = {p: designs[mir[p]["design"]]["fields"].at(64, 2048, 2048)["r"] for p in xu_pts}
+    checks.check("N-NOISE final's mirror is priced at A2r and tile copies as one attack, 0.0057 of its committed width "
+                 "(0.595% of stock before r256k's chunk_head, N-NOISE's figure on this card), unattacked, its noise "
+                 "reading no certifier, at the tag lead's T2",
+                 all(abs(mir[p]["t1"] - mir[p]["terms"]["chunk_head"] - 0.0057 * mir_w[p]) < 1e-4
+                     and abs(mir[p]["t1"] - mir[p]["terms"]["chunk_head"] - 0.00595) < 0.0002 and not mir[p]["attacks"]
+                     and abs(mir[p]["t2"]["judged"] / xl[p]["t2"]["judged"] - 1) < 0.01 for p in xu_pts)
+                 and not {"trusted-host", "certifier-coins"} & set(card["N"]["nn-mirror-tag"]["premises"]),
+                 ", ".join(f"{p} T1 {mir[p]['t1']:.3%} T2 {mir[p]['t2']['judged']:.1f}" for p in xu_pts))
+    l1a = {p: row(p, nm("ssn-1l-tag", "served", "s8", "k32", "w", "l1", "l1a", "min")) for p in xu_pts}
+    l1o = {p: row(p, nm("ssn-1l-tag", "served", "s8", "k32", "w", "l1", "open", "min")) for p in xu_pts}
+    hide = {"t512": (0.000251, 0.000829), "t512r512": (0.0000314, 0.000104), "t8192": (0.0000020, 0.0000065)}
+    checks.check("L1 + (a) is N-HIDE final §4's: on ssn_1l's bytes the hiding term at the floor is 0.0251% / 0.0031% / "
+                 "0.0002% of stock at T 512 64 rows / 512 rows / T 8,192 with the PRF and c credited "
+                 "(salt-derivation) and 0.0829% / 0.0104% / 0.0006% unforced, within 3%; it reads the L1 layouts alone",
+                 all(abs(l1a[p]["terms"]["hiding"] / hide[p][0] - 1) < 0.03
+                     and abs(l1o[p]["terms"]["hiding"] / hide[p][1] - 1) < 0.03 for p in xu_pts)
+                 and not any(d["choice"]["hiding"] == "l1a" and d["choice"]["rows"] not in ("l1", "l1w") for d in designs.values()),
+                 ", ".join(f"{p} {l1a[p]['terms']['hiding']:.4%} / {l1o[p]['terms']['hiding']:.4%}" for p in xu_pts))
     noisy = [n for n, d in designs.items() if d["choice"]["noise"] in ("nsf", "perm")]
     checks.check("a noise whose words repeat on data (nsf, perm) is refused while its share is unpriced",
                  noisy and all(n in results["t8192"]["refused"] and "dup" in results["t8192"]["refused"][n][0] for n in noisy),
@@ -1758,7 +1824,7 @@ def main() -> int:
         checks.mutation("a refuted commit-forced (SW-LEAN's counterexample) leaves every committed-operand module out of "
                         "the space", all(d["choice"]["operands"] == "w" for d in space(c)[0].values()), None)
         lc = copy.deepcopy(card)
-        lenient = {cid: compose(lc, lc["card"][cid]["modules"] | {"rows": "r256k", "hiding": "mask"},
+        lenient = {cid: compose(lc, lc["card"][cid]["modules"] | {"rows": "r256k", "hiding": "cert"},
                                 lc["card"][cid].get("premises", []), lenient=True, source="lenient")
                    for cid in ("dither-c", "fresh-u", "accel-d5-d6")}
         top = [cid for cid, d in lenient.items() if evaluate(lc, d, "t8192")["t1_pass"]]
@@ -1774,18 +1840,18 @@ def main() -> int:
         a1, b1 = one(c, ch)["terms"]["forming"], cardrow("ncp-k32")["terms"]["forming"]
         checks.mutation("forming one copy a side would be a third of NCP's 24/n + 24/m: the stack's 3 copies decide the term",
                         abs(3 * a1 - b1) < 1e-12 and b1 > 0.0085, f"{a1:.3%} vs {b1:.3%}")
-        d1 = evaluate(card, designs[nm("ncp", "cancel", "int7-U", "k32", "xyef", "r16k", "mask", "fw")], "t8192", delta=1e-4)
+        d1 = evaluate(card, designs[nm("ncp", "cancel", "int7-U", "k32", "xyef", "r16k", "cert", "fw")], "t8192", delta=1e-4)
         checks.mutation("a ShaSpeed slack of 0.01% breaks T1 for the all-forced design: hashing's work is 346x stock",
                         not d1["t1_pass"], f"T1 {d1['t1']:.2%}")
         c = mutated(lambda c: c["premise"]["pure-lanes"].__setitem__("word_units", "reg*L/32"))
         k1024 = {"noise": "ncp", "denoise": "cancel", "format": "int7-mix", "density": "k1024-pl", "operands": "xyef",
-                 "rows": "r256k", "hiding": "mask", "final": "fw", "forming": "none", "derivation": "none"}
+                 "rows": "r256k", "hiding": "cert", "final": "fw", "forming": "none", "derivation": "none"}
         e, e0 = one(c, k1024, "v4like", "grid"), one(card, k1024, "v4like", "grid")
         checks.mutation("credit PureLanes' full L at every L and ncp/k1024-pl/xyef passes T1 on V4-like on the grid: the "
                         "cap at L 128 from SW-SEM's margins keeps it out", e["t1_pass"] and not e0["t1_pass"],
                         f"T1 {e['t1']:.2%} uncapped, {e0['t1']:.0%} capped")
         ssn_e = {"noise": "ssn-1l", "denoise": "served", "format": "s8", "density": "k32", "operands": "ef",
-                 "rows": "r16k", "hiding": "mask", "final": "none", "forming": "none", "derivation": "none"}
+                 "rows": "r16k", "hiding": "cert", "final": "none", "forming": "none", "derivation": "none"}
         c = mutated(lambda c: c["N"]["ssn-1l"]["fields"].__setitem__("derive_extra", "0"))
         e, e0 = one(c, ssn_e), one(card, ssn_e)
         checks.mutation("drop SSN's rotates and committing its noise registers would close the derivation to 0: the "
@@ -1810,18 +1876,19 @@ def main() -> int:
                         "T 8,192: the 16 bits a row are what close the branch", e["terms"]["coin_branch"] > 0.01
                         and e0["terms"]["coin_branch"] < 0.002,
                         f"{e['terms']['coin_branch']:.2%} vs {e0['terms']['coin_branch']:.3%}")
-        c = mutated(lambda c: c["N"]["ssn-1l-tag"]["D"]["epilogue"]["fields"].__setitem__("branch_rows", "0"))
-        ep = dict(ssn_e, noise="ssn-1l-tag", denoise="epilogue", operands="w", rows="r256k", hiding="cert",
+        c = mutated(lambda c: c["N"]["ssn-1l-tag"]["D"]["xu"]["fields"].__setitem__("xu_q", "2**4"))
+        ep = dict(ssn_e, noise="ssn-1l-tag", denoise="xu", operands="w", rows="r256k", hiding="cert",
                   derivation="min")
         e, e0 = one(c, ep), one(card, ep)
-        checks.mutation("price the tag epilogue's final-word coin branch at nothing and it passes T1 at T 8,192 with T3 0: "
-                        "the final word's repeats on r_i are what keep it out", e["t1_pass"] and not e0["t1_pass"],
-                        f"T1 {e['t1']:.3%} vs {e0['t1']:.3%}")
-        c = mutated(lambda c: c["N"]["tag-blc1a-t128"]["fields"].__setitem__("branch_rows", "m*(S - 1)*blc_p"))
+        checks.mutation("salt xu's final word with a 4-bit rho_i in place of N-EXACT's coin bytes and its meets on chosen "
+                        "identical rows fail T1 at T 8,192: the salt bytes in step S are what keep it in",
+                        not e["t1_pass"] and e0["t1_pass"], f"T1 {e['t1']:.3%} vs {e0['t1']:.3%}")
+        c = mutated(lambda c: c["N"]["tag-blc1a-t128"]["fields"].__setitem__("branch_rows_w", "0"))
         bl = dict(ssn_e, noise="tag-blc1a-t128", operands="w", rows="r256k", hiding="cert", derivation="min")
         e, e0 = one(c, bl, "t512"), one(card, bl, "t512")
-        checks.mutation("price blc1a-t128's coin-free later steps at a 64-row call as if each carried a coin and it passes "
-                        "T1 at T 512: the public lane in half its steps is what A2c takes there",
+        checks.mutation("price blc1a-t128's coin-free later steps at a 64-row call as if each carried a coin, which tile "
+                        "grain leaves nothing, and it passes T1 at T 512: the public lane in half its steps is what A2c "
+                        "takes there",
                         e["t1_pass"] and not e0["t1_pass"], f"T1 {e['t1']:.3%} vs {e0['t1']:.2%}")
         c = mutated(lambda c: c["N"]["ssn-1l"]["fields"].pop("n_max"))
         e = one(c, dict(ssn_e, rows="r256k"), "v4pro")
@@ -1833,7 +1900,7 @@ def main() -> int:
         checks.mutation("restore the hiding ruling and ssn-1l-tag passes T1 at T 8,192 with the salt side waived: default 2 "
                         "is what keeps it out", isinstance(e, dict) and e["t1_pass"] and e["hiding_closed"] > TARGET["t1"],
                         f"T1 {e['t1']:.3%}, waived {e['hiding_closed']:.0%}" if isinstance(e, dict) else str(e)[:60])
-        p2 = designs[nm("per2", "cancel", "act124", "k32", "w", "r256k", "mask", "fw", "count", "min")]["choice"]
+        p2 = designs[nm("per2", "cancel", "act124", "k32", "w", "r256k", "cert", "fw", "count", "min")]["choice"]
         e, e0 = one(card, p2, "t8192", "grid"), one(card, p2)
         checks.mutation("price on the grid, where the final-word lemma holds, and per2/cancel under it passes T1 at "
                         "T 8,192: N-SAKU's skip in M0 is what keeps every exact design out", e["t1_pass"] and not e0["t1_pass"],
@@ -1897,7 +1964,7 @@ def main() -> int:
     with (out / "ranking.csv").open("w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["point", "position", "design", *(f"{a}.{s}" for a, s in card["space"]["slots"]), "rank_matmul",
-                    "rank_hashing", "rank", "rank_effective", "t1", "t1_bare_p", "t1_model_c", "t1_coins_uncredited", *TERMS, "hiding_closed", "t2_sync", "t2_async", "t2_unfused", "t3_worst", "delta_star",
+                    "rank_hashing", "rank", "rank_effective", "t1", "t1_p", "t1_bare_p", "t1_coins_uncredited", *TERMS, "hiding_closed", "t2_sync", "t2_async", "t2_unfused", "t3_worst", "delta_star",
                     "hash_bytes_per_mac", "network", "network_alt", "network_bound", "network_streamed",
                     "network_streamed_alt", "coins_streamed", "open", "attacks"])
         for p, res in results.items():
@@ -1909,7 +1976,7 @@ def main() -> int:
                 w.writerow([p, i, r["design"], *(ch[s] for _, s in card["space"]["slots"]),
                             LABEL[r["ranks"]["matmul"]], LABEL[r["ranks"]["hashing"]], LABEL[r["rank"]],
                             LABEL[r["rank_effective"]], f"{r['t1']:.6g}",
-                            "" if r["t1_bare_p"] is None else f"{r['t1_bare_p']:.6g}", f"{r['t1_model_c']:.6g}",
+                            f"{r['t1_p']:.6g}", "" if r["t1_bare_p"] is None else f"{r['t1_bare_p']:.6g}",
                             f"{r['t1_coins_uncredited']:.6g}",
                             *(f"{r['terms'][k]:.6g}" for k in TERMS), f"{r['hiding_closed']:.6g}",
                             f"{e['sync']['ratio']:.4g}", f"{e['async']['ratio']:.4g}", f"{r['t2']['unfused']:.4g}",
