@@ -28,6 +28,8 @@ Strategies:
 - `fold` (`lin` over 32-bit words, zero data): Σ r_t w_t = Σ_τ c_τ R_τ, with R_τ V split into four u8 digits.
 - `bitslice` (low 1 bit, zero data): 32 rows' parities in one register; acc ^= U-bits & V-mask, one LOP3 a lane step
   for 32 entries; a 32×32 bit transpose a committed 1,024 bits when the agg hashes the fields entry-major.
+- `four_russians`: `bitslice` with each 32-row block's increment planes tabulated over a lane group's column bits
+  (shared by every column of the call), so a lane step is k loads and a k-bit ripple add whatever q is.
 - `bsketch` (a sketch over 1-bit fields): the bitslice's bits, transposed, against r's bit planes in one b1 IMMA.
 - `copy`: entries whose inputs repeat are computed once (exact distinct count).
 - `table`: a field whose inputs span at most 34 bits (2³⁴ entries, `counter_tile`'s MEM) is one indexed load,
@@ -311,6 +313,32 @@ def bitslice(rule, inst, d):
     return cost, aggregate(rule, d, fields), f"{bitslice_ops(k)} LOP3 a lane step a 32-row register"
 
 
+def four_russians_cost(k: int, q: int) -> tuple[float, int]:
+    """Writes an entry a step when each (32-row block, step) tabulates, for every value of g lanes' low column bits,
+    the k planes of Σ_l a_l·b_l mod 2^k (built in Gray order, one k-plane add an entry, shared by CALL_N columns), and
+    each (block, column, step) a group loads the column's table offset and k planes and ripple-adds them: 1 + k loads
+    and 2k − 1 LOP3s."""
+    best = None
+    for g in range(1, q + 1):
+        groups = math.ceil(q / g)
+        per = groups * (1 + k + 2 * k - 1) / 32 + groups * (1 << (k * g)) * (3 * k) / (32 * CALL_N)
+        if best is None or per < best[0]:
+            best = (per, g)
+    return best
+
+
+def four_russians(rule, inst, d):
+    """`bitslice`'s fields, with a lane group's increment planes looked up instead of computed."""
+    res = bitslice(rule, inst, d)
+    if res is None:
+        return None
+    _, out, _ = res
+    per, g = four_russians_cost(rule.k, inst.q)
+    cost = inst.S * per
+    cost += len(d.P) * rule.k * TRANSPOSE_WB if rule.agg == "hash" else commit_ops(rule, len(d.P))
+    return cost, out, f"tables of {g} lanes' column bits a 32-row block"
+
+
 def bsketch(rule, inst, d):
     """A sketch over 1-bit fields is affine in the bits: Σ r_t g(b_t) = g(0)·Σ r_t + (g(1) − g(0))·Σ_β 2^β popc(r_β & b),
     one b1 IMMA (K 256) against r's 32 bit planes after the bitslice's fields are transposed entry-major."""
@@ -321,6 +349,7 @@ def bsketch(rule, inst, d):
     if res is None:
         return None
     cost, bits, _ = res
+    cost = min(cost, inst.S * four_russians_cost(1, inst.q)[0] + len(d.P) * TRANSPOSE_WB)
     g0, g1 = (0, 1) if rule.agg in ("lin", "sq") else (int(d.sbox[0]), int(d.sbox[1]))
     rbits = (d.r[:, None] >> np.arange(32)[None, :]) & 1
     pop = np.einsum("ijt,tb->ijb", bits, rbits)
@@ -357,8 +386,8 @@ def table(rule, inst, d):
     return best + commit_ops(rule, len(d.P)), out, "index gather + load (exact by construction)"
 
 
-STRATEGIES = {"honest": honest, "skip": skip, "fold": fold, "bitslice": bitslice, "bsketch": bsketch, "copy": copy,
-              "table": table}
+STRATEGIES = {"honest": honest, "skip": skip, "fold": fold, "bitslice": bitslice, "four_russians": four_russians,
+              "bsketch": bsketch, "copy": copy, "table": table}
 
 
 def evaluate(rule: Rule, inst: Inst, strategies=STRATEGIES):
