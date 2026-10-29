@@ -14,6 +14,9 @@ input with the clean pass's:
   saving if every input were known;
 - top-1 agreement of the next-token logits (clean fake-int8 against fp32, each design against clean).
 
+A second clean forward must reproduce the first's inputs exactly, so the changes counted are the noise's, not the
+float reductions' order.
+
 Run (CPU): python nred_requant.py --model DIR --text wikitext-2-raw-v1-test.json --out OUT.json
 """
 
@@ -111,12 +114,17 @@ def measure(model, windows: list) -> dict:
     acc: dict = {}
     top1: dict = {"clean_vs_fp32": []}
     noise_std: dict = {d: [] for d in DESIGNS}
+    repeat_changed = 0
     for wi, x in enumerate(windows):
         state[0] = Pass(None, 0)
         with torch.no_grad():
             clean_top = model(x).logits.argmax(-1)
         clean = state[0].inputs
         top1["clean_vs_fp32"].append(float((clean_top == fp32_top[wi]).float().mean()))
+        state[0] = Pass(None, 0)
+        with torch.no_grad():
+            model(x)
+        repeat_changed += sum(int((clean[key] != q).sum()) for key, q in state[0].inputs.items())
         for di, design in enumerate(DESIGNS):
             state[0] = Pass(design, 1000 * wi + di + 1)
             with torch.no_grad():
@@ -167,6 +175,8 @@ def measure(model, windows: list) -> dict:
                     for key, (got, full) in usable.items()}
     std_expect = r2.served_std()
     checks = [
+        {"check": "a second clean forward reproduces every linear's int8 input exactly (the changes are the noise's)",
+         "pass": repeat_changed == 0, "detail": repeat_changed},
         {"check": "layer 0's qkv input (no noise upstream) is unchanged under every design",
          "pass": all(per[f"{d}/0.qkv"]["entry_changed"] == 0 for d in DESIGNS)},
         {"check": "the clean fake-int8 forward agrees with fp32 on > 90% of top-1 tokens",
