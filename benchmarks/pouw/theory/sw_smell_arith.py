@@ -37,6 +37,8 @@ Every figure is W1 priced work against stock's mnK (CORE.md §2a), at H32's floo
   with them: SW-HASH's hiding work (unforced, and with the salt derivation forced; W1 floor / alone) and its T2's
   bytes part, both stated for NCP (α = 3), scaled to SSN-A's and ssn_1l's α over Llama's fused linears. The non-hash
   part of SSN's T2 is (α − 1) of stock's GEMM (12.49 ms of 37.77) plus its coins (0.60 ms) and A's root (0.096).
+  Per period, the hiding term in both readings (SW-HASH's AND-gate share, and the W1 share T1 judges, which is about
+  260× larger), and SW-NOISE's dequant epilogue (2.5–3.7% of stock if honest-only).
 
   python3 benchmarks/pouw/theory/sw_smell_arith.py [--json OUT]
 """
@@ -106,7 +108,9 @@ def stream_bits_per_token(linears, layers: int) -> dict[str, float]:
 
 SW_HASH_K32 = {"16k": (157.3, 20.8, 41.6, 13.0, 26.0), "256k": (140.9, 1.46, 2.93, 1.00, 2.01),
                "1m": (None, 0.42, 0.85, 0.27, 0.54)}
+SW_HASH_HIDING_AND = {"16k": 0.0488, "256k": 0.0031, "1m": 0.0008}
 STOCK_MS, GEMM_MS, NCP_EXTRA_MS, A_ROOT, SSN_COIN_MS = 37.77, 12.49, 56.7, 0.096, 0.60
+EPILOGUE = (0.025, 0.037)
 
 
 def tensor_width(linears, steps) -> float:
@@ -188,7 +192,21 @@ def main() -> int:
         "route U's Y fix at T 8,192, fused": out["routes"][8192]["route_u_y_fix"],
         "route U′'s extra writes, any m, fused": out["routes"][64]["route_u_prime"],
         "A's pre-noise hashing, closed by the final-word lemma in SW-PRICE's card": 14336 / 60817408 * H_BAR,
+        "the dequant epilogue over Llama's linears if honest-only, low (SW-NOISE)": EPILOGUE[0],
+        "the dequant epilogue over Llama's linears if honest-only, high (SW-NOISE)": EPILOGUE[1],
     }
+    widths = {"ssn_a": tensor_width(LLAMA_FUSED, lambda k: -(-k // 28)),
+              "ssn_1l": tensor_width(LLAMA_FUSED, lambda k: 1 + -(-(k - 28) // 31))}
+    out["by_alpha"] = {name: by_alpha(a) for name, a in widths.items()}
+    for name in widths:
+        v = out["by_alpha"][name]
+        for rows in ("256k", "1m"):
+            shares[f"{name}'s hiding at {rows} rows, unforced, AND-gate reading"] = (
+                SW_HASH_HIDING_AND[rows] * v["alpha"] / 3)
+            shares[f"{name}'s hiding at {rows} rows, unforced, W1 floor (T1's reading) × stock's AND gates"] = (
+                v[rows]["hiding_unforced"][0])
+            shares[f"{name}'s M·y with the salt forced at {rows} rows, W1 floor × stock's AND gates"] = (
+                v[rows]["hiding_salt_forced"][0])
     out["per_period"] = {}
     for what, s in shares.items():
         row = {p: {"world": s * world_year * sec / (365 * 86400), "datacenter": s * dc_rate * sec}
@@ -212,9 +230,6 @@ def main() -> int:
               f"{v['gbit_s_per_gpu_at_stock_rate']:.1f} at stock's (estimates)")
     out["ssn_a_max_n"] = 13 ** 4 - 2
     print(f"SSN-A's step-1 code holds n ≤ {out['ssn_a_max_n']:,}; Llama's head has n 128,256, DeepSeek-V3's 129,280")
-    widths = {"ssn_a": tensor_width(LLAMA_FUSED, lambda k: -(-k // 28)),
-              "ssn_1l": tensor_width(LLAMA_FUSED, lambda k: 1 + -(-(k - 28) // 31))}
-    out["by_alpha"] = {name: by_alpha(a) for name, a in widths.items()}
     for name, v in out["by_alpha"].items():
         print(f"{name}: α {v['alpha']:.4f}, {v['bytes_per_mac']:.4f} B a useful MAC; T2 sync at T 8,192 "
               f"{v['16k']['t2_sync']:.1f}× (16 KiB) / {v['256k']['t2_sync']:.1f}× (256 KiB); hiding × stock, unforced "
