@@ -16,7 +16,7 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   R_in = 4, salted), egress R = 3, four windows and a burst of requests across each of the 0/1 and 2/3 boundaries, the
   certifier's own frame in every window. Its records are certified under a fresh LMS key and certifier session. The
   tie is IoTieRequest's verdict, from the verifier's own tie source (`service.LinkWindows.ties`), which the proof
-  service doesn't have yet, so the verifier of record refuses every advised link (`advised`, fail closed); here the
+  system doesn't have yet, so the verifier of record refuses every advised link (`advised`, fail closed); here the
   link's tie source is the tests' stand-in (`advised_traffic.StandInTie`) on the link's certified prompts, the
   verifier's own and never the prover's, so this prices the unit and its proof, not IoTieRequest's. Its clock
   source is the verifier of record's: the certifier signs each window's sync salted (`Issuer.salted_clock`), and the
@@ -49,7 +49,7 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   stream's δ, ``--delta``). Its draw of record is the Lean verifier of record's (``--lean``'s ``draw --population n
   --k K --stream-file``, `service.lean_draw`) on the coins the period draw read, and it accepts only when the windows
   proved are that draw's, refusing by name (``period-draw``) otherwise. The coins are the verifier's own by default;
-  ``--challenger local|gate:USER@HOST`` takes the auditor's challenger's instead (`Challenger`: one session, as
+  ``--challenger local|gate:USER@HOST`` takes the auditor's challenger's instead (`ChallengerCoins`: one session, as
   `records_audit` takes it, whose evidence the coins each member's Lean drew on are held to, `coins.coins_reason`). The
   summary's ``draw`` and ``sampled`` report them, ``sampled`` per member in scan_zk's shape: ``draw`` {law, coins,
   units, of, by}, ``audit`` {accepted, wrong_units} and ``charge`` {delta, wrong_units, epsilon}, None unless
@@ -513,7 +513,7 @@ def coin_need(k: int, n: int, coin_bytes: int) -> int:
     return -(-(sum(reads) + max(reads, default=0)) // coin_bytes)
 
 
-class Challenger:
+class ChallengerCoins:
     """The period draws' coins from the auditor's challenger (``--challenger local|gate:USER@HOST``), as
     `records_audit` takes them (`a5_coins`): one session on `coins_root`, one rank per member, and each member's draw
     in its own turn on the session's one client (`a5_coins.RankCoins`), its coins committed to its period's commitment
@@ -587,7 +587,7 @@ class Challenger:
         return out_
 
 
-def coins(a, challenger: Challenger | None, name: str):
+def coins(a, challenger: ChallengerCoins | None, name: str):
     """Member `name`'s period draw's coins: the challenger's session's (``--challenger``), else the verifier's own, the
     operating system's bytes as the Lean verifier of record reads them (`sampled_proofs.service`'s default,
     `verifier.coins`); None when the period isn't sampled (``--draw 0``, every window)."""
@@ -677,7 +677,7 @@ def prove(a) -> int:
     log(f"staged: {summary['staging']}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
-    challenger = Challenger(a, rounds, out / "challenger") if a.draw and a.challenger else None
+    challenger = ChallengerCoins(a, rounds, out / "challenger") if a.draw and a.challenger else None
 
     def go(k: int, name: str) -> tuple[str, dict]:
         rd = rounds[name]
@@ -774,8 +774,8 @@ def main(argv=None) -> int:
                         "advice are committed, and only those proved (LinkWindows.period_draw); 0 (the default): every "
                         "window, Selection All")
     p.add_argument("--challenger", help="with --draw: the period draws on the auditor's challenger's coins (a5_coins, "
-                   "as records_audit takes them), not the verifier's own: local, or gate:USER@HOST (vy-challenger-1 "
-                   "through its gate, with --peer and --challenger-key)")
+                   "as records_audit takes them), not the verifier's own: local, or gate:USER@HOST (the auditor's "
+                   "challenger through its gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "

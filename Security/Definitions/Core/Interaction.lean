@@ -47,27 +47,6 @@ abbrev Collision (H : Msg → Msg) (u v : Msg) : Prop := Hash.Collision H u v
 draws 64-byte outputs. Completeness reads it (`Complete`); it fixes the length, not `H`. -/
 def Out64 (H : Msg → Msg) : Prop := ∀ m, (H m).length = 64
 
-/-! ## AND/XOR circuits -/
-
-inductive Gate where
-  | and (i j : ℕ)
-  | xor (i j : ℕ)
-
-/-- A circuit: `nIn` input wires, then one wire per gate; the outputs are wire indices. -/
-structure Circuit where
-  nIn : ℕ
-  gates : List Gate
-  outs : List ℕ
-
-/-- Wire values after the gates, in order (input wires first). -/
-def Circuit.wires (C : Circuit) (inp : List Bool) : List Bool :=
-  C.gates.foldl (fun ws g => ws ++ [match g with
-    | .and i j => ws.getD i false && ws.getD j false
-    | .xor i j => xor (ws.getD i false) (ws.getD j false)]) inp
-
-def Circuit.eval (C : Circuit) (inp : List Bool) : List Bool :=
-  C.outs.map fun o => (C.wires inp).getD o false
-
 /-! ## Relations -/
 
 /-- `R ⊆ X × W` with `X = Msg`. -/

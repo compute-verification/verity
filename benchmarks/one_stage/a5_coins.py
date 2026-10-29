@@ -4,11 +4,11 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
 
 * **The session.** ``local``: a development session on this machine, run by the auditor host's own service
   (`benchmarks/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
-  LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what vy-challenger-1
+  LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
   writes, and its key is this run's alone, so its draws show the path, not an auditor's coins. Its pins log pins main's
-  first-parent commit this tree is built on (`on_main`), as pin.sh pins vy-challenger-1 only to such a commit; its code is this
+  first-parent commit this tree is built on (`on_main`), as pin.sh pins the challenger host only to such a commit; its code is this
   tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
-  (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: vy-challenger-1 through infra's gate with the lane's gate key: `reserve` with this machine as its
+  (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: the challenger host through infra's gate with the lane's gate key: `reserve` with this machine as its
   peer, `open` on the TP run root (`served_h1.coins.open_window`), the client on the peer's 127.0.0.1:PORT with the session's
   secret, and once the session has ended its `status`, `fetch`, `ledger` and `pins`; the verifier's key is then the
   deployment's record (`served_h1.coins.key_record`), never the session's key.json. The layout is `SCHEME` with one family
@@ -139,7 +139,7 @@ def lines(path: Path) -> list[str]:
     return [x for x in path.read_text().split("\n") if x]
 
 
-#: the proof service's rule for a client of a session the gate has just opened (`remote.connect_when_listening`)
+#: the proof system's rule for a client of a session the gate has just opened (`remote.connect_when_listening`)
 TUNNEL_WAIT_S, connect_when_listening = R.TUNNEL_WAIT_S, R.connect_when_listening
 
 
@@ -513,7 +513,7 @@ class Local:
 
 
 class Gate:
-    """vy-challenger-1's session through infra's gate `gate` (USER@HOST) with the lane's gate key `ssh_key`, its challenger
+    """The challenger host's session through infra's gate `gate` (USER@HOST) with the lane's gate key `ssh_key`, its challenger
     listening on `peer`'s 127.0.0.1 (this machine's name in the host's /etc/vy/peers), and the challenger key the deployment
     records at `key_record`; `main` is the verifier's copy of main's first-parent line."""
 

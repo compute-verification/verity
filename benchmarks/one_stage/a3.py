@@ -1,4 +1,4 @@
-"""One-stage audit, run A3: every unit type M0's statement proves in one #101 decoder layer, as one audit with one draw and
+"""One-stage audit, run A3: every unit type M0's statement proves in one Llama-3.2-1B decoder layer, as one audit with one draw and
 one integrity profile.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
@@ -17,7 +17,7 @@ one integrity profile.
   a uniform subset of that size, which is still exactly `Subset(k)` over the union (conditioned on the counts, a uniform
   k-subset of the union is uniform within each template). The per-template sessions are one table each (M0 has no
   multi-table statement yet).
-* **Stand-in.** The values are #101's served values, committed afresh; every record says so.
+* **Stand-in.** The values are the Llama-3.2-1B row's served values, committed afresh; every record says so.
 """
 from __future__ import annotations
 
@@ -128,7 +128,7 @@ def main() -> int:
     prov = {m["name"]: {"selected": m["n"], "selection_digest": m["st"]["content_digest"],
                         **{k: v for k, v in a0.stand_in(str(m["dir"])).items() if k in ("row", "run", "run_root", "model")}}
             for m in members}
-    window = {"kind": "stand-in", "of": "vllm-v1 commitment of served row #101", "layer": a.layer, "sets": prov,
+    window = {"kind": "stand-in", "of": "vllm-v1 commitment of the served Llama-3.2-1B row", "layer": a.layer, "sets": prov,
               "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
     rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
@@ -178,7 +178,7 @@ def main() -> int:
                                                 and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
                                                 "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
-        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir), "tool": "flock-verify verify --archive (PR #118)"}
+        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir), "tool": "flock-verify verify --archive"}
         statement[m["name"]] = {k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest", "public_sha512", "sigma")}
         statement[m["name"]]["timing"] = {k: (live or {}).get(k) for k in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")}
         statement[m["name"]]["timing"]["verify_s"] = ((record or {}).get("verdict") or {}).get("verify_s")

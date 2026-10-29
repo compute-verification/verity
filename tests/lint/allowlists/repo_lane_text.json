@@ -60,7 +60,6 @@
     {"file": "Security/Definitions/Core/Accel/Sm120.lean", "count": 5},
     {"file": "Security/Definitions/Core/Assumptions/Accel.lean", "count": 2},
     {"file": "Security/Definitions/Core/Device.lean", "count": 1},
-    {"file": "Security/Definitions/Core/Hash.lean", "count": 1},
     {"file": "Security/Definitions/Core/NaiveStrassen.lean", "count": 2},
     {"file": "Security/Definitions/Core/PrivatePartition.lean", "count": 1},
     {"file": "Security/Definitions/Flock/Accounting/Padded.lean", "count": 1},
