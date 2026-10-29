@@ -1164,26 +1164,43 @@ def _audited(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> tu
                    b["refused_hellos"], o["body"]["pinned"], name, p["cap"], p["circuit"]), o["body"]
 
 
-def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
+class Ledger(NamedTuple):
+    """The auditor's ledger as `ledger_of` reads it: its lines, the longest published head, and that head's tables,
+    `verify_ledger`'s (window root -> its reserve, open and end) and `verify_periods`' (period -> its lane, open, close,
+    windows, cap and circuit)."""
+    lines: list[str]
+    windows: dict[str, dict]
+    periods: dict[str, dict]
+
+
+def ledger_of(heads: Any, key: ChallengerKey, verify: Verify) -> Ledger:
     """The auditor's ledger as the auditor host's operator published it: every head of `heads` (each its lines; None
     when the verifier has none)
     checked under the pinned key `key` (`audited_session`'s check of a ledger), any two extending one another, and of them
-    the longest.  Raises `CoinError` naming why (and which head, when there are several), so a ledger forked, cut or
-    rewritten between two publications is refused whichever head a verifier is shown."""
+    the longest, with its tables from that one check.  Raises `CoinError` naming why (and which head, when there are
+    several), so a ledger forked, cut or rewritten between two publications is refused whichever head a verifier is
+    shown."""
     if heads is None or heads == []:
         raise CoinError(NO_AUDIT)
     if type(heads) is not list:
         raise CoinError(HEADS_FORM)
+    tables = []
     for i, head in enumerate(heads):
         try:
-            _checked(head, key, verify)
+            tables.append(_checked(head, key, verify))
         except CoinError as e:
             raise (e if len(heads) == 1 else CoinError(f"the auditor's published head {i} is refused: {e}")) from None
     for i, j in itertools.combinations(range(len(heads)), 2):
         if not (extends(heads[i], heads[j]) or extends(heads[j], heads[i])):
             raise CoinError(f"the auditor's published heads {i} and {j} don't extend one another: its ledger was forked "
                             "or rewritten")
-    return max(heads, key=len)
+    k = max(range(len(heads)), key=lambda i: len(heads[i]))
+    return Ledger(heads[k], *tables[k])
+
+
+def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
+    """`ledger_of`'s lines: the longest published head, every head checked and any two extending one another."""
+    return ledger_of(heads, key, verify).lines
 
 
 def log_digest(lines: Sequence[str]) -> str:
@@ -1576,14 +1593,14 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "COMMITMENT_FORM", "COMMITMENT_TAG", "ChallengerClose", "ChallengerKey", "ChallengerRecord", "CoinError",
            "DESCRIPTOR_FORM", "END_FORM", "HEADS_FORM", "HELLOS_FILE", "HELLOS_FORM", "KEY_FORM", "KEY_RECORD_FORM", "KEY_RECORD_SCHEMA",
            "LEDGER_FORM", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_SCHEMA_V1", "LEDGER_TAGS", "LOG_FILE", "LOG_FORM",
-           "LOG_MALFORMED", "LOG_TAG", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
+           "LOG_MALFORMED", "LOG_TAG", "Ledger", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
            "MAIN_FORM", "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
            "NO_MAIN", "NO_PINS", "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE",
            "RUN_KIND", "RunRecord",
            "RECORD_FORM", "RECORD_ROLE",
            "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "WITHHELD", "audited_session",
            "cap_of", "circuit_of", "circuit_reason", "close_message", "credited_session", "extends", "first_parent_reason", "key_of_record", "lane_of", "later", "layout_problem",
-           "leaf_of", "ledger_head", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
+           "leaf_of", "ledger_head", "ledger_line", "ledger_of", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",

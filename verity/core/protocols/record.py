@@ -36,14 +36,18 @@ _PREV = re.compile(r"[0-9a-f]{128}")
 _HEX = re.compile(r"(?:[0-9a-f]{2})*")
 
 
-def of_json(e: Any) -> dict:
-    """`e`, a parsed JSON value, when it is a record entry: its seven keys, each of its type; ValueError(`FORM`)
-    otherwise."""
-    if not (isinstance(e, dict) and sorted(e) == list(FIELDS) and isinstance(e["body"], dict)
+def is_entry(e: Any) -> bool:
+    """Whether `e`, a parsed JSON value, is a record entry: its seven keys, each of its type."""
+    return (isinstance(e, dict) and sorted(e) == list(FIELDS) and isinstance(e["body"], dict)
             and type(e["kind"]) is str and type(e["prev"]) is str and _PREV.fullmatch(e["prev"]) is not None
             and type(e["schema"]) is str and type(e["seq"]) is int and e["seq"] >= 0
             and (e["session"] is None or type(e["session"]) is str)
-            and type(e["sig"]) is str and _HEX.fullmatch(e["sig"]) is not None):
+            and type(e["sig"]) is str and _HEX.fullmatch(e["sig"]) is not None)
+
+
+def of_json(e: Any) -> dict:
+    """`e`, a parsed JSON value, when it is a record entry (`is_entry`); ValueError(`FORM`) otherwise."""
+    if not is_entry(e):
         raise ValueError(FORM)
     return e
 
@@ -73,4 +77,4 @@ def prev_of(line: str | bytes) -> str:
     return hashlib.sha512(line.encode() if isinstance(line, str) else line).hexdigest()
 
 
-__all__ = ["FIELDS", "FORM", "ZERO", "line", "message", "of_json", "prev_of", "unsigned"]
+__all__ = ["FIELDS", "FORM", "ZERO", "is_entry", "line", "message", "of_json", "prev_of", "unsigned"]

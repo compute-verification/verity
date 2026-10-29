@@ -24,6 +24,8 @@ from verity_vllm.engine import handle
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import serve_h1 as SH
+from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs import remote
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
@@ -300,8 +302,9 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
         given = record["commitment"]["session"]
         assert given["session"] == sid and "secret" not in given
         assert record["commitment"]["coins"] == record["commitment"]["round_coins"]
-        ledger = PHC.Ledger.load(auditor.heads(), KEY, pins=pins, main=main)
-        assert PHC.session_reason(record["commitment"], ledger, lambda s: tmp_path / s if s == sid else None) is None
+        ledger = Ch.ledger_of([remote.ledger_lines(h) for h in auditor.heads()], KEY, PHC.lms_verify)
+        assert PHC.session_reason(record["commitment"], ledger, lambda s: tmp_path / s if s == sid else None, key=KEY,
+                                  pins=PHC.pins_head(pins), main=main) is None
         assert run.details["challenger"] == {"closed": True}
     assert len(set(sids)) == 2 and ports == [7811, 7811]
     reserves = [shlex.split(a[-1]) for a in auditor.argv if shlex.split(a[-1])[0] == "reserve"]

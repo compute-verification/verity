@@ -58,6 +58,7 @@ from verity.core.deploy.stream import Side
 from verity.ml.circuits import requirement
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.crypto import lms
+from verity.core.protocols import record as core_record
 from verity.ml.randomness import derive
 
 from . import challenger_party
@@ -416,7 +417,6 @@ def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> m
 
 LEDGER_SCHEMAS = ("verity/challenger-auditor/v1", "verity/challenger-auditor/v2")
 """The schemas of the auditor's ledger entries (`sampled_proofs.challenger.LEDGER_TAGS`), whose copies `cite` cuts."""
-_ENTRY = ["body", "kind", "prev", "schema", "seq", "session", "sig"]
 _CLOSE = ["chain", "ended", "lines", "session", "signature"]
 
 
@@ -429,11 +429,12 @@ def _json(data: str | bytes) -> Any:
 
 
 def _entry(line: Any) -> dict | None:
-    """`line` as an entry of the auditor's ledger (`sampled_proofs.challenger.ledger_text`'s form), else None."""
+    """`line` as an entry of the auditor's ledger (`sampled_proofs.challenger.ledger_text`'s form): a record entry
+    (`record.is_entry`) under one of its schemas, else None."""
     if type(line) is not str or not line.startswith('{"body":'):
         return None
     e = _json(line)
-    return e if isinstance(e, dict) and sorted(e) == _ENTRY and e["schema"] in LEDGER_SCHEMAS else None
+    return e if core_record.is_entry(e) and e["schema"] in LEDGER_SCHEMAS else None
 
 
 def _ledger(lines: Sequence[Any]) -> list[dict] | None:
