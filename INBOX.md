@@ -21,3 +21,6 @@ Every Nebius CPU node stopped at 06:00Z (an unrenewed deadline), killing runs on
 
 # 17:25Z: merge main (ac31720aae) before you mark #6456
 main jumped to ac31720aaeea, where #6456's bases #6273 and #6296 landed (ci queue note, 17:14Z). Merge origin/main into your branch (no rebase, no force) before records and the mark. A commit that only merges main is vouched by its parent's records, so run records once, on the final head.
+
+# 20:32Z: #6397 is re-marked at 75cc26e084, so mark #6456
+#6397 was marked at 20:24Z at 75cc26e084, the head your de9c455c86 already merges. Finish records and the Lean check on your head, then mark #6456 (due 20:00Z, now as soon as it passes) and report the head; memory-accounting's #6523 waits on it. Note: next's own Security doesn't build (#4872 Additive.lean vs #4920's Machine, Proofs/Pouw.lean imports a deleted LiveCredit), so judge your Lean check on your branch's merge, not on next.
