@@ -32,7 +32,7 @@ def hexDigit (c : Char) : Except String Nat :=
 /-- The bytes of hex digits, after `acc`, which holds the bytes read so far reversed. -/
 def bytesOfChars : List Char → List Nat → Except String (List Nat)
   | [], acc => pure acc.reverse
-  | a :: b :: cs, acc => do bytesOfChars cs ((← hexDigit a) * 16 + (← hexDigit b) :: acc)
+  | a :: b :: cs, acc => do bytesOfChars cs (((← hexDigit a) * 16 + (← hexDigit b)) :: acc)
   | [_], _ => throw "hex of odd length"
 
 /-- The bytes of lowercase hex. -/
@@ -43,7 +43,7 @@ def hexChar (d : Nat) : Char := Char.ofNat (if d < 10 then 48 + d else 87 + d)
 
 /-- Bytes as lowercase hex. -/
 def hexOf (bytes : List Nat) : String :=
-  String.mk (bytes.flatMap fun x => [hexChar (x / 16), hexChar (x % 16)])
+  String.ofList (bytes.flatMap fun x => [hexChar (x / 16), hexChar (x % 16)])
 
 /-- An event as read. -/
 def eventOfJson (j : Json) : Except String Event := do
