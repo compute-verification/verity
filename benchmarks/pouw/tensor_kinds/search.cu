@@ -1,4 +1,4 @@
-// M1c of EPS1 TENSOR (note:20261017T0321Z-draft-eps1-tensor §5): a schedule search over the programs that set JI3n_0..2.
+// A schedule search over the programs that set JI3n_0..2.
 //
 // M1 timed one program (IMMA m8n8k16 beside IADD3, interleaved, R = 32) 6.91% apart in two builds, and VF3n-16 divides
 // the joint rows by 1.07 for it. Here one form (FORM) at one lane density (RR ops a MMA warp-instruction group of 8 MMAs,

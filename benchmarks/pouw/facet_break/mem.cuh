@@ -1,5 +1,6 @@
-// FACET-BREAK's memory programs: the loads a table route reads its table with (shared, global through L1, texture), alone,
-// two kinds in one loop, and beside a MMA form. `generate.py` instantiates them and writes each probe-table entry.
+// facet_break's memory programs: the loads a table route reads its table with (shared, global through L1, texture),
+// alone, two kinds in one loop, and beside a MMA form. `generate.py` instantiates them and writes each probe-table
+// entry.
 //
 //   FB_LD(name, D1, D2, R, P, Q, tpb)          every warp: Q loads an iteration; load q is D2 when q % R == R - 1
 //   FB_LDMMA(name, Form, D1, D2, R, P, Q, tpb) every warp: 8 MMAs and Q such loads an iteration, spread after the MMAs

@@ -1,5 +1,5 @@
 """uni.sh's run of probes/sm100_ldtm.cu into the issue price of tcgen05.ld.32x32b.x128 (LDTM.x128, 4096 words a warp
-instruction) on sm_100 (EPS1 DC r7, TMEM-EXTRACT).
+instruction) on sm_100.
 
     python3 ldtm.py analyze OUT... [--json F]   each stream's baseline issue, each density's slowdown a load, the price
     python3 ldtm.py tables GATE_JSON            rewrite sm100_ldtm.cu's table from probe.py gate's JSON
@@ -9,7 +9,7 @@ the run's SASS between the bounds the gate recorded. Each load adds its LDTM and
 the R2UR and LOP3 of the next load's address; probes/sm100_ldtm.cu): `all` charges the whole slowdown to the load,
 `ldtm` first charges every other added instruction a whole issue slot, the most one costs, so it is the least the load is
 left with. The price is the least `ldtm` over the priced points of a read stream (issue ≥ 0.95 without the loads), less 2%
-(decision 76, as uniform.py prices a uniform instruction); it passes at 0.98 of an issue slot.
+(as uniform.py prices a uniform instruction); it passes at 0.98 of an issue slot.
 
 A priced point has at least two loads and still issues ≥ 0.95 of its slots. The single-load point is dropped: at one load
 ptxas restructures the loop (an extra LDC and LOP3 appear, then vanish at two or more), so its added-opcode count against

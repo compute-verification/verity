@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""stage.cu's commitment constants and gate references, written before the lease (STAGE-COST, cmp-13).
+"""stage.cu's commitment constants and gate references, written before the lease.
 
 For each operand width k (bytes a row) and row count R, the hm96-sha512/row-seg/v1 rows of a frame-v3-sha512 tree exactly as
 served_zk's hm96_rows.cu commits them (rows_bench.Commit): the segment and outer prefixes, every leaf's and node's message

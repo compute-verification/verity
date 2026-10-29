@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The tables of note:20261016T1037Z-draft-stage-ovl from one or more runs of run.sh (STAGE-OVL, cmp-13).
+"""The stage-overlap tables from one or more runs of run.sh.
 
   python3 report.py RUN_OUT_DIR... [--json OUT.json]
 

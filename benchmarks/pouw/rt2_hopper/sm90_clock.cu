@@ -1,4 +1,4 @@
-// RT2-HOPPER (note:20261019T1140Z-draft-rt2-hopper) on the H200 (sm_90a), two probes in one binary.
+// Two probes on the H200 (sm_90a) in one binary.
 //
 // `exact`: li's fold (segment._li_absorb: y <- (y ^ d0 ^ LK[c][h]) * LA[c][h] + d1, 8 chains a lane, li_entries) over U
 // units of 128 words a lane, with the warp checkpoint (the XOR of the warp's 8·32 chain states, redux.sync.xor) in four
@@ -12,16 +12,16 @@
 //
 // `clock`: the SM clock under the honest mixed load, read inside the kernel: each block's clock64 and %globaltimer at
 // its start and end, so the clock is the block's cycles over its own nanoseconds (no launch or tail in it, unlike the
-// event clock, RT-H200-EMP-4), and each MMA's MACs over its cycles give the tensor's MACs a clock beside it. The loads
+// event clock), and each MMA's MACs over its cycles give the tensor's MACs a clock beside it. The loads
 // are sm90_wgmma.cu's own loops: wg_s8_n256_a1's wgmma alone, wgli_redux (wgmma with LI and the redux checkpoint),
 // wgli_fill (that and ffill's filler: the design's mixed load), and the LI loop with no wgmma.
 //
-// `roles`: sm90_wgmma.cu's wg_spec (the JP*90 rows' block-timed points) with each role's own time (RT-BLACKWELL-16's
+// `roles`: sm90_wgmma.cu's wg_spec (the JP*90 rows' block-timed points) with each role's own time (a
 // test on the H200): every warp records the cycle its fixed loop ends, and each MMA warp the iterations it had done when
 // the first lane warp ended (one LDS an iteration), so the joint phase's tensor and lane rates are both exact.
 //
 // `lirate`: the fold with the lane alone on every SM, each checkpoint placement in one loop, its cycles a unit a
-// warp-slot (whether a REDG costs one issue slot and nothing else, as RT2-HOPPER-1's REDG routes take it).
+// warp-slot (whether a REDG costs one issue slot and nothing else, as 's REDG routes take it).
 #define main sm90_wgmma_main
 #include "../dc/probes/sm90_wgmma.cu"
 #undef main

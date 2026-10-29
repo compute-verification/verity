@@ -1,4 +1,4 @@
-"""cpw_floor.py, cpw_sass_count.py and a2u_sat_count.py (RT2-120): the DS-120 bound's break line and CP-W's checkpoint
+"""cpw_floor.py, cpw_sass_count.py and a2u_sat_count.py: the DS-120 bound's break line and CP-W's checkpoint
 floors, and the two SASS counters on small listings in cuobjdump's form."""
 from __future__ import annotations
 

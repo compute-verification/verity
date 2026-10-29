@@ -6,7 +6,7 @@
 # commit.py and job.sh under window.sh's retention record (priority keep): only `research retention rm`, with the owner's
 # yes, deletes them.
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
-#     --env GPU_LEASE_WHO=<id> -- bash benchmarks/pouw/served_zk/serve.sh
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/served_zk/serve.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; ID=${RESEARCH_RUN_ID:?}; OUT=$D/out; mkdir -p "$OUT"
 WORK=/workspace/pouw/mvp-e2e
