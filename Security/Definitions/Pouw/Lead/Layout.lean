@@ -9,9 +9,9 @@ three coin lanes every step in 64-row tiles with 7-bit odd coins (`blc4a-t64-e7`
 row parity (`-rot`), served noisy with the coin lanes folded exactly, k32 steps, words chunks of 256 KiB (`l1w`) and
 hiding L1 + (a).
 
-* **The layout** (`Layout`) is the call's shape (`m` rows and `n` columns of committed words, `rows` of A, `S` k32
-  steps a word) and the design's constants: the coin tile's rows, the coin lanes' bits, the words chunk's size, the
-  egress cap, the served forward's MACs a token and the node's memory.
+* **The layout** (`Layout`) is the call's shape (`m` rows and `n` columns of committed words, `rows` of A and `cols`
+  outputs served, `S` k32 steps a word) and the design's constants: the coin tile's rows, the coin lanes' bits, the
+  words chunk's size, the egress cap, the served forward's MACs a token and the node's memory.
   `lead` commits every call over whole MMA tiles (`padRows`, `padCols`), decode (`m = 1`) included, and fixes the
   design's constants; `pt512x64`, `pt512x512` and `pt8192` are the three evaluated points.
 * **A call's bits** (`Layout.callBits`): the network certifier apportions a forward's egress cap, `cap` bits a token,
@@ -43,6 +43,8 @@ structure Layout where
   rows : ℕ
   /-- Columns the call's words commit: its columns padded to whole MMA tiles (`padCols`). -/
   n : ℕ
+  /-- The call's columns before padding: the outputs it serves. -/
+  cols : ℕ
   /-- Inner dimension of the call. -/
   K : ℕ
   /-- k32 steps a committed word: step 0 holds 21 data lanes (three lanes coins, four the tag, four `a₁`), each later
@@ -131,14 +133,15 @@ def Layout.callBits (L : Layout) : ℚ := (L.cap * (L.rows * L.n * L.K) : ℚ) /
 
 /-- **The lead** at `T` tokens and a call of `m × K × n`: its words committed over whole MMA tiles (`padRows m` rows
 and `padCols n` columns: a padding row has zero data and its coin lanes, tag and coins like any row, a padding
-column its coins), 64-row coin tiles, 7-bit coins, 256 KiB words chunks, an egress cap of 32 bits a token over
-Llama-3.2-1B's 973,078,528 MACs a token (16 layers of `2048 × 3072`, `2048 × 2048`, `2048 × 16384` and
-`8192 × 2048`), and 8 TiB of node memory (`2^34` tiles). -/
+column its coins; it serves `rows = m` rows and `cols = n` columns), 64-row coin tiles, 7-bit coins, 256 KiB words
+chunks, an egress cap of 32 bits a token over Llama-3.2-1B's 973,078,528 MACs a token (16 layers of `2048 × 3072`,
+`2048 × 2048`, `2048 × 16384` and `8192 × 2048`), and 8 TiB of node memory (`2^34` tiles). -/
 def lead (T m n K : ℕ) : Layout where
   T := T
   m := padRows m
   rows := m
   n := padCols n
+  cols := n
   K := K
   S := stepsFor K
   tile := 64

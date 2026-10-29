@@ -6,7 +6,11 @@ import Definitions.Pouw.Lead.Model
 Every quantity is in registers; the W1 work is 32 a register (`H32`'s floor).
 
 * **Stock** (`stockRegs`): the call's unmodified FP8 matmul over whole MMA tiles, `m · n · K / 32` k32 `wgmma`
-  registers with `m` and `n` padded. Every share is of stock, and the honest work and the gap are the padded call's.
+  registers with `m` and `n` padded. The honest work and the gap are the padded call's.
+* **Served compute** (`servedRegs`): the call's unpadded MACs, `rows · cols · K / 32`, what credit counts. Padding
+  rows and columns are committed and hashed, so they are in the honest work, but they are never served compute. At
+  decode one row is served and 16 are committed, so the gap is reported as a share of served compute (`gapServed`),
+  and its share of stock (`gapShare`) is secondary.
 * **The honest work** (`honestRegs`): the committed words, one register each (`m · n · S`), and the SHA-512
   compressions of the commitment at ShaWrites' registers per form: `3,515.38` a words compression and `3,449.05` an A
   compression (`shaWordsRegs`, `shaARegs`).
@@ -20,7 +24,8 @@ Every quantity is in registers; the W1 work is 32 a register (`H32`'s floor).
     a coin bit, every step carrying the three coin lanes, at the call's honest W1 work a MAC (`wMac`);
   - `tableGap`: pre-coin tables and the coin stream holding a committed tile, within the node's memory, from each
     step's coin lanes alone.
-* `gapShare` is the gap over stock, which `Pouw.Guarantees.Lead.GapAt` evaluates at the three points.
+* `gapShare` is the gap over stock, which `Pouw.Guarantees.Lead.GapAt` evaluates at the three points; `gapServed` is
+  the gap over served compute, which `GapAtDecode` states at decode.
 -/
 
 namespace Pouw.Lead
@@ -86,6 +91,14 @@ def gapRegs (L : Layout) (C : Commit L) : ℚ :=
 
 /-- The gap as a share of stock. -/
 def gapShare (L : Layout) (C : Commit L) : ℚ := gapRegs L C / stockRegs L
+
+/-- **Served compute**: the call's unpadded MACs in k32 `wgmma` registers, `rows · cols · K / 32`. Credit is served
+compute. Stock and the honest work count the padding rows and columns, which are committed and hashed but serve
+nothing. -/
+def servedRegs (L : Layout) : ℚ := (L.rows * L.cols * L.K : ℚ) / 32
+
+/-- The gap as a share of served compute. -/
+def gapServed (L : Layout) (C : Commit L) : ℚ := gapRegs L C / servedRegs L
 
 /-- The words chunks of a call: `⌈m n S / chunkWords⌉`, at most `chunkWords` words a leaf. -/
 def wordChunks (L : Layout) : ℕ := (L.m * L.n * L.S + L.chunkWords - 1) / L.chunkWords

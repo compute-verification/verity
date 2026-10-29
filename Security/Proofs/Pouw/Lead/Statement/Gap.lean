@@ -5,8 +5,9 @@ import Definitions.Pouw.Guarantees.Lead
 
 `gapAt` and `gapAt320` evaluate `Pouw.Lead.gapShare` at T 512 × 64, T 512 × 512 and T 8,192 for every call of
 `n, K ≥ 4,096`, at caps 32 and 320; the worst call is at `K = 4,110`, the first `K` past 4,096 that adds a step.
-`gapAtDecode` evaluates it at decode at both caps. `nontrivial` is the guarantee's nontrivial lemma. The network term
-is `Network.networkGap_le` and `Network.networkGap_le320`.
+`gapAtDecode` evaluates the gap at decode at both caps, as a share of served compute (`gapServed`) and then of stock.
+`nontrivial` is the guarantee's nontrivial lemma. The network term is `Network.networkGap_le` and
+`Network.networkGap_le320`.
 
 The proof writes a call of the lead in its variables (`leadVars`): `16 q` rows, `8 p` columns with `p ≥ 512`, `K`
 with `28 S ≤ K + 34` (`stepsFor`), and `65,536` chunks at most `16 q · 8 p · S + 65,535` (`wordChunks`). The gap is
@@ -98,18 +99,25 @@ theorem share_le {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (n q R c : ℕ)
   rw [gapShare, div_le_iff₀ hpos, hg, hst]
   exact h p L.K S ch hp (by exact_mod_cast hK) hS' hch
 
-/-- **An unpadded bound at a point**: the gap is at most `X` times the unpadded call's one-row stock `n K / 32`
-wherever `gapExpr` is, over the variables' range with `8 p ≤ n + 7`. -/
-theorem regs_le {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (n q R c : ℕ) (X : ℚ) (hm : L.m = 16 * q)
-    (hn : L.n = 8 * ((n + 7) / 8)) (hr : L.rows = R) (hc : L.cap = c) (hS : L.S = stepsFor L.K)
-    (hF : L.fwdMacs = 973078528) (hmem : L.mem = 2 ^ 34) (hcw : L.chunkWords = 65536) (hq : 0 < q)
-    (hn4 : 4096 ≤ n) (hK : 4096 ≤ L.K) (hC : ChunksOf L C)
+/-- **A served bound at a point**: the gap's share of served compute `R n K / 32` is at most `X` wherever `gapExpr`
+is at most `X` times it, over the variables' range with `8 p ≤ n + 7`. -/
+theorem served_le {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (n q R c : ℕ) (X : ℚ) (hm : L.m = 16 * q)
+    (hn : L.n = 8 * ((n + 7) / 8)) (hr : L.rows = R) (hcols : L.cols = n) (hc : L.cap = c)
+    (hS : L.S = stepsFor L.K) (hF : L.fwdMacs = 973078528) (hmem : L.mem = 2 ^ 34) (hcw : L.chunkWords = 65536)
+    (hq : 0 < q) (hR : 0 < R) (hn4 : 4096 ≤ n) (hK : 4096 ≤ L.K) (hC : ChunksOf L C)
     (h : ∀ p K S ch u : ℚ, 512 ≤ p → 4096 ≤ K → 28 * S ≤ K + 34 → 65536 * ch ≤ 16 * q * (8 * p) * S + 65535 →
-      8 * p ≤ u + 7 → gapExpr q p R c K S ch ≤ X * (u * K / 32)) :
-    gapRegs L C ≤ X * ((n * L.K : ℚ) / 32) := by
+      8 * p ≤ u + 7 → gapExpr q p R c K S ch ≤ X * (R * u * K / 32)) :
+    gapServed L C ≤ X := by
   obtain ⟨p, S, ch, hp, hpn, hS', hch, hg, -, -⟩ :=
     leadVars C n q R c hm hn hr hc hS hF hmem hcw hq hn4 hK hC
-  rw [hg]
+  have hsv : servedRegs L = R * n * L.K / 32 := by simp only [servedRegs, hr, hcols]
+  have hpos : 0 < servedRegs L := by
+    rw [hsv]
+    have : (0 : ℚ) < R := by exact_mod_cast hR
+    have : (0 : ℚ) < n := by exact_mod_cast (by omega : 0 < n)
+    have : (0 : ℚ) < L.K := by exact_mod_cast (by omega : 0 < L.K)
+    positivity
+  rw [gapServed, div_le_iff₀ hpos, hg, hsv]
   exact h p L.K S ch n hp (by exact_mod_cast hK) hS' hch hpn
 
 /-- The bound at one point, over `p ≥ 512` and `K ≥ 4,096`: `products`, then `linarith`. -/
@@ -120,7 +128,7 @@ local macro "point_bound" : term =>
       simp only [gapExpr]
       linarith)
 
-/-- The unpadded bound at one point: `point_bound` with `(8 p − 7) K ≤ n K`. -/
+/-- The served bound at one point: `point_bound` with `(8 p − 7) K ≤ n K`. -/
 local macro "unpadded_bound" : term =>
   `(fun p K S ch u hp hK hS hch hu => by
       obtain ⟨h₁, h₂, h₃, h₄⟩ := products hp hK hS
@@ -142,13 +150,15 @@ theorem gapAt320 : GapAt320 := fun n K hn hK =>
     fun C hC => share_le C n 32 512 320 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC point_bound,
     fun C hC => share_le C n 512 8192 320 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC point_bound⟩
 
-/-- The gap at decode, padded to 16 rows, at caps 32 and 320: its share of the padded and the unpadded
+/-- The gap at decode, padded to 16 rows, at caps 32 and 320: its share of served compute, then of the padded
 stock. -/
 theorem gapAtDecode : GapAtDecode := fun T n K hn hK =>
-  ⟨fun C hC => ⟨share_le C n 1 1 32 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC point_bound,
-      regs_le C n 1 1 32 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC unpadded_bound⟩,
-    fun C hC => ⟨share_le C n 1 1 320 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC point_bound,
-      regs_le C n 1 1 320 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC unpadded_bound⟩⟩
+  ⟨fun C hC => ⟨served_le C n 1 1 32 _ rfl rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) (by norm_num) hn hK hC
+        unpadded_bound,
+      share_le C n 1 1 32 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC point_bound⟩,
+    fun C hC => ⟨served_le C n 1 1 320 _ rfl rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) (by norm_num) hn hK hC
+        unpadded_bound,
+      share_le C n 1 1 320 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC point_bound⟩⟩
 
 /-- The gap is below the honest work where its share of stock is at most 1%: the honest work is at least the words,
 `m n S ≥ m n K / 28`, more than the stock `m n K / 32`. -/

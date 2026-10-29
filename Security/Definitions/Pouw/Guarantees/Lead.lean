@@ -14,9 +14,11 @@ The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). 
   terms sum to at most its cap's. Acceptance is what the verifier sees, the honest root registered within the call's
   bits, so `G` is conditional on the registered root being the honest one.
 * `GapAt`: the gap's share of stock at T 512 × 64, T 512 × 512 and T 8,192, for every call of `n, K ≥ 4,096`, at cap
-  32: at most 0.190%, 0.168% and 0.165%. `GapAt320`: at cap 320, at most 0.513%, 0.491% and 0.488%.
-* `GapAtDecode`: at decode (`m = 1`, committed as 16 rows), at most 0.231% of the padded stock and 3.71% of the
-  unpadded at cap 32, and 0.252% and 4.03% at cap 320.
+  32: at most 0.190%, 0.168% and 0.165%. `GapAt320`: at cap 320, at most 0.513%, 0.491% and 0.488%. At these points
+  every row is served, and stock and served compute differ only by the padding of `n` to a multiple of 8.
+* `GapAtDecode`: at decode (`m = 1`, committed as 16 rows), the gap is at most 3.71% of served compute (the unpadded
+  MACs, `servedRegs`) at cap 32 and 4.03% at cap 320. Served compute is what credit counts, so this is decode's
+  figure; the share of the padded stock, 0.231% and 0.252%, counts 15 padding rows as compute and is secondary.
 * `Honest`: the hypotheses hold at the honest deployed instance: the nominal W1 table, and a set of strategies meeting
   every premise whose honest strategy is accepted at every coin value.
 * `Nontrivial`: the conclusion fails for a verifier that accepts everything: at the three points the honest work
@@ -68,14 +70,14 @@ def GapAt320 : Prop :=
     (∀ C : Pouw.Lead.Commit (lead320 8192 8192 n K), ChunksOf _ C → gapShare _ C ≤ 488 / 100000)
 
 /-- **Decode** (`m = 1`), which `G` covers padded to 16 rows: for every call of `n, K ≥ 4,096`, the gap is at most
-0.231% of the padded call's stock and at most 3.71% of the unpadded call's (`n · K / 32`) at cap 32, and at most 0.252%
-and 4.03% at cap 320. -/
+3.71% of served compute (the call's unpadded MACs, `servedRegs`) at cap 32 and 4.03% at cap 320. Secondary: at most
+0.231% and 0.252% of the padded call's stock, which counts the 15 padding rows as compute. -/
 def GapAtDecode : Prop :=
   ∀ T n K : ℕ, 4096 ≤ n → 4096 ≤ K →
     (∀ C : Pouw.Lead.Commit (lead T 1 n K), ChunksOf _ C →
-      gapShare _ C ≤ 231 / 100000 ∧ gapRegs _ C ≤ 371 / 10000 * ((n * K : ℚ) / 32)) ∧
+      gapServed _ C ≤ 371 / 10000 ∧ gapShare _ C ≤ 231 / 100000) ∧
     (∀ C : Pouw.Lead.Commit (lead320 T 1 n K), ChunksOf _ C →
-      gapShare _ C ≤ 252 / 100000 ∧ gapRegs _ C ≤ 403 / 10000 * ((n * K : ℚ) / 32))
+      gapServed _ C ≤ 403 / 10000 ∧ gapShare _ C ≤ 252 / 100000)
 
 /-- **The honest lemma**: at every call of the lead, the hypotheses hold at the honest deployed instance: the nominal
 W1 table meets `H32`, and some set of strategies meets every premise of `G` (with the coin stream and commitment the
