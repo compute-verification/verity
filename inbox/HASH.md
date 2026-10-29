@@ -184,3 +184,20 @@ Queue:
 - Six shortcuts every fold must avoid: linear folds, additive fusion, long sums of products, packed narrow words, rotation-free programs, and step-invariant terms.
 
 LIT becomes SI-RED, a general attack harness. BRW goes first. COUNTER keeps R80X and RDX.
+
+**22:05Z, NOISE and TENSOR:**
+- **The thin fold falls** (NOISE, note 20261029T2159Z-report-hash-noise, checked). `mma_pairsum` computes an IADD3 pair step at zero data with one IMMA from σ + 2w, writing neither word. It wins by 25–33% of stock on all 15 layouts. ASSUME's check had no IMMA.
+- **The multiply–xor fold:** nothing beats honest from a live N₀ (checked); from N₀ = 0, `edge_any` wins by 1.1–2.5%. N₀ must be live.
+- **The pure XOR fold** over full-width salted words survives every prover in the grid: h 2.31–3.50 (estimate), rank 5.
+- **Sketches:** on mirror-π with four coin lanes, the quadratic sketch and one-entry NH lose nothing under every feature model. On row-plus-column words, `decomp_sq` wins by 50%.
+- **Wire:** per-entry coins cost 35 MB a token, and bilinear coins fail T3.
+- **Decode-stream discrepancy (it matters for the lead's T3):** NOISE's formula gives the lead 92 MB a token at decode, against EGRESS's 11.7–13.2 MB. NOISE reconciles it now.
+- **The tensor-core fold** (TENSOR, note 20261029T2155Z-report-hash-fold-tensor, checked on CPU):
+  - h ≈ 1.51, an 84.5× cut, with T2 2.2–3.2× (estimate).
+  - It holds under credit = stock only at rank 5 (TensorMaterial). Crediting the fold's own cost is false: a row-sharing prover gets T1 = 102%.
+  - **The lever:** a wide rank-2 term from live coins in each word's starting value raises the write-count floor from 0.77× to 1.94× stock. Credit = stock could then rest on a count, provable as HashFloor was, not on a premise.
+- **Ruling on TENSOR's ask:** the frozen lead's word form doesn't change (freeze 1). A HASH design may define its own word form, as a v3 candidate, with T3, the network term and honest's cost priced.
+- Queue:
+  - TENSOR makes the lever's count rigorous, in Lean if it can.
+  - COUNTER's falsification target is any prover below 0.867 registers a word.
+  - NOISE prices the lever's wire cost.
