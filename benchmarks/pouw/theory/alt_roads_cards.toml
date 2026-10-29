@@ -38,10 +38,10 @@ origin = "N-ALT"
 note = "compute-research/20261029T0757Z-report-np-alt"
 modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "cert", final = "none", forming = "none", derivation = "none" }
 premises = ["certifier-coins"]
-source = "alt_roads.py r1b_salt_and_arrival on cursor/compute-research-np-alt-7c3e, on N-PREM's ssn-1l-tag: with the coin branch priced (N-RED A1), plain ssn-1l fails T1 under any hiding, and the row tags close the branch, so every T1 term is the certifier's or the tags' to close"
-claims.t512 = { t1 = 0.0, tol = 0.000002, kind = "checked", source = "hiding closed by certifier-salt, hashing before the noise by certifier-coins, the coin branch by ssn-1l-tag's row tags; no other T1 term of ssn-1l is nonzero at k32" }
-claims.t512r512 = { t1 = 0.0, tol = 0.000002, kind = "checked", source = "as at t512: the closed terms don't depend on m" }
-claims.t8192 = { t1 = 0.0, tol = 0.000002, kind = "checked", source = "as at t512" }
+source = "alt_roads.py r1b_salt_and_arrival on cursor/compute-research-np-alt-7c3e, on N-PREM's ssn-1l-tag: with the coin branch priced (N-RED A1), plain ssn-1l fails T1 under any hiding, and the row tags close the branch, so every T1 term but the noise derivation is the certifier's or the tags' to close"
+claims.t512 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "hiding closed by certifier-salt, hashing before the noise by certifier-coins, the coin branch by ssn-1l-tag's row tags; what is left is SW-NOISE's noise-derivation share (alt_roads_inputs.json ssn_1l), which only derivation = min closes, under one-instruction-minimal, a premise this card doesn't take" }
+claims.t512r512 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as at t512: ssn_1l's noise is 4S entries a row, so its share doesn't depend on m" }
+claims.t8192 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as at t512" }
 
 [card.np-alt-r1b-r16k]
 title = "R1b at 16 KiB rows: with hiding off the prover, rows no longer trade hiding against A's chain"
@@ -50,5 +50,5 @@ note = "compute-research/20261029T0757Z-report-np-alt"
 modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r16k", hiding = "cert", final = "none", forming = "none", derivation = "none" }
 premises = ["certifier-coins"]
 source = "alt_roads.py r1b_salt_and_arrival; the certifier's salt-side work at 16 KiB rows is 16x 256 KiB's (alt_roads' table)"
-claims.t512 = { t1 = 0.0, tol = 0.000002, kind = "checked", source = "as card np-alt-r1b: rows change hashing time, not T1, once hiding is closed" }
-claims.t8192 = { t1 = 0.0, tol = 0.000002, kind = "checked", source = "as card np-alt-r1b" }
+claims.t512 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as card np-alt-r1b: rows change hashing time, not T1, once hiding is closed" }
+claims.t8192 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as card np-alt-r1b" }
