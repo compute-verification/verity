@@ -24,7 +24,7 @@
    "imports": [
     "CoreProtocol.Protocol",
     "CoreProtocol.Profile",
-    "Flock.WindowRecord",
+    "Flock.Hash",
     "PouwCheck.Json",
     "PouwCheck.Tile",
     "PouwWindow.Length"
