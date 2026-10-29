@@ -10,7 +10,7 @@ import Proofs.Pouw.Lead.PStar.Tile
 At a step `t ≥ 1`, `Pouw.Lead.word` adds the step's `coinTerm` to what the data and the earlier steps fixed. On a
 16 × 8 MMA tile inside the call, that term reads only the tile's part of the step's coins (`TilePart`): its 16 rows'
 bits and, in its coin tile, its 8 columns' three lanes, `2^16 · 2^168 = 2^184` values. Overwriting the part
-(`tileSet`) moves the tile's words by the term alone (`tileWords_set`). Under the encoding `s = 2u − 127` the term is
+(`tileSet`) moves the tile's words by the term alone (`stepTile_set`). Under the encoding `s = 2u − 127` the term is
 `Tile`'s step (`tileTerm_eq`), which is injective, so by `part_fiber_le`:
 
 * **`p*` over the call** (`call_tile_pstar`): whatever the data, a value fixed before the coins is the tile's words at
@@ -113,17 +113,17 @@ theorem coinTerm_set_ne (htile : L.tile = 64) (hrb : 16 * rb + 16 ≤ L.m) (t : 
   simp [coinTerm, Coins.s, Coins.G, tileSet, hτ]
 
 /-- The tile's words at step `t`. -/
-def tileWords (hrb : 16 * rb + 16 ≤ L.m) (hcb : 8 * cb + 8 ≤ L.n) (t : Fin L.S)
+def stepTile (hrb : 16 * rb + 16 ≤ L.m) (hcb : 8 * cb + 8 ≤ L.n) (t : Fin L.S)
     (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) : Fin 16 → Fin 8 → ℤ :=
   fun r q => word L κ ω (tileRow L hrb r) t (tileCol L hcb q)
 
 /-- **The overwrite moves the tile's words by the term alone.** -/
-theorem tileWords_set (htile : L.tile = 64) (hrb : 16 * rb + 16 ≤ L.m) (hcb : 8 * cb + 8 ≤ L.n) (t : Fin L.S)
+theorem stepTile_set (htile : L.tile = 64) (hrb : 16 * rb + 16 ≤ L.m) (hcb : 8 * cb + 8 ≤ L.n) (t : Fin L.S)
     (ht : (t : ℕ) ≠ 0) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) (d : TilePart L) :
-    tileWords hrb hcb t κ (tileSet cb htile hrb t ω d) =
-      tileWords hrb hcb t κ ω - tileTerm L rb (tileGet htile hrb hcb t ω) + tileTerm L rb d := by
+    stepTile hrb hcb t κ (tileSet cb htile hrb t ω d) =
+      stepTile hrb hcb t κ ω - tileTerm L rb (tileGet htile hrb hcb t ω) + tileTerm L rb d := by
   funext r q
-  simp only [tileWords, word, Pi.add_apply, Pi.sub_apply]
+  simp only [stepTile, word, Pi.add_apply, Pi.sub_apply]
   rw [← sum_erase_add _ _ (mem_univ t), ← sum_erase_add _ _ (mem_univ t)]
   rw [sum_congr rfl fun τ hτ => by rw [coinTerm_set_ne htile hrb t ω d (ne_of_mem_erase hτ)]]
   rw [ite_eq_left le_rfl, ite_eq_left le_rfl, coinTerm_tile htile hrb hcb t ht, coinTerm_tile htile hrb hcb t ht,
@@ -185,11 +185,11 @@ theorem tileTerm_injective (he : L.e = 7) : Function.Injective (tileTerm L rb) :
 the coins, the tile's words at step `t` are `y` on at most a `2^−184` share of the call's coin values. -/
 theorem call_tile_pstar (he : L.e = 7) (htile : L.tile = 64) (hrb : 16 * rb + 16 ≤ L.m) (hcb : 8 * cb + 8 ≤ L.n)
     (t : Fin L.S) (ht : (t : ℕ) ≠ 0) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (y : Fin 16 → Fin 8 → ℤ) :
-    2 ^ 184 * (univ.filter fun ω : Coins L => tileWords hrb hcb t κ ω = y).card ≤ Fintype.card (Coins L) := by
+    2 ^ 184 * (univ.filter fun ω : Coins L => stepTile hrb hcb t κ ω = y).card ≤ Fintype.card (Coins L) := by
   classical
   have h := part_fiber_le (tileGet htile hrb hcb t) (tileSet cb htile hrb t) (tileGet_set htile hrb hcb t)
-    (tileSet_set htile hrb t) (tileSet_get htile hrb hcb t) (tileWords hrb hcb t κ) (tileTerm L rb)
-    (tileWords_set htile hrb hcb t ht κ) (P := 1)
+    (tileSet_set htile hrb t) (tileSet_get htile hrb hcb t) (stepTile hrb hcb t κ) (tileTerm L rb)
+    (stepTile_set htile hrb hcb t ht κ) (P := 1)
     (fun v => card_le_one.mpr fun d hd d' hd' =>
       tileTerm_injective he ((mem_filter.mp hd).2.trans (mem_filter.mp hd').2.symm)) y
   rwa [card_tilePart he, one_mul] at h
