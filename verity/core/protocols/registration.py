@@ -287,7 +287,7 @@ def item_of(j: Any) -> dict[str, Any]:
 
 def ascii(j: Any, what: str) -> None:
     """Registration is ASCII-only without DEL: `j`'s JSON, unescaped, holds no character from 0x7f up, so its digest
-    is the same however a canonical JSON escapes the rest. Checked before `canonical`, which raises on such a string."""
+    is the same however a canonical JSON escapes the rest. Checked before any digest is taken."""
     if any(ord(c) >= 0x7F for c in json.dumps(j, ensure_ascii=False)):
         raise Malformed(f"ascii: {what} holds a character outside ASCII")
 
