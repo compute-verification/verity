@@ -811,7 +811,9 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
         init = (specs, opts, everything, as_call, tracing)
         budget = budget_gb(mem_gb)
         peaks = heavy()
-        order = sorted(todo, key=lambda i: (-peaks.get(tasks[i][1], 0), -_gates(tasks[i])))
+        # a by-calls root has no gates, but its check builds the sidecar targets its callees rely on (`by_calls.relied`), which
+        # no process it is forked from holds when their bindings were built apart: it starts with the largest
+        order = sorted(todo, key=lambda i: (-peaks.get(tasks[i][1], 0), tasks[i][1] not in TG.BY_CALLS, -_gates(tasks[i])))
         if log:
             for i in order:
                 if peaks.get(tasks[i][1], 0) > budget:
