@@ -221,6 +221,10 @@ the perplexity, mean NLL and per-window NLLs, the gates, divergence from the ref
 token's NLL), `table.md`, the shard logs and `gpu.txt`. The run publishes itself as an Attempt; cite it by run id, and
 put findings about it on labels (`research data label`).
 
+`attn_shares.py` reads the bf16 reference's attention rows instead of an arm's NLLs: per row, the shares of keys whose
+online-softmax exponent falls below each cut and whose u8 P rounds to zero (its docstring). `cpu_job.sh` runs it on a
+CPU node with `PPL_SCRIPT=attn_shares.py`.
+
 ## Baseline
 
 The adopted design (dither, w64 peel, psink, kc, SmoothQuant α 0.5, weights ±63), its halves, the design without

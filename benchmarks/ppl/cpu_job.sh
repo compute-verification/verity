@@ -23,8 +23,10 @@ m = models.get(sys.argv[1]); print(snapshot_download(m["repo"], revision=m["revi
   { echo "pull failed" | tee "$O/status.txt"; tail -20 "$O/pull.log"; exit 3; }
 { nproc; lscpu | grep -E "^Model name|^CPU\(s\)"; "$PY" -c "import torch; print('torch', torch.__version__, torch.get_num_threads())"; } \
   > "$O/cpus.txt" 2>&1
+# PPL_SCRIPT: another script taking --device, --out and --data (default `run.py eval`), e.g. attn_shares.py
 # shellcheck disable=SC2086
-"$PY" benchmarks/ppl/run.py eval --device cpu --out "$O" --data "$RESEARCH_RUN_DIR/inputs" $PPL_ARGS > "$O/stdout.txt" 2> "$O/stderr.txt"
+"$PY" benchmarks/ppl/${PPL_SCRIPT:-run.py eval} --device cpu --out "$O" --data "$RESEARCH_RUN_DIR/inputs" $PPL_ARGS \
+  > "$O/stdout.txt" 2> "$O/stderr.txt"
 rc=$?
 echo "eval $rc" | tee "$O/status.txt"
 tail -5 "$O/stderr.txt"
