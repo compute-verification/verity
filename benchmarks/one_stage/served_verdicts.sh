@@ -18,8 +18,7 @@
 #     with ignore_eos and max_tokens WINDOW_STEPS, all prefilled at the window's first step and run through its last. The
 #     lease ends once every closed window is sealed. Each request's
 #     send, first-token and done times (the load's timings file, `serve_load.py`'s docstring) go to $OUT/timings/; each
-#     committed step's end is the serve dir's step_trace.jsonl's t_end, on the clock of the timings' start_unix. The serve
-#     dir's requests.jsonl, step traces and load.jsonl hold request values and stay on the node (`serve_commit.MIRRORED`).
+#     committed step's end is $OUT/serve/step_trace.jsonl's t_end, on the clock of the timings' start_unix.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
@@ -352,7 +351,7 @@ print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} ({len(seals)} sealed win
 sys.exit(0 if ok else 1)
 EOF
 [ "${PIPESTATUS[0]}" = 0 ] || stop seal 11
-for f in serve.json windows.jsonl seals.jsonl; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
+for f in serve.json windows.jsonl seals.jsonl requests.jsonl load.jsonl; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
 [ -d "$D/h1" ] && (cd "$D" && find h1 -name pouw-h1-calls.json -exec cp --parents {} "$OUT/serve/" \;)
 
 # 3. sampled proofs: the window, its advice and Programs, V3b's window circuit, then C-Flock --zk and the Lean verifier
