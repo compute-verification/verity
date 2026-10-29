@@ -172,7 +172,8 @@ with no effect on them; its `sync`, `land` and `drive` still run only on drive (
 
 Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/verity), and fetches with forced refspecs: a
 local copy of a branch that wasn't force-fetched once put a train on a stale base.  `state.json` beside the clone keeps ejections and
-the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`).  The clone authenticates as
+the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`), and one that only reads
+(`status`, `review` without N) holds it only while it clones and fetches, not while it reads labels.  The clone authenticates as
 the caller's checkout does (`credential_args`): a cloud VM sets its credential helper in the checkout's own config, which a clone
 elsewhere never reads.  Git never prompts, so a remote the queue can't read fails the command instead of answering from what the
 clone fetched last.
@@ -702,6 +703,11 @@ def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
     return any(p == "." or f.startswith(p + "/") for f in lean for p in pkgs)
 
 
+#: the listings and GETs `StoreLabels.prefetch` makes at once: a fresh VM's store lacks every label of `next`'s ~500 members
+#: (about 1,000 files), which one GET at a time took four minutes to pull
+PREFETCH_JOBS = 32
+
+
 class StoreLabels:
     """Ready marks from the evidence store: `ready` labels on `pr:{n}@{head}`, pulled from the remote first.  Without that pull it
     raises: a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled."""
@@ -722,7 +728,7 @@ class StoreLabels:
         if not targets or getattr(self.store, "remote", None) is None:
             return
         try:
-            labels_sync.pull_targets(self.store, targets, jobs=labels_sync.SYNC_JOBS)
+            labels_sync.pull_targets(self.store, targets, jobs=PREFETCH_JOBS)
         except Exception:  # noqa: BLE001
             return
         self._fresh.update(targets)
@@ -874,6 +880,9 @@ class Queue:
         self.lift: list[int] = []
         self._lifted: list[int] = []
         self.now: Callable[[], float] = time.time
+        #: releases the workdir's lock (`_lock`): a command that only reads calls it once its clone and fetches are done, so a
+        #: listing that reads hundreds of members' labels doesn't refuse a verdict meanwhile
+        self.unlock: Callable[[], None] = lambda: None
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
         #: whether git takes `--attr-source` (`_merge`), until it refuses it once
@@ -1501,6 +1510,7 @@ class Queue:
         state = self.load_state()
         open_prs = self.github.open_prs()
         prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
+        self.unlock()
         entries = self.entries(prs, state)
         entries.update(waiting)
         entries.update(self.off_main(open_prs))
@@ -2874,18 +2884,21 @@ RECORD_KEPT = "record/" + LEAN_LOCK
 REQUIRER_AUDIT = re.compile(r"(?:^|/)requirer-([^/]+)/audit\.json$")
 #: how many commits below a head `RecordsGate` follows one that only merged `main`, or only committed a record a run regenerated
 RECORDS_WALK = 8
-#: the attempts `RecordsGate` lists from the store's remote: those started after the oldest commit it may read, less the skew of a
-#: machine's clock, and never more than the lookback before now (an older run the catalog here lacks isn't seen)
-RECORDS_SKEW_S, RECORDS_LOOKBACK_S = 3600, 3 * 86400
+#: the attempts `RecordsGate` reads from the store's remote: those started in the lookback before now, whatever the head's history
+#: (a window counted from its commits dropped same-input runs of earlier the same night on a branch with many merges)
+RECORDS_LOOKBACK_S = 3 * 86400
+#: an attempt that may hold a pass of a package (`RecordsGate._commits`): a Lean check (`check.py`), or a records run of the
+#: package it names (`lean_changed.py --records NAME`, NAME a package's path or a part of it, as `lean_changed.py` resolves it)
+RECORDS_CHECK_RE, RECORDS_RUN_RE = re.compile(r"(?:^|[/\s])check\.py\b"), re.compile(r"lean_changed\.py\b.*?\s--records[=\s]+(\S+)")
 #: the repository's paths besides the packages' own that decide a records run's verdict: the toolchain they may share, and the
 #: checker `RECORDS_COMMAND` runs (`lean_changed.py`, with the `lean_audit.py`, `check.py`, `merge.py` and `sandbox.sh` it loads,
 #: and the `common.py` the audit's key counts among its files; `lean_slot.py` only takes a slot)
 RECORDS_SHARED = ("lean-toolchain", "tools/verity/lean", "tools/verity/check/common.py")
-#: the most commits with runs in the window, the newest first, that `RecordsGate` reads in its search for a run on the same inputs
-#: (a safety bound): those this clone lacks are fetched by sha, `RECORDS_FETCH_CHUNK` a `git fetch`, a chunk that fails split in
-#: halves until the commits the remote won't serve stand alone, in `RECORDS_FETCH_CALLS` fetches at most; one that can't be read
-#: vouches for nothing
-RECORDS_FETCH, RECORDS_FETCH_CHUNK, RECORDS_FETCH_CALLS = 1000, 200, 48
+#: the most commits with runs in the window that may vouch for a package, the newest first, that `RecordsGate` reads in its search for a run on the same inputs
+#: (a safety bound, above the ~2,500 that 3 days held for `Security/Proofs`, whose inputs span most packages): those this clone
+#: lacks are fetched by sha, `RECORDS_FETCH_CHUNK` a `git fetch`, a chunk that fails split in halves until the commits the remote
+#: won't serve stand alone, in `RECORDS_FETCH_CALLS` fetches at most; one that can't be read vouches for nothing
+RECORDS_FETCH, RECORDS_FETCH_CHUNK, RECORDS_FETCH_CALLS = 5000, 200, 48
 #: the files of a package that a records run doesn't read, and so leaves out of its inputs (`RecordsGate._differs`): those in a
 #: `tests/` or `test/` directory of it, Markdown and READMEs; everything else stays, as a build may read any file
 RECORDS_UNREAD_DIRS = frozenset({"tests", "test"})
@@ -2952,12 +2965,13 @@ class RecordsGate:
     `test/` directory, Markdown, READMEs: `RECORDS_UNREAD_DIRS`), the same blob there as at the head; and `RECORDS_SHARED` (the
     root `lean-toolchain` and the checker: `tools/verity/lean/` and `tools/verity/check/common.py`) the same whole, so a pass
     under another checker vouches for nothing.  A PR that carries another PR's Lean change needs no run of its own for the
-    packages that change passed in.  The candidates are the commits of the attempts in the window read, the newest first
-    (`RECORDS_FETCH` of them, fetched by sha when this clone lacks them); a commit that can't be read vouches for nothing.
+    packages that change passed in.  The candidates are the commits of the attempts in the window read that may hold a pass of
+    the package (`RECORDS_CHECK_RE`, `RECORDS_RUN_RE`: a Lean check, or a records run of a package among its inputs), the newest
+    first (`RECORDS_FETCH` of them, fetched by sha when this clone lacks them); a commit that can't be read vouches for nothing.
 
-    The store is read from its remote (`refresh(attempts_only=True, since=...)`, the attempts since the oldest commit the walk may
-    read or the newest that changed those inputs was written, and never more than `RECORDS_LOOKBACK_S` back); a store with no
-    usable remote, or one that can't be listed, refuses: the gate never fails open.  `--no-preflight` doesn't skip it: the lander
+    The store is read from its remote (`refresh(attempts_only=True, since=...)`, the attempts of the last `RECORDS_LOOKBACK_S`,
+    however many commits the head has gained since); a store with no usable remote, or one that can't be listed, refuses: the
+    gate never fails open.  `--no-preflight` doesn't skip it: the lander
     marks heads whose locks were checked like any other's."""
 
     def __init__(self, repo: Path, remote: str, store, *, log: Callable[[str], None] = print,
@@ -2967,8 +2981,10 @@ class RecordsGate:
         self._runs: dict[str, tuple[list[RecordsRun], list[str]]] = {}
         self._merges: dict[str, bool] = {}
         self._since = ""
-        self._candidates: list[str] | None = None
-        self._readable: list[str] | None = None
+        self._candidates: dict[str, list[str]] = {}
+        self._readable: dict[str, list[str]] = {}
+        #: the commits a fetch has asked the remote for: another package's search doesn't ask again for those it won't serve
+        self._tried: set[str] = set()
         self.notes: list[str] = []
 
     def __call__(self, pr: PR) -> str | None:
@@ -2987,7 +3003,7 @@ class RecordsGate:
             except (QueueError, ValueError, TypeError, AttributeError) as e:   # no search on the same inputs for it; the rest stands
                 self.notes.append(f"{pkg}'s inputs at {pr.head[:12]} can't be read ({type(e).__name__}: {e})")
         try:
-            self._read(pr.head, sorted({p for ps in inputs.values() for p in ps}))
+            self._read()
         except Exception as e:  # noqa: BLE001  (no store, no remote, a failed listing: refuse, never answer from what's here)
             return (f"it changes the Lean lock of {', '.join(locks)}, and the store's records runs can't be read "
                     f"({type(e).__name__}: {e}), so the records gate refuses: it never fails open. Run this where the store's remote "
@@ -3023,16 +3039,11 @@ class RecordsGate:
         return {posixpath.dirname(f) or ".": f for f in sorted(files) if posixpath.basename(f) == LEAN_LOCK
                 and _git(self.repo, "cat-file", "-e", f"{pr.head}:{f}", check=False).returncode == 0}
 
-    def _read(self, head: str, inputs: list[str]) -> None:
-        """Bring this store's attempts up to date from its remote, from the oldest commit the walk may read or the write of the
-        newest that changed ``inputs`` (an author's date, which a rebase keeps), whichever is older."""
+    def _read(self) -> None:
+        """Bring this store's attempts of the last `RECORDS_LOOKBACK_S` up to date from its remote."""
         if self.store.remote is None:
             raise QueueError("this machine's store has no remote, so the runs other machines published aren't here")
-        times = [int(t) for t in _out(self.repo, "log", "--first-parent", f"-{RECORDS_WALK + 1}", "--format=%ct", head).split()]
-        if inputs:
-            times += [int(t) for t in _out(self.repo, "log", "-1", "--format=%at", head, "--", *inputs).split()]
-        start = max(min(times) - RECORDS_SKEW_S, self.now() - RECORDS_LOOKBACK_S)
-        self._since = time.strftime("r%Y%m%d-%H%M%S", time.gmtime(start))
+        self._since = time.strftime("r%Y%m%d-%H%M%S", time.gmtime(self.now() - RECORDS_LOOKBACK_S))
         rep = self.store.refresh(attempts_only=True, since=self._since)
         if errs := rep.get("errors"):
             self.notes.append(f"{len(errs)} attempt(s) on the remote couldn't be read, e.g. {errs[0]}")
@@ -3072,23 +3083,47 @@ class RecordsGate:
             raise QueueError(f"git cat-file --batch-check: {r.stderr.strip()[-300:]}")
         return {c for c, ln in zip(commits, lines) if ln.split()[-1] == "commit"}
 
-    def _commits(self) -> list[str]:
-        """The clean commits of the attempts since the window's start, the newest first, `RECORDS_FETCH` at most."""
-        if self._candidates is None:
+    def _commits(self, pkg: str, inputs: list[str]) -> list[str]:
+        """The clean commits of the attempts since the window's start that may hold a pass of ``pkg``, the newest first,
+        `RECORDS_FETCH` at most: a Lean check's, or a records run's of a package NAME names among ``inputs`` (``pkg``, a package
+        it requires, whose run audits it as a requirer, or one whose directory holds it), as `lean_changed.py` resolves NAME (the
+        path, or a part of it).  A store holds thousands of other runs a day, which would push these past the bound."""
+        if pkg not in self._candidates:
+            dirs = [p for p in inputs if p not in RECORDS_SHARED]
             rows = self.store.index.sql(
-                "SELECT source_commit, MAX(id) FROM attempts WHERE id > ? AND source_dirty = 0 AND source_commit IS NOT NULL "
-                "GROUP BY source_commit ORDER BY 2 DESC", (self._since,))
-            self._candidates = [c for c, _ in rows if _SHA.fullmatch(str(c))][:RECORDS_FETCH]
-        return self._candidates
+                "SELECT source_commit, manifest_json FROM attempts WHERE id > ? AND source_dirty = 0 AND source_commit IS NOT NULL "
+                "AND (manifest_json LIKE '%check.py%' OR manifest_json LIKE '%lean_changed.py%') ORDER BY id DESC", (self._since,))
+            out: dict[str, None] = {}
+            bad: list[str] = []
+            for c, doc in rows:
+                if c in out or not _SHA.fullmatch(str(c)):
+                    continue
+                try:
+                    argv = " ".join(map(str, json.loads(doc).get("argv") or []))
+                except (ValueError, AttributeError) as e:
+                    bad.append(f"{str(c)[:12]} ({type(e).__name__})")
+                    continue
+                name = (m := RECORDS_RUN_RE.search(argv)) and m.group(1).strip("'\"").rstrip("/")
+                if (name and any(name in d for d in dirs)) or (not name and RECORDS_CHECK_RE.search(argv)):
+                    out[c] = None
+            if bad:
+                self.notes.append(f"{len(bad)} attempt(s) whose manifest can't be read weren't searched for {pkg}'s, "
+                                  f"e.g. at {bad[0]}")
+            if len(out) > RECORDS_FETCH:
+                self.notes.append(f"{len(out) - RECORDS_FETCH} older commit(s) with runs that may hold {pkg}'s are past the "
+                                  f"search's bound of {RECORDS_FETCH}")
+            self._candidates[pkg] = list(out)[:RECORDS_FETCH]
+        return self._candidates[pkg]
 
-    def _readable_commits(self) -> list[str]:
+    def _readable_commits(self, pkg: str, inputs: list[str]) -> list[str]:
         """`_commits` this clone can read once it fetched those it lacks from the remote by sha, in `RECORDS_FETCH_CHUNK`s,
         a chunk that fails split in halves until the commits the remote won't serve stand alone, `RECORDS_FETCH_CALLS` fetches
         at most."""
-        if self._readable is None:
-            cands = self._commits()
+        if pkg not in self._readable:
+            cands = self._commits(pkg, inputs)
             have = self._present(cands)
-            lacking = [c for c in cands if c not in have]
+            lacking = [c for c in cands if c not in have and c not in self._tried]
+            self._tried.update(lacking)
             todo = [lacking[i:i + RECORDS_FETCH_CHUNK] for i in range(0, len(lacking), RECORDS_FETCH_CHUNK)]
             calls = 0
             while todo and calls < RECORDS_FETCH_CALLS:
@@ -3100,8 +3135,8 @@ class RecordsGate:
                 have = self._present(cands)
             if unread := len(cands) - len(have):
                 self.notes.append(f"{unread} of {len(cands)} commit(s) with runs can't be read here or from {self.remote}")
-            self._readable = [c for c in cands if c in have]
-        return self._readable
+            self._readable[pkg] = [c for c in cands if c in have]
+        return self._readable[pkg]
 
     def _differs(self, head: str, commits: list[str], inputs: list[str]) -> set[str]:
         """The ``commits`` whose ``inputs`` aren't the head's, by one `git diff-tree --stdin`: a file of `RECORDS_SHARED` that
@@ -3139,7 +3174,7 @@ class RecordsGate:
     def _same_inputs(self, head: str, pkg: str, inputs: list[str]) -> str | None:
         """Why a pass of ``pkg`` at another commit whose ``inputs`` are the head's (`_differs`) vouches for it, or None."""
         try:
-            cands = [c for c in self._readable_commits() if c != head]
+            cands = [c for c in self._readable_commits(pkg, inputs) if c != head]
             differ = self._differs(head, cands, inputs)
         except Exception as e:  # noqa: BLE001  (a search that can't finish vouches for nothing)
             self.notes.append(f"{pkg}'s inputs can't be compared ({type(e).__name__}: {e})")
@@ -3481,7 +3516,7 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
 
 def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | None, ref: str | None, by: str | None,
            sha: str | None = None, as_json: bool = False) -> int:
-    """`research queue review`: without ``pr``, list `next`'s members above `main` that no land verdict at their head lands
+    """`research queue review`: without ``pr``, list `next`'s members above `checked` (`Queue.base`) that no land verdict at their head lands
     (`unreviewed`), bottom first, the order drive lands them in; with it, write ``verdict`` (`land` or `hold`, ``ref`` its note or
     reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner.  Without
     ``sha`` it refuses when GitHub has a head other than `next`'s, as the reviewer may have read either; a short ``sha`` is the
@@ -3490,8 +3525,9 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
 
     q._clone()
     q.fetch()
-    main = _out(q.workdir, "rev-parse", q.base)
-    chain = [m for m in q.chain() if _git(q.workdir, "merge-base", "--is-ancestor", m.commit, main, check=False).returncode]
+    if pr is None:
+        q.unlock()
+    chain = q.chain()
     opened = {p.number: p for p in q.github.open_prs()}
     if pr is None:
         labels.prefetch([(m.pr, m.head) for m in chain])
@@ -3906,7 +3942,8 @@ def main(argv: list[str]) -> int:
                   auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in (a.first or "").split(",") if n),
                   before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, marked_at=labels.marked_at,
                   prefetch=labels.prefetch)
-        lock = _lock(a.workdir)  # noqa: F841
+        lock = _lock(a.workdir)
+        q.unlock = lock.close
         if ignored := [f"--{k.replace('_', '-')}" for k in ("max_running", "train_size") if getattr(a, k) is not None]:
             q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted (#5070); drop them from "
                   "drive's args")
