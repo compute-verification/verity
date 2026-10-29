@@ -39,12 +39,10 @@ DOC_TERMS = {
     "thread block": "CTA",
     "KV block": "KV page",
     "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
-    "remote bandwidth audit, remote bandwidth, remote audit, proof of useful bandwidth": "PoUB",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
-                       rf"|legs?|remote{_SPACE}(?:bandwidth|audits?)|proof{_SPACE}of{_SPACE}useful{_SPACE}bandwidth)\b)"
-                       rf"|\bIUs?\b")
+                       rf"|legs?)\b)|\bIUs?\b")
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
@@ -99,34 +97,6 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
     "verity/ml/circuits/ops/boolean/rowwise.py": "#4539 rewrites its lines",
     "verity/ml/windows/interface.py": "#4502 adds lines",
-    "benchmarks/codec_tensor/pyproject.toml": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/kv_filler/pyproject.toml": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/one_stage/served_verdicts.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/pous/pyproject.toml": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/property_redteam/pyproject.toml": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/prove_path/e2e_chains/README.md": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/remote_session/README.md": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/remote_session/lean_verifier.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/remote_session/pyproject.toml": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/remote_session/serve.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/remote_session/verifier.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/serve_bandwidth/pyproject.toml": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/torch_gpu/README.md": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/vllm_encoded/pyproject.toml": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "integrations/vllm/tests/protocols/remote_bandwidth/test_remote_session.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "integrations/vllm/verity_vllm/protocols/remote_bandwidth/memory_map.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "tests/test_boundaries.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "tests/test_lean_vocabulary.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "verity/core/protocols/bandwidth/PROTOCOL.md": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "verity/core/protocols/remote_bandwidth/lean/tests/test_drawn.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "verity/core/protocols/remote_bandwidth/lean/tests/test_session.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "verity/core/protocols/remote_bandwidth/opening.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "verity/core/protocols/remote_bandwidth/tests/test_redteam_impl.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/rho/rho/envelopes.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "benchmarks/one_stage/a7.sh": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "tools/research/src/research/queue.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
-    "verity/core/protocols/sampled_proofs/optimize.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
 }
 
 
@@ -228,10 +198,6 @@ def test_the_doc_scan_reads_each_form():
         "b.md": 'The `legs/pous.py` file and `wipe_period.leg(dir)`; ``a `leg` key``; "leg" is retired.\n'
                 "```sh\nLEGS=A,B ./run.sh  # each leg\n```\n~~~\na leg\n~~~\nA thread block after the fences.\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
-        "d.md": "The remote bandwidth audit, a Remote-Audit, the remote\nbandwidth session and proof of useful "
-                "bandwidth.\n"
-                "Not `verity/remote-bandwidth/v0`, [its package](verity/core/protocols/remote_bandwidth/README.md), "
-                "`RemoteAudit` or the remote protocol.\n",
         "benchmarks/pouw/CHANGELOG.md": "a leg",
         "verity/README.md": "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
@@ -239,5 +205,4 @@ def test_the_doc_scan_reads_each_form():
     assert doc_offenders(list(docs), read=docs.__getitem__) == [(GLOSSARY, 2, "leg"),
         ("a.md", 1, "wrong unit"), ("a.md", 1, "Isolation-Units"), ("a.md", 1, "replay unit"), ("a.md", 2, "IU"),
         ("a.md", 2, "IUs"), ("a.md", 2, "KV block"), ("a.md", 3, "legs"), ("a.md", 3, "leg"), ("a.md", 3, "leg"),
-        ("b.md", 8, "thread block"), ("d.md", 1, "remote bandwidth"), ("d.md", 1, "Remote-Audit"),
-        ("d.md", 1, "remote bandwidth"), ("d.md", 2, "proof of useful bandwidth")]
+        ("b.md", 8, "thread block")]
