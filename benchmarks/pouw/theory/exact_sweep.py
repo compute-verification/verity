@@ -44,6 +44,14 @@ served; a served design's T3 can't. Two limits remain for every exact design:
 `rc_hw_mix` (`rc_hg_mix`) takes rc_hw (rc_hg) where the bound is free and rc_hw_ffma (rc_hg_ffma) elsewhere. Served
 noise has neither limit.
 
+`ssn_1l_tag_x` serves the tag lead (`ssn_1l_tag`) exactly with its committed words noisy: its words to step S − 1 are
+the lead's, and step S cancels the code (a1 against −C_j) and the tag (κ − T(i) against G_j, leaving κ·G_j) and adds
+coin bytes against public weights. Its final word A·Bᵀ + ρ_i + κ·G_j is salted, so the middle-segment skip, which runs
+back from a final word the prover knows, has none to start from and each of the S words still costs a write; the
+magic removes ρ_i + κ·G_j. Chosen identical or zero rows lose only final words whose offsets meet (`tagx_final_bound`).
+`ssn_1l_tag_xf` folds only G_0j, in the FFMA, and loses identical rows' final words; `ssn_1l_tag_mix` takes each
+where its range bound is free and the other elsewhere.
+
 Data models: M0 (free set: constants, salt-independent functions, raw coin words), M1u (the call's own words on a grid
 uniform in A: the final-word lemma, under PeriodInventory and the atomic call) and M1s (M1 on a grid that keeps the
 served data's zero blocks and identical rows, priced on noise_data.py's measurement). `--data` reads exact_data.py's
@@ -213,6 +221,75 @@ def _hgc_y_regs(k: int) -> int:
     """Y registers a column rc_hgc forms a call: G merged into steps 2..S−1's register, and step S's G lane beside the
     walk's −G_j lanes."""
     return hgc_steps(k) - 2 + math.ceil((1 + _hgc_lanes(k)) / 4)
+
+
+#: the tag lead's step 1: 24 data, the row tag T(i) against G_j ∈ [−3, 3]⁴ and the code's 4 bits a1 against C_j
+TAG_FIRST = 24
+#: ssn_1l_tag_x's step-S lanes beyond the lead's: a1 against −C_j, κ − T(i) against G_j, u0 against 1 and u1 against
+#: 127 (ssn_1l_tag_xf: the walk's two digits in place of u0, u1)
+TAGX_FIXED = 10
+TAGX_KAPPA = (1, 7, 49, 121)
+TAGX_EXTRA_MAX = 12
+
+
+def tag_steps(k: int) -> int:
+    return steps(k, TAG_FIRST)
+
+
+def tagx_steps(k: int) -> int:
+    return steps(k, TAG_FIRST, lambda s: TAGX_FIXED)
+
+
+def tagx_extra(k: int) -> int:
+    """Lanes of the coin byte u2 against 127 that fit step S's spare lanes."""
+    return min(TAGX_EXTRA_MAX, TAG_FIRST + 31 * (tagx_steps(k) - 1) - TAGX_FIXED - k)
+
+
+def tag_digits(m: int) -> np.ndarray:
+    """The row tag T(i): balanced base-13 digits of z_i = (⌊i/2⌋ + 1)·(−1)^i, injective for m ≤ 28,560 (m × 4)."""
+    i = np.arange(m)
+    z = (i // 2 + 1) * np.where(i % 2 == 0, 1, -1)
+    out = np.zeros((m, 4), dtype=np.int64)
+    for e in range(4):
+        out[:, e] = (z + 6) % 13 - 6
+        z = (z - out[:, e]) // 13
+    assert (z == 0).all(), "m too large for a 4-digit base-13 tag"
+    return out
+
+
+def _q(lanes: list[tuple[int, np.ndarray]], walk: np.ndarray | None = None) -> float:
+    """1 / Σ p² of Σ w·x over independent lanes (weight w, x uniform on the given values), plus a walk's pmf."""
+    size = sum(w * int(np.ptp(v)) for w, v in lanes) + (len(walk) if walk is not None else 1)
+    nfft = 1 << size.bit_length()
+    spec = np.ones(nfft // 2 + 1, dtype=complex)
+    for w, v in lanes:
+        lane = np.zeros(nfft)
+        lane[w * (v - v.min())] = 1 / len(v)
+        spec *= np.fft.rfft(lane)
+    if walk is not None:
+        spec *= np.fft.rfft(walk, nfft)
+    p = np.clip(np.fft.irfft(spec, nfft)[:size], 0, None)
+    return float(p.sum() ** 2 / (p ** 2).sum())
+
+
+def tagx_offset_q(k: int) -> float:
+    """The effective number of values of ssn_1l_tag_x's final row offset ρ_i = u0 + 127·u1 + 127e·u2 + w_i (u0 on
+    [0, 127], u1 and u2 signed coin bytes, w_i the walk Σ_{t≥2} (1 + a_t)): no data shift makes two rows' offsets
+    meet with probability above 1/Q."""
+    s, e, byte = tagx_steps(k), tagx_extra(k), np.arange(-128, 128)
+    walk = np.array([math.comb(s - 1, i) / 2 ** (s - 1) for i in range(s)])
+    return _q([(1, np.arange(128)), (LANE_MAX, byte)] + ([(LANE_MAX * e, byte)] if e else []), walk)
+
+
+def tagx_col_q() -> float:
+    """The effective number of values of ssn_1l_tag_x's column offset κ·G_j (G_j uniform on [−3, 3]⁴)."""
+    return _q([(w, np.arange(-3, 4)) for w in TAGX_KAPPA])
+
+
+def tagx_final_bound(m: int, k: int) -> float:
+    """ssn_1l_tag_x on m chosen-equal (identical or zero) rows: the expected share of row-steps lost to final words
+    with equal row offsets, at most C(m, 2) / Q of the m·S row-steps; its other row-steps are the lead's."""
+    return (m - 1) / (2 * tagx_offset_q(k) * tagx_steps(k))
 
 
 def row_words(bits: int) -> int:
@@ -503,6 +580,47 @@ def designs() -> list[Design]:
                "as ssn_1l_hw", f"{premises_m0}; {coins}; ssn-hw-distinct (open); signs drawn after the weights' "
                "registration", "reference: the served lead hardened against the coin branch and chosen weights",
                exact=False),
+        Design("ssn_1l_tag", "the served lead with row tags: step 1 holds 24 data, the row tag T(i) (balanced base-13 "
+               "digits of the row) against G_j ∈ [−3, 3]⁴ drawn once the weights are registered, and the code's bits "
+               "a1 against C_j; every later step 31 data and 1 + a_t against 1; noise served",
+               lambda k: H32 * tag_steps(k) / k,
+               lambda m, n, k: H32 * (ns.ssn_1l_forming_writes(tag_steps(k)) + 1) / (n * k),
+               lambda m, n, k: H32 / (m * k), lambda m, n, k: H32 * tag_steps(k) / (n * k),
+               lambda m, n, k: H32 / (m * k), _z, False, lambda m, n, k: 32 * ns.ssn_1l_words(tag_steps(k)) * m,
+               lambda m, n, k: 4 * tag_steps(k) / (n * k) + 4 / (m * k), _no_dup, False,
+               "served noise std 10–16 units (estimate); unmeasured",
+               f"{premises_m0}; {coins}; ssn-tag-distinct, g-private, copy-floor (open)", "reference: the served lead",
+               exact=False),
+        Design("ssn_1l_tag_x", "the tag lead de-noised in the stock epilogue: steps 1..S−1 are the lead's; step S adds "
+               "a1 against −C_j and κ − T(i) against G_j (the code and the tag cancel, leaving κ·G_j) and coin bytes u0 "
+               "against 1, u1 against 127 and u2 in e lanes against 127; ρ_i = u0 + 127·u1 + 127e·u2 + w_i and κ·G_j "
+               "are removed by the magic IADD3 and FFMA, so the served output is A·Bᵀ and the committed words stay "
+               "noisy", lambda k: H32 * tagx_steps(k) / k,
+               lambda m, n, k: H32 * (ns.ssn_1l_forming_writes(tagx_steps(k)) + 3
+                                      + math.ceil((2 + tagx_extra(k)) / 4)) / (n * k),
+               lambda m, n, k: 2 * H32 / (m * k), lambda m, n, k: H32 * tagx_steps(k) / (n * k),
+               lambda m, n, k: H32 / (m * k),
+               lambda m, n, k: H32 * (popc_writes(tagx_steps(k)) + 4) / (n * k) + 2 * H32 / (m * k), False,
+               lambda m, n, k: 32 * row_words(tagx_steps(k) + 26) * m,
+               lambda m, n, k: 4 * tagx_steps(k) / (n * k) + 4 / (m * k), _no_dup, True,
+               "0: stock's output bit for bit where 1.5·2^23·s_j is exact (exact while |A·Bᵀ| < 2^22)",
+               f"{premises_m0}; {coins}; ssn-tag-distinct, g-private, copy-floor (open, the lead's); the final row "
+               "offset's collision bound (counting)", "the lead's committed words to step S − 1 and a non-free final "
+               "word, so no middle-segment skip; chosen identical or zero rows lose only final words with equal "
+               "offsets; chosen out-of-range rows force the fallback write"),
+        Design("ssn_1l_tag_xf", "the tag lead with step S cancelling the code (a1 against −C_j), the tag (κ − T(i) "
+               "against G_j with κ = (1, 0, 0, 0), leaving G_0j) and the walk (its base-127 digits against −1 and "
+               "−127); only G_0j is folded, in the FFMA: no range limit below 2^24 and no row check",
+               lambda k: H32 * tagx_steps(k) / k,
+               lambda m, n, k: H32 * (ns.ssn_1l_forming_writes(tagx_steps(k)) + 4 + popc_writes(tagx_steps(k)))
+               / (n * k),
+               lambda m, n, k: 2 * H32 / (m * k), lambda m, n, k: H32 * tagx_steps(k) / (n * k),
+               lambda m, n, k: H32 / (m * k), lambda m, n, k: H32 / (m * k), False,
+               lambda m, n, k: 32 * ns.ssn_1l_words(tagx_steps(k)) * m,
+               lambda m, n, k: 4 * tagx_steps(k) / (n * k) + 4 / (m * k),
+               _final_dup("final_col_dup_share", tagx_steps), False, "0 (exact while |A·Bᵀ + G_0j| < 2^24)",
+               f"{premises_m0}; {coins}; ssn-tag-distinct, g-private, copy-floor (open, the lead's)",
+               "final word A·Bᵀ + G_0j: lost on equal outputs of a column, and on chosen identical or zero rows"),
         Design("rc_hybrid", "rc_magic on rows whose Cauchy–Schwarz bound is below 2^22, rc_ffma on the rest",
                lambda k: H32 * s_rcf(k) / k,
                lambda m, n, k: H32 * (row_bit_writes(s_rcf(k)) + 1 + lanes_writes(s_rcf(k))) / (n * k),
@@ -520,7 +638,11 @@ def designs() -> list[Design]:
         Design("rc_hg_mix", "rc_hg on linears fed by an RMSNorm, rc_hg_ffma on the rest",
                *([lambda *a: float("nan")] * 3), *([_z] * 3), False, _z, _z, _no_dup, True, "0 (exact)",
                f"{premises_m0}; {coins}; rc-hg-distinct (open); G drawn after the weights' registration",
-               "the exact lead: each linear takes the cheaper path")]
+               "the exact lead: each linear takes the cheaper path"),
+        Design("ssn_1l_tag_mix", "ssn_1l_tag_x on linears fed by an RMSNorm, ssn_1l_tag_xf on the rest",
+               *([lambda *a: float("nan")] * 3), *([_z] * 3), False, _z, _z, _no_dup, True, "0 (exact)",
+               f"{premises_m0}; {coins}; ssn-tag-distinct, g-private, copy-floor (open, the lead's)",
+               "the served lead de-noised: each linear takes the cheaper path")]
 
 
 def _per2_words(k: int) -> int:
@@ -535,7 +657,8 @@ BRANCH = {
     "rc_ffma": ("rc_ffma", s_rcf),
     "rc_hybrid": ("rc_hybrid", s_rcf), "rc_hw": ("rc_hw", hw_steps), "rc_hw_ffma": ("rc_hw_ffma", hw_steps),
     "rc_hg": ("rc_hg", hg_steps), "rc_hg_ffma": ("rc_hg_ffma", hw_steps), "rc_hgc_ffma": ("rc_hgc_ffma", hgc_steps),
-    "rc_hws_ffma": ("rc_hws_ffma", hws_steps),
+    "rc_hws_ffma": ("rc_hws_ffma", hws_steps), "ssn_1l_tag": ("ssn_1l_tag", tag_steps),
+    "ssn_1l_tag_x": ("ssn_1l_tag_x", tagx_steps), "ssn_1l_tag_xf": ("ssn_1l_tag_xf", tagx_steps),
     "ncp3": ("dense", lambda k: 3 * k // 32), "os2": ("dense", lambda k: 2 * k // 32), "per2": ("dense", _per2_words),
     "lowrank1": ("dense", _per2_words), "pair": ("none", lambda k: 2 * k // 32), "plain": ("plain", lambda k: k // 32),
 }
@@ -544,8 +667,9 @@ BRANCH = {
 POST_NORM = {"qkv", "gate_up"}
 #: per linear, the path a mixed design takes
 MIX = {"rc_hw_mix": lambda lin: "rc_hw" if lin in POST_NORM else "rc_hw_ffma",
-       "rc_hg_mix": lambda lin: "rc_hg" if lin in POST_NORM else "rc_hg_ffma"}
-MAGIC_DESIGNS = {"rc_magic", "rc_hybrid", "rc_hw", "rc_hg", "ssn_pd", "ssn_xd", "ssn_xr"}
+       "rc_hg_mix": lambda lin: "rc_hg" if lin in POST_NORM else "rc_hg_ffma",
+       "ssn_1l_tag_mix": lambda lin: "ssn_1l_tag_x" if lin in POST_NORM else "ssn_1l_tag_xf"}
+MAGIC_DESIGNS = {"rc_magic", "rc_hybrid", "rc_hw", "rc_hg", "ssn_pd", "ssn_xd", "ssn_xr", "ssn_1l_tag_x"}
 
 
 def _hybrid(d: Design) -> Design:
@@ -1036,6 +1160,63 @@ def sim_hws(case: str, salts: int = 24, m: int = 4, n: int = 6, seed: int = 1, s
     return out
 
 
+def sim_tag(case: str, variant: str = "x", salts: int = 24, m: int = 4, n: int = 6, seed: int = 1, s: int = 4,
+            e: int = 2) -> dict:
+    """The tag lead (`variant="lead"`, served), ssn_1l_tag_x (`"x"`, e lanes of u2) or ssn_1l_tag_xf (`"xf"`) on S
+    steps: its committed words on the salt grid (raw coin words and G free, T(i) a constant) and, de-noised, the
+    epilogue's output against A·Bᵀ."""
+    rng = np.random.default_rng(seed)
+    extra = {"lead": 0, "x": TAGX_FIXED + e, "xf": TAGX_FIXED}[variant]
+    k = TAG_FIRST + 31 * (s - 2) + 31 - extra
+    a, b = ns._data(case, m, n, 160, rng)
+    a, b = a[:, :k], b[:k]
+    code = ns.ssn_a_w0(n, ns.DATA_PER_STEP)[0]
+    tag = tag_digits(m)
+    one = np.ones((1, n), dtype=np.int64)
+    kappa = np.array(TAGX_KAPPA if variant == "x" else (1, 0, 0, 0))
+    xs, ys, raw, rs, cs = [], [], [], [], []
+    for _ in range(salts):
+        hr = rng.integers(0, 2 ** 32, (m,), dtype=np.int64)
+        hu = rng.integers(0, 2 ** 32, (m,), dtype=np.int64)
+        g = rng.integers(-3, 4, (4, n))
+        a1 = np.stack([(hr >> q) & 1 for q in range(4)], axis=1)
+        at = np.stack([np.zeros(m, dtype=np.int64)] + [1 + ((hr >> (4 + t)) & 1) for t in range(s - 1)], axis=1)
+        walk = at.sum(1, keepdims=True)
+        u0, u1, u2 = hu[:, None] & 0x7F, ((hu[:, None] >> 8 & 0xFF) ^ 0x80) - 0x80, ((hu[:, None] >> 16 & 0xFF) ^ 0x80) - 0x80
+        xl, yl, lo = [], [], 0
+        for t in range(s):
+            if t == 0:
+                lx, ly = [tag, a1], [g, code]
+            elif t < s - 1:
+                lx, ly = [at[:, t:t + 1]], [one]
+            else:
+                lx, ly = [at[:, t:t + 1]], [one]
+                if variant == "x":
+                    lx += [a1, kappa - tag, u0, u1] + [u2] * e
+                    ly += [-code, g, one, LANE_MAX * one] + [LANE_MAX * one] * e
+                elif variant == "xf":
+                    lx += [a1, kappa - tag, -(walk % LANE_MAX), -(walk // LANE_MAX)]
+                    ly += [-code, g, one, LANE_MAX * one]
+            lx, ly = np.concatenate(lx, axis=1), np.concatenate(ly, axis=0)
+            assert lx.min() >= -128 and lx.max() <= LANE_MAX and np.abs(ly).max() <= LANE_MAX
+            d = 32 - lx.shape[1]
+            xl += [a[:, lo:lo + d], lx]
+            yl += [b[lo:lo + d], ly]
+            lo += d
+        assert lo == k, (lo, k)
+        xs.append(np.concatenate(xl, axis=1))
+        ys.append(np.concatenate(yl, axis=0))
+        raw.append(np.concatenate([hr, hu, g.ravel()]))
+        rs.append((u0 + LANE_MAX * u1 + LANE_MAX * e * u2 + walk)[:, 0] if variant == "x" else np.zeros(m, np.int64))
+        cs.append(kappa @ g)
+    words = ns._words(np.stack(xs), np.stack(ys))
+    out = ns._distinct([words], [np.stack(raw)])
+    resid = words[:, :, :, -1] - np.stack(rs)[:, :, None] - np.stack(cs)[:, None, :]
+    out["exact_after_epilogue"] = bool((resid == (a @ b)[None]).all())
+    out["final_bad"] = ns._distinct([words[:, :, :, -1]], [np.stack(raw)])["bad_share"]
+    return out
+
+
 def sim_plain_m1(case: str, grids: int = 24, m: int = 4, n: int = 6, seed: int = 1) -> dict:
     """The plain GEMM's words on a grid over A that keeps the case's structure (M1s); `random` is M1u."""
     rng = np.random.default_rng(seed)
@@ -1091,6 +1272,19 @@ def branch_noise(model: str, m: int, s: int, n: int, k: int, rng: np.random.Gene
         seed = _SIGNS_SEED if model == "ssn_1l_hw" else _SIGNS_SEED + 1
         signs = np.random.default_rng(seed).choice(np.array([-1, 1]), size=(s, n))
         return (a1 @ code)[:, None, :] + (at[:, :, None] * signs[None]).cumsum(1)
+    if model.startswith("ssn_1l_tag"):
+        a1 = rng.integers(0, 2, (m, 4))
+        g = rng.integers(-3, 4, (4, n))
+        at = 1 + rng.integers(0, 2, (m, s))
+        at[:, 0] = 0
+        nz = (a1 @ code + tag_digits(m) @ g)[:, None, :] + at.cumsum(1)[:, :, None]
+        if model == "ssn_1l_tag_x":
+            u = rng.integers(-128, 128, (m, 3))
+            rho = (u[:, 0] & 0x7F) + LANE_MAX * u[:, 1] + LANE_MAX * tagx_extra(k) * u[:, 2] + at.sum(1)
+            nz[:, -1] = rho[:, None] + np.array(TAGX_KAPPA) @ g
+        elif model == "ssn_1l_tag_xf":
+            nz[:, -1] = g[0]
+        return nz
     if model.startswith("rc_hg"):
         a1 = rng.integers(0, 128, (m, 4))
         at = 1 + 2 * rng.integers(0, 2, (m, s))
@@ -1203,7 +1397,9 @@ STEP_NOISE = {"ssn_1l": ((0, 1), "public"), "ssn_xr": ((0, 1), "public"), "ssn_x
               "rc_hw": ((1, 3), "public"), "rc_hw_ffma": ((1, 3), "public"), "ssn_1l_hw": ((1, 3), "public"),
               "ssn_1l_hg": ((1, 3), "registered"), "rc_hg": ((1, 3), "registered"),
               "rc_hg_ffma": ((1, 3), "registered"), "rc_hgw_ffma": ((1, 3), "registered"),
-              "rc_hgc_ffma": ((1, 3), "call"), "rc_hws_ffma": (tuple(range(-128, 128)), "public")}
+              "rc_hgc_ffma": ((1, 3), "call"), "rc_hws_ffma": (tuple(range(-128, 128)), "public"),
+              "ssn_1l_tag": ((1, 2), "public"), "ssn_1l_tag_x": ((1, 2), "public"),
+              "ssn_1l_tag_xf": ((1, 2), "public")}
 
 
 def step_column_weights(model: str, n: int) -> np.ndarray:
@@ -1389,6 +1585,31 @@ def check() -> list[dict]:
     ok("word-level cancel: simulated repeats through the coin-branch noise match the closed form (rc_hg_ffma within "
        "0.02, rc_hgc_ffma and rc_hws_ffma within 0.002)", abs(swc["rc_hg_ffma"][0] - swc["rc_hg_ffma"][1]) <= 0.02
        and all(abs(swc[mo][0] - swc[mo][1]) <= 0.002 for mo in ("rc_hgc_ffma", "rc_hws_ffma")), swc)
+    tg = {v: {c: sim_tag(c, v) for c in ns.CASES} for v in ("lead", "x", "xf")}
+    ok("ssn_1l_tag (served) and ssn_1l_tag_x: every word distinct and non-free on every data case, the final word "
+       "included, so the middle-segment skip finds no free word to run back from; ssn_1l_tag_x's epilogue output is "
+       "A·Bᵀ", all(r["bad_share"] == 0 for v in ("lead", "x") for r in tg[v].values())
+       and all(r["exact_after_epilogue"] for r in tg["x"].values()),
+       {v: {c: (r["exact_after_epilogue"], r["bad_share"]) for c, r in tg[v].items()} for v in ("lead", "x")})
+    ok("ssn_1l_tag_xf: the epilogue output is A·Bᵀ; every word distinct and non-free except identical or zero rows' "
+       "final words (no row noise; at most 1/S)", all(r["exact_after_epilogue"] for r in tg["xf"].values())
+       and all(0 < tg["xf"][c]["bad_share"] <= 1 / 4 for c in ("identical_rows", "zero_row"))
+       and all(r["bad_share"] == 0 for c, r in tg["xf"].items() if c not in ("identical_rows", "zero_row")),
+       {c: (r["exact_after_epilogue"], r["bad_share"]) for c, r in tg["xf"].items()})
+    ok("ssn_1l_tag_x keeps the lead's steps (67 / 232 / 265 at K 2,048 / 7,168 / 8,192) with its lanes in step S, and "
+       "its final row offset has Q ≥ 2^17", all(tagx_steps(k) == tag_steps(k) == ns.steps1l(k) and tagx_extra(k) >= 0
+                                                and tagx_offset_q(k) >= 2 ** 17 for k in (2048, 7168, 8192)),
+       {k: (tagx_steps(k), tagx_extra(k), round(math.log2(tagx_offset_q(k)), 2)) for k in (2048, 7168, 8192)})
+    tb = {c: branch_collapse("ssn_1l_tag_x", c, 8192, 67, 2048) for c in ("identical", "zero", "random")}
+    tl = {c: branch_collapse("ssn_1l_tag", c, 8192, 67, 2048) for c in ("identical", "zero")}
+    bound = tagx_final_bound(8192, 2048)
+    ok("coin branch at 8,192 rows, K 2,048: ssn_1l_tag_x loses on chosen identical or zero rows within 0.5–2× its "
+       "final-word bound and nothing on random rows; the served lead loses nothing",
+       all(0.5 * bound <= tb[c] <= 2 * bound for c in ("identical", "zero")) and tb["random"] == 0
+       and all(v == 0 for v in tl.values()), {**tb, "lead": tl, "bound": bound})
+    ok("the de-noise changes no later step: chosen weights cancel half of the served lead's and ssn_1l_tag_x's "
+       "row-steps alike", word_cancel("ssn_1l_tag", 2048) == word_cancel("ssn_1l_tag_x", 2048) == 0.5,
+       {mo: word_cancel(mo, 2048) for mo in ("ssn_1l_tag", "ssn_1l_tag_x")})
     ok("rc steps: K 2,048 and 8,192 take as many steps as ssn_1l (67, 265)",
        (s_rc(2048), s_rc(8192)) == (ns.steps1l(2048), ns.steps1l(8192)), (s_rc(2048), s_rc(8192)))
     ok("in-GEMM cancellation lanes fit the last step's spare lanes at Llama's and V4's K",
@@ -1482,7 +1703,8 @@ def main(argv: list[str] | None = None) -> int:
     rep = report()
     rep["best"] = best(rep)
     for name in ("rc_magic", "rc_ffma", "rc_hybrid", "rc_hw", "rc_hw_mix", "rc_hw_ffma", "rc_hg", "rc_hg_mix",
-                 "rc_hg_ffma", "rc_hgc_ffma", "rc_hws_ffma", "ssn_1l", "ssn_1l_hw", "ssn_1l_hg", "per2"):
+                 "rc_hg_ffma", "rc_hgc_ffma", "rc_hws_ffma", "ssn_1l", "ssn_1l_hw", "ssn_1l_hg", "ssn_1l_tag",
+                 "ssn_1l_tag_x", "ssn_1l_tag_xf", "ssn_1l_tag_mix", "per2"):
         for model in ("M0", "M1u"):
             r = next(r for r in rep["rows"] if r["design"] == name and r["model"] == model and not r["c1"])
             for basis in ("gap", "gap_coins_uncredited", "gap_chosen", "gap_chosen_weights"):
