@@ -4,7 +4,7 @@ description: >
   What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask its owner or your
   coordinator when you can't tell, take only claims and his own clicks to Daniel, record a ruling where the next agent reads
   it, or leave a friction note. Holds the standing rulings AGENTS.md and the other skills don't state (what an agent may
-  change without asking, protocol and claim rulings) and the friction note format. Use when you worked around something,
+  change without asking, keys and access, the lint ratchets) and the friction note format. Use when you worked around something,
   a step bit you twice or keeps you waiting, you see a better abstraction, you're unsure a change is yours, you just got a
   ruling from Daniel, you read friction notes, or a command fails for missing credentials.
 ---
@@ -55,7 +55,9 @@ For a new rule, gate or required review, price it first with `.agents/skills/pro
 
 Record a ruling as the rule it sets, where the next agent at the same spot will read it, in the PR that makes the change:
 
-- a norm every agent needs: a line in `AGENTS.md`;
+- a rule about the code (a design rule, a protocol or claim ruling, a code principle): a line in `AGENTS.md`, the public
+  guide, stated with no name, date or id;
+- a norm of how the team works (landing, machines, lanes, where writing goes): a line in the team skill;
 - a norm for one kind of work: a line in that work's skill;
 - a ruling that fits neither: a line under "Standing rulings" below.
 
@@ -104,9 +106,8 @@ What an agent may change:
   sources of truth for one thing, variants a ruling already chose between, old vocabulary, machinery for a retired
   process, structure that doesn't earn itself, dead references. What crosses owners goes to that owner.
 - Close an old PR without asking when every commit on it is already in another open PR.
-- Hard switches: once a replacement lands, no second path stays alive beside it, and every bridge kept for the
-  transition names its end state. The admin audits for splits and tells Daniel when an abstraction fails or turns into
-  red tape.
+- The admin audits for splits, a path alive beside its replacement (AGENTS.md, "Hard switches"), and tells Daniel when
+  an abstraction fails or turns into red tape.
 - A protocol importing another protocol is the importing protocol's owner's call, told to the imported one's
   owner, and the edges stay acyclic (`ALLOWED` in `tests/test_boundaries.py`).
 - The Lean lane changes `tools/verity/lean`, the lean-proofs skill, `check`'s Lean steps, shared Lean foundations
@@ -118,8 +119,6 @@ What an agent may change:
 - Plan in hours: a pilot, trial or rollout gets hours, not days.
 - GPU work runs only as items its lane owner approved, each naming its research question; idle GPUs beat padded
   ones. RunPod tops itself up, so a low balance is not a blocker.
-- An overhead reported to Daniel is the `--zk` prover's only, over the time the computation's FLOPs take at the
-  census's dense datasheet peak for its dtype, to one significant digit.
 
 Keys and access:
 
@@ -150,60 +149,8 @@ Landing:
   `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
   the PR's base). No new swallowing handler: re-raise, record, or test first.
 
-Protocols and claims:
-
-- Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
-  exclusion, which reports in AND gates. Credit is a statement about values; SAK is exclusion's premise only. Whoever
-  finds a reason this is wrong floats it at once.
-- A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
-  every scale; workloads compose, and "row" never names one.
-- The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
-  both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
-  ties them by a premise or trusts them separately.
-- θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
-  are never θ (drops `NciCheck.Baseline`'s output provenance).
-- A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
-  Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
-  negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
-  the protocol's properties into `Properties/`. Where it leads: Lean is the definition and the
-  verifier, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
-- An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
-  soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
-  premises outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
-- The prover controls the audited circuit's inputs and knows every coin once it is issued, so no defense assumes
-  the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
-  trusted third party, salted after the commitment with secrets the prover never sees, as one deployment variant.
-- No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
-  bound on the named conjecture `EncodeChainHardness`, with the claims resting on it listed as conditional.
-  (`EncodeChainHardness` is falsified, `EncodeChainRefuted`; the bound now rests on `SquaringFloor` and
-  `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
-- Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
-  all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
-  are for the whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity
-  assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
-  model's logits.
-- PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. C-Flock's
-  knowledge soundness keeps the collision form.
-- The deployed recursion's bound record states its inner claim at IVStar at the weight
-  `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor
-  under every weight (`Claims.Recursion.lam`), and every table, README or claim that cites it gives its λ and says so.
-- `Flock.Guarantees.RecursiveAuditC3` may rest on `registrant-holds-openings`; in Lean the salt is a binder
-  applied at the salts the prover's workers committed under, never `∃ salt` or a `Classical.choose` of one.
-- A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed
-  refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
-  decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
-- The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
-  checks only padded counts. One key per protecting party, drawn once at setup from the OS before anything else, public
-  and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
-  are drawn from the OS, not expanded by a PRG.
-- A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting
-  implies the verifier accepts; completeness stays a test.
-- `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the
-  pinned key behaves like a fresh one.
-- A table that tabulates a fixed function is a value, even with no program parameter; an operation's own
-  definition holds only the hardware's measured tables. No protocol gets an exemption for public values: in development a
-  proof may be replaced by replay, or verification skipped, as a labelled shortcut, never as the protocol.
+Protocols and claims: the rulings are AGENTS.md's "Protocols and claims" and the Glossary's "Size, credit and
+exclusion" and "Workload". Whoever finds a reason that credit and reports in AND gates is wrong floats it at once.
 
 ## Before you finish
 

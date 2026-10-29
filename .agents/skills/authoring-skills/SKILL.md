@@ -28,7 +28,7 @@ Put it at the narrowest scope it applies to: work in one package, `<package>/.ag
 
 A skill is one `SKILL.md` in a directory of its name, at most 16 KB (`SKILL_SIZE_CAP` in `tests/test_repository.py`; an
 `OVERSIZE_SKILLS` entry there only shrinks). That test admits tracked Markdown only under the maintained basenames
-(AGENTS.md "Where writing goes"), so a `workflow.md` or `examples.md` beside it fails; a script or `*.template.md` it uses
+(AGENTS.md "What the tree holds"), so a `workflow.md` or `examples.md` beside it fails; a script or `*.template.md` it uses
 may sit there.
 
 Its frontmatter needs `name` (the directory's) and `description`. Runtime-specific fields (`argument-hint`,
@@ -66,4 +66,5 @@ how a skill was designed.
 
 `AGENTS.md` is always loaded: short invariants, gotchas and pointers. A skill is loaded when needed: the procedure,
 patterns and edge cases. A skill agents in some scope should know about gets a short entry in that scope's `AGENTS.md`,
-which routes to it and never duplicates it.
+which routes to it and never duplicates it. The root `AGENTS.md` is the public guide to the code: a skill about how the
+team works (landing, machines, lanes, Slack, Linear, notes) is routed from the `team` skill instead.

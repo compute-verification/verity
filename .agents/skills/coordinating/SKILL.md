@@ -27,7 +27,7 @@ skill).
 | The conversation about one ask | that ask's Slack thread |
 | Daniel's decisions, anything for a person | Notion: the decisions log, the Asks database (the asking-daniel skill), a page |
 | Evidence | the evidence store and run ids, linked from the issue |
-| A lane's checkpoints and findings | the notes (AGENTS.md "Where writing goes") |
+| A lane's checkpoints and findings | the notes (the team skill's "Outside the tree") |
 
 ## The map
 

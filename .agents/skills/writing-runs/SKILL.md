@@ -50,5 +50,5 @@ research run --on M --cwd source -- \
   bash -c 'd=$(mktemp -d); trap "rm -rf $d" EXIT; python bench.py --scratch "$d" --out "$OUT"'
 ~~~
 
-Try a long run's command on its machine for a minute first (`--timeout 2m --wait`), never on an agent VM (AGENTS.md
-"Tests"), and check that the run dir holds only your output directory beside the harness's files.
+Try a long run's command on its machine for a minute first (`--timeout 2m --wait`), never on an agent VM (the team
+skill's "Machines"), and check that the run dir holds only your output directory beside the harness's files.

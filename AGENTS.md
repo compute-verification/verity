@@ -33,8 +33,8 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `fixtures/artifacts.json`: every replicated fixture by `art:` id. `tests/`: invariants of the whole tree. The archived
   proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
   archive` restores them.
-- The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
-  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill).
+- `tools/research/` (runs, the evidence store, messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/`: the
+  team's own tooling and machines, which nothing in `verity/` reads.
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
 `verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`
@@ -53,11 +53,9 @@ uv run tools/verity/check/suites.py             # the suites whose inputs change
 uv run --extra torch-cpu verity check           # the whole check
 ~~~
 
-The team's agents run these remotely (the team skill).
-
 ## Design rules
 
-The rules in force, each stated as itself; the friction skill has the standing rulings stated nowhere else.
+The rules in force, each stated as itself.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value, committed under a hiding leaf and touched only inside a zero-knowledge proof.
@@ -101,8 +99,11 @@ The rules in force, each stated as itself; the friction skill has the standing r
   capacity, and nothing else: no power certifier, power ceiling, energy floor or meter enters a protocol, premise or
   plan.
 - **Lean is the definition and the verifier.** Python in `verity.ml` mirrors it for the prover's
-  speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
-  Python verifier and the ml units it reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
+  speed, held to it by difftest. A protocol's verifier switches from Python to Lean only on evidence: its gap list shows
+  nothing the Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's
+  verdict, negative controls included. The Python keeps running as the reference, the switch is one reversible line, and
+  it moves the protocol's properties into `Security/Properties/`. Until then its Python verifier and the ml units it
+  reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
 - **Soundness and zero knowledge in Lean; completeness may be Python.** What a guarantee says about a cheating
   prover is proved in Lean or rests on an auditor-trusted device; that honest serving passes may be checked in Python.
 - **That a circuit computes what the model computes is completeness, never proved.** It decides only whether
@@ -124,13 +125,61 @@ The rules in force, each stated as itself; the friction skill has the standing r
   one. The datacenter's size (from `benchmarks/census/`) and the window's length are stated parameters, and a figure
   scaled from one machine says which parts are proved and which are scaled. Give each bound as its pooled total over the
   period and as a share of the compute it covers, beside the per-window figure, never instead of it: a per-window δ that
-  looks weak is not the result.
+  looks weak is not the result. An overhead is the `--zk` prover's alone, over the time the computation's FLOPs take at
+  the census's dense datasheet peak for its dtype, to one significant digit.
+
+### Protocols and claims
+
+- An auditor device releases its commitment to its coins only after the prover's commitment is in, so no soundness
+  statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two premises
+  outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
+- The prover controls the audited circuit's inputs and knows every coin once it is issued, so no defense assumes the
+  circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a trusted
+  third party, salted after the commitment with secrets the prover never sees, as one deployment variant.
+- The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives both
+  the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement ties them by a premise or
+  trusts them separately.
+- θ comes only from registered public data, registered at the start of a deployment; an output of an earlier run is never
+  θ (`NciCheck.Baseline` admits no other provenance).
+- No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking bound on
+  named conjectures, with the claims resting on them listed as conditional: `SquaringFloor` and `ChainSum` in the
+  repriced gate model (a thin lane a compare-select unit), since `EncodeChainHardness` is refuted (`EncodeChainRefuted`).
+- Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse all-zero
+  weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees are for the
+  whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity
+  assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
+  model's logits.
+- PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512 (`StraightLineExtraction`,
+  Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. C-Flock's knowledge soundness keeps the collision
+  form.
+- The deployed recursion's bound record states its inner claim at IVStar at the weight `coverW`, the least at which the
+  premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor under every weight
+  (`Claims.Recursion.lam`), and every table, README or claim that cites it gives its λ and says so.
+- `Flock.Guarantees.RecursiveAuditC3` may rest on `registrant-holds-openings`; in Lean the salt is a binder applied at
+  the salts the prover's workers committed under, never `∃ salt` or a `Classical.choose` of one.
+- A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed refusal
+  modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition decidable
+  at any literal instantiation, discharged by computation at use, never a listed assumption.
+- The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor checks
+  only padded counts. One key per protecting party, drawn once at setup from the OS before anything else, public and a
+  constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts are
+  drawn from the OS, not expanded by a PRG.
+- A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting implies the
+  verifier accepts; completeness stays a test.
+- `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the pinned
+  key behaves like a fresh one.
+- A table that tabulates a fixed function is a value, even with no program parameter; an operation's own definition
+  holds only the hardware's measured tables. No protocol gets an exemption for public values: in development a proof may
+  be replaced by replay, or verification skipped, as a labelled shortcut, never as the protocol.
 
 ## Tests
 
 Each package's tests are one suite in its own `tests/`, run in its own process and cached by input; the root `tests/`
-holds only invariants of the whole tree. How to run them, what a suite may read, and the rules for slow tests, fixtures
-and dummy credentials: the testing skill.
+holds only invariants of the whole tree. `uv run tools/verity/check/suites.py` runs every suite whose inputs changed
+(name suites to run only those; `--quick` skips the tests marked slow; `--list` shows each suite's inputs and whether a
+pass is cached), and one test file runs from its package (`cd verity/ml/flock && uv run pytest tests/test_layouts.py -k
+typed`). A suite that reads a repository file outside its declared inputs (`[tool.verity.tests] inputs`) fails. What a
+suite may read, and the rules for slow tests, fixtures and dummy credentials: the testing skill.
 
 No test reads wall-clock time (no sleeps, clock readings or timeouts:
 wait on the event or inject the clock; `tests/test_no_wall_clock.py`, its exceptions in `ALLOWED`). A test that flakes is
@@ -143,18 +192,15 @@ A change that adds or modifies a circuit (a Definition, a subcircuit template, a
 `uv run circuit-check <definition|template|row>`, with its report in the PR. A new Definition gets a binding in its
 module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), which the suite enforces.
 
-## Checking and merging
+## The check
 
 There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
 `circuit-check --all`, C-Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
 `lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes.
 
-A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
-unchanged.
-
-A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
-docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. PRs land
-on review, and the full check runs after landing (how a PR lands: the team skill).
+A part's verdict (a test suite, a circuit-check target, a Lean package's Lean check) is reused only while a hash of its
+declared inputs, the base image and its runner is unchanged, so a docs-only change reruns nothing. A nightly uncached
+check must agree, and a disagreement is fixed in the check.
 
 ## Lean
 
@@ -200,14 +246,15 @@ on review, and the full check runs after landing (how a PR lands: the team skill
   machinery rather than accumulating them.
 - **The tree gets smaller over time.** Make two interfaces or definitions of one thing one, make things extensible,
   delete dead and superseded code, and move data and logs to the evidence store.
+- **Hard switches.** Once a replacement lands, no second path stays alive beside it, and every bridge kept for the
+  transition names its end state.
+- **A guard never fails open.** A check or refusal that can't reach its verdict fails, saying why.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
   procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, GLOSSARY.md, the
   skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` fails on a doc
   naming a dead path.
-- Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
-  `show-environment`.
 
-## Where writing goes
+## What the tree holds
 
 **The repository says what is true now and how to reproduce it. It is not a record.** A reader learns from it what each
 part is and does, its contract in the Glossary's terms, the rules, and how to run each measurement (a benchmark's runner
@@ -226,7 +273,7 @@ and its parameters). What a run measured, what happened and who decided live out
   reader who finds no overhead figure in the repository has found it working as intended, and runs the benchmark or reads
   the published result.
 - **Where those live:** results in the evidence store, why a line changed in git, and open work, decisions and reports
-  outside the repository (the team skill).
+  outside the repository.
 - **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`fixtures/artifacts.json`'s
   `art:` ids and digests, a lock's records, the handle registry, a table's runs of record), never in a comment, a
   docstring or a doc.
@@ -234,7 +281,6 @@ and its parameters). What a run measured, what happened and who decided live out
 ## Skills
 
 `.agents/skills/`: `testing`, `lean-proofs`, `kernel-engineering` (PoUW GPU kernels on sm_120), `smell-check` (before you
-call something served, end to end, proved or credited), `writing-runs` (a job for `research run`), `friction` (when
-something is in your way, and the standing rulings), `process-design` and `authoring-skills` (at most 16 KB a skill).
-The team's own agents start with `team` (machines, landing, lanes, and where work, notes and evidence live), then
-`coordinating`, `using-slack` and `asking-daniel`.
+call something served, end to end, proved or credited) and `authoring-skills` (at most 16 KB a skill).
+
+The team's own agents start with the `team` skill: how work lands and is coordinated, and the team's other skills.

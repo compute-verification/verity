@@ -344,7 +344,7 @@ in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. 
 (`verity/core/protocols/network/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
 `service.OF_RECORD`; an advised link's stays the Python's. `verify` runs both on every proof, and a link-window where
 they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch went
-to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
+to `lean` under the switching rule (root `AGENTS.md`, "Lean is the definition and the verifier"), on these grounds:
 - the gap list is empty for plain and served links. Everything the Python checks, the Lean checks: the findings prove
   the registered Program and the drawn units with every gate pinned, the public row the verifier derives (root, served
   domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'

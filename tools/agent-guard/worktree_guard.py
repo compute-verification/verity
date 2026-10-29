@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One agent per checkout (INF-59; the rule is AGENTS.md's, #2416): the shell hook's judgment of `git checkout`, `git switch` and
+"""One agent per checkout (INF-59; the rule is the team skill's, #2416): the shell hook's judgment of `git checkout`, `git switch` and
 `git push`, and the branch registry it keeps.
 
     python3 tools/agent-guard/worktree_guard.py hand BRANCH AGENT_ID   give a branch you created to another agent (its new owner)
@@ -162,7 +162,7 @@ def main_or_config_reason(invocations_: list[tuple[int, str, list[str]]], next_o
                     f.write(json.dumps({"agent": agent, "dir": d, "args": args, "reason": ok}) + "\n")
                 continue
             if opts & {"--all", "--mirror"} or targets:
-                return ("this push would update `main` or `next`, which only drive and the lander move (AGENTS.md). Push "
+                return ("this push would update `main` or `next`, which only drive and the lander move (the team skill). Push "
                         "your own branch instead: `git push origin HEAD:refs/heads/<your-branch>` (create it first with "
                         "`git switch -c <your-branch>` if this checkout is on main).")
         if sub == "config":
@@ -196,7 +196,7 @@ def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] |
                     f"agent (the `research` CLI follows it). Work in a checkout of your own: `git -C {top} worktree add "
                     f"../wt-<name> -b <branch>` (or `git worktree add ../wt-<name> <existing-branch>`), then run git there "
                     f"(`git -C ../wt-<name> ...`, or `cd ../wt-<name> && ...` in the same command). One agent per checkout "
-                    f"(AGENTS.md).")
+                    f"(the team skill).")
         if sub == "push":
             reg = registry()
             for b in push_targets(d, args[1:]):
