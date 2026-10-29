@@ -175,21 +175,23 @@ def program_digests(sub, statics: dict | None = None) -> dict[str, str]:
 def program_sha512(sub, statics: dict | None = None) -> str:
     """META ``program_sha512``: core's ``program_digest`` of the subcircuit's Definition at its default statics; a caller that
     builds the partition over another Program passes that Program's digest instead."""
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
     from verity.ml.circuits.program import Program
 
     try:
         desc = encode_program(Program(sub.definition(**(statics or {}))))
     except (TypeError, ValueError, AttributeError):
         # a silicon reference no core Definition wraps: its digests as the program
-        return hashlib.sha512(json.dumps(sub.program_digests([statics or {}]), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return hashlib.sha512(canonical_json(sub.program_digests([statics or {}]))).hexdigest()
     return program_digest(desc)
 
 
 def partition_digest(obj: dict) -> str:
     """``SHA-512(rule || 0 || canon({program, query, version, params}))``, 64 bytes: ``verity/partition/v1``'s shape under the
-    provisional :data:`PARTITION_RULE`."""
-    return hashlib.sha512(PARTITION_RULE.encode() + b"\0" + json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    provisional :data:`PARTITION_RULE`, ``canon`` being ``verity.ml.circuits.codec.canonical_json``."""
+    from verity.ml.circuits.codec import canonical_json
+
+    return hashlib.sha512(PARTITION_RULE.encode() + b"\0" + canonical_json(obj)).hexdigest()
 
 
 def _pow2(x: int) -> int:
