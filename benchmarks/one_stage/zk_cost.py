@@ -16,7 +16,7 @@ sessions.
   program and partition, served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
   drawn units in one statement.
 * **Sessions.** Per point and arm, `--cold` processes proving one session each (`--runs 1 --warm 0`: one touched
-  statement's prover today) and one proving `--warm` + `--runs` sessions (the in-process session cost). Arm `fw` is the
+  statement's prover) and one proving `--warm` + `--runs` sessions (the in-process session cost). Arm `fw` is the
   design's path: the firewall's send check on every session (`FC_FIREWALL=1`), which rechecks the host's witness; `nofw`
   is the same with the check off. Both take the host's witness (`FC_HOST_WITNESS=1`), as proof_throughput's ZK point does,
   so their difference is the firewall's.

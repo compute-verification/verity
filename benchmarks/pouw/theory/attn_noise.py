@@ -22,18 +22,20 @@ Parts:
   columns a compression; V's over Vᵀ) and on a layout with each unit's operand noise contiguous, and GRIND's
   bound a seed at prefill and at decode.
 
-Run from the repository root: `uv run --no-project --with numpy --with python-sat --with-editable
-benchmarks/pouw/exact_kit python -B benchmarks/pouw/theory/attn_noise.py --mutations`.
+Run from the repository root: `uv run python -B benchmarks/pouw/theory/attn_noise.py --mutations`.
 `benchmarks/pouw/tests/test_theory_attn_noise.py` runs it in the pouw suite.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import sys
 from pathlib import Path
 
 import numpy as np
+
+from verity.core.protocols.pouw.credit import DELTA
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -43,7 +45,7 @@ from narrow_u import NarrowBlock, planes  # noqa: E402
 
 INSTANCES = ("zero", "P = 0", "V = 0", "one-hot P", "uniform P", "random")
 #: SHA-512's output bits a compression in counter mode (one block a counter value).
-SHA_BITS = 512
+SHA_BITS = 8 * hashlib.sha512().digest_size
 #: The NS 1 patch: 4 rows × 128 columns of 1-bit noise a compression (sha_noise.cuh, cgemm_ref.patch_bits).
 PATCH_ROWS, PATCH_COLS = 4, 128
 #: A drawn unit's seed: 2 compressions (SHA-512 of the window coin and the two roots).
@@ -89,7 +91,11 @@ def h_decode(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
             "P·V, V column (b)": L, "P·V, P row (U)": u_bits_pv / d}
 
 
-def grind_eps(L, delta_log2=40, t_log2=128, d=128):
+#: The per-window δ's bits: δ = 2^-DELTA_LOG2 (PoUW's `credit.DELTA`).
+DELTA_LOG2 = DELTA.denominator.bit_length() - 1
+
+
+def grind_eps(L, delta_log2=DELTA_LOG2, t_log2=128, d=128):
     """Decision 112's (iv): a seed's grind premium is at most log₂(T/δ)/h units, so ε_grind ≤ log₂(T/δ)/(h·N) over
     the N units the seed covers, one seed a matmul (one head). Prefill: QKᵀ covers the causal L(L + 1)/2 scores,
     P·V L·d outputs; decode: L scores and d outputs."""

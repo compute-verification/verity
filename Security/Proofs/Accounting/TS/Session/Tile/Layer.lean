@@ -55,8 +55,8 @@ def TileRel {R C K : ℕ} (s : RowsSession) (o : s.Out) (ok : String) (dq : List
 
 /-- **The tile layer through its C-Flock sessions**: proof `i` of round `w` is accepted where flock-verify
 `--zk --registered` accepts its session at the registered file's known content `known x w i` (`LiveAcceptsZKR`, and
-`Registered.checkKnownAll`) and under its complete check (`Registered.checkComplete`, run when the `--registered` file
-sets `complete`: every port of the circuit is a port of `own`), opens the committed rows at the registered reads
+`Registered.checkKnownAll`) and under its complete check (`Registered.checkComplete`, run whenever `--registered` is
+given: every port of the circuit is a port of `own`), opens the committed rows at the registered reads
 (`openedReg`), and its relation is `TileRel` at the decode `dec x w i`. -/
 noncomputable def tileLayer {Ω : Type} {S nπ R C K : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String)

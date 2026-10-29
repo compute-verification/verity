@@ -14,8 +14,8 @@ SX_HD constexpr int v_of(int j) {
 SX_HD constexpr int r0_of(int j) { return j == 0 ? 1 : j == 1 ? 8 : 15; }
 constexpr int NV = 6, NR0 = 3;
 // sx::compress<V, ROLL> (ROLL 0..2), sx::compress_kw<V, ROLL> over kw_of (ROLL 0..1), sha::compress, sha::compress_kw over
-// schedule_kw, sha::compress_from<R0> from rounds_prefix
-constexpr int SX = 3 * NV, KW = 2 * NV, FORMS = SX + KW + 2 + NR0;
+// schedule_kw, sha::compress_compact, sha::compress_from<R0> from rounds_prefix
+constexpr int SX = 3 * NV, KW = 2 * NV, SHA = SX + KW, FORMS = SHA + 3 + NR0;
 
 template <int I>
 SX_HD void form(uint64_t* st, const uint64_t* blk) {
@@ -28,14 +28,16 @@ SX_HD void form(uint64_t* st, const uint64_t* blk) {
     uint64_t kw[80];
     sx::kw_of(w, kw);
     sx::compress_kw<v_of(J / 2), J % 2>(st, kw);
-  } else if constexpr (I == SX + KW) {
+  } else if constexpr (I == SHA) {
     sha::compress(st, w);
-  } else if constexpr (I == SX + KW + 1) {
+  } else if constexpr (I == SHA + 1) {
     uint64_t kw[80];
     sha::schedule_kw(blk, kw);
     sha::compress_kw(st, kw);
+  } else if constexpr (I == SHA + 2) {
+    sha::compress_compact(st, blk);
   } else {
-    constexpr int R0 = r0_of(I - SX - KW - 2);
+    constexpr int R0 = r0_of(I - SHA - 3);
     uint64_t m[8];
     sha::rounds_prefix(st, blk, R0, m);
     sha::compress_from<R0>(st, m, w);
@@ -77,9 +79,10 @@ extern "C" const char* sha512_form_name(int f) {
   static char s[64];
   if (f < SX) snprintf(s, sizeof s, "sx::compress<0x%02x, %d>", v_of(f / 3), f % 3);
   else if (f < SX + KW) snprintf(s, sizeof s, "sx::compress_kw<0x%02x, %d>", v_of((f - SX) / 2), (f - SX) % 2);
-  else if (f == SX + KW) snprintf(s, sizeof s, "sha::compress");
-  else if (f == SX + KW + 1) snprintf(s, sizeof s, "sha::compress_kw");
-  else snprintf(s, sizeof s, "sha::compress_from<%d>", r0_of(f - SX - KW - 2));
+  else if (f == SHA) snprintf(s, sizeof s, "sha::compress");
+  else if (f == SHA + 1) snprintf(s, sizeof s, "sha::compress_kw");
+  else if (f == SHA + 2) snprintf(s, sizeof s, "sha::compress_compact");
+  else snprintf(s, sizeof s, "sha::compress_from<%d>", r0_of(f - SHA - 3));
   return s;
 }
 

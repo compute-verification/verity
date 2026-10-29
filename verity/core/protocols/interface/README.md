@@ -42,6 +42,14 @@ an `accept` has no reason and both its public outputs and its profile, while a r
 them, and they import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another. `Verdict`, `Ratio` and the
 profile's types derive `DecidableEq`.
 
+## Decoding, then a check of the decoded values (`CoreProtocol/Decoded.lean`)
+
+`Protocol.decode` is the part of `answer` that reads bytes: the parameters through `canonicalJson` and `params`, the
+commitment and the evidence through their decoders. Each may run `Lean.Json.parse`, which is `partial`, so no proof
+evaluates it. `Protocol.answerOf` is the rest, on decoded values. `Protocol.answer_decode` (`rfl`) says `answer` is
+`answerOf` of `decode`, so a proof about decoded values holds of `answer` on any bytes that decode to them. A
+composition's form of it is `Core.Composition.checkSame_decode` (`../composition`).
+
 ## The command line (`CoreProtocol/Cli.lean`), the same for every protocol
 
 - `<exe> id` prints the id.
@@ -64,6 +72,17 @@ the caller's blobs. `toProtocol` is the protocol on no blobs, so a composition o
 `BlobProtocol.main`'s command line is `Protocol.main`'s, with `check PARAMS COMMITMENT EVIDENCE [BLOB ...]` (each blob a
 file) and a `serve` case that may carry `"blobs": ["<hex>", ...]` (absent: none). `CoreProtocol/BlobsExample.lean` is
 the toy protocol whose guards cover both.
+
+## Records (`CoreProtocol/Record.lean`)
+
+`Core.Record` is a record entry: one message of a run's transcript (a registration, a commitment, the challenger's
+coins or sample, a proof, a verdict), `{body, kind, prev, schema, seq, session, sig}`. `body` is the message, `kind` its
+kind under `schema` (the protocol's entry schema and version), `session` its session or `null`, and entry `i` has
+`seq = i` and `prev` the SHA-512 of entry `i - 1`'s line (`Record.ZERO` first). `sig` signs `Record.message role I d`,
+SHA-512 of the protocol's role, the signer's LMS identifier and `d`, the schema's tagged SHA-512 of the entry without its
+sig (`Record.unsigned`). `Record.ofJson` reads the form; what a protocol accepts beyond it (its schemas, kinds, bodies,
+signer and sessions) is its own check. The auditor's ledger (`SampledProofs.Challenger.ledgerEntry?`, schemas
+`verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/core/protocols/record.py` is its Python.
 
 ## The profile (`CoreProtocol/Profile.lean`)
 

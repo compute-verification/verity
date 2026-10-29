@@ -3,9 +3,9 @@
 # sessions by `flock-circuit prove --zk --gpu` with and without the firewall's send check, each prover process under a GPU
 # lease (the device held for the proofs alone), Lean verifying each arm at its largest point. Builds as zk_cost.sh's. Run
 # from the verity tree on a GPU node, as a GPU host job:
-#   research run --queue --on vy-nebius-1 --gpu-host --project verity --source . --cwd clone --mem-gb 96 --cpus 32 \
-#     --max-min 240 -- bash benchmarks/one_stage/a8_gpu.sh
-# (on vy-nebius-2 a guest job adds --preemptible)
+#   bash benchmarks/one_stage/a8_gpu.sh
+#   (a job run from a clone of the tree, on a GPU host, 32 CPUs, 96 GB, up to 240 min)
+# (a guest job on a shared GPU node is preemptible)
 # env: A8_SAMPLES=64 (the staged units)  A8_POINTS=1,8,32,64  A8_ARMS=fw,nofw  A8_COLD=2  LEASE_MAX_MIN=60 (a prover process's)
 #      FLOCK_WORK, PT_WORK as zk_cost.sh's
 # Kept in $OUT: a8's records and logs and the sessions' records; never a circuit, a prover's file or a proof's archive.
