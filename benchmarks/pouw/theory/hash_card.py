@@ -55,6 +55,7 @@ COUNT_ELSEWHERE = True
 PREFER_LEAD = True
 MACS_UNFORCED = True
 A_TARGET = 0.99
+LINK_FLOOR = True
 
 
 def load(path: Path = DATA) -> dict:
@@ -341,6 +342,11 @@ def design_entry(card: dict, hc: dict, key: str, spec: dict, lead: dict, kind: s
         e["cut"] = lead["h"] / e["h"]
     elif e.get("h") == 0:
         e["cut"] = math.inf
+    link = hc.get("link")
+    if LINK_FLOOR and link and e.get("t2") and e["t2"][0] is not None and e["t2"][0] < link["t2_floor"]:
+        flags.append(f"T2 {e['t2'][0]:.1f}x ({e['t2'][1]}) omits the lead's coin stream, which floors T2 at "
+                     f"{link['t2_floor']:g}x on {link['what']}")
+        e["t2"] = (float(link["t2_floor"]), "estimate")
     for t in ("t1", "t2", "t3"):
         if t not in e:
             flags.append(f"{t.upper()} unpriced")
@@ -383,6 +389,10 @@ def capacity(e: dict, spec: dict) -> None:
     if h is None:
         return
     c0 = spec.get("c0")
+    if spec.get("a"):
+        e["a"], e["a_label"], e["a_source"] = spec["a"]["value"], spec["a"].get("label", "estimate"), spec["a"]["what"]
+        e["precision"] = TARGET["t1"] / h if h > 0 else math.inf
+        return
     if c0:
         cost, src, label = c0["value"], c0["what"], c0.get("label", "estimate")
     elif spec.get("credits_macs") or not MACS_UNFORCED:
@@ -462,7 +472,7 @@ def rank_label(v: float) -> str:
 
 
 def render(hc: dict, lead: dict, readings: list[dict], entries: list[dict], fr: list[dict], fr_rules: list[dict],
-           fr_a: list[dict], checks_line: str) -> str:
+           fr_a: list[dict], fr_a_lanes: list[dict], checks_line: str) -> str:
     b = hc["basis"]
     L = ["# The HASH card: h against assumption rank, the lead as baseline", "",
          f"**Basis.** {b['title']}. Model {b['model']}, points {', '.join(b['points'])}, the words in "
@@ -528,7 +538,9 @@ def render(hc: dict, lead: dict, readings: list[dict], entries: list[dict], fr: 
     tables = [("as the lanes rank them, open rule questions aside", fr),
               (f"under the rules as they stand (rulings {rulings}; no rule change or question open)", fr_rules),
               (f"under the rules as they stand, if the target is {A_TARGET:.0%} of capacity (a ≥ {A_TARGET:.0%}, the "
-               f"question to Daniel)", fr_a)]
+               f"question to Daniel)", fr_a),
+              (f"as the lanes rank them, open rule questions aside, if the target is {A_TARGET:.0%} of capacity",
+               fr_a_lanes)]
     for title, f_ in tables:
         L += ["", f"## The frontier, {title}: the least h at each rank among designs meeting T1, T2 and T3", "",
               "| axis rank ≤ | best design | h | cut vs lead | a (capacity) | T2 | effective rank | what done-when still needs |",
@@ -538,7 +550,7 @@ def render(hc: dict, lead: dict, readings: list[dict], entries: list[dict], fr: 
             L.append(f"| {rank_label(f['rank'])} | {f['best']} | {f['h']:.2f} | {fmt(f['cut'], digits=2)}× | "
                      f"{e['a']:.1%} | {e['t2'][0]:.1f}× ({e['t2'][1]}) | {rank_label(e['ranks']['axis_effective'])} | "
                      f"{'; '.join(e['done_missing']) or 'nothing'} |")
-    best = list(dict.fromkeys(["lead"] + [f["best"] for f in fr + fr_rules + fr_a]))
+    best = list(dict.fromkeys(["lead"] + [f["best"] for f in fr + fr_rules + fr_a + fr_a_lanes]))
     L += ["", "## Per monitoring period: honest commitment work of the frontier's designs (h × stock, W1 at stock's AND rate)",
           "", "Pooled totals over each period and scope; the share of the compute covered is h itself (and T1's uncredited "
           "share beside it). The capacity the cheapest prover leaves unaccounted is (1 - a)(1 + h)·stock (share 1 - a of "
@@ -723,8 +735,9 @@ def run(card: dict, hc: dict, checks: Checks, prefix: str = "") -> dict:
                  f"h alone", len(ties) > 1 and bool(tf) and all(f["best"] == "lead" for f in tf),
                  " → ".join(f"{rank_label(f['rank'])}: {f['best']}" for f in tf))
     la = by["lead"]["a"]
-    over = [e["id"] for e in entries if e.get("a") is not None and not specs.get(e["id"], {}).get("c0")
-            and not specs.get(e["id"], {}).get("credits_macs") and e["a"] > e["h"] / (1 + e["h"]) + 1e-12]
+    over = [e["id"] for e in entries if e.get("a") is not None
+            and not any(specs.get(e["id"], {}).get(k) for k in ("c0", "a", "credits_macs"))
+            and e["a"] > e["h"] / (1 + e["h"]) + 1e-12]
     checks.check(f"{prefix}a is the cheapest prover's cost over honest's (1 + h)·stock: the lead's {la:.2%} is "
                  f"h / (1 + h) = 127.5 / 128.5 less T1, and no design without a matmul premise or a stated zero-data "
                  f"floor accounts for more than h / (1 + h)", abs(la - 127.5 / 128.5) < 1e-4 and not over,
@@ -735,8 +748,15 @@ def run(card: dict, hc: dict, checks: Checks, prefix: str = "") -> dict:
                  f"{A_TARGET / (1 - A_TARGET):.0f}: without MAC credit, cutting h costs capacity",
                  bool(f99) and not low, " → ".join(f"{rank_label(f['rank'])}: {f['best']} {f['h']:.1f} ({f['a']:.2%})"
                                                    for f in f99) + (f"; under h 99: {', '.join(low)}" if low else ""))
+    link = hc.get("link", {})
+    floored = [e for e in entries if e.get("t2") and e["t2"][0] is not None]
+    below = [e["id"] for e in floored if e["t2"][0] < link.get("t2_floor", math.inf)]
+    checks.check(f"{prefix}every design's T2 is at least the lead's coin stream on the stated certifier link "
+                 f"({link.get('t2_floor', 0):g}x on {link.get('what', 'no link stated')})", bool(link) and not below,
+                 f"{len(floored)} designs with a T2" + (f"; below: {', '.join(below)}" if below else ""))
     return {"lead": lead, "readings": readings, "entries": entries, "frontier": fr,
-            "frontier_rules": frontier(entries, rules_stand=True), "frontier_a": f99}
+            "frontier_rules": frontier(entries, rules_stand=True), "frontier_a": f99,
+            "frontier_a_lanes": frontier(entries, a_min=A_TARGET)}
 
 
 def mutations(card: dict, hc: dict, checks: Checks) -> None:
@@ -795,6 +815,8 @@ def mutations(card: dict, hc: dict, checks: Checks) -> None:
            card, hc, switched("PREFER_LEAD", False))
     caught("a with the MACs counted as forced on stock hardware, 1 - T1 / (1 + h)", card, hc,
            switched("MACS_UNFORCED", False))
+    caught("a design's T2 taken without the lead's coin stream on the certifier link", card, hc,
+           switched("LINK_FLOOR", False))
     h4 = copy.deepcopy(hc)
     h4["proposal"]["mut-ruling"] = {
         "lane": "TEST", "note": "none", "title": "a seeded proposal citing no recorded ruling", "status": "proposed",
@@ -839,7 +861,7 @@ def main() -> int:
         f", {sum(m['caught'] for m in checks.mutants)}/{len(checks.mutants)} mutations caught" if checks.mutants else "")
     out.mkdir(parents=True, exist_ok=True)
     (out / "hash_card.md").write_text(render(hc, res["lead"], res["readings"], res["entries"], res["frontier"],
-                                             res["frontier_rules"], res["frontier_a"], line))
+                                             res["frontier_rules"], res["frontier_a"], res["frontier_a_lanes"], line))
     keep = ("id", "kind", "title", "lane", "note", "status", "design", "h", "h_prover", "h_label", "cut", "t1", "t1_dw",
             "fold_w1", "t2", "t3", "a", "a_label", "a_source", "precision", "meets", "flags", "rule_change",
             "rule_question", "ruled", "refused", "attacks", "done_missing", "adds")
@@ -847,7 +869,7 @@ def main() -> int:
           "lead": {k: res["lead"][k] for k in ("name", "h", "t1", "t2_measured", "t2_card", "t3_measured", "macs_per_word")}
           | {"parts": res["lead"]["parts"], "ranks": res["lead"]["ranks"]},
           "readings": res["readings"], "frontier": res["frontier"], "frontier_rules_stand": res["frontier_rules"],
-          "frontier_capacity": res["frontier_a"],
+          "frontier_capacity": res["frontier_a"], "frontier_capacity_lanes": res["frontier_a_lanes"], "link": hc.get("link"),
           "designs": [{k: e[k] for k in keep if k in e} | {"ranks": e.get("ranks")} for e in res["entries"]]}
     (out / "hash_card.json").write_text(json.dumps(js, indent=1, sort_keys=True, default=str) + "\n")
     with (out / "hash_card.csv").open("w", newline="") as fh:

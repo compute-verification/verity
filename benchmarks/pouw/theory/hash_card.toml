@@ -13,6 +13,12 @@ lead_name = "tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min"
 h_definition = "h: the honest program's credited commitment work over stock, W1 units a useful MAC: SHA-512 at R per form (pouw_space price.sha_forms), plus any non-hash commitment work a design adds (a sketch's MACs, lookups), at W1, counted wherever it runs (the prover or the auditor's device)"
 source = "N-CARD final (note compute-research/20261029T1250Z-report-np-card), pouw_space at 5e6e05cc21; inbox/HASH.md's figure of merit; hashing wherever it runs: HASH.md §interim-1's card basis"
 
+# The certifier's down-link, a stated parameter: the lead's coin stream crosses it, so it floors every design's T2.
+[link]
+what = "the census's 100 Gb/s reference link a GPU, async, at T 8,192"
+t2_floor = 57.2
+source = "NOISE (note compute-research/20261029T2225Z-report-hash-noise; the feed checked, run r20261029-222047-3cfc; the floor is arithmetic on N-KERNEL's measured forwards, estimate): the lead's coin feed is 144.79 MB a token at one row, 9.05 at 16 rows and 2.24-2.26 at >= 64 rows, so after a hash cut the stream alone sets T2 >= 51.1x sync / 57.2x async at T 8,192 (13.1x / 14.6x at 400 Gb/s a GPU); if the census link is a machine's, shared by 8 GPUs, the lead itself fails T2 at T 8,192 (406x / 455x)"
+
 # Rulings on what a design needs of the rules, cited by a design's or a family's `rules`. A design's rule_change or
 # rule_question clears only when every ruling it cites admits it (`admits`); `flag` is what the design then carries.
 [ruling.one-hash-fold]
@@ -496,17 +502,20 @@ caveats = ["ALT states h for the card's share: 0 at T 512 with 64 rows and at de
 [proposal.alt-dout]
 lane = "ALT"
 note = "compute-research/20261029T2017Z-report-hash-alt"
-title = "D-OUT: outputs only, (A + R)·B^T with dense binary R on the activations, served noisy, public weights"
+title = "D-OUT (sink): outputs only, (A + R)·B^T with dense binary R on the activations, served noisy, position 0 (BOS) served exact, public weights; attention uncredited"
 status = "proposed"
 h = { value = 1.41, price = "floor", label = "estimate", point = "any", model = "llama-3.2-1b", words_chunk = 262144, baseline = 118.5 }
-t1 = { value = 0.0074, label = "estimate" }
-t2 = { value = 2.0, label = "estimate" }
+t1 = { value = 0.0074, label = "checked" }
+t2 = { value = 3.2, label = "estimate" }
+t3 = { value = 0.0319, label = "checked" }
 credits_macs = true
+a = { value = 0.811, label = "estimate", what = "ALT (note compute-research/20261029T2229Z-report-hash-alt §5): (c(1 - T1) + h) / (1 + h), c the credited share; with attention uncredited 99.0% at T 512, 89.4% at T 8,192 and 81.1% at decode b64 8K (c 64.4%), the worst" }
 adds = [{ id = "SAK-UF(B)", rank = "4bU", rank_stated = "4", part = "matmul", status = "open", owner = "ALT", falsification = "a MAC-weighted gap above 1% - 0.22% at 1-bit R on the registered weights (hash_alt_weights.py, per model): 0.516% on Llama-3.2-1B's int8 weights after ALT interim 2's routes (run r20261029-203003-9868), 16% on Student-t(3) synthetic weights; or any exact program for R·B^T below (1 - eps)·m·n·K" }]
 rule_change = "public weights: the weights are values a program brings under 'everything zero-knowledge' (the model-public ruling)"
 caveats = [
   "the linears only, as the basis: over all compute, attention at the lead's density gives h 3.4-43 with all of it credited; attention uncredited gives h 0.91-1.39 with 64-98% of stock MACs credited (ALT interim 2: quote it with its coverage)",
-  "T3 unmeasured (about int7-equivalent activations on every linear)",
+  "T3 (ALT checkpoint, run of hash_alt_ppl.py on WikiText-2, 5 seeds, checked): D-OUT as specified fails by about 100x (+430% at 2K), from noise on the attention sink's down input; with position 0 served exact +3.19% / +2.91% at 2K / 8K, at 1 - 1/ctx of the linears' credit; with down exact too +0.62% / +0.61% at 72.4% of it",
+  "the served weights' gap is 0.516% at 1-bit noise on the pinned LLAMA32_1B_INT8 bytes (run r20261029-205450-3fc3, 0 of 973,078,528 entries differ), so T1 = 0.22% forming + 0.52% = 0.74%",
   "the credit is for MACs on registered weights with fresh noise; nothing checks that A is the model's activation",
   "SAK-UF is a premise on the registered weights per model, met as 'literally random operands' on one side only",
 ]
@@ -825,7 +834,7 @@ caveats = [
 [proposal.tensor-fold-wide]
 lane = "TENSOR"
 note = "compute-research/20261029T2155Z-report-hash-fold-tensor"
-title = "the tensor-core fold over a v3 word form: a wide rank-2 live coin term U(i)·V(j) in each word's step-0 value, removed exactly mod 2^32 in the epilogue; credited as stock alone"
+title = "the tensor-core fold over a v3 word form, the lever alone: a wide rank-2 live coin term L(i, j) = sum_l U_l(i)·V_l(j) in each word, set and removed exactly mod 2^32; one R a call; credited as stock alone"
 status = "proposed"
 fold = { seal_bytes_per_cell = 0.0625, writes_per_word = 1.107 }
 form = "tensor-fold-wide"
@@ -834,12 +843,55 @@ word_form = "v3"
 t1_label = "checked"
 stated = { h = 1.58 }
 t2 = { value = 10.6, label = "estimate" }
-c0 = { value = 2.24, label = "estimate", what = "TENSOR's counting floor with the wide term, 1.94x stock (1.681 registers a word, a count in a model; checked), plus the hashing outside it (A's rows and the seal, 0.30); class-sharing then pays 17.5 registers a word" }
-adds = [{ id = "TensorMaterial (wide)", rank = 5, part = "hashing", status = "open", owner = "TENSOR", falsification = "a program below 0.867 registers a word at lead_words(..., 'wide'), bit for bit against honest's sealed state (TENSOR Ask 2, COUNTER's target)" }]
+c0 = { value = 0.67, label = "checked", what = "TENSOR checkpoint 2's floor with one R a call, 0.37x stock (0.322 registers a word, the carries route: last step's product plus the increment's carries; run r20261029-222842-aeb5), plus the hashing outside the fold (A's rows and the seal, 0.30); checkpoint 1's 1.94x is retracted" }
+adds = [{ id = "TensorMaterial (wide)", rank = 5, part = "hashing", status = "open", owner = "TENSOR", falsification = "a program below 0.867 registers a word at lead_words(..., 'wide'), bit for bit against honest's sealed state (TENSOR Ask 2, COUNTER's target); the carries route's floor is 0.32" }]
 caveats = [
-  "the frozen lead's word form doesn't change (freeze 1, HASH.md 22:05Z): a v3 candidate, with T3 (exact removal needs the served IGMMA to wrap mod 2^32, no .satfinite), the network term (NOISE prices the lever's wire) and honest's cost to price",
-  "honest's extra cost is about 4 IMADs a word a chunk, at most 0.06 registers a word (estimate), so h <= 1.58",
-  "the floor is a count in a model, not a bound on every program; TensorMaterial stays the premise, and the offset packers and the M0 stream were not rerun on wide data; TENSOR makes the count rigorous next, in Lean if it can",
-  "the coordinator's 77% of capacity divides the floor alone by 1 + h; the card adds the hashing outside the fold",
+  "TENSOR checkpoint 2 (note compute-research/20261029T2232Z-report-hash-fold-tensor, checked, run r20261029-222842-aeb5, 15/15): the lever alone doesn't put a count under stock, so credit = stock falls back on TensorMaterial; the fresh-R variant (tensor-fold-lever-fresh) does",
+  "the frozen lead's word form doesn't change (freeze 1, HASH.md 22:05Z): a v3 candidate, with T3 (exact removal needs the served IGMMA to wrap mod 2^32, no .satfinite), the network term (NOISE: the lever is <= 0.99% of the feed and leaves the network term the lead's, argued) and honest's cost to price",
+  "honest's lever costs 2 rho IMADs a word a chunk: 0.060 / 0.015 registers a word at K 2,048 / 8,192 (estimate), h 1.579 / 1.527",
+  "NOISE (run r20261029-222047-3cfc): the lever doesn't defeat decomp or mma_pairsum for the other folds; a step-constant term is a per-cell start value every attack already takes",
   "T2 as tensor-fold's, unmeasured",
 ]
+
+[proposal.tensor-fold-lever-fresh]
+lane = "TENSOR"
+note = "compute-research/20261029T2232Z-report-hash-fold-tensor"
+title = "the tensor-core fold over the v3 lever (rank 2) with a fresh live R_t every k32 step, read by wgmma from shared memory; credited as stock alone, protected by a count under ByteEntry"
+status = "proposed"
+fold = { seal_bytes_per_cell = 0.0625, writes_per_word = 1.107 }
+form = "tensor-fold-fresh"
+credit = "stock"
+word_form = "v3"
+t1_label = "checked"
+stated = { h = 1.579 }
+t2 = { value = 10.6, label = "estimate" }
+c0 = { value = 1.73, label = "checked", what = "TENSOR's floor, 1.43x stock at K 2,048 / 1.44x at K 8,192 (1.242 / 1.251 registers a word; arithmetic proved in TensorFloor.lean, core Lean, the per-byte minima checked, run r20261029-222842-aeb5) under W1, H32, DistinctWrites and ByteEntry, plus the hashing outside the fold (A's rows and the seal, 0.30); the cheapest modelled program pays 1.64 registers a word" }
+adds = [{ id = "ByteEntry", rank = 5, part = "hashing", status = "open", owner = "TENSOR", falsification = "a route outside ByteEntry's six (scratch, prev, partner, incr, decomp, walk) that forms one row-plane's product with fewer products plus bits than the cheapest of the six; the known gap is multi-row combinations at call scale with 16-bit coins (about 1,600 rows), which 32-bit coins remove (argued); COUNTER and NOISE asked to attack it (TENSOR Ask 3)" }]
+caveats = [
+  "TENSOR: a narrower premise than TensorMaterial, a route list over our construction with a random family (R_t, L) drawn live; with it credit = stock holds by a count with a 1.43x margin; the Lean proves the arithmetic only, as HashFloor.lean's did",
+  "the v3 word form (freeze 1): T3, the network term and honest's cost are its own to price; honest's lever 0.060 / 0.015 registers a word and the fresh R none under wgmma m64n8k32 (estimate; +0.125-0.5 a word under mma.sync)",
+  "a fresh R is 8 KiB a step a call, 536 KiB at K 2,048 and 2.1 MiB at K 8,192 of live coins (NOISE asked to price the wire), or one 64-byte live seed a call expanded by SHA-512 in counter mode, 128 compressions a step a call, which h would count wherever it runs and an outside machine could expand too (NOISE §5: a seed fails the network term)",
+  "the floor is at zero data and one seed of coins; honest's wgmma form with B from shared memory isn't compiled",
+  "T2 is TENSOR's estimate, with R_t from L2 at 0.5 B a word (no change past the lever's IMADs expected), unmeasured",
+]
+
+[proposal.alt-dout-hybrid]
+lane = "ALT"
+note = "compute-research/20261029T2229Z-report-hash-alt"
+title = "D-OUT (sink) on the linears with the lead's hashing kept on attention and row 0: outputs-only credit for the linears' MACs under SAK-UF, public weights"
+status = "proposed"
+h = { ratio = 0.3637, baseline = 118.5, label = "estimate" }
+t1 = { value = 0.0074, label = "checked" }
+t2 = { value = 74.63, label = "estimate" }
+t3 = { value = 0.0319, label = "checked" }
+credits_macs = true
+a = { value = 0.9918, label = "estimate", what = "ALT §5 (estimate on checked gaps): (c(1 - T1) + h) / (1 + h) with the lead's hashing on what D-OUT doesn't credit, 99.45% / 99.20% / 99.18% at T 512 / T 8,192 / decode b64 8K, the worst" }
+adds = [{ id = "SAK-UF(B)", rank = "4bU", rank_stated = "4", part = "matmul", status = "open", owner = "ALT", falsification = "a MAC-weighted gap above 1% - 0.22% at 1-bit R on the registered weights (hash_alt_weights.py, per model): 0.516% on the pinned Llama-3.2-1B int8 weights (run r20261029-205450-3fc3)" }]
+rule_change = "public weights: the weights are values a program brings under 'everything zero-knowledge' (the model-public ruling)"
+caveats = [
+  "ALT states h 3.4 / 26.8 / 43.1 against its lead's 118.5 at T 512 / T 8,192 / decode b64 8K (floor prices); the card takes the worst point's ratio, 0.364, to the basis lead: a 2.7x cut at 99% of capacity, 35x at T 512",
+  "T2 is argued, not priced: the hybrid hashes a subset of the lead's words and serves the linears at D-OUT's 1.2-3.2x, so the card carries the lead's measured 74.63x as its bound",
+  "T3 is D-OUT (sink)'s +3.19% / +2.91% (2K / 8K, checked); attention keeps the lead's noise",
+  "an error e in SAK-UF's credit costs c·e / (1 + h) of capacity: 0.22e / 0.028e / 0.015e at the three points",
+]
+
