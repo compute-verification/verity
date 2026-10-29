@@ -10,6 +10,7 @@
     "CoreComposition.Cases",
     "NciCheck.Protocol",
     "PouwCheck.Protocol",
+    "SampledProofs.OneStage",
     "SampledProofs.OneStageZk"
    ],
    "except": [],

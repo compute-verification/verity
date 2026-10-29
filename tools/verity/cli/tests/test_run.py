@@ -121,7 +121,7 @@ def test_the_composites_are_remote_and_onsite():
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SP.SUBPROTOCOLS.items()}
     assert SP.SUBPROTOCOLS["verity/remote/v0"] == {"inference-only": "verity/inference-only/v0", "pouw": "verity/pouw/v1",
-                                                   "sampled-proofs": "verity/sampled-proofs/one-stage/v2"}
+                                                   "sampled-proofs": "verity/sampled-proofs/one-stage/v1"}
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["pouw"] == "verity/pouw/period/v1"
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["wipe"] == "verity/wipe/v0"
 

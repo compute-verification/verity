@@ -1,8 +1,8 @@
 /-
 Onsite Verity (`verity/onsite/v0`): remote Verity's accounting with the verifier's hardware at the site, so it also
-accounts for space, bandwidth and communication. Its subprotocols are integrity by sampled proofs' one-stage audit on the
-proofs themselves (`SampledProofs.OneStageZk.protocol`, `verity/sampled-proofs/one-stage/v2`: flock-verify `--zk` run on
-each session's files, which the caller hands in as blobs), the inference-only policy (`NciCheck.Protocol.protocol`,
+accounts for space, bandwidth and communication. Its subprotocols are integrity by sampled proofs' one-stage audit
+(`SampledProofs.OneStage.protocol`, `verity/sampled-proofs/one-stage/v1`; v2, the audit on the proofs themselves, is not
+onsite's until its check reads the challenger's signed coins), the inference-only policy (`NciCheck.Protocol.protocol`,
 `verity/inference-only/v0`: the declared circuit divides into inference blocks within their gate and fresh-input
 budgets), work by proof of useful work over the period (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the
 period's windows credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
@@ -31,6 +31,7 @@ import NetworkCheck.Period
 import PousCheck.RunProtocol
 import PouwCheck.Period
 import RemoteAudit.P2Protocol
+import SampledProofs.OneStage
 import SampledProofs.OneStageZk
 
 namespace Core.Onsite
@@ -40,10 +41,10 @@ open Composition
 /-- Onsite's subprotocols, in the order of their ids. -/
 def components : List BlobProtocol :=
   [NetworkCheck.Period.protocol, NciCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
-    RemoteAudit.P2Protocol.protocol, SampledProofs.OneStageZk.protocol, MemoryChallenger.WipeProtocol.protocol]
+    RemoteAudit.P2Protocol.protocol, SampledProofs.OneStage.protocol, MemoryChallenger.WipeProtocol.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and the one-stage audit. -/
-def tied : List String := [NciCheck.Protocol.protocolId, SampledProofs.OneStageZk.protocol.id]
+def tied : List String := [NciCheck.Protocol.protocolId, SampledProofs.OneStage.protocol.id]
 
 /-- PoUS and the remote bandwidth audit on one store: the root of `C*` PoUS's setup published (its commitment's `root`)
 and the store the P2 session audits, the root its registration names (its commitment's `reg.root`, the case's
@@ -68,7 +69,7 @@ private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 #guard orderedB components
 #guard components.map (·.id) == ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run",
-  "verity/pouw/period/v1", "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/one-stage/v2", "verity/wipe/v0"]
+  "verity/pouw/period/v1", "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/one-stage/v1", "verity/wipe/v0"]
 #guard tied.all fun s => (components.map (·.id)).contains s
 
 -- every subprotocol refuses its case: onsite rejects on each, with or without blobs, and makes nothing public
@@ -78,16 +79,16 @@ private def allRefused : Answer := answer (components.map refused)
 #guard allRefused.reason.map (·.startsWith "verity/certifier/v0 reject: params: ") == some true
 #guard components.all fun P => (allRefused.reason.map (contains · s!"{P.id} reject: params: ")).getD false
 #guard (answer (components.map refused) #["not a circuit file".toUTF8]).reason == allRefused.reason
--- a part of onsite's subprotocols is not onsite's, onsite has no policy-less or wipe-less form, and v1's audit is not
+-- a part of onsite's subprotocols is not onsite's, onsite has no policy-less or wipe-less form, and v2's audit is not
 -- onsite's integrity subprotocol
-#guard (answer [refused PouwCheck.Period.protocol, refused SampledProofs.OneStageZk.protocol]).reason ==
+#guard (answer [refused PouwCheck.Period.protocol, refused SampledProofs.OneStage.protocol]).reason ==
   some "params: verity/certifier/v0 is missing"
 #guard (answer ((components.filter (·.id != NciCheck.Protocol.protocolId)).map refused)).reason ==
   some "params: verity/inference-only/v0 is missing"
 #guard (answer ((components.take 6).map refused)).reason == some "params: verity/wipe/v0 is missing"
 #guard (answer ((components.take 5).map refused ++
-    [refused SampledProofs.OneStage.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
-  some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
+    [refused SampledProofs.OneStageZk.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
+  some "params: verity/sampled-proofs/one-stage/v2 is not a component of this composition"
 
 -- the policy and the one-stage audit committing to one record leave each subprotocol to answer as itself; two
 -- records reject onsite, naming both, whatever the subprotocols answer
@@ -98,7 +99,7 @@ private def record (p : String) : ByteArray :=
 private def committed (policy audit : ByteArray) : Answer :=
   answer (components.map fun P =>
     if P.id == NciCheck.Protocol.protocolId then { refused P with commitment := policy }
-    else if P.id == SampledProofs.OneStageZk.protocol.id then { refused P with commitment := audit }
+    else if P.id == SampledProofs.OneStage.protocol.id then { refused P with commitment := audit }
     else refused P)
 
 #guard (committed (record "x") (record "x")).reason == allRefused.reason
@@ -107,7 +108,7 @@ private def committed (policy audit : ByteArray) : Answer :=
 #guard (committed (record "y") (record "x")).reason.map
   (·.startsWith "record: verity/inference-only/v0 committed ") == some true
 #guard (committed (record "y") (record "x")).reason.map
-  (contains · ", verity/sampled-proofs/one-stage/v2 committed ") == some true
+  (contains · ", verity/sampled-proofs/one-stage/v1 committed ") == some true
 #guard !((committed (record "y") (record "x")).reason.map (contains · "reject: params")).getD true
 
 end Core.Onsite

@@ -16,8 +16,8 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 (developer, verifier); `onsite.py` adds the network certifier, the memory challenger and the onsite verifier's subprotocols;
 `remote.py` is the two-party deployment; `tests/test_lifecycle.py` runs both, honest and with every deviation.
 
-**The proofs are a stand-in**, answering under the id both composites run for integrity, one-stage v2
-(`SampledProofs.OneStageZk`). `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
+**The proofs are a stand-in**, answering under the id both composites run for integrity, the one-stage audit
+(`SampledProofs.OneStage`). `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
 It is sound for the example and not zero-knowledge; Flock behind the ZK server replaces it (`verity/ml/flock/`,
 `verity/core/service/flock/`). Everything else is the repository's own code, as (b) says.
@@ -101,7 +101,7 @@ The first registration and declaration 1, onsite, and the period, remote (`run.p
 declaration 1
   4 declare    advice 00000011000000010010 (20 bits charged); block of 4 units (1 filler) on gpu0, gpu1, gpu0
   5 audit      drew subset:3 of 4: units [0, 2, 3]
-               verity/sampled-proofs/one-stage/v2       accept
+               verity/sampled-proofs/one-stage/v1       accept
                verity/pouw/period/v1                    accept
                verity/inference-only/v0                 accept
                verity/certifier/v0                      accept

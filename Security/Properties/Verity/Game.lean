@@ -23,7 +23,7 @@ the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAud
 
 | subprotocol | `Audit` | onsite's component | remote's component |
 | --- | --- | --- | --- |
-| sampled proofs | `.sampled` | `SampledProofs.OneStageZk.protocol` (v2) | the same |
+| sampled proofs | `.sampled` | `SampledProofs.OneStage.protocol` (v1) | the same |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | `PouwCheck.protocol` (its window) |
 | the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | |
@@ -147,14 +147,14 @@ def ties : Verity.Registration.Composite → List Composition.Tie
 /-- **The compiled component of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
 subprotocol. -/
 def component : Verity.Registration.Composite → Subprotocol → Option BlobProtocol
-  | .onsite, .sampled => some SampledProofs.OneStageZk.protocol
+  | .onsite, .sampled => some SampledProofs.OneStage.protocol
   | .onsite, .pouw => some PouwCheck.Period.protocol
   | .onsite, .inferenceOnly => some NciCheck.Protocol.protocol
   | .onsite, .pous => some PousCheck.RunProtocol.protocol
   | .onsite, .poub => some RemoteAudit.P2Protocol.protocol
   | .onsite, .network => some NetworkCheck.Period.protocol
   | .onsite, .wipe => some MemoryChallenger.WipeProtocol.protocol
-  | .remote, .sampled => some SampledProofs.OneStageZk.protocol
+  | .remote, .sampled => some SampledProofs.OneStage.protocol
   | .remote, .pouw => some PouwCheck.protocol
   | .remote, .inferenceOnly => some NciCheck.Protocol.protocol
   | .remote, _ => none

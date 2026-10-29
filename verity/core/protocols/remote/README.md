@@ -57,7 +57,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `SampledProofs.OneStageZk.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
+| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `SampledProofs.OneStage.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
 | PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the registered work's | `PouwCheck.protocol` (`verity/core/protocols/pouw/lean/check`) | `verity/pouw/v1` |
 | The inference-only policy ([README](../network/nci/README.md)) | the declared circuit divides into inference blocks within their budgets, and θ is registered | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
 
