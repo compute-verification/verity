@@ -32,10 +32,10 @@ def toyQuery : Query := ⟨"", 0, []⟩
 def toyPart : Partition := ⟨[[[[[0]], [[1]]]]]⟩
 
 /-- The program, drawn `subset 1`: in scope. -/
-def toyStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 1, none⟩]⟩, []⟩
+def toyStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 1, none⟩]⟩, []⟩
 
 /-- The program, drawn `subset 3` from two units: out of scope. -/
-def holeStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 3, none⟩]⟩, []⟩
+def holeStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 3, none⟩]⟩, []⟩
 
 theorem toyPart_rus : toyPart.rus = [[[0]], [[1]]] := rfl
 
@@ -51,7 +51,7 @@ theorem Pa_hole (B : Finset ℕ) : holeStmt.design.Pa toyPart B = 0 := by
   rw [Pa_subset_gt (by decide), zero_mul]
 
 /-- **No witness is in the relation** at the hole, at any `δ ≥ 0`: `M_δ` is empty. -/
-theorem not_relS_hole (H : Msg → Msg) (Cm : Commitment Bool) {δ : ℝ} (hδ : 0 ≤ δ) (w : Wit) :
+theorem not_relS_hole (H : Msg → Msg) (Cm : CommitmentScheme Bool) {δ : ℝ} (hδ : 0 ≤ δ) (w : Wit) :
     ¬ RelS H Cm δ holeStmt toyPart w := by
   intro h
   have h' : δ < holeStmt.design.Pa toyPart (faulty H Cm holeStmt toyPart w) := h

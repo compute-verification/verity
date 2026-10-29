@@ -8,6 +8,7 @@ import Proofs.Flock.EndToEndDrawn
 import Proofs.Flock.EndToEndHidden
 import Proofs.Flock.EndToEnd.Period
 import Proofs.Flock.EndToEnd.Blocks
+import Proofs.Flock.EndToEnd.Carry
 import Proofs.Flock.EndToEnd.Joint
 import Proofs.Flock.EndToEnd.Joint.MT.Bound
 import Proofs.Flock.EndToEndRegistered
