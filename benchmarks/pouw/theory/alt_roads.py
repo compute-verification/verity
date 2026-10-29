@@ -386,6 +386,41 @@ def per_period(inp: dict, ll: dict, r4: dict) -> dict:
             "scopes": out}
 
 
+def per_period_bounds(inp: dict, ll: dict, res: dict) -> dict:
+    """Each new bound in AND gates per period: the device always serving at its point, so the stock work it covers is
+    stock's MACs a step over the honest step; the datacenter is dc_gpus such devices; the world serves
+    world-inference-2027 at the same share."""
+    acc = inp["accounting"]
+    ands = acc["and_per_int8_mac"]
+    periods = {"window": acc["window_s"], "week": acc["week_s"], "month": acc["month_s"], "year": acc["year_s"]}
+    r1 = {p["point"]: p for p in res["R1"]["points"]}
+    hw = inp["ssn_1l_hw"]
+    bounds = [
+        ("R1 + ssn_1l_hw, T1 (forming only)", "t64", r1["t64"]["gpu_400g"]["t2_overlapped"], hw["t1_closed"]["t64"]),
+        ("R1 + ssn_1l_hw, T1 (forming only)", "decode1", r1["decode1"]["gpu_400g"]["t2_overlapped"], hw["t1_closed"]["t64"]),
+        ("R1 under T_cred, over-credit with a tensor-only floor", "t64", r1["t64"]["gpu_400g"]["t2_overlapped"],
+         res["R4"]["t_cred_reading"]["certifier_commit_over_credit_tensor_only_floor"]),
+        ("R1b + ssn_1l_hw at 256 KiB rows: hiding removed (W1 floor)", "t8192", inp["ssn_1l"]["t2_t8192"][1],
+         hw["hiding_salt_side"]["t8192"]),
+        ("R1b + ssn_1l_hw: hashing A before its noise removed (W1 floor)", "t8192", inp["ssn_1l"]["t2_t8192"][1],
+         hw["prenoise"]["t8192"]),
+        ("1% allowance", "t64", r1["t64"]["gpu_400g"]["t2_overlapped"], 0.01),
+        ("1% allowance", "t8192", inp["ssn_1l"]["t2_t8192"][1], 0.01),
+    ]
+    world_macs_per_s = acc["world_flop_per_year"] / 2.0 / acc["year_s"]
+    rows = []
+    for name, key, t2, share in bounds:
+        point = inp["points"][key]
+        stock_per_s = ll["macs_per_token"] * point["m"] / point["t_stock_s"] / t2
+        scopes = {"one H200": {p: share * stock_per_s * s * ands for p, s in periods.items()},
+                  "datacenter": {p: share * stock_per_s * acc["dc_gpus"] * s * ands for p, s in periods.items()},
+                  "world": {p: share * world_macs_per_s * s * ands for p, s in periods.items()}}
+        rows.append({"bound": name, "point": key, "t2": t2, "share_of_stock": share, "and_gates": scopes})
+    return {"basis": "each device always serving at its point; it covers stock's MACs a step over the honest step "
+                     "(stock step x T2); datacenter: dc-12500-machines-600s's GPUs; world: world-inference-2027 as stock, "
+                     "every MAC an int8 MAC, 2,079/16 AND gates a MAC; window 600 s", "rows": rows}
+
+
 def checks(inp: dict, ll: dict, res: dict) -> list[tuple[str, bool, str]]:
     s = inp["sha512"]
     pts = inp["points"]
@@ -546,6 +581,11 @@ def table(res: dict) -> str:
     lines.append("Per monitoring period (" + res["periods"]["basis"] + "), AND gates: T1 allowance / excess idle")
     for scope, ps in res["periods"]["scopes"].items():
         lines.append(f"    {scope:>10}: " + "; ".join(f"{p} {v['t1_allowance']:.2e} / {v['excess_idle']:.2e}" for p, v in ps.items()))
+    pb = res["period_bounds"]
+    lines.append("New bounds per monitoring period (" + pb["basis"] + "), AND gates")
+    for r in pb["rows"]:
+        lines.append(f"    {r['bound']} at {r['point']} (T2 {r['t2']:.1f}, {r['share_of_stock']:.4%} of stock): " + "; ".join(
+            f"{scope} " + ", ".join(f"{p} {v:.2e}" for p, v in ps.items()) for scope, ps in r["and_gates"].items()))
     return "\n".join(lines)
 
 
@@ -562,6 +602,7 @@ def main() -> int:
     res["R1b"] = r1b_salt_and_arrival(inp, ll)
     res["R4"]["certifier_rows"] = certifier_capacity(inp, ll, res["R1"])
     res["periods"] = per_period(inp, ll, res["R4"])
+    res["period_bounds"] = per_period_bounds(inp, ll, res)
     cks = checks(inp, ll, res)
     res["checks"] = [{"name": n, "ok": ok, "value": v} for n, ok, v in cks]
     args.out.mkdir(parents=True, exist_ok=True)

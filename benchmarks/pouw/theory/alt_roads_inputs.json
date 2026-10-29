@@ -60,6 +60,14 @@
     "coin_latency_s": 0.0006,
     "source": "SW-NOISE final (note compute-research/20261029T0551Z-report-sw-noise; run r20261029-065659-8f24, art:63ed96b1...); T1 as NIGHT.md section 3 states it at 07:28Z"
   },
+  "ssn_1l_hw": {
+    "t1_closed": {"t64": 0.00048, "t512rows": 0.00063, "t8192": 0.00197},
+    "t1_coins_uncredited": {"t64": 0.00297, "t512rows": 0.00311, "t8192": 0.00445},
+    "coin_branch": {"t64": 0.0, "t512rows": 0.00014, "t8192": 0.00148},
+    "hiding_salt_side": {"t64": 0.605, "t8192": 0.605},
+    "prenoise": {"t64": 0.313, "t8192": 0.313},
+    "source": "N-PREM interim (note compute-research/20261029T0740Z-report-np-prem, section 1, r256k card, run r20261029-073452-8e2e): T1 with every closable term closed (forming, plus the coin branch at 512 rows and T 8,192); hiding (salt side) and hashing A before its noise on Llama at the W1 floor"
+  },
   "ncp3": {
     "alpha": 3.0,
     "source": "CORE-NCP / SW-NOISE (0.375 B a useful MAC)"
