@@ -17,6 +17,9 @@ A program that branches on the coins skips only the words it can predict equal o
   over the coins, and two rows' fiber of a column's step-0 tag weights.
 * `Revisit`: a tile returning to a value it held, bounded by the returning step's fresh coins alone; on `-rot` a
   16 × 8 tile does so on at most a `2^−163` share of them, whatever the data and the other coins.
+* `Writes`: a run holds a value at some point exactly when it writes it or starts with it (`holds_iff`), and the
+  copy argument for the lead (`distinct_le_writes`): its distinct committed tiles cost whole-tile writes, less the
+  table hits.
 * `GrindProofs` (imported by `Cells`): target words lost on a success set of the coins.
 * `PointwiseProofs` (imported by `Registers`): the chunk model's bounds for every run.
 -/

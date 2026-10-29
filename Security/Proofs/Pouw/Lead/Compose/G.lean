@@ -13,10 +13,10 @@ import Proofs.Pouw.Dimension.H100Proofs
 `G`'s proof, at each accepted coin value with no break, on the egress-free twin (`OutsourceWithinEgressLead`), which
 is accepted where the original is (it registers its root and exchanges nothing) and hashed no collision where the
 original hashed none (beyond the original's, it hashes only the honest commitment's messages):
-1. the twin hashes every honest words message (`HonestHashRuled` with no collision), so its run holds every committed
-   tile (`TileGrain`) and its whole-tile writes are at least the distinct
-   committed tiles less the table hits (`CoinBranch.distinct_le_writes`), and the distinct tiles are the committed
-   tiles less the repeats; the lead commits whole tiles, so their words are `m n S` (`perCoin`);
+1. the twin hashes every honest words message (`HonestHashRuled` with no collision), so each committed tile is one of
+   its run's whole-tile writes or a tile it starts with (`TileGrain`), and its whole-tile writes are at least the
+   distinct committed tiles less the table hits (`CoinBranch.distinct_le_writes`), and the distinct tiles are the
+   committed tiles less the repeats; the lead commits whole tiles, so their words are `m n S` (`perCoin`);
 2. its hashing credit is at least the honest commitment's (`HonestHashRuled` at egress 0, `Commit.hashed_credit_ge`),
    at least the honest compressions' (`CommitL1w`), and its compressions write that many registers (`ShaWrites`);
 3. `OneInstructionMinimal` and `MH100W.cost_ge_regs` (`W1`, `H32`) price those registers at 32 each (`perCoin`);
@@ -153,11 +153,6 @@ theorem regCount_other {G : Type} (P : List (Op100 G)) (h : ∀ o ∈ P, ∃ f, 
   rw [List.map_congr_left fun o ho => show Pouw.Lead.Op100.regs o = 1 by obtain ⟨f, rfl⟩ := h o ho; rfl]
   simp
 
-/-- A run's last write is what its slot holds. -/
-theorem run_write_last {A V : Type} [DecidableEq A] {w : ℕ} (m₀ : A → Fin w → V) (P : List (Step A V w)) (a : A)
-    (p : Fin w) (v : V) : run m₀ (P ++ [.write a p v]) a p = v := by
-  simp [run, List.foldl_append, Step.apply]
-
 /-- The committed tiles at `ω`, in `tileIdx`'s order. -/
 noncomputable def tilesAt (L : Pouw.Lead.Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) :
     List (Fin tileWords → ℤ) :=
@@ -229,12 +224,7 @@ theorem honest : Pouw.Guarantees.Lead.Honest := by
     trivial
   · rintro σ rfl ω - - rb hrb cb hcb t
     have hy : tileOf _ κ ω rb cb t ∈ tilesAt _ κ ω := List.mem_map.2 ⟨(rb, cb, t), by simp [tileIdx, hrb, hcb], rfl⟩
-    obtain ⟨i, hi, hiy⟩ := List.getElem_of_mem hy
-    refine ⟨i + 1, .inl 0, ?_⟩
-    rw [← hiy]
-    simp only [honestStrategy]
-    rw [← List.map_take, List.take_add_one, List.getElem?_eq_getElem hi, Option.toList_some, List.map_append,
-      List.map_singleton, run_write_last]
+    exact Or.inl ⟨.inl 0, 0, List.mem_map.2 ⟨_, hy, rfl⟩⟩
   · rintro σ rfl ω
     rw [regCount_other _ (honest_trace_other _ κ ω)]
     simp only [honestStrategy, writes, List.map_map, Function.comp_def, Step.cost, List.length_append,
