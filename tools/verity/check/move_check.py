@@ -43,6 +43,8 @@ Every path git sees changed must be one of:
   moved in, that adds a `require` of a new Lake package, or adds comment lines (`lakefile_in_place`), and a
   `lake-manifest.json` that adds that package (`manifest_change`);
 - a `TRUSTED.sha256` line rewritten from a file's digest at BASE to its digest at HEAD, under its path moved by the map;
+- in a JSON pin of `tools/verity/check/pins.py`, a Lake manifest's digest rewritten likewise, since a move changes a
+  manifest only in where its path packages sit, which no pinned output reads (`manifest_pin`);
 - an entry appended to research's `moves.json` whose paths agree with the range's (`moves_change`);
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
@@ -97,6 +99,9 @@ MAPS = "tools/move/"
 #: the files that pin other files' digests (`<sha256>  <relative path>` lines)
 PINS = "TRUSTED.sha256"
 PIN_LINE = re.compile(r"^([0-9a-f]{64})  (.+)$")
+#: the pins of Lean sources, some of them JSON ({path: digest} under a key, `json_pins`)
+PINS_PY = "tools/verity/check/pins.py"
+PIN_ENTRY = re.compile(r'^\s*"([^"]+)"\s*:\s*"([0-9a-f]{64})",?\s*$')
 ROOT = Path(__file__).resolve().parents[3]
 IMPORT = re.compile(r"^(\s*from\s+)([\w.]+)(\s+import\b.*)$|^(\s*import\s+)([\w.]+)(.*)$")
 LEAN_IMPORT = re.compile(r"^(\s*(?:(?:public|private|meta)\s+)*import\s+(?:all\s+)?)([\w.]+)(\s*(?:--.*)?)$")
@@ -802,6 +807,31 @@ def pins_change(a: list[str], b: list[str], old: str, new: str, base: Tree, head
 
 
 @functools.cache
+def json_pins() -> dict[str, str]:
+    """`tools/verity/check/pins.py`'s pins that record {path: digest} under a JSON key: {pin: the directory its paths are
+    below}."""
+    spec = importlib.util.spec_from_file_location("move_check_pins", ROOT / PINS_PY)
+    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)       # its dataclass looks its module up
+    spec.loader.exec_module(mod)
+    return {p.path: p.under for p in mod.PINS if p.key is not None}
+
+
+def manifest_pin(x: str, y: str, under: str, base: Tree, head: Tree, pmap: dict[str, str]) -> bool:
+    """Whether a JSON pin's line ``y`` is its line ``x`` at BASE with a Lake manifest's digest at BASE rewritten to its digest
+    at HEAD, under its path moved by the map."""
+    mx, my = PIN_ENTRY.match(x), PIN_ENTRY.match(y)
+    if not (mx and my):
+        return False
+    po, pn = (posixpath.normpath(posixpath.join(under, m[1])) for m in (mx, my))
+
+    def digest(tree: Tree, path: str) -> str | None:
+        data = tree.blob(path)
+        return None if data is None else hashlib.sha256(data).hexdigest()
+    return (posixpath.basename(po) == "lake-manifest.json" and map_path(po, pmap) == pn
+            and digest(base, po) == mx[2] and digest(head, pn) == my[2])
+
+
+@functools.cache
 def _rename():
     """`tools/move/rename.py`, whose `Words` applies a word map as the move did."""
     spec = importlib.util.spec_from_file_location("move_rename", ROOT / "tools" / "move" / "rename.py")
@@ -1164,6 +1194,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             refuse(e, "edited, not UTF-8 text")
             continue
         same, pins = a == b, name == PINS and posixpath.basename(old) == PINS
+        at_base = a.splitlines()
         if not same and not pins and old != MOVES:
             a, unworded = worded(a, old, maps, lock=k == "lock"), a
             if b in (a, merged(unworded, a)):
@@ -1204,8 +1235,11 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
             def block(xs: list[str], ys: list[str]) -> bool:
                 return import_block(xs, ys, modules, old, new)
-            h = first_unexplained(al, bl, na, nb, pair=pair, added=lambda y: registered(new, y), block=block,
-                                  left=lambda i, y: partly(n0[i], y, pmap))
+            under = json_pins().get(old, json_pins().get(new))
+
+            def left(i: int, y: str) -> bool:
+                return partly(n0[i], y, pmap) or (under is not None and manifest_pin(at_base[i], y, under, B, H, pmap))
+            h = first_unexplained(al, bl, na, nb, pair=pair, added=lambda y: registered(new, y), block=block, left=left)
             why = h and ("relative path now resolves elsewhere" if same else "edit beyond moved paths and module names", h)
             if why and not same and old == new and name == "lakefile.toml":
                 why = lakefile_in_place(a, b, new, moves, new_lake) and why

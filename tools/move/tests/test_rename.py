@@ -139,6 +139,19 @@ def test_lock_moves_are_the_shortest_renamed_prefixes(tmp_path):
         "Warden": "NetworkCertifier"}
 
 
+def test_a_prefix_whose_names_move_otherwise_than_under_it_is_left_out(tmp_path):
+    """A private name holds its module twice (`_private.RemoteAudit.Plan.0.RemoteAudit.spans`): its prefix's move would
+    map it back under the wrong old name, which `check.py --moved` refuses, so only the full names move."""
+    words = M.Words({"words": {"RemoteAudit": "PoubCheck"}})
+    names = ("_private.RemoteAudit.Plan.0.RemoteAudit.spans", "_private.RemoteAudit.Line.0.RemoteAudit.Line.sumOver",
+             "RemoteAudit.Plan")
+    (tmp_path / "lean-audit.json").write_text(json.dumps({"reads": {"M": {"definitions": {n: "00" for n in names}}}}))
+    assert M.lock_moves(tmp_path, words, ["lean-audit.json"]) == {
+        "RemoteAudit": "PoubCheck",
+        "_private.RemoteAudit.Line.0.RemoteAudit.Line.sumOver": "_private.PoubCheck.Line.0.PoubCheck.Line.sumOver",
+        "_private.RemoteAudit.Plan.0.RemoteAudit.spans": "_private.PoubCheck.Plan.0.PoubCheck.spans"}
+
+
 def test_a_namespace_whose_names_are_renamed_inside_too_is_listed_in_full(tmp_path):
     """`Component` renames a namespace and the names under it that end in it: the prefix alone would give
     `Subprotocol.LineHeldAtComponent`, and the prefix with its override under it is a move `check.py --moved` can't read
@@ -213,12 +226,16 @@ def test_a_namespace_that_shares_a_modules_name_stands(tmp_path):
     assert out["layers"] == {"Properties.NetworkCertifier.Device": {"imports": ["Properties.Hash.Identity"]}}
 
 
-def test_the_recorded_paths_are_the_moves_up_to_their_first_renamed_span():
+def test_the_recorded_paths_are_the_moves_up_to_the_end_of_each_renamed_span():
     moves = [("v/warden/a.py", "v/certifier/a.py"), ("v/warden/lean/Warden/B.lean", "v/certifier/lean/NetworkCertifier/B.lean"),
-             ("S/Proofs/Warden.lean", "S/Proofs/NetworkCertifier.lean"), ("S/Proofs/Warden/C.lean", "S/Proofs/NetworkCertifier/C.lean")]
+             ("S/Proofs/Warden.lean", "S/Proofs/NetworkCertifier.lean"), ("S/Proofs/Warden/C.lean", "S/Proofs/NetworkCertifier/C.lean"),
+             ("v/warden/tests/test_warden.py", "v/certifier/tests/test_certifier.py")]
     assert M.renamed_paths(moves) == {"S/Proofs/Warden.lean": "S/Proofs/NetworkCertifier.lean",
-                                      "S/Proofs/Warden/": "S/Proofs/NetworkCertifier/", "v/warden/": "v/certifier/"}
-    assert M.renamed_paths(moves[:1]) == M.renamed_paths(moves[:2])       # a branch's new file under a renamed directory
+                                      "S/Proofs/Warden/": "S/Proofs/NetworkCertifier/", "v/warden/": "v/certifier/",
+                                      "v/warden/lean/Warden/": "v/certifier/lean/NetworkCertifier/",
+                                      "v/warden/tests/test_warden.py": "v/certifier/tests/test_certifier.py"}
+    branch = [*moves, ("v/warden/c.py", "v/certifier/c.py"), ("v/warden/lean/Warden/D.lean", "v/certifier/lean/NetworkCertifier/D.lean")]
+    assert M.renamed_paths(moves) == M.renamed_paths(branch)              # a branch's new files under the renamed directories
     swapped = [("S/Properties/Proofs/Nci.lean", "S/Proofs/Properties/Nci.lean"), ("S/Properties/Proofs/Nci/V.lean",
                                                                               "S/Proofs/Properties/Nci/V.lean")]
     assert M.renamed_paths(swapped) == {"S/Properties/Proofs/": "S/Proofs/Properties/"}
@@ -279,14 +296,15 @@ def test_the_move_on_a_toy_tree(toy, capsys):
                                                         f"{'0' * 64}  ../README.md\n")   # a stale pin stays stale
     assert json.loads((toy / M.MOVES).read_text())["moves"] == [
         {"paths": {"old/": "w/"}},
-        {"paths": {"Sec/Proofs/Warden.lean": "Sec/Proofs/NetworkCertifier.lean", "w/warden/": "w/certifier/"}}]
+        {"paths": {"Sec/Proofs/Warden.lean": "Sec/Proofs/NetworkCertifier.lean", "w/warden/": "w/certifier/",
+                   "w/warden/tests/test_network_warden_grid.py": "w/certifier/tests/test_network_certifier_grid.py"}}]
     status = git(toy, "status", "--porcelain", "--untracked-files=all").splitlines()
     assert status and all(line[1] == " " for line in status)                           # everything staged
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "move")
     head = git(toy, "rev-parse", "HEAD:")
     capsys.readouterr()
     assert M.main(["--root", str(toy)]) == 0
-    assert "files rewritten: 0, files moved: 0, TRUSTED.sha256 files repinned: 0" in capsys.readouterr().out
+    assert "files rewritten: 0, files moved: 0, pins repinned: 0" in capsys.readouterr().out
     assert git(toy, "status", "--porcelain") == "" and git(toy, "rev-parse", "HEAD:") == head
 
 
@@ -321,6 +339,32 @@ def test_a_file_lands_where_another_leaves(toy):
     assert (toy / "S/Area/Check.lean").read_text() == "import S.Area.Check.Check\n"
     assert (toy / "S/Area/Check/Check.lean").read_text() == "theorem t : True := trivial\n"
     assert not (toy / "S/Area.lean").exists()
+
+
+def test_a_json_pin_follows_a_manifest_the_move_rewrites(toy):
+    """A JSON pin `pins.py` lists gets a rewritten manifest's new digest, since a move changes where a path package sits,
+    which no pinned output reads; any other file it pins and the move rewrites (the README) stays stale, for its command."""
+    manifest = '{"packages": [{"type": "path", "dir": "../../w/warden"}]}\n'
+    readme = (toy / "README.md").read_text()
+
+    def sha(t: str) -> str:
+        return hashlib.sha256(t.encode()).hexdigest()
+    pin = {"inputs": {"README.md": sha(readme), "Sec/Proofs/lake-manifest.json": sha(manifest)}, "out": [1]}
+    (toy / "tools/verity/check").mkdir(parents=True)
+    (toy / "tools/verity/check/pins.py").write_text(
+        "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pin:\n"
+        "    path: str\n    key: str | None\n"
+        '    under: str\n\n\nPINS = (Pin("fix/vec.json", "inputs", ""), Pin("pous/TRUSTED.sha256", None, "pous"))\n')
+    (toy / "Sec/Proofs/lake-manifest.json").write_text(manifest)
+    (toy / "fix").mkdir()
+    (toy / "fix/vec.json").write_text(json.dumps(pin, indent=2) + "\n")
+    git(toy, "add", "-A")
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "a pin")
+    assert M.main(["--root", str(toy)]) == 0
+    moved = (toy / "Sec/Proofs/lake-manifest.json").read_text()
+    assert moved == manifest.replace("w/warden", "w/certifier")
+    assert json.loads((toy / "fix/vec.json").read_text()) == {
+        "inputs": {"README.md": sha(readme), "Sec/Proofs/lake-manifest.json": sha(moved)}, "out": [1]}
 
 
 def test_it_refuses_a_dirty_worktree(toy):
