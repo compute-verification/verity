@@ -19,7 +19,7 @@ inputs = ["tools/config/verity_config",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/interface",
           "verity/core/protocols/remote_bandwidth", "verity/core/protocols/sampled_proofs",
           # the registration log a store is read from (`audit.stored`), and the canonical JSON it imports
-          "verity/core/protocols/registration.py", "verity/core/wire/__init__.py",
+          "verity/core/protocols/registration.py", "verity/core/site", "verity/core/wire/__init__.py",
           "verity/core/protocols/profile.py",
           "verity/core/primitives/identity", "verity/core/primitives/randomness",
           "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
