@@ -16,7 +16,7 @@ whose wrong output can forfeit downstream work (a noise or form proof block ever
 **Cost.**  Per touched statement plus per proved proof block, as C-Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
 `touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
 committed at serve time whatever the draw: every proof block's outputs (`commit_bits`, `commit_rows`),
-and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
+and the fixed serve-time commitments of every scale (`TensorCommit`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A drawn proof block's
 witness is built by re-executing its replay block from the last committed state (`ReplayDomain`), which commits nothing.
@@ -48,7 +48,7 @@ from pathlib import Path
 
 from verity.core.protocols.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
-from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX, unit_class
+from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
 
 def pinned_ands(definition: str, sidecar: str = "lms") -> int:
     """`definition`'s ANDs as its circuit-check pin records them (`verity.ml.commitments.gates`' `SIDECAR.circuit-check.json`):
@@ -79,7 +79,7 @@ def row_ands(nbytes: int) -> int:
 class Candidate:
     """One subcircuit of one way (`cut`, default the subcircuit alone) to cut one op type into proof blocks, derived from the IR,
     never from the prover: `units` instances, each credited `work` (the verifier's work table), with `out_bits` over
-    `out_gates` boundary gates, its committed bits, which fit a public size class (`one_stage.partition.unit_class`, at
+    `out_gates` boundary gates, its committed bits, which fit a public size class (`partition_v2.unit_class`, at
     most `UNIT_CLASS_MAX`, as the one-stage partition refuses a wider proof block), and `influence`, the credited work a wrong
     one can forfeit downstream.  A proved proof block costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
     `commit_bits` in `commit_rows` rows per proof block whatever the sampling design; one statement holds at most `cap` proof blocks
@@ -144,7 +144,7 @@ class ReplayDomain:
 
 
 @dataclass(frozen=True)
-class Commitment:
+class TensorCommit:
     """One tensor committed at serve time by one scale, whatever the draw: `nbytes` hashed over the window, at the model's
     per-byte rate (`CostModel.commit_per_bit`) unless `cost` is measured.  `scale` names who commits it (the Commit's taps,
     PoUW's A rows or tile leaves, the remote audit's receipts, a work block's pin) and `tensor` what; one tensor under two
@@ -186,7 +186,7 @@ class CostModel:
     staged_per_unit: float = 0.0
     commit_per_bit: float = 0.0
     commit_per_row: float = 0.0
-    serve: tuple[Commitment, ...] = ()
+    serve: tuple[TensorCommit, ...] = ()
     replay: Mapping[str, ReplayDomain] = field(default_factory=dict)
     sigma: float = 0.0
     source: str = ""
@@ -225,7 +225,7 @@ class CostModel:
     def commit(self, c: Candidate) -> float:
         return c.units * (self.commit_per_bit * c.commit_bits + self.commit_per_row * c.commit_rows)
 
-    def committed(self, s: Commitment) -> float:
+    def committed(self, s: TensorCommit) -> float:
         return s.cost if s.cost is not None else 8 * self.commit_per_bit * s.nbytes
 
     def serve_cost(self) -> float:
@@ -810,7 +810,7 @@ def overlaps(costs: CostModel, *, latency: float = 0.0) -> list[dict]:
     its measured cost), and at decode its bytes, its chain and, when it gates the step, its chain's latency at `latency`
     a dependent compression (latency-bound).  Committed once, the cheapest copy is kept: the saving is the others' bytes
     and prefill cost, and at decode their latency less the kept copy's chain where it has to gate in their place."""
-    by: dict[str, list[Commitment]] = {}
+    by: dict[str, list[TensorCommit]] = {}
     for s in costs.serve:
         by.setdefault(s.tensor, []).append(s)
     rows = []
@@ -1014,7 +1014,7 @@ def sqrt_grain(beta: float, h: float, target: float, o: float, delta: float, wei
     return sqrt(weight * beta * h * target / (o * log(1 / delta)))
 
 
-__all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
+__all__ = ["Candidate", "TensorCommit", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
            "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayDomain", "SHA512_ANDS", "SHA512_ROWS", "TemplateCost", "acceptance_parts",
            "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target", "frontier", "grain_costs",
            "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits", "max_harm",
