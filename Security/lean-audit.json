@@ -1730,6 +1730,14 @@
    "owner": "@compute-research",
    "digest": "4a40e06630394c3a6d7647d8bd2d25ad8c9e8bb32d9f5dfa21228a53969e1612"
   },
+  "Pouw.Dither.Period.DualOpt": {
+   "owner": "@compute-research",
+   "digest": "de2cfdb23fc458876516bcb4d65a44dcd271dacfca87cc2b335f82c4d1ab181d"
+  },
+  "Pouw.Dither.Period.Fits": {
+   "owner": "@compute-research",
+   "digest": "9409d527a674bf2bfd45e109f28e6de008c5e986e2b64178aade79fa7ea769b6"
+  },
   "Pouw.Eps1.ClassP": {
    "owner": "@compute-accounting",
    "digest": "a701827ced69a6601de286c0a09f129a13cb0c797905954636c3ae3ad8bb16d2"
@@ -2097,14 +2105,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Pouw.Dither.Period.DualOpt": {
-   "owner": "@compute-research",
-   "digest": "de2cfdb23fc458876516bcb4d65a44dcd271dacfca87cc2b335f82c4d1ab181d"
-  },
-  "Pouw.Dither.Period.Fits": {
-   "owner": "@compute-research",
-   "digest": "9409d527a674bf2bfd45e109f28e6de008c5e986e2b64178aade79fa7ea769b6"
   }
  },
  "meaning": [
