@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import re
+import struct
 import sys
 from pathlib import Path
 
@@ -711,3 +712,37 @@ def test_h32_counts_predicates_and_uniform_registers_by_their_bits(tmp_path):
     assert abs(h.price(uni)["regs_sm_clk"] - 33) < 1e-9
     with pytest.raises(ValueError, match="no register"):
         h.price({**row, "note": "c=int32 w=LOP3.LUT:0"})
+
+
+def _cuda_elf(text: dict[str, bytes]) -> bytes:
+    """A minimal ELF64 for EM_CUDA (190): a `.text.<kernel>` section an entry, then `.shstrtab`."""
+    names = b"\0" + b"".join(b".text." + k.encode() + b"\0" for k in text) + b".shstrtab\0"
+    data, offs, at = b"", [], 64
+    for code in text.values():
+        offs.append(at + len(data))
+        data += code
+    strtab_off = at + len(data)
+    shoff = strtab_off + len(names)
+    shdrs, name_at = [bytes(64)], 1
+    for (k, code), off in zip(text.items(), offs):
+        shdrs.append(struct.pack("<IIQQQQIIQQ", name_at, 1, 6, 0, off, len(code), 0, 0, 128, 0))
+        name_at += len(".text.") + len(k) + 1
+    shdrs.append(struct.pack("<IIQQQQIIQQ", name_at, 3, 0, 0, strtab_off, len(names), 0, 0, 1, 0))
+    head = struct.pack("<16sHHIQQQIHHHHHH", b"\x7fELF\x02\x01\x01" + bytes(9), 2, 190, 1, 0, 0, shoff, 0, 64, 0, 0,
+                       64, len(shdrs), len(shdrs) - 1)
+    return head + data + names + b"".join(shdrs)
+
+
+def test_ldl_lu_sets_last_use_on_the_named_kernels_loads_alone():
+    lu = _load("ldl_lu")
+    ldl = struct.pack("<QQ", 0x500047983, 0x000EA80008100C00)     # LDL.128 R4, [R5], as ptxas encodes ld.local.v4
+    lop = struct.pack("<QQ", 0x0000000405047212, 0x000FC800078E9604)  # a LOP3, which no patch touches
+    b = bytearray(b"host" * 5 + _cuda_elf({"k": ldl + lop + ldl, "j": ldl}))
+    before = bytes(b)
+    done = lu.patch(b, ["k"])
+    assert len(done["k"]) == 2
+    diff = [(i, before[i], b[i]) for i in range(len(b)) if before[i] != b[i]]
+    assert [(o, n) for _, o, n in diff] == [(0x10, 0x30)] * 2  # bits 84-86: 1 (LDL) to 3 (LDL.LU), nothing else
+    assert lu.patch(bytearray(before), ["j"])["j"] and lu.patch(bytearray(before), ["none"]) == {"none": []}
+    with pytest.raises(SystemExit, match="cache op 3"):
+        lu.patch(b, ["k"])
