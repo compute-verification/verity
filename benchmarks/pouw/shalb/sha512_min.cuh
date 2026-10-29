@@ -10,6 +10,11 @@
 //   a constant chaining value), so round 0 folds to two adds of W_0 to constants.
 // - PAD_BITS: the block is a block-aligned message's padding block, a constant, so its schedule is K_t + W_t immediates
 //   and a round is 28: 80 × 28 + 14 = 2,254.
+// - CHAIN: a chain of compressions two blocks at a time (CHAIN 1, then 2), the chaining value in chain form: cv[7] holds
+//   H7 + K_0, so round 0's first add is h + W_0. The second block reads the first's H3 only in e_1 = d + T1 and its
+//   H7 + K_0 only in that first add, both with a free IADD3 slot, so the first block leaves each as two terms (cv[3] or
+//   cv[7] and pend[]), and the second adds both terms to its own d_80 or h_80 in one three-term add of its
+//   feed-forward: 2 × 3,534 − 4 registers a pair of blocks.
 #pragma once
 #include <cstdint>
 
@@ -102,9 +107,12 @@ SHAMIN_HD uint64_t ch(uint64_t e, uint64_t f, uint64_t g) { return (e & f) ^ (~e
 SHAMIN_HD uint64_t maj(uint64_t a, uint64_t b, uint64_t c) { return (a & b) | (c & (a | b)); }
 
 // One compression of the 16-word block w (big-endian u64 words; the schedule overwrites it) into cv. PAD_BITS != 0: the
-// block is the padding block of a PAD_BITS-bit block-aligned message, w is not read, and there is no schedule.
-template <int CVC, uint64_t PAD_BITS = 0>
-SHAMIN_HD void compress(uint64_t* cv, uint64_t* w) {
+// block is the padding block of a PAD_BITS-bit block-aligned message, w is not read, and there is no schedule. CHAIN 1
+// and 2 compress a pair of blocks of a chain in chain form, pend[] carrying H3's and H7 + K_0's second terms between
+// them.
+template <int CVC, uint64_t PAD_BITS = 0, int CHAIN = 0>
+SHAMIN_HD void compress(uint64_t* cv, uint64_t* w, uint64_t* pend = nullptr) {
+  static_assert(!CHAIN || (!CVC && !PAD_BITS), "a chain's blocks are variables");
   constexpr PadBlock pad(PAD_BITS);
   uint64_t a, b, c, d, e, f, g, h;
   if constexpr (CVC) {
@@ -116,7 +124,12 @@ SHAMIN_HD void compress(uint64_t* cv, uint64_t* w) {
 #pragma unroll
   for (int t = 0; t < 80; ++t) {
     if (t > 0) {
-      h = g; g = f; f = e; e = d + t1;
+      h = g; g = f; f = e;
+      if constexpr (CHAIN == 2) {
+        e = t == 1 ? d + pend[0] + t1 : d + t1;
+      } else {
+        e = d + t1;
+      }
       d = c; c = b; b = a; a = t1 + t2;
     }
     uint64_t u;
@@ -130,7 +143,11 @@ SHAMIN_HD void compress(uint64_t* cv, uint64_t* w) {
         wt = s1(w[(t - 2) & 15]) + w[(t - 7) & 15] + s0(w[(t - 15) & 15]) + w[t & 15];
         w[t & 15] = wt;
       }
-      u = h + wt + Kt(t);
+      if (CHAIN && t == 0) {
+        u = CHAIN == 2 ? h + pend[1] + wt : h + wt;
+      } else {
+        u = h + wt + Kt(t);
+      }
     }
     t1 = u + S1(e) + ch(e, f, g);
     t2 = S0(a) + maj(a, b, c);
@@ -138,8 +155,24 @@ SHAMIN_HD void compress(uint64_t* cv, uint64_t* w) {
   const uint64_t cv0 = CVC ? IVt(0) : cv[0], cv1 = CVC ? IVt(1) : cv[1], cv2 = CVC ? IVt(2) : cv[2];
   const uint64_t cv3 = CVC ? IVt(3) : cv[3], cv4 = CVC ? IVt(4) : cv[4], cv5 = CVC ? IVt(5) : cv[5];
   const uint64_t cv6 = CVC ? IVt(6) : cv[6], cv7 = CVC ? IVt(7) : cv[7];
-  cv[0] = t1 + t2 + cv0; cv[1] = cv1 + a; cv[2] = cv2 + b; cv[3] = cv3 + c;
-  cv[4] = t1 + d + cv4; cv[5] = cv5 + e; cv[6] = cv6 + f; cv[7] = cv7 + g;
+  cv[0] = t1 + t2 + cv0; cv[1] = cv1 + a; cv[2] = cv2 + b;
+  cv[4] = t1 + d + cv4; cv[5] = cv5 + e; cv[6] = cv6 + f;
+  if constexpr (CHAIN == 1) {
+    pend[0] = c;
+    pend[1] = g;
+  } else if constexpr (CHAIN == 2) {
+    uint64_t p3 = pend[0], p7 = pend[1];
+#ifdef __CUDA_ARCH__
+    // Round 0 added cv3 + p3 and cv7 + p7 to other terms; this keeps the compiler from materializing those sums once
+    // for both uses, which would write the two registers each that the chain form saves.
+    asm volatile("" : "+l"(p3), "+l"(p7));
+#endif
+    cv[3] = cv3 + p3 + c;
+    cv[7] = cv7 + p7 + g;
+  } else {
+    cv[3] = cv3 + c;
+    cv[7] = cv7 + g;
+  }
 }
 
 }  // namespace shamin

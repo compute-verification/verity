@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # SHA-512's registers written a compression on sm_90a: the committer's sha512.cuh (sha512_probe.cu, SHA_ROLL 0 and 1)
-# against the minimal compression (sha512_min_probe.cu: a variable chaining value, the IV as a constant, and a constant
-# padding block), each built, disassembled and counted by shalb_sass.py; then the minimal compression's host build
-# checked against hashlib. CPU only: nothing is launched. The CUDA wheels go into a scratch venv outside the run dir.
+# against the minimal compression (sha512_min_probe.cu: a variable chaining value, the IV as a constant, a constant
+# padding block, and a chain in chain form, two blocks a trip), each built, disassembled and counted by shalb_sass.py;
+# then the minimal compression's host build checked against hashlib. CPU only: nothing is launched. The CUDA wheels go into a scratch venv outside the run dir.
 # cwd: the source tree's root. Output: $OUT/{*.sass, *.ptxas, counts.json, summary.txt, check.txt, tools.txt}.
 set -euo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
@@ -25,8 +25,10 @@ build committer_rolled "$HERE/sha512_probe.cu" -DSHA_ROLL=1 -DSHA_ADD=0 -I"$SRC"
 build min_variable "$HERE/sha512_min_probe.cu" -DSHA_CVC=0
 build min_constant_cv "$HERE/sha512_min_probe.cu" -DSHA_CVC=1
 build min_padding_block "$HERE/sha512_min_probe.cu" -DSHA_PAD=2048
+build min_chain "$HERE/sha512_min_probe.cu" -DSHA_CHAIN=1
 args=()
 for n in committer_straight committer_rolled min_variable min_constant_cv min_padding_block; do args+=("$n=$OUT/$n.sass"); done
+args+=("min_chain=$OUT/min_chain.sass:2")
 python3 "$HERE/shalb_sass.py" "$OUT/counts.json" "${args[@]}" | tee "$OUT/summary.txt"
 g++ -O2 -std=c++17 -x c++ -D'__host__=' -D'__device__=' -D'__forceinline__=inline' "$HERE/sha512_min_check.cu" -o "$d/check"
 "$d/check" > "$OUT/check.txt"

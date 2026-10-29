@@ -2,7 +2,8 @@
 // (sha512_probe.cu), for counting its SASS with shalb_sass.py. SHA_CVC=1 takes the chaining value as the IV, a
 // compile-time constant, every trip, and stores each trip's digest. SHA_PAD=BITS compresses the padding block of a
 // BITS-bit block-aligned message, which reads no block, from a chaining value loaded per thread (else the whole loop
-// is warp-uniform and runs on the uniform datapath). Built only to be disassembled; never launched.
+// is warp-uniform and runs on the uniform datapath). SHA_CHAIN=1 compresses two blocks of a chain a trip in chain form
+// (count it as NAME=SASS:2). Built only to be disassembled; never launched.
 #include <cstdint>
 
 #include "sha512_min.cuh"
@@ -13,6 +14,9 @@
 #ifndef SHA_PAD
 #define SHA_PAD 0
 #endif
+#ifndef SHA_CHAIN
+#define SHA_CHAIN 0
+#endif
 
 extern "C" __global__ void probe(const uint64_t* __restrict__ in, uint64_t* __restrict__ out, int nblocks) {
   const size_t t = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
@@ -20,6 +24,21 @@ extern "C" __global__ void probe(const uint64_t* __restrict__ in, uint64_t* __re
   const uint64_t* p = in + t * 16 * (size_t)nblocks;
 #pragma unroll
   for (int i = 0; i < 8; ++i) st[i] = SHA_PAD ? p[i] : shamin::IVt(i);
+#if SHA_CHAIN
+  st[7] += shamin::Kt(0);
+#pragma unroll 1
+  for (int b = 0; b < nblocks; b += 2) {
+    uint64_t w0[16], w1[16], pend[2];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      w0[i] = p[(size_t)b * 16 + i];
+      w1[i] = p[(size_t)b * 16 + 16 + i];
+    }
+    shamin::compress<0, 0, 1>(st, w0, pend);
+    shamin::compress<0, 0, 2>(st, w1, pend);
+  }
+  st[7] -= shamin::Kt(0);
+#else
 #pragma unroll 1
   for (int b = 0; b < nblocks; ++b) {
     uint64_t w[16];
@@ -31,6 +50,7 @@ extern "C" __global__ void probe(const uint64_t* __restrict__ in, uint64_t* __re
     for (int i = 0; i < 8; ++i) out[((size_t)b * gridDim.x * blockDim.x + t) * 8 + i] = st[i];
 #endif
   }
+#endif
 #pragma unroll
   for (int i = 0; i < 8; ++i) out[t * 8 + i] = st[i];
 }

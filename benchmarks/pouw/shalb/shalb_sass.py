@@ -1,6 +1,6 @@
 """SHA-512's registers written a compression, from a probe's SASS, with the probe's own loop overhead taken out: stdlib.
 
-    python3 shalb_sass.py OUT_JSON NAME=PROBE_SASS ...
+    python3 shalb_sass.py OUT_JSON NAME=PROBE_SASS[:N] ...   # N compressions a loop trip (default 1)
 
 Each PROBE_SASS is `cuobjdump -sass` of a probe whose loop trip is one compression (sha512_probe.cu, the committer's;
 sha512_min_probe.cu, the minimal one). `sha512_sass.py` prices the trip as the committer's count does: every
@@ -87,7 +87,8 @@ def harness(body: list[dict]) -> set[int]:
     return marked
 
 
-def count(path: Path) -> dict:
+def count(path: Path, per_trip: int = 1) -> dict:
+    """The probe's loop trip, as `per_trip` compressions."""
     funcs = ss.parse(path)
     (name, ins), = [(k, v) for k, v in funcs.items() if "probe" in k]
     r = {"sha512_sass": ss.per_compression(ins, 4)}
@@ -99,7 +100,8 @@ def count(path: Path) -> dict:
         return r
     h = harness(body)
     r["harness"] = [f"{i['pred']} {i['op']} {i['ops']}".strip() for i in body if i["addr"] in h]
-    r["compression"] = ss.price([i for i in body if i["addr"] not in h])
+    r["compression"] = ss.price([i for i in body if i["addr"] not in h], {i["addr"]: 1 / per_trip for i in body})
+    r["compressions_a_trip"] = per_trip
     return r
 
 
@@ -108,7 +110,8 @@ def main() -> None:
     out = {}
     for arg in sys.argv[2:]:
         name, path = arg.split("=", 1)
-        r = out[name] = count(Path(path))
+        m = re.fullmatch(r"(.*):(\d+)", path)
+        r = out[name] = count(Path(m[1]), int(m[2])) if m else count(Path(path))
         c, s = r["compression"], r["sha512_sass"]
         print(f"{name}: {c['registers_written']:.0f} registers written a compression ({c['instructions']:.0f} "
               f"instructions; the trip as sha512_sass.py prices it {s['registers_written']:.0f} / {s['instructions']:.0f}; "

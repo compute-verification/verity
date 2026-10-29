@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import sys
 
-MSG = bytes((i * 151 + 7) % 256 for i in range(300))
+MSG = bytes((i * 151 + 7) % 256 for i in range(2000))
 
 
 def main() -> None:
