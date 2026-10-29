@@ -1,9 +1,9 @@
 """``row_commit.cuh`` against ``verity.ml.commitments``: its frame-v3-sha512 leaf, pad and node are `CommitmentDomain`'s at
-every length of uint below 2^32, through the compile-time and the run-time forms (the node's also through `Compact`), and
-its builders' leaf at a rank and a position apart is too; its trees give ``frame_v3/vectors_sha512.json``'s leaves, pads and
-roots; its hm96-sha512 leaf, through every table and loop of the mask, gives ``hm96/vectors_sha512.json``'s commit strings
-and leaves under both keys, the gates' reference on fresh rows and salts and the vectors' hiding leaves; and the gates'
-Definitions compute what it does.
+every length of uint below 2^32, through the compile-time and the run-time forms (the leaf's also a body a length,
+`frame_leaf_nb`, and the node's also through `Compact`), and its builders' leaf at a rank and a position apart is too; its
+trees give ``frame_v3/vectors_sha512.json``'s leaves, pads and roots; its hm96-sha512 leaf, through every table and loop of
+the mask, gives ``hm96/vectors_sha512.json``'s commit strings and leaves under both keys, the gates' reference on fresh rows
+and salts and the vectors' hiding leaves; and the gates' Definitions compute what it does.
 ``row_commit_cases.cu`` runs the cases, built by the host's C++ compiler and, where nvcc and a GPU are present, on the
 device; the device build is cached (`cuda_build`), so a GPU job builds it (``cuda_lib``) before it leases a GPU."""
 from __future__ import annotations
@@ -120,7 +120,7 @@ def _check_leaves(run: Run) -> None:
         did = rng.randbytes(64)
         for pos in EDGES:
             v = rng.randbytes(64)
-            for form in (0, 1) if schema in (ROW, SEG) else (0,):
+            for form in (0, 1, 2) if schema in (ROW, SEG) else (0, 2):
                 cases.append(case(LEAF, form, did=did, schema=schema, pos=pos, value=v))
                 want.append(F.leaf_ref(did, schema, v, pos))
     for rank, position in ((0, 7), (3, 65536), (1 << 20, 5), ((1 << 32) - 1, (1 << 40) + 3)):
