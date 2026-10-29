@@ -569,7 +569,10 @@ class H1Windows:
         t1 = self.clock()
         self.tap = HC.tap(self.com, self.model, self.layers, range(self.steps))
         prover = self.prover_of(window)
-        served = SV.Served(unit=self.unit, weights=self.weights, tap=self.tap, window=os.urandom(64),
+        # on a gate session the tables bind the window's open root (`Served.key`), the root the ledger opens it on and
+        # credit's domains bind; in-process coins credit nothing, and a random root stands in for the session's
+        served = SV.Served(unit=self.unit, weights=self.weights, tap=self.tap,
+                           window=None if self.sessions is not None else os.urandom(64),
                            program=self.program, program_digest=self.digest,
                            prover=None if prover is None else str(prover))
         settings = {**self.config.get("pouw", {}), "rows": self.rows, "steps": self.steps, "served": served,
