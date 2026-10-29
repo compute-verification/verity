@@ -4,9 +4,10 @@
                                                 histogram, and the verdict; exit 1 on a spill (LDL/STL) or a pinned count
                                                 that differs
 
-A pin is {"kernel substring": {"loop": i, "ops": {"OPCODE": n, ...}}}: loop i (innermost first, by body length) must hold
-exactly n of each pinned opcode (the major opcode, before the first dot). The unit prices come from these counts, so a
-build whose loop changed fails here instead of pricing the wrong code.
+A pin is {"kernel substring": {"loop": i, "ops": {"OPCODE": n, ...}}}: loop i (innermost first, by body length; or, when
+i is an opcode, the shortest loop holding it) must hold exactly n of each pinned opcode (the major opcode, before the
+first dot). The unit prices come from these counts, so a build whose loop changed fails here instead of pricing the wrong
+code.
 """
 
 import collections
@@ -51,10 +52,13 @@ def main():
         for key, pin in pins.items():
             if key not in name:
                 continue
-            if pin["loop"] >= len(ls):
+            at = pin["loop"]
+            if isinstance(at, str):
+                at = next((i for i, c in enumerate(ls) if c[at]), len(ls))
+            if at >= len(ls):
                 why.append(f"pin {key}: loop {pin['loop']} absent ({len(ls)} loops)")
                 continue
-            got = ls[pin["loop"]]
+            got = ls[at]
             for op, n in pin["ops"].items():
                 if got[op] != n:
                     why.append(f"pin {key}: loop {pin['loop']} has {got[op]} {op}, pinned {n}")
