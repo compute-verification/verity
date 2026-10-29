@@ -19,12 +19,12 @@ on (lo, hi) half-lanes), the same function on bits.
     PouwRotl64Hi_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                  word view: PouwRotl64Hi_v1
 
 Each is traced from a builder over core's `forms` (`verity.ml.circuits.boolean.trace.definition`), so its And gates are the builder's
-live ANDs but for its commits (`forms.Circuit.commit`, a row of a `forms` lowering and no gate); C-Flock's lowering runs the
+live ANDs but for its commits (`forms.Circuit.commit`, a row of a `forms` lowering and no gate); Flock's lowering runs the
 builder itself (``.build``), for the word primitive's piece and for an activation of the Definition, so it keeps the commits.
 
 * the windows: the 15 calls of the atom's own builder (`verity.ml.circuits.ops.boolean.gemm`) that build a window's masked words, on a
   view of the circuit that keeps its own AND memo (`_Shared`), so atom j's 32 products, and every part of its step that
-  doesn't read the accumulator, are built once for its 2^j words on any circuit, C-Flock's (which has no common-subexpression
+  doesn't read the accumulator, are built once for its 2^j words on any circuit, Flock's (which has no common-subexpression
   pass) included: on sm_120 102,409 ANDs where the 15 calls are 145,651.
 * `window_word`: a 4-to-16 decode and one AND per bit and mask, so a constant m (each of the cap word's reads) costs none.
 * the salt-dead bits: the atom's builder at the support's two ends (E′ the one code c_β at all 32 positions, F the
@@ -41,7 +41,7 @@ builder itself (``.build``), for the word primitive's piece and for an activatio
   sign correction), plus 1 when the remainder is nonzero, rounded up to 48 significant bits with a right shift and its
   sticky bit; n = 0 gives every bit set.
 * `chi32`: Keccak's χ on a half-lane, one AND per bit; xor is free.  Its output is committed: a lowering that keeps a
-  call's outputs as XOR forms (C-Flock's) otherwise carries χ's XOR terms into the next round's θ, and over 12 rounds they
+  call's outputs as XOR forms (Flock's) otherwise carries χ's XOR terms into the next round's θ, and over 12 rounds they
   compound until lowering one Keccak-p[1600, 12] runs out of memory; committed, it is 38,400 rows (19,200 ANDs and as
   many commits), χ's operands θ's outputs of 11 committed bits at most.
 * `rotl64`: a barrel rotator over the 64-bit word hi:lo, one stage per bit of the amount's low six, the largest first, so

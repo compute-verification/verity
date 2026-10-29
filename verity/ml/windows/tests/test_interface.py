@@ -1,5 +1,5 @@
 """What an integration hands Verity (`verity.ml.windows.interface`), against the interface alone: a circuit takes only
-Verity's Definitions, a unit's rows are its Definition's bit rows as C-Flock stages them, a window tiles the partition and
+Verity's Definitions, a unit's rows are its Definition's bit rows as Flock stages them, a window tiles the partition and
 commits under the window-domain rule, a label in a circuit with blocks is its run's class structure (its bounds where
 the units change inference block, its step and slot and a form of the window's), an integration's outputs are checked
 against the Definitions before it commits, a wire pattern wires whole members unit by unit under its writers' salts, a
@@ -465,7 +465,7 @@ def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
 
 def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
     """A template passes with the k_log its rows alone need, and is refused, its message naming it, its cuts, its rows and
-    the fix, when its rows are more than C-Flock's composer takes, none is past 111 bytes, or they alone need a C-Flock block
+    the fix, when its rows are more than Flock's composer takes, none is past 111 bytes, or they alone need a Flock block
     past 2^27 bits."""
     assert I.check_proof_block(GEMM) == I.check_proof_block(GEMM, {"x": 2}) == I.PACK_LOG
     wide = bind(G.Gemm, K=16, N=256, **G.GEMM_AMPERE)
@@ -483,7 +483,7 @@ def test_proof_block_k_log_is_the_composers_arithmetic():
     outputs, and logic of up to 2^26 rows, the k_log `circuit._ranges` gives its sha512x3, hm96, logic and mask ranges at
     the most VUs compose's packing loop takes, the logic's slot `ir_lower.layout`'s cells (each port group a power of two
     of `ir_lower.WORD`-bit words, the logic between, a constant last). A row has a compression before its last block
-    exactly past ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit C-Flock block
+    exactly past ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit Flock block
     room."""
     from verity_flock import circuit as FC, ir_lower as IL
 
@@ -521,7 +521,7 @@ def test_proof_block_k_log_is_the_composers_arithmetic():
 def test_proof_block_k_log_is_the_composed_k_log():
     """Staged as `UnitStager` stages `unit_rows`, a template's composed META ``k_log`` (the Lean verifier's
     ``HmRow.kLogOf``) is `proof_block_k_log` of its rows and its logic (ANDs, table reads' rows and assertions): GEMM at
-    2^PACK_LOG, two proof blocks to a C-Flock block; GEMM cut into 10 rows, its hm96 range deciding; and a GEMM whose
+    2^PACK_LOG, two proof blocks to a Flock block; GEMM cut into 10 rows, its hm96 range deciding; and a GEMM whose
     sha512x3 range and logic decide, one past `check_proof_block`'s k_log at no logic. It catches a change to compose's
     packing or the lowering's layout, which `test_proof_block_k_log_is_the_composers_arithmetic` mirrors. A proof block
     whose logic alone decides has over 2^22 ANDs, a minute or more to stage, so that test holds that case to the
