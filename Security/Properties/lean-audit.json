@@ -335,6 +335,12 @@
   "Definitions.Pouw.Fp8Atom",
   "Definitions.Pouw.Game.Defs"
  ],
+ "witnesses": {
+  "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
+   "honest": ["Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest"],
+   "nontrivial": "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial"
+  }
+ },
  "layers": {
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
@@ -921,6 +927,18 @@
    ],
    "assumptions": [],
    "type_hash": "e6864860dcc529afba634806f512b5d695318aac5fc33da7bcbd8452570ec5dd"
+  },
+  "Proofs.NetworkCertifier.expectedGridCausal": {
+   "owner": "@network-accounting"
+  },
+  "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
+   "owner": "@network-accounting"
+  },
+  "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest": {
+   "owner": "@network-accounting"
+  },
+  "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.CertifierDevice.completeRows": {
    "owner": "@network-accounting",
@@ -2509,6 +2527,14 @@
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "none"
    },
+   "Proofs.NetworkCertifier.expectedGridCausal": {
+    "function": "NetworkCheck.Check.expectedGrid",
+    "outcome": "none"
+   },
+   "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
+    "function": "NetworkCertifier.handingBuckets",
+    "outcome": "none"
+   },
    "Properties.CertifierDevice.completeRows": {
     "function": "CertifierDevice.step",
     "outcome": "none"
@@ -3569,6 +3595,8 @@
    }
   },
   "frozen": {
+   "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest": "completeness: the honest lemma of encardProgramRunsLeWindows: at a one-window, one-bucket configuration, the honest network certifier's record of one frame is among the sequences it counts",
+   "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial": "completeness: the nontrivial lemma of encardProgramRunsLeWindows: at the prediction that reads its rows off the advice, which accepts every sequence whose statuses are complete, two sequences of one bucket exceed its bound of one",
    "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier through runCheckAccepts, the composed check's property (PousCheck.Run.check); G-1 (one session per audit) and G-2 (the composed check) are fixed in code",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and takes CoinCommitHides and Pous.Period.RingDevice (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
