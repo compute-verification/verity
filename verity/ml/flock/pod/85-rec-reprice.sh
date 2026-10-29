@@ -35,8 +35,7 @@
 #                CONTROLS=DIR: the firewall's negative controls on that statement; OPROVE_JOBS=4 statements at once while their estimated
 #                peaks sum to at most OPROVE_MEM_GB=48. MODES=firewall alone, WARM=0 RUNS=1: each statement fixed before
 #                any session starts gets exactly one independent session, never drawn again, every exit recorded
-#                (out/oprove/statements.sha512, exits.tsv), and every session its coin servers serve listed with its coin
-#                key (data/$TAG/v-sess/opens.jsonl), which STEP=lean composes V*'s parts over (lean_verdicts.py --compose)
+#                (out/oprove/statements.sha512, exits.tsv)
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
 #                shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1: also the inner's,
