@@ -75,7 +75,7 @@ class _Arm:
 
     def gate(self, dev, call, shape, flags):
         self.log.append(f"gate {call.i}")
-        return A.Gate(self.ok, {"y": "all"})
+        return A.GateResult(self.ok, {"y": "all"})
 
 
 class _PrefetchingArm(_Arm):
