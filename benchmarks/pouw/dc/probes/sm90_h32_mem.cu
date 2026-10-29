@@ -6,6 +6,7 @@
 //                     rows, so each access reads one row, conflict-free; a cell holds the next row's address (d_lds128
 //                     folds its other 3 words, 2 LOP3 a load, so ptxas keeps all 4)
 //   d_ldg64           global through L1: each block's table in its own 16 KB of a.g, 8-B cells holding the next's address
+//                     (ld.global.ca: LDG.E.64.STRONG.SM)
 //   a_atoms, a_atomg  atom.add with its return, each lane its own word (shared: conflict-free), uncontended
 //   a_redg            red.global.add, each lane its own word, on every SM (the L2's atomic path bounds it)
 #include "../../opcode_probe/probe.cuh"
@@ -138,8 +139,8 @@ static const OpProbe PROBES[] = {
      .smem = lds_off, .dyn_smem = ROWS * 128, .iters = 512, .note = "c=other w=LDS:1"},
     {.name = "d_lds128", .kernel = (const void*)d_lds128, .tpb = TPB, .expect = "LDS.128=8", .smem_ops = "LDS.128*8",
      .smem = lds128_off, .dyn_smem = ROWS * 512, .iters = 512, .note = "c=other w=LDS.128:4"},
-    {.name = "d_ldg64", .kernel = (const void*)d_ldg64, .tpb = TPB, .expect = "LDG.E.64=8", .iters = 512,
-     .note = "c=other w=LDG.E.64:2"},
+    {.name = "d_ldg64", .kernel = (const void*)d_ldg64, .tpb = TPB, .expect = "LDG.E.64.STRONG.SM=8", .iters = 512,
+     .note = "c=other w=LDG.E.64.STRONG.SM:2"},
     {.name = "a_atoms", .kernel = (const void*)a_atoms, .tpb = TPB, .expect = "ATOMS.ADD=8", .smem_ops = "ATOMS.ADD*8",
      .smem = atoms_off, .dyn_smem = U * TPB * 4, .iters = 256, .note = "c=other w=ATOMS.ADD:2"},
     {.name = "a_atomg", .kernel = (const void*)a_atomg, .tpb = TPB, .expect = "ATOMG.E.ADD.STRONG.GPU=8", .iters = 128,
