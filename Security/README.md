@@ -359,9 +359,10 @@ q = q_whole + q_split, the remainder represents at most ν_out a gate (ζ̄'s pl
 (`Nci.Guarantees.GammaBelow`); an execution carrying Ω_* has N ≥ L = Ω_*/Γ (`Nci.Guarantees.PointwiseThreshold`); and
 over any game, Pr[accept ∧ success ∧ N < min(L, N_max)] ≤ δ + η, with δ bounding an accepted execution that has no such
 decomposition and η a successful one below N_max that carries less than Ω_* (`Nci.Guarantees.PointwiseEvent`). For
-regions that are proof blocks of a (c, k + k_F)-partition, the local bounds give q_whole = r·h·((k + k_F) + c/g)
-(`Nci.Guarantees.WholeCapLocal`), h being `HeldBudget`'s (k + k_F) + ⌈log₂ B_max⌉ + a_ext + λ. The split cap, the
-ceiling, the utilization and δ are each a hypothesis, and k_F and a_ext parameters that nothing bounds yet.
+regions that are proof blocks of a (c, k + k_F)-partition holding slots priced at most h, the local bounds give
+q_whole = r·h·((k + k_F) + c/g) (`Nci.Guarantees.WholeCapLocal`, r the occurrences per counted product); under
+description hardness `HeldBudget` gives h = (k + k_F) + ⌈log₂ B⌉ + a_ext + λ, at most its value at B_max. The split
+cap, the ceiling, the utilization and δ are each a hypothesis, and k_F and a_ext parameters that nothing bounds yet.
 
 **Onsite.** As remote, except that each registered server's remainder is capped per server block: a server block of at
 most c_S gates whose effective fresh input k_S is within the assembly's range does at most q_S of the weighted count,
