@@ -22,8 +22,8 @@ def test_the_reference_is_not_registered():
 
 
 def test_the_reference_traces_its_arm_and_spot_check():
-    """`eps1_reference.traced_as` builds the design the verifier would: the served arm, the spot check that is the drawn
-    unit, the work table and the empty closure, each from the shape alone."""
+    """`eps1_reference.traced_as` builds the design the verifier would: the served arm, the spot check that is the sampled
+    proof block, the work table and the empty closure, each from the shape alone."""
     t = EPS.traced_as(SHAPE.m, SHAPE.k, SHAPE.n)
     assert isinstance(t, EPS.Eps1Traced) and t.scheme == EPS.SCHEME and t.kind == EPS.KIND and t.shape == SHAPE
     assert t.check == EPS.check(SHAPE.ks) and t.arm == EPS.arm(SHAPE.k)
