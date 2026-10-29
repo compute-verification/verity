@@ -16,7 +16,7 @@ whose wrong output can forfeit downstream work (a noise or form proof block ever
 **Cost.**  Per touched statement plus per proved proof block, as C-Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
 `touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
 committed at serve time whatever the draw: every proof block's outputs (`commit_bits`, `commit_rows`),
-and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
+and the fixed serve-time commitments of every scale (`TensorCommit`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A drawn proof block's
 witness is built by re-executing its replay block from the last committed state (`ReplayDomain`), which commits nothing.
@@ -38,7 +38,7 @@ from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, nextaft
 
 from verity.core.protocols.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
-from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX, unit_class
+from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
 
 #: ANDs of one SHA-512 compression in Boolean form (hm96 PROTOCOL §5)
 SHA512_ANDS = 58_120
@@ -56,7 +56,7 @@ def row_ands(nbytes: int) -> int:
 class Candidate:
     """One subcircuit of one way (`cut`, default the subcircuit alone) to cut one op type into proof blocks, derived from the IR,
     never from the prover: `units` instances, each credited `work` (the verifier's work table), with `out_bits` over
-    `out_gates` boundary gates, its committed bits, which fit a public size class (`one_stage.partition.unit_class`, at
+    `out_gates` boundary gates, its committed bits, which fit a public size class (`partition_v2.unit_class`, at
     most `UNIT_CLASS_MAX`, as the one-stage partition refuses a wider proof block), and `influence`, the credited work a wrong
     one can forfeit downstream.  A proved proof block costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
     `commit_bits` in `commit_rows` rows per proof block whatever the sampling design; one statement holds at most `cap` proof blocks
@@ -121,7 +121,7 @@ class ReplayDomain:
 
 
 @dataclass(frozen=True)
-class Commitment:
+class TensorCommit:
     """One tensor committed at serve time by one scale, whatever the draw: `nbytes` hashed over the window, at the model's
     per-byte rate (`CostModel.commit_per_bit`) unless `cost` is measured.  `scale` names who commits it (the Commit's taps,
     PoUW's A rows or tile leaves, the remote audit's receipts, a work block's pin) and `tensor` what; one tensor under two
@@ -162,7 +162,7 @@ class CostModel:
     staged_per_unit: float = 0.0
     commit_per_bit: float = 0.0
     commit_per_row: float = 0.0
-    serve: tuple[Commitment, ...] = ()
+    serve: tuple[TensorCommit, ...] = ()
     replay: Mapping[str, ReplayDomain] = field(default_factory=dict)
     sigma: float = 0.0
     source: str = ""
@@ -196,7 +196,7 @@ class CostModel:
     def commit(self, c: Candidate) -> float:
         return c.units * (self.commit_per_bit * c.commit_bits + self.commit_per_row * c.commit_rows)
 
-    def committed(self, s: Commitment) -> float:
+    def committed(self, s: TensorCommit) -> float:
         return s.cost if s.cost is not None else 8 * self.commit_per_bit * s.nbytes
 
     def serve_cost(self) -> float:
@@ -226,7 +226,7 @@ class Objective:
 
 
 @dataclass(frozen=True)
-class Certificate:
+class PlanBounds:
     """What a plan's sampling design certifies at `delta`, from its sizes alone: `harm` (core's `harm_bound` of the objective's harm),
     `density` (`density_bound` of it), `free_compute` (core's `harm_bound` of credited work and influence) and, when the
     objective weighs bits, `leak` (`consumers.exfiltration_bound`: `harm_bound` of output bits plus `location_bits`).  When
@@ -254,7 +254,7 @@ class Plan:
     full: frozenset[str]
     cost: Mapping[str, float]
     weights: Mapping[str, float] = field(default_factory=dict)
-    certificate: Certificate | None = field(default=None, compare=False)
+    certificate: PlanBounds | None = field(default=None, compare=False)
 
 
 def _log_miss(n: int, m: int, k: int) -> float:
@@ -539,7 +539,7 @@ def max_harm(rows: Iterable[tuple[int, int, float | Fraction]], delta: float | F
 
 
 def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective: Objective, *,
-            exact: bool = True) -> Certificate:
+            exact: bool = True) -> PlanBounds:
     """The plan's guarantee, from its sizes alone, by core's bounds (and `density_bound`); by `density_bound` alone when not
     `exact`, for populations too large for core's search."""
     chosen = [c for c in candidates if c.template in sizes]
@@ -550,7 +550,7 @@ def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective
 
     density = dens(objective.harm)
     if not exact:
-        return Certificate(d, density, density, dens(lambda c: float(c.work + c.influence)), None, False)
+        return PlanBounds(d, density, density, dens(lambda c: float(c.work + c.influence)), None, False)
     law = Stratified(tuple(Stratum(c.template, c.units, sizes[c.template]) for c in chosen))
     harm = law.harm_bound({c.template: objective.harm(c) for c in chosen}, d)
     work = law.harm_bound({c.template: float(c.work + c.influence) for c in chosen}, d)
@@ -558,7 +558,7 @@ def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective
     if objective.bits:
         profile = IntegrityProfile(("unit",), (law.population,), {"unit": law}, d)
         leak = exfiltration_bound(profile, {c.template: float(c.out_bits) for c in chosen})
-    return Certificate(d, harm, density, work, leak)
+    return PlanBounds(d, harm, density, work, leak)
 
 
 def _k(c: Candidate, objective: Objective, lam: float, weight: float = 1.0) -> int:
@@ -642,7 +642,7 @@ def _pareto(plans: Iterable[Plan], key) -> list[Plan]:
 def frontier(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, *, by: str = "harm",
              grid: int = 121, promote: float = 0.05, exact: bool = True,
              weights: Mapping[str, float] | None = None) -> list[Plan]:
-    """The certified Pareto frontier of (expected cost, `by`), cheapest first, `by` a `Certificate` field, each weight
+    """The certified Pareto frontier of (expected cost, `by`), cheapest first, `by` a `PlanBounds` field, each weight
     class's density scaled by its weight (`weights`, 1 when absent).  The sweep's plans are screened by `density_bound`
     (cheap) before the survivors are certified (`certify`, `exact` or not)."""
     weights = dict(weights or {})
@@ -779,7 +779,7 @@ def overlaps(costs: CostModel, *, latency: float = 0.0) -> list[dict]:
     its measured cost), and at decode its bytes, its chain and, when it gates the step, its chain's latency at `latency`
     a dependent compression (latency-bound).  Committed once, the cheapest copy is kept: the saving is the others' bytes
     and prefill cost, and at decode their latency less the kept copy's chain where it has to gate in their place."""
-    by: dict[str, list[Commitment]] = {}
+    by: dict[str, list[TensorCommit]] = {}
     for s in costs.serve:
         by.setdefault(s.tensor, []).append(s)
     rows = []
@@ -885,8 +885,8 @@ def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
     return {"law": "work:1", "table": {c.template: {"work": c.work, "floor": plan.sizes[c.template]} for c in chosen}}
 
 
-__all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "Plan", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "acceptance_parts", "certify", "density_bound",
+__all__ = ["Candidate", "TensorCommit", "CostModel", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
+           "Objective", "Plan", "PlanBounds", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "acceptance_parts", "certify", "density_bound",
            "density_exact", "fill", "for_budget", "for_target", "frontier", "ln_bound", "ln_upper", "max_harm",
            "max_harm_check", "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
            "template_cost", "touched", "weigh", "work_law"]
