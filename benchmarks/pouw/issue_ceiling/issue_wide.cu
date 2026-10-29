@@ -1,6 +1,6 @@
-// Round-6 joint-row probe (compute-accounting, note:20261016T0759Z-draft-issue-r6-joint).
+// Round-6 joint-row probe.
 //
-// RS-W' r3 (note:20261016T0715Z-draft-rs-merge-multiplicity; VF3d) has τ = 0.1208 set by the two-word credits of IADD.64
+// RS-W' r3 (VF3d) has τ = 0.1208 set by the two-word credits of IADD.64
 // and DADD/DFMA, each priced at ONE dispatch slot on the issue row + JI3. A joint row MMA·a_M + op·a_X <= cycles can
 // recover τ if a_X is measured. This probe measures, for DADD, DFMA, RED.64 and the 16-byte vector RED (and, to confirm
 // r5's rates are dispatch-bound not latency-bound, IADD.64 and IMAD.WIDE with the 32-bit IADD3/IMAD as saturation

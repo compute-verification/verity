@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RT2-HOPPER task 1's synthesis queries (li_window_sat.py), one process a (width, query), on a CPU node. From a pushed
+# The synthesis queries (li_window_sat.py), one process a (width, query), on a CPU node. From a pushed
 # commit:
 #
 #   research run --on vy-nebius-cpu-N --project verity --campaign eps1 --source <tree> --cwd source --mem-gb 16 \
