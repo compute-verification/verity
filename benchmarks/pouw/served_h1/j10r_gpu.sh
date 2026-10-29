@@ -11,7 +11,7 @@
 #           the linears at K 2048 alone, --base-role LLAMA32_1B --role LLAMA32_1B_INT8 --repo
 #           verity-int8/Llama-3.2-1B-INT8 serve-openai's model)
 #
-#   research run --on vy-nebius-2 --pool research --mem-gb 96 --cwd source --source . --as LANE --env JOB=window \
+#   research run --on MACHINE --pool research --mem-gb 96 --cwd source --source . --as LANE --env JOB=window \
 #     -- bash benchmarks/pouw/served_h1/j10r_gpu.sh
 set -euo pipefail
 PY=${PY:-/workspace/jobs/venv312/bin/python}
