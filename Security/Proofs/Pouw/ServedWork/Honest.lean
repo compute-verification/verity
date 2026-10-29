@@ -118,7 +118,7 @@ theorem rightWords_hon {Np : ℕ} (wt : Fin Np → ℝ) (d : Bool) :
 section Meets
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-  (unitOf : Fin nB → ℕ) (regOf : Bool → Registered)
+  (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **The honest inventory meets every premise `ServedWork` adds**, in its order, on the flat machine at `c = N_p`
