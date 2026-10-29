@@ -2,7 +2,7 @@
 (the map's model class at the root, linears that hold the tensor-parallel size), and attention layers that run the pinned vLLM's call
 structure on real tensors of the map's per-rank sizes.
 
-`Attention.forward` is `DeepseekV32Attention.forward` without its projections (the hooked linears' outputs are drawn per layer and
+`Attention.forward` is `DeepseekV32Attention.forward` without its projections (the hooked linears' outputs are sampled per layer and
 step): it calls this module's `fused_norm_rope` with the step's slot mapping and the layer's caches, which writes the MLA cache entry
 [kv_c, k_pe] and, on an indexer layer, the indexer key's e4m3 bytes and f32 scale where `_fp8_quant_and_cache_write` puts them
 (per block, the block's key rows and then their scales) and clears the layer's top-k rows; then the W_UK_T product, `fused_q`, and
