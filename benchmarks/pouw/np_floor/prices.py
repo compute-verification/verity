@@ -10,7 +10,9 @@ decisions  4096 x the median block's cycles / (iters x warps x decisions a trip)
            warp and a lane-bit for the forms whose lanes read their own coins; the overhead is over the arms alone
            (`arm`, `larm`), scaled by decisions a trip where the arms differ.
 entries    lag.cu: 4096 x the median block's cycles / (iters x warps x 8) units a warp entry (a word folded into the
-           hash input), a lane's (over 32), and a lane's over `cmp`, where every word is computed.
+           hash input), a lane's (over 32), and a lane's over `cmp`, where every word is computed; beside the lead's
+           wgmma (hw_cmp, hw_l1, hw_lag1, hw_lag2), as a copy route's row with a lane-entry for a word, against
+           honest_we.
 
   python prices.py OUT_DIR   # OUT_DIR: a probes.sh run's out/ (one directory a binary); prints JSON lines
 """
@@ -39,12 +41,14 @@ DECIDE = {
 }
 # lag.cu: 8 entries a trip, each priced over `cmp` (every word computed)
 ENTRY = ("cmp", "cpy", "l1", "l1w", "lag1", "lag2", "lag4", "lag8")
+ENTRY_BESIDE = ("hw_cmp", "hw_l1", "hw_lag1", "hw_lag2")
 HONEST = {"hs_g2s1k": "honest_b", "hs_g2s4k": "honest_b", "hs_g2s4kh": "honest_b", "hs_s2g4k": "honest_b",
           "hs_g2s16k": "honest_b", "hs_g2s4kz": "honest_b", "hs_g2s16kz": "honest_b", "hs_s2g4kz": "honest_b",
           "hw_g2s4k": "honest_w", "hw_g2s16k": "honest_w", "hw_g2s4kz": "honest_w", "hw_g2s4khz": "honest_w",
           "hw_s2g4kz": "honest_w", "hw_ldgsts4": "honest_wl", "hw_ldgsts16": "honest_wl", "hw_ldssts4": "honest_wl",
           "hw_ldssts16": "honest_wl",
-          "hs_ldgsts4": "honest_l", "hs_ldgsts16": "honest_l", "hs_ldssts4": "honest_l", "hs_ldssts16": "honest_l"}
+          "hs_ldgsts4": "honest_l", "hs_ldgsts16": "honest_l", "hs_ldssts4": "honest_l", "hs_ldssts16": "honest_l",
+          **{n: "honest_we" for n in ENTRY_BESIDE}}
 
 
 def load(d: Path) -> tuple[dict, dict]:
@@ -92,7 +96,8 @@ def main(out: Path) -> None:
                 rec["over_cmp_a_lane_entry"] = round((u - per_trip["cmp"] / 8) / 32, 2)
         elif r.get("words"):
             w = r["rate"] * r["words"]
-            rec.update(kind="copy", words_an_sm_clock=round(w, 3), units_a_word=round(SM_CLOCK / w, 1),
+            rec.update(kind="entry" if name in ENTRY_BESIDE else "copy", words_an_sm_clock=round(w, 3),
+                       units_a_word=round(SM_CLOCK / w, 1),
                        share_of_floor=round(w / FLOOR_WORDS, 5))
             if name in HONEST and HONEST[name] in rows:
                 kept = imma(r) / rows[HONEST[name]]["rate"]
