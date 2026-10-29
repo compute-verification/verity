@@ -27,13 +27,13 @@ variable {Q R S : Type}
 
 /-- `(U, 𝒜)` is a **cheap point at cost `c₀`** in the game: `U` is in the domain (so its weights, like the
 activations `𝒜` commits, are the adversary's choice within int7), `c₀ ≥ 0`, `𝒜` is within `(c₀, q)`, and every unit
-of `U` is correct in `𝒜`'s transcript for every oracle and salt. A *degenerate input* is the special case where
+of `U` is correct in `𝒜`'s transcript, with no break, for every oracle and salt. A *degenerate input* is the special case where
 `𝒜`'s committed activations or `U`'s weights make the useful output a known constant (`A = 0` or `B = 0`), so that
 `c₀` is the cost of the checked values alone. -/
 def CheapPoint (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (A : Adversary CM)
     (c₀ : ℝ) (q : ℕ) : Prop :=
   U.InDomain D ∧ 0 ≤ c₀ ∧ q ≤ 2 ^ 64 ∧ A.Bounded U c₀ q ∧
-    ∀ (H : Q → R) (s : S), correctSet P U H s (A.transcript U H s) = range U.layout.N
+    ∀ (H : Q → R) (s : S), correctSet P U H s (A.transcript U H s) = range U.layout.N ∧ ¬ A.Breaks U H s
 
 /-! ## The abstract product model -/
 

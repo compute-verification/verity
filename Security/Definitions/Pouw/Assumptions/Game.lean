@@ -19,16 +19,20 @@ variable {Q R S : Type}
 The model's programs reach the oracle only through counted queries (`CostModel.Queries`). In the game
 of §3.3 (the same adversaries, budgets and oracle-call bounds as `Gγ`), let `K'` be the units whose checked values
 are correct (`checkedSet`; the useful output is not required). Then
-`Pr_{H,s}[ ∑_{u ∈ K'} m_u·k_u·n_u > T / (1 − γ₀) ] ≤ ε(q, N)`.
+`Pr_{H,s}[ ∑_{u ∈ K'} m_u·k_u·n_u > T / (1 − γ₀) ∧ the run doesn't break SHA-512 ] ≤ ε(q, N)`.
 
 It is stated in the same game as `Gγ`, so grinding and collisions over the `q` free oracle calls are inside
-`ε(q, N)`. TT is false when `γ₀ ≥ 1` or for zero noise in natural models (`Pouw.Sanity`). -/
+`ε(q, N)`. A run that finds a SHA-512 collision among the inputs it hashed (`Adversary.Breaks`) is outside the event:
+TT assumes nothing about SHA-512's collision resistance, and a guarantee from it bounds its event and no break. In a
+model that hashes nothing it is the statement without the break. TT is false when `γ₀ ≥ 1` or for zero noise in
+natural models (`Pouw.Sanity`). -/
 def TT [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - γ₀) < ∑ u ∈ checkedSet P U x.1 x.2 (A.transcript U x.1 x.2), ((U.layout.shape u).Wmm : ℝ))
+      T / (1 - γ₀) < ∑ u ∈ checkedSet P U x.1 x.2 (A.transcript U x.1 x.2), ((U.layout.shape u).Wmm : ℝ) ∧
+        ¬ A.Breaks U x.1 x.2)
       ≤ ε q U.layout.N
 
 end Pouw.Assumptions

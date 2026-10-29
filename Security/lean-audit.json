@@ -2517,8 +2517,13 @@
   },
   "Definitions.Pouw": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
-   "except": ["Definitions.Pouw.PearlC.Defs"],
+   "except": ["Definitions.Pouw.PearlC.Defs", "Definitions.Pouw.Game.Defs"],
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
+  },
+  "Definitions.Pouw.Game.Defs": {
+   "imports": ["Mathlib", "Definitions.Pouw.Basic", "Definitions.Hash.Basic"],
+   "except": [],
+   "why": "the γ-gap game, definitions only: its break is a collision among the run's own SHA-512 inputs (Hash.CollisionIn), the hash area's vocabulary"
   },
   "Definitions.Pouw.Basic": {
    "imports": ["Mathlib", "Definitions.Pouw.Basic"],

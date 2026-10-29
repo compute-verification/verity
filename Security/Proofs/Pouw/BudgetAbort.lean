@@ -5,7 +5,8 @@ import Definitions.Pouw.Game.Defs
 
 The per-run form of PoUW's bound takes `BudgetAbort CM` (`Accounting.BudgetAbort`, ra-per-run): costs are nonnegative,
 and for every program and budget `b ≥ 0` one program, fixed before the oracle, the state and the salt, costs at most `b`,
-makes at most the original's calls, and commits the original's transcript wherever the original costs at most `b`.
+makes at most the original's calls, and commits the original's transcript and hashes its inputs wherever the original
+costs at most `b`.
 `BudgetAbortG` is that property, word for word, over the game's `CostModel`.
 
 - `budgetAbortG_of_constCost`: a model truncates when a program's cost doesn't read the oracle, the state or the salt,
@@ -28,7 +29,8 @@ def BudgetAbortG (CM : CostModel Q R S) : Prop :=
     ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Mat) (b : ℝ), 0 ≤ b → ∃ prog' : CM.Prog,
       ∀ (H : Q → R) (σ : State) (s : S),
         CM.cost prog' H U act σ s ≤ b ∧ CM.calls prog' H U act σ s ≤ CM.calls prog H U act σ s ∧
-          (CM.cost prog H U act σ s ≤ b → CM.run prog' H U act σ s = CM.run prog H U act σ s)
+          (CM.cost prog H U act σ s ≤ b → CM.run prog' H U act σ s = CM.run prog H U act σ s ∧
+            CM.hashed prog' H U act σ s = CM.hashed prog H U act σ s)
 
 /-- **A model whose costs don't read the oracle, the state or the salt truncates**, given a program that costs and calls
 nothing: the copy is the program itself when it fits the budget, and that program when it doesn't. -/
@@ -44,7 +46,7 @@ theorem budgetAbortG_of_constCost (CM : CostModel Q R S)
   refine ⟨hnn, fun prog U act b hb => ?_⟩
   by_cases h : ∃ (H : Q → R) (σ : State) (s : S), CM.cost prog H U act σ s ≤ b
   · obtain ⟨H₀, σ₀, s₀, h₀⟩ := h
-    exact ⟨prog, fun H σ s => ⟨(hconst prog U act H H₀ σ σ₀ s s₀).trans_le h₀, le_rfl, fun _ => rfl⟩⟩
+    exact ⟨prog, fun H σ s => ⟨(hconst prog U act H H₀ σ σ₀ s s₀).trans_le h₀, le_rfl, fun _ => ⟨rfl, rfl⟩⟩⟩
   · refine ⟨halt, fun H σ s => ⟨(hhalt H U act σ s).1.trans hb, ?_, fun hc => (h ⟨H, σ, s, hc⟩).elim⟩⟩
     rw [(hhalt H U act σ s).2]
     exact Nat.zero_le _

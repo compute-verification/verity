@@ -19,7 +19,8 @@ open Pouw.Pinned Finset
 
 /-- **(b) Theorem 1** (§3.5). If `G_γ` holds with error `η` and, for an adversary within `(T, q)`, the audit (any
 coins `C` drawn independently of `H` and `s`, any acceptance predicate) satisfies
-`Pr[accept ∧ ∑_{u ∉ K} W_ref(u) > ε_s·W] ≤ δ_s`, then `Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ δ_s + η`. -/
+`Pr[accept ∧ ∑_{u ∉ K} W_ref(u) > ε_s·W] ≤ δ_s`, then
+`Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W ∧ the run doesn't break SHA-512] ≤ δ_s + η`. -/
 def Theorem1 : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
@@ -31,7 +32,8 @@ def Theorem1 : Prop :=
           εs * totalWref P U.layout <
             ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1), (P.Wref U.layout u : ℝ))
         ≤ δs →
-      pr (fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧ T < (1 - γ) * (1 - εs) * totalWref P U.layout)
+      pr (fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧ T < (1 - γ) * (1 - εs) * totalWref P U.layout ∧
+          ¬ A.Breaks U x.1 x.2.1)
         ≤ δs + η q U.layout.N
 
 /-- **(c) Work-weighted sampling.** `t` independent samples, each unit drawn with probability `∝ w(u)`; the audit
@@ -44,7 +46,8 @@ def WorkWeightedSampling : Prop :=
 
 /-- **(d) End to end: TT gives resource exhaustion.** Under TT(γ₀) and the `Ω_max` bound, for every in-domain
 workload, budget, oracle bound and adversary, the audit with `t` work-weighted samples satisfies
-`Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ (1 − ε_s)^t + ε(q, N)` with `γ = 1 − (1 − γ₀)/Ω_max`. -/
+`Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W ∧ the run doesn't break SHA-512] ≤ (1 − ε_s)^t + ε(q, N)` with
+`γ = 1 − (1 − γ₀)/Ω_max`. -/
 def EndToEnd : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
@@ -56,7 +59,7 @@ def EndToEnd : Prop :=
     ∀ A : Adversary CM, A.Bounded U T q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
           AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
+          T < (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout ∧ ¬ A.Breaks U x.1 x.2.1)
         ≤ (1 - εs) ^ t + ε q U.layout.N
 
 end Pouw.Guarantees
