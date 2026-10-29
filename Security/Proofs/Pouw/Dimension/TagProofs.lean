@@ -138,6 +138,8 @@ theorem tile_sum_agree (P : Fin n → β → Prop) [∀ j b, Decidable (P j b)] 
 
 end Tiles
 
+variable {n : ℕ}
+
 /-- **Row tags: two rows' words agree in `|J|/q` columns on average** when their tags differ in one digit by `δ ≠ 0`
 and their coin differences in the columns of `J` are `δ·(s j − h)`: over every draw of the tag weights, the agreeing
 columns of `J` total `|J|·q^(|ι|−1)·(q^|ι|)^(n−1)`, a `1/q` share of `|J|` times the draws. -/
