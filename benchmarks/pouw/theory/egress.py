@@ -554,6 +554,7 @@ def main() -> int:
         (f"{best['id']}'s network term, cap 32, floor", p8["32"]["stated"]["floor"]),
         (f"{best['id']}'s network term, cap 32, bar", p8["32"]["stated"]["bar"]),
         (f"{best['id']}'s lane forming, uncredited", best["points"]["t8192"]["forming_share_of_stock"]),
+        (f"{best['id']}'s A2c / A8 residual, model P (estimate)", best["a2c"]["model_p_saving_estimate"]),
         (f"{best320['id']}'s network term, cap 320, floor", best320["points"]["t8192"]["caps"]["320"]["stated"]["floor"]),
         (f"{best320['id']}'s network term, cap 320, bar", best320["points"]["t8192"]["caps"]["320"]["stated"]["bar"]),
         ("1% allowance", 0.01)])
