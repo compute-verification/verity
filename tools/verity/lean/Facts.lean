@@ -33,9 +33,21 @@ judgement; `check.py` holds the policy.
 - `spec_definitions`: the definitions and inductive types the audited modules under `spec` declare in their source (with a
   declaration range: what Lean generates for them has none), projections and internal names aside, each with whether it
   is a statement (`def G : Prop`) and whether it is a predicate (its type, past its binders, is `Prop`).
-- each pin's `body`: the constant its statement applies past its `∀` and `∃` binders (`head`), and whether a `¬` stands
-  before that application (`negated`), read as written: nothing is unfolded; and its `conclusion`, split at `∧`, with
-  what each conjunct applies (`conclusionOf`).
+- each pin's `body`: the constant its statement applies past its `∀` and `∃` binders (`head`), whether a `¬` stands
+  before that application (`negated`) and the binders on the way (`binders`: `∀`, `→` for a proposition, `∃`), read as
+  written: nothing is unfolded; and its `conclusion`, split at `∧`, with what each conjunct applies (`conclusionOf`). A
+  statement that is a definition under `meaning` applied under binders has the same read of it with that definition
+  unfolded once (`lifted`, `liftOf`), as `shape` reads it. Beside them, the definitions under `meaning` the head unfolds
+  through (`chain`, `headChain`); and each pin's `accept_all`, the verifiers accepting everything it applies
+  (`acceptAllOf`).
+- each pin's `inline`: the `Prop` binders of its statement, with a definition under `meaning` it applies unfolded once
+  (`liftOf`), in each conjunct, instance binders aside, each split past its leading `∀` over data and at `∧`
+  (`inlineParts`): as printed with those `∀`s, its head as written and past reducible unfolding (`premiseHead`), whether
+  it is a plain range (`plainRange`), whether it is closed, whether the statement as written binds it (`outer`), and the
+  constants it uses whose names its text shows (`consts`).
+- `constants`: each name under `names` (what `check.py` asks after: the names in the lock's `shape.inline` texts) and
+  each of the inline parts' `consts` that is a constant here, with its kind; a definition's and a theorem's `readCanon` is
+  a `const:` line, so `check.py` can tell a renamed declaration from another one.
 - `instances`: each constant with a declaration range whose name (a private one's as written) ends in a component
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
@@ -748,23 +760,77 @@ partial def premisesOf (env : Environment) (meaning premises : Array Name) (modu
       return ps)
   return out
 
-/-- The constant a statement applies past its `∀` and `∃` binders, and whether `¬` stands before it. -/
-partial def bodyHead (t : Expr) : MetaM (Option Name × Bool) :=
-  forallTelescope t fun _ b => do
+/-- The constant a statement applies past its `∀` and `∃` binders, whether `¬` stands before it, and the binders passed on
+the way, in order: `∀` for a binder that isn't a proposition, `→` for one that is, `∃` for an existential. -/
+partial def bodyHead (t : Expr) : MetaM (Option Name × Bool × Array String) :=
+  forallTelescope t fun xs b => do
+    let kinds ← xs.mapM fun x => do return if ← isProp (← inferType x) then "→" else "∀"
     let b := b.consumeMData
     if b.isAppOfArity ``Exists 2 then
       match b.appArg!.consumeMData with
-      | .lam n ty body bi => withLocalDecl n bi ty fun x => bodyHead (body.instantiate1 x)
-      | _ => return (none, false)
+      | .lam n ty body bi => withLocalDecl n bi ty fun x => do
+        let (h, neg, ks) ← bodyHead (body.instantiate1 x)
+        return (h, neg, kinds.push "∃" ++ ks)
+      | _ => return (none, false, kinds)
     else if b.isAppOfArity ``Not 1 then
-      return (b.appArg!.consumeMData.getAppFn.constName?, true)
+      return (b.appArg!.consumeMData.getAppFn.constName?, true, kinds)
     else
-      return (b.getAppFn.constName?, false)
+      return (b.getAppFn.constName?, false, kinds)
+
+/-- The definitions declared under `meaning` that a statement's head unfolds through: past its `∀` and `∃` binders and a
+`¬`, its head when it is one, then the head of its value at the arguments (`Expr.beta`, as `liftOf` unfolds), and so on,
+at most `n` deep, so that `¬ G' …` can be read against a `G` that unfolds to `G'`. -/
+partial def headChain (env : Environment) (meaning : Array Name) (t : Expr) : Nat → MetaM (Array Name)
+  | 0 => return #[]
+  | n + 1 => forallTelescope t fun _ b => do
+    let b := b.consumeMData
+    if b.isAppOfArity ``Exists 2 then
+      match b.appArg!.consumeMData with
+      | .lam x ty body bi => withLocalDecl x bi ty fun y => headChain env meaning (body.instantiate1 y) (n + 1)
+      | _ => return #[]
+    else
+      let b := if b.isAppOfArity ``Not 1 then b.appArg!.consumeMData else b
+      let .const g us := b.getAppFn | return #[]
+      let some (.defnInfo v) := env.find? g | return #[]
+      let some i := env.getModuleIdxFor? g | return #[]
+      unless us.length == v.levelParams.length && under meaning (moduleName env i) do return #[]
+      return #[g] ++ (← headChain env meaning ((v.value.instantiateLevelParams v.levelParams us).beta b.getAppArgs) n)
+
+partial def lamBody : Expr → Expr
+  | .lam _ _ b _ => lamBody b
+  | .mdata _ e => lamBody e
+  | e => e
+
+partial def binderNames : Expr → Array Name
+  | .forallE n _ b _ => #[n] ++ binderNames b
+  | _ => #[]
+
+/-- The verifiers accepting everything that a statement applies: a constant named `acceptAll…` or `accept_all…`, and a
+definition whose value is a structure instance with a field named `…accept…` that is `fun … => True` (or `true`), as
+`constant.field`. -/
+def acceptAllOf (env : Environment) (t : Expr) : Array String := Id.run do
+  let mut out := #[]
+  for c in t.getUsedConstants do
+    if let .str _ s := c then
+      if s.startsWith "acceptAll" || s.startsWith "accept_all" then out := out.push c.toString
+    let some (.defnInfo v) := env.find? c | continue
+    let b := lamBody v.value
+    let .const k _ := b.getAppFn | continue
+    let some (.ctorInfo cv) := env.find? k | continue
+    let args := b.getAppArgs
+    let names := binderNames cv.type
+    for i in [cv.numParams:args.size] do
+      let some f := names[i]? | continue
+      let a := lamBody args[i]!
+      if (f.toString.toLower.splitOn "accept").length > 1 && (a.isConstOf ``True || a.isConstOf ``Bool.true) then
+        out := out.push s!"{c}.{f}"
+  return out
 
 /-- A statement's conclusion past its `∀`, `→` and `∃` binders, split at its `∧`s, each conjunct again past its own: for
 each conjunct its head constant (`head`), the definitions declared under `meaning` it applies itself (`defs`, followed no
-further), whether it is a reflexivity (`a = a`, `a ↔ a`, `HEq a a`: `refl`) and whether it is a hypothesis in scope, the
-hypotheses split at `∧` (`assumed`); and whether a hypothesis is `False` (`absurd`). Read as written: nothing is
+further), whether it is a reflexivity (`a = a`, `a ↔ a`, `HEq a a`: `refl`), whether it is a hypothesis in scope, the
+hypotheses split at `∧` (`assumed`), and whether it is a `¬` (`negated`), with the head of what it negates past that
+proposition's own `∀` binders (`inner`); and whether a hypothesis is `False` (`absurd`). Read as written: nothing is
 unfolded. -/
 partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (hyps : Array Expr := #[]) :
     MetaM (Array Json × Bool) :=
@@ -786,9 +852,78 @@ partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (
       | _, _ => false
     let refl := ((b.isAppOfArity ``Eq 3 || b.isAppOfArity ``Iff 2) && b.appFn!.appArg! == b.appArg!) ||
       (b.isAppOfArity ``HEq 4 && b.getArg! 1 == b.getArg! 3)
+    let negated := b.isAppOfArity ``Not 1
+    let inner ← if negated then forallTelescope b.appArg!.consumeMData fun _ ib => pure ib.consumeMData.getAppFn.constName?
+      else pure none
     return (#[Json.mkObj [("head", toJson (b.getAppFn.constName?.map toString)),
-      ("defs", toJson ((defs.qsort Name.lt).map toString)), ("refl", toJson refl), ("assumed", toJson (hs.contains b))]],
+      ("defs", toJson ((defs.qsort Name.lt).map toString)), ("refl", toJson refl), ("assumed", toJson (hs.contains b)),
+      ("negated", toJson negated), ("inner", toJson (inner.map toString))]],
       hs.any (·.isConstOf ``False))
+
+/-- The casts a side of a plain range may stand under (`(n : ℝ)`, `(i : ℕ)` of `i : Fin n`). -/
+def casts : Array Name :=
+  #[`Nat.cast, `Int.cast, `Rat.cast, `NNRat.cast, `Int.ofNat, `Fin.val, `Subtype.val, `NNReal.toReal, `ENNReal.ofNNReal]
+
+def rawNat : Expr → Bool
+  | .lit (.natVal _) => true
+  | _ => false
+
+/-- A side of a plain range, under its casts: `some 0` for a numeral, `some 1` for a bound variable, `some 2` for a bound
+variable applied to bound variables (`f i`), none for anything else. -/
+partial def rangeSide (e : Expr) : Option Nat :=
+  let e := e.consumeMData
+  if rawNat e || e.isAppOfArity ``Zero.zero 2 || e.isAppOfArity ``One.one 2 then some 0
+  else if e.isAppOfArity ``OfNat.ofNat 3 then if rawNat (e.getArg! 1).consumeMData then some 0 else none
+  else if e.isFVar then some 1
+  else if e.getAppFn.isFVar && e.getAppArgs.all (·.consumeMData.isFVar) then some 2
+  else match e.getAppFn with
+    | .const c _ => if casts.contains c && e.getAppNumArgs > 0 then rangeSide e.appArg! else none
+    | _ => none
+
+/-- Whether `t` is a plain range: `a ≤ b` or `a < b` (`≥`, `>` alike), each side a numeral or a bound variable, or one side
+a numeral and the other a bound variable applied to bound variables (`0 ≤ f i`), either under casts. -/
+def plainRange (t : Expr) : Bool :=
+  let t := t.consumeMData
+  [``LE.le, ``LT.lt, ``GE.ge, ``GT.gt].any (t.isAppOfArity · 4) &&
+    match rangeSide (t.getArg! 2), rangeSide (t.getArg! 3) with
+    | some a, some b => (a < 2 && b < 2) || (a + b == 2 && a != b)
+    | _, _ => false
+
+/-- The parts of a premise `t` for the inline rule, under the binders `ys` stripped so far: past its leading `∀` over data
+(`∀ ω`), split at `∧`. Each is printed with those binders, with its head as written and past reducible unfolding
+(`premiseHead`, which also passes its antecedents: `A → X` asks less than `X`), whether it is a plain range, and the
+constants it uses whose names its text shows. -/
+partial def inlineParts (moduleOf : Name → Option Name) (ys : Array Expr) (t : Expr) : MetaM (Array Json) := do
+  let t := t.consumeMData
+  if let .forallE n d b bi := t then
+    unless ← isProp d do
+      return ← withLocalDecl n bi d fun y => inlineParts moduleOf (ys.push y) (b.instantiate1 y)
+  if t.isAppOfArity ``And 2 then
+    return (← inlineParts moduleOf ys t.appFn!.appArg!) ++ (← inlineParts moduleOf ys t.appArg!)
+  let head := t.getAppFn.constName?
+  let unfolded ← premiseHead moduleOf 4 t
+  let e ← mkForallFVars ys t
+  let text := toString (← ppExpr e)
+  let consts := (e.getUsedConstants.map toString).filter fun c => (text.splitOn c).length > 1
+  return #[Json.mkObj [("type", toJson text), ("head", toJson (head.map toString)),
+    ("unfolded", toJson (unfolded.map toString)), ("range", toJson (plainRange t)), ("consts", toJson (consts.qsort (· < ·)))]]
+
+/-- Each pin's `inline`: the `Prop` binders of the statement `t`, a definition under `meaning` it applies unfolded once
+(`liftOf`), in each of its conjuncts, instance binders aside, split by `inlineParts`, each with its binder's name, whether
+it is closed, and whether the statement as written binds it (`outer`: among the leading binders `liftOf` keeps). -/
+def inlineOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (t : Expr) : MetaM (Array Json) := do
+  let s ← plain (((liftOf env meaning t).map (·.2)).getD t)
+  let outer ← forallTelescope (← plain t) fun xs _ => pure xs.size
+  let cs := conjuncts s
+  cs.foldlM (init := #[]) fun out c => forallTelescope c fun xs _ => do
+    let mut acc := out
+    for h : i in [0:xs.size] do
+      let d ← xs[i].fvarId!.getDecl
+      if d.binderInfo.isInstImplicit || !(← isProp d.type) then continue
+      for p in ← inlineParts moduleOf #[] d.type do
+        acc := acc.push (((p.setObjVal! "binder" (toJson d.userName.toString)).setObjVal! "closed"
+          (toJson (!d.type.hasFVar))).setObjVal! "outer" (toJson (cs.length == 1 && i < outer)))
+    return acc
 
 def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning premises : Array Name)
     (listed built : NameSet) (axioms : Std.HashMap Name NameSet)
@@ -824,11 +959,19 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
       return toJson (← ps.mapM fun p => do
         let some h := (p.getObjValAs? String "head").toOption | return p
         return p.setObjVal! "unfolds" (← unfoldsOf env meaning premises listed built moduleOf h.toName))) <|> pure Json.null),
+    ("inline", ← (return toJson (← inlineOf env meaning moduleOf ci.type)) <|> pure Json.null),
     ("body", ← (do
-      let (h, neg) ← bodyHead ci.type
-      let (cs, absurd) ← conclusionOf env meaning ci.type
-      return Json.mkObj [("head", toJson (h.map toString)), ("negated", toJson neg), ("conclusion", toJson cs),
-        ("absurd", toJson absurd)]) <|> pure Json.null),
+      let read (t : Expr) : MetaM (List (String × Json)) := do
+        let (h, neg, ks) ← bodyHead t
+        let (cs, absurd) ← conclusionOf env meaning t
+        let chain ← headChain env meaning t 8
+        return [("head", toJson (h.map toString)), ("negated", toJson neg), ("binders", toJson ks),
+          ("chain", toJson (chain.map toString)), ("conclusion", toJson cs), ("absurd", toJson absurd)]
+      let lifted ← (do
+        let some (_, t) := liftOf env meaning ci.type | return Json.null
+        return Json.mkObj (← read (← plain t))) <|> pure Json.null
+      return Json.mkObj ((← read ci.type) ++ [("lifted", lifted)])) <|> pure Json.null),
+    ("accept_all", toJson (acceptAllOf env ci.type)),
     ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),
     ("outside", toJson (rs.2.map fun (c, m) => #[c.toString, m.toString]))]
@@ -1027,6 +1170,11 @@ unsafe def main (args : List String) : IO UInt32 := do
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
   lap "pins" pinned.size
   let field (j : Json) (k : String) : Array Json := (j.getObjValD k).getArr?.toOption.getD #[]
+  let asked := names cfg "names" ++ pinned.foldl (init := #[]) fun acc (_, j) =>
+    (field j "inline").foldl (init := acc) fun acc p => acc ++ names p "consts"
+  let constants := (asked.foldl (init := (({} : NameSet), #[])) fun (s, out) n =>
+    if s.contains n then (s, out) else (s.insert n, match env.find? n with | some ci => out.push (n, ci) | none => out)).2
+  lap "constants" constants.size
   let nameAt (j : Json) (k : String) : Option Name := (j.getObjValD k).getStr?.toOption.map String.toName
   let candidates := names cfg "assumptions" ++ pinned.foldl (init := #[]) fun acc (_, j) =>
     acc ++ (field j "premises").filterMap (nameAt · "head") ++ (field j "hypotheses").filterMap (nameAt · "named")
@@ -1083,6 +1231,10 @@ unsafe def main (args : List String) : IO UInt32 := do
         done := done.insert c
         lines := lines.push <| Task.spawn fun _ =>
           (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
+    for (c, ci) in constants do
+      if ci matches .defnInfo _ | .thmInfo _ then
+        lines := lines.push <| Task.spawn fun _ =>
+          (Json.mkObj [("id", toJson s!"const:{c}"), ("canon", toJson (readCanon ci))]).compress
     let h ← IO.FS.Handle.mk path .write
     for l in lines do
       h.putStrLn l.get
@@ -1106,6 +1258,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
     ("unreported_errors", toJson unreportedErrors), ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
     ("instances", toJson instances), ("pins", Json.mkObj pinned.toList),
+    ("constants", Json.mkObj (constants.toList.map fun (c, ci) => (c.toString, Json.mkObj [("kind", toJson (kind ci))]))),
     ("assumption_reads", Json.mkObj (walks.toList.map fun (a, rs) => (a.toString, toJson (rs.map fun (c, m, ci) =>
       Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci))])))),
     ("moved_conflicts", toJson conflicts)]
