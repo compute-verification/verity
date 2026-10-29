@@ -18,6 +18,7 @@ an execution (`Exec`), so it may branch on the coins anywhere.
   - `shaRegs`: the registers its SHA-512 compressions write, and `hashed`, the messages it hashes;
   - `egress`: the bits it exchanges with machines outside the node, other than the certifier's coin stream;
   - `root`: the words' commitment it registers, and `holds`, the tiles it holds whole at some point.
+* **The certifier's coin stream** (`CoinStream`): raw coins in a fixed arrangement, each coin once at most.
 * **The commitment format** (`Commit`): the messages the honest commitment of a call's words hashes (leaves and
   nodes), its root, and their SHA-512 compressions.
 * **Accepted** (`Accepted`): the execution holds every MMA tile of committed words whole at some point (the leaves
@@ -52,22 +53,6 @@ structure Exec where
   /-- The tiles it holds whole, in some slot at some point, wherever they came from. -/
   holds : (Fin tileWords → ℤ) → Prop
 
-/-- **A prover's strategy on a call**: tables fixed before the coins, within the node's memory, and an execution at
-each coin value. -/
-structure Strategy (L : Layout) where
-  /-- The pre-coin tables (any, chosen after the data), one tile a slot. -/
-  pre : ℕ → Fin tileWords → ℤ
-  /-- The tables fit the node's memory: `L.mem` tiles. -/
-  pre_supp : ∀ a, L.mem ≤ a → pre a = 0
-  /-- The execution at each value of the coins. -/
-  exec : Coins L → Exec
-
-/-- The memory an execution starts from: the pre-coin tables and the coin stream `stream ω` (the certifier's encoding
-of the coins in tiles). -/
-def Strategy.init {L : Layout} (σ : Strategy L) (stream : Coins L → ℕ → Fin tileWords → ℤ) (ω : Coins L) :
-    Addr → Fin 1 → Fin tileWords → ℤ :=
-  Sum.elim (fun a _ => σ.pre a) (fun c _ => stream ω c)
-
 /-- A coin's index: a tag bit, a step-1 bit, a tag weight or a coin lane. -/
 abbrev CoinIdx (L : Layout) : Type :=
   (Fin L.m × Fin L.S) ⊕ (Fin L.m × Fin 4) ⊕ (Fin 4 × Fin L.n) ⊕ (Fin L.S × Fin L.tiles × Fin 3 × Fin L.n)
@@ -79,12 +64,36 @@ def coinAt {L : Layout} (ω : Coins L) : CoinIdx L → ℤ
   | .inr (.inr (.inl (q, j))) => ω.G q j
   | .inr (.inr (.inr (t, k, ℓ, j))) => ω.s t k ℓ j
 
-/-- **The coin stream is raw coins in a fixed arrangement**: each word the certifier streams is zero or one coin, at a
-position fixed before the coins (`ι`), each coin at one position at most, in at most the node's memory of tiles. -/
-def RawStream (L : Layout) (stream : Coins L → ℕ → Fin tileWords → ℤ) : Prop :=
-  ∃ ι : ℕ → Fin tileWords → Option (CoinIdx L), (∀ c p, L.mem ≤ c → ι c p = none) ∧
-    (∀ c p c' p' x, ι c p = some x → ι c' p' = some x → c = c' ∧ p = p') ∧
-    ∀ ω c p, stream ω c p = (ι c p).elim 0 (coinAt ω)
+/-- **The certifier's coin stream**: raw coins in an arrangement fixed before the coins (`ι`), each streamed word zero
+or one coin, each coin at one position at most, within the node's memory of tiles. The certifier draws the coins after
+it holds `A_j` and the strategy's tables are fixed (`trusted-host`): `Strategy` fixes its tables before the coins,
+`G` fixes the data before them, and every bound averages over `Coins` uniformly. -/
+structure CoinStream (L : Layout) where
+  /-- The coin at each streamed tile's word, or none (zero). -/
+  ι : ℕ → Fin tileWords → Option (CoinIdx L)
+  /-- The stream fits the node's memory: `L.mem` tiles. -/
+  supp : ∀ c p, L.mem ≤ c → ι c p = none
+  /-- Each coin is streamed once at most. -/
+  once : ∀ c p c' p' x, ι c p = some x → ι c' p' = some x → c = c' ∧ p = p'
+
+/-- The stream's tile `c` at `ω`. -/
+def CoinStream.val {L : Layout} (st : CoinStream L) (ω : Coins L) (c : ℕ) : Fin tileWords → ℤ :=
+  fun p => (st.ι c p).elim 0 (coinAt ω)
+
+/-- **A prover's strategy on a call**: tables fixed before the coins, within the node's memory, and an execution at
+each coin value. -/
+structure Strategy (L : Layout) where
+  /-- The pre-coin tables (any, chosen after the data), one tile a slot. -/
+  pre : ℕ → Fin tileWords → ℤ
+  /-- The tables fit the node's memory: `L.mem` tiles. -/
+  pre_supp : ∀ a, L.mem ≤ a → pre a = 0
+  /-- The execution at each value of the coins. -/
+  exec : Coins L → Exec
+
+/-- The memory an execution starts from: the pre-coin tables and the certifier's coin stream at `ω`. -/
+def Strategy.init {L : Layout} (σ : Strategy L) (stream : CoinStream L) (ω : Coins L) :
+    Addr → Fin 1 → Fin tileWords → ℤ :=
+  Sum.elim (fun a _ => σ.pre a) (fun c _ => stream.val ω c)
 
 /-- **The priced W1 work** of a strategy at a coin value: its trace at the W1 table `pr`. -/
 def Strategy.work {L : Layout} (pr : Prices100) (σ : Strategy L) (ω : Coins L) : ℕ :=
@@ -147,9 +156,9 @@ open Classical in
 /-- **Table hits** at `ω`: the committed tiles whose value a strategy's memory starts with, a pre-coin table's tile or
 a coin stream's. -/
 noncomputable def tableHits (L : Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (σ : Strategy L)
-    (stream : Coins L → ℕ → Fin tileWords → ℤ) (ω : Coins L) : ℕ :=
+    (stream : CoinStream L) (ω : Coins L) : ℕ :=
   ((tileIdx L).filter fun x =>
-    (∃ a, σ.pre a = tileOf L κ ω x.1 x.2.1 x.2.2) ∨ ∃ c, stream ω c = tileOf L κ ω x.1 x.2.1 x.2.2).card
+    (∃ a, σ.pre a = tileOf L κ ω x.1 x.2.1 x.2.2) ∨ ∃ c, stream.val ω c = tileOf L κ ω x.1 x.2.1 x.2.2).card
 
 /-- **The execution at `ω` is accepted**: it holds every MMA tile of committed words whole at some point, and
 registers the honest root. -/
