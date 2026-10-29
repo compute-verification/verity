@@ -3,9 +3,9 @@
 A run of the bandwidth audit certifies how much of a fixed store a device read from its device memory into the chip
 within a deadline of a fresh seed. This is the audit over PoUS's store (v0), one of the subprotocols
 (`ARCHITECTURE.md`, Glossary), and no composite protocol runs it: its tag `ro-blake3/v1` is BLAKE3, which the one-hash
-rule (`AGENTS.md`, "Design rules") keeps off the served path. The bandwidth audit on the served path is the remote
-bandwidth audit (`verity/core/protocols/poub/`), which applies this audit's guarantee per pass. This package
-stays for the benchmarks that measure its tags (`benchmarks/bandwidth`).
+rule (`AGENTS.md`, "Design rules") keeps off the served path. The bandwidth subprotocol on the served path is
+PoUB (`verity/core/protocols/poub/`), a different protocol, which applies this audit's guarantee per pass.
+This package stays for the benchmarks that measure its tags (`benchmarks/bandwidth`).
 
 ## 1. What a run certifies, and on what
 
@@ -320,7 +320,7 @@ assumption is needed for the two properties of runs that overlap in time:
   `commit(root) -> samples`, `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`); `Params` (the tag,
   `s`, `T`, the `RTT` allowance and the rebuild floor); the operating point (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`,
   `SLACK_LOG2`, `certified_blocks`, `samples_for`) and `bound`.
-- `openings.py`: the openings of the remote audit's chained passes, `P` passes over the store with one pooled draw of
+- `openings.py`: the openings of PoUB's chained passes, `P` passes over the store with one pooled draw of
   `s` openings after the last root: the draw (`draw`), its sampling error alone and over a monitoring period's draws
   (`window_error`, `horizon_error_log2`), `λ` in three forms (`slack_bits`: `crude`, this audit's `64·k + 41`; `exact`;
   and `named`, a proposal with no Lean statement), and the expected bytes and verifier operations of a draw's openings

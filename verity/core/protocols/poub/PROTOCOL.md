@@ -1,4 +1,4 @@
-# The remote bandwidth audit v0 (`verity/poub/v0`)
+# PoUB v0 (`verity/poub/v0`)
 
 A verifier with no hardware at the site certifies, window by window, how many reads of a node's registered blocks the
 node made. The node's memory is its GPUs' HBM and its host's DRAM. No prover hardware is trusted: the host, its CPUs

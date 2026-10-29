@@ -1,4 +1,4 @@
-"""The remote audit's verifier, the Lean process `poub-check-verifier` (`PoubCheck.Verifier`, in
+"""PoUB's verifier, the Lean process `poub-check-verifier` (`PoubCheck.Verifier`, in
 verity/core/protocols/poub/lean), as `verifier.py` runs it beside `audit.Session`: one request a JSON line
 on its stdin (an openings frame's bytes right after its line), each answered by one line on its stdout; a window's
 check runs on the process's threads and its verdict comes on a line of its own, handed to `done` as it arrives.
@@ -39,7 +39,7 @@ class LeanError(RuntimeError):
 
 @functools.cache
 def build(package: Path = PACKAGE) -> Path:
-    """`lake build poub-check-verifier` in the remote audit's Lake package, once a process, and the executable's
+    """`lake build poub-check-verifier` in PoUB's Lake package, once a process, and the executable's
     path."""
     if shutil.which("lake") is None:
         raise LeanError("lake is not on the PATH, so poub-check-verifier cannot be built: put elan's bin on the PATH "
