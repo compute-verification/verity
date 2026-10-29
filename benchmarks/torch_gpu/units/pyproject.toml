@@ -1,4 +1,4 @@
-# The frozen decoder's non-matmul units (HASH-19). Not a package: build.sh, session.sh and check.py run on a CPU node, the
+# The frozen decoder's non-matmul units. Not a package: build.sh, session.sh and check.py run on a CPU node, the
 # H200 and the RTX PRO 6000; tests/ checks here what a CPU can: the twins against the fp32 primitives' evaluators and scalar
 # compositions, the twins against the sweeps' models, and the build check
 # (`uv run tools/verity/check/suites.py benchmarks/torch_gpu/units`).
@@ -8,6 +8,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # the twins evaluate MufuEx2Ftz and the fp32 primitives (verity.ml.circuits, which imports no other unit) and round to bf16
-# through verity.ml.kernels.tc
+# through verity.ml.kernels.tc; the modules read their variables through settings.py, on verity_config.settings
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
-          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py"]
+          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py", "tools/config/verity_config"]

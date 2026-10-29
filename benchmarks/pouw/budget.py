@@ -109,7 +109,7 @@ class Family:
     #: ε_skip's piece only P·V's served output needs (its served epilogue and the tail's 4th IMMA, `eps_budget.floor_skip`
     #: served free against checked, 8B 2K, the binding cell on every family), a fraction of ε_skip
     served: float
-    #: --operands floor: ε_machine's route term that φ_del closes (a new named assumption, decision 89: Daniel's)
+    #: --operands floor: ε_machine's route term that φ_del closes (a new named assumption)
     route: float
     #: P·V uncredited: ε_skip's most over the cells without P·V, and P·V's share of ♭ at the binding cell (eps_budget)
     skip_no_pv: float

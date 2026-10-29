@@ -1,4 +1,4 @@
-"""The whole codec word at 0 budgeted units, as Model.lean counted before #2420: `EncodeChainHardness` false for every `E > 0`.
+"""The whole codec word at 0 budgeted units, as Model.lean once counted: `EncodeChainHardness` false for every `E > 0`.
 
 `squaring.free_square` shows a squaring mod p1024 at 0 units through the one-word gather (`gather [idx, const c]` is
 `c·[idx ≤ 0]`, and `Gate.indexBits = Nat.clog 2 (args.length − 1) = 0` for it). This module completes the argument at the

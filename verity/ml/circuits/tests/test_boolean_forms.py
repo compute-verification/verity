@@ -1,9 +1,11 @@
 """`forms.Circuit.commit`: a word as committed bits, one row for each bit that is not one committed bit already or a
 constant, with every value unchanged; a Definition traced from a builder that commits (`trace.TracingCircuit`) has no gate for
-it, so its And gates are the builder's ANDs without the commits."""
+it, so its And gates are the builder's ANDs without the commits. A `trace.part`'s ``build``, called as C-Flock's lowering
+calls it (statics first only when it has some), traces to the part's own gates."""
 from __future__ import annotations
 
 import random
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -11,7 +13,7 @@ from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.types import Array
 from verity.ml.circuits.boolean.forms import ONE, ZERO, Circuit
-from verity.ml.circuits.boolean.trace import definition
+from verity.ml.circuits.boolean.trace import definition, part, trace
 
 U4 = Array(4, BL.BIT)
 
@@ -45,3 +47,22 @@ def test_a_traced_commit_is_no_gate() -> None:
     a, b = np.meshgrid(np.arange(16), np.arange(16), indexing="ij")
     got = evaluate_words(d.bind(), a.reshape(-1, 1), b.reshape(-1, 1)).reshape(-1)
     assert (got == (a ^ (a & b)).reshape(-1)).all()
+
+
+def _sig_part(S):
+    return (("a", U4), ("b", U4)), Array(getattr(S, "K", 4), BL.BIT)
+
+
+def _build_part(C, S, a, b):
+    return _xor_and(C, a, b)[:getattr(S, "K", 4)]
+
+
+def test_a_parts_build_is_called_as_the_lowering_calls_it() -> None:
+    for statics, key in (((), ()), (("K",), (3,))):
+        d = part("TestPartXorAnd" + "".join(statics), statics, _sig_part, _build_part, "", register=False)
+        S = SimpleNamespace(**dict(zip(statics, key)))
+        build = (lambda C, *e, d=d, S=S: d.build(C, S, *e)) if statics else d.build
+        params, ret = _sig_part(S)
+        got, want = trace(build, [t for _, t in params], ret), d.traced(*key)
+        assert (got.gates, got.outputs) == (want.gates, want.outputs) and want.counts["and"] == ret.leaves, statics
+        assert d.build.__module__ == __name__

@@ -5,13 +5,12 @@ import Mathlib.Order.Interval.Set.Defs
 /-!
 # The actual circuit (trusted)
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2), section 2. The *actual circuit* of a run is
-the circuit of everything the hardware did (`Verity.Circuit`): a gate for each operation, a wire for each dependence,
-and each gate placed at a leaf `x g` of the tree of locations, a cell `cell g` of that leaf and a tick `t g` (`Placed`;
-the cell is v2.5's: a leaf's memory is its cells, a program reads cells, and a cell takes at most one gate a tick). A
-location is a set of leaves (`Finset L`); the tree is laminar and never needed explicitly. Its input gates are the
-values that existed before the run, such as stored weights and the prover's secrets (the model places them at tick 0;
-nothing here needs it).
+The actual-circuit model. The *actual circuit* of a run is the circuit of everything the hardware did
+(`Verity.Circuit`): a gate for each operation, a wire for each dependence, and each gate placed at a leaf `x g` of the
+tree of locations, a cell `cell g` of that leaf and a tick `t g` (`Placed`; a leaf's memory is its cells, a program
+reads cells, and a cell takes at most one gate a tick). A location is a set of leaves (`Finset L`); the tree is laminar
+and never needed explicitly. Its input gates are the values that existed before the run, such as stored weights and the
+prover's secrets (the model places them at tick 0; nothing here needs it).
 
 For a location `X` and a set `I` of ticks (an interval `[a, b)`, `Set.Ico a b`, or `[t, ∞)`, `Set.Ici t`):
 * `region X I`: `A[X, I]`, the computed gates placed in `X` during `I`. Input gates are in no region, as they are in no
@@ -35,7 +34,7 @@ causality at latency 0, inside `X`, for computed sources, which is all the split
 `cut S` is a set `S` of gates as a circuit whose inputs are what it reads: `A` with every gate outside `S` an input gate,
 and the gates of `S` its outputs. `declaration X t θ` is `A[X, [0, t))` so cut, with the baseline `θ_A`, the input gates
 committed before the run, as NCI's `Declaration`. The runtime `t_A(P)` reads the strategy, not one run
-(`Accounting.Actual.runtime`, v2.7).
+(`Accounting.Actual.runtime`).
 -/
 
 namespace Accounting
@@ -49,7 +48,7 @@ structure Placed (L : Type*) extends Circuit where
   x : Fin N → L
   /-- The tick at which gate `g` ran. -/
   t : Fin N → ℕ
-  /-- The cell of its leaf at which gate `g` ran (v2.5). -/
+  /-- The cell of its leaf at which gate `g` ran. -/
   cell : Fin N → ℕ
   /-- A cell takes at most one gate a tick. -/
   cell_inj : Function.Injective fun g => (x g, cell g, t g)
@@ -72,7 +71,7 @@ noncomputable def ingress (X : Finset L) (I : Set ℕ) : ℕ :=
   A.width ((A.into (A.region X I)).filter fun a => A.x a ∉ X)
 
 open Classical in
-/-- **Egress** `out_X(I)` (v2.7, at the reader's tick): the width of the gates placed in `X` that some gate placed
+/-- **Egress** `out_X(I)` (at the reader's tick): the width of the gates placed in `X` that some gate placed
 outside `X` during `I` reads, `in(A[X̄, I]) ∩ A[X]` (an input gate reads nothing). -/
 noncomputable def egress (X : Finset L) (I : Set ℕ) : ℕ :=
   A.width (univ.filter fun g => A.x g ∈ X ∧ ∃ h, A.x h ∉ X ∧ A.t h ∈ I ∧ g ∈ A.reads h)
@@ -99,7 +98,7 @@ its operation. -/
 def Faithful (val : A.Transcript) : Prop :=
   ∀ g, A.isInput g = false → val g = A.op g val
 
-/-- **Holding** (v2.3): `held y t` is the gates the leaf `y` holds at the start of tick `t`. A held gate is `y`'s own
+/-- **Holding**: `held y t` is the gates the leaf `y` holds at the start of tick `t`. A held gate is `y`'s own
 and an input or placed before `t`; `y`'s inputs are held at tick 0; and a gate of `y` that `y` reads at a later tick is
 held at `y` at the start of every tick from the one after its placement (from 0 for an input) to the reading one. -/
 def Holding (held : L → ℕ → Finset (Fin A.N)) : Prop :=

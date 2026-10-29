@@ -62,6 +62,81 @@ def test_a_sealed_rows_sha512_window_opens_as_a_deferred_commits_row_dir(tmp_pat
     assert sorted(p.name for p in (d / "commit").iterdir()) == ["binding_map_p0.json", "replay_bundle_p0", "runs.jsonl", "verdict.json"]
     (run,) = CommitRun.load_lines(d / "commit" / "runs.jsonl")
     assert run.schema is None and run.arm == "instrumented" and run.tokens_equal is None and run.commit.run_root == rc.run_root.hex()
+    assert "committed_not_retained" not in s and "committed_not_retained" not in json.loads(Path(s["bundle"], "MANIFEST.json").read_text())
+
+
+#: a served step as `--retain-exclude hidden_m1` commits it: an attention interior between two module outputs
+INTERIOR = [("model.layers.0.self_attn.qkv_proj/0", 300), ("fa2.m1/L0/s0/g32x8x1/S", None), ("model.layers.0.self_attn.o_proj/0", 200)]
+
+
+def _interior_window(tmp_path, gap=None):
+    """`INTERIOR` (the plane four leaves and 100 B) at step 0 and the sampler at step 1, committed under rows-sha512, step 0
+    retained as the committer retains it with the hidden family excluded (`host_retention._HostRanges`, everything but the plane's
+    leaf-aligned interior, or but ``gap`` as well), and sealed."""
+    torch = pytest.importorskip("torch")
+    from tests.check.opened import commit_steps
+    from verity_vllm.commit import step_rows
+    from verity_vllm.commit.committer import host_retention as HR
+
+    C = step_rows.ROW_BYTES
+    spec = [(n, nb or 4 * C + 100) for n, nb in INTERIOR]
+    stream = (torch.arange(sum(nb for _n, nb in spec), dtype=torch.int64) % 251).to(torch.uint8)
+    tensors, off = [], 0
+    for i, (name, nb) in enumerate(spec):
+        tensors.append((name, bytes(stream[off:off + nb].numpy()), i, "int32" if ".m1/" in name else "bfloat16", (nb // 2,)))
+        off += nb
+    com, rc = commit_steps({0: tensors, 1: [("runner.sampler", b"\x01\x02\x03\x04")]}, commit_scheme=step_rows.NAME)
+    assert com.chunk == C
+    (lo, hi, fam), = HR._excluded_chunk_ranges(com._layouts[0], HR.HIDDEN_M1_FAMILIES, C)
+    blk, used = com._gpu_blocks[0]
+    kept = HR.outside(sorted([(lo, hi, fam), *([(*gap, "")] if gap else [])]), 0, -(-used // C) * C)
+    com._gpu_blocks[0] = (HR._HostRanges([(a, b, blk[a:b]) for a, b in kept], used, {fam: hi - lo}, C), used)
+    com.retain_exclude = set(HR.HIDDEN_M1_FAMILIES)
+    com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
+    leds = _ledgers()
+    reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
+    d = tmp_path / "windows" / "w6"
+
+    def seal():
+        return ss.seal_window(com, rc, d, rec={"window": 6, "run_id": "t/w6", "steps": len(rc.steps), "passed": True}, reqs=reqs,
+                              request_rows=rows, tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t")
+    return SimpleNamespace(stream=stream, lo=lo, hi=hi, C=C, committed=used + com._gpu_blocks[1][1], d=d, seal=seal)
+
+
+def test_a_window_committed_without_its_attention_interior_seals_it_as_committed_not_retained(tmp_path):
+    """`--retain-exclude hidden_m1`: the run root is the one every byte was committed under, the bundle's store lacks only the
+    plane's interior, its manifest (and the context, and the seal's line) name that as committed and not retained, and the window
+    opens as PROVE-PATH opens it: a module output reads verified against the run root, a read inside the interior answers None."""
+    from verity_vllm.commit.opened import OpenedReader
+    from verity_vllm.pipeline import deferred_rows as DR, replay_bundle as RB
+
+    w = _interior_window(tmp_path)
+    s, n = w.seal(), w.hi - w.lo
+    man = json.loads(Path(s["bundle"], "MANIFEST.json").read_text())
+    got = man[RB.NOT_RETAINED]
+    assert got == {"families": ["fa2_hidden_m1", "fa3_hidden_m1"], "bytes": n, "by_family": {"fa2_hidden_m1": n, "fa3_hidden_m1": 0},
+                   "committed_bytes": w.committed, "retained_bytes": got["retained_bytes"]}
+    assert s[RB.NOT_RETAINED] == got and RB.open_bundle(s["bundle"])["context"][RB.NOT_RETAINED] == got
+    steps = json.loads(Path(s["bundle"], "store", "store.json").read_text())["steps"]
+    assert got["retained_bytes"] == sum(b - a for st in steps for a, b in st["ranges"])
+    assert Path(s["bundle"], "store", "raw", "s0.bin").stat().st_size == sum(b - a for a, b in steps[0]["ranges"])
+    assert not any(a < w.hi and w.lo < b for a, b in steps[0]["ranges"]), "the interior is in no retained range"
+    r = DR.of_record(s["bundle"], str(w.d))
+    rd, o = OpenedReader(r.store, r.run), 300 + 4 * w.C + 100
+    assert rd(0, "model.layers.0.self_attn.qkv_proj/0", 0, 300) == bytes(w.stream[0:300].numpy())
+    assert rd(0, "model.layers.0.self_attn.o_proj/0", 0, 200) == bytes(w.stream[o:o + 200].numpy())
+    assert rd(0, "fa2.m1/L0/s0/g32x8x1/S", 0, w.lo - 300) == bytes(w.stream[300:w.lo].numpy()), "the plane's boundary leaf is retained"
+    assert rd(0, "fa2.m1/L0/s0/g32x8x1/S", w.lo - 300, w.lo - 300 + 64) is None
+    assert rd.stats["not_retained"] == 1 and rd.stats["failed"] == 0
+
+
+def test_a_committed_byte_not_retained_outside_the_excluded_interiors_is_refused_at_the_seal(tmp_path):
+    from verity_vllm.commit import step_rows
+
+    w = _interior_window(tmp_path, gap=(0, step_rows.ROW_BYTES))
+    with pytest.raises(ValueError, match=r"not retained outside the excluded families' interiors .*step 0 \[0, "):
+        w.seal()
+    assert not (w.d / "commit" / "replay_bundle_p0").exists() and not (w.d / "commit" / "replay_bundle_p0.partial").exists()
 
 
 #: the Commit of record of the bench row llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager (its ``source``):
@@ -136,7 +211,7 @@ def _store(d, s, opened: bool = False):
 
 
 def test_a_served_windows_identities_are_what_the_rows_programs_read(tmp_path):
-    """The failing read of PROVE-PATH on serve-openai's w5 (r20261024-114918-57a0), (b0-1, step 1, gate_up_proj/out), and the rest
+    """PROVE-PATH's read on serve-openai's w5 (b0-1, step 1, gate_up_proj/out), and the rest
     of what the row's Programs read: a Gemm's `out`, RoPE's `query` / `key` (layer 1 through the row's alias), an RMSNorm's
     `norm_scale` and an `fa2.m1` member, each bound exactly as the Commit of record bound the same tensor."""
     fx, d, s = _sealed_parts(tmp_path, with_manifest=True)
@@ -158,7 +233,7 @@ def test_a_served_windows_identities_are_what_the_rows_programs_read(tmp_path):
 
 
 def test_without_the_rows_manifest_a_window_binds_raw_names(tmp_path):
-    """What r20261024-105002-1042's w5 sealed: no manifest, so a name is its identity, and the Programs' reads miss by name."""
+    """A window sealed with no manifest: so a name is its identity, and the Programs' reads miss by name."""
     _fx, d, s = _sealed_parts(tmp_path, with_manifest=False)
     r, _bmap, store = _store(d, s)
     assert r.manifest is None and store.has("b0-1", 1, "model.layers.0.mlp.gate_up_proj", "0")

@@ -51,7 +51,7 @@ def vholds (resH : ResPiece → Msg → List Msg → List Coin → Prop) (openH 
   | .cap q, x, ms, cs => capH q x ms cs
 
 /-- What a piece says at the deployed three: `resHolds`, `openHolds` and `capHolds`. -/
-abbrev vholdsD (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+abbrev vholdsD (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (sideAt : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (rowAt : Msg → List Msg → CapPiece → ByteArray) : VPiece → Msg → List Msg → List Coin → Prop :=

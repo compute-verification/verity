@@ -513,7 +513,7 @@ class BroadcastBiasAddRefRule(OpRule):
 
 class EmbeddingRefRule(OpRule):
     """`aten.embedding(table[V,H], ids)` with ids a *value* (a prescribed input or a computed token) -> `EmbeddingRef_v1{V,H,DT}` per
-    token; int64 ids are narrowed first with `I64ToI32_v1` (range-checked, XFER-G3 / R4). Static ids (`wpe[arange(T)]`) stay
+    token; int64 ids are narrowed first with `I64ToI32_v1` (range-checked). Static ids (`wpe[arange(T)]`) stay
     `StaticGather_v1`.
 
     v2 (G-RH-14): `padding_idx` may be any Python int or None. ATen's forward `embedding(weight, indices, padding_idx, …)` is

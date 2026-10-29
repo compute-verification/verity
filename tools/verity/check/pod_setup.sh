@@ -39,6 +39,11 @@ fi
 if [ -n "${LC_ALL:-}" ] && ! locale -a 2>/dev/null | grep -qix "$(echo "$LC_ALL" | sed 's/UTF-8/utf8/I')"; then
   $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq locales >/dev/null && $SUDO locale-gen "$LC_ALL" >/dev/null
 fi
+# The image's Ubuntu 22.04 trust store still holds the roots that cross-signed the compromised eMudhra intermediates
+if ls /etc/ssl/certs | grep -q -E 'emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root'; then
+  $SUDO apt-get update -qq >/dev/null
+  $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --only-upgrade ca-certificates 'libnss3*' >/dev/null
+fi
 if [ "$(uv --version 2>/dev/null | cut -d' ' -f2)" != "$UV_VERSION" ]; then
   curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | $SUDO env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh >/dev/null
 fi

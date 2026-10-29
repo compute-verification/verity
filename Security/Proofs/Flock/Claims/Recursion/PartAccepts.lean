@@ -9,14 +9,14 @@ only as a hypothesis on the readers' messages, so it is antitone in `chk` (`deco
 that `PartChecksBV` admits, what part `s`'s circuit accepts, read at the messages (`PartAccepts`): at a compiled
 statement of the shape, some V\* statement showing the coins and some outer witness passing `Flock.check` there, with
 its recorded calls true and none colliding with each other or with the compiled verifier's own evaluations at that
-statement (`vcallsAt`: check 5's row commitments among them), that agrees with the messages at the rounds it holds whole and at its
-pieces, whose commit strings are the messages at the rounds read whole off the run (`LayoutB.CmtAgrees`), and whose
-shared rows are the messages' where they carry them (`LayoutB.RowsRead`). The commit strings tie every part to the
-readers' rounds, those it reads without holding them included, so no two parts' checks can pass on different values of
-one round; the shared rows do the same for a row one part writes and another reads. On the run, `VstarShowsB` supplies
-the commit strings and `LayoutB.ReadsRows` the shared rows (`RecDeploy.vstarAccepts_bound`). `ReadsRows` holds outright
-at a layout whose messages carry no shared row (`LayoutB.readsRows_of_rowIn`), as at every deployed layout, so no
-deployed route gains a premise.
+statement (`vcallsAt`: check 5's row commitments among them), that agrees with the messages at the rounds it holds whole
+and at its pieces, whose commit strings are the messages at every round the statement doesn't fix before the last, on
+the bytes the readers read (`LayoutB.CmtAgrees`), and whose shared rows are the messages' where they carry them
+(`LayoutB.RowsRead`). The commit strings tie every part to the readers' rounds, those it reads without holding them
+included, so no two parts' checks can pass on different values of one round; the shared rows do the same for a row one
+part writes and another reads. On the run, `VstarShowsB` supplies the commit strings and `LayoutB.ReadsRows` the shared
+rows (`RecDeploy.vstarAccepts_bound`). `ReadsRows` holds outright at a layout whose messages carry no shared row
+(`LayoutB.readsRows_of_rowIn`), as at every deployed layout, so no deployed route gains a premise.
 
 * `PartChecksBV` holds at `PartAccepts`, at every deployment, layout, shape and staging (`partChecksBV_partAccepts`).
 * `PartAccepts` implies every inner check `PartChecksBV` admits (`partAccepts_chk`).
@@ -47,12 +47,12 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 /-- **What V\* part `s`'s circuit accepts, read at the inner messages `ms`**, at the coins `c`: `x` is a compiled
 statement of the shape, and some V\* statement `xO` showing `c` for the part (`shows`) has an outer witness `w` passing
 `Flock.check`, its recorded calls true evaluations and none colliding with another or with the compiled verifier's at
-`xO` (`vcallsAt`), that agrees with `ms` at each round the part
-holds whole and at each of its pieces, at its offset, whose commit strings (`cmt`) are `ms`'s at the rounds read
-whole off the run (`LayoutB.CmtAgrees`), and whose shared rows are `ms`'s where `ms` carries them (`LayoutB.RowsRead`).
-It is the least inner check `PartChecksBV` admits (`partChecksBV_partAccepts`, `partAccepts_chk`). Refusing a
-collision with the verifier's evaluations ties the rows the part commits to the ones the verifier recomputes the
-commitments of (check 5, `partAccepts_tie`). -/
+`xO` (`vcallsAt`), that agrees with `ms` at each round the part holds whole and at each of its pieces, at its offset,
+whose commit strings (`cmt`) are `ms`'s at every round the statement doesn't fix before the last, on the bytes the
+readers read (`LayoutB.CmtAgrees`), and whose shared rows are `ms`'s where `ms` carries them (`LayoutB.RowsRead`). It is
+the least inner check `PartChecksBV` admits (`partChecksBV_partAccepts`, `partAccepts_chk`). Refusing a collision with
+the verifier's evaluations ties the rows the part commits to the ones the verifier recomputes the commitments of (check
+5, `partAccepts_tie`). -/
 def PartAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) (x : Msg)
     (c : ℕ → Coin) (ms : List Msg) : Prop :=

@@ -3,7 +3,7 @@ import Proofs.Flock.VBridge.Unit
 import Flock.TmplComputes
 
 /-!
-# A templated unit of a partition computes its Definitions at its local evaluation (PRF-133)
+# A templated unit of a partition computes its Definitions at its local evaluation
 
 Let unit `u` of a partition be an instance of `k` stacked copies of the audit's `Rows` of the net `Tmpl.unroll` builds
 (`Rows.ofNet`, `Rows.stack`), as a session's instance unit is of its circuit's unit net. At any transcript `X`, copy `i`'s

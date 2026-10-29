@@ -5,8 +5,8 @@ import Definitions.Accounting.Served
 /-!
 # A checked unit's proof layer with its served checks, through its C-Flock sessions
 
-`Accounting.TS.Checked.checkedLayer`'s relation asks only that a port named `ok` exist (RT4-LOGIC-29). This layer, at
-the same sessions, takes two steps further:
+`Accounting.TS.Checked.checkedLayer`'s relation asks only that a port named `ok` exist. This layer, at the same
+sessions, takes two steps further:
 
 * (a) **The `ok` rows are the verifier's.** flock-verify `--registered F` registers the `ok` port at known content
   (`Registered.KNOWN_KEY`: h1_prove's rows, each the one word `1` under the public `ok_salt`), and refuses a file whose
@@ -20,7 +20,7 @@ the same sessions, takes two steps further:
 
 What ties the C-Flock circuit to `Cd` is the premise `Accounting.Assumptions.TS.OkRealizes`: on an assignment the key
 program's evaluation agrees with at unit `u`, whose `ok` wires carry the `ok` row, `Cd`'s checks of `unitOf u` hold.
-Per RT4-LOGIC-30, unit `u` of the session is one unit of `Cd`, and its partials are proof-layer values.
+Unit `u` of the session is one unit of `Cd`, and its partials are proof-layer values.
 
 These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
 `Proofs.Accounting.TS.Session`, as `Accounting.TS.Checked`'s do.

@@ -1,5 +1,5 @@
-"""F-dA-15 admission (R17 stoch): the scheduled host-retention bound is SOUND (>= every observed step) and TIGHT (within 15 % of the
-run total) on three R16 records with per-step `n_bytes`, refuses by name over the cgroup, and is torch-free."""
+"""Commit admission: the scheduled host-retention bound is SOUND (>= every observed step) and TIGHT (within 15 % of the
+run total) on three recorded runs with per-step `n_bytes`, refuses by name over the cgroup, and is torch-free."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from verity_vllm.pipeline import admission_bound as ADM
 
 REPO = Path(__file__).resolve().parents[2]
 FIX = Path(__file__).resolve().parent / "fixtures" / "admission"
-CAP_CP_BIG = 376_999_997_440          # cp-big /sys/fs/cgroup/memory.max on 2026-09-20 (= 359,535 MiB)
+CAP_CP_BIG = 376_999_997_440          # a node's /sys/fs/cgroup/memory.max (= 359,535 MiB)
 
 
 def _fixture(name: str):
@@ -59,7 +59,7 @@ def test_b16_record_the_per_step_geometry_reproduces_the_record_to_the_percent()
 
 
 def test_envelope_bound_was_the_loose_one_and_the_scheduled_bound_admits_the_cp_big_rows():
-    """The R16 numbers of record (global M-0743): envelope x1.25 = 559,384 MiB for llama B16 mixed-arrivals against 359,535 MiB; the
+    """The recorded numbers: envelope x1.25 = 559,384 MiB for llama B16 mixed-arrivals against 359,535 MiB; the
     run bound 42.5 GiB.  The scheduled bound admits it (55.9 GB) and names the envelope beside it."""
     sizing, wl, obs = _fixture("b16")
     rec = ADM.admission(sizing, wl["requests"], CAP_CP_BIG, retain="host", max_num_batched_tokens=5348, lag=1,
@@ -69,7 +69,7 @@ def test_envelope_bound_was_the_loose_one_and_the_scheduled_bound_admits_the_cp_
     assert rec["scheduled_raw_bytes"] >= sum(obs.values())
     assert rec["predicted_host_bytes"] < 60 << 30
     assert "envelope bound 559384 MiB was over it" in rec["why"]
-    # phi3 B8 1024/128 from the phi3 widths (the R16 Commit died of the host SUM with the envelope at 582,111 MiB)
+    # phi3 B8 1024/128 from the phi3 widths (its envelope bound, 582,111 MiB, is over the cap)
     sizing3, _wl3, _ = _fixture("phi3b1")
     wl8 = json.loads((REPO / "workloads" / "phi3-mini__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json").read_text())
     rec8 = ADM.admission(sizing3, wl8["requests"], CAP_CP_BIG, retain="host", max_num_batched_tokens=3638, lag=1)
@@ -78,9 +78,9 @@ def test_envelope_bound_was_the_loose_one_and_the_scheduled_bound_admits_the_cp_
 
 
 def test_refuses_by_name_over_the_cap_and_a_non_host_retention_is_predicted_not_refused():
-    """[R19 admit, F-dA-15 correction] the refusal domain stays `--retain host` unbounded (R17-7.3 / coord M-0157 (2)); a non-host
-    retention on the windowed path is no longer 'predicted host 0 MiB' -- the unbounded windowed collector copies every window to the
-    pinned pool regardless of --retain (R18 #60 `--retain none` datum: the 112 GiB pool was allocated anyway), so the pool is predicted,
+    """the refusal domain is `--retain host` unbounded; a non-host
+    retention on the windowed path is not 'predicted host 0 MiB' -- the unbounded windowed collector copies every window to the
+    pinned pool regardless of --retain (a `--retain none` run allocates the 112 GiB pool), so the pool is predicted,
     the excess is named as a WARNING on the record, and the launch is still not refused here."""
     sizing, wl, _ = _fixture("b16")
     small = 32 << 30
@@ -101,9 +101,9 @@ def test_refuses_by_name_over_the_cap_and_a_non_host_retention_is_predicted_not_
 
 
 def test_bounded_staging_retain_exclude_hidden_predicts_the_kept_pool():
-    """[R19 admit, F-r18-admit-1 fix (a)] the RETAIN-windowed pool: under --bounded-staging --retain host --retain-exclude hidden_m1 the pool
+    """the RETAIN-windowed pool: under --bounded-staging --retain host --retain-exclude hidden_m1 the pool
     is (raw - hidden M1) + the levels over every leaf; the hidden stream is the bulk of the raw bytes at 1024/128; bounded + a non-host retention keeps the
-    levels only.  Bounded runs are governed by the bounded HOST BOUND (revb M-0254): recorded here, never refused."""
+    levels only.  Bounded runs are governed by the bounded HOST BOUND: recorded here, never refused."""
     sizing, wl, _ = _fixture("b16")
     small = 32 << 30
     full = ADM.admission(sizing, wl["requests"], small, retain="host", max_num_batched_tokens=5348, lag=1)
@@ -135,7 +135,7 @@ def test_lag_rows_chunking_and_the_rope_correction_are_named_and_monotone():
     assert sc["total_bytes"] > s1["total_bytes"]
     assert max(x["chunks"] for x in sc["per_step"]) >= 2
     assert sc["total_bytes"] - s1["total_bytes"] == sum((x["chunks"] - 1) for x in sc["per_step"]) * sizing["per_step_bytes"]
-    # the pre-R17 sizing record counts the shared RotaryEmbedding once: corrected by name; a record that says rope_per_layer is taken as is
+    # an older sizing record counts the shared RotaryEmbedding once: corrected by name; a record that says rope_per_layer is taken as is
     pt, note = ADM.per_token_bytes_of(sizing)
     assert pt == sizing["per_token_bytes"] + sizing["widths"]["RotaryEmbedding"] * (sizing["model"]["layers"] - 1) and "RotaryEmbedding" in note
     assert any("RotaryEmbedding" in a for a in s1["assumptions"])
@@ -162,7 +162,7 @@ def test_cli_is_torch_free_and_reports_the_observed_check(tmp_path):
 
 
 def test_host_cap_names_its_source_and_a_bare_host_is_still_a_bound(monkeypatch, tmp_path):
-    """[rev S-r17-09 n1] no visible cgroup limit -> MemTotal, named; a cgroup limit wins when present; the record carries a domain."""
+    """no visible cgroup limit -> MemTotal, named; a cgroup limit wins when present; the record carries a domain."""
     import verity_vllm.pipeline.admission_bound as M
     real = M.Path.read_text
 
@@ -191,7 +191,7 @@ def test_host_cap_names_its_source_and_a_bare_host_is_still_a_bound(monkeypatch,
 
 
 def test_the_commit_admission_counts_the_declared_lag():
-    """The host admission's lag rows are the manifest target's declared LAG, not a hard-coded 1 (the import used to miss and fall back)."""
+    """The host admission's lag rows are the manifest target's declared LAG, never a fallback of 1 when an import misses."""
     pytest.importorskip("torch")
     import inspect
 

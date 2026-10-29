@@ -8,11 +8,10 @@ The duo step (benchmarks/pouw/receipts/receipt_folds.py, `duo_word`) absorbs one
     y' = u * a + z            # one IMAD (integer multiply-add)
     z' = rotl(u, r) + y'      # one LEA.HI (funnel-shift-add)
 
-Three instructions a word, and DATASHEET's SASS reads exactly that (8 IMMA + 32 LOP3 + 32 IMAD + 32 LEA.HI a loop,
-note:20261017T0332Z-draft-eps1-datasheet). FOLD-OPT (decision 48; FOLD note:20261017T0320Z-draft-eps1-fold §4) is the
-claim that a cheater who must reproduce the receipt the verifier recomputes cannot do this absorb in fewer than three
-instructions a word. This script turns the claim into a superoptimisation search + a structural lower bound, exact over
-Z/2^32, so it becomes a mechanical fact rather than a named assumption (Daniel, decision 75).
+Three instructions a word, and the data sheet's SASS reads exactly that (8 IMMA + 32 LOP3 + 32 IMAD + 32 LEA.HI a loop).
+FOLD-OPT is the claim that a cheater who must reproduce the receipt the verifier recomputes cannot do this absorb in
+fewer than three instructions a word. This script turns the claim into a superoptimisation search + a structural lower
+bound, exact over Z/2^32, so it becomes a mechanical fact rather than a named assumption.
 
 The result (checks below):
 - **y' is not a single sm_120 integer instruction** of the inputs {y, z, d} and any public constants: XOR-then-multiply
@@ -27,11 +26,11 @@ The result (checks below):
   reproduces y'; the LOP3 for u is found in one instruction (the search finds short programs when they exist).
 - Across words, this script checks nothing. What is proved for a run of N words is only the fan-in floor: any program
   whose instructions each read f operands needs (N − 2)/(f − 1) of them (`Accounting.Guarantees.TS.DuoFoldFanIn`), ½
-  a word at f = 3 (note:20261017T1818Z-draft-mult-lb). That batching can't beat 3 a word is FOLD-OPT's across-words part,
+  a word at f = 3. That batching can't beat 3 a word is FOLD-OPT's across-words part,
   the named assumption `Accounting.Assumptions.TS.FoldOpt`. The reasons to expect it are arguments, not checks:
   - the 32-bit states admit no SWAR packing of the multiply;
   - the round mixes ^ over F2 with *+ over Z/2^32 with no homomorphism, so composing rounds has no known shorter closed
-    form (g3-chains' trivial all-state kernel, note:20261017T0320Z-draft-eps1-fold §8).
+    form (g3-chains' trivial all-state kernel).
 
   Seriality within a chain bounds only depth, not issue slots, since a cheater runs many chains at once.
 

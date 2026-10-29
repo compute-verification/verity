@@ -78,6 +78,15 @@ PY
 fi
 if [ -z "${AGENT_GUARD_SKIP_INSTALL:-}" ]; then
   bash "$dest/install.sh" || echo "agent-guard: install.sh failed or refused (above); the shell hook is in place" >&2
+  # a snapshot older than USN-8944-1 still trusts the roots that cross-signed the compromised eMudhra intermediates
+  if ls /etc/ssl/certs | grep -q -E 'emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root'; then
+    { sudo -n apt-get update -qq && sudo -n env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l \
+        apt-get install -y -qq --only-upgrade ca-certificates 'libnss3*'; } > /tmp/agent-trust-upgrade.log 2>&1 \
+      && echo "agent-guard: ca-certificates $(dpkg-query -W -f='${Version}' ca-certificates)" \
+      || echo "agent-guard: the ca-certificates upgrade failed (/tmp/agent-trust-upgrade.log)" >&2
+  fi
+  line='export UV_SYSTEM_CERTS=1'          # uv reads the system trust store, not the roots it ships
+  grep -qxF "$line" "$rc" 2>/dev/null || echo "$line" >> "$rc"
   # the VM's OOM recorder: one per VM (it holds its lock; a second exits), so a reboot or a second boot.sh is harmless
   setsid nohup python3 "$dest/oom_watch.py" loop >> /tmp/agent-oom-watch.log 2>&1 < /dev/null &
   echo "agent-guard: OOM recorder started ($dest/oom_watch.py, records in ~/.research/agent-oom.jsonl)"

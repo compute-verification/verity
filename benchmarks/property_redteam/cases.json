@@ -8,7 +8,7 @@
     },
     "allow": null,
     "computes": "a carry: (t mod 256, t div 256) of a run word, by I32Rem and I32Div",
-    "rule": "integer floors and mods are budgeted, one unit an output (19:15Z)",
+    "rule": "integer floors and mods are budgeted, one unit an output",
     "needs": [],
     "size": {}
   },
@@ -21,7 +21,7 @@
     },
     "allow": null,
     "computes": "a carry from comparisons: t mod 256 and t div 256 for t < 4096, by 4 rounds of U32Ge and two SelectI32",
-    "rule": "compares and selects are budgeted, one unit an output (19:15Z)",
+    "rule": "compares and selects are budgeted, one unit an output",
     "needs": [],
     "size": {}
   },
@@ -34,7 +34,7 @@
     },
     "allow": null,
     "computes": "[r < 1000] for r < 2^18 from two .satfinite IMMA steps whose incoming accumulator is r + S32_MAX - 2^18",
-    "rule": "a bare IMMA outside the s8 family is refused (19:15Z); a runtime T_0 with no derived interval makes the clamp a comparison",
+    "rule": "a bare IMMA outside the s8 family is refused; a runtime T_0 with no derived interval makes the clamp a comparison",
     "needs": [],
     "size": {}
   },
@@ -47,7 +47,7 @@
     },
     "allow": null,
     "computes": "a word whose s32 sign is [r >= 1000], from one u8 x s8 IMMA step without .satfinite at T_0 = r + 2^31 - 2^18",
-    "rule": "a bare IMMA outside the s8 family is refused (19:15Z); a runtime T_0 with no derived interval makes the wrap a comparison",
+    "rule": "a bare IMMA outside the s8 family is refused; a runtime T_0 with no derived interval makes the wrap a comparison",
     "needs": [],
     "size": {}
   },
@@ -60,7 +60,7 @@
     },
     "allow": null,
     "computes": "a K = 132,096 chain over run s8 inputs that clamps at S32_MAX from step 4,096 on (33 steps), under a declared operand bound of +-127 the inputs exceed at -128",
-    "rule": "a bare IMMA outside the s8 family is refused (19:15Z); operand ranges come from the producer, never from a declaration (19:15Z)",
+    "rule": "a bare IMMA outside the s8 family is refused; operand ranges come from the producer, never from a declaration",
     "needs": [],
     "size": {}
   },
@@ -71,7 +71,7 @@
     "charge": null,
     "allow": null,
     "computes": "a computed s32 word's leaf read where an 8-bit E4M3 code is typed",
-    "rule": "an implicit reinterpretation of a runtime word is refused (19:10Z); one type per committed word",
+    "rule": "an implicit reinterpretation of a runtime word is refused; one type per committed word",
     "needs": [],
     "size": {}
   },
@@ -84,7 +84,7 @@
     },
     "allow": null,
     "computes": "six bits of a run word at a run-chosen byte offset, by PouwNoiseByte over a value that is not the coin",
-    "rule": "the noise derivation's inputs are the coin and statics only (19:15Z); else PouwNoiseByte is budgeted",
+    "rule": "the noise derivation's inputs are the coin and statics only; else PouwNoiseByte is budgeted",
     "needs": [],
     "size": {}
   },
@@ -97,7 +97,7 @@
     },
     "allow": null,
     "computes": "the receipt fold's mixer, y' = (y ^ d0 ^ k0) * a0 + d1 mod 2^32, its output added into a second output",
-    "rule": "the receipt fold's output is a sink (19:15Z); the fold is unregistered, so its four gates are budgeted",
+    "rule": "the receipt fold's output is a sink; the fold is unregistered, so its four gates are budgeted",
     "needs": [],
     "size": {}
   },
@@ -110,7 +110,7 @@
     },
     "allow": null,
     "computes": "any function of a 7-bit run index, (i^2 + 7i) mod 251, by GatherF32x128",
-    "rule": "gathers are budgeted by fresh runtime index bits (19:15Z)",
+    "rule": "gathers are budgeted by fresh runtime index bits",
     "needs": [],
     "size": {}
   },
@@ -123,7 +123,7 @@
     },
     "allow": null,
     "computes": "S8Dot{K = 132,096, A = B = (-127, 127)} binds (its no_wrap holds for the declared bounds) and clamps at S32_MAX on run inputs at -128",
-    "rule": "operand ranges come from the producing Definition, never declared (19:15Z)",
+    "rule": "operand ranges come from the producing Definition, never declared",
     "needs": [
       "verity.ml.circuits.ops.s8"
     ],
@@ -138,7 +138,7 @@
     },
     "allow": null,
     "computes": "[r < 1000] from two S8Dot{T0 = input, C = (0, 2^18)} instances whose accumulator is r + S32_MAX - 2^18",
-    "rule": "T_0's interval is derived from its producer, not declared (19:15Z)",
+    "rule": "T_0's interval is derived from its producer, not declared",
     "needs": [
       "verity.ml.circuits.ops.s8"
     ],
@@ -153,7 +153,7 @@
     },
     "allow": null,
     "computes": "a word whose s32 sign is [r >= 1000], from S8Dot{T0 = input, C = (0, 2^18), DOT = u8 x s8} at T_0 = r + 2^31 - 2^18",
-    "rule": "T_0's interval is derived from its producer, not declared (19:15Z)",
+    "rule": "T_0's interval is derived from its producer, not declared",
     "needs": [
       "verity.ml.circuits.ops.s8"
     ],
@@ -168,7 +168,7 @@
     },
     "allow": null,
     "computes": "two S8Dot{K = 131,040} halves over run s8 inputs, each within s32, whose I32Add combine wraps",
-    "rule": "a split-K combine is inside the interval analysis; one that may wrap is not free-affine (19:15Z)",
+    "rule": "a split-K combine is inside the interval analysis; one that may wrap is not free-affine",
     "needs": [
       "verity.ml.circuits.ops.s8"
     ],
@@ -183,7 +183,7 @@
     },
     "allow": null,
     "computes": "a runtime S8Dot word as three s8 limbs by LimbSplit_v1{bytes, N = 3}",
-    "rule": "a LimbSplit of a runtime word is budgeted, a carry a limb beyond the first (19:10Z)",
+    "rule": "a LimbSplit of a runtime word is budgeted, a carry a limb beyond the first",
     "needs": [
       "verity.ml.circuits.ops.s8"
     ],
@@ -198,7 +198,7 @@
     },
     "allow": null,
     "computes": "the same three limbs from S32LowByte and S32ByteCarry called outside LimbSplit_v1",
-    "rule": "every registered primitive outside the free set is budgeted, one unit an output (19:15Z)",
+    "rule": "every registered primitive outside the free set is budgeted, one unit an output",
     "needs": [
       "verity.ml.circuits.ops.s8"
     ],
@@ -213,7 +213,7 @@
     },
     "allow": null,
     "computes": "LimbSplit_v1{bytes, N = 2, Y = (-32640, 32639)} on a word in [-520192, 524288]: its last limb truncates a second carry",
-    "rule": "a split's Y is its producer's interval (19:10Z), not declared",
+    "rule": "a split's Y is its producer's interval, not declared",
     "needs": [
       "verity.ml.circuits.ops.s8"
     ],
@@ -226,7 +226,7 @@
     "charge": null,
     "allow": null,
     "computes": "a runtime S8Dot word read back as the s8 operand codes of a second S8Dot, without a split",
-    "rule": "an implicit reinterpretation (an s32 word read back as s8 limbs) is refused (19:10Z)",
+    "rule": "an implicit reinterpretation (an s32 word read back as s8 limbs) is refused",
     "needs": [
       "verity.ml.circuits.ops.s8"
     ],
@@ -297,7 +297,7 @@
       "any": 396288
     },
     "computes": "P\u00b7V at 132,096 keys, the most a family K holds within s32 for P in [0, 127] against V in [-128, 127]",
-    "rule": "the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte; 21:08Z); without them P reads as s8 and the window ends at 131,071",
+    "rule": "the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte); without them P reads as s8 and the window ends at 131,071",
     "needs": [
       "verity.ml.circuits.ops.s8"
     ],
@@ -314,7 +314,7 @@
     },
     "allow": null,
     "computes": "P\u00b7V at 132,128 keys over PQUANT's P in [0, 127], bound with A = (0, 126): from runs at -128 the last step clamps at S32_MIN, one comparison a channel",
-    "rule": "operand ranges come from the producer, never declared (19:15Z); the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte; 21:08Z) prove the window to 132,104 keys only",
+    "rule": "operand ranges come from the producer, never declared; the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte) prove the window to 132,104 keys only",
     "needs": [
       "verity.ml.circuits.ops.s8"
     ],
@@ -344,7 +344,7 @@
     },
     "allow": null,
     "computes": "P\u00b7V at 131,072 keys with P = RzByte(fmaxf(p, 0)), no fminf: P is the truncation's whole low byte, read as s8, so the last step clamps at S32_MAX, one comparison a channel",
-    "rule": "F32ToU32RzByte's output is [0, 255] unless its input is below 256: the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte; 21:08Z)",
+    "rule": "F32ToU32RzByte's output is [0, 255] unless its input is below 256: the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte)",
     "needs": [
       "verity.ml.circuits.ops.s8"
     ],
@@ -359,7 +359,7 @@
     },
     "allow": null,
     "computes": "P\u00b7V at 132,096 keys with P = RzByte(fminf(fmaxf(p, 0), 128)): the byte 128 is s8 -128, so the last 33 steps may clamp at S32_MAX, 33 comparisons a channel",
-    "rule": "P's interval is its producer's, [0, 128], and its s8 reading [-128, 127]: the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte; 21:08Z)",
+    "rule": "P's interval is its producer's, [0, 128], and its s8 reading [-128, 127]: the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte)",
     "needs": [
       "verity.ml.circuits.ops.s8"
     ],

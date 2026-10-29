@@ -1,14 +1,14 @@
 """run.py's gate on the demo's seeded weights at the frozen H200 shape: compute-accounting's generator
-(`e2e_h200.served_weights`, ALLP-IFACE, CMP-95), every row of one layer's linears (wq, wk, wv, wo, wup, wdown) and of the
+(`e2e_h200.served_weights`), every row of one layer's linears (wq, wk, wv, wo, wup, wdown) and of the
 head, each with its f32 scales, against activations of all of s8 with run.py's structured rows and `fixture`'s activation
 scales (the special ones included): the kernel's picked config and its others, every cell against the Definition's twin.
 `--gen` writes the weights into --weights as .npy (in parallel, no GPU: run.sh's "cpu:" step, outside the lease); the gate
 loads them.
 
     python realw.py --out OUT --weights DIR --gen [--layer 0] [--seed text:verity/cmp92/h200/weights/v1] [--workers N]
-    python realw.py --out OUT --weights DIR [--layer 0] [--ms 1,7,64,...] [--kernel wgmma|triton] [--configs BEST_JSON]
+    python realw.py --out OUT --weights DIR [--layer 0] [--ms 1,7,64,...] [--kernel wgmma|triton|int_mm] [--configs BEST_JSON]
 
-The generator's module is on the path from benchmarks/e2e_h200, after this directory (whose `run` it imports).
+The generator's module is on the path from examples/h200, after this directory (whose `run` it imports).
 """
 from __future__ import annotations
 

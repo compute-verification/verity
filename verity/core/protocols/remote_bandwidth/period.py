@@ -20,7 +20,8 @@ own: accepted, its failure, or undecided while a window is unverified; on accept
 receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `BLOCK_BYTES` block each, at
 `eps = (2^24 + S)/2^64` for S the draws, as the Lean's `certify` computes them.
 
-`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records. The
+`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records
+(`pous.period.records`, every copy of the auditor's ledger in them cut to the entries their window cites). The
 verifier and its challenger are a party of their own (`verifier_party`) on `period.json`'s `challenger_host`, with coins
 fresh from that host's OS, and the prover runs on the node. `trusted-host`'s premise, that they run on a machine
 the prover doesn't control, holds only when the challenger host isn't the node, and the leg says which
@@ -40,6 +41,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Protocol
 
+from verity.core.protocols.pous.period import records
 from verity.ml.commitments.identity import canonical_json_bytes
 
 from . import audit, codec, pooled, receipts
@@ -282,16 +284,6 @@ def serve(exe: str | os.PathLike, cases: list[dict[str, Any]]) -> list[dict[str,
     lines = "".join(canonical_json_bytes(c).decode() + "\n" for c in cases)
     p = subprocess.run([str(exe), "serve"], input=lines, capture_output=True, text=True, check=True)
     return [json.loads(x) for x in p.stdout.splitlines()]
-
-
-def records(period_dir: str | os.PathLike, skip: tuple[str, ...] = ("answers",)) -> bytes:
-    """The period's records as one byte string (`pous.period.records`'s framing)."""
-    root = Path(period_dir)
-    out = bytearray()
-    for f in sorted(p for p in root.rglob("*") if p.is_file() and p.relative_to(root).parts[0] not in skip):
-        name, data = f.relative_to(root).as_posix().encode(), f.read_bytes()
-        out += len(name).to_bytes(4, "big") + name + len(data).to_bytes(8, "big") + data
-    return bytes(out)
 
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:

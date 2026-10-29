@@ -170,7 +170,7 @@ def test_a_new_lease_waits_for_another_process_to_leave_its_gpus(monkeypatch, lo
 
 
 def test_a_commit_whose_leased_gpu_stays_occupied_ends_by_name_and_gives_the_lease_back(tmp_path):
-    """r20261019-001854-76c1: a cancelled Commit's engine workers outlived its lease, and the next Commit's engine found its GPUs full."""
+    """A cancelled Commit's engine workers can outlive its lease, so the next Commit's engine can find its GPUs full."""
     fake_smi(tmp_path, ["GPU-5"] * 4)
     env = {"PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}", "GPU_LEASE": fake_lease(tmp_path)}
     GL.hide_devices(env)
@@ -532,7 +532,7 @@ def test_a_single_gpu_match_holds_its_lease_for_its_gpu_phase_only(tmp_path, lea
         env["GPU_LEASE"] = fake_lease(tmp_path)
         GL.hide_devices(env)
     t.child_env = env
-    with pytest.raises(RD.Stop):              # the stand-in folds nothing, so the Match fails after its legs
+    with pytest.raises(RD.Stop):              # the stand-in folds nothing, so the Match fails after its stages
         t.match()
     assert [json.loads(ln) for ln in (tmp_path / "legs.jsonl").read_text().splitlines()] == legs
     rec = Path(t.d, "match", "lease", GL.RECORD)

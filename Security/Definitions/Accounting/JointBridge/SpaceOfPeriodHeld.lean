@@ -3,7 +3,7 @@ import Definitions.Accounting.JointPeriod
 /-!
 # A period whose PoUS audit is a joint run's capacity audit (trusted)
 
-`Accounting.Guarantees.JointPeriod` takes PoUS's per-period guarantee as `PeriodRun.Sound c p .pous δ`.
+In the coins model (`Accounting.PeriodRun`), PoUS's per-period guarantee is `PeriodRun.Sound c p .pous δ`.
 PoUS proves its per-period guarantee (`Pous.Period.PeriodHeld`) over a joint run (`Accounting.Run`) whose capacity
 coins are the ring game's. `RealizesSpaceOfPeriodHeld` is what ties the two: a period whose PoUS coordinate of the coins
 is that run's capacity coins, whose capacity bit-ticks over its window are that run's over its capacity window, and

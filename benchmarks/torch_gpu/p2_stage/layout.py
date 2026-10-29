@@ -1,7 +1,7 @@
 """Where a layer's matrices lie in the P2-encoded weights store, where their plaintext comes from, and P2's decode of one
 block on the CPU (the check's reference). No torch.
 
-The store's layout is CMP-95 item 2's fixture, memory-accounting's (`benchmarks/pous/p2_v1/store.py`, schema
+The store's layout is p2_v1's fixture (`benchmarks/pous/p2_v1/store.py`, schema
 `verity-pous/p2-store-layout/v1`): `store_layout` reads its JSON, the real store's (`store.py layout`, pinned by its
 `LAYOUT_SHA512`) or the toy's (`store-toy/toy.json`'s `layout`), with the key prefix:
 

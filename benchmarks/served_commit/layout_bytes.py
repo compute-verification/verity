@@ -245,9 +245,9 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("layouts", nargs="+")
     ap.add_argument("--json")
-    ap.add_argument("--rate-256", type=float, default=66.12, help="GB/s, rows_floor minb2 at 256-byte rows (r20261017-234343-61c6)")
-    ap.add_argument("--rate-4k", type=float, default=230.61, help="GB/s, rows_floor minb2 at 4 KiB rows (r20261017-234343-61c6)")
-    ap.add_argument("--pad-ms-per-m", type=float, default=0.392, help="ms per million pad leaves (r20261017-234343-61c6)")
+    ap.add_argument("--rate-256", type=float, default=66.12, help="GB/s, rows_floor minb2 at 256-byte rows")
+    ap.add_argument("--rate-4k", type=float, default=230.61, help="GB/s, rows_floor minb2 at 4 KiB rows")
+    ap.add_argument("--pad-ms-per-m", type=float, default=0.392, help="ms per million pad leaves")
     a = ap.parse_args()
     seen, res = set(), []
     for path in a.layouts:

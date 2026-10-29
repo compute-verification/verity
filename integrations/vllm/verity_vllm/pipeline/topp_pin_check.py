@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 
 
 def kernel(out: Path) -> dict:
@@ -124,7 +124,7 @@ class KernelOptions:
 
 @dataclass(frozen=True, kw_only=True)
 class ServedOptions:
-    workload: str = option("--workload")
+    workload: str = option("--workload", type=workload_arg)
     out: str = option("--out")
     cmd: str = field(default="served", init=False)
 

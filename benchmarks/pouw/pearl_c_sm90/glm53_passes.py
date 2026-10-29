@@ -44,7 +44,9 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(VLLM_DIR))
 
 import glm53  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 PREFILL, DECODE = 1024, 40
 PASSES = ("prefill", "decode", "control")
 FULL = ("prefill", "decode")
@@ -79,7 +81,7 @@ def capture(a) -> int:
     xs = {m: {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
           for m in (PREFILL, DECODE)}
     for name, m, omit in (("prefill", PREFILL, ()), ("decode", DECODE, ()), ("control", DECODE, e2e.CONTROL_OMITS)):
-        run.begin(retain=str(out / name), run=os.environ.get("RESEARCH_RUN_ID", "glm53-passes"))
+        run.begin(retain=str(out / name), run=settings.RESEARCH_RUN_ID or "glm53-passes")
         run.omit = frozenset(omit)
         rms = {}
         try:
@@ -111,7 +113,7 @@ def verify(a) -> int:
     names = list(json.loads((out / "capture.json").read_text())["passes"]) if (out / "capture.json").exists() else PASSES
     res = {}
     for name in names:
-        v = VR.verify(out / name / "manifest.json", VR.DRAWS, a.jobs, os.environ.get("RESEARCH_SOURCE_SHA", "unknown"),
+        v = VR.verify(out / name / "manifest.json", VR.DRAWS, a.jobs, settings.RESEARCH_SOURCE_SHA or "unknown",
                       fast=a.fast, cross_check=a.cross_check if a.fast else 0, coins=coins)
         res[name] = {k: v.get(k) for k in ("accepted", "line", "verdicts", "error")}
         print(f"{name}: {v['line']}", flush=True)
@@ -129,7 +131,8 @@ def y_unit(u, alpha_a, alpha_b):
     rounded to BF16 nearest-even (numpy's float32 is IEEE's, as `fast_tile.install` holds the process to)."""
     import numpy as np
 
-    inv = lambda alpha: np.float32(1) / alpha.view(np.float32)
+    def inv(alpha):
+        return np.float32(1) / alpha.view(np.float32)
     w = ((u.view(np.float32) * inv(alpha_a)[:, None]) * inv(alpha_b)[None, :]).view(np.uint32).astype(np.uint64)
     return ((w + 0x7FFF + ((w >> 16) & 1)) >> 16).astype(np.uint16)
 

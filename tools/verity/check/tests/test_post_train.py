@@ -78,8 +78,7 @@ def test_only_a_landing_has_a_check_attempt_to_label(tmp_path):
 
 
 def test_drive_s_attempt_is_the_landing_s_when_it_ran_on_the_commit_or_on_its_merged_train(tmp_path, monkeypatch, capsys):
-    """CI-81: 1b21bc8f, 9cf072f6, d31c68c0, c13e24d4 and c1e1c288 (18-19 Oct), drive's landings with deferred steps, were refused
-    as no landing of main: their check still ran, or was cancelled at landing, so the store had no passed attempt of them.  Drive
+    """A landing with deferred steps has no passed attempt in the store (its check still runs, or was cancelled at landing).  Drive
     names the attempt it landed on; it is taken when it ran on the commit main was fast-forwarded to, or on the train main was
     merged onto (the merge's second parent), and refused otherwise."""
     origin, repo = tmp_path / "origin.git", tmp_path / "repo"
@@ -106,7 +105,7 @@ def test_drive_s_attempt_is_the_landing_s_when_it_ran_on_the_commit_or_on_its_me
     ran = {"r20261019-010000-0001": ff, "r20261019-020000-0002": train, "r20261019-020500-0003": moved,
            "r20261019-030000-0004": lane, "r20261019-005000-0006": head}
     monkeypatch.setattr(PT, "source_of", ran.get)
-    assert PT.check_attempt(ff, cwd=repo) is None, "no passed attempt in the store: the refusal CI-81 reports"
+    assert PT.check_attempt(ff, cwd=repo) is None, "no passed attempt in the store: refused"
     assert PT.check_attempt(ff, cwd=repo, attempt="r20261019-010000-0001") == "r20261019-010000-0001", "fast-forwarded"
     assert PT.check_attempt(merge, cwd=repo, attempt="r20261019-020000-0002") == "r20261019-020000-0002", "merged onto moved main"
     capsys.readouterr()

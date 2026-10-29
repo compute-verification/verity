@@ -3910,8 +3910,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
     let (rows_per_vu, ands_per_vu) = c.sizes_per_vu();
-    (
-        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": c.statement(), "scheme": SCHEME,
+    let mut live = json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": c.statement(), "scheme": SCHEME,
                "prover": if plan.gpu {"flock-cuda-circuit"} else {"flock-cpu"}, "gpu": plan.gpu, "unit": c.name, "set": inst.header["set"],
                "subcircuit": inst.header["subcircuit"], "instances": st.n, "vus_per_block": c.g, "units": st.n * c.upv, "rows_per_vu": rows_per_vu,
                "ands_per_vu": ands_per_vu, "k_log": c.k_log, "nbl": st.nbl,
@@ -3922,9 +3921,10 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                "unit_draw": if tabs.list.len() == 1 { inst.header.get("unit_draw").cloned() } else { tabs.draw.clone() },
                "tables": tabs.list.iter().map(|t| &t.name).collect::<Vec<_>>(),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
-               "step0_checked": step0.is_ok() && verified(&v) && (is_zk(st) || seed_coins())}),
-        proofs,
-    )
+               "step0_checked": step0.is_ok() && verified(&v) && (is_zk(st) || seed_coins())});
+    // past json!'s recursion limit in the literal above
+    live["public_file_sha512"] = json!(hex(&inst.public_file_sha512));
+    (live, proofs)
 }
 
 /// (case, expect accept, both reps must reject)

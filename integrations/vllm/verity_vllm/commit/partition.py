@@ -2,7 +2,7 @@
 `verity/partition/v1` object and digest (`query.partition`), the Commit refuses a partition that is malformed, carries another digest or
 names a Program that is not of record, and the binding map records it (`partition_entry`).  The manifest also records, per part, the strict
 word check its Build passed (`query.word_check`, `pipeline.manifest.word_record`), and the Commit refuses one without it
-(`word_check_refusal`, which the row reads too before it reuses a Build's manifest)."""
+(`word_check_refusal`, which `pipeline.row_records` reads too before it reuses a Build's manifest)."""
 
 from __future__ import annotations
 

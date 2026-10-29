@@ -23,7 +23,7 @@ completed by it. The completed ones have their weight in `θ'_S`, `|θ'_S| ≤ k
 outside `θ'_S` and so has at least `c_a` gates. `c_w D > k` makes `c_w` positive; `c_a > 0` is needed, since at
 `c_a ≤ 0` every cut is wide enough and the bound's `k / c_a` is not a count.
 
-With training's fine-tuning numbers, one shared `c` is capped by the weights' entropy and gives `ρ` about 1.1; the two
+At fine-tuning's measured costs, one shared `c` is capped by the weights' entropy and gives `ρ` about 1.1; the two
 costs give about 45 (`Definitions.Nci.Assumptions.CoveringTwoCosts`). The count is stated multiplied out, with no division by
 `(k / c_w)(k / c_a) + k`, so it says something when `k = 0`; in the slowdown form a division by zero is zero. -/
 def CoveringBoundTwoCosts : Prop :=

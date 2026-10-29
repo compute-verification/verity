@@ -1,4 +1,4 @@
-"""[R16 compiled, rev F-r16-09] compiled_merge's executed-code identity is a DENY-list over the ELF sections of the executed cubins (debug /
+"""compiled_merge's executed-code identity is a DENY-list over the ELF sections of the executed cubins (debug /
 line info / PTX text / symbol tables excluded; SASS, constant banks, initialised globals, rodata all count), and a difference in a
 non-deny-listed section is accepted ONLY when decoded on record as per-process absolute-path strings in device data (bytes equal once
 normalised).  Fixture: the two round-1 arms of the B1 record r16_0434_b1_unitB (written under the earlier .text-only rule: section hashes,
@@ -94,7 +94,7 @@ def _decorate(arm: Path, tag: str, *, constant_residue: dict[str, str] | None = 
 
 def test_old_text_only_record_fails_closed(tmp_path: Path) -> None:
     """The r16_0434 arms carry section hashes but no section_detail: .nv.global.init (non-deny-listed) differs for 4 kernels and cannot be
-    decoded -> the identity verdict is DIFFERS / fail closed and the merge records an F-r16-09 problem (no silent 'debug-only' label)."""
+    decoded -> the identity verdict is DIFFERS / fail closed and the merge records the refusal (no silent 'debug-only' label)."""
     c, t, mc, mt = _arms(tmp_path)
     S = _merge(tmp_path, c, t, mc, mt)
     L = S["loaded_identity"]
@@ -106,7 +106,7 @@ def test_old_text_only_record_fails_closed(tmp_path: Path) -> None:
     ex = L["executed"]["triton_poi_fused_1"]
     assert ".nv.global.init" in ex["sections_differing_non_denied"] and ".symtab" in ex["sections_differing_denied"]
     assert ex["device_data_path_strings"][0]["kind"].startswith("section_detail not recorded")
-    assert any("F-r16-09" in p and "NON-deny-listed" in p for p in S["problems"])
+    assert any("a NON-deny-listed ELF section" in p for p in S["problems"])
     assert S["commit_pass"] is False
 
 
@@ -130,7 +130,7 @@ def test_decoded_path_strings_are_one_specialization(tmp_path: Path) -> None:
     assert dec["path_strings_control"] != dec["path_strings_treatment"] and all(p.startswith("/workspace/") for p in dec["path_strings_control"] + dec["path_strings_treatment"])
     assert L["executed"]["matmul_kernel_persistent"]["identity_verdict"] == "equal"
     assert "matmul_kernel_persistent" in L["code_equal_denied_sections_differ"]
-    assert not any("F-r16-09" in p for p in S["problems"])
+    assert not any("of a P_compiled kernel differs across arms" in p for p in S["problems"])
     assert S["commit_pass"] is True
     assert "VERDICT: equal modulo" in S["table_md"] and "STRICT equal False" in S["table_md"]
 
@@ -149,12 +149,12 @@ def test_constant_bank_difference_refuses(tmp_path: Path) -> None:
     assert any(s.startswith(".nv.constant0") for s in ex["non_denied_unexplained"])
     assert any(d["kind"].startswith("NON-PATH DATA DIFFERS") for d in ex["device_data_path_strings"])
     assert L["executed_identity_verdict"].startswith("DIFFERS")
-    assert any("F-r16-09" in p and "triton_red_fused_fused_add_rms_norm_2" in p for p in S["problems"])
+    assert any("of a P_compiled kernel differs across arms" in p and "triton_red_fused_fused_add_rms_norm_2" in p for p in S["problems"])
     assert S["commit_pass"] is False
 
 
 def _decorate_text_path(arm: Path, tag: str, *, section_prefix: str = ".text", kernel: str = "triton_poi_fused_1", strings: list[str] | None = None) -> None:
-    """[rev F-r16-14 probe, lane/r16-rev 2beb3471c] the honest decoration PLUS one kernel whose `section_prefix` section differs across arms
+    """The honest decoration PLUS one kernel whose `section_prefix` section differs across arms
     with bytes 'equal once normalised' and a slash-led printable run as the only difference (SASS bytes can look like that)."""
     V, L = _loaded(arm)
     code_set, norm_set = [], []
@@ -190,7 +190,7 @@ def _decorate_text_path(arm: Path, tag: str, *, section_prefix: str = ".text", k
 
 
 def test_f16_14_text_difference_dressed_as_path_string_is_refused(tmp_path: Path) -> None:
-    """rev F-r16-14: a .text (SASS) difference whose bytes are 'equal once a slash-led run is normalised' is NOT a per-process path -- SASS
+    """A .text (SASS) difference whose bytes are 'equal once a slash-led run is normalised' is NOT a per-process path -- SASS
     never embeds the module path; the section name decides. Refusal named with the section."""
     c, t, mc, mt = _arms(tmp_path)
     _decorate_text_path(c, "control")
@@ -207,7 +207,7 @@ def test_f16_14_text_difference_dressed_as_path_string_is_refused(tmp_path: Path
 
 
 def test_f16_14_data_section_with_non_module_strings_is_refused(tmp_path: Path) -> None:
-    """rev F-r16-14 (b): a DATA-section difference whose differing strings are not the generated module's .py path is not decoded either."""
+    """A DATA-section difference whose differing strings are not the generated module's .py path is not decoded either."""
     c, t, mc, mt = _arms(tmp_path)
     _decorate_text_path(c, "control", section_prefix=".nv.constant0", strings=["/opc/control/x"])
     _decorate_text_path(t, "treatment", section_prefix=".nv.constant0", strings=["/opc/treatment/x"])
@@ -215,7 +215,7 @@ def test_f16_14_data_section_with_non_module_strings_is_refused(tmp_path: Path) 
     L = S["loaded_identity"]
     assert "triton_poi_fused_1" in L["executed_code_differs_unexplained"]
     ex = L["executed"]["triton_poi_fused_1"]
-    assert any(d["section"].startswith(".nv.constant0") and d["data_section"] is True and d["module_paths"] is False and "F-r16-14" in d["kind"]
+    assert any(d["section"].startswith(".nv.constant0") and d["data_section"] is True and d["module_paths"] is False and d["kind"].startswith("strings are not the generated module's .py path")
                for d in ex["device_data_path_strings"])
     assert S["commit_pass"] is False
 
@@ -302,7 +302,7 @@ def test_pointwise_kernel_shown_under_every_candidate_is_equal_modulo_autotune_c
 
 
 def test_f16_22_reduction_kernel_is_never_lifted_by_sampled_equality(tmp_path: Path) -> None:
-    """rev F-r16-22: for a REDUCTION the config sets the summation/fma order -- bit-equality on the sampled launches is a property of the data,
+    """For a REDUCTION the config sets the summation/fma order -- bit-equality on the sampled launches is a property of the data,
     not of the kernel; a different executed config is a different specialization: DIFFERS stands even though every sampled launch was shown."""
     c, t, mc, mt = _arms(tmp_path)
     _decorate(c, "control")
@@ -314,7 +314,7 @@ def test_f16_22_reduction_kernel_is_never_lifted_by_sampled_equality(tmp_path: P
     ex = L["executed"][RED]
     assert ex["identity_verdict"] == "DIFFERS"
     assert ex["autotune_equivalence"]["shown"] is False and ex["autotune_equivalence"]["structural"] is False
-    assert "F-r16-22" in ex["autotune_equivalence"]["why"]
+    assert ex["autotune_equivalence"]["why"].startswith("non-pointwise heuristic")
     assert RED in L["executed_code_differs_unexplained"] and L["executed_code_equal_modulo_autotune"] is False
     assert L["executed_identity_verdict"].startswith("DIFFERS")
     assert S["commit_pass"] is False

@@ -125,7 +125,7 @@ from typing import Sequence
 
 from . import boolean as BL
 from .boolean import trace as TR
-from .boolean.forms import ONE, ZERO, OR, add, and_reduce, const_bits, mux, or_reduce, sub
+from .boolean.forms import ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from .defs import CompositeDefinition
 from .requirement import BLOCK_BITS, Layout, Requirement, Store
 from .types import Array

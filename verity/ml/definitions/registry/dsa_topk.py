@@ -65,13 +65,14 @@ from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite, primit
 from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.refs import Coll, concat, strided_view
 from verity.ml.circuits.types import Array, Value
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry.prims import BF16, BIT, F32, I32, SelectBf16, SelectI32
 
 M32 = 0xFFFFFFFF
 
 _CONF = ("model-tested on synthetic rows: the tie rule read from vLLM d9105ea80 topk_histogram_4096.cuh:69-84, 380-548 "
          "(cooperative_topk's rows of 2049..16384 keys) and held by the served cooperative_topk's and persistent_topk's orders, run "
-         "r20261018-233053-2502; a captured served decode past TOPK keys is its hardware check")
+         f"{EVIDENCE['dsa_topk_order_probe']['run']}; a captured served decode past TOPK keys is its hardware check")
 _ORDERS: dict[tuple[int, int], PrimitiveDefinition] = {}
 
 

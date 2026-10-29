@@ -1,12 +1,13 @@
 """`move-check`: certify that BASE..HEAD is a pure move, so the lander may schedule it first in a quiet window, alone in its
-train (Daniel, 4 Oct). It relaxes no gate: a certified move still goes through `check`.
+train. It relaxes no gate: a certified move still goes through `check`.
 
     uv run python tools/verity/check/move_check.py BASE HEAD [--map OLD=NEW ...] [--json]
 
 Every path git sees changed must be one of:
 - a rename with byte-identical content and mode (git's 100% rename);
 - an edit, in place or with a rename, to a text file that leaves it unchanged once each moved path in it (from the root, also
-  after a variable such as `$REPO/`) is rewritten to where it is now, in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
+  after a variable such as `$REPO/`) is rewritten to where it is now or, in a line, left as it was (a top-level directory's
+  name is also a word: `examples` in prose, a JSON key, a function's name), in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
   the file's own directory first, in a `*.py` file a pathlib chain `ROOT / "a" / "b"` read as `"a/b"`. Each changed
   line left may only rewrite a moved path as written below a directory its old and new places share
   (`verity_vllm/program/predict/`), or a dotted name (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a
@@ -261,6 +262,18 @@ def substitute(text: str, pmap: dict[str, str]) -> str:
         return text
     return _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).sub(lambda m: (m.group(1) or "") + pmap[m.group(2)],
                                                                           text)
+
+
+def partly(old: str, new: str, pmap: dict[str, str]) -> bool:
+    """Whether the line `new` is `old` with each moved path in it either rewritten to where it is now or left as it was: a
+    top-level directory's name is also a word (`examples` in prose, a JSON key, a function's name) that the move leaves."""
+    if not pmap:
+        return False
+    parts, at = [], 0
+    for m in _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).finditer(old):
+        parts += [re.escape(old[at:m.start()]), f"(?:{re.escape(m[0])}|{re.escape((m[1] or '') + pmap[m[2]])})"]
+        at = m.end()
+    return bool(parts) and re.fullmatch("".join(parts) + re.escape(old[at:]), new) is not None
 
 
 def short_forms(pmap: dict[str, str], base: Tree) -> dict[str, str]:
@@ -537,14 +550,15 @@ def hunk(a: list[str], b: list[str], i1: int, i2: int, j1: int, j2: int) -> str:
 
 
 def first_unexplained(a: list[str], b: list[str], na: list[str], nb: list[str], pair=None, line=None,
-                      added=None, block=None) -> str | None:
+                      added=None, block=None, left=None) -> str | None:
     """The first hunk of `na` -> `nb` (normalized, line for line `a` and `b`) whose changed lines are neither each a `pair`
-    rewrite, nor each a `line`, nor (lines only added) each an `added` line, nor together a `block` rewrite, in the file's
-    own lines; None when every change is explained."""
+    rewrite or (`left(i, y)`) line i with moved paths left as they were, nor each a `line`, nor (lines only added) each an
+    `added` line, nor together a `block` rewrite, in the file's own lines; None when every change is explained."""
     for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, na, nb, autojunk=False).get_opcodes():
         if tag == "equal":
             continue
-        if pair and tag == "replace" and i2 - i1 == j2 - j1 and all(pair(x, y) for x, y in zip(na[i1:i2], nb[j1:j2])):
+        if pair and tag == "replace" and i2 - i1 == j2 - j1 and all(
+                pair(x, y) or (left and left(i, y)) for i, x, y in zip(range(i1, i2), na[i1:i2], nb[j1:j2])):
             continue
         if block and tag == "replace" and block(na[i1:i2], nb[j1:j2]):
             continue
@@ -1083,7 +1097,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         else:
             rel, py = name in RELATIVE_NAMES, new.endswith(".py")
             na_text = resolve_relative(a, old, pmap) if rel else join_chains(a) if py else a
-            na = (na_text if same else substitute(na_text, pmap)).splitlines()
+            n0 = na_text.splitlines()
+            na = n0 if same else substitute(na_text, pmap).splitlines()
             nb = (resolve_relative(b, new, {}) if rel else join_chains(b) if py else b).splitlines()
 
             def at(tree: Tree, path: str, text: str):
@@ -1100,7 +1115,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
             def block(xs: list[str], ys: list[str]) -> bool:
                 return import_block(xs, ys, modules, old, new)
-            h = first_unexplained(al, bl, na, nb, pair=pair, added=lambda y: registered(new, y), block=block)
+            h = first_unexplained(al, bl, na, nb, pair=pair, added=lambda y: registered(new, y), block=block,
+                                  left=lambda i, y: partly(n0[i], y, pmap))
             why = h and ("relative path now resolves elsewhere" if same else "edit beyond moved paths and module names", h)
             if why and not same and old == new and name == "lakefile.toml":
                 why = lakefile_in_place(a, b, new, moves, new_lake) and why

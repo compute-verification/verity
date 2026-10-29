@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The trace corpus (corpus.py's docstring) on one leased GPU of a node, from the shipped tree's root, with the C4 shard
-# benchmarks/ppl/datasets.json pins (`research data fetch art:4f1d50db...`) sent along, in a slot of node 1's gpu pool:
+# benchmarks/ppl/datasets.json pins (`research data fetch` its id) sent along, in a slot of node 1's gpu pool:
 #   research run --on vy-nebius-1 --project verity --campaign glm-e2e-demo --source <tree> --cwd source \
 #     --send c4-validation.00000-of-00008.json.gz [--env "CORPORA=llama32_1b/seeded;llama32_1b/async-greedy:heavy,smallkv"] \
 #     [--env REQUESTS=1000] [--env MAX_MIN=45] [--env JOIN=0] -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots \

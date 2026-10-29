@@ -215,7 +215,7 @@ def test_the_cli_resolves_each_targets_call_without_the_catalog(monkeypatch):
     attention = "Attention_v8{T=40,NH=2,KVH=1,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=2}"
     cli._calls(["TokenSelect_v1{V=16}", "RoPEHead_v2{D=8}", attention, "F32Add_v1", "rope-head", "RoPEHead_v1{Q=8}"])
     assert {"TokenSelect_v1", "RoPEHead_v1"} <= TG._SHORT["words"]
-    assert {"RoPEHead_v2", "Attention_v8"} <= TG._SHORT["certified"], "a template's binding, and a root function's (CIR-42)"
+    assert {"RoPEHead_v2", "Attention_v8"} <= TG._SHORT["certified"], "a template's binding, and a root function's"
 
 
 @pytest.mark.slow
@@ -574,8 +574,8 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
 #: Calls the suite checks over `Options.partition_max_gates`, each with why it is allowed: both are σ Definitions at their
 #: smallest bindings (`boolean_sigma.circuit-check.py`), and splitting them moves GLM-5.3's and DeepSeek-V4's word digests
 OVER_PARTITION_BUDGET = {
-    "AllReduceRmsNormMnnvl_v2{WORLD=2,N=256,SHOT=1,CLUSTER=1,EPS=1e-05,FMA=False}": "split pending, CIR-44",
-    "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending, CIR-44",
+    "AllReduceRmsNormMnnvl_v2{WORLD=2,N=256,SHOT=1,CLUSTER=1,EPS=1e-05,FMA=False}": "split pending",
+    "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending",
 }
 
 

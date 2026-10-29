@@ -13,7 +13,7 @@ id = "llama31-8b-fp8-1gpu-compiled-full"
 #
 # Neither variant is token-controlled: each execution runs other kernels and its greedy tokens differ, with equal KV
 # pools (65536 tokens). Gated at 11b103ff on the quick sweep, `@eager` against `stock-fp8` diverged at the first output
-# token (b8: 1 of 8 requests, r20261023-193006-847b; b32: 20 of 32, r20261023-193036-5e48) and `@compiled` against
+# token (b8: 1 of 8 requests; b32: 20 of 32) and `@compiled` against
 # `@eager` within three (b8: 1 of 8 at position 0; b32: 19 of 32, first at position 2). Each is timed on its own gated
 # tokens (timed-tokens).
 arms = ["stock-fp8", "stock-fp8@eager", "stock-fp8@compiled"]

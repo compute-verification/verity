@@ -5,8 +5,7 @@
     python3 integrations/vllm/tools/suite_parts.py launch          the 8 parts as `research run --on auto` jobs; their run ids
     python3 integrations/vllm/tools/suite_parts.py launch 8 -- --fresh     with suites.py options (--fresh, --quick)
 
-The suite is CPU-bound at about 12000 CPU-s on 4-CPU jobs (r20261025-202541-cb5f and its 5 sibling parts: 13462 tests,
-12320 CPU-s), so one 4-CPU job can't run it in under about 50 min, and `tests/program` alone, one flat directory, is half of
+The suite is CPU-bound at about 12000 CPU-s on 4-CPU jobs (13462 tests in 6 parts took 12320 CPU-s), so one 4-CPU job can't run it in under about 50 min, and `tests/program` alone, one flat directory, is half of
 it. A part is a list of test modules handed to pytest (`suites.py verity-vllm -- <modules>`), so the suite, its inputs, its
 guard and its configuration stay as they are. suites.py keys every pass on the pytest arguments (the suite's, each module's
 and the whole run's traced pass), so a part's pass answers only for that part, never for the suite or for another part.
@@ -35,11 +34,11 @@ TESTPATHS = ("tests",)
 PYTHON_FILES = ("test_*.py", "*_test.py")
 NORECURSE = ("*.egg", ".*", "_darcs", "build", "CVS", "dist", "node_modules", "venv", "{arch}", "__pycache__")
 DEFAULT_PARTS = 8
-#: a module SECONDS doesn't name: about the mean of those it leaves out (2.6 s in r20261025-204959-1fd2's parts)
+#: a module SECONDS doesn't name: about the mean of those it leaves out
 DEFAULT_S = 2.6
-#: each test module's seconds of test time, the modules over 20 s, from the 8 parts of r20261025-204959-1fd2 (be900c7df7,
-#: each part's 4 workers on 4 CPUs); `--seconds REPORT...` prints the table from the suites.py reports of a full run or of
-#: every part of one (each part's `out/logs/integrations_vllm.json`)
+#: each test module's seconds of test time, the modules over 20 s, from a run in 8 parts (each part's 4 workers on 4 CPUs);
+#: `--seconds REPORT...` prints the table from the suites.py reports of a full run or of every part of one (each part's
+#: `out/logs/integrations_vllm.json`)
 SECONDS: dict[str, float] = {
     "tests/protocol_options/test_pouw_h1_handoff.py": 481,
     "tests/program/test_sparse_mla_split.py": 455,

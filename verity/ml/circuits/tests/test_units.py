@@ -16,7 +16,7 @@ from verity.ml.circuits.evaluation.reference import standalone_call
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.cut import derived_committed
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value

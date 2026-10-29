@@ -49,7 +49,7 @@ SECTOR_BYTES = 32
 SECTORS = BLOCK_BYTES // SECTOR_BYTES
 GPUS = 8
 """A node's RTX PRO 6000s (vy-nebius: 8 of them and a host of two Xeon 6776P sockets).  The prover is the whole node,
-one undifferentiated resource (Daniel, 12 Oct, #1884), so each unprefixed rate and capacity below is the node's, the
+one undifferentiated resource, so each unprefixed rate and capacity below is the node's, the
 sum over its devices; the `GPU_` and `HOST_` constants are one device's."""
 GPU_SHA512_PER_S = 7.0e9
 """One RTX PRO 6000's SHA-512 compressions a second: block-sha512's 33 a block over 2,097,152 blocks in 9.87 ms
@@ -81,7 +81,7 @@ READ_BYTES_PER_S = GPUS * GPU_READ_BYTES_PER_S + HOST_READ_BYTES_PER_S
 """R measured: the node's read capacity over every registered tier, its GPUs' HBM and its host DRAM, each at its
 measured rate.  A store in HBM alone reads at `GPUS · GPU_READ_BYTES_PER_S` and leaves host DRAM's share idle."""
 SPEC_BYTES_PER_S = GPUS * GPU_SPEC_BYTES_PER_S + HOST_SPEC_BYTES_PER_S
-"""R specified, the headline (Daniel, 13 Oct): every tier at its datasheet rate."""
+"""R specified, the headline: every tier at its datasheet rate."""
 GPU_WRITE_BYTES_PER_S = GPU_SPEC_BYTES_PER_S
 """One RTX PRO 6000's write ceiling, the fastest a fill can write labels into its memory: the datasheet's 1,597 GB/s,
 the bus's own rate (512 bits at the 12,481 MHz memory clock it ran at), 4.4% above every write measured on it.  Labels
@@ -122,11 +122,11 @@ receive buffer at most, `net.ipv4.tcp_rmem`'s max on vy-nebius-2 (eth0's ring, 1
 holds less; r20261019-004759-4580)."""
 GPU_SQUARINGS_PER_S = {"p1024": 1.67 * 1.499e10, "p512": 1.567 * 5.13e10}
 """Assumption 5 stated per width, one RTX PRO 6000's share of the node: s·(1 + h) over the reference, s the best form
-on the GPU less its MOV and SEL and h the host's 128 cores at their IFMA bound over 8 reference GPUs
-(ra-squaring-ceiling #1887).  The reference is codec-mix's 5.13e10 at 512 bits and `kv.cu`'s 1.499e10 at 1,024.  At
-1,024 bits the best form is `kv.cu`'s FOLD 6 at ILP 1, 2.044e10 a second (1.364× the reference, #2489), so s =
-1.364 × 2463/2262 ≈ 1.485 and s·(1 + h) = 1.67 at h = 12.5%, up from `sq.cu`'s FOLD 6 and 1.597 (s = 1.42), as Daniel's
-card e2a13d4a set it (ASK-8, default applied 18 Oct, MEM-43).  A higher ceiling only raises μ_rebuild, from 0.062% to
+on the GPU less its MOV and SEL and h the host's 128 cores at their IFMA bound over 8 reference GPUs.
+The reference is codec-mix's 5.13e10 at 512 bits and `kv.cu`'s 1.499e10 at 1,024.  At
+1,024 bits the best form is `kv.cu`'s FOLD 6 at ILP 1, 2.044e10 a second (1.364× the reference), so s =
+1.364 × 2463/2262 ≈ 1.485 and s·(1 + h) = 1.67 at h = 12.5%, up from `sq.cu`'s FOLD 6 and 1.597 (s = 1.42).
+A higher ceiling only raises μ_rebuild, from 0.062% to
 0.065% of the node's measured R (γ +0.003 points), so the raise is the conservative direction.  The MOV/SEL-free form
 is modeled, not built, and stays below the conservative reading, Karatsuba's own model (s = 1.68, 1.885× with the
 host)."""

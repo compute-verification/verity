@@ -1,12 +1,12 @@
-# Remote bandwidth audit (`verity.core.protocols.remote_bandwidth`)
+# PoUB (`verity.core.protocols.remote_bandwidth`)
 
-The remote bandwidth audit v0: a verifier with no hardware at the site certifies, window by window, how many reads of a
-node's registered store the node made. `PROTOCOL.md` has the semantics, the byte formats and the record.
+Proof of useful bandwidth (PoUB) v0: a verifier with no hardware at the site certifies, window by window, how many reads
+of a node's registered store the node made. `PROTOCOL.md` has the semantics, the byte formats and the record.
 
 ## Which side is the definition
 
-The verifier's definition is the Lean package `lean/` (`RemoteAudit`; Daniel, 18 Oct: Lean is the definition and the
-verifier of record, Python mirrors it, and the remote audit switches first). `audit.py` and what it calls here
+The verifier's definition is the Lean package `lean/` (`RemoteAudit`: Lean is the definition and the
+verifier of record, Python mirrors it, and PoUB switches first). `audit.py` and what it calls here
 (`receipts.py`, `codec.py`, `coins.py`) mirror it and are held to it by `lean/tests/`' difftest: every event's result,
 the session's outcome and its record, the registry (`Registry`: one live registration a node, each session's index
 `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec seed, codec, plans,
@@ -14,13 +14,13 @@ receipts, openings, draws).
 Where the two differ, the Python is what is wrong. The properties of the Lean's verdicts are
 `Security/Properties/RemoteAudit.lean`.
 
-`benchmarks/remote_session/verifier.py` runs both, by its one switch line `VERDICT` (`--verdict`). Under `lean`, the
-default, the Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`) is the verifier of record: it decides
-each registration, event and window, an accepted session's record is the one it returns, and the ledger reads that
-record. `audit.Session` keeps the books beside it as the reference, and a registration, event, window verdict or record
-field on which they differ refuses the session at that window as `disagreement`. Under `both` `audit.Session` checks
-every window's openings too; under `python` there is no Lean. The default went to `lean` under the 8 Oct ruling (the
-friction skill), on these grounds:
+`benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
+is the verifier of record: it decides each registration, event and window, an accepted session's record is the one
+it returns, and the ledger reads that record. `audit.Session` keeps the books beside it as the reference, and a
+registration, event, window verdict or record field on which they differ refuses the session at that window as
+`disagreement`. The books check no openings: a window's verdict is the Lean's, and the Python check of its openings
+runs beside the Lean's in a transcript's replay (`lean/tests/replay.py`). The Lean became the verifier of record under
+the 8 Oct ruling (the friction skill), on these grounds:
 
 - the gap list is empty. A registration that binds PoUW's tiles is refused by both registries. A paced window's
   (k + 1)-th root is refused as `order` by both sessions. A transcript carries its session's pace. The Lean's record
@@ -123,7 +123,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   `benchmarks/remote_session/store_layout.py` writes pins and synthetic checkpoints.
 - `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
 - `monitoring.py`: one accepted session's `q_bytes` and `eps` over a week, a month and a year of a deployment's
-  sessions, at δ = 1% and 10⁻⁶: pooled by #4413's count bound (all but M − 1 sessions certify), with each session at
+  sessions, at δ = 1% and 10⁻⁶: pooled by the count bound (all but M − 1 sessions certify), with each session at
   δ/T beside it. The deployment's machines and window are parameters.
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/remote_bandwidth` (the Python), and

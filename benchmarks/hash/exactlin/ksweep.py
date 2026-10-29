@@ -30,8 +30,7 @@ from pathlib import Path
 
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import exactlin as X
 import kbench
 import kgate

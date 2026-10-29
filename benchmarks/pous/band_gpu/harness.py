@@ -31,8 +31,8 @@ One run, in order:
 6. **The step floor.** The fastest single `Π₂` call on one row over the Feistel kernels (`STEP_VARIANTS`) — the fastest honest
    kernel, an upper bound on the fastest whole call, which an attacker may beat with its best kernel and an overclock. It is
    not an upper bound on an attacker's answer: at the reference Feistel-SHAKE256 `Π₂` an attacker completes no call, and
-   rebuilds a label from 1.53% of `C` in one round's squeeze, 481 Keccak-f, about a tenth of a call (red team, 4 Oct 2026,
-   art:7617c8017e80). The SM clock is sampled while it runs, and the floor is scaled to the maximum clock and to a +15%
+   rebuilds a label from 1.53% of `C` in one round's squeeze, 481 Keccak-f, about a tenth of a call (the red
+   team's resume attack). The SM clock is sampled while it runs, and the floor is scaled to the maximum clock and to a +15%
    overclock; a single Keccak-f latency is measured beside it. A call under the certificate's `call_ns` is a gap in the profile.
 7. **NVMe** (`--nvme-dir`, optional): one block's read latency from a file there.
 8. **Clocks.** The GPU's clocks, throttle reasons, temperature and power before and after, and the SM clock per timed step.
@@ -74,7 +74,7 @@ PINNED = {"band-chain/d12/v1": ("band/64kb/segment", "band-segment-w", None),
 (None: the whole segment; the rest of the segment is zeros)."""
 FROZEN_KERNELS = {"thread_rows": 500, "word_io": True, "fused": True, "pair": True, "pair_max_rows": 7500, "chunked": True,
                   "chunked_threads": 64, "split": True, "fused_x": True, "whole_chain": True, "chain_pairs": False}
-"""The kernel settings of the band's run of record (`r20260928-032701-b4a1`, `bench.FROZEN_FLAGS`)."""
+"""The kernel settings of the band's run of record (`bench.FROZEN_FLAGS`)."""
 KERNELS = {**FROZEN_KERNELS, "chain_pairs": True}
 """The kernel settings a run starts from (`--kernels` overrides them): the run of record's, the whole-chain decode on lane
 pairs (`dense.CHAIN_PAIRS`).  `--kernels '{"chain_pairs": false}'` runs the run of record's kernels."""
@@ -103,7 +103,7 @@ LAUNCH_BOUND_FRACTION = 0.5
 PLAIN_WARMUP_S = 0.5
 """Device seconds of untimed forwards the plain arm runs before its first rep.  The GPU idles through the CPU gates before
 it and runs its first tens of ms after them slow: at T=1 on Llama-3.1-8B, 5.36 against 3.47 ms a forward for up to 11 reps,
-enough to put the median of 20 there (art:232d274d2fd9)."""
+enough to put the median of 20 there."""
 
 
 def quantiles(xs: list[float]) -> dict[str, float]:

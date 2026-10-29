@@ -24,6 +24,7 @@ from verity.ml.circuits.types import Array, Record, Tuple
 from verity.ml.circuits.ops.gemm import DotBf16 as DotBf16V2, Gemm as GemmV2, GemmCoordinate as GemmCoordinateV2
 from verity.ml.circuits.ops.prims import ZERO32, const
 from verity.ml.circuits.ops.scalar import BitNot
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.prims import A16, BF16, BIT, F32, I32
 
@@ -155,8 +156,9 @@ ResidualAdd = CompositeDefinition("ResidualAdd", 1, ("N",),
 
 
 @composite("Bf16MulScalarTensor", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("s", Array(1, BF16))), Array(S.N, BF16)),
-           conformance="exact-model-tested; G4 difftest vs aten.mul.Tensor(bf16 [1,N], bf16 0-d CUDA tensor) on the L40S (lane dense, "
-                       "R13 X-08) and the wave-1 exhaustive probe: bf16(f32(x) * 48) on all 65,282 non-NaN bf16 words (Gemma-2 normalizer)")
+           conformance="exact-model-tested; G4 difftest vs aten.mul.Tensor(bf16 [1,N], bf16 0-d CUDA tensor) on the L40S "
+                       f"({EVIDENCE['bf16_mul_scalar_tensor_difftest']['by']}) and the wave-1 exhaustive probe: bf16(f32(x) * 48) "
+                       "on all 65,282 non-NaN bf16 words (Gemma-2 normalizer)")
 def Bf16MulScalarTensor(B, S, x, s):
     """`aten.mul.Tensor(x bf16 [.., N], s bf16 0-d TENSOR)`: ATen's CUDA
     `mul_kernel` for bf16 computes in opmath float — `f32(x_j) * f32(s)` (exact widenings, one RN multiply) — and stores with
@@ -294,7 +296,7 @@ FUSED_RMS_BLOCK = 1024  # `max_block_size = batch_invariant_launch ? 1024 : ...`
                       Tuple(Array(S.N, BF16), Array(S.N, BF16))),
            conformance="exact-model-tested; evidence: reproduces production on 2,340/2,340 fused-norm rows (1,347,840 words) of "
                        "the B0 store (SmolLM2-135M, N=576, incl. the 13 rows v1 misses; `verity.ml.definitions.registry.rmsnorm_fused_sweep`) "
-                       "and on the B1 (N=1536) L27/t=1 row that v1 missed (typed-b1.md §5.1, closed 2026-09-08: "
+                       f"and on the B1 (N=1536) L27/t=1 row that v1 missed (typed-b1.md §5.1, closed {EVIDENCE['rmsnorm_fused_cuda_b1_row']['closed']}: "
                        "`results/TA1-typed-b1-20260907/corr-B1-L27t1-rmsv2.json`, 14/14 exact)")
 def RMSNormFusedCuda(B, S, x, res, w, eps=None):
     """vLLM `d9105ea80` `csrc/layernorm_kernels.cu` **generic** `fused_add_rms_norm_kernel<c10::BFloat16, 0, true>` —

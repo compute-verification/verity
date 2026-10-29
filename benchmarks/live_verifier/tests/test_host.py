@@ -48,7 +48,7 @@ BASE = ["run", "--peer", "vy-nebius-2", "--port", "7951", "--period", "memory-li
 PACED = [*BASE, "--paced", "2:8000:40:2", "4:16000:40:2"]
 SESSIONS = ["run", "--peer", "vy-nebius-2", "--port", "7958", "--period", "memory-line-1", "--pin", KEY,
             "--sessions", "3", "--windows", "7", "--window-ms", "1000", "--samples", "2773", "--minutes", "30",
-            "--jitter-ms", "2.5", "--quantile", "p99", "--lifetime", "4", "--verdict", "both"]
+            "--jitter-ms", "2.5", "--quantile", "p99", "--lifetime", "4"]
 ROLE = "SYNTHETIC_BF16"
 BOUND = [*PACED, "--model", ROLE, "--engines", "2", "--arena-blocks", "7"]
 
@@ -121,14 +121,14 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
     assert {k: v for k, v in req.items() if k != "argv"} == {
         "run": RUN, "by": LANE, "requested_utc": "2026-10-21T13:00:00Z", "pinned": PIN,
         "pin_log": {"line": 0, "utc": "2026-10-21T13:00:00Z"}, "peer": "vy-nebius-2", "port": 7951,
-        "period": "memory-line-1", "pin": KEY, "paced": ["2:8000:40:2", "4:16000:40:2"], "verdict": "lean"}
+        "period": "memory-line-1", "pin": KEY, "paced": ["2:8000:40:2", "4:16000:40:2"]}
     argv = req["argv"]
     assert argv == doc["argv"]
     assert argv[:3] == ["/usr/bin/python3", "-I", str(H.TREE / "benchmarks" / "remote_session" / "verifier.py")]
     i = argv.index("--paced")
     assert dict(zip(argv[3:i:2], argv[4:i:2])) == {
         "--host": "127.0.0.1", "--port": "7951", "--out": str(svc.runs / RUN / "out"), "--registry": str(svc.registry),
-        "--transcript": str(svc.scratch / RUN / "transcripts"), "--verdict": "lean", "--challenger": "gate",
+        "--transcript": str(svc.scratch / RUN / "transcripts"), "--challenger": "gate",
         "--challenger-ssh": SSH, "--challenger-peer": "vy-auditor-1", "--challenger-pin": KEY,
         "--challenger-period": "memory-line-1", "--challenger-main": str(svc.main), "--host-bytes": "1843153879040",
         "--ingress-bytes-per-s": "4400000000.0"}
@@ -176,8 +176,8 @@ def parsed(monkeypatch, argv: list[str]) -> tuple[argparse.Namespace, tuple]:
 
 
 @pytest.mark.parametrize("words, want", [
-    (PACED, {"paced": ["2:8000:40:2", "4:16000:40:2"], "verdict": "lean", "port": 7951, "challenger_minutes": 120}),
-    (SESSIONS, {"paced": None, "verdict": "both", "port": 7958, "sessions": 3, "windows": 7, "window_ms": 1000.0,
+    (PACED, {"paced": ["2:8000:40:2", "4:16000:40:2"], "port": 7951, "challenger_minutes": 120}),
+    (SESSIONS, {"paced": None, "port": 7958, "sessions": 3, "windows": 7, "window_ms": 1000.0,
                 "samples": 2773, "challenger_minutes": 30, "jitter_ms": 2.5, "quantile": "p99", "lifetime": 4}),
 ])
 def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_hosts_paths_and_capacities(
@@ -326,7 +326,7 @@ def test_the_runs_ports_are_the_tunnels_and_not_the_challenger_gates():
       for ms in ("1e3", "nan", "inf", "-1", "0.0001", "600001", "0")],
     ([*PACED, "--jitter-ms", "1001"], "--jitter-ms '1001'"),
     ([*PACED, "--pace-pass-ms", "1e1"], "--pace-pass-ms '1e1'"),
-    ([*PACED, "--verdict", "python"], "--verdict 'python'"),
+    ([*PACED, "--verdict", "lean"], "unrecognized arguments: --verdict"),
     ([*PACED, "--quantile", "p90"], "--quantile 'p90'"),
     # a bound run's role and its store's shape; its checkpoint and pin are the host's
     *[([*PACED, "--model", role, "--arena-blocks", "7"], f"--model {role!r}: a role of core's pin")
@@ -432,7 +432,7 @@ def test_a_run_whose_pin_moved_before_its_unit_started_does_not_run(svc):
 
 
 def test_each_pin_is_a_line_of_the_sealed_log_and_a_run_starts_only_from_its_last(svc, tmp_path):
-    """RT4-INT-40: pin.sh takes any commit it is handed, so the host keeps the record. Each pin is a line of a log that is
+    """pin.sh takes any commit it is handed, so the host keeps the record. Each pin is a line of a log that is
     sealed append-only before its first line, and a run starts only from the log's last pin and names that line."""
     log, sealed = tmp_path / "log" / "pins.jsonl", []
     log.parent.mkdir()
@@ -466,7 +466,7 @@ def test_each_pin_is_a_line_of_the_sealed_log_and_a_run_starts_only_from_its_las
 
 
 def test_pin_sh_runs_no_unpinned_code_and_logs_each_pin_before_current_names_it():
-    """Infra's review of #3062: elan is a release, its archive checked against a pinned sha256 before it runs (never a
+    """Infra's review: elan is a release, its archive checked against a pinned sha256 before it runs (never a
     script fetched from a branch), and the pin is logged (`host.py pinned`) before `current` moves to it."""
     code = "\n".join(ln for ln in (PACKAGING / "pin.sh").read_text().splitlines() if not ln.lstrip().startswith("#"))
     assert "raw.githubusercontent.com" not in code and not re.search(r"\|\s*(ba)?sh\b", code)
@@ -680,7 +680,7 @@ def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
 
 def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path, monkeypatch):
     """`exec_party` with a party that never exits (no prover joined): its timer kills it and its parent, and the log records
-    why. Killing the parent alone (runuser, 26 Oct on vy-auditor-2) left the party listening and holding the pipe."""
+    why. Killing the parent alone (runuser, on vy-auditor-2) left the party listening and holding the pipe."""
     armed: list[float] = []
 
     class Timer:

@@ -41,7 +41,7 @@ uv run machine-model headline             # each family's design of record at th
 uv run machine-model --device sm_100 sheet   # the data sheet: its DS lines against the census, each peak at its clock
 uv run machine-model --device sm_90 sheet --eps   # the headline's sheet reading on the sheet's lines, A3 at f_max
 uv run machine-model --device sm_100 sheet --eps --uni 0.1 0.02   # ... with a uniform instruction at 0.1, 0.02 a slot
-uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
+uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the verified share σ of a window's capacity
 uv run machine-model counts e-l7qs 2048 28672 4096   # H's closed-form instruction counts and model bound at a shape
 uv run machine-model counts e-l7qs --check           # every ncu observation of H against them
 uv run machine-model --device sm_90 theta    # θ: each figure at its clock, d by route, Strassen's exchange rate, B_RF, r_H, γ, units, c_sha
@@ -96,7 +96,8 @@ The data, each kind of thing a file or a line of its own:
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
 - `data/cover/`: the coverage table ("Coverage" below): the envelope (`envelope.toml`: MODEL-MIN's `Accel.Op` and the
   proposed entries), a row per opcode and a
-  verdict per unit outside the SM pipes (`rows.toml`), and the SASS corpus's opcodes by form (`corpus.json`).
+  verdict per unit outside the SM pipes (`rows.toml`), and the SASS corpus's opcodes by form (`corpus.json`, a fetched
+  fixture: "Coverage" below).
 
 The code:
 
@@ -113,8 +114,8 @@ The code:
   and ε_machine's LP.
 - `verity_machine_model/counts.py`: n(H)(m, n, k) from that closed form, the model bound it gives at any shape the
   kernel runs, its fit and its check.
-- `verity_machine_model/capacity.py`: the certified share σ = 1 − hidden(n̄)/hidden(0) of a window's capacity,
-  hidden(n̄) the useful work any program could still add beside the pooled certified load n̄ (the filler workstream,
+- `verity_machine_model/capacity.py`: the verified share σ = 1 − hidden(n̄)/hidden(0) of a window's capacity,
+  hidden(n̄) the useful work any program could still add beside the pooled verified load n̄ (the filler workstream,
   decision 77; note:20261017T0652Z-draft-filler).
 - `verity_machine_model/redteam.py`: the red-team audit of a headline design against a device's committed census.
 - `verity_machine_model/headline.py`: the per-family headline, every number computed from the design files and vectors.
@@ -268,7 +269,7 @@ A new design is a file with its own name, title and summary, and a `base` if it 
 
 ## ε in the tensor–scalar model
 
-`eps` reports two layers that are never mixed (Daniel, 17 Oct 06:29Z). The protocol with 100% checking, every word and
+`eps` reports two layers that are never mixed. The protocol with 100% checking, every word and
 operand verified, has the core ε (`--checking full`, the default):
 
     1 − ε_core = (1 − ε_skip − ε_mand − ε_machine)(1 − ε_sched)(1 − ε_clock)
@@ -286,7 +287,8 @@ fraction of honest time:
 - **ε_mand**: the fold or the filler done in fewer instructions than honest's. Set by `[mand.PART]`: 0 for duo, under
   FOLD's named assumption.
 - **ε_machine = ε_cert + ε_route**: the cheater's best mix over Π at q*, from the LP below. ε_cert = 1 − π*·n(H)/B(H) is
-  honest's own slack at the certificate π*; ε_route is what the cheater's routes add. Set by the vector and the design.
+  honest's own free compute at the certificate π*; ε_route is what the cheater's routes add. Set by the vector and the
+  design.
 - **ε_sched**: honest's measured time above its model time; 0 unmeasured. Set by `[measured]` in
   `data/honest/NAME.toml`.
 - **ε_clock**: 1 − f_H/f_max: 0.1391, honest at the node's 2,092 MHz lock against sm_120's 2,430 MHz. Set by `[clock]`.
@@ -364,7 +366,7 @@ The other options:
 `machine-model headline`'s ε, and the Lean headline guarantees exported from this data
 (`Accounting.Guarantees.TS.Sm120SheetHeadline` and `Sm120MeasuredHeadline`), bound work done by the node (ASK-65 = A,
 19 Oct): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least (1 − ε) of the
-credited work. The device that did it is left to the attribution layer. The floor argument places no work: every
+work the window credits. The device that did it is left to the attribution layer. The floor argument places no work: every
 credited word is a fresh function of the post-coin noise, so it was computed after the coin, but nothing ties a
 committed tile to the GPU that computed it. The transcript is a Merkle root over tile digests, so a helper holding the
 salt ships one 64-byte digest a tile. The model prices the work on one device's rows, which makes ε a share of the
@@ -372,8 +374,8 @@ credited time `T_cred` on that device, not of that device's own time.
 
 A per-GPU reading of ε comes only through the attribution layer, under two conditions:
 
-- **LOC's host deduction** (decision 37, LOC: the node computes its own certified work): what the host CPU can compute
-  of the credited work exactly is deducted from the GPUs' credit. On int8 that is AMX for a tile's products and AVX-512
+- **LOC's host deduction** (decision 37, LOC: the node runs its own verified compute): what the host CPU can compute
+  of the work the window credits is deducted exactly from the GPUs' credit. On int8 that is AMX for a tile's products and AVX-512
   for the fold and credited fillers, each bit-exact.
 - **The peer-GPU premise**: every billable GPU on the node is credited each window, so no uncredited peer computes a
   credited GPU's tiles over NVLink. Otherwise the node is the unit.
@@ -521,7 +523,10 @@ dominated by an envelope op at no fewer units of the same resource. `data/cover/
 - **What must be covered**: every opcode of NVIDIA's family tables (CUDA Binary Utilities 12.9 §4.3 and §4.4 in
   `../sass_census/data/bu_12_9.json`, CUDA 13's in `sass_isa_tables.json` beside it), every dotted form of the CUDA 13
   libraries' SASS corpus (`corpus.json`, with instruction counts), every census kind, and every unit θ lists
-  (`theta.UNITS`).
+  (`theta.UNITS`). The three JSON tables are generated, so they are fetched fixtures (`fixtures/artifacts.json`,
+  gitignored): `suites.py` fetches them before the tests, and `uv run research data fetch-fixtures
+  benchmarks/pouw/machine_model/data/cover benchmarks/pouw/sass_census/data` brings them into a checkout. `rows.toml`,
+  the reviewed table, stays in Git.
 - **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, envelope op with its pipe, stores or formats,
   units a warp instruction, register words, rate (θ keys, or `rate_value` with its unit), argument and source. A row
   with `forms` (regexes over the dotted form) covers those forms; the opcode's plain row covers the rest. A unit outside

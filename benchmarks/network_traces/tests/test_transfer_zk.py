@@ -4,8 +4,8 @@ without its certificate, the prover's own root under the certifier's certificate
 another window are refused; each member's statement is read as the member says (honest accepted, forged and unsigned
 refused at o0 alone, request at x alone and weight at wrow alone, each by its `WHY`), forged's response being one byte
 off unit 0's output and request's and weight's unit 0 one code off the signed row with its output unchanged; the leak
-scan's blobs are whole pieces. The h200 block's load is CMP-95 interface 1's ``l0.wk`` and ``l0.wk.scale``: its rows
-under the fixture's seed hash to the fixture's digests (``benchmarks/e2e_h200/tests/fixtures/weights-v1.json``: SHA-256
+scan's blobs are whole pieces. The h200 block's load is the seeded weights' ``l0.wk`` and ``l0.wk.scale``: its rows
+under the fixture's seed hash to the fixture's digests (``examples/h200/tests/fixtures/weights-v1.json``: SHA-256
 of each tensor's first and last generation row), and its registered
 rows are interface 1's (4,096 of 128 words, 64 of 2). Nothing here lowers or proves (`transfer_zk.prove` does, on a
 node)."""

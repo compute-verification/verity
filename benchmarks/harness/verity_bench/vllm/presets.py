@@ -47,6 +47,13 @@ class Preset:
 #: Engine precisions an arm may name (`runner.engine_args`). ``int8_exact`` is the eager exact-int8 engine on an int8 pin
 #: (`TargetProfile.int8_exact` ``"all"``: every linear and every attention layer on the plain exact-int8 arm)
 PRECISIONS = ("bfloat16", "fp8", "int8_exact")
+#: The keys a preset's `engine_settings` may set: those `runner.engine_args` reads, and the two `served` sets from the
+#: spec's `eager` (``cuda_graphs``, ``enforce_eager``), which a spec's own value doesn't change
+ENGINE_SETTINGS = (
+    "max_model_len", "max_num_seqs", "max_num_batched_tokens", "resident_gpu_memory_utilization",
+    "block_gpu_memory_utilization", "resident_kv_cache_memory_bytes", "block_kv_cache_memory_bytes", "capture_sizes",
+    "serving_defaults", "attention_backend", "attention_config", "cuda_graphs", "enforce_eager",
+)
 #: A protocol arm's `control` that gives it none: its tokens are checked by no other arm's, and the table names it
 NO_CONTROL = "none"
 #: The executions a served variant of a built-in arm (`BUILTIN@LABEL`, `arms.served_variant`) builds its engine in: vLLM's
@@ -147,6 +154,9 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
         raise ConfigError(f"{path}: unknown GPU id {doc.preset.gpu_id!r}")
     if doc.preset.gpu_count < 1 or doc.preset.gpu_count > GPUS[doc.preset.gpu_id].count_per_node:
         raise ConfigError(f"{path}: gpu_count is outside {doc.preset.gpu_id!r}'s per-node capacity")
+    unknown = sorted(set(doc.preset.engine_settings) - set(ENGINE_SETTINGS))
+    if unknown:
+        raise ConfigError(f"{path}: unknown engine_settings {unknown}; known: {list(ENGINE_SETTINGS)}")
     if doc.reps < 1 or doc.warmups < 1 or not doc.arms:
         raise ConfigError(f"{path}: arms must be nonempty and reps and warmups must be positive")
     if doc.max_warmups is not None and doc.max_warmups < doc.warmups:
@@ -224,7 +234,7 @@ def served(preset: Preset, eager: bool) -> tuple[Preset, bool]:
 
 def checkpoint_files(root: Path) -> list[Path]:
     """The files of a local checkpoint that bind it: all but a Hub snapshot's repository metadata (dot-files such as
-    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (vy-nebius-2's
+    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (a node's
     llama-3.1-8b-instruct gained ``.gitattributes`` and ``README.md`` with every weight unchanged)."""
 
     return sorted(p for p in root.iterdir() if p.is_file() and not p.name.startswith(".") and p.suffix != ".md")

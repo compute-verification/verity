@@ -1,5 +1,5 @@
 """``pearl-c-nvfp4-v0``: Pearl-C on sm_120's block-scaled FP4 (``mma.sync kind::mxf4nvf4``), NVFP4 only.  MXFP4
-(``pearl-c-mxfp4-v0``) stays here as a contrast line, outside the claimed domain (Daniel, 15:34Z): same forming and
+(``pearl-c-mxfp4-v0``) stays here as a contrast line, outside the claimed domain: same forming and
 chain, UE8M0 scales per 32, no certificate claims and not registered in `schemes.get`.
 
 The design is GPU 5's lane's.  It is Pearl-C (`pearl_c`) with the FP8 product replaced by the E2M1 one: the noise enters
@@ -53,8 +53,8 @@ as Pearl-C's H100 argument had it.  The design rests instead on every code and e
 salt-free (`row_passes`): D-NF (`dnf`: 0 ≤ β and a_E's E4M3 byte v in 0x08–0x7E, a normal UE4M3 with bit 7 clear and not
 NaN; one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted and
 its salt-dead codes are charged per element (items 3 and 4), so a row with many screened blocks is rejected only when
-its tile's debit passes the cap (the theory lane's 10:50Z ruling).  Items 3 and 4 charge the reference's witness alone,
-not every element of a screened block (the assessor's 17:25Z B for item 3 per element): F1′ charges a screened block's
+its tile's debit passes the cap.  Items 3 and 4 charge the reference's witness alone,
+not every element of a screened block: F1′ charges a screened block's
 near-certain codes at their own p_t.  A drawn tile's debit is replayed over its credited words (`tile_debit`):
 
 ~~~text
@@ -69,7 +69,7 @@ D-24 windows     per row and aligned 128 of k whose every 8-chunk has ≤ 2 of 4
 cap              debit ≤ ρ · the credited cells' share of creditOf, ρ = 1/400
 ~~~
 
-**F1′ and F2** (the fix for the assessor's D on ``tt-out/fp4-sm120``, under the assessor's FP4 conditions of 15:18Z).
+**F1′ and F2** (what makes ``tt-out/fp4-sm120``'s debit sound).
 F1′ charges the salt-free base split A′ = A0 + ΔA its expected saving under the exact noise law given this salt's E
 lines (`noise_law`): p_t = P(code ≠ modal code) at the block's modal scale byte (`change_probabilities`); per window,
 min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]) with R_24 one 2:4 pass plus a CUDA-core patch of the excess, R_skip
@@ -77,7 +77,7 @@ a skip or patch per k64 atom, at the cheater's best layout inside each block, an
 corrections: one FFMA per word for each of the M_w blocks whose realised byte is not their modal byte (`split_saving`,
 `split_units`).  F2 charges the masked int8-Strassen route on the tile's realised scale bytes, read at one tile byte,
 per row, and per block-column class (`int8_saving`), with c_L the fast-matmul catalogue's minimum at its lower-bound add
-count, pinned per shape (`int8_depth_cost`, `pearl_c4_c_L`; the assessor's 20:00Z ruling). They are the rows
+count, pinned per shape (`int8_depth_cost`, `pearl_c4_c_L`). They are the rows
 `base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2 charges the masked
 int8 route's saving per drawn tile), which replace `no-base-split/fp4-sm120` and the retired domain claim
 `scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`clear_work.check_opened`),
@@ -169,7 +169,7 @@ SPREAD_X5 = 79                     # D-SS: spread ≤ 2^15.8, as spread^5 ≤ 2^
 GROUP_MAX = 2304                   # the largest |group dot| in quarters: 16 products of 6 x 6
 #: F1′ and F2's prices in FP4 units: a CUDA-core FFMA 16.92 (the measured 8.46 FP8 units x 2), the dense correction of
 #: A0's block scales at least 0.125 per MAC (an FP8 GEMM over k/16), the int8 route's patch 4 slots per useful MAC per side,
-#: and its int8 leaf at W1's issue ratio, 2 slots per MAC (the assessor's FP4 conditions, 15:18Z; the
+#: and its int8 leaf at W1's issue ratio, 2 slots per MAC (the
 #: wall-time window below it, 1.81, is `concurrent-budgets/sm120`'s, not the rule's).
 FFMA_UNITS, DENSE_CORRECTION, INT8_PATCH_SLOTS, INT8_LEAF_SLOTS = 16.92, 0.125, 4, 2
 
@@ -408,7 +408,7 @@ def hw_scales(fmt: Fmt, scales: Sequence[int]) -> list[int]:
     """Scale bytes as sm_120's block-scaled step reads them: a UE4M3 byte from its low 7 bits, bit 7 ignored (the
     assessor's run of all 256 bytes, ``r20260930-093120-b2f2``); UE8M0 bytes as written.  Every replayed step reads
     scales through it, though the domain (`scale_bytes_ok`) never lets bit 7 reach one.  It is the decode the Lean
-    `scaleDyadic` proposal pins, whose `nvf4Specials` table has 28 rows (bc-5a715b19's review).  Four of them are NaN
+    `scaleDyadic` proposal pins, whose `nvf4Specials` table has 28 rows.  Four of them are NaN
     accumulators whose scale bytes set bit 7: valid scales under this decode, which the pinned model
     (`verity.ml.circuits.silicon.models._scale_dyadic`) now shares after GPU 4 replayed all 17 bit-7 vectors on the card
     (r20260930-161935-83a8), and outside the model through the accumulator (the card writes 0x7FFFFFFF)."""
@@ -513,8 +513,8 @@ def dnf(beta: int) -> bool:
     """D-NF on a row's β_row word: 0 ≤ β, and a_E's E4M3 byte v, the cast with its sign, has 8 ≤ v < 0x7F (a normal
     UE4M3, at least 2^-6, and not NaN): the bytes 0x08–0x7E, Lean's.  The pinned `stats` never makes β negative or
     non-finite, but the rule states it: a negative β casts to a byte with bit 7 set, which a check of 8 ≤ v alone admits
-    and sm_120 reads from its low 7 bits, so at β = −1/4096 the byte 0x80 would be a zero scale and the row's noise zero
-    (bc-824e54a2's post-M4 rebuild); a NaN β with its sign clear casts to 0x7F (bc-22298e90's review)."""
+    and sm_120 reads from its low 7 bits, so at β = −1/4096 the byte 0x80 would be a zero scale and the row's noise zero;
+    a NaN β with its sign clear casts to 0x7F."""
     try:
         v = P.f32_to_fp8(P.f32_of_bits(beta))
     except P.Reject:
@@ -701,7 +701,7 @@ def change_probabilities_exact(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Se
 #: The float margin on every comparison C's evaluation decides (the pmf's error is about 10^-16), and the slack its
 #: lower bound on p_t gives up; both on the charging side.
 F1_EPS = 1e-12
-#: R1's tolerance band (the assessor's condition 3, 16:10Z): a row within this relative distance of its bound may be
+#: R1's tolerance band: a row within this relative distance of its bound may be
 #: declared either way, and a tile's debit is compared with its cap at the same margin.  Soundness cost ≤ 10^-9·ρ.
 R1_TOLERANCE = 1e-9
 #: B̃'s overfit factor, measured, not derived: a layout chosen after the salt for B̃'s residual is shared by all n
@@ -709,13 +709,11 @@ R1_TOLERANCE = 1e-9
 #: F1′ is charged at 10× that expectation, per window, capped at the window's MACs; A′'s at 1× (its layout must re-gather
 #: B̃, which doesn't pay at n ≤ 2^18).  A stronger search pays past 10× at n ≤ 1,024, which `B_OVF` covers.
 F1_B_OVERFIT = 10
-#: B-OVF, measured, not derived (the assessor's B, 18:45Z): a unit's creditOf is discounted by β(n_b)·mnk, n_b the
+#: B-OVF, measured, not derived: a unit's creditOf is discounted by β(n_b)·mnk, n_b the
 #: largest tabled n ≤ its n.  β is the worst net saving of a B̃ layout annealed and block-optimised after the salt, over
 #: the families R1 admits at `F1_B_OVERFIT`, after A0's gather and ρ, with a 1.5× margin on the measured gain and made
 #: non-increasing in n.  It is taken on each bucket's own R1 admission boundary at k = 1,024 (``k_min``), where the cap
-#: is largest, and just inside it (the worst family can sit there): the larger of that need, the assessor's boundary
-#: check and the earlier grid's cells under the same cap, never below the grid's table (condition 7;
-#: art:cb8395f9d67e84c354611d00bd2b6bacd490db25b535cbfb1f12490d3f6653ca, beta_final.py).  The fork
+#: is largest, and just inside it (the worst family can sit there), never below the grid's table.  The fork
 #: (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
 B_OVF = ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
          (1024, Fraction(50, 10_000)), (2048, Fraction(18, 10_000)), (4096, Fraction(0)))
@@ -739,8 +737,7 @@ def _byte_edges(fmt: Fmt, s: int) -> tuple[float, float]:
 
 
 def certified_modal_byte(fmt: Fmt, v: Sequence[float], cdf: Callable[[float], float], realised: int) -> int | None:
-    """A block's modal scale byte by a certified local search around its realised byte r (bc-f5bf55c8's C; the
-    assessor's B, 16:10Z): from the product formula at the edges of bytes r − w … r + w, the byte probabilities there
+    """A block's modal scale byte by a certified local search around its realised byte r: from the product formula at the edges of bytes r − w … r + w, the byte probabilities there
     and the mass outside them.  The largest certifies when it beats the outside mass and the runner-up by more than
     `F1_EPS` (no other byte can then win, and no float near-tie decides).  w = 1, then 4, then 16; None if still
     uncertified (the caller charges the block on the safe side)."""
@@ -761,7 +758,7 @@ def certified_modal_byte(fmt: Fmt, v: Sequence[float], cdf: Callable[[float], fl
 
 def change_probabilities(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence[int], ae: int,
                          dead: Sequence[bool], scales: Sequence[int]) -> tuple[list[float], list[int | None]]:
-    """F1′'s p_t, C's evaluation, normative for prover and verifier alike (the assessor's condition 1, 16:10Z), under
+    """F1′'s p_t, C's evaluation, normative for prover and verifier alike, under
     the exact noise law given this salt's E line (`noise_law`):
     - each block's modal byte certified around its realised byte (`certified_modal_byte`); a block left uncertified is
       charged on the safe side, p = 0 on its codes and no κ relief (its mode is None);
@@ -884,7 +881,7 @@ def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int | None], scale
 
 def int8_depth_cost(fmt: Fmt, m: int, k: int, n: int) -> float:
     """F2's c_L: the masked int8 route's least cost per honest MAC before its patch over the fast-matmul catalogue, at
-    each scheme's lower-bound add count (`pearl_c4_c_L`; the assessor's 20:00Z ruling), read at the smallest tabled m, k
+    each scheme's lower-bound add count (`pearl_c4_c_L`), read at the smallest tabled m, k
     and n at least the shape's.  c_L falls as any of them grows, so a shape between table points takes the lower c_L.
     A route's depth is capped by k/block, so a 32-block format reads the table at half its k.  The claimed domain is
     inside the table (`PearlC4.check`); a shape beyond it raises."""
@@ -1120,7 +1117,7 @@ class PearlC4:
         self.name = NAMES[fmt] + ("" if hashing == "h0" else f"-{hashing}")
         #: MXFP4 is contrast only: its int8 closure holds under F2, but F1′ puts 9.5–57% of honest MXFP4 credit over the
         #: cap (UE8M0 scales don't move with the salt, and its round-up scales make honest zeros reliable), so its line is
-        #: D on honest coverage and Pearl-C4 claims NVFP4 alone (the assessor, 15:12Z; Daniel, 15:34Z).
+        #: D on honest coverage and Pearl-C4 claims NVFP4 alone.
         self.contrast = self.fmt is MXFP4
         self.r1_tolerance = R1_TOLERANCE
         self.k_min, self.tile, self.n_min = k_min, tile, n_min
@@ -1163,8 +1160,8 @@ class PearlC4:
                 omega=Fraction(1),
                 claims=(),
                 hypotheses=(),
-                allowances=("MXFP4 is contrast only: its line is D on honest coverage under F1′ (ratings.md 15:12Z), and "
-                            "Pearl-C4 claims NVFP4 alone (Daniel, 15:34Z)",),
+                allowances=("MXFP4 is contrast only: its line is D on honest coverage under F1′, and "
+                            "Pearl-C4 claims NVFP4 alone",),
                 parameters=self.certificate.parameters,
             )
 
@@ -1245,7 +1242,7 @@ class PearlC4:
         return CAP * Fraction(self.credit_of(Shape(1, k_kept, n)), n)
 
     def row_debit_ratio(self, record, ops: C.Ops, side: str, pos: int) -> Fraction:
-        """R1's reading (the assessor's FP4 condition 4, 15:18Z): the F1′ per word of the row at
+        """R1's reading: the F1′ per word of the row at
         tile position `pos` of A′ ("A") or B̃ ("B"), over ρ·(its cell credit).  Over 1 the row must be declared
         excluded; `clear_work.check_opened` allows either declaration within `R1_TOLERANCE` of 1.  An excluded row is
         still formed, checked and hashed; it earns nothing."""

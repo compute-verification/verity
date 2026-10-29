@@ -242,6 +242,33 @@ def nbytes(com: Any) -> int:
         _width(lv) for lvs in com._gpu_levels.values() for lv in lvs)
 
 
+def not_retained(com: Any) -> dict[str, Any] | None:
+    """What a committer that excludes value families from retention (``retain_exclude``, `VERITY_RETAIN_EXCLUDE`) committed and
+    doesn't hold: by family the bytes of the chunk-aligned interiors (`host_retention._excluded_chunk_ranges`) its retained ranges
+    leave out, beside the bytes its steps committed and those it retains; None when it excludes nothing.  A committed byte it
+    doesn't hold outside those interiors is refused by name: its opening would fail with nothing to say why."""
+    fams = set(getattr(com, "retain_exclude", None) or ())
+    if not fams:
+        return None
+    from verity_vllm.commit.committer.host_retention import _excluded_chunk_ranges, outside
+
+    C = int(com.chunk)
+    by, committed, retained, stray = dict.fromkeys(sorted(fams), 0), 0, 0, []
+    for s, (blk, used) in sorted(com._gpu_blocks.items()):
+        held = sorted((int(lo), int(hi), "") for lo, hi, _ in _ranges(blk))
+        excl = _excluded_chunk_ranges(com._layouts[s], fams, C)
+        committed, retained = committed + int(used), retained + sum(hi - lo for lo, hi, _ in held)
+        for lo, hi in outside(held, 0, -(-int(used) // C) * C):
+            stray += [f"step {s} [{a}, {b})" for a, b in outside(excl, lo, hi)]
+            for elo, ehi, fam in excl:
+                by[fam] += max(0, min(hi, ehi) - max(lo, elo))
+    if stray:
+        raise ValueError(f"{len(stray)} committed byte range(s) not retained outside the excluded families' interiors {sorted(fams)}: "
+                         f"{stray[:4]}")
+    return {"families": sorted(fams), "bytes": sum(by.values()), "by_family": by, "committed_bytes": committed,
+            "retained_bytes": retained}
+
+
 def dump(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: dict[str, str] | None = None,
          touched: Touched | None = None) -> dict[str, Any]:
     """Writes the committed store of `com` (run commitment `rc`) under `d`, its steps ``threads`` at a time; returns the `store.json`

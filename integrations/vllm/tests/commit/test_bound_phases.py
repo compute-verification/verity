@@ -1,9 +1,9 @@
-"""[R17 fp8, F-fp8-C2PROG / F-fp8-POW2] The bounded host bound is the max over the process's phases, with the C2 Programs and the pinned
-pow2 rounding as named terms -- and it reconstructs the B8 attempt-1 miss (VmHWM 223,776 MiB vs the 193,827 MiB sum) BEFORE the run.
+"""The bounded host bound is the max over the process's phases, with the C2 Programs and the pinned
+pow2 rounding as named terms -- and it reconstructs a measured B8 miss (VmHWM 223,776 MiB vs the 193,827 MiB sum) BEFORE the run.
 
-FP8-STAGING §6: run 93,052 (pool 59,220 + engine 7,100 + pow2 rounding 21,152 + ~5,600) | + C2 Programs 70,300 (never freed) | + replay
+That run: 93,052 (pool 59,220 + engine 7,100 + pow2 rounding 21,152 + ~5,600) | + C2 Programs 70,300 (never freed) | + replay
 pool 54,800 = 223,776 MiB, with the 3-pair term unused.  The same derivation with the exact pool, the Programs freed after C2 and the
-replay cache is what attempt 2 is admitted on.
+replay cache is what the next B8 run is admitted on.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ REQS8 = [{"prompt_token_ids": list(range(n)), "arrive_step": 0, "max_tokens": c}
          for n, c in zip((365, 633, 11, 1024, 817, 449, 165, 73), (128, 113, 95, 35, 121, 3, 9, 2))]
 COMMON = dict(learn_budget_bytes=4096 * MiB, openings=64, chunk_bytes=256, window_bytes=256 * MiB, bounded=True, open_after_release=True,
               host_cap_bytes=239372 * MiB, retain="host", retain_exclude={"fa3_hidden_m1"})
-C2_B8 = 70300 * MiB            # measured: RM._programs_for on the 8 Programs of record (7,853,122 rows), 01:34:30-01:46:52Z
+C2_B8 = 70300 * MiB            # measured: RM._programs_for on the 8 Programs of record (7,853,122 rows)
 
 
 def _s8():
@@ -60,7 +60,7 @@ def test_attempt_2_derivation_exact_pool_programs_freed_replay_cache_admits_b8_w
     assert b["host_peak_bound_bytes"] == ph["c2_sampled_replay"] + b["slack_bytes"]
     assert b["host_peak_bound_bytes"] < 239372 * MiB * 0.9 and b["margin_frac"] > 0.30, (b["host_peak_bound_bytes"] // MiB, b["margin_frac"])
     assert b["dominant_contributor"]["host_term"] == "c2_programs"
-    # every term says what kind of number it is (R17-35)
+    # every term says what kind of number it is
     assert set(b["term_kinds"]) >= {"c2_programs", "pool_rounding", "pairs", "replay", "levels"} and "forecast" in b["term_kinds"]["c2_programs"]
     assert b["c2_freed_before_replay"] is True and b["replay_cache"] is True
     # the observed attempt-1 phases, re-scored under this derivation: run 93,052 - rounding 21,152 = 71,900 < run + slack; run + programs
@@ -122,9 +122,9 @@ def test_row_counting_is_exact_when_the_needle_straddles_a_read_boundary(tmp_pat
 
 
 def test_fork_children_is_a_named_cgroup_term_of_the_c2_phase():
-    """[F-fp8-FORKPIN] the C2 evaluator children's private pages are charged to the cgroup, never to the parent's VmHWM: the term sits in
+    """The C2 evaluator children's private pages are charged to the cgroup, never to the parent's VmHWM: the term sits in
     the c2 phase, says its kind and scope, and attempt 3's derivation (exact SHARED pool, Programs freed, replay cache, 8 GiB children)
-    keeps the B8 3-pair row under the cgroup with margin."""
+    keeps the B8 3-pair workload under the cgroup with margin."""
     b0 = bounded_host_bound(_s8(), engine_rss_bytes=2522 * MiB, pairs=3, c2_programs_bytes=70439 * MiB, c2_freed_before_replay=True, pool_exact=True,
                             replay_cache=True, **COMMON)
     b = bounded_host_bound(_s8(), engine_rss_bytes=2522 * MiB, pairs=3, c2_programs_bytes=70439 * MiB, c2_freed_before_replay=True, pool_exact=True,
@@ -143,10 +143,10 @@ def test_fork_children_is_a_named_cgroup_term_of_the_c2_phase():
 
 
 def test_c2_residual_and_pool_carry_are_named_terms_that_rescore_attempt_3():
-    """[F-fp8-C2RESID / F-fp8-POOLCARRY] attempt 3 (B8, 3 pairs, exact shared pool, Programs freed, replay cache, 8 GiB children) held its
+    """Attempt 3 (B8, 3 pairs, exact shared pool, Programs freed, replay cache, 8 GiB children) held its
     156,654 MiB bound (VmHWM 150,935) but the peak was pair 2's replay phase (151,097), not the predicted c2 phase: the freed Programs left
     31,460 MiB resident and pair 1 carried 20,047 MiB of pair 0's pool pages.  With the two terms the later-pair replay phase is the peak, the
-    observed phases sit under their predictions, and the row is still admissible with margin."""
+    observed phases sit under their predictions, and the workload is still admissible with margin."""
     common = dict(engine_rss_bytes=2517 * MiB, pairs=3, c2_programs_bytes=70439 * MiB, c2_freed_before_replay=True, pool_exact=True, replay_cache=True,
                   fork_children_bytes=8 << 30, **COMMON)
     b0 = bounded_host_bound(_s8(), **common)

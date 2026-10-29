@@ -96,7 +96,7 @@ theorem RowsIn_run_bind {Q : ℕ → Prop} {m : Id (Array (ℕ × ℕ))}
     (hk : ∀ d, RowsIn Q d → RowsIn Q (Id.run (k d)).1) : RowsIn Q (Id.run (m >>= k)).1 := hk _ hm
 
 /-- **Every row Δ writes has one of its six forms** (`HmRow.delta` of a flat statement, both halves the same array; a
-typed template's tail is #277's, stated apart). -/
+typed template's tail is stated apart). -/
 theorem delta_rows (c : Circuit) (pin : ℕ) (ht : c.typed = none) : RowsIn (DeltaRow c pin) (HmRow.delta c pin).1 := by
   unfold HmRow.delta
   simp only

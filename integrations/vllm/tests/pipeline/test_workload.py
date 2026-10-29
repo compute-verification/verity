@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.config import (ROOT, TARGETS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, RowEngine, RowId, UsageError, done_source,
-                                row_file, row_path, row_target, row_world)
+                                row_file, row_path, row_target, row_world, workload_files)
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import P2P_SYS_TARGETS
 from verity_vllm.pipeline import workload as W
@@ -25,7 +25,7 @@ def is_row_id(name: str) -> bool:
         return False
 
 
-FILES = sorted(WORKLOADS.glob("*.json"))
+FILES = workload_files()
 TP_ROWS = [p for p in FILES if is_row_id(p.stem) and row_world(p.stem) > 1]
 
 
@@ -68,7 +68,7 @@ def test_a_row_outside_workloads_is_the_one_file_of_its_name_in_a_directory_veri
 @pytest.mark.parametrize("p", [p for p in TP_ROWS if done_source(json.loads(p.read_text())) == "public-cap"], ids=lambda p: p.stem)
 def test_every_tp_row_done_at_its_caps_declares_the_arrivals_it_is_served_at(p):
     """The TP Commit places the Build's manifest at the declared arrive_steps, and the serving loop admits a request early when the
-    engine would idle; GLM-5.3 B8 stochastic's gapped declaration left 52,005 identities unbound (Commit r20261021-181707-464b)."""
+    engine would idle; a gapped declaration leaves identities unbound (52,005 on GLM-5.3 B8 stochastic)."""
     reqs = json.loads(p.read_text())["requests"]
     declared = [int(r.get("arrive_step") or 0) for r in reqs]
     assert declared == realized_arrive_steps(reqs), (f"declare arrive_steps {realized_arrive_steps(reqs)}, where the serving loop admits "

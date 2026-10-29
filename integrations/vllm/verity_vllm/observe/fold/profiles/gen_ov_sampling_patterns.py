@@ -1,11 +1,11 @@
-"""[GEN ov-sampling] Recognizer for vLLM d9105ea80's Gumbel-max sampler at temperature 1 (no top-k / top-p): the served
+"""Recognizer for vLLM d9105ea80's Gumbel-max sampler at temperature 1 (no top-k / top-p): the served
 token of every sampled row becomes `Compute(GumbelArgmaxBf16_v1{V, SEED, POS}, rows=1, (PerRow(logits[r]),), (PerRow(out[r]),))`
 with SEED the request record's seed (children of an n>1 request: parent seed + index, the fork fact the adapter records)
 and POS the row's StepStart position; rows of a greedy request (per-request temperature 0, `mixed` workloads) become the
 registered `TokenSelect_v1{V}`.  Same three-stage shape as `patterns.TokenSelectGumbelTwoStage` (launch -> aten.argmax over
 the block maxima -> aten.gather), which stays first in line for greedy headers (this pattern returns None for them).
 
-What is deliberately Unsupported here (each is a contract finding, see out/gen/lanes/ov-sampling/REPORT.md):
+What is deliberately Unsupported here (each is a contract finding):
   * a sampled row whose request record has no seed (`seed: null`): the kernel consumed a host draw (`np.random` in
     vLLM's `SamplingStates`) that no trusted fact explains -> "unseeded sampled row";
   * float32 logits (the `_temperature_kernel` quotient / a top-k or top-p masked row): those need TemperatureDiv / TopKMask /

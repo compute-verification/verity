@@ -3,7 +3,7 @@ import Proofs.Flock.Claims.ZK.FrameShape
 /-!
 # The frame takes the firewall's own rounds of the inner proof
 
-Stage B (`note:20261022T0001Z-report-zkfin-stageb`, R3). At the inner proof's rounds the frame fixes every frame and
+At the inner proof's rounds the frame fixes every frame and
 every value it can compute from its draws and the coins (`innerOwn`): only `final_c'` and `τ`'s commitment are free. Were
 the frame to refuse one of the firewall's own rounds, the rep's next coins would be refused ("coins for no round"), a
 stop that reads the draws. So:

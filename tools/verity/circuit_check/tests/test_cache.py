@@ -1149,14 +1149,14 @@ def test_a_target_named_on_the_command_line_reruns_when_its_descriptor_changes_w
 
 def _shimmed(harness: str) -> str:
     """``harness`` with the synthetic package imported through a link outside the tree (``shim/syn -> tree/syn``) first on the
-    import path, as `research run` puts its shim (``pyshim/<key>/verity -> <tree>/verity``)."""
+    import path, as a remote run puts its shim (``pyshim/<key>/verity -> <tree>/verity``)."""
     return harness.replace("sys.path.insert(0, str(root))",
                            "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root.parent / 'shim'))")
 
 
 @pytest.mark.parametrize("named", [False, True], ids=["all", "named"])
 def test_a_module_imported_through_a_link_into_the_tree_is_held(tmp_path, named):
-    """Under `research run` every module of `verity` has its file in the shim, outside the root, so a file through a link into
+    """In a remote run every module of `verity` has its file in the shim, outside the root, so a file through a link into
     the tree is the tree's (`cache._LINKS`): else no entry would hold one, and an edit to a primitive's evaluator, which
     changes no descriptor, would be reused."""
     root, shim = _tree(tmp_path / "tree"), tmp_path / "shim"
@@ -1212,7 +1212,8 @@ def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
     """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
     computes: an edit to it reuses every target and the task list (so adding a peak never makes
     `circuit-check --all` run cold), and so does an edit to the known failures (`cache.KNOWN`,
-    which decide only the summary), while an edit to the checker's code still reruns them all."""
+    which decide only the summary) or to the checker's docstrings and comments (`cache.version`), while an edit to the
+    checker's code still reruns them all."""
     import shutil
 
     root = _tree(tmp_path)
@@ -1228,5 +1229,30 @@ def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
         p.write_text(p.read_text() + "\n# another known failure\n")
     out = _run(root, CHECKER)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
-    (checker / "checks.py").write_text((checker / "checks.py").read_text() + "\n# another version of the checker\n")
+    checks = checker / "checks.py"
+    checks.write_text(checks.read_text().replace('"""The checks,', '"""Reworded: the checks,', 1) + "\n# a comment\n")
+    out = _run(root, CHECKER)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
+    checks.write_text(checks.read_text() + "\n_ANOTHER_VERSION_OF_THE_CHECKER = 1\n")
     assert _run(root, CHECKER)["hits"] == []
+
+
+def test_the_checker_s_version_is_its_code_not_its_prose(tmp_path, monkeypatch):
+    """`cache.version`: an edit to a docstring, a comment or the layout of the checker's modules keeps its version, so it
+    reruns no target, while an edit to their code, or to a file of it that is no module, changes it."""
+    from circuit_check import cache as CC
+
+    monkeypatch.setattr(CC, "_HERE", tmp_path)
+    mod, data = tmp_path / "checks.py", tmp_path / "data.json"
+    src = '"""The checks."""\n\n\ndef f(x):\n    """Twice ``x``."""\n    return 2 * x  # doubled\n'
+    mod.write_text(src)
+    data.write_text("{}")
+    here = CC.version()
+    mod.write_text('"""The checks, reworded."""\n# a new comment\n\ndef f(x):\n    """``x`` doubled."""\n\n    return 2 * x\n')
+    assert CC.version() == here
+    mod.write_text(src.replace("2 * x", "3 * x"))
+    assert CC.version() != here
+    mod.write_text(src)
+    assert CC.version() == here
+    data.write_text('{"a": 1}')
+    assert CC.version() != here

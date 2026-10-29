@@ -30,7 +30,7 @@ words of the windows before the check's first refusal). The two differ in their 
 
 So the bridge prices the credit less the multiply-adds of the units the network certifier's bits could have carried
 out, `W ≤ m·p(tc)·credit − u·p(tc)·K/b_unit` with `u` a unit's, at every price `p`. It needs no time credit: Compose's
-time line (`(1 − ε)·T_cred`, `CreditOfWork`), which RT4-LOGIC-6 says no period statement gives, would credit device
+time line (`(1 − ε)·T_cred`, `CreditOfWork`), which no period statement gives, would credit device
 time, and the joint period's PoUW claim is priced ops.
 
 * `Certificates.helpUnits`: the units the network certifier's `K` bits can carry, at `b_unit` bits a unit.

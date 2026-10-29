@@ -6,7 +6,7 @@ import PouwCheck
 # A period's work over the windows PoUW's deployed check accepts (`PouwCheck.protocol.check`)
 
 PoUW's per-period statement about its deployed Lean code, for the all-protocols period (one loop audited every period by
-each protocol, composed in `Accounting.Guarantees.JointPeriod`). `Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod`
+each protocol, composed in the causal game, `Accounting.Guarantees.JointPeriodLive`). `Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod`
 is stated over the accounting model's abstract proofs (`PeriodRun`): whether window `w`'s proof of its `i`-th drawn tile
 was accepted is a parameter. Here it is the deployed check's verdict on the window: `protocol.check` (`verity/pouw/v1`,
 `core_check.py`'s port, the `Core.Protocol` that `CoreOnsite` composes) on the window's registration and the proof
@@ -58,8 +58,8 @@ check doesn't discharge it:
   registration is fixed before the window's draw coin (`RegisteredBeforeDraw`, which states the order; the commitment
   is the roots'). On today's path the registered roots are tags, not the rows' commitments (below): the loop's
   registration has `anchors []` and `wires []`, so nothing commits the rows before the draw. Its discharge path is
-  CMP-91 (updated 25 Oct): ALLP-WIRE commits the loop's `x`, `sx`, weight rows and `sw` as anchors (hm96 rows in
-  frame-v3-sha512 trees) before the window's draw coin, and ALLP-H1LOOP binds the H1 tiles' rows to those anchors.
+  to commit the loop's `x`, `sx`, weight rows and `sw` as anchors (hm96 rows in frame-v3-sha512 trees) before the
+  window's draw coin, and to bind the H1 tiles' rows to those anchors.
 * `RegisteredBeforeDraw`: protocol structure. The check reads only that the service's answer cites the registration's
   digest (`Evidence.commitment`), not when the draw coin was released against it, so it doesn't discharge it.
 * `ServiceSound δks`: C-Flock's soundness at each drawn unit under live coins (`Flock.Guarantees.EndToEndRegisteredRows`
@@ -74,7 +74,7 @@ check doesn't discharge it:
   a statement other than the registered tile's (H1's leg proves the window's staged statement), this is the link
   between the two, and H1's instance splits it into `StagedPins` and `SaltIsLiveCoin`.
 * `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` per live tile, and `UnitFixed` at `periodMode`: the named claims, as in
-  `CircuitWorkPeriod`. On H1's unit they are (H-μ) at `μ = 3/4` (#2482), B′ at `r_B = 1/2` and the guess bound at
+  `CircuitWorkPeriod`. On H1's unit they are (H-μ) at `μ = 3/4`, B′ at `r_B = 1/2` and the guess bound at
   `1/2`; ncp-v2 has no Compose `Scheme`, and its receipt bound is a time-tradeoff form
   (`Accounting.Guarantees.TileUnpredictableOfNCPU`), not lucks.
 
@@ -82,7 +82,7 @@ check doesn't discharge it:
 refusing the whole period on any refused window. A loop credited through it takes these statements with `Accepts` at
 `Credit.window`'s verdict; a period it credits is one whose windows are all accepted, `Windows.prefixLen = n`.
 
-*H1's tile unit on the torch loop* (`H1CheckedCreditPeriod`; all-protocols' PoUW leg, #4351). The loop's W8A8
+*H1's tile unit on the torch loop* (`H1CheckedCreditPeriod`, PoUW's leg of the period above). The loop's W8A8
 two-layer MLP at `H = 128` serves 4 requests × 2 decode steps a window, and each linear's `K = 128` is two pinned H1
 tiles `PouwH1Tile_v1` (`K = 64`, `R = 4`, `C = 8`, `core_check.TILES`): 2 steps × 2 linears × 16 column blocks × 2
 halves of `K` = 128 real tiles a window, in a population of `N_p = 144` (the grid's 16 fillers, of zero rows and no
@@ -99,12 +99,12 @@ at `δ_s = 1%` and through 115 at `10⁻⁶`, and `ε(j) < 1%` from 3,857 and 11
 What H1's instance takes that the deployed path doesn't give, each a named premise:
 * `RegisteredBeforeDraw`, with the window's rows committed by its registration: the binding premise reads both. The
   tiles' registered roots are tags (below), so the registration commits no row (`anchors []`, `wires []`), and an
-  opening the service gives is bound to nothing fixed before the draw. Discharge path: CMP-91, ALLP-WIRE's anchors
+  opening the service gives is bound to nothing fixed before the draw. Discharge path: the loop's anchors
   committed before the draw coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
 * `SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet it: the loop is given
   its salt before it serves, and nothing in the record binds the salt to a live coin (`core_check.salt` is not part of
   `answer`; the check item names no coin mode, so the window is seeded, and `Scope`'s `Declared.Live` and
-  `LayerCommitted` fail of the circuit it runs). Its discharge path is CMP-90 (ALLP-SALT); CMP-81's per-epoch live
+  `LayerCommitted` fail of the circuit it runs). Its discharge path is ALLP-SALT; the per-epoch live
   salt is the fix's shape (`Properties.Pouw.LiveSalt`, `PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1.
 * `StagedPins`: the leg's proofs are of the window's staged statement, not the pinned flat circuit `core_check.opening`
   reads. The bridge is stated over the staged statement (`ServiceSound` is the service's soundness for it, `stagedAt`),
@@ -192,8 +192,8 @@ def checkedLayer {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 <
 level has the population `N_p` and the draw size `K_d`, and the units it publishes as drawn (`Public.drawn`, the
 service's) are the units of the model's draw at the window's draw coin (`drawOf`). It holds when the model's
 permutation coin is read as the service's `subset:K′` draw from the challenger's draw coin
-(`SampledProofs.Select.select`), at one work level for every window. A named assumption in the lock (ASK-133, option A,
-decided by the lane): a protocol-code fact to prove. -/
+(`SampledProofs.Select.select`), at one work level for every window. A named assumption in the lock: a
+protocol-code fact to prove. -/
 def DrawIsCoin {C Ξ : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
     (ws : Windows (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) : Prop :=
   ∀ (x : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) (w : Fin n) (pub : Public) (prof : Core.Integrity),
@@ -204,8 +204,7 @@ def DrawIsCoin {C Ξ : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
 /-- **The service is sound at `δ_ks` against the check**: in every window, the check accepts and some unit it
 publishes as drawn has an opening (`opened x w u`) that fails its relation (`rel`, the registered unit Program's) with
 probability at most `δ_ks` over the period's coins. C-Flock's soundness at each drawn unit, with one-stage's acceptance
-and the check's, is what it needs. A named assumption in the lock (ASK-133, option A, decided by the lane): standard
-crypto, C-Flock's soundness. -/
+and the check's, is what it needs. A named assumption in the lock: standard crypto, C-Flock's soundness. -/
 def ServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n : ℕ} (p : Params)
     (ws : Windows (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
@@ -219,9 +218,9 @@ same on every continuation from `w`'s draw (`spliceAt w m`: `x`'s coins before w
 others'). With the window's rows committed by its registration's roots, it is what makes `MovedIn ≤ δ_bind` the roots'
 binding: an opening other than the committed row then opens a root fixed before the draw named the unit. It states
 the order only; the commitment is the roots', which on H1's path are tags (the loop's registration has `anchors []`
-and `wires []`). Its discharge path is CMP-91: ALLP-WIRE commits the loop's `x`, `sx`, weight rows and `sw` as anchors
-(hm96 rows in frame-v3-sha512 trees) before the window's draw coin, and ALLP-H1LOOP binds the H1 tiles' rows to them. A
-named assumption in the lock (ASK-133, option A, decided by the lane): a protocol-code fact to prove. -/
+and `wires []`). Its discharge path is to commit the loop's `x`, `sx`, weight rows and `sw` as
+anchors (hm96 rows in frame-v3-sha512 trees) before the window's draw coin, and to bind the H1 tiles' rows to them. A
+named assumption in the lock: a protocol-code fact to prove. -/
 def RegisteredBeforeDraw {C Ξ : Type} {m Np n : ℕ} (ws : Windows (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) : Prop :=
   ∀ (x z : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) (w : Fin n), ws.reg (spliceAt w.val m x z) w = ws.reg x w
 
@@ -308,9 +307,9 @@ salt the verifier holds for the window, which every tile's noise reads through i
 every drawn unit's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
 round's values are committed. The deployed path doesn't meet it: the loop is given its salt before it serves, nothing
 in the record binds the salt to a live coin (`core_check.salt` is not part of `answer`), and the check item names no
-coin mode, so the window is seeded. Its discharge path is CMP-90 (ALLP-SALT); CMP-81's per-epoch live salt is the
+coin mode, so the window is seeded. Its discharge path is ALLP-SALT; the per-epoch live salt is the
 fix's shape (`Properties.Pouw.LiveSalt`, `PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1. A named
-assumption in the lock (ASK-133, option A, decided by the lane): a deployment gap until CMP-90 (#4405). -/
+assumption in the lock: a deployment gap until the salt is a live coin. -/
 def SaltIsLiveCoin {C B : Type} {m n : ℕ} (hm : 0 < m) (salt : Paths (Paths C m × B) n → Fin n → ByteArray)
     (enc : C → ByteArray) : Prop :=
   ∀ x w, salt x w = enc (coinAt (coinAt x w).1 ⟨0, hm⟩)
@@ -319,7 +318,7 @@ def SaltIsLiveCoin {C B : Type} {m n : ℕ} (hm : 0 < m) (salt : Paths (Paths C 
 the service proves of it (`staged s t`, the window's staged statement, which the leg's proofs are of) satisfy the
 pinned flat tile's rightness there (`flat s t`, `PouwH1Tile_v1`'s function at salt `s`, the circuit `core_check.opening`
 reads and the lucks are claims of). Nothing proves it yet, and neither side has a Lean function, so both are
-parameters of the statements that take it. A named assumption in the lock (ASK-133, option A, decided by the lane): a
+parameters of the statements that take it. A named assumption in the lock: a
 protocol-code fact to prove. -/
 def StagedPins {Np : ℕ} {V : Type} (staged flat : ByteArray → Fin Np → (ℕ → V) → Prop) : Prop :=
   ∀ s t v, staged s t v → flat s t v
@@ -335,7 +334,7 @@ def flatAtCoin {C B V : Type} {m n Np : ℕ} (hm : 0 < m) (enc : C → ByteArray
   fun x w => flat (enc (coinAt (coinAt x w).1 ⟨0, hm⟩))
 
 /-- **(L)'s credit over the windows the deployed check accepts, at H1's tile unit on the torch loop.**
-`CheckedCreditPeriod` at the all-protocols leg's window (module docstring): one round a window (`Cd.rounds = 1`,
+`CheckedCreditPeriod` at the torch loop's window (module docstring): one round a window (`Cd.rounds = 1`,
 `w_max = 1`, every tile's noise reads the window's one salt), a population of `N_p = 144` of which `K_d = 24` are
 drawn, every tile's share of the words at most `1/128` (`ρ = 8/9`: 128 equal real tiles, the 16 fillers wordless),
 H1's lucks `p = 7/8`, `p0 = ½`, the word line `a = b = 1` and `SplitRateClosed`'s rate `Λ = 67/8`. The unit's relation

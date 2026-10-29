@@ -1,5 +1,5 @@
 """H1 + fx1 receipts beside vLLM's GEMM, not useful-work credit: a padded H1 + fx1 window (`eps1-sm120-h1fx1`) on vLLM's
-int8-exact row, one process on one GPU, in the static form (Daniel, 20:52Z): the window's tiles, rows and positions are a
+int8-exact row, one process on one GPU, in the static form: the window's tiles, rows and positions are a
 fixed function of public parameters alone.
 
 The receipts bind extra work beside cuBLASLt's served y, not the served kernel's.  vllm's PoUW option
@@ -88,7 +88,7 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             words equal to the tally's bits and a tampered one refused against the admit root, the tile's selected rows
             zeroed under a nonzero scale still admitted, a live unit's receipt the ungated one
 
-    cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
+    cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../tools/config:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting \
       --coins live --challenger 127.0.0.1:PORT --session ID
 """
@@ -113,7 +113,9 @@ sys.path.insert(0, str(HERE))
 import coins as CO  # noqa: E402
 import commit as CM  # noqa: E402
 import credit as CR  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 SCHEMA = "verity/pouw-h1-pass/v1"
 RECORD = "verity/pouw-served-h1/record/v1"
 SCHEME = "eps1-sm120-h1fx1"
@@ -170,7 +172,7 @@ def timing(cubin, reps: int = 10) -> dict:
         hashed = clock(lambda: cubin.launch(seeds, blocks, sink, sink=True), reps)
         full = torch.empty(units, blocks, 16, dtype=torch.int32, device="cuda")
         written = clock(lambda: cubin.launch(seeds, blocks, full), reps)
-        del full, sink
+        full = sink = None
         torch.cuda.empty_cache()
         out.append({"m": m, "n": n, "k": k, "units": units, "blocks_per_unit": blocks, "noise_blocks": lay.blocks,
                     "key_blocks": RC.LANES, "gemm_ms": round(gemm, 4), "noise_hash_ms": round(hashed, 4),
@@ -476,7 +478,7 @@ def run(a: argparse.Namespace) -> dict:
     rec.step("reference", {"requests": len(reference), "tokens": sum(len(r["token_ids"]) for r in reference),
                            "schedule": {"steps": len(ref_spans), "rows": [sum(k for _, k in x) for x in ref_spans], **ref_tap}})
 
-    window = os.environ.get("RESEARCH_RUN_ID") or "local"
+    window = settings.RESEARCH_RUN_ID or "local"
     key = os.urandom(64)
     queue = CR.queue_of(ref_spans, s_max, t_max)
     q_commit = commit_queue(window, key, queue)
@@ -1054,7 +1056,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--base-role", default="LLAMA31_8B")
     ap.add_argument("--role", default="LLAMA31_8B_INT8")
     ap.add_argument("--repo", default="verity-int8/Llama-3.1-8B-INT8")
-    ap.add_argument("--hf-home", default=os.environ.get("HF_HOME"))
+    ap.add_argument("--hf-home", default=settings.HF_HOME)
     ap.add_argument("--at", required=True, help="resolved_at of a new int8 pin entry (UTC, ISO 8601)")
     ap.add_argument("--by", required=True, help="resolved_by of a new int8 pin entry")
     ap.add_argument("--int8-exact", default="all", choices=["linears", "attention", "all"])
@@ -1074,7 +1076,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--session", default=None, metavar="ID",
                     help=f"the challenger session's id (default ${CO.SESSION_ENV}, its secret ${CO.SECRET_ENV}); "
                          "development only, since its salt coin opens after the registration root, not a window's root")
-    ap.add_argument("--gate", default=os.environ.get(CO.GATE_ENV), metavar="USER@HOST",
+    ap.add_argument("--gate", default=settings.get(CO.GATE_ENV), metavar="USER@HOST",
                     help=f"refused (default ${CO.GATE_ENV}): the gated served window of record is vllm's H1 path, "
                          "integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053)")
     return 0 if run(ap.parse_args(argv))["ok"] else 1

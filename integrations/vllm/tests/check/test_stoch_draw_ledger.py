@@ -1,7 +1,7 @@
-"""[R17-32 R5 record half, revb S-r17b-16 / M-0566] stoch_recompute's DRAW LEDGER: 'RNG advances iff r_t' measured on the record, per
+"""stoch_recompute's DRAW LEDGER: 'RNG advances iff r_t' measured on the record, per
 request -- the DRAWN positions compared as an ordered set with the positions the Program's stop rule EXECUTES ({prompt_len - 1 + (t - 1) :
 r_t = 1}: to the cap, or the first EOS at slot t < C then min(A, C - t) lag slot(s)); every extra / missing position a FAIL reason by name
-(F-r17b-35: over-cap without EOS fails; the lag slot is bounded by the cap); a record with no EOS stop says 'not measured', never 'pass'.  Torch-free (the accounting is pure
+(over-cap without EOS fails; the lag slot is bounded by the cap); a record with no EOS stop says 'not measured', never 'pass'.  Torch-free (the accounting is pure
 Python over the SampleEnd rows)."""
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def test_a_draw_past_the_lag_slot_a_missing_lag_draw_and_a_lag_pos_off_by_one_ea
 
 
 def test_f_r17b_35_over_cap_without_eos_fails_and_the_lag_slot_is_bounded_by_the_cap(tmp_path):
-    """revb M-0615 F-r17b-35: (a) 9 draws for cap 8 / lag 1 / NO EOS is 'the RNG advanced without r_t' (nothing is scheduled past the length
+    """(a) 9 draws for cap 8 / lag 1 / NO EOS is 'the RNG advanced without r_t' (nothing is scheduled past the length
     bound; the lag slot exists only after an EOS before the cap) -- before the fix the only over-cap check was len > cap + lag and this
     passed silently; (b) EOS at slot C - 1 under A = 1: the cap bounds the lag slot to ONE draw (n_exec = min(t_eos + A, C)), which is
     correct, not a failure; a second draw after it is the failure."""
@@ -154,18 +154,17 @@ def test_expected_executed_slots_is_the_spec_s7_rule_and_names_what_it_cannot_ju
     assert E([7, 7, 99], 4, 1, {99})[0] == [1, 2, 3, 4]                         # EOS at slot C - 1: the lag slot is the cap slot
     assert E([7, 7, 7, 99], 4, 1, {99})[0] == [1, 2, 3, 4]                      # EOS at the cap slot: nothing after
     assert E([7, 99, 5, 99], 6, 1, {99})[0] == [1, 2, 3]                        # the FIRST EOS rules; a later one is on a non-executed slot
-    assert E([7, 7], 4, 1, None)[0] is None and "F-pm-24" in E([7, 7], 4, 1, None)[1]["unjudged"]
+    assert E([7, 7], 4, 1, None)[0] is None and "cannot be read as an EOS stop" in E([7, 7], 4, 1, None)[1]["unjudged"]
     assert E([7, 7, 7, 7], 4, 1, None)[0] == [1, 2, 3, 4]                       # undeclared EOS but the cap is reached: judged on the cap
     assert E([7, 99], 4, None, {99})[0] is None and "unattested" in E([7, 99], 4, None, {99})[1]["unjudged"]
 
 
 def test_the_rule_is_pads_recurrence_and_the_slot_to_position_map_is_the_records_first_draw_at_prompt_len_minus_1():
-    """revb M-0615 / pad M-0688: the executed set comes from `verity_vllm.program.lifting.continuation.recurrence` (ONE mechanism, no twin here), the
+    """The executed set comes from `verity_vllm.program.lifting.continuation.recurrence` (ONE mechanism, no twin here), the
     comparison from `compare_draw_positions`.  The slot -> position map is the RECORD's: slot 1 draws at pos prompt_len - 1 (the query
     position whose logits are sampled; qwen B8 L=1024 -> first_pos 1023, device_facts_match on every row), slot t at prompt_len - 2 + t.
-    pad's `expected_draw_positions` at 61fe06dff mapped slot t to prompt_len + t - 1 (stoch M-0469's prose 'pos = prompt_len + n', one
-    more than the record); pad 2304c56ea fixed it to prompt_len - 2 + t (M-0801/M-0805) -- from 35408bbe9 on the two maps agree and the
-    ledger's positions ARE pad's `expected_draw_positions(...)["positions"]` (one mechanism, no map of its own)."""
+    An earlier `expected_draw_positions` mapped slot t to prompt_len + t - 1, one more than the record; the two maps now agree and
+    the ledger's positions ARE `expected_draw_positions(...)["positions"]` (one mechanism, no map of its own)."""
     from verity_vllm.program.lifting import continuation as CT
     from verity_vllm.check.replay.stoch_recompute import expected_executed_slots as E
     exp, info = E([7, 7, 99], 8, 1, {99})
@@ -173,7 +172,7 @@ def test_the_rule_is_pads_recurrence_and_the_slot_to_position_map_is_the_records
     ours = [10 - 1 + (t - 1) for t in exp]                       # L = 10: 9, 10, 11, 12 (the lag slot 4 at pos 12)
     pad = CT.expected_draw_positions([7, 7, 99], cap=8, A=1, eos={99}, prompt_len=10)
     assert pad["slots"] == exp and pad["n"] == 4 and pad["lag_positions"] == [pad["positions"][-1]]
-    assert pad["positions"] == ours, (pad["positions"], ours)      # pad 2304c56ea / 35408bbe9: the two maps AGREE (slot 1 at L - 1); the ledger takes pad's field
+    assert pad["positions"] == ours, (pad["positions"], ours)      # the two maps AGREE (slot 1 at L - 1); the ledger takes the padding's field
     cmp = CT.compare_draw_positions(ours, ours + [13])
     assert cmp["ok"] is False and cmp["extra"] == [13] and "RNG advanced without r_t" in cmp["problems"][0]
 
@@ -212,7 +211,7 @@ def test_a_stop_rule_file_that_cant_be_read_is_a_ledger_problem_not_an_undeclare
     ("qwen25-15b__bf16__l40s__tp1__b8__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager", "r17_1846_b8_int1_88dd07fd3", 388, 151936),
 ])
 def test_the_two_b8_stoch_records_of_record_carry_a_clean_ledger_every_request_to_its_cap_r5_not_exercised(row, att, n_rows, V):
-    """The R17 B8 stochastic rows of record (evidence dirs): every sampled row is exact-match, so match_stoch.json's rows ARE the whole
+    """The B8 stochastic rows of record (evidence dirs): every sampled row is exact-match, so match_stoch.json's rows ARE the whole
     ledger; each of the 8 requests drew exactly cap times at pos prompt_len - 1 + k, one per step; no request stopped at EOS -> the
     lag slot was not scheduled on either record and the ledger says R5 is NOT MEASURED there (the negative is named, not passed)."""
     att_dir = EVID / row / att

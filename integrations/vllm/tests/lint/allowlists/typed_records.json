@@ -44,7 +44,6 @@
     {"file": "verity_vllm/commit/hashing.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/json/v1"},
     {"file": "verity_vllm/commit/index.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/serving-rows/index/v0"},
     {"file": "verity_vllm/commit/served_record.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/served-record/v1"},
-    {"file": "verity_vllm/commit/step_rows.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/step-rows/v1"},
     {"file": "verity_vllm/commit/store_dump.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/committed-store/v1"},
     {"file": "verity_vllm/correspondence", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 10},
     {"file": "verity_vllm/correspondence/capture_identities.py", "kind": "schema-literal", "symbol": "requalify", "detail": "verity-ir/correspondence/v0"},
@@ -69,11 +68,10 @@
     {"file": "verity_vllm/observe/fold", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 16},
     {"file": "verity_vllm/observe/fold/patterns", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 25},
     {"file": "verity_vllm/observe/fold/patterns_prefix.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-capture/prefix-obligations/v1"},
-    {"file": "verity_vllm/observe/fold/profiles", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 19},
     {"file": "verity_vllm/observe/prefix_cache.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-capture/prefix-linkage/v1"},
     {"file": "verity_vllm/observe/prefix_cache.py", "kind": "schema-literal", "symbol": "evidence", "detail": "verity-capture/prefix-evidence/v1"},
     {"file": "verity_vllm/observe/runtime_tree.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/runtime-tree/v1"},
-    {"file": "verity_vllm/pipeline", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 570},
+    {"file": "verity_vllm/pipeline", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 568},
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/admission/f-da-15/v1"},
     {"file": "verity_vllm/pipeline/advice.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/advice-registration/v1"},
     {"file": "verity_vllm/pipeline/advice.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/advice-report/v3"},
@@ -124,7 +122,6 @@
     {"file": "verity_vllm/pipeline/row_stages.py", "kind": "schema-literal", "symbol": "SingleRow.prepare", "detail": "verity-sweep/executing-tree/v1"},
     {"file": "verity_vllm/pipeline/serve_seal.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/served-window/v1"},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/serving-rows/partition/v1"},
-    {"file": "verity_vllm/pipeline/sweep.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/sweep/v1"},
     {"file": "verity_vllm/pipeline/telemetry", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 11},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/admission/v1"},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/admission-plan/v1"},
@@ -286,6 +283,7 @@
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "schema-literal", "symbol": "TP2CaptureWorkerExtension.tp2_install", "detail": "verity-vllm/profile/v1"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "schema-literal", "symbol": "TP2CaptureWorkerExtension.tp2_param_hashes", "detail": "verity-capture/tp2-param-hashes/v0"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "schema-literal", "symbol": "TP2CaptureWorkerExtension.tp2_profiler_stop", "detail": "verity-capture/census-rank/v0"},
-    {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"}
+    {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"},
+    {"file": "verity_vllm/observe/fold/profiles", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 19}
   ]
 }

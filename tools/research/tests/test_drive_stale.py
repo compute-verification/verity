@@ -1,4 +1,4 @@
-"""The stale rule (`research.stale`, TOP-90 row 36) and the stacked-PR notice (row 23): `research queue status` marks a PR that
+"""The stale rule (`research.stale`) and the stacked-PR notice: `research queue status` marks a PR that
 isn't marked ready at its head and has been idle `stale_days` stale; drive rings its owner once a day and closes it at
 `stale_close_days` with a comment, keeping its branch, but never one held, a draft that says "keep open", or one on `next`;
 after a landing, the owner of each unmarked PR stacked on a landed one hears once to merge `main`.  On `test_queue`'s
@@ -171,7 +171,7 @@ def test_a_pr_drive_toml_keeps_is_never_stale_rung_or_closed(world, monkeypatch)
 
 
 def test_after_a_landing_the_owner_of_each_unmarked_pr_stacked_on_it_hears_once_to_merge_main(world, monkeypatch):
-    """TOP-90 row 23: a PR whose branch contains a landed PR's head, based on `main` or on that PR's branch, needs `main`
+    """A PR whose branch contains a landed PR's head, based on `main` or on that PR's branch, needs `main`
     merged in; one marked ready lands from `next` as it is, and a merge would cost it its mark."""
     gh = world.gh
     gh.put(1, h1 := world.change({"a.txt": "1\n"}))

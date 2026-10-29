@@ -1,6 +1,6 @@
 """Dither's served unit (CMP-176, CMP-172): the Definitions a sampled proof block's proof passes, the layout of a call's
 committed values, and the CPU reference a units kernel's values and hiding leaves are checked against on sampled cells.
-The protocol is Dither v3.2 (`verity/core/protocols/pouw/accel/PROTOCOL.md`), as V31-GPU's prover implements it
+The protocol is Dither v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md`), as V31-GPU's prover implements it
 (`benchmarks/pouw/accel_v31/v31.py`, CMP-159); the guarantee it instantiates is `Pouw.Guarantees.Dither.WorkSoundNoFold`.
 
 **A call** is O = (A + d_A)(B + d_B)ᵀ over the integers: A (m × K int8) is the call's activations, committed in the call's
@@ -138,6 +138,9 @@ class Shape:
             raise ValueError(f"K is below {K_LIMIT} (`K_LIMIT`), not {self.k}")
         if self.L <= 0 or self.L % self.lp:
             raise ValueError(f"L is t L′, a multiple of L′ {self.lp}, not {self.L}")
+        if min(self.L, self.k) > 8 * self.lp:
+            raise ValueError(f"t = min(L, K) / L′ is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
+                             f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row <= 0 or self.row % 16 or TILE_WORD_BYTES % self.row:
             raise ValueError(f"a row is a multiple of 16 bytes dividing {TILE_WORD_BYTES}, not {self.row}")
 
@@ -591,19 +594,24 @@ def PouwDitherFirstWord(acc: int, t1: int) -> int:
     return step_ok(0, acc, t1)
 
 
-@primitive("PouwDitherOutDot", 1, [("acc", Value(32)), ("a", Array(32, Value(8))), ("da", Array(32, Value(1))),
-                                   ("b", Array(32, Value(8))), ("db", Array(32, Value(1)))], Value(32),
+def _dithers(d: int) -> list[int]:
+    return [d >> k & 1 for k in range(32)]
+
+
+@primitive("PouwDitherOutDot", 1, [("acc", Value(32)), ("a", Array(32, Value(8))), ("da", Value(32)),
+                                   ("b", Array(32, Value(8))), ("db", Value(32))], Value(32),
            conformance="protocol-defined")
 def PouwDitherOutDotWord(acc: int, *v: int) -> int:
-    """O's sum 32 entries on: acc + sum_k (a_k + da_k)(b_k + db_k) mod 2^32."""
-    return out_dot(acc, v[0:32], v[32:64], v[64:96], v[96:128])
+    """O's sum 32 entries on: acc + sum_k (a_k + da_k)(b_k + db_k) mod 2^32, da_k and db_k bit k of da and db (the word view
+    of `PouwDitherOutDot_v2`'s `Array<32, Value<1>>`, `boolean.word_type`)."""
+    return out_dot(acc, v[0:32], _dithers(v[32]), v[33:65], _dithers(v[65]))
 
 
-@primitive("PouwDitherOutDot0", 1, [("a", Array(32, Value(8))), ("da", Array(32, Value(1))), ("b", Array(32, Value(8))),
-                                    ("db", Array(32, Value(1)))], Value(32), conformance="protocol-defined")
+@primitive("PouwDitherOutDot0", 1, [("a", Array(32, Value(8))), ("da", Value(32)), ("b", Array(32, Value(8))),
+                                    ("db", Value(32))], Value(32), conformance="protocol-defined")
 def PouwDitherOutDot0Word(*v: int) -> int:
-    """O's sum over its first 32 entries: sum_k (a_k + da_k)(b_k + db_k) mod 2^32."""
-    return out_dot(0, v[0:32], v[32:64], v[64:96], v[96:128])
+    """O's sum over its first 32 entries: sum_k (a_k + da_k)(b_k + db_k) mod 2^32, da_k and db_k bit k of da and db."""
+    return out_dot(0, v[0:32], _dithers(v[32]), v[33:65], _dithers(v[65]))
 
 
 @primitive("PouwDitherLastOk", 1, [("pre", Value(32)), ("t0", Value(16)), ("oacc", Value(32)), ("o", Value(32))],

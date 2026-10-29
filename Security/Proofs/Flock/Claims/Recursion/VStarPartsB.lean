@@ -27,8 +27,8 @@ open FlockVBridge.OfVStar
 
 /-- **The messages part `s`'s check reads agree with it** (what `PartChecksB` quantifies over), off its witness `w` at
 its V\* statement `xO`: at each round it holds whole, at each of its pieces at its offset, at the commit strings `xO`
-shows at the rounds read whole off the run (`LayoutB.CmtAgrees`), and at the shared rows it holds where the messages
-carry them (`LayoutB.RowsRead`). -/
+shows at every round it doesn't fix before the last (`LayoutB.CmtAgrees`), and at the shared rows it holds where the
+messages carry them (`LayoutB.RowsRead`). -/
 def LayoutB.Agrees (L : LayoutB) (cmt : Msg → ℕ → Msg → Msg) (x : Msg) (s : ℕ) (w : Flock.Wit) (xO : Msg)
     (ms : List Msg) : Prop :=
   (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) ∧

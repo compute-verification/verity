@@ -1,11 +1,11 @@
 # Flock interactive soundness: design and derivations
 
 This file holds the reasoning behind `README.md`, which lists the theorems, and `ASSUMPTIONS.md`, which states what they
-assume. Each section derives or plans an entry there. The long forms, with sources, are lane notes, cited as `note:<id>`.
+assume. Each section derives an entry there.
 
 ## 1. The hash: why SHA-512
 
-### 1.1 Why not SHA-256 (Daniel's question: does collision resistance clear 2^-128?)
+### 1.1 Why not SHA-256 (does collision resistance clear 2^-128?)
 
 With SHA-256 trees, two arguments cleared 2^-128, each for `t` up to about 2^64 hash evaluations:
 
@@ -13,13 +13,12 @@ With SHA-256 trees, two arguments cleared 2^-128, each for `t` up to about 2^64 
 - the random-oracle model.
 
 Rewinding, the only collision-resistance argument for every prover, gives `t·2^-113.6` at m = 33, which never clears
-2^-128. The comparison, the alternatives weighed and the cost of SHA-512 are in
-`note:20260926T2230Z-finding-sha512-merkle-choice`. In short: the prover costs about 1.5× per hashed byte on GPUs (under
+2^-128. The cost of SHA-512: the prover costs about 1.5× per hashed byte on GPUs (under
 2% of a proof), proofs grow about 36%, and verifier time stays about the same.
 
 ### 1.2 The rewinding bound as a function of hash width
 
-Plain collision resistance is Daniel's preferred model: no random oracle, no knowledge assumption. For arbitrary
+Plain collision resistance is the model of record: no random oracle, no knowledge assumption. For arbitrary
 provers it needs the rewinding argument. Its cost is a square root on each Merkle-committed level, so its bound depends
 on the hash's output width `n`.
 
@@ -46,7 +45,7 @@ on the hash's output width `n`.
   checked against a registrant's opening): SHA-256 meets that only up to `t = 2^64.5`, so **at `t ≥ 2^65` SHA-256
   misses 2^-128 in every model.**
 
-**The route that avoids both the random oracle and the knowledge assumption** (adopted by Daniel, 2026-09-26):
+**The route that avoids both the random oracle and the knowledge assumption**, adopted:
 
 1. Build the in-proof Merkle trees with SHA-512, leaves and nodes.
 2. Make the round digests assumption-free by having the challenger keep each round's bytes (it already receives
@@ -67,9 +66,9 @@ in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and 
   the leaves under every serving root registered before the draw, and `Q_s` the leaves the sampled units open.
   - `log2 √(2·N_s·Q_s)` is 17.4 to 34.0 over the study's audits, so this term exceeds the Flock proof term by up to
     2^17.
-  - Clearing 2^-128 per audit needs `n ≥ 2·(log2 t + 128 + log2 √(2·N_s·Q_s))`: 475 bits at `t = 2^80` for a #23-sized
-    audit. SHA-512 serving roots are therefore required for the audit composition. With SHA-256 roots the tree term is
-    `t·2^-101.3` for a #101-sized audit with per-value leaves.
+  - Clearing 2^-128 per audit needs `n ≥ 2·(log2 t + 128 + log2 √(2·N_s·Q_s))`: 475 bits at `t = 2^80` for the study's
+    audit 23. SHA-512 serving roots are therefore required for the audit composition. With SHA-256 roots the tree term
+    is `t·2^-101.3` for its audit 101, with per-value leaves.
 
 ## 2. The compiled theorem: its terms, its number, its proof
 
@@ -130,9 +129,8 @@ without the square root. It is a cross-check only. The number above does not res
 
 Soundness says the committed witness satisfies the statement. A claim about *which* data a proof used needs that witness
 computed, because hiding leaves open to essentially any row. So "these proofs used the registered weights" (§10) needs
-it, and so does the recursion track, whose outer proof must be a proof of knowledge. The analysis and its review are
-`note:20260927T0535Z-draft-knowledge-soundness-analysis` and `note:20260927T0600Z-review-knowledge-soundness`. The
-adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
+it, and so does the recursion track, whose outer proof must be a proof of knowledge. The
+adopted form is "fill and decode"; it is proved (`Knowledge.lean`).
 
 - **The extractor.** Level 0 is committed in the first message, so every rerun after it opens under the same cap. The
   extractor:
@@ -156,8 +154,6 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
     `Pr[accepted ∧ extraction fails] ≤ ε_c⁻ + K·Adv₀ + N₀/(eK)` (`table_knowledge_sound_joint_tight`). Rerun list by rerun
     list, `ε·1[fails] ≤ ε_c⁻ + mass`, so no Markov step enters. At `K = √(N₀/(e·Adv₀))` this is
     `ε_c⁻ + t·2^-244.7`, which is `2^-164.7` at `t = 2^80` above `ε_c⁻`.
-  - For comparison, the draft's form (fresh runs against `T*`, with a rewinding square root) gives a hash term of
-    `t·2^-233.4/(ε − ε_c)` and `κ = ε_c + t·2^-231.4`.
 - **Not knowing ε.** For the audit, the extractor is an analysis device, and `K` may depend on `ε` and `Adv₀`. An
   efficient extractor, as recursion needs, doubles `K` until a satisfying witness is found, which is a decidable stop.
   An exponential tail comes from disjoint blocks: the unseen set is the intersection of the blocks' unseen sets, so `r`
@@ -170,12 +166,11 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
   statement links the root, or tree binding and then Halevi–Micali binding give a SHA-512 collision.
 - **Sampled audits need the link term `δ_link` as well** (the lifetime-soundness desk study, §2 and §3).
   - Its collision finder runs the extractor, so the extractor's run count enters the collision-resistance bound.
-  - The analysis is below and in `note:20260927T0705Z-draft-link-term`; the Lean plan is
-    `note:20260927T1510Z-draft-expected-time-link-plan`.
+  - The analysis is below.
 - **Risks:** `ValueBinding` until the `hm96` layout; bridging CompPoly, ArkLib and `Model` for the efficient decoder.
   It is classical only (§9).
 
-**The link term: expected-time collision resistance, of record** (Daniel, Sep 27). The audit's value layer rests on
+**The link term: expected-time collision resistance, of record.** The audit's value layer rests on
 `ASSUMPTIONS.md` A2. One audit's knowledge-plus-link term, of record, under strict-time collision resistance alone
 (proved), and, for comparison, under a random oracle. $Q_s$ is the expected number of commit strings the drawn units
 read, at most the $N_s$ leaves under the serving roots, $N_0 = 2^{21}$ the level-0 codeword length (m = 33), and $t$
@@ -206,7 +201,7 @@ strict time.
 - **Expected-time collision resistance, of record.**
   - **The assumption** (A2, in the expected-time sense of Chiesa–Dall'Agnol–Guan–Spooner–Yogev, ePrint 2024/1434): an
     algorithm whose *expected* number of SHA-512 evaluations is $T$ finds a collision with probability at most
-    $T/2^{256}$. It read $T/2^{256.5}$ until the correction of Sep 27 (the proximity-gap scoping lane).
+    $T/2^{256}$.
   - **Why $2^{256}$.** For a random oracle with $N=2^{512}$ outputs the sharp bound is $E[Q]/E[\tau_N]$, with $\tau_N$
     the number of distinct inputs hashed until the first collision and $E[\tau_N]=\sqrt{\pi N/2}+2/3+o(1)\approx2^{256.33}$.
     Hashing until the first collision attains it, with probability 1 at cost $E[\tau_N]$, so $2^{256}$ holds for a random
@@ -244,17 +239,15 @@ strict time.
     $\delta_{\rm link}\le Q_s\big(2(1+k)t'/2^{256}+1/(eM)+k/(eR_w)\big)/(1-\rho)$. Waits give up after $R_w$ runs
     and the finder after $M$ further trials; $\rho$ bounds each table's $N_0/(ek)$.
   - **$Q_s\le N_s$** is the expected number of commit strings the drawn units read, since the finder draws only unit
-    sets that read its target. The record counts $Q_s$ (Daniel, Sep 27); with $N_s$ it would be $t\cdot2^{-205.1}$ for
+    sets that read its target. The record counts $Q_s$; with $N_s$ it would be $t\cdot2^{-205.1}$ for
     audit B.
 - **Strict time, proved** (`CROnly/`). The link finders stopped at a budget $q$ fixed in advance meet
   `cr/sha-512`'s $q^2/2^{513}$. Truncation and Markov (`expected_of_strict`) read that as A2's form at the per-run cost
   $2^{256}(t/q+q^2/2^{513})$, and $q^3=t\cdot2^{512}$ balances the two, so $2(1+k)t/2^{256}$ becomes
   $3(1+k)t^{2/3}/2^{512/3}$: $2^{-70.2}$ at $t=2^{80}$ for audit B, against the record's $2^{-129.4}$. Every e2e
   theorem of the non-ZK session and the headline are restated under it (`ASSUMPTIONS.md`); none is about `--zk`,
-  whose session model receives `final_c'` before the inner proof, as main's verifier does not until #793. The earlier
-  analysis balanced the knowledge term's $N_0/(eK)$ against the finder's cost instead, which left a square root (a
-  first estimate of $2^{-65.3}$ at $t=2^{80}$, audit B). Improving substantially on the strict-time loss would improve
-  the analysis of Schnorr's protocol (CDGSY24).
+  whose session model receives `final_c'` before the inner proof. Improving substantially on the strict-time loss would
+  improve the analysis of Schnorr's protocol (CDGSY24).
 - **The random-oracle column** (comparison, lifetime doc §7). The extractor reads the commit strings, the `hm96`
   openings and the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one
   global $t^2/2^{511}$. `ASSUMPTIONS.md` keeps the random oracle as a cross-check only.
@@ -293,13 +286,13 @@ strict time.
   fold terms per folding round rather than per level, and consistency batching at each level's own list size.
 - **List sizes.** ArkLib proves the Johnson list bound as `1/(2ηρ)` (200 at rate 1/2). Flock uses the sharper
   `1/(2η√ρ)` (141). The bound uses ArkLib's. Even the exact pairwise-Johnson lists (29 at level 0, m = 33) would add
-  only 0.17 bit (the proximity-gap scoping lane).
+  only 0.17 bit.
 
 ## 6. Zero knowledge: the masked protocol and the reference prover
 
 The targets and expected assumptions are README.md §3.
 
-**The masked protocol** is lane `flock-netlist`'s C-Flock ZK (PR #83). It consists of VEIL-style masking of the
+**The masked protocol** is C-Flock ZK. It consists of VEIL-style masking of the
 sumchecks, Reed–Solomon padding in Ligerito over GF(2^128), and Halevi–Micali leaf commitments. The model in `Model/*`
 is written so that these slot in without restructuring:
 
@@ -307,7 +300,7 @@ is written so that these slot in without restructuring:
 - masks are extra messages or extra committed columns in the existing phases;
 - salted leaves change only the Merkle layer.
 
-**The reference prover** (agreed with Daniel):
+**The reference prover:**
 
 - The production prover (Rust and CUDA) cannot run in Lean, so a slow, spec-level Lean reference prover stands in for
   it. It is a deterministic function of (statement, witness, prover randomness, verifier coins).
@@ -336,20 +329,13 @@ We follow the staging and vocabulary, and differ where the setting does.
 
 | a16z stage | What it asks | Here | Follows, or deliberately differs |
 |---|---|---|---|
-| **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer: the PIOP with Ligerito as an interactive oracle commitment, information-theoretic, per table, against any prover. | Follows, with no named assumption: A1, mutual correlated agreement up to the Johnson bound, is proved from DKT26, which ArkLib proves (#907; README.md §1.6). |
+| **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer: the PIOP with Ligerito as an interactive oracle commitment, information-theoretic, per table, against any prover. | Follows, with no named assumption: A1, mutual correlated agreement up to the Johnson bound, is proved from DKT26, which ArkLib proves (README.md §1.6). |
 | **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: plain SHA-512 collision resistance, for every prover, by rewinding to the plurality table (§2). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (README.md §2). The random-oracle version is only a cross-check. | Follows. The model is named per result, as a16z asks. |
 | **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The oracle protocol plus Merkle commitments (1b) plus session binding, which needs no assumption since the challenger keeps each round's bytes. | Differs. No random oracle for coins, avoiding the article's main caveat; Fiat–Shamir is out (§8). |
-| **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | No VM: 1d is the lowering theorem, that the block R1CS (spec §16) is satisfied exactly by correct evaluations of the named circuit (level 3, another lane). | Differs in content, not intent: "the circuit is the meaning". Circuit against hardware is checked by capture replay, outside formal scope. |
+| **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | No VM: 1d is the lowering theorem, that the block R1CS (spec §16) is satisfied exactly by correct evaluations of the named circuit. | Differs in content, not intent: "the circuit is the meaning". Circuit against hardware is checked by capture replay, outside formal scope. |
 | **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§6). | Follows. **Recursion caveat:** triggered only by the recursion track. Its outer proof must be knowledge-sound (§3), and every component inside it verified. |
-| **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` (lane `flock-verifier`) refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (`assumption-notes/trusted-components.md`). |
+| **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (`assumption-notes/trusted-components.md`). |
 | **3** prover implementation | The prover implementation is proved complete, and zero-knowledge if intended | A Lean reference prover with completeness and zero-knowledge theorems, tied to production by byte-for-byte differential tests (§6). | **Deliberately different: the production prover is not proved.** Untested equivalence is trusted; its failures cost liveness, not soundness. |
-
-**Levels.** Our formal-verification levels (the Lean verifier study) map onto the stages as follows:
-
-- level 4a is Stage 1a–1c (interactive);
-- level 4b, which completes Stage 1 by proving A1, is done (Sep 27, from DKT26 in ArkLib);
-- level 3 is Stage 2, plus the lowering theorem of 1d;
-- levels 1–2 are the implementation that Stage 2 is about.
 
 **Stating soundness.** a16z's concrete levels are 100 bits as the bare minimum and 128 bits as standard practice. We
 target 2^-128, and state the number the way the stages suggest:
@@ -373,20 +359,18 @@ twice (1–2 MB, 20–50 ms) exceeds them, which would matter only for a non-int
 
 ## 8. Fiat–Shamir is out
 
-Every proof is interactive, on live coins from the challenger; Fiat–Shamir is out (ruling of 5 Oct, "Live coins only;
-Fiat–Shamir is out", `AGENTS.md`). A non-interactive variant would have needed round-by-round
+Every proof is interactive, on live coins from the challenger; Fiat–Shamir is out (`AGENTS.md`'s design
+rules). A non-interactive variant would have needed round-by-round
 soundness and a Fiat–Shamir theorem in the random-oracle model, a new parameter set against state restoration (flock-128
 found `fast100` run twice at best 2^-75.6 under Fiat–Shamir), and, for small proofs, recursion with its caveat. None of
 that is planned. The per-coin lemmas of `rep_sound` and the separate round-by-round term of the out-of-domain samples
 stay as they are proved.
 
-**The `seed` coin mode is not Fiat–Shamir** (PR #83, spec §7.2). Coins come from a seed the verifier commits at step
+**The `seed` coin mode is not Fiat–Shamir** (spec §7.2). Coins come from a seed the verifier commits at step
 0, so soundness adds only seed hiding and SHA-256 as a PRF. It is the bridge to zero knowledge against a malicious
 verifier (§6), not to non-interactive proofs.
 
 ## 9. Quantum provers and verifiers
-
-The full analysis, with sources and the Lean landscape, is `note:20260926T2240Z-finding-post-quantum`.
 
 **The theorem is classical, and only its compiled layer is affected.**
 
@@ -415,7 +399,7 @@ IOP with a collapse-position-binding vector commitment and openings at the end.
   2^-41, which is 2^-11 after the loss.
 - A number needs straight-line extraction in the quantum random-oracle model (Zhandry's compressed oracle), or tighter
   rewinding. Both are open for the interactive case.
-- The hash itself has ample margin: collisions cost 2^170.7 queries by Brassard–Høyer–Tapp. `seed` coins (PR #83) sit
+- The hash itself has ample margin: collisions cost 2^170.7 queries by Brassard–Høyer–Tapp. `seed` coins sit
   at 2^128, from Grover on the 256-bit seed.
 
 **Zero knowledge against quantum verifiers.**
@@ -434,7 +418,7 @@ proved.
 ## 10. One root, many proofs
 
 The weights are committed once, as Halevi–Micali leaves under a Merkle root registered as the model's anchor, and every
-later proof opens that root. Numbers and sources: `note:20260926T2310Z-finding-root-reuse`.
+later proof opens that root.
 
 - **Soundness over N tables**, by union bound: `N·2^-205 + N·t·2^{17.3−256}`, plus the root's straight-line binding
   once, `t²/2^513`.
@@ -473,10 +457,9 @@ later proof opens that root. Numbers and sources: `note:20260926T2310Z-finding-r
 ## 11. Zero knowledge against a malicious verifier: batched, serialized sessions
 
 **The target.** The verifier is malicious (two nations checking each other), so honest-verifier zero knowledge is not an
-acceptable fallback anywhere (Daniel, 2026-09-26). There is exactly one verifier and no trusted third party, and
-throughput matters. Daniel decided the model on 2026-09-27: batched, serialized sessions (§11.1). The options weighed
-before that decision (serialization, a public beacon, straight-line-extractable commitments, concurrent-ZK preambles)
-are in `note:20260927T0015Z-finding-malicious-verifier-zk-options`.
+acceptable fallback anywhere. There is exactly one verifier and no trusted third party, and throughput matters. The
+model is batched, serialized sessions (§11.1), chosen over serialization alone, a public beacon,
+straight-line-extractable commitments and concurrent-ZK preambles.
 
 **The lemma** is special honest-verifier ZK (SHVZK): a simulator for every fixed coin sequence.
 
@@ -541,8 +524,7 @@ If real concurrency is ever needed:
 
 ## 12. The audit layer: the integrity profile
 
-`docs/audit-protocols.md` §4 is the plan and `Audit/README.md` the list of theorems. The full rationale is in
-`note:audit-lean/20260927T0736Z-finding-audit-layer-design`. The points a reviewer needs:
+`Audit/README.md` is the list of theorems. The points a reviewer needs:
 
 - **Strategies, not `value`.** `value` can exceed every strategy's `prob` when a branch has no strategy. So the audit
   theorems take per-strategy hypotheses and give per-strategy conclusions (`Game/Prob.lean`), as `table_sound_exec`

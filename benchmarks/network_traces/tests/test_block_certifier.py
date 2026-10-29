@@ -30,7 +30,7 @@ import block_certifier as BC  # noqa: E402
 
 ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())
 CLOCK_RUN, ROWS_RUN = "r20261025-213746-7692", "r20261025-235229-305e"
-E2E = ROOT / "benchmarks" / "e2e_demo"
+E2E = ROOT / "examples" / "h200" / "interfaces"
 BLOCK_SCHEMA = E2E / "verity_e2e_demo" / "schemas" / "block-record.v1.schema.json"
 
 

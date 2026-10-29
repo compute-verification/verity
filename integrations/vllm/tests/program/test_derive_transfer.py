@@ -1,10 +1,10 @@
-"""Transfer test (lane XFER, GUIDANCE §43.1 / §43.8; mandate §"Test generality and failure behavior"): a SECOND
+"""Transfer test: a SECOND
 model family, not used to develop the importer's rules, through the importer FROZEN at tag `derive-freeze-1`,
 unchanged. Every case is reported as-is: derived (then evaluated against torch CPU on random weights and checked
 structurally) or `Unsupported(reason, node, module_path)` with the rules that fired and the gap class
 (structural rule vs new numerical kind).
 
-Second family (XFER's choice, disjoint from DERIVE's Qwen2/Llama-style development models and B0/SmolLM2 dims):
+Second family (disjoint from the importer's Qwen2/Llama-style development models and B0/SmolLM2 dims):
 
   * GPT-2 style decoder (`Conv1D` `x @ W + b` with `W[in, out]` — not `nn.Linear`; `nn.LayerNorm` with bias;
     GELU(tanh); learned positional embeddings `wpe`; merged `c_attn`; explicit softmax attention in f32; tied
@@ -13,7 +13,7 @@ Second family (XFER's choice, disjoint from DERIVE's Qwen2/Llama-style developme
   * A non-decoder residual MLP with a shared block applied three times and one parameter used in two roles.
 
 Results are written as JSON lines to `$XFER_OUT` (default `/tmp/xfer/transfer-<importer>.jsonl`) for the transfer
-report. Needs torch; runs on the pod (§37).
+report. Needs torch; runs on the pod.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity.ml.circuits import Program, program_digest  # noqa: E402
-from verity.ml.circuits.evaluate import MissingValue, evaluate_region  # noqa: E402
+from verity.ml.circuits.evaluation import MissingValue, evaluate_region  # noqa: E402
 from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402
 
 from tests.program.test_derive_negative import IMPORTER_NAME, Outcome, _DERIVE, _input_gate_ranges, run_importer  # noqa: E402
@@ -183,7 +183,7 @@ class Case:
     make: Any
     inputs: tuple
     dtype: str
-    expect: str  # the brief's expectation, for the report
+    expect: str  # the expected outcome, for the report
     notes: str = ""
     importer_kw: dict | None = None  # e.g. {"mode": "profile", "profile": "b1-eager"}; default reference mode
 
@@ -216,7 +216,7 @@ CASES = [
     Case("gpt2_lm_bf16_profile_i32", lambda: GPT2TinyLM(dtype=torch.bfloat16), (_tok(4).to(torch.int32),), "bf16",
          "as above with int32 token ids (the profile's Embedding_v1 takes I32): how far does the B1 vocabulary carry GPT-2?",
          importer_kw={"mode": "profile", "profile": "b1-eager"}),
-    # added 00:55 (after the freeze run): HF's addmm form of Conv1D, T=3 rows -- support-matrix row 8 on XFER's own modules
+    # HF's addmm form of Conv1D, T=3 rows -- support-matrix row 8 on this file's own modules
     Case("gpt2_conv1d_addmm_f32", lambda: Conv1DAddmm(CFG["H"], CFG["I"]), (torch.randn(3, CFG["H"]),), "f32",
          "HF Conv1D via addmm: matrix row 8 says LinearRef with the weight as a transposed view"),
     Case("gpt2_mlp_addmm_f32", lambda: GPT2MLP(conv=Conv1DAddmm), (torch.randn(3, CFG["H"]),), "f32",
@@ -508,8 +508,8 @@ CERTIFIED_B0_DIGEST = "d4f4b1f1b4d592d697eef5b6c9c803108bdf02d0ef24c945eace6e705
 
 @pytest.mark.skipif(not os.environ.get("XFER_HEAVY"), reason="heavy audit probe; set XFER_HEAVY=1")
 def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
-    """Independent reproduction of DERIVE's S3 claim: `GreedyServe(B0, steps=15)` on a 32-token prompt derives, the
-    family rule claims `Serve_v1{B0,LP=32,STEPS=15}`, the digest equals the certificate of record's, and XFER's
+    """Independent reproduction of the importer's S3 claim: `GreedyServe(B0, steps=15)` on a 32-token prompt derives, the
+    family rule claims `Serve_v1{B0,LP=32,STEPS=15}`, the digest equals the certificate of record's, and this file's
     name-independent KV-ownership oracle holds on the derived program (30 layers x 47 positions)."""
     if not _DERIVE:
         pytest.skip("derive() not available")

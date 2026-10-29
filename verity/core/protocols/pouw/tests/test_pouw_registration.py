@@ -67,9 +67,9 @@ def test_served_fp8_folds_gamma_where_the_checkpoint_needs_it():
 
 
 def test_under_the_rotation_a_linear_registers_only_where_the_rotation_reaches_it():
-    """GLM-5.3 (compute-accounting's glm53_rotation runs): the keyed 8-block rotation mixes only the residual stream, so
+    """GLM-5.3: the keyed 8-block rotation mixes only the residual stream, so
     MLA's q_b and kv_b and the DSA indexer's wq_b, which read a latent behind its own RMSNorm, keep the checkpoint's
-    weights and are refused under a stack without the latent rotation; with it they register (Daniel's card b50e7597).  A
+    weights and are refused under a stack without the latent rotation; with it they register.  A
     linear off every rotated stream is refused under every rotated stack.  A curated unrotated checkpoint registers every
     linear, and the stack's own rule comes first."""
     with_latent = [t for t in R.REGISTRATION_STACKS if R.LATENT_ROTATION in t]

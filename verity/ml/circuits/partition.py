@@ -66,6 +66,7 @@ if TYPE_CHECKING:  # pragma: no cover
 PartitionStatus = Literal["exact", "overlap", "outside", "gap", "unsupported"]
 
 MAX_LISTED = 64  # cap on listed indices / examples inside a verdict (totals are always reported)
+LIMITS = Limits()  # the caps a check takes when its caller passes none
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -524,7 +525,7 @@ def _family_count(fam: Any) -> int | None:
         return None
 
 
-def validate_partition(program: "Program", fam, limits: Limits = Limits(), *, within: Any = None) -> PartitionVerdict:
+def validate_partition(program: "Program", fam, limits: Limits = LIMITS, *, within: Any = None) -> PartitionVerdict:
     """Is `fam` an exact partition of every gate of `program` (Input and constant gates included)?
 
     Fast path from `fam.tiling()` by per-body induction; fallback interval sweep over materialised intervals up to
@@ -774,7 +775,7 @@ class _WidthRun:
         return WidthVerdict(self.w_max, self.max_seen, tuple(self.violators), tuple(self.unsupported), status, detail)
 
 
-def validate_width(program: "Program", fam, w_max: int, limits: Limits = Limits()) -> WidthVerdict:
+def validate_width(program: "Program", fam, w_max: int, limits: Limits = LIMITS) -> WidthVerdict:
     """`w_out(S) <= w_max` for every set of `fam`?  Per member class `boundary.w_out_bound <= w_max` certifies;
     otherwise exact `boundary.w_out` per set within `limits.max_members_exact` exact evaluations.  A bound above
     `w_max` never proves a violation; `Unsupported` is reported separately, never counted as pass or fail."""
@@ -988,7 +989,7 @@ class RefinementVerdict:
         return {"status": self.status, "codes": list(self.codes), "counts": list(self.counts), "detail": self.detail}
 
 
-def validate_refinement(program: "Program", coarse, fine, limits: Limits = Limits()) -> RefinementVerdict:
+def validate_refinement(program: "Program", coarse, fine, limits: Limits = LIMITS) -> RefinementVerdict:
     """Is `fine` a refinement of `coarse`: every set of `fine` inside exactly one set of `coarse`?  Containment
     only; whether each level covers its gates is `validate_partition`'s question.  Families built with
     `each(F, G)` nest by construction; others need this check.  Interval sweep over both families' materialised
@@ -1054,7 +1055,7 @@ def _refinement_unsupported(seen: int, limits: Limits) -> RefinementVerdict:
                              {"intervals_seen": seen, "max_intervals": limits.max_intervals})
 
 
-def members_per_parent(program: "Program", coarse, fine, limits: Limits = Limits()) -> tuple[int, ...]:
+def members_per_parent(program: "Program", coarse, fine, limits: Limits = LIMITS) -> tuple[int, ...]:
     """The number of `fine` sets inside each `coarse` set, in `coarse`'s order; `ValueError` unless `fine` refines
     `coarse` (`validate_refinement`)."""
     v = validate_refinement(program, coarse, fine, limits)
@@ -1156,7 +1157,7 @@ def vu_status(partition: PartitionVerdict, width: WidthVerdict, readiness: Readi
     return "ok"
 
 
-def validate_vu_family(program: "Program", fam, w_max: int = 32, limits: Limits = Limits()) -> VuVerdict:
+def validate_vu_family(program: "Program", fam, w_max: int = 32, limits: Limits = LIMITS) -> VuVerdict:
     """Both validators and the readiness report over an already evaluated family."""
     partition = validate_partition(program, fam, limits)
     width = validate_width(program, fam, w_max, limits)

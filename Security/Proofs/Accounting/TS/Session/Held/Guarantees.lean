@@ -5,7 +5,7 @@ import Proofs.Accounting.TS.Session.Checked.Guarantees
 # A checked unit's proof layer with its served checks is sound through its C-Flock sessions (the statement)
 
 `Accounting.Guarantees.TS.HeldSessionSound`: `Accounting.Guarantees.TS.CheckedSessionSound`'s window, with the layer
-`Accounting.TS.Held.heldLayer` in place of `checkedLayer`. Its relation concludes the served checks (RT4-LOGIC-29):
+`Accounting.TS.Held.heldLayer` in place of `checkedLayer`. Its relation concludes the served checks:
 
 * (a) the `ok` rows are the verifier's, proved from flock-verify's known-content refusal (`Registered.checkKnownAll`)
   and `FlockC3.RegLevels.knownColl_spec`, not a premise. The service names the `ok` port's known content in the

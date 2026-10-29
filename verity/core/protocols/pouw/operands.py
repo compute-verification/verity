@@ -1,4 +1,4 @@
-"""A window's operand rows: the rows its tiles read, committed per window before its salt (CMP-91).
+"""A window's operand rows: the rows its tiles read, committed per window before its salt.
 
 A served window's tiles read their operands from committed rows, not from rows the prover chose after the fact: each
 operand (``a``, the tiles' A rows; ``b``, their B rows where the tile does not read them from registered weights) is a

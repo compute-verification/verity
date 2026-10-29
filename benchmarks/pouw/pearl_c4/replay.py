@@ -57,11 +57,14 @@ from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, tagged
 from verity.core.protocols.pouw.schemes import get
 from verity.core.protocols.pouw.schemes import pearl_c4 as F
 from verity.core.protocols.pouw.schemes import pearl_c_work as W
+from verity_config.settings import of
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
-import clear_audit as CA  # noqa: E402
-import clear_work as CW  # noqa: E402
+import clear_audit as CA
+import clear_work as CW
+
+settings = of(__file__)
 
 FORMAT = "verity/pouw/pearl-c4-transcript/v0"
 REPORT = "verity/pouw/pearl-c4-replay/v0"
@@ -325,7 +328,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     v.add_argument("transcript")
     v.add_argument("--out", required=True)
     v.add_argument("--path", help="the transcript as the accept line names it (default: <run>:<file name>)")
-    v.add_argument("--commit", default=os.environ.get("VERITY_COMMIT", "unknown"))
+    v.add_argument("--commit", default=settings.VERITY_COMMIT or "unknown")
     v.add_argument("--workers", type=int, default=os.cpu_count() or 1)
     args = ap.parse_args(argv)
     if args.cmd == "prove":

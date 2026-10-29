@@ -5,6 +5,8 @@ import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Soundness.ExecRows
 import Proofs.Flock.Recursive.ValueInner
 import Proofs.Flock.VBridge.Family.OutCols
+import Proofs.Flock.Claims.Recursion.NonVacuous
+import Proofs.Flock.Claims.Recursion.CopySiteDeployed
 
 /-!
 # The `rec-residuals` pieces' lowering at the deployed run (U12)
@@ -20,16 +22,23 @@ slot outputs the commit string of the row its columns hold (`SlotCommits`). Two 
 salt inputs and the two row inputs collide or are equal (`commit_tie`). The verifier's inputs are its own evaluations
 (`Brings.setup`, `vcallsAt`); the part's must be among its recorded calls for `PartAccepts`' refusal
 (`findColl (L.calls x s w ++ vcallsAt H D xO)`) to charge the collision. `layoutBTops` records the hm96 calls of the
-message-round ports only (`heldRows`), not of `v` or `out`. `DeployedR.layR`, the layout of record, adds them
-(`valCalls`): each instance's salt and row calls at `v` (its input columns, `rowHidden`) and at `out` (its output
-columns, `outRowForms`), and at a `rec-open` part's `dirs` (`openPorts`, whose check 5 evaluations are `openSetupSt`).
+message-round ports only (`heldRows`), not of `v` or `out`. The layout of record, `DeployedR.layR`, adds them
+(`DeployedR.valCalls`): each instance's salt and row calls at `v` (its input columns, `rowHidden`) and at `out` (its
+output columns, `outRowForms`), and at a `rec-open` part's `coef` and `dirs` (`openPorts`, whose check 5 evaluations
+are `openSetupSt`).
 
 * `commit_tie`: two commit strings at SHA-512 agree, and both salts' and both rows' inputs are among a list of true
   evaluations with no collision, so the rows are equal.
-* `portCalls_sub_layR`: `layR` records check 5's calls; `resSetup`: check 5's own evaluations at a V\*
+* `valCalls_shaAt_layR`: `DeployedR.layR` records check 5's calls; `resSetup`: check 5's own evaluations at a V\*
   statement, which the deployed `Brings.setup` is to list (`hset`).
+* `vCols_of_base`, `oCols_staged`: where a copy's `v` and `out` columns sit, from the verifier's checks (`checkParsed`
+  holds the unit's input and output leaves to V\*'s, its words in order).
+* `resTie_copyOf`, `resTie_site`: check 5's tie at a piece's copy; `resTie_site` takes the setup's site facts from
+  `CopySite.copySite_staged`.
 * `VVTie`: the coin tie, `vvAt` at the coins is check 5's row at the V\* statement (`staged_rep_drawn`).
-* `ResLowered`: the share at the deployed layout, the statement `hlowP`'s `rec-residuals` part reads.
+* `ResLowered`: the share at the layout of record and `bdR rd wE final w`, per algebra part; `resLowered_parts` gives
+  it at every part where the pieces are owned by algebra parts only, which is `DecompBR.ResLowJ`'s conclusion at each
+  part of a `Joint` acceptance.
 -/
 
 namespace RecDeploy.ResLower
@@ -38,6 +47,7 @@ open Flock
 open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
+open RecDeploy.DeployedR (outRowForms rowForms portCalls resPorts openPorts valPorts valCalls)
 
 noncomputable section
 
@@ -89,10 +99,6 @@ theorem commitString_exec (r : Msg) (salt : ByteArray) :
       (FlockSoundness.Refine.mask_size salt), ← Array.toList_append, ← ByteArray.data_append]
   rfl
 
-/-! ## V\*'s bound layout records check 5's calls (`DeployedR.layR`) -/
-
-open DeployedR (outRowForms rowForms portCalls resPorts openPorts valPorts valCalls)
-
 /-! ## Check 5's own evaluations -/
 
 /-- The bytes `Firewall.rowDigest` hashes: the `sha512/row/v1` prefix at the row's word count, then its words, each
@@ -122,14 +128,16 @@ def resSetupSt (src : Option RecCoins.Source) (st : Stmt) : List Msg :=
     | _, _ => []
   | _, _ => []
 
-/-- **Check 5's evaluations at one statement `st`** of a `rec-open` unit, at its source `src`: `checkOpen`'s at `dirs`
-(the verifier's `dirs` rows, `openRows`, under `verifierSalt` of META's `program_sha512`). None at any other unit. -/
+/-- **Check 5's evaluations at one statement `st`** of a `rec-open` unit, at its source `src`: `checkOpen`'s at `coef`
+and at `dirs` (the verifier's `coef` and `dirs` rows, `openRows`, under `verifierSalt` of META's `program_sha512`), in
+`checkOpen`'s order. None at any other unit. -/
 def openSetupSt (src : Option RecCoins.Source) (st : Stmt) : List Msg :=
   match RecOpen.params st.c.unit.name, src with
   | some (L, H), some f =>
     match (f.load st.c.unit.name).toOption, (st.c.metaJ.getObjValAs? String "program_sha512").toOption with
     | some inn, some prog => match FlockSoundness.Discharge.Recursion.openRows inn L H with
-      | some (_, dr) => commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE)
+      | some (cr, dr) => commitIns cr (RecCoins.verifierSalt prog RecCoins.COEF_VALUE) ++
+          commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE)
       | none => []
     | _, _ => []
   | _, _ => []
@@ -151,9 +159,14 @@ theorem rowDigest_eq (row : Array ℕ) : Firewall.rowDigest row = Sha512.hash �
 /-- A row's words as `Firewall.rowDigest` lays them after its prefix: each two bytes, little-endian. -/
 def wordBytes (ws : Array ℕ) : Msg := ws.toList.flatMap fun w => [(w % 256).toUInt8, (w / 256 % 256).toUInt8]
 
-/-- The instance copy `(o, g, 0)` of a part's table is: block `o`'s VU `g`, its first unit (`rowHidden`'s index). Check 5
-holds instances `0` and `1` (reps `0` and `1`), so only copies `(o, g, 0)` with `instOf c o g < 2` are tied. -/
-def instOf (c : Circuit) (o g : ℕ) : ℕ := o * c.g + g
+/-- **The copy a piece keyed `(jj, o, g, u)` reads**: instance `n = o + g` of the outer part's one table, at block
+`n / c.g`'s VU `n % c.g` of that part's own circuit `c` (`Circuit.instOf`), unit `u`. The key does not know `c.g`, which
+the prover chooses and check 5 does not pin, so a piece at `(jj, r, 0, 0)` is instance `r` at every `c.g ≥ 1`. Check 5
+holds instances `0` and `1` (reps `0` and `1`), so only keys with `o + g < 2` are tied. -/
+abbrev keyCopy (p : Flock.Readable.Parsed) (ht : 0 < p.sts.size) (w : Claims.Flock.Wit) (key : ℕ × ℕ × ℕ × ℕ) :
+    ℕ → Bool :=
+  Flock.Readable.copyOf p 0 ht w ((key.2.1 + key.2.2.1) / p.sts[0].c.g) ((key.2.1 + key.2.2.1) % p.sts[0].c.g)
+    key.2.2.2
 
 /-- The `nv` elements a row of words carries, 8 words an element (`RecCoins.words`), zero past `nv`. -/
 def wordsElems (nv : ℕ) (ws : Array ℕ) (e : ℕ) : _root_.Flock.F128 :=
@@ -288,7 +301,7 @@ theorem port_tie {Coin' : Type} {H : Msg → Msg} (hH : H = FlockDeploy.sha512) 
     rw [show Hm96.Default512.saltPrefix.data.toList = FlockSoundness.Refine.K512.saltPrefix from rfl] at h
     exact h
   subst hH
-  refine commit_tie (A := rowPfx c q ++ readForms w (rowForms c nm q n)) (σ := salt.data.toList) hT' hnc
+  refine commit_tie (σ := salt.data.toList) hT' hnc
     (hcall _ (List.mem_cons_of_mem _ List.mem_cons_self)) (hver _ hv) hy ?_ ?_
   · rw [show FlockSoundness.Refine.K512.saltPrefix ++ salt.data.toList =
       (Hm96.Default512.saltPrefix ++ salt).data.toList by
@@ -342,18 +355,27 @@ theorem mem_valPorts {r : XR} {s : ℕ} {ss : Array VStar.Stmt} (hss : RecVStar.
   dsimp only
   exact List.mem_flatMap.2 ⟨nm, hnm, by rw [hq]; exact List.mem_map.2 ⟨n, List.mem_range.2 hn, rfl⟩⟩
 
-/-- **`layR` records check 5's calls**: at an algebra part, each instance `n < 2`'s hm96 calls at ports `v` and `out`
-are among part `s`'s recorded calls. -/
+/-- **`DeployedR.layR` records check 5's calls**: each of `valCalls`' at part `s` is among part `s`'s recorded calls
+(`moreCalls`). -/
+theorem valCalls_shaAt_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    {x : Msg} {r : XR} (hr : readX x = some r) (s : ℕ) :
+    ∀ e ∈ valCalls r s, e ∈ (DeployedR.layR elem).shaAt x s := fun e he => by
+  show e ∈ (layoutBTops _).shaAt x s ++ ((readX x).map fun r => DeployedR.moreCalls r s).getD []
+  rw [hr, Option.map_some, Option.getD_some]
+  refine List.mem_append_right _ ?_
+  unfold DeployedR.moreCalls
+  exact List.mem_append_left _ (List.mem_append_right _ he)
+
+/-- **`DeployedR.layR` records check 5's calls at an algebra part**: each instance `n < 2`'s hm96 calls at ports `v`
+and `out` are among part `s`'s recorded calls. -/
 theorem portCalls_sub_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {ss : Array VStar.Stmt}
     (hss : RecVStar.statements r.shape = .ok ss) {j : ℕ} {nm' : String} {pt : VStar.Part}
     (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit} (hc : r.w.parts[s]?.bind partCircuit = some c)
     {nm : String} (hnm : nm ∈ resPorts) {q : ℕ} (hq : c.ports.findIdx? (·.name == nm) = some q) {n : ℕ}
     (hn : n < 2) : ∀ e ∈ portCalls c nm q n, e ∈ (DeployedR.layR elem).shaAt x s := fun e he => by
-  show e ∈ (layoutBTops _).shaAt x s ++ ((readX x).map fun r => DeployedR.moreCalls r s).getD []
-  rw [hr, Option.map_some, Option.getD_some, DeployedR.moreCalls]
-  refine List.mem_append_right _ (List.mem_append_right _ ?_)
-  simp only [valCalls, hc, Option.map_some, Option.getD_some]
+  refine valCalls_shaAt_layR elem hr s e ?_
+  simp only [Option.map_some, Option.getD_some, valCalls, hc]
   exact List.mem_flatMap.2 ⟨_, mem_valPorts hss hsv hc hnm hq hn, he⟩
 
 theorem mem_valPorts_open {r : XR} {s : ℕ} {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
@@ -367,21 +389,19 @@ theorem mem_valPorts_open {r : XR} {s : ℕ} {ss : Array VStar.Stmt} (hss : RecV
   dsimp only
   exact List.mem_flatMap.2 ⟨nm, hnm, by rw [hq]; exact List.mem_map.2 ⟨i, List.mem_range.2 hi, rfl⟩⟩
 
-/-- **`layR` records check 5's calls at a `rec-open` part**: each instance `i < n`'s hm96 calls at port `dirs` are
-among part `s`'s recorded calls. -/
+/-- **`DeployedR.layR` records check 5's calls at a `rec-open` part**: each instance `i < n`'s hm96 calls at ports `coef`
+and `dirs` are among part `s`'s recorded calls. -/
 theorem portCalls_sub_layR_open (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {ss : Array VStar.Stmt}
     (hss : RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n))
     {c : Circuit} (hc : r.w.parts[s]?.bind partCircuit = some c) {nm : String} (hnm : nm ∈ openPorts) {q : ℕ}
     (hq : c.ports.findIdx? (·.name == nm) = some q) {i : ℕ} (hi : i < n) :
     ∀ e ∈ portCalls c nm q i, e ∈ (DeployedR.layR elem).shaAt x s := fun e he => by
-  show e ∈ (layoutBTops _).shaAt x s ++ ((readX x).map fun r => DeployedR.moreCalls r s).getD []
-  rw [hr, Option.map_some, Option.getD_some, DeployedR.moreCalls]
-  refine List.mem_append_right _ (List.mem_append_right _ ?_)
-  simp only [valCalls, hc, Option.map_some, Option.getD_some]
+  refine valCalls_shaAt_layR elem hr s e ?_
+  simp only [Option.map_some, Option.getD_some, valCalls, hc]
   exact List.mem_flatMap.2 ⟨_, mem_valPorts_open hss hsv hc hnm hq hi, he⟩
 
-/-- **Check 5's tie at one instance of a part, at `layR`**: `resTie_copy` at the compiled record over `layR`, whose
+/-- **Check 5's tie at one instance of a part, at `DeployedR.layR`**: `resTie_copy` at the compiled record over it, whose
 calls hold check 5's (`portCalls_sub_layR`), with `v`'s slot at its unit input columns (`SlotCommits`) and `out`'s
 at its output bits (`outRowForms`). What is left are facts of the code: the slots' commit strings, check 5's public rows
 and the setup's evaluations of them (`hset` gives these at `resSetup`), and where the copy's columns sit. -/
@@ -768,6 +788,53 @@ theorem v_words {j : ℕ} {nm : String} {pt : VStar.Part} {c : Circuit} {u : VSt
   congr 1
   exact List.map_snd_zip (le_of_eq hlen.symm)
 
+/-- **`v` is the port after the row ports, and at most `out` follows it**: at an algebra part's statement, `checkParsed`'s
+row ports are V\*'s (`vstarRows`): the row ports, `v`, then V\*'s one output row. -/
+theorem v_idx {j : ℕ} {nm : String} {pt : VStar.Part} {c : Circuit} {u : VStar.UnitC}
+    (hu : (VStar.Stmt.inner j nm pt).unit = .ok u)
+    (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
+      RecVStar.vstarRows (VStar.Stmt.inner j nm pt).sub u)
+    {qv : ℕ} (hqv : c.ports.findIdx? (·.name == "v") = some qv) :
+    qv = pt.S.ports.length ∧ c.ports.size ≤ pt.S.ports.length + 2 := by
+  have hu' : VStar.innerUnit pt.S nm = .ok u := hu
+  have hnv := noV_of_innerUnit hu'
+  obtain ⟨-, -, hin, -⟩ := FlockVBridge.OfVStar.innerUnit_ok hu'
+  have hlen : (pt.S.ports.map (·.1)).length = (pt.S.ports.map fun p => VStar.portWordsOf p.2).length := by simp
+  have hr' : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
+      ((pt.S.ports.map (·.1)).zip (pt.S.ports.map fun p => VStar.portWordsOf p.2)).map
+        (fun p => (p.1, p.2, 16 * p.2)) ++
+      (("v", VStar.portWordsOf pt.S.gf.nv, 16 * VStar.portWordsOf pt.S.gf.nv) ::
+        (["out"].zip u.outPorts).map fun p => (p.1, (p.2 + 63) / 64 * 64, 16 * ((p.2 + 63) / 64 * 64))) := by
+    rw [hr]
+    have e1 : (VStar.Stmt.inner j nm pt).sub.inputs = pt.S.ports.map (·.1) ++ ["v"] := rfl
+    have e2 : (VStar.Stmt.inner j nm pt).sub.outputs = ["out"] := rfl
+    unfold RecVStar.vstarRows
+    rw [e1, e2, hin, FlockVBridge.OfVStar.repPorts, List.zip_append hlen, List.map_append, List.append_assoc]
+    rfl
+  have hAl : (((pt.S.ports.map (·.1)).zip (pt.S.ports.map fun p => VStar.portWordsOf p.2)).map
+      (fun p => (p.1, p.2, 16 * p.2))).length = pt.S.ports.length := by simp
+  have hfind : (c.ports.toList.map (fun p => (p.name, p.words, p.bits))).findIdx? (fun r => r.1 == "v") =
+      some pt.S.ports.length := by
+    rw [hr', List.findIdx?_append, List.findIdx?_cons, hAl]
+    have hnone : (((pt.S.ports.map (·.1)).zip (pt.S.ports.map fun p => VStar.portWordsOf p.2)).map
+        (fun p => (p.1, p.2, 16 * p.2))).findIdx? (fun r => r.1 == "v") = none := by
+      refine List.findIdx?_eq_none_iff.2 fun x hx => ?_
+      obtain ⟨⟨a, b⟩, hy, rfl⟩ := List.mem_map.1 hx
+      have hne : a ≠ "v" := fun he => hnv (he ▸ (List.of_mem_zip hy).1)
+      simpa using hne
+    rw [hnone]
+    simp
+  rw [List.findIdx?_map] at hfind
+  have hq : c.ports.findIdx? (·.name == "v") = some pt.S.ports.length :=
+    (List.findIdx?_toArray _ c.ports.toList).trans hfind
+  rw [hqv] at hq
+  cases hq
+  refine ⟨rfl, ?_⟩
+  have hl := congrArg List.length hr'
+  simp only [List.length_append, List.length_cons, List.length_map, List.length_zip, Array.length_toList, min_self,
+    List.length_singleton, List.length_nil] at hl
+  omega
+
 /-- The verifier's `rec-residuals` unit's first input group starts at column 0 (`layout`'s). -/
 theorem inCol_unitLaid {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {name : String} {net : Flock.Net}
     (hn : HmNets.netOf name (RecResiduals.unitLaid S ns nv) = .ok net) : (net.inGroups.getD 0 default).col = 0 := by
@@ -896,6 +963,28 @@ theorem outCol_lt {st : Flock.Stmt} (L : FlockSoundness.Layout st) {tags : Flock
   have := L.unit_slot_lt (L.slot_lt hg hu') (hin j hjs t ht)
   omega
 
+/-- **Output word `k`'s column, where the one copy returns the output words in order**: copy `0`'s output `k`
+(`outCol_leaf`), at the unit slot `g · upv`, column `16 k` of the returned-output group. -/
+theorem outCol_range {st : Flock.Stmt} (L : FlockSoundness.Layout st) {tags : Flock.Tags} {ls : Lean.Json}
+    (hty : st.c.typed = none) (ho : st.c.outNet = st.c.unitNet) (hls : HmRow.check st.c tags ls = .ok ())
+    (hupv : st.c.upv = 1) {N : ℕ} (hl : st.c.leavesOut.getD 0 #[] = Array.range N) {g : ℕ} (hg : g < st.c.g) {k : ℕ}
+    (hk : k < N) :
+    HmOut.outCol st.c g k =
+      st.c.unitRange.slot (g * st.c.upv) + ((st.c.unit.outGroups.getD 0 default).col * Flock.WORD + 16 * k) := by
+  have C := FlockSoundness.check_facts hty hls
+  obtain ⟨h16, -, hlo⟩ := FlockSoundness.Discharge.Layout.check_out hty ho hls
+  have hget : ∀ u < st.c.upv, st.c.leavesOut.getD u #[] = st.c.leavesOut[u]! := fun u hu => by
+    rw [FlockSoundness.Discharge.Hidden.getElem!_eq_getD']; rfl
+  have hpv := FlockSoundness.perVu_unit C L.unit_mem L.unit_kind L.unit_count (by omega)
+  have hj : k < (st.c.leavesOut.getD 0 #[]).size := by rw [hl, Array.size_range]; exact hk
+  have hleaf := FlockSoundness.Discharge.HiddenExec.outCol_leaf hty ho
+    (FlockSoundness.Discharge.HiddenExec.check_returned hty ho hls)
+    (fun u hu o' ho' => by rw [hget u hu] at ho'; exact (hlo u hu).2 o' ho')
+    h16 (fun u hu => by rw [hget u hu]; exact (hlo u hu).1) hpv g (by omega : 0 < st.c.upv) hj
+  have e : (st.c.leavesOut.getD 0 #[])[k]'hj = k := by simp only [hl, Array.getElem_range]
+  rw [e, Nat.add_zero] at hleaf
+  exact hleaf
+
 /-- **An output port's hm96 slot at instance `n` commits its output bits** (`outRowForms`), at a hidden-output table the
 verifier sets up whose model the witness's one-table share satisfies: its out columns are the model's `b ‖ c` (`bc_bit`),
 the commit string of the row's message and salt (`table_rows`); the message's bits are `HmOut.delta`'s copies of the
@@ -1019,6 +1108,21 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
     omega
   rw [hpfx, hrow, hsalt, ← hbc o hgn hqs]
   exact (bc_bit (L.model regs) w st.c rfl hb hy ht').symm
+
+/-- A hidden-output table's output rows are one per output port (`out_rows_v1`), from the checks its setup ran. -/
+theorem outRows_setupOne {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {tables : List (String × ByteArray)}
+    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt} (ht : tags.typed = false)
+    (hh : tags.hiddenOutputs = true)
+    (hd : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
+    (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) :
+    FlockSoundness.Discharge.Hidden.OutRows st.c := by
+  have hd' := hd
+  unfold FlockSoundness.Discharge.HiddenExec.setupOne at hd'
+  rw [hh] at hd'
+  simp only [↓reduceIte] at hd'
+  have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd'
+  obtain ⟨hp, hcr⟩ := FlockSoundness.Discharge.Hidden.parse_untyped ht s.parse
+  exact FlockSoundness.Discharge.Hidden.out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
 
 /-- `FlockDeploy.Raw.ins` reads its tags from `--statement`'s name, and C's under the session's coins. -/
 theorem raw_ins_tags {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
@@ -1159,6 +1263,129 @@ theorem slotOut_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit
     omega
   exact slotOut_table ht' hh hd hv1 ho hin L regs hz1 (Array.findIdx?_eq_some_iff_getElem.1 hqo).1 hoout hb
 
+/-- **Where a copy's `out` columns sit** (`resTie_copyOf`'s `hOc`): at a staged algebra part, `out` is the unit's one
+output row, right after `v` (`v_idx`, one output row per output port by `outRows_setupOne`), so its bit `q` is output
+word `q / 16`'s bit `q % 16`. The unit returns its output words in order (`checkParsed_leavesOut`), so output word `k`
+is copy `(0, o, g, 0)`'s column `16 k` past the output group (`outCol_range`), which starts at VBridge's `partBase`
+(`outCols_of_unitLaid`). -/
+theorem oCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
+    (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true)
+    {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
+    {j : ℕ} {nm' : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit}
+    (hpc : r.w.parts[s]?.bind partCircuit = some c) {p : Flock.Readable.Parsed}
+    (hx : Flock.Readable.parseBytes readOfO xO = some p) (ht : 0 < p.sts.size)
+    {qv qo : ℕ} (hqv : c.ports.findIdx? (·.name == "v") = some qv)
+    (hqo : c.ports.findIdx? (·.name == "out") = some qo) (hvin : qv < HmOut.nIn c) (hoout : ¬ qo < HmOut.nIn c)
+    {pto : Port} (hpto : c.ports[qo]? = some pto) (hwo : 128 ≤ pto.words)
+    {m k cl jj : ℕ} {sh : Flock.Shape} {holo : Bool} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
+    (hres : RecResiduals.params c.unit.name = some (m, k, cl, jj)) (hshp : RecResiduals.shape? m k cl = some sh)
+    (hholo : RecResiduals.holoOf c = .ok holo) (hpart : RecResiduals.part { sh with holo } jj = .ok (S, ns, nv))
+    {o g n : ℕ} (hg : g < c.g) (hn : o * c.g + g = n) :
+    ∀ q < 128 * S.res.length, ∃ hl : q < (rowForms c "out" qo n).length,
+      Flock.Readable.copyOf p 0 ht w o g 0 (FlockVBridge.OfVStar.partBase S ns nv + q) =
+        formBit w (rowForms c "out" qo n)[q] := by
+  obtain ⟨p', r', sv, hx', ht', hpi, hr', ⟨ss', hss', hsv'⟩, h0, htab⟩ := stagedTables hS
+  rw [hx] at hx'
+  cases hx'
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hss'
+  cases hss'
+  rw [hsv] at hsv'
+  cases hsv'
+  have hS' := hS
+  obtain ⟨-, i0, spec, sts, -, hsu, -⟩ := hS'
+  have hp : p = { i0.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
+  have hsz : p.sts.size = 1 := by rw [hp]; exact (oneFull_staged hS hsu).1
+  have hc0 := partCircuit_staged hS hx ht' hpi hr hpc h0
+  obtain ⟨L, -, -⟩ := Flock.Readable.layout_of_check hck hx ht' hpi h0
+  obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht' hpi h0
+  obtain ⟨-, hts⟩ := tablesOf_of_parse hx
+  obtain ⟨spec0, hset⟩ := Flock.Readable.setup_of_tablesOf hts
+  unfold Flock.Readable.Read.setup at hset
+  rw [hpi] at hset
+  obtain ⟨-, hall⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_setupOne hset
+  obtain ⟨d, hd, -⟩ := hall 0 h0
+  have htd : (FlockSoundness.Discharge.Exec.tagsAt p.tags p.I.count 0).typed = false :=
+    (FlockSoundness.Discharge.Exec.tagsAt_typed _ _ _).trans ht'
+  have hh : (FlockSoundness.Discharge.Exec.tagsAt p.tags p.I.count 0).hiddenOutputs = true := by
+    unfold FlockSoundness.Discharge.Exec.tagsAt
+    split <;> exact staged_hidden hS hx h0
+  obtain ⟨hscope, -⟩ := staged_scope hS hx h0
+  have hs := (FlockSoundness.Discharge.FailClosed.scopeOk_eq _).symm.trans hscope
+  have hv1 := FlockSoundness.Discharge.Layout.scopeOk_ports hs
+  have ho : p.sts[0].c.outNet = p.sts[0].c.unitNet := by
+    unfold FlockSoundness.Discharge.Layout.scopeOk at hs
+    simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hs
+    exact hs.1.1.1.2
+  have hrw := outRows_setupOne htd hh hd hv1
+  obtain ⟨u, hu, hupv, -, -, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
+  obtain ⟨u', hu', hlo⟩ := FlockSoundness.Discharge.Recursion.checkParsed_leavesOut (htab 0 h0).2.2
+  rw [hu] at hu'
+  cases hu'
+  subst hc0
+  obtain ⟨S', ns', nv', hpart', hnet⟩ := FlockVBridge.OfVStar.check_part_at P.recResiduals hres hshp hholo
+  rw [hpart] at hpart'
+  simp only [Except.ok.injEq, Prod.mk.injEq] at hpart'
+  obtain ⟨rfl, rfl, rfl⟩ := hpart'
+  obtain ⟨hcol, hbits, -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid L.unit_built hnet
+  have hcp : (FlockSoundness.Rows.ofNet L.unit_built).nIn + (FlockSoundness.Rows.ofNet L.unit_built).nComp =
+      p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one L.unit_built
+  have hsm := FlockVBridge.OfVStar.part_small hpart
+  have hR : RecResiduals.RES_OUT_WORDS = 128 := rfl
+  obtain ⟨hqv', hsize⟩ := v_idx hu hrows hqv
+  have hqs : qo < p.sts[0].c.ports.size := (Array.findIdx?_eq_some_iff_getElem.1 hqo).1
+  have hqn : qo = HmOut.nIn p.sts[0].c := by omega
+  have hnI : HmOut.nIn p.sts[0].c = p.sts[0].c.ports.size - p.sts[0].c.outRowPorts.size := rfl
+  have hrs := FlockSoundness.Discharge.Hidden.OutRows.size hrw
+  have hop : p.sts[0].c.outPorts.size = 1 := by omega
+  have hG := FlockSoundness.Discharge.Hidden.outGroup_single hrw.2.1 (j := 0) (by omega)
+  have h0at : FlockSoundness.Discharge.Hidden.outAt p.sts[0].c 0 = 0 := by
+    simp [FlockSoundness.Discharge.Hidden.outAt]
+  have hW : (p.sts[0].c.outPorts.getD 0 default).2 = p.sts[0].c.outWords := by
+    have h1 := FlockSoundness.Discharge.Hidden.outAt_succ p.sts[0].c (j := 0) (by omega)
+    rw [FlockSoundness.Discharge.Hidden.getElem!_eq_getD', h0at] at h1
+    simp only [Nat.zero_add] at h1
+    have h2 := FlockSoundness.Discharge.HiddenExec.outAt_size p.sts[0].c
+    rw [hop] at h2
+    exact h1.symm.trans h2
+  have hg0 : HmOut.outGroup p.sts[0].c (qo - HmOut.nIn p.sts[0].c) = (0, 1, 0, p.sts[0].c.outWords) := by
+    rw [← hqn, Nat.sub_self, hG, h0at, hW]
+  obtain ⟨ls, hls⟩ := P.check
+  obtain ⟨-, -, hlo'⟩ := FlockSoundness.Discharge.Layout.check_out P.typed ho hls
+  have hget0 : p.sts[0].c.leavesOut.getD 0 #[] = p.sts[0].c.leavesOut[0]! := by
+    rw [FlockSoundness.Discharge.Hidden.getElem!_eq_getD']; rfl
+  have hN : u.outWords = RecResiduals.RES_OUT_WORDS := by
+    have e := (hlo' 0 (by omega)).1
+    rw [← hget0, hlo, Array.size_range, hbits] at e
+    exact e
+  have hdiv : n / p.sts[0].c.g = o := by
+    subst hn
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by omega), Nat.div_eq_of_lt hg, Nat.zero_add]
+  have hmod : n % p.sts[0].c.g = g := by
+    subst hn
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hg]
+  intro q hq
+  have hq16 : q / 16 < u.outWords := by omega
+  have hkW : q / 16 < p.sts[0].c.outWords := by
+    have hmem : q / 16 ∈ (p.sts[0].c.leavesOut[0]!).toList := by
+      rw [← hget0, hlo]
+      simpa using hq16
+    exact (hlo' 0 (by omega)).2 _ hmem
+  have hlen : (rowForms p.sts[0].c "out" qo n).length = 16 * pto.words := by
+    simp [rowForms, outRowForms, hoout, Array.getD_eq_getD_getElem?, hpto]
+  have hql : q < (rowForms p.sts[0].c "out" qo n).length := by rw [hlen]; omega
+  refine ⟨hql, ?_⟩
+  have hel : (rowForms p.sts[0].c "out" qo n)[q] = HmNets.Lin.var (n / p.sts[0].c.g * 2 ^ p.sts[0].c.kLog +
+      (HmOut.outCol p.sts[0].c (n % p.sts[0].c.g) (q / 16) + q % 16)) := by
+    simp [rowForms, outRowForms, hoout, hg0, hkW]
+  have hb := hlt q (by omega)
+  have hq' : ∀ A, A + (FlockVBridge.OfVStar.partBase S ns nv + 16 * (q / 16)) + q % 16 =
+      A + (FlockVBridge.OfVStar.partBase S ns nv + q) := fun A => by omega
+  rw [hel, formBit_var, outCol_range L P.typed ho hls hupv hlo (Nat.mod_lt _ (by omega)) hq16, hcol, hq',
+    Claims.Recursion.VStar.copyOf_eq (by omega), hdiv, hmod]
+  simp [Claims.Recursion.VStar.copyIdx, hsz, hupv]
+
 /-- **Check 5's tie at one instance of a staged `rec-residuals` part**: `resTie_layR` with check 5's public rows from
 the statement's setup. The setup ran `RecCoins.check` at the part's table, so `checkResiduals` at its inner session
 (`residualsCheck_of_check`, `residualsBoth_of_check`), whose `v` and `out` rows the slots read (`check5_bytes`), and
@@ -1245,7 +1472,12 @@ theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
 /-- **`resPieces_computes` with the tie at the pieces' copies only**, and the whole acceptance at hand: wherever part
 `s` accepts at an algebra part, each piece `ownQ` gives it holds where, at every staged statement and witness that pass
 `Flock.check`, agree with the messages and record true, collision-free calls, the piece sits at one of the statement's
-copies, of its group, at which check 5's tie holds (`ResTie`) and whose rows are what `elemAt` reads. Check 5 holds only
+copies, of its group, at which check 5's tie holds (`ResTie`) and whose residuals vanish at what `elemAt` reads wherever
+they vanish at the copy's rows (`ResZero`; the copy's rows being `elemAt`'s gives it, and so does their being
+`elemAt`'s up to an offset the residuals cancel, `PartS.resZero_off`). The piece's key is
+`(jj, o, g, u)`: the part's group `jj` (so pieces of different groups have different keys) and instance `o + g`'s unit
+`u` of the part's one table (`keyCopy`: block `(o + g) / c.g`, VU `(o + g) % c.g` at the part's own `c.g`, which the
+prover chooses), so the pieces needn't know `c.g`. Check 5 holds only
 two instances, so `resPieces_computes`' tie at every copy does not follow from it; this one asks it where the pieces
 are. -/
 theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
@@ -1256,7 +1488,7 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
     {j : ℕ} {nm : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm pt))
     (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
     (pieces : Msg → List ResPiece) (ownQ : Msg → ResPiece → Option ℕ)
-    (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (hpc : ∀ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
       _root_.Flock.Readable.parseBytes readOfO xO = some p →
@@ -1264,22 +1496,25 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
       showsPart untr b s x xO c → L.Agrees cmt x s w xO ms → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
       (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false →
       ∀ q ∈ pieces (Claims.Recursion.xI D x), ownQ x q = some s →
-        ∃ ht : q.key.1 < p.sts.size, q.key.2.1 < 2 ^ (p.sts[q.key.1].m - p.sts[q.key.1].c.kLog) ∧
-          q.key.2.2.1 < p.sts[q.key.1].c.g ∧ q.key.2.2.2 < p.sts[q.key.1].c.upv ∧
+        ∃ ht : 0 < p.sts.size, 0 < p.sts[0].c.g ∧
+          (q.key.2.1 + q.key.2.2.1) / p.sts[0].c.g < 2 ^ (p.sts[0].m - p.sts[0].c.kLog) ∧
+          q.key.2.2.2 < p.sts[0].c.upv ∧
           ∀ (m k cl jj : ℕ) (sh : _root_.Flock.Shape) (holo : Bool) (S : _root_.Flock.RecOpen.GfS) (ns : List ℕ)
-            (nv : ℕ), _root_.Flock.RecResiduals.params p.sts[q.key.1].c.unit.name = some (m, k, cl, jj) →
+            (nv : ℕ), _root_.Flock.RecResiduals.params p.sts[0].c.unit.name = some (m, k, cl, jj) →
             _root_.Flock.RecResiduals.shape? m k cl = some sh →
-            _root_.Flock.RecResiduals.holoOf p.sts[q.key.1].c = .ok holo →
+            _root_.Flock.RecResiduals.holoOf p.sts[0].c = .ok holo →
             _root_.Flock.RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) →
-            S = q.S ∧
+            S = q.S ∧ q.key.1 = jj ∧
             ResTie S ns nv
               (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)
-              (_root_.Flock.Readable.copyOf p q.key.1 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) ∧
+              (keyCopy p ht w q.key) ∧
             ∀ os last, Bd.final (ms.getD (Bd.DE.V.k (Claims.Recursion.xI D x) - 1) []) = some (os, last) →
               os.length + 1 = Bd.DE.V.k (Claims.Recursion.xI D x) →
-              _root_.Flock.Readable.rowsRead ns nv
-                  (_root_.Flock.Readable.copyOf p q.key.1 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) =
-                elemAt (Claims.Recursion.xI D x) (Bd.opened os last) q.key) :
+              ResZero S (_root_.Flock.Readable.rowsRead ns nv (keyCopy p ht w q.key))
+                  (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) →
+                ResZero S (elemAt (Claims.Recursion.xI D x) (Bd.opened os last)
+                    ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)
+                  (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)) :
     PiecesComputes Bd D pieces (resHolds elemAt vvAt) ownQ s x c ms := by
   obtain ⟨-, xO, w, hck, hT, hc, hs, hh, hp, hm, hrw⟩ := h
   obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, -, htab⟩ := stagedReads hs
@@ -1294,23 +1529,18 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
   rw [hsv] at hsv'
   cases hsv'
   intro q hq ho os last hf hl
-  obtain ⟨ht', ho', hg, hu, hch⟩ := hpc xO w p hx hck' hs ⟨hh, hp, hm, hrw⟩ hT hc q hq ho
+  obtain ⟨ht', hG, ho', hu, hch⟩ := hpc xO w p hx hck' hs ⟨hh, hp, hm, hrw⟩ hT hc q hq ho
   obtain ⟨m, k, cl, jj, sh, holo, S, ns, nv, h1, h2, h3, h4, hro⟩ :=
-    _root_.Flock.Readable.innerCopies ht' ho' hg hu hcp
-  obtain ⟨rfl, htie, hE⟩ := hch m k cl jj sh holo S ns nv h1 h2 h3 h4
-  have hz : ResZero q.S (_root_.Flock.Readable.rowsRead ns nv
-      (_root_.Flock.Readable.copyOf p q.key.1 ht' w q.key.2.1 q.key.2.2.1 q.key.2.2.2))
-      (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) :=
-    resVal_zero_of_tie hro htie
-  rw [hE os last hf hl] at hz
-  exact hz
+    _root_.Flock.Readable.innerCopies ht' ho' (Nat.mod_lt _ hG) hu hcp
+  obtain ⟨rfl, -, htie, hE⟩ := hch m k cl jj sh holo S ns nv h1 h2 h3 h4
+  exact hE os last hf hl (resVal_zero_of_tie hro htie)
 
 /-! ## The statements -/
 
 /-- **The coin tie**: at a V\* statement `xO` part `s` stages at `x` and shows the coins `c` at, wherever check 5 loads
 a `rec-residuals` statement's inner session and computes its `v` rows (`residualRows`), the verifier's values the coins give
-at a copy (`vvAt` at the inner statement and the coins) are the elements of that copy's instance's row, at the
-verifier's part `(S, ns, nv)`. `staged_rep_drawn` is its coin side. -/
+at a key (`vvAt` at the inner statement and the coins, keyed `(jj, o, g, 0)` by the part's group) are the elements
+of instance `o + g`'s row, at the verifier's part `(S, ns, nv)`. `staged_rep_drawn` is its coin side. -/
 def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
@@ -1322,15 +1552,16 @@ def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × �
         ∀ (sh : _root_.Flock.Shape) (holo : Bool) (S : _root_.Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ),
           RecResiduals.shape? m k cl = some sh → RecResiduals.holoOf sts[t].c = .ok holo →
           RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) →
-          ∀ o g, g < sts[t].c.g → instOf sts[t].c o g < 2 →
-            vvAt (xIOf x) ((List.range (Bk (xIOf x))).map c) (t, o, g, 0) =
-              wordsElems nv rows[instOf sts[t].c o g]!
+          ∀ o g, o + g < 2 →
+            vvAt (xIOf x) ((List.range (Bk (xIOf x))).map c) (jj, o, g, 0) = wordsElems nv rows[o + g]!
 
-/-- **Check 5's tie at a piece's copy** (the `ResTie` conjunct `resPieces_computesAt` asks of each piece): at copy
-`(0, o, g, 0)` of an instance `n` check 5 holds (`n < 2`), between the verifier's values the coins give there and the
-copy's columns. `resTie_staged` at `n`, with the copy's `v` columns where its slot reads (`vCols_of_base`, VBridge's
+/-- **Check 5's tie at a piece's copy** (the `ResTie` conjunct `resPieces_computesAt` asks of each piece): at key
+`(jj, o, g, 0)` of an instance `n = o + g` check 5 holds (`n < 2`), between the verifier's values the coins give at the
+key and its copy's columns (`keyCopy`: block `n / c.g`, VU `n % c.g`, at any `c.g ≥ 1`). `resTie_staged` at `n`, with
+the copy's `v` columns where its slot reads (`vCols_of_base`, VBridge's
 `vBase` being the port's column by `vBase_staged`), the `out` slot committing its output bits (`slotOut_staged`), its
-residual columns where the `out` slot reads (`hOc`), and the coins' values check 5's row (`VVTie`). -/
+residual columns where the `out` slot reads (`oCols_staged`, from the output leaves `checkParsed` holds to V\*'s), and
+the coins' values check 5's row (`VVTie`). -/
 theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit} {cs : ℕ → Coin} {untr : TrReader}
@@ -1355,7 +1586,7 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
     {sh : _root_.Flock.Shape} {holo : Bool} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
     (hshp : RecResiduals.shape? m k cl = some sh) (hholo : RecResiduals.holoOf sts[0].c = .ok holo)
     (hpart : RecResiduals.part { sh with holo } jj = .ok (S, ns, nv))
-    {o g n : ℕ} (hg : g < sts[0].c.g) (hn : instOf sts[0].c o g = n) (hn2 : n < 2) (hnp : n < sts[0].pub.n)
+    {o g n : ℕ} (hG : 0 < sts[0].c.g) (hn : o + g = n) (hn2 : n < 2) (hnp : n < sts[0].pub.n)
     {qv qo : ℕ} (hqv : c.ports.findIdx? (·.name == "v") = some qv)
     (hqo : c.ports.findIdx? (·.name == "out") = some qo) (hvin : qv < HmOut.nIn c) (hoout : ¬ qo < HmOut.nIn c)
     {ptv pto : Port} (hptv : c.ports[qv]? = some ptv) (hpto : c.ports[qo]? = some pto)
@@ -1364,20 +1595,21 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
       ptv.words = (RecCoins.padTo rows[n]! (Registered.rowWords rows[n]!.size 16)).size ∧ n < rows.size ∧
         8 * nv ≤ rows[n]!.size)
     (hwo : pto.words = (RecCoins.padTo (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!
-      (Registered.rowWords (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!.size 16)).size)
-    (hOc : ∀ q < 128 * S.res.length, ∃ hl : q < (rowForms c "out" qo n).length,
-      Flock.Readable.copyOf p 0 ht w o g 0 (FlockVBridge.OfVStar.partBase S ns nv + q) =
-        formBit w (rowForms c "out" qo n)[q]) :
-    ResTie S ns nv (vvAt (xIOf x) ((List.range (Bk (xIOf x))).map cs) (0, o, g, 0))
-      (Flock.Readable.copyOf p 0 ht w o g 0) := by
+      (Registered.rowWords (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!.size 16)).size) :
+    ResTie S ns nv (vvAt (xIOf x) ((List.range (Bk (xIOf x))).map cs) (jj, o, g, 0)) (keyCopy p ht w (jj, o, g, 0)) := by
   obtain ⟨p', -, -, hx', ht', hpi, -, -, -, -⟩ := stagedTables hsh.2
   rw [hx] at hx'
   cases hx'
+  have hpc0 : p.sts[0].c = c := partCircuit_staged hsh.2 hx ht' hpi hr hpc ht
   have hc0 : sts[0].c = c := by
-    have e := partCircuit_staged hsh.2 hx ht' hpi hr hpc ht
     have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
     subst hp
-    exact e
+    exact hpc0
+  have hg : n % c.g < c.g := Nat.mod_lt _ (hc0 ▸ hG)
+  have hk : keyCopy p ht w (jj, o, g, 0) = Flock.Readable.copyOf p 0 ht w (n / c.g) (n % c.g) 0 := by
+    simp only [keyCopy]
+    rw [hpc0, hn]
+  rw [hk]
   have hslo := slotOut_staged (w := w) hsh.2 hck hr hss hsv hpc (by rw [← hc0]; exact hres) hshp
     (by rw [← hc0]; exact hholo) hqo hoout hn2
   obtain ⟨inn, rows, hinn, hrw, hall⟩ := resTie_staged hT hnc hsh.2 hck hr hss hsv hpc hsu h0 hidx hown hres hso hop
@@ -1386,29 +1618,103 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
   have hvb := vBase_staged hsh.2 hr hss hsv hpc hqv (by rw [← hc0]; exact hres) hshp (by rw [← hc0]; exact hholo)
     hpart
   have hVc := vCols_of_base (w := w) hsh.2 hr hss hsv hpc hx ht hqv hvin hptv
-    (by rw [hwv]; exact le_trans hsz (size_padTo_ge _ _)) (hc0 ▸ hg)
-    (show o * c.g + g = n by rw [← hc0]; exact hn) hvb
-  rw [hvv xO hsh i spec sts hsu 0 h0 m k cl jj hres f inn rows hf hinn hrw sh holo S ns nv hshp hholo hpart o g hg
-    (by rw [hn]; exact hn2), hn]
+    (by rw [hwv]; exact le_trans hsz (size_padTo_ge _ _)) hg (Nat.div_add_mod' n c.g) hvb
+  have hzs : 128 ≤ ((RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!).size := by
+    rw [getElem!_pos (RecCoins.zeroRows 2 RecCoins.OUT_WORDS) n (by simpa [RecCoins.zeroRows] using hn2)]
+    simp [RecCoins.zeroRows, RecCoins.OUT_WORDS]
+  have hOc := oCols_staged (w := w) hsh.2 hck hr hss hsv hpc hx ht hqv hqo hvin hoout hpto
+    (by rw [hwo]; exact le_trans hzs (size_padTo_ge _ _)) (by rw [← hc0]; exact hres) hshp
+    (by rw [← hc0]; exact hholo) hpart hg (Nat.div_add_mod' n c.g)
+  rw [hvv xO hsh i spec sts hsu 0 h0 m k cl jj hres f inn rows hf hinn hrw sh holo S ns nv hshp hholo hpart o g
+    (hn ▸ hn2), hn]
   exact hall hptv hpto hwv hwo hnr hsz hVc hOc
 
-/-- **The `rec-residuals` pieces' share of `hlowP` at the deployed layout** (U12's statement): at the compiled record
-`recBound` over V\*'s bound layout of record (`DeployedR.layR elem`), which records check 5's calls, the deployed
-outer record and the staging `showsPart`, wherever part `s` accepts and its V\* statement at `x`'s inner shape is an algebra part (`.inner`), each
-`rec-residuals` piece `ownQ` gives it holds (`resHolds elemAt vvAt`) at the messages the last message opens and the
-coins (`PiecesComputes` at `DeployedR.bdR`). -/
-def ResLowered (b : Brings) (IV : Claims.Verifier Coin)
+/-- **`resTie_copyOf` at check 5's site** (`CopySite.copySite_staged`): the setup's registered ports, its source at C3
+and the four "not another V\* unit" facts come from the staged setup's own checks at a `rec-residuals` table. -/
+theorem resTie_site {b : Brings} {IV : Claims.Verifier Coin}
+    {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
+    {w : Claims.Flock.Wit} {cs : ℕ → Coin} {untr : TrReader}
+    {vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128} {Bk : Msg → ℕ}
+    (hT : ∀ e ∈ (DeployedR.layR elem).calls x s w, FlockDeploy.sha512 e.1 = e.2)
+    (hnc : (Claims.findColl ((DeployedR.layR elem).calls x s w ++ vcallsAt FlockDeploy.sha512
+      (recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) IV) xO)).isSome = false)
+    (hsh : showsPart untr b s x xO cs)
+    (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true)
+    {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
+    {j : ℕ} {nm' : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit}
+    (hpc : r.w.parts[s]?.bind partCircuit = some c) {p : Flock.Readable.Parsed}
+    (hx : Flock.Readable.parseBytes readOfO xO = some p) (ht : 0 < p.sts.size)
+    {i : RecIns} {spec : SessionSpec} {sts : Array Stmt} (hsu : setupO xO = some (i, spec, sts)) (h0 : 0 < sts.size)
+    (hidx : Registered.unitIndices sts[0].pub = .ok (Array.range sts[0].pub.n))
+    {m k cl jj : ℕ} (hres : RecResiduals.params sts[0].c.unit.name = some (m, k, cl, jj))
+    (hset : ∀ u ∈ resSetup xO, u ∈ b.setup xO) (hvv : VVTie untr b vvAt Bk s x cs)
+    {sh : _root_.Flock.Shape} {holo : Bool} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
+    (hshp : RecResiduals.shape? m k cl = some sh) (hholo : RecResiduals.holoOf sts[0].c = .ok holo)
+    (hpart : RecResiduals.part { sh with holo } jj = .ok (S, ns, nv))
+    {o g n : ℕ} (hG : 0 < sts[0].c.g) (hn : o + g = n) (hn2 : n < 2) (hnp : n < sts[0].pub.n)
+    {qv qo : ℕ} (hqv : c.ports.findIdx? (·.name == "v") = some qv)
+    (hqo : c.ports.findIdx? (·.name == "out") = some qo) (hvin : qv < HmOut.nIn c) (hoout : ¬ qo < HmOut.nIn c)
+    {ptv pto : Port} (hptv : c.ports[qv]? = some ptv) (hpto : c.ports[qo]? = some pto)
+    (hrows : ∀ (f : RecCoins.Source), RecCoins.Source.atC3 i.src i.inner i.commits = some f →
+      ∀ (inn : RecCoins.Inner) (rows : Array (Array ℕ)), f.load sts[0].c.unit.name = .ok inn →
+      FlockSoundness.Discharge.Recursion.residualRows inn jj = some rows →
+      ptv.words = (RecCoins.padTo rows[n]! (Registered.rowWords rows[n]!.size 16)).size ∧ n < rows.size ∧
+        8 * nv ≤ rows[n]!.size)
+    (hwo : pto.words = (RecCoins.padTo (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!
+      (Registered.rowWords (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!.size 16)).size) :
+    ResTie S ns nv (vvAt (xIOf x) ((List.range (Bk (xIOf x))).map cs) (jj, o, g, 0)) (keyCopy p ht w (jj, o, g, 0)) := by
+  have hrs : (RecResiduals.params sts[0].c.unit.name).isSome := by simp [hres]
+  obtain ⟨own, f, hown, hf, hso, hop, hsp, hro⟩ := RecDeploy.CopySite.copySite_staged hsu h0 (.inr hrs)
+  exact resTie_copyOf hT hnc hsh hck hr hss hsv hpc hx ht hsu h0 hidx hown hres hso hop hsp (hro hrs) hf hset hvv
+    hshp hholo hpart hG hn hn2 hnp hqv hqo hvin hoout hptv hpto (hrows f hf) hwo
+
+/-- **The `rec-residuals` pieces' share of `hlowP` at the layout of record** (U12's statement): at the compiled record
+`recBound` over `DeployedR.layR elem` and `IVStar` of `bdR rd wE final w`, the staging `showsPart`, wherever part `s`
+accepts and its V\* statement at `x`'s inner shape is an algebra part (`.inner`), each `rec-residuals` piece `ownQ`
+gives it holds (`resHolds elemAt vvAt`) at the messages the last message opens and the coins (`PiecesComputes` at
+`bdR rd wE final w`). The deployed constants are `rd wE final w := rdR wER finalR wR`. -/
+def ResLowered (rd : Msg → Option FlockDeploy.FinalP) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (pieces : Msg → List ResPiece) (ownQ : Msg → ResPiece → Option ℕ)
-    (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128) : Prop :=
-  ∀ s x c ms, PartAccepts FlockDeploy.sha512 (recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) IV)
+  ∀ s x c ms, PartAccepts FlockDeploy.sha512
+      (recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) (_root_.RecDeploy.bdR rd wE final w).IVStar)
       (deployZkRec _root_.Flock.Readable.relation) (DeployedR.layR elem) shape (showsPart untr b) cmt s x c ms →
     ∀ (r : XR), readX x = some r → ∀ (ss : Array VStar.Stmt), RecVStar.statements r.shape = .ok ss →
       ∀ (j : ℕ) (nm : String) (pt : VStar.Part), ss[s]? = some (.inner j nm pt) →
-        PiecesComputes DeployedR.bdR (recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) IV) pieces
-          (resHolds elemAt vvAt) ownQ s x c ms
+        PiecesComputes (_root_.RecDeploy.bdR rd wE final w)
+          (recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) (_root_.RecDeploy.bdR rd wE final w).IVStar)
+          pieces (resHolds elemAt vvAt) ownQ s x c ms
+
+/-- **`ResLowered` at every part**: where `ownQ` gives a piece only to a part whose V\* statement is an algebra part
+(`hin`), the share holds wherever any part accepts. At a `Joint` acceptance (every part's `PartAccepts` at the parts'
+own messages) this is `DecompBR.ResLowJ`'s conclusion, part by part. -/
+theorem resLowered_parts {rd : Msg → Option FlockDeploy.FinalP} {wE : Msg → ℝ}
+    {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ} {b : Brings}
+    {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
+    {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
+    {pieces : Msg → List ResPiece} {ownQ : Msg → ResPiece → Option ℕ}
+    {elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128}
+    {vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128}
+    (h : ResLowered rd wE final w b elem shape untr cmt pieces ownQ elemAt vvAt)
+    (hin : ∀ x q s, q ∈ pieces (Claims.Recursion.xI
+        (recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) (_root_.RecDeploy.bdR rd wE final w).IVStar)
+        x) → ownQ x q = some s →
+      ∃ (r : XR) (ss : Array VStar.Stmt) (j : ℕ) (nm : String) (pt : VStar.Part), readX x = some r ∧
+        RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some (.inner j nm pt))
+    {s : ℕ} {x : Msg} {c : ℕ → Coin} {ms : List Msg}
+    (ha : PartAccepts FlockDeploy.sha512
+      (recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) (_root_.RecDeploy.bdR rd wE final w).IVStar)
+      (deployZkRec _root_.Flock.Readable.relation) (DeployedR.layR elem) shape (showsPart untr b) cmt s x c ms) :
+    PiecesComputes (_root_.RecDeploy.bdR rd wE final w)
+      (recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) (_root_.RecDeploy.bdR rd wE final w).IVStar)
+      pieces (resHolds elemAt vvAt) ownQ s x c ms := by
+  intro q hq ho
+  obtain ⟨r, ss, j, nm, pt, hr, hss, hsv⟩ := hin x q s hq ho
+  exact h s x c ms ha r hr ss hss j nm pt hsv q hq ho
 
 end
 

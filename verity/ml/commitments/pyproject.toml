@@ -4,11 +4,10 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: tests/test_leaves.py reads the typed-obligation fixtures through the frozen SP1 backend's statement codec (which
-# raises vLLM's check codes), and test_hm96 looks up the claims
-# hm96's PROTOCOL.md cites in verity.core.claims, and test_block_check holds the check-3 units to the remote bandwidth
-# audit's codec and receipts. test_layout reads commit_slots' interface fixture, whose layout is slots._layout_json's.
-inputs = ["verity", "verity/ml/circuits", "verity/ml/kernels", "verity/core/__init__.py", "verity/core/claims", "archive/sp1/python/verity_sp1", "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py",
-          "integrations/vllm/verity_vllm/check", "fixtures/typed-obligation-v0", "verity/ml/commitments/hm96/PROTOCOL.md",
+# Test-only: test_hm96 looks up the claims hm96's PROTOCOL.md cites in verity.core.claims, and test_block_check holds the
+# check-3 units to the remote bandwidth audit's codec and receipts. test_layout reads commit_slots' interface fixture,
+# whose layout is slots._layout_json's.
+inputs = ["verity", "verity/ml/circuits", "verity/ml/kernels", "verity/core/__init__.py", "verity/core/claims", "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py",
+          "integrations/vllm/verity_vllm/check", "verity/ml/commitments/hm96/PROTOCOL.md",
           "verity/core/protocols/remote_bandwidth", "benchmarks/torch_gpu/commit_slots/fixtures/commit-slots-v1.json"]
 parallel = true

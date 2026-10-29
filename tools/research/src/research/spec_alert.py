@@ -1,5 +1,5 @@
-"""The DM a spec change sends Daniel when it lands on main, by `research merge --push` or drive's landing (his ruling,
-3 Oct: a change to what a guarantee says waits on nobody, and he is shown it).
+"""The DM a spec change sends Daniel when it lands on main, by `research merge --push` or drive's landing: a change to what a
+guarantee says waits on nobody, and he is shown it.
 
 The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
 hash), every definition the statements read (its hash, under `reads`), every named assumption no `reads` record holds

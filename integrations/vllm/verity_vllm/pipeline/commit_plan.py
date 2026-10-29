@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 
 SCHEMA = "verity-vllm/commit-plan/v1"
 
@@ -195,7 +195,7 @@ def verdict_entry(args: Any, rec: dict[str, Any] | None) -> dict[str, Any]:
 class Options:
     """Derive a Commit's plan (the producer facts of its manifest, keyed by what they are a function of) without an engine."""
 
-    workload: str = option("--workload", help="the row's workload (the Commit's --workload)")
+    workload: str = option("--workload", type=workload_arg, help="the row's workload (the Commit's --workload)")
     required_manifest: str | None = option("--required-manifest", default=None, help="the Commit's required-value manifest")
     program_digest: str | None = option("--program-digest", default=None, help="the Commit's Program digest of record")
     program_dir: str | None = option("--program-dir", default=None, help="B=1: the Build's request Program dir")

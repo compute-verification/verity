@@ -24,7 +24,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import random
 import re
 import sys
@@ -38,7 +37,9 @@ from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c4 as F
 from verity.core.protocols.pouw.schemes import pearl_c_work as W
 from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity_config.settings import of
 
+settings = of(__file__)
 TILE, ROWS_PER_TASK, ALIGN = 64, 2048, 128
 SECONDS_8K = {"admit": 30.0, "tile": 150.0}     # a task's first estimate at k = 8,192; measured ones replace it
 
@@ -177,7 +178,7 @@ def tile(job: Job, name: str, t: int) -> dict:
     rng = random.Random(f"{job.seed}/{name}/{t}")
     ti, tj = rng.randrange(m // TILE), rng.randrange(n // TILE)
     rows, cols = list(range(ti * TILE, (ti + 1) * TILE)), list(range(tj * TILE, (tj + 1) * TILE))
-    fast = os.environ.get("PEARL_C4_F1") == "fast"
+    fast = settings.PEARL_C4_F1 == "fast"
     if fast:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import f1_fast
@@ -249,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="F1′'s evaluation: the rule's own, or f1_fast's cheap sound one (staged, pending the assessor's rating)")
     args = ap.parse_args(argv)
     t0 = time.monotonic()
-    os.environ["PEARL_C4_F1"] = args.f1
+    settings.put("PEARL_C4_F1", args.f1)
     args.out.mkdir(parents=True, exist_ok=True)
     job = Job(args.capture, args.out, args.seed)
     names = [n for n in job.man["inputs"] if re.search(args.layers, n)]

@@ -166,8 +166,7 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
     try:
         v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=a.windows,
                               window_ns=a.window_ns, samples=a.samples, delta=2.0 ** -40, jitter_ns=10 ** 9,
-                              clock=clock, log=lambda m: None, lifetime=a.lifetime,
-                              verdict=a.verdict or verifier.VERDICT)
+                              clock=clock, log=lambda m: None, lifetime=a.lifetime)
         v.register()
         out["verifier"] = v.session(0, v.allowance(v.ping(4)), None)
     except BaseException as e:  # noqa: BLE001
@@ -191,8 +190,6 @@ def main() -> int:
     ap.add_argument("--window-ns", type=int, default=6, help="with --local: passes a window, a tick each")
     ap.add_argument("--samples", type=int, default=4096, help="with --local")
     ap.add_argument("--lifetime", type=int, default=1, help="with --local: L, windows")
-    ap.add_argument("--verdict", choices=("lean", "both", "python"),
-                    help="with --local: who decides (`verifier.py --verdict`; default its own, lean)")
     a = ap.parse_args()
     if "," in a.plan:
         ap.error("one session a process: a Store serves one session")

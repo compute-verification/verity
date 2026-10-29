@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from verity.ml.circuits.codec import canonical_json, descriptor_size
 from verity.ml.circuits.defs import REGISTRY
 from verity_vllm import settings
-from verity_vllm.config import RowEngine, done_source_refusal, option
+from verity_vllm.config import RowEngine, done_source_refusal, option, workload_arg, workload_file
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import prefix_plan as PP, workload as W
 from verity_vllm.records.workload import Workload, WorkloadSampling
@@ -77,7 +77,7 @@ def shape_of(r: dict) -> tuple[int, ...]:
 
 def execution_of_workload(w: Workload) -> str:
     """The row's declared execution label: `sweep.execution` when present, else the `sweep.row_id` suffix (`…__bi-eager`,
-    `…__bi-compiled`, `…__bi-eager-fa2`) -- exec's EXEC-02 `execution_of_workload` over the workload record, kept local so the
+    `…__bi-compiled`, `…__bi-eager-fa2`) -- `execution_of_workload` over the workload record, kept local so the
     Build does not import the adapter.  The record has no top-level `execution` or `row_id` (no writer writes one), so a workload
     carrying either is refused by name before it gets here."""
     sweep = w.sweep or {}
@@ -87,21 +87,21 @@ def execution_of_workload(w: Workload) -> str:
     return rid.rsplit("__", 1)[-1] if "__" in rid else ""
 
 
-# engine conditions the workload Program models (COORD M-0063 (1)): the components are eager per-request Programs (X-09) over one shared
+# engine conditions the workload Program models: the components are eager per-request Programs (X-09) over one shared
 # weights input; a request's prefill may be chunked over engine steps (X-09's chunked-prefill criterion).  Prefix caching is the
 # manifest's (`workload_applicability`): with it on, a request whose first C rows the prefix cache serves (`program.prefix_plan`) is a
 # component that reads them as its `prefix` input, which Match binds to the producing requests' rows; no other cross-request read.
 MODELLED_ENGINE = {"enforce_eager": True, "enable_prefix_caching": False, "enable_chunked_prefill": "modelled (a request's prefill rows may span engine steps)"}
 
-# [compiled M-0153 (4a) / M-0141] a COMPILED execution is modelled only when every component declares it (applicability.execution
+# a COMPILED execution is modelled only when every component declares it (applicability.execution
 # 'bi-compiled…' AND an agreed `compilation` block {mode, cudagraph_mode, capture_sizes, …} written by derive_step from the TargetProfile);
 # the engine conditions then say enforce_eager False + those facts, and GM-01 G1 compares the record's header against them.
 COMPILATION_FACT_KEYS = ("mode", "cudagraph_mode", "capture_sizes", "backend", "use_inductor_graph_partition", "compile_cache",
-                         # [compiled M-0219] the record-level pin of the Inductor output identity (control process): carried into
+                         # the record-level pin of the Inductor output identity (control process): carried into
                          # global_match.json execution.effective_compilation when the header attests it, NOT compared with the Build
                          # (derive_step traces eagerly; the pin is an attempt-to-attempt condition the report/commit compare)
                          "kernel_set_sha256", "call_set_sha256", "wrapper_norm_set_sha256")
-_FACT_ALIASES = {"compilation_mode": "mode"}   # compiled's TargetProfile.modelled_engine() names it compilation_mode (M-0174)
+_FACT_ALIASES = {"compilation_mode": "mode"}   # compiled's TargetProfile.modelled_engine() names it compilation_mode
 
 
 def compilation_facts(block: dict | None) -> dict:
@@ -117,7 +117,7 @@ def compilation_facts(block: dict | None) -> dict:
 
 
 # vLLM CompilationMode: the recorder's profile.compilation writes the enum VALUE as a string ("0" on an eager record), compiled's
-# TargetProfile.modelled_engine() the NAME ("VLLM_COMPILE"); one spelling so the record's own sources are comparable (M-0261)
+# TargetProfile.modelled_engine() the NAME ("VLLM_COMPILE"); one spelling so the record's own sources are comparable
 _MODE_NAMES = {"0": "NONE", "1": "STOCK_TORCH_COMPILE", "2": "DYNAMO_TRACE_ONCE", "3": "VLLM_COMPILE"}
 
 
@@ -150,7 +150,7 @@ def component_declared_target(d: str) -> dict | None:
 
 
 def workload_lag(manifest: dict, shapes: dict) -> dict:
-    """[DP-pad-02 (b)] The workload Program's REQUIRED `lag` declaration: LAG = TargetProfile.lag() of the row's declared target
+    """The workload Program's REQUIRED `lag` declaration: LAG = TargetProfile.lag() of the row's declared target
     (the resolved async-scheduling configuration of the serving profile; 1 under async scheduling, 0 synchronous), with the source and
     the implementation version pinned.  Coupling checks (fail closed, named): every component's derive-time `target.declared` must
     resolve to the SAME value (a component derived for a synchronous profile does not compose into an async workload); `refusal` names
@@ -186,16 +186,16 @@ def workload_lag(manifest: dict, shapes: dict) -> dict:
         if cp.lag() != decl["value"]:
             out["refusal"] = (f"component (LP={s[0]}, T={s[1]}) {d} was derived under a target resolving async_scheduling={cp.effective_async_scheduling()} "
                               f"(LAG {cp.lag()}) but the workload's declared target resolves async_scheduling={decl['async_scheduling']} (LAG {decl['value']}): "
-                              f"one workload Program cannot be specialized for two schedulers (R17-1)")
+                              f"one workload Program cannot be specialized for two schedulers")
             return out
         if cp.vllm_revision != tp.vllm_revision:
             out["refusal"] = (f"component (LP={s[0]}, T={s[1]}) {d} was derived for vLLM {cp.vllm_revision} but the workload's target pins "
-                              f"{tp.vllm_revision}: the lag declaration is coupled to the pinned implementation (R17-1)")
+                              f"{tp.vllm_revision}: the lag declaration is coupled to the pinned implementation")
             return out
     return out
 
 
-#: [R17-42] the Definition ids (name prefixes of `spec_histogram` keys) that identify each construction's binding of the fused-MoE block
+#: the Definition ids (name prefixes of `spec_histogram` keys) that identify each construction's binding of the fused-MoE block
 _MOE_CONSTRUCTION_SPECS = {"indexed-read": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeExpertGemm_v2", "MoeExpertGemmW_v2", "MoeRouterTopK_v1", "MoeRouterTopKNorm_v1", "MoeSum_v1"),
                            "indexed-read-ordered": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeExpertGemm_v2", "MoeExpertGemmW_v2", "MoeRouterTopKOrdered_v1", "MoeRouterTopKOrderedNorm_v1", "MoeSum_v1"),
                            "padded": ("MoeFfnFixedL_v1",)}
@@ -255,7 +255,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
             comp["declared_explicitly"] = cp.moe_construction is not None
             if cp.effective_moe_construction() != decl["value"]:
                 out["refusal"] = (f"component (LP={s[0]}, T={s[1]}) {d} was derived under moe_construction={cp.effective_moe_construction()!r} but the "
-                                  f"workload's declared target says {decl['value']!r}: one workload Program is of ONE construction (R17-42)")
+                                  f"workload's declared target says {decl['value']!r}: one workload Program is of ONE construction")
                 out["components"][key] = comp
                 return out
         else:
@@ -272,7 +272,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
         out["refusal"] = ("the target declares moe_construction='padded' but no component binds a fused-MoE block (no MoeFfnFixedL_v1 anywhere): "
                           "an idle declaration is not a construction -- refused (a dense workload has nothing to pad; do not declare it)")
         return out
-    out["population_label"] = (("padded fixed-slot MoE: |Q(Lift(P_fixed-slot))|, labelled with its ACTUAL population (R17-45 (1))" if decl["value"] == "padded"
+    out["population_label"] = (("padded fixed-slot MoE: |Q(Lift(P_fixed-slot))|, labelled with its ACTUAL population" if decl["value"] == "padded"
                                 else f"{decl['value']} MoE (MOE-01): |Q(P)|") if out["moe_block_present"] else "no fused-MoE block (dense workload)")
     return out
 
@@ -286,7 +286,7 @@ def modelled_engine(execution: str, comps: dict) -> tuple[dict, str | None]:
     is then enforce_eager False + `compilation` = the normalised facts (what GM-01 G1 compares with the record header) + GP-01's own
     conditions (prefix caching as the manifest declares it, `workload_applicability`; chunked prefill modelled)."""
     ex = str(execution or "")
-    # [compiled M-0174 (a)] the components' agreed applicability.engine block (derive_step: profile.modelled_engine()) is carried verbatim
+    # the components' agreed applicability.engine block (derive_step: profile.modelled_engine()) is carried verbatim
     # into the workload engine block (claim text, program_derivation, attention note...); GP-01's own compose-level conditions stay
     # authoritative for what GP-01 models (prefix caching the manifest's; chunked prefill modelled), enforce_eager follows the execution label.
     blocks = [a.get("engine") for a in comps.values() if a and isinstance(a.get("engine"), dict)]
@@ -445,7 +445,7 @@ def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, int], str
                 if int(r["arrive_step"]) != int(req.get("arrive_step", -1)):
                     out["refusal"] = (f"component (LP={s[0]}, T={s[1]}) {d} declares its per-event S-schedule for the request arriving at engine "
                                       f"step {req.get('arrive_step')} but the manifest binds {r['request_id']} (arrive_step {r['arrive_step']}) to it: "
-                                      f"the same shape with another arrival has another S-schedule (M-0529 (A)); one component per request here")
+                                      f"the same shape with another arrival has another S-schedule; one component per request here")
                     return out
         if isinstance(splits, list) and len(splits) != s[1] + 1:
             out["refusal"] = f"component (LP={s[0]}, T={s[1]}) {d}: S-schedule has {len(splits)} entries, the request has T+1 = {s[1] + 1} sampling events"
@@ -459,7 +459,7 @@ def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, int], str
 
 
 def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampling: WorkloadSampling | None = None) -> dict:
-    """[F-pm-24] The STOP RULE the workload Program declares for a request that ends before its cap: the model's
+    """The STOP RULE the workload Program declares for a request that ends before its cap: the model's
     EOS token ids, read from the checkpoint the verifier pinned (config.json / generation_config.json `eos_token_id`, int or list) or
     given explicitly.  The bounded request Program has no EOS semantics of its own, so GM-01 needs this declaration to verify that an
     early stop IS an EOS stop (served[-1] in the set) and not a dropped / aborted / stop-string request recorded as `finish_reason=stop`.
@@ -470,7 +470,7 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampl
     if eos_token_ids:
         sources["--eos-token-ids"] = sorted(ids)
     # the manifest's sampling block may add per-workload stop ids (vLLM stop_token_ids) or switch EOS off (ignore_eos: every request
-    # must then reach its cap -- any early stop FAILS); both are declared here so GM-01 reads one rule [rev-pm M-0548 (2), M-0560 (2)]
+    # must then reach its cap -- any early stop FAILS); both are declared here so GM-01 reads one rule
     if checkpoint_dir:
         for fn in ("generation_config.json", "config.json"):
             p = os.path.join(checkpoint_dir, fn)
@@ -485,7 +485,7 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampl
                 vs = [int(x) for x in (v if isinstance(v, list) else [v])]
                 sources[fn] = sorted(vs)
                 ids.update(vs)
-    # [COORD M-0571 (1)] the EOS set pinned INTO the manifest is the declaration of record when present; a checkpoint given beside it
+    # the EOS set pinned INTO the manifest is the declaration of record when present; a checkpoint given beside it
     # must agree (a manifest pinned from another tokenizer/generation config is refused by name), else the checkpoint is the source
     if sampling is not None and sampling.eos_token_ids is not None:
         ms = sorted(set(sampling.eos_token_ids))
@@ -505,21 +505,21 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampl
                 "checkpoint_dir": checkpoint_dir, "rule": "manifest sampling.ignore_eos: every request must reach max_tokens; any early stop FAILS G6"}
     if not ids:
         return {"schema": "verity/workload-program/v1/stop-rule", "eos_token_ids": None, "source": sources or None, "checkpoint_dir": checkpoint_dir,
-                "note": "no EOS set declared: GM-01 fails closed on any request that stops before its max_tokens (F-pm-24)"}
+                "note": "no EOS set declared: GM-01 fails closed on any request that stops before its max_tokens"}
     return {"schema": "verity/workload-program/v1/stop-rule", "eos_token_ids": sorted(ids), "source": sources, "checkpoint_dir": checkpoint_dir,
             "rule": "a request may stop before max_tokens only when its last served token is one of eos_token_ids (finish_reason stop/None); "
                     "stop strings, aborts and drops are not modelled and FAIL G6"}
 
 
 def weights_of_record_binding(components: dict[str, dict]) -> dict:
-    """[MAN-09] The WEIGHTS OF RECORD per component: manbind's `weights_of_record.json`
+    """The WEIGHTS OF RECORD per component: `weights_of_record.json`
     (root_of_record = H(the served tensors composed from the PINNED safetensors shards, in Program order; for a rank Program of TP world W,
     that rank's shard slices) written beside the component by row_pod / tp2's Build.  GP-01 does not compute a second root (one function,
     one owner); it CARRIES each component's record into the workload Program, and REFUSES when the records cannot all be one workload's:
       (a) a record whose program_digest is not the component's recorded digest (a stale record beside a re-derived component);
       (b) two components of the same rank with different roots (the compose would span two checkpoints);
       (c) a record that is not complete (a field with no composition rule) -- fail closed, named.
-    A component with no record is carried as null (the row's Commit then fails 'weights unpinned', MAN-09), never invented.
+    A component with no record is carried as null (the row's Commit then fails 'weights unpinned'), never invented.
     `components`: {"LP,T": {"dir", "recorded_digest"}}."""
     per: dict[str, dict | None] = {}
     by_rank: dict[int, tuple[str, str]] = {}
@@ -539,7 +539,7 @@ def weights_of_record_binding(components: dict[str, dict]) -> dict:
                "unresolved": rec.get("unresolved") or [], "schema": rec.get("schema"), "checkpoint_dir": (rec.get("checkpoint") or {}).get("dir")}
         per[key] = ent
         rd = c.get("recorded_digest")
-        # [rev-pm M-0717 (ii)] a record without program_digest cannot be tied to the component (the stale check could never fire): refused
+        # a record without program_digest cannot be tied to the component (the stale check could never fire): refused
         if not ent["program_digest"]:
             return {"refusal": f"component {key}: weights_of_record.json carries no program_digest -- it cannot be tied to the component "
                                f"(recorded digest {str(rd)[:16] if rd else None})", "components": per, "per_rank": None}
@@ -549,12 +549,12 @@ def weights_of_record_binding(components: dict[str, dict]) -> dict:
         if not ent["complete"]:
             return {"refusal": f"component {key}: weights of record incomplete -- {len(ent['unresolved'])} Program weight field(s) without a "
                                f"composition rule: {[str(u)[:80] for u in ent['unresolved'][:5]]} (MAN-09: fail closed)", "components": per, "per_rank": None}
-        if ent["unresolved"]:   # [M-0717 (ii)] complete:true beside unresolved != [] is a self-contradicting record
+        if ent["unresolved"]:   # complete:true beside unresolved != [] is a self-contradicting record
             return {"refusal": f"component {key}: weights_of_record.json says complete but lists {len(ent['unresolved'])} unresolved field(s) "
                                f"{[str(u)[:80] for u in ent['unresolved'][:5]]}: self-contradicting record, refused", "components": per, "per_rank": None}
         if not ent["root_of_record"]:
             return {"refusal": f"component {key}: weights_of_record.json carries no root_of_record", "components": per, "per_rank": None}
-        # [rev F-r16-06, M-0056] a root is carried only when it was composed from the PINNED checkpoint shards (W1): `checkpoint.all_shards_pinned`
+        # a root is carried only when it was composed from the PINNED checkpoint shards (W1): `checkpoint.all_shards_pinned`
         # must be True (None = no shard pins recorded, False = a shard differs from its pin) and the record must not describe LIVE parameters
         # (a `source` starting with "live" is the Commit side's re-registration digest, never the weights of record) -- the finalizer applies the
         # same guard to weights_of_record*.json files and trusts workload_program.json's roots as-is, so the guard has to hold at the source.
@@ -577,7 +577,7 @@ def weights_of_record_binding(components: dict[str, dict]) -> dict:
     return {"refusal": None, "components": per,
             "per_rank": {str(r): v[1] for r, v in sorted(by_rank.items())} if have else None,
             "complete": bool(have) and len(have) == len(per),
-            "note": ("every component carries manbind's weights of record; Commit compares each served parameter with it by name (MAN-09)"
+            "note": ("every component carries its weights of record; Commit compares each served parameter with it by name (MAN-09)"
                      if have and len(have) == len(per) else
                      f"{len(per) - len(have)} of {len(per)} components carry no weights_of_record.json: the row's Commit fails 'weights unpinned' (MAN-09)")}
 
@@ -593,7 +593,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     are taken from it (module docstring).  `early`, `canon`: components `follow_components` already loaded, and their definition set.  `theta_registered`: the weights bound at registration (`WorkloadProgram`'s), which moves the workload digest."""
     t0 = time.time()
     artifact_root = os.path.abspath(artifact_root) if artifact_root else os.path.dirname(os.path.abspath(out))
-    raw = open(workload_path, "rb").read()
+    raw = workload_file(workload_path).read_bytes()
     m = json.loads(raw)
     w = Workload.of(m, workload_path)     # config's own readers (`done_source_refusal`, `RowEngine`) take the document `m`
     mdigest = hashlib.sha256(raw).hexdigest()
@@ -615,28 +615,28 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     if missing:
         return _refused(out, {"schema": W.SCHEMA + "/result", "ok": False, "reason": "missing_derived", "missing_derived": missing,
                               "hint": "derive_step --wrapper request --LP <lp> --T <t> --workload <manifest> for each"})
-    # [COORD M-0063 (1)] the Program declares the execution profile + engine conditions it models and REFUSES a row it does not model
+    # the Program declares the execution profile + engine conditions it models and REFUSES a row it does not model
     app = workload_applicability(w, {s: component_applicability(shapes[s]) for s in need})
     if app["refusal"]:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "applicability", "message": app["refusal"], "applicability": app,
                "manifest_sha256": mdigest}
         return _refused(out, res)
-    # [rev-pm M-0560 (1)] a component carrying a per-request S-schedule (stochastic top-p, DECISION M-0529 (A)) binds only to the
+    # a component carrying a per-request S-schedule (stochastic top-p) binds only to the
     # request whose declared arrival it was computed for; a shape shared by two arrivals does not compose with one component
     sched = sampler_schedule_binding(reqs, {s: shapes[s] for s in need})
-    # [M-0571 (3)] a component derived under stoch's EXPERIMENTAL per-event S (STOCH_DECLARED_CHRONOLOGY_S=1, sampling.geometry.experimental)
+    # a component derived under stoch's EXPERIMENTAL per-event S (STOCH_DECLARED_CHRONOLOGY_S=1, sampling.geometry.experimental)
     # never composes into a canonical workload Program: refused unless this compose is itself marked experimental by the same variable
     exp = {PP.shape_key(s): (component_sampling(shapes[s]).get("geometry") or {}).get("experimental") for s in need}
     exp = {k: v for k, v in exp.items() if v}
     if exp and not settings.STOCH_DECLARED_CHRONOLOGY_S:
         sched["refusal"] = (f"components {sorted(exp)} were derived under the EXPERIMENTAL per-event split schedule "
-                            f"(STOCH_DECLARED_CHRONOLOGY_S=1; ruling M-0571 (3): S is a workload-level derived value, not built yet): "
+                            f"(STOCH_DECLARED_CHRONOLOGY_S=1; S is a workload-level derived value, not built yet): "
                             f"not composable into a canonical workload Program -- set the same variable to compose mechanism evidence")
     if sched["refusal"]:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "sampler_schedule", "message": sched["refusal"], "sampler_schedule": sched,
                "manifest_sha256": mdigest}
         return _refused(out, res)
-    # [R17-1 / DP-pad-02 (b)] LAG: the REQUIRED specialization parameter, declared from the row's target (the resolved async-scheduling
+    # LAG: the REQUIRED specialization parameter, declared from the row's target (the resolved async-scheduling
     # configuration of the serving profile, implementation pinned) BEFORE the Program is composed -- it is a static of Workload_v1 and
     # enters the digest; the components' derive-time targets must resolve to the same value (fail closed, named)
     lag = workload_lag(m, {s: shapes[s] for s in need})
@@ -645,7 +645,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
                "lag": lag, "manifest_sha256": mdigest}
         return _refused(out, res)
     app["engine"] = {**app["engine"], "async_scheduling": bool(lag["async_scheduling"])}   # G1 compares it with the record's resolved read-back
-    # [R17-42 route A (3)] the fused-MoE CONSTRUCTION: declared by the row's target, bound by the components (their Definitions), coupled here
+    # the fused-MoE CONSTRUCTION: declared by the row's target, bound by the components (their Definitions), coupled here
     # (one construction per workload Program, fail closed, named); a header block, NOT an applicability.engine key -- never attested
     moec = workload_moe_construction(m, {s: shapes[s] for s in need})
     if moec.get("refusal"):
@@ -655,18 +655,18 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     comps: dict[tuple[int, ...], W.RequestComponent] = {}
     comp_secs = {}
     comp_provenance = {}
-    canon = {} if canon is None else canon   # [rev-pm M-0123 F(1)] this compose's shared-definition set, never another compose's in the same process
+    canon = {} if canon is None else canon   # this compose's shared-definition set, never another compose's in the same process
     for s in need:
         d = shapes[s]
         pre = (early or {}).get(d) or load_component(d, canon)
-        # [rev-pm M-0123 E] the component descriptor is checked against the digest the derive RECORDED for it (result.json program.digest /
+        # the component descriptor is checked against the digest the derive RECORDED for it (result.json program.digest /
         # artifact.json program_digest): a descriptor edited after the derive composes to another workload digest silently otherwise
         prov = pre["prov"]
         if prov["refusal"]:
             res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "component_provenance", "message": prov["refusal"], "component": d,
                    "manifest_sha256": mdigest}
             return _refused(out, res)
-        # [hopper HOP-03 M-0276] a component derived with a declared LAUNCH CONTEXT (FA3 tile = launch property) carries it in its
+        # a component derived with a declared LAUNCH CONTEXT (FA3 tile = launch property) carries it in its
         # applicability (`launch_context`, present only when declared): recorded per component here -- it is the component's own
         # (each shape has its own per-step launch max), so it is NOT an agreed workload_applicability key
         lc = component_applicability(d).get("launch_context")
@@ -684,32 +684,31 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     wl = W.WorkloadProgram(wreqs, manifest_digest=mdigest, lag=int(lag["value"]), theta_registered=theta_registered)
     art = wl.artifact()
     art["lag"] = {**lag, "value": wl.lag}   # the declaration block (source, pinned implementation, per-component coupling) beside the static
-    art["moe_construction"] = moec         # [R17-42] the construction block (declared value, family, per-component coupling, population label)
+    art["moe_construction"] = moec         # the construction block (declared value, family, per-component coupling, population label)
     # the manifest's UUIDs beside the Program's r<k> ids (the record's RunHeader/StepStart name requests by the UUID; the global
     # checker maps them through this table -- G1 checks the sets agree)
     wrids = {r["request_id"]: r["workload_request_id"] for r in reqs}
     for r in art["requests"]:
         r["workload_request_id"] = wrids.get(r["request_id"])
-    art["request_ids"] = {"convention": "r<k>, k = 0-based position in the workload manifest (COORD R15 ruling 2)",
+    art["request_ids"] = {"convention": "r<k>, k = 0-based position in the workload manifest",
                           "workload_request_ids": wrids}
     art["applicability"] = app
     if exp:
-        art["experimental"] = {"reason": "per-event split schedule from the DECLARED chronology (DECISION M-0529 (A)); mechanism evidence, "
-                                         "not canonical (ruling M-0571 (3))", "components": exp}
-    # [M-0614 (1) / M-0632 / MAN-09] the weights of record per component (per rank for TP), carried, never recomputed here
+        art["experimental"] = {"reason": "per-event split schedule from the DECLARED chronology; mechanism evidence, not canonical", "components": exp}
+    # the weights of record per component (per rank for TP), carried, never recomputed here
     wor = weights_of_record_binding({k: {"dir": v["dir"], "recorded_digest": v.get("recorded_digest")} for k, v in comp_provenance.items()})
     if wor["refusal"]:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "weights_of_record", "message": wor["refusal"], "weights_of_record": wor,
                "manifest_sha256": mdigest}
         return _refused(out, res)
     art["weights_of_record"] = wor
-    art["stop_rule"] = stop_rule(checkpoint_dir, eos_token_ids, w.sampling)   # [F-pm-24] the declared EOS set GM-01 verifies early stops against
+    art["stop_rule"] = stop_rule(checkpoint_dir, eos_token_ids, w.sampling)   # the declared EOS set GM-01 verifies early stops against
     if art["stop_rule"].get("refusal"):
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "stop_rule", "message": art["stop_rule"]["refusal"], "stop_rule": art["stop_rule"],
                "manifest_sha256": mdigest}
         return _refused(out, res)
-    # [R17-1 / DP-pad-02 (b)] the rows the declared scheduler computes AFTER an EOS stop are the Program's `lag` static (above); the stop
-    # rule carries the same value under both names (eos_lag_rows: the ruling-21 reader's key; lag: R17-1's) -- one source, and GM-01 G6
+    # the rows the declared scheduler computes AFTER an EOS stop are the Program's `lag` static (above); the stop
+    # rule carries the same value under both names (eos_lag_rows and lag) -- one source, and GM-01 G6
     # consumes THIS declaration (never the record's attestation as the rule; G1 checks the record attests the same resolved value)
     art["stop_rule"]["eos_lag_rows"] = art["stop_rule"]["lag"] = wl.lag
     art["stop_rule"]["eos_lag_source"] = ("Workload_v1 static `lag` = TargetProfile.lag() of the row's declared target (" + lag["source"] + "); "
@@ -732,7 +731,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     art["inputs"] = {"manifest": workload_path, "manifest_sha256": mdigest, "derived": {PP.shape_key(k): v for k, v in shapes.items() if k in comps},
                      # per component: the descriptor's recomputed digest == the derive's recorded program_digest (checked above), descriptor sha
                      "component_provenance": comp_provenance,
-                     "sampler_schedule": sched["checked"] or None,   # [M-0560 (1)] per-request S-schedule components and their bound request
+                     "sampler_schedule": sched["checked"] or None,   # per-request S-schedule components and their bound request
                      "execution_record_read": False}
     # layout 1.1: the same paths relative to the artifact root, so a fetched Build resolves its components wherever it lands
     art["layout"] = build_paths.layout_block(artifact_root, workload_path, art["inputs"]["derived"])
@@ -746,10 +745,10 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload")
+    workload: str = option("--workload", type=workload_arg)
     derived: list[str] = option("--derived", action="append", default=[])
     out: str = option("--out")
-    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the pinned checkpoint: its config.json / generation_config.json eos_token_id " "become the Program's declared stop rule (F-pm-24)")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the pinned checkpoint: its config.json / generation_config.json eos_token_id " "become the Program's declared stop rule")
     eos_token_ids: str | None = option("--eos-token-ids", default=None, help="comma-separated EOS token ids declared explicitly (union with --checkpoint-dir's)")
     artifact_root: str | None = option("--artifact-root", default=None, help="the dir the vllm-build/v1 tree is rooted at (holds build_workload/ and the " "build_request*/ dirs); the `layout` block's paths are relative to it. Default: the parent of --out")
     follow: float | None = option("--follow", type=float, default=None,
@@ -765,7 +764,7 @@ def main(a: Options) -> int:
     eos = [int(x) for x in a.eos_token_ids.split(",") if x.strip()] if a.eos_token_ids else None
     early, canon = None, {}
     if a.follow:
-        reqs = manifest_requests(Workload.load(a.workload))
+        reqs = manifest_requests(Workload.load(workload_file(a.workload)))
         early = follow_components(a.derived, {shape_of(r) for r in reqs}, canon, timeout=a.follow, done=a.follow_done,
                                   stop=a.follow_stop)
         if early is None:

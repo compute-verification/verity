@@ -1,5 +1,5 @@
 """The anchored inputs' anchors (`verity.core.protocols.pouw.circuit.anchors`): the verifier builds them, refuses a prover's that differ,
-and refuses a repeated call index in a window or across a salt's windows (the red team's X-SPC-72); a tile check's are public input regions, their
+and refuses a repeated call index in a window or across a salt's windows; a tile check's are public input regions, their
 values unpacked into whole words."""
 from __future__ import annotations
 

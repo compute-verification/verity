@@ -16,7 +16,7 @@ low six bits minus 31, exactly uniform on [−31, 32].  A tile's digest is SHAKE
 row-major within a step (the order an accumulator produces them).
 
 ``ncp-v1`` uses the word-granular production P v1.1 (`word_perm`: it moves aligned 4-entry words and keeps the order
-inside each, so forming E₂ is a free word move under W1 with byte moves priced).  The red team certified it independently
+inside each, so forming E₂ is a free word move under W1 with byte moves priced).  It is certified
 (independence rank T − 1, λ₃ = 32, MinRank 16 at k = 1,088, 2,048, 4,096 and 11,008); ``tests/test_pouw_word_p.py``
 re-checks the rejection rule, the MinRank argument's hypotheses and λ₃ ≥ 16 at the k the MVP uses.  ``ncp-v1-shift24``
 uses the shift by 24, admissible with independent checkpoints for every k >= 1024 with 16 | k (Lean
@@ -43,7 +43,7 @@ M32 = (1 << 32) - 1
 WORD_P_SEED = b"pous-pouw-ncp-Pword-v1"
 #: Route U's bias: X + β is u8 on the int7 domain for 127 <= β <= 129 with an unsigned P (Lean `biasU8Iff`)
 BETA = 128
-#: f: W1 units per activation position for forming the operands on route U (03:35Z W1)
+#: f: W1 units per activation position for forming the operands on route U
 FORM_UNITS = 24
 
 

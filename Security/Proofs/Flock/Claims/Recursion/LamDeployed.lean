@@ -38,7 +38,7 @@ It bounds a number and establishes no security level: `KSLin2` at the deployment
 coin server's record, which reads back; `ksLin2_deployed_full`), Holo statements being
 candidate 3's own model, and `BitsLin2` there, that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from it
 (`bitsLin2On_of_ksLin2On`). The proved level at the deployment is still `Claims.Recursion.lam`'s, about 65 bits, below
-the 100-bit floor (ASK-73).
+the 100-bit floor.
 -/
 
 namespace RecDeploy
@@ -473,7 +473,13 @@ theorem CpDep_width_le (x : Msg) : FlockDeploy.KS.CpDep.width x ≤ 2 ^ 64 := by
 /-- **Route 2C's bound `λ₂` evaluates to at least `100` at the deployed caps**: `lamLin2_deployed_ge` at `CpDep`, the
 caps `ksLin2_deployed_plain` states `KSLin2` at from its premises, whose width bound is `CpDep_width_le`. This bounds a
 number: `KSLin2` at the deployment's dense statements only follows from premises still open (`ksLin2_deployed_open`),
-and `BitsLin2` there follows from it (`bitsLin2On_of_ksLin2On`). -/
+and `BitsLin2` there follows from it (`bitsLin2On_of_ksLin2On`).
+
+`hn`, `hS` and `hO` are deployment-size conditions on public data, and none is a hash premise or says anything about
+the prover's behaviour: `hn` says `x` stages at most `2^16` V\* parts and `hS` that the inner setup `x` names has at
+most `2^56` hm96 inputs, both numbers read off `x`; `hO` is the scope condition `PartIn` at each staged V\* part (1–200
+tables, at most two link points, `25 ≤ m ≤ 35`), which the verifier's own setup `setupO` evaluates on the staged
+public statement. -/
 theorem lamLin2_deployed_ge_dep (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

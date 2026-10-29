@@ -3,9 +3,9 @@
 layer's attention scope cut out of it (`int8_attention_cut`) as the test's fixture.
 
     cd integrations/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
-    $PY -m tests.engine.int8_attention_capture_gpu --out DIR --at 2026-10-17T00:00:00Z --by LANE [--layer 0]
+    $PY -m tests.engine.int8_attention_capture_gpu --out DIR --at ISO_TIME --by LANE [--layer 0]
 
-The workload is the int8 Llama-3.2-1B sweep row's engine and target (`WORKLOAD_FROM`, the same int8 arm and CUSTOM attention backend)
+The workload is the int8 Llama-3.2-1B sweep workload's engine and target (`WORKLOAD_FROM`, the same int8 arm and CUSTOM attention backend)
 on the registered `LLAMA31_8B_INT8` pin (`int8_exact_gpu.pin`), with two requests of PROMPTS' lengths (that row's first prompt ids;
 Llama 3.1 and 3.2 share the tokenizer) and two tokens each: step 0 is one batched prefill of both, step 1 one batched decode, so
 each step's kv_quant_batch pads the shorter window.  m1_capture writes to a scratch directory; DIR gets workload.json, capture/

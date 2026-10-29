@@ -24,7 +24,7 @@ from verity_vllm.records.fields import RecordError, only, optional, required
 SCHEMA = "verity/commit-integ/delta/v1"
 TP_SCHEMA = "verity/commit-integ/delta-tp/v1"
 SCHEMAS = (SCHEMA, TP_SCHEMA)
-#: every top-level field a writer writes, across their versions since R19
+#: every top-level field a writer writes, across every version a reader still meets
 FIELDS = frozenset({
     "schema", "label", "workload", "workload_sha256", "case", "model", "pair", "order_in_pair", "arm", "committer", "committer_name",
     "wall_s", "iterations", "engine_steps", "generated_tokens", "prompt_tokens", "generated_tokens_per_s", "total_tokens_per_s",
@@ -32,7 +32,7 @@ FIELDS = frozenset({
     "utc", "remote_session", "fault_retained_flip", "root_equal_expected", "commit",
     "tp", "commit_started", "step_tokens_out", "thread_cpu_s",                       # pipeline.tp.commit
     "served_window",                                                                 # pipeline.serve_seal
-    "tokens_equal",                                                                  # runs before R19: tokens_equal_ref's old name
+    "tokens_equal",                                                                  # older runs: tokens_equal_ref's old name
 })
 
 
@@ -83,7 +83,7 @@ class CommitRun:
     pair: int
     arm: str                                          # `control`, or the instrumented arm (`instrumented`, or the committer's name)
     committer: str | None                             # the control arm has none; a sealed window names it in `commit.committer`
-    tokens_equal: bool | None                         # `tokens_equal_ref` (`tokens_equal` before R19); a sealed window has no reference run
+    tokens_equal: bool | None                         # `tokens_equal_ref` (`tokens_equal` in older runs); a sealed window has no reference run
     commit: CommitBlock | None                        # the control arm has none
     entry: Mapping[str, Any]                          # as written
 

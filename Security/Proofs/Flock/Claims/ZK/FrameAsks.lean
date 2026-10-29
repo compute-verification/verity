@@ -3,7 +3,7 @@ import Flock.Firewall.SessionPlan
 import Proofs.Flock.Claims.ZK.FrameCount
 
 /-!
-# The opening's coin asks (Stage B, R2)
+# The opening's coin asks
 
 After the algebraic phase, the opening runs live (`Drive.openStep`): every squeeze past the coins it was given asks the
 driver for its count, as the squeeze's framed header holds it (`Drive.stepAsks`). This file counts those asks, as

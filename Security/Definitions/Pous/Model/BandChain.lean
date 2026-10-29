@@ -4,7 +4,7 @@ import Definitions.Pous.Model.Dense
 /-!
 # The band scheme and the dense chain scheme over the overwrite chain on `Π₂`
 
-The definitions the proposed band pins read (`BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`,
+The definitions the band pins read (`BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`,
 `BandMultiMeets14`, `BandMultiMeets14K106`, `ChainDenseMeets64`), copied verbatim from the proofs' sources, with
 each source namespace `PousX` renamed `Pous.X` (the `Pous.Dense` and `Definitions.Pous.Model.P3Chain` precedent). The
 overwrite chain itself (`Pous.Sponge.{iv, padBlk, parentsDesc, ovR, ovH, ovStep, ovAbsorb, ovKey}`) is reused from
@@ -18,8 +18,8 @@ overwrite chain itself (`Pous.Sponge.{iv, padBlk, parentsDesc, ovR, ovH, ovStep,
 - `Pous.BandMulti` (`band-multi/BandMultiModel.lean`): the `N`-segment band DAG, the per-segment domains `segDom`, and
   the multi-segment scheme `chainBandSeg`.
 
-The public-encoder definitions (`PubMeets`, `exactCheck`) are not here: they are staged separately, for the three
-public-encoder pins, and enter only if those pins are approved.
+The public-encoder definitions (`PubMeets`, `exactCheck`) are not here: they are in `Definitions.Pous.Model.PubEncoder`
+and `Definitions.Pous.Accounting.PubMeets`.
 
 **The schemes.** All run in `idealPerm (ℓ + (ℓ + c))`, with `ℓ = 524288` (64 KiB labels) and capacity `c = 512`.
 Label `v` is `C_v = key_Π₂(IV(dom v); C_par(v) newest first, pad) ⊕ W_v`, where each call is `(r, h) = Π₂(B ‖ h)`: `r` is

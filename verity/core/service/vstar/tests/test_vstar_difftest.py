@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -21,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 from hypothesis import strategies as st
+from verity_difftest import settings
 
 import verity_difftest as D
 from verity.ml.circuits.boolean.forms import Circuit
@@ -35,7 +35,7 @@ from verity_flock import rec_residuals as RR
 
 LEAN = Path(__file__).resolve().parents[1]
 #: inner sessions' shapes, ``M,K_LOG,CLAIMS`` separated by ``;``, whose whole stage `test_stage_is_byte_equal` compares
-STAGE = os.environ.get("VERITY_VSTAR_STAGE", "")
+STAGE = settings.get("VERITY_VSTAR_STAGE")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 HEX = "0123456789abcdef"
@@ -241,7 +241,8 @@ def _given(**_):
 
 def _sub(id_: str, template: str, inputs: list[str], outputs: list[str], digests) -> SimpleNamespace:
     """`rec_outer.subcircuit`'s and `rec_residuals.subcircuit`'s shape, its `program_digests` the given ones."""
-    port = lambda nm: SimpleNamespace(name=nm, dtype="u16")
+    def port(nm):
+        return SimpleNamespace(name=nm, dtype="u16")
     return SimpleNamespace(id=id_, template=SimpleNamespace(id=template), inputs=[port(nm) for nm in inputs],
                            outputs=[port(nm) for nm in outputs], definition=_given, program_digests=lambda statics: digests)
 
@@ -405,8 +406,9 @@ def _one(*strategies):
 def _shapes(claims: int):
     """Inner sessions' shapes, three times in four: fast100's m (each of three ranges a branch), k_log from 6, 2 to
     ``claims`` claims; else m, k_log or claims just outside, or not a shape."""
-    valid = lambda lo, hi: st.fixed_dictionaries({"m": st.integers(lo, hi), "k_log": st.integers(6, 40),
-                                                  "claims": st.integers(2, claims)})
+    def valid(lo, hi):
+        return st.fixed_dictionaries({"m": st.integers(lo, hi), "k_log": st.integers(6, 40), "claims": st.integers(2, claims)})
+
     return st.one_of(valid(22, 26), valid(27, 30), valid(31, 35), _one(
         st.fixed_dictionaries({"m": st.sampled_from([0, 21, 36, -1, True]), "k_log": st.just(20), "claims": st.just(2)}),
         st.fixed_dictionaries({"m": st.just(22), "k_log": st.sampled_from([0, 5, -1]), "claims": st.just(2)}),
@@ -615,7 +617,8 @@ def test_inner_unit_agrees(server):
     zero, so without its own check `innerUnit` would emit a unit where `unit_circuit` refuses. A drawn invalid S is
     usually refused by `checkRepS` first, so the draws alone rarely reach `checkS`."""
     p = port("inner_unit", inner_unit, st.fixed_dictionaries({"S": REPS, "name": NAME}) | JSON)
-    gf = lambda t: {"nw": 2, "nv": 0, "ops": [], "res": [{"mul": [], "add": [t]}]}
+    def gf(t):
+        return {"nw": 2, "nv": 0, "ops": [], "res": [{"mul": [], "add": [t]}]}
     good = {"S": {"gf": gf(["w", 1]), "ports": [["a", 2]]}, "name": "row0"}
     assert D.replay(p, good, server)[0] == "output"
     for S in ({"gf": gf(["w", 1]), "ports": [["a", 1], ["a", 1]]}, {"gf": gf(["w", 2]), "ports": [["a", 2]]}):
@@ -803,7 +806,7 @@ def test_stage_is_byte_equal(tmp_path, shape):
         record.append({**s, "python_sha512": hashlib.sha512(python).hexdigest(), "python_bytes": len(python),
                        "equal": data == python, "partition": b["partition"], "program": b["program"]})
         del data, python
-    if out := os.environ.get("VERITY_VSTAR_STAGE_OUT"):
+    if out := settings.get("VERITY_VSTAR_STAGE_OUT"):
         Path(out).mkdir(parents=True, exist_ok=True)
         (Path(out) / f"stage-{'-'.join(map(str, shape))}.json").write_text(json.dumps(record, indent=1))
     assert all(r["equal"] for r in record), [r["dir"] for r in record if not r["equal"]]

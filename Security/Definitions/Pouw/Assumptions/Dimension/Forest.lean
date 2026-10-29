@@ -3,8 +3,8 @@ import Definitions.Pouw.Assumptions.Dimension.Pipe
 /-!
 # Theorem 1 of `a1-cost.md` (the forest argument): statements (trusted)
 
-`a1-cost.md` §3.2–3.3, restated on the grid as the red team asked (Phase 8: P8-1, priced additions; P8-2, products of
-free values, with `F₁`-functions free).
+`a1-cost.md` §3.2–3.3, restated on the grid with priced additions and with products of
+free values, `F₁`-functions free.
 
 * **Q-parts** (`QPart`): the functions of the noise modulo `V₀`. An FP32 step's value is then determined by its
   operands' Q-parts: a product of two free values contributes its **atom** (`atoms`: the class of `a·b` with
@@ -14,8 +14,8 @@ free values, with `F₁`-functions free).
   earlier value; every other value is priced and arbitrary. If no nonzero element of a subspace `Z` is a sum of two
   atoms (`TwoAtomFree`, rank ≥ 3 on Q-parts), then with FP32 steps at 8 and priced values at 16 the program pays at
   least `16·dim` of the span of its values in `Z`: `2·dim ≤ 2·#priced + #FP32`. With no priced values this is
-  Theorem 1, `#FP32 ≥ 2·dim`; with them it is Corollary 2 at P8-1's prices, the priced values allowed as FP32
-  operands.
+  Theorem 1, `#FP32 ≥ 2·dim`; with them it is Corollary 2 at the priced additions' prices, the priced values allowed as
+  FP32 operands.
 * **The grid** (`GridTwoAtom`): under checkpoint independence and MinRank ≥ 5, the non-final checked words modulo
   `V₀` (`wordsQ`) contain no nonzero sum of two atoms. The four-point mixed difference of an atom is a rank ≤ 2
   matrix, so two atoms give rank ≤ 4, and MinRank ≥ 5 exhibits a nonsingular 5 × 5 minor.
@@ -47,7 +47,7 @@ def TwoAtomFree (Z : Submodule ℚ W) (At : Set W) : Prop :=
 
 end Abstract
 
-/-- **Theorem 1 with Corollary 2's pricing** (`a1-cost.md` §3.2–3.3; abstract). Values `y i` for `i < N`; the steps
+/-- **Theorem 1 with Corollary 2's pricing** (abstract). Values `y i` for `i < N`; the steps
 in `F` are merge-free FP32 steps, the others priced (any value). If the atoms are closed under scaling and no
 nonzero element of `Z` is a sum of two atoms, then `2·d ≤ 2·#priced + #FP32`, with `d` the dimension of the span of
 the values that lie in `Z`: at 16 per priced value and 8 per FP32 step, the program costs at least `16·d`. -/
@@ -72,7 +72,7 @@ def wordsQ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ �
 
 /-! ## Pinned statements -/
 
-/-- **Rank ≥ 3 on the grid, in the form Theorem 1 uses** (P8-2): under checkpoint independence and MinRank ≥ 5, no
+/-- **Rank ≥ 3 on the grid, in the form Theorem 1 uses**: under checkpoint independence and MinRank ≥ 5, no
 nonzero element of the checked words' span modulo `V₀` is a sum of two atoms, for every `A = g(F₁)` and `B`. -/
 def GridTwoAtom : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ),
@@ -122,7 +122,7 @@ def QuadChainConsistent : Prop :=
         ∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ (quadMachine N m n k 8).outputs q) ∧
       1 - (1 / 2 : ℝ) ≤ (1 - 0) * (1 - 16 / (3 * k : ℝ))
 
-/-- **`TTNCPQuadOfA2`'s hypotheses hold together at the tight constant** (red team P11-2): `QuadChainConsistent` at
+/-- **`TTNCPQuadOfA2`'s hypotheses hold together at the tight constant**: `QuadChainConsistent` at
 `γ₂ = 0` and `γ₀ = 16/(3k)`, where the arithmetic hypothesis holds with equality. In the model the chain loses only
 the first checkpoint of each column. -/
 def QuadChainConsistentTight : Prop :=

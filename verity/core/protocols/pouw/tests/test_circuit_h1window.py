@@ -120,6 +120,16 @@ def _reads(want, tile=TILE):
             for u, (k, a0, b0) in enumerate(want)]
 
 
+def _ranges(ids: dict, linears, calls, m, tile=TILE) -> list[tuple[str, int, int]]:
+    """Each call's partition range, written out from the layout: K's template (``ids`` by K), its first unit and its
+    (m/R)·(n/C) tiles, one batch a call."""
+    k_of, n_of, at, out = {n: k for n, k, _n in linears}, {n: nn for n, _k, nn in linears}, 0, []
+    for lin, _blk in calls:
+        out.append((ids[k_of[lin]], at, (m // tile[0]) * (n_of[lin] // tile[1])))
+        at += out[-1][2]
+    return out
+
+
 def _b0(reads: dict) -> tuple[str, int]:
     """A unit's read of its first B row, at its K's key."""
     return next(v for key, v in reads.items() if key.startswith("b_k") and key.endswith("[0]"))
@@ -137,7 +147,8 @@ def test_a_mixed_k_window_with_shared_b_derives_exactly_each_calls_tiles():
     assert [[n for n, _t in t.signature()[0]] for _k, t in prog.fn.bindings["TILES"]] == [
         ["a_k32", "b_k32", *HW.SHARED], ["a_k64", "b_k64", *HW.SHARED]]
     assert m == 8 and tp.population == len(want) == 2 * (2 * 2 + 2 * 1 + 2 * 1)
-    assert [(tid, first, n) for _k, tid, first, n in tp.ranges] == [(ids[k], u, 1) for u, (k, _a, _b) in enumerate(want)]
+    assert [(tid, first, n) for _k, tid, first, n in tp.ranges] == _ranges(ids, LINEARS, CALLS, m)
+    assert {prog.root.body.nodes[k].form for k, _t, _f, _n in tp.ranges} == {"batch"}, "each call's tiles are one batch"
     sig = dict(prog.fn.signature()[0])
     assert [name for name, _t in prog.fn.signature()[0]] == list(HW.roles((64, 32)))
     assert (sig["a/32"].n, sig["b/32"].n, sig["a/64"].n, sig["b/64"].n, sig["zy"].n, sig["position"].n) == (
@@ -148,6 +159,20 @@ def test_a_mixed_k_window_with_shared_b_derives_exactly_each_calls_tiles():
     assert [HW.unit_reads(prog, tp, u) for u in range(tp.population)] == _reads(want)
     steps = [[_b0(HW.unit_reads(prog, tp, u)) for u in range(s * len(want) // 2, (s + 1) * len(want) // 2)] for s in (0, 1)]
     assert steps[0] == steps[1], "every step's units read the linears' one copy of B"
+
+
+def test_the_windows_descriptor_grows_with_its_calls_and_row_blocks_never_its_tiles():
+    """Each call is one batch of K's template, its A rows one repeated run a row block and its B rows the linear's run
+    repeated: a linear 32 times as wide, 32 times the tiles, leaves the root's nodes and the descriptor's references as
+    they were. A linear one tile wide reads each row block's A rows once, a plain run, so both widths here repeat it."""
+    def window(n: int) -> tuple[Program, bytes]:
+        prog = HW.program((("q_proj", 32, n),), (("q_proj", 0), ("q_proj", 1)), 16, TILE, unit=unit)
+        return prog, canonical_json({k: v for k, v in encode_program(prog).items() if k != "annotations"})
+
+    (small, a), (wide, b) = window(2 * C), window(64 * C)
+    assert P.evaluate(wide, HW.query(wide)).population == 32 * P.evaluate(small, HW.query(small)).population == 32 * 16
+    assert len(wide.root.body.nodes) == len(small.root.body.nodes)
+    assert len(a) <= len(b) < len(a) + 256, "only the sizes' digits and the type table's distinct sizes differ"
 
 
 def test_a_j10r_window_takes_each_units_call_and_blocks_and_its_public_row_holds_them():
@@ -378,7 +403,7 @@ def test_the_real_32_by_32_window_at_k_448_reads_in_v1_what_it_read_in_v0_and_cr
 
 def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
     """Under a served window's open root, `table_reads_file` gives the call's A and z tables the domains that bind it, the
-    window's own rows (PRF-127), and the weights' b/32 the one that binds none: the domains credit gives them
+    window's own rows, and the weights' b/32 the one that binds none: the domains credit gives them
     (`credit.domain_of`), and the same reads as with no window."""
     m = HW.slot(5, TILE)
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
@@ -569,21 +594,18 @@ def test_the_parameters_take_the_names_a_served_path_gives_them():
     assert P.program_digest(prog) != P.program_digest(HW.program(LINEARS, CALLS, 8, TILE, unit=unit))
 
 
-def test_every_units_receipt_is_a_sink_so_the_window_is_no_seed():
+def test_the_windows_result_is_a_sink_so_the_window_is_no_seed():
     """With the salt its coin port and the positions its position port, a window whose return held no sink would be a
-    seed, whose body no port rule follows (`ports._coin_role`), and the tiles' coin flow would go unchecked: each unit's
-    receipt, exactly its leaves (``ok`` is none), is a sink of the window's result, and a unit that returns none is refused."""
+    seed, whose body no port rule follows (`ports._coin_role`), and the tiles' coin flow would go unchecked: its whole
+    result, the Program's outputs, is declared one sink run, so its declaration is no function of the tile count. A tile
+    that returns its receipt without declaring it a sink is refused by the port rules at the tile."""
     prog = HW.program(LINEARS, CALLS, 8, TILE, unit=unit)
-    want, at = [], 0
-    for t in prog.fn.signature()[1].fields:
-        for _ in range(t.n):
-            want.append((at, at + t.elem.fields[0][1].leaves))
-            at += t.elem.leaves
-    assert [(lo, hi) for lo, hi, o, _w in PT.port_types(prog.fn).ret if o.sink] == want and len(want) == 16
+    ret = PT.port_types(prog.fn).ret
+    assert [(lo, hi, o.sink) for lo, hi, o, _w in ret] == [(0, prog.fn.signature()[1].leaves, True)]
     assert PT._coin_role(prog.fn) is None
     bare = _test_tile("H1WindowTestBareTile", ports=Ports(params={"salt": In(kind="coin")}))
-    with pytest.raises(ValueError, match="returns no sink"):
-        HW.program(LINEARS, CALLS, 8, TILE, unit=lambda k: bind(bare, K=k, R=R, C=C))
+    with pytest.raises(PT.PortError, match="E_PORT_SINK: H1WindowTestBareTile"):
+        PT.port_types(HW.program(LINEARS, CALLS, 8, TILE, unit=lambda k: bind(bare, K=k, R=R, C=C)).fn)
 
 
 def test_the_slot_is_a_power_of_two_of_at_least_the_tiles_rows():
@@ -625,7 +647,7 @@ def test_the_real_tile_composes_at_mixed_k_and_at_the_served_32_by_32():
     tp = P.evaluate(prog, HW.query(prog))
     want = _expected(linears, calls, 8)
     ids = dict(zip((64, 128), HW.query(prog)["params"]["templates"]))
-    assert [(tid, first, n) for _k, tid, first, n in tp.ranges] == [(ids[k], u, 1) for u, (k, _a, _b) in enumerate(want)]
+    assert [(tid, first, n) for _k, tid, first, n in tp.ranges] == _ranges(ids, linears, calls, 8)
     assert [HW.unit_reads(prog, tp, u) for u in range(tp.population)] == _reads(want)
     receipts = [t.elem.fields[0][1].n for t in prog.fn.signature()[1].fields]
     assert receipts[2] > receipts[0], "down_proj's receipt is K-wide"
@@ -682,8 +704,8 @@ def test_a_unit_that_doesnt_prove_its_record_against_its_scaled_rows_is_refused(
 
 
 def test_a_window_whose_receipts_padding_spills_into_another_block_is_staged():
-    """The H1 tile's receipt is an output row of 8 (KS + m) bytes, and the Lean verifier takes a v2 row of any length
-    (#3148): a window of the real tile unit at K = 384, 416, 896 and 928, whose receipts end past byte 111 of a block, is
+    """The H1 tile's receipt is an output row of 8 (KS + m) bytes, and the Lean verifier takes a v2 row of any length:
+    a window of the real tile unit at K = 384, 416, 896 and 928, whose receipts end past byte 111 of a block, is
     staged."""
     ks = (384, 416, 896, 928)
     assert [HW.tile_unit(k, TILE).signature()[1].fields[0][1].leaves // 8 for k in ks] == [112, 120, 240, 248]

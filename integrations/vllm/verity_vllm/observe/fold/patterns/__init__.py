@@ -4,7 +4,7 @@ Everything here is pure Python over the event trees (`tree.TreeNode`) and the st
 (`resolver.StepContext`); it never reads tensor values.  The patterns are registered by a profile module
 (`profiles/vllm_d9105ea80_sm89_eager.py`) which also pins the constexpr / launch-geometry values they accept.
 
-Vocabulary (D68): a pattern maps a raw event subtree to one of the resolver's outcomes: `Compute` (rows of a
+Vocabulary: a pattern maps a raw event subtree to one of the resolver's outcomes: `Compute` (rows of a
 registered *specialization*, one *instance* per row), `Transparent` (alias / move / alloc / noop) or `Unsupported`.
 
 Shared helpers: `resolutions` (grouped resolutions, `unsupported`, report labels), `ops` (op names, bound arguments),

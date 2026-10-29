@@ -2,13 +2,13 @@
 
 1. **Variants.** One layer's rows (``h200_rows``: 25 rows, 663,824 bytes a slot) at ``--sweep-slots``, the row kernel in
    every compression variant: GB/s of row bytes and row compressions a second, the SM clock and power after each; then
-   that layer's leaves in both leaf kernels (1 and 2 blocks an SM), leaves a second.
+   that layer's leaves in both leaf kernels (1 and 2 CTAs an SM), leaves a second.
 2. **Steps.** A whole step at each of ``--slots`` and ``--layers-per-call`` k (52 / k calls, each the rows and leaves of k
    layers, their tensors reused by every call): every row's digest and hm96 leaf (salts from a key), each slot's tree over
    its 1,300 one-row units' roots (frame leaves, pads, 11 levels), and the step's tree over the slots' roots. Seconds a step,
-   GB/s of committed bytes, SHA-512 compressions a second (a leaf's 5; its 3 ChaCha20 blocks aren't counted) and the split.
+   GB/s of committed bytes, SHA-512 compressions a second (a leaf's 5; its 3 ChaCha20 chunks aren't counted) and the split.
 
-The layout is commit_slots' ``h200_layout`` (HASH-13, benchmarks/torch_gpu/commit_slots/slots.py), derived again here from
+The layout is commit_slots' ``h200_layout`` (benchmarks/torch_gpu/commit_slots/slots.py), derived again here from
 the frozen shape: every op's per-token output, one-row units of at most 32 KiB. Times are CUDA events; clocks are read, never
 set.
 """
@@ -24,8 +24,7 @@ from typing import Any
 
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import engine as E
 

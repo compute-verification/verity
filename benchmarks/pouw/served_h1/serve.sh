@@ -49,7 +49,7 @@ else
 fi
 cd integrations/vllm
 PY=${PY:-/workspace/jobs/venv312/bin/python3}
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/pouw/served_h1
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1
 export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=$FLASHINFER_ARCH
 echo "served-h1: asking for one GPU at $(date -u +%H:%M:%SZ)"
 gpu-lease 1 --wait --max-min 28 -- timeout 1650 "$PY" "$ROOT/benchmarks/pouw/served_h1/serve.py" --out "$OUT" \

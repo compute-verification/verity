@@ -116,17 +116,10 @@ def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
     assert lp.evaluate(L.enc_bot(16), *words) == L.enc_bot(16)
 
 
-@pytest.mark.slow
-def test_gelu_tanh_mul_v3_is_v1_on_every_gate_word():
-    """One batch over all 65,536 bf16 gate words (random up words), plus the special up words, against `GeluTanhMulBf16_v1`."""
-    rng = np.random.default_rng(13)
+def test_gelu_tanh_mul_bf16_v3_is_v1_reading_the_registered_table():
+    """`GeluTanhMulBf16_v3` on special words, `gelu_tanh_bf16` its operand, against `GeluTanhMulBf16_v1` (the Lean evaluator's
+    difftest runs it on every gate word)."""
     table = T.table_words("gelu_tanh_bf16")
-    assert table == [D.gelu_tanh_bf16_bits(g) for g in range(1 << 16)]
-    I = 1 << 16
-    gu = list(range(I)) + rng.integers(0, 1 << 16, I).tolist()
-    new = bind(T.GeluTanhMulV3, I=I)
-    assert new.id == f"GeluTanhMul_v3{{I={I}}}"
-    assert list(evaluate(new, gu, table)) == [D.GeluTanhMulBf16.evaluate(g, u) for g, u in zip(gu[:I], gu[I:])]
     for g, u in [(0x3F80, 0x8000), (0xFF80, 0), (0x7FC0, 0x3F80), (0x0001, 0x7F80), (0x8000, 0xFF80)]:
         assert evaluate(T.GeluTanhMulBf16V3, g, u, table) == (D.GeluTanhMulBf16.evaluate(g, u),)
 

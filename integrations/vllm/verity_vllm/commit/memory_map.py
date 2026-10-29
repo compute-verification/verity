@@ -6,7 +6,7 @@ Commit's committed words, `pipeline.memory_map`).
 row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row
           of a sparse MLA Call's `kv` (`LATENT`: the normed latent, then the roped key, one plane); a layer's rows are the
           rows its Calls share, in the order its Calls first read them (its positions), K and V paired by position.  DSA's
-          indexer keys are no rows: their 132-byte rows pack across blocks, and memory accounting ruled them uncredited
+          indexer keys are no rows: their 132-byte rows pack across blocks, and memory accounting leaves them uncredited
           until the map packs them
 born      a row's step, and `last` its last structural reader's (the last step with a gate that has one of its values as
           an operand, a gather that may select one included, whichever it selected): the circuit's requirement

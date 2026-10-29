@@ -9,8 +9,8 @@
 #     -- taskset -c 48-95 bash benchmarks/word_codec/wide_run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to wide_bench.py; LIBSET
-# (default "p127s1 p255s1 p521s1": the carry-chain squaring, faster than operand scanning at every field in
-# r20261012-071155-d336; add p127s0 … for both; a suffix r builds WW_ROLL=1, rN also WW_OCC=N, as in p521s1r3, and
+# (default "p127s1 p255s1 p521s1": the carry-chain squaring, faster than operand scanning at every field
+# measured; add p127s0 … for both; a suffix r builds WW_ROLL=1, rN also WW_OCC=N, as in p521s1r3, and
 # trailing c, u, t, w, e, m and k WW_CC=1, WW_B3U=1, WW_TB=2, WW_KW=2, WW_SKEND=1, WW_MAXREG=160 and WW_SKU=1, as in
 # p521s1rcut) names the builds (p256s1 and p512s1 the full-width fields), KMAX_<bits> (defaults 4, 2, 2, 2, 3) the
 # largest k each holds, and WW_DEFS extra -D flags for every build. PROFILE=1 runs, instead of the bench, wide_profile.py under

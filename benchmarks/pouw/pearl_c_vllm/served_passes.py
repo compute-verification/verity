@@ -31,7 +31,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity_config.settings import of
+
 HERE = Path(__file__).resolve().parent
+settings = of(__file__)
 SPEC = HERE.parents[1] / "specs" / "llama31-8b-1gpu-pouw-protocol-served-b32.toml"
 ARM = "pouw:pearl-c-sm120-v1-h3"
 KEEP = ("units", "base", "tiles", "screened_rows", "failing_rows", "unsure_rows", "excluded_rows", "transcript_root",
@@ -83,7 +86,7 @@ def serve(args: argparse.Namespace) -> int:
     got = [{"pass": i, **{k: p.get(k) for k in KEEP if k in p}} for i, p in enumerate(run.details["passes"])]
     held = [p for p in got if p["units"]]
     over = [p["pass"] for p in got if any((p.get(k) or 0) > cap for k, cap in caps.items())]
-    doc = {"schema": "verity-pouw/pearl-c-served-passes/v1", "spec": str(args.spec), "arm": ARM, "run": os.environ.get("RESEARCH_RUN_ID"),
+    doc = {"schema": "verity-pouw/pearl-c-served-passes/v1", "spec": str(args.spec), "arm": ARM, "run": settings.RESEARCH_RUN_ID,
            "engine": {k: v for k, v in engine.items() if isinstance(v, (int, float, str, bool))},
            "requests": args.requests, "prompt_tokens": args.prompt_tokens, "output_tokens": args.output_tokens,
            "served_tokens": sum(len(o.outputs[0].token_ids) for o in outs), "engine_steps": steps[0],

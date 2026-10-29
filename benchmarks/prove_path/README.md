@@ -124,7 +124,7 @@ history would discharge, and doesn't discharge them yet.
 `advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
 - c, which the run doesn't print. Once the advice is the only free input outside the registration, c is `advice.bits`,
   the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as `bits`. Over
-  several windows, `BitsCount` charges their sum.
+  several windows, c is their sum.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are faulty, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
@@ -155,8 +155,6 @@ guarantee above.
 - The certifier's wire (`Security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. They enter through the wire bounds, which
   have no sampled form yet.
-- The advice (`Security/Definitions/NetworkCertifier/Assumptions/AdviceString.lean`): `NetTiming.BitsCount`,
-  `NetTiming.CompilerDeterministic` and `NetTiming.CompilerPrecommitted`.
 - For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`Security/Definitions/Claims/Hm96.lean`).
 
 **Off the page:** whether the circuit matches the model. That is completeness: an honest run on a circuit that doesn't
@@ -212,19 +210,25 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
     that digest (`build_of`): recomputed from its `descriptor.json.gz`, with every recorded digest and every
     `instances.json.gz` row held to it, so a Build whose body was swapped under its old `result.json` is refused. No Program
     digest covers the rows' names, the parameters' names and types, `supplied`, the correspondence or `prefix_cache.json`, so
-    the verifier (`audit`, and the compile command `circuit`) reads them only from its own Build of each Program: the trace
-    `steps.trace_commands` names, run with the pinned vLLM (`--vllm-python`, `own_builds`) into `--builds` (default
-    `OUT/builds`, never under the row dir), each held to I2's digest. The prover's Builds are its row dir's. The
-    audit summary's `i2` holds I2's Programs beside the Build's `build_request_LP*` digests.
+    the verifier (`audit`, and the compile command `circuit`) reads them only from its own Build of each Program, which its
+    own compile writes with the names vLLM's trace of it gives (`compile_steps(named=True)`, `naming.write_build`,
+    `own_builds`; no vLLM, and `--vllm-python` is ignored) into `--builds` (default `OUT/builds`, never under the row dir),
+    each held to I2's digest. The prover's Builds are its row dir's. The audit summary's `i2` holds I2's Programs beside the
+    Build's `build_request_LP*` digests.
   - on a served window, the same over φ of the served engine as vllm's advice compiler compiles under (`phi_of_serve`:
     `serve.json`'s model, revision, target profile and execution label, the checkpoint's `config.json`), the public default
     seed (`registered_seed`: `engine.served_seed.DEFAULT_SEED`; a run whose `serve.json` records another or none is refused,
     as vllm's advice compiler refuses it), and each request's body as that compiler gives it (`serve_ingress`: the sampling
     fields its ingress record says it brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named
-    as `verity-vllm advice` registers it (`served_identity`: `compile_steps` by module path, its digest over
-    `source_identity.code_identity`, which covers `integrations/vllm` and `verity`), so the audit runs on a tree whose two are
-    the server's. `prove_path.py compiler --serve-run DIR` prints the binding's compiler. I2's Programs are held to the ones
-    vllm's advice compiler wrote into the row dir (`manifest.json`, by I1 id).
+    as `verity-vllm advice` names it and runs the server's code (`served_identity`: `compile_steps` by module path, its
+    digest over `source_identity.code_identity`, which covers `integrations/vllm` and `verity`), so the audit runs on a tree
+    whose two are the server's. Its digest is the single-GPU one (`I2Compiler.digest`) with that code in place of this
+    tree's: it covers φ (`serve.json`'s model and revision, that pin's `config.json`, the target and the execution), the
+    default seed, ℓ and the transfer gates, so a `serve.json` whose model, revision, target or execution differs from the
+    one the advice was registered under names another compiler, refused before the draw (`serve_check`'s `compiler`), and
+    one recording another default seed is refused outright (`registered_seed`). `prove_path.py compiler --serve-run DIR`
+    prints the binding's compiler. I2's Programs are held to the ones vllm's advice compiler wrote into the row dir
+    (`manifest.json`, by I1 id).
 - **A served window** binds the root serve-openai published: the advice is committed once, by the server, and the prover
   commits the window under the published binding. Before any commit and before the draw (folded into the source check a5
   gates the draw on), `serve_check` holds the published records to the verifier's own and refuses by name: another window
@@ -237,14 +241,32 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   by SHA-512; the registered compiler and the advice's root and length; the registration and the committed values; and the
   advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition from Verity's
   catalog or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's
-  table names for it (`prove_path.py circuit` for a served window, which takes no row dir and compiles over its own trace of
+  table names for it (`prove_path.py circuit` for a served window, which takes no row dir and compiles over its own Build of
   each Program), on advice that opens the registered root, and holds its output to the circuit record (less the run root and
   the coins' context) and its charged length to the registered one, so a row dir whose names make another circuit under
   unchanged digests is refused (`circuit`). It imports no `verity_vllm` code.
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
-  prover's Programs come from `--row-dir` and the verifier's from its own trace, and the Build manifest falls back to
+  prover's Programs come from `--row-dir` and the verifier's from its own compile, and the Build manifest falls back to
   `<row dir>/manifest.json`, checked against the record's sha256.
 - **The advice** is I1's canonical encoding. A declared run's comes from its workload (`advice_windows.advice_of_workload`), a
   served run's from its step trace.
 - **The opening** is the named gap above. `run.sh` keeps neither the advice nor its opening in `$OUT`.
+
+## The class circuit's size and its window's commit
+
+`class_size.py` sizes a class circuit in ANDs and C-Flock blocks, and `class_rows.py` counts its rows by what fills them and
+their SHA-512 compressions (`--probe S,NP,O` lowers one Program at a small class). `window_cost.py` prices a
+window's commit from that census, or from a probe projected to a class (`--project 8,1024,64`, which reproduces the exact
+census unit for unit), against its target of 0.20 to 0.25 of the served window. It reports in ANDs (58,120 a
+compression) and in seconds (the window's rows on the GPU's hashing rates, the registration on the CPU's, which
+`--measure-cpu` measures). It covers each lever alone and the plan stacked, the pad pass at three traffics, the
+registration's bytes and files, and totals over a week, a month and a year. With `--stream SIZING` it also prices serving's
+own stream commit (rows-sha512, made while it serves, before the window's commit) and its seal, from serving's stream of
+record (`native_host.schedule_stream_bound`), whole and without the attention interiors (`fa*.m1`, lever F), which nothing
+reads after the seal:
+
+~~~text
+python window_cost.py PROBE.json --target h200 --project 8,1024,64 [--measure-cpu SCRATCH] \
+    [--stream ../../integrations/vllm/tests/pipeline/fixtures/admission/b16.json] [--out FILE]
+~~~

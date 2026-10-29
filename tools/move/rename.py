@@ -97,7 +97,8 @@ class Words:
                     scoped.setdefault(k, v)
             rules = [(_word(w, whole=True), n) for w, n in scoped.items()] + [(_word(w), n) for w, n in self.words.items()]
             first = "".join(sorted({re.escape(w[0]) for w in {**scoped, **self.words}}))
-            self._rules[which] = (re.compile(f"(?=[{first}])(?:" + "|".join(f"({r})" for r, _ in rules) + ")"),
+            pattern = f"(?=[{first}])(?:" + "|".join(f"({r})" for r, _ in rules) + ")" if rules else "(?!)"
+            self._rules[which] = (re.compile(pattern),
                                   [n for _, n in rules], [w.lower() for w in {**scoped, **self.words}])
         return self._rules[which]
 

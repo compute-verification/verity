@@ -34,7 +34,6 @@ from .defs import (PrimitiveDefinition, CompositeDefinition, SpecializedDefiniti
 from .program import Program, input_prim  # noqa: F401
 from .layout import Circuit, GateSelection, Region, FunctionCall, Gate  # noqa: F401
 from .query import query, groups, GapError, QueryError  # noqa: F401
-from .evaluate import evaluate_region, evaluate_call, ExecutionTranscript, MissingValue  # noqa: F401
 from .codec import encode_program, decode_program, program_digest, descriptor_size, canonical_json  # noqa: F401
 from . import boolean  # noqa: F401  (registers the three gates and the constant bits)
 

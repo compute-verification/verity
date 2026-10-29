@@ -15,6 +15,11 @@ through every subprotocol (`examples/vllm/README.md`).
 - **Workloads.** Each file in `workloads/` (`verity-vllm/workload/v2`, read as `config.RowConfig`, written by `verity-vllm
   workload`) states one workload with the runtime that serves it: checkpoint and revision, requests and sampling, the vLLM
   commit, engine arguments, kernel environment and target. The code still says "row" for a workload (`verity-vllm row`).
+  A workload file's bytes are a fixture in the evidence store: the tree keeps its SHA-256 (`workloads/SHA256SUMS`) and its
+  art id (`fixtures/artifacts.json`, the file gitignored). Every reader takes it through `config.workload_file` (outside
+  code: `verity_vllm.pipeline.workload_file`, shell: `verity-vllm workload-file`), which fetches an absent one by its id and
+  refuses one whose digest differs. A new or changed file is a new fixture (`research data put --kind fixture/v1 --file F
+  --preserve`), registered, gitignored and listed in `SHA256SUMS` (`tests/pipeline/test_workload_file.py` refuses one that isn't).
 - **Build: the circuit.** The torch frontend (`program/frontend/`) lowers the served model's exported graph by lowering rules
   into a Program of registered Definitions (`verity.ml.definitions.registry`), with its runtime correspondence: each Call's
   module, graph node, slot and view. `program/predict/` derives the same Programs ahead of time from the workload alone.
@@ -50,7 +55,7 @@ verity_vllm/
   pipeline/       stage drivers (Build, Match, Commit), the CLI, the endpoint, the circuit database; tp/ for TP > 1
   records/ collectives/ ops/ pins/   typed stage records; TP collective sites; pod bootstrap; per-device pins
 tests/ tools/     tests mirror the package (tests/regression: VERITY_REGRESSION=1); scripts run by path
-workloads/ manifests/   one file per workload; checkpoint pins, workloads of record, Definitions, capture maps
+workloads/ manifests/   workload digests (SHA256SUMS); checkpoint pins, workloads of record, Definitions, capture maps
 ~~~
 
 Imports point down `pipeline` > `check` | `properties` > `acquire` > `observe` | `commit` > `engine` > `query` |
@@ -58,8 +63,9 @@ Imports point down `pipeline` > `check` | `properties` > `acquire` > `observe` |
 
 ## Python API
 
-Outside code imports only `verity_vllm`, `verity_vllm.engine.spec` and `verity_vllm.engine.handle`, each only its `__all__`
-(`tests/test_vllm_public_api.py`). `verity_vllm.LLM` is a pinned vLLM engine, constructed and called like `vllm.LLM`:
+Outside code imports only `verity_vllm`, `verity_vllm.engine.spec`, `verity_vllm.engine.handle`,
+`verity_vllm.engine.served_seed`, `verity_vllm.program.predict.window_weights`, `verity_vllm.program.predict.window_rows` and
+`verity_vllm.pipeline.workload_file`, each only its `__all__`, and the modules still on its `KNOWN` list (`tests/test_vllm_public_api.py`). `verity_vllm.LLM` is a pinned vLLM engine, constructed and called like `vllm.LLM`:
 
 ~~~python
 from vllm import SamplingParams

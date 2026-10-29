@@ -1,4 +1,4 @@
-"""[R17 fp8, F-fp8-PLANKEY] The collector's plan key binds the step GEOMETRY, not only (ntok, nreq).
+"""The collector's plan key binds the step GEOMETRY, not only (ntok, nreq).
 
 The B8 mixed 1024/128 bounded record run failed closed at steps 35 and 80: both ntok 4 / nreq 4, the same
 four live requests 45 decode positions apart, 78,892,288 vs 87,297,280 staged bytes -- the FA3 hidden M1 plane is sized by KV length.
@@ -49,6 +49,14 @@ def test_new_and_cached_requests_both_count_and_a_prefill_step_keys_by_its_promp
     assert m0 == "geometry"
     other = _sched([("r0", 0, 1025), ("r1", 0, 10), ("r2", 0, 165), ("r3", 0, 365), ("r4", 0, 449), ("r5", 0, 633), ("r6", 0, 73), ("r7", 0, 817)], cached_from=8)
     assert plan_key_of(other, 3537, 8)[0] != k0                                       # same ntok/nreq, different per-request lengths
+
+
+def test_the_step_keyed_sources_names_are_bound_and_none_leaves_the_geometry_key():
+    s = _sched([("r1", 46, 1)])
+    assert plan_key_of(s, 1, 1, b"") == plan_key_of(s, 1, 1)
+    keyed, mode = plan_key_of(s, 1, 1, bytes(16))
+    assert mode == "geometry" and keyed != plan_key_of(s, 1, 1)[0] and 0 < keyed < 2**63
+    assert plan_key_of(s, 1, 1, b"\1" * 16)[0] != keyed
 
 
 def test_counts_fallback_is_named_when_the_scheduler_output_lacks_geometry():

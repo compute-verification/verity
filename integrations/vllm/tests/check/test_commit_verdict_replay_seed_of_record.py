@@ -1,4 +1,4 @@
-"""[R16 rev F-r16-23 / M-0579; fix pin] The sampled replay's seed is post-commitment by LABEL only: commit_delta [O6] derives it from the
+"""The sampled replay's seed is post-commitment by LABEL only: commit_delta [O6] derives it from the
 run root after commitment (int.from_bytes(run_root[:8])) or from a verifier challenge (sha256(challenge|root)), but `--replay-seed <int>`
 sets a PROVER-CHOSEN seed known before the run (seed_source '--replay-seed (targeted)'), and a prover who knows the seed knows the picks
 before committing (the population is fixed by the manifest) -- every unpicked VU is free, C3's prechallenge binding is defeated by
@@ -6,9 +6,9 @@ construction.  Neither commit_verdict nor the finalizer read `sample.seed_source
 
 Behaviour of record (this file): commit_verdict reads the seed source as a FACT.  The root form is RECOMPUTED from the record's run root;
 the challenge form is post-commitment by construction; a prover-chosen seed (or a root-form label whose seed is not the root's, or an
-unknown source) makes the replay a MECHANISM run: C2 of record then rests on form (B) alone (M-0721 (1)) and the PASS names it, and without
-a complete form (B) the Commit FAILS by name.  Plane-fed gaps (F-r16-07) are still named whatever the seed.  Every R16 record of record
-(rev's census: 150/150 say the root form) recomputes equal and is byte-identical in verdict."""
+unknown source) makes the replay a MECHANISM run: C2 of record then rests on form (B) alone and the PASS names it, and without
+a complete form (B) the Commit FAILS by name.  Plane-fed gaps are still named whatever the seed.  Every older record of record
+(150/150 say the root form) recomputes equal and is byte-identical in verdict."""
 from __future__ import annotations
 
 import hashlib
@@ -17,7 +17,7 @@ from verity_vllm.check.c2_rules import _replay_seed_of_record
 from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.replay.sample import challenge_seed
 
-# the shape of rev M-0579's recomputed fact (qwen A100 int-3 pair 0: run_root 71f69377... -> sample.seed 8211913111514837969)
+# the shape of a recomputed fact (qwen A100 pair 0: run_root 71f69377... -> sample.seed 8211913111514837969)
 RUN_ROOT = "71f69377" + "ab" * 28
 SEED_ROOT = int.from_bytes(bytes.fromhex(RUN_ROOT)[:8], "big")
 ROOT_FORM = "run root (first 8 bytes, after commitment)"
@@ -64,8 +64,8 @@ def _sr_chal(seed: int, src: str, chal: str | None) -> dict:
 
 
 def test_the_verifier_challenge_form_is_recomputed_from_the_recorded_challenge_and_a_prover_seed_is_not():
-    """[rev M-0600] the challenge form is a fact only with the FULL challenge on the record (sample.challenge, written by sampled_replay when
-    commit_delta runs --replay-challenge): seed == sha256(challenge|run_root)[:8] recomputed; a label alone (the pre-M-0600 shape, the source
+    """The challenge form is a fact only with the FULL challenge on the record (sample.challenge, written by sampled_replay when
+    commit_delta runs --replay-challenge): seed == sha256(challenge|run_root)[:8] recomputed; a label alone (the older shape, the source
     text carries challenge[:16] only), another seed under the label, or a source text naming another challenge is refused by name."""
     seed, src = challenge_seed("audit-2026-09-20", bytes.fromhex(RUN_ROOT))
     assert seed == int.from_bytes(hashlib.sha256(b"audit-2026-09-20|" + bytes.fromhex(RUN_ROOT)).digest()[:8], "big")
@@ -98,14 +98,14 @@ def test_the_verifier_challenge_form_is_recomputed_from_the_recorded_challenge_a
 
 
 def test_a_prover_chosen_seed_fails_the_commit_by_name_unless_form_b_is_complete_which_the_pass_then_names():
-    # the honest record of record: root-form seed recomputed -> plain PASS, byte-identical to before F-r16-23
+    # the honest record of record: root-form seed recomputed -> plain PASS, byte-identical to before the seed rule
     ok, why = commit_verdict({**BASE, "sampled_replay": _sr(SEED_ROOT, ROOT_FORM)}, True, min_openings=64)
     assert (ok, why) == (True, "PASS")
     # --replay-seed on a Commit-only rerun (no --match-dir): the replay is a mechanism run, nothing else value-checks -> FAIL by name
     ok, why = commit_verdict({**BASE, "sampled_replay": _sr(7, "--replay-seed (targeted)")}, True, min_openings=64)
-    assert ok is False and why.startswith("C2 of record not established (F-r16-23): sampled replay seed prover-chosen (--replay-seed)")
+    assert ok is False and why.startswith("C2 of record not established: sampled replay seed prover-chosen (--replay-seed)")
     assert "form (B) absent" in why
-    # with a complete form (B) (the F-r16-02 form) C2 of record holds through (B) alone and the PASS says so
+    # with a complete form (B) C2 of record holds through (B) alone and the PASS says so
     ok, why = commit_verdict({**BASE, "sampled_replay": _sr(7, "--replay-seed (targeted)"), "oracle_compare": OC_COMPLETE}, True, min_openings=64)
     assert ok is True and why.startswith("PASS (") and "prover-chosen" in why and "C2 of record by the complete form (B) alone" in why
     # a value-partial form (B) does not stand in
@@ -120,27 +120,27 @@ def test_a_prover_chosen_seed_fails_the_commit_by_name_unless_form_b_is_complete
 def test_plane_fed_gaps_are_named_whatever_the_seed_and_a_replay_mismatch_still_leads():
     sr = _sr(7, "--replay-seed (targeted)", population={"vus": 1000, "not_evaluable": {K_PLANE: 40}, "not_evaluable_by_family": {"MoeExpertGemm": 40}})
     ok, why = commit_verdict({**BASE, "sampled_replay": sr, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
-    assert ok is False and "plane-fed" in why                                       # F-r16-07 leads even with form (B) complete
+    assert ok is False and "plane-fed" in why                                       # the plane-fed FAIL leads even with form (B) complete
     bad = {**_sr(7, "--replay-seed (targeted)"), "result": False, "why": "r0 step 3 layers.0.mlp: committed output != replayed"}
     ok, why = commit_verdict({**BASE, "sampled_replay": bad, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
     assert ok is False and why.startswith("C2 sampled replay:")                      # a mismatch is a mismatch, seed or not
 
 
 def test_f_r16_26_the_f_r16_13_fault_rule_runs_before_the_mechanism_lift_whatever_seeded_the_replay():
-    """[rev F-r16-26 / rel M-0686] a PARTIAL replay from a run-time FAULT (an unevaluated pick inside an evaluated stratum; no fully
-    unevaluated stratum -> _partial_replay_named_gap names no gap) fails closed under the root form (F-r16-13) -- and must fail the SAME way
-    under a prover-chosen / non-post-commitment seed: form (B) stands in for a NAMED gap, never for a fault.  (The int-5 pod gate caught the
+    """A PARTIAL replay from a run-time FAULT (an unevaluated pick inside an evaluated stratum; no fully
+    unevaluated stratum -> _partial_replay_named_gap names no gap) fails closed under the root form -- and must fail the SAME way
+    under a prover-chosen / non-post-commitment seed: form (B) stands in for a NAMED gap, never for a fault.  (A pod gate caught the
     lift passing it: test_sampled_replay line 1085 with seed_source 'caller'.)"""
     fault = {"result": None, "grade": "partial", "why": "1 pick(s) not evaluated inside evaluated strata (missing-input x 1) -- run-time fault, not a gap on the record: "
-                                                        "committed bytes not retained for (r0, step 0, x/out) [0, 16) (F-r16-13)",
+                                                        "committed bytes not retained for (r0, step 0, x/out) [0, 16)",
              "strata_unevaluated": [], "sample": {"seed": 7, "seed_source": "caller", "evaluated": 9, "equal": 9, "mismatch_n": 0, "not_evaluated_n": 1, "picked": 10}}
     for src in ("caller", "--replay-seed (targeted)"):
         ok, why = commit_verdict({**BASE, "sampled_replay": {**fault, "sample": {**fault["sample"], "seed_source": src}}, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
-        assert not ok and why.startswith("C2 of record not established (DECISIONS-2 §4): sampled replay partial") and "run-time fault" in why, (src, why)
-        assert "F-r16-13" in why
-    # the root form fails it by the non-mechanism branch, byte-for-byte the F-r16-13 text (unchanged)
+        assert not ok and why.startswith("C2 of record not established: sampled replay partial") and "run-time fault" in why, (src, why)
+        assert "committed bytes not retained for (r0, step 0, x/out)" in why
+    # the root form fails it by the non-mechanism branch, byte-for-byte the named-gap rule's text (unchanged)
     ok, why = commit_verdict({**BASE, "sampled_replay": {**fault, "sample": {**fault["sample"], "seed": SEED_ROOT, "seed_source": ROOT_FORM}}, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (DECISIONS-2 §4): sampled replay partial") and "run-time fault" in why
+    assert not ok and why.startswith("C2 of record not established: sampled replay partial") and "run-time fault" in why
     # a partial replay with a NAMED gap (a fully unevaluated stratum of a class form (B) covers) is the lift's case: the prover seed PASSES on (B) alone, named
     named = {"result": None, "grade": "partial", "why": "1 stratum unevaluated by name", "strata_unevaluated": ["s1"],
              "unevaluated_strata": [{"stratum": "s1", "spec": "Gemm_v2{...}", "op_path": "model.layers.0.mlp.gate_up_proj", "n": 4,

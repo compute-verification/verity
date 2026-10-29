@@ -1,5 +1,5 @@
 # The proof service's challenger on its auditor host: `serve.py` over `verity.core.protocols.sampled_proofs.remote`, which
-# `auditor.py` runs there as the auditor user, one session a window under its signed ledger (`run.sh`: a research run's
+# `auditor.py` runs there as the auditor user, one session a window under its signed ledger (`run.sh`: a development
 # session elsewhere). Not a package: the suite runs serve.py as a process over loopback with a test key, the Lean verifier's
 # coins stubbed (`tests/stub_serve.py`).
 [tool.pytest.ini_options]

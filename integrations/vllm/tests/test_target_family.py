@@ -1,4 +1,4 @@
-"""Target-family preflight (r18-int-2; x09 M-0009 / coord M-0026): PRECHECK_FAIL_TARGET_FAMILY by name, WAIVED only by name."""
+"""Target-family preflight: PRECHECK_FAIL_TARGET_FAMILY by name, WAIVED only by name."""
 from __future__ import annotations
 
 import json
@@ -27,7 +27,7 @@ def test_row_id_grammar_names_the_device_class():
 
 
 def test_60_shape_hopper_build_for_an_l40s_row_fails_by_name():
-    """#60 of record: build_summary step.target cc 9.0 (H100 host) for an __l40s__ row (r17_1207)."""
+    """A Build whose build_summary step.target is cc 9.0 (an H100 host) for an __l40s__ workload fails by name."""
     bs = {"step": {"target": {"compute_capability": [9, 0], "num_sms": 132}, "applicability": {"gemm_target": "hopper", "flash_attn_version_applied": 3}}}
     rec = tf.check(ROW_L40S, {"sweep": {}}, ["build"], want_device=False, build_summary=bs)
     assert rec["verdict"] == "FAIL" and rec["fail_class"] == "PRECHECK_FAIL_TARGET_FAMILY"
@@ -56,7 +56,7 @@ def test_pod_device_of_another_family_fails_for_a_gpu_stage(monkeypatch):
     rec = tf.check(ROW_L40S, {"sweep": {}}, ["match", "commit"])
     assert rec["verdict"] == "FAIL" and rec["device"] == [9, 0]
     assert rec["mismatches"][0]["fact"] == "device" and "9.0 != row family 8.9" in rec["mismatches"][0]["why"]
-    # the same device IS the family of an __h100__ row
+    # the same device IS the family of an __h100__ workload
     assert tf.check(ROW_H100, {"sweep": {}}, ["match", "commit"])["verdict"] == "PASS"
 
 
@@ -68,7 +68,7 @@ def test_device_target_build_reads_the_pod_device_declared_target_build_does_not
 
 
 def test_a_leased_row_s_device_target_build_is_refused_and_its_gpu_stages_still_read_the_node(monkeypatch):
-    """A leased row hides every GPU from its stages (CUDA_VISIBLE_DEVICES empty), so a Build that targets the device sees none and
+    """A leased workload hides every GPU from its stages (CUDA_VISIBLE_DEVICES empty), so a Build that targets the device sees none and
     derives for the default target; nvidia-smi, which ignores the variable, would have read the node's GPU and passed it."""
     monkeypatch.setattr(tf, "device_cc", lambda: (_ for _ in ()).throw(AssertionError("device read for a Build that cannot see it")))
     rec = tf.check(ROW_L40S, {"sweep": {}}, ["build"], devices="")
@@ -87,8 +87,8 @@ def test_no_visible_gpu_for_a_gpu_stage_fails_closed(monkeypatch):
 
 
 def test_the_match_s_cpu_phase_reads_no_device_and_every_gpu_stage_still_refuses_without_one(monkeypatch):
-    """The Match's CPU half (the check, the served-shape derives and the fold over GPU legs already captured) runs on a GPU-free CPU
-    node; a TP8 row's was refused there because its `match` counted as a GPU stage whatever its phase."""
+    """The Match's CPU half (the check, the served-shape derives and the fold over GPU stages already captured) runs on a GPU-free
+    CPU node: a TP8 workload's `match` doesn't count as a GPU stage when its phase is cpu."""
     monkeypatch.setattr(tf, "device_cc", lambda: (_ for _ in ()).throw(AssertionError("device read for the Match's CPU phase")))
     rec = tf.check(ROW_H200_TP8, {"sweep": {}}, ["match"], match_phase="cpu")
     assert rec["verdict"] == "PASS" and rec["device"] is None and rec["match_phase"] == "cpu"
@@ -99,8 +99,8 @@ def test_the_match_s_cpu_phase_reads_no_device_and_every_gpu_stage_still_refuses
 
 
 def test_the_row_hands_its_match_phase_to_the_preflight_so_its_cpu_half_needs_no_gpu(tmp_path):
-    """`--match-phase cpu` on the row reaches `target-family`, which then passes on a host with no GPU; the same row's GPU legs
-    (`--match-phase all`) are refused there."""
+    """`--match-phase cpu` on a workload's run reaches `target-family`, which then passes on a host with no GPU; the same
+    workload's GPU stages (`--match-phase all`) are refused there."""
     from tests.pipeline.test_row import _tp_row
     env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")]), "PATH": str(tmp_path),
            "CUDA_VISIBLE_DEVICES": ""}
@@ -179,7 +179,7 @@ def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_p
 
 
 def test_the_row_match_argv_carries_the_explicit_snapshot_cap_only_when_set(tmp_path):
-    """[r18-int-2; cheap M-0082, F-r18-cheap-2] --snapshot-max-bytes N (MATCH_SNAP_MAX_BYTES) arms the Match's cap; unset -> the argv without it."""
+    """--snapshot-max-bytes N (MATCH_SNAP_MAX_BYTES) arms the Match's cap; unset -> the argv without it."""
     from tests.pipeline.test_row import _row
 
     def argv(*flags, environ=None):

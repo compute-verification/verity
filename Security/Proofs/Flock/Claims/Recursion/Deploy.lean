@@ -14,7 +14,8 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
 
 * **Statement.** `x` is the canonical bytes (`RecX.encode`) of what the verifier holds before the run: the inner
   statement's bytes (a `FlockDeploy.Raw` encoding: its circuit, public and partition files), the verifier's own inner
-  shape (`--rec-inner`) and bindings (`--rec-bindings`), the circuit registration, and per V* part its Flock statement.
+  shape (`--rec-inner`), the circuit registration, and per V* part its Flock statement and the verifier's own bindings
+  of it (`--rec-bindings`, which the auditor computes from that part's partition object and program, so parts differ).
   V*'s shared rows (`--rec-rows`) are no part of `x`: they are staged (below). `parse` and `scopeCheck` are the
   deployed parser's (`Flock.RecScope.parseOf`, `scopeCheckOf`) at
   `decodeR`: what `readX` reads (it refuses unless the inner statement's dimensions read, `RecVStar.innerOf`, Flock's
@@ -78,46 +79,46 @@ open Lean (Json)
 
 /-! ## The compiled verifier's statement -/
 
-/-- A V* part as the compiled statement holds it: its Flock statement (its public file the prover's, staged). Its
-shared rows (`--rec-rows`) are no part of it: they register the prover's running sums, so the prover stages them, one
-set for every part (`Stage.rows`). -/
+/-- A V* part as the compiled statement holds it: its Flock statement (its public file the prover's, staged) and the
+verifier's own bindings of it (`--rec-bindings`, `verity_flock.rec_bindings` of the part's partition object and
+program), which each part's session reads. Its shared rows (`--rec-rows`) are no part of it: they register the
+prover's running sums, so the prover stages them, one set for every part (`Stage.rows`). -/
 structure PartX where
   base : Raw
+  bindings : ByteArray
 
 /-- **What the compiled verifier holds before the run**: the inner statement's bytes, the verifier's own inner shape
-(`--rec-inner`) and bindings (`--rec-bindings`), the circuit registration (`--rec-inner-registration`), and the V*
-parts. -/
+(`--rec-inner`), the circuit registration (`--rec-inner-registration`), and the V* parts, each with its own bindings. -/
 structure RecX where
   inner : Claims.Msg
   recInner : ByteArray
-  bindings : ByteArray
   registration : Option ByteArray
   parts : List PartX
 
 /-- The compiled statement's format string, its first field. -/
-def XFORMAT : String := "flock-verify-recursion/v2"
+def XFORMAT : String := "flock-verify-recursion/v3"
 
-def PartX.encode (p : PartX) : Claims.Msg := encBytes ⟨p.base.encode.toArray⟩
+def PartX.encode (p : PartX) : Claims.Msg := encBytes ⟨p.base.encode.toArray⟩ ++ encBytes p.bindings
 
 /-- **The compiled statement's canonical bytes.** -/
 def RecX.encode (w : RecX) : Claims.Msg :=
-  encStr XFORMAT ++ encNat w.inner.length ++ w.inner ++ encBytes w.recInner ++ encBytes w.bindings ++
+  encStr XFORMAT ++ encNat w.inner.length ++ w.inner ++ encBytes w.recInner ++
     encOpt encBytes w.registration ++ encList PartX.encode w.parts
 
 def PartX.read : Rd PartX := do
   let b ← rdBytes
   let some base := FlockDeploy.decode b.data.toList | failure
-  pure ⟨base⟩
+  let bindings ← rdBytes
+  pure ⟨base, bindings⟩
 
 def RecX.read : Rd RecX := do
   if (← rdStr) ≠ XFORMAT then failure
   let n ← rdNat
   let inner ← rdTake n
   let recInner ← rdBytes
-  let bindings ← rdBytes
   let registration ← rdOpt rdBytes
   let parts ← rdList PartX.read
-  pure ⟨inner, recInner, bindings, registration, parts⟩
+  pure ⟨inner, recInner, registration, parts⟩
 
 /-- **The compiled statement's decoder**: `RecX.read` on all of `x`, kept only when its encoding is `x`. -/
 def decodeX (x : Claims.Msg) : Option RecX :=
@@ -166,7 +167,7 @@ theorem drawTiedB_iff {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array St
 
 /-- **Flock's own checks on the inner statement**: Flock's plain verifier sets it up (`FlockDeploy.setupOf false`), its
 statement check passes (`Readable.Read.check`, `ProvedScope.check`), it carries a draw, the inner session's record's
-(`Raw.draw`): the recursion's inner session is drawn (#2468), and the compiled verifier refuses a session over an inner
+(`Raw.draw`): the recursion's inner session is drawn, and the compiled verifier refuses a session over an inner
 session whose record holds none (`RecSetup.innerDrawn`, `noInnerDraw`), and at one table the public file's header
 carries that draw (`drawTiedB`): the deployed verifier refuses a record whose draw is not the session's (`Draw.check`,
 U1, in `Record.check`), and at one table the session's is the header's. -/
@@ -203,26 +204,29 @@ def capPorted (parts : List PartX) : Bool :=
   | some c => c.ports.any (·.name == "top")
   | none => false
 
-/-- The verifier's own bindings (`--rec-bindings`), as each part's session reads them (`RecRaw.ins`). -/
+/-- The verifier's own bindings of a part (`--rec-bindings`), as its session reads them (`RecRaw.ins`). -/
 def ownBindings (b : ByteArray) : Option VStar.Bindings :=
   (do RecVStar.ownBindingsOfJson (← jsonOf "rec-bindings" b)).toOption
 
 /-- **A part's circuit is V\*'s statement `sv`'s**, as its session's `RecVStar.checkCircuit` holds it: the circuit file
 is V\*'s for `sv` under the verifier's own bindings `f` at the shape's holo flag (`checkFile`, byte for byte), and the
-circuit the setup parses off it (`partCircuit`) carries V\*'s META and row ports (`checkParsed`) and V\*'s part
-(`checkPart`). -/
+circuit the setup parses off it (`partCircuit`) carries V\*'s META and row ports (`checkParsed`), V\*'s part
+(`checkPart`), `sv`'s name as its unit's (`RecVStar.check`) and V\*'s file's META `holo` (`checkHolo`). -/
 def partVStar (shape : RecVStar.Inner) (f : VStar.Bindings) (sv : VStar.Stmt) (p : PartX) : Bool :=
   match partCircuit p with
   | some c => (RecVStar.checkFile sv f p.base.circuit shape.holo).isOk && (RecVStar.checkParsed sv c).isOk &&
-      (RecVStar.checkPart sv c).isOk
+      (RecVStar.checkPart sv c).isOk && c.unit.name == sv.name && (RecVStar.checkHolo sv c shape.holo).isOk
   | none => false
 
-/-- **Each part's circuit is V\*'s statement's of its index** (`partVStar`), under the verifier's own bindings. -/
-def partsVStar (shape : RecVStar.Inner) (b : ByteArray) (parts : List PartX) (vs : Array VStar.Stmt) : Bool :=
+/-- **Each part's circuit is V\*'s statement's of its index** (`partVStar`), under the verifier's own bindings of that
+part. -/
+def partsVStar (shape : RecVStar.Inner) (parts : List PartX) (vs : Array VStar.Stmt) : Bool :=
   (List.range vs.size).all fun s =>
-    match ownBindings b, parts[s]?, vs[s]? with
-    | some f, some p, some sv => partVStar shape f sv p
-    | _, _, _ => false
+    match parts[s]?, vs[s]? with
+    | some p, some sv => match ownBindings p.bindings with
+      | some f => partVStar shape f sv p
+      | none => false
+    | _, _ => false
 
 /-- The compiled statement's reading before the parts' circuits are held to V\*'s: its bytes decode, the inner
 statement's decode and set up (`RecVStar.innerOf`) and pass Flock's own setup and statement check with a draw
@@ -248,7 +252,7 @@ def readXPre (x : Claims.Msg) : Option XR := do
 def readX (x : Claims.Msg) : Option XR := do
   let r ← readXPre x
   let vs ← (RecVStar.statements r.shape).toOption
-  if partsVStar r.shape r.w.bindings r.w.parts vs = false then none
+  if partsVStar r.shape r.w.parts vs = false then none
   pure r
 
 theorem readXPre_of_readX {x : Claims.Msg} {r : XR} (h : readX x = some r) : readXPre x = some r := by
@@ -259,13 +263,13 @@ theorem readXPre_of_readX {x : Claims.Msg} {r : XR} (h : readX x = some r) : rea
     cases hv : (RecVStar.statements r'.shape).toOption with
     | none => simp [hr, hv] at h
     | some vs =>
-      by_cases hp : partsVStar r'.shape r'.w.bindings r'.w.parts vs = false
+      by_cases hp : partsVStar r'.shape r'.w.parts vs = false
       · simp [hr, hv, hp] at h
       · simp [hr, hv, hp] at h
         rw [h]
 
 theorem readX_parts {x : Claims.Msg} {r : XR} (h : readX x = some r) :
-    ∃ vs, RecVStar.statements r.shape = .ok vs ∧ partsVStar r.shape r.w.bindings r.w.parts vs = true := by
+    ∃ vs, RecVStar.statements r.shape = .ok vs ∧ partsVStar r.shape r.w.parts vs = true := by
   unfold readX at h
   cases hr : readXPre x with
   | none => simp [hr] at h
@@ -273,7 +277,7 @@ theorem readX_parts {x : Claims.Msg} {r : XR} (h : readX x = some r) :
     cases hv : RecVStar.statements r'.shape with
     | error e => simp [hr, hv, Except.toOption] at h
     | ok vs =>
-      by_cases hp : partsVStar r'.shape r'.w.bindings r'.w.parts vs = false
+      by_cases hp : partsVStar r'.shape r'.w.parts vs = false
       · simp [hr, hv, hp, Except.toOption] at h
       · simp [hr, hv, hp, Except.toOption] at h
         subst h
@@ -282,7 +286,7 @@ theorem readX_parts {x : Claims.Msg} {r : XR} (h : readX x = some r) :
 /-- **`readX` refuses only what `partsVStar` refuses**: where `readXPre` reads and every part's circuit is V\*'s
 statement's of its index, `readX` reads the same. -/
 theorem readX_of_pre {x : Claims.Msg} {r : XR} (h : readXPre x = some r) {vs : Array VStar.Stmt}
-    (hvs : RecVStar.statements r.shape = .ok vs) (hp : partsVStar r.shape r.w.bindings r.w.parts vs = true) :
+    (hvs : RecVStar.statements r.shape = .ok vs) (hp : partsVStar r.shape r.w.parts vs = true) :
     readX x = some r := by
   unfold readX
   simp [h, hvs, hp, Except.toOption]
@@ -369,14 +373,14 @@ def Stage.ofMsg (tr : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArr
   rows _ ms := ((stageOf ms).map (·.2.2)).getD ByteArray.empty
 
 /-- Part `s`'s recursive statement: its Flock statement at the staged public file, the verifier's own inner shape,
-`--rec-part s`, the bindings, the staged shared rows, the inner statement's files, the staged record and transcript,
-the registration, and how the inner statement is set up (`innerFormOf`). -/
+`--rec-part s`, the part's bindings, the staged shared rows, the inner statement's files, the staged record and
+transcript, the registration, and how the inner statement is set up (`innerFormOf`). -/
 def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) (p : PartX) :
     RecRaw where
   base := { p.base with publicFile := st.pub x ms s }
   recInner := some r.w.recInner
   recPart := some s
-  recBindings := some r.w.bindings
+  recBindings := some p.bindings
   recRows := some (st.rows x ms)
   innerCircuit := some r.innerRaw.circuit
   innerPublic := some r.innerRaw.publicFile

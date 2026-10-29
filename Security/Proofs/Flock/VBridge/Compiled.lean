@@ -16,7 +16,7 @@ statement about V* or the verifier, so that each can be proved on its own agains
 * `AlgebraDecodes` (G items 1–3): at an accepted outer proof whose layers are all `Good`, each rep's values in V*'s
   layers (`rep`) meet the preconditions E's stage theorems take, apart from the running sums: the verifier rows at the
   rep's coins (`verifierRows`), the structure (`structureOf`), the ports' sizes, and every residual zero. Its proof reads
-  the algebra units the verifier pins (#1590), `PartS.res_partS` for each part, every part present (coverage), and the
+  the algebra units the verifier pins, `PartS.res_partS` for each part, every part present (coverage), and the
   decode of the port columns from the registered reads.
 * `AccChains` (G item 4): at the same outer proofs, each rep's running sums `rec-acc` differ by the levels' consistency
   sums weighted by `kappa`, E's `hacc`, from the chain of level sessions sharing `R₂`.

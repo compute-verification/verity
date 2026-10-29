@@ -2,14 +2,14 @@
 # Publish the auditor host's pins log, its ledger and every ended session to the store (auditor.py's "The ledger"). The control pod runs it as
 # the watchers loop `challenger-publish` (infra/control/watchers.toml), so no agent VM has to be up for it:
 #
-#   benchmarks/live_challenger/publish.sh [--every SECONDS] [DEST]     # DEST: research@204.12.178.84 (vy-challenger-1)
+#   benchmarks/live_challenger/publish.sh [--every SECONDS] [DEST]     # DEST: the auditor host's gate, research@204.12.178.84
 #
 # It reads both through the gate's `ledger` and `fetch SESSION` verbs: as research, with a key the host forces to the gate (the
 # pod's RunPod key, which reads only), or as vy-admin, through `sudo vy-challenger-gate`. $VY_CHALLENGER_SSH_KEY is the ssh key
-# when set, else ssh's config picks it (the pod's bin/ssh). The ledger is put (`research data put --kind challenger-ledger/v2
-# --preserve`, v1 while it holds only v1 entries) each time it has grown since the last put, and labelled `challenger-ledger
-# head` by infra; a ledger that isn't the last put one with entries appended (a fork, a cut or an edit: RT4-INT-27) is refused,
-# exit 4, and nothing is put until infra looks. Each session with an end entry is put once, `--kind challenger-session/v1 --ref
+# when set, else ssh's config picks it (the pod's bin/ssh). The ledger is put in the store (kind challenger-ledger/v2,
+# preserved, v1 while it holds only v1 entries) each time it has grown since the last put, and labelled `challenger-ledger
+# head`; a ledger that isn't the last put one with entries appended (a fork, a cut or an edit) is refused, exit 4, and
+# nothing is put until it is resolved by hand. Each session with an end entry is put once, `--kind challenger-session/v1 --ref
 # ledger=art:...`, its tree the session's request.json and out/. What was put is kept in $VY_CHALLENGER_STATE (default
 # ~/.local/state/vy-challenger: ledger.jsonl, ledger.sha512, ledger.art, sessions, and pins.* as ledger.*), so a rerun puts only what is new; an
 # artifact's id is its manifest's hash, so two publishers putting the same ledger get the same art. With --every, each pass is

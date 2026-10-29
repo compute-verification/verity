@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# The native baseline on one dc node: native.py's arms, each in its own process under its own gpu-lease (an engine build
+# The native baseline on one H200 or B200: native.py's arms, each in its own process under its own gpu-lease (an engine build
 # plus its measures fit well inside one).
 #
-#   research run --on vy-dc-b200 --project verity --campaign dither-loop --source . --cwd source --timeout 90m \
-#     -- bash benchmarks/hash/dither/native.sh [ARM ...]
+#   bash benchmarks/hash/dither/native.sh [ARM ...]      (on a B200 or an H200, up to 90 minutes)
 #
 # Default arms: vllm-int8, and vllm-int8-triton on a B200 (served-row only when named: served_h1's eager engine, whose
 # receipts are a side computation, not a served number). Every arm samples without FlashInfer's JIT sampler, as
@@ -28,7 +27,7 @@ rc=0
 for arm in "${arms[@]}"; do
   env_arm=()
   [ "$arm" = vllm-int8-triton ] && env_arm=(VLLM_DISABLED_KERNELS=CutlassInt8ScaledMMLinearKernel)
-  GPU_LEASE_WHO=kernels-dither-hb gpu-lease 1 --wait "${lease[@]}" -- env "${env_arm[@]}" \
+  GPU_LEASE_WHO=dither/${RESEARCH_RUN_ID:-local} gpu-lease 1 --wait "${lease[@]}" -- env "${env_arm[@]}" \
     "$PY" "$HERE/numabind.py" "$OUT/numa.$arm.json" bash -c '
     q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
     nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.'"$arm"'.before.csv"

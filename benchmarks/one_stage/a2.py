@@ -35,6 +35,7 @@ import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+from verity_flock import circuit as FC  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 
@@ -57,8 +58,8 @@ def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, di
         if made.get("class_sha512"):
             head["units"]["classes"] = [made["class_sha512"]] * n
         head["circuit_sha512"] = pin
-        with open(ub / name, "wb") as f:
-            f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + body)
+        (ub / name).write_bytes(FC.public_file(head, body) if name.startswith("pub-")
+                                else json.dumps(head, sort_keys=True).encode() + b"\n" + body)
     text = (ub / "circuit.txt").read_text()
     new = {"dir": ub, "meta": json.loads(text.split("\n", 2)[1][5:]), "pin": pin}
     return new, a0.public_header(ub, n)

@@ -3,13 +3,13 @@ the evidence store only. It measures nothing: the runs it reads are `benchmarks/
 G2 has no pass/fail number: it is this curve.
 
 Where the numbers come from:
-- Runs labeled campaign=g2 (`research data label RUN campaign g2 --by circuits --ref RUN`). The run's record
+- Runs labeled campaign=g2 in the store (a run counts once it carries that label). The run's record
   (`outputs.run_record`) holds verity-bench result docs (`*bench/result.json`, schema verity-bench/vllm-overhead/v1, from
   served_commit's `run.sh` or `prof.sh`: TP1 engines under vLLM's serving defaults) or tp_decode summaries
   (`out/<arm>/summary.json`, `tp_decode.sh`: GLM-5.3 TP8 eager, the mode of GLM-5.3's workload of record). A tp_decode arm's value
   retention is its summary's `retain`; a run older than that field took it from `RETAIN=` on its command line when it ran the
   retain wrapper (`tp_decode_retain.sh`), and otherwise retained none, which `tp_decode.sh` exported before it took `RETAIN`.
-- The hash loop's results (campaign=hash-loop, kind bench-result/v1, `benchmarks/hash/loop/collect.py`'s): Qwen3-8B B32
+- The hash loop's results (campaign=hash-loop, kind bench-result/v1, from the loop's collector): Qwen3-8B B32
   compiled, one result per iteration and GPU, from the loop branch. Only workload qwen3-8b is read: the loop's glm-5.3 rows
   are copies of campaign=g2 runs, and its other workloads aren't G2's models. Each result's run is read too, for its TTFT
   and ITL, under the loop's verdict on it. A run the loop's job made (`ROW` and `HYP` in its env, a re-run `redteam-N`
@@ -46,7 +46,7 @@ exists. Beside them, the lowest vllm-v1 ratio under the same rules but the hash.
     uv run --no-project --with matplotlib python3 benchmarks/g2/curve.py [--out DIR] [--no-refresh]
 
 Writes DIR/g2-curve.md (the curve, then every measure), DIR/g2-curve.png and DIR/g2-curve.json (every measure); DIR defaults
-to $OUT, else ./out. `research data refresh` first (a run publishes from its node), unless --no-refresh.
+to $OUT, else ./out. It refreshes the store's catalog first (a run publishes from its node), unless --no-refresh.
 """
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ HARNESS = {"time_to_first_token_s": ("prefill", "ttft"), "inter_token_latency_p5
            "inter_token_latency_p99_s": ("decode", "itl_p99"), "time_per_output_token_s": ("run", "tpot"),
            "tokens_per_s": ("run", "tput")}
 LOOP_ARMS = {"sha512": "served-commit-rows", "sha512-layer": "served-commit-rows-layer", "blake3": "served-commit-rows-blake3"}
-LOOP_RETAIN = "none"   # every arm LOOP_ARMS names is defined with retain="none" (served_commit/prof_arm.py, hash/loop/arms.py)
+LOOP_RETAIN = "none"   # every arm LOOP_ARMS names is defined with retain="none" (served_commit/prof_arm.py, and the hash loop's arms)
 LOOP_4K_FROM = 1   # the loop's iteration 1 set rows-sha512's rows to 4 KiB
 ROW_BYTES = 4096   # rows-sha512's row size since then
 RETAINS = ("host", "device", "none")   # the curve's retention columns, in order
@@ -583,7 +583,7 @@ def load(refresh: bool = True) -> list[Measure]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=Path(os.environ.get("OUT", "out")))
-    ap.add_argument("--no-refresh", action="store_true", help="read this store's catalog as it is (no `research data refresh`)")
+    ap.add_argument("--no-refresh", action="store_true", help="read this store's catalog as it is, without refreshing it first")
     a = ap.parse_args()
     measures = load(refresh=not a.no_refresh)
     if not measures:

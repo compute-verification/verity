@@ -58,13 +58,13 @@ BLOCK = 4096
 STATEMENT = 512
 """Openings a statement: C-Flock's ceiling, m = k_log + nbl ≤ 35, at the unit's k_log 26."""
 FLOOR_GPU_S = 0.0799
-"""An opening's GPU device phase at a full statement, firewall on: measured (r20261018-211523-93ec)."""
+"""An opening's GPU device phase at a full statement, firewall on: measured."""
 DEPLOYED_EXTRA_ANDS = (45.4e6 - 20.3e6) + 5e6
 """p1024/k3/masked's decode over p512/k2's, and the deployed trees' depths, per opening: modeled."""
 MEMSAT = {"run": "r20261018-222953-fbf1", "plain": 4260.0, "codec": 3271.0,
           "arms": [(65.84, 5.91e-3, 0.9689, 1999.0), (29.81, 6.18e-3, 0.9862, 2669.0),
                    (14.90, 3.87e-3, 0.9934, 3083.0)]}
-"""int8 Llama-3.1-8B on one GPU at saturation (note:hash/20261018T1935Z-draft-memsat): output tokens/s plain and with
+"""int8 Llama-3.1-8B on one GPU at saturation (memsat): output tokens/s plain and with
 the codec, and per receipts arm (passes/s, serving s a pass, γ at spec R, tokens/s)."""
 
 
@@ -235,7 +235,7 @@ def points(recorded: list[dict]) -> dict:
                    "weights_bytes": 8 * 65_525_514_240, "c_s": max(x["c_s"] for x in recorded), "xi": xi,
                    "chip": rec["chip_blocks"],
                    "tokens_per_s": 1000.0, "codec_loss": None,
-                   "source": "W2 round 5 (note:20261018T0720Z-report-north-star-node; r20261018-200634-12c0): store, "
+                   "source": "W2 round 5 (r20261018-200634-12c0): store, "
                              "weights, c measured; tokens/s the offered load, not saturation"},
         "8B x8": {"label": "Llama-3.1-8B int8, an engine a GPU, 8 GPUs", "blocks": 8 * 2_359_296, "gpus": 8,
                   "shard_bytes": 9_663_676_416, "weights_bytes": 8 * (6.98e9 + 2 * 1.05e9),
@@ -246,7 +246,7 @@ def points(recorded: list[dict]) -> dict:
                   "shard_bytes": 9_663_676_416, "weights_bytes": 6.98e9 + 2 * 1.05e9, "c_s": 0.072 - 2 / 51.7,
                   "xi": xi, "chip": rec["chip_blocks"], "tokens_per_s": MEMSAT["codec"],
                   "codec_loss": 1 - MEMSAT["codec"] / MEMSAT["plain"],
-                  "source": "memsat (note:hash/20261018T1935Z-draft-memsat; r20261018-222953-fbf1), measured"},
+                  "source": "memsat (r20261018-222953-fbf1), measured"},
     }
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# One arm of tp_decode.py (stock against the arm in one TP engine, eager) from the shipped tree, the research run's cwd:
-#   research run --on vy-glm53-eu --cwd source --gpus 8 --mem-gb 400 --timeout 75m --project verity -- env ARM=rows bash benchmarks/served_commit/tp_decode.sh
+# One arm of tp_decode.py (stock against the arm in one TP engine, eager), from the source tree's root on an 8-GPU H200 node:
+#   ARM=rows RESEARCH_RUN_DIR=DIR bash benchmarks/served_commit/tp_decode.sh
 # ARM: rows | rows-4k | rows-layer | rows-layer-4k.  RETAIN (default none): the committer's value retention, VERITY_RETAIN
 # (none | host | device), which summary.json records as the committer took it.  BATCHES (default 1,8,32), PAIRS (default 3), ROW
 # (the workload, default GLM-5.3's TP8 eager B1, whose request every batch rotates), CASE (default GLM53), TP (default 8), VENV (default
@@ -23,7 +23,7 @@ export TMPDIR
 trap 'rm -rf "$TMPDIR"' EXIT
 # shellcheck disable=SC1091
 source "${VENV:-/workspace/cp/venv312}/bin/activate"
-export PYTHONPATH=$TREE:$TREE/benchmarks:$TREE/integrations/vllm:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/archive/sp1/python:$TREE/benchmarks/numerical/python:$TREE/verity/ml/flock/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/verity/core/difftest/python
+export PYTHONPATH=$TREE:$TREE/benchmarks:$TREE/integrations/vllm:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/benchmarks/numerical/python:$TREE/verity/ml/flock/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/verity/core/difftest/python
 cd "$TREE/integrations/vllm"
 nvidia-smi --query-gpu=index,name,memory.used --format=csv,noheader
 python -c "from verity_vllm.commit.committer import native_collect as N; N.ext()"

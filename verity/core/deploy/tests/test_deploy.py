@@ -1,6 +1,7 @@
 """The deployment layer, on the worked example (`deploy_example`): run in memory in simulated time, over TCP to a local
 process, against a played-back challenger (mixed), replayed from its own transcript, and through an adversary; with
-the refusals the runtime makes by name, the record, and the state directory across restarts."""
+the refusals the runtime makes by name, each frame's arrival stamp, the record, and the state directory across
+restarts."""
 
 from __future__ import annotations
 
@@ -14,8 +15,8 @@ import pytest
 
 import deploy_example as X
 from verity.core.deploy import manifest as M
-from verity.core.deploy.channels import Playback
-from verity.core.deploy.runtime import RUNTIME, run
+from verity.core.deploy.channels import Playback, dial
+from verity.core.deploy.runtime import ARRIVED, RUNTIME, run
 from verity.core.deploy.transcript import Transcript
 from verity.core.wire import PUBLIC, REFUSALS, Message, Refused, handshake
 
@@ -26,6 +27,19 @@ BOTH = ["challenger", "responder"]
 def simulated(state, protocol=X.PROTOCOL, conf=None, **kw):
     return run(conf or X.config(), BOTH, "simulated", state, protocols={X.ID: protocol}, keys=X.keys(*BOTH),
                verify=X.verify, seed=SEED, **kw)
+
+
+def stamps(t: Transcript) -> list[int]:
+    return [ARRIVED.decode(e.data).fields["ns"] for e in t if e.dir == "arrived"]
+
+
+def watching(party, seen: list):
+    """`party`, with what each message it receives says of where it came from and when it arrived kept in `seen`."""
+    class Watching(party):
+        def on(self, r):
+            seen.append((r.channel, r.message.type, r.at))
+            return super().on(r)
+    return Watching
 
 
 def test_simulated_in_memory_takes_the_channels_latency(tmp_path):
@@ -59,6 +73,8 @@ def test_over_tcp_to_a_local_process(tmp_path):
     # A virtual clock that steps 1 us a reading: the challenger reads it on sending and on the answer.
     assert r.outcomes["challenger"] == {"outcome": {"elapsed_ns": 1000}, "refused": None}
     assert r.outcomes["responder"] == {"outcome": {"ok": True, "elapsed_ns": 1000}, "refused": None}
+    # The answer is stamped on the challenger's own clock, which its first reading stepped and the stamp doesn't.
+    assert stamps(r.transcripts["challenger"]) == [1000]
     child = Transcript.read(tmp_path / "runs/1/process-responder/runs/1/responder.transcript")
     assert [e.dir for e in child][-1] == "finish"
     sim = simulated(tmp_path / "sim")
@@ -86,6 +102,34 @@ def test_a_new_responder_against_the_recorded_challenger(tmp_path):
               protocols={X.ID: X.protocol(responder=X.WrongResponder)}, playback={"challenger": recorded})
     assert bad.status == "diverged"
     assert "challenger's transcript has received entry" in bad.divergence
+
+
+@pytest.mark.parametrize("delay_ns", [0, 1_000_000])
+def test_a_peers_frame_reaches_its_party_stamped_with_its_arrival_on_its_clock(tmp_path, delay_ns):
+    """The challenger's clock in a simulated run is the run's virtual time: the answer arrives two crossings after the
+    2 ms handshake, later by what an adversary holds it back. A source's answer has no stamp, and neither has a frame
+    to the responder, which has no clock. The transcript keeps the stamp just before its frame, and a replay feeds it
+    back."""
+    seen = {p: [] for p in BOTH}
+    proto = X.protocol(challenger=watching(X.Challenger, seen["challenger"]),
+                       responder=watching(X.Responder, seen["responder"]))
+    held = {("responder", "challenger"): {"seed": 7, "after": 2, "delay": 1.0, "delay_ns": delay_ns}}
+    r = simulated(tmp_path, proto, adversaries=held if delay_ns else None)
+    assert r.status == "completed", r.outcomes
+    arrived = 4_000_000 + delay_ns
+    assert seen["challenger"] == [("coins", "Coins", None), ("clock", "ClockReading", None),
+                                  ("responder", "Answer", arrived), ("clock", "ClockReading", None)]
+    assert seen["responder"] == [("challenger", "Challenge", None), ("challenger", "Verdict", None)]
+    t = r.transcripts["challenger"]
+    answer = next(e.n for e in t if e.dir == "in" and e.channel == "responder")
+    assert (t.entries[answer - 1].dir, t.entries[answer - 1].channel, t.entries[answer - 1].kind) == (
+        "arrived", "responder", "private")
+    assert (stamps(t), stamps(r.transcripts["responder"])) == ([arrived], [])
+    live = list(seen["challenger"])
+    seen["challenger"].clear()
+    again = run(X.config(), ["challenger"], "replay", None, protocols={X.ID: proto}, replay_dir=tmp_path / "runs/1")
+    assert (again.status, again.divergence, seen["challenger"]) == ("completed", None, live)
+    assert stamps(again.transcripts["challenger"]) == [arrived]
 
 
 def test_replay_of_the_challenger_from_its_transcript(tmp_path):
@@ -129,12 +173,14 @@ def test_a_party_told_of_a_frame_the_wire_refuses_finishes_on_it():
 
 
 def test_a_peer_that_resets_its_stream_is_recorded_in_the_transcript_and_the_result(tmp_path):
-    """The responder's end accepts the challenger's connection and resets it: the challenger is told `Closed` with what
-    failed on the stream, which its transcript keeps, and the run's result names it."""
+    """The responder's end accepts the challenger's connection, reads the first byte of its Hello and resets it: the
+    challenger is told `Closed` with what failed on the stream, which its transcript keeps, and the run's result names
+    it. The read makes the reset land on the stream, not on the connect."""
     server = socket.create_server(("127.0.0.1", 0))
 
     def reset() -> None:
         conn, _ = server.accept()
+        conn.recv(1)
         conn.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
         conn.close()
 
@@ -149,6 +195,35 @@ def test_a_peer_that_resets_its_stream_is_recorded_in_the_transcript_and_the_res
     told = [RUNTIME.decode(e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
     assert told == [Message("Closed", {"how": how})]
     assert r.outcomes["challenger"]["refused"] == "closed" and r.summary()["ended"] == r.ended
+
+
+def test_a_connect_that_fails_is_recorded_not_raised(tmp_path):
+    """A dial whose connect fails (nothing listens at the address) is a channel that ended on connecting: the challenger
+    is told `Closed` with it, and the run's result names it, as for a stream that fails later."""
+    server = socket.create_server(("127.0.0.1", 0))
+    address = "%s:%d" % server.getsockname()[:2]
+    server.close()
+    r = run(X.config(), ["challenger"], "live", tmp_path, protocols=X.PROTOCOLS, keys=X.keys("challenger"),
+            verify=X.verify, seed=SEED, dial_to={"responder": address})
+    how = r.ended["challenger"]["responder"]
+    assert how.startswith("ConnectionRefusedError on connecting: "), how
+    told = [RUNTIME.decode(e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
+    assert told == [Message("Closed", {"how": how})]
+    assert r.outcomes["challenger"]["refused"] == "closed"
+
+
+def test_a_connect_the_peer_resets_is_an_ended_pipe(monkeypatch):
+    """A peer that accepts and resets before the dialer resumes makes the blocking connect raise
+    `ConnectionResetError`; `dial` returns it as an ended pipe."""
+    def reset(*_args, **_kwargs):
+        raise ConnectionResetError(104, "Connection reset by peer")
+
+    monkeypatch.setattr(socket, "create_connection", reset)
+    pipe = dial("127.0.0.1:1")
+    assert pipe.closed and pipe.take() is None and pipe.fileno() is None
+    assert pipe.ended == "ConnectionResetError on connecting: [Errno 104] Connection reset by peer"
+    with pytest.raises(ValueError, match="HOST:PORT"):
+        dial("no-port")
 
 
 def test_a_corrupted_handshake_is_refused_by_name():

@@ -1,0 +1,36 @@
+{
+ "definitions": {
+  "SiluTorchBackwardOut_v1{N=2,CONTRACT=0}": {
+   "and": 19916,
+   "type": "031442b2be0541d5f5e03c6fbd56edd8a03705282251a445cfef238ec188edbd5c5a5df6cb39395750f35a2af9856f9aabc76f09d2b79239757c5368b1cbfd60"
+  },
+  "SiluTorchBackwardOut_v1{N=2,CONTRACT=1}": {
+   "and": 20934,
+   "type": "30805fca624a979ebbdf72859b4f0af7ae6426613e0a9b6a64d6de349ea55b1a2fd0b81d462ff7575a2eec32094db33e04a5a19fa7e0048705867d9e2c523a4b"
+  },
+  "SiluTorchBackward_v1{N=2,EX2=MufuEx2Ftz_v2,CONTRACT=0}": {
+   "and": 34306,
+   "type": "dcabc5c8cd13935539931aed2d4b44601cbeaae6f12cde476fb7c04f4ed2162036805f8c27daf61428b5d83113f9b636fbff55576388643606d1f5d608ec49b1"
+  },
+  "SiluTorchBackward_v1{N=2,EX2=MufuEx2Ftz_v2,CONTRACT=1}": {
+   "and": 35324,
+   "type": "f0004813f72ce94ae6d63194695a788f16d73aed6c9f75afb14c2b3de975c2e0d985078b2e2a8f749501e60a3e8d6cc8629d16738eab6eb043dc0b5bee1ae55d"
+  },
+  "SiluTorchIn_v1{N=2}": {
+   "and": 12246,
+   "type": "67c0f82b7cebda46d3af8fd7cc6eff7cb0cf5c32eba836129f68b93768451d6c52e86c5e4bab0d83170c9d342c6d026dcc2d1b8fe8aa3edab0dc306cc982e432"
+  },
+  "SiluTorchIn_v1{N=8}": {
+   "and": 48984,
+   "type": "c7e088936306e24771a24da02a2f9311047b8a30bf41e814e1dae71d06e7f18267e9a84344c70786fabff8ba016c2531457cba70518fe928fdaa32065856fc65"
+  },
+  "SiluTorchOut_v1{N=8}": {
+   "and": 31088,
+   "type": "bb527f14ad3914b10ff238a1dcd548bf88edcd3228d2734d635cf1d385b4e2229f1562a7bf529c2bd93fb21b6e5f542fce6f17ef74a51748bd185eff9c251a9d"
+  },
+  "Transpose_v1{R=128,C=128}": {
+   "and": 0,
+   "type": "e20b1bf8a25b07b4c5f5c45fbda9fc9e3770ce8af13d25982b6e02b96b9154213968340774c17f71f06cffdbbdbe998d59c5dbd719f750e74ff0b21756a176df"
+  }
+ }
+}

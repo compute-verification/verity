@@ -3,11 +3,11 @@ import Definitions.Nci.Threads
 /-!
 # NCI over windows: the fit bound's vocabulary
 
-The fit bound ("The fit bound", Notion) divides the reference circuit `c` into windows, a partition of its computed gates
-(`Verity.Partition`): in the accounting model, one server's time from a wipe through whole wipe periods. When no window
-can hold a model that reaches the target loss, each thread's work spans several windows, and every window that works on
-a thread other than the one that starts it reads some of that thread's state. Over a `Threading` of `c`, a partition `P`
-into `k` windows and the window `start t` that starts each thread `t`:
+The fit bound divides the reference circuit `c` into windows, a partition of its computed gates (`Verity.Partition`): in
+the accounting model, one server's time from a wipe through whole wipe periods. When no window can hold a model that
+reaches the target loss, each thread's work spans several windows, and every window that works on a thread other than
+the one that starts it reads some of that thread's state. Over a `Threading` of `c`, a partition `P` into `k` windows
+and the window `start t` that starts each thread `t`:
 
 * `threadWeights R t`: the weights thread `t` uses inside `R`, those of which `R` holds a counted multiplication of `t`.
 * `visits P t`: the windows that do some of thread `t`'s counted multiplications.

@@ -104,6 +104,7 @@ from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.ops.prims import ZERO32, const
 from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.prims import BF16
 
@@ -133,7 +134,7 @@ MULTIMEM_ALIGN_BYTES = 16
 #: the bf16 elements of one 16-byte vector, what one ``multimem.ld_reduce.v4.bf16x2`` reduces
 MULTIMEM_VECTOR = MULTIMEM_ALIGN_BYTES // 2
 #: `CAPTURE_RUNS`' kept multimem words replayed on `AllReduceMultimemVector_v1`'s batch (tests/properties/glm53_multimem_replay.py)
-MULTIMEM_REPLAY_RUN = "r20261019-023101-2f28"
+MULTIMEM_REPLAY_RUN = EVIDENCE["glm53_multimem_replay"]["run"]
 H200_SMS = 132
 _NEG_ZERO32 = const(32, 0x80000000)
 
@@ -142,7 +143,7 @@ _NEG_ZERO32 = const(32, 0x80000000)
 #: 1); "custom-off" is ``disable_custom_all_reduce`` true, what the two GO runs served; "switch" is ``VLLM_ALLREDUCE_USE_SYMM_MEM=0``.
 SETTINGS = {"defaults": (True, True), "custom-off": (False, True), "switch": (True, False)}
 #: the 8-GPU capture's GO runs on vy-glm53-h8 (the first with NCCL_P2P_DISABLE=1, which only NCCL's routes read)
-CAPTURE_RUNS = ("r20261013-085842-2147", "r20261013-091723-e383", "r20261013-115512-5ff3")
+CAPTURE_RUNS = tuple(EVIDENCE["glm53_tp8_allreduce_capture"]["runs"])
 _CUSTOM_OFF_RUNS = CAPTURE_RUNS[:2]
 _DEFAULT_RUNS = CAPTURE_RUNS[2:]
 #: the tree every owner's multimem reduction took in all three runs (including the 7168-wide pass)
@@ -154,7 +155,7 @@ RTX_PRO_6000 = ("12.0", 188)
 #: Llama-3.1-70B int8's TP4 capture on vy-nebius-1 (GPUs 2, 3, 6, 7, NCCL 2.29.7), the replay of its every all-reduce through
 #: `AllReduceNcclTree_v1` (`tests/properties/tp4_nccl_tree_replay.py replay`: 5152 calls, 1,514,110,976 rank words, GO) and
 #: NCCL's tree probed on GPUs 0, 1, 2, 5 (``probe``: the same chain, NaNs 0x7FFF)
-NCCL_TREE_RUNS = ("r20261018-213408-ac4a", "r20261018-234106-807f", "r20261018-235000-713a")
+NCCL_TREE_RUNS = tuple(EVIDENCE["tp4_nccl_tree_replay"]["runs"])
 
 
 class Captured(NamedTuple):

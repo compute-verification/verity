@@ -2,8 +2,8 @@
 cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the warden's root and decided by
 the verifier of record on its own lanes), and `advised.IoTieVerdict` built from the stream's outcomes of record alone.
 An honest link is tied, `advised.ends` reads the tie, and the advised link takes it only from `Ties`, the tie, its
-stream and the release as its source of record; REDTEAM phase 9's carried field count, its forged advice and phase 6's
-split are refused, as are an outcome on another advice, in the clear or late, a stream short of the advice's windows,
+stream and the release as its source of record; a carried field count, a forged advice and the swapped split are
+refused, as are an outcome on another advice, in the clear or late, a stream short of the advice's windows,
 out of order or past them, a profile that frames requests otherwise than the warden cuts them, a row that isn't the
 warden's, a head of another window, an advice whose `received` isn't the release's, and an unpinned size class.
 Nothing in `verity` but the tie service builds the verdict."""
@@ -36,7 +36,7 @@ B = 512
 PARAMS = W.WardenParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
 LINK, RUN = "requests", "r-tie-test"
 SESSION = hashlib.sha512(b"tie-test").digest()
-#: REDTEAM phase 9's span: request 1 (40 tokens) takes 2 cells, its DATA in bucket 3 and its END in bucket 4, so it
+#: a span: request 1 (40 tokens) takes 2 cells, its DATA in bucket 3 and its END in bucket 4, so it
 #: spans the two windows; requests 0 and 2 take one cell each, one in each window
 SPAN, ARRIVALS, RATES = (5, 40, 5), (0, 2, 4), (10 ** 6, 600, 10 ** 6)
 RECEIVED = (2, 2)
@@ -145,8 +145,8 @@ def test_an_honest_link_is_tied_and_advised_ends_reads_the_tie(tmp_path):
 def test_the_advised_link_reads_the_tie_only_from_its_source_of_record(tmp_path):
     """`Ties`, the tie, its stream and the release as `LinkWindows.ties`: the advised link of the tie's name takes each
     window's view under the verdict it gives; a link of another name takes none (the source refuses another link), as
-    with no source, and so does the link under the source of a stream whose outcomes are on a forged advice (REDTEAM
-    phase 9) or of another link's tie."""
+    with no source, and so does the link under the source of a stream whose outcomes are on a forged advice
+    or of another link's tie."""
     advice = _advice(SPAN, release=(1, 3, 5))
     run = Run(tmp_path / "honest")
     assert run.link(advice) == [True, True]
@@ -177,9 +177,9 @@ def test_the_advised_link_reads_the_tie_only_from_its_source_of_record(tmp_path)
 
 @pytest.mark.parametrize("delta", [1, 5, 100])
 def test_a_proof_on_an_added_carried_field_count_is_refused(tmp_path, delta):
-    """REDTEAM phase 9 (b) through the verifier: IoTieRequest accepts bucket 4's row on its lane's carry-in fields + Δ
-    with its carry-out's + Δ, but the verifier's lanes are its own, from the advice and the release, so a proof on the
-    added lanes opens to no public row of the verifier's and window 1 is refused."""
+    """The carried field count through the verifier: IoTieRequest accepts bucket 4's row on its lane's carry-in
+    fields + Δ with its carry-out's + Δ, but the verifier's lanes are its own, from the advice and the release, so a
+    proof on the added lanes opens to no public row of the verifier's and window 1 is refused."""
     run, advice = Run(tmp_path), _advice(SPAN)
     lanes = run.tie.lanes(advice, SERVED.releases, 1)
     ln = lanes[0][0]
@@ -195,7 +195,7 @@ def test_a_proof_on_an_added_carried_field_count_is_refused(tmp_path, delta):
 
 
 def test_a_forged_advice_is_refused_from_window_0(tmp_path):
-    """REDTEAM phase 9's forged advice, 40 → 45 prompt fields, keeps every request's cells, so `advised.ends` and the
+    """A forged advice, 40 → 45 prompt fields, keeps every request's cells, so `advised.ends` and the
     release can't see it: bucket 3's carry-out isn't the forged request's, nor bucket 4's carry-in, so both windows are
     refused, and `advised.ends` refuses the link."""
     forged = _advice((5, 45, 5))
@@ -209,7 +209,7 @@ def test_a_forged_advice_is_refused_from_window_0(tmp_path):
 
 
 def test_redteam_phase6_split_is_refused(tmp_path):
-    """REDTEAM phase 6's split at the tie's size class: prompts of 40 and 5 tokens take 2 cells and 1, and the forged
+    """The swapped split at the tie's size class: prompts of 40 and 5 tokens take 2 cells and 1, and the forged
     advice swaps them, keeping the total, which lowers request 0's end from 2 to 1 and so the advised floor. The
     release puts 2 cells on connection 1, which the swapped advice's 5-token request doesn't take, so the verifier's
     lanes refuse every window and `advised.ends` refuses the link."""

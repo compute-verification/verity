@@ -36,6 +36,8 @@ import Proofs.Nci.CoveringTwoCostsWitness
 import Proofs.Nci.CoveringPriced
 import Proofs.Nci.CoveringPricedWitness
 import Proofs.Nci.Cover
+import Proofs.Nci.PartitionCovers
+import Proofs.Nci.CompliesCK
 import Proofs.Nci.Ldl
 
 /-!

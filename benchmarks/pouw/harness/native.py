@@ -12,8 +12,10 @@ from pathlib import Path
 
 from arm import Buffer
 from identity import uuid_string
+from verity_config.settings import of
 
 HERE = Path(__file__).parent
+settings = of(__file__)
 u64, vp, sz, i32 = C.c_uint64, C.c_void_p, C.c_size_t, C.c_int
 
 
@@ -41,13 +43,13 @@ class LtCandidate(C.Structure):
 
 
 def lib_path() -> Path:
-    return Path(os.environ.get("POUW_HARNESS_LIB", HERE / "native" / "build" / "libpouw_harness.so"))
+    return Path(settings.POUW_HARNESS_LIB or HERE / "native" / "build" / "libpouw_harness.so")
 
 
 def lt2_path() -> Path | None:
     """The second cuBLASLt's library (build.sh with LT2_HOME): POUW_HARNESS_LT2, else libpouw_lt2.so beside the harness's
     library if the build made one; POUW_HARNESS_LT2=none leaves it out. A named library that can't load is an error."""
-    v = os.environ.get("POUW_HARNESS_LT2")
+    v = settings.POUW_HARNESS_LT2
     if v == "none":
         return None
     if v:
@@ -312,7 +314,7 @@ class Nvml:
     """One GPU's NVML handle, by UUID. `sample()` is the per-rep record; `identity()` the card's."""
 
     def __init__(self, uuid: str):
-        self.lib = C.CDLL(os.environ.get("POUW_LIBNVML", "libnvidia-ml.so.1"))
+        self.lib = C.CDLL(settings.POUW_LIBNVML)
         self.uuid = uuid
         self._ck(self.lib.nvmlInit_v2())
         self.h = vp()
@@ -409,7 +411,7 @@ def versions(dev: Device) -> dict:
         if build is not None and Path(t["path"]).parent == lib.parent and (lt2 or {}).get("lib_sha256") != t["sha256"]:
             raise RuntimeError(f"{build_json} describes another libpouw_lt2.so ({(lt2 or {}).get('lib_sha256')}, loaded "
                                f"{t['sha256']})")
-    nvcc = shutil.which("nvcc") or (os.environ.get("CUDA_HOME", "/usr/local/cuda") + "/bin/nvcc")
+    nvcc = shutil.which("nvcc") or ((settings.CUDA_HOME or "/usr/local/cuda") + "/bin/nvcc")
     maps = Path("/proc/self/maps")
     loaded = sorted({line.split()[-1] for line in maps.read_text().splitlines() if "libcublasLt" in line}) \
         if maps.exists() else None

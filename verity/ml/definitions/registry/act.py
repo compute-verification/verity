@@ -36,8 +36,8 @@ domain is the 65,536 bf16 words, and `gelu_erf_table.py` holds the kernel's outp
 pod (RTX 4090, sm_89, torch 2.13.0+cu129) by `verity_vllm/ops/gelu_erf_table_probe.py` (`aten.gelu` on
 `arange(65536).view(bfloat16)`, then zlib + base64).  The primitive is the table lookup.  Precedent: `prims.MufuEx2Ftz` /
 `MufuRcpFtz` (measured hardware tables).  `GeluErf_v1{N}` is `out[j] = GeluErfBf16(x[j])` over a row, the GPT-NeoX MLP
-activation (`nn.GELU()`, vLLM `get_act_fn("gelu")`).  Both came from the quarantine lane `cov-ln` with their bodies verbatim,
-so their ids are the lane's; the Match fold binds them (`engine/profiles/gen_ln_patterns.py`), and `tests/engine/test_gen_ln.py`
+activation (`nn.GELU()`, vLLM `get_act_fn("gelu")`).  Both were promoted from quarantine with their bodies verbatim, so
+their ids keep the quarantine's `ln/` prefix; the Match fold binds them (`engine/profiles/gen_ln_patterns.py`), and `tests/engine/test_gen_ln.py`
 checks the table's sanity facts: gelu(+0) = +0, gelu(-0) = -0, gelu(x) = x for x >= 2^4, gelu(x) = -0 for x <= -2^4, NaN words
 -> 0x7FFF, +inf -> +inf, -inf -> NaN.
 """
@@ -48,21 +48,23 @@ import math
 from verity.ml.circuits.defs import composite, primitive
 from verity.ml.circuits.types import Array
 
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.gelu_erf_table import TABLE_WORDS
 
-#: `SEMANTIC_ID`s of the promoted Definitions (their lanes' identities; the quarantine `act` modules keep the same strings)
+#: `SEMANTIC_ID`s of the promoted Definitions (their quarantine identities; the quarantine `act` modules keep the same strings)
 SEMANTIC_IDS = {"SiluMulBf16": "act/SiluMulBf16@v2", "SiluMul": "act/SiluMul@v2", "GeluErfBf16": "ln/GeluErfBf16@v1",
                 "GeluErf": "ln/GeluErf@v1"}
 
 BF16 = P.BF16
 F32_NEG_ZERO = 0x80000000
+_COV_LN = EVIDENCE["cov_ln_quarantine"]["by"]
 ZERO_BITS = 0x00000000
 #: ln of the smallest real that RN32 sends to +inf, (2 - 2^-24) * 2^127: no f32 word lies within float64 error of it
 LN_F32_OVERFLOW = math.log((2.0 - 2.0 ** -24) * 2.0 ** 127)
 
 CONFORMANCE = ("exact-model-tested: SiluMulBf16_v1 on finite ordinary words; the edge words (NaN, gate -inf, gates past expf "
-               "overflow, gate -0, up -0) as the red-team measured them (r20260930-092038-7dbc, silu-edge-cases)")
+               f"overflow, gate -0, up -0) as the red-team measured them ({EVIDENCE['silu_edge_cases']['run']}, silu-edge-cases)")
 
 
 def silu_f32_bits(g: int) -> int:
@@ -101,7 +103,7 @@ def gelu_erf_bf16_bits(x: int) -> int:
 
 
 @primitive("GeluErfBf16", 1, [("x", BF16)], BF16,
-           conformance="quarantine (lane cov-ln): exhaustive measured table (65,536/65,536 bf16 words, torch 2.13.0+cu129 aten.gelu on "
+           conformance=f"quarantine ({_COV_LN}): exhaustive measured table (65,536/65,536 bf16 words, torch 2.13.0+cu129 aten.gelu on "
                        "sm_89); difftest vs torch.nn.functional.gelu on the pod",
            tables=(("gelu_erf_bf16", "registered"),))
 def GeluErfBf16(x: int) -> int:
@@ -110,7 +112,7 @@ def GeluErfBf16(x: int) -> int:
 
 
 @composite("GeluErf", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, BF16)),
-           conformance="quarantine (lane cov-ln): difftest vs torch.nn.functional.gelu (bf16, sm_89) on the pod")
+           conformance=f"quarantine ({_COV_LN}): difftest vs torch.nn.functional.gelu (bf16, sm_89) on the pod")
 def GeluErf(B, S, x):
     """`out[j] = GeluErfBf16(x[j])` over one row of N bf16 words."""
     return B.batch(GeluErfBf16, x, axes=(0,))

@@ -13,7 +13,7 @@ at `CM` realizes it there (`RealizesPearlCPriced.withStop`): the guarantees cove
 
 At W1 priced at positive prices, the costs are nonnegative (`Pouw.PearlC.W1Stop.w1Priced_nonneg`), so
 `w1Stop_computeSoundPerRunPriced` is the compute audit's guarantee from `GγPerCoin (w1Priced dv salt)`, for a run that
-realizes `W1.w1Stop`, or `w1Priced` through the lift. A run of `w1Priced` has its cost on the priced sum by decision 9's
+realizes `W1.w1Stop`, or `w1Priced` through the lift. A run of `w1Priced` has its cost on the priced sum by the cost's
 split (`Pouw.PearlC.W1Priced.w1Priced_cost`: its arithmetic within the compute charge, its first fetches within the
 bandwidth charge); `w1Stop_cost_le` is the same split for a device that does stop a run, whose budget must then be
 within the two.
@@ -33,9 +33,9 @@ def RealizesPearlCPriced.withStop {CM : PearlC.CostModel Q R S} {P : PearlC.Prot
     RealizesPearlCPriced CM.withStop P U w r p pRead :=
   ⟨fun o => ⟨(h.adv o).pre, ((h.adv o).online, none), (h.adv o).act⟩, h.accepts_iff, h.cost_le, h.calls_le⟩
 
-/-- **Decision 9's split for a device that stops a run**: a run of `W1.w1Stop` costs at most `work + pRead·bits` when, if the
-machine doesn't stop it, its arithmetic (`final`'s `cost`) is within the compute charge `work` and `fetch` per word it
-first fetches (`w1Read`) within the bandwidth charge `pRead·bits`, and, if the machine stops it at budget `b`, `b` is
+/-- **The cost's split for a device that stops a run**: a run of `W1.w1Stop` costs at most `work + pRead·bits` when, if
+the machine doesn't stop it, its arithmetic (`final`'s `cost`) is within the compute charge `work` and `fetch` per word
+it first fetches (`w1Read`) within the bandwidth charge `pRead·bits`, and, if the machine stops it at budget `b`, `b` is
 within the two. -/
 theorem w1Stop_cost_le (dv : PearlC.W1.W1Device) (salt : S → List ℕ) (prog : PearlC.W1.Prog × Option ℝ) (H : Q → R)
     (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S) {work bits pRead : ℝ}

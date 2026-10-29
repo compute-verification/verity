@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.TmplSplitWalk
 import Proofs.Flock.Soundness.TmplFoldLayout
 
 /-!
-# The split fold is the template fold (PRF-133, part 3, stage 3)
+# The split fold is the template fold
 
 `foldSplit` walks the root's class at chunk origin 0 and sums the table's entries into the 64 slots; with the root
 reading no inputs that sum is `tabExp`, which `walk_ok` values as the root copy's reference value

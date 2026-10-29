@@ -68,7 +68,7 @@ id, the word count and the role, and each tree holds exactly one (schema id, wor
     cap-chunks row/v2          (none)
 
 Every per-call row (role X) but ok, the tile digest, the cap's rows and the row_k cut's rows (below) is a row-seg row,
-so decode's serial hash chain is a segment's, not the row's (Daniel's ruling, card 637f70c6).  The cap's per-word and
+so decode's serial hash chain is a segment's, not the row's.  The cap's per-word and
 per-row-sum rows are at most one SHA-512 block at any k up to 2^14, so a segment's chain is the row's and v2 hashes them
 in fewer blocks.  The cap's strip row and chunk digests are padded with zero words to 64, one whole block, because
 C-Flock's composer refuses a unit none of whose rows hashes a block before its last one (its SHA-512 range would hold no
@@ -78,7 +78,7 @@ only one-block v2 rows; a row tally has one through sd.  They are v2 rather than
 proved scope takes a v2 row whose bytes are whole blocks or end in its first block, and a row-seg row only of whole
 blocks: padded, each is two compressions, as its short row-seg row was, where a row-seg row of a block is three.  Every
 other row is a v2 row, the registered ones included, so each (row, role) has one leaf schema in the registered tree and
-in every statement that reads or writes it, and no row is `sha512/row/v1` (Daniel's ruling, Slack 1790973124.259289).  A
+in every statement that reads or writes it, and no row is `sha512/row/v1`.  A
 v2 row costs what a v1 row of the same words would, a 128-byte prefix block and the row; the role byte that v2 drops is
 bound by the registration domain.
 

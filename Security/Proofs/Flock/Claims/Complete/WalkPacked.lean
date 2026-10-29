@@ -25,7 +25,7 @@ theorem _root_.FlockComplete.Run.walkP {H : Claims.Msg → Claims.Msg} {rel : Re
     {r : ℕ} (hr : r < 2) : RepWalkP o 0 r := by
   obtain ⟨st, hst, hsp, -, -⟩ := o.table
   have ht : o.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
-  obtain ⟨hct, hsig, hdraw, -⟩ := JsonRT.stmtOk S o.toCase
+  obtain ⟨hct, hsig, hdraw, -⟩ := JsonRT.stmtOk o.toCase
   obtain ⟨hC, hRk⟩ := hP o.toCase st (by rw [hst]; simp)
   have htabs : o.tabs = #[Setup.ofCircuit st] := by simp [Run.tabs, tabsOf, hst]
   have htab0 : o.tabs[0]! = Setup.ofCircuit st := by rw [htabs]; rfl

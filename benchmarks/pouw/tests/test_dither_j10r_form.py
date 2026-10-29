@@ -146,7 +146,8 @@ def test_a_j10r_arm_in_the_order_is_ask71_a_with_3574_as_its_basis():
     assert "j10r" not in F.UNADOPTED_PARTS
     lab = F.form_of("dither-a", "zy", True, (), ("j10r",))
     assert lab["form"] == F.FORM_A
-    assert lab["form_basis"] == f"{F.Z_FORMS['zy'][1]}; {F.ADOPTED_PARTS['j10r']}" and "#3574" in lab["form_basis"]
+    assert lab["form_basis"] == f"{F.Z_FORMS['zy'][1]}; {F.ADOPTED_PARTS['j10r']}"
+    assert "credit.SHARED_J10R" in lab["form_basis"]
     assert F.form_of("dither-a", "zy", True, ("ov",), ("j10r",))["form"] == F.UNADOPTED
     assert F.form_of("dither-a", "zy", True) == {"form": F.FORM_A, "form_basis": F.Z_FORMS["zy"][1]}
 

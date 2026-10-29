@@ -5,10 +5,9 @@ from fractions import Fraction
 
 BF16_NAN_SOFTWARE = 0x7FC0   # c10::BFloat16::round_to_nearest_even, torch CPU: the software canonical NaN
 BF16_NAN_HARDWARE = 0x7FFF   # SASS F2FP.BF16.F32.PACK_AB / cvt.rn.bf16.f32: measured on A100 and RTX 4090 (L6)
-F32_NAN_CANONICAL = 0x7FC00000
 E4M3_NAN = 0x7F              # OCP E4M3 (float8_e4m3fn): NaN 0x7F / 0xFF, max finite 0x7E = 448, no infinities
 
-__all__ = ["BF16_NAN_HARDWARE", "BF16_NAN_SOFTWARE", "E2M1_UP", "E4M3_NAN", "F32_NAN_CANONICAL", "bf16_is_nan", "bf16_to_f32_word",
+__all__ = ["BF16_NAN_HARDWARE", "BF16_NAN_SOFTWARE", "E2M1_UP", "E4M3_NAN", "bf16_is_nan", "bf16_to_f32_word",
            "e4m3_to_f32_word", "f32_is_nan", "f32_to_bf16_hw_word", "f32_to_bf16_rn_word", "f32_to_bf16_word", "f32_to_e2m1_sat_word",
            "f32_to_e4m3_sat_word", "s32_to_f32_rn_word"]
 

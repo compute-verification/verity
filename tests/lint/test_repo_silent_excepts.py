@@ -1,6 +1,5 @@
 """Except handlers that swallow what they catch, in every tracked Python file outside ``integrations/vllm/`` and ``archive/``,
-held to ``allowlists/repo_silent_excepts.json``: S4 of the quality rollout, recorded outcomes (the vLLM coordinator, 27 Oct
-02:05Z), so no area adds one while its owner turns the ones it has into raises and records.
+held to ``allowlists/repo_silent_excepts.json``: S4 of the quality rollout, recorded outcomes, so no area adds one while its owner turns the ones it has into raises and records.
 
 A handler swallows when every statement in it is ``pass``, ``continue``, ``break``, a bare constant (``...``), or a ``return``
 or an assignment of a default: nothing, ``None``, a constant other than a string or ``False``, a name other than the caught

@@ -40,6 +40,8 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.config import workload_file
+
 HERE = Path(__file__).resolve().parent
 VLLM_ROOT = HERE.parents[1]  # integrations/vllm
 FIXTURES = HERE / "fixtures.toml"
@@ -276,8 +278,9 @@ class Row:
             return [json.loads(line) for line in f if line.strip()]
 
     def workload(self) -> Path:
-        """The declared workload manifest (in-repo `integrations/vllm/workloads/<row>.json`) -- the same file row_pod.sh's `$WL` was."""
-        p = VLLM_ROOT / "workloads" / f"{self.key}.json"
+        """The declared workload manifest (`integrations/vllm/workloads/<row>.json`, fetched by its art id and checked against its
+        digest, `config.workload_file`) -- the same file row_pod.sh's `$WL` was."""
+        p = workload_file(VLLM_ROOT / "workloads" / f"{self.key}.json")
         if not p.is_file():
             raise NotResolvable(f"{self.key}: workload manifest {p} not in this tree")
         return p
@@ -512,8 +515,8 @@ def diff(expected: Any, actual: Any, path: str = "$") -> list[str]:
 DECISION_FIELDS = ("check", "since", "finding", "reason", "expected")
 #: what `[rows.<row>.retired.<check>]` must state (`Row.retired`)
 RETIREMENT_FIELDS = ("reason", "since", "needs")
-#: `status` of a decision: `accepted` (the default when absent: Daniel confirmed it) or `pending_review` (labelled by a lane, not yet
-#: confirmed); both sanction.
+#: `status` of a decision: `accepted` (the default when absent: confirmed) or `pending_review` (labelled, not yet confirmed); both
+#: sanction.
 DECISION_STATUSES = ("accepted", "pending_review")
 
 

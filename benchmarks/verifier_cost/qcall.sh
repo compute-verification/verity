@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Q_call v1's cost on Serve_v1 (PRF-72): `flock-verify qcall-program` at each X and the one-stage `partition` piece under
+# Q_call v1's cost on Serve_v1: `flock-verify qcall-program` at each X and the one-stage `partition` piece under
 # `Q_call` v1 at X = 16, on one config's word-level descriptor, each under `/usr/bin/time -v`, and a `perf` profile of
 # `qcall-program` at the first X where the node has perf. Run from a clone (the builds write .lake):
 #   research run --as proofs --project verity --on vy-nebius-cpu-4 --source . --cwd clone -- \

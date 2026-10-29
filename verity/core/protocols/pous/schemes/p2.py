@@ -1,15 +1,13 @@
 """P2, **experimental**: the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
 `internal/efficient-crypto/p2-verdict.md`; its spec is the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
-v1 of 29 Sep 2026, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`, amended to v1.1 by Daniel's
-ruling of 4 Oct 2026 and to v4 by his ruling of 6 Oct 2026, one hash, SHA-512, in `../p2/PROTOCOL.md`, which this
+v1, amended to v1.1 (the RTT cap) and to v4 (one hash, SHA-512) in `../p2/PROTOCOL.md`, which this
 module implements).  Every block is independent, and its decode is two big-integer squarings.  Two codecs differ only
 in how a block's keys are expanded:
 
 - `p2-16448/v4`: counter-mode SHA-512 with the spec's v4 framing, the expander its setup assumption P2-EXP-IO names
   (decision F4).
 - `p2-16448/v2`: ChaCha8 from a SHAKE256 seed per segment.  It is **nonconforming** to F4, which adds a reduced-round
-  assumption, but its keys cost about 1% of the decode's multiply work on the device, and `benchmarks/pous`'s `p2-gpu`
-  arm measures it.  It is kept for that.
+  assumption, but its keys cost about 1% of the decode's multiply work on the device.
 
 ~~~text
 p          2^w − c0, prime, p ≡ 3 mod 4           registered: w = 16448, c0 = 21065 (`p2-p16448-c21065`, 2,056-byte blocks)
@@ -141,7 +139,7 @@ DELTA_NS = 500_000
 """Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node (`p2/PROTOCOL.md` §6, decision F2)."""
 
 RTT_ALLOWANCE_CAP_NS = 354_000
-"""The cap on the measured RTT allowance in spec v1.1, Daniel's ruling of 4 Oct 2026 (`p2/PROTOCOL.md` §12): the
+"""The cap on the measured RTT allowance in spec v1.1 (`p2/PROTOCOL.md` §12): the
 largest whole µs with `Δ + cap < ROOT_CALL_NS`, so `Δ + RTT ≤ 854 µs`.  The certificate refuses every whole µs past
 it, and the verifier any RTT past it or any Δ but `DELTA_NS` (`P2.deadline_refusals`), which the certificate's sum
 alone admits up to `ROOT_CALL_NS − 1`."""

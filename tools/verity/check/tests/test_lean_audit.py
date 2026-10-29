@@ -155,7 +155,7 @@ sys.exit(1 if failed else 0)
 
 
 def test_a_trains_audit_passes_on_regenerated_records_names_them_and_keeps_no_such_pass(tmp_path, monkeypatch):
-    """`--regenerate` (a train's lean-audit step, CI-64) reaches check.py and not the cache key: a package that passes only on
+    """`--regenerate` (a train's lean-audit step) reaches check.py and not the cache key: a package that passes only on
     its regenerated record is named in audit.json's `regenerated` for the train to commit, and is never kept as a reusable pass,
     since its lock changes when the record lands; the other packages' passes are kept and reused as before."""
     root = _tree(tmp_path, monkeypatch)
@@ -1007,8 +1007,7 @@ def test_an_audit_sweeps_before_it_makes_its_scratch_tree_named_by_its_pid(tmp_p
 
 
 def test_kept_dependencies_and_replays_past_their_caps_go_oldest_first(tmp_path):
-    """LEAN-29: vy-nebius-2 held 24 kept dependency trees (806k inodes) and 180k replay entries, with nothing evicting
-    either. Kept dependencies keep the newest `kept` by use, a held one stays, and the replay cache its newest entries."""
+    """Kept dependency trees and replay entries are evicted, or a node fills up with them. Kept dependencies keep the newest `kept` by use, a held one stays, and the replay cache its newest entries."""
     deps = tmp_path / "lean-deps"
     for i, k in enumerate(("a", "b", "c")):
         (deps / k / "pkg").mkdir(parents=True)

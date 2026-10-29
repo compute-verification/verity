@@ -215,7 +215,7 @@ class Bench:
         t0 = self.clock()
         try:
             ok, detail = fn()
-        except Exception as ex:  # noqa: BLE001 - a control that can't run shows nothing; the run stops
+        except Exception as ex:
             self.negatives.append({"key": list(key), "rejected": None, "error": f"{type(ex).__name__}: {ex}",
                                    "wall_s": self.clock() - t0})
             raise NegativeControlFailed(f"{'/'.join(map(str, key))} couldn't run: {ex}") from ex
@@ -550,7 +550,7 @@ def names_not_taken(fam: str, label: str, missing: list[str], enumeration: dict,
 
 
 def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bool, want: int, seed: int,
-                   enumerate_fams: frozenset = frozenset(), pick: B.LtPick = B.LtPick(),
+                   enumerate_fams: frozenset = frozenset(), pick: B.LtPick = B.EVERY,
                    sched_fams: frozenset = frozenset()) -> dict:
     """Every family's candidates, each gated on the gate set (cuBLASLt's configurations enumerated for the families in
     `enumerate_fams`, those `pick` takes; the CUTLASS 3.x kernels in every tile order for those in `sched_fams`); at the
@@ -1190,7 +1190,7 @@ def timed_clocks(items: list[dict]) -> dict:
 
 
 def now() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def main(argv: list[str] | None = None) -> int:

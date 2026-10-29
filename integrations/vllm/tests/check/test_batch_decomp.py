@@ -135,7 +135,7 @@ def test_dataflow_attribution_is_primary_and_refuses_cross_request(monkeypatch, 
 
 
 def _multi_weights_prog(n_weight_nodes=3):
-    """[R16 global, F-fp8-GM1 / M-0823] A stub oracle whose WEIGHTS are several Input nodes (a mixed-width Record lowers to one Input
+    """A stub oracle whose WEIGHTS are several Input nodes (a mixed-width Record lowers to one Input
     batch per leaf field: FP8 e4m3 weight + f32 scale + bf16 norm = 3 here, 435 on Qwen3-4B-FP8).  Inputs: 0, 1 = the two prompts,
     2, 3, 4 = the weights leaves (offsets 0..3, 4..9, 10..11 of the Record).  Each request: Embedding(prompt, W[2]) -> Linear(., W[3]) ->
     Norm(., W[4]) -> TokenSelect.  The rows rule cannot place any of them (rows=1); dataflow must."""
@@ -167,16 +167,16 @@ def _multi_weights_prog(n_weight_nodes=3):
 
 
 def test_multi_node_weights_are_shared_inputs_not_cross_request_reads(monkeypatch, tmp_path):
-    """[F-fp8-GM1 / M-0823] With the weights lowered to 3 Input nodes, every request's reads of nodes 2, 3, 4 are shared-weights
+    """With the weights lowered to 3 Input nodes, every request's reads of nodes 2, 3, 4 are shared-weights
     reads: all 8 instances attributed by dataflow, 0 cross-request reads, and the projections canonicalise the weight operands as
-    ("W", field, in-field offsets) through the oracle's field map + input_base (the pre-R16 code refused the Program: '5 input nodes
+    ("W", field, in-field offsets) through the oracle's field map + input_base (older code refused the Program: '5 input nodes
     but 2 requests (+1 weights expected)')."""
     B = _multi_weights_prog()
     header = {"workload": {"requests": [{"request_id": R0, "prompt_token_ids": [1, 2, 3]}, {"request_id": R1, "prompt_token_ids": [5, 6]}]}}
     steps = {0: _step([(R0, 0), (R1, 0)], [(R0, 0), (R1, 0)])}
     monkeypatch.setattr(bd, "read_steps", lambda p: (header, steps))
     monkeypatch.setattr(bd.C, "load_oracle", lambda d, label: B)
-    res = bd.decompose(str(tmp_path), [], log_path="ignored")   # pre-R16: ValueError '5 input nodes but the header has 2 requests (+1 weights expected)'
+    res = bd.decompose(str(tmp_path), [], log_path="ignored")   # older code: ValueError '5 input nodes but the header has 2 requests (+1 weights expected)'
     assert bd.weights_input_nodes(B, 2, 0) == {2, 3, 4}
     assert res["attribution"]["how"] == {"dataflow": 8} and res["attribution"]["unattributed"] == 0
     assert res["oracle"]["weights_input_nodes"] == {"n": 3, "first": 2, "last": 4, "request_owned_inputs": 2}

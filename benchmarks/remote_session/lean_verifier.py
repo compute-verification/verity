@@ -1,4 +1,4 @@
-"""The remote audit's verifier of record, the Lean process `remote-audit-verifier` (`RemoteAudit.Verifier`, in
+"""The remote audit's verifier, the Lean process `remote-audit-verifier` (`RemoteAudit.Verifier`, in
 verity/core/protocols/remote_bandwidth/lean), as `verifier.py` runs it beside `audit.Session`: one request a JSON line
 on its stdin (an openings frame's bytes right after its line), each answered by one line on its stdout; a window's
 check runs on the process's threads and its verdict comes on a line of its own, handed to `done` as it arrives.
@@ -43,7 +43,7 @@ def build(package: Path = PACKAGE) -> Path:
     path."""
     if shutil.which("lake") is None:
         raise LeanError("lake is not on the PATH, so remote-audit-verifier cannot be built: put elan's bin on the PATH "
-                        "(tools/verity/lean/setup.sh), pass --lean-exe, or run with --verdict python")
+                        "(tools/verity/lean/setup.sh), or pass --lean-exe")
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)

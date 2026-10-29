@@ -2,7 +2,7 @@ import Definitions.Pous.Model.PubEncoder
 import Definitions.Pous.Accounting.Params
 
 /-!
-# The requirement with a public encoder (staged: enters only with the public-encoder band pins)
+# The requirement with a public encoder
 
 `PubMeets`, copied verbatim from `lean/submissions/public-encoder/PubEncoderModel.lean`: `Meets`'s clauses, the
 check's completeness, and the public-encoder audit bound at the problem statement's parameters.

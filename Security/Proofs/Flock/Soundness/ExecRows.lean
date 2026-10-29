@@ -8,11 +8,11 @@ import Proofs.Flock.Soundness.SparseRows
 /-!
 # The rows the verifier parses, as the audit's `Rows`
 
-The executable's parser (`Flock.Net.parse`) holds every expanded circuit's rows to #144's order
-(`Net.checkOrder`, PR #147): a computed row, `inCols ≤ r < constPos`, reads in `A` and in `B` only
+The executable's parser (`Flock.Net.parse`) holds every expanded circuit's rows to an order
+(`Net.checkOrder`): a computed row, `inCols ≤ r < constPos`, reads in `A` and in `B` only
 the constant or an earlier column that is not input padding (`RowOrder`). `checkOrder_ok` turns an
 accepted check into that property, and `Rows.ofOrdered` builds the audit's `Rows` from rows that
-have it, with `topo` proved: what #144 named, the parser now checks.
+have it, with `topo` proved: the parser checks it.
 -/
 
 namespace FlockSoundness
@@ -59,7 +59,7 @@ theorem forIn_range_yield_ok {ε : Type} {lo hi : ℕ} {f : ℕ → PUnit → Ex
 def InputPadding (inCols : ℕ) (ra rb : Array (Array ℕ)) (c : ℕ) : Prop :=
   c < inCols ∧ (ra.getD c #[]).isEmpty = true ∧ (rb.getD c #[]).isEmpty = true
 
-/-- **Row order** (#144's `Rows.topo`, as the parser checks it): every computed row
+/-- **Row order** (`Rows.topo`, as the parser checks it): every computed row
 `inCols ≤ r < constPos` reads, in `A` and in `B`, only the constant or an earlier column that is not
 input padding. -/
 def RowOrder (inCols constPos : ℕ) (ra rb : Array (Array ℕ)) : Prop :=
@@ -239,7 +239,7 @@ theorem built_rowOrder {net : Net} (h : Built net) :
   ⟨ra, rb, checkOrder_ok hco, ha, hb⟩
 
 /-- **The parser orders every net it accepts**: the rows it stored as `A` and `B` have `RowOrder`,
-so #144's `Rows.topo` for a parsed net is an executable check, not a hypothesis. -/
+so `Rows.topo` for a parsed net is an executable check, not a hypothesis. -/
 theorem parse_rowOrder {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
     ∃ ra rb, RowOrder (net.inWords * WORD) net.constPos ra rb ∧
       Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b :=

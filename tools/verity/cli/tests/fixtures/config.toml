@@ -1,0 +1,83 @@
+# The deployment configuration of sampled-proofs and certifier on the toy workload (`verity config new`), every party
+# on local: `verity run` this file. Parameters it doesn't state are their declarations' defaults.
+format = "verity/config/v0"
+protocols = ["sampled-proofs", "certifier"]
+
+[workload]
+name = "toy"
+
+[service]
+law = "work:64"
+
+[program]
+commit = "ed7f3bdcea6d1966c489c0b8e1cbccabe7cd89bc"
+
+[[party]]
+name = "workers"
+machine = "local"
+principal = "developer"
+
+[[party]]
+name = "challenger"
+machine = "local"
+principal = "auditor"
+
+[[party]]
+name = "firewall"
+machine = "local"
+principal = "developer"
+
+[[party]]
+name = "verifier"
+machine = "local"
+principal = "auditor"
+
+[[party]]
+name = "network-certifier"
+machine = "local"
+principal = "auditor"
+
+[[channel]]
+from = "workers"
+to = "verifier"
+messages = ["registration"]
+
+[[channel]]
+from = "verifier"
+to = "challenger"
+messages = ["open", "finish"]
+after = ["registration"]
+
+[[channel]]
+from = "challenger"
+to = "verifier"
+messages = ["coins", "record"]
+after = ["open"]
+
+[[channel]]
+from = "verifier"
+to = "workers"
+messages = ["draw"]
+after = ["coins"]
+
+[[channel]]
+from = "workers"
+to = "firewall"
+messages = ["witness"]
+after = ["draw"]
+
+[[channel]]
+from = "firewall"
+to = "verifier"
+messages = ["proof"]
+after = ["draw"]
+
+[[channel]]
+from = "network-certifier"
+to = "workers"
+messages = ["out-opening"]
+
+[[channel]]
+from = "network-certifier"
+to = "verifier"
+messages = ["out-record"]

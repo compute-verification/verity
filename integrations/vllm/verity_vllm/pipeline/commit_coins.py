@@ -2,8 +2,8 @@
 and its served C2 replay challenge after each run's root of record.
 
 * **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,
-  the Commit reserves a challenge phase on infra's challenger gate (`Gate`: ``reserve --peer NAME --scheme SCHEME --families
-  families(runs)``, `benchmarks/live_challenger/auditor.py` on the auditor host, under the lane's own gate key). Once its
+  the Commit reserves a challenge phase on the auditor's challenger gate (`Gate`: ``reserve --peer NAME --scheme SCHEME --families
+  families(runs)``, `benchmarks/live_challenger/auditor.py` on the auditor host, under the caller's own gate key). Once its
   first instrumented run's root of record is fixed (rows-sha512's 64-byte root, `commit.step_rows`; a TP Commit's run
   root v2, `tp.run_root`), it opens that challenge phase on it (``open --session S --root R``): the gate signs the open entry
   binding the challenge phase to the root before the challenger serves a coin, and refuses a second challenge phase for the root, ever.
@@ -16,7 +16,7 @@ and its served C2 replay challenge after each run's root of record.
 * **Without a gate** each run's coins are this process's own bytes (``source`` ``in-process``): the run is a measurement,
   and its coins credit nothing, as H1's in-process coins (`pouw_h1_challenger.session_reason`). ``--replay-challenge``
   still names the C2 replay's challenge there (``source`` ``flag``).
-* **Checking** (`reason`): the verifier reads the auditor's signed ledger as infra published it (every head,
+* **Checking** (`reason`): the verifier reads the auditor's signed ledger as published (every head,
   `challenger.ledger_head`), the one challenge phase it opens for the Commit's root, run from a commit the host's pins log
   records on the verifier's own first-parent history of main (`challenger.pinned_session`, the log's heads read by
   `pouw_h1_challenger.pins_head`, main's history by `remote.main_lines`), and that challenge phase's files from the gate's ``fetch`` (never the prover's bundle) under the key the deployment pins
@@ -31,9 +31,7 @@ from __future__ import annotations
 import json
 import secrets
 import shlex
-import socket
 import subprocess
-import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -95,18 +93,6 @@ class Gate:
         return p.returncode, p.stdout
 
 
-def _connect(at: str, given: Mapping[str, Any], tries: int = 60) -> Any:
-    """`pouw_h1_window.connect`, retried while the challenge phase's port on this machine comes up."""
-    for i in range(tries):
-        try:
-            return PHW.connect(at, given)
-        except (ConnectionRefusedError, socket.timeout):
-            if i == tries - 1:
-                raise
-            time.sleep(1)
-    raise AssertionError("unreachable")
-
-
 class Session:
     """The Commit's challenge phase on the auditor host's challenger: reserved for `runs` runs (`reserve`), opened on the first
     run's root of record (`draw` of run 0), a coin of each family a run, closed after the last (`close`)."""
@@ -133,7 +119,7 @@ class Session:
             self.given = PHC.session_of({k: v for k, v in answer.items() if k in (*PHC.SESSION_FIELDS, *PHC.REPLY_FIELDS)})
         except ValueError as e:
             raise CoinError(f"the challenger gate's open answer: {e}") from e
-        self.client = _connect(self._address(int(answer["port"])), self.given)
+        self.client = PHW.connect(self._address(int(answer["port"])), self.given)
         c = self.client.commitment
         if c.scheme != SCHEME or [list(f) for f in c.families] != families(self.runs):
             self.close()
@@ -246,9 +232,9 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
            main: Sequence[str] | None) -> str | None:
     """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor host's
     challenger's, drawn after `roots` (each run's root of record as the verifier holds it); None when they are. The
-    challenge phase is read from `directory` (its ``out/`` from the gate's ``fetch``) and the ledger from `heads` (every head infra
+    challenge phase is read from `directory` (its ``out/`` from the gate's ``fetch``) and the ledger from `heads` (every head
     published, each a ``windows.jsonl``), under `key`, the challenger key the deployment pins, the host's pins log
-    from `pins` (every head infra published, each a ``pins.jsonl``) and `main`, the verifier's own first-parent history
+    from `pins` (every head published, each a ``pins.jsonl``) and `main`, the verifier's own first-parent history
     of main (``git rev-list --first-parent origin/main``), which must hold the challenge phase's pin. Fails closed."""
     if not runs or len(runs) != len(roots):
         return f"the Commit's coins name {len(runs)} runs' draws, not one for each of its {len(roots)} runs of record"

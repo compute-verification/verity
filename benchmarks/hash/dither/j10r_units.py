@@ -28,9 +28,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "pouw" / "served_h1"))
-sys.path.insert(0, str(HERE.parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "served_h1"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import receipts as RC
 
 from verity.core.protocols.pouw.circuit import h1tile as HT

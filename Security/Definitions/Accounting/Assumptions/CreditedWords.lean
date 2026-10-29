@@ -46,8 +46,8 @@ accepts, the `help` units the device had computed elsewhere are at most `c.K / b
 communication certificate, `PeriodRun.Holds .network`) and `b_unit` the bits that carry one unit out and back.
 
 It is stated per unit, not per bit of a word: a unit whose inputs are seed-derived (the prover's own workload) goes out
-whole in about `1024` bits, its SHA-512 seed out and its SHA-512 root in, however many words it has
-(note:compute-research/20261026T0315Z-draft-accel-rt-proto, P2), so a word count `K / b` at a word's bits fails.
+whole in about `1024` bits, its SHA-512 seed out and its SHA-512 root in, however many words it has,
+so a word count `K / b` at a word's bits fails.
 
 Why it is a premise: the network certifier bounds the bits the node moved (`PeriodRun.commWithin`), not the units they
 carry, and nothing proved says a unit costs `b_unit` of them; a unit may go out in fewer bits than `b_unit` assumes. The

@@ -66,6 +66,7 @@ STATEMENT = "verity/flock-circuit"
 PROVED = "verity/flock-circuit@cec3e347"
 #: `CoinTree.checkHello`'s refusal of a session whose Hello is not the verifier's own
 S2_R7 = "S2/R7: the session parameters are not the verifier's"
+PRF208 = "PRF-208: fixtures are re-proved after F1 (#5181) lands; this skip goes with that re-proof"
 #: the recorded level's circuit (`v/L3/circuit.txt`), which its outer session proves (`test_lean_rec_coins`)
 CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479cf7a525e331ed7152ab5e451bb27f39905f695af6295408db"
                   "459a42e2dda3e07463")
@@ -160,6 +161,7 @@ def test_the_recorded_level_meets(outer, check):
     assert outer[check]["ok"], outer[check].get("why")
 
 
+@pytest.mark.skip(reason=PRF208)
 def test_the_recorded_level_was_proved_before_the_os_masks(outer, level):
     """`AcceptsZKR` refuses the level's session as `verity/flock-circuit` at its Hello (its re-record's prover,
     505b9bfb1, lacked #1677's `osMasks`) and accepts it as `PROVED`. Holds as `verity/flock-circuit` once the fixture
@@ -383,6 +385,7 @@ def test_f1_the_session_meets(f1, part):
     assert w["full_draw"]["population"] == F1_STATEMENTS[j][1]
 
 
+@pytest.mark.skip(reason=PRF208)
 @pytest.mark.parametrize("part", F1_PARTS)
 def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
     """`AcceptsZKR`, and so `AcceptsZKV`, accepts every gate session as `verity/flock-circuit`, the verifier of record's
@@ -392,6 +395,7 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
         assert w[check]["ok"], (check, w[check].get("why"))
 
 
+@pytest.mark.skip(reason=PRF208)
 @pytest.mark.parametrize("part", ["L3", "cap"])
 def test_f1_verify_refuses_the_session_only_for_its_undrawn_inner_session(built, f1_gate, f1, once, part):  # noqa: F811
     """`flock-verify verify --zk`, the verifier of record, passes level 3 (`rec-open/l16-h4`, 106 units, the smallest

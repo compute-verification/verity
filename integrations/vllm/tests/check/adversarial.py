@@ -1,4 +1,4 @@
-"""tests/check/adversarial.py — lane ov-adversarial (Agent 10, swarm 2026-09-17): the mutation harness.
+"""The mutation harness.
 
 NOT a checker and NOT a fix.  This module plays the *untrusted adapter author*: it takes a genuine profile, wraps its
 patterns so that the Resolutions they return are rewritten (wrong producer, wrong-but-written slice, swallowed Compute,
@@ -123,7 +123,7 @@ def layer_of(hint: str) -> int | None:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# hostile definitions (what a lane can author in ITS OWN module; NOT under verity_vllm/program/quarantine)
+# hostile definitions (what an adapter author can write in ITS OWN module; NOT under verity_vllm/program/quarantine)
 # ---------------------------------------------------------------------------------------------------------
 
 

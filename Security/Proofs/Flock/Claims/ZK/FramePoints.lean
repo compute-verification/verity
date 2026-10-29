@@ -1,7 +1,7 @@
 import Proofs.Flock.Claims.ZK.FrameRank
 
 /-!
-# The frame's claim points are the session's (Stage B, `FrameAdmits`)
+# The frame's claim points are the session's (`FrameAdmits`)
 
 At the opening's label the deployed frame's rank check reads a rep's claim points off the algebraic phase's coins as the
 stream answered them, one flat array (`Frame.claimPoints`, `Masker.coins`); the session reads them off the rep's rounds

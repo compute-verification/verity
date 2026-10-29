@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.TmplFoldDef
 
 /-!
-# The template fold's reference over the call tree (PRF-133, part 3, stage 2)
+# The template fold's reference over the call tree
 
 `Tmpl.rows` writes each copy's rows through `place`, one column at a time and never one twice. `foldRef_tree`: entry `s`
 of `foldRef` is the sum over the call tree (`placeSum`) of every copy's own rows, each reference read through the copy's

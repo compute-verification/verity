@@ -286,22 +286,23 @@ def OutBindR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → Op
         nodeOf (capRow c' w' (capIdx (Claims.Recursion.xI D x) q
           (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q) HH))
 
+/-- **A piece's cap entry at the opened messages `ms'`**, at compiled statement `x`, inner statement `xI` and coins
+`cs`: some RecCap part of the piece's level holds the row the opening climbs to (`capIdx`), and the side's cap entry
+at the opening's node is the node that row carries. -/
+abbrev CapEntryR (posAt : Msg → List Coin → OpenPiece → ℕ) (x xI : Msg) (cs : List Coin)
+    (ws : List Claims.Flock.Wit) (HH : ℕ) (q : OpenPiece) (ms' : List Msg) : Prop :=
+  ∃ (r : XR) (ss : Array VStar.Stmt), readX x = some r ∧ _root_.Flock.RecVStar.statements r.shape = .ok ss ∧
+  ∃ (s' N' : ℕ) (c' : Circuit) (w' : Claims.Flock.Wit), ss[s']? = some (.cap q.level N') ∧
+    r.w.parts[s']?.bind partCircuit = some c' ∧ ws[s']? = some w' ∧ capIdx xI q (posAt xI cs q) HH < N' ∧
+    (FlockSoundness.Refine.capAt (sideAtR rd xI ms' q).cap (sideAtR rd xI ms' q).lig q.level).getD
+      (posAt xI cs q >>> HH) ByteArray.empty = nodeOf (capRow c' w' (capIdx xI q (posAt xI cs q) HH))
+
 /-- **The reader** at `sideAtR rd`: at every reading of the last message, some RecCap part of the piece's level holds
 the row the opening climbs to, and the side's cap entry at the opening's node is the node that row carries. -/
 def SideCapR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
-  AtPieces H D shape untr b cmt L pieces fun x c ws LANES HH _ _ _ _ _ q =>
-    AtOpened D Bd x (L.msgs x ws) fun ms' =>
-      ∃ (r : XR) (ss : Array VStar.Stmt), readX x = some r ∧ _root_.Flock.RecVStar.statements r.shape = .ok ss ∧
-      ∃ (s' N' : ℕ) (c' : Circuit) (w' : Claims.Flock.Wit), ss[s']? = some (.cap q.level N') ∧
-        r.w.parts[s']?.bind partCircuit = some c' ∧ ws[s']? = some w' ∧
-        capIdx (Claims.Recursion.xI D x) q
-          (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q) HH < N' ∧
-        (FlockSoundness.Refine.capAt (sideAtR rd (Claims.Recursion.xI D x) ms' q).cap
-            (sideAtR rd (Claims.Recursion.xI D x) ms' q).lig q.level).getD
-          ((posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q) >>> HH)
-          ByteArray.empty =
-          nodeOf (capRow c' w' (capIdx (Claims.Recursion.xI D x) q
-            (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q) HH))
+  AtPieces H D shape untr b cmt L pieces fun x c ws _ HH _ _ _ _ _ q =>
+    AtOpened D Bd x (L.msgs x ws) (CapEntryR rd posAt x (Claims.Recursion.xI D x)
+      ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) ws HH q)
 
 /-- **The cap tie from the binding and the reader**, at the deployed reader's statements at the dense form: the level
 part's siblings below the cap, `HH`, are the side's level's `d − c` (`sideLevel`). -/

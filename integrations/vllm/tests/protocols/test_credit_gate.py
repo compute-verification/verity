@@ -385,7 +385,7 @@ def test_todays_path_without_a_retained_z_is_refused_as_no_z():
 
 
 def test_serve_h1s_wrapper_is_refused_too():
-    """SERVE-H1's run tree (cursor/serve-h1-run-ea24, `pouw_h1.served`): the arm's apply serves y, then the wrapper
+    """The served H1 run's tree (`pouw_h1.served`): the arm's apply serves y, then the wrapper
     quantizes the same activations again and takes z from `int_mm`; the trace refuses it the same way."""
     layer = Linear(32, 1, TodayArm())
     x = (torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
@@ -406,7 +406,7 @@ def test_records_from_a_second_scaled_mm_zy_beside_the_served_scaled_mm_are_refu
 
 
 def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_nothing():
-    """RT4-INT-21: the call passes the gate, but the window's coins were held in the serving process (no pouw setting
+    """The call passes the gate, but the window's coins were held in the serving process (no pouw setting
     'challenger'), so no verifier trusts them and the window credits nothing, naming why."""
     _y, run = _serve(FusedArm())
     (v,) = run.verdicts.values()
@@ -724,7 +724,7 @@ def _one_row(xq):
     (lambda: ZyArm(), [0, 7, 2], "round 0's input-ids table h1/ids@0 is not the Commit's input-ids/0"),
 ], ids=["a-all-zero", "one-a-row-off", "ids-off-the-prompt"])
 def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, monkeypatch, arm, ids, want):
-    """ROOTS1, by core's credit (`credit._arow`): H1 handed every A code zero (the RT4 A = 0 probe) or one A
+    """ROOTS1, by core's credit (`credit._arow`): H1 handed every A code zero (the A = 0 probe) or one A
     row off the codes the Commit acquired at the linear's row_quant, or the Commit acquired an input id other than the
     prompt's (round 0's ids table is the prompt's, fixed before the salt), each with an honest Commit, whose record
     registers its own tree for those rows. The serving process credits nothing (`pouw_h1_commit.UNTIED`); a prover

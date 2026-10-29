@@ -6,15 +6,15 @@ coins (`core_sampled_proofs`). Once its properties are proven it moves, as a
 pure move, to the same path under `verity/core/`; the Python keeps running until then.
 
 Tokens served past the honest run's end-of-sequence are not useful work, so a workload of record serves at a public
-fixed length, ignore_eos at each slot's public max_tokens, which the window registers and the verifier checks (Daniel,
-19 Oct, ASK-39; `PouwWindow.Length`).
+fixed length, ignore_eos at each slot's public max_tokens, which the window registers and the verifier checks
+(`PouwWindow.Length`).
 
 | module | `window.py` |
 | --- | --- |
 | `PouwWindow.Grid` | `GRID_BITS`, `on_grid`, `floor_point`, `pad`, `level`, `point`, `levels`, `Work`, `bucket`, with their refusals |
 | `PouwWindow.Draw` | `k_prime` (K′, exact: `missAtMost`, then bisection), `eps_at` (`k_prime` inverted: the least grid ε whose K′ is at most K), `sampling` |
 | `PouwWindow.Public` | `PUBLIC`, `REGISTERED`, `LEGACY_REGISTERED`, `KINDS` |
-| `PouwWindow.Length` | `STOP_FIXED`, `LENGTH_KEYS`, `length_item`, `length_problem`: the workloads of record's fixed length (Daniel, 19 Oct, ASK-39) |
+| `PouwWindow.Length` | `STOP_FIXED`, `LENGTH_KEYS`, `length_item`, `length_problem`: the workloads of record's fixed length |
 | `PouwWindow.Json` | integers read as Python's `json` reads them; the items written as Python writes them |
 | `PouwWindow.Entry` | `T_BITS`, `DEPTHS`, `PORT`, `ENTRY_SCHEMA`, `TILE`, `ROW_STEP`, `Entry` (`row`, `words`, `from_row`, `from_words`), `pass_tiles`, `tiles`, `layout_problem`, `tile_in`, `tile_at`, `tile_read`, `entry_digest`, `entry_bc`, `entry_leaf` |
 | `PouwWindow.Record` | `record_digest` (`canonical_json` as Python writes it), `record_problem`, and how Python reads a record's JSON |

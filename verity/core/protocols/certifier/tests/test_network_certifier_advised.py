@@ -161,7 +161,7 @@ def test_honest_advised_traffic_is_accepted_in_every_window(tmp_path, own):
 
 
 def test_the_row_past_a_stop_is_accepted_and_hands_no_frame():
-    """The red team's case: async scheduling runs one decode past the stopping EOS (the third step samples past a
+    """Async scheduling runs one decode past the stopping EOS (the third step samples past a
     request of 4 prompt and 2 kept tokens, 2 ingress frames released in bucket 0). Advice v0 accepts it and discards
     that sample, and N2 reads v0's outputs, so the window counts the 2 kept frames, released in buckets 1 and 2, and is
     accepted, and a frame for the discarded sample is extra egress."""
@@ -198,7 +198,7 @@ def test_the_ingress_ends_are_derived_from_v0s_prompt_lengths():
 
 
 def _signed_end(counts, own, end):
-    """CERT-VARLEN's rule: the first bucket where the ingress head's signed counts, less one own frame a window, reach
+    """The first bucket where the ingress head's signed counts, less one own frame a window, reach
     `end` request frames."""
     total = 0
     for t, n in enumerate(counts):
@@ -210,7 +210,7 @@ def _signed_end(counts, own, end):
 
 @pytest.mark.parametrize("own", [0, 1])
 def test_the_ingress_ends_are_where_the_signed_counts_put_them(own):
-    """CERT-VARLEN's rule: request k ends in the first bucket where the ingress head's signed counts, less one own frame
+    """Request k ends in the first bucket where the ingress head's signed counts, less one own frame
     a window, reach `advised.ends`'s k-th, Σ_{i ≤ k} request_frames[prompt_len_i − 1]. With each window's own frame at
     the head of its queue, ahead of carried request frames (`active.Bucketer`), that is the bucket that releases
     request k's last frame in every session, salted sessions whose windows start with frames carried in among them, and
@@ -441,7 +441,7 @@ def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
     built; and every window refuses an advice that releases more than R frames in a bucket (all in the last), a frame
     before its request could be (the first in bucket 0), or one past the link's windows; and a window that declares no
     sync, or one outside Σ_sync, is refused, and only that window: every other window's view is the honest one, since
-    every floor reads the sync the certifier ran (REDTEAM phase 15)."""
+    every floor reads the sync the certifier ran."""
     session = serve(SEEDS[0])
     run = Run(tmp_path, ties=StandInTie(session.certified))
     opening = run.lw.commit(0, run.issuer.certify(session.egress[0], Direction.EGRESS, P,

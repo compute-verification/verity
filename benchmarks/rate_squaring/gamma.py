@@ -1,5 +1,5 @@
-"""x₁ and γ for p512 at k = 2 from this directory's squaring rates, by ra-rate-redteam's formula (`node_gamma.py`,
-branch cursor/ra-rate-redteam-3cf5 at 6fdc2a021): γ = μ_chip + μ_sample + d/(k·x₁,adv), x₁,adv = x₁/(s·(1 + h)), with
+"""x₁ and γ for p512 at k = 2 from this directory's squaring rates, by `benchmarks/rate_redteam/node_gamma.py`'s formula
+(at 6fdc2a021): γ = μ_chip + μ_sample + d/(k·x₁,adv), x₁,adv = x₁/(s·(1 + h)), with
 x₁ = 175 at the lanes' 5.13e10 squarings/s (2,092 MHz, ÷ 1.16 for the max clock), s a GPU's squaring rate over 5.13e10
 at the same clock, and h the host CPUs' squaring rate over the eight GPUs' 8 × 5.13e10 × 1.16.
 
@@ -28,7 +28,7 @@ def s_of(rate: float) -> float:
     return rate * REF_MHZ / MHZ / REF
 
 
-# Measured: sq.sh's median at 4 waves (r20261012-182613-5df1, r20261012-183030-b044). Modelled: cycles a warp-squaring.
+# Measured: sq.sh's median at 4 waves. Modelled: cycles a warp-squaring.
 GPU = {
     "FOLD 0, the red team's form (measured)": s_of(5.079e10),
     "FOLD 5, column-chained (measured best)": s_of(6.531e10),
@@ -37,7 +37,7 @@ GPU = {
     "column form, multiply pipe only (152 x 4.02)": s_of(rate_of_cycles(152 * 4.02)),
     "Karatsuba, multiply pipe only (124 x 4.02)": s_of(rate_of_cycles(124 * 4.02)),
 }
-# Squarings/s a physical core (ifma.sh, r20261012-183544-2d44: G = 1, both threads of 24 cores), and the IFMA-only port
+# Squarings/s a physical core (ifma.sh: G = 1, both threads of 24 cores), and the IFMA-only port
 # bound (130 IFMA per 8 words on two ports at 3.9 GHz); the node's 2 × Xeon 6776P have 128 cores, its VM shows 96.
 HOST = {"none": 0.0, "IFMA measured, 128 cores": 128 * 2.84e8, "IFMA-only bound, 128 cores": 128 * 8 * 2 * 3.9e9 / 130}
 

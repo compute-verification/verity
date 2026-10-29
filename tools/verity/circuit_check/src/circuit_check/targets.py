@@ -15,8 +15,9 @@ silicon references, every vLLM kernel's self-check specialisations, each templat
 suite checks every specialisation reachable from them (`suite`), and fails by name for a registered Definition family no root
 reaches: a new Definition needs a binding.  A binding lives beside the Definitions it binds, in their module's sidecar
 (`sidecars`), in this module's forms: a root function (``_X_roots``, `root_functions`), a `_model_roots` entry, a
-``TEMPLATE_PARAMS`` entry; a module with a sidecar is one the registries import (`load_registries`).  This module keeps what no
-one Definition module owns.
+``TEMPLATE_PARAMS`` entry; a module with a sidecar is one the registries import (`load_registries`).  A root too large to build
+whole is listed in ``_by_calls_roots`` and checked by its calls (`by_calls`), never built.  This module keeps what no one
+Definition module owns.
 """
 from __future__ import annotations
 
@@ -81,6 +82,31 @@ def load_registries() -> None:
     CC.registries(SC.discover())
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
+    declare_by_calls()
+
+
+#: the root function a binding file lists its by-calls roots in (`by_calls`): a Program root checked by its calls, never built
+BY_CALLS_ROOTS = "_by_calls_roots"
+#: the ids of every binding file's by-calls roots (`declare_by_calls`), which the catalog never descends into or builds
+BY_CALLS: set[str] = set()
+
+
+def declare_by_calls() -> None:
+    """Every binding file's by-calls roots (``_by_calls_roots``), made as the catalog makes them (`_produce`), into `BY_CALLS`:
+    each a complete composite specialization, else the binding file is refused by name."""
+    from verity.ml.circuits.defs import SpecializedDefinition
+
+    BY_CALLS.clear()
+    for units, make in _root_bindings(BY_CALLS_ROOTS):
+        for fn in _produce(units, make):
+            if not (isinstance(fn, SpecializedDefinition) and fn.complete):
+                raise TypeError(f"{units[0]}: a by-calls root is a composite specialization with every static bound, not {fn!r}")
+            BY_CALLS.add(fn.id)
+
+
+def is_by_calls(fn: Any) -> bool:
+    """Whether ``fn`` is a by-calls root a binding file declares (`BY_CALLS`)."""
+    return bool(BY_CALLS) and getattr(fn, "id", None) in BY_CALLS
 
 
 # --- parsing target strings ---------------------------------------------------------------------------------------------------
@@ -775,7 +801,8 @@ def catalog(by_unit: list | None = None) -> list[Any]:
 
 
 def reachable(roots: Iterable[Any]) -> dict[str, Any]:
-    """Every Definition (primitive, complete specialisation) or reference reachable from ``roots``, by id."""
+    """Every Definition (primitive, complete specialisation) or reference reachable from ``roots``, by id; a by-calls root
+    (`is_by_calls`) without what its body calls, which it doesn't build."""
     from verity.ml.circuits.evaluation import ScalarReference
     from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 
@@ -789,7 +816,8 @@ def reachable(roots: Iterable[Any]) -> dict[str, Any]:
             out[fn.id] = fn
         elif isinstance(fn, SpecializedDefinition):
             out[fn.id] = fn
-            stack.extend(n.fn for n in fn.body.nodes)
+            if fn.id not in BY_CALLS:
+                stack.extend(n.fn for n in fn.body.nodes)
     return out
 
 
@@ -808,13 +836,16 @@ def family(fn: Any) -> str:
 def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
     """The specialisations the suite checks: every one of at most ``max_gates`` gates, and a family's smallest otherwise, with its
     smallest Boolean one too when the smallest is not (a Boolean family bound at a word MUFU and at its Boolean version, which
-    the Program on bits calls)."""
+    the Program on bits calls); and every by-calls root (`is_by_calls`), whose gates are never counted."""
     from verity.ml.circuits import boolean as BL
 
     by: dict[str, list[Any]] = {}
-    for fn in found.values():
-        by.setdefault(family(fn), []).append(fn)
     out = {}
+    for fn in found.values():
+        if is_by_calls(fn):
+            out[fn.id] = fn
+        else:
+            by.setdefault(family(fn), []).append(fn)
     for fns in by.values():
         keep = [f for f in fns if getattr(f, "gates", 1) <= max_gates]
         if not keep:
@@ -843,6 +874,13 @@ def suite() -> dict[str, Any]:
 
 
 _SIDECARS: dict[Path, tuple[dict[str, Any], list[tuple[str, Any, list[dict]]]]] = {}
+_DROPPED: dict[Path, dict[str, Any]] = {}
+
+
+def sidecar_dropped(path: str) -> dict[str, Any]:
+    """What ``path``'s bindings reach of its module that `sidecar_targets` doesn't keep (`select`), by id."""
+    sidecar_targets(path)
+    return _DROPPED.get(Path(path).resolve(), {})
 
 
 def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, list[dict]]]]:
@@ -871,7 +909,9 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
     for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
         _produce((f"{prefix}_model_roots:{label}",), lambda make=make: [(lambda fn: (fn.body, fn)[1])(make())], by_unit)
     reached = reachable(r for _units, roots in by_unit for r in roots)
-    out = select({fid: fn for fid, fn in reached.items() if SC.owner(fn) == mod})
+    owned = {fid: fn for fid, fn in reached.items() if SC.owner(fn) == mod}
+    out = select(owned)
+    _DROPPED[p] = {fid: fn for fid, fn in owned.items() if fid not in out}
     for units, roots in by_unit:
         if units[0] == f"{prefix}_pouw_roots":
             out.update({fn.id: fn for fn in roots})
@@ -890,9 +930,9 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
     return hit
 
 
-__all__ = ["CATALOGS", "MAX_GATES", "REACHED", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY",
-           "binding_files", "binding_roots", "boolean_call_candidates", "boolean_call_families", "boolean_family",
-           "boolean_links", "call_families", "catalog", "catalog_units", "certified_boolean_calls", "definition", "family",
-           "instance_statics", "is_call", "kind_of", "load_registries", "pouw_bindings", "reachable", "root_functions",
-           "select", "sidecar_targets", "subcircuit", "suite", "table_probe", "template_params", "templates",
-           "word_call_families"]
+__all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "REACHED", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS",
+           "TABLE_PROBES", "TINY", "binding_files", "binding_roots", "boolean_call_candidates", "boolean_call_families",
+           "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units", "certified_boolean_calls",
+           "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call", "kind_of", "load_registries",
+           "pouw_bindings", "reachable", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "subcircuit", "suite",
+           "table_probe", "template_params", "templates", "word_call_families"]

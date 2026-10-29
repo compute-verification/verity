@@ -35,8 +35,8 @@ stops_at = "2026-10-23T15:00:00Z"  # the fallback for the VM's /etc/research/dea
 system_cpus = "0-7"  # k3s and the system (the steward's CPU map, 07:13Z)
 numa = { 0 = "0-95", 1 = "96-191" }
 # The merge-train check slots: never preempted, never borrowed, never used by other work (research coordinator, 17:22Z), slot
-# d on 128-159 since 2 Oct. The provers' slices, the dispatcher's VY_PROVER_CPUS, which no other job may share (Daniel, 11:33 PM
-# PDT 30 Sep; 160-191 since slot d took 128-159); a job naming no pool gets 96-127.
+# d on 128-159 since 2 Oct. The provers' slices, the dispatcher's VY_PROVER_CPUS, which no other job may share
+# (160-191 since slot d took 128-159); a job naming no pool gets 96-127.
 pools = { checks = "8-95,128-159", provers = "160-191" }
 # A GPU job pinned here runs under node 1's gpu-lease, on a GPU n1_lease.py (infra/nebius) lends from a Kueue holder in provers.
 gpu_executor = "n1-lease"
@@ -47,7 +47,7 @@ gpus = [
 
 # Kueue's GPU quotas on node 1 (kueue.yaml, infra/nebius fc0217812): what a workstream owns it gets back from any borrower.
 [[workstreams]]
-name = "provers"          # borrows every idle GPU; Commits (600) reclaim from it (300) (Daniel, 10:58 PM PDT 30 Sep)
+name = "provers"          # borrows every idle GPU; Commits (600) reclaim from it (300)
 node = "vy-nebius-1"
 gpus = 2
 borrow_gpus = 6
@@ -165,12 +165,12 @@ owner = "infra"
 # vy-device-cores owns node 2's cpusets (#1361): user.slice 0-119, its device cores 120-127, so `cluster policy apply` only
 # plans this drop-in here (policy_apply.PLAN_ONLY) and never `systemctl revert`s it
 user-cpuset = { delegate = "cpu cpuset memory pids" }
-# two full-check slots (Daniel 8 Oct 05:29Z via top: node 2 restarted for check capacity) that stop taking checks 90 min before
+# two full-check slots (node 2 runs for check capacity) that stop taking checks 90 min before
 # every booked window, so a check started before it ends in time (infra, 12 Oct); b ends at 119 because 120-127 are
 # vy-device-cores' device cores (#1361: isolcpus on the kernel cmdline, user.slice 0-119)
 check-slots = { a = "0-63 windows=/workspace/pouw/fill/windows lead=90 mem=560", b = "64-119 windows=/workspace/pouw/fill/windows lead=90 mem=560" }
 # /workspace/pouw/fill/cpu-sets: compute accounting's verifies, 4 at a time in 40 GB each, on 0-47, inside check slot a since
-# slot d left node 2 (Daniel 8 Oct 05:29Z via top)
+# slot d left node 2
 fill.cpu-sets = { bc-e6a46970-b6ef-5738-af64-182b143075d4 = "0-47 4 40" }
 # /workspace/pouw/fill/windows: the booked timed windows, as `fill.window."START" = MINUTES` (START in UTC, to the minute).
 # None is booked ahead; one that has ended is no longer compared.

@@ -1,7 +1,7 @@
 """`verity.ml.circuits.stacking` (property/v1) on small synthetic Programs with their census/v1: an exact int8 Program passes,
 and a clamping, wrapping, FP-smuggling, reinterpreting, carry-computing, gather-heavy, too wide or input-holding one fails with
-its reason, or has its carries budgeted. The red team's attacks (benchmarks/property_redteam on cursor/property-redteam-6cd3)
-are cases here."""
+its reason, or has its carries budgeted. The red team's attacks (benchmarks/property_redteam) are
+cases here."""
 from __future__ import annotations
 
 import hashlib

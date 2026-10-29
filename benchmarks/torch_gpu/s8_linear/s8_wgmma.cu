@@ -268,7 +268,7 @@ template <int TM, int BN, int CL> DEV void body(const Params& p) {
     raster(u, rows_u, tiles_n, p.group, tm, tn);
     tm = tm * CL + rank;
     const int z = t / units, kb0 = z * KB / splits, kb1 = (z + 1) * KB / splits;
-    // one accumulator over the unit's K (all of it, or split z's blocks): each stage's four atoms issued before the stage
+    // one accumulator over the unit's K (all of it, or split z's segments): each stage's four atoms issued before the stage
     // before it is waited on, which is then released; none in flight past the unit
     for (int kb = kb0; kb < kb1; kb++) {
       mbar_wait_warp(bars + 8 * s, ph);

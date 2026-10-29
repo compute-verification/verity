@@ -7,6 +7,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # Test-only: tests register the catalog's Definitions before decoding, tests/evaluation self-checks every registered kernel
 # against its Definition (the kernels and the silicon models they read), tests/test_stacking holds property/v1's table to
 # Lean's registry, and tests/test_lean_gates recomputes the circuit model's rows from s8, census/v1 and property/v1.
+# tests/test_ruff runs ruff, which the guard doesn't trace, under the repository's one configuration (ruff.toml).
 inputs = ["verity", "verity/ml/circuits", "verity/ml/kernels", "Security/Definitions/Accounting/Gates/Registry.lean",
-          "Security/Proofs/Accounting/Gates/Rows.lean"]
+          "Security/Proofs/Accounting/Gates/Rows.lean", "ruff.toml"]
 parallel = true

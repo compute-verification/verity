@@ -1,9 +1,9 @@
-"""SHARED-CODE (lane ov-moe): an instance is attributed to the first event its Compute claims, else the resolution's root.
+"""An instance is attributed to the first event its Compute claims, else the resolution's root.
 
 Snapshots are keyed by the event that produced a tensor (`vllm_adapter._after_call` / `_after_launch`), and every consumer
-(`fold_compare.SnapshotStore.find(view, at=event)`) looks a value up under the instance's `event`.  Before this change every part of a D70 Group was stamped with the ROOT event, so the intermediates of a scope
+(`fold_compare.SnapshotStore.find(view, at=event)`) looks a value up under the instance's `event`.  Stamping every part of a Group with the ROOT event would leave the intermediates of a scope
 such as `vllm.moe_forward` (router weights/ids, expert caches — snapshotted only under the nested kernels' event ids)
-were invisible to tier A/B/chain although the capture holds them.
+invisible to tier A/B/chain although the capture holds them.
 
 Invariant kept: a primary claims the whole subtree (min = the root) and `also`/`before` members claim nothing, so every
 pre-existing pattern still stamps `root.id` — checked here on the toy profile of `test_fold_synthetic`."""

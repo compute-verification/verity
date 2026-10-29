@@ -176,7 +176,7 @@ class StepStart:
     input_ids_view: ViewDesc | None = None
     positions_view: ViewDesc | None = None
     phase_hint: str = ""                   # "prefill" | "decode" | "mixed" (diagnostic only)
-    # [r8 E-cleanup 2026-09-18, hybrid KV cache] vLLM's hybrid KV-cache manager gives layers of different attention kinds
+    # vLLM's hybrid KV-cache manager gives layers of different attention kinds
     # (Gemma-2: sliding-window even layers / global odd layers) separate KV-cache GROUPS, each with its own block tables and
     # slot mapping, that index the SAME physical tensors (log Note: kv_cache[layers.0] and kv_cache[layers.1] at one offset).
     # `block_tables`/`slot_mapping` above are group 0's; with several groups the storage identity of a layer's KV rows is

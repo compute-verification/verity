@@ -14,7 +14,7 @@ from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops import gemm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import fixture as FX  # noqa: E402
+import fixture as FX
 
 
 def _words(a: np.ndarray) -> list[int]:
@@ -116,8 +116,40 @@ def test_a_flushing_epilogue_would_differ():
     assert (flushed != exact).sum() > 0
 
 
+def test_the_twin_takes_the_definitions_order_where_the_other_orders_round_differently():
+    """Scales searched so that s_w first (CUTLASS c2x's order) or s_a * s_w first rounds to another bf16 word: the twin is
+    the Definition there and both other orders differ from it, so a gate through the twin fails a reordered epilogue.
+    Random scales rarely tell the orders apart."""
+    from verity.ml.kernels.tc import f2fp_bf16_batch
+
+    rng = np.random.default_rng(7)
+    r, k = 64, 64
+    x, w = (rng.integers(-128, 128, (r, k), dtype=np.int8) for _ in range(2))
+    f = np.diag(FX.sums(x, w)).astype(np.float32)[:, None]
+    ca = np.exp2(rng.uniform(-24, 2, (r, 1 << 16))).astype(np.float32)
+    cw = np.exp2(rng.uniform(-20, -2, (r, 1 << 16))).astype(np.float32)
+
+    def bf(t):
+        return f2fp_bf16_batch(t.view(np.uint32))[0].reshape(t.shape)
+
+    with np.errstate(all="ignore"):
+        want = bf((f * ca) * cw)
+        apart = (want != bf((f * cw) * ca)) & (want != bf(f * (ca * cw)))
+        rows = np.flatnonzero(apart.any(1))
+        assert len(rows) >= 4
+        pick = apart[rows].argmax(1)
+        sa, sw = ca[rows, pick], cw[rows, pick]
+        fr = f[rows]
+        others = {"sw-first": bf((fr * sw[:, None]) * sa[:, None])[:, 0], "scales-first": bf(fr * (sa * sw)[:, None])[:, 0]}
+    twin = np.diag(FX.epilogue(FX.sums(x[rows], w[rows]), sa, sw))
+    want = np.array([_definition_rows(x[i:i + 1], sa[j:j + 1], w[i:i + 1], sw[j:j + 1])[0, 0] for j, i in enumerate(rows)])
+    assert np.array_equal(twin, want)
+    for order, got in others.items():
+        assert (got != want).all(), order
+
+
 def test_the_shapes():
-    """compute-accounting's: the H200's (the default; o is q's shape) and the RTX PRO 6000's two."""
+    """The models' shapes: the H200's (the default; o is q's shape) and the RTX PRO 6000's two."""
     h200 = {name: (n, k) for name, n, k in FX.shapes()}
     assert h200 == {"mqa16k52:q": (16384, 16384), "mqa16k52:kv": (128, 16384), "mqa16k52:up": (65536, 16384),
                     "mqa16k52:down": (16384, 65536), "mqa16k52:head": (256, 16384)}
@@ -134,10 +166,10 @@ def test_the_shapes():
     assert abs(FX.MODELS["mha8k"].weight_bytes / 2**30 - 52.5) < 0.05
 
 
-def test_the_units_a_token_row():
+def test_the_committed_bytes_a_token_row():
     """One layer's committed bytes a token row (codes, without the kernels' 4-byte words): mha8k's fused set is 256 KiB
-    against compute-accounting's 254 KB, every op 360 KiB against their 365 KB (their scores at the mean context)."""
-    per = {s: sum(k for _, k, _ in FX.units(FX.MODELS["mha8k"], s)) for s in FX.UNIT_SETS}
+    against the estimate's 254 KB, every op 360 KiB against its 365 KB (its scores at the mean context)."""
+    per = {s: sum(k for _, k, _ in FX.tables(FX.MODELS["mha8k"], s)) for s in FX.TABLE_SETS}
     assert per == {"quantize": 7 * 8192, "fused": 262144, "every": 368640}
-    ops = [op for op, _, _ in FX.units(FX.MODELS["mqa16k"], "every")]
-    assert len(ops) == len(set(ops)) == 17 and all(k % 2 == 0 for _, k, _ in FX.units(FX.MODELS["mqa16k"], "every"))
+    ops = [op for op, _, _ in FX.tables(FX.MODELS["mqa16k"], "every")]
+    assert len(ops) == len(set(ops)) == 17 and all(k % 2 == 0 for _, k, _ in FX.tables(FX.MODELS["mqa16k"], "every"))

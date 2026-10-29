@@ -16,7 +16,7 @@ its served y and its weight side). `replay` checks:
 4. the window's draw (`verity.core.protocols.pouw.circuit`): the run's calls are one window, listed with their anchors, shapes and leaves
    on its `anchors.Receipt`, sealed before any key exists; `anchors.SaltWindows.open` refuses a call index an earlier window of the salt used, and
    `anchors.Ledger.open` derives the window's key from a fresh
-   source, and each call draws its plan (`Traced.draw`) under #362's work law at its share of the window's budget
+   source, and each call draws its plan (`Traced.draw`) under the work law at its share of the window's budget
    (`plan.window_laws`). Every proved unit of a call is opened by the prover (`CallRecord.opening`, regenerated natively),
    and so is every unit it reads; so is each Y unit its drawn tiles read, in its weight side (once per replay). Each
    opening must hash to its committed leaf, the unit's template (`ncp2.templates`) must evaluate, by the IR reference,

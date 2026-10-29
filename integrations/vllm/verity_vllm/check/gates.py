@@ -51,7 +51,7 @@ Gates:
                                could not decide -- neither pass nor fail, the run verdict INCOMPLETE, never REJECTED.
                                A run without the document keeps today's verdict: G8 `skipped` never makes it INCOMPLETE.
 
-    R1 reference integrity     FAIL-CLOSED (R9 ref lane, `REF_INTEGRITY_RULE`; explicitly authorised checker
+    R1 reference integrity     FAIL-CLOSED (`REF_INTEGRITY_RULE`; explicitly authorised checker
                                addition, outside the frozen set): `fold/construction errors > 0 ⇒ the Program is ineligible
                                as an accepted reference`.  Evidence = `fold_summary.json` (`errors`, `unresolved`,
                                `unsupported`; `error_classes` / `per_step` must agree with `errors`), `fold_summary_2.json`
@@ -116,7 +116,7 @@ HOLDOUT_GATES = ("G1", "G2", "G3", "G4", "G5", "G6")
 #: Structural gates outside the frozen G1..G7 set (evaluated and reported, verdict rule in `verdict`).
 STRUCTURAL_GATES = ("G8",)
 GATE_NAMES["G8"] = "VU partition"
-#: [R9 ref 2026-09-18] integrity gates outside the frozen set: the fail-closed reference-integrity rule.
+#: Integrity gates outside the frozen set: the fail-closed reference-integrity rule.
 INTEGRITY_GATES = ("R1",)
 GATE_NAMES["R1"] = "reference integrity (fail-closed)"
 #: The rule, versioned: quoted in every R1 result and in `gates.json["constants"]`; bump the date on any change of the rule.
@@ -126,7 +126,6 @@ REF_INTEGRITY_RULE = {
                  "error evidence => unverified (never zero)",
     "evidence": ["fold_summary.json: errors, unresolved, unsupported (+ error_classes / per_step consistency)",
                  "fold_summary_2.json (when present): the same", "resolution.json (when present): totals.errors, totals.unsupported"],
-    "authorised_by": "R9 window brief §3 'Reference integrity' + DANIEL-BRIEF §6 (REF lane)",
 }
 #: Every gate `evaluate_gates` runs, in report order.
 ALL_GATES = GATES + STRUCTURAL_GATES + INTEGRITY_GATES
@@ -366,7 +365,7 @@ class RunArtifacts:
         return []
 
     def expected_steps(self) -> int | None:
-        """The engine steps a run of this workload takes.  [coverage D87] The control run (`control/tokens.json`, the bare engine
+        """The engine steps a run of this workload takes.  The control run (`control/tokens.json`, the bare engine
         on the same workload — THE token reference of every gate) records its realized `timing.engine_steps`; that is the
         expectation, so declared arrivals (B8-mixed), EOS before `max_tokens` and chunked prefill are all compared like for like.
         Fallback for older control files: `max(max_tokens)` (one prefill + max_tokens-1 decode steps, every request at step 0),
@@ -1060,7 +1059,7 @@ def gate_G8(run: RunArtifacts) -> GateResult:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# R1 — reference integrity, fail-closed (R9 ref lane 2026-09-18; outside the frozen G1..G7 set)
+# R1 — reference integrity, fail-closed (outside the frozen G1..G7 set)
 # ---------------------------------------------------------------------------------------------------------
 
 _INTEGRITY_COUNTS = ("errors", "unresolved", "unsupported")

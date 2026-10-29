@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 from verity_vllm.engine import hooks
 
-#: [R16 stoch REQ-03] vLLM's split-row top-p pipeline (`vllm.v1.sample.ops.topk_topp_triton._apply_topp_split`): three Triton JITFunctions
+#: vLLM's split-row top-p pipeline (`vllm.v1.sample.ops.topk_topp_triton._apply_topp_split`): three Triton JITFunctions
 #: looked up from the module's globals at every launch, each taking the split count as the constexpr kwarg `S` over grid (batch_size * S,).
 TOPP_SPLIT_MODULE = "vllm.v1.sample.ops.topk_topp_triton"
 TOPP_SPLIT_KERNELS = ("_topp_sb_stats_kernel", "_topp_sb_step_kernel", "_topp_sb_mask_kernel")

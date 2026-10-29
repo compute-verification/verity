@@ -8,7 +8,7 @@ head-check units and the I/O tie's units all ride it.
     python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
       --out DIR [--n 4] [--negatives] [--registered]
     python benchmarks/one_stage/prove_leg.py defs --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-      --out DIR --shape gemm:1b:2048 [--shape attention:1b:69 ...] [--negatives] [--census] [--reads slots]
+      --out DIR --shape gemm:1b:2048 [--shape attention-v20:1b:384:block ...] [--negatives] [--census] [--reads slots]
 
 * **Members** (`Member`). One template's units, one statement: a bound Definition C-Flock lowers flat (`ir_lower`; Lean
   refuses typed and template statements), `UnitStager`'s rows and output rows, the prover's rows, the rows
@@ -39,12 +39,14 @@ Negatives (`negatives`), each refused at the proof layer:
 
 Served Definitions (`served`, ``defs``): vLLM's served Definitions as the frontend binds them on the RTX PRO 6000 target
 (`targets.gemm_spec`, `attention_spec`, `rmsnorm_fused_spec`, the dead-free rewrites) at a Llama model's statics, each the
-template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`` row's unit), on seeded stand-in values. A
-shape whose rows' in-circuit hashing alone passes C-Flock's block (`m1_families.block`) is reported refused, not lowered.
+template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`` row's unit), on seeded stand-in values;
+and the window circuit's units (`window_circuit`): an attention head's per-key-block Calls on the RTX PRO 6000 and the H200
+(``CUT_TARGETS``) and the embedding's registered read. A unit's MUFU table reads are laid out as its template's own
+(`chunk_rows.reads`) unless ``--reads`` says otherwise. A shape whose rows' in-circuit hashing alone passes C-Flock's block
+(`m1_families.block`) is reported refused, not lowered, and an ``UNSTAGED`` unit (the embedding's read) is sized only.
 
-Known limits: units flat or untyped staged; C-Flock's block at most 2^27 (split-K past K = 5041);
-table-heavy units need lookup slots (``--reads slots``); tail lookup slots are the GPU prover's; prover
-worker threads may need a bigger stack.
+Known limits: units flat or untyped staged; C-Flock's block at most 2^27 (split-K past K = 5041); table-heavy units
+need lookup slots; tail lookup slots are the GPU prover's; prover worker threads may need a bigger stack.
 """
 from __future__ import annotations
 
@@ -608,7 +610,6 @@ def n2_member(name: str, key: tuple[int, int, int], insts: Sequence, pubs: Seque
     sys.path.insert(0, str(HERE.parent / "network_traces"))
     import n2_zk as N
 
-    N.builders()
     bits = N.row_bits(N.HC.unit(key[0], key[1], bool(key[2])))
     words = [N.rows_of(i) for i in insts]
     values = {r: np.asarray([w[r] for w in words], dtype=np.uint16) for r in N.ROWS}
@@ -624,16 +625,67 @@ LLAMA = {"1b": {"H": 2048, "I": 8192, "NH": 32, "KVH": 8, "D": 64, "V": 128256, 
          "8b": {"H": 4096, "I": 14336, "NH": 32, "KVH": 8, "D": 128, "V": 128256, "EPS": 1e-5}}
 #: the --zk statement's least and greatest log size (`stage`)
 M_MIN = 25
+#: the target each attention cut's decode head is served on, by family: the RTX PRO 6000 (FA2's `Attention_v5`, whose dead-free
+#: v18 `window_circuit.CUTS` cuts by `AttentionHead_v19`) and the H200 (FA3's `Attention_v4`, cut by `AttentionHead_v20`)
+CUT_TARGETS = {"attention-v19": ((12, 0), 188), "attention-v20": ((9, 0), 132)}
+#: an attention cut's Calls by name: its first visited key block, the full block below it and its epilogue
+CALLS = {"first": "AttnBlockFirst", "block": "AttnBlock", "end": "AttnHeadEnd"}
+#: an attention Call's f32 running state, each parameter's stand-in (scale, mean): the running max, the lane sums and O
+STATE = {"m_prev": (2.0, 0.0), "l_prev": (4.0, 16.0), "o_prev": (4.0, 0.0), "l": (4.0, 16.0), "o": (4.0, 0.0)}
+#: the window circuit's units that no serving row commits (`serving_rows.template` refuses their one-bit leaves): their
+#: Definition is the window's own (`interface.resolve`), and they read no pinned table
+WINDOW_ONLY = ("EmbeddingRead_v1",)
+#: the units `defs` sizes but never stages, and why: the stager lowers a unit whole through `ir_lower`, and these whole
+#: pass any node's memory
+UNSTAGED = {"EmbeddingRead_v1": "lowered whole, its SHA-512 parts take about 150 GB each through ir_lower, and staging "
+                                "embedding-read:1b reached 430 GB before its out-of-memory kill: it needs cutting into Calls "
+                                "first"}
 
 
 def _gen(rng: np.random.Generator, n: int, size: int, scale: float = 1.0, mean: float = 0.0) -> np.ndarray:
     return bf16(rng.normal(mean, scale, (n, size)))
 
 
+def _f32(rng: np.random.Generator, n: int, size: int, scale: float = 1.0, mean: float = 0.0) -> np.ndarray:
+    """``size`` f32 values a unit as u16 words, each value's little-endian bytes (a 32-bit leaf's row words)."""
+    return rng.normal(mean, scale, (n, size)).astype("<f4").view("<u2").astype(np.uint16)
+
+
+def _bit_words(bits: Sequence[int]) -> np.ndarray:
+    """A one-bit-leaf row's u16 words: its bits in leaf order, little-endian (`interface`'s bit rows)."""
+    return np.packbits(np.asarray(bits, dtype=np.uint8), bitorder="little").view("<u2").astype(np.uint16)
+
+
+def attention_call(shape: str) -> Any:
+    """The Call ``shape`` (``attention-v19|attention-v20:M:T:first|block|end``) names: the served decode head of T keys on its
+    ``CUT_TARGETS`` target (`targets.attention_spec`, one query row), cut as `window_circuit.CUTS` cuts it, and its first
+    visited block (keys (nb - 1) BN ... T - 1), the full block below it (T > BN) or its epilogue."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.definitions.registry import dead_free as DF
+    from verity_vllm import TargetProfile
+    from verity_vllm.program.frontend import targets as TG
+    from verity_vllm.program.predict.window_circuit import CUTS
+
+    fam, model, T, call = shape.split(":")
+    L, (cc, sms) = LLAMA[model], CUT_TARGETS[fam]
+    row = TG.attention_spec(TargetProfile(compute_capability=cc, num_sms=sms), int(T), L["NH"], L["KVH"], L["D"], 1, row=0, own_rows=1)
+    if row.base_id == "Attention_v5":
+        row = bind(DF.AttentionV18, **row.bindings)
+    cut = bind(CUTS[row.version], **row.bindings)
+    if f"v{cut.version}" != fam.rsplit("-", 1)[1]:
+        raise SystemExit(f"{shape}: the served head is cut by Attention_v{cut.version}, not {fam}'s")
+    head = next(n.fn for n in cut.body.nodes if n.fn.base_id.rsplit("_v", 1)[0] == "AttentionHead")
+    want = CALLS.get(call)
+    hit = [n.fn for n in head.body.nodes if n.form == "call" and n.fn.base_id.rsplit("_v", 1)[0] == want]
+    if not hit:
+        raise SystemExit(f"{shape}: {head.id} has no {call!r} Call (calls: {sorted(CALLS)}; a full block needs T > BN)")
+    return hit[0]
+
+
 def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[str, np.ndarray]]]:
     """The served Definition ``shape`` names (``family:model[:arg]``, ``model`` a key of `LLAMA`) as the frontend binds it on
-    the RTX PRO 6000 (sm_120, batch invariant, FA2 under the per-iteration Check_inf chain), and its stand-in values
-    (``rng, n -> {parameter: (n, words) u16}``):
+    the RTX PRO 6000 (sm_120, batch invariant, FA2 under the per-iteration Check_inf chain; an ``attention-v20`` Call on the
+    H200), and its stand-in values (``rng, n -> {parameter: (n, words) u16}``):
 
         gemm:M[:K]           Gemm_v2{K,N=1,DOT}, the unit of a Gemm_v2 row (``SLICES``), K the hidden size by default
         attention:M:T        Attention_v5, a decode row (one query row, non-causal) over T keys
@@ -646,6 +698,10 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
         token-select-combine:M[:V]  TokenSelectCombine_v2{V,C}, TokenSelect_v4's combine (``token-select-combine``), its
                                     partials the chunks' own of a stand-in logits row
         rope:M[:NHEADS]      RoPE_v1{NHEADS,D}, NHEADS the query heads by default
+        attention-v19:M:T:CALL  a Call of the RTX PRO 6000's decode head over T keys as the window circuit cuts it
+                             (`attention_call`): first (AttnBlockFirst_v1), block (AttnBlock_v5) or end (AttnHeadEnd_v1)
+        attention-v20:M:T:CALL  the same on the H200 (sm_90, FA3): AttnBlockFirst_v1, AttnBlock_v4 or AttnHeadEnd_v1
+        embedding-read:M[:V] EmbeddingRead_v1{V,H}, the window's embedding unit, each stand-in row opening at its token
     """
     from verity.ml.circuits.defs import bind
     from verity_vllm import TargetProfile
@@ -703,8 +759,38 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
             ang = pos * 500000.0 ** (-np.arange(0, D, 2) / D)
             return {"x": _gen(rng, n, heads * D), "cs": bf16(np.concatenate([np.cos(ang), np.sin(ang)], axis=1))}
         return bind(b1.RoPE, NHEADS=heads, D=D), rope
+    if fam in CUT_TARGETS:
+        fn = attention_call(shape)
+
+        def call(rng, n):
+            out = {}
+            for nm, t in fn.signature()[0]:
+                words = sum(t.leaf_widths()) // 16
+                out[nm] = _gen(rng, n, words) if t.width_set() == {16} else _f32(rng, n, words // 2, *STATE[nm])
+            return out
+        return fn, call
+    if fam == "embedding-read":
+        from verity.ml.commitments.gates import embedding as E
+        from verity.ml.commitments.gates.frame_v3 import root_ref
+        from verity.ml.commitments.gates.hm96 import reference as hm96_leaf
+        from verity.ml.commitments.gates.rowleaf import reference as row_digest
+        from verity.ml.commitments.merkle import merkle_depth
+        from verity.ml.commitments.rowleaf import bit_row
+
+        def emb_read(rng, n):
+            names, cols = ("tok", "root", "domain", "row", "salt", "path"), []
+            for _ in range(n):
+                tok, row = int(rng.integers(0, V)), _gen(rng, 1, H, 0.02)[0].tolist()
+                salt, dom = rng.bytes(E.SALT_BYTES), rng.bytes(64)
+                path = [rng.bytes(64) for _ in range(merkle_depth(V))]
+                root = root_ref(dom, E.SCHEMA, hm96_leaf(row_digest(*bit_row((row, 16))), salt)[2], tok, path)
+                if E.reference(V, tok, root, dom, row, salt, path)[1] != 1:
+                    raise AssertionError(f"{shape}: the stand-in row doesn't open at token {tok}")
+                cols.append([_bit_words(b) for b in E.arguments(V, tok, root, dom, row, salt, path)])
+            return {nm: np.stack([c[j] for c in cols]) for j, nm in enumerate(names)}
+        return E.read(V, H), emb_read
     raise SystemExit(f"{shape}: no served family {fam!r} (gemm, attention, attention-v18, rmsnorm-fused, rmsnorm-triton, embedding, "
-                     f"token-select, token-select-chunk, token-select-combine, rope)")
+                     f"token-select, token-select-chunk, token-select-combine, rope, {', '.join(CUT_TARGETS)}, embedding-read)")
 
 
 _LOWERINGS: dict = {}
@@ -758,28 +844,34 @@ def units_for(k_log: int, per_block: int) -> int:
     return 1 if b <= 3 else per_block * 2 ** (b - 1) + 1
 
 
-def served_member(shape: str, seed: int, n: int = 1, reads: str = "inline") -> tuple[Member, dict]:
+def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -> tuple[Member, dict]:
     """``shape``'s served unit as a member of ``n`` units: its parameters the prover's rows, its outputs hidden, values seeded
-    by ``seed``, its table reads laid out by ``reads`` (`Member`)."""
+    by ``seed``, its table reads laid out by ``reads`` (`Member`), by default its template's own (`chunk_rows.reads`)."""
     import a11_kinds as K
     from verity.ml.circuits.codec import descriptor_id
-    from verity_vllm.pipeline import serving_rows as SRW
+    from verity.ml.windows import interface as IF
+    from verity_vllm.pipeline import chunk_rows as CR, serving_rows as SRW
 
     fn, gen = served(shape)
     did = descriptor_id(fn)
-    tp = SRW.template(did)
+    if fn.base_id in WINDOW_ONLY:
+        tfn, layout, own = IF.resolve(did), "window", "inline"
+    else:
+        tp = SRW.template(did)
+        tfn, layout, own = tp.fn, tp.layout, CR.reads(tp)
+    reads = reads or own
     params, ret = fn.signature()
     rows = [(nm, V2, K.leaf_bits(t), [nm]) for nm, t in params]
     out_rows = K.out_rows(len(ret.fields) if hasattr(ret, "fields") else 1)
     values = gen(np.random.default_rng(seed), n)
     if set(values) != {nm for nm, _t in params}:
         raise AssertionError(f"{shape}: values for {sorted(values)}, parameters {[nm for nm, _t in params]}")
-    info = {"descriptor_id": did, "layout": tp.layout, "values": "stand-in: seeded inputs, outputs by the Definition's own evaluator",
+    info = {"descriptor_id": did, "layout": layout, "values": "stand-in: seeded inputs, outputs by the Definition's own evaluator",
             "seed": seed, "rows": [[r, b] for r, _s, b, _p in rows], "n": n, "reads": reads}
-    return Member(shape.replace(":", "-"), tp.fn, rows, out_rows, values, reads=reads), info
+    return Member(shape.replace(":", "-"), tfn, rows, out_rows, values, reads=reads), info
 
 
-def prove_served(shape: str, tools: Tools, out: Path, seed: int, reads: str = "inline") -> tuple[Member, dict, dict]:
+def prove_served(shape: str, tools: Tools, out: Path, seed: int, reads: str | None = None) -> tuple[Member, dict, dict]:
     """``shape``'s member through `prove_units`, one unit drawn by Lean: staged at one unit, and again at `units_for`'s when
     one unit's statement is smaller than --zk admits. Call inside `reuse_lowerings`. Returns the member, its info and the leg."""
     import a11_kinds as K
@@ -802,11 +894,11 @@ def prove_served(shape: str, tools: Tools, out: Path, seed: int, reads: str = "i
 
 
 def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed: int, max_ands: int,
-         lower_refused: bool = False, reads: str = "inline") -> dict:
+         lower_refused: bool = False, reads: str | None = None) -> dict:
     """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit drawn by Lean, its member staged at
-    `served_member`'s units (its table reads by ``reads``), through `prove_units` and, with ``negs``, `negatives` at that
+    `served_member`'s units (its table reads by ``reads``, else its template's own), through `prove_units` and, with ``negs``, `negatives` at that
     draw. A shape whose rows alone pass C-Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
-    its blocker C-Flock's own refusal), nor one whose estimate passes ``max_ands``."""
+    its blocker C-Flock's own refusal), nor one whose estimate passes ``max_ands``, nor an ``UNSTAGED`` unit."""
     summary: dict[str, dict] = {}
     for shape in shapes:
         rec: dict[str, Any] = {"shape": shape}
@@ -818,6 +910,9 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
             rec["descriptor_id"] = descriptor_id(fn)
             rec["census"] = c = sized(fn)
             log(f"{shape}: census {c}")
+            if fn.base_id in UNSTAGED:
+                rec["blocker"] = f"not staged: {UNSTAGED[fn.base_id]}"
+                continue
             if c["refused_block"]:
                 rec["blocker"] = (f"refused by C-Flock's block: its rows ({c['row_bits']} bits) need a block of 2^{c['rows_log']} "
                                   f"for their in-circuit hashing alone, past 2^{c['k_max']}")
@@ -884,9 +979,9 @@ def main(argv=None) -> int:
                    help="lower a shape the census finds past C-Flock's block, for the stager's own refusal")
     d.add_argument("--seed", type=int, default=20261025)
     d.add_argument("--mem-gb", type=int, default=64, help="the job's memory: a shape estimated past mem / 700 B an AND isn't lowered")
-    d.add_argument("--reads", choices=("inline", "slots"), default="inline",
-                   help="UnitStager's reads: a pinned MUFU table's reads inline (the served rows' own for a row template, "
-                        "chunk_rows.reads) or in lookup slots")
+    d.add_argument("--reads", choices=("inline", "slots"), default=None,
+                   help="UnitStager's reads: a pinned MUFU table's reads inline or in lookup slots (default: the template's "
+                        "own, chunk_rows.reads)")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     if a.command == "defs":

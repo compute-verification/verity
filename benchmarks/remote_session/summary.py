@@ -32,7 +32,8 @@ def summarize(out: Path) -> dict:
         s = vs["samples"]
         passes = [w["passes"] for w in vs["windows_seen"]]
         row = {"k": vs["k"], "accepted": vs["accepted"], "failure": vs["failure"], "passes": passes,
-               "verify_cpu_s": sum(vs["verify_cpu_ns"].values()) / 1e9, "draws": sum(len(d) for d in vs["draws"].values()),
+               "lean_check_s": sum(x or 0 for x in vs.get("lean_check_ns", {}).values()) / 1e9,
+               "draws": sum(len(d) for d in vs["draws"].values()),
                "on_dropped": sum(o.get("on_dropped", 0) for o in ps["opened"]),
                "opening_bytes": sum(o["bytes"] for o in ps["opened"]), "device": ps.get("device")}
         if ps["mode"] == "honest":
@@ -134,7 +135,7 @@ def main() -> int:
     print(f"store {r['bytes'] / 2 ** 30:.0f} GiB ({r['blocks']} blocks), s = {r['samples']}, A = {r['allowance_ms']:.2f} ms")
     for h in r["honest"]:
         print(f"honest {h['k']}: accepted={h['accepted']} passes/s={h['passes_per_s']:.1f} gamma(spec)={h['gamma_spec']} "
-              f"slack_min={h['slack_ms_min']:.2f} ms verify_cpu={h['verify_cpu_s']:.2f} s")
+              f"slack_min={h['slack_ms_min']:.2f} ms lean_check={h['lean_check_s']:.2f} s")
     for h in r["kv"]:
         print(f"{h['mode']}:{h['pages']} {h['k']}: accepted={h['accepted']} failure={h['failure']} "
               f"appended={h['appended']} released={h['released']} post_seed={h['post_seed']} "

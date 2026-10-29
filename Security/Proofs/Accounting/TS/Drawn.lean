@@ -226,8 +226,7 @@ theorem moved_of_movedIn {x : Paths (Paths C m × B) S} {w : Fin S} (h : pf.Move
 omit [Fintype C] [Fintype B] [Nonempty V] in
 open Classical in
 /-- **A share that charges each unit the run didn't pay for its late cone's weight covers**: a unit that isn't good has
-a unit of its late cone the run didn't pay for, whose cone weight counts it. RT-I8 r2's `covers_of_cone`, at the run's
-modes (RT-COMPOSE r2's R2-B1). -/
+a unit of its late cone the run didn't pay for, whose cone weight counts it, at the run's modes. -/
 theorem covers_of_cone [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S K T L U)
     (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (wt : Fin S → J → ℝ) (Nw : ℝ) (hw : ∀ w j, 0 ≤ wt w j)
     (h : ∀ x, P.accepts x →

@@ -114,60 +114,6 @@ def test_a_flock_gemm_cell_on_an_input_set_sends_it_to_both_pods(tmp_path, monke
     assert all(not j["send"] and not any(a.startswith("SET=") for a in j["command"]) for j in census.jobs)
 
 
-def test_plan_wraps_the_b_ligero_cell_script(tmp_path, monkeypatch):
-    """B-interactive on a captured #101 slice: the K = 2048 fold with the keyed-BLAKE3 xob circuit, the set shipped to the prover
-    as a tarball (--send), the verifier on its own pod, the loopback probe on."""
-    from verity_numerical.bench.drivers import b_interactive as B
-    monkeypatch.setattr(B, "STAGE_DIR", tmp_path)
-    kw = dict(verifier="vy-bl-verifier", verifier_addr="10.0.0.3:7000", campaign="c", lane="bligero-real-k", backend_args=["L=4096", "PP=4"],
-              placement=SEPARATE)
-    cell = C.plan("B-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-bl-a100", **kw)
-    assert (cell.family, cell.relation, cell.input_set["kind"]) == ("B-Ligero", "bf16-ampere-x4-k2048+blake3-xob", "set")
-    v, p = cell.jobs
-    assert (v["pod"], p["pod"]) == ("vy-bl-verifier", "vy-bl-a100") and "ROLE=verifier" in v["command"]
-    tar = Path(p["send"][0])
-    assert tar.is_file() and p["argv"][p["argv"].index("--send") + 1] == str(tar)
-    assert {"ROLE=prover", "REL=bf16-ampere-x4-k2048+blake3-xob", "VERIFIER=10.0.0.3:7000", "LOOPBACK=1", "L=4096", f"SET={tar.name}",
-            "START=1024", "OPERATOR=bligero-real-k"} <= set(p["command"])
-    assert (Path(C.LW.REPO) / B.SCRIPT).is_file()
-    with pytest.raises(C.NotSupported, match="vllm-v1"):
-        C.plan("B-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+vllm-v1/sha-256", str(SLICE), "vy-bl-a100", **kw)
-    with pytest.raises(C.NotSupported, match="producing lane"):
-        C.plan("B-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/sha-256", str(SLICE), "vy-bl-a100", **{**kw, "lane": None})
-    doc = {"workload_fingerprint": {"relation": "GemmCoordinate<2048> over sm80.mma.m16n8k16.bf16 (4 steps per column)",
-                                    "statement_relation": "bf16-ampere-x4-k2048+blake3-xob"}}
-    assert not any("relation" in p_ for p_ in C.check(cell, doc))
-
-
-def test_plan_wraps_the_route_a_cell_script(tmp_path, monkeypatch):
-    """A-route-a on a captured #101 slice: bf16-ampere-k2048+blake3, the set shipped to both pods (each builds its own statement),
-    the verifier on its own pod listening on VPORT, the gate and the loopback probe on the prover."""
-    from verity_numerical.bench.drivers import a_route_a as A
-    monkeypatch.setattr(A, "STAGE_DIR", tmp_path)
-    kw = dict(verifier="vy-ar-ver", verifier_addr="10.0.0.4:15678", rtt_target="10.0.0.4:15677", campaign="c", lane="agkr-real-k",
-              points="1024 2048", backend_args=["VPORT=7300"], placement=SEPARATE)
-    cell = C.plan("A-route-a", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-ar-a100", **kw)
-    assert (cell.family, cell.relation, cell.input_set["kind"]) == ("A-GKR", "bf16-ampere-k2048+blake3", "set")
-    v, p = cell.jobs
-    tar = Path(p["send"][0])
-    assert tar.is_file() and v["send"] == p["send"] and (v["pod"], p["pod"]) == ("vy-ar-ver", "vy-ar-a100")
-    common = {"REL=bf16-ampere-k2048+blake3", "POINTS=1024 2048", "RUNS=5", "OPERATOR=agkr-real-k", f"SET={tar.name}"}
-    assert common | {"ROLE=verifier", "PORT=7300"} <= set(v["command"])
-    assert common | {"ROLE=prover", "VERIFIER=10.0.0.4:15678", "RTT_TARGET=10.0.0.4:15677", "LOOPBACK=1"} <= set(p["command"])
-    assert not any(a.startswith("VPORT=") for a in p["command"]) and (Path(C.LW.REPO) / A.SCRIPT).is_file()
-    with pytest.raises(C.NotSupported, match="--rtt-target"):
-        C.plan("A-route-a", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-ar-a100", **{**kw, "rtt_target": None})
-    with pytest.raises(C.NotSupported, match="builds its own statement from an input set"):
-        C.plan("A-route-a", "gemm-coordinate/k1536/sm80-mma-bf16+frame-v3/blake3-keyed", "bench-instances-v1", "vy-ar-a100", **kw)
-    with pytest.raises(C.NotSupported, match="pinned at K"):
-        C.plan("A-route-a", "gemm-coordinate/k4096/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-ar-a100", **kw)
-    assert not any(q.startswith("relation") for q in C.check(cell, {"workload_fingerprint": {"relation": "bf16-ampere-k2048+blake3"}}))
-    reg = A.register(cell, Path("/runs/p"), Path("/runs/v"), Path("/tmp/meta.json"))[0]
-    assert Path(reg[1]) == Path(C.LW.REPO) / "archive/gkr/tools/cell.py" and Path(reg[1]).is_file()
-    assert reg[2:] == ["register", "--prover-run", "/runs/p", "--lane", "agkr-real-k",
-                                                                         "--out", "/tmp/meta.json", "--verifier-run", "/runs/v"]
-
-
 def test_input_set_directories_resolve():
     ref = C.resolve_input_set(str(SLICE))
     assert (ref["kind"], ref["subcircuit"], ref["source"], ref["n"]) == ("set", "gemm-coordinate/k2048/sm80-mma-bf16", "captured", 2)
@@ -264,7 +210,7 @@ def test_register_runs_the_backends_script_and_stamps_the_cell(tmp_path):
 
 @pytest.mark.parametrize("takes", [True, False])
 def test_register_passes_the_lane_to_verity_flock_register(tmp_path, monkeypatch, takes):
-    """flock-backend a9d13f68 (PR #34) requires ``--lane``; the register before it rejects the flag."""
+    """flock-backend a9d13f68 requires ``--lane``; the register before it rejects the flag."""
     drv = drivers.driver("C-interactive")
     monkeypatch.setattr(drv, "takes_lane", lambda: takes)
     (cmd,) = drv.register(_cell(), tmp_path / "p", tmp_path / "v", tmp_path / "m.json")

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import hashlib
+import socket
 
 import pytest
 
@@ -137,6 +138,30 @@ class Client:
         return asyncio.run(read())
 
 
+class SocketClient(Client):
+    """A client whose connection's warden end is a socket, the one a paced warden's pacer writes to, and whose other
+    end the test reads (`received`) once the run is over."""
+
+    def __init__(self, warden: Warden, data: bytes | tuple[bytes, bool]) -> None:
+        self.ours, self.peer = socket.socketpair()
+        self.ours.setblocking(False)
+        super().__init__(warden, data)
+
+    def get_extra_info(self, name: str):
+        return self.ours if name == "socket" else None
+
+    def close(self) -> None:
+        if not self.closed:
+            self.closed = True
+            self.ours.close()
+
+    def received(self) -> bytes:
+        out = bytearray()
+        while chunk := self.peer.recv(1 << 16):
+            out += chunk
+        return bytes(out)
+
+
 def settled(warden: Warden, server: Server) -> bool:
     cap = PARAMS.egress_cells * P
     if sum(c.server is None and c.upstream is None for c in warden.active) != len(server.held):
@@ -152,22 +177,25 @@ def settled(warden: Warden, server: Server) -> bool:
 
 
 async def drive(server: Server, arrivals: dict[int, list[bytes]], *, windows: int = 1, late: dict | None = None,
-                params: WardenParams = PARAMS, **hooks):
+                params: WardenParams = PARAMS, client: type[Client] = Client, **hooks):
     """Connect `arrivals[t]` (each a client's raw cell bytes) just before bucket t's tick, let the server answer what is
-    due and the warden read it, then tick, for `windows` windows; `late[t]` puts tick t that many seconds late.
-    `hooks` are the warden's `publish` and `release`."""
+    due and the warden read it, then tick, and with `paced` wait for the pacer to report the bucket's release, for
+    `windows` windows; `late[t]` puts tick t that many seconds late. `hooks` are the warden's `publish`, `release` and
+    `paced`."""
     clock = VirtualClock(-TAU / 2)
     warden = Warden(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
     running = asyncio.create_task(warden.run())
     clients: list[Client] = []
     for t in range(windows * params.window):
         for data in arrivals.get(t, ()):
-            clients.append(Client(warden, data))
-            await warden.until(lambda w, n=len(clients): w.ordinals + w.refused == n)
+            clients.append(client(warden, data))
+            count = len(clients)
+            await warden.until(lambda w, n=count: w.ordinals + w.refused == n)
         server.release(t)
         await warden.until(lambda w: settled(w, server))
         clock.advance(t * TAU + (late or {}).get(t, 0))
         await warden.until(lambda w, t=t: w.ticks > t)
+        await warden.until(lambda w: not any(w._unreleased.values()))
     await running
     await asyncio.gather(*(c.task for c in clients))
     return warden, clients
@@ -358,6 +386,35 @@ def test_a_late_tick_faults_both_grids_window_and_the_audit_refuses_it():
     assert statuses == {(link, w): Reason.MONITOR_UNAVAILABLE if w == 0 else None
                         for link in ("requests", "responses", "fails") for w in (0, 1)}
     assert [w["accepted"] for w in audit(PARAMS, *records(warden))["windows"]] == [False, True]
+
+
+def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
+    """With `paced`, each connection's cells reach its socket from the pacer, the bytes the loop writes unpaced. On the
+    injected clock a bucket's time (origin 0, on the host's monotonic clock) has long passed when its tick hands it, so
+    each reaches the pacer late, and the report of a window's first bucket handed faults the three grids' window
+    (`monitor-unavailable`) from the next bucket on: each grid is the unpaced run's up to that bucket, then padding. Each
+    window's records are published as its buckets' releases are in. Each connection's last part closes the pacer's
+    copy of its socket, so each client reads to its end."""
+    answers = [[(0, b"hello"), (0, EOF)], [(0, b"x" * 100), (0, EOF)]]
+    arrivals = {0: [cells(request(5), B), cells(request(70), B)], 30: [cells(request(9), B)]}
+    plain, plain_clients, _ = run([*answers, [(0, b"late"), (0, EOF)]], arrivals, windows=2)
+    paced, clients, _ = run([*answers, [(0, b"late"), (0, EOF)]], arrivals, windows=2, paced=0.05,
+                            client=SocketClient)
+    assert [c.received() for c in clients] == [b"".join(d for _, d in c.writes) for c in plain_clients]
+    assert [(r.link, r.window, r.status.reason) for r in paced.records] == \
+        [(link, w, Reason.MONITOR_UNAVAILABLE) for w in (0, 1) for link in ("requests", "responses", "fails")]
+    live = sorted({t for c in plain_clients for t, _ in c.writes})
+    T = PARAMS.window
+
+    def faulted(record):
+        first = min(t for t in live if t // T == record.window) % T
+        return record.grid[:first + 1] + ((None,) * len(record.grid[0]),) * (T - first - 1)
+
+    assert [(r.link, r.window, r.grid) for r in paced.records] == \
+        [(r.link, r.window, faulted(r)) for r in plain.records]
+    assert [r.t for r in paced.releases] == live and all(r.written for r in paced.releases)
+    with pytest.raises(ValueError, match="past the slack"):
+        Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=TAU)
 
 
 def test_the_audit_refuses_a_record_whose_cells_are_not_the_schedules():

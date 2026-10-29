@@ -284,7 +284,24 @@ def test_out_dot_on_bits_is_its_word_at_the_extremes():
         want = D.out_dot(acc, a, da, b, db)
         got = evaluate(D.PouwDitherOutDot, bits([acc], 32), bits(a, 8), bits(da, 1), bits(b, 8), bits(db, 1))
         assert int("".join(map(str, reversed(list(got)))), 2) == want
+        word = lambda ds: sum(d << k for k, d in enumerate(ds))  # noqa: E731
+        assert D.PouwDitherOutDotWord.evaluate(acc, *a, word(da), *b, word(db)) == want
+        assert D.PouwDitherOutDot0Word.evaluate(*a, word(da), *b, word(db)) == (want - acc) & D.M32
     assert D.out_dot(0, [127] * 32, [1] * 32, [127] * 32, [1] * 32) == 32 * 128 * 128
+
+
+def test_each_word_primitive_is_its_definitions_word_view():
+    """A word primitive's operands are one word per leaf, which C-Flock's lowering hands its Boolean Definition's builder as
+    that Definition's elements (`ir_lower._boolean_build`): so its ports are the word view of the Definition's
+    (`boolean.word_type`), a dither row `Array<32, Value<1>>` being one `Value<32>`."""
+    from verity.ml.circuits import boolean as BL
+
+    for name in D.__all__:
+        d = getattr(D, name)
+        w = getattr(d, "word", None)
+        if w is not None:
+            params, ret = d.signature({})
+            assert ([BL.word_type(t) for _, t in params], BL.word_type(ret)) == ([t for _, t in w.params], w.ret), name
 
 
 def test_the_dot_step_is_each_cards_below_the_limit():
@@ -309,6 +326,16 @@ def test_the_dot_step_is_each_cards_below_the_limit():
 def test_shape_refuses(bad):
     with pytest.raises(ValueError):
         D.Shape(**{**dict(m=128, n=128, k=256, lp=32, L=64), **bad})
+
+
+def test_shape_refuses_t_past_8():
+    """t = min(L, K) / L′ is at most 8: L 8,192 at L′ 256 is refused at K 16,384, and L′ 1,024 passes, as do the default
+    and L ≥ K with L′ ≥ K / 8."""
+    with pytest.raises(ValueError, match="at most 8"):
+        D.Shape(128, 128, 16384, lp=256, L=8192)
+    assert D.Shape(128, 128, 16384, lp=1024, L=8192).t == 8
+    assert D.Shape(128, 128, 4096).t == 8
+    assert D.Shape(128, 128, 4096, lp=512, L=8192).S == 1
 
 
 @pytest.mark.parametrize("defn, params", [(D.PouwDitherBlock, dict(L=48, FIRST=True)),

@@ -2,8 +2,8 @@
 ReplayStep_v1 by equality. On the demonstration slices (`compile_slice_v2.demo`, `demo_async`), where computes evict,
 a leaving request frees a block another slot still holds, a request is preempted (AS = 0) and late `cache_blocks`
 cache a block (AS = 1), the honest unit is accepted with the pool's own hits, returns and stamps, and each choice the
-pool leaves a prover is refused by ``cache`` alone: REDTEAM phase 18's overstated ``held`` (`rt_cache.py` (6) on
-cursor/redteam-phase18-cachev2-061a @45ff2f4087), a made-up eviction, a threshold stamp off, returns off and a pool row
+pool leaves a prover is refused by ``cache`` alone: an overstated ``held``, a made-up eviction, a threshold stamp off,
+returns off and a pool row
 that isn't one pool's encoding. The circuit is its reference on every case, at G = P and G = 1, and on random windows
 of a six-block engine under eviction pressure. The registered book is the arith fixture's async-light stream's."""
 from __future__ import annotations
@@ -135,7 +135,7 @@ def test_the_async_demo_runs_the_pool(asynth):
 
 @pytest.mark.parametrize("which", ["synth", "asynth"])
 def test_held_and_new_are_replay_steps(request, which):
-    """REDTEAM phase 18 (6): a free of a slot that shares a block, with ``held`` one past ⌈comp / B⌉, returns one block
+    """A free of a slot that shares a block, with ``held`` one past ⌈comp / B⌉, returns one block
     more and passes ReplayStep_v1's ``ret`` ≤ held(r) and its free count, so the next allocation skips its eviction.
     The prover's run with that free (its own rows served) is refused by ``cache`` alone, since every free's ``held`` is
     ReplayStep_v1's ⌈comp / B⌉. Two past it returns more than held(r), which ReplayStep_v1 refuses."""

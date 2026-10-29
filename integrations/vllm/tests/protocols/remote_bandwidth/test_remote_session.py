@@ -138,8 +138,7 @@ class TickingBackend(remote.StoreBackend):
 
 
 class HeadlessBackend(TickingBackend):
-    """A prover whose seeds chain only the root before each pass, not the appends sent before it (the seed before
-    the red team's KB-1)."""
+    """A prover whose seeds chain only the root before each pass, not the appends sent before it."""
 
     def launch(self, i: int, after, plan=None) -> dict:
         return {**super().launch(i, after, plan), "head": None}

@@ -130,7 +130,9 @@ def hashed(n: int) -> Program:
                lambda Bd, S, i, a, b: Bd.call(Add16, Bd.call(Pick, i, a), Bd.call(Pick, i, b)))
 
     def body(Bd, S, toks, t):
-        col = lambda t, c: Coll(C, strided_view(t, c, 1, 3, 0, R))
+        def col(t, c):
+            return Coll(C, strided_view(t, c, 1, 3, 0, R))
+
         out = [Bd.call(Pick, toks[i], col(t, c)) for i in range(n) for c in range(3)]
         out += [Bd.call(Two, toks[0], col(t, 0), col(t, 2)), Bd.call(Two, toks[1], col(t, 1), col(t, 1)), Bd.call(Fold, col(t, 2)),
                 Bd.call(Pick, toks[0], col(Bd.call(Keep, t), 1)), Bd.call(Add16, t[0][0], t[R - 1][1])]

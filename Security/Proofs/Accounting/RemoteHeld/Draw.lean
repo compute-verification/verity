@@ -2,7 +2,7 @@ import Definitions.Accounting.Guarantees.RemoteDraw
 import Proofs.Accounting.RemoteHeld.OverTime
 import Proofs.Accounting.RateAudit.Horizon
 import Proofs.Accounting.Prob
-import Proofs.Accounting.Actual.WipeDraw
+import Proofs.Accounting.Actual.Sampler
 import Proofs.Hash.RowBinding
 
 /-!
@@ -54,7 +54,7 @@ is one distinguisher's advantage, fixed by the session: it reads at most `s_t` f
 `t`, so efficient provers and verifiers give an efficient distinguisher with `s_t` queries, C3's form. An honest
 session, every receipt correct, gains nothing (`Draw.prfAdvantage_honest`). The
 term it replaces, the supremum of the advantage over every window test `test U k C`, was at least `1 − 2^-43` whatever
-the session (red team RD-6: at `U = 2^300`, `k = 1`, `C` the first opening under each of the `2^256` keys, which the
+the session (at `U = 2^300`, `k = 1`, `C` the first opening under each of the `2^256` keys, which the
 test lands in on `prf` always and on uniform blocks with probability at most `2^-44 + 2^-64`). That test is a window's
 distinguisher only in a session whose correct receipts are those `2^256` openings, which a prover can't compute; it
 passes, and C3 bounds no such distinguisher.

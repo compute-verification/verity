@@ -284,7 +284,7 @@ def test_ncp_v1_keeps_no_weight_copy_so_the_selector_admits_pous_beside_it(monke
 @pytest.mark.parametrize("scheme", ["pearl-c-sm120-v1-h3", "ncp-v2"])
 def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, scheme):
     """Pearl-C forms B~ once per install, and ncp-v2 reuses each weight's side: under POUS their GEMMs would read a copy made
-    from the plaintext, not what POUS decodes (the composition's decision 3)."""
+    from the plaintext, not what POUS decodes."""
     _fake_pous(monkeypatch)
     settings = {"pouw": {"coins": _coins(), **({"device": "cuda", "kernel": "k"} if scheme.startswith("pearl") else {})}}
     assert pouw.keeps_weight_copy(scheme, _serve(f"pouw:{scheme}", settings=settings))

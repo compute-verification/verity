@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# [circuits 21:10Z] The Commit of a served-compiled row: vLLM at its serving defaults (the workload's execution label `compiled`: torch.compile
+# The Commit of a served-compiled workload: vLLM at its serving defaults (the workload's execution label `compiled`: torch.compile
 # with vLLM's own CUDA-graph mode, no batch invariance, no compilation_config of ours), every value of every engine step committed
 # (acquire/sources/served_compiled_source.py), the served Build of record (`verity-vllm served-match`'s build.json) as the required manifest,
 # and the Build's Program checked word for word on the committed values (check/replay/served_check.py) with a seed drawn after commitment.

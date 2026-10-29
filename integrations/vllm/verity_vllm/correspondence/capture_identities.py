@@ -33,7 +33,7 @@ from typing import Any, Iterable
 import numpy as np
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluate import MissingValue, evaluate_region
+from verity.ml.circuits.evaluation import MissingValue, evaluate_region
 from verity.ml.circuits.layout import Circuit, FunctionCall, resolve
 from verity.ml.circuits.program import Program
 from verity_vllm.config import UsageError, option

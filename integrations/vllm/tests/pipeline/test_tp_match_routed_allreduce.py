@@ -1,6 +1,6 @@
 """tp-match `check` part 2 at world 8 holds every all-reduce to the routed Definition its rank Program binds (`xrank_dump.route_of` under
-the switches every rank's capture log header recorded), not the `AllReduce_v2` chain: DeepSeek-V4-Pro's TP8 Match (r20261017-182351-e5e6)
-received the f32-accumulated sum at all 3,936 all-reduces and failed the chain at 3,904.  Needs torch (skipped without)."""
+the switches every rank's capture log header recorded), not the `AllReduce_v2` chain: DeepSeek-V4-Pro's TP8 Match
+receives the f32-accumulated sum at all 3,936 all-reduces and would fail the chain at 3,904.  Needs torch (skipped without)."""
 from __future__ import annotations
 
 import hashlib

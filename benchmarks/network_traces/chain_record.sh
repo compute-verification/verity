@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The network chain's run of record (chain_record.py) on a CPU machine, from the gate's fetched tarballs, on hidden_zk's
 # builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify, the verifier of record) with the
-# firewall's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in a slot
-# of network-accounting's pool:
+# firewall's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in one of
+# the network slots:
 #   research run --on vy-nebius-cpu-2 --source . --project verity --as LANE --cwd clone --timeout 240m \
 #     --send GATE.tgz -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
 #     --by LANE -- env CR_MEM_GB=128 CR_GATES=GATE.tgz bash benchmarks/network_traces/chain_record.sh
@@ -12,12 +12,14 @@
 #   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the run and the I/O tie on it, both in the clear
 #            (network-e2e's e2e.py --no-prove: chain.served_advice and chain.tie)
 #   n2       N2's units proved by C-Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
-#            (N2-ZK's sampled draw on signed clocks); else on the advice profile n2_advised_zk.py --e2e on the bound
+#            (a sampled draw on signed clocks); else on the advice profile n2_advised_zk.py --e2e on the bound
 #            advice and the certifier's clock certificates, and on the others n2_zk.py prove
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
-#            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it: IO-TIE)
+#            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it)
 #   tie      on the warden path, the I/O tie on the warden's ingress, proved (n2_tie_zk.py prove --class warden)
 #   report   $OUT/report/report.json and report.md (chain_record.py report)
+#   guard    on every exit, before custody publishes the run dir, the record's leak guard (leak_guard.py): each file in it
+#            holding a gate run's witness moved to the quarantine, the run refused by name (exit 3; $OUT/leak-guard.json)
 # CR_PATH=warden is the warden path: every step reads the active warden's own run (CR_WARDEN_RUN, or the one gate run
 # holding a certified.jsonl) and nothing of a certifier rehearsal's, which in CR_GATES is refused by name: certs
 # --warden-run, endpoint (chain_record.py endpoint, the advice bound to the certified I/O off the warden's cells),
@@ -49,11 +51,17 @@
 #      $OUT/report/block.json, the block record's certifier entry (chain_record.block_entry)
 #      CR_SCAN_ONLY=1 (the scan alone, its report given no N2 summary: "scan only, N2 not given"; the record's N2 runs
 #      in jobs of its own)  CR_CACHE (the build cache; hidden_zk's by default)
+#      CR_QUARANTINE (where what the record mustn't hold goes, 0700 and outside the run dir: by default quarantine/RUN
+#      beside the runs root, /workspace/research/quarantine/RUN on a node, kept until its owner removes it)
 # n2 runs, then (on the warden path) the tie, then scan: outer proofs go through the firewall one at a time
 # (n2_zk.ONE_SESSION), so no two of their provers' firewalled sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
 # state or a gate run's witness/ (custody uploads all of $OUT; a warden run's witness is its lane key's only).
+# Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
+# them), so none of it may hold the gates' witness: a gate sent under inputs/ is moved to the quarantine once unpacked,
+# and on every exit leak_guard.py moves out whatever else holds a piece of it. On a signal (a timeout's SIGTERM leaves
+# seconds, not a scan) or when the guard can't run, out/, inputs/ and the logs are withheld whole instead.
 set -uo pipefail
 export HZ_CONFIGS=chain HZ_MEM_GB=${CR_MEM_GB:?}
 CR_CACHE=${CR_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -63,9 +71,40 @@ export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python:$SRC/tools/research/src
 CR=benchmarks/network_traces/chain_record.py
 
-# ---- the gates -------------------------------------------------------------------------------------------------------
-G=$W/gates
+# ---- the record's leak guard ---------------------------------------------------------------------------------------
+G=$W/gates RUN=$RESEARCH_RUN_DIR SIGNALED=
 mkdir -p "$G"
+Q=${CR_QUARANTINE:-$(dirname "$(dirname "$RUN")")/quarantine/$(basename "$RUN")}
+withhold() {   # withhold WHY: out/, inputs/ and the logs moved to the quarantine whole, deleted if they can't be moved
+  log "chain: $1: out/, inputs/ and the logs withheld from the record (in $Q/files)"
+  local f
+  for f in out inputs stdout.log stderr.log; do
+    [ -e "$RUN/$f" ] || continue
+    mv "$RUN/$f" "$Q/files/" 2>/dev/null || rm -rf "${RUN:?}/$f"
+  done
+}
+leak_guard() {   # on every exit: the guard on the run dir, then job.sh's removal of $W (the unpacked gates with it)
+  local rc=$? g
+  # a signal now ends the guard (its exit then withholds), not this handler
+  trap - EXIT; trap 'SIGNALED=SIGTERM' TERM; trap 'SIGNALED=SIGINT' INT
+  if [ -n "$SIGNALED" ]; then withhold "$SIGNALED ended the run before the leak guard read it"
+  else
+    "${PY:-python3}" "$SRC/benchmarks/network_traces/leak_guard.py" "$RUN" "$Q" --gates "$G" \
+      --report "$OUT/leak-guard.json" > "$W/leak-guard.out" 2> "$W/leak-guard.err"
+    g=$?
+    if [ "$g" = 0 ] || [ "$g" = 3 ]; then log "chain: $(cat "$W/leak-guard.out")"
+    else withhold "the leak guard failed (exit $g: $(tail -n 1 "$W/leak-guard.err" | cut -c1-300))"; fi
+    [ "$g" = 0 ] || [ "$rc" != 0 ] || rc=3
+  fi
+  rm -rf "$W"
+  exit "$rc"
+}
+trap 'SIGNALED=SIGTERM; exit 143' TERM
+trap 'SIGNALED=SIGINT; exit 130' INT
+trap leak_guard EXIT
+mkdir -p "$Q/files" && chmod 700 "$Q" || { log "chain: no quarantine at $Q"; exit 3; }
+
+# ---- the gates -------------------------------------------------------------------------------------------------------
 unpack() {   # unpack SRC DIR: a tarball under the run's inputs/ (or a path), an art: id, or a directory, into DIR
   mkdir -p "$2"
   case $1 in
@@ -77,6 +116,11 @@ unpack() {   # unpack SRC DIR: a tarball under the run's inputs/ (or a path), an
 k=0
 for g in ${CR_GATES:?CR_GATES: the gate tarballs, art: ids or directories}; do
   k=$((k + 1)); unpack "$g" "$G/g$k"
+  sent=$g; [ -e "$sent" ] || sent=$RUN/inputs/$g
+  if [ -e "$sent" ] && [[ $(realpath "$sent") == "$(realpath "$RUN")"/* ]]; then
+    rel=$(realpath --relative-to="$(realpath "$RUN")" "$sent"); mkdir -p "$(dirname "$Q/files/$rel")"
+    mv "$sent" "$Q/files/$rel" && log "chain: gate $k's $rel, which holds its witness, moved to the quarantine"
+  fi
   log "chain: gate $k $g: $(find "$G/g$k" -name end.json | sed "s|$G/g$k/||" | tr '\n' ' ')"
 done
 if [ "${CR_PATH:-}" = warden ]; then

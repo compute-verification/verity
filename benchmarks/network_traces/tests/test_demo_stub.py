@@ -240,3 +240,43 @@ def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and
     assert (bits["bound"], bits["rebuilt"], bits["bound_why"], bits["why"]) == (True, True, None, None), bits
     assert len(windows) >= 2 and all(w["opened"] and w["commit_is_the_windows"] for w in windows)
     assert bool(bits["chains"]) == (window_steps == 16) and sum(w["requests"] for w in windows) == 7
+
+
+@pytest.mark.parametrize("window_steps", [16, 64])
+def test_on_vllms_records_art_the_endpoint_step_binds_a_requests_jsonl_rebuilt_from_its_users_map(tmp_path,
+                                                                                                  monkeypatch,
+                                                                                                  window_steps):
+    """The served run's records artifact: advice_trace.jsonl, windows.jsonl, serve.json and request_users.jsonl,
+    requests.jsonl left on the served node. served_session's chain rebuilds requests.jsonl from the map and the
+    certified I/O, and the endpoint step's advice on it is bound to the certified requests and rebuilt from them, across
+    a carry too; a map naming a user the I/O doesn't certify is refused."""
+    sys.path.insert(0, str(HERE.parent / "network_e2e"))
+    import chain
+    import served_session as SS
+    from verity_vllm.pipeline import advice as ADV
+
+    (tmp_path / "ep").mkdir()
+    _served_with_records(tmp_path / "ep", window_steps)
+    art, prompts = tmp_path / "art", S.prompts(7)
+    art.mkdir()
+    for f in ("advice_trace.jsonl", "windows.jsonl", "serve.json"):
+        (art / f).write_bytes((tmp_path / "ep" / f).read_bytes())
+    own = [json.loads(x) for x in (tmp_path / "ep" / "requests.jsonl").read_text().splitlines()]
+    (art / SS.USERS).write_text("".join(json.dumps({"engine_id": r["engine_id"], "user": r["user"]}) + "\n" for r in own))
+    io = [{"user": f"user-{j}", "prompt": prompts[j], "max_tokens": 24, "output": S.outputs(prompts[j])}
+          for j in range(7)]
+    monkeypatch.setattr(SS, "certified_io", lambda fetch: {"accepted": True, "violations": [], "records": io})
+    keep = tmp_path / "keep"
+    ep = Path(SS.endpoint_records(str(art), keep / "rebuilt", keep / "fetch.tar.gz", [S.VOCAB]))
+    assert ep == keep / "rebuilt" and ep.stat().st_mode & 0o777 == 0o700 and not (art / "requests.jsonl").exists()
+    assert ADV.io_record(ep / "requests.jsonl") == ADV.io_record(tmp_path / "ep" / "requests.jsonl")
+
+    window, T = {"origin_unix": 0.0, "windows": 4, "window_s": 100.0}, 10
+    assert ADV.main(ADV.Options(run=str(ep), tau=window["window_s"] / T, compiler_digest="ab" * 64)) == 0
+    _, bits = chain.served_advice(ep, ep / "advice", window, io, T, [S.VOCAB])
+    assert (bits["bound"], bits["rebuilt"], bits["bound_why"], bits["why"]) == (True, True, None, None), bits
+    assert bool(bits["chains"]) == (window_steps == 16) and sum(w["requests"] for w in bits["commit_windows"]) == 7
+
+    (art / SS.USERS).write_text(json.dumps({"engine_id": "cmpl-x-0", "user": "user-9"}) + "\n")
+    with pytest.raises(SS.Refused, match="user 'user-9' is no certified request"):
+        SS.endpoint_records(str(art), keep / "again", keep / "fetch.tar.gz", [S.VOCAB])

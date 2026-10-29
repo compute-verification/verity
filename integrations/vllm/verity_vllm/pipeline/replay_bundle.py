@@ -13,7 +13,8 @@ linkage writes one bundle per instrumented run beside its outputs, `<out>/replay
                       arguments and Program refs, the required manifest's path and sha256, the retention, the Commit's row as recorded
                       (weights pin, coverage, openings), verdict inputs (declaration, required classes) and the engine's
                       configuration of record (`engine_facts_of_record`, read in the Commit's process)
-    MANIFEST.json     {schema, files: {path: {sha256, bytes}}}, written last
+    MANIFEST.json     {schema, files: {path: {sha256, bytes}}}, written last; with the values committed and not in the store
+                      (`NOT_RETAINED`), those too
 
 It is built under `replay_bundle_p<pair>.partial/` and renamed into place once sealed, so a bundle directory that exists is complete.
 A full store is written from the moment the run root is fixed, beside the binding and manifest coverage (`start`), so the GPU is not
@@ -43,6 +44,8 @@ SCHEMA = "verity-vllm/replay-bundle/v1"
 MANIFEST = "MANIFEST.json"
 #: the context's (unwritten) key for the sha256 of the files `write_store` hashed as it wrote them
 HASHED = "_hashed"
+#: the context's and manifest's key for the values committed and not retained, so not in the store (`store_dump.not_retained`)
+NOT_RETAINED = "committed_not_retained"
 ARGS = ("program_dir", "programs_root", "program_digest", "required_manifest", "replay_per_stratum", "replay_max", "replay_target", "replay_k",
         "replay_draw", "replay_workers", "replay_seed", "replay_challenge", "window_mb", "window_slots", "retain", "label", "serving_rows", "openings",
         "checkpoints", "workload", "weights_of_record", "checkpoint_dir")
@@ -311,7 +314,7 @@ def seal(out: str | os.PathLike, pair: int, context: dict[str, Any], binding_map
          hashed: dict[str, str] | None = None, rank: int | None = None) -> dict[str, Any]:
     """Writes the context and the binding map into the partial bundle, then its manifest, and renames it into place.  ``hashed``: the
     sha256 of files taken as they were written (`write_store`); every other file is read and hashed here.  ``binding_map`` None: the
-    partial holds it already (a TP rank writes its own)."""
+    partial holds it already (a TP rank writes its own).  The context's `NOT_RETAINED` record is the manifest's too."""
     p, final = partial(out, pair, rank=rank), path(out, pair, rank=rank)
     if binding_map is not None:
         shutil.copyfile(binding_map, p / "binding_map.json")
@@ -321,7 +324,8 @@ def seal(out: str | os.PathLike, pair: int, context: dict[str, Any], binding_map
         sums = dict(zip(rels, pool.map(lambda r: (hashed or {}).get(r) or _sha256(p / r), rels)))
     files = {r: {"sha256": sums[r], "bytes": (p / r).stat().st_size} for r in rels}
     man = {"schema": SCHEMA, "files": files, "bytes": sum(v["bytes"] for v in files.values()),
-           "sealed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+           "sealed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+           **({NOT_RETAINED: context[NOT_RETAINED]} if context.get(NOT_RETAINED) else {})}
     (p / MANIFEST).write_text(json.dumps(man, indent=1) + "\n")
     if final.exists():
         shutil.rmtree(final)

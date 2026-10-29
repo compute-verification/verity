@@ -6,6 +6,8 @@ up).
                                  -> Array<T, Array<16, Value<1>>>
     QkSoftmaxRowPad_v1{T, D, DOT}  (q, k as QkSoftmaxRow's, n: Array<16, Value<1>> of kind position)
                                  -> Array<T, Array<16, Value<1>>>
+    QkSoftmaxPvPad_v1{T, K, D, DOT}  (q, k as QkSoftmaxRow's, v0..v{T-1}: Array<D, Array<16, Value<1>>>, n as
+                                 QkSoftmaxRowPad's) -> Array<D, Array<16, Value<1>>>
     SoftmaxRow_v1{N}             (x: Array<N, Array<16, Value<1>>>) -> Array<N, Array<16, Value<1>>>
     SoftmaxRowPad_v1{N}          (x: Array<N, Array<16, Value<1>>>, n: Array<16, Value<1>>) -> Array<N, Array<16, Value<1>>>
 
@@ -41,6 +43,11 @@ public, as the static T it replaces was. `SoftmaxRowPad` masks each x_j with j >
 A masked key row is read only by its score, which the mask drops whole, so no word in it (a NaN, an inf) reaches an output;
 the replay binds it to a registered zero row. The circuit is total: n = 0 writes T words +0, and n > T is n = T. Its
 specification, `qk_softmax_row_pad_reference`, is for 1 <= n <= T only and refuses any other n.
+
+`QkSoftmaxPvPad` is a head's whole attention in one proof block: `gemm.PvRowPad_v2{T, K, D, DOT}` of
+`QkSoftmaxRowPad_v1{T, D, DOT}`'s probability row, V's T key rows and the same n, so the probability row is never an output
+and is never committed. Each half reads n as its own statement does, so the composition is total too; it refuses what
+either half refuses. One DOT serves both products, the step an H200 attention kernel runs QK^T and PV on.
 """
 from __future__ import annotations
 
@@ -61,8 +68,8 @@ from .elementwise import specialized
 from .mufu import mufu_ex2
 from .scalar import bf16_key, gt_u
 
-__all__ = ["LOG2E", "NEG_INF", "QkSoftmaxRow", "QkSoftmaxRowPad", "SoftmaxRow", "SoftmaxRowPad", "qk_softmax_row_pad_reference",
-           "softmax_exp", "softmax_max", "softmax_row", "softmax_row_pad"]
+__all__ = ["LOG2E", "NEG_INF", "QkSoftmaxPvPad", "QkSoftmaxRow", "QkSoftmaxRowPad", "SoftmaxRow", "SoftmaxRowPad",
+           "qk_softmax_row_pad_reference", "softmax_exp", "softmax_max", "softmax_row", "softmax_row_pad"]
 
 BF16 = Array(16, BL.BIT)
 #: the key count's type: one unsigned word
@@ -155,6 +162,20 @@ def QkSoftmaxRowPad(B, S, q, k, n):
     """A head's probability row at n of its T key rows, on bits: `SoftmaxRowPad_v1{N=T}` of the T scores
     ``GemmCoordinate_v3{K=D, DOT}(q, k_j)`` and n."""
     return B.call(bind(SoftmaxRowPad, N=S.T), B.call(bind(BG.Gemm, K=S.D, N=S.T, DOT=S.DOT), q, k), n)
+
+
+@composite("QkSoftmaxPvPad", 1, ["T", "K", "D", "DOT"],
+           lambda S: ((("q", Array(S.D, BF16)), ("k", Array(_keys(S), Array(S.D, BF16))),
+                       *((f"v{t}", Array(S.D, BF16)) for t in range(_keys(S))), ("n", U16)), Array(S.D, BF16)),
+           conformance="exact-model-tested",
+           refuse=lambda b: QkSoftmaxRowPad.refuse(b) or BG.PvRowPad.refuse(b),
+           ports=Ports(params={"n": In(kind="position")}))
+def QkSoftmaxPvPad(B, S, q, k, *rest):
+    """A head's attention output row at n of its T key rows, on bits: `PvRowPad_v2{T, K, D, DOT}` of
+    `QkSoftmaxRowPad_v1{T, D, DOT}(q, k, n)`, the value rows v0..v{T-1} and n."""
+    *vs, n = rest
+    p = B.call(bind(QkSoftmaxRowPad, T=S.T, D=S.D, DOT=S.DOT), q, k, n)
+    return B.call(bind(BG.PvRowPad, T=S.T, K=S.K, D=S.D, DOT=S.DOT), p, *vs, n)
 
 
 def qk_softmax_row_pad_reference(q, k, n: int, DOT) -> np.ndarray:

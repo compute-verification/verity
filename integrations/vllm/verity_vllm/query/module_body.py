@@ -8,7 +8,7 @@ correspondence says the same module issued their Calls.
 
 Under this query the boundary Values are exactly the Values that leave a module body for another module's body (or for the
 Program's output) and the prescribed inputs a module body reads.  v1's "promotion" of interior rows whose output another module
-reads (F-r19-int-20) is not a pass here: such a Value crosses the body boundary and so is a boundary Value by definition.
+reads is not a pass here: such a Value crosses the body boundary and so is a boundary Value by definition.
 
 Literals.  A Program has no literal operand (a reference is `("p", i, j)` -- a parameter leaf -- or `("n", k, j)` -- a body node's
 output leaf): a literal is a Call that reads no Value (`Const<w>[bits]`, a zero-arity gate), whose output is a function of its binding

@@ -4,7 +4,7 @@
 
 is a PURE function of its arguments: the Program (`Program`: the request component's calls per request-relative step), the runtime
 correspondence (`Correspondence`: `owning_module(call)`, `return_slot(call, port)`, `arg_slot(call, i)` -- today an adapter over the
-descriptor annotations of `instances.json.gz`, `DescriptorCorrespondence`; the correspondence lane's namespace exposes the same three
+descriptor annotations of `instances.json.gz`, `DescriptorCorrespondence`; the runtime-correspondence namespace exposes the same three
 functions), the occurrence, and the LIVE correspondence state (`LiveState`: per request its prefill steps / sampling events seen / the
 ordinal cursor of the current request-relative step; one owner per already-resolved value id; the engine steps' row tables).  It writes
 nothing; `LiveState.advance(observation, ref)` is the one mutation and it keeps only what a later resolution reads -- never the expanded
@@ -41,7 +41,7 @@ from verity_vllm.check.match import batch_decomp as BD
 
 from verity_vllm.observe import contract as OB
 
-SHARED = BD.SHARED                     # "*weight-only*": the owner of a value carrying no request's data (F-r19-int-15)
+SHARED = BD.SHARED                     # "*weight-only*": the owner of a value carrying no request's data
 _T_RE = re.compile(r"(?:^|/)t=(\d+)(?:/|$)")
 _LAYERS_RE = re.compile(r"(?:^|/)layers\.(\d+)(?:/|$)")
 
@@ -81,7 +81,7 @@ class Fault:
 
 
 class Correspondence(Protocol):
-    """The three functions the correspondence lane owns (`DescriptorCorrespondence`: the runtime-correspondence record first, the descriptor
+    """The runtime correspondence's three functions (`DescriptorCorrespondence`: the runtime-correspondence record first, the descriptor
     annotations as the recorded fallback)."""
 
     def owning_module(self, call: Any) -> str | None: ...

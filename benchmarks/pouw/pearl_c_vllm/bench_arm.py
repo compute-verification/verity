@@ -29,11 +29,13 @@ is H1's the arm refuses before reserving (`pouw_h1_window.period_reason`).
 from __future__ import annotations
 
 import hashlib
-import os
 from pathlib import Path
 from typing import Any
 
+from verity_config.settings import of
+
 HERE = Path(__file__).resolve().parent
+settings = of(__file__)
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
 #: the scheme each of the tree's kernel directories runs (`pouw_pearl_c_device.SCHEMES`' device records)
@@ -107,14 +109,14 @@ class PearlCArm:
     run_options: dict[str, Any] = {}
 
     def __init__(self) -> None:
-        self.kernel_dir = Path(os.environ.get("PEARLC_KERNEL", str(HERE.parent / "pearl_c_sm120")))
-        self.cubin = os.environ.get("PEARLC_CUBIN") or None
-        self.scheme = os.environ.get("PEARLC_SCHEME") or KERNEL_SCHEMES.get(self.kernel_dir.name, "pearl-c-sm120-v1-h3")
-        self.schedule = os.environ.get("PEARLC_SCHEDULE", "deferred")
-        self.epoch = int(os.environ.get("PEARLC_BENCH_EPOCH", "20261014"))
-        self.gate_command = os.environ.get("PEARLC_CHALLENGER_GATE") or None
-        self.peer = os.environ.get("PEARLC_CHALLENGER_PEER") or None
-        self.lane = os.environ.get("PEARLC_CHALLENGER_LANE") or "vllm"
+        self.kernel_dir = Path(settings.PEARLC_KERNEL or HERE.parent / "pearl_c_sm120")
+        self.cubin = settings.PEARLC_CUBIN
+        self.scheme = settings.PEARLC_SCHEME or KERNEL_SCHEMES.get(self.kernel_dir.name, "pearl-c-sm120-v1-h3")
+        self.schedule = settings.PEARLC_SCHEDULE
+        self.epoch = settings.PEARLC_BENCH_EPOCH
+        self.gate_command = settings.PEARLC_CHALLENGER_GATE
+        self.peer = settings.PEARLC_CHALLENGER_PEER
+        self.lane = settings.PEARLC_CHALLENGER_LANE
         self.run = self.stack = self.weights = self.session = None
         self.coins: dict[str, Any] = {"source": "in-process"}
 
@@ -128,8 +130,8 @@ class PearlCArm:
         without the step cap a 16,384-token prefill step's rings cost about 36 GiB and the full sweep's big points OOMed
         in the gate (93.5 GiB torch-allocated). The step cap applies to
         this arm's engine only, so its chunking differs from the controls'; the per-token ratio stays the metric."""
-        return {"gpu_memory_utilization": float(os.environ.get("PEARLC_GPU_UTIL", "0.55")),
-                "max_num_batched_tokens": int(os.environ.get("PEARLC_STEP_TOKENS", "4096"))}
+        return {"gpu_memory_utilization": settings.PEARLC_GPU_UTIL,
+                "max_num_batched_tokens": settings.PEARLC_STEP_TOKENS}
 
     def kernel_digest(self, target: Any) -> str | None:
         path = Path(self.cubin) if self.cubin else self.kernel_dir / f"{self.kernel_dir.name}.cubin"
@@ -195,7 +197,7 @@ class PearlCArm:
         if bad:
             raise RuntimeError(f"{scheme} refuses the model: " + "; ".join(bad))
         vllm_site.attach(stack, sites, target.hooks)
-        spec = PassSpec(hashing=True, schedule=self.schedule, run_id=os.environ.get("RESEARCH_RUN_ID"))
+        spec = PassSpec(hashing=True, schedule=self.schedule, run_id=settings.RESEARCH_RUN_ID)
         stack.activate(StackArm("pearlc", "bf16", run.entry, spec=spec))
 
         eng = target.engine.vllm.llm_engine
@@ -300,29 +302,28 @@ class PearlCWholeArm(PearlCArm):
         for option, env in (("whole_defer_a", "PEARLC_WHOLE_DEFER_A"), ("whole_fork_stats", "PEARLC_WHOLE_FORK_STATS"),
                             ("lag_ends", "PEARLC_LAG_ENDS"), ("whole_tree_sm", "PEARLC_WHOLE_TREE_SM"),
                             ("aside_ends", "PEARLC_ASIDE_ENDS"), ("whole_prefetch_b", "PEARLC_WHOLE_PREFETCH_B")):
-            if os.environ.get(env) == "0":
+            if not settings.get(env):
                 self.run_options = {k: v for k, v in self.run_options.items() if k != option}
-        if os.environ.get("PEARLC_WHOLE_SHAPE_JOINS") == "1":
+        if settings.PEARLC_WHOLE_SHAPE_JOINS:
             self.run_options = {**self.run_options, "whole_shape_joins": True}
         if "whole_defer_a" not in self.run_options:
             self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_tree_sm"}
         if "lag_ends" not in self.run_options:
             self.run_options = {k: v for k, v in self.run_options.items() if k != "aside_ends"}
-        eager = os.environ.get("PEARLC_WHOLE_EAGER")
+        eager = settings.PEARLC_WHOLE_EAGER
         if eager == "0":
             self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_eager"}
         elif eager:
             self.run_options = {**self.run_options, "whole_eager": eager}
         self.schedule = "serial"
-        self.vllm_execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
+        self.vllm_execution = settings.PEARLC_WHOLE_EXECUTION
         # Not ``execution``: the harness reads that as "build at vLLM's serving defaults", and this engine is FULL
         # decode graphs at compilation mode 0 (no torch.compile), which PoUW requires.
         self.engine_label = "graphs-mode0" + ("" if self.vllm_execution == "compiled" else f"-{self.vllm_execution}")
         self.whole, self.totals, self.capture = None, {}, [1, 8, 32, 128]
 
     def engine_overrides(self, target: Any) -> dict[str, Any]:
-        sizes = os.environ.get("PEARLC_CAPTURE_SIZES")
-        self.capture = [int(x) for x in sizes.split(",")] if sizes else [1, 8, 32, 128]
+        self.capture = list(settings.PEARLC_CAPTURE_SIZES or (1, 8, 32, 128))
         return {**super().engine_overrides(target), "enforce_eager": False, "execution": self.vllm_execution,
                 "compilation_config": {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
                                        "cudagraph_capture_sizes": self.capture}}

@@ -1,10 +1,10 @@
 # The encoded stack in vLLM, and its benchmark arms
 
 Llama-3.1-8B FP8 decode in vLLM with every linear weight, the lm_head and the paged KV cache held only as codec words,
-receipted by the remote bandwidth audit's sketches (`stack.py`, whose docstring lays out each part), and the plain stack,
-the same engine over the same kernels' plain forms. `bench_arm.py` makes them arms of the shared `verity-bench vllm`
-driver (`benchmarks/harness/README.md`); `benchmarks/harness/setup/vllm_encoded.sh` builds their GPU libraries from the
-dispatched commit.
+receipted by proof of useful bandwidth's (PoUB's) sketches (`stack.py`, whose docstring lays out each part), and the
+plain stack, the same engine over the same kernels' plain forms. `bench_arm.py` makes them arms of the shared
+`verity-bench vllm` driver (`benchmarks/harness/README.md`); `benchmarks/harness/setup/vllm_encoded.sh` builds their GPU
+libraries from the dispatched commit.
 
 ## Arms
 

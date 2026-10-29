@@ -3,7 +3,7 @@ import Definitions.Pouw.Assumptions.Dimension.OpenPipe
 /-!
 # The FP32 pipe, the residual assumption `A1_fp`, and `CanonicalNaN` (draft semantics)
 
-**Draft semantics, S-1 to S-11 pending review** (`barrier-assets/embed/DESIGN.md` §5).
+**Draft semantics, pending review**.
 
 `EmbedM4090` (`Pouw.Dimension.Embed`) maps every `M4090` program into the open quadratic pipe at no greater cost,
 except its non-quadratic FP32 instructions. What is left is a statement about the FP32 class alone: the **FP32 pipe**
@@ -12,10 +12,9 @@ the noise) or an **FP32 step** (price at least 8): one FP32 operation `fpSem κ 
 has no tensor cores, loads, selects, sub-word operations, moves or pre-salt data.
 
 * **The FP32 class is exactly FFMA, FADD and FMUL**, with their operand modifiers. W1 prices by measured throughput
-  per register written, and every other opcode measured on the 4090 costs at least 16 per register
-  (`internal/pouw/gpu-constants.md` §9, Round 4, rechecked in §10.3; S-3). That includes FSET, which is `int`: FSET.BF
-  runs on the ALU at 16.4 per register, 16.6 with a data-dependent predicate, and `set.*.u32.f32` is FSETP + SEL
-  (§11, Round 6).
+  per register written, and every other opcode measured on the 4090 costs at least 16 per register. That includes FSET,
+  which is `int`: FSET.BF runs on the ALU at 16.4 per register, 16.6 with a data-dependent predicate, and
+  `set.*.u32.f32` is FSETP + SEL (§11, Round 6).
 * **`A1_fp fpSem γ`** (named assumption): under checkpoint independence and MinRank ≥ 5, every `FpPipe fpSem`
   program on inputs in `V₀` whose slots include the non-final checked words at `S` costs at least `(1 − γ)·16·|S|`
   (`A1fpOn` for one instance). It is exactly the per-word cost of `M4090` (`A1fpIff`), so it is the weakest
@@ -27,7 +26,7 @@ has no tensor cores, loads, selects, sub-word operations, moves or pre-salt data
   int32. Its witness is `CanonicalNaNSat`.
 * `fpSem` is a parameter. `fpExact` is the formal-identity semantics of `a1-cost.md` §3.1 (FADD, FMUL, FFMA, with
   negation modifiers, in exact ℚ arithmetic). The intended reading is IEEE binary32 on the int32 reading, round to
-  nearest, flush-to-zero off, with the canonical NaN (S-2); no IEEE semantics is defined here.
+  nearest, flush-to-zero off, with the canonical NaN; no IEEE semantics is defined here.
 -/
 
 namespace Pouw.Dimension.Embed
@@ -53,7 +52,7 @@ def FpOK (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) : List (Noise N m n k →
 /-- **The FP32 pipe** for the FP32 semantics `fpSem`. -/
 def FpPipe (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (P : List (Instr (Noise N m n k))) : Prop := FpOK fpSem [] P
 
-/-- The formal-identity FP32 semantics (`a1-cost.md` §3.1): `κ mod 3` selects FADD `±x ± y`, FMUL `±x·y` or FFMA
+/-- The formal-identity FP32 semantics: `κ mod 3` selects FADD `±x ± y`, FMUL `±x·y` or FFMA
 `±x·y ± z`; bit 0 of `κ / 3` negates the first operand, bit 0 of `κ / 6` the second addend. -/
 def fpExact (κ : ℕ) (x y z : ℚ) : ℚ :=
   let x' := if κ / 3 % 2 = 1 then -x else x
@@ -71,7 +70,7 @@ def A1fpOn (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (γ : ℝ) (k m n N : �
     ∀ S ⊆ U ×ˢ range (nonFinal k m n), (∀ x ∈ S, word k m n N R A B x.1 x.2 ∈ slots P L) →
       (1 - γ) * (16 * S.card : ℝ) ≤ cost P
 
-/-- **Assumption `A1_fp(fpSem, γ)`** (named; draft semantics, S-1 to S-11 pending review): under checkpoint
+/-- **Assumption `A1_fp(fpSem, γ)`** (named; draft semantics, pending review): under checkpoint
 independence and MinRank ≥ 5, `A1fpOn` holds: every FP32-pipe program that outputs `|S|` non-final checked words costs
 at least `(1 − γ)·16·|S|`. -/
 def A1fp (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (γ : ℝ) : Prop :=
@@ -86,8 +85,7 @@ def NaNGap (v : ℚ) : Prop := (-8388607 ≤ v ∧ v ≤ -2) ∨ (2139095041 ≤
 
 /-- **Assumption `CanonicalNaN fpSem`** (named; the 4090's behaviour): no FFMA, FADD or FMUL output lies in the range
 gap on the int32 reading. They output no NaN pattern but `0x7FFFFFFF`: measured in all 72 forms (rounding modes,
-`.ftz`, `.sat`, neg and abs operands, immediates), 43.6·10⁹ NaN outputs, none other
-(`internal/pouw/gpu-constants.md` §10, Round 5). -/
+`.ftz`, `.sat`, neg and abs operands, immediates), 43.6·10⁹ NaN outputs, none other. -/
 def CanonicalNaN (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) : Prop := ∀ κ a b c, ¬ NaNGap (fpSem κ a b c)
 
 end Pouw.Dimension.Embed
