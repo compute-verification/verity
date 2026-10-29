@@ -18,7 +18,7 @@ statement takes two inputs per window:
   certifier's record are not accepted with the faulty set `W_i` (`LeakAt`) with probability at most `e'_i`.
 
 From them, every audit accepts while the faulty sets hold `Fmax ≥ ln(1/δ)/q` units or more, or some window's leak
-relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escapes multiply, `PooledWrongUnitsLe`'s
+relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escapes multiply, `PooledIncorrectBlocksLe`'s
 argument with the escape as the input); and the secrets whose every window meets its relation, with the faulty sets
 under `Fmax` (`PooledGood`), number at most
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i` the
