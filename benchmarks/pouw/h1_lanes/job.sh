@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One served H1 leaf proved as its 32 lanes and its combine (h1zy's PouwH1LaneZy_v1 and PouwH1Combine_v1, pouw.leaf_lanes),
-# one C-Flock --zk statement each, verified by the Lean verifier against the verifier's own files (run.py's docstring has
+# one Flock --zk statement each, verified by the Lean verifier against the verifier's own files (run.py's docstring has
 # the protocol and the negatives).
 #   research run --on vy-nebius-cpu-1 --pool proofs --project verity --campaign proofs-24h --source . --cwd source \
 #     --mem-gb G --declared-output 'out/*' --env H1L_MEM_GB=G -- bash benchmarks/pouw/h1_lanes/job.sh
@@ -10,10 +10,10 @@
 #   2. run.py prepare: the statements' Programs, the leaf's registered values and partials, every statement staged (WORK/plan.tsv),
 #      each circuit flat, or under H1_TMPL=structural the templated statement of its structural lowering (h1unit.layout),
 #      whose unit rows flock-tmpl-unit then places (circuits/<kind>/unit.placed, the prover's --tmpl-unit)
-#   3. one loopback --zk session per statement, H1L_PAR at a time, each drawing its one instance
+#   3. one loopback --zk session per statement, H1L_PAR at a time, each sampling its one instance
 #   4. the plan's Lean checks, each with its statement's own Program, partition, public file and registered reads, and
 #      pouw-leaf-own-window's check of those reads, placed from the window's descriptor and round log, against the
-#      registration and produced record the verifier holds, and of each session's draw against the draw policy (every unit)
+#      registration and produced record the verifier holds, and of each session's sample against the sample policy (every unit)
 #   5. run.py summarize: out/summary.json (a templated check refused only for its form after every other check,
 #      run.py's TMPL_WHY, is labelled run.py's TEMPLATED, never ACCEPT)
 # env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (448; h1zy.combine takes K >= 384)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (3: sessions at a time)

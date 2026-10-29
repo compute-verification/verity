@@ -1,4 +1,4 @@
-"""The NCI policy's check of a declared division, straight from the definitions: the reference `NciCheck.check` is held to.
+"""The inference-only policy's check of a declared division, straight from the definitions: the reference `NciCheck.check` is held to.
 
     check(instance) -> {"gates", "ius", "complies", "failure"} | {"error": code}
 
@@ -9,7 +9,7 @@ docstring gives: the declaration's circuit is the canonical layout of a descript
 gate `g` of width `Value<w>` bits, an input gate when its primitive is an input (`program.is_input`, with no operands),
 reading the gates its operands name; θ is a list of ids of input gates bound at registration (`program.is_registered`;
 one bound per run is refused, `theta-not-registered`); the division is one owner per gate, `"input"` or an IU index.
-A primitive is taken as the descriptor declares it, as C-Flock's decoder takes it, so no registry is needed.
+A primitive is taken as the descriptor declares it, as Flock's decoder takes it, so no registry is needed.
 
     check_desc(instance) -> the same, for `NciCheck.Desc`'s instance: θ and the owners per root node
 
