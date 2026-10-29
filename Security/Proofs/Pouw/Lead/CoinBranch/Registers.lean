@@ -28,7 +28,7 @@ point, as in `adaptive_pairs_le`. Each bound reads only the targets an outcome r
   plus a write for each instruction priced below a write and for each read the class shares across entries.
   Select-floor and copy-floor (a selection on the lane's own bit and a copy each cost at least a write) leave only the
   shared reads, and a class over which no two entries' values agree everywhere shares none.
-* **Premises per path** (`Prog.mem_cls_iff`, `small_cls_le`). A class is the outcomes that take its path, and the
+* **Premises per path** (`Tree.mem_cls_iff`, `small_cls_le`). A class is the outcomes that take its path, and the
   outcomes in classes of fewer than `c` number at most `c` a path, so a premise stated on every path's share of the
   coins of at least `c` outcomes holds at all others.
 -/
@@ -318,11 +318,11 @@ theorem adaptive_ones_attained [DecidableEq V] {Ω ι : Type} (O : Finset Ω) (m
 
 /-! ## Priced selection
 
-A program is uniform branches (`Prog`) down to static streams. Every outcome of a class, the outcomes that take one
-path, runs the same stream: instructions that each set one slot (a word) to a computed value or another slot's value,
-optionally under the lane's own predicate, and hashes that read a slot as an entry's value. An instruction is priced at
-every outcome, taken or not, since a predicated instruction issues either way: its selection `cs` if predicated and, if
-taken, a write `cw` or a copy `cc`. -/
+A program is a tree of uniform branches (`Tree`) down to static streams. Every outcome of a class, the outcomes that
+take one path, runs the same stream: instructions that each set one slot (a word) to a computed value or another slot's
+value, optionally under the lane's own predicate, and hashes that read a slot as an entry's value. An instruction is
+priced at every outcome, taken or not, since a predicated instruction issues either way: its selection `cs` if
+predicated and, if taken, a write `cw` or a copy `cc`. -/
 
 namespace Priced
 
@@ -584,26 +584,26 @@ theorem lanes_le_cost_separated {Λ W : Type} [Fintype Λ] [DecidableEq E] [Deci
     _ = Fintype.card Λ * (cw * (pairsAt ω L).card) := by ring
     _ ≤ _ := Nat.mul_le_mul_left _ (credit_le_cost_separated hcc hcs C m₀ L hc hsep hinit ω hω)
 
-/-- A program: uniform branches, each priced `cb`, down to static streams. -/
-inductive Prog (Ω A V E : Type)
+/-- A branching tree: uniform branches, each priced `cb`, down to static streams. -/
+inductive Tree (Ω A V E : Type)
   | leaf (L : List (Ev Ω A V E))
-  | branch (d : Ω → Bool) (p q : Prog Ω A V E)
+  | branch (d : Ω → Bool) (p q : Tree Ω A V E)
 
-def Prog.stream : Prog Ω A V E → Ω → List (Ev Ω A V E)
+def Tree.stream : Tree Ω A V E → Ω → List (Ev Ω A V E)
   | .leaf L, _ => L
   | .branch d p q, ω => if d ω then p.stream ω else q.stream ω
 
-def Prog.depth : Prog Ω A V E → Ω → ℕ
+def Tree.depth : Tree Ω A V E → Ω → ℕ
   | .leaf _, _ => 0
   | .branch d p q, ω => 1 + if d ω then p.depth ω else q.depth ω
 
 /-- `ω`'s class: the outcomes that take its path. -/
-def Prog.cls : Prog Ω A V E → Ω → Set Ω
+def Tree.cls : Tree Ω A V E → Ω → Set Ω
   | .leaf _, _ => Set.univ
   | .branch d p q, ω => {ω' | d ω' = d ω} ∩ if d ω then p.cls ω else q.cls ω
 
 omit [DecidableEq A] in
-theorem Prog.mem_cls : ∀ (P : Prog Ω A V E) (ω : Ω), ω ∈ P.cls ω
+theorem Tree.mem_cls : ∀ (P : Tree Ω A V E) (ω : Ω), ω ∈ P.cls ω
   | .leaf _, _ => Set.mem_univ _
   | .branch d p q, ω => by
     refine ⟨rfl, ?_⟩
@@ -612,11 +612,11 @@ theorem Prog.mem_cls : ∀ (P : Prog Ω A V E) (ω : Ω), ω ∈ P.cls ω
     · exact p.mem_cls ω
 
 omit [DecidableEq A] in
-theorem Prog.stream_eq : ∀ (P : Prog Ω A V E) (ω ω' : Ω), ω' ∈ P.cls ω → P.stream ω' = P.stream ω
+theorem Tree.stream_eq : ∀ (P : Tree Ω A V E) (ω ω' : Ω), ω' ∈ P.cls ω → P.stream ω' = P.stream ω
   | .leaf _, _, _, _ => rfl
   | .branch d p q, ω, ω', ⟨hd, h⟩ => by
     have hd : d ω' = d ω := hd
-    simp only [Prog.stream, hd]
+    simp only [Tree.stream, hd]
     cases hdω : d ω <;> simp only [hdω] at h ⊢
     · exact q.stream_eq ω ω' h
     · exact p.stream_eq ω ω' h
@@ -625,7 +625,7 @@ open Classical in
 /-- **A program that branches uniformly on the coins**: at every outcome, check (b)'s credit in writes is at most what
 the program costs there (its branches and its stream), plus a write for each instruction priced below a write and for
 each read its class shares across entries. A class can share a read only if its branches pin it. -/
-theorem prog_credit_le [DecidableEq E] [DecidableEq V] (cb cw cc cs : ℕ) (P : Prog Ω A V E) (m₀ : Ω → A → V)
+theorem prog_credit_le [DecidableEq E] [DecidableEq V] (cb cw cc cs : ℕ) (P : Tree Ω A V E) (m₀ : Ω → A → V)
     (hc : ∀ ω, Correct ω (m₀ ω) (P.stream ω)) (ω : Ω) :
     cw * (pairsAt ω (P.stream ω)).card ≤ cb * P.depth ω + cost cw cc cs ω (P.stream ω) +
       cw * (freeCount cw cc cs ω (P.stream ω) + shared (P.cls ω) (fun a ω => m₀ ω a) (fun _ => none) (P.stream ω)) := by
@@ -634,26 +634,26 @@ theorem prog_credit_le [DecidableEq E] [DecidableEq V] (cb cw cc cs : ℕ) (P : 
   omega
 
 /-- The decisions `ω`'s path takes. -/
-def Prog.path : Prog Ω A V E → Ω → List Bool
+def Tree.path : Tree Ω A V E → Ω → List Bool
   | .leaf _, _ => []
   | .branch d p q, ω => d ω :: if d ω then p.path ω else q.path ω
 
 omit [DecidableEq A] in
 /-- A class is the outcomes that take its path. -/
-theorem Prog.mem_cls_iff : ∀ (P : Prog Ω A V E) (ω ω' : Ω), ω' ∈ P.cls ω ↔ P.path ω' = P.path ω
-  | .leaf _, _, _ => by simp [Prog.cls, Prog.path]
+theorem Tree.mem_cls_iff : ∀ (P : Tree Ω A V E) (ω ω' : Ω), ω' ∈ P.cls ω ↔ P.path ω' = P.path ω
+  | .leaf _, _, _ => by simp [Tree.cls, Tree.path]
   | .branch d p q, ω, ω' => by
     have hp := p.mem_cls_iff ω ω'
     have hq := q.mem_cls_iff ω ω'
-    simp only [Prog.cls, Prog.path, Set.mem_inter_iff, Set.mem_ofPred_eq]
+    simp only [Tree.cls, Tree.path, Set.mem_inter_iff, Set.mem_ofPred_eq]
     cases hω : d ω <;> cases hω' : d ω' <;> simp [hp, hq]
 
 omit [DecidableEq A] in
-/-- **Few outcomes sit in small classes**: the outcomes of `O` whose class (its path's outcomes, `Prog.mem_cls_iff`)
+/-- **Few outcomes sit in small classes**: the outcomes of `O` whose class (its path's outcomes, `Tree.mem_cls_iff`)
 holds fewer than `c` of `O`'s number at most `c` a path taken. So a premise stated on every path's share of the coins,
 for each share of at least `c` outcomes, holds on all of `O` but at most `c` times the paths, `2^p` of them for a
 program `p` branches deep. -/
-theorem small_cls_le (P : Prog Ω A V E) (O : Finset Ω) (c : ℕ) :
+theorem small_cls_le (P : Tree Ω A V E) (O : Finset Ω) (c : ℕ) :
     (O.filter fun ω => (O.filter fun ω' => P.path ω' = P.path ω).card < c).card ≤ c * (O.image P.path).card := by
   set s := O.filter fun ω => (O.filter fun ω' => P.path ω' = P.path ω).card < c
   calc s.card ≤ c * (s.image P.path).card := card_le_mul_card_image s c fun κ hκ => by
