@@ -5,8 +5,8 @@ runs which units, and which request occupies which slot and step, are private: t
 commits every row that crosses it, and the scan (`ingress_scan`, `egress`) places those rows into slots inside the
 zero-knowledge proof, its state committed as the registered value `ingress_scan.SCAN_STATE`. What is public is the class
 circuit itself, protocol structure, and its padded counts: proof blocks per host and bits per link, each execution
-block's. So a record names no server and no transfer, and nothing here pins a request, a response or a value one host
-sends another.
+block's. So a record names no server and no transfer (its ``blocks`` are its proof and inference blocks alone, the window
+interface's `Blocks.of`), and nothing here pins a request, a response or a value one host sends another.
 
 Two values cross the uplink into a host's units: its loads, the registration's values, each committed by the network
 certifier as it crosses once a session (`transfer_rows`, `benchmarks/network_traces/load_relay.py`), and the scan's state,
@@ -14,8 +14,6 @@ which the verifier pins at the root of the scan's rows the window reads (`ingres
 
 **The check** (`check`), over the record before any coin, the work per declaration and never per unit:
 
-- the record's ``blocks`` state no server, server time or transfers (`PRIVATE`): placement is private, and a record is
-  one host's;
 - no ``ingress`` declaration: a host's ingress is the scan's state, a registered read, never an Ingress;
 - every registered read and every table is of a load or of the scan's state: every registered parameter other than
   `ingress_scan.SCAN_STATE` is a load;
@@ -45,8 +43,6 @@ from verity.core.protocols.certifier import transfer_rows as TR
 from verity.core.protocols.certifier.certificate import Direction, PublicKey
 from verity.core.protocols.certifier.ingress_scan import SCAN_STATE
 
-#: the record's ``blocks`` keys that would make placement public; a record states none of them
-PRIVATE = ("server", "server_time", "transfers")
 #: the registration's ``window`` of a load: a load crosses once a session, in the session's first execution phase
 SESSION_WINDOW = 0
 _READ = ("reader", "port", "param", "at", "radix", "base", "step")
@@ -158,10 +154,6 @@ def check(doc: Mapping[str, Any], layouts: Mapping[str, Any]) -> tuple[Load, ...
     breaks the module docstring's rules against ``layouts``, each template's bit rows by descriptor id (the interface's
     `layout`: its ``rows`` and ``outs``, each ``(name, words)``), the verifier's own from its catalog."""
     tpl = _templates(doc, layouts)
-    blocks = doc.get("blocks")
-    if isinstance(blocks, Mapping) and (named := [k for k in PRIVATE if k in blocks]):
-        raise ValueError(f"the record's blocks state {named}: placement is private, and a record is one host's; which host "
-                         "runs which units, and which rows cross its uplink, are no key of it")
     if doc.get("ingress"):
         raise ValueError("an ingress declaration: a host's ingress is the scan's state, a registered read, never an Ingress")
     reg = doc.get("registered") or {}
