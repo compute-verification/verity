@@ -358,14 +358,21 @@ def planes_of(lo: np.ndarray, hi: np.ndarray) -> np.ndarray:
 _PLANES8 = planes_of(np.arange(-128, 128), np.arange(-128, 128)).astype(np.uint8)
 
 
-def sorted_tile_credit(B: np.ndarray, r_bits: int, group: int, cols: int = 8, block: int = 1) -> float:
+SPARSE_HIGH = ((0.25, -8, 7), (0.5, -128, 127))
+
+
+def sorted_tile_credit(B: np.ndarray, r_bits: int, group: int, cols: int = 8, block: int = 1,
+                       split: bool = True) -> float:
     """The cheapest exact R·Bᵀ when the adversary reorders the reduction index once for every `group` tiles of 8
     columns, by their largest magnitude, so outliers share chunks. Per chunk it takes the least of b1 planes, u4
     nibbles (0.5 each, 64 deep, R of up to 4 bits) and s8 (1.0). The b1 route keeps q planes (r_bits · q · 0.125, 256
     deep) and adds the entries that need more as sparse corrections, one predicated add a row of R and noise bit with
-    int16 partials two to a register (16 units), r_bits · count / 128 a MAC of the chunk. A reordering of single
-    indices rewrites R's block (m·K bits, 32 to a register at 32 units), 1/(8·group) units a MAC; one of whole 32-index
-    blocks is a 4-byte copy, free in W1. Group 0 keeps K's order."""
+    int16 partials two to a register (16 units), r_bits · count / 128 a MAC of the chunk. With `split` it may instead
+    write B = B_lo + 2^q·B_hi, B_lo the signed residue in q planes and B_hi on a 2:4-sparse MMA (mma.sp: s4 at 0.25 a
+    dense MAC, s8 at 0.5), with the entries past two in a group of 4, or outside the sparse type, as sparse
+    corrections; combining the parts is not charged. A reordering of single indices rewrites R's block (m·K bits, 32 to
+    a register at 32 units), 1/(8·group) units a MAC; one of whole 32-index blocks is a 4-byte copy, free in W1.
+    Group 0 keeps K's order."""
     n, K = B.shape
     span = cols * (group or n // cols)
     tot = 0.0
@@ -379,18 +386,66 @@ def sorted_tile_credit(B: np.ndarray, r_bits: int, group: int, cols: int = 8, bl
         lo64, hi64 = t.min(axis=(1, 3)), t.max(axis=(1, 3))
         pe = _PLANES8[blk.astype(np.int16) + 128].reshape(blk.shape[0] // cols, cols, K // 256, 256)
         b1 = np.min([r_bits * (0.125 * q + (pe > q).sum(axis=(1, 3)) / 128.0) for q in range(1, 9)], axis=0)
+        if split:
+            g4 = pe.reshape(*pe.shape[:3], 64, 4)
+            vals = blk.astype(np.int16).reshape(g4.shape)
+            for q in range(1, 8):
+                for hp, lo, hi in SPARSE_HIGH:
+                    if r_bits * 0.125 * q + hp >= 1.0 or (hp == 0.25 and r_bits > 4):
+                        continue
+                    out = g4 > q
+                    if lo > -128:
+                        half = 1 << (q - 1)
+                        b_hi = (vals - (((vals + half) & ((1 << q) - 1)) - half)) >> q
+                        bad = out & ((b_hi < lo) | (b_hi > hi))
+                        excess = bad.sum(axis=-1) + np.maximum((out & ~bad).sum(axis=-1) - 2, 0)
+                    else:
+                        excess = np.maximum(out.sum(axis=-1) - 2, 0)
+                    b1 = np.minimum(b1, r_bits * (0.125 * q + excess.sum(axis=(1, 3)) / 128.0) + hp)
         u4 = (np.where(planes_of(lo64, hi64) <= 4, 0.5, 1.0).reshape(-1, K // 256, 4).mean(axis=2)
               if r_bits <= 4 else 1.0)
         tot += float(np.minimum(np.minimum(b1, u4), 1.0).sum()) * cols * 256
     return tot / B.size + (1.0 / (cols * group) if group and block == 1 else 0.0)
 
 
-def best_tile_credit(B: np.ndarray, r_bits: int) -> dict:
+def spread_order(B: np.ndarray, planes: int = 5) -> np.ndarray:
+    """One permutation of K for the whole matrix that deals the indices with the most entries past `planes` planes
+    round-robin over the groups of 4, so a 2:4 high part fits."""
+    heavy = (_PLANES8[B.astype(np.int16) + 128] > planes).sum(axis=0)
+    rank = np.argsort(-heavy, kind="stable")
+    K = B.shape[1]
+    pos = (np.arange(K) % (K // 4)) * 4 + np.arange(K) // (K // 4)
+    order = np.empty(K, dtype=np.int64)
+    order[pos] = rank
+    return order
+
+
+def gather_tile_credit(B: np.ndarray, r_bits: int, group: int, s: int, cols: int = 8) -> float:
+    """The adversary takes, for every `group` tiles of 8 columns, the s indices of K with the largest magnitude, does
+    them densely on s8 (s/K a MAC) from R's columns gathered once (m·s bits, s/(8·group·K) a MAC), and the rest in K's
+    order with those indices zeroed, by the per-tile routes."""
+    n, K = B.shape
+    span = cols * group
+    Bg = B.reshape(n // span, span, K).copy()
+    top = np.argpartition(-np.abs(Bg).max(axis=1), s - 1, axis=1)[:, :s]
+    Bg[np.arange(n // span)[:, None], :, top] = 0
+    return sorted_tile_credit(Bg.reshape(n, K), r_bits, 0, split=False) + s / K + s / (span * K)
+
+
+def best_tile_credit(B: np.ndarray, r_bits: int, split: bool = True, gather: bool = True) -> dict:
     groups = [1 << i for i in range(int(math.log2(B.shape[0] // 8)) + 1)]
-    by = {"none": sorted_tile_credit(B, r_bits, 0), "blocks32": sorted_tile_credit(B, r_bits, 1, block=32),
-          **{f"single g{g}": sorted_tile_credit(B, r_bits, g) for g in groups}}
+    by = {"none": sorted_tile_credit(B, r_bits, 0, split=split),
+          "blocks32": sorted_tile_credit(B, r_bits, 1, block=32, split=split),
+          **{f"single g{g}": sorted_tile_credit(B, r_bits, g, split=split) for g in groups}}
+    if split:
+        by["spread"] = sorted_tile_credit(B[:, spread_order(B)], r_bits, 0) + 1.0 / B.shape[0]
+    if gather:
+        for g in (g for g in groups if B.shape[0] % (8 * g) == 0):
+            for s in (32, 64, 128, 256):
+                by[f"gather g{g} s{s}"] = gather_tile_credit(B, r_bits, g, s)
     route = min(by, key=by.get)
-    return {"credit": by[route], "route": route, "free_reorder_credit": sorted_tile_credit(B, r_bits, 1) - 1.0 / 8}
+    return {"credit": by[route], "route": route,
+            "free_reorder_credit": sorted_tile_credit(B, r_bits, 1, split=split) - 1.0 / 8}
 
 
 def synth_weights(rng: np.random.Generator, n: int, K: int, kind: str) -> np.ndarray:
@@ -524,6 +579,16 @@ def run_checks(ck: Checks, res: dict) -> None:
         for n_, k_ in ((256, 2048), (256, 8192)):
             Bw = synth_weights(nrng, n_, k_, kind)
             srt[f"{kind} {n_}x{k_}"] = {f"r{b}": best_tile_credit(Bw, b) for b in (1, 2)}
+    v = np.arange(-127, 128, dtype=np.int16)
+    split_ok = True
+    for q in range(1, 8):
+        half = 1 << (q - 1)
+        b_lo = ((v + half) & ((1 << q) - 1)) - half
+        b_hi = (v - b_lo) >> q
+        split_ok &= bool(np.all(b_lo + (b_hi << q) == v) and np.all((-half <= b_lo) & (b_lo < half))
+                         and np.all((b_hi != 0) == (_PLANES8[v + 128] > q)))
+    ck.check("the weight split is exact: v = lo + 2^q·hi with lo in q planes, hi nonzero exactly where v needs more",
+             split_ok, None)
     res["sorted_tile_credit"] = srt
     macs_w = [k * n for k, n in LL["linears"]]
     gap = {}
