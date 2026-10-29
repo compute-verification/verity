@@ -85,7 +85,7 @@ class Remote:
         return [] if got is None else got
 
     def end(self, commitment: C.LiveCommitment | None = None, openings: Sequence[C.LiveOpening] = ()) -> None:
-        """The session's last message, with its coins disclosed (`audit.Session.disclose`), or without for a session
+        """The session's last message, with its coins disclosed (`audit.AuditRun.disclose`), or without for a session
         left undecided; sent once."""
         if not self.ended:
             _send(self.f, {"end": {} if commitment is None else {"commitment": commitment.to_json(),
