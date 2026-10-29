@@ -9,8 +9,8 @@ Modes, on the same windows (so the rises are paired):
   noise  int8 with D-OUT's noise: each linear's int8 input X becomes X - r, r a fresh uniform bit an element and a call,
          and each output gets ½·Σ_k W_nk back, so the served product is (X - r + ½)·Wᵀ. q, k and v are one call (one draw);
          gate and up draw their own.
-  sink   noise on every row but the window's first (BOS at position 0, a public row any party can precompute), served
-         exact as in int8.
+  sink   noise on every row but the window's first (BOS at position 0, the attention sink, whose massive activations
+         make one code of noise large against its other entries), which is served as in int8 and earns no credit.
   sink_nodown   sink with the down projection exact too.
 In every mode the norms, RoPE (llama3 scaling), attention (fp32 softmax) and the tied LM head (fp32) are the same, and
 every stage's output is rounded to bf16. The int8 products accumulate in fp32 rather than int32: exact while partial
