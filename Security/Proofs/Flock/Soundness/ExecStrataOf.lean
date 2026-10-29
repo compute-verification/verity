@@ -203,7 +203,11 @@ theorem strataProblem_none {k : Nat} {S : Array Stratum} {pop : Nat} (h : strata
             · cases this
             · split at this
               · cases this
-              · next hne => simpa [getElem!_pos S i hi] using hne
+              · next hne =>
+                have h' : ¬S[i].k = S[i].size → S[i].k = wholeK k S[i].size pop := by
+                  simpa [getElem!_pos S i hi] using hne
+                by_cases h1 : S[i].k = S[i].size
+                exacts [Or.inl h1, Or.inr (h' h1)]
           · left
             intro s hs
             simpa using Array.all_eq_true'.1 hst s hs
