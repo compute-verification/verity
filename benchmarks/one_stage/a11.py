@@ -23,7 +23,7 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   snapshot (the twin; for a kernel whose write lands after its own event's snapshot, the first later one before another
   writer that holds it, `call_twin`); its first ``--per-kind`` unit calls (the kind's unit, `a11_kinds.chain`) give each
   unit's arguments and returns. Each is packed into the unit's rows (`a11_kinds.rows_of`, an output row per output port,
-  `a11_kinds.out_rows`) and staged by C-Flock's `UnitStager` bound to the partition, whose IR reference check and the
+  `a11_kinds.out_rows`) and staged by Flock's `UnitStager` bound to the partition, whose IR reference check and the
   transcript's returns must agree. A kind the table lowers through its Boolean version (``boolean``: MoeSum_v1 as
   MoeSum_v3's 64-column members, TokenSelect_v1 as TokenSelect_v2's argmax leaves) evaluates that version bit-sliced on the
   same operands (`boolean_units`), holds its returns to the snapshot as words, and stages its unit's bits.

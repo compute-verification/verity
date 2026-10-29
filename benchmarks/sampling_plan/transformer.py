@@ -1,4 +1,4 @@
-"""The sampling plan for the end-to-end demo's transformer under C-Flock: the demo's decoder block, small (the CPU
+"""The sampling plan for the end-to-end demo's transformer under Flock: the demo's decoder block, small (the CPU
 reference) or scaled onto one RTX PRO 6000 (the Phase 2 model), every operation a proof block.
 
 The Definition DAG is one server-time block of serving: `requests` requests of `context` positions each (`prompt` given,
@@ -25,7 +25,7 @@ and its units, from the finest up:
 
 The harm is faulty ANDs: each unit is credited its ANDs (a recomputed statistic once, in the op it belongs to), so a
 plan's certificate means the same whatever the cut, where a count of faulty proof blocks falls as the cut coarsens; the
-faulty proof blocks (`IntegrityPeriod`'s W) are reported beside it. The cost is C-Flock's, fitted from its zero-knowledge
+faulty proof blocks (`IntegrityPeriod`'s W) are reported beside it. The cost is Flock's, fitted from its zero-knowledge
 sessions on sm_120 (`inputs.observations`, `costfit`), in GPU-seconds of an RTX PRO 6000, with every serve-time
 commitment of the block: every unit's outputs, the requests' bytes, the carried KV cache at the block's close, PoUW's
 CP-W receipts (h1, assumed) and the bandwidth audit's receipts (`serve`), and the replay of each drawn request
@@ -44,12 +44,12 @@ import json
 import sys
 from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
-from math import ceil, log, log2
+from math import ceil, log
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import I, KEY, observations  # noqa: E402
+from inputs import I, KEY, cap, observations  # noqa: E402
 
 from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
@@ -161,16 +161,11 @@ def requests_per_block(sequences: int, step_s: float, positions: int, block_s: f
     return round(block_s / step_s * sequences / positions)
 
 
-def _cap(ands: int) -> int:
-    """A statement's units under m = k_log + nbl <= 35 (`int8_llama.cap`)."""
-    return min(1 << max(0, 35 - (ceil(log2(max(ands, 2))) + 1)), 1 << 20)
-
-
 def _counted(s: Shape, memo: dict[str, Shape]) -> Shape:
-    """`s` credited its ANDs as work (unless it names its own), and its statement cap from its ANDs and rows."""
+    """`s` credited its ANDs as work (unless it names its own), and its statement cap from its ANDs and rows (`cap`)."""
     if s.id in memo:
         return memo[s.id]
-    out = replace(s, work=s.work or s.ands, cap=_cap(s.ands + sum(row_ands(r) for r in s.rows)),
+    out = replace(s, work=s.work or s.ands, cap=cap(s.ands, s.rows),
                   parts=tuple((_counted(c, memo), k) for c, k in s.parts),
                   ways=tuple((label, tuple((_counted(c, memo), k) for c, k in ps)) for label, ps in s.ways))
     memo[s.id] = out
@@ -370,7 +365,7 @@ def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
 
 
 def costs(m: Model, s: Serving) -> CostModel:
-    """C-Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
+    """Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
     `request` replay domain."""
     obs = observations()
     fitted = Fitted(fit(obs, "prove", ["one", "ands", "ands*staged", "ands*drawn"]),

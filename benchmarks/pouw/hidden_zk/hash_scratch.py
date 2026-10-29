@@ -1,5 +1,5 @@
-"""DEVELOPMENT BINDING, NOT FOR REVIEW: scratch C-Flock pieces for the PoUW word primitives Keccak-f[1600] is written in
-(`verity.core.protocols.pouw.circuit.words`: PouwXor32_v1, PouwChi32_v1, PouwRotl64Lo_v1, PouwRotl64Hi_v1), which C-Flock has no piece for
+"""DEVELOPMENT BINDING, NOT FOR REVIEW: scratch Flock pieces for the PoUW word primitives Keccak-f[1600] is written in
+(`verity.core.protocols.pouw.circuit.words`: PouwXor32_v1, PouwChi32_v1, PouwRotl64Lo_v1, PouwRotl64Hi_v1), which Flock has no piece for
 on this branch. `stage.py` puts them in `ir_lower.PIECES` for the hiding tile only, and every result staged with them is
 labelled 'hash scratch'. Xor is free, χ is 32 ANDs and 32 committed bits, and a rotation by a constant is wiring; a rotation by a variable count
 is refused (Keccak's are constants). χ's output is committed (`sha512_circuit.commit`, one row a bit), or the XOR forms

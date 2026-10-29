@@ -3,7 +3,7 @@ of a W8A8 MLP's window) and the part of its window that the hold reads (`fixture
 `window.json`'s run, registration and partition digests and the drawn members' public bodies, beside the H200 interfaces' copy of
 its registration): the honest bundle is held to its window with every check passing, and the command refuses, before
 staging or proving anything, a bundle whose payload was edited and a window whose drawn member's public body isn't the
-one the bundle names. Proving it end to end needs C-Flock, Lean and the window's private files: `prove_bundle.sh`."""
+one the bundle names. Proving it end to end needs Flock, Lean and the window's private files: `prove_bundle.sh`."""
 from __future__ import annotations
 
 import json

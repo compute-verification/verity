@@ -324,6 +324,7 @@
         "benchmarks/stacked_share/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
+        "examples/onsite_served/",
         "integrations/vllm/verity_vllm/protocols/pous.py",
         "verity/core/devices/memory_challenger/",
         "verity/core/protocols/bandwidth/",
