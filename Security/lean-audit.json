@@ -20571,7 +20571,7 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Recursion": {
-   "digest": "92ae959ed10b5ef235e8d68ae75bd1cf27d951a07384a949fdeda23fc7803f7c",
+   "digest": "6c49bedc23809a49f579cf4da4ac481b564f6760816255137bd91209406168be",
    "definitions": {
     "Claims.Recursion.BAbort": "cc6d1eae158f7e9353eed3e76a1d0be441485fa6b07023915a3bfb5b17d469a6",
     "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
@@ -20581,7 +20581,6 @@
     "Claims.Recursion.Bound.Binds": "2ee03ed4a887a97066a0177b12207460142f7ce938fefbbfbfb929bc0ec82118",
     "Claims.Recursion.Bound.DE": "327f27b2237460428939b9e3f6b6ad7d5668817d2ad47b04705847e64eeede2f",
     "Claims.Recursion.Bound.IVStar": "137185c636e2d70008f163623204e09d545ee6f84b00bef985d3b712a748a51a",
-    "Claims.Recursion.Bound.LastBinds": "5167cb9e4d264b017e58940bf2d6c97f379eb03198c659d263b53d25a0a1ac7d",
     "Claims.Recursion.Bound.LastBindsEC": "3d767acc16d6d4f014d90e4a649c18e0ca082980bfb8cbf5c8ffafc8ce3d6c42",
     "Claims.Recursion.Bound.LastCoinFree": "df7477989f22a2a0a7c3f84c5027773632ef1905cc0b528b484f4421170a2c40",
     "Claims.Recursion.Bound.PlainKSAbort": "f47c0563127f50809311f993df9976a067d626327d299d7e006aca87de994f34",
@@ -20654,7 +20653,6 @@
     "Claims.Recursion.Form.regions": "0526e46d39d8535009b9b470b964eb54048e47bd99b23de6f6ddb8b3e0c2b94a",
     "Claims.Recursion.Form.sparse": "cdde729c2d9e0ba6c593d6510429157f057864fdf3efa550165d2ab30240888d",
     "Claims.Recursion.Form.stacked": "1e9dd5f6621cad32c8f804f422be77b0d60f6a1fb32c20942d71223ef2695c44",
-    "Claims.Recursion.Form.unitRangeInBlock": "e8acc5c08ba23484c86f51648a5fea16fedd2347e66c4689d533b75475ad75db",
     "Claims.Recursion.InScope": "4e356c7a0494e53bff59aeb102aaa4c05f6f91a6bc8e467c6a9f01ba3418d63d",
     "Claims.Recursion.Inner": "65cd0218b5669ad9b091267cdb5f14f7e38713bf6cd91c2914507cf8f017ba2c",
     "Claims.Recursion.Inner.E": "f6beaf3000fe0d8fb3c1a91ffe977178536fe55ae558163299a0b68968cb1161",
@@ -20744,7 +20742,6 @@
     "Claims.Recursion.goesOn._sparseCasesOn_1": "b3ccc6fdfa2f16b768c4507e0344a76d871e6f9f32a748207d734348e2a6a872",
     "Claims.Recursion.lam": "9d414e47a7febbe37128d41540fb21c5dc22eb7f6145041ceb8d4cb8f2e9d92d",
     "Claims.Recursion.outerStage": "412166b3eea1f83011e5acbc176a794e45baded8db9a0aafcbf01cc58c21f43d",
-    "Claims.Recursion.pLog": "95ca32a7bbaa87a982b4154260f3efe17eaaf3907056a8aa78c98d88ae4d839b",
     "Claims.Recursion.runStmts": "c76caedc558cd62cf7aa8defc53ee3d4bf945dd06dfbbf2004e9529d43940818",
     "Claims.Recursion.serve": "d0ed223162467e1fcb4718ebfa7aef1e6de175ce8f3e76a69259ef05d468d3a5",
     "Claims.Recursion.served": "1555d45eecfdeb0cd0e8dfa40f476b44880590c8a13bd9825ed69f77e8be8831",
