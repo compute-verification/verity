@@ -9,8 +9,7 @@ For each claim of `Security/Definitions/Pous/Claims/StreamedWipeServer.lean`, wh
 `StreamedWipe.Accepts`:
 
 * **The honest lemma** (`<claim>_meets`): its numeric antecedents hold at the deployed H200 as measured on
-  vy-dc-h200-2 in run r20261026-003454-bfd2 (`StreamedWipe.h200`, its record
-  `art:213936fe824d1f844fe4bb0cbc4749fcc364e0dc38757c9fa73848a7872bfaa4`): `M_s = 512·n + R`, `0 < n`, `0 < r`,
+  vy-dc-h200-2 (`StreamedWipe.h200`): `M_s = 512·n + R`, `0 < n`, `0 < r`,
   `(r − 1)^k · 2^129 ≤ r^k` at the deployed `k = 5500` and its `r = 62`, and the 5 GB point, each decided by the kernel.
 * **The nontrivial lemma** (`<claim>_fails`): the claim is false at `StreamedWipe.acceptAll`, at the same numbers. The
   prover `keepAll` stays inside the physical model: its fill writes its prior content into the first `q` of its `M_s`
@@ -122,9 +121,9 @@ theorem honest_within {N k b q κ : ℕ} (hq : 128 ≤ q) (prf : Bits κ → Fin
 /-- No labels: the PRF of the nontrivial lemmas, of a zero-bit key. -/
 def noKey (N : ℕ) : Bits 0 → Fin N → Bits 512 := fun _ _ _ => false
 
-/-- **`StreamedWipeMeetsReadsTight`'s honest lemma**: its antecedents hold at the deployed H200 as measured in
-r20261026-003454-bfd2 (`h200`): `r = 62 ≥ 1`, `61^5500 · 2^129 ≤ 62^5500`, `n = 2,319,974,400 ≥ 1` labels, and its
-memory `M_s = 1,206,038,560,768` bits is `n · 512 + R`. -/
+/-- **`StreamedWipeMeetsReadsTight`'s honest lemma**: its antecedents hold at the deployed H200 as measured
+(`h200`): `r = 62 ≥ 1`, `61^5500 · 2^129 ≤ 62^5500`, `n = 2,319,974,400 ≥ 1` labels, and its memory
+`M_s = 1,206,038,560,768` bits is `n · 512 + R`. -/
 theorem StreamedWipeMeetsReadsTight_meets :
     0 < h200.r ∧ (h200.r - 1) ^ h200.k * 2 ^ 129 ≤ h200.r ^ h200.k ∧ 0 < h200.n ∧
       h200.Ms = h200.n * 512 + h200.R := by
@@ -137,8 +136,8 @@ theorem StreamedWipeMeetsReadsTight_fails : ¬ StreamedWipeMeetsReadsTight accep
     (h h200.r h200.k (by decide +kernel) (by decide +kernel) h200.n (by decide +kernel) h200.R 40000000000 0 0
       (noKey h200.n) (keepAll _ _ _ _ _ _ (by decide +kernel)) (by decide +kernel))
 
-/-- **`StreamedWipeMeetsServer`'s honest lemma**: its antecedents hold at the deployed H200 as measured in
-r20261026-003454-bfd2 (`h200`): `M_s = 1,206,038,560,768 = 512 · 2,319,974,400 + R` bits, `n ≥ 1`, `r = 62 ≥ 1` and
+/-- **`StreamedWipeMeetsServer`'s honest lemma**: its antecedents hold at the deployed H200 as measured
+(`h200`): `M_s = 1,206,038,560,768 = 512 · 2,319,974,400 + R` bits, `n ≥ 1`, `r = 62 ≥ 1` and
 `61^5500 · 2^129 ≤ 62^5500`. -/
 theorem StreamedWipeMeetsServer_meets :
     h200.Ms = 512 * h200.n + h200.R ∧ 0 < h200.n ∧ 0 < h200.r ∧
@@ -154,8 +153,8 @@ theorem StreamedWipeMeetsServer_fails : ¬ StreamedWipeMeetsServer acceptAll := 
       (keepAll _ _ _ _ _ _ (by decide +kernel)) le_rfl)
 
 /-- **`StreamedWipeMeetsServer5GB`'s honest lemma**: `StreamedWipeMeetsServer_meets` and the 5 GB point,
-`B(2,319,974,400, 62, 5500, 18,211,667,968) = 37,669,517,430 ≤ 4·10^10`, at the deployed H200 as measured in
-r20261026-003454-bfd2 (`h200`). -/
+`B(2,319,974,400, 62, 5500, 18,211,667,968) = 37,669,517,430 ≤ 4·10^10`, at the deployed H200 as measured
+(`h200`). -/
 theorem StreamedWipeMeetsServer5GB_meets :
     h200.Ms = 512 * h200.n + h200.R ∧ 0 < h200.n ∧ 0 < h200.r ∧
       (h200.r - 1) ^ h200.k * 2 ^ 129 ≤ h200.r ^ h200.k ∧ OperatingPoint h200.n h200.r h200.k h200.R := by
@@ -171,9 +170,8 @@ theorem StreamedWipeMeetsServer5GB_fails : ¬ StreamedWipeMeetsServer5GB acceptA
       (keepAll _ _ _ _ _ _ (by decide +kernel)) le_rfl)
 
 /-- **`StreamedWipeMeetsServerH200`'s honest lemma**: the premises of the 5 GB form hold at the deployed H200 as
-measured in r20261026-003454-bfd2 (`h200`, `art:213936fe824d1f844fe4bb0cbc4749fcc364e0dc38757c9fa73848a7872bfaa4`):
-its fill of `n = 2,319,974,400` labels and `R = 18,211,667,968` bits (2.28 GB) outside it, at the deployed `k = 5500`
-and `r = 62`. -/
+measured (`h200`): its fill of `n = 2,319,974,400` labels and `R = 18,211,667,968` bits (2.28 GB) outside it, at
+the deployed `k = 5500` and `r = 62`. -/
 theorem StreamedWipeMeetsServerH200_meets :
     h200.Ms = 512 * h200.n + h200.R ∧ 0 < h200.n ∧ 0 < h200.r ∧
       (h200.r - 1) ^ h200.k * 2 ^ 129 ≤ h200.r ^ h200.k ∧ OperatingPoint h200.n h200.r h200.k h200.R := by
