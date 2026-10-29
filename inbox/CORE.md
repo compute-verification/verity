@@ -179,3 +179,17 @@ Out:
   - (a) a bound that charges forming, which needs the tensor's real semantics in the model plus a counting lemma; or
   - (b) weight noise shared across a window's calls, which reverses Daniel's 4:30 PM ruling (fresh noise every call), so
     it's his call.
+
+## 9. NCP on the H200 (CORE-NCP final, 03:05Z; note:compute-research/20261029T0110Z-report-core-ncp)
+
+- **T1 (§2a, arithmetic): 2.10% at T 8,192** (with the served model's fused qkv and gate-up). At T 512 it is 39.3% with 64
+  real tokens (forming's 24/m at m = 64) and 6.49% with 512. The final word is 1.24% at every point.
+- **T2: 155× (sync) / 186× (async) at T 8,192, a fail.** Hashing is 98.4% of the honest step, measured on vy-dc-h200-5
+  (r20261029-013634-94e5); without it, 2.5–6.0×. At T 512, 64 tokens pass (16.8× / 33.4×); with 512 tokens, about 81–92×
+  sync and 162× async.
+- **T3: +3.68% (2K) and +3.48% (8K) over stock int8, a pass.** Attention on int7 fails T3 (P·V +6.15% / +9.18%).
+- **Nothing cuts forming:** not tiling, not noise in the GEMM's operand path (wgmma can't add before it multiplies), not
+  one-sided noise (it leaves half the words free). Only weight noise shared across a window's calls would, and that's
+  Daniel's call.
+- **Coverage:** the linears are 78% of a decode token's MACs at the demo's contexts and 55% at 8K keys. QKᵀ has no NCP
+  layout.
