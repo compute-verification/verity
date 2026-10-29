@@ -120,9 +120,9 @@ def test_a_task_s_size_is_its_built_body_s_gates_and_reading_it_builds_nothing(m
     eq = CompositeDefinition("SizeEq", 1, ("N",), lambda S: ((("x", Array(S.N, F32)), ("y", Array(S.N, F32))), Array(S.N, BIT)),
                              lambda B, S, x, y: B.batch(F32Eq, x, y, axes=(0, 0)), register=False)
     built, unbuilt, root = bind(eq, N=3), bind(eq, N=4), bind(eq, N=5)
-    built.body
+    assert built.body is not None
     monkeypatch.setattr(TG, "BY_CALLS", {root.id})
-    root.body
+    assert root.body is not None
     task = lambda *roots: ("definition", "t", None, {"roots": list(roots)})  # noqa: E731
     assert cli._gates(task(built)) == built.gates > 0 and cli._gates(task(F32Eq)) == 1
     assert [cli._gates(t) for t in (task(unbuilt), task(root), task(built, built), ("template", "tpl", None, {}))] == [0] * 4

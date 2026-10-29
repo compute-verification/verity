@@ -160,10 +160,7 @@ def _gates(task: tuple) -> int:
     fn = roots[0] if len(roots) == 1 else None
     if fn is None or TG.is_by_calls(fn) or getattr(fn, "_body", 1) is None:
         return 0
-    try:
-        return int(fn.gates)
-    except Exception:  # noqa: BLE001  (its check raises it again, by name)
-        return 0
+    return int(getattr(fn, "gates", 0))              # a `ScalarReference` has none
 
 
 def target_key(kind: str, label: str, opts: CK.Options, as_call: bool | None, roots: tuple = (), desc: str | None = None) -> dict:

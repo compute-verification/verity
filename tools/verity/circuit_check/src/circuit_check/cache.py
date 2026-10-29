@@ -1673,10 +1673,8 @@ def warm() -> None:
         for name, m in list(sys.modules.items()):
             if isinstance(f := getattr(m, "__file__", None), str) and _rel(a := _abspath(f)) is not None \
                     and a.endswith(".py") and not a.startswith(own):
-                try:
+                if os.path.isfile(a):
                     _parsed(Path(a))
-                except OSError:
-                    pass
                 _top_imports(a, name)
         _outside_tops()
         if _ROOT:

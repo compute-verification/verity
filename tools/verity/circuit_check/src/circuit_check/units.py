@@ -58,6 +58,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import types
 from collections import Counter, deque
 from contextlib import nullcontext
 from dataclasses import dataclass, field
@@ -585,11 +586,9 @@ def _words(before: set[str]) -> list[list[str | None]]:
             new.append((fid, w, d))
     held: dict[int, str] = {}
     for name, m in list(sys.modules.items()) if new else ():
-        try:
-            names = object.__getattribute__(m, "__dict__")    # not a lazy module's own lookup, which would load it
-        except AttributeError:
+        if not isinstance(m, types.ModuleType):
             continue
-        for v in list(names.values()):
+        for v in list(object.__getattribute__(m, "__dict__").values()):    # not a lazy module's own lookup, which would load it
             held.setdefault(id(v), name)
     return [[fid, w, held.get(id(d))] for fid, w, d in new]
 
