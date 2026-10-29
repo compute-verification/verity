@@ -5,6 +5,7 @@ model runner's ``execute_model``, which hands each step's admissions to the wind
 from __future__ import annotations
 
 import weakref
+from contextlib import nullcontext
 from typing import Any
 
 from verity_vllm.protocols.pouw import credit_gate as CG
@@ -97,12 +98,15 @@ def expert_names(layers: list[Any]) -> dict[int, str]:
 
 def observer(run: PH.H1Run, w: int, orig: Any) -> Any:
     """Layer `w`'s ``observe``: the arm's own, then the call recorded with the layer's weight and the z the arm's kernel
-    wrote, if it hands one over (`H1Run.record`: ``scaled_mm_zy``'s z/y records, the tensor itself)."""
+    wrote, if it hands one over (`H1Run.record`: ``scaled_mm_zy``'s z/y records, the tensor itself). A record given z writes
+    neither y nor z and runs no GEMM, so it runs `credit_gate.outside` the trace; one without z stays in it, where the GEMM
+    a retaining record runs is seen."""
 
     def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> None:
         orig(layer, xq, s_a, y) if z is None else orig(layer, xq, s_a, y, z)
         if run.commit:
-            run.record(w, xq, s_a, layer.weight, layer.weight_scale, z)
+            with CG.outside() if z is not None else nullcontext():
+                run.record(w, xq, s_a, layer.weight, layer.weight_scale, z)
     return observe
 
 
