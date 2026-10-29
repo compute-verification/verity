@@ -1,7 +1,7 @@
 """IoTieRequest on the warden's own ingress (`io_request`): each request's prompt_len and arrival ordinal held to the
 warden's ingress cells, a bucket row at a time, by the reference and by the Boolean Definitions. The first negative
-is the swapped split: two requests' prompt lengths swapped with their total kept, which the advised floor alone
-accepts."""
+is the swapped split: two requests' prompt lengths swapped with their total kept, which no count of the link's frames
+refuses."""
 from __future__ import annotations
 
 import hashlib
@@ -113,8 +113,8 @@ def test_a_forged_advice_is_refused(link):
 def test_redteam_phase6_split_is_refused():
     """The swapped split, as IoTieRequest's first negative. At B = 4,096 a 400-token prompt takes 2 cells and a
     16-token one 1, released one a bucket (r = 1). The forged advice swaps the two prompt lengths, keeping the total,
-    so its ends move and the advised floor alone accepts an acausal release, unless each request's prompt_len is bound
-    to the ingress record's content. The tie reads 400 fields from connection 1's cells, so the swap's lanes are
+    so its ends move and a floor on the frames' counts accepts an acausal release, unless each request's prompt_len is
+    bound to the ingress record's content. The tie reads 400 fields from connection 1's cells, so the swap's lanes are
     refused by the release and, built anyway, by the unit."""
     params = W.WardenParams(cell_bytes=4096, slots=1, lanes=2, window=4, delay=1)
     shape = Q.Shape(4096, 2, 1)

@@ -21,28 +21,28 @@
   records (``--run``'s ``certified.jsonl``, their heads and salts) are held by the Lean's audit (`certifier_serve._certified`: `NetworkCheck.Records`' ``verdicts-no-grid``, N2's
   audit without its head checks, `audit.Audit` beside it as the reference, each row's ``by`` and ``reference``) under
   the syncs the certifier signed, never the plan's: ``--run``'s salted ``clocks.jsonl``, each opening read by the Lean
-  (`lean_audit.signed_clocks`: `NetworkCheck.Period.signedSyncs`, ``clocks_by`` ``lean``, `advised.SignedClocks` beside
-  it as the reference, every window refused where the two differ). Their certificates, and the clocks', must be
+  (`lean_audit.signed_clocks`: `NetworkCheck.Period.signedSyncs`, ``clocks_by`` ``lean``, `certificate.SignedClocks`
+  beside it as the reference, every window refused where the two differ). Their certificates, and the clocks', must be
   exactly the client's. ``--deployed`` refuses a key that isn't LMS at
   `lms.DEPLOYED`.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
   `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
-  summary is `n2_advised_zk.py prove --e2e`'s on the advice profile and `n2_zk.py prove`'s on the others (Selection
-  All: every link-window's one unit proved) or a sampled draw's (``CR_N2_CMD``), read by the same fields. Scan's is
-  `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes the gate's warden
-  rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece reached the
-  verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes
-  the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`, its
-  ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
-  before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
-  isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its
-  negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each
-  tampered run that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each
-  window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With
-  ``--period-answer`` (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``,
-  its case ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
+  summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled draw's
+  (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
+  run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes
+  the gate's warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece
+  reached the verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden
+  run) never makes the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`,
+  its ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
+  before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan isn't
+  run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
+  N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each tampered run
+  that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's draw
+  and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With ``--period-answer``
+  (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``, its case
+  ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
   ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``),
   `block_certifier.block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is
   ``network-period check``'s own on its case (`decide_period`; `block_entry`).
@@ -78,7 +78,7 @@ sys.path.insert(0, str(HERE))
 
 SCHEMA = "verity-network-chain/record-report/v1"
 DELTAS = (0.5, 2.0 ** -20)
-ADVICE = "advice"  # certifier_serve.ADVICE: the profile whose counts N2's advised unit decides on the endpoint's advice
+ADVICE = "advice"  # certifier_serve.ADVICE: the profile whose egress counts derive from the endpoint's advice
 
 CLEAR = {
     "custody": "the SHA-512 of each fetched file against the gate's end.json (public files)",
@@ -90,8 +90,8 @@ CLEAR = {
                     "(NetworkCheck.LinkWindow.refusals, audit.certificate_refusals its reference); and the Lean's "
                     "audit (NetworkCheck.Records, audit.Audit its reference) of the rehearsal's certified heads "
                     "under its salted clock openings (witness a rehearsal publishes), each read by the Lean "
-                    "(NetworkCheck.Period.signedSyncs, advised.SignedClocks its reference), whose certificates must "
-                    "be exactly the client's",
+                    "(NetworkCheck.Period.signedSyncs, certificate.SignedClocks its reference), whose certificates "
+                    "must be exactly the client's",
     "n2": "at the verifier: the registration records, the draw, the certificates' public fields, the clock syncs, the "
           "proof's pub row opened to the verifier's own copy and the o0 output word; never a record, head, leaf "
           "salt, sibling or the certifier's salt (n2_zk's RECEIVED, scanned for every piece)",
@@ -251,8 +251,8 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
             rows.append({"window": w, "certified": False, "why": "no certified record"})
         elif w >= len(signed):
             rows.append({"window": w, "certified": False, "why": (
-                "the Lean (NetworkCheck.Period.signedSyncs) and its reference (advised.SignedClocks) disagree on the "
-                "clock openings" if disagree else "no clock certificate verifies for the window")})
+                "the Lean (NetworkCheck.Period.signedSyncs) and its reference (certificate.SignedClocks) disagree on "
+                "the clock openings" if disagree else "no clock certificate verifies for the window")})
         else:
             v = cs._certified(lw, lw.commit(w, *pair), signed)
             rows.append({"window": w, "certified": v["accepted"], "by": v["by"], "reference": v["reference"]})
@@ -448,7 +448,7 @@ def escaped(name: str, m: dict, s: dict) -> dict | None:
 
 
 def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
-    """What keeps an N2 driver's member from its ``ok``: the conditions `n2_zk` and `n2_advised_zk` hold it to, but
+    """What keeps an N2 driver's member from its ``ok``: the conditions `n2_zk` holds it to, but
     a negative's acceptance when it escaped the draw (`escaped`). A witness piece counts when the scan reads it
     ``leaked`` (`leak_scan.classify`); a ``structured`` find is listed, not counted, as the drivers decide."""
     wins, net, rec = m.get("windows") or [], m.get("network") or {}, m.get("received") or {}
