@@ -1427,7 +1427,7 @@ def test_a_read_guard_failure_rings_the_pr_that_added_the_reading_test(world, mo
     h.evidence = [run]
     h.tick()
     (ring,) = [p for p in h.posts if "is red on" in p]
-    assert ring.startswith("@lane-1 queue: suite pkg is red"), ring
+    assert ring.startswith("@lane-1 @pkg-owner queue: suite pkg is red"), ring
     assert "read outside its declared inputs: data/x.json" in ring and "Culprit: #1" in ring, ring
 
 
