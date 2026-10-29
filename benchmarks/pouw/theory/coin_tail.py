@@ -3,23 +3,27 @@
 coins as the layout draws them: a word is a prefix sum over steps, and the tag weights `G` (one set a column), the
 step-0 bits `a₁` (a row's) and the tag bits `b` (a row's and step's) are shared across blocks.
 
-**The route** (`Tail.Repeats`' stubs). A block is a step, coin tile and column block, holding the coin tile's `ρ` row
+**The route** (`Tail/Blocks.lean`). A block is a step, coin tile and column block, holding the coin tile's `ρ` row
 blocks (4 at the three points, 1 at decode). `X` counts the blocks with a tile equal to a tile of an earlier block
 (order: step, coin tile, column block) and `W` the blocks with two equal tiles of their own, so
-`repeats ≤ ρ X + (ρ − 1) W`. Each count is bounded by `Tail.count_tail` (`Pr[N ≥ r] ≤ (Σp)^r / r!` for sequentially
-dominated events) in its own order:
+`repeats ≤ ρ X + (ρ − 1) W` (`Tail.repeats_le_blocks`). Each count is bounded by `Tail.count_tail`
+(`Pr[N ≥ r] ≤ (Σp)^r / r!` for sequentially dominated events) in its own order:
 
-* `X`, in block order with `G`, `a₁` and `b` first: a block's own coin lanes are read by no earlier block, and each of
-  its tiles agrees with an earlier one on at most `2^−56` of them, so `λ_X = Σ_β ρ · (tiles before β) · 2^−56`.
-* `N_G`, the column blocks with any agreement, in column-block order with every coin but `G` first: a column block's
-  agreements read its own `G` only, `7^−8` a pair of tiles, so `λ_G = colBlocks · S · tiles · 6 · 7^−8`.
-* `W_cb`, one column block's slots (step, coin tile) with an agreement, in slot order with `u`, `G` and `b₀` first:
-  given `G` and the earlier slots, a slot agrees through its fresh `a₁` (step 0) or `b_t` bits on at most `2^−16` a
-  pair, so `λ_b = S · tiles · 6 · 2^−16`.
+* `X` (`Tail.across_tail`), in block order with `G`, `a₁` and `b` first: a block's own coin lanes are read by no
+  earlier block, and each of its tiles agrees with an earlier one on at most `2^−56` of them, so
+  `λ_X = Σ_β ρ · (tiles before β) · 2^−56 ≤ ρ² B² / 2^57` (`Tail.lamX`).
+* `N_G` (`Tail.columns_tail`), the column blocks with any agreement, in column-block order with every coin but `G`
+  first: a column block's agreements read its own `G` only, `7^−8` a pair of tiles, so
+  `λ_G = pairs · colBlocks · S · tiles · 7^−8`.
+* `W_cb` (`Tail.slots_tail`), one column block's slots (step, coin tile) with an agreement, in slot order with `u`, `G`
+  and `b₀` first: given `G` and the earlier slots, a slot agrees through its fresh `a₁` (step 0) or `b_t` bits on at
+  most `2^−16` a pair, so `λ_b = pairs · S · tiles · 2^−16`.
 
 With `X < a` and `N_G < k`, `repeats ≥ R` needs a column block with `x = ⌈⌈(R − ρ(a−1))/(ρ−1)⌉ / (k−1)⌉` agreeing
-slots, so the tail is at most `Pr[X ≥ a] + Pr[N_G ≥ k] + colBlocks · Pr[W_cb ≥ x]`, minimized over `a` and `k`. The
-script evaluates it on every step and column-block count up to `--dense` past the smallest call (147 and 512) and
+slots, so the tail is at most `λ_X^a/a! + λ_G^k/k! + colBlocks · λ_b^x/x!`, minimized over `a` and `k`, where a
+count past its index set's size (the blocks, the column blocks, one column block's slots) is impossible and its term
+is 0 (`Tail.cut`). That sum is `Tail.route_le`'s, exactly as it states it, with no term capped at 1. The script
+evaluates it on every step and column-block count up to `--dense` past the smallest call (147 and 512) and
 geometrically (`--growth`) beyond, each step count at its smallest `K ≥ 4,096` (the least slack), and finds the least
 slack `t` (a share of stock, against `coinSlack`'s `8/10000`) that brings each call to `2^−42`, and `gapFixed` there.
 
@@ -67,23 +71,28 @@ def threshold(L: dict, t: Fraction) -> int:
 def lam(L: dict) -> tuple[float, float, float]:
     rho, B, slots = L["rho"], L["B"], L["S"] * L["ct"]
     pairs = rho * (rho - 1) // 2
-    return rho * rho * B * (B - 1) / 2 * 2.0**-56, L["cb"] * slots * pairs * 7.0**-8, slots * pairs * 2.0**-16
+    return rho * rho * B * B * 2.0**-57, L["cb"] * slots * pairs * 7.0**-8, slots * pairs * 2.0**-16
 
 
 def lpois(lm: float, r: int) -> float:
-    """log2 of min(1, λ^r / r!)."""
+    """log2 of λ^r / r!."""
     if r <= 0:
         return 0.0
     if lm <= 0:
         return -math.inf
-    return min(0.0, r * math.log2(lm) - math.lgamma(r + 1) / LN2)
+    return r * math.log2(lm) - math.lgamma(r + 1) / LN2
+
+
+def lcut(size: int, lm: float, r: int) -> float:
+    """log2 of `Tail.cut size λ r`: 0 when `r` exceeds the count's index set, else `λ^r / r!`."""
+    return -math.inf if r > size else lpois(lm, r)
 
 
 def lsum(*xs: float) -> float:
     m = max(xs)
     if m == -math.inf:
         return m
-    return min(0.0, m + math.log2(sum(2.0 ** (x - m) for x in xs)))
+    return m + math.log2(sum(2.0 ** (x - m) for x in xs))
 
 
 def crossing(lo: int, hi: int, falling, rising) -> int:
@@ -102,19 +111,17 @@ def w_bound(L: dict, w: int) -> tuple[float, int, int]:
     slots, cbs = L["S"] * L["ct"], L["cb"]
     if w <= 0:
         return 0.0, 0, 0
-    if w > slots * cbs:
-        return -math.inf, 0, 0
     _, lg, lb = lam(L)
     top = min(cbs, w) + 1
 
     def first(k: int) -> float:
-        return -math.inf if k > cbs else lpois(lg, k)
+        return lcut(cbs, lg, k)
 
     def x_of(k: int) -> int:
         return -(-w // (k - 1))
 
     def second(k: int) -> float:
-        return -math.inf if x_of(k) > slots else min(0.0, math.log2(cbs) + lpois(lb, x_of(k)))
+        return math.log2(cbs) + lcut(slots, lb, x_of(k))
 
     k0 = crossing(2, top, first, second)
     return min((lsum(first(k), second(k)), k, x_of(k)) for k in {max(2, k0 - 1), k0, min(k0 + 1, top)})
@@ -125,11 +132,11 @@ def tail(L: dict, R: int) -> tuple[float, dict]:
     lx = lam(L)[0]
     rho, B = L["rho"], L["B"]
     if rho == 1:
-        v = -math.inf if R > B else lpois(lx, R)
+        v = lcut(B, lx, R)
         return v, {"a": R, "X": v}
 
     def xt(a: int) -> float:
-        return -math.inf if a > B else lpois(lx, a)
+        return lcut(B, lx, a)
 
     def wt(a: int) -> tuple[float, int, int]:
         return w_bound(L, -(-(R - rho * (a - 1)) // (rho - 1)))
