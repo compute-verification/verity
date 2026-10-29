@@ -65,7 +65,7 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
   Since E_j's structure is a function of a_j, the advice is fresh information: an inference block whose structure
   depends on k_a bits of a_j reads them as fresh input.
 - **Derived quantities**, none assumed:
-  - F, the faulty proof blocks (committed outputs that differ from their gates applied to their committed inputs), and
+  - F, the incorrect proof blocks (committed outputs that differ from their gates applied to their committed inputs), and
     the **faulty share** φ, the share of credited work that lies in F;
   - Φ_cred, the rate PoUW credits as declared work, and the **declared utilization** u = Φ_cred/Φ_R;
   - Φ_gap, credited work a cheaper route could produce; Φ_bk, bookkeeping (certificate slack and verdict lag);
@@ -91,7 +91,7 @@ Remote, for each execution block E_j, in five steps:
 3. **Proof.** The developer proves each sampled proof block in zero knowledge and answers PoUW's challenges in time.
 4. **Validation.** The verifier checks the proofs, the partitions' public rules, 𝓘_j's budgets (c, k) and PoUW's
    credit.
-5. **Accounting.** Each subprotocol's account for E_j is tallied: the bound on faulty proof blocks, the credited work,
+5. **Accounting.** Each subprotocol's account for E_j is tallied: the bound on incorrect proof blocks, the credited work,
    the inference blocks. The policies read the accounts.
 
 The monitoring period is accepted when every subprotocol accepts every E_j and all committed to one registration.
@@ -269,7 +269,7 @@ hardware.
 acceptance, the run lies in 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p (`Verity.Soundness`; the subprotocols' guarantees are the table under "The
 guarantees to read first"):
 
-- **sampled proofs:** F lies in the confidence set M_δ, which bounds the faulty proof blocks in each size class, and
+- **sampled proofs:** F lies in the confidence set M_δ, which bounds the incorrect proof blocks in each size class, and
   with each class's block size the faulty share φ;
 - **PoUW:** Φ_D ≥ (1 − φ)·Φ_cred − Φ_gap − Φ_bk, with each credited gate a distinct gate of A;
 - **the inference-only policy:** every 𝓘_j is a (c, k)-partition;
@@ -281,7 +281,7 @@ guarantees to read first"):
 one of two parts:
 
 - an inference block I of correct credited declared computation whose effective fresh input k_I + k_{F,I} + k_{a,I}
-  (its own fresh input, the bits faulty proof blocks inject into it, and the advice bits its structure depends on) is
+  (its own fresh input, the bits incorrect proof blocks inject into it, and the advice bits its structure depends on) is
   within the range of part 2's assembly, contributing q_I;
 - the remainder: unregistered hardware, registered hardware not running credited declared work, the faulty proof
   blocks, the credit gap, the bookkeeping, blocks out of range, and multiplications split between a block and the rest.
