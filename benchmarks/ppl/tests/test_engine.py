@@ -207,7 +207,8 @@ def test_pinned_float_ssn_passes_and_differs(llama, ids, monkeypatch, tmp_path):
     plain = spec.parse({"linear": [{"step": "fp", "fmt": "e4m3", "scale": "channel"}]}, "fp8")
     arms = [plain] + [spec.parse({"linear": [{"step": "ssnfp", "fmt": f, "bound": b, "noise": z}]}, f"{f}-{b}-{z}")
                       for f, b, z in (("e4m3", "partial", True), ("e4m3", "partial", False), ("e4m3", "l1", False),
-                                      ("e4m3", "rms", False), ("bf16", "l1", True), ("bf16", "rms", True))]
+                                      ("e4m3", "rms", False), ("e4m3", "sep", True), ("bf16", "l1", True),
+                                      ("bf16", "rms", True), ("bf16", "sep", True))]
     r = evaluate(llama, ids[:4], arms)
     assert passed(r), r["gates"]
     nll = {a.name: r["nll"][f"{a.name}/s0"] for a in arms}
@@ -220,7 +221,8 @@ def test_pinned_float_ssn_passes_and_differs(llama, ids, monkeypatch, tmp_path):
     steps._ssnfp_dump()
     stats = [json.loads(line) for f in tmp_path.glob("stats.*.jsonl") for line in f.read_text().splitlines()]
     assert stats and all(s["violated"][b] == 0 for s in stats for b in ("l1", "cs", "holder", "rms"))
-    assert any("q_proj" in s["where"] and "-rms-" in s["where"] for s in stats)
+    assert all(s["violated"]["sep"] == 0 for s in stats if "-sep-" in s["where"])
+    assert {"q_proj", "o_proj"} <= {s["where"].split()[3].split(".")[-1] for s in stats if "e4m3-sep-" in s["where"]}
 
 
 def test_a_checkpoint_on_e4m3_serves_through_int8(llama, ids):

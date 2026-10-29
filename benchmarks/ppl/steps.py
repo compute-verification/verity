@@ -1177,7 +1177,7 @@ def checkpoint_linear(mm, nxt, *, fmt: str, scale: str):
 #: the weight-side noise scale (C 2^sigma must be a format value for |C| <= 6)
 SSNFP = {"e4m3": {"first": 28, "later": 31, "fb": 13, "pow2": (-9, 8), "sigma": 6},
          "bf16": {"first": 12, "later": 15, "fb": 23, "pow2": (-133, 127), "sigma": 0}}
-SSNFP_BOUNDS = ("partial", "l1", "cs", "holder", "rms")
+SSNFP_BOUNDS = ("partial", "l1", "cs", "holder", "rms", "sep")
 #: the linears whose input is an RMSNorm's output, and that norm's weight (Llama's names)
 SSNFP_RMS_FED = {"self_attn.q_proj": "input_layernorm", "self_attn.k_proj": "input_layernorm",
                  "self_attn.v_proj": "input_layernorm", "mlp.gate_proj": "post_attention_layernorm",
@@ -1201,7 +1201,10 @@ def ssnfp_bound(fmt: str, xv: torch.Tensor, wv: torch.Tensor, bound: str, gamma:
     extra weight column), `cs` |x_i|_2 max_j |w_j|_2, `holder` |x_i|_inf max_j |w_j|_1, and `rms` where the input is
     gamma * z, z an RMSNorm's output (|z|_2 <= sqrt(k)), read nothing of the row but its scale sx: (1 + 2^-8)^2
     sqrt(k) max_j |gamma w_j|_2 (bf16's two roundings), for e4m3 times (1 + 2^-4) / sx_i plus the subnormals'
-    2^-10 max_j |w_j|_1; `rms` is `l1` where gamma is None. Every one is returned, with the chosen one under "dmax"."""
+    2^-10 max_j |w_j|_1; `rms` is `l1` where gamma is None. `sep` is a dot product's own bound, a row factor times a
+    column factor (so p_ij = a_i + b_j, the noise lanes 2^r_i against 2^b_j C): `rms`'s with |gamma w_j|_2 per column
+    where gamma is given, else |x_i|_inf |w_j|_1; it is returned as (rows, cols), its product under "sep_ij" beside
+    the oracle's own `partial_ij`. Every one is returned, with the chosen one under "dmax"."""
     m, k = xv.shape
     s, step = ssnfp_layout(fmt, k)
     ax, aw = xv.abs(), wv.abs()
@@ -1209,13 +1212,21 @@ def ssnfp_bound(fmt: str, xv: torch.Tensor, wv: torch.Tensor, bound: str, gamma:
            "holder": ax.amax(1) * aw.sum(1).max()}
     if gamma is None:
         out["rms"] = out["l1"]
+        out["sep"] = (ax.amax(1), aw.sum(1))
     else:
-        top = (1 + 2.0 ** -8) ** 2 * math.sqrt(k) * (wv * gamma[None, :]).norm(dim=1).max()
+        t = (1 + 2.0 ** -8) ** 2 * math.sqrt(k) * (wv * gamma[None, :]).norm(dim=1)
         if fmt == "e4m3":
-            out["rms"] = ((1 + 2.0 ** -4) * top / sx.double().reshape(-1) + 2.0 ** -10 * aw.sum(1).max()).expand(m).clone()
+            sxv = sx.double().reshape(-1).expand(m)
+            out["rms"] = (1 + 2.0 ** -4) * t.max() / sxv + 2.0 ** -10 * aw.sum(1).max()
+            # the subnormals' 2^-10 |w_j|_1 folded into the row factor: rows_i cols_j >= (1 + 2^-4) t_j / sx_i + 2^-10 |w_j|_1
+            col = (1 + 2.0 ** -4) * t
+            rho = (aw.sum(1) / col.clamp(min=1e-300)).max()
+            out["sep"] = ((1 + 2.0 ** -10 * sxv * rho) / sxv, col)
         else:
-            out["rms"] = top.expand(m).clone()
+            out["rms"] = t.max().expand(m).clone()
+            out["sep"] = (torch.ones(m, dtype=torch.float64, device=xv.device), t)
     part = (ax * aw.amax(0)).amax(1)
+    part_ij = torch.zeros(m, wv.shape[0], dtype=torch.float64, device=xv.device) if bound == "sep" else None
     rows = max(1, SSNFP_BLOCK // max(1, wv.shape[0] * s))
     for a in range(0, m, rows):
         xb = xv[a:a + rows]
@@ -1225,8 +1236,13 @@ def ssnfp_bound(fmt: str, xv: torch.Tensor, wv: torch.Tensor, bound: str, gamma:
             sel = step == t
             acc += xb[:, sel] @ wv[:, sel].T
             best = torch.maximum(best, acc.abs().amax(1))
+            if part_ij is not None:
+                part_ij[a:a + rows] = torch.maximum(part_ij[a:a + rows], acc.abs())
         part[a:a + rows] = torch.maximum(part[a:a + rows], best)
     out["partial"] = part
+    if part_ij is not None:
+        out["partial_ij"] = part_ij
+        out["sep_ij"] = out["sep"][0][:, None] * out["sep"][1][None, :]
     out["dmax"] = out[bound]
     return out
 
@@ -1235,15 +1251,22 @@ def ssnfp_product(fmt: str, xv: torch.Tensor, wv: torch.Tensor, dmax: torch.Tens
     """The pinned word's data part, exactly: u_i = 2^(p_i - fb) with 2^p_i > 2 (dmax_i + nmax u_i), and
     E4M3 (k32): sum_k trunc_u(x_ik w_jk), each product truncated toward zero to the row's grid u (the 14-bit adder at the
     accumulator's exponent p; the sum is exact in the binade). BF16 (k16): per step, floor_u of the step's products each
-    truncated to u / 4 (the 26-bit adder), as the 24-bit word truncates the positive sum. Returns (data part, u, p,
-    unpinnable rows), the data part in float64 on the format's values."""
+    truncated to u / 4 (the 26-bit adder), as the 24-bit word truncates the positive sum. `dmax` as (rows, cols) is a
+    separable bound: p_ij = ceil(log2 2 rows_i / (1 - 2 nmax 2^-fb)) + ceil(log2 cols_j), each dot product's own grid.
+    Returns (data part, u, p, unpinnable rows or dot products), the data part in float64 on the format's values."""
     c = SSNFP[fmt]
     fb, (lo, hi), sigma = c["fb"], c["pow2"], c["sigma"]
-    need = 2 * dmax / (1 - 2 * nmax * 2.0 ** -fb)
-    p = torch.ceil(torch.log2(need.clamp(min=2.0 ** -60))).long()
+    if isinstance(dmax, tuple):
+        r, cl = dmax
+        a = torch.ceil(torch.log2((2 * r / (1 - 2 * nmax * 2.0 ** -fb)).clamp(min=2.0 ** -60))).long()
+        p = a[:, None] + torch.ceil(torch.log2(cl.clamp(min=2.0 ** -60))).long()[None, :]
+    else:
+        need = 2 * dmax / (1 - 2 * nmax * 2.0 ** -fb)
+        p = torch.ceil(torch.log2(need.clamp(min=2.0 ** -60))).long()
     unpinnable = (p - fb - sigma) > hi
     p = torch.clamp(p - fb - sigma, min=lo) + fb + sigma
     u = torch.exp2((p - fb).double())
+    U = u[:, None] if u.dim() == 1 else u
     m, k = xv.shape
     n = wv.shape[0]
     s, _ = ssnfp_layout(fmt, k)
@@ -1254,21 +1277,21 @@ def ssnfp_product(fmt: str, xv: torch.Tensor, wv: torch.Tensor, dmax: torch.Tens
         # 256 truncated products of |x w / u| < 2^12 sum exactly in FP32
         kc = 256
         for a in range(0, m, rows):
-            inv = (1.0 / u[a:a + rows]).float()[:, None, None]
+            inv = (1.0 / U[a:a + rows]).float()[:, :, None]
             for b in range(0, k, kc):
                 y[a:a + rows] += _ssnfp_kernel("e4m3", xv.device)(x32[a:a + rows, b:b + kc], w32[:, b:b + kc], inv).double()
-        return y * u[:, None], u, p, unpinnable
+        return y * U, u, p, unpinnable
     # step 0's `first` entries padded in front to `later`, so every step is one block of `later`
     pad = c["later"] - c["first"]
     x32 = torch.nn.functional.pad(x32, (pad, s * c["later"] - pad - k))
     w32 = torch.nn.functional.pad(w32, (pad, s * c["later"] - pad - k))
     sc = 16
     for a in range(0, m, rows):
-        inv = (4.0 / u[a:a + rows]).float()[:, None, None]
+        inv = (4.0 / U[a:a + rows]).float()[:, :, None]
         for t in range(0, s, sc):
             e = slice(t * c["later"], min(s, t + sc) * c["later"])
             y[a:a + rows] += _ssnfp_kernel("bf16", xv.device)(x32[a:a + rows, e], w32[:, e], inv)
-    return y * u[:, None], u, p, unpinnable
+    return y * U, u, p, unpinnable
 
 
 def _ssnfp_e4m3(x, w, inv):
@@ -1341,9 +1364,10 @@ def _check_ssnfp(p):
 def ssnfp_linear(mm, nxt, *, fmt: str = "e4m3", scale: str = "channel", bound: str = "partial", noise: bool = True):
     """Served sparse noise on the H200's float MMA, the binade-pinned design (benchmarks/pouw/ssn_fp8): operands on
     `fmt` (e4m3 under `scale` as `fp`; bf16 rounded to nearest even, unscaled), each row's accumulator started at
-    1.5 2^p_i, p_i from the row's `bound` (`ssnfp_bound`) so every k-step word stays in [2^p_i, 2^(p_i + 1)), and the
-    noise (`ssnfp_noise`, unit u_i = 2^(p_i - fb)) served; the epilogue subtracts 1.5 2^p_i. The product is the MMA's
-    exactly (`ssnfp_product`), not the FP32 product. `noise = false` keeps the pinned grid and drops the noise."""
+    1.5 2^p_i, p_i from the row's `bound` (`ssnfp_bound`; `sep`: each dot product's own p_ij = a_i + b_j) so every
+    k-step word stays in [2^p, 2^(p + 1)), and the noise (`ssnfp_noise`, unit u = 2^(p - fb)) served; the epilogue
+    subtracts 1.5 2^p. The product is the MMA's exactly (`ssnfp_product`), not the FP32 product. `noise = false` keeps
+    the pinned grid and drops the noise."""
     if fmt == "e4m3":
         top = FORMATS["e4m3"][0]
         x = mm.x.float()
@@ -1369,19 +1393,28 @@ def ssnfp_linear(mm, nxt, *, fmt: str = "e4m3", scale: str = "channel", bound: s
     gamma = mm.run.layer.t[f"{norm}.weight"].double() if norm and f"{norm}.weight" in mm.run.layer.t else None
     b = ssnfp_bound(fmt, xv, wv, bound, gamma, sx)
     data, u, p, unpinnable = ssnfp_product(fmt, xv, wv, b["dmax"], nmax)
-    y = data + (nz * u[:, None] if noise else 0)
+    U = u[:, None] if u.dim() == 1 else u
+    y = data + (nz * U if noise else 0)
     exact = xv @ wv.T
     ref = exact.norm().clamp(min=1e-300)
     live = b["partial"] > 0
-    SSNFP_STATS.append({
+    rowwise = [name for name in SSNFP_BOUNDS if name != "sep"]
+    rec = {
         "where": mm.where, "m": m, "n": n, "k": k, "unpinnable": int(unpinnable.sum()),
-        "violated": {name: int((b[name] < b["partial"]).sum()) for name in SSNFP_BOUNDS},
-        "err_data": float((data - exact).norm() / ref), "err_noise": float((nz * u[:, None]).norm() / ref) if noise else 0.0,
+        "violated": {name: int((b[name] < b["partial"]).sum()) for name in rowwise},
+        "err_data": float((data - exact).norm() / ref), "err_noise": float((nz * U).norm() / ref) if noise else 0.0,
         "err_total": float((y - exact).norm() / ref),
         "loose_bits": {name: float(torch.log2(b[name][live] / b["partial"][live]).mean()) if live.any() else 0.0
-                       for name in SSNFP_BOUNDS},
-        "headroom_bits": float((p[live].double() - torch.log2(exact[live].abs().amax(1).clamp(min=1e-300))).mean())
-        if live.any() else 0.0})
+                       for name in rowwise}}
+    if "partial_ij" in b:
+        on = b["partial_ij"] > 0
+        rec["violated"]["sep"] = int((b["sep_ij"] < b["partial_ij"]).sum())
+        rec["loose_bits"]["sep"] = float(torch.log2(b["sep_ij"][on] / b["partial_ij"][on]).mean()) if on.any() else 0.0
+        rec["headroom_bits"] = float((p.double() - torch.log2(b["partial_ij"].clamp(min=1e-300)))[on].mean()) if on.any() else 0.0
+    else:
+        rec["headroom_bits"] = float((p[live].double() - torch.log2(exact[live].abs().amax(1).clamp(min=1e-300))).mean()) \
+            if live.any() else 0.0
+    SSNFP_STATS.append(rec)
     if len(SSNFP_STATS) >= 64:
         _ssnfp_dump()
     return (y * sx * (sw.reshape(1, -1) if sw.dim() == 2 else sw)).float()
