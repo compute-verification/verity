@@ -41,7 +41,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   `NciCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ α Λ_i size(d_i)`, which
   `NciCheck.Properties.DescThrottles` gives for every declaration a verdict of compliance of the check of record lays
   out (`NciCheck.Baseline.evaluate`, whose verdict is `Desc.evaluate`'s), at `Γ = gamma` and `α = num/den`, under
-  `BaselineRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs the
+  `ThetaRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs the
   code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is not a
   guarantee yet: it rests on `Novel.ReadsExact`, through `DescAgrees`. The cover theorem's factor on the same verdicts,
   `NciCheck.Properties.CheckedCoverTraining`, would replace `ρ_T = b_a/(αΛ)` by its own.
