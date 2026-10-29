@@ -39,11 +39,12 @@ Strategies:
 `agg` may also be `pow:D`, the sketch Σ r_t f_t^D. `expand` takes a power sketch over separable words apart, and
 `--aggs=A,B` and `--bits=A,B` restrict the sweep to those rules.
 
-`agg` `xor` is the unkeyed fold σ = ⊕_t f_t, one LOP3 a pair of words, sealed with the final word (64 bits hashed).
-`lead:e7`, `lead:e4` and `lead:w127` instances have the lead's zero-data word form, w_t = d0 + rpos_t(i) + cpos_t(j):
-a −1 lane and a 1 + b lane (b ∈ {0, 1}) on the row, and three odd e-bit coin lanes (one at e4; weights 1, 127, 1 at
-w127) on the column, with d0 a per-cell offset of the lead's size. Only `honest`, `pack`, `copy` and `table` run on
-them. `pack` (an `xor` fold over words that split into a row and a column term) puts L = ⌊32g/b⌋ cells in b-bit
+`agg` `xor` is the unkeyed fold σ = ⊕_t f_t, one LOP3 a pair of words, sealed with the final word (64 bits hashed);
+`xor:m` commits the XOR of each m consecutive words (⌈(m − 1)/2⌉ LOP3s and 32 hashed bits a block).
+`lead:e7`, `lead:e4`, `lead:w127` and `lead:rot` instances have the lead's zero-data word form,
+w_t = d0 + rpos_t(i) + cpos_t(j): a −1 lane and a 1 + b lane (b ∈ {0, 1}) on the row, and three odd e-bit coin lanes
+(one at e4; weights 1, 127, 1 at w127, and (127, 1, 1) or (1, 127, 1) by row parity at rot) on the column, with d0 a
+per-cell offset of the lead's size. Only `honest`, `pack`, `copy` and `table` run on them. `pack` (an `xor` fold over words that split into a row and a column term) puts L = ⌊32g/b⌋ cells in b-bit
 lanes of g registers, b the narrowest signed width holding every word, so g IADD3s write L words and g LOP3s fold 2L;
 σ's bits above a lane are its sign bit. `gap_claimed` is (honest − cheapest)/stock: the gap against a design that
 credits everything its honest prover does (C₀ = cost(H)), beside `gap_share` against stock.
@@ -155,6 +156,8 @@ class Draw:
             self.V[:, :, 0] = -1
             self.U[:, :, 1] = 1 + g.integers(0, 2, (m, S))
             self.V[:, :, 2:] = g.choice(odd, (n, S, lanes)) * np.array(weights)[None, None, :]
+            if inst.coins == "lead:rot":
+                self.U[:, :, 2:] = np.array([(127, 1, 1), (1, 127, 1)])[np.arange(m) % 2][:, None, :]
             self.w0 = g.integers(-2 * S, 2 * S + 1, (m, n))
         shape_a, shape_b = (m, S, 32 - q), (n, S, 32 - q)
         if inst.data == "zero":
@@ -206,14 +209,33 @@ def g_of(rule: Rule, d: Draw, f):
 def aggregate(rule: Rule, d: Draw, fields):
     if rule.agg == "hash":
         return fields
-    if rule.agg == "xor":
-        return np.bitwise_xor.reduce(fields, axis=2)
+    if rule.agg.startswith("xor"):
+        return xor_blocks(rule, fields)
     return mulmod(g_of(rule, d, fields), d.r[None, None, :]).sum(axis=2) & M32
+
+
+def xor_block(rule: Rule) -> int | None:
+    """`xor:m` commits the XOR of each m consecutive committed words; `xor` one XOR over all of them."""
+    return int(rule.agg.split(":")[1]) if rule.agg.startswith("xor:") else None
+
+
+def xor_blocks(rule: Rule, fields):
+    m = xor_block(rule)
+    if m is None:
+        return np.bitwise_xor.reduce(fields, axis=-1)
+    return np.stack([np.bitwise_xor.reduce(fields[..., b:b + m], axis=-1) for b in range(0, fields.shape[-1], m)], -1)
+
+
+def xor_lop3s(rule: Rule, nP: int) -> float:
+    m = xor_block(rule)
+    return nP * 0.5 if m is None else sum(math.ceil((min(m, nP - b) - 1) / 2) for b in range(0, nP, m))
 
 
 def common_hash(rule: Rule, nP: int) -> float:
     if rule.agg == "hash":
         return nP * rule.k * WB
+    if xor_block(rule):
+        return -(-nP // xor_block(rule)) * 32 * WB
     return (64 if rule.agg == "xor" else 32) * WB
 
 
@@ -221,8 +243,8 @@ def commit_ops(rule: Rule, nP: int) -> float:
     e = 0 if rule.k == 32 else 1
     if rule.agg == "hash":
         return nP * e
-    if rule.agg == "xor":
-        return nP * (e + 0.5)
+    if rule.agg.startswith("xor"):
+        return nP * e + xor_lop3s(rule, nP)
     if rule.agg == "lin":
         return nP * (e + 1)
     if degree(rule):
@@ -390,7 +412,7 @@ def four_russians(rule, inst, d):
 def bsketch(rule, inst, d):
     """A sketch over 1-bit fields is affine in the bits: Σ r_t g(b_t) = g(0)·Σ r_t + (g(1) − g(0))·Σ_β 2^β popc(r_β & b),
     one b1 IMMA (K 256) against r's 32 bit planes after the bitslice's fields are transposed entry-major."""
-    if rule.agg in ("hash", "xor") or not (rule.low and rule.k == 1):
+    if rule.agg == "hash" or rule.agg.startswith("xor") or not (rule.low and rule.k == 1):
         return None
     sub = Rule(rule.pos, rule.bits, "hash")
     res = bitslice(sub, inst, d)
@@ -441,32 +463,37 @@ def expand(rule, inst, d):
 
 
 def pack(rule, inst, d):
-    """An `xor` fold over words w = d0(i, j) + R_t(i) + C_t(j) (each lane's U constant down the rows or V across the
-    columns; zero data): L cells in b-bit lanes of a 32·g-bit integer of g registers (g 1 or 2, whichever is cheaper,
-    and only when L > g), the low lanes biased by 2^(b−1) so no lane borrows. A committed step costs g IADD3s (the
-    second with carry) of the packed d0, row and column terms, 2g/BLOCK operand loads and g/2 LOP3s. Unpacking a
-    lane: undo the bias's parity and sign-extend from bit b − 1."""
-    if rule.agg != "xor" or rule.k != 32 or inst.data != "zero" or inst.rec != "add":
+    """An `xor` fold over words w = d0(i, j) + R_t(i) + C_t(j) at zero data: each lane's V is constant across the
+    columns (a row term), or its U takes at most four row patterns (a column term a row class, as the lead's
+    row-parity weights). L cells go in b-bit lanes of a 32·g-bit integer of g registers (g 1 or 2, whichever is
+    cheaper, and only when L > g), the low lanes biased by 2^(b−1) so no lane borrows. A committed step costs g IADD3s
+    (the second with carry) of the packed d0, row and column terms and 2g/BLOCK operand loads, and the fold is the
+    honest LOP3 count a packed register. Unpacking (6 writes a cell for `xor` with its final word, 2 a block for
+    `xor:m`) undoes the bias's parity and sign-extends from bit b − 1."""
+    if not rule.agg.startswith("xor") or rule.k != 32 or inst.data != "zero" or inst.rec != "add":
         return None
     m, n, S = inst.m, inst.n, inst.S
     rowlane = np.all(d.V == d.V[:1], axis=(0, 1))
-    collane = np.all(d.U == d.U[:1], axis=(0, 1)) & ~rowlane
-    if not np.all(rowlane | collane):
+    pats, cls = np.unique(d.U[:, :, ~rowlane].reshape(m, -1), axis=0, return_inverse=True)
+    cls = cls.reshape(-1)
+    if len(pats) > 4:
         return None
     R = np.cumsum(np.einsum("itl,tl->it", d.U[:, :, rowlane], d.V[0][:, rowlane]), axis=1)
-    C = np.cumsum(np.einsum("tl,jtl->jt", d.U[0][:, collane], d.V[:, :, collane]), axis=1)
-    W = d.w0[:, :, None] + R[:, None, :] + C[None, :, :]
+    C = np.stack([np.cumsum(np.einsum("tl,jtl->jt", p.reshape(S, -1), d.V[:, :, ~rowlane]), axis=1) for p in pats])
+    W = d.w0[:, :, None] + R[:, None, :] + C[cls]
     need = int(np.abs(W).max()).bit_length() + 1
-    nrow, ncol = int(rowlane.sum()), int(collane.sum())
-    P = d.P
+    nrow, ncol, P = int(rowlane.sum()), int((~rowlane).sum()), d.P
+    mb = xor_block(rule) or len(P)
+    ranges = [(s0, min(s0 + mb, len(P))) for s0 in range(0, len(P), mb)]
+    unpack = 6 if xor_block(rule) is None else 2 * len(ranges)
     best = None
     for g in (1, 2):
         L = 32 * g // need
         if L <= g:
             continue
         groups = -(-n // L)
-        cost = (len(P) * groups / n * g * (1 + 2 / BLOCK + 0.5) + 6 + (nrow + 1) * S / CALL_N
-                + (ncol + L) * g * S / CALL_M)
+        cost = (groups / n * g * (len(P) * (1 + 2 / BLOCK) + xor_lop3s(rule, len(P))) + unpack
+                + (nrow + 1) * S / CALL_N + len(pats) * (ncol + L) * g * S / CALL_M)
         if best is None or cost < best[0]:
             best = (cost, g, L)
     if best is None:
@@ -474,24 +501,26 @@ def pack(rule, inst, d):
     cost, g, L = best
     width_all, b = 32 * g, 32 * g // L
     u = np.uint64
-    sigma = np.zeros((m, n), np.int64)
+    out = np.zeros((m, n, len(ranges)), np.int64)
     for gi in range(-(-n // L)):
         cols = list(range(gi * L, min(n, (gi + 1) * L)))
         Dp = sum((d.w0[:, j] + (1 << (b - 1)) * (a < len(cols) - 1)).astype(u) << u(a * b) for a, j in enumerate(cols))
         Rp = sum(R[:, P].astype(u) << u(a * b) for a in range(len(cols)))
-        Cp = sum(C[j, P].astype(u) << u(a * b) for a, j in enumerate(cols))
-        Pk = (Dp[:, None] + Rp + Cp[None, :]) & u((1 << width_all) - 1)
-        sp = np.bitwise_xor.reduce(Pk, axis=1)
-        for a, j in enumerate(cols):
-            top = a == len(cols) - 1
-            width = width_all - a * b if top else b
-            x = ((sp >> u(a * b)) & u((1 << width) - 1)).astype(object)
-            if not top and len(P) % 2:
-                x ^= 1 << (b - 1)
-            if width < 32:
-                x = np.where(x >> (width - 1) & 1, x | (M32 ^ ((1 << width) - 1)), x)
-            sigma[:, j] = (x & M32).astype(np.int64)
-    return cost, sigma, f"{L} cells in {b}-bit lanes of {g} register(s)"
+        Cp = sum(C[:, j][:, P].astype(u) << u(a * b) for a, j in enumerate(cols))
+        Pk = (Dp[:, None] + Rp + Cp[cls]) & u((1 << width_all) - 1)
+        for bi, (s0, s1) in enumerate(ranges):
+            sp = np.bitwise_xor.reduce(Pk[:, s0:s1], axis=1)
+            for a, j in enumerate(cols):
+                top = a == len(cols) - 1
+                width = width_all - a * b if top else b
+                x = ((sp >> u(a * b)) & u((1 << width) - 1)).astype(object)
+                if not top and (s1 - s0) % 2:
+                    x ^= 1 << (b - 1)
+                if width < 32:
+                    x = np.where(x >> (width - 1) & 1, x | (M32 ^ ((1 << width) - 1)), x)
+                out[:, j, bi] = (x & M32).astype(np.int64)
+    how = f"{L} cells in {b}-bit lanes of {g} register(s)" + (f", {len(pats)} row classes" if len(pats) > 1 else "")
+    return cost, (out if xor_block(rule) else out[:, :, 0]), how
 
 
 def copy(rule, inst, d):
@@ -592,10 +621,10 @@ def instances(quick: bool):
             yield Inst(64, 16, S, q, data, rec, seed)
     for S, q in itertools.product(S_set, [2, 4] if quick else [2, 4, 8]):
         yield Inst(64, 16, S, q, "zero", "add", 0, "sep")
-    lead = [("lead:e7", 5), ("lead:e4", 3), ("lead:w127", 5)]
+    lead = [("lead:e7", 5), ("lead:e4", 3), ("lead:w127", 5), ("lead:rot", 5)]
     for S, (coins, q), data, seed in itertools.product([67] if quick else [67, 265], lead, ["zero", "random"], [0, 1]):
         if not (quick and seed):
-            yield Inst(64, 16, S, q, data, "add", seed, coins)
+            yield Inst(64, 24, S, q, data, "add", seed, coins)
 
 
 def mutations(checks: Checks):
@@ -694,8 +723,8 @@ def main() -> int:
                      bool(narrow) and all(r["cheapest"] == "pack" for r in narrow),
                      [(r["inst"]["coins"], r["inst"]["S"], r["strategies"]["pack"]["how"], r["gap_claimed"])
                       for r in narrow])
-        wide = [r for r in xor if r["inst"]["coins"] == "lead:w127"]
-        checks.check("pack at lead:w127 (words past 16 bits) uses two-register lanes",
+        wide = [r for r in xor if r["inst"]["coins"] in ("lead:w127", "lead:rot")]
+        checks.check("pack at lead:w127 and lead:rot (words past 16 bits) uses two-register lanes",
                      bool(wide) and all("2 register" in r["strategies"].get("pack", {}).get("how", "") for r in wide),
                      [(r["inst"]["S"], r["strategies"].get("pack", {}).get("how"), r["gap_claimed"]) for r in wide])
     if checks.mutations:
