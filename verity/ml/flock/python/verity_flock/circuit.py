@@ -938,7 +938,7 @@ def write_public_inputs(text: str, words: dict, n: int, path) -> None:
 
 def public_file(head: dict, public: bytes) -> bytes:
     """The verifier's own ``flock-circuit-inputs`` file of header ``head`` (``rows`` false) and its public bytes, its header
-    line as C-Flock writes it (`Instances::public_file`: compact, key-sorted, UTF-8), so the file's SHA-512 is the prover's
+    line as Flock writes it (`Instances::public_file`: compact, key-sorted, UTF-8), so the file's SHA-512 is the prover's
     record's ``public_file_sha512``."""
     line = json.dumps(dict(head, rows=False), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return line.encode() + b"\n" + public
@@ -980,7 +980,7 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     end with every instance's public words (u16 LE, instance-major, the ports in order): ``public_words``
     (``{port: (n, words)}``), else the set's.
 
-    ``identifier``: the header's ``identifier`` (PROTOCOL.md §16.10), a JSON object C-Flock does not read, on which canonical JSON
+    ``identifier``: the header's ``identifier`` (PROTOCOL.md §16.10), a JSON object Flock does not read, on which canonical JSON
     is RFC 8785 (``verity.ml.circuits.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
     (``--identifier F``).
 
@@ -1114,7 +1114,7 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
 
 
 def lowering_for_set(input_set) -> IL.Lowering:
-    """The template's C-Flock lowering for a set (``lowering_for_set`` when the template's statement depends on the set)."""
+    """The template's Flock lowering for a set (``lowering_for_set`` when the template's statement depends on the set)."""
     from verity_numerical.bench import lowerings
 
     mod = lowerings.registry("C-Flock").module(input_set.subcircuit.template.id)

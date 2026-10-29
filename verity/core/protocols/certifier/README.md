@@ -328,7 +328,7 @@ the declared sync), beside the proved timing bound (Daniel's provisional call on
 is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
 N2's verifier of record, `LinkWindows.verify`, decides each link-window on a `--zk` proof of N2's registered unit
-(`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of C-Flock's Lean
+(`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of Flock's Lean
 verifier accepts the proof, the proof's public row opens to its own copy of the unit's public arguments, the output
 row's verdict and deadline bits are 1, the certificates verify on their public fields (`LinkWindows.certified`), and
 the window's sync is declared. It reads no head, salt or sibling. `benchmarks/network_traces/n2_zk.py` proves a
@@ -349,7 +349,7 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   the registered Program and the drawn units with every gate pinned, the public row the verifier derives (root, served
   domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
   openings and the word 0b11, both certificates under the LMS key in the certifier session, and the sync in Σ_sync. Both
-  take as inputs what the proof system and the lowering give: the findings of the verifier's own C-Flock Lean run, the
+  take as inputs what the proof system and the lowering give: the findings of the verifier's own Flock Lean run, the
   sessions' SHA-512s, the registration, the draw, and the Program's and partition's digests and the gate ids. On an
   advised link the window view (`advised.view`, from the tie and clock sources) is the Python's and an input to the Lean,
   which is why advised stays `python`. The Lean reads an LMS key only, and rejects any other.

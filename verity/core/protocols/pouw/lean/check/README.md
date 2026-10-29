@@ -43,14 +43,14 @@ verifies against), and each opened row's b ‖ c its side tree's leaf at the uni
 first two ports, `a0` and `b0` (`PC8_PORTS`), are an A row and a B row of the fp8-p schemas. A salted template's
 (`Salted`: today the H1 tile unit at K = 64, R = 4, C = 8) are its R A rows, its C B rows and its public row `pub`, each
 `hm96-sha512/row/v2`, its entry's side trees holding R rows per tile row and C per tile column. Each schema is read by
-port name, and C-Flock reads port k's b ‖ c at the body's k-th place, in the circuit's port order, so a header whose
+port name, and Flock reads port k's b ‖ c at the body's k-th place, in the circuit's port order, so a header whose
 keys, in key order (serde's), don't list the opened side rows first and in port order (`portsOf`) is refused, never
 read in its own order (every pinned template's side ports sort in port order). The public row's
 b ‖ c must be `publicBc` of the window's context, the certified salt the verifier passes (`opening`'s `salt`,
 `core_check.certified_salt`, the salt `passEpoch` checked), the unit's position and the entry's side roots. Only a
 certified window opens a salted template's units, and only under a 64-byte salt; it opens no unsalted template's unit,
 so a certified window passed no salt opens nothing. So the circuit a window's units are proved over is
-the pinned one, not whatever builds it: a change to a template's Definition or to C-Flock's lowering lands its new digest
+the pinned one, not whatever builds it: a change to a template's Definition or to Flock's lowering lands its new digest
 in `PouwCheck/Tile.lean` (and `core_check.TILES`), which benchmarks/pouw's staged-unit test enforces at K = 128. A
 template has one circuit, so its units proved under an earlier lowering no longer open.
 `served_commit.check` keeps the draw, the level and the population's domain and calls the opening rule for the rest.

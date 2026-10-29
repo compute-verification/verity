@@ -11,9 +11,9 @@ on bits.
                                                                                                 word view: Bf16MulF32_v1
     I32Add_v2                         (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>        word view: I32Add_v1
 
-Each is traced from the builder C-Flock's lowering runs for its word primitive (`trace.definition`), so its And gates are that
+Each is traced from the builder Flock's lowering runs for its word primitive (`trace.definition`), so its And gates are that
 builder's live ANDs: `fp.f32_add` / `f32_mul` / `f32_div` with the word primitives' NaN words (numpy float32 on x86-64), `fp.f32_fma`, the
-same four with every NaN the GPU's 0x7FFFFFFF for the `_v4`s (the `_v2` words, as C-Flock's `tail_pieces` lowers them), the
+same four with every NaN the GPU's 0x7FFFFFFF for the `_v4`s (the `_v2` words, as Flock's `tail_pieces` lowers them), the
 f32 add or multiply of the widened operands rounded by `fp.f32_to_bf16` to the word's NaN (0x7FC0 for `Bf16Add_v1`, F2FP's
 0x7FFF for the others), and `forms.add` at 32 bits. None is flushed: a
 subnormal operand or result is kept, as the `_v1` words keep it. `F32Div_v3` is the IEEE divider (`div.rn.f32`, which
