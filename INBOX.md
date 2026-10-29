@@ -12,3 +12,7 @@ Add to your PR:
 # 03:58Z addendum: filter by shard BEFORE the prologue
 
 ci's after-landing check waited on one `circuit-check --all --catalog-units --jobs 180` (r20261029-025415-5921, cpu-11) that spent 57+ min in a single-core prologue: the parent builds every target's Definition and descriptor digest (the cache key) before forking any worker, ~8,600 targets, 44 GB RSS. A shard must pick its targets by the stable hash of the target ID *before* that work, so each shard's prologue is ~1/N. Test it: a shard's prologue builds only its own targets' descriptors.
+
+
+# 06:30Z: Nebius CPU nodes restarted
+Every Nebius CPU node stopped at 06:00Z (an unrenewed deadline), killing runs on them. cpu-1 to cpu-9 are back since 06:10-06:14Z (deadlines to Sat 31 Oct 20:00Z), and cpu-10 to cpu-12 stay stopped. Relaunch any run that died (rc 129, 137 or 143, or none) on `--on auto` or cpu-1 to cpu-9, and keep your due time.
