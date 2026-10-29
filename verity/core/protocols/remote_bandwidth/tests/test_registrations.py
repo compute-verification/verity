@@ -17,7 +17,7 @@ def hosts(*ids: str) -> site.Site:
     """A remote Site of one site holding the hosts `ids`, and a device on the first."""
     log = site.Registration("remote")
     locs = [site.Loc("site0", "site"), *(site.Loc(h, "host", "site0") for h in ids)]
-    sheet = site.Sheet("gpu", 1, 1, 1, 1)
+    sheet = site.Sheet(site.DeviceFigures("gpu", 1, 1), 1, 1, 1)
     log = log.append(log.entry((sheet,), (*locs, site.Loc("gpu0", "device", ids[0], sheet=sheet.digest()))))
     return site.check(log, site.Auditor((sheet,)))
 
