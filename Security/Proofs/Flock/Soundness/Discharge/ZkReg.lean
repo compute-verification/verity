@@ -4,6 +4,7 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
 import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
 import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
+import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHCustody
 import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ

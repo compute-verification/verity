@@ -135,7 +135,7 @@ staged in `H1TGapStaging`: the monotone chain gap, the last-slice split, and the
 γ corollary, and bounds the running words below `2^31` for `k ≤ 9,048` and below `2^32` for `k ≤ 18,096`, unpinned.
 
 H-1T's per-tile count statement: the tiles, their domain `Tiling.AtLeast` and the output slots (`H1TTile`), the named
-assumption `TTH1T` (`H1TTileAssumptions`).
+assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProofs`).
 
 ## `FpG1`: FP8-g1 and W4A8-g1's operands
 

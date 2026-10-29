@@ -12,7 +12,7 @@ sparse `mma.sp` were never run. So `DistinctWritesFloor` covers legacy tensor-co
 legacy shapes at those rates. It is also the dispatch bound for a legacy MMA that writes 4 accumulator
 registers per thread (128 per warp, at one warp instruction per SMSP per clock). The other entries are `h100Floor`'s.
 
-`FloorTc 32 8 h100PeakTc` holds by `decide`, and
+`floorTcPeakTc` (`Pouw.Dimension.H100PeakTcProofs`) proves `FloorTc 32 8 h100PeakTc` by `decide`, and
 `DistinctWritesPeakTc` is `DistinctWritesLegacy` there: 32 per target that no cheap tensor-core instruction can write
 (outside `K`), and 8 per target that one can. Taking `K` to be every function gives 8 per target with no hypothesis
 at all. A smaller `K` needs a statement of what legacy `mma.sync` can compute, such as the k8 lemma's for

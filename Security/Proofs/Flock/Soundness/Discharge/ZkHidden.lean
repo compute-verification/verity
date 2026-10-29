@@ -17,5 +17,6 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJJson
 import Proofs.Flock.Soundness.Discharge.ZkHidden.View
 import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
+import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousSeg
 import Proofs.Flock.Soundness.Discharge.ZkHidden.BindInst
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundInst

@@ -7,6 +7,7 @@ import Proofs.Core.Game.Basic
 import Proofs.Core.Game.Interleave
 import Proofs.Core.Game.Union
 import Proofs.Core.Game.Prob
+import Proofs.Core.Game.Poly
 import Proofs.Core.Game.Expect
 import Proofs.Core.Game.Runs
 import Proofs.Core.Game.Seq
@@ -14,6 +15,7 @@ import Proofs.Core.Game.Lock
 import Proofs.Core.Game.Batch
 import Proofs.Core.Game.BatchInduced
 import Proofs.Core.Game.Rewinding
+import Proofs.Core.Game.Unambiguous
 import Proofs.Core.Round
 import Proofs.Core.Prims.Round
 import Proofs.Core.TC

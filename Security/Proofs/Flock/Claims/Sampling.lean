@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Sampling.Assembled
+import Proofs.Flock.Claims.Sampling.AssembledPlain
 import Proofs.Flock.Claims.Sampling.Bext
 import Proofs.Flock.Claims.Sampling.Committed
 import Proofs.Flock.Claims.Sampling.Count
@@ -10,9 +11,11 @@ import Proofs.Flock.Claims.Sampling.EndToEndDeploy
 import Proofs.Flock.Claims.Sampling.EndToEndDraw
 import Proofs.Flock.Claims.Sampling.Escape
 import Proofs.Flock.Claims.Sampling.ExecBernoulli
+import Proofs.Flock.Claims.Sampling.PooledPr
 import Proofs.Flock.Claims.Sampling.InputSlot
 import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Flock.Claims.Sampling.Leaf
+import Proofs.Flock.Claims.Sampling.Live
 import Proofs.Flock.Claims.Sampling.Path
 import Proofs.Flock.Claims.Sampling.Seq
 import Proofs.Flock.Claims.Sampling.Runs
