@@ -1,4 +1,4 @@
-"""The A100 (sm_80, EPS1 AMPERE): honest's egemm80 profiles and the designs priced on AMPERE-80."""
+"""The A100 (sm_80): honest's egemm80 profiles and the designs priced on AMPERE-80."""
 import pytest
 
 from verity_machine_model import eps as E
