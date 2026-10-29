@@ -93,7 +93,7 @@ def _read_shared(j) -> tuple | None:
 
 
 def _read(j) -> dict:
-    """`Verdict.ofJson`."""
+    """`PartVerdict.ofJson`."""
     o = j if isinstance(j, dict) else {}
     return {"accepted": o.get("accepted") is True, "why": _str(o.get("why")) or "", "part": _nat(o.get("rec_part")),
             "rows": _str(o.get("rec_rows_sha512")), "shared": _read_shared(o["rec_shared"]) if "rec_shared" in o else None,
