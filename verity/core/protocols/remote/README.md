@@ -79,8 +79,7 @@ answer (`Core.Composition.same`; the `#guard`s pin a policy on one record and th
    design and δ, the size classes, the inference-only policy's c and k, the advice length ℓ_a, and each subprotocol's
    public Program and parameters, by digest), the registered information θ (for example the weights) and the registered
    compiler B. It fixes no circuit. The Lean (`Verity.Declaration`, `Verity.Committed`) still states the older shape, a
-   circuit with a partition committed beside it; soundness's COMPILEREG PR (after V3) restates it as
-   `Verity.Registered`, with the compiler's output explaining the committed trace.
+   circuit with a partition committed beside it.
 2. **Execution phase** j. The hardware runs, and the developer commits every value it computes under hiding commitments
    in SHA-512 trees: the committed trace.
 3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, "How an audit works"):

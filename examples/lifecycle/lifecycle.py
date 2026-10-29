@@ -44,7 +44,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
+from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.core.protocols.pous import wipe_monitoring, wipe_period
 from verity.core.protocols.pouw import period_check
 from verity.core.protocols.pouw import window as pouw_window_rules
@@ -1309,7 +1309,7 @@ class Verifier:
             self.public["refused"] = {"name": refused, "detail": detail}
         self.public["lines"] = self.lines
         out = [Send(p, msg("Done", 0)) for p in self.peers()]
-        return [*out, Record(self.public, "output"), Finish(self.public, refused)]
+        return [*out, LogEntry(self.public, "output"), Finish(self.public, refused)]
 
     def on(self, r: Received) -> list[Any]:
         try:
@@ -1413,7 +1413,7 @@ class Verifier:
                 "answers": {i: {"verdict": a["verdict"], "reason": a["reason"]} for i, a in answers.items()},
                 "composite": compose(self.protocol, answers)}
         self.lines.append(line)
-        return [Record(line, "output")]
+        return [LogEntry(line, "output")]
 
     def statement(self, k: int, u: int) -> Statement:
         """Unit u of declaration k's statement, from what the verifier holds: the record, the previous record and the

@@ -1494,6 +1494,10 @@
    "owner": "@memory-accounting",
    "digest": "a64457dcd109df60a0fe2c0a2130bb8f15f3f5796d89700d3e953a82b2a05482"
   },
+  "Pous.Guarantees.RoundsBound": {
+   "owner": "@memory-accounting",
+   "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4"
+  },
   "Pous.P2.Assumptions.P2RingAuditSecure": {
    "owner": "@memory-accounting",
    "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
@@ -2156,6 +2160,7 @@
   "Lms",
   "PousCheck",
   "MemoryChallenger",
+  "Attest",
   "PouwCommit.Tagged",
   "PouwCommit.Frame",
   "PouwCommit.Rows",
@@ -9390,6 +9395,31 @@
    "assumptions": [],
    "type_hash": "647a7a6cc6ccaf23b16ce02bee9af028ed4c839b98ee0b4dd4cb54638a5eb181"
   },
+  "Pous.SecurityProofs.ObligationWide320": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.ObligationWide320 : Pous.Guarantees.ObligationWide320"],
+   "assumptions": [],
+   "type_hash": "13eba7d1271f1b1a203a29a5a705cec12bad77b8cacff6abe06439152470f339"
+  },
+  "Pous.SecurityProofs.ObligationWide320_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.ObligationWide320_honest :",
+    "  Pous.Guarantees.RoundsBound (43 / 1000) (instHPow.hPow (ENNReal.instInv.inv 2) 137) 320",
+    "    (instHPow.hPow (ENNReal.instInv.inv 2) 20)"
+   ],
+   "assumptions": [],
+   "type_hash": "0fe48a27cbcba8450f6bd5e62caa7f83b45002045681842835976f6ae6f37000"
+  },
+  "Pous.SecurityProofs.ObligationWide320_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.ObligationWide320_nontrivial :",
+    "  Not (ENNReal.instLE.le (Pous.pr fun x => True) (instHPow.hPow (ENNReal.instInv.inv 2) 20))"
+   ],
+   "assumptions": [],
+   "type_hash": "d559839c817d2ced57f280afa6968c78ef720b10da307f39f5b90f8e22a1a08c"
+  },
   "Pous.SecurityProofs.P2ContentAbsorbs": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.P2ContentAbsorbs : Pous.Guarantees.P2ContentAbsorbs"],
@@ -12600,7 +12630,10 @@
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
    "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
    "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs, proved by V2's assembly at keyProgP; it reads SampledKSLiveV5 (Security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each unit's public input bits), under RecordCustodyZKJP, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
-   "Flock.SecurityProofs.SampledKSLiveV5Honest": "frozen (no-function): the honest witness of SampledKSLiveV5, not a run of a Lean function: from one named premise, ServedFilesParseV5 (that the served registered --zk session art:88544efa's files, pinned by SHA-512, parse to a descriptor in scopeOkH with distinct port names whose public input ports parse and whose public file loads over them, as runs r20261027-025931-f22c and r20261027-114351-93be evaluated), every hypothesis that statement takes of the files holds there (Built, RowsOk, TagsOkZHJ, untyped tags, the parse, the public input ports, the public file, scopeOkH, dupName, the draw sizes' divisibility); it reads SampledKSLiveV5Honest (Security/Proofs/Flock/Bridge/V5/Honest.lean), so the lock records its text."
+   "Flock.SecurityProofs.SampledKSLiveV5Honest": "frozen (no-function): the honest witness of SampledKSLiveV5, not a run of a Lean function: from one named premise, ServedFilesParseV5 (that the served registered --zk session art:88544efa's files, pinned by SHA-512, parse to a descriptor in scopeOkH with distinct port names whose public input ports parse and whose public file loads over them, as runs r20261027-025931-f22c and r20261027-114351-93be evaluated), every hypothesis that statement takes of the files holds there (Built, RowsOk, TagsOkZHJ, untyped tags, the parse, the public input ports, the public file, scopeOkH, dupName, the draw sizes' divisibility); it reads SampledKSLiveV5Honest (Security/Proofs/Flock/Bridge/V5/Honest.lean), so the lock records its text.",
+   "Pous.SecurityProofs.ObligationWide320": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the mutable store (Security/Definitions/Pous/P2/Mutable.lean) at every block count from 2^19 to 2^27, 320 reads with the state at most S0 at each, by 2^-20, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
+   "Pous.SecurityProofs.ObligationWide320_honest": "frozen (no-function): ObligationWide320's honest witness, arithmetic: P2's per-round floor p = 0.043 and bad-event mass 2^-137 meet its RoundsBound premise at 320 rounds and 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
+   "Pous.SecurityProofs.ObligationWide320_nontrivial": "frozen (no-function): ObligationWide320's nontrivial witness: at 2^19 blocks and 320 reads the sure event, which a verifier that accepts everything passes, has probability 1, above 2^-20; it is about no function of the PoUS code and rests on no named assumption."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -24858,6 +24891,7 @@
     "Pous.SecurityProofs.ObligationDemoWide",
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -24920,6 +24954,7 @@
     "Pous.SecurityProofs.ObligationDemoWide",
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure",
     "Pous.SecurityProofs.P2RingGradedOfRoundSecure"
@@ -25023,6 +25058,7 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -25195,6 +25231,8 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
+    "Pous.SecurityProofs.ObligationWide320_nontrivial",
     "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
@@ -25301,14 +25339,16 @@
    ]
   },
   "Definitions.Pous.Guarantees.Obligation": {
-   "digest": "3c9e6e9e76b7b8a6acf17607917df6b2ecc351580ad2fbdb3884435b1d034f8e",
+   "digest": "2b8bd69256904902f2b37cecab7e85fb951153ec477bc227b59b2f3252cb2e9c",
    "definitions": {
     "Pous.Guarantees.ObligationDemo": "477a05a20ed593ebd3efc6354d226e2b99122be7454e38a463f3c8ba369b93a2",
     "Pous.Guarantees.ObligationDemoWide": "2c05dc28b62b59d9ef1f430c3ba2aeb195dedf0927cf39ca81d152d9b5717604",
     "Pous.Guarantees.ObligationOfRoundSecure": "94292f511eadaa13ece6940b67cc38584dc4e5668e07a68f9d48afec1d9f4b5b",
     "Pous.Guarantees.ObligationOfRoundSecureWide": "08ecc5527c191b57b8cb6515ba8e94f7d363be64f0746801d9910b3f8b41a3ae",
     "Pous.Guarantees.ObligationOfStatic": "28decba2f563aedd1f194ee15864496827f2f5602334bee6a4ac142095949212",
+    "Pous.Guarantees.ObligationWide320": "a805c8caf5169e869b00b4cc82bd17e3dd636f038f84e9a0322fde18ea171407",
     "Pous.Guarantees.P2ContentAbsorbs": "d8c36c9972b654a211b48bd6ec829a7b3a6d4015092dee2658e7dd5faf2738f1",
+    "Pous.Guarantees.RoundsBound": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
     "Pous.Guarantees.SnapshotFresh": "c106431b1609a11713c846d06df14838be4982fb3536019917533a3b5a0bf335"
    },
    "guarantees": [
@@ -25317,6 +25357,8 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
+    "Pous.SecurityProofs.ObligationWide320_honest",
     "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.SnapshotFresh"
    ]
@@ -25482,6 +25524,7 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -25766,6 +25809,7 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -25825,6 +25869,7 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
@@ -26012,6 +26057,7 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -26206,6 +26252,8 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
+    "Pous.SecurityProofs.ObligationWide320_nontrivial",
     "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure",
@@ -26226,7 +26274,9 @@
     "Pous.SecurityProofs.ObligationDemoWide",
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
-    "Pous.SecurityProofs.ObligationOfStatic"
+    "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
+    "Pous.SecurityProofs.ObligationWide320_nontrivial"
    ]
   },
   "Definitions.Pous.P2.Rounds": {
@@ -26244,6 +26294,7 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure",
     "Pous.SecurityProofs.P2RingGradedOfRoundSecure"
    ]
@@ -39487,8 +39538,9 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "7c0ad044fbd6bffaa6da9c9f443476332736f4b91dced9ac46f406967236d239",
+   "digest": "d40a3edf5c5539f5688ab9c55204628138d3a9b5e24900f0694438841c488d6d",
    "definitions": {
+    "Flock.Registered.COMPLETE_KEY": "1e8b83345448089f0b9bbbaadd6b8f707757fe7ad2be919ac116f2c367d70951",
     "Flock.Registered.FILE_KEYS": "f0c35dfcb8a6a4b2e574a62c121592a276b16512b53c37b2ff75025e63c2ae4e",
     "Flock.Registered.FORMAT": "fda4f60dfaea5d4458ee6f0696f8e183cfcd06e6f555178bf57f3c6e3ea83bd2",
     "Flock.Registered.FORMAT_V0": "a02a26231dce59059028ce6c558c2f565745e91e21315fc60525e82cb6c8aefc",
@@ -60251,6 +60303,10 @@
   "Flock.SecurityProofs.RecursiveKS": {
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
+  },
+  "Pous.SecurityProofs.ObligationWide320": {
+   "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
+   "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
   }
  }
 }
