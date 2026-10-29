@@ -54,7 +54,6 @@ import functools
 import itertools
 import json
 import math
-import os
 import sys
 import tomllib
 from pathlib import Path
@@ -731,7 +730,7 @@ def main() -> int:
     checks = Checks()
     args = checks.args
     card_path = Path(args[args.index("--card") + 1]) if "--card" in args else CARD
-    out = Path(args[args.index("--out") + 1]) if "--out" in args else Path(os.environ.get("OUT", "."))
+    out = Path(args[args.index("--out") + 1]) if "--out" in args else Path(".")
     delta = float(args[args.index("--delta") + 1]) if "--delta" in args else 0.0
     card = load(card_path)
     results = {}
