@@ -36,6 +36,10 @@ The attacks each axis meets, all at zero data (M0 frees salt-independent functio
   The edges still decompose: the first and last few words see few coin vectors (`edge_attack`), unless step 0 adds
   r0 more coin lanes, removed at the last step (`quad-lℓ-wr0`); and a middle block decomposes from the honest word
   before it (`edge_saves`). Both are priced against the byte products a rank term, and ℓ sets the margin.
+  `partition_search` takes the cheapest mix of honest words, edges and middle blocks.
+- Pools on sketched words (`sketch_pools`): honest's square and add are one IMAD an output, so k equal words across
+  outputs save k − 1, as hashed words do. Row and column salts ρ_i + c_j close the cross-row and column pools; an
+  output's own chance collisions remain (A2r), and `free_order` removes the replay's structural ones.
 
 `checks` runs the CPU checks and `score` the joint table; `--json` writes both.
 """
@@ -216,16 +220,28 @@ def adversary_window(b: int, predicates: str, bitslice_eq: float) -> float:
     return min(route, bitslice_eq, 1 + honest_extract(b, predicates))
 
 
+def free_order(half: int, rng: np.random.Generator) -> np.ndarray:
+    """mirror-π's replay order: uniform over the permutations whose no proper prefix is the first half's matching
+    suffix. When π(0..v) = {half − 1 − v, …, half − 1}, the replay's word v equals the first half's word
+    half − 2 − v at zero data, and data whose partial sums return makes them equal under any coins (an A2r pool)."""
+    while True:
+        order = rng.permutation(half)
+        if not np.any(np.minimum.accumulate(order)[:-1] == half - 1 - np.arange(half - 1)):
+            return order
+
+
 def _bilinear_noise(m: int, n: int, s: int, lanes: int, family: str, rng: np.random.Generator) -> np.ndarray:
     """(s, m, n) step noise: `lanes` byte coins a row and step against wide coin weights a column and step; `mirror`
-    replays the first half's coins against negated weights, `mirror-pi` in a coin-drawn order."""
+    replays the first half's coins against negated weights, `mirror-pi` in a coin-drawn order (`free_order`), and
+    `mirror-pi-any` in any order."""
     half = s // 2 if family.startswith("mirror") else s
     a = rng.integers(-128, 128, size=(half, lanes, m))
     w = rng.choice(nsp.WIDE, size=(half, lanes, n))
     first = np.einsum("tlm,tln->tmn", a, w)
     if family == "bilinear":
         return first
-    order = np.arange(half) if family == "mirror" else rng.permutation(half)
+    order = {"mirror": np.arange(half), "mirror-pi": free_order(half, rng),
+             "mirror-pi-any": rng.permutation(half)}[family]
     return np.concatenate([first, -first[order]])
 
 
@@ -272,9 +288,10 @@ def mirror_fold(s: int, lanes: int, rng: np.random.Generator, size: int = 32) ->
     return res
 
 
-def _edge_noise(m: int, n: int, s: int, lanes: int, r0: int, rng: np.random.Generator) -> np.ndarray:
+def _edge_noise(m: int, n: int, s: int, lanes: int, r0: int, rng: np.random.Generator,
+                family: str = "mirror-pi") -> np.ndarray:
     """mirror-pi's step noise with r0 more coin lanes at step 0, removed at the last step (r0 = 0 is mirror-pi)."""
-    noise = _bilinear_noise(m, n, s, lanes, "mirror-pi", rng)
+    noise = _bilinear_noise(m, n, s, lanes, family, rng)
     if r0:
         wide = rng.integers(-128, 128, size=(r0, m)).T @ rng.choice(nsp.WIDE, size=(r0, n))
         noise[0] += wide
@@ -352,25 +369,27 @@ def rfp4_check(m: int = 8, k: int = 16, n: int = 8, seg: int = 4, seed: int = 2)
 
 
 def _runs_saving(groups: np.ndarray) -> tuple[int, int]:
-    """Over each row of `groups`, the values met k ≥ 2 times: Σ (k − 2)⁺, a sketch's saving, and Σ (k − 1), a hashed
-    design's duplicates."""
+    """Over each row of `groups`, the values met k ≥ 2 times: Σ (k − 1), the words a pool skips, and Σ (k − 2)⁺."""
     srt = np.sort(groups, axis=1)
     start = np.ones(srt.shape, dtype=bool)
     start[:, 1:] = srt[:, 1:] != srt[:, :-1]
     ids = np.cumsum(start.ravel()) - 1
     k = np.bincount(ids)
-    return int(np.maximum(k - 2, 0).sum()), int((k - 1).sum())
+    return int((k - 1).sum()), int(np.maximum(k - 2, 0).sum())
 
 
-def sketch_pools(m: int, n: int, s: int, lanes: int, r0: int, salt_bits: int, tile: int = 64, seed: int = 4) -> dict:
+def sketch_pools(m: int, n: int, s: int, lanes: int, r0: int, salt_bits: int, tile: int = 64, seed: int = 4,
+                 family: str = "mirror-pi") -> dict:
     """Equal words an adversary can share in mirror-π's sketch at zero data, on chosen identical rows (the data
-    cancels; code and tags are left out, which only adds collisions). A pool of k equal values costs it one word, one
-    square and k adds against honest's 2k, so it saves k − 2 eq; a hashed design's duplicates save k − 1 words. Counted
-    within an output (A2r), within a (64-row tile, column) and a 64 × 64 block over every step, and within a whole
-    column or row over every step. Salts ρ_i + c_j of `salt_bits` each enter at step 0 and are folded out with the
-    output (the stock epilogue's two IADD3 sources). The final word is left out (M1). Shares are over stock."""
+    cancels; code and tags are left out, which only adds collisions). Honest pays 2 eq a word: its MMA share and one
+    IMAD, acc += w·w. A pool of k equal words across outputs costs one word and k IMADs, so it saves k − 1 eq, as a
+    hashed design's duplicates do. Within one output (A2r) k equal words cost one word, one square and one
+    multiply-add by k, so they save (k − 1) + (k − 2)⁺. Counted within an output (A2r), within a (64-row tile,
+    column) and a 64 × 64 block over every step, and within a whole column or row over every step. Salts ρ_i + c_j of
+    `salt_bits` each (32: uniform words) enter at step 0 and are folded out with the output (the stock epilogue's two
+    IADD3 sources). The final word is left out (M1). Shares are over stock."""
     rng = np.random.default_rng(seed)
-    w = np.cumsum(_edge_noise(m, n, s, lanes, r0, rng), axis=0)[:-1]
+    w = np.cumsum(_edge_noise(m, n, s, lanes, r0, rng, family), axis=0)[:-1]
     if salt_bits:
         w += rng.integers(0, 1 << salt_bits, size=m)[None, :, None]
         w += rng.integers(0, 1 << salt_bits, size=n)[None, None, :]
@@ -383,10 +402,11 @@ def sketch_pools(m: int, n: int, s: int, lanes: int, r0: int, salt_bits: int, ti
     if n % tile == 0:
         pools["block"] = (w.reshape(s - 1, m // tile, tile, n // tile, tile).transpose(1, 3, 0, 2, 4)
                           .reshape(m // tile * (n // tile), -1))
-    out: dict = {"m": m, "n": n, "s": s, "lanes": lanes, "r0": r0, "salt_bits": salt_bits}
+    out: dict = {"m": m, "n": n, "s": s, "lanes": lanes, "r0": r0, "salt_bits": salt_bits, "family": family}
     for name, g in pools.items():
-        sk, hs = _runs_saving(g)
-        out[name] = {"sketch": sk / (words * STOCK_EQ), "hash": hs / (words * STOCK_EQ)}
+        skipped, extra = _runs_saving(g)
+        sketch = skipped + (extra if name == "A2r" else 0)
+        out[name] = {"sketch": sketch / (words * STOCK_EQ), "hash": skipped / (words * STOCK_EQ)}
     return out
 
 
@@ -425,14 +445,28 @@ def partition_search(edge: dict, block: dict, s: int, sketch_bytes: int = SKETCH
     return {"cost": cost, "saving": 2 * s - cost}
 
 
-def pools_grid(shapes: tuple = ((512, 64), (8192, 64), (64, 8192)), salts: tuple = (0, 18, 24, 31)) -> list[dict]:
-    """`sketch_pools` over rows × columns, one lane (mirror's) and four (with and without the step-0 block), and salt
-    widths."""
+def replay_coincidence(halves: tuple = (37, 146), trials: int = 20000, seed: int = 5) -> dict:
+    """How often an unconstrained replay order has a prefix equal to the first half's matching suffix, and what such
+    a call then gives every output: one A2r pair of its s − 1 words (`free_order` excludes it)."""
+    rng = np.random.default_rng(seed)
+    out = {}
+    for half in halves:
+        hits = sum(bool(np.any(np.minimum.accumulate(rng.permutation(half))[:-1] == half - 1 - np.arange(half - 1)))
+                   for _ in range(trials))
+        out[2 * half] = {"rate": hits / trials, "call_saving": 1 / ((2 * half - 1) * STOCK_EQ)}
+    return out
+
+
+def pools_grid(shapes: tuple = ((512, 64, 74), (8192, 64, 74), (64, 8192, 74), (512, 64, 292)),
+               salts: tuple = (0, 24, 31, 32)) -> list[dict]:
+    """`sketch_pools` over rows × columns × steps, one lane (mirror's), three and four (with and without the step-0
+    block), and salt widths; and the survivor with an unconstrained replay order beside it."""
     rows = []
-    for m, n in shapes:
-        for lanes, r0 in ((1, 0), (4, 0), (4, MIRROR_PI_STEP0)):
+    for m, n, s in shapes:
+        for lanes, r0 in ((1, 0), (3, MIRROR_PI_STEP0), (4, 0), (4, MIRROR_PI_STEP0)):
             for salt in salts:
-                rows.append(sketch_pools(m, n, 74, lanes, r0, salt))
+                rows.append(sketch_pools(m, n, s, lanes, r0, salt))
+        rows.append(sketch_pools(m, n, s, 4, MIRROR_PI_STEP0, 32, family="mirror-pi-any"))
     return rows
 
 
@@ -614,9 +648,10 @@ def main() -> None:
     ap.add_argument("--pools", help="write mirror-π's network terms and its sketch pools here, and stop")
     args = ap.parse_args()
     if args.pools:
-        res = {"network": network_terms(), "pools": pools_grid()}
+        res = {"network": network_terms(), "replay_coincidence": replay_coincidence(), "pools": pools_grid()}
+        print("replay coincidence", res["replay_coincidence"], flush=True)
         for r in res["pools"]:
-            print(r["m"], r["n"], f"l{r['lanes']}", f"r0={r['r0']}", f"salt={r['salt_bits']}",
+            print(r["family"], r["m"], r["n"], r["s"], f"l{r['lanes']}", f"r0={r['r0']}", f"salt={r['salt_bits']}",
                   {k: f"{v['sketch']:.4%} / {v['hash']:.3%}" for k, v in r.items() if isinstance(v, dict)}, flush=True)
         with open(args.pools, "w") as fh:
             json.dump(res, fh, indent=1, default=str)
