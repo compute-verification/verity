@@ -69,6 +69,18 @@ def call(design: dict, m: int, k: int, n: int, lead: dict, lay: dict, reg: float
         return {"bits": m * rba + entries * design["e"], "bytes": m * rba / 8.0 + entries + corr,
                 "forming": m * rba / 32.0 * reg + entries / 4.0 * reg, "words": sa / s, "entries": entries,
                 "noise_rms": 0.0, "word_noise_rms": math.sqrt(coin_steps * odd_mean_square(design["e"]))}
+    if kind == "blc4a":
+        la, d4 = lay["lanes4"]["lanes"] - 1, lay["lanes4"]["data_lanes"]
+        s4 = steps4(k, d4)
+        rb4 = 32 * math.ceil((s4 - 1 + c) / 32)
+        tiles = math.ceil(m / design["tile"])
+        coin_steps = math.ceil((s4 - 1) * min(1.0, m / design["tile"]))
+        cells = tiles * n * coin_steps
+        corr = 4.0 * tiles * n if coin_steps > 1 else 0.0
+        return {"bits": m * rb4 + cells * la * design["e"],
+                "bytes": m * rb4 / 8.0 + cells * lay["lanes4"]["lanes"] + corr,
+                "forming": m * rb4 / 32.0 * reg, "words": s4 / s, "entries": cells * lay["lanes4"]["lanes"],
+                "noise_rms": 0.0, "word_noise_rms": math.sqrt(la * coin_steps * odd_mean_square(design["e"]))}
     if kind == "blc4":
         l4, d4 = lay["lanes4"]["lanes"], lay["lanes4"]["data_lanes"]
         s4 = steps4(k, d4)
@@ -111,10 +123,15 @@ def designs(lay: dict) -> list[dict]:
         out.append({"id": f"blc4-t64-e{e}", "kind": "blc4", "tile": 64, "e": e,
                     "title": f"four B' coin lanes a step (28 data lanes), {e}-bit odd coins a (64-row tile, step, "
                              "column), cp.async"})
+    for t, e in ((64, 4), (64, 7), (128, 7)):
+        out.append({"id": f"blc4a-t{t}-e{e}", "kind": "blc4a", "tile": t, "e": e,
+                    "title": f"three coin lanes against A' = 1 beside the lead's row lane (28 data lanes), {e}-bit odd "
+                             f"coins a ({t}-row tile, step, column), one 4-byte cp.async with the public weight, served "
+                             "exactly"})
     return out
 
 
-SERVED = {"rows": "either", "blc1a": "exact"}
+SERVED = {"rows": "either", "blc1a": "exact", "blc4a": "exact"}
 
 
 def outsource(calls: list, m: int, layers: int, served: str, wfun, alpha: float, out: dict) -> dict:
@@ -373,6 +390,11 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
              for c in p["caps"].values() for a in c["attack"].values() for v in a.values()), "ok"),
         ("The closing layout serves exactly (its served noise folds)",
          all(p["served"] == "exact" for p in best.values()), res["closing"]["id"]),
+        ("The cap-320 closing layout serves exactly, its stated term at most 1% at cap 320 at both prices, every point",
+         all(p["served"] == "exact" and p["caps"]["320"]["stated"][q] <= 0.01
+             for p in d[res["closing_320"]["id"]]["points"].values() for q in ("floor", "bar")),
+         ", ".join(f"{k} {p['caps']['320']['stated']['bar']:.4f}"
+                   for k, p in d[res["closing_320"]["id"]]["points"].items())),
         ("Per period: N-CARD's stock work reproduces (one H200 window 3.09e19 AND gates)",
          abs(res["period"][0]["and_gates"]["one H200"]["window"] / res["period"][0]["share_of_stock"] / 3.086e19 - 1)
          < 1e-3, f"{res['period'][0]['and_gates']['one H200']['window'] / res['period'][0]['share_of_stock']:.4e}"),
@@ -393,26 +415,8 @@ def table(res: dict) -> str:
         lines.append(f"  {x['id']:<16} {p['coin_bits_per_token']:>12,.0f} {p['n_max']:>12,.1f} "
                      f"{p['stream_bytes_per_token']:>11,.0f}  32: {f(c32)}  320: {f(c320)}  outsourcers {att}  "
                      f"forming {p['forming_share_of_stock']:.4%}  words x{p['words_vs_lead']:.3f}  {p['served']}")
-    cl = res["closing"]
-    lines.append(f"Closing layout: {cl['id']} ({cl['title']})")
-    for k, p in res["designs_by_id"][cl["id"]]["points"].items():
-        t2 = p.get("t2")
-        s = (f"  {k:<8} m {p['m']:>5}: n_max {p['n_max']:,.1f}, term cap 32 {p['caps']['32']['stated']['floor']:.4%}"
-             f"-{p['caps']['32']['stated']['bar']:.4%}, cap 320 {p['caps']['320']['stated']['floor']:.4%}-"
-             f"{p['caps']['320']['stated']['bar']:.4%}; forming {p['forming_share_of_stock']:.4%}; words "
-             f"x{p['words_vs_lead']:.3f}; served noise rms "
-             + ", ".join(f"K {k_}: {v:.1f}" for k_, v in p["noise_rms_lsb_by_k"].items())
-             + "; committed words' coin rms "
-             + ", ".join(f"K {k_}: {v:.1f}" for k_, v in p["word_noise_rms_lsb_by_k"].items()))
-        if t2:
-            s += (f"; T2 {t2['gpu_400g']['t2']:.2f} (lead {t2['lead_judged']:.2f}), arrival 400G "
-                  f"{t2['gpu_400g']['t2_arrival'][0]:.2f}-{t2['gpu_400g']['t2_arrival'][1]:.2f}, 100G "
-                  f"{t2['census_100g']['t2_arrival'][0]:.2f}-{t2['census_100g']['t2_arrival'][1]:.2f}; stream "
-                  f"{t2['stream_bytes_per_s'] / 1e9:.2f} GB/s ({t2['gpu_400g']['port_share']:.2%} of 400G, "
-                  f"{t2['census_100g']['port_share']:.2%} of 100G), certifier {t2['certifier_cores'][0]:.2f}-"
-                  f"{t2['certifier_cores'][1]:.2f} Genoa cores, patch {t2['patch_ms']:.3f} ms; N-KERNEL's ssn_1l "
-                  f"x words {p['t2_nkernel_scaled'][0]:.1f} beside / {p['t2_nkernel_scaled'][1]:.1f} serial")
-        lines.append(s)
+    for label, cl in (("Closing layout", res["closing"]), ("Closing layout at cap 320", res["closing_320"])):
+        lines += closing_lines(res, label, cl)
     lines.append("Lower bound (any layout): coin bits a token >= 100 W_mac cap; n_max <= 0.01 MACs / (W_mac cap)")
     for cap, ps in res["lower_bound"].items():
         for p, v in ps.items():
@@ -434,6 +438,29 @@ def table(res: dict) -> str:
     return "\n".join(lines)
 
 
+def closing_lines(res: dict, label: str, cl: dict) -> list[str]:
+    lines = [f"{label}: {cl['id']} ({cl['title']})"]
+    for k, p in res["designs_by_id"][cl["id"]]["points"].items():
+        t2 = p.get("t2")
+        s = (f"  {k:<8} m {p['m']:>5}: n_max {p['n_max']:,.1f}, term cap 32 {p['caps']['32']['stated']['floor']:.4%}"
+             f"-{p['caps']['32']['stated']['bar']:.4%}, cap 320 {p['caps']['320']['stated']['floor']:.4%}-"
+             f"{p['caps']['320']['stated']['bar']:.4%}; forming {p['forming_share_of_stock']:.4%}; words "
+             f"x{p['words_vs_lead']:.3f}; served noise rms "
+             + ", ".join(f"K {k_}: {v:.1f}" for k_, v in p["noise_rms_lsb_by_k"].items())
+             + "; committed words' coin rms "
+             + ", ".join(f"K {k_}: {v:.1f}" for k_, v in p["word_noise_rms_lsb_by_k"].items()))
+        if t2:
+            s += (f"; T2 {t2['gpu_400g']['t2']:.2f} (lead {t2['lead_judged']:.2f}), arrival 400G "
+                  f"{t2['gpu_400g']['t2_arrival'][0]:.2f}-{t2['gpu_400g']['t2_arrival'][1]:.2f}, 100G "
+                  f"{t2['census_100g']['t2_arrival'][0]:.2f}-{t2['census_100g']['t2_arrival'][1]:.2f}; stream "
+                  f"{t2['stream_bytes_per_s'] / 1e9:.2f} GB/s ({t2['gpu_400g']['port_share']:.2%} of 400G, "
+                  f"{t2['census_100g']['port_share']:.2%} of 100G), certifier {t2['certifier_cores'][0]:.2f}-"
+                  f"{t2['certifier_cores'][1]:.2f} Genoa cores, patch {t2['patch_ms']:.3f} ms; N-KERNEL's ssn_1l "
+                  f"x words {p['t2_nkernel_scaled'][0]:.1f} beside / {p['t2_nkernel_scaled'][1]:.1f} serial")
+        lines.append(s)
+    return lines
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--inputs", type=Path, default=HERE / "alt_roads_inputs.json")
@@ -451,6 +478,11 @@ def main() -> int:
                                        x["points"]["t8192"]["noise_rms_lsb_by_k"]["8192"]))
     res["closing"] = {"id": best["id"], "title": next(d["title"] for d in designs(einp["layouts"])
                                                       if d["id"] == best["id"])}
+    exact320 = [x for x in res["designs"] if x["points"]["t8192"]["served"] == "exact"
+                and all(p["caps"]["320"]["stated"]["bar"] <= 0.01 for p in x["points"].values())]
+    best320 = min(exact320, key=lambda x: x["points"]["t8192"]["stream_bytes_per_token"])
+    res["closing_320"] = {"id": best320["id"], "title": next(d["title"] for d in designs(einp["layouts"])
+                                                             if d["id"] == best320["id"])}
     res["lower_bound"] = lower_bound(inp, ll, res)
     res["statement_check"] = statement_check(inp, ll, res)
     p8 = best["points"]["t8192"]["caps"]
@@ -464,6 +496,8 @@ def main() -> int:
         (f"{best['id']}'s network term, cap 32, floor", p8["32"]["stated"]["floor"]),
         (f"{best['id']}'s network term, cap 32, bar", p8["32"]["stated"]["bar"]),
         (f"{best['id']}'s lane forming, uncredited", best["points"]["t8192"]["forming_share_of_stock"]),
+        (f"{best320['id']}'s network term, cap 320, floor", best320["points"]["t8192"]["caps"]["320"]["stated"]["floor"]),
+        (f"{best320['id']}'s network term, cap 320, bar", best320["points"]["t8192"]["caps"]["320"]["stated"]["bar"]),
         ("1% allowance", 0.01)])
     cks = checks(inp, einp, ll, res)
     res["checks"] = [{"name": n, "ok": ok, "value": v} for n, ok, v in cks]
