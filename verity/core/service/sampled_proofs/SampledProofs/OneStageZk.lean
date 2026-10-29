@@ -5,13 +5,16 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **params**: v1's, plus `proofs`, exactly `{"circuit", "registered"}`: the SHA-512 the auditor committed for the circuit
   file (lowercase hex of 64 bytes) and the verifier's own registered file (`flock-verify --registered`'s object, or null
   for a program that reads no registered value). The partition must not be null: the sessions are verified against the
-  verifier's own partition object;
+  verifier's own partition object; and v1's `challenger`, with its `window_root`, must be named (`NO_CHALLENGER`);
 * **commitment**: v1's (the registration record);
 * **evidence**: v1's without `verdicts`, plus `proofs`, exactly `{"public", "sessions"}`: the public file's SHA-512 and,
   for each of v1's `sessions` in order, `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and
   `{file: SHA-512}` naming at least each rep file the statement's session reads (`<stream with / as .>.bin`);
 * **blobs**: the files those digests name (`Core.Blobs`), and the MUFU tables any lookup reads, found under their pinned
   SHA-512 as `flock-verify --archive` finds them;
+* **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
+  the challenger's key, on the verifier's window; none read refuses. The check below runs at them (`checkBlobsAt`): v1's
+  `checkAt` refuses a draw other than the one they give before v1's `check`;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path); then v1's `check` on those verdicts, one of
@@ -33,6 +36,10 @@ open Flock (V)
 def PROTOCOL : String := "verity/sampled-proofs/one-stage/v2"
 /-- The statement every drawn unit's session proves (`one_stage.proofs.STATEMENT`). -/
 def STATEMENT : String := "verity/flock-circuit"
+/-- The refusal of parameters naming no challenger: the draw's coins are never the prover's to choose. -/
+def NO_CHALLENGER : String :=
+  "the parameters name no challenger: the draw's coins are the auditor's challenger's signed release (challenger, " ++
+    "with window_root), never the prover's record"
 
 /-- The verifier's own inputs to `flock-verify verify --zk`: the program's descriptor (as JSON and as the bytes
 `--program` reads), the partition object, the circuit file's committed SHA-512 and the registered file. -/
@@ -100,6 +107,7 @@ def paramsOfJson (j : Json) : V Params := do
   let (circuit, registered) ← circuitOf pr
   let rest := Json.mkObj (without j "proofs")
   let base ← OneStage.paramsOfJson rest
+  if base.challenger.isNone then throw NO_CHALLENGER
   let some partition := base.verifier.partition
     | throw "partition is null: the sessions are verified against the verifier's own partition object"
   let programJ := getD rest "program"
@@ -296,11 +304,26 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
     if all && proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
   return out
 
-def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
+/-- The coins the draw read (module docstring, **coins**): v1's, which only the parameters' challenger gives; a refusal
+when none read. -/
+def coinsOf (p : Params) (c : OneStage.Commitment) (e : Evidence) : V ByteArray := do
+  match ← OneStage.coinsOf p.base c e.base with
+  | some ξ => pure ξ
+  | none => throw s!"coins: {NO_CHALLENGER}"
+
+/-- The check at the coins `ξ` (module docstring, **check**): the sessions' verdicts on the blobs, then v1's `checkAt`
+at `ξ` on them. -/
+def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match verdicts p.own e.pub e.sessions (some e.base.provedUnits) bs with
   | .error err => .reject s!"proofs: {err}"
-  | .ok vs => OneStage.check p.base c { e.base with verdicts := vs }
+  | .ok vs => OneStage.checkAt p.base c (some ξ) { e.base with verdicts := vs }
+
+/-- The audit's check on the blobs: at the coins `coinsOf` reads (`checkBlobsAt`), refused with its reason when none
+read. -/
+def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
+    Core.Outcome OneStage.Public Core.Integrity :=
+  Core.atCoins (coinsOf p c e) (fun ξ => checkBlobsAt p c ξ e bs)
 
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
@@ -317,6 +340,13 @@ def protocol : Core.BlobProtocol where
   publicJson := OneStage.publicJson
   profileJson := Core.Integrity.toJson
   checkBlobs := checkBlobs
+
+/-- The audit on the blobs `bs` reads its draw's coins (`coinsOf`) and decides at them (`checkBlobsAt`). -/
+def live (bs : Array ByteArray) : Core.Live (protocol.on bs) where
+  Coins := ByteArray
+  coins := coinsOf
+  checkAt p c ξ e := checkBlobsAt p c ξ e (Core.Blobs.ofArray bs)
+  factors _ _ _ := rfl
 
 /-- `protocol.main`'s commands, and `verdicts OWN PROOFS [BLOB ...]`: the sessions' verdicts alone (`verdicts`, with no
 proved units to bind), from the verifier's own inputs (`ownOfJson`) and the evidence's `proofs` (`proofsOf`), each file

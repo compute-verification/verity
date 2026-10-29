@@ -7,7 +7,8 @@ import Properties.Challenger
 the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the reader's property `DrawnByDevice`.
 `drawnByDevice_nontrivial`: a reader that accepts every record fails `DrawnByDevice`'s statement.
 `oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
-proved about `check` (`acceptMeans_iff`) hold of what it accepts.
+proved about `check` (`acceptMeans_iff`) hold of what it accepts. `oneStageZk_source`: v2's coins read only under a
+challenger and a window its parameters name, so `oneStageZk_drawn`, `coinsFromLog` for v2, is never vacuous.
 -/
 
 namespace Properties.Challenger
@@ -89,5 +90,49 @@ theorem oneStage_check_of_accept {p : SampledProofs.OneStage.Params} {c : Sample
     cases hw : ξ.bind (SampledProofs.OneStage.coinsWhy p c e) with
     | some why => rw [hw] at h; simp at h
     | none => rw [hw] at h; exact h
+
+/-- v2's coins read only under the challenger and the window its parameters name (`oneStageZkSource`). -/
+theorem oneStageZk_source {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
+    {e : SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} (hξ : SampledProofs.OneStageZk.coinsOf p c e = .ok ξ) :
+    ∃ d, oneStageZkSource p c = some d := by
+  unfold SampledProofs.OneStageZk.coinsOf at hξ
+  unfold oneStageZkSource oneStageSource
+  cases h1 : SampledProofs.OneStage.coinsOf p.base c e.base with
+  | error r => simp [h1, bind, Except.bind] at hξ
+  | ok o =>
+    cases o with
+    | none => simp [h1, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hξ
+    | some ξ' =>
+      unfold SampledProofs.OneStage.coinsOf at h1
+      rcases hch : p.base.challenger with _ | ⟨key, label⟩ <;>
+        rcases hw : p.base.verifier.windowRoot with _ | w <;> simp only [hch, hw] at h1 ⊢
+      · split at h1 <;> simp [pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h1
+      · split at h1 <;> simp [pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h1
+      · simp [throw, throwThe, MonadExceptOf.throw] at h1
+      · exact ⟨_, rfl⟩
+
+/-- **What v2 accepts on the blobs `bs`, it accepts at coins its challenger device drew, or the run carries a break**
+(`CoinsFromLog` for v2): its answer's byte strings decode, and it accepts at the coins `ξ` its evidence's record shows,
+read under the challenger and window its parameters name (`d`); `ξ` is what a run of the device under that key released
+of the family after the registration's digest, a run the device's own ledger opens on the window, or the fixed finder
+outputs a break from the record and the device. -/
+theorem oneStageZk_drawn (hd : DrawnByDevice) (bs : Array ByteArray) (dev : History) (a b e : ByteArray)
+    (h : ((SampledProofs.OneStageZk.protocol.on bs).answer a b e).verdict = .accept) :
+    ∃ (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment)
+      (ev : SampledProofs.OneStageZk.Evidence) (ξ : ByteArray) (d : Draws),
+      (Core.canonicalJson a >>= SampledProofs.OneStageZk.paramsOfJson) = .ok p ∧
+      SampledProofs.OneStageZk.protocol.commitment b = .ok c ∧ SampledProofs.OneStageZk.protocol.evidence e = .ok ev ∧
+      ((SampledProofs.OneStageZk.protocol.on bs).answerAt (SampledProofs.OneStageZk.live bs) a b ξ e).verdict =
+        .accept ∧
+      oneStageZkSource p c = some d ∧
+      ((∃ s ∈ dev.runs d.key.pub, OpensOn dev d.key.pub d.window s.id ∧ s.released d.label d.after = ξ) ∨
+        Break dev d.key d.label ev.base.coins) := by
+  obtain ⟨p, c, ev, ξ, hp, hc, hev, hξ, hacc⟩ := liveAnswer _ (SampledProofs.OneStageZk.live bs) a b e h
+  obtain ⟨d, hd'⟩ := oneStageZk_source (p := p) (c := c) (e := ev) hξ
+  obtain ⟨raw, hraw, hdec⟩ := oneStageZk_reads p c d hd' ev ξ hξ
+  refine ⟨p, c, ev, ξ, d, hp, hc, hev, hacc, hd', ?_⟩
+  rcases hd dev d.key d.window d.label d.after ev.base.coins raw hraw with ⟨s, hs, hopen, hrel⟩ | hb
+  · exact .inl ⟨s, hs, hopen, by rw [← hrel]; exact hdec⟩
+  · exact .inr hb
 
 end Properties.Challenger
