@@ -13,8 +13,9 @@
 # then each window's request Programs and manifest.json into its workload dir (`tools/advice_compile.py RUN --window K`), and the
 # workload dir opened as PROVE-PATH opens it (`deferred_rows.of_record`, `opening.CommittedStore`) with what the workload's Programs
 # read looked up (identities.txt). The endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`, or until its filesystem has under
-# DISK_FLOOR_GB free (default 300, checked before serving and every 10 s). The serve dir's records (requests.jsonl, serve.json,
-# windows.jsonl, advice_trace.jsonl, summary.json) are copied into $OUT every 10 s, at the end and on SIGTERM, so custody keeps them.
+# DISK_FLOOR_GB free (default 300, checked before serving and every 10 s). The serve dir's public records (serve.json,
+# windows.jsonl, seals.jsonl, pauses.jsonl, summary.json) are copied into $OUT every 10 s, at the end and on SIGTERM, so custody
+# keeps them; requests.jsonl and the step traces, which hold request values, stay in the serve dir.
 # VARIED=N (with ADMIT=release-order; VARIED_RUNS=3, VARIED_RATE=4, VARIED_JITTER_MS=400): before READY, VARIED_RUNS runs of N
 # varied requests (network-accounting's traffic, `serve_load.py --varied`), each numbered under a fresh release run and
 # sent up to the jitter late, then `tools/admit_rows_check.py` over the serve dir: every window's first rows must be in
@@ -84,7 +85,7 @@ fi
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-300}; floor=$((DISK_FLOOR_GB * 1048576))
 under_floor() { [ "$(df --output=avail -k "$ROOT" | tail -1)" -lt "$floor" ]; }
 keep_records() {
-  for f in requests.jsonl serve.json windows.jsonl seals.jsonl pauses.jsonl advice_trace.jsonl summary.json; do
+  for f in serve.json windows.jsonl seals.jsonl pauses.jsonl summary.json; do
     [ -f "$D/$f" ] && cp "$D/$f" "$OUT/.$f.tmp" 2>/dev/null && mv "$OUT/.$f.tmp" "$OUT/$f"
   done
 }
@@ -233,7 +234,7 @@ for _ in $(seq 1 120); do                                   # the load's windows
   pending=0; for k in $(closed); do [ -f "$D/advice/.w$k/windows.json" ] || pending=1; done
   [ "$pending" = 0 ] && break; sleep 5
 done
-cp "$D/windows.jsonl" "$D/requests.jsonl" "$D/advice/windows.json" "$OUT/" 2>/dev/null
+cp "$D/windows.jsonl" "$D/advice/windows.json" "$OUT/" 2>/dev/null
 WS=$("$PY" -c "import json,sys; print(' '.join(sorted(json.load(open('$D/advice/windows.json'))['windows'], key=int)))" 2>/dev/null)
 FIRST=${WINDOW:-5}
 for k in $FIRST $WS; do
