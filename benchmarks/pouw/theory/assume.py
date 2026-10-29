@@ -59,13 +59,20 @@ C_t(class(i), j) (`lead_rot_words`, COUNTER's `lead:rot` Draw replicated, its sp
     2·w + P_k(i) + Q_k(class, j), with w the retained XOR-step word, so they are never written. An XOR3 step is not,
     by 11, so both its words are. The prover writes the XOR3 words (two IADD3s from the retained word), folds them (a
     LOP3) and applies each IADD3 step in two IADD3s: 5 a cell a period against honest's 6, bit-exact against
-    `thin_fold`. Its four mutations are caught, and the XOR3 step taken carry-free agrees only at bit 0. The gap
-    against FoldMaterial's credit is priced over the column precompute's cost, with its break-even.
+    `thin_fold` and the final word O′ (one IADD3 when no XOR3 step formed it). Its four mutations are caught, and
+    the XOR3 step taken carry-free agrees only at bit 0. The gap against FoldMaterial's credit is priced over the
+    column precompute's cost, with its break-even.
 13. Why item 9's windows held and missed it (`alt_span_split`): they give each increment as one per-cell register,
     so the IADD3 shortcut σ + 2S + 2δ_a + δ_b is no one- or two-instruction program (three, honest's count). Split
     into free row and column registers, σ + 2S + P + Q is two. The gain is the split, which no per-cell window sees.
-14. The folds that force every word (`fold_fix_costs`): the XOR fold alone, and an XOR3 on every pair plus an IADD3
-    every k-th pair over the same words, (1 + 1/k)/2 a word.
+14. The fold that forces every word (`fold_fix`): one chain, an XOR3 on every pair and an IADD3 over the same two
+    words after every k-th pair, (1 + 1/k)/2 a word. Decomposition skips none of its words (11), so packing is what
+    is left: COUNTER's `pack` carried through the IADD3 steps (`fix_pack_attack`: k pairs fold packed, then each cell
+    takes its lane out, XORs it in and applies the step decomposed), bit-exact against `fix_fold` and O′, with three
+    mutations caught. Priced at two unpack counts and two column sharings (the lead's 64-row coin tile, as `decomp`
+    charges it, and the call, as `pack` does), over k; k = ∞ is the XOR fold alone. A second accumulator for the
+    IADD3s is no fix: it is ℤ-linear over the unit, so it decomposes to two instructions a cell
+    (`fix_two_acc_decomp`) and the XOR accumulator packs.
 
 Run: `python assume.py [--out DIR] [--trials N]`. numpy, and `fold_routes` beside this file.
 """
@@ -626,7 +633,8 @@ def alt_fold_decomp_attack(x, rho, gamma, cls):
     """The decomposition prover for the alternating fold at zero data. It materializes only the XOR3-step words (both
     forced, since their XOR does not decompose above bit 0) and applies each IADD3 step as 2·(the retained XOR word)
     + P_k(i) + Q_k(class, j), a ℤ-linear identity that never materialises the IADD3 step's two words. Returns σ and
-    the per-cell instruction counts (an IADD3/IMAD or a LOP3 is one)."""
+    the per-cell instruction counts (an IADD3/IMAD or a LOP3 is one) and the final word O′ the seal reads (one IADD3
+    of the row and column sums when no XOR3 step formed it)."""
     u = np.uint64
     m, n = x.shape
     g = gamma[cls]                                    # (m, n, S) per-cell column increment γ_t
@@ -657,7 +665,12 @@ def alt_fold_decomp_attack(x, rho, gamma, cls):
             sigma = (sigma + u(2) * last) & u(M32)
             sigma = (sigma + Pk + Qk) & u(M32)
             counts["iadd"] += 2
-    return sigma, counts, P
+    if P % 2 and 2 * P == S:
+        final, counts["seal"] = last, 0
+    else:
+        final = (x + rho.astype(np.uint64).sum(axis=1)[:, None] + gamma.astype(np.uint64).sum(axis=2)[cls]) & u(M32)
+        counts["seal"] = 1
+    return sigma, counts, P, final
 
 
 def fold_decomp(rng: np.random.Generator, trials: int, Ks=(2048, 8192),
@@ -678,12 +691,12 @@ def fold_decomp(rng: np.random.Generator, trials: int, Ks=(2048, 8192),
         for _ in range(max(1, trials // 20)):
             W, x, rho, gamma, cls = lead_rot_words(rng, m, n, S)
             ref = thin_fold_np(W, True, np.zeros((m, n), np.uint64), M32)
-            got, counts, P = alt_fold_decomp_attack(x, rho, gamma, cls)
-            hit += int(np.array_equal(got, ref))
+            got, counts, P, final = alt_fold_decomp_attack(x, rho, gamma, cls)
+            hit += int(np.array_equal(got, ref) and np.array_equal(final, W[:, :, -1]))
         exact = exact and hit == max(1, trials // 20)
         stock = (32 - q) * S / 32
         honest = S + P                                    # S word writes (FoldMaterial) + one fold op a pair
-        core = counts["form"] + counts["xor"] + counts["iadd"]
+        core = sum(counts.values())
         by_col = {}
         for col_ops in (col_lanes, 4, col_lanes + 3, 2 * (col_lanes + 3)):
             col = col_ops * S * npat / tile
@@ -718,16 +731,16 @@ def fold_decomp_mutations(rng: np.random.Generator, m: int, n: int, S: int) -> d
     W, x, rho, gamma, cls = lead_rot_words(rng, m, n, S)
     ref = thin_fold_np(W, True, np.zeros((m, n), np.uint64), M32)
     caught = {}
-    merged, _, _ = alt_fold_decomp_attack(x, rho, gamma, np.zeros_like(cls))
+    merged = alt_fold_decomp_attack(x, rho, gamma, np.zeros_like(cls))[0]
     caught["row-parity classes merged"] = not np.array_equal(merged, ref)
     x2 = x.copy()
     x2[3, 5] = (x2[3, 5] + np.uint64(1)) & np.uint64(M32)
-    off, _, _ = alt_fold_decomp_attack(x2, rho, gamma, cls)
+    off = alt_fold_decomp_attack(x2, rho, gamma, cls)[0]
     caught["one cell's offset off by one"] = not np.array_equal(off, ref)
     g0 = gamma.copy()
     g0[:, :, 2::4] = 0
     g0[:, :, 3::4] = 0
-    noq, _, _ = alt_fold_decomp_attack(x, rho, g0, cls)
+    noq = alt_fold_decomp_attack(x, rho, g0, cls)[0]
     caught["IADD3 step's column part dropped"] = not np.array_equal(noq, ref)
     cf = _carry_free_xor(x, rho, gamma, cls)
     caught["XOR3 step taken carry-free"] = not np.array_equal(cf, ref)
@@ -772,16 +785,170 @@ def alt_span_split(seed: int) -> dict:
             "split: two instructions": FR.two(split, pool_split)}
 
 
-def fold_fix_costs() -> dict:
-    """Two folds that force every word (so decomposition skips none) and break the SWAR bias (so packing fails), with
-    their fold cost a word. `(1+1/k)/2` is one LOP3 a pair (½ a word) plus one IADD3 every k-th pair over the same,
-    already-materialised words (1/(2k) a word)."""
-    xor_only = {"fold_a_word": 0.5, "decomp_gap": 0.0,
-                "packing_gap_pct": "0–2.03 (W1 predicate ruling; interim 2 item 7)"}
-    alt_k = {f"k={k}": {"fold_a_word": round((1 + 1 / k) / 2, 4)} for k in (2, 4, 8, 16)}
-    return {"xor_only": xor_only, "xor_plus_iadd3_every_kth_reusing_words": alt_k,
-            "why": "every word is consumed by an XOR3, so a word's bit above 0 (its carries) is forced per cell; the "
-                   "periodic IADD3 over the same words makes a biased packed XOR disagree with the biased sum"}
+def _signed(v: np.ndarray) -> np.ndarray:
+    return ((v.astype(np.int64) + (1 << 31)) & M32) - (1 << 31)
+
+
+def fix_fold(W: np.ndarray, k: int | None) -> np.ndarray:
+    """The fix, one chain over a cell's words: σ ← σ ⊕ w_a ⊕ w_b on every pair, then σ ← σ + w_a + w_b over the same
+    two words after every k-th pair (`k` None: the XOR fold alone). The odd last word is unused, as in `thinFold`."""
+    u = np.uint64
+    s = np.zeros(W.shape[:-1], u)
+    for p in range(W.shape[-1] // 2):
+        wa, wb = W[..., 2 * p], W[..., 2 * p + 1]
+        s = s ^ wa ^ wb
+        if k and (p + 1) % k == 0:
+            s = (s + wa + wb) & u(M32)
+    return s
+
+
+def fix_pack_attack(x, rho, gamma, cls, k: int | None, mutate: str | None = None):
+    """The packed prover against the fix at zero data: COUNTER's `pack`, carried through the chain's IADD3 steps. L
+    cells of a row share b-bit lanes of g registers, the low lanes biased by 2^(b−1) so none borrows; a word is the
+    packed sum Dp + Rp_t(i) + Cp_t(class) and a pair one packed LOP3. A run of k pairs folds packed; then each cell
+    takes its lane out, sign-extended from its top bit (each word's bits above it are its sign, so the XOR's are the
+    signs' parity), XORs it into its own σ, and applies the IADD3 step decomposed, σ + 2x + P_p(i) + Q_p(class, j).
+    O′ is one IADD3 of the row and column sums. Returns σ, O′ and the layout, or None when no lane fits."""
+    u = np.uint64
+    m, n = x.shape
+    S = gamma.shape[2]
+    if mutate == "classes merged":
+        cls = np.zeros_like(cls)
+    xs, R, C = _signed(x), np.cumsum(_signed(rho), axis=1), np.cumsum(_signed(gamma), axis=2)
+    need = int(np.abs(xs[:, :, None] + R[:, None, :] + C[cls]).max()).bit_length() + 1
+    best = None
+    for gg in (1, 2):
+        LL = 32 * gg // need
+        if LL > gg and n % LL == 0 and (best is None or gg / LL < best[0] / best[1]):
+            best = (gg, LL)
+    if best is None:
+        return None
+    g, L = best
+    b, width_all = 32 * g // L, 32 * g
+    P = S // 2
+    ends = {p for p in range(P) if k and (p + 1) % k == 0}
+    bounds = sorted({0, P} | {p + 1 for p in ends})
+    blocks = list(zip(bounds[:-1], bounds[1:]))
+    sigma = np.zeros((m, n), u)
+    x2 = (u(2) * x) & u(M32)
+    for gi in range(n // L):
+        cols = list(range(gi * L, (gi + 1) * L))
+        Dp, Rp, Cp = u(0), u(0), u(0)
+        for a, j in enumerate(cols):
+            bias = (1 << (b - 1)) if a < L - 1 and mutate != "bias dropped" else 0
+            Dp = Dp + ((xs[:, j] + bias).astype(u) << u(a * b))
+            Rp = Rp + (R.astype(u) << u(a * b))
+            Cp = Cp + (C[:, j, :].astype(u) << u(a * b))
+        Pk = (Dp[:, None] + Rp + Cp[cls]) & u((1 << width_all) - 1)
+        for p0, p1 in blocks:
+            X = np.bitwise_xor.reduce(Pk[:, 2 * p0:2 * p1], axis=1)
+            for a, j in enumerate(cols):
+                width = b if a < L - 1 else width_all - a * b
+                v = (X >> u(a * b)) & u((1 << width) - 1)
+                if mutate != "no sign extension":
+                    v = np.where((v >> u(width - 1)) & u(1), v | u(M32 ^ ((1 << width) - 1)), v)
+                col = sigma[:, j] ^ (v & u(M32))
+                if p1 - 1 in ends:
+                    p = p1 - 1
+                    Pr = ((R[:, 2 * p] + R[:, 2 * p + 1]) & M32).astype(u)
+                    Qc = ((C[cls, j, 2 * p] + C[cls, j, 2 * p + 1]) & M32).astype(u)
+                    col = (col + x2[:, j] + Pr + Qc) & u(M32)
+                sigma[:, j] = col
+    final = ((xs + R[:, -1][:, None] + C[cls, :, -1]) & M32).astype(u)
+    return sigma, final, {"g": g, "L": L, "b": b, "blocks": len(blocks), "iadd3_steps": len(ends)}
+
+
+def fix_two_acc_decomp(x, rho, gamma, cls, k: int):
+    """The variant with a second accumulator, σ_add = Σ over every k-th pair of w_a + w_b: ℤ-linear over the whole
+    unit, so it is n_k·2x + ΣP(i) + ΣQ(class, j), two instructions a cell (an IMAD and an IADD3) for any k."""
+    S = gamma.shape[2]
+    ends = [p for p in range(S // 2) if (p + 1) % k == 0]
+    xs, R, C = _signed(x), np.cumsum(_signed(rho), axis=1), np.cumsum(_signed(gamma), axis=2)
+    rows = sum(R[:, 2 * p] + R[:, 2 * p + 1] for p in ends)
+    colsum = sum(C[:, :, 2 * p] + C[:, :, 2 * p + 1] for p in ends)
+    return ((2 * len(ends) * xs + rows[:, None] + colsum[cls]) & M32).astype(np.uint64)
+
+
+def fix_attack_cost(S: int, lay: dict, unpack: float, col_rows: int, ncol: int = 3, npat: int = 2) -> float:
+    """The packed prover's W1 count a cell (IADD3, LOP3, SHF, SGXT one each; loads 2g/BLOCK a packed word). Packed
+    column terms, (ncol + L)·g a class, step and lane group, are shared by `col_rows`/npat rows; row terms by the
+    call's columns."""
+    g, L, nb, nf = lay["g"], lay["L"], lay["blocks"], lay["iadd3_steps"]
+    P = S // 2
+    words = 2 * P * g / L * (1 + 2 / FIX_BLOCK)
+    lop3 = P * g / L
+    lanes = nb * (unpack + 1)
+    iadd = 2 * nf + (1 if nf else 0)
+    seal = 1
+    col = ((ncol + L) * g / L * S + nf) * npat / col_rows
+    row = (3 * S + 2 * nf) / FIX_CALL
+    return words + lop3 + lanes + iadd + seal + col + row
+
+
+FIX_BLOCK = 8
+FIX_CALL = 4096
+FIX_KS = (1, 2, 4, 8, 16, 32, None)
+FIX_READINGS = {"unpack 4/3, columns a 64-row tile": (4 / 3, 64), "unpack 3, columns a 64-row tile": (3, 64),
+                "unpack 4/3, columns the call": (4 / 3, FIX_CALL), "unpack 3, columns the call": (3, FIX_CALL)}
+
+
+def fold_fix(rng: np.random.Generator, trials: int, Ks=(2048, 8192), q: int = 5, m: int = 64, n: int = 48) -> dict:
+    """The fold that forces every word, priced against the packed prover, bit-exact. Decomposition skips no word of
+    it: every word enters an XOR3, so its bits above 0 are forced (item 11), and the decomposition prover is the
+    honest one. Packing is what is left; the sweep over k finds where the IADD3 steps make it lose. FoldMaterial
+    credits S word writes, a LOP3 a pair and an IADD3 every k-th pair. `unpack` 4/3 is the hand count at 3 lanes of
+    2 registers (SGXT; SHF.R.U64 and SGXT; SHF.R.S32.HI); 3 is COUNTER's (6 a cell for σ and O′)."""
+    rows, exact, two_exact, two_acc = {}, True, True, {}
+    for K in Ks:
+        S = NT.steps(K)
+        P = S // 2
+        stock = (32 - q) * S / 32
+        per_k = {}
+        for k in FIX_KS:
+            for _ in range(max(1, trials // 100)):
+                W, x, rho, gamma, cls = lead_rot_words(rng, m, n, S)
+                got = fix_pack_attack(x, rho, gamma, cls, k)
+                assert got is not None, "the lead's zero-data words should pack (3 lanes of 2 registers)"
+                sigma, final, lay = got
+                exact = exact and np.array_equal(sigma, fix_fold(W, k)) and np.array_equal(final, W[:, :, -1])
+                if k:
+                    ends = [p for p in range(P) if (p + 1) % k == 0]
+                    ref_add = sum(W[:, :, 2 * p] + W[:, :, 2 * p + 1] for p in ends) & np.uint64(M32)
+                    two_exact = two_exact and np.array_equal(fix_two_acc_decomp(x, rho, gamma, cls, k), ref_add)
+            honest = S + P + lay["iadd3_steps"]
+            entry = {"fold_a_word": round((1 + 1 / k) / 2, 4) if k else 0.5, "honest": honest, "layout": lay}
+            for label, (unpack, col_rows) in FIX_READINGS.items():
+                c0 = min(honest, fix_attack_cost(S, lay, unpack, col_rows))
+                entry[label] = {"C0": round(c0, 2), "gap_vs_foldmaterial": round((honest - c0) / stock, 4),
+                                "gap_vs_stock": round(max(0.0, (stock - c0) / stock), 4)}
+            per_k["XOR alone" if k is None else f"k={k}"] = entry
+        rows[f"K {K} (S {S})"] = {"stock": round(stock, 2), "by_k": per_k}
+        c0_two = fix_attack_cost(S, per_k["XOR alone"]["layout"], 4 / 3, 64) + 2
+        two_acc[f"K {K}"] = round(max(0.0, (per_k["k=4"]["honest"] - c0_two) / stock), 4)
+    macs = {K: sum(n_ * kk for _, n_, kk in NT.CALLS if kk == K) for K in Ks}
+    tot = sum(macs.values())
+    weighted, passes = {}, {}
+    for label in FIX_READINGS:
+        weighted[label], ok = {}, []
+        for kl in next(iter(rows.values()))["by_k"]:
+            gap = sum(macs[K] / tot * rows[f"K {K} (S {NT.steps(K)})"]["by_k"][kl][label]["gap_vs_foldmaterial"]
+                      for K in Ks)
+            weighted[label][kl] = round(gap, 4)
+            if gap <= T1 and kl != "XOR alone":
+                ok.append(int(kl[2:]))
+        passes[label] = max(ok) if ok else None
+    W, x, rho, gamma, cls = lead_rot_words(rng, m, n, NT.steps(Ks[0]))
+    ref = fix_fold(W, 4)
+    caught = {mu: not np.array_equal(fix_pack_attack(x, rho, gamma, cls, 4, mu)[0], ref)
+              for mu in ("bias dropped", "no sign extension", "classes merged")}
+    first = next(iter(FIX_READINGS))
+    return {"cases": rows, "bit_exact": exact, "mutations_caught": caught,
+            "mac_weighted_gap_vs_foldmaterial": weighted, "largest_k_passing_T1": passes,
+            "per_period_AND": {f"{kl}, {first}": NT.per_period(weighted[first][kl]) for kl in ("XOR alone", "k=8")},
+            "two_accumulators": {"decomposition_exact": two_exact,
+                                 "gap_vs_foldmaterial_at_k_4 (unpack 4/3, tile)": two_acc,
+                                 "why": "σ_add is ℤ-linear, so it decomposes to two instructions a cell and the XOR "
+                                        "accumulator packs as the XOR fold alone does"}}
 
 
 # ---- pricing ----------------------------------------------------------------------------------------------------
@@ -831,7 +998,7 @@ def main() -> int:
         "alt_carry_couples": alt_carry_couples(),
         "fold_decomp": fold_decomp(rng, args.trials),
         "alt_span_split": alt_span_split(args.seed),
-        "fold_fix_costs": fold_fix_costs(),
+        "fold_fix": fold_fix(rng, args.trials),
         "price": price(),
     }
     fails = []
@@ -896,6 +1063,14 @@ def main() -> int:
         fails.append(f"per-cell IADD3 shortcut is shorter than three: {sp}")
     if not sp["split: two instructions"]:
         fails.append("sanity: the split IADD3 shortcut should take two instructions")
+    ff = res["fold_fix"]
+    if not ff["bit_exact"]:
+        fails.append("the packed prover does not match the fix (σ and O′) bit for bit")
+    missed = [k for k, v in ff["mutations_caught"].items() if not v]
+    if missed:
+        fails.append(f"packed-prover mutations not caught: {missed}")
+    if not ff["two_accumulators"]["decomposition_exact"]:
+        fails.append("the second accumulator's decomposition is not exact")
     res["fails"] = fails
     text = json.dumps(res, indent=1, default=str)
     if args.out:
