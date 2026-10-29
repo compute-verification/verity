@@ -1,4 +1,4 @@
-"""The remote bandwidth audit over PoUS's P2 store (`p2-unit4/v0`): the node's registered store is PoUS's `C*`, the
+"""PoUB over PoUS's P2 store (`p2-unit4/v0`): the node's registered store is PoUS's `C*`, the
 weights `W` encoded under P2 (`pous.schemes.p2`, `p2-16448/v4`) at PoUS's setup, and each receipt is of a unit of four
 of its 2,056-byte blocks, which a GPU sketches as it decodes them while serving.
 
@@ -8,7 +8,7 @@ unit g        blocks 4g … 4g + 3, 8,224 bytes at byte 8224·g: 257 whole 32-by
               N − 4U blocks (none in a store of whole units, as PoUS's of 2^16-block segments) are in no unit, and no
               receipt certifies them
 registration  node, P2's parameters, PoUS's commitment to W, PoUS's salt, the vk root, k_s: PoUS's setup's, the salt
-              drawn after the commitment (`setup.draw_salt`) and the root the verifier built from the C* it decoded to
+              sampled after the commitment (`setup.draw_salt`) and the root the verifier built from the C* it decoded to
               the committed W (`setup.verifier_key_from_encoding`)
 digest        SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u32be w ‖ u32be c0 ‖ u32be blocks_per_segment ‖
               u64be segments ‖ frame(expander) ‖ commitment ‖ salt ‖ root ‖ frame(layout) ‖ frame(receipt kind) ‖
@@ -143,7 +143,7 @@ class Registration:
 def register(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *, site: Site,
              rows: int | None = None) -> Registration:
     """The verifier's registration of a node's P2 store from its PoUS setup, for a node `site` registers as a host
-    (`audit.host_of`, ValueError for any other; `RemoteAudit.P2.Registration.register`): the salt it draws from its
+    (`audit.host_of`, ValueError for any other; `RemoteAudit.P2.Registration.register`): the salt it samples from its
     own secret `source` after the commitment (`setup.draw_salt`), which `vk`, the key it built from the C* it decoded
     at setup (`setup.verifier_key_from_encoding`), must be under."""
     audit.host_of(site, node)

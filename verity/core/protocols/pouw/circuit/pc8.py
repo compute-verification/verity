@@ -17,10 +17,10 @@ port) has no circuit here.  The hiding Programs are `pc4`'s (``Shape.hidden``): 
 place of C̃ and U (under -h3, `Pc8TileHiddenH3` returns the tile's messages, the row its ``sha512/row-seg/v1`` leaf
 hashes, a value for the unit that hashes it: `leaves.tile_messages`; no root uses it yet; and an audit window's tile,
 `Pc8TileSide`, is `Pc8TileHidden` on the window's side rows, each carrying its index field: `SIDE_PORTS`), and the rows are
-C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i, B̃_j ‖ P_B,j; `leaves`) and each
+Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i, B̃_j ‖ P_B,j; `leaves`) and each
 row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.cap`` adds the per-tile cap to the hiding call,
 cut into a unit per word, the tile and its tally (`cap`).  ``Shape.row_k`` cuts each row unit along k into a head, a form
-per segment of row_k positions and a tail (`rowk`), so that a row unit fits C-Flock's block at every served k.  A shape
+per segment of row_k positions and a tail (`rowk`), so that a row unit fits Flock's block at every served k.  A shape
 takes at most one of the two, and each takes whole tiles only (`Shape.check` refuses a short last tile row there); off,
 nothing here changes.
 
@@ -45,7 +45,7 @@ back to that decode.
 
 The noise lines (E_A, E_B, F_A, F_B) and G = F_Bᵀ·F_A (`pearl_c.gram`) are verifier-derived public inputs
 (`anchors.TileAnchors`, `DERIVATIONS`): the verifier derives the lines from public seeds and computes G from them, so no
-unit computes G.  In a unit's proof each is a C-Flock public input region, as in `pc4`: one u16 word per E4M3 code, two
+unit computes G.  In a unit's proof each is a Flock public input region, as in `pc4`: one u16 word per E4M3 code, two
 per FP32 word of G, low half first.
 """
 from __future__ import annotations
@@ -318,7 +318,7 @@ def side_tile(k: int, tile: tuple[int, int] = (1, 1), dev: str = "sm120") -> Spe
 
 #: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, the anchors' regions, and its
 #: advice: parameters the prover supplies that no unit computes and nothing binds (the cap word's certificates,
-#: `cap.ADVICE`), which C-Flock proves as private inputs.  An advice port is in the unit's io and in no read set: in no
+#: `cap.ADVICE`), which Flock proves as private inputs.  An advice port is in the unit's io and in no read set: in no
 #: committed row (so in no link either) and in no public input region, which `leaves.statement_rows` enforces.  Under the
 #: cap the ports are `cap.PORTS` (``Shape.ports``).
 PORTS = {

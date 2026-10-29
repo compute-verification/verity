@@ -1,4 +1,4 @@
-"""The inner phase's firewall (`verity_flock.rec_live`) held to what live PROTOCOL.md §10.3 says it does, one rule a test:
+"""The inner phase's ZK server (`verity_flock.rec_live`) held to what live PROTOCOL.md §10.3 says it does, one rule a test:
 ``Link``'s ``y`` is the schedule's number of zero elements; the coin server is shown the schedule's ``Hello``, once the
 prover's is the same canonical JSON; the record lists streams by name, whatever order the prover opened them in; a session
 that ends without ``Finish`` is a stop, written and counted; any exception while handling a request is a refusal; and the
@@ -139,7 +139,7 @@ def test_the_record_lists_streams_in_the_schedules_order_whatever_order_they_wer
 
 
 def _stopped_record(reqs, then_stop=b"not a request"):
-    """The coin server's record of a session sent `reqs` and then a request the firewall refuses."""
+    """The coin server's record of a session sent `reqs` and then a request the ZK server refuses."""
     proxy = _proxy(_schedule())
     for r in reqs + [then_stop]:
         proxy.handle(r)
@@ -162,7 +162,7 @@ def test_a_stopped_record_does_not_show_whether_or_when_an_open_was_sent():
 
 
 def _coin_calls(reqs, schedule):
-    """Every call the firewall makes on the coin server while it handles `reqs`, in order, the ones it refuses included."""
+    """Every call the ZK server makes on the coin server while it handles `reqs`, in order, the ones it refuses included."""
     coins, calls = RL.CoinServer(T._counter_rand()), []
     for name in ("start", "commit", "y", "open", "round", "record"):
         f = getattr(coins, name)
@@ -175,7 +175,7 @@ def _coin_calls(reqs, schedule):
 
 def test_the_coin_server_never_sees_where_an_open_was_sent():
     """The coin server is the auditor's, so its calls, not only its record, must not show where the prover sent each Open
-    (firewall-contract's gap 3): every placement of the two Opens before their first rounds, finished or cut anywhere,
+    (ZK server-contract's gap 3): every placement of the two Opens before their first rounds, finished or cut anywhere,
     gives the coin server the honest session's calls or a prefix of them."""
     two = ("circuit/rep0", "circuit/rep1")
     sched = _schedule(two)
@@ -210,7 +210,7 @@ def test_the_coin_server_never_sees_where_an_open_was_sent():
 
 def test_a_stray_commit_link_or_finish_reaches_the_coin_server_as_a_plain_stop():
     """A Commit before Hello or after the first, a Link before Commit or after the first, and a Finish before the last
-    round are refused by the firewall itself, before any call on the coin server, so wherever one comes the coin server's
+    round are refused by the ZK server itself, before any call on the coin server, so wherever one comes the coin server's
     calls are a prefix of the honest session's: they show where the session stopped, never which request stopped it
     (review-zk-gateway's r4)."""
     two = ("circuit/rep0", "circuit/rep1")
@@ -270,9 +270,9 @@ class _Wire:
 
 
 def test_a_session_that_ends_without_finish_is_written_and_counted_as_a_stop(tmp_path):
-    """A connection that closes after drawing coins (here after its binding round), and one cut inside a frame, are each a
+    """A connection that closes after flipping coins (here after its binding round), and one cut inside a frame, are each a
     session that stopped: the coin server's record of it is written and says so, and it counts. Otherwise the prover could
-    draw coins, look at them and drop the connection as often as it likes, and the record would never show it."""
+    flip coins, look at them and drop the connection as often as it likes, and the record would never show it."""
     t, got = _serve(tmp_path, 3, _schedule())
     w = _Wire(got["addr"])
     drew = [RL.decode_resp(w.handle(r))[0] for r in (
@@ -310,7 +310,7 @@ def test_a_hello_the_firewall_cannot_read_is_a_refusal(hello):
 
 
 def test_any_exception_while_handling_a_request_is_a_refusal_and_serve_goes_on(tmp_path):
-    """The firewall's own fault (here the coin server's, a KeyError) stops the session it happened in, as a refusal; and a
+    """The ZK server's own fault (here the coin server's, a KeyError) stops the session it happened in, as a refusal; and a
     request that raises something other than ValueError ends neither `Proxy.handle` nor `serve`."""
 
     class Broken(RL.CoinServer):
@@ -402,7 +402,7 @@ FLAT = Path(__file__).resolve().parent / "fixtures" / "hidden-outputs" / "flat" 
 def test_the_schedule_of_a_statements_shape_is_the_one_a_real_session_keeps():
     """`schedule_for` from the shape alone (m = 25, k_log = 22, nbl = 3, three regions) is the flat GEMM selftest's honest
     session (the fetched fixture `test_rec_algebra` reads), round for round: coins, tops' node counts, level-0 copies, message rows. That
-    session drew committed coins, so its Hello also names them; the inner session's, on live OS coins, does not."""
+    session sampled committed coins, so its Hello also names them; the inner session's, on live OS coins, does not."""
     assert (FLAT / "records-cpu" / "honest.json").is_file(), (
         f"{FLAT} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")
     rec = json.loads((FLAT / "records-cpu" / "honest.json").read_text())["record"]
