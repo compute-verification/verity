@@ -234,8 +234,8 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
 
 def _made(plan: UN.Plan, fid: str, want: str, info: dict) -> Any:
     """A target `_planned` left to the process that checks it: made there (`units.make`) under its check's recording, or by the
-    zygote that forked it (`_prepare`), and held to the descriptor its binding's build gave (`units.Stale`, its check's
-    error)."""
+    zygote that forked it (`_prepare`), and held to the descriptor its binding's build gave or its record holds (`units.Stale`,
+    its check's error)."""
     if (made := info.get("made")) is not None:
         fn, err, _ = made
         if err is not None:
@@ -273,12 +273,14 @@ def _prepare(x: int | tuple[int, ...]) -> None:
         gc.freeze()                   # what it built stays shared with the processes this zygote forks
 
 
-def _planned(plan: UN.Plan, opts: CK.Options, cache: Path) -> tuple[list[tuple], list[dict], dict[int, tuple[dict, str]]]:
+def _planned(plan: UN.Plan, opts: CK.Options, cache: Path, forked: bool = False) \
+        -> tuple[list[tuple], list[dict], dict[int, tuple[dict, str]]]:
     """`_tasks` of ``--all`` from the bindings' records (`units.plan`), each target's key and the entries reused.  A target that
-    misses through a binding whose record counted is made here from a binding that reaches it (`units._materialize`), and
-    `units.Stale` when its descriptor is not its record's; through one built apart, a primitive is made here when its id makes
-    it (`units.built_here`), and anything else where it is checked (`_made`): by the zygote that forks its check, which makes
-    every such target of its binding (`_prepare`, `_owners`), or else by its check's process."""
+    misses through a binding built apart, or through any binding when the zygotes fork the checks (``forked``), is made here
+    only if it is a primitive its id makes (`units.built_here`), and anything else where it is checked (`_made`): by the zygote
+    that forks its check, which makes every such target of its binding (`_prepare`, `_owners`), or else by its check's process.
+    So a run whose records count describes no target here, one after another, to check it.  Else it is made here from a
+    binding that reaches it (`units._materialize`), and `units.Stale` when its descriptor is not its record's."""
     d = plan.derived
     memo = lambda: {}  # noqa: E731
     pins = CC.recorded_pins(CK.load_pins())
@@ -292,7 +294,7 @@ def _planned(plan: UN.Plan, opts: CK.Options, cache: Path) -> tuple[list[tuple],
         fn, later = None, False
         if (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
             hits[len(tasks)] = hit
-        elif d.via[fid].apart and (node["k"] != "P" or (fn := UN.built_here(plan, fid)) is None):
+        elif (forked or d.via[fid].apart) and (node["k"] != "P" or (fn := UN.built_here(plan, fid)) is None):
             later = True
         else:
             if fn is None:
@@ -670,9 +672,10 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     builds the list; with ``units``, from the catalog bindings' records (`circuit_check.units`), building only the bindings
     whose record misses, and a full build stores them.  With ``units``, ``fork`` and more than one job, the bindings are built
     so even with no record to reuse: each in a process of its own, up to ``jobs`` at once within `budget_gb` (`units.plan`'s
-    ``apart``), this process building no body; each target they reach is made by the one zygote that forks the checks of its
-    binding's targets, before it forks that target's (`_planned`, `_prepare`), and what the zygotes grow by comes off the
-    budget.  A run that built every binding so stores the task list too."""
+    ``apart``), this process building no body; each target they reach, and each one that misses through a binding whose record
+    counted, is made by the one zygote that forks the checks of its binding's targets, before it forks that target's
+    (`_planned`, `_prepare`), and what the zygotes grow by comes off the budget.  A run that built every binding so stores the
+    task list too."""
     tracing = cache is not None and CC.tracing()
     isolated = jobs > 1 if isolate is None else isolate
     listed = None
@@ -693,7 +696,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     if units:
         try:
             plan = UN.plan(cache, REPO, log, apart)
-            planned = _planned(plan, opts, cache) if plan is not None else None
+            planned = _planned(plan, opts, cache, forked=apart is not None) if plan is not None else None
         except UN.Stale as e:
             why = str(e)
             plan, planned = None, None
@@ -735,14 +738,16 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
 
 def _owners(plan: UN.Plan, tasks: list[tuple], n: int) -> dict[str, int]:
     """Which of ``n`` zygotes makes the targets ``tasks`` leave to be made where they are checked (`_prepare`), by the binding
-    built apart that they are made through: each binding to the zygote whose bindings took the least CPU to build so far
-    (`units.built_apart`'s ``seconds``), the longest first, so the bodies those targets share are built by one zygote."""
+    that they are made through: each binding to the zygote whose bindings took the least CPU to build so far (``seconds``:
+    `units.built_apart`'s, or its record's; a second for a record a full build stored), the longest first, so the bodies those
+    targets share are built by one zygote."""
     vias = {_info(t)["via"] for t in tasks if "make" in _info(t)}
     load, out = [0.0] * n, {}
-    for e in sorted((e for e in plan.entries if e.name in vias), key=lambda e: -(e.seconds or 0.0)):
+    cost = {e.name: e.seconds if e.seconds is not None else 1.0 for e in plan.entries if e.name in vias}
+    for name in sorted(cost, key=lambda name: -cost[name]):
         k = min(range(n), key=load.__getitem__)
-        out[e.name] = k
-        load[k] += e.seconds or 0.0
+        out[name] = k
+        load[k] += cost[name]
     return out
 
 

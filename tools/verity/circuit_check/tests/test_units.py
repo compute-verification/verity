@@ -400,6 +400,27 @@ def test_bindings_built_apart_give_a_full_builds_targets_keys_and_records(tmp_pa
     assert out["hits"] == built["hits"] and "SynX_v1" not in out["hits"], (out["hits"], built["hits"])
 
 
+@pytest.mark.slow
+def test_a_target_that_misses_through_a_record_that_counts_is_made_where_it_is_checked(tmp_path):
+    """With ``--jobs``, a target whose result misses while its binding's record counts (SynX, its pin changed) is made by the
+    zygote that forks its check, as one through a binding built apart is (`cli._planned`): this process builds and describes
+    no body to check it, and every target's verdict is the one a full build gives."""
+    from test_cache import _set_pin
+
+    root = _tree(tmp_path / "t")
+    _bindings(root, *BINDINGS)
+    _run(root, FORKED)
+    _set_pin(root, "SynX_v1", {"and": 1})
+    (tmp_path / "t-made.jsonl").unlink()
+    out = _run(root, FORKED)
+    units = out["stats"]["units"]
+    assert units["reused"] == 5 and units["rebuilt"] == [] and "stale" not in units, units
+    assert out["here"] == [] and out["hits"] == sorted(set(out["values"]) - {"SynX_v1"}), (out["here"], out["hits"])
+    made = [json.loads(ln) for ln in (tmp_path / "t-made.jsonl").read_text().splitlines()]
+    assert [(fid, via) for _, fid, via in made] == [("SynX_v1", "_xor_roots")], made
+    assert out["values"] == _fresh(root)["values"]
+
+
 #: a reference two bindings bind at two statics (as `verity.ml.kernels.tc`'s sidecar and the gemm-coordinate template bind
 #: the NVFP4 dot), a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.
 #: trace` makes one) only another binding's body build registers (as `boolean_marlin_moe`'s gathers), and one whose Boolean

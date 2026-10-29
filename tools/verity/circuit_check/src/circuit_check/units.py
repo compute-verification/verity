@@ -23,10 +23,10 @@ its key.  Two bindings can reach two Definitions of one id (`AttnDotStep_v1` wit
 unbound, from its sidecar): `targets.reachable` keeps the one it pops first, and so each id is taken from the record of the
 binding it is first reached through (`derive`).  A target that misses is made from that binding, along the path its record
 lists, and its descriptor computed again: one that differs from its record's is `Stale`, and the run builds the whole
-catalog.  What a body build registers (a constant's primitive, a lifted Definition) is never a root: the
-catalog's registered roots are taken before any binding runs, here and in `targets.catalog`, and `cli._tasks` reads the Calls
-off that one suite.  A full build stores every binding's record only when the task list derived from those records is the one
-it built (`cli._record_units`).
+catalog (in a run that forks its checks, where it is checked: below).  What a body build registers (a constant's primitive, a
+lifted Definition) is never a root: the catalog's registered roots are taken before any binding runs, here and in
+`targets.catalog`, and `cli._tasks` reads the Calls off that one suite.  A full build stores every binding's record only when
+the task list derived from those records is the one it built (`cli._record_units`).
 
 Not covered, beyond what `circuit_check.cache` leaves out: a body whose structure depends on module state a binding that makes
 roots sets (a binding's own state is in its reads; one that makes no root is held by every record), when no other record
@@ -42,15 +42,16 @@ A ``--catalog-units`` run that forks its targets' processes (`cli.run` with ``--
 binding whose record doesn't count, and every one when none does or there are none, is built in a process forked for it alone
 (``apart`` in `plan`), which returns what its roots reach with each one's descriptor, what its build read (its record's reads,
 `cache.unit_reads`) and its share of the task list's reads (`cache.task_list_reads` of its roots).  This process builds no
-body.  A target that misses through such a binding is made where it is checked (`cli._made`, `make`): by the zygote that forks
-the checks of that binding's targets, each under a recording its check then holds (`cli._prepare`), so the bodies they share
-are built once, as a full build builds them; the target is held to the descriptor its binding's build gave.  A primitive its
-id makes, which has no body, is made here (`built_here`), and so is each Boolean Definition a binding's build registered
-(`made_words`, or its module imported): C-Flock lowers a word primitive by the first one registered of that word, so a check
-forked from here finds the one a full build's would.  A binding whose process dies fails the run, as it
-would kill a build in one process.  When every binding was built apart, the task list's entry is stored as a full build stores
-it, its reads every binding's share and this process's own; it and each record are digested where this process stores them,
-as a full build's are (a full build digests none of its reads where it builds them either).
+body.  A target that misses, through such a binding or one whose record counted, is made where it is checked (`cli._made`,
+`make`): by the zygote that forks the checks of that binding's targets, each under a recording its check then holds
+(`cli._prepare`), so the bodies they share are built once, as a full build builds them, and no target is built or described
+here one after another; the target is held to the descriptor its binding's build gave or its record holds, and one that
+differs is its check's error.  A primitive its id makes, which has no body, is made here (`built_here`), and so is each
+Boolean Definition a binding's build registered (`made_words`, or its module imported): C-Flock lowers a word primitive by the
+first one registered of that word, so a check forked from here finds the one a full build's would.  A binding whose process
+dies fails the run, as it would kill a build in one process.  When every binding was built apart, the task list's entry is
+stored as a full build stores it, its reads every binding's share and this process's own; it and each record are digested
+where this process stores them, as a full build's are (a full build digests none of its reads where it builds them either).
 """
 from __future__ import annotations
 
@@ -79,8 +80,8 @@ class Entry:
     """One binding as this run has it: its units, kind and label (`targets.catalog_units`), its key, the roots it made now,
     what they reach (its record's, or `_reach` of the bodies built now) and whether its record counted.  Built in a process of
     its own (``apart``, `built_apart`), with what that process read: its record's reads and its share of the task list's
-    (``listed``), and the CPU seconds it took (``seconds``).  ``words``: the Boolean Definitions its build registered
-    (`_words`), where a process built it apart."""
+    (``listed``), and the CPU seconds it took (``seconds``, which its record keeps).  ``words``: the Boolean Definitions its
+    build registered (`_words`), where a process built it apart."""
     units: tuple[str, ...]
     kind: str
     label: str
@@ -405,7 +406,7 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
         entry = Entry(units, kind, label, key(units, n), roots)
         rec = _lookup(cache, repo, entry) if stored else None
         if rec is not None:
-            entry.nodes, entry.reused, entry.words = rec["nodes"], True, rec.get("words")
+            entry.nodes, entry.reused, entry.words, entry.seconds = rec["nodes"], True, rec.get("words"), rec.get("seconds")
         elif kind == "model" and apart is None:
             try:
                 with CC.producing(units):
@@ -416,7 +417,8 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
         entries.append(entry)
     rec = _lookup(cache, repo, entries[0]) if stored else None
     if rec is not None:
-        entries[0].nodes, entries[0].reused, entries[0].words = rec["nodes"], True, rec.get("words")
+        entries[0].nodes, entries[0].reused, entries[0].words, entries[0].seconds = (rec["nodes"], True, rec.get("words"),
+                                                                                     rec.get("seconds"))
     if not any(e.reused for e in entries) and apart is None:
         return None
     pinned = TG.pinned()
@@ -498,7 +500,8 @@ def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> 
              for e in todo]
     n = 0
     for e, got, now in zip(todo, reads, CC.seen_all(repo, reads)):
-        value = {"roots": e.root_ids, "nodes": e.nodes, **({"words": e.words} if e.words is not None else {})}
+        value = {"roots": e.root_ids, "nodes": e.nodes, **({"words": e.words} if e.words is not None else {}),
+                 **({"seconds": e.seconds} if e.seconds is not None else {})}
         if CC.store(cache, e.key, repo, got, value, now) is not None:
             n += 1
     return n
