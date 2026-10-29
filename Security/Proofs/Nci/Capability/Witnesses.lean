@@ -17,18 +17,28 @@ namespace Nci.Capability.Toy
 open Verity Finset Nci.Capability
 open scoped ENNReal
 
-theorem isCK : R1.P.IsCK R1.d 2 1 where
+theorem isCK : R1.d.𝓘.IsCK R1.d 2 1 where
   boolean := ⟨fun _ => rfl, by decide⟩
   card := by decide
   reads := by decide
 
-theorem unregistered_R1 (u : Fin 1) : D.unregistered (P1.gates u) = {1} := by
+@[simp] theorem R1_θ : R1.d.θ = {0} := rfl
+
+@[simp] theorem R1_𝓘 : R1.d.𝓘 = P1 := rfl
+
+@[simp] theorem R2_θ : R2.d.θ = {0} := rfl
+
+@[simp] theorem R2_𝓘 : R2.d.𝓘 = P2 := rfl
+
+theorem unregistered_R1 (u : Fin 1) : R1.d.unregistered (P1.gates u) = {1} := by
   revert u
   decide
 
+theorem unregistered_R1' (u : Fin 1) : R1.d.unregistered (R1.d.𝓘.gates u) = {1} := unregistered_R1 u
+
 theorem blockProgram_R1 (e : List Bool) (X : C.Transcript) (u : Fin 1) :
     blockProgram R1 e X u = e ++ [(X 1).getLsbD 0] := by
-  simp [blockProgram, indexCode, unregistered_R1, Circuit.bits]
+  simp [blockProgram, indexCode, unregistered_R1, unregistered_R1', Circuit.bits]
 
 theorem recompute_zero (X : C.Transcript) : R1.recompute X 0 0 = 1 := C.run_fixed (by simp)
 
@@ -120,7 +130,7 @@ theorem operand_le : ∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1
   have : ∀ o : Fin 1, (B.P.filter fun q => I.occ q = o).card ≤ 1 := by decide
   exact fun o => by exact_mod_cast this o
 
-theorem completed_R1 : completedIn B (R1.P.gates 0) = {(0, 0)} := by decide
+theorem completed_R1 : completedIn B (R1.d.𝓘.gates 0) = {(0, 0)} := by decide
 
 theorem upstream : K.Upstream := by
   intro c F hF g hg
@@ -133,7 +143,7 @@ theorem overlapWeights : K.OverlapWeights fun _ => 1 := by
   rw [sum_const, nsmul_one]
   exact_mod_cast (card_le_univ _).trans (by simp)
 
-theorem servedIn_R1 : K.servedIn (R1.P.gates 0) = univ := by
+theorem servedIn_R1 : K.servedIn (R1.d.𝓘.gates 0) = univ := by
   refine eq_univ_of_forall fun c => ?_
   obtain rfl : c = 0 := Subsingleton.elim c 0
   rw [Consumers.servedIn, mem_filter]
@@ -296,8 +306,8 @@ theorem ImportOrRecomputeHonest : Guarantees.ImportOrRecomputeHonest :=
 
 theorem ImportOrRecomputeNontrivial : Guarantees.ImportOrRecomputeNontrivial := by
   unfold Guarantees.ImportOrRecomputeNontrivial
-  rw [servedIn_R1, unregistered_R1,
-    show (univ : Finset (Fin 1)).filter (fun c => K.G c ⊆ R1.P.gates 0) = ∅ by decide]
+  rw [servedIn_R1, unregistered_R1',
+    show (univ : Finset (Fin 1)).filter (fun c => K.G c ⊆ R1.d.𝓘.gates 0) = ∅ by decide]
   norm_num
 
 theorem RecomputeByGatesHonest : Guarantees.RecomputeByGatesHonest :=

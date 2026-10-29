@@ -18,7 +18,7 @@ gates `S` compute at most `min(r |U| |V|, aout |V|)` counted products whole, `U`
 products use. The rectangle `U × V` overcounts pairs that never meet in a product; a finer count of the incidence graph is
 a structural improvement, not a new premise. -/
 def IncidenceCap : Prop :=
-  ∀ (d : Declaration) (B : Nci.Covering.MulBlocks d) {κ : Type} [DecidableEq κ] (W : Items d.D (Fin B.nw))
+  ∀ (d : RegisteredCircuit) (B : Nci.Covering.MulBlocks d) {κ : Type} [DecidableEq κ] (W : Items d.D (Fin B.nw))
     (O : Items d.D κ) (I : Incidence B W O) (r aout : ℝ),
     (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ r) →
     (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ aout) →
@@ -38,7 +38,7 @@ def OperandCapSeparate : Prop :=
     (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ aout) →
     HeldPriceAtMost R W hw → HeldPriceAtMost R O hx →
     (∀ x y : ℝ, 0 ≤ x → 0 ≤ y → βw * x ≤ hw → βx * y ≤ hx → min (r * x * y) (aout * y) ≤ Q) →
-    ∀ u, ((completedIn B (R.P.gates u)).card : ℝ) ≤ Q
+    ∀ u, ((completedIn B (R.d.𝓘.gates u)).card : ℝ) ≤ Q
 
 /-- **The operand cap, one joint budget.** As `OperandCapSeparate`, with every proof block holding slots and operands
 priced at most `h` together (a budget on `W.sum O`), and `Q` bounding `min(r x y, aout y)` wherever `βw x + βx y ≤ h`. -/
@@ -50,6 +50,6 @@ def OperandCapJoint : Prop :=
     (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ aout) →
     HeldPriceAtMost R (W.sum O) h →
     (∀ x y : ℝ, 0 ≤ x → 0 ≤ y → βw * x + βx * y ≤ h → min (r * x * y) (aout * y) ≤ Q) →
-    ∀ u, ((completedIn B (R.P.gates u)).card : ℝ) ≤ Q
+    ∀ u, ((completedIn B (R.d.𝓘.gates u)).card : ℝ) ≤ Q
 
 end Nci.Guarantees
