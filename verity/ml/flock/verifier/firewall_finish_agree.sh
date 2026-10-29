@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# The firewall's final round in Lean (firewall_finish_agree.py): one firewalled CPU `prove --zk` session (FC_FIREWALL=1
+# The ZK server's final round in Lean (firewall_finish_agree.py): one firewalled CPU `prove --zk` session (FC_FIREWALL=1
 # FC_HOST_WITNESS=1, through the Lean session loop of this tree, whose finish reads each table's level 0 from the loop, draws
 # each rep's salts for levels ≥ 1 and holds the opening's and the inner proof's rounds itself) that dumps each table's roots
 # and requests and each rep's request and Lean proof file (FC_FINISH_DUMP), then `flock-firewall finish` on the requests;
 # the session's verifier must accept, every rep passing, and the Lean verifier (`flock-verify verify --zk`) pass every check
 # (refused only for the tile's want of a Program). Run from the source tree's root:
-#   research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'out/*' --cpus 16 --mem-gb 48 \
-#     -- bash verity/ml/flock/verifier/firewall_finish_agree.sh
+#   bash verity/ml/flock/verifier/firewall_finish_agree.sh
+#   (a job run from the source tree, 16 CPUs, 48 GB, keeping out/*)
 # Every round in a device round's place is the loop's own (`Flock.Firewall.Frames`: `Skeleton.rounds`, then `Drive.openStep`).
 # The builds, the staging and their cache are benchmarks/pouw/hidden_zk/job.sh's (HZ_CACHE); the statement is one of its
 # configs (FF_CONFIG, default hidden:256: a hiding tile, whose rows are a form the soundness proof covers, where a plain

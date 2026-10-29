@@ -75,8 +75,8 @@ and they are held to `h1tile.j10r_reference`; v1's proof block is the default.
 
 ``--credit`` (with ``--commit`` and ``--receipts``) runs core credit's statement steps over the honest Commit window
 (`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier of record that
-opens each drawn proof block's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
-`credit._registration`, the drawn proof blocks the first and last of each kept call; then a receipt word flipped (with and
+opens each sampled proof block's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
+`credit._registration`, the sampled proof blocks the first and last of each kept call; then a receipt word flipped (with and
 without its round's root re-listed), a public table under another step's A root and an ok row 0, each to be refused.
 
 ``--commit`` (fill, ``--served``) serves the 64's window again with the Commit in the engine
@@ -92,7 +92,7 @@ window twice more with an honest Commit, H1 handed all-zero A codes or one A row
 ``arow``, and on a MoE (``--role OLMOE_INT8 --int8-exact linears``) once more with one routed expert call's codes zero
 (`EXPERT_NEGATIVE`): the Commit acquires each expert call's rows under its H1 name (`acquire.h1_commit.H1Source`). ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
 Without ``--challenger`` its windows' coins are this process's, so every call's credit gate verdict is
-`pouw_h1.IN_PROCESS`; with ``--challenger --gate --peer`` each window draws its salt, round and draw coins from a
+`pouw_h1.IN_PROCESS`; with ``--challenger --gate --peer`` each window samples its salt, round and flip coins from a
 challenge phase of its own, and ``commit.coins`` (`coins_summary`) holds each window's coin source, challenge phase and credit gate,
 ``ok`` only when every window's coins are the challenger's and the honest Commit window's gate refuses none of its calls.
 
@@ -312,7 +312,7 @@ def fixed_length(decl: Any) -> dict[str, Any]:
 
 def period_open_argv(name: str, circuit: str, draw_k: int, decl: Any, files: dict[str, str]) -> list[str]:
     """``period-open`` of the Commit window's period `name`: cap 1 (the Commit's window alone, so a negative's refused
-    window, which ends complete, is never one of it), its circuit (the period's declared Program's digest), its draw K
+    window, which ends complete, is never one of it), its circuit (the period's declared Program's digest), its sample K
     (`pouw_h1_challenger.draw_k` over the declared layout, core's `credit.committed_k`), T, its circuit files
     (`period_files`, core's `credit.committed_files`) and the fixed length (`fixed_length`, core's
     `credit.committed_length`)."""
@@ -1308,7 +1308,7 @@ def receipts_check(made: Any) -> dict[str, Any]:
 
 def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
     """``--credit``: core credit's statement steps (`pouw_h1_credit.check`) over the honest Commit window with receipts
-    on, the drawn proof blocks the first and last of each kept call (`receipts_producer`'s: the first layer's linears at step 0
+    on, the sampled proof blocks the first and last of each kept call (`receipts_producer`'s: the first layer's linears at step 0
     and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
     (`pouw_h1_credit.NEGATIVES`) at the first of them."""
     from tests.protocols import pouw_h1_credit as PC
@@ -1372,7 +1372,8 @@ def compile_from(calls_file: str, out: str) -> dict[str, Any]:
 
 def check_challenger(calls_file: str, directory: str, public_sha512: str, out: str, ledger: list[str],
                      window_file: str | None = None, period: str | None = None, descriptor: bytes | None = None,
-                     pins: list[str] | None = None, main: list[str] | None = None) -> dict[str, Any]:
+                     pins: list[str] | None = None, main: list[str] | None = None, statements: Any = (),
+                     live: Any = None) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
     directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`), `ledger`
     every head the gate published of the auditor's signed ledger, `pins` every head of the host's pins log (the host's
@@ -1387,7 +1388,8 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     must credit the lane's period with the window accepted and presented as its close's windows, its open committing
     ``draw_k`` (`pouw_h1_challenger.period_reason`, core's `credit.period`). Its ``credit`` is core's
     (`pouw_h1_challenger.credit_reason`) over `descriptor`, the bytes of the circuit the period committed
-    (`pouw_h1_served.descriptor`; none refuses it)."""
+    (`pouw_h1_served.descriptor`; none refuses it), the drawn calls' `statements` (`pouw_h1_challenger.statement`'s) and
+    the window's `live` evidence (`credit.LIVE_STATEMENTS`, ``h1_prove/live.py evidence``'s; none refuses it)."""
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
@@ -1415,7 +1417,8 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     doc["manifest"] = PHC.manifest_reason(rec)
     if key is not None:
         win = doc.get("window") or {"root": (rec["commitment"].get("session") or {}).get("root")}
-        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key, descriptor, pins=pins, main=main)
+        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key, descriptor, statements, pins=pins, main=main,
+                                          live=live)
     if period is not None:
         try:
             if key is None:
@@ -1502,6 +1505,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--descriptor", metavar="PROGRAM", help="with --check-challenger: the period's declared window Program "
                                                             "(the rehearsal's window-program.json.gz), whose bytes core's "
                                                             "credit reads the window's layout from")
+    ap.add_argument("--statements", metavar="FILE", help="with --check-challenger: the drawn calls' statements, a JSON list "
+                                                         "of pouw_h1_challenger.statement's {call, circuit, public, sessions}")
+    ap.add_argument("--live-evidence", metavar="FILE", help="with --check-challenger: the window's live evidence, "
+                                                            "h1_prove/live.py evidence's {descriptor, statements}")
     ap.add_argument("--main", metavar="FILE", help="with --check-challenger: the auditor's own `git rev-list --first-parent "
                                                    "origin/main`, a commit a line; none refuses every session")
     ap.add_argument("--served", action="store_true", help="fill: commit each call's tables and the weights' B as its "
@@ -1610,8 +1617,10 @@ def main(argv: list[str] | None = None) -> int:
         from verity.core.protocols.sampled_proofs import remote
         desc = gzip.decompress(Path(a.descriptor).read_bytes()) if a.descriptor else None
         main = None if a.main is None else remote.main_lines(a.main)
+        statements = json.loads(Path(a.statements).read_text()) if a.statements else ()
+        live = json.loads(Path(a.live_evidence).read_text()) if a.live_evidence else None
         return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
-                                     a.pins, main)["ok"] else 1
+                                     a.pins, main, statements, live)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")
     return 0 if (fill if a.workload == "fill" else run)(a)["ok"] else 1

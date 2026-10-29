@@ -1,23 +1,34 @@
 """`served_verdicts.py`'s window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
 the window it audits holds the most requests and none carried across windows; a subprotocol with no piece is named missing
-with its issue and given no verdict; and sampled proofs' accepted answer composes, with the others missing, to a pending
-block record that `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing
-composes to reject with no block record. The wipe composes only when its answer accepts on the record's server. PoUW's development piece checks the window's gate session and credits nothing,
-and the gate is refused while the lane has a period open. `served_verdicts.sh`'s window circuits gate on every class of
-CLASSES, and the class of record's count after them gates nothing; its endpoint gets one token budget, T, with or without
-H1. Its load, `serve_load.py --varied`, writes each
-request's send, first-token and done times beside its record, on an injected clock and a stand-in endpoint."""
+with the command it lacks and given no verdict, one that refused to run is missing, and one that ran out of its limit or
+wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to a pending block record that
+`block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing composes to reject with no
+block record. The record accepts only when every subprotocol accepted on its node, and names each one missing, rejecting,
+malformed or about another server. The wipe composes only when its answer accepts on the record's server. PoUW's
+development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
+open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
+the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
+`served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
+gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
+front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
+step publishes each case's and each product's verdict lines and nothing else. Its load, `serve_load.py --varied`, writes
+each request's send, first-token and done times beside its record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
 import io
 import itertools
 import json
 import os
+import shlex
+import shutil
 import subprocess
 import sys
 import tarfile
+from datetime import UTC, datetime
+from fractions import Fraction
 from pathlib import Path
 
 import jsonschema
@@ -55,6 +66,103 @@ def test_the_window_is_the_fullest_one_with_no_request_carried(tmp_path):
     assert set(got["refused"]) == {"2", "3"} and "carried" in got["refused"]["3"]
 
 
+def test_the_published_window_counts_none_of_its_requests(tmp_path):
+    """What the run says of its window: its engine steps and whether its requests filled the class's slots, and the
+    refused windows by number, with no count, list or user of any window's requests."""
+    got = S.pick(_serve_dir(tmp_path), slots=4)
+    assert S.public_pick(got, 4) == {"window": 1, "steps": [5, 11], "engine_steps": 6, "slots": 4, "every_slot": False,
+                                     "refused": [2, 3]}
+    assert S.public_pick(got, 3)["every_slot"] is True
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert S.main(["window", str(tmp_path), "--slots", "4"]) == 0
+    assert json.loads(out.getvalue()) == S.public_pick(got, 4)
+
+
+REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256, "rows": 2, "T": 600,
+                "binding": {"compiler": {"name": "c", "digest": "d"}, "advice": {"root": "ab" * 64, "bits": 392}},
+                "compiler": {"name": "c", "digest": "d", "cap_bits": 8388608}, "bits_by_window": {"0": 392, "1": 7},
+                "registered_roots": {"weights/w@16": "cd" * 64}, "requests": 3, "refused": {"q0": "2 of its 3 tokens"}}
+
+
+def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path, capsys):
+    """The advice registration's public form states no length of the advice but its compiler's cap, counts and refuses
+    none of its requests, and keeps its roots, compiler and binding's root."""
+    got = S.public_registration(REGISTRATION)
+    assert got["binding"]["advice"] == {"root": "ab" * 64, "bits": 8388608} and got["rows"] == 32768
+    assert got["bits_by_window"] == {"0": 8388608, "1": 8388608} and got["padded"] == list(S.PADDED)
+    assert not {"requests", "compiled", "refused"} & set(got) and "392" not in json.dumps(got)
+    assert {k: got[k] for k in ("registered_roots", "compiler", "T", "schema")} == {
+        k: REGISTRATION[k] for k in ("registered_roots", "compiler", "T", "schema")}
+    (tmp_path / "r.json").write_text(json.dumps(REGISTRATION))
+    assert S.main(["public-registration", str(tmp_path / "r.json")]) == 0
+    assert json.loads(capsys.readouterr().out) == got
+
+
+def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_or_population(tmp_path, capsys):
+    row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
+           "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
+    part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
+            "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [0, 1]}}
+    line = S.sampled_line(row, part)
+    head, _, rec = line.partition(": RECORDS ")
+    assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. steps [0, 1] (law subset:2), drawn members [0, 2]"
+    assert json.loads(rec)["leak"] == {"bound": "vacuous", "other_inputs": 786432, "registered": 0} and "832" not in line
+    assert "population" not in line and "37" not in line and row["population"] == 37
+    (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")
+    (tmp_path / "p.json").write_text(json.dumps(part))
+    assert S.main(["sampled-line", str(tmp_path / "log"), "--partition", str(tmp_path / "p.json")]) == 0
+    assert capsys.readouterr().out == line + "\n"
+    (tmp_path / "log").write_text("refused\n")
+    assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
+
+
+def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
+    """The CERTIFIER-FRONT line carries `FRONT_PUBLIC` of the front's session and none of its prompts, request, kept
+    fetch, gate or verdict's cells; a refused front's line names no reason, and a missing session says so."""
+    session = {"rc": 0, "run": "c1", "prompts": {"count": 4, "ids": 64}, "request": "warden-rehearse --requests 4",
+               "keep": "/serve/private/fetch.tar.gz", "gate": {"run": "g"}, "ended": "the rehearsal ended",
+               "ended_utc": "t", "session_s": 128.0, "pinned": "ab" * 20, "leaked_removed": [], "origin_unix": 1,
+               "verdict": {"cells": [7] * 3, "requests": 4, "wire_bits": 9}}
+    (tmp_path / "session.json").write_text(json.dumps(session))
+    assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
+    said = json.loads(capsys.readouterr().out)
+    assert list(said) == list(S.FRONT_PUBLIC) and said == {k: session[k] for k in S.FRONT_PUBLIC}
+    (tmp_path / "session.json").write_text(json.dumps({"refused": "4 prompts of 64 ids: past one link-window"}))
+    assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
+    assert "64" not in capsys.readouterr().out
+    assert S.main(["front-line", str(tmp_path / "absent.json")]) == 1
+    assert capsys.readouterr().out == "no session (FileNotFoundError)\n"
+
+
+def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_private_after_the_record(tmp_path):
+    """`served_verdicts.sh private-pieces` moves CERTIFIER_PRIVATE out of $OUT/pieces/certifier into the serve dir's
+    private/, 0700, and leaves the piece's answer, case and verdict where the record and its reader find them."""
+    piece, d = tmp_path / "out" / "pieces" / "certifier", tmp_path / "serve"
+    moved = ["chain/certs.json", "chain/report/report.json", "chain/tie/summary.json", "chain/n2/summary.json", "piece.log"]
+    kept = ["answer.json", "case.json", "chain/scan/answers.json"]
+    for f in moved + kept:
+        (piece / f).parent.mkdir(parents=True, exist_ok=True)
+        (piece / f).write_text(f)
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / "out")}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "private-pieces"], cwd=tmp_path, env=env,
+                        check=False).returncode
+    assert rc == 0
+    assert sorted(str(p.relative_to(piece)) for p in piece.rglob("*") if p.is_file()) == sorted(kept)
+    private = d / "private" / "pieces" / "certifier"
+    assert sorted(str(p.relative_to(private)) for p in private.rglob("*") if p.is_file()) == sorted(moved)
+    assert (private / "chain/tie/summary.json").read_text() == "chain/tie/summary.json"
+    assert all((d / p).stat().st_mode & 0o777 == 0o700 for p in ("private", "private/pieces", "private/pieces/certifier"))
+
+
+def test_one_piece_runs_alone_or_all_but_it(tmp_path, capsys):
+    """``only`` runs the named pieces alone and ``skip`` all but them, so the certifier's can run beside the others."""
+    assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, only=["certifier"])) == ["certifier"]
+    assert "the network certifier" in capsys.readouterr().out
+    assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, skip=["certifier"])) == ["pouw", "pous", "bandwidth"]
+    assert "the network certifier" not in capsys.readouterr().out
+
+
 def test_a_window_past_the_slots_or_named_and_refused_is_refused(tmp_path):
     d = _serve_dir(tmp_path)
     assert S.pick(d, slots=2)["window"] == 0
@@ -74,22 +182,65 @@ def test_a_failed_seal_or_commit_or_check_is_refused(tmp_path):
         S.pick(d, slots=4)
 
 
-def test_a_subprotocol_with_no_piece_is_named_missing_with_its_issue(tmp_path, capsys):
+def test_a_subprotocol_with_no_piece_is_named_missing_with_the_command_it_lacks(tmp_path, capsys):
     got = S.pieces(tmp_path, 1, tmp_path / "pieces", env={})
     lines = capsys.readouterr().out.splitlines()
     assert [g["verdict"] for g in got.values()] == ["missing"] * 4
-    assert [line.split(" (")[0] for line in lines] == ["MISSING PoUW", "MISSING the bandwidth audit", "MISSING PoUS",
+    assert [line.split(" (")[0] for line in lines] == ["MISSING PoUW", "MISSING PoUS", "MISSING the bandwidth audit",
                                                        "MISSING the network certifier"]
-    assert all(issue in "\n".join(lines) for issue in ("VLLM-33 G1", "VLLM-33 G2", "MEM-94", "NET-83", "INF-263"))
+    for line, (cmd, owner) in zip(lines, (("POUW_CMD", "compute-accounting"), ("POUS_CMD", "memory-accounting"),
+                                          ("BANDWIDTH_CMD", "memory-accounting"), ("CERTIFIER_CMD", "network-accounting"))):
+        assert f"({cmd} unset; {owner}): " in line
     assert not (tmp_path / "pieces").exists()
 
 
+def _reject(protocol: str) -> dict:
+    return {"protocol": protocol, "verdict": "reject", "reason": "no", "commitment": None, "public": None, "profile": None}
+
+
 def test_a_piece_that_ran_gives_its_answer_and_one_that_wrote_none_errs(tmp_path, capsys):
-    env = {"POUS_CMD": 'echo \'{"verdict": "reject", "reason": "no"}\' > "$3/answer.json"', "CERTIFIER_CMD": "true"}
-    got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env)
+    env = {"POUS_CMD": f"echo '{json.dumps(_reject('verity/pous/p2/v4/run'))}' > \"$3/answer.json\"",
+           "CERTIFIER_CMD": "true", "BANDWIDTH_CMD": 'echo \'{"verdict": "reject", "reason": "no"}\' > "$3/answer.json"'}
+    got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env, node="vy-dc-h200")
     assert got["pous"] == {"verdict": "reject", "reason": "no", "rc": 0}
     assert got["certifier"]["verdict"] == "error" and "wrote no answer" in got["certifier"]["reason"]
-    assert (got["pouw"]["verdict"], got["bandwidth"]["verdict"]) == ("missing", "missing")
+    assert got["bandwidth"]["verdict"] == "error" and "not a core answer" in got["bandwidth"]["reason"]
+    assert got["pouw"]["verdict"] == "missing"
+    assert json.loads((tmp_path / "pieces" / "pous" / S.RAN).read_text()) == {"server": "vy-dc-h200", "rc": 0,
+                                                                              "limit": S.PIECE_TIMEOUT}
+    assert {k: S.piece_row(k, tmp_path / "pieces")["verdict"] for k in S.PIECES} == {
+        "work": "missing", "bandwidth": "error", "space": "reject", "communication": "error"}
+
+
+def test_a_piece_runs_within_its_limit_and_one_out_of_time_or_refused_says_so(tmp_path):
+    """Each piece runs under `timeout` at ``<COMPONENT>_TIMEOUT``, else ``PIECE_TIMEOUT``: one that runs out of it (exit
+    124, which the fake `timeout` gives for the limit ``0``) errs naming the limit, and one that writes ``refused.txt``
+    instead of an answer is missing with the refusal as why."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "timeout").write_text(f'#!/bin/sh\necho "$3" >> {tmp_path}/limits\n[ "$3" = 0 ] && exit 124\nshift 3\nexec "$@"\n')
+    (bin_ / "timeout").chmod(0o755)
+    env = {"PATH": f"{bin_}:{os.defpath}", "PIECE_TIMEOUT": "7m", "BANDWIDTH_TIMEOUT": "0", "BANDWIDTH_CMD": "true",
+           "POUS_CMD": 'echo "PoUS REFUSED: the card has a compute process" > "$3/refused.txt"; exit 3'}
+    got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env, node="n")
+    assert (tmp_path / "limits").read_text().split() == ["7m", "0"]
+    assert got["bandwidth"] == {"verdict": "error", "rc": 124,
+                                "reason": "its piece ran (exit 124, out of time at 0) and wrote no answer; "
+                                          "its log is bandwidth/piece.log"}
+    assert got["pous"] == {"verdict": "missing", "rc": 3,
+                           "why": "its piece refused to run: PoUS REFUSED: the card has a compute process"}
+
+
+def test_a_piece_that_left_a_file_that_is_not_json_errs_about_no_server_and_the_next_piece_still_runs(tmp_path):
+    env = {"BANDWIDTH_CMD": f"echo '{json.dumps(_reject('verity/remote-bandwidth/v0'))}' > \"$3/answer.json\"; "
+                            "echo '{' > \"$3/served.json\"",
+           "POUS_CMD": f"echo '{json.dumps(_reject('verity/pous/p2/v4/run'))}' > \"$3/answer.json\""}
+    got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env, node="n")
+    assert got["bandwidth"]["verdict"] == "error"
+    assert got["bandwidth"]["reason"].startswith("its piece left a file that isn't JSON: JSONDecodeError")
+    assert got["pous"] == {"verdict": "reject", "reason": "no", "rc": 0}
+    row, at = S.piece("bandwidth", tmp_path / "pieces")
+    assert (row["verdict"], row["owner"], at) == ("error", "memory-accounting", (None, "real"))
 
 
 def _accepted() -> dict:
@@ -109,10 +260,58 @@ def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
     assert BR.check(rec) == {}
     assert rec["legs"]["integrity"]["quantity"]["value"] == 2 and rec["server_time"] == [{"server": "vy-dc-h200", "steps": [5, 11]}]
     assert (line["composed"], line["record_missing"]) == ("pending", ["bandwidth", "certifier", "pous", "pouw", "wipe"])
-    assert line["missing"] == {"PoUW": "VLLM-33 G1", "the bandwidth audit": "VLLM-33 G2", "PoUS": "MEM-94",
-                               "the network certifier": "NET-83", "the wipe": "MEM-96"}
-    assert report["protocols"]["work"] == {"verdict": "missing", "owner": "vllm-serve-arms", "issue": "VLLM-33 G1",
-                                           "why": S.PIECES["work"][4]}
+    assert {name: why.split(" unset: ")[0] for name, why in line["missing"].items()} == {
+        "PoUW": "POUW_CMD", "the bandwidth audit": "BANDWIDTH_CMD", "PoUS": "POUS_CMD", "the network certifier": "CERTIFIER_CMD",
+        "the wipe": "WIPE_CMD"}
+    assert report["protocols"]["work"] == {"verdict": "missing", "owner": "compute-accounting",
+                                           "why": f"POUW_CMD unset: {S.PIECES['work'][3]}"}
+    assert line["elsewhere"] == {} and "unserved" not in line
+
+
+def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and_where_its_quantity_is_not_established(
+        tmp_path):
+    """PoUS's answer in the shape its served piece writes: weights reloaded on the card after the window's serve, 64.9% of
+    the checkpoint, at ε = 1/100 + 2^-128, which the block record establishes at neither of its δs. Its accept's clause in
+    the composed reason says each, and the ``RECORD`` line carries that reason."""
+    eps = Fraction(1, 100) + Fraction(1, 2 ** 128)
+    held = "loaded from the served snapshot on the card the window served on, after its serve ended"
+    (d := tmp_path / "pous").mkdir()
+    (d / "answer.json").write_text(json.dumps({
+        "protocol": "verity/pous/p2/v4/run", "verdict": "accept", "reason": None, "commitment": "ef" * 64,
+        "public": {"certified": True, "eps": str(eps), "s_bits": 8169621180},
+        "profile": {"weights": {"held": held, "share": "237568/366225", "covers": "linears"},
+                    "outside": {"bytes": {"the embedding and the head": 525336576, "the norms": 135168,
+                                          "the per-row scales": 1507328}}}}))
+    (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    rows = _rows(_accepted(), tmp_path)
+    report, rec, line = S.record(rows, window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                 servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
+    assert rec["legs"]["pous"]["at"] == {d: {"holds": False, "why": f"the run established it except with {eps}, more than {d}"}
+                                         for d in ("1/100", "1/1000000")}
+    clause = line["reason"].split("; PoUS: ", 1)[1]
+    assert clause.startswith(f"accept (its weights {held}, not concurrently with the block; they are 64.9% of the "
+                             "checkpoint (linears); the embedding and the head, the norms, the per-row scales are outside "
+                             "its claim; its quantity is not established at δ = 1/100 or 1/1000000: the run established "
+                             "it except with 1/100 + 2^-128)")
+    assert line["reason"] == report["composed"]["reason"] == rec["composed"]["onsite"]["reason"]
+    assert line["reason"].startswith("sampled proofs: accept; ")
+
+
+def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
+    """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, draws
+    and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
+    accept isn't read as the auditor's devices having placed it."""
+    premise = ("assumed, the auditor's devices not placed: the network certifier ran on 204.12.178.84, not the prover's "
+               "vy-dc-h200, but the chain's checks and draws, the period check and their proofs' coins ran on vy-dc-h200")
+    (d := tmp_path / "certifier").mkdir()
+    (d / "answer.json").write_text(json.dumps({
+        "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
+        "public": {"K": 15764, "eps": "1/100", "windows": 1},
+        "profile": {"placement": {"kind": "not-placed", "trusted-host": premise}}}))
+    (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    _report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                   servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
+    assert line["reason"].split("; the network certifier: ", 1)[1].startswith(f"accept (trusted-host {premise}; ")
 
 
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
@@ -169,7 +368,86 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
     elif case == "unserved":
         assert rec["legs"]["wipe"] is None and "the wipe" not in line["missing"]
     else:
-        assert rec["legs"]["wipe"] is None and line["missing"]["the wipe"] == "MEM-96"
+        assert rec["legs"]["wipe"] is None
+        assert line["missing"]["the wipe"] == "its piece refused to run: WIPE REFUSED: the card has a compute process"
+
+
+#: an accepted core answer of each piece's subprotocol, its public outputs the block record's leg certificate
+ACCEPTS = {
+    "pouw": {"protocol": "verity/pouw/v1", "public": {"work": {"level": 3, "n": 4, "credited_tiles": 2, "credited": 8192}},
+             "profile": {"delta": "1/1000000"}},
+    "bandwidth": {"protocol": "verity/remote-bandwidth/v0", "public": {"eps": "1/1000000", "q_bytes": 6963200}, "profile": {}},
+    "pous": {"protocol": "verity/pous/p2/v4/run", "public": {"certified": True, "eps": "1/1000000", "s_bits": 1 << 30},
+             "profile": {}},
+    "certifier": {"protocol": "verity/certifier/v0", "public": {"K": 15764, "eps": "1/100", "windows": 1}, "profile": {}},
+    "wipe": {k: WIPE_ACCEPT[k] for k in ("protocol", "public", "profile")},
+}
+COMPONENTS = ("pouw", "bandwidth", "pous", "certifier", "wipe")
+
+
+@pytest.mark.parametrize("case, piece", [("accept", None)] + [
+    (case, piece) for case in ("missing", "reject", "elsewhere", "malformed") for piece in COMPONENTS])
+def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_names_each_that_does_not(
+        tmp_path, monkeypatch, capsys, case, piece):
+    """Every piece's answer accepted on the record's node (each piece's `RAN`, which a `SERVED` naming no server leaves it
+    about, and the wipe's `SERVED`): the composed verdict is ``accept``, with nothing missing, and its reason names each
+    subprotocol's accept. One piece with no answer leaves it ``pending`` and names that piece missing with
+    why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
+    no block record; one about another server leaves it ``pending``, carried and named as elsewhere."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    pieces = tmp_path / "pieces"
+    for comp in COMPONENTS:
+        (d := pieces / comp).mkdir(parents=True)
+        if comp == piece and case == "missing":
+            continue
+        a = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS[comp]}
+        if comp == piece and case == "reject":
+            a = {**a, "verdict": "reject", "reason": "a read came back late", "public": None, "profile": None}
+        if comp == piece and case == "malformed":
+            a = {**a, "public": {"unrelated": 1}}
+        (d / "answer.json").write_text(json.dumps(a))
+        server = "vy-dc-h200-2" if comp == piece and case == "elsewhere" else "vy-dc-h200"
+        if comp == "wipe" or server != "vy-dc-h200":
+            (d / S.SERVED).write_text(json.dumps({"server": server}))
+        elif comp == "bandwidth":
+            (d / S.SERVED).write_text(json.dumps({"served": {"window": 1}, "scope": "beside the served window"}))
+        if comp != "wipe":
+            (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    (tmp_path / "serve").mkdir()
+    rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
+                 "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(pieces), "--out", str(tmp_path / "record"),
+                 "--node", "vy-dc-h200"])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    leg, runner = piece, {v[1]: k for k, v in S.PIECES.items()} | {"wipe": "wipe"}
+    name = S.NAMES[runner[piece]] if piece else None
+    if case in ("reject", "malformed"):
+        assert rc == 1 and (line["composed"], line["by"], line["block_record"]) == ("reject", [name], None)
+        assert line["verdicts"][name] == ("reject" if case == "reject" else "error")
+        assert not (tmp_path / "record" / "block-record.json").exists()
+        report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
+        row = next(r for k, r in report["protocols"].items() if S.NAMES[k] == name)
+        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {leg} leg: KeyError")
+        return
+    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert rc == 0 and line["check"] == {} == BR.check(rec)
+    if case == "accept":
+        assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("accept", [], {}, {})
+        assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS}
+        late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
+                                         "except with 1/100)"}
+        assert rec["composed"]["onsite"]["reason"] == line["reason"] == "; ".join(
+            f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
+        return
+    assert line["composed"] == "pending" and line["record_missing"] == [leg]
+    if case == "missing":
+        what = S.WIPE[3] if piece == "wipe" else S.PIECES[runner[piece]][3]
+        assert line["missing"] == {name: f"{piece.upper()}_CMD unset: {what}"}
+        assert rec["legs"][leg] is None and line["elsewhere"] == {}
+    else:
+        assert line["missing"] == {} and line["elsewhere"] == {name: "vy-dc-h200-2"}
+        assert rec["legs"][leg]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [leg]
 
 
 SID = "s20261026T221500Z-ab12"
@@ -212,7 +490,8 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     calls, seen = [], []
     monkeypatch.setattr(S, "_gate_out", _gate(calls))
 
-    def check(calls_file, tree, ledger, pins, main, key, out):
+    def check(calls_file, tree, ledger, pins, main, key, out, inputs):
+        assert inputs == {}, "a serve dir with no declared Program or period gives credit nothing more"
         seen.append((tree, ledger.read_text(), pins.read_text(), main, key))
         assert (tree / "out" / "record.json").is_file()
         return {"ok": True, "reason": None, "manifest": None, "rounds": 16,
@@ -222,20 +501,69 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=tmp_path / "main.txt", check=check)
     assert (doc["verdict"], doc["reasons"], doc["credited"]) == ("accept", [], False)
     assert doc["credit"]["window"] == ["budget", "the window is in no period"] and doc["check"]["rounds"] == 16
+    assert doc["SaltIsLiveCoin"] == {"met": True, "why": S.SALT_MET}
+    assert doc["AcceptedLive"] == {"met": False, "why": "credit refused the window (budget: the window is in no "
+                                                       "period), so it credited no proof"}
     assert [w for _g, w in calls] == [("fetch", SID), ("ledger",), ("pins",)] and all(g == GATE for g, _w in calls)
     (tree, ledger, pins, main, key), = seen
     assert tree == tmp_path / "pieces" / "pouw" / "session" / SID and SID in ledger and '"commit"' in pins
     assert (main, key) == (tmp_path / "main.txt", "ff" * 64)
     row = S.piece_row("work", tmp_path / "pieces")
-    assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", S.DEV_WHY, "accept")
-    _report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
+    why = f"{S.DEV_WHY}; core's credit refuses the window (budget) the window is in no period"
+    assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", why, "accept")
+    report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
     assert line["composed"] == "pending" and "pouw" in line["record_missing"] and line["development"] == {"PoUW": "accept"}
-    assert BR.check(rec) == {}
+    assert line["verdicts"]["PoUW"] == S.DEV_VERDICT == "development run, credits nothing" and line["missing"]["PoUW"] == why
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert BR.check(rec) == {} and rec["composed"]["onsite"] == report["composed"]
+    reason = rec["composed"]["onsite"]["reason"]
+    assert reason.startswith(f"sampled proofs: accept; PoUW: {why}; ")
+    for name, cmd in (("the bandwidth audit", "BANDWIDTH"), ("PoUS", "POUS"), ("the network certifier", "CERTIFIER"),
+                      ("the wipe", "WIPE")):
+        assert f"; {name}: missing: {cmd}_CMD unset: " in reason
     env = {"POUW_CMD": f"cp {tmp_path}/pieces/pouw/development.json \"$3/\""}
     got = S.pieces(d, 1, tmp_path / "again", env=env)
     out = capsys.readouterr().out
     assert "POUW (development run, credits nothing) " in out and got["pouw"]["verdict"] == "accept"
     assert (got["pouw"]["session"], got["pouw"]["coins"], got["pouw"]["credited"]) == (SID, None, False)
+    assert {p: got["pouw"][p]["met"] for p in S.PREMISES} == {"AcceptedLive": False, "SaltIsLiveCoin": True}
+
+
+def test_the_pouw_piece_gives_credit_the_declared_program_the_period_and_the_proofs_it_has(tmp_path, monkeypatch):
+    """With the serve dir's declared Program (``h1/window-program.json.gz``) and its period (``period.json``), and the
+    drawn statements and live evidence given, the challenger check gets each as its ``--check-challenger`` flag, and the
+    piece's document carries them and credit's calls."""
+    monkeypatch.setattr(S, "_gate_out", _gate([]))
+    d = _h1_serve_dir(tmp_path)
+    (d / "h1" / "window-program.json.gz").write_bytes(b"")
+    (d / S.PERIOD).write_text(json.dumps({"name": "served-r1"}))
+    st, lv = tmp_path / "statements.json", tmp_path / "live.json"
+    got = []
+
+    def check(*a):
+        got.append(a[-1])
+        return {"ok": True, "reason": None, "manifest": None, "credit": {"window": None, "calls": [3], "credit": [3]}}
+
+    doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=None, check=check, statements=st,
+                 live=lv)
+    want = {"--descriptor": str(d / "h1" / "window-program.json.gz"), "--period": "served-r1", "--statements": str(st),
+            "--live-evidence": str(lv)}
+    assert got == [want] and doc["credit_inputs"] == want
+    assert (doc["credit"]["window"], doc["credit"]["calls"], doc["credit"]["credit"]) == (None, [3], [3])
+    assert (doc["AcceptedLive"], doc["SaltIsLiveCoin"]) == ({"met": True, "why": S.LIVE_MET},
+                                                            {"met": True, "why": S.SALT_MET})
+
+
+def test_a_record_that_isnt_one_manifest_under_its_salt_coin_doesnt_meet_salt_is_live_coin(tmp_path, monkeypatch):
+    """Coins the challenger check accepts with a record that isn't one manifest under them: ``SaltIsLiveCoin`` isn't
+    met, and names the manifest's refusal."""
+    monkeypatch.setattr(S, "_gate_out", _gate([]))
+    got = {"ok": True, "reason": None, "manifest": "round 2's tables are not under the salt", "credit": {}}
+    doc = S.pouw(_h1_serve_dir(tmp_path), 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=None,
+                 check=lambda *a: got)
+    assert doc["SaltIsLiveCoin"] == {"met": False, "why": "the window's record isn't one manifest under its salt coin: "
+                                                          "round 2's tables are not under the salt"}
+    assert doc["AcceptedLive"]["met"] is False and doc["verdict"] == "reject"
 
 
 @pytest.mark.parametrize("case", ["coins", "untied", "in-process", "no gate"])
@@ -251,6 +579,11 @@ def test_a_development_pouw_piece_rejects_what_its_checks_refuse(tmp_path, monke
     why = {"coins": "coins: session s1 is not the one the ledger opened", "untied": "ROOTS1:",
            "in-process": "coins: in-process, not the auditor host's challenger's", "no gate": "coins: ValueError: no gate"}
     assert doc["verdict"] == "reject" and doc["reasons"][0].startswith(why[case]), doc["reasons"]
+    salt = {"coins": "the challenger check refused the window's coins, its salt among them: session s1",
+            "untied": S.SALT_MET, "in-process": "the challenger check didn't run on the window: coins: in-process",
+            "no gate": "the challenger check didn't run on the window: coins: ValueError: no gate"}
+    assert doc["SaltIsLiveCoin"]["met"] is (case == "untied") and doc["SaltIsLiveCoin"]["why"].startswith(salt[case])
+    assert doc["AcceptedLive"]["met"] is False
     row = S.piece_row("work", tmp_path / "pieces")
     assert row["verdict"] == "reject" and row["reason"].startswith(why[case])
     _report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run=None)
@@ -309,10 +642,13 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
 
 def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeout_fails_nothing(tmp_path):
     rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "record": "expire"})
-    assert rc == 0 and limits == ["30m", "2h"], (rc, lines)
+    assert rc == 0 and limits == ["30m", "45m"], (rc, lines)
     assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
                                "weights registration's pins; ")
-    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=2h (exit 124): no count"]
+    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=45m (exit 124): no count"]
+    published = json.loads((tmp_path / "out" / "window-circuit-4-32-4.json").read_text())
+    kept = json.loads((tmp_path / "serve" / "window-circuit-4-32-4.count.json").read_text())
+    assert "bits" not in published and '"bits"' not in lines[0] and kept["bits"] == 772 and published["count"] == kept["count"]
 
 
 @pytest.mark.parametrize("classes, answers, refused", [
@@ -327,7 +663,388 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert rc != 0 and sum(line.startswith(refused) for line in lines) == 1, lines
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
     measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
-    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "2h")
+    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "45m")
+
+
+def _script(path: Path, body: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"#!/bin/sh\n{body}\n")
+    path.chmod(0o755)
+
+
+FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" --bucket-ms 4000 --warmup 0'
+
+
+IDS = "--protocol ids --id-payload 503"
+
+
+@pytest.mark.parametrize("load, front, takes, serve_args, line", [
+    ("varied", FRONT, "--gate --warmup --bucket-ms", IDS, None),
+    ("front", FRONT, "--gate --warmup --bucket-ms", IDS, None),
+    ("varied", "", "", "", None),
+    ("varied", FRONT, "--gate --warmup --bucket-ms-x", IDS, "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this "
+                                                             "tree's certifier front doesn't take"),
+    ("front", "", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
+    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the certifier front's warden sends "
+     "id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
+])
+def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_front_load_with_no_front(
+        tmp_path, load, front, takes, serve_args, line):
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    (tree / "benchmarks" / "network_traces").mkdir(parents=True)
+    (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
+        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "LOAD": load, "CERTIFIER_FRONT": front, "SERVE_ARGS": serve_args}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+
+def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused(tmp_path):
+    """SETTINGS names the file a load's counts are launched from, so the job record's command holds only its path."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    settings = tmp_path / "private" / "settings.env"
+    settings.parent.mkdir()
+    settings.write_text("LOAD=front\nCERTIFIER_FRONT=\n")
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "SETTINGS": str(settings)}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+    assert (rc, said) == (3, ["PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"])
+    got = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree,
+                         env={**env, "SETTINGS": str(tmp_path / "missing.env")}, check=False, capture_output=True, text=True)
+    assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: SETTINGS={tmp_path / 'missing.env'} is not a readable file")
+
+FAKE_COMPOSITE = '''import json, sys
+from pathlib import Path
+COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"),
+              "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2")}
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    Path(a[a.index("--private-out") + 1]).mkdir(parents=True)
+    Path(a[a.index("--public-out") + 1]).mkdir(parents=True)
+    Path(a[a.index("--public-out") + 1], "composite.json").write_text(json.dumps({"product": a[0]}))
+    cases = [a[i + 1] for i, x in enumerate(a) if x == "--cases"]
+    Path(a[a.index("--private-out") + 1], "argv.json").write_text(json.dumps(cases))
+    print("PIECE verity/pous/p2/v4/run accept 0123456789abcdef0123")
+    print("NOT_ESTABLISHED missing verity/wipe/v0")
+    print(f"VERDICT verity/{a[0]}/v0 reject components")
+    sys.exit(1)
+'''
+
+
+def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
+    """served_composite.sh with a stand-in lake, served_case.sh, served_cases.py and composite.py: PoUS's case is written
+    under the serve dir's private dir with both Lean answers built and passed, and served_cases.py's under it, given no α
+    or Γ while ALPHA and GAMMA are unset; each product gets the cases of its own subprotocols; OUT/verdicts.txt gets each
+    CASE line's protocol and verdict, each case not written by its protocol, and each product's NOT_ESTABLISHED and
+    VERDICT lines, never a PIECE line, a reason, a log or a path; each product's public output is OUT/composite/PRODUCT;
+    and without composite.py in the tree it says so and fails, since no Lean answered."""
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    out.mkdir()
+    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    _script(tree / "benchmarks" / "pous" / "served_case.sh", f'''set -e
+[ -x "$POUS_EXE" ] && [ -x "$WIPE_EXE" ] && [ "$1" = {out}/pieces ] && [ "$MEM_GB" = 170 ]
+for w in pous/w0 other; do mkdir -p {d}/private/$w; echo '{{"evidence": "beef"}}' > {d}/private/$w/case.json; done
+echo '{{"protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' > {d}/private/pous/w0/answer.json
+echo '{{"protocol": "verity/certifier/v9", "verdict": "accept"}}' > {d}/private/other/answer.json
+echo "CASE: evidence beef"
+echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' ''')
+    for pkg in ("protocols/pous/check", "devices/memory_challenger/lean", "protocols/remote", "protocols/onsite"):
+        (tree / "verity" / "core" / pkg).mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    v2 = d / "private" / "sampled-proofs-v2"
+    (tree / "benchmarks" / "one_stage" / "served_cases.py").write_text(f'''import json, sys
+from pathlib import Path
+assert sys.argv[1:] == ["--serve-dir", "{d}", "--private", "{d}/private", "--from-division"], sys.argv
+Path("{v2}").mkdir(parents=True)
+Path("{v2}", "case.json").write_text(json.dumps({{"evidence": "beef"}}))
+Path("{v2}", "answer.json").write_text(json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept"}}))
+print("CASE " + json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept", "dir": "{v2}"}}))
+print("CASE " + json.dumps({{"protocol": "verity/registration/v0", "verdict": "accept", "dir": "{d}/private/reg", "alpha_gamma": "235330880/1544757928"}}))
+print("NOT_WRITTEN " + json.dumps({{"protocol": "verity/inference-only/v0", "reason": "no alpha 0123456789abcdef"}}))
+sys.exit(1)
+''')
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
+    run = lambda: subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
+                                 check=False, capture_output=True, text=True)
+    r = run()
+    assert r.returncode == 0, r.stderr
+    assert (out / "verdicts.txt").read_text().splitlines() == [
+        "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
+        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
+        "COMPOSITE CASE verity/registration/v0 accept",
+        "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
+        "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
+        "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
+        "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components"]
+    p = d / "private" / "composite"
+    assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
+    assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
+    assert oct((d / "private").stat().st_mode & 0o777) == "0o700"
+    assert sorted(out.iterdir()) == [out / "composite", out / "verdicts.txt"]
+    assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
+        "composite/onsite/composite.json", "composite/remote/composite.json"]
+    (tree / "benchmarks" / "one_stage" / "composite.py").unlink()
+    (out / "verdicts.txt").unlink()
+    shutil.rmtree(out / "composite")
+    assert run().returncode == 1
+    assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
+
+
+DIGEST = "5e" * 64
+
+
+def _auditor():
+    """Infra's gate, ``benchmarks/live_challenger/auditor.py``, as a module of its own."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "benchmarks" / "live_challenger" / "auditor.py")
+    module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
+    spec.loader.exec_module(module)
+    return module
+
+
+def _declared(tmp_path: Path, files: dict | None = None, live=(32, 2)) -> tuple[Path, Path, dict]:
+    """A serve dir whose serve-openai declared a window Program of digest `DIGEST` at T 32, S 2 (serve.json and
+    ``h1/window-program.meta.json``, its layout `served.declared_layout`'s over two linears at K 32 and 64), and a
+    circuit-files directory for it whose manifest holds `files` (default the live file and k32's, not k64's)."""
+    from verity_vllm.protocols.pouw.h1 import served as SV
+    d, c = tmp_path / "serve", tmp_path / "circuits"
+    (d / "h1").mkdir(parents=True)
+    c.mkdir()
+    layout = SV.declared_layout([(64, 32), (32, 64)], {0: "up", 1: "down"}, 32, 2)
+    (d / "serve.json").write_text(json.dumps({"protocols": {"program": DIGEST, "rows": 32, "steps": 2,
+                                                            "weights_root": "77" * 64}}))
+    (d / S.H1_META).write_text(json.dumps({"program_digest": DIGEST, "rows": 32, "steps": 2, "layout": layout}))
+    files = {"live": "11" * 64, "k32": "22" * 64} if files is None else files
+    (c / S.CIRCUITS_MANIFEST).write_text(json.dumps({"program": DIGEST, "live_bind": {"T": live[0], "S": live[1]},
+                                                     "files": files}))
+    return d, c, layout
+
+
+def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credit_reads_them(tmp_path, monkeypatch):
+    """``period open``, through infra's own gate (`auditor.gate` and `auditor.period`, as lane vllm's key): its open
+    commits the Program digest serve-openai wrote, its T, the draw K, the fixed length and the circuit files, each read
+    back by core's credit as the window's period commits it; a stratum with no ``k<K>`` file yet is named and left out.
+    It names no weights without ``--model`` (the gate refuses a root its registry lacks). ``period close`` closes it."""
+    from verity.core.protocols.pouw import credit as CR
+    from verity.ml.crypto import lms
+    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+
+    A = _auditor()
+    (tmp_path / "var" / "sessions").mkdir(parents=True)
+    (tmp_path / "peers").write_text("vy-dc-h200 research@10.0.0.2\n")
+    (tmp_path / "pins.jsonl").write_text(A.pin_line("c" * 40, "d" * 40, "2026-10-27T09:00:00Z") + "\n")
+    host = A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
+    signer = A.key_signer(host, lms.Params(64, 4, 5), workers=1)
+    now = datetime(2026, 10, 27, 19, 0, tzinfo=UTC)
+    hooks = dict(now=now, token="ab12", own=lambda d: None, start=lambda s: None, active=lambda s: False,
+                 secret=bytes(32), ready=lambda s: None,
+                 period=lambda args: A.period(host, args, signer=signer, pinned="c" * 40, now=now, active=lambda s: False))
+    sent = []
+
+    def gate_out(gate: str, *words: str) -> bytes:
+        sent.append(words)
+        rc, out = A.gate(["--ssh", shlex.join(words), "--key", "vllm"], host, **hooks)
+        if rc:
+            raise RuntimeError(f"the gate refused {words[0]} (exit {rc}): {out.decode()}")
+        return out
+
+    monkeypatch.setattr(S, "_gate_out", gate_out)
+    d, c, layout = _declared(tmp_path)
+    doc = S.period_open(d, GATE, "served-r1", c, slots=4, max_tokens=8)
+    assert doc["missing"] == [64] and doc["weights"] == [] and doc["draw_k"] == PHC.draw_k(layout)
+    assert "--weights-root" not in sent[0] and "--model" not in sent[0]
+    ledger = (host.root / "windows.jsonl").read_text().splitlines()
+    assert CR.committed_k(ledger, "served-r1") == (PHC.draw_k(layout), None)
+    assert CR.committed_rows(ledger, "served-r1") == (32, None)
+    assert CR.committed_files(ledger, "served-r1") == ({"live": "11" * 64, "k32": "22" * 64}, None)
+    assert CR.committed_length(ledger, "served-r1") == ([8] * 4, None)
+    assert json.loads(ledger[-1])["body"]["circuit"] == DIGEST
+    assert json.loads((d / S.PERIOD).read_text())["open"]["body"]["period"] == "served-r1"
+    argv, _ = S.period_open_argv(d, "served-r2", c, slots=4, max_tokens=8, draw_k=3, model="LLAMA32_1B_INT8")
+    assert argv[argv.index("--draw-k") + 1] == "3" and argv[argv.index("--model") + 1] == "LLAMA32_1B_INT8"
+    S.period_close(d, GATE)
+    kinds = [json.loads(x)["kind"] for x in (host.root / "windows.jsonl").read_text().splitlines()]
+    assert kinds[-1] == "period-close" and json.loads((d / S.PERIOD).read_text())["close"]["body"]["windows"] == []
+
+
+def test_a_period_opens_before_serving_and_holds_the_served_program_to_it(tmp_path, monkeypatch, capsys):
+    """Before serve-openai starts (no serve.json; its startup reserves window 0's session, which joins only an open
+    period) the open goes out on the offline Program (`program`'s); ``period served`` then holds the Program
+    serve-openai declared to the period's, refusing another, whose windows credit nothing."""
+    d, c, _ = _declared(tmp_path)
+    served = (d / "serve.json").read_text()
+    (d / "serve.json").unlink()
+    monkeypatch.setattr(S, "_gate_out", lambda gate, *words: json.dumps({"body": {"period": words[2]}}).encode())
+    assert S.main(["period", "open", str(d), "--gate", GATE, "--name", "p", "--circuits", str(c), "--slots", "4",
+                   "--max-tokens", "8"]) == 0
+    assert json.loads((d / S.PERIOD).read_text())["circuit"] == DIGEST
+    (d / "serve.json").write_text(served)
+    assert S.main(["period", "served", str(d)]) == 0
+    assert f"PERIOD served p: serve-openai declared its Program {DIGEST[:16]}" in capsys.readouterr().out
+    (d / "serve.json").write_text(json.dumps({"protocols": {"program": "6f" * 64}}))
+    assert S.main(["period", "served", str(d)]) == 1
+    assert "its windows credit nothing" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("case", ["other program", "other live T,S", "no live", "no meta", "no manifest"])
+def test_a_period_open_is_refused_on_files_that_are_not_the_served_programs(tmp_path, case):
+    """Circuit files of another Program, a live file for another T or S, none for the live template, a serve dir with no
+    declared Program, or no circuit files: refused before anything is sent, naming the build to run."""
+    d, c, _ = _declared(tmp_path, files={"k32": "22" * 64} if case == "no live" else None,
+                        live=(64, 2) if case == "other live T,S" else (32, 2))
+    if case == "other program":
+        m = json.loads((c / S.CIRCUITS_MANIFEST).read_text())
+        (c / S.CIRCUITS_MANIFEST).write_text(json.dumps({**m, "program": "6f" * 64}))
+    if case == "no meta":
+        (d / S.H1_META).unlink()
+    if case == "no manifest":
+        (c / S.CIRCUITS_MANIFEST).unlink()
+    why = {"other program": "not the served", "other live T,S": "not the window's 32, 2", "no live": "not the window's",
+           "no meta": "has no declared window Program", "no manifest": "no circuit files at"}[case]
+    with pytest.raises(ValueError, match=why):
+        S.period_open_argv(d, "p", c, slots=4, max_tokens=8)
+
+
+def test_the_program_is_built_off_the_server_as_serve_openai_declares_and_writes_it(tmp_path, monkeypatch):
+    """``program`` declares the served model's linears (`DECLARED`) in vLLM's order and naming, ``(n, K)`` each, at T and
+    S, and writes them with serve-openai's own `served.write_program`; ``--like`` takes model, T and S from a serve
+    dir and refuses a digest other than the one that run declared. The declaration and its digest are stand-ins here
+    (a real one takes minutes); the node job checks the real one against a recorded run's digest."""
+    from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
+    seen = []
+    monkeypatch.setattr(SV, "declared", lambda shapes, modules, rows, steps, unit=None: ("program", shapes, modules, rows,
+                                                                                           steps))
+    monkeypatch.setattr(SV, "declared_layout", lambda shapes, modules, rows, steps: {"tile": [32, 32]})
+
+    def write(prog, layout, out, *, rows, steps):
+        seen.append((prog, layout, out, rows, steps))
+        out.mkdir(parents=True, exist_ok=True)
+        (out / PH.PROGRAM_META).write_text(json.dumps({"program_digest": DIGEST, "rows": rows, "steps": steps,
+                                                       "bytes": 9, "layout": layout}))
+        return DIGEST
+    monkeypatch.setattr(SV, "write_program", write)
+    meta = S.program(tmp_path / "h1", "verity-int8/Llama-3.2-1B-INT8", 512, 16)
+    (_tag, shapes, modules, rows, steps), _layout, out, *_ = seen[0]
+    assert meta["program_digest"] == DIGEST and out == tmp_path / "h1" and (rows, steps) == (512, 16)
+    assert len(shapes) == 64 and shapes[:4] == [(3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192)]
+    assert modules[0] == "model.layers.0.self_attn.qkv_proj" and modules[63] == "model.layers.15.mlp.down_proj"
+
+    run = tmp_path / "serve"
+    run.mkdir()
+    (run / "serve.json").write_text(json.dumps({"served_model_name": "verity-int8/Llama-3.2-1B-INT8",
+                                                "protocols": {"program": DIGEST, "rows": 32, "steps": 2}}))
+    assert S.main(["program", str(tmp_path / "like"), "--like", str(run)]) == 0 and seen[-1][3:] == (32, 2)
+    (run / "serve.json").write_text(json.dumps({"served_model_name": "verity-int8/Llama-3.2-1B-INT8",
+                                                "protocols": {"program": "6f" * 64, "rows": 32, "steps": 2}}))
+    with pytest.raises(ValueError, match="DECLARED's linears aren't the ones that run served"):
+        S.program(tmp_path / "like", "x", 0, 0, like=run)
+    with pytest.raises(ValueError, match="no declared linears for 'other'"):
+        S.program(tmp_path / "other", "other", 512, 16)
+
+
+def _llama(torch, model: str):
+    """`DECLARED`'s model as serve-openai's H1 arm finds it: its int8 linears on the meta device under vLLM's module names,
+    each on a stand-in of the int8_exact plain arm."""
+    from types import SimpleNamespace
+
+    class Linear(torch.nn.Module):
+        def __init__(self, n, k):
+            super().__init__()
+            self.weight = torch.empty(n, k, dtype=torch.int8, device="meta")
+            self.weight_scale = torch.empty(n, 1, device="meta")
+            self.quant_method = SimpleNamespace(int8_arm="plain", observe=lambda *a: None)
+
+    layers, linears = S.DECLARED[model]
+    root = torch.nn.Module()
+    root.model = torch.nn.Module()
+    root.model.layers = torch.nn.ModuleList()
+    for _ in range(layers):
+        layer = torch.nn.Module()
+        for name, n, k in linears:
+            parent, leaf = name.split(".")
+            if not hasattr(layer, parent):
+                layer.add_module(parent, torch.nn.Module())
+            getattr(layer, parent).add_module(leaf, Linear(n, k))
+        root.model.layers.append(layer)
+    return root, Linear
+
+
+def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_protocols_config(tmp_path, monkeypatch):
+    """``program --protocols-config C`` declares what serve-openai's H1 arm (`serve_h1.H1Windows`) declares under
+    ``--protocols-config C`` over the served model: under ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` the same linears
+    at K 2,048 alone, named alike, over the same J10-R tile unit (`served.unit_of`), at the same T and S, so ``period
+    served`` finds the Program the period opened on; ``--like`` takes C from the run (serve.json's ``protocols.config``).
+    Unset on both sides it is v1's over every linear, another Program, and ``--like`` refuses a run whose Program is not
+    the one its recorded config declares. The declaration is a stand-in that records what it was given (a real one takes
+    minutes)."""
+    from types import SimpleNamespace
+
+    torch = pytest.importorskip("torch")
+    from verity.core.protocols.pouw.circuit import h1tile as HT, h1window as HW
+    from verity_vllm.pipeline import serve_h1 as SH
+    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
+    model, j10r = "verity-int8/Llama-3.2-1B-INT8", {"pouw": {"unit": "j10r", "ks": [2048]}}
+    llama, linear = _llama(torch, model)
+    monkeypatch.setattr(pouw, "linear_types", lambda: (linear,))
+    monkeypatch.setattr(SV, "weights_of", lambda layers: None)
+    monkeypatch.setattr(SV, "register_weights", lambda *a, **k: SimpleNamespace(root=lambda: bytes(64)))
+    monkeypatch.setattr(SV, "declared", lambda shapes, modules, rows, steps, unit=None: (
+        [tuple(s) for s in shapes], dict(modules), rows, steps,
+        None if unit is None else (unit.func, unit.args, unit.keywords)))
+    programs = []
+
+    def write(prog, layout, out, *, rows, steps):
+        if (prog, layout) not in programs:
+            programs.append((prog, layout))
+        digest = f"{programs.index((prog, layout)):0128x}"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / PH.PROGRAM_META).write_text(json.dumps({"program_digest": digest, "rows": rows, "steps": steps, "bytes": 0}))
+        return digest
+    monkeypatch.setattr(SV, "write_program", write)
+
+    def served(config):
+        arm = SH.H1Windows(llama, None, 512, 16, engine=object(), out=tmp_path / f"serve{len(programs)}", config=config)
+        run = tmp_path / f"run{len(programs)}"
+        run.mkdir()
+        (run / "serve.json").write_text(json.dumps({"served_model_name": model, "protocols": arm.describe()}))
+        return arm, run
+
+    arm, run = served(j10r)
+    meta = S.program(tmp_path / "offline", model, 512, 16, config=json.dumps(j10r))
+    assert meta["program_digest"] == arm.digest and len(programs) == 1
+    shapes, modules, _r, _s, unit = programs[0][0]
+    assert len(shapes) == 48 and {k for _n, k in shapes} == {2048} and modules[0] == "model.layers.0.self_attn.qkv_proj"
+    assert unit[0] is HW.tile_unit and unit[2]["definition"] is HT.PouwH1Tile5
+    assert S.main(["program", str(tmp_path / "like"), "--like", str(run)]) == 0 and len(programs) == 1
+    assert S.main(["program", str(tmp_path / "flag"), "--rows", "512", "--steps", "16", "--protocols-config",
+                   json.dumps(j10r)]) == 0 and len(programs) == 1
+
+    v1, v1_run = served(None)
+    assert S.program(tmp_path / "v1", model, 512, 16)["program_digest"] == v1.digest != arm.digest
+    assert len(programs[1][0][0]) == 64 and programs[1][0][4] is None
+    (v1_run / "serve.json").write_text(json.dumps({"served_model_name": model,
+                                                   "protocols": {**v1.describe(), "program": arm.digest}}))
+    with pytest.raises(ValueError, match="DECLARED's linears aren't the ones that run served"):
+        S.program(tmp_path / "mixed", model, 0, 0, like=v1_run)
+    with pytest.raises(ValueError, match=r"no linear at K \[4096\]"):
+        S.program(tmp_path / "none", model, 512, 16, config=json.dumps({"pouw": {"ks": [4096]}}))
+
 
 
 def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
@@ -347,19 +1064,19 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
 
 
 @pytest.mark.parametrize("env, budget", [
-    ({}, "512"),
+    ({"H1_GATE": ""}, "512"),
     ({"H1_GATE": GATE}, "512"),
     ({"H1_GATE": GATE, "H1_T": "8192"}, "8192"),
-    ({"H1_T": "8192"}, "8192"),
+    ({"H1_GATE": "", "H1_T": "8192"}, "8192"),
     ({"T": "2048", "H1_T": "8192", "H1_GATE": GATE}, "2048"),
 ])
 def test_the_engine_gets_one_token_budget_with_or_without_h1(tmp_path, env, budget):
-    """serve-openai gets ``--max-num-batched-tokens`` once, T (default H1_T, else 512), whether H1 serves or not; without
-    it the engine would take serve-openai's own 2048 with H1 off."""
+    """serve-openai gets ``--max-num-batched-tokens`` once, T (default H1_T, else 512), whether H1 serves or not (H1_GATE
+    empty turns H1 off); without it the engine would take serve-openai's own 2048 with H1 off."""
     rc, argv = _serve_argv(tmp_path, env)
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
     assert argv.count("--max-num-batched-tokens") == 1 and argv[argv.index("--max-num-batched-tokens") + 1] == budget
-    assert ("--protocols" in argv) == ("H1_GATE" in env)
+    assert ("--protocols" in argv) == bool(env["H1_GATE"])
 
 
 class _Response:
