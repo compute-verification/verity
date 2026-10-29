@@ -86,7 +86,7 @@ def reads(rule: str, counts: list[int], seed: int) -> int:
 
 def test_the_silu_mul_window_keeps_todays_reserve():
     """38b2's SiluMul window reads 226 bytes a rank (a stratum of 675 at k 4, 144 bytes, and one of 3 at its floor of 1,
-    82), so its need with the margin is 6 coins. The reserve keeps today's 16 coins a rank and one more: 129 for 8
+    82), so its need with the margin is 6 coins. The reserve keeps the current 16 coins a rank and one more: 129 for 8
     ranks."""
     assert reads("stratified:4", SILU_MUL, 0) == 226
     need = need_of("stratified:4", SILU_MUL)
