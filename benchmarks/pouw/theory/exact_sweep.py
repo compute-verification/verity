@@ -358,7 +358,8 @@ def designs() -> list[Design]:
                lambda m, n, k: 4 * hw_steps(k) / (n * k) + 4 / (m * k), _final_dup("final_col_dup_share", hw_steps),
                False, "0 (exact while |A·Bᵀ| < 2^24)", f"{premises_m0}; {coins}; rc-hw-distinct (open)",
                "final word A·Bᵀ + c_j: lost on equal outputs of a column, and on chosen identical rows"),
-        Design("ssn_1l_hw", "N-PREM's hardened lead (premise_ledger.py): a1 ∈ [0,15]⁴ against the code, a_t = 1 + 2b_t "
+        Design("ssn_1l_hw", "the served lead hardened against the coin branch (premise_ledger.py's ssn_1l_hw): "
+               "a1 ∈ [0,15]⁴ against the code, a_t = 1 + 2b_t "
                "against public column signs; noise served", lambda k: H32 * s1(k) / k,
                lambda m, n, k: H32 * ns.ssn_1l_forming_writes(s1(k)) / (n * k), _z,
                lambda m, n, k: H32 * s1(k) / (n * k), _z, _z, False,
