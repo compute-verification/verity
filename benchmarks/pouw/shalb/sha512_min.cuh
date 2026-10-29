@@ -68,7 +68,6 @@ SHAMIN_HD uint64_t pack(uint32_t lo, uint32_t hi) { return (uint64_t)hi << 32 | 
 // The 32-bit window of hi:lo starting at bit m: one SHF.R.W.U32 on the device.
 SHAMIN_HD uint32_t window(uint32_t lo, uint32_t hi, int m) {
 #ifdef __CUDA_ARCH__
-  if (__builtin_constant_p(lo) && __builtin_constant_p(hi)) return (uint32_t)((((uint64_t)hi << 32) | lo) >> m);
   return __funnelshift_r(lo, hi, m);
 #else
   return (uint32_t)((((uint64_t)hi << 32) | lo) >> m);
