@@ -141,6 +141,9 @@ def test_the_live_templates_circuit_file_is_built_beside_the_strata_and_a_commit
     assert sorted(doc["files"]) == ["k128", "k64", CR.LIVE]
     assert PC.build(d, out, lower=lambda *_a: pytest.fail("relowered"), live=(ROWS, STEPS),
                     lower_live=stand_in_live) == doc and lived == [ROWS]
+    only = PC.build(d, tmp_path / "live-only", lower=lambda *_a: pytest.fail("lowered a stratum"), live=(ROWS, STEPS),
+                    lower_live=stand_in_live, only=())
+    assert only["files"] == {CR.LIVE: doc["files"][CR.LIVE]} and only["bind"] == doc["bind"]
 
     layout = json.loads((d / RH.PROGRAM_META).read_text())["layout"]
     decl = SimpleNamespace(rows=ROWS, steps=STEPS)
@@ -154,6 +157,19 @@ def test_the_live_templates_circuit_file_is_built_beside_the_strata_and_a_commit
     PC.build(d, out, lower=lambda *_a: None)
     with pytest.raises(ValueError, match="live circuit file is for T = None"):
         GPU.period_files(out, _sha(raw), layout, decl)
+
+
+def test_past_the_piece_rows_the_live_file_is_bound_to_the_pieced_live_program():
+    """At T past `live.PIECE_ROWS` (a V3 prefill round's T 8,192) the live Program is cut by rows: ``--live T,S`` binds
+    the live file to `live.program_rows` of T / 64 pieces a round and its `live.query_rows` partition, and up to it to
+    v2's."""
+    from verity.core.protocols.pouw.circuit import live as L
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
+    for t, (program, query) in ((8192, (L.program_rows(8192, 1, "h1/"), L.query_rows(8192))),
+                                (64, (L.program_v2(64, 1, "h1/"), L.query_v2(64)))):
+        assert PC.live_part(t, 1, "h1/") == P.partition(program, query)
+    assert P.evaluate(L.program_rows(8192, 1, "h1/"), L.query_rows(8192)).population == 128
 
 
 def test_a_template_the_declared_program_does_not_define_is_lowered_for_no_stratum(program, tmp_path, monkeypatch):
