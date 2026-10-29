@@ -108,6 +108,10 @@ theorem expands_program {p : NciCheck.Protocol.Params} {e : NciCheck.Protocol.Ev
 theorem bytes_eq_of_beq {a b : ByteArray} (h : (a == b) = true) : a = b :=
   ByteArray.ext (eq_of_beq (show ByteArray.beq a b = true from h))
 
+theorem bytes_bne_self (a : ByteArray) : (a != a) = false := by
+  have h : ByteArray.beq a a = true := by unfold ByteArray.beq; simp
+  simp [bne, show (a == a) = true from h]
+
 theorem checkSame_accept {id : String} {ss : List String} {cs : List Protocol} {ps : List Named} {c : ByteArray}
     {ev : List Case} {pub prof : Keyed} (h : checkSame id ss cs ps c ev = .accept pub prof) :
     check id cs ps c ev = .accept pub prof ∧ strays ss cs ev = none := by
@@ -320,7 +324,7 @@ theorem strays_three_none {P₁ P₂ P₃ : Protocol} {k₁ k₂ k₃ : Case} {c
     simp [e₁, e₂, e₃]
   unfold strays
   simp only [hm]
-  simp [List.find?]
+  simp [List.find?, bytes_bne_self]
 
 /-- Remote's check on the caller's blobs is `checkSame` over its components on them, the components named by their
 ids. -/
