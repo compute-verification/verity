@@ -1,7 +1,8 @@
 """Per-function minimality of SHA-512's Σ0, Σ1, σ0 and σ1 halves over sm_90 integer-lane instructions, by SMT.
 
     uv run --no-project --with z3-solver --with bitwuzla python benchmarks/pouw/shalb/shalb_minimal.py [--max-k K]
-        [--timeout S] [--solver bitwuzla] [--extra OPS] [--redo QUERIES_JSONL] [--jobs N] [--only NAMES] [--json OUT]
+        [--timeout S] [--solver bitwuzla] [--extra OPS] [--redo QUERIES_JSONL] [--done QUERIES_JSONL] [--jobs N]
+        [--only NAMES] [--json OUT]
 
 A target is one 32-bit half of a 64-bit function of x = hi:lo, given the registers lo and hi. A program is k
 straight-line instructions, each reading up to three sources (lo, hi, an earlier result, or an immediate of its own);
@@ -313,6 +314,8 @@ def main() -> int:
     ap.add_argument("--jsonl", default="", help="every query's result as it finishes")
     ap.add_argument("--solver", choices=sorted(SOLVERS), default="z3", help="the synthesis queries' solver")
     ap.add_argument("--redo", default="", help="a --jsonl stream: rerun only its unknown queries, by k")
+    ap.add_argument("--done", default="", help="a --jsonl stream: skip the queries it decided (none or found), as "
+                    "when resuming a sweep cut short")
     ap.add_argument("--no-controls", action="store_true")
     ap.add_argument("--init", default="0,7,31,32,45,63,r,r",
                     help="the first samples of x: bit positions set alone, or r for a random x")
@@ -332,6 +335,13 @@ def main() -> int:
                 redo.setdefault(len(r["ops"]), []).append((r["function"], 0 if r["half"] == "lo" else 1,
                                                            tuple(r["ops"]), args.timeout, args.solver, args.init))
 
+    decided: set = set()
+    if args.done:
+        for line in open(args.done):
+            r = json.loads(line)
+            if r["verdict"] != "unknown":
+                decided.add((r["function"], 0 if r["half"] == "lo" else 1, tuple(r["ops"])))
+
     def dump():
         if args.json:
             with open(args.json, "w") as f:
@@ -345,7 +355,7 @@ def main() -> int:
             tuples = [ops for ops in itertools.product(OPS + extra, repeat=k) if set(ops) & set(extra)] \
                 if extra else list(itertools.product(OPS, repeat=k))
             tasks = redo[k] if args.redo else [(n, h, ops, args.timeout, args.solver, args.init) for n in names
-                                               for h in (0, 1) for ops in tuples]
+                                               for h in (0, 1) for ops in tuples if (n, h, ops) not in decided]
             t0, rs = time.monotonic(), []
             for r in pool.imap_unordered(search, tasks, chunksize=1):
                 rs.append(r)
