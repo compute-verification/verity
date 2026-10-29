@@ -32,6 +32,7 @@ import argparse
 import itertools
 import json
 import multiprocessing as mp
+import os
 import random
 import sys
 import time
@@ -212,7 +213,7 @@ def main() -> int:
     ap.add_argument("--max-k", type=int, default=3)
     ap.add_argument("--timeout", type=int, default=1800, help="seconds a solver call")
     ap.add_argument("--control-timeout", type=int, default=7200, help="seconds a solver call, for the controls")
-    ap.add_argument("--jobs", type=int, default=mp.cpu_count())
+    ap.add_argument("--jobs", type=int, default=len(os.sched_getaffinity(0)))
     ap.add_argument("--only", default="", help="comma-separated function names")
     ap.add_argument("--json", default="")
     args = ap.parse_args()
