@@ -3160,7 +3160,7 @@ def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_p
         return quick_tier.build(str(lake), pkg, d, {**env, **extra})
 
     assert run(1) == {"dir": d, "rc": 0, "start": "cold"}
-    warm = tmp_path / "home" / ".cache" / "verity" / "lake-slot-a" / "verity--core--service--flock"
+    warm = tmp_path / "home" / ".cache" / "verity" / "lake-slot-a" / d.replace("/", "--")
     assert (warm / "warm").is_file()
     assert run(2) == {"dir": d, "rc": 0, "start": "warm"}
     assert run(3, FAIL_WARM="1") == {"dir": d, "rc": 0, "start": "cold"}

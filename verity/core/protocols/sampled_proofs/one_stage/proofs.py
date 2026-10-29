@@ -43,7 +43,7 @@ from typing import Any, Mapping, Sequence
 from .verifier import BUILD_LOCK, CORE
 from .verifier import PACKAGE as V2_PACKAGE
 
-PACKAGE = CORE / "service" / "flock"
+PACKAGE = CORE.parents[1] / "verity/core/service/flock"
 EXE = "flock-verify"
 #: the statement every sampled proof block's session proves
 STATEMENT = "verity/flock-circuit"
