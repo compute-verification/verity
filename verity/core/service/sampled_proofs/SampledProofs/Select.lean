@@ -25,20 +25,26 @@ private def split1 (s sep : String) : String × String :=
   | a :: rest => (a, sep.intercalate rest)
   | [] => (s, "")
 
-/-- `draw.parse_law`: `subset:K`, `stratified:K` or `work:K` (`K ≥ 1`), or `bernoulli:NUM/DEN` with `0 < DEN` and
-`NUM ≤ DEN`, split at the first `:` and the first `/`, each number one or more ASCII digits; the law object, a Bernoulli
-law's `p` written without leading zeros. -/
+/-- `draw.parse_law`: `subset:K`, `stratified:K` or `work:K` (`K ≥ 1`), `whole:K:B1,B2,…` (`K ≥ 1`, each base id
+non-empty), or `bernoulli:NUM/DEN` with `0 < DEN` and `NUM ≤ DEN`, split at the first `:` (a whole law's then at its next
+`:` and at every `,`) and the first `/`, each number one or more ASCII digits; the law object, a Bernoulli law's `p`
+written without leading zeros. -/
 def parseLaw (text : String) : V Json := do
   let (kind, arg) := split1 text ":"
   if kind == "subset" && digits arg && 1 ≤ arg.toNat! then
     return Json.mkObj [("law", "subset"), ("k", Lean.toJson arg.toNat!)]
   if (kind == "stratified" || kind == "work") && digits arg && 1 ≤ arg.toNat! then
     return Json.mkObj [("law", Json.str kind), ("k", Lean.toJson arg.toNat!)]
+  if kind == "whole" then
+    let (k, names) := split1 arg ":"
+    let bases := names.splitOn ","
+    if digits k && 1 ≤ k.toNat! && bases.all (!·.isEmpty) then
+      return Json.mkObj [("law", "whole"), ("k", Lean.toJson k.toNat!), ("whole", Json.arr (bases.toArray.map Json.str))]
   if kind == "bernoulli" then
     let (num, den) := split1 arg "/"
     if digits num && digits den && 0 < den.toNat! && num.toNat! ≤ den.toNat! then
       return Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{num.toNat!}/{den.toNat!}")]
-  throw s!"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {pyRepr text}"
+  throw s!"a law is subset:K, stratified:K, work:K, whole:K:B1,B2,... or bernoulli:NUM/DEN, not {pyRepr text}"
 
 /-- `draw.parse_rate`: the rate law `rate:NUM/DEN` or `rate:NUM/DEN:T`, a public rate `NUM/DEN` with `0 < NUM ≤ DEN` over
 `T ≥ 1` tables (one when it names none), split at the first `:`, then at the first `/` and `:`, each number one or more

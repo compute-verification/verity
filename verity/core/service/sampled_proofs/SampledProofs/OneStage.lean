@@ -3,7 +3,7 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `program` (its descriptor), `query`, `law`
   (the agreed rule: `{"law": "subset", "k"}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, `{"law": "stratified" | "work",
-  "k"}`), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`, what its layout derives),
+  "k"}`, `{"law": "whole", "k", "whole": [<base id>, ...]}`), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`, what its layout derives),
   `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's `registered`, when truthy, a list of
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
   `registered` (null, or `{parameter: words}`, the values it expects registered: empty or null expects a v1 record) and
@@ -93,7 +93,11 @@ def rule (law : Json) : V Json := do
   | .str "subset" | .str "stratified" | .str "work" =>
     exactly law #["k", "law"] "the law"
     if (nat? (getD law "k")).isNone then throw "the law's k is not a natural number"
-  | _ => throw "the law is not subset, bernoulli, stratified or work"
+  | .str "whole" =>
+    exactly law #["k", "law", "whole"] "the law"
+    if (nat? (getD law "k")).isNone then throw "the law's k is not a natural number"
+    if (Draw.wholeBases (getD law "whole")).isNone then throw "the law's whole is not a list of base ids"
+  | _ => throw "the law is not subset, bernoulli, stratified, work or whole"
   return law
 
 def PARAM_KEYS : Array String := #["anchors", "delta", "law", "leaf_layer", "log", "partition", "ports", "program", "query",

@@ -107,6 +107,13 @@ below the stratum's floor and never above `n_s`. Rounding up keeps each unit's i
 which the work bound (`FlockSoundness.Audit.Law.work_escape_le`, through `workRule_eq_draw`) reads. -/
 def workK (k work size total floor : Nat) : Nat := min size (max floor ((k * work * size + total - 1) / total))
 
+/-- A stratum's draw under the whole rule outside its whole templates (`draw.whole_k`): the work rule's at unit work and
+floor one over the population, `min(size, max(1, ⌈k · size / population⌉))`. -/
+def wholeK (k size population : Nat) : Nat := workK k 1 size population 1
+
+/-- A descriptor id is of base id `b` (`Name_vN`): `b` itself or a specialization `b{…}` (`draw.of_base`). -/
+def ofBase (t b : String) : Bool := t == b || t.startsWith (b ++ "{")
+
 /-- A work law's population work, `Σ_s work_s · n_s`. -/
 def totalWork (strata : Array WorkStratum) : Nat := strata.foldl (fun acc s => acc + s.work * s.size) 0
 
@@ -126,6 +133,15 @@ def derive (k : Nat) (strata : Array (String × Array (Nat × Nat))) : Except St
   if k < 1 || k > n then throw s!"a stratified law needs 1 <= k <= {n}, not {k}"
   return .stratified k (strata.map fun (t, rs) =>
     { template := t, units := rs, k := stratumK k (rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0) n })
+
+/-- `whole:K:B,…` expanded over the strata (`draw.derive`): a stratified law, each stratum of a template of a base id in
+`whole` (`ofBase`) drawing all its units and every other `wholeK`, for `1 ≤ K ≤ population`. -/
+def deriveWhole (k : Nat) (whole : Array String) (strata : Array (String × Array (Nat × Nat))) : Except String Law := do
+  let n := strata.foldl (fun acc (_, rs) => acc + rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0) 0
+  if k < 1 || k > n then throw s!"a whole law needs 1 <= k <= {n}, not {k}"
+  return .stratified k (strata.map fun (t, rs) =>
+    let size := rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0
+    { template := t, units := rs, k := if whole.any (ofBase t) then size else wholeK k size n })
 
 /-- `work:K` expanded over the strata and the verifier's work table (template descriptor id ↦ work per unit and floor):
 each stratum with `workK` above its floor, for `1 ≤ K ≤ population` and a population that does some work. A template the
@@ -259,13 +275,16 @@ private def stratumOfJson (j : Json) : V Stratum := do
   return { template := t, units, k }
 
 /-- A stratified law over `population` units (`draw.strata_problem`): `1 ≤ k ≤ population`, distinct templates, each
-stratum's `k` the rule's, and the strata's ranges tiling `[0, population)` exactly. -/
+stratum's `k` the rule's, and the strata's ranges tiling `[0, population)` exactly. The rule is the stratified one
+(every `k_s` `stratumK`'s) or the whole one (every `k_s` its size or `wholeK`'s), never a mix. -/
 def strataProblem (k : Nat) (strata : Array Stratum) (population : Nat) : Option String := Id.run do
   if strata.isEmpty || k < 1 || k > population then return some "U2: strata and 1 <= k <= population"
+  let stratified := strata.all fun s => s.k == stratumK k s.size population
   for i in [0:strata.size] do
     let s := strata[i]!
     if (strata.extract 0 i).any (·.template == s.template) then return some s!"U2: template '{s.template}' twice"
-    if s.k != stratumK k s.size population then return some s!"U2: stratum '{s.template}': k is not the rule's"
+    if !(stratified || s.k == s.size || s.k == wholeK k s.size population) then
+      return some s!"U2: stratum '{s.template}': k is not the rule's"
   let mut at_ := 0
   for (lo, hi) in (strata.foldl (· ++ ·.units) #[]).qsort (fun a b => a.1 < b.1) do
     if lo != at_ then return some "U2: the strata don't tile the population"

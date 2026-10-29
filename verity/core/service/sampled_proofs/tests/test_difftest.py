@@ -396,18 +396,22 @@ def probability(p) -> bool:
 
 
 def rule(law) -> dict:
-    """`OneStage.rule`: the agreed law, `{"law": "bernoulli", "p"}` or `{"law": "subset" | "stratified" | "work", "k"}`."""
+    """`OneStage.rule`: the agreed law, `{"law": "bernoulli", "p"}`, `{"law": "subset" | "stratified" | "work", "k"}` or
+    `{"law": "whole", "k", "whole": [<base id>, ...]}`."""
     kind = law.get("law") if isinstance(law, dict) else None
     if kind == "bernoulli":
         _exactly(law, {"law", "p"}, "the law")
         if not probability(law["p"]):
             raise D.Reject("the law's p is not NUM/DEN")
-    elif kind in ("subset", "stratified", "work"):
-        _exactly(law, {"k", "law"}, "the law")
+    elif kind in ("subset", "stratified", "work", "whole"):
+        _exactly(law, {"k", "law", *(("whole",) if kind == "whole" else ())}, "the law")
         if not _nat(law["k"]):
             raise D.Reject("the law's k is not a natural number")
+        if kind == "whole" and not (isinstance(law["whole"], list) and law["whole"]
+                                    and all(isinstance(b, str) and b for b in law["whole"])):
+            raise D.Reject("the law's whole is not a list of base ids")
     else:
-        raise D.Reject("the law is not subset, bernoulli, stratified or work")
+        raise D.Reject("the law is not subset, bernoulli, stratified, work or whole")
     return law
 
 
@@ -1225,12 +1229,18 @@ WORK_ENTRY = st.one_of(st.integers(0, 4), st.fixed_dictionaries({"work": st.inte
 BAD_WORK_ENTRY = st.sampled_from([-1, "1", {"work": -1}, {"floor": 0, "work": 1}, {"work": 1, "x": 1}, {"floor": 1}, True])
 
 
+#: Base ids a whole law names: the partitions' templates' own and one no partition has.
+WHOLE_BASES = st.lists(st.sampled_from(WORK_IDS + ["Other_v1"]), min_size=1, max_size=2, unique=True)
+
+
 @st.composite
 def laws(draw, n: int):
-    kind = draw(st.sampled_from(["subset", "bernoulli", "stratified", "work"]))
+    kind = draw(st.sampled_from(["subset", "bernoulli", "stratified", "work", "whole"]))
     if kind == "bernoulli":
         den = draw(st.integers(1, 6))
         return {"law": "bernoulli", "p": f"{draw(st.integers(0, den))}/{den}"}
+    if kind == "whole":
+        return {"k": draw(st.integers(1, n)), "law": "whole", "whole": draw(WHOLE_BASES)}
     return {"k": draw(st.integers(0 if kind == "subset" else 1, n)), "law": kind}
 
 
@@ -2172,6 +2182,8 @@ LAW_CHANGES = [
     lambda law, x: {**law, "strata": law["strata"][:-1]},
     lambda law, x: {**law, "strata": [{**s, "k": s["k"] + 1} if i == x % len(law["strata"]) else s
                                       for i, s in enumerate(law["strata"])]},
+    lambda law, x: {**law, "strata": [{**s, "k": sum(hi - lo for lo, hi in s["units"])} if i == x % len(law["strata"])
+                                      else s for i, s in enumerate(law["strata"])]},
     lambda law, x: {**law, "extra": 1},
     lambda law, x: {k: v for k, v in law.items() if k != "law"},
     lambda law, x: {**law, "law": ["subset", "bernoulli", "stratified", "work", [1]][x % 5]},
@@ -2205,14 +2217,17 @@ ODD_LAW_TEXTS = ["subset:", "subset", "", "subset:\u0663", "work:\u00b2", "strat
                  "subset:007", "nope:1",
                  "Subset:1", "bernoulli:", "bernoulli:/2", "rate:", "rate", "rate:0/3", "rate:4/3", "rate:1/0",
                  "rate:1/2:0", "rate:1/2:", "rate:1/2:3:4", "rate:1/2/3", "rate:\u0661/2", "rate:1/2:\u0663",
-                 "rate:01/02:003", "Rate:1/2", "rate:/2", "rate:1/2: 3", "rate:+1/2", "rate:1:2"]
+                 "rate:01/02:003", "Rate:1/2", "rate:/2", "rate:1/2: 3", "rate:+1/2", "rate:1:2", "whole:1", "whole:",
+                 "whole:1:", "whole::Pair_v1", "whole:0:Pair_v1", "whole:1:,", "whole:1:Pair_v1,", "whole:01:Pair_v1",
+                 "whole:\u0661:Pair_v1"]
 #: A rate law's text, `rate:NUM/DEN[:T]`, the tables written or not.
 RATE_TEXTS = st.builds(lambda num, den, t: f"rate:{num}/{den}" + ("" if t is None else f":{t}"),
                        st.integers(0, 12), st.integers(0, 12), st.none() | st.integers(0, 6))
 LAW_TEXTS = st.one_of(
     st.builds(lambda kind, k: f"{kind}:{k}", st.sampled_from(["subset", "stratified", "work"]), st.integers(0, 30)),
     st.builds(lambda num, den: f"bernoulli:{num}/{den}", st.integers(0, 12), st.integers(0, 12)),
-    RATE_TEXTS, st.sampled_from(ODD_LAW_TEXTS))
+    RATE_TEXTS, st.sampled_from(ODD_LAW_TEXTS),
+    st.builds(lambda k, bases: f"whole:{k}:{','.join(bases)}", st.integers(0, 30), WHOLE_BASES))
 #: Rules a stream doesn't run, or that aren't rules as `to_json` writes them.
 ODD_RULES = [{"check": "all", "replay": "subset:1", "rule": "two-stage"},
              {"check": 2, "replay": "subset:1", "rule": "two-stage"}, {"check": "some", "replay": "subset:1", "rule": "two-stage"},
@@ -2240,7 +2255,7 @@ def selections(draw) -> dict:
     a rate's mostly, its tables sometimes more than its count fits), the work table naming every template for a work
     law (sometimes with a template's work 0, or a bad entry), mostly a closure map for a work law, and the coins."""
     desc, query, n = draw(partitions())
-    kind = draw(st.sampled_from(["work", "stratified", "subset", "bernoulli", "rate", "work", "all"]))
+    kind = draw(st.sampled_from(["work", "stratified", "subset", "bernoulli", "rate", "work", "whole", "all"]))
     if kind == "all":
         rule = {"rule": "all"}
     else:
@@ -2250,6 +2265,8 @@ def selections(draw) -> dict:
         elif kind == "rate":
             tables = draw(st.none() | st.integers(1, 4))
             text = f"rate:{draw(st.integers(1, den))}/{den}" + ("" if tables is None else f":{tables}")
+        elif kind == "whole":
+            text = f"whole:{draw(st.integers(1, max(n, 1)))}:{','.join(draw(WHOLE_BASES))}"
         else:
             text = f"{kind}:{draw(st.integers(1, max(n, 1)))}"
         rule = {"law": text, "rule": "law"}
@@ -2496,6 +2513,8 @@ RUN_SESSIONS = ["5e" * 64, "a1" * 64]
 def _law_text(law) -> str | None:
     if not isinstance(law, dict):
         return None
+    if law.get("law") == "whole" and isinstance(law.get("whole"), list):
+        return f"whole:{law.get('k')}:{','.join(map(str, law['whole']))}"
     return f"bernoulli:{law.get('p')}" if law.get("law") == "bernoulli" else f"{law.get('law')}:{law.get('k')}"
 
 

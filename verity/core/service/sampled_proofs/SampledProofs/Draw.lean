@@ -11,19 +11,29 @@ namespace SampledProofs.Draw
 
 open Lean (Json)
 open Flock (V)
-/-- `draw.derive`'s expansion as C-Flock's law: `stratified` and `work` (the rule, or an expanded law, whose strata are
-ignored) over the strata of the verifier's program and query (`Flock.Draw.derive`, and `Flock.Draw.deriveWork` with its
-work table); `none` for `subset` and `bernoulli`, which `derive` leaves unchanged. An error when the query doesn't apply,
-`k` isn't in `[1, population]`, a work law has no table, the table names no work for a template, or the population does
+/-- A whole law's base ids: a non-empty list of non-empty strings. -/
+def wholeBases : Json → Option (Array String)
+  | .arr bs => if bs.isEmpty then none else bs.mapM fun | .str b => if b.isEmpty then none else some b | _ => none
+  | _ => none
+
+/-- `draw.derive`'s expansion as C-Flock's law: `stratified`, `whole` and `work` (the rule, or an expanded law, whose strata
+are ignored) over the strata of the verifier's program and query (`Flock.Draw.derive`, `Flock.Draw.deriveWhole` at its
+base ids, and `Flock.Draw.deriveWork` with its work table); `none` for `subset` and `bernoulli`, which `derive` leaves
+unchanged. An error when the query doesn't apply, `k` isn't in `[1, population]`, a whole law names no base ids or one
+that is not a non-empty string, a work law has no table, the table names no work for a template, or the population does
 none. -/
 def deriveLaw (p : Program) (query law : Json) (table : Option Json) : V (Option Flock.Draw.Law) := do
   let kind := match getD law "law" with | .str s => s | _ => ""
-  if !(kind == "stratified" || kind == "work") then return none
+  if !(kind == "stratified" || kind == "work" || kind == "whole") then return none
   let strata ← Partition.strata p query
   let n := strata.foldl (fun acc (_, rs) => acc + rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0) 0
   let some k := nat? (getD law "k") | throw s!"a law needs 1 <= k <= {n}"
   if kind == "stratified" then
     return some (← Flock.Draw.derive k strata)
+  if kind == "whole" then
+    if k < 1 || k > n then throw s!"a whole law needs 1 <= k <= {n}, not {k}"
+    let some bases := wholeBases (getD law "whole") | throw "a whole law names its whole templates' base ids"
+    return some (← Flock.Draw.deriveWhole k bases strata)
   let some t := table | throw "a work law needs the verifier's work table"
   return some (← Flock.Draw.deriveWork k strata (← Flock.Draw.workTableOfJson t))
 
@@ -103,11 +113,15 @@ private def sumSizes (rs : Array (Int × Int)) : Int := rs.foldl (fun a (lo, hi)
 
 /-- `draw.strata_problem`'s words for why a stratified or work law is not well formed over `population` units, in its
 order: `k` and the strata, a work stratum's keys, work and floor, the population's work, then each stratum's keys and
-template, its ranges, its floor and its `k`, and last the tiling. -/
+template, its ranges, its floor and its `k` (a stratified law's every `k_s` `stratumK`'s, or every `k_s` its size or
+`wholeK`'s), and last the tiling. -/
 def strataMessage (law : Json) (population : Int) : Option String := Id.run do
   let work := jeq (getD law "law") "work"
   let (.arr ss, some k) := (getD law "strata", int? (getD law "k")) | return some "strata and 1 <= k <= population"
   if ss.isEmpty || k < 1 || population < k then return some "strata and 1 <= k <= population"
+  let stratified := !work && ss.all fun s => match ranges? (getD s "units"), int? (getD s "k") with
+    | some rs, some x => x == (Flock.Draw.stratumK k.toNat (sumSizes rs).toNat population.toNat : Int)
+    | _, _ => false
   let keys := if work then WORK_STRATUM_KEYS else STRATUM_KEYS
   let mut total : Int := 0
   if work then
@@ -131,10 +145,11 @@ def strataMessage (law : Json) (population : Int) : Option String := Id.run do
     let floor := (int? (getD s "floor")).getD 0
     if work && floor < 1 then return some s!"stratum {pyRepr t}: a floor is at least one"
     let size := sumSizes rs
-    let rule : Int := if work then
-        Flock.Draw.workK k.toNat ((int? (getD s "work")).getD 0).toNat size.toNat total.toNat floor.toNat
-      else Flock.Draw.stratumK k.toNat size.toNat population.toNat
-    if int? (getD s "k") != some rule then
+    let rule : Array Int := if work then
+        #[Flock.Draw.workK k.toNat ((int? (getD s "work")).getD 0).toNat size.toNat total.toNat floor.toNat]
+      else if stratified then #[Flock.Draw.stratumK k.toNat size.toNat population.toNat]
+      else #[size, Flock.Draw.wholeK k.toNat size.toNat population.toNat]
+    if !((int? (getD s "k")).any rule.contains) then
       return some s!"stratum {pyRepr t}: k is not the {if work then "work " else ""}rule's"
     ranges := ranges ++ rs
   let mut at_ : Int := 0
