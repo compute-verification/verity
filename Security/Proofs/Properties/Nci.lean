@@ -12,7 +12,7 @@ Each statement of `Properties.Nci`, proved of `NciCheck.evaluate` from the lemma
 namespace NciCheck.Properties.SecurityProofs
 
 open Lean (Json toJson)
-open Flock.Program (Prog)
+open Flock.Program (Prog GateTable)
 
 theorem parses_unique {j : Json} {i i' : Instance} (h : Parses j i) (h' : Parses j i') : i = i' := by
   have h1 := (parse_ok j i).2 h
@@ -121,7 +121,7 @@ theorem failStep_fst (gamma num den : ℕ) (r : Array (ℕ × ℕ)) (u v : ℕ) 
 
 namespace Setting
 
-variable {P : Prog} {theta owner : Array Json} {c : Circuit} {dv : Division} {d : Verity.Declaration} {n : ℕ}
+variable {P : Prog} {theta owner : Array Json} {c : GateTable} {dv : Division} {d : Verity.Declaration} {n : ℕ}
   {U : Verity.Partition d.D n} (S : Setting P theta owner c dv d n U)
 include S
 
@@ -294,7 +294,7 @@ theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s
 /-- **`NciCheck.Desc.sizes` is the unrolled tally.** On a division that is the expansion of the root nodes' IUs `own`
 (root node `k` holding gates `[offs[k], offs[k + 1])`, `offs` from `0` to the circuit's `N`, each of them in IU
 `own[k]`), the description-sized check's size of each IU is the one `NciCheck.tally` counts gate by gate. -/
-theorem sizes_eq_tally (c : Circuit) (d : Division) (offs : Array ℕ) (own : Array (Option ℕ))
+theorem sizes_eq_tally (c : GateTable) (d : Division) (offs : Array ℕ) (own : Array (Option ℕ))
     (h0 : offs[0]! = 0) (hN : offs[own.size]! = c.N) (hmono : ∀ k < own.size, offs[k]! ≤ offs[k + 1]!)
     (hexp : ∀ k < own.size, ∀ g, offs[k]! ≤ g → g < offs[k + 1]! → d.owner[g]! = own[k]!) (u : ℕ) (hu : u < d.n) :
     (NciCheck.Desc.sizes offs own d.n)[u]! = (tally c d)[u]!.1 := by
