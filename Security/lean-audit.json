@@ -13707,13 +13707,8 @@
    ]
   },
   "Definitions.Accounting.Compose": {
-   "digest": "8b3dfa00e88e7ab58a6e0f4ee6102b103a2dc9ef0a014526fa90a434ddb4a4af",
+   "digest": "6223ea365c3f6237419afbeac04b0826f3c6a9aec0addc6d67d09b622f298d38",
    "definitions": {
-    "Accounting.Compose.Certificate": "2be237058a4c505964aab774cfdf272a361b1d72721e5f0c0d2111e79bd2e1ac",
-    "Accounting.Compose.Certificate.Holds": "3e92b034ff8ce9ebb63fb0b334e1d23d3f79ae9c3dd482a45baa64dc262d0d12",
-    "Accounting.Compose.Certificate.credit": "b644a3af20b09317bb4643402f0d4de3a625fcb4bbec06b2a3601d9e3a4ba4ec",
-    "Accounting.Compose.Certificate.delta": "42dae3042c7bb7a64ba6b47cfafbec0e9c0a94e350c6e7d7a2ba19c58f8a964b",
-    "Accounting.Compose.Certificate.eps": "bedd4c4c82295bb918e1f2140636d8fc167c72e4b8a55fe0d1b96f051d2dc057",
     "Accounting.Compose.CoinMode": "9ec656e568e719e9703d5a190c652794acbcbe559148d41adf8cc7687254f945",
     "Accounting.Compose.CoinMode.live": "2a68d126173b167c465fa76c5b175f40be66fdcb462dfd4ffec8a79e3df05a54",
     "Accounting.Compose.CoinMode.seeded": "9c0d4051e6619f468c7e15eede94f4be51890734b7d6d3d5f76f8628212a0b04",
@@ -13839,7 +13834,6 @@
     "Accounting.Compose.premiumOf": "1a94e22c14032f0315aba1594818c28214b6cf3b98e0b3e8ca280ec9544baaba",
     "Accounting.Compose.rOf": "c8f6f0b30e575d38d1ab9f084f981d5d1bdc1ffa1f29af4d9a0b00a2880dc1a6",
     "Accounting.Compose.rOfSeeded": "a342d46667b112ee1fd0d0d4b7662255e69fed49ef73e19de2f6a29f61ef6d4c",
-    "Accounting.Compose.redraw": "35f2d1dd5dbdac57dae91945da7a5bf135741a305d1a796f9fb0a3057463159a",
     "Accounting.Compose.resample": "868647faecf5e56f08afc30c23da4fbbbd3843e6b25ed422d661fd812fee020f",
     "Accounting.Compose.roundCone": "e7759aa03240f5e1d2b33f1935b49ad84fd205ece9948c9feb69ea73d9094b0c",
     "Accounting.Compose.roundGain": "3db82ed7afbdee9007b38729e7e42599676094059b62de92550724e332bb99b5",
