@@ -5,7 +5,7 @@ decides the same transcript, held to the verifier's public input (``verity/firew
 anything the transcript says of itself; `firewall_agree.py` compares the two.
 
 The recorder watches the ZK server from outside: a coin server that keeps every call made to it (`RecordingCoins`), a salt
-source that keeps every salt it hands out (`Tape`), and every answer the ZK server gives the workers (`Session.handle`). It
+source that keeps every salt it hands out (`Tape`), and every answer the ZK server gives the workers (`InnerRun.handle`). It
 splits each call into what the schedule fixes (its shape: ``fixed`` items) and the commitments it carries (``commit``
 items, one a node of a salted top or a message row, each with the message the ZK server's own records say it commits to;
 a round's copies of a level-0 top carry none, Commit committed them), and each coin answer into
@@ -103,10 +103,10 @@ class RecordingCoins(RL.CoinServer):
         return c["coins"]
 
 
-class Session:
-    """One inner session through a ZK server: ``handle`` answers the workers' requests as the ZK server does and keeps what
+class InnerRun:
+    """One inner run through a ZK server: ``handle`` answers the workers' requests as the ZK server does and keeps what
     the transcript needs. ``proxy`` is the ZK server under test (`rec_live.Proxy` or a subclass). The challenger's coins are
-    live, as `rec_live.serve`'s are, unless ``commit``: then it commits to them before the session
+    live, as `rec_live.serve`'s are, unless ``commit``: then it commits to them before the run
     (`rec_live.CoinServer.commit_coins`, each commitment under a salt from ``coin_salt``, the challenger's own, never the
     ZK server's tape). ``coins`` is the challenger under test (`RecordingCoins` or a subclass)."""
 
