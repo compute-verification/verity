@@ -355,6 +355,30 @@ def fix_costs() -> dict:
     return out
 
 
+def tiles_at_scale(seed: int = 19, n: int = 64, s: int = 8) -> dict:
+    """The fix's tile repeats at m up to 8,192, words built directly (no X·Y): identical rows share D_t(j), identical
+    columns share D_t(i). The share of (row, step, TILE-column tile) slots whose tile equals an earlier one."""
+    rng = np.random.default_rng(seed)
+    c = code(n)
+    out = {}
+    for m in MS:
+        h = rng.integers(0, 2 ** 32, (m, ns.ssn_1l_words(s)), dtype=np.int64)
+        g = rng.integers(-G_MAX, G_MAX + 1, (TAG_LANES, n), dtype=np.int64)
+        for case in ("identical_rows", "identical_cols"):
+            if case == "identical_rows":
+                d = np.broadcast_to(rng.integers(-5000, 5000, (1, n, s)), (m, n, s))
+            else:
+                d = np.broadcast_to(rng.integers(-5000, 5000, (m, 1, s)), (m, n, s))
+            for variant, lane1, tag in (("ssn_1l", False, False), ("fix", True, True)):
+                a1, cs = lane_sums(h, s, lane1)
+                w = d + (a1 @ c)[:, :, None] + cs[:, None, :] - bias(c, s, lane1)[None, :, None]
+                if tag:
+                    w = w + (row_tags(m) @ g)[:, :, None]
+                tl = w.transpose(0, 2, 1).reshape(m * s * (n // TILE), TILE)
+                out[f"{variant}/{case}/m{m}"] = 1 - np.unique(tl, axis=0).shape[0] / tl.shape[0]
+    return out
+
+
 HBM_BYTES = 141e9
 
 
@@ -415,8 +439,14 @@ def main(argv: list[str] | None = None) -> int:
     checks.append({"check": "A1 at Llama m 8,192: gap > 1% of stock (T1 fails on identical rows)",
                    "pass": worst["gap_share_of_stock"]["A1_identical_rows"] > 0.01,
                    "detail": worst["gap_share_of_stock"]})
+    tiles = tiles_at_scale()
+    checks.append({"check": "fix: < 1% of 4-word tiles repeat at m up to 8,192 (identical rows and identical columns)",
+                   "pass": max(v for k, v in tiles.items() if k.startswith("fix/")) < 0.01, "detail": tiles})
+    checks.append({"check": "ssn_1l: > 40% of 4-word tiles repeat on identical rows or columns (tile-level A1 and A3)",
+                   "pass": min(v for k, v in tiles.items() if k.startswith("ssn_1l/")) > 0.4, "detail": tiles})
     rep = {"checks": checks, "small": small, "at_scale": scale, "t3_value_collapse": t3_value_collapse(),
            "fix_noise": fix_noise(), "fix_costs": fix_costs(), "advice_table": advice_table(), "padding": padding(),
+           "tiles_at_scale": tiles,
            "periods_A1_llama_m8192": ns.periods(worst["gap_share_of_stock"]["A1_identical_rows"], worst["alpha"]),
            "params": {"tag_lanes": TAG_LANES, "g_max": G_MAX, "tile_words": TILE, "ms": MS, "H32": ns.H32}}
     text = json.dumps(rep, indent=1, default=float)
