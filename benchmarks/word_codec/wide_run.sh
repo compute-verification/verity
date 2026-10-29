@@ -4,9 +4,7 @@
 # wide.py, then, under one gpu-lease 1 --wait --max-min MAXMIN (default 25), wide_bench.py's gates and timings. Results go
 # to $RESEARCH_RUN_DIR/out.
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 64 \
-#     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-codec-wide \
-#     -- taskset -c 48-95 bash benchmarks/word_codec/wide_run.sh
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-codec-wide taskset -c 48-95 bash benchmarks/word_codec/wide_run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to wide_bench.py; LIBSET
 # (default "p127s1 p255s1 p521s1": the carry-chain squaring, faster than operand scanning at every field

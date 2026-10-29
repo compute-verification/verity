@@ -81,7 +81,7 @@ def test_the_opened_roots_are_the_records():
                                               "p0": {"value": "partials", "root": root}}}}
     assert PR.opened(rec, audit.session_registered(v(tree.root.hex()))) == ()
     assert PR.opened(rec, audit.session_registered(v("00" * 64))) == ("P-opened",)
-    assert PR.opened(rec, audit.session_registered({})) == ("P-opened",), "a produced value no verifier of record opened"
+    assert PR.opened(rec, audit.session_registered({})) == ("P-opened",), "a produced value no verifier opened"
     two = {**v(tree.root.hex()), "lean2": {**v("00" * 64)["lean"]}}
     assert PR.opened(rec, audit.session_registered(two)) == ("P-opened",), "two roots for one value"
 

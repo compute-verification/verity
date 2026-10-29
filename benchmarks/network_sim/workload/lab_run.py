@@ -45,7 +45,7 @@ modeled under (`calibrate_run`).
 **Checks.** The certifier's audit (`active_replay.audit_configuration` with `audit.Audit`) on each block's raw and committed
 records, in its live mode, whose Program is the block's event log anchored at each request's release as the ingress
 records show it: the timing. N2's served verdict on each block's link (`n2_verdicts`): each link-window's published
-records, their heads signed by a stand-in certifier (the lab's proxy signs nothing), through the proof service's stream
+records, their heads signed by a stand-in certifier (the lab's proxy signs nothing), through the proof system's stream
 on live coins and N2's verifier of record, so the counts only. And the answers against the Program evaluated in one
 process.
 
@@ -104,7 +104,7 @@ from . import lab as L
 from . import model as M
 from . import values as V
 from .block import Context
-from .hardware import OUTSIDE, Hardware
+from .hardware import OUTSIDE, DeviceGraph
 
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
 FABRIC_MS = 10  # the model's delay between a proxy and the client, each way
@@ -509,11 +509,11 @@ class Place:
     link: str
 
 
-def hardware(dc) -> Hardware:
+def hardware(dc) -> DeviceGraph:
     """The workload's hardware: the lab's declaration at the certifiers' cadence (`records.cadence`'s bucket of
     `BUCKET_MS` ticks of `records.TICK_MS`), so that an engine step is one of their buckets."""
     cadence = Cadence(frame_bits=8 * FRAME_BYTES, bucket_ticks=BUCKET_MS // records.TICK_MS, buckets=WINDOW_BUCKETS)
-    return Hardware.from_datacenter(dataclasses.replace(dc, cadence=cadence))
+    return DeviceGraph.from_datacenter(dataclasses.replace(dc, cadence=cadence))
 
 
 def shape_of(args) -> argparse.Namespace:

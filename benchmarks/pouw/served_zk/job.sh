@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# served_zk's window through the proof service on a node's CPUs: SZ_CALLS served calls of a retained request committed as
+# served_zk's window through the proof system on a node's CPUs: SZ_CALLS served calls of a retained request committed as
 # one audit window (padded with filler tiles to a grid level), registered with exactly PoUW's public items, received,
 # drawn subset:K' once, every drawn tile proved hidden and opened, a filler tile proved beside them, and the outcome; after
 # serve.sh's run SERVED_RUN retained its two requests under $WORK/passes/$SERVED_RUN.

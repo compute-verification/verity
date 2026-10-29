@@ -2,7 +2,6 @@
 name = "VF3i-strict-r8"
 epoch = "VF3i-strict-r8"
 summary = "Round 8's strict VF3i: every byte-converting or byte-mixing read at 32 MACs a word. Its LDSM/STSM rows were invalid (round 9); VF3i-strict is the same vector on corrected rows."
-note = "note:20261016T1538Z-draft-rs-vf3i-textures-uniform"
 superseded_by = "VF3i-strict"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
