@@ -100,7 +100,7 @@ namespace Lc
 
 section Rounds
 
-variable {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Coins}
+variable {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Challenges}
 
 theorem combT_size (hf : full.size = 2 ^ c.kLog) : ∀ j, (combT c full cs j).size = 2 ^ c.kLog / 2 ^ j
   | 0 => by simp [combT, hf]
@@ -211,7 +211,7 @@ theorem lcAlgebra_of (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes 
     (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽))
     (ha : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.az a.val = ((aVec S w a).val : 𝔽))
     (hb : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.bz a.val = ((bVec S w a).val : 𝔽))
-    (zcs : Zc.Coins) (cs : Coins) (full : Array F128)
+    (zcs : Zc.Challenges) (cs : Challenges) (full : Array F128)
     (hfold : c.fold (cs.ca 0) (skipWeights (Zc.out m zcs tr).z) ((Zc.out m zcs tr).rho.extract 0 (c.kLog - 6)) =
       .ok full) :
     ∃ comb, c.folded (cs.ca 0) (cs.cb 0) (skipWeights (Zc.out m zcs tr).z)

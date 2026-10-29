@@ -24,7 +24,7 @@ open Flock Transcript
 
 namespace ZcZ
 
-variable {lay : Zk.PadLayout} {h : Array F128} {m : ℕ} {digest cap root : ByteArray} {cs : Zc.Coins} {tr : Trace}
+variable {lay : Zk.PadLayout} {h : Array F128} {m : ℕ} {digest cap root : ByteArray} {cs : Zc.Challenges} {tr : Trace}
 
 theorem loopT_k (t₀ : Transcript) (i : ℕ) : (loopT lay h m cs tr t₀ i).k = t₀.k + i := by
   induction i with
@@ -60,7 +60,7 @@ end ZcZ
 namespace LcZ
 
 variable {lay : Zk.PadLayout} {h : Array F128} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut}
-  {full : Array F128} {cs : Lc.Coins}
+  {full : Array F128} {cs : Lc.Challenges}
 
 theorem loopT_k (t : Transcript) (i : ℕ) : (loopT lay h c m tr zc full cs t i).k = t.k + 2 + i := by
   induction i with
@@ -106,7 +106,7 @@ theorem coins_of {R : Array Round} {j : ℕ} {ρ : Round} (h : Carries R j ρ) :
 
 /-- **Zerocheck's points at the stream**: on rounds carrying the masked prover's zerocheck from `t.k`, the replay's
 `ρ` and `r` are the prover's. -/
-theorem zc_coins {lay : Zk.PadLayout} {h : Array F128} {m : ℕ} {digest cap root : ByteArray} {cs : Zc.Coins}
+theorem zc_coins {lay : Zk.PadLayout} {h : Array F128} {m : ℕ} {digest cap root : ByteArray} {cs : Zc.Challenges}
     {tr : Trace} (t : Transcript) (hk : t.k = t.rounds.size) {R : Array Round}
     (hR : Agrees R (ZcZ.tEnd lay h m digest cap root cs tr t).rounds 0) :
     (zcAt m R t.k).rho = (Zc.out m cs tr).rho ∧ (zcAt m R t.k).rRest = (Zc.out m cs tr).rRest := by
@@ -116,7 +116,7 @@ theorem zc_coins {lay : Zk.PadLayout} {h : Array F128} {m : ℕ} {digest cap roo
       simp only [ZcZ.t₅, ZcZ.t₄, ZcZ.t₃, ZcZ.t₂, ZcZ.t₁, afterSq, Array.size_push, hk]
     have hc := hR.at_push (ZcZ.prefix_loop (i := i + 1) t (by omega)) (Nat.zero_le _)
     rw [e] at hc
-    simp only [coinAt, coins_of hc, sent, Zc.Coins.ρ]
+    simp only [coinAt, coins_of hc, sent, Zc.Challenges.ρ]
     simp
   · have e : (ZcZ.t₂ digest cap root cs t).rounds.size = t.k + 1 := by
       simp only [ZcZ.t₂, ZcZ.t₁, afterSq, Array.size_push, hk]
@@ -125,12 +125,12 @@ theorem zc_coins {lay : Zk.PadLayout} {h : Array F128} {m : ℕ} {digest cap roo
       ((Prefix.push _ _).trans (ZcZ.prefix_loop (i := 0) t (Nat.zero_le _)))
     have hc := hR.at_push hp (Nat.zero_le _)
     rw [e] at hc
-    simp only [zcAt, Zc.out, Zc.Coins.r, coins_of hc, sent]
+    simp only [zcAt, Zc.out, Zc.Challenges.r, coins_of hc, sent]
 
 /-- **Lincheck's points at the stream**: on rounds carrying the masked prover's lincheck from `t.k`, the replay's
 `r_in` is the prover's. -/
 theorem lc_coins {lay : Zk.PadLayout} {h : Array F128} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut}
-    {full : Array F128} {cs : Lc.Coins} (t : Transcript) (hk : t.k = t.rounds.size) {R : Array Round}
+    {full : Array F128} {cs : Lc.Challenges} (t : Transcript) (hk : t.k = t.rounds.size) {R : Array Round}
     (hR : Agrees R (LcZ.tEnd lay h c m tr zc full cs t).rounds 0) (k₀ : ℕ) (hk₀ : k₀ + 3 + (m - 6) = t.k) :
     (lcAt m c.kLog R k₀).rIn = (Lc.out c m tr zc cs).rIn := by
   simp only [lcAt, Lc.out]
@@ -140,7 +140,7 @@ theorem lc_coins {lay : Zk.PadLayout} {h : Array F128} {c : CircuitFold} {m : �
     rw [LcZ.loopT_size, hk₀, hk]
   have hc := hR.at_push (LcZ.prefix_loop (i := i + 1) t (by omega)) (Nat.zero_le _)
   rw [e] at hc
-  simp only [coinAt, coins_of hc, sent, Lc.Coins.τ]
+  simp only [coinAt, coins_of hc, sent, Lc.Challenges.τ]
   simp
 
 /-! ## The prover's rep -/
@@ -257,12 +257,12 @@ theorem proof_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x =
   rw [hn]
   exact pushes_congr fun k _ => switch_congr hx k
 
-theorem loopT_congr (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Coins) (t : Transcript) :
+theorem loopT_congr (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Challenges) (t : Transcript) :
     ∀ k, loopT tr c₁ cs t k = loopT tr c₂ cs t k
   | 0 => rfl
   | k + 1 => by simp only [loopT, absorbed, loopT_congr hx cs t k, switch_congr hx k]
 
-theorem tEnd_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Coins) (t : Transcript) :
+theorem tEnd_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Challenges) (t : Transcript) :
     tEnd tr c₁ cs t = tEnd tr c₂ cs t := by
   unfold tEnd
   rw [hn, loopT_congr hx]
@@ -294,8 +294,8 @@ theorem abc_x {m kLog : ℕ} {z₁ z₂ : ZcOut} {l₁ l₂ : LcOut} (hρ : z₁
 /-- **The verifier's ring switch returns** after a masked replay that returned on rounds carrying the prover's through
 its ring switch, if the extra claims meet their values. -/
 theorem rs_of (hs : Hashes V) (st : Setup) (hk : st.fold.kLog = st.kLog) (tr : Trace) (e : Array Claim)
-    (lay : Zk.PadLayout) (hp : Array F128) (digest cap root : ByteArray) (cz : Zc.Coins)
-    (full : Array F128) (cl : Lc.Coins) (crs : Rs.Coins) (t₀ : Transcript) (h₀ : t₀.k = 0)
+    (lay : Zk.PadLayout) (hp : Array F128) (digest cap root : ByteArray) (cz : Zc.Challenges)
+    (full : Array F128) (cl : Lc.Challenges) (crs : Rs.Challenges) (t₀ : Transcript) (h₀ : t₀.k = 0)
     (hs₀ : t₀.rounds.size = 0) (R : Array Round) (rp : Zk.Replayed) (prf : Proof)
     (hR : Agrees R (Rs.tEnd tr (abcClaims st.m st.kLog (Zc.out st.m cz tr)
       (Lc.out st.fold st.m tr (Zc.out st.m cz tr) cl) ++ e) crs
