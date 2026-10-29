@@ -11,17 +11,23 @@ A job is a `[[job]]` table:
 - `after`: optional, a job in another group that must end first: this one starts once it has passed or been skipped, and is
   stopped if it fails. The job it names has no `after` of its own;
 - `part`: optional, one of `PARTS`, the part of the check (`check.py PART...`) the job belongs to (`select`); `check.py
-  --deferred JOB,...` names jobs instead (`needed`).
+  --deferred JOB,...` names jobs instead (`needed`);
+- `gate`: optional, default true; false takes the job off the merge gate (`gated`): a recorded check, whole or a shard,
+  skips it, `research merge` requires it of no check, and it runs in drive's after-landing run (`check.py --deferred`), whose red
+  reverts its culprit. Such a job has no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
+- `shards`: optional, for a job in `SHARDED` only, N >= 1: its work in N shards, its parts `K/N` for K = 1..N (`job_parts`).
 
 The file also carries `schema = "ci/v0"`. Anything else is refused: an unknown key, a missing field, a wrong type, a
 duplicate name, or an owner the registry doesn't know. Reading the file runs none of the commit's code. Stdlib only.
 
 A `[[plan]]` is one way to split a check over several machines (`check.py --shard K/N`): `shards`, a list of N lists of
 selectors, shard K the K-th. A selector is a job's name, or for a job in `SPLIT`, `JOB:PART` (one part: for `lean-audit`, a
-Lake package with a `lean-audit.json`) or `JOB:*` (its parts no other selector of the plan names). Every job is in exactly one
-shard, whole or, for a split job, as named parts plus exactly one `*`; a shard holds what each of its jobs `needs` or runs
-`after`; no two plans have the same N (`plans`). `resolve` turns a plan into each shard's parts for a tree's parts
-(`parts_of`), and refuses a named part the tree lacks, so a stale plan stops the shard instead of leaving something out.
+Lake package with a `lean-audit.json`; for `circuit-check`, one of its `shards`, `K/N`) or `JOB:*` (its parts no other
+selector of the plan names). Every job on the gate is in exactly one shard, whole or, for a split job, as named parts plus
+exactly one `*`, and a job off it in at most one (a shard skips it either way: a plan that keeps it puts it back on the gate
+in one line); a shard holds what each of its jobs `needs` or runs `after`; no two plans have the same N (`plans`). `resolve`
+turns a plan into each shard's parts for a tree's parts (`parts_of`), and refuses a named part the tree lacks, so a stale plan
+stops the shard instead of leaving something out.
 """
 from __future__ import annotations
 
@@ -35,10 +41,13 @@ ROOT = Path(__file__).resolve().parents[3]
 PATH = ROOT / "tools" / "verity" / "check" / "ci.toml"
 REGISTRY = ROOT / ".agents" / "skills" / "using-slack" / "registry.json"
 FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": str, "merge_requires": list, "needs": list,
-          "after": str, "part": str}
+          "after": str, "part": str, "gate": bool, "shards": int}
 REQUIRED = ("name", "owner", "group")
 #: the jobs a plan may split, and what their parts are
-SPLIT = {"lean-audit": "the Lake packages with a lean-audit.json"}
+SPLIT = {"lean-audit": "the Lake packages with a lean-audit.json",
+         "circuit-check": "its `shards` shards of its targets, K/N (`circuit-check --all --shard K/N`)"}
+#: the split jobs whose parts are shards of their own work, as many as their `shards` say (none given: the job runs whole)
+SHARDED = ("circuit-check",)
 #: the parts a check runs alone (`check.py PART...`)
 PARTS = ("tests", "circuits", "lean")
 
@@ -58,6 +67,8 @@ class Job:
     needs: tuple[str, ...] = ()
     after: str | None = None
     part: str | None = None
+    gate: bool = True
+    shards: int | None = None
 
 
 def _toml(text: str, source: str) -> dict:
@@ -89,8 +100,12 @@ def parse(text: str, handles: set[str], source: str = "ci.toml") -> list[Job]:
             raise DeclarationError(f"{where}: merge_requires must be non-empty path strings")
         if t["group"] < 1:
             raise DeclarationError(f"{where}: group must be 1 or more")
+        if t.get("gate") is False and t.get("merge_requires"):
+            raise DeclarationError(f"{where}: merge_requires on a job off the gate (gate = false), which no merge requires")
         if "part" in t and t["part"] not in PARTS:
             raise DeclarationError(f"{where}: part {t['part']!r} isn't one of {', '.join(PARTS)}")
+        if "shards" in t and (t["name"] not in SHARDED or t["shards"] < 1):
+            raise DeclarationError(f"{where}: shards is N >= 1, for {', '.join(SHARDED)} alone")
         if t["name"] in seen:
             raise DeclarationError(f"{where}: duplicate name")
         if t["owner"] not in handles:
@@ -100,11 +115,15 @@ def parse(text: str, handles: set[str], source: str = "ci.toml") -> list[Job]:
             raise DeclarationError(f"{where}: needs {bad}, which aren't earlier jobs of its group")
         seen.add(t["name"])
         jobs.append(Job(t["name"], t["owner"], t["group"], t.get("halts", False), t.get("halts_on"),
-                        tuple(t.get("merge_requires", ())), tuple(t.get("needs", ())), t.get("after"), t.get("part")))
+                        tuple(t.get("merge_requires", ())), tuple(t.get("needs", ())), t.get("after"), t.get("part"),
+                        t.get("gate", True), t.get("shards")))
     if not jobs:
         raise DeclarationError(f"{source}: declares no job")
     by = {j.name: j for j in jobs}
     for j in jobs:
+        if j.gate and (off := [n for n in (*j.needs, *[j.after] * bool(j.after)) if n in by and not by[n].gate]):
+            raise DeclarationError(f"{source}: job {j.name} is on the gate and waits on {', '.join(off)}, which is off it "
+                                   f"(gate = false): take {j.name} off the gate too, or put {', '.join(off)} back on it")
         if j.after is None:
             continue
         if (a := by.get(j.after)) is None:
@@ -153,7 +172,7 @@ def parse_plans(text: str, jobs: list[Job], source: str = "ci.toml") -> dict[int
                 (whole.setdefault(job, []).append(k) if part is None else parts.setdefault(job, []).append((k, part)))
         for j in jobs:
             w, p = whole.get(j.name, []), parts.get(j.name, [])
-            if not w and not p:
+            if not w and not p and j.gate:
                 raise DeclarationError(f"{where}: no shard runs {j.name}")
             if w and (len(w) > 1 or p):
                 raise DeclarationError(f"{where}: {j.name} is in more than one shard")
@@ -179,6 +198,11 @@ def select(jobs: list[Job], parts: list[str]) -> set[str]:
     return needed(jobs, [j.name for j in jobs if j.part in parts])
 
 
+def gated(jobs: list[Job]) -> list[Job]:
+    """The jobs on the merge gate (all but `gate = false`), in file order: what a recorded check runs and a merge requires."""
+    return [j for j in jobs if j.gate]
+
+
 def needed(jobs: list[Job], names: list[str]) -> set[str]:
     """The jobs ``names``, and every job they `need` or run `after` (`check.py --deferred`).  DeclarationError for a name no job
     has."""
@@ -193,15 +217,31 @@ def needed(jobs: list[Job], names: list[str]) -> set[str]:
     return out
 
 
+def job_parts(job: Job, parts_of: dict[str, list[str]]) -> list[str] | None:
+    """A split job's parts, or None for a job that runs whole: a `SHARDED` job's ``K/N`` for K = 1..N, its `shards` (none given:
+    whole), another split job's from ``parts_of`` (the tree's), sorted."""
+    if job.name not in SPLIT:
+        return None
+    if job.name in SHARDED:
+        return None if job.shards is None else [f"{k}/{job.shards}" for k in range(1, job.shards + 1)]
+    return sorted(parts_of[job.name])
+
+
 def all_parts(jobs: list[Job], parts_of: dict[str, list[str]]) -> list[str]:
-    """Every part an unsharded check covers, in job order: each job's name, or for a split job `JOB:PART` for each of its parts."""
-    return [p for j in jobs for p in ([f"{j.name}:{x}" for x in sorted(parts_of[j.name])] if j.name in SPLIT else [j.name])]
+    """Every part an unsharded check covers, in job order: each job's name, or for a split job `JOB:PART` for each of its parts
+    (`job_parts`)."""
+    out = []
+    for j in jobs:
+        xs = job_parts(j, parts_of)
+        out += [j.name] if xs is None else [f"{j.name}:{x}" for x in xs]
+    return out
 
 
 def resolve(plan: Plan, jobs: list[Job], parts_of: dict[str, list[str]]) -> list[list[str]]:
     """Each shard's parts (`all_parts`' names, in its order) under ``plan`` for a tree whose split jobs have ``parts_of``."""
     named = {s for shard in plan for s in shard if ":" in s and not s.endswith(":*")}
-    if missing := sorted(s for s in named if s.partition(":")[2] not in parts_of[s.partition(":")[0]]):
+    by = {j.name: j for j in jobs}
+    if missing := sorted(s for s in named if s.partition(":")[2] not in (job_parts(by[s.partition(":")[0]], parts_of) or ())):
         raise DeclarationError(f"the plan names {', '.join(missing)}, which this tree doesn't have")
     out = []
     for shard in plan:
