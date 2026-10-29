@@ -278,7 +278,7 @@ def test_a_persons_ask_off_track_rings_its_lane_and_top_every_hour_until_it_hold
     rung = {to: body for to, body, _ in ring.rings if "a person's ask" in body or "people's asks" in body}
     assert rung["ci"] == ("ci: a person's ask is off track on CI-285 (unstaffed 1, slipped 1): `research msg linear audit --lane "
                           "ci` gives each fix; this rings every hour until it holds.")
-    assert rung["top"] == "top: people's asks off track: ci 2, compute-accounting 1 (`research msg linear asks` is the ledger)"
+    assert rung["top"] == "top: people's asks off track: ci 2, compute-accounting 1 (`research msg linear audit --asks` is the ledger)"
     n = len(ring.rings)
     T.linear_audit(state, ring, at(19, 12, 50), lambda: FOUND + asks, lambda: VOLUME, log)        # the same hour: nothing new
     assert len(ring.rings) == n

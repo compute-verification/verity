@@ -411,7 +411,7 @@ def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Call
         once_each(state, f"linear-ask:top:{hour}", ring, "top",
                   "top: people's asks off track: " + ", ".join(f"{lane} {sum(c.values())}" for lane, c in
                                                                 sorted(asks.items(), key=lambda kv: -sum(kv[1].values())))
-                  + " (`research msg linear asks` is the ledger)", None, now)
+                  + " (`research msg linear audit --asks` is the ledger)", None, now)
     if time.gmtime(now).tm_hour < REPORT_HOUR_UTC:
         return
 

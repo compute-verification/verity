@@ -80,16 +80,6 @@ class FakeLinear:
             return {"data": {"a": {**a, "relations": {"nodes": [r for r in self.relations if r["issue"] == a]},
                                    "inverseRelations": {"nodes": [r for r in self.relations if r["relatedIssue"] == a]}},
                              "b": self._issue(v["b"])}}
-        if m := re.search(r"\{ (issueAddLabel|issueRemoveLabel)\(", q):
-            name = next(n for n, i in self.labels.items() if i == v["l"])
-            have = self.tags.setdefault(v["id"], set())
-            have.discard(name) if m[1] == "issueRemoveLabel" else have.add(name)
-            return {"data": {m[1]: {"issue": {"labels": {"nodes": [{"name": n} for n in sorted(have)]}}}}}
-        if "history(first" in q:
-            self.ask_filter, start = v["f"], int(v["after"] or 0)
-            page = self.asked[start:start + int(re.search(r"issues\(filter: \$f, first: (\d+)", q)[1])]
-            more = start + len(page) < len(self.asked)
-            return {"data": {"issues": {"pageInfo": {"hasNextPage": more, "endCursor": str(start + len(page))}, "nodes": page}}}
         if "projects(filter" in q:
             return {"data": {"projects": {"nodes": [{"name": p["name"]} for p in self.projects if p["name"].lower() == v["n"].lower()]}}}
         if "users(first" in q:
@@ -138,6 +128,16 @@ class FakeLinear:
         if "IssueUpdateInput" in q:
             self.updated.append((v["id"], v["i"]))
             return {"data": {"issueUpdate": {"success": True}}}
+        if m := re.search(r"\{ (issueAddLabel|issueRemoveLabel)\(", q):
+            name = next(n for n, i in self.labels.items() if i == v["l"])
+            have = self.tags.setdefault(v["id"], set())
+            have.discard(name) if m[1] == "issueRemoveLabel" else have.add(name)
+            return {"data": {m[1]: {"issue": {"labels": {"nodes": [{"name": n} for n in sorted(have)]}}}}}
+        if "history(first" in q:
+            self.ask_filter, start = v["f"], int(v["after"] or 0)
+            page = self.asked[start:start + int(re.search(r"issues\(filter: \$f, first: (\d+)", q)[1])]
+            more = start + len(page) < len(self.asked)
+            return {"data": {"issues": {"pageInfo": {"hasNextPage": more, "endCursor": str(start + len(page))}, "nodes": page}}}
         if "pageInfo" in q:
             self.audited, start = v["f"], int(v["after"] or 0)
             page = self.open[start:start + int(re.search(r"issues\(filter: \$f, first: (\d+)", q)[1])]
@@ -617,8 +617,8 @@ def test_a_persons_ask_is_found_parked_unstaffed_slipped_or_restated_and_nothing
     by = {(f["issue"], f["kind"]): f for f in found}
     assert by[("INF-31", "parked")]["fix"] == (
         "daniel asked for it, and only daniel parks or cancels it: start it (In Progress, with a comment naming its worker and "
-        "the date its outcome lands), or quote daniel's yes in a comment and add `asker-ok` (`research msg linear tag INF-31 "
-        "asker-ok`)")
+        "the date its outcome lands), or quote daniel's yes in a comment and add `asker-ok` (`research msg linear edit INF-31 "
+        "--label asker-ok`)")
     assert by[("INF-35", "unstaffed")]["fix"].startswith("daniel's ask, filed 2 h ago, has no worker: move it to In Progress")
     assert by[("INF-37", "slipped")]["fix"].startswith("its date moved later 2 times (2026-10-20 -> 2026-10-22 -> 2026-10-21 -> "
                                                        "2026-10-25): comment what missed each date")
@@ -640,7 +640,7 @@ def test_a_persons_ask_is_found_parked_unstaffed_slipped_or_restated_and_nothing
 def test_the_asks_ledger_counts_delivered_against_not_by_lane(fake, registry, capsys, lin):
     lin.asked = ASKED
     lin.visible = sorted(set(linear.owners(json.loads(registry.read_text()))))
-    rc, out, _ = run(capsys, "linear", "asks", "--now", str(AUDIT_NOW))
+    rc, out, _ = run(capsys, "linear", "audit", "--asks", "--now", str(AUDIT_NOW))
     lines = out.splitlines()
     assert rc == 0 and lines[0] == "@compute-research: 1 not delivered, 0 delivered"
     assert lines[1].split(":")[0].split() == ["CMP-42", "Triage", "due", "2026-10-30", "0", "slip(s),", "asked", "again", "0,", "24", "h", "old"]
@@ -649,9 +649,9 @@ def test_the_asks_ledger_counts_delivered_against_not_by_lane(fake, registry, ca
                                                     "INF-36"]                                    # oldest first; Done and duplicates not
     assert lines[-1] == ("12 ask(s) of daniel open or closed recently: 1 delivered, 10 not (2 parked without `asker-ok`, "
                          "3 with no worker, 1 slipped), 1 closed with the asker's yes or as duplicates")
-    rc, out, _ = run(capsys, "linear", "asks", "--lane", "@compute-research", "--json", "--now", str(AUDIT_NOW))
+    rc, out, _ = run(capsys, "linear", "audit", "--asks", "--lane", "@compute-research", "--json", "--now", str(AUDIT_NOW))
     assert rc == 0 and [a["issue"] for a in json.loads(out)] == ["CMP-42"]
-    rc, out, _ = run(capsys, "linear", "asks", "--asker", "luke", "--now", str(AUDIT_NOW))
+    rc, out, _ = run(capsys, "linear", "audit", "--asks", "--asker", "luke", "--now", str(AUDIT_NOW))
     assert rc == 0 and out.splitlines() == ["0 ask(s) of anyone open or closed recently: 0 delivered, 0 not (0 parked without "
                                             "`asker-ok`, 0 with no worker, 0 slipped), 0 closed with the asker's yes or as duplicates"]
 
@@ -674,14 +674,14 @@ def test_an_ask_filed_for_a_person_carries_their_label_and_a_bad_name_or_an_untr
     assert rc == 2 and "--parent, --title and --asker go with an ask" in err
 
 
-def test_tag_adds_and_removes_a_label_and_names_an_askers_label_canonically(fake, registry, capsys, lin):
-    rc, out, _ = run(capsys, "linear", "tag", "INF-1", "asker-ok")
+def test_edit_adds_and_removes_a_label_and_names_an_askers_label_canonically(fake, registry, capsys, lin):
+    rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--label", "asker-ok")
     assert rc == 0 and out.strip() == "INF-1 labels: asker-ok"
-    rc, out, _ = run(capsys, "linear", "tag", "INF-1", "asker:Daniel")
+    rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--label", "asker:Daniel")
     assert rc == 0 and out.strip() == "INF-1 labels: asker-ok, asker:daniel"
-    rc, out, _ = run(capsys, "linear", "tag", "INF-1", "asker-ok", "--remove")
+    rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--label", "asker-ok", "--remove")
     assert rc == 0 and out.strip() == "INF-1 labels: asker:daniel"
-    rc, out, _ = run(capsys, "linear", "tag", "INF-1", "asker-ok", "--dry-run")
+    rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--label", "asker-ok", "--dry-run")
     assert rc == 0 and out.strip() == "dry-run: would add asker-ok on INF-1"
     with pytest.raises(linear.LinearError, match="first name in lower case"):
         linear.asker_label("daniel@x")

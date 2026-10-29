@@ -12,7 +12,7 @@ is never assigned or delegated: an issue assigned to the Cursor app starts a new
 prints it and top's hourly sweep rings each lane with its findings.  An issue tracks an ask and never answers it: a person's
 ask carries `asker:<name>` (`--asker`), is done only when its outcome exists, and `asks` reads every one, open, parked or
 recently closed, so the audit also finds those parked, unstaffed, slipped or restated (ASK_KINDS) and `research msg linear
-asks` is their ledger.  `edit` changes an issue's title, due date, description
+audit --asks` is their ledger.  `edit` changes an issue's title, due date, description
 or parent, `relate` and `unrelate` its relations, `update` posts a project update, `create_project` and `milestone` make
 projects and milestones, all through the app, so nobody writes through the Linear MCP connector, which acts as Daniel.  None
 of them sends a state. Stdlib only."""
@@ -223,7 +223,7 @@ def ask_findings(asks: list[dict], now: float) -> list[dict]:
             "parked": t in ("backlog", "canceled") and not a["ok"]
             and f"{who} asked for it, and only {who} parks or cancels it: start it (In Progress, with a comment naming its worker "
                 f"and the date its outcome lands), or quote {who}'s yes in a comment and add `{ASKER_OK}` (`research msg linear "
-                f"tag {ident} {ASKER_OK}`)",
+                f"edit {ident} --label {ASKER_OK}`)",
             "unstaffed": t in ("triage", "unstarted") and a["created"] is not None and now - a["created"] > ASK_START_H * 3600
             and f"{who}'s ask, filed {(now - a['created']) / 3600:.0f} h ago, has no worker: move it to In Progress (`research msg "
                 f"linear state {ident} In Progress`) with a comment naming its worker (a `bc-` id, or the lead) and the date its "

@@ -81,13 +81,13 @@ skill).
   The owner dates it and moves it out of Backlog within the hour, or declines it (`research msg close --declined`). A
   question that needs no issue is `research msg send --kind question` in its thread.
 - **A person's ask is answered by its outcome, never by its issue.** Whoever relays Daniel's ask files it with
-  `--asker daniel` (an existing issue: `research msg linear tag ISSUE asker:daniel`). Within the hour it is In Progress
+  `--asker daniel` (an existing issue: `research msg linear edit ISSUE --label asker:daniel`). Within the hour it is In Progress
   with a comment naming its worker (a `bc-` id, or the lead) and the date its outcome lands; filing, dating,
   planning and starting it answer nothing, and a reply to him names the worker and that date, not the issue. Only he
   parks or cancels it: quote his yes on the issue and add `asker-ok`. When he asks again, comment `asked again: <his
   words>` on the issue, never a new one, and `postmortem:` that day (why it wasn't delivered, and the change that stops
-  that recurring). The audit finds each break (`parked`, `unstaffed`, `slipped`, `repeated`); `research msg linear asks`
-  is the ledger, and a report to Daniel counts delivered, never filed.
+  that recurring). The audit finds each break (`parked`, `unstaffed`, `slipped`, `repeated`); `research msg linear audit
+  --asks` is the ledger, and a report to Daniel counts delivered, never filed.
 - **Write through the app, not the Linear connector.** The connector acts as Daniel, so its comments and state changes
   show as his. Use these commands:
   - `research msg linear comment ISSUE 'TEXT' --as ME`, which rings the team's handle and any names the text starts with;

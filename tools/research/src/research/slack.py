@@ -1865,8 +1865,8 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     """`check` (what the credentials reach), `state ISSUE STATE`, `comment ISSUE TEXT --as HANDLE` (or `--worker NAME`, a
     lane's worker, which holds no handle: as LANE/NAME, ringing no one), `list TEAM [--state S]`, `audit [TEAM ...]
     [--lane HANDLE]` (exit 1 on any finding; a team the app can't read is named and skipped), `place ISSUE PROJECT
-    [--milestone M]`, `asks [TEAM ...] [--lane HANDLE] [--asker NAME]` (the ledger of people's asks), `tag ISSUE LABEL
-    [--remove]`, `edit ISSUE [--title T] [--due D|none] [--file BRIEF.md] [--parent ID]`, `relate ISSUE
+    [--milestone M]` (`--asks [--asker NAME]`: the ledger of people's asks), `edit ISSUE [--title T] [--due D|none]
+    [--file BRIEF.md] [--parent ID] [--label L [--remove]]`, `relate ISSUE
     blocks|blocked-by|related|duplicate OTHER`, `unrelate ISSUE OTHER`, `update PROJECT --health H --body-file F`,
     `project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]` and `milestone create|edit
     PROJECT NAME [--date D] [--description-file F] [--rename NEW]`. Each prints one line; a refusal exits 2."""
@@ -1882,9 +1882,9 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                          "--worker NAME for a lane's worker, which holds no handle")
     if ns.worker and not WORKER_RE.fullmatch(ns.worker):
         raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
-    if ns.dry_run and ns.verb not in ("check", "list", "audit", "asks", "edit", "state", "place", "comment", "tag"):
+    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
-                         "`place`, `comment` or `tag`, which have one")
+                         "`place` or `comment`, which have one")
     try:
         brief = Path(ns.file).read_text() if ns.file else None
     except OSError as e:
@@ -1900,16 +1900,16 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 print(f"{i['identifier']}  {i['state']['name']}  {i['title']}")
             print(f"states: {LINEAR_STATES}")
             return 0
-        if ns.verb in ("audit", "asks"):
+        if ns.verb == "audit":
             keys = {h["handle"]: h["linear"] for h in reg["handles"] if h.get("linear")}
             teams = [keys.get(t.lstrip("@"), t) for t in ([ns.target] if ns.target else []) + ns.value]
             unread = lin.unread(teams or sorted(set(linear.owners(reg))))
             readable = [t for t in teams if t not in unread]
             if unread:
-                print(f"linear {ns.verb}: the app can't read team(s) {', '.join(unread)}, so their issues aren't audited",
+                print(f"linear audit: the app can't read team(s) {', '.join(unread)}, so their issues aren't audited",
                       file=sys.stderr)
             now = time.time() if ns.now is None else float(ns.now)
-            if ns.verb == "asks":
+            if ns.asks:
                 rows = [] if teams and not readable else lin.asks(linear.owners(reg), readable or None, now)
                 rows = [a for a in rows if (not ns.lane or a["lane"] == ns.lane.lstrip("@"))
                         and (not ns.asker or a["asker"] == ns.asker.strip().lower())]
@@ -1946,14 +1946,6 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         if ns.verb == "unrelate":
             print(f"{issue} unrelated: removed " + "; ".join(lin.unrelate(issue, need(value, "the OTHER issue"))))
             return 0
-        if ns.verb == "tag":
-            name = need(value, f"the LABEL (`{linear.ASKER_OK}`, `asker:NAME`)")
-            if name.startswith(linear.ASKER_LABEL):
-                name = linear.asker_label(name[len(linear.ASKER_LABEL):])
-            how = "remove" if ns.remove else "add"
-            print(f"dry-run: would {how} {name} on {issue}" if ns.dry_run
-                  else f"{issue} labels: {lin.tag(issue, name, remove=ns.remove) or 'none'}")
-            return 0
         if ns.verb == "state":
             state = need(value, 'the STATE by name (e.g. In Progress)')
             print(f"dry-run: would move {issue} to {state}" if ns.dry_run else f"{issue} {lin.move(issue, state)}")
@@ -1966,6 +1958,12 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             p = lin.place(issue, need(value, "the PROJECT (a prefix of its name)"), ns.milestone)
             print(f"{issue} placed in {p['project']}" + (f" / {p['milestone']}" if p["milestone"] else ""))
             return 0
+        if ns.verb == "edit" and ns.label:
+            name = linear.asker_label(ns.label[len(linear.ASKER_LABEL):]) if ns.label.startswith(linear.ASKER_LABEL) else ns.label
+            print(f"dry-run: would {'remove' if ns.remove else 'add'} {name} on {issue}" if ns.dry_run
+                  else f"{issue} labels: {lin.tag(issue, name, remove=ns.remove) or 'none'}")
+            if not (ns.title or ns.due or brief or ns.parent):
+                return 0
         if ns.verb == "edit":
             i = lin.edit(issue, ns.title, ns.due, brief, ns.parent, send=not ns.dry_run)
             print(("dry-run: would set " if ns.dry_run else f"{issue} set ") + linear.said(i))
@@ -4011,21 +4009,19 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` (by name; " + LINEAR_STATES + "), "
                       "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `list TEAM [--state S]` (open by "
                       "default), `audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, and each person's "
-                      "ask parked, unstaffed, slipped or asked again, with its fix; exit 1 on any), `asks [TEAM ...] [--lane "
-                      "HANDLE] [--asker NAME]` (the ledger of people's asks: delivered or not), `tag ISSUE LABEL [--remove]`, "
-                      "`place ISSUE PROJECT [--milestone M]` (by name prefixes), `edit ISSUE [--title T] "
-                      "[--due YYYY-MM-DD|none] [--file BRIEF.md] [--parent ID]`, `relate ISSUE blocks|blocked-by|related|"
+                      "ask parked, unstaffed, slipped or asked again, with its fix; exit 1 on any; `--asks [--asker NAME]`: "
+                      "the ledger of people's asks, delivered or not), `place ISSUE PROJECT [--milestone M]` (by name "
+                      "prefixes), `edit ISSUE [--title T] [--due YYYY-MM-DD|none] [--file BRIEF.md] [--parent ID] [--label L "
+                      "[--remove]]`, `relate ISSUE blocks|blocked-by|related|"
                       "duplicate OTHER` (Linear moves a duplicate to its Duplicate status), `unrelate ISSUE OTHER`, `update "
                       "PROJECT --health onTrack|atRisk|offTrack --body-file F` (a project update), `project create NAME --team "
                       "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `milestone create|edit PROJECT NAME "
                       "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`; none sends a state")
-    p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "asks", "tag", "place", "edit", "relate",
-                                    "unrelate", "update", "project", "milestone"))
-    p.add_argument("target", nargs="?", help="state, comment, tag, place, edit, relate, unrelate: the issue (INF-12); list, audit, "
-                                             "asks: the team (a handle or its key); update: the project; project, milestone: "
-                                             "create or edit")
-    p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; tag: the label; place: the project; "
-                                            "audit, asks: more teams; "
+    p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
+                                    "project", "milestone"))
+    p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
+                                             "team (a handle or its key); update: the project; project, milestone: create or edit")
+    p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
                                             "relate: the kind and the other issue; unrelate: the other issue; project create: "
                                             "its name; milestone: the project (one word or quoted) and the milestone's name")
     p.add_argument("--state", default=None, metavar="NAME", help="list: only issues in this state (default: every open one)")
@@ -4048,12 +4044,15 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--date", "--target", dest="date", default=None, metavar="YYYY-MM-DD",
                    help="milestone: its target date; project create (--target): the project's (`none` clears it)")
     p.add_argument("--rename", default=None, metavar="NEW", help="milestone edit: the milestone's new name")
-    p.add_argument("--lane", default=None, metavar="HANDLE", help="audit, asks: only this lane's (`-`: those with no lane)")
-    p.add_argument("--asker", default=None, metavar="NAME", help="asks: only the asks of this person (daniel)")
-    p.add_argument("--remove", action="store_true", help="tag: remove the label instead")
+    p.add_argument("--lane", default=None, metavar="HANDLE", help="audit: only this lane's findings (`-`: those with no lane)")
+    p.add_argument("--asks", action="store_true", help="audit: the ledger of people's asks (an `asker:` label) instead: "
+                                                       "each not delivered, and the counts")
+    p.add_argument("--asker", default=None, metavar="NAME", help="audit --asks: only this person's asks (daniel)")
+    p.add_argument("--label", default=None, metavar="L", help="edit: add this label (`asker:NAME`, `asker-ok`)")
+    p.add_argument("--remove", action="store_true", help="edit --label: remove it instead")
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")
-    p.add_argument("--json", action="store_true", help="audit: the findings and counts as JSON; asks: the asks as JSON")
-    p.add_argument("--now", default=None, metavar="EPOCH", help="audit, asks: the time it audits at, in seconds since the epoch (default: now)")
+    p.add_argument("--json", action="store_true", help="audit: the findings and counts (--asks: the asks) as JSON")
+    p.add_argument("--now", default=None, metavar="EPOCH", help="audit: the time it audits at, in seconds since the epoch (default: now)")
     p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True)
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
     p.add_argument("--verify", default=None, metavar="CMD", help="a required action: the command that shows it took")
