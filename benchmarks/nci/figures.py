@@ -62,7 +62,7 @@ LADDER = [
     ("Floor, one-minute verdict lag", "Floor,\none-minute\nlag", "policy choice"),
 ]
 #: the rungs whose headline is the PoUW route, r̂ to 0 with no memory cap (``statement.ladder``'s closed-form D, which
-#: caps nothing there); the fit bound's cap at their 4 GB is drawn beside it
+#: caps nothing there); the fit bound's cap at their 4 GB is sampled beside it
 FLOORS = ("Floor (r̂ = 0, 4 GB)", "Floor, one-minute verdict lag")
 #: the Dot16 conjecture's (d, e), ``tiers.REFERENCE_THREADED``: conditional, as a run that trains its embedding reads
 #: Layered's lookup columns as updated weights

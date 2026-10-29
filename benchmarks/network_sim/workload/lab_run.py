@@ -613,7 +613,7 @@ def _seeded(seed: bytes, n: int) -> bytes:
 def n2_verdicts(lab: L.Lab, setup: ar.Setup, plans: dict[str, dict], published: dict[str, list], run: str) -> dict:
     """N2's served verdict on each block's link (`service.LinkWindows` with the served profile of the block's (F, F_in)
     and the run's windows): each window's two records as the proxy published them, their heads signed under the block's
-    name by a stand-in certifier (an LMS key of the deployed N = 64, W = 1 drawn from a seed, in a zero session: the
+    name by a stand-in certifier (an LMS key of the deployed N = 64, W = 1 sampled from a seed, in a zero session: the
     lab's proxy signs nothing), committed, registered, drawn and delivered on the challenger's live coins, and checked by
     N2's verifier of record under the window's declared sync; then the link's network verdict, the AND over its windows.
     A window without both records ends the registrations, so it and every later window are refused. `served_counts` is

@@ -75,7 +75,7 @@ def _registered_top(stage: Path, cap: bytes, seed: int) -> tuple[dict, str, dict
 @pytest.mark.parametrize("shape", [(25, 22, 8), (22, 10, 2)], ids=str)
 def test_the_holo_schedule_gives_h_a_round_after_z_partials_coinless_one(shape):
     """z_partial's round squeezes nothing and h's round (64 elements) squeezes r′; every other round is the plain schedule's,
-    the message rounds are the holo algebra's (`rec_algebra.rounds`), and only the coinless round is no draw."""
+    the message rounds are the holo algebra's (`rec_algebra.rounds`), and only the coinless round is no sample."""
     m, k_log, claims = shape
     plain, holo, k = RL.rep_rounds(m, k_log, claims), RL.holo_rounds(m, k_log, claims), RL.zp_round(m, k_log)
     assert plain[k] == (1, [], 0, 64) and holo[k:k + 2] == [(0, [], 0, 64), (1, [], 0, 64)]
@@ -157,7 +157,7 @@ def test_h_is_the_dense_fold_of_the_hidden_slots(tmp_path):
 
 
 def _client(addr: str, rec: dict) -> list:
-    """The fake prover: the fixture's honest session as C-Flock's live prover sends it (its Hello without the coin scheme:
+    """The fake prover: the fixture's honest session as Flock's live prover sends it (its Hello without the coin scheme:
     the session ran on seeded coins), each answer kept."""
     host, port = addr.rsplit(":", 1)
     coins = lambda hexes: b"".join(RL.f128_bytes(int(c, 16)) for c in hexes)
@@ -267,7 +267,7 @@ def _holo_fold(hs: list[list[int]]) -> dict:
 
 def test_rec_vstage_stages_the_holo_algebra_with_h_read_from_the_session(served):
     """`rec_vstage` on the holo session: the fold points from the coins as the plain session's (z_partial's coinless round
-    is no draw), the shape holo, h's round among the message rounds (its row the one its ``c_k`` commits), and per rep the
+    is no sample), the shape holo, h's round among the message rounds (its row the one its ``c_k`` commits), and per rep the
     holo algebra's residuals zero on the rounds' rows with the public comb; h's row one bit off moves the lincheck alone.
     A plain verifier (no hidden circuits) refuses the session: it has one message round too many."""
     out, _, _, rec = served
@@ -324,7 +324,7 @@ def test_the_relay_splits_z_partials_round_and_refuses_another():
     """At z_partial's index the relay sends z_partial's frames ending in a squeeze of no coins, then h's 64 elements and the
     prover's own squeeze, computing h between them at the fold points of the coins the prover has had; the prover gets r′.
     A round there that is not z_partial's (64 elements, then a squeeze of one coin) stops the session before the proxy sees
-    it, and an h the relay cannot compute stops it before r′ is drawn."""
+    it, and an h the relay cannot compute stops it before r′ is sampled."""
     k, zp = RL.zp_round(M, K_LOG), [G.of_hex(f"{i:032x}") for i in range(64)]
     prefix = [[0] * 6, [0] * (M - 13)] + [[i + 1] for i in range(k - 2)]
     content = RS.observe(zp) + RS._frame(RL.OP_SQUEEZE, RL.KIND_SCALAR, 1)
@@ -476,7 +476,7 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
     META names (one-stage's ``stratified`` law, the statement's scheme, no roots, window ``stand-in``), beside the other
     values registered at staging (a description's): 128 rows of 64 words, one a node, each under its own salt, which only
     the prover's file holds. META's ``registration`` is the record's digest, so the circuit's SHA-512 (both files' headers)
-    and the statement digest bind it, and the same circuit and salts give the same record. The firewall refuses a
+    and the statement digest bind it, and the same circuit and salts give the same record. The ZK server refuses a
     registration whose digest is not META's, a binding round when R has no registered top, or binds a cap that is not it;
     a top is registered only before Hello and before any coin, once, only with an opening that opens it and whose top makes
     the registration's entry, and never for a table whose root Commit carries. The schedule names no registered value.
@@ -732,7 +732,7 @@ def test_the_relay_runs_each_reps_sparse_phase_after_both_reps_on_the_coin_serve
 @pytest.mark.slow
 def test_rec_vstage_stages_the_relays_sparse_phase_as_rec_sparse(sparse_session, tmp_path):
     """`rec_vstage.stage_sparse` stages the relay's sparse phase as RecSparse over both reps, its message ports the rows the
-    firewall committed (h the algebra's h round's), and both instances hold. Building RecSparse's statement is the cost."""
+    ZK server committed (h the algebra's h round's), and both instances hold. Building RecSparse's statement is the cost."""
     ss = sparse_session
     program = O.session_program((ss.d / "inner" / "public.json").read_bytes())
     regs, own = S.messages(program, S.message_rounds(ss.public, ss.private, ss.vf.sh))
@@ -776,7 +776,7 @@ def test_the_relay_commits_r_and_opens_it_at_the_sparse_claims_in_the_same_sessi
     passes the prover's Hello and Commit on as they are, and once both reps' sparse streams have run opens R at their
     registered claims (P.json) on a connection of its own into the same session, answering its Finish itself: the record is
     `schedule_for(..., sparse=, stacked=table_m)`'s, R's stream last, its binding round absorbing the circuit reps'
-    statement digest (``--statement-digest``, the firewall's) and committing ROOT.json's cap as the
+    statement digest (``--statement-digest``, the ZK server's) and committing ROOT.json's cap as the
     registered top, ``b || c`` for ``b || c`` (`rec_vstar.registered` accepts it); `rec_vstar` accepts R's openings, and the
     opening-only model's residuals at the verifier's points and the sparse phase's claims are zero; the verifier's record
     and the prover's have one Hello, the prover's bytes, and the circuit table's Commit. R registered with cell 0 flipped

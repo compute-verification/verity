@@ -1600,7 +1600,7 @@ def store_custody() -> None:
     """Inside a `research run` whose custody key is staged, the tests reach the evidence store through it and require it, as check's
     steps do (check.py's `env()`, "The evidence store"). `run` drops RESEARCH_*, the machine's store among them, so without this a
     test that fetches a fixture skipped as "the evidence store is not reachable" under this runner and passed under a bare pytest
-    (r20261024-030225-1ea6: 13 of test_lean_session.py's 39, the firewall's wire-tamper negatives among them). Set here, before
+    (r20261024-030225-1ea6: 13 of test_lean_session.py's 39, the ZK server's wire-tamper negatives among them). Set here, before
     `environment()`, so the requirement keys the pass and a pass earned with those skips is never reused for one without."""
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     if CUSTODY_ENV in os.environ or not run_dir or not run_id:

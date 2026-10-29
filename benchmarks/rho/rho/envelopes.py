@@ -26,7 +26,7 @@ cryptography's advantage:
   `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
   with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the warden form's public parameters
   set. Its δ is 0: the certifier is the auditor's device (`trusted-host`), and the side channels an assumed cap.
-* The NCI check is a registration check, not an envelope: the declared circuit's `(c, k)`-partition into inference
+* The NCI check is a registration check, not an envelope: the registered circuit's `(c, k)`-partition into inference
   blocks (`Policy`), registered once.
 
 A **regime** is the envelopes that run: `Remote` (PoUW, detection and the NCI check; no wipe or certifier, so its
@@ -156,7 +156,7 @@ class Detection:
     lag_s: float
     sampled: bool = False
     #: the sampled proofs' compute share, proving cost per unit of step work, replay cost per drawn step, work and
-    #: output bits per step, failure probability `δ`, luck factor, and steps drawn at a floor of one
+    #: output bits per step, failure probability `δ`, luck factor, and steps sampled at a floor of one
     proof_share: float = math.nan
     overhead: float = math.nan
     replay: float = math.nan
@@ -310,7 +310,7 @@ class Certifier:
     `Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`; the egress at the same requests). The
     bound is stated per link-window, so the rate is too: this package never cites less than the bound states. This is
     its honest-δ form, at a δ where only the empty faulty set is possible. A faulty ingress unit adds
-    `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is drawn. The
+    `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is sampled. The
     bound is a draft until Lean proves it, so `declared_x` keeps the line rate as the ingress's upper end: the ingress
     is `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is below the prompt rate of
     the serving credited at the location can't feed that serving, so `declared` is off by default until a deployment
@@ -386,7 +386,7 @@ class Certifier:
     @property
     def faulty_unit_bits(self) -> float:
         """Bits a faulty ingress unit adds, which the honest-δ form excludes and which are 0 when every ingress unit is
-        drawn: its bucket's whole row, `8 B lanes r`, and two requests more a lane, its forged state's own and one
+        sampled: its bucket's whole row, `8 B lanes r`, and two requests more a lane, its forged state's own and one
         admission its reset allows (`faultyIngressBits`)."""
         return 8 * self.cell_bytes * self.lanes * self.cell_rate + 2 * self.lanes * self.request_in
 

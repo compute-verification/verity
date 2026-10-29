@@ -8,7 +8,7 @@ unit g        blocks 4g … 4g + 3, 8,224 bytes at byte 8224·g: 257 whole 32-by
               N − 4U blocks (none in a store of whole units, as PoUS's of 2^16-block segments) are in no unit, and no
               receipt certifies them
 registration  node, P2's parameters, PoUS's commitment to W, PoUS's salt, the vk root, k_s: PoUS's setup's, the salt
-              drawn after the commitment (`setup.draw_salt`) and the root the verifier built from the C* it decoded to
+              sampled after the commitment (`setup.draw_salt`) and the root the verifier built from the C* it decoded to
               the committed W (`setup.verifier_key_from_encoding`); the node the one whose store the deployment's
               registration log registers (`stored`)
 digest        SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u32be w ‖ u32be c0 ‖ u32be blocks_per_segment ‖
@@ -143,7 +143,7 @@ class Registration:
 
 def register(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
              rows: int | None = None) -> Registration:
-    """The verifier's registration of a node's P2 store from its PoUS setup: the salt it draws from its own secret
+    """The verifier's registration of a node's P2 store from its PoUS setup: the salt it samples from its own secret
     `source` after the commitment (`setup.draw_salt`), which `vk`, the key it built from the C* it decoded at setup
     (`setup.verifier_key_from_encoding`), must be under."""
     salt = setup.draw_salt(source, _bytes(commitment, DIGEST_BYTES, "PoUS's commitment to W"))

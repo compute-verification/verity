@@ -154,7 +154,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         binding=None, groups_per_coin: int = 1, **kv):
     """The verifier's sessions and the prover's over one registration, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
-    (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a draw; `then(v)` once
+    (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a sample; `then(v)` once
     they end. With `store` (a `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `binding`
     the verifier binds the registration to its pinned model."""
     clock = PassClock()
@@ -208,7 +208,7 @@ def test_a_session_on_the_pass_clock_runs_one_schedule(monkeypatch):
     """Each tick settles both sides, so an honest session's windows are the same at every run: window 0's boundary
     falls at tick 20, as its 20th pass ends, and each later window starts one tick after its coin, the pass in flight
     at the boundary discarded, so it holds 19 passes; each root reaches the verifier at the tick its pass ended, and a
-    window's draws go out as the next window's first root arrives."""
+    window's samples go out as the next window's first root arrives."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (r,), (pr,) = run("honest")
     assert r["accepted"] and pr["passes"] == [20, 19, 19] and pr["discarded"] == 3
@@ -361,8 +361,8 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
     """Two sessions over one registration, each beside a serving trace of memory-map/v1 steps (2 pages every 4th pass
     over a pool of 10 slots): an honest one is accepted, its record counting the appends, releases and post-seed reads
     the verifier saw, which its ledger leaves uncredited without a property verdict; then one whose prover drops the
-    pages it appends, whose appends start again from N, is rejected at a draw on a dropped page.  At 16 draws a window
-    the second's chance of drawing no dropped page is below 2^-30 at the passes these sessions make."""
+    pages it appends, whose appends start again from N, is rejected at a sample on a dropped page.  At 16 draws a window
+    the second's chance of sampling no dropped page is below 2^-30 at the passes these sessions make."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (honest, dropping), (ph, pd) = run("kv:2,kvdrop:2", sessions=2, samples=16, kv_every=4, kv_pool=8)
     assert honest["accepted"] and ph["accepted"] and honest["failure"] is None
@@ -570,7 +570,7 @@ def test_a_pipelined_prover_that_overwrites_a_freed_block_before_its_pass_reads_
     session's fence holds serving's writes until no pass to come holds the block, and it is accepted; one whose writes
     skip the fence (`kvoverwrite`) lands pages over blocks the pass in flight still has to read, and is rejected at a
     receipt of one of them.  Each of its passes but the second (whose steps write the pool's empty slots) misreads 2
-    of its at most 17 blocks, so at 96 draws a window its chance of drawing none in either window is below 2^-30."""
+    of its at most 17 blocks, so at 96 draws a window its chance of sampling none in either window is below 2^-30."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (honest, over), (ph, po) = run("kv:1,kvoverwrite:1", sessions=2, windows=2, samples=96, kv_every=1, kv_pool=8,
                                    ahead=2, fill=True, kv_headroom=1)
@@ -592,7 +592,7 @@ class CarrierVerdict:
 
 def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(monkeypatch):
     """The ledger's memory line on a kv session whose hello labels its store: 8 blocks of weights, then the KV pool's 8
-    pages, in HBM.  At a draw of every receipt the floor is 0, so each window credits the weights every pass holds,
+    pages, in HBM.  At a sample of every receipt the floor is 0, so each window credits the weights every pass holds,
     less the blocks the node's squarings could rebuild in its span (none here: the clock's spans are ticks, so the
     session runs at no squarings, and a rate is put back below); the KV the session appended is held and read but
     credited only on the property's verdict and the session's schedule check (its verdict stood in here: the check's
@@ -1012,7 +1012,7 @@ def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
 
 
 def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_verdicts_from_both_verifiers():
-    """`node.py --overlap-openings`: the prover opens each window as its draws arrive instead of after its last pass,
+    """`node.py --overlap-openings`: the prover opens each window as its samples arrive instead of after its last pass,
     so both verifiers take openings between a paced session's roots and coins; the honest session is still accepted
     and the dropper rejected, with no disagreement."""
     pace = verifier.pace_of("1:4:40:2", 1.0)
@@ -1172,7 +1172,7 @@ def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, 
 def test_a_prover_that_defers_residency_is_refused_under_a_lifetime_of_one_window():
     """The hello says whether the prover defers an appended block's residency to its encode: a block appended in window
     w is then resident from w or w + 1, so its re-key falls at age L − 1, and under L = 1 the verifier refuses it with
-    `bye` before drawing a registration.  At L = 2, or not deferring, the session's parameters carry it, and so does
+    `bye` before sampling a registration.  At L = 2, or not deferring, the session's parameters carry it, and so does
     the default, whose count of windows (`audit.lifetime_windows`) is at least 2 for a prover that defers."""
     v, refused, heard = greeted(1, True)
     assert refused is not None and "lifetime of at least 2 windows, not 1" in str(refused)
@@ -1200,7 +1200,7 @@ def test_only_a_hello_whose_plan_appends_nothing_reserves_no_append_coins():
 
 def test_a_hello_asking_for_receipts_that_bind_tiles_is_refused():
     """A hello asking that its receipts bind PoUW's tile outputs (`bind`): the Lean covers receipts of blocks alone, so
-    both registries refuse it before drawing a registration (`audit.Registry.register` as `Registry.register` does),
+    both registries refuse it before sampling a registration (`audit.Registry.register` as `Registry.register` does),
     and the prover reads why in its `bye`."""
     v, refused, heard = greeted(None, False, hello={"bind": True})
     assert refused is not None and "tile outputs" in str(refused)
@@ -1310,7 +1310,7 @@ def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, 
 
 def test_a_session_drawn_four_windows_a_coin_is_accepted_through_both_verifiers_and_a_skipper_is_not(
         tmp_path, monkeypatch):
-    """`--groups-per-coin 4` over five windows: two draws, windows 0–3 and window 4, each drawn at its last window's
+    """`--groups-per-coin 4` over five windows: two draws, windows 0–3 and window 4, each sampled at its last window's
     close on its own openings coin (`audit.Params.groups_per_coin`), the challenger reserving ⌈5/4⌉ = 2 of them. The
     first draw's two receipts leave at least two of its windows a share of none, which the close accepts and no
     openings follow; the Lean verifier agrees at every event and on the record, which names g, and the session's
