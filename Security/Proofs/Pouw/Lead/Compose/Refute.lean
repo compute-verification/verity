@@ -1,6 +1,6 @@
 import Proofs.Pouw.Lead.Compose.Guarantee
 import Proofs.Pouw.Dimension.H100Proofs
-import Mathlib.Logic.Equiv.Nat
+import Mathlib.Data.Nat.Pairing
 
 /-!
 # The lead's guarantee as stated has a strategy that writes no word (proofs)
@@ -8,8 +8,9 @@ import Mathlib.Logic.Equiv.Nat
 `not_G : ¬ Pouw.Guarantees.Lead.G`. At `lead 512 64 4096 4096` (the point T 512 × 64 at `n = K = 4,096`), one strategy
 meets every premise of `G`, is accepted at every coin value and hashes one message, yet writes no word:
 
-* its pre-coin table holds every integer at every tile position (`pre k = Equiv.intEquivNat.symm k`), so `TileGrain`
-  holds with no step, and `Accepted`'s `holds` reads values at any address;
+* `G` takes any coin stream, and this one lays out every committed MMA tile (`streamx`, tile `(rb, cb, t)` at slot
+  `Nat.pair rb (Nat.pair cb t)`), so `TileGrain` holds with no step: `Accepted` reads a tile held in any slot, the
+  stream's included. Its pre-coin table is empty;
 * its trace is the `other` instructions its compressions' registers need (`ShaWrites`), and nothing else.
 
 Its priced W1 work is the commitment's hash part, about 4.24 · 10⁹ registers at 32 each, while `G` asks for the words
@@ -40,17 +41,26 @@ def Cx : Pouw.Lead.Commit Lx where
   aMsgs := []
   chunks := 588
 
-/-- The strategy: every integer in its pre-coin table, no step, and `xRegs` `other` instructions. -/
+/-- The data: zero. -/
+def κx : Fin Lx.m → Fin Lx.S → Fin Lx.n → ℤ := fun _ _ _ => 0
+
+/-- The coin stream: committed tile `(rb, cb, t mod S)` at slot `Nat.pair rb (Nat.pair cb t)`. -/
+def streamx (ω : Coins Lx) (c : ℕ) : Fin tileWords → ℤ :=
+  tileOf Lx κx ω c.unpair.1 c.unpair.2.unpair.1
+    ⟨c.unpair.2.unpair.2 % Lx.S, Nat.mod_lt _ (by norm_num [lead, stepsFor])⟩
+
+/-- The strategy: an empty pre-coin table, no step, the stream's tiles held, and `xRegs` `other` instructions. -/
 def σx : Strategy Lx where
-  pre k _ := Equiv.intEquivNat.symm k
-  exec _ :=
+  pre _ _ := 0
+  pre_supp _ _ := rfl
+  exec ω :=
     { trace := List.replicate xRegs (.other 0)
       steps := []
       shaRegs := xRegs
       hashed := [xMsg]
       egress := 0
       root := 0
-      holds := fun _ _ => True }
+      holds := fun y => ∃ c, streamx ω c = y }
 
 theorem blocks_xMsg : blocks xMsg = 1206861 := by
   rw [blocks, xMsg, List.length_replicate, xLen]
@@ -68,19 +78,20 @@ theorem commitL1w_Cx (H : Hash.Msg → Hash.Digest) (κ : Fin Lx.m → Fin Lx.S 
     List.map_nil, List.sum_cons, List.sum_nil, add_zero, shaCredit, blocks_xMsg]
   norm_num [wordsBlocks, wordsRegs, aBlocks, shaWordsRegs, shaARegs, lead, stepsFor]
 
-/-- **The lead's guarantee as stated is false**: a strategy that writes no word meets every premise. -/
+/-- **The lead's guarantee as stated is false**: with a coin stream that lays out the committed tiles, a strategy that
+writes no word meets every premise. -/
 theorem not_G : ¬ Pouw.Guarantees.Lead.G := by
   intro hG
   let Real : Strategy Lx → Prop := fun σ => σ = σx
-  have hκ : DataInRange Lx fun _ _ _ => 0 := fun _ _ _ => by norm_num
+  have hκ : DataInRange Lx κx := fun _ _ _ => by norm_num [κx]
   have hw1 : W1 h100Nominal Real := by
     rintro σ rfl ω o ho
     simp only [σx, List.mem_replicate] at ho
     rw [ho.2]
     trivial
-  have htile : TileGrain (fun _ _ _ => 0) Real := by
-    rintro σ rfl ω - p v -
-    exact ⟨0, .inl (Equiv.intEquivNat v), by simp [σx, run, Strategy.init]⟩
+  have htile : TileGrain streamx Real := by
+    rintro σ rfl ω - y ⟨c, rfl⟩
+    exact ⟨0, .inr c, by simp [run, Strategy.init]⟩
   have hlane : LaneSemantics (fun _ _ _ _ => 0) Real := by
     rintro σ rfl ω a p v h
     simp [σx] at h
@@ -91,18 +102,20 @@ theorem not_G : ¬ Pouw.Guarantees.Lead.G := by
     rintro σ rfl ω
     simp only [σx, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, shaCredit, blocks_xMsg]
     norm_num [shaWordsRegs, xRegs]
-  have hhon : HonestHashRuled (fun _ => 0) Cx (fun _ _ _ => 0) Real := by
+  have hhon : HonestHashRuled (fun _ => 0) Cx κx Real := by
     rintro σ rfl ω - y hy
     simp only [Cx, List.append_nil, List.mem_singleton] at hy
     exact ⟨xMsg, by simp [σx], by rw [hy]⟩
   have hout : OutsourceWithinEgressLead h100Nominal Real := by
     rintro σ rfl
-    refine ⟨σx, rfl, rfl, fun ω => ⟨rfl, fun _ _ h => h, rfl, rfl, ?_⟩⟩
+    refine ⟨σx, rfl, rfl, fun ω => ⟨rfl, fun _ h => h, rfl, rfl, ?_⟩⟩
     have : (0 : ℚ) ≤ networkGap Lx := by unfold networkGap stockRegs; positivity
     linarith
-  have hacc : ∀ ω ∈ (univ : Finset (Coins Lx)), Accepted Lx (fun _ => 0) Cx (fun _ _ _ => 0) σx ω :=
-    fun ω _ => ⟨fun _ _ _ => trivial, rfl⟩
-  rcases hG h100Nominal (fun _ _ _ _ => 0) (fun _ => 0) 512 64 4096 4096 (fun _ _ _ => 0) (fun _ _ _ => 0) Cx
+  have hacc : ∀ ω ∈ (univ : Finset (Coins Lx)), Accepted Lx (fun _ => 0) Cx κx σx ω := fun ω _ =>
+    ⟨fun rb _ cb _ t => ⟨Nat.pair rb (Nat.pair cb t), by
+      simp only [streamx, Nat.unpair_pair]
+      exact congrArg (tileOf Lx κx ω rb cb) (Fin.ext (Nat.mod_eq_of_lt t.2))⟩, rfl⟩
+  rcases hG h100Nominal (fun _ _ _ _ => 0) (fun _ => 0) 512 64 4096 4096 κx streamx Cx
       (fun _ => false) (cert := ()) (fun _ => certCode) Real Real hκ (commitL1w_Cx _ _) h32Sat hw1 htile hlane
       hone (fun _ h => h) hsha hhon (fun _ => rfl) hout σx rfl univ hacc with h | ⟨ω, -, a, ha, b, hb, hab, -⟩
   · simp only [work_σx, sum_const, card_univ, nsmul_eq_mul] at h
@@ -115,7 +128,8 @@ theorem not_G : ¬ Pouw.Guarantees.Lead.G := by
       linarith
     revert h'
     norm_num [honestRegs, gapRegs, wordsRegs, wordsBlocks, aBlocks, shaWordsRegs, shaARegs, headGap, hidingGap,
-      coinBranchGap, pStarGap, networkGap, stockRegs, Cx, xRegs, lead, stepsFor]
+      coinBranchGap, pStarGap, networkGap, tableGap, Layout.rowBlocks, Layout.colBlocks, stockRegs, Cx, xRegs, lead,
+      stepsFor, tileWords]
   · simp only [σx, Cx, List.cons_append, List.nil_append, List.append_nil, List.mem_cons, List.not_mem_nil,
       or_false, or_self] at ha hb
     exact hab (ha.trans hb.symm)
