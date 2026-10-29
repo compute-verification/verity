@@ -12,7 +12,8 @@ Each local bound of `Definitions.Nci.Guarantees.Capability`, proved over the voc
 * `Incidence`: `IncidenceCap`, `OperandCapSeparate`, `OperandCapJoint`;
 * `Dependency`: `ImportOrRecompute`, `RecomputeByGates`, `RecomputeByState`, `WeightedProductCap`;
 * `Items`: what they share about what a block holds;
-* `Witnesses`: each bound's honest and nontrivial witnesses at the toy circuit.
+* `Toy` and `Witnesses`: the toy circuit, and each bound's honest and nontrivial witnesses there, theorems the lock
+  doesn't list.
 
 The floor under coverage, `CapabilityFloor`, and its witnesses are `Proofs.Accounting.Coverage`.
 -/

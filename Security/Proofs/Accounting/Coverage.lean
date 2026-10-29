@@ -1,9 +1,10 @@
 import Definitions.Accounting.Guarantees.Coverage
+import Proofs.Accounting.CoverageToy
 import Proofs.Core.Game.Prob
 
 /-! `Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor`: below `min Lc Tmax`, a computation in `𝒜`
 has no covered structure (each costs at least `Lc`), so its success there is among coverage's uncovered successes below
-`Tmax`. Its witnesses (`CapabilityFloorHonest`, `CapabilityFloorNontrivial`) are proved at the toy task
+`Tmax`. Its witnesses (`capabilityFloor_honest`, `capabilityFloor_nontrivial`) are proved at the toy task
 `Accounting.Slowdown.Toy`: a position holds one gate, so a run reaches at most one of the coin's two targets, and the
 guess reaches one. -/
 
@@ -56,16 +57,30 @@ theorem prob_pos (E : Unit → Set (Fin 1 → List Bool) → Prop) (h : E () {y 
   rw [prob_eq]
   simp [h]
 
-end Accounting.Slowdown.Toy
-
-/-- **`CapabilityFloor`'s premises hold together** (`Nci.Guarantees.CapabilityFloorHonest`). -/
-theorem Nci.SecurityProofs.CapabilityFloorHonest : Nci.Guarantees.CapabilityFloorHonest := by
+/-- **`CapabilityFloor`'s premises hold together** at the toy task, with the covered structure at least two gates, the
+cost a run's gate count, `Tmax = 10`, `η = 1/2` and `Lc = 2`: coverage holds, and every covered computation costs at
+least `2`. Coverage is not empty: the guess, one gate, lacks the structure and reaches the target on half the coins, so
+coverage fails at `η = 0`. -/
+theorem capabilityFloor_honest :
+    Nci.Assumptions.CoversEfficientMethods Accounting.Slowdown.Toy.task Set.univ Accounting.Slowdown.Toy.covered
+        Accounting.Slowdown.Toy.cost 10 2⁻¹ ∧
+      (∀ C x, (C, x) ∈ (Set.univ : Accounting.Slowdown.Class Unit Unit) → Accounting.Slowdown.Toy.covered C x →
+        2 ≤ Accounting.Slowdown.Toy.cost (C x)) ∧
+      ¬ Nci.Assumptions.CoversEfficientMethods Accounting.Slowdown.Toy.task Set.univ Accounting.Slowdown.Toy.covered
+        Accounting.Slowdown.Toy.cost 10 0 := by
   refine ⟨fun C pos => Accounting.Slowdown.Toy.prob_le_half _ fun h =>
       Accounting.Slowdown.Toy.not_both (C ()) pos ⟨h.1.2.1, h.2.2.1⟩,
     fun _ _ _ h => h, fun h => Accounting.Slowdown.Toy.prob_pos _ ?_ (h Accounting.Slowdown.Toy.comp
       Accounting.Slowdown.Toy.pos)⟩
   exact ⟨Set.mem_univ _, Accounting.Slowdown.Toy.guess_succeeds, (by decide : 1 < 10), (by decide : ¬ 2 ≤ 1)⟩
 
-/-- **`CapabilityFloor`'s conclusion can fail** (`Nci.Guarantees.CapabilityFloorNontrivial`). -/
-theorem Nci.SecurityProofs.CapabilityFloorNontrivial : Nci.Guarantees.CapabilityFloorNontrivial :=
+/-- **`CapabilityFloor`'s conclusion can fail**: at `η = 0`, the guess, costing one gate, below the floor `Lc = 2`,
+reaches the target below the floor on half the coins. -/
+theorem capabilityFloor_nontrivial :
+    ¬ Accounting.Slowdown.Toy.task.prob (fun x 𝒴 =>
+        (Accounting.Slowdown.Toy.comp, x) ∈ (Set.univ : Accounting.Slowdown.Class Unit Unit) ∧
+          Accounting.Slowdown.Succeeds (Accounting.Slowdown.Toy.comp x) Accounting.Slowdown.Toy.pos 𝒴 ∧
+          Accounting.Slowdown.Toy.cost (Accounting.Slowdown.Toy.comp x) < min 2 10) ≤ 0 :=
   Accounting.Slowdown.Toy.prob_pos _ ⟨Set.mem_univ _, Accounting.Slowdown.Toy.guess_succeeds, by decide⟩
+
+end Accounting.Slowdown.Toy

@@ -1,15 +1,31 @@
-import Definitions.Nci.Guarantees.Capability.Witnesses
+import Definitions.Nci.Guarantees.Capability.Budgets
+import Definitions.Nci.Guarantees.Capability.Incidence
+import Definitions.Nci.Guarantees.Capability.Dependency
+import Proofs.Nci.Capability.Toy
 import Proofs.Nci.Capability.Items
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Probability.Distributions.Uniform
 import Mathlib.Tactic.Linarith
 
 /-!
-# Local bounds: proofs of their witnesses
+# Local bounds: their witnesses
 
-Each witness of `Definitions.Nci.Guarantees.Capability.Witnesses`, at the toy instance (`Nci.Capability.Toy`). The
-facts about the toy they share come first: its `(2, 1)`-partition, a block program's bits, what the block recomputes,
-the decoder's description lengths, and the budgets of items priced one bit each.
+Each local bound of `Definitions.Nci.Guarantees.Capability` has two witnesses at the toy instance
+(`Proofs.Nci.Capability.Toy`), theorems here:
+
+* `x_honest`: the bound's premises, every one, hold together at the toy, at the parameters its conclusion is read at;
+* `x_nontrivial`: its conclusion fails at the toy where a premise is dropped, so the conclusion is not a tautology.
+
+The structural premises (`HeldPriceAtMost`, `SlotsRead`, the incidence, `Consumers.Upstream`, `OverlapWeights`,
+`RequiresState`) are proved at the toy. So are the information premises. Description and source hardness hold at
+deficit `1` for the two-bit value `bb` of gates `2` and `3`, the token `b` twice, and the recovery at ambiguity `1`.
+Each honest witness also proves its parameter spent: at deficit or ambiguity `0` the premise fails, because the toy's
+decoder `M` describes `11`, an honest run's value, in one bit, and its recovery program spends one bit picking the
+source. Min-entropy hardness holds at deficit `0` for the product's value, a uniform bit. The operand caps share one
+nontrivial witness, since their conclusions are the same.
+
+The facts about the toy the witnesses share come first: its `(2, 1)`-partition, a block program's bits, what the block
+recomputes, the decoder's description lengths, and the budgets of items priced one bit each.
 -/
 
 namespace Nci.Capability.Toy
@@ -164,14 +180,16 @@ theorem requires_K2 : K2.RequiresState W2 1 := by
   · exact (show ∀ i : Fin 2, (if i = 0 then ({2} : Finset (Fin 4)) else {3}) ⊆ holds C {2, 3} by decide) i
   · simp [W2]
 
-end Nci.Capability.Toy
-
-namespace Nci.SecurityProofs
-
-open Verity Finset Nci.Capability Nci.Capability.Toy
-open scoped ENNReal
-
-theorem HeldBudgetHonest : Guarantees.HeldBudgetHonest := by
+/-- **`HeldBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `aBlk = 3`, `Λ = 1` and the value of
+gates `2` and `3` priced two bits: every held selection has an evaluator of at most three bits, and description hardness
+holds at deficit `1`. The deficit is spent: at `Λ = 0` description hardness fails, since `M` describes `11` in one
+bit. -/
+theorem heldBudget_honest :
+    R1.P.IsCK R1.d 2 1 ∧
+      (∀ (U : Fin R1.B → Finset (Fin 1)) (σ : Fin 1 → Finset (Fin R1.d.D.N)),
+        (∀ u, Selects (Y2 2) (U u) σ ∧ ∀ i ∈ U u, σ i ⊆ holds R1.d.D (R1.P.gates u)) →
+        ∃ e : List Bool, e.length ≤ 3 ∧ Evaluates M () 0 R1 e fun u T => selectionBits T (U u) σ) ∧
+      Nci.Assumptions.DescriptionHard R1 (Y2 2) M () 0 1 ∧ ¬ Nci.Assumptions.DescriptionHard R1 (Y2 2) M () 0 0 := by
   refine ⟨isCK, fun U σ hU => ?_, fun a _ U σ _ => ?_, fun h => ?_⟩
   · rcases (U 0).eq_empty_or_nonempty with h0 | h0
     · refine ⟨[true, true, false], le_rfl, fun u X => ?_⟩
@@ -200,13 +218,18 @@ theorem HeldBudgetHonest : Guarantees.HeldBudgetHonest := by
     rw [selection_two _ _ rfl, eval_ones] at this
     exact not_two_le_ldl_eleven 0 (by simpa [Y2] using this)
 
-theorem HeldBudgetNontrivial : Guarantees.HeldBudgetNontrivial := by
+/-- **`HeldBudget`'s conclusion can fail**: with the value of gates `2` and `3` priced six bits, above every
+description of it, the proof block holds more than `k + ⌈log₂ B⌉ + aBlk + Λ = 5`. -/
+theorem heldBudget_nontrivial : ¬ HeldPriceAtMost R1 (Y2 6) (((1 + Nat.clog 2 R1.B + 3 : ℕ) : ℝ) + 1) := by
   intro h
   have := h 0 {0} (fun _ => {2, 3}) (fun _ _ => mem_singleton_self _)
     (fun _ _ => show ({2, 3} : Finset (Fin 4)) ⊆ holds C (P1.gates 0) by decide)
   norm_num [Y2] at this
 
-theorem StatHeldBudgetHonest : Guarantees.StatHeldBudgetHonest := by
+/-- **`StatHeldBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `Λ = 0`, the token drawn
+uniformly and the product's value priced one bit. -/
+theorem statHeldBudget_honest :
+    R1.P.IsCK R1.d 2 1 ∧ (∀ a ∈ μ.support, R1.Honest a) ∧ Nci.Assumptions.MinEntropyHard R1 (Y 1) μ 0 := by
   refine ⟨isCK, fun a ha g hg => ?_, fun U σ v hsel => ?_⟩
   · obtain ⟨b, -, rfl⟩ := (PMF.mem_support_map_iff _ _ _).1 ha
     rw [mem_singleton.1 hg]
@@ -239,13 +262,24 @@ theorem StatHeldBudgetHonest : Guarantees.StatHeldBudgetHonest := by
             rw [PMF.toOuterMeasure_apply_singleton, PMF.uniformOfFintype_apply]
             simp
 
-theorem StatHeldBudgetNontrivial : Guarantees.StatHeldBudgetNontrivial := by
+/-- **`StatHeldBudget`'s conclusion can fail**: with the product's value priced three bits, more than its one bit of
+entropy, the proof block holds more than `k + Λ = 1`. -/
+theorem statHeldBudget_nontrivial : ¬ HeldPriceAtMost R1 (Y 3) (((1 : ℕ) : ℝ) + 0) := by
   intro h
   have := h 0 {0} (fun _ => {2}) (fun _ _ => mem_singleton_self _)
     (fun _ _ => show ({2} : Finset (Fin 4)) ⊆ holds C (P1.gates 0) by decide)
   norm_num [Y] at this
 
-theorem RecoveredBudgetHonest : Guarantees.RecoveredBudgetHonest := by
+/-- **`RecoveredBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, the evaluator `[1, 1, 1]`
+(`aBlk = 3`), the value of gates `2` and `3` as the source (`ℓz = 2`, `δ = 1`) and one eligible output per block
+recovering it with a one-bit complement (`βv = 2`, `amb = 1`). Both parameters are spent: at `δ = 0` source hardness
+fails, since `M` describes `11` in one bit, and at `amb = 0` the recovery fails, since it needs its bit picking the
+source. -/
+theorem recoveredBudget_honest :
+    R1.P.IsCK R1.d 2 1 ∧ ([true, true, true] : List Bool).length ≤ 3 ∧ Nci.Assumptions.SourceHard R1 M () 0 z 2 1 ∧
+      Nci.Assumptions.Recovers R1 M () 0 [true, true, true] z 2 2 1 (fun _ => 1) ∧
+      ¬ Nci.Assumptions.SourceHard R1 M () 0 z 2 0 ∧
+      ¬ Nci.Assumptions.Recovers R1 M () 0 [true, true, true] z 2 2 0 fun _ => 1 := by
   refine ⟨isCK, le_rfl, fun a _ => ?_, fun a ha u => ⟨[true], by norm_num, ?_⟩, fun h => ?_, fun h => ?_⟩
   · calc ENNReal.ofReal (2 - 1) ≤ ((1 : ℕ∞) : ℝ≥0∞) := by norm_num
       _ ≤ _ := ENat.toENNReal_le.2 (ldl_pos _ _)
@@ -265,61 +299,107 @@ theorem RecoveredBudgetHonest : Guarantees.RecoveredBudgetHonest := by
     rw [blockProgram_R1] at hrun
     simp [M, decode] at hrun
 
-theorem RecoveredBudgetNontrivial : Guarantees.RecoveredBudgetNontrivial := by
+/-- **`RecoveredBudget`'s conclusion can fail**: at seven bits per eligible output, more than the source holds,
+`βv · J = 7` exceeds `k + ⌈log₂ B⌉ + aBlk + δ + amb = 6`. -/
+theorem recoveredBudget_nontrivial : ¬ ((7 : ℝ) * ((1 : ℕ) : ℝ) ≤ ((1 + Nat.clog 2 R1.B + 3 : ℕ) : ℝ) + 1 + 1) := by
   show ¬ ((7 : ℝ) * ((1 : ℕ) : ℝ) ≤ ((1 + Nat.clog 2 1 + 3 : ℕ) : ℝ) + 1 + 1)
   rw [Nat.clog_one_right]
   norm_num
 
-theorem IncidenceCapHonest : Guarantees.IncidenceCapHonest :=
+/-- **`IncidenceCap`'s premises hold together** at the toy's product: it reads its slot and its operand, with at most
+one product per slot-operand pair (`r = 1`) and per operand (`aout = 1`). -/
+theorem incidenceCap_honest :
+    SlotsRead B W ∧ (∀ q ∈ B.P, ∃ c ∈ O.cells (I.occ q), c ⊆ holds D.D (B.m q)) ∧
+      (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ 1) ∧
+      ∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1 :=
   ⟨slotsRead, operandsRead, pairs_le, operand_le⟩
 
-theorem IncidenceCapNontrivial : Guarantees.IncidenceCapNontrivial := by
-  unfold Guarantees.IncidenceCapNontrivial
+/-- **`IncidenceCap`'s conclusion can fail**: at `r = aout = 0`, below the one product per pair, the gate computing
+the product completes more than `min(r |U| |V|, aout |V|) = 0` products. -/
+theorem incidenceCap_nontrivial :
+    ¬ (((completedIn B ({2} : Finset (Fin 4))).card : ℝ) ≤
+      min (0 * ((completedIn B ({2} : Finset (Fin 4))).image Prod.fst).card *
+          ((completedIn B ({2} : Finset (Fin 4))).image I.occ).card)
+        (0 * ((completedIn B ({2} : Finset (Fin 4))).image I.occ).card)) := by
   rw [show completedIn B ({2} : Finset (Fin 4)) = {(0, 0)} by decide]
   simp
 
-theorem OperandCapSeparateHonest : Guarantees.OperandCapSeparateHonest :=
+/-- **`OperandCapSeparate`'s premises hold together** at the toy: one bit per slot and per operand, the block holding
+slots and operands priced at most one bit each, and `Q = 1`. -/
+theorem operandCapSeparate_honest :
+    (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ (∀ i, W.price i = 1) ∧ (∀ o, O.price o = 1) ∧
+      (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ 1) ∧
+      (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1) ∧
+      HeldPriceAtMost R1 W 1 ∧ HeldPriceAtMost R1 O 1 ∧
+      ∀ x y : ℝ, 0 ≤ x → 0 ≤ y → 1 * x ≤ 1 → 1 * y ≤ 1 → min (1 * x * y) (1 * y) ≤ 1 :=
   ⟨one_pos, one_pos, fun _ => rfl, fun _ => rfl, pairs_le, operand_le, held_W, held_O,
     fun x y _ _ _ hy => (min_le_right _ _).trans (by linarith)⟩
 
-theorem OperandCapJointHonest : Guarantees.OperandCapJointHonest :=
+/-- **`OperandCapJoint`'s premises hold together** at the toy: one bit per slot and per operand, the block holding
+slots and operands priced at most two bits together, and `Q = 2`. -/
+theorem operandCapJoint_honest :
+    (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ (∀ i, W.price i = 1) ∧ (∀ o, O.price o = 1) ∧
+      (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ 1) ∧
+      (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1) ∧
+      HeldPriceAtMost R1 (W.sum O) 2 ∧
+      ∀ x y : ℝ, 0 ≤ x → 0 ≤ y → 1 * x + 1 * y ≤ 2 → min (1 * x * y) (1 * y) ≤ 2 :=
   ⟨one_pos, one_pos, fun _ => rfl, fun _ => rfl, pairs_le, operand_le, held_WO,
     fun x y hx _ hxy => (min_le_right _ _).trans (by linarith)⟩
 
-theorem OperandCapNontrivial : Guarantees.OperandCapNontrivial := by
-  unfold Guarantees.OperandCapNontrivial
+/-- **The operand caps' conclusion can fail**: the proof block completes more than `Q = 0` products, a `Q` no budget
+on what it holds bounds. -/
+theorem operandCap_nontrivial : ¬ (((completedIn B (R1.P.gates 0)).card : ℝ) ≤ 0) := by
   rw [completed_R1]
   simp
 
-theorem ImportOrRecomputeHonest : Guarantees.ImportOrRecomputeHonest :=
+/-- **`ImportOrRecompute`'s premises hold together** at the toy: the token reaches the gate the product reads, and the
+one consumer has weight `1`. -/
+theorem importOrRecompute_honest : K.Upstream ∧ K.OverlapWeights fun _ => 1 :=
   ⟨upstream, overlapWeights⟩
 
-theorem ImportOrRecomputeNontrivial : Guarantees.ImportOrRecomputeNontrivial := by
-  unfold Guarantees.ImportOrRecomputeNontrivial
+/-- **`ImportOrRecompute`'s conclusion can fail**: at weight `2`, over what one gate's regions allow, the proof block
+finishes more weight than its one unregistered input bit and the consumers it recomputes. -/
+theorem importOrRecompute_nontrivial :
+    ¬ (∑ _c ∈ K.servedIn (R1.P.gates 0), (2 : ℝ) ≤
+      ((R1.d.unregistered (R1.P.gates 0)).card : ℝ) +
+        ∑ _c ∈ (K.servedIn (R1.P.gates 0)).filter (fun c => K.G c ⊆ R1.P.gates 0), (2 : ℝ)) := by
   rw [servedIn_R1, unregistered_R1,
     show (univ : Finset (Fin 1)).filter (fun c => K.G c ⊆ R1.P.gates 0) = ∅ by decide]
   norm_num
 
-theorem RecomputeByGatesHonest : Guarantees.RecomputeByGatesHonest :=
+/-- **`RecomputeByGates`'s premises hold together** at the toy: the consumer has weight `1` and one required gate
+(`g = 1`). -/
+theorem recomputeByGates_honest : (K.OverlapWeights fun _ => 1) ∧ ∀ c, (1 : ℝ) ≤ (K.G c).card :=
   ⟨overlapWeights, fun _ => by simp [K, Consumers.ofUses]⟩
 
-theorem RecomputeByGatesNontrivial : Guarantees.RecomputeByGatesNontrivial := by
-  unfold Guarantees.RecomputeByGatesNontrivial
+/-- **`RecomputeByGates`'s conclusion can fail**: at `g = 2`, above the consumer's one required gate, the gates
+`S = {1}` contain more recomputed weight than `|S| / g`. -/
+theorem recomputeByGates_nontrivial :
+    ¬ ((2 : ℝ) * ∑ _c ∈ (univ : Finset (Fin 1)).filter (fun c => K.G c ⊆ ({1} : Finset (Fin 4))), (1 : ℝ) ≤
+      (({1} : Finset (Fin 4)).card : ℝ)) := by
   rw [show (univ : Finset (Fin 1)).filter (fun c => K.G c ⊆ ({1} : Finset (Fin 4))) = univ by decide]
   norm_num
 
-theorem RecomputeByStateHonest : Guarantees.RecomputeByStateHonest :=
+/-- **`RecomputeByState`'s premises hold together** at the toy with two proof blocks: each holds one computed gate's
+value, priced one bit (`h = 1`), and the consumer requiring both gates holds two. -/
+theorem recomputeByState_honest : HeldPriceAtMost R2 W2 1 ∧ K2.RequiresState W2 1 :=
   ⟨held_W2, requires_K2⟩
 
-theorem RecomputeByStateNontrivial : Guarantees.RecomputeByStateNontrivial :=
+/-- **`RecomputeByState`'s conclusion can fail**: with one proof block holding both gates, that block contains the
+consumer's required gates. -/
+theorem recomputeByState_nontrivial : ¬ ∀ (u : Fin R1.B) (c : Fin 1), ¬ K2.G c ⊆ R1.P.gates u :=
   fun h => h 0 0 (by decide)
 
-theorem WeightedProductCapHonest : Guarantees.WeightedProductCapHonest :=
+/-- **`WeightedProductCap`'s premises hold together** at the toy: the product reads its slot, the use has weight `1`,
+and the block holds slots priced at most one bit. -/
+theorem weightedProductCap_honest : SlotsRead B W ∧ (∀ _j : Fin B.nt, (0 : ℝ) ≤ 1) ∧ HeldPriceAtMost R1 W 1 :=
   ⟨slotsRead, fun _ => zero_le_one, held_W⟩
 
-theorem WeightedProductCapNontrivial : Guarantees.WeightedProductCapNontrivial := by
-  unfold Guarantees.WeightedProductCapNontrivial
+/-- **`WeightedProductCap`'s conclusion can fail**: at `h = 0`, below the slot the block holds, its weighted products
+exceed `h` times the weight it serves. -/
+theorem weightedProductCap_nontrivial :
+    ¬ (∑ q ∈ completedIn B (R1.P.gates 0), W.price q.1 * 1 ≤ 0 * ∑ _j ∈ served B (R1.P.gates 0), (1 : ℝ)) := by
   rw [completed_R1]
   simp [W]
 
-end Nci.SecurityProofs
+end Nci.Capability.Toy

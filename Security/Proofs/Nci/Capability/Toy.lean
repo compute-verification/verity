@@ -5,8 +5,8 @@ import Mathlib.Probability.Distributions.Uniform
 /-!
 # Local bounds: the toy instance their witnesses are stated at
 
-One small Boolean circuit, at which the local bounds' witnesses (`Definitions.Nci.Guarantees.Capability.Witnesses`) show
-each bound's premises holding together, and its conclusion failing where a premise is dropped. Four one-bit gates:
+One small Boolean circuit, at which the local bounds' witnesses (`Proofs.Nci.Capability.Witnesses`) show each bound's
+premises holding together, and its conclusion failing where a premise is dropped. Four one-bit gates:
 
 * `0`, a registered input: the weight, registered as `1`;
 * `1`, an unregistered input: the token's operand;

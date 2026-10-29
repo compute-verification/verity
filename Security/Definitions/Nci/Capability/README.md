@@ -141,10 +141,12 @@ candidate sufficient condition, not part of the repertoire.
 empty selection would force the decoder to output nothing on every block's program, and the premises could hold only
 when no block holds anything.
 
-Each bound has two witnesses, listed under the lock's `witnesses` and proved: an honest one, its premises holding
-together, and a nontrivial one, its conclusion failing where a premise is dropped. They are stated at the toy circuit
-`Nci.Capability.Toy` (four one-bit gates, one counted product; `Guarantees/Capability/Witnesses.lean`), and
-`CapabilityFloor`'s at the toy task `Accounting.Slowdown.Toy`. The structural premises are proved there, and so are the
+Each bound has two witnesses, proved as theorems in the proofs tree, which the lock doesn't list: an honest one, its
+premises holding together, and a nontrivial one, its conclusion failing where a premise is dropped. They are stated at
+the toy circuit `Nci.Capability.Toy` (four one-bit gates, one counted product; `Security/Proofs/Nci/Capability/Toy.lean`,
+the witnesses in `Security/Proofs/Nci/Capability/Witnesses.lean`), and `CapabilityFloor`'s at the toy task
+`Accounting.Slowdown.Toy` (`Security/Proofs/Accounting/CoverageToy.lean`, the witnesses in
+`Security/Proofs/Accounting/Coverage.lean`). The structural premises are proved there, and so are the
 information premises, none degenerately. `MinEntropyHard` holds at Λ = 0 for the product's value, a uniform bit. The toy
 decoder compresses: it describes `11`, the value of gates 2 and 3 in an honest run, in one bit, and every other two-bit
 string in three. Against it `DescriptionHard` holds at Λ = 1, `SourceHard` at δ = 1 and `Recovers` at amb = 1, and each

@@ -1,7 +1,6 @@
 import Definitions.Nci.Guarantees.Capability.Budgets
 import Definitions.Nci.Guarantees.Capability.Incidence
 import Definitions.Nci.Guarantees.Capability.Dependency
-import Definitions.Nci.Guarantees.Capability.Witnesses
 
 /-!
 # Local bounds: the repertoire
@@ -17,9 +16,9 @@ The statements a local bound is assembled from, one module per step of the argum
 4. Coverage, over tasks and runs (`Definitions.Accounting.Guarantees.Coverage`): a circuit floor → success below it is
    rare (`CapabilityFloor`).
 
-`Witnesses` states each bound's witnesses at the toy circuit `Definitions.Nci.Capability.Toy`: an honest one (its
-premises hold together there) and a nontrivial one (its conclusion fails there when a premise is dropped).
-`CapabilityFloor`'s are in `Coverage`, at `Definitions.Accounting.CoverageToy`.
+Each bound's witnesses, an honest one (its premises hold together) and a nontrivial one (its conclusion fails when a
+premise is dropped), are theorems at toy instances in the proofs: `Proofs.Nci.Capability.Witnesses` at the toy circuit
+`Proofs.Nci.Capability.Toy`, and `CapabilityFloor`'s in `Proofs.Accounting.Coverage` at `Proofs.Accounting.CoverageToy`.
 
 A new premise, structure or kind of consumer is a new module or a new value of an existing type, consumed by the same
 steps. Improving the structure never strengthens a premise; a stronger premise is a new hypothesis, named as one. Each
