@@ -238,20 +238,22 @@ def own_final(fam: dict, dense: dict, group: str, envelopes: tuple[list[dict], l
             **at_envelope(fam, sf, dense, sd, target, group, envelopes)}
 
 
-def plot(out: Path, size: str, group: str, curves: dict[str, dict], tgts: list[float]) -> str:
+def plot(out: Path, size: str, group: str, curves: dict[str, dict], shorter: dict[str, list[dict]], tgts: list[float]) -> str:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(7, 4.5))
     for lab, s in curves.items():
-        ax.plot(s["step"] * s["flops_per_step"], s["loss"], marker=".", label=lab)
+        line, = ax.plot(s["step"] * s["flops_per_step"], s["loss"], marker=".", label=lab)
+        for e in shorter.get(lab, []):
+            ax.plot(e["step"] * e["flops_per_step"], e["loss"], color=line.get_color(), lw=0.7, ls=":")
     for t in tgts:
         ax.axhline(t, color="grey", lw=0.6, ls="--")
     ax.set_xscale("log")
     ax.set_xlabel("training FLOPs (analytic)")
     ax.set_ylabel("held-out loss (nats per byte)")
-    ax.set_title(f"size {size}: dense and {group}, each at its best learning rate")
+    ax.set_title(f"size {size}, dense and {group} at their best rates; dotted: shorter horizons", fontsize=10)
     ax.legend(fontsize=8)
     name = f"loss-flops-{size}-{group}.png"
     fig.tight_layout()
@@ -300,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
                       for lab, s in members.items() if lab != "dense"}
             report["comparisons"].setdefault(size, {})[group] = {"targets": tgts, "never_below_first_checkpoint": out_of_targets,
                                                                  "rows": rows, "own_final": finals}
-            report["plots"].append(plot(a.out, size, group, members, tgts))
+            report["plots"].append(plot(a.out, size, group, members, shorter, tgts))
     (a.out / "analysis.json").write_text(json.dumps(report, indent=1) + "\n")
     (a.out / "tables.md").write_text(tables(report))
     print(tables(report))
