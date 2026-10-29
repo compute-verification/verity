@@ -15,7 +15,7 @@ import Proofs.Population.NecessityMatrix
 import Proofs.Population.Exfiltration
 import Proofs.Population.ExfiltrationBound
 import Proofs.Population.ExfiltrationExamples
-import Proofs.Population.DrawPressure
+import Proofs.Population.SamplePressure
 import Proofs.Population.JointPressure
 import Proofs.Population.ChiPool
 
@@ -72,7 +72,7 @@ gets the target with probability at most `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K
 deployment's windows.
 `ExfiltrationExamples`: the stopping-time bound is attained, and without detection pressure, a halt, bound inputs or a
 trusted model the leak is unbounded.
-`DrawPressure`: the deployed draw, `k` of the `n` units without replacement, misses a `K`-unit wrong set with
+`SamplePressure`: the deployed draw, `k` of the `n` units without replacement, misses a `K`-unit wrong set with
 probability `C(n - K, k) / C(n, k) ≤ (1 - k/n)^K ≤ exp (-k K / n)`, so it gives detection pressure `k/n` for a leak
 of at most one per wrong unit, and with probability at least `1 - δ` what leaves through the first detection is below
 `ℓ + (n/k) ln (1/δ)`.
