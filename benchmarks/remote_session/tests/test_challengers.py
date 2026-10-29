@@ -209,7 +209,7 @@ def test_a_gate_session_is_refused_as_coins_unless_the_hosts_pins_log_and_the_ve
                        f"{PIN}, which the host's pins log records but which is not on main's first-parent line in the "
                        "verifier's copy (`git rev-list --first-parent origin/main`): a branch commit merged into main "
                        "is in main's history but no tree main's check ran on; repin the challenger host to a commit "
-                       "on main's first-parent line (vy-challenger-pin) and rerun the window there"),
+                       "on main's first-parent line (with its pin command) and rerun the window there"),
         "no-pins": ("the auditor's session is not readable: the challenger gate answered pins with exit 3: "
                     '{"refused": "usage"}')}[case]
 
@@ -540,15 +540,15 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
                "window on a host whose gate seals its pins log in each open")
     elif sealed != PINS:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log doesn't record as a commit of main's "
-               "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
-               "window there")
+               "history: repin the challenger host to a commit origin/main contains (with its pin command) and "
+               "rerun the window there")
     elif main is None:
         why = NO_MAIN
     else:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log records but which is not on main's "
                "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
                "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
-               "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
+               "commit on main's first-parent line (with its pin command) and rerun the window there")
     assert s["credit"]["complete"]["ok"]
     assert s["credit"]["credited"]["ok"] is False and s["credit"]["credited"]["reason"] == why
     assert s["credit"]["pinned"] == {"commit": PIN, "seal": None if sealed is None else pins_seal(sealed), "ok": False,
