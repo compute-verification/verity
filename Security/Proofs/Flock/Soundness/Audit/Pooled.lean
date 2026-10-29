@@ -30,7 +30,7 @@ weights `|W_t|` and `ρ = 1 − kd/N`.
 
 The network certifier's leak bound composes `pooled_escape_log` with the per-period D1 into
 `(ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + δ_link)`: each window's error adds once per window, so the
-second term grows with the number of windows in the monitoring period. That composition is `HorizonLeakAccepted`'s,
+second term grows with the number of windows in the monitoring period. That composition is `PooledLeakAccepted`'s,
 not this file's.
 -/
 
