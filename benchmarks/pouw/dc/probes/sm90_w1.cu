@@ -11,6 +11,10 @@
 //   l_tld, l_tld4 tex1Dfetch<u32>, <uint4> inside a window the texture cache holds (TLD, 1 and 4 words)
 //   l_tex         tex2D<float4> bilinear (TEX, 4 words), inside a 2D window the cache holds
 //   l_atoms64     atom.shared.exch.b64 with its return (ATOMS.EXCH.64: 2 registers and 2 memory words a lane)
+//   l_lds128b, l_lds64b, l_ldg128b, l_ldgnc128b  ld.shared.v4 and .v2, ld.global.v4 and ld.global.nc.v4 at an address
+//                 the warp shares but ptxas can't prove uniform (a broadcast), 8 fixed 16-B cells a thread inside a
+//                 window L1 holds; each load folded into its own chain by LOP3, which the note counts too, so the row
+//                 prices every register the loop writes
 #include "../../opcode_probe/probe.cuh"
 #include "w1.cuh"
 
@@ -240,6 +244,55 @@ OP_KERNEL(l_atoms64, TPB) {
   OP_SINK(s ^ (s >> 32))
 }
 
+// chain u's 16-B cell, one every warp reads: row u, its two cells alternating by trip (so no load is loop-invariant);
+// a.mode (0 when timed) splits a warp's lanes over 8 cells only when it isn't
+__host__ __device__ inline unsigned bcast_off(int u, int, int, int it) {
+  return (unsigned)(u * 128) ^ (((unsigned)it & 1u) << 4);
+}
+
+template <int V, int SPACE>  // SPACE: 0 shared, 1 global, 2 global .nc
+DC_DEV void bcast_body(const OpArgs& a) {
+  extern __shared__ __align__(128) unsigned sb[];
+  const unsigned m = (unsigned)a.mode, split = (threadIdx.x & m & 7u) << 5;
+  const unsigned base = (unsigned)__cvta_generic_to_shared(sb) + split;
+  const unsigned long long gbase = (unsigned long long)a.g + split;
+  if constexpr (SPACE == 0) {
+    for (int i = threadIdx.x; i < ROWS * 32 + 64; i += TPB) sb[i] = (unsigned)i * 0x9E3779B9u ^ m;
+  }
+  __syncthreads();
+  unsigned acc[U];
+#pragma unroll
+  for (int u = 0; u < U; u++) acc[u] = threadIdx.x * 0x9E3779B9u + u;
+  OP_BEGIN
+  OP_LOOP(it) {
+    const unsigned d = ((unsigned)it & 1u) << 4;
+    const unsigned s0 = base ^ d;
+    const unsigned long long g0 = gbase ^ d;
+#pragma unroll
+    for (int u = 0; u < U; u++) {
+      unsigned p, q, r = 0, s = 0;
+      if constexpr (V == 4 && SPACE == 0)
+        asm volatile("ld.shared.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(p), "=r"(q), "=r"(r), "=r"(s) : "r"(s0 + u * 128) : "memory");
+      if constexpr (V == 2 && SPACE == 0)
+        asm volatile("ld.shared.v2.u32 {%0,%1}, [%2];" : "=r"(p), "=r"(q) : "r"(s0 + u * 128) : "memory");
+      if constexpr (V == 4 && SPACE == 1)
+        asm volatile("ld.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(p), "=r"(q), "=r"(r), "=r"(s) : "l"(g0 + u * 128) : "memory");
+      if constexpr (V == 4 && SPACE == 2)
+        asm volatile("ld.global.nc.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(p), "=r"(q), "=r"(r), "=r"(s) : "l"(g0 + u * 128) : "memory");
+      acc[u] ^= V == 4 ? p ^ q ^ r ^ s : p ^ q;
+    }
+  }
+  OP_END
+  unsigned t = 0;
+#pragma unroll
+  for (int u = 0; u < U; u++) t ^= acc[u];
+  OP_SINK(t)
+}
+OP_KERNEL(l_lds128b, TPB) { bcast_body<4, 0>(a); }
+OP_KERNEL(l_lds64b, TPB) { bcast_body<2, 0>(a); }
+OP_KERNEL(l_ldg128b, TPB) { bcast_body<4, 1>(a); }
+OP_KERNEL(l_ldgnc128b, TPB) { bcast_body<4, 2>(a); }
+
 #define P(NAME, PAT, NOTE) {.name = #NAME, .kernel = (const void*)NAME, .tpb = TPB, .expect = PAT, .iters = 512, .note = NOTE}
 #define PS(NAME, PAT, OPS, FN, DYN, NOTE)                                                                               \
   {.name = #NAME, .kernel = (const void*)NAME, .tpb = TPB, .expect = PAT, .smem_ops = OPS, .smem = FN, .dyn_smem = DYN, \
@@ -300,6 +353,14 @@ static const OpProbe PROBES[] = {
     P(l_tld4, "TLD.LZ=8", "c=other w=TLD.LZ:4"),
     P(l_tex, "TEX.LL=8", "c=other w=TEX.LL:4"),
     PS(l_atoms64, "ATOMS.EXCH.64=8", "ATOMS.EXCH.64*8", atoms64_off, U * TPB * 8, "c=other w=ATOMS.EXCH.64:2"),
+    PS(l_lds128b, "LDS.128=8,LOP3.LUT=17,IMAD.SHL.U32=1,VIADD=1", "LDS.128*8", bcast_off, ROWS * 128 + 128,
+       "c=other w=LDS.128:4,LOP3.LUT:1,IMAD.SHL.U32:1,VIADD:1 p=ISETP.GE.AND:1"),
+    PS(l_lds64b, "LDS.64=8,LOP3.LUT=9,IMAD.SHL.U32=1,VIADD=1", "LDS.64*8", bcast_off, ROWS * 128 + 128,
+       "c=other w=LDS.64:2,LOP3.LUT:1,IMAD.SHL.U32:1,VIADD:1 p=ISETP.GE.AND:1"),
+    P(l_ldg128b, "LDG.E.128=8,LOP3.LUT=17,IMAD.SHL.U32=1,VIADD=1",
+      "c=other w=LDG.E.128:4,LOP3.LUT:1,IMAD.SHL.U32:1,VIADD:1 p=ISETP.GE.AND:1"),
+    P(l_ldgnc128b, "LDG.E.128.CONSTANT=8,LOP3.LUT=17,IMAD.SHL.U32=1,VIADD=1",
+      "c=other w=LDG.E.128.CONSTANT:4,LOP3.LUT:1,IMAD.SHL.U32:1,VIADD:1 p=ISETP.GE.AND:1"),
 };
 #undef P
 #undef PS
