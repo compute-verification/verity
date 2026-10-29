@@ -1,0 +1,4 @@
+order = 367
+path = "`core_rank/`"
+runs_on = "CPU"
+what = "The H200 power ranking of PoUW designs (`rank.py`): checks a rows file, one TOML row a design with each target (T1 gap in H200 time, T2 overhead, T3 perplexity) a cited value or `?`, where it was obtained (measured or modelled on the H200, or on the H100, the 4090 or sm_120 only, or an estimate), its assumption's rank 0–5, its Lean status and whether vLLM serves it, and renders the ranking as Markdown, CSV and JSON with each shared gap pooled over a week, a month and a year of the world's and a datacenter's compute; the rows themselves live in the evidence store"
