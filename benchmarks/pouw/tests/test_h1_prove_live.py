@@ -2,7 +2,8 @@
 form) the verifier's files are the live Program's, every opened row opens its registered root, each round's staged
 statement is the verifier's own public file byte for byte with ok 1 at the served rows, and a prover that claims one row
 more stages ok 0; a tampered opening is refused. The live Program is credit's, `PouwLiveWindow_v2`, each unit reading the
-public max_tokens as its caps."""
+public max_tokens as its caps. Past `live.PIECE_ROWS` rows (here past `R` = 2, `LV.R`) each round is cut by rows into
+`live.PouwLiveRows_v1` pieces, each staged as its own unit."""
 from __future__ import annotations
 
 import importlib.util
@@ -36,7 +37,8 @@ def salts(n: int) -> list[bytes]:
     return [os.urandom(LV.U.SALT_BYTES) for _ in range(n)]
 
 
-def dump(out: Path) -> dict:
+def dump(out: Path, T: int = T, S: int = S, HEADERS: list = HEADERS, MAX_TOKENS: list = MAX_TOKENS,
+         SLOTS: list = SLOTS) -> dict:
     """A served window's live dump, as `pouw_h1_live.dump` writes it."""
     heads = HEADERS + [(0,) * LR.HEADER] * (T - len(HEADERS))
     req = G.Registered.commit(PROGRAM, LR.table(PREFIX, LR.REQUESTS), LR.header_words(heads), salts(T), G.WORD_BITS,
@@ -149,3 +151,56 @@ def test_evidence_is_credits_live_statements_on_the_staged_program(prepared, tmp
         (s, str(work / "verifier" / f"honest-{s}.pub.bin"), [str(work / "st" / f"honest-{s}" / "sessions" / f"s{s}")])
         for s in range(S)]
     assert all(st["circuit"] == str(work / "circuit.txt") for st in doc["statements"])
+
+
+#: a prefill round cut into P = 2 pieces of 2 rows: request 0's 2-token prompt from slot 0, request 1's 1-token one from 2
+PIECED = {"T": 4, "S": 1, "HEADERS": [(0, 0, 0, 1, 2), (1, 0, 2, 1, 1)], "MAX_TOKENS": [1, 1], "SLOTS": [[1, 1, 2, 0]]}
+
+
+@pytest.fixture(scope="module")
+def pieced(tmp_path_factory):
+    base = tmp_path_factory.mktemp("pieced")
+    pub = dump(base / "dump", **PIECED)
+    LV.R = 2
+    try:
+        rc = LV.main(["prepare", "--live", str(base / "dump"), "--work", str(base / "work")])
+    finally:
+        LV.R = L.PIECE_ROWS
+    return base, pub, rc
+
+
+def test_a_round_past_the_piece_rows_is_staged_piece_by_piece_on_the_verifiers_own_files(pieced):
+    """Each piece's statement, staged on its R rows of the round, the first R headers and caps and its known base, is the
+    verifier's own public file with ok 1 at m_s, on the pieced live Program (`live.program_rows`); ``m-claimed`` is staged
+    at the piece holding row m_0 with ok 0, and ``other-piece`` holds piece 0's session to piece 1's files."""
+    base, pub, rc = pieced
+    work = base / "work"
+    record = json.loads((work / "record.json").read_text())
+    assert rc == 0 and record["problems"] == [] and (record["R"], record["pieces"]) == (2, 2)
+    assert {t: (r["round"], r.get("piece"), r["m"], r["staged_ok"]) for t, r in record["rounds"].items()} == {
+        "honest-0-0": (0, 0, 3, 1), "honest-0-1": (0, 1, 3, 1), "m-claimed": (0, 1, 4, 0)}
+    for tag in ("honest-0-0", "honest-0-1"):
+        assert (work / "st" / tag / "pub.bin").read_bytes() == (work / "verifier" / f"{tag}.pub.bin").read_bytes()
+    plan = [x.split("\t") for x in (work / "plan.tsv").read_text().splitlines()]
+    assert {x[1]: x[-1] for x in plan if x[0] == "C"} == {"honest-0-0": "ACCEPT", "m-other": "REJECT", "m-claimed": "REJECT",
+                                                          "other-piece": "REJECT", "honest-0-1": "ACCEPT"}
+    desc = json.loads((work / "verifier" / "program.json").read_text())
+    assert desc["program_fn"].startswith("PouwLivePieces")
+    reg = json.loads((work / "verifier" / "honest-0-1.registered.json").read_text())["ports"]
+    assert [reg[f"slot_{k}"]["reads"] for k in range(2)] == [[None, 2], [None, 3]]
+    assert reg["base"]["known"]["rows"] == [LR.slot_words([2])[0]] and reg["o0"]["reads"] == [None, 1]
+    assert json.loads((work / "verifier" / "other-piece.registered.json").read_text()) == \
+        json.loads((work / "verifier" / "honest-0-1.registered.json").read_text())
+
+
+def test_a_pieces_opening_is_its_rounds_rows_from_its_base(pieced):
+    base, pub, _rc = pieced
+    LV.R = 2
+    try:
+        opening = json.loads((base / "dump" / "0" / "opening.json").read_text())
+        reg = LV.files(pub, 1, pub["served"][0])
+        assert LV.check_openings(pub, 1, LV.piece_opening(pub, 1, opening), reg) == []
+        assert LV.check_openings(pub, 1, LV.piece_opening(pub, 0, opening), reg) == [
+            f"live@0 piece 1: port slot_{k}'s opened row is not row {2 + k} of h1/slots@0's registered root" for k in range(2)]
+    finally:
+        LV.R = L.PIECE_ROWS
