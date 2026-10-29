@@ -51,8 +51,8 @@ in a lock, and nothing imports it.
   period's capacity with the hosts at their rows (`hostsCounted_capacity`). A row below the hosts' best leaves
   `Σ_r Tp·n·w_r·(best_r − rate_r)⁺`, resource by resource. Both premises read the headline's own terms: the hosts'
   counted W1 is within `Period.cap` at the host resources of the `G` that `OnCard` describes (`hostsW1_le_hostsCounted`,
-  `hostsW1_le_cap`), and `Period.Fits` at hosts counted at the row gives `HostsWithinRow` (`hostsWithinRow_of_fits`;
-  `hostsCounted_others`: the row's own hosts are counted).
+  `hostsW1_le_cap`), and `Period.Fits` at hosts counted at the row gives `HostsWithinRow` (`hostsWithinRow_of_fits`,
+  `hostsCounted_closes_of_fits`; `hostsCounted_others`: the row's own hosts are counted).
 * **Lifting a data-case result to the call grid** (`distinctOn_lift`, `sepBy_lift`): a target set distinct at one
   data case, with that case's free values, is distinct on the call grid with the call's free values, when each call
   free value restricts to a data-case free value.
@@ -1136,9 +1136,10 @@ theorem hostsW1_le_cap {GA : Pouw.Dither.Accel} {c : Verity.Accel.Card} {x} {D :
   ring
 
 /-- **`HostsWithinRow` is the headline's capacity at a row-counted host** (rank 0 given `OnCard`'s rates): if a
-strategy fits the period (`Period.Fits`, which `TimedWorkFits` gives an accepted period's sampling blocks' work) and
-the host resources `j` are counted at no more than the row, then its use of them, a unit at its credited W1, meets
-`HostsWithinRow` at that row. So for the hosts' timed work the premise is the headline's own (G2) rate at θ's row. -/
+strategy fits the period (`Period.Fits`, which `FreedSound` reads at every other work `z` and `TimedWorkFits` gives at
+`z = 0` for an accepted period's sampling blocks' work) and the host resources `j` are counted at no more than the
+row, then its use of them, a unit at its credited W1, meets `HostsWithinRow` at that row. So for the hosts' timed work
+the premise is the headline's own (G2) rate at θ's row. -/
 theorem hostsWithinRow_of_fits {GA : Pouw.Dither.Accel} {c : Verity.Accel.Card} {x} {D : Pouw.Dither.Devices c} {P}
     {L} {e : GA.Res ≃ Verity.Accel.Res ⊕ D.oth.Res} (hon : Pouw.Dither.OnCard GA c x D P L e)
     {Pd : Pouw.Dither.Period GA} {X : GA.Res → ℝ} {z : Pd.J → ℝ} (hfit : Pd.Fits X z)
@@ -1155,6 +1156,18 @@ theorem hostsWithinRow_of_fits {GA : Pouw.Dither.Accel} {c : Verity.Accel.Card} 
   have hX : X (e.symm (.inr (j r))) ≤ Pd.T * D.n * rateAt hr r := by linarith
   calc w r * X (e.symm (.inr (j r))) ≤ w r * (Pd.T * D.n * rateAt hr r) := mul_le_mul_of_nonneg_left hX (hw r)
     _ = Pd.T * D.n * w r * rateAt hr r := by ring
+
+/-- **The hosts inside T1 from the headline's terms** (rank 0 given `OnCard`'s rates and `PeriodInventoryT1`): when
+the strategy fits the period and the host resources are counted at no more than the row, the credited W1 is at most
+the cards' share, the hosts' counted W1 at the row and the outside's. `HostsWithinRow` is then no premise of its own. -/
+theorem hostsCounted_closes_of_fits {GA : Pouw.Dither.Accel} {c : Verity.Accel.Card} {x} {D : Pouw.Dither.Devices c}
+    {P} {L} {e : GA.Res ≃ Verity.Accel.Res ⊕ D.oth.Res} (hon : Pouw.Dither.OnCard GA c x D P L e)
+    {Pd : Pouw.Dither.Period GA} {X : GA.Res → ℝ} {z : Pd.J → ℝ} (hfit : Pd.Fits X z)
+    (hneeds : ∀ k r, 0 ≤ Pd.needs k r) (hT : 0 ≤ Pd.T) {hr : HostRow} {j : HostRes → D.oth.Res}
+    (hj : ∀ r, D.oth.rate (j r) ≤ D.n * rateAt hr r) {w : HostRes → ℝ} (hw : ∀ r, 0 ≤ w r) {Wc Wcard Wout : ℝ}
+    (hinv : PeriodInventoryT1 Wc Wcard (fun r => w r * X (e.symm (.inr (j r)))) Wout) :
+    Wc ≤ Wcard + hostsW1 D.n hr w Pd.T + Wout :=
+  hostsCounted_closes hinv (hostsWithinRow_of_fits hon hfit hneeds hT hj hw)
 
 /-- **Route H on a toy, and the host row that closes it**: the card writes the word `tw` (32) and a host hashes the
 digest, credited 32 through its SHA-512. The cards' `PeriodInventory` holds, and the credited 64 is over the card's
@@ -1236,4 +1249,5 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.hostsCounted_others
 #print axioms Pouw.Dimension.NCompose.hostsW1_le_cap
 #print axioms Pouw.Dimension.NCompose.hostsWithinRow_of_fits
+#print axioms Pouw.Dimension.NCompose.hostsCounted_closes_of_fits
 #print axioms Pouw.Dimension.NCompose.routeH_toy
