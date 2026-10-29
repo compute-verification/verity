@@ -22,16 +22,31 @@ def row_words(codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(np.concatenate([b, s], axis=1)).view("<u2").astype(np.uint16)
 
 
-def chunk_words(codes: np.ndarray, scales: np.ndarray, n: int) -> np.ndarray:
+def chunk_words(codes: np.ndarray, scales: np.ndarray, n: int, slots: int | None = None,
+                out: np.ndarray | None = None) -> np.ndarray:
     """int8 code rows ``(r, K)`` and their f32 scales ``(r,)`` as ``n`` leaves a row (`weights.chunks` (K), SPLITK):
     leaf ``n·i + c`` row i's codes ``[c·K/n, (c + 1)·K/n)`` then its scale, `row_words` of the codes' ``(n·r, K/n)``
-    view and each scale n times, ``(n·r, K/(2n) + 2)``. At n = 1 it is `row_words`. ValueError on an n that doesn't
-    divide K into whole u16 words."""
-    c = np.ascontiguousarray(np.asarray(codes, dtype=np.int8))
+    view and each scale n times, ``(n·r, K/(2n) + 2)``. At n = 1 it is `row_words`. ``slots``: over that many rows, those
+    past r zero codes of scale 0, ``(n·slots, K/(2n) + 2)``. ``out``: written into that u16 array of the words' shape, each
+    byte once, else into a new one. ValueError on an n that doesn't divide K into whole u16 words, or fewer slots than
+    rows."""
+    c = np.asarray(codes, dtype=np.int8)
     r, k = c.shape
     if type(n) is not int or n < 1 or k % (2 * n):
         raise ValueError(f"K = {k} is not {n} chunks of whole u16 words")
-    return row_words(c.reshape(n * r, k // n), np.repeat(np.asarray(scales, "<f4").reshape(r), n))
+    slots = r if slots is None else int(slots)
+    if slots < r:
+        raise ValueError(f"{r} rows over {slots} slots")
+    shape, w = (n * slots, k // (2 * n) + 2), k // n
+    if out is None:
+        out = np.empty(shape, "<u2")
+    elif out.shape != shape or out.dtype != np.dtype("<u2") or not out.flags.c_contiguous:
+        raise ValueError(f"out: a contiguous u16 array of {shape}, not {out.dtype} {out.shape}")
+    b = out.view(np.uint8)
+    b[:n * r, :w] = c.view(np.uint8).reshape(n * r, w)
+    b[:n * r, w:] = np.repeat(np.asarray(scales, "<f4").reshape(r), n).view(np.uint8).reshape(n * r, 4)
+    b[n * r:] = 0
+    return out
 
 
 def ids_words(ids: Sequence[int | None], slots: int) -> np.ndarray:
