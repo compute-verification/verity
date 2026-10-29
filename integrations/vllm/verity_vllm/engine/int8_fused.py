@@ -40,7 +40,9 @@ The fused producers (`engine.int8_producers` installs them) write a linear's inp
 one launch: `silu_mul_quant` is vLLM's `_C.silu_and_mul` then `quant_rows`, and `add_norm_quant` is vLLM's batch-invariant
 `_C.fused_add_rms_norm` (its generic kernel's per-thread sums, warp shuffle tree and warp-aggregate order at min(H, 1024)
 threads, `norm_threads`) then `quant_rows`, each bit for bit (`tests/engine/test_int8_producers.py`), at
-`producer_warps`' warps.
+`producer_warps`' warps.  The silu's act is `_SILU_MUL2`, inline PTX on pairs of elements: written in Triton (libdevice's
+expf, tl.div_rn, a scalar bf16 rounding twice an element) it issued about 52 instructions an element, five of them on the
+quarter-rate unit, and ran short of HBM's rate; written out it issues about 43, three of them there.
 """
 from __future__ import annotations
 
@@ -49,7 +51,6 @@ import functools
 import torch
 import triton
 import triton.language as tl
-from triton.language.extra import libdevice
 
 from verity_vllm.engine import int8_wgmma
 from verity_vllm.engine.int8_exact import UNIT, ZY_BYTES, zy_units
@@ -110,25 +111,93 @@ def _rsqrt_approx(v):
     return tl.inline_asm_elementwise("rsqrt.approx.f32 $0, $1;", "=r,r", [v], dtype=tl.float32, is_pure=True, pack=1)
 
 
+# vLLM's silu-and-mul on one pair of a row's elements, $1 its gate and $2 its up as bf16x2 words (the even element in the
+# low half), $0 the pair of h: bf16(g / (1.0f + expf(-g * alpha))) at alpha 1, then bf16(that * (u + beta)) at beta 0, where
+# u + 0.0f only turns -0 into +0.  expf is libdevice's __nv_expf step for step, with -g's sign moved into the constants it
+# multiplies (exact: each product is an fma's), the division is div.rn, and each pair's two roundings to bf16 are one
+# cvt.rn.bf16x2.f32 (an ALU instruction; the scalar cvt.rn.bf16.f32 is F2F, on the quarter-rate unit).
+_SILU_MUL2 = tl.constexpr("""{
+.reg .b32 g<2>, u<2>, j<2>, a;
+.reg .f32 x<2>, t<2>, r<2>, e<2>, y<2>, d<2>, q<2>, v<2>, m<2>;
+shl.b32 g0, $1, 16;
+and.b32 g1, $1, 0xFFFF0000;
+mov.b32 x0, g0;
+mov.b32 x1, g1;
+fma.rn.f32 t0, x0, 0fBBBB989D, 0f3F000000;
+fma.rn.f32 t1, x1, 0fBBBB989D, 0f3F000000;
+cvt.sat.f32.f32 t0, t0;
+cvt.sat.f32.f32 t1, t1;
+fma.rm.f32 t0, t0, 0f437C0000, 0f4B400001;
+fma.rm.f32 t1, t1, 0f437C0000, 0f4B400001;
+add.rn.f32 r0, t0, 0fCB40007F;
+add.rn.f32 r1, t1, 0fCB40007F;
+neg.f32 r0, r0;
+neg.f32 r1, r1;
+fma.rn.f32 r0, x0, 0fBFB8AA3B, r0;
+fma.rn.f32 r1, x1, 0fBFB8AA3B, r1;
+fma.rn.f32 r0, x0, 0fB2A57060, r0;
+fma.rn.f32 r1, x1, 0fB2A57060, r1;
+mov.b32 j0, t0;
+mov.b32 j1, t1;
+shl.b32 j0, j0, 23;
+shl.b32 j1, j1, 23;
+mov.b32 y0, j0;
+mov.b32 y1, j1;
+ex2.approx.ftz.f32 e0, r0;
+ex2.approx.ftz.f32 e1, r1;
+mul.rn.f32 e0, e0, y0;
+mul.rn.f32 e1, e1, y1;
+add.rn.f32 d0, e0, 0f3F800000;
+add.rn.f32 d1, e1, 0f3F800000;
+div.rn.f32 q0, x0, d0;
+div.rn.f32 q1, x1, d1;
+cvt.rn.bf16x2.f32 a, q1, q0;
+shl.b32 j0, a, 16;
+and.b32 j1, a, 0xFFFF0000;
+mov.b32 q0, j0;
+mov.b32 q1, j1;
+shl.b32 u0, $2, 16;
+and.b32 u1, $2, 0xFFFF0000;
+mov.b32 v0, u0;
+mov.b32 v1, u1;
+add.rn.f32 v0, v0, 0f00000000;
+add.rn.f32 v1, v1, 0f00000000;
+mul.rn.f32 m0, q0, v0;
+mul.rn.f32 m1, q1, v1;
+cvt.rn.bf16x2.f32 $0, m1, m0;
+}""")
+
+
+@triton.jit
+def _silu_mul2(g, u):
+    return tl.inline_asm_elementwise(_SILU_MUL2, "=r,r,r", [g, u], dtype=tl.bfloat16, is_pure=True, pack=2)
+
+
 @triton.jit
 def exactlin_silu_mul_quant(gu_ptr, h_ptr, q_ptr, s_ptr, M, I, stride_gu, stride_h, stride_q, BLOCK_M: tl.constexpr,
-                            BLOCK_K: tl.constexpr):
-    # vLLM's act_and_mul_kernel<bf16, silu_kernel> on each row's [gate | up], then exactlin_quant_rows on its bf16 output
+                            BLOCK_K: tl.constexpr, EVEN: tl.constexpr):
+    # vLLM's act_and_mul_kernel<bf16, silu_kernel> on each row's [gate | up], then exactlin_quant_rows on its bf16 output.
+    # EVEN: I is BLOCK_K and M a multiple of BLOCK_M, so nothing is masked; a masked element's h is +0 (silu(+0) * (+0 + 0)),
+    # which leaves its row's max as it was.
     rows = tl.program_id(0).to(tl.int64) * BLOCK_M + tl.arange(0, BLOCK_M)
     offs = tl.arange(0, BLOCK_K)
-    live = rows < M
-    mask = live[:, None] & (offs < I)[None, :]
     g_ptrs = gu_ptr + rows[:, None] * stride_gu + offs[None, :]
-    g = tl.load(g_ptrs, mask=mask, other=0.0).to(tl.float32)
-    u = tl.load(g_ptrs + I, mask=mask, other=0.0).to(tl.float32)
-    # bf16(g / (1.0f + expf(-g * alpha))) at alpha 1 (expf is libdevice's, the division div.rn), then
-    # bf16(that * (u + beta)) at beta 0, where u + 0.0f only turns -0 into +0
-    act = tl.div_rn(g, 1.0 + libdevice.exp(-g)).to(tl.bfloat16).to(tl.float32)
-    h = (act * tl.where(u == 0.0, 0.0, u)).to(tl.bfloat16)
-    tl.store(h_ptr + rows[:, None] * stride_h + offs[None, :], h, mask=mask)
-    q, s = _quant_tile(tl.where(mask, h.to(tl.float32), 0.0), BLOCK_M, BLOCK_K)
-    tl.store(q_ptr + rows[:, None] * stride_q + offs[None, :], q, mask=mask)
-    tl.store(s_ptr + rows, s, mask=live)
+    h_ptrs = h_ptr + rows[:, None] * stride_h + offs[None, :]
+    q_ptrs = q_ptr + rows[:, None] * stride_q + offs[None, :]
+    if EVEN:
+        h = _silu_mul2(tl.load(g_ptrs), tl.load(g_ptrs + I))
+        tl.store(h_ptrs, h)
+        q, s = _quant_tile(h.to(tl.float32), BLOCK_M, BLOCK_K)
+        tl.store(q_ptrs, q)
+        tl.store(s_ptr + rows, s)
+    else:
+        live = rows < M
+        mask = live[:, None] & (offs < I)[None, :]
+        h = _silu_mul2(tl.load(g_ptrs, mask=mask, other=0.0), tl.load(g_ptrs + I, mask=mask, other=0.0))
+        tl.store(h_ptrs, h, mask=mask)
+        q, s = _quant_tile(h.to(tl.float32), BLOCK_M, BLOCK_K)
+        tl.store(q_ptrs, q, mask=mask)
+        tl.store(s_ptr + rows, s, mask=live)
 
 
 @triton.jit
@@ -422,14 +491,18 @@ def quant_rows(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: in
                                                      BLOCK_K=triton.next_power_of_2(k), num_warps=warps, **OPTS)
 
 
-#: num_warps of a fused producer called at a row width `PRODUCER_WARPS` doesn't list (the engine doesn't fuse there)
+#: num_warps of a fused producer called where `PRODUCER_WARPS` has no plan (the engine doesn't fuse there)
 FUSE_FALLBACK = {"norm": 1, "silu": 16}
 
 
-def producer_warps(kind: str, k: int, sm: str | None = None) -> int | None:
-    """num_warps of the fused producer `kind` ("norm", "silu") on rows of k on `sm` (default: the current device's), where
-    it is measured faster than vLLM's op and the quantizer apart (`PRODUCER_WARPS`), else None."""
-    return PRODUCER_WARPS.get(sm or arch(), {}).get(kind, {}).get(k)
+def producer_warps(kind: str, m: int, k: int, sm: str | None = None) -> int | None:
+    """num_warps of the fused producer `kind` ("norm", "silu") on m rows of k on `sm` (default: the current device's):
+    `PRODUCER_WARPS`' first plan for k whose M floor m reaches, where it is measured faster than vLLM's op and the
+    quantizer apart, else None."""
+    for floor, warps in PRODUCER_WARPS.get(sm or arch(), {}).get(kind, {}).get(k, ()):
+        if m >= floor:
+            return warps
+    return None
 
 
 def silu_mul_quant(gu: torch.Tensor, h: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: int | None = None):
@@ -439,9 +512,10 @@ def silu_mul_quant(gu: torch.Tensor, h: torch.Tensor, xq: torch.Tensor, s: torch
     assert gu.dtype == h.dtype == torch.bfloat16 and gu.shape == (m, 2 * i) and gu.stride(1) == 1 and h.stride(1) == 1
     assert xq.dtype == torch.int8 and xq.shape == h.shape and xq.stride(1) == 1
     assert s.dtype == torch.float32 and s.numel() == m and s.is_contiguous()
-    warps = num_warps or producer_warps("silu", i, arch(h.device.index)) or FUSE_FALLBACK["silu"]
+    warps = num_warps or producer_warps("silu", m, i, arch(h.device.index)) or FUSE_FALLBACK["silu"]
+    bk = triton.next_power_of_2(i)
     return exactlin_silu_mul_quant[(m,)](gu, h, xq, s, m, i, gu.stride(0), h.stride(0), xq.stride(0), BLOCK_M=1,
-                                         BLOCK_K=triton.next_power_of_2(i), num_warps=warps, **OPTS)
+                                         BLOCK_K=bk, EVEN=i == bk, num_warps=warps, **OPTS)
 
 
 def norm_threads(h: int) -> int | None:
@@ -463,7 +537,7 @@ def add_norm_quant(x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor
     assert x.stride(1) == 1 and residual.stride(1) == 1 and weight.is_contiguous()
     assert xq.dtype == torch.int8 and xq.shape == x.shape and xq.stride(1) == 1
     assert s.dtype == torch.float32 and s.numel() == m and s.is_contiguous()
-    warps = num_warps or producer_warps("norm", h, arch(x.device.index)) or FUSE_FALLBACK["norm"]
+    warps = num_warps or producer_warps("norm", m, h, arch(x.device.index)) or FUSE_FALLBACK["norm"]
     return exactlin_add_norm_quant[(m,)](x, residual, weight, xq, s, h, eps, x.stride(0), residual.stride(0), xq.stride(0),
                                          NT=nt, R=triton.next_power_of_2(triton.cdiv(h, nt)), num_warps=warps, **OPTS)
 
