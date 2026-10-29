@@ -161,7 +161,10 @@ names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold la
 owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
 `pr:{n}@{head}`). No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
-conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
+conflicting or ejected PR's owner gets one handoff per head. A head whose `lean-audit.json`, merged onto `next` by
+`tools/verity/lean/merge.py`, drops a `shape.inline` premise or a `shape.frozen` key that `next`'s unchanged statements still need
+is refused at the mark (`Preflight`) and left off `next` by the sync, naming each entry: restore it verbatim from `next` in a
+lock-only commit (`queue.lock_drops`). `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
