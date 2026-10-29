@@ -190,7 +190,9 @@ def coin_plan(later: int, coin_steps: int) -> list[bool]:
 def a2c_point(design: dict, lay: dict, w: int, calls: list, m: int, reg: float) -> dict | None:
     """A8 under model P at a point, N-RED's count (nred_round3.at_scale) in expectation: each kept entry-step saves a
     word at reg units, one pointer a row-step is charged anyway, over the stock MACs m k n. Per step type the adversary
-    uses the cancelling lane only where it gains."""
+    uses the cancelling lane only where it gains. For blc1a / blc4a also N-ADAPT's walk: at CopyGrain's chunks on a
+    small tile's runs, and, for reference, at one word if a one-word copy were free (each entry's later increments
+    are a walk of about the 8-bit row coin's spread), which only copy-floor excludes."""
     dists = step_dists(design, lay, w)
     if dists is None:
         return None
@@ -209,6 +211,9 @@ def a2c_point(design: dict, lay: dict, w: int, calls: list, m: int, reg: float) 
     if design["kind"] in ("blc1a", "blc4a") and lay["lane_add"]["fill_row_coin_bits"]:
         out["walk_share"] = walk_share(design, lay, calls, m, reg, window=True)
         out["walk_share_without_window_coin"] = walk_share(design, lay, calls, m, reg, window=False)
+        out["walk_share_grain1_free_copies"] = sum(
+            reg * m * n * walk_revisits(c["later"], lay["lane_add"]["fill_row_coin_bits"])
+            for k, n, c in calls) / sum(m * k * n for k, n, _ in calls)
     return out
 
 
@@ -754,7 +759,8 @@ def closing_lines(res: dict, label: str, cl: dict) -> list[str]:
              + "; committed words' coin rms "
              + ", ".join(f"K {k_}: {v:.1f}" for k_, v in p["word_noise_rms_lsb_by_k"].items())
              + f"; A2c model P {p['a2c']['model_p_share']:.3%} (p* {p['a2c']['pstar']:.5f}), walk "
-             f"{p['a2c']['walk_share']:.3%} ({p['a2c']['walk_share_without_window_coin']:.3%} without the window coin)")
+             f"{p['a2c']['walk_share']:.3%} ({p['a2c']['walk_share_without_window_coin']:.3%} without the window coin; "
+             f"{p['a2c']['walk_share_grain1_free_copies']:.2%} at one word if a one-word copy were free)")
         if t2:
             s += (f"; T2 {t2['gpu_400g']['t2']:.2f} (lead {t2['lead_judged']:.2f}), arrival 400G "
                   f"{t2['gpu_400g']['t2_arrival'][0]:.2f}-{t2['gpu_400g']['t2_arrival'][1]:.2f}, 100G "
