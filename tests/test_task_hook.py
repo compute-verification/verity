@@ -106,7 +106,7 @@ def test_each_verdict_is_logged_without_the_prompt(tmp_path):
 @pytest.mark.parametrize("tool", ["save_issue", "save_comment", "save_status_update", "create_attachment"])
 def test_a_cloud_agents_linear_write_offered_directly_as_an_mcp_tool_is_refused_too(tmp_path, tool):
     """An agent offered the connector's tools directly calls them as `MCP:<tool>` with no namespace: issues created that way
-    showed Daniel as their creator though the dynamic-tool refusal was in place."""
+    showed the connector's user as their creator though the dynamic-tool refusal was in place."""
     a = answer(tmp_path, WORKER, {"title": "x", "team": "INF"}, f"MCP:{tool}")
     assert a["permission"] == "deny" and f"`{tool}`" in a["agent_message"] and "research msg ask --as ME" in a["agent_message"]
     assert not (tmp_path / "task.jsonl").exists()
