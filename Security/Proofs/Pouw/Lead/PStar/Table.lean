@@ -194,7 +194,8 @@ theorem sum_tableHits_le (he : L.e = 7) (htile : L.tile = 64) (hm : L.m = 16 * L
   calc (128 : ℚ) * H
       ≤ 128 * ((L.rowBlocks * L.colBlocks * L.S : ℚ) * ((2 * L.mem + 1) * Fintype.card (Coins L)) / 2 ^ 100) :=
         mul_le_mul_of_nonneg_left hH (by norm_num)
-    _ = Fintype.card (Coins L) * ((L.rowBlocks * L.colBlocks * 128 : ℚ) * (L.S * (2 * L.mem + 1 : ℚ) / 2 ^ 100)) := by
+    _ = Fintype.card (Coins L) *
+          ((L.rowBlocks * L.colBlocks * 128 : ℚ) * (L.S * (2 * L.mem + 1 : ℚ) / 2 ^ 100)) := by
         ring
 
 end Memory
