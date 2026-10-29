@@ -17,7 +17,8 @@ Words (`family`): the lead's zero-data words w_t = x(i, j) + R_t(i) + C_t(class(
 (COUNTER's `lead:rot` and NOISE's lead words), COUNTER's with x = 0 (`counter_x0`: the per-cell offset is the prover's
 when it is data rather than a live coin), the lead's words with random data, and on-chip noise that no split
 reproduces: `operand` (each step's increment a GEMM of fresh s8 noise operands, k 32) and `cell` (an i.i.d. 32-bit
-increment a cell a step). On-chip noise rides the data lanes, so its stock is the whole MMA.
+increment a cell a step). On-chip noise rides the data lanes, so its stock is the whole MMA. A `_inc` family feeds the
+k-steps' increments c_t in place of the words, for a MAC function acc ← F(acc, c_t; k) applied every k-step.
 
 Attacks, each computing S itself and checked bit for bit against honest's:
 
@@ -467,6 +468,23 @@ def d_brw32x(W, k):
     return brw([w ^ k[f"c{t}"] for t, w in enumerate(W)], tau_pows(k["tau"], len(W)))
 
 
+def d_add(W, k):
+    S = W[0]
+    for w in W[1:]:
+        S = S + w
+    return S
+
+
+def d_rho(kind):
+    """acc ← ρ(acc) + c a k-step, the words the k-steps' increments c: `rot` rotl(acc, 13), `xs` acc ⊕ (acc ≫ 15)."""
+    def f(W, k):
+        S = k["s0"]
+        for c in W:
+            S = (S.rotl(13, 32) if kind == "rot" else S ^ (S >> 15)) + c
+        return S
+    return f
+
+
 def d_poly31(W, k):
     S = W[0].embed(P31)
     for w in W[1:]:
@@ -528,6 +546,16 @@ DESIGNS = {
     "hw_gf32": dict(fn=d_gf32, hw=True, coins={"tau": (M32, u32coin)}, Ts=(16, 64),
                     what="sketch unit: Horner in GF(2³²), XOR entry"),
     "hw_brw31": dict(fn=d_brw31, hw=True, coins={"tau": (P31, fp)}, Ts=(15, 16, 31), what="sketch unit: BRW mod 2³¹−1"),
+    "hw_brw32": dict(fn=d_brw32, hw=True, coins={"tau": (M32, odd32)}, Ts=(15, 16, 31),
+                     what="sketch unit: BRW over Z/2³² (SI-THEORY's thin in-unit fold)"),
+    "hw_xor": dict(fn=d_xor, hw=True, coins={}, Ts=(16, 64), what="sketch unit: ⊕ of the words (thin, XOR3)"),
+    "hw_add": dict(fn=d_add, hw=True, coins={}, Ts=(16, 64), what="sketch unit: Σ of the words mod 2³² (thin, IADD3)"),
+    "hw_poly": dict(fn=d_poly, hw=True, coins={"tau": (M32, odd32)}, Ts=(16, 64),
+                    what="MAC: acc ← τ·acc + c a k-step (linear ρ), on increments"),
+    "hw_rho_rot": dict(fn=d_rho("rot"), hw=True, coins={"s0": (M32, u32coin)}, Ts=(16, 64),
+                       what="MAC: acc ← rotl(acc, 13) + c a k-step, on increments"),
+    "hw_rho_xs": dict(fn=d_rho("xs"), hw=True, coins={"s0": (M32, u32coin)}, Ts=(16, 64),
+                      what="MAC: acc ← (acc ⊕ acc ≫ 15) + c a k-step, on increments"),
 }
 
 
@@ -685,7 +713,27 @@ def signed32(a):
     return np.where(a >= 1 << 31, a - (1 << 32), a)
 
 
+def increments(p):
+    """The k-steps' increments in place of the accumulator words: c_t = w_t − w_(t−1), w_(−1) = x, so x drops out and
+    the split is ΔR + ΔC."""
+    def diff(a, first):
+        return (a - np.concatenate([first, a[..., :-1]], axis=-1)) & np.uint64(M32 - 1)
+    q = dict(p)
+    x = p.get("d0", np.zeros(p["W"].shape[:2], np.uint64))
+    q["W"] = diff(p["W"], x[:, :, None])
+    if "R" in p:
+        q["R"], q["C"] = diff(p["R"], np.zeros_like(p["R"][:, :1])), diff(p["C"], np.zeros_like(p["C"][..., :1]))
+        q["d0"] = np.zeros_like(x)
+        q["separable"] = p["separable"] and bool(np.array_equal(
+            (q["R"][:, None, :] + q["C"][q["cls"]]) & np.uint64(M32 - 1), q["W"]))
+    return q
+
+
 def family(name, hc, cs, S, seed=0):
+    if name.endswith("_inc"):
+        p = increments(family(name[:-4], hc, cs, S, seed))
+        p["family"] = name
+        return p
     if name in ("counter", "counter_x0", "counter_random"):
         p = nh.counter_parts(hc, "lead:rot", "random" if name == "counter_random" else "zero", S, seed=seed)
         p["rows_a_class"] = TILE / len(p["C"])
@@ -1081,10 +1129,11 @@ def main() -> int:
 
     S = int(opts.get("steps", 64))
     names = opts["designs"].split(",") if "designs" in opts else list(DESIGNS)
-    fams = opts.get("families", "counter,counter_x0,noise,counter_random,operand,cell").split(",")
+    fams = opts.get("families", "counter,counter_x0,noise,counter_random,operand,cell,counter_inc,noise_inc,"
+                                "operand_inc").split(",")
     parts = {f: family(f, hc, cs, S) for f in fams}
     for f, p in parts.items():
-        if f in ("counter", "counter_x0", "noise"):
+        if f in ("counter", "counter_x0", "noise", "counter_inc", "noise_inc"):
             checks.check(f"{f}: the split reproduces the words", p["separable"])
 
     g = np.random.default_rng(5)
