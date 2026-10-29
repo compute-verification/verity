@@ -5,7 +5,7 @@ A table is one op's output at one step, one row a sequence slot (`tables`, from 
 order the step writes them); a quantizer's table also has the f32 scale as each row's word. Backends:
 
     slots       kernels' commit call (``benchmarks/torch_gpu/commit_slots``): ``hm96-sha512/row/v2``
-                rows under hiding leaves in ``frame-v3-sha512`` trees, step -> slot -> unit -> rows, so a drawn unit opens
+                rows under hiding leaves in ``frame-v3-sha512`` trees, step -> slot -> unit -> rows, so a sampled proof block opens
                 by replaying its own request. `layout` lays a slot's tables out as the map's units: one group a step group,
                 one commit unit a proof block, its rows that unit's output rows (`plan.Units`: a coordinate's 16-bit row, a
                 chunk row, a quantizer chunk's codes row and the scale), so a gather's rows are its parts' bytes again.

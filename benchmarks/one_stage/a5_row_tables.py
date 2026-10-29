@@ -4,8 +4,8 @@ over two engine steps, under the stratified law), its run ``<ROOT>/rank0``, comm
 (`pipeline.serving_rows._read_s8` on the fixture's served values, `ml.windows.rows.commit` under the step roots
 serving records before each step's coin, `row_tables.step_roots`) and audited by `a5.audit` as rank 0 of a one-rank
 step on the auditor's challenger's coins, a local session on ``ROOT``: the window's `service.Stream` (its ``row-table``
-Value a tree over roots of row-seg leaves), `tables.check_row_tables` against those step roots before the draw, M0's
-`--zk` session of each drawn chunk behind the firewall, the Lean verifier of record, the stream's outcome and the
+Value a tree over roots of row-seg leaves), `tables.check_row_tables` against those step roots before the sample, M0's
+`--zk` session of each drawn chunk behind the ZK server, the Lean verifier of record, the stream's outcome and the
 negatives. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time context),
 so this window stands in for one. Each chunk's public file is a shared-row file, which Lean's verifier of record covers
 only with its own registered reads: a5 gives each drawn chunk's verify the reads of its one table (`a5`'s module

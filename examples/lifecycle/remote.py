@@ -1,7 +1,7 @@
 """The remote composite (`verity/remote/v0`: sampled proofs and PoUW) on the lifecycle, as a deployment of two parties.
 
 The developer serves its own load, so nothing the auditor runs sees the system's I/O: the developer reports what it served
-through its declared advice, and the audit holds each declaration block to its committed values. Work it leaves out of
+through its advice, and the audit holds each execution block to its committed values. Work it leaves out of
 its declarations is not credited and not detected (`unreported` is accepted): the credit is a lower bound on the work done.
 """
 

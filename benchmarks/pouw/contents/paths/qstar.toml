@@ -1,4 +1,0 @@
-order = 210
-path = "`qstar/`"
-runs_on = "RTX PRO 6000"
-what = "q*, the fewest scalar instructions a correct fresh Dither word costs: dp4a, bit planes, Four Russians in shared memory and in L2, each against IMMA, alone and beside it in one kernel or two streams; and design A's bit×bit words and x, the bit-sliced binary product's cost per 4,096 bit-products (AND + POPC, Harley–Seal, mixed) (`qstar.cu`); `count.py` counts each timed loop's instructions a word and gates its pinned histogram (`expect.json`); `run.sh` is the `research run` job"

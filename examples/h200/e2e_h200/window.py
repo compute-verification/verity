@@ -36,7 +36,7 @@ read opens the widest row holding its bytes and an output the narrowest, so the 
 `Window.bundle` gives the same pieces as the drawn-block bundle's ``locate`` returns them (a ``Read``'s
 commit unit and rank, the port word it fills and its bytes in the row; ``n`` a ``Position``; an output that is one whole
 row as ``(unit, rank, None)``). Binding a port's words to the segments of rows opened under the step roots is that bundle's
-and C-Flock's statement's: the windows wiring reads a row whole, and a port here is pieces of rows.
+and Flock's statement's: the windows wiring reads a row whole, and a port here is pieces of rows.
 """
 from __future__ import annotations
 

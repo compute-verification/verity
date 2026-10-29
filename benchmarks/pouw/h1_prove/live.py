@@ -1,4 +1,4 @@
-"""live.py: a served H1 window's live units (VLLM-85's ``live@<s>``, `circuit.live`) through sampled proofs, the
+"""live.py: a served H1 window's live units (``live@<s>``, `circuit.live`) through sampled proofs, the
 verifier's side and the prover's staging; `live.sh` proves them by C-Flock --zk and has Lean verify them.
 
     python live.py prepare --live DIR --work W

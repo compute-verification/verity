@@ -1,7 +1,7 @@
 """network-e2e: network accounting end to end on a served model, as one report. A certifier-serve rehearsal's runs (the
 network certifier in front of a served endpoint, `certifier_serve.py`), N2's verdict of record on every link-window and
 the link's network verdict (`LinkWindows.verify` through the proof system's stream, `network_verdict`), every
-link-window's head checks proved by C-Flock ``prove --zk`` behind the Lean firewall and held by Lean (`n2_zk.prove`), and
+link-window's head checks proved by Flock ``prove --zk`` behind the Lean ZK server and held by Lean (`n2_zk.prove`), and
 the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json` and `report.md` under ``--out``; then
 the chain's stages (`chain`): the advice's bits per link-window, the prove path's audit and the negatives
 (`negatives.py`), and what is still stubbed.
@@ -13,7 +13,7 @@ the chain's stages (`chain`): the advice's bits per link-window, the prove path'
     python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
                                          [--endpoint-run DIR] [certifier_serve.py rehearse's options]
 
-`run.sh` is the runner (`verity bench network_e2e`): it builds the binaries and the firewall's frame as `n2_zk.sh` does,
+`run.sh` is the runner (`verity bench network_e2e`): it builds the binaries and the ZK server's frame as `n2_zk.sh` does,
 then runs this. The README says what the report establishes and what it doesn't.
 
 * **The runs** (`collect`). Each ``--from`` SRC is a rehearsal (`certifier_serve.py rehearse --out`'s directory: its
@@ -33,8 +33,8 @@ then runs this. The README says what the report establishes and what it doesn't.
   proved (adopted) carries honest's, tampered's and extra's verdicts on the roots it proved under; any other run's are
   taken here.
 * **Proofs** (planned profile). `n2_zk.prove` on the honest run and, when its plan has the honest run's windows, the
-  extra run: each member (honest egress and ingress, tampered egress, extra egress) one statement of n units, drawn by the
-  verifier's Lean, proved ``--zk`` behind the firewall and held by Lean; the verifier opens each unit's ``pub`` row to its
+  extra run: each member (honest egress and ingress, tampered egress, extra egress) one statement of n units, sampled by the
+  verifier's Lean, proved ``--zk`` behind the ZK server and held by Lean; the verifier opens each unit's ``pub`` row to its
   own copy and its verdict row. With ``--proofs`` they are a run's of its own, adopted (`adopt`: each proved unit's
   certificate digest must be these runs'), so that what n2_zk's own run proved isn't proved again. Not yet on `n2_zk` as
   it now proves: one member a round, each link-window decided by its proof of N2's registered unit; `prove` refuses and
@@ -46,8 +46,8 @@ then runs this. The README says what the report establishes and what it doesn't.
   the driver had run by its end (``max_child_rss_gb``, `RUSAGE_CHILDREN`, which only grows: n2_zk proves the honest
   members first). Beside them, n2_zk's cost pass (``summary.json``'s ``cost``): one honest link-window proved alone, per
   end (`alone`); and the driver's own peak (the unit's lowering).
-* **Varied traffic** (``rehearse --traffic varied``, passed on): N2's profile is ``advice``, on which N2 gives no
-  verdict without N2's advised counts, so nothing is proved and the rehearsal's own check (certified, the certified I/O,
+* **Varied traffic** (``rehearse --traffic varied``, passed on): N2's profile is ``advice``, whose egress counts no N2
+  unit holds, so N2 gives no verdict, nothing is proved and the rehearsal's own check (certified, the certified I/O,
   audit, salt) is each run's verdict, late, extra and drop its negatives (`CLAIM_ADVICE`).
 * **The chain** (`stages_of`, `chain`'s docstring): ``--advice`` and ``--serving-config``, or ``--endpoint-run``, the
   endpoint's records, whose own advice for the honest run's Commit windows `verity-vllm advice` writes
@@ -121,7 +121,7 @@ CLAIM = {
         "proofs ran, the head checks (NetworkHeadCheck_v2: the head's hiding opening under the registered root, its "
         "fields, its counts against the profile, and its record digest under the certifier's salt against the digest "
         "its certificate signs) of every honest link-window at both ends, and the egress head checks of the tampered "
-        "run and, when its plan has the honest run's windows, the extra run, were proved by C-Flock prove --zk behind "
+        "run and, when its plan has the honest run's windows, the extra run, were proved by Flock prove --zk behind "
         "the Lean firewall and held by Lean verify --zk, the verifier opening only each unit's public row and its "
         "verdict row. Late's head checks are not proved: N2 alone refuses it."),
     "not_covered": [
@@ -156,9 +156,9 @@ CLAIM = {
 
 CLAIM_ADVICE = {
     "statement": (
-        "Certified I/O only, no counts. On the advice profile (varied traffic) N2 gives no verdict: N2's advised "
-        "counts (NetworkAdvisedCounts_v1), which derive each window's egress counts from its ingress head and the "
-        "advice, aren't run here. A report marked OK establishes, for the rehearsal's one link: every link-window's "
+        "Certified I/O only, no counts. On the advice profile (varied traffic) N2 gives no verdict: each window's "
+        "egress counts derive from its ingress head and the advice, which no N2 unit holds. A report marked OK "
+        "establishes, for the rehearsal's one link: every link-window's "
         "records certified under the certifier's key and session; the certified I/O well formed (every request an id "
         "request, every egress frame an id event of a request released by its bucket, every response ending at its "
         "first EOS or at its max_tokens); the certifier's audit of both records and the salt audit accepted (the "
@@ -171,7 +171,7 @@ CLAIM_ADVICE = {
         "the link-windows token changed. The advice's sections say what was checked of the advice, and the prove "
         "path's what it proved."),
     "not_covered": [
-        "N2's counts: no link-window's head is held to a profile or to the advice (N2's advised counts), and nothing "
+        "N2's counts: no link-window's head is held to a profile or to the advice, and nothing "
         "is proved by n2_zk, whose head check is the planned profile's; a tampered head is not refused.",
         "The tie (`io_tie`): no proof holds the certified tokens to the committed values. The tie is `io_tie`'s "
         "reference in the clear on stand-ins: the certified frames under fake salts in place of the warden's cells, and "
@@ -576,7 +576,7 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
 
 
 def alone(summary: dict, d: Path | None) -> dict | None:
-    """n2_zk's cost pass, per end: one honest link-window proved by itself (a session whose verifier draws one unit of
+    """n2_zk's cost pass, per end: one honest link-window proved by itself (a session whose verifier samples one unit of
     the n staged), with its prover and Lean seconds, its two proofs' bytes (read from ``d``, n2_zk's output, when
     there) and the peak, as the report's sessions."""
     out = {}
@@ -595,7 +595,9 @@ def alone(summary: dict, d: Path | None) -> dict | None:
 
 def negative(run: dict, rows: list[dict], name: str | None = None, tie: dict | None = None) -> dict:
     """Whether negative ``name`` was refused, and by what: N2's network verdict and its link-windows' verdicts of
-    record, the rehearsal's own check, and where proved, its head checks' proved verdicts (each proof held by Lean).
+    record (a link-window the certifier certified nothing of, `Issuer.refused`, has no verdict of its own, and the
+    network verdict refuses it unregistered), the rehearsal's own check, and where proved, its head checks' proved
+    verdicts (each proof held by Lean).
     Refused only when every one of them that ran refuses it. Where N2 gives no verdict (the advice profile), the check
     refuses it only by its own violation (`OWN_CODE`): a refusal for another reason is not this negative's. A pending
     negative (`PENDING`) is refused by the I/O tie alone (``tie``, its row of `chain.tie`) when its verdict is the one it
@@ -608,11 +610,14 @@ def negative(run: dict, rows: list[dict], name: str | None = None, tie: dict | N
         return {"refused": refused, "ran": ran, "by": [_tie_by(tie)] if refused else [], "own_code": None,
                 "check_codes": None if check is None else check.get("codes"), "n2_refused_windows": [],
                 "proved_refused_windows": [], "failed_parts": {}, "proved": False, "proofs_held": None, "tie": tie}
-    n2 = [r["window"] for r in rows if r["n2"] == "refuse"]
+    n2 = sorted({r["window"] for r in rows if r["n2"] == "refuse"} | set(run["network"].get("refused") or ()))
     decided = run["network"]["accepted"] is not None
     own = None if decided else OWN_CODE.get(name)
     check_refused = check is not None and check["verdict"] == "refused"
     by_own = check_refused and own is not None and own in (check.get("codes") or ())
+    issuer = sorted({w for *_, w in run.get("issuer_refused") or ()})
+    if issuer:
+        by.append(f"the certifier (Issuer.refused; link-windows {issuer})")
     if run["network"]["accepted"] is False and n2:
         by.append(f"N2 (network verdict; link-windows {n2})")
     if check_refused and (decided or by_own):
@@ -676,7 +681,7 @@ def markdown(r: dict) -> str:
                      f"{', '.join(f'{e}: {v['held']}' for e, v in held.items()) if held else '—'} |")
     lines += ["", "## Link-windows", ""]
     if not r["link_windows"]:
-        lines.append("No N2 verdict on the advice profile (N2's advised counts aren't run here): the rehearsal's own "
+        lines.append("No N2 verdict on the advice profile (no N2 unit holds its egress counts): the rehearsal's own "
                      "check is the verdict.")
     else:
         lines += ["N2: the verdict of record (host). Proof: each end's head check proved --zk and held by Lean, accept "
@@ -795,8 +800,7 @@ def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dic
         log(f"prove path: adopted from {', '.join(map(str, srcs))}, ok {out['prove_path']['ok']}, bound "
             f"{out['prove_path']['bound']}")
     if (plan.get("occupancy") or {}).get("kind") == chain.ADVICE:
-        out["negatives"] = {"ran": False, "why": "its rows take N2's verdict, which the advice profile has none of "
-                                                 "without N2's advised counts"}
+        out["negatives"] = {"ran": False, "why": "its rows take N2's verdict, which the advice profile has none of"}
         out["tie"] = chain.tie({s: r["dir"] for s, r in runs.items()}, getattr(args, "endpoint_dir", None),
                                Path(args.ids) if args.ids else None, getattr(args, "endpoint_why", None))
         log(f"I/O tie: {', '.join(f'{s} {x['verdict']} (ok {x['ok']})' for s, x in out['tie']['runs'].items())}"
@@ -843,9 +847,8 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
         advised = profile == chain.ADVICE
         log(f"runs: {', '.join(f'{s} {r['dir']}' for s, r in runs.items())}; N2's profile {profile}")
         if advised:
-            proofs = {"ran": False, "why": "not run: on the advice profile the counts are N2's advised counts "
-                                           "(NetworkAdvisedCounts_v1), which this report doesn't run, and n2_zk "
-                                           "proves the planned profile's head check"}
+            proofs = {"ran": False, "why": "not run: on the advice profile no N2 unit holds the egress counts, and "
+                                           "n2_zk proves the planned profile's head check"}
         elif profile != "planned":
             proofs = {"ran": False, "why": f"not run: the {profile} profile's count check is NetworkServedCounts_v1, "
                                            "which n2_zk doesn't prove"}
@@ -901,7 +904,7 @@ def main(argv=None) -> int:
                                                                   "127.0.0.1:PORT, through an ssh forward (/etc/vy/peers)")
     ap.add_argument("--out", default=os.environ.get("OUT"), help="the report's directory (default $OUT)")
     ap.add_argument("--work", help="scratch, kept (default: a temporary directory, removed)")
-    ap.add_argument("--bin", help="C-Flock's flock-circuit (run.sh builds it)")
+    ap.add_argument("--bin", help="Flock's flock-circuit (run.sh builds it)")
     ap.add_argument("--lean", help="the Lean flock-verify (run.sh builds it)")
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     how = ap.add_mutually_exclusive_group()
@@ -924,7 +927,7 @@ def main(argv=None) -> int:
                          "record, first_draw, ref}}, registration the verity-vllm advice directory it was registered in "
                          "when not the report's own, record the serving run's own run directory, first_draw ISO 8601 "
                          "UTC; when is read off the record's out/advice_windows.jsonl stamp, else the registration's "
-                         "file time: at serve time if before its draw and no later than the next window's close (the "
+                         "file time: at serve time if before its sample and no later than the next window's close (the "
                          "session's end, per the record, for its last window)")
     ap.add_argument("--ids", metavar="FILE", help="each request's sampled ids by its advice id (the endpoint's "
                                                   "requests.jsonl: user, output_ids), for the I/O tie's verdict on the "

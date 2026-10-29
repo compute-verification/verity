@@ -93,7 +93,7 @@ LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_by
                "key_sha512": "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744"
                              "a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22"}
 #: The leaves of a statement whose trees need no hiding, a recursive session's inner statement (`verity_flock.rec_live`): its
-#: firewall commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
+#: ZK server commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
 #: SHA-512 digest itself (``HashKind::Sha512``, the Lean verifier's ``MerkleScheme.sha512``) and an opening carries no salt.
 #: ZK off only: ``flock-circuit --zk`` refuses it (``live/src/circuit.rs``'s ``leaf_scheme_plain`` is the same object).
 LEAF_SCHEME_PLAIN = {"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
@@ -938,7 +938,7 @@ def write_public_inputs(text: str, words: dict, n: int, path) -> None:
 
 def public_file(head: dict, public: bytes) -> bytes:
     """The verifier's own ``flock-circuit-inputs`` file of header ``head`` (``rows`` false) and its public bytes, its header
-    line as C-Flock writes it (`Instances::public_file`: compact, key-sorted, UTF-8), so the file's SHA-512 is the prover's
+    line as Flock writes it (`Instances::public_file`: compact, key-sorted, UTF-8), so the file's SHA-512 is the prover's
     record's ``public_file_sha512``."""
     line = json.dumps(dict(head, rows=False), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return line.encode() + b"\n" + public
@@ -980,7 +980,7 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     end with every instance's public words (u16 LE, instance-major, the ports in order): ``public_words``
     (``{port: (n, words)}``), else the set's.
 
-    ``identifier``: the header's ``identifier`` (PROTOCOL.md §16.10), a JSON object C-Flock does not read, on which canonical JSON
+    ``identifier``: the header's ``identifier`` (PROTOCOL.md §16.10), a JSON object Flock does not read, on which canonical JSON
     is RFC 8785 (``verity.ml.circuits.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
     (``--identifier F``).
 
@@ -1114,7 +1114,7 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
 
 
 def lowering_for_set(input_set) -> IL.Lowering:
-    """The template's C-Flock lowering for a set (``lowering_for_set`` when the template's statement depends on the set)."""
+    """The template's Flock lowering for a set (``lowering_for_set`` when the template's statement depends on the set)."""
     from verity_numerical.bench import lowerings
 
     mod = lowerings.registry("C-Flock").module(input_set.subcircuit.template.id)
