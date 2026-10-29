@@ -7,8 +7,7 @@
 # (research run --cwd source); CPU only. Outputs under out/: host.txt, stage.json, statement.txt, serve.log, prove.txt and
 # prove.err, live.json (the LIVE record), lean-honest.log and lean-root.log (each its VERDICT line), fixture.txt.
 # ZK=0 is the plain session instead (no --zk anywhere): a stratified sample of K units, Lean's own (`flock-verify draw
-# --stratified K` on the stage's program and partition, on COINS=FILE, the challenger's bytes: the verifier has none of
-# its own, so ZK=0 without COINS refuses), served from its file and verified with
+# --stratified K` on the stage's program and partition, the OS's coins), served from its file and verified with
 # `--stratified K --coins os` (FC_COINS=os: every round's coins the OS's); Lean also verifies it without --registered
 # (lean-none.log, refused). Its fixture adds vectors/: honest, root and none, each the session with its case.json (the live
 # server's verdict, from serve's index.jsonl) and a registered.json for the two negatives (agree.py's per-session reads;
