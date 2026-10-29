@@ -24,7 +24,6 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundStmt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyStmt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousV2
 import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousSeg
 import Proofs.Flock.Soundness.Discharge.ZkHidden.BindInst
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundInst
