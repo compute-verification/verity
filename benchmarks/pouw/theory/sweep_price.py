@@ -10,7 +10,7 @@ costs `reg`. Under DistinctWrites each committed, pairwise-distinct, noise-depen
 
 - final word: each dot product's last word is A·Bᵀ, free advice until the final-word lemma (32/K at L 32);
 - uncommitted steps: r·(1 − reg/L) between words committed every L, unless the k32 semantics make a word force its L/32
-  steps;
+  steps; then what the best-known fast scheme (Strassen-Winograd, `price.fast_matmul`) saves on them;
 - forming: the formed operand entries at reg/4 each, unless committed under `commit-forced` or charged by the counting
   lemma;
 - noise derivation: the noise entries derived from XOF bytes (one LOP3 a packed register, CORE-SMELL C28), the same way;
@@ -164,6 +164,25 @@ def calls(card: dict, point: str) -> list[dict]:
             for nm, n, K, cnt, frac in model["matmuls"]]
 
 
+def fast_saving(card: dict, L: int, m: float, n: float) -> tuple[float, int]:
+    """The best-known scheme's saving against the k32 counting, as a share of a segment's mnL tensor units, and its levels.
+
+    ℓ levels of a <2,2,2; t> scheme run t^ℓ products of depth L/2^ℓ (whole k32 steps) for (t/8)^ℓ of the tensor units,
+    and pay its output-block additions (registers at `reg`) and operand-block additions (entries at reg/4) at each level:
+    saving_ℓ = 1 − (t/8)^ℓ − (out·reg/(4L) + (op/2)·(reg/epr)/4·(1/m + 1/n)) · Σ_{i<ℓ} (t/4)^i, with `op` the
+    operand-block additions of both sides, each of a quarter of its operand."""
+    f = card["price"]["fast_matmul"]
+    reg, epr = card["price"]["reg"]["value"], card["price"]["entries_per_reg"]["value"]
+    t, best = f["products"], (0.0, 0)
+    per_level = f["output_adds"] * reg / (4 * L) + f["operand_adds"] / 2 * (reg / epr) / 4 * (1 / m + 1 / n)
+    for lv in range(1, f["max_levels"] + 1):
+        if L / 2 ** lv < 32 or min(m, n) / 2 ** lv < 1:
+            break
+        s = 1 - (t / 8) ** lv - per_level * sum((t / 4) ** i for i in range(lv))
+        best = max(best, (s, lv))
+    return best
+
+
 def call_units(card: dict, name: str, m: float, n: float, K: float, lenient: bool = False) -> dict:
     """One call's T1 terms in W1 units, the credited hashing's bytes and the T2 counts."""
     d = card["design"][name]
@@ -190,6 +209,9 @@ def call_units(card: dict, name: str, m: float, n: float, K: float, lenient: boo
         raise Refused(["commit.L unpriced"])
     if (r * K) % L:
         raise Refused([f"{r:g}K = {r * K:g} is not a whole number of words at L {L}"])
+    if L >= r * K:
+        raise Refused([f"a word every {L} steps commits only the final word of a {r * K:g}-deep dot product, and the "
+                       f"final word isn't noise-dependent"])
     stock = m * n * K
     words = r * K / L
     u_word = reg * L / 32 if steps else reg
@@ -198,6 +220,8 @@ def call_units(card: dict, name: str, m: float, n: float, K: float, lenient: boo
     t = dict.fromkeys(TERMS, 0.0)
     t["final_word"] = m * n * u_word if final_free else 0.0
     t["uncommitted_steps"] = honest_tensor - m * n * words * u_word
+    if steps:
+        t["uncommitted_steps"] += fast_saving(card, L, m, n)[0] * honest_tensor
     committed = set(c.get("operands", []))
     ent = {k: get(k) for k in CLASSES}
     for k, term in CLASSES.items():
@@ -308,9 +332,12 @@ def t2_of(card: dict, point: str, agg: dict, r: float) -> dict:
                    "noised": plain * parts["noised"], "w_side": plain * parts["w_side"] * ry, "f1_coins": coins}
     extra = sum(extra_parts.values())
     hash_ms = agg["hashed_bytes"] / rate * 1e3
+    write_ms = (agg["word_bytes"] + agg["operand_bytes"]) / price["hbm_rate"]["value"] * 1e3
     eng = {e: {"stock_ms": s, "t_H_ms": s + extra + hash_ms, "ratio": (s + extra + hash_ms) / s,
                "hash_share": hash_ms / (s + extra + hash_ms)} for e, s in stock.items()}
-    return {"engines": eng, "judged": max(v["ratio"] for v in eng.values()), "extra_ms": extra, "extra_parts_ms": extra_parts,
+    return {"engines": eng, "judged": max(v["ratio"] for v in eng.values()),
+            "unfused": max((s + extra + hash_ms + write_ms) / s for s in stock.values()), "hbm_write_ms": write_ms,
+            "extra_ms": extra, "extra_parts_ms": extra_parts,
             "hash_ms": hash_ms, "plain_gemm_ms": plain, "matmuls_only": (plain + extra + hash_ms) / plain,
             "without_hashing": max((s + extra) / s for s in stock.values()), "bytes_forward": agg["hashed_bytes"],
             "kind": "estimate on measured parts: " + (pt.get("gemm_source", "") if pt.get("matmul_only") else
@@ -341,6 +368,9 @@ def needs(row: dict) -> list[str]:
     if not row["t2_pass"]:
         out.append(f"T2 {row['t2']['judged']:.1f}x > 100x (hashing {row['t2']['hash_ms']:.1f} ms a forward); "
                    f"{row['hash_bytes_per_mac']:.3f} B of credited hashing a useful MAC")
+    elif row["t2"]["unfused"] > TARGET["t2"]:
+        out.append(f"a committer fused with the GEMM: unfused, writing the committed bytes to HBM first makes T2 "
+                   f"{row['t2']['unfused']:.1f}x")
     if row["t3_worst"] is None:
         out.append(f"T3 unmeasured: {row['t3']['source']}")
     elif not row["t3_pass"]:
@@ -513,7 +543,15 @@ def main() -> int:
 
     swept = [n for n, d in card["design"].items() if d.get("swept")]
     checks.check("the sweep generates every L x committed classes x forming charge, less the counting lemma beside "
-                 "committed X and Y: 4 x 4 x 2 - 8 = 24 designs", len(swept) == 24, f"{len(swept)} swept")
+                 "committed X and Y: 7 x 4 x 2 - 14 = 42 designs", len(swept) == 42, f"{len(swept)} swept")
+    s256, s512 = fast_saving(card, 256, 8192, 8192), fast_saving(card, 512, 8192, 8192)
+    checks.check("Strassen-Winograd saves nothing against the k32 counting at L 256 (1/8 - 56/256 < 0) and 1/8 - 56/512 "
+                 "- 8(2/8192) = 1.37% at L 512, m = n = 8,192",
+                 s256[0] <= 0 and abs(s512[0] - (1 / 8 - 56 / 512 - 16 / 8192)) < 1e-12 and s512[1] == 1,
+                 f"L 256: {s256[0]:.2%}; L 512: {s512[0]:.3%} at {s512[1]} level")
+    k512 = row("t8192", "ncp-k512-xyef")
+    checks.check("so ncp-k512-xyef fails T1 at T 8,192 on its uncommitted steps alone",
+                 not k512["t1_pass"] and k512["terms"]["uncommitted_steps"] > 0.01, f"{k512['t1']:.2%}")
 
     # (3) Refusals: what an unpriced term does.
     for name in ("dither-c", "fresh-u", "accel-d5-d6"):
@@ -560,6 +598,12 @@ def main() -> int:
         d1 = evaluate(card, "ncp-k32-xyef", "t8192", delta=1e-4)
         checks.mutation("a ShaSpeed slack of 0.01% breaks T1 for the all-forced design: hashing's work is 666x stock",
                         not d1["t1_pass"], f"T1 {d1['t1']:.2%}")
+        c = mutated(lambda c: c["price"]["fast_matmul"].__setitem__("products", 8))
+        e = evaluate(c, "ncp-k512-xyef", "t8192")
+        top = ranking(c, "t8192")[0][0]
+        checks.mutation("without the fast scheme's price (8 products, nothing saved) ncp-k512-xyef passes T1 and a "
+                        "design past L 256 tops T 8,192: the term is what keeps them out",
+                        e["t1_pass"] and top["commit"]["L"] > 256, f"T1 {e['t1']:.2%}; top {top['design']}")
         c = mutated(lambda c: c["point"]["t512"].__setitem__("tokens", 16))
         rows16, ref16 = ranking(c, "t512")
         priced = [r["design"] for r in results["t512"]["rows"]]

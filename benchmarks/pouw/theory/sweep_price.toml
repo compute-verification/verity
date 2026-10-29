@@ -46,6 +46,20 @@ unit = "hashed bytes a derived noise entry"
 kind = "arith"
 source = "one XOF byte a noise entry and 64 XOF bytes a 128-byte compression: each entry's coins cost two hashed bytes of credited work under ShaSpeed (the adversary needs the noise to write noise-dependent words)"
 
+[price.fast_matmul]
+products = 7
+output_adds = 7
+operand_adds = 8
+max_levels = 4
+kind = "estimate"
+source = "Strassen-Winograd on 2x2 blocks, the best-known bilinear scheme by additions: 7 products, 7 output-block and 4 + 4 operand-block additions a level. Run on a segment of depth L, it writes each committed word with (7/8)^l of the k32 steps; the k32 counting is charged by it whenever it saves (a lower bound on the adversary's saving, not a proof that nothing saves more)"
+
+[price.hbm_rate]
+value = 4.8e12
+unit = "B/s"
+kind = "estimate"
+source = "the H200's data-sheet HBM3e bandwidth; prices writing the committed bytes to HBM before hashing them (T2's unfused reading only)"
+
 [price.mac_rate_peak]
 value = 9.89e14
 unit = "int8 MAC/s"
@@ -204,7 +218,7 @@ status = "open"
 owner = "SW-SEM"
 requires = ["H32"]
 word_forces_steps = true
-source = "SWEEP.md candidate 2: a tensor instruction writes a k32 partial sum of its operand registers, not any function; with its counting lemma a word committed every L forces L/32 k32 steps. Rank provisional (3, model faithfulness) until SW-SEM rules"
+source = "SWEEP.md candidate 2: a tensor instruction writes a k32 partial sum of its operand registers, not any function; with its counting lemma a word committed every L forces L/32 k32 steps, less what a fast scheme saves (price.fast_matmul: nothing at L <= 256, 1.4% at L 512 and m = n = 8,192). Rank provisional (3, model faithfulness) until SW-SEM rules"
 
 [premise.forming-counting]
 rank = 0
@@ -263,7 +277,7 @@ source = "a control: density without candidate 2"
 # commit-forced, and the counting lemma adds forming-counting (and k32-semantics). Named ncp-k<L>-<classes>[-count].
 [sweep.ncp]
 noise = "ncp"
-L = [32, 64, 128, 256]
+L = [32, 64, 128, 256, 512, 1024, 2048]
 operands = { w = [], ef = ["noise_x", "noise_y"], xy = ["formed_x", "formed_y"], xyef = ["formed_x", "formed_y", "noise_x", "noise_y"] }
 forming = ["none", "count"]
 base = ["H32", "W1", "atomic-call", "final-word-lemma", "ShaSpeed"]
