@@ -15,8 +15,10 @@ for the classes a sparse or outputs-only commitment can take:
   of the credit needs SAK on the cancelling structure (rank 4b), which this script assumes in that table's favour.
 
 **The XOR fold.** σ ← LOP3(σ, S_t, S_{t+1}): every k32 running word folded by a 3-input XOR, one instruction per two
-words, sealed by one SHA-512 per cell (or per row of cells). Its own work meets dataflow-W1's fan-in floor (≥ ⌈(N − 1)/2⌉
-three-source instructions to combine N written words). The checks:
+words, sealed by one SHA-512 per cell (or per row of cells): main's `Accounting.TS.thinFold` with every step XOR3. Its
+own work is ½ a node a word only at three sources; `Accounting.Assumptions.TS.FanIn` counts guards, carry-ins and kept
+destinations, up to 10 sources on sm_90, so `FoldFanIn` credits about ⅑ a word and the rest is a FOLD-OPT premise.
+The checks:
 
 1. A linear fold folds (H12): Σ r_t S_t = Σ_u δ_u R_u with R_u = Σ_{t≥u} r_t, so no word need be written.
 2. The XOR fold is affine over GF(2) in the increments only at bit 0, and isn't additive over ℤ/2³² at all.
@@ -27,7 +29,14 @@ three-source instructions to combine N written words). The checks:
 5. Superoptimizer windows (`fold_routes.single` and `two`): no single modelled sm_90 instruction computes
    x ⊕ (x + y) or x ⊕ (x + y·z) (an add fused into an XOR), and no two-instruction program computes the XOR fold's pair
    step σ ⊕ S_t ⊕ S_{t+1} from (σ, S_{t−1}, δ_t, δ_{t+1}); the honest step is three (two adds and the LOP3), 1.5 a word
-   with the words.
+   with the words. The same at zero data, one s8 coin lane a step, from (σ, S_{t−1}, e_t, f_t, e_{t+1}, f_{t+1}).
+6. The only LOP3 steps that flip on every single input bit are 0x96 and 0x69: an injective bitwise fold is the 3-XOR,
+   so it is affine over GF(2) bit by bit, and acts lane-wise on packed fields.
+7. Packing (SWAR) at zero data: two cells of one row share e_t, so one IMAD on P = (S_A + 2^14) + 2^16 (S_B + 2^14)
+   with F_t = f_A + 2^16 f_B advances both, one predicate-only LOP3 on P & 0x80008000 flags the first step either word
+   leaves [−2^14, 2^14), and the XOR of the packed words decodes exactly to both cells' folds. It pays while the walks
+   stay small; the gain is priced at two detector prices and two overhead counts. The thin fold's IADD3 steps break the
+   bias that makes the decode exact (a biased XOR is not a biased sum).
 
 Run: `python assume.py [--out DIR] [--trials N]`. numpy, and `fold_routes` beside this file.
 """
@@ -43,7 +52,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import fold_routes as FR  # noqa: E402
+import fold_routes as FR
 
 T1 = 0.01
 M32 = 0xFFFFFFFF
@@ -265,6 +274,70 @@ def superopt_zero_data(seed: int) -> dict:
     return out
 
 
+# ---- packing two cells' small zero-data words in one register (SWAR) ------------------------------------------------
+
+def injective_luts() -> list[str]:
+    """The LOP3 steps f(σ, a, b) that flip their output bit whenever any one input bit flips: the only bitwise steps
+    that keep every bit of the state and of both words."""
+    out = []
+    for lut in range(256):
+        def f(s, a, b, lut=lut):
+            return (lut >> (s | a << 1 | b << 2)) & 1
+        bits = (0, 1)
+        if all(f(0, a, b) != f(1, a, b) and f(a, 0, b) != f(a, 1, b) and f(a, b, 0) != f(a, b, 1)
+               for a in bits for b in bits):
+            out.append(f"{lut:#04x}")
+    return out
+
+
+B14 = 1 << 14
+
+
+def swar_decode(field: int, n: int) -> int:
+    """σ over n words from the XOR of their 16-bit fields S + 2^14, each S in [-2^14, 2^14): bits 0..13 are S's low
+    bits, bit 14 is S's sign inverted, and S's bits 14..31 all equal its sign."""
+    neg_odd = (n & 1) ^ ((field >> 14) & 1)
+    return (field & (B14 - 1)) | (0xFFFFC000 if neg_odd else 0)
+
+
+def swar_xor(rng: np.random.Generator, trials: int, T: int) -> dict:
+    """Two cells of one row at zero data (row coin e_t, column coins f_A, f_B): one IMAD on P = (S_A + 2^14) +
+    2^16 (S_B + 2^14) with F_t = f_A + 2^16 f_B advances both, a LOP3 to a predicate on P & 0x80008000 flags the first
+    step either word leaves [-2^14, 2^14), and the XOR of the packed words decodes to both cells' folds."""
+    taus, exact, packed_runs = [], 0, 0
+    for _ in range(trials):
+        e = rng.integers(-128, 128, T)
+        fa, fb = rng.integers(-128, 128, T), rng.integers(-128, 128, T)
+        sa, sb = np.cumsum(e * fa), np.cumsum(e * fb)
+        P, X, tau = B14 + (B14 << 16), 0, 0
+        for t in range(T):
+            P = (P + int(e[t]) * (int(fa[t]) + (int(fb[t]) << 16))) & M32
+            if P & 0x80008000:
+                break
+            X ^= P
+            tau += 1
+        taus.append(tau)
+        if tau:
+            packed_runs += 1
+            ta = tb = 0
+            for t in range(tau):
+                ta ^= int(sa[t]) & M32
+                tb ^= int(sb[t]) & M32
+            exact += swar_decode(X & 0xFFFF, tau) == ta and swar_decode(X >> 16, tau) == tb
+        assert tau == T or max(abs(int(sa[tau])), abs(int(sb[tau]))) >= B14
+    taus = np.array(taus)
+    honest, packed = 96.0, 48.5
+    gain = {f"detector {d}, overhead {o}": float(max(0.0, np.mean(taus) * (honest - packed - d) - 32 * o)
+                                                 / (2 * 31 * T))
+            for d in (0, 32) for o in (8, 12)}
+    return {"T": T, "trials": trials, "mean_packed_words": float(taus.mean()), "max_packed_words": int(taus.max()),
+            "p_ge_10": float(np.mean(taus >= 10)), "decode_exact": exact, "packed_runs": packed_runs,
+            "gap_over_stock": gain,
+            "accounting": "a pair-step: honest-shaped 2 IMAD + 2 half-LOP3 = 96; packed IMAD 32 + half-LOP3 16 + "
+                          "F_t 0.5 (shared by 64 rows) + detector d (a predicate-only LOP3: 0 if W1 charges only "
+                          "registers written, 32 if it charges the issue); unpack and decode o instructions a pair"}
+
+
 # ---- pricing ----------------------------------------------------------------------------------------------------
 
 def price(h_lead=(120.0, 230.0)) -> dict:
@@ -301,6 +374,8 @@ def main() -> int:
         "sign_flip_32": sign_flip_32(rng, args.trials),
         "superopt": superopt_windows(args.seed),
         "superopt_zero_data": superopt_zero_data(args.seed),
+        "injective_luts": injective_luts(),
+        "swar_xor": [swar_xor(rng, args.trials * 10, T) for T in (64, 256)],
         "price": price(),
     }
     fails = []
@@ -324,6 +399,11 @@ def main() -> int:
         fails.append("sanity: the zero-data step should be one IMAD, and the pair step given S_t two instructions")
     if zd["sig^S_t from (sig,Sprev,e1,f1): one instruction"] or zd["pair step from the six: two instructions"]:
         fails.append("the zero-data pair step has a shorter program than three instructions")
+    if res["injective_luts"] != ["0x69", "0x96"]:
+        fails.append(f"injective LOP3 steps: {res['injective_luts']}, expected only the 3-XOR and its complement")
+    for s in res["swar_xor"]:
+        if s["decode_exact"] != s["packed_runs"]:
+            fails.append(f"SWAR decode not exact at T {s['T']}")
     res["fails"] = fails
     text = json.dumps(res, indent=1, default=str)
     if args.out:
