@@ -1310,3 +1310,190 @@ source = "N-PREM interim 1 §2's table (simulated, one draw of two 64-bit keys);
 claims.t512r512 = { coin_branch = 0.00014, tol = 0.00005, kind = "simulated (one draw: about 4 repeated row-steps a call)", source = "N-PREM §2: 0.014% at 512 rows" }
 claims.t8192 = { coin_branch = 0.00148, tol = 0.00005, kind = "simulated (one draw)", source = "N-PREM §2: 0.148% at T 8,192" }
 claims.v4like = { coin_branch = 0.00054, tol = 0.00002, kind = "simulated (one draw)", source = "N-PREM §2: 0.054% on V4 dense T 8,192" }
+
+# N-NOISE interim (note compute-research/20261029T0825Z-report-np-noise §8; its cards art:fa80eef4f9d72ff95abd69a595dea9dd0c1f09cb4a98f6bb381032b1de01b23a,
+# n-noise-cards.toml, priced by noise_space.py on cursor/compute-research-np-noise-9f9a at 7a7e47059f). A design's side
+# is where the noise sits: A (a row lane against public weights in B) or AorB (per linear, the side with fewer owners: B
+# when m > n). Tags: four public owner tags in step 1 against coin-drawn G in [-3, 3]. nz: every later lane 1 + 2^(b+1)·x.
+# Each module's coin branch is priced here with the card's occupancy functions (N-NOISE's cards carried none): an
+# untagged sv4 code collapses on chosen identical owners as ssn-1l's b13s4 does (rep_sum, which reproduces N-NOISE's
+# a1_chosen), side B over n columns of m words each; tags close it under ssn-tag-distinct; sv28's 2^28 step-1 states
+# as rep_bits. Its ssn_1l+tag+nz card is ssn-1l-tag's design (N-RED's fix: the same lanes, tags and later lanes), so it
+# names that module.
+[premise.noise-space-distinct]
+rank = 0
+status = "open"
+owner = "N-LEAN"
+source = "noise_space.py symbolic_check (N-NOISE interim §1): every committed word and C1-formed register of a 2 x 3 x 5-step instance as a multilinear polynomial in the coin bits; a pair is distinct for every input iff the difference has a coin monomial no input zeroes. It decides ssn-distinct's statement for the lane families ssn-distinct's layout lemma doesn't cover: constant offsets (nz), sign-replicate lanes (prmt), owner tags against coin-drawn weights, sv codes, a rotating gap. Checked at that size only; no Lean"
+
+[premise.gap-layout]
+rank = 2
+status = "open"
+owner = "N-KERNEL"
+source = "N-NOISE interim: rgap injections, the noised operand's data layout puts the noise byte at a different byte of the step's last register each step (the gap rotates), so one LOP3 with a mask places four steps' bits from one coin word version; a layout fact about the producing epilogue and the GEMM's operand load, unchecked in SASS"
+
+[t3.nn-b1-sv4]
+models = ["llama-3.2-1b"]
+ctx2k = "?"
+ctx8k = "?"
+kind = "unmeasured"
+source = "N-NOISE: served noise of ssn-1l-b1-v1's width-1 family (lanes 0 or -1, the sv4 code's mean |c|^2 below b13s4's): std 5.9-6.0 units at K 8,192 against ssn-1l-b1-v1's 6.58 (noise_space.py); unmeasured"
+
+[t3.nn-tag-std17]
+models = ["llama-3.2-1b"]
+ctx2k = "?"
+ctx8k = "?"
+kind = "unmeasured"
+source = "N-NOISE: served noise with owner tags kept in the output (A4): std 13-18 units at K 8,192 (noise_space.py), above SW-PPL's width-1 runs (6-9) and below its b4 runs (38-75, +0.17-0.26% at 8K); unmeasured"
+
+[t3.nn-rawS-epi]
+models = ["llama-3.2-1b"]
+ctx2k = "?"
+ctx8k = "?"
+kind = "unmeasured"
+source = "N-NOISE: only the sv4 code part is served (std 2.82 units at K 8,192); the raw bytes' row-common sum is subtracted in the epilogue; unmeasured"
+
+[N.nn-prmt-sv4]
+title = "prmt: PRMT's sign replicate places each step's lane (0 or -1) from one of four sign bits of a shifted coin word version, one shift every four steps; step-1 code the shortest vectors of Z^4"
+fields = { S = "1 + ceil(max(0, K - 28)/31)", nn_ver = "ceil((S - 1)/4)", nn_lw = "ceil(nn_ver/8)", nn_w = "max(nn_lw, ceil((S + 3)/32))", noise_x = "4*m*S", noise_y = "0", derive_extra = "4*m*(nn_ver - nn_lw)", dup = 0, noise_max = 1, n_max = 1e9, s8_ok = 1, branch_rows = "rep_sum(m, 4, S)" }
+coins = { coins = ["4*m*nn_w"] }
+premises = ["ssn-distinct", "ssn-success-set", "noise-space-distinct"]
+t3 = { s8 = "nn-b1-sv4" }
+source = "N-NOISE: noise_space.py A/prmt/sv4/served/s8/noc1/M0: S PRMTs and the code's LOP3 a row (noise_x), a shift a version past each word's first (derive_extra); coin words as ssn-1l's. A1 and A2 open (chosen inputs save 52-100% of stock)"
+
+[N.nn-prmt-sv4.D.served]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "served"
+
+[N.nn-prmt-sv4-aorb]
+title = "prmt on the side with fewer owners per linear (B when m > n)"
+fields = { S = "1 + ceil(max(0, K - 28)/31)", nn_b = "1*(m > n)", nn_ver = "ceil((S - 1)/4)", nn_lw = "ceil(nn_ver/8)", nn_w = "max(nn_lw, ceil((S + 3)/32))", noise_x = "(1 - nn_b)*4*m*S", noise_y = "nn_b*4*n*S", derive_extra = "4*((1 - nn_b)*m + nn_b*n)*(nn_ver - nn_lw)", dup = 0, noise_max = 1, n_max = 1e9, s8_ok = 1, branch_rows = "(1 - nn_b)*rep_sum(m, 4, S) + nn_b*rep_sum(n, 4, S)*m/n" }
+coins = { coins = ["4*((1 - nn_b)*m + nn_b*n)*nn_w"] }
+premises = ["ssn-distinct", "ssn-success-set", "noise-space-distinct"]
+t3 = { s8 = "nn-b1-sv4" }
+source = "N-NOISE: noise_space.py AorB/prmt/sv4/served/s8/noc1/M0 (side B needs B's registers formed in the mainloop each call, kernel assumption b-forming). A1 and A2 open; side B's A1 is identical weight columns (N-RED's A3)"
+
+[N.nn-prmt-sv4-aorb.D.served]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "served"
+
+[N.nn-rot1-sv4-tag-aorb]
+title = "ssn-1l's rotate + LOP3 lanes with tags and nz on the side with fewer owners; no layout assumption"
+fields = { S = "1 + ceil(max(0, K - 24)/31)", nn_b = "1*(m > n)", nn_lw = "ceil((S - 1)/32)", nn_w = "max(nn_lw, ceil((S + 3)/32))", nn_o = "(1 - nn_b)*m + nn_b*n", noise_x = "(1 - nn_b)*4*m*S + nn_b*4*m", noise_y = "nn_b*4*n*S", derive_extra = "4*nn_o*(S - 1 - nn_lw) + nn_b*4*m", dup = 0, noise_max = 3, n_max = 28560, s8_ok = 1, branch_rows = "0" }
+coins = { coins = ["4*nn_o*nn_w + nn_b*4*m"] }
+premises = ["ssn-distinct", "ssn-success-set", "noise-space-distinct", "ssn-tag-distinct", "g-private", "copy-floor"]
+t3 = { s8 = "nn-tag-std17" }
+source = "N-NOISE: noise_space.py AorB/rot1/sv4/served/s8/noc1/M0+tag+nz: S LOP3s and S - 1 - W rotates an owner; side B adds G's register in A (a forced LOP3 and one more write a row, a coin word a row). A1 and A2 closed (a1_chosen 0), by the tags as ssn-1l-tag's"
+
+[N.nn-rot1-sv4-tag-aorb.D.served]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "served"
+
+[N.nn-rgap1-sv4-tag-aorb]
+title = "rotating-gap LOP3 lanes (four steps a coin word version) with tags and nz on the side with fewer owners"
+fields = { S = "1 + ceil(max(0, K - 24)/31)", nn_b = "1*(m > n)", nn_ver = "ceil((S - 1)/4)", nn_lw = "ceil(nn_ver/8)", nn_w = "max(nn_lw, ceil((S + 3)/32))", nn_o = "(1 - nn_b)*m + nn_b*n", noise_x = "(1 - nn_b)*4*m*S + nn_b*4*m", noise_y = "nn_b*4*n*S", derive_extra = "4*nn_o*(nn_ver - nn_lw) + nn_b*4*m", dup = 0, noise_max = 3, n_max = 28560, s8_ok = 1, branch_rows = "0" }
+coins = { coins = ["4*nn_o*nn_w + nn_b*4*m"] }
+premises = ["ssn-distinct", "ssn-success-set", "noise-space-distinct", "gap-layout", "ssn-tag-distinct", "g-private", "copy-floor"]
+t3 = { s8 = "nn-tag-std17" }
+source = "N-NOISE: noise_space.py AorB/rgap1/sv4/served/s8/noc1/M0+tag+nz. A1 and A2 closed (a1_chosen 0), by the tags as ssn-1l-tag's"
+
+[N.nn-rgap1-sv4-tag-aorb.D.served]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "served"
+
+[N.nn-rot2-sv28-aorb]
+title = "a 28-lane step-1 code (the shortest vectors of Z^28) whose 2^28 states close A1 without tags; two bits a byte before each rotate, lanes 1 + 2x and 1 + 4x"
+fields = { S = "1 + ceil(max(0, K - 4)/31)", nn_b = "1*(m > n)", nn_ver = "ceil((S - 1)/2)", nn_lw = "ceil(nn_ver/16)", nn_w = "max(nn_lw, ceil((S + 27)/32))", nn_o = "(1 - nn_b)*m + nn_b*n", noise_x = "(1 - nn_b)*4*m*(S + 6)", noise_y = "nn_b*4*n*(S + 6)", derive_extra = "4*nn_o*(nn_ver - nn_lw + 6)", dup = 0, noise_max = 5, n_max = 1e9, s8_ok = 1, branch_rows = "(1 - nn_b)*rep_bits(m, 28, S) + nn_b*rep_bits(n, 28, S)*m/n" }
+coins = { coins = ["4*nn_o*nn_w"] }
+premises = ["ssn-distinct", "ssn-success-set", "noise-space-distinct"]
+t3 = { s8 = "nn-tag-std17" }
+source = "N-NOISE: noise_space.py AorB/rot2/sv28/served/s8/noc1/M0+nz: the code's 7 registers (7 LOP3s forced, 6 shifts) and S - 1 lane LOP3s plus a rotate every two steps past each word's first. A1 and A2 closed on whole owner vectors; the coin branch priced as 28 + t - 1 uniform bits at step t (rep_bits), 3.4x under N-NOISE's a1_chosen (9.8e-7 at T 8,192), both under 1e-6 of stock"
+
+[N.nn-rot2-sv28-aorb.D.served]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "served"
+
+[N.nn-rawS-sv4-aorb]
+title = "the step's whole lane register is one raw coin word for the call (four bytes, each reused every fourth step), the sv4 code served; its row-common sum folded into the epilogue"
+fields = { S = "1 + ceil(max(0, K - 28)/28)", nn_b = "1*(m > n)", nn_o = "(1 - nn_b)*m + nn_b*n", noise_x = "(1 - nn_b)*4*m", noise_y = "nn_b*4*n", derive_extra = "0", dup = 0, noise_max = 8448, n_max = 1e9, s8_ok = 1 }
+coins = { coins = ["8*nn_o"] }
+premises = ["ssn-distinct", "ssn-success-set", "noise-space-distinct"]
+t3 = { s8 = "nn-rawS-epi" }
+source = "N-NOISE: noise_space.py AorB/rawS/sv4/epi_row/s8/noc1/M0: the code's LOP3 an owner, no other forming (the raw word is the register); two coin words an owner. A2 open: a zero byte repeats a step, chosen zero tails save 1-8% of stock. Its coin branch (a1_chosen 1.0% / 1.8% / 7.8% at 64 / 512 / 8,192 rows) has no closed form in the card's occupancy functions, so the card refuses it until one prices it"
+
+[N.nn-rawS-sv4-aorb.D.epilogue]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "4*nn_o*reg", operand_max = 127, wide_measured = 0 }
+premises = ["epilogue-fold"]
+t3 = "N"
+source = "N-NOISE: the owner-common sum (four bytes times public counts) computed once an owner (four register ops) and subtracted by the epilogue's per-row (per-column for B) FFMA"
+
+[attack.nn-a1-a2-chosen]
+targets = ["N.nn-prmt-sv4", "N.nn-prmt-sv4-aorb", "N.nn-rawS-sv4-aorb"]
+status = "open"
+source = "N-NOISE interim §3 (noise_space.py a1_collapse, reproducing N-RED's A1 on ssn-1l at 18.9 / 66.0 / 100.3% of stock for m 64 / 512 / 8,192): untagged low-entropy codes collapse on chosen identical owners (A1, identical weight columns for side B), and lanes that can be zero repeat on zero tails (A2)"
+
+[attack.nn-sv28-tile]
+targets = ["N.nn-rot2-sv28-aorb"]
+status = "open"
+source = "N-NOISE interim, its first smell: a 4-word tile of an sv code reads only a few of its 28 lanes, so if copies are priced a tile rather than a whole owner vector, sv28's A1 closure likely fails; the tag designs and b13 codes don't have this problem. N-NOISE's interim 2 models tiles"
+
+[card.nn-ssn-1l-tag]
+title = "ssn-1l with N-RED's fix (tags + nonzero lanes), priced: same T1 as ssn-1l, A1/A2 closed"
+origin = "N-NOISE"
+note = "compute-research/20261029T0825Z-report-np-noise"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "noise_space.py A/rot1/b13s4/served/s8/noc1/M0+tag+nz at cursor/compute-research-np-noise-9f9a: N-RED's ssn-1l-tag (its card's module)"
+claims.t512 = { gap = 0.000483, tol = 0.000002, kind = "estimate", source = "noise_space.py, llama_T512_64tok gap" }
+claims.t8192 = { gap = 0.000483, tol = 0.000002, kind = "estimate", source = "noise_space.py, llama_T8192 gap" }
+
+[card.nn-prmt-sv4]
+title = "prmt sign-replicate lanes, side A: 38% under ssn-1l's T1, A1/A2 open"
+origin = "N-NOISE"
+note = "compute-research/20261029T0825Z-report-np-noise"
+modules = { N = "nn-prmt-sv4", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "noise_space.py at cursor/compute-research-np-noise-9f9a"
+claims.t512 = { gap = 0.000297, tol = 0.000002, kind = "estimate", source = "noise_space.py, llama_T512_64tok gap" }
+claims.t8192 = { gap = 0.000297, tol = 0.000002, kind = "estimate", source = "noise_space.py, llama_T8192 gap" }
+
+[card.nn-prmt-sv4-aorb]
+title = "prmt on the cheaper side: the functional reading's premise-free lead at T 8,192, A1/A2 open"
+origin = "N-NOISE"
+note = "compute-research/20261029T0825Z-report-np-noise"
+modules = { N = "nn-prmt-sv4-aorb", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "noise_space.py at cursor/compute-research-np-noise-9f9a"
+claims.t512 = { gap = 0.000297, tol = 0.000002, kind = "estimate", source = "noise_space.py, llama_T512_64tok gap" }
+claims.t8192 = { gap = 0.000112, tol = 0.000002, kind = "estimate", source = "noise_space.py, llama_T8192 gap" }
+
+[card.nn-rot1-sv4-tag-aorb]
+title = "ssn-1l's lanes with tags and nz on the cheaper side: A1/A2 closed, no layout assumption"
+origin = "N-NOISE"
+note = "compute-research/20261029T0825Z-report-np-noise"
+modules = { N = "nn-rot1-sv4-tag-aorb", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "noise_space.py at cursor/compute-research-np-noise-9f9a"
+claims.t512 = { gap = 0.000479, tol = 0.000002, kind = "estimate", source = "noise_space.py, llama_T512_64tok gap" }
+claims.t8192 = { gap = 0.000183, tol = 0.000002, kind = "estimate", source = "noise_space.py, llama_T8192 gap" }
+
+[card.nn-rgap1-sv4-tag-aorb]
+title = "rotating-gap lanes with tags and nz on the cheaper side: A1/A2 closed, the premise-free T1 lead at fair coins"
+origin = "N-NOISE"
+note = "compute-research/20261029T0825Z-report-np-noise"
+modules = { N = "nn-rgap1-sv4-tag-aorb", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "noise_space.py at cursor/compute-research-np-noise-9f9a"
+claims.t512 = { gap = 0.000297, tol = 0.000002, kind = "estimate", source = "noise_space.py, llama_T512_64tok gap" }
+claims.t8192 = { gap = 0.000115, tol = 0.000002, kind = "estimate", source = "noise_space.py, llama_T8192 gap" }
+
+[card.nn-rot2-sv28-aorb]
+title = "a 28-bit step-1 code instead of tags: A1/A2 closed with no tags and no layout assumption"
+origin = "N-NOISE"
+note = "compute-research/20261029T0825Z-report-np-noise"
+modules = { N = "nn-rot2-sv28-aorb", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "noise_space.py at cursor/compute-research-np-noise-9f9a"
+claims.t512 = { gap = 0.000384, tol = 0.000002, kind = "estimate", source = "noise_space.py, llama_T512_64tok gap" }
+claims.t8192 = { gap = 0.000146, tol = 0.000002, kind = "estimate", source = "noise_space.py, llama_T8192 gap" }
+
+[card.nn-rawS-sv4-epi-aorb]
+title = "a raw coin word a call with its row-common sum folded into the epilogue: T1 0.001%, premise epilogue-fold, A2 open; refused while its coin branch is unpriced"
+origin = "N-NOISE"
+note = "compute-research/20261029T0825Z-report-np-noise"
+modules = { N = "nn-rawS-sv4-aorb", D = "epilogue", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "noise_space.py at cursor/compute-research-np-noise-9f9a; its gap 0.00106% / 0.00052% at T 512 64 tokens / T 8,192 (N-NOISE) is not checked here while the card refuses it"

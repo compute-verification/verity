@@ -651,7 +651,10 @@ def ranks(card: dict, ids: list[str]) -> dict:
 
 
 def attacked(card: dict, d: dict) -> list[str]:
-    targets = set(d["premises"]) | {f"{s}.{m}" for s, m in d["choice"].items()} | {d["choice"].get("noise", "")}
+    """The open attacks on the design: a target names a premise, a module as slot.id or axis.id, or a noise by its id."""
+    axis = {s: a for a, s in card["space"]["slots"]}
+    targets = (set(d["premises"]) | {f"{s}.{m}" for s, m in d["choice"].items()}
+               | {f"{axis[s]}.{m}" for s, m in d["choice"].items() if s in axis} | {d["choice"].get("noise", "")})
     return [a for a, v in card.get("attack", {}).items()
             if isinstance(v, dict) and v.get("status") == "open" and targets & set(v.get("targets", []))
             and ("with_any" not in v or targets & set(v["with_any"]))]
@@ -1366,6 +1369,17 @@ def main() -> int:
                  "words), ssn-1l fails T1 at every Llama point and chosen-rows attacks it",
                  all(s1.values()) and all(not r["t1_pass"] and "chosen-rows" in r["attacks"] for v in s1.values() for r in v),
                  ", ".join(f"{p} min branch {min(r['terms']['coin_branch'] for r in v):.1%}" for p, v in s1.items() if v))
+    a1 = {("nn-prmt-sv4", "t512"): 0.188824, ("nn-prmt-sv4", "t512r512"): 0.659851, ("nn-prmt-sv4", "t8192"): 1.00252,
+          ("nn-prmt-sv4-aorb", "t8192"): 0.954505}
+    got = {k: cardrow(*k)["terms"]["coin_branch"] for k in a1}
+    sv28 = [cardrow("nn-rot2-sv28-aorb", p)["terms"]["coin_branch"] for p in ("t512", "t512r512", "t8192")]
+    checks.check("N-NOISE's untagged sv4 codes collapse on chosen identical owners as ssn-1l's code does: the card's "
+                 "coin branch reproduces its a1_chosen at 64, 512 and 8,192 rows, side B on identical weight columns, "
+                 "and sv28's 2^28 states leave under 1e-6; its attack entries, naming modules as N.<id>, attack them",
+                 all(abs(got[k] - w) < 1e-5 for k, w in a1.items()) and max(sv28) < 1e-6
+                 and "nn-a1-a2-chosen" in cardrow("nn-prmt-sv4-aorb")["attacks"]
+                 and "nn-sv28-tile" in cardrow("nn-rot2-sv28-aorb")["attacks"],
+                 ", ".join(f"{k[0]} {k[1]} {v:.4%}" for k, v in got.items()) + f", sv28 {max(sv28):.1e}")
     noisy = [n for n, d in designs.items() if d["choice"]["noise"] in ("nsf", "perm")]
     checks.check("a noise whose words repeat on data (nsf, perm) is refused while its share is unpriced",
                  noisy and all(n in results["t8192"]["refused"] and "dup" in results["t8192"]["refused"][n][0] for n in noisy),
