@@ -698,7 +698,7 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
 
 def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
     """`session_registered` reads the Lean verdict's `registered` finding, only on an accepted verdict of record: a v2 audit
-    passes on what the verifier of record opened, and fails closed on anything else."""
+    passes on what the verifier opened, and fails closed on anything else."""
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
