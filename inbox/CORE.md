@@ -122,3 +122,24 @@ Out:
   Coverage is 78% of a decode token's MACs (QKᵀ and the lm_head are outside).
 - **The served `ncp-v1/v2` is a different design (C3):** depth-16 words, SHAKE / SHA-256, noise reused per epoch, host numpy.
 - **No new H200 measurement yet.** vy-dc-h200-5 has refused SSH since 00:24Z, and infra has been asked.
+
+## 6. H32 measured on the H200 (CORE-H32 final, 02:30Z; note:compute-research/20261029T0230Z-report-core-h32)
+
+- **The H200's table is exactly h100Floor:** h200Measured = {mac nominal, tc 32, ffma 32, int32 32, fp64 32, other 32}.
+  **H32 holds with no slack, and so does FloorTc 32 32.**
+  - Run of record: r20261029-021534-a5a3, 232 probes, all through the SASS gate. Replicate r20261029-014532-a2da agrees within
+    1% on the 140 probes they share. Sparse wgmma and LDS beside wgmma: r20261029-022621-53d7.
+  - The cheapest writer in each class: tc 32.003 (b1 wgmma), ffma 32.255, int32 32.277 (IMAD beside LOP3), fp64 32.003,
+    other 32.279. The H200 reaches 32 in int32 and other, where the H100 sat at 34 and 36.
+  - Lean: `h32H200Measured` and `h200MeasuredFloor` build (r20261029-022112-3656), on cursor/compute-research-core-h32-1e0b.
+- **The time reading (reported, not judged):**
+  - Scalar co-issue writes a register every 21.542 units.
+  - wgmma beside IMAD and FFMA lanes writes one every 23.02, and beside IDP4A lanes every 25.60.
+  - FP64 beside wgmma adds nothing, so the 60% case doesn't occur.
+- **CORE-SMELL C7, answered:**
+  - sparse mma.sp ≥ 48.25; sparse wgmma 32.0 (A from registers) or 36.0 (A from shared);
+  - carry chains 44.7–55.3; uniform datapath 2,048 a word; atomics and reductions 64.6–1,123;
+  - an L2 lookup costs 472 units a word (128 through L1), so the Accel instance's 8 is sound but 59× loose;
+  - m8n8k4 with f16 inputs is not a tensor instruction on sm_90a.
+- **For #1:** the rank-1 premise is now measured on the H200. What's left for T1 (§2a) is the model refinements: charging work
+  done before the noise (the final word) and charging forming. Model faithfulness (rank 3) stays a premise.
