@@ -4,7 +4,6 @@ import Proofs.Flock.Recursive.Fork
 import Proofs.Flock.Recursive.Sound
 import Proofs.Flock.Recursive.Multi
 import Proofs.Flock.Recursive.Finds
-import Proofs.Flock.Recursive.PadsAt
 import Proofs.Flock.Recursive.Flock
 import Proofs.Flock.Recursive.Schedule
 import Proofs.Flock.Recursive.Target
@@ -21,7 +20,6 @@ import Proofs.Flock.Recursive.Compile
 import Proofs.Flock.Recursive.Audit
 import Proofs.Flock.Recursive.SoundExec
 import Proofs.Flock.Recursive.Universal
-import Proofs.Flock.Recursive.UniversalClass
 import Proofs.Flock.Recursive.ExecClass
 import Proofs.Flock.Recursive.Written
 import Proofs.Flock.Recursive.Loads
@@ -35,7 +33,6 @@ import Proofs.Flock.Recursive.Firewall
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.OuterSessionZK
 import Proofs.Flock.Recursive.FirewallRun
-import Proofs.Flock.Recursive.FirewallFollows
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
 import Proofs.Flock.Recursive.HoloExec
@@ -63,6 +60,8 @@ import Proofs.Flock.Recursive.LeafFinder
 import Proofs.Flock.Recursive.ValueChecked
 import Proofs.Flock.Recursive.ValueInner
 import Proofs.Flock.Recursive.PartTie
+import Proofs.Flock.C3.RegLevels.VRows
+import Proofs.Flock.C3.RegLevels.OutRegs
 import Proofs.Flock.Recursive.HPortTie
 import Proofs.Flock.Recursive.KSStatement
 import Proofs.Flock.Recursive.KSNontrivial
@@ -71,6 +70,7 @@ import Proofs.Flock.Recursive.KSV
 import Proofs.Flock.Recursive.KSDeployed
 import Proofs.Flock.Recursive.KSProved
 import Proofs.Flock.Claims.Recursion.DeployedCounts
+import Proofs.Flock.Recursive.InnerRows
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
@@ -92,5 +92,6 @@ honest worker's half left an obligation (`FirewallFollows`), and the recursive a
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof
 (`PublicAuditProof`), the same audit at candidate 3's table (`HoloExec`, its coins `HoloCoins`, its schedule and the
 verifier's map of its records `HoloSched` and `HoloMap`, `AuditC3`, its proof `AuditC3Proof` from the
-pieces under `Proofs.Flock.C3` and gap 2 at the word the prover's runs open, `RegExtract`), and
-`flock-witness`'s checks of recorded sessions, each the model's predicate (`Witness`). -/
+pieces under `Proofs.Flock.C3` and gap 2 at the word the prover's runs open, `RegExtract`),
+`flock-witness`'s checks of recorded sessions, each the model's predicate (`Witness`), and a unit's rows read off the
+inner relation's witness, each the commit string its public file publishes (`InnerRows`). -/

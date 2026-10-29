@@ -1,4 +1,4 @@
-"""A draw's coins from the auditor's challenger (`coins.ChallengerCoins`): the stream is one family's coins opened after
+"""A sample's coins from the auditor's challenger (`coins.ChallengerCoins`): the stream is one family's coins opened after
 the prover's commitment, concatenated in order, extended with the family's next coins, each checked against the
 challenger's commitment before its bytes are used; the verifier replays it from the record (`challenger_stream`,
 `read_reason`) against the roots the challenger's signed log shows. A bad opening, a commitment drawn twice, coins the
@@ -43,7 +43,7 @@ def _reading(coins):
 
 
 def test_the_draw_reads_the_coins_opened_after_the_commitment_in_order():
-    """subset:4 over 678 reads 144 bytes, three coins, opened in one batch after the commitment; the draw is
+    """subset:4 over 678 reads 144 bytes, three coins, opened in one batch after the commitment; the sample is
     `draw_first` on their concatenation, and the verifier replays it from the record."""
     ch, coins = _coins()
     segment = coins.commit(ROOT)
@@ -142,7 +142,7 @@ def test_coins_skipped_after_the_commitment_are_caught_by_the_log():
 
 
 def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, signer):  # noqa: F811
-    """Over a challenger served on loopback (`remote.serve`): the draw opens its coins in one round trip, and the
+    """Over a challenger served on loopback (`remote.serve`): the sample opens its coins in one round trip, and the
     verifier replays it against the commitment and roots it trusts from the challenger's directory and the auditor's
     ledger (`remote.trusted_session`)."""
     host = Host(tmp_path, signer)
@@ -181,20 +181,20 @@ def test_the_proof_system_draws_from_the_challengers_coins_after_the_receipt():
     assert T.read_reason(ch.commitment, segment.to_json(), bytes.fromhex(reg.digest), read, coins.record.roots) is None
 
 
-#: The draws `coin_outcomes` runs: the honest one, then each the Lean run refuses at its select (`coins`).
+#: The samples `coin_outcomes` runs: the honest one, then each the Lean run refuses at its select (`coins`).
 #: `other-window` stays last: a second host serves it.
 COIN_CASES = ["honest", "skipped", "wrong", "before", "missing", "empty", "no-window", "off-main", "other-window"]
 
 
 def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):  # noqa: F811
     """Each of `COIN_CASES`' outcomes over a served challenger: `register(coins, i, window_root)` is case i's stream on
-    the challenger's `coins` and its registration under `window_root`, drawn after the registration's digest, its proof
+    the challenger's `coins` and its registration under `window_root`, sampled after the registration's digest, its proof
     delivered, and its outcome run with the case's evidence (`coins_reason`'s: the challenger key, the auditor's
     ledger, the verifier's copy of main's first-parent history, the host's pins log, the segment and the session's
     files): the honest one; a segment that skips a coin opened after the digest, one with a wrong opening, one that
     adds an earlier registration's coins; no evidence, empty evidence; a registration without its window root; a
     session whose pin isn't on the verifier's copy of main (`pinned_session`); and coins a session of another window
-    released after the same digest. Each session's challenger holds `positions` coins of the draws' family.
+    released after the same digest. Each session's challenger holds `positions` coins of the samples' family.
     -> ({case: (its stream, its outcome, its audit record)}, {case: its segment})."""
     import test_remote
     from test_service import SESSION, _lean
@@ -258,7 +258,7 @@ def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_
     by the verifier (`Run.run`) checks the draw's coins: with their evidence for the registration's window
     (`window_root`) it accepts the honest draw, and it rejects, failing `run` with the select step's `coins`, each of
     `coin_outcomes`' other cases (a prover picking the window among them). A sampler beside the challenger's coins, and
-    evidence for a draw that read none, are refused."""
+    evidence for a sample that read none, are refused."""
     import test_remote
     from test_service import SESSION, _lean, _ports, _record, _stream
 

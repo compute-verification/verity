@@ -65,7 +65,7 @@ def test_faulty_outputs_capacity_is_where_detection_reaches_one_minus_delta():
 def test_faulty_outputs_are_the_same_in_either_regime_and_undetected_unmonitored():
     onsite = operating.faulty(REG, build(REG, "reference-onsite-nvl72"))
     assert operating.faulty(REG, build(REG, "reference-remote-h200")) == onsite
-    # every unit proved: the first faulty step is drawn, so the channel carries J ln(1/δ) (1 + floor) steps' bits
+    # every unit proved: the first faulty step is sampled, so the channel carries J ln(1/δ) (1 + floor) steps' bits
     assert onsite.q == 1 and math.isclose(onsite.capacity, math.log(1e6) * 2 * 16)
     unmonitored = operating.faulty(REG, build(REG, "unmonitored-h200-kimi"))
     assert unmonitored.capacity == math.inf and set(unmonitored.detect.values()) == {0.0}

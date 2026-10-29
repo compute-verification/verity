@@ -2,7 +2,7 @@
 (`verity.ml.circuits.operations.program_data`) sees a table only through its primitive's declaration, so an undeclared one passes it.
 
 A primitive reads a table when its evaluator reaches an indexable constant (one it closes over, or a global or module
-attribute of the code it calls) or a memoized loader that returns anything but a word, or when C-Flock's lowering of it reads
+attribute of the code it calls) or a memoized loader that returns anything but a word, or when Flock's lowering of it reads
 one (`Circuit.lookup` by name, or `fp.lookup`'s table laid into the linear forms). A table read by name must be declared under
 that name; one without a name needs the primitive to declare at least one table. A lifted primitive runs its base primitive's
 evaluator, so it reads, and declares, the base's tables."""
@@ -136,7 +136,7 @@ def _loaded(p: PrimitiveDefinition, loaders: list) -> set[tuple[int, str | None]
 
 
 def _lowered(p: PrimitiveDefinition) -> tuple[set[str], int]:
-    """The tables C-Flock's lowering of `p` reads: the names `Circuit.lookup` reads, and how many tables `fp.lookup` lays in."""
+    """The tables Flock's lowering of `p` reads: the names `Circuit.lookup` reads, and how many tables `fp.lookup` lays in."""
     if not p.params or p.id not in IL.PIECES:
         return set(), 0
     laid: list[int] = []
@@ -192,7 +192,7 @@ def _primitives() -> list[PrimitiveDefinition]:
 
 @pytest.mark.slow
 def test_every_registered_primitive_declares_the_tables_it_reads():
-    """Lowers every primitive C-Flock has a piece for (about 30 s, most of it the Gumbel pieces): a table only the lowering
+    """Lowers every primitive Flock has a piece for (about 30 s, most of it the Gumbel pieces): a table only the lowering
     reads, as SiluMulBf16's is, never shows in its evaluator."""
     prims = _primitives()
     assert len(prims) > 300
