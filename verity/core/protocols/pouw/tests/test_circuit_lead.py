@@ -171,7 +171,7 @@ def test_an_even_lane_coin_is_rejected(K, BLK, step):
     args = c.unit_args(0, 0, BLK)
     k = [name for name, _t in u.params()].index("s")
     assert c.unit_ok(0, 0, BLK) == 1
-    args[k][0, (step * 8 + 3) * 3 + 1] ^= 1
+    args[k][0][(step * 8 + 3) * 3 + 1] ^= 1
     fn = bind(L.PouwLeadTile, K=K, R0=0, C0=0, ROWS=16, COLS=8, BLK=BLK)
     assert int(np.asarray(evaluate_words(fn, *args)).reshape(-1)[0]) == 0
 

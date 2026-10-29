@@ -22,14 +22,14 @@ data lanes past K zero, so Σ_l A′_l B′_l is κ(i, t, j) + coinTerm(i, t, j)
 
 **The unit** `PouwLeadTile_v1{K, R0, C0, ROWS, COLS, BLK}` is the tile of rows R0 .. R0 + 15 and columns C0 .. C0 + 7
 (16 | R0, 8 | C0), ROWS and COLS of them the call's own, over steps [32 BLK, min(32 BLK + 32, S)). Its inputs, every one a
-value, are `Unit.params`: A's ROWS rows and B's COLS rows at the block's K entries; the certifier's coins for the tile in
-the certifier's feed's encodings: its 16 rows' row-word bits at the block (bit q < 4
-a₁[i, q], bit t + 3 b_t[i]; on block 0 bits 0 .. t₁ + 2, after it the block's steps' bits), on block 0 its 8 columns' G
-words (byte q the tag weight G[q, j] as an int8), and the lane-coin words' coin bytes (bytes 0-2 s_t[ℓ, ⌊i/64⌋, j] as
-int8s, by step, column and lane) of its coin tile at the block's steps, at every step on the call's last block; on a block
-after the first the tile's committed words at the step before it; and the block's committed words, each step's 128 at
-Lean's `tileOf` position 8 r + c. They are Layout.lean's `Coins` (g = G + 3, u = (s + 127) / 2) exactly when every G is
-in [-3, 3] and every s odd, which the unit checks. It returns one bit, ok, a proof block's outputs being at most 16 bits:
+value, are `Unit.params`: A's ROWS rows and B's COLS rows at the block's K entries; the tile's coins as the certifier's
+feed encodes them: its 16 rows' row-word bits at the block (bit q < 4 a₁[i, q], bit t + 3 b_t[i]; on block 0 bits
+0 .. t₁ + 2, after it the block's steps' bits), on block 0 its 8 columns' G words (byte q the tag weight G[q, j] as an
+int8), and the coin bytes of its coin tile's lane-coin words (bytes 0-2 s_t[ℓ, ⌊i/64⌋, j] as int8s, by step, column and
+lane) at the block's steps, at every step on the call's last block; on a block after the first the tile's committed words
+at the step before it; and the block's committed words, each step's 128 at Lean's `tileOf` position 8 r + c. They are
+Layout.lean's `Coins` (g = G + 3, u = (s + 127) / 2) exactly when every G is in [-3, 3] and every s odd, which the unit
+checks. It returns one bit, ok, a proof block's outputs being at most 16 bits:
 
 * **each step** (`PouwLeadStep0`, `PouwLeadStep`): ``w_t ≡ w_{t-1} + Σ_l A′_l B′_l (mod 2^32)``, w_{-1} = -β_j the
   public bias, so the committed words are Lean's read as s32 (each fits s32 up to `MAX_K`, Lean's `Tags.word_exact`);
@@ -48,9 +48,9 @@ addend; a padding cell's data lanes are zero, so its step multiplies only step 0
 later step none (`PouwLeadPad`). The coin lanes' term 127 s_t[i mod 2] + s_t[1 - i mod 2] + s_t[2] depends only on the
 row's class and the column, so each step's 16 are `PouwLeadWeigh` once and each cell adds its own. On a tile of the
 call's cells alone a step is `PouwLeadStep0Mma` or `PouwLeadStepMma`, 16 rows (`PouwLeadStep0Row`, `PouwLeadStepRow`) of
-8 cells each, and on a ragged tile its cells' pieces one a cell; the fold's σ is `PouwLeadWeigh` of
-the three lanes' sums, trees of `PouwLeadPairS8` then `PouwLeadPair32` over each lane's coins. Each piece's ANDs are
-`PIECE_ANDS`, which its pin holds, and a unit's are `unit_ands`.
+8 cells each, and on a ragged tile each cell's own piece, batched; the fold's σ is `PouwLeadWeigh` of the three lanes'
+sums, trees of `PouwLeadPairS8` then `PouwLeadPair32` over each lane's coins. Each piece's ANDs are `PIECE_ANDS`, which
+its pin holds, and a unit's are `unit_ands`.
 
 **Refused** (`bind`, `Unit.refuse`): what `Statement.admits_of_caps` doesn't cover, K outside [1, `MAX_K`], rows past
 `MAX_ROWS` or columns past `MAX_COLS`; a tile off the 16 × 8 grid; ROWS outside [1, 16] or COLS outside [1, 8]; and a
@@ -61,8 +61,6 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 from typing import Any
-
-import numpy as np
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, ZERO, add, compress_columns, const_bits, or_reduce, sub
@@ -736,7 +734,7 @@ class Call:
     def unit(self, R0: int, C0: int, BLK: int) -> Unit:
         return Unit(self.K, R0, C0, min(self.rows - R0, TM), min(self.cols - C0, TN), BLK)
 
-    def unit_args(self, R0: int, C0: int, BLK: int, words: list | None = None) -> list[np.ndarray]:
+    def unit_args(self, R0: int, C0: int, BLK: int, words: list | None = None) -> list[list[list[int]]]:
         """The unit's inputs at the tile at row R0 and column C0 and block BLK, `evaluate_words`' arrays of one instance:
         the call's data, its coins in the feed's encodings (row bits, G and s as int8s) and the committed words ``words``
         (`words` by default)."""
@@ -752,7 +750,7 @@ class Call:
                       for ell in range(LANE_COINS)],
                 "prev": [W[u.t0 - 1][i][j] & M32 for i, j in cells] if u.BLK else [],
                 "w": [W[t][i][j] & M32 for t in range(u.t0, u.t1) for i, j in cells]}
-        return [np.array([args[name]], dtype=np.uint64) for name, _t in u.params()]
+        return [[args[name]] for name, _t in u.params()]
 
     def unit_ok(self, R0: int, C0: int, BLK: int, words: list | None = None) -> int:
         """The unit's verdict on the call's committed words ``words`` (`words` by default)."""
@@ -760,4 +758,4 @@ class Call:
 
         u = self.unit(R0, C0, BLK)
         fn = bind(PouwLeadTile, K=u.K, R0=R0, C0=C0, ROWS=u.ROWS, COLS=u.COLS, BLK=BLK)
-        return int(np.asarray(evaluate_words(fn, *self.unit_args(R0, C0, BLK, words))).reshape(-1)[0])
+        return int(evaluate_words(fn, *self.unit_args(R0, C0, BLK, words)).reshape(-1)[0])
