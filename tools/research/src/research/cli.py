@@ -22,6 +22,8 @@
   research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group and its whole cgroup
                                                  # scope, recorded as a manual cancel; 20 s later the runner SIGKILLs what is left (never
                                                  # itself), records the exit and publishes custody.  From any VM: as `inspect` finds runs
+  research move <run-id> [--to MACHINE] | --waiting-over MIN [--dry-run]   # a run still waiting in a pool's line is resent where
+                                                 # it starts sooner (--on auto), then the waiting copy cancelled (research/move.py)
   research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json | --py-spy]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
@@ -1801,6 +1803,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_fetch(rest)
     if cmd == "cancel":
         return cmd_cancel(rest)
+    if cmd == "move":
+        from .move import main as move_main
+
+        return move_main(rest)
     if cmd == "compare":
         return cmd_compare(rest)
     if cmd == "launch-request":
