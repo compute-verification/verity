@@ -1107,12 +1107,12 @@ def main(argv=None) -> int:
                                          "chain and re-decided by network-period check")
     r.add_argument("--server", help="the node the block ran on (the block record's server)")
     r.add_argument("--out", required=True, type=Path)
-    k = sub.add_parser("leak", help="K's terms a link-window and per monitoring period on the warden run")
+    k = sub.add_parser("leak", help="K per monitoring period on the warden run, for the scan's class and draw")
     k.add_argument("--warden-run", required=True, type=Path, help="the fetched warden gate run (its end.json)")
-    k.add_argument("--scan", help="the scan's summary on that run (its sample); default every proof block sampled")
+    k.add_argument("--scan", help="the scan's summary on that run (its draw); default every unit drawn")
+    k.add_argument("--out", required=True, type=Path)
     k.add_argument("--audit", type=Path, help="a served compute audit's window (registration.json and circuit.json), "
                                               "whose free inputs and sampling the served rows read")
-    k.add_argument("--out", required=True, type=Path)
     a = ap.parse_args(argv)
     if a.command == "custody":
         doc = custody(a.gates)
