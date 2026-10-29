@@ -14,9 +14,10 @@ stated here against its functions, for every input.
   determines the id and the position, with no hash premise (`LeafFirstBlock`): two rows at two positions, or in two
   domains, never share their first compression. Two leaves with one digest at two positions, or in two domains, are
   two different framed messages with one SHA-512 digest (`RowBound`). A domain's id binds its binding, owner and count
-  by `Properties.Pouw.Commit.FrameInjective`. Both hold of a row committed as a frame-v3 leaf. Neither holds of a row
-  of an `hm96-sha512` row tree (`RowsDomain.leaf`), whose row digest `HmRow.segDigest` reads the row alone, so equal
-  rows at two positions hash the same messages.
+  by `Properties.Pouw.Commit.FrameInjective`. Both hold of every frame leaf, an `hm96-sha512` row tree's included:
+  `RowsDomain.leaf` puts the row's hm96 leaf in `Domain.leaf` at the row's rank. Neither covers the row's own
+  compressions there: `HmRow.segDigest` reads the row alone, so equal rows at two positions of an `hm96-sha512` tree
+  share those messages.
 * **g-private's order** (`RoundsOpenAfterRoots`): what a live window's round check (`PouwWindow.roundsReason`) accepts
   is one opening per recorded round root, opening `i` the epoch's round coin `i`, opened against the coin commitment
   fixed before the epoch and after the verifier recorded round `i`'s root. Round `i`'s noise key (`roundKey`) is
