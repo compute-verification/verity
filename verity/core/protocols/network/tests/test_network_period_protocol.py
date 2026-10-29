@@ -40,9 +40,9 @@ SEEN: Counter = Counter()
 
 
 #: The changes drawn more often than the rest: each form's accepted periods, its honest one and the rows form's tied
-#: audit drawn in part, and its undecided answers, the only undecided ones.
-WEIGHTS = {"honest": 4, "rows-honest": 4, "rows-tied-partial": 2, "answer-undecided": 2, "audit-undecided": 2,
-           "rows-answer-undecided": 1, "rows-audit-undecided": 1}
+#: audit sampled in part, and its undecided answers, the only undecided ones.
+WEIGHTS = {"honest": 4, "rows-honest": 4, "rows-tied-partial": 2, "rows-tied-sampled": 2, "answer-undecided": 2,
+           "audit-undecided": 2, "rows-answer-undecided": 1, "rows-audit-undecided": 1}
 
 
 @st.composite
@@ -121,9 +121,6 @@ ROWS_REFUSALS = {
     "rows-units": ("not the scan's 2T", "not the scan's 2T"),
     "rows-prog-untied": ("is no compute audit's output",) * 2,
     "rows-prog-unwired": ("is no compute audit's slot entries",) * 2,
-    "rows-tied-undrawn": (PC.UNDRAWN,) * 2,
-    "rows-tied-entries-undrawn": (PC.UNDRAWN,) * 2,
-    "rows-tied-slots-undrawn": (PC.UNDRAWN,) * 2,
     "rows-state-untied": (PC.UNSTATED,) * 2,
 }
 
@@ -133,9 +130,8 @@ def test_the_rows_form_refuses_what_it_must(server):
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
     another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
-    not the entries of an entry template its circuit record registers, an audit a scan's `prog` is tied to with a unit
-    undrawn and no strata, or with its slot entries' or its registered whole templates' stratum drawn in part, and a
-    scan whose state is not its wired audit's `SCAN_STATE`: Lean and the mirror each refuse every one at that check."""
+    not the entries of an entry template its circuit record registers, and a scan whose state is not its wired audit's
+    `SCAN_STATE`: Lean and the mirror each refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -229,11 +225,11 @@ def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
 
 
 def test_a_second_model_needs_no_verifier_change(server, monkeypatch):
-    """The check names no model: it reads each tied audit's entry templates, the vocabulary size and stop ids they
-    bind and the templates drawn whole beside them from the audit's circuit record. A period whose tied audits serve
-    a second model (`PC.MODELS["other"]`: a stand-in under a Definition id the check has never seen, at V = 512 and
-    STOP = [3, 7], beside a stand-in of its own drawn whole) is accepted by Lean with the mirror's public, its audits
-    drawn whole or in part; and refused when tampered, at the wiring (its Program's entry template under its
+    """The check names no model: it reads each tied audit's entry templates and the vocabulary size and stop ids they
+    bind from the audit's circuit record. A period whose tied audits serve a second model (`PC.MODELS["other"]`: a
+    stand-in under a Definition id the check has never seen, at V = 512 and STOP = [3, 7], beside a stand-in of its
+    own scan slots) is accepted by Lean with the mirror's public, its audits sampled whole or in part; and refused
+    when tampered, at the wiring (its Program's entry template under its
     descriptor id with another body, the record registering another closure digest or no entries, or a registration
     that doesn't bind the record) or as parameters (a record whose stop ids or vocabulary size aren't the ones its
     entry template binds, or that is otherwise malformed, `PC.bad_circuits`). A mirror that takes the record's
@@ -308,14 +304,11 @@ def charged(case: dict, public: dict) -> list[int]:
     return [i for i, f in enumerate(public["audits"]) if f["drawn"] < f["units"] and PC._tied_in(audits, windows, i)]
 
 
-def test_only_a_tied_audit_must_draw_its_entries_whole(server, monkeypatch):
-    """K charges an audit a scan's `prog` is tied to its free inputs, and its incorrect proof blocks only as the entries
-    they can set, so the rows form refuses one drawn in part unless its slot entries' templates and those its circuit
-    record registers whole beside them are strata drawn whole (`rows-tied-undrawn`, `rows-tied-entries-undrawn` and
-    `rows-tied-slots-undrawn` above), and only such an audit: over honest rows periods, which the mirror accepts, every
-    tied audit draws all its units and some untied audit fewer, and Lean accepts each such period with the mirror's
-    public; a mirror that skips the draw's refusal accepts what Lean refuses at the draw, and so does one that holds
-    only the slot entries' template whole a period whose registered whole template's stratum is drawn in part."""
+def test_an_untied_audit_sampled_in_part_is_charged_nothing(server):
+    """K charges an audit a scan's `prog` is tied to its free inputs and, sampled in part, its incorrect proof blocks as
+    the entries they can set, and an untied audit nothing: over honest rows periods, which the mirror accepts, every
+    tied audit samples all its proof blocks and some untied audit fewer, none is charged, and Lean accepts each such
+    period with the mirror's public."""
     partial = []
     for n in range(24):
         case = build("rows-honest", n)
@@ -328,44 +321,47 @@ def test_only_a_tied_audit_must_draw_its_entries_whole(server, monkeypatch):
     for case in partial[:3]:
         verdict, got = D.replay(PORT, case, server)
         assert verdict == ACCEPT and json.loads(got)["public"] == reference(case)["public"], got
-    with monkeypatch.context() as mp:
-        mp.setattr(PC, "_draws_whole", lambda audit, reg, prof, f: True)
-        for m in ("rows-tied-undrawn", "rows-tied-entries-undrawn", "rows-tied-slots-undrawn"):
-            for n in range(2):
-                refused_by_lean_alone(build(m, n, small=True), server, PC.UNDRAWN)
-    monkeypatch.setattr(PC.Audit, "whole", property(lambda a: tuple(k for k, _n, _d in a.entries)))
-    for n in range(2):
-        refused_by_lean_alone(build("rows-tied-slots-undrawn", n, small=True), server, PC.UNDRAWN)
 
 
-def test_a_tied_audit_drawn_in_part_is_charged_its_link_windows_entries(server):
-    """A tied audit whose slot entries' templates and those its circuit record registers whole are strata drawn whole
-    may draw the rest in part at its δ (`rows-tied-partial`): Lean accepts the period with the mirror's public, in
-    which that audit's link-window's term charges every entry its at most `b` incorrect proof blocks can set,
-    `faulty_entries` = E_w = lanes · T / every · the entry's bits, when `b ≥ 1` and none when `b = 0`, every other
-    link-window's none, and `eps` holds that audit's δ beside the scans'; the cases' audits serve each model
-    (`PC.MODELS`: `SlotEntry_v1`, `SelectEntry_v1` beside its scan slots, and the second model's entry template beside
-    its own)."""
+#: The tied audits sampled in part: by template, its slot entries' and scan slots' strata whole (`rows-tied-partial`),
+#: or its slot entries' or its scan slots' stratum in part too, and one or two of its proof blocks, the demo's sample.
+SAMPLED_IN_PART = ("rows-tied-partial", "rows-tied-entries-sampled", "rows-tied-slots-sampled", "rows-tied-sampled")
+
+
+def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server):
+    """The scan reads a tied audit only through its `prog`, E_w entry bits a link-window, and its state is the scan's
+    own, so an incorrect proof block of any of the audit's templates, an unsampled entry template's or scan slots' one
+    among them, changes only those bits: the rows form accepts a tied audit at any sample, Lean with the mirror's
+    public, in which that audit's link-windows' terms charge every entry its at most `b` incorrect proof blocks can
+    set, `faulty_entries` = E_w = lanes · T / every · the entry's bits, when `b ≥ 1` and none when `b = 0`, every other
+    link-window's none, and `eps` holds that audit's δ beside the scans'. Each way of sampling in part is charged, the
+    demo's sample at one proof block and at two, and the cases' audits serve each model (`PC.MODELS`: `SlotEntry_v1`,
+    `SelectEntry_v1` beside its scan slots, and the second model's entry template beside its own)."""
     seen = Counter()
-    for n in range(8):
-        case = build("rows-tied-partial", n, small=n % 2 == 0)
-        p, out = PC.params(case["params"]), reference(case)
-        assert out["verdict"] == ACCEPT, (n, out)
-        verdict, got = D.replay(PORT, case, server)
-        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
-        pub, (i,) = out["public"], charged(case, out["public"])
-        s, prog = p.schedule, PC._scan_widths(case["params"]["scan"])[1]
-        assert p.scan.entries == s.lanes * (s.window // s.every) * prog, (n, p.scan)
-        c = json.loads(bytes.fromhex(case["commitment"]))
-        audits = c["audits"]
-        b = pub["audits"][i]["wrong_units"]
-        assert [t["faulty_entries"] for t in pub["scans"]] == [
-            p.scan.entries if b and i in PC._tied_audits(audits, reg) else 0
-            for reg in c["windows"]], (n, pub)
-        assert pub["eps"] == str(sum((Fraction(t["delta"]) for t in pub["scans"]), Fraction(pub["audits"][i]["delta"])))
-        seen["charged" if b else "uncharged"] += 1
-        seen[p.audits[i].registered.templates[0][0].split("{")[0]] += 1
-    assert all(seen[k] for k in ("charged", "uncharged", "SlotEntry_v1", "SelectEntry_v1", "NetworkPeriodEntry_v1")), seen
+    for m in SAMPLED_IN_PART:
+        for n in range(8):
+            case = build(m, n, small=n % 2 == 0)
+            p, out = PC.params(case["params"]), reference(case)
+            assert out["verdict"] == ACCEPT, (m, n, out)
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (m, n, got)
+            pub, (i,) = out["public"], charged(case, out["public"])
+            s, prog = p.schedule, PC._scan_widths(case["params"]["scan"])[1]
+            assert p.scan.entries == s.lanes * (s.window // s.every) * prog, (m, n, p.scan)
+            c = json.loads(bytes.fromhex(case["commitment"]))
+            b = pub["audits"][i]["wrong_units"]
+            assert [t["faulty_entries"] for t in pub["scans"]] == [
+                p.scan.entries if b and i in PC._tied_audits(c["audits"], reg) else 0
+                for reg in c["windows"]], (m, n, pub)
+            assert pub["eps"] == str(sum((Fraction(t["delta"]) for t in pub["scans"]),
+                                         Fraction(pub["audits"][i]["delta"])))
+            seen[m, "charged" if b else "uncharged"] += 1
+            if m == "rows-tied-sampled":
+                seen[f"subset:{pub['audits'][i]['drawn']}"] += 1
+            seen[p.audits[i].registered.templates[0][0].split("{")[0]] += 1
+    want = [(m, "charged") for m in SAMPLED_IN_PART] + [("rows-tied-partial", "uncharged"), "subset:1", "subset:2",
+                                                        "SlotEntry_v1", "SelectEntry_v1", "NetworkPeriodEntry_v1"]
+    assert all(seen[k] for k in want), seen
 
 
 def test_an_output_port_is_a_units_past_o0():
@@ -426,30 +422,6 @@ def test_each_lanes_prog_is_its_own_chunk():
     assert not PC._wired(other, [chunks(2, 2, "E{KO=1}")], scan("r0", "r1"))
     assert not PC._wired(s, [chunks(2, 2, "E{KO=1}", "x")], scan("r0", "r1"))
     assert PC._tied_audits([chunks(2, 2, "E{KO=1}")], reg(("scan/prog1", "r1", 2))) == [0]
-
-
-def test_a_tied_audit_draws_its_registered_templates_whole():
-    """`_draws_whole` is Lean's `drawsWhole` on its `#guard`: a tied audit of 3 units, its slot entries' template "E"
-    of 1 and "S" of 1, which its circuit record "c" registers whole, drawn whole, or with both strata whole and the
-    record its registration's; not with either stratum sampled, the record not its registration's, nor drawn in part
-    with no slot entries' template."""
-    a = PC.Audit(0, 0, "", 3, 0, (("E", 1, ""),), "c", PC.Entries(whole=("S",)))
-
-    def prof(*strata) -> dict:
-        return {"levels": [{"draw": {"law": "stratified", "strata": [{"name": n, "size": z, "k": k}
-                                                                   for n, z, k in strata]}}]}
-
-    def reg(c: str) -> dict:
-        return {"window": {"circuit": c}}
-
-    whole = prof(("E", 1, 1), ("S", 1, 1), ("R", 1, 0))
-    f = PC.Facts(3, 2, Fraction(1, 10), 1)
-    assert PC._draws_whole(a, reg("c"), whole, f)
-    assert PC._draws_whole(a, reg("x"), prof(("E", 1, 0)), PC.Facts(3, 3, Fraction(1, 10), 0))
-    assert not PC._draws_whole(a, reg("c"), prof(("E", 1, 1), ("S", 1, 0), ("R", 1, 1)), f)
-    assert not PC._draws_whole(a, reg("c"), prof(("E", 1, 1), ("R", 2, 1)), f)
-    assert not PC._draws_whole(a, reg("x"), whole, f)
-    assert not PC._draws_whole(dataclasses.replace(a, entries=()), reg("c"), whole, f)
 
 
 def test_the_scan_is_read_off_its_program(server):

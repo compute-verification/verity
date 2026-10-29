@@ -26,7 +26,7 @@ registration holding both rows' roots and domains and each lane j's `scan/prog<j
 of chunk j's entries port of that link-window's slot entries' template, with one member a slot, in its own audit's
 registration and Program, the template its circuit record registers by closure digest, a record the registration binds
 (`_prog_tied`, `_wired`; the record's entries a served model's, `MODELS`: `io_shell.SlotEntry_v1` at its smallest
-circuit-check row, `SelectEntry_v1` at its smallest binding beside a stand-in of its scan slots drawn whole, or a
+circuit-check row, `SelectEntry_v1` at its smallest binding beside a stand-in of its scan slots, or a
 second model's stand-in at another vocabulary size and other stop ids beside a stand-in of its own), and its
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
 stratified or subset draw at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
@@ -36,10 +36,10 @@ the checker form is a bad scan (`bad_scans`), as is each check's negative of wha
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`) and its circuit record (`audit_circuit`),
 and answered with a subset or stratified draw (a work law's) and its bound on incorrect proof blocks, every unit drawn
-for an audit a scan's `prog` is tied to, or its slot entries' templates and those its record registers whole the
-rest in part (`tied-partial`, a stratum a template, `_by_template`; refused: `tied-undrawn`, one such audit drawn
-`subset:k`, k < N, and `tied-entries-undrawn` and `tied-slots-undrawn`, its slot entries' or its registered whole
-templates' stratum in part), and a link-window whose scan's state is not its
+for an audit a scan's `prog` is tied to, or, each accepted and charged, its slot entries' and scan slots' templates
+whole and the rest in part (`tied-partial`, a stratum a template, `_by_template`), one or two of its proof blocks
+sampled (`tied-sampled`, `subset:k`, the demo's sample), or its slot entries' or scan slots' stratum in part too
+(`tied-entries-sampled`, `tied-slots-sampled`), and a link-window whose scan's state is not its
 wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
 at another root or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a
 verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
@@ -117,7 +117,7 @@ AUDIT_CIRCUIT_KEYS = ["circuit", *AUDIT_KEYS]
 #: `circuitFormat`: a window's circuit record's format (`interface.CIRCUIT`)
 CIRCUIT = "verity/window-circuit/v1"
 #: a circuit record's `entries` (`interface.Entries.record`)
-ENTRIES_KEYS = ["stop", "templates", "vocabulary", "whole"]
+ENTRIES_KEYS = ["stop", "templates", "vocabulary"]
 
 # --- the mirror --------------------------------------------------------------------------------------------------------
 
@@ -125,12 +125,11 @@ ENTRIES_KEYS = ["stop", "templates", "vocabulary", "whole"]
 @dataclasses.dataclass(frozen=True)
 class Entries:
     """`Entries`: what a compute audit's circuit record registers of its slot entries (`interface.Entries`): its entry
-    templates, each `(descriptor id, closure digest)`, the vocabulary size and stop ids they bind, and the templates a
-    tied audit draws whole beside them; none without a record."""
+    templates, each `(descriptor id, closure digest)`, and the vocabulary size and stop ids they bind; none without a
+    record."""
     templates: tuple[tuple[str, str], ...] = ()
     vocabulary: int = 0
     stop: tuple[int, ...] = ()
-    whole: tuple[str, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -148,12 +147,6 @@ class Audit:
     entries: tuple[tuple[str, int, str], ...] = ()
     circuit: str = ""
     registered: Entries = Entries()
-
-    @property
-    def whole(self) -> tuple[str, ...]:
-        """`Audit.whole`: the templates a tied audit drawn in part draws whole, its slot entries' and those its circuit
-        record registers whole beside them."""
-        return (*(k for k, _n, _d in self.entries), *self.registered.whole)
 
     def bound_in(self, reg) -> bool:
         """`Audit.boundIn`: the registration's window names the circuit record's SHA-512 as its `circuit`."""
@@ -480,9 +473,9 @@ def _nats(v) -> tuple[int, ...] | None:
 def _entries_of(r, j: dict, program: str, keys: list[str], ctx: str) -> Entries:
     """`entriesOf`: what circuit record `r` registers of its slot entries, checked against the Program `j` (its SHA-512
     `program`, its root's templates `keys`): the record is `CIRCUIT`'s and names that Program; without `entries` it
-    registers none; else its templates, each `[descriptor id, closure digest]`, are at least one, they and its `whole`
-    root templates of the Program, each once, its vocabulary size at least 1, and each entry template binds `STOP` and
-    `V`, where it binds them, to the registered stop ids and vocabulary size."""
+    registers none; else its templates, each `[descriptor id, closure digest]`, are at least one, root templates of the
+    Program, each once, its vocabulary size at least 1, and each entry template binds `STOP` and `V`, where it binds
+    them, to the registered stop ids and vocabulary size."""
     ctx = f"{ctx}: circuit"
     if not isinstance(r, dict) or r.get("format") != CIRCUIT:
         raise D.Reject(f"{ctx}: not a {CIRCUIT} record")
@@ -500,20 +493,17 @@ def _entries_of(r, j: dict, program: str, keys: list[str], ctx: str) -> Entries:
     vocabulary, stop = _nat(e["vocabulary"], f"{ctx}.entries.vocabulary"), _nats(e["stop"])
     if stop is None:
         raise D.Reject(f"{ctx}.entries: stop is not a list of ids")
-    whole = _of(e["whole"], list, f"{ctx}.entries.whole")
-    if not all(isinstance(k, str) for k in whole):
-        raise D.Reject(f"{ctx}.entries.whole: not a list of strings")
     ids = [k for k, _d in ts]
-    if not (ids and vocabulary >= 1 and len(set(ids + whole)) == len(ids + whole) and set(ids + whole) <= set(keys)):
-        raise D.Reject(f"{ctx}.entries: its templates, at least one, and its whole are root templates of the Program, "
-                       "each once, and its vocabulary is at least 1")
+    if not (ids and vocabulary >= 1 and len(set(ids)) == len(ids) and set(ids) <= set(keys)):
+        raise D.Reject(f"{ctx}.entries: its templates, at least one, are root templates of the Program, each once, and "
+                       "its vocabulary is at least 1")
     for k in ids:
         b = j["definitions"][k].get("bindings")
         b = b if isinstance(b, dict) else {}
         if not ((b.get("STOP") is None or _nats(b["STOP"]) == stop)
                 and (b.get("V") is None or (_is_nat(b["V"]) and b["V"] == vocabulary))):
             raise D.Reject(f"{ctx}.entries: {k} binds other stop ids or another vocabulary size than the registered")
-    return Entries(tuple((k, d) for k, d in ts), vocabulary, stop, tuple(whole))
+    return Entries(tuple((k, d) for k, d in ts), vocabulary, stop)
 
 
 def _audit(a, ctx: str) -> Audit:
@@ -1000,26 +990,9 @@ def _facts(what: str, prof: dict, pub) -> Facts:
     return Facts(lv["size"], drawn, prof["delta"], bound)
 
 
-def _strata(prof: dict) -> list[dict]:
-    """`strataOf`: the profile's one level's strata, drawn stratified, else none."""
-    if len(prof["levels"]) != 1:
-        return []
-    draw = prof["levels"][0]["draw"]
-    return draw["strata"] if isinstance(draw, dict) and draw.get("law") == "stratified" else []
-
-
-def _draws_whole(audit: Audit, reg: dict, prof: dict, f: Facts) -> bool:
-    """`drawsWhole`: every unit drawn, or, the Program having slot entries' templates, each of those and of those its
-    circuit record registers whole beside them (`Audit.whole`) a stratum of the profile drawn whole, a record its
-    registration `reg` binds (`Audit.bound_in`)."""
-    return f.drawn == f.units or (bool(audit.entries) and audit.bound_in(reg) and all(
-        any(st["name"] == key and st["k"] == st["size"] for st in _strata(prof)) for key in audit.whole))
-
-
-def _audit_check(i: int, audit: Audit, reg: dict, a: dict, tied: bool = False) -> Facts:
-    """`auditCheck`: the registration names the audit's Program, the answer's units are the Program's, and one tied to
-    a link-window's scan (`_tied_in`, in the rows form) draws every unit or its slot entries' templates and those its
-    registered circuit record names whole (`_draws_whole`)."""
+def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
+    """`auditCheck`: the registration names the audit's Program and the answer's proof blocks are the Program's, at
+    any sample."""
     what = f"audit {i}"
     if reg.get("program") != audit.program:
         raise Finding(REJECT, f"{what}: registration: not its Program")
@@ -1027,17 +1000,11 @@ def _audit_check(i: int, audit: Audit, reg: dict, a: dict, tied: bool = False) -
     f = _facts(what, prof, pub)
     if f.units != audit.units:
         raise Finding(REJECT, f"{what}: profile: {f.units} units, not its Program's {audit.units}")
-    if tied and not _draws_whole(audit, reg, prof, f):
-        raise Finding(REJECT, f"{what}: tied to a link-window's scan with {f.drawn} of its {f.units} units drawn, and "
-                              f"{UNDRAWN}")
     return f
 
 
 #: `wiredCheck`'s refusal, after its window's number.
 UNWIRED = "the scan's prog is no compute audit's slot entries"
-#: `auditCheck`'s refusal of a tied audit, after its number and its draw.
-UNDRAWN = ("not each of its slot entries' templates and those its registered circuit record names whole a stratum drawn "
-           "whole")
 #: `stateCheck`'s refusal, after its window's number.
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
 
@@ -1114,7 +1081,7 @@ def check(p: Params, c: Commitment, e) -> tuple:
     for i, (audit, reg, a) in enumerate(zip(p.audits, c.audits, audits)):
         tied = p.schedule is not None and _tied_in(c.audits, c.windows, i)
         try:
-            facts.append(f := _audit_check(i, audit, reg, a, tied))
+            facts.append(f := _audit_check(i, audit, reg, a))
         except Finding as x:
             findings.append(x)
         else:
@@ -1173,7 +1140,8 @@ EXPECT = {
     "undecided-and-reject": REJECT, "form": REJECT,
     "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
-    "rows-honest": ACCEPT, "rows-tied-partial": ACCEPT,
+    "rows-honest": ACCEPT, "rows-tied-partial": ACCEPT, "rows-tied-sampled": ACCEPT,
+    "rows-tied-entries-sampled": ACCEPT, "rows-tied-slots-sampled": ACCEPT,
     "rows-program": REJECT,
     "rows-cert-missing": REJECT, "rows-cert-swap": REJECT, "rows-cert-fails-link": REJECT,
     "rows-cert-direction": REJECT, "rows-cert-forged": REJECT, "rows-cert-window": REJECT, "rows-cert-session": REJECT,
@@ -1184,8 +1152,7 @@ EXPECT = {
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT, "rows-prog-untied": REJECT,
-    "rows-prog-unwired": REJECT, "rows-tied-undrawn": REJECT, "rows-tied-entries-undrawn": REJECT,
-    "rows-tied-slots-undrawn": REJECT, "rows-state-untied": REJECT,
+    "rows-prog-unwired": REJECT, "rows-state-untied": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
     "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
@@ -1425,8 +1392,8 @@ SCAN_SLOTS_UNIT = _stand_in("ScanSlots", 2, ("NS",), lambda S: S.NS)
 #: descriptor id with another body, committing 2.
 OTHER_ENTRY = _stand_in("NetworkPeriodEntry", 1, tuple(OTHER_BINDING), lambda S: 3)
 RENAMED_OTHER_ENTRY = _stand_in("NetworkPeriodEntry", 1, tuple(OTHER_BINDING))
-#: The second model's template drawn whole beside its entries, committing `NS` bytes.
-OTHER_WHOLE = _stand_in("NetworkPeriodOccupancy", 1, ("NS",), lambda S: S.NS)
+#: The second model's stand-in of its slots' occupancy beside its entries, committing `NS` bytes.
+OTHER_SCAN_SLOTS = _stand_in("NetworkPeriodOccupancy", 1, ("NS",), lambda S: S.NS)
 
 
 @lru_cache(maxsize=None)
@@ -1452,13 +1419,13 @@ def select_entry():
 class Model:
     """A served model's slot entries as its integration registers them (`interface.Entries`): its entry template
     (`entry`, and `renamed`, a template under its descriptor id with another body), the vocabulary size and stop ids
-    its circuit record registers, and the stand-in of the template a tied audit draws whole beside its entries
-    (`whole`, bound by `NS`), if any."""
+    its circuit record registers, and the stand-in of its slots' occupancy beside its entries (`scan_slots`, bound by
+    `NS`), if any."""
     entry: Any
     renamed: Any
     vocabulary: int
     stop: tuple[int, ...]
-    whole: CompositeDefinition | None = None
+    scan_slots: CompositeDefinition | None = None
 
 
 #: The models whose slot entries the cases' tied audits register, each a Definition and binding the check names
@@ -1470,28 +1437,29 @@ MODELS = {
     "select": Model(select_entry, lambda: bind(RENAMED_SELECT_ENTRY, **SELECT_BINDING), SELECT_BINDING["V"],
                     SELECT_BINDING["STOP"], SCAN_SLOTS_UNIT),
     "other": Model(lambda: bind(OTHER_ENTRY, **OTHER_BINDING), lambda: bind(RENAMED_OTHER_ENTRY, **OTHER_BINDING),
-                   OTHER_BINDING["V"], OTHER_BINDING["STOP"], OTHER_WHOLE),
+                   OTHER_BINDING["V"], OTHER_BINDING["STOP"], OTHER_SCAN_SLOTS),
 }
 
 
-def _templates(model: str | None, entries: tuple[int, ...], renamed: bool, whole: tuple[int, ...]) -> tuple[list, list]:
-    """A model's whole templates of `n` members for each `n` of `whole` and its entry template of `n` members for each
-    `n` of `entries` (with `renamed`, another body under its descriptor id), each `(template, n)`; none without one."""
+def _templates(model: str | None, entries: tuple[int, ...], renamed: bool,
+               scan_slots: tuple[int, ...]) -> tuple[list, list]:
+    """A model's scan slots' templates of `n` members for each `n` of `scan_slots` and its entry template of `n` members
+    for each `n` of `entries` (with `renamed`, another body under its descriptor id), each `(template, n)`; none without one."""
     if model is None:
         return [], []
     m = MODELS[model]
     entry = m.renamed() if renamed else m.entry()
-    return [(bind(m.whole, NS=1 + j), n) for j, n in enumerate(whole)], [(entry, n) for n in entries]
+    return [(bind(m.scan_slots, NS=1 + j), n) for j, n in enumerate(scan_slots)], [(entry, n) for n in entries]
 
 
 @lru_cache(maxsize=None)
 def audit_descriptor(units: tuple[tuple[int, int], ...], entries: tuple[int, ...] = (), renamed: bool = False,
-                     model: str | None = None, whole: tuple[int, ...] = ()) -> str:
+                     model: str | None = None, scan_slots: tuple[int, ...] = ()) -> str:
     """The canonical descriptor of a compute audit's Program over the stand-in unit: `n` instances committing `out`
-    bytes each, for each `(n, out)` of `units` (each `out` its own template), then `model`'s whole templates and its
+    bytes each, for each `(n, out)` of `units` (each `out` its own template), then `model`'s scan slots' templates and its
     slot entries' template (`_templates`), one template as the window's population program (`population_program`,
     `TemplateInstances_v1`), several as a mixed one."""
-    held, entry = _templates(model, entries, renamed, whole)
+    held, entry = _templates(model, entries, renamed, scan_slots)
     templates = [(bind(AUDIT_UNIT, OUT=out), n) for n, out in units] + held + entry
     program = population.population_program(*templates[0]) if len(templates) == 1 else \
         population.mixed_population_program(templates)
@@ -1506,27 +1474,25 @@ def entry_digest(model: str) -> str:
     return AN.closure_digest(codec.encode_program(population.population_program(t, 1)), codec.descriptor_id(t))
 
 
-def audit_circuit(desc: dict, model: str | None = None, whole: tuple[int, ...] = ()) -> dict:
+def audit_circuit(desc: dict, model: str | None = None) -> dict:
     """An audit's window circuit record as the period check reads it (`interface.circuit_record`): its format, its
     Program's SHA-512 and, with a `model`, the slot entries it registers (`interface.Entries.record`): the model's entry
-    template at its closure digest (`entry_digest`), its vocabulary size and stop ids, and its whole templates
-    (`_templates`)."""
+    template at its closure digest (`entry_digest`), and its vocabulary size and stop ids."""
     out = {"format": CIRCUIT, "name": "audit", "program": program_sha512(desc)}
     if model is None:
         return out
-    m, (held, _) = MODELS[model], _templates(model, (), False, whole)
+    m = MODELS[model]
     return out | {"entries": {"stop": list(m.stop), "templates": [[codec.descriptor_id(m.entry()), entry_digest(model)]],
-                              "vocabulary": m.vocabulary, "whole": [codec.descriptor_id(t) for t, _n in held]}}
+                              "vocabulary": m.vocabulary}}
 
 
-def _audit_record(rp: random.Random, desc: dict, model: str | None, whole: tuple[int, ...], keep: bool,
-                  unwire: str | None) -> dict | None:
+def _audit_record(rp: random.Random, desc: dict, model: str | None, keep: bool, unwire: str | None) -> dict | None:
     """An audit's circuit record (`audit_circuit`): a tied audit's registers its `model`'s entries, or, as `unwire`
     breaks it, another closure digest for its entry template (`digest`) or no entries (`unregistered`, the record kept
     or none); an untied audit's registers none, kept or none (`keep`)."""
     if model is None or unwire == "unregistered":
         return audit_circuit(desc) if keep else None
-    c = audit_circuit(desc, model, whole)
+    c = audit_circuit(desc, model)
     if unwire == "digest":
         c["entries"]["templates"][0][1] = rp.randbytes(64).hex()
     return c
@@ -1644,14 +1610,16 @@ def _output_entries(rp: random.Random, i: int, ties: dict, nb: int, aimed: int, 
     return out
 
 
-def _by_template(r: random.Random, desc: dict, m: str, circuit: dict) -> tuple[dict, list[dict]]:
+def _by_template(r: random.Random, desc: dict, m: str, model: str,
+                 scan_slots: tuple[int, ...]) -> tuple[dict, list[dict]]:
     """A tied audit's stratified law and its profile's strata, a stratum a template of its Program (`templates_of`):
-    the slot entries' templates and the whole ones its circuit record registers drawn whole and its first other
-    template in part (`tied-partial`), or with its slot entries' (`tied-entries-undrawn`) or its whole
-    (`tied-slots-undrawn`) templates in part too."""
-    ts, e = templates_of(desc), circuit["entries"]
-    entries = tuple(k for k, _d in e["templates"])
-    whole, broken = (*entries, *e["whole"]), {"tied-entries-undrawn": entries, "tied-slots-undrawn": e["whole"]}
+    its `model`'s slot entries' and scan slots' templates (`_templates`) drawn whole and its first other template in
+    part (`tied-partial`), or with its slot entries' (`tied-entries-sampled`) or its scan slots' (`tied-slots-sampled`)
+    templates in part too."""
+    held, entry = _templates(model, (1,), False, scan_slots)
+    entries, slots = (tuple(codec.descriptor_id(t) for t, _n in ts) for ts in (entry, held))
+    ts = templates_of(desc)
+    whole, broken = (*entries, *slots), {"tied-entries-sampled": entries, "tied-slots-sampled": slots}
     fewer = lambda n: r.randint(min(1, n - 1), n - 1)  # noqa: E731
     ks = [fewer(n) if k in broken.get(m, ()) else n if k in whole else r.randint(1, n) for k, _, n in ts]
     j = next(j for j, (k, _, _) in enumerate(ts) if k not in whole)
@@ -1699,12 +1667,12 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     t = r.randrange(1, n_windows) if m == "clock-reused" else r.randrange(n_windows)
     a = r.randrange(max(n_audits, 1))
     # one slot entries' template per audit, its served model's (`MODELS`): one-stage names a template's ports by its
-    # descriptor id; a model that selects draws its slots' occupancy whole beside its entries, as a window circuit's
-    # last position reads it
+    # descriptor id; a model that selects has its slots' occupancy beside its entries, as a window circuit's last
+    # position reads it
     owners = rp.sample(range(n_audits), n_windows) if rows else []
     models = {i: rp.choice(sorted(MODELS)) for i in owners}
-    if m == "tied-slots-undrawn":
-        models[owners[t]] = rp.choice(sorted(k for k, x in MODELS.items() if x.whole is not None))
+    if m == "tied-slots-sampled":
+        models[owners[t]] = rp.choice(sorted(k for k, x in MODELS.items() if x.scan_slots is not None))
     lanes = sched.lanes if rows else 0
     ties = {w: {"audit": i, "key": (k := codec.descriptor_id(MODELS[models[i]].entry())), "chunks": [
                 {"port": entries_port(k, j), "root": rp.randbytes(64).hex(), "domain": rp.randbytes(64).hex()}
@@ -1722,8 +1690,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     hit = rp.randrange(lanes) if lanes else 0
     # the changes that draw the aimed link-window's audit stratified by its templates, its slot entries' and scan slots'
     # whole (`tied-partial`) or one of them in part
-    by_template = m in ("tied-partial", "tied-entries-undrawn", "tied-slots-undrawn")
-    if m == "tied-undrawn" or by_template:
+    by_template = m in ("tied-partial", "tied-entries-sampled", "tied-slots-sampled")
+    if m == "tied-sampled" or by_template:
         a = ties[first + t]["audit"]
     tied = {x["audit"] for x in ties.values()}
     signed = iter(range(1 << 30))
@@ -1929,7 +1897,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     audit_params, audit_regs, audits = [], [], []
     slots = sched.window // sched.every * sched.lanes if rows else 0
     for i in range(n_audits):
-        undrawn = i == a and m == "tied-undrawn"
+        sampled = i == a and m == "tied-sampled"
         partial = i == a and by_template
         entries = tuple(slots + (rp.choice([1, -1]) if slots > 1 else 1)
                         if w == first + t and unwire == "members" else slots
@@ -1937,24 +1905,25 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         stated = rows and i == ties[first + t]["audit"]
         renamed = stated and unwire == "body"
         model = models.get(i)
-        whole = (rp.randint(1, 2),) if model and MODELS[model].whole else ()
-        units = r.randint(2 if undrawn or partial else 1, 40)
+        scan_slots = (rp.randint(1, 2),) if model and MODELS[model].scan_slots else ()
+        units = r.randint(2 if sampled or partial else 1, 40)
         n_prog = units + (r.choice([1, -1]) if units > 1 else 1) if i == a and m == "audit-units" else units
-        units += sum(entries) + sum(whole)
+        units += sum(entries) + sum(scan_slots)
         split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
         outs = r.sample(UNIT_BYTES, 1 if split is None else 2)
         shape = ((n_prog, outs[0]),) if split is None else ((split, outs[0]), (n_prog - split, outs[1]))
-        desc = json.loads(audit_descriptor(shape, entries, renamed, model, whole))
+        desc = json.loads(audit_descriptor(shape, entries, renamed, model, scan_slots))
         prog = program_sha512(desc)
         keep = rp.random() < 0.5
-        circuit = _audit_record(rp, desc, model, whole, keep, unwire if stated else None)
-        k, strata = r.randint(1, units - 1) if undrawn else units if i in tied else r.randint(1, units), None
+        circuit = _audit_record(rp, desc, model, keep, unwire if stated else None)
+        # `tied-sampled`: one or two of the tied audit's proof blocks, the demo's sample
+        k, strata = r.randint(1, min(2, units - 1)) if sampled else units if i in tied else r.randint(1, units), None
         law = {"k": k, "law": "subset"}
-        wrong = r.randint(0, units)
+        wrong = (0 if r.random() < 0.25 else r.randint(1, units)) if sampled else r.randint(0, units)
         if partial:
-            law, strata = _by_template(r, desc, m, circuit)
+            law, strata = _by_template(r, desc, m, model, scan_slots)
             k, wrong = sum(s["k"] for s in strata), 0 if r.random() < 0.25 else r.randint(1, units)
-        elif r.random() < 0.5 and not undrawn:
+        elif r.random() < 0.5 and not sampled:
             cuts = [0, *([r.randint(1, units - 1)] if units > 1 and r.random() < 0.5 else []), units]
             law = {"k": k, "law": "stratified", "strata": [
                 {"k": stratum_k(k, hi - lo, units), "template": f"s{j}", "units": [[lo, hi]]}
@@ -1979,8 +1948,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), prog.upper(), None])
             else:
                 desc = json.loads(audit_descriptor(((n_prog, r.choice([o for o in UNIT_BYTES if o != outs[0]])),),
-                                                   entries, renamed, model, whole))
-                circuit = _audit_record(rp, desc, model, whole, keep, unwire if stated else None)
+                                                   entries, renamed, model, scan_slots))
+                circuit = _audit_record(rp, desc, model, keep, unwire if stated else None)
         if circuit is not None:
             binds = circuit_digest(circuit)
             if stated and unwire == "unbound":
@@ -2072,19 +2041,17 @@ def _bad_params(p: dict, n: int) -> list:
 
 
 def registered_audit(model: str = "other") -> dict:
-    """A compute audit whose circuit record registers `model`'s slot entries beside one whole template, which
-    `auditOf` decodes (`bad_circuits` breaks it)."""
-    desc = json.loads(audit_descriptor(((1, 2),), (2,), False, model, (1,) if MODELS[model].whole else ()))
-    return {"circuit": audit_circuit(desc, model, (1,) if MODELS[model].whole else ()), "free": 0, "program": desc,
-            "steps": 0}
+    """A compute audit whose circuit record registers `model`'s slot entries, its Program holding its scan slots'
+    template beside them, which `auditOf` decodes (`bad_circuits` breaks it)."""
+    desc = json.loads(audit_descriptor(((1, 2),), (2,), False, model, (1,) if MODELS[model].scan_slots else ()))
+    return {"circuit": audit_circuit(desc, model), "free": 0, "program": desc, "steps": 0}
 
 
 def bad_circuits(a: dict) -> list[dict]:
     """Audits whose circuit record `entriesOf` refuses, each one change to audit `a` (`registered_audit`): a record not
     an object, of another format, naming another Program, with a key more or one fewer in its entries, no entry
     template, one not `[descriptor id, closure digest]` or whose digest isn't one, one no root template of the
-    Program, twice, or also whole, a whole template no root template's, a vocabulary size of 0 or none, stop ids not
-    natural numbers, and other stop ids or another vocabulary size than the entry template binds; and an audit with a
+    Program, or twice, a vocabulary size of 0 or none, stop ids not natural numbers, and other stop ids or another vocabulary size than the entry template binds; and an audit with a
     key more beside its record."""
     c = a["circuit"]
     e, (key, d) = c["entries"], c["entries"]["templates"][0]
@@ -2093,10 +2060,10 @@ def bad_circuits(a: dict) -> list[dict]:
             a | {"circuit": {k: v for k, v in c.items() if k != "format"}},
             a | {"circuit": c | {"program": hashlib.sha512(b"another program").hexdigest()}},
             a | {"circuit": c | {"entries": e | {"x": 0}}},
-            a | {"circuit": c | {"entries": {k: v for k, v in e.items() if k != "whole"}}},
+            a | {"circuit": c | {"entries": {k: v for k, v in e.items() if k != "stop"}}},
             one(templates=[]), one(templates=[key]), one(templates=[[key, d, d]]), one(templates=[[key, d.upper()]]),
             one(templates=[[key, d[:-2]]]), one(templates=[["Absent_v1{}", d]]), one(templates=[[key, d], [key, d]]),
-            one(whole=[*e["whole"], key]), one(whole=["Absent_v1{}"]), one(vocabulary=0), one(vocabulary=True),
+            one(vocabulary=0), one(vocabulary=True),
             one(vocabulary="512"), one(stop=[-1]), one(stop=[True]), one(stop="3"),
             one(stop=[*e["stop"], 9]), one(stop=e["stop"][::-1]), one(vocabulary=e["vocabulary"] + 1),
             a | {"x": 0}]

@@ -38,9 +38,9 @@ instances, and each commits its template's return, the outputs it computes that 
 can be wider than a proof unit's 16-bit public output; optionally its window's circuit record (`circuit.json`,
 `verity/window-circuit/v1`, naming the Program), whose SHA-512 the audit's registration binds (its window's `circuit`)
 and whose `entries` (`interface.Entries`, `entriesOf`) are what the integration registers for the scan: the templates
-whose `o0` is a slot's entry, each by descriptor id and closure digest (`closureDigest`), the vocabulary size and stop
-ids each binds (its `V` and its `STOP`, where it binds them), and the templates a tied audit draws whole beside them, so
-the check names no model, template or binding of its own; each network certifier connection's cell cap over the period
+whose `o0` is a slot's entry, each by descriptor id and closure digest (`closureDigest`), and the vocabulary size and
+stop ids each binds (its `V` and its `STOP`, where it binds them), so the check names no model, template or binding of
+its own; each network certifier connection's cell cap over the period
 (`cap_c`), the session's window
 the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
 periods),
@@ -137,13 +137,9 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 * in the rows form, every accepted link-window's scan is at one δ, `PeriodLeakAccepted`'s;
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
   registration's digest, accepted with one level of its Program's units drawn `subset:k` or stratified (a work law's
-  draw is stratified), and its `bound`; in the rows form, an audit tied to a link-window's scan (`tiedIn`: some
-  link-window's `prog` is its output) is refused unless every proof block is sampled (`Σ k = N`) or, its Program
-  having slot entries' templates, each of those and of the templates its circuit record registers whole beside them
-  (`Audit.whole`) is a stratum of its sample sampled whole (`k = n`), the record its registration's (`Audit.boundIn`),
-  the rest sampled at its profile's δ (`drawsWhole`, `Properties.NetworkPeriod.RowsTiedDrawn`): its slots' entries and
-  what they read are then the ones its Programs computed, and `K` charges what its incorrect proof blocks can set of
-  the entries (`faulty_entries`, below);
+  draw is stratified), and its `bound`, at any sample: this is the consistency check (each audit's answer is its
+  registration's, and in the rows form its outputs are the scan's `prog` and its `SCAN_STATE` the scan's state, below),
+  and what a sample in part leaves unproved is in `K` (in the rows form, a tied audit's `faulty_entries` and δ, below);
 * in the rows form, link-window `w`'s scan's Programs' rows are a compute audit's slot entries, a lane a chunk
   (`wired`): for each lane `j`, its `scan/prog<j>` entry names the root and domain of the entries port
   `<descriptor id>/c<j>/o0`, of T / `every` leaves, in the `roots` of one audit's registration, where the descriptor id
@@ -185,12 +181,16 @@ lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote
 In the rows form the terms are `PeriodLeakAccepted`'s over its windows, the link-windows' scans, whose statements read
 the network certifier's rows. A compute audit reads none, so its own terms are in none (it is an acceptance condition),
 but the free inputs of each audit a scan's `prog` is an output of are in that scan's link-window's term: the egress
-renders the audit's outputs, so the bits the prover chose of its inputs are the egress's to leak. A wrong unit of such
-an audit reaches the scan only through the entries its slots' Programs compute (the scan's state is the scan's own,
-`stateTied`). A tied audit is drawn whole, or with its slot entries' and scan slots' strata whole and the rest sampled
-(`drawsWhole`); drawn in part, its at most `b` wrong units can set any of its link-window's entries through the inputs
-its slots' Programs read, so that link-window's term charges every entry bit (`faulty_entries`) when `b ≥ 1`, and its δ
-is in `eps`:
+renders the audit's outputs, so the bits the prover chose of its inputs are the egress's to leak. An incorrect proof
+block of such an audit reaches the scan only as the slot entries the scan reads: the scan reads the audit only through
+its `prog`, one input node of `E_w` entry bits a link-window (`wired`, `scanOf`), and its state is the scan's own
+(`stateTied`). So an incorrect proof block of any template, an entry template's setting its slot's entry, or one
+setting the occupancy and prompts its slots' Programs read, or any other its entries read, changes at most those `E_w`
+bits; the scan reads an entry only where its own state has the slot due and occupied,
+and refuses one there whose `read` is 0, so no `occ` the audit computes drops a request. The check accepts a tied audit
+at any sample; sampled in part, its at most `b` incorrect proof blocks can set any of its link-window's entries, so that
+link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b ≥ 1`, and its δ is in
+`eps`:
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ + Σ δ_i,
      "scans": [terms, …], "schedules": c, "windows": m}
@@ -224,9 +224,9 @@ the clock form's link-window registration's domain; in the rows form, the record
 rows (each signs its salted record, witness) and the scan's statements against its registration (lane `j`'s slot
 entries' input node the value it registers as `scan/prog<j>`), which one-stage's verifier of record checks inside the
 answer, and each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
-`egress_cells`); that a tied audit's entry templates' units read their lanes' occupancy from the units of the templates
-its circuit record registers whole, which read its `SCAN_STATE` (the check reads no wires of an audit's Program, only
-its root templates' ids and closure digests and its circuit record), and that an entry template computes the entry as
+`egress_cells`); that a tied audit's entry templates' units read their lanes' occupancy from its `SCAN_STATE` (the check
+reads no wires of an audit's Program, only its root templates' ids and closure digests and its circuit record), and
+that an entry template computes the entry as
 the scan reads it, which is the registered circuit's, as every guarantee is about the registered circuit; and that the
 audits' answers are the sampled-proofs component's own, which the composition's theorem is to bind.
 -/
@@ -258,14 +258,12 @@ def cellHeader : Nat := 9
 
 /-- What a compute audit's circuit record registers of its slot entries (its `entries`, `interface.Entries`), fixed
 before any coin with the record, whose SHA-512 the audit's registration binds: its entry templates, each by descriptor
-id with its closure digest (`closureDigest`), whose `o0` is a slot's entry; the vocabulary size and the stop ids each of
-them binds (its `V` and its `STOP`, where it binds them); and the templates beside them that a tied audit draws whole.
-An audit without a circuit record registers none. -/
+id with its closure digest (`closureDigest`), whose `o0` is a slot's entry; and the vocabulary size and the stop ids
+each of them binds (its `V` and its `STOP`, where it binds them). An audit without a circuit record registers none. -/
 structure Entries where
   templates : Array (String × String) := #[]
   vocabulary : Nat := 0
   stop : Array Nat := #[]
-  whole : Array String := #[]
 
 /-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
 gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
@@ -281,10 +279,6 @@ structure Audit where
   entries : Array (String × Nat × String)
   circuit : String
   registered : Entries
-
-/-- The templates a tied audit drawn in part draws whole, by descriptor id: its slot entries' and those its circuit
-record registers whole beside them. -/
-def Audit.whole (a : Audit) : Array String := a.entries.map (·.1) ++ a.registered.whole
 
 /-- The network certifier's schedule when it functions as an active warden (`warden.WardenParams`). -/
 structure Schedule where
@@ -591,34 +585,33 @@ def natsOf (j : Json) : Option (Array Nat) := match j with
 /-- What the circuit record `r` registers of its slot entries (its `entries`, `interface.Entries`), checked against the
 Program whose descriptor is `pj`, whose SHA-512 is `program` and whose root's templates are `keys`: the record is
 `circuitFormat`'s and names that Program; without `entries` it registers none; else its `templates`, each a descriptor
-id and a closure digest, are at least one, and they and its `whole` are root templates of the Program, each once; its
-vocabulary size is at least 1; and each entry template binds `STOP`, where it binds it, to the registered stop ids and
-`V`, where it binds it, to the registered vocabulary size. -/
+id and a closure digest, are at least one and root templates of the Program, each once; its vocabulary size is at
+least 1; and each entry template binds `STOP`, where it binds it, to the registered stop ids and `V`, where it binds
+it, to the registered vocabulary size. -/
 def entriesOf (r pj : Json) (program : String) (keys : Array String) (ctx : String) : V Entries := do
   let ctx := s!"{ctx}: circuit"
   unless r.getObjValD "format" == .str circuitFormat do throw s!"{ctx}: not a {circuitFormat} record"
   unless r.getObjValD "program" == .str program do throw s!"{ctx}: names another Program than the audit's"
   let e := r.getObjValD "entries"
   if e == .null then return {}
-  exactly e ["stop", "templates", "vocabulary", "whole"] s!"{ctx}.entries"
+  exactly e ["stop", "templates", "vocabulary"] s!"{ctx}.entries"
   let templates ← (← Flock.J.arr e "templates" s!"{ctx}.entries").mapM fun t => match t with
     | .arr #[.str k, .str d] =>
       if isDigest d then pure (k, d) else throw s!"{ctx}.entries: {k}'s closure digest is not a SHA-512 digest"
     | _ => throw s!"{ctx}.entries: a template is [descriptor id, closure digest]"
   let vocabulary ← Flock.J.nat e "vocabulary" s!"{ctx}.entries"
   let some stop := natsOf (e.getObjValD "stop") | throw s!"{ctx}.entries: stop is not a list of ids"
-  let whole ← (← Flock.J.arr e "whole" s!"{ctx}.entries").mapM (Flock.J.asStr · s!"{ctx}.entries.whole")
   let ids := templates.map (·.1)
-  unless 0 < ids.size && 1 ≤ vocabulary && decide (ids ++ whole).toList.Nodup && (ids ++ whole).all keys.contains do
-    throw s!"{ctx}.entries: its templates, at least one, and its whole are root templates of the Program, each once, \
-      and its vocabulary is at least 1"
+  unless 0 < ids.size && 1 ≤ vocabulary && decide ids.toList.Nodup && ids.all keys.contains do
+    throw s!"{ctx}.entries: its templates, at least one, are root templates of the Program, each once, and its \
+      vocabulary is at least 1"
   for k in ids do
     let b := ((pj.getObjValD "definitions").getObjValD k).getObjValD "bindings"
     unless (b.getObjValD "STOP" == .null || natsOf (b.getObjValD "STOP") == some stop) &&
         (b.getObjValD "V" == .null || (b.getObjValD "V").getNat?.toOption == some vocabulary) do
       throw s!"{ctx}.entries: {k} binds other stop ids (STOP) than the registered {stop} or another vocabulary size \
         (V) than the registered {vocabulary}"
-  pure { templates, vocabulary, stop, whole }
+  pure { templates, vocabulary, stop }
 
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
@@ -1131,23 +1124,6 @@ def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts :
   | .ok b => pure { units := l.size, drawn, delta := prof.delta, wrong := b }
   | .error e => refuse s!"{what}: {e}"
 
-/-- A profile's strata: its one level's, drawn stratified (one-stage's strata, one a template, each named by its
-template's descriptor id), else none. -/
-def strataOf (prof : Core.Integrity) : Array Core.Stratum := match prof.levels with
-  | #[l] => match l.draw with
-    | some (.stratified ss) => ss
-    | _ => #[]
-  | _ => #[]
-
-/-- A tied audit's sample covers what `K` doesn't charge: every proof block sampled, or, its Program having slot
-entries' templates, each of those and of the templates its circuit record registers whole beside them (`Audit.whole`)
-a stratum of the profile sampled whole (`k = size`), a record its registration `reg` binds (`Audit.boundIn`), so its
-slots' entries and what they read are the ones its Programs computed, and only the rest, sampled at its δ, can hold
-an incorrect proof block. -/
-def drawsWhole (a : Audit) (reg : Json) (prof : Core.Integrity) (f : Facts) : Bool :=
-  f.drawn == f.units || (0 < a.entries.size && a.boundIn reg && a.whole.all fun key =>
-    (strataOf prof).any fun st => st.name == key && st.k == st.size)
-
 /-- Link-window `w`'s findings in the rows form, in the order the module docstring gives, and on acceptance its scan's
 facts and its tied audits' free inputs (`tiedAudits`: the parameters' `free` of each audit whose output the scan's
 `prog` is, each once). -/
@@ -1171,26 +1147,20 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
   unless f.units == 2 * s.window do refuse s!"{what}: profile: {f.units} units, not the scan's 2T = {2 * s.window}"
   pure (f, (tiedAudits audits reg).foldl (fun n i => n + ((p.audits[i]?.map (·.free)).getD 0)) 0)
 
-/-- Audit `i`'s findings, and on acceptance its facts: its registration names its Program, the answer's units are the
-Program's, and one tied to a link-window's scan (`tied`: `tiedIn`, in the rows form) samples whole what its
-link-window's term doesn't charge (`drawsWhole`): every proof block, or its slot entries' templates and those its
-circuit record registers whole beside them, the term then charging the entries its incorrect proof blocks can set
-(`faultyEntries`). -/
-def auditCheck (i : Nat) (a : Audit) (reg : Json) (x : Core.Answer) (tied : Bool := false) : Found Facts := do
+/-- Audit `i`'s findings, and on acceptance its facts: its registration names its Program and the answer's proof
+blocks are the Program's, at any sample; a tied audit sampled in part is charged in its link-windows' terms
+(`chargedOf`, `faultyEntries`). -/
+def auditCheck (i : Nat) (a : Audit) (reg : Json) (x : Core.Answer) : Found Facts := do
   let what := s!"audit {i}"
   unless reg.getObjValD "program" == .str a.program do refuse s!"{what}: registration: not its Program"
   let (prof, pub) ← answered what reg x
   let f ← factsOf what prof pub
   unless f.units == a.units do refuse s!"{what}: profile: {f.units} units, not its Program's {a.units}"
-  if tied && !drawsWhole a reg prof f then
-    refuse s!"{what}: tied to a link-window's scan with {f.drawn} of its {f.units} units drawn, and not each of its \
-      slot entries' templates and those its registered circuit record names whole a stratum drawn whole: K charges a \
-      tied audit's wrong units only as the entries they can set, so draw those templates whole, or all {f.units} units"
   pure f
 
-/-- The audits' findings, in order, each tied as the period's form ties it (`tiedOf`). -/
+/-- The audits' findings, in order. -/
 def auditChecks (p : Params) (c : Commitment) (e : Evidence) : Array (Found Facts) :=
-  ((p.audits.zip c.audits).zip e.audits).zipIdx.map fun (((a, reg), x), i) => auditCheck i a reg x (tiedOf p.form c i)
+  ((p.audits.zip c.audits).zip e.audits).zipIdx.map fun (((a, reg), x), i) => auditCheck i a reg x
 
 /-- Link-window `w`'s wiring finding in the rows form: a refusal unless its scan's Programs' row is a compute audit's
 slot entries (`wired`). -/
@@ -1460,22 +1430,19 @@ def protocol : Core.Protocol where
 -- a charged audit's δ = 1/10 is in eps beside its scan's 1/15: 1/6
 #guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[] 1 1 #[⟨2, 1, ⟨1, 10⟩, 0⟩]
   ).eps.toString == "1/6"
--- a tied audit of 3 units, its slot entries' template "E" of 1 and "S" of 1, which its circuit record "c" registers
--- whole: drawn whole, or with both strata whole and the record its registration's; not with either stratum sampled,
--- the record not its registration's, nor drawn in part with no slot entries' template
+-- w63k4's tied audit of 16 proof blocks sampled at one (`subset:1`), with a bound of 2 incorrect ones: charged, its
+-- link-window's β_w every one of the scan's E_w = 896 entry bits; sampled whole, uncharged and β_w = 0
 #guard
-  let prof := fun (ss : Array Core.Stratum) => ({
-    programs := #[], prescribed := #[], linked := false, covered := #[], delta := ⟨1, 10⟩, drawn := #[],
-    levels := #[{ name := unitLevel, query := none, size := 3, draw := some (.stratified ss) }] } : Core.Integrity)
-  let a : Audit := ⟨0, 0, "", 3, 0, #[("E", 1, "")], "c", { whole := #["S"] }⟩
-  let reg := fun (c : String) => Json.mkObj [("window", Json.mkObj [("circuit", .str c)])]
-  let whole : Array Core.Stratum := #[⟨"E", 1, 1⟩, ⟨"S", 1, 1⟩, ⟨"R", 1, 0⟩]
-  drawsWhole a (reg "c") (prof whole) ⟨3, 2, ⟨1, 10⟩, 1⟩ &&
-    drawsWhole a (reg "x") (prof #[⟨"E", 1, 0⟩]) ⟨3, 3, ⟨1, 10⟩, 0⟩ &&
-    !drawsWhole a (reg "c") (prof #[⟨"E", 1, 1⟩, ⟨"S", 1, 0⟩, ⟨"R", 1, 1⟩]) ⟨3, 2, ⟨1, 10⟩, 1⟩ &&
-    !drawsWhole a (reg "c") (prof #[⟨"E", 1, 1⟩, ⟨"R", 2, 1⟩]) ⟨3, 2, ⟨1, 10⟩, 1⟩ &&
-    !drawsWhole a (reg "x") (prof whole) ⟨3, 2, ⟨1, 10⟩, 1⟩ &&
-    !drawsWhole { a with entries := #[] } (reg "c") (prof whole) ⟨3, 2, ⟨1, 10⟩, 1⟩
+  let scan : Scan := ⟨32, 0, 300, 512, 8 * 112⟩
+  let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[], "", {}⟩], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
+    .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32⟩ .empty scan, 1⟩
+  let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
+    Json.mkObj [("port", .str q), ("root", .str "r"), ("domain", .str "d")]])]
+  let c : Commitment := ⟨#[at_ (entriesPort "E{KO=4}" 0)], #[at_ (progName 0)], .empty⟩
+  let one : Array (Found Facts) := #[.ok ⟨16, 1, ⟨1, 100⟩, 2⟩]
+  let whole : Array (Found Facts) := #[.ok ⟨16, 16, ⟨1, 100⟩, 0⟩]
+  tiedIn c.audits c.windows 0 && (chargedOf p c one 0).isSome && faultyEntries p c one scan (at_ (progName 0)) == 896 &&
+    (chargedOf p c whole 0).isNone && faultyEntries p c whole scan (at_ (progName 0)) == 0
 -- a unit's output port past o0, its index in ASCII digits without a leading zero; never o0, an input, or no unit's
 #guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
 #guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||
