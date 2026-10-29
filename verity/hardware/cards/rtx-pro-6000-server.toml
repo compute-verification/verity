@@ -1,8 +1,10 @@
 # The NVIDIA RTX PRO 6000 Blackwell Server Edition: the one source of its numbers (verity/hardware/README.md).
 # Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
 # model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). Per-SM rates are a SM-clock's. Security/Definitions/Core/Accel/Sm120.lean is held to this file.
+# (neither, open). Per-SM rates are a SM-clock's. Security/Definitions/Core/Accel/Sm120.lean is held to this file. The
+# host the card sits in is its own card (xeon-6776p-2s.toml on our node).
 
+kind = "gpu"
 sku = "rtx-pro-6000-server"
 name = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
 die = "GB202"
@@ -63,15 +65,3 @@ f64 = { value = 32, unit = "tensor unit/MAC", mark = "measurement", source = "no
 [model]
 exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 mma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (models.BLACKWELL_SM120_S8_M16N8K32, _WRAP)" }
 instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram / 16 instructions" }
-
-# The node's host CPUs (benchmarks/rho's host_ops): the server's, not the card's.
-[host]
-cpu = "Intel Xeon 6776P (Granite Rapids)"
-source = "lscpu on an RTX PRO 6000 node, art:1f22137354a4: the VM sees 2 x 48 cores of the physical 2 x 64"
-sockets = { value = 2, unit = "socket", mark = "measurement", source = "lscpu on an RTX PRO 6000 node's VM, art:1f22137354a4; the server's own socket count is not attested" }
-cores = { value = 64, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691 (Xeon 6776P: 64 cores)" }
-amx = { value = 1024, unit = "INT8 MAC/cycle/core", mark = "ceiling", source = "Intel Optimization Reference Manual 248966-049 section 20.3 Table 20-2 (TDPBSSD, 16,384 MACs, 16-cycle throughput); measured 1,024.1, art:1f22137354a4" }
-turbo = { value = 3.9, unit = "GHz", mark = "ceiling", source = "Intel ARK 243691: max turbo 3.9 GHz (all-core turbo 3.6); Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
-priority_turbo = { value = 4.6, unit = "GHz", mark = "ceiling", source = "Intel ARK 243691: Priority Core Turbo 4.6 GHz, which the operator may enable in the BIOS" }
-priority_cores = { value = 8, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691: Priority Core Turbo on at most 8 cores a socket" }
-ops = { value = 1.0452992e15, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x amx x sockets x (priority_cores x priority_turbo + (cores - priority_cores) x turbo), 1.0453e15 (1.0224e15 without Priority Core Turbo)" }
