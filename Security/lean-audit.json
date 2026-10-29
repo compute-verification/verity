@@ -11014,6 +11014,24 @@
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
   },
+  "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Writes.RunBall": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Writes.RunPairs": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Writes.SsnServedCharged": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Writes.SsnServedDistinct": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Writes.SsnServedShift": {
+   "owner": "@compute-research"
+  },
   "RecDeploy.HonestHalfFixture.honest_half_fixture": {
    "owner": "@proofs",
    "signature": [
@@ -12546,7 +12564,13 @@
    "Verity.SecurityProofs.AndSizeLe": "frozen (no-function): It is about an arbitrary circuit and set of its gates (Verity.Circuit.andSize, Security/Definitions/Core/Formalism.lean): its AND gates are operation gates, so the AND count is at most the size; not about a function's code.",
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, Security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code.",
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
-   "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code."
+   "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
+   "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor": "frozen (no-function): A cost bound over the MH100w machine model, not over a Lean function of the code, so it has no acceptance to take. It is about one straight-line program fixed before the coins: a program that branches on the coins, loads a whole chunk from a computed address (priced at `other`, which a device's chunk copy doesn't pay) or stores to one (no MH100w instruction) is outside it. Its model's semantics are draft, pending review (Security/Definitions/Pouw/Assumptions/Dimension/H100W.lean), and the review must clear them before the statement says anything about a device.",
+   "Pouw.SecurityProofs.Writes.RunBall": "frozen (no-function): A bound in the chunk model (Security/Definitions/Pouw/Dimension/Pointwise.lean), whose semantics are draft, pending review, not over a Lean function of the code, so it has no acceptance to take. It holds for every run, so for a prover that branches on the coins or copies from and to computed addresses; it prices a word write at one and a whole-chunk copy at nothing, and that a device's writes cost at least that (a copy grain or a fresh-write floor) is a device premise not yet stated.",
+   "Pouw.SecurityProofs.Writes.RunPairs": "frozen (no-function): A bound in the chunk model (Security/Definitions/Pouw/Dimension/Pointwise.lean), whose semantics are draft, pending review, not over a Lean function of the code, so it has no acceptance to take. It holds for every run, so for a prover that branches on the coins or copies from and to computed addresses; it prices a word write at one and a whole-chunk copy at nothing, and that a device's writes cost at least that (a copy grain or a fresh-write floor) is a device premise not yet stated.",
+   "Pouw.SecurityProofs.Writes.SsnServedCharged": "frozen (no-function): A cost bound at MH100w's `h100Floor` table for served sparse noise's committed words on the full coin grid, not over a Lean function of the code, so it has no acceptance to take. It is about one program fixed before the coins and right on every coin value: a prover that branches on the coins, or is right only on a success set, is outside it. Its model's semantics are draft, pending review (Security/Definitions/Pouw/Assumptions/Dimension/H100W.lean), and the review must clear them before the statement says anything about a device.",
+   "Pouw.SecurityProofs.Writes.SsnServedDistinct": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (Security/Definitions/Pouw/Dimension/Ssn.lean), for the 4- and 5-lane layouts as the definitions state them; it reads no function of the code, so it has no acceptance to take. That the served kernel commits exactly these words is completeness. Its model's semantics are draft, pending review (Security/Definitions/Pouw/Assumptions/Dimension/H100W.lean), and the review must clear them before the statement says anything about a device.",
+   "Pouw.SecurityProofs.Writes.SsnServedShift": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (Security/Definitions/Pouw/Dimension/Ssn.lean): no two differ by a constant and none is a free value plus one, the hypotheses of carrier separation. It reads no function of the code, so it has no acceptance to take. Its model's semantics are draft, pending review (Security/Definitions/Pouw/Assumptions/Dimension/H100W.lean), and the review must clear them before the statement says anything about a device."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
