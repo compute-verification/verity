@@ -1,0 +1,28 @@
+# The PoUB move (`python3 tools/move/rename.py --map tools/move/poub_map.toml`): the subprotocol over a node's registered
+# store is PoUB and only PoUB. This map moves its paths and the Python modules they name: `verity/core/protocols/poub/`
+# with its Lake package `lean/`, `benchmarks/poub_session/`, vLLM's `protocols/poub/` and `pipeline/serve_poub.py`. Not
+# PoUB: the bandwidth audit over PoUS's store (`verity/core/protocols/bandwidth/`), the remote composite protocol
+# (`Core.Remote`, `verity/core/protocols/remote/`), the inference-only policy's remote regime (`Nci.*Remote*`,
+# `DampenerRemote*`), `RemoteChallenger` and `RemoteCertifier`. Its Lean names, identifiers, ids and domain tags are no
+# words here: a move keeps every lock's records and every pin's outputs (`tools/verity/check/move_check.py`), and those
+# renames re-record them. The rules for [words] are `rename_map.toml`'s.
+
+[rewrite]
+exclude = [
+    "archive/**",
+    "tools/move/**",
+    "**/CHANGELOG.md",
+    "tools/research/src/research/store/moves.json",
+    "tools/verity/lean/tests/fixtures/**",
+    "examples/h200/interfaces/tests/fixtures/**",
+]
+
+[words]
+"remote_bandwidth" = "poub"
+"remote_session" = "poub_session"
+"remote_coins" = "poub_coins"
+"serve_remote" = "serve_poub"
+
+[keep_in]
+# C-Flock's class statement serves verifier sessions on other hosts, not PoUB.
+"verity/ml/flock/**" = ["serve_remote"]
