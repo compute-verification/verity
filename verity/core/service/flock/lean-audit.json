@@ -63,6 +63,7 @@
   "Flock.Test.TmplRows",
   "Flock.Test.TmplLayout",
   "Flock.Test.TmplFold",
+  "Flock.Test.TmplScope",
   "Flock.Test.NetAt",
   "Flock.Test.MaskLog",
   "Flock.Test.CoinsTree",
