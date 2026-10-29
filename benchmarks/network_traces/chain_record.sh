@@ -166,7 +166,8 @@ mkdir -p "$OUT/gates"
 
 # ---- the challenger --------------------------------------------------------------------------------------------------
 # every round that draws (the scan's, a sampled N2 period's) reads its coins from a session of the auditor's challenger
-# of its own (round_coins), and nothing draws on the verifier's own: no challenger, no draw
+# of its own (round_coins), and no round draws on the verifier's own: no challenger, no draw (each Flock session's
+# coin tree is its server's, round_coins.FLOCK)
 CH=()
 if [ -n "${CR_CHALLENGER:-}" ]; then
   MAIN=${CR_MAIN:-}
@@ -187,7 +188,7 @@ if [ -n "${CR_CHALLENGER:-}" ]; then
 elif { [ -z "${CR_SCAN_CMD:-}" ] && [ "${CR_PATH:-}" != certifier-only ]; } || [ -n "${CR_N2_DRAW:-}" ] \
     || [[ " ${CR_N2_ARGS:-} " == *" --draw "* ]]; then
   log "chain: CR_CHALLENGER (local|gate:USER@HOST) names the auditor's challenger whose sessions the scan's rounds and a" \
-    "sampled N2 period draw on: nothing draws on the verifier's own coins"; exit 3
+    "sampled N2 period draw on: no round draws on the verifier's own coins"; exit 3
 fi
 CHS=; [ ${#CH[@]} = 0 ] || CHS=$(printf '%q ' "${CH[@]}")
 log "chain: the challenger ${CR_CHALLENGER:-none}"
@@ -316,8 +317,6 @@ text = lambda f: (w / f).read_text().strip() if (w / f).is_file() else None
 json.dump({"run": os.environ.get("RESEARCH_RUN_ID"), "tree": "${RESEARCH_SOURCE_SHA:-$(git -C "$SRC" rev-parse HEAD 2>/dev/null)}",
            "gates": "${CR_GATES}".split(), "endpoint": os.environ.get("CR_ENDPOINT"), "profile": "$PROFILE",
            "path": os.environ.get("CR_PATH"), "challenger": os.environ.get("CR_CHALLENGER"),
-           "n2_sampled": not os.environ.get("CR_SCAN_ONLY") and not os.environ.get("CR_N2_CMD") and (
-               bool(os.environ.get("CR_N2_DRAW")) or " --draw " in f" {os.environ.get('CR_N2_ARGS', '')} "),
            "lean": "$(sha256sum "$LEAN" | cut -c1-64) $LEAN", "bin": "$(sha256sum "$BIN" | cut -c1-64)",
            "n2_cmd": os.environ.get("CR_N2_CMD"), "scan_cmd": os.environ.get("CR_SCAN_CMD"),
            "scan_only": bool(os.environ.get("CR_SCAN_ONLY")),

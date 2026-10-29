@@ -72,8 +72,9 @@ request's max_tokens, at most KO.
   and the tie on 8 link-windows (CR_TIE_WINDOWS) at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every
   unit, or ``--draw K`` of them. Every round that draws, each scan round and each member of N2's sampled period, reads
   its coins from a session of its own of the auditor's challenger (``--challenger``, chain_record.sh's CR_CHALLENGER,
-  `round_coins`), and nothing draws on the verifier's own. It is refused unless the tree has the record's leak guard
-  (``leak_guard.py``), which chain_record.sh runs on its way out, whatever the exit.
+  `round_coins`), and no round draws on the verifier's own (each Flock session's coin tree is its server's,
+  `round_coins.FLOCK`). It is refused unless the tree has the record's leak guard (``leak_guard.py``), which
+  chain_record.sh runs on its way out, whatever the exit.
 
 **The challenger.** ``--challenger gate:GATE`` (the default) is the auditor's challenger through infra's gate, on the
 network certifier's machine: P (``--coin-peer``, `AUDITOR` by default) is the node the chain runs on, which holds the

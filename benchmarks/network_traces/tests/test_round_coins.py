@@ -1,5 +1,6 @@
 """round_coins: each drawing round's coins from a session of its own of the auditor's challenger, on a root that binds
-the run's base, the step and the round. The fake challenger is ``local`` on live_challenger's stub of the Lean
+the run's base (the scan's `window_root`: the network certifier's session and each side's registrations in order), the
+step and the round. The fake challenger is ``local`` on live_challenger's stub of the Lean
 verifier's coins (`fake_challenger`, as `test_a5_reserve` runs it), so nothing builds `sampled-proofs-verifier`. A
 round's draw holds against its session's evidence (`RoundSession.held`: `coins.coins_reason` on the round's root and its
 commitment, each `a5_coins.negatives` refused, the bytes read the ones released); a draw held to other bytes, another
@@ -61,8 +62,17 @@ def test_each_rounds_root_binds_the_base_the_step_and_the_round():
     assert RC.digest({"a": 1, "b": [2]}) == RC.digest({"b": [2], "a": 1}) != RC.digest({"a": 1, "b": [3]})
 
 
+def test_the_scans_base_binds_the_session_and_each_sides_registrations_in_order():
+    regs = {"ingress": [{"window": 0}, {"window": 1}], "egress": [{"window": 0, "root": "aa"}, {"window": 1}]}
+    base = RC.window_root(bytes(32), regs)
+    assert len(base) == 128 and base == RC.window_root(bytes(32), dict(reversed(regs.items())))
+    assert base != RC.window_root(bytes([1]) * 32, regs)
+    assert base != RC.window_root(bytes(32), {**regs, "egress": regs["egress"][::-1]})
+    assert base != RC.window_root(bytes(32), {**regs, "egress": [{"window": 0, "root": "ab"}, {"window": 1}]})
+
+
 @pytest.mark.parametrize("flags, why", [
-    ({}, "nothing draws on the verifier's own coins"),
+    ({}, "no round draws on the verifier's own coins"),
     ({"challenger": "remote"}, "not 'remote'"),
     ({"challenger": "gate:research@h", "peer": "p"}, "needs --peer and --challenger-key"),
     ({"challenger": "local", "main": None}, "needs --main"),

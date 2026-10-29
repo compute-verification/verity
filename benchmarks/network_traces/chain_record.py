@@ -55,9 +55,11 @@
   and the report names what the path stands on (`WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` on the served node's
   endpoint report).
 * **The coins** (`coins_step`, required on every path): each round's coin source from the drivers' summaries, a
-  session of the auditor's challenger for each scan round and each member of a sampled N2 period (`round_coins`),
-  none for a round that reads no coin (Selection All); refused when a scan round has no session or a session's
-  evidence doesn't hold. ``open`` names the coins that aren't the challenger's: every Flock session's.
+  session of the auditor's challenger for each scan round and each member of a sampled N2 period (its summary's
+  draw; `round_coins`), none for a round that reads no coin (Selection All); refused when a scan round has no
+  session, a scan round's root isn't the one the network certifier's signed registrations in the scan's
+  ``answers.json`` give (`scan_base`, under ``--warden-run``'s deployment), or a session's evidence doesn't hold.
+  ``open`` names the coins that aren't the challenger's: every Flock session's.
 * **leak**: K per monitoring period (week, month, year; one machine and 1,000) on the warden gate run, pooled at
   δ = 1% and 10⁻⁶ and in the per-period form, each beside its share of Llama-3.2-1B's BF16 weights (`leak`).
 """
@@ -539,12 +541,43 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
             "in_the_clear": CLEAR["scan"]}
 
 
-def coins_step(scan: dict | None, n2: dict | None, tie: dict | None, job: dict) -> dict:
+def scan_base(answers: Path, run: str | None) -> dict:
+    """The scan's base, which each scan round's session root binds (`round_coins.window_root`), recomputed from what
+    the network certifier signed: each link-window's ingress and egress registrations in the scan's ``answers.json``,
+    each verified under the warden run's deployment key and session (`warden_rows.check_registration`). ``root`` is
+    None, and ``why`` says why, when there is no network certifier run (the scan's stand-in signs its own) or a
+    registration doesn't verify."""
+    if not run:
+        return {"root": None, "why": "no network certifier run signed the scan's registrations (its stand-in's)"}
+    import round_coins as RC
+    import warden_chain as WC
+    from verity.core.protocols.certifier import warden_rows as WR
+    try:
+        dep, params = WC.deployment(Path(run))
+        key, session = WC.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
+        sides: dict[str, list[dict]] = {"ingress": [], "egress": []}
+        for w in json.loads(answers.read_text())["windows"]:
+            for (side, direction), reg in zip((("ingress", WC.Direction.INGRESS), ("egress", WC.Direction.EGRESS)),
+                                              w["registrations"], strict=True):
+                WR.check_registration(reg, key, session, params, WC.WS.LINK, direction, w["window"])
+                sides[side].append(reg)
+    except SystemExit as e:
+        return {"root": None, "why": str(e)}
+    except (OSError, KeyError, TypeError, ValueError) as e:
+        return {"root": None, "why": f"{answers}'s registrations don't verify under {run}'s deployment: {e}"}
+    return {"root": RC.window_root(session, sides), "why": None}
+
+
+def coins_step(scan: dict | None, n2: dict | None, tie: dict | None, job: dict, base: dict | None = None) -> dict:
     """Each round's coin source, from the drivers' summaries' ``coins``: a scan round's and a sampled N2 member's
     session of the auditor's challenger (`round_coins`), or none (Selection All: N2 at every window, the tie).
-    Accepted when every scan round the summary ran, and a sampled N2 period (the job's ``n2_sampled``), has a session,
-    no two rounds share a session's root, and every session held (`round_coins.RoundSession.held`'s ``ok``); ``open``
-    names the coins that aren't the challenger's, every Flock session's (`round_coins.FLOCK`)."""
+    Accepted when every scan round has a session on its root over the scan's ``base`` (`scan_base`: the root the
+    network certifier's signed registrations give, `round_coins.root`), each member of an N2 period whose summary's
+    draw isn't Selection All has a session, no two rounds share a session's root, and every session held
+    (`round_coins.RoundSession.held`'s ``ok``); ``open`` names the coins that aren't the challenger's, every Flock
+    session's (`round_coins.FLOCK`)."""
+    import round_coins as RC
+    base = base or {"root": None, "why": "the scan's base wasn't recomputed"}
     rounds: dict[str, dict] = {}
     for step, doc in (("scan", scan), ("n2", n2)):
         for name, r in (((doc or {}).get("coins") or {}).get("rounds") or {}).items():
@@ -553,20 +586,33 @@ def coins_step(scan: dict | None, n2: dict | None, tie: dict | None, job: dict) 
                                         if k in r}
     if tie is not None:
         rounds["tie"] = {"source": None, "draw": (tie.get("coins") or {}).get("draw") or NO_COIN}
-    missing = [f"scan/{n}" for n in (scan or {}).get("rounds") or {} if f"scan/{n}" not in rounds]
-    if job.get("n2_sampled"):
+    scans = dict.fromkeys([*(f"scan/{n}" for n in (scan or {}).get("rounds") or {}),
+                           *(k for k in rounds if k.startswith("scan/"))])
+    missing = [k for k in scans if not (rounds.get(k) or {}).get("source")]
+    selection = ((n2 or {}).get("draw") or {}).get("selection")
+    if n2 is not None and selection != "all":
         members = [k for k in rounds if k.startswith("n2/")]
-        missing += [k for k in members if not rounds[k].get("source")] if members else ["n2 (sampled)"]
+        missing += ([k for k in members if not rounds[k].get("source")] if members
+                    else [f"n2 ({selection or 'its summary names no draw'})"])
     bad = {k: v.get("coins_reason") or v.get("error") or "the session's evidence doesn't hold"
            for k, v in rounds.items() if v.get("source") and not v.get("ok")}
     first: dict[str, str] = {}
     for k, v in rounds.items():
         if v.get("root") and first.setdefault(v["root"], k) != k:
             bad.setdefault(k, f"its session's root is {first[v['root']]}'s: each round draws on a session of its own")
+    for k in scans:
+        if k in missing:
+            continue
+        if base["root"] is None:
+            bad.setdefault(k, f"its root can't be recomputed: {base['why']}")
+        elif rounds[k].get("root") != RC.root(base["root"], "scan", k.removeprefix("scan/")):
+            bad.setdefault(k, "its session's root isn't the round's over the network certifier's signed "
+                              "registrations (scan_base)")
     why = "; ".join([*(f"{k}: no challenger session" for k in missing), *(f"{k}: {v}" for k, v in bad.items())])
     flock = next((d["coins"]["flock"] for d in (scan, n2, tie) if ((d or {}).get("coins") or {}).get("flock")), None)
     return {"verdict": "refused" if why else "accepted", "why": why or None, "challenger": job.get("challenger"),
-            "rounds": rounds, "open": [f"every Flock session's coins (scan, N2, tie): {flock['by']}"] if flock else [],
+            "base": base if scans else None, "rounds": rounds,
+            "open": [f"every Flock session's coins (scan, N2, tie): {flock['by']}"] if flock else [],
             "in_the_clear": "the sessions' evidence: the challenger's key, ledger, pins and released coins, public"}
 
 
@@ -961,7 +1007,9 @@ def report(a) -> dict:
             else scan_step(_json(a.scan), a.warden_run, job))
     certificates = {k: v for k, v in cert.items() if k != "rows"}
     tie, tie_doc = None, _json(getattr(a, "tie", None)) if warden else None
-    coins = coins_step(None if certifier_only else _json(a.scan), merged, tie_doc, job)
+    scan_doc = None if certifier_only else _json(a.scan)
+    base = scan_base(Path(a.scan).with_name("answers.json"), a.warden_run) if scan_doc else None
+    coins = coins_step(scan_doc, merged, tie_doc, job, base)
     if warden:
         run_id = cert.get("warden_run")
         certificates = on_warden(certificates, _json(a.certs), run_id, "the certificates step's input")

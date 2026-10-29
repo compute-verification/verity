@@ -11,9 +11,9 @@ else, never the verifier's own randomness.
   the session's pin must be. Tests run ``local`` on live_challenger's stub of the Lean's coins
   (``benchmarks/live_challenger/tests/stub_serve.py``): the fake challenger.
 * **The root** (`root`): the SHA-512 of the run's base (what the auditor's devices signed, which the prover can't
-  vary: the scan's the network certifier's session and signed registrations, a sampled N2 period's its
-  certificates), the step and the round. The gate opens a root once, ever, so each round of a run draws once, and a
-  rerun of the run can't draw it again.
+  vary: the scan's the network certifier's session and signed registrations, `window_root`, a sampled N2 period's
+  its certificates), the step and the round. The gate opens a root once, ever, so each round of a run draws once, and
+  a rerun of the run can't draw it again.
 * **A round's session** (`RoundSession`: `a5_coins.start` for one rank). The round plans its need (`RankCoins.plan`,
   which opens the session), commits to its registration (`RankCoins.commit`), reads its coins and ends its turn
   (`RankCoins.drawn`: the segment the session released). `close` publishes the session's evidence, kept under its
@@ -34,6 +34,7 @@ from verity.core.protocols.sampled_proofs import coins as CC, service as S
 
 HERE = Path(__file__).resolve().parent
 ROOT = "verity/certifier/round-coins/v1"
+WINDOW_ROOT = "verity/certifier/scan-window-root/v2"
 KINDS = "local, loopback:HOST:PORT or gate:USER@HOST"
 #: whose coins every Flock session (scan, N2, tie) runs on: not the challenger's
 FLOCK = {"source": "flock-circuit serve --zk", "challenger": False,
@@ -58,6 +59,13 @@ def root(base: str, step: str, name: str) -> str:
     return digest({"format": ROOT, "base": base, "step": step, "round": name})
 
 
+def window_root(session: bytes, registrations: dict[str, list[dict]]) -> str:
+    """The scan's base (128 hex digits): the SHA-512 of the network certifier's `session` and each link's signed
+    registrations of the group, in link-window order (`registrations`, by link side)."""
+    return digest({"format": WINDOW_ROOT, "session": session.hex(),
+                   "registrations": {s: registrations[s] for s in sorted(registrations)}})
+
+
 def add_args(p, what: str) -> None:
     """The challenger's flags on parser `p`; `what` names the draws they take."""
     p.add_argument("--challenger", help=f"{what} on the auditor's challenger's coins, a session a round: {KINDS} "
@@ -76,7 +84,7 @@ def refusal(a) -> str | None:
     c = a.challenger
     if not c:
         return f"--challenger names the auditor's challenger every drawing round reads its coins from ({KINDS}): " \
-               "nothing draws on the verifier's own coins"
+               "no round draws on the verifier's own coins (a Flock session's coin tree is its server's, FLOCK)"
     if c != "local" and not c.startswith(("gate:", "loopback:")):
         return f"--challenger is {KINDS}, not {c!r}"
     if c.startswith("gate:") and not (a.peer and a.challenger_key):

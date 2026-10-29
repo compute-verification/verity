@@ -3,7 +3,8 @@ certifier-serve run's records, clock certificates and the client's kept copies (
 window's declared sync signed), refuses the window of a record whose signature is changed, every window from a clock
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
 the report needs the endpoint's step on the advice profile, needs each drawing round on a challenger session of its own
-that held (the coins step: none, two on one root or one not held refuse it), never accepts a stand-in, merges N2's
+that held (the coins step: none, two on one root, a scan root not its round's over the network certifier's signed
+registrations or one not held refuse it), never accepts a stand-in, merges N2's
 members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
 window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
@@ -52,6 +53,21 @@ def _load(name: str):
 
 
 cr, n2 = _load("chain_record"), _load("n2_zk")
+import round_coins as RC  # noqa: E402
+
+#: the scan's base its rounds' roots bind, as a network certifier run's signed registrations give it (`scan_base`)
+BASE = hashlib.sha512(b"the network certifier's signed registrations").hexdigest()
+
+
+@pytest.fixture(autouse=True)
+def signed_base():
+    """`chain_record.scan_base` on these tests' scan summaries, which have no network certifier run behind them: `BASE`
+    (test_scan_zk holds the real one to scan_zk's `window_root` on a run's signed registrations). Its own patch, so a
+    test's ``monkeypatch.undo()`` keeps it; yields each call's arguments."""
+    calls = []
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(cr, "scan_base", lambda answers, run: calls.append((answers, run)) or {"root": BASE, "why": None})
+        yield calls
 
 
 class _Clocked(n2.cs.CertifyingPublisher):
@@ -159,10 +175,13 @@ def test_job_keeps_no_gate_runs_witness(tmp_path):
 
 
 def _held(step: str, *rounds: str, challenger: str = "local") -> dict:
-    """Step `step`'s summary ``coins``: each of `rounds` on a challenger session of its own whose evidence held."""
+    """Step `step`'s summary ``coins``: each of `rounds` on a challenger session of its own whose evidence held, a scan
+    round's on its root over `BASE`."""
+    def root(r: str) -> str:
+        return RC.root(BASE, "scan", r) if step == "scan" else hashlib.sha512(f"{step}/{r}".encode()).hexdigest()
     return {"challenger": challenger, "flock": {"by": "the session's coin tree, drawn by the Flock server itself"},
-            "rounds": {r: {"source": f"challenger:{challenger}", "root": hashlib.sha512(f"{step}/{r}".encode()).hexdigest(),
-                           "session": f"{step}-{r}", "coins_reason": None, "error": None, "read_bytes": 64,
+            "rounds": {r: {"source": f"challenger:{challenger}", "root": root(r), "session": f"{step}-{r}",
+                           "coins_reason": None, "error": None, "read_bytes": 64,
                            "negatives_refused": {"swapped": True}, "ok": True} for r in rounds}}
 
 
@@ -178,7 +197,7 @@ def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
         endpoint=put("endpoint.json", {"chain": {
             "bits": {"bound": True, "rebuilt": True, "commit_windows": [{"bound": True, "rebuilt": True}]},
             "tie": {"ran": True, "runs": {"honest": {"verdict": "accepted"}}}}}) if endpoint else None,
-        n2=put("n2.json", {"ok": True, "members": {
+        n2=put("n2.json", {"ok": True, "draw": {"selection": "all"}, "members": {
             "honest": {"windows": [window], "network": {"accepted": True}, "ok": True},
             "tampered": {"windows": [window | {"accepted": False}], "network": {"accepted": False}, "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 1, "rounds": {"honest": {"audit": {"window_accepted": True}}},
@@ -225,8 +244,6 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
         (tmp_path / f"{name}.json").write_text(json.dumps(doc))
         return str(tmp_path / f"{name}.json")
 
-    Path(steps.job).write_text(json.dumps(ok | {"n2_sampled": True}))
-
     structured = {"leaked": [], "verifier_found": ["head egress 45 @320"], "structured": {"head egress 45 @320": "across"},
                   "control": {"holds_all": True}}
     steps.n2 = [run("honest", {"windows": [window] * 2, "network": {"accepted": True}, "received": structured}, [1, 2]),
@@ -248,30 +265,50 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
     assert got["why"].startswith("honest: witness pieces leaked to the verifier: ['head egress 45 @320']")
 
 
-def test_the_coins_step_holds_each_drawing_round_to_a_challenger_session_of_its_own(tmp_path):
-    """Each scan round and each member of a sampled N2 period on a session of its own that held; the tie and N2 at
-    every window read no coin. A round with no session, a sampled period with none, two rounds on one root and a
-    session whose evidence doesn't hold refuse the step, and with it the report."""
+def test_the_coins_step_holds_each_drawing_round_to_a_challenger_session_of_its_own(tmp_path, signed_base):
+    """Each scan round on a session of its own on its root over the base the network certifier's signed registrations
+    give (`scan_base`), and each member of an N2 period whose summary's draw is sampled on one, that held; the tie and
+    N2 at every window read no coin. A scan round with no session or a sourceless one, a sampled period with none (or a
+    summary naming no draw), a scan root that isn't its round's over the base, no base, two rounds on one root and a
+    session whose evidence doesn't hold refuse the step, and with it the report, which reads the base off the scan's
+    ``answers.json`` and the warden run."""
     scan = {"rounds": {"honest": {}, "chain": {}}, "coins": _held("scan", "honest", "chain")}
-    sampled = {"coins": _held("n2", "honest", "tampered")}
+    sampled = {"draw": {"selection": "sampled"}, "coins": _held("n2", "honest", "tampered")}
     tie = {"coins": {"draw": cr.NO_COIN, "flock": sampled["coins"]["flock"]}}
-    job = {"challenger": "local", "n2_sampled": True}
-    got = cr.coins_step(scan, sampled, tie, job)
-    assert (got["verdict"], got["why"], got["challenger"]) == ("accepted", None, "local")
+    job, signed = {"challenger": "local"}, {"root": BASE, "why": None}
+    got = cr.coins_step(scan, sampled, tie, job, signed)
+    assert (got["verdict"], got["why"], got["challenger"], got["base"]) == ("accepted", None, "local", signed)
     assert sorted(got["rounds"]) == ["n2/honest", "n2/tampered", "scan/chain", "scan/honest", "tie"]
     assert got["rounds"]["tie"] == {"source": None, "draw": cr.NO_COIN}
     assert got["rounds"]["scan/chain"]["source"] == "challenger:local" and got["rounds"]["scan/chain"]["ok"]
     assert got["open"] == ["every Flock session's coins (scan, N2, tie): the session's coin tree, drawn by the Flock "
                            "server itself"]
-    assert cr.coins_step(scan, {"coins": {"rounds": {}}}, tie, {**job, "n2_sampled": False})["verdict"] == "accepted"
+    every = {"draw": {"selection": "all"}, "coins": {"rounds": {"honest": {"source": None, "draw": cr.NO_COIN}}}}
+    assert cr.coins_step(scan, every, tie, job, signed)["verdict"] == "accepted"
+    assert cr.coins_step(None, every, tie, job)["base"] is None
 
-    def why(scan=scan, sampled=sampled, job=job):
-        got = cr.coins_step(scan, sampled, tie, job)
+    def why(scan=scan, sampled=sampled, base=signed):
+        got = cr.coins_step(scan, sampled, tie, job, base)
         assert got["verdict"] == "refused"
         return got["why"]
 
     assert why(scan={**scan, "rounds": {**scan["rounds"], "tampered": {}}}) == "scan/tampered: no challenger session"
-    assert why(sampled={"coins": {"rounds": {}}}) == "n2 (sampled): no challenger session"
+    sourceless = json.loads(json.dumps(scan))
+    sourceless["coins"]["rounds"]["chain"]["source"] = None
+    assert why(scan=sourceless) == "scan/chain: no challenger session"
+    sourceless["coins"]["rounds"]["chain"] = {"source": None, "draw": cr.NO_COIN}
+    sourceless["rounds"].pop("chain")
+    assert why(scan=sourceless) == "scan/chain: no challenger session"
+    assert why(sampled={"draw": {"selection": "sampled"}, "coins": {"rounds": {}}}) == \
+        "n2 (sampled): no challenger session"
+    assert why(sampled={"coins": {"rounds": {}}}) == "n2 (its summary names no draw): no challenger session"
+    off = "its session's root isn't the round's over the network certifier's signed registrations (scan_base)"
+    assert why(base={"root": "00" * 64, "why": None}) == f"scan/honest: {off}; scan/chain: {off}"
+    unsigned = {"root": None, "why": "no network certifier run signed the scan's registrations (its stand-in's)"}
+    assert why(base=unsigned) == "; ".join(f"scan/{r}: its root can't be recomputed: {unsigned['why']}"
+                                           for r in ("honest", "chain"))
+    assert why(base=None) == "; ".join(f"scan/{r}: its root can't be recomputed: the scan's base wasn't recomputed"
+                                       for r in ("honest", "chain"))
     assert why(sampled={"coins": {"rounds": {**sampled["coins"]["rounds"], "honest": {"source": None, "draw": cr.NO_COIN}}}}) == \
         "n2/honest: no challenger session"
     unopened = json.loads(json.dumps(sampled))
@@ -289,6 +326,7 @@ def test_the_coins_step_holds_each_drawing_round_to_a_challenger_session_of_its_
     Path(steps.scan).write_text(json.dumps({**doc, "coins": None}))
     got = cr.report(steps)
     assert got["verdict"] == "refused" and got["why"] == {"coins": "refused: scan/honest: no challenger session"}
+    assert signed_base[-1] == (Path(steps.scan).with_name("answers.json"), steps.warden_run)
     assert "## Coins (the challenger: None)" in cr.markdown(got)
     Path(steps.scan).write_text(json.dumps(doc))
     assert "- scan/honest: challenger:local, session scan-honest, held" in cr.markdown(cr.report(steps))

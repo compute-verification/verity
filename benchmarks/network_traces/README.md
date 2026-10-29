@@ -99,8 +99,10 @@ guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratc
 the endpoint. Every round of `chain` that draws (each scan round, each member of N2's sampled period) reads its coins
 from a session of its own of the auditor's challenger (`--challenger`, `round_coins.py`): by default the gate's, on
 the network certifier's machine, whose coin link reaches the node the chain runs on through that node's own line of
-`/etc/vy/coin-ports` (the auditor's node's is ports 7821-7830); `--challenger local` is a dry run's. Nothing draws on
-the verifier's own coins, and a challenger that fails fails the round.
+`/etc/vy/coin-ports` (the auditor's node's is ports 7821-7830); `--challenger local` is a dry run's. No round draws on
+the verifier's own coins, and a challenger that fails fails the round; each Flock session's coin tree is still its
+server's own (`round_coins.FLOCK`). The report recomputes each scan round's root from the network certifier's signed
+registrations (`chain_record.scan_base`).
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's

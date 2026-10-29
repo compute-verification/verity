@@ -786,8 +786,8 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
 
 
 @pytest.mark.parametrize("flags,why", [
-    ([], "nothing draws on the verifier's own coins"),
-    (["--draw", "16", "--main", "m.txt"], "nothing draws on the verifier's own coins"),
+    ([], "no round draws on the verifier's own coins"),
+    (["--draw", "16", "--main", "m.txt"], "no round draws on the verifier's own coins"),
     (["--challenger", "remote", "--main", "m.txt"], "local, loopback:HOST:PORT or gate:USER@HOST, not 'remote'"),
     (["--challenger", "gate:research@h", "--main", "m.txt", "--peer", "p"], "needs --peer and --challenger-key"),
     (["--challenger", "local", "--draw", "16"], "needs --main"),
@@ -838,6 +838,33 @@ def test_the_window_root_is_the_wardens_signed_link_windows(tmp_path):
     two = sz.link(tmp_path / "two", setup=sz.TEST, group=2)
     assert sz.window_root(two) != sz.window_root(SimpleNamespace(session=two.session,
                                                                  sides={s: x[:1] for s, x in two.sides.items()}))
+
+
+def test_the_reports_scan_base_is_the_window_root_of_what_the_network_certifier_signed(tmp_path):
+    """`chain_record.scan_base` reads ``answers.json``'s registrations (as `answers` writes them) under the warden run's
+    deployment and gives the group's `window_root`, a group of two included; a registration the deployment's key
+    didn't sign, one moved to another link-window, a missing ``answers.json`` or no warden run give no base, by name."""
+    import chain_record as CR
+
+    run = published(tmp_path / "run", sz.TEST, windows=2)
+    at = sz.link(tmp_path / "at", run, setup=sz.TEST, group=2)
+
+    def answers(sides: dict, windows=at.windows) -> Path:
+        doc = {"windows": [{"window": w, "registrations": [sides[s][i].registration for s in ("ingress", "egress")]}
+                           for i, w in enumerate(windows)]}
+        (tmp_path / "answers.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
+        return tmp_path / "answers.json"
+
+    assert CR.scan_base(answers(at.sides), str(run)) == {"root": sz.window_root(at), "why": None}
+    i = at.tampered.window
+    forged = {**at.sides, "egress": [at.tampered if j == i else x for j, x in enumerate(at.sides["egress"])]}
+    got = CR.scan_base(answers(forged), str(run))
+    assert got["root"] is None and "doesn't verify under the warden's key in the session" in got["why"]
+    got = CR.scan_base(answers(at.sides, at.windows[::-1]), str(run))
+    assert got["root"] is None and ", and the schedule's " in got["why"]
+    assert CR.scan_base(tmp_path / "none.json", str(run))["root"] is None
+    assert CR.scan_base(answers(at.sides), None) == {
+        "root": None, "why": "no network certifier run signed the scan's registrations (its stand-in's)"}
 
 
 def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_its_stream_takes():

@@ -63,7 +63,7 @@ if [ -n "${N2_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-pa
     CH+=(--peer "$N2_PEER" --challenger-key "$N2_CHALLENGER_KEY" ${N2_GATE_KEY:+--gate-key "$N2_GATE_KEY"});;
   esac
 elif [ -n "${N2_DRAW:-}" ]; then
-  log "n2adv: N2_DRAW needs N2_CHALLENGER (local|gate:USER@HOST): nothing draws on the verifier's own coins"; exit 4
+  log "n2adv: N2_DRAW needs N2_CHALLENGER (local|gate:USER@HOST): no round draws on the verifier's own coins"; exit 4
 fi
 log "n2adv: proving, ${E2E:+e2e $E2E windows ${N2_WINDOWS:-all}${N2_CLOCK_STAND_IN:+ clock stand-in}${N2_ADVICE_FROM_IO:+ advice from io}, }seed" \
   "${N2_SEED:-7}, members ${N2_MEMBERS:-all}, draw ${N2_DRAW:-all}${N2_CHALLENGER:+ on $N2_CHALLENGER}${N2_DRY:+, dry}"

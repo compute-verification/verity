@@ -112,13 +112,14 @@ session of the auditor's challenger of its own (``--challenger``, `round_coins`)
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, `round_coins`): every round, the
   block round and the negatives too, draws as prove_path's records audit draws (`a5_coins`), on a session of the
   auditor's challenger of its own, on the round's root (`round_coins.root` of the group's `window_root`, the network
-  certifier's session and the group's signed registrations, and the round's name). The round's stream (`RoundStream`
-  on `spec_of`, the joint round's own Program the generator form) on its coins (`a5_coins.RankCoins`) registers the
-  round, the coins commit to the registration's digest, and its select draws once (Lean's `Select.select` on the bytes
-  read). Once the session has ended, the outcome of record is the stream's with the coins' evidence, the Lean's whole
-  run (`Run.run`, coin source the challenger) held to the Python's (`coins_outcome`), and the session's evidence held
-  by `round_coins.RoundSession.held`; for the honest round each altered evidence (`a5_coins.negatives`, the evidence
-  for another window) is also refused by the Lean's run.
+  certifier's session and the group's signed registrations, and the round's name). Every round is staged (`stage`)
+  before any round's session opens, so each round's statement is fixed before any coin is drawn. The round's stream
+  (`RoundStream` on `spec_of`, the joint round's own Program the generator form) on its coins (`a5_coins.RankCoins`)
+  registers the round, the coins commit to the registration's digest, and its select draws once (Lean's
+  `Select.select` on the bytes read). Once the session has ended, the outcome of record is the stream's with the
+  coins' evidence, the Lean's whole run (`Run.run`, coin source the challenger) held to the Python's
+  (`coins_outcome`), and the session's evidence held by `round_coins.RoundSession.held`; for the honest round each
+  altered evidence (`a5_coins.negatives`, the evidence for another window) is also refused by the Lean's run.
   ``local`` is a development session on this machine (its own key; it shows the path, not an auditor's coins);
   ``gate:USER@HOST`` is the auditor's challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under
   the deployment's key record ``--challenger-key``. The gate opens a root once, ever: a run's round is drawn once (the
@@ -160,7 +161,6 @@ import round_coins as RC  # noqa: E402
 import warden_zk as WZ  # noqa: E402
 from verity.ml.circuits import boolean as BL  # noqa: E402
 from verity.ml.circuits.boolean import trace as TR  # noqa: E402
-from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
@@ -260,10 +260,9 @@ FRAME_BINDING = "verity/flock-circuit/binding/v2"
 VALUES = {k: f"verity/certifier/scan-{k}/v1" for k in ("state", "prog", "view")}
 TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "k_log", "nbl",
           "dense_m", "units", "ands_per_vu", "prover", "gpu")
-#: each round's stream on the auditor's challenger's coins (``--challenger``): its challenger, the format of the
-#: group's root its rounds' roots bind (`window_root`), and each member's share of the proof deadline
+#: each round's stream on the auditor's challenger's coins (``--challenger``): its challenger, and each member's share
+#: of the proof deadline
 CHALLENGER = "scan_zk.py on the auditor's challenger's coins"
-WINDOW_ROOT = "verity/certifier/scan-window-root/v2"
 MEMBER_DEADLINE_S = 5 * 3600
 #: the format of ``answers.json`` (`answers`): the honest round's registration, the block's audit and each
 #: link-window's answer and rows
@@ -1016,13 +1015,11 @@ def staged_wires(members: list[dict]) -> list[str]:
 # --- the challenger's coins ---------------------------------------------------------------------------------------------
 
 def window_root(at: SimpleNamespace) -> str:
-    """The group's root (128 hex digits), which each round's session root binds (`round_coins.root`): the SHA-512 of
-    the network certifier's session and the group's registrations, each link's in link-window order, whose heads the
+    """The group's root (`round_coins.window_root`), which each round's session root binds (`round_coins.root`): the
+    network certifier's session and the group's registrations, each link's in link-window order, whose heads the
     network certifier signed. The gate opens a root once, ever, so each round of a network certifier run's group is
-    drawn once."""
-    return hashlib.sha512(canonical_json({"format": WINDOW_ROOT, "session": at.session.hex(),
-                                          "registrations": {s: [x.registration for x in ws]
-                                                            for s, ws in sorted(at.sides.items())}})).hexdigest()
+    drawn once; the chain's report recomputes it from ``answers.json`` (`chain_record.scan_base`)."""
+    return RC.window_root(at.session, {s: [x.registration for x in ws] for s, ws in at.sides.items()})
 
 
 @contextmanager
@@ -1563,11 +1560,9 @@ def prove(a) -> int:
     log(f"stagers: {summary['stagers']}")
     ok, results = True, {}
     summary["coins"] = {"challenger": a.challenger, "base": window_root(at), "rounds": {}, "flock": RC.FLOCK}
-    log(f"every round draws on a session of its own of the challenger's ({a.challenger}), on its root over the group's "
-        f"{summary['coins']['base'][:16]}…")
-    for j, (name, mrs) in enumerate(h.rounds.items()):
-        pg = pgs[rounds[name][0]]
-        members = [stage(M, pg, mr, out / name / f"stage-{mr.name}") for mr in mrs]
+    staged = {}
+    for name, mrs in h.rounds.items():
+        members = staged[name] = [stage(M, pgs[rounds[name][0]], mr, out / name / f"stage-{mr.name}") for mr in mrs]
         if name == "honest":
             summary["wires"] = staged_wires(members)
             if summary["wires"]:
@@ -1577,7 +1572,11 @@ def prove(a) -> int:
                         "stage_s": m["stage_s"], "outputs": m["outputs"]} for m in members}
         log(f"staged {name}: " + "; ".join(f"{m['name']} {m['ands']} ANDs a unit, m = {m['k_log']} + {m['nbl']}, "
                                            f"outputs {m['outputs']}" for m in members))
-        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    log(f"every round staged; each draws on a session of its own of the challenger's ({a.challenger}), on its root "
+        f"over the group's {summary['coins']['base'][:16]}…")
+    for j, (name, members) in enumerate(staged.items()):
+        pg = pgs[rounds[name][0]]
         av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
         trees = {**at.trees, **({"state": at.swapped} if name == "chain" else {}),
                  **({"prog": at.unread.tree} if name == "unread" else {})}

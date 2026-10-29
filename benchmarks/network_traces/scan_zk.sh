@@ -84,7 +84,7 @@ if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-pa
     CH+=(--peer "$SC_PEER" --challenger-key "$SC_CHALLENGER_KEY" ${SC_GATE_KEY:+--gate-key "$SC_GATE_KEY"});;
   esac
 elif [ -z "${SC_DRY:-}" ]; then
-  log "sczk: SC_CHALLENGER (local|gate:USER@HOST) names the challenger every round draws on: nothing draws on the" \
+  log "sczk: SC_CHALLENGER (local|gate:USER@HOST) names the challenger every round draws on: no round draws on the" \
     "verifier's own coins"; exit 4
 fi
 SC_PORT=${SC_PORT:-$("$PY" -c 'import os; print(7811 + 16 * min(os.sched_getaffinity(0)))')}
