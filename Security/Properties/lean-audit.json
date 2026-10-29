@@ -6061,9 +6061,9 @@
    ]
   },
   "Definitions.Nci": {
-   "digest": "599bfd62068dd97aba4cc68a9ae47b8eae8668aee555ee97f6386c7da323dde3",
+   "digest": "cf73531500555d51a32b3b80a46a9f46975791a7a397c8caa4224ad9107851c7",
    "definitions": {
-    "Nci.Complies": "57196e4e385bfd389cdc6a3776b00da99c4df976b913c3e02e1c956b0f49c44e",
+    "Nci.CompliesRate": "04d1bc0c7741d7ddbf12e07e6ea3399f89935a6db83da39818c19e72cd0946ad",
     "Nci.Policy": "a81cff6c812131f35e8b34e7d21b6fe0cdfc05c26075c9806d0b45ca908d872c",
     "Nci.novelReads": "f9a643aedf8a9ffa1542961e8c8a249e4e9954abe74c705a91d60d6565a6cf79"
    },
@@ -11443,7 +11443,7 @@
    ]
   },
   "Properties.Nci": {
-   "digest": "99d5032cae6ea79303d2a991aa5275e2a2ab6bd02581d3640952c23212cef453",
+   "digest": "2e4ff03259bde87aadd999542676005e0c442621073c73470c33dcc9f8ceebbc",
    "definitions": {
     "NciCheck.Properties.AcceptsExactly": "ad49a4fc7bdc27c51834a5eb3b326501fd251b58a230767e43146a882d9fe4ac",
     "NciCheck.Properties.CheckAccepts": "0ab73f824c3fc0ef171fb8614da23aeac2c585fab78df539a8e0e3666a1b559b",
@@ -11472,7 +11472,7 @@
     "NciCheck.Properties.ThetaFault": "3eec63867622fd244865c678cf1de095584b79307ec1f1d16b60b91994a63618",
     "NciCheck.Properties.ThetaOk": "7688f08847afe11c7f69343d219f7930ce2f4f52e2ee30990fc82338e44ba091",
     "NciCheck.Properties.WellFormed": "96738bd8333b944b7455f4697e0b5e97920e93b911571144a3739f5bd824d6ff",
-    "NciCheck.Properties.Witnessed": "00d67453f43d79ccb3b13bdac6d2b23db9d39268caa37dce4402a8e1a4273c38",
+    "NciCheck.Properties.Witnessed": "f7b69681e38d740de1dd2ee2544df74a15cc2650a2269e0fca388a6abb3c93af",
     "NciCheck.Properties.Witnesses": "e5656ba79b198fcf216d820deadc82ed40c693a0b3cf5fd701a95fa512cf6d89",
     "NciCheck.Properties.gates": "d22de7ef77236de69a3945a590442b1313af6dbff593dfb425cc2f436521c303"
    },
@@ -11511,12 +11511,12 @@
    "guarantees": ["NciCheck.Properties.SecurityProofs.BaselineProvenance"]
   },
   "Properties.Nci.Threads": {
-   "digest": "cded63e27e36646644fa159154955b4d5607747007d60724ec5cb8ab8991d178",
+   "digest": "946507e8e2082b2c8627dac263d102f99c2955bf3da08865f8772d7d1fb17484",
    "definitions": {
-    "NciCheck.Properties.Throttled": "ec7024eeaa6d4ae250879f4967a785087e122ccb16d99723393a84b81665ecf7",
-    "NciCheck.Properties.ThrottledDark": "f9beb717d270c34450196f12441256b3b7e8cf084b49f9a482b6f284bdd94834",
-    "NciCheck.Properties.ThrottledDarkSlots": "c7513d0e7161ed50efbc65cf3164cdee1d18ccb5e704d0d0ddbbd255acb6015c",
-    "NciCheck.Properties.ThrottledSlots": "a754a653eaf05e597adc7131224fb3f736a8c43ea0314dfe9809d36feb73f5c1",
+    "NciCheck.Properties.Throttled": "db3a8cbb5d184f16ed1803b73a3fba27da93ec7143f4abdb9d7942e6eee0c151",
+    "NciCheck.Properties.ThrottledDark": "c11e46b5143cbd717d93a8cd286d4db212a032a28a333086477d15c669493343",
+    "NciCheck.Properties.ThrottledDarkSlots": "2936dc47615b30593158a2e47d86211b81ee66c1c2db8a1e358b63264ff95aee",
+    "NciCheck.Properties.ThrottledSlots": "e0db14c767caaaac3f438fdd2647cbcc53d5349fa168604f7cb8b327e871e400",
     "NciCheck.Properties.Throttles": "941527d6f138cd24061409566b5de4f4f5369e1e379679af1c155144166626e9",
     "NciCheck.Properties.ThrottlesDark": "84c35cdd2aee2d620a8702599f07d6985ad4d29fc7cb600f8ef973a0bccecbde",
     "NciCheck.Properties.ThrottlesDarkSlots": "590e5e8a3d803ba6b9e368fe5d000aa606cec5e1dbd5db59177edf19b2483fef",
@@ -11555,10 +11555,10 @@
    ]
   },
   "Properties.NciDesc.Cover": {
-   "digest": "fbd133da9689da71f9a1ed63e108d0b7840a31000e296df7a03a152bea5a6f25",
+   "digest": "4237ea220ea65d7a7dbb1b66e6641603fb53a94e82a60e9a8342dc9dcf264f2c",
    "definitions": {
     "NciCheck.Properties.CheckedCoverTraining": "330c64e1a9f61389517cfc395571ba7cf250d7d9a74c792912835f89c168d7bd",
-    "NciCheck.Properties.CoverTrained": "f6bdaaafda93fb0c4af9b3db16930eddc25d10441e5a7a79aecabe334c0d6f67"
+    "NciCheck.Properties.CoverTrained": "6cc7a8680334966c5dae88fbfbe79b53e11a89d564d76c5f76ba51ee3147704d"
    },
    "guarantees": ["NciCheck.Properties.SecurityProofs.CheckedCoverTraining"]
   },
