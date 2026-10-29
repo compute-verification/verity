@@ -918,8 +918,10 @@ def fold_fix(rng: np.random.Generator, trials: int, Ks=(2048, 8192), q: int = 5,
             honest = S + P + lay["iadd3_steps"]
             entry = {"fold_a_word": round((1 + 1 / k) / 2, 4) if k else 0.5, "honest": honest, "layout": lay}
             for label, (unpack, col_rows) in FIX_READINGS.items():
-                c0 = min(honest, fix_attack_cost(S, lay, unpack, col_rows))
-                entry[label] = {"C0": round(c0, 2), "gap_vs_foldmaterial": round((honest - c0) / stock, 4),
+                packed = fix_attack_cost(S, lay, unpack, col_rows)
+                c0 = min(honest, packed)
+                entry[label] = {"C0": round(c0, 2), "packed_over_honest": round(packed / honest, 3),
+                                "gap_vs_foldmaterial": round((honest - c0) / stock, 4),
                                 "gap_vs_stock": round(max(0.0, (stock - c0) / stock), 4)}
             per_k["XOR alone" if k is None else f"k={k}"] = entry
         rows[f"K {K} (S {S})"] = {"stock": round(stock, 2), "by_k": per_k}
