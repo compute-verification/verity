@@ -61,8 +61,8 @@ counting it. It is the form the Programs' outputs are tied to: a Program gives a
 slot holds them in `out` through its last egress bucket, past the link-window's end where that is later (a group's scan
 carries its state across its link-windows). In a link-window of nb = T / EVERY boundaries, bucket t's `prog<j>` reads
 row j·nb + ⌊t / EVERY⌋ of one slot-entries input (`NetworkCheck.Period`'s `readsEntries`), the row of slot j at boundary
-⌊t / EVERY⌋ as `SlotEntry_v1` lays them out. Unless that input is a compute audit's `SlotEntry_v1` template's entries,
-its `read` bit is the prover's word: an entry of `read` 1, n 0 and no outputs for a request no Program reads passes
+⌊t / EVERY⌋ as `SlotEntry_v1` lays them out. Unless that input is the entries of a slot entry template a compute audit's
+circuit record registers, its `read` bit is the prover's word: an entry of `read` 1, n 0 and no outputs for a request no Program reads passes
 these gates (o0's ok 1), and an unwired input is a free input the prover commits, not a zero. So the refusal of an
 absent entry holds against an honest prover only, and the period check refuses such a link-window (`wired`), and one
 whose scan's state is not that audit's `SCAN_STATE`, by root and domain (`stateTied`). The scan's state tree is the

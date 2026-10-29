@@ -6,14 +6,15 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
   and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
-  ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
+  ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps, and
+  its circuit record where it carries one),
   jitter bound 1 (K's jitter term 0, assumed (J), not met at 1), and the scan that Program's
   descriptor (``joint/program.json``), off which the period check reads the scan's terms; the commitment the audits'
   registrations and the scan's; the evidence the audits' answers, then the scan's answer, the certificates of W's
   three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations (``cells.jsonl``, as
   ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T units, so a group of
-  more is refused, and the scan's `prog` must be an audit's `SlotEntry_v1` template's entries and its ``scan/state``
-  that audit's.
+  more is refused, and the scan's `prog` must be the entries of a slot entry template its audit's circuit record
+  registers, and its ``scan/state`` that audit's.
 * **tampered** and **chain**: the same rows and certificates with that round's registration
   (``<round>/registration.json``) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
   for another statement than the link's Program; chain's the link's Program's, refused.
@@ -22,12 +23,12 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
   ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: reject, and where the scan's
   answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's). The block round's o0 is a
-  `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`entryPins`: the scan's
-  `prog` is a ``scan/prog<j>`` a lane, and lane j's must be chunk j, ``<descriptor id>/c<j>/o0``, of a pinned
-  `SlotEntry_v1`'s or `SelectEntry_v1`'s own entries, as the block round's lane-j o0 is of the stand-in's), so the
-  honest case passes every check before the wiring and is refused there; its registration names the scan's state tree
-  as ``scan/state``, the state the stand-in's `SCAN_STATE` is tied to (`stateTied`). ``DIR`` gets each case's files
-  and ``period.json``, each case's answers.
+  `SlotEntry_v1` stand-in's entries, and its audit carries no circuit record registering that template (the scan's
+  `prog` is a ``scan/prog<j>`` a lane, and lane j's must be chunk j, ``<descriptor id>/c<j>/o0``, of the entries of a
+  template the audit's circuit record registers by closure digest, a record the audit's registration binds, as the
+  block round's lane-j o0 is of the stand-in's), so the honest case passes every check before the wiring and is
+  refused there; its registration names the scan's state tree as ``scan/state``, the state the stand-in's `SCAN_STATE`
+  is tied to (`stateTied`). ``DIR`` gets each case's files and ``period.json``, each case's answers.
 """
 from __future__ import annotations
 
@@ -86,7 +87,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
         certs[1]["signature"] = sig[:-1] + ("1" if sig[-1] == "0" else "0")
     N, W, H = dep["key"]["params"]
     audits = doc.get("audits", [])
-    params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": [],
+    params = {"audits": [{k: a[k] for k in ("circuit", "free", "program", "steps") if k in a} for a in audits], "cells": [],
               "first": x["window"], "jitter": 1, "key": dep["key"]["public"], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),

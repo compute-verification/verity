@@ -211,10 +211,11 @@ A spec-level reference for network accounting's timing channel:
   last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
   then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit, which is 0 at an
   occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Unless the
-  Programs' row is a compute audit's `SlotEntry_v1` template's entries, that template a pinned Definition (its closure
-  digest one of `slotEntryPins`), the read bit is the prover's word (an entry of read 1 and no outputs passes), so the
-  period check refuses such a link-window (`NetworkCheck.Period`'s `wired`), and one whose scan's state isn't that
-  audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is the window state (`window_state`),
+  Programs' row is the entries of a slot entry template a compute audit's circuit record registers by closure digest
+  (`interface.Entries`, a record the audit's registration binds), the read bit is the prover's word (an entry of read
+  1 and no outputs passes), so the period check refuses such a link-window (`NetworkCheck.Period`'s `wired`), and one
+  whose scan's state isn't that audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is the
+  window state (`window_state`),
   each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
   `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at

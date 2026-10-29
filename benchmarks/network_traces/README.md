@@ -224,12 +224,15 @@ The terms, in the generator reading of the scan's statement (each proof block's 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
 reads slot j's entry at row ⌊t / EVERY⌋ of lane j's entries, `scan/prog<j>` (`NetworkCheck.Period`'s `readsEntries`),
 and ignores it outside due and occupied slots, so a sampling block's entries are its NR·nb boundaries'. Unless each
-lane's `scan/prog<j>` is chunk j of a compute audit's `SlotEntry_v1` or `SelectEntry_v1` template's entries
+lane's `scan/prog<j>` is chunk j of the entries of a slot entry template a compute audit's circuit record registers
 (`<descriptor id>/c<j>/o0`, one member a lane), the read bit is the prover's word (an entry of read 1 and no outputs
-passes the scan), so `NetworkCheck.Period` refuses the sampling block by name (`wired`). `wired` pins the template's
-whole body by its closure digest (`entryPins`, `io_shell.SlotEntry_v1` at its circuit-check rows, and
-`SelectEntry_v1`'s), so the block round's `prog<j>`, the o0 of scan_zk's `SlotEntry_v1` stand-in's lane-j member,
-whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the
+passes the scan), so `NetworkCheck.Period` refuses the sampling block by name (`wired`). The integration registers its
+entry templates in the circuit record (`interface.Entries`: each template's whole body by its closure digest, the
+vocabulary size and stop ids they bind, and the templates the audit draws whole beside them), the audit's registration
+binds the record's digest before any coin, and `wired` holds the audit's template to the registered digest, so no
+constant of the check names a model. The block round's audit registers no entry template, so its `prog<j>`, the o0 of
+scan_zk's `SlotEntry_v1` stand-in's lane-j member, whose entries, read bit included, are the prover's, is refused
+there (scan_period.py). A slot's Program reads the
 requests from its own registered `SCAN_STATE`, and the check refuses, last, by name, a sampling block whose scan's
 state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
 (`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}), each leaf but the first the o1 of the proof block
