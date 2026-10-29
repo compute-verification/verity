@@ -16,7 +16,9 @@ A column's step offsets `w_t = u + t·v` expand two coins `u, v ∈ ℤ/q` drawn
 * **Composite `q`** (`pair_card_255`): at `q = 255` and steps 0 and 3, the offsets `(0, 0)` have three preimages, three
   times the independent share, because `3` is no unit mod 255.
 
-This is the pairwise independence a second-moment tail over a column's step events reads.
+* **The two moments** (`sum_hitSteps`, `sum_hitPairs`): for `S` distinct steps with targets of at most `P` residues
+  each, the hit count `C` has `E[C] ≤ S·p*` and, on a prime modulus, `E[C(C − 1)] ≤ S(S − 1)·p*²` with `p* = P/q`.
+  These are what a second-moment tail over a column's step events reads; the tail itself isn't proved here.
 -/
 
 namespace Pouw.Dimension.Expansion
@@ -92,5 +94,46 @@ theorem pair_card_255 : 3 ≤ (univ.filter fun uv => offset (0 : ZMod 255) uv = 
   rw [mem_filter]
   simp only [offset, mem_univ, true_and]
   rcases huv with rfl | rfl | rfl <;> exact ⟨rfl, rfl⟩
+
+variable {S : ℕ}
+
+/-- The steps whose offsets land in their targets. -/
+def hitSteps (t : Fin S → ZMod q) (X : Fin S → Finset (ZMod q)) (uv : ZMod q × ZMod q) : Finset (Fin S) :=
+  univ.filter fun i => offset (t i) uv ∈ X i
+
+/-- **First moment**: if each step's target holds at most `P` residues, the hit steps summed over the `q²` draws are at
+most `S·P·q`, so `E[C] ≤ S·p*` with `p* = P/q`. -/
+theorem sum_hitSteps [NeZero q] (t : Fin S → ZMod q) (X : Fin S → Finset (ZMod q)) (P : ℕ)
+    (hX : ∀ i, (X i).card ≤ P) : ∑ uv, (hitSteps t X uv).card ≤ S * P * q := by
+  simp only [hitSteps, card_filter]
+  rw [sum_comm]
+  calc ∑ i : Fin S, ∑ uv : ZMod q × ZMod q, (if offset (t i) uv ∈ X i then 1 else 0)
+      = ∑ i : Fin S, (X i).card * q := by
+        refine sum_congr rfl fun i _ => ?_
+        rw [← card_filter, step_mem_card]
+    _ ≤ ∑ _i : Fin S, P * q := sum_le_sum fun i _ => Nat.mul_le_mul_right _ (hX i)
+    _ = S * P * q := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul, Nat.cast_id, mul_assoc]
+
+/-- **Second moment**: for distinct steps on a prime modulus, the ordered pairs of distinct hit steps summed over the
+draws are at most `(S² − S)·P²`, so `E[C(C − 1)] ≤ S(S − 1)·p*²`, the pairwise term a second-moment tail reads. -/
+theorem sum_hitPairs [Fact q.Prime] (t : Fin S → ZMod q) (ht : Function.Injective t) (X : Fin S → Finset (ZMod q))
+    (P : ℕ) (hX : ∀ i, (X i).card ≤ P) : ∑ uv, (hitSteps t X uv).offDiag.card ≤ (S * S - S) * (P * P) := by
+  have hoff : ∀ uv, (hitSteps t X uv).offDiag = (univ : Finset (Fin S)).offDiag.filter
+      fun ii => offset (t ii.1) uv ∈ X ii.1 ∧ offset (t ii.2) uv ∈ X ii.2 := by
+    intro uv
+    ext ii
+    rw [mem_filter, mem_offDiag, mem_offDiag, hitSteps, mem_filter, mem_filter]
+    simp only [mem_univ, true_and]
+    tauto
+  simp only [hoff, card_filter]
+  rw [sum_comm]
+  calc ∑ ii ∈ (univ : Finset (Fin S)).offDiag, ∑ uv : ZMod q × ZMod q,
+        (if offset (t ii.1) uv ∈ X ii.1 ∧ offset (t ii.2) uv ∈ X ii.2 then 1 else 0)
+      = ∑ ii ∈ (univ : Finset (Fin S)).offDiag, (X ii.1).card * (X ii.2).card := by
+        refine sum_congr rfl fun ii hii => ?_
+        rw [← card_filter, pair_mem_card (ht.ne (mem_offDiag.mp hii).2.2)]
+    _ ≤ ∑ _ii ∈ (univ : Finset (Fin S)).offDiag, P * P := sum_le_sum fun ii _ => Nat.mul_le_mul (hX _) (hX _)
+    _ = (S * S - S) * (P * P) := by
+        rw [sum_const, offDiag_card, card_univ, Fintype.card_fin, nsmul_eq_mul, Nat.cast_id]
 
 end Pouw.Dimension.Expansion
