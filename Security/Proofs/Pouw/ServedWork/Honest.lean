@@ -296,7 +296,7 @@ theorem served_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (re
     (∀ w, prob (fun x => (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n)
       opened (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile)
       (j10rAtCoin (hr1 _) enc place tile)).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (windows σ sT regOf evOf n) ∧ TileDrawIsCoin σ k hk sT unitOf (windows σ sT regOf evOf n) ∧
+    RegisteredBeforeSample (windows σ sT regOf evOf n) ∧ TileSampleIsCoin σ k hk sT unitOf (windows σ sT regOf evOf n) ∧
     TileServiceSound σ sT unitOf (windows σ sT regOf evOf n) opened
       (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) 0 ∧
     Properties.Pouw.Period.SaltIsLiveCoin (hr1 _) (saltOf (windows σ sT regOf evOf n)) enc ∧
