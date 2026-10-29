@@ -210,7 +210,7 @@ GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 READY = "ready"
 #: A reviewer's verdict on a pull request at one head (`research queue review`): `land` lands it with drive's `land = "review"`
 #: once every member below it has one, `hold` keeps it and everything above it on `next`; the owner's own doesn't count
-#: (PRs land on an eyeball review, and the full check runs after landing).
+#: (on `checked`; `main` follows only to commits whose after-landing run passed).
 REVIEWED = "reviewed"
 REVIEW_VERDICTS = ("land", "hold")
 #: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed

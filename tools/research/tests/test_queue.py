@@ -2941,7 +2941,7 @@ def test_a_remote_quick_tier_that_never_got_a_check_slot_never_started_and_did_n
     err = capsys.readouterr().err
     assert re.search(r"#1 is not marked ready at \w{12}: the quick tier never started: run \S+ on vy-test waited for a check slot "
                      r"until its --wait-max and never ran the tier", err) and "the quick tier failed" not in err
-    assert "lands on an eyeball review, and the quick tier isn't required" in err and "research run --on vy-nebius-cpu-K" in err
+    assert "A PR lands on `checked` on a review, and reaches `main` on the full check after, so the quick tier isn't required" in err and "research run --on vy-nebius-cpu-K" in err
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
     rid = machine.launched[-1][machine.launched[-1].index("--id") + 1]
     assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 1
@@ -3204,7 +3204,8 @@ def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
     q.fetch()
     shows = []
     real = Q._git
-    monkeypatch.setattr(Q, "_git", lambda repo, *a, **kw: (shows.append(a) if a[:1] == ("show",) else None) or real(repo, *a, **kw))
+    monkeypatch.setattr(Q, "_git", lambda repo, *a, **kw: (shows.append(a) if a[:1] == ("show",) and a[1].endswith(str(Q.REGISTRY))
+                                                            else None) or real(repo, *a, **kw))
     prs = [PR(n, "h", "t", body) for n, body in ((1, "Lane circuits"), (2, "Lane infra"), (3, "Lane circuits"))]
     assert [q.handle(p) for p in prs] == ["circuits", None, "circuits"]
     assert len(shows) == 1

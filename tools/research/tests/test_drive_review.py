@@ -1,4 +1,5 @@
-"""The review landing (`land = "review"`: PRs land on an eyeball review, and the full check runs after landing).  A tick
+"""The review landing (`land = "review"`, here with `land_into = "main"`: PRs land on review, and the full check runs on
+`main` after; `test_drive_checked.py` has `land_into = "checked"`, where `main` moves only to a checked commit).  A tick
 lands `next`'s longest prefix whose every member has a land verdict at its head by a reviewer who isn't its owner, a Lean
 change only once a Lean check passed; the after-landing run checks `main`, and its failure reverts what it implicates once
 `main` passed that step before, bisecting when several PRs are implicated."""
@@ -23,6 +24,9 @@ from test_queue import World, _git
 from test_queue_drive import Harness, _failed_run, _killed_run, _live_run, _steps_run, _tip
 
 EVERY = {s: "passed" for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL}
+#: a ci.toml with a job for each after-landing step, circuit-check off the merge gate as in the tree
+CI_TOML = 'schema = "ci/v0"\n' + "".join(f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n'
+                                         + ('gate = false\n' if s == "circuit-check" else "") for s in AFTER_LANDING)
 
 
 def test_the_after_landing_run_runs_circuit_check_which_is_off_the_merge_gate():
@@ -37,6 +41,20 @@ def test_the_after_landing_run_runs_circuit_check_which_is_off_the_merge_gate():
 @pytest.fixture
 def world(tmp_path):
     return World(tmp_path)
+
+
+def test_main_waits_for_the_steps_on_the_gate_of_the_commits_own_ci_toml(world, monkeypatch):
+    """`_promote` waits at a commit for every after-landing step but those a run skips by name and the jobs that commit's own
+    ci.toml takes off the merge gate (circuit-check); for every such step when that ci.toml can't be read."""
+    h = Review(world, monkeypatch)
+    every = [s for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL]
+    assert h.d._gating(_main(world)) == every
+    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
+    h.q.fetch()
+    assert h.d._gating(_main(world)) == [s for s in every if s != "circuit-check"]
+    _move_main(world, {"tools/verity/check/ci.toml": "not toml ["})
+    h.q.fetch()
+    assert h.d._gating(_main(world)) == every
 
 
 def _registry(world: World, *handles: str) -> None:

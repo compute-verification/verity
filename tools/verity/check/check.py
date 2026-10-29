@@ -1,6 +1,6 @@
 """`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs ci.toml takes off
-the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after landing, in drive's after-landing run on `main`'s
-tip.
+the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after landing, in drive's after-landing run on
+`checked`'s tip.
 
     uv run --extra torch-cpu python tools/verity/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
@@ -8,7 +8,7 @@ tip.
                                                             ci.toml) and what their jobs need, after the preflight; outside a
                                                             recorded run, since no gate takes part of a check
     ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
-                                                            post-landing run drive launches on `main`'s tip (`train.sh
+                                                            post-landing run drive launches on `checked`'s tip (`train.sh
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
                                                             with --shard K/N, only those of shard K's parts (drive's
                                                             `after_landing_shards`: one run per shard, at once)
@@ -371,7 +371,7 @@ LANE_POOL = ("vy-nebius-cpu-1", "research")
 SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
 FULL_CHECK_S = 9000
-#: a lane's own test run, which no landing needs (a PR lands on an eyeball review)
+#: a lane's own test run, which no landing needs (a PR lands on review, and drive's full check decides what reaches `main`)
 LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
@@ -476,8 +476,8 @@ def placement(doc: dict, priority: bool = False, min_mem: int | None = None) -> 
     else:
         mine = [s for s in check["slots"] if priority or not s.get("trains")]
         if not mine:
-            raise ValueError(f"every slot in {check['file']} is for train checks (only=trains). A PR lands on an eyeball review, "
-                             "and no lane check is required; to run its tests anyway: " + LANE_RUN)
+            raise ValueError(f"every slot in {check['file']} is for train checks (only=trains). A PR lands on review, and drive's "
+                             "full check decides what reaches `main`, so no lane check is required; to run its tests anyway: " + LANE_RUN)
         if min_mem and not (mine := [s for s in mine if s.get("mem") is None or s["mem"] >= min_mem]):
             raise ValueError(f"no slot in {check['file']} holds this check's {min_mem} GB (" + ", ".join(
                 f"{s['name']} {s.get('mem')} GB" for s in check["slots"]) + "): it takes a train slot")

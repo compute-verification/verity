@@ -1482,8 +1482,8 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     return [p["number"] for p in done], [p["number"] for p in moved]
 
 
-#: the branch drive's review landing is to fast-forward, which `main` follows only to commits whose after-landing run passed
-#: every step
+#: the branch drive's review landing fast-forwards when drive.toml's `land_into` names it, and `main` follows to each commit whose
+#: after-landing run passed every step on the merge gate (`drive.Driver._promote`)
 CHECKED = "checked"
 #: branches no sweep touches: the trunk, drive's landing branch, its train branch and its shadow
 KEEP_BRANCHES = frozenset({"main", CHECKED, "next", "queue-shadow"})

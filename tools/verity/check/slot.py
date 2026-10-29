@@ -85,7 +85,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 SLOTS = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/slots"))
-#: a lane's own test run, which no landing needs (a PR lands on an eyeball review)
+#: a lane's own test run, which no landing needs (a PR lands on review, and drive's full check decides what reaches `main`)
 LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 LINE = "check-line"
@@ -838,7 +838,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
               "recorded check, for the pools `research run --help` names)"
             if pools else "a lane check runs on another machine")
         sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); {where}. A PR lands "
-                 f"on an eyeball review, and no lane check or quick tier is required; to run its tests anyway: {LANE_RUN}")
+                 f"on review, and drive's full check decides what reaches `main`, so no lane check or quick tier is required; to run its tests anyway: {LANE_RUN}")
     if not any(holds(s, min_mem) for s in slots if priority or not s["trains"]):
         have = ", ".join(f"{s['name']} ({s['mem']} GB)" for s in slots)
         print(f"slot: not started: this check needs a slot of at least {min_mem} GB, and {SLOTS} has {have}. Run it on a machine "
