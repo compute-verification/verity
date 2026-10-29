@@ -78,10 +78,9 @@ def _node(ex: dict) -> str | None:
 
 def _since(slot: dict) -> float:
     """A check slot's wait (`slot.json`: took less since), 0 without one."""
-    try:
-        return max((ts(slot["took"]) - ts(slot["since"])).total_seconds(), 0.0)
-    except (KeyError, TypeError, ValueError):
+    if not (isinstance(slot, dict) and slot.get("took") and slot.get("since")):
         return 0.0
+    return max((ts(slot["took"]) - ts(slot["since"])).total_seconds(), 0.0)
 
 
 def records_task(rid: str, doc: dict, meta: dict | None, paths: list[str], read: Callable[[str], bytes]) -> dict:
@@ -95,10 +94,12 @@ def records_task(rid: str, doc: dict, meta: dict | None, paths: list[str], read:
     if (meta or {}).get("kind") != FAST_KIND:
         return task
     out = read("stdout.log").decode(errors="replace") if "stdout.log" in paths else ""
-    try:
-        slot = json.loads(read("slot.json")) if "slot.json" in paths else {}
-    except ValueError:
-        slot = {}
+    slot = {}
+    if "slot.json" in paths:
+        try:
+            slot = json.loads(read("slot.json"))
+        except ValueError as e:
+            task["note"] = f"slot.json unreadable ({e}): its check-slot wait counts as 0"
     wall, check_wait = float(ex.get("wall_s") or 0.0), _since(slot)
     work = [int(s) for _, s in WORK.findall(out)]
     work_s = float(sum(work)) if work else max(wall - check_wait, 0.0)
@@ -139,12 +140,21 @@ def within(tasks: list[dict], start: datetime, end: datetime) -> list[dict]:
     """The ``tasks`` that ended in [start, end]."""
     keep = []
     for t in tasks:
-        try:
-            if start <= ts(t["ended"]) <= end:
-                keep.append(t)
-        except (KeyError, TypeError, ValueError, AttributeError):
-            continue
+        if (e := _ended(t)) is not None and start <= e <= end:
+            keep.append(t)
     return keep
+
+
+def _ended(t: dict) -> datetime | None:
+    """When the task ``t`` ended, None while it hasn't; an unparseable time is noted on ``t``, which no window then holds."""
+    e = t.get("ended")
+    if not isinstance(e, str):
+        return None
+    try:
+        return ts(e)
+    except ValueError as err:
+        t["note"] = f"ended {e!r} doesn't parse ({err}): left out of every window"
+        return None
 
 
 def _stats(vals: list[float], pre: str = "") -> dict:
