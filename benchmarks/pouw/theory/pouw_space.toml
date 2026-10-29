@@ -263,21 +263,21 @@ source = "CORE-NCP final §4: NCP as served (int7 activations and weights on +-6
 models = ["llama-3.2-1b"]
 ctx2k = -0.0005
 ctx8k = -0.0006
-kind = "measured"
+kind = "checked"
 source = "SW-PPL final (note compute-research/20261029T0725Z-report-sw-ppl, art:3448184919db0f476e2bc758698b6533d7603ce0d291745a2db9f56ddf3bf9be; benchmarks/ppl on cursor/compute-research-sw-ppl-dd1e at 136d15b0f8, CPU runs listed there): Llama-3.2-1B on WikiText-2's 16 locked windows, noise seed 0, exp(mean NLL difference) - 1 against stock int8 (int8-channel127-v1) in the same run, 95% paired window bootstrap: -0.05% [-0.19, +0.10] at 2K, -0.06% [-0.17, +0.06] at 8K"
 
 [t3.ssn-1l-b1-v1]
 models = ["llama-3.2-1b"]
-ctx2k = -0.0009
+ctx2k = -0.0016
 ctx8k = -0.0002
-kind = "measured"
-source = "SW-PPL final (note compute-research/20261029T0725Z-report-sw-ppl, art:3448184919db0f476e2bc758698b6533d7603ce0d291745a2db9f56ddf3bf9be; benchmarks/ppl on cursor/compute-research-sw-ppl-dd1e at 136d15b0f8, CPU runs listed there): Llama-3.2-1B on WikiText-2's 16 locked windows, noise seed 0, exp(mean NLL difference) - 1 against stock int8 (int8-channel127-v1) in the same run, 95% paired window bootstrap: -0.09% [-0.34, +0.15] at 2K, -0.02% [-0.11, +0.06] at 8K"
+kind = "checked"
+source = "N-PPL interim 1 §1, §6 (note compute-research/20261029T0850Z-report-np-ppl; art:0dcf7e57a8194a54af5095021d0ecbf5a33eb42e7ea2ac4b33f03f7a9217291d, benchmarks/ppl on cursor/compute-research-np-ppl-2176 at e70985c06d, CPU): the seed-mean of 5 noise seeds, -0.161% [-0.306, -0.021] at 2K (M2K-u r20261029-074048-9573/-074121-695f/-074152-745b/-074211-d90a) and -0.021% [-0.088, +0.046] at 8K (M8K-u r20261029-075058-4314/-075129-aeba/-075150-7815/-075210-2661); seed 0 reproduces SW-PPL bit for bit; coins shared across a fused call as served (ssn-1l-b1-fused-v1) -0.137% [-0.267, +0.001] at 2K, +0.024% [-0.077, +0.134] paired against unfused (r20261029-074253-7d3b/-074312-deef/-074342-d4c6/-074405-4142; 8K running). Before it, SW-PPL final (note compute-research/20261029T0725Z-report-sw-ppl, art:3448184919db0f476e2bc758698b6533d7603ce0d291745a2db9f56ddf3bf9be; benchmarks/ppl on cursor/compute-research-sw-ppl-dd1e at 136d15b0f8, CPU runs listed there): Llama-3.2-1B on WikiText-2's 16 locked windows, noise seed 0, exp(mean NLL difference) - 1 against stock int8 (int8-channel127-v1) in the same run, 95% paired window bootstrap: -0.09% [-0.34, +0.15] at 2K, -0.02% [-0.11, +0.06] at 8K"
 
 [t3.int8-act124-v1]
 models = ["llama-3.2-1b"]
 ctx2k = 0.0004
 ctx8k = 0.0002
-kind = "measured"
+kind = "checked"
 source = "SW-PPL final (note compute-research/20261029T0725Z-report-sw-ppl, art:3448184919db0f476e2bc758698b6533d7603ce0d291745a2db9f56ddf3bf9be; benchmarks/ppl on cursor/compute-research-sw-ppl-dd1e at 136d15b0f8, CPU runs listed there): Llama-3.2-1B on WikiText-2's 16 locked windows, noise seed 0, exp(mean NLL difference) - 1 against stock int8 (int8-channel127-v1) in the same run, 95% paired window bootstrap: +0.04% [-0.16, +0.23] at 2K, +0.02% [-0.08, +0.13] at 8K"
 
 [t3.int8-stock]
@@ -297,14 +297,14 @@ source = "D.epilogue's served output: stock's int8 product, but the per-row nois
 models = ["llama-3.2-1b"]
 ctx2k = -0.0005
 ctx8k = -0.0003
-kind = "measured"
+kind = "checked"
 source = "SW-PPL final (note compute-research/20261029T0725Z-report-sw-ppl, art:3448184919db0f476e2bc758698b6533d7603ce0d291745a2db9f56ddf3bf9be; benchmarks/ppl on cursor/compute-research-sw-ppl-dd1e at 136d15b0f8, CPU runs listed there): Llama-3.2-1B on WikiText-2's 16 locked windows, noise seed 0, exp(mean NLL difference) - 1 against stock int8 (int8-channel127-v1) in the same run, 95% paired window bootstrap: -0.05% [-0.21, +0.12] at 2K, -0.03% [-0.13, +0.07] at 8K"
 
 [t3.int7-rot]
 models = ["llama-3.2-1b"]
 ctx2k = -0.0096
 ctx8k = -0.0064
-kind = "measured"
+kind = "checked"
 source = "SW-PPL final (note compute-research/20261029T0725Z-report-sw-ppl, art:3448184919db0f476e2bc758698b6533d7603ce0d291745a2db9f56ddf3bf9be; benchmarks/ppl on cursor/compute-research-sw-ppl-dd1e at 136d15b0f8, CPU runs listed there): Llama-3.2-1B on WikiText-2's 16 locked windows, noise seed 0, exp(mean NLL difference) - 1 against stock int8 (int8-channel127-v1) in the same run, 95% paired window bootstrap: ncp-rotate, each linear's input rotated online (x·Q, Q = diag(signs)·H_k/sqrt(k), W·Q offline) then int7 on +-63: -0.96% [-1.20, -0.73] at 2K, -0.64% [-0.74, -0.54] at 8K; against rotated int8 it is +0.22% and +0.29%, so the gain is the rotation's, not int7's"
 
 [t3.ssn-1l5-b1-v1]
@@ -312,21 +312,21 @@ models = []
 ctx2k = "?"
 ctx8k = "?"
 kind = "unmeasured"
-source = "SW-NOISE final §8's ssn-1l5-b1-v1 (the 5-lane balanced code): its served std is below ssn-1l-b1-v1's at every shape (qkv 5.26 against 5.94 units, down 8.72 against 9.22; estimate, ssn_code5.py run r20261029-070428-c03f), and lm_head's noise lands on the logits; SW-PPL to measure"
+source = "SW-NOISE final §8's ssn-1l5-b1-v1 (the 5-lane balanced code): its served std is below ssn-1l-b1-v1's at every shape (qkv 5.26 against 5.94 units, down 8.72 against 9.22; estimate, ssn_code5.py run r20261029-070428-c03f), and lm_head's noise lands on the logits; SW-PPL to measure. N-PPL interim 1 §2 (partial, labelled so): -0.24% [-0.50, +0.00] at 2K on 12/16 windows, seed 0 (H2K r20261029-075712-4b9d/-075738-dd1b/-075805-71f4/-075830-156e, running)"
 
 [t3.ssn-1l-hw-v1]
 models = []
 ctx2k = "?"
 ctx8k = "?"
 kind = "unmeasured"
-source = "N-PREM interim 1 §2: served noise std 41-43 units (6-9 for ssn-1l), bracketed by SW-PPL's measured ssn-1l-b4-v1 (+0.01% / +0.17%), so about +0.2% at most (estimate); N-PPL to measure"
+source = "N-PREM interim 1 §2: served noise std 41-43 units (6-9 for ssn-1l), bracketed by SW-PPL's measured ssn-1l-b4-v1 (+0.01% / +0.17%), so about +0.2% at most (estimate); N-PPL to measure. N-PPL interim 1 §2 (partial, labelled so): -0.03% / -0.07% / -0.45% [-0.71, -0.17] at 2K on 8/16 windows, seeds 0-2 (W2K r20261029-075511-dbba/-075550-5f1f/-075917-4067/-075957-3605, running)"
 
 [t3.ssn-1l-tag-v1]
 models = []
 ctx2k = "?"
 ctx8k = "?"
 kind = "unmeasured"
-source = "N-RED interim 1 §3: served noise std 10.0-16.2 units with the tags (6.0 / 9.2 for ssn-1l), so about 0 to +0.2% interpolated on SW-PPL's b1 and b4 rows (estimate); needs its own SW-PPL row"
+source = "N-RED interim 1 §3: served noise std 10.0-16.2 units with the tags (6.0 / 9.2 for ssn-1l), so about 0 to +0.2% interpolated on SW-PPL's b1 and b4 rows (estimate); needs its own SW-PPL row. N-PPL interim 1 §8: queued for its interim 2, waiting on N-RED for the exact tag layout"
 
 [t3.nsf-v1]
 models = []
