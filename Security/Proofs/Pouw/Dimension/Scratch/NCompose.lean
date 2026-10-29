@@ -24,7 +24,8 @@ in a lock, and nothing imports it.
   separation (`SepBy`). `CarriedWords` (a named premise) is that every admissible program writes a carrier of each
   committed word; with it, only carriers leave the hash's count (`hashCompose_of_carriedWords`). The pair gives the
   joint count, `ShaWrites` with only the free values excluded at `|T| + R` (`jointWrites_of_carriedWords`), which
-  doesn't say which registers are the words.
+  doesn't say which registers are the words, and the joint count holds where `CarriedWords` fails
+  (`fold_joint_not_carried`, the fold on a toy grid).
   `sepShift_needed`: targets that differ by a constant share one carrier. The byte swap
   (`bswap32`, little-endian rows read by SHA-512's big-endian words): a carrier `w + s` with `s ≠ 0` does not survive
   the swap up to a constant (`bswap32_shift_not_const`), and the swapped word is no carrier of the word
@@ -915,6 +916,57 @@ theorem hashComposeW1_not_of_shaSpeedW1 :
     rw [Finset.card_singleton] at hc h'
     omega
 
+/-- `tw + td` on the toy grid: the fold's register, a `wgmma` on the word started from the round sum `td`. -/
+def tf : Bool → ℚ := fun b => if b then 3 else 7
+
+/-- **The joint count holds where `CarriedWords` fails** (the fold, on the toy grid): the hash writes its round sum
+`td` and `tf = tw + td`, so no register carries the word `tw`, yet it writes `|T| + R = 2` registers, distinct and
+non-constant. The pair implies the joint form (`jointWrites_of_carriedWords`), so the joint form is strictly weaker. -/
+theorem fold_joint_not_carried :
+    ∃ (Adm : List (Op100 Bool) → List (Bool → ℚ) → Prop) (P : List (Op100 Bool)),
+      ShaWrites h100Floor Adm (fun _ _ _ _ => 0) Set.univ (Consts Bool) {tf} (({tw} : Finset _).card + 1) ∧
+        Adm P [] ∧ (∀ o ∈ P, o.WFw h100Floor (Consts Bool)) ∧ OutputsOn (fun _ _ _ _ => 0) Set.univ P [] {tf} ∧
+        DistinctOn Set.univ (Consts Bool) {tw} ∧ ¬ CarriedWords Adm (fun _ _ _ _ => 0) Set.univ {tw} {tf} := by
+  have hregs : regs100 (fun _ _ _ _ => (0 : ℚ)) ([td, tf].map Op100.int) [] = [td, tf] := by
+    simpa using regs100_map_int (fun _ _ _ _ => (0 : ℚ)) [td, tf] []
+  have hne : td ≠ tf := by
+    intro h
+    have := congrFun h true
+    norm_num [td, tf] at this
+  have hnc : ∀ r ∈ ({td, tf} : Finset (Bool → ℚ)), ∀ f ∈ Consts Bool, ¬ ∀ g ∈ (Set.univ : Set Bool), r g = f g := by
+    intro r hr f hf h
+    obtain ⟨q, rfl⟩ := hf
+    have h1 := h true trivial
+    have h0 := h false trivial
+    simp only [Finset.mem_insert, Finset.mem_singleton] at hr
+    rcases hr with rfl | rfl <;> norm_num [td, tf] at h1 h0 <;> linarith
+  have hcar : ∀ r ∈ [td, tf], ¬ Carries Set.univ tw r := by
+    intro r hr ⟨q, hq⟩
+    have h1 := hq true trivial
+    have h0 := hq false trivial
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hr
+    rcases hr with rfl | rfl <;> norm_num [td, tf, tw] at h1 h0 <;> linarith
+  have hO : OutputsOn (fun _ _ _ _ => (0 : ℚ)) Set.univ ([td, tf].map Op100.int) [] {tf} := by
+    intro t ht
+    rw [Finset.mem_singleton] at ht
+    exact ⟨tf, by rw [hregs]; simp, fun g _ => by rw [ht]⟩
+  refine ⟨fun P L => P = [td, tf].map Op100.int ∧ L = [], [td, tf].map Op100.int, ?_, ⟨rfl, rfl⟩, ?_, hO, ?_, ?_⟩
+  · rintro L P - - ⟨rfl, rfl⟩ -
+    refine ⟨{td, tf}, by rw [Finset.card_pair hne, Finset.card_singleton],
+      ⟨fun t _ t' _ h => funext fun g => h g trivial, hnc⟩, fun t ht => ⟨t, ?_, fun _ _ => rfl⟩⟩
+    rw [hregs]
+    simp only [Finset.mem_insert, Finset.mem_singleton] at ht
+    rcases ht with rfl | rfl <;> simp
+  · intro o ho
+    simp only [List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false] at ho
+    rcases ho with rfl | rfl <;> trivial
+  · exact ⟨fun t ht t' ht' _ => by simp at ht ht'; rw [ht, ht'], fun t ht f hf => by
+      simp at ht; rw [ht]; exact tw_not_const f hf⟩
+  · intro h
+    obtain ⟨r, hr, hc⟩ := h [] _ ⟨rfl, rfl⟩ hO tw (Finset.mem_singleton_self _)
+    rw [hregs] at hr
+    exact hcar r hr hc
+
 end Ledger
 
 end Pouw.Dimension.NCompose
@@ -951,3 +1003,4 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.shaSpeedW1_of_shaWrites
 #print axioms Pouw.Dimension.NCompose.hashComposeW1_of_shaWrites
 #print axioms Pouw.Dimension.NCompose.hashComposeW1_not_of_shaSpeedW1
+#print axioms Pouw.Dimension.NCompose.fold_joint_not_carried
