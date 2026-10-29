@@ -1,4 +1,5 @@
 import Proofs.Pouw.Dimension.H100FloorProofs
+import Definitions.Pouw.DitherInstance
 
 /-!
 # `hash-compose` in `MH100w`: SHA-512's written registers beside the distinct-writes targets (scratch; not in a lock)
@@ -25,7 +26,8 @@ in a lock, and nothing imports it.
   committed word; with it, only carriers leave the hash's count (`hashCompose_of_carriedWords`). The pair gives the
   joint count, `ShaWrites` with only the free values excluded at `|T| + R` (`jointWrites_of_carriedWords`), which
   doesn't say which registers are the words, and the joint count holds where `CarriedWords` fails
-  (`fold_joint_not_carried`, the fold on a toy grid).
+  (`fold_joint_not_carried`, the fold on a toy grid). Over every program of `MH100w` `CarriedWords` is false
+  (`carriedWords_unrestricted_false`), so, like `ShaWrites`, it is a premise about the card's programs.
   `sepShift_needed`: targets that differ by a constant share one carrier. The byte swap
   (`bswap32`, little-endian rows read by SHA-512's big-endian words): a carrier `w + s` with `s ≠ 0` does not survive
   the swap up to a constant (`bswap32_shift_not_const`), and the swapped word is no carrier of the word
@@ -35,12 +37,18 @@ in a lock, and nothing imports it.
   every digest of the call, `root(A)`'s included, the card's cost is at least `c·(|T| + R_A + R_W)`: the pre-noise
   hashing of `A` is charged to the card, beside the targets. Without it the hash's credit is zero
   (`shaWrites_false_of_free`, under a free set holding `root(A)`).
-* **The egress layer** (`Run`, `costOn`, `PeriodInventory`; `costOn_split`, `egress_charged`,
-  `preNoiseHash_credited`): instructions on devices, cost counted on the card's devices `I`. The card is charged the
-  bound less what devices outside `I` ran (`egress_charged`); bounding that is the egress layer's. `PeriodInventory`,
-  every device of both runs in `I`, makes it zero. Without it, outsourced hashing goes uncounted on `I`
-  (`costOn_outside`, `outsourced_uncredited`); a toy instance meets every hypothesis and attains the bound
-  (`toy_attained`).
+* **The cards' inventory** (`Run`, `costOn`, `PeriodInventory`; `costOn_split`, `egress_charged`,
+  `preNoiseHash_credited`): instructions on devices, cost counted on the cards `I`. The cards are charged the bound
+  less what devices outside `I` ran (`egress_charged`); for devices outside the network certifier's boundary, bounding
+  that is the egress layer's. `PeriodInventory`, every device of both runs in `I`, makes it zero. Without it,
+  outsourced hashing goes uncounted on `I` (`costOn_outside`, `outsourced_uncredited`); a toy instance meets every
+  hypothesis and attains the bound (`toy_attained`).
+* **The hosts inside T1** (`PeriodInventoryT1`, `HostsWithinRow`, `hostsW1`; `hostsCounted_closes`,
+  `hostsCounted_call`, `hostRow_residual`, `routeH_gains_nothing`, `routeH_toy`): inside the network certifier's
+  boundary every device is a card or one of its hosts, and the hosts are counted at θ's rows (`HostRow`, as
+  `HostsCounted` counts them), so a host's hashing is credited as hashing. The credited W1 is at most the cards' cost,
+  the hosts' counted W1 and what came from outside the boundary. A row below the hosts' best leaves
+  `Σ_r Tp·n·w_r·(best_r − rate_r)⁺`, resource by resource.
 * **Lifting a data-case result to the call grid** (`distinctOn_lift`, `sepBy_lift`): a target set distinct at one
   data case, with that case's free values, is distinct on the call grid with the call's free values, when each call
   free value restricts to a data-case free value.
@@ -538,6 +546,19 @@ theorem words_not_forced (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (S : Set 
   rw [hregs] at hr
   exact hD r (Finset.mem_toList.1 hr) t ht
 
+/-- **`CarriedWords` needs its class**, as `ShaWrites` does: over every program of `MH100w` it fails for a nonempty
+target set no digest word encodes, since one `int` a digest word outputs the digests and writes no carrier
+(`words_not_forced`). So it is a premise about the card's programs (no instruction fuses a byte permute into an add or
+a dot product), not a fact of `MH100w`. -/
+theorem carriedWords_unrestricted_false (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (S : Set G) (T Dig : Finset (G → ℚ))
+    (hT : T.Nonempty) (hD : ∀ d ∈ Dig, ∀ t ∈ T, ¬ Encodes S t d) :
+    ¬ CarriedWords (fun _ _ => True) fpSem S T Dig := by
+  intro h
+  obtain ⟨hO, hno⟩ := words_not_forced fpSem S T Dig hD
+  obtain ⟨t, ht⟩ := hT
+  obtain ⟨r, hr, hc⟩ := h [] _ trivial hO t ht
+  exact hno t ht r hr (encodes_of_carries hc)
+
 end Carry
 
 /-! ## 5. The byte swap: little-endian rows under SHA-512's big-endian words -/
@@ -605,7 +626,7 @@ theorem bswap32_not_carrier : (bswap32 1 : ℤ) - 1 ≠ (bswap32 0 : ℤ) - 0 :=
 
 end Bswap
 
-/-! ## 6. The call model: `AtomicCall` (T1's layer) and `PeriodInventory` (the egress layer's) -/
+/-! ## 6. The call model: `AtomicCall` and the cards' `PeriodInventory` (T1's) -/
 
 section Call
 
@@ -647,10 +668,11 @@ open Classical in
 noncomputable def costOn (pr : Prices100) (I : Set Dev) (P : Run Dev G) : ℕ :=
   cost100 pr (ops (P.filter fun p => p.1 ∈ I))
 
-/-- **`PeriodInventory I Ph Pa`** (named premise; rank 3; the egress layer's, not T1's), the call model's form of the
-Accel premise of that name: the honest run `Ph` and the adversary's run `Pa` use only devices of `I`, so what either
-computes in the period is counted on `I`. T1's adversary is the card alone, whose runs meet it with `I` the card by
-definition; with a device outside the card it is an outsourcing premise, which `OutsourceWithinEgress` replaces. -/
+/-- **`PeriodInventory I Ph Pa`** (named premise; rank 3; T1's), the call model's form of the Accel premise of that
+name for the devices that run the card's instructions: the honest run `Ph` and the adversary's run `Pa` use only
+devices of `I`, so what either computes in the period is counted on `I`. The cards' hosts run no card instruction and
+are counted at their rows (`PeriodInventoryT1`, §9); a device outside the network certifier's boundary is the egress
+layer's (`egress_charged`). -/
 def PeriodInventory (I : Set Dev) (Ph Pa : Run Dev G) : Prop := devs Ph ⊆ I ∧ devs Pa ⊆ I
 
 theorem costOn_eq (pr : Prices100) {I : Set Dev} {P : Run Dev G} (h : devs P ⊆ I) :
@@ -710,7 +732,7 @@ theorem egress_charged {c : ℕ} {pr : Prices100} (hpr : Floor c pr)
   omega
 
 /-- **The pre-noise hashing of `A` is credited on `I`** (rank 0 given `PeriodInventory`, `AtomicCall` and
-`ShaWrites`; the egress layer's form): with every device of both runs in `I`, the adversary's cost on `I` is at least
+`ShaWrites`; T1's): with every device of both runs in `I`, the adversary's cost on `I` is at least
 `c·(|T| + R_A + R_W)`. -/
 theorem preNoiseHash_credited {c : ℕ} {pr : Prices100} (hpr : Floor c pr)
     {Adm : List (Op100 G) → List (G → ℚ) → Prop} {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {S : Set G}
@@ -724,7 +746,7 @@ theorem preNoiseHash_credited {c : ℕ} {pr : Prices100} (hpr : Floor c pr)
   rw [costOn_eq pr hinv.2]
   exact atomicCall_closes hpr hconst hFX hS hRX hsha hsep hatom hadm hw hOD
 
-/-- **Both sides on one inventory** (the egress layer's form): the gap on `I` is at most honest's whole cost less the
+/-- **Both sides on one inventory** (T1's): the gap on `I` is at most honest's whole cost less the
 adversary's bound. -/
 theorem gap_on_inventory {c : ℕ} {pr : Prices100} {I : Set Dev} {Ph Pa : Run Dev G} {B : ℕ}
     (hinv : PeriodInventory I Ph Pa) (hB : c * B ≤ costOn pr I Pa) :
@@ -969,6 +991,142 @@ theorem fold_joint_not_carried :
 
 end Ledger
 
+/-! ## 9. The hosts inside T1: `PeriodInventoryT1` with the hosts counted at θ's rows -/
+
+section Hosts
+
+open Pouw.Dither (HostRes HostRow)
+
+/-- A sum over the host resources. -/
+theorem sum_hostRes {β : Type} [AddCommMonoid β] (f : HostRes → β) : ∑ r, f r = f .amx + f .sha := by
+  show ∑ r ∈ ({HostRes.amx, HostRes.sha} : Finset HostRes), f r = _
+  rw [Finset.sum_insert (by simp), Finset.sum_singleton]
+
+/-- A host row's rate at a host resource: AMX in s8 MACs a second, SHA-512 in compressions a second. -/
+def rateAt (hr : HostRow) : HostRes → ℝ
+  | .amx => hr.amx
+  | .sha => hr.sha
+
+/-- **The hosts' counted W1 for a period** (`HostsCounted` in the call model): the `n` cards' hosts at `n` times the
+row `hr`'s rate at each resource for the period's `Tp` seconds, a unit at its credited W1 `w r` (a compression at the
+W1 the verifier credits for one, a MAC at a word's credit over its MACs). -/
+noncomputable def hostsW1 (n : ℕ) (hr : HostRow) (w : HostRes → ℝ) (Tp : ℝ) : ℝ :=
+  ∑ r, Tp * n * w r * rateAt hr r
+
+theorem hostsW1_eq (n : ℕ) (hr : HostRow) (w : HostRes → ℝ) (Tp : ℝ) :
+    hostsW1 n hr w Tp = Tp * n * w .amx * hr.amx + Tp * n * w .sha * hr.sha := by
+  simp only [hostsW1, sum_hostRes, rateAt]
+
+/-- **`PeriodInventoryT1 Wc Wcard hc Wout`** (named premise; rank 3; T1's): inside the network certifier's boundary
+every device is a card of the inventory or one of those cards' hosts. So the period's credited W1 `Wc` is at most what
+the cards computed (`Wcard`), what the hosts computed through each host resource (`hc r`, at its credited W1), and what
+devices outside the boundary computed (`Wout`), which reaches the devices only across the certifier and which the
+egress layer bounds. -/
+def PeriodInventoryT1 (Wc Wcard : ℝ) (hc : HostRes → ℝ) (Wout : ℝ) : Prop := Wc ≤ Wcard + ∑ r, hc r + Wout
+
+/-- **`HostsWithinRow n hr w Tp hc`** (named premise: θ's host row is at least the hosts' best rate; rank 3 for the
+row's cores a card and all-core clock, 4a for SHA-512's rate a core): through each host resource `r`, the `n` cards'
+hosts compute in `Tp` seconds at most `Tp·n·rate_r` units' credited W1. It is resource by resource, so AMX's idle
+capacity doesn't absorb SHA-512 beyond its row. -/
+def HostsWithinRow (n : ℕ) (hr : HostRow) (w : HostRes → ℝ) (Tp : ℝ) (hc : HostRes → ℝ) : Prop :=
+  ∀ r, hc r ≤ Tp * n * w r * rateAt hr r
+
+/-- **With the hosts counted, the host's hashing is hashing** (rank 0 given `PeriodInventoryT1` and
+`HostsWithinRow`): the period's credited W1 is at most the cards' share, the hosts' counted W1 and what came from
+outside the boundary. -/
+theorem hostsCounted_closes {Wc Wcard Wout Tp : ℝ} {n : ℕ} {hr : HostRow} {w hc : HostRes → ℝ}
+    (hinv : PeriodInventoryT1 Wc Wcard hc Wout) (hrow : HostsWithinRow n hr w Tp hc) :
+    Wc ≤ Wcard + hostsW1 n hr w Tp + Wout := by
+  have : ∑ r, hc r ≤ hostsW1 n hr w Tp := Finset.sum_le_sum fun r _ => hrow r
+  unfold PeriodInventoryT1 at hinv
+  linarith
+
+/-- **What a row below the hosts' best leaves** (rank 0 given `PeriodInventoryT1`): if the hosts compute through each
+resource at most at the rates `best`, the credited W1 exceeds the cards' share, the hosts' counted W1 at the row `hr`
+and the outside's by at most `Σ_r Tp·n·w_r·(best_r − rate_r)⁺`, resource by resource. -/
+theorem hostRow_residual {Wc Wcard Wout Tp : ℝ} {n : ℕ} {hr best : HostRow} {w hc : HostRes → ℝ}
+    (hTp : 0 ≤ Tp) (hw : ∀ r, 0 ≤ w r) (hinv : PeriodInventoryT1 Wc Wcard hc Wout)
+    (hbest : HostsWithinRow n best w Tp hc) :
+    Wc ≤ Wcard + hostsW1 n hr w Tp + ∑ r, Tp * n * w r * max 0 (rateAt best r - rateAt hr r) + Wout := by
+  have key : ∀ r, hc r ≤ Tp * n * w r * rateAt hr r + Tp * n * w r * max 0 (rateAt best r - rateAt hr r) := by
+    intro r
+    have hk : 0 ≤ Tp * n * w r := mul_nonneg (mul_nonneg hTp (Nat.cast_nonneg n)) (hw r)
+    have hm : rateAt best r ≤ rateAt hr r + max 0 (rateAt best r - rateAt hr r) := by
+      have := le_max_right 0 (rateAt best r - rateAt hr r)
+      linarith
+    calc hc r ≤ Tp * n * w r * rateAt best r := hbest r
+      _ ≤ Tp * n * w r * (rateAt hr r + max 0 (rateAt best r - rateAt hr r)) := mul_le_mul_of_nonneg_left hm hk
+      _ = _ := by ring
+  have hs : ∑ r, hc r ≤ ∑ r, (Tp * n * w r * rateAt hr r + Tp * n * w r * max 0 (rateAt best r - rateAt hr r)) :=
+    Finset.sum_le_sum fun r _ => key r
+  rw [Finset.sum_add_distrib] at hs
+  unfold PeriodInventoryT1 at hinv
+  unfold hostsW1
+  linarith
+
+/-- **T1 with the hosts, from the card's premises** (rank 0 given `ShaWrites`, `AtomicCall`, the cards'
+`PeriodInventory`, `PeriodInventoryT1` and `HostsWithinRow`): the cards' share is the targets and digests their
+program writes, `c·(|T| + R_A + R_W)`, which `preNoiseHash_credited` charges to the cards; the hosts' share is their
+row's. So the period's credited W1 is at most the cards' cost on `I`, the hosts' counted W1 and the outside's. -/
+theorem hostsCounted_call {G Dev : Type} {c : ℕ} {pr : Prices100} (hpr : Floor c pr)
+    {Adm : List (Op100 G) → List (G → ℚ) → Prop} {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {S : Set G}
+    {Fcall X : Set (G → ℚ)} (hconst : ∀ q : ℚ, (fun _ : G => q) ∈ Fcall) (hFX : Fcall ⊆ X)
+    {Rel : (G → ℚ) → (G → ℚ) → Prop} (hS : OnS S Rel) {T DigA DigW : Finset (G → ℚ)} {RA RW : ℕ}
+    [DecidableEq (G → ℚ)] (hRX : RelOf Rel T ⊆ X) (hsha : ShaWrites pr Adm fpSem S X (DigA ∪ DigW) (RA + RW))
+    (hsep : SepBy Rel Fcall T) {I : Set Dev} {Ph Pa : Run Dev G} {L : List (G → ℚ)}
+    (hinvC : PeriodInventory I Ph Pa) (hatom : AtomicCall pr Fcall L (ops Pa)) (hadm : Adm (ops Pa) L)
+    (hw : WritesBy Rel fpSem (ops Pa) L T) (hOD : OutputsOn fpSem S (ops Pa) L (DigA ∪ DigW))
+    {Wc Wout Tp : ℝ} {n : ℕ} {hr : HostRow} {wh hc : HostRes → ℝ}
+    (hinv : PeriodInventoryT1 Wc ((c * (T.card + RA + RW) : ℕ) : ℝ) hc Wout) (hrow : HostsWithinRow n hr wh Tp hc) :
+    Wc ≤ (costOn pr I Pa : ℝ) + hostsW1 n hr wh Tp + Wout := by
+  have hcard : ((c * (T.card + RA + RW) : ℕ) : ℝ) ≤ (costOn pr I Pa : ℝ) := by
+    exact_mod_cast preNoiseHash_credited hpr hconst hFX hS hRX hsha hsep hinvC hatom hadm hw hOD
+  have := hostsCounted_closes hinv hrow
+  linarith
+
+/-- **Route H gains nothing against an honest optimum that may use the hosts** (rank 0): if the adversary's credited
+W1 is at most its cards' cost, the hosts' counted W1 `Hw` and the outside's (`hostsCounted_closes`), and honest, running
+its hosts at their row, pays on its cards at most the credited W1 less `Hw` plus its excess `E_h`, the adversary saves
+at most `E_h + W_out` on the cards. Against an honest whose hosts idle (`costH ≤ Wc + E_h`) it saves up to `Hw` more,
+which is route H. -/
+theorem routeH_gains_nothing {Wc costA costH Wout Eh Hw : ℝ} (hA : Wc ≤ costA + Hw + Wout) (hH : costH + Hw ≤ Wc + Eh) :
+    costH - costA ≤ Eh + Wout := by
+  linarith
+
+/-- **Route H on a toy, and the host row that closes it**: the card writes the word `tw` (32) and a host hashes the
+digest, credited 32 through its SHA-512. The cards' `PeriodInventory` holds, and the credited 64 is over the card's
+cost. Counted at a row of one compression a second (credited 32), the hosts meet `HostsWithinRow` and the bound of
+`hostsCounted_closes` is attained; at a zero SHA-512 row, `HostsWithinRow` fails. -/
+theorem routeH_toy :
+    let Pa : Run Unit Bool := [((), Op100.int tw)]
+    let hc : HostRes → ℝ := fun r => match r with
+      | .amx => 0
+      | .sha => 32
+    PeriodInventory Set.univ Pa Pa ∧ PeriodInventoryT1 64 32 hc 0 ∧
+      (costOn h100Floor Set.univ Pa : ℝ) + 0 < 64 ∧
+      HostsWithinRow 1 ⟨0, 1⟩ (fun _ => 32) 1 hc ∧
+      (64 : ℝ) = (costOn h100Floor Set.univ Pa : ℝ) + hostsW1 1 ⟨0, 1⟩ (fun _ => 32) 1 + 0 ∧
+      ¬ HostsWithinRow 1 ⟨0, 0⟩ (fun _ => 32) 1 hc := by
+  intro Pa hc
+  have hcost : costOn h100Floor Set.univ Pa = 32 := by
+    rw [costOn_eq (I := Set.univ) h100Floor (fun _ _ => Set.mem_univ _)]
+    decide
+  refine ⟨⟨fun _ _ => Set.mem_univ _, fun _ _ => Set.mem_univ _⟩, ?_, ?_, ?_, ?_, ?_⟩
+  · show (64 : ℝ) ≤ 32 + ∑ r, hc r + 0
+    rw [sum_hostRes]
+    norm_num [hc]
+  · rw [hcost]
+    norm_num
+  · intro r
+    cases r <;> norm_num [hc, rateAt]
+  · rw [hcost, hostsW1_eq]
+    norm_num
+  · intro h
+    have := h .sha
+    norm_num [hc, rateAt] at this
+
+end Hosts
+
 end Pouw.Dimension.NCompose
 
 #print axioms Pouw.Dimension.NCompose.charged_by
@@ -1004,3 +1162,11 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.hashComposeW1_of_shaWrites
 #print axioms Pouw.Dimension.NCompose.hashComposeW1_not_of_shaSpeedW1
 #print axioms Pouw.Dimension.NCompose.fold_joint_not_carried
+#print axioms Pouw.Dimension.NCompose.carriedWords_unrestricted_false
+#print axioms Pouw.Dimension.NCompose.sum_hostRes
+#print axioms Pouw.Dimension.NCompose.hostsW1_eq
+#print axioms Pouw.Dimension.NCompose.hostsCounted_closes
+#print axioms Pouw.Dimension.NCompose.hostRow_residual
+#print axioms Pouw.Dimension.NCompose.hostsCounted_call
+#print axioms Pouw.Dimension.NCompose.routeH_gains_nothing
+#print axioms Pouw.Dimension.NCompose.routeH_toy
