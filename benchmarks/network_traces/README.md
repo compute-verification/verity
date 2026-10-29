@@ -198,9 +198,10 @@ request with outputs still to keep and no next Commit window, is refused.
 `leak_bounds.py` is the one calculator of K, the bits a covert sender's secrets can number over a monitoring period.
 `per_link` gives K for one link: one network certifier on one uplink, certifying a request rate of one scan class (an
 `ingress_scan.Class`, or a window class's `scan`). `datacenter` sums K over a datacenter's links, and `world` over the
-world's. Each comes in two forms, beside its share of one copy of the weights and its ε. The terms are those of
+world's. Each comes in two forms and three terms (`leak_bounds.Terms`), beside its share of one copy of the weights
+and its ε. The terms are those of
 `NetTiming.Guarantees.PeriodLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
-`Security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose sampling blocks'
+`Security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose link-windows'
 failures `NetTiming.periodLeak_le_sum` sums by a union bound (`Security/Proofs/NetworkCertifier/PeriodSum.lean`); the
 pooled form is `NetTiming.Guarantees.PooledLeakAccepted`
 (`Security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
@@ -208,30 +209,45 @@ over links is our composition, which no Lean statement covers. It holds except w
 datacenter at δ takes each link at δ / links, and each link pays its own incorrect proof blocks (`datacenter`'s
 docstring says why pooling them by weight copy would be unsound).
 
-**K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
-SUMMARY --out FILE`, with RUN a fetched warden run and SUMMARY its scan's `summary.json` (its draw). It reads
-`leak_bounds` on the run's parameters (`deployment.json`), its traffic (`end.json`'s requests and sampling blocks) and
-the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block undrawn. FILE holds the widths, each
-term, the links and a row for each monitoring period, scope and reading; `FILE.md`, which it prints, holds the tables.
-A run's figures are its published Attempt's. The report's `d1` lists, per sampling block, whether its certificates, N2
-and the scan accepted.
+**K's terms on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan SUMMARY
+[--audit WINDOW] --out FILE`, with RUN a fetched warden run, SUMMARY its scan's `summary.json` (its sample) and WINDOW
+a served compute audit's window (its `registration.json` and `circuit.json`). It reads `leak_bounds` on the run's
+parameters (`deployment.json`), its traffic (`end.json`'s requests and link-windows) and the scan's class
+(`scan_zk.CLASS`), and refuses a scan that left a proof block unsampled. FILE holds the widths, each term, the links,
+the terms a link-window (`per_link_window`) and a row for each monitoring period, scope, tie and sampling design;
+`FILE.md`, which it prints, holds the tables. A run's figures are its published Attempt's. The report's `d1` lists, per
+link-window, whether its certificates, N2 and the scan accepted.
 
-The terms, in the generator reading of the scan's statement (each proof block's registered rows its boundary values):
-- The schedules and the fail cells, ⌈log2(cap_c + 1)⌉ each a connection (`capsTerm`, charged twice, as
+The three terms, in the generator reading of the scan's statement (each proof block's registered rows its boundary
+values):
+- Timing: the schedules and the fail cells, ⌈log2(cap_c + 1)⌉ each a connection (`capsTerm`, charged twice, as
   `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_request`). Here cap_c bounds `WardenSchedule.cells c`, the
   egress cells of connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network
-  certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive.
-- The free inputs (`terms.free`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE bits
-  (`ingress_scan.entry_bits`) a sampling block; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
-  its anchored entries.
-- No faulty term with every proof block drawn.
-- The jitter term is charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits a sampling block (the
-  record's `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is
-  one bound over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The warden hands each bucket to
-  a pacer that releases it at a time fixed before the bucket is made (`warden.Warden(paced=…)`, `warden_serve.py
+  certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive. And the jitter term,
+  charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits a link-window (the record's
+  `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is one bound
+  over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The warden hands each bucket to a pacer
+  that releases it at a time fixed before the bucket is made (`warden.Warden(paced=…)`, `warden_serve.py
   --paced-ms`), and a warden on the host's clock always paces. Still, the host's state after the server's writes for
   the next bucket moves when a bucket reaches the client. The scan's period check (`scan_period.py`) passes the same
   bound as `NetworkCheck.Period`'s `jitter`.
+- The side channels: the tied audit's unregistered free inputs (`chain_record.free_inputs`), which the rows form
+  charges to the link-window (`tiedAudits`).
+- The checking term, what the sampled proofs leave unchecked (`LinkLoad.checking`, where every checking charge is
+  made). It is 0 with every proof block of the scan and of the tied audit sampled. When the tied audit is sampled in
+  part, it is E_w a link-window, the slot entries' bits, NR·T / EVERY entries of NE bits (`ingress_scan.entry_bits`;
+  the record's `terms.e_w`), any of which its incorrect proof blocks can set (`faultyEntries`), and the audit's δ joins
+  ε (`chargedOf`). The rows form charges E_w only at a bound of at least one incorrect proof block; the report charges
+  it whenever the audit is sampled in part.
+
+Two readings of the tie (`leak_bounds.READINGS`), each its own table:
+- The stand-in, the record's: the block round's scan is tied to scan_zk's `SlotEntry_v1` stand-in, whose free inputs
+  are the slot entries themselves, E_w a link-window: the whole response content, which the prover sets and nothing
+  checks. The report gives it as "unchecked (stand-in tie)" (`leak_bounds.UNCHECKED`) and adds it to no K, so the
+  stand-in's rows give timing and checking and no bound.
+- Served: the scan tied to a served compute audit's window (`--audit`), each link-window to one. Its side channels are
+  that audit's own free inputs, and its checking term is E_w when it is sampled in part. Without `--audit` the served
+  rows give both sampling designs, whole and in part, and no side channels.
 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
 reads slot j's entry at row ⌊t / EVERY⌋ of lane j's entries, `scan/prog<j>` (`NetworkCheck.Period`'s `readsEntries`),
@@ -248,18 +264,20 @@ state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). scan_
 that computes it and the sin of the next, both registered reads, so a state tree that skips or alters a transition is
 refused at that proof block's o1; the block round's registration names it as `scan/state`.
 Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
-and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
-K charges to the sampling block's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
-tied audit's inputs; K is unchanged in what it bounds, and the registered reading's free term is those slot entries.
+and the scan's own free term is 0: the bits are that audit's free inputs, which the rows form's K charges to the
+link-window's term (`tiedAudits`), the side channels. The egress tie moves the free term from the scan's `prog` to the
+tied audit's inputs. Tied to the stand-in, those inputs (its `x`) are the slot entries themselves: unchecked, and in no
+K.
 
 The two forms:
-- The pooled form (`PooledLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ incorrect proof blocks of b = NS + NV bits, and
-  Fmax·log2(N + 1) (the record's `terms.fmax` and `terms.b`). The form is conditional: `hesc` and `hleak` await
-  `SampledKSLive` and P2.
-- The per-period form (`PeriodLeakAccepted`) has no δ term with every proof block drawn.
+- The per-period form (`PeriodLeakAccepted`): its checking term is 0 with every proof block sampled.
+- The pooled form (`PooledLeakAccepted`) adds to the checking term Fmax = ⌈ln(1/δ)⌉ incorrect proof blocks of
+  b = NS + NV bits, and Fmax·log2(N + 1) (the record's `terms.fmax` and `terms.b`), even with every proof block
+  sampled. The form is conditional: `hesc` and `hleak` await `SampledKSLive` and P2.
 - Both are proved: `NetTiming.SecurityProofs.PeriodLeakAccepted` and `NetTiming.SecurityProofs.PooledLeakAccepted`.
-- Beside either, ε = m·δ_scan is the scans' δ summed over the period's m sampling blocks and the links
-  (`NetworkCheck.Period`'s `eps`), each scan at its δ (`leak_bounds.SCAN_DELTA`, `scan_zk --delta`'s default).
+- Beside either, ε = m·δ_scan is the scans' δ summed over the period's m link-windows and the links
+  (`NetworkCheck.Period`'s `eps`), each scan at its δ (`leak_bounds.SCAN_DELTA`, `scan_zk --delta`'s default). A tied
+  audit sampled in part adds its δ, which the report's ε leaves out.
 
 The scale:
 - A week, a month and a year of one link, of the census's reference datacenter (`benchmarks/census/deployments.json`,
@@ -272,21 +290,19 @@ The scale:
 - The weights are one copy of Llama-3.2-1B in BF16 (`leak_bounds.WEIGHTS`), whatever the links. The served checkpoint
   is int8, so every share names the copy it is of.
 
-FILE has both readings of the free inputs. `prog` as registered is the record's K. `prog` only at its anchored entries
-is what the generator-form lowering would give if it registers `prog` everywhere but its anchors, and is not the
-record's number.
-
 K also rests on these conditions:
 - The generator reading of the scan's statement, in which each proof block's registered rows are its boundary values.
   That reading is a claim, not yet a locked guarantee.
 - Each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and
   `NetworkCheck.Period` doesn't check.
-- The scan proves sampling block 0. A monitoring period's figures scale its per-sampling-block and per-request terms at
-  the run's rate.
-- The jitter term is T bits a sampling block, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
+- The scan proves link-window 0. A monitoring period's figures scale its per-link-window and per-request terms at the
+  run's rate.
+- The jitter term is T bits a link-window, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
   host-state channel).
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
-  audit's (the `SlotEntry_v1` stand-in's) are the sampling block's free inputs above.
+  audit's are the side channels above.
+- A served audit's free inputs are `free_inputs`' count, an overcount: a row its registration's anchors register
+  still counts.
 
 The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
 `POOLED_CONDITION`) and what the theorem doesn't cover (its `uncovered`).

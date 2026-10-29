@@ -8,7 +8,7 @@
     python benchmarks/network_traces/chain_record.py report --custody FILE --certs FILE [--endpoint REPORT]
       [--n2 SUMMARY ...] [--scan SUMMARY] [--tie SUMMARY] [--job FILE] [--audit WINDOW ...]
       [--period-answer FILE [--period-case FILE] --server NODE] --out DIR
-    python benchmarks/network_traces/chain_record.py leak --warden-run DIR [--scan SUMMARY] --out FILE
+    python benchmarks/network_traces/chain_record.py leak --warden-run DIR [--scan SUMMARY] [--audit WINDOW] --out FILE
 
 * **custody**: each gate run under ``--gates`` (a directory holding the gate's ``end.json``, as the gate's ``fetch``
   writes it) holds the files its ``end.json`` names, each with the SHA-512 it records. In the clear, of public
@@ -58,9 +58,11 @@
   --warden-run`'s. Each is held to the warden run the certificates step read (`on_warden`), every one is required,
   and the report names what the path stands on (`WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` on the served node's
   endpoint report).
-* **leak**: K per monitoring period (week, month, year; one machine and 1,000) on the warden gate run, pooled at
-  δ = 1% and 10⁻⁶ and in the per-period form, each beside its share of Llama-3.2-1B's BF16 weights (`leak`), computed
-  by `leak_bounds`: one machine is one link, and 1,000 machines are the sum over as many links.
+* **leak**: K's terms, timing, the side channels and the checking term, a link-window and per monitoring period
+  (week, month, year; one link, the census's reference datacenter and the world, one link a machine) on the warden
+  gate run, in the per-period form and pooled at each δ, K beside its share of Llama-3.2-1B's BF16 weights (`leak`),
+  computed by `leak_bounds`. The record's tie, scan_zk's `SlotEntry_v1` stand-in, gives its content as unchecked and
+  no K; a served audit (``--audit``) gives its own side channels and checking term.
 """
 from __future__ import annotations
 
@@ -682,15 +684,19 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
 SCOPES = ("link", "datacenter", "world")
 
 
-def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
-    """K, the bits the network certifier's accepted transcripts can carry about the secret, per monitoring period on
-    the warden run ``run`` (a fetched gate run: its ``end.json`` and ``deployment.json``), for the scan's class
-    (`scan_zk.CLASS`) and its draw of every proof block, by `leak_bounds` (`SCOPES`): one link certifying the run's own
-    request rate (`leak_bounds.per_link`), and as many identical links summed as the census's reference datacenter has
-    machines (`leak_bounds.datacenter_links`) and as the adversary resource model's compute fills
-    (`leak_bounds.world`). Each count is in both forms, the per-period form (`PeriodLeakAccepted`'s count) and the
-    pooled one (`PooledLeakAccepted`'s at q = 1), in both readings of the sampling block's free inputs
-    (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
+def leak(run: Path, scan: dict | None = None, weights=None, audit: dict | None = None) -> dict:
+    """K's terms, timing, the side channels and the checking term (`leak_bounds.Terms`), a link-window and per
+    monitoring period on the warden run ``run`` (a fetched gate run: its ``end.json`` and ``deployment.json``), for the
+    scan's class (`scan_zk.CLASS`) with every proof block sampled, by `leak_bounds` (`SCOPES`): one link certifying the
+    run's own request rate (`leak_bounds.per_link`), and as many identical links summed as the census's reference
+    datacenter has machines (`leak_bounds.datacenter_links`) and as the adversary resource model's compute fills
+    (`leak_bounds.world`). Each period's row is in the per-period form (`PeriodLeakAccepted`'s count) and pooled
+    (`PooledLeakAccepted`'s at q = 1), beside ε, its scans' δ summed, and K's share of ``weights``
+    (`leak_bounds.WEIGHTS`), for each reading of the scan's tie (`leak_bounds.READINGS`): the record's stand-in tie,
+    whose content is unchecked (`leak_bounds.UNCHECKED`) and in no K, and a served audit, ``audit`` (`audit_of`: its
+    free inputs, and whether it is sampled whole), each link-window tied to one window of it. Without ``audit`` the
+    served rows take both sampling designs, whole and in part, and give no side channels."""
+    import dataclasses
     import leak_bounds as LB
     import scan_zk as SZ
     from verity.core.protocols.certifier import ingress_scan as IS, warden as W
@@ -704,49 +710,58 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     T, units = params.window, 2 * params.window
     drawn = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units
     if drawn != units:
-        raise SystemExit(f"leak: the scan drew {drawn} of {units} proof blocks; K's terms for incorrect proof blocks "
-                         f"are 0 only with every proof block drawn (scan_zk --draw {units})")
+        raise SystemExit(f"leak: the scan sampled {drawn} of its {units} proof blocks; K's terms here have the scan's "
+                         f"checking term 0, which needs every proof block sampled (scan_zk --draw {units})")
     rate = v["requests"] / v["windows"]
     window_s = T * params.bucket_ms / 1000
     at = {"T": T, "tau": Fraction(params.bucket_ms, 1000), "egress_cells": params.egress_cells}
     per_s = Fraction(v["requests"], v["windows"]) / (T * at["tau"])
     link = LB.link(cls, per_s, **at)
     links = {"link": 1, "datacenter": LB.datacenter_links(), "world": LB.world_links()}
+    served = ([dataclasses.replace(link, audit_whole=w) for w in (True, False)] if audit is None else
+              [dataclasses.replace(link, audit_free=audit["free"], audit_whole=audit["drawn"] == audit["units"])])
+    ties = [("stand-in", link), *(("served", l) for l in served)]
 
-    def bound(scope: str, period: str, reading: str, delta: Fraction | None = None) -> LB.Bound:
+    def bound(one: LB.LinkLoad, scope: str, period: str | Fraction, reading: str,
+              delta: Fraction | None = None) -> LB.Bound:
         if scope == "link":
-            return LB.per_link(cls, per_s, period, reading, delta, **at, weights=weights)
+            return LB.per_link(cls, per_s, period, reading, delta, **at, audit_free=one.audit_free,
+                               audit_whole=one.audit_whole, weights=weights)
         if scope == "world":
-            return LB.world(link, period, reading, delta, weights=weights)
-        return LB.datacenter({link: links[scope]}, period, reading, delta, weights=weights)
+            return LB.world(one, period, reading, delta, weights=weights)
+        return LB.datacenter({one: links[scope]}, period, reading, delta, weights=weights)
 
+    def terms(b: LB.Bound) -> dict:
+        return b.terms._asdict() | {"timing": b.terms.timing, "K": b.bits, "share": b.share}
+
+    def tie(reading: str, one: LB.LinkLoad) -> dict:
+        return {"tie": reading, "sampling": "whole" if reading == "stand-in" or one.audit_whole else "in part"}
+
+    per_link_window = [tie(reading, one) | terms(bound(one, "link", one.block_s, reading)) for reading, one in ties]
     rows = []
     for period, s in LB.PERIODS.items():
         for scope in SCOPES:
             lw = links[scope] * s / window_s
-            for reading in LB.READINGS:
-                pooled = {f"{float(d):g}": bound(scope, period, reading, d) for d in LB.DELTAS}
-                per = bound(scope, period, reading)
-                rows.append({"period": period, "scope": scope, "links": links[scope], "link_windows": lw,
-                             "requests": rate * lw, "prog": reading, "pooled": {d: b.bits for d, b in pooled.items()},
-                             "pooled_share": {d: b.share for d, b in pooled.items()},
-                             "per_period": per.bits, "per_period_share": per.share, "eps": str(per.eps),
-                             "per_link_window": link.bits(link.block_s, reading)})
-    free = {reading: {"link_window": f["block"], "request": f["request"]}
-            for reading, f in ((r, link.free(r)) for r in LB.READINGS)}
+            for reading, one in ties:
+                per = bound(one, scope, period, reading)
+                rows.append(tie(reading, one) | {
+                    "period": period, "scope": scope, "links": links[scope], "link_windows": lw,
+                    "requests": rate * lw, "per_period": terms(per), "eps": str(per.eps),
+                    "pooled": {f"{float(d):g}": terms(bound(one, scope, period, reading, d)) for d in LB.DELTAS}})
     split = "; ".join(f"the {scope}'s F = {LB.fmax(d / links[scope])} at δ = {float(d):g}"
                       for scope in SCOPES[1:] for d in LB.DELTAS)
     return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"],
             "class": {k: getattr(cls, k) for k in IS.STATICS},
             "widths": link.widths | {"entries": link.entries, "egress_row": 8 * cls.egress.R * cls.B},
-            "draw": {"units": units, "drawn": drawn},
+            "draw": {"units": units, "drawn": drawn}, "audit": audit,
             "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
                     "link_window_s": window_s, "accepted": v.get("accepted")},
             "terms": {"schedules_per_request": link.cell, "cells_per_request": link.cell,
-                      "cap_per_request": link.cap, "free": free, "faulty": 0,
-                      "jitter_per_block": link.jitter, "jitter_bound": LB.JITTER_BOUND, "jitter_term": LB.JITTER,
+                      "cap_per_request": link.cap, "jitter_per_block": link.jitter, "jitter_bound": LB.JITTER_BOUND,
+                      "jitter_term": LB.JITTER, "e_w": link.e_w, "unchecked": LB.UNCHECKED,
                       "b": link.b, "fmax": {f"{float(d):g}": LB.fmax(d) for d in LB.DELTAS},
                       "scan_delta": str(link.scan_delta)},
+            "readings": dict(LB.READINGS), "per_link_window": per_link_window,
             "links": links, "weights": weights._asdict(), "rows": rows, "theorems": dict(LB.STATEMENTS),
             "conditions": [
                 "the generator reading of the scan's statement (each proof block's registered rows its boundary "
@@ -754,22 +769,28 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and "
                 "NetworkCheck.Period doesn't check; the schedules and the fail cells are charged at that cap, "
                 "⌈log2(cap + 1)⌉ each a request, as its rows form charges them",
-                f"the jitter term is T bits a sampling block, one a bucket: {LB.JITTER}",
-                "the scan proves sampling block 0 of the warden run; a monitoring period's terms are its "
-                "per-sampling-block and per-request terms at the run's request rate",
+                f"the jitter term is T bits a link-window, one a bucket: {LB.JITTER}",
+                "the scan proves link-window 0 of the warden run; a monitoring period's terms are its "
+                "per-link-window and per-request terms at the run's request rate",
                 "the datacenter's rows sum as many identical links as the census's reference datacenter has machines, "
                 "and the world's as many as the adversary resource model's compute fills in machines of its GPUs "
                 f"(leak_bounds.datacenter, world), each link pooled at δ / links ({split}) and paying its own "
                 "incorrect proof blocks: our composition, which no Lean statement covers. Each link certifies the "
                 "run's rate; the adversary model's requests past the links' rate are uncertified, and no row counts "
                 "them",
-                "ε is the scans' δ summed over the period's sampling blocks and the links (NetworkCheck.Period's "
-                "eps, m·δ), each scan at the scan's δ",
+                "ε is the scans' δ summed over the period's link-windows and the links (NetworkCheck.Period's "
+                "eps, m·δ), each scan at the scan's δ; a served tied audit sampled in part adds its δ (chargedOf), "
+                "which these rows don't",
                 "the loop's (an untied compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's "
                 "sum",
-                "the scan's prog is a compute audit's output (NetworkCheck.Period's progTied), so its slot entries' "
-                "bits are the tied audit's free inputs, which Lean's rows-form K charges to the sampling block's term "
-                "(tiedAudits), as this K does",
+                "the scan's prog is a compute audit's output (NetworkCheck.Period's progTied), so the tied audit's "
+                "free inputs are the link-window's side channels (tiedAudits). Tied to scan_zk's SlotEntry_v1 "
+                f"stand-in, they are the slot entries themselves, E_w a link-window: {LB.UNCHECKED}, the whole "
+                "response content, in no K",
+                "a served audit's side channels are its unregistered free inputs (free_inputs, an overcount: a row "
+                "its anchors register still counts), each link-window tied to one window of it; its checking term "
+                "is E_w a link-window when it is sampled in part, where the rows form charges E_w only at a bound of "
+                "at least one incorrect proof block",
                 f"a share is of one copy of the weights, {weights.label}, whatever the links"]}
 
 
@@ -778,17 +799,34 @@ def leak_markdown(doc: dict) -> str:
     d1, d2 = (f"{float(d):g}" for d in LB.DELTAS)
     bits = lambda x: f"{x / 10 ** (e := math.floor(math.log10(x))):.3g}·10^{e}" if x >= 1e6 else f"{x:,.0f}"
     share = lambda x: f"{100 * x:.3g}%" if x < 1 else f"{x:.3g}×" if x < 100 else f"{x:,.0f}×"
-    lines = []
-    for reading, title in LB.READINGS.items():
-        lines += [f"**{title}**, bits, the share of one copy of the weights ({doc['weights']['label']}) and ε, the "
-                  f"scans' δ summed (the jitter term one bit a bucket, {LB.JITTER}):", "",
-                  "| period | links | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | ε | a sampling block |",
-                  "|---|---|---|---|---|---|---|"]
-        lines += [f"| {r['period']} | {r['scope']}, {r['links']:,} | {bits(r['pooled'][d1])} "
-                  f"({share(r['pooled_share'][d1])}) | {bits(r['pooled'][d2])} ({share(r['pooled_share'][d2])}) | "
-                  f"{bits(r['per_period'])} ({share(r['per_period_share'])}) | {float(Fraction(r['eps'])):.3g} | "
-                  f"{r['per_link_window']:,.0f} |"
-                  for r in doc["rows"] if r["prog"] == reading]
+
+    def side(t: dict) -> str:
+        if t["unchecked"]:
+            return f"{LB.UNCHECKED}: {bits(t['unchecked'])}"
+        return "not given (--audit)" if t["side"] is None else bits(t["side"])
+
+    def k(t: dict) -> str:
+        if t["K"] is not None:
+            return f"{bits(t['K'])} ({share(t['share'])})"
+        return "no bound" if t["unchecked"] else f"{bits(t['timing'] + t['checking'])} + side channels"
+
+    lines = [f"K's terms in bits, K's share of one copy of the weights ({doc['weights']['label']}) and ε, the scans' "
+             f"δ summed. Timing is the schedules and fail cells and the jitter term, one bit a bucket ({LB.JITTER}). "
+             "The checking column is the per-period form's; the pooled forms' K adds their incorrect proof blocks. "
+             f"The stand-in tie's content is labelled {LB.UNCHECKED} and added to no K.", "",
+             "A link-window:", "",
+             "| tie | sampled | timing (caps + jitter) | side channels | checking | K |", "|---|---|---|---|---|---|"]
+    lines += [f"| {t['tie']} | {t['sampling']} | {bits(t['timing'])} ({bits(t['caps'])} + {bits(t['jitter'])}) | "
+              f"{side(t)} | {bits(t['checking'])} | {k(t)} |" for t in doc["per_link_window"]]
+    lines.append("")
+    for t in doc["per_link_window"]:
+        lines += [f"**{doc['readings'][t['tie']]}**, sampled {t['sampling']}:", "",
+                  f"| period | links | timing | side channels | checking | K per period | K pooled, δ = {d1} | "
+                  f"K pooled, δ = {d2} | ε |", "|---|---|---|---|---|---|---|---|---|"]
+        lines += [f"| {r['period']} | {r['scope']}, {r['links']:,} | {bits(r['per_period']['timing'])} | "
+                  f"{side(r['per_period'])} | {bits(r['per_period']['checking'])} | {k(r['per_period'])} | "
+                  f"{k(r['pooled'][d1])} | {k(r['pooled'][d2])} | {float(Fraction(r['eps'])):.3g} |"
+                  for r in doc["rows"] if (r["tie"], r["sampling"]) == (t["tie"], t["sampling"])]
         lines.append("")
     return "\n".join(lines)
 
@@ -1069,9 +1107,11 @@ def main(argv=None) -> int:
                                          "chain and re-decided by network-period check")
     r.add_argument("--server", help="the node the block ran on (the block record's server)")
     r.add_argument("--out", required=True, type=Path)
-    k = sub.add_parser("leak", help="K per monitoring period on the warden run, for the scan's class and draw")
+    k = sub.add_parser("leak", help="K's terms a link-window and per monitoring period on the warden run")
     k.add_argument("--warden-run", required=True, type=Path, help="the fetched warden gate run (its end.json)")
-    k.add_argument("--scan", help="the scan's summary on that run (its draw); default every unit drawn")
+    k.add_argument("--scan", help="the scan's summary on that run (its sample); default every proof block sampled")
+    k.add_argument("--audit", type=Path, help="a served compute audit's window (registration.json and circuit.json), "
+                                              "whose free inputs and sampling the served rows read")
     k.add_argument("--out", required=True, type=Path)
     a = ap.parse_args(argv)
     if a.command == "custody":
@@ -1086,7 +1126,7 @@ def main(argv=None) -> int:
         doc["verdict"] = warden_endpoint_step(doc)["verdict"]
         a.out.parent.mkdir(parents=True, exist_ok=True)
     elif a.command == "leak":
-        doc = leak(a.warden_run, _json(a.scan))
+        doc = leak(a.warden_run, _json(a.scan), audit=None if a.audit is None else audit_of(a.audit))
         a.out.write_text(json.dumps(doc, indent=1, sort_keys=True))
         a.out.with_suffix(".md").write_text(leak_markdown(doc))
         print(leak_markdown(doc))

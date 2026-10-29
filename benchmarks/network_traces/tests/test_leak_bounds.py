@@ -2,14 +2,16 @@
 run's files, and `datacenter` is links × `per_link` for identical links, each link at δ / links.
 
 K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lean (`clog2`, `capsTerm`, `rowsTerms`,
-`eps`) rather than from the calculator:
-- the registered free inputs are the tied audit's slot entries, NR·T / EVERY entries of `ingress_scan.entry_bits`;
-- a request's caps are charged twice, as schedules and as fail cells, each ⌈log2(cap + 1)⌉;
-- a sampling block's jitter term is ⌈log2 D_j^T⌉ over its scan's T steps (`Scan.terms`), at D_j = 2;
-- the datacenter's links are the census's reference datacenter's machines, and the world's are the adversary resource
-  model's compute in machines of the datacenter's GPUs;
-- a share is of one copy of the weights, labelled with what it is;
-- ε is the scans' δ summed, m·δ_scan over the period's sampling blocks and the links.
+`Scan.terms`, `faultyEntries`, `eps`) rather than from the calculator, in three parts:
+- timing: a request's caps charged twice, as schedules and as fail cells, each ⌈log2(cap + 1)⌉, and a link-window's
+  jitter term ⌈log2 D_j^T⌉ over its scan's T steps, at D_j = 2;
+- the side channels: the tied audit's free inputs, given for a served audit and none for the stand-in tie, whose
+  content, NR·T / EVERY slot entries of `ingress_scan.entry_bits` a link-window (E_w), is unchecked and in no K;
+- the checking term: 0 with every proof block sampled, E_w a link-window when the served audit is sampled in part, and
+  the pooled form's F incorrect proof blocks.
+The datacenter's links are the census's reference datacenter's machines, and the world's are the adversary resource
+model's compute in machines of the datacenter's GPUs; a share is of one copy of the weights, labelled with what it is;
+ε is the scans' δ summed, m·δ_scan over the period's link-windows and the links.
 
 At δ = 1% for the whole datacenter, the pooled form's incorrect proof blocks alone pass the weights. A window class
 stands in for its scan class and its T, and the calculator refuses what it can't count."""
@@ -37,8 +39,10 @@ CENSUS = HERE.parents[1] / "benchmarks" / "census"
 KO1 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=1, KI=1024)
 #: the warden's scan class, KO 64 (`scan_zk.CLASS`)
 W63 = replace(KO1, KO=64)
-#: 8 requests a sampling block of 32 buckets of 100 ms
+#: 8 requests a link-window of 32 buckets of 100 ms
 RATE = 2.5
+#: a served audit's free inputs a link-window
+FREE = 40
 
 
 def _load(name: str):
@@ -68,58 +72,122 @@ def test_per_link_datacenter_and_world_are_chain_records_rows(tmp_path):
     doc = cr.leak(run, {"draw": {"honest": 64}})
     at = {"T": 32, "tau": Fraction(1, 10), "egress_cells": 65}
     per_s = Fraction(100, 75) / Fraction(32, 10)
-    link = LB.link(sz.CLASS, per_s, **at)
+
+    def terms(b):
+        return b.terms._asdict() | {"timing": b.terms.timing, "K": b.bits, "share": b.share}
+
+    assert {(r["tie"], r["sampling"]) for r in doc["rows"]} == {("stand-in", "whole"), ("served", "whole"),
+                                                                ("served", "in part")}
     for r in doc["rows"]:
+        whole = r["sampling"] == "whole"
+        link = LB.link(sz.CLASS, per_s, **at, audit_whole=whole)
         if r["scope"] == "link":
-            got = {d: LB.per_link(sz.CLASS, per_s, r["period"], r["prog"], d, **at) for d in (None, *LB.DELTAS)}
-        elif r["scope"] == "world":
-            got = {d: LB.world(link, r["period"], r["prog"], d) for d in (None, *LB.DELTAS)}
-        else:
-            got = {d: LB.datacenter({link: LB.datacenter_links()}, r["period"], r["prog"], d)
+            got = {d: LB.per_link(sz.CLASS, per_s, r["period"], r["tie"], d, **at, audit_whole=whole)
                    for d in (None, *LB.DELTAS)}
-        assert r["per_period"] == got[None].bits and r["per_period_share"] == got[None].share
-        assert Fraction(r["eps"]) == got[None].eps
-        assert r["pooled"] == {f"{float(d):g}": got[d].bits for d in LB.DELTAS}
-        assert r["pooled_share"] == {f"{float(d):g}": got[d].share for d in LB.DELTAS}
-        assert r["per_link_window"] == LB.per_link(sz.CLASS, per_s, Fraction(32, 10), r["prog"], **at).bits
-    rows = {(r["period"], r["scope"], r["prog"]): r for r in doc["rows"]}
-    one, many = rows["week", "link", "anchors"], rows["week", "datacenter", "anchors"]
-    assert many["per_period"] == pytest.approx(12_500 * one["per_period"], rel=1e-12)
-    assert many["pooled"]["0.01"] > 12_500 * one["pooled"]["0.01"]
+        elif r["scope"] == "world":
+            got = {d: LB.world(link, r["period"], r["tie"], d) for d in (None, *LB.DELTAS)}
+        else:
+            got = {d: LB.datacenter({link: LB.datacenter_links()}, r["period"], r["tie"], d)
+                   for d in (None, *LB.DELTAS)}
+        assert r["per_period"] == terms(got[None]) and Fraction(r["eps"]) == got[None].eps
+        assert r["pooled"] == {f"{float(d):g}": terms(got[d]) for d in LB.DELTAS}
+    for t in doc["per_link_window"]:
+        one = LB.per_link(sz.CLASS, per_s, Fraction(32, 10), t["tie"], **at, audit_whole=t["sampling"] == "whole")
+        assert {k: v for k, v in t.items() if k not in ("tie", "sampling")} == terms(one)
+    rows = {(r["period"], r["scope"], r["tie"], r["sampling"]): r for r in doc["rows"]}
+    one, many = (rows["week", s, "served", "in part"]["per_period"] for s in ("link", "datacenter"))
+    assert many["checking"] == pytest.approx(12_500 * one["checking"], rel=1e-12)
+    assert many["timing"] == pytest.approx(12_500 * one["timing"], rel=1e-12)
+    one, many = (rows["week", s, "served", "whole"]["pooled"]["0.01"] for s in ("link", "datacenter"))
+    assert many["checking"] > 12_500 * one["checking"]
     assert doc["theorems"]["datacenter"] == LB.STATEMENTS["datacenter"]
 
 
 def test_datacenter_is_links_times_per_link():
     n = 12
-    one = LB.link(KO1, RATE, T=32)
     for reading in LB.READINGS:
-        for period in LB.PERIODS:
-            each = LB.per_link(KO1, RATE, period, reading, T=32)
-            dc = LB.datacenter([one] * n, period, reading)
-            assert dc == LB.datacenter({one: n}, period, reading)
-            assert dc.bits == n * each.bits and dc.share == pytest.approx(n * each.share, rel=1e-15)
-            assert dc.delta is None and dc.eps == n * each.eps
-            for delta in LB.DELTAS:
-                pooled = LB.datacenter([one] * n, period, reading, delta)
-                assert pooled.bits == n * LB.per_link(KO1, RATE, period, reading, delta / n, T=32).bits
-                assert pooled.delta == delta and pooled.statement == LB.STATEMENTS["datacenter"]
-                assert pooled.bits > n * LB.per_link(KO1, RATE, period, reading, delta, T=32).bits
-    ko64 = LB.link(W63, 1, T=32)
-    mixed = LB.datacenter([one] * 3 + [ko64], "week", "anchors")
-    assert mixed == LB.datacenter({one: 3, ko64: 1}, "week", "anchors")
-    assert mixed.bits == pytest.approx(3 * LB.per_link(KO1, RATE, "week", "anchors", T=32).bits
-                                       + LB.per_link(W63, 1, "week", "anchors", T=32).bits)
+        for whole in (True, False):
+            one = LB.link(KO1, RATE, T=32, audit_free=FREE, audit_whole=whole)
+            for period in LB.PERIODS:
+                each = LB.per_link(KO1, RATE, period, reading, T=32, audit_free=FREE, audit_whole=whole)
+                dc = LB.datacenter([one] * n, period, reading)
+                assert dc == LB.datacenter({one: n}, period, reading)
+                for field in LB.Terms._fields:
+                    mine, theirs = getattr(dc.terms, field), getattr(each.terms, field)
+                    assert mine is theirs is None or mine == pytest.approx(n * theirs, rel=1e-15)
+                assert dc.bits is None if reading == "stand-in" else dc.bits == pytest.approx(n * each.bits)
+                assert dc.delta is None and dc.eps == n * each.eps
+                for delta in LB.DELTAS:
+                    pooled = LB.datacenter([one] * n, period, reading, delta)
+                    split = LB.per_link(KO1, RATE, period, reading, delta / n, T=32, audit_free=FREE,
+                                        audit_whole=whole)
+                    assert pooled.terms.checking == pytest.approx(n * split.terms.checking, rel=1e-15)
+                    assert pooled.delta == delta and pooled.statement == LB.STATEMENTS["datacenter"]
+                    assert pooled.terms.checking > n * LB.per_link(KO1, RATE, period, reading, delta, T=32,
+                                                                   audit_whole=whole).terms.checking
+    one, ko64 = LB.link(KO1, RATE, T=32, audit_free=FREE), LB.link(W63, 1, T=32, audit_free=FREE)
+    mixed = LB.datacenter([one] * 3 + [ko64], "week", "served")
+    assert mixed == LB.datacenter({one: 3, ko64: 1}, "week", "served")
+    assert mixed.bits == pytest.approx(3 * LB.per_link(KO1, RATE, "week", "served", T=32, audit_free=FREE).bits
+                                       + LB.per_link(W63, 1, "week", "served", T=32, audit_free=FREE).bits)
+    assert LB.datacenter([one, LB.link(KO1, RATE, T=32)], "week", "served").terms.side is None
 
 
-def test_the_registered_free_inputs_are_the_tied_audits_slot_entries():
-    for cls, entry, block in ((W63, 1_136, 9_088), (replace(W63, KO=4), 112, 896)):
-        link = LB.link(cls, RATE, T=32)
+def test_the_stand_in_ties_content_is_unchecked_and_in_no_bound():
+    for cls, entry, e_w in ((W63, 1_136, 9_088), (replace(W63, KO=4), 112, 896)):
+        link = LB.link(cls, RATE, T=32, audit_free=FREE, audit_whole=False)
         assert IS.entry_bits(cls) == entry and link.entries == cls.NR * 32 // cls.EVERY == 8
-        assert link.free("registered") == {"block": block, "request": 0} == {"block": 8 * entry, "request": 0}
-        assert link.free("registered")["block"] < 32 * IS.prog_bits(cls)
-        assert link.free("anchors") == {"block": 0, "request": 33 + cls.KO * cls.IDB}
+        assert link.e_w == e_w == 8 * entry < 32 * IS.prog_bits(cls)
         assert link.widths == {"NS": IS.state_bits(cls), "NE": entry, "NV": IS.view_bits(cls)}
-    assert LB.link(W63, RATE, T=64).free("registered")["block"] == 2 * 9_088
+        for period in (link.block_s, "week"):
+            m = link.blocks(period)
+            got = link.terms(period, "stand-in")
+            assert (got.side, got.unchecked, got.checking) == (None, m * e_w, 0)
+            assert got.bits is None and link.bits(period, "stand-in") is None
+            assert got.timing == float(RATE * LB.seconds(period) * link.cap + m * 32)
+        bound = LB.per_link(cls, RATE, "week", "stand-in", T=32, audit_free=FREE)
+        assert (bound.bits, bound.share, bound.terms.unchecked) == (None, None, 189_000 * e_w)
+        assert LB.per_link(cls, RATE, "week", "stand-in", Fraction(1, 100), T=32).bits is None
+    assert LB.link(W63, RATE, T=64).e_w == 2 * 9_088
+    assert LB.UNCHECKED == "unchecked (stand-in tie)"
+
+
+def test_the_served_reading_is_its_audits_free_inputs_and_e_w_when_sampled_in_part():
+    tau = Fraction(4)
+    four = dict(T=32, tau=tau, egress_cells=65)
+    rate = Fraction(4) / (32 * tau)
+    timing = 2 * clog2(65 + 1) * 4 + clog2(LB.JITTER_BOUND ** 32)
+    assert timing == 88
+    whole = LB.link(W63, rate, **four, audit_free=0)
+    part = LB.link(W63, rate, **four, audit_free=0, audit_whole=False)
+    assert whole.terms(whole.block_s, "served") == LB.Terms(56, 32, 0, 0, 0)
+    assert whole.bits(whole.block_s, "served") == timing == 88
+    assert part.terms(part.block_s, "served") == LB.Terms(56, 32, 0, 9_088, 0)
+    assert part.bits(part.block_s, "served") == timing + 9_088 == 9_176
+    free = LB.link(W63, rate, **four, audit_free=FREE)
+    assert free.bits(free.block_s, "served") == timing + FREE
+    assert free.terms("week", "served").side == free.blocks("week") * FREE
+    unknown = LB.link(W63, rate, **four, audit_whole=False)
+    got = unknown.terms(unknown.block_s, "served")
+    assert (got.side, got.checking, got.bits) == (None, 9_088, None)
+    assert LB.per_link(W63, rate, "week", "served", **four).share is None
+
+
+def test_the_checking_term_is_charged_in_one_place():
+    n = 189_000
+    for reading in LB.READINGS:
+        for whole in (True, False):
+            link = LB.link(W63, RATE, T=32, audit_free=FREE, audit_whole=whole)
+            e_w = 9_088 if reading == "served" and not whole else 0
+            assert link.checking("week", reading) == link.terms("week", reading).checking == n * e_w
+            for delta in LB.DELTAS:
+                f = LB.fmax(delta)
+                pooled = n * e_w + f * math.log2(n * 64 + 1) + link.b * f
+                assert link.checking("week", reading, delta) == pytest.approx(pooled)
+                assert link.terms("week", reading, delta).checking == link.checking("week", reading, delta)
+                assert link.terms("week", reading, delta)[:3] == link.terms("week", reading)[:3]
+    with pytest.raises(ValueError, match="stand-in, served"):
+        LB.link(W63, RATE, T=32).checking("week", "registered")
 
 
 def test_the_caps_are_charged_twice_at_lean_s_ceilings():
@@ -130,11 +198,6 @@ def test_the_caps_are_charged_twice_at_lean_s_ceilings():
     assert LB.JITTER_BOUND == 2
     steps = (16, 32, 48)
     assert [LB.link(W63, RATE, T=t).jitter for t in steps] == [clog2(2 ** t) for t in steps] == list(steps)
-    tau = Fraction(4)
-    four = LB.link(W63, Fraction(4) / (32 * tau), T=32, tau=tau, egress_cells=65)
-    schedules = cells = clog2(65 + 1) * 4
-    jitter = clog2(LB.JITTER_BOUND ** 32)
-    assert four.bits(four.block_s, "registered") == schedules + cells + 9_088 + jitter == 9_176
 
 
 def test_the_census_sets_the_datacenter_and_the_world():
@@ -143,24 +206,26 @@ def test_the_census_sets_the_datacenter_and_the_world():
     flop_s = world["flop_per_s_per_h100"] * world["monitoring_period_s"]
     machines = world["total_flop"] / flop_s / dc["gpus_per_machine"]
     assert LB.world_links() == math.ceil(machines) == 18_550_229
-    one = LB.link(W63, RATE, T=32)
-    for delta in (None, *LB.DELTAS):
-        got = LB.world(one, "year", "registered", delta)
-        assert got == LB.datacenter({one: 18_550_229}, "year", "registered", delta)
-        assert got.statement == LB.STATEMENTS["datacenter"]
-    assert LB.world(one, "week", "anchors").bits == pytest.approx(
-        18_550_229 * LB.per_link(W63, RATE, "week", "anchors", T=32).bits, rel=1e-12)
+    one = LB.link(W63, RATE, T=32, audit_free=FREE)
+    for reading in LB.READINGS:
+        for delta in (None, *LB.DELTAS):
+            got = LB.world(one, "year", reading, delta)
+            assert got == LB.datacenter({one: 18_550_229}, "year", reading, delta)
+            assert got.statement == LB.STATEMENTS["datacenter"]
+    assert LB.world(one, "week", "served").bits == pytest.approx(
+        18_550_229 * LB.per_link(W63, RATE, "week", "served", T=32, audit_free=FREE).bits, rel=1e-12)
 
 
 def test_a_share_is_of_one_bf16_copy_and_says_so():
     assert LB.WEIGHTS == LB.Weights(1_235_814_400 * 16, "Llama-3.2-1B in BF16")
-    one = LB.link(W63, RATE, T=32)
-    for got in (LB.per_link(W63, RATE, "week", "registered", T=32), LB.datacenter([one] * 3, "week", "registered"),
-                LB.world(one, "week", "registered", Fraction(1, 100))):
+    one = LB.link(W63, RATE, T=32, audit_free=FREE)
+    for got in (LB.per_link(W63, RATE, "week", "served", T=32, audit_free=FREE),
+                LB.datacenter([one] * 3, "week", "served"), LB.world(one, "week", "served", Fraction(1, 100))):
         assert got.weights == LB.WEIGHTS.label and got.share == got.bits / LB.WEIGHTS.bits
     int8 = LB.Weights(1_235_814_400 * 8, "an int8 copy")
-    got = LB.per_link(W63, RATE, "week", "registered", T=32, weights=int8)
-    assert got.weights == "an int8 copy" and got.share == 2 * LB.per_link(W63, RATE, "week", "registered", T=32).share
+    got = LB.per_link(W63, RATE, "week", "served", T=32, audit_free=FREE, weights=int8)
+    assert got.weights == "an int8 copy" and got.share == 2 * LB.per_link(W63, RATE, "week", "served", T=32,
+                                                                         audit_free=FREE).share
 
 
 def test_eps_is_the_scans_delta_summed():
@@ -168,25 +233,27 @@ def test_eps_is_the_scans_delta_summed():
     assert one.scan_delta == Fraction(1, 2 ** 20)
     for period, s in LB.PERIODS.items():
         m = Fraction(s) / Fraction(32, 10)
-        per = LB.per_link(W63, RATE, period, "registered", T=32)
-        assert per.eps == m / 2 ** 20 and isinstance(per.eps, Fraction)
-        for delta in LB.DELTAS:
-            pooled = LB.per_link(W63, RATE, period, "registered", delta, T=32)
-            assert pooled.delta == delta and pooled.eps == per.eps
-            assert LB.datacenter([one] * 5, period, "registered", delta).eps == 5 * per.eps
-    assert LB.per_link(W63, RATE, "week", "registered", T=32, scan_delta=Fraction(1, 2 ** 40)).eps == Fraction(
+        for reading in LB.READINGS:
+            per = LB.per_link(W63, RATE, period, reading, T=32)
+            assert per.eps == m / 2 ** 20 and isinstance(per.eps, Fraction)
+            for delta in LB.DELTAS:
+                pooled = LB.per_link(W63, RATE, period, reading, delta, T=32)
+                assert pooled.delta == delta and pooled.eps == per.eps
+                assert LB.datacenter([one] * 5, period, reading, delta).eps == 5 * per.eps
+    assert LB.per_link(W63, RATE, "week", "served", T=32, scan_delta=Fraction(1, 2 ** 40)).eps == Fraction(
         189_000, 2 ** 40)
-    assert LB.world(one, "week", "registered").eps == 18_550_229 * Fraction(189_000, 2 ** 20)
+    assert LB.world(one, "week", "served").eps == 18_550_229 * Fraction(189_000, 2 ** 20)
 
 
 def test_the_pooled_datacenters_incorrect_blocks_alone_pass_the_weights():
     n, one = LB.datacenter_links(), Fraction(1, 100)
-    floor = LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors", one)
-    faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1))
+    idle = LB.link(KO1, 0, T=32, audit_free=0)
+    floor = LB.datacenter({idle: n}, "week", "served", one)
+    incorrect = n * 15 * (idle.b + math.log2(189_000 * 64 + 1))
     jitter = n * 189_000 * clog2(LB.JITTER_BOUND ** 32)
-    assert LB.fmax(one / n) == 15 and faulty > LB.WEIGHTS.bits
-    assert floor.bits == pytest.approx(faulty + jitter)
-    assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors").bits == jitter
+    assert LB.fmax(one / n) == 15 and incorrect > LB.WEIGHTS.bits
+    assert floor.terms.checking == pytest.approx(incorrect) and floor.bits == pytest.approx(incorrect + jitter)
+    assert LB.datacenter({idle: n}, "week", "served").bits == jitter
 
 
 def test_a_window_class_and_refusals():
@@ -194,7 +261,7 @@ def test_a_window_class_and_refusals():
     for reading in LB.READINGS:
         assert LB.per_link(window, RATE, "month", reading) == LB.per_link(KO1, RATE, "month", reading, T=32)
     assert LB.link(window, RATE, T=16).T == 16 and LB.link(KO1, RATE, T=32).tau == Fraction(1, 10)
-    assert LB.per_link(KO1, RATE, 604_800, "anchors", T=32) == LB.per_link(KO1, RATE, "week", "anchors", T=32)
+    assert LB.per_link(KO1, RATE, 604_800, "served", T=32) == LB.per_link(KO1, RATE, "week", "served", T=32)
     with pytest.raises(ValueError, match="needs T"):
         LB.link(KO1, RATE)
     with pytest.raises(TypeError, match="ingress_scan.Class"):
@@ -207,16 +274,22 @@ def test_a_window_class_and_refusals():
         LB.link(KO1, RATE, T=24)
     with pytest.raises(ValueError, match="scan's δ"):
         LB.link(KO1, RATE, T=32, scan_delta=0)
-    with pytest.raises(ValueError, match="registered, anchors"):
-        LB.per_link(KO1, RATE, "week", "everywhere", T=32)
+    for free in (-1, 1.5, "40"):
+        with pytest.raises(ValueError, match="free inputs"):
+            LB.link(KO1, RATE, T=32, audit_free=free)
+    with pytest.raises(TypeError, match="sampled whole"):
+        LB.link(KO1, RATE, T=32, audit_whole=1)
+    for old in ("registered", "anchors"):
+        with pytest.raises(ValueError, match="stand-in, served"):
+            LB.per_link(KO1, RATE, "week", old, T=32)
     with pytest.raises(ValueError, match="week, month, year"):
-        LB.per_link(KO1, RATE, "decade", "anchors", T=32)
+        LB.per_link(KO1, RATE, "decade", "served", T=32)
     for delta in (0, 1, 125):
         with pytest.raises(ValueError, match="δ is in"):
-            LB.datacenter([LB.link(KO1, RATE, T=32)] * 12_500, "week", "anchors", delta)
+            LB.datacenter([LB.link(KO1, RATE, T=32)] * 12_500, "week", "served", delta)
     with pytest.raises(ValueError, match="at least one link"):
-        LB.datacenter([], "week", "anchors")
+        LB.datacenter([], "week", "served")
     with pytest.raises(TypeError, match="LinkLoads"):
-        LB.datacenter([KO1], "week", "anchors")
+        LB.datacenter([KO1], "week", "served")
     with pytest.raises(ValueError, match="positive integers"):
-        LB.datacenter({LB.link(KO1, RATE, T=32): 0}, "week", "anchors")
+        LB.datacenter({LB.link(KO1, RATE, T=32): 0}, "week", "served")

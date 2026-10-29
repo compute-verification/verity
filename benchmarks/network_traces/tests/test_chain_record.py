@@ -505,25 +505,72 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
     assert doc["terms"]["schedules_per_request"] == doc["terms"]["cells_per_request"] == 7
     assert (doc["terms"]["jitter_bound"], doc["terms"]["jitter_per_block"]) == (2, 32)
+    assert (doc["terms"]["e_w"], doc["terms"]["unchecked"]) == (9_088, "unchecked (stand-in tie)")
     assert doc["links"] == {"link": 1, "datacenter": 12_500, "world": 18_550_229}
     assert "BF16" in doc["weights"]["label"] and "BF16" in cr.leak_markdown(doc)
     json.dumps(doc)
-    rows = {(r["period"], r["scope"], r["prog"]): r for r in doc["rows"]}
-    week = {p: rows["week", "link", p] for p in ("registered", "anchors")}
     lw, rate, cap = 604_800 / 3.2, 100 / 75, 2 * 7
-    assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + 32 + rate * cap))
-    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_121 + cap) + 32)
-    assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
+    window = {(t["tie"], t["sampling"]): t for t in doc["per_link_window"]}
+    assert list(window) == [("stand-in", "whole"), ("served", "whole"), ("served", "in part")]
+    for t in window.values():
+        assert (t["caps"], t["jitter"], t["timing"]) == pytest.approx((rate * cap, 32, rate * cap + 32))
+    assert (window["stand-in", "whole"]["unchecked"], window["stand-in", "whole"]["K"]) == (9_088, None)
+    assert [window["served", s]["checking"] for s in ("whole", "in part")] == [0, 9_088]
+    assert all(t["side"] is None and t["K"] is None for t in window.values())
+    rows = {(r["period"], r["scope"], r["tie"], r["sampling"]): r for r in doc["rows"]}
+    stand_in, part = rows["week", "link", "stand-in", "whole"], rows["week", "link", "served", "in part"]
+    assert stand_in["per_period"]["unchecked"] == pytest.approx(lw * 8 * 1_136)
+    assert stand_in["per_period"]["checking"] == 0 and stand_in["per_period"]["K"] is None
+    assert part["per_period"]["checking"] == pytest.approx(lw * 8 * 1_136) and part["per_period"]["unchecked"] == 0
+    assert part["pooled"]["0.01"]["checking"] - part["per_period"]["checking"] == pytest.approx(
         5 * (154_480 + math.log2(lw * 64 + 1)))
-    assert Fraction(week["anchors"]["eps"]) == Fraction(189_000, 2 ** 20)
+    assert Fraction(part["eps"]) == Fraction(189_000, 2 ** 20)
     for scope, n in doc["links"].items():
-        assert rows["week", scope, "registered"]["per_period"] == pytest.approx(n * week["registered"]["per_period"])
-        assert Fraction(rows["week", scope, "registered"]["eps"]) == n * Fraction(189_000, 2 ** 20)
-    with pytest.raises(SystemExit, match="drew 16 of 64"):
+        assert rows["week", scope, "served", "in part"]["per_period"]["timing"] == pytest.approx(
+            n * part["per_period"]["timing"])
+        assert Fraction(rows["week", scope, "stand-in", "whole"]["eps"]) == n * Fraction(189_000, 2 ** 20)
+    md = cr.leak_markdown(doc)
+    assert "| stand-in | whole | 51 (19 + 32) | unchecked (stand-in tie): 9,088 | 0 | no bound |" in md
+    assert "| served | in part | 51 (19 + 32) | not given (--audit) | 9,088 | 9,139 + side channels |" in md
+    with pytest.raises(SystemExit, match="sampled 16 of its 64"):
         cr.leak(run, {"draw": {"honest": 16}})
     (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
     with pytest.raises(ValueError, match="lanes = 4"):
         cr.leak(run)
+
+
+def test_leak_reads_a_served_audits_free_inputs_and_sampling(tmp_path):
+    from dataclasses import asdict
+    sz = sys.modules.get("scan_zk") or _load("scan_zk")
+    sys.modules["scan_zk"] = sz
+    run = tmp_path / "c1"
+    (run / "out").mkdir(parents=True)
+    (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
+    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
+    window = tmp_path / "audit"
+    window.mkdir()
+    (window / "circuit.json").write_text(json.dumps({
+        "templates": [["T", 4]], "external": ["T/y"], "wires": [],
+        "statements": {"T": {"in_rows": [["x", 0, 8, ["x"]], ["y", 1, 16, ["y"]]]}}}))
+    lw, rate, cap = 604_800 / 3.2, 100 / 75, 2 * 7
+    for k, sampling, checking in ((4, "whole", 0), (2, "in part", 9_088)):
+        (window / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": k}}))
+        out = tmp_path / f"leak-{k}.json"
+        assert cr.main(["leak", "--warden-run", str(run), "--audit", str(window), "--out", str(out)]) == 0
+        doc = json.loads(out.read_text())
+        assert (doc["audit"]["free"], doc["audit"]["drawn"]) == (32, k)
+        served = [t for t in doc["per_link_window"] if t["tie"] == "served"]
+        assert [t["sampling"] for t in served] == [sampling]
+        assert served[0]["side"] == 32 and served[0]["checking"] == checking
+        assert served[0]["K"] == pytest.approx(rate * cap + 32 + 32 + checking)
+        week = next(r for r in doc["rows"] if (r["period"], r["scope"], r["tie"]) == ("week", "link", "served"))
+        assert week["per_period"]["side"] == pytest.approx(lw * 32)
+        assert week["per_period"]["K"] == pytest.approx(lw * (rate * cap + 32 + 32 + checking))
+        assert week["per_period"]["share"] == week["per_period"]["K"] / doc["weights"]["bits"]
+        stand_in = next(t for t in doc["per_link_window"] if t["tie"] == "stand-in")
+        assert (stand_in["side"], stand_in["unchecked"], stand_in["K"]) == (None, 9_088, None)
+        md = out.with_suffix(".md").read_text()
+        assert "unchecked (stand-in tie): 9,088" in md and "not given" not in md and "+ side channels" not in md
 
 
 def test_subset_bound():
