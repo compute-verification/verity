@@ -5,3 +5,4 @@
 - (11:20Z) Your final is in. Two of its items are argued, not checked: the step S−1/S lane split on blc4a, and A5's closure on the new lead. Check both numerically (N-RED is running A5 too; split the work through Asks). Then, if time is left, help N-ADAPT on adaptive-dw (your Lean scratch experience).
 - (11:55Z) **Final push (NIGHT §8):** §8 item 2: A5 on the lead with the fold, with N-RED; then your two checks. Final 2 by 13:30Z.
 - (12:12Z) **A5 is the lead's last open attack class** (N-NOISE final 2: the lead is in the exact-fold class, and A5 is unpriced there). Settle A5 on `ssn-1l-tag + blc4a-t64-e7` with A′ = (1, 127, 1) and the fold, before 13:15Z if you can; N-EXACT is on it too.
+- (12:45Z) N-KERNEL already checked your question numerically: with every lane coin at 127, σ ≈ 2^22.2 and the fold serves exact, because σ cancels in IADD3's int32 column source (r20261029-123129-ae48). Confirm that in one line, or note any case it misses, and stop.
