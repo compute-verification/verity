@@ -35,6 +35,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 SCHEMA = "verity-vllm/served-record/v1"
@@ -200,9 +201,30 @@ def served_rows(committer: Any) -> dict[int, list[tuple]]:
 def committed_ints(committer: Any, step: int, name: str) -> list[int] | None:
     """The integer tensor ``name`` as committed at ``step``, read back from the bytes the committer retains (the retained step
     block, or the tensor's host copy); None when the step committed no such tensor."""
+    got = committed_raw(committer, step, name)
+    return None if got is None else ints_of(*got)
+
+
+def ints_of(raw: bytes, dtype: str) -> list[int]:
+    """A committed integer tensor's bytes (`committed_raw`) as ints."""
     import numpy as np
 
-    meta = next((m for m in committer._layouts.get(step, ()) if m.name == name), None)
+    return np.frombuffer(raw, dtype=np.dtype(str(dtype).rsplit(".", 1)[-1])).astype(np.int64).tolist()
+
+
+def committed_raw(committer: Any, step: int, name: str) -> tuple[bytes, str] | None:
+    """`committed_ints`' bytes of ``name`` at ``step`` and its dtype. A plan's metas (`plan_cache.PlanMetas`) are read from its
+    columns, so no `TensorMeta` is built for the read."""
+    from verity_vllm.commit.committer.plan_cache import PlanMetas
+
+    metas = committer._layouts.get(step, ())
+    if isinstance(metas, PlanMetas):
+        if name not in metas.names:
+            return None
+        i = metas.names.index(name)
+        meta: Any = SimpleNamespace(dtype=metas.dtypes[i], nbytes=metas.sizes[i], dev_off=metas.offsets[i], stream_off=metas.offsets[i])
+    else:
+        meta = next((m for m in metas if m.name == name), None)
     if meta is None:
         return None
     raw: Any = None
@@ -213,9 +235,7 @@ def committed_ints(committer: Any, step: int, name: str) -> list[int] | None:
         raw = (part.cpu() if hasattr(part, "cpu") else part).numpy().tobytes()
     elif getattr(meta, "host", None) is not None:
         raw = bytes(meta.host)
-    if raw is None:
-        return None
-    return np.frombuffer(raw, dtype=np.dtype(str(meta.dtype).rsplit(".", 1)[-1])).astype(np.int64).tolist()
+    return None if raw is None else (raw, str(meta.dtype))
 
 
 @dataclass
@@ -368,8 +388,10 @@ class Record:
 
     def absorb(self, committer: Any, window: int) -> dict[str, Any]:
         """The window just finalized by ``committer`` into the requests' records; returns the window's readback record."""
+        from verity_vllm.commit.committer.plan_cache import PlanMetas
+
         layouts = getattr(committer, "_layouts", {}) or {}
-        names = {m.name for metas in layouts.values() for m in metas}
+        names = {n for metas in layouts.values() for n in (metas.names if isinstance(metas, PlanMetas) else (m.name for m in metas))}
         ids_name = next((n for n in IDS_NAMES if n in names), None)
         errors: list[str] = []
         rows_of = served_rows(committer)
