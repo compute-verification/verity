@@ -23,7 +23,7 @@ that accepts everything (`*_nontrivial`).
 
 namespace Accounting.SecurityProofs.Remote.DrawMeets
 
-open Finset Accounting.Rate.Horizon
+open Finset Accounting.Rate.Pooled
 open Pous (pr)
 open scoped ENNReal
 open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
