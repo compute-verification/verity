@@ -259,8 +259,9 @@ theorem encardProgramRunsLeWindows : EncardProgramRunsLeWindows := by
         exact NetTiming.jitterCode_mem o ho.1 ho.2.1
     _ = _ := by
         rw [Finset.card_product, Fintype.card_piFinset]
-        simp [Fintype.card_prod, Fintype.card_fun, Fintype.card_coe,
-          List.toFinset_card_of_nodup cfg.syncSet.deltas_nodup, List.toFinset_card_of_nodup cfg.syncSet.rhos_nodup]
+        simp only [Finset.card_univ, Finset.card_range, Finset.prod_const, Fintype.card_prod, Fintype.card_fun,
+          Fintype.card_fin, Fintype.card_coe, List.toFinset_card_of_nodup cfg.syncSet.deltas_nodup,
+          List.toFinset_card_of_nodup cfg.syncSet.rhos_nodup]
 
 section Check
 
