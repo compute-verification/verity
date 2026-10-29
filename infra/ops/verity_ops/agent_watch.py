@@ -104,7 +104,7 @@ after a second window (`SILENT_RINGS`), then not until one of those moves; the r
 worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more:
 a worker is archived (`POST /v1/agents/{id}/archive`, which stops it and frees its slot) and recorded as **archived**, rung to
 its lane, which relaunches it from its last note or drops it; a coordinator, or a worker the API won't archive, is recorded as
-**no_step**, rung to @top (on 26 Oct nine workers sat ACTIVE with no step for 30-64 h, each rung twice and then by no one).
+**no_step**, rung to @top.
 Its last activity there also counts its agent's own `updatedAt` and, for a coordinator, its judged run's `updatedAt` and last
 stream event, since no_step advises stopping and archiving it: on 26 Oct at 21:05Z it said so of compute-accounting's and
 network-accounting's coordinators, each working in Slack within two minutes, with no note or push for 6 h.
