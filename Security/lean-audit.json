@@ -2505,16 +2505,9 @@
    "sealed": true
   },
   "Definitions.Pouw.Assumptions": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Core",
-    "Definitions.Core.Assumptions",
-    "Definitions.Claims",
-    "Definitions.Pouw",
-    "Definitions.Pouw.Assumptions"
-   ],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw", "Definitions.Pouw.Assumptions"],
    "except": [],
-   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do; the lead's trusted-host premise instantiates core's (Definitions.Core.Assumptions), as the inference-only policy's do",
+   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do",
    "sealed": true
   },
   "Definitions.Pouw.Guarantees": {
@@ -11491,6 +11484,11 @@
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Lead.Statement.gapAt320 : Pouw.Guarantees.Lead.GapAt320"],
    "assumptions": []
+  },
+  "Pouw.SecurityProofs.Lead.Statement.gapAtDecode": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Statement.gapAtDecode : Pouw.Guarantees.Lead.GapAtDecode"],
+   "assumptions": []
   }
  },
  "shape": {
@@ -12644,7 +12642,8 @@
    "Pouw.SecurityProofs.Lead.Compose.honest": "completeness: G's honest lemma: at every call of the lead with data in range, the nominal W1 table and a set of strategies holding an honest one, accepted at every coin value, meet every premise of G, so G's hypotheses are not vacuous.",
    "Pouw.SecurityProofs.Lead.Statement.nontrivial": "completeness: G's nontrivial lemma: at the three points the honest work exceeds the gap, and a strategy that does nothing does no priced work and hashes nothing, so G's conclusion fails for a verifier that accepts everything.",
    "Pouw.SecurityProofs.Lead.Statement.gapAt": "lemma: the gap's share of stock at T 512 x 64, T 512 x 512 and T 8,192 at cap 32, an evaluation of the defined function Pouw.Lead.gapShare, not a property of a Lean function of the code.",
-   "Pouw.SecurityProofs.Lead.Statement.gapAt320": "lemma: the gap's share of stock at the same three points at cap 320, an evaluation of the defined function Pouw.Lead.gapShare, not a property of a Lean function of the code."
+   "Pouw.SecurityProofs.Lead.Statement.gapAt320": "lemma: the gap's share of stock at the same three points at cap 320, an evaluation of the defined function Pouw.Lead.gapShare, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Statement.gapAtDecode": "lemma: the gap at decode, the call committed padded to 16 rows, as a share of the padded and of the unpadded stock, an evaluation of the defined functions Pouw.Lead.gapShare and Pouw.Lead.gapRegs, not a property of a Lean function of the code."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

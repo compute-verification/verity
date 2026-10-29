@@ -11,7 +11,7 @@ import Proofs.Pouw.Lead.Commit.Credit
 `G`'s proof, at each accepted coin value with no break, on the egress-free twin (`OutsourceWithinEgressLead`):
 1. the twin's run holds every committed tile (`TileGrain`), so its whole-tile writes are at least the distinct
    committed tiles less the table hits (`CoinBranch.distinct_le_writes`), and the distinct tiles are the committed
-   tiles less the repeats; in a call of whole tiles the committed tiles' words are `m n S` (`perCoin`);
+   tiles less the repeats; the lead commits whole tiles, so their words are `m n S` (`perCoin`);
 2. its hashing credit is at least the honest commitment's (`HonestHashRuled`, `Commit.hashed_credit_ge`), at least
    the honest compressions' (`CommitL1w`), and its compressions write that many registers (`ShaWrites`);
 3. `OneInstructionMinimal` and `MH100W.cost_ge_regs` (`W1`, `H32`) price those registers at 32 each (`perCoin`);
@@ -24,13 +24,13 @@ namespace Pouw.SecurityProofs.Lead.Compose
 
 open Pouw.Lead Pouw.Assumptions.Lead Pouw.Dimension.H100
 
-/-- **One coin value's floor**: at a coin value where a realizable strategy in a call of whole tiles
-exchanges nothing, is accepted and hashed no collision, its priced W1 work is at least 32 times the honest registers
-less the repeated and table-held tiles' words. -/
+/-- **One coin value's floor**: at a coin value where a realizable strategy exchanges nothing, is
+accepted and hashed no collision, its priced W1 work is at least 32 times the honest registers less the repeated
+and table-held tiles' words. -/
 theorem perCoin (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
-    (stream : Coins (lead T m n K) → ℕ → Fin tileWords → ℤ) (C : Pouw.Lead.Commit (lead T m n K))
-    (isA : Hash.Msg → Bool) (Real : Strategy (lead T m n K) → Prop) (hm : 16 ∣ m) (hn : 8 ∣ n)
+    (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K))
+    (isA : Hash.Msg → Bool) (Real : Strategy (lead T m n K) → Prop)
     (hcommit : CommitL1w H C isA κ) (hpr : H32 pr) (hw1 : W1 pr Real) (hgrain : TileGrain stream Real)
     (hmin : OneInstructionMinimal Real) (hsha : ShaWrites isA Real) (hhash : HonestHashRuled H C κ Real)
     (σ : Strategy (lead T m n K)) (hσ : Real σ) (ω : Coins (lead T m n K)) (he : (σ.exec ω).egress = 0)

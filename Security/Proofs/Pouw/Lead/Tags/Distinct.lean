@@ -11,11 +11,10 @@ namespace Pouw.SecurityProofs.Lead.Tags
 
 open Pouw.Lead
 
-/-- **Tiles repeat rarely**: in a call of whole tiles with data in range, the committed tiles less
-their distinct values, in words and averaged over the coins, are at most `coinBranchGap`. Reads `word`, `rowTag`,
-`colCode`, `rotWeight` and `tileOf`. -/
-theorem repeats_le (T m n K : ℕ) (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
-    (hm : 16 ∣ m) (hn : 8 ∣ n) (hκ : DataInRange (lead T m n K) κ) :
+/-- **Tiles repeat rarely**: for any data, the committed tiles less their distinct values, in words
+and averaged over the coins, are at most `coinBranchGap`. Reads `word`, `rowTag`, `colCode`, `rotWeight` and
+`tileOf`. -/
+theorem repeats_le (T m n K : ℕ) (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ) :
     ∑ ω : Coins (lead T m n K), (tileWords * repeats (lead T m n K) κ ω : ℚ) ≤
       Fintype.card (Coins (lead T m n K)) * coinBranchGap (lead T m n K) := by
   sorry
