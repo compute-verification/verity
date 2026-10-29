@@ -247,6 +247,7 @@ from verity.core.protocols.certifier.certificate import Certificate, CertifiedCl
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
 from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs.coins import ChallengerCoins
 from verity.core.protocols.sampled_proofs.one_stage import audit as OA, partition as P, proofs as PF, registration as R
 from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
@@ -1351,14 +1352,14 @@ class LinkWindows:
         """The period's draw over its link-windows 0 … n − 1, after the prover committed them: `roots`, window w's
         salted root (`root`, hex) at w, n of them (by default the link's windows, which `network_verdict` takes), and on
         an advised link `advice`, the advice's digest (`advised.digest`), which every accepted window must name. Every
-        window for `k` None (`All`, reading no coins), else `subset:k`, 1 <= k <= n, on `coins` (a callable of a byte
-        count, as a stream's); a coin source with a `commit` method is first committed to the period's digest
+        window for `k` None (`All`, reading no coins), else `subset:k`, 1 <= k <= n, on `coins`, the auditor's
+        challenger's (`ChallengerCoins`: the verifier has no coins of its own), first committed to the period's digest
         (`commitment`), so the coins come after every commitment of the period. Call it before the stream's first
         registration. The object is `{format, stream, law, k, population, units, roots, advice, commitment, read}`,
         `read` the coin bytes the draw read, in order (hex), from which the network verdict's Lean draws its own
         (`lean_draw`); `register` and `network_verdict` take it as `drawn`. Raises `ValueError` for a stream that isn't
         this link's or holds a registration, roots that aren't n SHA-512 hex digests, an advice on a link that isn't
-        advised or none on one that is, and k outside [1, n]."""
+        advised or none on one that is, k outside [1, n], and coins that aren't the challenger's."""
         n = self._period(stream, len(roots) if isinstance(roots, Sequence) and not isinstance(roots, str) else None)
         if stream.log:
             raise ValueError("the period is committed and drawn before the stream's first registration")
@@ -1371,9 +1372,12 @@ class LinkWindows:
                              "link's does")
         if k is not None and not (type(k) is int and 1 <= k <= n):
             raise ValueError(f"a period draw takes 1 <= K <= {n} of the link-windows, not {k!r}")
+        if k is not None and not isinstance(coins, ChallengerCoins):
+            raise ValueError("a period draw of K windows reads the auditor's challenger's coins (ChallengerCoins); the "
+                             "verifier has no coins of its own")
         commitment = self._committed(stream, roots, advice)
         rule = S.All() if k is None else S.Law(f"subset:{k}")
-        if k is not None and callable(getattr(coins, "commit", None)):
+        if k is not None:
             coins.commit(bytes.fromhex(commitment))
         read = bytearray()
 

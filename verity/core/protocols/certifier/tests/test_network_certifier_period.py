@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import random
 import sys
 from dataclasses import replace
 
@@ -15,8 +16,8 @@ import pytest
 from verity.core.protocols.certifier import service as SVC
 from verity.core.protocols.certifier.certificate import CertifiedRecord
 from verity.core.protocols.certifier.service import PERIOD_DRAW, PERIOD_DRAWN
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.coins import OwnRandomness
+from verity.core.protocols.sampled_proofs import challenger as C, service as S
+from verity.core.protocols.sampled_proofs.coins import ChallengerCoins, OwnRandomness
 
 from test_network_certifier_service import SALTS, Run, lean  # noqa: F401  (lean: the stand-in Lean, autouse)
 
@@ -42,18 +43,23 @@ def lean_draw(monkeypatch):
     return calls
 
 
-class Coins:
-    """A coin source with a `commit`, as a remote challenger's: what it was committed to, and when it was read."""
+class Coins(ChallengerCoins):
+    """The challenger's coins, from an in-process challenger: what they were committed to, and each read with its
+    bytes."""
 
-    def __init__(self, byte: int = 0x5a) -> None:
-        self.byte, self.events = byte, []
+    def __init__(self, seed: str = "period") -> None:
+        ch = C.LiveChallenger("verity/test/period/v1", 0, [("draw", 64)], random.Random(seed).randbytes)
+        super().__init__(C.LiveRecord(ch, "draw", itertools.count().__next__))
+        self.events = []
 
-    def commit(self, after: bytes) -> None:
+    def commit(self, after: bytes):
         self.events.append(("commit", after.hex()))
+        return super().commit(after)
 
     def __call__(self, n: int) -> bytes:
-        self.events.append(("read", n))
-        return bytes([self.byte]) * n
+        b = super().__call__(n)
+        self.events.append(("read", b))
+        return b
 
 
 def committed(run: Run, windows=range(3)) -> dict:
@@ -81,11 +87,12 @@ def test_the_period_draw_commits_every_root_before_it_reads_a_coin(tmp_path):
     drawn = run.lw.period_draw(run.stream, roots(run, openings), 2, coins)
     assert coins.events[0] == ("commit", drawn["commitment"]) and len(coins.events) > 1
     assert all(e[0] == "read" for e in coins.events[1:])
-    assert drawn["read"] == (bytes([coins.byte]) * sum(e[1] for e in coins.events[1:])).hex()
+    assert drawn["read"] == b"".join(e[1] for e in coins.events[1:]).hex()
+    assert coins.segments[0].after.hex() == drawn["commitment"]
     assert drawn["commitment"] == S._sha512({"format": PERIOD_DRAW, "stream": run.stream.digest,
                                              "roots": roots(run, openings), "advice": None})
     assert drawn["format"] == PERIOD_DRAW and drawn["k"] == 2 and drawn["population"] == 3
-    assert len(drawn["units"]) == 2 and drawn["units"] == sorted(set(drawn["units"])) <= [0, 1, 2]
+    assert len(drawn["units"]) == 2 and drawn["units"] == sorted(set(drawn["units"])) and set(drawn["units"]) <= {0, 1, 2}
     with pytest.raises(ValueError, match="1 <= K <= 3"):
         run.lw.period_draw(run.stream, roots(run, openings), 4, Coins())
     with pytest.raises(ValueError, match="SHA-512 in lowercase hex"):
@@ -95,6 +102,18 @@ def test_the_period_draw_commits_every_root_before_it_reads_a_coin(tmp_path):
     prove(run, drawn, openings)
     with pytest.raises(ValueError, match="before the stream's first registration"):
         run.lw.period_draw(run.stream, roots(run, openings), 2, Coins())
+
+
+def test_a_period_draw_on_coins_other_than_the_challengers_is_refused(tmp_path):
+    """The verifier has no coins of its own: a draw of K windows on a callable that isn't the challenger's coins
+    (`ChallengerCoins`), however it would draw, is refused before anything is committed or read."""
+    run = Run(tmp_path)
+    openings = committed(run)
+    read = []
+    for own in (lambda n: read.append(n) or b"\x5a" * n, OwnRandomness(lambda n: b"\x5a" * n), None):
+        with pytest.raises(ValueError, match="challenger's coins"):
+            run.lw.period_draw(run.stream, roots(run, openings), 2, own)
+    assert read == [] and not run.stream.log
 
 
 def test_all_draws_every_window_and_reads_no_coin(tmp_path, lean_draw):
