@@ -4,7 +4,7 @@ pair, the serving side's `RemoteChallenger` on the other; the session's close is
 auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``, v2) opens the session for its window before the first coin and
 ends it once it has ended, sealing its files (the refused hellos' log, empty here, among them) and naming its record's
 leaf, its commitment and how many hellos it refused. The verifier reads `directory` under `key`, as the ledger opens and ends it.
-`Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads with core's check. Each seals the host's
+`Gate` is infra's v2 gate instead, whose ledger core's check reads (`challenger.ledger_of`). Each seals the host's
 pins log (`PINS`, one pin of `PINNED`, every open's ``pinned``) in its opens as the gate does (``pins: {lines, sha512}``),
 and writes it as infra publishes it (``pins.jsonl``, the gate's ``pins``), so `challenger.pinned_session` holds each
 session to it, and to the verifier's copy of main's first-parent history `MAIN`, which holds `PINNED`. Each holds a
@@ -303,10 +303,15 @@ class Gate:
         self._complete[session] = body["complete"] is True
         return self.append("end", session, body)
 
-    def ledger(self, pins=None, main=MAIN) -> PHC.Ledger:
-        """The ledger as `pouw_h1_challenger.Ledger` reads it, under the host's pins log `pins` (its lines; by default
-        the gate's own) and the verifier's copy of main's first-parent history `main` (None: no copy)."""
-        return PHC.Ledger.of([self.lines], self.key, pins=[self.pins if pins is None else list(pins)], main=main)
+    def ledger(self) -> LC.Ledger:
+        """The ledger as core reads it (`challenger.ledger_of`) under the gate's key."""
+        return LC.ledger_of([list(self.lines)], self.key, PHC.lms_verify)
+
+    def reading(self, pins=None, main=MAIN) -> dict:
+        """What a reading of `ledger` holds its sessions to, as `pouw_h1_challenger.session_reason` takes it: the gate's
+        key, the host's pins log `pins` (its lines; by default the gate's own) and the verifier's copy of main's
+        first-parent history `main` (None: no copy)."""
+        return {"key": self.key, "pins": list(self.pins) if pins is None else list(pins), "main": main}
 
     def pins_head(self, path: Path) -> Path:
         """The gate's pins log at `path`, as infra publishes it."""

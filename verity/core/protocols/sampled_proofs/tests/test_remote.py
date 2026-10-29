@@ -1458,6 +1458,16 @@ def test_the_ledger_is_the_longest_of_the_operators_heads_when_each_extends_the_
     for heads, why in ((None, C.NO_AUDIT), ([], C.NO_AUDIT), ("lines", C.HEADS_FORM)):
         with pytest.raises(C.CoinError, match=re.escape(why)):
             C.ledger_head(heads, pinned_key(), lms_verify)
+    heads = [R.ledger_lines(early), R.ledger_lines(first.ledger.path)]
+    read = C.ledger_of(heads, pinned_key(), lms_verify)
+    raw = [line.encode() for line in heads[1]]
+
+    def verifies(m: bytes, s: bytes) -> bool:
+        return lms_verify(pinned_key(), m, s) is True
+
+    assert read.lines == heads[1] == C.ledger_head(heads, pinned_key(), lms_verify)
+    assert read.windows == C.verify_ledger(raw, pinned_key().public[:16], verifies)
+    assert read.periods == C.verify_periods(raw, pinned_key().public[:16], verifies)
 
 
 def test_an_end_whose_reason_is_past_ascii_is_read_escaped(tmp_path, signer):
