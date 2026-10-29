@@ -11,7 +11,7 @@ the two records an honest certifier issues for it, each under a 64-byte salt and
 (`honestAccepted_instance`); the same unit with no records is undecided (`somePending_instance`).
 
 Two hypotheses stay hypotheses, each of a function no proof can evaluate: the parameters digests (`ParamsDigests`),
-since `parametersDigest` reads `Flock.canon`, well-founded recursion the kernel does not evaluate; and, for `answer`,
+since `parametersDigest` reads `Flock.canonUtf8`, well-founded recursion the kernel does not evaluate; and, for `answer`,
 that the bytes decode to the unit, since the parameters' and evidence's decoders read canonical JSON through it too.
 -/
 
