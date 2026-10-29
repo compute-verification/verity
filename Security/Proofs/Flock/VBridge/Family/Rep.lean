@@ -250,7 +250,7 @@ theorem verifierRows_v_size {sh : Shape} {GS : Flock.RecAlgebra.GfS} (hS : struc
     {kappa : Array (Array (Array F128))} (h : verifierRows sh rounds extras comb = .ok (v, info, kappa))
     (hc : comb.size = 64) : v.size = GS.nv := by
   unfold verifierRows at h
-  cases hl : Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) extras with
+  cases hl : Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) extras with
   | error e => rw [hl] at h; cases h
   | ok q =>
     obtain ⟨lins, info'⟩ := q
@@ -355,7 +355,7 @@ theorem ioColAt_of_readCol {Q : VStmt} (u : Fin Q.nv) {col : ℕ} (hc : col < (R
 elements. -/
 def combOf (sh : Shape) {cls : HClass} (TF : TableFiles cls) (rounds : Array (Array F128)) : Array F128 :=
   let c : Array F128 :=
-    match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) TF.extras with
+    match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) TF.extras with
     | .ok (_, info) =>
       match TF.st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn
           info.lc.fold.ts with
@@ -479,10 +479,8 @@ def HOne : Prop :=
     layers F.zs dg N k Rw R ω t R₂ τ (F.sess p)
       (Const.Prog.oneAt (Placed.keyProg (F.Vs (F.sess p)).c (F.Vs (F.sess p)).hU (F.Vs (F.sess p)).nv) (F.un p r)) = true
 
-/-- Obligation: discharged by `hVCoins_of` (`Family/VCoins.lean`) from the parts' `v` keys (`PartVCols`), their reads
-files naming `v` (`OwnNamesV`) and the registrant's `v` (`VRowsAre`): check 5's `RecCoins.checkResiduals` (in the event
-as `ChecksC3`'s `RecCoins.check`) holds the `v` port's registration to `verifierRows` at the inner session's coins, extra
-claims and comb (`checkValue` at `rec-v`).
+/-- Obligation: check 5's `RecCoins.checkResiduals` (in the event as `ChecksC3`'s `RecCoins.check`) holds the `v` port's
+registration to `verifierRows` at the inner session's coins, extra claims and comb (`checkValue` at `rec-v`).
 **The registered `v` is the verifier's at the rep's coins.** At an accepted outer proof, the `v` port of rep `r`'s copy
 of part `p` is registered bits of `verifierRows`' coefficients at the rep's coins, extra claims and comb (`vOf`), at the
 part's `V`; established from that check's rows (the registrant's rows at `rec-v`'s root, as `AccRowsAre` reads
@@ -496,9 +494,7 @@ def HVCoins : Prop :=
             (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras
             (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).comb)) q)
 
-/-- Obligation: discharged by `hZeroL_of` (`Family/VCoins.lean`) from the parts' `out` columns (`PartOutCols`, which
-makes their gates committed, `outCol_committed`) and their reads (`ZeroReads`, open: the Lean verifier does not check
-`out`'s registration).
+/-- Obligation, open: the Lean verifier does not check `out`'s registration.
 **The parts' outputs are 0 in the layer.** At an accepted outer proof, every output column of rep `r`'s copy of
 part `p` is 0 in the layer (`copyVal`). V* registers each part's `out` as reads of the zero row `rec-residuals-zero`
 (`rec_vstage.py`), and `ZkOuter.Good` asks the layer to agree with the registrant at registered reads only

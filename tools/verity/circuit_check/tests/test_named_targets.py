@@ -113,6 +113,27 @@ def test_the_last_line_sums_the_checked_targets_and_counts_the_reused():
                                               "(partition 2.0, lowering 2.0), 1 reused")
 
 
+def test_a_warning_is_printed_unchecked_apart_from_the_passes_and_counted(runs, monkeypatch, capsys):
+    """A warning never fails: a target with one is logged ``unchecked``, not ``ok``; the warnings are printed under ``unchecked``
+    by check, with counts, and the last line says how many there are, on how many Definitions."""
+    F = CK.Findings()
+    F.warn("redundant-gates", "ir", "F32Add_v1", 3, "values computed again inside their own unit")
+    F.warn("lowering", "unpinned", "F32Add_v1", 1, "[F32Add_v1]: no pin")
+    F.warn("partition", "unchecked", "F32Mul_v1", 1, "6000000 gates: over the partition budget 5000000")
+    by = {"F32Add_v1": F.warnings[:2], "F32Mul_v1": F.warnings[2:]}
+    monkeypatch.setattr(cli, "run", lambda specs, opts, **kw: CK.report([_target(s, 1.0, {}, warnings=by[s]) for s in specs], opts))
+    assert cli.main(["F32Add_v1", "F32Mul_v1"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert [s for s in out if s.startswith(("unchecked ", "warn "))] == [
+        "unchecked redundant-gates/ir: 3 over 1 target(s)", "unchecked lowering/unpinned: 1 over 1 target(s)",
+        "unchecked partition/unchecked: 1 over 1 target(s)"]
+    assert "3 unchecked (warnings, which never fail) on 2 Definition(s)" in out[-1]
+    assert cli.main(["F32Add_v1", "--fail-on-warnings"]) == 1
+    statuses = [cli._status(t) for t in (_target("A", 0, {}, warnings=by["F32Add_v1"]), _target("B", 0, {}),
+                                          _target("C", 0, {}, failures=[{}], warnings=by["F32Mul_v1"]))]
+    assert [s.strip() for s in statuses] == ["unchecked", "ok", "FAIL"]
+
+
 def test_a_sidecar_names_the_targets_its_bindings_reach_in_its_module():
     """``circuit-check path/to/<module>.circuit-check.py`` checks what that sidecar binds, not the catalog: the Definitions its
     root functions reach that its module defines, selected as the suite selects them, each with its binding unit, and the

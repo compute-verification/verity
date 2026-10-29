@@ -369,7 +369,7 @@ Vocabulary that one area uses:
   - **Landing gate**: a script at `main` that every PR's merge onto `next` must pass.
   - **Lean check**: a run of every Lake package's audit (`lean-audit`) on a commit of `next`. A PR that changes a lock, or
     Lean that runs as code, lands only on a passed Lean check at or above it.
-  - **After-landing run**: the full check of `main`'s tip after each landing; when it passes, `main` is verified.
+  - **After-landing run**: the full check of `checked`'s tip after each landing; `main` moves only to tips that passed every step on the merge gate.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`; it lands alone, without review.
 - **Running jobs** (`tools/research`, `infra/`):
