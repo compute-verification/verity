@@ -2,8 +2,8 @@
 
 Every premise any frontier design uses or could use is one row of `LEDGER`: its statement, rank (0 theorem, 1 measured
 hardware floor, 2 CPU-checkable fact, 3 model faithfulness or protocol premise, 4a algorithmic knowledge about
-SHA-512, 4b about our own noised operands, 5 hardness conjecture; an open premise ranks 5 today), how to falsify or
-measure it on the H200, its status, its owner and the T1 terms it closes.
+SHA-512, 4bU about literally uniform operands, 4b about our own noised operands, 5 hardness conjecture; an open premise
+ranks 5 today), how to falsify or measure it on the H200, its status, its owner and the T1 terms it closes.
 
 T1 is CORE §2a's additive gap in W1 units, as a share of stock's int8 MACs. Each design's terms come from SW-NOISE's
 calculator (`noise_sweep.gap_terms`: forming, de-noise, the final word, duplicates, the coins). Added here:
@@ -91,7 +91,7 @@ ALLOW = 0.01
 POINTS = {"llama_T512": (NS.LLAMA, 64, 1.0), "llama_512rows": (NS.LLAMA, 512, 1.0), "llama_T8192": (NS.LLAMA, 8192, 1.0),
           "v4d_T512": (NS.V4_DENSE, 64, 1.0), "v4d_T8192": (NS.V4_DENSE, 8192, 1.0),
           "v4e_T8192": (NS.V4_EXPERT, 8192, NS.V4_EXPERT_SHARE)}
-RANK_ORDER = ["0", "1", "2", "3", "4a", "4b", "5", "F"]
+RANK_ORDER = ["0", "1", "2", "3", "4a", "4bU", "4b", "5", "F"]
 
 # --------------------------------------------------------------------------------------------------------- the ledger
 # (id, statement, rank once settled, status, rank today, falsify / measure on the H200, owner, T1 terms it closes)
@@ -146,8 +146,13 @@ LEDGER = [
     ("NoSharingGain", "A committed L-sum of int7 data costs at least L/32 tensor writes of 32", "5", "open", "5",
      "a cheaper L-sum route (likely false from L 256: Hopcroft–Kerr ties at L 128)", "SW-SEM",
      "uncommitted steps at any L"),
-    ("SAK-U", "No program computes a product of uniform operands with less work than the best known", "4b", "stated",
-     "4b", "a faster algorithm on uniform matrices", "N-SAKU", "matmul part of SAK-U designs; nothing in ssn_1l"),
+    ("SAK-U", "No program computes a product of uniform operands with less work than the best known", "4bU", "stated",
+     "4bU", "a faster algorithm on uniform matrices", "N-SAKU",
+     "none: alone it leaves at least stock uncertified for every class of design, and beside a per-word floor it "
+     "buys no sparse commitment"),
+    ("outputs-only", "Committing only each dot product's output (one word a K MACs) suffices", "F", "false", "F",
+     "sparse commitments fail premise-free with chosen data (the middle-segment skip, L/K of stock), and the outputs' "
+     "hashing alone exceeds the allowance at rank ≤ 3 (this file)", "N-SAKU", "none"),
     ("SAKMatmul", "Symmetric algorithmic knowledge on our noise distribution", "4b", "locked", "4b", "—", "lock",
      "the baseline; nothing in ssn_1l"),
     ("ssn-distinct", "ssn_1l's words D_t − β + Σ a₁C + Σ a_t are pairwise distinct and non-free as functions of the "
@@ -271,8 +276,23 @@ LEDGER = [
     ("PeriodInventory", "Every device the prover runs in the period is counted on both sides", "3", "stated", "3",
      "inventory and egress", "SW-PREMISES",
      "none in T1: the egress layer's (devices off the card, with OutsourceWithinEgress)"),
-    ("OutsourceWithinEgress", "Off-card compute is bounded by the egress the certifiers see", "3", "locked", "3",
-     "certifiers", "lock", "none in T1 (egress layer)"),
+    ("OutsourceWithinEgress", "Off-card compute is bounded by the egress the certifiers see", "3",
+     "locked; false for every seeded design at DitherInstance's β", "3", "certifiers", "lock",
+     "the network term n_max·W_mac·E (outside T1), only with streamed-coins and coin-density, or "
+     "commit-through-certifier"),
+    ("streamed-coins", "Each call's coins arrive in the challenger's signed stream, excluded from E, not derived from "
+     "a window salt the prover holds", "3", "design (the lead seeds its noise from a 512-bit window salt)", "3",
+     "— (protocol structure)", "N-ALT",
+     "the network term's seeded case: without it one counted message outsources the window and the bound is empty"),
+    ("coin-density", "A design's coins carry at most n_max MACs a coin bit with n_max·W_mac·E ≤ 1% of stock (1,305 to "
+     "2,540 MACs a bit at a 32-bit-a-token cap)", "5", "open", "5",
+     "per-row coins carry about 31·N MACs a bit (138–268% of stock); per-output-element coins would meet it at "
+     "475k–918k bits a token, if they force distinct writes", "N-ALT / N-NOISE",
+     "the network term with streamed coins"),
+    ("commit-through-certifier", "R1: the committed words leave the GPU through a network certifier's port and are "
+     "hashed there (trusted-host)", "3", "design", "3",
+     "the GEMM slowdown under a port-rate stream, and whether the port carries the words (T2)", "N-ALT",
+     "hashing on the prover (no ShaWrites) and the network term, which an outsourced result's words bound"),
     ("inputs-natural", "The prover chooses neither its requests nor its model (no identical, zero or crafted rows, no "
      "crafted weights)", "F", "false", "F", "a self-dealing prover submits its own requests and registers its own "
      "weights", "—", "every coin-branch term on chosen data (requests, zero rows, crafted increments)"),
