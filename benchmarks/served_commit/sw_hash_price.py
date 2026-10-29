@@ -30,6 +30,10 @@ T1 terms, MAC-weighted over the linears and additive over stock's m·n·K (W1 un
   only where the drawn unit's proof checks y = PRF_ks(pos) and c; then M_key y alone remains, under no premise (the salt
   kernel's time from given salts less c's two compressions and the frame leaf's first block).
 ShaSpeed's precision δ: 0.01 / (the hash's W1 work a useful MAC), at the floor and alone, and as instructions a compression.
+
+In AND gates (hm96's AND model: 58,120 a SHA-512 compression, 53,568 one from round 8, XORs free; a MAC is main's Boolean
+lowering of an s8 x s8 linear into int32, 2,079/16 ANDs) the hash is (row blocks + 12) compressions a leaf, the hiding work
+the salt PRF and c (M_key y is XORs), and stock one MAC's ANDs a useful MAC.
 """
 from __future__ import annotations
 
@@ -48,6 +52,9 @@ FORM, NOISE = 24, 8                                 # W1 units an operand entry:
 PACK_INSTR = {32: 0, 16: 1, 64 / 3: 2}              # honest instructions a packed 32-bit register (PRMT; shifts and an OR)
 PRICE = {"floor": 32.0, "alone": 64.13}             # W1 a pack instruction
 ROWS_16K = 16384
+ANDS_COMPRESSION, ANDS_FROM_8 = 58_120, 53_568
+ANDS_MAC = 2079 / 16
+ANDS_HIDING = 3 * ANDS_FROM_8 + 2 * ANDS_COMPRESSION
 PERIODS = {"week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
 CENSUS = {"world FLOP a year": 9.36e30, "datacenter GPUs": 100_000, "H200 dense FLOP/s": 1.979e15, "datacenter utilization": 0.4,
           "window s": 600}
@@ -168,7 +175,10 @@ def main() -> None:
                     comps_byte = (blocks(R) + 9 + 3) / R
                     w1_hash = {p: B / macs * comps_byte * w for p, w in w1c.items()}
                     hid = rows.by[R]["hiding_share"]
+                    ands = B / macs * comps_byte * ANDS_COMPRESSION
                     e = {"hash_ms": hm, "comps_byte": comps_byte, "w1_hash_mac": w1_hash,
+                         "ands": {"hash_mac": ands, "hash_of_stock": ands / ANDS_MAC, "shaspeed_delta": 0.01 * ANDS_MAC / ands,
+                                  "hiding_of_stock": B / macs / R * ANDS_HIDING / ANDS_MAC},
                          "shaspeed_delta": {p: 0.01 / v for p, v in w1_hash.items()},
                          "shaspeed_instr_compression": {p: 0.01 / v * sass["instructions"] for p, v in w1_hash.items()},
                          "hiding_share_of_hash": hid, "t1_hiding_unforced": {p: hid * v for p, v in w1_hash.items()},
@@ -216,6 +226,10 @@ def main() -> None:
                             f"{e['engines']['sync']['unfused']:.1f}/{e['engines']['async']['unfused']:.1f})"
                             f" δ {e['shaspeed_delta']['floor']:.2e}/{e['shaspeed_delta']['alone']:.2e}"
                             f" hiding {e['t1_hiding_unforced']['floor']:.3f}/{e['t1_hiding_unforced']['alone']:.3f}")
+        for R in (ROWS_16K, 262144):
+            a = res["points"]["T 8,192"]["rows"][str(R)]["measured"]["ands"]
+            line.append(f"  ANDs at T 8,192, {R // 1024} KiB: hash {a['hash_of_stock']:.3f}x stock, ShaSpeed δ {a['shaspeed_delta']:.2%}, "
+                        f"hiding {a['hiding_of_stock']:.3%} of stock")
         t1 = res["points"]["T 8,192"]["t1"]
         line.append(f"  T1 at T 8,192: interior H32 {t1['interior_h32_floor']:.2%}/{t1['interior_h32_alone']:.2%}, SemK32 "
                     f"{t1['interior_semk32_floor']:.2%}/{t1['interior_semk32_alone']:.2%}, final word "
