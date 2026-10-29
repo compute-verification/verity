@@ -35,7 +35,7 @@ witnesses; `Witnesses` has the negation `notStmt` and its accepting verifier `le
   (`tapOps_opens`), so at every `δ` no witness is in `RLeakTap` (`tapD_noRLeakTap`), and at `δ = 1/8` the per-window
   leak bound of `PeriodLeakAccepted` fails at its silent prover (`tapD_bound_fails`).
 * `pooled_bound_fails`: `PooledLeakAccepted`'s bound fails at an audit that always accepts, at one window of one step
-  whose faulty set holds the one unit `Fmax = 1` allows none of, at `δ = 1/2`.
+  tied to `tiedToy`, whose one proof block is incorrect and `Ft = 1` allows none of, at `δ = 1/2`.
 * `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections, `fixtureAgrees`
   checks its egress record), one window of ten buckets of four slots, which `fxQueueSched` fits (`fxQueue_fits`).
 -/
@@ -472,14 +472,18 @@ theorem tapD_bound_fails (H : Msg → Msg) :
 
 /-! ## The monitoring period, pooled -/
 
-/-- **`PooledLeakAccepted`'s bound fails at an audit that always accepts**, at `δ = 1/2` and `e = e' = 0`: one window
-of one step whose faulty set holds its one unit, which `Fmax = 1` allows none of, so the good event fails on every
-coin. -/
+/-- A tied audit at `notStmt`'s Program and partition, its one returned value the scan's input `0`. -/
+def tiedToy : TiedAudit := ⟨notProg, notPart, [0]⟩
+
+/-- **`PooledLeakAccepted`'s bound fails at an audit that always accepts**, at `δ = 1/2`, `ε_t = 0` and `e = e' = 0`:
+one window of one step tied to `tiedToy`, no incorrect proof block of its own (`Fmax = 1`) and the tied audit's one
+proof block incorrect, which `Ft = 1` allows none of, so the good event fails on every coin. -/
 theorem pooled_bound_fails :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         ¬ PooledGood (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 (fun _ : Fin 1 => notStmt) (fun _ => notPart)
-          (fun _ _ => false) (fun _ _ _ => ([] : List Bool)) 1 (fun _ => {0}) (fun _ => [obs0])) ≤
-      (1 / 2 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) := by
+          (fun _ _ => false) (fun _ _ _ => ([] : List Bool)) (fun _ => [tiedToy]) 1 1 (fun _ => ∅) (fun _ => {0})
+          (fun _ => [obs0])) ≤
+      (1 / 2 : ℝ) + 0 + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) := by
   simp [Pr, PooledGood] <;> norm_num
 
 /-! ## The Python network certifier's fixture -/

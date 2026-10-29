@@ -21,8 +21,8 @@ import Proofs.NetworkCertifier.Assumptions.SampledCode
   sends at most 6 cells a connection (`hcap`). Stated as their conjunction, not as `fits` alone: the witnesses rule
   reads a statement that is one definition applied by unfolding it once, and `fits` is a field.
 * `PooledLeakAccepted_nontrivial`: its bound fails at an audit that always accepts, at `δ = 1/2` with one window of
-  one step whose faulty set holds its one unit (`pooled_bound_fails`). There its conditional escape (`hesc`) holds
-  only at `q = 0`, which its `hF` refuses at `δ < 1`.
+  one step tied to `tiedToy`, whose one proof block is incorrect (`pooled_bound_fails`). There sampled proofs' pooled
+  bound (`hpool`) fails: every audit accepts with that proof block incorrect on every coin, and `ε_t = 0`.
 -/
 
 namespace NetTiming.Witness
@@ -79,13 +79,15 @@ theorem PooledLeakAccepted_honest :
   · rw [Set.mem_singleton_iff.1 hs]
     fin_cases c <;> decide
 
-/-- **`PooledLeakAccepted`'s bound fails at an audit that always accepts**, at one window of one step whose faulty
-set holds its one unit, `Fmax = 1`, `δ = 1/2` and `e = e' = 0` (`pooled_bound_fails`). -/
+/-- **`PooledLeakAccepted`'s bound fails at an audit that always accepts**, at one window of one step tied to
+`tiedToy`, whose one proof block is incorrect, `Fmax = Ft = 1`, `δ = 1/2`, `ε_t = 0` and `e = e' = 0`
+(`pooled_bound_fails`). -/
 theorem PooledLeakAccepted_nontrivial :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         ¬ PooledGood (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 (fun _ : Fin 1 => notStmt) (fun _ => notPart)
-          (fun _ _ => false) (fun _ _ _ => ([] : List Bool)) 1 (fun _ => {0}) (fun _ => [obs0])) ≤
-      (1 / 2 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) :=
+          (fun _ _ => false) (fun _ _ _ => ([] : List Bool)) (fun _ => [tiedToy]) 1 1 (fun _ => ∅) (fun _ => {0})
+          (fun _ => [obs0])) ≤
+      (1 / 2 : ℝ) + 0 + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) :=
   pooled_bound_fails
 
 end NetTiming.Witness
