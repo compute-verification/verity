@@ -33,7 +33,8 @@ def test_a_one_slot_unit_fits_below_half_the_block():
 
 def test_the_int8_plan_offers_no_tile_past_the_block():
     """int8 Llama's K = 14336 2 x 1 tile and both 16 x 16 tiles are past C-Flock's block (cap 0, descended into, never proved
-    whole); its K = 14336 coordinate fits, 256 a statement."""
+    whole), and so is its K = 14336 coordinate, whose 898 noise compressions at `SHA512_ROWS` are 73M ANDs; its K = 4096
+    coordinate (258, 21M) fits, 512 a statement."""
     caps = {}
 
     def walk(s):
@@ -44,8 +45,9 @@ def test_the_int8_plan_offers_no_tile_past_the_block():
 
     for k in (4096, 14336):
         walk(P.linear(k, 16))
-    assert {t for t, c in caps.items() if c == 0} == {"S8Tile{K=4096,16x16}", "S8Tile{K=14336,2x1}", "S8Tile{K=14336,16x16}"}
-    assert caps["S8Coord{K=14336}"] == 256 and caps["S8Coord{K=4096}"] == 1024
+    assert {t for t, c in caps.items() if c == 0} == {"S8Tile{K=4096,16x16}", "S8Tile{K=14336,2x1}", "S8Tile{K=14336,16x16}",
+                                                      "S8Coord{K=14336}"}
+    assert caps["S8Coord{K=4096}"] == 512
 
 
 def test_a_unit_past_the_block_is_proved_as_its_least_parts():

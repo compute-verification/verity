@@ -1,6 +1,6 @@
 # The sampling plans' models and their tests. Not a package: the plans run as scripts (`int8_llama.py`,
-# `transformer.py`, `h200.py`, `demo_a.py`), and the transformer's DAG, certificates and hand-off, the H200 plan and
-# Demo A's frontier run here as a suite (`uv run tools/verity/check/suites.py benchmarks/sampling_plan`).
+# `transformer.py`, `h200.py`, `demo_a.py`, `served_window.py`), and the transformer's DAG, certificates and hand-off,
+# the H200 plan, Demo A's frontier and the served window's two modes run here as a suite (`uv run tools/verity/check/suites.py benchmarks/sampling_plan`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
