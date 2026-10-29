@@ -1,5 +1,5 @@
 """A served tree registered as a port, end to end (`one_stage.served.register_served`, `served_registered.py`): a
-RoPE d64 statement whose 32 units each read their `cs` row from the served tree `cs_table`, proved by C-Flock in one
+RoPE d64 statement whose 32 units each read their `cs` row from the served tree `cs_table`, proved by Flock in one
 loopback `--zk` session under a subset draw of 16 (`pod/89-served-registered.sh`, `FIXTURES`), once for each row format a
 served tree may be: `row/v1`, and `row/v2` and `row-seg/v1` bit rows (the circuit's rows bit rows of their words, `cs` a
 v2 or a segmented row). The verifier writes its own `--registered` file from the tree as the service holds it

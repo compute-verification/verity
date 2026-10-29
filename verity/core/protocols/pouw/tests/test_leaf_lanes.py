@@ -263,7 +263,7 @@ def _j10r_definition(t, n: int, st: tuple):
 @pytest.mark.parametrize("k", [448, 8192, 12288])
 def test_a_j10r_leafs_statements_and_every_port_are_its_v2_definitions(k):
     """A J10-R leaf's statements are `h1zy.lane_statements` lane by lane, then the combine, and each one's registered
-    ports (`own`) are exactly its Definition's C-Flock ports (`h1zy.statement_ports`), ``o0`` among them; statement i's
+    ports (`own`) are exactly its Definition's Flock ports (`h1zy.statement_ports`), ``o0`` among them; statement i's
     ``o0`` reads row i of ``oks`` and the combine's ``ok<i>`` the same row."""
     from verity.core.protocols.pouw.circuit import h1window as HW
 

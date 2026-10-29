@@ -1,4 +1,4 @@
-"""Exact f32 / bf16 arithmetic as GF(2) circuits over `forms` (formerly C-Flock's `fp`, its lowering's per-op pieces).
+"""Exact f32 / bf16 arithmetic as GF(2) circuits over `forms` (formerly Flock's `fp`, its lowering's per-op pieces).
 
 A word is a list of :class:`forms.L` linear forms, LSB first. XOR, NOT, constant shifts and bit selection are free; an AND
 of two non-constant forms is one committed bit (``forms.Circuit.AND``). Constants propagate, so each piece is written once

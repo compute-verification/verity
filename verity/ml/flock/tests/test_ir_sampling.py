@@ -1,4 +1,4 @@
-"""C-Flock's lowering of GumbelTopPTokenSelect_v1 (``verity_flock.ir_sampling``): the pieces against the IR primitives, the lane
+"""Flock's lowering of GumbelTopPTokenSelect_v1 (``verity_flock.ir_sampling``): the pieces against the IR primitives, the lane
 unit against the IR composites it is lowered from, a row's words against the IR evaluator on synthetic sets (a row whose last
 BLAKE3 chunk is short included), the staged file's units, the native words, the pin, and the negatives."""
 from __future__ import annotations

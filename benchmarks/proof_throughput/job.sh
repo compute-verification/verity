@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # proof_throughput's prover point: sessions that each prove B coordinates of one workload's population, the B its loopback
 # `flock-circuit serve` draws at the session's Register by the stratified law (`serve --draw-law`, the law verify.sh's Lean
-# verifier derives for itself), proved by C-Flock's native prover (ZK off) on one leased GPU with live coins, WARM warm and RUNS
+# verifier derives for itself), proved by Flock's native prover (ZK off) on one leased GPU with live coins, WARM warm and RUNS
 # timed sessions. The population (n_max instances) is staged once, whatever B (FLOCK_STAGE_CACHE). Build, staging and the
 # instance check run outside the lease; the lease covers the sessions alone. The timed sessions, the circuit, the population's
 # public file and the law go to the store as one bundle (out/bundle.json names it) for verify.sh, which runs the Lean verifier

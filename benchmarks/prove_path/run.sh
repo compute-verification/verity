@@ -42,7 +42,7 @@
 #     digests forged to X's (those units aren't their Definition's); each must be refused, and pin nothing.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
-#   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
+#   PP_PLAIN=1: plain Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
 #     draw, until multi-table coverage lands, so each partition's law must be stratified:K over a window of one member.
 #   PP_KEEP_WINDOWS=DIR: each run's committed windows copied whole to DIR/<name>-windows (the prover's files with them, so
 #   DIR stays on the node, under `research keep`), for a later job such as recursion_e2e/stage.sh WINDOW=DIR/served-windows/rank0.

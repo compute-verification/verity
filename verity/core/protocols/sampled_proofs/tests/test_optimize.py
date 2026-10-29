@@ -1,5 +1,5 @@
 """The sampling planner (`optimize`): its statement count, replay count and closed-form bound against brute force and core's
-bound, `Achievability`'s rates at zero statement cost, the frontier under C-Flock's statement-batched cost, the choice
+bound, `Achievability`'s rates at zero statement cost, the frontier under Flock's statement-batched cost, the choice
 between a partition and a covering, serving's commitment (per proof block, and the fixed serve-time total with its overlaps), the
 weight classes' weights, and the sensitivity queries."""
 
@@ -147,7 +147,7 @@ def test_work_law_draws_the_plan_sizes(achievability, batched):
 
 @pytest.fixture(scope="module")
 def batched():
-    """C-Flock's shape at small scale: G, many cheap proof blocks behind a per-statement cost (a0 = 2, a1 = 0.016 per staged
+    """Flock's shape at small scale: G, many cheap proof blocks behind a per-statement cost (a0 = 2, a1 = 0.016 per staged
     proof block, at most 4096 proof blocks a statement); N, proof blocks costing 10 per unit of work and no statement cost; M, 64 heavy proof blocks
     that fit one statement."""
     cands = [Candidate("gemm", "G", 20000, 100, 16, cap=4096),

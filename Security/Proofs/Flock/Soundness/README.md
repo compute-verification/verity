@@ -37,7 +37,7 @@ at most `tableError(fast100 m, shape)`:
   `RS[2^d, 2^cols + t]`, of rate `ρ' = (2^cols + t)/2^d`. Each rep also folds its own `e` extra lanes with fresh coins.
   - **The bound is a function of `t` and `e`** (`padTableError`). It is `tableError` with level 0's radius, list size,
     queries and MCA numerator taken at `ρ'`, plus one MCA line and one coin on the restarted claim per extra lane.
-  - **At C-Flock ZK's values** (§7 item 6, `Zk.queries0`): `q₀ = 277, 242, 229` at `m = 25, 26, 27`, 219 at `m = 28..31`
+  - **At Flock ZK's values** (§7 item 6, `Zk.queries0`): `q₀ = 277, 242, 229` at `m = 25, 26, 27`, 219 at `m = 28..31`
     and 218 at `m = 32..35`, `t = 2q₀`, and a pair of extra lanes per rep. At every `m` the verifier serves the bound is
     at most **2^-205 per table** (`table_sound_pad_m1`).
   - **The committed values** are the witness lanes' messages `a − c₀·pad` of lane families within the padded radius
@@ -172,7 +172,7 @@ link term per audit.
 | Phase lemma: Ligerito, level by level: the folds (sumcheck and MCA), the next level's OOD binding, the queries and batching coins, the final check | 1a | `ligerito_phase` (`RepSound.lean`), `ligerito_sound` (`LigeritoPhase.lean`) | proved |
 | The link points reduce region checks to opened claims | 1a | `link_sound` (`Soundness.lean`), `link_sound_of_card` (`LinkSound.lean`) | proved |
 | M1's padded level 0 (§1.1): Ligerito with the padded code and the extra lanes, and the table theorem for any padding `t` and extra lanes `e` | 1a | `ligeritoPad_sound`, `table_sound_pad` (`LigeritoPad*.lean`, `SoundnessPad.lean`) | proved; the inner proof's soundness separately |
-| The padded bound at C-Flock ZK's values: 2^-205 per table at m = 25–35 | 1a | `table_sound_pad_m1` (`Accounting/PaddedNumbers.lean`) | proved |
+| The padded bound at Flock ZK's values: 2^-205 per table at m = 25–35 | 1a | `table_sound_pad_m1` (`Accounting/PaddedNumbers.lean`) | proved |
 | Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
