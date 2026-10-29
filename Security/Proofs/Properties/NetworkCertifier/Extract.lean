@@ -51,7 +51,7 @@ theorem mem_treeStrings {g : Grid} {grid : Array (Array (Option ByteArray))} {x 
   rw [hfr]
   exact mem_framesStrings hx
 
-theorem declared_eq {W : Nat} {link : Link} {syncs : Fin W → ClockSync} (h : Declares link syncs) :
+theorem declared_eq {W : Nat} {link : LinkOpening} {syncs : Fin W → ClockSync} (h : Declares link syncs) :
     syncs = declared W link :=
   funext fun v => by rw [declared, Array.getD_eq_getD_getElem?, h v]; rfl
 
