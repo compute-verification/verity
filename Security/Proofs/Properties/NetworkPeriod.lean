@@ -259,22 +259,20 @@ theorem rowsProgWired_honest :
 theorem tiedWindow_unwired : wired #[] slotSchedule #[] tiedWindow = false := by
   decide +kernel
 
-/-- **No period check that accepts every period has `RowsProgWired`'s property** (its nontrivial lemma): such a check
-accepts a rows-form period of one link-window with no audit, and there the link-window's scan's `prog` is no audit's
-slot entries (`wired` fails at the period, its acceptance, its form and its link-window). -/
+/-- **A check that accepts every period accepts one where `RowsProgWired`'s conclusion fails** (its nontrivial lemma):
+`acceptAllRows` accepts a rows-form period of one link-window with no audit, and there the link-window's scan's `prog`
+is no audit's slot entries (`wired` fails). -/
 theorem rowsProgWired_nontrivial :
-    ¬ RowsProgWiredOf acceptAllRows ∧
-      (∃ pub prof, acceptAllRows (rowsParams #[]) (oneWindow #[] tiedWindow) ⟨#[], #[]⟩ = .accept pub prof) ∧
-      (rowsParams #[]).form = .rows slotSchedule .empty ⟨0, 0, 0, 0⟩ ∧
-      (oneWindow #[] tiedWindow).windows[0]? = some tiedWindow ∧
+    ∃ (pub : Public) (prof : Profile)
+      (_ : acceptAllRows (rowsParams #[]) (oneWindow #[] tiedWindow) ⟨#[], #[]⟩ = .accept pub prof)
+      (_ : (rowsParams #[]).form = .rows slotSchedule .empty ⟨0, 0, 0, 0⟩)
+      (_ : (oneWindow #[] tiedWindow).windows[0]? = some tiedWindow),
       ¬ wired (rowsParams #[]).audits slotSchedule (oneWindow #[] tiedWindow).audits tiedWindow = true := by
-  have hw : ¬ wired (rowsParams #[]).audits slotSchedule (oneWindow #[] tiedWindow).audits tiedWindow = true := by
-    intro hw
-    change wired #[] slotSchedule #[] tiedWindow = true at hw
-    rw [tiedWindow_unwired] at hw
-    cases hw
-  exact ⟨fun h => hw (h (rowsParams #[]) (oneWindow #[] tiedWindow) ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩
-    rfl 0 tiedWindow rfl), ⟨_, _, rfl⟩, rfl, rfl, hw⟩
+  refine ⟨_, _, rfl, rfl, rfl, ?_⟩
+  intro hw
+  change wired #[] slotSchedule #[] tiedWindow = true at hw
+  rw [tiedWindow_unwired] at hw
+  cases hw
 
 /-- `slotAudit` with its template's body another than every pinned one: a template under `SlotEntry_v1`'s name and
 descriptor id, one member a slot, whose closure digest is none of `slotEntryPins`. -/
@@ -340,25 +338,22 @@ theorem stateWindow_skipped : stateTied #[slotAudit] slotSchedule #[stateReg "t"
 theorem tiedWindow_unstated : stateTied #[slotAudit] slotSchedule #[stateReg "s"] tiedWindow = false := by
   decide +kernel
 
-/-- **No period check that accepts every period has `RowsStateTied`'s property** (its nontrivial lemma): such a check
-accepts a rows-form period of one link-window whose scan's `prog` is wired to the slot audit, and there the scan's
-state is not that audit's `SCAN_STATE`, which skips or alters a transition of the scan's (`stateTied` fails at the
-period, its acceptance, its form and its link-window). -/
+/-- **A check that accepts every period accepts one where `RowsStateTied`'s conclusion fails** (its nontrivial lemma):
+`acceptAllRows` accepts a rows-form period of one link-window whose scan's `prog` is wired to the slot audit, and there
+the scan's state is not that audit's `SCAN_STATE`, which skips or alters a transition of the scan's (`stateTied`
+fails). -/
 theorem rowsStateTied_nontrivial :
-    ¬ RowsStateTiedOf acceptAllRows ∧
-      (∃ pub prof, acceptAllRows (rowsParams #[slotAudit]) (oneWindow #[stateReg "t"] stateWindow) ⟨#[], #[]⟩ =
-        .accept pub prof) ∧
-      (rowsParams #[slotAudit]).form = .rows slotSchedule .empty ⟨0, 0, 0, 0⟩ ∧
-      (oneWindow #[stateReg "t"] stateWindow).windows[0]? = some stateWindow ∧
+    ∃ (pub : Public) (prof : Profile)
+      (_ : acceptAllRows (rowsParams #[slotAudit]) (oneWindow #[stateReg "t"] stateWindow) ⟨#[], #[]⟩ =
+        .accept pub prof)
+      (_ : (rowsParams #[slotAudit]).form = .rows slotSchedule .empty ⟨0, 0, 0, 0⟩)
+      (_ : (oneWindow #[stateReg "t"] stateWindow).windows[0]? = some stateWindow),
       ¬ stateTied (rowsParams #[slotAudit]).audits slotSchedule (oneWindow #[stateReg "t"] stateWindow).audits
         stateWindow = true := by
-  have hs : ¬ stateTied (rowsParams #[slotAudit]).audits slotSchedule (oneWindow #[stateReg "t"] stateWindow).audits
-      stateWindow = true := by
-    intro hs
-    change stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = true at hs
-    rw [stateWindow_skipped] at hs
-    cases hs
-  exact ⟨fun h => hs (h (rowsParams #[slotAudit]) (oneWindow #[stateReg "t"] stateWindow) ⟨#[], #[]⟩ _ _ rfl
-    slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 stateWindow rfl), ⟨_, _, rfl⟩, rfl, rfl, hs⟩
+  refine ⟨_, _, rfl, rfl, rfl, ?_⟩
+  intro hs
+  change stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = true at hs
+  rw [stateWindow_skipped] at hs
+  cases hs
 
 end Properties.NetworkPeriod
