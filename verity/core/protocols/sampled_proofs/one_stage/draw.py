@@ -20,6 +20,13 @@ without replacement inside each, independently.
   "k": k_s}, ...]}`: the agreement's rule `stratified:K` expanded by `derive`. R1 holds the registered sampling design to the verifier's
   own expansion, and the draw carries the sampling design's keys plus `population` and `units`.
 
+**The whole sampling design** (Lean `Flock.Draw.deriveWhole`): the stratified sampling design's strata, sampler and object, with the
+strata of named templates drawn whole. The rule `whole:K:B1,B2,...` names base ids `Name_vN`; a stratum is whole when its
+descriptor id is one of them or a specialization `B{...}` of one, and draws k_s = n_s (still a k-of-k draw on its coins). Every
+other stratum draws the work rule's size at unit work and floor one over the population, k_s = min(n_s, max(1, ceil(K n_s / n)))
+(`whole_k`). Its object is a stratified one, so a verifier holds a stratified object to one of two rules
+(`strata_problem`): every k_s `stratum_k`'s, or every k_s n_s or `whole_k`'s.
+
 **The work sampling design** (the Lean verifier's `Flock.Draw.Law.work`, its bound
 `FlockSoundness.Audit.Work.work_escape_le`): the stratified sampling design's strata and sampler, with each stratum's draw sized by the
 PoUW work its proof blocks do. The verifier's work table gives each template's work per proof block, a natural number in any fixed unit,
@@ -64,20 +71,26 @@ def digits(s: str) -> bool:
 
 
 def parse_law(text: str) -> dict[str, Any]:
-    """`subset:K` or `bernoulli:NUM/DEN` (`flock-circuit serve --draw`'s syntax), or `stratified:K` or `work:K` (rules, which `derive`
-    expands over a program and query, and for `work` a work table), as a sampling design object; numbers in ASCII digits, `K >= 1`.
-    A design outside the sampling claims' scope (`Claims.Sampling.OneStage.WellFormed`) is refused: `subset:0` draws
-    nothing, so its `P_a` is no miss probability."""
+    """`subset:K` or `bernoulli:NUM/DEN` (`flock-circuit serve --draw`'s syntax), or `stratified:K`, `work:K` or
+    `whole:K:B1,B2,...` (rules, which `derive` expands over a program and query, and for `work` a work table), as a sampling
+    design object; numbers in ASCII digits, `K >= 1`, a whole rule's base ids non-empty. A design outside the sampling
+    claims' scope (`Claims.Sampling.OneStage.WellFormed`) is refused: `subset:0` draws nothing, so its `P_a` is no miss
+    probability."""
     kind, _, arg = text.partition(":")
     if kind == "subset" and digits(arg) and int(arg) >= 1:
         return {"law": "subset", "k": int(arg)}
     if kind in ("stratified", "work") and digits(arg) and int(arg) >= 1:
         return {"law": kind, "k": int(arg)}
+    if kind == "whole":
+        k, _, names = arg.partition(":")
+        bases = names.split(",")
+        if digits(k) and int(k) >= 1 and all(bases):
+            return {"law": "whole", "k": int(k), "whole": bases}
     if kind == "bernoulli":
         num, _, den = arg.partition("/")
         if digits(num) and digits(den) and 0 < int(den) and int(num) <= int(den):
             return {"law": "bernoulli", "p": f"{int(num)}/{int(den)}"}
-    raise ValueError(f"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {text!r}")
+    raise ValueError(f"a law is subset:K, stratified:K, work:K, whole:K:B1,B2,... or bernoulli:NUM/DEN, not {text!r}")
 
 
 def parse_rate(text: Any) -> tuple[int, int, int] | None:
@@ -118,6 +131,17 @@ def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
     return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
+def whole_k(k: int, size: int, population: int) -> int:
+    """A stratum's draw under the whole rule outside its whole templates (Lean `Flock.Draw.wholeK`): the work rule's at unit
+    work and floor one over the population, min(size, max(1, ceil(k * size / population)))."""
+    return work_k(k, 1, size, population, 1)
+
+
+def of_base(template: str, base: str) -> bool:
+    """A descriptor id is of base id `base` (`Name_vN`): `base` itself or a specialization `base{...}` (Lean `Flock.Draw.ofBase`)."""
+    return template == base or template.startswith(base + "{")
+
+
 def work_table(table: Mapping[str, Any]) -> dict[str, tuple[int, int]]:
     """The verifier's work table (Lean `workTableOfJson`): template descriptor id -> the credited work of one of its proof blocks
     (a natural number, floor one) or `{"work": w, "floor": f}` with f >= 1; as `{template: (work, floor)}`. Raises
@@ -156,12 +180,14 @@ def total_work(strata: Sequence[Mapping[str, Any]]) -> int:
 def derive(program: Program, query: Mapping[str, Any], law: Mapping[str, Any],
            table: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The verifier's sampling design for its program and query: `stratified` (the rule, or an expanded sampling design, whose strata are ignored)
-    expands to the strata `partition.strata` derives, each with `stratum_k`; `work` expands to the same strata with the
-    work table's works and floors (`work_table`), each with `work_k` (Lean `Flock.Draw.deriveWork`); `subset` and
-    `bernoulli` are unchanged. Raises `partition.QueryRefused` when the query doesn't apply, and `ValueError` when k isn't
-    in [1, population], a work sampling design has no table, the table names no work for a template, or the population does none."""
+    expands to the strata `partition.strata` derives, each with `stratum_k`; `whole` to the same strata as a stratified
+    sampling design, a whole template's drawing n_s and every other `whole_k` (Lean `Flock.Draw.deriveWhole`); `work`
+    expands to the same strata with the work table's works and floors (`work_table`), each with `work_k` (Lean
+    `Flock.Draw.deriveWork`); `subset` and `bernoulli` are unchanged. Raises `partition.QueryRefused` when the query
+    doesn't apply, and `ValueError` when k isn't in [1, population], a work sampling design has no table, the table names
+    no work for a template, or the population does none."""
     kind = law.get("law")
-    if kind not in ("stratified", "work"):
+    if kind not in ("stratified", "work", "whole"):
         return dict(law)
     strata = P.strata(program, query)
     n = sum(hi - lo for _, rs in strata for lo, hi in rs)
@@ -171,6 +197,14 @@ def derive(program: Program, query: Mapping[str, Any], law: Mapping[str, Any],
     if kind == "stratified":
         return {"law": "stratified", "k": k,
                 "strata": [{"template": t, "units": [list(r) for r in rs], "k": stratum_k(k, _size(rs), n)}
+                           for t, rs in strata]}
+    if kind == "whole":
+        bases = law.get("whole")
+        if not isinstance(bases, list) or not bases or not all(isinstance(b, str) and b for b in bases):
+            raise ValueError("a whole law names its whole templates' base ids")
+        return {"law": "stratified", "k": k,
+                "strata": [{"template": t, "units": [list(r) for r in rs],
+                            "k": _size(rs) if any(of_base(t, b) for b in bases) else whole_k(k, _size(rs), n)}
                            for t, rs in strata]}
     if table is None:
         raise ValueError("a work law needs the verifier's work table")
@@ -212,11 +246,15 @@ def same_law(a: Any, b: Any) -> bool:
 def strata_problem(law: Mapping[str, Any], population: int) -> str | None:
     """Why a stratified or work sampling design object isn't well formed over `population` proof blocks, or None: each stratum is exactly
     {template, proof blocks, k} (a work stratum {template, proof blocks, work, floor, k}) with a distinct template; the ranges are
-    ascending, disjoint and non-empty and tile [0, population); each stratum's k is the rule's (a work sampling design's: a floor of
-    at least one, a population that does some work, and each k `work_k` above its floor; Lean `workProblem`)."""
+    ascending, disjoint and non-empty and tile [0, population); each stratum's k is the rule's: a stratified sampling design's
+    every k `stratum_k`'s, or every k n_s or `whole_k`'s (the whole rule's, nothing mixed); a work sampling design's a floor of
+    at least one, a population that does some work, and each k `work_k` above its floor (Lean `workProblem`)."""
     strata, k, work = law.get("strata"), law.get("k"), law.get("law") == "work"
     if not isinstance(strata, list) or not strata or not _int(k) or not 1 <= k <= population:
         return "strata and 1 <= k <= population"
+    stratified_rule = not work and all(
+        isinstance(s, Mapping) and _ranges_ok(s.get("units")) and _int(s.get("k"))
+        and s["k"] == stratum_k(k, _size(s["units"]), population) for s in strata)
     keys = _WORK_STRATUM_KEYS if work else _STRATUM_KEYS
     total = 0
     if work:
@@ -241,8 +279,10 @@ def strata_problem(law: Mapping[str, Any], population: int) -> str | None:
             return f"stratum {s['template']!r}: ranges ascending, disjoint and not adjacent"
         if work and s["floor"] < 1:
             return f"stratum {s['template']!r}: a floor is at least one"
-        rule = work_k(k, s["work"], _size(rs), total, s["floor"]) if work else stratum_k(k, _size(rs), population)
-        if not _int(s["k"]) or s["k"] != rule:
+        size = _size(rs)
+        rule = ((work_k(k, s["work"], size, total, s["floor"]),) if work else (stratum_k(k, size, population),)
+                if stratified_rule else (size, whole_k(k, size, population)))
+        if not _int(s["k"]) or s["k"] not in rule:
             return f"stratum {s['template']!r}: k is not the {'work ' if work else ''}rule's"
         ranges += rs
     for lo, hi in sorted(ranges):
@@ -358,6 +398,6 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
     return c.verdict()
 
 
-__all__ = ["TABLES_LAW", "check_draw", "check_proved", "derive", "digits", "fixed_count", "law_of", "parse_law", "parse_rate",
-           "proved", "rate_count", "same_law", "strata_problem", "stratum_k", "tables_problem", "total_work", "work_k",
-           "work_table"]
+__all__ = ["TABLES_LAW", "check_draw", "check_proved", "derive", "digits", "fixed_count", "law_of", "of_base", "parse_law",
+           "parse_rate", "proved", "rate_count", "same_law", "strata_problem", "stratum_k", "tables_problem", "total_work",
+           "whole_k", "work_k", "work_table"]

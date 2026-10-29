@@ -234,7 +234,8 @@ class All:
 @dataclass(frozen=True)
 class Law:
     """A one-stage sampling design: the rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T` (`draw.parse_rate`), what a new Spec states, or
-    one in one-stage's syntax (`draw.parse_law`): `subset:K`, `bernoulli:NUM/DEN`, `stratified:K` or `work:K`. A rate
+    one in one-stage's syntax (`draw.parse_law`): `subset:K`, `bernoulli:NUM/DEN`, `stratified:K`, `work:K` or
+    `whole:K:B1,B2,...` (a stratified draw with the named templates' strata drawn whole). A rate
     draws `subset:K` at K = ceil(NUM N / DEN) rounded up to a multiple of the T tables (`draw.rate_count`) over the N
     proof blocks each registration brings, so every proof block is drawn with probability at least NUM/DEN however large the prover
     makes N; a fixed `subset:K` draws each with K/N."""
@@ -247,7 +248,7 @@ class Law:
                 D.parse_law(self.text)
             except ValueError:
                 raise ValueError("a law is rate:NUM/DEN or rate:NUM/DEN:T (0 < NUM <= DEN, T >= 1), subset:K, stratified:K, "
-                                 f"work:K or bernoulli:NUM/DEN, not {self.text!r}") from None
+                                 f"work:K, whole:K:B1,B2,... or bernoulli:NUM/DEN, not {self.text!r}") from None
 
     def to_json(self) -> dict[str, Any]:
         return {"rule": "law", "law": self.text}

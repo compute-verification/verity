@@ -500,6 +500,34 @@ def test_derive_expands_the_rule_over_the_verifiers_program():
         D.derive(prog, P.template_instance_query(PAIR.id), law)
 
 
+def test_the_whole_rule_draws_its_templates_whole_and_the_rest_at_the_work_rule():
+    """`whole:K:B,...` expands to a stratified sampling design: a stratum of a named base id draws all its proof blocks, every
+    other `whole_k`; a stratified object is held to the stratified rule or to the whole rule, never a mix."""
+    prog = P.mixed_population_program([(XOR3, 3), (PAIR, 7)])
+    q = P.template_instances_query([PAIR.id, XOR3.id])
+    rule = D.parse_law(f"whole:2:{XOR3.id}")
+    assert rule == {"law": "whole", "k": 2, "whole": [XOR3.id]}
+    law = D.derive(prog, q, rule)
+    assert law == {"law": "stratified", "k": 2, "strata": [{"template": XOR3.id, "units": [[0, 3]], "k": 3},
+                                                          {"template": PAIR.id, "units": [[3, 10]], "k": 2}]}
+    assert D.strata_problem(law, 10) is None and D.fixed_count(law) == 5
+    assert [s["k"] for s in D.derive(prog, q, D.parse_law("stratified:2"))["strata"]] == [1, 1]
+    mixed = {**law, "strata": [law["strata"][0], {**law["strata"][1], "k": 1}]}   # XOR3 whole, PAIR at stratum_k
+    assert D.strata_problem(mixed, 10) == f"stratum {PAIR.id!r}: k is not the rule's"
+    assert [s["k"] for s in D.derive(prog, q, D.parse_law("whole:2:Nothing_v1"))["strata"]] == [1, 2]
+    assert D.whole_k(2, 7, 10) == 2 and D.whole_k(10, 7, 10) == 7 and D.whole_k(1, 1, 100) == 1
+    assert D.of_base("SelectEntry_v1{K=3}", "SelectEntry_v1") and D.of_base("ScanSlots_v2", "ScanSlots_v2")
+    assert not D.of_base("SelectEntry_v10", "SelectEntry_v1") and not D.of_base("SelectEntry_v1", "SelectEntry")
+    for bad in ("whole:0:A_v1", "whole:1:", "whole:1:A_v1,,B_v1", "whole:1", "whole:x:A_v1"):
+        with pytest.raises(ValueError):
+            D.parse_law(bad)
+    for bad in ({"law": "whole", "k": 2}, {"law": "whole", "k": 2, "whole": []}, {"law": "whole", "k": 2, "whole": [""]}):
+        with pytest.raises(ValueError, match="base ids"):
+            D.derive(prog, q, bad)
+    with pytest.raises(ValueError, match="1 <= k"):
+        D.derive(prog, q, {"law": "whole", "k": 11, "whole": [XOR3.id]})
+
+
 def _stratified_registration():
     prog = P.mixed_population_program([(XOR3, 2), (PAIR, 3), (XOR3, 1)])
     q = P.template_instances_query([PAIR.id, XOR3.id])
