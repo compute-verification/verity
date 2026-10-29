@@ -1,6 +1,6 @@
 """certifier-serve on an injected clock, end to end: the served plan probed from a stub OpenAI streaming endpoint, the
 certifier (`active.Proxy` with its salt on, its records certified and its reveals signed) in front of it behind the
-shim, and the offline check of what it published, which asks each window's salt through a `RemoteCertifier` signed
+shim, and the offline check of what it published, which asks each window's salt through a `CertifierClient` signed
 with the challenger's key. Honest traffic is accepted on every link-window (N2 on the planned profile, the audit and
 the salt), a shim that holds one session past every sync or writes one event more than the endpoint sent is refused,
 and each window's salt is revealed once. The same holds four in flight against an endpoint that sends some responses'
