@@ -10,12 +10,12 @@ check the stream ran on it, in the stream's order.
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
 * `select`: the draw of record on the bytes of the challenger's coins (`Select.select`, under the rule over the program's
-  population, `Select.resolve`); the coins are what the run's source says (`coinsHold`, code `coins`): from the
-  verifier's own coins, no evidence; from the auditor's challenger, evidence (`coins`) that the bytes it read are
-  exactly the coins the session the ledger opens for the registration's window (the verifier's `windowRoot`) released
-  after the registration's digest, every one read and each opening checked against the challenger's commitment
-  (`Challenger.coinsReason`), missing evidence or no window refused; then the draw is held to the registration and the
-  expanded law (`Draw.checkDraw`);
+  population, `Select.resolve`); the verifier has no coins of its own, so a draw that read any byte carries evidence
+  (`coins`) that the bytes are exactly the coins the session the ledger opens for the registration's window (the
+  verifier's `windowRoot`) released after the registration's digest, every one read and each opening checked against
+  the challenger's commitment (`Challenger.coinsReason`), and one that read none carries none (`coinsHold`, code
+  `coins`), missing evidence or no window refused; then the draw is held to the registration and the expanded law
+  (`Draw.checkDraw`);
 * `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
 * `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier of record, and the
   audit record (`Record.record`) over the draw's proved units; the symbol accepts when the audit record does.
@@ -58,8 +58,6 @@ structure Input where
   instances : Option Int
   served : Json
   sessionRoots : Json
-  /-- the draw's coins are the auditor's challenger's (`coin_source` `challenger`), not the verifier's own -/
-  fromChallenger : Bool
   coins : Json := Json.null
 
 private def refused (step : String) (codes : Array String) : Json :=
@@ -87,12 +85,12 @@ def countVaries (law : Json) : Bool :=
     | none => false
   | _, _ => false
 
-/-- The draw's coins are what its source says: a draw from the verifier's own coins carries no evidence (`null`), and
-one from the auditor's challenger carries evidence that holds of the bytes it read (`Challenger.coinsReason`, after the
-registration's digest, for the window whose open root `window` the verifier holds), so missing evidence, or a verifier
-that holds no window, is a refusal and never a skip. -/
-def coinsHold (fromChallenger : Bool) (coins record : Json) (window : Option String) (read : ByteArray) : Bool :=
-  if !fromChallenger then coins == Json.null else
+/-- The draw's coins are the challenger's: a draw that read any byte carries evidence that holds of the bytes it read
+(`Challenger.coinsReason`, after the registration's digest, for the window whose open root `window` the verifier holds),
+so missing evidence, or a verifier that holds no window, is a refusal and never a skip; one that read none (`All`)
+carries none (`null`). -/
+def coinsHold (coins record : Json) (window : Option String) (read : ByteArray) : Bool :=
+  if read.isEmpty then coins == Json.null else
   match window, Registration.digest record with
   | some w, .ok after => (Challenger.coinsReason coins w after read).isNone
   | _, _ => false
@@ -116,7 +114,7 @@ def run (i : Input) : V Json := do
   let derived ← Draw.derive v.program v.query law v.workTable
   let (draw, _, read) ← Select.select (← Select.resolve i.rule v.program v.query) v.program v.query v.workTable
     i.closure i.source
-  if !coinsHold i.fromChallenger i.coins i.record v.windowRoot (i.source.extract 0 read) then
+  if !coinsHold i.coins i.record v.windowRoot (i.source.extract 0 read) then
     return refused "select" #["coins"]
   let codes := Draw.checkDraw draw (getD i.record "population") derived
   if !codes.isEmpty then return refused "select" codes

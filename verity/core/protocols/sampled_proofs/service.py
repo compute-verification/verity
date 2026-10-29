@@ -5,9 +5,9 @@ A protocol states what it commits (`Spec.values`), which proof blocks need proof
 the check each drawn proof block passes, as a public Program (`Spec.check`), and what it makes public, each item with its reason
 (`Spec.public`). What it does with each `Outcome` is its own code; the service does the rest. The parties: the workers
 compute and prove with zero knowledge off, trusted by neither party; the firewall, trusted by the developer, is their only
-path to the auditor, and commits, registers and releases the proofs; the challenger, trusted by the auditor, receives
-registrations, draws from its own randomness and keeps the record (this module); the verifier, the auditor's Lean
-verifier, verifies offline.
+path to the auditor, and commits, registers and releases the proofs; the service, trusted by the auditor, receives
+registrations, draws on the auditor's challenger's coins and keeps the record (this module); the verifier, the auditor's
+Lean verifier, verifies offline, and reads coins only from the challenger's log.
 
 **The public-items rule.** Everything the auditor observes is a function of the Spec's public items. A registration is
 one-stage's record (`one_stage.registration`, v1 or v2), and `check_public` holds each of its observable items to the
@@ -36,34 +36,33 @@ verifier reads one program and one query either way, so a window's registration,
 `check`, `Select.select` and `Run.run` as they are for one template's.
 
 **The draw.** `register` logs the record and its receipt, whose `received` is the record's position in the stream's log.
-The challenger then draws once (`select`) from its coins as the Lean verifier's `Flock.Draw.drawWith` does
-(`coins.draw_first` over `coins.OwnRandomness`), with no hash and no derivation, or by the stream's `sampler`;
-either draw is held to `draw.check_draw`. The coins are the operating system's bytes as the Lean verifier
-reads them (`verifier.coins`: `IO.getRandomBytes`, assumption A3, `uniform/io-getrandombytes`); the Python never reads
-them from the OS itself. A work draw carries the challenger's closure map's closure (`select(closure=)`, a map over
+The stream then draws once (`select`) from the auditor's challenger's coins (`coins.ChallengerCoins`, opened after the
+registration's digest) as the Lean verifier's `Flock.Draw.drawWith` does (`coins.draw_first` over
+`coins.OwnRandomness`), with no hash and no derivation, or by the stream's `sampler`; either draw is held to
+`draw.check_draw`. Neither the stream nor the verifier has coins of its own: a stream whose selection reads coins
+refuses any source but the challenger's (`NO_OWN_COINS`), and the verifier's run refuses a draw that read coins without
+the challenger's log to show they are its (`outcome`'s `coins`). A work draw carries the challenger's closure map's closure (`select(closure=)`, a map over
 `[0, N)`, refused under another sampling design or out of range before any coin is read; `coins.closure_of`), which the proof
 proves with the drawn proof blocks.
 From the selection rule to the draw object it is `selection_law`, `draw.derive` and `select_draw`, which the Lean
 verifier's `SampledProofs.Select` ports, held to them by its difftest on fixed coins.
 
-**The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
-coins, and reads its release on the challenger's clock (`salted_at`). `Stream.salt_released` instead records a salt
-released elsewhere (PoUW's epoch coin, shared by one stream per level) with its release on the same clock, which can't
-be later than the clock's reading now (`released-later`); either is the epoch's one salt. Under `Check.registration_deadline` (seconds on
+**The salt and the registration deadline.** The epoch's one salt is a challenger's coin: `Stream.salt_released`
+records it (PoUW's epoch coin, shared by one stream per level) with its release on the stream's clock (`salted_at`),
+which can't be later than the clock's reading now (`released-later`); the stream issues none of its own. Under `Check.registration_deadline` (seconds on
 that clock from the release), `register` reads the receipt (`received_at`) first and refuses a registration received
 later than the deadline, or before any salt, as `late-registration`, whatever it holds. That is one visible failure,
 never retried, and it ends the epoch: the stream receives no registration after it (`epoch-ended`) and never reissues
 the salt (`salted`). It is the rule of `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`), with `ts` =
 `salted_at`, `tr` = `received_at` and `td` = `ts` + the deadline. The readings are the challenger's own: the stream's
 epoch log (`Stream.epoch_log`) and each `Registration` carry them, and neither the receipt nor an outcome's record does.
-`salt(n=64)` is `n` bytes of the challenger's coins, read in order with the draws'. A level's stream created at its
-first registration still measures from the epoch's release. A salt that isn't non-empty bytes, or a release that isn't a
-finite number, raises `ValueError`, and after the epoch ends a salt of either kind is refused (`epoch-ended`). The epoch
-log holds `{"event": "salt", "salt", "salted_at"}` (with `"external": true` from `salt_released`), then each
+A level's stream created at its first registration still measures from the epoch's release. A salt that isn't non-empty
+bytes, or a release that isn't a finite number, raises `ValueError`, and after the epoch ends a salt is refused
+(`epoch-ended`). The epoch log holds `{"event": "salt", "salt", "salted_at", "external": true}`, then each
 `{"event": "registration", "order", "registration", "salted_at", "received_at"}` or `{"event": "late-registration",
 "salted_at", "received_at"}`. With no registration deadline `register` reads no clock and logs nothing to the epoch log.
 
-**No retries.** The salt is issued or recorded once (`salt`, `salt_released`). A registration is drawn once, after its receipt (`select`); its
+**No retries.** The salt is recorded once (`salt_released`). A registration is drawn once, after its receipt (`select`); its
 proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
 redraws. A proof delivered after `Check.proof_deadline` (seconds on the challenger's clock, from the draw) is a reject,
 and so is a draw whose proof is not delivered by then: a `Stream` refuses a check without a proof deadline, so every draw
@@ -145,6 +144,8 @@ OUTCOME = "verity/proof-service/outcome/v0"
 ACCEPT, REJECT, LATE, HALTED = "accept", "reject", "late", "halted"
 #: The most rounds (registrations) one proof session covers.
 ROUNDS = 4
+NO_OWN_COINS = ("the verifier draws no coins of its own: a stream whose selection reads coins takes the auditor's "
+                "challenger's, a coins.ChallengerCoins over its live record (a test's over a challenger of its own)")
 
 _RECORD_KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
                 "anchors", "window", "previous", "registered"}
@@ -1115,20 +1116,19 @@ class Stream:
     verifier of record's draw and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
     (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `Session` covers) are
     public parameters of the stream. `coins` is
-    the challenger's randomness (n bytes a call, read in order by `OwnRandomness`): by default the operating system's
-    bytes as the Lean verifier reads them (`verifier.coins`, `IO.getRandomBytes`, A3), never the Python's own
-    read of the OS. `clock` is its clock in seconds; tests inject both. Coins from the auditor's challenger are a
-    `coins.ChallengerCoins`: the stream's `coin_source` is then `"challenger"` (else `"verifier"`, the verifier's own
-    coins or a test's stand-in for them), its digest names it, and every outcome's run by the verifier needs
-    the coins' evidence (`outcome`'s `coins`), refusing a draw without it. `sampler`, when given, draws instead of the
-    coins (`flock-verify draw` in a process of its own, say), never beside the challenger's: it takes the challenger's
-    sampling design and N, and its draw is held to them like any other. `prover`, when given, is the identity the challenger registered the stream's prover under
+    the auditor's challenger's coins, a `coins.ChallengerCoins` (n bytes a call, read in order by `OwnRandomness`), which
+    the stream's digest names: the verifier has no coins of its own, so there is no default, and a stream whose
+    selection reads coins refuses any other source (`NO_OWN_COINS`). Every outcome's run by the verifier needs the
+    coins' evidence (`outcome`'s `coins`), refusing a draw without it. A stream that reads no coins (`All`, or one a
+    `sampler` draws for) takes none. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
+    their own. `sampler`, when given, draws instead of the coins, never beside the challenger's: it takes the
+    challenger's sampling design and N, and its draw is held to them like any other. `prover`, when given, is the identity the challenger registered the stream's prover under
     (lowercase hex): the stream's digest names it, and every registration is bound to the stream and the prover
     (`binding`, `registration.check`'s): its window names both, and a window salt is bound to them, so a tile seeded for
     one prover's stream is refused in any other.
 
-    A stream runs one epoch with one salt: `salt` issues it from the coins, or `salt_released` records one released
-    elsewhere with its release, and under `Check.registration_deadline` every registration is received within the
+    A stream runs one epoch with one salt, a challenger's coin released elsewhere: `salt_released` records it with its
+    release, and under `Check.registration_deadline` every registration is received within the
     deadline of that release, or the epoch ends (`ended`) at the first that isn't. `epoch_log` holds the challenger's
     clock readings.
 
@@ -1146,7 +1146,7 @@ class Stream:
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
-                 coins: Callable[[int], bytes] = V.coins, clock: Callable[[], float] = time.monotonic,
+                 coins: ChallengerCoins | None = None, clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None) -> None:
         if isinstance(spec.selection, Sequential):
             raise ValueError("the service doesn't run a Sequential selection yet")
@@ -1173,9 +1173,11 @@ class Stream:
             raise ValueError(f"delta is a float in (0, 1), not {delta!r}")
         if not (type(rounds) is int and 1 <= rounds <= ROUNDS):
             raise ValueError(f"a session covers 1 to {ROUNDS} rounds, not {rounds!r}")
-        self.coin_source = "challenger" if isinstance(coins, ChallengerCoins) else "verifier"
-        if self.coin_source == "challenger" and sampler is not None:
+        if coins is not None and sampler is not None:
             raise ValueError("a stream drawing from the challenger's coins takes no sampler, which would draw instead")
+        if not (isinstance(coins, ChallengerCoins) or coins is None and (sampler is not None
+                                                                          or isinstance(spec.selection, All))):
+            raise ValueError(NO_OWN_COINS)
         self.spec, self.unit, self.budget, self.delta, self.challenger = spec, unit, budget, delta, challenger
         self.templates = None if isinstance(unit, SpecializedDefinition) else units
         self.rounds = rounds
@@ -1183,7 +1185,7 @@ class Stream:
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
                                "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {}),
                                **({"prover": prover} if prover is not None else {}),
-                               **({"coins": "challenger"} if self.coin_source == "challenger" else {})})
+                               **({"coins": "challenger"} if coins is not None else {})})
         self.binding = None if prover is None else R._binding({"stream": self.digest, "prover": prover})
         self._params = {"budget": budget, "rounds": rounds,
                         "registration_deadline": _reading(spec.check.registration_deadline),
@@ -1313,32 +1315,14 @@ class Stream:
         outcome as it may (`open`): `rounds`, and never more than `budget` minus its failures."""
         self._held(self._decide({"op": "ready"}))
 
-    def salt(self, n: int = 64) -> bytes:
-        """The epoch's salt coin: `n` bytes of the challenger's own coins (`OwnRandomness`, in order with the draws'
-        reads), issued once. Its release is read on the challenger's clock (`salted_at`) and logged (`epoch_log`);
-        `Check.registration_deadline` counts from it. Raises `Refused`: `salted` (the epoch has a salt, from `salt` or
-        `salt_released`: nothing redraws it) or `epoch-ended` (the epoch ended before any salt)."""
-        if not (type(n) is int and n >= 1):
-            raise ValueError(f"a salt is a positive number of bytes, not {n!r}")
-        got: dict[str, Any] = {}
-
-        def at() -> float:
-            got["salt"] = OwnRandomness(self._coins).read(n)
-            got["salted_at"] = self._clock()
-            return float(got["salted_at"])
-        self._held(self._decide({"op": "salt"}, {"at": at}))
-        self._salted_at = got["salted_at"]
-        self._epoch_log.append({"event": "salt", "salt": got["salt"].hex(), "salted_at": self._salted_at})
-        return got["salt"]
-
     def salt_released(self, salt: bytes, released_at: float) -> None:
-        """The epoch's salt when it was released elsewhere (PoUW's epoch coin, shared by one stream per level):
-        `released_at` is its release, read on this stream's clock. It is then the epoch's salt as `salt`'s is, and
-        `Check.registration_deadline` counts from `released_at`, so a stream created after the release (a level's, at
-        its first registration) still measures from it. Logged with `"external": true`. Raises `ValueError` for a salt
-        that isn't non-empty bytes or a release that isn't a finite number, and `Refused`: `salted` (the epoch has a
-        salt), `epoch-ended`, or `released-later` (`released_at` after the clock's reading now: a release is never in
-        the future)."""
+        """The epoch's salt, a challenger's coin released elsewhere (PoUW's epoch coin, shared by one stream per level),
+        once: the stream issues none of its own. `released_at` is its release, read on this stream's clock, and
+        `Check.registration_deadline` counts from it, so a stream created after the release (a level's, at its first
+        registration) still measures from it. Logged with `"external": true`. Raises `ValueError` for a salt that isn't
+        non-empty bytes or a release that isn't a finite number, and `Refused`: `salted` (the epoch has a salt: nothing
+        redraws it), `epoch-ended`, or `released-later` (`released_at` after the clock's reading now: a release is never
+        in the future)."""
         if not (isinstance(salt, bytes) and salt):
             raise ValueError(f"a released salt is non-empty bytes, not {salt!r}")
         if not (isinstance(released_at, (int, float)) and not isinstance(released_at, bool) and math.isfinite(released_at)):
@@ -1484,7 +1468,7 @@ class Stream:
         return [self._log[i] for i in sorted(at)]
 
     def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
-        """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
+        """The draw, once per registration, from the auditor's challenger's coins after the receipt: indices in [0, N) by
         the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). `closure` is the challenger's closure map
         (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work sampling design only: the draw carries the
         drawn proof blocks' closure (`coins.closure_of`), which `draw.proved` and `draw.check_proved` count. The draw of
@@ -1582,10 +1566,10 @@ class Stream:
         audit record: its `proved_units`, `instances`, `served` and `session_roots` are its round's (its own tables'),
         never another round's. On a draw from the coins and an audit record its two verifiers agree on, the whole run is
         held to the verifier's (`verifier.run`, the Lean's `Run.run` from the
-        registration on): where they differ the outcome is a reject, its audit record failing `run`. The run takes the
-        stream's `coin_source`, so on a stream drawing from the auditor's challenger (`coins.ChallengerCoins`) the
-        Lean's run refuses every draw unless `coins` is its evidence (`coins.coins_reason`'s `{key, ledger, main, pins,
-        segment, session}`) and the bytes it read are exactly the coins the session the ledger opens for the
+        registration on): where they differ the outcome is a reject, its audit record failing `run`. The verifier has
+        no coins of its own, so the Lean's run refuses every draw that read coins unless `coins` is their evidence
+        (`coins.coins_reason`'s `{key, ledger, main, pins, segment, session}`) and the bytes it read are exactly the
+        coins the session the ledger opens for the
         registration's window (`register`'s `window_root`), from main's code (`challenger.pinned_session`), released
         after the registration's digest, each checked against its
         commitment and every one read; missing evidence, or a registration without its window root, is a reject failing
@@ -1659,8 +1643,7 @@ class Stream:
                       [(x.name, x.registered) for x in self.spec.values], [p.item for p in self.spec.public],
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
-                      binding=self.binding, schemas=schemas, window_root=window_root, held=held,
-                      coin_source=self.coin_source, coins=coins)
+                      binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins)
             if not v.ok:
                 rec = {**rec, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                        "checks": {**rec["checks"], "run": {"ok": False, "codes": list(v.codes), "detail": v.detail}}}
@@ -1705,6 +1688,6 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
 
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
-           "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "Registration", "SCHEME", "SOURCES", "Selection",
+           "NO_OWN_COINS", "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "Registration", "SCHEME", "SOURCES", "Selection",
            "Sequential", "Session", "Spec", "Stream", "Terms", "Value", "check_public", "check_verdicts",
            "select_draw", "selection_law"]
