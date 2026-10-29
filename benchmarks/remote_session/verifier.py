@@ -168,7 +168,7 @@ def site_of(log: Path, keys: Path | None = None) -> dict:
     """The Site a registration log registers as both verifiers take it, `{"log", "auditor"}`
     (`RemoteAudit.Difftest.siteOf`): the log (`verity.core.site.Registration`'s JSON) and the auditor's data sheets,
     every GPU card file's, and its own devices' keys, `keys` (a JSON object of id to key)."""
-    auditor = site.Auditor.of_files([load(sku) for sku in skus("gpu")], json.loads(keys.read_text()) if keys else None)
+    auditor = site.Auditor.of_files([load(sku) for sku in skus("gpu")], keys=json.loads(keys.read_text()) if keys else None)
     return {"log": json.loads(log.read_text()), "auditor": auditor.to_json()}
 
 
