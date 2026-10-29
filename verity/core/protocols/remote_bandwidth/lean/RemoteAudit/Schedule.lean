@@ -30,17 +30,17 @@ namespace RemoteAudit.Schedule
 /-- Steps are below 2^64. -/
 def STEP_LIMIT : Nat := 2 ^ 64
 
-/-- An appended block: `none` never resident, or its write's step and its free's, if it is freed. -/
-abbrev Block := Option (Nat × Option Nat)
+/-- An appended chunk of the store: `none` never resident, or its write's step and its free's, if it is freed. -/
+abbrev Chunk := Option (Nat × Option Nat)
 
 structure Schedule where
   registered : Array (Nat × Nat × Nat)
-  appends : Array (Array Block)
+  appends : Array (Array Chunk)
   steps : Array Nat
 deriving Inhabited
 
 /-- Whether block `b` is resident at step `s`: written before `s`, and not freed before it. -/
-def residentAt (b : Block) (s : Nat) : Bool :=
+def residentAt (b : Chunk) (s : Nat) : Bool :=
   match b with
   | none => false
   | some (w, none) => decide (w < s)
@@ -87,7 +87,7 @@ termination_by n
 decreasing_by omega
 
 /-- A block's integers: its tag (0 never resident, 1 never freed, else `f − w + 1`), then its write's step. -/
-def blockCode : Block → List Nat
+def blockCode : Chunk → List Nat
   | none => [0]
   | some (w, none) => [1, w]
   | some (w, some f) => [f - w + 1, w]
