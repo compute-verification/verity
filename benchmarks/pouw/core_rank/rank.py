@@ -95,16 +95,18 @@ def entry(r: dict, t: str) -> str:
 
 
 def md_table(header: list[str], body: list[list[str]]) -> list[str]:
-    esc = lambda s: str(s).replace("|", "\\|").replace("\n", " ")
     return ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)] + [
-        "| " + " | ".join(esc(c) for c in row) + " |" for row in body]
+        "| " + " | ".join(str(c).replace("|", "\\|").replace("\n", " ") for c in row) + " |" for row in body]
 
 
 def render_md(rows: list[dict], period: dict, prows: list[dict], meta: dict) -> str:
     ranked = sorted((r for r in rows if r["verdict"] == "ranked"), key=lambda r: r["pos"])
     head = ["#", "id", "design", "rank", "T1 gap, H200 time", "T2 t_H/t_S", "T3 perplexity", "Lean", "vLLM"]
-    line = lambda r, pos: [pos, r["id"], r["design"], f"{r['rank']}: {r['assumption']}", entry(r, "t1"), entry(r, "t2"),
-                           entry(r, "t3"), f"{', '.join(r['lean'])}: {r['lean_ids']}", r["vllm"]]
+
+    def line(r: dict, pos: int | str) -> list:
+        return [pos, r["id"], r["design"], f"{r['rank']}: {r['assumption']}", entry(r, "t1"), entry(r, "t2"),
+                entry(r, "t3"), f"{', '.join(r['lean'])}: {r['lean_ids']}", r["vllm"]]
+
     out = [f"# {meta.get('title', 'H200 power ranking')}", ""]
     out += [meta.get("preamble", ""), ""]
     out += ["Each target reads `value [where it was obtained; status]`. Marks: " + ", ".join(f"`{c}`" for c in CARDS)
@@ -118,11 +120,11 @@ def render_md(rows: list[dict], period: dict, prows: list[dict], meta: dict) -> 
             out += md_table(head[1:] + ["why"], [line(r, "")[1:] + [r["why"]] for r in sel]) + [""]
     if prows:
         out += ["## Per monitoring period", "", period.get("note", ""), ""]
-        fmt = lambda x: f"{x:.2e}"
+        periods = ("week", "month", "year")
         out += md_table(["id", "design", "share", "reading", "world: week", "month", "year", "datacenter: week", "month",
                          "year"],
-                        [[p["id"], p["design"], f"{p['share']:.3%}", p["basis"], *(fmt(p[f"world_{n}"]) for n in
-                          ("week", "month", "year")), *(fmt(p[f"datacenter_{n}"]) for n in ("week", "month", "year"))]
+                        [[p["id"], p["design"], f"{p['share']:.3%}", p["basis"],
+                          *(f"{p[f'{scope}_{n}']:.2e}" for scope in ("world", "datacenter") for n in periods)]
                          for p in prows])
         out += ["", "Sources: " + "; ".join(period["sources"]), ""]
     out += ["## Rows in detail", ""]
