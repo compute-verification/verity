@@ -5,8 +5,10 @@ slack: E the bits the network certifier counts (capped at served traffic, the co
 block's priced cost a MAC (its hashing and answers included) and n_max the most MACs one exchanged bit carries, through
 OutsourceWithinEgress at beta = n_max W_mac. As a share of stock (W1: a MAC 1, a register write 32) the term is
 n_max W_mac E / MACs. Each layout is priced on Llama-3.2-1B's linears at each point's rows: its coin bits, n_max, the
-term at each cap and hashing price, the attack that outsources whole forwards, the coins' forming on the GPU, the
-certifier's stream, T2 and the served noise for T3. Inputs: ``egress_inputs.json`` beside ``alt_roads_inputs.json``.
+term at each cap and hashing price, the outsourcing provers that realize it (a call set when the served path is
+coin-free, a prefix of the forward when it is noisy), the coins' forming on the GPU, the certifier's stream, T2 and the
+served noise for T3, with whether N-EXACT's epilogue fold serves it exactly. Inputs: ``egress_inputs.json`` beside
+``alt_roads_inputs.json``.
 Writes ``egress.json`` and ``table.txt`` to ``--out``; exits non-zero if a self-check fails.
 """
 
@@ -57,6 +59,15 @@ def call(design: dict, m: int, k: int, n: int, lead: dict, lay: dict, reg: float
         return {"bits": rows["bits"] + entries * design["e"], "bytes": rows["bytes"] + entries,
                 "forming": rows["forming"] + entries / 4.0 * reg, "words": 1.0, "entries": entries,
                 "noise_rms": math.sqrt(2.5 * coin_steps * odd_mean_square(design["e"]))}
+    if kind == "blc1a":
+        sa = steps4(k, lay["lane_add"]["data_lanes"])
+        rba = 32 * math.ceil((sa - 1 + c) / 32)
+        tiles = math.ceil(m / design["tile"])
+        coin_steps = math.ceil((sa - 1) * min(1.0, m / design["tile"]))
+        entries = tiles * n * coin_steps
+        return {"bits": m * rba + entries * design["e"], "bytes": m * rba / 8.0 + entries + 4.0 * tiles * n,
+                "forming": m * rba / 32.0 * reg + entries / 4.0 * reg, "words": sa / s, "entries": entries,
+                "noise_rms": 0.0, "word_noise_rms": math.sqrt(coin_steps * odd_mean_square(design["e"]))}
     if kind == "blc4":
         l4, d4 = lay["lanes4"]["lanes"], lay["lanes4"]["data_lanes"]
         s4 = steps4(k, d4)
@@ -90,11 +101,43 @@ def designs(lay: dict) -> list[dict]:
         for e in lay["lane_entropy_bits"]:
             out.append({"id": f"blc1-t{t}-e{e}", "kind": "blc1", "tile": t, "e": e,
                         "title": f"the lead's B' lane, a {e}-bit odd coin a ({t}-row tile, step, column), patched"})
+    for t in lay["tile_rows"]:
+        for e in lay["lane_entropy_bits"][1:]:
+            out.append({"id": f"blc1a-t{t}-e{e}", "kind": "blc1a", "tile": t, "e": e,
+                        "title": f"a coin lane against A' = 1 beside the lead's row lane (30 data lanes), a {e}-bit "
+                                 f"odd coin a ({t}-row tile, step, column), patched, served exactly"})
     for e in (2, 7):
         out.append({"id": f"blc4-t64-e{e}", "kind": "blc4", "tile": 64, "e": e,
                     "title": f"four B' coin lanes a step (28 data lanes), {e}-bit odd coins a (64-row tile, step, "
                              "column), cp.async"})
     return out
+
+
+SERVED = {"rows": "either", "blc1a": "exact"}
+
+
+def outsource(calls: list, m: int, layers: int, served: str, wfun, alpha: float, out: dict) -> dict:
+    """Priced work an outsourcing prover saves a bit it exchanges, under R1b (it keeps A_j for the certifier, so it
+    computes the served path; the outside machine computes the coin-dependent words and hashes them, returning a root a
+    call). Coin-free served path: any set of call types, every layer, beside the token (saving W - 1 a MAC). Noisy
+    served path: a prefix of the forward, since each call's input carries every earlier call's coins (W - alpha words
+    a MAC: the prover still runs the noisy MMA)."""
+    tok, root = out["token_bits"], out["root_bits"]
+    res = {}
+    if served in ("exact", "either"):
+        per = [(k * n * (wfun(c["words"]) - 1.0), c["bits"] / m + root / m) for k, n, c in calls]
+        res["subset"] = max(layers * sum(per[i][0] for i in range(len(per)) if mask >> i & 1)
+                            / (layers * sum(per[i][1] for i in range(len(per)) if mask >> i & 1) + tok)
+                            for mask in range(1, 2 ** len(per)))
+    if served in ("noisy", "either"):
+        sv = bt = best = 0.0
+        for _ in range(layers):
+            for k, n, c in calls:
+                sv += k * n * (wfun(c["words"]) - alpha * c["words"])
+                bt += c["bits"] / m + root / m
+                best = max(best, sv / (bt + tok))
+        res["prefix"] = best
+    return res
 
 
 def w_mac(base: dict, words: float, units_per_byte: float, answers: float) -> float:
@@ -123,13 +166,24 @@ def price_design(design: dict, inp: dict, einp: dict, ll: dict) -> dict:
         forming = cfg["layers"] * sum(c["forming"] for _, _, c in calls) / macs
         entries = cfg["layers"] * sum(c.get("entries", 0) for _, _, c in calls)
         wm = {p: w_mac(base, words, u, pr["answers_units_per_mac"]) for p, u in units.items()}
+        served = SERVED.get(design["kind"], "noisy")
+        osr = einp["outsource"]
+        per_bit = {p: outsource(calls, m, cfg["layers"], served,
+                                lambda wd, u=u: w_mac(base, wd, u, pr["answers_units_per_mac"]), base["alpha"], osr)
+                   for p, u in units.items()}
         row = {"m": m, "coin_bits_per_token": bits / m, "stream_bytes_per_token": byts / m, "n_max": n_max,
                "macs_per_coin_bit_mean": macs / bits, "words_vs_lead": words, "w_mac": wm,
-               "forming_share_of_stock": forming,
+               "forming_share_of_stock": forming, "served": served,
                "noise_rms_lsb_by_k": {str(k): c["noise_rms"] for k, _, c in calls},
+               "word_noise_rms_lsb_by_k": {str(k): c.get("word_noise_rms", c["noise_rms"]) for k, _, c in calls},
+               "outsource_units_per_bit": per_bit,
                "caps": {str(cap): {"stated": {p: n_max * w * cap / ll["macs_per_token"] for p, w in wm.items()},
                                    "honest_share": n_max * cap / ll["macs_per_token"],
-                                   "attack_whole_forwards": {p: w * cap / (bits / m + 32) for p, w in wm.items()}}
+                                   "attack": {p: {a: {"whole_cap": r * cap / ll["macs_per_token"],
+                                                      "slack": r * (cap - osr["honest_io_bits_per_token"])
+                                                      / ll["macs_per_token"],
+                                                      "of_stated": r / (n_max * wm[p])}
+                                                  for a, r in per_bit[p].items()} for p in wm}}
                         for cap in caps}}
         if space_key:
             row["t2"] = t2_at(inp, einp, ll, space_key, byts, entries, words)
@@ -162,17 +216,17 @@ def t2_at(inp: dict, einp: dict, ll: dict, space_key: str, step_bytes: float, st
 
 
 def lower_bound(inp: dict, ll: dict, res: dict) -> dict:
-    """Any layout: the whole-forward attack is W_mac cap / (coin bits + 32), so 1% needs coin bits a token of at least
-    100 W_mac cap - 32; the stated term needs n_max <= 0.01 MACs / (W_mac cap), and n_max >= MACs / coin bits.
-    A B-shared lane: a coin entry is read by the tile's T rows over a step's d data lanes, so n_max >= T d / (L e)."""
+    """Any layout: the stated term needs n_max <= 0.01 MACs / (W_mac cap), and n_max >= MACs / coin bits, so coin bits
+    a token of at least 100 W_mac cap. A B-shared lane: a coin entry is read by the tile's T rows over a step's d data
+    lanes, so n_max >= T d / (L e)."""
     rows = res["designs"][0]["points"]["t8192"]
     out = {}
     for cap in inp["egress"]["cap_bits_per_token"]:
         out[str(cap)] = {}
         for p, w in rows["w_mac"].items():
             need = 0.01 * ll["macs_per_token"] / (w * cap)
-            out[str(cap)][p] = {"n_max_at_most": need, "coin_bits_per_token_at_least": 100.0 * w * cap - 32,
-                                "coin_bits_per_mac_at_least": (100.0 * w * cap - 32) / ll["macs_per_token"],
+            out[str(cap)][p] = {"n_max_at_most": need, "coin_bits_per_token_at_least": 100.0 * w * cap,
+                                "coin_bits_per_mac_at_least": 100.0 * w * cap / ll["macs_per_token"],
                                 "blc_tile_e_lanes_that_meet_it": [
                                     {"tile": t, "lanes": lanes, "e": e, "n": t * d / (lanes * e)}
                                     for t in (16, 64, 128) for lanes, d in ((1, 31), (4, 28)) for e in (1, 2, 4, 7)
@@ -235,6 +289,30 @@ def distinct_check(s_zero: bool, seed: int) -> bool:
     return True
 
 
+def fold_check(kind: str, seed: int) -> bool:
+    """A tile's final accumulators with the lead's row lane (1 + b_t(i)) against public w_t and blc1's coin in that lane,
+    or blc1a's coin on its own lane against A' = 1: True when the noise is r_i + c_j and subtracting
+    r_i = sum_t (1 + b_t(i)) w_t and c_j = sum_t s_t[j] (N-EXACT's IADD3 sources) leaves A B^T exactly. A noise whose
+    second differences N[i,j] - N[i,0] - N[0,j] + N[0,0] aren't all 0 is no r_i + c_j, so no such fold removes it."""
+    rng = random.Random(seed)
+    m, n, k, st = 6, 5, 40, 4
+    a = [[rng.randint(-127, 127) for _ in range(k)] for _ in range(m)]
+    b = [[rng.randint(-127, 127) for _ in range(n)] for _ in range(k)]
+    bits = [[rng.randint(0, 1) for _ in range(st)] for _ in range(m)]
+    w = [rng.randint(-127, 127) for _ in range(st)]
+    s = [[rng.choice([v for v in range(-15, 16, 2)]) for _ in range(n)] for _ in range(st)]
+    exact = [[sum(a[i][x] * b[x][j] for x in range(k)) for j in range(n)] for i in range(m)]
+    lane = (lambda i, j, t: (1 + bits[i][t]) * s[t][j]) if kind == "blc1" else \
+        (lambda i, j, t: (1 + bits[i][t]) * w[t] + s[t][j])
+    acc = [[exact[i][j] + sum(lane(i, j, t) for t in range(st)) for j in range(n)] for i in range(m)]
+    noise = [[acc[i][j] - exact[i][j] for j in range(n)] for i in range(m)]
+    if any(noise[i][j] - noise[i][0] - noise[0][j] + noise[0][0] for i in range(m) for j in range(n)):
+        return False
+    r = [sum((1 + bits[i][t]) * w[t] for t in range(st)) for i in range(m)]
+    c = [sum(s[t][j] for t in range(st)) for j in range(n)]
+    return all(acc[i][j] - r[i] - c[j] == exact[i][j] for i in range(m) for j in range(n))
+
+
 def noise_mc(e: int, s_count: int, trials: int, seed: int) -> float:
     rng = random.Random(seed)
     odd = list(range(-(2 ** e - 1), 2 ** e, 2))
@@ -280,6 +358,18 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
          all(distinct_check(False, sd) for sd in range(20)), "20 seeds"),
         ("Mutation: a zero lane coin makes two words of one element coincide, and the check catches it",
          not any(distinct_check(True, sd) for sd in range(20)), "20 seeds"),
+        ("blc1a's served noise is r_i + c_j and N-EXACT's two fold sources return A B^T exactly",
+         all(fold_check("blc1a", sd) for sd in range(20)), "20 seeds"),
+        ("Mutation: blc1's coin in the row lane isn't r_i + c_j, so no free fold removes it, and the check says so",
+         not any(fold_check("blc1", sd) for sd in range(20)), "20 seeds"),
+        ("The de-noised lead's call-set outsourcer saves at least 95% a bit of what the stated term charges at T 8,192",
+         rows8["caps"]["32"]["attack"]["floor"]["subset"]["of_stated"] >= 0.95,
+         f"{rows8['caps']['32']['attack']['floor']['subset']['of_stated']:.4f}"),
+        ("No outsourcer saves more a bit than the stated term charges, at every design, point, price and cap",
+         all(v["of_stated"] <= 1.0 + 1e-12 for x in res["designs"] for p in x["points"].values()
+             for c in p["caps"].values() for a in c["attack"].values() for v in a.values()), "ok"),
+        ("The closing layout serves exactly (its served noise folds)",
+         all(p["served"] == "exact" for p in best.values()), res["closing"]["id"]),
         ("Per period: N-CARD's stock work reproduces (one H200 window 3.09e19 AND gates)",
          abs(res["period"][0]["and_gates"]["one H200"]["window"] / res["period"][0]["share_of_stock"] / 3.086e19 - 1)
          < 1e-3, f"{res['period'][0]['and_gates']['one H200']['window'] / res['period'][0]['share_of_stock']:.4e}"),
@@ -289,23 +379,28 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
 def table(res: dict) -> str:
     lines = ["N-EGRESS: OutsourceWithinEgress's term n_max W_mac E / stock MACs on Llama-3.2-1B (T 8,192 unless stated)",
              "  design: coin bits a token, n_max, stream B a token; term at cap 32 / 320, floor / floor chained / bar; "
-             "whole-forward attack at 32 (floor); forming (T1 uncredited); words"]
+             "outsourcers at 32 (floor; call set if the served path is coin-free, else a prefix): saving at the whole cap"
+             " / at its slack over 17 bits, and a bit against the stated term; forming (T1 uncredited); words; served"]
     for x in res["designs"]:
         p = x["points"]["t8192"]
         c32, c320 = p["caps"]["32"], p["caps"]["320"]
         f = lambda c: " / ".join(f"{c['stated'][q]:.4%}" for q in ("floor", "floor_chained", "bar"))
+        att = "; ".join(f"{a} {v['whole_cap']:.4%} / {v['slack']:.4%} ({v['of_stated']:.3f})"
+                        for a, v in c32["attack"]["floor"].items())
         lines.append(f"  {x['id']:<16} {p['coin_bits_per_token']:>12,.0f} {p['n_max']:>12,.1f} "
-                     f"{p['stream_bytes_per_token']:>11,.0f}  32: {f(c32)}  320: {f(c320)}  attack "
-                     f"{c32['attack_whole_forwards']['floor']:.4%}  forming {p['forming_share_of_stock']:.4%}  "
-                     f"words x{p['words_vs_lead']:.3f}")
+                     f"{p['stream_bytes_per_token']:>11,.0f}  32: {f(c32)}  320: {f(c320)}  outsourcers {att}  "
+                     f"forming {p['forming_share_of_stock']:.4%}  words x{p['words_vs_lead']:.3f}  {p['served']}")
     cl = res["closing"]
     lines.append(f"Closing layout: {cl['id']} ({cl['title']})")
     for k, p in res["designs_by_id"][cl["id"]]["points"].items():
         t2 = p.get("t2")
         s = (f"  {k:<8} m {p['m']:>5}: n_max {p['n_max']:,.1f}, term cap 32 {p['caps']['32']['stated']['floor']:.4%}"
              f"-{p['caps']['32']['stated']['bar']:.4%}, cap 320 {p['caps']['320']['stated']['floor']:.4%}-"
-             f"{p['caps']['320']['stated']['bar']:.4%}; forming {p['forming_share_of_stock']:.4%}; noise rms "
-             + ", ".join(f"K {k_}: {v:.1f}" for k_, v in p["noise_rms_lsb_by_k"].items()))
+             f"{p['caps']['320']['stated']['bar']:.4%}; forming {p['forming_share_of_stock']:.4%}; words "
+             f"x{p['words_vs_lead']:.3f}; served noise rms "
+             + ", ".join(f"K {k_}: {v:.1f}" for k_, v in p["noise_rms_lsb_by_k"].items())
+             + "; committed words' coin rms "
+             + ", ".join(f"K {k_}: {v:.1f}" for k_, v in p["word_noise_rms_lsb_by_k"].items()))
         if t2:
             s += (f"; T2 {t2['gpu_400g']['t2']:.2f} (lead {t2['lead_judged']:.2f}), arrival 400G "
                   f"{t2['gpu_400g']['t2_arrival'][0]:.2f}-{t2['gpu_400g']['t2_arrival'][1]:.2f}, 100G "
@@ -314,7 +409,7 @@ def table(res: dict) -> str:
                   f"{t2['census_100g']['port_share']:.2%} of 100G), certifier {t2['certifier_cores'][0]:.2f}-"
                   f"{t2['certifier_cores'][1]:.2f} Genoa cores, patch {t2['patch_ms']:.3f} ms")
         lines.append(s)
-    lines.append("Lower bound (any layout): coin bits a token >= 100 W_mac cap - 32; n_max <= 0.01 MACs / (W_mac cap)")
+    lines.append("Lower bound (any layout): coin bits a token >= 100 W_mac cap; n_max <= 0.01 MACs / (W_mac cap)")
     for cap, ps in res["lower_bound"].items():
         for p, v in ps.items():
             ok = ", ".join(f"T{r['tile']}/L{r['lanes']}/e{r['e']} ({r['n']:.0f})"
@@ -345,9 +440,10 @@ def main() -> int:
     ll = alt_roads.llama(inp)
     res = {"designs": [price_design(x, inp, einp, ll) for x in designs(einp["layouts"])]}
     res["designs_by_id"] = {x["id"]: x for x in res["designs"]}
-    closing = [x for x in res["designs"] if x["id"].startswith("blc1-t")
+    closing = [x for x in res["designs"] if x["id"].startswith(("blc1-t", "blc1a-t"))
                and all(p["caps"]["32"]["stated"]["bar"] <= 0.01 for p in x["points"].values())]
-    best = min(closing, key=lambda x: (x["points"]["t8192"]["stream_bytes_per_token"],
+    best = min(closing, key=lambda x: (x["points"]["t8192"]["served"] != "exact",
+                                       x["points"]["t8192"]["stream_bytes_per_token"],
                                        x["points"]["t8192"]["noise_rms_lsb_by_k"]["8192"]))
     res["closing"] = {"id": best["id"], "title": next(d["title"] for d in designs(einp["layouts"])
                                                       if d["id"] == best["id"])}
@@ -359,6 +455,8 @@ def main() -> int:
         ("stock work", 1.0),
         ("the lead's network term, cap 32, floor", lead8["32"]["stated"]["floor"]),
         ("the lead's network term, cap 32, bar", lead8["32"]["stated"]["bar"]),
+        ("the de-noised lead's call-set outsourcer, cap 32's slack, floor",
+         lead8["32"]["attack"]["floor"]["subset"]["slack"]),
         (f"{best['id']}'s network term, cap 32, floor", p8["32"]["stated"]["floor"]),
         (f"{best['id']}'s network term, cap 32, bar", p8["32"]["stated"]["bar"]),
         (f"{best['id']}'s lane forming, uncredited", best["points"]["t8192"]["forming_share_of_stock"]),
