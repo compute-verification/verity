@@ -274,7 +274,7 @@ def test_random_programs_have_the_old_codecs_bytes():
 
 # -- the other tests' Programs ----------------------------------------------------------------------------------------
 
-MODULES = ("test_codec", "test_running_example", "test_annotations", "test_ports", "test_ports_one_use", "test_stacking",
+MODULES = ("test_codec", "test_running_example", "test_metadata", "test_ports", "test_ports_one_use", "test_stacking",
            "test_format_spec", "test_template_instance")
 
 
