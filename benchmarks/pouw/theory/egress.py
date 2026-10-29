@@ -268,14 +268,15 @@ def designs(lay: dict) -> list[dict]:
     out.append({"id": "blc4a-t64-e7-pack16", "kind": "blc4a", "tile": 64, "e": 7, "pack_rows": 16,
                 "title": "blc4a-t64-e7 with three lanes on each coined step of a tile of 16 rows or more, and spread "
                          "below 16 rows"})
-    for wid, weights, what, tiles in (
-            ("w127", [[1, 127, 1]], "N-LIT's A' = (1, 127, 1) on the coin lanes", (64, 32)),
-            ("rot", ROT, "A' = (127, 1, 1) on even rows and (1, 127, 1) on odd rows (a column fold a row class)", (64,))):
-        for t in tiles:
+    for wid, weights, what, tes in (
+            ("w127", [[1, 127, 1]], "N-LIT's A' = (1, 127, 1) on the coin lanes", ((64, 7), (32, 7))),
+            ("rot", ROT, "A' = (127, 1, 1) on even rows and (1, 127, 1) on odd rows (a column fold a row class)",
+             ((64, 7), (64, 4)))):
+        for t, e in tes:
             for pack in (None, 16):
-                out.append({"id": f"blc4a-t{t}-e7-{wid}" + ("-pack16" if pack else ""), "kind": "blc4a", "tile": t,
-                            "e": 7, "weights": weights, **({"pack_rows": pack} if pack else {}),
-                            "title": f"blc4a-t{t}-e7 with {what}" + (", packed from 16 rows" if pack else "")})
+                out.append({"id": f"blc4a-t{t}-e{e}-{wid}" + ("-pack16" if pack else ""), "kind": "blc4a",
+                            "tile": t, "e": e, "weights": weights, **({"pack_rows": pack} if pack else {}),
+                            "title": f"blc4a-t{t}-e{e} with {what}" + (", packed from 16 rows" if pack else "")})
     return out
 
 
