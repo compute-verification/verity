@@ -16,9 +16,9 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
 `BindingOfECR` and `WholeLuckOfEntropy` (steps 1–6, 9, 11 and 12, each in its own file under
 `Proofs/Accounting/Compose/`), and `CreditOfWork` (step 7), `CircuitCredit` (step 8) and `CircuitCreditSeeded`
 (step 10) below. What the window's proofs' layer meets is proved: its static half is defined from the IR
-(`Declared.layer`), so `StageCuts` (at every value committed by its IR cut, which every one is at `Declared.atIR`),
-`StageCoins` (under `Declared.Wf`), `StageSlots`, `WriterReads` and `StageComplete` (under `Declared.Wf` and
-`units ≤ N_p`) are lemmas below, not premises, as are the draw cut of `Declared.atDraw`'s layer and `serviceGame`,
+(`RegisteredCircuit.layer`), so `StageCuts` (at every value committed by its IR cut, which every one is at `RegisteredCircuit.atIR`),
+`StageCoins` (under `RegisteredCircuit.Wf`), `StageSlots`, `WriterReads` and `StageComplete` (under `RegisteredCircuit.Wf` and
+`units ≤ N_p`) are lemmas below, not premises, as are the draw cut of `RegisteredCircuit.atDraw`'s layer and `serviceGame`,
 `tileMode` as `jointGame`, `jointMode` at a split-stage window's joint run.
 
 1. `SplitRateClosed` (proved, `Compose/SplitRateClosed.lean`), from step 2. A larger rate keeps `SplitRateAt` at the
@@ -41,11 +41,11 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    deficiency is the not-paid tiles' `tileCone` (the three modes, at `1` and `1`), so it is enough that a tile's layer
    cone is at most `N_w` times its `tileCone`: a layer edge `DrawnLayer.Late u v` at slot `k` has its position a value
    the prover writes and a gate of `u`'s unit (`layer_stageSlots`), and either one of `v`'s own gates (`u = v`) or an
-   operand of one, read by a gate `j` of `v`'s, whose round is `v`'s (`Declared.Wf`, `layer_stageCoins`). Under
+   operand of one, read by a gate `j` of `v`'s, whose round is `v`'s (`RegisteredCircuit.Wf`, `layer_stageCoins`). Under
    `LayerCommitted` the position is committed by its IR cut, so `j`'s round is before that cut (`layer_stageCuts`),
-   `Declared.Late` and a `Declared.UnitLate` edge, or it is a computed value only its own unit reads, so `j`'s unit,
+   `RegisteredCircuit.Late` and a `RegisteredCircuit.UnitLate` edge, or it is a computed value only its own unit reads, so `j`'s unit,
    `v`, is `u` (a value committed late adds no edge out of its unit); along
-   `ReflTransGen` the layer's cone lies in `Declared.Reaches`, and a tile's words are `N_w` times its weight (`0` when
+   `ReflTransGen` the layer's cone lies in `RegisteredCircuit.Reaches`, and a tile's words are `N_w` times its weight (`0` when
    `N_w = 0`: a tile's words are among the circuit's).
 6. `CircuitWork` (proved, `Compose/CircuitWork.lean`): the luck first. At each stage, each credited tile's
    `tileGame … .folded` is `Pinned` (its check is `same`), so
@@ -53,7 +53,7 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    `LuckOfReceipt` with `ReceiptLuckAt` give `Pr[folded ∧ same] ≤ (μ + (1 − μ)·r_B)·Pr[folded]` (`r_B ≤ 1` by
    `Scheme.LuckProved`), and `GuessLuckAt` on `tileGame … .whole` gives `Pr[whole ∧ same] ≤ guess·Pr[whole]`; a tile of
    no credited kind is held to `1`; so `SplitStages.LuckAt (tileLuck …) (tileLuck0 …)`. `LuckAt` and the per-stage
-   games read the stages' coins as `SplitStages`' uniform ones; `Scope`'s `Declared.Live` is read by no step: it is the
+   games read the stages' coins as `SplitStages`' uniform ones; `Scope`'s `RegisteredCircuit.Live` is read by no step: it is the
    protocol fact under which those are the service's coins, as `SeedNamed` is in step 9. Under `LayerCommitted` an
    input's layer cut is its IR cut (`layer_stageCuts`: an input has no second case), so a run input is bound before its
    first reader's coin. Then
@@ -66,7 +66,7 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    at least `(1 − (c_F + c₀))·N_w`, `c_F`, `c₀` the folded and whole shares at `tileCone`, and the words not skipped
    whole at least `(1 − S_0)·N_w`, since a tile's words are at most `N_w` times its `shareCone` (a tile's cone holds
    itself, `ReflTransGen.refl`); both read `Σ_t tileWords ≥ N_w` (each credited word is in its unit's tile, by
-   `Declared.Wf` and `units ≤ N_p`). `tileCone` and `shareCone` differ only on tiles of no words, so
+   `RegisteredCircuit.Wf` and `units ≤ N_p`). `tileCone` and `shareCone` differ only on tiles of no words, so
    `c_F + c₀ = S_F + S_0 + Z_F + Z_0` with `Z_F + Z_0 ≤ D₀`, the folded and whole cones of those tiles. Take them in the
    cheaper share: for `a ≤ b`, `d_F = S_F + Z_F + Z_0` and `d₀ = S_0`; for `b < a`, `d_F = S_F` and
    `d₀ = S_0 + Z_F + Z_0`. Either keeps `d_F + d₀ = c_F + c₀` and `d₀ ≥ S_0`, so `WorkAt` at
@@ -94,13 +94,13 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    Given the rounds' coins, the service's live draw of a uniform `K_d`-subset misses the tiles whose checked values
    aren't honest with probability at most `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so an accepted run with
    `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s` (`live_le`). Off these, `DrawnRightOff` on
-   `Declared.atDraw`'s layer (its `MovedIn`, `JointSound`, `Pins`) and `Of` give the share game's pass; `UnitFixed`
-   and step 5's `Covers` on `Declared.atIR`'s layer (`LayerCommitted` by `layerCommitted_atIR`) at `jointMode` give
+   `RegisteredCircuit.atDraw`'s layer (its `MovedIn`, `JointSound`, `Pins`) and `Of` give the share game's pass; `UnitFixed`
+   and step 5's `Covers` on `RegisteredCircuit.atIR`'s layer (`LayerCommitted` by `layerCommitted_atIR`) at `jointMode` give
    the good tiles' words as in step 6 (`WorkProof.work_of_bounds`). The two layers differ only in their cuts, and
    `UnitFixed`, `Covers` and the game read none of a layer's committed values, so they combine: each mode's share is
    its `L − κ·U` plus `(1 + κ)·U` (`share_split`), so `a·S_F + b·S_0 ≤ max(5a, (1 + κ₀)·b)·U + a·Π_F + b·Π_0`,
    strictly below `rOfSeeded`'s first three terms (`a > 0`), with `D₀` as in step 6. `SeedNamed` (in `ScopeSeeded`)
-   is read by no step: it is the protocol fact under which the `UnitFixed` premise on `Declared.atIR`'s layer can
+   is read by no step: it is the protocol fact under which the `UnitFixed` premise on `RegisteredCircuit.atIR`'s layer can
    hold, as `LayerCommitted` is for the live pair.
 10. `CircuitCreditSeeded` (proved): step 9 at `a = aOf`, `b = bOf`, and step 7 on each run off its event at
    `r = rOfSeeded`; the certificate is issued at `.seeded`.
@@ -126,14 +126,14 @@ open Accounting.Compose
 /-! ## The window's proofs' layer, from the IR -/
 
 /-- A gate of the circuit is one of its own unit's gates. -/
-theorem mem_unitGates {ι : Type} (Cd : Declared ι) {i : ℕ} (h : i < Cd.dag.length) :
+theorem mem_unitGates {ι : Type} (Cd : RegisteredCircuit ι) {i : ℕ} (h : i < Cd.dag.length) :
     i ∈ unitGates Cd (Cd.unit i) :=
   List.mem_filter.mpr ⟨List.mem_range.mpr h, by simp⟩
 
-/-- Under `Declared.Wf` every unit's round is one of the circuit's. -/
-theorem roundOf_lt {ι : Type} {Cd : Declared ι} (hw : Cd.Wf) (hr : 0 < Cd.rounds) (u : ℕ) :
+/-- Under `RegisteredCircuit.Wf` every unit's round is one of the circuit's. -/
+theorem roundOf_lt {ι : Type} {Cd : RegisteredCircuit ι} (hw : Cd.Wf) (hr : 0 < Cd.rounds) (u : ℕ) :
     Cd.roundOf u < Cd.rounds := by
-  unfold Declared.roundOf
+  unfold RegisteredCircuit.roundOf
   rcases hl : unitGates Cd u with _ | ⟨i, l⟩
   · exact hr
   · have hi : i ∈ unitGates Cd u := by rw [hl]; exact List.mem_cons_self
@@ -141,7 +141,7 @@ theorem roundOf_lt {ι : Type} {Cd : Declared ι} (hw : Cd.Wf) (hr : 0 < Cd.roun
 
 section Layer
 
-variable {ι C Ξ V : Type} (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
+variable {ι C Ξ V : Type} (Cd : RegisteredCircuit ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
   (pr : ProofRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V)
 
 theorem layer_draw : (Cd.layer hr hK pr).draw = drawOf hK := rfl
@@ -221,7 +221,7 @@ theorem serviceGame_eq {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (W : Spli
     (a b : ℝ) (K : ℕ) : serviceGame (Ξ := Ξ) stg W w a b K = jointGame (W.joint stg) w a b K := rfl
 
 /-- A split-stage window's modes are its joint run's. -/
-theorem tileMode_eq {ι C B : Type} {Np : ℕ} (Cd : Declared ι) (W : SplitStages C (Fin Np) Cd.rounds) :
+theorem tileMode_eq {ι C B : Type} {Np : ℕ} (Cd : RegisteredCircuit ι) (W : SplitStages C (Fin Np) Cd.rounds) :
     tileMode (B := B) Cd W = jointMode (W.joint (tileStage Cd Np)) := rfl
 
 /-! ## The guarantees -/
@@ -286,7 +286,7 @@ theorem CreditOfWork : Accounting.Guarantees.Compose.CreditOfWork := by
 
 /-- The circuit's costs `aOf` and `bOf` are `≥ 0` in the model's ranges. -/
 theorem costs_nonneg {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
-    [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] (Sc : Scheme K) (Cd : Declared ι)
+    [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] (Sc : Scheme K) (Cd : RegisteredCircuit ι)
     (Z : Accounting.TS.Model K R T L U F X) (lam : R → ℝ) (h : ModelScope Sc Cd Z lam) :
     0 ≤ aOf Sc Cd Z lam ∧ 0 ≤ bOf Sc Cd Z lam := by
   have hst := Accounting.SecurityProofs.TS.stars_nonneg Z (floorOf Sc Cd) lam h.2.1 h.1

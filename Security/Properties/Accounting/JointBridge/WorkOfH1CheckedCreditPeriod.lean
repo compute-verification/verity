@@ -48,7 +48,7 @@ def WorkOfH1CheckedCreditPeriodAt (p : Accounting.Price) (macs : Accounting.Comp
   ∀ (ι α I : Type) [Fintype α] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
     (d : Accounting.Device ι) (C : Verity.Circuit) (r : Accounting.PeriodRun d α C Ω) (c : Accounting.Certificates)
     {ι' K T L U Cn Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype Cn] [Fintype Ξ]
-    [Nonempty V] (Sc : Scheme K) (Cd : Declared ι') {n : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ 144)
+    [Nonempty V] (Sc : Scheme K) (Cd : RegisteredCircuit ι') {n : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ 144)
     (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1) (hK : 24 ≤ 144) (prm : Params) (enc : Cn → ByteArray)
     (staged flat : ByteArray → Fin 144 → (ℕ → V) → Prop) (δs δbind δks : ℝ)
     (ws : ((i : I) → Ω i) → Executions (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n)

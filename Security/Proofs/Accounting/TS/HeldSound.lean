@@ -77,7 +77,7 @@ theorem tie_ok (s : RowsSession) (ok : String) {known : Array (String × Array (
 naming `ok` with rows each the word `1`, whose served roots are registered and whose key program realizes `Cd`. -/
 theorem held_of_checked {ι : Type} (s : RowsSession) (o : s.Out) (ok : String)
     (known : Array (String × Array (Array ℕ × ByteArray))) {ks : Array (Array ℕ × ByteArray)}
-    {Cd : Accounting.Compose.Declared ι} {cls : ℕ → Accounting.Served.Cls} {unitOf : Fin s.n → ℕ}
+    {Cd : Accounting.Compose.RegisteredCircuit ι} {cls : ℕ → Accounting.Served.Cls} {unitOf : Fin s.n → ℕ}
     {dec : (Fin s.Circ.N → Bool) → ι → ℤ}
     (hk : Flock.Registered.checkKnownAll s.own known = .ok ()) (hm : (ok, ks) ∈ known)
     (hks : ∀ r ∈ ks, r.1 = okRow) (hS : ∀ u, s.ServedRegistered u)

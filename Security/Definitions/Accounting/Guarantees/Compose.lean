@@ -6,19 +6,19 @@ import Definitions.Accounting.Assumptions.Compose
 # PoUW's credit on an arbitrary declared circuit (trusted)
 
 THEOREM's composed statement. Each `def G : Prop` is proved as `Accounting.SecurityProofs.Compose.G` in
-`Proofs.Accounting.Compose`, whose module doc gives each proof's steps. The circuit is any `Declared` one, a `Gates.IntDag`
+`Proofs.Accounting.Compose`, whose module doc gives each proof's steps. The circuit is any `RegisteredCircuit` one, a `Gates.IntDag`
 with its call sites, its rounds, their coin modes, the service's commit coins and its proof units, its words, kinds,
 cuts and late cones read off the IR.
-Nothing about its form is a hypothesis beyond `Declared.Wf` (call sites, rounds and units in range; one unit's gates in
+Nothing about its form is a hypothesis beyond `RegisteredCircuit.Wf` (call sites, rounds and units in range; one unit's gates in
 one round; each coin input read in its own round; one unit's words of one kind).
 
 The live statements (`CircuitWork`, `CircuitCredit`) need every round that holds a credited tile live and the service
 committing by the IR's cuts, a computed value only its own unit reads (a receipt) by the draw (`Scope`'s
-`Declared.Live` and `LayerCommitted`), and describe the designed protocol.
+`RegisteredCircuit.Live` and `LayerCommitted`), and describe the designed protocol.
 PoUW's code today has one salt a window and derives every noise in the scheme, so every window it runs is seeded, and
 its credit is the seeded statements' (`CircuitWorkSeeded`, `CircuitCreditSeeded`), over the same circuit, at the
 grinding premium per seed group. The certificate records which (`CreditCertificate.coins`). Nothing yet builds a
-`Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its units, its commit
+`RegisteredCircuit` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its units, its commit
 coins and its draw to the service's, is unproved: until both exist, these speak of the declared circuit, not of a
 served workload.
 
@@ -30,7 +30,7 @@ The credit splits in two, and `CircuitCredit` is their composition:
   at B′'s `½` (`2^-64` isn't granted), and the fixed-words claim, `UnitFixed` with
   its fold clause at the run's modes (`tileMode`), with the templates' proved luck (`Scheme.LuckProved`), the service's commit order (`LayerCommitted`, in `Scope`), the
   service's draw and sampled (I8)'s pieces on the window's proofs (`DrawnLayer.Of`, binding at
-  `δ_bind`, joint proof soundness, `Pins`). The proofs' layer is the IR's (`Declared.layer`): its slots, writers, cuts, coins and draw are
+  `δ_bind`, joint proof soundness, `Pins`). The proofs' layer is the IR's (`RegisteredCircuit.layer`): its slots, writers, cuts, coins and draw are
   defined from the circuit, so under `LayerCommitted` it is bound at the IR's cuts (a value only its own unit reads,
   committed later, at its commit coin, which adds no late edge out of its unit), reads each round's coin and has
   every late edge the IR has (`StageCuts`, `StageCoins`, `StageSlots`, `StageComplete`, proved of it), and only its
@@ -44,9 +44,9 @@ The credit splits in two, and `CircuitCredit` is their composition:
 The seeded pair is (L) and its composition with (P) under seeded coins, stated as Fiat–Shamir in the random-oracle model
 (`fiat-shamir`): the window's seeds are uniform answers to the prover's queries naming its operands' roots, and
 `SeedExtractedAt` (`random-oracle`) is where that model is named, at `ε_id` once a window. Its run is a `JointRun` on
-every round's answers at once, with no stage order. Its binding is checked at the draw (`Declared.atDraw`: `Of`,
+every round's answers at once, with no stage order. Its binding is checked at the draw (`RegisteredCircuit.atDraw`: `Of`,
 `MovedIn`, `JointSound`), after every seed, since a seeded round's coin is a hash the cheater can evaluate before it
-commits; its cones are counted at the IR's cuts (`Declared.atIR`: `UnitFixed`, `ServiceCovers`), which read no committed
+commits; its cones are counted at the IR's cuts (`RegisteredCircuit.atIR`: `UnitFixed`, `ServiceCovers`), which read no committed
 value, and its scope needs each seeded round's seed to name what the round reads (`SeedNamed`). GRIND's premise
 (`SeedLuckAt`) at the template's `κ = 4` for folded tiles and the guess bound's `κ₀` for whole ones stands in for the
 live luck claims, and the bound is `rOfSeeded`, the live draw's charge on the unlucky share plus each seed group's
@@ -143,8 +143,8 @@ def SplitRateMerged : Prop :=
 /-- **The service's share covers every tile that isn't good.** For a declared circuit's window whose ideal game is the
 service's at share `1` per unit of each skipped tile's late cone (`tileCone`, from the IR) at any joint run `R` of the
 rounds' coins (`jointGame`; a split-stage window's `serviceGame` is one, at `SplitStages.joint`), and its proofs the
-IR's layer (`Declared.layer`, at any run-dependent half `pr`), committed as the layer says (`LayerCommitted`; at
-`Declared.atIR` always), the share covers the words of every tile that isn't good at the run's modes
+IR's layer (`RegisteredCircuit.layer`, at any run-dependent half `pr`), committed as the layer says (`LayerCommitted`; at
+`RegisteredCircuit.atIR` always), the share covers the words of every tile that isn't good at the run's modes
 (`DrawnLayer.Covers` at `jointMode R`, the tiles' words and `N_w`). The layer is then bound at the IR's cuts (a
 computed value only its own unit reads at its later commit coin), reads each round's coin and has its slots and
 writers inside the IR (`StageCuts`, `StageCoins`, `StageSlots`), so a late edge of the layer is one of the IR's or
@@ -153,7 +153,7 @@ which the share charges that cone (`DrawnLayer.covers_of_cone`). It reads no com
 run's modes may read every round's coin. Tiles of no words are charged too: their cones are the bound's `D₀`. -/
 def ServiceCovers : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
-    (Sc : Scheme K) (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
+    (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (R : JointRun (Paths C Cd.rounds) (Fin Np)) (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 K T L U)
     (pr : ProofRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V),
     Cd.Wf → LayerCommitted Cd → Pl.game = jointGame (Ξ := Ξ) R (tileCone Sc Cd Np) 1 1 Kd →
@@ -169,7 +169,7 @@ C-Flock's knowledge extractor, `κ` its extraction failure), for every `δ' > 0`
 (`Claims.ExpectedCR`) and `⊤` if it doesn't. It is `DrawnBindingOfFork` (`Pr[MovedIn]² ≤ |L|²·Pr[fork]`)
 with AM–GM (`√(γx) ≤ δ' + γx/(4δ')`), and it assumes no hash: a prover whose fork finder beats `ecr` gets `⊤`, so it
 is the per-prover `δ_bind` the statements take (`MovedIn ≤ δ_bind`), on the IR's layer under live coins and on the
-draw's (`Declared.atDraw`) under seeded ones. `SeedLuckAt`'s `δ_b` is read the same way, at a round's roots, at about
+draw's (`RegisteredCircuit.atDraw`) under seeded ones. `SeedLuckAt`'s `δ_b` is read the same way, at a round's roots, at about
 `2·T_q` SHA-512 calls. At the best `δ'` the bound is about `|L|·√(E[cost F]/2^256)`, and a seeded window prices it at
 the budget its premium reads (one `T` for the cheater): at `2^128` it is `|L|·2^-64` (`2^-44` to `2^-34` at `|L|` from
 `2^20` to `2^30`, not negligible beside `δ_s = 2^-40`), at `2^80` it is `|L|·2^-88` (`2^-68` to `2^-58`). `ecr` is the
@@ -208,7 +208,7 @@ def WholeLuckOfEntropy : Prop :=
 one window: the circuit's rounds in order, each round's noise coin live and released after its operands are committed
 (one coin a round), then the service's draw of `K_d` of the `N_p ≥ units` grid-padded tiles, one a proof unit (`drawOf`,
 a uniform `K_d`-subset), with the proofs' coins `Ξ`, each drawn tile proved with its noise's generation. Under:
-* the logical ranges (`Scope`: every round holding a credited tile live, `Declared.Live`, and the service's commit
+* the logical ranges (`Scope`: every round holding a credited tile live, `RegisteredCircuit.Live`, and the service's commit
   order, `LayerCommitted`: each value the prover writes committed under a root before its IR cut's coin, or, a
   computed value only its own unit reads (a receipt), before the draw; on the live path each round's values and run
   inputs under its root before its coin, which today's code doesn't meet);
@@ -219,7 +219,7 @@ a uniform `K_d`-subset), with the proofs' coins `Ξ`, each drawn tile proved wit
   ruled);
 * costs `a, b ≥ 0`, `Λ > 0` and `SplitRate` at them;
 * the play's ideal game the service's at share `1` per unit of each skipped tile's late cone (`tileCone`, tiles of no
-  words included), and sampled (I8)'s pieces on the window's proofs, the IR's layer (`Declared.layer` at the run's `pr`:
+  words included), and sampled (I8)'s pieces on the window's proofs, the IR's layer (`RegisteredCircuit.layer` at the run's `pr`:
   positions the IR's gates, its slots, writers, cuts, coins and draw defined from the circuit): `Of`, binding at
   `δ_bind` in the round (`MovedIn`; WindowEps: `Σ_c δlink_c`, which needs `LayerCommitted`'s order), proof soundness
   jointly over the draws at `δ_ks` (`JointSound`; WindowEps: `max_c κ_c + coll`) and `Pins`;
@@ -245,12 +245,12 @@ at the decided `½` a query, 1.120% if `GuessLuckAt` holds at `2^-64`, and 0.101
 it would hold here too; reading it needs a per-round moment premise and a rate lemma in place of `SplitRate`, a
 statement of its own, so this line leaves that margin unused.
 
-Nothing yet builds a `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its
+Nothing yet builds a `RegisteredCircuit` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its
 units, commit coins and draw to the service's, is unproved: until both exist, this speaks of the declared circuit, not
 of a served workload. -/
 def CircuitWork : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
-    [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {Np Kd : ℕ} (_hN : Cd.units ≤ Np) (hr : 0 < Cd.rounds)
+    [Nonempty V] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np Kd : ℕ} (_hN : Cd.units ≤ Np) (hr : 0 < Cd.rounds)
     (hK : Kd ≤ Np) (W : SplitStages C (Fin Np) Cd.rounds)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 K T L U)
     (pr : ProofRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V)
@@ -283,11 +283,11 @@ round `r`'s operands, values and skips after querying the oracle for any round's
   meet) and `δ_g > 0`;
 * every tile at least `ρ` times its detected weight's share, costs `a > 0`, `b ≥ 0` and `κ₀ ≥ 0`;
 * the play's ideal game the service's on `R` (`jointGame`) at share `1` per unit of each skipped tile's late cone;
-* sampled (I8)'s binding pieces on the proofs' layer cut at the draw (`Declared.atDraw`'s `Declared.layer` at the run's
+* sampled (I8)'s binding pieces on the proofs' layer cut at the draw (`RegisteredCircuit.atDraw`'s `RegisteredCircuit.layer` at the run's
   `pr`): `Of`, `MovedIn` at `δ_bind`, `JointSound` at `δ_ks` and `Pins`. A seeded round's coin is a hash the cheater
   can evaluate before it commits, so nothing it writes, operands or a round's receipts, is bound before the live draw,
   and the draw is where the `δ_bind` card holds: Fiat–Shamir has fixed every root the seeds' preimages name;
-* the fixed-words claim, `UnitFixed`, on the proofs' layer cut at the IR (`Declared.atIR`) at `R`'s modes
+* the fixed-words claim, `UnitFixed`, on the proofs' layer cut at the IR (`RegisteredCircuit.atIR`) at `R`'s modes
   (`jointMode`): it reads modes, cuts and writers, never a committed value, so it needs no binding at the IR cut, and
   its late cones are the IR's, as `ServiceCovers` counts them;
 * the random-oracle premise once for the window (`SeedExtractedAt`: each round's proofs' seed is the answer to query
@@ -327,12 +327,12 @@ sees each word's row and column bits and charges `1 + κ = 5` per unit of unluck
 folded tile's one point luck `p = 7/8` at `1/(1 − p) = 8`, from which no moment at `κ = 4` follows (`κ > 7` is
 needed). The premium `a·Π_F + b·Π_0` is what the seeded line pays for its seeds.
 
-Nothing yet builds a `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its
+Nothing yet builds a `RegisteredCircuit` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its
 units, commit coins and draw to the service's, is unproved: until both exist, this speaks of the declared circuit, not
 of a served workload. -/
 def CircuitWorkSeeded : Prop :=
   ∀ {ι K T L U B Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype B] [Fintype Ξ]
-    [Nonempty V] {Tq : ℕ} (Sc : Scheme K) (Cd : Declared ι) {Np Kd : ℕ} (_hN : Cd.units ≤ Np)
+    [Nonempty V] {Tq : ℕ} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np Kd : ℕ} (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (R : JointRun (Paths (Fin Tq → B) Cd.rounds) (Fin Np))
     (Pl : Play (Paths (Fin Tq → B) Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 K T L U)
     (pr : ProofRun (Fin Tq → B) (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V)
@@ -364,7 +364,7 @@ folded. -/
 def CreditOfWork : Prop :=
   ∀ {ι K P T L U F X : Type} [Fintype K] [Fintype P] [DecidableEq P] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X]
-    (Sc : Scheme K) (Cd : Declared ι) (Sh : Sheet K P) (Z : Model K (SheetRow P) T L U F X)
+    (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Sh : Sheet K P) (Z : Model K (SheetRow P) T L U F X)
     (A : Anatomy K T L U) (folded : ℝ) (lam : SheetRow P → ℝ) (r : ℝ),
     Fits Sc Cd Sh Z → ModelScope Sc Cd Z lam → A.Split →
     SheetClock Sh A.run → SheetDispatch A.run → SheetTensor Sh A.run → SheetPipe Sh A.run → SheetSmem Sh A.run →
@@ -379,7 +379,7 @@ def CreditOfWork : Prop :=
 certificate in device window `win` holds (`certOf` at `.live`): it is accepted with time below `(1 − ε)·T_cred` with
 probability at most `δ_s + δ_bind + δ_ks`, where `T_cred = B(♭)/f_max` at the circuit's floor and
 `ε = ε_♭ + ε_μ + Λ·ln(1/δ_s) + min(a, b)·D₀` (`rOf`). The certificate also reports the words per kind, `γ_♭` (W1) and
-the coin mode, `live` under `Scope`'s `Declared.Live`: a seeded window's credit is `CircuitCreditSeeded`'s. Its `Scope`
+the coin mode, `live` under `Scope`'s `RegisteredCircuit.Live`: a seeded window's credit is `CircuitCreditSeeded`'s. Its `Scope`
 holds the service's commit order (`LayerCommitted`), which today's code doesn't meet. Its luck line is `CircuitWork`'s,
 the live claims' point lucks `p = 7/8` folded and `p0 = ½` whole (as ruled; 0.173% at `r = 1` closed, 0.110% sharp), and
 with `ε_♭ = 0.571%` (NOTATION's sm_120 sheet, H1 + fx1) and `ε_μ = 0` under FOLD-OPT its `ε` is 0.744%, 0.801% and
@@ -387,13 +387,13 @@ with `ε_♭ = 0.571%` (NOTATION's sm_120 sheet, H1 + fx1) and `ε_μ = 0` under
 or sampled (I8)'s (0.722%, 0.772% and 0.873% closed at the ungranted `p0 = 2^-64`). The seeded pair's is above it at
 small-batch decode under every premise but `WholeEntropyAt`'s (`CircuitCreditSeeded`). Work is the prover system's, and
 the certificate is what the physical layer's ledger consumes: what device time the work took, and whose, is the
-ledger's, which credits one device's time once. Nothing yet builds a `Declared` from a compiled Program, and
+ledger's, which credits one device's time once. Nothing yet builds a `RegisteredCircuit` from a compiled Program, and
 `Properties.Compose.UnitsOfLayout`, which would tie its units, commit coins and draw to the service's, is unproved:
 until both exist, this speaks of the declared circuit, not of a served workload. -/
 def CircuitCredit : Prop :=
   ∀ {ι K P T L U F X C Ξ V : Type} [Fintype K] [Fintype P] [DecidableEq P] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] [Fintype C] [Fintype Ξ] [Nonempty V]
-    (Sc : Scheme K) (Cd : Declared ι) (Sh : Sheet K P) (Z : Model K (SheetRow P) T L U F X) (H : Honest K)
+    (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Sh : Sheet K P) (Z : Model K (SheetRow P) T L U F X) (H : Honest K)
     {Np Kd : ℕ} (_hN : Cd.units ≤ Np) (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (W : SplitStages C (Fin Np) Cd.rounds)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 K T L U)
     (pr : ProofRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V)
@@ -425,8 +425,8 @@ run, the window's certificate in device window `win` holds at `.seeded` (`certOf
 `(1 − ε)·T_cred` with probability at most `δ_s + δ_bind + δ_ks + ε_id(T, |J|) + 2·rounds·(δ_g + δ_b)`, where
 `ε = ε_♭ + ε_μ + max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K_d) + a·Π_F + b·Π_0 + min(a, b)·D₀` (`rOfSeeded`, `Π_F` and `Π_0` the
 seed groups' premiums from the IR at the folded and the whole rates). It is stated as Fiat–Shamir in the random-oracle
-model (`fiat-shamir`; `SeedExtractedAt` names it), its binding checked at the draw (`Declared.atDraw`) and its cones at
-the IR (`Declared.atIR`), as `CircuitWorkSeeded`'s, and its luck line is that statement's, conditional as its numbers
+model (`fiat-shamir`; `SeedExtractedAt` names it), its binding checked at the draw (`RegisteredCircuit.atDraw`) and its cones at
+the IR (`RegisteredCircuit.atIR`), as `CircuitWorkSeeded`'s, and its luck line is that statement's, conditional as its numbers
 are on the whole-tile luck a query its `wholeTheta` reads. With `ε_♭ = 0.571%` (NOTATION's sm_120 sheet, H1 + fx1)
 and `ε_μ = 0` under FOLD-OPT, its `ε` at `r = 1` and `T_q = 2^128` is:
 * at `½` a query (the ruled live value; no premise per query is granted): 56.6% for Llama-3.1-8B decode at batch up to
@@ -438,13 +438,13 @@ and `ε_μ = 0` under FOLD-OPT, its `ε` at `r = 1` and `T_q = 2^128` is:
 
 The live pair's is 0.744% closed and 0.681% sharp. It is the credit of every window PoUW's code runs, whose noise it
 derives from the salt, once the code's seed preimages name what each round reads (`SeedNamed`, in `ScopeSeeded`) and
-its binding is checked at the draw. Nothing yet builds a `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would
+its binding is checked at the draw. Nothing yet builds a `RegisteredCircuit` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would
 tie its units, commit coins, seed preimages and draw to the service's, is unproved: until both exist, this speaks of
 the declared circuit, not of a served workload. -/
 def CircuitCreditSeeded : Prop :=
   ∀ {ι K P T L U F X B Ξ V : Type} [Fintype K] [Fintype P] [DecidableEq P] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] [Fintype B] [Fintype Ξ] [Nonempty V] {Tq : ℕ}
-    (Sc : Scheme K) (Cd : Declared ι) (Sh : Sheet K P) (Z : Model K (SheetRow P) T L U F X) (H : Honest K)
+    (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Sh : Sheet K P) (Z : Model K (SheetRow P) T L U F X) (H : Honest K)
     {Np Kd : ℕ} (_hN : Cd.units ≤ Np) (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (R : JointRun (Paths (Fin Tq → B) Cd.rounds) (Fin Np))
     (Pl : Play (Paths (Fin Tq → B) Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 K T L U)
