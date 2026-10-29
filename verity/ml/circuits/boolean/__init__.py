@@ -26,7 +26,7 @@ from typing import Any
 from verity.ml.circuits.codec import register_lazy_family
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Record, Tuple, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple, Type, Value
 
 __all__ = ["AND", "BIT", "CONSTANTS", "KINDS", "NOT", "XOR", "and_gate", "bit_type", "constant", "elements", "gate_kind",
            "is_boolean", "is_constant_bit", "is_gate", "operands", "word_type", "xor_gate"]
@@ -183,7 +183,7 @@ def elements(t: Type) -> list[int]:
         return elements(t.elem) * t.n
     if isinstance(t, Tuple):
         return [w for f in t.fields for w in elements(f)]
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         return [w for _, f in t.fields for w in elements(f)]
     raise TypeError(f"{t!r} is not a Boolean type (its leaves must be Value<1>)")
 
@@ -198,8 +198,8 @@ def word_type(t: Type) -> Type:
         return Array(t.n, word_type(t.elem))
     if isinstance(t, Tuple):
         return Tuple(*[word_type(f) for f in t.fields])
-    if isinstance(t, Record):
-        return Record(*[(k, word_type(f)) for k, f in t.fields])
+    if isinstance(t, RecordType):
+        return RecordType(*[(k, word_type(f)) for k, f in t.fields])
     raise TypeError(f"{t!r} is not a Boolean type (its leaves must be Value<1>)")
 
 
@@ -211,6 +211,6 @@ def bit_type(t: Type) -> Type:
         return Array(t.n, bit_type(t.elem))
     if isinstance(t, Tuple):
         return Tuple(*[bit_type(f) for f in t.fields])
-    if isinstance(t, Record):
-        return Record(*[(k, bit_type(f)) for k, f in t.fields])
+    if isinstance(t, RecordType):
+        return RecordType(*[(k, bit_type(f)) for k, f in t.fields])
     raise TypeError(t)

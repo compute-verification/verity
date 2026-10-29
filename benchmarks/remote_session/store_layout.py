@@ -1,4 +1,4 @@
-"""Pins and checkpoints for the store binding, whose layout and decision are the remote audit's own
+"""Pins and checkpoints for the store binding, whose layout and decision are PoUB's own
 (`verity/core/protocols/remote_bandwidth/store.py`: the pin's form and checks, the arena, the store, its expected payload
 root and `Binding`): a checkpoint's local pin, a small synthetic BF16 checkpoint for tests, and the plain SHA-256 a GiB
 of an engine's arena holding the checkpoint's weights (`node.py --model-dir`'s check of each engine against the layout).

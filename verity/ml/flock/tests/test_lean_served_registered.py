@@ -1,6 +1,6 @@
 """A served tree registered as a port, end to end (`one_stage.served.register_served`, `served_registered.py`): a
-RoPE d64 statement whose 32 units each read their `cs` row from the served tree `cs_table`, proved by C-Flock in one
-loopback `--zk` session under a subset draw of 16 (`pod/89-served-registered.sh`, `FIXTURES`), once for each row format a
+RoPE d64 statement whose 32 units each read their `cs` row from the served tree `cs_table`, proved by Flock in one
+loopback `--zk` session under a subset sample of 16 (`pod/89-served-registered.sh`, `FIXTURES`), once for each row format a
 served tree may be: `row/v1`, and `row/v2` and `row-seg/v1` bit rows (the circuit's rows bit rows of their words, `cs` a
 v2 or a segmented row). Each unit's `x` row and output row are registered values too, so every port of the circuit is
 registered (`Flock.Registered.checkComplete`). The verifier writes its own `--registered` file from the trees as the
@@ -43,8 +43,8 @@ FIXTURES = {
     G.SCHEMA_V2: "art:9059dbea3724a426dfe4ee371cd7aabd91116595a31bd5e843e757fa33130803",
     G.SCHEMA_SEG: "art:914ec71e91006bef4486b89dba2f2c936f3bba90d8afbeae3d6016fb8318555c",
 }
-#: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified draw of `PLAIN_K`
-#: (stage/draw.json), and session/ a plain session (no --zk, OS coins) drawn by it; vectors/ is vectors.json's live set
+#: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified sample of `PLAIN_K`
+#: (stage/draw.json), and session/ a plain session (no --zk, OS coins) sampled by it; vectors/ is vectors.json's live set
 PLAIN = "art:d1f2e2ffb692f3f631659ca231a429bff0eeecd6a7196d7e186f71001557afa3"
 PLAIN_K = 16
 STATEMENT = "verity/flock-circuit"
@@ -170,7 +170,7 @@ def plain(built, tmp_path_factory):
 
 def test_a_plain_session_on_registered_reads_is_accepted_and_refused_without_its_reads(plain, tmp_path):
     """Without `--zk`, a shared-row public file at hidden outputs and `hm96-sha512/v1` leaves is a covered form when the
-    verifier holds its own registered reads (`ProvedScope.sharedRowsOk`, `FailClosed.SoundExecHR`): the plain session drawn by
+    verifier holds its own registered reads (`ProvedScope.sharedRowsOk`, `FailClosed.SoundExecHR`): the plain session sampled by
     the verifier's own stratified law is accepted on `register_served`'s file, and refused on it with the tree's root changed
     (the registered check opens no row) and without `--registered`."""
     import served_registered as SR
