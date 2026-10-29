@@ -13,7 +13,8 @@ registration's ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root 
 ``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the
 challenger's coins (``--challenger``): its flags refused by name where they can't draw, the group's root bound to the
 warden's signed link-windows, and its Spec what the round's registration shows (`service.check_public`) over the units
-its `Stream` takes. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
+its `Stream` takes. w63k4, w63's class at a window circuit's KO 4 and KI 32, serves w63's network certifier at
+egress_cells 5 and reads its rounds as w63's. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
 from __future__ import annotations
 
 import hashlib
@@ -661,11 +662,101 @@ def test_the_scan_leaves_out_each_members_refs_which_the_statement_fixes_and_sti
             sz.refs_of(member([bad(i) for i in range(n)]))
 
 
-def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys):
-    assert sz.main(["schedule", "--class", "test"]) == 0
+def _a8():
+    """`a8`'s piece scan as `scan_zk.received` calls it: 16-byte pieces found raw or as hex in each file the verifier
+    received, and the control holding the held ones."""
+    def needles(p):
+        return {f: k for k, x in p.items() for f in (x, x.hex().encode())}
+
+    def find(data, t):
+        return {k: 1 for nd, k in t.items() if nd in data}
+
+    def received(vdir, control, pieces, held):
+        files = {f.name: {"bytes": f.stat().st_size, "found": find(f.read_bytes(), needles(pieces))}
+                 for f in sorted(vdir.iterdir())}
+        ctl = find(control.read_bytes(), needles(pieces))
+        return {"blobs": len(pieces), "files": files, "verifier_bytes": sum(x["bytes"] for x in files.values()),
+                "verifier_found": sorted({k for x in files.values() for k in x["found"]}),
+                "control": {"blobs_found": len(ctl), "holds_all": held <= set(ctl)}}
+
+    return SimpleNamespace(PIECE=16, needles=needles, find=find, received=received)
+
+
+def test_a_row_shorter_than_a_piece_is_found_whole_and_held_to_the_pieces_rule(tmp_path):
+    """w63k4's slot entries are 14 bytes, under the scan's 16-byte piece: `received` finds each whole (raw or as hex,
+    `leak_scan.find_whole`) beside the longer rows' cut pieces, leaves an all-zero one out as sparse, and `unseen` fails
+    the round where the verifier received one or the control doesn't hold it."""
+    entry = sz._bytes(sz.IS.entry_encode(sz.W63K4.cls, sz.IS.entry(3, [13, 110, 207])))
+    state = hashlib.sha512(b"state").digest()[:40]
+    assert len(entry) == 14
+    blobs = {"ingress-0 prog0 0": entry, "ingress-0 prog1 0": bytes(14), "ingress-0 o1 0": state}
+    control = tmp_path / "inst.bin"
+    control.write_bytes(state + entry)
+    vdir = tmp_path / "verifier"
+    vdir.mkdir()
+    (vdir / "proof.bin").write_bytes(hashlib.sha512(b"proof").digest())
+    rec = sz.received(_a8(), vdir, control, blobs, set(blobs), b"")
+    assert rec["whole_rows"]["rows"] == 1 and rec["sparse_pieces"] == 1 and sz.unseen(rec)
+    assert sorted(sz.LS.cut({"ingress-0 o1 0": state}, 16)) == [f"ingress-0 o1 0 @{o}" for o in (0, 16, 24, 32)]
+    assert rec["blobs"] == 4
+    for leak in (entry, entry.hex().encode()):
+        (vdir / "proof.bin").write_bytes(b"\xff" + leak)
+        rec = sz.received(_a8(), vdir, control, blobs, set(blobs), b"")
+        assert rec["whole_rows"]["verifier_found"] == ["ingress-0 prog0 0"] and not rec["verifier_found"]
+        assert not sz.unseen(rec)
+    (vdir / "proof.bin").write_bytes(hashlib.sha512(b"proof").digest())
+    control.write_bytes(state)
+    rec = sz.received(_a8(), vdir, control, blobs, set(blobs), b"")
+    assert rec["whole_rows"]["control"]["missing"] == ["ingress-0 prog0 0"] and not sz.unseen(rec)
+
+
+@pytest.mark.parametrize("name", sorted(sz.SETUPS))
+def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys, name):
+    assert sz.main(["schedule", "--class", name]) == 0
     flags = capsys.readouterr().out.split()
     assert dict(zip(flags[::2], flags[1::2])) == {f"--{k.replace('_', '-')}": str(v)
-                                                  for k, v in asdict(sz.TEST.params).items()}
+                                                  for k, v in asdict(sz.SETUPS[name].params).items()}
+
+
+def test_w63k4_is_w63s_class_at_a_window_circuits_ko_and_ki_its_certifier_w63s_at_egress_cells_ko_plus_1():
+    """w63k4 is w63's class at KO 4 and KI 32 (a window circuit's of 8 slots, 32 prompt ids and 4 outputs a request),
+    its certifier w63's but for egress_cells 5, which the class serves and w63's 65 it refuses by name; its traffic
+    fills the class (a prompt of KI ids, a response of KO), and its egress is 4 request slots of KO ids."""
+    s = sz.SETUPS["w63k4"]
+    assert s.cls == replace(sz.CLASS, KO=4, KI=32) and (s.cls.SLOTS, s.params.window_programs) == (4, 8)
+    assert {k: v for k, v in asdict(s.params).items() if asdict(sz.PARAMS)[k] != v} == {"egress_cells": 5}
+    s.cls.serves(s.params)
+    with pytest.raises(ValueError, match=re.escape("set egress_cells <= KO + 1 = 5 (it is 65)")):
+        s.cls.serves(sz.PARAMS)
+    assert max(map(len, s.prompts)) == s.cls.KI and max(map(len, s.responses)) == s.cls.KO
+    assert s.cls.egress == sz.EG.Shape(512, 16, 4, 4, 4, 17, 27)
+    assert (sz.IS.entry_bits(s.cls), sz.IS.view_bits(s.cls)) == (7 * 16, 32 + 4 * 192)
+
+
+def test_w63k4s_rounds_read_as_w63s(tmp_path):
+    """w63k4's run admits as w63's (request 5 in request 1's slot past its egress) and answers each request its
+    response, and each round's host read is the round's: block and honest accepted, every honest output 1 and its
+    chains wired; chain refused at unit A's o1, tampered at its re-signed row, and unread's one unit output 0."""
+    s = sz.W63K4
+    h = sz.host(tmp_path, setup=s)
+    at, T, A = h.at, s.params.window, s.A
+    assert at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28} and [x.q for x in at.chain.scan[29].slots] == [5, 2, 3, 4]
+    assert at.outputs == {q: r for q, r in enumerate(s.responses, 1)}
+    rounds = {k: {m.name: m for m in ms} for k, ms in h.rounds.items()}
+    (blk,) = rounds["block"].values()
+    assert (blk.n, blk.refused, blk.outputs) == (sz.entries_of(s.cls, 1, T), None, None) and blk.n == 8
+    honest = rounds["honest"]
+    assert [(m.name, m.base, m.n) for m in honest.values()] == [("first", 0, 1), ("ingress-0", 1, T - 2),
+                                                                ("last", T - 1, 1), ("egress-0", T, T)]
+    assert all(m.refused is None and m.outputs == [1] * m.n for m in honest.values())
+    assert sz.wired(honest.values()) == []
+    assert rounds["chain"]["ingress-0"].refused == (f"registered reads: table row {A - 1} does not open the registered "
+                                                    f"root at position {A + 1}")
+    (f,) = rounds["tampered"].values()
+    b = at.tampered.bucket
+    assert f.refused == f"registered reads: table row {b} does not open the registered root at position {b}"
+    (u,) = rounds["unread"].values()
+    assert (at.unread.bucket, at.unread.q, u.refused, u.outputs) == (16, 1, None, [0])
 
 
 def _rewrite(path: Path, blobs: list[bytes]) -> None:

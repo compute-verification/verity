@@ -7,21 +7,24 @@ Lean firewall and held by Lean `verify --zk --registered`. Standalone: in no Spe
 challenger's coins (``--challenger``), a `service.Stream`'s.
 
     python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
-        [--class w63|test] [--group G] [--warden-run RUN] [--draw K [--challenger local|gate:USER@HOST --main FILE
-        [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
-    python benchmarks/network_traces/scan_zk.py schedule [--class w63|test]    # its schedule as warden_serve.py's flags
+        [--class w63|w63k4|test] [--group G] [--warden-run RUN] [--draw K [--challenger local|gate:USER@HOST
+        --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
+    python benchmarks/network_traces/scan_zk.py schedule [--class w63|w63k4|test]    # as warden_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a timestep, 8 a link-window) with the
   warden's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
   egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the warden at `PARAMS`, 32-bucket
-  link-windows; and ``test`` (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5,
-  KO 8, KI 100) and 16-bucket link-windows, whose units a CPU proves in minutes.
+  link-windows; ``w63k4`` (`W63K4`), w63's class at KO 4 and KI 32, a window circuit's of 8 slots, 32 prompt ids and
+  4 outputs a request (egress 4 request slots of 4 ids), its certifier w63's at egress_cells 5 (KO + 1); and ``test``
+  (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5, KO 8, KI 100) and 16-bucket
+  link-windows, whose units a CPU proves in minutes.
 * **The run** (`scan_traffic.serve`: the warden's own `_ingress` and `_egress`, ticked as `Warden._tick` ticks them)
   carries the setup's warden-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the fifth waits
-  in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), test's three (the third in the
-  first's slot past its egress). Each link-window of each link is committed by the warden and its head signed by a
-  test-size LMS key (`warden_rows.attest`); each registration is read back by the verifier
+  in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), w63k4's five at w63's arrivals
+  (prompts of at most 32 ids, responses of 3, 4, 1, 4 and 2, the fifth in request 1's slot at 28 as w63's), test's
+  three (the third in the first's slot past its egress). Each link-window of each link is committed by the warden and
+  its head signed by a test-size LMS key (`warden_rows.attest`); each registration is read back by the verifier
   (`warden_rows.check_registration`).
 * **A warden's run** (``--warden-run RUN``, `warden_run`) in its place: a warden_serve run's directory (``serve``'s, or
   the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule (w63's:
@@ -134,7 +137,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   anyway (the circuits, zeros, the window's pads and `END` cells) and the sparse pieces (at most one nonzero byte); the
   prover's instance file, which holds them all, is the control. The instance holds each row's u16 words followed by
   the next row's, so a row's zero-padded last chunk isn't one the control holds; its last 16 bytes, which cover the
-  same tail, are (`leak_scan.public_pieces`' ``fields``).
+  same tail, are (`leak_scan.public_pieces`' ``fields``). A row shorter than a piece (w63k4's slot entries, 14 bytes)
+  is found whole, raw or as hex (`received`, `leak_scan.find_whole`), and held to the same: none found, the control
+  holding each.
 """
 from __future__ import annotations
 
@@ -147,7 +152,7 @@ import socket
 import sys
 import time
 from contextlib import contextmanager
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -215,13 +220,21 @@ W63 = Setup(
     (0, 2, 2, 12, 15),
     tuple(tuple((97 * k + 13 * q) % (1 << 17) for k in range(n)) for q, n in enumerate((3, 40, 64, 8, 5), 1)),
     windows=2, A=9, max_tokens=16, seed=7)
+W63K4 = Setup(
+    "w63k4", replace(W63.cls, KO=4, KI=32), replace(W63.params, egress_cells=5),
+    (tuple((7 * k + 11) % 128_256 for k in range(32)), tuple(100_000 + k for k in range(20)),
+     tuple(131_071 - 3 * k for k in range(5)), tuple((k * k) % 128_256 for k in range(32)),
+     tuple(5_000 + k for k in range(9))),
+    W63.arrivals,
+    tuple(tuple((97 * k + 13 * q) % (1 << 17) for k in range(n)) for q, n in enumerate((3, 4, 1, 4, 2), 1)),
+    windows=2, A=9, max_tokens=4, seed=7)
 TEST = Setup(
     "test", IS.Class(B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100),
     W.WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
                    ingress_buckets=3, egress_cells=9, every=2),
     ((1000, 1007, 1014), tuple(2000 + 3 * k for k in range(60)), tuple(131071 - k for k in range(100))),
     (0, 1, 1), ((11, 22, 33), (131071, 0, 5, 6, 7, 8, 9, 10), (40, 41, 42, 43)), windows=1, A=6, max_tokens=5, seed=11)
-SETUPS = {s.name: s for s in (W63, TEST)}
+SETUPS = {s.name: s for s in (W63, W63K4, TEST)}
 #: w63's: the schedule ``scan_zk.py schedule`` prints and the gate's ``warden-rehearse --scan`` serves
 CLASS, PARAMS = W63.cls, W63.params
 SHAPE = CLASS.egress
@@ -1544,6 +1557,27 @@ def sparse(pieces: dict[str, bytes], held: set[str]) -> tuple[dict[str, bytes], 
     return {k: x for k, x in pieces.items() if k not in out}, held - out, len(out)
 
 
+def received(a8, vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str], public: bytes) -> dict:
+    """What the verifier received (`vdir`) scanned for the witness `blobs`, less the sparse pieces: each row of at least
+    a piece cut whole less what `public` holds (`leak_scan.public_pieces`, found by `a8.received`), and each shorter
+    row (a slot entry at a small KO) found whole (`leak_scan.find_whole`, as ``whole_rows``); the `control` (the
+    instances) is to hold every one in `held`."""
+    short = {k: x for k, x in blobs.items() if len(x) < a8.PIECE}
+    pieces, kept, out = LS.public_pieces(a8, {k: x for k, x in blobs.items() if k not in short}, held, public,
+                                         fields=True)
+    pieces, kept, nsparse = sparse(pieces, kept)
+    short, short_held, nshort = sparse(short, held & set(short))
+    rec = {**a8.received(vdir, control, pieces, kept), "public_pieces": len(out), "sparse_pieces": nsparse + nshort}
+    if short:
+        rec["whole_rows"] = LS.find_whole(rec, short, vdir, control, short_held)
+    return rec
+
+
+def unseen(rec: dict) -> bool:
+    """No witness piece nor short row in what the verifier received (`received`), and the control holds them all."""
+    return all(not r["verifier_found"] and r["control"]["holds_all"] for r in (rec, rec.get("whole_rows")) if r)
+
+
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1624,27 +1658,25 @@ def prove(a) -> int:
             if name == "honest":
                 summary["answers"] = answers(at, out, res, Fraction(a.delta), results.get("block"))
                 log(f"answers: link-windows {at.windows}, each {summary['answers']}")
-            blobs, held = blobs_of(members)
-            blobs, held, public = LS.public_pieces(M.a8, blobs, held, known(members, at), fields=True)
-            blobs, held, nsparse = sparse(blobs, held)
             inst = out / name / "instances.bin"
             inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in members))
-            res["received"] = {**M.a8.received(out / name / "verifier", inst, blobs, held),
-                               "public_pieces": len(public), "sparse_pieces": nsparse}
+            rec = res["received"] = received(M.a8, out / name / "verifier", inst, *blobs_of(members),
+                                             known(members, at))
             inst.unlink()
-            rec = res["received"]
-            good = expected(at, name, res) and not rec["verifier_found"] and rec["control"]["holds_all"]
+            good = expected(at, name, res) and unseen(rec)
             if coins is not None and name == "honest":
                 good = good and bool(res.get("coin_negatives")) and all(res["coin_negatives"].values())
             ok &= good
             summary["rounds"][name]["audit"] = res
+            whole = rec.get("whole_rows") or {"rows": 0, "verifier_found": []}
             log(f"round {name}: drawn {len(res.get('draw', {}).get('units') or [])} of {pg.units}, "
                 f"charge {res.get('charge')}, per unit {res.get('per_unit')}; proofs {res['verdicts']}, audit "
                 f"{res.get('audit')}, opened "
                 f"{ {k: v for k, v in res.get('opened', {}).items()} }, Lean {res['why']}, verifier received "
                 f"{rec['verifier_bytes']} bytes, witness pieces found there: {rec['verifier_found'] or 'none'} (of "
-                f"{len(blobs)}; {len(public)} public, {nsparse} sparse left out), control "
-                f"{rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
+                f"{rec['blobs']}; {rec['public_pieces']} public, {rec['sparse_pieces']} sparse left out), rows "
+                f"shorter than a piece found whole there: {whole['verifier_found'] or 'none'} (of {whole['rows']}), "
+                f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if coins is not None:
         pub = coins.published or {}
@@ -1669,8 +1701,8 @@ def main(argv=None) -> int:
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--dry", action="store_true", help="the run and the host's read of every round: nothing proved")
     p.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name,
-                   help="the class and the warden's schedule (default w63's, PARAMS; test: the certifier tests', a CPU "
-                        "window)")
+                   help="the class and the network certifier's schedule (default w63's, PARAMS; w63k4: w63's at KO 4 "
+                        "and KI 32, its certifier's at egress cells 5; test: the certifier tests', a CPU window)")
     p.add_argument("--group", type=int, default=1, help="G: link-windows 0 .. G - 1 in one registration (default 1)")
     p.add_argument("--warden-run", type=Path,
                    help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
