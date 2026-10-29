@@ -73,9 +73,9 @@ struct Lane {
 // The multiply lanes a side pipe could make checkpoint words on, in Lane2 so the lanes above keep their SASS. idp4a:
 // dp4a.s32.s32 (IDP.4A.S8.S8, four int8 products into s32); idp2a: dp2a.lo (IDP.2A.LO); dfma: fma.rn.f64 on eight FP64
 // chains of its own; hfma2: fma.rn.f16x2 (two FP16 FMAs); popc and prmt. The p_ kinds alternate two of them (lane_pair),
-// and t_idp4a_ffma_lop3 cycles three, one a pipe (lane_triple).
+// t_idp4a_ffma_lop3 cycles three, one a pipe (lane_triple), and r<A><B>_idp4a_ffma runs IDP4A and FFMA at A:B (lane_ratio).
 enum { L_IDP4A = 32, L_IDP2A, L_DFMA, L_HFMA2, L_POPC, L_PRMT, L_P_IDP4A_FFMA, L_P_IDP4A_DFMA, L_P_DFMA_FFMA,
-       L_P_IDP4A_LOP3, L_T_IDP4A_FFMA_LOP3 };
+       L_P_IDP4A_LOP3, L_T_IDP4A_FFMA_LOP3, L_R21_IDP4A_FFMA, L_R31_IDP4A_FFMA, L_R12_IDP4A_FFMA };
 struct Lane2 : Lane {
   double d[8];
   DC_DEV explicit Lane2(uint32_t tid) : Lane(tid) {
@@ -119,6 +119,18 @@ DC_DEV void lane_pair(L& l) {
     l.template op<Y>((q >> 1) + 4);
   }
 }
+// R ops in groups of A X ops and B Y ops: the pair at ratio A:B.
+template <int X, int Y, int A, int B, int R, class L>
+DC_DEV void lane_ratio(L& l) {
+  static_assert(R % (A + B) == 0, "a ratio lane's R is a multiple of A + B");
+#pragma unroll
+  for (int q = 0; q < R / (A + B); q++) {
+#pragma unroll
+    for (int x = 0; x < A; x++) l.template op<X>(q * A + x);
+#pragma unroll
+    for (int y = 0; y < B; y++) l.template op<Y>(q * B + y + 4);
+  }
+}
 // R ops cycling X, Y and Z, R/3 of each.
 template <int X, int Y, int Z, int R, class L>
 DC_DEV void lane_triple(L& l) {
@@ -155,6 +167,12 @@ DC_DEV void lane_ops(L& l) {
     lane_pair<L_IDP4A, L_LOP3, R>(l);
   } else if constexpr (X == L_T_IDP4A_FFMA_LOP3) {
     lane_triple<L_IDP4A, L_FFMA, L_LOP3, R>(l);
+  } else if constexpr (X == L_R21_IDP4A_FFMA) {
+    lane_ratio<L_IDP4A, L_FFMA, 2, 1, R>(l);
+  } else if constexpr (X == L_R31_IDP4A_FFMA) {
+    lane_ratio<L_IDP4A, L_FFMA, 3, 1, R>(l);
+  } else if constexpr (X == L_R12_IDP4A_FFMA) {
+    lane_ratio<L_IDP4A, L_FFMA, 1, 2, R>(l);
   } else {
 #pragma unroll
     for (int q = 0; q < R; q++) l.template op<X>(q);

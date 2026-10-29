@@ -14,8 +14,9 @@
 // Lanes (lanes.cuh): mix, imad, lop3, shfl (interleaved only: warp-specialized, ptxas pulls the clock read into a loop),
 // duo (the fold's 3 ops a word), imadw (IMAD.WIDE.U32), and the memory lanes lde, atome, redg, atoms and lds128
 // (wgU_ and wgmix_ only: LD.E, ATOM.E, REDG, ATOMS and LDS.128 beside the IGMMA, so the census's issue-only classes get
-// their joint issue lines), and the multiply lanes ffma, idp4a, dfma and hfma2 and their pairs (wgU_ only: how fast a
-// side pipe could make checkpoint words beside a saturated wgmma). Their alone rates and pipe pairs are scalar.cu's.
+// their joint issue lines), and the multiply lanes ffma, idp4a, dfma and hfma2, their pairs, the idp4a+ffma+lop3 triple
+// and idp4a:ffma ratios (wgU_, and at two lane warps a SMSP wgV_ and wgW_: how fast a side pipe could make checkpoint
+// words beside a saturated wgmma). Their alone rates and pipe pairs are scalar.cu's.
 // dc/analyze.py turns rows.jsonl into words a tensor-pipe cycle and the issue cost a beside each lane.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
@@ -537,6 +538,10 @@ OP_KERNEL(wgV_ffma_r256, 384) { wg_until2<L_FFMA, 256, F_s8_n256, 1>(a); }
 OP_KERNEL(wgV_lop3_r256, 384) { wg_until2<L_LOP3, 256, F_s8_n256, 1>(a); }
 OP_KERNEL(wgV_idp4a_ffma_r256, 384) { wg_until2<L_P_IDP4A_FFMA, 256, F_s8_n256, 1>(a); }
 OP_KERNEL(wgV_tri_r384, 384) { wg_until2<L_T_IDP4A_FFMA_LOP3, 384, F_s8_n256, 1>(a); }
+OP_KERNEL(wgV_idp4a_r512, 384) { wg_until2<L_IDP4A, 512, F_s8_n256, 1>(a); }
+OP_KERNEL(wgV_r21_r192, 384) { wg_until2<L_R21_IDP4A_FFMA, 192, F_s8_n256, 1>(a); }
+OP_KERNEL(wgV_r31_r256, 384) { wg_until2<L_R31_IDP4A_FFMA, 256, F_s8_n256, 1>(a); }
+OP_KERNEL(wgV_r12_r192, 384) { wg_until2<L_R12_IDP4A_FFMA, 192, F_s8_n256, 1>(a); }
 OP_KERNEL(wgW_idp4a_ffma_r256, 512) { wg_until2<L_P_IDP4A_FFMA, 256, F_s8_n128>(a); }
 OP_KERNEL(wgW_tri_r384, 512) { wg_until2<L_T_IDP4A_FFMA_LOP3, 384, F_s8_n128>(a); }
 OP_KERNEL(wgUu8_idp4a, 384) { wg_until2<L_IDP4A, 64, F_u8s8_n256>(a); }
@@ -648,6 +653,10 @@ static const OpProbe PROBES[] = {
     P_UNTILV(wgV_lop3_r256, "LOP3.LUT=256"),
     P_UNTILV(wgV_idp4a_ffma_r256, "IDP.4A*=128,FFMA=128"),
     P_UNTILV(wgV_tri_r384, "IDP.4A*=128,FFMA=128,LOP3.LUT=128"),
+    P_UNTILV(wgV_idp4a_r512, "IDP.4A*=512"),
+    P_UNTILV(wgV_r21_r192, "IDP.4A*=128,FFMA=64"),
+    P_UNTILV(wgV_r31_r256, "IDP.4A*=192,FFMA=64"),
+    P_UNTILV(wgV_r12_r192, "IDP.4A*=64,FFMA=128"),
 #undef P_UNTILV
 #define P_UNTILW(NAME, LPAT)                                                                                      \
   {.name = #NAME, .kernel = (const void*)NAME, .tpb = 512, .expect = "IGMMA.64x128x32.S8.S8*=4;" LPAT, .warps = "8;8", \
