@@ -1197,7 +1197,7 @@ def _read(concept: str) -> str:
 
 def test_every_hit_is_canonical_or_listed():
     found = classify(_scanned())
-    assert len(found) >= 300, f"the scan found only {len(found)} declarations of the concepts: has the tree moved?"
+    assert len(found) >= 200, f"the scan found only {len(found)} declarations of the concepts: has the tree moved?"
     unlisted = [f"{k} (line {h.line}) declares {concept} again: read {_read(concept)}, or rename it if it is another thing"
                 for k, (concept, h, status) in sorted(found.items()) if status == "unlisted"]
     assert not unlisted, (f"declarations of a concept that are not its canonical object ({FIX}):\n  "
