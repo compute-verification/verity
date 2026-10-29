@@ -17,7 +17,7 @@ def outRow (u p : Nat) : Array Nat := #[u, p, 7 * u + p, 65535 - u]
 /-- A chain: unit `u + 1`'s input row 0 is unit `u`'s output row 0; every other input row is its own. -/
 def inRow (u p : Nat) : Array Nat := if p == 0 && u > 0 then outRow (u - 1) 0 else #[u, p, 1, 1]
 
-def chain (n : Nat) : List Link := (List.range n).map fun u => ⟨u + 1, 0, u, 0⟩
+def chain (n : Nat) : List LinkEntry := (List.range n).map fun u => ⟨u + 1, 0, u, 0⟩
 
 def code (rows : Array ByteArray) : String :=
   match check sh inRow outRow rows with
