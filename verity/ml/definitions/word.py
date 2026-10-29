@@ -113,7 +113,7 @@ def _view(a: array) -> np.ndarray:
 
 class Graph:
     """The computing gates of one activation of `fn`: the graph of core's `verity.ml.circuits.cut.CallGraph` (the reference, whose step 3
-    this follows; `tests/query/test_word.py` holds the two equal field by field), built in one pass over the gates into flat arrays.  The
+    this follows; `tests/test_word.py` holds the two equal field by field), built in one pass over the gates into flat arrays.  The
     reference keeps Python objects per operand read (an interned token per input, a tuple per input read, the full key of every computing
     gate), hundreds of bytes each: GLM-5.3's MoE expert FP8 GEMMs read 257 operands per gate, 468 GB for one Definition.  Here a read
     costs a few bytes, and a computing gate's key is matched by its hash, then compared in full, so the recomputed pairs are the
@@ -262,7 +262,7 @@ def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
 def cut_verdict(G: Graph, owner: np.ndarray, head: np.ndarray) -> CutVerdict:
     """`verity.ml.circuits.partition.validate_unit_cut` of the cut `owner` committing the gates `head >= 0`, the Call's parameters standing
     for the input unit (`verity.ml.circuits.cut.check_cut`'s arguments), in numpy passes over `G`'s reads: the reference's verdict, detail
-    for detail (`tests/query/test_word.py`), with no Python object per read.  A parameter's read crosses from the input unit into a
+    for detail (`tests/test_word.py`), with no Python object per read.  A parameter's read crosses from the input unit into a
     computing unit and reads a committed value, so it fails nothing: it counts in `cross_unit_reads`, and a parameter no unit reads and
     the Call does not return is `committed-unread`."""
     n, k = G.n, len(G.input_ids)
