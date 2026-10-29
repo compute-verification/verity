@@ -89,11 +89,14 @@ def test_a_malformed_declaration_is_refused_with_the_reason(body, why):
         _parse(body)
 
 
-def test_a_job_off_the_gate_parses_and_ci_toml_takes_circuit_check_alone_off_it():
-    """circuit-check runs after landing, off the gate, until `circuit-check --all` fits inside the rest of the check."""
+def test_a_job_off_the_gate_parses_and_ci_toml_takes_circuit_check_and_ratchet_gate_off_it():
+    """circuit-check runs after landing, off the gate, until `circuit-check --all` fits inside the rest of the check; ratchet-gate
+    runs there too, reporting without blocking a merge, and no plan names it."""
     a, b = _parse('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\n')
     assert (a.gate, b.gate) == (False, True) and D.gated([a, b]) == [b]
-    assert [j.name for j in D.load() if not j.gate] == ["circuit-check"] and CHECK.OFF_GATE == ("circuit-check",)
+    assert [j.name for j in D.load() if not j.gate] == ["circuit-check", "ratchet-gate"]
+    assert CHECK.OFF_GATE == ("circuit-check", "ratchet-gate")
+    assert not any("ratchet-gate" in shard for plan in D.plans().values() for shard in plan)
 
 
 @pytest.mark.parametrize("body, why", [

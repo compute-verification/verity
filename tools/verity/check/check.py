@@ -1,5 +1,6 @@
 """`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs ci.toml takes off
-the merge gate (`gate = false`: circuit-check), which run after landing, in drive's after-landing run on `main`'s tip.
+the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after landing, in drive's after-landing run on `main`'s
+tip.
 
     uv run --extra torch-cpu python tools/verity/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
@@ -18,12 +19,12 @@ the merge gate (`gate = false`: circuit-check), which run after landing, in driv
                                                             run, where a cold `--all` (~4 h) outlasted every run
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
-                                                            ci.toml's `gate = false`: circuit-check), which only `--deferred`
-                                                            and `--no-cache` run: an Attempt of the clean commit checked out, the
-                                                            record `research merge` reads; with the pinned upstream build and
-                                                            inputs when the commit changes verity/ml/flock/ against --base REF
-                                                            (default origin/main), and presigned URLs for the pinned Lean
-                                                            dependency bundles; with --on, in a free check slot of M
+                                                            ci.toml's `gate = false`: circuit-check, ratchet-gate), which only
+                                                            `--deferred` and `--no-cache` run: an Attempt of the clean commit
+                                                            checked out, the record `research merge` reads; with the pinned
+                                                            upstream build and inputs when the commit changes verity/ml/flock/
+                                                            against --base REF (default origin/main), and presigned URLs for
+                                                            the pinned Lean dependency bundles; with --on, in a free check slot of M
                                                             (`tools/verity/check/slot.py`), the lock and cores the train checks take,
                                                             and in the run's own clone of the shipped tree (`--cwd clone`);
                                                             --priority takes the next free slot ahead of waiting lane checks;
@@ -73,7 +74,7 @@ parts, each once (the preflight's steps once, passed in every shard), when `rese
 shards' Attempts are passing runs of the declared command with `--shard K/N` on that clean commit, their results passed with
 no step failed or stopped, all of one plan (one N, K = 1..N once each) and one config (the commit's), and their parts are
 every part, each once, covering every job the commit's `ci.toml` puts on the gate (a shard skips a job off it, which a plan
-still names: circuit-check runs after landing alone). `research merge` takes the combined Attempt only
+may still name: circuit-check and ratchet-gate run after landing alone). `research merge` takes the combined Attempt only
 after judging its shards again the same way and finding its steps theirs, so a missing, repeated, failed or mismatched shard
 passes nothing. A step skipped in its shard (lean-agreement without the upstream build) is skipped in the combined check too.
 
@@ -139,7 +140,9 @@ doesn't name:
                     grows the vLLM integration's lint ratchets.  On a train each `Queue: #N` merge is judged against the one
                     below, so its log names the PR whose merge fails (`  #N (COMMIT): failed: ...`), which drive takes as
                     the culprit.  A BASE at or above HEAD fails it, since it would judge nothing (drive's after-landing
-                    run sends the last verified `main`, below the tip); one that names no commit here skips it
+                    run sends the last verified `main`, below the tip); one that names no commit here skips it.  Off the
+                    gate and in no plan: a recorded check skips it, and the after-landing run, `--deferred` with every
+                    job, runs it
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
 

@@ -43,15 +43,16 @@ def test_a_deferred_run_runs_only_its_steps_and_what_they_need_inside_a_recorded
 
 
 def test_a_recorded_check_runs_every_job_on_the_gate_and_passes_without_circuit_check(monkeypatch, tmp_path):
-    """circuit-check is off the gate (ci.toml's `gate = false`): a recorded check (`--record`, the declared command in a run)
-    leaves it out, and its `check/v1` passes on the jobs on the gate alone."""
+    """circuit-check and ratchet-gate are off the gate (ci.toml's `gate = false`): a recorded check (`--record`, the declared
+    command in a run) leaves them out, and its `check/v1` passes on the jobs on the gate alone."""
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache" / "check"))
     monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "cache" / "tests"))
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     rc, only = _main(monkeypatch, run_dir, ["--keep-going"])
-    assert rc == 0 and only == [p for p in CHECK.shard_parts() if not p.startswith("circuit-check")] == CHECK.gated_parts()
-    assert {p.partition(":")[0] for p in only} == {j.name for j in CHECK.JOBS} - {"circuit-check"}
+    off = {"circuit-check", "ratchet-gate"}
+    assert rc == 0 and only == [p for p in CHECK.shard_parts() if p.partition(":")[0] not in off] == CHECK.gated_parts()
+    assert {p.partition(":")[0] for p in only} == {j.name for j in CHECK.JOBS} - off
     doc = json.loads((run_dir / "result.json").read_text())
     assert doc["kind"] == "check/v1" and doc["validation"]["status"] == "passed" and "shard" not in doc
 
@@ -62,7 +63,7 @@ def test_circuit_check_runs_in_the_after_landing_run_and_the_nightly_cold_check(
     (test_declaration's `test_check_of_parts_runs_only_their_jobs_and_lean_audit_on_every_package`)."""
     every = ",".join(j.name for j in CHECK.JOBS)
     rc, only = _main(monkeypatch, tmp_path, ["--deferred", every, "--keep-going", "--no-cache"])
-    assert rc == 0 and only == CHECK.shard_parts() and "circuit-check" in only
+    assert rc == 0 and only == CHECK.shard_parts() and {"circuit-check", "ratchet-gate"} <= set(only)
     assert json.loads((tmp_path / "result.json").read_text())["kind"] == CHECK.DEFERRED_KIND
     assert _main(monkeypatch, tmp_path, ["--no-cache"]) == (0, None)
 

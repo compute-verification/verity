@@ -13,9 +13,10 @@ you ask it to. The jobs it runs are data in `ci.toml`: each has an owner, a part
 `--deferred STEP,...`, `--plan` and `--slots`.
 
 A job with `gate = false` in `ci.toml` is off the merge gate: a recorded check and its shards leave it out, and `research
-merge` requires it of no check. Today that is `circuit-check`. It runs after landing, in the run that checks `main`'s tip, and
-a red there reverts its culprit as any other after-landing red does. It goes back on the gate once `circuit-check --all` fits
-inside the rest of the check.
+merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
+checks `main`'s tip, and a red there reverts its culprit as any other after-landing red does. `circuit-check` goes back on the
+gate once `circuit-check --all` fits inside the rest of the check; `ratchet-gate` is in no shard plan, and reports without
+blocking a merge.
 
 ## Suites and reuse
 
