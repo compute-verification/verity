@@ -6,7 +6,7 @@ import Definitions.Pouw.Assumptions.Dimension.EmbedAssumptions
 **Draft semantics, pending review**.
 
 **Review.** The H200's measurements (`Pouw.Dimension.H100W`'s review) can't check `M4090`, whose prices are the RTX
-4090's (Rounds 4 and 6), so the marker stays.
+4090's as measured on that card, so the marker stays.
 
 `MH100w` reads one definition here, `fpVal`, through `Op100.outs`: an FP32 instruction's value is `fpSem κ` of the
 three source registers in its own lane, and a missing register reads the constant `0`. That is PTX's reading of

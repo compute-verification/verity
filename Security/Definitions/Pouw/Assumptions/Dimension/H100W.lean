@@ -64,23 +64,23 @@ unit per 32-bit register written. **Matches** means the model charges what the h
 charges a program no more than the hardware does, so a lower bound in the model holds on the hardware a fortiori. No
 definition here is looser. The measurements:
 
-* **Price table** (run of record r20261029-021534-a5a3, 232 probes through the SASS gate; sparse `wgmma`
-  r20261029-022621-53d7; replicate r20261029-014532-a2da). Each class's cheapest writer is within 1% above 32: tc
-  32.003, ffma 32.255, int32 32.277, fp64 32.003 and other 32.279. So the H200's table is `h100Floor` entry for entry,
-  and `H32` holds there with no slack.
-* **Opcode census** (r20261029-100449-71cf): 963 `sm_90` forms. None costs under 32 a register alone; the least is
-  DMUL at 32.00. 26 forms are unpriced: 21 `LDGMC`, 4 `LDL` and `LEPC`.
-* **Lane forms** (r20261029-105502-4ad4 with 40 forms, r20261029-120438-23de with 58). Each of 58 integer forms, warp
-  forms included, was captured on 65,536 inputs against its documented function, with 0 mismatches. Every output was
-  checked: its 32-bit words a lane (two for IMAD.WIDE) and its predicates.
-* **Predicated writes, model W** (r20261029-094825-8394). An IMAD under a guard costs 64.27 a register whether the
-  guard is true or false, against 64.01 unguarded. So a predicated-off instruction takes its whole issue slot.
-* **MMA tile widths.**
-  - Dense `wgmma` m64nN costs 32.003 a register at N ≥ 64, and 48.0, 80.0 and 144 at N 32, 16 and 8 (a5a3).
+* **Price table**: 232 probes, each through the SASS gate (the timed loop holds only the instructions it names), with
+  sparse `wgmma` in its own run and the table replicated in a third. Each class's cheapest writer is within 1% above
+  32: tc 32.003, ffma 32.255, int32 32.277, fp64 32.003 and other 32.279. So the H200's table is `h100Floor` entry
+  for entry, and `H32` holds there with no slack.
+* **Opcode census**: every one of 963 `sm_90` SASS forms, each timed alone. None costs under 32 a register; the
+  least is DMUL at 32.00. 26 forms are unpriced: 21 `LDGMC`, 4 `LDL` and `LEPC`.
+* **Lane forms**: each of 58 integer forms, warp forms included, captured on 65,536 inputs against its documented
+  function, with 0 mismatches. Every output was checked: its 32-bit words a lane (two for IMAD.WIDE) and its
+  predicates.
+* **Predicated writes, model W**: an IMAD under a guard costs 64.27 a register whether the guard is true or false,
+  against 64.01 unguarded. So a predicated-off instruction takes its whole issue slot.
+* **MMA tile widths**, from the price table and from `mma.sync` and `wgmma` probes at each shape:
+  - Dense `wgmma` m64nN costs 32.003 a register at N ≥ 64, and 48.0, 80.0 and 144 at N 32, 16 and 8.
   - `mma.sync` m16n8 forms with a 32-bit accumulator write 128 words a warp, at 32.010 to 48.07 a register. m8n8
-    forms and FP16-accumulate m16n8 forms write 64, at 64.02 to 96.1 (r20261029-090635-51b2, a5a3).
-  - s4 and b1 XOR.POPC are emulated by a subroutine, at 88 to 1,504 a register (r20261029-091418-b409).
-  - The lead's kernel issues IGMMA 64x256x32 and 64x128x32 (r20261029-120612-7622).
+    forms and FP16-accumulate m16n8 forms write 64, at 64.02 to 96.1.
+  - s4 and b1 XOR.POPC are emulated by a subroutine, at 88 to 1,504 a register.
+  - The `sm_90a` PoUW kernel's SASS issues IGMMA 64x256x32 and 64x128x32.
 
 The verdicts:
 
@@ -95,8 +95,8 @@ The verdicts:
     under-charges it: IMAD and LOP3 alone cost 64.0 and 64.13, shared atomics 64.56, REDG 1,123 a word and the uniform
     datapath 2,048 a word.
   - **Stricter** for `move`, which is free where the hardware's MOV takes an issue slot. A load from a computed
-    address is `other` at 32 a word. On the hardware, a lookup costs at least 128.07 a word (a5a3), and a copy into
-    shared memory at least 156 (LDGSTS.128, r20261029-095917-70b4).
+    address is `other` at 32 a word. On the hardware, a lookup costs at least 128.07 a word, and a copy into shared
+    memory at least 156 (LDGSTS.128, timed alone).
   - **Stricter** for predicate and carry outputs. They aren't words, and the model doesn't price them. On the hardware,
     they cost their instruction's issue slot.
   - Every priced instruction computes any function of the grid. So `MH100w` reads none of the 58 forms' functions,
