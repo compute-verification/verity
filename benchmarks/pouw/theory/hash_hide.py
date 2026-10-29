@@ -28,13 +28,13 @@ The parts:
   T1 (the card's honest-only first-block excess) and, credited, a padding block, a part-filled block and a node in h.
   Beside them, the round root's wait on the critical path, priced as the card prices A's root (its latencies), as a
   multiple of that per-call wait.
-- ``grinding``: tries a window at a Fiat-Shamir seed, for each re-roll knob: an hm96 leaf's blind (an unforced mask),
-  that blind moved within M_key's kernel, the data (under hm96 with the forced mask, and under the keyed leaf) and the
-  floor any knob pays (a fresh root and the seed's last block), each priced in compressions at ShaWrites' cheapest
-  form against one H200's, a datacenter's and the world's compute a window. The window's live salt bounds a grind to
-  its window. From T: the noised coordinates m a steer needs at mu = 1/2 a coordinate for 2^-40 a window and pooled
-  over a week, month and year, and the premium ln(T/delta_g) against the T_q = 2^128 the grinding premium reads (and
-  2^80, its other reading).
+- ``grinding``: tries a window at a Fiat-Shamir seed, for each re-roll knob: an hm96 leaf's blind (an unforced mask,
+  the seed reading the public leaf), the data (the seed reading the public leaf under a forced mask, or a private root
+  or the keyed digest under any mask) and the floor any knob pays (a fresh root and the seed's last block), each
+  priced in compressions at ShaWrites' cheapest form against one H200's, a datacenter's and the world's compute a
+  window. The window's live salt bounds a grind to its window. From T: the noised coordinates m a steer needs at
+  mu = 1/2 a coordinate for 2^-40 a window and pooled over a week, month and year, and the premium ln(T/delta_g)
+  against the T_q = 2^128 the grinding premium reads (and 2^80, its other reading).
 - ``fold_seal``: the XOR fold of a cell's words sealed with the cell's final word O' (one sigma a cell or a row of 8
   cells): h in the words tree and with each seal hidden on its own, counting sigma alone and sigma with its O's; a drawn
   unit's committed output bits and size class; and, a chunk size at a time, the drawn unit's in-circuit opening against
@@ -255,21 +255,21 @@ def grinding() -> dict:
            "at T_q = 2^128": at(TQ_LOG2), "at T_q = 2^80": at(80), "points": {}}
     for point, rows in POINT_ROWS.items():
         d = min(_a_tree(rows, k) for _, k, _ in LLAMA)
-        # an hm96 leaf's blind: c = H(sp || y) one compression (y's second-block bytes), the leaf H(lp || b || c) two,
-        # the seed's two blocks that hold the roots two (b moves by M_key's image of the change, an XOR). y has 1,536
-        # bits against M_key's 512 rows, so a change in its kernel leaves b and the leaf's first block alone. The data:
-        # the last leaf's last block, three compressions a level of A's tree, the seed's two, and under hm96 the leaf
-        # over the new root. Any try needs a fresh root, a SHA-512 output, and the seed's last block: the floor
-        blind, kernel, keyed, floor = 1 + 2 + 2, 1 + 1 + 2, 1 + 3 * d + 2, 2
-        knobs = {"hm96 blind (unforced mask)": blind,
-                 "hm96 blind in M_key's kernel (unforced mask)": kernel,
-                 "data under hm96 with the forced mask": keyed + 2,
-                 "data under the keyed leaf": keyed,
+        # an hm96 leaf's blind, when the seed reads the public leaf: c = H(sp || y) one compression past sp's constant
+        # block (y's last 64 bytes), the leaf H(lp || b || c) two past lp's constant block (b || c fills one block, then
+        # the padding block, so b's move by M_key's image of the change costs nothing more), the seed's two blocks that
+        # hold the roots two. The data, when the seed reads a private root (L1 + (a)) or the keyed digest: the last
+        # leaf's last block, three compressions a level of A's tree, the seed's two; read through the public leaf, the
+        # leaf over the new root too. Any try needs a fresh root, a SHA-512 output, and the seed's last block: the floor
+        blind, data, floor = 1 + 2 + 2, 1 + 3 * d + 2, 2
+        knobs = {"hm96 blind, the seed reading the public leaf (unforced mask)": blind,
+                 "data, the seed reading the public leaf (forced mask)": data + 2,
+                 "data, the seed reading a private root or the keyed digest (any mask)": data,
                  "any knob, the floor": floor}
         row = {"cheapest_a_tree_levels": d, "knobs": {},
-               "bits_the_forced_mask_removes": math.log2((keyed + 2) / kernel),
-               "bits_the_keyed_leaf_removes": math.log2(keyed / kernel),
-               "bits_any_knob_adds_over_the_kernel_blind": math.log2(kernel / floor)}
+               "bits_forcing_the_mask_removes_when_the_seed_reads_the_public_leaf": math.log2((data + 2) / blind),
+               "bits_the_keyed_leaf_or_a_private_root_removes": math.log2(data / blind),
+               "bits_any_knob_adds_over_the_blind": math.log2(blind / floor)}
         for knob, c in knobs.items():
             row["knobs"][knob] = {"compressions_a_try": c, "by_scope": {
                 s: at(math.log2(macs / (c * compression_w1))) for s, macs in scopes.items()}}
