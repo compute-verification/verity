@@ -1871,6 +1871,28 @@ def check() -> list[dict]:
        {"point_mass": pm, "walk3": (walk_share(3, dd, 16, 3), brute3),
         "tile_copy": {pl: e["t1_tile_copy"] for pl, e in ac.items()},
         "col_coin_bytes": {pl: e["col_coin_bytes"] for pl, e in ac.items()}})
+    rng, cancel = np.random.default_rng(7), {}
+    c0 = nsw.DATA_PER_STEP - TAG_LANES - ATTN_CANCEL_LANES
+    for s in (3, 4, 8, 21):
+        for b in (4, 7):
+            qa, kb = rng.integers(-128, 128, (4, 32 * s)), rng.integers(-128, 128, (32 * s, 16))
+            shape = (s - 1, BLC_LANES, 16)
+            cs = rng.integers(-64, 64, shape) * 2 + 1 if b == 7 else rng.integers(-8, 8, shape)
+            for t in range(1, s):
+                qa[:, 32 * t + 28:32 * t + 32] = (1, 1, 1, 0)
+                kb[32 * t + 28:32 * t + 31] = cs[t - 1]
+            lo = (32 - cs.sum((0, 1))) % 64 - 32
+            hi = (-cs.sum((0, 1)) - lo) // 64
+            qa[:, c0:c0 + 4], kb[c0], kb[c0 + 1] = (1, 64, 0, 0), lo, hi
+            keep = [i for i in range(32 * s) if not (c0 <= i < c0 + 4 or (i >= 32 and i % 32 >= 28))]
+            today = qa[:, keep] @ kb[keep]
+            dropped = qa @ kb - qa[:, c0:c0 + 2] @ kb[c0:c0 + 2]
+            cancel[f"{s}/{b}"] = (bool((qa @ kb == today).all()), bool((dropped != today).any()),
+                                  int(np.abs(hi).max()))
+    ok("per-column attention coins cancel exactly: on random int8 data at 3, 4, 8 and 21 steps, with 4- and 7-bit "
+       "lanes, the last word equals today's (data, tags and code) and differs without the cancel slot, and the cancel "
+       "fits two int8 lanes against [1, 64]",
+       all(e and d and h <= 127 for e, d, h in cancel.values()) and c0 == 20, cancel)
     for plan in PLANS:
         for model in ("llama", "v4"):
             for point in POINTS:
