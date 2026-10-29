@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity_flock import rec_compose as RC
 
 POD = Path(__file__).resolve().parents[1] / "pod"
 sys.path.insert(0, str(POD))
@@ -223,25 +224,17 @@ def test_cover_says_whether_a_part_run_reads_the_forged_coin(capsys, kind, parts
 
 
 # `flock-verify rec-compose`'s rule (`RecCompose.check`, whose #guards are `Flock/Test/RecCompose.lean`), for the wiring:
-# one log per V* statement, every VERDICT accepted at the SHA-512 of the one rows file and of the one inner shape file, and
-# at the inner session record's and transcript's the first part names.
+# its mirror, `verity_flock.rec_compose`, which `test_lean_rec_compose.py` holds to the binary.
 COMPOSER = r'''
-import hashlib, json, sys
+import json, sys
+from verity_flock import rec_compose as RC
 a = sys.argv[1:]
 assert a[0] == "rec-compose", a
 flags = {a[i]: a[i + 1] for i in range(1, len(a) - 1) if a[i] in ("--rec-inner", "--rec-rows")}
 logs = [x for i, x in enumerate(a[1:], 1) if x not in flags and x not in flags.values()]
-pins = {"rec_rows_sha512": hashlib.sha512(open(flags["--rec-rows"], "rb").read()).hexdigest(),
-        "rec_inner_sha512": hashlib.sha512(open(flags["--rec-inner"], "rb").read()).hexdigest()}
-n = json.load(open(flags["--rec-inner"]))["n"]
-parts, ok = [], True
-for f in logs:
-    vs = [json.loads(ln[8:]) for ln in open(f).read().splitlines() if ln.startswith("VERDICT ")]
-    if vs and len(pins) == 2:
-        pins |= {k: vs[0].get(k) for k in ("rec_inner_session_sha512", "rec_inner_transcript_sha512")}
-    ok = ok and bool(vs) and all(v.get("accepted") is True and all(h and v.get(k) == h for k, h in pins.items()) for v in vs)
-    parts.append(vs[0].get("rec_part") if vs else None)
-ok = ok and sorted(parts, key=str) == list(range(n))
+inner = open(flags["--rec-inner"], "rb").read()
+ok, why = RC.check(json.loads(inner)["n"], RC.digest(open(flags["--rec-rows"], "rb").read()), RC.digest(inner),
+                   [(f, open(f).read()) for f in logs])
 print("REC-COMPOSE " + json.dumps({"accepted": ok, "parts": len(logs)}))
 sys.exit(0 if ok else 1)
 '''
@@ -263,21 +256,17 @@ def _composer(d: Path, n: int, rows: bytes = b'{"ports":{}}') -> tuple[str, str]
     return str(binary), hashlib.sha512(rows).hexdigest()
 
 
-def _inner(d: Path) -> str:
-    """The SHA-512 of the inner shape file ``rec-inner.json`` that `_composer` wrote in ``d``."""
-    import hashlib
-
-    return hashlib.sha512((d / "rec-inner.json").read_bytes()).hexdigest()
-
-
 def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True, inner: str | None = None,
-           session: str = "ee" * 64, transcript: str = "11" * 64) -> None:
-    """A V* part 85 gave V*'s inputs (``own-PART.txt``): its log's VERDICT names its part, the rows it checked, the inner
-    shape it read (``d``'s ``rec-inner.json`` unless ``inner``), and the inner session record and transcript it was held
-    to."""
-    v = {"session": f"/s/{name}", "accepted": accepted, "why": "" if accepted else "x", "rec_part": j, "rec_rows_sha512": digest,
-         "rec_inner_sha512": inner or _inner(d), "rec_inner_session_sha512": session,
-         "rec_inner_transcript_sha512": transcript}
+           session: str = "s", transcript: str = "t") -> None:
+    """A V* part 85 gave V*'s inputs (``own-PART.txt``): its log's VERDICT names its part, the rows it checked, the
+    inputs every part shares (at DIR's ``rec-inner.json`` unless ``inner`` is another inner shape file's bytes, and at
+    the inner session record ``session`` and transcript ``transcript``), ``--zk`` and its coin key."""
+    rec_inner = inner.encode() if inner is not None else (d / "rec-inner.json").read_bytes()
+    shared = RC.shared(rec_inner=rec_inner, inner_circuit=b"c", inner_public=b"p",
+                       inner_partition=b"{}", inner_session=session.encode(), inner_transcript=transcript.encode(),
+                       inner_statement="i", inner_statement_coins="os", inner_tables=[])
+    v = {"session": f"/s/{name}", "accepted": accepted, "why": "" if accepted else "x", "rec_part": j,
+         "rec_rows_sha512": digest, "rec_shared": shared, "zk": True, "coin_key": f"k-{name}"}
     (d / f"{name}.log").write_text(f"VERDICT {json.dumps(v)}\n")
     (d / f"time-{name}.txt").write_text(f"\tExit status: {rc}\n")
     (d / f"own-{name}.txt").write_text("--rec-rows rows.json")
@@ -307,8 +296,8 @@ def test_a_part_checked_against_other_rows_is_refused(tmp_path, capsys):
 
 
 def test_a_part_under_another_inner_shape_is_refused(tmp_path, capsys):
-    """A part verified under another inner shape file (`--rec-inner`) names another `rec_inner_sha512`, and the
-    composition refuses, as `Flock/Test/RecCompose.lean`'s #guard does, so the step fails."""
+    """A part verified under another inner shape file (`--rec-inner`) names another in its `rec_shared`, and the
+    composition refuses, as `Flock/Test/RecCompose.lean`'s #guards do, so the step fails."""
     binary, h = _composer(tmp_path, 3)
     _vpart(tmp_path, "L0", 0, h)
     _vpart(tmp_path, "alg-p0", 1, h, inner="cd" * 64)
@@ -321,8 +310,7 @@ def test_a_part_under_another_inner_shape_is_refused(tmp_path, capsys):
 @pytest.mark.parametrize("other", [{"session": "ff" * 64}, {"transcript": "22" * 64}])
 def test_parts_from_different_inner_sessions_are_refused(tmp_path, capsys, other):
     """Two parts verified over different inner sessions (85's `$REC_INNER`, `--rec-inner-session`) or transcripts of one
-    (`--rec-inner-transcript`) name different `rec_inner_session_sha512` or `rec_inner_transcript_sha512`, each accepting
-    alone, and the composition refuses, as `Flock/Test/RecCompose.lean`'s #guards do, so the step fails."""
+    (`--rec-inner-transcript`) name different ones in their `rec_shared`, each accepting alone, and the composition refuses, as `Flock/Test/RecCompose.lean`'s #guards do, so the step fails."""
     binary, h = _composer(tmp_path, 3)
     _vpart(tmp_path, "L0", 0, h)
     _vpart(tmp_path, "alg-p0", 1, h)
