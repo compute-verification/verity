@@ -33,7 +33,7 @@ def bytesOf {L : ℕ} (src : Fin L → Fin 256) : ByteArray := ⟨Array.ofFn fun
 def puGates (pu : ℕ × ℕ) : List ℕ := List.range' pu.1 (pu.2 - pu.1)
 
 /-- The claims' partition of a layout: its classes, each its strata, each its replay units' proof units' gates. -/
-def slotPartition (l : Slots.Layout) : Claims.Sampling.Partition :=
+def slotPartition (l : Slots.SlotOrder) : Claims.Sampling.Partition :=
   ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map fun r => r.pus.toList.map puGates⟩
 
 /-- The claims' one-stage design of a C-Flock law. -/
@@ -65,7 +65,7 @@ noncomputable def missBound (rule : Select.Rule) (d : Program) (query : Json) (t
   | _, _ => 0
 
 /-- The proof units a draw checks, none where it is refused. -/
-def checkedOf : Flock.V (Slots.Layout × Array (ℕ × ℕ)) → Array (ℕ × ℕ)
+def checkedOf : Flock.V (Slots.SlotOrder × Array (ℕ × ℕ)) → Array (ℕ × ℕ)
   | .ok (_, c) => c
   | .error _ => #[]
 
@@ -89,7 +89,7 @@ the first stage `subset K` with `1 ≤ K ≤ N`, Bernoulli at `NUM/DEN` with `0 
 `1 ≤ K ≤ N` over strata of at least one unit each, or `work K` over such strata with one work and one floor of at least
 one per stratum, and some work; every proof unit of a drawn replay unit checked. -/
 def DesignWellFormed : Prop :=
-  ∀ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (l : Slots.Layout)
+  ∀ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (l : Slots.SlotOrder)
     (D : Claims.Sampling.Design),
     Slots.layout d query = .ok l → slotDesign rule d query table = .ok D → D.WellFormed (slotPartition l)
 

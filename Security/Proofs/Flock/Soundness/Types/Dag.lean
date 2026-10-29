@@ -317,7 +317,7 @@ theorem getD_of_getElem? {α : Type} {a : Array α} {i : Nat} {x d : α} (h : a[
   simp [Array.getD, hi, hx]
 
 theorem checkLayout_spec {types : String → Option CircuitType} {words : String → Option (Array Nat)}
-    {ls : Array Layout} {done : Array D} {unit jj : Nat} (h : checkLayout types words ls done unit jj = true)
+    {ls : Array BlockLayout} {done : Array D} {unit jj : Nat} (h : checkLayout types words ls done unit jj = true)
     {t : CircuitType} (ht : (ls.getD jj default).type.bind types = some t) :
     t.outputs.size = t.outBits ∧
       (∀ o (ho : o < t.outputs.size), t.outputs[o].c ≤ 1) ∧
@@ -351,7 +351,7 @@ theorem checkLayout_spec {types : String → Option CircuitType} {words : String
 
 /-- A generated read layout's check: it is not the unit, and its rows pass `genOk`. -/
 theorem genLayout_spec {types : String → Option CircuitType} {words : String → Option (Array Nat)}
-    {ls : Array Layout} {done : Array D} {unit jj : Nat} (h : checkLayout types words ls done unit jj = true)
+    {ls : Array BlockLayout} {done : Array D} {unit jj : Nat} (h : checkLayout types words ls done unit jj = true)
     {sha : String} {n vb lo : Nat} (hown : (ls.getD jj default).own = .gen sha n vb lo) :
     jj ≠ unit ∧ genOk words ⟨done.getD jj default, false⟩ sha n vb lo = true := by
   unfold checkLayout at h
@@ -383,7 +383,7 @@ theorem genOk_facts {words : String → Option (Array Nat)} {d : D} {u : Bool} {
 /-! ## A placed call -/
 
 /-- Layout `jj`'s rows compute its type, at every fuel past its index. -/
-def LayoutSound (types : String → Option CircuitType) (words : String → Option (Array Nat)) (ls : Array Layout)
+def LayoutSound (types : String → Option CircuitType) (words : String → Option (Array Nat)) (ls : Array BlockLayout)
     (done : Array D) (jj : Nat) : Prop :=
   ∀ u, (ls.getD jj default).type.bind types = some u → ∀ z, SatAt (fullRow words (done.getD jj default)) z →
     z (done.getD jj default).const = true → ∀ F, jj < F → ∀ o < u.outputs.size,
@@ -487,7 +487,7 @@ theorem placed_core {words : String → Option (Array Nat)} {k : Chk} {z : ℕ �
     · rw [hf.bind _ _ _ hbi hcb1, xorSum_resolve z _ hf.const _ (formOf_snd_lt _ _)]
       exact hinv.formOf _ (hargs i hi)
 
-theorem placed_sound {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array Layout}
+theorem placed_sound {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array BlockLayout}
     {done : Array D} {unit : Nat} {k : Chk} {z : ℕ → Bool} (hf : Facts words k z) {jj base : Nat} {ex : List Nat}
     {wire : Array CF} {vals : List Bool} (hinv : Inv z wire vals) {args : Array Form} {u : CircuitType}
     (hcheck : checkLayout types words ls done unit jj = true) (hjj : jj ≠ unit)
@@ -1050,7 +1050,7 @@ theorem genOk_sound (words : String → Option (Array Nat)) (d : D) {sha : Strin
 /-- **A placed read's outputs**: its segment embeds a generated read layout (`placedOk`, every index bit bound), so its
 output columns carry the table's bits at the index its forms spell. -/
 theorem placed_read_sound {types : String → Option CircuitType} {words : String → Option (Array Nat)}
-    {ls : Array Layout} {done : Array D} {unit : Nat} {k : Chk} {z : ℕ → Bool} (hf : Facts words k z)
+    {ls : Array BlockLayout} {done : Array D} {unit : Nat} {k : Chk} {z : ℕ → Bool} (hf : Facts words k z)
     {jj base : Nat} {wire : Array CF} {vals : List Bool} (hinv : Inv z wire vals) {idx : Array Form} {sha : String}
     {n vb lo : Nat} (hcheck : checkLayout types words ls done unit jj = true)
     (hown : (ls.getD jj default).own = .gen sha n vb lo) (hsz : idx.size = n)
@@ -1099,7 +1099,7 @@ theorem inv_args {z : ℕ → Bool} {wire : Array CF} {vals : List Bool} (hinv :
   · rw [ite_eq_right (by omega)]
     simp [Array.getD, hw, cfVal_nil]
 
-theorem walk_sound {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array Layout}
+theorem walk_sound {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array BlockLayout}
     {done : Array D} {unit j : Nat} {k : Chk} {z : ℕ → Bool} (hf : Facts words k z)
     (hcallee : ∀ jj < j, jj ≠ unit →
       checkLayout types words ls done unit jj = true ∧ LayoutSound types words ls done jj) :
@@ -1287,7 +1287,7 @@ theorem walk_sound {types : String → Option CircuitType} {words : String → O
 
 /-- A checked layout, on column values where its row tests hold: each output column carries the type's output on its
 input columns. -/
-theorem checked_sound {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array Layout}
+theorem checked_sound {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array BlockLayout}
     {done : Array D} {unit jj : Nat} (hcheck : checkLayout types words ls done unit jj = true) {t : CircuitType}
     (ht : (ls.getD jj default).type.bind types = some t) {z : ℕ → Bool}
     (hf : Facts words ⟨done.getD jj default, jj == unit⟩ z)
@@ -1318,7 +1318,7 @@ theorem checked_sound {types : String → Option CircuitType} {words : String �
   simp
 
 /-- **Every inner layout's rows compute its type.** -/
-theorem layouts_sound_of {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array Layout}
+theorem layouts_sound_of {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array BlockLayout}
     {done : Array D} {unit : Nat} (hall : ∀ jj < ls.size, checkLayout types words ls done unit jj = true) :
     ∀ jj < ls.size, jj ≠ unit → LayoutSound types words ls done jj := by
   intro jj
@@ -1331,7 +1331,7 @@ theorem layouts_sound_of {types : String → Option CircuitType} {words : String
 
 /-- **The unit's rows compute its type**: column values that satisfy its rows in the block (Δ applied), with the block's
 constant `one` at 1, carry on each output column the type's output on its input columns. -/
-theorem unit_sound_of {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array Layout}
+theorem unit_sound_of {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array BlockLayout}
     {done : Array D} {unit : Nat} (hall : ∀ jj < ls.size, checkLayout types words ls done unit jj = true)
     (hu : unit < ls.size) {t : CircuitType} (ht : (ls.getD unit default).type.bind types = some t) (one : Nat)
     {z : ℕ → Bool}
@@ -1345,7 +1345,7 @@ theorem unit_sound_of {types : String → Option CircuitType} {words : String �
   exact checked_sound (hall unit hu) ht (by rw [hk]; exact facts_unit hz h1 hone)
     (fun jj hlt hne => ⟨hall jj (by omega), layouts_sound_of hall jj (by omega) hne⟩) F hF o ho
 
-theorem deriveChecked_checks {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+theorem deriveChecked_checks {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
     (h : deriveChecked types ls info words unit = .ok done) :
     (∀ jj < ls.size, checkLayout types words ls done unit jj = true) ∧ orderChecked words done unit = true ∧
@@ -1369,18 +1369,18 @@ theorem deriveChecked_checks {types : String → Option CircuitType} {ls : Array
           have := List.find?_eq_none.mp hf jj (List.mem_range.mpr hjj)
           simpa using this
 
-theorem deriveChecked_spec {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+theorem deriveChecked_spec {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
     (h : deriveChecked types ls info words unit = .ok done) :
     (∀ jj < ls.size, checkLayout types words ls done unit jj = true) ∧ orderChecked words done unit = true :=
   ⟨(deriveChecked_checks h).1, (deriveChecked_checks h).2.1⟩
 
-theorem deriveChecked_parts {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+theorem deriveChecked_parts {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
     (h : deriveChecked types ls info words unit = .ok done) : partsChecked done unit = true :=
   (deriveChecked_checks h).2.2
 
-theorem deriveChecked_all {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+theorem deriveChecked_all {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
     (h : deriveChecked types ls info words unit = .ok done) :
     ∀ jj < ls.size, checkLayout types words ls done unit jj = true :=
@@ -1489,7 +1489,7 @@ theorem outsideOk_spec {u : D} {o : List Nat} (h : outsideOk u o = true) :
     rw [show u.reads[i].prod0 + (c - u.reads[i].prod0) = c by omega] at this
     exact (colSet_contains o c).mp this
 
-theorem inputs_self_of {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array Layout}
+theorem inputs_self_of {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array BlockLayout}
     {done : Array D} {unit : Nat} (hall : ∀ jj < ls.size, checkLayout types words ls done unit jj = true)
     (hu : unit < ls.size) {t : CircuitType} (ht : (ls.getD unit default).type.bind types = some t) (one : Nat) :
     ∀ i < (done.getD unit default).inCols.size,
@@ -1505,7 +1505,7 @@ theorem inputs_self_of {types : String → Option CircuitType} {words : String �
 unit's rows and `order done u`: no column repeats; each is one of `u`'s rows; the order starts with `u`'s input columns;
 each row after them reads, besides `one`, only columns before it; and every column outside the order has a zero row or
 none. -/
-theorem order_sound {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+theorem order_sound {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) (one : Nat) :
     (order done (done.getD unit default)).Nodup ∧
@@ -1545,7 +1545,7 @@ theorem order_sound {types : String → Option CircuitType} {ls : Array Layout} 
       exact (Option.some.inj hp).symm
 
 /-- **With `one` past every row, `[one]·[one]` rows are exactly Δ's constant copies.** -/
-theorem blockRow_one_iff {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+theorem blockRow_one_iff {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
     (ht : (ls.getD unit default).type.bind types = some t) {one : Nat}
@@ -1625,7 +1625,7 @@ theorem blockRow_one_iff {types : String → Option CircuitType} {ls : Array Lay
 
 /-! ## The statements -/
 
-theorem lt_of_type {ls : Array Layout} {types : String → Option CircuitType} {j : ℕ} {t : CircuitType}
+theorem lt_of_type {ls : Array BlockLayout} {types : String → Option CircuitType} {j : ℕ} {t : CircuitType}
     (ht : (ls.getD j default).type.bind types = some t) : j < ls.size := by
   by_contra hj
   have : ls.getD j default = default := by simp [Array.getD, hj]
@@ -1635,7 +1635,7 @@ theorem lt_of_type {ls : Array Layout} {types : String → Option CircuitType} {
 /-- **The unit's derived rows compute its type**, over the type DAG. If `deriveChecked` accepts the layouts, column
 values that satisfy the unit's rows as the block holds them (Δ applied), with the block's constant `one` at 1, carry on
 each output column the unit type's output on its input columns. -/
-theorem unit_sound {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+theorem unit_sound {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
     (ht : (ls.getD unit default).type.bind types = some t) (one : ℕ) (z : ℕ → Bool)
@@ -1648,7 +1648,7 @@ theorem unit_sound {types : String → Option CircuitType} {ls : Array Layout} {
 /-- **Every other layout's derived rows compute its type.** If `deriveChecked` accepts the layouts, column values that
 satisfy layout `j`'s rows as the verifier folds them (a placed or inlined callee's, in its own coordinates), with its
 constant at 1, carry on each output column its type's output on its input columns. -/
-theorem layout_sound {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+theorem layout_sound {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {j : ℕ} (hj : j ≠ unit) {t : CircuitType}
     (ht : (ls.getD j default).type.bind types = some t) (z : ℕ → Bool) (hz : SatAt (fullRow words (done.getD j default)) z)
@@ -1658,7 +1658,7 @@ theorem layout_sound {types : String → Option CircuitType} {ls : Array Layout}
   layouts_sound_of (deriveChecked_all hd) j (lt_of_type ht) hj t ht z hz h1 F hF o ho
 
 /-- **The unit's input rows are self rows** in the block, whatever `one` is. -/
-theorem inputs_self {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+theorem inputs_self {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
     (ht : (ls.getD unit default).type.bind types = some t) (one : ℕ) :

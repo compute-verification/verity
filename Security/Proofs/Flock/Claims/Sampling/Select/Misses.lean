@@ -19,8 +19,8 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset Claims.Sampl
 def popRUs (pop : Array (Array Slots.RU)) : List Slots.RU := pop.toList.flatMap (·.toList)
 
 theorem rus_toList (pop ic : Array (Array Slots.RU)) :
-    (({ classes := #[pop, ic] } : Slots.Layout).rus).toList = popRUs pop ++ popRUs ic := by
-  simp [Slots.Layout.rus, popRUs, List.flatten_append]
+    (({ classes := #[pop, ic] } : Slots.SlotOrder).rus).toList = popRUs pop ++ popRUs ic := by
+  simp [Slots.SlotOrder.rus, popRUs, List.flatten_append]
   rfl
 
 /-- The population's units, slot by slot. -/
@@ -71,9 +71,9 @@ theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array
   · refine Finset.eq_empty_of_forall_notMem fun j hj => ?_
     have hjl : j < (popRUs ic).length := Finset.mem_range.1 (window_subset _ _ _ hj)
     refine h _ ((mem_window hjl).1 hj) 0 ((mem_checked _ _ _ _).2 ?_)
-    have hv : (popUnits S).length + j < ({ classes := #[pop, ic] } : Slots.Layout).rus.size := by
+    have hv : (popUnits S).length + j < ({ classes := #[pop, ic] } : Slots.SlotOrder).rus.size := by
       rw [← Array.length_toList, hrus, List.length_append]; omega
-    have hr : ({ classes := #[pop, ic] } : Slots.Layout).rus[(popUnits S).length + j] = (popRUs ic)[j] := by
+    have hr : ({ classes := #[pop, ic] } : Slots.SlotOrder).rus[(popUnits S).length + j] = (popRUs ic)[j] := by
       rw [← Array.getElem_toList, List.getElem_of_eq hrus, List.getElem_append_right (by omega)]
       congr 1; omega
     refine ⟨hv, ?_, ?_⟩
@@ -83,9 +83,9 @@ theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array
     have hvl : v < (popUnits S).length := Finset.mem_range.1 (window_subset _ _ _ hv)
     rw [mem_window hvl, zero_add] at hv
     refine h v hv 0 ((mem_checked _ _ _ _).2 ?_)
-    have hvr : v < ({ classes := #[pop, ic] } : Slots.Layout).rus.size := by
+    have hvr : v < ({ classes := #[pop, ic] } : Slots.SlotOrder).rus.size := by
       rw [← Array.length_toList, hrus, List.length_append]; omega
-    have hr : ({ classes := #[pop, ic] } : Slots.Layout).rus[v] = (popRUs pop)[v] := by
+    have hr : ({ classes := #[pop, ic] } : Slots.SlotOrder).rus[v] = (popRUs pop)[v] := by
       rw [← Array.getElem_toList, List.getElem_of_eq hrus, List.getElem_append_left]
     have hunit : (popRUs pop)[v].unit = some ((popUnits S).getD v 0) := by
       have := List.getElem_of_eq hu (by rw [List.length_map]; omega : v < ((popRUs pop).map (·.unit)).length)

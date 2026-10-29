@@ -33,15 +33,15 @@ structure RU where
   deriving BEq, Inhabited, Repr
 
 /-- The claims' partition over the verifier's: its classes, each its strata, each its replay units, in slot order. -/
-structure Layout where
+structure SlotOrder where
   classes : Array (Array (Array RU))
   deriving BEq, Inhabited, Repr
 
 /-- The replay units, slot by slot. -/
-def Layout.rus (l : Layout) : Array RU := l.classes.flatten.flatten
+def SlotOrder.rus (l : SlotOrder) : Array RU := l.classes.flatten.flatten
 
 /-- Unit `u`'s slot: the replay unit that is it. -/
-def Layout.slotOf (l : Layout) (u : Nat) : Option Nat := l.rus.findIdx? (·.unit == some u)
+def SlotOrder.slotOf (l : SlotOrder) (u : Nat) : Option Nat := l.rus.findIdx? (·.unit == some u)
 
 /-- The gates of the root's input nodes (`TemplateQuery.isInput`), in gate order. -/
 def inputGates (d : Desc) : Array Nat := Id.run do
@@ -57,7 +57,7 @@ def inputGates (d : Desc) : Array Nat := Id.run do
 
 /-- The claims' partition over the verifier's own program `p` under `query` (`Partition.evaluate`): the population's
 strata, then the input class. An error where the query doesn't apply. -/
-def layout (p : Program) (query : Json) : V Layout := do
+def layout (p : Program) (query : Json) : V SlotOrder := do
   let rs ← Partition.evaluate p query
   let gs ← Partition.unitGates p query
   let strata := Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))
@@ -69,7 +69,7 @@ def layout (p : Program) (query : Json) : V Layout := do
   return { classes := #[pop, if inputs.isEmpty then #[] else #[inputs]] }
 
 /-- A layout's population: its first class's replay units, in slot order. -/
-def popOf (l : Layout) : List RU := ((l.classes.toList.headD #[]).toList.map Array.toList).flatten
+def popOf (l : SlotOrder) : List RU := ((l.classes.toList.headD #[]).toList.map Array.toList).flatten
 
 /-- **The population is the registration's `n` units, in order**: the layout of `p` under `query` is defined, and its
 population is `n` replay units with slot `u` unit `u`. The run refuses a registration whose program and query fail it
@@ -82,14 +82,14 @@ def popOk (p : Program) (query : Json) (n : Nat) : Bool :=
 /-- **The checked proof units** (`Deploy.checked`) of a draw that proves the units `proved`: each proof unit of every
 replay unit among them and of every input slot, as `(slot, index)`, in slot order. An input slot listed here is
 opened only where a drawn unit reads its row. -/
-def checked (l : Layout) (proved : Array Nat) : Array (Nat × Nat) :=
+def checked (l : SlotOrder) (proved : Array Nat) : Array (Nat × Nat) :=
   (l.rus.zipIdx.filter fun (r, _) => r.unit.all proved.contains).flatMap fun (r, v) =>
     (Array.range r.pus.size).map (v, ·)
 
 /-- **The challenger's draw in the claims' slots**: the layout of `p` under `query`, and the proof units of the units
 `Select.select`'s draw on the coins `src` proves. An error where either is. -/
 def select (rule : Select.Rule) (p : Program) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
-    (src : ByteArray) : V (Layout × Array (Nat × Nat)) := do
+    (src : ByteArray) : V (SlotOrder × Array (Nat × Nat)) := do
   let l ← layout p query
   let (_, proved, _) ← Select.select rule p query table cm src
   return (l, checked l proved)
@@ -98,6 +98,6 @@ def RU.toJson (r : RU) : Json :=
   Json.mkObj [("unit", (r.unit.map Lean.toJson).getD .null),
     ("pus", Json.arr (r.pus.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi]))]
 
-def Layout.toJson (l : Layout) : Json := Json.arr (l.classes.map fun c => Json.arr (c.map fun s => Json.arr (s.map (·.toJson))))
+def SlotOrder.toJson (l : SlotOrder) : Json := Json.arr (l.classes.map fun c => Json.arr (c.map fun s => Json.arr (s.map (·.toJson))))
 
 end SampledProofs.Slots

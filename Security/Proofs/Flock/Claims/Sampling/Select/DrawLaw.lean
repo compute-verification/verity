@@ -158,10 +158,10 @@ theorem Design.wellFormed_of_shape (d : Design) {P Q : Partition} (h : P.shape =
 /-! ## The deployed draw's checked units -/
 
 /-- Every proof unit of a layout, as `(slot, index)`, in slot order. -/
-def allSlots (l : Slots.Layout) : Array (ℕ × ℕ) :=
+def allSlots (l : Slots.SlotOrder) : Array (ℕ × ℕ) :=
   l.rus.zipIdx.flatMap fun (r, v) => (Array.range r.pus.size).map (v, ·)
 
-theorem mem_allSlots (l : Slots.Layout) (v i : ℕ) :
+theorem mem_allSlots (l : Slots.SlotOrder) (v i : ℕ) :
     (v, i) ∈ allSlots l ↔ ∃ h : v < l.rus.size, i < l.rus[v].pus.size := by
   unfold allSlots
   simp only [Array.mem_flatMap, Array.mem_map, Array.mem_range, Prod.mk.injEq]
@@ -175,21 +175,21 @@ theorem mem_allSlots (l : Slots.Layout) (v i : ℕ) :
   · rintro ⟨hv, hi⟩
     exact ⟨(l.rus[v], v), Array.mem_zipIdx_iff_getElem?.2 (Array.getElem?_eq_getElem hv), i, hi, rfl, rfl⟩
 
-theorem slotPartition_rus (l : Slots.Layout) :
+theorem slotPartition_rus (l : Slots.SlotOrder) :
     (slotPartition l).rus = l.rus.toList.map fun r => r.pus.toList.map puGates := by
-  simp [slotPartition, Partition.rus, Slots.Layout.rus, List.map_flatten, Function.comp_def]
+  simp [slotPartition, Partition.rus, Slots.SlotOrder.rus, List.map_flatten, Function.comp_def]
 
-theorem slotPartition_sizes (l : Slots.Layout) : (slotPartition l).sizes = l.rus.toList.map fun r => r.pus.size := by
+theorem slotPartition_sizes (l : Slots.SlotOrder) : (slotPartition l).sizes = l.rus.toList.map fun r => r.pus.size := by
   simp [Partition.sizes, slotPartition_rus, Function.comp_def]
 
-theorem size_allSlots (l : Slots.Layout) : (allSlots l).size = (slotPartition l).sizes.sum := by
+theorem size_allSlots (l : Slots.SlotOrder) : (allSlots l).size = (slotPartition l).sizes.sum := by
   rw [slotPartition_sizes, ← Array.length_toList]
   simp only [allSlots, Array.toList_flatMap, List.length_flatMap, Array.toList_map, List.length_map,
     Array.toList_range, List.length_range, Array.toList_zipIdx]
   rw [show (fun a : Slots.RU × ℕ => a.1.pus.size) = (fun r => r.pus.size) ∘ Prod.fst from rfl, ← List.map_map,
     List.zipIdx_map_fst]
 
-theorem size_checked_le (l : Slots.Layout) (proved : Array ℕ) :
+theorem size_checked_le (l : Slots.SlotOrder) (proved : Array ℕ) :
     (Slots.checked l proved).size ≤ (slotPartition l).sizes.sum := by
   rw [← size_allSlots, ← Array.length_toList, ← Array.length_toList]
   simp only [Slots.checked, allSlots, Array.toList_flatMap, Array.toList_filter]
@@ -198,7 +198,7 @@ theorem size_checked_le (l : Slots.Layout) (proved : Array ℕ) :
 /-- **The proof units the deployed draw checks** on the bytes `src`: `Slots.select`'s, and every proof unit of the
 layout `l` where it is refused, where the run rejects. -/
 def drawChecked (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
-    (cm : Option (Array (Int × Array Int))) (l : Slots.Layout) (src : ByteArray) : Array (ℕ × ℕ) :=
+    (cm : Option (Array (Int × Array Int))) (l : Slots.SlotOrder) (src : ByteArray) : Array (ℕ × ℕ) :=
   match Slots.select rule d query table cm src with
   | .ok (_, c) => c
   | .error _ => allSlots l
@@ -221,7 +221,7 @@ checked proof units the draw's on them (`drawChecked`). -/
 def DrawSlots (D : Deploy Coin Col T) : Prop :=
   ∀ x s Pt, D.parse x = some s → D.partition s = some Pt →
   ∃ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
-    (cm : Option (Array (Int × Array Int))) (l : Slots.Layout) (L : ℕ) (bytes : (Fin (D.V.k x) → Coin) → Fin L → Fin 256),
+    (cm : Option (Array (Int × Array Int))) (l : Slots.SlotOrder) (L : ℕ) (bytes : (Fin (D.V.k x) → Coin) → Fin L → Fin 256),
     Program.parse ⟨s.desc.toArray⟩ = .ok d ∧ Slots.layout d query = .ok l ∧ Pt.shape = (slotPartition l).shape ∧
       slotDesign rule d query table = .ok s.design ∧
       (∀ E : (Fin L → Fin 256) → Prop, Pr (fun c => E (bytes c)) = Pr E) ∧

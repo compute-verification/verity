@@ -61,7 +61,7 @@ theorem forall₂_mem_right {α β : Type} {R : α → β → Prop} :
 
 /-- **The verifier's replay units are one proof unit each**: every replay unit of a layout `Slots.layout` gives, a
 population unit's or an input gate's, has one proof unit (`layout_ok`). -/
-theorem slotPartition_single (d : Program) (query : Lean.Json) (l : Slots.Layout) (h : Slots.layout d query = .ok l) :
+theorem slotPartition_single (d : Program) (query : Lean.Json) (l : Slots.SlotOrder) (h : Slots.layout d query = .ok l) :
     ∀ r ∈ (slotPartition l).rus, r.length = 1 := by
   obtain ⟨rs, -, pop, rfl, hpop⟩ := layout_ok d query l h
   have hone : ∀ c ∈ [pop, inputClass d], ∀ s ∈ c.toList, ∀ ru ∈ s.toList, ru.pus.size = 1 := by

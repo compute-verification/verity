@@ -319,7 +319,7 @@ def LaysOut (p : String × Array (ℕ × ℕ)) (s : Array Slots.RU) : Prop :=
   s.toList.map (·.unit) = (expand p.2.toList).map some ∧ ∀ r ∈ s.toList, r.pus.size = 1
 
 /-- **`Slots.layout`'s classes**: the strata of the evaluated query, each laid out unit by unit, then the input class. -/
-theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.Layout)
+theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.SlotOrder)
     (h : Slots.layout d query = .ok l) :
     ∃ rs, Partition.evaluate d query = .ok rs ∧ ∃ pop : Array (Array Slots.RU),
       l = { classes := #[pop, inputClass d] } ∧
@@ -356,7 +356,7 @@ theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.Layout)
 
 /-- **The proof units `checked` lists**: `(v, i)` is one when slot `v` holds a replay unit whose unit is proved (or
 none, an input), and `i` is one of its proof units. -/
-theorem mem_checked (l : Slots.Layout) (proved : Array ℕ) (v i : ℕ) :
+theorem mem_checked (l : Slots.SlotOrder) (proved : Array ℕ) (v i : ℕ) :
     (v, i) ∈ Slots.checked l proved ↔
       ∃ h : v < l.rus.size, l.rus[v].unit.all proved.contains = true ∧ i < l.rus[v].pus.size := by
   unfold Slots.checked
