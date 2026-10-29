@@ -153,6 +153,13 @@ class LM(nn.Module):
         return logits
 
 
+def matrix_shapes(size: Size, vocab: int = VOCAB) -> list[tuple[int, int]]:
+    """Every matrix's (d_in, d_out): each layer's attention q, k, v, o and MLP gate, up, down, then the tied embedding (V x d)."""
+    d = size.d_model
+    layer = [(d, d)] * 4 + [(d, size.d_ff)] * 2 + [(size.d_ff, d)]
+    return layer * size.n_layer + [(vocab, d)]
+
+
 def counts(size: Size, rank: int = 0, ctx: int = CTX, vocab: int = VOCAB) -> dict:
     """Parameter counts and the analytic training FLOPs per token.
 
@@ -162,8 +169,8 @@ def counts(size: Size, rank: int = 0, ctx: int = CTX, vocab: int = VOCAB) -> dic
     QK^T and AV over half the context on average: 2 * ctx * d per layer forward, 6 * n_layer * ctx * d with the backward.
     """
     d, L = size.d_model, size.n_layer
-    mats = [(d, d)] * 4 + [(d, size.d_ff)] * 2 + [(size.d_ff, d)]
-    n_mat = L * sum(i * o for i, o in mats)
+    shapes = matrix_shapes(size, vocab)
+    n_mat = sum(i * o for i, o in shapes[:-1])
     n_norm = (2 * L + 1) * d
     n_embed = vocab * d
     attn = 6 * L * ctx * d
@@ -172,7 +179,7 @@ def counts(size: Size, rank: int = 0, ctx: int = CTX, vocab: int = VOCAB) -> dic
            "flops_per_token_6n": 6 * (n_mat + n_norm),
            "dense_flops_per_token": 6 * (n_mat + n_embed) + attn}
     if rank:
-        n_fac = L * sum(rank * (i + o) for i, o in mats) + rank * (vocab + d)
+        n_fac = sum(rank * (i + o) for i, o in shapes)
         out |= {"rank": rank, "factors": n_fac, "trained_per_window": n_fac + n_norm,
                 "lowrank_flops_per_token": 4 * (n_mat + n_embed) + 6 * n_fac + attn}
     return out

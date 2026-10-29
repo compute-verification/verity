@@ -18,6 +18,10 @@ its rank or sync interval, and a token budget. At each size a configuration take
   every value trained in a window at fp32, dense training every parameter in every window of the same length. Local SGD:
   bits communicated, each replica's delta at fp32 per sync, dense as data parallel over as many replicas sending a full
   gradient every step;
+- for per-window low rank, alpha on the stock instead: the values in the departure from the initialization when the target is
+  reached, every parameter for dense; low rank's merged delta of each matrix has rank at most the windows started times r, and
+  is counted as factors or whole, whichever is smaller, with the norms in full. A base registered once, at the start, makes
+  the stock what a server block must hold, not one window's delta;
 - kappa at each configuration's own final loss (dense's cost to reach it), the late-training number;
 - where shorter-horizon dense runs exist, dense's envelope (the least cost at which any dense run reaches the target) and kappa
   against it, since a checkpoint inside a cosine schedule has not annealed.
@@ -30,6 +34,8 @@ import math
 from pathlib import Path
 
 import numpy as np
+
+from model import SIZES, matrix_shapes
 
 FIT_FROM = 0.1
 QUARTER = 0.25
@@ -89,11 +95,24 @@ def series(r: dict) -> dict:
     c, res = r["config"], r["result"]
     args, counts = c["args"], c["counts"]
     tokens_per_step = args["batch"] * c["ctx"]
-    return {"step": np.array([p["step"] for p in r["curve"]], float), "loss": np.array([p["val_nats_per_byte"] for p in r["curve"]]),
-            "n_steps": c["n_steps"], "flops_per_step": c["flops_per_token"] * tokens_per_step, "tokens_per_step": tokens_per_step,
-            "seconds_per_step": res["seconds_per_step"], "bits": c["bits_per_value"], "total": counts["total"],
-            "trained": counts["trained_per_window"] if args["family"] == "lowrank" else counts["total"],
-            "window": args["window"], "replicas": args["replicas"], "sync": args["sync"] if args["family"] == "localsgd" else 1}
+    s = {"step": np.array([p["step"] for p in r["curve"]], float), "loss": np.array([p["val_nats_per_byte"] for p in r["curve"]]),
+         "n_steps": c["n_steps"], "flops_per_step": c["flops_per_token"] * tokens_per_step, "tokens_per_step": tokens_per_step,
+         "seconds_per_step": res["seconds_per_step"], "bits": c["bits_per_value"], "total": counts["total"],
+         "trained": counts["trained_per_window"] if args["family"] == "lowrank" else counts["total"],
+         "window": args["window"], "replicas": args["replicas"], "sync": args["sync"] if args["family"] == "localsgd" else 1}
+    if args["family"] == "lowrank":
+        s |= {"shapes": matrix_shapes(SIZES[args["size"]], c["vocab"]), "rank": args["rank"], "norms": counts["norms"]}
+    return s
+
+
+def stock(s: dict, step: float) -> float:
+    """The values in the departure from the initialization after `step` steps: every parameter, except under per-window low rank,
+    where each matrix's merged delta has rank at most the windows started times r (stored as factors or whole, whichever is
+    smaller) and the norms are trained in full."""
+    if "shapes" not in s:
+        return s["total"]
+    w = math.ceil(step / s["window"])
+    return sum(min(min(w * s["rank"], i, o) * (i + o), i * o) for i, o in s["shapes"]) + s["norms"]
 
 
 def per_step(s: dict, group: str, like: dict) -> float:
@@ -166,6 +185,8 @@ def compare(fam: dict, dense: dict, fam_fit: dict, dense_fit: dict, target: floa
             "kappa_time": ratio(seconds(fam, sf), seconds(dense, sd)),
             "kappa_flops_fit": ratio(flops_from_fit(fam_fit, target), flops_from_fit(dense_fit, target)),
             "omega": omega, "omega_dense": omega_dense, "alpha": omega_dense / omega}
+    if group == "lowrank":
+        row |= {"stock": stock(fam, sf), "alpha_stock": stock(dense, sd) / stock(fam, sf)}
     if envelope:
         reach = [(st, e) for e in envelope if (st := step_at(e, target)) is not None]
         best_step, best = min([(sd, dense), *reach], key=lambda p: p[0] * p[1]["flops_per_step"])
@@ -186,7 +207,8 @@ def own_final(fam: dict, dense: dict, group: str) -> dict:
     return {"target": target, "at": at, "reached": True,
             "kappa_flops": sf * fam["flops_per_step"] / (sd * dense["flops_per_step"]), "kappa_tokens": sf / sd,
             "kappa_time": ratio(seconds(fam, sf), seconds(dense, sd)),
-            "alpha": sd * per_step(dense, group, fam) / (sf * per_step(fam, group, fam))}
+            "alpha": sd * per_step(dense, group, fam) / (sf * per_step(fam, group, fam)),
+            "alpha_stock": stock(dense, sd) / stock(fam, sf) if group == "lowrank" else None}
 
 
 def plot(out: Path, size: str, group: str, curves: dict[str, dict], tgts: list[float]) -> str:
@@ -268,19 +290,20 @@ def tables(report: dict) -> str:
         for group, comp in groups.items():
             out += ["", f"## Size {size}, {group}: targets " + ", ".join(f"{t:.4f}" for t in comp["targets"]), "",
                     "| config | best lr | target | kappa FLOPs | kappa tokens | kappa time | kappa FLOPs (fit) | kappa FLOPs (envelope) |"
-                    " alpha | alpha (envelope) |", "|---|---|---|---|---|---|---|---|---|---|"]
+                    " alpha | alpha (envelope) | alpha (stock) |", "|---|---|---|---|---|---|---|---|---|---|---|"]
             for lab, rows in comp["rows"].items():
                 lr = report["best"][size][lab]["lr"]
                 for r in rows:
                     out.append(f"| {lab} | {lr:g} | {r['target']:.4f} | " + " | ".join(
                         fmt(r.get(k)) for k in ("kappa_flops", "kappa_tokens", "kappa_time", "kappa_flops_fit",
-                                                "kappa_flops_envelope", "alpha", "alpha_envelope")) + " |")
-            out += ["", "| config | at | loss | kappa FLOPs | kappa tokens | kappa time | alpha |", "|---|---|---|---|---|---|---|"]
+                                                "kappa_flops_envelope", "alpha", "alpha_envelope", "alpha_stock")) + " |")
+            out += ["", "| config | at | loss | kappa FLOPs | kappa tokens | kappa time | alpha | alpha (stock) |",
+                    "|---|---|---|---|---|---|---|---|"]
             for lab, f in comp["own_final"].items():
-                out.append(f"| {lab} | {f['at']} | {f['target']:.4f} | "
-                           + " | ".join(fmt(f.get(k)) for k in ("kappa_flops", "kappa_tokens", "kappa_time", "alpha")) + " |")
+                out.append(f"| {lab} | {f['at']} | {f['target']:.4f} | " + " | ".join(
+                    fmt(f.get(k)) for k in ("kappa_flops", "kappa_tokens", "kappa_time", "alpha", "alpha_stock")) + " |")
     sizes = sorted(report["comparisons"], key=lambda s: report["non_embedding"][s])
-    out += ["", "## Across sizes: kappa (FLOPs) / alpha at each target rule", "",
+    out += ["", "## Across sizes: kappa (FLOPs) / alpha at each target rule (low rank: then alpha on the stock)", "",
             "| group | config | target | " + " | ".join(sizes) + " |", "|---|---|---|" + "---|" * len(sizes)]
     for group in GROUPS:
         labs = sorted({lab for s in sizes for lab in report["comparisons"][s].get(group, {}).get("rows", {})})
@@ -290,7 +313,9 @@ def tables(report: dict) -> str:
                 for s in sizes:
                     comp = report["comparisons"][s].get(group, {})
                     r = comp.get("own_final", {}).get(lab) if rule == "own final" else (comp.get("rows", {}).get(lab) or [None] * 3)[i]
-                    cells.append(f"{fmt((r or {}).get('kappa_flops'))} / {fmt((r or {}).get('alpha'), '.1f')}")
+                    r = r or {}
+                    cell = f"{fmt(r.get('kappa_flops'))} / {fmt(r.get('alpha'), '.1f')}"
+                    cells.append(cell + (f" / {fmt(r.get('alpha_stock'))}" if group == "lowrank" else ""))
                 out.append(f"| {group} | {lab} | {rule} | " + " | ".join(cells) + " |")
     out += ["", f"GPU hours held: {report['gpu_held_hours']:.2f}", ""]
     return "\n".join(out)
