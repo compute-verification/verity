@@ -1,4 +1,4 @@
-import NetworkCheck.Certificate
+import NetworkCheck.Check
 import Lms.Verify
 import Flock.Hm96
 import Flock.Canon
@@ -36,15 +36,17 @@ of record stays the Python's (`service.OF_RECORD`).
 `linkWindowFn` is the `link-window` function of `network-records verdicts` (`Difftest.serve`), which `service.py` calls
 through `lean_audit.SERVER`. `certificatesFn` is its `certificates` function, the client's check of one window's
 certificates as a reveal endpoint served them (`refusals`), which `lean_audit.certificate_refusals` calls with
-`audit.certificate_refusals` as its reference. Code: it imports only Lean, C-Flock's verifier (`Flock.Hash`,
-`Flock.Bytes`, `Flock.Canon`, `Flock.Hm96`, `Flock.FV3`), the identity hash, the LMS port and the certificate's
-encodings.
+`audit.certificate_refusals` as its reference. Both read a certificate as v4's check does (`Check.Certificate`) and
+verify it with its one LMS check (`Check.Certificate.signs`). Code: it imports only Lean, C-Flock's verifier
+(`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`, `Flock.Hm96`, `Flock.FV3`), the identity hash, the LMS port and v4's
+certificate and its encodings (`NetworkCheck.Check`).
 -/
 
 namespace NetworkCheck.LinkWindow
 
 open Lean (Json toJson)
 open Flock (V)
+open NetworkCheck.Check (Certificate)
 
 def verdictFormat : String := "verity-network-certifier/verdict/v0"
 /-- `verity.ml.commitments.window.WINDOW_DOMAIN`, one-stage's served domain. -/
@@ -66,16 +68,6 @@ def ports : List String := ["pub", "wit", "o0"]
 structure End where
   grid : NetworkCheck.Params
   profile : Option (Array (Array Nat))
-
-/-- A certificate's public fields (`certificate.Certificate`), direction by its code. The public row reads each
-certificate's signed digest from `Case.digests`, as the Python reads it from any object (`public_arguments`). -/
-structure Cert where
-  keyId : ByteArray
-  link : String
-  direction : Direction
-  window : Nat
-  digest : ByteArray
-  signature : ByteArray
 
 /-- One session's finding from the verifier's own Lean run (`proofs.Finding`). -/
 structure Finding where
@@ -120,8 +112,10 @@ structure Case where
   saltOut : Option ByteArray
   output : Option Nat
   sessions : Array String
-  certificates : Array (Option Cert)
-  /-- each certificate's signed digest as the public row reads it, whatever its other fields (empty for none) -/
+  /-- each certificate's public fields, its direction by its code (`certOf`) -/
+  certificates : Array (Option Certificate)
+  /-- each certificate's signed digest as the public row reads it, whatever its other fields (empty for none), as the
+  Python reads it from any object (`public_arguments`) -/
   digests : Array ByteArray
   syncs : Array Sync
   deltas : Array Nat
@@ -161,7 +155,7 @@ private def endOf (j : Json) (ctx : String) : V End := do
   let profile ← (opt j "profile").mapM fun p => do (← asArr p s!"{ctx}.profile").mapM (natsOf · s!"{ctx}.profile")
   pure ⟨grid, profile⟩
 
-private def certOf (j : Json) : V (Option Cert) := do
+private def certOf (j : Json) : V (Option Certificate) := do
   if j.isNull then return none
   let direction ← match ← nat j "direction" "certificate" with
     | 0 => pure Direction.egress
@@ -404,21 +398,12 @@ def opened (c : Case) (row : Option ByteArray) : Option Nat := do
 
 /-! ## The certificates and the sync -/
 
-/-- `Certificate.verify` under the link's LMS key in its certifier session: the key's identifier, and the signature
-verifying over the certificate's message (`certificateMessage`); a message or signature that doesn't decode is false. -/
-def verifies (c : Case) (x : Cert) : Bool :=
-  x.keyId == c.key.extract 0 16 &&
-    match certificateMessage x.keyId c.session x.link x.direction x.window x.digest,
-        Lms.Signature.decode c.lms x.signature with
-    | .ok m, .ok sig => (Lms.verify c.lms c.key m sig).toOption == some true
-    | _, _ => false
-
 /-- The certificates' check (`LinkWindows.certified`): two, each naming this link, its end (egress first) and the window,
-and verifying. -/
+and the key's and verifying in the link's certifier session (`Certificate.signs`). -/
 def certified (c : Case) : Bool :=
   c.certificates.size == 2 && (List.range 2).all fun d =>
     match c.certificates[d]! with
-    | some x => x.link == c.link && x.direction.code == d && x.window == c.window && verifies c x
+    | some x => x.link == c.link && x.direction.code == d && x.window == c.window && x.signs c.lms c.key c.session
     | none => false
 
 /-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ one of the rhos. A warden link
@@ -494,8 +479,8 @@ structure Served where
   session : ByteArray
   link : String
   window : Nat
-  certificates : Array Cert
-  clocks : Array Cert
+  certificates : Array Certificate
+  clocks : Array Certificate
   seen : Array ByteArray
 
 section Served
@@ -507,7 +492,7 @@ def servedOf (j : Json) : V Served := do
   let lms ← Lms.Params.make (← nat l "N" "lms") (← nat l "W" "lms") (← nat l "H" "lms") (← bool l "toy" "lms")
   let key ← bytesOf (← get j "key" "served") "key"
   unless key.size = 16 + lms.N do throw s!"an LMS public key is {16 + lms.N} bytes, not {key.size}"
-  let certs (k : String) : V (Array Cert) := do
+  let certs (k : String) : V (Array Certificate) := do
     (← arr j k "served").mapM fun x => do
       let some c ← certOf x | throw s!"served.{k}: a certificate, not null"
       pure c
@@ -517,32 +502,24 @@ def servedOf (j : Json) : V Served := do
 
 end Served
 
-/-- `verifies` under a key and session given alone: the key's identifier, and the signature verifying over the
-certificate's message (`certificateMessage`); a message or signature that doesn't decode is false. -/
-def signs (lms : Lms.Params) (key session : ByteArray) (x : Cert) : Bool :=
-  x.keyId == key.extract 0 16 &&
-    match certificateMessage x.keyId session x.link x.direction x.window x.digest,
-        Lms.Signature.decode lms x.signature with
-    | .ok m, .ok sig => (Lms.verify lms key m sig).toOption == some true
-    | _, _ => false
-
 /-- Why the client refuses certificate `x`, in the order it checks, or none where it keeps it: another key's (`key`),
 another link-window's (`link-window`), a clock certificate that isn't egress (`clock`), a signature that doesn't verify
-under the key in the session (`signature`), a second of its direction among those `kept` (`second`), or a clock
-certificate signing a digest that one kept earlier signs (`signed`: `reused`). -/
-def refusal (s : Served) (clock : Bool) (kept : Array Direction) (signed : Array ByteArray) (x : Cert) :
+under the key in the session (`Certificate.signs`: `signature`), a second of its direction among those `kept`
+(`second`), or a clock certificate signing a digest that one kept earlier signs (`signed`: `reused`). -/
+def refusal (s : Served) (clock : Bool) (kept : Array Direction) (signed : Array ByteArray) (x : Certificate) :
     Option String :=
   if x.keyId != s.key.extract 0 16 then some "key"
   else if x.link != s.link || x.window != s.window then some "link-window"
   else if clock && x.direction != .egress then some "clock"
-  else if !signs s.lms s.key s.session x then some "signature"
+  else if !x.signs s.lms s.key s.session then some "signature"
   else if kept.contains x.direction then some "second"
   else if clock && signed.contains x.digest then some "reused"
   else none
 
 /-- Each refusal of one pass over `xs`, each read against those kept before it, which start from none of either
 direction and from `signed`'s digests. -/
-def pass (s : Served) (clock : Bool) (signed : Array ByteArray) (xs : Array Cert) : Array (Option String) := Id.run do
+def pass (s : Served) (clock : Bool) (signed : Array ByteArray) (xs : Array Certificate) :
+    Array (Option String) := Id.run do
   let mut kept : Array Direction := #[]
   let mut signed := signed
   let mut out := #[]

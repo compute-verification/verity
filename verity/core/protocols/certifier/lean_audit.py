@@ -381,10 +381,11 @@ def signed_clocks(key: PublicKey, session: bytes, link: str, openings: Sequence[
     """`advised.SignedClocks(key, session, openings).syncs(link)`, the syncs the certifier signed for `link`'s windows
     read through their openings, the Lean's (`NetworkCheck.Period.signedSyncs`, `network-records verdicts`'
     ``clocks``), with each opening's refusal (`NetworkCheck.Period.openingRefusals`, None where it holds) and
-    `advised.SignedClocks` run beside it as the reference. Where the two differ on the syncs, or on how many openings
-    and link-windows they refuse, no window has a sync and every opening is refused as `disagreement`. A key other
-    than an `LmsKey`, an opening that isn't a `CertifiedClock` or anything else the Lean refuses to read raises
-    `ValueError`; a reference that raises where the Lean answers raises `RuntimeError`."""
+    `advised.SignedClocks` run beside it as the reference. Where the two differ on the syncs, on any opening's refusal
+    code (`SignedClocks.codes`), or on which link-windows have two or more signed syncs (`SignedClocks.split`), no
+    window has a sync and every opening is refused as `disagreement`. A key other than an `LmsKey`, an opening that
+    isn't a `CertifiedClock` or anything else the Lean refuses to read raises `ValueError`; a reference that raises
+    where the Lean answers raises `RuntimeError`."""
     if not isinstance(key, LmsKey):
         raise ValueError(f"outside the Lean audit's domain: clock openings under a {type(key).__name__}, not an LmsKey")
     p = key.params
@@ -394,8 +395,8 @@ def signed_clocks(key: PublicKey, session: bytes, link: str, openings: Sequence[
     syncs = tuple(ClockSync(d, Fraction(n, m)) for d, n, m in out["syncs"])
     try:
         ref = SignedClocks(key, session, tuple(openings))
-        refused = sum(r is not None for r in out["refused"]) + out["split"]
-        agree = syncs == ref.syncs(link) and refused == len(ref.refused)
+        agree = (syncs == ref.syncs(link) and tuple(out["refused"]) == tuple(ref.codes)
+                 and sorted((x, w) for x, w in out["split"]) == sorted(ref.split))
     except Exception as e:
         raise RuntimeError(f"the reference raised where the Lean check answered: {e!r}") from e
     if not agree:
