@@ -46,7 +46,7 @@
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT): the records check's evidence bridge reads C-Flock's `V`, JSON accessors and `unhex`, on both sides of its equation"
+  "Flock": "C-Flock is excepted until its spec is extracted: the records check's evidence bridge reads C-Flock's `V`, JSON accessors and `unhex`, on both sides of its equation"
  },
  "guarantees": {
   "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": {

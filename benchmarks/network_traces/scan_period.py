@@ -7,7 +7,7 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
   and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
-  the jitter bound `chain_record.JITTER_BOUND` (K's jitter term T bits a link-window, `chain_record.JITTER`), and the
+  the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
   certificates of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations
@@ -39,7 +39,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import chain_record as CR  # noqa: E402
+import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
 import warden_serve as WS  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
@@ -86,7 +86,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
     N, W, H = dep["key"]["params"]
     audits = doc.get("audits", [])
     params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": [],
-              "first": x["window"], "jitter": CR.JITTER_BOUND, "key": dep["key"]["public"], "link": WS.LINK,
+              "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
               "session": dep["session"], "windows": 1}
