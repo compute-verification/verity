@@ -9,7 +9,7 @@ honest answer is more than the stored label.  Everything else is written once, h
 3. **Encode.** The server computes `C = Enc(W, salt)` (`encode`).  The verifier builds `vk` (`verifier_key`) either by
    encoding `W` itself (`PRIVATE`) or by decoding the server's `C*` and checking `Dec(C*)` against the commitment
    (`PUBLIC`).  The two give the same guarantee (Lean `pubAuditSecure_exact_iff`).
-4. **Serve.** `decode` of a segment, and `decode_tensor` of one tensor of a `layout.Layout`.
+4. **Serve.** `decode` of a segment, and `decode_tensor` of one tensor of a `layout.TensorLayout`.
 5. **Audit.** `TimedAudit` reveals `k` indices one at a time.  Each answer must arrive within `Δ + RTT` and match `vk`.
    The memory challenger refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit
    gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
@@ -33,7 +33,7 @@ from verity.ml.randomness import Key
 
 from . import audit, setup
 from .codec import Codec, Geometry, split
-from .layout import Layout
+from .layout import TensorLayout
 from .layout import decode_tensor as _decode_tensor
 from .primitives import Primitives
 from .verifier import VerifierKey
@@ -251,7 +251,7 @@ def decode(scheme: Scheme, salt: bytes, encoded: Iterable[Sequence[bytes]]) -> b
     return b"".join(scheme.decode_segment(salt, s, blocks) for s, blocks in enumerate(encoded))
 
 
-def decode_tensor(scheme: Scheme, layout: Layout, salt: bytes, name: str, block: Callable[[int], bytes]) -> bytes:
+def decode_tensor(scheme: Scheme, layout: TensorLayout, salt: bytes, name: str, block: Callable[[int], bytes]) -> bytes:
     """One tensor of `layout`, decoded from the segments of `C` it overlaps (`block(i)` is label `i` of `C`)."""
     if layout.params != scheme.params:
         raise ValueError("the layout's parameters are not the scheme's")

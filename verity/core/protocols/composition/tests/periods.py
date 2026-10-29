@@ -83,12 +83,12 @@ def build(tmp: Path) -> None:
     M = _mc_cases()
     signer = M.deployed_signer()
 
-    def space(name: str, store: bytes = POUS_STORE, **kw) -> pous.Period:
+    def space(name: str, store: bytes = POUS_STORE, **kw) -> pous.Run:
         mc.SessionLog.create(tmp / name)
         return pous.run("n0", store, COINS, signer=signer, log=mc.SessionLog(tmp / name), clock=M.Clock(10 ** 9),
                         point=pous.point_for(len(store), pous.W, pous.C0, k=POUS_K), **kw)
 
-    def reads(**kw) -> bandwidth.Period:
+    def reads(**kw) -> pous.Run:
         c = Clock()
         return bandwidth.run("n0", STORE, COINS, windows=1, clock=c, sleep_until=c.sleep_until,
                              entropy=_entropy(b"salts"), **kw)

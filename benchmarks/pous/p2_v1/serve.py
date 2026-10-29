@@ -79,7 +79,7 @@ class Clock:
         return self.now
 
 
-def toy() -> tuple[S.Store, dict, bytes]:
+def toy() -> tuple[S.StoreLayout, dict, bytes]:
     """The tracked toy: its store, `toy.json` and `C*`."""
     doc = json.loads((S.TOY_DIR / "toy.json").read_text())
     c_star = (S.TOY_DIR / "c-star.bin").read_bytes()
@@ -88,7 +88,7 @@ def toy() -> tuple[S.Store, dict, bytes]:
     return S.toy_store(doc), doc, c_star
 
 
-def blocks_of(store: S.Store, c_star: bytes) -> list[bytes]:
+def blocks_of(store: S.StoreLayout, c_star: bytes) -> list[bytes]:
     nb = store.params.block_bytes
     return [c_star[nb * j:nb * (j + 1)] for j in range(store.params.blocks)]
 
@@ -100,7 +100,7 @@ def toy_site(node: bytes = NODE) -> site.Site:
     return site.check(log, site.Auditor())
 
 
-def registration(store: S.Store, doc: dict, c_star: bytes, node: bytes = NODE) -> p2.Registration:
+def registration(store: S.StoreLayout, doc: dict, c_star: bytes, node: bytes = NODE) -> p2.Registration:
     """The verifier's registration of the toy's store: PoUS's setup decoding `C*` to the committed `W` under the salt
     it drew from its source after the commitment, then `p2.register` of the node as a host of the toy's Site
     (`toy_site`)."""
@@ -128,7 +128,7 @@ class Engine:
     highest-scoring cached key, the latest on a tie), a KV cache a layer. With `w` given, it reads that plaintext `W`
     instead of decoding, and sketches nothing: the model the decode must agree with."""
 
-    def __init__(self, store: S.Store, c_star: bytes, salt: bytes, w: bytes | None = None) -> None:
+    def __init__(self, store: S.StoreLayout, c_star: bytes, salt: bytes, w: bytes | None = None) -> None:
         self.store, self.c_star, self.w = store, c_star, w
         self.prefix = expand_prefix(store.params, salt)
         self.audited = p2.UNIT_BLOCKS * (store.params.blocks // p2.UNIT_BLOCKS)
