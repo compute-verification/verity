@@ -101,6 +101,10 @@ T1 = forming(N, F) − forced(C) + de-noise(D) + final word(D, P) + uncommitted 
     that reduce to it exactly (N-SAKU).
   - **(d) Something outside the paradigm** (N-ALT), or a hash outside the one-hash rule (a what-if needing Daniel's
     ruling; label it so).
+- **Road (c) is closed** (N-SAKU final, 08:51Z, note 20261029T0850Z-report-np-saku). SAK-U alone leaves at least the whole
+  stock work uncertified, in every class of design (exact, served, padded). Beside the per-word floor it adds nothing at
+  k32. Sparse commitments in M0 cost an exact design L/K of stock (proved in Lean), and committing outputs only fails
+  for every design. N-SAKU moves to hiding as N-SALT (§4).
 
 ## 4. The workers
 
@@ -114,7 +118,7 @@ T1 = forming(N, F) − forced(C) + de-noise(D) + final word(D, P) + uncommitted 
 | **N-COMPOSE** | new | hash-compose as a counting theorem in MH100w (committed words must be materialized; SHA-512's writes aren't targets), and the atomic call and PeriodInventory as named Props closing hashing before the noise. Lean, or a counterexample | statements, proofs or a counterexample |
 | **N-W1** | new | W1 stated as a refinement of Core/Accel (CardWithinAccel is locked); an opcode census of compiled sm_90a SASS; measured prices for every opcode, multi-output forms included (IMAD.WIDE, carry and predicate outputs, LDSM, uniform datapath) | the census art, the Lean bridge statement, and every opcode under 32 a register (or none) |
 | **N-DENSE** | SW-SEM (now) | Raise credit a committed byte at rank ≤ 3: your saturating-noise route (full-range s8 lanes so `CoverCount` applies; the wide lanes as a finite rank-2 computation), `BamFloor`'s unchecked step, packed 16-bit codes for quadratic noise | whether L 64 or 128 is creditable at rank ≤ 3, with the design and its T1/T2 |
-| **N-SAKU** | new | Designs whose adversary's problem reduces exactly (a proof) to multiplying literally uniform matrices, or to their k-step partial sums, so the only premise is SAK-U, with sparse commitments | the best such design's T1/T2/T3 and its reduction, or why none exists |
+| **N-SALT** | N-SAKU (08:55Z) | Hiding through forced work, in parallel with N-HIDE: hiding randomness that the forced computation consumes, so no separate honest-only salt work remains. For example, a prover-secret noise lane per step, PRF-derived from a committed key and checked in the proof, giving each leaf its own entropy; or anything else that makes hm96's hiding come from committed, forced words | a hiding design whose honest-only work is ≤ 0.1% of stock, with what the proof checks and the premises it reads |
 | **N-NOISE** | SW-NOISE (07:35Z) | The noise and de-noise space, exhaustively: a grammar over N × D × F, automated search for designs dominating `ssn_1l` (α, forming, coins, T3), lower bounds on what any design must pay (noise lanes a step, coin bits), attention and decode variants | the grammar, the search's output, and a dominance proof or a better design |
 | **N-EXACT** | new | Exact-output designs (served O = A·Bᵀ) and every de-noising strategy: one-sided stacks, low-rank, cancelling stacks (prove NCP's 3K minimal), post-hoc and epilogue-folded corrections, paired calls; their premise sets (M1 needs the atomic call) | the best exact design at each T with its premises |
 | **N-FP8** | new | FP8 E4M3 and BF16 serving on the H200: SSN-like lanes with exact small values, the accumulator's real semantics, distinctness under rounding | a verdict and the best floating-point design |
