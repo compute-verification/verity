@@ -7,7 +7,7 @@
 For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an upstream binary, the job:
 - fetches its inputs from the evidence store (`research data fetch`), among them the verifier's own registered reads
   (`statement.registered`, `agree.py --registered`) for a statement that reads registered values, and passes the verifier's
-  own K (`statement.stratified`, `agree.py --stratified`) for sessions drawn by the stratified law, and a plain session's
+  own K (`statement.stratified`, `agree.py --stratified`) for sessions sampled by the stratified law, and a plain session's
   coins (`statement.coins`, `agree.py --coins`: `os` for a live server's OS coins);
 - for a set that names `mutants`, regenerates the proof mutants (`redigest.py`), the retained-bytes sessions
   (`redigest.py --retain`) and `N` fuzz cases (`fuzz.py --seed S`) from its honest session;
@@ -18,7 +18,7 @@ For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an up
   proof does not cover, which the Lean verifier refuses whatever the session, once every check has passed),
   `--lean-refuses-drawn` for one marked `lean_refuses_drawn` (D12 at its drawn sessions' law, which no soundness claim draws
   by, refused at setup), and `--lean-refuses-drawless` for one marked `lean_refuses_drawless` (D12 at its sessions without
-  a draw, refused once every check has passed). A session refused last, and for nothing else, passed every check.
+  a sample, refused once every check has passed). A session refused last, and for nothing else, passed every check.
 
 `--live` runs `live.sets` instead: sets with no upstream binary, whose upstream verdicts are the live server's in each
 case's `case.json` (`agree.py --upstream live`).

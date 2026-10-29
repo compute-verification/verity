@@ -37,7 +37,7 @@ inputs = [
     "Security/Proofs/Flock/Soundness/PlanDraw.lean",
     # tests import circuit-check's targets and read the census
     "tools/verity/circuit_check", "benchmarks/census",
-    # the Lean verifier's stratified draw against the one-stage protocol's, and the Lean spec of verity.ml.randomness against
+    # the Lean verifier's stratified sample against the one-stage protocol's, and the Lean spec of verity.ml.randomness against
     # its pinned vectors
     "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's

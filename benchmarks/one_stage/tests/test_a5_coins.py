@@ -1,8 +1,8 @@
-"""a5's draw on the verifier's own coins (`a5.py --coins verifier`, `a5_coins.VerifierCoins`): a window's `service.Stream` on
+"""a5's sample on the verifier's own coins (`a5.py --coins verifier`, `a5_coins.VerifierCoins`): a window's `service.Stream` on
 them has the verifier as its coin source, and its outcome, with no coins' evidence, is accepted with the Lean verifier of
 record's whole run (`Run.run`, `coin_source` verifier) agreeing. `a5_coins.verifier_negatives` refuses each negative for its
 own reason: the bytes passed off as the challenger's, or as the verifier's with evidence, at the Lean run's select (`coins`);
-a redraw (`drawn`) and a draw before the registration (`unknown`), with no coin read. A toy window of two templates."""
+a resample (`drawn`) and a sample before the registration (`unknown`), with no coin read. A toy window of two templates."""
 
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ def test_verifier_coins_default_to_the_leans_os_coins():
 
 def test_a_window_drawn_on_the_verifiers_coins_is_accepted_with_the_lean_run_agreeing():
     """The stream's coin source is the verifier; its select reads the coins only after the registration (a stratum each,
-    PAIR's by its floor), `read` holds exactly the bytes the draw read, and the outcome with no evidence is accepted, the
+    PAIR's by its floor), `read` holds exactly the bytes the sample read, and the outcome with no evidence is accepted, the
     Lean's `Run.run` agreeing (no `run` check failed)."""
     stream, coins, draw, got, audit = honest()
     assert stream.coin_source == "verifier"

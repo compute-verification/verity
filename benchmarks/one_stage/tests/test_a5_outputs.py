@@ -1,9 +1,9 @@
 """a5's output class (`a5.output_closure`): a window's units whose outputs are served out are proved whole beside a work
-draw, on the closure the verifier's own map gives every draw. Over several coin seeds the stream's draw of record (the Lean
-`Select.select`, agreeing with the Python) draws its k units uniformly and proves the drawn units and the whole class, and
-its outcome is accepted with the Lean's `Run.run` agreeing; the proved set less one output unit, and the draw with its
+sample, on the closure the verifier's own map gives every sample. Over several coin seeds the stream's sample of record (the Lean
+`Select.select`, agreeing with the Python) draws its k units uniformly and proves the sampled proof blocks and the whole class, and
+its outcome is accepted with the Lean's `Run.run` agreeing; the proved set less one output unit, and the sample with its
 closure dropped, are refused (`a5.output_negatives`); a class that mixes a member, a law that is not a streamed work law,
-and a class outside the population are refused before the draw (`a5.output_refusal`). A toy window of one template."""
+and a class outside the population are refused before the sample (`a5.output_refusal`). A toy window of one template."""
 
 from __future__ import annotations
 
@@ -96,9 +96,9 @@ def seeded(seed: int):
 
 @pytest.mark.parametrize("seed", range(6))
 def test_every_draw_proves_the_output_class_whole_beside_its_uniform_k_and_is_accepted(seed):
-    """The stream's draw of record on the verifier's coins, with the class's closure map: k drawn (the work law over one
-    template of work 1 is the uniform k-subset), the closure every output unit not drawn, so the draw proves the drawn
-    units and the whole class and nothing else; the outcome is accepted, the Lean's run agreeing."""
+    """The stream's sample of record on the verifier's coins, with the class's closure map: k drawn (the work law over one
+    template of work 1 is the uniform k-subset), the closure every output unit not sampled, so the sample proves the sampled
+    proof blocks and the whole class and nothing else; the outcome is accepted, the Lean's run agreeing."""
     closure = A5.output_closure(args(), N)
     assert closure is not None and set(closure) == set(range(N)) and all(cs == OUTS for cs in closure.values())
     coins = AC.VerifierCoins(seeded(seed))
