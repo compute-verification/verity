@@ -113,7 +113,8 @@ def refusals(tmp_path, lines, **kw):
 
 
 def test_a_run_whose_lead_lines_pass_admits_the_lead(tmp_path, capsys):
-    v, g, got = refusals(tmp_path, HONEST + CONTROLS + [{"check": "ssn_1l", "rejected": False}])
+    extreme = line(256, 8192, served_outputs=0)
+    v, g, got = refusals(tmp_path, HONEST + [extreme] + CONTROLS + [{"check": "ssn_1l", "rejected": False}])
     assert got == [] and g.passed and g.variant == v.id and v.binary_sha256 == "ab" * 32
     assert g.fold_bound == LEAD_FOLD_BOUND and g.toolkit == "13.0.1-sm_90a" and set(g.shapes) == set(SERVED)
     root, out = tmp_path / "tree", tmp_path / "out"
@@ -128,7 +129,8 @@ def test_a_run_whose_lead_lines_pass_admits_the_lead(tmp_path, capsys):
     (HONEST + CONTROLS, False, ["failed sass_ok"]),
     ([{**x, "fold_bound": LEAD_FOLD_BOUND // 2} for x in HONEST] + CONTROLS, True,
      ["held outputs exact within |p| <= 2097152, its fold serves |p| <= 4194304"]),
-    ([{**x, "served_outputs": 0} for x in HONEST] + CONTROLS, True, ["failed exact"]),
+    ([{**x, "served_outputs": 0} for x in HONEST[:3]] + HONEST[3:] + CONTROLS, True,
+     ["didn't cover [(2048, 2048), (3072, 2048), (16384, 2048)]"]),
 ])
 def test_a_run_that_missed_a_check_doesnt_admit_the_lead(tmp_path, lines, sass_ok, want):
     _, _, got = refusals(tmp_path, lines, sass_ok=sass_ok)
