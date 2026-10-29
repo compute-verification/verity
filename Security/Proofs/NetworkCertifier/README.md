@@ -254,7 +254,7 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   window's audit fails the leak relation at the network certifier's rows (`RLeakTap`) with probability at most
   `δ + ε_ks + ε_bind + Pr[B_tap]`. Every unit outside the faulty set is correct, so the extracted trace opens every
   transfer gate there, at the network certifier's value unless the two openings collide (`B_tap`, under
-  `Commitment.Binds`); filled in with the network certifier's values, it carries its records, and the faulty units'
+  `CommitmentScheme.Binds`); filled in with the network certifier's values, it carries its records, and the faulty units'
   gates are the advice the count already charges, so the count is unchanged. The network certifier is one device on
   the server's uplink, and it functions as an active warden (`Definitions/NetworkCertifier/Tap.lean`):
   one run of its code (`tapCode`, under one `trusted-host`) gives the cells the client receives and the observations
@@ -265,7 +265,7 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   in the monitoring period's buckets, at most `S` a bucket, and its `#guard`s hold it to the Python records. The record
   holds the fail cells and padding too, so the proof counts the cells through the
   observations and needs no fail-cell charge: `∏_c (cap_c + 1)` is room. Its named assumptions are
-  `Claims.Sampling.KS`, `Commitment.Binds`, `Claims.Flock.ListWithin` and `trusted-host`. The union over the monitoring
+  `Claims.Sampling.KS`, `CommitmentScheme.Binds`, `Claims.Flock.ListWithin` and `trusted-host`. The union over the monitoring
   period's live coins and the registration's binding of the prover's values at `reg` are not yet stated.
   `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
   locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.

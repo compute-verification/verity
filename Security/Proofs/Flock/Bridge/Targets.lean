@@ -32,7 +32,7 @@ reads, is not faulty in `witDep C Cm H roots Xr` at the statement at constants `
 def FaultyRightTarget : Prop :=
   ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
-    (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (roots : List Claims.Msg)
+    (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (roots : List Claims.Msg)
     (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n),
     (∃ op : Pos → Opn, ∀ g ∈ P.io u, com (op (pos g)) = cs (pos g) ∧ bit (val (op (pos g))) g = C.eval Xr g) →
     (∀ g ∈ P.io u, κ g = none → ∀ o : Opn, com o = cs (pos g) →
@@ -57,7 +57,7 @@ def PaTarget : Prop :=
 least `min K₀ (n − kd + 1)` faulty population slots, slots below `n`. -/
 def CountTarget : Prop :=
   ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd K₀ : ℕ), 1 ≤ kd → kd ≤ n →
-    ∀ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (κ : Fin C.N → Option Bool)
+    ∀ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (κ : Fin C.N → Option Bool)
       (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg) (w : Claims.Sampling.Wit),
       ¬ Claims.Sampling.RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots)
           (partOf P κ) w →
