@@ -11,7 +11,8 @@ shipped verdict over `OC`, `Zk.verifyWithM Hashes.oc`, then the custody checks),
 (`RecIns.setup`) where `FlockDeploy.V` has Flock's (`Ins.setup`), which refuses every V* statement; then the verdict's
 last refusals (`fullDrawO`: `RecSetup.fullDraw` at the record's draw, which refuses a recursive session without
 `--rec-inner` and, under it, a draw short of every unit; then `RecSetup.innerDrawn`, which refuses a session over an
-inner session whose record holds no draw), which `FlockDeploy.V` doesn't run.
+inner session whose record holds no draw; then `RecSetup.denseOnly`, which refuses a holo or sparse inner shape), which
+`FlockDeploy.V` doesn't run.
 
 `nextO_rej`, `nextO_coin` and `nextO_decide` are its three steps; at the SHA-512 oracle a decision accepts exactly when
 the deployed `Zk.verify` accepts the record and proof files at the recursive setup's tables, the custody checks pass and
@@ -68,11 +69,24 @@ def srcOfO (x : Claims.Msg) : Option RecCoins.Source := (insO x).bind (·.src)
 /-- **The verdict's last refusals**, as `verifyCmd` calls them: `RecSetup.fullDraw` at the record's draw (a recursive
 session without the verifier's inner shape, `RecSetup.noInner`, and under that shape a V* session whose record's draw is
 not every unit of its population), then `RecSetup.innerDrawn` (a session over an inner session whose record holds no
-draw). -/
+draw), then `RecSetup.denseOnly` (a session at a holo or sparse inner shape, which `RecursiveKS` doesn't cover). -/
 def fullDrawO (x : Claims.Msg) (f : Final) : Bool :=
   (do
     RecSetup.fullDraw (innerOfO x) (recOfO x) (Witness.recordDraw f.record) f.record
-    RecSetup.innerDrawn (srcOfO x)).isOk
+    RecSetup.innerDrawn (srcOfO x)
+    RecSetup.denseOnly (innerOfO x)).isOk
+
+/-- Where the verdict's last refusals pass, so does `RecSetup.denseOnly`, the last of them. -/
+theorem fullDrawO_denseOnly {x : Claims.Msg} {f : Final} (h : fullDrawO x f = true) :
+    RecSetup.denseOnly (innerOfO x) = .ok () := by
+  unfold fullDrawO at h
+  cases hd : RecSetup.denseOnly (innerOfO x) with
+  | ok u => rfl
+  | error e =>
+    exfalso
+    cases ha : RecSetup.fullDraw (innerOfO x) (recOfO x) (Witness.recordDraw f.record) f.record <;>
+      cases hb : RecSetup.innerDrawn (srcOfO x) <;>
+      simp [ha, hb, hd, bind, Except.bind, Except.isOk, Except.toBool] at h
 
 /-- Where the verdict's last refusals pass, so does `RecSetup.fullDraw`, the first of them. -/
 theorem fullDrawO_fullDraw {x : Claims.Msg} {f : Final} (h : fullDrawO x f = true) :

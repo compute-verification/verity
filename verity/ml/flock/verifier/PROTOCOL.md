@@ -438,10 +438,13 @@ with `refused: <why>: a statement form the soundness proof does not cover`. The 
 Also refused: a draw by a design no claim covers (bernoulli, work, a work draw with a closure, and a subset draw without
 `--zk` at public outputs; under `--plain-tables` the subset design alone), a session without a draw, a session verified
 without the verifier's own `--program`, and under `--rec-inner` a V* session that does not draw every unit of its one
-full table (`RecSetup.fullDraw`, `RecSetup.oneFull`); a recursive session without `--rec-inner` is refused too. Last,
-once every other check has passed, `verify` refuses a statement version other than `verity/flock-circuit` and
-`verity/flock-circuit+plain-leaves` (a `+seed-injection` one as a selftest build's, the rest as superseded) and a plain
-session on seed coins (`ProvedScope.servedForm`); the versions stay parsed, so recorded sessions replay through every check.
+full table (`RecSetup.fullDraw`, `RecSetup.oneFull`), over an inner session whose record holds no draw
+(`RecSetup.innerDrawn`), or at a holo or sparse inner shape (`RecSetup.denseOnly`: `RecursiveKS` covers the dense form
+only, and the compiled model refuses the same sessions, `RecDeploy.acc_dense`); a recursive session without `--rec-inner`
+or without `--zk` (`RecSetup.zkOnly`) is refused too. Last, once every other check has passed, `verify` refuses a
+statement version other than `verity/flock-circuit` and `verity/flock-circuit+plain-leaves` (a `+seed-injection` one as
+a selftest build's, the rest as superseded) and a plain session on seed coins (`ProvedScope.servedForm`); the versions
+stay parsed, so recorded sessions replay through every check.
 `flock-verify rec-compose` (`Flock.RecCompose`) gives a recursive statement's verdict from its parts' verdicts.
 
 ### 16.16 Plain leaves
