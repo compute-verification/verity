@@ -7,7 +7,7 @@ import Definitions.Accounting.Assumptions.RemoteSketch
 
 `Accounting.Remote.Held.Assumptions.SketchBound T δs`, the memory line's premise that a correct receipt was computed
 while its block was in node memory or on a chip during its pass, on a trace over a remote session's outcomes
-(`Accounting.Remote.Sketch.SessionCoins`): the prover's own coins, a uniform registered store, and SHA-512's outputs, whose
+(`Accounting.Remote.Sketch.Outcome`): the prover's own coins, a uniform registered store, and SHA-512's outputs, whose
 keys at the candidate seeds are within `ε_ro` of uniform by the named random-oracle premise
 `Accounting.Assumptions.SketchHashRandom`. Its error is
 
@@ -49,7 +49,7 @@ uniform (`SketchHashRandom`), within the per-pass hash budget `qtot` (`KeyBudget
 `(Σ_j G_j)·(ε + N/2^h) + (Σ_j qtot_j)/2^(8r) + ε_ro`. -/
 def SketchBoundSession : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N m h S L q ks r : ℕ) (G qtot : Fin P → ℕ) (ε εro : ℝ)
-    (A : Session β Hs P N m h S L q ks G) (T : Trace (SessionCoins β Hs N m)),
+    (A : Session β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)),
     r ≤ 32 → 0 ≤ ε → 0 ≤ εro → T.passes ≤ P →
     Accounting.Assumptions.SketchRank ks m r (ENNReal.ofReal ε) →
     Accounting.Assumptions.SketchHashRandom A εro → KeyBudget A qtot → Receipted A T → Present A T →
@@ -61,7 +61,7 @@ outside-compute factor `F`): at most `Q + P` candidate seeds and `Q` receipt-has
 at them within `(Q + P)²/2^257` of uniform. -/
 def SketchBoundDeployed : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N S L q Q : ℕ) (G qtot : Fin P → ℕ) (ε : ℝ)
-    (A : Session β Hs P N 128 512 S L q 16 G) (T : Trace (SessionCoins β Hs N 128)),
+    (A : Session β Hs P N 128 512 S L q 16 G) (T : Trace (Outcome β Hs N 128)),
     0 ≤ ε → T.passes ≤ P →
     Accounting.Assumptions.SketchRank 16 128 12 (ENNReal.ofReal ε) →
     ∑ j, G j ≤ Q + P → ∑ j, qtot j ≤ Q →

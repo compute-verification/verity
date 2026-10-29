@@ -67,7 +67,7 @@ structure EraseProver (sch : Scheme M) (S S_φ D Q : ℕ) (K V : Type) : Type wh
 
 /-- The randomness of one secure-erasure audit: the foreign content, the digest key, and the timed audit's primitive,
 coins and indices. -/
-abbrev EraseOutcome (sch : Scheme M) (S_φ : ℕ) (K : Type) (s : ℕ) : Type := Bits S_φ × K × AuditCoins sch s
+abbrev EraseOutcome (sch : Scheme M) (S_φ : ℕ) (K : Type) (s : ℕ) : Type := Bits S_φ × K × Outcome sch s
 
 /-- The blocks the spot reads return for the indices `is`, from round `j` in memory `σ`, each with what `keep` reads off
 the memory at that round's arrival. -/

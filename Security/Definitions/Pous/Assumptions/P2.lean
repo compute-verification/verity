@@ -110,7 +110,7 @@ def P2RingRoundSecure (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=
     ∀ (Sz : ℕ → ℕ) (k : ℕ) (W : Bits (p2ring N 16448 (2 ^ 16448 - 21065) 16432).n)
       (A₁ : Preprocessor (p2ring N 16448 (2 ^ 16448 - 21065) 16432) (Sz 0))
       (A₂ : VarResponderOn (p2ring N 16448 (2 ^ 16448 - 21065) 16432) Sz D Q L),
-      ∃ bad : AuditCoins (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k → Prop, pr bad ≤ k * ε₀ ∧
+      ∃ bad : Outcome (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k → Prop, pr bad ≤ k * ε₀ ∧
         ∀ j < k, Sz j ≤ (p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ →
           pr (fun x => varPassesOn _ k (j + 1) W A₁ A₂ x ∧ ¬ bad x) ≤
             (1 - p) * pr (fun x => varPassesOn _ k j W A₁ A₂ x ∧ ¬ bad x)
@@ -126,7 +126,7 @@ def P2RingRoundSecureWide (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=
     ∀ (Sz : ℕ → ℕ) (k : ℕ) (W : Bits (p2ring N 16448 (2 ^ 16448 - 21065) 16432).n)
       (A₁ : Preprocessor (p2ring N 16448 (2 ^ 16448 - 21065) 16432) (Sz 0))
       (A₂ : VarResponderOn (p2ring N 16448 (2 ^ 16448 - 21065) 16432) Sz D Q L),
-      ∃ bad : AuditCoins (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k → Prop, pr bad ≤ k * ε₀ ∧
+      ∃ bad : Outcome (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k → Prop, pr bad ≤ k * ε₀ ∧
         ∀ j < k, Sz j ≤ (p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ →
           pr (fun x => varPassesOn _ k (j + 1) W A₁ A₂ x ∧ ¬ bad x) ≤
             (1 - p) * pr (fun x => varPassesOn _ k j W A₁ A₂ x ∧ ¬ bad x)

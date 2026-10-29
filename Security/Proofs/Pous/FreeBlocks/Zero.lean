@@ -17,7 +17,7 @@ theorem seqAnswers_length {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → 
   | j, i :: is, σ => by simp [seqAnswers, seqAnswers_length f step (j + 1) is]
 
 theorem seqAcceptsFree_zero (sch : Scheme M) {S D Q : ℕ} (k : ℕ) (W : Bits sch.n) (A₁ : Preprocessor sch S)
-    (Fr : FreeSet sch 0) (A₂ : SeqResponder sch S D Q) (x : AuditCoins sch k) :
+    (Fr : FreeSet sch 0) (A₂ : SeqResponder sch S D Q) (x : Outcome sch k) :
     seqAcceptsFree sch k W A₁ Fr A₂ x ↔ seqAccepts sch k W A₁ A₂ x := by
   simp only [seqAcceptsFree, seqAccepts]
   have hF : ∀ W pp C ω, Fr.free W pp C ω = ∅ := fun W pp C ω =>

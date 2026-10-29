@@ -67,12 +67,12 @@ variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
 /-- `Present` with outside computation allowed: on every accepting outcome, a block the kept candidate's device of pass
 `j` obtained whole was in node memory or on a chip, or computed on by a device outside the node, at some tick of the
 pass. -/
-def PresentAt (A : Session β Hs P N m h S L q ks G) (T : Trace (SessionCoins β Hs N m)) (O : Outside T) : Prop :=
+def PresentAt (A : Session β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)) (O : Outside T) : Prop :=
   ∀ ω, T.accepts ω → ∀ j : Fin P, ∀ t : Fin N, A.Whole ω j (A.kept ω j) t →
     ∀ b : Fin T.blocks, (b : ℕ) = t →
       ∃ τ, T.tick ω (j : ℕ) ≤ τ ∧ τ < T.tick ω ((j : ℕ) + 1) ∧ b ∈ T.present ω τ ∪ O.blocks ω τ
 
-variable {A : Session β Hs P N m h S L q ks G} {T : Trace (SessionCoins β Hs N m)}
+variable {A : Session β Hs P N m h S L q ks G} {T : Trace (Outcome β Hs N m)}
 
 /-- `Present` gives `PresentAt` at every record of outside computation. -/
 theorem presentAt_of_present (hP : Present A T) (O : Outside T) : PresentAt A T O :=

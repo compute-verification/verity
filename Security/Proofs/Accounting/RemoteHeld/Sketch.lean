@@ -286,7 +286,7 @@ and store (`SketchHashRandom A ε`), an event of the model's coins is at most `�
 than over the model's coins: average the premise over the prover's coins and the store. -/
 theorem pr_coins_le [Fintype Hs] (A : Session β Hs P N m h S L q ks G) {ε : ℝ}
     (hH : Accounting.Assumptions.SketchHashRandom A ε) (E : Coins β P N m h ks G → Prop) :
-    pr (fun ω : SessionCoins β Hs N m => E (A.coins ω)) ≤ pr E + ENNReal.ofReal ε := by
+    pr (fun ω : Outcome β Hs N m => E (A.coins ω)) ≤ pr E + ENNReal.ofReal ε := by
   refine pr_le_add_of_fst (fun ω : β × (Data N m 0 Sector × Hs) => E (A.coins ω)) E _ fun b => ?_
   refine pr_le_add_of_fst (fun y : Data N m 0 Sector × Hs => E (A.coins (b, y))) (fun z => E (b, z)) _
     fun D => ?_
@@ -333,8 +333,8 @@ end Session
 /-- An accepting outcome where `SketchBound`'s event fails has some pass's kept candidate missing at the outcome's
 model coins. -/
 theorem miss_of_fails {β Hs : Type} {P : ℕ} {G : Fin P → ℕ} (A : Session β Hs P N m h S L q ks G)
-    (T : Accounting.Remote.Held.Trace (SessionCoins β Hs N m)) (hP : T.passes ≤ P)
-    (hrec : Assumptions.Receipted A T) (hpres : Assumptions.Present A T) (ω : SessionCoins β Hs N m)
+    (T : Accounting.Remote.Held.Trace (Outcome β Hs N m)) (hP : T.passes ≤ P)
+    (hrec : Assumptions.Receipted A T) (hpres : Assumptions.Present A T) (ω : Outcome β Hs N m)
     (hacc : T.accepts ω)
     (hfail : ¬ ∀ p < T.passes, ∀ b ∈ T.correct ω p,
       ∃ τ, T.tick ω p ≤ τ ∧ τ < T.tick ω (p + 1) ∧ b ∈ T.present ω τ) :
@@ -385,7 +385,7 @@ theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := 
               (fun κ D => hq b j η κ D)
       _ = δ := by
           simp only [δ, Finset.sum_add_distrib, ← Finset.sum_mul, ENNReal.sum_div, Nat.cast_sum]
-  have hout : pr (fun ω : SessionCoins β Hs N m =>
+  have hout : pr (fun ω : Outcome β Hs N m =>
       ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) ≤
       δ + ENNReal.ofReal εro :=
     (Session.pr_coins_le A hH
@@ -413,12 +413,12 @@ theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := 
     rw [ENNReal.toReal_add hfin ENNReal.ofReal_ne_top, hδ, ENNReal.toReal_ofReal hεro]
   have hmono : Pouw.pr (fun ω => T.accepts ω ∧ ¬ ∀ p < T.passes, ∀ b ∈ T.correct ω p,
       ∃ τ, T.tick ω p ≤ τ ∧ τ < T.tick ω (p + 1) ∧ b ∈ T.present ω τ) ≤
-      Pouw.pr (fun ω : SessionCoins β Hs N m =>
+      Pouw.pr (fun ω : Outcome β Hs N m =>
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) :=
     pouw_pr_mono fun ω hω => miss_of_fails A T hP hrec hpres ω hω.1 hω.2
-  have hpr : Pouw.pr (fun ω : SessionCoins β Hs N m =>
+  have hpr : Pouw.pr (fun ω : Outcome β Hs N m =>
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) =
-      (pr (fun ω : SessionCoins β Hs N m =>
+      (pr (fun ω : Outcome β Hs N m =>
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1)).toReal := by
     unfold Pouw.pr Pous.pr
     rw [ENNReal.toReal_div]

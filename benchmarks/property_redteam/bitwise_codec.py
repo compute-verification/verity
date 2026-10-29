@@ -16,7 +16,7 @@ payload byte is registered, so its table reads pay nothing.
 
 The circuit computes the codec with the field's arithmetic built from those gates (ripple-carry adders, the
 conditional subtraction of `p`, double-and-add products, square-and-multiply for `ρ`'s exponent), and every word's tweak
-from word 1's, `t_i = i·t_1 mod p` (`Draw.tweak`: `t_i = τ·i mod p`, so `t_1 = τ`). It reads the coin slots
+from word 1's, `t_i = i·t_1 mod p` (`KeySample.tweak`: `t_i = τ·i mod p`, so `t_1 = τ`). It reads the coin slots
 `(const, r, l)`, `(mask, l)` and `(tweak, 1, l)` once: `8·(k + 2)·n/8` units for the whole block, whatever its number
 of words. At p1024 and `k = 3` that is 5,120 units, so `EncodeChainHardness p1024 3 B E ε`'s conclusion
 `q·E·(n − 1) ≤ budgeted·(n − 1)` fails at every `q > 5120/E`, for every `B` (there is no budgeted gate) and every

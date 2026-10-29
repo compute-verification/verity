@@ -120,7 +120,7 @@ theorem seqAnswers_code {I : IdealModel} {ℓ N S B : ℕ} (f : I.Qry → I.Ans)
 `seqAccepts` and `seqAcceptsOn`, each with its responder's step. -/
 def accepts {I : IdealModel} (sch : Scheme I) {S : ℕ} (c : ℕ) (W : Bits sch.n) (A₁ : Preprocessor sch S)
     (step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → Prog I (Bits sch.ℓ × Bits S))
-    (x : AuditCoins sch c) : Prop :=
+    (x : Outcome sch c) : Prop :=
   let ω := x.1
   let pp := (sch.enc W ω x.2.1).1
   let C := (sch.enc W ω x.2.1).2
@@ -144,11 +144,11 @@ theorem accepts_coded_iff {I : IdealModel} (sch : Scheme I) {N S : ℕ} (c : ℕ
     (A₁ : Preprocessor sch N)
     (step : Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → Prog I (Bits sch.ℓ × Bits N))
     (P : ℕ → Bits N → Prop)
-    (hreach : ∀ (x : AuditCoins sch c) (j : ℕ), j < c →
+    (hreach : ∀ (x : Outcome sch c) (j : ℕ), j < c →
       P j (Sampled.seqState (I.answer x.1) (step W (sch.enc W x.1 x.2.1).1) 0 ((List.ofFn x.2.2).take j)
         (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1)))
     (e : ℕ → Bits N → Bits S) (d : ℕ → Bits S → Bits N)
-    (hed : ∀ j < c, ∀ σ, P j σ → d j (e j σ) = σ) (x : AuditCoins sch c) :
+    (hed : ∀ j < c, ∀ σ, P j σ → d j (e j σ) = σ) (x : Outcome sch c) :
     accepts sch c W (codedPre A₁ e) (codedStep step e d) x ↔ accepts sch c W A₁ step x := by
   have h := seqAnswers_code (I.answer x.1) (step W (sch.enc W x.1 x.2.1).1) P c e d hed (List.ofFn x.2.2) 0
     (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) (by simp) fun m hm => by
@@ -192,13 +192,13 @@ theorem adds_sets {I : IdealModel} (sch : Scheme I) {N q : ℕ} (S c k T : ℕ) 
     (A₁ : Bits q → Preprocessor sch N)
     (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → Prog I (Bits sch.ℓ × Bits N))
     (F : ℕ → Bits q → Finset (Bits N))
-    (hreach : ∀ (z : Bits q) (x : AuditCoins sch c) (j : ℕ), j < c →
+    (hreach : ∀ (z : Bits q) (x : Outcome sch c) (j : ℕ), j < c →
       Sampled.seqState (I.answer x.1) (step z W (sch.enc W x.1 x.2.1).1) 0 ((List.ofFn x.2.2).take j)
         (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) ∈ F j z)
     (hheavy : ∀ j, pr (fun z : Bits q => T < (F j z).card) ≤ (2⁻¹ : ℝ≥0∞) ^ k) (hT : T ≤ 2 ^ S)
     (hsec : ∀ (z : Bits q) (e : ℕ → Bits N → Bits S) (d : ℕ → Bits S → Bits N),
       pr (accepts sch c W (codedPre (A₁ z) e) (codedStep (step z) e d)) ≤ η) :
-    pr (fun x : Bits q × AuditCoins sch c => accepts sch c W (A₁ x.1) (step x.1) x.2) ≤ η + c * (2⁻¹ : ℝ≥0∞) ^ k := by
+    pr (fun x : Bits q × Outcome sch c => accepts sch c W (A₁ x.1) (step x.1) x.2) ≤ η + c * (2⁻¹ : ℝ≥0∞) ^ k := by
   classical
   have hbad : pr (fun z : Bits q => ∃ j ∈ Finset.range c, T < (F j z).card) ≤ c * (2⁻¹ : ℝ≥0∞) ^ k := by
     refine (PousThm1.pr_exists_le _ _).trans ?_
@@ -220,7 +220,7 @@ theorem adds_sets {I : IdealModel} (sch : Scheme I) {N q : ℕ} (S c k T : ℕ) 
         (accepts_coded_iff sch c W (A₁ z) (step z) (fun j σ => σ ∈ F j z) (hreach z) e d hed' x).symm
     rw [heq]
     exact hsec z e d
-  calc pr (fun x : Bits q × AuditCoins sch c => accepts sch c W (A₁ x.1) (step x.1) x.2)
+  calc pr (fun x : Bits q × Outcome sch c => accepts sch c W (A₁ x.1) (step x.1) x.2)
       ≤ pr (fun z : Bits q => ∃ j ∈ Finset.range c, T < (F j z).card) + η :=
         PousThm1.pr_prod_le (fun z x => accepts sch c W (A₁ z) (step z) x) _ η hgood
     _ ≤ c * (2⁻¹ : ℝ≥0∞) ^ k + η := add_le_add hbad le_rfl
@@ -233,7 +233,7 @@ theorem adds_core {I : IdealModel} (sch : Scheme I) {N q : ℕ} (S c k : ℕ) (�
     (hdet : Determines sch c W π A₁ step) (hNS : N + k ≤ S + q)
     (hsec : ∀ (z : Bits q) (e : ℕ → Bits N → Bits S) (d : ℕ → Bits S → Bits N),
       pr (accepts sch c W (codedPre (A₁ z) e) (codedStep (step z) e d)) ≤ η) :
-    pr (fun x : Bits q × AuditCoins sch c => accepts sch c W (A₁ x.1) (step x.1) x.2) ≤ η + c * (2⁻¹ : ℝ≥0∞) ^ k :=
+    pr (fun x : Bits q × Outcome sch c => accepts sch c W (A₁ x.1) (step x.1) x.2) ≤ η + c * (2⁻¹ : ℝ≥0∞) ^ k :=
   adds_sets sch S c k (2 ^ (N + k - q)) η W A₁ step (fun j z => fibre (π j) z)
     (fun z x j hj => by simp [fibre, hdet z x j hj]) (fun j => pr_heavy_le (π j) k)
     (Nat.pow_le_pow_right (by norm_num) (by omega)) hsec
@@ -245,7 +245,7 @@ theorem adds_advice_core {I : IdealModel} (sch : Scheme I) {N a q : ℕ} (S c k 
     (hdet : DeterminesAdvice sch c W π A₁ step) (hNS : N + a + k ≤ S + q)
     (hsec : ∀ (z : Bits q) (e : ℕ → Bits N → Bits S) (d : ℕ → Bits S → Bits N),
       pr (accepts sch c W (codedPre (A₁ z) e) (codedStep (step z) e d)) ≤ η) :
-    pr (fun x : Bits q × AuditCoins sch c => accepts sch c W (A₁ x.1) (step x.1) x.2) ≤ η + c * (2⁻¹ : ℝ≥0∞) ^ k :=
+    pr (fun x : Bits q × Outcome sch c => accepts sch c W (A₁ x.1) (step x.1) x.2) ≤ η + c * (2⁻¹ : ℝ≥0∞) ^ k :=
   adds_sets sch S c k (2 ^ (N + a + k - q)) η W A₁ step (fun j z => fibreAdvice (π j) z)
     (fun z x j hj => by simpa [fibreAdvice] using hdet z x j hj) (fun j => pr_heavy_advice_le (π j) k)
     (Nat.pow_le_pow_right (by norm_num) (by omega)) hsec
@@ -265,7 +265,7 @@ theorem pr_and_not_le {α : Type} [Fintype α] (A : α → Prop) {q S M k : ℕ}
 theorem adds : Accounting.Guarantees.Memory.Adds := by
   intro I sch S D Q c δ ε hsec M H q k W π A₁ A₂ hdet
   simp only [AuditSecure] at hsec
-  refine pr_and_not_le (fun x : Bits q × AuditCoins sch c => seqAccepts sch c W (A₁ x.1) (A₂ x.1) x.2) _ fun hNS => ?_
+  refine pr_and_not_le (fun x : Bits q × Outcome sch c => seqAccepts sch c W (A₁ x.1) (A₂ x.1) x.2) _ fun hNS => ?_
   exact adds_core sch S c k (δ + ε) W π A₁ (fun z => (A₂ z).step) hdet hNS fun z e d =>
     hsec W (codedPre (A₁ z) e)
       ⟨codedStep (A₂ z).step e d, fun W pp j s i => bounded_progMap _ ((A₂ z).bounded W pp j (d j s) i)⟩
@@ -273,7 +273,7 @@ theorem adds : Accounting.Guarantees.Memory.Adds := by
 theorem addsOn : Accounting.Guarantees.Memory.AddsOn := by
   intro B w p _ sch S D Q L c δ ε hsec M H q k W π A₁ A₂ hdet
   simp only [AuditSecureOn] at hsec
-  refine pr_and_not_le (fun x : Bits q × AuditCoins sch c => seqAcceptsOn sch c W (A₁ x.1) (A₂ x.1) x.2) _
+  refine pr_and_not_le (fun x : Bits q × Outcome sch c => seqAcceptsOn sch c W (A₁ x.1) (A₂ x.1) x.2) _
     fun hNS => ?_
   exact adds_core sch S c k (δ + ε) W π A₁ (fun z => (A₂ z).step) hdet hNS fun z e d =>
     hsec W (codedPre (A₁ z) e)
@@ -299,7 +299,7 @@ theorem addsP2RingIsolated : Accounting.Guarantees.Memory.AddsP2RingIsolated := 
 theorem addsAdvice : Accounting.Guarantees.Memory.AddsAdvice := by
   intro I sch S D Q c δ ε hsec M H a q k W π A₁ A₂ hdet
   simp only [AuditSecure] at hsec
-  refine pr_and_not_le (fun x : Bits q × AuditCoins sch c => seqAccepts sch c W (A₁ x.1) (A₂ x.1) x.2) _ fun hNS => ?_
+  refine pr_and_not_le (fun x : Bits q × Outcome sch c => seqAccepts sch c W (A₁ x.1) (A₂ x.1) x.2) _ fun hNS => ?_
   exact adds_advice_core sch S c k (δ + ε) W π A₁ (fun z => (A₂ z).step) hdet hNS fun z e d =>
     hsec W (codedPre (A₁ z) e)
       ⟨codedStep (A₂ z).step e d, fun W pp j s i => bounded_progMap _ ((A₂ z).bounded W pp j (d j s) i)⟩
@@ -307,7 +307,7 @@ theorem addsAdvice : Accounting.Guarantees.Memory.AddsAdvice := by
 theorem addsAdviceOn : Accounting.Guarantees.Memory.AddsAdviceOn := by
   intro B w p _ sch S D Q L c δ ε hsec M H a q k W π A₁ A₂ hdet
   simp only [AuditSecureOn] at hsec
-  refine pr_and_not_le (fun x : Bits q × AuditCoins sch c => seqAcceptsOn sch c W (A₁ x.1) (A₂ x.1) x.2) _
+  refine pr_and_not_le (fun x : Bits q × Outcome sch c => seqAcceptsOn sch c W (A₁ x.1) (A₂ x.1) x.2) _
     fun hNS => ?_
   exact adds_advice_core sch S c k (δ + ε) W π A₁ (fun z => (A₂ z).step) hdet hNS fun z e d =>
     hsec W (codedPre (A₁ z) e)

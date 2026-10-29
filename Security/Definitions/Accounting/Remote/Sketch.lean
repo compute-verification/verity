@@ -11,8 +11,8 @@ tag of the block's index and its sketch words (`RateSketch.sketch`). There is no
 may grind a pass's seed: pass `j` has `G j` candidate seeds, each with its own key, and the receipts it sends are one
 candidate's (`kept`).
 
-**The session's coins** (`SessionCoins`) are the prover's own coins `β`, the registered store (`N` blocks of `m` 32-byte
-sectors) and `Hs`, what SHA-512's outputs are read over, all uniform and independent. The session's keys are SHA-512's at its
+**The outcome** (`Outcome`) is the prover's own coins `β`, the registered store (`N` blocks of `m` 32-byte sectors)
+and `Hs`, what SHA-512's outputs are read over, all uniform and independent. The session's keys are SHA-512's at its
 candidate seeds (`Session.keys`, any function of the outcome). That they are uniform, whatever the prover's coins and
 the store, is the named premise `Accounting.Assumptions.SketchHashRandom` (`random-oracle`), not the coin type.
 
@@ -38,9 +38,9 @@ abbrev Keys (P N m h ks : ℕ) (G : Fin P → ℕ) : Type := (j : Fin P) → Fin
 /-- The model's coins: the prover's own, the registered store, and the keys. -/
 abbrev Coins (β : Type) (P N m h ks : ℕ) (G : Fin P → ℕ) : Type := β × Data N m 0 Sector × Keys P N m h ks G
 
-/-- A session's coins: the prover's own, the registered store, and `Hs`, what SHA-512's outputs are read
+/-- A session's outcome: the prover's own coins, the registered store, and `Hs`, what SHA-512's outputs are read
 over. -/
-abbrev SessionCoins (β Hs : Type) (N m : ℕ) : Type := β × Data N m 0 Sector × Hs
+abbrev Outcome (β Hs : Type) (N m : ℕ) : Type := β × Data N m 0 Sector × Hs
 
 instance instFintypeKey (N m h ks : ℕ) : Fintype (Key N m h ks) := by
   letI : Fintype (Oracle N 0 h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
@@ -63,7 +63,7 @@ structure Session (β Hs : Type) (P N m h S L q ks : ℕ) (G : Fin P → ℕ) wh
   device : β → (j : Fin P) → ((i : {i : Fin P // i < j}) → Fin (G i) → Key N m h ks) →
     Fin (G j) → RateSketch.Device N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32))
   keys : β → Data N m 0 Sector → Hs → Keys P N m h ks G
-  kept : SessionCoins β Hs N m → (j : Fin P) → Fin (G j)
+  kept : Outcome β Hs N m → (j : Fin P) → Fin (G j)
 
 namespace Session
 
@@ -71,7 +71,7 @@ variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
 
 /-- The model's coins at an outcome: the prover's own, the store, and the keys SHA-512 gives at the candidate
 seeds. -/
-def coins (A : Session β Hs P N m h S L q ks G) (ω : SessionCoins β Hs N m) : Coins β P N m h ks G :=
+def coins (A : Session β Hs P N m h S L q ks G) (ω : Outcome β Hs N m) : Coins β P N m h ks G :=
   (ω.1, ω.2.1, A.keys ω.1 ω.2.1 ω.2.2)
 
 /-- Pass `j`'s candidate `c` at the model's coins. -/
@@ -81,12 +81,12 @@ def devAt (A : Session β Hs P N m h S L q ks G) (x : Coins β P N m h ks G) (j 
 
 /-- The blocks whose receipts pass `j`'s candidate `c` gets right at an outcome: its tag is the receipt hash of the
 block's index and sketch at the candidate's key. -/
-def correctAt (A : Session β Hs P N m h S L q ks G) (ω : SessionCoins β Hs N m) (j : Fin P) (c : Fin (G j)) :
+def correctAt (A : Session β Hs P N m h S L q ks G) (ω : Outcome β Hs N m) (j : Fin P) (c : Fin (G j)) :
     Finset (Fin N) :=
   (A.devAt (A.coins ω) j c).correct sketch ((A.coins ω).2.2 j c).1 ((A.coins ω).2.2 j c).2 ω.2.1
 
 /-- Pass `j`'s candidate `c` obtained block `t` whole at an outcome: every one of its sectors. -/
-def Whole (A : Session β Hs P N m h S L q ks G) (ω : SessionCoins β Hs N m) (j : Fin P) (c : Fin (G j))
+def Whole (A : Session β Hs P N m h S L q ks G) (ω : Outcome β Hs N m) (j : Fin P) (c : Fin (G j))
     (t : Fin N) : Prop :=
   ∀ u, Sum.inl (t, u) ∈
     (A.devAt (A.coins ω) j c).obtained ((A.coins ω).2.2 j c).1 ((A.coins ω).2.2 j c).2 ω.2.1

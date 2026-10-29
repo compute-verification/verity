@@ -40,7 +40,7 @@ structure SeqResponder (sch : Scheme M) (S D Q : ℕ) : Type where
   bounded : ∀ W pp j σ i, (step W pp j σ i).Bounded D Q
 
 /-- The randomness of one audit: the primitive, the encoder's coins and the challenge indices. -/
-abbrev AuditCoins (sch : Scheme M) (k : ℕ) : Type := M.Ω × sch.Coins × (Fin k → Fin sch.B)
+abbrev Outcome (sch : Scheme M) (k : ℕ) : Type := M.Ω × sch.Coins × (Fin k → Fin sch.B)
 
 /-- The blocks a sequential responder returns for the indices `is`, starting at round `j` in state `σ`. -/
 def seqAnswers {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) :
@@ -52,7 +52,7 @@ def seqAnswers {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → 
 
 /-- The simultaneous audit accepts. -/
 def simAccepts (sch : Scheme M) {S D Q k : ℕ} (W : Bits sch.n) (A₁ : Preprocessor sch S)
-    (A₂ : SimResponder sch S D Q k) (x : AuditCoins sch k) : Prop :=
+    (A₂ : SimResponder sch S D Q k) (x : Outcome sch k) : Prop :=
   let ω := x.1
   let pp := (sch.enc W ω x.2.1).1
   let C := (sch.enc W ω x.2.1).2
@@ -60,7 +60,7 @@ def simAccepts (sch : Scheme M) {S D Q k : ℕ} (W : Bits sch.n) (A₁ : Preproc
 
 /-- The sequential audit with `k` rounds accepts. -/
 def seqAccepts (sch : Scheme M) {S D Q : ℕ} (k : ℕ) (W : Bits sch.n) (A₁ : Preprocessor sch S)
-    (A₂ : SeqResponder sch S D Q) (x : AuditCoins sch k) : Prop :=
+    (A₂ : SeqResponder sch S D Q) (x : Outcome sch k) : Prop :=
   let ω := x.1
   let pp := (sch.enc W ω x.2.1).1
   let C := (sch.enc W ω x.2.1).2

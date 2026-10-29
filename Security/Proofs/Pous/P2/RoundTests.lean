@@ -33,7 +33,7 @@ noncomputable def recSeq (B w p b : ℕ) [NeZero B] [NeZero p] (n D Q L : ℕ) (
 
 theorem recSeq_accepts (hp : p.Prime) (h4 : p % 4 = 3) (hb : 2 ^ b ≤ p) (hp2 : p ≤ 2 ^ w) (n : ℕ)
     (hn : (p + 1) / 4 < 2 ^ n) {D Q L k : ℕ} (hD : 2 * (n + 1) ≤ D) (hQ : 2 ≤ Q) (hL : 4 * n + 5 ≤ L)
-    (x : AuditCoins (p2ring B w p b) k) :
+    (x : Outcome (p2ring B w p b) k) :
     seqAcceptsOn (p2ring B w p b) k (fun _ => false) (fun _ _ _ _ _ => false) (recSeq B w p b n D Q L hD hQ hL) x := by
   show seqAnswers _ (fun _ σ i => progMap (fun c => (c, σ))
     (recBlock n ((p + 1) / 4) (pad B w b (fun _ => false) i) i)) 0 _ _ = _

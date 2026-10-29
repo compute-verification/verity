@@ -5,7 +5,7 @@ import Definitions.Accounting.Remote.Sketch
 # What deriving the receipts' sketch bound assumes (trusted)
 
 `Accounting.Guarantees.Remote.SketchBoundSession` derives `Accounting.Remote.Held.Assumptions.SketchBound` on a
-trace over a session's outcomes (`Accounting.Remote.Sketch.SessionCoins`) from the session (`Accounting.Remote.Sketch.Session`)
+trace over a session's outcomes (`Accounting.Remote.Sketch.Outcome`) from the session (`Accounting.Remote.Sketch.Session`)
 and these premises, each a named `Prop` taken as a hypothesis:
 
 * `Accounting.Assumptions.SketchHashRandom A ε`: the random-oracle premise (`random-oracle`). At every prover coin and
@@ -77,13 +77,13 @@ def KeyBudget (A : Session β Hs P N m h S L q ks G) (qtot : Fin P → ℕ) : Pr
 
 /-- **Receipted**: on every accepting outcome, each block whose receipt the trace counts correct in credited pass `j`
 is one the kept candidate's device tagged right at the key SHA-512 gives at its seed. -/
-def Receipted (A : Session β Hs P N m h S L q ks G) (T : Trace (SessionCoins β Hs N m)) : Prop :=
+def Receipted (A : Session β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)) : Prop :=
   ∀ ω, T.accepts ω → ∀ j : Fin P, ∀ b ∈ T.correct ω (j : ℕ),
     ∃ t ∈ A.correctAt ω j (A.kept ω j), (t : ℕ) = b
 
 /-- **Present**: on every accepting outcome, a block the kept candidate's device of pass `j` obtained whole was in node
 memory or on a chip at some tick of the pass. -/
-def Present (A : Session β Hs P N m h S L q ks G) (T : Trace (SessionCoins β Hs N m)) : Prop :=
+def Present (A : Session β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)) : Prop :=
   ∀ ω, T.accepts ω → ∀ j : Fin P, ∀ t : Fin N, A.Whole ω j (A.kept ω j) t →
     ∀ b : Fin T.blocks, (b : ℕ) = t → ∃ τ, T.tick ω (j : ℕ) ≤ τ ∧ τ < T.tick ω ((j : ℕ) + 1) ∧ b ∈ T.present ω τ
 

@@ -40,7 +40,7 @@ theorem band64_epsProof (d : ℕ) (salt : Bits 256) : epsProof (band64 d salt) 2
 `ε_proof = epsProof (band64 d salt) 265253616 = 3182352/2^28` (`band64_epsProof`). -/
 theorem band64_continuous (d : ℕ) (hd : 5 ≤ d) (salt : Bits 256) (D_late Q_late n : ℕ) (W : Bits (band64 d salt).n)
     (mach : ContMachine (band64 d salt)) (arr : ℕ → ℕ) (f βe : ℝ) (hβe : 0 < βe) :
-    pr (fun x : AuditCoins (band64 d salt) n =>
+    pr (fun x : Outcome (band64 d salt) n =>
         let pp := ((band64 d salt).enc W x.1 x.2.1).1
         let C := ((band64 d salt).enc W x.1 x.2.1).2
         let rs := contRecords mach 5 (2 ^ 20) D_late Q_late W pp C x.1 arr .start (List.ofFn x.2.2)

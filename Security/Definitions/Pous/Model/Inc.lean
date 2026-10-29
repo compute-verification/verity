@@ -52,7 +52,7 @@ structure TimedProdResponder (sch : Scheme M) (S D Q : ℕ) : Type where
 
 /-- The `k`-challenge audit accepts an untimed product-form responder. -/
 def prodAccepts (sch : Scheme M) {S : ℕ} (k : ℕ) (W : Bits sch.n) (A₁ : Preprocessor sch S)
-    (A₂ : ProdResponder sch S) (x : AuditCoins sch k) : Prop :=
+    (A₂ : ProdResponder sch S) (x : Outcome sch k) : Prop :=
   let ω := x.1
   let pp := (sch.enc W ω x.2.1).1
   let C := (sch.enc W ω x.2.1).2
@@ -60,7 +60,7 @@ def prodAccepts (sch : Scheme M) {S : ℕ} (k : ℕ) (W : Bits sch.n) (A₁ : Pr
 
 /-- The `k`-challenge audit accepts a timed product-form responder. -/
 def timedProdAccepts (sch : Scheme M) {S D Q : ℕ} (k : ℕ) (W : Bits sch.n) (A₁ : Preprocessor sch S)
-    (A₂ : TimedProdResponder sch S D Q) (x : AuditCoins sch k) : Prop :=
+    (A₂ : TimedProdResponder sch S D Q) (x : Outcome sch k) : Prop :=
   let ω := x.1
   let pp := (sch.enc W ω x.2.1).1
   let C := (sch.enc W ω x.2.1).2

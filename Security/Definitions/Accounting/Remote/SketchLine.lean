@@ -8,10 +8,10 @@ import Definitions.Accounting.Remote.Sketch
 The memory line (`Properties.RemoteAudit.Line.LineHeld`) is a statement over a session's coins
 `Accounting.Remote.Draw.Coins n κ X`: the other coins `X` (the prover's, the world's, every window's challenge) and each
 window's openings coin, all uniform. The receipts' sketch bound (`Accounting.Guarantees.Remote.SketchBoundDeployed`) is
-a statement over a session's outcomes `Accounting.Remote.Sketch.SessionCoins β Hs N m`: the prover's own coins, the
+a statement over a session's outcomes `Accounting.Remote.Sketch.Outcome β Hs N m`: the prover's own coins, the
 registered store and SHA-512's outputs, all uniform. One space carries both: the line's coins whose other coins are a
-sketch outcome, `Draw.Coins n κ (SessionCoins β Hs N m)`. Read the other way round it is a sketch outcome whose prover's
-coins are `β` and the windows' openings coins, `SessionCoins (β × (Fin n → Bits κ)) Hs N m` (`lineCoins`, a bijection). The
+sketch outcome, `Draw.Coins n κ (Outcome β Hs N m)`. Read the other way round it is a sketch outcome whose prover's
+coins are `β` and the windows' openings coins, `Outcome (β × (Fin n → Bits κ)) Hs N m` (`lineCoins`, a bijection). The
 prover is sent every openings coin once it is released, and the sketch model's devices may read its prover's coins in
 any way, so a device that reads an openings coin early is one of the model's.
 
@@ -30,8 +30,8 @@ variable {β Hs : Type} {n κ N m : ℕ}
 
 /-- A sketch outcome whose prover's coins carry the windows' openings coins, read as the memory line's coins: the other
 coins the prover's own, the store and SHA-512's outputs, and the openings coins. -/
-def lineCoins (ω : SessionCoins (β × (Fin n → Pous.Bits κ)) Hs N m) :
-    Accounting.Remote.Draw.Coins n κ (SessionCoins β Hs N m) :=
+def lineCoins (ω : Outcome (β × (Fin n → Pous.Bits κ)) Hs N m) :
+    Accounting.Remote.Draw.Coins n κ (Outcome β Hs N m) :=
   ((ω.1.1, ω.2.1, ω.2.2), ω.1.2)
 
 end Accounting.Remote.Sketch
@@ -44,8 +44,8 @@ variable {β Hs : Type} {n κ N m : ℕ}
 
 /-- The memory line's trace over coins whose other coins are a sketch outcome, read on the sketch model's outcomes
 (`lineCoins`), with the registered blocks a device outside the node computes on at a tick counted with the chips'. -/
-def sketch (T : Trace (Accounting.Remote.Draw.Coins n κ (SessionCoins β Hs N m))) (O : Outside T) :
-    Trace (SessionCoins (β × (Fin n → Pous.Bits κ)) Hs N m) where
+def sketch (T : Trace (Accounting.Remote.Draw.Coins n κ (Outcome β Hs N m))) (O : Outside T) :
+    Trace (Outcome (β × (Fin n → Pous.Bits κ)) Hs N m) where
   blocks := T.blocks
   passes := T.passes
   accepts ω := T.accepts (lineCoins ω)

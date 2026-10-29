@@ -472,7 +472,7 @@ Frozen (no-function): the guarantee `PROTOCOL.md` and `continuous.py` cite, over
 def ContinuousAudit : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late β n : ℕ) (π : ℝ≥0∞), TimedINC sch D Q β π →
     ∀ (W : Bits sch.n) (mach : ContMachine sch) (arr : ℕ → ℕ) (f βe : ℝ), 0 < βe →
-      pr (fun x : AuditCoins sch n =>
+      pr (fun x : Outcome sch n =>
           let pp := (sch.enc W x.1 x.2.1).1
           let C := (sch.enc W x.1 x.2.1).2
           let rs := contRecords mach D Q D_late Q_late W pp C x.1 arr .start (List.ofFn x.2.2)

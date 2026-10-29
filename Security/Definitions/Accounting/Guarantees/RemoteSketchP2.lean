@@ -23,7 +23,7 @@ is the four partials' sum, so the bound is on the unit.
   `2^-96.2548` by the sectors' count.
 
 `SketchBoundLine` is at every `m`, so the memory line's `SketchBoundAt T O δs` at P2's units is `SketchBoundLine` at
-`X = SessionCoins β Hs N 257` under `SketchBoundP2`: no new assumption. What stays assumed is `SketchBoundDeployed`'s, at
+`X = Outcome β Hs N 257` under `SketchBoundP2`: no new assumption. What stays assumed is `SketchBoundDeployed`'s, at
 `m = 257`: `SketchHashRandom` (claim `random-oracle`), the devices obtaining sectors whole and verbatim
 (`RateSketch.Device`, claim `rate-sketch-verbatim`, here a sector of a decoded block's bytes), the signs' rank tail at 257
 sectors (`SketchRank 16 257 12`), the hash budget (`KeyBudget`), and `Receipted`, `Present`, and the store uniform (the
@@ -47,7 +47,7 @@ at most `Q + P` candidate seeds and `Q` receipt-hash queries in all, with SHA-51
 of uniform. -/
 def SketchBoundP2 : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N S L q Q : ℕ) (G qtot : Fin P → ℕ) (ε : ℝ)
-    (A : Session β Hs P N 257 512 S L q 16 G) (T : Trace (SessionCoins β Hs N 257)),
+    (A : Session β Hs P N 257 512 S L q 16 G) (T : Trace (Outcome β Hs N 257)),
     0 ≤ ε → T.passes ≤ P →
     Accounting.Assumptions.SketchRank 16 257 12 (ENNReal.ofReal ε) →
     ∑ j, G j ≤ Q + P → ∑ j, qtot j ≤ Q →

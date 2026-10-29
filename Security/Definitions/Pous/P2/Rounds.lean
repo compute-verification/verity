@@ -36,7 +36,7 @@ def varAnswers {M : IdealModel} {ℓ B : ℕ} {Sz : ℕ → ℕ} (f : M.Qry → 
 
 /-- The first `j` of the `k` answers are correct. -/
 def varPassesOn (sch : Scheme (ringRO B w p)) {Sz : ℕ → ℕ} {D Q L : ℕ} (k j : ℕ) (W : Bits sch.n)
-    (A₁ : Preprocessor sch (Sz 0)) (A₂ : VarResponderOn sch Sz D Q L) (x : AuditCoins sch k) : Prop :=
+    (A₁ : Preprocessor sch (Sz 0)) (A₂ : VarResponderOn sch Sz D Q L) (x : Outcome sch k) : Prop :=
   let ω := x.1
   let pp := (sch.enc W ω x.2.1).1
   let C := (sch.enc W ω x.2.1).2

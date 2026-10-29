@@ -198,7 +198,7 @@ theorem continuous_audit : Pous.Guarantees.ContinuousAudit := by
       G < ∑ j : Fin n, q a (hist I j)
   let stop : M.Ω × sch.Coins → (Fin n → Fin sch.B) → Prop := fun a I =>
     ∃ j ∈ (Finset.univ : Finset (Fin n)), bad sch D Q D_late Q_late W mach arr β a (hist I j)
-  have himp : ∀ x : AuditCoins sch n,
+  have himp : ∀ x : Outcome sch n,
       (let pp := (sch.enc W x.1 x.2.1).1
        let C := (sch.enc W x.1 x.2.1).2
        let rs := contRecords mach D Q D_late Q_late W pp C x.1 arr .start (List.ofFn x.2.2)
@@ -213,7 +213,7 @@ theorem continuous_audit : Pous.Guarantees.ContinuousAudit := by
       exact id
     · rw [List.map_ofFn, List.sum_ofFn]
       rfl
-  have hre : pr (fun x : AuditCoins sch n => ev (x.1, x.2.1) x.2.2) =
+  have hre : pr (fun x : Outcome sch n => ev (x.1, x.2.1) x.2.2) =
       pr (fun y : (M.Ω × sch.Coins) × (Fin n → Fin sch.B) => ev y.1 y.2) :=
     pr_equiv (Equiv.prodAssoc _ _ _).symm (fun y : (M.Ω × sch.Coins) × (Fin n → Fin sch.B) => ev y.1 y.2)
   refine le_trans (pr_mono himp) ?_

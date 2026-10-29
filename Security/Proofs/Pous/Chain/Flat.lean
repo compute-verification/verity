@@ -29341,7 +29341,7 @@ theorem auditSecure_seq_add {M : IdealModel} (sch : Scheme M) {S D Q k : ℕ} (j
     (h : AuditSecure sch .sequential S D Q k δ ε) : AuditSecure sch .sequential S D Q (k + j) δ ε := by
   intro W A₁ A₂
   refine le_trans ?_ (h W A₁ A₂)
-  have hsub : ∀ x : AuditCoins sch (k + j), seqAccepts sch (k + j) W A₁ A₂ x →
+  have hsub : ∀ x : Outcome sch (k + j), seqAccepts sch (k + j) W A₁ A₂ x →
       seqAccepts sch k W A₁ A₂ (x.1, x.2.1, fun t => x.2.2 (Fin.castAdd j t)) := by
     intro x hx
     simp only [seqAccepts] at hx ⊢
@@ -29355,7 +29355,7 @@ theorem auditSecure_seq_add {M : IdealModel} (sch : Scheme M) {S D Q k : ℕ} (j
     rw [List.length_ofFn] at h2
     exact h2.symm.trans h1
   have : Nonempty (Fin j → Fin sch.B) := ⟨fun _ => ⟨0, sch.B_pos⟩⟩
-  let e : AuditCoins sch (k + j) ≃ AuditCoins sch k × (Fin j → Fin sch.B) :=
+  let e : Outcome sch (k + j) ≃ Outcome sch k × (Fin j → Fin sch.B) :=
     ((Equiv.refl M.Ω).prodCongr ((Equiv.refl sch.Coins).prodCongr (splitIdx k j sch.B))).trans
       (((Equiv.refl M.Ω).prodCongr (Equiv.prodAssoc _ _ _).symm).trans (Equiv.prodAssoc _ _ _).symm)
   have he : ∀ x, (e x).1 = (x.1, x.2.1, fun t => x.2.2 (Fin.castAdd j t)) := by
@@ -29364,7 +29364,7 @@ theorem auditSecure_seq_add {M : IdealModel} (sch : Scheme M) {S D Q k : ℕ} (j
       Equiv.prodAssoc_symm_apply]
     rw [splitIdx_fst]
   calc pr (seqAccepts sch (k + j) W A₁ A₂)
-      ≤ pr (fun x : AuditCoins sch (k + j) => seqAccepts sch k W A₁ A₂ (x.1, x.2.1, fun t => x.2.2 (Fin.castAdd j t))) :=
+      ≤ pr (fun x : Outcome sch (k + j) => seqAccepts sch k W A₁ A₂ (x.1, x.2.1, fun t => x.2.2 (Fin.castAdd j t))) :=
         pr_mono hsub
     _ = pr (fun x => seqAccepts sch k W A₁ A₂ (e x).1) := by simp only [he]
     _ = pr (seqAccepts sch k W A₁ A₂) := pr_proj e _
@@ -29375,7 +29375,7 @@ theorem meets_seq_add {M : IdealModel} (sch : Scheme M) {D Q k : ℕ} (j : ℕ) 
 
 
 /-- The exact check's outcome is today's outcome with a `Unit` coordinate for the check's coins. -/
-def dropUnit {M : IdealModel} (sch : Scheme M) (k : ℕ) : PubOutcome sch Unit k ≃ AuditCoins sch k :=
+def dropUnit {M : IdealModel} (sch : Scheme M) (k : ℕ) : PubOutcome sch Unit k ≃ Outcome sch k :=
   (Equiv.refl M.Ω).prodCongr ((Equiv.refl sch.Coins).prodCongr (Equiv.uniqueProd (Fin k → Fin sch.B) Unit))
 
 /-- The exact check accepts only the honest encoding: `dec pp C = W` and `EncDec` give `enc W = (pp, C)`. -/

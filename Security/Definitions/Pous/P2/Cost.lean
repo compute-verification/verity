@@ -142,7 +142,7 @@ structure SeqResponderOn (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) : Type wh
 
 /-- `simAccepts` for a `SimResponderOn`. -/
 def simAcceptsOn (sch : Scheme (ringRO B w p)) {S D Q L k : ℕ} (W : Bits sch.n) (A₁ : Preprocessor sch S)
-    (A₂ : SimResponderOn sch S D Q L k) (x : AuditCoins sch k) : Prop :=
+    (A₂ : SimResponderOn sch S D Q L k) (x : Outcome sch k) : Prop :=
   let ω := x.1
   let pp := (sch.enc W ω x.2.1).1
   let C := (sch.enc W ω x.2.1).2
@@ -150,7 +150,7 @@ def simAcceptsOn (sch : Scheme (ringRO B w p)) {S D Q L k : ℕ} (W : Bits sch.n
 
 /-- `seqAccepts` for a `SeqResponderOn`. -/
 def seqAcceptsOn (sch : Scheme (ringRO B w p)) {S D Q L : ℕ} (k : ℕ) (W : Bits sch.n) (A₁ : Preprocessor sch S)
-    (A₂ : SeqResponderOn sch S D Q L) (x : AuditCoins sch k) : Prop :=
+    (A₂ : SeqResponderOn sch S D Q L) (x : Outcome sch k) : Prop :=
   let ω := x.1
   let pp := (sch.enc W ω x.2.1).1
   let C := (sch.enc W ω x.2.1).2

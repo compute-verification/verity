@@ -96,14 +96,14 @@ theorem image_state_eq_of_acts {L : Type*} [LinearOrder L] {Ω : Type*} {S : Ω 
 section
 
 variable {L : Type*} [LinearOrder L] {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ}
-  {S : Pous.AuditCoins sch k → Actual.Run L} {X : Finset L} {t : Pous.AuditCoins sch k → ℕ → ℕ} {α : Type*}
-  {help : Pous.AuditCoins sch k → α}
+  {S : Pous.Outcome sch k → Actual.Run L} {X : Finset L} {t : Pous.Outcome sch k → ℕ → ℕ} {α : Type*}
+  {help : Pous.Outcome sch k → α}
 
 /-- **The next tick agrees**: at two outcomes with the same help, challenge `j`, tick `t j` and content there, the next
 challenge tick is the same. Until the earlier of the two, what reaches `X` is the same (`IngressFixed`), so what `X`
 does is (`CausalFrom`), and the earlier one is then the other's too (`ArrivalRule`). -/
 theorem next_tick_eq (hc : CausalFrom S) (hinc : ∀ x (j : Fin k), t x j < t x (j + 1)) (hin : IngressFixed S X t help)
-    (har : ArrivalRule S X t help) {x x' : Pous.AuditCoins sch k} (j : Fin k) (hh : help x = help x')
+    (har : ArrivalRule S X t help) {x x' : Pous.Outcome sch k} (j : Fin k) (hh : help x = help x')
     (hi : x.2.2 j = x'.2.2 j) (ht : t x j = t x' j)
     (hcont : (S x).content X (t x j) = (S x').content X (t x' j)) : t x (j + 1) = t x' (j + 1) := by
   have hcr := hin x x' j hh hi ht
@@ -144,7 +144,7 @@ theorem ticksIn_of_start (hinc : ∀ x (j : Fin k), t x j < t x (j + 1)) {t₀ s
   exact_mod_cast this
 
 /-- The ticks challenge `j` takes on the runs on time. -/
-def ticks (t : Pous.AuditCoins sch k → ℕ → ℕ) (span : ℕ) (j : ℕ) : Set ℕ := {v | ∃ x, Timely (t x) span k ∧ t x j = v}
+def ticks (t : Pous.Outcome sch k → ℕ → ℕ) (span : ℕ) (j : ℕ) : Set ℕ := {v | ∃ x, Timely (t x) span k ∧ t x j = v}
 
 omit [LinearOrder L] in
 /-- With `TicksIn`, each challenge's ticks on the runs on time have a `τ`-bit code, injective on them. -/
@@ -263,19 +263,19 @@ theorem seqState_eq {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.Ans)
     exact h j hj
 
 variable {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) {k : ℕ}
-  (W : Pous.Bits sch.n) (S : Pous.AuditCoins sch k → Actual.Run L) (X : Finset L) (t : Pous.AuditCoins sch k → ℕ → ℕ)
-  (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.AuditCoins sch k → α) (span M τ H N : ℕ)
+  (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : Pous.Outcome sch k → ℕ → ℕ)
+  (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (span M τ H N : ℕ)
   (c : α → Pous.Bits H) (ct : ℕ → ℕ → Pous.Bits τ)
 
 /-- The responder's state before challenge `j` at the outcome `x`: `X`'s content at `t x j` coded in `M + 1` bits, the
 tick's code and the help's code. -/
-noncomputable def stateOf (x : Pous.AuditCoins sch k) (j : ℕ) : Pous.Bits N :=
+noncomputable def stateOf (x : Pous.Outcome sch k) (j : ℕ) : Pous.Bits N :=
   pack (M + 1) (τ + H) N (lengthCode M ((S x).content X (t x j))) (pack τ H (τ + H) (ct j (t x j)) (c (help x)))
 
 open Classical in
 /-- The preprocessing: the state at the first challenge of an outcome with the given primitive and encoding. -/
 noncomputable def pre : Pous.Preprocessor sch N := fun _ pp C ω =>
-  if h : ∃ x : Pous.AuditCoins sch k, x.1 = ω ∧ sch.enc W ω x.2.1 = (pp, C) then
+  if h : ∃ x : Pous.Outcome sch k, x.1 = ω ∧ sch.enc W ω x.2.1 = (pp, C) then
     stateOf sch S X t help M τ H N c ct (Classical.choose h) 0
   else fun _ => false
 
@@ -285,7 +285,7 @@ outcome whose state codes to `σ`, with content of at most `M` bits and a tick a
 is `i`. -/
 noncomputable def out (j : ℕ) (σ : Pous.Bits N) (i : Fin sch.B) : Pous.Bits sch.ℓ × Pous.Bits N :=
   if hj : j < k then
-    if h : ∃ x : Pous.AuditCoins sch k, x.2.2 ⟨j, hj⟩ = i ∧ ((S x).content X (t x j)).length ≤ M ∧
+    if h : ∃ x : Pous.Outcome sch k, x.2.2 ⟨j, hj⟩ = i ∧ ((S x).content X (t x j)).length ≤ M ∧
         t x j ∈ ticks t span j ∧ stateOf sch S X t help M τ H N c ct x j = σ then
       (ans j ((S (Classical.choose h)).acts X (window (t (Classical.choose h)) j)),
         stateOf sch S X t help M τ H N c ct (Classical.choose h) (j + 1))
@@ -301,10 +301,10 @@ variable {sch W S X t ans help span M τ H N c ct}
 
 /-- When the setup fixes `X`'s state at the first challenge, that tick and the help, the preprocessing returns
 `stateOf … 0`. -/
-theorem pre_spec (hset : SetupFixed W S X t help) (x : Pous.AuditCoins sch k) :
+theorem pre_spec (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k) :
     pre sch W S X t help M τ H N c ct W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1 =
       stateOf sch S X t help M τ H N c ct x 0 := by
-  have h : ∃ x' : Pous.AuditCoins sch k, x'.1 = x.1 ∧
+  have h : ∃ x' : Pous.Outcome sch k, x'.1 = x.1 ∧
       sch.enc W x.1 x'.2.1 = ((sch.enc W x.1 x.2.1).1, (sch.enc W x.1 x.2.1).2) := ⟨x, rfl, rfl⟩
   obtain ⟨h1, h2⟩ := Classical.choose_spec h
   obtain ⟨hcont, htick, hhelp⟩ := hset _ _ h1 (by rw [h1]; exact h2)
@@ -319,14 +319,14 @@ include hc hinc hin har hct hcode hN
 
 /-- At an outcome on time where `X`'s content at `t x j` has at most `M` bits, the step at challenge `j` answers as `X`
 does and, unless `j` is the last challenge, moves to `X`'s next state. -/
-theorem out_spec (x : Pous.AuditCoins sch k) (hx : Timely (t x) span k) (j : ℕ) (hj : j < k)
+theorem out_spec (x : Pous.Outcome sch k) (hx : Timely (t x) span k) (j : ℕ) (hj : j < k)
     (hm : ((S x).content X (t x j)).length ≤ M) :
     (out sch S X t ans help span M τ H N c ct j (stateOf sch S X t help M τ H N c ct x j) (x.2.2 ⟨j, hj⟩)).1 =
         ans j ((S x).acts X (window (t x) j)) ∧
       (j + 1 < k → (out sch S X t ans help span M τ H N c ct j (stateOf sch S X t help M τ H N c ct x j)
         (x.2.2 ⟨j, hj⟩)).2 = stateOf sch S X t help M τ H N c ct x (j + 1)) := by
   have hxt : t x j ∈ ticks t span j := ⟨x, hx, rfl⟩
-  have h : ∃ x' : Pous.AuditCoins sch k, x'.2.2 ⟨j, hj⟩ = x.2.2 ⟨j, hj⟩ ∧ ((S x').content X (t x' j)).length ≤ M ∧
+  have h : ∃ x' : Pous.Outcome sch k, x'.2.2 ⟨j, hj⟩ = x.2.2 ⟨j, hj⟩ ∧ ((S x').content X (t x' j)).length ≤ M ∧
       t x' j ∈ ticks t span j ∧ stateOf sch S X t help M τ H N c ct x' j = stateOf sch S X t help M τ H N c ct x j :=
     ⟨x, rfl, hm, hxt, rfl⟩
   obtain ⟨hi, hl, hR, hs⟩ := Classical.choose_spec h
@@ -359,7 +359,7 @@ theorem out_spec (x : Pous.AuditCoins sch k) (hx : Timely (t x) span k) (j : ℕ
     rw [hc', hnext, hhelp]
 
 /-- **The responder answers as `X` does** at every outcome on time where `mem_X(t_j) ≤ M` at each challenge. -/
-theorem seqAnswers_resp (hset : SetupFixed W S X t help) (x : Pous.AuditCoins sch k) (hx : Timely (t x) span k)
+theorem seqAnswers_resp (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k) (hx : Timely (t x) span k)
     (hm : ∀ j : Fin k, (S x).mem X (t x j) ≤ M) :
     Pous.seqAnswers ((Pous.ringRO B w p).answer x.1)
         ((resp sch S X t ans help span M τ H N c ct).step W (sch.enc W x.1 x.2.1).1) 0 (List.ofFn x.2.2)
@@ -383,7 +383,7 @@ theorem seqAnswers_resp (hset : SetupFixed W S X t help) (x : Pous.AuditCoins sc
 
 /-- **The state before each challenge is `stateOf`** at every outcome on time where `mem_X(t_j) ≤ M` at each
 challenge. -/
-theorem seqState_resp (hset : SetupFixed W S X t help) (x : Pous.AuditCoins sch k) (hx : Timely (t x) span k)
+theorem seqState_resp (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k) (hx : Timely (t x) span k)
     (hm : ∀ j : Fin k, (S x).mem X (t x j) ≤ M) (j : ℕ) (hj : j < k) :
     Pous.Sampled.seqState ((Pous.ringRO B w p).answer x.1)
         ((resp sch S X t ans help span M τ H N c ct).step W (sch.enc W x.1 x.2.1).1) 0 ((List.ofFn x.2.2).take j)
@@ -476,13 +476,13 @@ namespace Responder
 
 /-- `Passes` on a fixed schedule `t`. -/
 def PassesFixed {L : Type*} {I : Pous.IdealModel} (sch : Pous.Scheme I) {k : ℕ} (W : Pous.Bits sch.n)
-    (S : Pous.AuditCoins sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ)
-    (x : Pous.AuditCoins sch k) : Prop :=
+    (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ)
+    (x : Pous.Outcome sch k) : Prop :=
   ∀ j : Fin k, ans j ((S x).acts X (window t j)) = (sch.enc W x.1 x.2.1).2 (x.2.2 j)
 
 section
 variable {L : Type*} [LinearOrder L] {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ} {W : Pous.Bits sch.n}
-  {S : Pous.AuditCoins sch k → Actual.Run L} {X : Finset L} {t : ℕ → ℕ} {α : Type*} {help : Pous.AuditCoins sch k → α}
+  {S : Pous.Outcome sch k → Actual.Run L} {X : Finset L} {t : ℕ → ℕ} {α : Type*} {help : Pous.Outcome sch k → α}
 
 omit [LinearOrder L] in
 theorem fixed_timely (ht : StrictMono t) (k : ℕ) : Timely t (t k) k := fun j hj => by
@@ -490,7 +490,7 @@ theorem fixed_timely (ht : StrictMono t) (k : ℕ) : Timely t (t k) k := fun j h
   omega
 
 omit [LinearOrder L] in
-theorem fixed_ticksIn : TicksIn (fun _ : Pous.AuditCoins sch k => t) (t k) 0 := by
+theorem fixed_ticksIn : TicksIn (fun _ : Pous.Outcome sch k => t) (t k) 0 := by
   intro j
   refine (Set.encard_le_encard (t := {t j}) ?_).trans (by simp)
   rintro v ⟨x, -, rfl⟩
@@ -515,8 +515,8 @@ end Responder
 open Responder in
 /-- **`B2` on a fixed schedule**, from `B2` at `t x = t`, `span = t k` and `τ = 0`. -/
 theorem B2_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k : ℕ)
-    (W : Pous.Bits sch.n) (S : Pous.AuditCoins sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
-    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.AuditCoins sch k → α) (M H N : ℕ)
+    (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
+    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (M H N : ℕ)
     (hc : CausalFrom S) (ht : StrictMono t)
     (hset : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
       (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x')
@@ -536,8 +536,8 @@ open Responder in
 /-- **`B2Audit` on a fixed schedule**, from `B2Audit` at `t x = t`, `span = t k` and `τ = 0`. -/
 theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p))
     (N k : ℕ) (δ ε : ℝ≥0∞) (hsec : Pous.AuditSecureOn sch .sequential N 0 0 0 k δ ε)
-    (W : Pous.Bits sch.n) (S : Pous.AuditCoins sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
-    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.AuditCoins sch k → α) (H : ℕ)
+    (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
+    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (H : ℕ)
     (hc : CausalFrom S) (ht : StrictMono t)
     (hset : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
       (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x')
@@ -553,9 +553,9 @@ theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch 
 theorem B2P2Ring_fixed :
   Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
     ∀ {L : Type*} [LinearOrder L] (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
-      (S : Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → Actual.Run L) (X : Finset L)
+      (S : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → Actual.Run L) (X : Finset L)
       (t : ℕ → ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ)
-      {α : Type*} (help : Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → α) (H : ℕ),
+      {α : Type*} (help : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → α) (H : ℕ),
       CausalFrom S → StrictMono t →
       (∀ x x', x.1 = x'.1 →
         (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1 =
@@ -575,8 +575,8 @@ open Responder in
 /-- **`B2Determines` on a fixed schedule**, from `B2Determines` at `t z x = t`, `span = t k` and `τ = 0`. -/
 theorem B2Determines_fixed :
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k q : ℕ)
-    (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.AuditCoins sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
-    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Bits q → Pous.AuditCoins sch k → α)
+    (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
+    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Bits q → Pous.Outcome sch k → α)
     (ζ : ℕ → List Bool → Pous.Bits q) (M H : ℕ),
     (∀ z, CausalFrom (S z)) → StrictMono t →
     (∀ z x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
@@ -588,7 +588,7 @@ theorem B2Determines_fixed :
     (∀ z x (j : Fin k), ζ j ((S z x).content X (t j)) = z) →
     ∃ (A₁ : Pous.Bits q → Pous.Preprocessor sch (M + 1 + H))
       (A₂ : Pous.Bits q → Pous.SeqResponderOn sch (M + 1 + H) 0 0 0) (π : ℕ → Pous.Bits (M + 1 + H) → Pous.Bits q),
-      (∀ (z : Pous.Bits q) (x : Pous.AuditCoins sch k) (j : ℕ), j < k →
+      (∀ (z : Pous.Bits q) (x : Pous.Outcome sch k) (j : ℕ), j < k →
         π j (Pous.Sampled.seqState ((Pous.ringRO B w p).answer x.1) ((A₂ z).step W (sch.enc W x.1 x.2.1).1) 0
           ((List.ofFn x.2.2).take j) (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1)) = z) ∧
       ∀ z x, Pous.seqAnswers ((Pous.ringRO B w p).answer x.1) ((A₂ z).step W (sch.enc W x.1 x.2.1).1) 0
@@ -604,9 +604,9 @@ open Responder in
 theorem B2Adds_fixed :
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N c : ℕ)
     (δ ε : ℝ≥0∞), Pous.AuditSecureOn sch .sequential N 0 0 0 c δ ε →
-    ∀ (q k : ℕ) (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.AuditCoins sch c → Actual.Run L) (X : Finset L)
+    ∀ (q k : ℕ) (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.Outcome sch c → Actual.Run L) (X : Finset L)
       (t : ℕ → ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*}
-      (help : Pous.Bits q → Pous.AuditCoins sch c → α) (ζ : ℕ → List Bool → Pous.Bits q) (M H : ℕ),
+      (help : Pous.Bits q → Pous.Outcome sch c → α) (ζ : ℕ → List Bool → Pous.Bits q) (M H : ℕ),
       (∀ z, CausalFrom (S z)) → StrictMono t →
       (∀ z x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
         (S z x).content X (t 0) = (S z x').content X (t 0) ∧ help z x = help z x') →
@@ -615,7 +615,7 @@ theorem B2Adds_fixed :
       (∀ z, (Set.range (help z)).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) →
       (∀ z x (j : Fin c), (S z x).mem X (t j) ≤ M) →
       (∀ z x (j : Fin c), ζ j ((S z x).content X (t j)) = z) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins sch c =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch c =>
           Responder.PassesFixed sch W (S x.1) X t ans x.2 ∧ ¬ q + N < M + 1 + H + k) ≤ δ + ε + c * (2⁻¹ : ℝ≥0∞) ^ k := by
   intro L _ B w p _ sch N c δ ε hsec q k W S X t ans α help ζ M H hc ht hset hin hcount hm hζ
   exact (pr_mono fun x hx => ⟨⟨fixed_timely ht c, hx.1⟩, hx.2⟩).trans
@@ -627,9 +627,9 @@ theorem B2Adds_fixed :
 theorem B2AddsP2Ring_fixed :
   Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
     ∀ {L : Type*} [LinearOrder L] (q k : ℕ) (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
-      (S : Pous.Bits q → Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
+      (S : Pous.Bits q → Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
       (ans : ℕ → Actual.Acts L → Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ) {α : Type*}
-      (help : Pous.Bits q → Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → α) (ζ : ℕ → List Bool → Pous.Bits q) (M H : ℕ),
+      (help : Pous.Bits q → Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → α) (ζ : ℕ → List Bool → Pous.Bits q) (M H : ℕ),
       (∀ z, CausalFrom (S z)) → StrictMono t →
       (∀ z x x', x.1 = x'.1 → (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1 = (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x'.1 x'.2.1 →
         (S z x).content X (t 0) = (S z x').content X (t 0) ∧ help z x = help z x') →
@@ -638,7 +638,7 @@ theorem B2AddsP2Ring_fixed :
       (∀ z, (Set.range (help z)).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) →
       (∀ z x (j : Fin 105), (S z x).mem X (t j) ≤ M) →
       (∀ z x (j : Fin 105), ζ j ((S z x).content X (t j)) = z) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
           Responder.PassesFixed (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) W (S x.1) X t ans x.2 ∧ ¬ q + (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ < M + 1 + H + k) ≤
         ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) + 105 * (2⁻¹ : ℝ≥0∞) ^ k := by
   intro hsec L _ q k W S X t ans α help ζ M H hc ht hset hin hcount hm hζ

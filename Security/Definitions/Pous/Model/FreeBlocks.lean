@@ -25,7 +25,7 @@ structure FreeSet (sch : Scheme M) (F : ℕ) : Type where
 /-- The sequential audit with `k` rounds and free blocks accepts: every round whose index is not free returns the
 true block. -/
 def seqAcceptsFree (sch : Scheme M) {S D Q F : ℕ} (k : ℕ) (W : Bits sch.n) (A₁ : Preprocessor sch S)
-    (Fr : FreeSet sch F) (A₂ : SeqResponder sch S D Q) (x : AuditCoins sch k) : Prop :=
+    (Fr : FreeSet sch F) (A₂ : SeqResponder sch S D Q) (x : Outcome sch k) : Prop :=
   let ω := x.1
   let pp := (sch.enc W ω x.2.1).1
   let C := (sch.enc W ω x.2.1).2

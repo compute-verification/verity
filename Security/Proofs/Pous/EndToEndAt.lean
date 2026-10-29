@@ -231,7 +231,7 @@ sequential audit of a `⌊ρ·|C|⌋`-bit responder by `(1 − p)^105 + 105·ε�
 theorem seqAccepts_le_of_round {N : ℕ} [NeZero N] {p ε₀ : ℝ≥0∞} {D Q L : ℕ}
     (h : ∀ (Sz : ℕ → ℕ) (k : ℕ) (W : Bits (schAt N).n) (A₁ : Preprocessor (schAt N) (Sz 0))
       (A₂ : VarResponderOn (schAt N) Sz D Q L),
-      ∃ bad : AuditCoins (schAt N) k → Prop, pr bad ≤ k * ε₀ ∧
+      ∃ bad : Outcome (schAt N) k → Prop, pr bad ≤ k * ε₀ ∧
         ∀ j < k, Sz j ≤ (schAt N).stateBound Params.ρ →
           pr (fun x => varPassesOn _ k (j + 1) W A₁ A₂ x ∧ ¬ bad x) ≤
             (1 - p) * pr (fun x => varPassesOn _ k j W A₁ A₂ x ∧ ¬ bad x))

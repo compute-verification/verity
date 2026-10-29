@@ -181,7 +181,7 @@ theorem continuous_complete : Pous.Guarantees.ContinuousComplete := by
   let rej : M.Ω × sch.Coins → (Fin n → Fin sch.B) → Prop := fun a I =>
     ¬ contAccepts f₀ (contRecords mach D Q D_late Q_late W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1 arr .start
       (List.ofFn I))
-  have hre : pr (fun x : AuditCoins sch n => rej (x.1, x.2.1) x.2.2) =
+  have hre : pr (fun x : Outcome sch n => rej (x.1, x.2.1) x.2.2) =
       pr (fun y : (M.Ω × sch.Coins) × (Fin n → Fin sch.B) => rej y.1 y.2) :=
     pr_equiv (Equiv.prodAssoc _ _ _).symm (fun y : (M.Ω × sch.Coins) × (Fin n → Fin sch.B) => rej y.1 y.2)
   refine le_of_eq_of_le hre (pr_prod_le_of_forall rej _ fun a => ?_)
@@ -230,7 +230,7 @@ end
 /-- **The honest responder is accepted at every tolerance `f₀ ≥ 0`**: `ContinuousComplete` at `q = 0`. -/
 theorem honest_complete (sch : Scheme M) (D Q D_late Q_late n : ℕ) (W : Bits sch.n) (arr : ℕ → ℕ) (f₀ : ℝ)
     (hf : 0 ≤ f₀) :
-    pr (fun x : AuditCoins sch n =>
+    pr (fun x : Outcome sch n =>
         ¬ contAccepts f₀ (contRecords (honest sch) D Q D_late Q_late W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2
           x.1 arr .start (List.ofFn x.2.2))) = 0 := by
   refine le_antisymm (le_trans (continuous_complete sch D Q D_late Q_late n 0 W (honest sch) arr

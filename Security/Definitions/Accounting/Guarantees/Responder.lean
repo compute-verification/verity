@@ -86,8 +86,8 @@ time, then some `N`-bit preprocessing and sequential responder that makes no que
 every outcome on time where `X`'s state has at most `M` bits at each challenge tick, exactly what `X` answers. -/
 def B2 : Prop :=
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k : ℕ)
-    (W : Pous.Bits sch.n) (S : Pous.AuditCoins sch k → Actual.Run L) (X : Finset L) (t : Pous.AuditCoins sch k → ℕ → ℕ)
-    (span : ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.AuditCoins sch k → α)
+    (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : Pous.Outcome sch k → ℕ → ℕ)
+    (span : ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α)
     (M τ H N : ℕ),
     CausalFrom S → (∀ x (j : Fin k), t x j < t x (j + 1)) → SetupFixed W S X t help → IngressFixed S X t help →
     ArrivalRule S X t help → TicksIn t span τ → (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞) →
@@ -105,8 +105,8 @@ most `δ + ε`. -/
 def B2Audit : Prop :=
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N k : ℕ)
     (δ ε : ℝ≥0∞), Pous.AuditSecureOn sch .sequential N 0 0 0 k δ ε →
-    ∀ (W : Pous.Bits sch.n) (S : Pous.AuditCoins sch k → Actual.Run L) (X : Finset L) (t : Pous.AuditCoins sch k → ℕ → ℕ)
-      (span : ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.AuditCoins sch k → α) (τ H : ℕ),
+    ∀ (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : Pous.Outcome sch k → ℕ → ℕ)
+      (span : ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (τ H : ℕ),
       CausalFrom S → (∀ x (j : Fin k), t x j < t x (j + 1)) → SetupFixed W S X t help → IngressFixed S X t help →
       ArrivalRule S X t help → TicksIn t span τ → (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞) →
       Pous.pr (fun x => Passes sch W S X t span ans x ∧ ∀ j : Fin k, (S x).mem X (t x j) + 1 + τ + H ≤ N) ≤ δ + ε
@@ -118,10 +118,10 @@ every challenge with probability at most `δ + 2^-129 + 2^-130`. -/
 def B2P2Ring : Prop :=
   Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
     ∀ {L : Type*} [LinearOrder L] (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
-      (S : Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → Actual.Run L) (X : Finset L)
-      (t : Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → ℕ → ℕ) (t₀ span : ℕ)
+      (S : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → Actual.Run L) (X : Finset L)
+      (t : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → ℕ → ℕ) (t₀ span : ℕ)
       (ans : ℕ → Actual.Acts L → Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ)
-      {α : Type*} (help : Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → α) (τ H : ℕ),
+      {α : Type*} (help : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → α) (τ H : ℕ),
       CausalFrom S → (∀ x (j : Fin 105), t x j < t x (j + 1)) → SetupFixed W S X t help →
       IngressFixed S X t help → ArrivalRule S X t help → (∀ x, t x 0 = t₀) → 105 * span ≤ 2 ^ τ →
       (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞) →
@@ -137,9 +137,9 @@ preprocessings and responders that make no query, one for each `z`, answer as `X
 state each holds before every challenge `j < k` on every outcome (lemma M's `Determines`, unfolded). -/
 def B2Determines : Prop :=
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k q : ℕ)
-    (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.AuditCoins sch k → Actual.Run L) (X : Finset L)
-    (t : Pous.Bits q → Pous.AuditCoins sch k → ℕ → ℕ) (span : ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ)
-    {α : Type*} (help : Pous.Bits q → Pous.AuditCoins sch k → α) (ζ : ℕ → List Bool → Pous.Bits q) (M τ H : ℕ),
+    (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.Outcome sch k → Actual.Run L) (X : Finset L)
+    (t : Pous.Bits q → Pous.Outcome sch k → ℕ → ℕ) (span : ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ)
+    {α : Type*} (help : Pous.Bits q → Pous.Outcome sch k → α) (ζ : ℕ → List Bool → Pous.Bits q) (M τ H : ℕ),
     (∀ z, CausalFrom (S z)) → (∀ z x (j : Fin k), t z x j < t z x (j + 1)) →
     (∀ z, SetupFixed W (S z) X (t z) (help z)) → (∀ z, IngressFixed (S z) X (t z) (help z)) →
     (∀ z, ArrivalRule (S z) X (t z) (help z)) → (∀ z, TicksIn (t z) span τ) →
@@ -149,7 +149,7 @@ def B2Determines : Prop :=
     ∃ (A₁ : Pous.Bits q → Pous.Preprocessor sch (M + 1 + τ + H))
       (A₂ : Pous.Bits q → Pous.SeqResponderOn sch (M + 1 + τ + H) 0 0 0)
       (π : ℕ → Pous.Bits (M + 1 + τ + H) → Pous.Bits q),
-      (∀ (z : Pous.Bits q) (x : Pous.AuditCoins sch k) (j : ℕ), j < k →
+      (∀ (z : Pous.Bits q) (x : Pous.Outcome sch k) (j : ℕ), j < k →
         π j (Pous.Sampled.seqState ((Pous.ringRO B w p).answer x.1) ((A₂ z).step W (sch.enc W x.1 x.2.1).1) 0
           ((List.ofFn x.2.2).take j) (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1)) = z) ∧
       ∀ z x, Pous.seqAnswers ((Pous.ringRO B w p).answer x.1) ((A₂ z).step W (sch.enc W x.1 x.2.1).1) 0
@@ -164,16 +164,16 @@ except with that probability. -/
 def B2Adds : Prop :=
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N c : ℕ)
     (δ ε : ℝ≥0∞), Pous.AuditSecureOn sch .sequential N 0 0 0 c δ ε →
-    ∀ (q k : ℕ) (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.AuditCoins sch c → Actual.Run L) (X : Finset L)
-      (t : Pous.Bits q → Pous.AuditCoins sch c → ℕ → ℕ) (span : ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ)
-      {α : Type*} (help : Pous.Bits q → Pous.AuditCoins sch c → α) (ζ : ℕ → List Bool → Pous.Bits q) (M τ H : ℕ),
+    ∀ (q k : ℕ) (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.Outcome sch c → Actual.Run L) (X : Finset L)
+      (t : Pous.Bits q → Pous.Outcome sch c → ℕ → ℕ) (span : ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ)
+      {α : Type*} (help : Pous.Bits q → Pous.Outcome sch c → α) (ζ : ℕ → List Bool → Pous.Bits q) (M τ H : ℕ),
       (∀ z, CausalFrom (S z)) → (∀ z x (j : Fin c), t z x j < t z x (j + 1)) →
       (∀ z, SetupFixed W (S z) X (t z) (help z)) → (∀ z, IngressFixed (S z) X (t z) (help z)) →
       (∀ z, ArrivalRule (S z) X (t z) (help z)) → (∀ z, TicksIn (t z) span τ) →
       (∀ z, (Set.range (help z)).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) →
       (∀ z x, Timely (t z x) span c) → (∀ z x (j : Fin c), (S z x).mem X (t z x j) ≤ M) →
       (∀ z x (j : Fin c), ζ j ((S z x).content X (t z x j)) = z) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins sch c =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch c =>
           Passes sch W (S x.1) X (t x.1) span ans x.2 ∧ ¬ q + N < M + 1 + τ + H + k) ≤
         δ + ε + c * (2⁻¹ : ℝ≥0∞) ^ k
 
@@ -184,10 +184,10 @@ tick `t₀` the verifier fixes and `105·span ≤ 2^τ` in place of `TicksIn`, p
 def B2AddsP2Ring : Prop :=
   Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
     ∀ {L : Type*} [LinearOrder L] (q k : ℕ) (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
-      (S : Pous.Bits q → Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → Actual.Run L)
-      (X : Finset L) (t : Pous.Bits q → Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → ℕ → ℕ)
+      (S : Pous.Bits q → Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → Actual.Run L)
+      (X : Finset L) (t : Pous.Bits q → Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → ℕ → ℕ)
       (t₀ span : ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ)
-      {α : Type*} (help : Pous.Bits q → Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → α)
+      {α : Type*} (help : Pous.Bits q → Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → α)
       (ζ : ℕ → List Bool → Pous.Bits q) (M τ H : ℕ),
       (∀ z, CausalFrom (S z)) → (∀ z x (j : Fin 105), t z x j < t z x (j + 1)) →
       (∀ z, SetupFixed W (S z) X (t z) (help z)) → (∀ z, IngressFixed (S z) X (t z) (help z)) →
@@ -195,7 +195,7 @@ def B2AddsP2Ring : Prop :=
       (∀ z, (Set.range (help z)).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) →
       (∀ z x, Timely (t z x) span 105) → (∀ z x (j : Fin 105), (S z x).mem X (t z x j) ≤ M) →
       (∀ z x (j : Fin 105), ζ j ((S z x).content X (t z x j)) = z) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
           Passes (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) W (S x.1) X (t x.1) span ans x.2 ∧
             ¬ q + (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ <
               M + 1 + τ + H + k) ≤
@@ -232,7 +232,7 @@ def B2WindowAudit : Prop :=
       (∀ W pp j σ i, (Wd W pp j σ i).span ≤ D * ℓ) →
       (∀ (ω : (Pous.ringRO B w p).Ω) W pp j σ i, (Wd W pp j σ i).keys ((Pous.ringRO B w p).answer ω) ≤ Q ∧
         (Wd W pp j σ i).ops ((Pous.ringRO B w p).answer ω) ≤ L) →
-      Pous.pr (fun x : Pous.AuditCoins sch k =>
+      Pous.pr (fun x : Pous.Outcome sch k =>
         Pous.seqAnswers ((Pous.ringRO B w p).answer x.1)
             (fun j σ i => Pous.Prog.ret ((Wd W (sch.enc W x.1 x.2.1).1 j σ i).result ((Pous.ringRO B w p).answer x.1)))
             0 (List.ofFn x.2.2) (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
@@ -261,7 +261,7 @@ def B2WindowP2Ring : Prop :=
       (∀ (ω : (Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) W pp j σ i,
         (Wd W pp j σ i).keys ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer ω) ≤ Q ∧
         (Wd W pp j σ i).ops ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer ω) ≤ L) →
-      Pous.pr (fun x : Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
+      Pous.pr (fun x : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
         Pous.seqAnswers ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)
             (fun j σ i => Pous.Prog.ret ((Wd W ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1
               x.2.1).1 j σ i).result ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)))

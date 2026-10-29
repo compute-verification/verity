@@ -27,14 +27,14 @@ theorem seqAnswers_take {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bi
       rw [seqAnswers_take f step (j + 1) is is']
 
 /-- The outcome of `k + 1` rounds is that of `k` rounds and one more index. -/
-def snocEquiv (sch : Scheme M) (k : ℕ) : AuditCoins sch k × Fin sch.B ≃ AuditCoins sch (k + 1) where
+def snocEquiv (sch : Scheme M) (k : ℕ) : Outcome sch k × Fin sch.B ≃ Outcome sch (k + 1) where
   toFun y := (y.1.1, y.1.2.1, Fin.snoc y.1.2.2 y.2)
   invFun x := ((x.1, x.2.1, Fin.init x.2.2), x.2.2 (Fin.last k))
   left_inv y := by simp
   right_inv x := by simp
 
 theorem seqAccepts_of_succ (sch : Scheme M) {S D Q k : ℕ} (W : Bits sch.n) (A₁ : Preprocessor sch S)
-    (A₂ : SeqResponder sch S D Q) (y : AuditCoins sch k × Fin sch.B)
+    (A₂ : SeqResponder sch S D Q) (y : Outcome sch k × Fin sch.B)
     (h : seqAccepts sch (k + 1) W A₁ A₂ (snocEquiv sch k y)) : seqAccepts sch k W A₁ A₂ y.1 := by
   obtain ⟨⟨ω, r, I⟩, i⟩ := y
   simp only [seqAccepts, snocEquiv, Equiv.coe_fn_mk] at h ⊢
@@ -50,7 +50,7 @@ theorem pr_seqAccepts_succ_le (sch : Scheme M) {S D Q : ℕ} (k : ℕ) (W : Bits
   calc pr (seqAccepts sch (k + 1) W A₁ A₂)
       = pr (fun y => seqAccepts sch (k + 1) W A₁ A₂ (snocEquiv sch k y)) :=
         (PousThm1.pr_equiv (snocEquiv sch k) _).symm
-    _ ≤ pr (fun y : AuditCoins sch k × Fin sch.B => seqAccepts sch k W A₁ A₂ y.1) :=
+    _ ≤ pr (fun y : Outcome sch k × Fin sch.B => seqAccepts sch k W A₁ A₂ y.1) :=
         pr_mono fun y => seqAccepts_of_succ sch W A₁ A₂ y
     _ = pr (seqAccepts sch k W A₁ A₂) := PousThm1.pr_fst _
 

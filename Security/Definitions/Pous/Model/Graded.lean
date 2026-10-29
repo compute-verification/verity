@@ -86,7 +86,7 @@ def gradedAnswers {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ)
 /-- The graded audit with `k` rounds and grace `t` accepts: every returned block is correct and at most `t` rounds are
 late. -/
 def gradedAccepts (sch : Scheme M) {S D_late Q_late : ℕ} (D Q k t : ℕ) (W : Bits sch.n) (A₁ : Preprocessor sch S)
-    (A₂ : GradedResponder sch S D_late Q_late) (x : AuditCoins sch k) : Prop :=
+    (A₂ : GradedResponder sch S D_late Q_late) (x : Outcome sch k) : Prop :=
   let ω := x.1
   let pp := (sch.enc W ω x.2.1).1
   let C := (sch.enc W ω x.2.1).2

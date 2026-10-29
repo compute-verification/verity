@@ -553,7 +553,7 @@ def ContinuousComplete : Prop :=
           (contRecord mach D Q D_late Q_late W pp C a.1 arr (contAfter mach D_late W pp C a.1 arr h) i).verdict ≠ .hit)
         ≤ q) →
     ∀ f₀ : ℝ,
-      pr (fun x : AuditCoins sch n =>
+      pr (fun x : Outcome sch n =>
           let pp := (sch.enc W x.1 x.2.1).1
           let C := (sch.enc W x.1 x.2.1).2
           ¬ contAccepts f₀ (contRecords mach D Q D_late Q_late W pp C x.1 arr .start (List.ofFn x.2.2)))

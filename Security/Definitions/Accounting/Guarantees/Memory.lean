@@ -62,7 +62,7 @@ def Adds : Prop :=
     ∀ (M H q k : ℕ) (W : Pous.Bits sch.n) (π : ℕ → Pous.Bits (M + H) → Pous.Bits q)
       (A₁ : Pous.Bits q → Pous.Preprocessor sch (M + H)) (A₂ : Pous.Bits q → Pous.SeqResponder sch (M + H) D Q),
       Determines sch c W π A₁ (fun z => (A₂ z).step) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins sch c =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch c =>
           Pous.seqAccepts sch c W (A₁ x.1) (A₂ x.1) x.2 ∧ ¬ q + S < M + H + k) ≤
         δ + ε + c * (2⁻¹ : ℝ≥0∞) ^ k
 
@@ -75,7 +75,7 @@ def AddsOn : Prop :=
       (A₁ : Pous.Bits q → Pous.Preprocessor sch (M + H))
       (A₂ : Pous.Bits q → Pous.SeqResponderOn sch (M + H) D Q L),
       Determines sch c W π A₁ (fun z => (A₂ z).step) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins sch c =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch c =>
           Pous.seqAcceptsOn sch c W (A₁ x.1) (A₂ x.1) x.2 ∧ ¬ q + S < M + H + k) ≤
         δ + ε + c * (2⁻¹ : ℝ≥0∞) ^ k
 
@@ -91,7 +91,7 @@ def AddsP2Ring : Prop :=
       (A₂ : Pous.Bits q →
         Pous.SeqResponderOn (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) (M + H) D Q L),
       Determines (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 W π A₁ (fun z => (A₂ z).step) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
           Pous.seqAcceptsOn (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 W (A₁ x.1) (A₂ x.1) x.2 ∧
             ¬ q + (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ < M + H + k) ≤
         ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) + 105 * (2⁻¹ : ℝ≥0∞) ^ k
@@ -104,7 +104,7 @@ def AddsIsolated : Prop :=
     ∀ (M q k : ℕ) (W : Pous.Bits sch.n) (π : ℕ → Pous.Bits M → Pous.Bits q)
       (A₁ : Pous.Bits q → Pous.Preprocessor sch M) (A₂ : Pous.Bits q → Pous.SeqResponder sch M D Q),
       Determines sch c W π A₁ (fun z => (A₂ z).step) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins sch c =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch c =>
           Pous.seqAccepts sch c W (A₁ x.1) (A₂ x.1) x.2 ∧ ¬ q + S < M + k) ≤
         δ + ε + c * (2⁻¹ : ℝ≥0∞) ^ k
 
@@ -115,7 +115,7 @@ def AddsOnIsolated : Prop :=
     ∀ (M q k : ℕ) (W : Pous.Bits sch.n) (π : ℕ → Pous.Bits M → Pous.Bits q)
       (A₁ : Pous.Bits q → Pous.Preprocessor sch M) (A₂ : Pous.Bits q → Pous.SeqResponderOn sch M D Q L),
       Determines sch c W π A₁ (fun z => (A₂ z).step) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins sch c =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch c =>
           Pous.seqAcceptsOn sch c W (A₁ x.1) (A₂ x.1) x.2 ∧ ¬ q + S < M + k) ≤
         δ + ε + c * (2⁻¹ : ℝ≥0∞) ^ k
 
@@ -128,7 +128,7 @@ def AddsP2RingIsolated : Prop :=
       (A₁ : Pous.Bits q → Pous.Preprocessor (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) M)
       (A₂ : Pous.Bits q → Pous.SeqResponderOn (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) M D Q L),
       Determines (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 W π A₁ (fun z => (A₂ z).step) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
           Pous.seqAcceptsOn (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 W (A₁ x.1) (A₂ x.1) x.2 ∧
             ¬ q + (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ < M + k) ≤
         ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) + 105 * (2⁻¹ : ℝ≥0∞) ^ k
@@ -150,7 +150,7 @@ def AddsAdvice : Prop :=
     ∀ (M H a q k : ℕ) (W : Pous.Bits sch.n) (π : ℕ → Pous.Bits (M + H) → Pous.Bits a → Pous.Bits q)
       (A₁ : Pous.Bits q → Pous.Preprocessor sch (M + H)) (A₂ : Pous.Bits q → Pous.SeqResponder sch (M + H) D Q),
       DeterminesAdvice sch c W π A₁ (fun z => (A₂ z).step) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins sch c =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch c =>
           Pous.seqAccepts sch c W (A₁ x.1) (A₂ x.1) x.2 ∧ ¬ q + S < M + H + a + k) ≤
         δ + ε + c * (2⁻¹ : ℝ≥0∞) ^ k
 
@@ -163,7 +163,7 @@ def AddsAdviceOn : Prop :=
       (A₁ : Pous.Bits q → Pous.Preprocessor sch (M + H))
       (A₂ : Pous.Bits q → Pous.SeqResponderOn sch (M + H) D Q L),
       DeterminesAdvice sch c W π A₁ (fun z => (A₂ z).step) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins sch c =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch c =>
           Pous.seqAcceptsOn sch c W (A₁ x.1) (A₂ x.1) x.2 ∧ ¬ q + S < M + H + a + k) ≤
         δ + ε + c * (2⁻¹ : ℝ≥0∞) ^ k
 
@@ -177,7 +177,7 @@ def AddsAdviceP2Ring : Prop :=
       (A₂ : Pous.Bits q →
         Pous.SeqResponderOn (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) (M + H) D Q L),
       DeterminesAdvice (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 W π A₁ (fun z => (A₂ z).step) →
-      Pous.pr (fun x : Pous.Bits q × Pous.AuditCoins (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
+      Pous.pr (fun x : Pous.Bits q × Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
           Pous.seqAcceptsOn (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 W (A₁ x.1) (A₂ x.1) x.2 ∧
             ¬ q + (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ <
               M + H + a + k) ≤

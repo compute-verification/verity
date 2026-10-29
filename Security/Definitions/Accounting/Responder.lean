@@ -41,15 +41,15 @@ variable {L : Type*}
 lasts at most `span` ticks, and for every challenge `j` the answer read off what `X` does during window `j` (`ans j`)
 is block `I j` of the codeword the encoder made at `x`. -/
 def Passes {I : Pous.IdealModel} (sch : Pous.Scheme I) {k : ℕ} (W : Pous.Bits sch.n)
-    (S : Pous.AuditCoins sch k → Actual.Run L) (X : Finset L) (t : Pous.AuditCoins sch k → ℕ → ℕ) (span : ℕ)
-    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) (x : Pous.AuditCoins sch k) : Prop :=
+    (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : Pous.Outcome sch k → ℕ → ℕ) (span : ℕ)
+    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) (x : Pous.Outcome sch k) : Prop :=
   Timely (t x) span k ∧ ∀ j : Fin k, ans j ((S x).acts X (window (t x) j)) = (sch.enc W x.1 x.2.1).2 (x.2.2 j)
 
 /-- **The ticks are read off the run** (PoUS's protocol): challenge `j + 1`'s tick is a function of the help,
 challenge `j`, its tick and what `X` does from it on, so the answer's arrival is `X`'s doing, with no delay from
 anything outside `X`. Two outcomes that agree on those over `[t j, v)` both have `t (j + 1) = v`, or neither has. -/
-def ArrivalRule {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ} (S : Pous.AuditCoins sch k → Actual.Run L)
-    (X : Finset L) (t : Pous.AuditCoins sch k → ℕ → ℕ) {α : Type*} (help : Pous.AuditCoins sch k → α) : Prop :=
+def ArrivalRule {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ} (S : Pous.Outcome sch k → Actual.Run L)
+    (X : Finset L) (t : Pous.Outcome sch k → ℕ → ℕ) {α : Type*} (help : Pous.Outcome sch k → α) : Prop :=
   ∀ x x' (j : Fin k) v, help x = help x' → x.2.2 j = x'.2.2 j → t x j = t x' j → t x j < v →
     (S x).acts X (Set.Ico (t x j) v) = (S x').acts X (Set.Ico (t x j) v) → t x (j + 1) = v → t x' (j + 1) = v
 
@@ -57,8 +57,8 @@ def ArrivalRule {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ} (S : Pous.
 challenge `j` and tick `t j`, what crosses into `X` from `t j` until the earlier of their next challenge ticks is the
 same. -/
 def IngressFixed {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ} [LinearOrder L]
-    (S : Pous.AuditCoins sch k → Actual.Run L) (X : Finset L) (t : Pous.AuditCoins sch k → ℕ → ℕ) {α : Type*}
-    (help : Pous.AuditCoins sch k → α) : Prop :=
+    (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : Pous.Outcome sch k → ℕ → ℕ) {α : Type*}
+    (help : Pous.Outcome sch k → α) : Prop :=
   ∀ x x' (j : Fin k), help x = help x' → x.2.2 j = x'.2.2 j → t x j = t x' j →
     (S x).crossing (↑X)ᶜ ↑X (Set.Ico (t x j) (min (t x (j + 1)) (t x' (j + 1)))) =
       (S x').crossing (↑X)ᶜ ↑X (Set.Ico (t x j) (min (t x (j + 1)) (t x' (j + 1))))
@@ -66,13 +66,13 @@ def IngressFixed {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ} [LinearOr
 /-- **The setup fixes the start**: at two outcomes with the same primitive and encoding, `X`'s state's content at the
 first challenge tick, that tick and the help are the same. -/
 def SetupFixed {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ} [LinearOrder L] (W : Pous.Bits sch.n)
-    (S : Pous.AuditCoins sch k → Actual.Run L) (X : Finset L) (t : Pous.AuditCoins sch k → ℕ → ℕ) {α : Type*}
-    (help : Pous.AuditCoins sch k → α) : Prop :=
+    (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : Pous.Outcome sch k → ℕ → ℕ) {α : Type*}
+    (help : Pous.Outcome sch k → α) : Prop :=
   ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
     (S x).content X (t x 0) = (S x').content X (t x' 0) ∧ t x 0 = t x' 0 ∧ help x = help x'
 
 /-- **Challenge `j`'s tick takes at most `2^τ` values** on the outcomes whose windows all last at most `span`. -/
-def TicksIn {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ} (t : Pous.AuditCoins sch k → ℕ → ℕ) (span τ : ℕ) :
+def TicksIn {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ} (t : Pous.Outcome sch k → ℕ → ℕ) (span τ : ℕ) :
     Prop :=
   ∀ j : Fin k, {v | ∃ x, Timely (t x) span k ∧ t x j = v}.encard ≤ ((2 ^ τ : ℕ) : ℕ∞)
 

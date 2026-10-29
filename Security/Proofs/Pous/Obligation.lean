@@ -119,7 +119,7 @@ theorem ObligationOfRoundSecure : Pous.Guarantees.ObligationOfRoundSecure := by
   intro p ε₀ D Q L h N _ h1 h2 T _ _ tag htag Sz k W A₁ A₂
   have : Nonempty (Fin N) := ⟨⟨0, Nat.pos_of_ne_zero (NeZero.ne N)⟩⟩
   exact Pous.Mutable.SecurityProofs.pr_snap_le tag htag
-    (fun e (x : AuditCoins (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k) =>
+    (fun e (x : Outcome (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k) =>
       varPassesOn _ k k (W e) (A₁ e) (A₂ e) x) _
     fun e => PousP2Rounds.graded p ε₀ D Q L h N h1 h2 Sz k (W e) (A₁ e) (A₂ e)
 
@@ -129,7 +129,7 @@ theorem ObligationOfStatic : Pous.Guarantees.ObligationOfStatic := by
   intro N _ T _ _ tag htag Sz k D Q L c h W A₁ A₂
   have : Nonempty (Fin N) := ⟨⟨0, Nat.pos_of_ne_zero (NeZero.ne N)⟩⟩
   exact Pous.Mutable.SecurityProofs.pr_snap_le tag htag
-    (fun e (x : AuditCoins (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k) =>
+    (fun e (x : Outcome (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k) =>
       varPassesOn _ k k (W e) (A₁ e) (A₂ e) x) c
     fun e => h (W e) (A₁ e) (A₂ e)
 
