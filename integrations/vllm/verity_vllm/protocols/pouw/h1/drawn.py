@@ -1,7 +1,7 @@
 """A served H1 window's drawn J10-R units staged as C-Flock statements, and the statements file core's credit verifies
 (``--statements``, `credit.STATEMENT_KEYS`), from the serve dir and the prover's own state. ``benchmarks/pouw/h1_prove/drawn.py``
-is its CLI, which reads ``--checkpoint`` with the live challenger's model registry (`main`'s ``checkpoint``) and binds
-``check`` to credit's own verification (`main`'s ``verified``).
+is its CLI, which reads ``--checkpoint`` with the live challenger's model registry (``checkpoint_weights``) and binds
+``check`` to credit's own verification (``verified``), running `run` on its arguments.
 
     drawn stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
                 [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
@@ -23,7 +23,7 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
 3. The values those ports read are rebuilt as serve-openai committed them (`served.Served.commit`): step s's
    ``a/<K>@<s>`` its calls of K's codes over M slots (`Served.a_words`) at `served.nonce` of its first call, call c's
    ``zy@<c>`` its records (`zy_words`) at c's, both under the prover's key and bound to the window's root, and ``b/<K>``
-   K's linears' weight rows (`chunk_words`, from ``--checkpoint``'s safetensors through `main`'s ``checkpoint``, or
+   K's linears' weight rows (`chunk_words`, from ``--checkpoint``'s safetensors through ``checkpoint_weights``, or
    ``--weights``) at ``B_NONCE`` plus K's place under the auditor's key (``--weights-key``, or the gate's ``model-key
    --model ROLE --circuit C``; a server with neither kept no key). Each must have credit's root and domain, else the stage
    is refused; ``pub@<c>`` and ``ok`` are credit's own (`credit.public_table`, `credit.ok_table`).
@@ -36,13 +36,12 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
 ``statements``: after each W/c<call>/ is proved (`hidden_zk/job.sh`'s ``session``: exactly one session, all its
 instances drawn), the statements file: each call's `challenger.statement` (circuit, pub.bin, its session).
 
-``check``: credit's own verification of those statements over the window's drawn units (`main`'s ``verified``: the
+``check``: credit's own verification of those statements over the window's drawn units (``verified``: the
 CLI's is `credit._verified` with the Lean ``flock-verify`` at FLOCK_VERIFY, then `credit._proved`), the prover's look
 before it hands them over: ``PROVED`` or ``REFUSED``.
 """
 from __future__ import annotations
 
-import argparse
 import bisect
 import gzip
 import hashlib
@@ -63,6 +62,7 @@ from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity_vllm.errors import Refused
 
 NAME = "unit/pouw-h1-tile"
 RECORD = "h1/w{w}/pouw-h1-calls.json"
@@ -82,10 +82,6 @@ CheckpointWeights = Callable[[Path, Sequence[tuple[str, int, int]], int], list[t
 #: ``check``'s verifier: (the statements, ``{k<K>: SHA-512}`` of --circuits' manifest, the window (`window_of`), its drawn
 #: units, the Lean ``flock-verify``) -> each drawn unit's proof outcomes and None, or None and credit's refusal
 Verified = Callable[[Any, dict, dict, list[int], Path], tuple[Any, tuple[str, str] | None]]
-
-
-class Refused(Exception):
-    pass
 
 
 # -- J10-R's statement ---------------------------------------------------------------------------------------------------
@@ -301,7 +297,7 @@ def b_value(win: dict, k: int, key: bytes, checkpoint: Path | None, weights: Pat
                      keep_rows=True)
 
 
-def weights_key(a: argparse.Namespace, win: dict) -> tuple[bytes, str]:
+def weights_key(a: Any, win: dict) -> tuple[bytes, str]:
     """The key ``b/<K>`` is salted under, and whose: ``--weights-key``'s (32 bytes, raw or hex), else the gate's
     ``model-key`` for ``--model`` under the window's circuit (serve-openai's ``--h1-model``). A server with neither
     salts it under a fresh key it never writes (`serve_h1.H1Windows`), so its windows' b/<K> can't be opened."""
@@ -452,7 +448,7 @@ class FileStager:
         return {"meta": self.meta, "outs": self.outs, "salts": salts, "circuit_sha512": self.pin}
 
 
-def stage(a: argparse.Namespace) -> int:
+def stage(a: Any) -> int:
     serve_dir, work = Path(a.serve_dir), Path(a.work)
     prover = Path(a.prover) if a.prover else serve_dir / PROVER.format(w=a.window)
     win = window_of(serve_dir, a.window)
@@ -550,7 +546,7 @@ def stage(a: argparse.Namespace) -> int:
 
 # -- statements and their check ---------------------------------------------------------------------------------------------
 
-def statements(a: argparse.Namespace) -> int:
+def statements(a: Any) -> int:
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     plan = json.loads((Path(a.work) / PLAN).read_text())
     out = []
@@ -566,7 +562,7 @@ def statements(a: argparse.Namespace) -> int:
     return 0
 
 
-def check(a: argparse.Namespace) -> int:
+def check(a: Any) -> int:
     if a.verified is None:
         raise Refused("check is credit's own verification, which benchmarks/pouw/h1_prove/drawn.py binds: run that CLI")
     serve_dir = Path(a.serve_dir)
@@ -582,45 +578,14 @@ def check(a: argparse.Namespace) -> int:
     return 0 if why is None else 1
 
 
-def main(argv: Sequence[str] | None = None, checkpoint: CheckpointWeights | None = None,
-         verified: Verified | None = None) -> int:
-    """``stage``, ``statements`` or ``check`` on `argv`; ``stage --checkpoint`` reads the served weights with
-    `checkpoint`, and ``check`` verifies with `verified`."""
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("stage")
-    s.add_argument("serve_dir")
-    s.add_argument("window", type=int)
-    s.add_argument("--circuits", required=True)
-    s.add_argument("--work", required=True)
-    s.add_argument("--prover")
-    s.add_argument("--k", type=int)
-    s.add_argument("--weights-key")
-    s.add_argument("--gate")
-    s.add_argument("--model")
-    s.add_argument("--checkpoint")
-    s.add_argument("--weights")
-    s.add_argument("--recompose", action="store_true")
-    t = sub.add_parser("statements")
-    t.add_argument("--work", required=True)
-    t.add_argument("--out", required=True)
-    c = sub.add_parser("check")
-    c.add_argument("serve_dir")
-    c.add_argument("window", type=int)
-    c.add_argument("--circuits", required=True)
-    c.add_argument("--statements", required=True)
-    c.add_argument("--lean", required=True)
-    c.add_argument("--k", type=int)
-    a = ap.parse_args(argv)
-    a.checkpoint_weights, a.verified = checkpoint, verified
+def run(cmd: str, a: Any) -> int:
+    """``stage``, ``statements`` or ``check`` on `a` (the CLI's arguments, with ``checkpoint_weights`` ``--checkpoint``'s
+    reader and ``verified`` ``check``'s verifier, each None when not given): 0, or 1 with the refusal on stderr."""
     try:
-        return {"stage": stage, "statements": statements, "check": check}[a.cmd](a)
+        return {"stage": stage, "statements": statements, "check": check}[cmd](a)
     except Refused as e:
         print(f"REFUSED: {e}", file=sys.stderr, flush=True)
         return 1
 
 
-__all__ = ["CheckpointWeights", "MANIFEST", "PLAN", "Refused", "Verified", "main"]
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+__all__ = ["CheckpointWeights", "MANIFEST", "PLAN", "Refused", "Verified", "run"]

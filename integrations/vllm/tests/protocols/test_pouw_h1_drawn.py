@@ -13,6 +13,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -124,9 +125,16 @@ def served(tmp_path, monkeypatch):
     return DR, d, tmp_path
 
 
-def _stage(DR, d, tmp, *more):
-    return DR.main(["stage", str(d), "0", "--circuits", str(tmp / "circuits"), "--work", str(tmp / "work"), "--k",
-                    str(_PeriodAuditor.K), "--weights", str(tmp / "weights.npz"), *more])
+def _stage(DR, d, tmp, weights_key=None, recompose=False):
+    return DR.run("stage", SimpleNamespace(serve_dir=d, window=0, circuits=tmp / "circuits", work=tmp / "work", prover=None,
+                                           k=_PeriodAuditor.K, weights_key=weights_key, gate=None, model=None,
+                                           checkpoint=None, weights=tmp / "weights.npz", recompose=recompose,
+                                           checkpoint_weights=None))
+
+
+def _check(DR, d, tmp, st, monkeypatch):
+    return DR.run("check", SimpleNamespace(serve_dir=d, window=0, circuits=tmp / "circuits", statements=st,
+                                           lean=tmp / "flock-verify", k=_PeriodAuditor.K, verified=_verified(monkeypatch)))
 
 
 def _prove(plan: dict, d: Path) -> None:
@@ -166,7 +174,7 @@ def _seeded():
 @pytest.mark.slow
 def test_a_served_windows_drawn_calls_are_staged_proved_and_credits_proved_accepts_them(served, monkeypatch, capsys):
     DR, d, tmp = served
-    assert _stage(DR, d, tmp, "--weights-key", str(tmp / "wkey"), "--recompose") == 0, capsys.readouterr().err
+    assert _stage(DR, d, tmp, weights_key=tmp / "wkey", recompose=True) == 0, capsys.readouterr().err
     plan = json.loads((tmp / "work" / DR.PLAN).read_text())
     manifest = json.loads((tmp / "circuits" / PC.MANIFEST).read_text())
     assert plan["calls"] and all(x["circuit"] == str((tmp / "circuits" / PC.file_name(K)).resolve()) for x in plan["calls"])
@@ -175,21 +183,17 @@ def test_a_served_windows_drawn_calls_are_staged_proved_and_credits_proved_accep
     assert all((Path(x["dir"]) / f).exists() for x in plan["calls"] for f in ("inst.bin", "pub.bin", "pin.txt", "circuit.txt"))
     _prove(plan, d)
     st = tmp / "statements.json"
-    assert DR.main(["statements", "--work", str(tmp / "work"), "--out", str(st)]) == 0
+    assert DR.run("statements", SimpleNamespace(work=tmp / "work", out=st)) == 0
     assert [s["call"] for s in json.loads(st.read_text())] == [x["call"] for x in plan["calls"]]
     capsys.readouterr()
-    assert DR.main(["check", str(d), "0", "--circuits", str(tmp / "circuits"), "--statements", str(st), "--lean",
-                    str(tmp / "flock-verify"), "--k", str(_PeriodAuditor.K)],
-                   verified=_verified(monkeypatch)) == 0
+    assert _check(DR, d, tmp, st, monkeypatch) == 0
     got = capsys.readouterr().out
     assert got.startswith("PROVED ") and json.loads(got.split(" ", 1)[1])["units"] == sorted(
         u for x in plan["calls"] for u in x["units"])
     first = json.loads(st.read_text())
     first[0]["sessions"] = []
     st.write_text(json.dumps(first))
-    assert DR.main(["check", str(d), "0", "--circuits", str(tmp / "circuits"), "--statements", str(st), "--lean",
-                    str(tmp / "flock-verify"), "--k", str(_PeriodAuditor.K)],
-                   verified=_verified(monkeypatch)) == 1
+    assert _check(DR, d, tmp, st, monkeypatch) == 1
     assert capsys.readouterr().out.startswith("REFUSED ")
 
 
@@ -201,11 +205,11 @@ def test_staging_on_the_committed_file_writes_the_recomposed_statements_bytes(se
     outs = {}
     monkeypatch.setattr(DR, "reference_check", lambda z, o, *_a: outs.__setitem__(int(z["call"]), o))
     monkeypatch.setattr(DR, "_random", _seeded())
-    assert _stage(DR, d, tmp, "--weights-key", str(tmp / "wkey"), "--recompose") == 0, capsys.readouterr().err
+    assert _stage(DR, d, tmp, weights_key=tmp / "wkey", recompose=True) == 0, capsys.readouterr().err
     (tmp / "work").rename(tmp / "recomposed")
     monkeypatch.setattr(DR, "unit_outputs", lambda z, *_a: outs[int(z["call"])])
     monkeypatch.setattr(DR, "_random", _seeded())
-    assert _stage(DR, d, tmp, "--weights-key", str(tmp / "wkey")) == 0, capsys.readouterr().err
+    assert _stage(DR, d, tmp, weights_key=tmp / "wkey") == 0, capsys.readouterr().err
     plan = json.loads((tmp / "work" / DR.PLAN).read_text())
     assert plan["calls"] and sorted(outs) == [x["call"] for x in plan["calls"]]
     for x in plan["calls"]:
@@ -218,7 +222,7 @@ def test_a_prover_state_or_weights_key_other_than_the_served_ones_is_refused(ser
     DR, d, tmp = served
     assert _stage(DR, d, tmp) == 1 and "b/<K>'s salt key" in capsys.readouterr().err
     (tmp / "other").write_bytes(bytes(32))
-    assert _stage(DR, d, tmp, "--weights-key", str(tmp / "other")) == 1
+    assert _stage(DR, d, tmp, weights_key=tmp / "other") == 1
     assert "is not the tree the window registered" in capsys.readouterr().err
     for f in (d / "private" / "h1" / "w0" / PV.CALLS).glob("*.npz"):
         with np.load(f) as x:
@@ -226,5 +230,5 @@ def test_a_prover_state_or_weights_key_other_than_the_served_ones_is_refused(ser
         if kept["a"].size:
             kept["a"].reshape(-1)[0] ^= 1
         np.savez(f, **kept)
-    assert _stage(DR, d, tmp, "--weights-key", str(tmp / "wkey")) == 1
+    assert _stage(DR, d, tmp, weights_key=tmp / "wkey") == 1
     assert "is not the tree the window registered" in capsys.readouterr().err

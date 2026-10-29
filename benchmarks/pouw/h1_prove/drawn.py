@@ -10,6 +10,7 @@ with the Lean ``flock-verify`` at ``--lean``, then `credit._proved`).
 """
 from __future__ import annotations
 
+import argparse
 import importlib.util
 from pathlib import Path
 from typing import Sequence
@@ -59,5 +60,36 @@ def verified(statements: list, files: dict, win: dict, units: list[int], lean: P
     return proofs, why if why is not None else CR._proved(units, proofs)
 
 
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("stage")
+    s.add_argument("serve_dir")
+    s.add_argument("window", type=int)
+    s.add_argument("--circuits", required=True)
+    s.add_argument("--work", required=True)
+    s.add_argument("--prover")
+    s.add_argument("--k", type=int)
+    s.add_argument("--weights-key")
+    s.add_argument("--gate")
+    s.add_argument("--model")
+    s.add_argument("--checkpoint")
+    s.add_argument("--weights")
+    s.add_argument("--recompose", action="store_true")
+    t = sub.add_parser("statements")
+    t.add_argument("--work", required=True)
+    t.add_argument("--out", required=True)
+    c = sub.add_parser("check")
+    c.add_argument("serve_dir")
+    c.add_argument("window", type=int)
+    c.add_argument("--circuits", required=True)
+    c.add_argument("--statements", required=True)
+    c.add_argument("--lean", required=True)
+    c.add_argument("--k", type=int)
+    a = ap.parse_args(argv)
+    a.checkpoint_weights, a.verified = checkpoint_weights, verified
+    return D.run(a.cmd, a)
+
+
 if __name__ == "__main__":
-    raise SystemExit(D.main(checkpoint=checkpoint_weights, verified=verified))
+    raise SystemExit(main())
