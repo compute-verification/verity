@@ -50,6 +50,7 @@ from typing import Any
 
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.randomness import derive
 
 from .memory_challenger import CLOCK_RESOLUTION_NS, SCHEMES, SessionLog, Signer, Verify
@@ -62,7 +63,7 @@ SESSION_TAG = b"verity-pous/streamed-wipe/session/v1\0"
 RECORD_BINDING = b"verity-pous/streamed-wipe/batch-records/v1\0"
 RECORDS_TREE = "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1"
 RECORD_SCHEMA = "pous/streamed-wipe/batch-record/v1"
-LABEL_BYTES = 64
+LABEL_BYTES = DIGEST_BYTES["sha512"]
 LABEL_BITS = 8 * LABEL_BYTES
 COMPLETE, LATE, WRONG = "complete", "late", "wrong"
 
