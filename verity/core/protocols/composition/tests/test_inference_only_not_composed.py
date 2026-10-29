@@ -1,8 +1,7 @@
 """No composite composes a protocol that publishes private data in the clear (`IN_THE_CLEAR`) unless `KNOWN` lists it
 with its reason. The inference-only policy's public form, `verity/inference-only/v0` (`NciCheck.Protocol.protocol`),
 publishes the division, and each inference block's gates and fresh-input bits, so it isn't zero-knowledge; both
-composites compose it for the run of record of 28 Oct only, a stated exception by Daniel's ruling: "Let's run it in
-the clear tonight as a stated exception." v1's private form replaces it after 15:00Z on 28 Oct. The
+composites compose it for one run of record only, a stated exception, and v1's private form replaces it. The
 composites' components are read wherever they are listed: their Lean (`Core.Onsite.components`, which is also
 `Core.Product.registry`, and `Core.Remote.components`, with the ids each one's `#guard` pins), the reference's mirror of
 them (`reference.ONSITE`, `REMOTE`), and the ids a configuration may name as components (`parties.IDS`, which step0's
