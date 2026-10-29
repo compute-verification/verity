@@ -21,6 +21,7 @@ import re
 from dataclasses import dataclass
 from functools import cached_property
 
+from verity.ml.circuits import cut
 from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 from verity.ml.circuits.program import is_input
 from verity.ml.circuits.types import Array
@@ -64,7 +65,10 @@ class NotSeparable(ValueError):
 
 
 def ids(fn) -> tuple[str, ...]:
-    """The ids a regex matches against: a lowered root's are its program function's (`Root[...]_v1` is no name)."""
+    """The ids a regex matches against: a lowered root's are its program function's (`Root[...]_v1` is no name), and a
+    decoded root's its `program_fn_id` (a string, `Name_vN{...}`)."""
+    if isinstance(fn, str):
+        return (fn.split("{", 1)[0], fn)
     fn = getattr(fn, "program_fn", fn)
     if isinstance(fn, SpecializedDefinition):
         return (fn.base_id, fn.id)
@@ -92,13 +96,7 @@ def member_refs(node, m: int, i: int):
     """The references member ``m`` of a batch or scan node passes as its parameter ``i``."""
     a = node.args[i]
     if node.form == "batch":
-        ax = node.axes[i]
-        if ax is None:
-            return a.refs
-        if ax == 0:
-            L = a.type.elem.leaves
-            return a.refs.slice(m * L, (m + 1) * L)
-        return a.take(ax, m).refs
+        return cut.member_refs(a, node.axes[i], m)
     if node.form == "scan" and 1 <= i <= node.n_xs:
         L = a.type.elem.leaves
         return a.refs.slice(m * L, (m + 1) * L)
