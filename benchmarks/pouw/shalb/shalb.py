@@ -31,7 +31,7 @@
 - **The bitsliced count**, the alternative representation every per-function argument has to cover.
 - **T1**: the hashing W1 a useful MAC at SSN's (`ssn_1l`, α 1.044, every k32) and NCP's volumes, the δ T1 allows, the
   term each rung of the ladder leaves, the frontier (bytes a MAC each rung allows), and the pooled figures for a week, a
-  month and a year: one H200, the reference datacenter, the world.
+  month and a year: one H200 (serving at `MFU_SERVE` of its tensor peak), the reference datacenter, the world.
 """
 from __future__ import annotations
 
@@ -46,7 +46,9 @@ W1_PER_REG = 32
 BLOCK = 128
 AND_PER_ADD64 = 63
 AND_PER_MAC = 130
-H200_MACS_PER_S = 9.9e14
+H200_MACS_PER_S = 9.89e14
+MFU_SERVE = 0.4
+H200_SERVED_MACS_PER_S = H200_MACS_PER_S * MFU_SERVE
 DC_GPUS = 100_000
 WINDOW_S = 600
 WORLD_MACS_PER_YEAR = 4.68e30
@@ -715,7 +717,8 @@ def main() -> None:
     pooled = []
     for vol_row in t1:
         hw, res = vol_row["hash_w1_per_mac"], rung[BEST_RANK3]["residual"]
-        for scope, rate in (("one H200", H200_MACS_PER_S), ("datacenter (100,000 H200)", H200_MACS_PER_S * DC_GPUS)):
+        for scope, rate in (("one H200", H200_SERVED_MACS_PER_S),
+                            ("datacenter (100,000 H200)", H200_SERVED_MACS_PER_S * DC_GPUS)):
             for p, s in {"window (600 s)": WINDOW_S, **PERIODS}.items():
                 macs = rate * s
                 comp = macs * vol_row["bytes_per_mac"] / BLOCK
@@ -795,8 +798,8 @@ def main() -> None:
                                  "a_keyed_mix_share": mix, "t1_a_keyed_mix": mix * args.a_w1,
                                  "keyed_per_digest": keyed.at(ITEM, DATA), "keyed_once_a_window": keyed.at(CALL),
                                  "honest_only_share": honest_only})
-    scopes = [(scope, rate * s, p) for scope, rate in (("one H200", H200_MACS_PER_S),
-                                                       ("datacenter (100,000 H200)", H200_MACS_PER_S * DC_GPUS))
+    scopes = [(scope, rate * s, p) for scope, rate in (("one H200", H200_SERVED_MACS_PER_S),
+                                                       ("datacenter (100,000 H200)", H200_SERVED_MACS_PER_S * DC_GPUS))
               for p, s in PERIODS.items()]
     scopes += [("world", WORLD_MACS_PER_YEAR * s / PERIODS["year"], p) for p, s in PERIODS.items()]
     for scope, macs, p in scopes:
