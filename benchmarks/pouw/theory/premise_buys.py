@@ -16,6 +16,10 @@ a committed, pairwise-distinct, noise-dependent 32-bit word, and nothing else. N
   (an estimate carried from the core's smell check, not computed here).
 - `decode`: below N 64 a k32 register costs honest more than H32's 32 (`DECODE_PRICE`), while the floor stays 32.
 - `uncommitted(L)`: committing a word every L > 32 leaves L/32 − 1 of every L/32 tensor writes unforced: 3(1 − 32/L).
+- `sign_fix`: the u8 × s8 wgmma takes one operand signed, and one IADD3 can't form signed bytes of B + F (the carry out
+  of a byte depends on its noise for 63 of the 127 int7 values), so honest writes that operand's registers twice where
+  a forced-write bound charges once. Per linear honest takes the cheaper route: U, Y signed, 3p·nK more; or U′, X
+  signed, 3p·mK more plus the row init's sum of A, p·mK (an estimate). No premise set closes it.
 
 The premise sets are cumulative (`SETS`): S0 today; S1 adds the atomic call (the free values are the call's own words,
 not their span; with every device of the period counted); S2 adds TensorSemantics (a tensor instruction computes the
@@ -102,11 +106,12 @@ def terms(linears, share: float, t: int, p_form: float = P_FORM, p_derive: float
             "forming": 3 * p_form * operands / stock,
             "derivation": p_derive * operands / stock,
             "before_noise": BEFORE_NOISE[0],
-            "decode": 3 * (price - FLOOR) / FLOOR if price else 0.0}
+            "decode": 3 * (price - FLOOR) / FLOOR if price else 0.0,
+            "sign_fix": sum(min(3 * p_form * n * k, 4 * p_form * m * k) for _, n, k in linears) / stock}
 
 
 def residual(t: dict[str, float], closed: set[str], noise: bool = True) -> float:
-    keys = ("final_word", "forming", "derivation", "before_noise", "decode")
+    keys = ("final_word", "forming", "derivation", "before_noise", "decode", "sign_fix")
     return sum(t[k] for k in keys if k not in closed and (noise or k != "before_noise"))
 
 
@@ -151,20 +156,31 @@ def main() -> int:
                  and round(l64["derivation"], 3) == 0.128,
                  f"{la['derivation']:.2%}, {lf['derivation']:.2%}, {l64['derivation']:.2%}")
 
+    crossing = [b for b in range(-63, 64) if any((b - 31) % 256 + r >= 256 for r in range(64))
+                and any((b - 31) % 256 + r < 256 for r in range(64))]
+    checks.check("an add whose byte sum is ≡ B − 31 + r (mod 256) carries out for some r in 0..63 and not others for 63 "
+                 "of the 127 int7 B, exactly [−32, 30]: those signed bytes take a second write",
+                 crossing == list(range(-32, 31)), f"{len(crossing)} of 127")
+    l512f, v4d = table["llama-3.2-1b fused, T 512"]["terms"], table["v4-like dense, T 8192"]["terms"]
+    checks.check("the sign fix is route U′'s 32·ΣK/ΣnK = 0.754% over Llama-3.2-1B fused at T 512, and route U's 24/m = "
+                 "0.293% on V4's dense linear at T 8,192",
+                 abs(l512f["sign_fix"] - 32 * 14336 / 60817408) < 1e-12 and abs(v4d["sign_fix"] - 24 / 8192) < 1e-12,
+                 f"{l512f['sign_fix']:.3%}, {v4d['sign_fix']:.3%}; Llama fused T 8,192 {lf['sign_fix']:.3%}")
+
     s = list(SETS)
-    print("  (shape, T)                         m      final   forming  derive  decode |  S0       S1       S2       S3")
+    print("  (shape, T)                         m      final   forming  derive  decode  sign  |  S0       S1       S2"
+          "       S3")
     for key, row in table.items():
         tm, r = row["terms"], row["residual"]
         print(f"  {key:34s} {tm['m']:6.0f} " + " ".join(f"{tm[k]:7.2%}" for k in ("final_word", "forming",
-                                                                                   "derivation", "decode"))
+                                                                                   "derivation", "decode", "sign_fix"))
               + " | " + " ".join(f"{v:8.2%}" for v in r.values()))
     checks.check("today (S0) misses T1 at every shape and T: hashing before the noise alone is 42% of stock (estimate)",
                  all(row["residual"][s[0]] > 0.01 for row in table.values()))
     s1 = {k: row["residual"][s[1]] for k, row in table.items()}
     t1_s1 = sorted(k for k, v in s1.items() if v <= 0.01)
-    checks.check("the atomic call (S1) alone meets T1 only on V4's dense K = n = 7,168 at T 8,192: forming and "
-                 "derivation stay (3p + 8)(1/n + 1/m) of stock, above 1% on Llama-3.2-1B at every T",
-                 t1_s1 == ["v4-like dense, T 8192"],
+    checks.check("the atomic call (S1) alone meets T1 at no shape and T: forming, derivation and the sign fix stay "
+                 "above 1% even on V4's dense K = n = 7,168 at T 8,192", t1_s1 == [],
                  f"{s1['v4-like dense, T 8192']:.2%} (V4 dense); Llama fused T 8,192 "
                  f"{s1['llama-3.2-1b fused, T 8192']:.2%}")
     s2 = {k: row["residual"][s[2]] for k, row in table.items()}
@@ -176,8 +192,13 @@ def main() -> int:
                  f"Llama fused T 8,192 {s2['llama-3.2-1b fused, T 8192']:.3%}, T 512 "
                  f"{s2['llama-3.2-1b fused, T 512']:.2%}; V4 expert T 8,192 {s2['v4-like routed expert, T 8192']:.2%}")
     s3 = {k: row["residual"][s[3]] for k, row in table.items()}
-    checks.check("with lane semantics and the derivation's minimality (S3) every term this model prices closes, at "
-                 "every shape and T", all(v == 0 for v in s3.values()))
+    over_s3 = sorted(k for k, v in s3.items() if v > 0.01)
+    checks.check("with lane semantics and the derivation's minimality (S3) only the sign fix remains; it meets T1 "
+                 "fused and on V4's shapes, but Llama-3.2-1B served apart (k and v at n 512) misses at T 512 and below",
+                 all(v == table[k]["terms"]["sign_fix"] for k, v in s3.items())
+                 and over_s3 == ["llama-3.2-1b apart, T 512", "llama-3.2-1b apart, T 64", "llama-3.2-1b apart, T 8"],
+                 f"fused T 8,192 {s3['llama-3.2-1b fused, T 8192']:.3%}, T 512 {s3['llama-3.2-1b fused, T 512']:.3%};"
+                 f" apart T 512 {s3['llama-3.2-1b apart, T 512']:.3%}")
 
     commit_alt = {key: {"X and Y": [3 * row["terms"]["operand_bytes"] * p for p in HASH_BYTE],
                         "E1 and F1": [row["terms"]["operand_bytes"] * p for p in HASH_BYTE]}
@@ -223,13 +244,18 @@ def main() -> int:
         no_dec = dict(table["llama-3.2-1b fused, T 8"]["terms"], decode=0.0)
         checks.mutation("dropping the decode term would leave S1 at T 8 dominated by forming alone: the term is counted",
                         residual(no_dec, {"final_word", "before_noise"}) < s1["llama-3.2-1b fused, T 8"])
+        no_sign = dict(table["llama-3.2-1b apart, T 512"]["terms"], sign_fix=0.0)
+        closed_s3 = {c for _, closes in SETS.values() for c in closes}
+        checks.mutation("dropping the sign fix would put S3 at 0 and pass Llama-3.2-1B apart at T 512: the term is counted",
+                        residual(no_sign, closed_s3) == 0 < 0.01 < s3["llama-3.2-1b apart, T 512"])
     if out:
         with open(out, "w") as f:
             json.dump({"sets": {k: {"adds": v[0], "closes": v[1]} for k, v in SETS.items()}, "table": table,
                        "uncommitted": unc, "t2": t2s, "sha_tolerance": tol, "periods": periods,
                        "commit_instead_hashing": commit_alt,
                        "estimates": {"before_noise": BEFORE_NOISE, "hash_units": HASH_UNITS, "hash_share": HASH_SHARE,
-                                     "t2_k32": T2_K32, "expert_share": EXPERT_SHARE, "derivation_price": P_DERIVE}},
+                                     "t2_k32": T2_K32, "expert_share": EXPERT_SHARE, "derivation_price": P_DERIVE,
+                                     "sign_fix_route_u_prime_row_init": P_FORM}},
                       f, indent=1)
             f.write("\n")
     return checks.finish()
