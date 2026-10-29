@@ -4,10 +4,10 @@ import Proofs.NetworkCertifier.Ingress
 /-!
 # Per window: the blocks the accounting charges
 
-The guarantees count steps; these read a horizon of whole blocks and factor each bound per block: the shipped
-schedule's `2^k · D^(g·T)` per execution block, from any execution block's start and whatever the run showed before it,
-and the ingress bound's `(r ℓ + 1)^T` per `T` buckets (`encard_ingress_obsDecodable_le` and its content version at
-`n = m·T`). Each takes its parent's hypotheses at that horizon and no other.
+The guarantees count steps; these count the monitoring period's whole blocks and factor each bound per block: the
+reference schedule's `2^k · D^(g·T)` per execution block, from any execution block's start and whatever the run showed
+before it, and the ingress bound's `(r ℓ + 1)^T` per `T` buckets (`encard_ingress_obsDecodable_le` and its content
+version at `n = m·T`). Each takes its parent's hypotheses at that length and no other.
 
 The egress count from block `e₀` codes a sequence continuing a fixed prefix by the advice of blocks `e₀` to `e₀ + m − 1`
 and the jitter classes after the prefix. That code fixes the sequence: before block `e₀` it is the prefix, and after it
@@ -101,7 +101,7 @@ theorem encard_accSeqs_le_constantRate_from {Adv : Type} [Fintype Adv] (T g E : 
         rw [mul_pow, ← pow_mul']
 
 /-- **`|a|` bits per execution block, from any block's start.** `encard_accSeqs_le_constantRate_from` with `|a|`-bit
-advice. The horizon need only lie within the `E` blocks: with `g·T = 0` there is one sequence, the empty one. -/
+advice. The steps counted need only lie within the `E` blocks: with `g·T = 0` there is one sequence, the empty one. -/
 theorem encard_accSeqs_le_constantRate_perWindow (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
     (e₀ m D : ℕ) (hn : (e₀ + m) * (g * T) ≤ E * (g * T)) (p : List (Obs L K S)) :

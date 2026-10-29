@@ -67,15 +67,15 @@ def EncardAccSeqsLeAdviceBits : Prop :=
     (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
     (AccSeqs P op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞)
 
-/-! ## Theorem 3 for the shipped schedule: the constant-rate Program
+/-! ## Theorem 3 for the reference schedule: the constant-rate Program
 
 `constantRate T g E frames` (`Definitions.NetworkCertifier.Schedule`) is the Program of one link's monitoring period:
 `E` execution blocks, each of `g·T` buckets, each block's frames and send ticks `frames ins e v ℓ` read from the
 ingress and that block's advice `v`, a string of `k = |a|` bits. None of these guarantees has a dataflow
-hypothesis. The counts take a horizon within the `E` blocks (`hn : n ≤ E·(g·T)`): the audit gives verdicts for those
-blocks only, so every step counted is a step it checks. -/
+hypothesis. The counts are over the monitoring period's first `n` steps, within its `E` blocks (`hn : n ≤ E·(g·T)`):
+the audit gives verdicts for those blocks only, so every step counted is a step it checks. -/
 
-/-- **Theorem 3 for the shipped schedule.** The constant-rate Program's accepted observation sequences of length `n`
+/-- **Theorem 3 for the reference schedule.** The constant-rate Program's accepted observation sequences of length `n`
 with jitter below `D` number at most `2^(E·k) · D^n`: `|a|` bits per execution block plus jitter. This holds for every
 frame function and operator. -/
 def EncardAccSeqsLeConstantRate : Prop :=
@@ -93,16 +93,16 @@ def ExpectedRowCausal : Prop :=
     (ins : List In) (a a' : Fin E → Adv) (ha : ∀ e : Fin E, (e : ℕ) = t / (g * T) → a e = a' e),
     (constantRate (S := S) T g E frames).rows t ins a = (constantRate (S := S) T g E frames).rows t ins a'
 
-/-- **`|a|` bits per execution block opened.** If the horizon `n` lies within the first `m` execution blocks
-(`n ≤ m·(g·T)`), the constant-rate Program's accepted sequences number at most `2^(min(E, m)·k) · D^n`: only the advice
-of blocks the horizon reaches counts, however many blocks the advice covers. -/
+/-- **`|a|` bits per execution block opened.** If the monitoring period's first `n` steps lie within its first `m`
+execution blocks (`n ≤ m·(g·T)`), the constant-rate Program's accepted sequences number at most
+`2^(min(E, m)·k) · D^n`: only the advice of blocks those steps reach counts, however many blocks the advice covers. -/
 def EncardAccSeqsLeConstantRateWindows : Prop :=
   ∀ {L K S : ℕ} {In : Type} (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
     (n D m : ℕ) (hn : n ≤ E * (g * T)) (hm : n ≤ m * (g * T)),
     (AccSeqs (constantRate (S := S) T g E frames) op n D).encard ≤ ((2 ^ (min E m * k) * D ^ n : ℕ) : ℕ∞)
 
-/-- **The composed statement for the shipped schedule (W2 and J).** A decoder reads the wire of the first `n` steps,
+/-- **The composed statement for the reference schedule (W2 and J).** A decoder reads the wire of the first `n` steps,
 within the first `m` execution blocks, and recovers every secret in `Zs`, all of whose runs the constant-rate Program
 accepts up to `n`. Then `Zs` has at most `2^(min(E, m)·k) · D^n` elements: a covert sender inside X moves at most
 `m·|a| + n·log2 D` bits through egress timing and content advice together, and under J only the advice's. -/
@@ -118,10 +118,10 @@ def EncardDecodableLeConstantRate : Prop :=
 
 /-- **`|a|` bits per execution block, from any block's start.** Fix what a run showed through its first `e₀` execution
 blocks, `p`, and take the `m` blocks after them, within the `E` blocks (`hn` is
-`EncardAccSeqsLeConstantRateWindows`'s `n ≤ E·(g·T)` at the horizon `n = (e₀ + m)·(g·T)`). The constant-rate Program's
-accepted sequences of that length with jitter below `D` that continue `p` number at most `(2^k · D^(g·T))^m`:
-`|a| + g·T·log2 D` bits per execution block, `|a|` under J (`D = 1`), whatever came before. At `e₀ = 0` they are the
-monitoring period's first `m` blocks. -/
+`EncardAccSeqsLeConstantRateWindows`'s `n ≤ E·(g·T)` for the monitoring period's first `n = (e₀ + m)·(g·T)` steps). The
+constant-rate Program's accepted sequences of that length with jitter below `D` that continue `p` number at most
+`(2^k · D^(g·T))^m`: `|a| + g·T·log2 D` bits per execution block, `|a|` under J (`D = 1`), whatever came before. At
+`e₀ = 0` they are the monitoring period's first `m` blocks. -/
 def EncardAccSeqsLeConstantRatePerWindow : Prop :=
   ∀ {L K S : ℕ} {In : Type} (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
@@ -207,9 +207,9 @@ def EncardIngressDecodableLeContents : Prop :=
     Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
 
 /-- **The K charge's unit: `T·log2(r ℓ + 1)` bits per ingress link-window.** `EncardIngressObsDecodableLe` over the
-first `m` whole windows of `T` buckets, the horizon `n = m·T`: for one content assignment `c`, at most
-`(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each link-window contributes the factor `(r ℓ + 1)^T`, its `T·log2(r ℓ + 1)` bits,
-and each window `D^T` of jitter, 1 under J. -/
+monitoring period's first `m` whole windows of `T` buckets, its first `n = m·T` steps: for one content assignment `c`,
+at most `(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each link-window contributes the factor `(r ℓ + 1)^T`, its
+`T·log2(r ℓ + 1)` bits, and each window `D^T` of jitter, 1 under J. -/
 def EncardIngressObsDecodableLePerWindow : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
     (I : Interaction L K S Msg In Act Wire) (T m D : ℕ) (r : Fin L → ℕ)
