@@ -45,7 +45,7 @@ nothing else but Lean core.
   format is in `NciCheck.Check`'s docstring. `nci-check --policy` runs the policy's check alone, without θ's
   provenance, which is what `benchmarks/verifier_cost` measures.
 - `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
-  each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../tests/test_nci_*.py`.
+  each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../network/tests/test_nci_*.py`.
 
 The check stays experimental until its agreement with `Nci.Complies` is proved. `benchmarks/nci` holds the
 literature index and the training algorithms' traits.
