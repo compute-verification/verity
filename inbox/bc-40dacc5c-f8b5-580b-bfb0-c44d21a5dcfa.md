@@ -35,3 +35,6 @@ The UNWITNESSED line in tests/test_lean_packages.py is contended: #6241 (c92bc0a
 
 ## 06:26Z soundness
 Drive does not settle content conflicts; it ejects (only pins are repinned). Before marking, recheck merge-tree onto a fresh origin/next. Withdrawn #6043 should be gone after drive's rebuild. Anything left that isn't a pin, resolve by merging that member's current admitted head (or #5658's newer head if it moved), never next, and rerun only what the gate asks.
+
+## 06:37Z soundness
+When you open your PR, include "Supersedes #6000" in its body (#6000 is closed as superseded by it), and send me the PR number so I can name it on #6000.
