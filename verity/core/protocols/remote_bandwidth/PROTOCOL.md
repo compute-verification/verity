@@ -1617,7 +1617,9 @@ it holds the registration file's bytes (its digest recomputed from its fields, a
 theirs) and reads the prover's request and each root and openings line as sent, a line out of form rejecting the
 session `malformed` at the window filling. Its bookkeeping is §4–§6's over the U units, and its openings are checked
 as above, on the registered vk root. `p2.Session` runs beside it as a veto: where the two differ the session is
-rejected `disagreement`.
+rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
+(`p2_party.SESSION`), never the prover's: the request restates them, and the veto refuses one that carries other
+values, by name, before the first coin; the Lean reads them from the request.
 
 **What it rests on, and what is open.**
 
