@@ -39,7 +39,7 @@ cp-xt = { ALU = 0.53515625, IMAD = 0.5, STS32 = 0.0078125, LDS128 = 0.001953125,
 [skip.served]
 eps = 0.008145
 at = { "DC-100-ri" = 0.008145, "DS-100" = 0.006981 }
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip at this design's own ♭ (decision 90), the plain LI-CP-W fold with its checkpoint at the fold routes' cheapest mix (DC-100: 4.160 SMSP-cycles a 4096-MAC MMA, 0.788 cp-red2 and 0.212 cp-red; DS-100: 4.169, 0.903 cp-red2 and 0.097 cp-red8; 0.8025% and 0.6849% at REDUX) and no LDTM, so the skippable work is a larger share of a smaller ♭ than the heavy design's. The most is at Llama-3.1-8B 2K prefill, all P·V's peel. On DC-100-ri (`at`) ♭ is DC-100's; on DS-100 the tail is at DS-100's price (RT-HB-HEAD)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip at this design's own ♭, the plain LI-CP-W fold with its checkpoint at the fold routes' cheapest mix (DC-100: 4.160 SMSP-cycles a 4096-MAC MMA, 0.788 cp-red2 and 0.212 cp-red; DS-100: 4.169, 0.903 cp-red2 and 0.097 cp-red8; 0.8025% and 0.6849% at REDUX) and no LDTM, so the skippable work is a larger share of a smaller ♭ than the heavy design's. The most is at Llama-3.1-8B 2K prefill, all P·V's peel. On DC-100-ri (`at`) ♭ is DC-100's; on DS-100 the tail is at DS-100's price (RT-HB-HEAD)"
 
 [mand.fold]
 eps = 0.0
