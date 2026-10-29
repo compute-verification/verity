@@ -286,10 +286,6 @@
    "owner": "@compute-accounting",
    "digest": "13419da38b56a985a7e9d380082513956a1014123de6551f02858585df159139"
   },
-  "Accounting.Compose.Period.EveryWindow": {
-   "owner": "@compute-accounting",
-   "digest": "a00f71bbadbe548d58bba0efff580398689ade608d039a289391b1534b9f265c"
-  },
   "Accounting.Compose.PrefixOf": {
    "owner": "@compute-accounting",
    "digest": "5f6db3d832a87a822b240b84797299efacb6c607ff175b79678767e4593e846a"
@@ -2105,6 +2101,10 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Accounting.Compose.WindowPlay.EveryWindow": {
+   "owner": "@compute-accounting",
+   "digest": "c98626accb7df5b1c0074aa9db7c4b154b316997637babcf44034dc4aba884f9"
   }
  },
  "meaning": [
@@ -13883,7 +13883,7 @@
    ]
   },
   "Definitions.Accounting.ComposePeriod": {
-   "digest": "97f3bd46606ef0bc2e4f8cda3576c68483b764238d20e703baa5cb08aa09b435",
+   "digest": "90116c11db3edc43c96137fc5b72d8db5e9e556d63a91e8a80b60d7cae0a95ad",
    "definitions": {
     "Accounting.Compose.DeadConeDead": "ca2183fb0f093df1f54d1a511bac3482a6808e51a6b37b292fc94e8fc2c96bc7",
     "Accounting.Compose.Declared.periodLayer": "a01db9d427c342555e77bd8d0c437c88963489e2c43b2dcf299f6a71c649a843",
@@ -13896,28 +13896,28 @@
     "Accounting.Compose.Outcomes.rel": "a8a4aeafd52b7b38bafb63224a5e0dad0e087b9086e62981f233dc4343138677",
     "Accounting.Compose.Outcomes.right": "c9e3052b13f635844940ec05ab1cbe759e565d22cf82e17e0acfaa31386cbf8e",
     "Accounting.Compose.PerLiveTile": "91895d8096bf1965ed5103916813e0624047592ef6933af8da4ed2cbc9c923a0",
-    "Accounting.Compose.Period": "13d14cade7896245c98de63e7b9b333a94bde2f918d0c4c727f58b320b0596bc",
-    "Accounting.Compose.Period.EveryWindow": "a00f71bbadbe548d58bba0efff580398689ade608d039a289391b1534b9f265c",
-    "Accounting.Compose.Period.below": "6a5df8cd5668063823056d9273443e04f47cbc0065be2aa3941cd36674d97a9a",
-    "Accounting.Compose.Period.brecOn": "a8477feee591807b5f8a3646a71d2585daa83333907ea7ee14a878358871011f",
-    "Accounting.Compose.Period.brecOn.go": "35474b4f43e61aa4770ba972ce972eb818beb51f83346d8ea416bb5c8612e9f3",
-    "Accounting.Compose.Period.casesOn": "131de49507ac32ec06839871b47ab28a589ce0eb776fb41e670c39f07825ff46",
-    "Accounting.Compose.Period.done": "7d16ae838104b949137991d7652c34c2cf15c04446846cd71d7787d99b2330d5",
-    "Accounting.Compose.Period.liveAt": "fd7d537da3c88aa8bb018e3abdc90f5fb86171dc9c19e4de3aea4e3f7555b120",
-    "Accounting.Compose.Period.rec": "0adacc7d014142c938755d3cae5f6bd5e3d72fb4ea3a9bd8aaf22de7600610a4",
-    "Accounting.Compose.Period.window": "f39dcb3af3972c3864f161ba68c3322dab3be434611c25337dd93763f73a8216",
-    "Accounting.Compose.Period.windowAt": "371c0de8887af6adb233d1aee7802dffa4dcf89290b3344fd57fe0829ecd9765",
     "Accounting.Compose.PrefixOf": "5f6db3d832a87a822b240b84797299efacb6c607ff175b79678767e4593e846a",
     "Accounting.Compose.RoundGame.acceptsUpTo": "7f24c520abbb1dae862a06cf3eeadacf1f0d8ffcbf0d8aa37c2c5ff9bfdc9db1",
     "Accounting.Compose.RoundGame.deficiencyUpTo": "ec618fe1e854b9e09bee48e05dd7fcbf16e09ff910f6a155de253f780864cf3a",
+    "Accounting.Compose.WindowPlay": "abbf6d86f51a72b82e21a67102782a1523ba6a906e592615cf03f7846894a525",
+    "Accounting.Compose.WindowPlay.EveryWindow": "c98626accb7df5b1c0074aa9db7c4b154b316997637babcf44034dc4aba884f9",
+    "Accounting.Compose.WindowPlay.below": "019ca0227d52e3c7f354e5c160a3b416faf36260ab9b34b066a879107e8e5cf8",
+    "Accounting.Compose.WindowPlay.brecOn": "6ec83024bf017ed233aa043c01fd8d6afddec085f6792591d37e11257df8ccf7",
+    "Accounting.Compose.WindowPlay.brecOn.go": "d2c4bdbe13601b8cad341406a76e2c33a58131dd72b8e13422873265e6f2aa61",
+    "Accounting.Compose.WindowPlay.casesOn": "13ca444a78925e3993ba11189f6073b2a5f1f62fb74f6489d81ad614e6e091c5",
+    "Accounting.Compose.WindowPlay.done": "486618ac95373dd92546e07b238cc362b8567d07d5e17c290cdb5ac9b0e7ac3c",
+    "Accounting.Compose.WindowPlay.liveAt": "1d0198968cb884fc443badb099323a6dececf8172fbc0ca06d175387a1f2ec5a",
+    "Accounting.Compose.WindowPlay.rec": "2b88578a46c99df649024dbe30257bda0d92a481ebb5fbec931779029d3ab83d",
+    "Accounting.Compose.WindowPlay.window": "d64cfa739e924c1366c2f7a4187695beec4b80e133ff0f83b4ee1780a0143d38",
+    "Accounting.Compose.WindowPlay.windowAt": "90c32b98a21b4db315ef0469ae19e021bddb2e3319b362e06178e23c981c0287",
     "Accounting.Compose.consGame": "c2028e515abf2a609322d707f397836d556d0ee509301d3ea18d80d0dadd2f26",
     "Accounting.Compose.creditPrefix": "0cf51a60ce843ddf1b28ec3ba0a5e1f1bfd1823877dbcf833f6074f4830be3e5",
-    "Accounting.Compose.creditedLive": "15e1aa9f0aecd5269b391c02e6249e973b30e9fef123cad871b869c13b93dc38",
+    "Accounting.Compose.creditedLive": "4f01df9749296e195bcb04e7181687eeabb8bee99a5962dd42587c10c63eacaa",
     "Accounting.Compose.epsPrefix": "326c39d4dd24cd93e1a7fa6d13d8784177b0a069dd48c7baa6a9ec56c68a5c62",
     "Accounting.Compose.liveCone": "fc1a07b9904b18a8d083652f260526228ad818a5cc1a1e314d3e7be4a07d7daf",
     "Accounting.Compose.liveWords": "0a60576d88cab5b6bc1024f19524c7b48d52b16e2c43faf43a10af4bb7379bdf",
-    "Accounting.Compose.periodGame": "76b742254a2efa587efbd4559c05ffb95b6365ab78ce00e53287b4ffda0ae169",
-    "Accounting.Compose.periodMode": "9ebef421f897aa7e70ee118ad58fc2b5318d376afd25525f92a220b7093abb3d",
+    "Accounting.Compose.periodGame": "fad519d2c5a96b8edf0ddd76acf4ccb6ccbb36f32bef10c9535ce44cbba59bcc",
+    "Accounting.Compose.periodMode": "f2a39135d388ff641734b2e8460acc941e987bb58eb8246777f536ab7e235d5e",
     "Accounting.Compose.rOfPrefix": "1166975ed785ba47325b1d4600a1cc953f9dcbbd8d561d612307cf64bb1afb83"
    },
    "guarantees": [
@@ -14657,11 +14657,11 @@
    ]
   },
   "Definitions.Accounting.Guarantees.ComposePeriod": {
-   "digest": "246d22df17f83e4428d6a4112b9f63351649ff10f79b1e40e4f64a69bd083ecf",
+   "digest": "82de97ea9a1b5b0fbea479cc72b962aada7433e52f6732dfc36995db9f5309cf",
    "definitions": {
-    "Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod": "744a4cc27725edd120cb3fdfa4dd4467b916d3cb1aecf9bd5e39444dfb644ca6",
-    "Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod": "9a9c44a25d40e27e546d6271b4b6d09dbfa83baea7bda4acca50c1bafa6571bf",
-    "Accounting.Guarantees.ComposePeriod.PeriodBudget": "854184f4b0a891ea10efec5a1619e331e2f77fd82bea4c5e4c2c5f575afee155",
+    "Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod": "e1c18328e34245525bdb996c612db8dbbe16b63c51d7348122b8afd990e97dd7",
+    "Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod": "960742127645d0bccd8daafe43f0580e341a9fc2783c9a8fc84984c2b4dbd04a",
+    "Accounting.Guarantees.ComposePeriod.PeriodBudget": "8e58a4788964033cc40fd5f4ed21bc1fe8cbcd38c2ad21464ceed098d46f70c3",
     "Accounting.Guarantees.ComposePeriod.PeriodTailMax": "9ab8417f568e72412d8aabc831652ed12f28fb7995c20b016baee7d88410743e"
    },
    "guarantees": [
