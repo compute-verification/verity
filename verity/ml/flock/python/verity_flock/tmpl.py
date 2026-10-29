@@ -135,7 +135,7 @@ def read_flat(path, name: str | None = None) -> tuple[Flat, int]:
 
 
 def of_layout(lay, name: str) -> Flat:
-    """A laid-out unit (`ir_lower.Layout`) as the unit `ir_lower.netlist` writes of it (no ``LEAVES`` line), read off its
+    """A laid-out unit (`ir_lower.LoweredUnit`) as the unit `ir_lower.netlist` writes of it (no ``LEAVES`` line), read off its
     rows rather than its text."""
     head = [FLAT, name, str(lay.useful), str(lay.const)]
     for groups in (lay.in_groups, lay.out_groups):

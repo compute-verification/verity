@@ -299,7 +299,7 @@ class Stage:
     count: int = 1
     slot_ins: list | None = None
     slot_outs: list | None = None
-    layout: IL.Layout | None = field(default=None, repr=False)
+    layout: IL.LoweredUnit | None = field(default=None, repr=False)
 
     def tags(self, i: int) -> tuple[list, list]:
         """Slot ``i``'s input and output port tags."""
@@ -461,7 +461,7 @@ def lower_tail(low: IL.Lowering, forged: bool = False) -> Tail:
     return Tail(stages, lookups, read_by_units, rets)
 
 
-def stage_layout(st: Stage) -> IL.Layout:
+def stage_layout(st: Stage) -> IL.LoweredUnit:
     """A stage laid out as ``flock-ir-unit/v2``: one input group, one output group."""
     if st.layout is not None:
         return st.layout
