@@ -65,7 +65,8 @@ def call(design: dict, m: int, k: int, n: int, lead: dict, lay: dict, reg: float
         tiles = math.ceil(m / design["tile"])
         coin_steps = math.ceil((sa - 1) * min(1.0, m / design["tile"]))
         entries = tiles * n * coin_steps
-        return {"bits": m * rba + entries * design["e"], "bytes": m * rba / 8.0 + entries + 4.0 * tiles * n,
+        corr = 4.0 * tiles * n if coin_steps > 1 else 0.0
+        return {"bits": m * rba + entries * design["e"], "bytes": m * rba / 8.0 + entries + corr,
                 "forming": m * rba / 32.0 * reg + entries / 4.0 * reg, "words": sa / s, "entries": entries,
                 "noise_rms": 0.0, "word_noise_rms": math.sqrt(coin_steps * odd_mean_square(design["e"]))}
     if kind == "blc4":
