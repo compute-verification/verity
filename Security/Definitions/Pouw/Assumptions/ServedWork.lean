@@ -15,10 +15,11 @@ credited words `wt t`. At `pub = p · Σ_t wt t` the right fraction by tiles is 
 `SakLb.SAKResidual` at the same `μ`, `lam` and `κdeg`, on a round whose cells are the tiles' credited words, gives
 `SAKServed` pointwise: it asks no more of 𝓜.
 
-**Non-vacuity rests on a model that prices register reductions.** 𝓜 as `Definitions.Core.Accel` writes it makes
-`SAKMatmul` and `SAKResidual` false: free register reductions run the four Russians' method below the public best's cost.
-`SAKServed` is false there too. A guarantee that takes it says something only on a model where a register word that an
+**Non-vacuity is open.** 𝓜 as `Definitions.Core.Accel` writes it prices register reductions: a register word that an
 atomic or a reduction writes costs an `alu` lane, L2 writes are priced, and an MMA pays at least one product an output.
+The four Russians' method then pays at least an `alu` lane a MAC, but `SAKMatmul` as written still fails at a dual
+price that leaves those pipes cheap, and `SAKResidual`, which would carry them, is not adopted. Whether `SAKServed`
+holds on 𝓜 is open.
 -/
 
 namespace Pouw.Assumptions
@@ -47,8 +48,8 @@ words at `p` each, no less. The advice is anything computed before the salt with
 the product's structure.
 
 It is falsified by any program on the card, with any advice, that gets a share of a window's tiles right on most
-salts at a measured priced cost below `p` a credited word of them, less `lam`. It is false of 𝓜 as written, which
-leaves register reductions free (module doc). -/
+salts at a measured priced cost below `p` a credited word of them, less `lam`. Whether it holds of 𝓜 as written is
+open (module doc). -/
 def SAKServed (G : Accel) (μ : G.Res → ℝ) {I D W : Type} [Fintype D] {Np : ℕ} (Reg : Set I)
     (hon : I → D → Fin Np → W) (wt : Fin Np → ℝ) (p : ℝ) (lam : I → ℝ) (κdeg : ℕ → ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ a ∈ Reg, ∀ (B : ℕ) (St : Type), (∃ e : St → Fin (2 ^ B), Function.Injective e) →
