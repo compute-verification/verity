@@ -22,14 +22,6 @@ theorem isCK : R1.d.𝓘.IsCK R1.d 2 1 where
   card := by decide
   reads := by decide
 
-@[simp] theorem R1_θ : R1.d.θ = {0} := rfl
-
-@[simp] theorem R1_𝓘 : R1.d.𝓘 = P1 := rfl
-
-@[simp] theorem R2_θ : R2.d.θ = {0} := rfl
-
-@[simp] theorem R2_𝓘 : R2.d.𝓘 = P2 := rfl
-
 theorem unregistered_R1 (u : Fin 1) : R1.d.unregistered (P1.gates u) = {1} := by
   revert u
   decide
@@ -38,21 +30,24 @@ theorem unregistered_R1' (u : Fin 1) : R1.d.unregistered (R1.d.𝓘.gates u) = {
 
 theorem blockProgram_R1 (e : List Bool) (X : C.Transcript) (u : Fin 1) :
     blockProgram R1 e X u = e ++ [(X 1).getLsbD 0] := by
-  simp [blockProgram, indexCode, unregistered_R1, unregistered_R1', Circuit.bits]
+  obtain rfl : u = 0 := Subsingleton.elim _ _
+  show e ++ indexCode (0 : Fin 1) ++ C.bits X ((R1.d.unregistered (P1.gates 0)).sort (· ≤ ·)) = _
+  rw [unregistered_R1]
+  simp [indexCode, Circuit.bits]
 
-theorem recompute_zero (X : C.Transcript) : R1.recompute X 0 0 = 1 := C.run_fixed (by simp)
+theorem recompute_zero (X : C.Transcript) : R1.recompute X 0 0 = 1 := C.run_fixed rfl
 
-theorem recompute_one (X : C.Transcript) : R1.recompute X 0 1 = X 1 := C.run_fixed (by simp [P1])
+theorem recompute_one (X : C.Transcript) : R1.recompute X 0 1 = X 1 := C.run_fixed rfl
 
 theorem recompute_two (X : C.Transcript) : ((R1.recompute X 0) 2).getLsbD 0 = (X 1).getLsbD 0 := by
-  have h : R1.recompute X 0 2 = C.op 2 (R1.recompute X 0) := C.run_free (by simp [P1])
+  have h : R1.recompute X 0 2 = C.op 2 (R1.recompute X 0) := C.run_free rfl
   rw [h]
   show (BitVec.ofBool ((R1.recompute X 0 0).getLsbD 0 && (R1.recompute X 0 1).getLsbD 0)).getLsbD 0 = _
   rw [recompute_zero, recompute_one]
   simp
 
 theorem recompute_three (X : C.Transcript) : ((R1.recompute X 0) 3).getLsbD 0 = (X 1).getLsbD 0 := by
-  have h : R1.recompute X 0 3 = C.op 3 (R1.recompute X 0) := C.run_free (by simp [P1])
+  have h : R1.recompute X 0 3 = C.op 3 (R1.recompute X 0) := C.run_free rfl
   rw [h]
   show (BitVec.ofBool ((R1.recompute X 0 0).getLsbD 0 && (R1.recompute X 0 1).getLsbD 0)).getLsbD 0 = _
   rw [recompute_zero, recompute_one]
