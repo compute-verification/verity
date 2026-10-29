@@ -26,7 +26,7 @@ than its rows ran (`positions_off`), and the context carries the manifest's ``op
 shared module's layer-N path through, the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
 step-input port (`port_of`; `port_layout` is where the window's streams put it). The window's requests are named by the body's ``user`` (the id the advice names them
 by), and the bundle names no Programs: a served window's Programs are the registered compiler's for its advice, made after
-the window closed. With ``--retain-exclude hidden_m1`` (`serve_retention.RetentionOptions`) the attention interiors (``fa2.m1/*``, ``fa3.m1/*``)
+the window closed. With ``--retain-exclude hidden_m1`` (`RetentionOptions`) the attention interiors (``fa2.m1/*``, ``fa3.m1/*``)
 are committed as before, same leaves and roots, but not copied off the device, so the bundle's store doesn't hold them and its
 manifest names them ``committed_not_retained``: no reader of a sealed window opens them (no Program of record reads an
 ``fa*.m1`` identity, and C2 and the oracle compare skip them), and a read of one is refused by name.
@@ -36,13 +36,13 @@ with the pinned blocks its values sit in lent out of the committer's pool until 
 the window was detached into at its close (`NativeHostCommitter.detach`), finalized on the sealer's thread before its seal,
 or, for a committer that detaches no window, the committer frozen after a finalize at the close (`freeze`). The registered
 tensors' bytes (`extras_of`) are read once for each weights root, and `seal_window` runs over the view on the sealer's
-thread while the engine serves the next window; the bytes it writes are the ones an inline seal writes. `DiskFloor` keeps
-the serve dir's filesystem above a floor: a window whose seal would take it under is not sealed.
+thread while the engine serves the next window; the bytes it writes are the ones an inline seal writes. `serve_guard.DiskFloor`
+keeps the serve dir's filesystem above a floor: a window whose seal would take it under is not sealed.
 
 A seal on the sealer's thread shares the engine's GIL, so it holds it only briefly: its binding map is encoded a chunk of
 entries at a time (`commit.json_chunks`), built with no cyclic collection running (`gc_paused`) and freed a chunk at a time
 (`drop`). By default its Python runs in a spawned process (`seal_process.ProcessSealer`), over a view it is handed (`SealView`,
-`seal_view`), the thread here writing only the store's files. `Watchdog` records what still stalls the process (``pauses.jsonl``),
+`seal_view`), the thread here writing only the store's files. `serve_guard.Watchdog` records what still stalls the process (``pauses.jsonl``),
 and each seal's line its phases.
 """
 from __future__ import annotations
@@ -52,7 +52,6 @@ import copy
 import functools
 import gc
 import json
-import shutil
 import threading
 import time
 from collections import deque
@@ -65,8 +64,7 @@ from typing import Any
 from verity_vllm.commit import json_chunks as JC
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
-from verity_vllm.config import UsageError
-from verity_vllm.pipeline.serve_retention import retention_refusal
+from verity_vllm.config import UsageError, option
 
 ROWS, V1 = step_rows.NAME, "vllm-v1"
 #: the token budget's floor under rows-sha512: the step-input port's ids fill whole ``step_rows.ROW_BYTES`` rows
@@ -79,6 +77,72 @@ SERVED_WINDOW = "verity-vllm/served-window/v1"
 
 #: the committer a declared Commit commits rows-sha512 with (`pipeline.commit`'s default ``--committer``)
 DECLARED_COMMITTER = "native_collect_v2b"
+
+
+@dataclass(frozen=True, kw_only=True)
+class RetentionOptions:
+    """serve-openai's ``--retain-exclude`` and ``--retain`` (its ``retention`` group, `retention_refusal`, `retention_record`)."""
+    retain_exclude: str = option("--retain-exclude", env="VERITY_RETAIN_EXCLUDE", default="", metavar="FAMILIES",
+                                 help="rows-sha512: commit these value families without retaining them (sets VERITY_RETAIN_EXCLUDE, as "
+                                      "the Commit's --retain-exclude does): the attention interiors only, hidden_m1 (fa2_hidden_m1, "
+                                      "fa3_hidden_m1), which no reader of a sealed window opens. Their leaves and roots are the "
+                                      "same; each seal's manifest names them committed_not_retained (store_dump.not_retained)")
+    retain: str = option("--retain", default="host", choices=("host", "device"),
+                         help="rows-sha512: where a window's committed values wait for its draws. host (the default): the pinned host "
+                              "pool. device: a device pool of --retain-device-gb (committer.device_pool), which the window's draw-gated "
+                              "release empties, keeping on host only the leaves some subprotocol drew; a full pool makes the step wait")
+    retain_device_gb: float = option("--retain-device-gb", type=float, default=32.0, metavar="GB",
+                                     help="--retain device: the device pool's size, beside the engine and the window ring; it must hold "
+                                          "every window awaiting its release and the open one, so at least --window-gb")
+    release_after: str = option("--release-after", default="", metavar="PROTOCOLS",
+                                help="--retain device --seal: the subprotocols (comma-separated, e.g. pouw) whose draw of each "
+                                     "window its release waits for; the union of the leaves their drawn blocks open is kept "
+                                     "(serve_release); pouw is PoUW H1's, put by its arm (--protocols), the rest come in "
+                                     "through --draws-dir")
+    draws_dir: str = option("--draws-dir", default="", metavar="DIR",
+                            help="--release-after: where each draw comes in, w<k>.<protocol>.json (default OUT/draws)")
+
+
+def retention_record(opts: Any, com: Any) -> dict[str, Any]:
+    """serve.json's record of ``opts.retention``: the families left unretained, where values wait for their draws, and the pool."""
+    r = opts.retention
+    return {"retain_exclude": r.retain_exclude or None, "retain": r.retain, "device_pool": getattr(com, "device_pool_record", None),
+            "release_after": r.release_after or None, "draws_dir": (r.draws_dir or "OUT/draws") if r.release_after else None}
+
+
+def retention_refusal(opts: Any) -> str | None:
+    """Why ``opts.retention`` can't hold (None: it can): ``--retain-exclude`` names attention interiors only, and the Commit under
+    rows-sha512, whose committer leaves them on the device; ``--retain device`` the Commit under rows-sha512 too, with a pool of at
+    least ``--window-gb``."""
+    r = opts.retention
+    if r.retain == "device":
+        if not opts.commit or opts.scheme != ROWS:
+            return f"--retain device holds the windowed collector's committed values on the device: it needs the Commit under --scheme {ROWS}"
+        if r.retain_device_gb < float(getattr(opts, "window_gb", 0) or 0):
+            return (f"--retain-device-gb {r.retain_device_gb:g} is under --window-gb {opts.window_gb:g}: the pool must hold the open window "
+                    "beside those awaiting their release")
+        if getattr(opts, "seal", False) and not getattr(r, "release_after", ""):
+            return ("--retain device --seal: a window is sealed only after its draw-gated release, so name the subprotocols whose draws "
+                    "it waits for (--release-after)")
+    if getattr(r, "release_after", ""):
+        if r.retain != "device" or not getattr(opts, "seal", False):
+            return "--release-after gates the release of device-held values before each seal: it needs --retain device and --seal"
+        from verity_vllm.pipeline.serve_release import protocols_of
+        try:
+            protocols_of(r.release_after)
+        except ValueError as e:
+            return str(e)
+    spec = r.retain_exclude
+    if not spec:
+        return None
+    from verity_vllm.commit.committer.host_retention import HIDDEN_M1_FAMILIES, retain_exclude_families
+
+    if other := sorted(retain_exclude_families(spec) - HIDDEN_M1_FAMILIES):
+        return (f"--retain-exclude {spec}: {other} aren't attention interiors; serve-openai commits without retaining only "
+                f"{sorted(HIDDEN_M1_FAMILIES)} (hidden_m1), which no reader of a sealed window opens")
+    if not opts.commit or opts.scheme != ROWS:
+        return f"--retain-exclude {spec} commits values without retaining them: it needs the Commit under --scheme {ROWS}"
+    return None
 
 
 def recorded_scheme(rec: Mapping[str, Any]) -> str | None:
@@ -716,64 +780,3 @@ class Sealer:
 
     def summary(self) -> dict[str, Any]:
         return {"hold_bytes": self.hold_bytes, "held": self.held, "errors": self.errors[:10], "errors_n": len(self.errors)}
-
-
-class DiskFloor:
-    """The serve dir's filesystem kept above ``floor`` bytes free: a closed window is sealed only when its committed bytes (about
-    its bundle's size) and the bytes the seals still pending will write leave the floor free (`short`)."""
-
-    def __init__(self, path: str | Path, floor: int, usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
-        self.path, self.floor, self.usage = Path(path), int(floor), usage
-
-    def free(self) -> int:
-        return int(self.usage(self.path).free)
-
-    def short(self, nbytes: int, pending: int = 0) -> dict[str, Any] | None:
-        """None when a window of ``nbytes`` fits above the floor; else what was seen, for the window's record."""
-        free = self.free()
-        if free - int(pending) - int(nbytes) >= self.floor:
-            return None
-        return {"free_gb": round(free / GB, 1), "pending_gb": round(pending / GB, 1), "window_gb": round(nbytes / GB, 1),
-                "floor_gb": round(self.floor / GB, 1), "path": str(self.path)}
-
-    def refusal(self, window: int) -> str | None:
-        """Before serving: why the filesystem can't take one window of ``window`` bytes above the floor, else None."""
-        free = self.free()
-        if free >= self.floor + int(window):
-            return None
-        return (f"{self.path} has {free / GB:.0f} GB free, under the disk floor ({self.floor / GB:.0f} GB, --disk-floor-gb) plus one "
-                f"sealed window ({int(window) / GB:.0f} GB, --window-gb): free space there or lower them")
-
-
-class Watchdog:
-    """A thread that sleeps ``period_s`` at a time beside the engine: each wake ``min_s`` or more late is a pause, a line of
-    ``path`` (pauses.jsonl: when it ended, unix seconds as the step trace's ``t_end``, and how late). The engine's thread waits
-    as long for the GIL (or a core), so a pause is a stall of the step then running; the window's ``gc`` and the seals'
-    ``phases_s`` say what ran."""
-
-    def __init__(self, path: str | Path, *, period_s: float = 0.05, min_s: float = 0.2, clock: Callable[[], float] = time.perf_counter,
-                 sleep: Callable[[float], Any] = time.sleep, wall: Callable[[], float] = time.time) -> None:
-        self.path, self.period_s, self.min_s = Path(path), float(period_s), float(min_s)
-        self.clock, self.sleep, self.wall = clock, sleep, wall
-        self.late: list[float] = []
-        self.stopped = threading.Event()
-        self.thread = threading.Thread(target=self.run, name="serve-watchdog", daemon=True)
-
-    def run(self) -> None:
-        while not self.stopped.is_set():
-            t0 = self.clock()
-            self.sleep(self.period_s)
-            late = self.clock() - t0 - self.period_s
-            if late >= self.min_s:
-                self.late.append(late)
-                with open(self.path, "a") as fh:
-                    fh.write(json.dumps({"t_end": round(self.wall(), 3), "late_s": round(late, 3)}) + "\n")
-
-    def stop(self) -> None:
-        self.stopped.set()
-        if self.thread.is_alive():
-            self.thread.join()
-
-    def summary(self) -> dict[str, Any]:
-        return {"period_s": self.period_s, "min_s": self.min_s, "pauses": len(self.late),
-                "late_s": {"max": round(max(self.late, default=0.0), 3), "total": round(sum(self.late), 3)}}

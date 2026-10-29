@@ -47,7 +47,6 @@ from typing import Any
 from verity_vllm.commit.challenge import stream
 from verity_vllm.config import UsageError, option
 from verity_vllm.pipeline import serve_seal as SS
-from verity_vllm.pipeline.serve_retention import RetentionOptions
 
 PRECISIONS = ("int8_exact", "verity_int8", "pin")
 CHAT_HEAD = "<|start_header_id|>user<|end_header_id|>\n\n"
@@ -119,7 +118,7 @@ def committer_opts(opts: Options) -> SimpleNamespace:
     """What `serve_seal.committer` reads to build serve-openai's rows-sha512 Commit over ``opts``'s engine and bench row: the
     vllm-v1 committer's own knobs are unset, since commit-arb serves no recorded vllm-v1 run again."""
     return SimpleNamespace(**{k: getattr(opts, k) for k in opts.__dataclass_fields__}, scheme=SS.ROWS, of_record=None, commit=True,
-                           seal=False, gpu_tree=True, chunk=None, hash_threads=None, cudart_copy=False, retention=RetentionOptions())
+                           seal=False, gpu_tree=True, chunk=None, hash_threads=None, cudart_copy=False, retention=SS.RetentionOptions())
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
