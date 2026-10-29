@@ -39,6 +39,15 @@ Strategies:
 `agg` may also be `pow:D`, the sketch Σ r_t f_t^D. `expand` takes a power sketch over separable words apart, and
 `--aggs=A,B` and `--bits=A,B` restrict the sweep to those rules.
 
+`agg` `xor` is the unkeyed fold σ = ⊕_t f_t, one LOP3 a pair of words, sealed with the final word (64 bits hashed).
+`lead:e7`, `lead:e4` and `lead:w127` instances have the lead's zero-data word form, w_t = d0 + rpos_t(i) + cpos_t(j):
+a −1 lane and a 1 + b lane (b ∈ {0, 1}) on the row, and three odd e-bit coin lanes (one at e4; weights 1, 127, 1 at
+w127) on the column, with d0 a per-cell offset of the lead's size. Only `honest`, `pack`, `copy` and `table` run on
+them. `pack` (an `xor` fold over words that split into a row and a column term) puts L = ⌊32/b⌋ cells in b-bit
+lanes of one register, b the narrowest signed width holding every word, so one IADD3 writes L words and one LOP3 folds
+2L; σ's bits above a lane are its sign bit. `gap_claimed` is (honest − cheapest)/stock: the gap against a design that
+credits everything its honest prover does (C₀ = cost(H)), beside `gap_share` against stock.
+
 Run: `uv run --no-project --with numpy --with-editable benchmarks/pouw/exact_kit python -B hash_counter.py OUT.json
 [--quick] [--mutations] [--aggs=...] [--bits=...]` (from this directory).
 """
@@ -135,6 +144,18 @@ class Draw:
         if inst.coins == "sep":
             self.V[:, :, : q // 2] = 1
             self.U[:, :, q // 2:] = 1
+        self.w0 = np.zeros((m, n), np.int64)
+        if inst.coins.startswith("lead:"):
+            e = 4 if inst.coins == "lead:e4" else 7
+            lanes = q - 2
+            weights = (1, 127, 1) if inst.coins == "lead:w127" else (1,) * lanes
+            odd = np.arange(-(2 ** e - 1), 2 ** e, 2)
+            self.U[:] = 1
+            self.V[:] = 1
+            self.V[:, :, 0] = -1
+            self.U[:, :, 1] = 1 + g.integers(0, 2, (m, S))
+            self.V[:, :, 2:] = g.choice(odd, (n, S, lanes)) * np.array(weights)[None, None, :]
+            self.w0 = g.integers(-2 * S, 2 * S + 1, (m, n))
         shape_a, shape_b = (m, S, 32 - q), (n, S, 32 - q)
         if inst.data == "zero":
             self.A, self.B = np.zeros(shape_a, np.int64), np.zeros(shape_b, np.int64)
@@ -148,10 +169,10 @@ class Draw:
         c = np.einsum("itl,jtl->ijt", self.U, self.V) + np.einsum("itl,jtl->ijt", self.A, self.B)
         self.c = c & M32
         if inst.rec == "add":
-            self.w = np.cumsum(c, axis=2) & M32
+            self.w = (self.w0[:, :, None] + np.cumsum(c, axis=2)) & M32
         else:
             w = np.zeros((m, n, S), np.int64)
-            acc = np.zeros((m, n), np.int64)
+            acc = self.w0 & M32
             for t in range(S):
                 acc = (mulmod(acc, self.rho[t]) + self.c[:, :, t]) & M32
                 w[:, :, t] = acc
@@ -185,17 +206,23 @@ def g_of(rule: Rule, d: Draw, f):
 def aggregate(rule: Rule, d: Draw, fields):
     if rule.agg == "hash":
         return fields
+    if rule.agg == "xor":
+        return np.bitwise_xor.reduce(fields, axis=2)
     return mulmod(g_of(rule, d, fields), d.r[None, None, :]).sum(axis=2) & M32
 
 
 def common_hash(rule: Rule, nP: int) -> float:
-    return nP * rule.k * WB if rule.agg == "hash" else 32 * WB
+    if rule.agg == "hash":
+        return nP * rule.k * WB
+    return (64 if rule.agg == "xor" else 32) * WB
 
 
 def commit_ops(rule: Rule, nP: int) -> float:
     e = 0 if rule.k == 32 else 1
     if rule.agg == "hash":
         return nP * e
+    if rule.agg == "xor":
+        return nP * (e + 0.5)
     if rule.agg == "lin":
         return nP * (e + 1)
     if degree(rule):
@@ -363,7 +390,7 @@ def four_russians(rule, inst, d):
 def bsketch(rule, inst, d):
     """A sketch over 1-bit fields is affine in the bits: Σ r_t g(b_t) = g(0)·Σ r_t + (g(1) − g(0))·Σ_β 2^β popc(r_β & b),
     one b1 IMMA (K 256) against r's 32 bit planes after the bitslice's fields are transposed entry-major."""
-    if rule.agg == "hash" or not (rule.low and rule.k == 1):
+    if rule.agg in ("hash", "xor") or not (rule.low and rule.k == 1):
         return None
     sub = Rule(rule.pos, rule.bits, "hash")
     res = bitslice(sub, inst, d)
@@ -413,6 +440,48 @@ def expand(rule, inst, d):
     return cost, s, f"row and column powers + {D - 1} cross-term IMMA chains"
 
 
+def pack(rule, inst, d):
+    """An `xor` fold over words w = d0(i, j) + R_t(i) + C_t(j) (each lane's U constant down the rows or V across the
+    columns; zero data): L cells a register in b-bit lanes, the low lanes biased by 2^(b−1) so no lane borrows, one
+    IADD3 of the packed d0, row and column terms (and 2/BLOCK operand loads) a register a committed step, and one LOP3
+    a pair of registers. Unpacking a lane: undo the bias's parity and sign-extend from bit b − 1."""
+    if rule.agg != "xor" or rule.k != 32 or inst.data != "zero" or inst.rec != "add":
+        return None
+    m, n, S = inst.m, inst.n, inst.S
+    rowlane = np.all(d.V == d.V[:1], axis=(0, 1))
+    collane = np.all(d.U == d.U[:1], axis=(0, 1)) & ~rowlane
+    if not np.all(rowlane | collane):
+        return None
+    R = np.cumsum(np.einsum("itl,tl->it", d.U[:, :, rowlane], d.V[0][:, rowlane]), axis=1)
+    C = np.cumsum(np.einsum("tl,jtl->jt", d.U[0][:, collane], d.V[:, :, collane]), axis=1)
+    W = d.w0[:, :, None] + R[:, None, :] + C[None, :, :]
+    b = int(np.abs(W).max()).bit_length() + 1
+    L = 32 // b
+    if L < 2:
+        return None
+    b = 32 // L
+    groups = -(-n // L)
+    P = d.P
+    sigma = np.zeros((m, n), np.int64)
+    for gi in range(groups):
+        cols = list(range(gi * L, min(n, (gi + 1) * L)))
+        Dp = sum(((d.w0[:, j] + (1 << (b - 1)) * (a < len(cols) - 1)) << (a * b)) for a, j in enumerate(cols))
+        Rp = R[:, P] * sum(1 << (a * b) for a in range(len(cols)))
+        Cp = sum(C[j, P] << (a * b) for a, j in enumerate(cols))
+        Pk = (Dp[:, None] + Rp + Cp[None, :]) & M32
+        sp = np.bitwise_xor.reduce(Pk, axis=1)
+        for a, j in enumerate(cols):
+            top = a == len(cols) - 1
+            width = 32 - a * b if top else b
+            x = (sp >> (a * b)) & ((1 << width) - 1)
+            if not top and len(P) % 2:
+                x ^= 1 << (b - 1)
+            sigma[:, j] = np.where((x >> (width - 1)) & 1, x | (M32 ^ ((1 << width) - 1)), x) & M32
+    nrow, ncol = int(rowlane.sum()), int(collane.sum())
+    cost = len(P) * groups / n * (1 + 2 / BLOCK + 0.5) + 6 + (nrow + 1) * S / CALL_N + (ncol + L) * S / CALL_M
+    return cost, sigma, f"{L} cells a register in {b}-bit lanes"
+
+
 def copy(rule, inst, d):
     """Entries whose inputs repeat: computed once, then moved."""
     rows = np.concatenate([d.U.reshape(inst.m, -1), d.A.reshape(inst.m, -1)], axis=1)
@@ -441,10 +510,13 @@ def table(rule, inst, d):
 
 
 STRATEGIES = {"honest": honest, "skip": skip, "fold": fold, "bitslice": bitslice, "four_russians": four_russians,
-              "bsketch": bsketch, "expand": expand, "copy": copy, "table": table}
+              "bsketch": bsketch, "expand": expand, "pack": pack, "copy": copy, "table": table}
+LEAD_STRATEGIES = ("honest", "pack", "copy", "table")
 
 
 def evaluate(rule: Rule, inst: Inst, strategies=STRATEGIES):
+    if inst.coins.startswith("lead:"):
+        strategies = {k: v for k, v in strategies.items() if k in LEAD_STRATEGIES}
     d = Draw(inst, rule)
     stock = (32 - inst.q) * inst.S / 32
     hc = common_hash(rule, len(d.P))
@@ -472,6 +544,7 @@ def evaluate(rule: Rule, inst: Inst, strategies=STRATEGIES):
         "cheapest_writes": cheapest,
         "gap_share": round(gap, 6),
         "breaks_T1": gap > T1,
+        "gap_claimed": round(max(0.0, (h_cost - cheapest) / stock), 6),
     }
 
 
@@ -507,6 +580,10 @@ def instances(quick: bool):
             yield Inst(64, 16, S, q, data, rec, seed)
     for S, q in itertools.product(S_set, [2, 4] if quick else [2, 4, 8]):
         yield Inst(64, 16, S, q, "zero", "add", 0, "sep")
+    lead = [("lead:e7", 5), ("lead:e4", 3), ("lead:w127", 5)]
+    for S, (coins, q), data, seed in itertools.product([67] if quick else [67, 265], lead, ["zero", "random"], [0, 1]):
+        if not (quick and seed):
+            yield Inst(64, 16, S, q, data, "add", seed, coins)
 
 
 def mutations(checks: Checks):
@@ -547,6 +624,17 @@ def mutations(checks: Checks):
     d4.V[:, :, 2:] = 0
     _, out4, _ = expand(rule4, inst4, d4)
     checks.mutation("expand with the column term dropped", not np.array_equal(out4, ref4))
+    rule5, inst5 = Rule("all", "32", "xor"), Inst(64, 16, 67, 5, "zero", "add", 7, "lead:e7")
+    d5 = Draw(inst5, rule5)
+    _, ref5, _ = honest(rule5, inst5, d5)
+    d5.w0 = d5.w0.copy()
+    d5.w0[0, 1] += 1
+    _, out5, _ = pack(rule5, inst5, d5)
+    checks.mutation("pack with one cell's offset off by one", not np.array_equal(out5, ref5))
+    d5 = Draw(inst5, rule5)
+    d5.P = d5.P[:-1]
+    _, out5, _ = pack(rule5, inst5, d5)
+    checks.mutation("pack folding one word fewer", not np.array_equal(out5, ref5))
 
 
 def main() -> int:
@@ -570,7 +658,8 @@ def main() -> int:
     breaks = [r for r in results if r["breaks_T1"]]
     survive = [r for r in results if not r["breaks_T1"]]
     known = {
-        "fold": [r for r in results if r["rule"] == "all/32/lin" and r["inst"]["data"] == "zero"],
+        "fold": [r for r in results if r["rule"] == "all/32/lin" and r["inst"]["data"] == "zero"
+                 and not r["inst"]["coins"].startswith("lead:")],
         "random": [r for r in results if r["inst"]["data"] == "random"],
     }
     checks.check("no strategy beats honest on random data", all(not r["breaks_T1"] for r in known["random"]))
@@ -586,6 +675,16 @@ def main() -> int:
         hash32 = [r for r in results if r["rule"] == "all/32/hash"]
         checks.check("all/32/hash costs SHA_REGS/32 writes a word (h · stock)",
                      all(abs(r["common_hash"] - r["inst"]["S"] * 32 * WB) < 1e-6 for r in hash32))
+    xor = [r for r in results if r["rule"] == "all/32/xor" and r["inst"]["data"] == "zero"]
+    if xor:
+        narrow = [r for r in xor if r["inst"]["coins"] in ("lead:e7", "lead:e4")]
+        checks.check("pack is cheapest on every narrow lead all/32/xor instance",
+                     bool(narrow) and all(r["cheapest"] == "pack" for r in narrow),
+                     [(r["inst"]["coins"], r["inst"]["S"], r["strategies"]["pack"]["how"], r["gap_claimed"])
+                      for r in narrow])
+        wide = [r for r in xor if r["inst"]["coins"] == "lead:w127"]
+        checks.check("pack doesn't apply at lead:w127 (words past 16 bits)",
+                     bool(wide) and all("pack" not in r["strategies"] for r in wide))
     if checks.mutations:
         mutations(checks)
     by_rule = {}
