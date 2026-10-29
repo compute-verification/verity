@@ -7,6 +7,7 @@ prover answers with the collector paused, as the challenger does. `Party.of` rea
 
 from __future__ import annotations
 
+import functools
 import gc
 import hashlib
 import json
@@ -15,6 +16,7 @@ import threading
 
 import pytest
 
+import pous_fakes
 import pous_test_signer as ts
 from verity.core.protocols.pous import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
@@ -23,15 +25,7 @@ from verity.core.protocols.pous import period, run
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(600)
 COINS = hashlib.sha512(b"the period's live coins").digest()
 TEST_ID = mc.TEST_PREFIX + period.PROTOCOL
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 10 ** 9
-
-    def __call__(self) -> int:
-        self.now += 1_000
-        return self.now
+Clock = functools.partial(pous_fakes.Clock, 10 ** 9, 1_000)
 
 
 def _in_process() -> tuple[period.Period, run.Point, run.Setup, list[bytes], bytes]:

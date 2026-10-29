@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
@@ -25,28 +26,6 @@ SCHEDULE = timing.honest(1000, 3, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_n
 A = 20 + 30 + 2 * 5 + 300 + 10
 APPENDS = 8
 """The append coins a test session's challenger commits to: these sessions append none, so a few keep it quick."""
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
-class Entropy:
-    """A deterministic stand-in for the operating system's generator: SHA-512 in counter mode under `label`."""
-
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 def payload(j: int) -> bytes:
