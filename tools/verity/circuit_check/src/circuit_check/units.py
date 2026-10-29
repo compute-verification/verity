@@ -709,8 +709,6 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
         with CC.internal(), tempfile.TemporaryDirectory(prefix="circuit-check-apart-") as tmp:
             while queue or running:
                 picked = cli.admit([weigh(i) for i in queue], [weigh(i) for i in running.values()], max(1, jobs), budget)
-                if picked:
-                    gc.freeze()       # and what this process took from each binding done since: a child would copy it
                 for i in [queue[k] for k in picked]:
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore", DeprecationWarning)    # an xdist worker's idle threads
