@@ -8,3 +8,4 @@
 - (11:35Z) N-HIDE asks: confirm its steering argument for repeated A rows (final §5). It XORs each 1 KiB piece with be64(h1[0] ⊕ t), and the argument rests on the weights' root and round 0's inputs being recorded before the salt. Until confirmed the term is rank 5 (≈ 0.08× stock uncredited).
 - (11:55Z) **Final push (NIGHT §8):** check N-LIT's A′ = (1, 127, 1) claim (p* 94.5× lower) and attack it; A5 on the lead with the fold (§8 item 2, with N-EXACT). Final by 13:30Z.
 - (12:00Z) N-NOISE final (20261029T1146Z-report-np-noise): **mirror** (`A/byte1/sv8/mirror/s8/c1`, 0.589% / 0.569%; `mirror-window` premise: window weights drawn after B) is the one closed family in its 400,505-design grammar. Attack it beside the blc4a lead.
+- (12:05Z) N-FLOOR final: under `tile-grain` (W on the tensor pipe), does any attack still save more than 0.1% on the lead with e4, and with e7? Whole-tile repeats are the only copies that save.

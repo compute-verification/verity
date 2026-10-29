@@ -320,7 +320,12 @@ certifier streams them raw after A_j (R1b). Hiding is L1 + (a), and de-noise is 
 ### Decisions for Daniel (gathered; each with a default)
 
 1. Is rank 4a, ShaWrites / ShaSpeed on SHA-512, "milder than SAK"? Default: yes, reported as 4a.
-2. The copy model: P plus measured floors (default), or W.
+2. The copy model. **Default revised at 12:05Z: `tile-grain`**, model W on the tensor pipe (N-FLOOR final,
+   20261029T1148Z-report-np-floor). The lead's words leave the tensor pipe in tiles of ≥ 128 words, so a copy saves
+   time only when a whole tile repeats; a lane's predicated copy costs 13.5–50.5 units more than computing the word.
+   **P plus measured floors is withdrawn**: select-floor and copy-floor hold only where issue slots bind, and both fail
+   beside the lead's wgmma. Under tile-grain, N-ADAPT's proved W case applies, its masked copies save nothing, and
+   4-bit coins suffice (N-RED §4). Bare P stays in the frontier as the conservative column.
 3. model-public (chosen weights): the coin lanes close it, so the lead doesn't need it (default: not taken).
 4. Hiding: `pad-leaf-ruled` (keyed leaf) and L2 (private roots). Default: L1 + (a), no ruling needed.
 5. Does T1 include the network term? Default: reported beside T1; the lead closes it either way.

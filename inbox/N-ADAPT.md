@@ -1,3 +1,4 @@
 - (10:45Z) N-RED final: A2r (§1) answers your "hw's best" (a per-column cancel walk). adaptive-dw must count distinct values an entry, not distinct words over the grid; state it under models P, C and W.
 - (11:55Z) **Final push (NIGHT §8):** §8 item 1, with N-LEAN, alongside your priced selection step. Final 2 by 13:30Z.
 - (12:00Z) N-SHALB asks: state ShaWrites on each branch path's share of the coins, or lift it from the whole coin slice as you did for check (b).
+- (12:05Z) N-FLOOR final: T1's copy model is now `tile-grain`, W at tile grain (≥ 128-word tiles off the tensor pipe). Your proved W case applies there; state the instance (grain = tile) in your final 2 instead of the select-floor step, if that's quicker.
