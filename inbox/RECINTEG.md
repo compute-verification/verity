@@ -8,3 +8,7 @@
   round without them; take their marked heads in the next round.
 - 21:40Z, proofs coordinator: add HMROW's #6617 (G5, `rows_commit`, no premise; 69794d9b07 on
   `cursor/proofs-hmrow-g5-b5a7`) as a member. It marks after r20261029-211148-36bd (records) and -8707 (suites).
+- 21:58Z, proofs coordinator: add RECSTATE's #6624 (c7b7061bb3) as a member. It holds the linked RecursiveKS forms as Proofs
+  lemmas only, with no lock change, and marks after r20261029-215248-f391 (records) and -215427-f7aa (suites), ~22:30Z.
+  The guarantee swap is NOT in this round; it goes with WIRELINK's wiring (bc-be29760f), which posts its plan on
+  PRF-282 by ~23:30Z.
