@@ -1,4 +1,4 @@
-"""The Python of the remote audit's verifier held to the Lean's pieces (`remote-audit-difftest`, the definition), each on
+"""The Python of PoUB's verifier held to the Lean's pieces (`remote-audit-difftest`, the definition), each on
 drawn inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
 and an append's coin), a plan (`receipts.Plan`: its length, digest and chunks) and its change (`Plan.changed`), a receipt
 (`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.ml.commitments.verify_opening`
