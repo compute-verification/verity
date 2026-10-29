@@ -478,7 +478,7 @@ class H1Windows:
         self.held: dict[str, Any] | None = None
         self.opened: dict[str, float] = {}
         self.writer = None if prover is None else PV.Writer(self.steps * sum(
-            PV.kept_bytes(self.rows, k, PH.units(k, n, self.rows)) for n, k in shapes))
+            PV.kept_bytes(self.rows, k, PH.units(k, n, self.rows)) for n, k in shapes), threads=3)
         self.outcomes: list[dict[str, Any]] = []
         self.releasing = 0
         self.readied: dict[str, Any] | None = None
