@@ -33,6 +33,9 @@ The attacks each axis meets, all at zero data (M0 frees salt-independent functio
 - Linear sketches fold (H12): Σ r_t·w_t = Σ_τ κ_τ·Σ_{t≥τ} r_t.
 - Quadratic sketches: the decomposition costs rank × bytes MACs an output; mirror's replay gives the second half's
   squares from the first half's sums (`mirror_fold`); `mirror-pi` and the served bilinear family have no such identity.
+  The edges still decompose: the first and last few words see few coin vectors (`edge_attack`), unless step 0 adds
+  r0 more coin lanes, removed at the last step (`quad-lℓ-wr0`); and a middle block decomposes from the honest word
+  before it (`edge_saves`), which ℓ lanes a step price against the byte products a rank term.
 
 `checks` runs the CPU checks and `score` the joint table; `--json` writes both.
 """
@@ -269,6 +272,45 @@ def mirror_fold(s: int, lanes: int, rng: np.random.Generator, size: int = 32) ->
     return res
 
 
+def _edge_noise(m: int, n: int, s: int, lanes: int, r0: int, rng: np.random.Generator) -> np.ndarray:
+    """mirror-pi's step noise with r0 more coin lanes at step 0, removed at the last step (r0 = 0 is mirror-pi)."""
+    noise = _bilinear_noise(m, n, s, lanes, "mirror-pi", rng)
+    if r0:
+        wide = rng.integers(-128, 128, size=(r0, m)).T @ rng.choice(nsp.WIDE, size=(r0, n))
+        noise[0] += wide
+        noise[-1] -= wide
+    return noise
+
+
+def edge_attack(lanes: int, r0: int, t0_max: int = 12, size: int = 400, seed: int = 3) -> dict:
+    """The edge decomposition of a quadratic sketch: its first (or last) t0 words see few coin vectors, so the sum of
+    their squares has low rank and costs rank × bytes MACs an output in place of honest's 2 eq a word, and the prover
+    goes on honestly from the word at t0, which one MMA gives. Measures that rank at zero data for each t0 (exact below
+    `size`, which exceeds 32·t0_max, the rank past which an edge stops paying at 2 bytes; `edge_saves` skips a rank that
+    reaches it). The final word is left out: M0 knows it, and M1 closes it for every exact design."""
+    rng = np.random.default_rng(seed)
+    s = 2 * t0_max + 2
+    w = np.cumsum(_edge_noise(size, size, s, lanes, r0, rng), axis=0).astype(np.float64)
+    out: dict = {"lanes": lanes, "r0": r0, "size": size, "prefix": {}, "suffix": {}}
+    for t0 in range(1, t0_max + 1):
+        out["prefix"][t0] = int(np.linalg.matrix_rank((w[:t0] ** 2).sum(0)))
+        out["suffix"][t0] = int(np.linalg.matrix_rank((w[s - 1 - t0:s - 1] ** 2).sum(0)))
+    return out
+
+
+def edge_saves(edge: dict, block: dict, sketch_bytes: int = SKETCH_BYTES) -> dict:
+    """The edge and middle-block attacks' savings at `sketch_bytes` byte products a rank term. An edge saves
+    2·t0 − rank·bytes/32 eq an output a side. A middle block of L words, from the honest word N before it, writes
+    Σ (N + Δ_t)² = N·(L·N + 2·ΣΔ) + ΣΔ²: the words ΣΔ, L·N + 2·ΣΔ, the product and the next block's first word, 4 eq,
+    and ΣΔ²'s decomposition, whose rank is the r0 = 0 prefix's (`block`), against honest's 2L: it saves the best
+    (2L − 4 − rank·bytes/32)/L eq a word."""
+    out = {side: max(0.0, *(2 * t0 - r * sketch_bytes / 32 for t0, r in edge[side].items() if r < edge["size"]))
+           for side in ("prefix", "suffix")}
+    out["block_a_word"] = max(0.0, *((2 * n - 4 - r * sketch_bytes / 32) / n
+                                     for n, r in block["prefix"].items() if r < block["size"]))
+    return out
+
+
 def rfp4_check(m: int = 8, k: int = 16, n: int = 8, seg: int = 4, seed: int = 2) -> dict:
     """RFP-4 on a small instance: X = [A+E | G−A | −E·π | −G·π′], Y = [B+F; F; π(B+F); π′F], coins in [−64, 64]. Checks
     X·Y = A·B exactly, that each block's words are coin-dependent at zero data (A = 0), and counts each committed
@@ -321,6 +363,7 @@ def checks(m: int = 128, n: int = 128, s: int = 74, seed: int = 0) -> dict:
     out["lead_rank_within_bound"] = all(
         v["lead"] <= lead_rank_bound(int(key[1:].split("_")[0]), tiles=v["lead_tiles"]) for key, v in out["sketch"].items())
     out["rfp4"] = rfp4_check()
+    out["edge"] = {f"l{ln}_r{r0}": edge_attack(ln, r0) for ln in (1, 2, 3) for r0 in (0, 4, 8)}
     return out
 
 
@@ -333,10 +376,10 @@ def _llama_k_shares() -> dict:
     return shares
 
 
-def score(chk: dict, predicates: str = "dataflow") -> list[dict]:
+def score(chk: dict, predicates: str = "dataflow", sketch_bytes: int = SKETCH_BYTES) -> list[dict]:
     """The joint table: one row a (family, which, bits, kind) design over Llama's linears, MAC-weighted by K.
     `predicates` reads predicate-only instructions as W1 states them (`w1`, free) or as dataflow-W1 prices them
-    (`dataflow`, 1 eq)."""
+    (`dataflow`, 1 eq); `sketch_bytes` is the byte products a quadratic decomposition pays a rank term."""
     se = STOCK_EQ
     shares = _llama_k_shares()
     steps = {k: nsp.blc_steps(k) for k in shares}
@@ -378,10 +421,13 @@ def score(chk: dict, predicates: str = "dataflow") -> list[dict]:
     hr = sum(sh / steps[k] for k, sh in shares.items())
     add("lead", "every", 32, "linear", hr, {"fold": sum(sh * (1 - 1 / steps[k]) for k, sh in shares.items()) / se},
         ["none: folds (H12)"], 0, {"fold": "Σ r_t w_t = Σ_τ κ_τ Σ_{t≥τ} r_t"}, hr)
-    for fam, lanes in (("lead", 3), ("mirror", 1), ("mirror", 2), ("mirror-pi", 1), ("mirror-pi", 2),
-                       ("mirror-pi", 3), ("bilinear", 1)):
+    quads = [("lead", 3, 0), ("mirror", 1, 0), ("mirror", 2, 0), ("bilinear", 1, 0)]
+    quads += [("mirror-pi", ln, r0) for ln in (1, 2, 3) for r0 in (0, 4, 8)]
+    for fam, lanes, r0 in quads:
         gap, detail = 0.0, {}
         hr = 0.0
+        sv = (edge_saves(chk["edge"][f"l{lanes}_r{r0}"], chk["edge"][f"l{lanes}_r0"], sketch_bytes)
+              if fam == "mirror-pi" else None)
         for k, sh in shares.items():
             s = steps[k]
             if fam == "lead":
@@ -390,15 +436,19 @@ def score(chk: dict, predicates: str = "dataflow") -> list[dict]:
                 rank = (lanes * s) * (lanes * s + 1) // 2 + 9 * lanes * s
             else:
                 rank = (lanes * s // 2) * (lanes * s // 2 + 1) // 2 + 9 * lanes * s // 2
-            dec = rank * SKETCH_BYTES / 32 / s
+            dec = rank * sketch_bytes / 32 / s
             replay = 1.0 if fam == "mirror" else 2.0
-            adv = min(2.0, dec, replay)
-            gap += sh * max(0.0, 2.0 - adv) / se
+            whole = max(0.0, 2.0 - min(2.0, dec, replay))
+            parts = (sv["prefix"] + sv["suffix"]) / s + sv["block_a_word"] if sv else 0.0
+            gap += sh * min(2.0, max(whole, parts)) / se
             hr += sh * (1 + SHA_WORD / s) / SHA_WORD
-            detail[f"K{k}"] = {"steps": s, "rank": rank, "decomposition_eq": round(dec, 3), "replay_eq": replay}
-        add(fam, "every", 32, f"quad-l{lanes}", hr, {"base": base[fam]["t1"], "sketch": gap},
+            detail[f"K{k}"] = {"steps": s, "rank": rank, "decomposition_eq": round(dec, 3), "replay_eq": replay,
+                               "edges_and_blocks_eq_a_word": round(parts, 4)}
+        add(fam, "every", 32, f"quad-l{lanes}" + (f"-w{r0}" if r0 else ""), hr,
+            {"base": base[fam]["t1"], "sketch": gap},
             ["SketchWrites2 (new)", "H32"] + (["mirror's"] if fam.startswith("mirror") else []), "4a+",
-            {"decomposition": detail, "replay fold": fam == "mirror"}, hr)
+            {"decomposition": detail, "replay fold": fam == "mirror", "edges and blocks": sv,
+             "sketch_bytes": sketch_bytes}, hr)
     for words, label in ((3, "blocks"), (7, "half-blocks")):
         hr = sum(sh * words / steps[k] for k, sh in shares.items())
         skip_m0 = sum(sh * (4 * k / (words + 1)) / k for k, sh in shares.items())
@@ -433,6 +483,10 @@ def main() -> None:
     scores = {pr: score(chk, pr) for pr in ("w1", "dataflow")}
     for pr, rows in scores.items():
         print(f"\npredicate-only instructions: {pr}\n{table(rows)}")
+    scores["sketch_bytes"] = {nb: [r for r in score(chk, "dataflow", nb) if r["design"].startswith("mirror-pi")]
+                              for nb in (2, 3, 4)}
+    for nb, rows in scores["sketch_bytes"].items():
+        print(f"\nmirror-pi at {nb} byte products a rank term\n{table(rows)}")
     if args.json:
         with open(args.json, "w") as fh:
             json.dump({"checks": chk, "scores": scores}, fh, indent=1, default=str)
