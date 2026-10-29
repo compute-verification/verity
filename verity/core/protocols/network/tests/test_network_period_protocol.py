@@ -291,13 +291,13 @@ def charged(case: dict, public: dict) -> list[int]:
 
 
 def test_only_a_tied_audit_must_draw_its_entries_whole(server, monkeypatch):
-    """K charges an audit a scan's `prog` is tied to its free inputs, and its wrong units only as the entries they can
-    set, so the rows form refuses one drawn in part unless its slot entries' and scan slots' templates are strata drawn
-    whole (`rows-tied-undrawn`, `rows-tied-entries-undrawn` and `rows-tied-slots-undrawn` above), and only such an
-    audit: over honest rows periods, which the mirror accepts, every tied audit draws all its units and some untied
-    audit fewer, and Lean accepts each such period with the mirror's public; a mirror that skips the draw's refusal
-    accepts what Lean refuses at the draw, and so does one that holds only the slot entries' template whole a period
-    whose scan slots' stratum is drawn in part."""
+    """K charges an audit a scan's `prog` is tied to its free inputs, and its incorrect proof blocks only as the entries
+    they can set, so the rows form refuses one drawn in part unless its slot entries' and scan slots' templates are
+    strata drawn whole (`rows-tied-undrawn`, `rows-tied-entries-undrawn` and `rows-tied-slots-undrawn` above), and only
+    such an audit: over honest rows periods, which the mirror accepts, every tied audit draws all its units and some
+    untied audit fewer, and Lean accepts each such period with the mirror's public; a mirror that skips the draw's
+    refusal accepts what Lean refuses at the draw, and so does one that holds only the slot entries' template whole a
+    period whose scan slots' stratum is drawn in part."""
     partial = []
     for n in range(24):
         case = build("rows-honest", n)
@@ -323,9 +323,10 @@ def test_only_a_tied_audit_must_draw_its_entries_whole(server, monkeypatch):
 def test_a_tied_audit_drawn_in_part_is_charged_its_link_windows_entries(server):
     """A tied audit whose slot entries' and scan slots' templates are strata drawn whole may draw the rest in part at
     its δ (`rows-tied-partial`): Lean accepts the period with the mirror's public, in which that audit's link-window's
-    term charges every entry its at most `b` wrong units can set, `faulty_entries` = E_w = lanes · T / every · the
-    entry's bits, when `b ≥ 1` and none when `b = 0`, every other link-window's none, and `eps` holds that audit's δ
-    beside the scans'; the cases' audits select (`SelectEntry_v1` beside `ScanSlots_v2`) or don't (`SlotEntry_v1`)."""
+    term charges every entry its at most `b` incorrect proof blocks can set, `faulty_entries` = E_w = lanes · T /
+    every · the entry's bits, when `b ≥ 1` and none when `b = 0`, every other link-window's none, and `eps` holds that
+    audit's δ beside the scans'; the cases' audits select (`SelectEntry_v1` beside `ScanSlots_v2`) or don't
+    (`SlotEntry_v1`)."""
     seen = Counter()
     for n in range(8):
         case = build("rows-tied-partial", n, small=n % 2 == 0)
@@ -459,10 +460,10 @@ def test_a_scan_in_the_checker_form_is_refused_by_name(server):
 
 
 def test_a_wide_unit_is_charged_its_committed_bits(server):
-    """A compute audit's faulty bits are its bound times the most bits one of its Program's units commits, read off the
-    Program, not a proof unit's 16-bit public output: over honest clock-form periods whose audits' units commit 8 to
-    320 bits, each audit is charged `b · bits`, some audit of wide units more than `16 · b`, and Lean's public is the
-    mirror's."""
+    """A compute audit's incorrect proof blocks' bits (`faulty_bits`) are its bound times the most bits one of its
+    Program's units commits, read off the Program, not a proof block's 16-bit public output: over honest clock-form
+    periods whose audits' units commit 8 to 320 bits, each audit is charged `b · bits`, some audit of wide units more
+    than `16 · b`, and Lean's public is the mirror's."""
     wide = 0
     for n in range(12):
         case = build("honest", n)
@@ -565,9 +566,9 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
 
 def test_the_bound_counts_what_it_says():
     """K's terms on a period worked by hand: 10 units, each committing 16 bits, drawn subset:3 at δ = 1/10 with at most
-    4 wrong, 7 cells on one connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3 steps;
-    the same audit with units committing 40 bits, its faulty bits 4 · 40; and eps over audits at δ = 1/10, 1/15 and
-    1/6, and over none (Lean's `#guard`s)."""
+    4 incorrect, 7 cells on one connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3
+    steps; the same audit with units committing 40 bits, its incorrect proof blocks' bits 4 · 40; and eps over audits at
+    δ = 1/10, 1/15 and 1/6, and over none (Lean's `#guard`s)."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 0), 0, 2, "a", None, b"", "",
                SyncSet((0,), (Fraction(1), Fraction(2))), 3)
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
@@ -586,11 +587,12 @@ def test_the_bound_counts_what_it_says():
 def test_the_rows_forms_bound_counts_what_it_says():
     """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): 7 cells on one connection and 2 on another, 5
     bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 link-window
-    one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3 wrong (1351 sets), 1,120 free inputs, instances
-    committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no faulty term; at w63's
-    class with the egress tie (T = 32, every unit drawn), K the tied slot entries' free inputs, 8 · 1,136 = 9,088 bits;
-    at w63k4's (8 slot entries of 112 bits) with its tied audit drawn in part with at most 2 wrong, K those and its
-    E_w = 896 bits; and eps over the scans' δ alone, or with a charged audit's beside them."""
+    one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3 incorrect (1351 sets), 1,120 free inputs, instances
+    committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no term for incorrect
+    proof blocks; at w63's class with the egress tie (T = 32, every unit drawn), K the tied slot entries' free inputs,
+    8 · 1,136 = 9,088 bits; at w63k4's (8 slot entries of 112 bits) with its tied audit drawn in part with at most 2
+    incorrect, K those and its E_w = 896 bits; and eps over the scans' δ alone, or with a charged audit's beside
+    them."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0)])
