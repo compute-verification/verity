@@ -2758,7 +2758,7 @@
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": "62a501bc4842f040a02106fe3def5bb875618490e8e0f114594c719095f1547d",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "4c1965a5e2a5e713ecff8b0684b90ccb00b7f75cab2d0552c2fb38625f4bfb8e",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "98c1037729d6fbf9d9c120ea1fb9b3799f98cfba802df100bb262266102f1cb4",
-  "NetTiming.SecurityProofs.PooledWrongUnitsLe": "4b11601f70dff05cee40e380db457b79380461d4bb512fd7a54931a34a305d38",
+  "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": "6d31f6c0ea7cbc7af3d253da83db6fb2a9feda44b50fd9a3644da87ec193e733",
   "NetTiming.SecurityProofs.SampledAuditAccepted": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
   "NetTiming.SecurityProofs.SampledLeakAccepted": "43970f90d531d3e7171623b15c9ce94eef5f67c55a52c6b00059cca4d554f37d",
   "NetTiming.SecurityProofs.SampledLeakRegistered": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3",
@@ -15094,7 +15094,7 @@
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "NetTiming.SecurityProofs.PooledWrongUnitsLe": {
+   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": {
     "∀ (i : Fin m) (x : Ω), Eq (draw i x).card (k i)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i : Fin m) (S : Finset (Fin (n i))), Eq S.card (k i) → Eq (instHMul.hMul (Finset.filter (fun x => Eq (draw i x) S) Finset.univ).card ((n i).choose (k i))) (Fintype.card Ω)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i : Fin m) (ω ω' : Fin m → Ω), (∀ (j : Fin m), instLTFin.lt j i → Eq (ω j) (ω' j)) → Eq (W i ω) (W i ω')": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
