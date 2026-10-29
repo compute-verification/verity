@@ -184,7 +184,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # only the digest's d bits per tile, from a table of |signs| * N * d bits, at any number of rows. What Lean proves is
     # the narrower verbatim class (Accounting.Guarantees.RateAuditSketch, RateAuditTensorSketchRank: on-chip state, device
     # memory, the side link and rebuilding each return whole sectors as they are); the restated form, where a device that
-    # computes from blocks it read has those reads counted, is the remote audit's composition, not yet proved for the sketch
+    # computes from blocks it read has those reads counted, is PoUB's composition, not yet proved for the sketch
     Entry("rate-sketch-verbatim", "model",
           "Rate sketch store-as-blocks model: in every tier the prover holds the store only as its blocks (any number of "
           "copies, anywhere), and any device may compute from the blocks it reads, every such read counted; a layout from "
