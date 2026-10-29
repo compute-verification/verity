@@ -14,8 +14,9 @@ calculator (`noise_sweep.gap_terms`: forming, de-noise, the final word, duplicat
   compression's 16 output registers (H32 with DistinctWrites), so the term is h·(1 − 16·32/W1).
 - **pre-noise hashing**: A's commitment before its noise, A's bytes a useful MAC (1/n), at the same price. The atomic
   call puts it inside the call; ShaSpeed prices it.
-- **hiding**: the salt PRF and M_key·y a leaf, honest-only, SW-SMELL's figures at ssn_1l's bytes (W1 floor and alone),
-  scaled by bytes for other designs and as 1/R for leaves above 1 MiB.
+- **hiding**: each leaf's salt side (the PRF, M_key·y and c), honest-only, at SW-HASH's measured share of a leaf's hash
+  time (SW-PRICE's card), for the committed words' leaves and A's pre-noise leaves (one activation row a leaf on the
+  card; a call's A packed into big leaves under the big-rows option, at the smallest leaf size that passes).
 - **coin branch**: the adversary may branch on coin bits, and a branch writes no register, so W1 prices it at 0.
   `DistinctWritesMH100On` then charges each path only the words distinct on that path's salts. For each row-step it
   computes the noise class once and skips every row-step whose n words equal an earlier one at this salt. The term is
@@ -51,10 +52,16 @@ ANDS_MAC = 2079 / 16
 NCP_BYTES_MAC = 3 * 4 / 32
 ROWS = {"16 KiB": 16_384, "256 KiB": 262_144, "1 MiB": 1_048_576}
 CARD_ROW = "256 KiB"
-#: SW-SMELL 0630Z's hiding at ssn_1l's bytes (SW-HASH's NCP figures × α/3), a share of stock: unforced and with the
-#: salt PRF forced (M_key·y left), at the W1 floor; "alone" is twice the floor in both
-HIDING_SSN = {"16 KiB": (7.24, 4.52), "256 KiB": (0.51, 0.35), "1 MiB": (0.15, 0.094)}
-HIDING_ALPHA = 1.044
+#: SW-HASH's measured hm96 leaves, as SW-PRICE's card holds them (`hash_rows`): a leaf's hash time in ns, the salt
+#: side's hiding (PRF, M_key·y and c) and M_key·y alone as shares of it, and the data kernel's ns a compression. A leaf
+#: under 16 KiB hides at 16 KiB's per-leaf price (SW-PRICE's estimate); past 1 MiB a leaf's hiding grows by its last
+#: measured step a 4× (estimate)
+HIDE_ROWS = (16_384, 65_536, 262_144, 1_048_576)
+HIDE_NS_LEAF = (31.787, 125.18, 494.424, 1989.076)
+HIDE_SHARE = (0.0553, 0.0151, 0.0043, 0.0012)
+MASK_SHARE = (0.0345, 0.0096, 0.0029, 0.0008)
+COMP_NS = 0.2255
+BIG_ROWS = tuple(2 ** e for e in range(18, 31))          # 256 KiB … 1 GiB, the big-rows option's leaf sizes
 HBM_BYTES = 141e9
 TDP_W, INT8_MAC_S, INT32_OPS_S = 700.0, 989.5e12, 132 * 64 * 1.98e9    # data sheet; INT32 lanes at f_max
 ALLOW = 0.01
@@ -76,7 +83,9 @@ LEDGER = [
     ("FloorTc", "No tensor instruction writes an s8 partial-sum register under 32; k32 is the finest full-rate step",
      "1", "measured", "1", "mma.sync and wgmma N 8–256 probes", "CORE-H32", "k32 commitment at no premium"),
     ("W1", "Every program the H200 runs is a well-formed MH100w program costing at least its h200Measured entries: "
-     "every register written is an Op100 output at its class floor, moves are oblivious, operands carry free values",
+     "every register written is an Op100 output at its class floor, moves are oblivious, operands carry free values. "
+     "MH100w programs are straight-line: a branch writes no register and is priced 0, so a program that branches on "
+     "the coins is charged per path (coin-branch)",
      "3", "stated", "3", "every class's probes; opcode census; per-SM scaling", "SW-SEM / N-W1",
      "base: DistinctWritesMH100Floor is about the model without it"),
     ("ISA-census", "The opcode census of sm_90a is complete: no unit, opcode or mode outside it",
@@ -119,8 +128,14 @@ LEDGER = [
     ("SAKMatmul", "Symmetric algorithmic knowledge on our noise distribution", "4b", "locked", "4b", "—", "lock",
      "the baseline; nothing in ssn_1l"),
     ("ssn-distinct", "ssn_1l's words D_t − β + Σ a₁C + Σ a_t are pairwise distinct and non-free as functions of the "
-     "coin bits, for every A and B", "0", "open", "5", "a proof (SW-NOISE §4 argues it; CPU-checked on 6 data cases)",
-     "N-LEAN", "ssn_1l's word credit"),
+     "coin bits, for every A and B, each lane read from its own bit of the row's coin words",
+     "0", "proved (scratch)", "0",
+     "— (SW-LEAN's ssn1lBit_charged and ssnABit_charged, straight-line programs, n ≤ 28,559; no lock)",
+     "SW-LEAN / N-LEAN", "ssn_1l's and ssn_a's word credit"),
+    ("ssn-hw-distinct", "ssn_1l_hw's words (a₁ ∈ {0..15}⁴ from the nibble mask on coin word 0; step lanes 1 + 2b_t "
+     "against public column signs s_t[j]) are pairwise distinct and non-free as functions of the coin bits",
+     "0", "open", "5", "CPU-checked on 7 data cases (this file); a proof extends ssnTargetG to nibble lanes on a "
+     "shared coin word and to affine step lanes", "N-LEAN", "ssn_1l_hw's word credit"),
     ("ssn-success-set", "Fixing g coin bits succeeds with probability 2^−g a try and merges ≤ g·n words", "0", "open",
      "5", "a proof; it bounds a program fixed in advance, not one that branches on the bits (coin-branch)", "N-LEAN",
      "grinding for a fixed program"),
@@ -177,7 +192,8 @@ LEDGER = [
      "arithmetic; costs a leaf's opening", "N-HIDE", "hiding, at no premise"),
     ("atomic-call", "Each A·B is atomic: work done before the noise inside the call is charged", "3",
      "ruled (Daniel 4:49 PM)", "3", "— (a scoping of the game)", "Daniel",
-     "final word (with final-word), pre-noise hashing (with ShaSpeed)"),
+     "final word (with final-word), pre-noise hashing (with ShaSpeed and hash-compose); T1 needs only its own-card "
+     "part, so not PeriodInventory"),
     ("live-coins", "The window's salt is drawn by the challenger after the roots it reads are fixed", "3", "rule",
      "3", "— (protocol structure)", "AGENTS.md", "every noise term"),
     ("RootAfterCoin", "A root committed after a coin arrives no earlier than coin + the work's wall time", "3",
@@ -185,7 +201,8 @@ LEDGER = [
     ("SeedRO", "seed_j = SHA-512(tag ‖ salt ‖ … ‖ root(A_j) ‖ root(B_j)) behaves as fresh coins: μ = 1/2 a bit", "C",
      "ruled (AGENTS.md exception)", "C", "—", "AGENTS.md", "grinding's μ (crypto axis, every design)"),
     ("PeriodInventory", "Every device the prover runs in the period is counted on both sides", "3", "stated", "3",
-     "inventory and egress", "SW-PREMISES", "none in T1's single-H200 game (egress layer, SW-SMELL)"),
+     "inventory and egress", "SW-PREMISES",
+     "none in T1: the egress layer's (devices off the card, with OutsourceWithinEgress)"),
     ("OutsourceWithinEgress", "Off-card compute is bounded by the egress the certifiers see", "3", "locked", "3",
      "certifiers", "lock", "none in T1 (egress layer)"),
     ("inputs-natural", "The prover does not choose its inputs (no batches of identical or zero rows)", "F", "false",
@@ -225,38 +242,51 @@ def a_bytes_mac(shapes: dict) -> float:
 
 
 def hash_terms(design, shapes: dict, m: int, c1: bool, row: str = CARD_ROW) -> dict:
-    """The design's hashed bytes a useful MAC, and hashing's W1 work a useful MAC at the floor and alone."""
+    """The design's hashed bytes a useful MAC, and hashing's W1 work a useful MAC at the floor and alone: the words on
+    `row` leaves, A before its noise on one activation row (K bytes) a leaf, as SW-PRICE's r256k card lays it out."""
     w = sum(n * k for n, k in shapes.values())
     words_b = sum(n * k * NS.hash_bytes_per_mac(design, m, n, k, c1) for n, k in shapes.values()) / w
     pre_b = a_bytes_mac(shapes)
-    cb = comps_byte(ROWS[row])
+    pre_c = sum(k * comps_byte(k) for n, k in shapes.values()) / w
+    words_c = words_b * comps_byte(ROWS[row])
     out = {"bytes_mac": words_b, "pre_bytes_mac": pre_b}
     for p, wc in W1_COMPRESSION.items():
-        h = (words_b + pre_b) * cb * wc
+        h = (words_c + pre_c) * wc
         out[f"h_{p}"] = h
-        out[f"words_{p}"] = words_b * cb * wc
-        out[f"pre_{p}"] = pre_b * cb * wc
+        out[f"words_{p}"] = words_c * wc
+        out[f"pre_{p}"] = pre_c * wc
         out[f"rank3_residual_{p}"] = h * (1 - SHA_OUT_REGS * H32 / wc)
-    out["h_ands"] = (words_b + pre_b) * cb * ANDS_COMPRESSION / ANDS_MAC
+    out["h_ands"] = (words_c + pre_c) * ANDS_COMPRESSION / ANDS_MAC
     return out
 
 
-def hiding_terms(bytes_mac: float, row: str = CARD_ROW, r_bytes: int | None = None) -> dict:
-    scale = bytes_mac / (HIDING_ALPHA * 4 / H32)
-    if r_bytes is None:
-        unf, my = HIDING_SSN[row]
-    else:
-        unf, my = (v * ROWS["1 MiB"] / r_bytes for v in HIDING_SSN["1 MiB"])
-    return {"unforced_floor": unf * scale, "unforced_alone": 2 * unf * scale,
-            "my_floor": my * scale, "my_alone": 2 * my * scale}
+def leaf_hiding(leaf: float, share=HIDE_SHARE) -> float:
+    """A leaf's salt side (or with MASK_SHARE, its M_key·y) in compressions, interpolated in log2 of the leaf size."""
+    per = [ns * s / COMP_NS for ns, s in zip(HIDE_NS_LEAF, share)]
+    x = math.log2(max(leaf, HIDE_ROWS[0]))
+    xs = [math.log2(r) for r in HIDE_ROWS]
+    if x >= xs[-1]:
+        return per[-1] + (per[-1] - per[-2]) * (x - xs[-1]) / 2
+    i = max(j for j in range(len(xs)) if xs[j] <= x)
+    return per[i] + (per[i + 1] - per[i]) * (x - xs[i]) / (xs[i + 1] - xs[i])
 
 
-def big_rows(bytes_mac: float, budget: float) -> dict:
-    """The leaf size at which honest-only hiding fits the budget left, scaling SW-SMELL's 1 MiB figure as 1/R."""
-    scale = bytes_mac / (HIDING_ALPHA * 4 / H32)
-    unf, my = HIDING_SSN["1 MiB"]
-    return {p: ROWS["1 MiB"] * v * scale * f / budget for p, (v, f) in
-            {"unforced_floor": (unf, 1), "unforced_alone": (unf, 2), "my_floor": (my, 1), "my_alone": (my, 2)}.items()}
+def hiding_terms(bytes_mac: float, shapes: dict, m: int, row: int = ROWS[CARD_ROW], a_pack: int | None = None) -> dict:
+    """Honest-only hiding a useful MAC as a share of stock: the committed words on `row` leaves, and A's pre-noise leaves,
+    one activation row a leaf (`a_pack` None, the card's layout) or a call's A packed in leaves of `a_pack` bytes."""
+    w = sum(n * k for n, k in shapes.values())
+    out = {}
+    for name, share in (("unforced", HIDE_SHARE), ("my", MASK_SHARE)):
+        words = bytes_mac / row * leaf_hiding(row, share)
+        if a_pack is None:
+            a = sum(leaf_hiding(k, share) for n, k in shapes.values()) / w
+        else:
+            a = sum(math.ceil(m * k / a_pack) * leaf_hiding(min(a_pack, m * k), share) for n, k in shapes.values()) / (m * w)
+        for p, wc in W1_COMPRESSION.items():
+            out[f"{name}_{p}"] = (words + a) * wc
+            out[f"{name}_words_{p}"] = words * wc
+            out[f"{name}_a_{p}"] = a * wc
+    return out
 
 
 # --------------------------------------------------------------------------------------------- the coin-branch term
@@ -363,6 +393,11 @@ def coin_branch_terms(data: dict) -> dict:
     return out
 
 
+def hw_coin_words(s: int) -> int:
+    """ssn_1l_hw's coin words a row: a₁'s 16 nibble bits share word 0 with 16 step bits, then S − 1 step bits in all."""
+    return math.ceil((16 + s - 1) / 32)
+
+
 def hw_noise_std(k: int, n: int = 2048) -> dict:
     """Served noise std (accumulator units) for ssn_1l and ssn_1l_hw: code lanes' variance plus the steps'."""
     code = _code(min(n, 28_560)).astype(float)
@@ -398,7 +433,8 @@ def hw_distinct_check(salts: int = 24, m: int = 4, n: int = 6, s: int = 4, seed:
 DESIGNS = [  # (label, noise_sweep name, model, C1, base premises (word credit), coin-branch applies)
     ("ssn_1l", "ssn_1l", "M0", False, ("H32", "W1", "ssn-distinct", "ssn-success-set"), "ssn_1l"),
     ("ssn_1l+C1", "ssn_1l", "M0", True, ("H32", "W1", "ssn-distinct", "ssn-success-set", "formed-charged"), "ssn_1l"),
-    ("ssn_1l_hw", "ssn_1l", "M0", False, ("H32", "W1", "ssn-distinct", "ssn-success-set", "coin-branch"), "ssn_1l_hw"),
+    ("ssn_1l_hw", "ssn_1l", "M0", False, ("H32", "W1", "ssn-hw-distinct", "ssn-success-set", "coin-branch"),
+     "ssn_1l_hw"),
     ("ssn_a", "ssn_a", "M0", False, ("H32", "W1", "ssn-distinct", "ssn-success-set"), "ssn_a"),
     ("per2 M1+C1", "per2", "M1", True, ("H32", "W1", "per2-distinct", "formed-charged"), None),
     ("os2 M1+C1", "os2", "M1", True, ("H32", "W1", "weights-distinct", "formed-charged"), None),
@@ -423,8 +459,10 @@ def design_terms(label: str, point: str, data: dict, cb: dict) -> dict:
     d = next(x for x in NS.designs() if x.name == name)
     shapes, m, share = POINTS[point]
     t = NS.weighted(d, shapes, m, model, c1, share)
-    h = hash_terms(d, shapes, max(1, round(m * share)), c1)
-    hid = hiding_terms(h["bytes_mac"])
+    rows = max(1, round(m * share))
+    h = hash_terms(d, shapes, rows, c1)
+    hid = hiding_terms(h["bytes_mac"], shapes, rows)
+    big = {r: hiding_terms(h["bytes_mac"], shapes, rows, row=r, a_pack=r)["unforced_floor"] for r in BIG_ROWS}
     e = cb[point]
     if branch == "data":
         # a data-dependent design repeats every later word of an all-zero row in any program (estimate: zero rows)
@@ -439,7 +477,8 @@ def design_terms(label: str, point: str, data: dict, cb: dict) -> dict:
             "dup": t["dup"], "coins": t["coins"],
             "hashing": h["words_floor"] * (1 - SHA_OUT_REGS * H32 / W1_COMPRESSION["floor"]), "pre_noise": h["pre_floor"],
             "hiding": hid["unforced_floor"], "coin_branch_natural": natural, "coin_branch_chosen": chosen,
-            "_h_floor": h["h_floor"], "_h_alone": h["h_alone"], "_bytes_mac": h["bytes_mac"]}
+            "_h_floor": h["h_floor"], "_h_alone": h["h_alone"], "_bytes_mac": h["bytes_mac"], "_hiding": hid,
+            "_hiding_big": big}
 
 
 def minimal_sets(label: str, data: dict, cb: dict) -> dict:
@@ -454,20 +493,29 @@ def minimal_sets(label: str, data: dict, cb: dict) -> dict:
             if "pre_noise" in closed and "atomic-call" not in prem:
                 closed.discard("pre_noise")
             res = {p: sum(v for k, v in t.items() if not k.startswith("_") and k not in closed) for p, t in terms.items()}
-            if all(v <= ALLOW for v in res.values()):
-                if any(set(c) <= set(combo) for c, _ in passing):
+            leaf = None
+            if "hiding: big rows" in combo:
+                # big rows close hiding only at a leaf size where what remains of it fits: the smallest such size
+                leaf = next((r for r in BIG_ROWS if all(res[p] + terms[p]["_hiding_big"][r] <= ALLOW for p in res)),
+                            None)
+                if leaf is None:
                     continue
-                passing.append((combo, res))
+                res = {p: v + terms[p]["_hiding_big"][leaf] for p, v in res.items()}
+            if all(v <= ALLOW for v in res.values()):
+                if any(set(c) <= set(combo) for c, *_ in passing):
+                    continue
+                passing.append((combo, res, leaf))
     led = {r["id"]: r for r in ledger()}
     out = []
-    for combo, res in passing:
+    for combo, res, leaf in passing:
         prem = sorted(set(itertools.chain.from_iterable(OPTIONS[o][0] for o in combo)) | set(base))
-        out.append({"options": list(combo), "premises": prem,
+        out.append({"options": [f"{o} ({leaf / 2 ** 20:g} MiB leaves, A packed a call)" if o == "hiding: big rows"
+                                else o for o in combo], "premises": prem,
                     "rank_settled": rank_max(led[p]["rank"] for p in prem),
                     "rank_today": rank_max(led[p]["rank_today"] for p in prem),
                     "matmul_rank_settled": rank_max(led[p]["rank"] for p in base),
                     "matmul_rank_today": rank_max(led[p]["rank_today"] for p in base),
-                    "residual": res})
+                    "big_rows_leaf": leaf, "residual": res})
     out.sort(key=lambda x: (RANK_ORDER.index(x["rank_settled"]) if x["rank_settled"] in RANK_ORDER else 9,
                             len(x["premises"])))
     every = set(itertools.chain.from_iterable(o[1] for o in OPTIONS.values()))
@@ -609,6 +657,18 @@ def checks(rep: dict) -> list[dict]:
     ok("ssn_1l passes only with inputs-natural (false)", all("inputs-natural" in s["premises"] for s in lead))
     ok("nsf passes only with inputs-natural (false)",
        all("inputs-natural" in s["premises"] for s in rep["hitting"]["nsf"]["minimal_sets"]))
+    ks = sorted({k for shapes, _, _ in POINTS.values() for _, k in shapes.values()})
+    ok("ssn_1l_hw's S + 15 coin bits a row take as many coin words as ssn_1l's S + 3 at every priced K, so its "
+       "coin term is ssn_1l's", all(hw_coin_words(NS.steps1l(k)) == NS.ssn_1l_words(NS.steps1l(k)) for k in ks),
+       str({k: (hw_coin_words(NS.steps1l(k)), NS.ssn_1l_words(NS.steps1l(k))) for k in ks}))
+    hid = rep["hiding"]["ssn_1l"]["card"]["llama_T8192"]
+    ok("ssn_1l's card hiding, alone, is within 15% of SW-PRICE's 1.18x stock (words, A's rows; measured price)",
+       abs(hid["unforced_alone"] / 1.18 - 1) < 0.15, f"{hid['unforced_alone']:.3f}")
+    ok("A's per-row leaves alone exceed the allowance at the floor on Llama, so big word rows alone can't close hiding",
+       hid["unforced_a_floor"] > ALLOW, f"{hid['unforced_a_floor']:.2%}")
+    ok("every passing set with big rows names its leaf size", all(
+        s["big_rows_leaf"] for d in rep["hitting"].values() for s in d["minimal_sets"]
+        if any(o.startswith("hiding: big rows") for o in s["options"])))
     g1 = rep["g1"]
     ok("one call's outputs fit HBM at every point", all(v["fits"]["call_out"] for v in g1.values()))
     en = rep["energy"]
@@ -645,10 +705,31 @@ def report(data_path: str | None) -> dict:
     rep["g1"] = g1_advice()
     rep["energy"] = energy_reweight(data, cb)
     rep["periods"] = periods(data, cb)
-    rep["hiding_big_rows"] = big_rows(design_terms("ssn_1l", "llama_T8192", data, cb)["_bytes_mac"], 0.0095)
-    rep["params"] = {"W1_compression": W1_COMPRESSION, "rows": ROWS, "card_row": CARD_ROW, "hiding_ssn": HIDING_SSN,
+    rep["hiding"] = hiding_summary(rep["hitting"])
+    rep["params"] = {"W1_compression": W1_COMPRESSION, "rows": ROWS, "card_row": CARD_ROW,
+                     "hide_rows": [HIDE_ROWS, HIDE_NS_LEAF, HIDE_SHARE, MASK_SHARE, COMP_NS],
                      "points": {k: [v[1], v[2]] for k, v in POINTS.items()}, "allowance": ALLOW}
     return rep
+
+
+def hiding_summary(hitting: dict) -> dict:
+    """Each design's hiding on the card's layout, and the smallest leaf (words on it, a call's A packed up to it) at
+    which honest-only hiding fits beside what no true option closes (inputs-natural is false), floor and alone,
+    unforced and with the salt PRF forced (M_key·y left)."""
+    out = {}
+    for lab, h in hitting.items():
+        terms = h["terms"]
+        rest = {p: sum(v for k, v in t.items() if not k.startswith("_") and k not in
+                       ("final_word", "hashing", "coins", "pre_noise", "hiding")) for p, t in terms.items()}
+        e = {"card": {p: t["_hiding"] for p, t in terms.items()}, "rest": rest}
+        for name in ("unforced", "my"):
+            for reading in W1_COMPRESSION:
+                key = f"{name}_{reading}"
+                e[f"leaf_{key}"] = next((r for r in BIG_ROWS if all(
+                    rest[p] + hiding_terms(t["_bytes_mac"], POINTS[p][0], max(1, round(POINTS[p][1] * POINTS[p][2])),
+                                           row=r, a_pack=r)[key] <= ALLOW for p, t in terms.items())), None)
+        out[lab] = e
+    return out
 
 
 def table(rep: dict) -> str:
@@ -673,10 +754,16 @@ def table(rep: dict) -> str:
         if not h["minimal_sets"]:
             best = h["every_option_residual"]
             lines.append(f"- none passes; with every option: {', '.join(f'{p} {v:.3%}' for p, v in best.items())}")
-    br = rep["hiding_big_rows"]
-    lines.append(f"\n# hiding without a premise: leaves ≥ {br['unforced_floor'] / 2**20:.1f} MiB (floor) / "
-                 f"{br['unforced_alone'] / 2**20:.1f} MiB (alone); with the PRF forced, {br['my_floor'] / 2**20:.1f} / "
-                 f"{br['my_alone'] / 2**20:.1f} MiB")
+    lines.append("\n# hiding (share of stock; card: words on 256 KiB leaves, A one activation row a leaf)")
+
+    def mib(r):
+        return "none" if r is None else f"{r / 2 ** 20:g} MiB"
+    for lab, e in rep["hiding"].items():
+        c = e["card"]["llama_T8192"]
+        lines.append(f"{lab}: Llama T 8,192 floor {c['unforced_floor']:.2%} (words {c['unforced_words_floor']:.2%}, "
+                     f"A {c['unforced_a_floor']:.2%}), alone {c['unforced_alone']:.2%}, PRF forced {c['my_floor']:.2%}; "
+                     f"big rows fit at {mib(e['leaf_unforced_floor'])} floor / {mib(e['leaf_unforced_alone'])} alone, "
+                     f"PRF forced {mib(e['leaf_my_floor'])} / {mib(e['leaf_my_alone'])}")
     r3 = rep["rank3"]
     lines.append(f"# rank ≤ 3 overall: SHA-512 bound {r3['rank3_sha_lb_share']:.2%}; bytes a MAC ≤ "
                  f"{r3['max_bytes_mac_rank3']:.2e} (one 4 B word a {r3['min_macs_per_4B_word_rank3']:,.0f} MACs)")
