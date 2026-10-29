@@ -1819,6 +1819,41 @@ def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=None) == 0         # --no-preflight: the lander's
 
 
+def test_the_preflight_runs_its_checks_on_a_merge_whose_only_conflict_is_in_a_pin_rebuilt_as_the_sync_rebuilds_it(world, capsys):
+    """A PR that regenerated a pin for its own input conflicts with one on `next` that did the same, only in the pin, which drive's
+    sync rebuilds from the merged tree (as PoUS's TRUSTED.sha256): the preflight merges it the same way and checks that tree,
+    so a check failing there refuses the mark, rather than the checks being skipped while the mark goes through."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    pin = "pkg/PIN.sha256"
+    listing = lambda a, b: "".join(f"{hashlib.sha256(t.encode()).hexdigest()}  {n}\n"            # noqa: E731
+                                   for n, t in (("a.txt", a), ("b.txt", b)))
+    world.with_store_remote()
+    _move_main(world, {**PREFLIGHT_FILES, "ci/pins.py": f'PINS = (Pin("{pin}", None, "pkg"),)\n', "pkg/a.txt": "a0\n",
+                       "pkg/b.txt": "b0\n", pin: listing("a0\n", "b0\n")})
+    world.gh.put(1, world.change({"pkg/a.txt": "a1\n", pin: listing("a1\n", "b0\n")}))
+    assert [m.pr for m in world.queue().sync()[0]] == [1]
+    next_ = _git(world.origin, "rev-parse", "refs/heads/next")
+    for n, broken in ((2, {"BROKEN_MODULE_STRING": ""}), (3, {})):
+        world.gh.put(n, h := world.change({"pkg/b.txt": f"b{n}\n", pin: listing("a0\n", f"b{n}\n"), **broken}), ready=False)
+        raw = subprocess.run(["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", next_, h], cwd=world.dev,
+                             capture_output=True, text=True)
+        assert raw.returncode == 1 and raw.stdout.splitlines()[1:] == [pin], raw.stdout
+        world.logs.clear()
+        assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=_preflight(world)) == (1 if broken else 0)
+        err = capsys.readouterr().err
+        if broken:
+            [found] = [ln for ln in err.splitlines() if ln.startswith("  - ")]
+            assert found.startswith("  - the invariant tests in . fail on the merged tree: FAILED "
+                                    "tests/test_module_strings.py::test_broken_module_string_absent"), err
+            assert f"conflicts only in pins: {pin}, rebuilt from the merged tree" in err and "checks skipped" not in err, err
+        else:
+            said = next(s for s in world.logs if f"preflight: #{n} at" in s)
+            assert "nothing refused" in said and f"conflicts only in pins: {pin}, rebuilt from the merged tree" in said, said
+            assert "collected 2 suite(s) (pkg, .)" in said and "checks skipped" not in said, said
+        assert StoreLabels(world.store, log=world.logs.append).ready(n, h) is (not broken) and _no_worktree_left(world)
+
+
 #: what the head writes -> what the refusal says: each a way a train breaks that the merged tree shows at mark time
 PREFLIGHT_REFUSALS = {
     "stale pin": ({"STALE.txt": "x\n"}, "`pins.py --stale` on the merged tree: pkg/pins.json is stale (pkg/Main.lean)"),
@@ -1875,7 +1910,8 @@ def test_the_preflight_refuses_a_head_a_landing_gate_at_main_fails_with_its_fix_
     world.gh.put(3, h3 := world.change({"crash.txt": "3\n"}), ready=False)
     assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
     said = next(s for s in world.logs if f"preflight: #3 at {h3[:12]}" in s)
-    assert "nothing refused" in said and f"the landing gate gates/g.py can't judge {h3[:12]}" in said and "exit 2" in said
+    assert f"checks skipped: the landing gate gates/g.py can't judge {h3[:12]}" in said and "exit 2" in said, said
+    assert "nothing refused" not in said, said
 
 
 def test_the_preflight_runs_a_lint_only_on_a_change_that_reaches_what_it_judges(world, capsys):
@@ -2092,9 +2128,10 @@ def test_the_preflight_refuses_a_head_that_breaks_a_lean_module_a_pr_on_next_own
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h3) is False and _no_worktree_left(world)
 
 
-def test_the_lean_step_notes_why_it_built_nothing_and_refuses_nothing(world, monkeypatch, capsys):
+def test_the_lean_step_says_why_it_built_nothing_as_a_skipped_check_and_refuses_nothing(world, monkeypatch, capsys):
     """An agent VM keeps no warm Lean tree and builds nothing; a change more modules import than the preflight builds, a node
-    without Mathlib for the package, and a spent budget each leave the break to drive's Lean check: noted, never refused."""
+    without Mathlib for the package, and a spent budget each leave the break to drive's Lean check: said as a skipped check,
+    never as nothing refused, and never refused."""
     from research.queue import LakeBuild, MarkOnly, ready
 
     seen, slots = _lean_world(world, monkeypatch)
@@ -2113,7 +2150,8 @@ def test_the_lean_step_notes_why_it_built_nothing_and_refuses_nothing(world, mon
         assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=_preflight(world, lean=lean, **kw)) == 0, \
             capsys.readouterr().err
         said = next(s for s in world.logs if f"preflight: #{n} at" in s)
-        assert "nothing refused" in said and says in said, said
+        assert "checks skipped: " in said and "nothing refused" not in said and says in said, said
+        assert said.index("checks skipped: ") < said.index(says), said
         assert seen.exists() is built
 
 
