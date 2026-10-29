@@ -1133,10 +1133,8 @@ class PearlC4:
             hypotheses=(
                 "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
                 "this job's salt, seed-B = H_seed-B(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
-                "F2 (theory §6.2–6.3; the assessor's FP4 conditions, ratings.md 15:18Z), as the theory lane states it, proposed and "
-                "not proved: no sm_120 W1 program outputs correct C̃ and U words of the units whose replayed debit is under "
-                "the cap for less than their credit less the debit (research store "
-                "internal/pouw/rtx-pro/theory-pearl-c4-domain.md §2)",
+                "F2 and the FP4 conditions, proposed and not proved: no sm_120 W1 program outputs correct C̃ and U words "
+                "of the units whose replayed debit is under the cap for less than their credit less the debit",
                 f"sm_120's mma.sync kind::mxf4nvf4 and BF16 m16n8k16 are reproduced exactly ({self.fmt.atom.name}, "
                 "blackwell_sm120_nvf4_m16n8k64 for the noise atom, hopper_bf16_m16n8k16), pinned on the RTX 5090",
                 "the E2M1, UE4M3 and UE8M0 casts are as modelled (from the PTX ISA, not captured)",
