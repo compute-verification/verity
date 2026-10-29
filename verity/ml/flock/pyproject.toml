@@ -58,4 +58,5 @@ artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
              "verity/core/service/flock/.lake/build/bin/flock-rec-sparse",
              "verity/core/service/flock/.lake/build/bin/flock-witness",
              "verity/core/service/flock/.lake/build/bin/flock-rec-opening",
+             "verity/core/service/flock/.lake/build/bin/flock-rec-links",
              "Security/.lake/packages/mathlib/.lake/build"]

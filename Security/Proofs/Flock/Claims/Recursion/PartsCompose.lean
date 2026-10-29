@@ -430,7 +430,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 def OwnedBy {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bound Coin Col T) (shape : Form → Prop)
     (S : ElemSplit H Bd Q) (own : Msg → IVCheck Q → Option ℕ) (PC : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) :
     Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ q ∈ ivChecks Bd S (xI D x), ∀ s,
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ q ∈ ivChecks Bd S (xI D x), ∀ s,
     own x q = some s → s < D.nS x ∧ ∀ c ms, PC s x c ms → q.Holds H Bd S (xI D x) c ms
 
 /-- **Each check the inventory gives the statement holds off any witnesses** (a code fact about the layout, `final`
@@ -438,7 +438,7 @@ and the split): at a compiled statement `x` of the shape, a check `own` gives no
 readers' messages of any witnesses, one a part, whose recorded calls are true evaluations. -/
 def StmtFixes {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bound Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (S : ElemSplit H Bd Q) (own : Msg → IVCheck Q → Option ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ q ∈ ivChecks Bd S (xI D x), own x q = none →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ q ∈ ivChecks Bd S (xI D x), own x q = none →
     ∀ (c : ℕ → Coin) (ws : List Flock.Wit), ws.length = D.nS x → (∀ e ∈ L.allCalls x ws, H e.1 = e.2) →
       q.Holds H Bd S (xI D x) c (L.msgs x ws)
 
@@ -467,7 +467,7 @@ omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 /-- **`PartComputes` is owned**, wherever the inventory gives checks only to the statement's parts. -/
 theorem ownedBy_partComputes {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bound Coin Col T)
     (shape : Form → Prop) (S : ElemSplit H Bd Q) (own : Msg → IVCheck Q → Option ℕ)
-    (hcov : ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ q ∈ ivChecks Bd S (xI D x), ∀ s,
+    (hcov : ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ q ∈ ivChecks Bd S (xI D x), ∀ s,
       own x q = some s → s < D.nS x) :
     OwnedBy H D Bd shape S own (PartComputes H D Bd S own) :=
   fun x st hx hf q hq s ho => ⟨hcov x st hx hf q hq s ho, fun _ _ h => h q hq ho⟩
@@ -477,7 +477,7 @@ omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 theorem partComputes_of_ownedBy {Q : Type} {H : Msg → Msg} {D : Deploy Coin} {Bd : Bound Coin Col T}
     {shape : Form → Prop} {S : ElemSplit H Bd Q} {own : Msg → IVCheck Q → Option ℕ}
     {PC : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} (hown : OwnedBy H D Bd shape S own PC) {s : ℕ} {x : Msg}
-    {st : Stmt} (hx : D.parse x = some st) (hf : shape st.form) {c : ℕ → Coin} {ms : List Msg}
+    {st : CompiledStatement} (hx : D.parse x = some st) (hf : shape st.form) {c : ℕ → Coin} {ms : List Msg}
     (h : PC s x c ms) : PartComputes H D Bd S own s x c ms :=
   fun q hq ho => (hown x st hx hf q hq s ho).2 c ms h
 
@@ -530,7 +530,7 @@ omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 statement's parts: the salt and row checks' owner, a first holder, always is (`firstHolder_lt`). -/
 theorem ownedBy_holders {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bound Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (S : ElemSplit H Bd Q) (ownE : Msg → Q → Option ℕ)
-    (hE : ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ q ∈ S.checks (xI D x), ∀ s,
+    (hE : ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ q ∈ S.checks (xI D x), ∀ s,
       ownE x q = some s → s < D.nS x) :
     OwnedBy H D Bd shape S (ownHolders D L ownE) (PartComputes H D Bd S (ownHolders D L ownE)) := by
   refine ownedBy_partComputes H D Bd shape S _ fun x st hx hf q hq s ho => ?_
@@ -660,7 +660,7 @@ theorem ownedBy_deploy (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed →
     (hcoin : ∀ x as cs c, FlockDeploy.act false x as cs = .coin c → ((nextE x as cs).eval H).1 = .msg c.bytes)
     {R : Type} (LS : LastSplit H nextE R) (ownR : Msg → R → Option ℕ) (D : Claims.Recursion.Deploy Coin)
     (L : LayoutB) (shape : Claims.Recursion.Form → Prop)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ r ∈ LS.checks (Claims.Recursion.xI D x), ∀ s, ownR x r = some s → s < D.nS x) :
     let S := deploySplit H rel nextE colsE wE join rowIn final w hcoin LS
     OwnedBy H D (bdDeployed rel nextE colsE wE join rowIn final w) shape S (ownHolders D L (ownDeploy ownR))
@@ -690,7 +690,7 @@ theorem setup_fixed (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _r
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (hcoin : ∀ x as cs c, FlockDeploy.act false x as cs = .coin c → ((nextE x as cs).eval H).1 = .msg c.bytes)
     {R : Type} (LS : LastSplit H nextE R) (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (b : Brings) (L : LayoutB) (IV : Claims.Verifier Coin) {x : Msg} {st : Claims.Recursion.Stmt}
+    (b : Brings) (L : LayoutB) (IV : Claims.Verifier Coin) {x : Msg} {st : Claims.Recursion.CompiledStatement}
     (hx : (recBound rel' b L IV).parse x = some st) (c : ℕ → Coin) (ms : List Msg) :
     (IVCheck.elem DeployCheck.setup : IVCheck (DeployCheck R)).Holds H (bdDeployed rel nextE colsE wE join rowIn final w)
       (deploySplit H rel nextE colsE wE join rowIn final w hcoin LS) (Claims.Recursion.xI (recBound rel' b L IV) x)
@@ -732,7 +732,7 @@ theorem stmtFixes_deploy (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed �
     {R : Type} (LS : LastSplit H nextE R) (ownR : Msg → R → Option ℕ)
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ q ∈ ivChecks (bdDeployed rel nextE colsE wE join rowIn final w)
           (deploySplit H rel nextE colsE wE join rowIn final w hcoin LS) (Claims.Recursion.xI (recBound rel' b L IV) x),
         ownHolders (recBound rel' b L IV) L (ownDeploy ownR) x q = none →
