@@ -1,6 +1,7 @@
 /-
 PROTOCOL.md §7.3: the unit draw. After serving registers its roots and before the session's statements are fixed, the
-verifier draws the sampled units from its own randomness with exact samplers and sends them in the clear. The drawn units'
+sampled units are drawn with exact samplers on the challenger's coins and sent in the clear; the verifier uses no
+randomness of its own, and `flock-verify draw` refuses a draw that reads coins it wasn't given. The drawn units'
 statement carries the draw (the public header's `unit_draw`, under Σ) and the session record keeps it. Offline, the
 verifier checks that the two agree, that the draw is well formed, and that the statement's instances are the drawn units.
 -/
@@ -413,8 +414,9 @@ def drawWith {m : Type → Type} [Monad m] (get : Nat → Nat → m ByteArray) (
     | .work _ strata => stratifiedWith get (strata.map (·.toStratum))
   return units.map fun units => { law, population, units }
 
-/-- The draw from the verifier's operating-system randomness: `drawWith` with every stream's bytes from
-`IO.getRandomBytes`. -/
+/-- `drawWith` with every stream's bytes from `IO.getRandomBytes`. No command draws with it (the verifier has no coins of
+its own, and `flock-verify draw` draws on the challenger's bytes); the escape bounds are stated over it and hold on any
+byte source. -/
 def drawOS (law : Law) (population : Nat) : IO UnitDraw := do
   let some d ← drawWith (fun _ need => IO.getRandomBytes need.toUSize) law population
     | throw (IO.userError "unreachable")

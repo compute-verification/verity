@@ -6,8 +6,9 @@
 # fixture (`research data put --kind fixture/v1 --preserve`), whose id `out/fixture.txt` names. Run from the verity tree
 # (research run --cwd source); CPU only. Outputs under out/: host.txt, stage.json, statement.txt, serve.log, prove.txt and
 # prove.err, live.json (the LIVE record), lean-honest.log and lean-root.log (each its VERDICT line), fixture.txt.
-# ZK=0 is the plain session instead (no --zk anywhere): a stratified draw of K units, Lean's own (`flock-verify draw
-# --stratified K` on the stage's program and partition, the OS's coins), served from its file and verified with
+# ZK=0 is the plain session instead (no --zk anywhere): a stratified draw of K units, Lean's (`flock-verify draw
+# --stratified K` on the stage's program and partition, on COINS=FILE, the challenger's bytes: the verifier has none of
+# its own, so ZK=0 without COINS refuses), served from its file and verified with
 # `--stratified K --coins os` (FC_COINS=os: every round's coins the OS's); Lean also verifies it without --registered
 # (lean-none.log, refused). Its fixture adds vectors/: honest, root and none, each the session with its case.json (the live
 # server's verdict, from serve's index.jsonl) and a registered.json for the two negatives (agree.py's per-session reads;
@@ -75,9 +76,10 @@ python3 verity/ml/flock/tests/served_registered.py --out $D --schema ${SCHEMA:-v
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
 $B statement "${ZF[@]}" --circuit $D/circuit.txt --instances $D/pub-$N.bin --tables $D/tables > $O/statement.txt 2>&1
 if [ "${ZK:-1}" = 0 ]; then
-  # the plain claims draw by the stratified law: the verifier's own draw, served from its file
+  # the plain claims draw by the stratified law: Lean's draw on the challenger's bytes, served from its file
+  [ -s "${COINS:-}" ] || { echo "ZK=0 draws on the challenger's coins: give COINS=FILE (the verifier has none of its own)" >&2; exit 2; }
   wait $LP; [ -x $LEAN_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
-  $LEAN_BIN draw --program $D/program.json --partition $D/partition.json --stratified $K > $O/draw.log 2>&1 || { cat $O/draw.log; exit 1; }
+  $LEAN_BIN draw --program $D/program.json --partition $D/partition.json --stratified $K --stream-file $COINS > $O/draw.log 2>&1 || { cat $O/draw.log; exit 1; }
   grep -h '^DRAW ' $O/draw.log | head -1 | cut -d' ' -f2- > $D/draw.json
   DRAW=(--draw-file $D/draw.json); VFLAGS=(--stratified $K --coins os)
 else

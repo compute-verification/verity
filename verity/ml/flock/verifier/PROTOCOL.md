@@ -319,12 +319,14 @@ pseudorandom (SHA-512 as a PRF, `prf/sha-512`; SHA-256 for a v1 session); with `
 
 ### 7.3 The unit draw
 
-The verifier draws the sampled units itself, in the clear, between registration and the session
-(`note:20260927T0210Z-finding-unit-draw-placement`). Serving registers its roots; the verifier draws the unit set from
-its operating system's randomness and sends it; the drawn units' statements are fixed; only then does the verifier send
-its coin commitment. The draw is not under the coin commitment, and no hash derives it.
+The sampled units are drawn in the clear, between registration and the session
+(`note:20260927T0210Z-finding-unit-draw-placement`). Serving registers its roots; the unit set is drawn on the
+challenger's coins and sent; the drawn units' statements are fixed; only then does the verifier send its coin
+commitment. The draw is not under the coin commitment, and no hash derives it. The verifier uses no randomness of its
+own: `flock-verify draw` draws on the bytes `--stream` or `--stream-file` gives, and without them it draws only a law
+that samples every unit (whose units no bytes change) and refuses any other.
 
-The samplers are `verity.ml.randomness`'s exact ones, read straight from the OS bytes (`Flock.Draw`, `flock-verify draw`).
+The samplers are `verity.ml.randomness`'s exact ones, read straight from the given bytes (`Flock.Draw`, `flock-verify draw`).
 `uniform(n)` takes big-endian words of `w = ⌈(bitlen(n) + 64) / 8⌉` bytes and returns the first `x < 2^(8w) − 2^(8w) mod n`,
 mod `n`. `subset(k, n)` is the partial Fisher–Yates of `Key.subset`: for `i < k`, `j = i + uniform(n − i)`, swap `i` and
 `j`, and return the first `k`, sorted. `bernoulli(p)` over `[0, N)` takes unit `u` when `uniform(den) < num`. A stream
