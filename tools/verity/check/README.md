@@ -5,7 +5,7 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 
 | Part | Jobs |
 | --- | --- |
-| `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build) |
+| `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build), `ratchet-gate` (the vLLM integration's ratchet gate on each merge above the check's base: on a train, it names the PR whose merge grows a lint allowlist) |
 | `circuits` | `flock-circuit-build`, `flock-rust-tests` (C-Flock's Rust), `circuit-check` (the property checks every circuit passes) |
 | `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), `lean-changed` (the early Lean check on a merge, which halts the run), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches C-Flock) |
 
@@ -13,9 +13,11 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 `--deferred STEP,...`, `--plan` and `--slots`.
 
 A job with `gate = false` in `ci.toml` is off the merge gate: a recorded check and its shards leave it out, and `research
-merge` requires it of no check. Today that is `circuit-check`. It runs after landing, in the run that checks `checked`'s tip, and
-a red there reverts its culprit at once, and lands no PR touching its inputs until it passes, but doesn't hold `main`. It goes back on the gate once `circuit-check --all` fits
-inside the rest of the check.
+merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
+checks `checked`'s tip, and doesn't hold `main`. A red `circuit-check` reverts its culprit at once and lands no PR touching its
+inputs until it passes; a red `ratchet-gate` reverts its culprit as any other after-landing red does. `circuit-check` goes back
+on the gate once `circuit-check --all` fits inside the rest of the check; `ratchet-gate` is in no shard plan, and reports
+without blocking a merge.
 
 ## Suites and reuse
 

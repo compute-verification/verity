@@ -175,17 +175,19 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
 
 
 def test_a_job_off_the_merge_gate_is_planned_and_required_of_no_check(P, tmp_path):
-    """circuit-check is off the merge gate (ci.toml's `gate = false`): its targets are listed, none required, so `research merge
-    --verdicts` admits a commit whose targets no check passed."""
+    """circuit-check and ratchet-gate are off the merge gate (ci.toml's `gate = false`): their parts are listed, none required, so
+    `research merge --verdicts` admits a commit whose targets no check passed."""
     root = tmp_path / "tree"
     _tree(root)
     parts = P.plan_tree(root, [], False, circuit=lambda C, s: [P.Part("circuit-check:t", "circuit-check", "v1/k", "must-run")])
     doc = P.document(parts, _git(root, "rev-parse", "HEAD"), _git(root, "rev-parse", "HEAD^{tree}"), None, [], [])
     by = {p["part"]: p for p in doc["parts"]}
     assert by["circuit-check:t"]["state"] == "must-run" and by["circuit-check:t"]["required"] is False
-    assert all(p.get("required", True) for n, p in by.items() if n not in ("circuit-check:t", "lean-changed", "lean-agreement"))
+    assert by["ratchet-gate"]["required"] is False
+    off = ("circuit-check:t", "ratchet-gate", "lean-changed", "lean-agreement")
+    assert all(p.get("required", True) for n, p in by.items() if n not in off)
     _cited, why = _judged(doc, {})
-    assert why and "circuit-check" not in why
+    assert why and "circuit-check" not in why and "ratchet-gate" not in why
 
 
 def test_lean_agreement_is_required_for_a_change_its_merge_requires_covers_in_the_commits_own_ci_toml(P, tmp_path):
