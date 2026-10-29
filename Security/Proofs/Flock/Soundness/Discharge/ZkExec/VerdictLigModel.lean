@@ -99,7 +99,7 @@ theorem queryAndBatchPadC_plays (r : ℕ) (lv : Accounting.Level) (col : List �
 sample, the first message and the masked lane rounds (`hfold`, ending in the lane coins `ini`), the pair's sums, `ρ`
 (`hρ`), `T'` and `ybar`, the code-switch message, level 1's cap, its two out-of-domain samples from `T'` (`htwo`),
 level 0's padded queries (`hqb`), and a run of the recursive rounds from the resulting state (`hrec`). -/
-theorem ligeritoPadZC_model {np : ℕ} (P : ZkSession.Pads0 np 2) (sch : Accounting.Schedule) (tp : ℕ) (c₀ : 𝔽)
+theorem ligeritoPadZC_model {np : ℕ} (P : ZkSession.Pads0 np 2) (sch : FlockSoundness.Accounting.Schedule) (tp : ℕ) (c₀ : 𝔽)
     (r : ℕ) (Tm : 𝔽) (b : ℕ → 𝔽) {lv₀ lv₁ : Accounting.Level} {rest : List Accounting.Level}
     (hl : sch.levels = lv₀ :: lv₁ :: rest) (z₀ cβ₀ : Array F128) (hz₀ : z₀.size = sch.m - 7) (hm7 : sch.m - 7 ≠ 1)
     (hβ₀ : cβ₀.size = 1) (y₀ : 𝔽) (m₀ : 𝕂 × 𝕂) {msF : List Msg} {csF : List (Array F128)} {ini : List 𝕂}

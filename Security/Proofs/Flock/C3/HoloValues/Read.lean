@@ -102,7 +102,7 @@ whose `m`, `k_log` and circuit fold are `S`'s, on a `fast100` schedule `sch` who
 extra claims `extras` the model's claim by claim. The steps take the kinds of `holoRepC`'s shape, their messages are
 the proof's and `h` (`holoRepMsgs`), their coin steps the rounds the program consumes but `z_partial`'s; the proof's
 level-0 cap is `cap₀`, and the openings at rep `r` are the proof's rows and siblings (`openRow`). -/
-structure RepUnit (S : Model.Statement) (sch₀ : Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
+structure RepUnit (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
     (cap₀ : Model.Cap Dig) (os : Model.Opens 𝔽 Dig) (r : ℕ) (ts : List Game.Step) : Type where
   sh : Flock.Shape
   d : RepData
@@ -174,7 +174,7 @@ structure RepUnit (S : Model.Statement) (sch₀ : Accounting.Schedule) (extra : 
 /-- **A rep's unit plays `holoRepC` to an output** on its steps, whose result accepts the openings and whose level-0
 paths verify against `cap₀` at any salts; the output's zerocheck `z` and `ρ` and lincheck `alpha` and `ts` are the
 coins of the rounds of the unit's record that draw them (`holoRep_refines_coins`). -/
-theorem rep_of_unit_coins {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+theorem rep_of_unit_coins {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step} (hm : 13 ≤ S.m)
     (U : RepUnit S sch₀ extra cap₀ os r ts) :
     ∃ zc lc pend, Game.PlaysT (holoRepC (D := Dig) execArith r S sch₀ hm extra) ts (some (zc, lc), pend) ∧
@@ -209,7 +209,7 @@ theorem rep_of_unit_coins {S : Model.Statement} {sch₀ : Accounting.Schedule} {
   exact opensOK_of U.msId U.sch hlv U.p.cap U.p.ligerito r pend os hcaps hreqs' U.opens
 
 /-- **A rep's unit plays `holoRepC` to an output**: `rep_of_unit_coins` without the coins. -/
-theorem rep_of_unit {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+theorem rep_of_unit {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step} (hm : 13 ≤ S.m)
     (U : RepUnit S sch₀ extra cap₀ os r ts) :
     ∃ zc lc pend, Game.PlaysT (holoRepC (D := Dig) execArith r S sch₀ hm extra) ts (some (zc, lc), pend) ∧

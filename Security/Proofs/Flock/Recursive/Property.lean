@@ -87,7 +87,7 @@ under `Refine.H512`: `flock-leaf/sha512-unsalted`, which `RecVStar.innerTags` na
 and the schedule `sch`. -/
 noncomputable abbrev innerExec {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
-    (sch : Accounting.Schedule) : Inner :=
+    (sch : FlockSoundness.Accounting.Schedule) : Inner :=
   flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain cls regs sch
 
 /-- **The number of V*'s outer statements** over an inner session of a table of `m` variables, `k_log` and `claims`

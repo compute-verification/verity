@@ -84,7 +84,7 @@ arithmetic (`execArith`) and the inner statement's Merkle scheme, SHA-512 with p
 `Refine.leafPlain` under `Refine.H512`), on the class `cls`, its regions and the schedule `sch`. -/
 def CompiledForkSound {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
     (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
-    (sch : Accounting.Schedule) : Prop :=
+    (sch : FlockSoundness.Accounting.Schedule) : Prop :=
   InnerSoundForkOn Refine.H512 (flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain cls regs sch)
     (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain cls regs sch)
     (ENNReal.ofReal (Accounting.tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩))

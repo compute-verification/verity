@@ -143,17 +143,17 @@ noncomputable def levelZeroReader {F K : Type} [Field F] [Fintype F] [DecidableE
       _ = 2 * (2 ^ lanes * 2 ^ cols) ^ 2 := by ring
 
 /-- The level-0 reader at a `fast100` schedule. -/
-noncomputable def flockReader {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
+noncomputable def flockReader {m : ℕ} {sch : FlockSoundness.Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
     Reader (Flock.flockLevelZero h) :=
   levelZeroReader execArith execArith_correct sch.k0 sch.level₀.logCols (Flock.fast100_level₀_fits h).1
 
 /-- **The counted decoder at Flock's level-0 code.** -/
-noncomputable def flockDecode {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch)
+noncomputable def flockDecode {m : ℕ} {sch : FlockSoundness.Accounting.Schedule} (h : Accounting.fast100 m = some sch)
     (agree : ℝ) : List (ℕ × (Fin (2 ^ sch.k0) → GF128)) → List (Message GF128 sch.k0 sch.level₀.logCols) :=
   gsDecode (Flock.flockLevelZero h) rf128 (flockReader h) agree
 
 /-- `flockDecode` with its count, one step per point. -/
-noncomputable def flockCounted {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch)
+noncomputable def flockCounted {m : ℕ} {sch : FlockSoundness.Accounting.Schedule} (h : Accounting.fast100 m = some sch)
     (agree : ℝ) (os : List (ℕ × (Fin (2 ^ sch.k0) → GF128))) :
     List (Message GF128 sch.k0 sch.level₀.logCols) × ℕ :=
   gsCounted (Flock.flockLevelZero h) rf128 (flockReader h) agree 1 os
@@ -170,7 +170,7 @@ theorem gsBound_flock : gsBound Flock.roots128Cost (C 2 * X ^ 2) 1 = flockPoly :
   ring
 
 /-- **Flock's level-0 decoder's complexity**: at most `flockPoly` at the opened columns' bits `N·2^k0·128`. -/
-theorem flockDecode_complexity {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch)
+theorem flockDecode_complexity {m : ℕ} {sch : FlockSoundness.Accounting.Schedule} (h : Accounting.fast100 m = some sch)
     (agree : ℝ) :
     DecoderComplexity (flockDecode h agree) (flockCounted h agree) (fun os => os.length * 2 ^ sch.k0 * 128)
       flockPoly := by
@@ -180,7 +180,7 @@ theorem flockDecode_complexity {m : ℕ} {sch : Accounting.Schedule} (h : Accoun
 /-- **Flock's level-0 decoder is complete on the codeword's positions**: on opened columns at distinct positions below
 `2^level₀.logLen`, from the Johnson count on, at `agree > 0`, it lists every message whose level-0 encoding agrees with
 at least `agree·N` of them. -/
-theorem mem_flockDecode {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch) {agree : ℝ}
+theorem mem_flockDecode {m : ℕ} {sch : FlockSoundness.Accounting.Schedule} (h : Accounting.fast100 m = some sch) {agree : ℝ}
     (ha : 0 < agree) (os : List (ℕ × (Fin (2 ^ sch.k0) → GF128))) (hnd : (os.map Prod.fst).Nodup)
     (hlt : ∀ p ∈ os, p.1 < 2 ^ sch.level₀.logLen) (hN : johnsonCount (2 ^ sch.level₀.logCols) agree ≤ os.length)
     (M : Message GF128 sch.k0 sch.level₀.logCols)

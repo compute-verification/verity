@@ -142,7 +142,7 @@ def wDig : DecodeZL.Wire := .bytes Dig toDig
 /-- **The `--zk` Ligerito wires**: the non-ZK session's (`wLIG`) with the last lane round's coin followed by the pair's
 sums' round, the second `ρ` coin's empty round, and a round that carries `T'` and `ybar` before the round's message and
 the level-1 cap. -/
-noncomputable def wLIGZ (s : Accounting.Schedule) (t : ℕ) : List (List DecodeZL.Wire) :=
+noncomputable def wLIGZ (s : FlockSoundness.Accounting.Schedule) (t : ℕ) : List (List DecodeZL.Wire) :=
   [[]] ++ ([[.f]] ++ (List.replicate s.k0 [.kk] ++ ([[wEv], [], [wK, wY t, .kk, .cap]] ++
     (wMid ++ wLev s.ext (s.levels.length - 1)))))
 
@@ -152,7 +152,7 @@ def wInner (nY : ℕ) : List (List DecodeZL.Wire) := [[.f], [.ff], [wDig], [.v n
 /-- **The wires of a `--zk` rep's rounds after round 0**: the non-ZK session's zerocheck's and lincheck's after round 0,
 the opening's of `n` claims, Ligerito's with level 0's hiding (`ybar` of `t` elements), and the inner proof's on `np`
 pads. -/
-noncomputable def wRestZ (m kLog n : ℕ) (s : Accounting.Schedule) (t np : ℕ) : List (List DecodeZL.Wire) :=
+noncomputable def wRestZ (m kLog n : ℕ) (s : FlockSoundness.Accounting.Schedule) (t np : ℕ) : List (List DecodeZL.Wire) :=
   (wZL m kLog).tail ++ (wOP n ++ (wLIGZ s t ++ wInner (np + Zk.K_PAD)))
 
 /-- **The pads root in round 0's bytes**: the 64 bytes before the closing squeeze's 16-byte header, after the root's
@@ -167,7 +167,7 @@ noncomputable def decZ (W : List (List DecodeZL.Wire)) : ℕ → ByteArray → L
 /-- **A compiled `--zk` rep's shape at the executable's dimensions** (`repShapeZ` with `e = 2` pair sums, `Q` inner
 queries and `K_PAD` padding symbols): the pads root, the masked zerocheck's, lincheck's and `n` claims' opening's
 shapes, level 0 masked (`ybar` of `t` elements), `final_c'`, and the inner proof on seven rows and `np` pads. -/
-def shapeZE (m kLog n : ℕ) (s : Accounting.Schedule) (t np : ℕ) : List Exec.Kind :=
+def shapeZE (m kLog n : ℕ) (s : FlockSoundness.Accounting.Schedule) (t np : ℕ) : List Exec.Kind :=
   .msg Dig :: ((zcShape 𝔽 m ++ (lcShape 𝔽 kLog ++ (opShape 𝔽 n ++ (ligPadShape 𝔽 𝕂 Dig s 2 t ++ [.msg 𝔽])))) ++
     innerShape 𝔽 Dig 7 np Zk.K_PAD Zk.Q)
 

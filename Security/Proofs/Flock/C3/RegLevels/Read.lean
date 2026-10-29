@@ -49,7 +49,7 @@ theorem proverAt_of_eq {β : Type} {s : Option Step} {d b : β} (hs : s = some (
 
 /-- **Compiled Ligerito's run on its messages and coins is a run on one tape** that takes steps of its shape's kinds
 (`ligShape`), with those messages and coin steps: the shape places the coins among the messages. -/
-theorem playsT_lig_of_tape {sch : Accounting.Schedule} {T₀ : 𝔽} {b : ℕ → 𝔽} {ms : List Game.Msg}
+theorem playsT_lig_of_tape {sch : FlockSoundness.Accounting.Schedule} {T₀ : 𝔽} {b : ℕ → 𝔽} {ms : List Game.Msg}
     {cs : List (Array Flock.F128)} {pend : PendL 𝔽 Dig} {ts : List Step}
     (h : Plays fOf (ligeritoC (D := Dig) execArith 2 sch T₀ b) ms cs pend)
     (hk : ts.map kindOf <+: ligShape 𝔽 𝕂 Dig sch) (hl : ts.filterMap Sum.getLeft? = ms)

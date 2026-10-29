@@ -1248,7 +1248,7 @@ theorem innerOf_holds_rep_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hw
     show 2 ^ (Tz).sch.level₀.logCols = _
     have := (Tz).hshape.2.2.1
     have := (Tz).hmsch
-    rw [Accounting.Schedule.level₀]
+    rw [FlockSoundness.Accounting.Schedule.level₀]
     congr 1
     omega
   -- the prover's table `z = (w, u)` satisfies the statement

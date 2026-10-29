@@ -63,7 +63,7 @@ def Accounting.Level.Fits (l : Level) : Prop := l.logCols ≤ 40 ∧ l.logLen �
 instance instDecidableFits (l : Level) : Decidable l.Fits := by unfold Accounting.Level.Fits; infer_instance
 
 /-- Level 0 of a schedule. -/
-def Accounting.Schedule.level₀ (sch : Schedule) : Level := sch.levels.headD default
+def FlockSoundness.Accounting.Schedule.level₀ (sch : Schedule) : Level := sch.levels.headD default
 
 /-- The committed level-0 table as a table. -/
 def asTable (sch : Schedule) (C : Oracle F) : Table F sch.k0 sch.level₀.logLen :=

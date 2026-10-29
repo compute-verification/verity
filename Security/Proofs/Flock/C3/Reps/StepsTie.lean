@@ -30,7 +30,7 @@ open FlockSoundness.Discharge.PlaysCoin (coinArr)
 
 /-- **A rep unit's messages and coin steps at `v`, woven along `holoRepShape`** at `S`, `nX` extra claims and `sch₀`
 (`UnitWoven`'s steps). -/
-def unitWeave (S : Model.Statement) (sch₀ : Accounting.Schedule) (nX : ℕ) (sh : Flock.Shape) (d : RepData)
+def unitWeave (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (nX : ℕ) (sh : Flock.Shape) (d : RepData)
     (v : UnitVals) : List Game.Step :=
   weave (holoRepShape 𝔽 𝕂 Dig S.m S.kLog nX sch₀) (holoRepMsgs v.st v.sch (2 + nX) v.p (hOfW sh d.w) capDig)
     ((consumed v.t.rounds v.t.k (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6)) ++
@@ -39,7 +39,7 @@ def unitWeave (S : Model.Statement) (sch₀ : Accounting.Schedule) (nX : ℕ) (s
 /-- **A rep's messages and coins are a tape along its shape** from its unit's other parts: the program runs
 (`holoProg_of_zclc`), refines to `holoRepC` (`holoRep_refines`) at the proof's rows as openings, and that run is a
 tape along `holoRepC`'s spine (`tapeAlong_of_plays`). -/
-theorem tapeAlong_of_parts {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+theorem tapeAlong_of_parts {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {sh : Flock.Shape} {d : RepData} {v : UnitVals} (hm : 13 ≤ S.m) (alg : AlgebraHolds sh d) (acc : AccHolds sh d)
     (hp : UnitProof sh d v) (hs : UnitSetup S sch₀ extra sh v) (hf : UnitFrames sh d v) :
     TapeAlong (holoRepShape 𝔽 𝕂 Dig S.m S.kLog extra.length sch₀)

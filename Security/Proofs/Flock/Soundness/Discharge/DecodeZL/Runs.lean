@@ -112,7 +112,7 @@ theorem extraClaims_length (S : Model.Statement) (pl mPts : ℕ) (pts : Fin 2 �
 whose schedule is `fast100`'s and whose link layout is `PT_LOCAL`, a run of rep `r` on its rounds' coins with its proof's
 messages (`accepts_verdict_hm96`), on rounds that retained the encodings of `repFrames`' chunks (`accepts_rep_rounds`),
 cuts at `repSpine`'s coins into the decoder's groups of the rounds, with no tail. -/
-theorem repRun_at {mPts : ℕ} {wOP : ℕ → List (List Wire)} {wLIG : Accounting.Schedule → List (List Wire)}
+theorem repRun_at {mPts : ℕ} {wOP : ℕ → List (List Wire)} {wLIG : FlockSoundness.Accounting.Schedule → List (List Wire)}
     (hOP : OPCarries wOP) (hLIG : LIGCarries wLIG) (sizes : DecodeSizes) (T : TabSpec mPts) (st : Flock.Stmt)
     (hwf : StmtWF st) (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (hdl : st.merkle.digestLen = 64)
     (hS : T.S = stmtOf st hwf (regionsOf st)) (hsch : T.sch = schedOf sch) (hpl : T.ptLocal = PT_LOCAL)

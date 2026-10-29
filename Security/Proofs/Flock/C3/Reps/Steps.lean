@@ -52,14 +52,14 @@ theorem Woven.steps {σ : List FlockSoundness.Discharge.Exec.Kind} {ms cs : List
 
 /-- **A rep's steps woven from its unit's values**: `UnitSteps`' messages (`holoRepMsgs`) and coin steps at `v`,
 woven along `holoRepShape` at `S`, `nX` extra claims and `sch₀`. -/
-def UnitWoven (S : Model.Statement) (sch₀ : Accounting.Schedule) (nX : ℕ) (ts : List Game.Step) (sh : Flock.Shape)
+def UnitWoven (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (nX : ℕ) (ts : List Game.Step) (sh : Flock.Shape)
     (d : RepData) (v : UnitVals) : Prop :=
   Woven (holoRepShape 𝔽 𝕂 Dig S.m S.kLog nX sch₀) (holoRepMsgs v.st v.sch (2 + nX) v.p (hOfW sh d.w) capDig)
     ((consumed v.t.rounds v.t.k (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6)) ++
       consumed v.t.rounds (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6) + 1) v.t₄.k).map (coinArr fOf)) ts
 
 /-- **`UnitSteps` from woven steps**, the cap and the openings. -/
-theorem unitSteps_of_woven {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+theorem unitSteps_of_woven {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step} {sh : Flock.Shape} {d : RepData}
     {v : UnitVals} (h : UnitWoven S sch₀ extra.length ts sh d v) (hcap : capDig v.p.cap = cap₀)
     (hos : ∀ ℓ j, os r ℓ j = openRow v.p.ligerito v.sch ℓ j) : UnitSteps S sch₀ extra cap₀ os r ts sh d v :=

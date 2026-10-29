@@ -384,7 +384,7 @@ theorem isCoin_rec (F K D : Type) (ext : ℕ) : ∀ lvs : List Accounting.Level,
 
 /-- **The Ligerito wires**: the start's round carries nothing, the first out-of-domain round its value, the `k0` fold
 rounds their messages, the last one also the level-1 cap, then level 0's `wMid` and the level loop's `wLev`. -/
-noncomputable def wLIG (s : Accounting.Schedule) : List (List Wire) :=
+noncomputable def wLIG (s : FlockSoundness.Accounting.Schedule) : List (List Wire) :=
   [[]] ++ ([[.f]] ++ (List.replicate s.k0 [.kk] ++ ([[.kk, .cap]] ++ (wMid ++ wLev s.ext (s.levels.length - 1)))))
 
 theorem lig_carries : LIGCarries wLIG := by

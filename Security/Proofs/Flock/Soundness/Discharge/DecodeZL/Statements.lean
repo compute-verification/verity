@@ -79,7 +79,7 @@ def OPCarries (wOP : ℕ → List (List Wire)) : Prop :=
 /-- **Ligerito's rounds carry its messages** (dec-lig's chunk lemma): at a decoded proof of a `fast100` statement with
 64-byte digests, Ligerito's rounds read by `wLIG` are its messages (caps as `capDig`), cut at `ligShape`'s coins, with
 no tail. -/
-def LIGCarries (wLIG : Accounting.Schedule → List (List Wire)) : Prop :=
+def LIGCarries (wLIG : FlockSoundness.Accounting.Schedule → List (List Wire)) : Prop :=
   ∀ (st : Setup) (sch : Flock.Schedule) (nExtra : ℕ) (bytes : ByteArray) (p : Proof) (T : F128),
     Flock.fast100 st.m = some sch → st.merkle.digestLen = 64 → decodeProof (shapeOf st sch nExtra) bytes = .ok p →
     Carries (wLIG (schedOf sch)) (ligShape 𝔽 𝕂 Dig (schedOf sch)) (ligFrames sch T p.cap p.ligerito)
@@ -117,7 +117,7 @@ noncomputable def nX (T : Finset (Fin n) → Reg → TabSpec mPts) (S : Finset (
 /-- **The decoder at draw `S`**: the zerocheck's and lincheck's wires, the opening's, then Ligerito's, at the table's
 dimensions, number of claims and schedule. -/
 noncomputable def decAt (T : Finset (Fin n) → Reg → TabSpec mPts) (wOP : ℕ → List (List Wire))
-    (wLIG : Accounting.Schedule → List (List Wire)) (S : Finset (Fin n)) (R : Reg) : ℕ → ByteArray → List Msg :=
+    (wLIG : FlockSoundness.Accounting.Schedule → List (List Wire)) (S : Finset (Fin n)) (R : Reg) : ℕ → ByteArray → List Msg :=
   decOf (wZL (T S R).S.m (T S R).S.kLog ++ (wOP (nX T S R + 2) ++ wLIG (T S R).sch))
 
 /-- **The openings at draw `S`**: `opnOf` at the statement setupH sets up at the record's draw `dj S` and its `fast100`
@@ -139,7 +139,7 @@ def DecodesOnExec : Prop :=
     (_hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {Reg : Type}
     (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (wOP : ℕ → List (List Wire))
-    (wLIG : Accounting.Schedule → List (List Wire)),
+    (wLIG : FlockSoundness.Accounting.Schedule → List (List Wire)),
     OPCarries wOP → LIGCarries wLIG → TagsOk I → RecordsLive I dj wr → (∀ ω, DrawOk I dj mPts (L.draw ω)) →
     DecodesOn H512 enc512 leaf512 (tablesAt (Reg := Reg) ht dj x₀) I wr (opnAt (tablesAt ht dj x₀) I dj)
       (decAt (tablesAt ht dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) L
