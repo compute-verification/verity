@@ -26,6 +26,13 @@ build)
   "$NVCC" -std=c++17 -O3 -gencode arch=compute_90a,code=sm_90a -o "$WORK/ldgmc" "$HERE/ldgmc.cu" -lcuda \
     >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
   "$(dirname "$NVCC")/cuobjdump" -sass "$WORK/ldgmc" >"$OUT/ldgmc.sass"
+  # --list runs before cuInit, so on a node without a driver the toolkit's stub stands in for libcuda.so.1
+  STUB=$(ls "$(dirname "$NVCC")"/../lib64/stubs/libcuda.so "$(dirname "$NVCC")"/../targets/*/lib/stubs/libcuda.so \
+    2>/dev/null | head -n 1)
+  mkdir -p "$WORK/stub" && [ -n "$STUB" ] && ln -s "$(realpath "$STUB")" "$WORK/stub/libcuda.so.1"
+  LD_LIBRARY_PATH="$WORK/stub${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$WORK/ldgmc" --list >"$WORK/forms.txt" \
+    || { echo "ldgmc.sh: ldgmc --list failed" >&2; exit 1; }
+  [ -s "$WORK/forms.txt" ] || { echo "ldgmc.sh: ldgmc --list listed no forms" >&2; exit 1; }
   rc=0
   : >"$OUT/gate.txt"
   while read -r name form _ _; do
@@ -35,7 +42,7 @@ build)
       "$OUT/ldgmc.sass" | sort -u | tr '\n' ' ')
     if [ "$got" = "$form " ]; then echo "lowering $name: $form" >>"$OUT/gate.txt"
     else echo "ldgmc.sh: $name lowers to '$got', not $form" | tee -a "$OUT/gate.txt" >&2; rc=1; fi
-  done < <("$WORK/ldgmc" --list)
+  done <"$WORK/forms.txt"
   tar -C "$WORK" -czf "$OUT/ldgmc.tgz" ldgmc
   grep -c '^lowering' "$OUT/gate.txt" | xargs echo "ldgmc.sh: forms lowered as the census names them:"
   exit $rc
