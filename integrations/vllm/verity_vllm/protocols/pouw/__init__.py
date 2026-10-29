@@ -665,7 +665,7 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     Under H1 and the lead, the int8_exact arm's int8 weight rows as they are served, once a process
     (`pouw_h1_hooks.weight_roots`)."""
     if scheme in (PH.SCHEME, PL.SCHEME):
-        layers = PHK.layers(target.model, linear_types(), scheme)
+        layers = PHK.layers(target.model, linear_types(), scheme=scheme)
         return {"weight_roots": {str(w): r.hex() for w, r in PHK.weight_roots(layers).items()},
                 "shapes": {str(w): list(m.weight.shape) for w, m in enumerate(layers)}}
     _, layers, shapes = _layers(scheme, target)
@@ -819,7 +819,7 @@ def _install_lead(entry: str, settings: Settings, target: Target) -> Option:
     setting ``backend`` and its ``gemm`` the run's call, so the arm quantizes each call's rows and the lead serves its y;
     each engine step's calls are one pass, published at the step's end (`pearl_c.passes.hook_steps`), and at release. The
     coins are this process's (`lead.feed.InProcessCertifier`) and credit nothing."""
-    layers = PHK.layers(target.model, linear_types(), PL.SCHEME)
+    layers = PHK.layers(target.model, linear_types(), scheme=PL.SCHEME)
     off = [f"linear {w}: {type(m.quant_method).__name__} has no gemm" for w, m in enumerate(layers)
            if not hasattr(type(m.quant_method), "gemm")]
     if off:

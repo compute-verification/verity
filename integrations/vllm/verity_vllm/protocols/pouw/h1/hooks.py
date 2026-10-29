@@ -12,7 +12,7 @@ from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 
-def layers(model: Any, types: tuple[type, ...], scheme: str = PH.SCHEME) -> list[Any]:
+def layers(model: Any, types: tuple[type, ...], *, scheme: str = PH.SCHEME) -> list[Any]:
     """The linear layers by type in module order; ValueError, naming `scheme`, names every one not on the int8_exact
     plain arm (`engine.int8_vllm.Int8PlainLinearMethod`, whose ``observe`` the option wraps) with its int8 weight and
     scales.
