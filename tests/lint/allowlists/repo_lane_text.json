@@ -679,7 +679,7 @@
     {"file": "demos/README.md", "count": 4},
     {"file": "demos/dither_full_util/README.md", "count": 1},
     {"file": "demos/h200/README.md", "count": 9},
-    {"file": "demos/h200/example.toml", "count": 2},
+    {"file": "demos/h200/demo.toml", "count": 2},
     {"file": "demos/vllm/serve.sh", "count": 1},
     {"file": "infra/cluster/README.md", "count": 2},
     {"file": "infra/cluster/descriptions/nebius-after-n1.toml", "count": 1},

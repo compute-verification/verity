@@ -1,10 +1,10 @@
-"""The ladder: each example's doneness on two independent axes, from its `demos/<name>/example.toml` (`demos/README.md`).
+"""The ladder: each demo's doneness on two independent axes, from its `demos/<name>/demo.toml` (`demos/README.md`).
 
-An example names its protocol (or a composite, or a list), its workload and its placement (role -> machine class), how far it
+A demo names its protocol (or a composite, or a list), its workload and its placement (role -> machine class), how far it
 runs (`run`: moved, runs, placed) and how far its guarantee is proved (`proof`: none, stated, proved, measured), and the
 evidence for each step up to those on each axis. `problems` says what a claimed step lacks, in the form that can be checked
 offline: run-id format, a guarantee listed in a `lean-audit.json`, declaration names found in the tracked `.lean` files.
-`tests/test_demos.py` fails an example with any, and `verity example --status` prints every example with what the next
+`tests/test_demos.py` fails a demo with any, and `verity demo --status` prints every demo with what the next
 step on each axis needs.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ from pathlib import Path
 #: each axis's steps in order; each axis needs the evidence of every step up to the one it claims, and none of the other's
 AXES = {"run": ("moved", "runs", "placed"), "proof": ("none", "stated", "proved", "measured")}
 #: the roles a placement names -> whose they are; the auditor's run only on an `auditor-host` (AGENTS.md "Auditor-trusted
-#: devices"). A new example's role goes here with its side.
+#: devices"). A new demo's role goes here with its side.
 ROLES = {"prover": "prover", "endpoint": "prover", "store": "prover",
          "verifier": "auditor", "challenger": "auditor", "certifier": "auditor", "memory_challenger": "auditor"}
 #: machine classes: a node the prover runs (`gpu-node`, `cpu-node`), a machine it doesn't control (`auditor-host`), or one
@@ -31,7 +31,7 @@ NAME = re.compile(r"[a-z0-9_]+")
 PROOF = re.compile(r"\w+(\.\w+)*\.SecurityProofs\.\w+(\.\w+)*")
 KEYS = {"protocol", "workload", *AXES, "placement", "evidence"}
 #: the retired single ladder's `level` -> (run, proof), read from a file that gives neither axis. Remove once no
-#: example.toml says `level`.
+#: demo.toml says `level`.
 LEVEL = {0: ("moved", "none"), 1: ("runs", "none"), 2: ("placed", "none"), 3: ("placed", "stated"), 4: ("placed", "proved"),
          5: ("placed", "measured")}
 EVIDENCE = {"runs", "tests", "guarantee", "honest", "nontrivial", "proof", "premises"}
@@ -43,28 +43,28 @@ NAMESPACE = re.compile(r"^[ \t]*namespace[ \t]+(\S+)", re.M)
 
 
 @dataclass(frozen=True)
-class Example:
+class Demo:
     name: str
-    data: dict | None       # example.toml, or None when it is missing or doesn't parse (`error`)
+    data: dict | None       # demo.toml, or None when it is missing or doesn't parse (`error`)
     error: str = ""
-    runner: str = ""        # config.toml (`verity run`), run.py or run.sh, what `verity example NAME` runs
+    runner: str = ""        # config.toml (`verity run`), run.py or run.sh, what `verity demo NAME` runs
 
 
-def examples(root: Path) -> list[Example]:
+def demos(root: Path) -> list[Demo]:
     out = []
     for d in sorted(p for p in (root / "demos").iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
         runner = next((r for r in ("config.toml", "run.py", "run.sh") if (d / r).is_file()), "")
-        f = d / "example.toml"
+        f = d / "demo.toml"
         if not f.is_file():
-            out.append(Example(d.name, None, f"no example.toml: add one ({SCHEMA})", runner))
+            out.append(Demo(d.name, None, f"no demo.toml: add one ({SCHEMA})", runner))
             continue
         try:
             data = tomllib.loads(f.read_text())
             if data.get("level") in LEVEL and not set(AXES) & set(data):
                 data = {k: v for k, v in data.items() if k != "level"} | dict(zip(AXES, LEVEL[data["level"]]))
-            out.append(Example(d.name, data, "", runner))
+            out.append(Demo(d.name, data, "", runner))
         except tomllib.TOMLDecodeError as e:
-            out.append(Example(d.name, None, f"example.toml doesn't parse: {e}", runner))
+            out.append(Demo(d.name, None, f"demo.toml doesn't parse: {e}", runner))
     return out
 
 
@@ -128,19 +128,19 @@ def vocabulary(root: Path) -> tuple[list[str], list[str]]:
     return dirs(root / "verity" / "core" / "protocols"), [*dirs(root / "integrations"), "none"]
 
 
-def schema(ex: Example, root: Path) -> list[str]:
-    """What's wrong with ``ex``'s example.toml as a document, whatever it claims."""
+def schema(ex: Demo, root: Path) -> list[str]:
+    """What's wrong with ``ex``'s demo.toml as a document, whatever it claims."""
     if ex.data is None:
         return [ex.error]
     d, out = ex.data, []
     if not NAME.fullmatch(ex.name):
-        out.append(f"name {ex.name!r}: rename the directory to lowercase letters, digits and _ (`verity example NAME` reads a - "
+        out.append(f"name {ex.name!r}: rename the directory to lowercase letters, digits and _ (`verity demo NAME` reads a - "
                    "as a _)")
     if "level" in d:
         out.append("level is retired: give run (moved, runs, placed; the old 0-2) and proof (none, stated, proved, measured; "
                    "the old 3-5), each with its own evidence")
     if extra := sorted(set(d) - KEYS - {"level"}):
-        out.append(f"unknown keys {extra}: example.toml has only {sorted(KEYS)} ({SCHEMA})")
+        out.append(f"unknown keys {extra}: demo.toml has only {sorted(KEYS)} ({SCHEMA})")
     protocols, workloads = vocabulary(root)
     p = d.get("protocol")
     ps = _names(p)
@@ -175,7 +175,7 @@ def schema(ex: Example, root: Path) -> list[str]:
     return out
 
 
-def missing(ex: Example, axis: str, step: str, root: Path) -> list[str]:
+def missing(ex: Demo, axis: str, step: str, root: Path) -> list[str]:
     """What ``ex`` lacks for ``step`` of ``axis`` itself (not the steps below it), each saying what to add."""
     ev = ex.data.get("evidence", {}) if ex.data else {}
     ev = ev if isinstance(ev, dict) else {}
@@ -187,9 +187,9 @@ def missing(ex: Example, axis: str, step: str, root: Path) -> list[str]:
             path, _, fn = str(t).partition("::")
             f = root / path
             if not fn or not f.is_file() or not re.search(rf"^\s*(?:async\s+)?def {re.escape(fn)}\(", f.read_text(), re.M):
-                out.append(f"tests: {t!r} names no test; give PATH::NAME of a test in a suite that runs the example on CPU")
+                out.append(f"tests: {t!r} names no test; give PATH::NAME of a test in a suite that runs the demo on CPU")
         if not runs and not tests:
-            out.append(f"{head}: add a run of record to [evidence] runs, or a CPU test that runs the example to tests "
+            out.append(f"{head}: add a run of record to [evidence] runs, or a CPU test that runs the demo to tests "
                        "(PATH::NAME)")
     elif step == "placed":
         if not runs:
@@ -236,7 +236,7 @@ def missing(ex: Example, axis: str, step: str, root: Path) -> list[str]:
     return out
 
 
-def problems(ex: Example, root: Path) -> list[str]:
+def problems(ex: Demo, root: Path) -> list[str]:
     """Everything ``ex`` lacks for the steps it claims: the document's faults, then each axis's evidence up to its step."""
     if out := schema(ex, root):
         return out
@@ -244,7 +244,7 @@ def problems(ex: Example, root: Path) -> list[str]:
             for m in missing(ex, axis, step, root)]
 
 
-def next_missing(ex: Example, axis: str, root: Path) -> str:
+def next_missing(ex: Demo, axis: str, root: Path) -> str:
     """What the step after ``ex``'s on ``axis`` needs, or why it has none."""
     steps = AXES[axis]
     i = steps.index(ex.data[axis])
@@ -257,11 +257,11 @@ def next_missing(ex: Example, axis: str, root: Path) -> str:
 
 
 def status(root: Path) -> int:
-    """Print every example's protocol, workload, both axes and each axis's next missing evidence; 1 when one lacks what it
+    """Print every demo's protocol, workload, both axes and each axis's next missing evidence; 1 when one lacks what it
     claims."""
-    head = ("example", "protocol", "workload", *AXES, "runner")
+    head = ("demo", "protocol", "workload", *AXES, "runner")
     rows, notes, broken = [head], {}, 0
-    for ex in examples(root):
+    for ex in demos(root):
         d = ex.data or {}
         rows.append((ex.name, "+".join(map(str, _names(d.get("protocol")))) or "?", str(d.get("workload", "?")),
                      *(str(d.get(a, "?")) for a in AXES), ex.runner or "missing"))

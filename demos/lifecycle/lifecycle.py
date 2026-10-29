@@ -24,7 +24,7 @@ The phases, each a function here:
    projection of the layout (`Layout.accounting`).
 
 `prove` and `verify` are a stand-in for Flock behind the ZK server: the proof is the sampled proof block's opening, which `verify`
-checks against the commitments and re-evaluates in the clear. It is sound for the example and not zero-knowledge.
+checks against the commitments and re-evaluates in the clear. It is sound for the demo and not zero-knowledge.
 """
 
 from __future__ import annotations
@@ -1343,22 +1343,22 @@ class Verifier:
         return None
 
 
-# --- the example's inputs ----------------------------------------------------------------------------------------------
+# --- the demo's inputs ----------------------------------------------------------------------------------------------
 
 def theta_of(seed: int) -> Theta:
-    """A model's weights for the example, from a seed."""
+    """A model's weights for the demo, from a seed."""
     rng = np.random.default_rng(seed)
     return Theta(tuple(int(v) for v in rng.integers(-128, 128, D * D)), tuple(int(v) for v in rng.integers(-128, 128, D * D)))
 
 
 def load_of(seed: int, sizes: Sequence[int]) -> list[list[list[int]]]:
-    """The example's requests: one list an execution phase, each request D int8 codes."""
+    """The demo's requests: one list an execution phase, each request D int8 codes."""
     rng = np.random.default_rng(seed)
     return [[[int(v) for v in rng.integers(-128, 128, D)] for _ in range(n)] for n in sizes]
 
 
 SIZES = (3, 4, 2)
-"""Requests in each execution phase of the example's monitoring period."""
+"""Requests in each execution phase of the demo's monitoring period."""
 PLAN = ((1, ("gpu0", "gpu1")), (2, ("gpu0", "gpu1", "gpu2")))
 """B's placement: gpu2 from declaration 2 on, once the later hardware registration holds it."""
 CHEATS = ("hardware", "builder", "placement", "unreported", "advice-cap", "recommit", "wrong-value", "fork")

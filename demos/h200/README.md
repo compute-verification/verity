@@ -1,4 +1,4 @@
-# The H200 example
+# The H200 demo
 
 It shows the remote protocol's sampled-proofs half (`demos/README.md`) at a frozen shape on one H200: a step's every
 value committed, proof blocks drawn by one live coin, each proved by Flock `--zk` and checked by the Lean verifier
@@ -8,7 +8,7 @@ The GPU serving loop of the one-H200 demo: steps of the frozen MQA shape (`shape
 plain INT8 weights, loaded once into the card's memory and resident across steps (`--weights staged` decodes them from the
 store into staging instead), every op's output committed through the per-step commit call, drawn slots
 opened by replaying their requests and drawn proof blocks replayed bit for bit against the Definitions, each subprotocol run against the
-step or named, and a replay bundle and block record written. `verity example h200 --out OUT [...]` runs it
+step or named, and a replay bundle and block record written. `verity demo h200 --out OUT [...]` runs it
 (`run.py --help`): on the CPU at the small shapes, or on an H200 at the frozen one (`--shape h200 --device cuda`).
 
 Around sampled proofs, `e2e_h200/legs.py` runs the other subprotocols as a skeleton on fixture coins, not as runs, and
@@ -16,17 +16,17 @@ nothing claims them: PoUW is per-call noise's tiles as a `--subcircuit`, PoUS is
 on the staged path's store, network certification's digests are a fixture, and the bandwidth audit isn't run. `interfaces/` holds the
 interfaces between its subprotocols, the drawn-unit replay bundle and the block record, a suite of its own (its README).
 
-It is an example, not an integration: it composes pieces from several parts of the tree (the weights' store and decode
+It is a demo, not an integration: it composes pieces from several parts of the tree (the weights' store and decode
 call, the GEMMs, attention and commit call, circuits' Definitions, the subprotocols) for one recorded run. When the real pieces land
 they replace the fixtures here, one module each, and the record's `stands_in_for` fields go to `null`.
 
 ## Workload and placement
 
 The workload is the frozen MQA shape on seeded INT8 weights (`e2e_h200/served_weights.py`), with `--shape
-tiny|small|slice` for CPU runs; it isn't an integration yet (`example.toml`: `workload = "none"`). Every party runs in the
+tiny|small|slice` for CPU runs; it isn't an integration yet (`demo.toml`: `workload = "none"`). Every party runs in the
 one run on one GPU node (an H200 node for `percall_job.sh`): the driver and its commit call on the prover's side, and the
-replay and the opening on the verifier's, on fixture coins. Where the run of record's parties ran, how far the example runs and
-the runs behind it are `example.toml`'s (`demos/README.md`).
+replay and the opening on the verifier's, on fixture coins. Where the run of record's parties ran, how far the demo runs and
+the runs behind it are `demo.toml`'s (`demos/README.md`).
 
 ## What runs, and what stands in
 

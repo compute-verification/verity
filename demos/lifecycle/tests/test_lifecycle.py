@@ -1,4 +1,4 @@
-"""The lifecycle example's two composites over one monitoring period: honest, each accepts; each way the developer deviates
+"""The lifecycle demo's two composites over one monitoring period: honest, each accepts; each way the developer deviates
 (`lifecycle.CHEATS` and `ONSITE_CHEATS`, at least one a phase) is refused by name or rejected by the component whose check it breaks, except
 what the remote composite can't see, which goes uncredited."""
 

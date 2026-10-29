@@ -1,9 +1,9 @@
-# Examples
+# Demos
 
-One directory per example. An example holds what is its own: the workload it serves, its placement (where each party
+One directory per demo. A demo holds what is its own: the workload it serves, its placement (where each party
 runs), and the commands a person runs to serve and audit it. What attaches Verity to the serving stack is the integration's
 (`integrations/`), and the protocols it runs stay in core (`verity/core/`). `verity` imports nothing from `demos/`
-(`tests/test_boundaries.py`), and `verity example NAME` runs `demos/<NAME>/config.toml` (`verity run`), else its `run.py`
+(`tests/test_boundaries.py`), and `verity demo NAME` runs `demos/<NAME>/config.toml` (`verity run`), else its `run.py`
 or `run.sh`.
 
 ## The remote protocol
@@ -20,18 +20,18 @@ establishes with no hardware of its own at the prover's site. It composes two pr
 Remote accepts only when both accept over one commitment that binds both; either one's rejection rejects it, whatever the
 other answers. It rests on live coins (flipped after the commitment, never flipped again) and on what each subprotocol's own
 guarantee assumes; each subprotocol states its guarantee in `Security/`, and the composite states none of its own in Lean
-yet, so no example's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet; its first is due
-Wed 28 Oct, 11 AM PDT. `lifecycle/` is the only example that steps through the whole remote composite, on CPU with a
-stand-in prover. Its demo is the vLLM demo (`verity example vllm`): one served run of Llama-3.2-1B INT8 on one H200,
+yet, so no demo's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet; its first is due
+Wed 28 Oct, 11 AM PDT. `lifecycle/` is the only demo that steps through the whole remote composite, on CPU with a
+stand-in prover. Its demo is the vLLM demo (`verity demo vllm`): one served run of Llama-3.2-1B INT8 on one H200,
 sampled proofs and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs
 remote's sampled-proofs half. Five other things are called "remote" (PoUB among them);
 `verity/core/protocols/remote/README.md`, "Which remote", lists them.
 
-## How far an example runs, and how far it's proved
+## How far a demo runs, and how far it's proved
 
-An example stands on two independent axes, and its `example.toml` gives each. `run` is how far it runs:
+A demo stands on two independent axes, and its `demo.toml` gives each. `run` is how far it runs:
 
-| `run` | what the example has | evidence |
+| `run` | what the demo has | evidence |
 | --- | --- | --- |
 | `moved` | its workload, placement and commands, and no end-to-end run yet | none |
 | `runs` | an end-to-end run: a run of record on its hardware, or a CPU test that runs it with stand-ins | a run of record (`runs`: `rYYYYMMDD-HHMMSS-xxxx` or `art:` ids), or a CPU test in a suite that runs it (`tests`: `PATH::NAME`) |
@@ -49,29 +49,29 @@ An example stands on two independent axes, and its `example.toml` gives each. `r
 A file that still gives the retired `level` instead of the two axes is read as `run` `moved`, `runs` or `placed` for 0, 1
 or 2, with `proof` `none`.
 
-## `example.toml`
+## `demo.toml`
 
-`vllm/example.toml` is one. It gives the example's `protocol` (a package under `verity/core/protocols/`, the composite
+`vllm/demo.toml` is one. It gives the demo's `protocol` (a package under `verity/core/protocols/`, the composite
 `onsite` or `remote`, or a list), its `workload`, its `[placement]` (each role to a machine class), its `run` and `proof`,
 and the `[evidence]` every step up to each needs. A workload is what runs: its Program, its inputs and its placement. The
 `workload` field names the integration (a directory under `integrations/`, or `none`); once workload specs exist, it names
 a workload spec id, `<frontend>:<id>`, whose spec carries the model and the load. A directory's name is lowercase letters,
-digits and `_`, since `verity example` reads a `-` in NAME as a `_`.
+digits and `_`, since `verity demo` reads a `-` in NAME as a `_`.
 
-`tests/test_demos.py` fails an example that lacks the evidence for its `run` or its `proof`, saying what to add, and
-`verity example --status` prints every example's next missing evidence on each. The roles, the machine classes and the
+`tests/test_demos.py` fails a demo that lacks the evidence for its `run` or its `proof`, saying what to add, and
+`verity demo --status` prints every demo's next missing evidence on each. The roles, the machine classes and the
 checks are `tools/verity/cli/verity_cli/demos.py`'s; a new role goes in its `ROLES`, with its side.
 
-## The examples
+## The demos
 
 - `lifecycle/` (`run` `runs`, `proof` `none`): both composites, `onsite` and `remote`, stepped through one monitoring
   period on CPU in about 2 s, from the hardware registration to the period's verdict and accounting. Every party is
   simulated in one process, the prover is a labelled stand-in for C-Flock, and the verdict is the composition's Python
-  mirror (`verity/core/protocols/composition/tests/reference.py`), not `remote check`. It is the only example that steps
+  mirror (`verity/core/protocols/composition/tests/reference.py`), not `remote check`. It is the only demo that steps
   through the whole remote composite; its tests (`demos/lifecycle/tests/test_lifecycle.py`) run each composite honest
   and with every deviation it lists refused. Nothing about it is proved.
 - `vllm/` (`run` `moved`, `proof` `none`): the vLLM demo, the remote protocol on a real served model. Llama-3.2-1B INT8
-  served by vLLM on one H200 through `verity_vllm`'s committing endpoint; `verity example vllm` serves one sampling block,
+  served by vLLM on one H200 through `verity_vllm`'s committing endpoint; `verity demo vllm` serves one sampling block,
   commits its values, and audits it through `benchmarks/one_stage/served_verdicts.sh`: live coins sample proof blocks,
   C-Flock `--zk` proves them and the Lean verifier checks them, PoUW runs on the served model, and onsite's subprotocols
   run where each has its piece. Its run is `moved`: PoUW's verdict is a development run that credits nothing, so no run of
@@ -80,7 +80,7 @@ checks are `tools/verity/cli/verity_cli/demos.py`'s; a new role goes in its `ROL
   not a package. The auditor's devices (the verifier, the network certifier and the memory challenger) are not placed:
   the Lean verifier runs on the GPU node with the endpoint and the prover, and the other two may run there too.
 - `h200/` (`run` `runs`, `proof` `none`): remote's sampled-proofs half at a frozen shape on one H200. The
-  frozen multi-query attention shape is served on one GPU node with every value committed a step. `verity example h200
+  frozen multi-query attention shape is served on one GPU node with every value committed a step. `verity demo h200
   --out OUT` runs its step driver, `run.py` (on the CPU at small shapes, or an H200 at the frozen shape), and writes a
   replay bundle and a block record; `phases.sh` runs the sampled-proof-block proving, one phase a run, from the step's commit on
   the H200 to its sampled proof blocks proved. In its run of record, 8 proof blocks sampled by one live coin are each proved by
@@ -90,4 +90,4 @@ checks are `tools/verity/cli/verity_cli/demos.py`'s; a new role goes in its `ROL
   a skeleton on fixture coins, not as runs, and nothing claims them.
 - `dither_full_util/` (`run` `moved`, `proof` `none`): the remote protocol's PoUW half, as PoUW's work unit. The H200 at
   full utilization on useful s8 GEMMs, credited by PoUW over Dither's no-fold receipt. It has no runner and no run of
-  record, so `verity example dither_full_util` runs nothing yet, and it is not a remote run.
+  record, so `verity demo dither_full_util` runs nothing yet, and it is not a remote run.
