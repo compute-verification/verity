@@ -6,7 +6,8 @@ NCP computes each linear's dot product as one 3K-deep stacked product and the pr
 step of depth d: 3K/d words of 4 bytes a dot product, so 12/d bytes a useful MAC whatever K is (d = 32, k32: 0.375; d = 16,
 ncp-v1 and ncp-v2 today: 0.75). The words go into hm96 SHA-512 rows of 16 KiB. A forward's hashing takes
 (B h_x − h_leaf min(B, G)) / (540,672 f) seconds for B bytes (GD-HASH's model, its inputs measured on vy-dc-h200-5), and
-NCP's GEMMs cost what GD-DENOISE measured for a 3K-wide cuBLASLt call and fresh noise on both operands. t_H / t_S is the
+NCP's GEMMs cost what GD-DENOISE measured for a 3K-wide cuBLASLt call and fresh noise on both operands, plus F₁'s SHA-512
+coins every call (an estimate). t_H / t_S is the
 stock step plus both, over the stock step; "at the bar" hashes at HASH-38's bar, the public best SHA-512 on the H200
 (leaves only), instead; "measured hash" takes the hashing from hash_cost.py's own run of these rows (a forward's whole
 volume where it fits on the GPU, else that run's rate), with no gap credit; "without hashing" is the stock step and the
@@ -48,6 +49,10 @@ HEADS, HEAD_DIM = 32, 64
 GEMM = {64: {"plain_us": 570.8, "a_side": 1.893, "noised": -0.001, "wide": 0.996, "w_side": 5.683},
         512: {"plain_us": 1194.3, "a_side": 2.059, "noised": 0.012, "wide": 1.169, "w_side": 2.739},
         8192: {"plain_us": 12494.2, "a_side": 2.424, "noised": 0.043, "wide": 1.536, "w_side": 0.265}}
+# estimate: GD-DENOISE's weight side is a periodic refresh, so a fresh F₁ every call adds its coins: one XOF byte an entry
+# (`ncp.noise_row`), SHA-512 in counter mode at 64 bytes a compression, at the committer's 4.449 G compressions/s
+# (r20261029-013634-94e5; GD-DENOISE's coin kernels ran at 2.8-4.5 G/s)
+COMPRESSIONS_S = 4.449e9
 
 # the stock steps (GD-HASH, note:compute-research/20261028T2230Z-report-gd-hash-reframe); a T 512 step of 512 real rows
 # is GD-HASH's 64-row step with its GEMMs at m 512 instead of m 64 (GEMM's plain rows) and its other kernels held
@@ -116,6 +121,7 @@ def main() -> None:
         for pname, (real, m) in POINTS.items():
             B, g = t["bytes"] * real, GEMM[min(GEMM, key=lambda x: abs(x - m))]
             parts = {p: g["plain_us"] * g[p] * 1e-3 for p in ("wide", "a_side", "noised", "w_side")}
+            parts["f1_coins"] = t["macs"] / 64 / COMPRESSIONS_S * 1e3
             gemm_ms = sum(parts.values())
             excl, _ = hash_ms(B, 16384, 0.0)
             meas = hashed_ms(B, pname)
@@ -135,7 +141,8 @@ def main() -> None:
                                      "tH_tS_measured_hash": (stock + gemm_ms + meas) / stock,
                                      "hash_share_of_tH": meas / (stock + gemm_ms + meas),
                                      "tH_tS_without_hash": (stock + gemm_ms) / stock,
-                                     "tH_tS_weight_noise_once": (stock + gemm_ms - parts["w_side"] + meas) / stock}
+                                     "tH_tS_weight_noise_once": (stock + gemm_ms - parts["w_side"] - parts["f1_coins"] + meas)
+                                                                / stock}
             out["points"].setdefault(f"d {d}{', head too' if head else ''}",
                                      {"bytes_mac": t["bytes"] / t["macs"], "J_rule_T8192": rule})[pname] = row
     for ctx, decode in ((144, True), (288, True), (2048, True), (8192, True), (2048, False), (8192, False)):
