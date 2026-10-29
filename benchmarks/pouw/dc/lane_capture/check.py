@@ -118,7 +118,7 @@ ONE = {
     "bfind_u": lambda a, b, c: a.bit_length() - 1 & M32,
     "brev": lambda a, b, c: int(f"{a:032b}"[::-1], 2),
     "sel": lambda a, b, c: a if c & 1 else b,
-    "viadd_imm": lambda a, b, c: (a + 0x9E3779B9) & M32,
+    "viadd_imm": lambda a, b, c: (((a + 0x9E3779B9) & M32 ^ 0x85EBCA6B) + 0x7F4A7C15) & M32,
     "i2ip_s8": i2ip(8, True, True), "i2ip_u8": i2ip(8, False, True), "i2ip_u16": i2ip(16, False, False),
     "plop3_maj": maj_pred,
     "min_s16x2": halves(lambda x, y, z: min(x, y), True),
@@ -134,6 +134,8 @@ WARP = {
     "vote_any": lambda w, A, B, C, i: int(any(C[j] & 1 for j in w)),
     "vote_all": lambda w, A, B, C, i: int(all(C[j] & 7 for j in w)),
     "voteu_any": lambda w, A, B, C, i: A[i] if any(C[j] & 1 for j in w) else B[i],
+    "voteu_popc": lambda w, A, B, C, i: (A[i] + sum(C[j] & 1 for j in w)) & M32,
+    "voteu_xor": lambda w, A, B, C, i: A[i] ^ sum((C[j] & 3 == 0) << j % 32 for j in w),
 }
 TWO = {
     "mad_wide": lambda a, b, c: divmod((a * b + (c << 32 | (a ^ b))) & M64, 1 << 32)[::-1],

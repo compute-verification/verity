@@ -83,7 +83,12 @@ struct Out2 {
   F(bfind_u, { asm("bfind.u32 %0,%1;" : "=r"(o.x) : "r"(a)); })                                                         \
   F(brev, { o.x = __brev(a); })                                                                                         \
   F(sel, { o.x = (c & 1) ? a : b; })                                                                                    \
-  F(viadd_imm, { asm("add.u32 %0,%1,0x9e3779b9;" : "=r"(o.x) : "r"(a)); })                                             \
+  F(viadd_imm, {                                                                                                        \
+    o.x = a;                                                                                                            \
+    asm volatile("add.u32 %0,%0,0x9e3779b9;" : "+r"(o.x));                                                              \
+    asm volatile("xor.b32 %0,%0,0x85ebca6b;" : "+r"(o.x));                                                              \
+    asm volatile("add.u32 %0,%0,0x7f4a7c15;" : "+r"(o.x));                                                              \
+  })                                                                                                                    \
   F(i2ip_s8, { asm("cvt.pack.sat.s8.s32.b32 %0,%1,%2,%3;" : "=r"(o.x) : "r"(a), "r"(b), "r"(c)); })                    \
   F(i2ip_u8, { asm("cvt.pack.sat.u8.s32.b32 %0,%1,%2,%3;" : "=r"(o.x) : "r"(a), "r"(b), "r"(c)); })                    \
   F(i2ip_u16, { asm("cvt.pack.sat.u16.s32 %0,%1,%2;" : "=r"(o.x) : "r"(a), "r"(b)); })                                 \
@@ -104,7 +109,9 @@ struct Out2 {
   F(ballot, { o.x = __ballot_sync(0xffffffffu, c & 1); })                                                               \
   F(vote_any, { o.x = __any_sync(0xffffffffu, c & 1); })                                                                \
   F(vote_all, { o.x = __all_sync(0xffffffffu, (c & 7) != 0); })                                                         \
-  F(voteu_any, { o.x = __any_sync(0xffffffffu, c & 1) ? a : b; })
+  F(voteu_any, { o.x = __any_sync(0xffffffffu, c & 1) ? a : b; })                                                      \
+  F(voteu_popc, { o.x = a + __popc(__ballot_sync(0xffffffffu, c & 1)); })                                               \
+  F(voteu_xor, { o.x = a ^ __ballot_sync(0xffffffffu, (c & 3) == 0); })
 
 #define KERNEL(NAME, BODY)                                                                                   \
   extern "C" __global__ void lc_##NAME(const uint32_t* A, const uint32_t* B, const uint32_t* C, Out2* O, int n) { \
