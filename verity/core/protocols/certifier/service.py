@@ -1,4 +1,4 @@
-"""One link-window's network certificates through the proof service (N2): the network `Spec`, the firewall's salted
+"""One link-window's network certificates through the proof system (N2): the network `Spec`, the firewall's salted
 commitment to the link-window's certified records, and the check's verifier of record.
 
 **What is committed.** One `Value`, `certificates`: four leaves under one salted root, the link-window's two certified
@@ -66,7 +66,7 @@ their public fields (`LinkWindows.certified`).
 
 In the unit's Program each head check is one gate that names the Definition and its circuit digest (`head_check.gate`,
 `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2`), because the commitment gadgets' Boolean bodies encode to about
-140 MB and the proof service encodes the Program on every registration. The digest is core's `program_digest` of the
+140 MB and the proof system encodes the Program on every registration. The digest is core's `program_digest` of the
 Definition's Program (`head_check.circuit_digest`), the one a C-Flock statement names a template by, pinned in
 `head_check.circuit-check.json` and held to the Definition by circuit-check. So the Program's digest binds the head
 check's circuit, and the spec, the stream and each registration bind to it: a proof of another circuit with the same
@@ -79,7 +79,7 @@ The count check is the part of the egress grid check that needs no frame's bytes
 It runs on every link-window, as a structural check must. In a proof it is an equality of each head's 32·T count bits
 with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
 
-N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-service Spec, is
+N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system Spec, is
 retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `benchmarks/network_traces/scan_zk.py`
 proves in zero knowledge, outside this protocol.
 
@@ -149,7 +149,7 @@ syncs the certifier ran; the heads' counts stay witness. Its public items are `P
 verifier of record takes the delivered advice (`verify(advice=…)`) and the tie only from its own tie source
 (`LinkWindows.ties`, `advised.TieSource`: `advised.IoTieVerdict`, IoTieRequest's verdict from proofs it verified,
 naming the link and its ingress registrations), never beside the advice. That source is `tie_service.Ties`, on the
-ingress tie's stream of record (IoTieRequest in the proof service), and without one (`ties` None) every advised link
+ingress tie's stream of record (IoTieRequest in the proof system), and without one (`ties` None) every advised link
 is refused. Every floor is under the sync the certifier ran, which the verifier takes only from its own clock source
 (`LinkWindows.clock_source`: the certifier's salted clock certificates, each opened under the link's key and session,
 `advised.SignedClocks`; the openings are witness, the verifier's own read, never a public answer), since a δ below the
@@ -195,7 +195,7 @@ Lean takes as an input rather than checks:
   syncs), which is why an advised link's verdict of record stays this module's;
 - on a warden link, the warden's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
   as its schedule's, `warden.WardenParams.digest`), which neither derives;
-- what both take from the proof service and the lowering: the findings of the verifier's own run of C-Flock's Lean
+- what both take from the proof system and the lowering: the findings of the verifier's own run of C-Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the draw, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
   findings and pins to but doesn't derive.

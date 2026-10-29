@@ -217,7 +217,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
 ## Public outputs
 
-Under the proof service, an
+Under the proof system, an
 audit makes public its verdict and nothing about a single round:
 
 - the verdict;
@@ -485,7 +485,7 @@ and the Python's alike, rejects such a session however it ran (`batch size B is 
 verdict and the certified egress in whole MiB, rounded up and saturating at `2^15 − 1` (`Verdict.public()`, the
 protocol's outputs, 16 bits in all), and the coins once the session is signed (`Challenger.coins()`, the verifier's draws). The
 signed session (its times, its batch records and the exact egress) is witness, as a memory-challenger session is: the
-prover proves `verdict` of it through the proof service, and only the verdict is published. The labels and `K` are the
+prover proves `verdict` of it through the proof system, and only the verdict is published. The labels and `K` are the
 auditor's; nothing of the prover's is committed, opened or read.
 
 **The bound.** For every prover of the sequential wipe, with `M` bits inside the boundary when the fill ends (every
@@ -613,7 +613,7 @@ which was not measured. The node's load average was about 930 during the run, wh
   fetch from outside the boundary, neither measured.
 - **The guarantee isn't stated against the Lean verdict, and there is no Program.** `MemoryChallenger.StreamedWipe.verdict`
   decides the verdict, but the guarantees read the game's `Accepts`, not that function, so they stay frozen (no-function)
-  until restated against it. `verdict` has no circuit for the proof service, so it is not yet proved in zero knowledge.
+  until restated against it. `verdict` has no circuit for the proof system, so it is not yet proved in zero knowledge.
 
 ## API
 
