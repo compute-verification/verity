@@ -263,8 +263,6 @@ FLOCK_ZK_TAU = "verity/flock-zk/tau/v1"
 LAYOUT = "verity/layout/v1"
 REC_COINS = "verity/rec-coins/v1"
 REC_INNER = "verity/rec-inner/v1"
-REC_V0_VERIFIER_SALT = "verity/rec-v0/verifier-salt/v0"
-REC_V0_ZERO_RESIDUAL_SALT = "verity/rec-v0/zero-residual-salt/v0"
 
 # Not yet read from here: PoUS, the wipe and the memory challenger
 CHAIN_DENSE_H = "chain-dense-H/v1"
