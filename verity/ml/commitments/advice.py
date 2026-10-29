@@ -91,6 +91,10 @@ def commit(rows: Sequence[bytes], n_bits: int, binding: bytes, salts: Sequence[b
     return Committed(bytes(binding), n_bits, rows, salts, key)
 
 
+# Remains only for callers on next until they move to `commit`.
+register = commit
+
+
 def verify(root: bytes, count: int, n_bits: int, binding: bytes, opening: Opening, key: bytes = INST.default_key) -> bool:
     """Whether `opening` is row ``opening.index`` of the `count` rows committed under `binding` with root `root`."""
     try:
