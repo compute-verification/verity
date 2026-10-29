@@ -1,4 +1,5 @@
 import Definitions.Pouw.Lead.Gap
+import Definitions.Pouw.Assumptions.Dimension.H100W
 import Definitions.Core.Assumptions
 
 /-!
@@ -27,7 +28,7 @@ namespace Pouw.Assumptions.Lead
 
 open Pouw.Lead Pouw.Dimension.H100 Pouw.Dimension.Pointwise
 
-variable {L : Layout}
+variable {L : Pouw.Lead.Layout}
 
 /-- `pouw-w1` (proposed). **The node's instructions are W1's**: every instruction a realizable strategy executes at a
 coin value is a well-formed `MH100w` instruction with no free operand (`Op100.WFw pr ∅`), priced by the W1 table `pr`.
@@ -94,7 +95,7 @@ the honest commitment's messages**: for each message the honest commitment of th
 strategy's accepted execution hashes a message with its digest.
 
 Rationale: the premise counts registers; a digest is reached only by hashing. -/
-def HonestHashRuled (H : Hash.Msg → Hash.Digest) (C : Commit L) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
+def HonestHashRuled (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
     (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∀ ω, Accepted L H C κ σ ω →
     ∀ y ∈ C.msgs H (word L κ ω) ++ C.aMsgs, ∃ x ∈ (σ.exec ω).hashed, H x = H y
@@ -105,7 +106,7 @@ distinct messages' ShaWrites credit is at least `3,515.38` a words compression o
 compression of `aBlocks`.
 
 Rationale: the served commitment hashes each 256 KiB words chunk under one leaf and A's rows under its own. -/
-def CommitL1w (H : Hash.Msg → Hash.Digest) (C : Commit L) (isA : Hash.Msg → Bool)
+def CommitL1w (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (isA : Hash.Msg → Bool)
     (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) : Prop :=
   C.chunks = wordChunks L ∧ ∀ ω : Coins L,
     shaWordsRegs * wordsBlocks L C + shaARegs * aBlocks L ≤

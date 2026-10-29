@@ -31,7 +31,7 @@ collision with the honest commitment's messages. -/
 def G : Prop :=
   ∀ (pr : Prices100) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
-    (stream : Coins (lead T m n K) → ℕ → Fin tileWords → ℤ) (C : Commit (lead T m n K))
+    (stream : Coins (lead T m n K) → ℕ → Fin tileWords → ℤ) (C : Pouw.Lead.Commit (lead T m n K))
     (isA : Hash.Msg → Bool) {Device : Type} (cert : Device)
     (runC : Device → Hash.Digest × Coins (lead T m n K) → Hash.Digest × Coins (lead T m n K))
     (can Real : Strategy (lead T m n K) → Prop),
@@ -46,22 +46,22 @@ def G : Prop :=
       ∃ ω ∈ O, Break (lead T m n K) H C κ σ ω
 
 /-- A call's commitment at the lead's layout: its words chunks are `wordChunks`. -/
-def ChunksOf (L : Layout) (C : Commit L) : Prop := C.chunks = wordChunks L
+def ChunksOf (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) : Prop := C.chunks = wordChunks L
 
 /-- **The gap at the three points, cap 32**: for every call of `n, K ≥ 4,096`, the gap's share of stock is at most
 0.190% at T 512 × 64, 0.168% at T 512 × 512 and 0.165% at T 8,192. -/
 def GapAt : Prop :=
   ∀ n K : ℕ, 4096 ≤ n → 4096 ≤ K →
-    (∀ C : Commit (pt512x64 n K), ChunksOf _ C → gapShare _ C ≤ 190 / 100000) ∧
-    (∀ C : Commit (pt512x512 n K), ChunksOf _ C → gapShare _ C ≤ 168 / 100000) ∧
-    (∀ C : Commit (pt8192 n K), ChunksOf _ C → gapShare _ C ≤ 165 / 100000)
+    (∀ C : Pouw.Lead.Commit (pt512x64 n K), ChunksOf _ C → gapShare _ C ≤ 190 / 100000) ∧
+    (∀ C : Pouw.Lead.Commit (pt512x512 n K), ChunksOf _ C → gapShare _ C ≤ 168 / 100000) ∧
+    (∀ C : Pouw.Lead.Commit (pt8192 n K), ChunksOf _ C → gapShare _ C ≤ 165 / 100000)
 
 /-- **The gap at the three points, cap 320**: at most 0.514%, 0.492% and 0.489%. -/
 def GapAt320 : Prop :=
   ∀ n K : ℕ, 4096 ≤ n → 4096 ≤ K →
-    (∀ C : Commit (lead320 512 64 n K), ChunksOf _ C → gapShare _ C ≤ 514 / 100000) ∧
-    (∀ C : Commit (lead320 512 512 n K), ChunksOf _ C → gapShare _ C ≤ 492 / 100000) ∧
-    (∀ C : Commit (lead320 8192 8192 n K), ChunksOf _ C → gapShare _ C ≤ 489 / 100000)
+    (∀ C : Pouw.Lead.Commit (lead320 512 64 n K), ChunksOf _ C → gapShare _ C ≤ 514 / 100000) ∧
+    (∀ C : Pouw.Lead.Commit (lead320 512 512 n K), ChunksOf _ C → gapShare _ C ≤ 492 / 100000) ∧
+    (∀ C : Pouw.Lead.Commit (lead320 8192 8192 n K), ChunksOf _ C → gapShare _ C ≤ 489 / 100000)
 
 /-- **The honest lemma**: at every call of the lead with data in range, the hypotheses hold at the honest deployed
 instance: the nominal W1 table meets `H32`, and some set of strategies meets every premise of `G` (with the coin stream,
@@ -70,7 +70,7 @@ def Honest : Prop :=
   ∀ (T m n K : ℕ) (H : Hash.Msg → Hash.Digest) (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ),
     DataInRange (lead T m n K) κ →
     ∃ (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (stream : Coins (lead T m n K) → ℕ → Fin tileWords → ℤ)
-      (C : Commit (lead T m n K)) (isA : Hash.Msg → Bool) (Device : Type) (cert : Device)
+      (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool) (Device : Type) (cert : Device)
       (runC : Device → Hash.Digest × Coins (lead T m n K) → Hash.Digest × Coins (lead T m n K))
       (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
       CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧ TileGrain stream Real ∧
@@ -83,9 +83,9 @@ honest work exceeds the gap, and a strategy that does nothing does no priced wor
 coin value accepted only a collision among the honest commitment's own messages would meet the conclusion. -/
 def Nontrivial : Prop :=
   ∀ n K : ℕ, 4096 ≤ n → 4096 ≤ K →
-    (∀ C : Commit (pt512x64 n K), ChunksOf _ C → gapRegs _ C < honestRegs _ C) ∧
-    (∀ C : Commit (pt512x512 n K), ChunksOf _ C → gapRegs _ C < honestRegs _ C) ∧
-    (∀ C : Commit (pt8192 n K), ChunksOf _ C → gapRegs _ C < honestRegs _ C) ∧
-    ∀ (L : Layout) (pr : Prices100), ∃ σ : Strategy L, ∀ ω, σ.work pr ω = 0 ∧ (σ.exec ω).hashed = []
+    (∀ C : Pouw.Lead.Commit (pt512x64 n K), ChunksOf _ C → gapRegs _ C < honestRegs _ C) ∧
+    (∀ C : Pouw.Lead.Commit (pt512x512 n K), ChunksOf _ C → gapRegs _ C < honestRegs _ C) ∧
+    (∀ C : Pouw.Lead.Commit (pt8192 n K), ChunksOf _ C → gapRegs _ C < honestRegs _ C) ∧
+    ∀ (L : Pouw.Lead.Layout) (pr : Prices100), ∃ σ : Strategy L, ∀ ω, σ.work pr ω = 0 ∧ (σ.exec ω).hashed = []
 
 end Pouw.Guarantees.Lead
