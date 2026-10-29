@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import functools
+import itertools
 import json
 import math
 import random
@@ -32,6 +33,7 @@ HERE = Path(__file__).resolve().parent
 POINTS = {"decode1": None, "decode16": None, "t64": "t512", "t512": "t512r512", "t8192": "t8192"}
 LEAD_T2 = "ssn-1l-tag/served/s8/k32/w/r256k/cert/min"
 COORDINATOR_LEAD = "blc4a-t64-e7"
+ROT = [[127, 1, 1], [1, 127, 1]]
 
 
 def steps(k: int, d1: int, dl: int = 31) -> int:
@@ -128,7 +130,8 @@ def stepped(k: int, d1: int, dl: int, bits: list[float], lane: list[bool]) -> di
 
 def call(design: dict, m: int, k: int, n: int, lead: dict, lay: dict, reg: float) -> dict:
     """One call's coins. Per step: its data lanes (cumulative, D), the coin bits its words add (sb: row coins at the
-    bits the words read, lane coins at e bits an entry, the window coin, drawn once a window, at none) and whether it
+    bits the words read, lane coins at the bits the words read of them (step_bits: against A' = 1 only their sum), the
+    window coin, drawn once a window, at none) and whether it
     carries lane coins; with the certifier's stream in bytes (row coins in whole 32-bit words), forming in W1 units,
     words against the lead's and the served noise rms. off_lane and off_elem are the fewest bits the accumulators' coin
     state takes after a lane-coined step: e bits a (tile, column), a sum of at least one e-bit odd coin, and an init
@@ -170,15 +173,19 @@ def call(design: dict, m: int, k: int, n: int, lead: dict, lay: dict, reg: float
         fill, ef = sa - 1 - coin_steps, lay["lane_add"]["fill_row_coin_bits"]
         rba = 32 * math.ceil((coin_steps + fill * max(ef, 1) + c) / 32)
         cells, entry_bits = tiles * n * coined, tiles * n * design["e"]
-        corr = 4.0 * tiles * n if coined > 1 else 0.0
+        rows = min(m, design["tile"])
+        corr = 4.0 * tiles * n * len(a_weights(design, la)[:rows]) if coined > 1 else 0.0
         lane_bytes = cells if kind == "blc1a" else cells * lay["lanes4"]["lanes"]
-        sb = [m * c + g + lc[0] * entry_bits] + [m + x * entry_bits if x else m * max(ef, 1) for x in lc[1:]]
+        read = {x: tiles * n * step_bits(design, la, x, rows) for x in set(lc)}
+        sb = [m * c + g + read[lc[0]]] + [m + read[x] if x else m * max(ef, 1) for x in lc[1:]]
+        w2 = max(sum(v * v for v in w) / la for w in a_weights(design, la))
         return {**out, **stepped(k, d1, dl, sb, lane),
                 "bytes": m * rba / 8.0 + gw * lead["tag_coin_word_bytes"] + lane_bytes + corr,
                 "forming": (m * rba / 32.0 + gw) * reg + (cells / 4.0 * reg if kind == "blc1a" else 0.0),
                 "words": sa / s, "entries": lane_bytes, "later": sa - 1, "coin_steps": coin_steps, "plan": plan,
                 "fill": fill, "off_lane": entry_bits, "min_lanes": min(x for x in lc if x),
-                "word_noise_rms": math.sqrt(sum(lc) * odd_mean_square(design["e"]) + (
+                "read_bits": {str(x): v / (tiles * n) for x, v in sorted(read.items())},
+                "word_noise_rms": math.sqrt(sum(lc) * w2 * odd_mean_square(design["e"]) + (
                     fill * (uniform_mean_square(ef) + odd_mean_square(lay["lane_add"]["fill_window_coin_bits"]))
                     if ef else 0.0))}
     if kind == "blc4":
@@ -261,22 +268,64 @@ def designs(lay: dict) -> list[dict]:
     out.append({"id": "blc4a-t64-e7-pack16", "kind": "blc4a", "tile": 64, "e": 7, "pack_rows": 16,
                 "title": "blc4a-t64-e7 with three lanes on each coined step of a tile of 16 rows or more, and spread "
                          "below 16 rows"})
+    for wid, weights, what, tiles in (
+            ("w127", [[1, 127, 1]], "N-LIT's A' = (1, 127, 1) on the coin lanes", (64, 32)),
+            ("rot", ROT, "A' = (127, 1, 1) on even rows and (1, 127, 1) on odd rows (a column fold a row class)", (64,))):
+        for t in tiles:
+            for pack in (None, 16):
+                out.append({"id": f"blc4a-t{t}-e7-{wid}" + ("-pack16" if pack else ""), "kind": "blc4a", "tile": t,
+                            "e": 7, "weights": weights, **({"pack_rows": pack} if pack else {}),
+                            "title": f"blc4a-t{t}-e7 with {what}" + (", packed from 16 rows" if pack else "")})
     return out
 
 
 SERVED = {"rows": "either", "blc1a": "exact", "blc4a": "exact"}
 
 
-def lane_sum(lanes: int, e: int) -> dict[int, float]:
+def lane_sum(lanes: int | tuple[int, ...], e: int) -> dict[int, float]:
+    """The law of sum_l w_l s_l over a step's lanes (lanes: their A' weights, or a count of lanes at weight 1), the
+    s_l independent and uniform over the odd values in +-(2^e - 1)."""
     odd = range(-(2 ** e - 1), 2 ** e, 2)
     dist = {0: 1.0}
-    for _ in range(lanes):
+    for wl in ((1,) * lanes if isinstance(lanes, int) else lanes):
         nxt: dict[int, float] = {}
         for v, p in dist.items():
             for s in odd:
-                nxt[v + s] = nxt.get(v + s, 0.0) + p / len(odd)
+                nxt[v + wl * s] = nxt.get(v + wl * s, 0.0) + p / len(odd)
         dist = nxt
     return dist
+
+
+def a_weights(design: dict, la: int) -> list[list[int]]:
+    """A''s weights on the coin lanes, one list a row class (row i in class i mod the count)."""
+    return design.get("weights", [[1] * la])
+
+
+@functools.lru_cache(maxsize=None)
+def read_bits(weights: tuple[tuple[int, ...], ...], e: int) -> float:
+    """The bits a step's words read of its lane coins a (tile, column): the entropy of the joint, over the tile's row
+    classes c, of sum_l weights[c][l] s_l. With one class only the weighted sum is read."""
+    odd = range(-(2 ** e - 1), 2 ** e, 2)
+    dist = {(0,) * len(weights): 1}
+    for lane in range(len(weights[0])):
+        nxt: dict[tuple[int, ...], int] = {}
+        for v, p in dist.items():
+            for s in odd:
+                key = tuple(a + w[lane] * s for a, w in zip(v, weights))
+                nxt[key] = nxt.get(key, 0) + p
+        dist = nxt
+    tot = len(odd) ** len(weights[0])
+    return -sum(p / tot * math.log2(p / tot) for p in dist.values())
+
+
+def step_bits(design: dict, la: int, x: int, rows: int) -> float:
+    """read_bits for a step carrying x of the la lanes in a tile of rows rows (its first min(rows, classes) classes),
+    at the x lanes that read fewest."""
+    if not x:
+        return 0.0
+    classes = a_weights(design, la)[:max(1, rows)]
+    return min(read_bits(tuple(tuple(w[i] for i in sub) for w in classes), design["e"])
+               for sub in itertools.combinations(range(la), x))
 
 
 def step_dists(design: dict, lay: dict, w: int, lanes: int | None = None) -> dict | None:
@@ -290,11 +339,14 @@ def step_dists(design: dict, lay: dict, w: int, lanes: int | None = None) -> dic
     if kind not in ("rows", "blc1", "blc1a", "blc4a"):
         return None
     lead = {w: 0.5, 2 * w: 0.5}
+    la = {"rows": 0, "blc1": 0, "blc1a": 1, "blc4a": lay["lanes4"]["lanes"] - 1}[kind]
     if lanes is None:
-        lanes = {"rows": 0, "blc1": 0, "blc1a": 1, "blc4a": lay["lanes4"]["lanes"] - 1}[kind]
+        lanes = la
+    law = max((lane_sum(tuple(w[i] for i in sub), e) for w in a_weights(design, la)
+               for sub in itertools.combinations(range(la), lanes)), key=lambda d: max(d.values()))
     coin: dict[int, float] = {}
     for b in (0, 1):
-        for v, p in lane_sum(lanes, e).items():
+        for v, p in law.items():
             for s, q in (lane_sum(1, e) if kind == "blc1" else {w: 1.0}).items():
                 coin[(1 + b) * s + v] = coin.get((1 + b) * s + v, 0.0) + 0.5 * p * q
     ef = lay["lane_add"]["fill_row_coin_bits"]
@@ -772,7 +824,15 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
         over = f"rank {tag_rank(28561, lead)}"
     except ValueError as err:
         over = str(err)
-    packed = d["blc4a-t64-e7-packed"]["points"]["decode1"]
+    rot = by_id["blc4a-t64-e7-rot"]
+    packed = price_design({**rot, "lanes": "packed", "id": "rot packed"}, inp, einp, ll)["points"]["decode1"]
+    sums = {"A' = 1": read_bits(((1, 1, 1),), 7), "(1, 127, 1)": read_bits(((1, 127, 1),), 7),
+            "rotated": read_bits(tuple(map(tuple, ROT)), 7)}
+    subsets = [(len(sub), x, step_bits({**rot, "weights": [ROT[c] for c in sub]}, 3, x, len(sub)),
+                step_bits(rot, 3, x, len(ROT)))
+               for r in range(1, len(ROT)) for sub in itertools.combinations(range(len(ROT)), r) for x in (1, 2, 3)]
+    weighting = {i: d[i]["points"] for i in ("blc4a-t64-e7", "blc4a-t64-e7-w127", "blc4a-t64-e7-w127-pack16",
+                                             "blc4a-t64-e7-rot")}
     lay0 = json.loads(json.dumps(lay))
     lay0["lane_add"]["fill_row_coin_bits"] = 0
     old = {}
@@ -783,7 +843,7 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
         old[key] = a2c_point(by_id["blc1a-t128-e7"], lay0, w, calls, m, reg)["model_p_share"]
     a8 = {}
     for c in ("closing", "closing_320"):
-        des = by_id[res[c]["id"]]
+        des = {k: v for k, v in by_id[res[c]["id"]].items() if k != "weights"}
         t = des["tile"]
         a8[f"{des['id']} m {2 * t}"] = a8_words(des, lay, w, 2 * t, 128, 11, 71, d1)
         a8[f"{des['id']} m {t // 2}"] = a8_words(des, lay, w, t // 2, 32, 128, 73, d1)
@@ -840,27 +900,50 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
          and hole["t8192"]["caps"]["32"]["attack"]["floor"]["interval"]["whole_cap"] > 0.05,
          ", ".join(f"{k} {p['caps']['32']['stated']['floor']:.4f}-{p['caps']['32']['stated']['bar']:.4f} n_max "
                    f"{p['n_max']:,.0f}" for k, p in hole.items())),
-        ("Mutation: blc4a-t64-e7 with three lanes on each coined step: at decode a run between coined steps carries "
-         "more than twice the call's work a bit and the term passes 1% at cap 320; one or two lanes a step it doesn't",
-         packed["beta"]["floor"] > 2 * packed["beta_call"]["floor"]
-         and packed["caps"]["320"]["stated"]["bar"] > 0.01
-         and d["blc4a-t64-e7"]["points"]["decode1"]["caps"]["320"]["stated"]["bar"] <= 0.01,
+        ("Against A' = 1 a step's words read only the sum of its three 7-bit lane coins, 8.04 bits of 21 (the exact "
+         "law); N-LIT's (1, 127, 1) reads 13.99; the rotated row classes read all 21. So from 64 rows the lead's n_max "
+         "is over 2.5 times the rotated layout's, and at one row (one lane a step) the same",
+         abs(sums["A' = 1"] - 8.0377) < 1e-4 and abs(sums["(1, 127, 1)"] - 13.9944) < 1e-4
+         and abs(sums["rotated"] - 21.0) < 1e-9
+         and all(weighting["blc4a-t64-e7"][k]["n_max"] > 2.5 * weighting["blc4a-t64-e7-rot"][k]["n_max"]
+                 for k in ("t64", "t512", "t8192"))
+         and weighting["blc4a-t64-e7"]["decode1"]["n_max"] == weighting["blc4a-t64-e7-rot"]["decode1"]["n_max"],
+         ", ".join(f"{k} {v:.4f}" for k, v in sums.items()) + "; n_max " + ", ".join(
+             f"{k} {weighting['blc4a-t64-e7'][k]['n_max']:.1f} / {weighting['blc4a-t64-e7-rot'][k]['n_max']:.1f}"
+             for k in POINTS)),
+        ("The rotated row classes: every proper subset of a tile's classes reads at least its share of the tile's "
+         "lane bits on every step (so, per bit, no subset of rows carries more work than the tile)",
+         all(b_s >= r / len(ROT) * b_all - 1e-9 for r, _, b_s, b_all in subsets),
+         ", ".join(f"{r} class(es) {x} lane(s) {b_s:.2f} / {b_all:.2f}" for r, x, b_s, b_all in subsets)),
+        ("A' = 1 and N-LIT's (1, 127, 1), spread or packed from 16 rows, close cap 32 at every point but miss cap 320 "
+         "at the bar from 64 rows; the rotated classes close both",
+         all(p["caps"]["32"]["stated"]["bar"] <= 0.01 for x in weighting.values() for p in x.values())
+         and all(weighting[i]["t8192"]["caps"]["320"]["stated"]["bar"] > 0.01
+                 for i in ("blc4a-t64-e7", "blc4a-t64-e7-w127", "blc4a-t64-e7-w127-pack16"))
+         and all(p["caps"]["320"]["stated"]["bar"] <= 0.01 for p in weighting["blc4a-t64-e7-rot"].values()),
+         "; ".join(f"{i} " + ", ".join(f"{k} {p['caps']['32']['stated']['bar']:.4f}/"
+                                       f"{p['caps']['320']['stated']['bar']:.4f}" for k, p in x.items())
+                   for i, x in weighting.items())),
+        ("Mutation: blc4a-t64-e7-rot with three lanes on each coined step: at decode its term passes 1% at cap 320; "
+         "one or two lanes a step it doesn't",
+         packed["caps"]["320"]["stated"]["bar"] > 0.01
+         and d["blc4a-t64-e7-rot"]["points"]["decode1"]["caps"]["320"]["stated"]["bar"] <= 0.01,
          f"x{packed['beta']['floor'] / packed['beta_call']['floor']:.3f} at {packed['beta_at']}, "
          f"{packed['caps']['320']['stated']['bar']:.4f} vs "
-         f"{d['blc4a-t64-e7']['points']['decode1']['caps']['320']['stated']['bar']:.4f}"),
-        ("blc4a-t64-e7 packed from 16 rows and spread below: its term is at most 1% at cap 320 at both prices and A2c "
-         "plus the walk at most 1%, at every point; at 16 rows it streams under half what the spread does, and from "
-         "64 rows and at one row it is the spread",
+         f"{d['blc4a-t64-e7-rot']['points']['decode1']['caps']['320']['stated']['bar']:.4f}"),
+        ("blc4a-t64-e7-rot packed from 16 rows and spread below: its term is at most 1% at cap 320 at both prices and "
+         "A2c plus the walk at most 1%, at every point; at 16 rows it streams under half what the spread does, and "
+         "from 64 rows and at one row it is the spread",
          all(p["caps"]["320"]["stated"][q] <= 0.01 and p["a2c"]["model_p_share"] + p["a2c"]["walk_share"] <= 0.01
-             for p in d["blc4a-t64-e7-pack16"]["points"].values() for q in ("floor", "bar"))
-         and d["blc4a-t64-e7-pack16"]["points"]["decode16"]["stream_bytes_per_token"]
-         < 0.5 * d["blc4a-t64-e7"]["points"]["decode16"]["stream_bytes_per_token"]
-         and all(d["blc4a-t64-e7-pack16"]["points"][k]["stream_bytes_per_token"]
-                 == d["blc4a-t64-e7"]["points"][k]["stream_bytes_per_token"]
-                 and d["blc4a-t64-e7-pack16"]["points"][k]["beta"] == d["blc4a-t64-e7"]["points"][k]["beta"]
+             for p in d["blc4a-t64-e7-rot-pack16"]["points"].values() for q in ("floor", "bar"))
+         and d["blc4a-t64-e7-rot-pack16"]["points"]["decode16"]["stream_bytes_per_token"]
+         < 0.5 * d["blc4a-t64-e7-rot"]["points"]["decode16"]["stream_bytes_per_token"]
+         and all(d["blc4a-t64-e7-rot-pack16"]["points"][k]["stream_bytes_per_token"]
+                 == d["blc4a-t64-e7-rot"]["points"][k]["stream_bytes_per_token"]
+                 and d["blc4a-t64-e7-rot-pack16"]["points"][k]["beta"] == d["blc4a-t64-e7-rot"]["points"][k]["beta"]
                  for k in ("decode1", "t64", "t512", "t8192")),
          ", ".join(f"{k} {p['caps']['320']['stated']['bar']:.4f} {p['stream_bytes_per_token'] / 1e6:.2f} MB"
-                   for k, p in d["blc4a-t64-e7-pack16"]["points"].items())),
+                   for k, p in d["blc4a-t64-e7-rot-pack16"]["points"].items())),
         ("Mutation: the same lane coins on a small tile's first steps leave a run of coin-free steps whose interval "
          "carries more a bit than the call; the term passes 1% at T 512 with 64 rows, where spread evenly it doesn't",
          muts["front-loaded"]["points"]["t64"]["caps"]["32"]["stated"]["bar"] > 0.01
@@ -923,8 +1006,8 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
         ("Interim 2's blc1a-t128-e7 (the lead's public lane on a small tile's coin-less steps) leaves A2c above 25% "
          "at T 512 with 64 rows and above 50% at decode",
          old["t64"] > 0.25 and old["decode1"] > 0.5, f"{old['t64']:.4f}, {old['decode1']:.4f}"),
-        ("A8 word for word on both closing layouts, two tiles of T rows and one of T/2 (half its steps with the row and "
-         "window coins in place of lane coins): "
+        ("A8 word for word on both closing layouts (a weighted one at A' = 1), two tiles of T rows and one of T/2 (half "
+         "its steps with the row and window coins in place of lane coins): "
          "the adversary's words equal the honest words, its kept entry-steps within 4 sd of the expectation",
          all(v["equal"] and abs(v["kept"] - v["mean"]) <= 4 * v["sd"] for v in a8.values()),
          "; ".join(f"{name} kept {v['kept']} (mean {v['mean']:.0f}, sd {v['sd']:.0f}) of {v['entry_steps']:,}"
