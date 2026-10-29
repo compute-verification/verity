@@ -19,15 +19,17 @@
 # reads it; drive reads its steps and suites. With it alone, `--agreement` sends the upstream build (a run of `main` has no
 # change to send it for), `--no-cache` reuses no pass (`--circuit-cache` beside it: but circuit-check's per-target ones), and
 # `--no-regenerate` fails lean-audit on a lock record difference rather than passing it on a regenerated record: drive's
-# after-landing run (`after_landing_no_cache`), where nothing commits regenerated records.
+# after-landing run (`after_landing_no_cache`), where nothing commits regenerated records. `--base REF` (with --deferred alone)
+# is the run's base (`check.py --record --base`), above which ratchet-gate judges every landing: drive sends the last verified
+# `main`, below the tip it checks, since against origin/main a run of `main`'s tip would judge nothing.
 #
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, a shell that skips the store-backed tests, and a COMMIT that is
 # empty (its tree is its base's: where it leaves origin/main, or its parent for a commit on main) or that origin doesn't hold.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() deferred= nocache= ccache= noregen=
+pass=() deferred= nocache= ccache= noregen= below=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
@@ -36,6 +38,8 @@ while [ $# -gt 0 ]; do
     --no-regenerate) noregen=1 ;;
     --deferred) [[ $# -ge 2 && $2 =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]] || { echo "train: --deferred needs STEP,..." >&2; exit 2; }
       deferred=$2; shift ;;
+    --base) [ $# -ge 2 ] || { echo "train: --base needs REF" >&2; exit 2; }
+      below=$2; shift ;;
     *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement and --deferred STEPS alone" >&2; exit 2 ;;
   esac
   shift
@@ -46,6 +50,8 @@ done
   || { echo "train: --circuit-cache refused without --no-cache: it keeps circuit-check's reuse on under --no-cache" >&2; exit 2; }
 [ -z "$noregen" ] || [ -n "$deferred" ] \
   || { echo "train: --no-regenerate refused without --deferred: a train's check regenerates the locks drive commits" >&2; exit 2; }
+[ -z "$below" ] || [ -n "$deferred" ] \
+  || { echo "train: --base refused without --deferred: a train's check judges its merges above origin/main" >&2; exit 2; }
 [ -z "$deferred" ] || pass+=(--deferred "$deferred")
 [ -z "$nocache" ] || pass+=(--no-cache)
 [ -z "$ccache" ] || pass+=(--circuit-cache)
@@ -82,6 +88,10 @@ for backoff in 5 15 ''; do
 done
 [ -n "$(git -C "$root" for-each-ref --contains "$sha" refs/remotes/origin)" ] \
   || die "${sha:0:12} is on no branch of origin: push it first, the run ships what origin holds"
+if [ -n "$below" ]; then
+  b=$(git -C "$root" rev-parse -q --verify "$below^{commit}") || die "--base $below: no such commit"
+  pass+=(--base "$b")
+fi
 if git -C "$root" merge-base --is-ancestor "$sha" refs/remotes/origin/main; then
   base=$(git -C "$root" rev-parse -q --verify "$sha^1" || true)
 else

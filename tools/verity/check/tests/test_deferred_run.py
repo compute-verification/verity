@@ -50,12 +50,14 @@ def test_a_deferred_run_is_refused_with_a_part_or_a_step_ci_toml_doesnt_declare(
 
 
 def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without_lean(monkeypatch):
-    """A post-landing run recorded as `--tool check` would be a check of `main`'s tip that `research merge` reads."""
-    real, launched = subprocess.run, []
+    """A post-landing run recorded as `--tool check` would be a check of `main`'s tip that `research merge` reads.  It carries
+    its base's commit, above which ratchet-gate judges every merge."""
+    real, launched, sent = subprocess.run, [], {}
 
     def run(cmd, *a, **k):
         if cmd[:4] == [sys.executable, "-m", "research", "run"]:
             launched.append(cmd)
+            sent.update({Path(cmd[i + 1]).name: Path(cmd[i + 1]).read_text() for i, x in enumerate(cmd) if x == "--send"})
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
@@ -69,6 +71,7 @@ def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without
     head, tail = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
     assert "--tool" not in head and head[head.index("--send") + 1].endswith(CHECK.SHARD_PARTS)
     assert tail[:2] == ["slot", "--priority"] and tail[-3:] == ["--keep-going", "--deferred", "pytest,circuit-check"]
+    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD')}\n"
 
 
 def _pack(tmp_path: Path, monkeypatch) -> Path:

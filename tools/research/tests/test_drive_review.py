@@ -89,8 +89,9 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
     assert _subject(world, "main").startswith("Queue: #2") and _subject(world, "main^1").startswith("Queue: #1")
     assert _subject(world, "next").startswith("Queue: #3") and _git(world.origin, "rev-parse", "next^1") == main
     assert h.launched == []                                     # no Lean check: no Lean changes
+    verified = _git(world.origin, "rev-parse", "main^1^1")
     assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": False, "no_cache": True, "circuit_cache": True,
-                                                            "no_regenerate": True})]
+                                                            "no_regenerate": True, "base": verified})]
     assert h.after and h.after[0][1] == {main: "", _git(world.origin, "rev-parse", "main^1"): ""}
     pl = h.postland()
     assert pl["pending"] == [main] and pl["run"]["skip"] == ["lean-agreement", "lean-changed"]
@@ -101,6 +102,29 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
     pl = h.postland()
     assert pl["verified"] == main and pl["verified_as"]["no_cache"] is True
     assert "lean-agreement" in pl["verified_as"]["steps"]         # ci's baseline passed it, and nothing it checks changed since
+
+
+def test_an_after_landing_run_sends_a_base_below_its_tip_so_ratchet_gate_judges_the_landings_above_it(world, monkeypatch):
+    """Against origin/main, its own tip, the after-landing run's ratchet-gate judged no change and could never fail.  Drive
+    sends the last verified `main` as its base (`train.sh --base`), below the tip with every landing since above it; the
+    baseline run, of the verified `main` itself, sends the tip's first parent."""
+    _move_main(world, {"x.txt": "x\n"})
+    h = Review(world, monkeypatch, baseline=False)
+    verified = _main(world)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.review(1)
+    h.review(2)
+    assert h.tick().startswith("nothing lands before an after-landing run of `main`"), world.logs
+    ((tip, _, kw),) = h.posted
+    assert tip == verified and kw["base"] == _git(world.origin, "rev-parse", f"{verified}^1")
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, "r-post-0", {s: "passed" for s in AFTER_LANDING})]
+    assert h.tick().startswith("landed #2"), world.logs
+    tip, _, kw = h.posted[-1]
+    assert tip == _main(world) != verified and kw["base"] == verified == h.postland()["verified"]
+    assert _git(world.origin, "merge-base", kw["base"], tip) == verified                   # below the tip
+    assert [m.pr for m in h.d.landed_since(kw["base"], tip)] == [1, 2]                    # the landings it judges
 
 
 def test_an_unreviewed_member_new_to_next_or_a_held_one_stops_the_prefix_below_it(world, monkeypatch):
@@ -957,8 +981,9 @@ def test_nothing_lands_before_the_after_landing_run_of_main_itself_and_a_red_mai
     main = _main(world)
     out = h.tick()
     assert out.startswith("nothing lands before an after-landing run of `main`"), out
+    below = _git(world.origin, "rev-parse", f"{main}^1")
     assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": True, "no_cache": False, "circuit_cache": False,
-                                                            "no_regenerate": True})]
+                                                            "no_regenerate": True, "base": below})]
     h.run_state["r-post-0"] = ("done", 1, None)
     h.evidence = [_steps_run(world.tmp, "r-post-0", {**{s: "passed" for s in AFTER_LANDING}, "lean-suites": "failed"})]
     assert h.tick().startswith("landed #2"), world.logs
@@ -1058,6 +1083,46 @@ def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_rev
     (h.evidence[0] / "suites-lean.json").write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "passed"}]))
     h.tick()
     assert h.postland()["verified"] == main and not h.postland()["red"] and h.postland()["green"]["suite pkg"] == main
+
+
+def test_a_red_ratchet_gate_names_the_merge_it_fails_as_the_culprit(world, monkeypatch, tmp_path):
+    """The after-landing run's ratchet-gate step runs the vLLM integration's ratchet gate on each landing's merge, and its log
+    names no file of the change, only the PR whose merge grows an allowlist: drive takes that PR as the culprit.  The log
+    here is the gate's own, run on the merges drive landed."""
+    import sys
+
+    p01 = "integrations/vllm/tests/lint/allowlists/p01_core.json"
+
+    def allowlist(*files: str) -> str:
+        return json.dumps({"rule": "p01", "entries": [{"file": f, "kind": "k", "symbol": "s", "detail": "d"} for f in files]})
+
+    _git(world.dev, "push", "-q", "origin", f"{world.change({p01: allowlist('a.py', 'b.py')})}:refs/heads/main")
+    h = Review(world, monkeypatch)
+    base = _main(world)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"c.py": "C = 1\n", p01: allowlist("a.py", "b.py", "c.py")}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    assert h.tick().startswith("landed #3")
+    tip = _main(world)
+    merge2 = _git(world.origin, "rev-parse", "main^1")
+    assert _subject(world, merge2).startswith("Queue: #2")
+    _git(world.dev, "fetch", "-q", "origin")
+    gate = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / "integrations/vllm/tools/ratchet_gate.py"),
+                           base, tip], cwd=world.dev, capture_output=True, text=True, env={**os.environ, "RATCHET_GATE_CACHE": ""})
+    assert gate.returncode == 1 and f"  #2 ({merge2[:12]}): failed: grows {p01} 2 -> 3 entries" in gate.stdout, gate
+    run = _steps_run(tmp_path, "r-post-0", {s: "passed" for s in EVERY if s != "ratchet-gate"})
+    with open(run / "steps.jsonl", "a") as f:
+        f.write(json.dumps({"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}) + "\n")
+    (run / "ratchet-gate.log").write_text(gate.stdout)
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [run]
+    h.tick()
+    (ring,) = [p for p in h.posts if "is red on" in p]
+    assert f"step ratchet-gate is red on `main` {tip[:12]}" in ring and f"`#2 ({merge2[:12]}): failed: grows {p01}" in ring, ring
+    assert "Culprit: #2 (the ratchet gate fails its merge), of the 3 landing(s)" in ring, ring
+    assert h.postland()["red"]["step ratchet-gate"]["culprit"][:1] == [2]
 
 
 @pytest.mark.parametrize("fix", ["names-the-culprit", "fixes-suite", "touches-the-failure", "new-head"])
@@ -1374,7 +1439,7 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     out = h.tick()
     assert out.startswith("landed #4"), out
     assert h.posted[1] == (one, "lean-suites", {"agreement": False, "no_cache": False, "circuit_cache": False,
-                                                   "no_regenerate": True})
+                                                   "no_regenerate": True, "base": _git(world.origin, "rev-parse", f"{one}^1")})
     assert h.posted[2][0] == _main(world)                                        # #4's after-landing run
     (ring,) = [p for p in h.posts if "is red on" in p]
     assert "#1 #2 each touch it" in ring and "drive bisects them" in ring, ring
