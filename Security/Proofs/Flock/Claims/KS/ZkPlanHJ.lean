@@ -31,8 +31,8 @@ open FlockSoundness.Discharge.Tables (DecodesTable)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A `DrawSetupZHJ`'s table is `zkTab`** at its statement, at every layout and link layout: the same schedule and
-`t_pad`, `stmtOf` the layout's model statement (`Integrate.model_eq`: setupHidden's circuit has `HmRow.parse`'s facts
-and its leaf is the default one), and the same padding constant, pads and inner code. -/
+`t_pad`, `stmtOf` the layout's model statement (`Integrate.model_eqW`: the committed circuit's nets are as the placement
+reads them, `Hidden.Committed.netWidths`/`netKinds`, and its leaf is the default one), and the same padding constant, pads and inner code. -/
 theorem tableH_eq_zkTab {n mPts : ℕ} {I' : Exec.Inputs} {S : Finset (Fin n)} {d : Lean.Json}
     (ht : I'.tags.typed = false) (y : DrawSetupZHJ I' mPts S d) {st : Stmt} (hst : y.x.st = st)
     (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.m = .ok (sch, tPad))
@@ -43,7 +43,8 @@ theorem tableH_eq_zkTab {n mPts : ℕ} {I' : Exec.Inputs} {S : Finset (Fin n)} {
   obtain ⟨rfl, rfl⟩ := Prod.ext_iff.1 (Except.ok.inj (hz'.symm.trans hz))
   have s := Hidden.setupHidden_spec' x.h
   have hS : Refine.stmtOf x.st x.wf.1 (Refine.regionsOf x.st) = L.model (Refine.regionsOf x.st) :=
-    (Integrate.model_eq (parse_facts (HiddenExec.parse_untyped ht s.parse).1) L s.leaf x.wf.1 _).symm
+    (Integrate.model_eqW ((Hidden.committed_of_commit s.parse).netWidths ht)
+      ((Hidden.committed_of_commit s.parse).netKinds ht) L s.leaf x.wf.1 _).symm
   unfold DrawSetupZHJ.table DrawSetupZHJ.tabAt zkTab
   congr 1
 
@@ -87,7 +88,6 @@ inputs whose circuit file `HmOut.parse` accepts, where `DrawOkZKHJ` holds, the t
 table `j` has `Zk.schedule`'s schedule, table `j` has a `DrawSetupZHJ` at its inputs, its draw's units of `S` and its
 draw, at its statement and schedule. -/
 theorem setupZHJ_of_setupAt {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
-    {c : Flock.Circuit} (hc : HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c)
     {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts))
     (hshape : sts.forM Flock.Zk.shapeOk = .ok ()) (hok : DrawOkZKHJ I dj mPts S) (j : Fin (nTab I))
@@ -98,12 +98,10 @@ theorem setupZHJ_of_setupAt {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true)
   have hst := hstJ j.val hj
   obtain ⟨_, hf⟩ := ZkHidden.fast100_of_schedule hz
   have ht' : (inputsJ I j.val).tags.typed = false := Composed.typedJ ht j.val
-  have hcJ : HmOut.parse (inputsJ I j.val).tags (inputsJ I j.val).circuitFile (inputsJ I j.val).tables = .ok c :=
-    (ZkHidden.parseH_tagsAt ((ZkExec.zkTags_typed I).trans ht) _ _ _ _).trans hc
   obtain ⟨_, -, hdr⟩ := HiddenExec.setupHidden_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[j.val].c with outPorts := #[] }) hdr
-  obtain ⟨x, hx⟩ := HiddenExec.drawSetupH_of_setupHiddenI (I := inputsJ I j.val) (S := partS I (dj S) S j)
-    (mPts := mPts) ht' hcJ hst hf hD ((hok j).1 D hD) ((hok j).2 _ hst)
+  obtain ⟨x, hx⟩ := HiddenExec.drawSetupH_of_setupHiddenU (I := inputsJ I j.val) (S := partS I (dj S) S j)
+    (mPts := mPts) ht' hst hf hD ((hok j).1 D hD) ((hok j).2 _ hst)
   obtain ⟨y, hyx, hys, hyt⟩ := ZkHidden.drawSetupZHJ_of x (by rw [hx]; exact ZkExec.array_forM_ok hshape j.val hj)
     (sch := sch) (tPad := tPad) (by rw [hx]; exact hz)
   exact ⟨y, by rw [hyx, hx], hys, hyt⟩
@@ -111,7 +109,6 @@ theorem setupZHJ_of_setupAt {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true)
 /-- **The hidden-output plan's table `j` is `zkTabs`'s** where `verify --zk` sets its session up at the draw `dj S`,
 the tables pass the shape check and `DrawOkZKHJ` holds. -/
 theorem tableZHJ_eq_zkTabs {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
-    {c : Flock.Circuit} (hc : HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c)
     {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts))
@@ -122,7 +119,7 @@ theorem tableZHJ_eq_zkTabs {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) 
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL mPts)
     (j : Fin (nTab I)) (hj : j.val < sts.size) :
     tableZHJ dj y₀ S j = zkTabs h0 L hz hk hlay j.val := by
-  obtain ⟨y, hyst, -, -⟩ := setupZHJ_of_setupAt hh ht hc dj hs hshape hok j hj (hz j.val hj)
+  obtain ⟨y, hyst, -, -⟩ := setupZHJ_of_setupAt hh ht dj hs hshape hok j hj (hz j.val hj)
   unfold tableZHJ
   rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩), DrawSetupZHJ.table_eq _ y, zkTabs_of_lt h0 L hz hk hlay hj]
   exact tableH_eq_zkTab (Composed.typedJ ht j.val) y hyst (L j.val hj) (hz j.val hj) (hk j.val hj) (hlay j.val hj)
@@ -131,7 +128,6 @@ theorem tableZHJ_eq_zkTabs {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) 
 tables pass the shape check and `DrawOkZKHJ` holds, at every registration: the setup has the plan's `nTab I` tables
 (`setupAt_tableJH`), each `zkTabs`'s. -/
 theorem planZHJ_eq_tabsJ {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
-    {c : Flock.Circuit} (hc : HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c)
     {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts))
@@ -145,7 +141,7 @@ theorem planZHJ_eq_tabsJ {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (h
   refine List.ext_get (by rw [ZkHidden.planZHJ_length, tabsJ_length, hsz]) fun i h1 h2 => ?_
   have hi : i < nTab I := by rwa [ZkHidden.planZHJ_length] at h1
   simp only [planZHJ, tabsJ, List.get_eq_getElem, List.getElem_ofFn]
-  exact tableZHJ_eq_zkTabs hh ht hc dj y₀ hs hshape hok h0 L hz hk hlay ⟨i, hi⟩ (by omega)
+  exact tableZHJ_eq_zkTabs hh ht dj y₀ hs hshape hok h0 L hz hk hlay ⟨i, hi⟩ (by omega)
 
 /-- **`DrawOkZKHJ` at no drawn units** is the tables' link points, which are the session's (`setupTables_pointsAny`). -/
 theorem drawOkZKHJ_empty {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) {n : ℕ}

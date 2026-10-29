@@ -65,7 +65,7 @@ def inStmt : Claims.Flock.Stmt where
     { hm96Rows := true, typed := false, retainedRounds := true, leaf := "hm96-sha512/v1", tables := 1,
       publicInputs := false, sharedRows := false, registeredReads := false, hiddenOutputs := false,
       unitInputGroups := 1, tail := false, unitLog := 0, readsOnlyPortBits := true, rowsV1 := true,
-      rowsV2OrSeg := false, wiresAcyclic := false }
+      rowsV2OrSeg := false, wiresAcyclic := false, templated := false }
 
 /-- The toy record of `Complete` and `Nontrivial`: every statement parses as `inStmt`, and the verifier rejects. -/
 def compD (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit where
@@ -120,7 +120,7 @@ theorem listWithin_unit {Col : Type} [DecidableEq Col] [Zero Col] (len : Unit �
 
 theorem inStmt_inScope : Claims.Flock.InScope false inStmt := by
   refine ⟨by decide, by decide, by decide, by decide, rfl, by decide, rfl, Or.inl rfl, by decide, by decide,
-    fun h => absurd h (by decide), Or.inl ⟨rfl, by decide⟩, by decide, rfl, Or.inl rfl⟩
+    fun h => absurd h (by decide), Or.inl ⟨rfl, by decide⟩, by decide, rfl, Or.inl rfl, fun h => absurd h (by decide)⟩
 
 theorem inStmt_relS (w : Claims.Flock.Wit) : Claims.Flock.RelS inStmt w := fun _ _ o => o.elim0
 

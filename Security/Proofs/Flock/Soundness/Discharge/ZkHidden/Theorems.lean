@@ -3,9 +3,13 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
 # The theorems of `Statements.lean`
+
+The tables' theorems hold from the session alone (`drawSetupZKH_of_acceptsU`, `tablesAtZKH_liveU`), so each circuit
+form, `HmOut.parse`'s and the statement circuit's (`…St`, `HmOut.parseStmt`), reads them.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
@@ -39,18 +43,16 @@ theorem acceptsZK_acceptedH : AcceptsZKAcceptedH := by
   have hh' : (zkTags I).hiddenOutputs = true := (zkTags_hiddenOutputs I).trans hh
   rw [setupOne_hidden hh'] at hst
   have ht' : (zkTags I).typed = false := (zkTags_typed I).trans ht
-  have hcst : st.c = c := Except.ok.inj ((setupHidden_parseC hst).symm.trans hc)
+  have hcst : st.c = c := setupHidden_c_of_parse hc hst
   refine ⟨st, hst, hshape, fun regs => ⟨_, ⟨zkTags I, I.circuitFile, I.publicFile, zkCoins I, I.tables,
-    recordDraw t.record, I.partition, I.program, st, ht', hst,
-    Hidden.hidden_layout ht' hst (Hidden.setupHidden_unpinned ht' hst (by rw [hcst]; exact hv1.1.1)),
-    unitRowsFlat ht' hst (by rw [hcst]; exact hv1.1), regs, rfl⟩, rfl, HEq.rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩⟩
+    recordDraw t.record, I.partition, I.program, st, ht', Hidden.setupHidden_specCC hst,
+    Hidden.unpin_layout ht' hst, unitRowsFlat_unpin ht' hst (by rw [hcst]; exact hv1.1.toP), regs, rfl⟩, rfl, HEq.rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩⟩
 
 theorem zk_schedOK : ZkSchedOK := zk_schedOK'
 
-/-- **A one-table hidden-output `--zk` acceptance at the challenger's draw sets the draw up**: with `ZkSchedOK`, a
-`DrawSetupZKH` at `dj S`, wherever the outputs are returned. -/
-theorem drawSetupZKH_of_acceptsI (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
-    {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+/-- **A one-table hidden-output `--zk` acceptance at the challenger's draw sets the draw up**, from the session alone:
+with `ZkSchedOK`, a `DrawSetupZKH` at `dj S`. -/
+theorem drawSetupZKH_of_acceptsU (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
     {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKH I dj mPts S) :
     Nonempty (DrawSetupZKH I mPts S (dj S)) := by
@@ -62,10 +64,29 @@ theorem drawSetupZKH_of_acceptsI (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs
   obtain ⟨sch, hf⟩ := fast100_of_schedule hz'
   obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
-  obtain ⟨x, rfl⟩ := drawSetupH_of_setupHiddenI (I := zkInputs I) ((zkTags_typed I).trans ht) hc hst hf hD
+  obtain ⟨x, rfl⟩ := drawSetupH_of_setupHiddenU (I := zkInputs I) ((zkTags_typed I).trans ht) hst hf hD
     (hok.1 D hD) (hok.2 _ hst)
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := hsched x.st _ _ x.wf.1 x.wf.2 x.hm hshape hz'
   exact ⟨⟨x, _, _, hz', h1, h2, h3, h4, h5, h6 _⟩⟩
+
+set_option linter.unusedVariables false in
+/-- **A one-table hidden-output `--zk` acceptance at the challenger's draw sets the draw up**: with `ZkSchedOK`, a
+`DrawSetupZKH` at `dj S`, wherever the outputs are returned. -/
+theorem drawSetupZKH_of_acceptsI (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
+    {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+    {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
+    {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKH I dj mPts S) :
+    Nonempty (DrawSetupZKH I mPts S (dj S)) :=
+  drawSetupZKH_of_acceptsU hsched ht hh hc1 h hd hok
+
+set_option linter.unusedVariables false in
+/-- `drawSetupZKH_of_acceptsI` at the statement circuit (`HmOut.parseStmt`). -/
+theorem drawSetupZKH_of_acceptsISt (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
+    {c : Flock.Circuit} (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
+    {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
+    {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKH I dj mPts S) :
+    Nonempty (DrawSetupZKH I mPts S (dj S)) :=
+  drawSetupZKH_of_acceptsU hsched ht hh hc1 h hd hok
 
 set_option linter.unusedVariables false in
 /-- `drawSetupZKH_of_acceptsI` where the unit returns the outputs. -/
@@ -76,11 +97,11 @@ theorem drawSetupZKH_of_accepts (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs}
     Nonempty (DrawSetupZKH I mPts S (dj S)) :=
   drawSetupZKH_of_acceptsI hsched ht hc hh hc1 h hd hok
 
-theorem tablesAtZKH_liveI_of (hsched : ZkSchedOK) {n mPts : ℕ} {Reg : Type} :
-    TablesAtZKHLiveI (n := n) (mPts := mPts) (Reg := Reg) := by
-  intro I ht c hc dj S₀ y₀ wr hh hc1 hrec S R o hok h
+theorem tablesAtZKH_liveU_of (hsched : ZkSchedOK) {n mPts : ℕ} {Reg : Type} :
+    TablesAtZKHLiveU (n := n) (mPts := mPts) (Reg := Reg) := by
+  intro I ht dj S₀ y₀ wr hh hc1 hrec S R o hok h
   obtain ⟨hd, -, -⟩ := hrec S R o h
-  have hne := drawSetupZKH_of_acceptsI hsched ht hc hh hc1 h hd hok
+  have hne := drawSetupZKH_of_acceptsU hsched ht hh hc1 h hd hok
   refine ⟨(Classical.choice hne).x.st, (Classical.choice hne).sch, (Classical.choice hne).tPad,
     (Classical.choice hne).x.wf.1, (Classical.choice hne).x.wf.2, (Classical.choice hne).x.h,
     (Classical.choice hne).hz, Classical.choice hne, rfl, rfl, rfl, ?_, fun points hpts hsz => ?_⟩
@@ -92,15 +113,39 @@ theorem tablesAtZKH_liveI_of (hsched : ZkSchedOK) {n mPts : ℕ} {Reg : Type} :
     rw [(Classical.choice hne).x.hmPts] at e
     exact e
 
+theorem tablesAtZKH_liveI_of (hsched : ZkSchedOK) {n mPts : ℕ} {Reg : Type} :
+    TablesAtZKHLiveI (n := n) (mPts := mPts) (Reg := Reg) := by
+  intro I ht c _
+  exact tablesAtZKH_liveU_of hsched I ht
+
+theorem tablesAtZKH_liveISt_of (hsched : ZkSchedOK) {n mPts : ℕ} {Reg : Type} :
+    TablesAtZKHLiveISt (n := n) (mPts := mPts) (Reg := Reg) := by
+  intro I ht c _
+  exact tablesAtZKH_liveU_of hsched I ht
+
 theorem tablesAtZKH_live_of (hsched : ZkSchedOK) {n mPts : ℕ} {Reg : Type} :
     TablesAtZKHLive (n := n) (mPts := mPts) (Reg := Reg) := by
   intro I ht c hc _
   exact tablesAtZKH_liveI_of hsched I ht hc
+
+theorem tablesAtZKH_liveSt_of (hsched : ZkSchedOK) {n mPts : ℕ} {Reg : Type} :
+    TablesAtZKHLiveSt (n := n) (mPts := mPts) (Reg := Reg) := by
+  intro I ht c hc _
+  exact tablesAtZKH_liveISt_of hsched I ht hc
+
+theorem tablesAtZKH_liveU {n mPts : ℕ} {Reg : Type} : TablesAtZKHLiveU (n := n) (mPts := mPts) (Reg := Reg) :=
+  tablesAtZKH_liveU_of zk_schedOK
 
 theorem tablesAtZKH_liveI {n mPts : ℕ} {Reg : Type} : TablesAtZKHLiveI (n := n) (mPts := mPts) (Reg := Reg) :=
   tablesAtZKH_liveI_of zk_schedOK
 
 theorem tablesAtZKH_live {n mPts : ℕ} {Reg : Type} : TablesAtZKHLive (n := n) (mPts := mPts) (Reg := Reg) :=
   tablesAtZKH_live_of zk_schedOK
+
+theorem tablesAtZKH_liveISt {n mPts : ℕ} {Reg : Type} : TablesAtZKHLiveISt (n := n) (mPts := mPts) (Reg := Reg) :=
+  tablesAtZKH_liveISt_of zk_schedOK
+
+theorem tablesAtZKH_liveSt {n mPts : ℕ} {Reg : Type} : TablesAtZKHLiveSt (n := n) (mPts := mPts) (Reg := Reg) :=
+  tablesAtZKH_liveSt_of zk_schedOK
 
 end FlockSoundness.Discharge.ZkHidden
