@@ -49,9 +49,17 @@ costs `reg`. Under DistinctWrites each committed, pairwise-distinct, noise-depen
   ShaSpeed needs for T1 to hold (CORE-SMELL C27). The coins' expansion is credited hashing too; T1 with it uncredited
   is reported beside T1 (NIGHT §1 default 4).
 
-Hashing is priced at the best known SHA-512 compression's register count (`price.hash_work`, ShaLB(3,534), N-SHALB):
-W1 counts registers and the honest program is the best, so every term that prices hashing reads it, and the served
-committer's excess (3,632) is printed as its own gap.
+The network term is reported beside T1 and outside it: DitherInstance's egress slack n_max · W_mac · E over stock, with
+n_max the most MACs a coin bit over the point's matmuls, W_mac the honest work a MAC (the stacked product's and the
+credited hashing's) and E the egress cap a served token (`price.egress_cap`). It bounds only a design whose coins stream
+from the challenger a call (`certifier-coins`); a design seeded from the window's salt is outsourced by one message, so
+none bounds it (`network` is null, `network_streamed` what streaming would give).
+
+Hashing is priced at the best known SHA-512 compression's register count per form (N-SHALB): a chained compression
+(`price.hash_work`, 3,532), the bulk of every hm96 row, and a row digest's first, from the constant chaining value
+(`price.hash_work_iv`, 3,510), which the row binding's prefix block is. W1 counts registers and the honest program is
+the best, so every term that prices hashing reads them, and the served committer's excess (3,632) is printed as its
+own gap.
 
 T2 is t_H / t_S, a serial sum: the stock step, the stacked product's extra over the plain GEMM, the noise's coins a call
 and NCP's formed copies, A's root before each call's noise (an estimate), exporting each committed word, and hashing at
@@ -126,14 +134,18 @@ def rep_bits(m: float, b: int, S: int) -> float:
 
 
 @functools.lru_cache(maxsize=None)
+def rep_at(m: float, b: int, t: int) -> float:
+    """Row-steps repeating an earlier row's vector at step t alone, over m identical rows, when its vector is fixed by b
+    uniform code bits and the sum of t - 1 step bits: 2^b x t classes, the sum binomial."""
+    t = int(t)
+    d = sum(-math.expm1(m * math.log1p(-math.comb(t - 1, c) / 2.0 ** (t - 1 + b))) for c in range(t))
+    return m - 2.0 ** b * d
+
+
+@functools.lru_cache(maxsize=None)
 def rep_sum(m: float, b: int, S: int) -> float:
-    """The same when step t's vector is fixed by b uniform code bits and the sum of t - 1 step bits (ssn-1l): 2^b x t
-    classes, the sum binomial."""
-    out = 0.0
-    for t in range(1, int(S) + 1):
-        d = sum(-math.expm1(m * math.log1p(-math.comb(t - 1, c) / 2.0 ** (t - 1 + b))) for c in range(t))
-        out += m - 2.0 ** b * d
-    return out
+    """The same summed over steps 1..S (ssn-1l)."""
+    return sum(rep_at(m, b, t) for t in range(1, int(S) + 1))
 
 
 @functools.lru_cache(maxsize=None)
@@ -144,7 +156,7 @@ def rep_lanes(m: float, lanes: int, S: int) -> float:
 
 
 FNS = {"__builtins__": {}, "ceil": math.ceil, "floor": math.floor, "min": min, "max": max, "log2": math.log2,
-       "distinct": distinct, "rep_bits": rep_bits, "rep_sum": rep_sum, "rep_lanes": rep_lanes}
+       "distinct": distinct, "rep_bits": rep_bits, "rep_sum": rep_sum, "rep_at": rep_at, "rep_lanes": rep_lanes}
 
 
 class Refused(Exception):
@@ -630,6 +642,7 @@ def call_units(card: dict, d: dict, m: float, n: float, K: float, g: float = 1.0
             "x_entries": ent["formed_x"] + ent["noise_x"], "y_entries": ent["formed_y"] + ent["noise_y"],
             "noise_y": ent["noise_y"], "mK": m * K, "nK": n * K, "words": nwords, "word_units": nwords * u_word,
             "extra_macs": (r - 1) * stock,
+            "macs_per_coin_bit": m * n * K / (8 * sum(map(sum, xof.values()))) if any(map(sum, xof.values())) else math.inf,
             "coinform_ms": sum(coinsncp_ms(card, b * g, table) for table, bs in xof.items() for b in bs) / g,
             "a_ms": max(a_chain_s, a_bulk_s) / g * 1e3, "a_chain": chain / g, "bulk_hash_ms": bulk * 1e3,
             "sts_ms": nwords * sts * 1e3, "stg_ms": nwords * stg * 1e3, "hiding_closed": hiding_closed,
@@ -695,9 +708,11 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
     agg: dict = dict.fromkeys(SUM_KEYS, 0.0) | {"terms": dict.fromkeys(TERMS, 0.0)}
     per_matmul = {}
     wide_measured = r = None
+    bit_macs = 0.0
     for x in cs:
         u = call_units(card, d, x["m"], x["n"], x["K"], x["count"] / x["serial"], rate)
         r, wide_measured = u["r"], u["wide_measured"]
+        bit_macs = max(bit_macs, u["macs_per_coin_bit"])
         w = x["count"]
         for k in SUM_KEYS:
             agg[k] += w * u[k]
@@ -720,13 +735,19 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
         agg["salts"] += fs
         if "hiding_salt" in closes and "hiding" not in closes:
             agg["credited_bytes"] += fs * sw / card["price"]["hash_work_floor"]["value"]
-    hash_share = agg["credited_bytes"] * hw / stock
+    hash_share = ((agg["credited_bytes"] - agg["bound_bytes"]) * hw
+                  + agg["bound_bytes"] * card["price"]["hash_work_iv"]["value"]) / stock
     host = card["price"]["host_sha"]["value"]
     f_host = host / (rate + host)
     host_route = f_host * (hash_share + agg["word_units"] / stock)
     terms = {k: v / stock for k, v in agg["terms"].items()}
     if "host" not in effects(card, d["premises"], 32)[0]:
         terms["host"] = host_route
+    w_mac = (stock + agg["extra_macs"]) / stock + hash_share
+    egress = card["price"]["egress_cap"]
+    network_streamed = bit_macs * w_mac * egress["value"] * pt["tokens"] / stock
+    streamed = "certifier-coins" in d["premises"]
+    network = network_streamed if streamed else None
     terms["hashing_slack"] = delta * hash_share
     rest = sum(v for k, v in terms.items() if k != "hashing_slack")
     t1 = rest + terms["hashing_slack"]
@@ -753,7 +774,8 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
             "hash_bytes_per_mac": agg["credited_bytes"] / stock, "coin_bytes_per_mac": agg["coin_bytes"] / stock,
             "pre_noise_units": agg["pre_noise_bytes"] * hw / stock,
             "committer_gap": committer_gap, "sha_regs": hw * BLOCK / card["price"]["reg"]["value"],
-            "f_host": f_host, "host_route": host_route,
+            "f_host": f_host, "host_route": host_route, "network": network, "network_streamed": network_streamed,
+            "coins_streamed": streamed, "macs_per_coin_bit": bit_macs, "w_mac": w_mac, "egress_cap": egress["value"],
             "row_bound_share": agg["bound_bytes"] / agg["credited_bytes"] if agg["credited_bytes"] else 0.0,
             "t2": t2, "t2_pass": t2["judged"] <= TARGET["t2"],
             "t3": t3, "t3_worst": t3w, "t3_pass": t3w is not None and t3w <= TARGET["t3"], "ranks": rk,
@@ -874,6 +896,13 @@ def needs(row: dict) -> list[str]:
                    f"them the host hashes f_host = {row['f_host']:.2%} of the rows and computes their words off the card "
                    f"(N-FLOOR's route H), {row['host_route']:.2f}x stock, {row['host_route'] / TARGET['t1']:.0f}x T1's "
                    f"allowance")
+    out.append(f"the network term, reported beside T1 and outside it pending Daniel (N-ALT): DitherInstance's slack "
+               f"n_max · W_mac · E over stock, at E = {row['egress_cap']:g} bits a token, n_max "
+               f"{row['macs_per_coin_bit']:,.0f} MACs a coin bit and W_mac {row['w_mac']:.1f} W1 a MAC, is "
+               f"{row['network_streamed']:.1%} of stock if the call's coins stream from the challenger"
+               + (" (certifier-coins, taken)" if row["coins_streamed"] else
+                  "; this design's coins are seeded from the window's salt, so one message outsources the window and "
+                  "OutsourceWithinEgress gives no bound"))
     if not row["t1_pass"]:
         big = max(((k, v) for k, v in row["terms"].items()), key=lambda kv: kv[1])
         out.append(f"T1 {row['t1']:.2%} > 1%: its largest term is {big[0]} {big[1]:.2%}")
@@ -1043,13 +1072,19 @@ def row_line(i, row: dict) -> str:
             f"{pct(t['denoise'])} | {pct(t['hiding'])} ({pct(row['hiding_closed'])}) | {pct(t['host'])} "
             f"({row['host_route']:.2f}x) | {t2s(row)} "
             f"({row['t2']['unfused']:.1f}x) {'pass' if row['t2_pass'] else 'fail'} | {pct(row['t3_worst'])} | "
-            f"{row['delta_star']:.1e} | {len(row['open'])}: {opened(row)} | {', '.join(row['attacks']) or '-'} |")
+            f"{row['delta_star']:.1e} | {net(row)} | {len(row['open'])}: {opened(row)} | {', '.join(row['attacks']) or '-'} |")
+
+
+def net(row: dict) -> str:
+    """The network term (DitherInstance's egress slack over stock), outside the core T1: none bounds a seeded design."""
+    s = f"{row['network_streamed']:.0%}"
+    return s + " (streamed)" if row["coins_streamed"] else f"unbounded, seeded ({s} if streamed)"
 
 
 HEADER = ["| # | design | rank m/h (overall) | effective | T1 | +coins | final word | uncommitted | coin branch | forming | "
           "lane fix | derivation | de-noise | hiding (closed) | host (route H) | T2 sync / async (unfused) | T3 | delta* | "
-          "open (matmul) | open attacks |",
-          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+          "network (not in T1) | open (matmul) | open attacks |",
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
 
 
 def render(card: dict, results: dict, space_info: dict) -> str:
@@ -1085,17 +1120,17 @@ def render(card: dict, results: dict, space_info: dict) -> str:
             continue
         for key, what in (("rank_effective", "effective rank (open premises at 5)"), ("rank", "nominal rank (open premises settled at their own rank)")):
             lines += [f"Pareto frontier of the T1-passing designs over (T1, T2, T3), at each {what}:", "",
-                      "| up to rank | design | rank m/h (overall) | T1 | +coins | T2 sync / async | T3 | open |",
-                      "|---|---|---|---|---|---|---|---|"]
+                      "| up to rank | design | rank m/h (overall) | T1 | +coins | network (not in T1) | T2 sync / async | T3 | open |",
+                      "|---|---|---|---|---|---|---|---|---|"]
             frs = res["frontier_effective" if key == "rank_effective" else "frontier_nominal"]
             for lv, fr in frs:
                 for r in sorted(fr, key=lambda r: r["t2"]["judged"])[:FRONTIER_SHOWN]:
                     lines.append(f"| {LABEL[lv]} | {r['design']} | {rk(r, key == 'rank_effective')} | {pct(r['t1'])} | "
-                                 f"{pct(r['t1_coins_uncredited'])} | {t2s(r)} | {pct(r['t3_worst'])} | {opened(r)} |")
+                                 f"{pct(r['t1_coins_uncredited'])} | {net(r)} | {t2s(r)} | {pct(r['t3_worst'])} | {opened(r)} |")
                 if len(fr) > FRONTIER_SHOWN:
-                    lines.append(f"| {LABEL[lv]} | ({len(fr) - FRONTIER_SHOWN} more on the frontier; the JSON has them) | | | | | | |")
+                    lines.append(f"| {LABEL[lv]} | ({len(fr) - FRONTIER_SHOWN} more on the frontier; the JSON has them) | | | | | | | |")
             if not frs:
-                lines.append("| - | no design passes T1 | | | | | | |")
+                lines.append("| - | no design passes T1 free of open attacks | | | | | | | |")
             lines.append("")
         lines += [f"The top {SHOWN} by the ranking (the CSV has every row):", ""] + HEADER
         for i, row in enumerate(res["rows"][:SHOWN], 1):
@@ -1299,11 +1334,40 @@ def main() -> int:
     served = lead["f_host"] * (lead["hash_bytes_per_mac"] * card["price"]["hash_work_floor"]["value"]
                                + lead["host_route"] / lead["f_host"] - lead["hash_units_per_mac"])
     checks.check("route H on ssn_1l at T 8,192 is N-FLOOR final's: the host hashes 4.04% of the rows and computes their "
-                 "words, 4.83x stock at the served committer's 908 W1 a byte and 4.71x at the best leaf (here at ShaLB's "
-                 "883.5); period-inventory with host-row closes it, so it is no T1 term",
+                 "words, 4.83x stock at the served committer's 908 W1 a byte and 4.71x at the best leaf (here at the "
+                 "chain form's 883.0); period-inventory with host-row closes it, so it is no T1 term",
                  abs(lead["f_host"] - 0.0404) < 0.0001 and abs(served / 4.83 - 1) < 0.01
                  and abs(lead["host_route"] / 4.71 - 1) < 0.01 and lead["terms"]["host"] == 0,
-                 f"f_host {lead['f_host']:.3%}, {served:.2f}x at 908, {lead['host_route']:.2f}x at ShaLB")
+                 f"f_host {lead['f_host']:.3%}, {served:.2f}x at 908, {lead['host_route']:.2f}x at 3,532")
+    s1l = row("t8192", nm("ssn-1l", "served", "s8", "k32", "w", "r256k", "mask", "min"))
+    over = 2 / 3532 * s1l["hash_units_per_mac"]
+    checks.check("crediting 3,534 to a chained compression (N-SHALB interim 1's count) would credit 2 registers a "
+                 "compression no program writes: on ssn_1l at T 8,192, 6.5% of stock (N-SHALB interim 2), so the card "
+                 "credits the chain form's 3,532 and the prefix block's constant-chaining-value form at 3,510",
+                 abs(over / 0.065 - 1) < 0.08 and card["price"]["hash_work"]["value"] == 3532 * 32 / 128
+                 and card["price"]["hash_work_iv"]["value"] == 3510 * 32 / 128,
+                 f"{s1l['hash_units_per_mac']:.1f} W1 a MAC of hashing, {over:.2%} of stock")
+    alt = cardrow("np-alt-r1b")
+    at_alt = lead["network_streamed"] * 119.7 / lead["w_mac"]
+    checks.check("the network term is N-ALT final's: on the tagged lead at T 8,192 gate_up's 349,525 MACs a coin bit, and "
+                 "N-ALT's 137.6% of stock at its W_mac of 119.7 (908 W1 a byte) is this card's at the card's W_mac; a "
+                 "design whose coins are seeded from the window's salt has no bound, and N-ALT's R1b, its coins streamed "
+                 "under certifier-coins, has one",
+                 abs(lead["macs_per_coin_bit"] - 349525.33) < 1 and abs(at_alt / 1.376 - 1) < 0.005
+                 and lead["network"] is None and alt["coins_streamed"] and alt["network"] is not None,
+                 f"{lead['macs_per_coin_bit']:,.0f} MACs a coin bit, W_mac {lead['w_mac']:.1f}, "
+                 f"{lead['network_streamed']:.1%} ({at_alt:.1%} at 119.7); R1b {alt['network']:.1%}")
+    epi = {p: row(p, nm("ssn-1l-tag", "epilogue", "s8", "k32", "w", "r256k", "cert", "min"))
+           for p in ("t512", "t512r512", "t8192")}
+    fw = 32 * 23552 / 60817408
+    checks.check("N-EXACT's epilogue fold on the tagged lead (code and tags cancelled in one more k32 step, the separable "
+                 "row term removed by the IADD3 and FFMA) serves stock's int8 product, T3 0, but its final word is then "
+                 "fixed by r_i alone on chosen identical rows, so the coin branch copies its repeats: under 1% at 64 "
+                 "rows only, and at T 8,192 nearly the whole final word",
+                 all(r["t3_worst"] == 0 and r["terms"]["coin_branch"] > 0.99 * r["gap"] for r in epi.values())
+                 and epi["t512"]["t1_pass"] and not epi["t512r512"]["t1_pass"] and not epi["t8192"]["t1_pass"]
+                 and 0.99 * fw < epi["t8192"]["terms"]["coin_branch"] < fw,
+                 ", ".join(f"{p} T1 {r['t1']:.3%} (branch {r['terms']['coin_branch']:.3%})" for p, r in epi.items()))
     for point, want in (("t8192", 0.024), ("t512", 0.520)):
         t = cardrow("ncp-k32", point)["terms"]
         got = t["final_word"] + t["forming"] + t["noise_derivation"]
@@ -1325,11 +1389,14 @@ def main() -> int:
 
     # (3) The space itself.
     ncp = [n for n, d in designs.items() if d["choice"]["noise"] == "ncp"]
+    hidings = [h for h in modules(card, "H", "hiding") if f"H.hiding.{h}" not in dropped]
     checks.check("the space holds, for NCP, every density (k32, and 6 L's under each of 2 credits) x 3 formats (int7 "
                  "route U, the cheaper route, rotated) x 6 row layouts (3 leaf sizes salted every leaf, N-HIDE's l1, l2f "
-                 "and l2w) x 3 hiding charges x 2 final-word charges x the 9 (operands, forming, derivation) choices a "
-                 "charge doesn't duplicate: 13 x 3 x 6 x 3 x 2 x 9 = 12,636; hiding-ruled is out (default 2)",
-                 len(ncp) == 12636 and "H.hiding.hr" in dropped, f"{len(ncp):,} NCP designs; dropped {sorted(dropped)}")
+                 "and l2w) x each hiding module the card and its added files hold x 2 final-word charges x the 9 "
+                 "(operands, forming, derivation) choices a charge doesn't duplicate: 13 x 3 x 6 x H x 2 x 9; "
+                 "hiding-ruled is out (default 2)",
+                 len(ncp) == 13 * 3 * 6 * len(hidings) * 2 * 9 and "H.hiding.hr" in dropped,
+                 f"{len(ncp):,} NCP designs, {len(hidings)} hiding modules ({', '.join(hidings)}); dropped {sorted(dropped)}")
     w = [call_units(card, designs[nm("ssn-1l", "served", "s8", "k32", "w", "r16k", "open")], 64, 2048, K) for K in (2048, 8192)]
     got = [(u["r"], u["coin_bytes"] / card["price"]["coin_bytes"]["value"] * 8 / 64) for u in w]
     checks.check("ssn-1l's stacked width and coin bits a row a call are SW-NOISE's: 2,144/2,048 and 3 whole coin words "
@@ -1546,6 +1613,13 @@ def main() -> int:
                         "T 8,192: the 16 bits a row are what close the branch", e["terms"]["coin_branch"] > 0.01
                         and e0["terms"]["coin_branch"] < 0.002,
                         f"{e['terms']['coin_branch']:.2%} vs {e0['terms']['coin_branch']:.3%}")
+        c = mutated(lambda c: c["N"]["ssn-1l-tag"]["D"]["epilogue"]["fields"].__setitem__("branch_rows", "0"))
+        ep = dict(ssn_e, noise="ssn-1l-tag", denoise="epilogue", operands="w", rows="r256k", hiding="cert",
+                  derivation="min")
+        e, e0 = one(c, ep), one(card, ep)
+        checks.mutation("price the tag epilogue's final-word coin branch at nothing and it passes T1 at T 8,192 with T3 0: "
+                        "the final word's repeats on r_i are what keep it out", e["t1_pass"] and not e0["t1_pass"],
+                        f"T1 {e['t1']:.3%} vs {e0['t1']:.3%}")
         c = mutated(lambda c: c["N"]["ssn-1l"]["fields"].pop("n_max"))
         e = one(c, dict(ssn_e, rows="r256k"), "v4pro")
         checks.mutation("drop SSN's column-code limit and ssn-1l is priced on V4-Pro's 65,536-column wq_b, a distinctness "
@@ -1621,7 +1695,7 @@ def main() -> int:
         w = csv.writer(fh)
         w.writerow(["point", "position", "design", *(f"{a}.{s}" for a, s in card["space"]["slots"]), "rank_matmul",
                     "rank_hashing", "rank", "rank_effective", "t1", "t1_coins_uncredited", *TERMS, "hiding_closed", "t2_sync", "t2_async", "t2_unfused", "t3_worst", "delta_star",
-                    "hash_bytes_per_mac", "open", "attacks"])
+                    "hash_bytes_per_mac", "network_streamed", "coins_streamed", "open", "attacks"])
         for p, res in results.items():
             if p.startswith("_"):
                 continue
@@ -1635,6 +1709,7 @@ def main() -> int:
                             f"{e['sync']['ratio']:.4g}", f"{e['async']['ratio']:.4g}", f"{r['t2']['unfused']:.4g}",
                             "" if r["t3_worst"] is None else f"{r['t3_worst']:.4g}",
                             f"{r['delta_star']:.4g}", f"{r['hash_bytes_per_mac']:.4g}",
+                            f"{r['network_streamed']:.4g}", int(r["coins_streamed"]),
                             " ".join(o["premise"] for o in r["open"]), " ".join(r["attacks"])])
     print(f"wrote {out / 'ranking.md'}, {out / 'pouw_space.json'}, {out / 'ranking.csv'}")
     return checks.finish()

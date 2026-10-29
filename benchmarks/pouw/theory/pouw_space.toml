@@ -18,10 +18,16 @@ kind = "arith"
 source = "four packed int8 entries a register, so a formed or derived entry costs reg/4 = 8 at the floor"
 
 [price.hash_work]
-value = 883.5
+value = 883.0
 unit = "W1 units a hashed byte"
 kind = "measured"
-source = "N-SHALB interim 1 §1.1 (note compute-research/20261029T0753Z-report-np-shalb): the best honest SHA-512 on sm_90a, sha512_min.cuh, writes 3,534 registers a compression for a variable chaining value and block (1,728 SHF, 896 LOP3, 910 adds; SASS run r20261029-074922-d49c, art:89d31f3a0f7d7440f934833133332c825f2d05d4dfb724f8064aa938f5b38130; bit-exact on the H200, r20261029-074752-6e23), 3,534 x 32 / 128 a byte. W1 counts registers, and CORE.md §2a takes the honest program to be the best, so every T1 term that prices hashing reads this; ShaSpeed's sharper form is ShaLB(3,534)"
+source = "N-SHALB interim 2 §1 (note compute-research/20261029T0846Z-report-np-shalb; sha512_min.cuh's chain form, run r20261029-082755-3f9c on vy-dc-h200-5, art:775d93887e3480c696cfb46a7d9d5e5145d000c8c8f7422746d4f315a3a35eaa, bit-exact on the H200): two consecutive blocks of one chain share their boundary (H3 and H7 left as two terms and added in free IADD3 slots), 7,064 registers a pair, so 3,532 a chained compression, 3,532 x 32 / 128 a byte; a chain is the bulk of hm96 (2,049 of a 256 KiB leaf's 2,056 compressions). Was 3,534 (interim 1, independent compressions), which over-credits a chain by 2 registers, 6.5% of stock at SSN (N-FLOOR's incident 2). W1 counts registers, and CORE.md §2a takes the honest program to be the best, so every T1 term that prices hashing reads this; ShaLB with the chain clause is rank 4a and names its numbers (sha-writes)"
+
+[price.hash_work_iv]
+value = 877.5
+unit = "W1 units a hashed byte"
+kind = "measured"
+source = "N-SHALB interim 2 §4: a compression from a constant chaining value (a digest's first block, the IV) writes 3,510 registers, 3,510 x 32 / 128 a byte; the row binding's prefix block (salt, forward, position) is that form. The other forms: 3,534 an independent compression (variable chaining value and block), 2,254 a constant block (SASS run r20261029-074922-d49c, art:89d31f3a0f7d7440f934833133332c825f2d05d4dfb724f8064aa938f5b38130)"
 
 [price.hash_work_bar]
 value = 1774.85
@@ -106,6 +112,12 @@ time = { unforced = 1923352, forced = 1200447 }
 unit = "W1 units an hm96 salt at the floor (the PRF, c and M_key·y)"
 kind = "checked"
 source = "N-HIDE interim 1 §2 (note compute-research/20261029T0715Z-report-np-hide; benchmarks/served_commit/np_hide_price.py on cursor/compute-research-np-hide-9090 at 4839409549, run r20261029-073640-fd4e, art:675eb0f6…, on SW-HASH's measured rows and SASS, art:c4b98cbf…): a salt's registers at the floor, 32 a register and 116,224 a compression; forced (a) leaves M_key·y alone (7,440 registers); c is two compressions, the PRF the rest (321,364). `alone` prices a register at one LOP3's measured 64.13; `time` is the salt kernel's GPU time in MAC-times, not W1. Replaces the card's leaf-time price (hash_rows' shares), which priced one salt 1.29x higher at 256 KiB (N-SMELL item 12); SW-HASH's claims are checked at their own (`salt_basis = \"leaf-time\"`)"
+
+[price.egress_cap]
+value = 32
+unit = "bits a served token across the replica's boundary"
+kind = "estimate"
+source = "N-ALT final, the egress layer (note compute-research/20261029T0903Z-report-np-alt; alt_roads.py run r20261029-090132-52bb, art:6e3a7a4157cd2c4334fef32498a90094404f85118e23681b517a03f08ec7dd30): DitherInstance's slack carries n_max · W_mac · E / W_reg, E the bits exchanged across the replica's boundary capped at served traffic, the challenger's signed coin stream excluded; a 4-byte token id a token, and 10x that (320) for text and framing. The network term is linear in it"
 
 [price.coin_bytes]
 value = 2
@@ -293,6 +305,12 @@ ctx8k = "?"
 kind = "unmeasured"
 source = "D.epilogue's served output: stock's int8 product, but the per-row noise term removed in fp32 by the epilogue's FFMA, so within a couple of fp32 ulps of stock's (estimate: T3 about 0); unmeasured"
 
+[t3.int8-epi]
+ctx2k = 0.0
+ctx8k = 0.0
+kind = "arith"
+source = "N-EXACT interim 1 §2 (note compute-research/20261029T0745Z-report-np-exact; proved on paper and checked by emulation, calculator run r20261029-073813-0acf, art:98a21a2b489989350e5d41fcdbf0235ef06d964f76920f62c223ab188bd586cc): I2F becomes IADD3(D, 0x4B400000 - r_i, -c_j) and the column FMUL becomes FFMA(v, s_j, -1.5·2^23·s_j), so the output is stock's bit for bit while |A·Bᵀ| < 2^22 and 1.5·2^23·s_j is exact in fp32; the range on served data is a completeness fact, N-PPL to confirm the bits (NIGHT §7)"
+
 [t3.ssn2-b1-v1]
 models = ["llama-3.2-1b"]
 ctx2k = -0.0005
@@ -386,7 +404,7 @@ rank = "4a"
 part = "hashing"
 status = "assumed"
 owner = "N-COMPOSE"
-source = "N-COMPOSE interim §1-2 (ShaWrites): every admissible program that outputs the digests writes at least R registers, pairwise distinct on the grid and none equal to an excluded value; ShaSpeed restated as a count, strictly stronger than ShaSpeed at the same rank (compose_needs_exclusion: a cost floor alone doesn't add to DistinctWrites). N-SHALB interim 1's falsifiable form is ShaLB(3,534): the minimal kernel's 3,534 registers a compression against the committer's 3,632 (run r20261029-074922-d49c)"
+source = "N-COMPOSE interim §1-2 (ShaWrites): every admissible program that outputs the digests writes at least R registers, pairwise distinct on the grid and none equal to an excluded value; ShaSpeed restated as a count, strictly stronger than ShaSpeed at the same rank (compose_needs_exclusion: a cost floor alone doesn't add to DistinctWrites). N-SHALB interim 2 §4's falsifiable form is ShaLB with the chain clause: in a dataflow refinement of MH100w with predicate-only instructions priced at int32 (N-W1's ask), any sm_90 program outputting the compressions of N distinct (chaining value, block) pairs writes at least the sum of 3,534 (variable chaining value and block), 3,510 (constant chaining value) and 2,254 (constant block), two consecutive blocks of a chain counting 7,064; refuted twice tonight (3,632 to 3,534 to 3,532), residual 0 against the best known count by construction, and T1 needs it exact to delta* (0.31 registers at SSN), so the count it names is watched, not only stated. Was ShaLB(3,534), interim 1 (run r20261029-074922-d49c)"
 
 [premise.carried-words]
 rank = 3
@@ -438,6 +456,31 @@ status = "refuted"
 owner = "the coordinator (NIGHT.md §1 default 2)"
 closes = ["hiding"]
 source = "ruled out by NIGHT.md §1 default 2 (hiding is required, so honest-only hiding work is a T1 term). Was SW-HASH interim §7 (c): zero knowledge is mandated, so the salt side's hiding work is credited by ruling, not by a premise about the adversary; no ruling yet. SW-SMELL final §2.4: the ruling is a choice of target, cost(H) without the zero-knowledge overhead; what it waives is each row's hiding_closed (ssn_1l at 256 KiB rows: 1.18x stock)"
+
+[premise.trusted-host]
+rank = 3
+part = "hashing"
+status = "assumed"
+owner = "the design rules (AGENTS.md, auditor-trusted devices)"
+source = "the network certifier is the auditor's hardware on a machine the prover doesn't control; trust in it and its host is the named assumption trusted-host"
+
+[premise.certifier-salt]
+rank = 3
+part = "hashing"
+status = "open"
+owner = "N-ALT (a protocol change: the certifier's role; Daniel's ruling)"
+requires = ["trusted-host"]
+closes = ["hiding"]
+source = "R1b (alt_roads.py r1b_salt_and_arrival): the certifier draws each leaf's y, keeps it, and sends M_key·y and c = H(SP ‖ y) (128 B a leaf, 10 compressions on the certifier); the prover hashes H(LP ‖ (x ⊕ M_key·y) ‖ c) only. The gadget checks c and b, so the salt side was honest-only work; supplied by the certifier, neither side does it on the prover, and the leaf hides x under trusted-host. Inbound 0.05% of the words' bytes at 256 KiB rows, 0.78% at 16 KiB"
+
+[premise.certifier-coins]
+rank = 3
+part = "hashing"
+status = "open"
+owner = "N-ALT (a protocol change: live per-call coins; Daniel's ruling)"
+requires = ["trusted-host"]
+closes = ["pre_noise_hashing"]
+source = "R1b: each call's A_j goes to the certifier, which commits it and releases the call's coins only on its arrival, so A_j is fixed before its noise without the prover hashing it first, and the per-matmul seed is a live coin (no Fiat-Shamir exception, no grinding term). pouw_space credits the closed pre_b under ShaSpeed and keeps A's root chain in T2 (a_ms); under R1b the prover hashes no A and T2 pays a round trip a call instead (64 calls at 2-10 us add 0.04-0.19 at T 512's 64 rows, -0.14 to +0.01 net of SW-NOISE's coin time): both inexact, neither moves T1"
 
 [premise.route-u2]
 rank = 0
@@ -573,7 +616,7 @@ part = "hashing"
 status = "scratch"
 owner = "N-COMPOSE"
 requires = ["sha-writes"]
-source = "CORE.md §2a: hashing is credited, no program computes SHA-512 faster than the best implementation; CORE-SMELL C27: SAK for SHA-512, rank 4, needed to delta* = (1% - the other terms) / hashing's work. N-COMPOSE interim 2 §1 (NCompose.lean at a7adc61388, run r20261029-080634-29e2, in no lock): its cost form in MH100w, ShaSpeedW1, is a theorem of ShaWrites (shaSpeedW1_of_shaWrites), so the 4a premise the hashing part rests on is sha-writes, whose falsifiable form is ShaLB(3,534); the lock's ShaSpeed is Accel's statement, not ShaSpeedW1"
+source = "CORE.md §2a: hashing is credited, no program computes SHA-512 faster than the best implementation; CORE-SMELL C27: SAK for SHA-512, rank 4, needed to delta* = (1% - the other terms) / hashing's work. N-COMPOSE interim 2 §1 (NCompose.lean at a7adc61388, run r20261029-080634-29e2, in no lock): its cost form in MH100w, ShaSpeedW1, is a theorem of ShaWrites (shaSpeedW1_of_shaWrites), so the 4a premise the hashing part rests on is sha-writes, whose falsifiable form is ShaLB with the chain clause (3,532 a chained compression); the lock's ShaSpeed is Accel's statement, not ShaSpeedW1"
 
 [premise.SAK-U]
 rank = "4bU"
@@ -643,7 +686,7 @@ source = "D.epilogue on ssn-1l: step 1's 4 code lanes are cancelled in one more 
 rank = 2
 status = "open"
 owner = "N-COVER"
-source = "D.epilogue: the served int8 epilogue writes each output through a per-row multiply that an FFMA with a per-row bias replaces at no added instruction, so subtracting a per-row term costs m registers a call, not m·n; a SASS fact about the served epilogue (vLLM's cutlass scaled_mm), unchecked"
+source = "D.epilogue: the served int8 epilogue writes each output through a per-row multiply that an FFMA with a per-row bias replaces at no added instruction, so subtracting a per-row term costs m registers a call, not m·n; a SASS fact about the served epilogue (vLLM's cutlass scaled_mm), unchecked. N-EXACT interim 1 §2 (proved on paper, checked by emulation): stock converts each int32 accumulator with I2F, then the column and row scales; I2F as IADD3(D, 0x4B400000 - r_i, -c_j) and the column FMUL as FFMA(v, s_j, -1.5·2^23·s_j) remove a separable r_i + c_j at no added instruction, bit for bit while |A·Bᵀ| < 2^22; a noise that isn't separable costs a write an output (32/K). Open until it is checked on the served epilogue's SASS"
 
 [premise.ssn2-distinct]
 rank = 0
@@ -779,6 +822,12 @@ source = "N-RED interim 1 §3 (note compute-research/20261029T0734Z-report-np-re
 [N.ssn-1l-tag.D.served]
 fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
 source = "N-RED: served, the tags kept in the output; the extra width at the plain GEMM's time a MAC (estimate)"
+
+[N.ssn-1l-tag.D.epilogue]
+fields = { r = "32*(S + 1)/K", formed_x = "0", formed_y = "0", denoise = "m*reg", operand_max = 127, wide_measured = 0, derive_extra = "4*m*rot + 4*m", branch_rows = "rep_at(m, 0, S)" }
+premises = ["ssn-fold-distinct", "weights-distinct", "epilogue-fold"]
+t3 = { s8 = "int8-epi" }
+source = "N-CARD's composition (estimate; N-EXACT's interim 2 prices the served lead's own): N-EXACT's fold removes a separable noise r_i + c_j at no added instruction, but the tag lead's final word also carries a1[i]·C_j and T(i)·G_j, rank 4 each, which cost a write an output to remove in the epilogue (32/K, N-EXACT §2; N-NOISE's epi_full+tag+nz, two IDP4A an output, T1 2.53%). Cancelled instead in one more k32 step (-a1 derived, a LOP3 a row; -T loaded, as T is) against C and G, the final word is A·Bᵀ + r_i + c_j with r_i the sum of the S - 1 later lanes, which N-EXACT's IADD3 and FFMA remove for free (m registers a call for 0x4B400000 - r_i), so the output is stock's int8 product. The tags no longer separate that word: on chosen identical rows it is fixed by r_i alone, S classes with the sum binomial, so the coin branch copies the repeats at that step (rep_at, the same count rep_sum makes for ssn-1l; N-RED's A4 at the final word, unchecked)"
 
 [N.ssn-a]
 title = "ssn-a, served sparse noise: each k32 step 28 entries and a register a = (h >> q) & 0x01010101 a row against public W0"
@@ -1040,6 +1089,10 @@ source = "SW-HASH §7 (a) and (b): the PRF and c forced, M_key·y closed by mask
 [H.hiding.hr]
 premises = ["hiding-ruled"]
 source = "the hiding ruling, ruled out by NIGHT.md §1 default 2"
+
+[H.hiding.cert]
+premises = ["trusted-host", "certifier-salt"]
+source = "R1b: the salt side from the certifier (premise certifier-salt)"
 
 # P, the premise sets that close a term: the final word (the final-word lemma, when the final word is free), forming
 # (the counting lemma, when the formed operands aren't committed) and the noise's derivation (OneInstructionMinimal).
@@ -1538,3 +1591,27 @@ source = "as np-saku-ncp3-k64-pl-m0-c1, t1 at saku.py's T1_mix; route U' takes p
 claims.t8192 = { gap = 0.02764682, t1 = 0.03003772, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m8192 L64 C1" }
 claims.t512 = { gap = 0.15167026, t1 = 0.15921336, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m64 L64 C1" }
 claims.v4like = { gap = 0.01102121, t1 = 0.01395089, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, v4 dense m8192 L64 C1" }
+
+# N-ALT final's cards (alt_roads_cards.toml on cursor/compute-research-np-alt-7c3e at c4af3fe4b1): R1b, the
+# lead's words hashed on the GPU with the salt sides and each call's coins from the network certifier.
+
+[card.np-alt-r1b]
+title = "R1b: ssn-1l-tag with the salt sides and the per-call coins from the network certifier, 256 KiB rows"
+origin = "N-ALT"
+note = "compute-research/20261029T0903Z-report-np-alt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "cert", final = "none", forming = "none", derivation = "none" }
+premises = ["certifier-coins"]
+source = "alt_roads.py r1b_salt_and_arrival on cursor/compute-research-np-alt-7c3e, on N-PREM's ssn-1l-tag: with the coin branch priced (N-RED A1), plain ssn-1l fails T1 under any hiding, and the row tags close the branch, so every T1 term but the noise derivation is the certifier's or the tags' to close"
+claims.t512 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "hiding closed by certifier-salt, hashing before the noise by certifier-coins, the coin branch by ssn-1l-tag's row tags; what is left is SW-NOISE's noise-derivation share (alt_roads_inputs.json ssn_1l), which only derivation = min closes, under one-instruction-minimal, a premise this card doesn't take" }
+claims.t512r512 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as at t512: ssn_1l's noise is 4S entries a row, so its share doesn't depend on m" }
+claims.t8192 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as at t512" }
+
+[card.np-alt-r1b-r16k]
+title = "R1b at 16 KiB rows: with hiding off the prover, rows no longer trade hiding against A's chain"
+origin = "N-ALT"
+note = "compute-research/20261029T0903Z-report-np-alt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r16k", hiding = "cert", final = "none", forming = "none", derivation = "none" }
+premises = ["certifier-coins"]
+source = "alt_roads.py r1b_salt_and_arrival; the certifier's salt-side work at 16 KiB rows is 16x 256 KiB's (alt_roads' table)"
+claims.t512 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as card np-alt-r1b: rows change hashing time, not T1, once hiding is closed" }
+claims.t8192 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as card np-alt-r1b" }
