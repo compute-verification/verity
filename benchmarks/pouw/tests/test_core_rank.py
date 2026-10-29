@@ -1,4 +1,5 @@
-"""`core_rank/rank.py` refuses a row that leaves a target uncited or unplaced, and pools a shared gap over each period."""
+"""`core_rank/rank.py` refuses a row that leaves a target uncited, unplaced or out of order, and pools a shared gap over
+each period."""
 from __future__ import annotations
 
 import importlib.util
@@ -52,3 +53,22 @@ def test_an_incomplete_row_is_refused_by_name(over, says):
 
 def test_a_period_without_its_sources_is_refused():
     assert R.check([row()], {k: v for k, v in PERIOD.items() if k != "sources"}) == ["[period] lacks 'sources'"]
+
+
+def test_holding_designs_by_rank_then_restatements_then_failures_is_in_order():
+    rows = [row(id="A", pos=1, rank=3), row(id="B", pos=2, rank=5), row(id="C", pos=3, rank=3, restates="A"),
+            row(id="D", pos=4, rank=3, t1_status="fail"), row(id="E", pos=5, rank=4, t1_status="fail")]
+    assert R.check(rows, PERIOD) == []
+
+
+@pytest.mark.parametrize(("rows", "says"), [
+    ([row(id="P", pos=1, rank=5), row(id="S", pos=2, rank=4)],
+     "S at #2 (T1 could hold, rank 4) belongs above P at #1 (T1 could hold, rank 5)"),
+    ([row(id="F", pos=1, rank=3, t1_status="fail"), row(id="H", pos=2, rank=5)],
+     "H at #2 (T1 could hold, rank 5) belongs above F at #1 (T1 fails, rank 3)"),
+    ([row(id="A", pos=1, rank=3), row(id="C", pos=2, rank=3, restates="Z")],
+     "C: restates 'Z', which is not a ranked design whose T1 could still hold"),
+])
+def test_a_design_out_of_order_is_refused(rows, says):
+    errs = R.check(rows, PERIOD)
+    assert any(e.startswith(says) for e in errs), errs

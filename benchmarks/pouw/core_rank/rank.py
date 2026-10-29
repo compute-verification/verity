@@ -2,8 +2,10 @@
 
 A rows file is TOML: one ``[[row]]`` per design or argument, each target a cited value or ``"?"``, and one
 ``[period]`` table with the compute a monitoring period scales by. ``rank.py`` refuses a row that leaves a column empty,
-uses a provenance mark or Lean status outside the lists below, or ranks a design without a position, and writes
-``ranking.md``, ``ranking.csv`` and ``ranking.json`` into ``--out``.
+uses a provenance mark or Lean status outside the lists below, or ranks a design without a position or out of order,
+and writes ``ranking.md``, ``ranking.csv`` and ``ranking.json`` into ``--out``. The order is ``GROUPS``, each by rank:
+first the designs whose T1 could still hold, then those that only restate one of them (``restates = "ID"``), then those
+whose own numbers fail T1. Within a group and a rank the order is by H200 evidence, which is judgment and not checked.
 
 The rows hold measured numbers and the ids of the runs behind them, so they live with the evidence, not in this tree:
 ``uv run python benchmarks/pouw/core_rank/rank.py --rows ROWS.toml --out DIR``.
@@ -27,7 +29,16 @@ STATUS = ("met", "open", "fail", "n/a")
 VERDICTS = ("ranked", "argument", "out", "not core")
 TARGETS = ("t1", "t2", "t3")
 REQUIRED = ("id", "design", "catalogs", "assumption", "rank", "lean", "lean_ids", "vllm", "verdict", "why", "cites")
+GROUPS = ("T1 could hold", "restates one", "T1 fails")
 WEEK_S, MONTH_S, YEAR_S = 7 * 86400, 365 * 86400 / 12, 365 * 86400
+
+
+def group(r: dict) -> str:
+    return GROUPS[2] if r.get("t1_status") == "fail" else GROUPS[1] if r.get("restates") else GROUPS[0]
+
+
+def order_key(r: dict) -> tuple[int, int]:
+    return GROUPS.index(group(r)), r["rank"]
 
 
 def check(rows: list[dict], period: dict) -> list[str]:
@@ -67,6 +78,16 @@ def check(rows: list[dict], period: dict) -> list[str]:
             errs.append(f"{rid}: 'share' must be a fraction in [0, 1] with a 'share_basis' saying which reading it is")
     if sorted(positions) != list(range(1, len(positions) + 1)):
         errs.append(f"ranked positions {sorted(positions)} must be 1..{len(positions)} with no gap or repeat")
+    ranked = sorted((r for r in rows if r.get("verdict") == "ranked" and isinstance(r.get("pos"), int)
+                     and isinstance(r.get("rank"), int)), key=lambda r: r["pos"])
+    holding = {r["id"] for r in ranked if group(r) == GROUPS[0]}
+    for r in ranked:
+        if r.get("restates") and r["restates"] not in holding:
+            errs.append(f"{r['id']}: restates {r['restates']!r}, which is not a ranked design whose T1 could still hold")
+    for a, b in zip(ranked, ranked[1:]):
+        if order_key(b) < order_key(a):
+            errs.append(f"{b['id']} at #{b['pos']} ({group(b)}, rank {b['rank']}) belongs above {a['id']} at #{a['pos']} "
+                        f"({group(a)}, rank {a['rank']}): order the groups {' / '.join(GROUPS)}, each by rank")
     for k in ("world_flop_year", "dc_gpus", "gpu_flops", "mfu", "gates_per_flop", "sources"):
         if k not in period:
             errs.append(f"[period] lacks '{k}'")
@@ -156,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     (a.out / "ranking.md").write_text(render_md(rows, period, prows, meta))
     (a.out / "ranking.json").write_text(json.dumps({"meta": meta, "period": period, "rows": rows,
                                                     "per_period": prows}, indent=1, ensure_ascii=False))
-    keys = ["pos", *REQUIRED[:5], *(f"{t}{s}" for t in TARGETS for s in ("", "_card", "_status")), *REQUIRED[5:],
+    keys = ["pos", "restates", *REQUIRED[:5], *(f"{t}{s}" for t in TARGETS for s in ("", "_card", "_status")), *REQUIRED[5:],
             "needs", "share", "share_basis"]
     with (a.out / "ranking.csv").open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=keys, extrasaction="ignore")
