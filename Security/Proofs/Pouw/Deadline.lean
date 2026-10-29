@@ -1,6 +1,7 @@
 import Definitions.Pouw.Guarantees.Deadline
 import Proofs.Pouw.Game
 import Proofs.Pouw.Prob
+import Proofs.Pouw.Break
 import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
 import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
 import Proofs.Pouw.PearlC.TTOutW1
@@ -30,16 +31,17 @@ theorem WorkBetweenSaltAndDeadline : Pouw.Guarantees.WorkBetweenSaltAndDeadline 
     rw [hpre] at h1 ⊢
     omega
   refine le_trans (pr_mono fun x hx => ?_) (EndToEnd Q R S CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU T hT q hq A' hb t εs hεs)
-  obtain ⟨⟨htr, hacc⟩, hlt⟩ := hx
-  rw [(hA' x.1 x.2.1).1 htr]
-  exact ⟨hacc, hlt⟩
+  obtain ⟨⟨htr, hacc⟩, hlt, hbr⟩ := hx
+  obtain ⟨heq, hsub⟩ := (hA' x.1 x.2.1).1 htr
+  rw [heq]
+  exact ⟨hacc, hlt, fun h => hbr (Pouw.Proofs.collisionIn_mono hsub h)⟩
 
 theorem SpareCapacityAtDeadline : Pouw.Guarantees.SpareCapacityAtDeadline := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU A run td hclock C Y hY q hq hB t εs hεs
   have hb : A.BoundedBy U run td (C * (td - run.ts) - Y) q := by
     intro H s
     exact ⟨by linarith [(hB H s).1], (hB H s).2⟩
-  refine le_trans (pr_mono fun x hx => ⟨hx.1, by linarith [hx.2]⟩)
+  refine le_trans (pr_mono fun x hx => ⟨hx.1, by linarith [hx.2.1], hx.2.2⟩)
     (WorkBetweenSaltAndDeadline Q R S CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU A run td hclock (C * (td - run.ts) - Y)
       (by linarith) q hq hb t εs hεs)
 

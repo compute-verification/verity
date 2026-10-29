@@ -1,6 +1,7 @@
 import Definitions.Pouw.Barrier.Pinned
 import Proofs.Pouw.NCP.Proofs
 import Proofs.Pouw.Prob
+import Proofs.Pouw.Break
 import Definitions.Pouw.Guarantees.Barrier
 
 /-!
@@ -34,14 +35,16 @@ theorem wins_of_all_correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s
 /-- **The generic barrier, in probability.** -/
 theorem genericPr : Pinned.GenericPr := by
   intro Q R S _ _ _ _ CM P D U A c₀ q hU hc hq hA hW γ hγ η hG
-  exact le_trans (pr_mono fun x hx => wins_of_all_correct P U x.1 x.2 _ hc hW hγ hx) (hG U hU c₀ hc q hq A hA)
+  exact le_trans (pr_mono fun x hx => ⟨wins_of_all_correct P U x.1 x.2 _ hc hW hγ hx.1, hx.2⟩)
+    (hG U hU c₀ hc q hq A hA)
 
 /-- **The generic barrier.** -/
 theorem generic : Pouw.Guarantees.Barrier.Generic := by
   intro Q R S _ _ _ _ _ _ CM P D U A c₀ q hpt hW γ hγ η hG
   obtain ⟨hU, hc, hq, hA, hall⟩ := hpt
   have h := genericPr Q R S CM P D U A c₀ q hU hc hq hA hW γ hγ η hG
-  have h1 : pr (fun x : (Q → R) × S => correctSet P U x.1 x.2 (A.transcript U x.1 x.2) = range U.layout.N) = 1 :=
+  have h1 : pr (fun x : (Q → R) × S =>
+      correctSet P U x.1 x.2 (A.transcript U x.1 x.2) = range U.layout.N ∧ ¬ A.Breaks U x.1 x.2) = 1 :=
     pr_eq_one fun x => hall x.1 x.2
   rwa [h1] at h
 
@@ -81,6 +84,16 @@ theorem planAdv_correct (N : NoiseSrc Q R S) (f : Shape → Plan) (P : Protocol 
   intro hu
   exact ⟨_, by simp [Adversary.transcript, gemmModel, planAdv, hu], hc H s u hu⟩
 
+theorem gemmModel_hashless (N : NoiseSrc Q R S) : (gemmModel N).Hashless := fun _ _ _ _ _ _ => rfl
+
+/-- `planAdv_correct`, with no break: the abstract model hashes nothing. -/
+theorem planAdv_cheap (N : NoiseSrc Q R S) (f : Shape → Plan) (P : Protocol Q R S) (U : Workload)
+    (hc : ∀ (H : Q → R) (s : S), ∀ u < U.layout.N,
+      Correct P U H s u ((f (U.layout.shape u)).commit N H s U (fun _ => 0) u)) :
+    ∀ (H : Q → R) (s : S),
+      correctSet P U H s ((planAdv N f).transcript U H s) = range U.layout.N ∧ ¬ (planAdv N f).Breaks U H s :=
+  fun H s => ⟨planAdv_correct N f P U hc H s, not_breaks_of_hashless (gemmModel_hashless N) _ _ _ _⟩
+
 theorem zero_actOK (sh : Shape) : ActOK sh (0 : Mat) := fun _ _ _ _ => by unfold InInt7; norm_num
 
 theorem sum_Ico_zero (k : ℕ) (f : ℕ → ℤ) : ∑ l ∈ Ico 0 (0 + k), f l = ∑ l ∈ range k, f l := by
@@ -113,7 +126,7 @@ theorem additive : Pinned.Additive := by
   have hpt : CheapPoint (gemmModel N) (addProto N W) D U (planAdv N addPlan)
       (∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) 0 :=
     ⟨hU, by positivity, by norm_num, hB,
-      planAdv_correct N addPlan _ U fun H s u _ => addPlan_correct N W U H s u⟩
+      planAdv_cheap N addPlan _ U fun H s u _ => addPlan_correct N W U H s u⟩
   have hWt : p * ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ) ≤ totalWref (addProto N W) U.layout := by
     rw [Finset.mul_sum]
     exact Finset.sum_le_sum fun u hu => hW u (Finset.mem_range.1 hu)
@@ -321,7 +334,7 @@ theorem relation : Pinned.Relation := by
   have hpt : CheapPoint (gemmModel N) (relProto t c N W) D U (planAdv N (relPlan t c))
       (((t : ℝ) - 1) * ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) 0 :=
     ⟨hU, mul_nonneg (by have : (1 : ℝ) ≤ t := (by exact_mod_cast ht); linarith) hS.le, by norm_num, hB,
-      planAdv_correct N _ _ U fun H s u _ => relPlan_correct W ht hc hN U H s u⟩
+      planAdv_cheap N _ _ U fun H s u _ => relPlan_correct W ht hc hN U H s u⟩
   have hWt : (t : ℝ) * ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)
       ≤ totalWref (relProto t c N W) U.layout := by
     rw [Finset.mul_sum]
@@ -540,7 +553,7 @@ theorem segment : Pinned.Segment := by
   have hpt : CheapPoint (gemmModel N) (segProto L d α β N W) D ⟨Lay, fun _ => 0⟩ (planAdv N (segPlan L d))
       (((L : ℝ) - 1) * ∑ u ∈ range Lay.N, (((Lay.shape u).m : ℝ) * d * (Lay.shape u).n)) 0 :=
     ⟨hU, mul_nonneg (by linarith) hS'.le, by norm_num, hB,
-      planAdv_correct N _ _ _ fun H s u _ => segPlan_correct W hL hα hβ hcan Lay H s u⟩
+      planAdv_cheap N _ _ _ fun H s u _ => segPlan_correct W hL hα hβ hcan Lay H s u⟩
   have hWt : (L : ℝ) * ∑ u ∈ range Lay.N, (((Lay.shape u).m : ℝ) * d * (Lay.shape u).n)
       ≤ totalWref (segProto L d α β N W) Lay := by
     rw [Finset.mul_sum]
@@ -561,7 +574,7 @@ def oneUnit : Workload := ⟨⟨1, fun _ => ⟨1, 1, 1⟩, fun _ => 0⟩, fun _ 
 theorem genericWitness : Pinned.GenericWitness := by
   refine ⟨fun _ _ _ _ _ _ => 0, addProto (fun _ _ _ _ _ _ => 0) fun L u => 2 * (L.shape u).Wmm, fun _ => True,
     oneUnit, planAdv _ addPlan, 1, addProto_complete _ _ _, (additiveWitness Unit Unit Unit _ _).2.1, ⟨?_, by norm_num,
-    by norm_num, ?_, planAdv_correct _ addPlan _ _ fun H s u _ => addPlan_correct _ _ oneUnit H s u⟩, ?_, ?_⟩
+    by norm_num, ?_, planAdv_cheap _ addPlan _ _ fun H s u _ => addPlan_correct _ _ oneUnit H s u⟩, ?_, ?_⟩
   · refine ⟨by norm_num [oneUnit], trivial, fun u hu l _ j _ => ?_⟩
     unfold InInt7; norm_num [oneUnit]
   · have hB := planAdv_bounded (Q := Unit) (R := Unit) (S := Unit) (fun _ _ _ _ _ _ => 0) addPlan oneUnit

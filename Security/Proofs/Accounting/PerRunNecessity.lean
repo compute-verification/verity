@@ -1,4 +1,5 @@
 import Proofs.Accounting.PerRunPouw
+import Proofs.Pouw.Break
 
 /-!
 # PoUW's per-run guarantee needs the cost model to truncate
@@ -51,6 +52,7 @@ theorem tt : Assumptions.TT CM P D 0 (fun _ _ => 0) := by
   intro U' _ T _ q _ A' hA'
   classical
   refine (pr_eq_zero fun x hx => ?_).le
+  replace hx := hx.1
   have hT : ∑ u ∈ range U'.layout.N, ((U'.layout.shape u).Wmm : ℝ) ≤ T := by
     simpa [CM] using (hA' x.1 false).1
   have hK : ∑ u ∈ checkedSet P U' x.1 x.2 (A'.transcript U' x.1 x.2), ((U'.layout.shape u).Wmm : ℝ) ≤
@@ -126,7 +128,9 @@ theorem tt_not_perRun :
 theorem not_budgetAbort : ¬ BudgetAbort CM := by
   intro h
   obtain ⟨hTT, hW, hU, hA, hlt⟩ := tt_not_perRun
-  exact absurd (SecurityProofs.PouwEndToEndPerRun Unit Unit Bool CM P D 0 1 (fun _ _ => 0) one_pos one_pos hW hTT h
-    U hU 0 (by norm_num) A hA 2 (1 / 2) (by norm_num)) (not_le.2 hlt)
+  have hb := SecurityProofs.PouwEndToEndPerRun Unit Unit Bool CM P D 0 1 (fun _ _ => 0) one_pos one_pos hW hTT h
+    U hU 0 (by norm_num) A hA 2 (1 / 2) (by norm_num)
+  exact absurd (le_trans (pr_mono fun x hx =>
+    ⟨hx.1, hx.2, Pouw.Proofs.not_breaks_of_hashless (fun _ _ _ _ _ _ => rfl) A U x.1 x.2.1⟩) hb) (not_le.2 hlt)
 
 end Accounting.PerRunNecessity

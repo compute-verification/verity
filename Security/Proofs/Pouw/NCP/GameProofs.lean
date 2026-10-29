@@ -140,8 +140,8 @@ theorem wins_imp_ttncp (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S)
 theorem gammaFromTTNCP : GamePinned.GammaFromTTNCP := by
   intro Q R S _ _ _ _ CM P d D γ₀ Ωmax ε hγ₀ hΩ hW hside hTT U hU T hT q hq A hA
   refine le_trans (pr_mono ?_) ((hTT hside).2 U hU T hT q hq A hA)
-  rintro ⟨H, s⟩ hwin
-  exact wins_imp_ttncp P U H s _ hΩ (hW U hU) hwin
+  rintro ⟨H, s⟩ ⟨hwin, hb⟩
+  exact ⟨wins_imp_ttncp P U H s _ hΩ (hW U hU) hwin, hb⟩
 
 /-! ## TT_NCP's witness -/
 
@@ -213,7 +213,7 @@ theorem ttncp_outputPriced3 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] 
   have e3 : T ≤ T / (1 - γ₀) := by
     rw [le_div_iff₀ (by linarith)]
     nlinarith
-  exact absurd hx (not_lt.2 (e1.trans (e2.trans e3)))
+  exact absurd hx.1 (not_lt.2 (e1.trans (e2.trans e3)))
 
 /-- **TT_NCP's satisfiability witness.** -/
 theorem ttncpWitness : GamePinned.TTNCPWitness := by
@@ -375,7 +375,8 @@ theorem oneSegment : GamePinned.OneSegment := by
   have hall := Barrier.Proofs.planAdv_correct P.nz (onePlan P.d) P.toProtocol ⟨Lay, fun _ => 0⟩
     fun H s u hu => onePlan_correct P hd Lay H s u (hk u hu) fun _ hτ _ ha _ hb =>
       nz_int32 P hN hR Lay H s u (hsh u hu) hτ ha hb
-  refine ⟨Barrier.Proofs.planAdv P.nz (onePlan P.d), ⟨hU, ?_, by norm_num, hB, hall⟩, ?_⟩
+  refine ⟨Barrier.Proofs.planAdv P.nz (onePlan P.d), ⟨hU, ?_, by norm_num, hB,
+    fun H s => ⟨hall H s, not_breaks_of_hashless (Barrier.Proofs.gemmModel_hashless _) _ _ _ _⟩⟩, ?_⟩
   · refine Finset.sum_nonneg fun u hu => ?_
     rw [← hcost u hu]
     positivity
