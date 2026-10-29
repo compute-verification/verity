@@ -243,7 +243,7 @@ another composite, or one the check refuses, is an error. -/
 def loggedView (j : Json) : V Core.Registration.View := do
   let p ← Core.Registration.Params.ofJson (← J.get j "params" "op")
   let l ← J.get j "log" "op"
-  Core.Registration.ascii l "the log"
+  Core.Registration.ascii l
   let c ← Core.Registration.Committed.ofJson l
   if c.composite != p.composite then throw "the log is another composite's"
   match Core.Registration.check p.auditor p.composite c.log with
