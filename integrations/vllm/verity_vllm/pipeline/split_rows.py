@@ -9,7 +9,7 @@ Part unit (row, h, s) reads ``in0`` = ``q_nope[h]``, ``in1`` = ``q_rope[h]`` and
 stores: the reader computes every split's with the twin (`sparse_mla_split_twins.part_rows`) and holds the twin's combine of
 them to the row's served output.  Combine unit (row, h) reads ``in0.s`` = split s's ``lse`` and ``in1.s`` = its partial for each
 split s, and returns ``o0`` = the served head h.  The window wires each of those rows to the output row of the part unit that
-wrote it (`wire`, `commit.wiring`), so a drawn combine's inputs are the committed outputs of its parts."""
+wrote it (`wire`, `commit.wiring`), so a sampled combine's inputs are the committed outputs of its parts."""
 from __future__ import annotations
 
 import re
