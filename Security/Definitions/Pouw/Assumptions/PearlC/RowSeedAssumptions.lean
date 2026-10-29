@@ -3,8 +3,7 @@ import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 /-!
 # The named assumption `FragDraw`, the fragment corollary's per-row draw (trusted; a `Prop` hypothesis, not an `axiom`)
 
-Named by a ruling. Only the fragment corollary takes it, `ttOutRowSeed_skipClass`
-(`RowSeedSkip.lean`), the skip class's supporting line. P2's main line, `ttOutRowSeed_of_ttOut` and
+Named by a ruling, for the fragment corollary only, the skip class's supporting line. P2's main line, `ttOutRowSeed_of_ttOut` and
 `ttOutTileRowSeed_of_ttOutTile`, does not read it and takes no named assumption.
 
 The corollary's other conditions stay definitions in `TTOutRowSeed.lean`, taken as hypotheses: (C4)

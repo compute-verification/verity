@@ -11,7 +11,7 @@ which m64n128k32 and m64n64k32 e4m3 reach to within 2 ppm. Each entry is the lea
 measured, rounded down to a natural number. It is a measurement, not a floor, and since Round 8 it does not bound the
 hardware from below (below).
 
-`h32Measured` (`Pouw.Dimension.H100MeasuredProofs`) proves `H32 h100Measured` by `decide`, so a re-measured entry
+`H32 h100Measured` holds by `decide`, so a re-measured entry
 changes only this definition. `DistinctWritesMeasured` (`Pouw.Dimension.H100Cite`) is the distinct-writes bound at
 these prices, with no hypothesis on the tensor-core instructions' multiplicands.
 

@@ -36,11 +36,10 @@ Three additions, also definitions only:
   relabelling a program's oracle keeps its cost and calls. With them the row-seeded TT_OUT carries to the code's form
   at the same error (`ttOutRowSeed_code`, in `RowSeedCode.lean`).
 - **The fragment argument's counting side** ("The fragment argument, made rigorous"):
-  `SkipSetU`, `undebitedSkippable` and `fragCount`, which `fragSkip_count_le` (`RowSeedFragment.lean`) bounds a skip
-  program's undebited slots by.
+  `SkipSetU`, `undebitedSkippable` and `fragCount`, which bound a skip program's undebited slots.
 - **The fragment argument's skip class** (option (a) of the fragment-draw ruling):
   `SkipProgram` and its class, `SkipEmbed`, (C4) `CostModel.FragmentPriced`, (C6) `PearlCSem.RowDrawn`, `rowWords` and
-  `QTree.hits`, which `qtree_union_bound` and `ttOutRowSeed_skipClass` (`RowSeedSkip.lean`) read. The corollary's one
+  `QTree.hits`, which the corollary reads. The corollary's one
   named assumption, `Assumptions.FragDraw`, is in `RowSeedAssumptions.lean`. P2 rests on `ttOutRowSeed_of_ttOut` (and
   its tile twin) alone, with no named assumption; the corollary is a supporting line, and it takes no TT_OUT.
 -/

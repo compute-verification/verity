@@ -95,10 +95,12 @@ import Proofs.Pouw.PearlC.DeviceSm120Gamma
 import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
 import Proofs.Pouw.PearlC.DeviceSm120LoopGamma
 import Proofs.Pouw.PearlC.DeviceSm120v2LoopEquiv
+import Proofs.Pouw.PearlC.EncChecks
 import Proofs.Pouw.PearlC.FlockTile
 import Proofs.Pouw.PearlC.Forming
 import Proofs.Pouw.PearlC.FormingP
 import Proofs.Pouw.PearlC.Fp4ChainOnlyGamma
+import Proofs.Pouw.PearlC.Fp4Checks
 import Proofs.Pouw.PearlC.Fp4Freeze
 import Proofs.Pouw.PearlC.Fp4HotGamma
 import Proofs.Pouw.PearlC.Fp4IssueGamma
@@ -113,8 +115,10 @@ import Proofs.Pouw.PearlC.HonestWords
 import Proofs.Pouw.PearlC.Instance
 import Proofs.Pouw.PearlC.KernelWrefGamma
 import Proofs.Pouw.PearlC.Peel
+import Proofs.Pouw.PearlC.PeelExactChecks
 import Proofs.Pouw.PearlC.PeelExactProofs
 import Proofs.Pouw.PearlC.PeelExactProofsP
+import Proofs.Pouw.PearlC.PeelFp4Checks
 import Proofs.Pouw.PearlC.PeelFp4Proofs
 import Proofs.Pouw.PearlC.Rev1Witness
 import Proofs.Pouw.PearlC.RowCircuit
@@ -127,6 +131,7 @@ import Proofs.Pouw.PearlC.RowSeedKGamma
 import Proofs.Pouw.PearlC.ServedFadd8Rev1Gamma
 import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
 import Proofs.Pouw.PearlC.ServedRev1Gamma
+import Proofs.Pouw.PearlC.Sm120Checks
 import Proofs.Pouw.PearlC.TTOutW1RowSeed
 import Proofs.Pouw.PearlC.Tile4Circuit
 import Proofs.Pouw.PearlC.TileCapRev1Gamma

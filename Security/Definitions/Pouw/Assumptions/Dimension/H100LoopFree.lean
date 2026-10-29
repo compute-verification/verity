@@ -18,7 +18,7 @@ a floor except at `tc`, which both tables take from this board's legacy `mma.syn
 citations are `DistinctWritesLoopFree` (these prices, for the measured forms) and `DistinctWritesFloor` (every scalar
 form and every `wgmma` shape, and legacy tensor-core forms as measured).
 
-`h32LoopFree` (`Pouw.Dimension.H100LoopFreeProofs`) proves `H32 h100LoopFree` by `decide`. It has no slack: `tc`,
+`H32 h100LoopFree` holds by `decide`. It has no slack: `tc`,
 `ffma` and `fp64` are exactly 32.
 
 **Work, not time.** `H32` holds per instruction class, not per register in time. Writers on separate pipes co-issue:

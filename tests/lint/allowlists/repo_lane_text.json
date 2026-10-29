@@ -227,6 +227,7 @@
     {"file": "Security/Proofs/Pouw/PearlC/DeviceSm120KernelGamma.lean", "count": 1},
     {"file": "Security/Proofs/Pouw/PearlC/Forming.lean", "count": 6},
     {"file": "Security/Proofs/Pouw/PearlC/Peel.lean", "count": 14},
+    {"file": "Security/Proofs/Pouw/PearlC/PeelExactChecks.lean", "count": 1},
     {"file": "Security/Proofs/Pouw/PearlC/PeelExactProofs.lean", "count": 3},
     {"file": "Security/Proofs/Pouw/PearlC/PeelFp4Proofs.lean", "count": 5},
     {"file": "Security/Proofs/Pouw/PearlC/TTOutW1Item1.lean", "count": 4},

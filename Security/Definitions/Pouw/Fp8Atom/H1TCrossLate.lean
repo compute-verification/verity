@@ -3,7 +3,7 @@ import Definitions.Pouw.Fp8Atom.H1TLemmas
 /-!
 # H-1T: the cross-column late pairs in the exact-512 regime (statements)
 
-The definitions the five `H1TCrossLateStaging` theorems read, in a module that imports no proofs.
+The definitions of the cross-column late pairs in the exact-512 regime, in a module that imports no proofs.
 `CrossLateResidue512` is the finite two-slice lemma over the last two quiet slices' tag fields, `Exact512` the regime
 (real codes 0 on the last two slices, tag values multiples of 32, `R_(T−3)` exact on the 512 grid at the zero salt),
 `H1TCrossLate512` the unit statement, and `absorbUnit` the unit of `H1TGapStaging`'s last section. The regime is empty
