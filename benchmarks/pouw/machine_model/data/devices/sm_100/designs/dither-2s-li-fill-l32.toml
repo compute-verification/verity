@@ -2,7 +2,7 @@
 # formed by vfold: dither-2s-li-l32's noise, fold and honest. With the operands free (the TS model's word-route demand
 # prices delivery at 0), the cheater skips the 8 tcgen05.ld.x128 a MMA that bring the words to lanes, 8 of ♭'s 1033
 # issue cycles (0.774%) at every q*; the filler adds 768 to ♭ and to the cheater, which takes ε_machine to 0.444% and,
-# over the same B_♭, ε_skip to 0.483% (EPS1 DC r6). Its ε_skip is its own, ♭ with the filler, as the H200's LI designs'.
+# over the same B_♭, ε_skip to 0.483%. Its ε_skip is its own, ♭ with the filler, as the H200's LI designs'.
 name = "dither-2s-li-fill-l32"
 title = "Dither-2S, LI, ¾ filler, L = 32"
 summary = "Dither-2S on the B200 at L = 32: two-sided dither, LI receipts, ¾ verified lane instruction a word, P·V's peel with vfold's sums"
@@ -52,7 +52,7 @@ p = 0.75
 checks = 48000
 source = "SPEC §5: Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
-[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IMAD = 8 }
 source = "dp4a at 8 IDP4A a word at L = 32, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"
