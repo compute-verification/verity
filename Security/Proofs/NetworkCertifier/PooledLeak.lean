@@ -12,21 +12,26 @@ The probability half: each window's audit, given the earlier windows' coins, acc
 `(1 - q)^|W_i| + e_i`, and the escapes multiply over the windows with the errors adding (`pr_adaptive_add_le`). That is
 the monitoring-period step (`FlockSoundness.Audit.Periods.prCoin_forall_prod_le`) at each window's bound capped at `1`,
 whose product is at most the product of the escapes plus the errors' sum (`prod_min_add_le`). The tied audits'
-incorrect sets escape the same way at `1 - q_t`, and a union bound adds the leak relations' errors `e' i`.
+incorrect proof blocks are sampled proofs' pooled bound, an input taken as it is, and a union bound adds it and the leak
+relations' errors `e' i`.
 
-The count half: a family of faulty sets with fewer than `Fmax` units in total is the units listed by some
-`Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them, and a family of
-incorrect sets of at most `F_t` tied proof blocks one of at most `(N_t + 1)^F_t`. At one pair of families, each window's
+What a tied proof block reaches: a gate outside the downstream cone of the gates holding free values computes the
+value it computes with none free (`valOver_congr_free`, gate by gate as `valOver` reads), so a returned value of a tied
+audit wired to a scan input outside what its incorrect proof blocks reach is the value its Program computes
+(`TiedAudit.valOver_eq_of_notMem_reach`). That is why the leak relation pins every other registered input.
+
+The count half: a family of sets of incorrect proof blocks with fewer than `Fmax` in total is the proof blocks listed by
+some `Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them, and a family
+of fewer than `F_t` tied proof blocks one of at most `(N_t + 1)^F_t`. At one pair of families, each window's
 observations number at most `2^#(freeInputs \ (reg \ A)) · 2^(faultyBits) · Dj^k` (`encard_leakAt_le`, from
 `encard_acceptedFaulty_le` at `AsReg`), `A` what the window's incorrect tied proof blocks reach, at most
-`2^#(freeInputs \ reg) · 2^#A` (`card_sdiff_sdiff_le`); the faulty bits sum to at most `b · Fmax`, and the `A` to at
-most `R · F_t` inputs (`card_tiedReach_le`). Every `A` is within the window's span (`tiedReach_subset_span`), and a
-leak relation with fewer inputs pinned holds whenever one with more does (`leakAt_mono`), so the same observations are
-also among those at the spans unpinned, `2^(Σ_i #span_i)` in place of the tied families. Under `trusted-host` the cells
-the client receives read back from the network certifier's record under the schedule, one its record format holds
-(`tap_cells_read`), so they
-number at most `#Ss` times those records, which bounds the secrets they decode to (`encard_pooledGood_le`);
-`∏_c (cap_c + 1)` is room, as in the period's bound.
+`2^#(freeInputs \ reg) · 2^#A` (`card_sdiff_sdiff_le`); the incorrect proof blocks' bits sum to at most `b · Fmax`, and
+the `A` to at most `R · F_t` inputs (`card_tiedReach_le`). Every `A` is within the window's span
+(`tiedReach_subset_span`), and a leak relation with fewer inputs pinned holds whenever one with more does
+(`leakAt_mono`), so the same observations are also among those at the spans unpinned, `2^(Σ_i #span_i)` in place of
+the tied families. Under `trusted-host` the cells the client receives read back from the network certifier's record
+under the schedule, one its record format holds (`tap_cells_read`), so they number at most `#Ss` times those records,
+which bounds the secrets they decode to (`encard_pooledGood_le`); `∏_c (cap_c + 1)` is room, as in the period's bound.
 
 At no tied audit (`horizonLeak_untied`) the statement is the one without them: nothing is unpinned, and the tied factor
 and error are `1` and `0`.
@@ -215,6 +220,66 @@ theorem tiedReach_nil (F : Finset ℕ) : tiedReach [] F = ∅ := by
 
 theorem tiedSpan_nil : tiedSpan [] = ∅ := tiedReach_nil _
 
+theorem tiedWidth_nil : tiedWidth [] = 0 := by simp [tiedWidth, tiedReaches]
+
+theorem sup_tiedWidth_nil {m : ℕ} : ((univ : Finset (Fin m)).sup fun _ => tiedWidth []) = 0 :=
+  Nat.eq_zero_of_le_zero (Finset.sup_le fun _ _ => tiedWidth_nil.le)
+
+/-! ### What a tied proof block reaches -/
+
+/-- **Free values reach only their downstream cone**: free values that agree off the gates `Sv v` of the proof blocks
+`v ∈ F` give one value at every gate outside each one's cone (`inCone`). -/
+theorem valOver_congr_free (C : Prog) (inp : ℕ → Bool) (F : Finset ℕ) (Sv : ℕ → List ℕ)
+    {free free' : ℕ → Option Bool} (h : ∀ g, (∀ v ∈ F, g ∉ Sv v) → free g = free' g) (g : ℕ)
+    (hg : ∀ v ∈ F, inCone C (Sv v) g = false) : valOver C inp free g = valOver C inp free' g := by
+  induction g using Nat.strong_induction_on with
+  | _ g ih =>
+    have hgS : ∀ v ∈ F, g ∉ Sv v := fun v hv => by
+      have hv' := hg v hv
+      rw [inCone] at hv'
+      simp only [Bool.or_eq_false_iff, decide_eq_false_iff_not] at hv'
+      exact hv'.1
+    have hfg := h g hgS
+    rcases hf : free g with _ | b
+    · have hf' : free' g = none := by rw [← hfg]; exact hf
+      rcases hx : C.gates[g]? with _ | x
+      · rw [valOver_of_none_none C inp hf hx, valOver_of_none_none C inp hf' hx]
+      · rw [valOver_of_none_some C inp hf hx, valOver_of_none_some C inp hf' hx]
+        congr 1
+        apply bgate_val_congr x
+        intro i hi
+        split_ifs with hig
+        · have hi' : ∀ v ∈ F, inCone C (Sv v) i = false := fun v hv => by
+            have hv' := hg v hv
+            rw [inCone] at hv'
+            simp only [Bool.or_eq_false_iff, hx, List.any_eq_false] at hv'
+            simpa [hig] using hv'.2 i hi
+          rw [ih i hig hi']
+        · rfl
+    · have hf' : free' g = some b := by rw [← hfg]; exact hf
+      rw [valOver_of_some C inp hf, valOver_of_some C inp hf']
+
+/-- **What a tied audit's incorrect proof blocks reach**: with free values only at the committed gates of the proof
+blocks `F` (as `AcceptedFaulty` takes them), a returned value wired to a scan input outside what `F` reaches
+(`TiedAudit.reach`) is the value the audit's Program computes with no free value. -/
+theorem TiedAudit.valOver_eq_of_notMem_reach (a : TiedAudit) (inp : ℕ → Bool) {free : ℕ → Option Bool}
+    {F : Finset ℕ} (hfree : ∀ g b, free g = some b → FaultyGate a.prog a.part F g) {w o : ℕ}
+    (hwo : (w, o) ∈ a.wire.zip a.prog.outs) (hw : w ∉ F.biUnion a.reach) :
+    valOver a.prog inp free o = valOver a.prog inp (fun _ => none) o := by
+  refine valOver_congr_free a.prog inp F (fun v => RU.gates (a.part.rus.getD v [])) (fun g hg => ?_) o
+    fun v hv => ?_
+  · rcases hf : free g with _ | b
+    · rfl
+    · obtain ⟨v, hv, r, hr, hgr, -⟩ := hfree g b hf
+      have hgv : g ∈ RU.gates (a.part.rus.getD v []) := by
+        rw [List.getD_eq_getElem?_getD, hr, Option.getD_some]
+        exact hgr
+      exact (hg v hv hgv).elim
+  · by_contra hc
+    simp only [Bool.not_eq_false] at hc
+    exact hw (Finset.mem_biUnion.2 ⟨v, hv, List.mem_toFinset.2
+      (List.mem_map.2 ⟨(w, o), List.mem_filter.2 ⟨hwo, hc⟩, rfl⟩)⟩)
+
 /-! ### The count -/
 
 theorem encard_leakAt_le {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
@@ -264,7 +329,7 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
   set A2 : ℕ := 2 ^ ∑ i, (tiedSpan (T i)).card
   let s : Finset (Fin Fmax → Option (Σ i : Fin m, Fin (n i))) := univ.filter fun g => ∑ i, (famOf g i).card < Fmax
   let st : Finset (Fin Ft → Option (Σ i : Fin m, Fin ((tiedReaches (T i)).length))) :=
-    univ.filter fun g => ∑ i, (famOf g i).card ≤ Ft
+    univ.filter fun g => ∑ i, (famOf g i).card < Ft
   let X : (Fin Fmax → Option (Σ i : Fin m, Fin (n i))) → (Fin m → Finset ℕ) → Set (Fin m → List (Obs L K S)) :=
     fun g A => Set.pi Set.univ fun i =>
       {o | LeakAt lay k (fun t => reg t \ A i) Dj (sw i) (Pw i) (ρ i) (op i) (famOf g i) o}
@@ -275,7 +340,7 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
   have hgood : ∀ z ∈ G, (run tap (sched z, srv z)).2 ∈ Y := by
     rintro z ⟨-, hlt, hle, hleak⟩
     obtain ⟨g, hg⟩ := exists_famOf_eq n Fmax (W z) (hWn z) hlt.le
-    obtain ⟨gt, hgt⟩ := exists_famOf_eq (fun i => (tiedReaches (T i)).length) Ft (Wt z) (hWtn z) hle
+    obtain ⟨gt, hgt⟩ := exists_famOf_eq (fun i => (tiedReaches (T i)).length) Ft (Wt z) (hWtn z) hle.le
     refine Set.mem_biUnion (x := g) ?_ ?_
     · simp only [s, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq, hg]
       exact hlt
@@ -341,12 +406,12 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
   have hX1 : ∀ g ∈ s, ∀ gt ∈ st, (X g fun i => tiedReach (T i) (famOf gt i)).encard ≤
       ((2 ^ (b * Fmax) * P0 * 2 ^ (R * Ft) : ℕ) : ℕ∞) := by
     intro g hg gt hgt
-    have hle : ∑ i, (famOf gt i).card ≤ Ft := (Finset.mem_filter.1 hgt).2
+    have hle : ∑ i, (famOf gt i).card < Ft := (Finset.mem_filter.1 hgt).2
     have hA : ∑ i, (tiedReach (T i) (famOf gt i)).card ≤ R * Ft :=
       calc ∑ i, (tiedReach (T i) (famOf gt i)).card ≤ ∑ i, (famOf gt i).card * R :=
             sum_le_sum fun i _ => (card_tiedReach_le _ _).trans (Nat.mul_le_mul_left _ (hRi i))
         _ = (∑ i, (famOf gt i).card) * R := (sum_mul _ _ _).symm
-        _ ≤ Ft * R := Nat.mul_le_mul_right _ hle
+        _ ≤ Ft * R := Nat.mul_le_mul_right _ hle.le
         _ = R * Ft := mul_comm _ _
     refine (hX g hg _).trans ?_
     exact_mod_cast Nat.mul_le_mul_left (2 ^ (b * Fmax) * P0) (Nat.pow_le_pow_right (by norm_num : (0 : ℕ) < 2) hA)
@@ -389,11 +454,12 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
       exact (Set.encard_le_encard hY12).trans hY2
   have hcap1 : 0 < ∏ c, (cap c + 1) := Finset.prod_pos fun c _ => Nat.succ_pos _
   have hroom : ((∑ i, n i) + 1) ^ Fmax * (2 ^ (b * Fmax) * P0 * min A1 A2) ≤
-      (∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) * P0 * min A1 A2 := by
+      (∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) *
+        ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card * Dj ^ k (sw i)) * min A1 A2 := by
     calc ((∑ i, n i) + 1) ^ Fmax * (2 ^ (b * Fmax) * P0 * min A1 A2)
         ≤ (∏ c, (cap c + 1)) * (((∑ i, n i) + 1) ^ Fmax * (2 ^ (b * Fmax) * P0 * min A1 A2)) :=
           Nat.le_mul_of_pos_left _ hcap1
-      _ = _ := by ring
+      _ = _ := by simp only [hP0, hc]; ring
   calc G.encard ≤ (dec '' V).encard := Set.encard_le_encard hsub
     _ ≤ V.encard := Set.encard_image_le _ _
     _ ≤ (Ss ×ˢ Y).encard := Set.encard_image_le _ _
@@ -405,12 +471,11 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
 /-! ### The monitoring period -/
 
 /-- **The leak through the network certifier over a monitoring period**: `Guarantees.PooledLeakAccepted`, from
-`pr_adaptive_add_le` at the scan's and the tied audits' conditional escapes, a union bound over the leak relations, and
-`encard_pooledGood_le` at each draw of the coins. -/
+`pr_adaptive_add_le` at the scan's conditional escapes, a union bound over the tied audits' pooled bound and the leak
+relations, and `encard_pooledGood_le` at each draw of the coins. -/
 theorem horizonLeak : Guarantees.PooledLeakAccepted := by
   intro L K S lay k reg Dj m sw Pw ρ op T n b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap hfit Zs
-    schedOf srvOf hs dec hdz acc hacc W hW hWn Wt hWt hWtn e et e' he het q hq0 hq1 qt hqt0 hqt1 hesc hesct hleak
-    δ hδ Fmax hF δt Ft hFt
+    schedOf srvOf hs dec hdz acc hacc W hW hWn Wt hWtn e e' he q hq0 hq1 hesc Ft et hpool hleak δ hδ Fmax hF
   refine ⟨fun z hz => ?_, fun ω => encard_pooledGood_le lay k reg Dj sw Pw ρ op T n b hb arr f tap run htrust cap Ss
     hfit Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω) (fun z hz => hdz z hz ω)
     (fun z => W z ω) (fun z => Wt z ω) (fun z i => hWn z ω i) (fun z i => hWtn z ω i) Fmax Ft⟩
@@ -418,9 +483,6 @@ theorem horizonLeak : Guarantees.PooledLeakAccepted := by
   have hmiss := pr_adaptive_add_le (Ω := Ω) (r := 1 - q) (by linarith) (by linarith) m (acc z)
     (fun i ω => (W z ω i).card) e (fun i ω ω' h => hacc z i ω ω' h)
     (fun i ω ω' h => by simp only [hW z i ω ω' h]) he (fun i ω => hesc z hz i ω) Fmax
-  have hmisst := pr_adaptive_add_le (Ω := Ω) (r := 1 - qt) (by linarith) (by linarith) m (acc z)
-    (fun i ω => (Wt z ω i).card) et (fun i ω ω' h => hacc z i ω ω' h)
-    (fun i ω ω' h => by simp only [hWt z i ω ω' h]) het (fun i ω => hesct z hz i ω) (Ft + 1)
   have hpow : (1 - q) ^ Fmax ≤ δ := by
     have h1 : 1 - q ≤ Real.exp (-q) := by linarith [Real.add_one_le_exp (-q)]
     calc (1 - q) ^ Fmax ≤ Real.exp (-q) ^ Fmax := pow_le_pow_left₀ (by linarith) h1 Fmax
@@ -430,7 +492,7 @@ theorem horizonLeak : Guarantees.PooledLeakAccepted := by
   calc Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
         ¬PooledGood lay k reg Dj sw Pw ρ op T Fmax Ft (W z ω) (Wt z ω) (run tap (schedOf z ω, srvOf z ω)).2)
       ≤ Pr (fun ω => (((∀ i, acc z i ω (ω i)) ∧ Fmax ≤ ∑ i, (W z ω i).card) ∨
-            ((∀ i, acc z i ω (ω i)) ∧ Ft + 1 ≤ ∑ i, (Wt z ω i).card)) ∨
+            ((∀ i, acc z i ω (ω i)) ∧ Ft ≤ ∑ i, (Wt z ω i).card)) ∨
           ∃ i ∈ (univ : Finset (Fin m)), acc z i ω (ω i) ∧
             ¬LeakAt lay k (fun s => reg s \ tiedReach (T i) (Wt z ω i)) Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i)
               ((run tap (schedOf z ω, srvOf z ω)).2 i)) := by
@@ -438,22 +500,22 @@ theorem horizonLeak : Guarantees.PooledLeakAccepted := by
         obtain ⟨hall, hng⟩ := h
         unfold PooledGood at hng
         by_cases hlt : ∑ i, (W z ω i).card < Fmax
-        · by_cases hle : ∑ i, (Wt z ω i).card ≤ Ft
+        · by_cases hle : ∑ i, (Wt z ω i).card < Ft
           · have : ¬∀ i, LeakAt lay k (fun s => reg s \ tiedReach (T i) (Wt z ω i)) Dj (sw i) (Pw i) (ρ i) (op i)
                 (W z ω i) ((run tap (schedOf z ω, srvOf z ω)).2 i) := fun hl => hng ⟨hlt, hle, hl⟩
             push Not at this
             obtain ⟨i, hi⟩ := this
             exact Or.inr ⟨i, mem_univ i, hall i, hi⟩
-          · exact Or.inl (Or.inr ⟨hall, by omega⟩)
+          · exact Or.inl (Or.inr ⟨hall, not_lt.1 hle⟩)
         · exact Or.inl (Or.inl ⟨hall, not_lt.1 hlt⟩)
     _ ≤ _ := Pr_or_le _ _
-    _ ≤ ((1 - q) ^ Fmax + ∑ i, e i + ((1 - qt) ^ (Ft + 1) + ∑ i, et i)) + ∑ i, e' i :=
-        add_le_add ((Pr_or_le _ _).trans (add_le_add hmiss hmisst))
+    _ ≤ ((1 - q) ^ Fmax + ∑ i, e i + et) + ∑ i, e' i :=
+        add_le_add ((Pr_or_le _ _).trans (add_le_add hmiss (hpool z hz)))
           ((Pr_exists_mem_le_sum univ _).trans (sum_le_sum fun i _ => hleak z hz i))
-    _ ≤ δ + δt + ∑ i, e i + ∑ i, et i + ∑ i, e' i := by linarith
+    _ ≤ δ + et + ∑ i, e i + ∑ i, e' i := by linarith
 
-/-- **At no tied audit** `Guarantees.PooledLeakAccepted` is the statement without them: nothing is unpinned, the tied
-audits' escape is `Pr ≤ 1` at `q_t = 1`, and the tied factor and error are `1` and `0` at `F_t = 0`, `δ_t = 0`. -/
+/-- **At no tied audit** `Guarantees.PooledLeakAccepted` is the statement without them: nothing is unpinned, no tied
+proof block is incorrect, so the pooled bound holds at `F_t = 1` with error `0`, and the tied factor is `1`. -/
 theorem horizonLeak_untied {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {m : ℕ} (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
     (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool)
@@ -485,17 +547,17 @@ theorem horizonLeak_untied {L K S : ℕ} (lay : AuditStatement → BoundaryGates
         Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) *
           ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card * Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
   have hgood : ∀ (Wf : Fin m → Finset ℕ) (o : Fin m → List (Obs L K S)),
-      PooledGood lay k reg Dj sw Pw ρ op (fun _ => []) Fmax 0 Wf (fun _ => ∅) o ↔
+      PooledGood lay k reg Dj sw Pw ρ op (fun _ => []) Fmax 1 Wf (fun _ => ∅) o ↔
         ∑ i, (Wf i).card < Fmax ∧ ∀ i, LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (Wf i) (o i) := by
     intro Wf o
     simp [PooledGood, tiedReach_nil]
   obtain ⟨h1, h2⟩ := horizonLeak lay k reg Dj sw Pw ρ op (fun _ => []) n b hb arr f tap run htrust cap Ss hcap hfit
-    Zs schedOf srvOf hs dec hdz acc hacc W hW hWn (fun _ _ _ => ∅) (fun _ _ _ _ _ => rfl)
-    (fun _ _ _ => Finset.empty_subset _) e (fun _ => 0) e' he (fun _ => le_rfl) q hq0 hq1 1 zero_le_one le_rfl hesc
-    (fun z _ i ω => by simpa using Pr_le_one (acc z i ω)) (fun z hz i => by simpa [tiedReach_nil] using hleak z hz i)
-    δ hδ Fmax hF 0 0 (by norm_num)
+    Zs schedOf srvOf hs dec hdz acc hacc W hW hWn (fun _ _ _ => ∅) (fun _ _ _ => Finset.empty_subset _) e e' he
+    q hq0 hq1 hesc 1 0 (fun z _ => (Pr_mono fun ω h => by simp at h).trans_eq Pr_false)
+    (fun z hz i => by simpa [tiedReach_nil] using hleak z hz i)
+    δ hδ Fmax hF
   refine ⟨fun z hz => ?_, fun ω => ?_⟩
   · simpa [hgood] using h1 z hz
-  · simpa [hgood, tiedReaches, tiedSpan_nil] using h2 ω
+  · simpa [hgood, tiedReaches, tiedSpan_nil, sup_tiedWidth_nil] using h2 ω
 
 end NetTiming
