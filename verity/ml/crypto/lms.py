@@ -8,6 +8,16 @@ public_key(key), DEPLOYED.H)``; to check, ``verify(DEPLOYED, public, message, si
 (`certificate_message`, `memory_challenger_message`), never hand-rolled. A network certifier first starts its session on
 the state (``state.start(session)``), which refuses a session id the key has already started.
 
+**HSS: a device's identity and its parties' keys** (RFC 8554 §6 at two levels; NIST SP 800-208). A device's long-lived
+top tree is its identity (`Identity.init`, made on the device from its own coins; its public key is the device's key in
+the deployment configuration). Each party on the device gets a short-lived lower tree (`Identity.issue`), whose public key
+the identity signs once (`party_key_message`, binding the deployment's hash and the party's name). The lower key signs
+the party's messages (`PartyKey`): one root per certification period (`period_root_message`), which goes to the prover
+only, and one public liveness record per sampling block (`liveness_message`). An `HssSignature` is the lower key, its
+certificate and the signature; `hss_verify` checks both levels, and `verify_liveness` a liveness record in the clear. Both
+levels are at ``DEPLOYED`` and both trees' states are `LeafState`s, so neither ever signs twice at a leaf, as long as its
+host never restores an earlier copy of the state (`faithful`, `verity.core.claims`).
+
 **The hash.** ``H(x) = SHA-512(x)``, the whole output: N = 64, nothing truncated. The one other N, `TOY_N` = 8 (the
 first word of SHA-512's output, asked for by name with ``toy=True``), is circuit-check's binding of the verifier and is never
 deployed. Every hash input is RFC 8554's, with its domain separators: a chain step ``H(I ||
@@ -41,9 +51,11 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
-__all__ = ["D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "DEPLOYED", "DIRECTIONS", "LeafState", "Params", "PrivateKey", "ROLES",
-           "SESSION_BYTES", "Signature", "StateError", "certificate_message", "digits", "key", "keygen", "memory_challenger_message",
-           "public_key", "root_of", "sign", "sign_at", "verify", "TOY_N"]
+__all__ = ["D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "DEPLOYED", "DEPLOYMENT_BYTES", "DIRECTIONS", "HssSignature", "Identity",
+           "LeafState", "Params", "PartyKey", "PrivateKey", "ROLES", "SESSION_BYTES", "Signature", "StateError",
+           "certificate_message", "digits", "hss_verify", "key", "keygen", "liveness_message", "memory_challenger_message",
+           "party_key_message", "period_root_message", "public_key", "root_of", "sign", "sign_at", "verify",
+           "verify_certificate", "verify_liveness", "TOY_N"]
 
 D_PBLC, D_MESG, D_LEAF, D_INTR = 0x8080, 0x8181, 0x8282, 0x8383
 
@@ -134,9 +146,13 @@ class Signature:
 # --- the messages ------------------------------------------------------------------------------------------------------------
 
 #: role -> its tag, which every digest of the role begins with. The network certificate's is the message's own,
-#: distinct from the ids of the checks that read it (`verity/network-certificate/v4`, `verity/network-records/v3`).
+#: distinct from the ids of the checks that read it (`verity/network-certificate/v4`, `verity/network-records/v3`). The
+#: last three are HSS's (`party_key_message`, `period_root_message`, `liveness_message`).
 ROLES = {"network-certificate": "verity/network-certificate-message/v2",
-         "memory-challenger-record": "verity/memory-challenger-record/v1"}
+         "memory-challenger-record": "verity/memory-challenger-record/v1",
+         "party-key": "verity/party-key/v1",
+         "period-root": "verity/period-root/v1",
+         "liveness": "verity/liveness/v1"}
 DIRECTIONS = ("egress", "ingress")
 #: the length of a certifier session id, which the challenger draws for each session of the certifier
 SESSION_BYTES = 32
@@ -170,6 +186,53 @@ def memory_challenger_message(I: bytes, session: str | bytes, record: bytes) -> 
     ``verity/memory-challenger-record/v1`` and the context the session id."""
     sid = session.encode() if isinstance(session, str) else bytes(session)
     return _digest("memory-challenger-record", I, _field(sid), record)
+
+
+#: the length of a deployment configuration's hash, SHA-512 of the file
+DEPLOYMENT_BYTES = 64
+
+
+def _u64(x: int, what: str) -> bytes:
+    if isinstance(x, bool) or not isinstance(x, int) or not 0 <= x < 2 ** 64:
+        raise ValueError(f"{what} is a u64, not {x!r}")
+    return x.to_bytes(8, "big")
+
+
+def _party_context(deployment: bytes, party: str) -> bytes:
+    if len(deployment) != DEPLOYMENT_BYTES:
+        raise ValueError(f"a deployment's hash is {DEPLOYMENT_BYTES} bytes, not {len(deployment)}")
+    return _field(bytes(deployment)) + _field(party.encode())
+
+
+def _period_context(deployment: bytes, party: str, attachment: bytes, link: str, period: int) -> bytes:
+    return (_party_context(deployment, party) + _field(bytes(attachment)) + _field(link.encode())
+            + _u64(period, "a certification period's index"))
+
+
+def party_key_message(I: bytes, deployment: bytes, party: str, lower: bytes) -> bytes:
+    """The message a device's identity (the top tree of its HSS key, identifier ``I``) signs to certify one party's lower
+    key: the tag ``verity/party-key/v1``, the context the deployment's hash and the party's name, the record the lower
+    key's public key (``I || T[1]``), each field but I prefixed with its length (u64)."""
+    return _digest("party-key", I, _party_context(deployment, party), bytes(lower))
+
+
+def period_root_message(I: bytes, deployment: bytes, party: str, attachment: bytes, link: str, period: int, count: int,
+                        root: bytes) -> bytes:
+    """The message a party's lower key (identifier ``I``) signs once per certification period: the tag
+    ``verity/period-root/v1``, the context the deployment's hash, the party's name, the attachment id the challenger drew,
+    the link's name (for a party on no link, its device role), the period's index and the number of records under the root
+    (u64 each, unprefixed), the record the root of the period's records tree (`verity.core.attest`)."""
+    context = _period_context(deployment, party, attachment, link, period) + _u64(count, "a period's record count")
+    return _digest("period-root", I, context, bytes(root))
+
+
+def liveness_message(I: bytes, deployment: bytes, party: str, attachment: bytes, link: str, period: int,
+                     block: int) -> bytes:
+    """The message of a party's one public record per sampling block (or per run, for a party that runs in runs): "block
+    ``block`` of the period was certified", with no content. The tag ``verity/liveness/v1``, the context as
+    `period_root_message`'s with the block's index (u64) in the place of the count, the record empty."""
+    return _digest("liveness", I, _period_context(deployment, party, attachment, link, period)
+                   + _u64(block, "a sampling block's index"), b"")
 
 
 # --- the scheme --------------------------------------------------------------------------------------------------------------
@@ -446,3 +509,199 @@ class LeafState:
 
     def __exit__(self, *exc) -> None:
         self.close()
+
+
+# --- HSS: a device's identity and its parties' keys --------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class HssSignature:
+    """A two-level HSS signature (RFC 8554 §6 at L = 2, without its type fields and its count of levels): the party's lower
+    public key (``I || T[1]``), the identity's signature of the lower key's `party_key_message` (its certificate), and the
+    lower key's signature of the message. Encoded ``lower || certificate || signature``, 16 + N + 2 `signature_bytes`."""
+
+    lower: bytes
+    certificate: Signature
+    signature: Signature
+
+    def encode(self) -> bytes:
+        return self.lower + self.certificate.encode() + self.signature.encode()
+
+    @classmethod
+    def decode(cls, params: Params, data: bytes) -> "HssSignature":
+        n, s = 16 + params.N, params.signature_bytes()
+        if len(data) != n + 2 * s:
+            raise ValueError(f"an HSS signature for {params} is {n + 2 * s} bytes, not {len(data)}")
+        return cls(bytes(data[:n]), Signature.decode(params, data[n:n + s]), Signature.decode(params, data[n + s:]))
+
+
+def verify_certificate(params: Params, identity: bytes, deployment: bytes, party: str, lower: bytes,
+                       certificate: Signature) -> bool:
+    """Whether ``certificate`` is the identity's signature over ``lower``'s `party_key_message` for ``party`` in the
+    deployment; False for a lower key of another length."""
+    if len(identity) != 16 + params.N:
+        raise ValueError(f"an LMS public key is {16 + params.N} bytes, not {len(identity)}")
+    if len(lower) != 16 + params.N:
+        return False
+    return verify(params, identity, party_key_message(identity[:16], deployment, party, lower), certificate)
+
+
+def hss_verify(params: Params, identity: bytes, deployment: bytes, party: str, sig: HssSignature, message: bytes) -> bool:
+    """Whether ``sig`` signs ``message`` under the device ``identity`` for ``party`` in the deployment: its lower key's
+    certificate verifies under the identity, and its signature under the lower key. ``message`` is a lower key's role
+    digest (`period_root_message`, `liveness_message`), made with the lower key's identifier ``sig.lower[:16]``."""
+    return (verify_certificate(params, identity, deployment, party, sig.lower, sig.certificate)
+            and verify(params, sig.lower, message, sig.signature))
+
+
+def verify_liveness(params: Params, identity: bytes, deployment: bytes, party: str, attachment: bytes, link: str,
+                    period: int, block: int, sig: HssSignature) -> bool:
+    """Whether ``sig`` is the party's public liveness record of sampling block ``block`` of the period: checked in the
+    clear, as the verifier reads it."""
+    if len(sig.lower) != 16 + params.N:
+        return False
+    message = liveness_message(sig.lower[:16], deployment, party, attachment, link, period, block)
+    return hss_verify(params, identity, deployment, party, sig, message)
+
+
+IDENTITY_SEED, IDENTITY_STATE, IDENTITY_PUBLIC = "identity.seed", "identity.state", "identity.public"
+LOWER_SEED, LOWER_STATE, LOWER_CERTIFICATE = "lower.seed", "lower.state", "lower.certificate"
+
+
+def _write_secret(path: Path, data: bytes) -> None:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.write(fd, data)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    _fsync_dir(path.parent)
+
+
+def _read_secret(path: Path, n: int) -> bytes:
+    try:
+        data = path.read_bytes()
+    except FileNotFoundError:
+        raise StateError(f"{path}: missing") from None
+    if len(data) != n:
+        raise StateError(f"{path}: a seed is {n} bytes, not {len(data)}")
+    return data
+
+
+def _party_dir(deployment: bytes, party: str) -> str:
+    if not party or not all(c.isascii() and (c.isalnum() or c in "-_.") for c in party) or party[0] == ".":
+        raise ValueError(f"a party's name is ASCII letters, digits, '-', '_' and '.', not starting with '.', not {party!r}")
+    if len(deployment) != DEPLOYMENT_BYTES:
+        raise ValueError(f"a deployment's hash is {DEPLOYMENT_BYTES} bytes, not {len(deployment)}")
+    return f"{bytes(deployment).hex()}-{party}"
+
+
+class Identity:
+    """A device's identity: the top tree of its two-level HSS key (RFC 8554 §6; NIST SP 800-208), made on the device from
+    its own coins (`os.urandom`) by `init`, whose public key (``I || T[1]``, in ``identity.public``) is the device's key in a
+    deployment configuration. Its seed (``identity.seed``, mode 0600 in a directory of mode 0700) never leaves the device
+    and is never written twice. It signs only `party_key_message`s, one leaf each under its `LeafState`
+    (``identity.state``): each certifies one lower tree, made by `issue` for one party of one deployment under
+    ``parties/<deployment hex>-<party>/<n>/``, ``n`` counting the party's lower trees from 0, so a party whose tree runs out
+    is issued the next. Opening the identity rebuilds its tree from the seed (`keygen`; about 16 minutes on one core at
+    `DEPLOYED`, divided by ``workers``)."""
+
+    def __init__(self, directory: str | os.PathLike, params: Params = DEPLOYED, workers: int = 1, *,
+                 _key: PrivateKey | None = None) -> None:
+        self.directory, self.params = Path(directory), params
+        self.key = _key or keygen(params, _read_secret(self.directory / IDENTITY_SEED, params.N), workers)
+        self.public = public_key(self.key)
+        recorded = (self.directory / IDENTITY_PUBLIC).read_text().strip()
+        if recorded != self.public.hex():
+            raise StateError(f"{self.directory / IDENTITY_PUBLIC} is another key's")
+
+    @classmethod
+    def init(cls, directory: str | os.PathLike, params: Params = DEPLOYED, workers: int = 1) -> "Identity":
+        """A new identity in ``directory``; refused when the directory already holds one."""
+        d = Path(directory)
+        d.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _write_secret(d / IDENTITY_SEED, os.urandom(params.N))
+        key = keygen(params, _read_secret(d / IDENTITY_SEED, params.N), workers)
+        LeafState.create(d / IDENTITY_STATE, public_key(key), params.H)
+        (d / IDENTITY_PUBLIC).write_text(public_key(key).hex() + "\n")
+        return cls(d, params, workers, _key=key)
+
+    def _issued(self, deployment: bytes, party: str) -> list[Path]:
+        base = self.directory / "parties" / _party_dir(deployment, party)
+        return sorted((p for p in base.glob("*") if p.name.isdigit()), key=lambda p: int(p.name)) if base.is_dir() else []
+
+    def issue(self, deployment: bytes, party: str, workers: int = 1) -> "PartyKey":
+        """The next lower tree of ``party`` in the deployment: its seed from the device's coins, its leaf state, and the
+        identity's certificate of its public key, signed at the identity's next leaf."""
+        n = len(self._issued(deployment, party))
+        d = self.directory / "parties" / _party_dir(deployment, party) / str(n)
+        d.mkdir(mode=0o700, parents=True, exist_ok=False)
+        _write_secret(d / LOWER_SEED, os.urandom(self.params.N))
+        key = keygen(self.params, _read_secret(d / LOWER_SEED, self.params.N), workers)
+        lower = public_key(key)
+        LeafState.create(d / LOWER_STATE, lower, self.params.H)
+        with LeafState(self.directory / IDENTITY_STATE, self.public, self.params.H, wait=True) as state:
+            cert = sign(self.key, state, party_key_message(self.key.I, deployment, party, lower))
+        tmp = d / (LOWER_CERTIFICATE + ".tmp")
+        tmp.write_bytes(cert.encode())
+        os.replace(tmp, d / LOWER_CERTIFICATE)
+        _fsync_dir(d)
+        return PartyKey(d, self.public, deployment, party, self.params, workers, _key=key)
+
+    def party(self, deployment: bytes, party: str, workers: int = 1) -> "PartyKey":
+        """The party's newest lower tree in the deployment; refused when it has none."""
+        issued = self._issued(deployment, party)
+        if not issued:
+            raise StateError(f"{self.directory}: no key issued to {party!r} in this deployment")
+        return PartyKey(issued[-1], self.public, deployment, party, self.params, workers)
+
+
+class PartyKey:
+    """One party's lower tree on its device, certified by the device's identity for the party in one deployment: it signs
+    the party's `period_root_message` once per certification period and its `liveness_message` once per sampling block,
+    each at the next leaf of its `LeafState`, into an `HssSignature`. The signed roots go to the prover only, as witness;
+    the liveness records, and with them the lower key and its certificate, are public.
+
+    It signs for one attachment at a time, the one it last started (`start`), and starts each attachment once in the
+    key's life: a restart within an attachment signs nothing more of it. That rests on no-state-rollback, the leaf
+    state's own premise: a state restored from before the start would start it again."""
+
+    def __init__(self, directory: str | os.PathLike, identity: bytes, deployment: bytes, party: str,
+                 params: Params = DEPLOYED, workers: int = 1, *, _key: PrivateKey | None = None) -> None:
+        self.directory, self.identity, self.params = Path(directory), bytes(identity), params
+        self.deployment, self.party = bytes(deployment), party
+        self.key = _key or keygen(params, _read_secret(self.directory / LOWER_SEED, params.N), workers)
+        self.lower = public_key(self.key)
+        self.certificate = Signature.decode(params, (self.directory / LOWER_CERTIFICATE).read_bytes())
+        if not verify_certificate(params, self.identity, self.deployment, party, self.lower, self.certificate):
+            raise StateError(f"{self.directory}: its certificate does not verify under the identity")
+        self.attachment: bytes | None = None
+
+    def start(self, attachment: bytes) -> None:
+        """Start this key's run of ``attachment`` (the attachment id the challenger drew), after the key's leaf state on
+        disk records it as started (`LeafState.start`), so that `period_root` and `liveness` sign for it; a no-op for the
+        attachment already started here, and refused for one the state records already (this key's earlier run of it, or
+        another signer's)."""
+        attachment = bytes(attachment)
+        if attachment == self.attachment:
+            return
+        with LeafState(self.directory / LOWER_STATE, self.lower, self.params.H, wait=True) as state:
+            state.start(attachment)
+        self.attachment = attachment
+
+    def _started(self, attachment: bytes) -> None:
+        if self.attachment is None or bytes(attachment) != self.attachment:
+            raise StateError(f"{self.directory}: attachment {bytes(attachment).hex()} is not the one this key started")
+
+    def sign(self, message: bytes) -> HssSignature:
+        """``message`` (a role digest made with this key's identifier ``self.key.I``) signed at the next unused leaf."""
+        with LeafState(self.directory / LOWER_STATE, self.lower, self.params.H, wait=True) as state:
+            return HssSignature(self.lower, self.certificate, sign(self.key, state, message))
+
+    def period_root(self, attachment: bytes, link: str, period: int, count: int, root: bytes) -> HssSignature:
+        self._started(attachment)
+        return self.sign(period_root_message(self.key.I, self.deployment, self.party, attachment, link, period, count,
+                                             root))
+
+    def liveness(self, attachment: bytes, link: str, period: int, block: int) -> HssSignature:
+        self._started(attachment)
+        return self.sign(liveness_message(self.key.I, self.deployment, self.party, attachment, link, period, block))
