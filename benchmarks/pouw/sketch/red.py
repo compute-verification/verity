@@ -33,6 +33,9 @@ Attacks, each computing S itself and checked bit for bit against honest's:
   price is an upper bound on the cheapest decomposition.
 - `pack` (shortcut 4): a lane-wise design run on b-bit lanes of one register, b the block's signed word width, and the
   bits above the lane from the words' sign bits, bitsliced 32 cells a register, once per distinct coin-bit column.
+  A packed word is formed as x + R + C a register, so `pack` runs only where the split reproduces the words.
+- `carry` (for acc ← rotl(acc, r) + c): the fold is linear mod 2³² − 1 once each step's carry out is guessed as the
+  increment's sign; counted where that is exact on every cell, at an estimated price.
 - `tfunc` (shortcut 5): flagged from the op set and verified (S mod 2^b from the words mod 2^b); not priced.
 
 Prices are W1 register writes an S, as `nh_attack`'s: honest pays an MMA a word plus the trace (only the MMA when
@@ -1080,7 +1083,7 @@ def evaluate(name, design, parts, seed=0, rng=None):
             em = T * parts["emulate_word"] + sw
             row["attacks"]["emulate"] = {"exact": True, "every": round(em, 3), "once": round(em, 3)}
             cands.append(em), cands_once.append(em)
-        if st["lanewise"]:
+        if st["lanewise"] and parts.get("separable"):
             pk = pack(design, coins, parts["W"], T)
             if pk:
                 row["attacks"]["pack"] = {"exact": pk[0], "every": round(pk[1], 3), "once": round(pk[1], 3),
