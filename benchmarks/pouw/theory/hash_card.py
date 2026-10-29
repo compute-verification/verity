@@ -2,8 +2,10 @@
 
 h is the honest program's credited commitment work over stock, in W1 units a useful MAC (a register write 32, a stock
 MAC 1): SHA-512 at ShaWrites' constant per form (pouw_space's `price.sha_forms`), plus any non-hash commitment work a
-design adds. Beside h each design carries T1, T2, T3 and the rank of its assumptions; the frontier is the least h at each
-rank among the designs meeting T1 <= 1%, T2 <= 100x and T3 <= 5%.
+design adds, counted wherever it runs, so a design that moves hashing to the certifier carries it (`moved_from`). Beside
+h each design carries T1, T2, T3 and the rank of its assumptions; the frontier is the least h at each rank among the
+designs meeting T1 <= 1%, T2 <= 100x and T3 <= 5%, the lead where a design only ties it. A design's rule change or rule
+question clears when every ruling it cites ([ruling.*]) admits it.
 
 * The lead (`hash_card.toml` [basis].lead) is composed and priced by pouw_space (`compose`, `evaluate`), at the
   basis's Llama-3.2-1B points, and its h decomposed by part (words, operands, A, coins, bound blocks, salts), each at
@@ -42,7 +44,8 @@ GONE = ("refuted", "closed")
 LABELS = ("proved", "checked", "measured", "estimate")
 REQUIRE_FALSIFICATION = True
 FOLD_WRITES = True
-GRANT_ANY_REFUTED = False
+COUNT_ELSEWHERE = True
+PREFER_LEAD = True
 
 
 def load(path: Path = DATA) -> dict:
@@ -208,16 +211,21 @@ def family_rank(hc: dict, add: dict) -> tuple[object, str | None]:
     return add["rank"], None
 
 
+def ruled(hc: dict, spec: dict) -> tuple[list[dict], list[str]]:
+    """The rulings a design or a family cites, and the ids it cites that no [ruling.*] records."""
+    rs = hc.get("ruling", {})
+    ids = spec.get("rules", [])
+    return [rs[i] | {"id": i} for i in ids if i in rs], [i for i in ids if i not in rs]
+
+
 def design_entry(card: dict, hc: dict, key: str, spec: dict, lead: dict, kind: str, convert: bool = True) -> dict:
     """One design on the basis: h, cut against the lead, T1/T2/T3 with labels, ranks, status and flags."""
     flags: list[str] = []
     adds = []
-    refuted, refuting = [], []
+    refuted = []
     for a in spec.get("adds", []):
         rank, why = family_rank(hc, a)
         fam = hc.get("family", {}).get(a.get("family", ""), {})
-        if fam.get("status") == "refuted":
-            refuting.append(fam)
         adds.append(a | {"rank": rank} | ({"status": "refuted"} if fam.get("status") == "refuted" else {}))
         if why:
             flags.append(why)
@@ -225,14 +233,13 @@ def design_entry(card: dict, hc: dict, key: str, spec: dict, lead: dict, kind: s
             flags.append(f"{a['id']}: its lane states rank {a['rank_stated']}, not on the card's scale; carded at {rank}")
         if fam.get("status") == "refuted":
             refuted.append(f"{a['id']} (family {a['family']}) refuted: {fam['refuted_by']}"
-                           + (f"; it would stand if {fam['stands_if']}" if fam.get("stands_if") else ""))
+                           + (f"; it would stand if {fam['stands_if']}" if fam.get("stands_if") else "")
+                           + "".join(f"; {r['flag']}" for r in ruled(hc, fam)[0]))
     flags += refuted
     e = {"id": key, "kind": kind, "title": spec.get("title", key), "lane": spec.get("lane", ""),
          "note": spec.get("note", ""), "status": spec.get("status", "proposed"), "rule_change": spec.get("rule_change", ""),
          "what": spec.get("what", ""), "extra_w1_per_mac": float(spec.get("extra_w1_per_mac", 0.0)), "adds": adds,
          "rule_question": spec.get("rule_question", "")}
-    e["stands_if"] = ([f.get("stands_if", "") for f in refuting] if refuting and e["status"] not in GONE
-                      and (GRANT_ANY_REFUTED or all(f.get("stands_if") for f in refuting)) else [])
     if refuted and e["status"] not in GONE:
         e["status"] = "refuted"
     if "combine" in spec or "fold" in spec:
@@ -318,10 +325,18 @@ def design_entry(card: dict, hc: dict, key: str, spec: dict, lead: dict, kind: s
     mpw = spec.get("layout", {}).get("macs_per_word")
     if mpw and abs(mpw / lead["macs_per_word"] - 1) > 0.02:
         flags.append(f"its lead's layout is {mpw:g} useful MACs a word, the basis lead's {lead['macs_per_word']:.2f}")
+    rs, missing = ruled(hc, spec)
+    asked = e["rule_change"] or e["rule_question"]
+    if asked and rs and not missing and all(r["admits"] for r in rs):
+        e["ruled"], e["rule_change"], e["rule_question"] = asked, "", ""
     if e["rule_change"]:
         flags.append(f"needs a rule change: {e['rule_change']}")
-    if spec.get("rule_question"):
-        flags.append(f"rule question open: {spec['rule_question']}")
+    if e["rule_question"]:
+        flags.append(f"rule question open: {e['rule_question']}")
+    if missing:
+        flags.append(f"cites rulings no [ruling.*] records: {', '.join(missing)}")
+    if rs:
+        flags.append(f"ruled ({', '.join(r['id'] for r in rs)}): " + "; ".join(r["flag"] for r in rs))
     flags += spec.get("caveats", [])
     for a in adds:
         if a.get("status", "open") in ps.UNSETTLED and not a.get("falsification"):
@@ -344,7 +359,7 @@ def done_missing(e: dict) -> list[str]:
     if e.get("t1") and e["t1"][1] not in ("checked", "proved", "measured"):
         out.append("credit (T1) not checked")
     if not (e.get("t2") and e["t2"][1] in ("measured", "bound")):
-        out.append("cost (T2) neither measured nor bounded")
+        out.append("T2 unmeasured" + (f" ({e['t2'][1]})" if e.get("t2") else ", unpriced"))
     out += [f"{a['id']}: no falsification test" for a in e.get("adds", [])
             if REQUIRE_FALSIFICATION and a.get("status", "open") in ps.UNSETTLED and not a.get("falsification")]
     if e.get("rule_change") or e.get("rule_question"):
@@ -354,17 +369,17 @@ def done_missing(e: dict) -> list[str]:
     return out
 
 
-def frontier(entries: list[dict], enforce: bool = True, rules_stand: bool = False, stands_if: bool = False) -> list[dict]:
+def frontier(entries: list[dict], enforce: bool = True, rules_stand: bool = False) -> list[dict]:
     """At each rank, the least-h design among those meeting every target, not refuted or closed, with the axis at most
-    that rank; with `rules_stand`, only designs that need no ruling; with `stands_if`, a design refuted only by families
-    that state the write model under which they'd stand counts as standing (the model granted)."""
+    that rank, and the lead where a design only ties it; with `rules_stand`, only designs with no rule change or
+    question open."""
     out = []
     for lv in sorted(set(ps.RANKS.values())):
         live = [e for e in entries if e.get("h") is not None and e.get("ranks") and e["ranks"]["axis"] <= lv
-                and (not enforce or (e["meets"] and (e["status"] not in GONE or (stands_if and e.get("stands_if")))))
+                and (not enforce or (e["meets"] and e["status"] not in GONE))
                 and not (rules_stand and (e.get("rule_change") or e.get("rule_question")))]
         if live:
-            best = min(live, key=lambda e: (e["h"], e["ranks"]["axis"], e["id"]))
+            best = min(live, key=lambda e: (e["h"], e["ranks"]["axis"], PREFER_LEAD and e["kind"] != "baseline", e["id"]))
             out.append({"rank": lv, "best": best["id"], "h": best["h"], "cut": best.get("cut")})
     return out
 
@@ -400,9 +415,9 @@ def rank_label(v: float) -> str:
 
 
 def render(hc: dict, lead: dict, readings: list[dict], entries: list[dict], fr: list[dict], fr_rules: list[dict],
-           checks_line: str, fr_model: list[dict] | None = None) -> str:
+           checks_line: str) -> str:
     b = hc["basis"]
-    L = [f"# The HASH card: h against assumption rank, the lead as baseline", "",
+    L = ["# The HASH card: h against assumption rank, the lead as baseline", "",
          f"**Basis.** {b['title']}. Model {b['model']}, points {', '.join(b['points'])}, the words in "
          f"{b['words_chunk'] // 1024} KiB chunks. {b['h_definition']}.", "",
          f"## The lead: `{lead['name']}`", "",
@@ -459,19 +474,19 @@ def render(hc: dict, lead: dict, readings: list[dict], entries: list[dict], fr: 
         if fl:
             L.append(f"- **{e['id']}**: " + "; ".join(fl) + ".")
     by = {e["id"]: e for e in entries}
-    models = sorted({f.get("model", f["stands_if"]) for f in hc.get("family", {}).values() if f.get("stands_if")})
-    tables = [("as the lanes rank them, rulings pending", fr), ("under the rules as they stand (no ruling needed)", fr_rules)]
-    if fr_model is not None:
-        tables.append(("under the rules as they stand, with each refuted family's write model granted ("
-                       + " | ".join(models) + ")", fr_model))
+    rulings = ", ".join(f"{k} ({'admits' if v['admits'] else 'declines'})" for k, v in hc.get("ruling", {}).items())
+    tables = [("as the lanes rank them, open rule questions aside", fr),
+              (f"under the rules as they stand (rulings {rulings}; no rule change or question open)", fr_rules)]
     for title, f_ in tables:
         L += ["", f"## The frontier, {title}: the least h at each rank among designs meeting T1, T2 and T3", "",
-              "| axis rank ≤ | best design | h | cut vs lead | effective rank | what done-when still needs |", "|---|---|---|---|---|---|"]
+              "| axis rank ≤ | best design | h | cut vs lead | T2 | effective rank | what done-when still needs |",
+              "|---|---|---|---|---|---|---|"]
         for f in f_:
             e = by[f["best"]]
             L.append(f"| {rank_label(f['rank'])} | {f['best']} | {f['h']:.2f} | {fmt(f['cut'], digits=2)}× | "
-                     f"{rank_label(e['ranks']['axis_effective'])} | {'; '.join(e['done_missing']) or 'nothing'} |")
-    best = list(dict.fromkeys(["lead"] + [f["best"] for f in fr + fr_rules + (fr_model or [])]))
+                     f"{e['t2'][0]:.1f}× ({e['t2'][1]}) | {rank_label(e['ranks']['axis_effective'])} | "
+                     f"{'; '.join(e['done_missing']) or 'nothing'} |")
+    best = list(dict.fromkeys(["lead"] + [f["best"] for f in fr + fr_rules]))
     L += ["", "## Per monitoring period: honest commitment work of the frontier's designs (h × stock, W1 at stock's AND rate)",
           "", "Pooled totals over each period and scope; the share of the compute covered is h itself (and T1's uncredited "
           "share beside it). The window is one 600 s window.", "",
@@ -561,14 +576,45 @@ def run(card: dict, hc: dict, checks: Checks, prefix: str = "") -> dict:
     for k, v in hc.get("proposal", {}).items():
         entries.append(design_entry(card, hc, k, v, lead, "proposal"))
     by = {e["id"]: e for e in entries}
+    specs = hc.get("known", {}) | hc.get("proposal", {})
+    moved = [(e, specs[e["id"]]["moved_from"]) for e in entries if specs.get(e["id"], {}).get("moved_from")]
+    for e, src in moved:
+        s = by[src]
+        if COUNT_ELSEWHERE and e.get("h") is not None:
+            e["h_prover"], e["h"], e["h_label"], e["cut"] = e["h"], s["h"], s["h_label"], lead["h"] / s["h"]
+            e["flags"].append(f"h counts hashing wherever it runs: the prover's {e['h_prover']:.2f} and the certifier's "
+                              f"{s['h'] - e['h_prover']:.2f}, {src}'s {s['h']:.2f}")
+            e["done_missing"] = done_missing(e)
     r16, r256 = by["r16k-words"], by["lead"]
     checks.check(f"{prefix}the words chunk moves h by under 1% (16 KiB against 256 KiB): the brief's 233 / 119.5 "
                  f"is not a chunk-size pair", r16.get("h") and abs(r16["h"] / r256["h"] - 1) < 0.01,
                  f"16 KiB {r16.get('h', 0):.2f}, 256 KiB {r256['h']:.2f}; T1 at 16 KiB {fmt(r16.get('t1', (None,))[0], True)}")
     r1 = by["r1"]
     checks.check(f"{prefix}R1 leaves the prover no hashing but fails T2 at every point",
-                 r1.get("h") == 0 and r1["passes"]["t2"] is False,
-                 f"h {r1.get('h')}, T2 {fmt(r1.get('t2', (None,))[0])}x")
+                 r1.get("h_prover", r1.get("h")) == 0 and r1["passes"]["t2"] is False,
+                 f"h on the prover {r1.get('h_prover', r1.get('h'))}, T2 {fmt(r1.get('t2', (None,))[0])}x")
+    checks.check(f"{prefix}h counts hashing wherever it runs: each design that moves hashing to the certifier carries "
+                 f"the hashing of the design it splits, and cuts no more than it",
+                 bool(moved) and all(e.get("h") is not None and e["h"] >= by[s]["h"] - 1e-9
+                                     and e["cut"] <= by[s]["cut"] + 1e-9 for e, s in moved),
+                 ", ".join(f"{e['id']} {fmt(e.get('h'), digits=2)} (prover {fmt(e.get('h_prover', e.get('h')), digits=2)}) "
+                           f"from {s}" for e, s in moved))
+    cited = [(k, i) for sect in ("known", "proposal", "family") for k, v in hc.get(sect, {}).items()
+             for i in v.get("rules", [])]
+    unknown = [f"{k}/{i}" for k, i in cited if i not in hc.get("ruling", {})]
+    wrong = []
+    for e in entries:
+        spec = specs.get(e["id"], {})
+        if spec.get("rule_change") or spec.get("rule_question"):
+            rs, miss = ruled(hc, spec)
+            clears = bool(rs) and not miss and all(r["admits"] for r in rs)
+            if clears != (not (e["rule_change"] or e["rule_question"])):
+                wrong.append(e["id"])
+    checks.check(f"{prefix}every ruling a design or family cites is recorded, and a design's rule change or question "
+                 f"clears exactly when every ruling it cites admits it",
+                 not unknown and not wrong,
+                 ", ".join(unknown + wrong) or f"{len(cited)} citations of {len(hc.get('ruling', {}))} rulings; open: "
+                 + (", ".join(e["id"] for e in entries if e["rule_change"] or e["rule_question"]) or "none"))
     k64 = by["k64"]
     why = "; ".join(sorted(set((k64.get("refused") or {}).values())))
     checks.check(f"{prefix}the card prices no word every 64 steps on the lead's noise, for its layout, not the skip: "
@@ -599,7 +645,8 @@ def run(card: dict, hc: dict, checks: Checks, prefix: str = "") -> dict:
                  f"T1 under DistinctWrites alone (within 1 point) as its lane states them",
                  all(ok for _, ok in rep), ", ".join(f"{k} {'ok' if ok else 'NO'}" for k, ok in rep) or "none stated")
     nofold = [e["id"] for e, _ in dv if not (e["fold_w1"] > 0 and abs(
-        e["h"] - e["extra_w1_per_mac"] - e["fold_w1"] - derived(card, hc, lead, hc["proposal"][e["id"]], False)["worst"]["h"]) < 1e-9)]
+        e.get("h_prover", e["h"]) - e["extra_w1_per_mac"] - e["fold_w1"]
+        - derived(card, hc, lead, hc["proposal"][e["id"]], False)["worst"]["h"]) < 1e-9)]
     checks.check(f"{prefix}every derived design's h counts the fold's own register writes at W1, as h's definition "
                  f"and the lead's word count require", not nofold and bool(dv),
                  ", ".join(nofold) or ", ".join(f"{e['id']} +{e['fold_w1']:.2f}" for e, _ in dv)[:200])
@@ -612,17 +659,12 @@ def run(card: dict, hc: dict, checks: Checks, prefix: str = "") -> dict:
     ok = all(by[f["best"]]["meets"] and by[f["best"]]["status"] not in GONE for f in fr)
     checks.check(f"{prefix}the frontier's h falls (weakly) as rank rises, and every design on it meets T1, T2 and T3 and "
                  f"stands", mono and ok and bool(fr), " → ".join(f"{rank_label(f['rank'])}: {f['best']} {f['h']:.1f}" for f in fr))
-    fm = frontier(entries, rules_stand=True, stands_if=True)
-
-    def granted(e: dict) -> bool:
-        fams = [hc.get("family", {}).get(a.get("family", ""), {}) for a in hc.get("proposal", {}).get(e["id"], {}).get("adds", [])]
-        return all(f.get("stands_if") for f in fams if f.get("status") == "refuted")
-    ok = all(by[f["best"]]["meets"] and (by[f["best"]]["status"] not in GONE or granted(by[f["best"]])) for f in fm)
-    checks.check(f"{prefix}with each refuted family's stated write model granted (rules otherwise as they stand), every "
-                 f"design on the frontier meets T1, T2 and T3 and is refuted, if at all, only by such families",
-                 ok and bool(fm), " → ".join(f"{rank_label(f['rank'])}: {f['best']} {f['h']:.1f}" for f in fm))
-    return {"lead": lead, "readings": readings, "entries": entries, "frontier": fr,
-            "frontier_rules": frontier(entries, rules_stand=True), "frontier_model": fm}
+    frs = frontier(entries, rules_stand=True)
+    idle = [f"{rank_label(f['rank'])}: {f['best']}" for f in fr + frs if f["best"] != "lead" and not (f["cut"] > 1 + 1e-9)]
+    checks.check(f"{prefix}every frontier row is headed by the lead or by a design that cuts h: one that only ties the "
+                 f"lead, as a design moving the lead's hashing to the certifier does, doesn't head a rank",
+                 not idle, ", ".join(idle) or " → ".join(f"{rank_label(f['rank'])}: {f['best']}" for f in frs))
+    return {"lead": lead, "readings": readings, "entries": entries, "frontier": fr, "frontier_rules": frs}
 
 
 def mutations(card: dict, hc: dict, checks: Checks) -> None:
@@ -675,17 +717,22 @@ def mutations(card: dict, hc: dict, checks: Checks) -> None:
     caught("done-when that ignores an open premise without a falsification test", card, h2,
            switched("REQUIRE_FALSIFICATION", False))
     caught("a derived design's h without the fold's own register writes", card, hc, switched("FOLD_WRITES", False))
+    caught("h counting only the prover's hashing: R1 at 0, ALT's split at its card share", card, hc,
+           switched("COUNT_ELSEWHERE", False))
     h3 = copy.deepcopy(hc)
-    h3["family"]["mut-refuted"] = {"what": "seeded", "stated": [{"lane": "TEST", "name": "seeded", "rank": "4a"}],
-                                   "status": "refuted", "refuted_by": "a seeded adversary"}
-    h3["proposal"]["mut-refuted"] = {
-        "lane": "TEST", "note": "none", "title": "a seeded refuted proposal", "status": "proposed",
-        "h": {"value": 0.5, "price": "w1-forms", "label": "checked"}, "t1": {"value": 0.0001, "label": "checked"},
-        "t2": {"value": 2.0, "label": "estimate"}, "t3": {"value": 0.0, "label": "measured"},
-        "adds": [{"id": "seeded", "family": "mut-refuted", "rank": "4a", "part": "hashing", "status": "open",
-                  "falsification": "x"}]}
-    caught("a model-granted frontier that grants a family stating no write model", card, h3,
-           switched("GRANT_ANY_REFUTED", True))
+    h3["proposal"]["a-tie"] = {
+        "lane": "TEST", "note": "none", "title": "a seeded design moving the lead's hashing", "status": "proposed",
+        "h": {"value": 50.0, "price": "w1-forms", "label": "estimate"}, "moved_from": "lead",
+        "t1": {"value": 0.0005, "label": "checked"}, "t2": {"value": 50.0, "label": "estimate"},
+        "t3": {"value": 0.0, "label": "measured"}}
+    caught("a frontier that breaks the lead's tie by id, so a design that cuts nothing heads 4a", card, h3,
+           switched("PREFER_LEAD", False))
+    h4 = copy.deepcopy(hc)
+    h4["proposal"]["mut-ruling"] = {
+        "lane": "TEST", "note": "none", "title": "a seeded proposal citing no recorded ruling", "status": "proposed",
+        "h": {"value": 12.0, "price": "w1-forms", "label": "estimate"}, "rule_question": "seeded?",
+        "rules": ["mut-missing"]}
+    caught("a design citing a ruling no [ruling.*] records", card, h4)
 
     def axis_without_adds(card2, hc2):
         spec = {"lane": "TEST", "note": "none", "title": "seeded", "status": "proposed",
@@ -724,15 +771,14 @@ def main() -> int:
         f", {sum(m['caught'] for m in checks.mutants)}/{len(checks.mutants)} mutations caught" if checks.mutants else "")
     out.mkdir(parents=True, exist_ok=True)
     (out / "hash_card.md").write_text(render(hc, res["lead"], res["readings"], res["entries"], res["frontier"],
-                                             res["frontier_rules"], line, res["frontier_model"]))
-    keep = ("id", "kind", "title", "lane", "note", "status", "design", "h", "h_label", "cut", "t1", "t1_dw", "fold_w1",
-            "t2", "t3", "meets", "flags", "rule_change", "rule_question", "refused", "attacks", "done_missing", "adds",
-            "stands_if")
-    js = {"basis": hc["basis"], "lead": {k: res["lead"][k] for k in ("name", "h", "t1", "t2_measured", "t2_card", "t3_measured",
-                                                                     "macs_per_word")}
+                                             res["frontier_rules"], line))
+    keep = ("id", "kind", "title", "lane", "note", "status", "design", "h", "h_prover", "h_label", "cut", "t1", "t1_dw",
+            "fold_w1", "t2", "t3", "meets", "flags", "rule_change", "rule_question", "ruled", "refused", "attacks",
+            "done_missing", "adds")
+    js = {"basis": hc["basis"], "rulings": hc.get("ruling", {}),
+          "lead": {k: res["lead"][k] for k in ("name", "h", "t1", "t2_measured", "t2_card", "t3_measured", "macs_per_word")}
           | {"parts": res["lead"]["parts"], "ranks": res["lead"]["ranks"]},
           "readings": res["readings"], "frontier": res["frontier"], "frontier_rules_stand": res["frontier_rules"],
-          "frontier_model_granted": res["frontier_model"],
           "designs": [{k: e[k] for k in keep if k in e} | {"ranks": e.get("ranks")} for e in res["entries"]]}
     (out / "hash_card.json").write_text(json.dumps(js, indent=1, sort_keys=True, default=str) + "\n")
     with (out / "hash_card.csv").open("w", newline="") as fh:
