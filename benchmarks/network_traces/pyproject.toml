@@ -28,11 +28,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # certifier/v0 cases from period_case (the period check's Python mirror, with verity_difftest's decoders, and its pinned
 # slot entry's fixture), which also re-decides them.
 # demo_stub's endpoint records are read as the warden path's endpoint step reads them: `verity-vllm advice` (with the
-# step trace and the records it imports) and network-e2e's chain. certifier_piece is the network certifier's piece of
+# step trace and the records it imports, and its CLI, which served_session's endpoint step runs it through) and
+# network-e2e's chain. certifier_piece is the network certifier's piece of
 # one_stage's served_verdicts, whose pieces and record test_certifier_piece runs it through into the block record.
 inputs = ["integrations/vllm/workloads", "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/window_advice.py",
           "integrations/vllm/verity_vllm/pipeline/advice.py", "integrations/vllm/verity_vllm/pipeline/advice_windows.py",
+          "integrations/vllm/verity_vllm/pipeline/cli.py",
           "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/settings.py",
           "integrations/vllm/verity_vllm/engine/__init__.py",
           "integrations/vllm/verity_vllm/engine/hooks.py", "integrations/vllm/verity_vllm/engine/step_trace.py",
