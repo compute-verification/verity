@@ -12,7 +12,7 @@
 #      syncs, a labelled stand-in, instead of refused)
 #      N2_ADVICE_FROM_IO=1 (--advice-from-io, with N2_E2E: a run with no endpoint advice, such as a gate's rehearsal,
 #      on an advice synthesized from its certified I/O, labelled so)
-#      N2_DRAW (--draw K: each member's period sampled, K of its windows drawn after the period is committed and only
+#      N2_DRAW (--draw K: each member's period sampled, K of its windows sampled after the period is committed and only
 #      those proved; every window by default)  N2_DELTA (--delta)
 #      N2_CHALLENGER=local|gate:USER@HOST (--challenger, required with N2_DRAW: the draws on the auditor's challenger's
 #      coins, a session of its own for each member, pinned on main's first-parent history fetched from the clone's

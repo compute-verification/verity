@@ -309,7 +309,7 @@ def test_a_law_whose_count_varies_is_refused_at_register():
 def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n():
     """`rate:1/3:2` draws `subset:K` at K = ⌈N/3⌉ rounded up to a multiple of its 2 tables over each registration's N, so
     a registration padded tenfold (N = 60 for 6) draws K = 20 and every proof block is still drawn with probability K/N ≥ 1/3,
-    where `subset:2` falls to 2/60. The draw, the Lean verifier's draw of record and the outcome's run (`verifier.run`,
+    where `subset:2` falls to 2/60. The sample, the Lean verifier's sample of record and the outcome's run (`verifier.run`,
     which an accept needs) are a subset's of K."""
     for n, k in ((6, 2), (60, 20)):
         stream = _stream(_spec(S.Law("rate:1/3:2")))
@@ -418,8 +418,8 @@ def test_a_late_proof_is_a_reject():
 
 
 def test_a_proof_that_never_arrives_ends_late():
-    """A drawn proof block whose proof is never delivered is pending until the proof deadline and a reject (`late`) after it:
-    no draw stays pending forever, and the stream receives the next registration only once it ends."""
+    """A sampled proof block whose proof is never delivered is pending until the proof deadline and a reject (`late`) after it:
+    no sample stays pending forever, and the stream receives the next registration only once it ends."""
     clock = Clock()
     stream = _stream(clock=clock)
     draw = stream.select(stream.register(_record(), _ports(6)))
@@ -500,7 +500,7 @@ def test_a_registration_before_the_salt_is_late():
 
 
 def test_the_salt_is_issued_once_from_the_challengers_coins():
-    """The salt is the challenger's next `n` bytes, read before the draw's, and a second salt reads nothing."""
+    """The salt is the challenger's next `n` bytes, read before the sample's, and a second salt reads nothing."""
     reads: list[int] = []
     source = random.Random(3).randbytes
     clock = Clock()
@@ -717,8 +717,8 @@ def test_a_closure_widens_a_work_draw_only_and_stays_in_range():
 
 @pytest.mark.parametrize("text", ["subset:2", "bernoulli:3/3", "stratified:2", "work:2"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
-    """The draw is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
-    draws the same proof blocks; a work draw's closure is the same too."""
+    """The sample is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
+    draws the same proof blocks; a work sample's closure is the same too."""
     table = WORK if text.startswith("work") else None
     closure = NEXT if table else None
     for seed in range(8):
