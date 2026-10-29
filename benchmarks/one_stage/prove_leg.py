@@ -19,7 +19,8 @@ it.
   members' templates (`partition.mixed_population_program`, `Q_template_instances`), one stratum a member.
 * **The registration** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
   leaf layer, checked by the verifier of record (R1-R7) and against each statement's header before the sample.
-* **The sample** (``coins``): ``"lean"``, the verifier's Lean on its own OS coins (`flock-verify draw --stratified K`, A3);
+* **The sample** (``coins``): ``"lean"``, the verifier's Lean (`flock-verify draw --stratified K`) on a development
+  challenger's coins opened after the registration (`a0.challenger_draw`);
   a mapping ``{member: [unit, ...]}`` of each member's sampled proof blocks, a sample the proof system made on live coins; or a
   callable that takes the registration record and returns that mapping (a `service.Stream`'s register and select).
 * **Proving.** Each drawn member's units are one `serve --zk --draw-file` / `prove --zk` session, behind the ZK server
@@ -224,10 +225,11 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
 
 def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, lean: str, out: Path,
           bases: dict[str, tuple[int, int]]) -> dict:
-    """The verifier's sample as one sample object over global units: Lean's own (``coins == "lean"``), or the caller's."""
+    """The verifier's sample as one sample object over global units: its Lean's on a development challenger's coins opened
+    after the registration (``coins == "lean"``, `a0.challenger_draw`), or the caller's."""
     if coins == "lean":
-        p = a0.run([lean, "draw", "--program", str(program_file), "--partition", str(partition_file), "--stratified", str(k)],
-                   out / "draw.log")
+        p = a0.challenger_draw(lean, ["--program", str(program_file), "--partition", str(partition_file), "--stratified", str(k)],
+                               rec["law"], rec["population"], R.digest(rec), out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:
             raise RuntimeError(f"flock-verify draw gave no draw (rc {p.returncode}): {p.stderr[-400:]}")
