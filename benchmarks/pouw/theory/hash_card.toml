@@ -121,13 +121,22 @@ what = "inbox/HASH.md: it equals Σ_τ κ_τ Σ_{t≥τ} r_t, computable without
 #   rule_change: the rule a design needs changed (another primitive, a revealed sketch); rule_question: one asked
 #   caveats: conditions another lane's note sets on the design, carried as flags
 #   adds[].family: a premise another lane states under another name and rank ([family.*]); the card takes the highest
+#   family.stands_if: the write model under which a refuted family's known adversaries no longer beat it
 
-# Premise families: one statement two lanes name and rank differently.
+# Premise families: one statement two lanes name and rank differently, or one premise a lane states for several designs.
 [family.xor-fold-writes]
 what = "a program that outputs the XOR of a cell's words (m of them, or all of them sealed with the final word) writes each word and the XOR's three-input LOP3s"
 stated = [{ lane = "SHA", name = "XorWrites_m", rank = "4a" }, { lane = "ASSUME", name = "FoldMaterial (+ XorFoldOpt)", rank = 5 }]
 status = "refuted"
-refuted_by = "COUNTER's pack (run r20261029-202456-94fa, checked bit for bit): at the lead's layout 2-3 cells' zero-data words share a register, so the cheapest prover undercuts the credit by 28-36% of stock (the XOR fold), 21-24% (xor-16) and 12-15% (xor-11); credit = stock alone is sound but leaves honest's words and fold uncredited (T1 about 77%)"
+refuted_by = "under today's W1 (MH100w, predicate writes free): COUNTER's pack (run r20261029-202456-94fa, checked bit for bit; it counts IADD3s, not their carry predicates) undercuts the credit by 28-36% of stock (the XOR fold), 21-24% (xor-16) and 12-15% (xor-11) at the lead's layout; SHA's part Y (run r20261029-203316-fc3f, checked bit for bit, writes modelled) pays 1.396 a word against honest's 1.5 at m 16 (0.931x) and ties at m 11 (0.9997x); credit = stock alone is sound but leaves honest's words and fold uncredited (T1 about 77%)"
+stands_if = "a predicate write is priced as a register write (shalb.py's B1 dataflow rung; SHA Ask 1): the best known adversary then pays 1.375-1.486x honest on a fresh-output IMMA and 1.031-1.115x on the served in-place IGMMA (1.000x against ptxas's 2 + 1/m at m 16); ASSUME's whole-cell fold is not priced so"
+
+[family.trunc-writes]
+what = "a program that outputs each word's low 16 bits, two halves a message register, writes 1.5 registers a word"
+stated = [{ lane = "SHA", name = "TruncWrites_16", rank = "4a" }]
+status = "refuted"
+refuted_by = "under today's W1 (predicate writes free): SHA's part Z (run r20261029-203316-fc3f, bit for bit against honest's message registers, writes modelled) pays 1.370 a word against honest's 1.5 (0.913x)"
+stands_if = "a predicate write is priced as a register write (B1): part Z then pays 1.875 a word (1.25x)"
 
 [family.fold-opt]
 what = "FOLD-OPT (Accounting.Assumptions.TS): honest's fold program is the cheapest that outputs the fold, instantiated at a keyed fold (li, Duo, fx1, or SPARSE's multiply-xor)"
@@ -138,8 +147,8 @@ stated = [{ lane = "SPARSE", name = "FOLD-OPT", rank = "4a" }, { lane = "ASSUME"
 lane = "SHA"
 note = "compute-research/20261029T1947Z-report-hash-sha"
 what = "SHA-512 trees under ShaWrites with DistinctWrites the only other credit, M0: h >= (R/32)(r - T1)"
-value = "h >= 108.6 for any noise (126.2 at the lead's r); no design in the class cuts h by 1.2x"
-label = "checked (derived; arithmetic checked, run r20261029-192202-edd6)"
+value = "h >= 108.60 for any noise (108.5906 rounded up; 126.2 at the lead's r); no design in the class cuts h by 1.17x"
+label = "proved (the counting: HashFloor.lean on SHA's branch at 9aecd98f55, core Lean, axioms propext and Quot.sound; class C's credit bound is its definition, the hypothesis `credit`)"
 
 [bound.zero-data-ceiling]
 lane = "ASSUME"
@@ -147,6 +156,13 @@ note = "compute-research/20261029T1926Z-report-hash-assume"
 what = "a premise only lower-bounds an adversary's cost, so credit <= C0, the zero-data prover's cost, whatever the premise's rank"
 value = "no premise on operands buys h: served stride-k designs keep >= 1/31 words a data MAC (the lead's), outputs-only leaves >= stock uncredited, exact designs at most 1.3x (8B) / 3.2x (70B) at rank 4b and none on 1B"
 label = "proved (paper); classes checked, run r20261029-190731-0ded"
+
+[bound.read-every-word]
+lane = "SKETCH"
+note = "compute-research/20261029T2031Z-report-hash-sketch"
+what = "a design that reads every k32 word with 3-input instructions"
+value = "at least 0.5 register a word: h >= 0.843 on SKETCH's basis (0.85 on the card's: 0.577 + A and the bound blocks 0.272); below it only fewer words a MAC or A's rows"
+label = "argument (counting)"
 
 [proposal.sha-trunc16]
 lane = "SHA"
@@ -157,7 +173,7 @@ h = { value = 63.89, price = "w1-forms", label = "checked", point = "any", model
 t1 = { value = 0.00045, label = "checked" }
 t2 = { value = 36.84, label = "estimate" }
 t3 = { value = -0.00021, label = "measured" }
-adds = [{ id = "TruncWrites_16", rank = "4a", part = "hashing", status = "open", owner = "SHA" }]
+adds = [{ id = "TruncWrites_16", family = "trunc-writes", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "an exact M0 program for the truncated message registers below honest's 1.5 writes a word all in (hash_sha.py part Z; SHA interim 2)" }]
 caveats = ["the cut tops out at 2x", "T1 under DistinctWrites alone 115%"]
 
 [proposal.sha-xor8]
@@ -192,7 +208,7 @@ stated = { h_bare = 8.22, h = 8.22, t1 = 0.00028, t1_dw = 1.66 }
 t2 = { value = 12.81, label = "estimate" }
 adds = [{ id = "XorWrites_16", family = "xor-fold-writes", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "an exact M0 program at or below 1.47 writes a word all in against honest's 1.5 (hash_sha.py part X; the packed adversary is at 1.29 a word plus about 14 hand-counted writes a register)" }]
 rule_question = "is a XOR fold of words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
-caveats = ["SHA's own adversary costs 1.29 writes a word against honest's 1.5; only its hand-counted per-block overhead keeps it behind (fragile, SHA's Smells)"]
+caveats = ["honest's 1.5 a word needs a fresh-output IMMA (mma.sync), whose int8 rate on the H200 is unmeasured; the served GEMM accumulates in place (the -igmma rows)"]
 
 [proposal.sha-xor31]
 lane = "SHA"
@@ -210,25 +226,64 @@ caveats = ["SHA states T1 at T 8,192 only", "SHA expects a better encoding to br
 lane = "SHA"
 note = "compute-research/20261029T1947Z-report-hash-sha"
 title = "xorrot-11: X = xor of rot(W_t, rho_t) over 11 words, distinct public rotations"
-status = "proposed"
+status = "closed"
 combine = { m = 11, rot = 1 }
 stated = { h_bare = 11.84, h = 11.84, t1 = 0.00029, t1_dw = 2.62 }
 t2 = { value = 14.78, label = "estimate" }
-adds = [{ id = "RotXorWrites_11", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "the exact adversary search for xorrot-m (SHA's next step); attacked only on paper so far" }]
+adds = [{ id = "RotXorWrites_11", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "the bit-sliced adversary (hash_sha.py part R with rotations renamed)" }]
 rule_question = "is a XOR fold of rotated words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
-caveats = ["not reached by COUNTER's pack, since a 32-bit rotation spills a packed lane into its neighbour; no exact search yet"]
+caveats = ["dropped by its lane (SHA interim 1 §2c, checked): a rotation only renames a bit-sliced program's registers, so the bit-sliced adversary pays 1.12x honest at m 16 and 0.998x at m 31, and the credited SHF a word buys nothing; SHA keeps xor-m", "not reached by COUNTER's pack, since a 32-bit rotation spills a packed lane into its neighbour"]
 
 [proposal.sha-xorrot16]
 lane = "SHA"
 note = "compute-research/20261029T1947Z-report-hash-sha"
 title = "xorrot-16: X = xor of rot(W_t, rho_t) over 16 words, distinct public rotations"
-status = "proposed"
+status = "closed"
 combine = { m = 16, rot = 1 }
 stated = { h_bare = 8.22, h = 8.22, t1 = 0.00028, t1_dw = 2.74 }
 t2 = { value = 13.25, label = "estimate" }
-adds = [{ id = "RotXorWrites_16", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "the exact adversary search for xorrot-m (SHA's next step); attacked only on paper so far" }]
+adds = [{ id = "RotXorWrites_16", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "the bit-sliced adversary (hash_sha.py part R with rotations renamed)" }]
 rule_question = "is a XOR fold of rotated words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
-caveats = ["not reached by COUNTER's pack, since a 32-bit rotation spills a packed lane into its neighbour; no exact search yet"]
+caveats = ["dropped by its lane (SHA interim 1 §2c, checked): a rotation only renames a bit-sliced program's registers, so the bit-sliced adversary pays 1.12x honest at m 16 and 0.998x at m 31, and the credited SHF a word buys nothing; SHA keeps xor-m", "not reached by COUNTER's pack, since a 32-bit rotation spills a packed lane into its neighbour"]
+
+[proposal.sha-xor8-igmma]
+lane = "SHA"
+note = "compute-research/20261029T2040Z-report-hash-sha"
+title = "xor-8 on the served in-place IGMMA: honest XORs each word into its register as the accumulator moves on, 2 writes a word (2 + 1/m as ptxas compiles it)"
+status = "proposed"
+combine = { m = 8, writes_per_word = 1.0 }
+form = "xor-8-igmma"
+stated = { h_bare = 16.18 }
+t2 = { value = 16.24, label = "estimate" }
+adds = [{ id = "XorWrites_8 (served)", family = "xor-fold-writes", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "an exact M0 program for X below 2 writes a word all in (hash_sha.py parts R and Y; m0_draw)" }]
+rule_question = "is a XOR fold of words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
+caveats = ["the fold's writes are 1 a word on the served form (m - 1 XORs and one copy a block; checked from the SASS of a probe of the served form, m64n8k32, run r20261029-203103-cb54), 1 + 1/m as ptxas compiles it", "T2 is SHA's fresh-form estimate at the worst point; SHA prices the served form at T 8,192 only (xor-16: 5.43/6.34 sync/async against 5.20/6.07)", "the XOR set doesn't fit at BN 256: xor-m needs BN 128"]
+
+[proposal.sha-xor11-igmma]
+lane = "SHA"
+note = "compute-research/20261029T2040Z-report-hash-sha"
+title = "xor-11 on the served in-place IGMMA, 2 writes a word"
+status = "proposed"
+combine = { m = 11, writes_per_word = 1.0 }
+form = "xor-11-igmma"
+stated = { h_bare = 11.84 }
+t2 = { value = 14.35, label = "estimate" }
+adds = [{ id = "XorWrites_11 (served)", family = "xor-fold-writes", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "an exact M0 program for X below 2 writes a word all in (hash_sha.py parts R and Y; m0_draw)" }]
+rule_question = "is a XOR fold of words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
+caveats = ["the fold's writes are 1 a word on the served form, 1 + 1/m as ptxas compiles it (checked from a probe's SASS, run r20261029-203103-cb54)", "T2 is SHA's fresh-form estimate at the worst point; SHA prices the served form at T 8,192 only", "the XOR set doesn't fit at BN 256: xor-m needs BN 128"]
+
+[proposal.sha-xor16-igmma]
+lane = "SHA"
+note = "compute-research/20261029T2040Z-report-hash-sha"
+title = "xor-16 on the served in-place IGMMA, 2 writes a word"
+status = "proposed"
+combine = { m = 16, writes_per_word = 1.0 }
+form = "xor-16-igmma"
+stated = { h_bare = 8.22 }
+t2 = { value = 12.81, label = "estimate" }
+adds = [{ id = "XorWrites_16 (served)", family = "xor-fold-writes", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "an exact M0 program for X below 2 writes a word all in (hash_sha.py parts R and Y; m0_draw)" }]
+rule_question = "is a XOR fold of words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
+caveats = ["the fold's writes are 1 a word on the served form, 1 + 1/m as ptxas compiles it (checked from a probe's SASS, run r20261029-203103-cb54)", "the thinnest margin in play: with predicates priced the best adversary pays 1.031x honest's 2.0, 1.000x against the compiled 2.0625 (SHA's Smells)", "T2 is SHA's fresh-form estimate at the worst point; SHA prices the served form at T 8,192 only (5.43/6.34 against 5.20/6.07)", "the XOR set doesn't fit at BN 256: xor-m needs BN 128"]
 
 [proposal.assume-fold-cell]
 lane = "ASSUME"
@@ -311,17 +366,19 @@ caveats = ["the card keeps A's leaves and the bound blocks on the prover (0.27);
 
 [proposal.noise-mirrorpi-quad]
 lane = "NOISE"
-note = "compute-research/20261029T2000Z-report-hash-noise"
-title = "mirror-pi/quad-l4-w4: a per-output quadratic sketch sum_t w_t^2 mod 2^32 over mirror-pi noise, 4 coin lanes a step and a wide step-0 block"
+note = "compute-research/20261029T2045Z-report-hash-noise"
+title = "mirror-pi/quad-l4-w4: a per-output quadratic sketch sum_t w_t^2 mod 2^32 over mirror-pi noise, 4 coin lanes a step and a wide step-0 block, coins tiled a 64-column / 64-row tile, 32-bit row and column salts, a coincidence-free replay order"
 status = "proposed"
 h = { ratio = 0.0198, baseline = 120.0, label = "estimate" }
-t1 = { value = 0.0062, label = "estimate" }
+t1 = { value = 0.00101, label = "checked" }
 t2 = { value = 2.6, label = "estimate" }
-adds = [{ id = "SketchWrites2", rank = "4bU", rank_stated = "4a+", part = "hashing", status = "open", owner = "NOISE", falsification = "a program for the sketch below 2 eq a word; commit_space.py's edge and middle-block decompositions are its attacks so far (run r20261029-200124-8f0f)" }]
+adds = [{ id = "SketchWrites2", rank = "4b", part = "hashing", status = "open", owner = "NOISE", falsification = "a program at small m, n and S on CPU that computes sigma for every output below 2(S - 1) - Pi/|O| eq an output word by 1% of stock, or a rank term below 2 byte products (commit_space.py: sketch_pools, edge_attack, partition_search)" }]
 caveats = [
-  "another noise (mirror-pi), not the lead's: its T1 base is mirror's (0.62%, open: base pools and A2r above 1% at 8,192 rows without a row salt), its T3 unmeasured",
-  "NOISE states h as h/lead against the brief's 120-230 and counts the sketch's arithmetic as hashing",
-  "mirror's network term is about 28% at cap 32 unless row coins are drawn per column tile",
+  "another noise (mirror-pi), not the lead's; its T3 is unmeasured",
+  "T1 is the sum of NOISE's checked terms under literal P at cap 320 (pools and A2r 0.071%, network 0.030% at the bar's W_mac; 0.072-0.074% at cap 32); the pool at 8,192 rows and K 8,192 is an estimate (+0.005%), and 'tiling keeps the credit' is argued",
+  "NOISE states h as h/lead against the brief's 120-230 and counts the sketch's arithmetic as hashing; the salts add under 1%",
+  "SketchWrites2 splits: (a) the bound inside the separable class, a matrix-rank statement and a Lean property candidate (0 eq saved at l 4, w4, checked, run r20261029-201436-35f5), and (b) the class's completeness, assumed",
+  "decode is open: at one row the coin stream is 72.7 MB a token, 5.5x the lead's 13.2 MB",
 ]
 
 [proposal.noise-rfp4]
@@ -373,6 +430,11 @@ status = "proposed"
 h = { value = 1.41, price = "floor", label = "estimate", point = "any", model = "llama-3.2-1b", words_chunk = 262144, baseline = 118.5 }
 t1 = { value = 0.0074, label = "estimate" }
 t2 = { value = 2.0, label = "estimate" }
-adds = [{ id = "SAK-UF(B)", rank = "4bU", rank_stated = "4", part = "matmul", status = "open", owner = "ALT", falsification = "a MAC-weighted gap above 1% at 1-bit R on the registered weights (hash_alt_weights.py, per model): 0.52% on Llama-3.2-1B's int8 weights, 16% on Student-t(3) synthetic weights" }]
+adds = [{ id = "SAK-UF(B)", rank = "4bU", rank_stated = "4", part = "matmul", status = "open", owner = "ALT", falsification = "a MAC-weighted gap above 1% - 0.22% at 1-bit R on the registered weights (hash_alt_weights.py, per model): 0.516% on Llama-3.2-1B's int8 weights after ALT interim 2's routes (run r20261029-203003-9868), 16% on Student-t(3) synthetic weights; or any exact program for R·B^T below (1 - eps)·m·n·K" }]
 rule_change = "public weights: the weights are values a program brings under 'everything zero-knowledge' (the model-public ruling)"
-caveats = ["the linears only: attention stays at the lead's density, so the whole step's h is 3.39 at T 512 and 26.7 at T 8,192 (4.4x)", "T3 unmeasured (about int7-equivalent activations on every linear)"]
+caveats = [
+  "the linears only, as the basis: over all compute, attention at the lead's density gives h 3.4-43 with all of it credited; attention uncredited gives h 0.91-1.39 with 64-98% of stock MACs credited (ALT interim 2: quote it with its coverage)",
+  "T3 unmeasured (about int7-equivalent activations on every linear)",
+  "the credit is for MACs on registered weights with fresh noise; nothing checks that A is the model's activation",
+  "SAK-UF is a premise on the registered weights per model, met as 'literally random operands' on one side only",
+]

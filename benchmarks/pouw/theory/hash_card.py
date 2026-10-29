@@ -221,7 +221,8 @@ def design_entry(card: dict, hc: dict, key: str, spec: dict, lead: dict, kind: s
         if a.get("rank_stated"):
             flags.append(f"{a['id']}: its lane states rank {a['rank_stated']}, not on the card's scale; carded at {rank}")
         if fam.get("status") == "refuted":
-            refuted.append(f"{a['id']} (family {a['family']}) refuted: {fam['refuted_by']}")
+            refuted.append(f"{a['id']} (family {a['family']}) refuted: {fam['refuted_by']}"
+                           + (f"; it would stand if {fam['stands_if']}" if fam.get("stands_if") else ""))
     flags += refuted
     e = {"id": key, "kind": kind, "title": spec.get("title", key), "lane": spec.get("lane", ""),
          "note": spec.get("note", ""), "status": spec.get("status", "proposed"), "rule_change": spec.get("rule_change", ""),
