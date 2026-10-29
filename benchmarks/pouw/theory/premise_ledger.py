@@ -26,6 +26,11 @@ calculator (`noise_sweep.gap_terms`: forming, de-noise, the final word, duplicat
   the two, simulated exactly on the words for ssn_1l, ssn_a, the hardened variant ssn_1l_hw (16 code-lane coin bits,
   step coins a_t ∈ {1, 3} against public column signs) and two candidates with a whole coin word against a wide code,
   cancelled in the last step: ssn_1l_tele4 (signed middle lanes, whose walks return) and ssn_1l_tele4m (monotone).
+  A self-dealer's chosen data is three terms, each closed by its own premise: requests (identical rows and
+  massive-activation rows, reachable through any model; a massive row's data part is a per-column constant, which
+  cancels in a column's returns), zero rows (rows-reachable: unreachable through a public model, padding uncredited)
+  and crafted increments (model-public: with its own weights a self-dealer sets each block's dot to minus the
+  likelier one-bit noise increment, so a one-bit branch skips at least half the words).
 
 Other sections: ShaSpeed's precision at each point and what Daniel's 02:01Z ruling covers, what rank ≤ 3 overall would
 take, G1 against advice, energy as a pricing (excluded by AGENTS.md; reported only as what it would change), per-period
@@ -224,9 +229,22 @@ LEDGER = [
      "none in T1: the egress layer's (devices off the card, with OutsourceWithinEgress)"),
     ("OutsourceWithinEgress", "Off-card compute is bounded by the egress the certifiers see", "3", "locked", "3",
      "certifiers", "lock", "none in T1 (egress layer)"),
-    ("inputs-natural", "The prover chooses neither its inputs nor its weights (no zero or identical rows, no equal "
-     "weight columns)", "F", "false", "F", "a self-dealing prover submits its own requests and registers its own "
-     "weights", "—", "coin-branch on prover-chosen data"),
+    ("inputs-natural", "The prover chooses neither its requests nor its model (no identical, zero or crafted rows, no "
+     "crafted weights)", "F", "false", "F", "a self-dealing prover submits its own requests and registers its own "
+     "weights", "—", "every coin-branch term on chosen data (requests, zero rows, crafted increments)"),
+    ("model-public", "The registered weights are a public checkpoint's, proved against its digest at registration, "
+     "so a self-dealer chooses its requests (tokens) but neither a linear's weights nor, through them, its rows",
+     "3", "open (a ruling: credit only public checkpoints)", "5",
+     "— (a protocol rule and an equality proof of the committed weights; false for a private model)", "Daniel / N-CARD",
+     "crafted increments: with its own weights a self-dealer sets each block's dot to minus the likelier noise "
+     "increment, skipping ≥ α/2 of every ssn design's words (α/8 for per2 and os2 with one-hot weight blocks, "
+     "estimate)"),
+    ("rows-reachable", "Through a public model no request makes a linear's input row zero or crafted, and padding "
+     "rows (a size class's, a CUDA graph's) are not credited; identical rows and massive-activation rows (one-hot "
+     "after per-token int8) stay reachable, in any share a self-dealer's short requests choose",
+     "3", "stated", "3", "post-RMSNorm rows (qkv, gate_up) have norm √d·|γ| ≠ 0; a token search at o's and down's "
+     "inputs; the integration's credit of padded rows", "N-PREM / N-CARD",
+     "zero rows (with model-public): their equal columns and a column's returns"),
     ("energy", "A measured J per op per class prices work", "X", "excluded (AGENTS.md)", "X",
      "— (no meter enters a premise)", "—", "none: forming and hashing ×r, credit unchanged (this file)"),
 ]
@@ -399,7 +417,8 @@ def coin_branch_terms(data: dict) -> dict:
         rows = max(1, round(m * share))
         alpha = weighted_alpha(ssn, shapes)
         scope = NS.DATA_SCOPE[min(NS.DATA_SCOPE, key=lambda r: abs(math.log(max(rows, 1) / r)))]
-        summ = data["summary"][scope] if data else {"zero_block_share": 0.0, "identical_row_share": 0.0}
+        summ = data["summary"][scope] if data else {"zero_block_share": 0.0, "identical_row_share": 0.0,
+                                                    "massive_row_share": 0.0}
         w = sum(n * k for n, k in shapes.values())
         pairc = sum(n * k * pair_collision_ssn1l(NS.steps1l(k)) for n, k in shapes.values()) / w
         natural = alpha * (0.5 * summ["zero_block_share"] + 0.5 * summ["identical_row_share"] * pairc)
@@ -413,6 +432,10 @@ def coin_branch_terms(data: dict) -> dict:
             e[f"chosen_identical_{x}"] = e[f"chosen_zero_{x}"] = weighted_alpha(tele, shapes) * 2.0 ** -32
             e[f"natural_{x}"] = 0.0
         e.update(col_collapse_terms(shapes))
+        for x, name, steps in COL_VARIANTS:
+            e[f"natural_{x}"] = e.get(f"natural_{x}", 0.0) + summ["massive_row_share"] * e[f"massive_table_{x}"]
+            e[f"crafted_{x}"] = sum(n_ * k * design(name).alpha(k) * (steps(k) - 1) / (2 * steps(k))
+                                    for n_, k in shapes.values()) / w
         out[point] = e
     return out
 
@@ -615,8 +638,18 @@ def _zero_row_noise(variant: str, n: int, s: int, rng: np.random.Generator) -> t
     return base[None, :] + inc.cumsum(axis=0), pat
 
 
+@functools.cache
+def _massive_offsets(n: int) -> np.ndarray:
+    """A massive-activation row after per-token int8 quantization: one lane at 127 (lane 3, step 1's data, as
+    SW-NOISE's massive_row case), every other 0, so each column's data part is 127·B[3, c] from step 1 on (B natural,
+    int8 normal with std 25, estimate)."""
+    b = np.clip(np.rint(np.random.default_rng(77).normal(0, 25, n)), -127, 127).astype(np.int64)
+    return 127 * b
+
+
 @functools.lru_cache(maxsize=None)
-def col_collapse(variant: str, n: int, s: int, t0: int, lag: int = 0, salts: int = 2, seed: int = 11) -> float:
+def col_collapse(variant: str, n: int, s: int, t0: int, lag: int = 0, salts: int = 2, seed: int = 11,
+                 case: str = "zero") -> float:
     """The share of a zero row's n·S words a coin-branching program skips (stores and memory-path gathers are free,
     MemOblivious): it writes one register a class of equal words in a step and gathers the rest, and it copies a word
     that equals its own column's word up to `lag` steps back.
@@ -625,11 +658,17 @@ def col_collapse(variant: str, n: int, s: int, t0: int, lag: int = 0, salts: int
     from t0 on, the classes are the table's last classes (or, at t0 = 0, step 1's computed values, written in full)
     split by the columns' public patterns, which keep equal words equal on every value of the later coins. A column's
     return is decided by the window's step coins alone (the code's part cancels), except across ssn_1l_tele's last
-    step, which drops the code. t0 < 0 is W1 alone (no bound on a program's paths): every equal value in the row."""
+    step, which drops the code. t0 < 0 is W1 alone (no bound on a program's paths): every equal value in the row.
+
+    case "massive" is a massive-activation row (`_massive_offsets`): a per-column constant that splits a step's classes
+    and cancels in a column's returns. Classes are read off the words' values, which overstates a table's grouping
+    (a coincidence of noise and data needs a table per layer), so the share errs against the design."""
     rng = np.random.default_rng(seed)
     shares = []
     for _ in range(salts):
         vals, pat = _zero_row_noise(variant, n, s, rng)
+        if case == "massive":
+            vals = vals + _massive_offsets(n)[None, :]
         if t0 < 0:
             shares.append(1 - np.unique(vals).shape[0] / (n * s))
             continue
@@ -664,17 +703,20 @@ CHEAP_LAG = 2
 def col_collapse_terms(shapes: dict) -> dict:
     """Each variant's zero-row collapse as a share of stock (α times the share of words skipped, weighted by n·K): cheap
     (a₁'s table, returns over ≤ 2 steps), G1 (the table depth and return window that fit half of HBM each), and W1
-    alone."""
+    alone; and a massive-activation row's (`massive_*`), cheap and at G1."""
     w = sum(n * k for n, k in shapes.values())
     out = {}
     for variant, name, steps in COL_VARIANTS:
         d = design(name)
         t0, lag = table_depth(variant, shapes), return_window(variant, shapes, steps)
         out[f"t0_{variant}"], out[f"lag_{variant}"] = t0, lag
-        for reading, depth, window in (("static", min(t0, 1), min(lag, CHEAP_LAG)), ("table", t0, lag),
-                                       ("w1_alone", -1, 0)):
-            out[f"col_{reading}_{variant}"] = sum(n * k * d.alpha(k) * col_collapse(variant, n, steps(k), depth, window)
-                                                 for n, k in shapes.values()) / w
+        for case, prefix, readings in (
+                ("zero", "col", (("static", min(t0, 1), min(lag, CHEAP_LAG)), ("table", t0, lag), ("w1_alone", -1, 0))),
+                ("massive", "massive", (("static", min(t0, 1), min(lag, CHEAP_LAG)), ("table", t0, lag)))):
+            for reading, depth, window in readings:
+                out[f"{prefix}_{reading}_{variant}"] = sum(
+                    n * k * d.alpha(k) * col_collapse(variant, n, steps(k), depth, window, case=case)
+                    for n, k in shapes.values()) / w
     return out
 
 
@@ -735,8 +777,14 @@ OPTIONS = {
     "hiding: ruled": (("hiding-ruled",), ("hiding",)),
     "hiding: forced PRF + mask-optimal": (("forced-PRF", "mask-optimal", "ShaSpeed"), ("hiding",)),
     "hiding: big rows": (("big-rows",), ("hiding",)),
-    "inputs-natural": (("inputs-natural",), ("coin_branch_chosen",)),
+    "inputs-natural": (("inputs-natural",), ("coin_branch_requests", "coin_branch_zero", "coin_branch_crafted")),
+    "model-public": (("model-public",), ("coin_branch_crafted",)),
+    "rows-reachable": (("model-public", "rows-reachable"), ("coin_branch_zero", "coin_branch_crafted")),
 }
+#: crafted increments for the M1 designs, a share of α (estimate): with its own weights a self-dealer makes a k32 block
+#: of a weight column one-hot, so the block adds one 3-bit noise entry (8 values) that a crafted row cancels w.p. 1/8;
+#: ncp3's noise is fresh on both sides, so its own weights fix nothing
+CRAFTED_M1 = {"per2": 1 / 8, "os2": 1 / 8, "ncp3": 0.0}
 
 
 def design_terms(label: str, point: str, data: dict, cb: dict) -> dict:
@@ -751,20 +799,26 @@ def design_terms(label: str, point: str, data: dict, cb: dict) -> dict:
     big = {r: hiding_terms(h["bytes_mac"], shapes, rows, row=r, a_pack=r)["unforced_floor"] for r in BIG_ROWS}
     e = cb[point]
     if branch == "data":
-        # a data-dependent design repeats every later word of an all-zero row in any program (estimate: zero rows)
+        # a data-dependent design repeats every later word of an all-zero row in any program (estimate: zero rows), and
+        # of a massive-activation row, whose one lane sits in the first step; with its own weights a self-dealer zeroes
+        # the blocks
         w = sum(n * k for n, k in shapes.values())
-        chosen, natural = sum(n * k * d.alpha(k) * (1 - H32 / k) for n, k in shapes.values()) / w, 0.0
+        zero = sum(n * k * d.alpha(k) * (1 - H32 / k) for n, k in shapes.values()) / w
+        requests, crafted, natural = zero, zero, 0.0
     elif branch:
-        # the adversary's best single attack: equal row-steps, or equal columns within zero rows (G1's table depth)
-        chosen = max(e.get(f"chosen_identical_{branch}", 0.0), e.get(f"chosen_zero_{branch}", 0.0),
-                     e.get(f"col_table_{branch}", 0.0))
-        natural = e.get(f"natural_{branch}", 0.0)
+        # chosen requests reach identical rows and massive-activation rows; zero rows' equal columns and returns at G1's
+        # depth and window; crafted increments need the prover's own weights
+        requests = max(e.get(f"chosen_identical_{branch}", 0.0), e.get(f"massive_table_{branch}", 0.0))
+        zero = max(e.get(f"chosen_zero_{branch}", 0.0), e.get(f"col_table_{branch}", 0.0))
+        crafted, natural = e[f"crafted_{branch}"], e.get(f"natural_{branch}", 0.0)
     else:
-        chosen = natural = 0.0
+        requests = zero = natural = 0.0
+        crafted = CRAFTED_M1[name] * weighted_alpha(d, shapes)
     return {"forming": t["forming_x"] + t["forming_y"], "denoise": t["denoise"], "final_word": t["final_word"],
             "dup": t["dup"], "coins": t["coins"],
             "hashing": h["words_floor"] * (1 - SHA_OUT_REGS * H32 / W1_COMPRESSION["floor"]), "pre_noise": h["pre_floor"],
-            "hiding": hid["unforced_floor"], "coin_branch_natural": natural, "coin_branch_chosen": chosen,
+            "hiding": hid["unforced_floor"], "coin_branch_natural": natural, "coin_branch_requests": requests,
+            "coin_branch_zero": zero, "coin_branch_crafted": crafted,
             "_h_floor": h["h_floor"], "_h_alone": h["h_alone"], "_bytes_mac": h["bytes_mac"], "_hiding": hid,
             "_hiding_big": big}
 
@@ -893,11 +947,15 @@ def periods(data: dict, cb: dict) -> dict:
             "ShaSpeed's slack at δ*": ALLOW - t["forming"],
             "hiding at 256 KiB, unforced (W1 floor)": t["hiding"],
             "coin branch, WikiText": t["coin_branch_natural"],
-            "coin branch, chosen rows (worse of identical and zero)": t["coin_branch_chosen"],
-            "coin branch, ssn_1l_hw, chosen rows (G1)":
-                design_terms("ssn_1l_hw", "llama_T8192", data, cb)["coin_branch_chosen"],
-            "coin branch, ssn_1l_tele4m (candidate), chosen rows (G1)":
-                design_terms("ssn_1l_tele4m", "llama_T8192", data, cb)["coin_branch_chosen"]}
+            "coin branch, chosen requests (identical or massive-activation rows)": t["coin_branch_requests"],
+            "coin branch, ssn_1l_hw, chosen requests (massive-activation rows, G1)":
+                design_terms("ssn_1l_hw", "llama_T8192", data, cb)["coin_branch_requests"],
+            "coin branch, ssn_1l_tele4m (candidate), chosen requests (G1)":
+                design_terms("ssn_1l_tele4m", "llama_T8192", data, cb)["coin_branch_requests"],
+            "coin branch, ssn_1l_hw, zero rows (G1)": design_terms("ssn_1l_hw", "llama_T8192", data, cb)["coin_branch_zero"],
+            "coin branch, ssn_1l_tele4m (candidate), zero rows (G1)":
+                design_terms("ssn_1l_tele4m", "llama_T8192", data, cb)["coin_branch_zero"],
+            "coin branch, crafted increments with the prover's own weights (any ssn design)": t["coin_branch_crafted"]}
     mac_s = {"one H200": INT8_MAC_S / alpha, "datacenter": INT8_MAC_S / alpha * NS.DATACENTER}
     out = {}
     for scope, rate in mac_s.items():
@@ -971,13 +1029,28 @@ def checks(rep: dict) -> list[dict]:
     ok("no design passes at rank ≤ 3 overall", all(
         s["rank_settled"] not in ("0", "1", "2", "3") for d in rep["hitting"].values() for s in d["minimal_sets"]))
     hwset = rep["hitting"]["ssn_1l_hw"]["minimal_sets"]
-    ok("ssn_1l_hw passes only with inputs-natural (false): its column collapse",
-       all("inputs-natural" in s["premises"] for s in hwset))
-    ok("ssn_1l_tele4 passes only with inputs-natural (false): a column's returns",
-       all("inputs-natural" in s["premises"] for s in rep["hitting"]["ssn_1l_tele4"]["minimal_sets"]))
+    def every(lab, *ids):
+        return all(any(i in s["premises"] for i in ids) for s in rep["hitting"][lab]["minimal_sets"])
+    ok("a massive-activation row skips over 1% of ssn_1l_hw's and ssn_1l_tele4's words at every point at G1 (its data "
+       "part cancels in a column's returns)",
+       all(v[f"massive_table_{x}"] > ALLOW for v in cb.values() for x in ("ssn_1l_hw", "ssn_1l_tele4")),
+       str({k: (round(v["massive_table_ssn_1l_hw"], 4), round(v["massive_table_ssn_1l_tele4"], 4))
+            for k, v in cb.items()}))
+    ok("ssn_1l_tele4m's massive-row collapse ≤ 0.5% at every point at G1",
+       all(v["massive_table_ssn_1l_tele4m"] <= ALLOW / 2 for v in cb.values()),
+       str({k: round(v["massive_table_ssn_1l_tele4m"], 5) for k, v in cb.items()}))
+    ok("ssn_1l_hw passes only with inputs-natural (false): massive-activation rows",
+       hwset and every("ssn_1l_hw", "inputs-natural"))
+    ok("ssn_1l_tele4 passes only with inputs-natural (false): a column's returns on massive rows",
+       every("ssn_1l_tele4", "inputs-natural"))
     tset = rep["hitting"]["ssn_1l_tele4m"]["minimal_sets"]
-    ok("ssn_1l_tele4m passes without inputs-natural", any("inputs-natural" not in s["premises"] for s in tset))
-    ok("ssn_1l passes only with inputs-natural (false)", all("inputs-natural" in s["premises"] for s in lead))
+    ok("ssn_1l_tele4m passes with model-public alone (zero and massive rows reachable)", any(
+        "model-public" in s["premises"] and not {"rows-reachable", "inputs-natural"} & set(s["premises"]) for s in tset))
+    ok("no ssn design and neither per2 nor os2 passes without model-public or inputs-natural (crafted increments)",
+       all(every(lab, "model-public", "inputs-natural") for lab in rep["hitting"] if lab.split()[0] in
+           ("ssn_1l", "ssn_1l+C1", "ssn_1l_hw", "ssn_1l_tele4", "ssn_1l_tele4m", "ssn_a", "per2", "os2")))
+    ok("ssn_1l passes only with inputs-natural (false): identical rows", all("inputs-natural" in s["premises"]
+                                                                              for s in lead))
     ok("nsf passes only with inputs-natural (false)",
        all("inputs-natural" in s["premises"] for s in rep["hitting"]["nsf"]["minimal_sets"]))
     ks = sorted({k for shapes, _, _ in POINTS.values() for _, k in shapes.values()})
@@ -1051,13 +1124,15 @@ def report(data_path: str | None) -> dict:
 
 def hiding_summary(hitting: dict) -> dict:
     """Each design's hiding on the card's layout, and the smallest leaf (words on it, a call's A packed up to it) at
-    which honest-only hiding fits beside what no true option closes (inputs-natural is false), floor and alone,
+    which honest-only hiding fits beside what no option but the false inputs-natural closes (model-public and
+    rows-reachable are taken: they are open, not false), floor and alone,
     unforced and with the salt PRF forced (M_key·y left)."""
     out = {}
     for lab, h in hitting.items():
         terms = h["terms"]
         rest = {p: sum(v for k, v in t.items() if not k.startswith("_") and k not in
-                       ("final_word", "hashing", "coins", "pre_noise", "hiding")) for p, t in terms.items()}
+                       ("final_word", "hashing", "coins", "pre_noise", "hiding", "coin_branch_zero",
+                        "coin_branch_crafted")) for p, t in terms.items()}
         e = {"card": {p: t["_hiding"] for p, t in terms.items()}, "rest": rest}
         for name in ("unforced", "my"):
             for reading in W1_COMPRESSION:
@@ -1081,13 +1156,17 @@ def table(rep: dict) -> str:
     lines.append("\n# coin branch (share of stock)")
     for p, e in rep["coin_branch"].items():
         lines.append(f"{p}: " + ", ".join(f"{k} {v:.4%}" for k, v in e.items() if isinstance(v, float) and k != "alpha"
-                                          and not k.startswith("col_")))
+                                          and not k.startswith(("col_", "massive_"))))
     lines.append("\n# a zero row's (or equal weight columns') words skipped, share of stock: cheap (a₁'s table, returns "
                  "over ≤ 2 steps) / G1 (table depth t0, return window L) / W1 alone")
     for p, e in rep["coin_branch"].items():
         lines.append(f"{p}: " + "; ".join(
             f"{x} {e[f'col_static_{x}']:.3%} / {e[f'col_table_{x}']:.3%} (t0 {e[f't0_{x}']}, L {e[f'lag_{x}']}) / "
             f"{e[f'col_w1_alone_{x}']:.1%}" for x, *_ in COL_VARIANTS))
+    lines.append("\n# a massive-activation row's words skipped, share of stock: cheap / G1")
+    for p, e in rep["coin_branch"].items():
+        lines.append(f"{p}: " + "; ".join(f"{x} {e[f'massive_static_{x}']:.3%} / {e[f'massive_table_{x}']:.3%}"
+                                          for x, *_ in COL_VARIANTS))
     lines.append("\n# minimal premise sets")
     for lab, h in rep["hitting"].items():
         lines.append(f"## {lab}")
