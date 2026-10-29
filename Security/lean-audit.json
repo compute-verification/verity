@@ -1986,6 +1986,14 @@
    "owner": "@compute-research",
    "digest": "9970d9795fc5080b384ca0a894a62c36113f13acf26cfa0dafbdd94f9ca82be9"
   },
+  "Verity.Assumptions.ChallengerLogsCoins": {
+   "owner": "@soundness",
+   "digest": "8c09825011781cb4d73b14f1056b1887cea82faad845141e6d826075010c94fa"
+  },
+  "Verity.Assumptions.FlipsAfterRecorded": {
+   "owner": "@soundness",
+   "digest": "3261cd32e88a813bed5cba80d2463e28d2202169df59653ce77d0692830f48f7"
+  },
   "Verity.Assumptions.GemmAmpereStep": {
    "owner": "@proofs",
    "digest": "02e4cb87864bcee487dafdb2047e70b7e521b0c0e9d0d8cb824ff3854abe00e1"
@@ -2001,6 +2009,10 @@
   "Verity.Assumptions.TrustedHost": {
    "owner": "@network-accounting",
    "digest": "205602db201f6c4f8976260053ef011cade6a4e53347a14486e1c87075c91ca3"
+  },
+  "Verity.Assumptions.VerifierReadsLog": {
+   "owner": "@soundness",
+   "digest": "0ed1c5456b740c38fa2d2638b81cae376aacb18ab9315ed23702dfe936d329e4"
   },
   "Verity.Circuit.BitFaninPos": {
    "owner": "@lean",
@@ -2437,6 +2449,10 @@
   "Pous.SecurityProofs.StreamedWipeMeetsDisk": {
    "honest": ["Pous.Claims.StreamedWipeMeetsDisk_meets"],
    "nontrivial": "Pous.Claims.StreamedWipeMeetsDisk_fails"
+  },
+  "Verity.SecurityProofs.SampleAfterRecorded": {
+   "honest": ["Verity.SecurityProofs.SampleAfterRecorded_honest"],
+   "nontrivial": "Verity.SecurityProofs.SampleAfterRecorded_nontrivial"
   }
  },
  "unwitnessed": {
@@ -11742,6 +11758,79 @@
    "assumptions": [],
    "type_hash": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6"
   },
+  "Verity.SecurityProofs.SampleAfterRecorded": {
+   "owner": "@soundness",
+   "signature": ["Verity.SecurityProofs.SampleAfterRecorded : Verity.Guarantees.SampleAfterRecorded"],
+   "assumptions": [],
+   "type_hash": "fbeb0ea5055c52bb842b296ef0dabce92330410439b1b39442b6125cfd409494"
+  },
+  "Verity.SecurityProofs.SampleAfterRecorded_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.SecurityProofs.SampleAfterRecorded_honest {U : Type} (L : Verity.Law U)",
+    "  (bad : Verity.Challenger.Log L.Ω L.Ω → Finset U) (K : Nat) :",
+    "  And",
+    "    (Verity.Assumptions.ChallengerLogsCoins fun ω =>",
+    "      List.cons (Verity.Challenger.Entry.released (ω 0))",
+    "        (List.cons (Verity.Challenger.Entry.recorded (ω 0))",
+    "          (List.cons (Verity.Challenger.Entry.released (ω 1)) List.nil)))",
+    "    (And",
+    "      (Verity.Assumptions.FlipsAfterRecorded fun ω =>",
+    "        List.cons (Verity.Challenger.Entry.released (ω 0))",
+    "          (List.cons (Verity.Challenger.Entry.recorded (ω 0))",
+    "            (List.cons (Verity.Challenger.Entry.released (ω 1)) List.nil)))",
+    "      (And",
+    "        (Verity.Assumptions.VerifierReadsLog (fun ω => List.cons (ω 0) (List.cons (ω 1) List.nil)) fun ω =>",
+    "          List.cons (Verity.Challenger.Entry.released (ω 0))",
+    "            (List.cons (Verity.Challenger.Entry.recorded (ω 0))",
+    "              (List.cons (Verity.Challenger.Entry.released (ω 1)) List.nil)))",
+    "        (ENNReal.instLE.le",
+    "          (Verity.Game.prCoin fun ω =>",
+    "            Exists fun c =>",
+    "              And",
+    "                (Eq (List.instGetElem?NatLtLength.getElem? (List.cons (ω 0) (List.cons (ω 1) List.nil)) 1)",
+    "                  (Option.some c))",
+    "                (And",
+    "                  (instLENat.le K",
+    "                    (bad",
+    "                        (Verity.Challenger.Log.before",
+    "                          (List.cons (Verity.Challenger.Entry.released (ω 0))",
+    "                            (List.cons (Verity.Challenger.Entry.recorded (ω 0))",
+    "                              (List.cons (Verity.Challenger.Entry.released (ω 1)) List.nil)))",
+    "                          1)).card)",
+    "                  (Disjoint (L.draw c)",
+    "                    (bad",
+    "                      (Verity.Challenger.Log.before",
+    "                        (List.cons (Verity.Challenger.Entry.released (ω 0))",
+    "                          (List.cons (Verity.Challenger.Entry.recorded (ω 0))",
+    "                            (List.cons (Verity.Challenger.Entry.released (ω 1)) List.nil)))",
+    "                        1)))))",
+    "          (L.miss K))))"
+   ],
+   "assumptions": [],
+   "type_hash": "dc5a91ec5527363d291a05283eed58a9f88b010b083723cecf94e32965b6317c"
+  },
+  "Verity.SecurityProofs.SampleAfterRecorded_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.SecurityProofs.SampleAfterRecorded_nontrivial :",
+    "  Exists fun L =>",
+    "    Exists fun log =>",
+    "      Exists fun vc =>",
+    "        Exists fun bad =>",
+    "          And (Verity.Assumptions.ChallengerLogsCoins log)",
+    "            (And (Verity.Assumptions.VerifierReadsLog vc log)",
+    "              (And (Not (Verity.Assumptions.FlipsAfterRecorded log))",
+    "                (ENNReal.instPartialOrder.lt (L.miss 1)",
+    "                  (Verity.Game.prCoin fun ω =>",
+    "                    Exists fun c =>",
+    "                      And (Eq (List.instGetElem?NatLtLength.getElem? (vc ω) 0) (Option.some c))",
+    "                        (And (instLENat.le 1 (bad ((log ω).before 0)).card)",
+    "                          (Disjoint (L.draw c) (bad ((log ω).before 0))))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "0a0d2cf2d114fd42f47757951d0c484436447b2716e0fa51a0098ff033328483"
+  },
   "Verity.SecurityProofs.ServingBlockSum": {
    "owner": "@lean",
    "signature": ["Verity.SecurityProofs.ServingBlockSum : Verity.Guarantees.ServingBlockSum"],
@@ -12924,7 +13013,10 @@
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
    "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
    "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
-   "Flock.SecurityProofs.IntegrityHorizonCarried": "frozen (hash,world-unlisted,scope): It is IntegrityHorizonBlocks with the state a block carries across a wipe read at its carried leaves, so it takes what IntegrityHorizonBlocks takes (TableCRZ, LinkCRZC, A3, RecordCustodyZKJ, hscope) and, at each carried leaf, ecr/sha-512 (SHA512CRExpected) at the leaf's finder, whose cost the bound states."
+   "Flock.SecurityProofs.IntegrityHorizonCarried": "frozen (hash,world-unlisted,scope): It is IntegrityHorizonBlocks with the state a block carries across a wipe read at its carried leaves, so it takes what IntegrityHorizonBlocks takes (TableCRZ, LinkCRZC, A3, RecordCustodyZKJ, hscope) and, at each carried leaf, ecr/sha-512 (SHA512CRExpected) at the leaf's finder, whose cost the bound states.",
+   "Verity.SecurityProofs.SampleAfterRecorded": "frozen (no-function): It is stated over an arbitrary sample law, challenger log and verifier, and says what a coin read from a challenger's log, released after the commitments it samples were recorded, establishes about the sample drawn with it, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.SampleAfterRecorded_honest": "completeness: SampleAfterRecorded's honest lemma (its witnesses entry): a challenger that releases a coin, records a commitment, then releases the coin that samples it meets all three premises, with the verifier reading both coins from its log, so the bound is not vacuous at a log that releases coins.",
+   "Verity.SecurityProofs.SampleAfterRecorded_nontrivial": "completeness: SampleAfterRecorded's nontrivial lemma (its witnesses entry): a challenger that flips its coin before recording the commitment it samples meets ChallengerLogsCoins and VerifierReadsLog but not FlipsAfterRecorded, and a block set chosen after the coin breaks the bound, a counterexample for another challenger, not a property of a deployed one."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -21617,6 +21709,19 @@
     "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120"
    ]
   },
+  "Definitions.Core.Assumptions.Challenger": {
+   "digest": "2874164ae699cba60c2ba360ec2ff1a7150d1fcfa56a83c4f2beca9ce9902c97",
+   "definitions": {
+    "Verity.Assumptions.ChallengerLogsCoins": "8c09825011781cb4d73b14f1056b1887cea82faad845141e6d826075010c94fa",
+    "Verity.Assumptions.FlipsAfterRecorded": "3261cd32e88a813bed5cba80d2463e28d2202169df59653ce77d0692830f48f7",
+    "Verity.Assumptions.VerifierReadsLog": "0ed1c5456b740c38fa2d2638b81cae376aacb18ab9315ed23702dfe936d329e4"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.SampleAfterRecorded",
+    "Verity.SecurityProofs.SampleAfterRecorded_honest",
+    "Verity.SecurityProofs.SampleAfterRecorded_nontrivial"
+   ]
+  },
   "Definitions.Core.Boolean": {
    "digest": "bdca6f202be5ce821c537817148d69f8f173b88caf12b8a5fcade6c8ea044d2f",
    "definitions": {
@@ -21688,6 +21793,24 @@
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
     "Verity.SecurityProofs.ToCircuitAnd"
+   ]
+  },
+  "Definitions.Core.Challenger": {
+   "digest": "28dfd5a933b4a0ed8941bb49066baa775c3d0637181498540c50664d5311bf10",
+   "definitions": {
+    "Verity.Challenger.Entry": "2c6ba8eb683a32594eb1690e2f50d6f42acd4442d14296dfae561923d6267a18",
+    "Verity.Challenger.Entry.casesOn": "a74aef2596ab98880fad4e0f1a74e458f88c7e0ac547c5fa1e01150ebc69637f",
+    "Verity.Challenger.Entry.rec": "6dccc93c82810b811bb83084d85df3fa7a307b1558851d2159ae0387bcfb3d32",
+    "Verity.Challenger.Entry.recorded": "1b4c26e0ca7cb8afece1a2e586ede676c870a6f253c48625408f6a7cbea22ba4",
+    "Verity.Challenger.Entry.released": "15cde9e1c6850c327f0e3e0785538b0d159763287152aeda0a1220a72712f544",
+    "Verity.Challenger.Log": "33130dd2a0c20b1b6c6790b0f45dcd5a6d8cd4869c5c4de7b1c245ca61f260d9",
+    "Verity.Challenger.Log.before": "f0e1df39a87e0ac597c37752c5752c87890e4318dbfb444f2c1595fec53d6f5f",
+    "Verity.Challenger.Log.coins": "79ada5721ed20366fc0b5b1ae28120a130f3743df5415b3be8329c126438297b"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.SampleAfterRecorded",
+    "Verity.SecurityProofs.SampleAfterRecorded_honest",
+    "Verity.SecurityProofs.SampleAfterRecorded_nontrivial"
    ]
   },
   "Definitions.Core.Circuit": {
@@ -22084,7 +22207,10 @@
     "FlockSoundness.Audit.audit_work_floor",
     "FlockSoundness.Audit.audit_work_whole_stratum",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
+    "Verity.SecurityProofs.SampleAfterRecorded",
+    "Verity.SecurityProofs.SampleAfterRecorded_honest",
+    "Verity.SecurityProofs.SampleAfterRecorded_nontrivial"
    ]
   },
   "Definitions.Core.Expand": {
@@ -22329,12 +22455,22 @@
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Verity.SecurityProofs.ProbBatchInduced",
+    "Verity.SecurityProofs.SampleAfterRecorded",
+    "Verity.SecurityProofs.SampleAfterRecorded_honest",
+    "Verity.SecurityProofs.SampleAfterRecorded_nontrivial",
     "Verity.SecurityProofs.SoundAnd",
     "Verity.SecurityProofs.SoundBatch",
     "Verity.SecurityProofs.SoundBind",
     "Verity.SecurityProofs.SoundInterleave",
     "Verity.SecurityProofs.SoundMono"
    ]
+  },
+  "Definitions.Core.Guarantees.Challenger": {
+   "digest": "c26ec9f6baf432c0e1cf5f1a99c0f738e410052e2163b57115f1ab701f84c00e",
+   "definitions": {
+    "Verity.Guarantees.SampleAfterRecorded": "342ebbadd02d84a86df79332a6014239c4b4301f5cc598bcad5ffa67d982b051"
+   },
+   "guarantees": ["Verity.SecurityProofs.SampleAfterRecorded"]
   },
   "Definitions.Core.Guarantees.Circuit": {
    "digest": "395bc70c519cd7f869c9166f202b2ca65d741ae2fd3bad30a3c929b350161ad7",
