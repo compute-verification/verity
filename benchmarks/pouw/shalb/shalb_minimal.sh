@@ -5,5 +5,6 @@ set -euo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 HERE=benchmarks/pouw/shalb
 uv run --no-project --with z3-solver python "$HERE/shalb_minimal.py" --max-k "${MAX_K:-3}" --timeout "${TIMEOUT:-300}" \
+  --control-timeout "${CONTROL_TIMEOUT:-2400}" --only "${ONLY:-}" \
   --json "$OUT/minimal.json" | tee "$OUT/minimal.log"
 python3 "$HERE/shalb.py" --minimal "$OUT/minimal.json" --json "$OUT/shalb.json" > "$OUT/shalb.txt"
