@@ -12,8 +12,8 @@ Every quantity is in registers; the W1 work is 32 a register (`H32`'s floor).
   decode one row is served and 16 are committed, so the gap is reported as a share of served compute (`gapServed`),
   and its share of stock (`gapShare`) is secondary.
 * **The honest work** (`honestRegs`): the committed words, one register each (`m · n · S`), and the SHA-512
-  compressions of the commitment at ShaWrites' registers per form: `3,515.38` a words compression and `3,449.05` an A
-  compression (`shaWordsRegs`, `shaARegs`).
+  compressions of the commitment at ShaWrites' registers per form: `3,530.92` a words compression, the lead's 256 KiB
+  chunks' figure, and `3,449.05` an A compression (`shaWordsRegs`, `shaARegs`).
 * **The gap** (`gapRegs`) is the sum of six terms, each the bound its piece proves:
   - `headGap`: the words chunks' first-block excess, 23 registers a chunk;
   - `hidingGap`: hiding L1 + (a), 1.6064% of one row's stock a call;
@@ -36,8 +36,8 @@ def stockRegs (L : Layout) : ℚ := (L.m * L.n * L.K : ℚ) / 32
 /-- The committed words, one register each: `m · n · S`. -/
 def wordsRegs (L : Layout) : ℚ := L.m * L.n * L.S
 
-/-- ShaWrites' registers a words compression. -/
-def shaWordsRegs : ℚ := 351538 / 100
+/-- ShaWrites' registers a words compression, at the lead's 256 KiB words chunks. -/
+def shaWordsRegs : ℚ := 353092 / 100
 
 /-- ShaWrites' registers an A compression. -/
 def shaARegs : ℚ := 344905 / 100

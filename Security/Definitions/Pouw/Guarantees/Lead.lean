@@ -15,7 +15,7 @@ The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). 
   dimension of at least 1 and at most `2^40` MMA tiles; it refuses every other call), the honest root registered
   within the call's bits. So `G` is conditional on the registered root being the honest one.
 * `GapAt`: the gap's share of stock at T 512 × 64, T 512 × 512 and T 8,192, for every call of `n, K ≥ 4,096`, at cap
-  32: at most 0.190%, 0.168% and 0.165%. `GapAt320`: at cap 320, at most 0.513%, 0.491% and 0.488%. At these points
+  32: at most 0.190%, 0.168% and 0.165%. `GapAt320`: at cap 320, at most 0.514%, 0.492% and 0.489%. At these points
   every row is served, and stock and served compute differ only by the padding of `n` to a multiple of 8.
 * `GapAtDecode`: at decode (`m = 1`, committed as 16 rows), the gap is at most 3.71% of served compute (the unpadded
   MACs, `servedRegs`) at cap 32 and 4.03% at cap 320. Served compute is what credit counts, so this is decode's
@@ -67,12 +67,12 @@ def GapAt : Prop :=
     (∀ C : Pouw.Lead.Commit (pt512x512 n K), ChunksOf _ C → gapShare _ C ≤ 168 / 100000) ∧
     (∀ C : Pouw.Lead.Commit (pt8192 n K), ChunksOf _ C → gapShare _ C ≤ 165 / 100000)
 
-/-- **The gap at the three points, cap 320**: at most 0.513%, 0.491% and 0.488%. -/
+/-- **The gap at the three points, cap 320**: at most 0.514%, 0.492% and 0.489%. -/
 def GapAt320 : Prop :=
   ∀ n K : ℕ, 4096 ≤ n → 4096 ≤ K →
-    (∀ C : Pouw.Lead.Commit (lead320 512 64 n K), ChunksOf _ C → gapShare _ C ≤ 513 / 100000) ∧
-    (∀ C : Pouw.Lead.Commit (lead320 512 512 n K), ChunksOf _ C → gapShare _ C ≤ 491 / 100000) ∧
-    (∀ C : Pouw.Lead.Commit (lead320 8192 8192 n K), ChunksOf _ C → gapShare _ C ≤ 488 / 100000)
+    (∀ C : Pouw.Lead.Commit (lead320 512 64 n K), ChunksOf _ C → gapShare _ C ≤ 514 / 100000) ∧
+    (∀ C : Pouw.Lead.Commit (lead320 512 512 n K), ChunksOf _ C → gapShare _ C ≤ 492 / 100000) ∧
+    (∀ C : Pouw.Lead.Commit (lead320 8192 8192 n K), ChunksOf _ C → gapShare _ C ≤ 489 / 100000)
 
 /-- **Decode** (`m = 1`), which `G` covers padded to 16 rows: for every call of `n, K ≥ 4,096`, the gap is at most
 3.71% of served compute (the call's unpadded MACs, `servedRegs`) at cap 32 and 4.03% at cap 320. Secondary: at most

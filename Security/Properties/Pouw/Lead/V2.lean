@@ -11,8 +11,11 @@ or egress. So these properties are stated over any `Core.Protocol` with that id 
 (`Reads`), a stub of the case's own functions of its commitment and evidence. When the case exists, its readers
 instantiate `Reads`, and the properties are stated at `PouwCheck`'s v2 protocol itself.
 
-`Accepted` has two conjuncts at a call's coins `ω`, and each reaches the case differently:
+`Accepted` has three conjuncts at a call's coins `ω`, and each reaches the case differently:
 
+* **The admitted call** (`L.Admits`: `1 ≤ K` and at most `2^40` MMA tiles) is the case's own check of the call's
+  registered shape, public and fixed before its coins. It refuses a call whose layout the lead doesn't admit
+  (`ShapeAdmitted`).
 * **Egress** (`(σ.exec ω).egress ≤ L.callBits`) is the case's own check. It refuses a call whose bits, as the network
   certifier counted them, exceed the call's share of its forward's cap (`EgressWithin`). The certifier counts every
   bit the node exchanges (`trusted-host`), so the execution's egress is at most the count.
@@ -64,6 +67,11 @@ structure Reads (P : Core.Protocol) where
 
 variable (P : Core.Protocol) (r : Reads P)
 
+/-- **The case refuses a call it doesn't admit**: at an accepted window, each credited call's registered shape lays
+out as a call the lead admits. -/
+def ShapeAdmitted : Prop :=
+  ∀ p c e, P.Accepts p c e → ∀ i ∈ r.calls c e, (layoutAt (r.shape c i)).Admits
+
 /-- **The case refuses a call past its bits**: at an accepted window, each credited call's certifier-counted bits are
 at most its share of its forward's cap. -/
 def EgressWithin : Prop :=
@@ -84,9 +92,9 @@ def UnitsCover : Prop :=
       ∀ u ∈ r.drawn e i, u < (r.units c i).length ∧ r.proved e i u = true
 
 /-- **The v2 case ties to the lead's acceptance**: it is PoUW's `verity/pouw/v2` case, and what it accepts keeps the
-egress refusal, the coins' order and the units' cover. -/
+shape refusal, the egress refusal, the coins' order and the units' cover. -/
 def TiesToAccepted : Prop :=
-  P.id = "verity/pouw/v2" ∧ EgressWithin P r ∧ CoinsAfterA P r ∧ UnitsCover P r
+  P.id = "verity/pouw/v2" ∧ ShapeAdmitted P r ∧ EgressWithin P r ∧ CoinsAfterA P r ∧ UnitsCover P r
 
 /-- **`Accepted` at the case's coins**: at an accepted window's credited call, a strategy that exchanged at most the
 certifier's count and registered the call's root is `Accepted` at the call's coins, once that root is the honest
