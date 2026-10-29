@@ -19,8 +19,8 @@ negatives.
   (`bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 row on one H200 under `gpu-lease`: its Build and
   Match, then a deferred config-run Commit under rows-sha512 whose `--serving-rows` window
   (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
-  a `served` window under the 64-byte run root. Then the Commit's CPU replay, and `a5.sh` with `WINDOW=served` on the bundle
-  and that window, whose private bodies stay on the node.
+  a `served` window under the 64-byte run root. Then the Commit's CPU replay (the prover's pre-flight check, on the node), and
+  `a5.sh` with `WINDOW=served` on the bundle and that window, whose private bodies stay on the node.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the sample): GLM-5.3's TP8 Commit with
