@@ -1,3 +1,4 @@
+import Proofs.Flock.Claims.KS.PlainThird
 import Proofs.Flock.Claims.KS.ForkSlack
 import Proofs.Flock.Claims.Recursion.PlainK
 

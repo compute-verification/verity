@@ -130,9 +130,14 @@ slice's bounds, the chain's monotonicity, the range `|R| < 2^33`, the form table
 non-constancy are the named assumption `H1TRunningWords` (`H1TRunningAssumptions`); `H1TRunningProofs` proves it
 equivalent to `DistinctLiveH1T` and derives `H1TGamma` from it. The statements its proof still needs, unpinned, are
 staged in `H1TGapStaging`: the monotone chain gap, the last-slice split, and the cross-column late pairs.
-`H1TCrossLate` states the cross-column late pairs in the exact-512 regime, which is empty for `k ≤ 19,430`.
-`H1TBoundedStaging` states the named assumptions and `H1TGamma` for units of `k ≤ K`, proves the bounded
+`H1TCrossLateStaging` proves the cross-column late pairs in the exact-512 regime, from the statements in
+`H1TCrossLate`; the five theorems are granted, not pinned (pin when used), and the regime is empty for
+`k ≤ 19,430`. `H1TBoundedStaging` states the named assumptions and `H1TGamma` for units of `k ≤ K`, proves the bounded
 γ corollary, and bounds the running words below `2^31` for `k ≤ 9,048` and below `2^32` for `k ≤ 18,096`, unpinned.
+`H1TShiftStaging` reduces the cross-column late pairs, where the chains after slice `T − 1`'s block 1 stay in one
+binade, to one slice's two block-1 words against step-`W` staircases (`TagStaircaseSplit`, unproved); where a chain
+crosses one power of two at one step, to the same with cuts (`TagCutSplit`, unproved); and below `2^e` it separates
+them by the rounding margin outright, unpinned.
 
 H-1T's per-tile count statement: the tiles, their domain `Tiling.AtLeast` and the output slots (`H1TTile`), the named
 assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProofs`).

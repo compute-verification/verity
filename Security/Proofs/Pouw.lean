@@ -40,11 +40,13 @@ import Proofs.Pouw.Fp8Atom.Fp32Proofs
 import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 import Proofs.Pouw.Fp8Atom.H1TBoundedStaging
 import Proofs.Pouw.Fp8Atom.H1TChecks
+import Proofs.Pouw.Fp8Atom.H1TCrossLateStaging
 import Proofs.Pouw.Fp8Atom.H1TFlipProofs
 import Proofs.Pouw.Fp8Atom.H1TGammaProofs
 import Proofs.Pouw.Fp8Atom.H1TGapStaging
 import Proofs.Pouw.Fp8Atom.H1TProofs
 import Proofs.Pouw.Fp8Atom.H1TRunningProofs
+import Proofs.Pouw.Fp8Atom.H1TShiftStaging
 import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 import Proofs.Pouw.Fp8Atom.H1TTileProofs
 import Proofs.Pouw.Fp8Atom.Proofs
@@ -176,6 +178,7 @@ import Proofs.Pouw.Sampling
 import Proofs.Pouw.Sanity
 import Proofs.Pouw.SteinerRigidity
 import Proofs.Pouw.Theorem1
+import Proofs.Pouw.TileBound.AlignedExact
 import Proofs.Pouw.TileBound.Fp8
 import Proofs.Pouw.TileBound.Proofs
 import Proofs.Pouw.TileBound.Witness

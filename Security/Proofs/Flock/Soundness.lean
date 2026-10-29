@@ -185,5 +185,6 @@ import Proofs.Flock.Soundness.ZK.GK.Link
 import Proofs.Flock.Soundness.Audit.FlockWork
 import Proofs.Flock.Soundness.CROnly.E2E
 import Proofs.Flock.Soundness.CROnly.Registered
+import Proofs.Flock.Soundness.CROnly.E2EMore
 import Proofs.Flock.Soundness.Discharge.Exec.SessionLDecisive
 import Proofs.Flock.Soundness.Discharge.ZkCoins.Statements

@@ -4,7 +4,7 @@ import Mathlib.Data.Rat.Cast.Order
 /-!
 # Aligned exactness: the definitions (trusted)
 
-Word `(i, j)`'s exactness over a window as a predicate `f i j` of row `i`'s seed and column `j`'s
+For `AlignedExact.lean`: word `(i, j)`'s exactness over a window as a predicate `f i j` of row `i`'s seed and column `j`'s
 seed, the one-row hypothesis `RowCompat`, and the event `HasRegion` that some `a × b` block is exact everywhere.
 
 What `no-aligned-exact-region/sm120-unpromoted` instantiates them with:
