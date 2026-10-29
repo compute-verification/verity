@@ -18,10 +18,10 @@ import random
 
 import pytest
 
-from verity_vllm.commit import binding as B
+from verity_vllm.commit import binding as B, step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
-CHUNK = 64
+CHUNK = step_rows.ROW_BYTES
 PD = hashlib.sha256(b"program").hexdigest()
 LAYERS = 2
 STEPS = 3
@@ -56,11 +56,11 @@ def step_names() -> list[str]:
 
 def produce(seed: int = 7, steps: int = STEPS) -> list[list[tuple[str, bytes]]]:
     rng = random.Random(seed)
-    return [[(n, rng.randbytes(300 + 17 * i)) for i, n in enumerate(step_names())] for _ in range(steps)]
+    return [[(n, rng.randbytes(6000 + 17 * i)) for i, n in enumerate(step_names())] for _ in range(steps)]
 
 
 def committer(program: bytes = b"program") -> NativeHostCommitter:
-    return NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=hashlib.sha256(program).digest())
+    return NativeHostCommitter(None, run_id="run", hash_threads=1, program_digest=hashlib.sha256(program).digest())
 
 
 def commit(stream, program: bytes = b"program", **map_kw):
@@ -135,9 +135,9 @@ def test_map_leaves_are_the_committers_leaves():
     """A map built without `chunk`, as the TP worker builds it, indexes the committer's own leaves. rows-sha512 commits 4 KiB rows, and a
     map in 256 B units sent its population draws past each step's stream: `identity_of` raised IndexError on every
     rank."""
-    rows = 1024
     stream = produce()
-    c = NativeHostCommitter(None, run_id="run", chunk=rows, hash_threads=1, program_digest=hashlib.sha256(b"program").digest())
+    c = committer()
+    rows = c.chunk
     run = c.commit_offline(stream)
     bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD)
     leaves = [e for e in bmap["entries"] if e["kind"] == "leaf"]
@@ -147,7 +147,7 @@ def test_map_leaves_are_the_committers_leaves():
     assert not unbound and all(c.verify(run, o) for o in ops)
     vc = B.value_correspondence(ops, [e for _, e, _ in bound], lookup(reference(stream)), chunk=rows)
     assert vc["ok"] and vc["checked"] == len(ops), vc
-    with pytest.raises(ValueError, match="1024-byte leaves"):
+    with pytest.raises(ValueError, match=f"{rows}-byte leaves"):
         B.build_binding_map(c._layouts, run.steps, run.run_root, PD, chunk=256)
 
 

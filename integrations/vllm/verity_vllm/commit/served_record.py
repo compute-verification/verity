@@ -199,8 +199,8 @@ def served_rows(committer: Any) -> dict[int, list[tuple]]:
 
 
 def committed_ints(committer: Any, step: int, name: str) -> list[int] | None:
-    """The integer tensor ``name`` as committed at ``step``, read back from the bytes the committer retains (the retained
-    GPU-tree block, its host copy, or the packed step stream); None when the step committed no such tensor."""
+    """The integer tensor ``name`` as committed at ``step``, read back from the bytes the committer retains (the retained step
+    block, or the tensor's host copy); None when the step committed no such tensor."""
     got = committed_raw(committer, step, name)
     return None if got is None else ints_of(*got)
 
@@ -230,13 +230,11 @@ def committed_raw(committer: Any, step: int, name: str) -> tuple[bytes, str] | N
     raw: Any = None
     blk = (getattr(committer, "_gpu_blocks", {}) or {}).get(step, (None, 0))[0]
     if blk is not None:
-        off = int(meta.dev_off) if int(getattr(meta, "dev_off", -1)) >= 0 else int(meta.stream_off)
+        off = int(meta.stream_off) if int(getattr(meta, "stream_off", -1)) >= 0 else int(meta.dev_off)
         part = blk[off: off + meta.nbytes]
         raw = (part.cpu() if hasattr(part, "cpu") else part).numpy().tobytes()
     elif getattr(meta, "host", None) is not None:
         raw = bytes(meta.host)
-    elif step in (getattr(committer, "_streams", {}) or {}) and int(meta.stream_off) >= 0:
-        raw = bytes(committer._streams[step][meta.stream_off: meta.stream_off + meta.nbytes])
     return None if raw is None else (raw, str(meta.dtype))
 
 

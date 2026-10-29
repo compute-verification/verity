@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from verity_vllm.commit import scheme, step_rows
+from verity_vllm.commit import step_rows
 
 
 def key(tree: dict | None) -> bytes:
@@ -65,4 +65,4 @@ class WeightsRows:
         return r, 1
 
     def tree(self, names: list, roots: list[bytes]) -> dict:
-        return step_rows.weights_tree(self.geo, names, scheme.names_digest(names), roots, self.wk)
+        return step_rows.weights_tree(self.geo, names, step_rows.names_digest(names), roots, self.wk)

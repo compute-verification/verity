@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from tests.check.opened import commit_host_steps
+from tests.check.opened import commit_host_steps, meta, retained_block
 from tests.commit.test_binding_negatives import PD
 from verity_vllm.check import commit_tokens as CT, executed_prefix as EPL
 from verity_vllm.check.replay import population as POP
@@ -30,6 +30,7 @@ from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 C = CT.CommitTokens
 EOS, CAP, LAG, LAG_ROW = 2, 5, 1, 99
 EMBED = "model.embed_tokens"
+SAMPLER = "runner.sampler/sampled_token_ids"
 ORDER = {"0f2b6d7e-r0": "r0", "5c1a9b3d-r1": "r1"}
 ARRIVALS = {"r0": 0, "r1": 0}
 PROMPTS = {"r0": [5, 6, 7], "r1": [8, 9]}
@@ -46,7 +47,7 @@ class World:
     com: Any
     run: Any
     bmap: dict
-    retained: dict          # engine step -> the sampler tensor's retained copy (the buffer the committer keeps and opens from)
+    retained: dict          # engine step -> a writable view of the committer's retained copy of the sampler tensor (what it opens from)
     epr: dict
     past: dict
     served: dict
@@ -79,7 +80,7 @@ class World:
 
 def world(sampled: dict = SAMPLED, served: dict = SERVED, finish: dict = FINISH, *, run_id: str = "commit-tokens") -> World:
     """`sampled[r]`: r's committed sampled id at each engine step it ran; its input at step e > 0 is its sampled id of step e - 1."""
-    steps, rows, retained = {}, {}, {}
+    steps, rows = {}, {}
     for e in range(max(len(v) for v in sampled.values())):
         live = [r for r in sorted(sampled) if e < len(sampled[r])]
         ids, rr = [], []
@@ -87,12 +88,12 @@ def world(sampled: dict = SAMPLED, served: dict = SERVED, finish: dict = FINISH,
             toks = PROMPTS[r] if e == 0 else [sampled[r][e - 1]]
             rr.append((r, len(ids), len(ids) + len(toks)))
             ids += toks
-        retained[e] = bytearray(np.asarray([sampled[r][e] for r in live], dtype=np.int64).tobytes())
         steps[e] = [(f"{EMBED}/in", np.asarray(ids, dtype=np.int64).tobytes(), 0, "int64", (len(ids),)),
-                    ("runner.sampler/sampled_token_ids", retained[e], 1, "int64", (len(live),))]
+                    (SAMPLER, np.asarray([sampled[r][e] for r in live], dtype=np.int64).tobytes(), 1, "int64", (len(live),))]
         rows[e] = rr
-    com, run = commit_host_steps(steps, run_id=run_id, chunk=64)
-    bmap = B.build_binding_map(com._layouts, run.steps, run.run_root, PD, chunk=64, request_rows=rows)
+    com, run = commit_host_steps(steps, run_id=run_id)
+    retained = {e: retained_block(com, e)[m.stream_off:m.stream_off + m.nbytes].numpy() for e in steps for m in [meta(com, e, SAMPLER)]}
+    bmap = B.build_binding_map(com._layouts, run.steps, run.run_root, PD, chunk=com.chunk, request_rows=rows)
     epr = EP.executed_prefix_of_record(sorted(served), served, caps={r: CAP for r in served}, eos_of_record=STOP["eos"], lag=LAG)
     past = EP.rows_past_the_stop(bmap, EP.request_steps_of_record(epr, ARRIVALS))
     return World(com, run, bmap, retained, epr, past, served, finish)
@@ -368,7 +369,8 @@ def test_tokens_that_did_not_come_from_the_served_output_are_refused():
 
 
 class TamperedPath:
-    """The committer with each range opening's first sibling digest flipped: the bytes are the retained ones, the Merkle path is not."""
+    """The committer with each range opening's first sibling digest flipped (a one-row step has none: its first salt byte): the bytes are
+    the retained ones, their authentication is not."""
 
     def __init__(self, com: Any) -> None:
         self._com = com
@@ -379,7 +381,10 @@ class TamperedPath:
     def open_range(self, step: int, lo: int, hi: int) -> Any:
         ro = self._com.open_range(step, lo, hi)
         path = [list(p) for p in ro.path]
-        d, k = next((d, k) for d, p in enumerate(path) for k in (0, 1) if p[k] is not None)
+        at = next(((d, k) for d, p in enumerate(path) for k in (0, 1) if p[k] is not None), None)
+        if at is None:
+            return dataclasses.replace(ro, salts=bytes([ro.salts[0] ^ 1]) + bytes(ro.salts[1:]))
+        d, k = at
         path[d][k] = bytes([path[d][k][0] ^ 1]) + bytes(path[d][k][1:])
         return dataclasses.replace(ro, path=tuple(tuple(p) for p in path))
 
@@ -387,11 +392,11 @@ class TamperedPath:
 def test_a_tampered_value_or_merkle_path_is_refused():
     # the prover served 13 as r0's second token and rewrote its retained copy of the committed sampled id to agree
     w = world(served={"r0": [11, 13, EOS], "r1": SERVED["r1"]})
-    w.retained[1][:8] = np.asarray([13], dtype=np.int64).tobytes()
+    w.retained[1][:8] = np.asarray([13], dtype=np.int64).view(np.uint8)
     link = w.link()
     assert named(refused(link), "r0: (1) served token 1 not opened from the run root at engine step 1: opened value not verified")
     assert link["tokens_committed"]["r0"] is False
-    # the honest bytes under a corrupted Merkle path
+    # the honest bytes under a corrupted Merkle path (or salt)
     w = world()
     link = w.relink(w.record(), store=w.store(com=TamperedPath(w.com)))
     assert named(refused(link), "r0: (1) served token 0 not opened from the run root at engine step 0: opened value not verified")

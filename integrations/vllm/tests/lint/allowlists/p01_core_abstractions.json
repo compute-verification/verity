@@ -17,7 +17,6 @@
     {"file": "verity/ml/definitions/registry/lifted.py", "kind": "core-private", "symbol": "request_boundaries", "detail": "verity.ml.circuits.codec._spec_id"},
     {"file": "verity_vllm/program/workload.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.ml.circuits.codec._spec_id"},
     {"file": "verity_vllm/program/workload.py", "kind": "core-private", "symbol": "_canonicalize", "detail": "verity.ml.circuits.codec._encode_definition"},
-    {"file": "verity_vllm/query/program_view.py", "kind": "core-private", "symbol": "_spec_id", "detail": "verity.ml.circuits.codec._spec_id"},
     {"file": "verity/ml/definitions/call_scope.py", "kind": "core-private", "symbol": "spec_statics", "detail": "verity.ml.circuits.codec._split_record"}
   ]
 }

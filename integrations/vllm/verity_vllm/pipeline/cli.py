@@ -61,7 +61,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),
     "glue": ("verity_vllm.glue", "per model, the code its `__models__` markers tie to it and the hours from staged checkpoint to record"),
     "golden": ("verity_vllm.properties.golden", "golden corpus check"),
-    "hidden-gpu": ("verity_vllm.commit.committer.hidden_gpu_src.hidden_gpu", "GPU commitment tree: check, bench, commit"),
     "holdout": ("verity_vllm.properties.holdout", "holdout workload generator and assembler"),
     "hot": ("verity_vllm.pipeline.hot", "hot Commit worker"),
     "instances-form": ("verity_vllm.program.instances_form", "stored form of instances.jsonl operand references"),

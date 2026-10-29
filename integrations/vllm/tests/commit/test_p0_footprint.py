@@ -5,7 +5,7 @@
 * `_HostWindows`: the raw bytes of a step retained as pinned host windows quack like the contiguous `keep` tensor for openings
   (slices that span two windows, the tail, `numel()`, `is_cuda`).
 * the padded-length bookkeeping the windowed worker relies on (leaves per window sum to the step's leaves).
-* the declared leaf layout (`--layout`) reaches the collector as an argument and is refused where it is not implemented.
+* the collector commits rows-sha512 on the windowed worker only, and refuses every other scheme and path.
 
 The GPU end-to-end (roots of a windowed run == roots of the single-block run for the same manifest; B=2 green) is the pod acceptance
 run, re-run with VERITY_E2E_WORKLOAD/VERITY_E2E_CASE (see `test_e2e_windowed_roots`).
@@ -127,32 +127,32 @@ def test_window_leaf_count_bookkeeping():
             assert all(p % C == 0 for p in per) and sum(p // C for p in per) == padded // C
 
 
-def test_the_declared_layout_reaches_only_a_committer_that_implements_it(monkeypatch):
-    """The leaf layout is the collector's constructor argument (`commit_delta --layout`): an unknown value, or chunk-leaf-v2 off the
-    windowed path, is refused before the extension is built; a committer without v2 refuses a declared v2."""
+def test_the_collector_commits_rows_sha512_on_the_windowed_worker_only(monkeypatch):
+    """The collector's one scheme is rows-sha512, on the windowed worker (`--committer native_collect_v2b`, `--window-mb` > 0):
+    another scheme, or a collector off the windowed path, is refused before the extension is built, and the Commit names its
+    committers when it is asked for a retired one."""
     from verity_vllm.commit.committer import native_collect as NC
     from verity_vllm.pipeline import commit as CD
 
     monkeypatch.delenv("VERITY_WINDOW_MB", raising=False)
-    with pytest.raises(ValueError, match="unknown leaf layout"):
-        NC.NativeCollectCommitter(None, layout="chunk-leaf-v3")
-    with pytest.raises(ValueError, match="windowed path only"):
-        NC.NativeCollectCommitter(None, layout="chunk-leaf-v2")
+    with pytest.raises(ValueError, match="unknown commit scheme 'vllm-v1'"):
+        NC.NativeCollectCommitter(None, commit_scheme="vllm-v1")
+    with pytest.raises(ValueError, match="rows-sha512 is implemented on the windowed worker"):
+        NC.NativeCollectCommitter(None)
     with pytest.raises(ValueError, match="retain_levels=False is implemented on the windowed path only"):
         NC.NativeCollectCommitter(None, retain_levels=False)
-    args = argparse.Namespace(layout="chunk-leaf-v2", chunk=256, hash_threads=1, arena_mb=None)
-    for kind in ("native_host", "native_host_direct", "hooks_only"):
-        with pytest.raises(ValueError, match="native_collect committers only"):
+    args = argparse.Namespace(chunk=256, hash_threads=1, arena_mb=None)
+    for kind in ("native_host", "native_host_direct", "native_collect", "native_collect_v2"):
+        with pytest.raises(ValueError, match="the Commit's committers are native_collect_v2b"):
             CD.make_committer(kind, None, args, "run")
-    assert nh.NativeHostCommitter.layout == "chunk-leaf-v1"
 
 
 @pytest.mark.skipif(not (os.environ.get("VERITY_E2E_WORKLOAD") and os.environ.get("VERITY_E2E_CASE")), reason="GPU pod end-to-end only (needs vLLM + a workload)")
 def test_e2e_windowed_roots(tmp_path: Path):
     """Same manifest, single-block path vs windowed path (256 MiB windows, host retention): identical run roots, both fail-closed PASS."""
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
-    base = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-            "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", os.environ.get("VERITY_E2E_B", "1"),
+    base = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b",
+            "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", os.environ.get("VERITY_E2E_B", "1"),
             "--engine-arg", "gpu_memory_utilization=" + os.environ.get("VERITY_E2E_UTIL", "0.35"), "--retain", "host"]
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         base += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
@@ -196,51 +196,3 @@ def test_e2e_windowed_roots(tmp_path: Path):
                     assert bs["excluded_bytes"] > 0 and fam in (oar.get("replay_families") or {}), (bs["excluded_bytes"], oar.get("replay_families"))
     assert len(set(roots)) == 1, f"the run root differs across arms {dict(zip([a for a, _ in arms], roots))} (layout must be unchanged under chunk-leaf-v1)"
 
-
-@pytest.mark.skipif(not torch.cuda.is_available() or not os.environ.get("NATIVE_COLLECT_BUILD"), reason="needs a GPU and the JIT-built native_collect extension")
-@pytest.mark.parametrize("n_leaves,j", [(1, 4), (5, 4), (16, 4), (17, 4), (48, 4), (49, 4), (1000, 4), (3, 6), (64, 6), (65, 6), (200, 3)])
-def test_tree_window_equals_whole_tree(n_leaves: int, j: int):
-    """Per-window subtrees (window = 2^j leaves, `StepHasher.tree_window`) + the ordinary tree over the window tops == the whole-step tree
-    (`StepHasher.tree`): same root AND the same nodes at every level (the levels are what openings read); `tree_window_top` gives the
-    same window tops.  Covers: a single collapsed
-    window (n < 2^j, height < j), exact multiples, a partial last window that collapses below the window level (the lift chain), and
-    steps with many windows."""
-    from verity_vllm.commit.committer.native_collect import ext
-
-    H = ext(os.environ["NATIVE_COLLECT_BUILD"]).StepHasher()
-    side = torch.cuda.Stream()
-    g = torch.Generator(device="cuda").manual_seed(n_leaves * 131 + j)
-    leaves = torch.randint(-(2**31), 2**31 - 1, (n_leaves, 8), dtype=torch.int32, device="cuda", generator=g)
-    ref_levels, ref_root, _ = H.tree(leaves.clone(), side.cuda_stream, True, torch.empty(0, dtype=torch.uint8))
-    # windowed: heights / levels exactly as the worker computes them
-    height, m = 0, n_leaves
-    while m > 1:
-        m = (m + 1) // 2
-        height += 1
-    n_levels = min(j, height) + 1
-    sizes = [-(-n_leaves // (1 << L)) for L in range(n_levels)]
-    views = [torch.empty((nL, 8), dtype=torch.int32, pin_memory=True) for nL in sizes]
-    tops = []
-    per_win = 1 << j
-    for k in range(-(-n_leaves // per_win)):
-        lv_k = leaves[k * per_win:(k + 1) * per_win].clone()
-        n_k = int(lv_k.shape[0])
-        dsts = [views[L][(k << (j - L)):(k << (j - L)) + -(-n_k // (1 << L))] for L in range(n_levels)]
-        tops.append(H.tree_window(lv_k, n_levels, side.cuda_stream, dsts))
-    assert len(tops) == sizes[-1]
-    tops_t = torch.cat(tops) if len(tops) > 1 else tops[0]
-    upper, root, _ = H.tree(tops_t, side.cuda_stream, True, torch.empty(0, dtype=torch.uint8))
-    levels = list(views[:n_levels - 1]) + list(upper)
-    assert root == ref_root
-    # retain_levels=False: the same window tops on the device, with no host copy and no host sync -- ordered on `side` only (the worker
-    # reads them there), so the windows' leaves outlive those kernels and the tops are read on that stream
-    wins = [leaves[k * per_win:(k + 1) * per_win].clone() for k in range(len(tops))]
-    side.wait_stream(torch.cuda.current_stream())
-    with torch.cuda.stream(side):
-        dev_tops = torch.cat([H.tree_window_top(w, n_levels, side.cuda_stream) for w in wins])
-        assert torch.equal(dev_tops, tops_t)
-        assert H.tree(dev_tops, side.cuda_stream, False, torch.empty(0, dtype=torch.uint8))[1] == ref_root
-    assert len(levels) == len(ref_levels)
-    for L, (a, b) in enumerate(zip(levels, ref_levels)):
-        assert a.shape == b.shape, L
-        assert torch.equal(a.cpu(), b.cpu()), f"level {L} differs"

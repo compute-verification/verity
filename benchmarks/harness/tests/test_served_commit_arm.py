@@ -1,4 +1,4 @@
-"""served_commit's arm (`benchmarks/served_commit/arm.py`) installs only a scheme other than vllm-v1, which it refuses by name.
+"""served_commit's arm (`benchmarks/served_commit/arm.py`) commits rows-sha512 and gives that scheme to its committer.
 It gates on the harness's run phases: under bounded staging its gate and
 warm-up runs are learn-only, a run of theirs left without a root is a declared warm-up named in the custom gate's verdict, and a
 measured run without a root fails the gate. Its ``ready``, and the stock profiling arm's (`prof_arm.py`), read only the engine's
@@ -12,8 +12,6 @@ import json
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-
-import pytest
 
 ARM = Path(__file__).resolve().parents[2] / "served_commit" / "arm.py"
 PROF_ARM = ARM.parent / "prof_arm.py"
@@ -86,17 +84,12 @@ def test_a_measured_run_without_a_root_fails_the_gate():
     assert got["failed"][0]["run"] == "measure:B32" and "not a declared warm-up" in got["failed"][0]["errors"][0]
 
 
-def test_a_vllm_v1_arm_refuses_to_install_by_name_and_a_rows_arm_installs(monkeypatch):
-    mod = _arm_module()
-    v1 = mod.ServedCommitArm("served-commit-v1", retain="none")
-    with pytest.raises(RuntimeError, match=r"served-commit-v1 arm commits 'vllm-v1' \(SHA-256\), not 'rows-sha512'"):
-        v1.install(SimpleNamespace(hooks=None))
-    assert v1.source is None
+def test_an_arm_installs_under_rows_sha512_by_default(monkeypatch):
     source = ModuleType("verity_vllm.acquire.sources.served_compiled_source")
     source.ServedCompiledSource = lambda into, batch_copies: SimpleNamespace(install_hooks=lambda: None)
     monkeypatch.setitem(sys.modules, source.__name__, source)
-    rows = mod.ServedCommitArm("served-commit-rows", retain="none")
-    rows.commit_scheme = "rows-sha512"
+    rows = _arm_module().ServedCommitArm("served-commit-rows", retain="none")
+    assert rows.commit_scheme == "rows-sha512"
     assert rows.install(SimpleNamespace(hooks=None)) is rows and rows.source is not None
 
 
@@ -185,7 +178,7 @@ def test_ready_gives_the_committer_the_private_engines_fields_from_llms_public_n
     private = SimpleNamespace(llm=vllm, cp={"repo": repo, "revision": revision, "local_path": "/hf/snapshots/4e20de3624"})
     assert _geo_digest(com.engine) == _geo_digest(private)
     assert com.envelope == {"batch": 8, "max_prompt": 2048, "max_new": 1, "max_num_batched_tokens": 2048, "max_model_len": 4096}
-    assert arm.windows == {"windows": {"envelope": com.envelope}}
+    assert arm.windows == {"windows": {"envelope": com.envelope}} and com.kw["commit_scheme"] == "rows-sha512"
 
 
 def test_a_local_checkpoint_commits_under_vllms_model_path_without_the_private_engine(monkeypatch):

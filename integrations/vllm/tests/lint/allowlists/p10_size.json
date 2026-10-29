@@ -14,7 +14,6 @@
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "function", "symbol": "NativeCollectCommitter._commit_step_windowed", "detail": "lines", "count": 399},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1805},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2399},
-    {"file": "verity_vllm/commit/padding_steps.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 894},
     {"file": "verity_vllm/correspondence/capture_identities.py", "kind": "function", "symbol": "run", "detail": "lines", "count": 162},
     {"file": "verity_vllm/correspondence/capture_identities.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 875},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "function", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "lines", "count": 252},

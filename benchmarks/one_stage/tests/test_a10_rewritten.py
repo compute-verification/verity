@@ -1,6 +1,5 @@
-"""A10's registered tensors that vLLM rewrites at load (`Committed.rewritten`) open against their committed tensor roots under the
-weights tree's scheme (`cpu_replay.tensor_root_of`): under rows-sha512, a tensor composed as vLLM rewrites it opens and one composed
-otherwise is mismatched by name."""
+"""A10's registered tensors that vLLM rewrites at load (`Committed.rewritten`) open against their committed rows-sha512 tensor roots
+(`cpu_replay.tensor_root_of`): a tensor composed as vLLM rewrites it opens and one composed otherwise is mismatched by name."""
 
 from __future__ import annotations
 
@@ -32,14 +31,14 @@ def _a10(monkeypatch) -> types.ModuleType:
 
 def test_a_rewritten_tensor_opens_against_its_rows_sha512_tensor_root(monkeypatch, tmp_path):
     from verity_vllm.check import fp8_ue8m0
-    from verity_vllm.commit import scheme, step_rows
+    from verity_vllm.commit import step_rows
 
     a10 = _a10(monkeypatch)
     geo, wk = bytes(range(32)), bytes(range(64, 128))
     served = {"model.a.weight": np.arange(8, dtype=np.uint16), "model.b.weight": np.arange(8, 16, dtype=np.uint16)}
     names = [[n, "bfloat16", [8], 16] for n in served]
     roots = [step_rows.tensor_root(geo, i, e, served[e[0]].view(np.uint8), wk) for i, e in enumerate(names)]
-    tree = step_rows.weights_tree(geo, names, scheme.names_digest(names), roots, wk)
+    tree = step_rows.weights_tree(geo, names, step_rows.names_digest(names), roots, wk)
 
     class Rewrites:
         def __init__(self, _names, _roles, _compose, _config):

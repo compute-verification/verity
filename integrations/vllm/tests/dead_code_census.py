@@ -17,7 +17,7 @@ circuit-check loads by path).  Edges: `import a.b`, `from a.b import c`
 (`c` as a submodule when it is one), relative imports, the parents of every imported dotted name (their `__init__`), string
 literals that name an integration module (`importlib.import_module("verity_vllm.program.model")`, dotted registry paths), f-string
 prefixes (`f"verity.ml.definitions.registry.{m}"` + every short literal of the same file that completes to a module), path literals
-(`verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
+(`verity_vllm/acquire/fa2_tap_src/build_ext.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
 root is LIVE.  `verity_vllm/observe/fold/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
 `registry.catalog.load()` imports every module of `verity.ml.definitions.registry` but `quarantine` (`pkgutil`): they are reachable from it.
 
@@ -320,7 +320,7 @@ def shell_modules(g: Graph, text: str) -> set[str]:
                 mods.add(g.mod_of[tok])
             continue
         cands = non_test_by_base.get(os.path.basename(tok), [])
-        if len(cands) > 1:   # `$SRC/build_ext.py`: the dir the shell names (fa2_tap_src / fa3_tap_src / hidden_gpu_src) disambiguates
+        if len(cands) > 1:   # `$SRC/build_ext.py`: the dir the shell names (fa2_tap_src / norm_tap_src / router_tap_src) disambiguates
             cands = [c for c in cands if any(d in text for d in Path(c).parts[:-1] if d.endswith("_src"))]
         if len(cands) == 1:
             mods.add(g.mod_of[cands[0]])

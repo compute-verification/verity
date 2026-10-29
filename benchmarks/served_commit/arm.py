@@ -9,9 +9,9 @@ captured into the graph and drained at the logits), and the native collector (`N
 staging) hashes them into one root per step. Its control is ``stock`` token for token: committing must not change what
 is served.
 
-An arm commits under its ``commit_scheme``, and ``install`` refuses the default, ``vllm-v1`` (SHA-256), by name, so an
-arm that runs names ``rows-sha512``; `benchmarks/g2/curve.py` reads a recorded run's scheme from its arm's name. The Commit is
-what `prof_arm`'s rows arms and the harness's ``commit`` arms (`verity_bench.vllm.commit_arm`) measure.
+An arm commits under rows-sha512 (``commit_scheme``), the one scheme; `benchmarks/g2/curve.py` reads a recorded run's scheme
+from its arm's name. The Commit is what `prof_arm`'s rows arms and the harness's ``commit`` arms (`verity_bench.vllm.commit_arm`)
+measure.
 
 Each of the harness's runs is one Commit. ``begin_run`` resets the committer and installs it (before the clock),
 ``end_run`` finalizes the run's commitment (inside the timed period, so a run's time includes the hashing backlog), and
@@ -38,7 +38,6 @@ from types import SimpleNamespace
 from typing import Any
 
 WARMUPS = ("gate", "warmup")
-V1 = "vllm-v1"
 
 
 def committer_engine(llm: Any) -> SimpleNamespace:
@@ -60,7 +59,7 @@ class ServedCommitArm:
     precision = "bfloat16"
     control = "stock"
     resident = True
-    commit_scheme = V1
+    commit_scheme = "rows-sha512"
     batch_copies = True
 
     def __init__(self, id: str, retain: str) -> None:
@@ -73,9 +72,6 @@ class ServedCommitArm:
         self.runs: list[dict[str, Any]] = []
 
     def install(self, target: Any) -> ServedCommitArm:
-        if self.commit_scheme == V1:
-            raise RuntimeError(f"{self.id} arm commits {V1!r} (SHA-256), not 'rows-sha512': vllm-v1 is kept only to read recorded "
-                               "runs, so measure the Commit with prof_arm's served-commit-rows* arms")
         from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
 
         self.source = ServedCompiledSource(into=target.hooks, batch_copies=self.batch_copies)

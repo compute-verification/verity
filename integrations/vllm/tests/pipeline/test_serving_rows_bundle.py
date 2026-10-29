@@ -27,9 +27,9 @@ from tests.pipeline.served_rope import D, HEADS, LAW, ROPE
 
 
 def _commit(tmp_path) -> dict:
-    """An old record's deferred Commit (vllm-v1, by name): its output dir and row dir, and the world that served it."""
+    """A deferred Commit: its output dir and row dir, and the world that served it."""
     pytest.importorskip("torch")
-    return SR.commit(tmp_path, commit_scheme="vllm-v1")
+    return SR.commit(tmp_path)
 
 
 def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_served_values(tmp_path):
@@ -41,8 +41,8 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
     w = rec["window"]
     assert (win["population"], rec["format"], w["kind"], w["run"]) == (heads, R.FORMAT, "stand-in", c["run_root"])
     man = RB.open_bundle(RB.path(c["out"], 1))["manifest_sha256"]
-    assert w["of"] == {"commitment": "vllm-v1", "run_root": c["run_root"], "bundle_manifest_sha256": man, "rows": DRW.ROWS}
-    assert w["link"] == DRW.link("vllm-v1") and w["committer"]["from"] == "replay bundle" and w["row"] == "rope-d64-cpu"
+    assert w["of"] == {"commitment": step_rows.NAME, "run_root": c["run_root"], "bundle_manifest_sha256": man, "rows": DRW.ROWS}
+    assert w["link"] == DRW.link(step_rows.NAME) and w["committer"]["from"] == "replay bundle" and w["row"] == "rope-d64-cpu"
 
     # the verifier's own copies: its population program, the run root of record, the public body it holds
     defn = bind(REGISTRY["RoPEHead_v1"], D=D)
@@ -91,19 +91,17 @@ def test_the_in_commit_hook_writes_the_window_as_served(tmp_path):
     assert [(x["port"], x["domain"]) for x in hook["roots"]] == [(x["port"], x["domain"]) for x in deferred["roots"]]
 
     # the audit's source check (A5's): the deferred window is a stand-in linked to the run root of record and the bundle, and the
-    # hook's is served exactly when that root is a SHA-512 root (a vllm-v1 run's is refused by name)
+    # hook's is served over that SHA-512 root
     man, root = RB.open_bundle(RB.path(c["out"], 1))["manifest_sha256"], c["run_root"]
-    assert DRW.source(deferred["window"], root, man, "vllm-v1") == {"kind": True, "run": True, "commitment": True, "of": True, "link": True}
-    sha512 = len(bytes.fromhex(root)) == DRW.SERVED_ROOT
-    assert DRW.source(hook["window"], root, man, "vllm-v1") == {"kind": True, "run": True, "commitment": True, "sha512": sha512, "link": True}
+    assert DRW.source(deferred["window"], root, man, step_rows.NAME) == {"kind": True, "run": True, "commitment": True, "of": True, "link": True}
+    assert DRW.source(hook["window"], root, man, step_rows.NAME) == {"kind": True, "run": True, "commitment": True, "sha512": True, "link": True}
 
 
 def test_a_rows_sha512_records_stand_in_names_that_commitment_and_its_served_window_passes_the_source_check(tmp_path):
-    """A deferred Commit committed under rows-sha512 (the Commit's default): the stand-in's ``of`` and ``link`` name the commitment
-    the record was committed in, not vllm-v1, and the in-Commit hook's served window over the same record passes the audit's source
-    check; either one naming vllm-v1 is refused by name."""
-    pytest.importorskip("torch")
-    c = SR.commit(tmp_path, commit_scheme=step_rows.NAME)
+    """A deferred Commit, committed under rows-sha512: the stand-in's ``of`` and ``link`` name the commitment the record was
+    committed in, and the in-Commit hook's served window over the same record passes the audit's source check; either one naming
+    vllm-v1 is refused by name."""
+    c = _commit(tmp_path)
     bundle, root = RB.path(c["out"], 1), c["run_root"]
     r = DRW.of_record(bundle, str(c["row_dir"]))
     assert (r.commitment, len(bytes.fromhex(root))) == (step_rows.NAME, DRW.SERVED_ROOT)
