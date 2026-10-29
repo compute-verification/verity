@@ -28,8 +28,8 @@
 //   ssn time REPS M [BUDGET_GB [ROW_BYTES ...]]
 //                             Llama-3.2-1B's fused linears at M rows, one JSON line a timing (see time_all), the hash pass
 //                             by each ROW_BYTES (0: row-seg; default 0 65536 16384)
-// Build (from the tree's root): nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a benchmarks/pouw/np_kernel/ssn.cu
-//   integrations/vllm/verity_vllm/commit/committer/native_rows.cu -o ssn
+// L1=1 replaces root(A_j) and the seed message's coins with L1 + (a)'s seed path (l1.h), checked by `ssn check`.
+// Build: run.sh (ssn.cu, the served committer's native_rows.cu and its plain-leaf copy from plain_rows.py).
 #include <cuda_runtime.h>
 
 #include <algorithm>
@@ -45,6 +45,7 @@
 #include "../dc/dc.cuh"
 #include "../dc/wgmma.cuh"
 #include "../served_zk/hm96_rows.cu"
+#include "l1.h"
 
 #define CK(x)                                                                                \
   do {                                                                                       \
@@ -208,6 +209,71 @@ __global__ void g_k(uint8_t* __restrict__ B, const u32* __restrict__ gc, int n, 
   *reinterpret_cast<u32*>(B + (size_t)(j / BN) * S * BN * KB + kmaj_off(j % BN, 24, KB)) = r;
 }
 
+// L1 + (a)'s seed path (l1.h), a call: l1_root_k's CTAs each hash 256 of A_j's 1 KiB leaves (a thread a leaf) and fold
+// them to their subtree's root in shared memory; with one CTA it goes on to root(A_j) and the seed, else l1_top_k (one CTA)
+// folds the CTAs' roots and does. l1_coins_k then writes the call's noise blocks from the seed. The call's leaf count is a
+// power of two.
+__device__ void l1_fold(const l1::Call& k, u64 (*lv)[8], int m, int level, u64 first) {
+  for (; m > 1; m >>= 1, level++) {
+    const int t = threadIdx.x;
+    u64 o[8];
+    const bool act = t < m / 2;
+    if (act) l1::node_of(k, level, (first >> (level + 1)) + t, lv[2 * t], lv[2 * t + 1], o);
+    __syncthreads();
+    if (act)
+      for (int i = 0; i < 8; i++) lv[t][i] = o[i];
+    __syncthreads();
+  }
+}
+__device__ void l1_seed(const l1::Call& k, const u64* x, u64* seed) {
+  u64 h[8], ra[8], s[8];
+  l1::instance(k, x, h, ra);
+  l1::seed_of(k, ra, s);
+  for (int i = 0; i < 8; i++) seed[i] = s[i];
+  seed[8 + 0] = ra[0];  // root(A_j)'s first word, for the check
+}
+__global__ void __launch_bounds__(256) l1_root_k(const l1::Call* __restrict__ kc, const uint8_t* __restrict__ A,
+                                                 u64* __restrict__ roots, u64* __restrict__ seed) {
+  __shared__ u64 lv[256][8];
+  const l1::Call& k = *kc;
+  const int t = threadIdx.x;
+  const u64 first = (u64)blockIdx.x * 256;
+  const int w = (int)(k.n - first < 256 ? k.n - first : 256);
+  if (t < w) {
+    u64 o[8];
+    l1::a_leaf(k, first + t, A + (size_t)l1::SEG * (first + t), o);
+    for (int i = 0; i < 8; i++) lv[t][i] = o[i];
+  }
+  __syncthreads();
+  l1_fold(k, lv, w, 0, first);
+  if (t) return;
+  if (gridDim.x == 1) l1_seed(k, lv[0], seed);
+  else
+    for (int i = 0; i < 8; i++) roots[8 * blockIdx.x + i] = lv[0][i];
+}
+__global__ void __launch_bounds__(256) l1_top_k(const l1::Call* __restrict__ kc, const u64* __restrict__ roots, int m,
+                                                u64* __restrict__ seed) {
+  __shared__ u64 lv[256][8];
+  const l1::Call& k = *kc;
+  const int t = threadIdx.x;
+  if (t < m)
+    for (int i = 0; i < 8; i++) lv[t][i] = roots[8 * t + i];
+  __syncthreads();
+  l1_fold(k, lv, m, 8, 0);
+  if (!t) l1_seed(k, lv[0], seed);
+}
+__global__ void l1_coins_k(const l1::Call* __restrict__ kc, const u64* __restrict__ seed, u32* __restrict__ coins,
+                           long long blocks) {
+  const long long b = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+  if (b >= blocks) return;
+  u64 s[8], o[8];
+  for (int i = 0; i < 8; i++) s[i] = seed[i];
+  l1::noise_of(*kc, s, (u64)b, o);
+  uint4* c = reinterpret_cast<uint4*>(coins + 16 * b);
+  for (int j = 0; j < 4; j++)
+    c[j] = make_uint4((u32)(o[2 * j] >> 32), (u32)o[2 * j], (u32)(o[2 * j + 1] >> 32), (u32)o[2 * j + 1]);
+}
+
 __global__ void clock_k(Clk* clk, long long cycles) {
   const long long c0 = clock64();
   const u64 t0 = gtime();
@@ -217,49 +283,6 @@ __global__ void clock_k(Clk* clk, long long cycles) {
 }
 
 // ---- host ------------------------------------------------------------------------------------------------------------------
-namespace hsha {
-static const u64 K[80] = {
-    0x428a2f98d728ae22ull, 0x7137449123ef65cdull, 0xb5c0fbcfec4d3b2full, 0xe9b5dba58189dbbcull, 0x3956c25bf348b538ull,
-    0x59f111f1b605d019ull, 0x923f82a4af194f9bull, 0xab1c5ed5da6d8118ull, 0xd807aa98a3030242ull, 0x12835b0145706fbeull,
-    0x243185be4ee4b28cull, 0x550c7dc3d5ffb4e2ull, 0x72be5d74f27b896full, 0x80deb1fe3b1696b1ull, 0x9bdc06a725c71235ull,
-    0xc19bf174cf692694ull, 0xe49b69c19ef14ad2ull, 0xefbe4786384f25e3ull, 0x0fc19dc68b8cd5b5ull, 0x240ca1cc77ac9c65ull,
-    0x2de92c6f592b0275ull, 0x4a7484aa6ea6e483ull, 0x5cb0a9dcbd41fbd4ull, 0x76f988da831153b5ull, 0x983e5152ee66dfabull,
-    0xa831c66d2db43210ull, 0xb00327c898fb213full, 0xbf597fc7beef0ee4ull, 0xc6e00bf33da88fc2ull, 0xd5a79147930aa725ull,
-    0x06ca6351e003826full, 0x142929670a0e6e70ull, 0x27b70a8546d22ffcull, 0x2e1b21385c26c926ull, 0x4d2c6dfc5ac42aedull,
-    0x53380d139d95b3dfull, 0x650a73548baf63deull, 0x766a0abb3c77b2a8ull, 0x81c2c92e47edaee6ull, 0x92722c851482353bull,
-    0xa2bfe8a14cf10364ull, 0xa81a664bbc423001ull, 0xc24b8b70d0f89791ull, 0xc76c51a30654be30ull, 0xd192e819d6ef5218ull,
-    0xd69906245565a910ull, 0xf40e35855771202aull, 0x106aa07032bbd1b8ull, 0x19a4c116b8d2d0c8ull, 0x1e376c085141ab53ull,
-    0x2748774cdf8eeb99ull, 0x34b0bcb5e19b48a8ull, 0x391c0cb3c5c95a63ull, 0x4ed8aa4ae3418acbull, 0x5b9cca4f7763e373ull,
-    0x682e6ff3d6b2b8a3ull, 0x748f82ee5defb2fcull, 0x78a5636f43172f60ull, 0x84c87814a1f0ab72ull, 0x8cc702081a6439ecull,
-    0x90befffa23631e28ull, 0xa4506cebde82bde9ull, 0xbef9a3f7b2c67915ull, 0xc67178f2e372532bull, 0xca273eceea26619cull,
-    0xd186b8c721c0c207ull, 0xeada7dd6cde0eb1eull, 0xf57d4f7fee6ed178ull, 0x06f067aa72176fbaull, 0x0a637dc5a2c898a6ull,
-    0x113f9804bef90daeull, 0x1b710b35131c471bull, 0x28db77f523047d84ull, 0x32caab7b40c72493ull, 0x3c9ebe0a15c9bebcull,
-    0x431d67c49c100d4cull, 0x4cc5d4becb3e42b6ull, 0x597f299cfc657e2aull, 0x5fcb6fab3ad6faecull, 0x6c44198c4a475817ull};
-static u64 rotr(u64 x, int n) { return (x >> n) | (x << (64 - n)); }
-static void iv(u64 h[8]) {
-  const u64 v[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull, 0xa54ff53a5f1d36f1ull,
-                    0x510e527fade682d1ull, 0x9b05688c2b3e6c1full, 0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
-  for (int i = 0; i < 8; i++) h[i] = v[i];
-}
-static void compress(u64 h[8], const u64 m[16]) {
-  u64 w[80], a[8];
-  for (int i = 0; i < 16; i++) w[i] = m[i];
-  for (int i = 16; i < 80; i++) {
-    const u64 s0 = rotr(w[i - 15], 1) ^ rotr(w[i - 15], 8) ^ (w[i - 15] >> 7);
-    const u64 s1 = rotr(w[i - 2], 19) ^ rotr(w[i - 2], 61) ^ (w[i - 2] >> 6);
-    w[i] = w[i - 16] + s0 + w[i - 7] + s1;
-  }
-  for (int i = 0; i < 8; i++) a[i] = h[i];
-  for (int i = 0; i < 80; i++) {
-    const u64 t1 = a[7] + (rotr(a[4], 14) ^ rotr(a[4], 18) ^ rotr(a[4], 41)) + ((a[4] & a[5]) ^ (~a[4] & a[6])) + K[i] + w[i];
-    const u64 t2 = (rotr(a[0], 28) ^ rotr(a[0], 34) ^ rotr(a[0], 39)) + ((a[0] & a[1]) ^ (a[0] & a[2]) ^ (a[1] & a[2]));
-    for (int j = 7; j > 0; j--) a[j] = a[j - 1];
-    a[4] += t1;
-    a[0] = t1 + t2;
-  }
-  for (int i = 0; i < 8; i++) h[i] += a[i];
-}
-}  // namespace hsha
 
 static u64 mix64(u64 x) {
   x += 0x9E3779B97F4A7C15ull;
@@ -394,6 +417,85 @@ static void coins_form(const u64* msg, u32* coins, uint8_t* A, uint8_t* B, int m
   CK(cudaGetLastError());
 }
 
+// One call's L1 seed path on the device: its constants, the CTAs' subtree roots and the seed (words 0-7; word 8 root(A_j)'s
+// first word)
+struct L1Dev {
+  l1::Call* k;
+  u64 *roots, *seed;
+  int nct;
+};
+static L1Dev l1_dev(const l1::Window& w, u64 call, u64 bytes) {
+  const u64 n = bytes / l1::SEG;
+  if (bytes % l1::SEG || !n || (n & (n - 1)) || n > 65536 || call >= 256) {
+    fprintf(stderr, "ERR the L1 seed path takes a power-of-two count of 1 KiB leaves up to 65,536 and a call below 256\n");
+    exit(2);
+  }
+  L1Dev d{};
+  const l1::Call k = l1::call_of(w, call, n);
+  CK(cudaMalloc(&d.k, sizeof k));
+  CK(cudaMemcpy(d.k, &k, sizeof k, cudaMemcpyHostToDevice));
+  d.nct = (int)((n + 255) / 256);
+  CK(cudaMalloc(&d.roots, 64 * (size_t)d.nct));
+  CK(cudaMalloc(&d.seed, 128));
+  return d;
+}
+// root(A_j) and the seed (parts & COINS also the noise blocks) on st
+static void l1_path(const L1Dev& d, const uint8_t* A, u32* coins, long long blocks, cudaStream_t st, int parts = COINS) {
+  l1_root_k<<<d.nct, 256, 0, st>>>(d.k, A, d.roots, d.seed);
+  if (d.nct > 1) l1_top_k<<<1, 256, 0, st>>>(d.k, d.roots, d.nct, d.seed);
+  if (parts & COINS) l1_coins_k<<<(unsigned)((blocks + 127) / 128), 128, 0, st>>>(d.k, d.seed, coins, blocks);
+  CK(cudaGetLastError());
+}
+
+// the device's seed path against l1::reference: the seed, root(A_j)'s first word and every noise block, over random and
+// zero A_j
+static int check_l1() {
+  struct C { u64 rows, K, call; int zero; };
+  const C cs[] = {{64, 2048, 5, 0}, {64, 8192, 9, 0}, {512, 8192, 63, 0}, {8192, 2048, 0, 0}, {8192, 8192, 255, 0}, {64, 2048, 1, 1}};
+  int bad = 0;
+  u64 sd = 1;
+  for (const C& c : cs) {
+    const l1::Window w = l1::window_of(sd++, 3, 256);
+    std::vector<uint8_t> a(c.rows * c.K, 0);
+    if (!c.zero)
+      for (size_t i = 0; i < a.size(); i++) a[i] = (uint8_t)mix64(sd * 1000003 + i);
+    const l1::Ref r = l1::reference(w, c.call, a.data(), a.size());
+    const L1Dev d = l1_dev(w, c.call, a.size());
+    uint8_t* dA = up(a);
+    const long long blocks = 4096;
+    u32* dc;
+    CK(cudaMalloc(&dc, blocks * 64));
+    CK(cudaMemset(d.seed, 0xA5, 128));
+    CK(cudaMemset(dc, 0xA5, blocks * 64));
+    l1_path(d, dA, dc, blocks, 0);
+    CK(cudaDeviceSynchronize());
+    u64 seed[9];
+    std::vector<u32> coins(blocks * 16);
+    CK(cudaMemcpy(seed, d.seed, sizeof seed, cudaMemcpyDeviceToHost));
+    CK(cudaMemcpy(coins.data(), dc, blocks * 64, cudaMemcpyDeviceToHost));
+    const bool seed_ok = l1::digest_bytes(seed) == r.seed && seed[8] == l1::be64(r.root_a.data());
+    size_t bad_blocks = 0;
+    for (long long b = 0; b < blocks; b++) {
+      const l1::Bytes nb = l1::noise_block(r.seed, (u64)b);
+      for (int j = 0; j < 16; j++) {
+        const u32 want = (u32)nb[4 * j] << 24 | (u32)nb[4 * j + 1] << 16 | (u32)nb[4 * j + 2] << 8 | nb[4 * j + 3];
+        if (coins[16 * b + j] != want) {
+          bad_blocks++;
+          break;
+        }
+      }
+    }
+    printf("{\"check\": \"l1_seed_path\", \"rows\": %llu, \"K\": %llu, \"call\": %llu, \"data\": \"%s\", \"leaves\": %llu, "
+           "\"ctas\": %d, \"seed_and_root_a_match\": %s, \"noise_blocks\": %lld, \"noise_block_mismatches\": %zu}\n",
+           (unsigned long long)c.rows, (unsigned long long)c.K, (unsigned long long)c.call, c.zero ? "zero" : "random",
+           (unsigned long long)(a.size() / l1::SEG), d.nct, seed_ok ? "true" : "false", blocks, bad_blocks);
+    fflush(stdout);
+    bad += !seed_ok || bad_blocks;
+    CK(cudaFree(dA)); CK(cudaFree(dc)); CK(cudaFree(d.k)); CK(cudaFree(d.roots)); CK(cudaFree(d.seed));
+  }
+  return bad;
+}
+
 // native_rows.cu (the served committer, linked as its own translation unit): hm96-sha512/row/v2 leaves of fixed-size rows
 extern "C" int verity_rows_params_bytes();
 extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, const uint8_t* row_prefix, const uint8_t* salt_prefix,
@@ -408,6 +510,14 @@ extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, u
                                         uint64_t first_index, uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_frame_launch(const void* params, const uint8_t* hs, uint64_t n_h, uint64_t first, uint64_t m,
                                         uint64_t n_total, uint8_t* out, uint64_t max_blocks, cudaStream_t st);
+// run.sh's plain-leaf build of native_rows.cu (plain_rows.py): frame-v3-sha512 row leaves without hm96, L1's words
+extern "C" int verity_rows_p_build(const uint8_t* domain_id, const uint8_t* ks, const uint8_t* row_prefix,
+                                   const uint8_t* salt_prefix, const uint8_t* leaf_prefix, const char* schema, int schema_len,
+                                   uint32_t lb, void* out);
+extern "C" int verity_rows_p_leaves_sf_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows,
+                                              const uint8_t* salts, const uint8_t* tn, uint64_t first, uint64_t m,
+                                              uint64_t n_total, uint8_t* out, uint8_t* bc, uint8_t* hs, uint8_t* scratch,
+                                              uint64_t max_blocks, cudaStream_t st);
 // SSN_SMALL_ROWS: run.sh's second build of native_rows.cu (SMALL_THREADS), its blocks SSN_SMALL_ROWS threads and its symbols
 // verity_rows_s_*; a leaves launch of fewer rows than SMALL_ROWS_MAX (default 2 blocks of 256 an SM) uses it, so a small
 // call's rows spread over the SMs instead of sharing a few
@@ -448,6 +558,9 @@ static uint8_t* dev_fill(u64 bytes, u64 seed, int slot = 0, int len = 0) {
 // The hash pass over a run of exported words, and roots. Every row is an hm96-sha512 leaf of a frame-v3-sha512 tree.
 //   rb > 0: the served committer's hm96-sha512/row/v2 leaves of rb-byte rows (native_rows.cu: salts derived, the split
 //           form), one thread a row; its tree by verity_rows_levels_launch.
+//   rb < 0: L1's words: frame-v3-sha512's row leaves of -rb-byte rows over their sha512/row/v2 digests without hm96 (the
+//           plain-leaf build: the served kernels less the salt, mask and hm96 leaf; an 18-byte stand-in schema, the
+//           template's length); its tree as rb > 0's.
 //   rb 0:   served_zk's sha512/row-seg/v1 rows (hm96_rows.cu): sz_segments hashes every 1 KiB segment, then sz_finish, a
 //           thread a row, x = SHA-512(Q || the row's segment digests), the hm96 leaf under the row's salt and the frame
 //           leaf; its tree by sz_level, a launch a level, or in sz_finish's one CTA for at most 256 rows.
@@ -467,15 +580,16 @@ struct Hasher {
       std::vector<uint8_t> c(1024);
       for (size_t i = 0; i < c.size(); i++) c[i] = (uint8_t)mix64(i + 99);
       params.resize(verity_rows_params_bytes());
-      const char* schema = "hm96-sha512/row/v2";
-      if (verity_rows_build(&c[0], &c[64], &c[128], &c[256], &c[384], schema, (int)strlen(schema), (uint32_t)rb, params.data())) {
+      const char* schema = rb > 0 ? "hm96-sha512/row/v2" : "sha512/row/v2/l1-w";
+      const auto build = rb > 0 ? verity_rows_build : verity_rows_p_build;
+      if (build(&c[0], &c[64], &c[128], &c[256], &c[384], schema, (int)strlen(schema), (uint32_t)std::abs(rb), params.data())) {
         fprintf(stderr, "ERR verity_rows_build\n");
         exit(2);
       }
       std::vector<uint8_t> t(256 * 17 * 16);
       for (size_t i = 0; i < t.size(); i++) t[i] = (uint8_t)mix64(i + 5);
       tn = up(t);
-      const size_t rows = max_bytes / rb + 2;
+      const size_t rows = max_bytes / std::abs(rb) + 2;
       size_t width = 1;
       while (width < rows) width <<= 1;
       CK(cudaMalloc(&leaves, width * 64));
@@ -537,13 +651,14 @@ struct Hasher {
   // as rb-byte rows.
   u64 leaves_of(const uint8_t* data, u64 rows, u64 row_bytes, cudaStream_t st, u64 cap = 0) {
     if (rb) {
-      const u64 n = (rows * row_bytes + rb - 1) / rb;
+      const u64 b = (u64)std::abs(rb), n = (rows * row_bytes + b - 1) / b;
 #ifdef SSN_SMALL_ROWS
-      const auto launch = n < small_rows_max() ? verity_rows_s_leaves_sf_launch : verity_rows_leaves_sf_launch;
+      auto launch = n < small_rows_max() ? verity_rows_s_leaves_sf_launch : verity_rows_leaves_sf_launch;
 #else
-      const auto launch = verity_rows_leaves_sf_launch;
+      auto launch = verity_rows_leaves_sf_launch;
 #endif
-      const int rc = launch(params.data(), data, rb, n, nullptr, tn, 0, n, n, leaves, nullptr, nullptr, scratch, cap, st);
+      if (rb < 0) launch = verity_rows_p_leaves_sf_launch;
+      const int rc = launch(params.data(), data, b, n, nullptr, tn, 0, n, n, leaves, nullptr, nullptr, scratch, cap, st);
       if (rc) {
         fprintf(stderr, "ERR verity_rows_leaves_sf_launch %d\n", rc);
         exit(2);
@@ -778,6 +893,7 @@ static int check() {
     u64 seed = 1;
     for (const C& c : cs) bad += check_one(c.m, c.n, c.K, c.BN, c.kind, seed++);
   }
+  bad += check_l1();
   return bad ? 1 : 0;
 }
 
@@ -819,6 +935,7 @@ struct LinDev {
   int* beta;
   u64* msg;
   u32* coins;
+  std::vector<L1Dev> l1;  // L1=1: each layer's call of this linear
 };
 
 // One JSON line a measurement, at M rows: per linear the plain GEMM at its own K, ssn_1l's GEMM without and with export,
@@ -850,6 +967,14 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     d.chunk = (int)std::min<size_t>(M, std::max<size_t>(64, budget / row_bytes / 64 * 64));
     max_chunk_words = std::max(max_chunk_words, (size_t)d.chunk * s.n * L.S);
     lins.push_back(d);
+  }
+  // L1=1: root(A_j) and the seed by L1 + (a)'s seed path (l1_path; ROOT_A and the call's seed message unused), call 4 l + i
+  // the forward's linear i in layer l
+  const bool use_l1 = getenv("L1") && atoi(getenv("L1"));
+  if (use_l1) {
+    const l1::Window w = l1::window_of(7, 0, 64);
+    for (size_t i = 0; i < lins.size(); i++)
+      for (int l = 0; l < 16; l++) lins[i].l1.push_back(l1_dev(w, 4 * l + i, (u64)M * lins[i].K));
   }
   // beside's buffers, each with its own hash stream: as many as fit in 48 GB, 2 to 8
   const int nbuf = (int)std::max<size_t>(2, std::min<size_t>(8, (size_t)48e9 / (max_chunk_words * 4)));
@@ -886,7 +1011,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
 #ifdef SSN_SMALL_ROWS
   // the small-block build's leaves against the served build's, over each linear's A_j by each committer scheme
   for (auto& [r, h] : hra) {
-    if (!r) continue;
+    if (r <= 0) continue;
     for (const LinDev& d : lins) {
       const u64 n = ((u64)M * d.K + r - 1) / r;
       std::vector<uint8_t> want(64 * n), got(64 * n);
@@ -913,7 +1038,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   // WORDS_TREE=1: each chunk's hash in the forwards builds the frame tree above its leaves (the levels above the chunks'
   // subtrees, a few nodes a linear, aren't run)
   const bool words_tree = getenv("WORDS_TREE") && atoi(getenv("WORDS_TREE"));
-  auto rname = [](int rb) { return rb ? "rows" + std::to_string(rb) : std::string("rowseg"); };
+  auto rname = [](int rb) { return rb ? (rb > 0 ? "rows" : "plain") + std::to_string(std::abs(rb)) : std::string("rowseg"); };
   auto hname = [&](int h) { return h < 0 ? std::string("none") : rname(rbs[h]); };
   int* dout;
   CK(cudaMalloc(&dout, (size_t)M * 16384 * 4));
@@ -971,6 +1096,15 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     if (g_tag) line("g_draw", &d, T.ms(std::max(reps, 51), [&] { cf(GDRAW); }), macs, words, (double)d.n);
     line("coins_forming", &d, T.ms(std::max(reps, 51), [&] { cf(COINS | FORM | GDRAW); }), macs, words, (double)M * d.S);
     const u64 abytes = (u64)M * d.K;
+    if (use_l1) {
+      const long long nbk = coin_blocks(M, d.S, d.n);
+      line("l1_root", &d, T.ms(std::max(reps, 51), [&] { l1_path(d.l1[0], d.A0, d.coins, nbk, 0, 0); }), macs, abytes / 4.0,
+           (double)abytes, "l1");
+      line("l1_seed_path", &d, T.ms(std::max(reps, 51), [&] {
+             l1_path(d.l1[0], d.A0, d.coins, nbk, 0);
+             cf(FORM | GDRAW);
+           }), macs, abytes / 4.0, (double)abytes, "l1");
+    }
     for (int r : ras) {
       Hasher& h = hra[r];
       line("root_a_hash", &d, T.ms(std::max(reps, 51), [&] { h.leaves_of(d.A0, (u64)M, (u64)d.K, 0); }), macs, abytes / 4.0,
@@ -987,11 +1121,20 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
       for (const LinDev& d : lins) gemm(d.BN, false, d.A0, d.B0, nullptr, M, d.n, d.K / KB, nullptr, nullptr, nullptr, s1);
   };
   line("fwd_plain_gemm", nullptr, T.ms(reps, fwd_plain, s1), fwd_macs, 0, 0);
+  // a call's work before its GEMM: root(A_j) (ROOT_A) and coins from the seed message, or L1's seed path; then G and forming
+  auto pre = [&](const LinDev& d, int l, cudaStream_t st) {
+    if (use_l1) {
+      l1_path(d.l1[l], d.A0, d.coins, coin_blocks(M, d.S, d.n), st);
+      coins_form(d.msg, d.coins, d.A, d.B, M, d.n, d.S, d.BN, st, FORM | GDRAW);
+    } else {
+      fwd_root_a(d, st);
+      coins_form(d.msg, d.coins, d.A, d.B, M, d.n, d.S, d.BN, st);
+    }
+  };
   auto fwd_serial = [&] {
     for (int l = 0; l < 16; l++)
       for (const LinDev& d : lins) {
-        fwd_root_a(d, s1);
-        coins_form(d.msg, d.coins, d.A, d.B, M, d.n, d.S, d.BN, s1);
+        pre(d, l, s1);
         for (int r0 = 0; r0 < M; r0 += d.chunk) {
           const int mc = std::min(d.chunk, M - r0);
           gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, s1);
@@ -1009,8 +1152,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     for (int b = 0; b < nbuf; b++) CK(cudaEventRecord(done[b], s2[b]));
     for (int l = 0; l < 16; l++)
       for (const LinDev& d : lins) {
-        fwd_root_a(d, s1);
-        coins_form(d.msg, d.coins, d.A, d.B, M, d.n, d.S, d.BN, s1);
+        pre(d, l, s1);
         for (int r0 = 0; r0 < M; r0 += d.chunk, c++) {
           const int mc = std::min(d.chunk, M - r0), b = c % nbuf;
           CK(cudaStreamWaitEvent(s1, done[b]));
@@ -1029,9 +1171,10 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   }
   printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d, \"hash_cap\": %llu, "
          "\"root_a_in_forward\": %d, \"root_a_rows\": %d, \"root_a_tree\": 1, \"words_tree\": %d, \"rowseg_leaf\": "
-         "\"sz_finish\", \"prio\": %d, \"layout\": \"%s\", \"small_threads\": %d, \"small_rows_max\": %llu}\n",
+         "\"sz_finish\", \"prio\": %d, \"layout\": \"%s\", \"l1\": %d, \"small_threads\": %d, "
+         "\"small_rows_max\": %llu}\n",
          f0, sm_mhz(dclk), nbuf, (unsigned long long)hash_cap, root_a, root_a_rows, (int)words_tree, (int)prio,
-         g_tag ? "ssn_1l_tag" : "ssn_1l",
+         g_tag ? "ssn_1l_tag" : "ssn_1l", (int)use_l1,
 #ifdef SSN_SMALL_ROWS
          SSN_SMALL_ROWS, (unsigned long long)small_rows_max()
 #else
@@ -1057,6 +1200,6 @@ int main(int argc, char** argv) {
     if (rbs.empty()) rbs = {0, 65536, 16384};
     return time_all(atoi(argv[2]), atoi(argv[3]), argc >= 5 ? atof(argv[4]) : 16.0, rbs);
   }
-  fprintf(stderr, "usage: ssn check | time REPS M [BUDGET_GB [ROW_BYTES ...]]   (ROW_BYTES 0: row-seg)\n");
+  fprintf(stderr, "usage: ssn check | time REPS M [BUDGET_GB [ROW_BYTES ...]]   (ROW_BYTES 0: row-seg; -B: L1's plain leaves)\n");
   return 2;
 }

@@ -3,7 +3,8 @@
 # lease; under it the exact check of every word, then the timings at each M, the SM clock sampled beside it all.
 # Measurement only. cwd: the source tree's root.
 #   MS (64 512 8192: Llama-3.2-1B's T 512 at 64 and 512 rows, and T 8,192), REPS (5), BUDGET_GB (16: the exported words a
-#   hash chunk holds), ROWS (0 65536 16384: the hash pass's row bytes, 0 for row-seg), CUDA_HOME (/usr/local/cuda-13.0),
+#   hash chunk holds), ROWS (0 65536 16384: the hash pass's row bytes, 0 for row-seg, -B for L1's plain leaves of B-byte
+#   rows), CUDA_HOME (/usr/local/cuda-13.0),
 #   LEASE_MIN (25), CHECK (1; 0 skips the exact check), TIME (1; 0 skips the timings), NOT_AFTER (a UTC time past which
 #   the leased part does no GPU work), CAPS (0: beside's caps on a row hash launch's blocks, each a pass
 #   over MS; time_m<M>_cap<C>.jsonl), ROOT_A (0; 1 puts root(A_j), its leaves and the tree above them, in the forward ahead
@@ -11,7 +12,8 @@
 #   schemes root(A_j) is timed by a call; default ROWS), WORDS_TREE (0; 1 builds the tree above each chunk's leaves in the
 #   forwards), PRIO (0; 1 runs the forwards' GEMM stream at the greatest stream priority, the hash streams at the least),
 #   SMALL_THREADS (unset; N builds native_rows.cu a second time with blocks of N threads, a build-time edit of a copy, for
-#   the leaves of any launch of fewer than SMALL_ROWS_MAX rows), TAG (0; 1 times the ssn-1l-tag layout; the check runs both).
+#   the leaves of any launch of fewer than SMALL_ROWS_MAX rows), TAG (0; 1 times the ssn-1l-tag layout; the check runs both),
+#   L1 (0; 1 puts L1 + (a)'s seed path, root(A_j) through the seed and noise blocks, before each call's forming).
 #   VERITY_ROWS_PHASES and VERITY_ROWS_FORM reach the served committer (native_rows.cu).
 set -uo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
@@ -24,7 +26,8 @@ if [ "${1:-}" != leased ]; then
   CUDA=${CUDA_HOME:-/usr/local/cuda-13.0}
   say "build $(git rev-parse --short=10 HEAD 2>/dev/null) into $BUILD_DIR"
   COMMITTER=integrations/vllm/verity_vllm/commit/committer
-  SRCS=("$HERE/ssn.cu" "$COMMITTER/native_rows.cu")
+  python3 "$HERE/plain_rows.py" "$COMMITTER/native_rows.cu" "$BUILD_DIR/native_rows_p.cu" || { say "plain_rows.py failed"; exit 3; }
+  SRCS=("$HERE/ssn.cu" "$COMMITTER/native_rows.cu" "$BUILD_DIR/native_rows_p.cu" -I "$COMMITTER")
   if [ -n "${SMALL_THREADS:-}" ]; then
     # the copy keeps the leaf kernels' register cap (128: threads x min blocks = 512) and renames its symbols and sha512.cuh's
     sed -e "s/^constexpr int THREADS = 256;/constexpr int THREADS = $SMALL_THREADS;/" \
