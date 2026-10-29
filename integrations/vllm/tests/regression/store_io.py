@@ -219,7 +219,7 @@ def attempt_outputs(run_id: str, kinds: tuple[str, ...] | None = None) -> dict[s
 def fetch_attempt(run_ids: list[str] | str, to: Path, kinds: tuple[str, ...] = ROW_KINDS) -> Path:
     """Materialise the row-dir account files of one or more attempts (the union of their `kinds` output trees, relative paths kept:
     `build_summary.json`, `match/...`, `commit/...`, `global_match.json`, ...) under `to`, so the harness can read them like a v1 row
-    dir.  Each stage's `execution-evidence/v1` (the cumulative `timeline.jsonl`, `stages.txt`, `admission.json`, ...) goes under
+    dir.  Each stage's `execution-evidence/v1` (the cumulative `stages.txt`, `admission.json`) goes under
     `evidence/<stage>/` -- the stages' copies legitimately differ.  Any other file two attempts both carry must be identical (the
     later attempt's copy is compared, never overwrites silently).  Returns `to`; `to/ATTEMPTS.json` records what came from where."""
     ids = [run_ids] if isinstance(run_ids, str) else list(run_ids)

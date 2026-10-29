@@ -643,7 +643,7 @@ def bot_plane_sizing(pads: Iterable[dict[str, Any]]) -> dict[str, Any]:
 def padded_population(sr: dict[str, Any], bmap: dict[str, Any], committed: Any, epr: dict[str, Any], *, max_report: int = 8) -> dict[str, Any]:
     """[sign-against for fix (a); the required values' third consumer] Rewrite a `sampled_replay` result of a PADDED Commit into the
     padded record's population: the identities the replay classified `not_executed_by_rule` (request-relative steps >= n_exec: they left the
-    pool before any draw -- the same identities the padding materialised) become `population.inactive_by_enablement`, `not_executed_by_rule`
+    pool before sampling -- the same identities the padding materialised) become `population.inactive_by_enablement`, `not_executed_by_rule`
     reads n 0 with `renamed_to`; then (i) EVERY bot-by-enablement entry of the map is read back through `committed` (`<name>#ord<ordinal>`: a
     padding tensor beside an executed one of the same name at a mixed step) and checked word for word == bot_word(committed_dtype); (ii) the
     ONE-MECHANISM reconciliation, kept: the Commit's padding classification (entries by family) against the population's inactive bucket by

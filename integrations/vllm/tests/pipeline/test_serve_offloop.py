@@ -87,8 +87,8 @@ def _window_a() -> tuple[Any, Any, dict[str, Any]]:
     com.pool = PP.PinnedPool(1 << 14, exact=False, populate_threads=0)
     rc = _commit(com, A)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
-    leds = {"alice": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
-            "cmpl-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
+    leds = {"alice": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
+            "cmpl-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
     reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
     kw = dict(rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs, request_rows=rows,
               tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t", code="c0de",
@@ -294,7 +294,8 @@ def test_the_engine_serves_the_next_windows_while_a_seal_is_held(tmp_path, monke
     wins = records(out, "windows.jsonl")
     assert [w["window"] for w in wins] == [0, 1, 2] and all(w["seal"] == {"row_dir": str(out / "windows" / f"w{w['window']}"),
                                                                       "off_loop": True} for w in wins)
-    assert not (out / "seals.jsonl").exists() and len(records(tmp_path / "OUT", "requests.jsonl")) == 3
+    assert not (out / "seals.jsonl").exists() and len(records(tmp_path / "OUT", sc.REQUEST_USERS)) == 3
+    assert not (tmp_path / "OUT" / "requests.jsonl").exists(), "the requests' ids stay in the serve dir"
     assert not s.windows.summary()["passed"] and s.windows.summary()["seals"]["awaiting"] == 3
     held.set()
     sealer.close()
@@ -681,36 +682,24 @@ def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
 def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_path):
     src, dst = tmp_path / "serve", tmp_path / "OUT"
     src.mkdir()
-    (src / "requests.jsonl").write_bytes(b'{"a": 1}\n{"b": ')
+    (src / "windows.jsonl").write_bytes(b'{"a": 1}\n{"b": ')
     (src / "serve.json").write_text("{}")
+    (src / "requests.jsonl").write_text('{"prompt_ids": [1]}\n')
+    (src / "advice_trace.jsonl").write_text('{"kind": "header"}\n')
     m = sc.Mirror(src, dst)
     m()
-    assert (dst / "requests.jsonl").read_bytes() == b'{"a": 1}\n' and (dst / "serve.json").read_text() == "{}"
-    with open(src / "requests.jsonl", "ab") as f:
+    assert (dst / "windows.jsonl").read_bytes() == b'{"a": 1}\n' and (dst / "serve.json").read_text() == "{}"
+    with open(src / "windows.jsonl", "ab") as f:
         f.write(b'2}\n{"c": 3}\n')
     m()
-    assert (dst / "requests.jsonl").read_bytes() == (src / "requests.jsonl").read_bytes()
-    (src / "requests.jsonl").write_bytes(b'{"d": 4}\n')
+    assert (dst / "windows.jsonl").read_bytes() == (src / "windows.jsonl").read_bytes()
+    (src / "windows.jsonl").write_bytes(b'{"d": 4}\n')
     m()
-    assert (dst / "requests.jsonl").read_bytes() == b'{"d": 4}\n' and not m.errors
+    assert (dst / "windows.jsonl").read_bytes() == b'{"d": 4}\n' and not m.errors
     assert sc.records_mirror(src, str(src)) is None and sc.records_mirror(src, None) is None
-    assert json.loads((dst / "serve.json").read_text()) == {} and not (dst / "windows.jsonl").exists()
-
-
-def test_the_records_mirror_drains_the_step_traces_writer_before_it_copies(tmp_path):
-    """serve-openai's step trace is written by a thread of its own (`advice_trace`): its lines so far reach the file only at a
-    `drain`, which the mirror calls first."""
-    src, dst = tmp_path / "serve", tmp_path / "OUT"
-    src.mkdir()
-    (src / "advice_trace.jsonl").write_bytes(b'{"kind": "header"}\n{"kind": "st')
-
-    def drain() -> None:
-        with open(src / "advice_trace.jsonl", "ab") as f:
-            f.write(b'ep"}\n')
-
-    m = sc.records_mirror(src, str(dst), before=drain)
-    m()
-    assert (dst / "advice_trace.jsonl").read_bytes() == b'{"kind": "header"}\n{"kind": "step"}\n' and not m.errors
+    assert json.loads((dst / "serve.json").read_text()) == {} and not (dst / "seals.jsonl").exists()
+    assert not (dst / "requests.jsonl").exists(), "the requests' ids stay in the serve dir"
+    assert not (dst / "advice_trace.jsonl").exists(), "the step trace stays in the serve dir"
 
 
 def test_a_seal_writes_its_binding_map_in_pieces_to_the_bytes_and_digest_one_dumps_writes(tmp_path, host_blocks, monkeypatch):
