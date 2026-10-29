@@ -1,4 +1,4 @@
-"""The draw over hidden positions (`one_stage.hidden_draw`): the honest table's positions are its live (call, row, tile)
+"""The sample over hidden positions (`one_stage.hidden_draw`): the honest table's positions are its live (call, row, tile)
 triples one to one, and on any table, overlapping, out of order or with gaps, no two positions share a witness and each
 witness is in range."""
 

@@ -1,4 +1,4 @@
-"""One remote bandwidth session a period on one node, at a small size: the registration, the verifier's session against the
+"""One PoUB session a period on one node, at a small size: the registration, the verifier's session against the
 prover's passes over its store, and the answer of the bandwidth component of onsite Verity (`verity/remote-bandwidth/v0`,
 `RemoteAudit.Protocol` in `lean/`).
 
@@ -6,7 +6,7 @@ prover's passes over its store, and the answer of the bandwidth component of ons
 process, `Local`), in the protocol's order:
 
 1. the prover packs `store` into blocks (`payloads`), commits to them under fresh salts (`audit.payload_tree`), and the
-   verifier draws the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
+   verifier samples the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
    (`audit.Store`);
 2. the verifier opens a session (`audit.Session`) on coins its challenger commits to before the first one, drawn from
    `coins` (`coins.local`), and the prover runs `passes` passes a window over the whole store (`audit.Prover`), each root
@@ -289,8 +289,8 @@ def serve(exe: str | os.PathLike, cases: list[dict[str, Any]]) -> list[dict[str,
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """Bandwidth's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): the session on the
     period's records, the verifier and its challenger a party of their own on `period.json`'s `challenger_host`
-    (`verifier_party.Party.of`; on this node by default, as a process of its own, with its own coins) and the prover
-    here. With `remote-audit-protocol` among the period's tools the Lean answers (the verifier of record) and must agree
+    (`verifier_party.side_of`; on this node by default, as a process of its own, with its own coins) and the prover
+    here. With `remote-audit-protocol` among the period's tools the Lean verifier answers and must agree
     with the Python; it writes `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host
     ran each party, and whether `trusted-host`'s premise holds (`verifier_party.placement`), go in
     `bandwidth.json` and in an accepted answer's profile (`placement`)."""
@@ -298,7 +298,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
 
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools = doc.get("tools") or {}
-    party = verifier_party.Party.of(doc, node)
+    party = verifier_party.side_of(doc, node)
     store = records(period_dir)
     t = time.monotonic()
     period, side = verifier_party.period_with(party, verifier_party.request_of(node), store)

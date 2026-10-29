@@ -118,7 +118,7 @@ from .layout import resolve
 from .liveness import _MEMBER_LIMIT
 from .program import input_id, is_input
 from .refs import Affine, Concat, Explicit, Refs, Strided, concat
-from .types import Array, Record, Tuple as TupleT, Type, Value
+from .types import Array, RecordType, Tuple as TupleT, Type, Value
 
 SCHEMA = "verity/census/v1"
 
@@ -912,7 +912,7 @@ def _bits(t: Type, lo: int, hi: int) -> int:
         if a == b:
             return _bits(t.elem, lo - a * L, hi - a * L)
         return _bits(t.elem, lo - a * L, L) + (b - a - 1) * _all_bits(t.elem) + _bits(t.elem, 0, hi - b * L)
-    fields = t.fields if isinstance(t, TupleT) else [ft for _, ft in t.fields] if isinstance(t, Record) else None
+    fields = t.fields if isinstance(t, TupleT) else [ft for _, ft in t.fields] if isinstance(t, RecordType) else None
     if fields is None:
         raise TypeError(t)
     out, pos = 0, 0

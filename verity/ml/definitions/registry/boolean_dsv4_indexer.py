@@ -10,7 +10,7 @@
     Dsv4ShortContextTopK_v2{TOPK,RATIO}                traced: one validity bit per slot from pos's bits
 
 A step is core's gate builder for the word primitive `dsv4_indexer.WORD` names: `fp.f32_add` / `f32_sub` / `f32_mul` / `f32_fma`
-with the GPU's NaN word (the `_v2` FP32 primitives, as C-Flock lowers them), the FTZ FMA flushed around `fp.f32_fma`, `mufu`'s
+with the GPU's NaN word (the `_v2` FP32 primitives, as Flock lowers them), the FTZ FMA flushed around `fp.f32_fma`, `mufu`'s
 MUFU pieces, `scalar`'s max, min and e4m3 conversion, `boolean_dsa`'s `cvt.rn.f32.s32` and `cvt.rpi.ftz`, `forms`' integer add,
 subtract and compare; a constant word is constant bits, so it folds into the gates.  No table or lookup gate.
 """

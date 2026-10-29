@@ -14,7 +14,7 @@ A session has four steps:
 2. **Rounds.** Round `j` reveals index `j` (`challenge`), receives the whole answer block (`receive`), reads its clock
    for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
    `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
-   retried, and no index is redrawn.
+   retried, and no index is resampled.
 3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records root)`: the header is
    the commitment's fields and how the session ended, and the records root is the frame-v3-sha512 root of the round
    records.  The records are witness: the prover proves things about them, and they never reach the auditor in the
@@ -455,6 +455,21 @@ class SessionLog:
             os.close(fd)
 
 
+def coin_key(raw: bytes) -> bytes:
+    """A coin tree's hiding key from `HM96.key_bytes` uniform bytes `raw`, the bits above `HM96.key_bits` cleared as
+    `HM96.fresh_key` clears them."""
+    out = bytearray(raw)
+    if out:
+        out[-1] &= (1 << (HM96.key_bits - 8 * (HM96.key_bytes - 1))) - 1
+    return HM96.check_key(bytes(out))
+
+
+def resolution_of(clock: Callable[[], int]) -> float:
+    """How finely `clock` ticks, in ns: the monotonic clock's resolution for `time.perf_counter_ns`, else 1 (an injected
+    clock's readings are taken as given)."""
+    return time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
+
+
 class MemoryChallenger:
     """One session of the memory challenger over `coins`, judged against `limit_ns`, signed by `signer`, bound to
     `binding`, the setup's root of the `C*` it audits (module docstring).  The session's id, `coins.session`, goes into
@@ -469,7 +484,7 @@ class MemoryChallenger:
         if len(binding) != DIGEST_BYTES:
             raise ValueError(f"a session's binding is the setup's {DIGEST_BYTES}-byte root of C*, not {len(binding)} bytes")
         if resolution_ns is None:
-            resolution_ns = time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
+            resolution_ns = resolution_of(clock)
         if resolution_ns > CLOCK_RESOLUTION_NS:
             raise ValueError(f"the clock ticks every {resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
         log.claim(coins.session)
@@ -610,6 +625,6 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
 __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_SCHEMA", "COIN_TREE", "COMPLETE", "LATE", "LMS", "PROTOCOL",
            "RECORDS_TREE", "RECORD_SCHEMA", "SCHEMES", "SESSION_LOG", "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner",
            "MemoryChallenger", "Round", "SessionCommitment", "SessionLog", "SessionLogError", "SignedSession", "Signer",
-           "Verdict", "Verify", "block_digest", "coin_digest", "coin_leaf", "collector_paused", "covering_certificate",
-           "lms_verify", "message",
-           "records_root", "register", "verdict", "verify_coin"]
+           "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "coin_leaf", "collector_paused",
+           "covering_certificate", "lms_verify", "message", "records_root", "register", "resolution_of", "verdict",
+           "verify_coin"]
