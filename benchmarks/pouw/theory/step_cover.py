@@ -45,7 +45,8 @@ cannot force and stays out of the lever plans; `best_max` and `best_p4_max` add 
 router gate, `best_p4_max_s8` the softmax's row max over every 8th score, and `best_p4_all` resident epilogue scales
 and norm rows (`MEM`), the sampler's two-pass argmax and the row max once every two PV calls (`max_block`);
 `best_p4_nkd` adds noise-keyed dither (`noise_dithered`): u is the pre-round f32's low mantissa byte (SHF, LOP3), a
-function of the noised value, so u and every nonzero round are targets at a T3 cost (`T3["noise_dither"]`);
+function of the noised value, so u and every nonzero round are targets at a T3 cost (`T3["noise_dither"]`). The
+f32 is the fused lane's own, from the noised accumulator; a stored bf16's f32 has a zero low byte;
 `best_p4_nkd_bmax` rounds P against its own block's strided max (P's zero share, `p_zero`, is the lever: a zero round
 is a constant), rescaled to the running max at the block's end; `best_p4_exact` serves every linear's, the lm_head's
 and the router's output exactly (N-EXACT's epilogue fold, plus two IDP4A an output for the lead's non-separable code
@@ -54,7 +55,12 @@ and tag terms), so every lane but attention's own (`EXACT_REACHED`) reads salt-i
 `best_p4_nkd_bmax_pad64` pads every matmul below 64 rows to wgmma's 64; `best_p4_nkd_bmax_coin` fills the padding
 rows' data lanes with raw coin bytes (`Plan.pad_fill`; the default is zero padding, whose later-step words are the
 previous word plus the shared coin byte, so TensorSemantics prices them at the floor, as it does P·V's real words
-whose P chunk rounds to 0, `p_chunk_zero`); `best_p4_smlite` commits only the softmax's MUFU outputs. The free part of the de-noise alone (the later steps' row
+whose P chunk rounds to 0, `p_chunk_zero`); `lead_blc4a_pad64` and `lead_blc4a_coin` put the lead, ssn_1l-tag +
+blc4a-t64-e7 (`blc4a_terms`), on every ssn_1l matmul, charge each noised matmul's chosen-data residual (the lead's p*
+a coined later word; ssn_sh's shared byte, `walk_share`) and read chosen data (`Plan.chosen`): TensorSemantics credits
+nothing there, since a prover that picks the data can make a later step's data part constant, and that word is the
+previous one plus coin terms, an IADD3 at the floor; `lead_blc4a_coin_hd` is the coin plan on honest data;
+`best_p4_smlite` commits only the softmax's MUFU outputs. The free part of the de-noise alone (the later steps' row
 bits at the magic conversion, the column mean in the FFMA) leaves the code and the tags served, and the lanes covered.
 
 P's zero share is `ZERO_P` (assumed) until `--pzero FILE` reads attn_pzero.py's measurement: then each softmax takes
@@ -75,13 +81,15 @@ ones don't and noise-keyed ones as often as independent u's would (`sim_dither`)
 prover's row copies, that two attention calls on equal data share last-step vectors unless the tags number rows across
 the step (`sim_cross_call`), that zero padding's later steps need no tensor instruction and coin padding's do
 (`sim_pad_fill`) and how each is priced, `p_zero`'s weighting, that exact outputs leave only attention's lanes
-forced, and the small-m instruction choice. Output: a JSON
+forced, ssn_sh's chosen-data walk against a brute force, the lead's words and residual against N-RED's and N-EGRESS's
+counts, that chosen data takes coin padding's credit and not wgmma's 64 rows', and the small-m instruction choice. Output: a JSON
 report (`--json PATH`) and a text table (`--table`).
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import itertools
 import json
 import math
@@ -167,7 +175,78 @@ def ssn1l_terms(m: int, n: int, k: int, code_lanes: int = 4, tag: int = 0) -> di
     words = nsw.ssn_1l_words(s + code_lanes - 4)
     return {"design": f"ssn_1l({code_lanes})" + ("-tag" if tag else ""), "alpha": H32 * s / k,
             "forming": H32 * nsw.ssn_1l_forming_writes(s) / (n * k),
-            "coins": 4 * words * nsw.COIN_PRICED_BYTE / (n * k), "coin_bytes_call": 4 * words * m}
+            "coins": 4 * words * nsw.COIN_PRICED_BYTE / (n * k), "coin_bytes_call": 4 * words * m, "steps": s}
+
+
+#: blc4a-t64-e7's three lanes of 7-bit odd coins against A′ = 1, one a (64-row tile, step, lane, column), streamed
+#: raw by the certifier after A_j (a cp.async: no register written), and its chosen-data residual a coined later
+#: step under model P (N-RED's A2c and A8 as N-EGRESS counts them); an uncoined later step leaves a raw byte's 1/256
+BLC_LANES, BLC_TILE, BLC_P_COINED = 3, 64, 0.00293
+
+
+def blc4a_terms(m: int, n: int, k: int, code_lanes: int = 4, tag: int = 0, tile_rows: int | None = None) -> dict:
+    """ssn_1l-tag + blc4a-t64-e7. A full tile's steps hold the three coin lanes: 28 data lanes a later step, and step 1
+    three short of the lead's. A tile of r < 64 rows carries ceil(S·r/64) steps' worth of them, spread one or two a
+    step from step 1; its other later steps hold a row coin and a window coin (30 data lanes). `p_attack` is the
+    residual a later word."""
+    r = min(tile_rows or m, BLC_TILE)
+    d1 = 32 - code_lanes - tag
+
+    def cap(s: int) -> int:
+        if r >= BLC_TILE:
+            return d1 - BLC_LANES + (31 - BLC_LANES) * (s - 1)
+        return d1 + 30 * (s - 1) - BLC_LANES * math.ceil(s * r / BLC_TILE)
+
+    s = 1
+    while cap(s) < k:
+        s += 1
+    words = nsw.ssn_1l_words(s + code_lanes - 4)
+    coined = 1.0 if r >= BLC_TILE else min(1.0, 2 * math.ceil(s * r / BLC_TILE) / max(1, s - 1))
+    return {"design": f"ssn_1l({code_lanes})-tag+blc4a-t64-e7", "alpha": H32 * s / k,
+            "forming": H32 * nsw.ssn_1l_forming_writes(s) / (n * k),
+            "coins": 4 * words * nsw.COIN_PRICED_BYTE / (n * k), "coin_bytes_call": 4 * words * m, "steps": s,
+            "p_attack": coined * BLC_P_COINED + (1 - coined) / 256}
+
+
+@functools.lru_cache(maxsize=None)
+def _sum_pmfs(n: int, width: int) -> tuple[np.ndarray, ...]:
+    out = [np.ones(1)]
+    for _ in range(n):
+        out.append(np.convolve(out[-1], np.full(width, 1.0 / width)))
+    return tuple(out)
+
+
+def walk_share(steps: int, d: tuple[int, ...] | None = None, width: int = 256) -> float:
+    """The share of an entry's later words that equal an earlier word of the same entry, when step t adds d_t + c_t
+    with c_t uniform on `width` consecutive integers (ssn_sh's shared raw byte against W₀) and d_t the data part a
+    prover chose before the coins. Exact up to 5 steps, by inclusion–exclusion over the earlier words a word equals
+    (those events meet in disjoint blocks of increments); beyond, the union bound, an upper bound. With d None, the
+    best d on a grid near the centre (alternating 0 and 1 beyond 4 steps, which centres every block's sum)."""
+    if d is None:
+        grid = (itertools.product(range(-1, 3), repeat=steps - 1) if steps <= 4 else
+                [tuple((u + o) % 2 for u in range(steps - 1)) for o in (0, 1)])
+        return max(walk_share(steps, dd, width) for dd in grid)
+    pmfs, lo = _sum_pmfs(steps - 1, width), -(width // 2)
+
+    def mass0(a: int, b: int) -> float:
+        off = (b - a) * lo + sum(d[a:b])
+        return float(pmfs[b - a][-off]) if 0 <= -off < len(pmfs[b - a]) else 0.0
+
+    copies = 0.0
+    for t in range(1, steps):
+        if steps > 5:
+            copies += min(1.0, sum(mass0(u, t) for u in range(t)))
+            continue
+        for size in range(1, t + 1):
+            for a_set in itertools.combinations(range(t), size):
+                cuts = list(a_set) + [t]
+                copies += (-1) ** (size + 1) * math.prod(mass0(cuts[i], cuts[i + 1]) for i in range(size))
+    return copies / (steps - 1)
+
+
+@functools.lru_cache(maxsize=None)
+def sh_walk(steps: int) -> float:
+    return walk_share(steps)
 
 
 def steps_sh(k: int, tag: int = 0) -> int:
@@ -180,7 +259,8 @@ def ssn_sh_terms(m: int, n: int, k: int, tag: int = 0) -> dict:
     s = steps_sh(k, tag)
     coin_b = 0.5 * m + 4 * (s - 1)
     return {"design": "ssn_sh" + ("-tag" if tag else ""), "alpha": H32 * s / k, "forming": H32 / (n * k),
-            "coins": coin_b * nsw.COIN_PRICED_BYTE / (m * n * k), "coin_bytes_call": coin_b}
+            "coins": coin_b * nsw.COIN_PRICED_BYTE / (m * n * k), "coin_bytes_call": coin_b, "steps": s,
+            "p_attack": sh_walk(s)}
 
 
 # ---------------------------------------------------------------- lane idioms (op, count an element, class)
@@ -553,6 +633,8 @@ class Plan:
     exact: bool = False
     exact_idp4a: int = 2
     pad_fill: str = "zero"
+    blc: bool = False
+    chosen: bool = False
     note: str = ""
 
 
@@ -614,6 +696,24 @@ PLANS = [
          premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
          note="best_p4_nkd_bmax with the padding rows' data lanes holding raw coin bytes, so TensorSemantics prices "
               "their words at the instruction's own shape"),
+    Plan("lead_blc4a_pad64", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
+         static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
+         noise_dither=True, block_max=True, small_m="wgmma64", blc=True, chosen=True,
+         premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="best_p4_nkd_bmax_pad64 on the lead ssn_1l-tag + blc4a-t64-e7 (every ssn_1l matmul), each noised "
+              "matmul's chosen-data residual charged, and chosen data: TensorSemantics credits nothing, since a "
+              "prover that picks the data can make a later step's data part constant, and that word is the "
+              "previous one plus coin terms, an IADD3 at the floor"),
+    Plan("lead_blc4a_coin", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
+         static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
+         noise_dither=True, block_max=True, pad_fill="coin", blc=True, chosen=True,
+         premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="lead_blc4a_pad64 with best_p4_nkd_bmax_coin's coin padding in place of wgmma's 64 rows"),
+    Plan("lead_blc4a_coin_hd", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
+         static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
+         noise_dither=True, block_max=True, pad_fill="coin", blc=True,
+         premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="lead_blc4a_coin on honest data: TensorSemantics credits the tile's words, the residuals still charged"),
     Plan("best_p4_exact", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
          static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
          noise_dither=True, block_max=True, exact=True,
@@ -645,8 +745,9 @@ T3 = {
                "uniform fraction v, interpolated between int8 and int7 activations' +3.5%; more where a token's "
                "scale leaves most coordinates under one step, since there it is O(|x|) against O(x^2))", 0.012,
                "dither-int8-v1"),
-    "noise_dither": ("+1.2% (estimate: as `dither`, since u, a hash of the input's own bits, is near uniform and "
-                     "independent of the round's fraction; `sim_dither` checks it unbiased)", 0.012, "nkd-int8-v1"),
+    "noise_dither": ("+1.2% (estimate: as `dither`, since u, the low byte of the pre-round f32 the fused lane "
+                     "computes from the noised accumulator, is near uniform and independent of the round's fraction; "
+                     "`sim_dither` checks it unbiased)", 0.012, "nkd-int8-v1"),
     "static": ("unmeasured: one calibrated scale a tensor for every activation quantize, instead of a token's amax",
                None, "static-int8-v1"),
     "router": ("unmeasured: the router's gate in int8 can flip an expert choice", None, None),
@@ -738,13 +839,17 @@ def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
     if plan.small_m == "wgmma64" and c.m < 64:
         hp, hpad, hinstr = wgmma_price(256, reading) / TENSOR["s8"]["kreg"], 64 / c.m, "wgmma, rows padded to 64"
     lanes = 4 if c.n <= nsw.SSN_CODE_N_MAX else 5
+    tile = 64 if plan.small_m == "wgmma64" and c.m < 64 else c.m
+
+    def lead(m: int, n: int, k: int) -> dict:
+        return blc4a_terms(m, n, k, lanes, plan.tag, tile) if plan.blc else ssn1l_terms(m, n, k, lanes, plan.tag)
+
     if fam == "linear":
-        t = (ssn1l_terms(c.m, c.n, c.k, lanes, plan.tag) if plan.linears == "ssn_1l" else
-             ssn_sh_terms(c.m, c.n, c.k, plan.tag))
+        t = lead(c.m, c.n, c.k) if plan.linears == "ssn_1l" else ssn_sh_terms(c.m, c.n, c.k, plan.tag)
         forming, coins = t["forming"] * c.count, t["coins"] * c.count
         coin_calls = [(t["coin_bytes_call"], c.calls * (c.count / (c.m * c.n * c.k * c.calls)))]
     elif fam in ("lm_head", "router_gemm"):
-        t = ssn1l_terms(c.m, c.n, c.k, lanes, plan.tag)
+        t = lead(c.m, c.n, c.k)
         forming, coins = t["forming"] * c.count, t["coins"] * c.count
         coin_calls = [(t["coin_bytes_call"], 1)]
     else:
@@ -770,11 +875,16 @@ def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
     pad_c = hpad if plan.commit_pad else 1.0
     forced = c.count * a * ((1 - zc) * tile_forced + zc * floor_t
                             + (pad_c - 1) * (tile_forced if plan.pad_fill == "coin" else floor_t))
+    attack = 0.0
+    if plan.blc:
+        resid = t["p_attack"] * (t["steps"] - 1) / t["steps"]
+        chosen = (c.count * a * pad_c * floor_t if plan.chosen else forced) * (1 - resid)
+        attack, forced = forced - chosen, chosen
     words = c.count * a * pad_c / TENSOR["s8"]["kreg"]
     return {"stock": stock_units, "honest": honest + forming, "forced": forced, "words": words, "forming": forming,
             "coins": coins, "coin_calls": coin_calls, "instr": hinstr, "design": t["design"], "alpha": a,
-            "unforced": forming + (honest - forced if not plan.commit_pad else 0.0), "pad": hpad,
-            **({"zero_chunk": (zc, zsrc)} if zsrc else {})}
+            "unforced": forming + (honest - forced if not plan.commit_pad else 0.0), "pad": hpad, "attack": attack,
+            **({"zero_chunk": (zc, zsrc)} if zsrc and not plan.chosen else {})}
 
 
 def lane_variant(c: Comp, plan: Plan) -> tuple[str, bool]:
@@ -986,6 +1096,8 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
             "macs": macs, "w1_per_mac": st / macs, "linears_gap": lin_gap, "rest_gap": t1_mm + cov - lin_gap,
             "t1_matmul": t1_mm, "coverage": cov, "t1": t1_mm + cov, "coins_uncredited": coins,
             "t1_coins_uncredited": t1_mm + cov + coins, "uncovered_share": tot["unforced"] / st,
+            "t1_attack": sum(r.get("attack", 0.0) for r in rows) / st,
+            "linears_attack": sum(r.get("attack", 0.0) for r in lin) / max(1e-30, sum(r["stock"] for r in lin)),
             "slack_share": (tot["honest"] - tot["forced"] - tot["unforced"]) / st,
             "hash_bytes": 4 * tot["words"], "groups": groups, "t2": t2, "t3_estimate": t3,
             "t3_unmeasured": t3_unmeasured, "t3_formats": t3_formats,
@@ -1614,6 +1726,40 @@ def check() -> list[dict]:
        and abs(ex["epi_qkv"]["per_element"]["honest"] - nb["epi_qkv"]["per_element"]["honest"]
                - (2 * PRICE["IDP4A"][1] + PRICE["IADD3"][1] + PRICE["FFMA"][1] - PRICE["I2F"][1] - PRICE["FMUL"][1]))
        < 1e-9, {n: ex[n]["forced"] for n in lanes_ex})
+    brute = {}
+    for steps, d in ((3, (1, 0)), (4, (1, 0, 1)), (4, (0, 0, 0))):
+        vals = np.arange(-8, 8)
+        g = np.stack(np.meshgrid(*([vals] * (steps - 1)), indexing="ij"), -1).reshape(-1, steps - 1) + np.array(d)
+        v = np.concatenate([np.zeros((len(g), 1), int), np.cumsum(g, 1)], 1)
+        brute[(steps, d)] = (sum((v[:, :t] == v[:, t:t + 1]).any(1).mean() for t in range(1, steps)) / (steps - 1),
+                             walk_share(steps, d, 16))
+    union = walk_share(6, (1, 0, 1, 0, 1), 16)
+    exact6 = None
+    g = np.stack(np.meshgrid(*([np.arange(-8, 8)] * 5), indexing="ij"), -1).reshape(-1, 5) + np.array((1, 0, 1, 0, 1))
+    v = np.concatenate([np.zeros((len(g), 1), int), np.cumsum(g, 1)], 1)
+    exact6 = sum((v[:, :t] == v[:, t:t + 1]).any(1).mean() for t in range(1, 6)) / 5
+    ok("ssn_sh's chosen-data walk: inclusion–exclusion equals a brute force over every coin sequence (16-value coins), "
+       "the union bound beyond 5 steps is above it, a byte's best share a later word is 1/256 to 2/256 at QKᵀ's 3 "
+       "steps and P·V's 4, and a one-bit coin (A2r's) loses half or more",
+       all(abs(a - b) < 1e-12 for a, b in brute.values()) and exact6 <= union + 1e-12
+       and all(1 / 256 <= sh_walk(s) <= 2 / 256 for s in (3, 4)) and walk_share(3, None, 2) >= 0.5,
+       {"brute": {f"{k}": v for k, v in brute.items()}, "union6": (union, exact6),
+        "byte": {s: 256 * sh_walk(s) for s in (3, 4, 7)}, "bit": walk_share(3, None, 2)})
+    lead_k = [(ssn1l_terms(64, 2048, 2048, 4, TAG_LANES)["steps"], blc4a_terms(64, 2048, 2048, 4, TAG_LANES)["steps"])]
+    lead_e = {pl: evaluate("llama", "T8192_8x1k", PLAN[pl]) for pl in ("lead_blc4a_pad64", "best_p4_nkd_bmax_pad64")}
+    ok("ssn_1l-tag + blc4a-t64-e7: 67 words at K 2,048 for the lead (N-RED's count), 1.105× with the coin lanes "
+       "(N-EGRESS's), and its linears' chosen-data residual at Llama T 8,192 within 0.25–0.40% of their stock "
+       "(N-EGRESS 0.307%, N-CARD 0.334%); the lanes' coverage is unchanged",
+       lead_k[0][0] == 67 and 1.09 <= lead_k[0][1] / lead_k[0][0] <= 1.12
+       and 0.0025 <= lead_e["lead_blc4a_pad64"]["linears_attack"] <= 0.004
+       and abs(lead_e["lead_blc4a_pad64"]["coverage"] - lead_e["best_p4_nkd_bmax_pad64"]["coverage"]) < 1e-4,
+       {"steps": lead_k, "linears_attack": lead_e["lead_blc4a_pad64"]["linears_attack"]})
+    ch = {pl: evaluate("llama", "dec64_2k", PLAN[pl])["t1_matmul"]
+          for pl in ("lead_blc4a_coin", "lead_blc4a_coin_hd", "lead_blc4a_pad64")}
+    ok("chosen data: coin padding's TensorSemantics credit at decode goes (a constant later-step data part makes "
+       "the word an IADD3 at the floor), wgmma's 64 rows need none",
+       ch["lead_blc4a_coin"] > 5 * ch["lead_blc4a_coin_hd"] and ch["lead_blc4a_pad64"] < ch["lead_blc4a_coin"] / 5,
+       ch)
     for plan in PLANS:
         for model in ("llama", "v4"):
             for point in POINTS:
@@ -1673,7 +1819,7 @@ def report(lookup: bool = False) -> dict:
 
 PERIOD_PLANS = ("linears", "best", "best_p4", "best_p4_dither", "best_p4_max", "best_p4_max_s8", "best_p4_all",
                 "best_p4_nkd", "best_p4_nkd_bmax", "best_p4_nkd_bmax_pad64", "best_p4_nkd_bmax_coin", "best_p4_exact",
-                "best_p4_exact_sep")
+                "best_p4_exact_sep", "lead_blc4a_pad64", "lead_blc4a_coin", "lead_blc4a_coin_hd")
 #: pouw_space.py's points (and this file's further ones) to this file's (model, point)
 CARD_POINTS = {"t512": ("llama", "T512_64"), "t512r512": ("llama", "T512_512"), "t8192": ("llama", "T8192_8x1k"),
                "t8192_1x8k": ("llama", "T8192_1x8k"), "decode_b64_2k": ("llama", "dec64_2k"),
