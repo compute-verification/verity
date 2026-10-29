@@ -9729,11 +9729,18 @@
     "  And",
     "    (Pous.Guarantees.RoundsBound (43 / 1000) (instHPow.hPow (ENNReal.instInv.inv 2) 137) 320",
     "      (instHPow.hPow (ENNReal.instInv.inv 2) 20))",
-    "    (And (instLENat.le (instHPow.hPow 2 19) (instHPow.hPow 2 19))",
-    "      (instLENat.le (instHPow.hPow 2 19) (instHPow.hPow 2 27)))"
+    "    (And (Pous.Guarantees.WideBlockCount (instHPow.hPow 2 19))",
+    "      (And (Pous.Guarantees.TagsInjective id)",
+    "        (Pous.Guarantees.StateWithin",
+    "          (fun x =>",
+    "            (Pous.p2ring (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) 16432).stateBound",
+    "              Pous.Params.ρ)",
+    "          320",
+    "          ((Pous.p2ring (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) 16432).stateBound",
+    "            Pous.Params.ρ))))"
    ],
    "assumptions": [],
-   "type_hash": "d6de92b952fd6aa1e355dbf69e5f9ee06390e9c4081e19ac4ba4b951273384e1"
+   "type_hash": "cd3c7e0d35a7cb3f6b2141df692668ecd054a8b20eb1d9725f2fb23b4115be08"
   },
   "Pous.SecurityProofs.ObligationWide320_nontrivial": {
    "owner": "@memory-accounting",
