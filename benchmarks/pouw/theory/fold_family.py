@@ -24,13 +24,18 @@ that depends on D, so N ↦ op(N, D) is a bijection:
 - `mulxor` (N ⊕ D)·k [2], `xormul` N·k ⊕ D [2], `addmul` (N + D)·k [2], `muladd` N·k + D [1],
 - `xorg` N ⊕ g(D, c) [1], `xorgmul` (N ⊕ g(D, c))·k [2], `sqxor` (N ⊕ D)² + c [2].
 A bitwise g that depends on D at every bit is D ⊕ h(c), so the g kinds are XOR with a drawn constant.
+A round fold's word entry, one half of U = h + W + K_t, is `addk` N + D + k [1], and with the word XORed by a
+per-position constant first, `xoradd` N + (D ⊕ c) + k [2].
 
 Families: `mulxor` (FOLD-OPT's step, the keys drawn), `arith` (the first four kinds uniform), `lop` (the two g kinds),
-`all` (every kind uniform).
+`all` (the seven fold kinds uniform), `round` (`xoradd`).
+
+`--sweep=KIND` replaces the drawn members by KIND's one-step members at every w-bit c (k drawn). An unsat at c then
+holds for every 32-bit constant whose low w bits are c.
 
 Run: `uv run --no-project --with z3-solver python -B fold_family.py OUT.json --window=PATH/fold_window.py [--width=8]
-[--members=12] [--steps=1,2] [--families=...] [--targets=zero,words] [--timeout=300] [--jobs=4]` (from this
-directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
+[--members=12] [--steps=1,2] [--families=...] [--targets=zero,words] [--timeout=300] [--jobs=4] [--sweep=KIND]` (from
+this directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
 """
 from __future__ import annotations
 
@@ -44,9 +49,10 @@ import zlib
 
 import z3
 
-KINDS = {"mulxor": 2, "xormul": 2, "addmul": 2, "muladd": 1, "xorg": 1, "xorgmul": 2, "sqxor": 2}
+KINDS = {"mulxor": 2, "xormul": 2, "addmul": 2, "muladd": 1, "xorg": 1, "xorgmul": 2, "sqxor": 2, "addk": 1,
+         "xoradd": 2}
 FAMILIES = {"mulxor": ["mulxor"], "arith": ["mulxor", "xormul", "addmul", "muladd"], "lop": ["xorg", "xorgmul"],
-            "all": list(KINDS)}
+            "all": list(KINDS)[:7], "round": ["xoradd"]}
 G_TABLES = [t for t in range(16) if all(((t >> c) & 1) != ((t >> (2 + c)) & 1) for c in (0, 1))]
 WINDOW = None
 
@@ -84,6 +90,10 @@ def step(kind, n, d, p, mask):
         return ((n ^ g_of(t, d, c, mask)) * k) & mask
     if kind == "sqxor":
         return ((n ^ d) * (n ^ d) + c) & mask
+    if kind == "addk":
+        return (n + d + k) & mask
+    if kind == "xoradd":
+        return (n + (d ^ c) + k) & mask
     raise ValueError(kind)
 
 
@@ -152,12 +162,17 @@ def specs(opt):
     fams = str(opt.get("--families", ",".join(FAMILIES))).split(",")
     targets = str(opt.get("--targets", "zero,words")).split(",")
     timeout = float(opt.get("--timeout", 300))
+    sweep = opt.get("--sweep")
+    if sweep:
+        rng = random.Random(f"sweep-{sweep}")
+        fams, steps = [f"sweep-{sweep}"], [1]
+        drawn = [[(sweep, {"k": rng.randrange(0, 1 << w) | 1, "c": c, "t": 3})] for c in range(1 << w)]
     out = []
     for fam in fams:
         for s in steps:
             rng = random.Random(f"{fam}-{s}")
-            for i in range(members):
-                member = draw_member(rng, fam, s, w)
+            for i in range(len(drawn) if sweep else members):
+                member = drawn[i] if sweep else draw_member(rng, fam, s, w)
                 for target in targets:
                     h = honest(target, member)
                     for L, grid in ((h - 1, (3, 3, 4) if target == "zero" else (1, 1, 24)),
