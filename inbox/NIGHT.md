@@ -68,7 +68,9 @@ T1 = forming(N, F) − forced(C) + de-noise(D) + final word(D, P) + uncommitted 
 - **T1 0.049%** on Llama at every T (0.255% with coins uncredited); 0.029% on V4 dense. α 1.044. No final-word lemma, no
   C1, no int7, no sign fix.
 - **T2 62.9× serial / 34.2× overlapped at T 8,192; 6.5× / 4.0× at T 512** (estimates on SW-GPU's measured parts).
-- **T3 ≈ 0, estimated, unmeasured** (served noise std 6–9 accumulator units). SW-PPL measures it now.
+- **T3 measured (SW-PPL final, note 20261029T0725Z-report-sw-ppl): −0.09% [−0.34, +0.15] at 2K and −0.02% [−0.11, +0.06]
+  at 8K** against stock int8, all 16 windows, one noise seed. Every 1-bit SSN format is within noise of stock; 4-bit lanes cost
+  +0.17–0.26% at 8K.
 - **Premises:** H32 (1, measured), W1 (3, unnamed), ShaSpeed (4a) for the credited hashing, hash-compose (4a, unstated),
   atomic call + PeriodInventory for hashing A before its noise (3), the distinctness lemma (0 once proved; open), a
   grinding bound (open).
