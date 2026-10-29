@@ -1,7 +1,8 @@
 """The remote bandwidth audit over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
-answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + S/2^64 (δ₀ the
-openings' pooled bound's δ, 2^-40, and S the session's draws).
+answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + ⌈W/g⌉·s/2^64 (δ₀
+the openings' pooled bound's δ, 2^-40, and ⌈W/g⌉·s/2^64 the draw term, the session's openings coins at its `samples` s
+each, `LineHeldAtComponent`'s).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
 T = machines·⌊period/window_s⌋ sessions in a period, each on its own live coins, against one adaptive prover.
@@ -12,10 +13,12 @@ T = machines·⌊period/window_s⌋ sessions in a period, each on its own live c
   at least T − M + 1 sessions certify their `q_bytes`: the period certifies at least (T − M + 1)·`q_bytes`, and at most
   (M − 1)/T of its sessions are uncovered.
 - **Per window** (`per_window`): the session's openings bound at δ/T instead of δ₀ (`pooled.bound` of its windows),
-  so that every one of the T sessions certifies that much at once, except with δ + T·S/2^64.
+  so that every one of the T sessions certifies that much at once, except with δ + T·(eps − δ₀), each session's draw
+  term once.
 
-Both leave out each session's coin PRF advantage and coin commitment's hiding, which are named assumptions, not
-numbers. What the session proves is its verdict and outputs, by the Lean verifier; what is scaled is the
+Both leave out each session's coin PRF advantage, a named assumption, not a number; a session's sample has no hiding
+term, since its prover is sent the coin commitment only at the session's end. What the session proves is its verdict
+and outputs, by the Lean verifier; what is scaled is the
 number of sessions and that each is audited as this one was."""
 
 from __future__ import annotations
@@ -36,7 +39,7 @@ from . import codec, pooled
 FORMAT = "verity/remote-bandwidth-monitoring-period/v1"
 STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
              "file": "Security/Proofs/Flock/Soundness/Audit/Periods.lean"}
-EXCEPT = "each session's coin PRF advantage and coin commitment hiding (named assumptions) over the period's sessions"
+EXCEPT = "each session's coin PRF advantage (a named assumption) over the period's sessions"
 
 
 def _share(x: int, of: int) -> str:
@@ -61,14 +64,14 @@ def pooled_step(t: int, q_bytes: int, eps: Fraction, delta: Fraction) -> dict[st
             "bound": f"{float(bound):.3g}", "statement": STATEMENT["name"]}
 
 
-def per_window(t: int, windows: Sequence[tuple[int, int]], delta: Fraction) -> dict[str, Any]:
-    """Each of `t` sessions at δ/t: its openings' pooled bound at that δ, the reads it certifies and the period's total."""
+def per_window(t: int, windows: Sequence[tuple[int, int]], delta: Fraction, draw_term: Fraction) -> dict[str, Any]:
+    """Each of `t` sessions at δ/t: its openings' pooled bound at that δ, the reads it certifies and the period's total,
+    except with δ and each session's `draw_term` (its eps less its δ₀)."""
     b = pooled.bound(windows, delta / t)
     wrong = -(-b.wrong.numerator // b.wrong.denominator)
     each = (sum(u for u, _ in windows) - wrong) * codec.BLOCK_BYTES
-    draws = sum(s for _, s in windows)
     return {"q_bytes_each": each, "q_bytes": t * each, "at": f"δ/T = {delta}/{t} a session",
-            "except_with": f"δ + T·S/2^64 = {float(delta + Fraction(t * draws, 2 ** 64)):.3g}"}
+            "except_with": f"δ + T·(eps − δ₀) = {float(delta + t * draw_term):.3g}"}
 
 
 def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment: str | None = None) -> dict[str, Any]:
@@ -82,6 +85,7 @@ def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment
                        "why": f"the session wasn't accepted ({answer.get('reason')}), so it certifies nothing to pool"}
     o = _observed(answer)
     eps = Fraction(o["eps"])
+    draw_term = eps - Fraction(answer["profile"]["delta"])
     periods = {}
     for name, seconds in PERIODS:
         per_machine = seconds // window_s
@@ -93,7 +97,7 @@ def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment
             continue
         for d in DELTAS:
             row[str(d)] = {"pooled": pooled_step(t, o["q_bytes"], eps, d),
-                           "per_window": per_window(t, o["windows"], d) if not o["gaps"] else None}
+                           "per_window": per_window(t, o["windows"], d, draw_term) if not o["gaps"] else None}
         periods[name] = row
     return head | {"observed": o, "periods": periods,
                    "scaled": [f"the sessions: {machines} machines, one session every {window_s} s each",
