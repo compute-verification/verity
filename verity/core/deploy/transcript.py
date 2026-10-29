@@ -1,4 +1,4 @@
-"""A party's transcript, and the record (`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §2).
+"""A party's transcript, and the record.
 
 A transcript is one party's view of one run, append-only: its start (its name and parameters), every frame it received
 (`in`) and sent (`out`) in the order it saw them, with its channel and kind, when a peer's frame arrived on the party's
@@ -21,12 +21,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
-from verity.core.wire import KINDS, NAME, PUBLIC, Body, Bool, Int, Message, Refused, Registry, Schema, Str, frames
+from verity.core.wire import KINDS, NAME, PUBLIC, Body, Bool, Int, Message, MessageTypes, Refused, Schema, Str, frames
 
 DIRS = ("start", "in", "out", "arrived", "event", "record", "finish", "handshake-in", "handshake-out", "party")
 ENTRY = Schema("Entry", 1, "structure", {"n": Int(), "dir": Str(16, "|".join(DIRS)), "channel": Str(64),
                                          "kind": Str(16, "|".join(KINDS)), "elided": Bool()}, Body(max=(1 << 32) - 1))
-REGISTRY = Registry([ENTRY])
+REGISTRY = MessageTypes([ENTRY])
 KEEP = 1 << 16
 """The largest frame a transcript keeps whole by default; past it, its SHA-512."""
 
