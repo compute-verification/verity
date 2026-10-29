@@ -52,6 +52,7 @@ relative to a body; a path may be a single node selector (relative to the enclos
 from __future__ import annotations
 
 import bisect
+import functools
 import itertools
 import math
 import re
@@ -2078,6 +2079,58 @@ def frontier_pieces(fn, w: int, memo: dict | None = None) -> list[Piece]:
     return out
 
 
+def refines(a, b) -> bool:
+    """Does every set of `a` lie inside one set of `b` (`Verity.Annotation.Refines`), on every Program and in every
+    activation where both evaluate?  Decided from the two terms (Query objects or their string form) alone, never from a
+    Program: `each` and `where` stay inside their base's sets, `minus` and `inter` inside an operand's; `group` and an
+    affine `label` merge their base's sets, `concat` holds its parts', and `root()` everything; `members`, `nodes`, `zip`
+    and `table` lie inside `instances` of their path, `members` inside `nodes` of its selector and inside `members` whose
+    block sizes are multiples of its own; `each(F, G)` refines `each(F, H)` when G refines H; `default` and `frontier`
+    refine themselves at a larger width.  Sound, not complete: False says only that no rule shows it.  A `label` by
+    table drops a set whose node has no label, and a `union` with an empty family has no sets, so neither is a coarsening."""
+    from .query import parse  # string sugar lives with the legacy syntax
+    qa, qb = (parse(q) if isinstance(q, str) else q for q in (a, b))
+    for q in (qa, qb):
+        if not isinstance(q, Query):
+            raise QueryError(f"not a query: {q!r}")
+    return _refines(qa, qb)
+
+
+def _rows_cols(k: int | tuple[int, int]) -> tuple[int, int | None]:
+    return (k, None) if isinstance(k, int) else k
+
+
+@functools.lru_cache(maxsize=4096)
+def _refines(a: Query, b: Query) -> bool:
+    if a == b or isinstance(b, Root):
+        return True
+    if isinstance(a, (Each, Where)) and _refines(a.base, b):
+        return True
+    if isinstance(a, Minus) and _refines(a.a, b):
+        return True
+    if isinstance(a, Inter) and (_refines(a.a, b) or _refines(a.b, b)):
+        return True
+    if isinstance(a, Concat) and all(_refines(p, b) for p in a.parts):
+        return True
+    if isinstance(b, Group) or (isinstance(b, Label) and b.affine is not None):
+        if _refines(a, b.base):
+            return True
+    if isinstance(b, Concat) and any(_refines(a, p) for p in b.parts):
+        return True
+    if isinstance(a, Each) and isinstance(b, Each) and a.base == b.base and _refines(a.inner, b.inner):
+        return True
+    if isinstance(a, (Default, Frontier)) and type(a) is type(b):
+        return a.w <= b.w
+    if isinstance(a, (Members, Nodes, Zip, Table)) and isinstance(b, Instances):
+        return a.path == b.path
+    if isinstance(a, Members) and isinstance(b, (Nodes, Members)) and (a.path, a.sel) == (b.path, b.sel):
+        if isinstance(b, Nodes):
+            return True
+        (ra, ca), (rb, cb) = _rows_cols(a.k), _rows_cols(b.k)
+        return rb % ra == 0 and (cb is None or (ca is not None and cb % ca == 0))
+    return False
+
+
 def parse(text: str) -> Query:
     from .query import parse as _parse
     return _parse(text)
@@ -2104,5 +2157,5 @@ __all__ = ["GateSet", "Family", "Tiling", "BodyTiling", "NodeTiling", "SetClass"
            "Where", "Union", "Minus", "Inter", "Root", "Table", "Group", "Label", "TABLE_OF",
            "instances", "members", "nodes", "zip_", "each", "concat", "rest", "default", "frontier", "override", "where",
            "union", "minus", "inter", "root", "table", "group", "label",
-           "evaluate", "evaluator", "frontier_pieces", "parse", "to_json", "from_json", "query_id", "gateset_of_scope",
+           "evaluate", "evaluator", "frontier_pieces", "refines", "parse", "to_json", "from_json", "query_id", "gateset_of_scope",
            "PlanFamily", "ConstFamily", "AlgebraFamily", "Plan", "Entry"]
