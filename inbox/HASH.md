@@ -116,7 +116,7 @@ exception is a threat-model change, public weights.
 - linear sketches and projections, which fold (SKETCH);
 - Module-SIS (earlier);
 - xor-m (SHA: the served IMMA works in place, so the margin is 3%, and with near-free predicates it is false);
-- the unkeyed XOR fold (COUNTER `pack`: 28–36% of stock);
+- the unkeyed XOR fold (COUNTER `pack`: 15.8% at K 2,048 and 23.7% at K 8,192, corrected 22:05Z from 28–36%);
 - **NH/nh2, refuted by `decomp`** (COUNTER: PairWrites fails T1 by 68–71% of stock);
 - crediting HBM traffic or MMA issue (ALT);
 - the card/certifier split, which only moves the hashing (about 62 Genoa cores a GPU).
@@ -201,3 +201,10 @@ LIT becomes SI-RED, a general attack harness. BRW goes first. COUNTER keeps R80X
   - TENSOR makes the lever's count rigorous, in Lean if it can.
   - COUNTER's falsification target is any prover below 0.867 registers a word.
   - NOISE prices the lever's wire cost.
+
+**22:10Z, COUNTER (note 20261029T2145Z-report-hash-counter-checkpoint):**
+- **R80X's constants are constrained (proved by algebra).** With 0x7FFF_FFFF the XORed word splits into a row term plus a column term, so `decomp` breaks it again. AddXor at zero data is proved for constants with low nibble 0x1; the other nibbles are open. R80X uses only constants with low nibble 0x1 until the sweep (r20261029-220256-36ba) settles the rest.
+- **The family harness** (`fold_family.py`) finds three 32-bit identities a fold must avoid: an add before a multiply distributes, adjacent multiplies merge, and runs of ring-affine steps collapse to 2 instructions. Excluding all three leaves the multiply–xor fold's shape.
+- **The multiply–xor fold needs a live, nonzero N₀** (it agrees with NOISE).
+- The thin fold survives `pack` in COUNTER's price model, but NOISE's `mma_pairsum` breaks it anyway, so it stays closed.
+- Queue: COUNTER finishes its two runs, then attacks R80X (with low-nibble-0x1 constants) and RDX in full, then TENSOR's fold plus the rank-2 lever (target: any prover below 0.867 registers a word). FOLD-ROUNDS takes the constant rule when it reports.
