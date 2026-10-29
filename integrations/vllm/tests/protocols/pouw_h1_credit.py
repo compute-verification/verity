@@ -6,7 +6,7 @@ A window's ``receipt@<c>``, ``pub@<c>`` and ok rows are bound only where credit 
 credit computes), then `credit._proved` and `credit._registration` over the outcomes. `verdict` runs those steps, after
 `credit._a_link` and (with the Commit) `credit._arow`, as `credit._window` orders them, over the window's own evidence.
 
-The verifier of record is a stand-in (`StandIn`), as in core's `test_pouw_credit_statements.py`: there is no C-Flock
+The verifier of record is a stand-in (`StandIn`), as in core's `test_pouw_credit_statements.py`: there is no Flock
 proof of a served K = 4096 unit here. A session's "proof" is the prover's openings of each drawn unit's ``pub``, o0 and
 o1 rows (each row's b || c, its path and, for o0, its salt) from the prover's own tables (`Prover`). The stand-in
 accepts a session only when each opening verifies against the root credit's file gives that port, at the row the file

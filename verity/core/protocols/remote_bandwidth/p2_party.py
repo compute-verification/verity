@@ -1,4 +1,4 @@
-"""The verifier and its challenger of a remote bandwidth session over PoUS's P2 store (`p2.py`) as a party of their own,
+"""The verifier and its challenger of a PoUB session over PoUS's P2 store (`p2.py`) as a party of their own,
 so they run on a host the prover doesn't control (`trusted-host`) while the prover serves on its node.
 
 The channel is a pair of byte streams carrying one JSON object of one key a line: the ssh session that starts this side
