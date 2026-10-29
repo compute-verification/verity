@@ -16,7 +16,7 @@ verdict at the code `Vocab.Coupling.verdict` among them):
 
 | step | content | state |
 | --- | --- | --- |
-| S1 | an accepted period accepted every link-window, v2 on the blobs among it (`periodAcceptMeans`) | restated, its proof open |
+| S1 | an accepted period accepted every link-window, v2 on the blobs among it (`periodAcceptMeans`) | proved |
 | S2 | Period runs one-stage v2 on each window's case (`PeriodRunsV2`) | from S1 in the clock form (`periodRunsV2_of_clock`) |
 | S4 | the sessions' coins are the live coins (`WindowCoinsLive`) | open |
 | S5 | v2's acceptance is an accepting sampled run, under a guard (`SessionIsSampledRun`) | open |
