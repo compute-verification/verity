@@ -209,7 +209,7 @@ def _zeros_on_odd_rounds(blocks):
     return lambda i: bytes(len(blocks[i])) if i % 2 else blocks[i]
 
 
-def periods(signer, store: bytes = STORE) -> dict[str, period.Period]:
+def periods(signer, store: bytes = STORE) -> dict[str, period.Run]:
     """A small period of `store` on node `n0` at the small point, signed by `signer`: honest, and under a prover that
     answers every other label with zeros."""
     kw = dict(signer=signer, schemes=mc.SCHEMES if signer.scheme == mc.LMS else M.ts.SCHEMES,
@@ -252,7 +252,7 @@ def test_a_small_periods_answers_agree(deployed_server, test_server) -> None:
 
 
 @pytest.fixture(scope="module")
-def certified_store() -> period.Store:
+def certified_store() -> period.EncodedStore:
     """`STORE` set up at the certified point (`period.point_for`'s default, 256 labels), its `C*` encoded in up to
     `period.SETUP_WORKERS` processes: about 16 core-minutes, since no `C*` that setup accepts there is cheaper than
     encoding one (a random label decodes to a payload with probability 2^-16)."""
