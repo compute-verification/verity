@@ -191,12 +191,16 @@ def test_a_namespace_that_shares_a_modules_name_stands(tmp_path):
     assert out["layers"] == {"Properties.NetworkCertifier.Device": {"imports": ["Properties.Hash.Identity"]}}
 
 
-def test_the_recorded_paths_are_the_moves_up_to_their_first_renamed_span():
+def test_the_recorded_paths_are_the_moves_up_to_the_end_of_each_renamed_span():
     moves = [("v/warden/a.py", "v/certifier/a.py"), ("v/warden/lean/Warden/B.lean", "v/certifier/lean/NetworkCertifier/B.lean"),
-             ("S/Proofs/Warden.lean", "S/Proofs/NetworkCertifier.lean"), ("S/Proofs/Warden/C.lean", "S/Proofs/NetworkCertifier/C.lean")]
+             ("S/Proofs/Warden.lean", "S/Proofs/NetworkCertifier.lean"), ("S/Proofs/Warden/C.lean", "S/Proofs/NetworkCertifier/C.lean"),
+             ("v/warden/tests/test_warden.py", "v/certifier/tests/test_certifier.py")]
     assert M.renamed_paths(moves) == {"S/Proofs/Warden.lean": "S/Proofs/NetworkCertifier.lean",
-                                      "S/Proofs/Warden/": "S/Proofs/NetworkCertifier/", "v/warden/": "v/certifier/"}
-    assert M.renamed_paths(moves[:1]) == M.renamed_paths(moves[:2])       # a branch's new file under a renamed directory
+                                      "S/Proofs/Warden/": "S/Proofs/NetworkCertifier/", "v/warden/": "v/certifier/",
+                                      "v/warden/lean/Warden/": "v/certifier/lean/NetworkCertifier/",
+                                      "v/warden/tests/test_warden.py": "v/certifier/tests/test_certifier.py"}
+    branch = [*moves, ("v/warden/c.py", "v/certifier/c.py"), ("v/warden/lean/Warden/D.lean", "v/certifier/lean/NetworkCertifier/D.lean")]
+    assert M.renamed_paths(moves) == M.renamed_paths(branch)              # a branch's new files under the renamed directories
     swapped = [("S/Properties/Proofs/Nci.lean", "S/Proofs/Properties/Nci.lean"), ("S/Properties/Proofs/Nci/V.lean",
                                                                               "S/Proofs/Properties/Nci/V.lean")]
     assert M.renamed_paths(swapped) == {"S/Properties/Proofs/": "S/Proofs/Properties/"}
@@ -257,7 +261,8 @@ def test_the_move_on_a_toy_tree(toy, capsys):
                                                         f"{'0' * 64}  ../README.md\n")   # a stale pin stays stale
     assert json.loads((toy / M.MOVES).read_text())["moves"] == [
         {"paths": {"old/": "w/"}},
-        {"paths": {"Sec/Proofs/Warden.lean": "Sec/Proofs/NetworkCertifier.lean", "w/warden/": "w/certifier/"}}]
+        {"paths": {"Sec/Proofs/Warden.lean": "Sec/Proofs/NetworkCertifier.lean", "w/warden/": "w/certifier/",
+                   "w/warden/tests/test_network_warden_grid.py": "w/certifier/tests/test_network_certifier_grid.py"}}]
     status = git(toy, "status", "--porcelain", "--untracked-files=all").splitlines()
     assert status and all(line[1] == " " for line in status)                           # everything staged
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "move")

@@ -16,8 +16,9 @@ branch across it):
 3. in a `lean-audit.json`, renames module names and prose but not the records `audit.py --update` writes (`guarantees`,
    `reads`, `dependencies`), so that `--update --moved` compares the build with them under their old names;
 4. rewrites a `TRUSTED.sha256` line whose file the move changed, when it held that file's digest before;
-5. appends its renamed paths to research's `moves.json` once, as `layout.py` does, each moved path up to its first renamed
-   part (`.../warden/`, not each file under it), so that a branch carried across the move appends the same entry.
+5. appends its renamed paths to research's `moves.json` once, as `layout.py` does, each moved path up to the end of each
+   run of renamed parts (`.../warden/`, not each file under it, and `.../warden/tests/test_warden.py` besides), so that a
+   branch carried across the move appends the same entry unless it adds a path that renames a part below a renamed one.
 It refuses a dirty worktree, and a second run changes nothing.
 """
 from __future__ import annotations
@@ -218,23 +219,25 @@ def repin(root: Path, words: Words, pins: str, texts: dict[str, str], dest: dict
 
 
 def renamed_paths(moves: list[tuple[str, str]]) -> dict[str, str]:
-    """Each moved path up to the end of its first run of renamed parts ({old: new}; a directory ends in "/"), so that every
-    file under one renamed directory gives the same entry, and a swap (`Properties/Proofs/` to `Proofs/Properties/`) is
-    recorded whole."""
+    """Each moved path up to the end of each of its runs of renamed parts ({old: new}; a directory ends in "/"), so that
+    every file under one renamed directory gives the same entries, a path below it that renames another part
+    (`warden/tests/test_warden.py`) is recorded besides, since `move_check.py` and research's `tools_registry` read the
+    longest entry that holds a path, and a swap (`Properties/Proofs/` to `Proofs/Properties/`) is recorded whole."""
     out: dict[str, str] = {}
     for o, n in moves:
         a, b = o.split("/"), n.split("/")
-        if len(a) != len(b):
-            old, new = o, n
-        else:
-            i = next(i for i, (x, y) in enumerate(zip(a, b)) if x != y)
-            while i + 1 < len(a) and a[i + 1] != b[i + 1]:
-                i += 1
-            old, new = "/".join(a[:i + 1]), "/".join(b[:i + 1])
-            if i < len(a) - 1:
-                old, new = old + "/", new + "/"
-        if out.setdefault(old, new) != new:
-            raise SystemExit(f"{old} would move to both {out[old]} and {new}")
+        spans = [(o, n)] if len(a) != len(b) else []
+        i = 0 if len(a) == len(b) else len(a)
+        while i < len(a):
+            if a[i] != b[i]:
+                while i + 1 < len(a) and a[i + 1] != b[i + 1]:
+                    i += 1
+                end = "/" if i < len(a) - 1 else ""
+                spans.append(("/".join(a[:i + 1]) + end, "/".join(b[:i + 1]) + end))
+            i += 1
+        for old, new in spans:
+            if out.setdefault(old, new) != new:
+                raise SystemExit(f"{old} would move to both {out[old]} and {new}")
     return dict(sorted(out.items()))
 
 
