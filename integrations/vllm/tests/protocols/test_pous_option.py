@@ -142,7 +142,7 @@ def test_with_pous_on_the_selector_refuses_an_option_that_keeps_a_weight_copy(mo
 
 def test_a_tiny_int8_model_is_held_as_p2_and_served_bit_exact(toy):
     """W is the int8 weights in the store's layout (each from a block, zero past it); C* = P2-Enc(W, salt) under the salt
-    drawn from the auditor's source after the commitment; every use decodes the layer's weight from C*, so the outputs are
+    sampled from the auditor's source after the commitment; every use decodes the layer's weight from C*, so the outputs are
     the plaintext's to the bit, and closing restores W decoded from C*."""
     before, served = hooks.live(), toy.outputs()
     comp = PO.install(toy, _ctx(ENTRY))

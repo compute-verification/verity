@@ -266,7 +266,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   (`c.root = c'.root`, `Facts.lean`'s `shares`), whose proof nothing mentions, is allowed: it is the field bound once
   (`⟨s, e, fs, r⟩` and `⟨s', e', fs', r⟩`). A guarantee under `frozen` (with why it doesn't fit yet) is
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
-  with a `Guarantees` component) must be the statement of a
+  with a `Guarantees` name part) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
   `lemma`, `completeness`, `falsified`, or `unstated` for a statement no guarantee states), so a record counts its
   guarantees by category. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
@@ -458,7 +458,7 @@ watch list names what a statement is about, and the status comes from the depend
 A hit is a theorem whose statement mentions every constant under `mentions`. There are two passes.
 
 - **No build.** The pass reads each `scan` package's sources with `git show`, in its checkout under `.lake/packages/`, at
-  the pinned revision. It matches the constants' last components as words in each theorem's statement (comments aside),
+  the pinned revision. It matches the constants' last name parts as words in each theorem's statement (comments aside),
   and takes proved or not from the package's own transitive baseline. ArkLib keeps `scripts/axiom_baseline.json` current
   with its `validate.sh --axioms` gate. The audit runs this pass for every package with an `upstream` section: a bump
   that brings a proof about a watched statement fails the audit until the proof is acknowledged. It takes a few seconds.
