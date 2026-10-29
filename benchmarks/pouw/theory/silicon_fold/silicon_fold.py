@@ -39,6 +39,9 @@ M32 = rho.M32
 TC_MACS_PER_CYCLE = 1024  # one tensor core's int8 MACs a cycle at the write-back port (H100/H200 class, estimate)
 MACS_PER_WORD = 32  # a k32 step: each 32-bit accumulator word absorbs 32 MACs
 DECOMP_FORM = 0.109  # COUNTER's decomp: writes a word to form a zero-data word (note 20261029T2120Z-report-hash-fold-rounds §2)
+# Writes a word the cheater pays to form the words it absorbs. FT needs no operand noise, and without it zero data makes
+# every word free (0, the default); with the lead's noise it is decomp's 0.109 (--form 0.109)
+FORM = 0.0
 W1_PER_SHA_BYTE = 883.0  # a chained SHA-512 compression's 3,532 registers over 128 B, x32 units (pouw_space price.sha-3532)
 H_REST = 0.272  # the lead's A pre-noise commitment (0.203) and bound blocks (0.069), unchanged (HASH card, checked)
 H_A = 0.203
@@ -182,7 +185,7 @@ def price(r: Rho, synth: dict, base: dict, margin: float) -> dict:
     depth = max(m[x]["depth"] for x in r.modules if not x.endswith("rom"))
     stages = max(1, math.ceil(depth / (CYCLE_DEPTH or base["s8_depth"])))
     unit = logic + rom + stages * r.state_bits * dff
-    need = 1.0 - DECOMP_FORM  # software writes an absorbed MAC-word the cheater must exceed
+    need = 1.0 - FORM  # software writes an absorbed MAC-word the cheater must exceed
     words_per_cycle = TC_MACS_PER_CYCLE / MACS_PER_WORD
     every = {
         "units_per_tc": words_per_cycle / r.absorb_words,
@@ -190,7 +193,7 @@ def price(r: Rho, synth: dict, base: dict, margin: float) -> dict:
         "margin_known": r.c_sw / (r.absorb_words * need),
         "margin_floor": r.c_floor / (r.absorb_words * need) if r.c_floor else 0.0,
     }
-    need_sm120 = MACS_PER_WORD - DECOMP_FORM * SM120_ADD  # the same saving in sm_120 MACs
+    need_sm120 = MACS_PER_WORD - FORM * SM120_ADD  # the same saving in sm_120 MACs
     every["margin_known_sm120"] = r.sm120() / (r.absorb_words * need_sm120)
     every["margin_floor_sm120"] = r.c_floor * r.sm120() / r.c_sw / (r.absorb_words * need_sm120) if r.c_floor else 0.0
 
@@ -227,15 +230,15 @@ def h_of(seal_state_bytes: int, macs_per_state: float, a_in_hw: bool) -> dict:
 def t1_attacks(r: Rho, covered_words: float, placement: str, k: int, fast_ratio: float, trigger_rule: bool) -> dict:
     """The cheapest cheater a credited MAC-word, in W1 writes (honest: 1, the k-step's own write, rho free in hardware).
 
-    Strategies: honest; decomp + software rho; decomp + C-injection through the MAC path; the tile-end skip (one
-    C-injected instruction a tile); a faster-format trigger when the trigger rule is absent; linear batching when rho is
-    affine (E2)."""
+    Strategies: honest; zero data, the words formed at FORM a word, and rho in software; C-injection through the MAC
+    path; the tile-end skip (one C-injected instruction a tile); a faster-format trigger when the trigger rule is absent;
+    linear batching when rho is affine (E2)."""
     honest = 1.0
     s = {"honest": honest}
-    s["decomp+software"] = DECOMP_FORM + r.c_sw / covered_words if r.nonlinear else DECOMP_FORM
-    s["decomp+c-inject"] = 1.0 + 1.0 / MACS_PER_WORD  # the instruction plus materializing C (1 write a word over 32 MACs' credit)
+    s["zero data+software"] = FORM + r.c_sw / covered_words if r.nonlinear else FORM
+    s["c-inject"] = 1.0 + 1.0 / MACS_PER_WORD  # the instruction plus materializing C (1 write a word over 32 MACs' credit)
     if placement in ("tile-end", "call-end"):
-        s["skip (one injected instruction a tile)"] = (DECOMP_FORM + 1.0) * MACS_PER_WORD / k
+        s["skip (one injected instruction a tile)"] = (FORM + 1.0) * MACS_PER_WORD / k
     if not trigger_rule:
         s["faster-format trigger"] = 1.0 / fast_ratio
     best = min(s, key=s.get)
@@ -245,9 +248,9 @@ def t1_attacks(r: Rho, covered_words: float, placement: str, k: int, fast_ratio:
 def t1_sm120(r: Rho, covered_words: float) -> dict:
     """Per-instruction placement with the trigger rule at sm_120's prices, in FP8 MACs a credited word (honest: 32)."""
     honest = float(MACS_PER_WORD)
-    form = DECOMP_FORM * SM120_ADD
-    s = {"honest": honest, "decomp+software": form + (r.sm120() / covered_words if r.nonlinear else 0.0),
-         "decomp+c-inject": honest * (1.0 + 1.0 / MACS_PER_WORD)}
+    form = FORM * SM120_ADD
+    s = {"honest": honest, "zero data+software": form + (r.sm120() / covered_words if r.nonlinear else 0.0),
+         "c-inject": honest * (1.0 + 1.0 / MACS_PER_WORD)}
     best = min(s, key=s.get)
     return {"strategies": {x: round(v, 4) for x, v in s.items()}, "best": best,
             "t1": round(max(0.0, 1.0 - s[best] / honest), 4)}
@@ -543,7 +546,7 @@ def run(synth: dict, margin: float, k: int, fast_ratio: float) -> dict:
             "h": h,
             "h_with_hw_A_hash": h_hw,
         }
-    models = {"w1": (1.0, 1.0 - DECOMP_FORM), "sm120": (SM120_WRITE, MACS_PER_WORD - DECOMP_FORM * SM120_ADD)}
+    models = {"w1": (1.0, 1.0 - FORM), "sm120": (SM120_WRITE, MACS_PER_WORD - FORM * SM120_ADD)}
 
     def at_margin(r: Rho, model: str, M: float) -> dict:
         """One invocation covering as many words as margin M allows (pre-folded by XOR2s past its natural width)."""
@@ -557,7 +560,8 @@ def run(synth: dict, margin: float, k: int, fast_ratio: float) -> dict:
     kr = SOFTWARE[0]
     floor_one = kr.c_sw / kr.c_floor  # the known margin at which the counting floor's margin is exactly 1
     trade = {f"{model} {M:.2f}": at_margin(kr, model, M) for model in models for M in (1.1, floor_one, 4.0)}
-    trade["w1 4.21 (every word)"] = at_margin(kr, "w1", 120.0 / 32 / (1 - DECOMP_FORM))
+    every = 120.0 / 32 / (1 - FORM)
+    trade[f"w1 {every:.2f} (every word)"] = at_margin(kr, "w1", every)
     cheapest = {}
     for model in models:
         pts = {r.key: at_margin(r, model, 1.1) for r in SOFTWARE if r.standard}
@@ -574,7 +578,7 @@ def run(synth: dict, margin: float, k: int, fast_ratio: float) -> dict:
     return {
         "baseline": base,
         "params": {"margin": margin, "K": k, "fast_ratio": fast_ratio, "tc_macs_per_cycle": TC_MACS_PER_CYCLE,
-                   "decomp_form": DECOMP_FORM, "w1_per_sha_byte": W1_PER_SHA_BYTE, "h_rest": H_REST,
+                   "form": FORM, "decomp_form": DECOMP_FORM, "w1_per_sha_byte": W1_PER_SHA_BYTE, "h_rest": H_REST,
                    "sm120_write": SM120_WRITE, "sm120_add": SM120_ADD},
         "proof": {"lead_and_per_mac": round(lead_and, 2), "mac_and_per_mac": round(AND_PER_MAC_S8, 2)},
         "designs": designs,
@@ -616,7 +620,6 @@ def checks(res: dict, synth: dict) -> list[tuple[str, bool]]:
 def mutations(synth: dict, margin: float, k: int, fast_ratio: float) -> list[tuple[str, bool]]:
     """Each mutation must make some check fail."""
     out = []
-    global DECOMP_FORM
     import copy
 
     s2 = copy.deepcopy(synth)
@@ -672,13 +675,14 @@ def main() -> None:
     ap.add_argument("--cycle-depth", type=int, default=0)
     ap.add_argument("--mutations", action="store_true")
     ap.add_argument("--verdict")
+    ap.add_argument("--form", type=float, default=0.0, help="writes a word to form absorbed words (0.109: the lead's noise)")
     ap.add_argument("--synth-lib", help="synth.py --lib output: price every area in SI-ALG's flow against its baseline")
     a = ap.parse_args()
     synth = json.loads(Path(a.synth).read_text())
     if a.synth_lib:
         synth = adopt_lib_flow(synth, json.loads(Path(a.synth_lib).read_text()))
-    global CYCLE_DEPTH
-    CYCLE_DEPTH = a.cycle_depth
+    global CYCLE_DEPTH, FORM
+    CYCLE_DEPTH, FORM = a.cycle_depth, a.form
     res = run(synth, a.margin, a.K, a.fast_ratio)
     cs = checks(res, synth)
     res["checks"] = [{"name": n, "ok": ok} for n, ok in cs]
