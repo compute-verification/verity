@@ -470,8 +470,7 @@ accept and the commitment binds both (`Properties.Composition`, proved). Onsite 
 - **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`, `LinkCRZC`,
   `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`,
   `ReceiptLuckAt` and `GuessLuckAt`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
-  with no retries. Interaction is preferred to Fiat–Shamir; randomness derived from a challenger's coin by hashing is
-  used only in named cases, PoUW's per-multiplication noise seeds among them. The challenger and the verifier both run on auditor hosts. The challenger, which
+  with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
   draws each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs,
   `CoinsConfidential` and `OneClock`, are prose only (`verity/core/protocols/sampled_proofs/README.md`): no `.lean`
