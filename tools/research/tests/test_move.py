@@ -13,7 +13,7 @@ HARNESS = ["--stage", "run", "--project", "verity", "--timeout", "3600", "--time
 
 
 def test_the_resend_keeps_the_runs_lane_timeout_memory_environment_and_harness_options():
-    """29 Oct: lanes cancelled and resent runs stuck behind full lines by hand, a dozen an hour, some with the wrong options."""
+    """Lanes cancelled and resent runs stuck behind full lines by hand, a dozen an hour, some with the wrong options."""
     req = {"command": POOL_CMD, "harness_args": HARNESS, "env": {"CHECK_RUN_MEM_GB": "48", "LAKE_JOBS": "8"}, "mem_gb": None}
     argv = move.argv_for(req, source=Path("/tmp/tree"), to="auto")
     assert argv == ["research", "run", "--on", "auto", "--project", "verity", "--source", "/tmp/tree", "--as", "proofs",
