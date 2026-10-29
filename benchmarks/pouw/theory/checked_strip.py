@@ -195,12 +195,12 @@ class PVBlock(Block):
         return np.stack(cells, axis=1) & MASK
 
 
-def pv_words(P, V, U, c, b, z, r, L, m, M, led=None):
+def pv_words(P, V, U, c, b, z, r, L, m, M, tally=None):
     """P·V's words, batched over a leading axis (or none): T_t (masked P̃X), D_d = U·A_d(Ycum) (1 ≤ d < m) and
-    O′ = T_last − U·A_0(Ycum) − W, W = Σ_{diagonal κ ≤ q} U(·, κ mod r) X(κ). With a ledger (unbatched), every product
+    O′ = T_last − U·A_0(Ycum) − W, W = Σ_{diagonal κ ≤ q} U(·, κ mod r) X(κ). With a tally (unbatched), every product
     is priced as computed, masked entries included (an IMMA computes them)."""
     k = P.shape[-1]
-    mm = led.int8 if led is not None else (lambda A_, B_, what: np.matmul(A_.astype(np.int64), B_.astype(np.int64)))
+    mm = tally.int8 if tally is not None else (lambda A_, B_, what: np.matmul(A_.astype(np.int64), B_.astype(np.int64)))
     Ph = (P + c) * M
     Ue = U[..., np.arange(k) % r]
     Pt = Ph + Ue * M
@@ -392,7 +392,7 @@ def limbs(lo, hi):
     return m
 
 
-class Ledger:
+class Tally:
     """A strategy's products, priced per cell (MACs per output cell times the unit's price)."""
 
     def __init__(self):
@@ -456,11 +456,11 @@ def digits(Y, z, m):
     return A
 
 
-def co32c_words(P, V, U, c, b, z, r, L, m, led=None):
+def co32c_words(P, V, U, c, b, z, r, L, m, tally=None):
     """CO with committed digits: T_t, D_d = U·A_d (1 ≤ d < m) and O′ = T_last − U·A_0, for Y's digits A_d; the
-    served output is O = O′ − Σ_d 128^d D_d. With a ledger, every product is priced as computed."""
+    served output is O = O′ − Σ_d 128^d D_d. With a tally, every product is priced as computed."""
     k = P.shape[1]
-    mm = led.int8 if led is not None else (lambda A_, B_, what: A_.astype(np.int64) @ B_.astype(np.int64))
+    mm = tally.int8 if tally is not None else (lambda A_, B_, what: A_.astype(np.int64) @ B_.astype(np.int64))
     Pt = P + c + U[:, np.arange(k) % r]
     X = V + b
     T, acc = [], np.zeros((P.shape[0], V.shape[1]), np.int64)
@@ -485,27 +485,27 @@ def honest_words(P, V, U, c, b, r, L):
 
 
 def strategy(name, P, V, U, c, b, r, L):
-    """Run one strategy; return its words and its ledger."""
+    """Run one strategy; return its words and its tally."""
     k = P.shape[1]
-    led = Ledger()
+    tally = Tally()
     Ph = P + c
     Pt = Ph + U[:, np.arange(k) % r]
     X = V + b
     T, acc = [], np.zeros((P.shape[0], V.shape[1]), np.int64)
     for t in range(k // L):
         sl = slice(t * L, (t + 1) * L)
-        acc = acc + led.int8(Pt[:, sl], X[sl], f"T segment {t}")
+        acc = acc + tally.int8(Pt[:, sl], X[sl], f"T segment {t}")
         T.append(acc.copy())
     if name == "strip":
         Y = X.reshape(k // r, r, -1).sum(0)
-        O = T[-1] - led.limbed(U, Y, "P2 = U·Y")
+        O = T[-1] - tally.limbed(U, Y, "P2 = U·Y")
     elif name == "direct":
-        O = led.int8(Ph, X, "O = P̂X")
+        O = tally.int8(Ph, X, "O = P̂X")
     elif name == "fp4":
-        O = led.fp4(Ph, X, "O = P̂X in E2M1")
+        O = tally.fp4(Ph, X, "O = P̂X in E2M1")
     else:
         raise ValueError(name)
-    return [s32(x) for x in T], s32(O), led
+    return [s32(x) for x in T], s32(O), tally
 
 
 def draw(rng, n, k, n2, r, two=True):
@@ -897,11 +897,11 @@ def main():
                 V = np.where(rng.random((k, n2)) < 0.5, vlo, vhi)
             U, c, b = draw(rng, n, k, n2, rr)
             Th, Oh = honest_words(P, V, U, c, b, rr, L)
-            Ts, Os, led = strategy(strat, P, V, U, c, b, rr, L)
+            Ts, Os, tally = strategy(strat, P, V, U, c, b, rr, L)
             ok = all(np.array_equal(x, y) for x, y in zip(Th, Ts)) and np.array_equal(Oh, Os)
-            rows[f"{inst}/{strat}"] = led.price()
+            rows[f"{inst}/{strat}"] = tally.price()
             checks.check(f"E r={rr} {vb}-bit X, {inst} instance, {strat}: every word equals the honest word",
-                         ok, f"price {led.price()} a cell (k = {k}, r = {rr})")
+                         ok, f"price {tally.price()} a cell (k = {k}, r = {rr})")
         price[f"r={rr},{vb}bit"] = {a: str(v) for a, v in rows.items()}
         hon = rows["random/strip"]
         adv = min(v for a, v in rows.items() if a != "random/strip")
@@ -920,13 +920,13 @@ def main():
         P, V = instance(Block("co", n, k, n2, 32, L), inst, rng)
         if inst == "random":
             V = np.where(rng.random((k, n2)) < 0.5, -128, 126)
-        led = Ledger()
-        got = co32c_words(P, V, U, c, b, z, 32, L, m, led)
+        tally = Tally()
+        got = co32c_words(P, V, U, c, b, z, 32, L, m, tally)
         want = co32c_words(P, V, U, c, b, z, 32, L, m)
         same = all(np.array_equal(x, y) for x, y in zip(got[0] + got[1] + [got[2]], want[0] + want[1] + [want[2]]))
         Y = (V + b).reshape(k // 32, 32, n2).sum(0)
         skip = s32(want[0][-1].astype(np.int64) - U @ Y)
-        cprice[inst] = (led.price(), same, not np.array_equal(skip, want[2]))
+        cprice[inst] = (tally.price(), same, not np.array_equal(skip, want[2]))
     out["prices_co32c"] = {a: str(v[0]) for a, v in cprice.items()}
     checks.check("E committed digits at r = 32 (k = 256): every product is a committed word's, so honest and the cheater "
                  "at the zero and the structured instance pay k + m·r alike, and the 1-limb shortcut O′ = T_last − U·Y "
@@ -1220,16 +1220,16 @@ def main():
     checks.check("P4 the collapse c removes: without c, at a one-hot P row O = 126·X(κ*) − 64·S is a copy, so "
                  "O′ = O + Σ 128^d D_d without U·A_0 or W (L + r products a cell free); with c the same shortcut is "
                  "wrong", cut[False] and not cut[True], str(cut))
-    led = Ledger()
-    got = pv_words(P, V, U, c, b, z, r, L, m, M, led)
+    tally = Tally()
+    got = pv_words(P, V, U, c, b, z, r, L, m, M, tally)
     same = all(np.array_equal(x, y) for x, y in zip(got[0] + got[1] + [got[2]],
                                                     (lambda w: w[0] + w[1] + [w[2]])(pv_words(P, V, U, c, b, z, r, L,
                                                                                               m, M))))
-    out["pv_price"] = {"honest": str(led.price()), "k + L + m r": k + L + m * r,
+    out["pv_price"] = {"honest": str(tally.price()), "k + L + m r": k + L + m * r,
                        "eps_products without c (one-hot P)": f"{(L + r) / (k + (m - 1) * r):.4%}"}
     checks.check("P5 priced: honest's P·V products a cell are k + L + m·r (T, W, U·A_0 and the D_d, masked entries "
                  "included), every one a committed word's; without c a one-hot row frees L + r of them",
-                 same and led.price() == k + L + m * r, str(out["pv_price"]))
+                 same and tally.price() == k + L + m * r, str(out["pv_price"]))
     pv_rank = {}
     for kk, rr, LL, qq in [(128, 32, 32, 127), (128, 32, 32, 111), (64, 32, 32, 63), (96, 16, 32, 80)]:
         Bc = PVBlock(1, kk, 1, rr, LL, q=[qq])
