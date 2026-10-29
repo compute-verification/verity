@@ -1,16 +1,15 @@
-import Proofs.Pouw.Lead.CoinBranch.AdaptiveProofs
-import Proofs.Pouw.Lead.CoinBranch.GrindProofs
-import Proofs.Pouw.Lead.CoinBranch.PointwiseAdaptiveProofs
-import Proofs.Pouw.Lead.CoinBranch.PointwiseProofs
+import Proofs.Pouw.Lead.CoinBranch.Cells
+import Proofs.Pouw.Lead.CoinBranch.Registers
 
 /-!
-# The lead's coin branch: a program that reads the coins
+# The lead's coin-branch bound (proofs)
 
-Its proofs are in `Lead/CoinBranch/`, its new declarations in `Pouw.SecurityProofs.Lead.CoinBranch`.
+A program that branches on the coins skips only the words it can predict equal on its path.
 
-* `GrindProofs`: target words lost on a success set of the coins (grinding).
-* `AdaptiveProofs`: a program chosen from the coins, in `MH100w`, paid cell by cell, and the step merge on the served
-  4-lane layout.
-* `PointwiseProofs`: the chunk model's bounds for every run.
-* `PointwiseAdaptiveProofs`: an adaptive program pays an entry's distinct values, per entry, lane and register.
+* `Cells`: `MH100w`'s floor applied cell by cell to a program chosen from the coins, and the served sparse-noise
+  layout's one-bit merges.
+* `Registers`: the chunk model against such a program, outcome by outcome: per-entry credit at word writes and under
+  whole-register writes (model W), the attained side, and priced selection over uniform branches.
+* `GrindProofs` (imported by `Cells`): target words lost on a success set of the coins.
+* `PointwiseProofs` (imported by `Registers`): the chunk model's bounds for every run.
 -/
