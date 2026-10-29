@@ -4,7 +4,7 @@ import Definitions.Pouw.Assumptions.Lead
 # The lead's work guarantee (trusted statements)
 
 The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). Its guarantee's proof is
-`Pouw.SecurityProofs.Lead.G : Pouw.Guarantees.Lead.G`, composed from the lanes' pieces under `Proofs/Pouw/Lead/`.
+`Pouw.SecurityProofs.Lead.Compose.G : Pouw.Guarantees.Lead.G`, composed from the pieces under `Proofs/Pouw/Lead/`.
 
 * `G`: for every prover strategy the node can run on a call, its priced W1 work summed over the coin values on which
   the call is accepted is at least the honest work less the gap, at each of those values (`|O| · honest − |Ω| · gap`),
