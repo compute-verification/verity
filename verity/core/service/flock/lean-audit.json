@@ -286,6 +286,21 @@
    "repeatM"
   ]
  },
+ "witnesses": {
+  "Flock.RecLinks.check_sound": {
+   "honest": ["Flock.RecLinks.check_sound_honest"],
+   "nontrivial": "Flock.RecLinks.check_sound_nontrivial"
+  }
+ },
+ "unwitnessed": {
+  "Flock.Firewall.Contract.holds_coins": "f7c75fc8ff69fd14d2eb14fdf528503aa90514b4631c436a3973c0793267c6eb",
+  "Flock.Firewall.Contract.holds_coins_binding": "2f38b70ba9aae0ea55033e2810725f001faa26ae99c11c7b348a0a78f2c07c06",
+  "Flock.Firewall.Contract.holds_commit": "9e86b324d2e725880221dddee14f20fb05839f5e4ffff11ada6ddabd2f2b0361",
+  "Flock.Firewall.Contract.holds_computed": "9c0c81dfbc7167b19c682b77768e00765a7a0a77b778d97ca5f45f0eef5fd3a4",
+  "Flock.Firewall.Contract.holds_finish": "aa67703052894f171a7b02e9bb4cc0ac0b3da1a2da9592ca3ebf2c136a3accc5",
+  "Flock.Firewall.Contract.holds_fixed": "01861c4768c06289a8317df2c471999f9378506a0c7c59972ed9bab24531ec36",
+  "Flock.Firewall.Contract.holds_masked": "5e617dd64b1e2cd62d76d06af0007fbc6d7f698d153f042690fab45ac466a7de"
+ },
  "compile_time": {
   "Flock.With.ReturnsWalk": {
    "why": "returns_walk, a tactic macro (syntax and macro_rules only) that expands to core tactics (repeat', first, extract_lets, with_reducible apply/refine/exact, intro, assumption, split, conv whnf) and the Flock.With.Returns lemmas; it runs no IO and declares nothing a guarantee reads",
@@ -473,10 +488,38 @@
    "type_hash": "218aec79e075e338ef0fd887a1c7e9a60d6a9064f315409e1cc5c38a5569e883"
   },
   "Flock.RecLinks.check_sound_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Flock.RecLinks.check_sound_honest :",
+    "  Eq",
+    "    (Flock.RecLinks.check Flock.RecLinks.honestShape Flock.RecLinks.honestRow Flock.RecLinks.honestRow",
+    "      (Flock.RecLinks.table (List.cons Flock.RecLinks.honestLink List.nil)))",
+    "    (Except.ok 1)"
+   ],
+   "assumptions": [],
+   "type_hash": "adf73139c22dcdb9c1611459387c467f24535e9c60a21e821284528a9dfd10fb"
   },
   "Flock.RecLinks.check_sound_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Flock.RecLinks.check_sound_nontrivial (ls : List Flock.RecLinks.LinkEntry) :",
+    "  Not",
+    "    (And",
+    "      (Eq (Flock.RecLinks.decodeAll (List.cons ByteArray.empty List.nil).toArray.toList)",
+    "        (Except.ok",
+    "          (instHAppendOfAppend.hAppend (List.map Option.some ls)",
+    "            (List.replicate (instHSub.hSub (List.cons ByteArray.empty List.nil).toArray.size 1) Option.none))))",
+    "      (And (Eq 1 ls.length)",
+    "        (And (instLTNat.lt 0 1)",
+    "          (And (Eq (List.cons ByteArray.empty List.nil).toArray.size (Flock.RecLinks.grid 1))",
+    "            (And",
+    "              (∀ (l : Flock.RecLinks.LinkEntry),",
+    "                List.instMembership.mem ls l →",
+    "                  Flock.RecLinks.Holds Flock.RecLinks.honestShape Flock.RecLinks.honestRow Flock.RecLinks.honestRow l)",
+    "              (List.map (fun l => { fst := l.reader, snd := l.port }) ls).Nodup)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "6dad6f59128ad47ab24414e32de877bb654a05d7db3bf255eff8495197ee8bca"
   }
  },
  "shape": {
@@ -754,7 +797,7 @@
    ]
   },
   "Flock.RecLinks": {
-   "digest": "db9828cbad6f3a86ce6597e90fc28215811a31c6c7fb344a14b418575951c83e",
+   "digest": "a5d7658d2d2d22f09e42bbba6db35fcb80c70e7ee57413876436a49534719102",
    "definitions": {
     "Flock.RecLinks.FIELD_BYTES": "cd19ac2e7b0e432c174ce9b4250c8700af97d8327a63db3eb313b75bbc7e0354",
     "Flock.RecLinks.GRID_BITS": "eeb2f0a6a105f79b698798e5aafcc13ebfc1e0cea562e1aa51c0ff7c5c71843a",
@@ -774,31 +817,26 @@
     "Flock.RecLinks.check": "66510dca4f460ec22e1082dbdb56c8f773ab64129bc466d43cc0b2efaae0242a",
     "Flock.RecLinks.decode": "b3105bb61c9585019e87b00536996e1753d2182f60fbfa72c7521b808062a140",
     "Flock.RecLinks.decodeAll": "6a93c4f91cf14549e6ba829baa140a4110bc5e62f64d2539dc2ee5daf58ce60d",
+    "Flock.RecLinks.encode": "b341b3680358883381ceb5ea589183b722ae5e345c63597ba802e0da7508f8a8",
     "Flock.RecLinks.grid": "9b1119f854b0c580347111b443022997ddbba432e0deddf3771b75b8f82b7748",
+    "Flock.RecLinks.honestLink": "f6e4cda27b8a9533192870535b3b9da46eb20c78c49030f4ed8ef4cc5f0ba986",
+    "Flock.RecLinks.honestRow": "6914b05c9032d6d5928d829dbdba7543c348265e272bf6b95247b7ed125c2eb2",
+    "Flock.RecLinks.honestShape": "bd89ef26bd9e416e2219abf4a53b9dd431bc8c9fffb44ca862120a85fe8ce558",
+    "Flock.RecLinks.le32": "55868f486a262b8613a46ed7c08645f9c31292dd4e797640c310ca8512cf0bfd",
     "Flock.RecLinks.linkErr": "76baacbac0f59506afa611f47dfb5c1678a69334bf39a2c8690d20eb564fde28",
     "Flock.RecLinks.links": "fd638b50d3f5862365779458cfa55f63252bf5253afcb911843ced5d79265ca4",
     "Flock.RecLinks.ordered": "10414dfce5ab5fd6ffe51e49a963cad26e1782ea8cb71b9073406408156334e0",
+    "Flock.RecLinks.table": "a19dd4e349bbd0d1eb1250feee2b7de64a059320d7855613fb5f1d974572de3e",
     "Flock.RecLinks.u32At": "c1675f44eafac783a305179e813be310e7b341eaa28ee67706d1aa50d3aff4f6"
    },
-   "guarantees": ["Flock.RecLinks.check_sound"]
+   "guarantees": [
+    "Flock.RecLinks.check_sound",
+    "Flock.RecLinks.check_sound_honest",
+    "Flock.RecLinks.check_sound_nontrivial"
+   ]
   }
  },
  "dependencies": {
   "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
- },
- "witnesses": {
-  "Flock.RecLinks.check_sound": {
-   "honest": ["Flock.RecLinks.check_sound_honest"],
-   "nontrivial": "Flock.RecLinks.check_sound_nontrivial"
-  }
- },
- "unwitnessed": {
-  "Flock.Firewall.Contract.holds_coins": "f7c75fc8ff69fd14d2eb14fdf528503aa90514b4631c436a3973c0793267c6eb",
-  "Flock.Firewall.Contract.holds_coins_binding": "2f38b70ba9aae0ea55033e2810725f001faa26ae99c11c7b348a0a78f2c07c06",
-  "Flock.Firewall.Contract.holds_commit": "9e86b324d2e725880221dddee14f20fb05839f5e4ffff11ada6ddabd2f2b0361",
-  "Flock.Firewall.Contract.holds_computed": "9c0c81dfbc7167b19c682b77768e00765a7a0a77b778d97ca5f45f0eef5fd3a4",
-  "Flock.Firewall.Contract.holds_finish": "aa67703052894f171a7b02e9bb4cc0ac0b3da1a2da9592ca3ebf2c136a3accc5",
-  "Flock.Firewall.Contract.holds_fixed": "01861c4768c06289a8317df2c471999f9378506a0c7c59972ed9bab24531ec36",
-  "Flock.Firewall.Contract.holds_masked": "5e617dd64b1e2cd62d76d06af0007fbc6d7f698d153f042690fab45ac466a7de"
  }
 }
