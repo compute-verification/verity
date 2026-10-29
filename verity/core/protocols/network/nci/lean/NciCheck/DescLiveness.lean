@@ -5,7 +5,7 @@ import NciCheck.DescDifftest
 # The liveness cases of the description-sized check
 
 `scripts/desc_liveness_vectors.py` writes Program shapes on which `NciCheck.Desc` once walked a scan's iterations or a
-batch's members one by one (PRF-151: a stack overflow, a time and a memory linear in them), each at a small `n` and at an
+batch's members one by one (a stack overflow, a time and a memory linear in them), each at a small `n` and at an
 `n` of `2^22` to `2^52`. `NciCheck/DescLivenessMain.lean` fails unless, on every case, `NciCheck.Desc.check` gives on the
 small instance what `NciCheck.check` gives on it expanded gate by gate (`expand`), and on the big one a verdict that is
 the small one's (`same`) or has its novel reads per IU (`novel`, where the gates grow with `n`). That it finishes is the
