@@ -111,10 +111,18 @@ def designs() -> list[dict]:
     def lean_row(name, fn, premise, rank):
         per_call = {c: total(fn(n, K)) for c, n, K in CALLS}
         parts = {c: {k: round(v, 4) for k, v in fn(n, K).items()} for c, n, K in CALLS}
+        h_call = {c: round(per_call[c] - fn(n, K)["words"], 4) for c, n, K in CALLS}
+        lead_h = {c: total(lead_w(n, K)) - lead_w(n, K)["words"] for c, n, K in CALLS}
         w_max = max(per_call.values())
         w_avg = sum(per_call[c] * mac_w[c] for c in per_call) / tot
-        rows.append({"design": name, "n_max": N_LEAD, "n_max_source": "the lead's coin lanes (proved)",
+        h_avg = sum(h_call[c] * mac_w[c] for c in h_call) / tot
+        lead_avg = sum(lead_h[c] * mac_w[c] for c in lead_h) / tot
+        rows.append({"h_mac_weighted": round(h_avg, 3), "cut_mac_weighted": round(lead_avg / h_avg, 1),"design": name, "n_max": N_LEAD, "n_max_source": "the lead's coin lanes (proved)",
                      "w_mac_by_call": {c: round(v, 4) for c, v in per_call.items()}, "parts_by_call": parts,
+                     "h_by_call": h_call, "cut_from_lead_by_call": {c: round(lead_h[c] / h_call[c], 1) for c in h_call},
+                     "h_brief_basis_by_call": {c: [round(fn(n, K).get("fold", 0) + (h_call[c] - fn(n, K).get("fold", 0))
+                                                         * hb / (total(lead_w(n, K)) - lead_w(n, K)["words"]), 3)
+                                                   for hb in H_LEAD_BRIEF] for c, n, K in CALLS},
                      "w_mac_max": w_max, "w_mac_mac_weighted": w_avg, "premise": premise, "rank": rank,
                      "basis": "Lean (ShaWrites registers)"})
 
@@ -187,6 +195,13 @@ def main() -> int:
         s32, s320 = r["share"]["32"], r["share"]["320"]
         print(f"{r['design'][:58]:58s} {r['n_max']:8.1f} {lo:7.2f}–{r['w_mac_max']:<7.2f} "
               f"{100 * s32[0]:9.5f}–{100 * s32[1]:<9.5f}% {100 * s320[0]:9.4f}–{100 * s320[1]:<9.4f}%")
+    print("\nh by call (Lean basis; then the brief's h_lead 120–230 basis), and the cut from the lead's h:")
+    for r in rows:
+        if "h_by_call" in r:
+            print(f"{r['design'][:58]:58s} " + "  ".join(
+                f"{c} {r['h_by_call'][c]:.2f} [{r['h_brief_basis_by_call'][c][0]:.2f}–{r['h_brief_basis_by_call'][c][1]:.2f}]"
+                f" {r['cut_from_lead_by_call'][c]}×" for c in r["h_by_call"])
+                + f"  MAC-weighted {r['h_mac_weighted']} ({r['cut_mac_weighted']}×)")
     print("FAIL" if fails else "OK", len(fails))
     return 1 if fails else 0
 
