@@ -50,25 +50,27 @@ def layers(model: Any, types: tuple[type, ...], ks: tuple[int, ...] | None = Non
     return out
 
 
-#: the roots `weight_roots` computed, by global index: the weight (a weak reference), its `_tensor_key` and its root
-_ROOTS: dict[int, tuple[Any, tuple, bytes]] = {}
+#: the roots `weight_roots` computed, by salt key and global index: the weight (a weak reference), its `_tensor_key` and
+#: its root
+_ROOTS: dict[tuple[bytes, int], tuple[Any, tuple, bytes]] = {}
 
 
 def weight_roots(layers: list[Any], lo: int = 0) -> dict[int, bytes]:
-    """`pouw_h1.weight_root` of each layer's int8 weight as it is served, by global index from ``lo``, once a process: the
-    weights are fixed after install, so each window's install reuses a root while the layer's weight is the tensor it was
-    computed from, with the same storage, shape, dtype and version. Anything else (a weight replaced or written in place,
-    or an array that isn't a tensor) is computed again."""
-    out = {}
+    """`pouw_h1.weight_root` of each layer's int8 weight as it is served, by global index from ``lo``, under this process's
+    salt key (`pouw_h1.WEIGHT_KEY`), once a process: the weights are fixed after install, so each window's install reuses a
+    root while the key is the one it was computed under and the layer's weight the tensor it was computed from, with the
+    same storage, shape, dtype and version. Anything else (another key, a weight replaced or written in place, or an array
+    that isn't a tensor) is computed again."""
+    out, salt = {}, PH.WEIGHT_KEY
     for i, m in enumerate(layers):
         w, weight = lo + i, m.weight
-        key, hit = _tensor_key(weight), _ROOTS.get(w)
+        key, hit = _tensor_key(weight), _ROOTS.get((salt, w))
         if key is not None and hit is not None and hit[0]() is weight and hit[1] == key:
             out[w] = hit[2]
             continue
-        out[w] = PH.weight_root(w, PH.numpy_of(weight))
+        out[w] = PH.weight_root(w, PH.numpy_of(weight), salt)
         if key is not None:
-            _ROOTS[w] = (weakref.ref(weight), key, out[w])
+            _ROOTS[(salt, w)] = (weakref.ref(weight), key, out[w])
     return out
 
 

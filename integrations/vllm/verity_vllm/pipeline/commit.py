@@ -243,7 +243,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict, step: 
             "prompt_tokens": sum(len(r["prompt_token_ids"]) for r in requests), "tokens": tokens, "finish_reasons": finish, "t_last_step": step_t[-1]}
 
 
-# the compiled check's sampled steps are drawn from the run root AFTER commitment: seed = int(run_root.hex()[:8], 16)
+# the compiled check's steps are sampled from the run root AFTER commitment: seed = int(run_root.hex()[:8], 16)
 # (first 4 bytes).  Recorded on value_correspondence.compiled_check.seed_source so the finalizer recomputes it from the same runs.jsonl as a fact.
 COMPILED_REPLAY_SEED_SOURCE = "run root (first 4 bytes, after commitment): int(run_root.hex()[:8], 16)"
 
@@ -575,7 +575,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     """`served_tokens` / `finish_reasons`: {workload request_id: ...} of THIS run (run_workload's); `stop`: stop_rule_of_record's {eos, lag}
     -- together the executed prefix of record every population consumer is placed over."""
     """The binding map (fixed at finalize, digest recorded), the collector-INDEPENDENT expected population (model structure x
-    workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
+    workload requests/steps/ranks), the identity-coverage verdict, and openings sampled from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
     from verity_vllm.commit import binding as B, executed_prefix as EP, partition as PT
@@ -740,7 +740,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     elif bound and getattr(com, "retain_exclude", None):
         # retain=host + exclude: a population pick whose leaf lies in an excluded family's interior has no host bytes here;
         # it is handed to openings_after_release (com._oar_deferred) and opened there by REPLAY against this run's root.  The host share
-        # opens now and must verify (binding_check).  Nothing is dropped: every drawn identity is opened by one of the two paths.
+        # opens now and must verify (binding_check).  Nothing is dropped: every sampled identity is opened by one of the two paths.
         want = [(e["identity"]["step"], leaf) for _, e, leaf in bound]
         held = [p for p in want if com.leaf_retained(*p)]
         po_deferred = [p for p in want if not com.leaf_retained(*p)]
@@ -817,9 +817,9 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
             forced.append((first, 0)); forced_why[forced[-1]] = "first step: first leaf"
     forced = [f for f in forced if f not in sample]
     # the in-run challenge / population picks this run could NOT open from host (excluded families' interior; handed over
-    # by the openings and binding stages via com._oar_deferred) are opened here by replay -- every drawn leaf is opened by one of the paths
+    # by the openings and binding stages via com._oar_deferred) are opened here by replay -- every sampled leaf is opened by one of the paths
     handed = list(dict.fromkeys(tuple(p) for p in (getattr(com, "_oar_deferred", None) or [])))
-    deferred = [p for p in handed if p not in sample and p not in forced]    # the rest are drawn here anyway (and open by replay when not held)
+    deferred = [p for p in handed if p not in sample and p not in forced]    # the rest are sampled here anyway (and open by replay when not held)
     com._oar_deferred = []
     picks = sample + forced + deferred
     # which picks the frozen run can open from its OWN retained bytes: all of them (retain=host), none (retain=none), or
@@ -1108,7 +1108,7 @@ class Options:
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers, where its challenger reaches the Commit (its certifier coin link)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
-    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (drawn by --replay-draw) in place of the row's per-stratum sample")
+    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (sampled by --replay-draw) in place of the row's per-stratum sample")
     replay_draw: str = option("--replay-draw", default="uniform", choices=("uniform", "family"), help="with --replay-k: uniform over every unit, or stratified by family (one stratum per family, round-robin, at least one each)")
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
@@ -1896,7 +1896,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 row["commit"]["expected_tensors"] = rc.extra.get("expected_tensors")
                 row["commit"]["committed_tensors"] = rc.extra.get("committed_tensors")
                 row["commit"]["errors_n"] = rc.extra.get("errors_n", len(rc.extra.get("errors") or []))
-                # binding map + identity coverage against the collector-independent expected population, and openings drawn
+                # binding map + identity coverage against the collector-independent expected population, and openings sampled
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
                 _rb_started = RB.start(out, pair, com, rc, args, protocols)
                 GL.release(TL, eng, list(coms.values()), args, last=pair == args.pairs - 1 and k == len(order) - 1 and (_HOT or {}).get("last", _HOT is None), after=_wstage, bundle=_rb_started is not None)   # nothing below reads the device
