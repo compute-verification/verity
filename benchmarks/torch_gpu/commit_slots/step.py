@@ -409,8 +409,7 @@ def main(argv: list[str] | None = None) -> int:
                          "step's")
     tm.add_argument("--samples", type=int, default=4, help="random slots the reference rebuilds, beside the first and last")
     tm.add_argument("--target-s", type=float, default=0.95,
-                    help="a step's target at 4,096 slots, at most 25%% of the served step (default: a quarter of run "
-                         "r20261026-030611-8b64's, rounded up)")
+                    help="a step's target at 4,096 slots, at most 25%% of the served step (default 0.95)")
     a = ap.parse_args(argv)
     if a.cmd == "count" and (a.layout is None) == (a.uniform is None):
         ap.error("count takes a layout or --uniform BYTES")
