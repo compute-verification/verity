@@ -297,10 +297,11 @@ private def keysOf : Json → Option (List String)
 def exactly (j : Json) (ks : List String) (what : String) : V Unit :=
   if keysOf j == some ks then pure () else throw s!"{what}: the keys must be [{", ".intercalate ks}]"
 
-/-- Registration is ASCII-only without DEL: `j`'s canonical JSON holds no character from 0x7f up, so its digest is
-the same however a canonical JSON escapes the rest. -/
+/-- Registration is ASCII-only without DEL: `j`'s strings, unescaped (`Flock.canonUtf8`), hold no character from 0x7f
+up, so its digest is the same however a canonical JSON escapes the rest. `Flock.canon` escapes such a character, so it
+can't be the test: a `\u00e9` in the committed text is refused here as `é` is. -/
 def ascii (j : Json) (what : String) : V Unit :=
-  if ((Flock.canon j).toOption.getD "").all (fun (c : Char) => c.toNat < 127) then pure ()
+  if ((Flock.canonUtf8 j).toOption.getD "").all (fun (c : Char) => c.toNat < 127) then pure ()
   else throw s!"ascii: {what} holds a character outside ASCII"
 
 def hex64 (j : Json) (what : String) : V String := do
@@ -713,6 +714,9 @@ private def accented : Committed :=
 private def deleted : Committed :=
   { composite := .onsite, log := chain .onsite [.information [.theta { weights with value := "poids\x7f" }]] }
 #guard ((answer .onsite deleted).reason.map (·.startsWith "commitment: ascii")) == some true
+private def raw (j : Json) : ByteArray := ((Flock.canonUtf8 j).toOption.getD "").toUTF8
+#guard [accented, deleted].all fun l => (protocol.answer (bytes (params .onsite)) (raw l.toJson) "{}".toUTF8).reason ==
+  some "commitment: not ASCII without DEL (a byte at or above 0x7f)"
 
 end Example
 

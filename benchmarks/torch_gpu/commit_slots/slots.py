@@ -69,7 +69,7 @@ DIGEST_BYTES = INST.digest_bytes
 
 # --- the layout --------------------------------------------------------------------------------------------------------
 
-class CommitShape(L.Layout):
+class CommitShape(L.RowsPerSlot):
     """A step's public structure, ``commitments.layout``'s (its groups in order, the same for every slot, a repeated group one
     object; ``name`` names it), with the indices and the digest the slot's trees take."""
 
