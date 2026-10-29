@@ -10,13 +10,14 @@ Every quantity is in registers; the W1 work is 32 a register (`H32`'s floor).
 * **The honest work** (`honestRegs`): the committed words, one register each (`m · n · S`), and the SHA-512
   compressions of the commitment at ShaWrites' registers per form: `3,515.38` a words compression and `3,449.05` an A
   compression (`shaWordsRegs`, `shaARegs`).
-* **The gap** (`gapRegs`) is the sum of five terms, each the bound its piece proves:
+* **The gap** (`gapRegs`) is the sum of six terms, each the bound its piece proves:
   - `headGap`: the words chunks' first-block excess, 23 registers a chunk;
   - `hidingGap`: hiding L1 + (a), 1.6064% of one row's stock a call;
   - `coinBranchGap`: what a prover that branches on the coins keeps by copying whole MMA tiles across the call's
     rows and patching the rest (copy-and-patch at tile grain), 0.084% of stock;
   - `pStarGap`: the coin lanes' guess at `-rot`'s weights, 0.0035% of stock;
-  - `networkGap`: work outsourced within the egress cap, 0.036% of stock a 32 bits of cap.
+  - `networkGap`: work outsourced within the egress cap, 0.036% of stock a 32 bits of cap;
+  - `tableGap`: pre-coin tables holding a committed tile, within the node's memory (negligible).
 * `gapShare` is the gap over stock, which `Pouw.Guarantees.Lead.GapAt` evaluates at the three points.
 -/
 
@@ -59,9 +60,13 @@ def pStarGap (L : Layout) : ℚ := 35 / 1000000 * stockRegs L
 /-- Work outsourced within the egress cap: 0.036% of stock a 32 bits of cap. -/
 def networkGap (L : Layout) : ℚ := 36 / 100000 * (L.cap / 32 : ℚ) * stockRegs L
 
-/-- **The gap** in registers: the sum of the five terms. -/
+/-- Pre-coin tables: the node's memory in tiles, times the call's tiles and their words, at `2^-150`, a bound on the
+chance that a fixed tile is a given committed tile. -/
+def tableGap (L : Layout) : ℚ := L.mem * (L.rowBlocks * L.colBlocks * L.S * tileWords : ℚ) / 2 ^ 150
+
+/-- **The gap** in registers: the sum of the six terms. -/
 def gapRegs (L : Layout) (C : Commit L) : ℚ :=
-  headGap L C + hidingGap L + coinBranchGap L + pStarGap L + networkGap L
+  headGap L C + hidingGap L + coinBranchGap L + pStarGap L + networkGap L + tableGap L
 
 /-- The gap as a share of stock. -/
 def gapShare (L : Layout) (C : Commit L) : ℚ := gapRegs L C / stockRegs L

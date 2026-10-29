@@ -40,32 +40,32 @@ def W1 (pr : Prices100) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∀ ω, ∀ o ∈ (σ.exec ω).trace, o.WFw pr ∅
 
 /-- `pouw-tile-grain` (proposed; CopyGrain at the tile width, under model W). **What the node holds, its run at tile
-grain holds**: at a coin value where a realizable strategy exchanges nothing, a value its execution holds at a tile
-position is held there by its run (`Exec.steps`, from the pre-coin tables and the coin stream) at some point, whose
-only free step is a whole MMA tile's copy (`tileWords` words). Any other move of a word is a write.
+grain holds**: at a coin value where a realizable strategy exchanges nothing, a tile its execution holds whole is held
+by its run (`Exec.steps`, from the pre-coin tables and the coin stream) at some point. The run's only free step is a
+whole MMA tile's copy (`tileWords` words); writing any word of a tile writes the tile (model W at the tile's width).
 
 Rationale: on the measured kernels a reuse saves time only where a whole MMA tile (16 rows × 8 columns) repeats;
 this is the copy model, one line to change. -/
 def TileGrain (stream : Coins L → ℕ → Fin tileWords → ℤ) (Real : Strategy L → Prop) : Prop :=
-  ∀ σ, Real σ → ∀ ω, (σ.exec ω).egress = 0 → ∀ p v, (σ.exec ω).holds p v →
-    ∃ k a, run (σ.init stream ω) ((σ.exec ω).steps.take k) a p = v
+  ∀ σ, Real σ → ∀ ω, (σ.exec ω).egress = 0 → ∀ y, (σ.exec ω).holds y →
+    ∃ k a, run (σ.init stream ω) ((σ.exec ω).steps.take k) a 0 = y
 
 /-- `pouw-lane-semantics` (proposed). **Each word the run writes is a register value its trace computes**: at every
-coin value, every write of a realizable strategy's run writes the value of a register of its trace under the
-measured lane functions `fpSem`.
+coin value, every word of every tile a realizable strategy's run writes is the value of a register of its trace under
+the measured lane functions `fpSem`.
 
 Rationale: the lane forms' semantics are measured on the card. -/
 def LaneSemantics (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∀ ω, ∀ a p v, Step.write a p v ∈ (σ.exec ω).steps →
-    (fun _ : Unit => (v : ℚ)) ∈ regs100 fpSem (σ.exec ω).trace []
+    ∀ q, (fun _ : Unit => (v q : ℚ)) ∈ regs100 fpSem (σ.exec ω).trace []
 
 /-- `pouw-one-instruction-minimal` (proposed). **Each word written and each compression register is its own register
-of the trace**: at every coin value, a realizable strategy's run's writes and its SHA-512 compressions' registers
-number at most the registers its trace writes.
+of the trace**: at every coin value, a realizable strategy's run's tile writes (`tileWords` registers each) and its
+SHA-512 compressions' registers number at most the registers its trace writes.
 
 Rationale: one instruction writes each register, and its price per register is its class's (`H32` floors it). -/
 def OneInstructionMinimal (Real : Strategy L → Prop) : Prop :=
-  ∀ σ, Real σ → ∀ ω, writes (σ.exec ω).steps + (σ.exec ω).shaRegs ≤ regCount (σ.exec ω).trace
+  ∀ σ, Real σ → ∀ ω, tileWords * writes (σ.exec ω).steps + (σ.exec ω).shaRegs ≤ regCount (σ.exec ω).trace
 
 /-- `pouw-card-within-accel-w1` (proposed; `CardWithinAccel` and `PeriodInventory` at W1, hosts counted).
 **Every strategy the node's processors run is realizable**: what the node's cards, host CPUs and their AMX units
@@ -134,7 +134,7 @@ Rationale: the network certifier caps the bits a call's node exchanges, and an e
 of priced work. -/
 def OutsourceWithinEgressLead (pr : Prices100) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∃ σ', Real σ' ∧ σ'.pre = σ.pre ∧ ∀ ω, (σ'.exec ω).egress = 0 ∧
-    (∀ p v, (σ.exec ω).holds p v → (σ'.exec ω).holds p v) ∧ (σ'.exec ω).root = (σ.exec ω).root ∧
+    (∀ y, (σ.exec ω).holds y → (σ'.exec ω).holds y) ∧ (σ'.exec ω).root = (σ.exec ω).root ∧
     (σ'.exec ω).hashed = (σ.exec ω).hashed ∧ (σ'.work pr ω : ℚ) ≤ σ.work pr ω + 32 * networkGap L
 
 end Pouw.Assumptions.Lead

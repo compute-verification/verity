@@ -10,7 +10,8 @@ row parity (`-rot`), served noisy with the coin lanes folded exactly, k32 steps,
 hiding L1 + (a).
 
 * **The layout** (`Layout`) is the call's shape (`m` rows, `n` columns, `S` k32 steps a word) and the design's
-  constants: the coin tile's rows, the coin lanes' bits, the words chunk's size, the egress cap the network term reads.
+  constants: the coin tile's rows, the coin lanes' bits, the words chunk's size, the egress cap the network term reads
+  and the node's memory.
   `lead` fixes the design's constants; `pt512x64`, `pt512x512` and `pt8192` are the three evaluated points.
 * **The coins** (`Coins`) are what the certifier draws after it holds the call's `A`: the tag bits `b`, the step-1
   bits `a₁`, the tag weights `G ∈ [−3, 3]^{4×n}` and the coin lanes `s ∈ {±1, ±3, …, ±(2^e − 1)}`, one a step, tile,
@@ -46,6 +47,8 @@ structure Layout where
   chunkWords : ℕ
   /-- The egress cap the network term reads, in bits a step's word (32 or 320). -/
   cap : ℕ
+  /-- The node's memory in MMA tiles of 512 bytes, its cards' and hosts': what pre-coin tables can hold. -/
+  mem : ℕ
 
 /-- Coin tiles a call: `⌈m / tile⌉`. -/
 def Layout.tiles (L : Layout) : ℕ := (L.m + L.tile - 1) / L.tile
@@ -104,8 +107,8 @@ def DataInRange (L : Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) : Pr
 /-- k32 steps for inner dimension `K`: step 0 holds 24 data lanes and each later step 28, `1 + ⌈(K − 24)/28⌉`. -/
 def stepsFor (K : ℕ) : ℕ := 1 + (K - 24 + 27) / 28
 
-/-- **The lead** at `T` tokens and a call of `m × K × n`: 64-row coin tiles, 7-bit coins, 256 KiB words chunks, and the
-network term at cap 32. -/
+/-- **The lead** at `T` tokens and a call of `m × K × n`: 64-row coin tiles, 7-bit coins, 256 KiB words chunks, the
+network term at cap 32, and 8 TiB of node memory (`2^34` tiles). -/
 def lead (T m n K : ℕ) : Layout where
   T := T
   m := m
@@ -116,6 +119,7 @@ def lead (T m n K : ℕ) : Layout where
   e := 7
   chunkWords := 65536
   cap := 32
+  mem := 2 ^ 34
 
 /-- The lead at cap 320. -/
 def lead320 (T m n K : ℕ) : Layout := { lead T m n K with cap := 320 }
