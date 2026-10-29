@@ -19,7 +19,10 @@ At the reference's constant-rate Program of one execution block of the `W` windo
 (`programFrames`), a step's rows read the content advice and the syncs of the windows up to its own
 (`tiedRows_causal`). So an accepted sequence of the first `m` windows is fixed by the content advice, the syncs of its
 windows below `min W m` and its jitter classes, and those sequences number at most `#Ac · |Σ_sync|^min(W, m) · D^(m·T)`,
-by the injection of `NetTiming.encard_accSeqs_le_constantRate_windows` (`encardProgramRunsLeWindows`).
+by the injection of `NetTiming.encard_accSeqs_le_constantRate_windows` (`encardProgramRunsLeWindows`). An accepted run of
+the check is a run of that Program (`acceptedRunsAreProgramRuns`), whose first `m·T` buckets it accepts
+(`NetTiming.accepted_take`), so the check's accepted runs over their first `m ≤ W` windows number at most
+`#Ac · |Σ_sync|^m · D^(m·T)`, or one carries a break (`encard_acceptedObservations_take_le`).
 
 The honest lemma counts the honest network certifier's record at `Instance.config`, one window of one bucket: the
 Program's own row of one frame anchored at bucket 0. The nontrivial lemma takes the prediction that reads its rows off
@@ -258,6 +261,52 @@ theorem encardProgramRunsLeWindows : EncardProgramRunsLeWindows := by
         rw [Finset.card_product, Fintype.card_piFinset]
         simp [Fintype.card_prod, Fintype.card_fun, Fintype.card_coe,
           List.toFinset_card_of_nodup cfg.syncSet.deltas_nodup, List.toFinset_card_of_nodup cfg.syncSet.rhos_nodup]
+
+section Check
+
+open NetworkCheck hiding Params
+open NetworkCheck.Check
+open _root_.CertifierDevice
+
+/-- **The check's accepted runs over their first `m` windows.** For a device that runs as built, the first `m ≤ W`
+windows of the observation sequences of its accepted runs number at most `#Ac · |Σ_sync|^m · D^(m·T)`, or some accepted
+run carries a break (`ObservationsBounded`'s): an accepted run is a run of the tied Program
+(`acceptedRunsAreProgramRuns`), the Program accepts its first `m·T` buckets (`NetTiming.accepted_take`), and those
+number at most `encardProgramRunsLeWindows`'s count. -/
+theorem encard_acceptedObservations_take_le (device : DeviceInput → DeviceOutput) (cfg : Config)
+    (key : Lms.PrivateKey) {K : ℕ} {In Ac : Type} [Fintype Ac]
+    (frames : List In → Ac → Fin 1 → List _root_.NetworkCertifier.LogicalFrame)
+    (op : ℕ → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (linkOf : Fin K → String) (m D : ℕ)
+    (hm : m ≤ cfg.windows) (hint : NetTiming.DeviceIntact device deviceCode) :
+    ((List.take (m * cfg.egress.buckets)) '' AcceptedObservations cfg key device frames op linkOf D).encard ≤
+        ((Fintype.card Ac * (cfg.syncSet.deltas.length * cfg.syncSet.rhos.length) ^ m *
+          D ^ (m * cfg.egress.buckets) : ℕ) : ℕ∞) ∨
+      ∃ o x c e a, AcceptedRun cfg key device frames op linkOf o x c e a ∧
+        ((∃ y ∈ runStrings x (device x) c e, ∃ z ∈ runStrings x (device x) c e, y ≠ z ∧
+            Flock.Sha512.hash y = Flock.Sha512.hash z) ∨
+          ∃ r ∈ c.records.toList, ∃ msg, certMessage x.issuer.session r = some msg ∧
+            LmsVerifies (deviceParams x) msg r.certificate.signature ∧ ¬ Signed x.issuer.session (device x) msg) := by
+  by_cases hb : ∃ o x c e a, AcceptedRun cfg key device frames op linkOf o x c e a ∧
+      ((∃ y ∈ runStrings x (device x) c e, ∃ z ∈ runStrings x (device x) c e, y ≠ z ∧
+          Flock.Sha512.hash y = Flock.Sha512.hash z) ∨
+        ∃ r ∈ c.records.toList, ∃ msg, certMessage x.issuer.session r = some msg ∧
+          LmsVerifies (deviceParams x) msg r.certificate.signature ∧ ¬ Signed x.issuer.session (device x) msg)
+  · exact Or.inr hb
+  have hbound := encardProgramRunsLeWindows cfg frames op m D
+  rw [min_eq_right hm] at hbound
+  refine Or.inl (le_trans (Set.encard_le_encard ?_) hbound)
+  rintro _ ⟨o, ⟨hlen, hjit, x, c, e, a, hrun⟩, rfl⟩
+  obtain ⟨hx, hk, hacc, hlink, hobs, hopen⟩ := hrun
+  subst hx hk
+  rcases acceptedRunsAreProgramRuns device x c e hacc hint with hr | hbr
+  · obtain ⟨σ, -, hA⟩ := hr frames a op o linkOf hlink hlen hobs hopen
+    have hmT : m * x.config.egress.buckets ≤ x.config.windows * x.config.egress.buckets :=
+      Nat.mul_le_mul_right _ hm
+    exact ⟨by rw [List.length_take, hlen]; exact Nat.min_eq_left hmT,
+      fun y hy => hjit y (List.mem_of_mem_take hy), fun _ => (a, σ), NetTiming.accepted_take _ op hmT hA⟩
+  · exact (hb ⟨o, x, c, e, a, ⟨rfl, rfl, hacc, hlink, hobs, hopen⟩, hbr⟩).elim
+
+end Check
 
 /-! ## Its honest and nontrivial lemmas -/
 
