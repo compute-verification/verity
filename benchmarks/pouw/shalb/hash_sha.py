@@ -686,15 +686,17 @@ SERVED_HONEST = 2.0
 
 def part_s(checks: Checks, r: dict, y: dict) -> dict:
     """Honest's xor-m on the served form. The served GEMM's IGMMA accumulates in place (served_sass.py), so a word is
-    gone at the next step and honest's fold is one write a word (xor_wgmma_probe.cu): 2 writes a word at every m. The
-    adversaries' writes against that."""
+    gone at the next step and honest's fold is one write a word (xor_wgmma_probe.cu): 2 writes a word at every m, and
+    2 + 1/m as ptxas compiles the probe (a loop-carried copy a block). The adversaries' writes against both."""
     out = {}
     for m in y:
         bs = r["xor"][m]["adaptive"]
         out[m] = {"honest_fresh": xor_honest_writes(m) / m, "honest_served": SERVED_HONEST,
                   "packed_free": y[m]["w1_today"]["per_word"] / SERVED_HONEST,
                   "packed_priced": y[m]["predicates_priced"]["per_word"] / SERVED_HONEST,
-                  "bitsliced": (bs["per_word"] + bs["uniform_per_word_t8192"]) / SERVED_HONEST}
+                  "bitsliced": (bs["per_word"] + bs["uniform_per_word_t8192"]) / SERVED_HONEST,
+                  "honest_compiled": SERVED_HONEST + 1 / m,
+                  "packed_priced_vs_compiled": y[m]["predicates_priced"]["per_word"] / (SERVED_HONEST + 1 / m)}
     priced = {m: min(v["packed_priced"], v["bitsliced"]) for m, v in out.items()}
     checks.check("S: against honest on the served form (in-place IGMMA, 2 writes a word), the best adversary with "
                  "predicate writes priced pays less than 5% more at m = 16 and less than 10% more at m = 11, and with "
@@ -702,6 +704,11 @@ def part_s(checks: Checks, r: dict, y: dict) -> dict:
                  "and thinly", 1 < priced[16] < 1.05 and 1 < priced[11] < 1.10 and out[16]["packed_free"] < 0.75,
                  ", ".join(f"m {m}: priced {priced[m]:.3f}x (packed {v['packed_priced']:.3f}x, bit-sliced "
                            f"{v['bitsliced']:.3f}x), free {v['packed_free']:.3f}x" for m, v in out.items()))
+    checks.check("S: against honest as ptxas compiles the in-place fold (2 + 1/m a word), the packed adversary with "
+                 "predicate writes priced ties at m = 16 (within 0.5%): a premise crediting the compiled count has no "
+                 "margin there", abs(out[16]["packed_priced_vs_compiled"] - 1) < 0.005,
+                 ", ".join(f"m {m}: {v['packed_priced_vs_compiled']:.4f}x of {v['honest_compiled']:.4f}"
+                           for m, v in out.items()))
     return out
 
 
