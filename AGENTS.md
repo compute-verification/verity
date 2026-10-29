@@ -26,7 +26,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `Security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `examples/`: one directory per example: its workload, placement, commands and doneness (`examples/README.md`).
+- `demos/`: one directory per demo: its workload, placement, commands and doneness (`demos/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
@@ -45,7 +45,7 @@ Nothing outside `infra/` imports it (`INFRA_IMPORTERS`), and nothing under `veri
 package name or by a path put on `sys.path` or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a
 protocol uses reaches it through a card file citing an `art:` id.
 
-`verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|example NAME`, `verity --help`.
+`verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|demo NAME`, `verity --help`.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu        # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)

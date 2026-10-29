@@ -1,4 +1,4 @@
-"""`examples/vllm/serve_load.py --fixed`, served_verdicts' load under LOAD=fixed, against serve-openai's endpoint as
+"""`demos/vllm/serve_load.py --fixed`, served_verdicts' load under LOAD=fixed, against serve-openai's endpoint as
 served_verdicts runs it (``--admit release-order --window-requests N``: `serve_openai.Server`, its `ReleaseOrder` and its
 `EngineLoop`) over a stand-in engine on CPU. Its N requests are ``--varied``'s prompts with ``ignore_eos`` and ``max_tokens``
 S; request 0 goes out only once every other one is held, so every one of the engine's S steps runs all N, the first
@@ -20,7 +20,7 @@ from verity_vllm.pipeline import serve_protocol as sp
 from verity_vllm.pipeline.serve_admit import ReleaseOrder
 
 HERE = Path(__file__).resolve().parent
-_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "examples" / "vllm" / "serve_load.py")
+_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "demos" / "vllm" / "serve_load.py")
 SL = importlib.util.module_from_spec(_SL)
 _SL.loader.exec_module(SL)
 

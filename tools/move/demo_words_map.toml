@@ -1,0 +1,110 @@
+# The examples' rename to demos, part two, the words: `verity example NAME` is `verity demo NAME`, each demo's
+# `example.toml` is its `demo.toml`, and the prose, identifiers and CLI help that say "example" for one say "demo". Part one,
+# the move of `examples/` to `demos/`, is `demos_map.toml`; this runs after it, at the root of a clean checkout:
+#
+#     python3 tools/move/rename.py --map tools/move/demo_words_map.toml
+#
+# The plain word is renamed only in the files where it always means a demo ([[words_in]]): elsewhere "example" is English
+# (a difftest's examples, "for example") and stays. [words] holds the phrases that mean a demo wherever they stand. The
+# format is `rename_map.toml`'s; it is idempotent, so it reruns on a later main.
+
+[words]
+"verity example" = "verity demo"
+"example.toml" = "demo.toml"
+"the vLLM example" = "the vLLM demo"
+"The vLLM example" = "The vLLM demo"
+"H200 example" = "H200 demo"
+
+# the CLI's help keeps its description column
+[[words_in]]
+files = ["tools/verity/cli/verity_cli/__init__.py"]
+[words_in.words]
+"verity example NAME [ARGS]      " = "verity demo NAME [ARGS]         "
+"verity example --status         " = "verity demo --status            "
+
+# the files where "example" always means a demo
+[[words_in]]
+files = ["demos/**", "tools/verity/cli/verity_cli/__init__.py", "tools/verity/cli/verity_cli/demos.py", "tests/test_demos.py",
+         "tools/research/console/status_export.py"]
+[words_in.words]
+"test_there_are_examples" = "test_there_are_demos"
+"test_example_has_what_it_claims" = "test_demo_has_what_it_claims"
+"example_records" = "demo_records"
+"an `example.toml`" = "a `demo.toml`"
+"An example" = "A demo"
+"an example" = "a demo"
+"Examples" = "Demos"
+"examples" = "demos"
+"EXAMPLES" = "DEMOS"
+"Example" = "Demo"
+"example" = "demo"
+
+[[words_in]]
+files = ["tools/research/tests/test_console_status_export.py"]
+[words_in.words]
+"test_results_of_record_come_from_an_examples_evidence_and_run_ids_are_only_counted" = "test_results_of_record_come_from_a_demos_evidence_and_run_ids_are_only_counted"
+"demos/demo/example.toml" = "demos/toy/demo.toml"
+"the demo example's" = "the toy demo's"
+"for the demo example" = "for the toy demo"
+"example" = "demo"
+
+[[words_in]]
+files = ["AGENTS.md"]
+[words_in.words]
+"directory per example" = "directory per demo"
+"bench|example" = "bench|demo"
+
+[[words_in]]
+files = ["ARCHITECTURE.md"]
+[words_in.words]
+"end-to-end examples" = "end-to-end demos"
+"(example, run, proof)" = "(demo, run, proof)"
+
+[[words_in]]
+files = ["README.md", "verity/core/protocols/remote/README.md"]
+[words_in.words]
+"the only example that" = "the only demo that"
+"The only example that" = "The only demo that"
+"No example runs" = "No demo runs"
+
+[[words_in]]
+files = ["benchmarks/README.md"]
+[words_in.words]
+"End-to-end examples" = "End-to-end demos"
+
+[[words_in]]
+files = ["tools/research/console/README.md"]
+[words_in.words]
+"examples name" = "demos name"
+
+[[words_in]]
+files = ["integrations/vllm/pyproject.toml"]
+[words_in.words]
+"the example's stored" = "the demo's stored"
+
+[[words_in]]
+files = ["integrations/vllm/tests/pipeline/test_workload.py"]
+[words_in.words]
+"An example keeps" = "A demo keeps"
+
+[[words_in]]
+files = ["integrations/vllm/tests/pipeline/test_workload_file.py"]
+[words_in.words]
+"EXAMPLE" = "DEMO"
+
+# the two paths `demos_map.toml` leaves to this map: one relative to a README's own directory, one a shell default
+[[words_in]]
+files = ["benchmarks/torch_gpu/commit_slots/README.md", "benchmarks/torch_gpu/units/build.sh"]
+[words_in.words]
+"examples/h200/" = "demos/h200/"
+
+[keep]
+# "for example" and "a worked example" are English
+patterns = ['[Ff]or example', '[Ww]orked example']
+
+[rewrite]
+# Never rewritten: records of what was (the moves' maps, changelogs, research's recorded moves), the retired-terms test and
+# the Glossary, which name the old words to refuse them, and files whose bytes a digest pins.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/research/src/research/store/moves.json", "tests/test_retired_terms.py", "GLOSSARY.md"]

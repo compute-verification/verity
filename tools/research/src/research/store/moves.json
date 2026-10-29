@@ -1516,6 +1516,21 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "examples/": "demos/",
+        "tests/test_examples.py": "tests/test_demos.py",
+        "tools/verity/cli/verity_cli/examples.py": "tools/verity/cli/verity_cli/demos.py"
+      }
+    },
+    {
+      "paths": {
+        "demos/dither_full_util/example.toml": "demos/dither_full_util/demo.toml",
+        "demos/h200/example.toml": "demos/h200/demo.toml",
+        "demos/lifecycle/example.toml": "demos/lifecycle/demo.toml",
+        "demos/vllm/example.toml": "demos/vllm/demo.toml"
+      }
     }
   ]
 }

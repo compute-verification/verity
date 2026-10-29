@@ -1,13 +1,13 @@
 # benchmarks/remote_session
 
-PoUB's (proof of useful bandwidth) session harness, not the remote protocol's demo, which is `verity example vllm`. It
+PoUB's (proof of useful bandwidth) session harness, not the remote protocol's demo, which is `verity demo vllm`. It
 runs the bandwidth audit (PoUB, `verity/core/protocols/remote_bandwidth`) end to end: a verifier's process and a prover's,
 over TCP, on one machine or two, and the memory line a gate run publishes.
 
 **Status: active.** The vLLM integration imports it (`integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`
 and `in_place.py`, which `tests/test_boundaries.py` lists), the audit's Lean verifier names `verifier.py` as its driver and
 `auditor_line.py` as its line of record, and its suite runs in `check`. Decided by `rg remote_session` over `verity/`,
-`benchmarks/`, `examples/`, `tests/` and `integrations/`.
+`benchmarks/`, `demos/`, `tests/` and `integrations/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/remote_session` runs both processes over a loopback, the driver's
 reference (`CpuBackend`) as the prover's backend, and the Lean line test where `lake` is. `run.sh` is the GPU run.

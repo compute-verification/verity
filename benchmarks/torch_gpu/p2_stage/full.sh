@@ -55,7 +55,7 @@ S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 LAYOUT=$IN/store-layout.json; MANIFEST=$IN/h200-manifest.json
 export O D PY S ENC LAYOUT MANIFEST MANIFEST_SHA256 LEASE_MIN ARCH QUIET PATH=$CUDA/bin:$PATH \
   P2_RECEIPTS_BUILD=$S/p2r SHA512_ROWS_BUILD=$S/sxr \
-  PYTHONPATH=$PWD:$PWD/benchmarks/pous:$PWD/examples/h200${PYTHONPATH:+:$PYTHONPATH}
+  PYTHONPATH=$PWD:$PWD/benchmarks/pous:$PWD/demos/h200${PYTHONPATH:+:$PYTHONPATH}
 : > "$O/rc.txt"
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 
