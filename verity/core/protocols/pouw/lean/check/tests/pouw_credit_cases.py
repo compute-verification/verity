@@ -10,7 +10,7 @@ open root and its circuit, `registered.domain`), and the draw: `credit.draw_root
 challenger, then its draw coin opened after it; the auditor's ledger opens and ends the session for the window, its
 open pinned to a commit the host's pins log (``pins``) records on the verifier's copy of main's first-parent history
 (``main``, `pouw_rounds_cases.PINS` and `MAIN`). Then one mutation (`CREDIT_NAMES`) aimed at one refusal: a credit bit
-flipped after the draw coin with the draw root recomputed (``changed``, RT4-INT-32's withdrawn verdict), a row changed
+flipped after the draw coin with the draw root recomputed (``changed``, a verdict withdrawn), a row changed
 likewise, a missing or malformed bit, a credited row with no z root, the draw root left stale, no draw coin, a coin of
 another family, a session pinned to a commit the log doesn't record (``unpinned``) or to a logged one off main's
 first-parent line (``branch-pin``), and the forms.
@@ -82,7 +82,7 @@ under the domain of those rows (so `credit._registration` accepts it).
 A `period` case is one to three such windows of one circuit in one period of the auditor's ledger (`period-open`
 committing the SHA-512 of the circuit's descriptor, the K every window is drawn at, `credit.K_FIELD`, the tables'
 rows T, `credit.ROWS_FIELD`, and the weights' root every window opens, `credit.WEIGHTS_FIELD`, with the pinned model it is of, `credit.MODEL_FIELD`, each window's session opened and ended, then the `period-close` listing them), presented in its close's order, each with that
-descriptor, a window of no period beside it in the ledger. Its mutations (RT4-INT-42) leave the period unclosed or a
+descriptor, a window of no period beside it in the ledger. Its mutations leave the period unclosed or a
 window incomplete, drop, reorder or add a window, present the window of no period among the period's, name a period
 never opened or no period, forge the ledger, refuse one window, make one window wholly another circuit's (its
 descriptor, registration and proofs, ``other-circuit``, so `credit.window` alone credits it), give one the descriptor
@@ -107,7 +107,7 @@ another circuit registers them under its own.
 An `a_link` case is a window's registered entries, among them one or two A values (``…/a/<K>``) whose trees are frame-v3
 SHA-512 trees (`verity.ml.commitments.merkle.tree_levels`) of `steps` equal blocks, and its round log: each round's
 `credit.cover` segments of every A value under `credit.round_root` of a random inner root. Its mutations register an A
-tree other than the one the rounds committed (RT4-INT-34), rewrite a segment with or without its round root, leave a gap,
+tree other than the one the rounds committed, rewrite a segment with or without its round root, leave a gap,
 add a segment, misalign one, list an unregistered value, register none or one twice, and break the forms. It may also
 register rounds' A tables ``…/a/<K>@<s>``, each committed whole by its round; its mutations list one in another
 round (``table-other-round``) and name a round past the window's (``table-past``).

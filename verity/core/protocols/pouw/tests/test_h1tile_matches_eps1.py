@@ -1,9 +1,9 @@
-"""`circuit.h1tile`'s gates implement the same design as the `circuit.eps1_reference` reference (decision 102, one design
+"""`circuit.h1tile`'s gates implement the same design as the `circuit.eps1_reference` reference (one design
 across schemes).
 
-The two schemes differ only where decision 102 lets them: the noise map (each derives its own public noise from `seed_j`)
+The two schemes differ only where one design across schemes lets them: the noise map (each derives its own public noise from `seed_j`)
 and the receipt view (h1tile's CP-W warp checkpoint, two words a set; the reference's chains, eight a thread).  On the
-substance they agree, and that is what these pin: both serve the matmul's exact s8 product unchanged (decision 101), and
+substance they agree, and that is what these pin: both serve the matmul's exact s8 product unchanged, and
 both fold the identical H1 sets (`segment.call_words`) with fx1.  `test_circuit_h1tile` shows h1tile's gates equal its word
 reference (`h1tile.reference`); these show that word reference is the eps1 reference's design, so the gates are.  Pure
 Python, fast (no Boolean lowering)."""

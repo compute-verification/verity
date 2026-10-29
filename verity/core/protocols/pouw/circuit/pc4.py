@@ -24,8 +24,8 @@ The hiding Programs (``Shape.hidden``: `Pc4CallHidden`, `Pc4CheckHidden`) differ
 The weight's Program is `Pc4Weight` under hiding too.  The hiding is C-Flock's: every row a unit reads or writes is a
 committed port, which C-Flock commits as an hm96-sha512 row and hashes in the proof, so these Programs hold no leaf and no
 value is computed in two units.  `PORTS` names each unit's committed rows by schema (`leaves.SCHEMAS`): a row unit's input
-row (bf16), the nvfp4-p row it writes (A′_i ‖ P_A,i or B̃_j ‖ P_B,j) and its ``ok`` row (C-Flock commits every output,
-#757), and a tile unit's TM + TN nvfp4-p rows and its tile digest.  A tile reads each row as its row unit wrote it, the
+row (bf16), the nvfp4-p row it writes (A′_i ‖ P_A,i or B̃_j ‖ P_B,j) and its ``ok`` row (C-Flock commits every output),
+and a tile unit's TM + TN nvfp4-p rows and its tile digest.  A tile reads each row as its row unit wrote it, the
 same words under the same schema, so the units link by equal commit strings.  The rest are the anchored inputs, each a
 public input region that `PORTS` names with its recomputation (`DERIVATIONS`).
 

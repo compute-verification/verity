@@ -1,9 +1,9 @@
-"""PoUW as one pass over a served Program (decisions 102, 105, 106, 109 and 112, `PROTOCOL.md` §`compile`):
+"""PoUW as one pass over a served Program (`PROTOCOL.md` §`compile`):
 `compile(program, scheme, groups)`.
 
 * **Find.** Every Call of a registered matmul family (`MATMULS`: each family's A and B ports, its (m, k, n) and the arm it is
   registered at) is one dot product, or N of them (`S8Matmul_v1`'s rows). Attention's QKᵀ is `DotBf16`'s, a kind like any
-  other (decision 109). A Call nested in a Definition, at any depth, is found through it when its operands are that
+  other. A Call nested in a Definition, at any depth, is found through it when its operands are that
   Definition's parameters (`ScaledMmS8Coordinate_v1`'s `GemmAccumulatorS8_v1`). A Program whose root is the matmul itself is
   served as one Call of it (`PouwCall_v1{FN}`). A served Program with an edited arm, a scan over a matmul or a matmul step
   outside every registered family (P·V as `AttnBlock_v3` serves it, tensor-core steps on a P computed in the block) is
@@ -13,10 +13,10 @@
   site's dots inside one block and chunk (`Tile`: its rows, columns and cells, in z order). A grid site's tiles are full r × c
   grids; a site whose dots pair rows one to one (a population of coordinates) has diagonal ones.
 * **Replace.** Each tile is one unit of the scheme, its dot kind's (`Scheme.unit(dot, tile)`: per kind a factory, which
-  carries that kind's noise form; `Scheme.plug` sets one), self-contained (decision 106): ``(a: its A rows, b: its B rows,
+  carries that kind's noise form; `Scheme.plug` sets one), self-contained: ``(a: its A rows, b: its B rows,
   salt, position, roots) -> {z: its cells' exact products, receipt}``. The unit derives its seed in its own proof from the
-  salt, its position and its seed group's roots (`seeds.PouwSeed`, decision 105, or `seeds.PouwUnitSeeds` for a unit whose
-  receipt folds take keys: seed_j and σ_R, decision 121), and its noise from the seed; nothing else reads the salt. The
+  salt, its position and its seed group's roots (`seeds.PouwSeed`, or `seeds.PouwUnitSeeds` for a unit whose
+  receipt folds take keys: seed_j and σ_R), and its noise from the seed; nothing else reads the salt. The
   salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree); unit u reads position slot
   u (`Compiled.positions`) and its seed group's (root(A), root(B)). The three seed inputs are registered values the
   one-stage verifier fills itself, so the prover chooses none of them (`sampled_proofs.one_stage.registered`'s
@@ -26,9 +26,9 @@
   (`registered.log_base`, so no two records of a log share a position), and `pouw.salt` per window, filled by the
   verifier. R7 refuses a record that registers any other commitment of them (`R7-supplied`); `Compiled.inputs` gives the
   leaves the verifier fills. A seed group is the calls committed together (`groups`; by default a site, one
-  call: a batched call over a layer's heads and the batch is one site, decision 122): one commitment fixes the noise of
-  every unit it covers, so the units a group covers are the grinding premium's divisor (decision 112), at least the
-  scheme's `cover`, and its dots of each attention kind carry a grind term of at most 0.1% (decision 122: `grind`'s premium
+  call: a batched call over a layer's heads and the batch is one site): one commitment fixes the noise of
+  every unit it covers, so the units a group covers are the grinding premium's divisor, at least the
+  scheme's `cover`, and its dots of each attention kind carry a grind term of at most 0.1% (`grind`'s premium
   over the group's rows, each row's noise bits from the kind's `RowNoise` and its readers among the group's dots). A group
   never spans calls run one after another. The receipt is a sink (`Out(sink=True)`) only the Program's
   outputs read, and z feeds the Call's consumers in place of the Call's output, so served values don't change. The units sit
@@ -36,7 +36,7 @@
   becomes `PouwRest_v1{FN=F}`, F without its dots, reading their z (`pouw.z`). A rest of no gate is inlined.
 * **Check** (`CompileError` with the rule's code): every seed group covers at least the scheme's `cover` units, and its
   dots of each kind with a `RowNoise` a grind term of at most `grind.FLAG` at `grind.T_BITS` (``cover``: past it, decode at
-  a small batch or a short prompt, the group's noise is decision 36's live per-round coin, not a seed's); no seed group
+  a small batch or a short prompt, the group's noise is a live window's per-round coin, not a seed's); no seed group
   holds two calls one of which reads the other's output (``span``);
   no registered Call or matmul step is left outside a unit (``uncovered``);
   the salt reaches only the seed, through the units' salt port (``salt-flow``); each unit's seed reads the unit's own position
@@ -210,7 +210,7 @@ ANY = "*"
 
 @dataclass(frozen=True)
 class RowNoise:
-    """A kind's noise form as its seed group's grind term reads it (decision 122): the noise bits one A row and one B row
+    """A kind's noise form as its seed group's grind term reads it: the noise bits one A row and one B row
     carry, each ``(fixed, per entry)``, so ``fixed + per_entry·k`` at contraction k."""
 
     a: tuple[int, int]
@@ -220,9 +220,9 @@ class RowNoise:
         return self.a[0] + self.a[1] * k, self.b[0] + self.b[1] * k
 
 
-#: The attention forms H1 is to carry (ATTN-NOISE, `benchmarks/pouw/theory/attn_noise.py`'s `h_table`): QKᵀ's Q row carries
+#: The attention forms H1 is to carry (`benchmarks/pouw/theory/attn_noise.py`'s `h_table`): QKᵀ's Q row carries
 #: its c (a bit an entry) and its U (320 bits), its K row its b (a bit an entry); P·V's P row its U (224 bits), its V column
-#: its b. QKᵀ is `DotBf16`'s; P·V's kind is the one ATTN-NOISE plugs (`Scheme.plug(..., rows=PV_ROWS)`). H1's scheme has no
+#: its b. QKᵀ is `DotBf16`'s; P·V's kind is the one a plugged unit takes (`Scheme.plug(..., rows=PV_ROWS)`). H1's scheme has no
 #: unit for either yet, so its `rows` are read only once one is plugged: a `DotBf16` dot is refused (`scheme`) first.
 QK_ROWS = RowNoise(a=(320, 1), b=(0, 1))
 PV_ROWS = RowNoise(a=(224, 0), b=(0, 1))
@@ -232,13 +232,13 @@ ROWS = {f"DotBf16_v{v}": QK_ROWS for v in (1, 2, 3)}
 @dataclass(frozen=True)
 class Scheme:
     """A PoUW scheme as the pass takes it: its tile size (r, c), a scheme parameter; per kind of dot (a family's id, or `ANY`
-    for every kind without its own), the factory of one tile's unit, which carries that kind's noise form (decision 109:
-    attention's QKᵀ and P·V are kinds like any other, and `plug` sets a kind's form); `cover`, the fewest units one seed
-    group may cover (decision 112: the grinding premium is a constant number of units per seed group, so GRIND/BUDGET sets
+    for every kind without its own), the factory of one tile's unit, which carries that kind's noise form (attention's
+    QKᵀ and P·V are kinds like any other, and `plug` sets a kind's form); `cover`, the fewest units one seed
+    group may cover (the grinding premium is a constant number of units per seed group, so GRIND/BUDGET sets
     the least coverage); and `rows`, per kind whose noise a matched row makes visible (attention's, `ROWS`), its
     `RowNoise`. A seed group's dots of such a kind carry GRIND's grind term: `grind.visible_premium` over the group's
     distinct A rows and B rows, each row's noise bits from the form and its readers the group's dots that read it, over
-    those dots, at `grind.T_BITS`; over `grind.FLAG` (0.1%) the group is refused (decision 122). At decode that is every
+    those dots, at `grind.T_BITS`; over `grind.FLAG` (0.1%) the group is refused. At decode that is every
     (query head, request) pair a call holds, whatever KV heads they share (8B: batch ≥ 13 for QKᵀ); at prefill, the
     (KV head, request) components, fewer the longer the prompt. `noise`, per kind outside `rows`, its `RowNoise` too, which
     the grind term doesn't read and only the work floor does (`Compiled.floor`; H1's s8 kinds, `h1tile.H1_ROWS`): a kind's
@@ -248,7 +248,7 @@ class Scheme:
     Array(2, digest)) -> Record(z: Array(len(tile.pairs), dot.z), receipt: R)``, the digest and position types
     `seeds.types(dot.boolean)`'s. It calls one seed once on its salt, position and roots: `seeds.PouwSeed`
     (`seeds.seed_call`), or `seeds.PouwUnitSeeds` (`seeds.unit_seeds_call`) where its receipt folds take keys, which come
-    from σ_R, never from seed_j (decision 121). It derives its noise from seed_j (`seeds.noise_blocks`), holds the noised
+    from σ_R, never from seed_j. It derives its noise from seed_j (`seeds.noise_blocks`), holds the noised
     arm, the receipt fold and the spot check, and returns its cells' exact products as z. A factory may raise
     `CompileError` ("scheme") for a dot or tile it doesn't take.
 
@@ -958,7 +958,7 @@ def _group_of(plan: _Plan, groups: Callable[[Site], Any] | Sequence[Any] | None)
 
 
 def _grind(plan: _Plan, group_of: Sequence[int], scheme: Scheme) -> tuple[dict[str, float], ...]:
-    """Per seed group, the grind term of its dots of each kind with a `RowNoise` (decision 122): `grind.visible_premium`
+    """Per seed group, the grind term of its dots of each kind with a `RowNoise`: `grind.visible_premium`
     over the group's distinct A rows and B rows, each (its noise bits at its k, its readers among the group's dots of the
     kind), over those dots."""
     acc: dict[tuple[int, str], tuple[dict[tuple[int, tuple], tuple[int, int]], list[int]]] = {}
@@ -1031,7 +1031,7 @@ class Compiled:
 
     @cached_property
     def cover(self) -> tuple[int, ...]:
-        """The units each seed group covers (decision 112's coverage)."""
+        """The units each seed group covers (its coverage, which `Scheme.cover` bounds below)."""
         n = [0] * len(self.groups)
         for u in self.units:
             n[self.group_of[u.site]] += 1
@@ -1039,7 +1039,7 @@ class Compiled:
 
     @cached_property
     def grind(self) -> tuple[dict[str, float], ...]:
-        """Per seed group, the grind term of its dots of each kind with a `RowNoise` (decision 122, `Scheme.rows`): π* over
+        """Per seed group, the grind term of its dots of each kind with a `RowNoise` (`Scheme.rows`): π* over
         its dots, each at most `grind.FLAG`."""
         return _grind(self.plan, self.group_of, self.scheme)
 

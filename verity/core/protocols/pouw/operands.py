@@ -13,7 +13,7 @@ The verifier holds each entry to the domain its program, value, rows and the win
 the tiles' rows against those entries alone.
 
 Not proved here: that the A rows are the rows the served model read (the served activations ``x`` are one token's row,
-an A row R tokens' K/2 codes): that tie is a gather (CIR-100)."""
+an A row R tokens' K/2 codes): that tie is a gather, still open (`GAPS`)."""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
