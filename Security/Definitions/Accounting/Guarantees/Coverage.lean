@@ -25,20 +25,24 @@ def CapabilityFloor : Prop :=
     ∀ (C : In → Accounting.Actual.Run L) (pos : Fin m → L × ℕ × ℕ),
       G.prob (fun x 𝒴 => (C, x) ∈ 𝒜 ∧ Accounting.Slowdown.Succeeds (C x) pos 𝒴 ∧ cost (C x) < min Lc Tmax) ≤ η
 
-/-- **`CapabilityFloor`'s premises hold together** at the toy task (`Accounting.Slowdown.Toy`): every computation has
-the covered structure, so coverage holds at `η = 0`, and every one costs `5 = Lc`. -/
+/-- **`CapabilityFloor`'s premises hold together** at the toy task (`Accounting.Slowdown.Toy`), with the covered
+structure at least two gates, the cost a run's gate count, `Tmax = 10`, `η = 1/2` and `Lc = 2`: coverage holds, and
+every covered computation costs at least `2`. Coverage is not empty: the guess, one gate, lacks the structure and
+reaches the target on half the coins, so coverage fails at `η = 0`. -/
 def CapabilityFloorHonest : Prop :=
   Assumptions.CoversEfficientMethods Accounting.Slowdown.Toy.task Set.univ Accounting.Slowdown.Toy.covered
-      Accounting.Slowdown.Toy.cost 5 0 ∧
-    ∀ C x, (C, x) ∈ (Set.univ : Accounting.Slowdown.Class Unit Unit) → Accounting.Slowdown.Toy.covered C x →
-      5 ≤ Accounting.Slowdown.Toy.cost (C x)
+      Accounting.Slowdown.Toy.cost 10 2⁻¹ ∧
+    (∀ C x, (C, x) ∈ (Set.univ : Accounting.Slowdown.Class Unit Unit) → Accounting.Slowdown.Toy.covered C x →
+      2 ≤ Accounting.Slowdown.Toy.cost (C x)) ∧
+    ¬ Assumptions.CoversEfficientMethods Accounting.Slowdown.Toy.task Set.univ Accounting.Slowdown.Toy.covered
+      Accounting.Slowdown.Toy.cost 10 0
 
-/-- **`CapabilityFloor`'s conclusion can fail**: when a computation costs `0`, below the floor `Lc = 5`, and reaches
-the target on every input, success below the floor has probability `1`, above `η = 0`. -/
+/-- **`CapabilityFloor`'s conclusion can fail**: at `η = 0`, the guess, costing one gate, below the floor `Lc = 2`,
+reaches the target below the floor on half the coins. -/
 def CapabilityFloorNontrivial : Prop :=
   ¬ Accounting.Slowdown.Toy.task.prob (fun x 𝒴 =>
       (Accounting.Slowdown.Toy.comp, x) ∈ (Set.univ : Accounting.Slowdown.Class Unit Unit) ∧
         Accounting.Slowdown.Succeeds (Accounting.Slowdown.Toy.comp x) Accounting.Slowdown.Toy.pos 𝒴 ∧
-        Accounting.Slowdown.Toy.free (Accounting.Slowdown.Toy.comp x) < min 5 5) ≤ 0
+        Accounting.Slowdown.Toy.cost (Accounting.Slowdown.Toy.comp x) < min 2 10) ≤ 0
 
 end Nci.Guarantees
