@@ -88,8 +88,6 @@ def chainV (d : ByteArray) (k : ℕ) : List (BitVec 64) := (List.range 8).map fu
 /-- The `k`-th block of `d`, as its sixteen big-endian words. -/
 def blockV (d : ByteArray) (k : ℕ) : List (BitVec 64) := (List.range 16).map fun i => (wordBE d (128 * k) i).toBitVec
 
-theorem chainV_zero (d : ByteArray) : chainV d 0 = (List.range 8).map fun i => Sha512.iv[i]!.toBitVec := rfl
-
 /-- **One compression per block**: the chaining value after `k + 1` blocks is `compressV` of the one after `k` and
 block `k`. -/
 theorem chainV_succ (d : ByteArray) (k : ℕ) : chainV d (k + 1) = compressV (chainV d k) (blockV d k) := by
