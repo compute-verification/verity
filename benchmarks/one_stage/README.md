@@ -78,8 +78,8 @@ negatives.
   follows them as a measurement under its own `WC_RECORD_TIMEOUT` (default 2h): a timeout or refusal there is reported and
   never fails the run. V3c commits the window as `V3C_CLASS`'s circuit (its scan state the network certifier's scan of the
   warden run the certifier front kept), audits it and writes it as the certifier's period reads it (`period.json`). With
-  the certifier's piece split, `CERTIFIER_CHAIN_CMD` runs its chain before V3c's audit and `CERTIFIER_PERIOD_CMD` its period
-  check after it. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn
+  the certifier's piece split, `CERTIFIER_CHAIN_CMD` runs its chain beside V3c's audit (within `CERTIFIER_TIMEOUT`, default
+  4h) and `CERTIFIER_PERIOD_CMD` its period check after both. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn
   proof blocks and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its
   piece where `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its
   issue, and it gets no verdict. Finally the all-protocols window report and the block record. Each step's verdict line is

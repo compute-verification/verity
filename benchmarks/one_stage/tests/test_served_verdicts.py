@@ -403,28 +403,32 @@ def _v3c(tmp_path: Path, **extra: str) -> tuple[int, list[str], list[str], list[
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), read("order"), read("limits")
 
 
-def test_v3c_runs_the_certifiers_chain_before_its_audit_and_its_period_check_on_the_period_json_after(tmp_path):
-    """The window commit, then the split certifier's chain (it reads the commit's scan state), V3c's audit, its period.json
-    and the certifier's period check on it, each within its own limit; the check gets the serve dir, the window, the
-    certifier's piece dir and V3c's dir, and writes the answer `pieces` reads there."""
+def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_the_period_json_after(tmp_path):
+    """The window commit, then the split certifier's chain (it reads the commit's scan state) beside V3c's audit and its
+    period.json, and the certifier's period check on it once both are done, each within its own limit; the check gets the
+    serve dir, the window, the certifier's piece dir and V3c's dir, and writes the answer `pieces` reads there."""
     rc, lines, order, limits = _v3c(tmp_path)
     assert rc == 0, lines
-    assert order == ["window-circuit", "window-commit", "chain", "audit", "period", "period-check"]
-    assert limits == ["30m", "120m", "60m", "180m", "60m"]
+    assert order[:2] == ["window-circuit", "window-commit"] and order[-1] == "period-check"
+    assert sorted(order[2:-1]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
+    assert limits[:2] == ["30m", "120m"] and sorted(limits[2:-1]) == ["180m", "4h"] and limits[-1] == "60m"
     vw, pieces = tmp_path / "serve" / "v3c-w0-8-32-4-4-16", tmp_path / "out" / "pieces" / "certifier"
     assert (pieces / "chain.args").read_text().split() == [str(tmp_path / "serve"), "0", str(pieces), str(vw)]
     assert json.loads((pieces / "answer.json").read_text()) == {"verdict": "accept"}
     assert json.loads((tmp_path / "out" / "v3c-audit" / "period.json").read_text()) == {"free": 0}
-    assert [line.split(" (")[0].split(":")[0] for line in lines] == [
-        "WINDOW-CIRCUIT class 8,32,4,4,16", "WINDOW-COMMIT class 8,32,4,4,16", "WINDOW-CIRCUIT-HELD class 8,32,4,4,16",
-        "CERTIFIER-CHAIN", "V3C-AUDIT class 8,32,4,4,16", "V3C-PERIOD", "CERTIFIER-PERIOD"]
-    assert lines[2].endswith("PASS") and lines[5].endswith('PERIOD {"verdict": "accept"}')
+    heads = [line.split(" (")[0].split(":")[0] for line in lines]
+    assert heads[:3] == ["WINDOW-CIRCUIT class 8,32,4,4,16", "WINDOW-COMMIT class 8,32,4,4,16",
+                         "WINDOW-CIRCUIT-HELD class 8,32,4,4,16"] and heads[-1] == "CERTIFIER-PERIOD"
+    assert sorted(heads[3:-1]) == ["CERTIFIER-CHAIN", "V3C-AUDIT class 8,32,4,4,16", "V3C-PERIOD"]
+    assert lines[2].endswith("PASS") and lines[heads.index("V3C-PERIOD")].endswith('PERIOD {"verdict": "accept"}')
 
 
 def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
     rc, lines, order, _limits = _v3c(tmp_path, FAIL_PERIOD="1")
-    assert rc == 1 and order == ["window-circuit", "window-commit", "chain", "audit", "period"]
-    assert "the audit under it wrote no Program" in lines[-2] and lines[-1] == "CERTIFIER-PERIOD: not run: V3c wrote no period.json"
+    assert rc == 1 and order[:2] == ["window-circuit", "window-commit"]
+    assert sorted(order[2:]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
+    assert any("the audit under it wrote no Program" in x for x in lines[-3:-1])
+    assert lines[-1] == "CERTIFIER-PERIOD: not run: V3c wrote no period.json"
     assert not (tmp_path / "out" / "pieces" / "certifier" / "answer.json").exists()
 
 

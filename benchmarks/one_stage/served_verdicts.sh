@@ -38,10 +38,13 @@
 #     window-circuit record at the class; then `records_audit.py audit --circuit --registered` the registration (V3C_LAW,
 #     default subset:1) draws and proves its members, and `records_audit.py period` writes the audit as the network
 #     certifier's period reads it (period.json: the registration, the Program, its answer and its free inputs).
-#     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD runs its chain after the window-commit and
-#     before V3c's audit (within CERTIFIER_TIMEOUT, default 60m), and CERTIFIER_PERIOD_CMD its period check after V3c's
-#     period.json (within CERTIFIER_PERIOD_TIMEOUT, default 60m), each as `bash -c CMD _ D K DIR V3C` in TREE with DIR
-#     $OUT/pieces/certifier, where the period check writes the certifier's answer.json; CERTIFIER_CMD is then left unset.
+#     With the network certifier's piece split in two (`certifier_piece.py chain` and `period`), CERTIFIER_CHAIN_CMD runs
+#     its chain after the window-commit, beside V3c's audit and period.json (within CERTIFIER_TIMEOUT, default 4h), and
+#     CERTIFIER_PERIOD_CMD its period check once both are done and V3c wrote period.json (within
+#     CERTIFIER_PERIOD_TIMEOUT, default 60m), each as `bash -c CMD _ D K DIR V3C` in TREE with DIR $OUT/pieces/certifier,
+#     where the period check writes the certifier's answer.json; CERTIFIER_CMD is then left unset. Step 3 then takes the
+#     window-commit, the longer of the chain and V3c's audit, and the period check (at most 120m + 4h + 60m at the
+#     defaults), which the run's --timeout holds beside steps 1, 2 and 4.
 #     `served_verdicts.sh v3c` runs only that step on an existing serve dir (D and its window K set), the build first.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it (the split certifier's, its period check's answer
@@ -178,7 +181,7 @@ v3c_period() {  # V3c's audit as one compute audit of the network certifier's pe
 }
 certifier_step() {  # $1 chain|period: the split network certifier's step on V3c's window (step 3), if its command is set
   local cmd lim dir=$OUT/pieces/certifier rc
-  if [ "$1" = chain ]; then cmd=${CERTIFIER_CHAIN_CMD:-} lim=${CERTIFIER_TIMEOUT:-60m}
+  if [ "$1" = chain ]; then cmd=${CERTIFIER_CHAIN_CMD:-} lim=${CERTIFIER_TIMEOUT:-4h}
   else cmd=${CERTIFIER_PERIOD_CMD:-} lim=${CERTIFIER_PERIOD_TIMEOUT:-60m}; fi
   [ -n "$cmd" ] || return 0
   mkdir -p "$dir"
@@ -187,11 +190,12 @@ certifier_step() {  # $1 chain|period: the split network certifier's step on V3c
   say "CERTIFIER-${1^^} (exit $rc): $(tail -1 "$dir/$1.log" | cut -c1-600)"
   return $rc
 }
-v3c_proved() {  # V3c's window committed and the build done: the certifier's chain, V3c's audit and period.json, the period check
-  local rc prc
-  certifier_step chain
+v3c_proved() {  # V3c's window committed and the build done: the certifier's chain beside V3c's audit and period.json, then the period check
+  local rc prc chain
+  certifier_step chain & chain=$!
   v3c_audit; rc=$?
   v3c_period; prc=$?
+  wait "$chain"
   if [ "$prc" = 0 ]; then certifier_step period
   elif [ -n "${CERTIFIER_PERIOD_CMD:-}" ]; then say "CERTIFIER-PERIOD: not run: V3c wrote no period.json"; fi
   return $((rc ? rc : prc))
