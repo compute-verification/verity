@@ -333,7 +333,7 @@ def rates : _root_.RemoteAudit.Line.Rates := ⟨0, 1, 0, 0, 0, 0, 0⟩
 /-- One host `h` holding one device of sheet `t` and one byte of DRAM: inputs `rates`, no on-chip byte and one byte of
 node memory (`inputs`). -/
 def site : Core.Site where
-  sheets := [{ sku := "t", tc := 0, bw := 0, chip := 0, mem := 0 }]
+  sheets := [{ figures := { sku := "t", clock := 0, peakRate := fun _ => 0 }, bw := 0, chip := 0, mem := 0 }]
   locs := [{ id := "h", kind := .host }, { id := "d", kind := .device, parent := some "h", sheet := "t" },
     { id := "m", kind := .memory, parent := some "h", tier := some .dram, bytes := 1 }]
   links := []
