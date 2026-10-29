@@ -5,7 +5,7 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 The compile slice reads a window's served rows as a committed hidden row, ``srv``, and the verifier holds its b‖c to the
 served-rows registration natively. What binds those rows to the batch the server ran is a tie. The routed tie
 (`served_tie.ServedRowsTie_v2`) holds them to the Commit's committed positions. Each of its units hashes the window's
-whole ``srv`` row and each step's positions in-circuit, about 400 KB at the served class, which no C-Flock unit of
+whole ``srv`` row and each step's positions in-circuit, about 400 KB at the served class, which no Flock unit of
 2^27 holds. `ServedStaticsTie_v1{R, G, IW, L, T}` holds them to the Programs' statics instead, and reads its block's rows
 through the Lean verifier's registered reads, so its unit hashes only those rows.
 
@@ -42,7 +42,7 @@ the prover's word.
 
 **Cost** (`size`, pinned in `served_statics.circuit-check.json`). A step is R·(1 + LW + TW) − 2 ANDs, and the steps'
 flags cost 2·(G − 1) more. Every committed row a unit reads is hashed in-circuit, so its two rows, G·R·(3 + IW +
-2·(LW + TW)) bits, set its C-Flock block (`benchmarks/prove_path/served_statics_zk.py cost`):
+2·(LW + TW)) bits, set its Flock block (`benchmarks/prove_path/served_statics_zk.py cost`):
 
 | class | G | unit ANDs | block (k_log) |
 |---|---|---|---|

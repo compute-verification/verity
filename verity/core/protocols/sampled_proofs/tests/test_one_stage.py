@@ -1,4 +1,4 @@
-"""One-stage audit: the demo partition query, the registration record, the draw and proved-block checks, the profile."""
+"""One-stage audit: the demo partition query, the registration record, the sample and proved-block checks, the profile."""
 
 from __future__ import annotations
 
@@ -421,7 +421,7 @@ def test_audit_record_needs_every_check_and_verdict():
 
 
 def test_audit_record_holds_the_served_draw_and_the_sessions_roots():
-    """The sessions must have been served exactly the verifier's draw, and each session's root must be the registered one."""
+    """The sessions must have been served exactly the verifier's sample, and each session's root must be the registered one."""
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
@@ -555,8 +555,8 @@ def test_stratified_draw_checks():
 
 
 def test_one_stratified_draw_splits_over_several_tables():
-    """A session of J tables splits one draw (Lean `Draw.tablesWhy`): a stratified draw whose sum of k_s is a positive
-    multiple of J, as a subset draw's k must be; a Bernoulli or work sampling design never, whatever its count."""
+    """A session of J tables splits one sample (Lean `Draw.tablesWhy`): a stratified sample whose sum of k_s is a positive
+    multiple of J, as a subset sample's k must be; a Bernoulli or work sampling design never, whatever its count."""
     prog, q, rule, rec = _stratified_registration()
     law = D.derive(prog, q, rule)                                          # k_s = 2, 2
     good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
@@ -728,10 +728,10 @@ def test_a_pre_canonical_object_keeps_its_digest():
     assert P.digest(old) == hashlib.sha512(b"verity/partition/v1\x00" + codec.canonical_json(old)).hexdigest()
 
 
-# --- the work sampling design (the draw sampling design's second version; Lean `Flock.Draw.Law.work`) -------------------------------------------------
+# --- the work sampling design (the sample sampling design's second version; Lean `Flock.Draw.Law.work`) -------------------------------------------------
 
 def test_the_work_rule_sizes_by_work_above_the_floor():
-    """`work_k` is Lean's `workK`: ceil(K w n_s / W), at least the floor and at most n_s; so every non-empty stratum draws at
+    """`work_k` is Lean's `workK`: ceil(K w n_s / W), at least the floor and at most n_s; so every non-empty stratum samples at
     least min(n_s, f_s) (`floor_le_workK`), at least K w n_s / W or all (`workK_ge`), and at most K + sum_s f_s in all
     (`sum_workK_le`)."""
     assert D.work_k(4, 10, 3, 30, 1) == 3 and D.work_k(4, 0, 3, 30, 1) == 1 and D.work_k(4, 0, 3, 30, 2) == 2
@@ -815,7 +815,7 @@ def test_work_draw_checks_and_closures():
     assert D.check_draw({**closed, "closure": [5, 1]}, rec, law).codes == ("closure",)
     stratified = D.derive(prog, q, D.parse_law("stratified:4"))
     assert D.check_draw({"law": "stratified", "population": 6, "k": 4, "strata": stratified["strata"], "units": [0, 2, 3, 5],
-                         "closure": [1]}, rec, stratified).codes == ("keys",)           # a closure only on a work draw
+                         "closure": [1]}, rec, stratified).codes == ("keys",)           # a closure only on a work sample
     wrong_k = [law["strata"][0], {**law["strata"][1], "k": 2}]
     assert D.strata_problem({"law": "work", "k": 4, "strata": wrong_k}, 6) == f"stratum {PAIR.id!r}: k is not the work rule's"
     no_work = [{**s, "work": 0} for s in law["strata"]]
