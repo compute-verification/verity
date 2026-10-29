@@ -41,19 +41,19 @@ def stepsFor (K : ℕ) : ℕ := 1 + (K - 20 + 27) / 28
 
 /-- **The coin lanes** of row `i` at step `t`, column `j`: `Σ_ℓ A′[i, ℓ] · s_t[⌊i/tile⌋, ℓ, j]`, `-rot`'s weights
 against its tile's three lane coins. -/
-def coinLanes (L : Layout) (ω : Coins L) (i : Fin L.m) (t : Fin L.S) (j : Fin L.n) : ℤ :=
+def coinLanes (L : Pouw.Lead.Layout) (ω : Coins L) (i : Fin L.m) (t : Fin L.S) (j : Fin L.n) : ℤ :=
   ∑ ℓ : Fin 3, rotWeight i ℓ * (if h : (i : ℕ) / L.tile < L.tiles then ω.s t ⟨(i : ℕ) / L.tile, h⟩ ℓ j else 0)
 
 /-- **Step `t`'s coin term** in row `i`, column `j`: step 0's `T(i)·G[:, j] + a₁[i]·C[:, j]` or a later step's tag lane
 `1 + b_t[i]`, and at every step the coin lanes. -/
-def coinTerm (L : Layout) (ω : Coins L) (i : Fin L.m) (t : Fin L.S) (j : Fin L.n) : ℤ :=
+def coinTerm (L : Pouw.Lead.Layout) (ω : Coins L) (i : Fin L.m) (t : Fin L.S) (j : Fin L.n) : ℤ :=
   (if (t : ℕ) = 0 then
     (∑ q : Fin 4, rowTag i q * ω.G q j) + ∑ q : Fin 4, ((ω.2.1 i q : ℕ) : ℤ) * colCode j q
   else 1 + ((ω.1 i t : ℕ) : ℤ)) + coinLanes L ω i t j
 
 /-- **The committed word** of row `i`, step `t`, column `j`: `−β_j + Σ_{τ ≤ t} (κ i τ j + coinTerm i τ j)`, with `κ`
 the data's step dot products, fixed before the coins. -/
-def word (L : Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) (i : Fin L.m) (t : Fin L.S)
+def word (L : Pouw.Lead.Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) (i : Fin L.m) (t : Fin L.S)
     (j : Fin L.n) : ℤ :=
   -bias L.S j + ∑ τ : Fin L.S, if τ ≤ t then κ i τ j + coinTerm L ω i τ j else 0
 
@@ -65,26 +65,26 @@ def leadMacs : ℕ := 16 * ∑ q : Fin 4, (llamaShapes q).1 * (llamaShapes q).2
 
 /-- **A forward of Llama-3.2-1B**: at `T` tokens in calls of `m` rows and an egress cap of `cap` bits a token, the call
 of row block `c.1`, layer `c.2.1` and matmul `c.2.2`. -/
-def llamaCall (cap T m : ℕ) (c : Fin (T / m) × Fin 16 × Fin 4) : Layout :=
+def llamaCall (cap T m : ℕ) (c : Fin (T / m) × Fin 16 × Fin 4) : Pouw.Lead.Layout :=
   { lead T m (llamaShapes c.2.2).1 (llamaShapes c.2.2).2 with cap := cap }
 
 /-- `β = n_max · W_mac`: the priced W1 work an exchanged bit replaces at most, `n_max = 256 / 3` MACs a coin bit
 (`CellsRot`) times the honest W1 work a MAC, `32 · honestRegs / (m n K)`. -/
-def betaLead (L : Layout) (C : Commit L) : ℚ := 256 / 3 * (32 * honestRegs L C / (L.m * L.n * L.K))
+def betaLead (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) : ℚ := 256 / 3 * (32 * honestRegs L C / (L.m * L.n * L.K))
 
 /-- **The network term** of a call that exchanges `E` bits, in registers: `β E / 32`, at 32 W1 a register. -/
-def networkGap (L : Layout) (C : Commit L) (E : ℚ) : ℚ := betaLead L C * E / 32
+def networkGap (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) (E : ℚ) : ℚ := betaLead L C * E / 32
 
 /-- **A call's stock share of the egress cap**: `cap · m n K / leadMacs` bits, a forward's `cap` bits a token spread
 over its `leadMacs` MACs a token in proportion to the call's `m n K`. -/
-def egressShare (L : Layout) : ℚ := L.cap * (L.m * L.n * L.K) / leadMacs
+def egressShare (L : Pouw.Lead.Layout) : ℚ := L.cap * (L.m * L.n * L.K) / leadMacs
 
 /-- **`n_max ≤ 256 / 3` at every cell of the lead**: rows `R` of one 64-row coin tile at step `t` (step 0 included),
 by the columns `J`, whose step-`t` words an outsourcer gets from a message of `b` bits at every coin value, do
 `|R| · |J| · dataLanes t` MACs, at most `256 / 3` a bit of the message. -/
 def CellsRot : Prop :=
-  ∀ (L : Layout), L.tile = 64 → L.e = 7 → ∀ (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (t : Fin L.S) (k : Fin L.tiles)
-    (R : Finset (Fin L.m)), (∀ i ∈ R, (i : ℕ) / L.tile = k) → ∀ (J : Finset (Fin L.n)) (b : ℕ)
+  ∀ (L : Pouw.Lead.Layout), L.tile = 64 → L.e = 7 → ∀ (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (t : Fin L.S)
+    (k : Fin L.tiles) (R : Finset (Fin L.m)), (∀ i ∈ R, (i : ℕ) / L.tile = k) → ∀ (J : Finset (Fin L.n)) (b : ℕ)
     (h : Coins L → Fin (2 ^ b)) (g : Fin (2 ^ b) → Fin L.m → Fin L.n → ℤ),
     (∀ ω, ∀ i ∈ R, ∀ j ∈ J, g (h ω) i j = word L κ ω i t j) →
     3 * (R.card * J.card * dataLanes t) ≤ 256 * b
@@ -93,27 +93,27 @@ def CellsRot : Prop :=
 its stock share of 32 bits a token, at most 0.036% of stock at T 512 × 64, T 512 × 512 and T 8,192. -/
 def NetworkAt : Prop :=
   ∀ n K : ℕ, 4096 ≤ n → 4096 ≤ K →
-    (∀ C : Commit (pt512x64 n K), ChunksOf _ C → ∀ E : ℚ, E ≤ egressShare (pt512x64 n K) →
+    (∀ C : Pouw.Lead.Commit (pt512x64 n K), ChunksOf _ C → ∀ E : ℚ, E ≤ egressShare (pt512x64 n K) →
       networkGap _ C E ≤ 36 / 100000 * stockRegs (pt512x64 n K)) ∧
-    (∀ C : Commit (pt512x512 n K), ChunksOf _ C → ∀ E : ℚ, E ≤ egressShare (pt512x512 n K) →
+    (∀ C : Pouw.Lead.Commit (pt512x512 n K), ChunksOf _ C → ∀ E : ℚ, E ≤ egressShare (pt512x512 n K) →
       networkGap _ C E ≤ 36 / 100000 * stockRegs (pt512x512 n K)) ∧
-    (∀ C : Commit (pt8192 n K), ChunksOf _ C → ∀ E : ℚ, E ≤ egressShare (pt8192 n K) →
+    (∀ C : Pouw.Lead.Commit (pt8192 n K), ChunksOf _ C → ∀ E : ℚ, E ≤ egressShare (pt8192 n K) →
       networkGap _ C E ≤ 36 / 100000 * stockRegs (pt8192 n K))
 
 /-- **The network term at the three points, cap 320**: at most 0.36% of stock. -/
 def NetworkAt320 : Prop :=
   ∀ n K : ℕ, 4096 ≤ n → 4096 ≤ K →
-    (∀ C : Commit (lead320 512 64 n K), ChunksOf _ C → ∀ E : ℚ, E ≤ egressShare (lead320 512 64 n K) →
+    (∀ C : Pouw.Lead.Commit (lead320 512 64 n K), ChunksOf _ C → ∀ E : ℚ, E ≤ egressShare (lead320 512 64 n K) →
       networkGap _ C E ≤ 36 / 10000 * stockRegs (lead320 512 64 n K)) ∧
-    (∀ C : Commit (lead320 512 512 n K), ChunksOf _ C → ∀ E : ℚ, E ≤ egressShare (lead320 512 512 n K) →
+    (∀ C : Pouw.Lead.Commit (lead320 512 512 n K), ChunksOf _ C → ∀ E : ℚ, E ≤ egressShare (lead320 512 512 n K) →
       networkGap _ C E ≤ 36 / 10000 * stockRegs (lead320 512 512 n K)) ∧
-    (∀ C : Commit (lead320 8192 8192 n K), ChunksOf _ C → ∀ E : ℚ, E ≤ egressShare (lead320 8192 8192 n K) →
+    (∀ C : Pouw.Lead.Commit (lead320 8192 8192 n K), ChunksOf _ C → ∀ E : ℚ, E ≤ egressShare (lead320 8192 8192 n K) →
       networkGap _ C E ≤ 36 / 10000 * stockRegs (lead320 8192 8192 n K))
 
 /-- **The network term over a forward of Llama-3.2-1B** at cap `cap`: at `T` tokens in calls of `m ∣ T` rows, the
 calls' egress summed within `cap · T` bits, their network terms sum to at most `share` of the forward's stock. -/
 def NetworkForward (cap : ℕ) (share : ℚ) : Prop :=
-  ∀ T m : ℕ, 1 ≤ m → m ∣ T → ∀ C : ∀ c, Commit (llamaCall cap T m c), (∀ c, ChunksOf _ (C c)) →
+  ∀ T m : ℕ, 1 ≤ m → m ∣ T → ∀ C : ∀ c, Pouw.Lead.Commit (llamaCall cap T m c), (∀ c, ChunksOf _ (C c)) →
     ∀ E : Fin (T / m) × Fin 16 × Fin 4 → ℚ, (∀ c, 0 ≤ E c) → ∑ c, E c ≤ cap * T →
       ∑ c, networkGap _ (C c) (E c) ≤ share * ∑ c, stockRegs (llamaCall cap T m c)
 

@@ -31,20 +31,20 @@ open Finset Pouw.Lead
 
 /-- Two coin values that agree on the tag bits, the step-1 bits and `G` give coin terms that differ by their coin
 lanes. -/
-theorem coinTerm_sub {L : Layout} {ω ω' : Coins L} (h1 : ω.1 = ω'.1) (h2 : ω.2.1 = ω'.2.1)
+theorem coinTerm_sub {L : Pouw.Lead.Layout} {ω ω' : Coins L} (h1 : ω.1 = ω'.1) (h2 : ω.2.1 = ω'.2.1)
     (h3 : ω.2.2.1 = ω'.2.2.1) (i : Fin L.m) (t : Fin L.S) (j : Fin L.n) :
     coinTerm L ω i t j - coinTerm L ω' i t j = coinLanes L ω i t j - coinLanes L ω' i t j := by
   unfold coinTerm Coins.G
   rw [h1, h2, h3]
   ring
 
-theorem coinLanes_congr {L : Layout} {ω ω' : Coins L} {t : Fin L.S} (h : ω.2.2.2 t = ω'.2.2.2 t) (i : Fin L.m)
+theorem coinLanes_congr {L : Pouw.Lead.Layout} {ω ω' : Coins L} {t : Fin L.S} (h : ω.2.2.2 t = ω'.2.2.2 t) (i : Fin L.m)
     (j : Fin L.n) : coinLanes L ω i t j = coinLanes L ω' i t j := by
   simp only [coinLanes, Coins.s, h]
 
 /-- **Words differ by their step's coin lanes**: two coin values that agree on everything but step `t`'s lane coins
 give step-`t` words that differ by the step's coin lanes. -/
-theorem word_sub {L : Layout} (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) {ω ω' : Coins L} (h1 : ω.1 = ω'.1)
+theorem word_sub {L : Pouw.Lead.Layout} (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) {ω ω' : Coins L} (h1 : ω.1 = ω'.1)
     (h2 : ω.2.1 = ω'.2.1) (h3 : ω.2.2.1 = ω'.2.2.1) {t : Fin L.S} (h4 : ∀ τ, τ ≠ t → ω.2.2.2 τ = ω'.2.2.2 τ)
     (i : Fin L.m) (j : Fin L.n) :
     word L κ ω i t j - word L κ ω' i t j = coinLanes L ω i t j - coinLanes L ω' i t j := by
@@ -72,24 +72,24 @@ theorem word_sub {L : Layout} (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) {ω
 
 /-- The coin values that vary only step `t`'s lane coins on tile `k` at the columns of `J`, by index (`y`): every other
 coin is index 0. -/
-def laneCoins (L : Layout) (he : L.e = 7) (t : Fin L.S) (k : Fin L.tiles) (J : Finset (Fin L.n))
+def laneCoins (L : Pouw.Lead.Layout) (he : L.e = 7) (t : Fin L.S) (k : Fin L.tiles) (J : Finset (Fin L.n))
     (y : J → Fin 3 → Fin 128) : Coins L :=
   (fun _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun t' k' ℓ j =>
     Fin.cast (by simp [he]) (if h : t' = t ∧ k' = k ∧ j ∈ J then y ⟨j, h.2.2⟩ ℓ else 0))
 
-theorem laneCoins_ne {L : Layout} (he : L.e = 7) {t : Fin L.S} {k : Fin L.tiles} (J : Finset (Fin L.n))
+theorem laneCoins_ne {L : Pouw.Lead.Layout} (he : L.e = 7) {t : Fin L.S} {k : Fin L.tiles} (J : Finset (Fin L.n))
     (y y' : J → Fin 3 → Fin 128) {τ : Fin L.S} (hτ : τ ≠ t) :
     (laneCoins L he t k J y).2.2.2 τ = (laneCoins L he t k J y').2.2.2 τ := by
   funext k' ℓ j
   simp [laneCoins, hτ]
 
-theorem laneCoins_s {L : Layout} (he : L.e = 7) (t : Fin L.S) (k : Fin L.tiles) {J : Finset (Fin L.n)}
+theorem laneCoins_s {L : Pouw.Lead.Layout} (he : L.e = 7) (t : Fin L.S) (k : Fin L.tiles) {J : Finset (Fin L.n)}
     (y : J → Fin 3 → Fin 128) (ℓ : Fin 3) {j : Fin L.n} (hj : j ∈ J) :
     (laneCoins L he t k J y).s t k ℓ j = coinVal (y ⟨j, hj⟩ ℓ) := by
   simp [Coins.s, laneCoins, hj, coinVal, he]
 
 /-- A row's coin lanes read its own tile's lane coins. -/
-theorem coinLanes_eq {L : Layout} (ω : Coins L) {i : Fin L.m} {k : Fin L.tiles} (hik : (i : ℕ) / L.tile = k)
+theorem coinLanes_eq {L : Pouw.Lead.Layout} (ω : Coins L) {i : Fin L.m} {k : Fin L.tiles} (hik : (i : ℕ) / L.tile = k)
     (t : Fin L.S) (j : Fin L.n) : coinLanes L ω i t j = ∑ ℓ : Fin 3, rotWeight i ℓ * ω.s t k ℓ j := by
   have hk : (i : ℕ) / L.tile < L.tiles := by rw [hik]; exact k.isLt
   have hk' : (⟨(i : ℕ) / L.tile, hk⟩ : Fin L.tiles) = k := Fin.ext hik
@@ -108,7 +108,7 @@ theorem rotSum_odd {i : ℕ} (hi : i % 2 = 1) (v : Fin 3 → ℤ) :
   simp [Fin.sum_univ_three, rotWeight, hi, foldOdd]
 
 /-- A step-`t` word of a coin value of `laneCoins` is a constant of its row and column plus its coin lanes. -/
-theorem word_laneCoins {L : Layout} (he : L.e = 7) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (t : Fin L.S)
+theorem word_laneCoins {L : Pouw.Lead.Layout} (he : L.e = 7) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (t : Fin L.S)
     (k : Fin L.tiles) (J : Finset (Fin L.n)) (y y₀ : J → Fin 3 → Fin 128) (i : Fin L.m) (j : Fin L.n) :
     word L κ (laneCoins L he t k J y) i t j =
       (word L κ (laneCoins L he t k J y₀) i t j - coinLanes L (laneCoins L he t k J y₀) i t j) +
@@ -123,7 +123,7 @@ theorem word_laneCoins {L : Layout} (he : L.e = 7) (κ : Fin L.m → Fin L.S →
 def tripleAt (x : Triple) (ℓ : Fin 3) : Fin 128 :=
   if (ℓ : ℕ) = 0 then x.1 else if (ℓ : ℕ) = 1 then x.2.1 else x.2.2
 
-theorem lanes_tripleAt {L : Layout} (he : L.e = 7) (t : Fin L.S) (k : Fin L.tiles) {J : Finset (Fin L.n)}
+theorem lanes_tripleAt {L : Pouw.Lead.Layout} (he : L.e = 7) (t : Fin L.S) (k : Fin L.tiles) {J : Finset (Fin L.n)}
     (x : J → Triple) {i : Fin L.m} (hik : (i : ℕ) / L.tile = k) (j : J) :
     coinLanes L (laneCoins L he t k J fun j => tripleAt (x j)) i t j =
       ∑ ℓ : Fin 3, rotWeight i ℓ * coinVal (tripleAt (x j) ℓ) := by
@@ -133,7 +133,7 @@ theorem lanes_tripleAt {L : Layout} (he : L.e = 7) (t : Fin L.S) (k : Fin L.tile
 
 /-- **Rows of both classes need 21 bits a column**: a message of `b` bits from which an outsourcer gets an even and an
 odd row's step-`t` words at the columns of `J`, both rows of tile `k`, for every coin value, has `b ≥ 21 |J|`. -/
-theorem lead_pair_bits {L : Layout} (he : L.e = 7) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (t : Fin L.S)
+theorem lead_pair_bits {L : Pouw.Lead.Layout} (he : L.e = 7) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (t : Fin L.S)
     (k : Fin L.tiles) {i i' : Fin L.m} (hik : (i : ℕ) / L.tile = k) (hik' : (i' : ℕ) / L.tile = k)
     (hi : (i : ℕ) % 2 = 0) (hi' : (i' : ℕ) % 2 = 1) (J : Finset (Fin L.n)) (b : ℕ) (h : Coins L → Fin (2 ^ b))
     (g : Fin (2 ^ b) → Fin L.m → Fin L.n → ℤ)
@@ -186,7 +186,7 @@ theorem rotSum_halfAt {i : ℕ} (x : Fin 128 × Fin 127) :
 
 /-- **Rows of one class need 13 bits a column**: a message of `b` bits from which an outsourcer gets one row's step-`t`
 words at the columns of `J` for every coin value has `b ≥ 13 |J|`. -/
-theorem lead_one_bits {L : Layout} (he : L.e = 7) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (t : Fin L.S)
+theorem lead_one_bits {L : Pouw.Lead.Layout} (he : L.e = 7) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (t : Fin L.S)
     (k : Fin L.tiles) {i : Fin L.m} (hik : (i : ℕ) / L.tile = k) (J : Finset (Fin L.n)) (b : ℕ)
     (h : Coins L → Fin (2 ^ b)) (g : Fin (2 ^ b) → Fin L.m → Fin L.n → ℤ)
     (hg : ∀ ω, ∀ j ∈ J, g (h ω) i j = word L κ ω i t j) : 13 * J.card ≤ b := by
@@ -206,7 +206,7 @@ theorem lead_one_bits {L : Layout} (he : L.e = 7) (κ : Fin L.m → Fin L.S → 
 
 /-! ## The lead's cells -/
 
-theorem card_tile_le {L : Layout} (hT : L.tile = 64) {k : ℕ} (R : Finset (Fin L.m))
+theorem card_tile_le {L : Pouw.Lead.Layout} (hT : L.tile = 64) {k : ℕ} (R : Finset (Fin L.m))
     (hR : ∀ i ∈ R, (i : ℕ) / L.tile = k) : R.card ≤ 64 := by
   have hinj : Set.InjOn (fun i : Fin L.m => (i : ℕ) % 64) R := by
     intro a ha b hb hab
@@ -221,7 +221,7 @@ theorem card_tile_le {L : Layout} (hT : L.tile = 64) {k : ℕ} (R : Finset (Fin 
         exact mem_range.2 (Nat.mod_lt _ (by norm_num))
     _ = 64 := card_range 64
 
-theorem card_class_le {L : Layout} (hT : L.tile = 64) {k p : ℕ} (R : Finset (Fin L.m))
+theorem card_class_le {L : Pouw.Lead.Layout} (hT : L.tile = 64) {k p : ℕ} (R : Finset (Fin L.m))
     (hR : ∀ i ∈ R, (i : ℕ) / L.tile = k) (hp : ∀ i ∈ R, (i : ℕ) % 2 = p) : R.card ≤ 32 := by
   have hinj : Set.InjOn (fun i : Fin L.m => (i : ℕ) % 64 / 2) R := by
     intro a ha b hb hab
@@ -246,7 +246,7 @@ theorem dataLanes_le (t : ℕ) : dataLanes t ≤ 28 := by
 included), by the columns of `J`, whose step-`t` words an outsourcer gets from a message of `b` bits at every coin
 value, is a cell of `|R|` rows, `|J|` columns and `dataLanes t ≤ 28` data lanes reading `b` bits that meets
 `Cell.Rot`: at most 64 rows with `b ≥ 21 |J|`, or, its rows of one class, at most 32 with `b ≥ 13 |J|`. -/
-theorem lead_cells_rot (L : Layout) (hT : L.tile = 64) (he : L.e = 7) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
+theorem lead_cells_rot (L : Pouw.Lead.Layout) (hT : L.tile = 64) (he : L.e = 7) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
     (t : Fin L.S) (k : Fin L.tiles) (R : Finset (Fin L.m)) (hne : R.Nonempty)
     (hR : ∀ i ∈ R, (i : ℕ) / L.tile = k) (J : Finset (Fin L.n)) (b : ℕ) (h : Coins L → Fin (2 ^ b))
     (g : Fin (2 ^ b) → Fin L.m → Fin L.n → ℤ) (hg : ∀ ω, ∀ i ∈ R, ∀ j ∈ J, g (h ω) i j = word L κ ω i t j) :
@@ -271,7 +271,7 @@ theorem lead_cells_rot (L : Layout) (hT : L.tile = 64) (he : L.e = 7) (κ : Fin 
     exact Or.inr ⟨by exact_mod_cast card_class_le hT R hR hp, by exact_mod_cast hbits⟩
 
 /-- **A cell of the lead does at most `256 / 3` MACs a bit of its message.** -/
-theorem lead_cell_macs_le (L : Layout) (hT : L.tile = 64) (he : L.e = 7) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
+theorem lead_cell_macs_le (L : Pouw.Lead.Layout) (hT : L.tile = 64) (he : L.e = 7) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
     (t : Fin L.S) (k : Fin L.tiles) (R : Finset (Fin L.m)) (hne : R.Nonempty)
     (hR : ∀ i ∈ R, (i : ℕ) / L.tile = k) (J : Finset (Fin L.n)) (b : ℕ) (h : Coins L → Fin (2 ^ b))
     (g : Fin (2 ^ b) → Fin L.m → Fin L.n → ℤ) (hg : ∀ ω, ∀ i ∈ R, ∀ j ∈ J, g (h ω) i j = word L κ ω i t j) :
@@ -293,8 +293,8 @@ theorem cellsRot : CellsRot := by
 
 /-- **Without step 0's coin lanes, step 0 reads none**: in `Pouw.Lead.word`, step 0's words of two coin values that
 agree on `a₁` and `G` are equal, whatever their lane coins and tag bits. -/
-theorem draft_step0_free {L : Layout} (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) {ω ω' : Coins L} (h2 : ω.2.1 = ω'.2.1)
-    (h3 : ω.2.2.1 = ω'.2.2.1) (i : Fin L.m) {t : Fin L.S} (ht : (t : ℕ) = 0) (j : Fin L.n) :
+theorem draft_step0_free {L : Pouw.Lead.Layout} (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) {ω ω' : Coins L}
+    (h2 : ω.2.1 = ω'.2.1) (h3 : ω.2.2.1 = ω'.2.2.1) (i : Fin L.m) {t : Fin L.S} (ht : (t : ℕ) = 0) (j : Fin L.n) :
     Pouw.Lead.word L κ ω i t j = Pouw.Lead.word L κ ω' i t j := by
   unfold Pouw.Lead.word
   congr 1

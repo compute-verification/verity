@@ -47,7 +47,7 @@ theorem stepsFor_le (K : ℕ) : Pouw.Lead.stepsFor K ≤ stepsFor K := by
 
 /-! ## `W_mac` -/
 
-theorem wordChunks_le (L : Layout) (hcw : L.chunkWords = 65536) :
+theorem wordChunks_le (L : Pouw.Lead.Layout) (hcw : L.chunkWords = 65536) :
     (wordChunks L : ℚ) ≤ (L.m * L.n * L.S + 65535) / 65536 := by
   unfold wordChunks
   rw [hcw, show L.m * L.n * L.S + 65536 - 1 = L.m * L.n * L.S + 65535 by omega]
@@ -58,7 +58,7 @@ theorem wordChunks_le (L : Layout) (hcw : L.chunkWords = 65536) :
 /-- **The honest work a row**: with words chunks of 65,536 words, `m ≥ 1` and A's rows at most the padded rows, the
 honest work is at most `m` times `n S (1 + c / 32 + c / 65,536) + c + a K / 128`, `c` and `a` ShaWrites' registers a
 words and an A compression. -/
-theorem honestRegs_le (L : Layout) (C : Commit L) (hC : ChunksOf L C) (hcw : L.chunkWords = 65536)
+theorem honestRegs_le (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) (hC : ChunksOf L C) (hcw : L.chunkWords = 65536)
     (hm : 1 ≤ L.m) (hr : L.rows ≤ L.m) :
     honestRegs L C ≤ L.m * (L.n * L.S * (1 + shaWordsRegs / 32 + shaWordsRegs / 65536) + shaWordsRegs +
       shaARegs * L.K / 128) := by
@@ -81,7 +81,7 @@ theorem honestRegs_le (L : Layout) (C : Commit L) (hC : ChunksOf L C) (hcw : L.c
   linarith
 
 /-- **`β` times the call's `n K`** is at most `n_max · 32` times the work a row of `honestRegs_le`. -/
-theorem betaLead_mul_le (L : Layout) (C : Commit L) (hC : ChunksOf L C) (hcw : L.chunkWords = 65536)
+theorem betaLead_mul_le (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) (hC : ChunksOf L C) (hcw : L.chunkWords = 65536)
     (hm : 1 ≤ L.m) (hr : L.rows ≤ L.m) (hn : 0 < L.n) (hK : 0 < L.K) :
     betaLead L C * (L.n * L.K) ≤ 256 / 3 * 32 *
       (L.n * L.S * (1 + shaWordsRegs / 32 + shaWordsRegs / 65536) + shaWordsRegs + shaARegs * L.K / 128) := by
@@ -98,9 +98,9 @@ theorem betaLead_mul_le (L : Layout) (C : Commit L) (hC : ChunksOf L C) (hcw : L
   exact hR.trans_eq (mul_comm _ _)
 
 /-- `β` at a call of `n` columns, inner dimension `K` and `S` steps, from a bound on the work a row. -/
-theorem betaLead_le_of_shape (L : Layout) (C : Commit L) (hC : ChunksOf L C) (hcw : L.chunkWords = 65536)
-    (hm : 1 ≤ L.m) (hr : L.rows ≤ L.m) {n K S : ℕ} (hn : L.n = n) (hK : L.K = K) (hS : L.S = S)
-    (hn0 : 0 < n) (hK0 : 0 < K) (B : ℚ)
+theorem betaLead_le_of_shape (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) (hC : ChunksOf L C)
+    (hcw : L.chunkWords = 65536) (hm : 1 ≤ L.m) (hr : L.rows ≤ L.m) {n K S : ℕ} (hn : L.n = n) (hK : L.K = K)
+    (hS : L.S = S) (hn0 : 0 < n) (hK0 : 0 < K) (B : ℚ)
     (hB : 256 / 3 * 32 * (n * S * (1 + shaWordsRegs / 32 + shaWordsRegs / 65536) + shaWordsRegs +
       shaARegs * K / 128) ≤ B * (n * K)) : betaLead L C ≤ B := by
   have h := betaLead_mul_le L C hC hcw hm hr (hn ▸ hn0) (hK ▸ hK0)
@@ -110,8 +110,9 @@ theorem betaLead_le_of_shape (L : Layout) (C : Commit L) (hC : ChunksOf L C) (hc
 
 /-- **`W_mac ≤ 128.06` at `n, K ≥ 4,096`**: `β ≤ 256 / 3 · 128.06` for every call of at least one row, A's rows at
 most the padded rows, words chunks of 65,536 words and at most `stepsFor K` steps. -/
-theorem betaLead_le_range (L : Layout) (C : Commit L) (hC : ChunksOf L C) (hcw : L.chunkWords = 65536)
-    (hm : 1 ≤ L.m) (hr : L.rows ≤ L.m) (hn : 4096 ≤ L.n) (hK : 4096 ≤ L.K) (hS : L.S ≤ stepsFor L.K) :
+theorem betaLead_le_range (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) (hC : ChunksOf L C)
+    (hcw : L.chunkWords = 65536) (hm : 1 ≤ L.m) (hr : L.rows ≤ L.m) (hn : 4096 ≤ L.n) (hK : 4096 ≤ L.K)
+    (hS : L.S ≤ stepsFor L.K) :
     betaLead L C ≤ 256 / 3 * (12806 / 100) := by
   have h := betaLead_mul_le L C hC hcw hm hr (by omega) (by omega)
   have hS28 : 28 * L.S ≤ L.K + 35 := by
@@ -129,7 +130,7 @@ theorem betaLead_le_range (L : Layout) (C : Commit L) (hC : ChunksOf L C) (hcw :
   have hnK : (0 : ℚ) < L.n * L.K := by positivity
   exact le_of_mul_le_mul_right (h.trans hX) hnK
 
-theorem betaLead_nonneg (L : Layout) (C : Commit L) : 0 ≤ betaLead L C := by
+theorem betaLead_nonneg (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) : 0 ≤ betaLead L C := by
   unfold betaLead honestRegs wordsBlocks aBlocks wordsRegs shaWordsRegs shaARegs
   positivity
 
@@ -139,9 +140,9 @@ theorem leadMacs_q : (leadMacs : ℚ) = 973078528 := by exact_mod_cast leadMacs_
 
 /-- **The network term at a call's stock share of the cap**: a call of `n, K ≥ 4,096` whose egress `E` is at most its
 stock share of `L.cap` bits a token (`egressShare`) has a network term of at most `0.036% · cap / 32` of its stock. -/
-theorem networkGap_le_share (L : Layout) (C : Commit L) (hC : ChunksOf L C) (hcw : L.chunkWords = 65536)
-    (hm : 1 ≤ L.m) (hr : L.rows ≤ L.m) (hn : 4096 ≤ L.n) (hK : 4096 ≤ L.K) (hS : L.S ≤ stepsFor L.K)
-    (E : ℚ) (hE : E ≤ egressShare L) :
+theorem networkGap_le_share (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) (hC : ChunksOf L C)
+    (hcw : L.chunkWords = 65536) (hm : 1 ≤ L.m) (hr : L.rows ≤ L.m) (hn : 4096 ≤ L.n) (hK : 4096 ≤ L.K)
+    (hS : L.S ≤ stepsFor L.K) (E : ℚ) (hE : E ≤ egressShare L) :
     networkGap L C E ≤ 36 / 100000 * (L.cap / 32 : ℚ) * stockRegs L := by
   have hβ := betaLead_le_range L C hC hcw hm hr hn hK hS
   have hβ0 := betaLead_nonneg L C
@@ -158,8 +159,8 @@ theorem networkGap_le_share (L : Layout) (C : Commit L) (hC : ChunksOf L C) (hcw
   nlinarith [h1, h2, hcap]
 
 /-- The network term at a call of the lead at its stock share of the cap. -/
-theorem networkGap_lead {T m n K : ℕ} (hm : 1 ≤ m) (hn : 4096 ≤ n) (hK : 4096 ≤ K) (L : Layout)
-    (hL : L = lead T m n K ∨ L = lead320 T m n K) (C : Commit L) (hC : ChunksOf L C) (E : ℚ)
+theorem networkGap_lead {T m n K : ℕ} (hm : 1 ≤ m) (hn : 4096 ≤ n) (hK : 4096 ≤ K) (L : Pouw.Lead.Layout)
+    (hL : L = lead T m n K ∨ L = lead320 T m n K) (C : Pouw.Lead.Commit L) (hC : ChunksOf L C) (E : ℚ)
     (hE : E ≤ egressShare L) : networkGap L C E ≤ 36 / 100000 * (L.cap / 32 : ℚ) * stockRegs L := by
   have hm' : 1 ≤ (lead T m n K).m := one_le_lead_m hm
   have hr := lead_rows_le T m n K
@@ -168,8 +169,8 @@ theorem networkGap_lead {T m n K : ℕ} (hm : 1 ≤ m) (hn : 4096 ≤ n) (hK : 4
   · exact networkGap_le_share _ C hC rfl hm' hr hn' hK (stepsFor_le K) E hE
   · exact networkGap_le_share _ C hC rfl hm' hr hn' hK (stepsFor_le K) E hE
 
-theorem networkGap_lead32 {T m n K : ℕ} (hm : 1 ≤ m) (hn : 4096 ≤ n) (hK : 4096 ≤ K) (C : Commit (lead T m n K))
-    (hC : ChunksOf _ C) (E : ℚ) (hE : E ≤ egressShare (lead T m n K)) :
+theorem networkGap_lead32 {T m n K : ℕ} (hm : 1 ≤ m) (hn : 4096 ≤ n) (hK : 4096 ≤ K)
+    (C : Pouw.Lead.Commit (lead T m n K)) (hC : ChunksOf _ C) (E : ℚ) (hE : E ≤ egressShare (lead T m n K)) :
     networkGap _ C E ≤ 36 / 100000 * stockRegs (lead T m n K) := by
   have h := networkGap_lead hm hn hK _ (Or.inl rfl) C hC E hE
   have e : ((lead T m n K).cap / 32 : ℚ) = 1 := by
@@ -178,7 +179,7 @@ theorem networkGap_lead32 {T m n K : ℕ} (hm : 1 ≤ m) (hn : 4096 ≤ n) (hK :
   rwa [e, mul_one] at h
 
 theorem networkGap_lead320 {T m n K : ℕ} (hm : 1 ≤ m) (hn : 4096 ≤ n) (hK : 4096 ≤ K)
-    (C : Commit (lead320 T m n K)) (hC : ChunksOf _ C) (E : ℚ) (hE : E ≤ egressShare (lead320 T m n K)) :
+    (C : Pouw.Lead.Commit (lead320 T m n K)) (hC : ChunksOf _ C) (E : ℚ) (hE : E ≤ egressShare (lead320 T m n K)) :
     networkGap _ C E ≤ 36 / 10000 * stockRegs (lead320 T m n K) := by
   have h := networkGap_lead hm hn hK _ (Or.inr rfl) C hC E hE
   have e : ((lead320 T m n K).cap / 32 : ℚ) = 10 := by
@@ -203,8 +204,8 @@ theorem networkAt320 : NetworkAt320 := fun n K hn hK =>
 
 /-- **A forward's network terms**: calls whose `β` is at most `B` and whose egress sums to `ΣE` have network terms
 summing to at most `B · ΣE / 32`. -/
-theorem forward_networkGap_le {ι : Type*} (s : Finset ι) (L : ι → Layout) (C : ∀ c, Commit (L c)) (E : ι → ℚ)
-    (B : ℚ) (hE : ∀ c ∈ s, 0 ≤ E c) (hB : ∀ c ∈ s, betaLead (L c) (C c) ≤ B) :
+theorem forward_networkGap_le {ι : Type*} (s : Finset ι) (L : ι → Pouw.Lead.Layout) (C : ∀ c, Pouw.Lead.Commit (L c))
+    (E : ι → ℚ) (B : ℚ) (hE : ∀ c ∈ s, 0 ≤ E c) (hB : ∀ c ∈ s, betaLead (L c) (C c) ≤ B) :
     ∑ c ∈ s, networkGap (L c) (C c) (E c) ≤ B * (∑ c ∈ s, E c) / 32 := by
   rw [mul_sum, sum_div]
   exact sum_le_sum fun c hc =>
@@ -225,7 +226,7 @@ theorem stepsFor_8192 : Pouw.Lead.stepsFor 8192 = 293 := by norm_num [Pouw.Lead.
 
 /-- **`W_mac ≤ 128.69` at Llama-3.2-1B's own calls**, at any number of rows. -/
 theorem llama_betaLead_le (cap T m : ℕ) (hm : 1 ≤ m) (c : Fin (T / m) × Fin 16 × Fin 4)
-    (C : Commit (llamaCall cap T m c)) (hC : ChunksOf _ C) :
+    (C : Pouw.Lead.Commit (llamaCall cap T m c)) (hC : ChunksOf _ C) :
     betaLead _ C ≤ 256 / 3 * (12869 / 100) := by
   have hm' : 1 ≤ (llamaCall cap T m c).m := one_le_lead_m (T := T) (n := (llamaShapes c.2.2).1)
     (K := (llamaShapes c.2.2).2) hm
@@ -271,7 +272,7 @@ theorem llama_stock_ge (cap T m : ℕ) (hmT : m ∣ T) :
 
 /-- **The network term over a forward of Llama-3.2-1B**: at `T` tokens in calls of `m ∣ T` rows, egress summed within
 `cap · T` bits, the calls' network terms sum to at most `0.0362% · cap / 32` of the forward's stock. -/
-theorem llama_forward_network (cap T m : ℕ) (hm : 1 ≤ m) (hmT : m ∣ T) (C : ∀ c, Commit (llamaCall cap T m c))
+theorem llama_forward_network (cap T m : ℕ) (hm : 1 ≤ m) (hmT : m ∣ T) (C : ∀ c, Pouw.Lead.Commit (llamaCall cap T m c))
     (hC : ∀ c, ChunksOf _ (C c)) (E : Fin (T / m) × Fin 16 × Fin 4 → ℚ) (hE : ∀ c, 0 ≤ E c)
     (hsum : ∑ c, E c ≤ cap * T) :
     ∑ c, networkGap (llamaCall cap T m c) (C c) (E c) ≤
