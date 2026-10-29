@@ -971,8 +971,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--catalog-units", action="store_true",
                     help="with --all --cache: build only the catalog bindings whose record misses (circuit_check.units)")
     ap.add_argument("--shard", metavar="K/N",
-                    help="build the whole task list, but check only the targets whose id hashes to shard K of N (circuit_check.shard), "
-                         "and write their records and a manifest to --shard-dir; exit 1 on their own new failures")
+                    help="key and check only the targets whose id hashes to shard K of N (circuit_check.shard), no other, and write "
+                         "their records and a manifest to --shard-dir; exit 1 on their own new failures")
     ap.add_argument("--shard-dir", type=Path, metavar="DIR", help="with --shard: where its records and manifest go")
     ap.add_argument("--combine", type=Path, nargs="+", metavar="DIR",
                     help="the report, summary and exit status the unsharded run gives, from the --shard-dir of every shard 1..N "
