@@ -19,7 +19,8 @@ monotonicity, since `Vocab.Verdict k a` includes `a`'s component's acceptance at
 and its siblings (at registered files, where the subprotocol's honest lemma `Vocab.HonestHolds k a` holds, the
 deployment's honest prover meets `ComponentBound`'s event and the target's with probability `0`), and
 `pouwSound_of_nontrivial` and its siblings (the target fails for a verifier that accepts everything, at a strategy on
-whose every play the claim fails and whose error is below one, so its finder meets `FinderCR`).
+whose every play the claim fails and whose error is below one, so its finder meets `FinderCR` and its forger
+`Unforgeable`).
 
 For a subprotocol that decides `Audit` `a` (`Subprotocol.ofAudit a`), `ComponentBound k (.ofAudit a)` comes from a
 per-period guarantee of the coins model (`Accounting.PeriodRun.Sound`, the bridges `Accounting.SecurityProofs.Bridge.*`)
@@ -33,7 +34,9 @@ through a coupling (`Vocab.Coupling k a`) at each `θ F c σ`:
 * **The verdict at the code** (`Coupling.verdict`): `a`'s component at `k` accepts, every release its check read is the
   device's at the round the coupling assigns it (`pos`, `Logged`), and the coupling's break (`brk`) is absent. The rest
   of the event, a release out of place or a break, is answered for by `a`'s error beyond `δ`: where its finder meets
-  `FinderCR`, its probability is at most `a`'s LMS-forgery term plus its collision term (`Coupling.BreakBound`).
+  `FinderCR`, its probability is at most the probability that `a`'s forger forges plus its collision term
+  (`Coupling.BreakBound`), and where the forger meets `Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`), that is
+  at most the published `ε_forge(t, Q)` (`Vocab.epsForge`).
 
 `Coupling.bound` gives `ComponentBound`'s event at most `a`'s error from the run at the verdict at the code
 (`Coupling.atCode`) meeting a guarantee within `a`'s published `δ`, and `componentBound_of_coupling` collects it over
@@ -465,8 +468,8 @@ theorem sound_of_honest (k : Verity.Registration.Composite) (a : Subprotocol) (h
     (q := fun o => ¬ V.Holds k θ F c (V.honest θ F c) a o) (fun _ ho => ho.2) _ _) h0.le) zero_le⟩
 
 /-- **The target fails for a verifier that accepts everything**: at a strategy on whose every play subprotocol `a`'s
-claim at composite `k` fails, with its error there below one (so its finder meets `FinderCR`, and its forgery and
-collision terms are below one). -/
+claim at composite `k` fails, with its error there below one (so its finder meets `FinderCR` and its forger
+`Unforgeable`, and its `ε_forge` and collision terms are below one). -/
 theorem sound_of_nontrivial (k : Verity.Registration.Composite) (a : Subprotocol) (θ F c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (hfail : ∀ o, ¬ V.Holds k θ F c σ a o) (hlt : V.error a θ F c σ < 1) :
     ¬ V.TargetFor (fun _ => True) k a := by
@@ -616,20 +619,23 @@ def verdict (b : Audit) (ξ : (i : q.I) → q.Ω i) : Prop :=
 def atCode : PeriodRun d α q.C q.Ω := Subprotocol.atCode q.run q.verdict
 
 /-- **The error beyond `δ` answers for the rest of the event**: the probability over the coins that `a`'s component
-accepts while a release its check read is not the device's at its round, or the coupling's break holds, is at most
-`a`'s LMS-forgery term plus its collision term at the strategy (a release out of place is a forgery of the device's LMS
-signature over its ledger or a session's close, which the forgery term bounds, and a break a collision, which `a`'s
-finder outputs). -/
+accepts while a release its check read is not the device's at its round, or the coupling's break holds, is at most the
+probability that `a`'s forger forges under the compiled LMS verifier (`Vocab.forger`, `lmsVerify`) plus `a`'s collision
+term at the strategy (a release out of place is a forgery of the device's LMS signature over its ledger or a session's
+close, which the forger outputs, and a break a collision, which `a`'s finder outputs). Where the forger meets
+`Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`), its probability is at most the published `ε_forge(t, Q)`
+(`bound`). -/
 def BreakBound : Prop :=
   ENNReal.ofReal (Pouw.pr fun ξ => ComponentAccepts k (.ofAudit a) (V.outcome θ F c σ q.coins ξ).sent ∧
       (¬ V.Logged (q.pos a) (.ofAudit a) (V.outcome θ F c σ q.coins ξ) ∨ q.brk ξ)) ≤
-    V.forgery θ (.ofAudit a) (V.cost θ F c σ) +
+    ENNReal.ofReal ((V.forger (.ofAudit a) θ F c σ).Pr lmsVerify) +
       V.loss (.ofAudit a) θ (ENNReal.ofReal ((V.finder (.ofAudit a) θ F c σ).Pr sha512Msg))
 
 /-- **A coupled period guarantee bounds the component's event in the game**: where the coupled run at the verdict at
 the code meets a per-period guarantee within `a`'s published `δ` at the strategy's calls, and the error beyond `δ`
 answers for the rest of the event where the finder meets `FinderCR`, `ComponentBound`'s event at `σ` is at most `a`'s
-error. -/
+error (where the forger also meets `Unforgeable`, its forging probability is at most `epsForge` at its budget and the
+device's signatures, `forger_calls` and `forger_signed`). -/
 theorem bound {δ : ℝ} (hs : q.atCode.Sound (V.certOf θ) q.price a δ)
     (hδ : ENNReal.ofReal δ ≤ V.delta θ (.ofAudit a) (V.cost θ F c σ))
     (hb : V.FinderCR (.ofAudit a) θ F c σ → q.BreakBound) :
@@ -638,7 +644,14 @@ theorem bound {δ : ℝ} (hs : q.atCode.Sound (V.certOf θ) q.price a δ)
   unfold Vocab.error Accounting.condError
   split_ifs with hcr
   · classical
-    show _ ≤ V.delta θ (.ofAudit a) (V.cost θ F c σ) + V.forgery θ (.ofAudit a) (V.cost θ F c σ) +
+    obtain ⟨hcr, hun⟩ := hcr
+    have hf : ENNReal.ofReal ((V.forger (.ofAudit a) θ F c σ).Pr lmsVerify) ≤
+        ENNReal.ofReal (V.epsForge θ (V.callsMul θ (.ofAudit a) * V.cost θ F c σ + V.callsAdd θ (.ofAudit a))
+          (V.signatures θ)) :=
+      ENNReal.ofReal_le_ofReal (hun (V.forger_calls _ θ F c σ) (V.forger_signed _ θ F c σ))
+    show _ ≤ V.delta θ (.ofAudit a) (V.cost θ F c σ) +
+      ENNReal.ofReal (V.epsForge θ (V.callsMul θ (.ofAudit a) * V.cost θ F c σ + V.callsAdd θ (.ofAudit a))
+        (V.signatures θ)) +
       V.loss (.ofAudit a) θ (ENNReal.ofReal ((V.finder (.ofAudit a) θ F c σ).Pr sha512Msg))
     rw [add_assoc]
     refine (V.prob_eq_pr θ F c σ q.coins _).trans_le ?_
@@ -653,7 +666,7 @@ theorem bound {δ : ℝ} (hs : q.atCode.Sound (V.certOf θ) q.price a δ)
         · exact Or.inr ⟨hξ.1, Or.inr hk⟩
         · exact Or.inl ⟨⟨hξ.1, hl, hk⟩, hξ.2⟩
       · exact Or.inr ⟨hξ.1, Or.inl hl⟩
-    refine le_trans ENNReal.ofReal_add_le (add_le_add ?_ (hb hcr))
+    refine le_trans ENNReal.ofReal_add_le (add_le_add ?_ ((hb hcr).trans (add_le_add hf le_rfl)))
     refine le_trans (ENNReal.ofReal_le_ofReal ?_) hδ
     exact le_trans (Pouw.pr_mono fun ξ (h : q.verdict a ξ ∧ _) =>
         (⟨h.1, fun hh => h.2 (q.world ξ ((Subprotocol.holds_atCode q.run q.verdict _ _ a ξ).1 hh))⟩ :
