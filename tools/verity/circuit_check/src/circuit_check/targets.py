@@ -616,18 +616,22 @@ def call_families(found: dict[str, Any] | None = None) -> set[str]:
     Boolean version of each of those (`boolean_call_families`: the Program on bits calls them in their place).  Any other
     Definition's gates are partitioned inside the Call that contains them.  It builds the whole catalog, or takes ``found``, a
     `suite` built already (`cli._tasks`'s: a later one would also hold what building its bodies registered); `is_call` asks
-    whether one family is among them, mostly without."""
+    whether one family is among them without it, and refuses a family it can't decide so."""
     if not _CALLS:
         words = word_call_families()
         _CALLS.update(words | boolean_call_families(set(words), found))
     return _CALLS
 
 
+class Undecided(LookupError):
+    """`is_call` can't tell whether a family is a Call without building the whole catalog."""
+
+
 def is_call(fam: str) -> bool:
-    """Whether family ``fam`` is in `call_families`, decided without the catalog where its answer doesn't need it: a word Call
-    family is; a family outside `boolean_call_candidates` is not; one `certified_boolean_calls` names is; any other (a Boolean
-    version of a word Call family that only Definitions the catalog reaches inside its roots show) is looked up in
-    `call_families`."""
+    """Whether family ``fam`` is in `call_families`, never building the catalog for it: once `call_families` is known here, by it;
+    else a word Call family is; a family outside `boolean_call_candidates` is not; one `certified_boolean_calls` names is.  Any
+    other (a Boolean version of a word Call family that only Definitions the catalog reaches inside its roots could show) is
+    `Undecided`, by name, with the flags that decide it: the catalog's whole build is what ``--all`` pays once for every target."""
     if _CALLS:
         return fam in _CALLS
     words = word_call_families()
@@ -640,22 +644,31 @@ def is_call(fam: str) -> bool:
     certified, refused = _SHORT.setdefault("certified", set()), _SHORT.setdefault("uncertified", set())
     if fam not in certified | refused:
         (certified if certified_boolean_calls(words, {fam}) else refused).add(fam)
-    return fam in certified or fam in call_families()
+    if fam in certified:
+        return True
+    raise Undecided(f"{fam}: whether a served Program Calls it needs the whole catalog built; give --as-call or --no-as-call, "
+                    "or check it under --all")
 
 
 def boolean_call_candidates(word_calls: set[str]) -> set[str]:
     """A superset of `boolean_call_families` of ``word_calls``, from the Boolean table's links alone (no catalog): each family
     `boolean_version` could return for a Definition of a family in ``word_calls``, by its two lookups, a registered Boolean
-    Definition whose ``word`` is a Definition of such a family, or whose ``word`` is a function of its bindings and whose name is
-    such a family's name.  Each candidate it returns is one of those Definitions, bound."""
-    from verity.ml.circuits.defs import CompositeDefinition, bind
+    Definition whose ``word`` is a Definition of such a family, or whose ``word`` is a function of its bindings, whose name is
+    such a family's name and whose statics a binding of that family could give (each one of the family's statics or one its word
+    computes, ``word_statics``: the by-name lookup reads no other).  Each candidate it returns is one of those Definitions, bound."""
+    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
     from verity.ml.definitions.boolean import _load
 
     exact, by_name, _errors = _load()
-    names = {m[1] for f in word_calls if (m := re.fullmatch(r"(.+)_v(\d+)", f))}
+    statics: dict[str, list[set[str] | None]] = {}
+    for f in word_calls:
+        if m := re.fullmatch(r"(.+)_v(\d+)", f):
+            d = REGISTRY.defs.get(f)
+            statics.setdefault(m[1], []).append(None if d is None else set(getattr(d, "statics", ())))
     out = {f"{d.name}_v{d.version}" for ds in exact.values() for d in ds
            if family(bind(d.word) if isinstance(d.word, CompositeDefinition) else d.word) in word_calls}
-    out.update(f"{d.name}_v{d.version}" for name, ds in by_name.items() if name in names for d in ds)
+    out.update(f"{d.name}_v{d.version}" for name, ds in by_name.items() for d in ds
+               if any(s is None or set(d.statics) <= s | set(getattr(d, "word_statics", {})) for s in statics.get(name, ())))
     return out | on_demand_boolean_families(word_calls)
 
 
@@ -931,7 +944,7 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
 
 
 __all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "REACHED", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS",
-           "TABLE_PROBES", "TINY", "binding_files", "binding_roots", "boolean_call_candidates", "boolean_call_families",
+           "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates", "boolean_call_families",
            "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units", "certified_boolean_calls",
            "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call", "kind_of", "load_registries",
            "pouw_bindings", "reachable", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "subcircuit", "suite",
