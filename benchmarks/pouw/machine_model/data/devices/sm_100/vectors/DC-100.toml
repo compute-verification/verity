@@ -1,4 +1,4 @@
-# Π on the B200: every row of EPS1 DC's census (rows.csv). No price LP is solved on it, so it credits nothing.
+# Π on the B200: every row of the measured census (rows.csv). No price LP is solved on it, so it credits nothing.
 name = "DC-100"
 epoch = "DC-100"
 summary = "the B200 (sm_100) census: the pipes, the tensor pipe of every tcgen05.mma and mma.sync form, the TMEM read port (TL), UTCIMMA.128x256's joint rows with tcgen05.ld (TM100) and issue (JI100), the uniform pipe (UP), and the TMA bulk-async facet (TMAB, HBM-bound, no tensor issue). No ALU joint row: beside the saturated tcgen05.mma the exact tclaneU_lop3 keeps the tensor at 0.999 and LOP3 at 0.991 of alone, so census.py writes none (RT-BLACKWELL-16)"

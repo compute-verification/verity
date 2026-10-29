@@ -1,7 +1,7 @@
 # Dither-2S with the LI fold at L = 32 on the H200 (sm_90): two-sided dither serving the last checked word and P·V's
 # peel, LI receipts on every committed word and 0.02 verified FFMA a word. The noise is dither-2s-l32's, and ε_skip is
-# this design's own at its ♭ (eps_budget's `design_skip`); the fold, honest and ε_mand are DC-DESIGN's: LI binds honest
-# on the H200's lane facet, so output counting closes the lane route.
+# this design's own at its ♭ (eps_budget's `design_skip`); the fold, honest and ε_mand are the LI designs': LI binds
+# honest on the H200's lane facet, so output counting closes the lane route.
 name = "dither-2s-li-l32"
 title = "Dither-2S, LI, L = 32"
 summary = "Dither-2S on the H200 at L = 32: two-sided dither serving the last checked word, LI receipts, P·V's peel"
@@ -51,7 +51,7 @@ p = 0.75
 checks = 48000
 source = "SPEC §5: Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
-[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IMAD = 8 }
 source = "dp4a at 8 IDP4A a word at L = 32, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"
