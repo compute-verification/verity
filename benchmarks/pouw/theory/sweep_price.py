@@ -394,6 +394,19 @@ def period_table(card: dict, row: dict) -> list[str]:
     return lines
 
 
+def if_refuted(card: dict, point: str, delta: float = 0.0) -> list[tuple[str, dict | None]]:
+    """The best design at the point if each open premise is refuted, and if all of them are."""
+    opened = [p for p, v in card["premise"].items() if v.get("status") == "open"]
+    out = []
+    for drop in [[p] for p in opened] + [opened]:
+        c = copy.deepcopy(card)
+        for p in drop:
+            c["premise"][p]["status"] = "refuted"
+        rows, _ = ranking(c, point, delta)
+        out.append((" and ".join(drop) if len(drop) == 1 else "every open premise", rows[0] if rows else None))
+    return out
+
+
 def pct(x: float | None) -> str:
     return "?" if x is None else f"{x:.2%}"
 
@@ -426,6 +439,13 @@ def render(card: dict, results: dict) -> str:
         if best:
             lines += ["", f"**Best: {best['design']}** ({best['title']}). It still needs:", ""]
             lines += [f"- {n}" for n in needs(best)]
+            lines += ["", "If a premise fails:", "", "| refuted | best then | rank | T1 | T2 sync / async | still open |",
+                      "|---|---|---|---|---|---|"]
+            for drop, b in res["if_refuted"]:
+                lines.append(f"| {drop} | - | - | - | - | - |" if b is None else
+                             f"| {drop} | {b['design']} | {b['rank']} | {pct(b['t1'])} {'pass' if b['t1_pass'] else 'fail'} | "
+                             f"{b['t2']['engines']['sync']['ratio']:.1f}x / {b['t2']['engines']['async']['ratio']:.1f}x | "
+                             f"{', '.join(o['premise'] for o in b['open']) or '-'} |")
             lines += [""] + period_table(card, best)
         clean = next((r for r in res["rows"] if not r["open"]), None)
         if clean and clean is not best:
@@ -445,7 +465,7 @@ def main() -> int:
     results = {}
     for point in card["point"]:
         rows, refused = ranking(card, point, delta)
-        results[point] = {"rows": rows, "refused": refused}
+        results[point] = {"rows": rows, "refused": refused, "if_refuted": if_refuted(card, point, delta)}
     for point, res in results.items():
         print(f"== {card['point'][point]['title']}")
         for i, row in enumerate(res["rows"], 1):
@@ -553,7 +573,10 @@ def main() -> int:
             "points": {p: {"rows": res["rows"], "refused": res["refused"],
                            "best": res["rows"][0]["design"] if res["rows"] else None,
                            "best_needs": needs(res["rows"][0]) if res["rows"] else [],
-                           "best_periods": periods(card, res["rows"][0]) if res["rows"] else None}
+                           "best_periods": periods(card, res["rows"][0]) if res["rows"] else None,
+                           "if_refuted": [{"refuted": drop, "best": b and b["design"], "t1": b and b["t1"],
+                                           "t2": b and b["t2"]["judged"], "open": b and [o["premise"] for o in b["open"]]}
+                                          for drop, b in res["if_refuted"]]}
                        for p, res in results.items()}}
     (out / "sweep_price.json").write_text(json.dumps(blob, indent=1, default=str) + "\n")
     with (out / "ranking.csv").open("w", newline="") as f:
