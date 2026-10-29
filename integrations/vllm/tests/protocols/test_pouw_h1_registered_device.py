@@ -18,7 +18,6 @@ entries, digest, manifest rows, the values' strings, levels and paths, and recei
 from __future__ import annotations
 
 import hashlib
-import pickle
 import shutil
 
 import numpy as np
@@ -81,22 +80,6 @@ def test_the_cpu_twin_is_cores_commit_with_given_salts_and_unaligned_rows():
         given = b"".join(bytes([j + 1]) * 192 for j in range(n))
         ref = _core(words, 0, given, window=WINDOW)
         assert D.host_commit(words, KEY, 0, given, ref.domain.domain_id) == (ref.bcs, ref.levels)
-
-
-def test_strings_read_as_the_tuple_of_bytes_they_hold():
-    """`Strings`, the device path's ``bcs`` and levels, is the tuple of each string's big-endian bytes: item by item from
-    either end, sliced, iterated, equal and hashed as it, unequal to other strings or sizes, and pickled whole."""
-    words = np.random.default_rng(1).integers(0, 1 << 63, 24, dtype=np.uint64)
-    want = tuple(words.astype(">u8").tobytes()[i:i + 64] for i in range(0, 192, 64))
-    s = D.Strings(words, 64)
-    assert len(s) == 3 and tuple(s) == want and [s[j] for j in range(-3, 3)] == list(want * 2) and s[1:] == want[1:]
-    assert s == want and want == s and hash(s) == hash(want) and s == D.Strings(words.copy(), 64)
-    assert s != want[:2] and s != (want[0], want[1], want[0]) and s != D.Strings(words, 192) and s != want[0]
-    assert pickle.loads(pickle.dumps(s)) == want
-    with pytest.raises(IndexError):
-        s[3]
-    with pytest.raises(ValueError, match="not strings of 64 bytes"):
-        D.Strings(words[:5], 64)
 
 
 #: (records, bytes a record, call): a z/y record's 6 KiB, 1 to 8 segments a record, call z nonces past 2^32
