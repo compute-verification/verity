@@ -1,4 +1,4 @@
-"""Private advice registered as hiding rows: fixed-width bit rows under ``hm96-sha512/row/v2`` leaves in one ``frame-v3-sha512``
+"""Private advice committed as hiding rows: fixed-width bit rows under ``hm96-sha512/row/v2`` leaves in one ``frame-v3-sha512``
 tree, so a root fixes the rows before any coin and reveals nothing of them.
 
 Row ``i`` (``n_bits`` bits, ``rowleaf.bit_row``'s bytes) with salt ``y_i`` has, under ``hm96.SHA512`` with key ``key``::
@@ -8,7 +8,7 @@ Row ``i`` (``n_bits`` bits, ``rowleaf.bit_row``'s bytes) with salt ``y_i`` has, 
     leaf_i = row_leaf(D, i, tree_leaf(key, bc_i), "hm96-sha512/row/v2")
 
 and the root is the ``frame-v3-sha512`` root of the leaves over ``D = CommitmentDomain(binding, -1, RangeIndexedDomain(R),
-"sha512")``: the binding is what the registration may not outlive (the consumer's, such as `partition_v2.BINDING`), ``-1`` the
+"sha512")``: the binding is what the commitment may not outlive (the consumer's, such as `partition_v2.BINDING`), ``-1`` the
 boundary owner, R the row count, which the consumer's statement fixes.  An opening of row i is the row, its salt and the path;
 `verify` recomputes the leaf and walks the path.  A proof that holds the rows privately proves ``bc_i`` from the row and the salt
 (the backend's hm96 gadget) and the verifier finishes natively, as for every hm96 port.  Salts are fresh from the OS unless given
@@ -25,7 +25,7 @@ from .indexed import RangeIndexedDomain
 from .merkle import CommitmentDomain
 from .rowleaf import row_leaf
 
-__all__ = ["OWNER", "PORT", "Opening", "Registration", "domain", "leaf", "register", "verify"]
+__all__ = ["OWNER", "PORT", "Committed", "Opening", "commit", "domain", "leaf", "verify"]
 
 INST = hm96.SHA512
 OWNER = -1
@@ -56,7 +56,7 @@ class Opening:
 
 
 @dataclass(frozen=True)
-class Registration:
+class Committed:
     """The prover's side: the rows, their salts and the tree.  `root` is what goes public."""
 
     binding: bytes
@@ -83,16 +83,16 @@ class Registration:
         return Opening(i, self.rows[i], self.salts[i], path)
 
 
-def register(rows: Sequence[bytes], n_bits: int, binding: bytes, salts: Sequence[bytes] | None = None,
-             key: bytes = INST.default_key) -> Registration:
+def commit(rows: Sequence[bytes], n_bits: int, binding: bytes, salts: Sequence[bytes] | None = None,
+           key: bytes = INST.default_key) -> Committed:
     """Commit `rows` (each ``ceil(n_bits / 8)`` bytes) under `binding`; fresh salts unless `salts` is given."""
     rows = tuple(bytes(r) for r in rows)
     salts = tuple(bytes(s) for s in salts) if salts is not None else tuple(INST.fresh_salt() for _ in rows)
-    return Registration(bytes(binding), n_bits, rows, salts, key)
+    return Committed(bytes(binding), n_bits, rows, salts, key)
 
 
 def verify(root: bytes, count: int, n_bits: int, binding: bytes, opening: Opening, key: bytes = INST.default_key) -> bool:
-    """Whether `opening` is row ``opening.index`` of the `count` rows registered under `binding` with root `root`."""
+    """Whether `opening` is row ``opening.index`` of the `count` rows committed under `binding` with root `root`."""
     try:
         d = domain(binding, count)
         lf = leaf(d, n_bits, opening.index, opening.row, opening.salt, key)
