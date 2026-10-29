@@ -143,7 +143,7 @@ def test_fill_is_dithers_no_fold_call(case):
         seeds = v31.served_seeds(bytes(range(64, 128)), bytes(range(128, 192)), 3)
         assert set(seeds) == set(v31.STREAMS)
     else:
-        seeds = v31.fill_seeds(bytes(range(64)), bytes(range(64, 128)))
+        seeds = v31.call_seeds(bytes(range(64)), bytes(range(64, 128)))
         A = v31.pad_rows(seeds, range(m), k)
         assert hashlib.sha512(A.tobytes()).hexdigest() == pad_h
         assert np.array_equal(v31.pad_rows(seeds, range(5, 9), k), A[5:9])
@@ -157,7 +157,7 @@ def test_fill_is_dithers_no_fold_call(case):
 def _fill_answer(f: v31.Fill, cm, B: np.ndarray, A: np.ndarray | None):
     def answer(i: int, j: int, s: int) -> dict:
         pos = v31.fill_cells_positions(f, i, j, s)
-        return {"rows": {p: (cm.row(p), cm.salt(p), cm.path(p)) for p in pos}, "B": B[j], "A": None if A is None else A[i]}
+        return {"rows": {p: cm.open(p) for p in pos}, "B": B[j], "A": None if A is None else A[i]}
     return answer
 
 
@@ -175,7 +175,7 @@ def test_fill_verdicts(cheat, served, L):
         seeds = v31.served_seeds(rng.bytes(64), rng.bytes(64), 0)
         A = rng.integers(-128, 128, size=(f.m, f.k)).astype(np.int8)
     else:
-        seeds = v31.fill_seeds(rng.bytes(64), rng.bytes(64))
+        seeds = v31.call_seeds(rng.bytes(64), rng.bytes(64))
         A = None
     Aop = v31.pad_rows(seeds, range(f.m), f.k) if A is None else A
     co = v31.CallNoise.expand(f, seeds)
@@ -231,10 +231,11 @@ def test_fill_sample_rebuilds_a_tile_and_the_params(tmp_path, capsys, served):
         seeds = v31.served_seeds(rng.bytes(64), rng.bytes(64), 5)
         A = rng.integers(-127, 128, size=(f.m, f.k)).astype(np.int8)
     else:
-        seeds = v31.fill_seeds(rng.bytes(64), rng.bytes(64))
+        seeds = v31.call_seeds(rng.bytes(64), rng.bytes(64))
         A = v31.pad_rows(seeds, range(f.m), f.k)
     ks, off = rng.bytes(64), 5 * f.leaves
-    cm = v31.fill_commit(f, v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.CallNoise.expand(f, seeds))), ks, off)
+    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.CallNoise.expand(f, seeds)))
+    cm = v31.fill_commit(f, values, ks, off)
     args = ["--served"] if served else []
     assert v31.main(["v31", "fill-params", str(tmp_path / "p"), "--L", "512", "--row", "2048", "x:256:384:1024", *args]) == 0
     name = v31.fill_params_name(256, 384, 1024, 256, 512, 2048, served)
@@ -251,7 +252,7 @@ def test_fill_sample_rebuilds_a_tile_and_the_params(tmp_path, capsys, served):
         tm, tn = divmod(tile, f.n // v31.TILE)
         (s / f"t{i}_A.bin").write_bytes(A[tm * 128:(tm + 1) * 128].tobytes())
         (s / f"t{i}_B.bin").write_bytes(B[tn * 128:(tn + 1) * 128].tobytes())
-        (s / f"t{i}_words.bin").write_bytes(cm.values[tile * tb:(tile + 1) * tb])
+        (s / f"t{i}_words.bin").write_bytes(values[tile * tb:(tile + 1) * tb])
         (s / f"t{i}_leaves.bin").write_bytes(b"".join(cm.levels[0][tile * f.lpt:(tile + 1) * f.lpt]))
     assert v31.main(["v31", "fill-sample", str(s)]) == 0
     lv = bytearray((s / "t1_leaves.bin").read_bytes())
