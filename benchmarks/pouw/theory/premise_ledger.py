@@ -139,13 +139,20 @@ LEDGER = [
     ("CardWithinAccel", "The card refines the ACCEL instance: no hidden units, 132 SMs, every opcode", "3", "locked",
      "3", "per-SM scaling, census", "lock", "base"),
     ("Sm90Sem", "Every class computes its documented function (tensor, lanes, memory path), stated per class",
-     "3", "stated", "3", "class captures; opcode list incomplete (IMNMX, SEL, VABSDIFF4, IDP.2A, I2F/F2I, MUFU, "
-     "FLO/BREV/BMSK/SGXT, ISETP/PLOP3, uniform datapath, IMAD.WIDE)", "SW-SEM",
-     "raises the rank ≤ 3 credit a word from 32 to 48–60 (L 64–256) with AlgSuffL"),
-    ("TensorSemantics", "A tensor output register is the captured exact s8 k32 dot of its tiles plus its accumulator",
-     "3", "stated", "3", "re-capture; an output ≠ intDot falsifies", "SW-SEM", "forming (with every class semantic)"),
-    ("LaneSemantics", "Each lane instruction computes its documented function exactly", "3", "partly", "3",
-     "lane captures per opcode", "N-W1", "forming (with every class semantic)"),
+     "3", "stated", "3", "class captures; opcode list incomplete (SEL beyond constant arms, I2F/F2I, MUFU, uniform "
+     "datapath; IMNMX, VABSDIFF4, IDP.2A, FLO/BREV/BMSK/SGXT, ISETP/PLOP3 and IMAD.WIDE are captured, N-W1)",
+     "SW-SEM", "raises the rank ≤ 3 credit a word from 32 to 48–60 (L 64–256) with AlgSuffL"),
+    ("TensorSemantics", "A tensor output register is the captured exact s8 k32 dot of its tiles plus its accumulator. "
+     "Its scope is what the instruction outputs: it credits no word above the cheapest program W1 admits, so a word "
+     "whose data part the prover made constant (chosen data) is the previous word plus coin terms and earns the "
+     "floor of the IADD3 that computes it",
+     "3", "stated", "3", "re-capture; an output ≠ intDot falsifies", "SW-SEM",
+     "forming (with every class semantic); not chosen data's padding at decode (N-COVER's Plan.chosen prices it)"),
+    ("LaneSemantics", "Each lane instruction computes its documented function exactly (lane-function; N-W1 splits "
+     "lane-semantics into it and warp-charge, which model-W states)", "1",
+     "measured (N-W1: 58 lane forms captured on the H200, 65,536 inputs each, 0 mismatches)", "1",
+     "lane_capture/check.py's captures: a form whose output differs from its documented function", "N-W1",
+     "forming (with every class semantic); one-instruction-minimal reads it"),
     ("FanIn", "An instruction reads at most 3 register sources plus immediates; an MMA reads its tiles", "2", "stated",
      "2", "SASS encoding census", "SW-SEM", "ingredient of Sm90Sem; closes no frontier term alone"),
     ("MemOblivious", "TMA, LDGSTS and copies move whole words without transforming them; the memory path computes "
@@ -256,7 +263,9 @@ LEDGER = [
      "every credited byte, with ShaSpeed; not implied by ShaSpeed and distinct targets"),
     ("ShaWrites", "A straight-line program that outputs the digests of N committed bytes writes ≥ (1 − δ) of the best "
      "honest hash's registers beyond the message words and their carriers (the pair, with CarriedWords and carrier "
-     "separation; the joint form excludes only free values, at |T| + R)", "4a", "stated", "4a",
+     "separation; the joint form excludes only free values, at |T| + R), on every part of the coins with at least m "
+     "coins, so a program with k paths pays on all but k·m (N-COMPOSE's shaWrites_branch; the whole slice doesn't "
+     "imply its parts)", "4a", "stated", "4a",
      "a SHA-512 that shares registers with the words, or a cheaper one (ShaLB's kernels)",
      "N-SHALB (its constant) / N-COMPOSE",
      "hashing, credited coins, pre-noise hashing (with atomic-call), a checked PRF; not a branching program's repeated "
@@ -304,7 +313,8 @@ LEDGER = [
     ("repeat-mask", "N-HIDE's remedy (b): A's 1 KiB piece is committed as V ⊕ Z, Z's word t be64(h1[0] ⊕ t) from "
      "the leaf's first chaining value, so a repeated row's blocks differ within and across leaves and share no "
      "schedule; a prover can't choose V = c ⊕ Z because the window's record order fixes A before salt_w", "4a",
-     "design (N-HIDE final); the record order as R's condition (N-COMPOSE) and the steer (N-RED) open", "5",
+     "design (N-HIDE final); the record order as R's condition (N-COMPOSE) and the steer (N-RED) open; at decode "
+     "it needs round-open-coin", "5",
      "a steer of A_j's bytes after salt_w; two leaves' first words within 112 of each other (7·2⁻⁶⁴ a pair)",
      "N-HIDE / N-COMPOSE / N-RED",
      "repeated A rows' hashing (pre-noise) as prefix-binding does, at no extra compression (≈ 0.0023× / 0.0045× "
@@ -427,7 +437,8 @@ LEDGER = [
     ("model-W", "T1 charges a register write for its whole warp (N-W1's model W, a lane semantics), and on the tensor "
      "pipe a whole MMA tile (tile-grain), so a program saves a word only where the whole warp's, and the whole "
      "tile's, words repeat", "3", "stated (NIGHT's 12:05Z default for Daniel's decision 2; N-ADAPT proves "
-     "adaptive-dw under W, no lock); bare model P stays the conservative column", "3",
+     "adaptive-dw under W, no lock); N-W1's warp-charge, which holds in price for lane ops (measured) and adds a "
+     "reading of copies; bare model P (MH100w's free move) stays the conservative column", "3",
      "— (a choice of cost model; N-W1 states it as a lane semantics)", "N-W1 / Daniel",
      "copy-and-patch and N-ADAPT's masked channel, with tile-grain"),
     ("detection-price", "N-RED's: finding a coin-lane entry equal to one d steps back costs the prover enough that "
@@ -436,7 +447,20 @@ LEDGER = [
      "false there", "5", "N-NOISE's criterion (an entry pays only for its distinct values, detection free) gives the "
      "walk (A2r) 4.48% of stock on the lead's full tiles at A′ = 1", "N-RED (premise) / N-FLOOR (measure)",
      "the lead's chosen-weight walk at A′ = 1 without model-public; N-LIT's weighting A′ = (1, 127, 1) takes it to "
-     "0.060% without this premise (N-NOISE, counted)"),
+     "0.060% without this premise (N-NOISE, counted); under bare P the fold's A5 too, which free detection leaves "
+     "unbounded at any A′ (N-EXACT, argued) and tile-grain takes to about 0"),
+    ("round-open-coin", "A round-open root over what round s's circuit reads that the prover picks (ids, slots, "
+     "advice), then a live coin c°_s that keys round s's repeat-mask, so every round-s A row is fixed before its key",
+     "3", "design (N-COMPOSE final 2; the per-leaf step proved in scratch, the round an argument)", "5",
+     "— (protocol structure, as g-private)", "N-COMPOSE / N-HIDE",
+     "repeated A rows' hashing at decode, open under every key derived from salt_w (about 31 tokens carry it) and "
+     "under today's round coins: up to 0.080–0.160× stock in W1 (N-COMPOSE, estimate)"),
+    ("hiding-decode-round", "N-HIDE's decode layout: one hm96 instance over a live window round's tables (its layout "
+     "ruling R1 widened to a round) with a live window", "3", "design (N-HIDE final 2; the hybrid bound proved in "
+     "scratch); the widened ruling pending the commitments owner", "5", "— (protocol structure: a ruling)",
+     "N-HIDE / the commitments owner",
+     "decode hiding with L1 + (a) in W1, without L2: 0.0247% / 0.0495% at one row, 0.0015% / 0.0031% at 16 "
+     "(N-HIDE, relayed)"),
     ("mirror-window", "A nonzero int8 window weight in B′'s lane 31, drawn per column and step after B", "3",
      "design (N-NOISE: mirror's premise, proposed for the lead's decode)", "5", "— (protocol structure, as g-private)",
      "N-NOISE", "the lead's decode walk (A2r 3.74% at one row, 0.76% at 16, whatever A′; 0.55% / 0.58% with it), "
@@ -476,7 +500,8 @@ FIELDS = ["id", "statement", "rank", "status", "rank_today", "falsify", "owner",
 #: other lanes' names for a ledger row (or the row it generalizes)
 ALIASES = {"forced-PRF": ("salt-forced",), "CopyGrain": ("CopyGrain(w₀) at w₀ = 4", "model C"),
            "CopyGrain-row": ("copy-priced",),
-           "LaneSemantics": ("lane-semantics",), "OneInstructionMinimal": ("one-instruction-minimal",),
+           "LaneSemantics": ("lane-semantics", "lane-function"), "model-W": ("warp-charge",),
+           "OneInstructionMinimal": ("one-instruction-minimal",),
            "PeriodInventory": ("period-inventory", "PeriodInventoryT1"), "CarriedWords": ("carried-words",),
            "HostsCounted": ("HostsWithinRow (cores a card, all-core clock)",),
            "host-rate": ("HostsWithinRow (SHA-512's rate a core)",),
