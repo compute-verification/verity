@@ -1,16 +1,17 @@
 """The windowed worker (``native_collect_v2b``, ``--window-mb``) commits what the reference does under ``rows-sha512``
-(``verity_vllm.commit.step_rows``, the collector's one scheme), on the real collector, window ring and kernels: each step's root is
-``step_rows``'s over the step's packed stream (each tensor at the next ALIGN offset, zero-padded to a row) with the step's recorded
-salt key, on a learning run (each window hashed to its rows' h in place, the leaves from them once the step's length is known;
-re-hashed from host when it keeps bytes), a hit run (hashed in place, pad-only windows absorbed after the data windows), with and
-without the levels, through either step end, and under bounded staging.
+(``verity_vllm.commit.step_rows``, the collector's one scheme), through either step end, on the real collector, window ring and
+kernels: each step's root is ``step_rows``'s over the step's packed stream (each tensor at the next ALIGN offset, zero-padded to a
+row) with the step's recorded salt key, on a learning run (each window hashed to its rows' h in place, the leaves from them once the
+step's length is known; re-hashed from host when it keeps bytes), a hit run
+(hashed in place, pad-only windows absorbed after the data windows), with and without the levels, and under bounded staging.
+Past ``rows_hold_bytes`` (what a step holds on the device: a learning step's h, a levelless step's leaves) the trees are the same
+as within it.  Openings of a run that kept no levels come from a replay that took its keys, and verify against its 64-byte roots, as
+the replay's range openings verify against its own; a tampered row, salt or path does not.
 
 The windows here are 8 KiB and the ring holds four, so every step of ~56 KiB refills each slot while the worker still has the previous
 window's kernels queued; a run that keeps no tree level leaves each window's subtree on the device and drops the per-window host copy
 and host sync, so a slot goes back to the ring with only an event on the worker's side stream between the hash kernels that read it
-and the gather that refills it.  Past ``rows_hold_bytes`` (what a step holds on the device: a learning step's h, a levelless step's
-leaves) the trees are the same as within it.  Openings of a run that kept no levels come from a replay that took its keys, and verify
-against its 64-byte roots, as the replay's range openings verify against its own; a tampered row, salt or path does not.
+and the gather that refills it.
 """
 from __future__ import annotations
 
@@ -107,7 +108,7 @@ def schedule(kv0: int, steps: int, batch: int = 2) -> list[tuple[int, ...]]:
     return [tuple(kv0 + 37 * r + 9 * s for r in range(batch)) for s in range(steps)]
 
 
-def run(com: NC.NativeCollectCommitter, sched: list[tuple[int, ...]]):
+def commit_run(com: NC.NativeCollectCommitter, sched: list[tuple[int, ...]]):
     """One commitment run (reset, install, the steps, finalize, uninstall); its blocks stay held until the next run's reset."""
     com.reset()
     com.install()
@@ -163,9 +164,9 @@ def check_run(rc, keys: dict[int, bytes]) -> None:
 def test_learning_and_hit_runs_commit_step_rows_roots(monkeypatch, retain_levels):
     com = committer(monkeypatch, retain_levels=retain_levels)
     try:
-        learn = run(com, SCHED)
+        learn = commit_run(com, SCHED)
         learn_keys, reup, hfirst = dict(com.row_keys), com._win_reupload_bytes, com._win_hfirst_steps
-        hit = run(com, SCHED)
+        hit = commit_run(com, SCHED)
         assert reup == 0 and hfirst == len(SCHED), "a learning step that keeps no bytes hashes its windows to h in place (no re-upload)"
         assert com._win_reupload_bytes == 0 and com._win_hfirst_steps == 0, "the second run follows the first run's plans (in place)"
         check_run(learn, learn_keys)
@@ -183,7 +184,7 @@ def test_the_step_end_paths_commit_the_same_roots_and_row_order(monkeypatch, fas
     com = committer(monkeypatch)
     com.native_end = com.rows_off_thread = fast
     try:
-        rc = run(com, SCHED)
+        rc = commit_run(com, SCHED)
         check_run(rc, com.row_keys)
         assert list(com.step_rows.values()) == [[("r0", 0, 1), ("r1", 1, 2)]] * len(SCHED)
     finally:
@@ -206,20 +207,20 @@ def test_steps_past_the_device_hold_commit_the_same_trees(monkeypatch, retain_le
     com.rows_hold_bytes = hold
     assert ref.rows_hold_bytes == NC.ROWS_HOLD_BYTES
     try:
-        for phase in ("learn", "hit"):
-            rc = run(com, SCHED)
+        for run in ("learn", "hit"):
+            rc = commit_run(com, SCHED)
             ref.replay_row_keys = dict(com.row_keys)
-            want = run(ref, SCHED)
+            want = commit_run(ref, SCHED)
             check_run(rc, com.row_keys)
             assert [s.root for s in rc.steps] == [s.root for s in want.steps] and rc.run_root == want.run_root
             assert sorted(com._gpu_levels) == sorted(ref._gpu_levels) == (list(range(len(SCHED))) if retain_levels else [])
             for s in com._gpu_levels:
                 got, ref_lv = com._gpu_levels[s], ref._gpu_levels[s]
-                assert len(got) == len(ref_lv) and all(torch.equal(a.cpu(), b.cpu()) for a, b in zip(got, ref_lv)), (phase, s)
+                assert len(got) == len(ref_lv) and all(torch.equal(a.cpu(), b.cpu()) for a, b in zip(got, ref_lv)), (run, s)
             w, wr = rc.extra["windows"], want.extra["windows"]
             assert w["rows_hold_bytes"] == hold and wr["leaf_folds"] == 0
             assert (w["leaf_folds"] > 0) is not retain_levels, "a levelless step folds its held leaves past the hold"
-            if phase == "learn":
+            if run == "learn":
                 assert w["hfirst_steps"] == (len(SCHED) if hold else 0) and wr["hfirst_steps"] == len(SCHED)
                 assert w["reupload_bytes"] > 0 and wr["reupload_bytes"] == 0, "the windows past the hold re-hash from host"
             else:
@@ -273,7 +274,7 @@ def test_side_stream_drain_commits_step_rows_roots(monkeypatch):
         runner.committer, com.runner = com, runner
         try:
             for phase in ("learn", "hit"):
-                rc = run(com, SCHED)
+                rc = commit_run(com, SCHED)
                 keys, roots = com.row_keys, [s.root for s in rc.steps]
                 want, plain = [], []
                 for i, kv in enumerate(SCHED):
@@ -295,9 +296,9 @@ def test_capped_runs_commit_step_rows_roots(monkeypatch):
     com = committer(monkeypatch)
     com.rows_cap_blocks, com.rows_cap_free = 1, 0
     try:
-        learn = run(com, SCHED)
+        learn = commit_run(com, SCHED)
         learn_keys = dict(com.row_keys)
-        hit = run(com, SCHED)
+        hit = commit_run(com, SCHED)
         check_run(learn, learn_keys)
         check_run(hit, com.row_keys)
     finally:
@@ -313,7 +314,7 @@ def test_bounded_record_run_commits_step_rows_roots(monkeypatch, hold):
     com.rows_hold_bytes = hold
     try:
         com.learn_only = True
-        warm = run(com, SCHED)
+        warm = commit_run(com, SCHED)
         if hold == NC.ROWS_HOLD_BYTES:
             assert not warm.extra["bounded_staging"]["learned_only_steps"] and com._win_hfirst_steps == len(SCHED), \
                 "learning steps that keep no bytes copy nothing to host within rows_hold_bytes, so over the budget they are committed"
@@ -321,7 +322,7 @@ def test_bounded_record_run_commits_step_rows_roots(monkeypatch, hold):
         else:
             assert warm.extra["bounded_staging"]["learned_only_steps"] == list(range(len(SCHED)))
         com.learn_only = False
-        rec = run(com, SCHED)
+        rec = commit_run(com, SCHED)
         bs = rec.extra["bounded_staging"]
         assert not bs["learned_only_steps"] and bs["plan_mismatches"] == 0 and bs["transient_peak_bytes"] == 0, bs
         assert (rec.extra["windows"]["leaf_folds"] > 0) is (hold != NC.ROWS_HOLD_BYTES)
@@ -335,9 +336,9 @@ def test_a_run_without_levels_opens_from_a_replay_that_took_its_keys(monkeypatch
     com = committer(monkeypatch, retain_levels=False)
     rep = committer(monkeypatch, retain="host")
     try:
-        rc = run(com, SCHED)
+        rc = commit_run(com, SCHED)
         rep.replay_row_keys = dict(com.row_keys)
-        rrc = run(rep, SCHED)
+        rrc = commit_run(rep, SCHED)
         assert rep.replay_row_keys is None and rep.row_keys == com.row_keys
         assert [s.root for s in rrc.steps] == [s.root for s in rc.steps] and rrc.run_root == rc.run_root
         sample = [(s, i) for s, sc in enumerate(rc.steps) for i in sorted({0, 1, sc.n_leaves // 2, sc.n_leaves - 1})]
@@ -360,7 +361,7 @@ def test_a_run_without_levels_opens_from_a_replay_that_took_its_keys(monkeypatch
         with pytest.raises(RuntimeError, match="no salt key for step 0"):
             rep._row_key(0)
         rep.replay_row_keys = None
-        unkeyed = run(rep, SCHED[:1])
+        unkeyed = commit_run(rep, SCHED[:1])
         assert unkeyed.steps[0].root != rc.steps[0].root, "a replay without the run's keys commits other trees"
     finally:
         com.close()
