@@ -138,17 +138,11 @@ Keys and access:
 
 Landing:
 
-- The vLLM integration's lint ratchets are no-growth: no change adds an
-  exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
-  cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
-- A `# noqa` is an exception too: in `integrations/vllm`, no
-  change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
-  retirement. The ratchet gate counts them, with no allowlist.
-- Outside `integrations/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each PR's changed Python,
-  as drive lands on `checked` before the suites run: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
-  list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
-  `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
-  the PR's base). No new swallowing handler: re-raise, record, or test first.
+- Lint ratchets are no-growth, and a change to a lint is judged like source; cleanup lanes pay the exceptions down and a
+  feature PR owes none. `integrations/vllm/tools/ratchet_gate.py`'s docstring states the rules (the integration's ratchets
+  and `noqa` count, `tests/lint/`'s lists, each changed file's lint). Fix the code, never the list: a rename moves its
+  entries (`--move OLD NEW`), an environment read goes through the area's settings registry, and a swallowing handler
+  re-raises, records the outcome, or narrows.
 
 Protocols and claims:
 
@@ -173,8 +167,7 @@ Protocols and claims:
 - A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
   Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
-  the protocol's properties into `Properties/`. Where it leads: Lean is the definition and the
-  verifier, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
+  the protocol's properties into `Properties/`.
 - An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
   soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
   premises outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
