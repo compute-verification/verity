@@ -5,6 +5,7 @@
 #   MS (64 512 8192: Llama-3.2-1B's T 512 at 64 and 512 rows, and T 8,192), REPS (5), BUDGET_GB (16: the exported words a
 #   hash chunk holds), ROWS (0 65536 16384: the hash pass's row bytes, 0 for row-seg, -B for L1's plain leaves of B-byte
 #   rows), CUDA_HOME (/usr/local/cuda-13.0),
+#   BUILD_ONLY (0; 1 stops after the build and the SASS gate, on any machine with a CUDA toolkit: no lease, no GPU),
 #   LEASE_MIN (25), CHECK (1; 0 skips the exact check), TIME (1; 0 skips the timings), NOT_AFTER (a UTC time past which
 #   the leased part does no GPU work), CAPS (0: beside's caps on a row hash launch's blocks, each a pass
 #   over MS; time_m<M>_cap<C>.jsonl), ROOT_A (0; 1 puts root(A_j), its leaves and the tree above them, in the forward ahead
@@ -17,7 +18,9 @@
 #   path shaped for latency, its noise blocks, G and forming in one launch), L1_CTA (64; L1=2's least CTA size, 64 or 128),
 #   BLC (0; 1 times blc4a-t64-e7: the tag layout with three lane coins a 64-row tile in each later step, streamed after A_j;
 #   2 blc4a-t64-e7-s1, the same with lane coins on step 1 too; the check runs all four layouts), BLC_W (1:1:1: A' in the
-#   three lane-coin lanes, e.g. 1:127:1; the check runs under it too), XU (0; 1 times ssn_1l_tag_xu on the tag layout:
+#   three lane-coin lanes, e.g. 1:127:1; the check runs under it too), ROT (0; 1 with BLC times blc4a-t64-e7-rot, A' in
+#   the lane-coin lanes (127, 1, 1) on even rows and (1, 127, 1) on odd ones in place of BLC_W; the check runs it on
+#   blc4a-t64-e7-s1 with and without XU), XU (0; 1 times ssn_1l_tag_xu on the tag layout:
 #   its last step and the GEMMs' xu epilogue serving bf16; the check runs it on the three tag layouts against stock's
 #   epilogue), EPI (0; 1 the GEMMs run stock's epilogue on the final words),
 #   SPLIT (0; R runs beside's GEMM stream in a green context of R SMs and its hash streams in one of the rest; no serial),
@@ -71,6 +74,7 @@ print(json.dumps({"ok": ok, "functions": funcs}))
 sys.exit(0 if ok else 1)
 EOF
   rc=$?; say "SASS gate rc $rc"; [ "$rc" = 0 ] || { cat "$OUT/gate_ssn.json"; exit 4; }
+  [ "${BUILD_ONLY:-0}" = 1 ] && { say "BUILD_ONLY: no lease, no GPU work"; exit 0; }
   gpu-lease status 2>&1 | tee -a "$OUT/steps.txt"
   say "lease requested"
   gpu-lease 1 --wait --mem-gb 0 --max-min "${LEASE_MIN:-25}" -- bash "$0" leased

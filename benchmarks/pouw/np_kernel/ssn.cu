@@ -21,15 +21,19 @@
 //   (1, 1, 1), so a step adds sum_e w_e s_t'[e, i / 64, j]. BLC=2 (blc4a-t64-e7-s1) gives step 1 lane coins too: its lanes
 //   0-19 data, lanes 20-22 A' = (w0, w1, w2) against s_1[e, i / 64, j], lane 23 A' = 0 against the word's fourth byte, lanes
 //   24-31 as the tag layout's; S = 1 + ceil((K - 20) / 28), and the sums run from t' = 1.
+// ROT=1 (with BLC) is blc4a-t64-e7-rot: A' in the three lane-coin lanes by row parity, (127, 1, 1) on even rows and
+//   (1, 127, 1) on odd ones (ROT_W), in place of BLC_W, so a step adds sum_e ROT_W[i mod 2][e] s_t'[e, i / 64, j].
 // XU=1 is ssn_1l_tag_xu with kappa = 0 on a tag layout: the last step's lanes from xa (the first 4-aligned lane past its
 //   data) hold a1 against -C[0..3, j], -T(i) (written by A's producer) against G[0..3, j] (g_k writes G there too), and from
-//   xa + 8 the bytes u0 against 1, u1 against 127 and u2 in e = min(12, spare) lanes against 127, u0..u2 the bytes of row
-//   i's u word (written by the forming); a step is added when fewer than 12 lanes are left, and S >= 2. The final word is
-//   A_i . B_j - beta_j + rho_i + sigma_{tile, j}, rho_i = u0 + 127 u1 + 127 e u2 + sum_{t >= 2} (1 + a_t[i]) and sigma the
-//   lane coins' sum; the GEMM's epilogue serves bf16(fl(fl(v s_j - 1.5 2^23 s_j) s_i)), v the float whose bits are the word
-//   + (0x4B400000 - rho_i) + (beta_j - sigma_{tile, j}) (one IADD3 of the forming's row source and the certifier's column
-//   source), which is stock's epilogue on A_i . B_j bit for bit while |A_i . B_j| < 2^22 and s_j has a 22-bit significand.
-//   Past 2^22 it serves a wrong output and nothing flags it. EPI=1 runs stock's epilogue on the final word instead.
+//   xa + 8 the bytes u0 against 1, u1 against 127 and u2 in e = min(12, spare) lanes against 127, u0 the low 7 bits of row
+//   i's u word and u1, u2 its signed bytes 1 and 2 (written by the forming); a step is added when fewer than 12 lanes are
+//   left, and S >= 2. The final word is A_i . B_j - beta_j + rho_i + sigma_{tile, class, j}, rho_i = u0 + 127 u1 + 127 e u2
+//   + sum_{t >= 2} (1 + a_t[i]) and sigma the lane coins' sum under row class i mod 2's A' (both classes alike without
+//   ROT); the GEMM's epilogue serves bf16(fl(fl(v s_j - 1.5 2^23 s_j) s_i)), v the float whose bits are the word
+//   + (0x4B400000 - rho_i) + (beta_j - sigma_{tile, class, j}) (one IADD3 of the forming's row source and the certifier's
+//   column source), which is stock's epilogue on A_i . B_j bit for bit while |A_i . B_j| <= 2^22 and s_j has a 22-bit
+//   significand. Past 2^22 it serves a wrong output and nothing flags it. EPI=1 runs stock's epilogue on the final word
+//   instead. The lanes, the sources and the fold are layout.h's, which the CPU check (cpu_check.cc) also reads.
 // Coins: a row's S + 3 bits are bits 0..S+2 of its H = ceil((S + 3) / 32) coin words (a1[i, e] bit e, a_t[i] bit t + 2);
 // row i's words are coin words i H .. i H + H - 1 of the call's stream, whose 16-word block c is SHA-512(seed || be64 c),
 // seed = SHA-512 of the call's 224-byte seed message (tag, salt, forward, position, root(A_j), root(B_j)). Under TAG=1,
@@ -42,7 +46,8 @@
 //   ssn check                 every exported word, the final outputs and the formed registers against the host reference
 //                             on small shapes (random, extreme and zero data; columns past the code's skip; S = 1 and a
 //                             partial last step; random data with every lane coin 127), in the four layouts, then under
-//                             XU=1 on the three tag layouts with each served output against stock's epilogue
+//                             XU=1 on the three tag layouts with each served output against stock's epilogue, then
+//                             blc4a-t64-e7-s1 under ROT=1 without and with XU=1
 //   ssn time REPS M [BUDGET_GB [ROW_BYTES ...]]
 //                             Llama-3.2-1B's fused linears at M rows, one JSON line a timing (see time_all), the hash pass
 //                             by each ROW_BYTES (0: row-seg; default 0 65536 16384)
@@ -67,6 +72,7 @@
 #include "../dc/wgmma.cuh"
 #include "../served_zk/hm96_rows.cu"
 #include "l1.h"
+#include "layout.h"
 
 #define CK(x)                                                                                \
   do {                                                                                       \
@@ -92,29 +98,6 @@ typedef uint64_t u64;
 
 constexpr int KB = 32, TA = 64 * KB, STAGES = 4;
 
-static bool g_tag = false;  // TAG=1: the ssn-1l-tag layout
-static int g_blc = 0;  // BLC=1: blc4a-t64-e7 (with the tag layout's step 1 and row lane); BLC=2: its lane coins on step 1 too
-static int g_lw[3] = {1, 1, 1};  // BLC_W: A' in the three lane-coin lanes
-static int lanes1() { return g_blc == 2 ? 20 : g_tag ? 24 : 28; }  // step 1's data lanes
-static int lanesl() { return g_blc ? 28 : 31; }  // a later step's data lanes
-static bool g_xu = false;  // XU=1: ssn_1l_tag_xu's last step and epilogue, on a tag layout
-// XU=1: the last step's lanes from xu_at (the first 4-aligned lane past its data) hold a1 against -C, -T(i) against G,
-// u0 against 1, u1 against 127 and u2 in xu_e lanes against 127; S >= 2, and a step is added when fewer than 12 are left
-static int xu_at(int k, int S) { return (std::max(0, k - lanes1() - lanesl() * (S - 2)) + 3) & ~3; }
-static int xu_e(int xa) { return std::min(12, 4 * ((lanesl() - xa - 8) / 4) - 2); }
-static int steps_of(int k) {
-  int S = k <= lanes1() ? 1 : 1 + (k - lanes1() + lanesl() - 1) / lanesl();
-  if (g_xu && S < 2) S = 2;
-  if (g_xu && lanesl() - xu_at(k, S) < 12) S++;
-  return S;
-}
-static int lc_steps(int S) { return g_blc == 2 ? S : S - 1; }  // the steps with lane coins, the last lc_steps(S) of S
-static const char* layout_name() {
-  if (g_xu) return g_blc == 2 ? "blc4a_t64_e7_s1_xu" : g_blc ? "blc4a_t64_e7_xu" : "ssn_1l_tag_xu";
-  return g_blc == 2 ? "blc4a_t64_e7_s1" : g_blc ? "blc4a_t64_e7" : g_tag ? "ssn_1l_tag" : "ssn_1l";
-}
-__host__ __device__ inline int coin_words(int s) { return (s + 3 + 31) / 32; }
-
 struct Clk {
   long long c0, c1;
   u64 t0, t1;
@@ -124,7 +107,7 @@ struct Clk {
 struct Xu {
   const int* r;     // 0x4B400000 - rho_i a row
   const float* s;   // s_i a row
-  const int* c;     // beta_j - sigma_{tile, j} a (64-row tile, column)
+  const int* c;     // beta_j - sigma_{tile, class, j} a (64-row tile, row class i mod 2, column), (tile 2 + class) n + j
   const float2* j;  // (s_j, -1.5 2^23 s_j) a column
   u32* o;
   int mode;
@@ -239,25 +222,27 @@ __global__ void __launch_bounds__(128) ssn_k(const uint8_t* __restrict__ A, cons
       for (int e = 0; e < 4; e++)
         out[(size_t)(64 * rt + 16 * w + g + 8 * (e >> 1)) * n + ct * BN + 8 * ni + 2 * q + (e & 1)] = d[4 * ni + e];
   if (x.mode) {
+    // the thread's rows r0 and r0 + 8 share their parity, g's, so one row class's column sources serve both
     const int r0 = 64 * rt + 16 * w + g;
     const float s0 = x.s[r0], s1 = x.s[r0 + 8];
     const u32 x0 = x.mode == 2 ? (u32)x.r[r0] : 0u, x1 = x.mode == 2 ? (u32)x.r[r0 + 8] : 0u;
+    const int* xc = x.c + ((size_t)rt * 2 + (g & 1)) * n;
 #pragma unroll
     for (int ni = 0; ni < BN / 8; ni++) {
       const int col = ct * BN + 8 * ni + 2 * q;
       const float2 j0 = x.j[col], j1 = x.j[col + 1];
       float y[4];
       if (x.mode == 2) {
-        const u32 k0 = (u32)x.c[(size_t)rt * n + col], k1 = (u32)x.c[(size_t)rt * n + col + 1];
-        y[0] = __fmul_rn(__fmaf_rn(__uint_as_float((u32)d[4 * ni] + x0 + k0), j0.x, j0.y), s0);
-        y[1] = __fmul_rn(__fmaf_rn(__uint_as_float((u32)d[4 * ni + 1] + x0 + k1), j1.x, j1.y), s0);
-        y[2] = __fmul_rn(__fmaf_rn(__uint_as_float((u32)d[4 * ni + 2] + x1 + k0), j0.x, j0.y), s1);
-        y[3] = __fmul_rn(__fmaf_rn(__uint_as_float((u32)d[4 * ni + 3] + x1 + k1), j1.x, j1.y), s1);
+        const u32 k0 = (u32)xc[col], k1 = (u32)xc[col + 1];
+        y[0] = xu_fold((u32)d[4 * ni], x0, k0, j0.x, j0.y, s0);
+        y[1] = xu_fold((u32)d[4 * ni + 1], x0, k1, j1.x, j1.y, s0);
+        y[2] = xu_fold((u32)d[4 * ni + 2], x1, k0, j0.x, j0.y, s1);
+        y[3] = xu_fold((u32)d[4 * ni + 3], x1, k1, j1.x, j1.y, s1);
       } else {
-        y[0] = __fmul_rn(__fmul_rn(__int2float_rn(d[4 * ni]), j0.x), s0);
-        y[1] = __fmul_rn(__fmul_rn(__int2float_rn(d[4 * ni + 1]), j1.x), s0);
-        y[2] = __fmul_rn(__fmul_rn(__int2float_rn(d[4 * ni + 2]), j0.x), s1);
-        y[3] = __fmul_rn(__fmul_rn(__int2float_rn(d[4 * ni + 3]), j1.x), s1);
+        y[0] = stock_fold(d[4 * ni], j0.x, s0);
+        y[1] = stock_fold(d[4 * ni + 1], j1.x, s0);
+        y[2] = stock_fold(d[4 * ni + 2], j0.x, s1);
+        y[3] = stock_fold(d[4 * ni + 3], j1.x, s1);
       }
       const __nv_bfloat162 h0 = __floats2bfloat162_rn(y[0], y[1]), h1 = __floats2bfloat162_rn(y[2], y[3]);
       x.o[((size_t)r0 * n + col) / 2] = *reinterpret_cast<const u32*>(&h0);
@@ -295,8 +280,8 @@ __global__ void coins_k(const u64* __restrict__ msg, u32* __restrict__ coins, lo
 // The forming pass: one thread a noise register (row i, step t), rows fastest. Step 1's register is a1 spread over its four
 // bytes (one IMAD and one LOP3); step t's ORs bit t + 2 of the row's stream into byte 3 (a funnel shift and one LOP3), or
 // under the tag layout sets byte 3 to 1 + that bit (a LOP3 and an IADD3, so a repeated call leaves it unchanged).
-// XU=1 (uc, the rows' u words): the last step's thread also writes a1 at lane xa, the bytes u0, u1 and xe u2 from lane
-// xa + 8, and the row source 0x4B400000 - rho_i, rho_i = u0 + 127 u1 + 127 xe u2 + sum_{t >= 2} (1 + a_t[i]).
+// XU=1 (uc, the rows' u words): the last step's thread also writes a1 at lane xa, the bytes u0 (7 bits), u1 and xe u2
+// from lane xa + 8, and the row source 0x4B400000 - rho_i, rho_i = u0 + 127 u1 + 127 xe u2 + sum_{t >= 2} (1 + a_t[i]).
 __global__ void form_k(uint8_t* __restrict__ A, const u32* __restrict__ coins, int m, int S, bool tag,
                        const u32* __restrict__ uc = nullptr, int xa = 0, int xe = 0, int* __restrict__ xr = nullptr) {
   const long long x = (long long)blockIdx.x * blockDim.x + threadIdx.x;
@@ -315,12 +300,12 @@ __global__ void form_k(uint8_t* __restrict__ A, const u32* __restrict__ coins, i
   if (uc && t == S - 1) {
     *reinterpret_cast<u32*>(st + kmaj_off(i & 63, xa, KB)) = ((h[0] & 0xFu) * 0x00204081u) & 0x01010101u;
     const u32 u = uc[i];
-    const int u0 = (int8_t)u, u1 = (int8_t)(u >> 8), u2 = (int8_t)(u >> 16);
+    const int u0 = u0_of(u), u1 = u1_of(u), u2 = u2_of(u);
     for (int l = xa + 8; l < xa + 10 + xe; l += 4) {
       u32 v = 0;
       for (int b = 0; b < 4; b++) {
         const int ll = l + b;
-        const u32 y = ll == xa + 8 ? u & 0xFFu : ll == xa + 9 ? (u >> 8) & 0xFFu : ll < xa + 10 + xe ? (u >> 16) & 0xFFu : 0u;
+        const u32 y = ll == xa + 8 ? (u32)u0 : ll == xa + 9 ? (u >> 8) & 0xFFu : ll < xa + 10 + xe ? (u >> 16) & 0xFFu : 0u;
         v |= y << (8 * b);
       }
       *reinterpret_cast<u32*>(st + kmaj_off(i & 63, l, KB)) = v;
@@ -535,31 +520,6 @@ static u64 mix64(u64 x) {
   x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
   return x ^ (x >> 31);
 }
-static int code_of(int j, int e) {
-  long long c = j + 1 < 14280 ? j + 1 : j + 2;
-  for (int r = 0; r < e; r++) c /= 13;
-  return (int)(c % 13) - 6;
-}
-static int beta_of(int j, int S) {
-  int s = (g_tag ? 3 : 1) * (S - 1);
-  for (int e = 0; e < 4; e++) s += code_of(j, e);
-  return (int)std::nearbyint(s / 2.0);
-}
-// T(i)[e]: digit e of z_i's balanced base-13 expansion, each in [-6, 6]
-static int tag_of(int i, int e) {
-  int z = (i / 2 + 1) * (i & 1 ? -1 : 1), d = 0;
-  for (int r = 0; r <= e; r++) {
-    d = ((z % 13) + 19) % 13 - 6;
-    z = (z - d) / 13;
-  }
-  return d;
-}
-// data entry of step t (0-based), lane l: its K index, or -1 for a noise, tag or padding lane
-static int kidx(int t, int l, int K) {
-  const int d = lanes1(), e = lanesl();
-  const int k = t == 0 ? (l < d ? l : -1) : (l < e ? d + e * (t - 1) + l : -1);
-  return k >= 0 && k < K ? k : -1;
-}
 
 struct Lin {
   int m, n, K, S, BN;
@@ -581,36 +541,21 @@ static void fill(Lin& L, int kind, u64 seed) {
 // the tiled layout
 static std::vector<uint8_t> tile_a(const Lin& L) {
   std::vector<uint8_t> o((size_t)L.m * L.S * KB, 0);
-  const int xa = xu_at(L.K, L.S);
   for (int i = 0; i < L.m; i++)
     for (int t = 0; t < L.S; t++)
-      for (int l = 0; l < KB; l++) {
-        const int k = kidx(t, l, L.K);
-        int v = k >= 0 ? L.A[(size_t)i * L.K + k] : 0;
-        if (g_tag && t == 0 && l >= 24 && l < 28) v = tag_of(i, l - 24);
-        if (g_blc && t > 0 && l >= 28 && l < 31) v = g_lw[l - 28];
-        if (g_blc == 2 && t == 0 && l >= 20 && l < 23) v = g_lw[l - 20];
-        if (g_xu && t == L.S - 1 && l >= xa + 4 && l < xa + 8) v = -tag_of(i, l - xa - 4);
-        o[((size_t)(i >> 6) * L.S + t) * TA + kmaj_off(i & 63, l, KB)] = (uint8_t)(int8_t)v;
-      }
+      for (int l = 0; l < KB; l++)
+        o[((size_t)(i >> 6) * L.S + t) * TA + kmaj_off(i & 63, l, KB)] =
+            (uint8_t)(int8_t)lane_a(i, t, l, L.K, L.S, &L.A[(size_t)i * L.K], nullptr);
   return o;
 }
 static std::vector<uint8_t> tile_b(const Lin& L) {
   std::vector<uint8_t> o((size_t)L.n * L.S * KB, 0);
   const size_t TB = (size_t)L.BN * KB;
-  const int xa = xu_at(L.K, L.S), xe = xu_e(xa);
   for (int j = 0; j < L.n; j++)
     for (int t = 0; t < L.S; t++)
-      for (int l = 0; l < KB; l++) {
-        const int k = kidx(t, l, L.K);
-        int v = k >= 0 ? L.B[(size_t)j * L.K + k] : 0;
-        if (t == 0 && l >= 28) v = code_of(j, l - 28);
-        if (t > 0 && l == 31) v = 1;
-        if (g_xu && t == L.S - 1 && l >= xa && l < xa + 4) v = -code_of(j, l - xa);
-        if (g_xu && t == L.S - 1 && l == xa + 8) v = 1;
-        if (g_xu && t == L.S - 1 && l > xa + 8 && l < xa + 10 + xe) v = 127;
-        o[((size_t)(j / L.BN) * L.S + t) * TB + kmaj_off(j % L.BN, l, KB)] = (uint8_t)(int8_t)v;
-      }
+      for (int l = 0; l < KB; l++)
+        o[((size_t)(j / L.BN) * L.S + t) * TB + kmaj_off(j % L.BN, l, KB)] =
+            (uint8_t)(int8_t)lane_b(j, t, l, L.K, L.S, &L.B[(size_t)j * L.K], nullptr, false, 0);
   return o;
 }
 // the stock-shaped operands: 32 data lanes a step, no noise (the plain GEMM at the linear's own K)
@@ -1127,11 +1072,12 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
     for (size_t x = 0; x < (size_t)(m / 64) * lc_steps(S) * n; x++)
       lc.push_back(kind == 4 ? 0x017F7F7Fu : lane_word(seed * 0x9E3779B97F4A7C15ull + x));
   u32* dlc = lc.empty() ? nullptr : up(lc);
-  // XU=1: scales with 22-bit significands, the column source from the lane coins, and the served outputs
+  // XU=1: scales with 22-bit significands, the column source a (tile, row class, column) from the lane coins, and the
+  // served outputs
   const int xa = xu_at(K, S), xe = xu_e(xa);
   std::vector<float> si(m), sj(n);
   std::vector<float2> xj(n);
-  std::vector<int> xc((size_t)(m / 64) * n);
+  std::vector<int> xc((size_t)(m / 64) * 2 * n);
   auto scale = [](u64 r, int lo) { return std::ldexp((float)((1u << 21) + (u32)(r & ((1u << 21) - 1))), -21 - lo - (int)((r >> 32) % 4)); };
   for (int i = 0; i < m; i++) si[i] = scale(mix64(seed * 31 + i), 4);
   for (int j = 0; j < n; j++) sj[j] = scale(mix64(~seed * 37 + j), 7), xj[j] = make_float2(sj[j], -12582912.0f * sj[j]);
@@ -1139,16 +1085,17 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
   auto lane_sum = [&](int i, int t, int j) {
     if (!g_blc || t + c1 == 0) return 0;
     const u32 w = lc[((size_t)(i / 64) * lc_steps(S) + t - 1 + c1) * n + j];
-    return g_lw[0] * (int8_t)w + g_lw[1] * (int8_t)(w >> 8) + g_lw[2] * (int8_t)(w >> 16);
+    return coin_w(i, 0) * (int8_t)w + coin_w(i, 1) * (int8_t)(w >> 8) + coin_w(i, 2) * (int8_t)(w >> 16);
   };
   long long max_sigma = 0;
   for (int rt = 0; rt < m / 64; rt++)
-    for (int j = 0; j < n; j++) {
-      int s = 0;
-      for (int t = 0; t < S; t++) s += lane_sum(64 * rt, t, j);
-      xc[(size_t)rt * n + j] = beta[j] - s;
-      max_sigma = std::max(max_sigma, (long long)std::abs(s));
-    }
+    for (int cls = 0; cls < 2; cls++)
+      for (int j = 0; j < n; j++) {
+        int s = 0;
+        for (int t = 0; t < S; t++) s += lane_sum(64 * rt + cls, t, j);
+        xc[((size_t)rt * 2 + cls) * n + j] = beta[j] - s;
+        max_sigma = std::max(max_sigma, (long long)std::abs(s));
+      }
   int* dxr = nullptr;
   u32* dxo = nullptr;
   Xu xu{};
@@ -1211,35 +1158,25 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
         bad_coin += (coins[16 * b + 2 * j] != (u32)(st[j] >> 32)) + (coins[16 * b + 2 * j + 1] != (u32)st[j]);
     }
   }
-  // the formed A' against the spec: data lanes unchanged, noise lanes the row's bits
+  // the formed A' against the spec (lane_a on the row's coin words and u word): data lanes unchanged, noise lanes the
+  // row's bits
   size_t bad_form = 0;
-  for (int i = 0; i < m; i++)
+  auto row_coins = [&](int i) {
+    return RowCoins{&coins[(size_t)i * H], g_xu ? coins[(size_t)m * H + (g_tag ? n : 0) + i] : 0u};
+  };
+  for (int i = 0; i < m; i++) {
+    const RowCoins rc = row_coins(i);
     for (int t = 0; t < S; t++)
-      for (int l = 0; l < KB; l++) {
-        const int k = kidx(t, l, K);
-        int v = k >= 0 ? L.A[(size_t)i * K + k] : 0;
-        if (g_tag && t == 0 && l >= 24 && l < 28) v = tag_of(i, l - 24);
-        if (t == 0 && l >= 28) v = bit(i, l - 28);
-        if (g_blc && t > 0 && l >= 28 && l < 31) v = g_lw[l - 28];
-        if (g_blc == 2 && t == 0 && l >= 20 && l < 23) v = g_lw[l - 20];
-        if (t > 0 && l == 31) v = (g_tag ? 1 : 0) + bit(i, t + 3);
-        if (g_xu && t == S - 1 && l >= xa && l < xa + 10 + xe) {
-          const u32 u = coins[(size_t)m * H + (g_tag ? n : 0) + i];
-          v = l < xa + 4 ? bit(i, l - xa) : l < xa + 8 ? -tag_of(i, l - xa - 4) : (int8_t)(u >> (l == xa + 8 ? 0 : l == xa + 9 ? 8 : 16));
-        }
-        bad_form += (int8_t)fa[((size_t)(i >> 6) * S + t) * TA + kmaj_off(i & 63, l, KB)] != v;
-      }
+      for (int l = 0; l < KB; l++)
+        bad_form += (int8_t)fa[((size_t)(i >> 6) * S + t) * TA + kmaj_off(i & 63, l, KB)] !=
+                    lane_a(i, t, l, K, S, &L.A[(size_t)i * K], &rc);
+  }
   // every word against word (i, j, t) = D_t(i, j) - beta_j + sum_e a1[i, e] C[e, j] + sum_{2 <= t' <= t} a_t'[i], and
   // under the tag layout + sum_e T(i)[e] G[e, j] and 1 + a_t'[i] for a_t'[i], under blc4a-t64-e7 also + the three lane coins
   // of (i / 64, t', j) at each step t'; under XU=1 the last step's - sum_e a1[i, e] C[e, j] - sum_e T(i)[e] G[e, j] + u0 +
   // 127 u1 + 127 e u2. The served output against stock's epilogue on A_i . B_j, bf16(fl(fl(float(D) s_j) s_i)), where
-  // |A_i . B_j| < 2^22, and the outputs past it counted
+  // |A_i . B_j| <= 2^22, and the outputs past it counted
   size_t bad_w = 0, bad_o = 0, ones = 0, bad_xr = 0, bad_served = 0, past = 0;
-  auto bf16 = [](float f) {
-    u32 u;
-    memcpy(&u, &f, 4);
-    return (uint16_t)((u + 0x7FFFu + ((u >> 16) & 1u)) >> 16);
-  };
   long long maxabs = 0;
   std::vector<int> code(4 * (size_t)n);
   for (int j = 0; j < n; j++)
@@ -1249,8 +1186,9 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
     const int8_t* a = &L.A[(size_t)i * K];
     int T[4];
     for (int e = 0; e < 4; e++) T[e] = tag_of(i, e);
-    const u32 u = g_xu ? coins[(size_t)m * H + (g_tag ? n : 0) + i] : 0;
-    int rho = (int8_t)u + 127 * (int8_t)(u >> 8) + 127 * xe * (int8_t)(u >> 16);
+    const u32 u = row_coins(i).u;
+    const int u0 = u0_of(u), u1 = u1_of(u), u2 = u2_of(u);
+    int rho = u0 + 127 * u1 + 127 * xe * u2;
     for (int t = 1; t < S; t++) rho += 1 + bit(i, t + 3);
     bad_xr += g_xu && xr[i] != 0x4B400000 - rho;
     for (int j = 0; j < n; j++) {
@@ -1265,19 +1203,18 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
         acc += lane_sum(i, t, j);
         if (g_xu && t == S - 1) {
           for (int e = 0; e < 4; e++) acc -= bit(i, e) * code[4 * j + e] + T[e] * G[4 * j + e];
-          acc += (int8_t)u + 127 * (int8_t)(u >> 8) + 127 * xe * (int8_t)(u >> 16);
+          acc += u0 + 127 * u1 + 127 * xe * u2;
         }
         maxabs = std::max(maxabs, acc < 0 ? -acc : acc);
         bad_w += W[word_at(i, j, t, S, n, BN)] != acc;
       }
       bad_o += out[(size_t)i * n + j] != (int)acc;
       if (g_xu) {
-        if (ab <= -(1 << 22) || ab >= (1 << 22)) {
+        if (ab < -(1 << 22) || ab > (1 << 22)) {
           past++;
           continue;
         }
-        const float y = ((float)ab * sj[j]) * si[i];
-        bad_served += xo[(size_t)i * n + j] != bf16(y);
+        bad_served += xo[(size_t)i * n + j] != bf16_rn(stock_fold((int)ab, sj[j], si[i]));
       }
     }
     for (int t = 1; t < S; t++) ones += bit(i, t + 3);
@@ -1330,14 +1267,16 @@ static int check() {
     }
   }
   int bad = 0;
-  // the four layouts, then XU=1 on the three tag layouts
-  for (int lay = 0; lay < 7; lay++) {
-    g_xu = lay > 3;
+  // the four layouts, then XU=1 on the three tag layouts, then blc4a-t64-e7-s1 under ROT=1 without and with XU=1
+  for (int lay = 0; lay < 9; lay++) {
+    g_rot = lay > 6;
+    g_xu = (lay > 3 && lay < 7) || lay == 8;
     g_tag = lay > 0;
-    g_blc = std::max(0, (g_xu ? lay - 3 : lay) - 1);
+    g_blc = g_rot ? 2 : std::max(0, (g_xu ? lay - 3 : lay) - 1);
     u64 seed = 1;
     for (const C& c : cs) bad += check_one(c.m, c.n, c.K, c.BN, c.kind, seed++);
   }
+  g_rot = false;
   g_xu = false;
   g_tag = false;
   g_blc = 0;
@@ -1432,9 +1371,9 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     d.xj = up(xj);
     CK(cudaMalloc(&d.xr, (size_t)M * 4));
     CK(cudaMemset(d.xr, 0, (size_t)M * 4));
-    CK(cudaMallocHost(&d.hxc, (size_t)(M / 64) * s.n * 4));
-    for (size_t x = 0; x < (size_t)(M / 64) * s.n; x++) d.hxc[x] = beta[x % s.n];
-    CK(cudaMalloc(&d.xc, (size_t)(M / 64) * s.n * 4));
+    CK(cudaMallocHost(&d.hxc, (size_t)(M / 64) * 2 * s.n * 4));
+    for (size_t x = 0; x < (size_t)(M / 64) * 2 * s.n; x++) d.hxc[x] = beta[x % s.n];
+    CK(cudaMalloc(&d.xc, (size_t)(M / 64) * 2 * s.n * 4));
     lins.push_back(d);
   }
   // BLC=1: the certifier's link on a copy stream. A call sends A_j (M K bytes, device to host) once A_j is ready, and its lane
@@ -1453,16 +1392,17 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
       CK(cudaMalloc(&p, lc_max * 4));
       CK(cudaMemcpy(p, hlc, lc_max * 4, cudaMemcpyHostToDevice));
     }
-    // the column sources beta_j - sigma_{tile, j}, which the certifier streams with the lane coins
-    for (LinDev& d : lins)
+    // the column sources beta_j - sigma_{tile, class, j}, which the certifier streams with the lane coins
+    for (LinDev& d : lins) {
+      const int c1 = g_blc == 2, ls = lc_steps(d.S);
       for (int rt = 0; rt < M / 64; rt++)
-        for (int j = 0; j < d.n; j++)
-          for (int t = 0; t < lc_steps(d.S); t++) {
-            const u32 w = hlc[((size_t)rt * lc_steps(d.S) + t) * d.n + j];
-            d.hxc[(size_t)rt * d.n + j] -= g_lw[0] * (int8_t)w + g_lw[1] * (int8_t)(w >> 8) + g_lw[2] * (int8_t)(w >> 16);
-          }
+        for (int cls = 0; cls < 2; cls++)
+          for (int j = 0; j < d.n; j++)
+            d.hxc[((size_t)rt * 2 + cls) * d.n + j] -=
+                xu_sigma(cls, d.S, [&](int t) { return hlc[((size_t)rt * ls + t - 1 + c1) * d.n + j]; });
+    }
   }
-  for (LinDev& d : lins) CK(cudaMemcpy(d.xc, d.hxc, (size_t)(M / 64) * d.n * 4, cudaMemcpyHostToDevice));
+  for (LinDev& d : lins) CK(cudaMemcpy(d.xc, d.hxc, (size_t)(M / 64) * 2 * d.n * 4, cudaMemcpyHostToDevice));
   if (g_blc) {
     CK(cudaMallocHost(&hA, (size_t)M * 8192));
     CK(cudaStreamCreateWithFlags(&sc, cudaStreamNonBlocking));
@@ -1553,7 +1493,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   // none (the final words are only exported)
   const int epi = g_xu ? 2 : getenv("EPI") && atoi(getenv("EPI")) ? 1 : 0;
   auto xu_of = [&](const LinDev& d, int r0) {
-    return Xu{d.xr + r0, d.xs + r0, d.xc + (size_t)(r0 / 64) * d.n, d.xj, (u32*)dout + (size_t)r0 * d.n / 2, epi};
+    return Xu{d.xr + r0, d.xs + r0, d.xc + (size_t)(r0 / 64) * 2 * d.n, d.xj, (u32*)dout + (size_t)r0 * d.n / 2, epi};
   };
   Timer T;
   cudaStream_t s1;
@@ -1715,8 +1655,8 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
       const size_t off = (size_t)(r0 / 64) * lc_steps(d.S) * d.n;
       CK(cudaMemcpyAsync(dlc[par] + off, hlc + off, (size_t)(mc / 64) * lc_steps(d.S) * d.n * 4, cudaMemcpyHostToDevice, sc));
       if (g_xu) {
-        const size_t xo = (size_t)(r0 / 64) * d.n;
-        CK(cudaMemcpyAsync(d.xc + xo, d.hxc + xo, (size_t)(mc / 64) * d.n * 4, cudaMemcpyHostToDevice, sc));
+        const size_t xo = (size_t)(r0 / 64) * 2 * d.n;
+        CK(cudaMemcpyAsync(d.xc + xo, d.hxc + xo, (size_t)(mc / 64) * 2 * d.n * 4, cudaMemcpyHostToDevice, sc));
       }
       CK(cudaEventRecord(ev_c, sc));
       CK(cudaStreamWaitEvent(st, ev_c));
@@ -1814,8 +1754,13 @@ int main(int argc, char** argv) {
     g_blc = getenv("BLC") ? std::min(2, std::max(0, atoi(getenv("BLC")))) : 0;
     g_tag = g_blc || (getenv("TAG") && atoi(getenv("TAG")));
     g_xu = getenv("XU") && atoi(getenv("XU"));
+    g_rot = getenv("ROT") && atoi(getenv("ROT"));
     if (g_xu && (!g_tag || (getenv("L1") && atoi(getenv("L1")) == 2))) {
       fprintf(stderr, "ERR XU=1 takes a tag layout (TAG=1 or BLC) and L1 0 or 1\n");
+      return 2;
+    }
+    if (g_rot && !g_blc) {
+      fprintf(stderr, "ERR ROT=1 sets the lane-coin lanes' A', so it takes BLC=1 or 2\n");
       return 2;
     }
     std::vector<int> rbs;
