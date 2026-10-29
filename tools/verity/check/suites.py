@@ -19,7 +19,8 @@ resolves to in `uv.lock` (the lock's entry for each distribution it depends on, 
 groups, which bring pytest) and the installed version of each, and the environment: Python, the platform, the base image (the
 os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake`, `cargo` and `nvidia-smi` are on the PATH,
 and the `VERITY_*` and `FLOCK_*` variables tests switch on, and the code that runs the suites (`RUNNER`: this runner and its guard,
-not the rest of check, so an edit to `check.py` reruns its own suite alone). The cache key hashes all
+not the rest of check, so an edit to `check.py` reruns its own suite alone; each by its content where this runner is,
+`runner_ids`, so a runner in another checkout keys a tree as the same files inside it do). The cache key hashes all
 of them, read from git's view of the working tree, so uncommitted edits count. The tree must be a git checkout: `research run
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
@@ -162,9 +163,11 @@ CHILD = GUARD / "child"
 CACHE = Path(os.environ.get("VERITY_TEST_CACHE") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "tests")
 #: Files every key includes: the code that decides a suite's verdict, the runner and its guard and tracer. Not
 #: check.py: what it hands the runner that can change a verdict is keyed as such (the pytest arguments, `environment()`'s
-#: variables, the tools on the PATH), and its own suite (verity-check) keys it as its own file.
-RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/guard/verity_suite_guard.py",
-          "tools/verity/check/guard/child/sitecustomize.py", "tools/verity/check/guard/child/verity_suite_reads.py")
+#: variables, the tools on the PATH), and its own suite (verity-check) keys it as its own file. Each is keyed by its content
+#: wherever this runner is (`runner_ids`), under its name here: RUNNER_HOME, then its path from this file's directory.
+RUNNER_HOME = "tools/verity/check"
+RUNNER = tuple(f"{RUNNER_HOME}/{f}" for f in ("suites.py", "guard/verity_suite_guard.py", "guard/child/sitecustomize.py",
+                                              "guard/child/verity_suite_reads.py"))
 XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo", "nvidia-smi")
 ENV_PREFIXES = ("VERITY_", "FLOCK_")
@@ -482,6 +485,22 @@ def object_ids(tree: str, paths: list[str]) -> dict[str, str]:
     specs = [tree if p == "." else f"{tree}:{p}" for p in paths]
     out = _git("cat-file", "--batch-check=%(objectname)", stdin="\n".join(specs) + "\n").splitlines()
     return {p: ("absent" if line.endswith(" missing") else line) for p, line in zip(paths, out)}
+
+
+def runner_ids() -> dict[str, str]:
+    """{each file of `RUNNER`: its git blob id}, read from this runner's own directory (`HERE`) wherever it is, this tree's
+    `tools/verity/check/` or another repository's checkout: in this tree, what `object_ids` reads of git's view of it."""
+    out = {}
+    for name in RUNNER:
+        f = HERE / name.removeprefix(RUNNER_HOME + "/")
+        data = f.read_bytes() if f.is_file() else None
+        out[name] = "absent" if data is None else hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+    return out
+
+
+def key_ids(tree: str, paths: list[str], prose: bool = True, cut: list[str] = ()) -> dict[str, str]:
+    """What a suite's key holds of its inputs ``paths`` in ``tree`` (`input_ids`) and of the runner (`runner_ids`)."""
+    return {**input_ids(tree, sorted(set(paths) - set(RUNNER)), prose, cut), **runner_ids()}
 
 
 def markdown(suite: Suite) -> bool:
@@ -2162,7 +2181,7 @@ def main(argv: list[str] | None = None) -> int:
     meta, lock, provided = metadata() + list(STORE_READS), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:
         paths = inputs[s]
-        ids = input_ids(tree, sorted(set(paths) | set(RUNNER)), markdown(s), cuts[s])
+        ids = key_ids(tree, paths, markdown(s), cuts[s])
         ids.update({f"fixture:{p}": art for p, art in fixtures.items() if covered(p, paths, cuts[s])})
         deps = resolved(roots(s, pkgs), lock, s.path)
         keys = [key(s, ids, env, args, deps)] + ([key(s, ids, env, extra, deps)] if a.quick else [])   # a full pass also covers --quick

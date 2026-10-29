@@ -288,7 +288,8 @@ def suite_parts(C, sources: list[Source], lean: bool) -> list[Part]:
                          and not (hasattr(S, "built_from") and S.built_from(a))]:
                 out.append(Part(f"suite:{s.name}", step, None, "unkeyed", why=f"its key reads {needs[0]}, which lean-build builds"))
                 continue
-            ids = S.input_ids(tree, sorted(set(inputs[s]) | set(S.RUNNER)), S.markdown(s), cuts[s])
+            ids = (S.key_ids(tree, inputs[s], S.markdown(s), cuts[s]) if hasattr(S, "key_ids")        # a tree from before it
+                   else S.input_ids(tree, sorted(set(inputs[s]) | set(S.RUNNER)), S.markdown(s), cuts[s]))
             ids.update({f"fixture:{p}": art for p, art in fixtures.items() if S.covered(p, inputs[s], cuts[s])})
             deps = S.resolved(S.roots(s, pkgs), lock, s.path)
             k = S.key(s, ids, env[step], [], deps)

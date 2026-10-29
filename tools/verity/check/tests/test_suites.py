@@ -290,7 +290,7 @@ def _keys(S) -> dict[str, str]:
     out = {}
     for s in S.discover():
         paths = S.inputs_of(s, pkgs)
-        out[s.name] = S.key(s, S.input_ids(tree, sorted(set(paths) | set(S.RUNNER)), S.markdown(s), S.dropped(s, paths)), env, [],
+        out[s.name] = S.key(s, S.key_ids(tree, paths, S.markdown(s), S.dropped(s, paths)), env, [],
                             S.resolved(S.roots(s, pkgs), lock, s.path))
     return out
 
@@ -333,6 +333,60 @@ def test_a_suite_moved_whole_keys_as_it_did_and_any_change_misses(tmp_path, monk
     assert changed["a"] != after["a"] and changed["b"] != after["b"]
 
 
+def _runner_at(home: Path, monkeypatch, root: Path, name: str):
+    """This runner's files copied to ``home`` (its directory: `suites.py`, `guard/`), loaded from there, keying the tree at ``root``."""
+    import shutil
+
+    home.mkdir(parents=True, exist_ok=True)
+    shutil.copy(HERE / "suites.py", home / "suites.py")
+    shutil.copytree(HERE / "guard", home / "guard", ignore=shutil.ignore_patterns("__pycache__"), dirs_exist_ok=True)
+    spec = importlib.util.spec_from_file_location(name, home / "suites.py")
+    mod = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, mod)
+    spec.loader.exec_module(mod)
+    monkeypatch.setattr(mod, "ROOT", root)
+    return mod
+
+
+def test_in_todays_layout_the_runners_content_keys_every_suite_as_its_path_in_the_tree_did(tmp_path, monkeypatch):
+    """The ops seam: a key holds each runner file's git blob id (`runner_ids`), read where the runner is, under its name in
+    `RUNNER`. With the runner at `tools/verity/check/` in the tree it keys, that is the id git's view of the tree gives that
+    path, so each key is the one `input_ids` of the tree with `RUNNER` among the paths gave before."""
+    _workspace(tmp_path)
+    S = _runner_at(tmp_path / "tools" / "verity" / "check", monkeypatch, tmp_path, "suites_in_todays_layout")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    (S.HERE / "guard" / "verity_suite_guard.py").write_text((S.HERE / "guard" / "verity_suite_guard.py").read_text() + "\n")
+    tree = S.worktree()
+    assert S.runner_ids() == S.object_ids(tree, list(S.RUNNER)), "an uncommitted edit to the runner counts as git's view has it"
+    pkgs, lock, env = S.members(), S.locked(), S.environment()
+    suites = S.discover()
+    assert suites
+    for s in suites:
+        paths = S.inputs_of(s, pkgs)
+        cut = S.dropped(s, paths)
+        deps = S.resolved(S.roots(s, pkgs), lock, s.path)
+        before = S.key(s, S.input_ids(tree, sorted(set(paths) | set(S.RUNNER)), S.markdown(s), cut), env, [], deps)
+        assert S.key(s, S.key_ids(tree, paths, S.markdown(s), cut), env, [], deps) == before
+
+
+def test_a_runner_in_another_checkout_keys_the_tree_as_the_same_runner_inside_it_and_a_changed_byte_misses(tmp_path, monkeypatch):
+    """The ops seam: the check can run from the ops repository against verity's tree. Its runner there keys every suite as the
+    same files at `tools/verity/check/` do, and a byte changed in it moves every key."""
+    root = tmp_path / "verity"
+    root.mkdir()
+    _workspace(root)
+    inside = _runner_at(root / "tools" / "verity" / "check", monkeypatch, root, "suites_inside")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "base")
+    outside = _runner_at(tmp_path / "ops" / "ci", monkeypatch, root, "suites_outside")
+    assert _keys(outside) == _keys(inside)
+    reads = outside.HERE / "guard" / "child" / "verity_suite_reads.py"
+    reads.write_text(reads.read_text() + "\n")
+    moved, kept = _keys(outside), _keys(inside)
+    assert all(moved[s] != kept[s] for s in kept)
+
+
 def test_the_lock_keys_a_suite_s_own_paths_from_it_and_others_as_they_are(tmp_path, monkeypatch):
     S = _suites(monkeypatch, tmp_path)
     entry = [{"name": "b", "source": {"editable": "pkgs/b"}, "metadata": {"requires-dist": [
@@ -364,9 +418,9 @@ def test_a_lock_or_metadata_change_rekeys_only_the_suites_it_resolves_to(tmp_pat
 def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_path, monkeypatch):
     """`--changed REV`, the quick tier `research queue ready` runs: a suite whose inputs, runner or resolution the change moves."""
     _workspace(tmp_path)
+    S = _runner_at(tmp_path / "tools" / "verity" / "check", monkeypatch, tmp_path, "suites_changed")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "base")
-    S = _suites(monkeypatch, tmp_path)
     pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
 
     def touched():
