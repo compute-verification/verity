@@ -14,7 +14,8 @@
 // Lanes (lanes.cuh): mix, imad, lop3, shfl (interleaved only: warp-specialized, ptxas pulls the clock read into a loop),
 // duo (the fold's 3 ops a word), imadw (IMAD.WIDE.U32), and the memory lanes lde, atome, redg, atoms and lds128
 // (wgU_ and wgmix_ only: LD.E, ATOM.E, REDG, ATOMS and LDS.128 beside the IGMMA, so the census's issue-only classes get
-// their joint issue lines). Their alone rates and pipe pairs are scalar.cu's.
+// their joint issue lines), and the multiply lanes ffma, idp4a, dfma and hfma2 and their pairs (wgU_ only: how fast a
+// side pipe could make checkpoint words beside a saturated wgmma). Their alone rates and pipe pairs are scalar.cu's.
 // dc/analyze.py turns rows.jsonl into words a tensor-pipe cycle and the issue cost a beside each lane.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
@@ -85,6 +86,35 @@ DC_DEV void wg_until(const OpArgs& a) {
   }
   OP_END_STOP
   OP_SINK((mma_role ? fold_acc(d) : l.fold()) ^ threadIdx.x)
+}
+
+// wg_until with a Lane2 multiply lane, each role's registers declared in its own branch (Lane2's FP64 chains stay off
+// the wgmma role's accumulators).
+template <int X, int R, class F = F_s8_n256>
+DC_DEV void wg_until2(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  const Tiles t = fill_tiles<F::TYPE>(sm, a.mode);
+  const bool mma_role = threadIdx.x < 256;
+  uint32_t x = 0;
+  OP_BEGIN_STOP
+  if (mma_role) {
+    typename F::Acc d[F::NA] = {};
+    OP_LOOP(it) {
+      group4<F>(d, t);
+      wgmma_wait<1>();
+    }
+    wgmma_wait<0>();
+    OP_DONE
+    wgmma_hold(d);
+    x = fold_acc(d);
+  } else {
+    Lane2 l(threadIdx.x);
+    OP_UNTIL(n) { lane_ops<X, R>(l); }
+    OP_TRIPS(n)
+    x = l.fold();
+  }
+  OP_END_STOP
+  OP_SINK(x ^ threadIdx.x)
 }
 
 // wg_until with a memory lane (lanes.cuh's mem_ops, M): the lane warps' R accesses a trip.
@@ -486,6 +516,18 @@ OP_KERNEL(wgmixe4_mix_r256, 256) { wg_mix<L_MIX, 256, F_e4m3_n256>(a); }
 OP_KERNEL(wgmixe4_mix_r512, 256) { wg_mix<L_MIX, 512, F_e4m3_n256>(a); }
 OP_KERNEL(wgU_sync_k16, 384) { wg_sync_until<16>(a); }
 OP_KERNEL(wgU_sync_k32, 384) { wg_sync_until<32>(a); }
+OP_KERNEL(wgU_ffma, 384) { wg_until<L_FFMA, 64>(a); }
+OP_KERNEL(wgU_ffma_r256, 384) { wg_until<L_FFMA, 256>(a); }
+OP_KERNEL(wgU_idp4a, 384) { wg_until2<L_IDP4A, 64>(a); }
+OP_KERNEL(wgU_idp4a_r256, 384) { wg_until2<L_IDP4A, 256>(a); }
+OP_KERNEL(wgU_dfma, 384) { wg_until2<L_DFMA, 64>(a); }
+OP_KERNEL(wgU_dfma_r256, 384) { wg_until2<L_DFMA, 256>(a); }
+OP_KERNEL(wgU_hfma2, 384) { wg_until2<L_HFMA2, 64>(a); }
+OP_KERNEL(wgU_idp4a_ffma, 384) { wg_until2<L_P_IDP4A_FFMA, 64>(a); }
+OP_KERNEL(wgU_idp4a_dfma, 384) { wg_until2<L_P_IDP4A_DFMA, 64>(a); }
+OP_KERNEL(wgU_dfma_ffma, 384) { wg_until2<L_P_DFMA_FFMA, 64>(a); }
+OP_KERNEL(wgU_idp4a_lop3, 384) { wg_until2<L_P_IDP4A_LOP3, 64>(a); }
+OP_KERNEL(wgUu8_idp4a, 384) { wg_until2<L_IDP4A, 64, F_u8s8_n256>(a); }
 OP_KERNEL(imma_s8_k32, 512) { imma_alone<32>(a); }
 OP_KERNEL(imma_s8_k16, 512) { imma_alone<16>(a); }
 #define SYNC(NAME) OP_KERNEL(sync_##NAME, 512) { sync_alone<S_##NAME>(a); }
@@ -573,6 +615,17 @@ static const OpProbe PROBES[] = {
     P_UNTIL(wgU_lif_r512, "LOP3.LUT=224,IMAD=224,FFMA=64"),
     P_UNTIL(wgU_imadw, "IMAD.WIDE.U32=64"),
     P_UNTIL(wgU_imadw_r256, "IMAD.WIDE.U32=256"),
+    P_UNTIL(wgU_ffma, "FFMA=64"),
+    P_UNTIL(wgU_ffma_r256, "FFMA=256"),
+    P_UNTIL(wgU_idp4a, "IDP.4A*=64"),
+    P_UNTIL(wgU_idp4a_r256, "IDP.4A*=256"),
+    P_UNTIL(wgU_dfma, "DFMA=64"),
+    P_UNTIL(wgU_dfma_r256, "DFMA=256"),
+    P_UNTIL(wgU_hfma2, "HFMA2*=64"),
+    P_UNTIL(wgU_idp4a_ffma, "IDP.4A*=32,FFMA=32"),
+    P_UNTIL(wgU_idp4a_dfma, "IDP.4A*=32,DFMA=32"),
+    P_UNTIL(wgU_dfma_ffma, "DFMA=32,FFMA=32"),
+    P_UNTIL(wgU_idp4a_lop3, "IDP.4A*=32,LOP3.LUT=32"),
 #define P_MEM(LN, PAT)                                                                                    \
   P_UNTIL(wgU_##LN, PAT "=16"), P_UNTIL(wgU_##LN##_r32, PAT "=32"),                                       \
       {.name = "wgmix_" #LN "_r16", .kernel = (const void*)wgmix_##LN##_r16, .tpb = 256, .expect = WGI "," PAT "=16", \
@@ -589,6 +642,7 @@ static const OpProbe PROBES[] = {
     P_UNTILF(wgUb1_lif_r256, "BGMMA.64x256x256.AND.POPC*=4", "LOP3.LUT=112,IMAD=112,FFMA=32"),
     P_UNTILF(wgUb1_lif_r512, "BGMMA.64x256x256.AND.POPC*=4", "LOP3.LUT=224,IMAD=224,FFMA=64"),
     P_UNTILF(wgUe4_lif_r512, "QGMMA.64x256x32.F32.E4M3.E4M3*=4", "LOP3.LUT=224,IMAD=224,FFMA=64"),
+    P_UNTILF(wgUu8_idp4a, "IGMMA.64x256x32.U8.S8*=4", "IDP.4A*=64"),
 #undef P_UNTILF
 #define P_MIXF(NAME, WPAT, LPAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = 256, .expect = WPAT "," LPAT, .iters = 4096}
     P_MIXF(wgmixb1_mix_r256, "BGMMA.64x256x256.AND.POPC*=4", "I*ADD*=128,FFMA=128"),

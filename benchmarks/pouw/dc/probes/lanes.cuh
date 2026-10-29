@@ -4,6 +4,7 @@
 #include "../dc.cuh"
 
 // mix: add.u32 and FFMA alternating (ptxas splits the adds between IADD3 and IMAD.IADD); duo: the fold, 3 ops a word.
+// The multiply lanes (idp4a, dfma, hfma2, ...) are Lane2's, below.
 // redux: one redux.sync.xor.b32 (the whole warp's XOR in one instruction, sm_80+); reduce: the same by 5 butterfly
 // shuffles and 5 XORs (the fallback). LI-CP-W's per-segment checkpoint is one of these a warp a segment.
 // li: LOP3 and IMAD alternating, LI's op mix; lif: LI with FFMA filler. imadw: mad.wide.u32 (IMAD.WIDE.U32), the 64-bit
@@ -69,6 +70,38 @@ struct Lane {
     return x;
   }
 };
+// The multiply lanes a side pipe could make checkpoint words on, in Lane2 so the lanes above keep their SASS. idp4a:
+// dp4a.s32.s32 (IDP.4A.S8.S8, four int8 products into s32); idp2a: dp2a.lo (IDP.2A.LO); dfma: fma.rn.f64 on eight FP64
+// chains of its own; hfma2: fma.rn.f16x2 (two FP16 FMAs); popc and prmt. The p_ kinds alternate two of them (lane_pair).
+enum { L_IDP4A = 32, L_IDP2A, L_DFMA, L_HFMA2, L_POPC, L_PRMT, L_P_IDP4A_FFMA, L_P_IDP4A_DFMA, L_P_DFMA_FFMA,
+       L_P_IDP4A_LOP3 };
+struct Lane2 : Lane {
+  double d[8];
+  DC_DEV explicit Lane2(uint32_t tid) : Lane(tid) {
+#pragma unroll
+    for (int i = 0; i < 8; i++) d[i] = 1.0 + (double)(r[i] & 0xffffu) * 0x1p-20;
+  }
+  template <int X>
+  DC_DEV void op(int i) {
+    const int s = i & 7, t = (i + 1) & 7, u = (i + 2) & 7;
+    if constexpr (X < L_IDP4A) Lane::op<X>(i);
+    if constexpr (X == L_IDP4A) asm volatile("dp4a.s32.s32 %0,%1,%2,%0;" : "+r"(r[s]) : "r"(r[t]), "r"(r[u]));
+    if constexpr (X == L_IDP2A) asm volatile("dp2a.lo.s32.s32 %0,%1,%2,%0;" : "+r"(r[s]) : "r"(r[t]), "r"(r[u]));
+    if constexpr (X == L_DFMA) asm volatile("fma.rn.f64 %0,%0,%1,0d3FF0000000000000;" : "+d"(d[s]) : "d"(d[t]));
+    if constexpr (X == L_HFMA2) asm volatile("fma.rn.f16x2 %0,%0,%1,%2;" : "+r"(r[s]) : "r"(r[t]), "r"(0x3C003C00u));
+    if constexpr (X == L_POPC) asm volatile("popc.b32 %0,%1;" : "=r"(r[s]) : "r"(r[t]));
+    if constexpr (X == L_PRMT) asm volatile("prmt.b32 %0,%0,%1,0x6420;" : "+r"(r[s]) : "r"(r[t]));
+  }
+  DC_DEV uint32_t fold() const {
+    uint32_t x = Lane::fold();
+#pragma unroll
+    for (int i = 0; i < 8; i++) {
+      const unsigned long long b = (unsigned long long)__double_as_longlong(d[i]);
+      x += (uint32_t)b ^ (uint32_t)(b >> 32);
+    }
+    return x;
+  }
+};
 template <int Q, int N>
 DC_DEV void duo_ops(Lane& l) {
   if constexpr (Q < N) {
@@ -77,18 +110,18 @@ DC_DEV void duo_ops(Lane& l) {
   }
 }
 // R ops alternating X and Y: when the pair's rate exceeds both alone rates, X and Y issue to different pipes.
-template <int X, int Y, int R>
-DC_DEV void lane_pair(Lane& l) {
+template <int X, int Y, int R, class L>
+DC_DEV void lane_pair(L& l) {
 #pragma unroll
   for (int q = 0; q < R; q += 2) {
-    l.op<X>(q >> 1);
-    l.op<Y>((q >> 1) + 4);
+    l.template op<X>(q >> 1);
+    l.template op<Y>((q >> 1) + 4);
   }
 }
 // R lane ops (the duo lane: R/3 words of three ops each; the LI lane: LI's LOP3 + IMAD pair, R/2 of each; lif: LI with
 // one FFMA filler op in eight, 7 LOP3 + 7 IMAD + 2 FFMA a 16)
-template <int X, int R>
-DC_DEV void lane_ops(Lane& l) {
+template <int X, int R, class L>
+DC_DEV void lane_ops(L& l) {
   if constexpr (X == L_DUO) {
     duo_ops<0, R / 3>(l);
   } else if constexpr (X == L_LI) {
@@ -96,13 +129,21 @@ DC_DEV void lane_ops(Lane& l) {
   } else if constexpr (X == L_LIF) {
 #pragma unroll
     for (int q = 0; q < R; q++) {
-      if (q % 8 == 7) l.op<L_FFMA>(q / 8);
-      else if ((q % 8 + q / 8) % 2 == 0) l.op<L_LOP3>(q);
-      else l.op<L_IMAD>(q);
+      if (q % 8 == 7) l.template op<L_FFMA>(q / 8);
+      else if ((q % 8 + q / 8) % 2 == 0) l.template op<L_LOP3>(q);
+      else l.template op<L_IMAD>(q);
     }
+  } else if constexpr (X == L_P_IDP4A_FFMA) {
+    lane_pair<L_IDP4A, L_FFMA, R>(l);
+  } else if constexpr (X == L_P_IDP4A_DFMA) {
+    lane_pair<L_IDP4A, L_DFMA, R>(l);
+  } else if constexpr (X == L_P_DFMA_FFMA) {
+    lane_pair<L_DFMA, L_FFMA, R>(l);
+  } else if constexpr (X == L_P_IDP4A_LOP3) {
+    lane_pair<L_IDP4A, L_LOP3, R>(l);
   } else {
 #pragma unroll
-    for (int q = 0; q < R; q++) l.op<X>(q);
+    for (int q = 0; q < R; q++) l.template op<X>(q);
   }
 }
 

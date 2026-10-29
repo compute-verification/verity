@@ -6,15 +6,16 @@
 //   p_<x>_<y>           the same with x and y alternating (independent chains): a pair rate above both alone rates
 //                       means x and y issue to different pipes; at the alone rate, they share one
 //   s_<lane>_w<W>       W warps a SMSP: the lane role's warps in sm90_wgmma.cu's wgU_* (W = 1), alone
+// The multiply lanes (idp4a, idp2a, dfma, hfma2) and popc and prmt are lanes.cuh's Lane2.
 // The beside-the-tensor-pipe rows are sm90_wgmma.cu's and sm100_tcgen05.cu's; dc/analyze.py reads all three.
 #include "../../opcode_probe/probe.cuh"
 #include "lanes.cuh"
 
 constexpr int R = 64;
 
-template <int X>
+template <int X, class L = Lane>
 DC_DEV void s_alone(const OpArgs& a) {
-  Lane l(threadIdx.x ^ (uint32_t)a.mode);
+  L l(threadIdx.x ^ (uint32_t)a.mode);
   OP_BEGIN
   OP_LOOP(it) { lane_ops<X, X == L_DUO ? 3 * R / 2 : (X == L_REDUCE ? R / 8 : R)>(l); }
   OP_END
@@ -33,9 +34,9 @@ DC_DEV void s_mem(const OpArgs& a) {
   OP_END
   OP_SINK(l.fold() ^ threadIdx.x)
 }
-template <int X, int Y>
+template <int X, int Y, class L = Lane>
 DC_DEV void s_pair(const OpArgs& a) {
-  Lane l(threadIdx.x ^ (uint32_t)a.mode);
+  L l(threadIdx.x ^ (uint32_t)a.mode);
   OP_BEGIN
   OP_LOOP(it) { lane_pair<X, Y, R>(l); }
   OP_END
@@ -78,6 +79,23 @@ OP_KERNEL(s_lop3_w1, 128) { s_alone<L_LOP3>(a); }
 OP_KERNEL(s_imad_w1, 128) { s_alone<L_IMAD>(a); }
 OP_KERNEL(s_mix_w1, 128) { s_alone<L_MIX>(a); }
 OP_KERNEL(s_li_w2, 256) { s_alone<L_LI>(a); }
+OP_KERNEL(s_idp4a, 1024) { s_alone<L_IDP4A, Lane2>(a); }
+OP_KERNEL(s_idp2a, 1024) { s_alone<L_IDP2A, Lane2>(a); }
+OP_KERNEL(s_dfma, 1024) { s_alone<L_DFMA, Lane2>(a); }
+OP_KERNEL(s_hfma2, 1024) { s_alone<L_HFMA2, Lane2>(a); }
+OP_KERNEL(s_popc, 1024) { s_alone<L_POPC, Lane2>(a); }
+OP_KERNEL(s_prmt, 1024) { s_alone<L_PRMT, Lane2>(a); }
+OP_KERNEL(p_idp4a_imad, 1024) { s_pair<L_IDP4A, L_IMAD, Lane2>(a); }
+OP_KERNEL(p_idp4a_ffma, 1024) { s_pair<L_IDP4A, L_FFMA, Lane2>(a); }
+OP_KERNEL(p_idp4a_lop3, 1024) { s_pair<L_IDP4A, L_LOP3, Lane2>(a); }
+OP_KERNEL(p_idp4a_dfma, 1024) { s_pair<L_IDP4A, L_DFMA, Lane2>(a); }
+OP_KERNEL(p_dfma_ffma, 1024) { s_pair<L_DFMA, L_FFMA, Lane2>(a); }
+OP_KERNEL(p_dfma_imad, 1024) { s_pair<L_DFMA, L_IMAD, Lane2>(a); }
+OP_KERNEL(p_hfma2_ffma, 1024) { s_pair<L_HFMA2, L_FFMA, Lane2>(a); }
+OP_KERNEL(s_idp4a_w1, 128) { s_alone<L_IDP4A, Lane2>(a); }
+OP_KERNEL(s_dfma_w1, 128) { s_alone<L_DFMA, Lane2>(a); }
+OP_KERNEL(s_hfma2_w1, 128) { s_alone<L_HFMA2, Lane2>(a); }
+OP_KERNEL(s_ffma_w1, 128) { s_alone<L_FFMA>(a); }
 
 #define P(NAME, PAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = 1024, .expect = PAT, .iters = 4096}
 static const OpProbe PROBES[] = {
@@ -111,6 +129,19 @@ static const OpProbe PROBES[] = {
     P(p_lea_imad, "LEA.HI=32,IMAD=32"),
     P(p_lea_iadd, "LEA.HI=32,I*ADD*=32"),
     P(p_lea_ffma, "LEA.HI=32,FFMA=32"),
+    P(s_idp4a, "IDP.4A*=64"),
+    P(s_idp2a, "IDP.2A*=64"),
+    P(s_dfma, "DFMA=64"),
+    P(s_hfma2, "HFMA2*=64"),
+    P(s_popc, "POPC=64"),
+    P(s_prmt, "PRMT=64"),
+    P(p_idp4a_imad, "IDP.4A*=32,IMAD=32"),
+    P(p_idp4a_ffma, "IDP.4A*=32,FFMA=32"),
+    P(p_idp4a_lop3, "IDP.4A*=32,LOP3.LUT=32"),
+    P(p_idp4a_dfma, "IDP.4A*=32,DFMA=32"),
+    P(p_dfma_ffma, "DFMA=32,FFMA=32"),
+    P(p_dfma_imad, "DFMA=32,IMAD=32"),
+    P(p_hfma2_ffma, "HFMA2*=32,FFMA=32"),
 #define PW(NAME, TPB, PAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = TPB, .expect = PAT, .iters = 4096}
     PW(s_li_w1, 128, "LOP3.LUT=32,IMAD=32"),
     PW(s_lif_w1, 128, "LOP3.LUT=28,IMAD=28,FFMA=8"),
@@ -118,6 +149,10 @@ static const OpProbe PROBES[] = {
     PW(s_imad_w1, 128, "IMAD=64"),
     PW(s_mix_w1, 128, "I*ADD*=32,FFMA=32"),
     PW(s_li_w2, 256, "LOP3.LUT=32,IMAD=32"),
+    PW(s_idp4a_w1, 128, "IDP.4A*=64"),
+    PW(s_dfma_w1, 128, "DFMA=64"),
+    PW(s_hfma2_w1, 128, "HFMA2*=64"),
+    PW(s_ffma_w1, 128, "FFMA=64"),
 #undef PW
 };
 #undef P
