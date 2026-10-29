@@ -268,7 +268,6 @@ SIDECARS = [str(TG.REPO / "verity/ml/circuits/ops/argmax.circuit-check.py"),
             str(TG.REPO / "verity/ml/circuits/ops/boolean/scalar.circuit-check.py")]
 
 
-@pytest.mark.slow
 def test_three_shards_of_a_sidecar_set_combine_to_the_unsharded_run(tmp_path, capsys):
     """The real checks: the combined report's summary, its output and its exit status are the unsharded run's, byte for byte.
     Uncached: a cache would trace this test process for good (`cache.trace`)."""
