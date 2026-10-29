@@ -406,12 +406,13 @@ class Served:
     def _a_rows(self, call: Any, value: str, mine: Sequence[int], codes: np.ndarray, scales: np.ndarray
                 ) -> np.ndarray | None:
         """Write call ``call``'s `a_words` into its step's A table of K ``value`` at its place among ``mine``, the step's
-        calls of K in call order: the whole table once they are all in, else None."""
+        calls of K in call order: the whole table once they are all in, else None. The table starts zero, which is
+        `chunk_words`' padding, so each call writes only its rows."""
         n = Wt.chunks(call.k)
         block = n * self.m
-        table, done = self._a.setdefault(value, (np.empty((len(mine) * block, call.k // (2 * n) + 2), "<u2"), set()))
+        table, done = self._a.setdefault(value, (np.zeros((len(mine) * block, call.k // (2 * n) + 2), "<u2"), set()))
         j = mine.index(call.index)
-        self.a_words(call, codes, scales, table[j * block:(j + 1) * block])
+        self.a_words(call, codes, scales, table[j * block:j * block + n * len(codes)], len(codes))
         done.add(call.index)
         if len(done) < len(mine):
             return None
