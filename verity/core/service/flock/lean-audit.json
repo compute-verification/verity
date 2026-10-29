@@ -5,6 +5,7 @@
   "Flock.Test.Full",
   "Flock.Test.Labels",
   "Flock.Test.PortRoots",
+  "Flock.Test.KsScope",
   "Flock.Test.FullDraw",
   "Flock.Test.OneFull",
   "Flock.Test.RegBudget",
