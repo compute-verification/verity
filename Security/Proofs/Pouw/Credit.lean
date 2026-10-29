@@ -451,7 +451,10 @@ theorem groupedDrawMisses_nontrivial :
   classical
   have hall : ∀ g : (i : Fin idleLaw.size) → Fin idleLaw[i].need → Fin 256,
       ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d := fun g => by
-    refine ⟨(#[] : Array ℕ).qsort (· < ·), ?_, fun b _ hb => by simp [DrawExec.mem_qsort] at hb⟩
+    refine ⟨(#[] : Array ℕ).qsort (· < ·), ?_, fun b _ hb => by
+      first
+        | exact absurd ((DrawExec.mem_qsort (#[] : Array ℕ) _ _).1 hb) (by simp)
+        | (unfold Array.qsort at hb; simp at hb)⟩
     unfold drawnOn Flock.Draw.stratified
     dsimp only
     rw [Std.Legacy.Range.forIn_eq_forIn_range']
