@@ -746,8 +746,11 @@ is accepted under `--zk` and changes nothing), and under `--zk` without `--rec-i
 tags, files and a draw outside the rest of that form (`KsScope.checkOf`: a typed statement, one with public outputs,
 without retained rounds or without `hm96-sha512/v1` leaves; a circuit outside `ProvedScope.scopeOkH`, which a unit
 reading several input groups or a tail stage returning the outputs is; a shared-row public file, with or without
-`--registered F`; at more than one table a draw that does not parse or a subset draw whose `k` the tables don't divide;
-`Flock.Guarantees.SampledKSLiveV4` is over that acceptance), all after every
+`--registered F`, outside the form `Flock.Guarantees.SampledKSLiveV5` covers (`KsScope.sharedWhy`: one whose circuit's
+public input ports do not parse, that does not load over them, or two of whose ports' roots over its tables are one root
+under different domains); at more than one table a draw that does not parse or a subset draw whose `k` the tables don't
+divide; `Flock.Guarantees.SampledKSLiveV4` is over that acceptance without shared rows, and `SampledKSLiveV5` with
+them), all after every
 check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
