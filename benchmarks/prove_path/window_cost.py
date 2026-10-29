@@ -7,7 +7,8 @@ Costs. A fresh output row is its digest x (`class_rows.blocks(128 + b)`: P(8 nby
 (hm96's c and h, two each, the frame leaf, and a port-tree node); an input row a wire or a registered read fills is re-leafed in
 its reader's port tree for `Costs.reused` (h, the leaf, the node). `CENSUS` is class_rows' model, a node one compression;
 `ENGINE` is the commit engine's, a node two (`commit_slots`: nine compressions a one-block row-slot). Compressions are priced
-in ANDs at `SHA512_ANDS` each; the served window is the class circuit's ANDs (`unit_ands`).
+in AND rows at `SHA512_ROWS` each (`Sha512Compress_v1`'s pin, the copies C-Flock proves included); the served window is the
+class circuit's ANDs (`unit_ands`).
 
 Levers (`LEVERS`), each a change to the circuit's layout or the commitment's format, not to what the model computes:
 
@@ -55,7 +56,7 @@ from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import WindowClass
 
 from verity.core.protocols.pous import wipe_monitoring
-from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
+from verity.core.protocols.sampled_proofs.optimize import SHA512_ROWS
 from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
@@ -494,7 +495,7 @@ def stream(sizing: dict, cls: dict, target: str, served_ands: float, served_s: f
         for key, b in (("all", r["run_bytes"]), ("F", r["run_bytes"] - r["hidden_bytes"])):
             c = -(-b // STREAM_ROW_BYTES) * STREAM_ROW
             s = {k: c / v for k, v in RATES.items()}
-            row[key] = {"compressions": c, "ands": c * SHA512_ANDS, "ratio_ands": c * SHA512_ANDS / served_ands, "s": s,
+            row[key] = {"compressions": c, "ands": c * SHA512_ROWS, "ratio_ands": c * SHA512_ROWS / served_ands, "s": s,
                         "ratio_s": {k: v / served_s for k, v in s.items()}, "seal_s": b / SEAL_BYTES_S,
                         "seal_ratio": b / SEAL_BYTES_S / served_s}
         out[name] = row
@@ -608,7 +609,7 @@ def price(census: dict, target: str = "h200", served_s: float = 1.7, step_s: flo
     else:
         rest, heads, cls = project(census, *to[:3], target, *to[3:])
         total = None
-    out = {"class": cls, "target": target, "served_s": served_s, "step_s": step_s, "sha512_ands": SHA512_ANDS,
+    out = {"class": cls, "target": target, "served_s": served_s, "step_s": step_s, "sha512_ands": SHA512_ROWS,
            "census_compressions": total, "projected_from": None if to is None else census["class"], "cpu": cpu}
     served0 = served_ands(rest, heads, frozenset(), target)
     att = sum(heads.ands_at(T, heads.BN, target) for T in range(1, heads.P + 1))
@@ -630,10 +631,10 @@ def price(census: dict, target: str = "h200", served_s: float = 1.7, step_s: flo
         commit_s = {r: gpu_c / v + (on_cpu["total"] if on_cpu else 0.0) for r, v in RATES.items()}
         rows.append({"levers": name, "set": sorted(levers), "costs": costs.name, "row_compressions": rows_c,
                      "registration": reg.__dict__, "registration_cpu": on_cpu, "commit_compressions": commit_c,
-                     "commit_ands": commit_c * SHA512_ANDS, "served_ands": served,
-                     "ratio_ands": commit_c * SHA512_ANDS / served, "commit_s": commit_s,
+                     "commit_ands": commit_c * SHA512_ROWS, "served_ands": served,
+                     "ratio_ands": commit_c * SHA512_ROWS / served, "commit_s": commit_s,
                      "ratio_s": {r: s / served_s for r, s in commit_s.items()}, "pad_pass": pads,
-                     "full_ratio_ands": (commit_c * SHA512_ANDS + full["ands"]) / served,
+                     "full_ratio_ands": (commit_c * SHA512_ROWS + full["ands"]) / served,
                      "full_ratio_s": (commit_s["3.1 G/s"] + full["seconds"]) / served_s})
     out["rows"] = rows
     out["stream"] = None if sizing is None else stream(sizing, cls, target, served0, served_s)

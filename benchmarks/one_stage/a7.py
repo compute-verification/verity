@@ -24,7 +24,7 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   commitments' stand-in) and each written block's payload. Each unit's witness rows are those rows under those salts, so their
   ``b || c`` in the statement's public file are the canonical ones; the verifier holds each at the position the public
   requirement names (`bindings`).
-* **Statements and draw.** One circuit per template, staged by C-Flock's `UnitStager` bound to the partition
+* **Statements and draw.** One circuit per template, staged by Flock's `UnitStager` bound to the partition
   (`Q_template_instances` over `TemplatePopulations`, one unit per step each), drawn by the verifier's Lean
   (`flock-verify draw --stratified K`, K every unit by default, so no unit is uncertified), each member's draw served
   `--zk` and held by Lean `verify --zk --partition --program`. For every drawn unit the prover opens its public row (the
@@ -210,7 +210,7 @@ def _salts(key: bytes, kind: str, n: int) -> list[bytes]:
 
 
 def canon_dom(kind: str, n: int) -> CommitmentDomain:
-    """The verifier's own derivation of a canonical commitment's frame domain: C-Flock's set-bound domain of port ``kind``
+    """The verifier's own derivation of a canonical commitment's frame domain: Flock's set-bound domain of port ``kind``
     over rows [0, n) of set ``a7-canon-<kind>``."""
     b = identity_digest_sha512(FC.BINDING_TAG, {"set": f"a7-canon-{kind}", "lo": 0, "hi": n, "port": kind, "schema": V2})
     return CommitmentDomain(b, FC.OWNER, RangeIndexedDomain(0, n), hash="sha512")

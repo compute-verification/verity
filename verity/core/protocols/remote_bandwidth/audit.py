@@ -1,4 +1,4 @@
-"""The remote bandwidth audit v0 (`verity/remote-bandwidth/v0`): a verifier with no hardware at the site certifies how
+"""PoUB v0 (`verity/remote-bandwidth/v0`): a verifier with no hardware at the site certifies how
 many reads of a node's registered blocks the node made in each window, from receipts chained pass to pass.
 
 1. Registration.  The prover commits to its payload blocks (`payload_tree`: the weights, KV pages and filler, each an
@@ -99,7 +99,7 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
-from verity.core.protocols.profile import IntegrityProfile, Subset
+from verity.core.protocols.profile import WINDOW_DELTA, IntegrityProfile, Subset
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
 from verity.ml.commitments import verify_opening
 from verity.ml.randomness import derive, frame
@@ -130,7 +130,7 @@ pass, which γ's error and the memory line's δ add once a pass.  Up to 2^17 pas
 (532.6 GB, gate runs 8 and 9's store) at `timing.READ_BYTES_PER_S` is 87,326 passes."""
 WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
-DELTA = 2.0 ** -40
+DELTA = float(WINDOW_DELTA)
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt")

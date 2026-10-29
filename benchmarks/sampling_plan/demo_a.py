@@ -1,5 +1,5 @@
 """Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a 6.35 s step (its
-commit 1.0 s of it), on the map of every subcircuit to a Definition C-Flock stages (`examples/h200/e2e_h200/plan.py`'s
+commit 1.0 s of it), on the map of every subcircuit to a Definition Flock stages (`examples/h200/e2e_h200/plan.py`'s
 `Map`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
 circuit size): half skipped work, half leaked output bits.
 
@@ -10,7 +10,7 @@ the exchange rate divides each half by the least bound B certifies for that half
 two bounds from its one draw, `free_compute` and `leak`, at delta = 1% and 1e-6, and the tile stratum's epsilon at delta
 (`pouw.window.eps_at`).
 
-**Units** (`families`). Each subcircuit is the map's Definition at its measured ANDs and C-Flock's staged k_log (at most
+**Units** (`families`). Each subcircuit is the map's Definition at its measured ANDs and Flock's staged k_log (at most
 27, its statement cap `min(2^(35 - k_log), 2^20)`), its units counted from the shape: the s8 coordinates as
 `ScaledMmS8CoordinateRows_v1` (x in the quantizer's 8 KiB chunk rows), the residual stream as 128 chunk rows of 256 B
 (`Bf16AddRow_v2{128}` x 128 an add, RMSNorm as `RmsSumSqPart_v1` and `RmsNormOutSums_v1` a chunk, the quantizer as
@@ -29,7 +29,7 @@ year: one draw over all their units, its statements shared per subcircuit. M3's 
 block's units (and, for its reservation, 8 of its tile lanes), given as its cost against the block's GPU time and its 1%
 budget, and what it certifies.
 
-**Certificate.** `certify`'s: one stratified harm bound over every subcircuit (core's `Stratified.harm_bound`), with no
+**PlanBounds.** `certify`'s: one stratified harm bound over every subcircuit (core's `Stratified.harm_bound`), with no
 delta split by subcircuit, its leak's location term counting the wrong units by the unit-weighted harm bound in place of
 the exact `count_bound` (`certificate`). The bound of record is `Flock.Guarantees.JointStratified`
 (Security/Proofs/Flock/EndToEnd/Joint/Statement.lean): per sampling block, one detection budget
@@ -64,7 +64,7 @@ import h200 as H  # noqa: E402
 from verity.core.protocols.pouw.window import eps_at  # noqa: E402
 from verity.core.protocols.profile import MARGIN, Stratified, Stratum, neg_log_ratio  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (  # noqa: E402
-    Candidate, Certificate, CostModel, Objective, Plan, ReplayDomain, TemplateCost, _plan, density_bound, for_budget,
+    Candidate, CostModel, Objective, Plan, PlanBounds, ReplayDomain, TemplateCost, _plan, density_bound, for_budget,
     frontier, row_ands)
 
 #: Demo A's block: 16,384 requests, a 6.35 s step (the commit 1.0 s of it), 32 steps a request
@@ -83,7 +83,7 @@ BUDGET_SHARE = 0.01
 GRID = (1, 8.5, 10, 12.5, 15, 20, 30, 50, 100, 300, 1000)
 S8 = "ScaledMmS8CoordinateRows_v1"
 TILE = "PouwH1LaneZy_v2"
-#: C-Flock's largest statement (it refuses k_log 28)
+#: Flock's largest statement (it refuses k_log 28)
 K_LOG_MAX = 27
 #: M3's live draw: a uniform subset of this many of one block's units
 M3_UNITS = 8
@@ -116,7 +116,7 @@ PV_ANDS = ((1, 111_104), (8, 321_024), (31, 1_009_152), (32, 1_039_168))
 
 @dataclass(frozen=True)
 class Unit(H.Template):
-    """A subcircuit of the block at C-Flock's staged `k_log`, serving committing `commit` bits a unit (its `out_bits`
+    """A subcircuit of the block at Flock's staged `k_log`, serving committing `commit` bits a unit (its `out_bits`
     when None). A unit of `chunks` chunks (PoUW's lanes) is proved as its chunks at `k_log`, a statement holding `cap`
     whole units in `groups` statements, and one combine."""
 
@@ -284,7 +284,7 @@ def location(n: int, count: int) -> float:
     return min(float(n), nextafter(n * (-x * log2(x) - (1 - x) * log2(1 - x)) * (1 + MARGIN), inf))
 
 
-def certificate(sizes: dict[str, int], cands: list[Candidate], objective: Objective) -> Certificate:
+def certificate(sizes: dict[str, int], cands: list[Candidate], objective: Objective) -> PlanBounds:
     """`certify`'s certificate, its location term's count the floor of core's `harm_bound` with every unit weighing 1
     instead of the exact `count_bound`, whose exact binomials take hours at 1e12 units. Any set with more units escapes
     with less than delta, so that floor is `audit_exfiltration`'s k (`L.miss (k + 1) < delta`), and as it is at least
@@ -297,7 +297,7 @@ def certificate(sizes: dict[str, int], cands: list[Candidate], objective: Object
     count = floor(st.harm_bound({c.template: 1.0 for c in chosen}, d))
     leak = st.harm_bound({c.template: float(c.out_bits) for c in chosen}, d) + location(st.population, count)
     dens = density_bound(((c.units, sizes[c.template], objective.harm(c)) for c in chosen), d)
-    return Certificate(d, harm, dens, work, leak)
+    return PlanBounds(d, harm, dens, work, leak)
 
 
 def _best(cands, cm, objective, budget, grid) -> Plan | None:

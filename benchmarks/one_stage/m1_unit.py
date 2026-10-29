@@ -1,4 +1,4 @@
-"""M1: one step family's unit through C-Flock, timed: the Definition a Program row names (its ``spec``) as M0's `UnitStager`
+"""M1: one step family's unit through Flock, timed: the Definition a Program row names (its ``spec``) as M0's `UnitStager`
 statement on the serving rows' ports (an input row per parameter and an output row per returned field, each a
 ``hm96-sha512/row/v2`` row of its u16 words), flat (`ir_lower`; ``--reads slots``: its MUFU reads in lookup slots,
 `read_slots`) or structural (``--structural``: `struct_lower`'s template, the flat unit never built), and with ``--bin`` and ``--lean`` one round of ``--n`` units staged on finite bf16 values (every
@@ -405,7 +405,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--structural", default=None, metavar="LAYOUT", help="the structural stager at this layout mode (iv/hybrid/4)")
     ap.add_argument("--reads", choices=("inline", "slots"), default="inline",
-                    help="a flat unit's MUFU table reads: inline rows of the unit, or C-Flock lookup slots (read_slots)")
+                    help="a flat unit's MUFU table reads: inline rows of the unit, or Flock lookup slots (read_slots)")
     ap.add_argument("--stage-ands", type=lambda v: v if v in ("auto", "none") else int(v), default="auto", metavar="N|auto|none",
                     help="with --reads slots: at most N ANDs a net, the caps whose nets take the fewest cells (auto), or no cap "
                          "(read_slots.split's stage_ands)")

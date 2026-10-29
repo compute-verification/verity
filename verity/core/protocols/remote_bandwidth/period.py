@@ -1,4 +1,4 @@
-"""One remote bandwidth session a period on one node, at a small size: the registration, the verifier's session against the
+"""One PoUB session a period on one node, at a small size: the registration, the verifier's session against the
 prover's passes over its store, and the answer of the bandwidth component of onsite Verity (`verity/remote-bandwidth/v0`,
 `RemoteAudit.Protocol` in `lean/`).
 
@@ -42,13 +42,14 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from verity.core.protocols.pous.period import records
+from verity.core.protocols.profile import WINDOW_DELTA
 from verity.ml.commitments.identity import canonical_json_bytes
 
 from . import audit, codec, pooled, receipts
 from . import coins as C
 
 PROTOCOL = "verity/remote-bandwidth/v0"
-DELTA = Fraction(1, 2 ** 40)
+DELTA = WINDOW_DELTA
 """`audit.DELTA`'s exact value, the pooled bound's δ (`RemoteAudit.Protocol.DELTA`)."""
 WORD_BYTES = 64
 DATA_BYTES = WORD_BYTES - 1

@@ -1,4 +1,4 @@
-"""C-Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`sampled_proofs.costfit`): A6's
+"""Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`sampled_proofs.costfit`): A6's
 W8A8 coordinates (`ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}`) staged in statements of c units, each
 session proving k of them drawn by the verifier's Lean, with `flock-circuit prove --zk --gpu`, and the Lean verifier on the
 sessions.
@@ -40,7 +40,7 @@ import socket
 import subprocess
 import sys
 import time
-from math import ceil, sqrt
+from math import sqrt
 from pathlib import Path
 
 import numpy as np
@@ -59,8 +59,10 @@ S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, 58_120, 116_240
 
 def unit_ands(K: int) -> int:
     """One coordinate's ANDs with its rows' openings, as `costfit` counts them: K/32 s8 steps, the epilogue, two K-byte
-    operand rows and three one-block rows (the scales and the output)."""
-    return K // 32 * S8_STEP + EPILOGUE + 2 * (HM96 + SHA512 * ceil((K + 17) / 128)) + 3 * (HM96 + SHA512)
+    operand rows and three one-block rows (the scales and the output), each at `optimize.row_ands`."""
+    from verity.core.protocols.sampled_proofs.optimize import row_ands
+
+    return K // 32 * S8_STEP + EPILOGUE + 2 * row_ands(K) + 3 * row_ands(1)
 
 
 def draws(c: int, spec: str = "1,8,64,c") -> list[int]:

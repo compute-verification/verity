@@ -1,4 +1,4 @@
-"""Pinned vectors for the tile checks' committed rows (`verity.core.protocols.pouw.circuit.leaves`), against which C-Flock's ports are
+"""Pinned vectors for the tile checks' committed rows (`verity.core.protocols.pouw.circuit.leaves`), against which Flock's ports are
 mapped: ``uv run python
 verity/core/protocols/pouw/tests/pouw_rows_vectors.py`` rewrites ``tests/vectors/pouw_rows.json``.  A change to that file is a change to
 a row schema and needs a reason in the PR.
@@ -6,7 +6,7 @@ a row schema and needs a reason in the PR.
 Inputs are derived, not stored: part ``p`` of case ``c`` is the first bytes of SHAKE256("verity/pouw/rows-vectors/v1", c, p),
 read as the schema's elements (16-, 32- and 64-bit words little-endian, codes one per byte masked to their width), and the salt
 is its 192 bytes of part "salt".  A tile case's C̃ and U are TM x TN 32-bit words, hashed by `pearl_c.leaf`.  Each case's
-leaf is the row C-Flock commits from its words and salt under the schema of its row and its tree's role (x or w,
+leaf is the row Flock commits from its words and salt under the schema of its row and its tree's role (x or w,
 `leaves.ROW_SCHEMA`), which its registration domain binds and its leaf does not; a `sha512/row-seg/v1` row's case also
 gives each segment's length in bits and digest d_j."""
 
