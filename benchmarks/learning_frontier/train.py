@@ -83,6 +83,7 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--val-windows", type=int, default=0, help="held-out windows to evaluate (a smoke test); 0: all")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--no-compile", action="store_true")
+    ap.add_argument("--commit", default="", help="the source commit to record (default: git rev-parse HEAD)")
     a = ap.parse_args(argv)
     if (a.family == "lowrank") != (a.rank > 0):
         ap.error("--rank is for --family lowrank, which needs it")
@@ -203,10 +204,10 @@ class Run:
         self.eval_model = self.compiled[0] if not self.replicas else self.model if a.no_compile else torch.compile(self.model)
         self.step, self.syncs, self.curve, self.ema = 0, 0, [], None
         self.timed_steps, self.timed_s, self.wall_s, self.eval_s = 0, 0.0, 0.0, 0.0
-        self.starts, self.train_verified = 0, False
+        self.starts, self.train_verified, self.commits = 0, False, []
 
     def key(self, corpus_sha: str) -> str:
-        skip = {"out", "ckpt_root", "chunk_minutes", "device", "no_compile", "data"}
+        skip = {"out", "ckpt_root", "chunk_minutes", "device", "no_compile", "data", "commit"}
         spec = {k: (str(v) if isinstance(v, Path) else v) for k, v in sorted(vars(self.a).items()) if k not in skip}
         return hashlib.sha256(json.dumps([spec, corpus_sha], sort_keys=True).encode()).hexdigest()[:20]
 
@@ -215,7 +216,7 @@ class Run:
                 "replicas": [r.state_dict() for r in self.replicas], "opts": [o.state_dict() for o in self.opts],
                 "outer_buf": self.outer_buf, "timed_steps": self.timed_steps, "timed_s": self.timed_s,
                 "wall_s": self.wall_s, "eval_s": self.eval_s, "starts": self.starts, "train_verified": self.train_verified,
-                "ema": None if self.ema is None else float(self.ema)}
+                "commits": self.commits, "ema": None if self.ema is None else float(self.ema)}
 
     def save(self, path: Path) -> None:
         path.mkdir(parents=True, exist_ok=True)
@@ -235,7 +236,7 @@ class Run:
             o.load_state_dict(os_)
         for b, bs in zip(self.outer_buf, s["outer_buf"]):
             b.copy_(bs)
-        for k in ("step", "syncs", "curve", "timed_steps", "timed_s", "wall_s", "eval_s", "starts", "train_verified"):
+        for k in ("step", "syncs", "curve", "timed_steps", "timed_s", "wall_s", "eval_s", "starts", "train_verified", "commits"):
             setattr(self, k, s[k])
         self.ema = None if s["ema"] is None else torch.tensor(s["ema"], device=self.a.device)
         return True
@@ -322,6 +323,9 @@ def main(argv: list[str] | None = None) -> int:
     corpus = Corpus(a.data, verify_train=not run.train_verified)
     run.train_verified = True
     run.starts += 1
+    commit = a.commit or git_commit()
+    if run.commits[-1:] != [commit]:
+        run.commits.append(commit)
     n_steps = min(run.n_steps, a.max_steps) if a.max_steps else run.n_steps
     order = corpus.order(a.data_seed, run.n_steps * a.batch)
     windows = a.val_windows or corpus.manifest["val"]["targets"] // CTX
@@ -331,7 +335,7 @@ def main(argv: list[str] | None = None) -> int:
     per_token = c["lowrank_flops_per_token"] if a.family == "lowrank" else c["dense_flops_per_token"]
     gpu = torch.cuda.get_device_name(0) if a.device.startswith("cuda") else "cpu"
     config = {"schema": "learning-frontier/run/v1", "args": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(a).items()},
-              "key": key, "commit": git_commit(), "n_steps": run.n_steps, "eval_steps": run.eval_steps(),
+              "key": key, "commit": commit, "commits": run.commits, "n_steps": run.n_steps, "eval_steps": run.eval_steps(),
               "micro_batch": run.micro, "counts": c, "flops_per_token": per_token, "bits_per_value": BITS,
               "corpus": manifest, "data_order": {"rule": "the training stream cut into ctx + 1 token windows at stride ctx, "
                                                           "permuted by numpy default_rng(data_seed).permutation; step t reads "
@@ -408,11 +412,13 @@ def main(argv: list[str] | None = None) -> int:
               "tokens_per_second": a.batch * CTX / spt if spt else None,
               "achieved_flop_per_second": per_token * a.batch * CTX / spt if spt else None,
               "mfu": per_token * a.batch * CTX / spt / peak if spt else None,
-              "wall_seconds": run.wall_s, "eval_seconds": run.eval_s, "starts": run.starts, "gpu": gpu}
+              "wall_seconds": run.wall_s, "eval_seconds": run.eval_s, "starts": run.starts, "commits": run.commits, "gpu": gpu,
+              "max_memory_gib": torch.cuda.max_memory_allocated() / 2**30 if a.device.startswith("cuda") else None}
     (a.out / "result.json").write_text(json.dumps(result, indent=1) + "\n")
     if result["complete"] or result["diverged"]:
         shutil.rmtree(ckpt, ignore_errors=True)
-    print(json.dumps({k: result[k] for k in ("family", "size", "lr", "steps", "tokens_per_second", "mfu")}), flush=True)
+    print(json.dumps({k: result[k] for k in ("family", "size", "lr", "steps", "tokens_per_second", "mfu", "max_memory_gib")}),
+          flush=True)
     return 0
 
 
