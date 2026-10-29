@@ -61,15 +61,15 @@ of the window's compute, it is `(1 − τ)/x` when tagging takes the fraction `�
 compute residual (`RateOfAudit`). The bound holds at every `F`; a device whose compute is within `F` on every run has
 the conjunct always.
 
-**The proof** (`Accounting.SecurityProofs.RateAudit`) generalizes `Bandwidth.Guarantees.AuditRO`'s. A sampled word
-passes either because the device queried the oracle at its contents under the stream, or by a guessed tag (`2^-h` per
-sampled word); the sample misses the words never queried with chance `((k − 1)/N)^s`. A device that queried `k` words
-under the stream knows those `k·b` bits and all `ρ` bits of the stream at its queries, and it had them from its state,
-the device memory at its footprint, the link (free side bits and stream bits together, at most `L`) and its rebuilt
-words, plus which `k` of its queries named them: compressing the store and the stream together (`C(q, k)·2^-λ`) leaves
-it at least `k·b + ρ − S − L − λ` bits of footprint and rebuilt words, and a rebuilt word costs `c_enc` of the compute
-`F − k·c_tag` that tagging leaves. The stream is what makes `L − ρ`, not `L`, the link's share: its bits are fresh,
-so the link's bits that carried them carried nothing about the store. Its completeness is `RateHonest`.
+**The proof** (`Accounting.SecurityProofs.RateAudit`) generalizes `Accounting.Guarantees.Remote.AuditRO`'s. A sampled
+word passes either because the device queried the oracle at its contents under the stream, or by a guessed tag (`2^-h`
+per sampled word); the sample misses the words never queried with chance `((k − 1)/N)^s`. A device that queried `k`
+words under the stream knows those `k·b` bits and all `ρ` bits of the stream at its queries, and it had them from its
+state, the device memory at its footprint, the link (free side bits and stream bits together, at most `L`) and its
+rebuilt words, plus which `k` of its queries named them: compressing the store and the stream together (`C(q, k)·2^-λ`)
+leaves it at least `k·b + ρ − S − L − λ` bits of footprint and rebuilt words, and a rebuilt word costs `c_enc` of the
+compute `F − k·c_tag` that tagging leaves. The stream is what makes `L − ρ`, not `L`, the link's share: its bits are
+fresh, so the link's bits that carried them carried nothing about the store. Its completeness is `RateHonest`.
 
 The game's `rebuild j` is all-or-nothing: it returns the whole word at `c_enc`. Completing part of a word from the rest
 (at one codec round with the payload known, a lattice completes a word's bottom third far below its per-bit price) is
