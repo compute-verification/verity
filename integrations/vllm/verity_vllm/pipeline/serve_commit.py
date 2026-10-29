@@ -5,8 +5,8 @@ A window (`CommitWindows`) opens at the first engine step after the engine was i
 again (once it holds ``idle_close_steps`` steps), or after ``window_steps`` steps; each is one Commit, with its own run
 root. The record is the served path's and COMMIT-ARB's one record, `commit.served_record`: the committer carries a
 `served_record.SamplerInputsSource`, which binds each sampled row's seed and position beside the sampled ids and keeps
-the step's rows, and at each close `served_record.Record.absorb` reads the window back from the committed bytes into one
-`RequestRecord` per engine request. A finished request is checked by `Record.check` against what was streamed for it,
+the step's rows, and at each close `served_record.BlockValues.absorb` reads the window back from the committed bytes into one
+`RequestRecord` per engine request. A finished request is checked by `BlockValues.check` against what was streamed for it,
 the seed it carried into the engine (the client's, or the served default, `engine.served_seed`) and how its stream
 ended; one its client aborted ends at the k ids streamed before the abort, its finish ``abort`` with ``k``, and passes when
 those are the committed ids' prefix. The finish says who ended it: ``by`` ``client``, or ``server`` for a request still
@@ -56,7 +56,7 @@ from typing import Any
 
 from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SRW
-from verity_vllm.commit.served_record import Record, base_id, served_rows, window_commit
+from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 
@@ -195,7 +195,7 @@ def commit_served(statics: Mapping[str, int], by_step: Mapping[int, Sequence[tup
 
 
 @dataclass
-class Ledger:
+class LiveRequest:
     """One request as served: its ids, the HTTP id -> engine id map, its ingress record and its stream."""
 
     http_id: str
@@ -220,8 +220,8 @@ class _Closed:
     window: int
     com: Any
     step_t: dict[int, float]
-    ledgers: Mapping[str, Ledger]
-    finished: list[Ledger]
+    ledgers: Mapping[str, LiveRequest]
+    finished: list[LiveRequest]
     open_s: float
     off_loop: bool = False
     on_loop: dict[str, float] = field(default_factory=dict)    # off the loop: the close's phases on the loop
@@ -239,7 +239,7 @@ def _lap(laps: list[tuple[str, float]], clock: Callable[[], float], name: str) -
 
 
 class CommitWindows:
-    """The committer's windows over a serving engine, and every request's `Ledger`. ``committer`` is a
+    """The committer's windows over a serving engine, and every request's `LiveRequest`. ``committer`` is a
     `NativeHostCommitter` with a `served_record.SamplerInputsSource` attached (or its offline stand-in in the tests:
     ``reset``, ``install``, ``uninstall``, ``finalize``, ``_layouts``, ``_step_index``, ``sources``, and to close off the loop
     ``enable_window_views`` and ``detach``, whose view has ``wait_absorbed`` and ``finalize``); ``eos_ids`` and
@@ -272,10 +272,10 @@ class CommitWindows:
         self.eos_ids, self.decode = [int(x) for x in eos_ids], decode
         self.known: dict[str, str] = {}                  # every admitted engine id -> its HTTP id; rows past a finish still map
         self.names: dict[str, str] = {}                  # every admitted engine id -> its name in a sealed window (`user`, else HTTP id)
-        self.record = Record(known=self.known)
+        self.record = BlockValues(known=self.known)
         self.window, self.open_s, self.is_open = -1, 0.0, False
         self.step_t: dict[int, float] = {}               # the open window's committed steps -> when their engine step ended
-        self.ledgers: dict[str, Ledger] = {}
+        self.ledgers: dict[str, LiveRequest] = {}
         self.records: list[dict[str, Any]] = []
         self.seals: list[dict[str, Any]] = []            # seals.jsonl's lines, appended on the sealer's thread
         self.checked: list[dict[str, Any]] = []
@@ -291,7 +291,7 @@ class CommitWindows:
         """``adm`` a `verity_vllm.pipeline.serve_openai.Admission`."""
         self.known[adm.engine_id] = adm.http_id
         self.arrivals.setdefault(adm.engine_id, len(self.arrivals))
-        self.ledgers[adm.engine_id] = Ledger(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress),
+        self.ledgers[adm.engine_id] = LiveRequest(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress),
                                              getattr(adm, "user", None), getattr(adm, "release", None), len(self.known) - 1,
                                              times=dict(getattr(adm, "times", None) or {}))
         self.names[adm.engine_id] = self.ledgers[adm.engine_id].user or adm.http_id
@@ -660,8 +660,8 @@ class CommitWindows:
         else:
             self.sealer.submit(run, int(rec.get("committed_bytes") or 0))
 
-    def check(self, led: Ledger) -> dict[str, Any]:
-        """``led``'s record against what was served: `Record.check` with the seed it carried and its finish."""
+    def check(self, led: LiveRequest) -> dict[str, Any]:
+        """``led``'s record against what was served: `BlockValues.check` with the seed it carried and its finish."""
         params = led.ingress.get("params") or {}
         finish = None if led.finish is None else {**led.finish, "max_tokens": params.get("max_tokens"),
                                                   "min_tokens": params.get("min_tokens") or 0, "eos_ids": self.eos_ids}
@@ -684,11 +684,11 @@ class CommitWindows:
                                      "step_root": root, "t_end": c.step_t.get(s), "rows": [list(r) for r in rows.get(s, [])],
                                      **own}) + "\n")
 
-    def _pop_finished(self) -> list[Ledger]:
+    def _pop_finished(self) -> list[LiveRequest]:
         """The loop's: the ledgers finished by the close, out of the open ones (their requests ran no step after it)."""
         return [self.ledgers.pop(e) for e in [e for e, led in self.ledgers.items() if led.finished]]
 
-    def _check_finished(self, finished: Sequence[Ledger]) -> None:
+    def _check_finished(self, finished: Sequence[LiveRequest]) -> None:
         """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl, and its
         engine id and ``user`` a line of `REQUEST_USERS`."""
         with open(self.out / "requests.jsonl", "a") as fh, open(self.out / REQUEST_USERS, "a") as fu:

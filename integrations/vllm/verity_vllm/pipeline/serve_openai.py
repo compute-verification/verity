@@ -47,9 +47,9 @@ a declared workload, values retained on host, and a `commit.served_record.Sample
 Commit window (`verity_vllm.pipeline.serve_commit.CommitWindows`) opens at the first engine step after the engine was idle
 and closes when the engine is idle again (once it holds ``--idle-close-steps``), or after ``--window-steps`` steps (it
 reopens before the next step): each window is one Commit, with its own run root. At each close the server reads the
-window back from the committed bytes into the served record (`commit.served_record.Record`, COMMIT-ARB's): each request's
+window back from the committed bytes into the served record (`commit.served_record.BlockValues`, COMMIT-ARB's): each request's
 committed input ids (the step-input port's ``step.input/ids``, `served_record.IDS_NAMES`), sampled ids and
-seeds, by position. Once a request has finished, `Record.check` holds them to what was served: its prompt ids and
+seeds, by position. Once a request has finished, `BlockValues.check` holds them to what was served: its prompt ids and
 streamed ids, the seed it carried, and where its finish says the stream ends. ``--prefix-caching``: vLLM's prefix cache
 (off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`). Before it
 listens, under bounded staging, the committer learns its declared static shape's plans in a learn-only pass (`serve_learn`).

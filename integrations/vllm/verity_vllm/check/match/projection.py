@@ -12,11 +12,11 @@ from verity_vllm.check.match import supplied_inputs as SI
 XREQ = "XREQ"
 
 
-class Projection(PX.CachedKv, C.Prog):
-    """Request r's view of the oracle Prog: the subset of instances attributed to r, segmented at r's TokenSelects (a warm request's reads
+class Projection(PX.CachedKv, C.RootView):
+    """Request r's view of the oracle RootView: the subset of instances attributed to r, segmented at r's TokenSelects (a warm request's reads
     of its cached prefix: `prefix_reads.CachedKv`)."""
 
-    def __init__(self, oracle: C.Prog, label: str, inst_idx: list[int], tok_node: int, weights_node: "int | set[int] | frozenset[int]",
+    def __init__(self, oracle: C.RootView, label: str, inst_idx: list[int], tok_node: int, weights_node: "int | set[int] | frozenset[int]",
                  seed_node: int | None = None, peer_node: int | None = None):
         # no super().__init__: reuse the decoded oracle, never decode twice
         self.label = label
@@ -27,7 +27,7 @@ class Projection(PX.CachedKv, C.Prog):
         # the request's OWN seed parameter canonicalises as ("SEED", ..) (the derived Program's `seed`); another request's is xreq
         self.seed_nodes = {seed_node} if seed_node is not None else set()
         # the request's OWN `peers_<i>` node canonicalises as ("PEER", k, ..) (the rank Program's `peers_<k>`); another request's is
-        # xreq.  `peer_fields` keeps only this request's node so `Prog._src`'s peer branch never answers for a foreign one.
+        # xreq.  `peer_fields` keeps only this request's node so `RootView._src`'s peer branch never answers for a foreign one.
         self.peer_node = peer_node
         self.peer_fields = {peer_node: oracle.peer_fields[peer_node]} if peer_node is not None and peer_node in getattr(oracle, "peer_fields", {}) else {}
         self._all_peer_nodes = set(getattr(oracle, "peer_fields", {}))
@@ -59,7 +59,7 @@ class Projection(PX.CachedKv, C.Prog):
         # Record-global offset of each weights Input node's first leaf (compare.load_oracle): without it every
         # multi-node weight read would be located at offset 0 of the field map -- the wrong field (or `W?`) -- on the projection side only
         self.input_base = getattr(oracle, "input_base", {})
-        # the fold's bound top-p split constants (compare.Prog._bind_splits): select node -> S; the
+        # the fold's bound top-p split constants (compare.RootView._bind_splits): select node -> S; the
         # request's e-th select canonicalises its splits operand as ("SPLITS", e, e+1) against the Program's `splits` input entry e
         self.splits_values = getattr(oracle, "splits_values", {})
         self.splits_nodes = getattr(oracle, "splits_nodes", set())
@@ -96,8 +96,8 @@ class Projection(PX.CachedKv, C.Prog):
         return super()._src(run, unfold)
 
     def _srcP(self, p: tuple, unfold: bool) -> list[tuple]:
-        """`_src` for one run progression `(space, (idx0, lo0, hi0), (dI, dL, dH), count)` (compare.Prog._srcP): the request's
-        own inputs by kind, another request's reads as XREQ counted per RUN, everything else the oracle Prog's mapping.  Uniform only
+        """`_src` for one run progression `(space, (idx0, lo0, hi0), (dI, dL, dH), count)` (compare.RootView._srcP): the request's
+        own inputs by kind, another request's reads as XREQ counted per RUN, everything else the oracle RootView's mapping.  Uniform only
         when every run of the progression is provably of one kind (one node, or a node range wholly outside this request's instances
         and the inputs); otherwise the record's mapping run by run."""
         space, base, delta, c = p
@@ -134,7 +134,7 @@ class Projection(PX.CachedKv, C.Prog):
             if lo_i > self._max_input and self._own_count(lo_i, hi_i) == 0:
                 self._xreq("node", (idx0, lo0, hi0), (dI, dL, dH), c)
                 return [(XREQ, "node", (idx0, lo0, hi0), (dI, dL, dH), c)]
-            if lo_i > self._max_input and self._own_count(lo_i, hi_i) == hi_i - lo_i + 1:   # wholly ours: the Prog mapping decides
+            if lo_i > self._max_input and self._own_count(lo_i, hi_i) == hi_i - lo_i + 1:   # wholly ours: the RootView mapping decides
                 return super()._srcP(p, unfold)
             return self._per_run(p, unfold)
         return super()._srcP(p, unfold)
