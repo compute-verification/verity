@@ -127,7 +127,7 @@ fi
 # (REFS_PY, by sha); each is renamed aside, the tree checked once more, put back if named, and deleted.
 # Trees from before and after the 5 Oct layout move and the Lean move sit side by side, so every layout's paths are listed.
 # These are strings the moves' path rewriting must leave alone: each names where a tree of that age keeps them.
-LK_OLD="verity/core/service/flock verity/core/service/flock/level3 verity/core/service/flock/soundness"
+LK_OLD="verity/core/proof_system/flock verity/core/proof_system/flock/level3 verity/core/proof_system/flock/soundness"
 LK_NEW="verity/core/protocols/verification/flock/lean security_proofs/flock/level3 security_proofs/flock/soundness"
 LK_LEAN="Security Security/Proofs"
 LK="$LK_OLD $LK_NEW $LK_LEAN"

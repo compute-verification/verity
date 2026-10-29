@@ -23,25 +23,25 @@ ALLOWED: dict[str, str] = {
     "verity/core/protocols/network/nci/lean/NciCheck/Check.lean":
         "NciCheck.check, the gate-by-gate reference NciCheck.Desc is difftested against (runs NciCheck.DescDifftestMain); "
         "`nci-check` runs it only with --unrolled",
-    "verity/core/service/flock/Flock/Extract.lean":
+    "verity/core/proof_system/flock/Flock/Extract.lean":
         "open (PRF-72): Q_word v1 owns every computing gate, so its CallGraph lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled; no served window names Q_word (they name "
         "template queries, which read the root body only)",
-    "verity/core/service/flock/Flock/Qcall.lean":
+    "verity/core/proof_system/flock/Flock/Qcall.lean":
         "open (PRF-72): Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled (its reads deduplicated in linear time, "
         "dedupReads, proved equal to the quadratic loop it replaced: gates_ref); no served window names Q_call",
-    "verity/core/service/sampled_proofs/SampledProofs/PartitionRef.lean":
+    "verity/core/proof_system/sampled_proofs/SampledProofs/PartitionRef.lean":
         "committedBitsRef, the walk of one activation Partition.committedBits replaced by reading Flock.Qcall.gates' "
         "layout (Gates.readTo): the reference the committed_bits difftest piece holds it to; the verifier never runs it",
-    "verity/core/service/flock/Flock/NetAt.lean":
+    "verity/core/proof_system/flock/Flock/NetAt.lean":
         "Tmpl.unrollAt, a templated unit's rows at their committed positions: the reference Tmpl.unitNet is proved "
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
         "behind Tmpl.unitNet's thunks, built only where a check reads them, which none on the templated statement's "
         "path does (benchmarks/verifier_cost/flock_tmpl stmt)",
-    "verity/core/service/flock/Flock/TmplLayout.lean":
+    "verity/core/proof_system/flock/Flock/TmplLayout.lean":
         "Tmpl.posMap, every column's committed position: the reference Tmpl.posOf is proved to read (posMap_tree)",
-    "verity/core/service/flock/Flock/TmplFold.lean":
+    "verity/core/proof_system/flock/Flock/TmplFold.lean":
         "Tmpl.foldRef, the fold over the unrolled rows: the reference Tmpl.foldUnit is difftested against "
         "(Flock.Test.TmplFold) and proved equal to (foldUnit_eq_project)",
 }

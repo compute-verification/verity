@@ -15,7 +15,7 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/proof_system/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 log "a6: members ${A6_MEMBERS:-default}, k ${A6_K:-default}"
 "$PY" benchmarks/one_stage/a6.py --bin "$BIN" --lean "$LEAN" --out "$W/a6" ${A6_MEMBERS:+--members "$A6_MEMBERS"} \

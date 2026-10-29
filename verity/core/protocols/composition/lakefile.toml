@@ -11,7 +11,7 @@ relaxedAutoImplicit = false
 
 [[require]]
 name = "flock_verifier"
-path = "../../service/flock"
+path = "../../proof_system/flock"
 
 [[require]]
 name = "core_protocol"

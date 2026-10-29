@@ -28,7 +28,7 @@ case ${A11_MODE:?} in
 kinds)
   PY=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
   cached flock "$(tree_key verity/ml/flock/live verity/ml/flock/*.patch)" build_circuit > "$W/flock.dir" &
-  cached lean "$(tree_key verity/core/service/flock)" build_lean > "$W/lean.dir" &
+  cached lean "$(tree_key verity/core/proof_system/flock)" build_lean > "$W/lean.dir" &
   rc=0
   for d in "$IN"/*.json.gz; do
     n=$(basename "$d" .json.gz)
@@ -43,7 +43,7 @@ kinds)
   ;;
 audit)
   setup
-  (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+  (cd verity/core/proof_system/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
     || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
   V=$W/values && mkdir -p "$V"
   if compgen -G "$IN/a11-saved*.tar" >/dev/null; then

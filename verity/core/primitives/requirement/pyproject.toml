@@ -19,6 +19,6 @@ inputs = ["verity/ml/circuits", "verity/ml/kernels/__init__.py", "verity/ml/kern
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
           "verity/core/protocols/sampled_proofs/remote.py", "verity/ml/commitments",
           "verity/ml/crypto", "verity/ml/randomness",
-          "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
-          "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock/Field.lean",
-          "verity/core/service/flock/Flock/Bytes.lean", "verity/core/service/flock/Flock/Canon.lean"]
+          "verity/core/proof_system/flock/lakefile.toml", "verity/core/proof_system/flock/lake-manifest.json",
+          "verity/core/proof_system/flock/lean-toolchain", "verity/core/proof_system/flock/Flock/Field.lean",
+          "verity/core/proof_system/flock/Flock/Bytes.lean", "verity/core/proof_system/flock/Flock/Canon.lean"]

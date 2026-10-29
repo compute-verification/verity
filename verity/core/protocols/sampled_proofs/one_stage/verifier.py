@@ -1,5 +1,5 @@
 """The one-stage audit's verifier: its Lean port (`sampled-proofs-verifier`, the Lake package
-`verity/core/service/sampled_proofs`, built with `lake` on first use) and this package's Python, the reference, run side by
+`verity/core/proof_system/sampled_proofs`, built with `lake` on first use) and this package's Python, the reference, run side by
 side on every check.
 
 `RECORD_VERDICT` names the one whose verdict is the record's: `"lean"`, or `"python"` to switch back. Either way both run on

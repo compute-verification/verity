@@ -39,14 +39,14 @@ trap 'kill $SAMPLER $CORES 2>/dev/null; rm -rf $S' EXIT
 # Lean's flock-verify (no dependencies), built once per source in this lane's own directory, while the prover builds
 LEAN_BIN=
 if [ "${LEAN:-1}" = 1 ]; then
-  LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+  LSHA=$(cd verity/core/proof_system/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
   LEAN_BIN=$L/lean-$LSHA/flock-verify
   (
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
     if [ ! -x $LEAN_BIN ]; then
-      rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
+      rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/proof_system/flock/. $L/lean-src/ \
         && (cd $L/lean-src && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $L/lean-src/.lake/build/bin/flock-verify $LEAN_BIN
     fi
   ) > $O/build-lean.log 2>&1 &

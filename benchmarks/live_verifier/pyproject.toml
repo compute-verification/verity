@@ -12,8 +12,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
           "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
           # the Lean verifier a session runs beside audit.Session, and the difftest a replay serves: their Lake packages
-          "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",
-          "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
+          "verity/core/proof_system/flock/Flock", "verity/core/proof_system/flock/lakefile.toml",
+          "verity/core/proof_system/flock/lake-manifest.json", "verity/core/proof_system/flock/lean-toolchain",
           "verity/core/primitives/randomness", "verity/core/difftest/lean", "verity/core/difftest/python",
           # challengers.py's gate client, which verifier.py builds for --challenger gate
           "verity/core/claims/__init__.py", "verity/core/protocols/sampled_proofs",

@@ -18,7 +18,7 @@ from verity.ml.circuits import library  # noqa: E402
 from verity_flock import circuit_types as CT  # noqa: E402
 from verity_numerical.bench import lowerings, templates as TM  # noqa: E402
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 REG = lowerings.registry("C-Flock")
 #: The parameters each pinned template's `PINS` keys name, in their order.
 PIN_PARAMS = {"rope-head": ("D",), "silu-mul": ("I",), "silu-mul-v2": ("I",), "rmsnorm-fused-cuda": ("N", "EPS"),
