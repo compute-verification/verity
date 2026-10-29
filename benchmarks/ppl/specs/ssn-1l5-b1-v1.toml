@@ -1,0 +1,19 @@
+description = "ssn-1l5-lin-b1-v1 with lm_head served the same way: the head on stock int8 (activations one scale per token, weights one per output row, ±127) and SSN-1L5's noise on its 128,256 columns; attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "int8"
+linears = ["lm_head"]
+
+[[linear]]
+step = "served"
+rule = "ssn_1l5"
+fused = true
+
+[[linear]]
+step = "served"
+rule = "ssn_1l5"
+linears = ["lm_head"]

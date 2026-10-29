@@ -184,17 +184,66 @@ def test_ssn_a_w0_is_the_formats_pattern():
         steps.ssn_a_w0(28560, 28)
 
 
+def test_ssn_code5_is_the_formats_code():
+    def balanced(n, lanes=5):
+        j = np.arange(n)
+        r = np.where(j % 2 == 0, j // 2 + 1, -(j // 2 + 1))
+        out = []
+        for _ in range(lanes):
+            d = (r + 6) % 13 - 6
+            out.append(d)
+            r = (r - d) // 13
+        assert (r == 0).all()
+        return np.stack(out)
+
+    for n, off in ((40, 0), (512, 2048), (16, 128240)):
+        assert np.array_equal(steps.ssn_code5(n, off).numpy(), balanced(off + n)[:, off:]), (n, off)
+    codes = steps.ssn_code5(371292).T
+    assert len({tuple(c) for c in codes.tolist()}) == 371292 and not bool((codes == 0).all(1).any())
+    assert float(codes.abs().max()) == 6
+    with pytest.raises(ValueError, match="outrun"):
+        steps.ssn_code5(371293)
+
+
+def test_fused_projections_draw_one_calls_coins():
+    """With `fused`, q, k and v (gate and up) each serve their own columns of the one fused call's noise."""
+    run = types.SimpleNamespace(seed=1, li=3, window=5, rotations={}, gates=matmul.G.Gates(),
+                                arm=types.SimpleNamespace(name="t"), checking=False, cache={})
+    m, k = 16, 96
+    x = torch.ones(m, k)
+
+    def noise(name, n, rule, fused):
+        mm = matmul.MM("linear", name, run, x, torch.ones(n, k)).integer(x, torch.ones(n, k))
+        return steps.served_linear(mm, lambda _m: torch.zeros(m, n, dtype=torch.int64), rule=rule, fused=fused)
+
+    for rule in ("ssn_1l", "ssn_1l5", "ssn_a", "raw_byte"):
+        whole = noise("self_attn.qkv", k + 2 * 32, rule, False)
+        q, kk, v = (noise(f"self_attn.{p}_proj", n, rule, True) for p, n in (("q", k), ("k", 32), ("v", 32)))
+        assert torch.equal(torch.cat([q, kk, v], 1), whole), rule
+        apart = noise("self_attn.k_proj", 32, rule, False)
+        assert not torch.equal(apart, kk), rule
+    assert run.gates.log["accumulator"]["failed"] == 0
+
+
 def test_served_noise_stays_in_the_product(llama, ids):
     stock = spec.parse({"linear": [{"step": "int8"}]}, "stock")
-    rules = (("ssn_a", 1), ("ssn_a", 4), ("ssn_1l", 1), ("ssn_1l", 4), ("ssn2", 1), ("raw_byte", 1))
+    rules = (("ssn_a", 1), ("ssn_a", 4), ("ssn_1l", 1), ("ssn_1l", 4), ("ssn_1l5", 1), ("ssn2", 1), ("raw_byte", 1))
     arms = [stock] + [spec.parse({"linear": [{"step": "int8"}, {"step": "served", "rule": r, "bits": b}]}, f"{r}-{b}")
                       for r, b in rules]
+    arms.append(spec.parse({"linear": [{"step": "int8"}, {"step": "served", "rule": "ssn_1l", "fused": True}]},
+                           "ssn_1l-fused"))
+    head = [{"step": "int8"}, {"step": "int8", "linears": ["lm_head"]}]
+    arms.append(spec.parse({"linear": head}, "head"))
+    arms.append(spec.parse({"linear": head + [{"step": "served", "rule": "ssn_1l5", "linears": ["lm_head"]}]},
+                           "head-ssn_1l5"))
     r = evaluate(llama, ids[:4], arms)
     assert passed(r), r["gates"]
     nll = {a.name: r["nll"][f"{a.name}/s0"] for a in arms}
     assert all(not np.array_equal(nll[a.name], nll["stock"]) for a in arms[1:])
+    assert not np.array_equal(nll["ssn_1l-fused"], nll["ssn_1l-1"])
+    assert not np.array_equal(nll["head-ssn_1l5"], nll["head"])
     rise = {a.name: abs(ppl(nll[a.name]) / ppl(nll["stock"]) - 1) for a in arms[1:]}
-    assert max(rise["ssn_a-1"], rise["ssn_1l-1"]) < rise["raw_byte-1"]
+    assert max(rise["ssn_a-1"], rise["ssn_1l-1"], rise["ssn_1l5-1"]) < rise["raw_byte-1"]
 
 
 def test_seeds(llama, ids, calib):

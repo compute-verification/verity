@@ -8,7 +8,8 @@ import math
 EVAL_SETS = ("c4", "wikitext2")
 #: context length -> how many windows: windows 0..n-1 of the set's token stream cut at that length
 CONTEXTS = {2048: 16, 8192: 16, 32768: 4}
-#: every arm whose result depends on a seed runs all of them; a deterministic arm runs the first
+#: every arm whose result depends on a seed runs all of them; a deterministic arm runs the first. A run may name more,
+#: seeds 0, ..., n - 1, to measure the seed spread (`--seeds`)
 SEEDS = (0, 1, 2)
 #: SmoothQuant's maxima and GPTQ's second moments: C4 windows 100..115 at 2048, disjoint from every eval window of C4 at
 #: every context (16 x 8191 and 4 x 32767 tokens both end before window 100 at 2048 starts, at 100 x 2047)

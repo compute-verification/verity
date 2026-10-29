@@ -77,9 +77,10 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
         want[name] = ("all", stock, False)
     for name in ("ncp-qk-rot", "ncp-attn-fix", "ncp-linears-attn-fix"):
         want[name] = ("all", stock, True)
-    want["int8-act124-v1"] = ("linears", stock, False)
+    want["int8-act124-v1"] = want["int8-head-v1"] = ("linears", stock, False)
     for name in ("noise-ef1", "noise-ef2", "noise-ef4", "noise-ef32", "noise-x1-none", "ncp-dither", "ncp-dither-both",
-                 "ssn-a-b1-v1", "ssn-a-b4-v1", "ssn-1l-b1-v1", "ssn-1l-b4-v1", "ssn2-b1-v1", "raw-byte-served-v1"):
+                 "ssn-a-b1-v1", "ssn-a-b4-v1", "ssn-1l-b1-v1", "ssn-1l-b4-v1", "ssn2-b1-v1", "raw-byte-served-v1",
+                 "ssn-1l-b1-fused-v1", "ssn-1l5-lin-b1-v1", "ssn-1l5-b1-v1"):
         want[name] = ("linears", stock, True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)

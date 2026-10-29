@@ -75,8 +75,8 @@ def arms_for(refs: list[str]) -> list:
 
 def parse_seeds(text: str) -> tuple:
     seeds = tuple(int(s) for s in text.split(","))
-    if seeds != methodology.SEEDS[:len(seeds)] or not seeds:
-        raise ValueError(f"seeds are a prefix of {methodology.SEEDS}")
+    if seeds != tuple(range(len(seeds))) or not seeds:
+        raise ValueError("seeds are a prefix 0, 1, ..., n - 1 of the naturals")
     return seeds
 
 

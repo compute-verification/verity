@@ -173,14 +173,14 @@ class MM:
             self.run.rotations[key] = fn()
         return self.run.rotations[key]
 
-    def coins(self, shape, levels: int = 2) -> torch.Tensor:
+    def coins(self, shape, levels: int = 2, name: str | None = None) -> torch.Tensor:
         """Fresh coins of the given shape, uniform on {0, ..., levels - 1} (bits by default; a b-bit dither takes
-        levels = 2^b). Linears: one stream per (seed, layer, linear, window); attention: the (seed, layer, window)
-        stream, in draw order."""
+        levels = 2^b). Linears: one stream per (seed, layer, linear, window), `name` in place of the linear's own to
+        share one stream across linears (a fused call's); attention: the (seed, layer, window) stream, in draw order."""
         if self.kind == "linear":
             n = self._draws[0]
             self._draws[0] += 1
-            tag = f"{self.seed}/{self.layer}/{self.name}/{self.window}" + (f"/{n}" if n else "")
+            tag = f"{self.seed}/{self.layer}/{name or self.name}/{self.window}" + (f"/{n}" if n else "")
             g = torch.Generator(device=self.device)
             g.manual_seed(zlib.crc32(tag.encode()))
             return torch.randint(0, levels, tuple(shape), generator=g, device=self.device).float()

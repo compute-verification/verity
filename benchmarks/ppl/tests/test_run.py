@@ -21,7 +21,8 @@ def test_arms_for_adds_each_scopes_plain_arm_once():
 
 def test_seeds_are_a_prefix():
     assert run.parse_seeds("0,1,2") == (0, 1, 2) and run.parse_seeds("0") == (0,)
-    for bad in ("1,2", "0,2", "0,1,2,3"):
+    assert run.parse_seeds("0,1,2,3,4") == tuple(range(5))
+    for bad in ("1,2", "0,2", "0,1,3"):
         with pytest.raises(ValueError, match="prefix"):
             run.parse_seeds(bad)
 

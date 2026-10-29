@@ -968,16 +968,39 @@ def noise_linear(mm, nxt, *, x_width: int = 0, w_width: int = 0, period: int = 0
 
 
 #: the noise rules `served` adds to the integer product and serves
-SERVED_RULES = ("ssn_a", "ssn_1l", "ssn2", "raw_byte")
+SERVED_RULES = ("ssn_a", "ssn_1l", "ssn_1l5", "ssn2", "raw_byte")
 #: data entries in a k32 step (the other 4 are noise); `ssn_1l`'s later steps hold 31 and one noise lane
 SSN_DATA = 28
 SSN_1L_DATA = 31
+#: `ssn_1l5`'s step 0: 27 data entries and 5 noise lanes
+SSN_1L5_DATA = 27
+#: the fused linear each projection is served in: one call, so one draw of row coins for all its columns
+FUSED = {"self_attn.q_proj": "self_attn.qkv", "self_attn.k_proj": "self_attn.qkv", "self_attn.v_proj": "self_attn.qkv",
+         "mlp.gate_proj": "mlp.gate_up", "mlp.up_proj": "mlp.gate_up"}
+#: rows of noise `ssn_1l` and `ssn_1l5` form at once (the head's 128,256 columns in float64)
+NOISE_ROWS = 1024
 
 
 def fused_offset(name: str, k: int, n: int) -> int:
     """Where this projection's columns start in its fused linear (qkv, gate_up), for Llama's shapes: q's rows the
     hidden size k, k's and v's alike, gate's and up's alike."""
     return {"self_attn.k_proj": k, "self_attn.v_proj": k + n, "mlp.up_proj": n}.get(name, 0)
+
+
+def ssn_code5(n: int, offset: int = 0) -> torch.Tensor:
+    """SSN-1L5's public column code, 5 x n, for columns offset .. offset + n - 1 of the fused linear: the balanced
+    base-13 digits (in [-6, 6], least significant first) of z_j = (floor(j / 2) + 1) (-1)^j, an injective code into
+    [-6, 6]^5 \\ {0} for j < 371,292."""
+    j = torch.arange(offset, offset + n, dtype=torch.int64)
+    r = torch.where(j % 2 == 0, j // 2 + 1, -(j // 2 + 1))
+    digits = []
+    for _ in range(5):
+        d = (r + 6) % 13 - 6
+        digits.append(d)
+        r = (r - d) // 13
+    if bool((r != 0).any()):
+        raise ValueError(f"ssn_1l5: {offset + n} columns outrun the 5-digit balanced base-13 code")
+    return torch.stack(digits).double()
 
 
 def ssn_a_w0(n: int, k: int, offset: int = 0) -> torch.Tensor:
@@ -1001,38 +1024,54 @@ def ssn_a_w0(n: int, k: int, offset: int = 0) -> torch.Tensor:
 def _check_served(p):
     if p["rule"] not in SERVED_RULES:
         raise ValueError(f"served.rule is one of {SERVED_RULES}")
-    if p["bits"] not in (1, 2, 4) or (p["rule"] not in ("ssn_a", "ssn_1l") and p["bits"] != 1):
-        raise ValueError("served.bits is 1, 2 or 4, and widens only ssn_a's mask and ssn_1l's lanes")
+    if p["bits"] not in (1, 2, 4) or (p["rule"] not in ("ssn_a", "ssn_1l", "ssn_1l5") and p["bits"] != 1):
+        raise ValueError("served.bits is 1, 2 or 4, and widens only ssn_a's mask and ssn_1l's and ssn_1l5's lanes")
+    if p["fused"] and p["rule"] == "ssn2":
+        raise ValueError("served.fused shares row coins; ssn2's b is per column")
 
 
 @linear_step("served", phase="integer", seeded=True, check=_check_served, source="SW-NOISE")
-def served_linear(mm, nxt, *, rule: str, bits: int = 1):
+def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False):
     """Noise added to the exact integer product and served, never subtracted, fresh every call, over S = ceil(k / 28)
     k32 steps: `ssn_a` adds a W0 (`ssn_a_w0`) less rint((2^bits - 1) / 2 sum W0) per column, a uniform on
     {0, ..., 2^bits - 1}^(m x S x 4); `ssn_1l` (S = 1 + ceil((k - 28) / 31)) adds a1 C + rowsum(l) less
     rint(sum C / 2 + (2^bits - 1) (S - 1) / 2) per column, C step 0 of W0, a1 bits (m x 4) and l uniform on
-    {0, ..., 2^bits - 1}^(m x (S - 1)), one lane a row a later step; `ssn2` adds a b - S, a and b bits (m x S x 4 and
+    {0, ..., 2^bits - 1}^(m x (S - 1)), one lane a row a later step; `ssn_1l5` the same with five step-0 lanes
+    (S = 1 + ceil((k - 27) / 31), a1 bits m x 5, C `ssn_code5`); `ssn2` adds a b - S, a and b bits (m x S x 4 and
     S x 4 x n); `raw_byte` adds sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred.
-    torch.round rounds half to even, as rint does."""
+    `fused`: the row coins are one draw per fused call (`FUSED`), shared by q, k and v and by gate and up, as served;
+    otherwise each projection draws its own. torch.round rounds half to even, as rint does."""
     acc = nxt(mm).double()
     (m, k), n = mm.x.shape, acc.shape[1]
     s = -(-k // SSN_DATA)
-    if rule == "ssn_1l":
-        s = 1 + -(-(k - SSN_DATA) // SSN_1L_DATA)
+    stream = FUSED.get(mm.name) if fused else None
+    if rule in ("ssn_1l", "ssn_1l5"):
+        five = rule == "ssn_1l5"
+        s = 1 + -(-(k - (SSN_1L5_DATA if five else SSN_DATA)) // SSN_1L_DATA)
         off = fused_offset(mm.name, k, n)
-        code = mm.shared(("ssn_code", n, off, str(acc.device)), lambda: ssn_a_w0(n, SSN_DATA, off)[0].to(acc.device))
-        lanes = mm.coins((m, s - 1), 2 ** bits).double().sum(1, keepdim=True)
-        noise = (mm.coins((m, 4), 2).double() @ code + lanes
-                 - torch.round(code.sum(0) / 2 + (2 ** bits - 1) * (s - 1) / 2))
-    elif rule == "raw_byte":
-        noise = (mm.coins((m, s), 256) - 128).double().sum(1, keepdim=True).expand(m, n)
+        code = mm.shared(("ssn_code5" if five else "ssn_code", n, off, str(acc.device)),
+                         lambda: (ssn_code5(n, off) if five else ssn_a_w0(n, SSN_DATA, off)[0]).to(acc.device))
+        lanes = mm.coins((m, s - 1), 2 ** bits, name=stream).double().sum(1, keepdim=True)
+        a1 = mm.coins((m, code.shape[0]), 2, name=stream).double()
+        bias = torch.round(code.sum(0) / 2 + (2 ** bits - 1) * (s - 1) / 2)
+        top = 0.0
+        for i in range(0, m, NOISE_ROWS):
+            noise = a1[i:i + NOISE_ROWS] @ code + lanes[i:i + NOISE_ROWS] - bias
+            top = max(top, G.absmax(noise))
+            acc[i:i + NOISE_ROWS] += noise
+        bound = k * G.absmax(mm.x.float()) * G.absmax(mm.weight().float()) + top
+        mm.gate("accumulator", bound <= G.S32, bound)
+        return acc
+    if rule == "raw_byte":
+        noise = (mm.coins((m, s), 256, name=stream) - 128).double().sum(1, keepdim=True).expand(m, n)
     elif rule == "ssn2":
         noise = mm.coins((m, 4 * s), 2).double() @ mm.coins((4 * s, n), 2).double() - s
     else:
         off = fused_offset(mm.name, k, n)
         w0 = mm.shared(("ssn_a_w0", k, n, off, str(acc.device)),
                        lambda: ssn_a_w0(n, k, off).reshape(4 * s, n).to(acc.device))
-        noise = mm.coins((m, 4 * s), 2 ** bits).double() @ w0 - torch.round((2 ** bits - 1) / 2 * w0.sum(0))
+        noise = (mm.coins((m, 4 * s), 2 ** bits, name=stream).double() @ w0
+                 - torch.round((2 ** bits - 1) / 2 * w0.sum(0)))
     bound = k * G.absmax(mm.x.float()) * G.absmax(mm.weight().float()) + G.absmax(noise)
     mm.gate("accumulator", bound <= G.S32, bound)
     return acc + noise

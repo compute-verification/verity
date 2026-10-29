@@ -1,0 +1,9 @@
+description = "stock int8 on every linear and on lm_head (activations one scale per token, weights one per output row, both rounded to ±127, the exact product), no noise: what quantizing the head costs before any noise; attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "int8"
+linears = ["lm_head"]

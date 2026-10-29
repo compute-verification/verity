@@ -1,0 +1,10 @@
+description = "served sparse noise, five step-0 lanes (SSN-1L5, 1-bit lanes) on every linear: stock int8, then the integer product plus a1 C + rowsum(l) less rint(0.5 (sum C + S - 1)) per column, S = 1 + ceil((k - 27) / 31), a1 fresh bits m x 5 against C (the balanced base-13 digits of z_j = (floor(j / 2) + 1) (-1)^j on the fused linear's columns) and l fresh bits m x (S - 1), row coins one draw per fused call, served uncorrected; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "ssn_1l5"
+fused = true
