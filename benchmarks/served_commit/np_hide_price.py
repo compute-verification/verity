@@ -49,9 +49,10 @@ which the hash alone, at the bar, fits in T2 stock steps overlapped (where the s
 T2's bar (T2_BAR) and at 2 and 1.1. The V4-like layers (`v4`) get the hiding term under each layout and the seed path. Hashing before the noise is A's commitment: under L0 a
 row-seg row with its hm96 leaf and tree share (its salt is in the hiding term); under L1 a row-seg or flat SHA-512 row and its
 tree share, or segments as frame-v3 leaves of the call's own domain. A row digest is a function of the row alone, so a
-repeated A_j or row reuses it whatever hides it; only the segment leaves read a per-call value (the domain id, rank and
-position), so only their hashing is distinct in every call. Tree costs are frame-v3-sha512's (FRAME_LEAF_PREFIX, NODE),
-whose node is binary.
+repeated A_j or row reuses it whatever hides it, unless a per-call value is in its hash: the segment leaves read one (the
+domain id, rank and position), and so do row-seg rows with (pouw.salt, forward, call, row) in each segment's prefix block,
+at one compression a segment, since that block is then no longer one midstate shared across rows. Tree costs are
+frame-v3-sha512's (FRAME_LEAF_PREFIX, NODE), whose node is binary.
 """
 from __future__ import annotations
 
@@ -87,8 +88,10 @@ HM96_LEAF = 2                                       # H(leaf_prefix ‖ b ‖ c)
 # node is binary; a 4-ary node is a frame change
 NODE = {2: 2, 4: 3}
 TREE_LEAF = S.blocks(FRAME_LEAF_PREFIX + 64) + NODE[2]   # a row digest's frame leaf and its share of the binary nodes
-# the seed path's layouts: A's leaves (row-seg rows, flat rows, or segments of so many bytes) and the subtree's arity
-CHAINS = {"row-seg rows, binary (L1)": ("row-seg", 2), "flat rows, binary": ("flat", 2),
+# the seed path's layouts: A's leaves (row-seg rows with the call and row bound in each segment's prefix block, as L1 takes
+# them, or with the shared prefix; flat rows; or segments of so many bytes) and the subtree's arity
+CHAINS = {"row-seg rows, binary (L1)": ("row-seg", 2), "row-seg rows, shared prefix, binary": ("row-seg, shared prefix", 2),
+          "flat rows, binary": ("flat", 2),
           "1 KiB segments as leaves, binary": (1024, 2), "256 B segments as leaves, binary": (256, 2),
           "row-seg rows, 4-ary (a frame change)": ("row-seg", 4), "1 KiB segments as leaves, 4-ary (a frame change)": (1024, 4),
           "256 B segments as leaves, 4-ary (a frame change)": (256, 4)}
@@ -116,10 +119,12 @@ MACS_TOKEN = N.LAYERS * sum(n * k for n, k in N.LINEARS.values())
 HIDING_ANDS = 3 * S.ANDS_FROM_8 + 2 * S.ANDS_COMPRESSION
 
 
-def segs(k: int) -> int:
-    """A row-seg row of k bytes: its segments' compressions and the outer hash's."""
+def segs(k: int, bound: bool = False) -> int:
+    """A row-seg row of k bytes: its segments' compressions and the outer hash's. A segment's prefix block S(j, s, m) is a
+    function of (j, s) alone, so the committer starts every row's segment from one shared midstate (8 data blocks and the
+    padding block); a prefix block that also binds the row is compressed for every segment of every row."""
     s = -(-k // 1024)
-    return 9 * s + (64 * s + 17 + 127) // 128
+    return (10 if bound else 9) * s + (64 * s + 17 + 127) // 128
 
 
 def instance_prices(sass: dict, rows: S.Rows, mask_sass: dict | None = None) -> dict:
@@ -226,10 +231,11 @@ def levels(leaves: int, arity: int) -> int:
 
 def a_leaves(rows: int, k: int, row: str | int) -> tuple[int, int]:
     """A call's subtree under L1 (rows of k bytes): one leaf's compressions one after another (a row-seg row: its segments
-    side by side, then their outer hash, then the subtree's leaf; a flat SHA-512 row and its leaf; or, for an int `row`,
-    segments of that many bytes as the subtree's leaves) and the leaves."""
-    if row == "row-seg":
-        return 9 + -(-(64 * -(-k // 1024) + 17) // 128) + frame_leaf(64), rows
+    side by side, each from its own bound prefix block or from the shared one, then their outer hash, then the subtree's
+    leaf; a flat SHA-512 row and its leaf; or, for an int `row`, segments of that many bytes as the subtree's leaves) and
+    the leaves."""
+    if row in ("row-seg", "row-seg, shared prefix"):
+        return (10 if row == "row-seg" else 9) + -(-(64 * -(-k // 1024) + 17) // 128) + frame_leaf(64), rows
     if row == "flat":
         return S.blocks(k) + frame_leaf(64), rows
     return frame_leaf(row), rows * -(-k // row)
@@ -421,11 +427,11 @@ def main() -> None:
             # digest reads only the row, so a repeated A_j (or row) reuses it whatever wraps it; a frame-v3 leaf reads its
             # domain id, rank and position, so leaves of the call's own domain (bound to pouw.salt, the forward and the call)
             # differ in every call and every row. Binding (pouw.salt, forward, call, row) into each row-seg segment's prefix
-            # block, which the committer compresses for every segment anyway, does the same at no compression
+            # block does the same at one compression a segment, the block no longer shared across rows
             a_comps = {"L0 (row-seg, a leaf a row)": (sum(segs(k) + HM96_LEAF + TREE_LEAF for _, k in N.LINEARS.values()), False),
                        "L1 (row-seg rows in the call's subtree)": (sum(segs(k) + TREE_LEAF for _, k in N.LINEARS.values()), False),
                        "L1 (row-seg rows, the call and row bound in each segment's prefix block)":
-                           (sum(segs(k) + TREE_LEAF for _, k in N.LINEARS.values()), True),
+                           (sum(segs(k, bound=True) + TREE_LEAF for _, k in N.LINEARS.values()), True),
                        "L1 (flat SHA-512 rows in the call's subtree)": (sum(S.blocks(k) + TREE_LEAF for _, k in N.LINEARS.values()), False),
                        **{f"L1 ({seg} B frame-v3 segment leaves of the call's domain)":
                           (sum(-(-k // seg) * (frame_leaf(seg) + NODE[2]) for _, k in N.LINEARS.values()), True)
