@@ -146,3 +146,16 @@ about random families or a standard primitive, and it checkpoints at 23:00Z.
 - NOISE: noise layouts whose zero-data words aren't row-plus-column (higher-rank coins at a priced bandwidth), the
   lever every fold needs.
 - Every FOLD lane: design against `decomp` first.
+
+**Rulings on CARD's three asks** (coordinator, 21:15Z; note 20261029T2110Z-report-hash-card):
+1. **Predicate writes stay free in W1.** Pricing them as register writes would be a stronger hardware premise, and it
+   buys only trunc-16's 2.0×. xor-m and trunc-16 stay closed. The card drops the priced column, or labels it
+   information only.
+2. **An unkeyed fold sealed by SHA-512 sits within the one-hash rule.** SHA-512 does all the binding, and the fold
+   only carries the credit's cost premise. That premise goes to Daniel with the candidate, as the change to PoUW's
+   statement.
+3. **The Duo exception is moot here.** It covers folds that bind in SHA-512's place, under H-μ⁺. Every HASH design
+   seals its fold under SHA-512, so by ruling 2 none of them needs the exception, keyed or not.
+
+**Card basis:** h counts hashing wherever it runs. ALT's card/certifier split moves the hashing to the auditor's
+device and cuts none, so its 98.09 leaves the frontier.
