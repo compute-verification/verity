@@ -1,6 +1,6 @@
 """The boundary's layout and the verifier's Fits check (`boundary`): the record-grain check (`refusal`) held to
-`NetTiming.Layout.Fits` itself (`prog_fits`) on each toy window flattened to gates, its egress frame an output row the
-unit computes and returns; a frame that is a parameter row, an input, is refused by name."""
+`NetTiming.BoundaryGates.Fits` itself (`prog_fits`) on each toy window flattened to gates, its egress frame an output
+row the unit computes and returns; a frame that is a parameter row, an input, is refused by name."""
 from __future__ import annotations
 
 import copy
@@ -100,7 +100,7 @@ def flatten(doc, toys):
 
 
 def fits(doc, toys):
-    """`Layout.Fits` on the flattened record."""
+    """`BoundaryGates.Fits` on the flattened record."""
     return BD.prog_fits(*flatten(doc, toys))
 
 
@@ -135,15 +135,15 @@ def test_an_egress_bucket_that_reads_a_later_buckets_ingress_is_refused_by_the_c
     wires = {("Mid_v1", "x"): [2, 1], (EGR.tid, "y"): [3, 4, 3]}
     doc = record(toys, wires, 1, 1, T)
     why = BD.refusal(doc)
-    assert why is not None and why.startswith("Layout.Fits, causal: egress bucket 0 of link 0 (unit 5) depends on ingress "
-                                              "bucket 2 of link 0 (unit 2)"), why
+    assert why is not None and why.startswith("BoundaryGates.Fits, causal: egress bucket 0 of link 0 (unit 5) depends "
+                                              "on ingress bucket 2 of link 0 (unit 2)"), why
     assert not fits(doc, toys)
 
 
 def test_the_unit_grain_contains_depends_and_is_exact_on_dense_templates():
-    """On random windows (seeds 0 … 299), `refusal` accepting implies `Layout.Fits` at the gate grain, and on windows of
-    dense templates the two agree; both verdicts occur. About half the windows with ingress over two buckets or more hold
-    each link's bucket 0 in a first template."""
+    """On random windows (seeds 0 … 299), `refusal` accepting implies `BoundaryGates.Fits` at the gate grain, and on
+    windows of dense templates the two agree; both verdicts occur. About half the windows with ingress over two buckets
+    or more hold each link's bucket 0 in a first template."""
     seen = {True: 0, False: 0}
     for seed in range(300):
         rng = random.Random(seed)
@@ -179,7 +179,8 @@ def test_a_record_that_fits_only_at_the_gate_grain_is_refused():
     toys = [(ing, 2), (EGR, 2)]
     doc = record(toys, {(EGR.tid, "y"): [1, 1]}, 1, 1, 2)
     assert fits(doc, toys)
-    assert BD.refusal(doc).startswith("Layout.Fits, causal: egress bucket 0 of link 0 (unit 2) depends on ingress bucket 1")
+    assert BD.refusal(doc).startswith("BoundaryGates.Fits, causal: egress bucket 0 of link 0 (unit 2) depends on "
+                                      "ingress bucket 1")
 
 
 def test_prog_fits_is_layout_fits_on_its_conjuncts():
@@ -223,8 +224,8 @@ def test_the_unit_of_a_bucket_is_its_templates_unit_link_times_T_plus_t():
     assert [b.unit(doc, "egress", ell, t) for ell in range(2) for t in range(3)] == [6, 7, 8, 9, 10, 11]
     assert accepted(doc) and fits(doc, toys)
     doc["members"][2]["wired"][0][2][0] = 2
-    assert BD.refusal(doc).startswith("Layout.Fits, causal: egress bucket 0 of link 0 (unit 6) depends on ingress bucket 1 "
-                                      "of link 0 (unit 2)")
+    assert BD.refusal(doc).startswith("BoundaryGates.Fits, causal: egress bucket 0 of link 0 (unit 6) depends on "
+                                      "ingress bucket 1 of link 0 (unit 2)")
     assert not fits(doc, toys)
 
 
@@ -250,7 +251,7 @@ def _rename(name, **kw):
 
 
 @pytest.mark.parametrize("edit, needle", [
-    (lambda d: d.pop("boundary"), "the circuit record declares none (NetTiming.Layout)"),
+    (lambda d: d.pop("boundary"), "the circuit record declares none (NetTiming.BoundaryGates)"),
     (lambda d: d.update(format="verity/window-circuit/v0"), "a circuit record is verity/window-circuit/v1"),
     (lambda d: _bd(d).update(format="verity/boundary/v1"), "a boundary is verity/boundary/v3"),
     (lambda d: _bd(d).update(format="verity/boundary/v2"), "a boundary is verity/boundary/v3"),
@@ -271,27 +272,30 @@ def _rename(name, **kw):
     (_rename("egress", template="Nope_v1"), "boundary egress: Nope_v1 is no template of the circuit"),
     (_rename("ingress", first="First_v1"), "boundary ingress: First_v1 is no template of the circuit"),
     (lambda d: _bd(d)["egress"].update(links=2), "boundary egress: Egr_v1 has 2 units, not links·buckets = 2·2"),
-    (_rename("egress", verdict="o2"), "Layout.Fits, egress gates are returned: Egr_v1's verdict 'o2' is not an output row "
-                                      "of one u16 word (a unit's public output is at most 16 bits)"),
+    (_rename("egress", verdict="o2"),
+     "BoundaryGates.Fits, egress gates are returned: Egr_v1's verdict 'o2' is not an output row of one u16 word (a "
+     "unit's public output is at most 16 bits)"),
     (lambda d: d["members"][1].update(outs=[["o0", 2], ["o1", 1]]),
-     "Layout.Fits, egress gates are returned: Egr_v1's verdict 'o0' is not an output row of one u16 word"),
-    (_rename("egress", frame="nope"), "Layout.Fits, egress gates are returned: Egr_v1's frame 'nope' is not an output row of "
-                                      "1 words"),
-    (lambda d: _bd(d)["egress"].update(slots=2), "Layout.Fits, egress gates are returned: Egr_v1's frame 'o1' is not an "
-                                                 "output row of 2 words"),
-    (_rename("egress", frame="y"), "Layout.Fits, egress gates are returned: Egr_v1's frame 'y' is a parameter row, an input"),
+     "BoundaryGates.Fits, egress gates are returned: Egr_v1's verdict 'o0' is not an output row of one u16 word"),
+    (_rename("egress", frame="nope"),
+     "BoundaryGates.Fits, egress gates are returned: Egr_v1's frame 'nope' is not an output row of 1 words"),
+    (lambda d: _bd(d)["egress"].update(slots=2),
+     "BoundaryGates.Fits, egress gates are returned: Egr_v1's frame 'o1' is not an output row of 2 words"),
+    (_rename("egress", frame="y"),
+     "BoundaryGates.Fits, egress gates are returned: Egr_v1's frame 'y' is a parameter row, an input"),
     (lambda d: (d["members"][1].update(rows=[["y", 1], ["row", 1]], outs=[["o0", 1]]), _rename("egress", frame="row")(d)),
-     "Layout.Fits, egress gates are returned: Egr_v1's frame 'row' is a parameter row, an input, which the Program reads "
-     "from the advice and so bounds nothing"),
-    (_rename("ingress", frame="o0"), "Layout.Fits, ingress gates are inputs: Ing_v1's 'o0' is not a parameter row of 1 words"),
+     "BoundaryGates.Fits, egress gates are returned: Egr_v1's frame 'row' is a parameter row, an input, which the "
+     "Program reads from the advice and so bounds nothing"),
+    (_rename("ingress", frame="o0"),
+     "BoundaryGates.Fits, ingress gates are inputs: Ing_v1's 'o0' is not a parameter row of 1 words"),
     (lambda d: d["members"][0]["wired"].append(["row", "o0", [2, 3]]),
-     "Layout.Fits, ingress gates are inputs: Ing_v1's 'row' is wired from another unit's output"),
+     "BoundaryGates.Fits, ingress gates are inputs: Ing_v1's 'row' is wired from another unit's output"),
     (lambda d: d["members"][0].update(tables=[["x", 1]], links=[[0, 0]], link_units=[2]),
-     "Layout.Fits, ingress gates are inputs: Ing_v1 reads row tables"),
+     "BoundaryGates.Fits, ingress gates are inputs: Ing_v1 reads row tables"),
     (lambda d: d["members"][1]["wired"][0][2].__setitem__(0, 9), "a wire is one writer in [0, 4) a unit"),
     (lambda d: d["members"][1].update(base=3), "Egr_v1: a member's units start at 3, not 2"),
     (lambda d: d["members"][1]["wired"][0].__setitem__(2, [1, 1]),
-     "Layout.Fits, causal: egress bucket 0 of link 0 (unit 2) depends on ingress bucket 1 of link 0 (unit 1)"),
+     "BoundaryGates.Fits, causal: egress bucket 0 of link 0 (unit 2) depends on ingress bucket 1 of link 0 (unit 1)"),
 ])
 def test_a_record_that_doesnt_fit_is_refused_by_name(edit, needle):
     _refused(edit, needle)
@@ -341,8 +345,10 @@ def test_the_scans_link_windows_fit(G):
         base += counts[tid]
     rows = {m["template"]: dict(map(tuple, m["rows"])) for m in members}
     outs = {m["template"]: dict(map(tuple, m["outs"])) for m in members}
-    assert rows["IngressScanBucket"] == {"row": cls.S * cls.B // 2, "sin": 9353, "prog": 280}
-    assert rows["IngressScanFirst"] == {"row": cls.S * cls.B // 2, "prog": 280}
+    entries = {f"prog{j}": IS.entry_bits(cls) // 16 for j in range(cls.lanes)}
+    assert entries == {"prog0": 71, "prog1": 71, "prog2": 71, "prog3": 71}
+    assert rows["IngressScanBucket"] == {"row": cls.S * cls.B // 2, "sin": 9353, **entries}
+    assert rows["IngressScanFirst"] == {"row": cls.S * cls.B // 2, **entries}
     assert outs["IngressScanBucket"] == outs["IngressScanFirst"] == {"o0": 1, "o1": 9353, "o2": sh.state_words}
     assert rows["EgressBucket"] == {"state": sh.state_words} and outs["EgressBucket"] == {"o0": 1, "o1": sh.R * sh.B // 2}
     b = BD.Boundary(BD.Side("EgressBucket", "o1", 1, n, sh.R, sh.B, "o0"),
@@ -357,9 +363,9 @@ def test_the_scans_link_windows_fit(G):
     checker["boundary"]["egress"]["frame"] = "row"
     checker["external"] = sorted(BD.parse(checker).ports())
     assert BD.refusal(checker) == (
-        "Layout.Fits, egress gates are returned: EgressBucket's frame 'row' is a parameter row, an input, which the Program "
-        "reads from the advice and so bounds nothing: NetTiming.Layout.Fits takes every slot gate to be one C returns "
-        "(C.outs) and not an input, a frame the unit computes (prog_fits)")
+        "BoundaryGates.Fits, egress gates are returned: EgressBucket's frame 'row' is a parameter row, an input, which "
+        "the Program reads from the advice and so bounds nothing: NetTiming.BoundaryGates.Fits takes every slot gate "
+        "to be one C returns (C.outs) and not an input, a frame the unit computes (prog_fits)")
 
 
 def test_parse_reads_only_the_boundary():

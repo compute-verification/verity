@@ -1,10 +1,10 @@
-// The filler scorer's round protocol and power window (SCORER, cmp-13), shared by dscore.cu and arm-side drivers that
+// The filler scorer's round protocol and power window, shared by dscore.cu and arm-side drivers that
 // include dcap.cu (DFill, DPump, Dev, now_ms, nvml_mhz). Include it after dcap.cu.
 //
 // Anti-replay. Slot s of point POINT is round R = POINT·POINT_SLOTS + s, one count for every driver of a run, so no two
 // points' rounds share an id (dscore's slots: 0 the filler-alone calibration, 1 + r round r's arm block, 1 + ROUNDS + r
 // its standalone block, then the two power windows'). Its tiles are the public range [R·2^32, (R + 1)·2^32), fixed by the scorer before the round's coins,
-// which are drawn from the OS once the range is fixed; every seed is dseed(the round's coins, tag | tile id), tag 0 for
+// which are sampled from the OS once the range is fixed; every seed is dseed(the round's coins, tag | tile id), tag 0 for
 // dfill_k (a filler whose kernel marks its ids with a high bit prints it as the round's tag).
 #pragma once
 #include <sys/random.h>
@@ -128,7 +128,7 @@ static void print_round(const Round& r, const char* key = "round") {
   printf("]}");
 }
 
-// Board power over a settled window (HC-POWER, note:20261016T0435Z-draft-hc-power): NVML's power reading lags ~1 s,
+// Board power over a settled window: NVML's power reading lags ~1 s,
 // longer than a block's reps, so each point also runs serving alone, the arm and the filler alone sustained, PW_SETTLE_MS
 // then PW_MEAS_MS with the energy counter sampled every 5 ms. The power is the counter's rise between the first sample at
 // which it moved and the first at its last value, over their time (it advances in steps, so a window's ends are steps).

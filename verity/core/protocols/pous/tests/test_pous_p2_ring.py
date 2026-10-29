@@ -19,10 +19,10 @@ than a label), at `w = 184`, `p = 2^184 − 33` and 16 labels:
   As at the deployed point (a root in `65,789` ring queries, `λ = 128`, `w/19 = 865`), a recomputed label's ring work
   is below `2^λ` and `λ < w/19`, so the depth-limited recompute is inside the region and the slack is not vacuous.
 
-A responder's answer to label `i` depends only on `i`, its state and the oracle (`Responder`), so given the draw
+A responder's answer to label `i` depends only on `i`, its state and the oracle (`Responder`), so given the sample
 `ω` it is accepted with probability exactly `(s_ω/B)^K`, `s_ω` the labels it answers right; the test averages that
 over seeded draws, and a responder inside the region whose average is above `δ + margin(TRIALS)` (Hoeffding, at
-`1 − 10⁻⁹`) is a counterexample, which fails the test with the responder and the draws. Outside the region the test
+`1 − 10⁻⁹`) is a counterexample, which fails the test with the responder and the samples. Outside the region the test
 shows the known-false side as expected failures: the honest responder (it holds all of `C`), `PousP2Ring.tight`'s
 recomputation (`D = 2(n + 1)`) and `PousP2Ring.not_meetsOn_b19_k88`'s truncation one bit past the slack."""
 from __future__ import annotations
@@ -66,7 +66,7 @@ class Counterexample(AssertionError):
 # ---------------------------------------------------------------------------------------------------------------
 
 class Ring:
-    """One draw `ω` of `ringRO B w p`: an odd labeling `φ` (`φ(−x) = p − φ(x)`), sampled lazily and uniformly, and
+    """One sample `ω` of `ringRO B w p`: an odd labeling `φ` (`φ(−x) = p − φ(x)`), sampled lazily and uniformly, and
     label `j`'s keys `(K_j, τ_j)`. `identity` fixes `φ = id`, the reference codec's."""
 
     def __init__(self, rng: random.Random, identity: bool = False) -> None:
@@ -346,9 +346,9 @@ def test_p2_ring_round_secure_at_a_scaled_point(case: Case):
     """`Pous.P2.Assumptions.P2RingRoundSecure` at the same point, and so `P2RingRoundSecureWide`, the same statement to
     `2^27` labels, which the scaled point doesn't tell apart, with `1 − p = KEPT/B`: given the first `j` answers
     right, the next uniform challenge is answered right with probability at most `KEPT/B`, at every `j < K`. Given the
-    draw `ω` a responder answers each challenge right with probability exactly `s_ω/B`, so over the draws the rate at
+    sample `ω` a responder answers each challenge right with probability exactly `s_ω/B`, so over the samples the rate at
     round `j` is `Σ (s_ω/B)^(j+1) / Σ (s_ω/B)^j`, and it is above `KEPT/B` only if some draw has `s_ω > KEPT`. That
-    draw would have to lie in the conjecture's `bad`, which at `ε₀ = 2^-137` shows up among `TRIALS` seeded draws with
+    sample would have to lie in the conjecture's `bad`, which at `ε₀ = 2^-137` shows up among `TRIALS` seeded draws with
     probability at most `TRIALS·K·ε₀`, so the rate is compared with `KEPT/B` with no margin. The responders outside
     the region beat it, the side `RoundTests.lean` proves false (`round_tight`, `round_trunc`)."""
     r = case.responder

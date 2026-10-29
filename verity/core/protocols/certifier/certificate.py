@@ -45,7 +45,7 @@ with its length as a u64be:
     message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [signed digest] ),
               tag = "verity/network-certificate-message/v2", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
 
-`session` is the certifier session's id, 32 bytes (`lms.SESSION_BYTES`) that the challenger draws for the session and
+`session` is the certifier session's id, 32 bytes (`lms.SESSION_BYTES`) that the challenger samples for the session and
 issues to the certifier; the audit takes it from its parameters, as it takes the key, so the record head and the
 certificate's encoding don't carry it. The tag is the message's own, distinct from the ids of the checks that read it
 (`verity/network-certificate/v4`, `verity/network-records/v3`).
@@ -422,7 +422,7 @@ class Certificate:
     def verify(self, key: PublicKey, session: bytes) -> bool:
         """The host's signature check: the certificate is `key`'s and its signature verifies over its message in
         certifier session `session`. It reads the certificate's public fields and its signed digest, nothing of the
-        head."""
+        head. The Lean's is `NetworkCheck.Check.Certificate.signs`, which every Lean certificate check reads."""
         if self.key_id != key.key_id:
             return False
         try:
@@ -434,7 +434,7 @@ class Certificate:
 
 @dataclass(frozen=True, slots=True)
 class CertifiedRecord:
-    """What the certifier hands over per link-window: the record head, the salt it drew for it (`salt_c`, witness like
+    """What the certifier hands over per link-window: the record head, the salt it sampled for it (`salt_c`, witness like
     the head) and the certificate, which signs the head's digest salted by it (`certificate_digest`)."""
 
     head: RecordHead
@@ -477,7 +477,7 @@ class CertifiedRecord:
 @dataclass(frozen=True, slots=True)
 class CertifiedClock:
     """What the certifier hands over per egress link-window beside its record: the sync its shaper ran the window under
-    and the salt it drew for it (`salt_c`), both witness as a head and its salt are, and the certificate, the one public
+    and the salt it sampled for it (`salt_c`), both witness as a head and its salt are, and the certificate, the one public
     part, which signs the sync's clock digest salted by it (`clock_commitment`)."""
 
     sync: ClockSync
@@ -497,22 +497,24 @@ class CertifiedClock:
         return self.certificate.window
 
     def refusal(self, key: PublicKey, session: bytes) -> str | None:
-        """Why the opening fails under `key` in certifier session `session`, or None when it holds: the certificate is
-        an egress one of `key`'s, the sync and the salt open the digest it signs, and its signature verifies over its
-        message in the session (`Certificate.verify`), which binds the link and the window."""
+        """Why the opening fails under `key` in certifier session `session`, by the Lean's code
+        (`NetworkCheck.Period.openingRefusal`), or None when it holds: ``egress`` unless the certificate is an egress
+        one, ``key`` unless it is `key`'s, ``opening`` unless the sync and the salt open the digest it signs, and
+        ``signature`` unless its signature verifies over its message in the session (`Certificate.verify`), which
+        binds the link and the window."""
         c = self.certificate
         if type(c) is not Certificate or c.direction is not Direction.EGRESS:
-            return "it isn't an egress certificate, and a clock is an egress window's"
+            return "egress"
         if c.key_id != key.key_id:
-            return f"another key's, not {key.key_id.hex()[:16]}…"
+            return "key"
         try:
             opened = clock_commitment(self.salt, self.sync)
         except ValueError:
             opened = None
         if c.digest != opened:
-            return "its sync and salt don't open the salted digest it signs"
+            return "opening"
         if not c.verify(key, session):
-            return "its signature doesn't verify under the key in its session for the link-window it names"
+            return "signature"
         return None
 
     def verify(self, key: PublicKey, session: bytes) -> bool:
