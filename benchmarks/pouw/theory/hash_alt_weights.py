@@ -2,8 +2,9 @@
 """D-OUT's falsification test on real weights: the cheapest exact R·Bᵀ at W1's prices on Llama-3.2-1B's linears.
 
 Outputs-only with dense noise, (A + R)·Bᵀ, is credited only if R·Bᵀ costs the adversary about one unit a MAC (SAK-UF on
-the weights). This reads a Llama-3.2-1B checkpoint (one bf16 safetensors file), fuses q/k/v and gate/up as
-`hash_alt_inputs.json` does, quantizes each output channel to int8 (symmetric, absmax / 127), and gives, per linear and
+the weights). This reads a Llama-3.2-1B checkpoint (one safetensors file), fuses q/k/v and gate/up as
+`hash_alt_inputs.json` does, takes an int8 pin's I8 weights as stored or quantizes each BF16 output channel to int8
+(symmetric, absmax / 127), and gives, per linear and
 noise width (1 and 2 bits), `best_tile_credit`: the least of b1 planes with sparse corrections, b1 planes plus a
 2:4-sparse high part, u4 nibbles and s8 per 8-column, 256-deep tile, over K in its own order, reordered by whole
 32-index blocks (free), reordered by single indices once for every G tiles (priced at 1/(8G) a MAC), or spread so heavy
@@ -50,13 +51,21 @@ def int8_per_channel(w: np.ndarray) -> np.ndarray:
     return np.clip(np.rint(w / np.where(s == 0, 1, s)), -127, 127).astype(np.int8)
 
 
+def int8_weight(header: dict, raw: np.memmap, base: int, name: str) -> np.ndarray:
+    """The int8 weight as served: an I8 tensor's own bytes (an int8 pin), else a BF16 tensor quantized per row."""
+    t = header[name]
+    if t["dtype"] != "I8":
+        return int8_per_channel(bf16(header, raw, base, name))
+    a, b = t["data_offsets"]
+    return np.frombuffer(raw[base + a:base + b], dtype=np.int8).reshape(t["shape"])
+
+
 def credits(task: tuple[Path, int, str]) -> list[dict]:
     path, layer, name = task
     header, raw, base = tensors(path)
-    w = np.concatenate([bf16(header, raw, base, f"model.layers.{layer}.{p}.weight") for p in FUSED[name]])
+    B = np.concatenate([int8_weight(header, raw, base, f"model.layers.{layer}.{p}.weight") for p in FUSED[name]])
     want = {nm: (n, K) for nm, (K, n) in zip(FUSED, LL["linears"])}
-    assert w.shape == want[name], (layer, name, w.shape, want[name])
-    B = int8_per_channel(w)
+    assert B.shape == want[name], (layer, name, B.shape, want[name])
     return [{"layer": layer, "linear": name, "r_bits": r, "macs": B.size, **best_tile_credit(B, r)} for r in (1, 2)]
 
 
