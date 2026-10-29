@@ -8,7 +8,7 @@ import pytest
 
 from verity_machine_model.adopt import adopt
 from verity_machine_model.cli import main
-from verity_machine_model.model import DATA, census, model, vector
+from verity_machine_model.model import DATA, census, device, devices, model, vector
 from verity_machine_model.resolve import resolve
 
 RUN = "r20261016-000000-0000"
@@ -167,3 +167,14 @@ def test_adopt_refuses(tmp_path):
     (tmp_path / "d.csv").write_text(f"kind,row,rate,noise,cycles,u,since,until,runs\nFFMA,F,3.9,,,,VF,,{RUN}\n")
     with pytest.raises(SystemExit, match="a measured line has no epochs"):
         adopt(tmp_path / "d.csv", last, data)
+
+
+def test_solve_and_attacks_say_a_device_has_no_price_vector():
+    """README "Devices": a device directory that no vector is solved on leaves out the price LP, so `solve` and
+    `attacks` say so and exit instead of failing inside it."""
+    unpriced = [d for d in devices() if not model(device(d)).adopted]
+    assert unpriced
+    for d in unpriced:
+        for cmd in ("solve", "attacks"):
+            with pytest.raises(SystemExit, match=f"^{d}: no price vector is solved on this device"):
+                main(["--device", d, cmd])
