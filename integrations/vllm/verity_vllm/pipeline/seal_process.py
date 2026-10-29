@@ -144,7 +144,7 @@ class SealProcess:
             msgs.append(("manifest", id(manifest), manifest))
         port, fams = SS.port_of(com), sorted(getattr(com, "retain_exclude", None) or ())
         view = {"program_digest": bytes(com.program_digest), "chunk": com.chunk, "name": com.name,
-                "scheme": getattr(com, "commit_scheme", SS.V1), "retain": getattr(com, "retain", None),
+                "scheme": com.commit_scheme, "retain": getattr(com, "retain", None),
                 "manifest": None if manifest is None else id(manifest), "manifest_path": getattr(com, "required_manifest_path", None),
                 "port": port, "ports": source_ports(sources) if manifest is not None else {},
                 "has_port": any(isinstance(s, StepInputPort) for s in sources), "rows": served_rows(com)}
