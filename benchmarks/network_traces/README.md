@@ -201,6 +201,8 @@ unit drawn and accepted. K uses:
   T = 32 buckets of 100 ms, and egress_cells = 65;
 - its traffic: 100 requests over 75 link-windows, 1.33 a link-window;
 - the scan's class: B = 512, r = 4, lanes = 4, C = 47, IDB = 17 and KO = 64;
+- the scan's registered form at this head, its slot entries (the scan above registered a Programs' row a bucket,
+  143,360 bits a link-window);
 - every unit drawn.
 
 The terms, in the generator reading of the scan's statement (each unit's registered rows its boundary values):
@@ -217,6 +219,24 @@ The terms, in the generator reading of the scan's statement (each unit's registe
   made (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`), and a warden on the host's clock always paces. Still,
   the host's state after the server's writes for the next bucket moves when a bucket reaches the client. The scan's
   period check (`scan_period.py`) passes the same bound as `NetworkCheck.Period`'s `jitter`.
+
+Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
+reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of the entries (`NetworkCheck.Period`'s `readsEntries`) and ignores it
+outside due and occupied slots, so a link-window's entries are its NR·nb boundaries'. Unless the scan's `prog` is a
+compute audit's `SlotEntry_v1` template's entries (`<descriptor id>/c0/o0`, one member a slot), the read bit is the
+prover's word (an entry of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses the link-window by
+name (`wired`). `wired` pins the template's whole body by its closure digest (`slotEntryPins`, `io_shell.SlotEntry_v1`
+at its circuit-check rows), so the block round's `prog`, the o0 of scan_zk's `SlotEntry_v1` stand-in, whose entries,
+read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the requests from its
+own registered `SCAN_STATE`, and the check refuses, last, by name, a link-window whose scan's state isn't a wired
+audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
+(`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}), each leaf but the first the o1 of the unit that
+computes it and the sin of the next, both registered reads, so a state tree that skips or alters a transition is
+refused at that unit's o1; the block round's registration names it as `scan/state`.
+Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
+and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
+K charges to the link-window's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
+tied audit's inputs; K is unchanged in what it bounds, 9,088 bits a link-window at w63.
 
 The two forms:
 - The pooled form (`HorizonLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
@@ -236,27 +256,27 @@ D_j = 2):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
-| week | 1 | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 143,400 |
-| week | 1,000 | 2.71·10^13 (1,371×) | 2.71·10^13 (1,371×) | 2.71·10^13 (1,371×) | 143,400 |
-| month | 1 | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 143,400 |
-| month | 1,000 | 1.16·10^14 (5,874×) | 1.16·10^14 (5,874×) | 1.16·10^14 (5,874×) | 143,400 |
-| year | 1 | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 143,400 |
-| year | 1,000 | 1.41·10^15 (71,471×) | 1.41·10^15 (71,471×) | 1.41·10^15 (71,471×) | 143,400 |
+| week | 1 | 1.73·10^9 (8.73%) | 1.73·10^9 (8.74%) | 1.73·10^9 (8.73%) | 9,128 |
+| week | 1,000 | 1.73·10^12 (87.3×) | 1.73·10^12 (87.3×) | 1.73·10^12 (87.3×) | 9,128 |
+| month | 1 | 7.39·10^9 (37.4%) | 7.4·10^9 (37.4%) | 7.39·10^9 (37.4%) | 9,128 |
+| month | 1,000 | 7.39·10^12 (374×) | 7.39·10^12 (374×) | 7.39·10^12 (374×) | 9,128 |
+| year | 1 | 9·10^10 (4.55×) | 9·10^10 (4.55×) | 9·10^10 (4.55×) | 9,128 |
+| year | 1,000 | 9·10^13 (4,549×) | 9·10^13 (4,549×) | 9·10^13 (4,549×) | 9,128 |
 
-As registered, K passes the size of the weights within one machine-week, so the record's K is vacuous for every
-monitoring period.
+As registered, K passes the size of the weights within one machine-year, and within one week of 1,000 machines, so
+the record's K is vacuous for a year of one machine and for every period of 1,000.
 
 **`prog` only at its anchored entries (conditional on the generator-form lowering)**, bits, and the share of
 the weights (the jitter term one bit a bucket, at D_j = 2):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
-| week | 1 | 2.91·10^8 (1.47%) | 2.92·10^8 (1.48%) | 2.9·10^8 (1.47%) | 1,533 |
-| week | 1,000 | 2.9·10^11 (14.7×) | 2.9·10^11 (14.7×) | 2.9·10^11 (14.7×) | 1,533 |
-| month | 1 | 1.24·10^9 (6.29%) | 1.24·10^9 (6.29%) | 1.24·10^9 (6.28%) | 1,533 |
-| month | 1,000 | 1.24·10^12 (62.8×) | 1.24·10^12 (62.8×) | 1.24·10^12 (62.8×) | 1,533 |
-| year | 1 | 1.51·10^10 (76.4%) | 1.51·10^10 (76.4%) | 1.51·10^10 (76.4%) | 1,533 |
-| year | 1,000 | 1.51·10^13 (764×) | 1.51·10^13 (764×) | 1.51·10^13 (764×) | 1,533 |
+| week | 1 | 2.91·10^8 (1.47%) | 2.92·10^8 (1.48%) | 2.9·10^8 (1.47%) | 1,535 |
+| week | 1,000 | 2.9·10^11 (14.7×) | 2.9·10^11 (14.7×) | 2.9·10^11 (14.7×) | 1,535 |
+| month | 1 | 1.24·10^9 (6.29%) | 1.25·10^9 (6.3%) | 1.24·10^9 (6.29%) | 1,535 |
+| month | 1,000 | 1.24·10^12 (62.9×) | 1.24·10^12 (62.9×) | 1.24·10^12 (62.9×) | 1,535 |
+| year | 1 | 1.51·10^10 (76.5%) | 1.51·10^10 (76.5%) | 1.51·10^10 (76.5%) | 1,535 |
+| year | 1,000 | 1.51·10^13 (765×) | 1.51·10^13 (765×) | 1.51·10^13 (765×) | 1,535 |
 
 This second table is what the generator-form lowering would give if it registers `prog` everywhere but its anchors.
 It is not the record's number.
@@ -270,9 +290,10 @@ K also rests on these conditions:
 - The jitter term is T bits a link-window, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
   host-state channel).
 - At light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
-  anchored table's machine-week is 1.04% of the weights and its machine-year 53.8%; as registered it is 1.37×
-  a machine-week either way.
-- The compute audit's free inputs don't enter K: its δ goes into JointPeriodLive's sum.
+  anchored table's machine-week is 1.04% of the weights and its machine-year 53.9%; as registered it is 8.73% of
+  the weights a machine-week either way.
+- An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
+  audit's (the `SlotEntry_v1` stand-in's) are the link-window's free inputs above.
 
 The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
 `HORIZON_CONDITION`) and what the theorem doesn't cover (its `uncovered`).
