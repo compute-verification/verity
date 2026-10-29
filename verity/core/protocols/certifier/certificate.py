@@ -423,7 +423,7 @@ class Certificate:
     def verify(self, key: PublicKey, session: bytes) -> bool:
         """The host's signature check: the certificate is `key`'s and its signature verifies over its message in
         certifier session `session`. It reads the certificate's public fields and its signed digest, nothing of the
-        head."""
+        head. The Lean's is `NetworkCheck.Check.Certificate.signs`, which every Lean certificate check reads."""
         if self.key_id != key.key_id:
             return False
         try:
@@ -498,22 +498,24 @@ class CertifiedClock:
         return self.certificate.window
 
     def refusal(self, key: PublicKey, session: bytes) -> str | None:
-        """Why the opening fails under `key` in certifier session `session`, or None when it holds: the certificate is
-        an egress one of `key`'s, the sync and the salt open the digest it signs, and its signature verifies over its
-        message in the session (`Certificate.verify`), which binds the link and the window."""
+        """Why the opening fails under `key` in certifier session `session`, by the Lean's code
+        (`NetworkCheck.Period.openingRefusal`), or None when it holds: ``egress`` unless the certificate is an egress
+        one, ``key`` unless it is `key`'s, ``opening`` unless the sync and the salt open the digest it signs, and
+        ``signature`` unless its signature verifies over its message in the session (`Certificate.verify`), which
+        binds the link and the window."""
         c = self.certificate
         if type(c) is not Certificate or c.direction is not Direction.EGRESS:
-            return "it isn't an egress certificate, and a clock is an egress window's"
+            return "egress"
         if c.key_id != key.key_id:
-            return f"another key's, not {key.key_id.hex()[:16]}…"
+            return "key"
         try:
             opened = clock_commitment(self.salt, self.sync)
         except ValueError:
             opened = None
         if c.digest != opened:
-            return "its sync and salt don't open the salted digest it signs"
+            return "opening"
         if not c.verify(key, session):
-            return "its signature doesn't verify under the key in its session for the link-window it names"
+            return "signature"
         return None
 
     def verify(self, key: PublicKey, session: bytes) -> bool:
@@ -525,6 +527,14 @@ def _named(c: CertifiedClock) -> str:
     if type(x) is not Certificate:
         return f"a clock opening of a {type(x).__name__}"
     return f"{x.link} window {x.window}'s {x.direction.value} clock (key {x.key_id.hex()[:16]}…)"
+
+
+def _why(code: str, key: PublicKey) -> str:
+    """What `CertifiedClock.refusal`'s code says of an opening under `key`."""
+    return {"egress": "it isn't an egress certificate, and a clock is an egress window's",
+            "key": f"another key's, not {key.key_id.hex()[:16]}…",
+            "opening": "its sync and salt don't open the salted digest it signs",
+            "signature": "its signature doesn't verify under the key in its session for the link-window it names"}[code]
 
 
 @dataclass(frozen=True)
@@ -539,38 +549,48 @@ class SignedClocks:
     not an egress certificate, another key's, a sync and salt that don't open the digest signed (an altered
     digest or sync), a signature that doesn't verify (forged, or another session's, or relabelled to another link or
     window), a salt another link-window's opening has too, or a window with two signed syncs. Whoever delivers the
-    openings, the prover included, can't forge one."""
+    openings, the prover included, can't forge one. `codes` is each opening's refusal by the Lean's code
+    (`NetworkCheck.Period.openingRefusals`), None where it holds: `CertifiedClock.refusal`'s, ``opening`` for what
+    isn't an opening, and ``salt``; `split` the link-windows with two or more signed syncs, by link then window."""
 
     key: PublicKey
     session: bytes
     openings: Sequence[CertifiedClock]
     refused: tuple[str, ...] = field(default=(), init=False)
+    codes: tuple[str | None, ...] = field(default=(), init=False)
+    split: tuple[tuple[str, int], ...] = field(default=(), init=False)
 
     def __post_init__(self) -> None:
-        held: list[CertifiedClock] = []
+        codes: list[str | None] = []
         refused: list[str] = []
         for c in self.openings:
             if type(c) is not CertifiedClock:
+                codes.append("opening")
                 refused.append(f"a {type(c).__name__}: not a salted clock certificate's opening "
                                "(certificate.CertifiedClock), so it gives no sync")
-            elif (why := c.refusal(self.key, self.session)) is not None:
-                refused.append(f"{_named(c)}: {why}")
+            elif (code := c.refusal(self.key, self.session)) is not None:
+                codes.append(code)
+                refused.append(f"{_named(c)}: {_why(code, self.key)}")
             else:
-                held.append(c)
+                codes.append(None)
+        held = [(i, c) for i, c in enumerate(self.openings) if codes[i] is None]
         salts: dict[bytes, list[CertifiedClock]] = {}
-        for c in held:
+        for _, c in held:
             salts.setdefault(c.salt, []).append(c)
         signed: dict[str, dict[int, set[ClockSync]]] = {}
-        for c in held:
+        for i, c in held:
             if (other := next((o for o in salts[c.salt] if o != c), None)) is not None:
+                codes[i] = "salt"
                 refused.append(f"{_named(c)}: its salt is also {other.link} window {other.window}'s, under which two "
                                "windows of one sync sign one digest")
             else:
                 signed.setdefault(c.link, {}).setdefault(c.window, set()).add(c.sync)
-        refused += [f"{link} window {w}: {len(got)} signed syncs, so it has none"
-                    for link, windows in signed.items() for w, got in sorted(windows.items()) if len(got) > 1]
+        split = [(link, w) for link, windows in signed.items() for w, got in sorted(windows.items()) if len(got) > 1]
+        refused += [f"{link} window {w}: {len(signed[link][w])} signed syncs, so it has none" for link, w in split]
         object.__setattr__(self, "_signed", signed)
         object.__setattr__(self, "refused", tuple(refused))
+        object.__setattr__(self, "codes", tuple(codes))
+        object.__setattr__(self, "split", tuple(sorted(split)))
 
     def syncs(self, link: str) -> tuple[ClockSync, ...]:
         windows, out = self._signed.get(link, {}), []
