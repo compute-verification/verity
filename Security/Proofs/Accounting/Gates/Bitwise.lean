@@ -211,7 +211,7 @@ lemma accStep {t : ℕ} {ia ir : Iv} (ha : AccIv t ia) (hr : BitIv ir) :
 
 /-! ## The gates -/
 
-/-- A gate of no step, primitive or site. -/
+/-- A gate of no step, primitive or place. -/
 def mk (op : Op ι) (args : List ℕ) (lo hi : ℤ) : Gate ι := ⟨op, args, lo, hi, 0, "", .other, false⟩
 
 /-- The constant `c`. -/

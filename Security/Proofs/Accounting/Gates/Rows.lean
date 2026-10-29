@@ -251,8 +251,8 @@ def laneRow (r c ln s : ℕ) : ℕ := ln / (c / 8) + r / 4 * s
 def laneCol (c ln s : ℕ) : ℕ := 2 * (ln % (c / 8)) + 2 * (c / 8) * (s / 2) + s % 2
 
 /-- A budgeted gate of class `cls` and primitive `prim` reading `args`, at engine step 0. -/
-def h1Gate (prim : String) (cls : Budget) (args : List ℕ) (site : Site := .other) (commit : Bool := false) : Gate ℕ :=
-  ⟨.budgeted cls fun v => v.headD 0, args, s32Min, s32Max, 0, prim, site, commit⟩
+def h1Gate (prim : String) (cls : Budget) (args : List ℕ) (place : Place := .other) (commit : Bool := false) : Gate ℕ :=
+  ⟨.budgeted cls fun v => v.headD 0, args, s32Min, s32Max, 0, prim, place, commit⟩
 
 /-- A lane's segment dot of primitive `prim` (`PouwSegDot_v2` from the accumulator at gate `acc`, or `PouwSegDot0_v2`
 from the zero there): `acc + Σ a_k·b_k` over 32 s8 pairs, wrapping. -/
@@ -268,7 +268,7 @@ def immaStep (acc : ℕ) (a b : List ℕ) : Gate ℕ :=
 `c` rows (registered), the salt (a coin) and a zero; `X = A + b` (`r·K`), `U` (32 a column), `−U`, `W′ = B + c + U`
 (`c·K`) and each row's `m` digit words `A_d` (32 a word); then each lane's dots set by set (`T_0 … T_{KS−1}`,
 `O′ = T_{KS−1} − U·A_0` and `D_d = U·A_d`, one a lane entry, 32 a set), and per set its fx1 fold and its two halves'
-`PouwXinFinal`; the receipt's `2·(KS + m)` words, each the XOR over lanes of one half after one set, at its receipt site
+`PouwXinFinal`; the receipt's `2·(KS + m)` words, each the XOR over lanes of one half after one set, at its receipt place
 and committed; and `z`, each cell's `K/32` steps from the zero. Its noise and fold keys read the salt, and its digits read
 `X` directly: the counts it is held to read neither. -/
 def h1Dag (r c K : ℕ) : Dag ℕ :=
@@ -350,7 +350,7 @@ theorem h1Of_h1Rows : h1Rows.all (fun (r, c, K, out) => h1Of r c K == out) := by
 
 /-- A gate at a dot step is an s8-family step. -/
 def mmaAtDot (g : Gate ℕ) : Bool :=
-  match g.site, g.op with
+  match g.place, g.op with
   | .dot .., .mma .. => true
   | .dot .., _ => false
   | _, _ => true

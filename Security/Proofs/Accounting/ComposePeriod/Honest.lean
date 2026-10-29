@@ -40,7 +40,7 @@ def word : Accounting.Gates.Gate Unit where
   hi := 0
   step := 0
   prim := "S8Dot_v1"
-  site := .dot 32 32 [] 0
+  place := .dot 32 32 [] 0
   commit := true
 
 /-- One gate, one call site, one live round, one unit, every value committed before the round's coin. -/
