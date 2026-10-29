@@ -1228,7 +1228,7 @@
   },
   "Nci.Assumptions.CoversEfficientMethods": {
    "owner": "@training",
-   "digest": "1da6410237fea7622af465d92377764d24c77080d022cae138c2a1e82daff6ad"
+   "digest": "5278d5015393ac6b9b6a5609004ebec37b4caeafd791a72d8ba08aa4dca862c4"
   },
   "Nci.Assumptions.DescriptionHard": {
    "owner": "@training",
@@ -13024,9 +13024,9 @@
    ]
   },
   "Definitions.Accounting.Assumptions.Coverage": {
-   "digest": "657df0a53e66457fbfe17a30f8a641e3624e343f36393d555f460725de93594b",
+   "digest": "f62ed9f999d7fe5203d8f384c8967fbe257493aae068e8b3b41912ac0d9cefac",
    "definitions": {
-    "Nci.Assumptions.CoversEfficientMethods": "1da6410237fea7622af465d92377764d24c77080d022cae138c2a1e82daff6ad"
+    "Nci.Assumptions.CoversEfficientMethods": "5278d5015393ac6b9b6a5609004ebec37b4caeafd791a72d8ba08aa4dca862c4"
    },
    "guarantees": ["Nci.SecurityProofs.CapabilityFloor", "Nci.SecurityProofs.CapabilityFloorHonest"]
   },
@@ -13934,16 +13934,16 @@
    "guarantees": ["Accounting.SecurityProofs.pouwRow"]
   },
   "Definitions.Accounting.CoverageToy": {
-   "digest": "d21e57781af7256c9c500787f0f2c246d0491fd5cb136f9669886514124a97ca",
+   "digest": "d9e0e161503b24bc0463391e5bc3f42c1a2f49cbdca730f9fa4064801bf77f88",
    "definitions": {
-    "Accounting.Overhead.Toy.comp": "421aae82855afeed07fe822aca4662f54a89cd00bdc8b58cb9e96e0399c4b5bb",
-    "Accounting.Overhead.Toy.cost": "a076b0cb3e64bbe6d6e8bfcc56e1012fd2dbb954428689574016cf623aad4743",
-    "Accounting.Overhead.Toy.covered": "512aad0efa9550665763b96d23b1336409b12650f7540e6721a3238567c7e80c",
-    "Accounting.Overhead.Toy.empty": "9c82eac4ad184475089b5e409ac6476bb5796997032821ac3af2c15fc3f9c560",
-    "Accounting.Overhead.Toy.free": "0eafc8cb1a16c9b115d37ee93dcb6d2f6cdca09cd67b48e992102844915d20f1",
-    "Accounting.Overhead.Toy.pos": "59180a3e749b5c59667799ddde7dc9be18f425aef905fe88028183fffafc0955",
-    "Accounting.Overhead.Toy.run": "bac506c0e4c24707f0598d56ea6d696030fe0ce606f2bcde5ff477e7ad90a4cc",
-    "Accounting.Overhead.Toy.task": "c04323e239db3af4cef819911ebbdb35b2c04a8f389905db4ca9f3b409f9afae"
+    "Accounting.Slowdown.Toy.comp": "7306b9712ddc19791c6a64351df17e89163ba80841392d927c39c3e6b5e43312",
+    "Accounting.Slowdown.Toy.cost": "ac4328da0acbd70ed38a4cdf7aa4010f33034f2ae13c485edac73aa27bbc316c",
+    "Accounting.Slowdown.Toy.covered": "7ed5ca0311967f1ddc78047285211494c30602724bb5c26bac031d0198bdb0c2",
+    "Accounting.Slowdown.Toy.empty": "f13668fafc9d46216968f6e821e79ff4fd9a741943e5f225cd0bb5f2b46b9eb3",
+    "Accounting.Slowdown.Toy.free": "c0eb2ec4791ca7d1f1623864415320a5ab09fcbc546fea8e342e02b368b8efc1",
+    "Accounting.Slowdown.Toy.pos": "929461a73d1882163788aac3d51e6ce62f41d8a0ef609173b35b7f2445c6c6d7",
+    "Accounting.Slowdown.Toy.run": "ff00845111151996b771a48962b6f27b36594eb1b6a962fc80a6d3ff8cefc5c9",
+    "Accounting.Slowdown.Toy.task": "8d15ae9654a13e74cc555d12c2aa5aa4233f8192a0bf04a959d73715e7ad419d"
    },
    "guarantees": ["Nci.SecurityProofs.CapabilityFloorHonest", "Nci.SecurityProofs.CapabilityFloorNontrivial"]
   },
@@ -14634,11 +14634,11 @@
    "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
   },
   "Definitions.Accounting.Guarantees.Coverage": {
-   "digest": "e67e8edacb1b227284e506819e668162f30d08f5c187b49b3c1c63cfb8b90934",
+   "digest": "85b8a0daac72bc21cb6d9fa33f262259aa5f56963e73f602113deffc3f892186",
    "definitions": {
-    "Nci.Guarantees.CapabilityFloor": "ec07c701d065891540e14def96865f781d8418fdc2dfe9748ae6dc6bbf5cad5b",
-    "Nci.Guarantees.CapabilityFloorHonest": "bed5293eca85b9c79d4a6c55faed94766525f6195d8599693d3d564857386ce6",
-    "Nci.Guarantees.CapabilityFloorNontrivial": "0b62173a12212a48a82250d3fc8324c1bb348c3c9f36c1bd68a2f086a7a21bf3"
+    "Nci.Guarantees.CapabilityFloor": "8c5e7c4d36328b5d1116a8c783e8acb418382194255718e89bd353073460f713",
+    "Nci.Guarantees.CapabilityFloorHonest": "c697d053fbd8bfd128f76fe6c97006a654f007ca203d600be6e208bb00b14ae3",
+    "Nci.Guarantees.CapabilityFloorNontrivial": "7997dfa10ba4428b92b524f8c8e476b3a1ee44dfbf1bb811b84441441d3cf3c0"
    },
    "guarantees": [
     "Nci.SecurityProofs.CapabilityFloor",
@@ -15934,25 +15934,6 @@
     "Accounting.SecurityProofs.Memory.CountingAdvice"
    ]
   },
-  "Definitions.Accounting.Overhead": {
-   "digest": "93158847fbe7e48daff5eeba9fbcdef759ccb3169f101b758901cb4e88b2fc5a",
-   "definitions": {
-    "Accounting.Overhead.Class": "6d258b1cc63a22f15d1136ca1d8596d652b6183cad93df2470a38e4950e69c71",
-    "Accounting.Overhead.Reads": "44ce7c2b524a572c096396eb92583332d7760dae10dda3757b37195496016b60",
-    "Accounting.Overhead.Succeeds": "9d9a4ce45d005fb936abcd966665ec1a9813c7cbd09aad8e5c46c56ee63ac472",
-    "Accounting.Overhead.Task": "ae9c966618fffb1c475c1f09a123e80058ce48b6b45dc05223b20536d0e1a720",
-    "Accounting.Overhead.Task.draw": "f92e7f4077218998f94161f9bff0366d333c2fb8a8cceb5356b9b227faf4af7a",
-    "Accounting.Overhead.Task.fintype": "a65ccd39e0ba1e01cbf17c53166a12726e2e009b24de866123933c003335cb2a",
-    "Accounting.Overhead.Task.game": "a9e8db6f1bb249aac1cf833175b98ff0382b6cb5ad3ec1dcb01817f2732f8f7f",
-    "Accounting.Overhead.Task.prob": "6d723a2bd0a1a1c110e70f695e4f3bc789e84e5936492d521e02ca77c3ac78b8",
-    "Accounting.Overhead.Task.Ω": "5d29d0793b3e25a64b500585f254375ba12971e4910a4832417e235079c8283a"
-   },
-   "guarantees": [
-    "Nci.SecurityProofs.CapabilityFloor",
-    "Nci.SecurityProofs.CapabilityFloorHonest",
-    "Nci.SecurityProofs.CapabilityFloorNontrivial"
-   ]
-  },
   "Definitions.Accounting.PerRun": {
    "digest": "3d15cf5b17ad2b0db821784954e54ccaf734833a6174899da32e95b0636935c1",
    "definitions": {
@@ -16968,6 +16949,25 @@
     "Accounting.Served.Held": "7f0e04f7760c1c5d90e49708cf9ee8a3ccbf3a3e5b57b5a7e7f3136e31e67486"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
+  },
+  "Definitions.Accounting.Slowdown": {
+   "digest": "922d639e6355b1e5e9b1c790db75e22a18cf817849475cdbda08b49f595831cb",
+   "definitions": {
+    "Accounting.Slowdown.Class": "e14b71aaf6712df20dbd9bf4a76ee00e85a0f58ca2b399f8a90ee1b9639589f5",
+    "Accounting.Slowdown.Reads": "fd1150ad8c34aaf515f331fff51fe346b8e7c1e86150b9a5b21724ee287c1168",
+    "Accounting.Slowdown.Succeeds": "371a82f6faf92376d8e24317c960efe8199274efa5fdd795b44913ccbaef2787",
+    "Accounting.Slowdown.Task": "52ef473e49156183aa83d6880a9450af67b4623135a7fa56a073d428414b82b8",
+    "Accounting.Slowdown.Task.draw": "532cf0c40724df995361140d62e4109b3aa00010b59c25508bdc87a19de77d49",
+    "Accounting.Slowdown.Task.fintype": "a8f8f5434b10cb0e5841b01a0bd930e9506a7adb31f02ef844e3b1a23cbbf60d",
+    "Accounting.Slowdown.Task.game": "918c83f55ee3b20e332a32011b0b2c9a6aef167f536e9d91f161ea5cd396c190",
+    "Accounting.Slowdown.Task.prob": "71bc28c217ec6d33c00ad57681384f0eed22a14280da15d2c93f9c37c7d0b1a2",
+    "Accounting.Slowdown.Task.Ω": "99b693a9dda86da4a1a8ee58fd853eac7dad1a48f8be818e865dc178f13b45b2"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.CapabilityFloor",
+    "Nci.SecurityProofs.CapabilityFloorHonest",
+    "Nci.SecurityProofs.CapabilityFloorNontrivial"
+   ]
   },
   "Definitions.Accounting.TS.Drawn": {
    "digest": "32e35a1db7d3af15b74e44f1f18f6aff730ab88a5967e84247b1902da1b09e59",
