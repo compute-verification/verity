@@ -24,6 +24,9 @@ Its proofs are in `Lead/PStar/`, its new declarations in `Pouw.SecurityProofs.Le
 * `Marginal`: a part of the draw caps the whole: a value that moves with one part of the draw only through a term
   hits a fixed value on at most the share that term does.
 * `MassFloorProofs`: point masses at most `p` force a variance of at least `(1/p² − 1)/12`, with its mean over steps.
+* `Table`: the statement's pieces. `pStar_eq`: a value of a step's lanes and tag bit, `127 s₀ + s₁ + s₂ + 1 + b`, is
+  taken by at most 130 of the `2 · 128³` draws and one by exactly 130, `Lanes`' bound on an even row; `table_le`, the
+  pre-coin tables' and coin stream's term, is still a stub.
 * `Tile`: at tile grain, the even and odd rows together fix each column's triple, so a 16 × 8 MMA tile's step is
   injective in its `2^184` draws: `p* = 2^−184` exactly.
 * `Walks`: the same lanes summed over steps: an entry's own walk keeps `p*` over any nonempty set of steps; an even
