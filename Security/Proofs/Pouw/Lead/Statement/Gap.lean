@@ -33,7 +33,7 @@ def gapExpr (q p R c K S ch : ℚ) : ℚ :=
     35 / 1000000 * (16 * q * (8 * p) * K / 32) +
     256 / 3 * (16 * q * (8 * p) * S + 351538 / 100 * (4 * (16 * q * (8 * p) * S) / 128 + ch) +
       344905 / 100 * (R * K / 128)) * c * R / (16 * q * 973078528) +
-    q * p * 128 * ((2 * 2 ^ 34 + 1) / 49 ^ 8 + 32 / 7 ^ 8 + (S - 1) * (2 * 2 ^ 34 + 1) / 2 ^ 100)
+    q * p * 128 * (S * (2 * 2 ^ 34 + 1) / 2 ^ 100)
 
 theorem gapRegs_eq {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (q p : ℕ) (hm : L.m = 16 * q)
     (hn : L.n = 8 * p) (hF : L.fwdMacs = 973078528) (hmem : L.mem = 2 ^ 34) (hq : 0 < q) (hp : 0 < p)

@@ -18,7 +18,8 @@ Every quantity is in registers; the W1 work is 32 a register (`H32`'s floor).
   - `pStarGap`: the coin lanes' guess at `-rot`'s weights, 0.0035% of stock;
   - `networkGap`: work outsourced within the call's bits (`Layout.callBits`), `betaLead` a bit: `n_max = 256/3` MACs
     a coin bit, every step carrying the three coin lanes, at the call's honest W1 work a MAC (`wMac`);
-  - `tableGap`: pre-coin tables and the coin stream holding a committed tile, within the node's memory.
+  - `tableGap`: pre-coin tables and the coin stream holding a committed tile, within the node's memory, from each
+    step's coin lanes alone.
 * `gapShare` is the gap over stock, which `Pouw.Guarantees.Lead.GapAt` evaluates at the three points.
 -/
 
@@ -71,13 +72,13 @@ def betaLead (L : Layout) (C : Commit L) : ℚ := nMax * wMac L C
 def networkGap (L : Layout) (C : Commit L) : ℚ := betaLead L C * L.callBits / 32
 
 /-- Pre-coin tables and the coin stream holding a committed tile, in a call of whole tiles: a memory's `2 · mem + 1`
-tile values (the tables', the stream's and zero) against each committed tile's words. A step-0 tile is a given value
-with chance at most `49^-8` (its 16 rows' tags span two digits against each column's `G`), and at most `7^-8` for the
-32 stream tiles that can hold its block's `G`; a later step's at most `2^-100` (each column's two row parities fix its
-three coin lanes, at least five columns free of the stream's lanes). -/
+tile values (the tables', zero and the stream's) against each committed tile's words, at every step, step 0
+included, from the tile's coin lanes alone. Each column's even and odd rows fix its three lanes, so a tile is a
+given value with chance at most `2^-168`; at most three of its columns hold the stream's lanes, so it is a streamed
+tile with chance at most `2^-105`; either is within `2^-100`, so a tile and step are held with chance at most
+`(2 · mem + 1) · 2^-100`. -/
 def tableGap (L : Layout) : ℚ :=
-  (L.rowBlocks * L.colBlocks * tileWords : ℚ) *
-    ((2 * L.mem + 1 : ℚ) / 49 ^ 8 + 32 / 7 ^ 8 + (L.S - 1 : ℚ) * (2 * L.mem + 1) / 2 ^ 100)
+  (L.rowBlocks * L.colBlocks * tileWords : ℚ) * (L.S * (2 * L.mem + 1 : ℚ) / 2 ^ 100)
 
 /-- **The gap** in registers: the sum of the six terms. -/
 def gapRegs (L : Layout) (C : Commit L) : ℚ :=
