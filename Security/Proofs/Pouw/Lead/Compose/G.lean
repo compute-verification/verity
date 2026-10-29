@@ -10,9 +10,10 @@ import Proofs.Pouw.Lead.Network.Term
 # The lead's guarantee from its pieces
 
 `G`'s proof, at each accepted coin value with no break, on the egress-free twin (`OutsourceWithinEgressLead`), which
-is accepted where the original is (it holds what it holds, registers its root and exchanges nothing) and hashed no
-collision where the original hashed none (beyond the original's, it hashes only the honest commitment's messages):
-1. the twin's run holds every committed tile (`TileGrain`), so its whole-tile writes are at least the distinct
+is accepted where the original is (it registers its root and exchanges nothing) and hashed no collision where the
+original hashed none (beyond the original's, it hashes only the honest commitment's messages):
+1. the twin hashes every honest words message (`HonestHashRuled` with no collision), so its run holds every committed
+   tile (`TileGrain`) and its whole-tile writes are at least the distinct
    committed tiles less the table hits (`CoinBranch.distinct_le_writes`), and the distinct tiles are the committed
    tiles less the repeats; the lead commits whole tiles, so their words are `m n S` (`perCoin`);
 2. its hashing credit is at least the honest commitment's (`HonestHashRuled` at egress 0, `Commit.hashed_credit_ge`),
@@ -35,7 +36,7 @@ theorem perCoin (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
     (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K))
     (isA : Hash.Msg → Bool) (Real : Strategy (lead T m n K) → Prop)
-    (hcommit : CommitL1w H C isA κ) (hpr : H32 pr) (hw1 : W1 pr Real) (hgrain : TileGrain stream Real)
+    (hcommit : CommitL1w H C isA κ) (hpr : H32 pr) (hw1 : W1 pr Real) (hgrain : TileGrain H C κ stream Real)
     (hmin : OneInstructionMinimal Real) (hsha : ShaWrites isA Real) (hhash : HonestHashRuled H C κ Real)
     (σ : Strategy (lead T m n K)) (hσ : Real σ) (ω : Coins (lead T m n K)) (he : (σ.exec ω).egress = 0)
     (hacc : Accepted (lead T m n K) H C κ σ ω) (hnb : ¬ Break (lead T m n K) H C κ σ ω) :
@@ -46,9 +47,15 @@ theorem perCoin (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     exact_mod_cast MH100W.cost_ge_regs pr hpr _ (hw1 σ hσ ω)
   have hmin' : ((tileWords * writes (σ.exec ω).steps + (σ.exec ω).shaRegs : ℕ) : ℚ) ≤ regCount (σ.exec ω).trace := by
     exact_mod_cast hmin σ hσ ω
+  have hall : ∀ y ∈ C.msgs H (word (lead T m n K) κ ω), y ∈ (σ.exec ω).hashed := fun y hy => by
+    obtain ⟨x, hx, hxy⟩ := hhash σ hσ ω he hacc y (List.mem_append_left _ hy)
+    by_cases hne : x = y
+    · exact hne ▸ hx
+    · exact absurd ⟨x, List.mem_append_left _ hx, y, List.mem_append_right _ (List.mem_append_left _ hy), hne,
+        congrArg Verity.Digest.bytes hxy⟩ hnb
   have hdist : (((tileIdx (lead T m n K)).image fun x => tileOf (lead T m n K) κ ω x.1 x.2.1 x.2.2).card : ℚ) ≤
       writes (σ.exec ω).steps + tableHits (lead T m n K) κ σ stream ω := by
-    exact_mod_cast CoinBranch.distinct_le_writes κ σ stream ω (fun y hy => hgrain σ hσ ω he y hy) hacc.1
+    exact_mod_cast CoinBranch.distinct_le_writes κ σ stream ω (hgrain σ hσ ω he hall)
   have hrep : (repeats (lead T m n K) κ ω : ℚ) = (tileIdx (lead T m n K)).card -
       ((tileIdx (lead T m n K)).image fun x => tileOf (lead T m n K) κ ω x.1 x.2.1 x.2.2).card := by
     rw [repeats, Nat.cast_sub Finset.card_image_le]
@@ -79,9 +86,9 @@ theorem G : Pouw.Guarantees.Lead.G := by
   push Not at hB
   obtain ⟨σ', hσ', -, htwin⟩ := hout σ (hcard σ hcan)
   have hacc' : ∀ ω ∈ O, Accepted (lead T m n K) H C κ σ' ω := fun ω hω => by
-    obtain ⟨he, hh, hr, -, -⟩ := htwin ω
-    obtain ⟨hhold, hroot, hbits⟩ := hacc ω hω
-    refine ⟨fun rb hrb cb hcb t => hh _ (hhold rb hrb cb hcb t), hr.trans hroot, ?_⟩
+    obtain ⟨he, hr, -, -⟩ := htwin ω
+    obtain ⟨hroot, hbits⟩ := hacc ω hω
+    refine ⟨hr.trans hroot, ?_⟩
     rw [he]
     exact (Nat.cast_nonneg _).trans hbits
   have hnb' : ∀ ω ∈ O, ¬ Break (lead T m n K) H C κ σ' ω := fun ω hω hb => by
@@ -90,7 +97,7 @@ theorem G : Pouw.Guarantees.Lead.G := by
     have hsub : ∀ z ∈ (σ'.exec ω).hashed ++ (C.msgs H (word (lead T m n K) κ ω) ++ C.aMsgs),
         z ∈ (σ.exec ω).hashed ++ (C.msgs H (word (lead T m n K) κ ω) ++ C.aMsgs) := fun z hz => by
       rcases List.mem_append.1 hz with hz | hz
-      · rcases (htwin ω).2.2.2.1 z hz with h | h
+      · rcases (htwin ω).2.2.1 z hz with h | h
         · exact List.mem_append_left _ h
         · exact List.mem_append_right _ h
       · exact List.mem_append_right _ hz
@@ -112,8 +119,8 @@ theorem G : Pouw.Guarantees.Lead.G := by
     intro ω hω
     have h1 := perCoin pr H T m n K κ stream C isA Real hC h32 hw1 htile hone hsha hhon σ' hσ' ω (htwin ω).1
       (hacc' ω hω) (hnb' ω hω)
-    have h2 := (htwin ω).2.2.2.2
-    have h3 := mul_le_mul_of_nonneg_left (hacc ω hω).2.2 hβ
+    have h2 := (htwin ω).2.2.2
+    have h3 := mul_le_mul_of_nonneg_left (hacc ω hω).2 hβ
     rw [htw] at h1 ⊢
     linarith
   have hsum := Finset.sum_le_sum hstep

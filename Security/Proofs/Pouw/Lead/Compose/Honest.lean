@@ -8,8 +8,8 @@ import Proofs.Hash.Bytes
 The honest strategy writes each committed tile once with one `other` instruction a word, hashes the commitment's
 messages with one `other` instruction a credited register, registers the commitment's root and exchanges nothing. For
 every coin stream and every commitment format it meets every premise of `G` but `CommitL1w` and is accepted at every
-coin value (`honestAt`): the stream enters only the memory the run starts from, and the honest run writes every tile it
-holds. So at a deployed instance the honest lemma is `CommitL1w` at the deployed commitment, which holds where the
+coin value (`honestAt`): the stream enters only the memory the run starts from, and the honest run writes every
+committed tile. So at a deployed instance the honest lemma is `CommitL1w` at the deployed commitment, which holds where the
 commitment's messages include frame-v3 leaves, at ranks below `2^64`, over the words' bytes in the lead's chunks and
 over A's rows (`commitL1w_of_leaves`): a frame leaf carries its rank (`leafMsg_rank_inj`), so leaves at distinct ranks
 are distinct messages however their values repeat, and its header puts one more compression on its value's
@@ -60,8 +60,7 @@ noncomputable def honestStrategy (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.D
       shaRegs := shaRegsOf isA (commitMsgs L H C κ ω)
       hashed := commitMsgs L H C κ ω
       egress := 0
-      root := C.root H (word L κ ω)
-      holds := fun y => y ∈ tilesAt L κ ω }
+      root := C.root H (word L κ ω) }
 
 theorem honest_trace_other (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L)
     (isA : Hash.Msg → Bool) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) :
@@ -79,7 +78,7 @@ commitment format and form classifier: with `Real` the honest strategy alone, th
 theorem honestAt (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
     (stream : CoinStream L) (C : Pouw.Lead.Commit L) (isA : Hash.Msg → Bool) :
     H32 h100Nominal ∧ W1 h100Nominal (· = honestStrategy L H C isA κ) ∧
-      TileGrain stream (· = honestStrategy L H C isA κ) ∧ OneInstructionMinimal (· = honestStrategy L H C isA κ) ∧
+      TileGrain H C κ stream (· = honestStrategy L H C isA κ) ∧ OneInstructionMinimal (· = honestStrategy L H C isA κ) ∧
       CardWithinAccelW1 (· = honestStrategy L H C isA κ) (· = honestStrategy L H C isA κ) ∧
       ShaWrites isA (· = honestStrategy L H C isA κ) ∧ HonestHashRuled H C κ (· = honestStrategy L H C isA κ) ∧
       OutsourceWithinEgressLead h100Nominal (betaLead L C) H C κ (· = honestStrategy L H C isA κ) ∧
@@ -89,9 +88,11 @@ theorem honestAt (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (κ : Fin
   · rintro σ rfl ω o ho
     obtain ⟨f, rfl⟩ := honest_trace_other L H C isA κ ω o ho
     trivial
-  · rintro σ rfl ω - y hy
-    obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hy
+  · rintro σ rfl ω - - rb hrb cb hcb t
+    have hy : tileOf L κ ω rb cb t ∈ tilesAt L κ ω := List.mem_map.2 ⟨(rb, cb, t), by simp [tileIdx, hrb, hcb], rfl⟩
+    obtain ⟨i, hi, hiy⟩ := List.getElem_of_mem hy
     refine ⟨i + 1, .inl 0, ?_⟩
+    rw [← hiy]
     simp only [honestStrategy]
     rw [← List.map_take, List.take_add_one, List.getElem?_eq_getElem hi, Option.toList_some, List.map_append,
       List.map_singleton, run_write_last]
@@ -106,16 +107,15 @@ theorem honestAt (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (κ : Fin
   · rintro σ rfl ω - - y hy
     exact ⟨y, hy, rfl⟩
   · rintro σ rfl
-    refine ⟨_, rfl, rfl, fun ω => ⟨rfl, fun _ h => h, rfl, fun _ h => Or.inl h, ?_⟩⟩
+    refine ⟨_, rfl, rfl, fun ω => ⟨rfl, rfl, fun _ h => Or.inl h, ?_⟩⟩
     have : ((honestStrategy L H C isA κ).exec ω).egress = 0 := rfl
     rw [this, Nat.cast_zero, mul_zero, add_zero]
   · intro ω
-    refine ⟨fun rb hrb cb hcb t => List.mem_map.2 ⟨(rb, cb, t), ?_, rfl⟩, rfl, ?_⟩
-    · simp [tileIdx, hrb, hcb]
-    · show ((0 : ℕ) : ℚ) ≤ _
-      unfold Layout.callBits
-      push_cast
-      positivity
+    refine ⟨rfl, ?_⟩
+    show ((0 : ℕ) : ℚ) ≤ _
+    unfold Layout.callBits
+    push_cast
+    positivity
 
 /-! ## `CommitL1w` from frame-v3 leaves -/
 
