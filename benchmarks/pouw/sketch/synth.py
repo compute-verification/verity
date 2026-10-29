@@ -16,7 +16,7 @@ instances, by counterexample-guided synthesis (z3): the falsification test for a
 - **The question.** For each length L below honest's, is there a program of L instructions whose last result equals the
   sketch on every input? z3 synthesizes on a growing set of examples and verifies over all inputs (CEGIS); SAT is a fold
   (a cheaper program, printed), UNSAT at every L below honest's means none exists in this component set at this size.
-  The linear sketches are positive controls: their fold (H12) must be found.
+  The linear sketches are positive controls: their fold must be found.
 """
 from __future__ import annotations
 
