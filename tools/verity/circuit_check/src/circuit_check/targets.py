@@ -64,7 +64,8 @@ def _authored(d: Any) -> bool:
 def load_registries() -> None:
     """Register every Definition and kernel: each module with a circuit-check sidecar (`sidecars.discover`: a Definition module
     has its bindings, or its pins, beside it), each module of the vLLM registry, and the kernel modules.  The modules with a
-    sidecar are in every target's key (`cache.registries`)."""
+    sidecar are in the task list's key, and a target holds whether each module that registered what its check read is one of
+    them (`cache.registries`)."""
     global _LOADED
     if _LOADED:
         return
