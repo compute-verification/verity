@@ -1,11 +1,11 @@
 # verity/core/difftest: the Lean against the Python that mirrors it
 
-Lean is the definition and the verifier of record (Daniel, 18 Oct; root `AGENTS.md`, "Design rules"), and Python mirrors
-it for the prover's speed. Each piece of core in executable Lean (`verity/core/<core path>`, a Lake package of its own) and
-its Python are held together by a differential test: Hypothesis draws inputs, invalid ones included, and each goes to the
+Lean is the definition and the verifier of record (root `AGENTS.md`, "Design rules"), and Python mirrors it for the
+prover's speed. Each piece of core in executable Lean (`verity/core/<core path>`, a Lake package of its own) and its
+Python are held together by a differential test: Hypothesis draws inputs, invalid ones included, and each goes to the
 Python (the harness's `reference`) and to the Lean executable, which must agree exactly. Until a protocol's verifier of
-record switches to its Lean (the 8 Oct procedure, `.agents/skills/friction/SKILL.md`), its Python verifier is what the Lean
-is checked against; after, the Python is held to the Lean.
+record switches to its Lean (on evidence, by the procedure in `.agents/skills/friction/SKILL.md`), its Python verifier
+is what the Lean is checked against; after, the Python is held to the Lean.
 
 - `lean/` is the Lake package `verity_difftest`, lib `Difftest`: `Difftest.serve` answers requests `{"fn", "input"}` one
   JSON line at a time with `{"output"}`, `{"reject"}`, or `{"error"}` for a protocol fault (an unknown `fn`, a bad
