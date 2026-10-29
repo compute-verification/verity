@@ -323,6 +323,10 @@ certifier streams them raw after A_j (R1b). Hiding is L1 + (a), and de-noise is 
 
 ### Decisions for Daniel (gathered; each with a default)
 
+**Daniel, 20:27Z (ASK-189 A′, through top): "Okay, sure. On all the things above."** That takes the night program's
+seven defaults and builds the lead. It is consistent with his 16:00Z (ShaWrites) and 19:37Z (tile grain, the keyed
+leaf) decisions, and with the LEAN workstream.
+
 1. Is rank 4a, ShaWrites / ShaSpeed on SHA-512, "milder than SAK"? Default: yes, reported as 4a.
    **Decided, Daniel 16:00Z: yes** ("I'm fine with it taking 3,500 registers"). The LEAN program (inbox/LEAN.md) takes
    ShaWrites as a named assumption.
