@@ -11,10 +11,14 @@ point, as in `adaptive_pairs_le`. Each bound reads only the targets an outcome r
 * **Balls against any initial memory** (`run_ball_table_le`, `adaptive_ball_table_le`). An initial chunk within `r y`
   of a target is within it of no other, so `run_ball_le` holds with no hypothesis on `m₀`, less `R + 1` a slot. Its
   count is at most `⌊(w − 1)/2⌋ + 1` a target, about half of the target's `w` words.
+* **Per-entry credit under whole-register writes** (`card_lanes_le`, `adaptive_lanes_le`). With a register as one
+  word, a write sets all its lanes; the lanes' distinct values over the steps are at most the lanes times the
+  register's, so the per-entry distinct count is paid, less the lanes for each register value repeated across groups
+  or held initially.
 * **The attained side** (`pathRun_le_card`, `adaptive_attained`, `adaptive_levels_attained`,
   `adaptive_ones_attained`). The path run (`pathRun_attained`) holds any targets at `w` writes a distinct value.
-  Row-step chunks `base i + c i t · 1` number at most `Σ_i |{c i t}|`, and a row whose chunk repeats at every step
-  whose coin bit is `false` takes at most `1 + #true bits` values.
+  Row-step chunks that are a function of the row and its level, `G i (c i t)`, number at most `Σ_i |{c i t}|`, and a
+  row whose chunk repeats at every step whose coin bit is `false` takes at most `1 + #true bits` values.
 -/
 
 namespace Pouw.Dimension.Pointwise
@@ -34,15 +38,25 @@ theorem card_rows_le {X ι T : Type} [DecidableEq X] (rows : Finset ι) (steps :
         exact mem_biUnion.2 ⟨i, hit.1, mem_image.2 ⟨t, hit.2, rfl⟩⟩
     _ ≤ _ := card_biUnion_le
 
-/-- **Column-free increments collapse**: row-step chunks `base i + c i t · 1` number at most `Σ_i |{c i t}|`. -/
-theorem card_levels_le [DecidableEq V] [Add V] {ι T : Type} (rows : Finset ι) (steps : Finset T)
-    (base : ι → Fin w → V) (c : ι → T → V) :
-    ((rows ×ˢ steps).image fun it => base it.1 + fun _ => c it.1 it.2).card ≤
-      ∑ i ∈ rows, (steps.image (c i)).card := by
-  refine (card_rows_le rows steps fun i t => base i + fun _ => c i t).trans (sum_le_sum fun i _ => ?_)
-  calc (steps.image fun t => base i + fun _ => c i t).card
-        = ((steps.image (c i)).image fun x => base i + fun _ => x).card := by rw [image_image]; rfl
+/-- **Levels collapse**: row-step values that are a function of the row and its level, `G i (c i t)`, number at most
+`Σ_i |{c i t}|`. The walk's chunks `base i + W_t · s` (s fixed a row: `1` on the tag lead, the column signs on hw) are
+of this form. -/
+theorem card_levels_le {X L ι T : Type} [DecidableEq X] [DecidableEq L] (rows : Finset ι) (steps : Finset T)
+    (G : ι → L → X) (c : ι → T → L) :
+    ((rows ×ˢ steps).image fun it => G it.1 (c it.1 it.2)).card ≤ ∑ i ∈ rows, (steps.image (c i)).card := by
+  refine (card_rows_le rows steps fun i t => G i (c i t)).trans (sum_le_sum fun i _ => ?_)
+  calc (steps.image fun t => G i (c i t)).card = ((steps.image (c i)).image (G i)).card := by
+        rw [image_image]; rfl
     _ ≤ _ := card_image_le
+
+/-- **A register's lanes hold at most its values**: over any steps, the lanes' distinct values sum to at most the
+number of lanes times the register's distinct values. -/
+theorem card_lanes_le {Λ T : Type} [Fintype Λ] [DecidableEq V] (steps : Finset T) (R : T → Λ → V) :
+    ∑ ℓ : Λ, (steps.image fun t => R t ℓ).card ≤ Fintype.card Λ * (steps.image R).card := by
+  calc ∑ ℓ : Λ, (steps.image fun t => R t ℓ).card = ∑ ℓ : Λ, ((steps.image R).image fun r => r ℓ).card :=
+        sum_congr rfl fun ℓ _ => by rw [image_image]; rfl
+    _ ≤ ∑ _ℓ : Λ, (steps.image R).card := sum_le_sum fun _ _ => card_image_le
+    _ = _ := by rw [sum_const, card_univ, smul_eq_mul]
 
 /-- **A sequence that repeats at every step whose bit is `false` takes at most `1 + #true bits` values.** -/
 theorem card_image_le_ones {X : Type} [DecidableEq X] (f : ℕ → X) (b : ℕ → Bool) (k : ℕ)
@@ -155,6 +169,33 @@ theorem adaptive_ball_table_le [Fintype A] [DecidableEq V] [Inhabited V] {Ω : T
     run_ball_table_le (m₀ ω) (P ω) (Y ω) (hY ω hω) (r ω) R (hR ω hω) (hYY ω hω)
   rwa [sum_add_distrib, sum_const, smul_eq_mul] at h
 
+open Classical in
+/-- **Per-entry credit under whole-register writes** (model W). Read the chunk model at one word a chunk, the word a
+whole register of lanes `Λ`, so that a write sets a register and costs `|Λ|` lane-writes. Then a program holding every
+outcome's registers `R ω e t` pays, in lane-writes, at least the entries' distinct values (each lane of each group,
+over the steps), less `|Λ|` for each register value a group shares with another group or the initial memory. -/
+theorem adaptive_lanes_le [DecidableEq V] [Inhabited V] {Λ Ω E T : Type} [Fintype Λ] [DecidableEq Λ] (O : Finset Ω)
+    (m₀ : Ω → A → Fin 1 → Λ → V) (P : Ω → List (Step A (Λ → V) 1)) (groups : Finset E) (steps : Finset T)
+    (R : Ω → E → T → Λ → V)
+    (hY : ∀ ω ∈ O, ∀ e ∈ groups, ∀ t ∈ steps, ∃ i a, run (m₀ ω) ((P ω).take i) a 0 = R ω e t) :
+    ∑ ω ∈ O, ∑ e ∈ groups, ∑ ℓ : Λ, (steps.image fun t => R ω e t ℓ).card +
+        Fintype.card Λ * ∑ ω ∈ O,
+          (((groups ×ˢ steps).image fun et => R ω et.1 et.2).filter fun r => ∀ a, m₀ ω a 0 ≠ r).card ≤
+      Fintype.card Λ * ∑ ω ∈ O, writes (P ω) +
+        Fintype.card Λ * ∑ ω ∈ O, ∑ e ∈ groups, (steps.image (R ω e)).card := by
+  have h1 : ∑ ω ∈ O, (((groups ×ˢ steps).image fun et => R ω et.1 et.2).filter fun r => ∀ a, m₀ ω a 0 ≠ r).card ≤
+      ∑ ω ∈ O, writes (P ω) := sum_le_sum fun ω hω => run_values_le (m₀ ω) (P ω) _ (fun r hr => by
+        obtain ⟨⟨e, t⟩, het, rfl⟩ := mem_image.1 (mem_filter.1 hr).1
+        rw [mem_product] at het
+        exact hY ω hω e het.1 t het.2) fun r hr => (mem_filter.1 hr).2
+  have h2 : ∑ ω ∈ O, ∑ e ∈ groups, ∑ ℓ : Λ, (steps.image fun t => R ω e t ℓ).card ≤
+      Fintype.card Λ * ∑ ω ∈ O, ∑ e ∈ groups, (steps.image (R ω e)).card := by
+    rw [mul_sum]
+    exact sum_le_sum fun ω _ => by rw [mul_sum]; exact sum_le_sum fun e _ => card_lanes_le steps (R ω e)
+  calc _ ≤ Fintype.card Λ * ∑ ω ∈ O, ∑ e ∈ groups, (steps.image (R ω e)).card +
+        Fintype.card Λ * ∑ ω ∈ O, writes (P ω) := add_le_add h2 (Nat.mul_le_mul_left _ h1)
+    _ = _ := add_comm _ _
+
 /-- **Any targets are held at `w` writes a distinct value**: the path run through them in one slot. -/
 theorem pathRun_le_card [DecidableEq V] (m₀ : A → Fin w → V) (a : A) (Y : Finset (Fin w → V)) :
     (∀ y ∈ Y, ∃ i, run m₀ ((pathRun a (m₀ a) Y.toList).take i) a = y) ∧
@@ -173,17 +214,17 @@ theorem adaptive_attained [DecidableEq V] {Ω : Type} (O : Finset Ω) (m₀ : Ω
   · rw [mul_sum]
     exact sum_le_sum fun ω _ => (pathRun_le_card (m₀ ω) a (Y ω)).2
 
-/-- **The walk's obstruction**: when every outcome's targets are row-step chunks `base ω i + c ω i t · 1`, some program
-holds them all at `w·Σ_ω Σ_i |{c ω i t}|` writes. -/
-theorem adaptive_levels_attained [DecidableEq V] [Add V] {Ω ι T : Type} (O : Finset Ω) (m₀ : Ω → A → Fin w → V)
-    (a : A) (rows : Finset ι) (steps : Finset T) (base : Ω → ι → Fin w → V) (c : Ω → ι → T → V) :
+/-- **The walk's obstruction**: when every outcome's targets are row-step chunks `G ω i (c ω i t)`, a function of the
+row and its level, some program holds them all at `w·Σ_ω Σ_i |{c ω i t}|` writes. -/
+theorem adaptive_levels_attained [DecidableEq V] {Ω ι T L : Type} [DecidableEq L] (O : Finset Ω)
+    (m₀ : Ω → A → Fin w → V) (a : A) (rows : Finset ι) (steps : Finset T) (G : Ω → ι → L → Fin w → V)
+    (c : Ω → ι → T → L) :
     ∃ P : Ω → List (Step A V w),
-      (∀ ω ∈ O, ∀ y ∈ (rows ×ˢ steps).image (fun it => base ω it.1 + fun _ => c ω it.1 it.2),
+      (∀ ω ∈ O, ∀ y ∈ (rows ×ˢ steps).image (fun it => G ω it.1 (c ω it.1 it.2)),
         ∃ i a, run (m₀ ω) ((P ω).take i) a = y) ∧
       ∑ ω ∈ O, writes (P ω) ≤ w * ∑ ω ∈ O, ∑ i ∈ rows, (steps.image (c ω i)).card := by
-  obtain ⟨P, hP, hw⟩ :=
-    adaptive_attained O m₀ a fun ω => (rows ×ˢ steps).image fun it => base ω it.1 + fun _ => c ω it.1 it.2
-  exact ⟨P, hP, hw.trans (Nat.mul_le_mul_left w (sum_le_sum fun ω _ => card_levels_le rows steps (base ω) (c ω)))⟩
+  obtain ⟨P, hP, hw⟩ := adaptive_attained O m₀ a fun ω => (rows ×ˢ steps).image fun it => G ω it.1 (c ω it.1 it.2)
+  exact ⟨P, hP, hw.trans (Nat.mul_le_mul_left w (sum_le_sum fun ω _ => card_levels_le rows steps (G ω) (c ω)))⟩
 
 /-- **The cancel's obstruction**: when every row's chunk at step `t + 1` repeats its chunk at step `t` whenever the
 coin bit `b ω i t` is `false`, some program holds every outcome's row-step chunks at
