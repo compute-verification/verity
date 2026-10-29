@@ -25,6 +25,8 @@ Provers beyond COUNTER's:
   as `hash_counter.digit_dot` chains.
 - `pairsum`: the thin fold over separable words. An IADD3 step adds w_t + w_{t+1} = 2x + (R_t + R_{t+1}) + (C_t +
   C_{t+1}), two IADD3s of shared sums, so neither word is written; an XOR3 step forms its two words (an IADD3 each).
+- `mma_pairsum`: the thin fold on any layout. At zero data a step's data lanes are free, so an IADD3 step is one MMA
+  over its two steps' coin lanes (the first doubled) from σ + 2w_{t−1}, and neither word is written.
 - `pack_bound` (xor and thin, any layout): packing L cells in b-bit lanes of g registers needs, a step, one IMAD a
   bilinear lane a packed register (U_l(i)·V′_l with V′ the packed column weights), so the words cost ≥ ℓ·g/L writes;
   with full-width salts b = 32 and L = g. A lower bound on the packed prover, from the instance's word span.
@@ -310,6 +312,36 @@ def pairsum(rule, inst, d, tile: int):
     return cost, out, f"{n_add} IADD3 steps from shared pair sums, {n_xor} XOR3 steps on formed words"
 
 
+def mma_pairsum(rule, inst, d):
+    """The thin fold on any lane-form layout at zero data, where a k32 step's data lanes are free for other steps'
+    coin lanes. An IADD3 step is linear: σ + w_t + w_{t+1} = (σ + 2·w_{t−1}) + 2c_t + c_{t+1}, so one IADD3 forms the
+    accumulator input and one MMA over step t's lanes twice and step t+1's once (3q ≤ 32 lanes) writes σ′; neither
+    word is formed. An XOR3 step's first word is one MMA over the skipped steps' lanes from the last formed word, its
+    second one MMA more, then the LOP3. O′ is one MMA when no XOR3 step formed it."""
+    if rule.agg != "thin" or rule.k != 32 or rule.pos != "all" or inst.data != "zero" or 3 * d.U.shape[2] > 32:
+        return None
+    S = inst.S
+    c = np.einsum("itl,jtl->ijt", d.U, d.V)
+    s = np.zeros((inst.m, inst.n), np.int64)
+    last, p = d.w0 & M32, -1
+    xor, cost = True, 0
+    for t in range(0, S - 1, 2):
+        if xor:
+            wt = (last + c[:, :, p + 1:t + 1].sum(axis=2)) & M32
+            wt1 = (wt + c[:, :, t + 1]) & M32
+            s = s ^ wt ^ wt1
+            last, p = wt1, t + 1
+            cost += 3
+        else:
+            acc = (s + 2 * last) & M32
+            s = (acc + 2 * c[:, :, t] + c[:, :, t + 1]) & M32
+            cost += 2
+        xor = not xor
+    final = (last + c[:, :, p + 1:S].sum(axis=2)) & M32
+    cost += 0 if p == S - 1 else 1
+    return cost, np.stack([s, final], -1), "IADD3 steps as one MMA each over the pair's lanes (step t's doubled)"
+
+
 def word_span_bits(d) -> int:
     """The narrowest signed width holding every zero-data word (its residue mod 2³² read as signed)."""
     w = d.w.astype(np.int64)
@@ -368,6 +400,7 @@ def evaluate(lay: Layout, rule: hc.Rule, m: int, n: int, S: int, seed: int) -> d
     add("edge_any", edge_any(rule, inst, d))
     add("decomp_sq", decomp_sq(rule, inst, d, tile))
     add("pairsum", pairsum(rule, inst, d, tile))
+    add("mma_pairsum", mma_pairsum(rule, inst, d))
     exact = {k: v for k, v in rows.items() if v["exact"]}
     best = min(exact, key=lambda k: exact[k]["writes"]) if exact else "honest"
     cheapest = exact[best]["writes"] if exact else hcost
@@ -623,6 +656,13 @@ def mutations(checks: Checks):
     d.w0[2, 3] += 1
     _, out, _ = pairsum(rule, inst, d, inst.m)
     checks.mutation("pairsum with one cell's offset off by one", not np.array_equal(out, ref))
+    rule = hc.Rule("all", "32", "thin")
+    inst, d = build(Layout("mirror-pi", 4, 4, True), 64, 48, 74, rule, 7)
+    _, ref, _ = honest(rule, inst, d)
+    d.V = d.V.copy()
+    d.V[:, 5, 1] = -d.V[:, 5, 1]
+    _, out, _ = mma_pairsum(rule, inst, d)
+    checks.mutation("mma_pairsum with one step's lane negated", not np.array_equal(out, ref))
     rule = hc.Rule("all", "32", "sq")
     inst, d = build(Layout("lead"), 64, 48, 74, rule, 7)
     _, ref, _ = honest(rule, inst, d)
@@ -683,7 +723,8 @@ def main() -> int:
     if args.part in ("grid", "all"):
         grid = run_grid(args.quick)
         res["grid"] = grid
-        for name in ("pack", "pack@tile", "decomp", "edge", "edge_any", "decomp_sq", "pairsum", "copy", "table"):
+        for name in ("pack", "pack@tile", "decomp", "edge", "edge_any", "decomp_sq", "pairsum", "mma_pairsum", "copy",
+                     "table"):
             ran = [r for r in grid if name in r["strategies"]]
             bad = [f"{r['layout']} {r['rule']} S{r['S']}" for r in ran if not r["strategies"][name]["exact"]]
             checks.check(f"{name} matches the honest commitment bit for bit", not bad,
