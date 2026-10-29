@@ -13,6 +13,7 @@
 #   host   the verifier gate's `run`, gate run 7's request (PROVER_NODE as its peer, PORT, PERIOD, PIN, PACED at
 #          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, MODEL with ENGINES arenas of ARENA_BLOCKS); its `status` every 30 s
 #          until it ends, then the run's directory without its transcripts (`fetch`) into host/RUN. Exits with the run's rc.
+#          PACED defaults to two 60 s sessions at the clone's `audit.SAMPLES` openings and two 1 s ones at 2,773.
 #   close  `period-close --name PERIOD`, then the closed ledger.
 #   audit  `auditor.sh` over the host run HOST_RUN (default the one `host` fetched), into $OUT itself: ledger.jsonl,
 #          pins.jsonl, auditor_line.json, credit.md, which `gate_whatif.sh` reads.
@@ -34,7 +35,7 @@ AUDITOR=${AUDITOR:-research@81.85.1.145}
 AUDITOR_FP=${AUDITOR_FP:-SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs}
 LANE=${LANE:-memory-accounting} MODEL=${MODEL:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} ARENA_BLOCKS=${ARENA_BLOCKS:-16252928}
 PORT=${PORT:-7951} CAP=${CAP:-4} PACE_PASS_MS=${PACE_PASS_MS:-85} MINUTES=${MINUTES:-30}
-PACED=${PACED:-1:60000:33273:2 1:60000:33273:2 1:1000:2773:7 1:1000:2773:7}
+PACED=${PACED:-}
 JITTER_MS=${JITTER_MS:-50} QUANTILE=${QUANTILE:-max} PROVER_NODE=${PROVER_NODE:-vy-nebius-2}
 SSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15
   -i "$GATE_KEY")
@@ -151,7 +152,12 @@ open_period() {
 }
 
 host_run() {
-  local words r run
+  local words r run a=verity/core/protocols/remote_bandwidth/audit.py s
+  if [ -z "$PACED" ]; then
+    s=$(sed -n 's/^SAMPLES = \([0-9_]*\)$/\1/p' "$a" | tr -d _)
+    [ -n "$s" ] || { echo "no SAMPLES = N line in $a, so no default PACED: give PACED"; return 3; }
+    PACED="1:60000:$s:2 1:60000:$s:2 1:1000:2773:7 1:1000:2773:7"
+  fi
   read -ra words <<< "$PACED"
   gate "$AUDITOR" run --peer "$PROVER_NODE" --port "$PORT" --period "${PERIOD:?}" --pin "${PIN:?}" --paced "${words[@]}" \
     --pace-pass-ms "$PACE_PASS_MS" --minutes "$MINUTES" --jitter-ms "$JITTER_MS" --quantile "$QUANTILE" \
