@@ -47,21 +47,22 @@ PERIODS = {"week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
 VOLUMES = {"SSN ssn_1l (α 1.044, every k32)": 1.044 * 4 / 32, "NCP k32": 0.375}
 
 
-CONST, CALL, ITEM, DATA = range(4)
+ZERO, CONST, CALL, ITEM, DATA = range(-1, 4)
 LEVELS = {CALL: "per call", ITEM: "per leaf or node, data-independent", DATA: "data"}
 
 
 class Count:
-    """Registers written, by kind and by the level of the value written: CONST (compile time, free), CALL (the same for
-    every leaf of a call or every node of a level: computed once a call), ITEM (one leaf's or node's, from the domain id,
-    rank, position or index alone) or DATA. Schedule ops also record the block words they read (`sched`)."""
+    """Registers written, by kind and by the level of the value written: ZERO and CONST (compile time, free; a zero term
+    drops out of an add), CALL (the same for every leaf of a call or every node of a level: computed once a call), ITEM
+    (one leaf's or node's, from the domain id, rank, position or index alone) or DATA. Schedule ops also record the block
+    words they read (`sched`)."""
 
     def __init__(self):
         self.by = {(k, lv): 0 for k in ("SHF", "LOP3", "adds") for lv in (CALL, ITEM, DATA)}
         self.sched: list[tuple[int, int, int]] = []
 
     def charge(self, kind: str, level: int, n: int, mask: int | None) -> None:
-        if level and n:
+        if level > CONST and n:
             self.by[kind, level] += n
             if mask is not None:
                 self.sched.append((n, level, mask))
@@ -78,7 +79,10 @@ class Count:
     def add(self, terms: list[int], mask: int | None = None) -> int:
         """A 64-bit add: terms at CONST and CALL fold first into one term (constants into an immediate, a per-call sum
         once a call), then that term and the rest in IADD3 / IADD3.X pairs, 2·⌈(m − 1)/2⌉ registers for m terms."""
-        top = max(terms, default=CONST)
+        terms = [t for t in terms if t != ZERO]
+        if not terms:
+            return ZERO
+        top = max(terms)
         low = [t for t in terms if t <= CALL]
         if top <= CALL:
             m = terms.count(CALL) + (1 if CONST in terms and CALL in terms else 0)
@@ -153,14 +157,23 @@ def chain(n: int) -> int:
 FRAME = b"veritor/protocol/merkle/frame/v3\0"
 
 
-def frame_message(tag: bytes, parts: list[tuple[int, int]]) -> list[list[int]]:
+def frame_message(tag: bytes, parts: list[tuple[bytes | int, int]]) -> list[list[int]]:
     """The word levels of each SHA-512 block of a frame-v3 message (the frame, the tag after its u32be length, then each
-    part after its u64be length; `verity.ml.commitments.merkle`), padding included. `parts` are (bytes, level)."""
-    lv = [CONST] * (len(FRAME) + 4 + len(tag))
-    for n, level in parts:
-        lv += [CONST] * 8 + [level] * n
-    lv += [CONST] * (-(len(lv) + 17) % BLOCK + 17)
-    return [[max(lv[i:i + 8]) for i in range(b, b + BLOCK, 8)] for b in range(0, len(lv), BLOCK)]
+    part after its u64be length; `verity.ml.commitments.merkle`), padding included. `parts` are (bytes, CONST) or
+    (length, level); a word of constant bytes all zero is ZERO."""
+    msg = [(CONST, x) for x in FRAME + len(tag).to_bytes(4, "big") + tag]
+    for part, level in parts:
+        n = len(part) if level == CONST else part
+        msg += [(CONST, x) for x in n.to_bytes(8, "big")]
+        msg += [(CONST, x) for x in part] if level == CONST else [(level, None)] * n
+    bits = 8 * len(msg)
+    msg += [(CONST, x) for x in b"\x80" + bytes(-(len(msg) + 17) % BLOCK) + bits.to_bytes(16, "big")]
+
+    def word(ws: list[tuple[int, int | None]]) -> int:
+        top = max(lv for lv, _ in ws)
+        return ZERO if top == CONST and not any(x for _, x in ws) else top
+
+    return [[word(msg[i:i + 8]) for i in range(b, b + BLOCK, 8)] for b in range(0, len(msg), BLOCK)]
 
 
 def message_cost(blocks: list[list[int]], cv: int = CONST) -> dict:
@@ -189,14 +202,14 @@ def _ulen(x: int) -> int:
     return max(1, (x.bit_length() + 7) // 8)
 
 
-def l1_call(leaves: int, value_bytes: int = 1024, schema_bytes: int = 13) -> dict:
+def l1_call(leaves: int, value_bytes: int = 1024, schema: str = "u8") -> dict:
     """One call's hashing under L1 (`hm96-sha512/subtree/v1`): `leaves` frame-v3-sha512 leaves of `value_bytes` each in
     the call's own range-u64 domain (positions 0..leaves − 1), their tree, the domain id and the call's hm96 instance
     (c, its leaf and the salt PRF, 3 compressions). Shared work is counted once: the leaves' prefix through the domain id
     (a midstate a call), each level's node midstate, the domain id. Per call, by level."""
     depth = (leaves - 1).bit_length()
     rl = _ulen(leaves - 1)
-    leaf = message_cost(frame_message(b"leaf", [(64, CALL), (rl, ITEM), (rl, ITEM), (schema_bytes, CONST),
+    leaf = message_cost(frame_message(b"leaf", [(64, CALL), (rl, ITEM), (rl, ITEM), (schema.encode(), CONST),
                                                 (value_bytes, DATA)]))
     rows = [{"what": f"leaf ({value_bytes} B value)", "n": leaves, **leaf}]
     for lvl in range(1, depth + 1):
@@ -215,8 +228,9 @@ def l1_call(leaves: int, value_bytes: int = 1024, schema_bytes: int = 13) -> dic
                  **message_cost(frame_message(b"domain/range-u64", [(64, CALL)] + [(8, CALL)] * 3))})
     inst = {
         "salt PRF (3 compressions; N-HIDE's layout)": ([(CONST, [ITEM] * 16)] + [(ITEM, [ITEM] * 16)] * 2, ITEM),
-        "c = H(salt prefix ‖ y)": ([(CONST, [ITEM] * 16), (ITEM, [ITEM] * 8 + [CONST] * 8)], ITEM),
-        "instance leaf = H(leaf_prefix(key) ‖ b ‖ c)": ([(CONST, [DATA] * 16), (DATA, [CONST] * 16)], DATA),
+        "c = H(salt prefix ‖ y)": ([(CONST, [ITEM] * 16), (ITEM, [ITEM] * 8 + [CONST] + [ZERO] * 6 + [CONST])], ITEM),
+        "instance leaf = H(leaf_prefix(key) ‖ b ‖ c)": ([(CONST, [DATA] * 16), (DATA, [CONST] + [ZERO] * 14 + [CONST])],
+                                                        DATA),
     }
     for what, (blocks, lv) in inst.items():
         regs = sum(compression_levels(cv, w).at(ITEM, DATA) for cv, w in blocks) - chain(len(blocks))
