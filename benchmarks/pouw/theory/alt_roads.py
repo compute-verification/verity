@@ -301,6 +301,7 @@ def egress_outsourcing(inp: dict, ll: dict) -> dict:
         elem_bits = {p: cfg["layers"] * sum(n * math.ceil(k / nr) for k, n in cfg["linears"]) for p, nr in n_req.items()}
         caps[str(cap)] = {
             "r1b_live_coins": {p: cap * n_max * w / ll["macs_per_token"] for p, w in w_mac.items()},
+            "r1b_live_coins_whole_forwards": {p: cap * w / coin_bits for p, w in w_mac.items()},
             "n_max_for_1pct": n_req,
             "row_coins_meet_it_up_to_columns": {p: min(nr * row_bits(k) / k for k, _ in cfg["linears"])
                                                 for p, nr in n_req.items()},
@@ -628,7 +629,9 @@ def table(res: dict) -> str:
                  f"{eg['w_mac']['bar_units_per_byte']:.1f} (SHA floor - bar); R1 imports words at {eg['r1_macs_per_imported_bit']:.3f} MACs a bit")
     for cap, v in eg["share_of_stock_at_cap"].items():
         f, b = "floor_units_per_byte", "bar_units_per_byte"
-        lines.append(f"    cap {cap} bits a token: R1b's live coins {v['r1b_live_coins'][f]:.1%}-{v['r1b_live_coins'][b]:.1%}; "
+        lines.append(f"    cap {cap} bits a token: R1b's live coins {v['r1b_live_coins'][f]:.1%}-{v['r1b_live_coins'][b]:.1%} "
+                     f"(whole forwards outsourced, at the mean: {v['r1b_live_coins_whole_forwards'][f]:.1%}-"
+                     f"{v['r1b_live_coins_whole_forwards'][b]:.1%}); "
                      f"R1 {v['r1_words_through_the_port']:.2e}; the seeded lead {eg['seeded_lead']}")
         st = v["element_coins_bytes_per_s_t8192"]
         lines.append(f"        a 1% term needs n_max <= {v['n_max_for_1pct'][f]:,.0f}-{v['n_max_for_1pct'][b]:,.0f} MACs a bit: coins a row "
