@@ -117,7 +117,7 @@ def py(*args):
 def run_set(i, s, a, ups, store):
     up = agree.LIVE if a.live else ups.get(s["pr83"])
     if up is None:
-        return {"set": i, "pr83": s["pr83"], "skipped": "no upstream binary for this PR #83 commit"}, False
+        return {"set": i, "pr83": s["pr83"], "skipped": "no upstream binary for this circuit prover commit"}, False
     w = a.work / f"set{i}"
     st = s["statement"]
     circuit, public = fetch(st["circuit"], store), fetch(st["public"], store)
