@@ -118,7 +118,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import clone
+from . import checkview, clone
 from . import compare as C
 from . import record, remote, result
 from . import runs as R
@@ -1522,6 +1522,9 @@ def cmd_status(argv: list[str]) -> int:
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--also", action="append", default=[], metavar="FILE",
                     help="with RUN: fetch this file of its run dir with its records (repeatable): a workload's own progress file")
+    ap.add_argument("--basis", default=None, metavar="RUN",
+                    help="with RUN, a check: time its steps against this finished check (default: the newest other finished "
+                         "check on its machine)")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
     ledger = None
@@ -1543,9 +1546,10 @@ def cmd_status(argv: list[str]) -> int:
             return 1
     if ns.refresh or one:
         for s in [R.summarize(one)] if one else R.list_runs(root):
-            if s.get("remote_rec") and (s["state"] not in R.TERMINAL or (one and ns.also)) and (s["remote_rec"].get("remote_run_dir")):
+            if s.get("remote_rec") and (s["state"] not in R.TERMINAL or (one and (ns.also or not (Path(s["dir"]) / checkview.SPANS).exists()))) \
+                    and (s["remote_rec"].get("remote_run_dir")):
                 try:
-                    remote.fetch(Path(s["dir"]), also=tuple(ns.also) if one else ())
+                    remote.fetch(Path(s["dir"]), also=(*ns.also, *checkview.CHECK_FILES) if one else ())
                 except remote.Refused as e:
                     print(f"research status: {s['id']}: {e}", file=sys.stderr)
     rows = [R.summarize(one)] if one else R.list_runs(root)
@@ -1562,8 +1566,10 @@ def cmd_status(argv: list[str]) -> int:
             continue
         live.append(s)
     _read_holds(live)
+    check = _check_view(root, one, ns.basis) if one and checkview.is_check(one) else None
     if ns.json:
-        print(json.dumps({"runs_root": str(root), "runs": rows, "ledger": ledger}, indent=2, sort_keys=True))
+        print(json.dumps({"runs_root": str(root), "runs": rows, "ledger": ledger, **({"check": check} if check else {})},
+                         indent=2, sort_keys=True))
         return 0
     if ledger:
         if ledger.get("error"):
@@ -1581,12 +1587,39 @@ def cmd_status(argv: list[str]) -> int:
             print(f"{'':<26}{label:<4} {text}")
         if s.get("scope_memory_error"):
             print(f"{'':<26}mem  unread: {s['scope_memory_error']}")
+        for line in check or []:
+            print(f"{'':<26}{line}")
     active = sum(1 for s in rows if s["state"] in R.ACTIVE)
     unfetched = sum(1 for s in rows if s.get("remote_rec") and not s["has_job"] and s["state"] != "refused")
     print(f"\n{len(rows)} shown ({active} active" + (f", {unfetched} remote not yet fetched: `research status --refresh`" if unfetched else "")
           + (f", memory of {unread} active remote run(s): `--refresh` or `research status RUN`" if unread else "") + f") under {root}"
           f"   res: result.json ok/BAD/-absent   valid: the workload's own checker")
     return 0
+
+
+def _check_view(root: Path, run_dir: Path, basis_ref: str | None) -> list[str]:
+    """`checkview.view` of a check run: against ``basis_ref`` (a finished check, fetched when it is remote), else the newest
+    other finished check on the run's machine, else none; its first line names the basis."""
+    basis, why = None, ""
+    if basis_ref:
+        try:
+            basis = _run_dir(root, basis_ref, None)
+        except (FileNotFoundError, LookupError) as e:
+            why = f"--basis {basis_ref}: {e}"
+        else:
+            if (remote._read_json(basis / "remote.json") or {}).get("remote_run_dir") and not checkview.finished(basis):
+                try:
+                    remote.fetch(basis, also=checkview.CHECK_FILES)
+                except remote.Refused as e:
+                    why = f"--basis {basis_ref}: {e}"
+            if not checkview.finished(basis):
+                basis, why = None, why or f"--basis {basis_ref} is no finished check"
+    elif not checkview.finished(run_dir) and (rec := remote._read_json(run_dir / "remote.json") or {}).get("remote_run_dir"):
+        ssh = remote.ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
+        basis = checkview.remote_basis(rec, ssh, root / ".check-basis", remote.ssh_read)
+    head = [] if checkview.finished(run_dir) and not basis_ref else [
+        f"basis   {basis.name}" if basis else f"basis   none{f' ({why})' if why else ''}"]
+    return head + checkview.view(run_dir, datetime.now(timezone.utc), basis)
 
 
 def _slot_text(sl: dict) -> str:

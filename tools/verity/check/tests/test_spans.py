@@ -118,3 +118,22 @@ def test_steps_mirrors_each_record_into_spans_jsonl(tmp_path):
     assert [s["status"] for s in got[1:]] == ["ok", "failed"]
     recs = [json.loads(l) for l in (tmp_path / "steps.jsonl").read_text().splitlines()]
     assert [r["step"] for r in recs] == [s["name"] for s in got[1:]]
+
+
+def test_a_step_opens_its_span_as_it_starts_and_its_record_completes_the_same_span(tmp_path):
+    """A running step is an open child (`research status RUN` shows it running, since its own start); its record completes
+    that span_id from that start, and a step that never started (a skip) is still one completed line."""
+    CHECK = _load("check")
+    steps = CHECK.Steps(tmp_path, keep_going=True)
+    with open(tmp_path / "x.log", "w") as log:
+        p = steps.start("circuit-check", ["true"], tmp_path, {}, log)
+        p.wait()
+    opened = lines(tmp_path)[1]
+    assert (opened["name"], opened["end_utc"], opened["status"], opened["attributes"]) == ("circuit-check", None, None,
+                                                                                          {"step": "circuit-check"})
+    steps.end({"step": "circuit-check", "status": "passed", "rc": 0, "seconds": 0.1})
+    steps.end({"step": "lean-agreement", "status": "skipped", "seconds": 0.0})
+    got = lines(tmp_path)
+    assert [s["span_id"] for s in got[1:3]] == [opened["span_id"]] * 2 and got[2]["start_utc"] == opened["start_utc"]
+    assert got[2]["status"] == "ok" and got[3]["name"] == "lean-agreement" and got[3]["span_id"] != opened["span_id"]
+    assert all(list(line) == FROZEN_KEYS for line in got)
