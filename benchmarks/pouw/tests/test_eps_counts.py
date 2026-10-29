@@ -1,4 +1,4 @@
-"""sass_census's eps_counts: ε_skip's per-instruction counts from `nvdisasm -c -gi` SASS (INT-HB row 20).
+"""sass_census's eps_counts: ε_skip's per-instruction counts from `nvdisasm -c -gi` SASS.
 
 On a synthetic apv.cu and a listing in nvdisasm's inline-chain format: an instruction's chain is the run of `//## File`
 lines above it and one with none inherits the last; a converged warp never takes `BRA.DIV`, so the shuffle fallbacks

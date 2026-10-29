@@ -15,7 +15,9 @@ are for the public path. Where the original names `setupH`, this one names `setu
   `AcceptsZKRetained` without `hh`.
 * `TablesAtZKHLive`: ZkLink's `TablesAtZKLive` under `hh = true`, at `tablesAtZKH`, with HiddenExec's
   `TableAtHOfAccepts` hypotheses on the circuit (`HmOut.parse` accepts it, at the `--zk` tags; its unit returns the
-  outputs). `TablesAtZKHLiveI` is it without the unit returning the outputs.
+  outputs). `TablesAtZKHLiveI` is it without the unit returning the outputs. `TablesAtZKHLiveSt` and
+  `TablesAtZKHLiveISt` are them at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled), and
+  `TablesAtZKHLiveU` is the conclusion with no circuit hypothesis, which the session's committed circuit discharges.
 * `AcceptsZKAcceptedH`: lp-zkbind's `acceptsZK_accepted` (the placement every `--zk` table's binding is read at) for
   one hidden-output table, with HiddenExec's `AcceptedH` for `Placed.Accepted`.
 * `ZkSchedOK`: the half of `TablesAtZKLive` that reads no setup: at any statement `Zk.shapeOk` passes, `Zk.schedule`'s
@@ -118,6 +120,58 @@ def TablesAtZKHLive : Prop :=
 def TablesAtZKHLiveI : Prop :=
   ∀ (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}
     (_hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
+    I.tags.hiddenOutputs = true → I.count ≤ 1 → RecordsLiveZK I dj wr →
+    ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
+      ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
+        Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
+          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+        ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
+          tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
+          ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
+            ExtraRealizes (Setup.ofCircuit st) y.table.S points
+              (Model.extraClaims y.table.S y.table.ptLocal mPts (ptsOf mPts points))
+
+/-- **`TablesAtZKHLive` at the statement circuit**: its conclusion on every circuit `HmOut.parseStmt` reads at the `--zk`
+tags (a templated file's template unrolled, `HmOut.unrolled`) whose unit returns the outputs. -/
+def TablesAtZKHLiveSt : Prop :=
+  ∀ (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}
+    (_hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
+    I.tags.hiddenOutputs = true → I.count ≤ 1 → RecordsLiveZK I dj wr →
+    ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
+      ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
+        Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
+          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+        ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
+          tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
+          ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
+            ExtraRealizes (Setup.ofCircuit st) y.table.S points
+              (Model.extraClaims y.table.S y.table.ptLocal mPts (ptsOf mPts points))
+
+/-- **`TablesAtZKHLiveI` at the statement circuit**: its conclusion on every circuit `HmOut.parseStmt` reads. -/
+def TablesAtZKHLiveISt : Prop :=
+  ∀ (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}
+    (_hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
+    I.tags.hiddenOutputs = true → I.count ≤ 1 → RecordsLiveZK I dj wr →
+    ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
+      ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
+        Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
+          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+        ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
+          tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
+          ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
+            ExtraRealizes (Setup.ofCircuit st) y.table.S points
+              (Model.extraClaims y.table.S y.table.ptLocal mPts (ptsOf mPts points))
+
+/-- **`TablesAtZKHLiveI` from the session alone**: its conclusion with no hypothesis on the circuit, which the session's
+own committed circuit discharges. -/
+def TablesAtZKHLiveU : Prop :=
+  ∀ (I : Inputs) (_ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
     I.tags.hiddenOutputs = true → I.count ≤ 1 → RecordsLiveZK I dj wr →
