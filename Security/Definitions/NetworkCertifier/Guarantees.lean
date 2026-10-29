@@ -121,7 +121,7 @@ blocks, `p`, and take the `m` blocks after them, within the `E` blocks (`hn` is
 `EncardAccSeqsLeConstantRateWindows`'s `n ≤ E·(g·T)` at the horizon `n = (e₀ + m)·(g·T)`). The constant-rate Program's
 accepted sequences of that length with jitter below `D` that continue `p` number at most `(2^k · D^(g·T))^m`:
 `|a| + g·T·log2 D` bits per execution block, `|a|` under J (`D = 1`), whatever came before. At `e₀ = 0` they are the
-session's first `m` blocks. -/
+monitoring period's first `m` blocks. -/
 def EncardAccSeqsLeConstantRatePerWindow : Prop :=
   ∀ {L K S : ℕ} {In : Type} (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
@@ -133,7 +133,7 @@ def EncardAccSeqsLeConstantRatePerWindow : Prop :=
 show the same observations `p` through the first `e₀` execution blocks, each accepted through the `m` blocks after
 them. A decoder of the wire through those blocks recovers at most `(2^k · D^(g·T))^m` of them: whatever the first `e₀`
 blocks showed, a covert sender inside X moves at most `m·(|a| + g·T·log2 D)` more bits through egress timing and
-content advice over the next `m` blocks. At `e₀ = 0` they are the session's first `m` blocks. -/
+content advice over the next `m` blocks. At `e₀ = 0` they are the monitoring period's first `m` blocks. -/
 def EncardDecodableLeConstantRatePerWindow : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire : Type}
     (I : Interaction L K S Z In Act Wire) (T g E k : ℕ)

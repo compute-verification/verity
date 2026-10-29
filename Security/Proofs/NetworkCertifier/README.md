@@ -168,8 +168,8 @@ part of the theorem. It is exact under fixed-length frames (W3): N frames of B b
 `Cs` all of them, `log2 #Cs` is the `N·B` bits read.
 
 **The shipped schedule** (`NetTiming.Protocol.Schedule`). `constantRate T g E frames` is the Program of one link's
-monitoring period: `E` execution blocks, each of `g` sampling blocks of `T` buckets, and block `e`'s frames, with
-their content and send ticks, `frames ins e (a e) ℓ`, read from the ingress and `e`'s own advice. A frame is handed at
+monitoring period: `E` execution blocks, each of `g·T` buckets, and block `e`'s frames, with their content and send
+ticks, `frames ins e (a e) ℓ`, read from the ingress and `e`'s own advice. A frame is handed at
 `h(k) = max(send(k), h(k−1))` and released by `fifoGrid`, with the FIFO empty at each execution block's first bucket.
 Its advice type is `Fin E → Adv`, the protocol's `Adv` the `|a|`-bit strings, so Theorem 3's `2^(E·k)` form holds for
 it with no dataflow hypothesis (`Guarantees.EncardAccSeqsLeConstantRate`).
@@ -358,7 +358,7 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
    `e₀` (`EncardAccSeqsLeConstantRatePerWindow`, `EncardDecodableLeConstantRatePerWindow`; at `e₀ = 0` the run's first
    `m` blocks). It holds whatever came before because each block's rows read only its own advice and its FIFO starts
    empty, so a temporal unit that starts later is bounded by its own blocks. The ingress bound is
-   `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment over the first `m` link-windows, `n = m·T`
+   `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment over the first `m` periods of `T` buckets, `n = m·T`
    (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version); `Packed`, `Allocated` and `JitterBounded` bound
    every step's branching whatever came before.
 2. **The Program reads ingress up to and including step t.** The note's W1 lag allows only ingress before t. This is
