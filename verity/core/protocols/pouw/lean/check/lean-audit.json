@@ -50,7 +50,14 @@
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Opening": {
-   "imports": ["PouwCheck.Inputs", "PouwCheck.Pass", "PouwWindow.Record", "PouwWindow.Side", "Identity.Domains"],
+   "imports": [
+    "PouwCheck.Inputs",
+    "PouwCheck.Pass",
+    "PouwWindow.Record",
+    "PouwWindow.Side",
+    "Flock.FV3",
+    "Identity.Domains"
+   ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
@@ -94,6 +101,7 @@
     "SampledProofs.ChallengerSession",
     "SampledProofs.PyJson",
     "SampledProofs.Registered",
+    "Flock.FV3",
     "Identity.Domains"
    ],
    "except": [],
