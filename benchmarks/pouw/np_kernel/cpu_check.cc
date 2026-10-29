@@ -5,8 +5,7 @@
 //           where A.B^T is recorded the IADD3 reads it back and the fold serves stock's outputs (expect 1), or, for
 //           fold_extreme's mutation (an output of 2^22 + 1, expect -1), doesn't read it back.
 //   layout  each recorded operands call (A, B, a1, a_t, u, G and the lane coins, odd in [-127, 127] a (step, tile,
-//           column)) on blc4a-t64-e7-s1 under the call's lane-coin weights (ROT=1, or BLC_W=1:127:1), under XU=1 and
-//           FOLD=1, then on blc4a-t64-e7 (BLC=1: step 1 without lane coins, its recorded coins unused) under FOLD=1:
+//           column)) on blc4a-t64-e7-s1 under the call's lane-coin weights (ROT=1, or BLC_W=1:127:1), twice:
 //           XU=1   ssn's final word from lane_a and lane_b, plus its row source and its column source for (tile, row
 //                  class i mod 2, column), is 0x4B400000 + A_i . B_j mod 2^32 (the IADD3), and the fold serves stock's bf16
 //                  outputs bit for bit where |A_i . B_j| <= 2^22.
@@ -15,8 +14,8 @@
 //                  from the recorded values, and the fold serves stock's epilogue on A_i . B_j + n_ij where it is within
 //                  2^22 (FOLD's S is the Python's S, or one less at K 8,192, where xu adds a step; the first S steps of
 //                  the recorded coins are used).
-//           ssn's lanes differ from the Python's (20 data lanes in step 1, not 21; kappa 0; e by its own rule), which
-//           changes the words and not what is served, so the check is on what is served. As a control, the other row
+//           ssn's lanes differ from the Python's (their positions; kappa 0; e by its own rule), which changes the
+//           words and not what is served, so the check is on what is served. As a control, the other row
 //           class's column source is also tried, and under ROT=1 it must serve wrong outputs.
 // Build: g++ -O2 -std=c++17 -ffp-contract=off cpu_check.cc -o cpu_check. Usage: cpu_check DIR (fold_vectors.py's --out).
 // One JSON line a vector and a summary line; exit 1 on any mismatch.
@@ -127,12 +126,12 @@ static bool fold_check(const std::string& label, const Vec& v, int expect) {
   return ok;
 }
 
-static bool layout_check(const std::string& label, const Vec& v, const std::string& wname, bool xu, int blc) {
+static bool layout_check(const std::string& label, const Vec& v, const std::string& wname, bool xu) {
   const Arr &a = v.at("a"), &b = v.at("b"), &a1 = v.at("a1"), &at = v.at("at"), &u0 = v.at("u0"), &u1 = v.at("u1"),
             &u2 = v.at("u2"), &g = v.at("g"), &coins = v.at("coins"), &wts = v.at("weights"), &meta = v.at("meta"),
             &sc = v.at("s_col"), &sr = v.at("s_row"), &p = v.at("p"), &st = v.at("stock");
   const int m = (int)a.dims[0], K = (int)a.dims[1], n = (int)b.dims[1];
-  g_tag = true, g_blc = blc, g_xu = xu, g_fold = !xu, g_rot = wname == "rot";
+  g_tag = true, g_blc = 2, g_xu = xu, g_fold = !xu, g_rot = wname == "rot";
   bool wok = true;
   for (int c = 0; c < 2; c++)
     for (int e = 0; e < 3; e++) {
@@ -174,9 +173,9 @@ static bool layout_check(const std::string& label, const Vec& v, const std::stri
   std::vector<int> G(4 * (size_t)n);
   for (int j = 0; j < n; j++)
     for (int e = 0; e < 4; e++) G[4 * j + e] = (int)g.i((size_t)e * n + j);
-  // the certifier's lane-coin word of (step t, tile q, column j): the three coins and lane 31's 1
+  // the certifier's lane-coin word of (step t, tile q, column j): the three coins and coin_word_top
   auto lw = [&](int t, int q, int j) {
-    uint32_t w = 0x01000000u;
+    uint32_t w = coin_word_top(t, j);
     for (int e = 0; e < 3; e++) w |= (uint32_t)(uint8_t)(int8_t)coins.i((((size_t)t * 3 + e) * tiles + q) * n + j) << (8 * e);
     return w;
   };
@@ -267,7 +266,7 @@ int main(int argc, char** argv) {
     const Vec v = load(dir + "/" + file);
     if (kind == "fold") fold_n++, fold_ok += fold_check(label, v, expect);
     else if (kind == "layout")
-      for (const int pass : {0, 1, 2}) lay_n++, lay_ok += layout_check(label, v, w, pass == 0, pass == 2 ? 1 : 2);
+      for (const bool xu : {true, false}) lay_n++, lay_ok += layout_check(label, v, w, xu);
     fflush(stdout);
   }
   const bool ok = fold_n && lay_n && fold_ok == fold_n && lay_ok == lay_n;

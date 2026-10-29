@@ -22,7 +22,7 @@ static bool g_xu = false;  // XU=1: ssn_1l_tag_xu's last step and epilogue, on a
 static bool g_fold = false;  // FOLD=1 (with BLC, not XU): served noisy, xu's epilogue folding out the lane coins alone
 // A' in lane-coin lane e (0..2) for row i
 static inline int coin_w(int i, int e) { return g_rot ? ROT_W[i & 1][e] : g_lw[e]; }
-static inline int lanes1() { return g_blc == 2 ? 20 : g_tag ? 24 : 28; }  // step 1's data lanes
+static inline int lanes1() { return g_blc == 2 ? 21 : g_tag ? 24 : 28; }  // step 1's data lanes
 static inline int lanesl() { return g_blc ? 28 : 31; }  // a later step's data lanes
 // XU=1: the last step's lanes from xu_at (the first 4-aligned lane past its data) hold a1 against -C, -T(i) against G,
 // u0 against 1, u1 against 127 and u2 in xu_e lanes against 127; S >= 2, and a step is added when fewer than 12 are left
@@ -63,6 +63,11 @@ static inline int beta_of(int j, int S) {
   for (int e = 0; e < 4; e++) s += code_of(j, e);
   return (int)std::floor(s / 2.0);
 }
+// byte 3 of the certifier's lane-coin word for step t (0-based) and column j, bytes 0-2 its three coins: 1 (against lane
+// 31's 1 + a_t[i]) at a later step, the public C[3, j] (against a1[i, 3]) at step 1 under BLC=2
+static inline uint32_t coin_word_top(int t, int j) {
+  return t == 0 ? (uint32_t)(uint8_t)(int8_t)code_of(j, 3) << 24 : 0x01000000u;
+}
 // T(i)[e]: digit e of z_i's balanced base-13 expansion, each in [-6, 6]
 static inline int tag_of(int i, int e) {
   int z = (i / 2 + 1) * (i & 1 ? -1 : 1), d = 0;
@@ -96,9 +101,9 @@ static inline int lane_a(int i, int t, int l, int K, int S, const int8_t* x, con
   const int k = kidx(t, l, K);
   int v = k >= 0 ? x[k] : 0;
   if (g_tag && t == 0 && l >= 24 && l < 28) v = tag_of(i, l - 24);
-  if (g_blc && t > 0 && l >= 28 && l < 31) v = coin_w(i, l - 28);
-  if (g_blc == 2 && t == 0 && l >= 20 && l < 23) v = coin_w(i, l - 20);
-  if (c && t == 0 && l >= 28) v = rc_bit(*c, l - 28);
+  if (g_blc && (t > 0 || g_blc == 2) && l >= 28 && l < 31) v = coin_w(i, l - 28);
+  if (c && t == 0 && g_blc == 2 && ((l >= 21 && l < 24) || l == 31)) v = rc_bit(*c, l == 31 ? 3 : l - 21);
+  if (c && t == 0 && g_blc != 2 && l >= 28) v = rc_bit(*c, l - 28);
   if (c && t > 0 && l == 31) v = (g_tag ? 1 : 0) + rc_bit(*c, t + 3);
   if (g_xu && t == S - 1) {
     const int xa = xu_at(K, S), xe = xu_e(xa);
@@ -111,11 +116,13 @@ static inline int lane_a(int i, int t, int l, int K, int S, const int8_t* x, con
   return v;
 }
 // B' step t lane l for column j, y its K data entries: G its four digits (null: 0, as before G's draw); with lw, w is the
-// column's lane-coin word at step t (bytes 0-2 the coins, byte 3 lane 31's 1), copied over B' by the GEMM (ssn_k's cv)
+// column's lane-coin word at step t (bytes 0-2 the coins, byte 3 coin_word_top's), copied over B' lanes 28-31 by the GEMM
+// (ssn_k's cv)
 static inline int lane_b(int j, int t, int l, int K, int S, const int8_t* y, const int* G, bool lw, uint32_t w) {
   const int k = kidx(t, l, K);
   int v = k >= 0 ? y[k] : 0;
-  if (t == 0 && l >= 28) v = code_of(j, l - 28);
+  if (t == 0 && g_blc == 2 && ((l >= 21 && l < 24) || l == 31)) v = code_of(j, l == 31 ? 3 : l - 21);
+  if (t == 0 && g_blc != 2 && l >= 28) v = code_of(j, l - 28);
   if (t > 0 && l == 31) v = 1;
   if (G && g_tag && t == 0 && l >= 24 && l < 28) v = G[l - 24];
   if (g_xu && t == S - 1) {
@@ -125,10 +132,7 @@ static inline int lane_b(int j, int t, int l, int K, int S, const int8_t* y, con
     if (l == xa + 8) v = 1;
     if (l > xa + 8 && l < xa + 10 + xe) v = 127;
   }
-  if (lw && g_blc && (t > 0 || g_blc == 2)) {
-    const int l0 = t == 0 ? 20 : 28;
-    if (l >= l0 && l < l0 + 4) v = (int8_t)(uint8_t)(w >> (8 * (l - l0)));
-  }
+  if (lw && g_blc && (t > 0 || g_blc == 2) && l >= 28) v = (int8_t)(uint8_t)(w >> (8 * (l - 28)));
   return v;
 }
 
