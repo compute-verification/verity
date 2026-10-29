@@ -41,7 +41,6 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.commit import step_rows
 from verity_vllm.commit.native_ranges import DROPPED
 from verity_vllm.commit.opened import meta_by_name
 from verity_vllm.commit.served_record import PORT_NAMES, committed_raw
@@ -303,8 +302,8 @@ def retention_refusal(opts: Any) -> str | None:
     least ``--window-gb``, ``--seal`` and ``--release-after``."""
     r = opts.retention
     if r.retain == "device":
-        if not opts.commit or opts.scheme != step_rows.NAME:
-            return f"--retain device holds the windowed collector's committed values on the device: it needs the Commit under --scheme {step_rows.NAME}"
+        if not opts.commit:
+            return "--retain device holds the windowed collector's committed values on the device: it needs the Commit (drop --no-commit)"
         if r.retain_device_gb < float(getattr(opts, "window_gb", 0) or 0):
             return (f"--retain-device-gb {r.retain_device_gb:g} is under --window-gb {opts.window_gb:g}: the pool must hold the open window "
                     "beside those awaiting their release")
@@ -326,8 +325,8 @@ def retention_refusal(opts: Any) -> str | None:
     if other := sorted(retain_exclude_families(spec) - HIDDEN_M1_FAMILIES):
         return (f"--retain-exclude {spec}: {other} aren't attention interiors; serve-openai commits without retaining only "
                 f"{sorted(HIDDEN_M1_FAMILIES)} (hidden_m1), which no reader of a sealed window opens")
-    if not opts.commit or opts.scheme != step_rows.NAME:
-        return f"--retain-exclude {spec} commits values without retaining them: it needs the Commit under --scheme {step_rows.NAME}"
+    if not opts.commit:
+        return f"--retain-exclude {spec} commits values without retaining them: it needs the Commit (drop --no-commit)"
     return None
 
 
