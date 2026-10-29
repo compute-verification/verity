@@ -47,7 +47,7 @@ from verity_flock import rec_outer as O
 from verity_flock import rec_vstage as S
 
 HERE = Path(__file__).resolve().parent
-LEAN = HERE.parents[2] / "core" / "service" / "flock"
+LEAN = HERE.parents[3] / "verity/core/service/flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
