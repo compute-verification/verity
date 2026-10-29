@@ -147,8 +147,8 @@ T1 = forming(N, F) − forced(C) + de-noise(D) + final word(D, P) + uncommitted 
 - **Compute:**
   - CPU through `research run --on auto`. cpu-1..9 are up to Sat 31 Oct 20:00Z; cpu-10..12 are stopped. If a node's
     slots are full, use another.
-  - GPU only on vy-dc-h200-5, through gpu-lease and `research run`. Its lease ends 07:55Z unless infra extends it
-    (INF-362); your inbox says when. Never the demo node vy-dc-h200. Finish GPU runs 10 minutes before the lease ends.
+  - GPU only on vy-dc-h200-5, through gpu-lease and `research run`. Infra extended it to 15:00Z (lease 14:55Z; INF-362).
+    Finish GPU runs by 14:45Z. Never the demo node vy-dc-h200.
   - Lean: the lean-proofs skill. Never share a writable `.lake` with another agent.
 - **Labels:** estimates labelled; every measurement with its run id.
 - **Messaging:** no Slack and no Linear (the handle is the coordinator's); your note and its Asks are your report.
