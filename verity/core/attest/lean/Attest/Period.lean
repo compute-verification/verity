@@ -27,8 +27,8 @@ def PERIOD_BINDING : ByteArray := Sha512.hash "verity/period-records/v1".toUTF8
 /-- `attest.SCHEMA`: every leaf's schema. -/
 def PERIOD_SCHEMA : String := "verity/period-record/v1"
 
-/-- `attest.domain(count)`: the period tree's domain over the positions `0 … count − 1`. -/
-def periodDomain (count : Nat) : FrameV3Sha512.Domain := FrameV3Sha512.Domain.make PERIOD_BINDING (-1) count
+/-- `attest.domain_id(count)`'s domain: the period tree's, over the positions `0 … count − 1`, the `range-u64` kind. -/
+def periodDomain (count : Nat) : FrameV3Sha512.Domain := FrameV3Sha512.Domain.makeU64 PERIOD_BINDING (-1) count
 
 /-- Record `r` as leaf `r` (its rank and its position) of the tree over `records`. -/
 def leaves (records : Array ByteArray) : Array ByteArray :=
