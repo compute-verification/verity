@@ -92,7 +92,7 @@ theorem tailAt : Pouw.Guarantees.Lead.TailAt := by
   have hmem : L.mem = 2 ^ 34 := by
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hL
     rcases hL with rfl | rfl | rfl | rfl <;> rfl
-  have hcoin := coinTail_le T n K hn hK L hL (htiles.trans (by norm_num))
+  have hcoin := coinTail_le T n K hn hK L hL htiles
   have htab : tableTail L ≤ 1 / 2 ^ 41 + 1 / 2 ^ 103 := by
     have ht : (L.rowBlocks * L.colBlocks * L.S : ℚ) ≤ 2 ^ 30 := by exact_mod_cast htiles
     unfold tableTail

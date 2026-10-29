@@ -1,4 +1,10 @@
 import Proofs.Pouw.Lead.Tail.Chernoff
+import Proofs.Pouw.Lead.Tail.Fiber
+import Proofs.Pouw.Lead.Tail.Blocks
+import Proofs.Pouw.Lead.Tail.Across
+import Proofs.Pouw.Lead.Tail.Columns
+import Proofs.Pouw.Lead.Tail.Slots
+import Proofs.Pouw.Lead.Tail.Route
 import Proofs.Pouw.Lead.Tail.Table
 import Proofs.Pouw.Lead.Tail.Repeats
 import Proofs.Pouw.Lead.Tail.G
@@ -8,6 +14,12 @@ import Proofs.Pouw.Lead.Tail.Gap
 # The lead's tail form
 
 * `Chernoff`: sequentially dominated events are rarely many (`count_tail`).
+* `Fiber`: the same with the domination read off one coordinate (`count_tail_fiber`).
+* `Blocks`: the coin-branch repeats split over the blocks (`repeats_le_blocks`, `within_le`), the three counts'
+  Poisson parameters and `cut`.
+* `Across`, `Columns`, `Slots`: the three counts' tails (`across_tail`, `columns_tail`, `slots_tail`), each from its
+  fiber count (`across_fiber`, `columns_fiber`, `slots_fiber`).
+* `Route`: the counts that bound the tail at the three points and decode (`route_le`).
 * `Table`: the tables' union bound over tiles and steps (`table_tail`).
 * `Repeats`: the coin-branch tail at the three points and decode (`coinTail_le`).
 * `G`: `G_tail` from `Compose.perCoin` and the two tails, and the tail at the three points and decode (`tailAt`).
