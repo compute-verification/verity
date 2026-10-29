@@ -9,12 +9,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
 import pytest
-from test_scan_zk import sz
+from test_scan_zk import PERIOD_CASE, sz
 
+from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as D
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.windows import rows as RWS
@@ -133,3 +135,45 @@ def test_a_v3c_window_that_isnt_the_scans_is_refused_by_name(tmp_path, scanned, 
 def test_v3c_is_one_link_window_from_link_window_0(tmp_path, scanned):
     with pytest.raises(SystemExit, match="--v3c: V3c's window is link-window 0's, a group of 1, not 2 from 0"):
         sz.link(tmp_path, setup=S, group=2, v3c=scanned["window"])
+
+
+def test_v3cs_draw_reaches_the_period_check_whole_as_a_work_law_floored_at_its_entries_and_scan_slots():
+    """The served accept's draw: `work:K` with a work table whose floor for the slot entries' and scan slots' templates is
+    their unit count draws them whole and the rest by K, and its profile is `stratified` with k == size for them, which
+    the period check's `drawsWhole` accepts. `stratified:K` short of the population draws them in part, and the same
+    work law floored at one leaves the honest period at `UNDRAWN`."""
+    import scan_period as SP
+
+    PC = SP.mirror(PERIOD_CASE)
+    entry, slots, rest = TID, PC.SCAN_SLOTS, "Rest_v1"
+    sizes = {entry: 2 * S.cls.NR, slots: 4, rest: 4096}
+    at, ranges = 0, {}
+    for t, n in sizes.items():
+        ranges[t], at = [[at, at + n]], at + n
+    N, K = at, 10
+    audit = PC.Audit(free=0, steps=0, program="00" * 64, units=N, bits=1, entries=((entry, S.cls.NR, "00"),),
+                     scan_slots=(slots,))
+
+    def law(floors: dict) -> dict:
+        strata = [{"template": t, "units": ranges[t], "work": 0 if t in floors else 1, "floor": floors.get(t, 1)}
+                  for t in sizes]
+        total = D.total_work(strata)
+        for s in strata:
+            s["k"] = D.work_k(K, s["work"], sizes[s["template"]], total, s["floor"])
+        out = {"law": "work", "k": K, "strata": strata}
+        assert D.strata_problem(out, N) is None
+        return out
+
+    def whole(lw: dict) -> bool:
+        prof = {"levels": [{"size": N, "draw": AU.core_law(lw, N).to_json()}], "delta": Fraction(1, 2 ** 40)}
+        return PC._draws_whole(audit, prof, PC._facts("audit 0", prof, {"bound": 0}))
+
+    served = law({entry: sizes[entry], slots: sizes[slots]})
+    assert {s["template"]: s["k"] for s in served["strata"]} == {entry: sizes[entry], slots: sizes[slots], rest: K}
+    assert whole(served)
+    assert not whole(law({}))
+    stratified = {"law": "stratified", "k": K, "strata": [
+        {"template": t, "units": ranges[t], "k": D.stratum_k(K, n, N)} for t, n in sizes.items()]}
+    assert D.strata_problem(stratified, N) is None and not whole(stratified)
+    stratified["strata"][0]["k"] = sizes[entry]
+    assert D.strata_problem(stratified, N) == f"stratum {entry!r}: k is not the rule's"
