@@ -89,7 +89,9 @@
     "census_reference_bytes_per_s": 12.5e9,
     "per_gpu_400g_bytes_per_s": 50e9,
     "nvlink_domain_bytes_per_s": [900e9, 1800e9],
-    "source": "benchmarks/census/networks.json dc-1ms-100gbps (reference); 400 Gb/s a GPU is an HGX H200's compute-fabric NIC (sensitivity, not a census entry); NVLink 4 (900 GB/s a Hopper GPU) and NVLink 5 (1.8 TB/s a Blackwell GPU) are a what-if for an NVLink domain that spans machines, which an HGX H200 doesn't have"
+    "pcie_d2h_measured_bytes_per_s": [54.92e9, 55.25e9],
+    "gemm_slowdown_under_d2h_measured": [1.0146, 1.0454],
+    "source": "benchmarks/census/networks.json dc-1ms-100gbps (reference); 400 Gb/s a GPU is an HGX H200's compute-fabric NIC (sensitivity, not a census entry); NVLink 4 (900 GB/s a Hopper GPU) and NVLink 5 (1.8 TB/s a Blackwell GPU) are a what-if for an NVLink domain that spans machines, which an HGX H200 doesn't have; PCIe Gen5 x16 device-to-host into pinned host memory (min-max of 3 x 8 GiB) and int8 cuBLAS GEMMs' slowdown under a concurrent device-to-host stream that outlasts them (min-max over 5 Llama and square shapes), alt_roads_egress.sh on one H200 at 1980 MHz (run r20261029-080123-0158, art:33b1cc829b8f2735773529db549d0ecde8b6cfd090001d793eff2db40f5be898)"
   },
   "accounting": {
     "and_per_int8_mac": 129.9375,
@@ -100,6 +102,7 @@
     "dc_gpus": 100000,
     "world_flop_per_year": 9.36e30,
     "co_run_peak_share_beside_hash": 0.071,
-    "source": "SW-PREMISES section 5 (2,079/16 ANDs an int8 MAC); benchmarks/census/deployments.json dc-12500-machines-600s; adversary.json world-inference-2027; C26's one co-run (GEMMs beside the hash at 11% of their rate, power-limited, not a bound)"
+    "mfu_serve": 0.4,
+    "source": "SW-PREMISES section 5 (2,079/16 ANDs an int8 MAC); benchmarks/census/deployments.json dc-12500-machines-600s; adversary.json world-inference-2027; C26's one co-run (GEMMs beside the hash at 11% of their rate, power-limited, not a bound); mfu_serve from benchmarks/rho/data/reference.toml fleet.world-h200 (assumed 0.2-0.6), N-CARD's one basis (stock work held fixed)"
   }
 }

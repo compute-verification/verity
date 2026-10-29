@@ -126,6 +126,11 @@ def r1_egress(inp: dict, ll: dict) -> dict:
         if "t_stock_band_s" in point:
             row["t2_overlapped_band_gpu_400g"] = [max(base - point["t_stock_s"] + t, byts / inp["links"]["per_gpu_400g_bytes_per_s"]) / t
                                                   for t in point["t_stock_band_s"]]
+        slow = inp["links"]["gemm_slowdown_under_d2h_measured"][1]
+        row["gpu_400g_measured_slowdown"] = {
+            "t2_overlapped": max(base + (slow - 1.0) * alpha * point["t_gemm_s"],
+                                 byts / inp["links"]["per_gpu_400g_bytes_per_s"]) / point["t_stock_s"],
+            "pcie_egress_s": byts / inp["links"]["pcie_d2h_measured_bytes_per_s"][0]}
         out.append(row)
     # Rows that fit T2 <= 100, with the stock step interpolated linearly between decode (1 row) and 64 tokens.
     d, s64 = inp["points"]["decode1"], inp["points"]["t64"]
@@ -154,9 +159,13 @@ def r1_egress(inp: dict, ll: dict) -> dict:
                     for name, rate in links.items() if name.startswith("nvlink")}
     rtt = {f"{r * 1e6:g}us": {key: 64 * r / p["t_stock_s"] for key, p in inp["points"].items()}
            for r in (2e-6, 10e-6, 1e-3)}
+    pcie = inp["links"]["pcie_d2h_measured_bytes_per_s"]
     return {
         "max_rows_t2_le_100": max_rows,
         "certifier_hashing": certifier,
+        "pcie_egress_measured": {"d2h_bytes_per_s": pcie,
+                                 "port_400g_share_of_pcie": [inp["links"]["per_gpu_400g_bytes_per_s"] / x for x in reversed(pcie)],
+                                 "gemm_slowdown_under_d2h": inp["links"]["gemm_slowdown_under_d2h_measured"]},
         "criterion_max_stock_tensor_share": criterion,
         "stock_useful_tensor_share": stock_share,
         "t2_t8192_nvlink_domain_sensitivity": t8192_nvlink,
@@ -369,62 +378,43 @@ def r6_algebraic(inp: dict) -> dict:
     return {"ssn_bytes_per_mac": b, "rows": rows}
 
 
-def per_period(inp: dict, ll: dict, r4: dict) -> dict:
+def per_period_bounds(inp: dict, res: dict) -> dict:
+    """Each new bound as a share of the stock work per period (N-CARD's one basis, stock work held fixed): one H200
+    serves stock at the tensor peak times mfu_serve, the datacenter is dc_gpus of them, the world serves
+    world-inference-2027; T2 is the hardware beside the pool, never folded in."""
     acc = inp["accounting"]
     ands = acc["and_per_int8_mac"]
     periods = {"window": acc["window_s"], "week": acc["week_s"], "month": acc["month_s"], "year": acc["year_s"]}
-    t8192 = next(r for r in r4["rows"] if r["point"] == "t8192" and r["schedule"] == "overlapped")
-    t2 = t8192["t2"]
-    point = inp["points"]["t8192"]
-    stock_macs_per_s_device = ll["macs_per_token"] * point["m"] / point["t_stock_s"]
-    out = {}
-    for scope, gpus in (("one H200", 1), ("datacenter", acc["dc_gpus"])):
-        stock_rate = stock_macs_per_s_device * gpus / t2
-        out[scope] = {p: {"t1_allowance": 0.01 * stock_rate * s * ands,
-                          "excess_idle": t8192["excess_idle_stock_macs_per_stock_mac"] * stock_rate * s * ands}
-                      for p, s in periods.items()}
-    world_macs_per_s = acc["world_flop_per_year"] / 2.0 / acc["year_s"]
-    out["world"] = {p: {"t1_allowance": 0.01 * world_macs_per_s * s * ands,
-                        "excess_idle": t8192["excess_idle_stock_macs_per_stock_mac"] * world_macs_per_s * s * ands}
-                    for p, s in periods.items()}
-    return {"basis": "SSN overlapped at T 8,192, the device always serving; one H200 and the datacenter: the stock work "
-                     "the honest step serves; the world: world-inference-2027 as stock, every MAC an int8 MAC",
-            "scopes": out}
-
-
-def per_period_bounds(inp: dict, ll: dict, res: dict) -> dict:
-    """Each new bound in AND gates per period: the device always serving at its point, so the stock work it covers is
-    stock's MACs a step over the honest step; the datacenter is dc_gpus such devices; the world serves
-    world-inference-2027 at the same share."""
-    acc = inp["accounting"]
-    ands = acc["and_per_int8_mac"]
-    periods = {"window": acc["window_s"], "week": acc["week_s"], "month": acc["month_s"], "year": acc["year_s"]}
+    h200 = peak(inp) * acc["mfu_serve"]
+    rates = {"one H200": h200, "datacenter": h200 * acc["dc_gpus"], "world": acc["world_flop_per_year"] / 2.0 / acc["year_s"]}
+    stock = {scope: {p: rate * s * ands for p, s in periods.items()} for scope, rate in rates.items()}
     r1 = {p["point"]: p for p in res["R1"]["points"]}
     hw = inp["ssn_1l_hw"]
+    r4 = next(r for r in res["R4"]["rows"] if r["point"] == "t8192" and r["schedule"] == "overlapped")
+    t2 = lambda key: r1[key]["gpu_400g_measured_slowdown"]["t2_overlapped"]
     bounds = [
-        ("R1 + ssn_1l_hw, T1 (forming only)", "t64", r1["t64"]["gpu_400g"]["t2_overlapped"], hw["t1_closed"]["t64"]),
-        ("R1 + ssn_1l_hw, T1 (forming only)", "decode1", r1["decode1"]["gpu_400g"]["t2_overlapped"], hw["t1_closed"]["t64"]),
-        ("R1 under T_cred, over-credit with a tensor-only floor", "t64", r1["t64"]["gpu_400g"]["t2_overlapped"],
+        ("R1 + ssn_1l_hw, T1 closed (forming and coin branch)", "T 512, 64 rows", t2("t64"), hw["t1_closed"]["t64"]),
+        ("R1 + ssn_1l_hw, T1 closed (forming and coin branch)", "T 512, 512 rows", t2("t512"), hw["t1_closed"]["t512rows"]),
+        ("R1 + ssn_1l_hw, T1 closed (forming and coin branch)", "T 8,192", t2("t8192"), hw["t1_closed"]["t8192"]),
+        ("R1 + ssn_1l_hw, T1 with coins uncredited", "T 512, 64 rows", t2("t64"), hw["t1_coins_uncredited"]["t64"]),
+        ("R1 + ssn_1l_hw, T1 with coins uncredited", "T 8,192", t2("t8192"), hw["t1_coins_uncredited"]["t8192"]),
+        ("R1 under T_cred, over-credit with a tensor-only floor", "T 512, 64 rows", t2("t64"),
          res["R4"]["t_cred_reading"]["certifier_commit_over_credit_tensor_only_floor"]),
-        ("R1b + ssn_1l_hw at 256 KiB rows: hiding removed (W1 floor)", "t8192", inp["ssn_1l"]["t2_t8192"][1],
+        ("R1b + ssn_1l_hw at 256 KiB rows: hiding term removed (W1 floor)", "T 8,192", inp["ssn_1l"]["t2_t8192"][1],
          hw["hiding_salt_side"]["t8192"]),
-        ("R1b + ssn_1l_hw: hashing A before its noise removed (W1 floor)", "t8192", inp["ssn_1l"]["t2_t8192"][1],
+        ("R1b + ssn_1l_hw: hashing A before its noise removed (W1 floor)", "T 8,192", inp["ssn_1l"]["t2_t8192"][1],
          hw["prenoise"]["t8192"]),
-        ("1% allowance", "t64", r1["t64"]["gpu_400g"]["t2_overlapped"], 0.01),
-        ("1% allowance", "t8192", inp["ssn_1l"]["t2_t8192"][1], 0.01),
+        ("R4 elapsed-time reading: tensor pipe idle beyond stock's, SSN overlapped", "T 8,192", r4["t2"],
+         r4["excess_idle_stock_macs_per_stock_mac"]),
+        ("1% allowance", "any", None, 0.01),
     ]
-    world_macs_per_s = acc["world_flop_per_year"] / 2.0 / acc["year_s"]
-    rows = []
-    for name, key, t2, share in bounds:
-        point = inp["points"][key]
-        stock_per_s = ll["macs_per_token"] * point["m"] / point["t_stock_s"] / t2
-        scopes = {"one H200": {p: share * stock_per_s * s * ands for p, s in periods.items()},
-                  "datacenter": {p: share * stock_per_s * acc["dc_gpus"] * s * ands for p, s in periods.items()},
-                  "world": {p: share * world_macs_per_s * s * ands for p, s in periods.items()}}
-        rows.append({"bound": name, "point": key, "t2": t2, "share_of_stock": share, "and_gates": scopes})
-    return {"basis": "each device always serving at its point; it covers stock's MACs a step over the honest step "
-                     "(stock step x T2); datacenter: dc-12500-machines-600s's GPUs; world: world-inference-2027 as stock, "
-                     "every MAC an int8 MAC, 2,079/16 AND gates a MAC; window 600 s", "rows": rows}
+    rows = [{"bound": name, "point": point, "t2_beside": t2v, "share_of_stock": share,
+             "and_gates": {scope: {p: share * v for p, v in ps.items()} for scope, ps in stock.items()}}
+            for name, point, t2v, share in bounds]
+    return {"basis": "N-CARD's one basis, stock work held fixed: one H200 at the tensor peak x mfu_serve "
+                     f"{acc['mfu_serve']}, dc-12500-machines-600s's {acc['dc_gpus']:,} GPUs, world-inference-2027, "
+                     f"{ands} AND gates an int8 MAC, window {acc['window_s']} s; T2 beside, not folded in",
+            "stock_mac_per_s": rates, "stock_work_and_gates": stock, "rows": rows}
 
 
 def checks(inp: dict, ll: dict, res: dict) -> list[tuple[str, bool, str]]:
@@ -480,6 +470,14 @@ def checks(inp: dict, ll: dict, res: dict) -> list[tuple[str, bool, str]]:
          all(abs(v["t2_per_row"] * res["R1"]["shapes"]["roofline_knee_rows"] / v["compute_bound_t2"] - 1) < 1e-9
              for d in res["R1"]["shapes"]["roofline"].values() for v in d.values()), ""),
         ("R1b: A_j is SW-HASH's 229,376 bytes a token", ll["a_bytes_per_token"] == 229_376, str(ll["a_bytes_per_token"])),
+        ("R1: a 400 Gb/s port fits inside the measured PCIe Gen5 x16 device-to-host rate",
+         max(res["R1"]["pcie_egress_measured"]["port_400g_share_of_pcie"]) < 1.0,
+         ", ".join(f"{x:.3f}" for x in res["R1"]["pcie_egress_measured"]["port_400g_share_of_pcie"])),
+        ("Per period: N-CARD's stock work reproduces (one H200 window 3.08e19, world year 6.08e32 AND gates)",
+         abs(res["period_bounds"]["stock_work_and_gates"]["one H200"]["window"] / 3.08e19 - 1) < 0.01
+         and abs(res["period_bounds"]["stock_work_and_gates"]["world"]["year"] / 6.08e32 - 1) < 0.01,
+         f"{res['period_bounds']['stock_work_and_gates']['one H200']['window']:.3e}, "
+         f"{res['period_bounds']['stock_work_and_gates']['world']['year']:.3e}"),
         ("R4 at C26's co-run share reproduces its ~51 stock forwards for NCP at 160x (T 8,192)",
          abs(inp["accounting"]["co_run_peak_share_beside_hash"] * 160.0 / stock_tensor_share(inp, ll, pts["t8192"], False) / 51.0 - 1) < 0.1,
          f"{inp['accounting']['co_run_peak_share_beside_hash'] * 160.0 / stock_tensor_share(inp, ll, pts['t8192'], False):.1f}"),
@@ -518,6 +516,11 @@ def table(res: dict) -> str:
     lines.append(f"    rows that fit T2 <= 100 (stock step interpolated, an estimate): 100 Gb/s {fits['census_100g']}, "
                  f"400 Gb/s {fits['gpu_400g']}; the certifier hashes 400 Gb/s with "
                  f"{r1['certifier_hashing']['certifier_h200s_per_prover_gpu_at_400g']:.3f} H200s of SHA-512 a prover GPU")
+    pe = r1["pcie_egress_measured"]
+    lines.append(f"    measured PCIe Gen5 x16 device-to-host {pe['d2h_bytes_per_s'][0]:.3e}-{pe['d2h_bytes_per_s'][1]:.3e} B/s: a 400 Gb/s "
+                 f"port is {pe['port_400g_share_of_pcie'][0]:.1%}-{pe['port_400g_share_of_pcie'][1]:.1%} of it; int8 GEMMs under the "
+                 f"stream {pe['gemm_slowdown_under_d2h'][0]:.4f}-{pe['gemm_slowdown_under_d2h'][1]:.4f}x; 400 Gb/s T2 with the worst "
+                 "slowdown: " + ", ".join(f"{p['point']} {p['gpu_400g_measured_slowdown']['t2_overlapped']:.1f}" for p in r1["points"]))
     crit = r1["criterion_max_stock_tensor_share"]
     lines.append("    fits when stock's useful tensor share is at most (T2 <= 100 / <= 10): "
                  + "; ".join(f"{k} {v['t2_le_100']:.2%} / {v['t2_le_10']:.3%}" for k, v in crit.items()))
@@ -584,13 +587,13 @@ def table(res: dict) -> str:
     for r in res["R6"]["rows"]:
         lines.append(f"    {r['rows']:>4} rows: {r['hashing_share_of_stock']:.1f}x stock, {r['cheaper_than_sha_bar']:.1f}x cheaper than "
                      f"SHA-512's bar; idle lanes {r['idle_lane_capacity_stock_equiv']:.2f} stock")
-    lines.append("Per monitoring period (" + res["periods"]["basis"] + "), AND gates: T1 allowance / excess idle")
-    for scope, ps in res["periods"]["scopes"].items():
-        lines.append(f"    {scope:>10}: " + "; ".join(f"{p} {v['t1_allowance']:.2e} / {v['excess_idle']:.2e}" for p, v in ps.items()))
     pb = res["period_bounds"]
     lines.append("New bounds per monitoring period (" + pb["basis"] + "), AND gates")
+    lines.append("    stock work: " + "; ".join(
+        f"{scope} " + ", ".join(f"{p} {v:.2e}" for p, v in ps.items()) for scope, ps in pb["stock_work_and_gates"].items()))
     for r in pb["rows"]:
-        lines.append(f"    {r['bound']} at {r['point']} (T2 {r['t2']:.1f}, {r['share_of_stock']:.4%} of stock): " + "; ".join(
+        t2 = f"T2 {r['t2_beside']:.1f} beside" if r["t2_beside"] is not None else "no T2"
+        lines.append(f"    {r['bound']} at {r['point']} ({r['share_of_stock']:.4%} of stock, {t2}): " + "; ".join(
             f"{scope} " + ", ".join(f"{p} {v:.2e}" for p, v in ps.items()) for scope, ps in r["and_gates"].items()))
     return "\n".join(lines)
 
@@ -607,8 +610,7 @@ def main() -> int:
     res["R1"]["shapes"] = r1_shapes(inp, ll)
     res["R1b"] = r1b_salt_and_arrival(inp, ll)
     res["R4"]["certifier_rows"] = certifier_capacity(inp, ll, res["R1"])
-    res["periods"] = per_period(inp, ll, res["R4"])
-    res["period_bounds"] = per_period_bounds(inp, ll, res)
+    res["period_bounds"] = per_period_bounds(inp, res)
     cks = checks(inp, ll, res)
     res["checks"] = [{"name": n, "ok": ok, "value": v} for n, ok, v in cks]
     args.out.mkdir(parents=True, exist_ok=True)
