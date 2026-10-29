@@ -252,7 +252,7 @@ def test_a_small_periods_answers_agree(deployed_server, test_server) -> None:
 
 
 @pytest.fixture(scope="module")
-def certified_store() -> period.Store:
+def certified_store() -> period.EncodedStore:
     """`STORE` set up at the certified point (`period.point_for`'s default, 256 labels), its `C*` encoded in up to
     `period.SETUP_WORKERS` processes: about 16 core-minutes, since no `C*` that setup accepts there is cheaper than
     encoding one (a random label decodes to a payload with probability 2^-16)."""
