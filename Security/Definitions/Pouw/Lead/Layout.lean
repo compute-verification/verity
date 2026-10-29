@@ -38,7 +38,7 @@ structure Layout where
   n : ℕ
   /-- Inner dimension of the call. -/
   K : ℕ
-  /-- k32 steps a committed word: step 0 holds 24 data lanes, each later step 28 (three lanes are coins, one the tag). -/
+  /-- k32 steps a committed word: step 0 holds 24 data lanes, each later step 28 (three lanes coins, one the tag). -/
   S : ℕ
   /-- Rows a coin tile: 64. -/
   tile : ℕ

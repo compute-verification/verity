@@ -23,8 +23,9 @@ namespace Pouw.Guarantees.Lead
 open Pouw.Lead Pouw.Assumptions.Lead Pouw.Dimension.H100
 
 /-- **The lead's work guarantee.** For every price table `pr` meeting `H32`, lane semantics `fpSem`, hash `H`, call
-`m × K × n` at `T` tokens, data `κ` in range, raw coin stream `stream`, commitment format `C` with its form classifier
-`isA`, network certifier `cert` and set `Real` of the strategies the node can run, under the named premises, every
+`m × K × n` at `T` tokens of whole MMA tiles (`16 ∣ m`, `8 ∣ n`), data `κ` in range, raw coin stream `stream`,
+commitment format `C` with its form classifier `isA`, network certifier `cert` and set `Real` of the strategies the
+node can run, under the named premises, every
 strategy `σ` the node's processors run (`can`) and every set `O` of coin values on which its call is accepted has
 `Σ_{ω ∈ O} work(ω) ≥ 32 · (|O| · honestRegs − |Ω| · gapRegs)`, or at some `ω ∈ O` its execution hashed a SHA-512
 collision with the honest commitment's messages. -/
@@ -35,6 +36,7 @@ def G : Prop :=
     (isA : Hash.Msg → Bool) {Device : Type} (cert : Device)
     (runC : Device → Hash.Digest × Coins (lead T m n K) → Hash.Digest × Coins (lead T m n K))
     (can Real : Strategy (lead T m n K) → Prop),
+    16 ∣ m → 8 ∣ n →
     DataInRange (lead T m n K) κ → RawStream (lead T m n K) stream → CommitL1w H C isA κ →
     H32 pr → W1 pr Real → TileGrain stream Real → LaneSemantics fpSem Real → OneInstructionMinimal Real →
     CardWithinAccelW1 can Real → ShaWrites isA Real → HonestHashRuled H C κ Real →
@@ -67,13 +69,15 @@ def GapAt320 : Prop :=
 instance: the nominal W1 table meets `H32`, and some set of strategies meets every premise of `G` (with the coin stream,
 commitment and certifier the protocol's) and holds an honest strategy accepted at every coin value. -/
 def Honest : Prop :=
-  ∀ (T m n K : ℕ) (H : Hash.Msg → Hash.Digest) (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ),
+  ∀ (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
+    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ),
     DataInRange (lead T m n K) κ →
     ∃ (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (stream : Coins (lead T m n K) → ℕ → Fin tileWords → ℤ)
       (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool) (Device : Type) (cert : Device)
       (runC : Device → Hash.Digest × Coins (lead T m n K) → Hash.Digest × Coins (lead T m n K))
       (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
-      RawStream (lead T m n K) stream ∧ CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧ TileGrain stream Real ∧
+      RawStream (lead T m n K) stream ∧ CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧
+      TileGrain stream Real ∧
       LaneSemantics fpSem Real ∧ OneInstructionMinimal Real ∧ CardWithinAccelW1 Real Real ∧ ShaWrites isA Real ∧
       HonestHashRuled H C κ Real ∧ TrustedNebiusHost cert runC ∧ OutsourceWithinEgressLead h100Nominal Real ∧
       Real σ ∧ ∀ ω, Accepted (lead T m n K) H C κ σ ω

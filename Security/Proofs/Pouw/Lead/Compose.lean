@@ -1,7 +1,8 @@
+import Proofs.Pouw.Lead.Compose.G
+import Proofs.Pouw.Lead.Compose.Guarantee
 import Proofs.Pouw.Lead.Compose.HashCompose
 import Proofs.Pouw.Lead.Compose.Inventory
 import Proofs.Pouw.Lead.Compose.Sketch
-import Proofs.Pouw.Lead.Compose.Guarantee
 import Proofs.Pouw.Lead.Compose.Refute
 
 /-!
