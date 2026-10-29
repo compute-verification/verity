@@ -457,21 +457,45 @@ PLANS = [
 ]
 PLAN = {p.name: p for p in PLANS}
 
+#: each entry: (basis, value, the benchmarks/ppl format that measures it). "measured" values are that format's
+#: perplexity rise over stock int8 on WikiText-2; the rest are estimates until their format is measured.
 T3 = {
-    "linear": ("~0 (served noise std 6.0 / 9.2 units at K 2,048 / 8,192 vs ~330 quant)", 0.0),
-    "lm_head": ("+0.03% (estimate: int7 lm_head's measured +0.07-0.08%, /4 for int8's halved step)", 0.0003),
-    "qk": ("+0.07% (estimate: int7 QKᵀ with q and k Hadamard-rotated, measured +0.29% at 8K, /4)", 0.0007),
-    "pv": ("+0.16% (estimate: int7 P·V with the sink in its own block, measured +0.65% at 8K, /4; int7 QKᵀ and P·V "
-           "together measured +0.66%, so the sum with qk is conservative)", 0.0016),
-    "silu": ("~0 (tanh.approx.f32: relative error <= 2^-10.99, below bf16's 2^-9; estimate)", 0.0),
-    "softmax": ("~0 (poly exp2 checked below; P is u8 at 1/255)", 0.0),
-    "dither": ("+1.2% (estimate: rounding variance x2 on every int8 activation, interpolated between int8 and int7 "
-               "activations' measured +3.5%; P and QKᵀ's int8 inside the attention terms)", 0.012),
-    "static": ("unmeasured: one calibrated scale a tensor for every activation quantize, instead of a token's amax", None),
-    "router": ("unmeasured: the router's gate in int8 can flip an expert choice", None),
+    "linear": ("~0 (measured: ssn-1l-b1-v1, both 2K and 8K intervals contain 0)", 0.0, "ssn-1l-b1-v1"),
+    "lm_head": ("+0.03% (estimate: int7 lm_head's +0.07-0.08%, /4 for int8's halved step)", 0.0003, "int8-head-v1"),
+    "qk": ("+0.07% (estimate: int7 QKᵀ with q and k Hadamard-rotated, +0.29% at 8K, /4)", 0.0007, "int8-qk-had-v1"),
+    "pv": ("+0.16% (estimate: int7 P·V with the sink in its own block, +0.65% at 8K, /4; int7 QKᵀ and P·V together "
+           "+0.66%, so the sum with qk is conservative)", 0.0016, "int8-pv-u8-v1"),
+    "silu": ("~0 (tanh.approx.f32: relative error <= 2^-10.99, below bf16's 2^-9; estimate)", 0.0, None),
+    "softmax": ("~0 (poly exp2 checked below; P is u8 at 1/255)", 0.0, "int8-attn-v1"),
+    "dither": ("+1.2% (estimate: stochastic rounding's error variance v(1-v) against rint's min(v, 1-v)^2, x2 for a "
+               "uniform fraction v, interpolated between int8 and int7 activations' +3.5%; more where a token's "
+               "scale leaves most coordinates under one step, since there it is O(|x|) against O(x^2))", 0.012,
+               "dither-int8-v1"),
+    "static": ("unmeasured: one calibrated scale a tensor for every activation quantize, instead of a token's amax",
+               None, "static-int8-v1"),
+    "router": ("unmeasured: the router's gate in int8 can flip an expert choice", None, None),
     "rowmax": ("unmeasured: a strided row max with a margin costs P the margin's bits and clamps the scores it misses",
-               None),
+               None, "rowmax-s8-v1"),
 }
+
+
+#: the one per-period basis, stock work held fixed (pouw_space.toml's [scale] and [price]): one H200 serves stock int8
+#: MACs at its measured tensor peak times mfu_serve (benchmarks/rho/data/reference.toml, assumed), the datacenter is
+#: benchmarks/census/deployments.json dc-12500-machines-600s's GPUs, the world benchmarks/census/adversary.json
+#: world-inference-2027's MACs a year; AND gates an int8 MAC an estimate
+BASIS = {"mac_rate_peak": 9.89e14, "mfu_serve": 0.4, "datacenter_gpus": 100_000, "window_s": 600,
+         "world_mac_per_year": 4.68e30, "and_per_mac": 2079 / 16}
+PERIOD_S = {"window": BASIS["window_s"], "week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
+
+
+def periods(share: float, w1_per_mac: float) -> dict:
+    """`share` of the whole step's stock work, in AND gates, over each period and scope on BASIS: each scope's MACs
+    times the step's stock W1 a MAC (its lanes and bf16 attention beside the int8 MACs) at and_per_mac."""
+    h200 = BASIS["mac_rate_peak"] * BASIS["mfu_serve"]
+    scopes = {"h200": h200, "datacenter": h200 * BASIS["datacenter_gpus"],
+              "world": BASIS["world_mac_per_year"] / PERIOD_S["year"]}
+    return {scope: {p: share * mac_s * s * w1_per_mac * BASIS["and_per_mac"] for p, s in PERIOD_S.items()}
+            for scope, mac_s in scopes.items()}
 
 
 def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
@@ -681,14 +705,19 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
         t3 += T3["dither"][1]
     t3_unmeasured = ((["static"] if plan.static_scales else []) + (["rowmax"] if plan.rowmax_stride > 1 else []) +
                      (["router"] if plan.router == "i8" and any(r["family"] == "router_gemm" for r in rows) else []))
+    t3_formats = sorted({r["t3"][2] for r in rows if len(r["t3"]) > 2 and r["t3"][2]}
+                        | {T3[k][2] for k in t3_unmeasured + (["dither"] if plan.dither else []) if T3[k][2]})
     alpha = tot["honest"] / st
+    macs = sum(c.count for c in comps if c.family in ("linear", "lm_head", "qk", "pv", "router_gemm"))
+    lin_gap = groups["linears"]["gap_share"]
     return {"model": model, "point": point, "plan": plan.name, "reading": reading, "stock_units": st,
             "honest_units": tot["honest"], "alpha_w1": alpha, "linears_stock_share": lin_share,
+            "macs": macs, "w1_per_mac": st / macs, "linears_gap": lin_gap, "rest_gap": t1_mm + cov - lin_gap,
             "t1_matmul": t1_mm, "coverage": cov, "t1": t1_mm + cov, "coins_uncredited": coins,
             "t1_coins_uncredited": t1_mm + cov + coins, "uncovered_share": tot["unforced"] / st,
             "slack_share": (tot["honest"] - tot["forced"] - tot["unforced"]) / st,
             "hash_bytes": 4 * tot["words"], "groups": groups, "t2": t2, "t3_estimate": t3,
-            "t3_unmeasured": t3_unmeasured,
+            "t3_unmeasured": t3_unmeasured, "t3_formats": t3_formats,
             "components": [{k: v for k, v in r.items() if k not in ("ops", "coin_calls")} for r in rows]}
 
 
@@ -738,18 +767,25 @@ def t2_of(model: str, point: str, rows: list[dict], plan: Plan) -> dict:
     if not _RATES:
         _RATES.update(unit_rates())
     base, how = stock_ms(model, point)
-    extra = 0.0
+    parts = {"linears": {"extra": 0.0, "bytes": 0.0, "coin_ms": 0.0}, "rest": {"extra": 0.0, "bytes": 0.0, "coin_ms": 0.0}}
     for r in rows:
         fam = {"linear": "tensor", "lm_head": "tensor", "router_gemm": "tensor", "qk": "attention", "pv": "attention",
                "softmax": "attention"}.get(r["family"], "lane")
-        extra += max(0.0, r["honest"] - r["stock"]) / _RATES[fam] * 1e3
-    byts = 4 * sum(r["words"] for r in rows)
-    coin_ms = sum(nsw.coin_us(b) * n for r in rows for b, n in r.get("coin_calls", [])) * 1e-3
+        p = parts["linears" if r["family"] == "linear" else "rest"]
+        p["extra"] += max(0.0, r["honest"] - r["stock"]) / _RATES[fam] * 1e3
+        p["bytes"] += 4 * r["words"]
+        p["coin_ms"] += sum(nsw.coin_us(b) * n for b, n in r.get("coin_calls", [])) * 1e-3
+    extra = sum(p["extra"] for p in parts.values())
+    byts = sum(p["bytes"] for p in parts.values())
+    coin_ms = sum(p["coin_ms"] for p in parts.values())
     out = {"stock_ms": base, "stock_ms_source": how, "extra_work_ms": extra, "coin_ms": coin_ms,
            "hash_gb": byts / 1e9}
     for key, u in nsw.HASH_UNITS_BYTE.items():
         out[f"hash_ms_{key}"] = byts * (u + nsw.EXPORT_UNITS_WORD / 4) / nsw.H200_MAC_S * 1e3
         out[f"t2_{key}"] = (base + extra + coin_ms + out[f"hash_ms_{key}"]) / base
+        for name, p in parts.items():
+            out[f"{name}_added_ms_{key}"] = (p["extra"] + p["coin_ms"]
+                                              + p["bytes"] * (u + nsw.EXPORT_UNITS_WORD / 4) / nsw.H200_MAC_S * 1e3)
     return out
 
 
@@ -1126,17 +1162,76 @@ def report(lookup: bool = False) -> dict:
     out["dither_sim"] = {"dither": sim_dither(), "rint": sim_dither(dither=False)}
     out["checks"] = check()
     best = {(e["model"], e["point"], e["plan"]): e for e in out["evals"] if e["reading"] == "paired"}
-    out["periods"] = {f"{m}_{pt}_{pl}": {"t1": nsw.periods(best[(m, pt, pl)]["t1"], best[(m, pt, pl)]["alpha_w1"]),
-                                         "uncovered": nsw.periods(best[(m, pt, pl)]["uncovered_share"],
-                                                                  best[(m, pt, pl)]["alpha_w1"])}
-                      for m in ("llama", "v4") for pt in ("T8192_8x1k", "dec64_2k")
-                      for pl in ("linears", "best", "best_p4", "best_dither", "best_p4_dither")}
+    out["periods"] = {}
+    for m in ("llama", "v4"):
+        for pt in ("T8192_8x1k", "dec64_2k"):
+            for pl in PERIOD_PLANS:
+                e = best[(m, pt, pl)]
+                out["periods"][f"{m}_{pt}_{pl}"] = {k: periods(v, e["w1_per_mac"]) for k, v in (
+                    ("stock", 1.0), ("allowance", 0.01), ("t1", e["t1"]), ("uncovered", e["uncovered_share"]))}
     out["params"] = {"price": PRICE, "price_estimated": PRICE_ESTIMATED, "refined_floor": REFINED_FLOOR,
                      "fa3_block": FA3_BLOCK, "i8_block": I8_BLOCK, "ept": [EPT_STOCK, EPT_LEAN],
                      "stock_t8192_ms": STOCK_T8192_MS, "gemm_t8192_ms": GEMM_T8192_MS, "att_t8192_ms": ATT_T8192_MS,
                      "host_t8192_ms": HOST_T8192_MS, "host_fit_ms": HOST_FIT_MS, "hbm_b_s": HBM_B_S,
                      "lookup_priced": lookup, "t3": T3}
     return out
+
+
+PERIOD_PLANS = ("linears", "best", "best_p4", "best_p4_dither", "best_p4_max", "best_p4_max_s8")
+#: pouw_space.py's points (and this file's further ones) to this file's (model, point)
+CARD_POINTS = {"t512": ("llama", "T512_64"), "t512r512": ("llama", "T512_512"), "t8192": ("llama", "T8192_8x1k"),
+               "t8192_1x8k": ("llama", "T8192_1x8k"), "decode_b64_2k": ("llama", "dec64_2k"),
+               "decode_b64_8k": ("llama", "dec64_8k"), "v4layer_t512": ("v4", "T512_64"),
+               "v4layer_t512r512": ("v4", "T512_512"), "v4layer_t8192": ("v4", "T8192_8x1k"),
+               "v4layer_t8192_1x8k": ("v4", "T8192_1x8k"), "v4layer_decode_b64_2k": ("v4", "dec64_2k"),
+               "v4layer_decode_b64_8k": ("v4", "dec64_8k")}
+
+
+def _toml(v) -> str:
+    if isinstance(v, str):
+        return json.dumps(v, ensure_ascii=False)
+    if isinstance(v, (list, tuple)):
+        return "[" + ", ".join(_toml(x) for x in v) + "]"
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    return f"{v:.6g}" if isinstance(v, float) else str(v)
+
+
+def card_file(rep: dict, source: str) -> str:
+    """The whole step's coverage as a file for pouw_space.py's --add: per point and plan, the linears' share of the
+    step's stock W1 and everything else's gap, so a linear design's T1 there (a share of the linears' stock) gives the
+    step's T1 = T1 x linears_share + rest_gap, and its T2 = (stock_ms + the linears' added ms + rest_added_ms) /
+    stock_ms."""
+    best = {(e["model"], e["point"], e["plan"]): e for e in rep["evals"] if e["reading"] == "paired"}
+    lines = ["# The whole served step's coverage term (NIGHT.md §1 default 3), beside T1 and never folded into it.",
+             "# step T1 = (a linear design's T1) x linears_share + rest_gap; step T2 = (stock_ms + its linears' added",
+             "# ms + rest_added_ms) / stock_ms, serial or overlapped hashing. Shares of the whole step's stock W1, paired",
+             "# reading (estimate: priced instruction counts at the card's H32 prices, not measured on the GPU).",
+             "[coverage]", f"source = {_toml(source)}",
+             f"plans = {_toml(list(PERIOD_PLANS))}", ""]
+    for pl in PERIOD_PLANS:
+        p = PLAN[pl]
+        lines += [f"[coverage.plan.{pl}]", f"title = {_toml(p.note)}", f"premises = {_toml(sorted(p.premises))}", ""]
+    for cp, (m, pt) in CARD_POINTS.items():
+        sh = POINTS[pt]
+        lines += [f"[coverage.point.{cp}]", f"model = {_toml(m)}", f"step_point = {_toml(pt)}",
+                  f"title = {_toml(sh.get('title', pt))}",
+                  f"stock_ms = {_toml(best[(m, pt, 'linears')]['t2']['stock_ms'])}",
+                  f"stock_ms_source = {_toml(best[(m, pt, 'linears')]['t2']['stock_ms_source'])}",
+                  f"w1_per_mac = {_toml(best[(m, pt, 'linears')]['w1_per_mac'])}", ""]
+        for pl in PERIOD_PLANS:
+            e = best[(m, pt, pl)]
+            t2 = e["t2"]
+            lines += [f"[coverage.point.{cp}.{pl}]",
+                      f"linears_share = {_toml(e['linears_stock_share'])}", f"linears_gap = {_toml(e['linears_gap'])}",
+                      f"rest_gap = {_toml(e['rest_gap'])}", f"step_t1 = {_toml(e['t1'])}",
+                      f"uncovered = {_toml(e['uncovered_share'])}",
+                      f"rest_added_ms = {{ serial = {_toml(t2['rest_added_ms_serial'])}, "
+                      f"overlapped = {_toml(t2['rest_added_ms_overlapped'])} }}",
+                      f"step_t2 = {{ serial = {_toml(t2['t2_serial'])}, overlapped = {_toml(t2['t2_overlapped'])} }}",
+                      f"t3_estimate = {_toml(e['t3_estimate'])}", f"t3_formats = {_toml(e['t3_formats'])}",
+                      f"t3_unmeasured = {_toml(e['t3_unmeasured'])}", 'kind = "estimate"', ""]
+    return "\n".join(lines)
 
 
 def table(rep: dict) -> str:
@@ -1177,6 +1272,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--table", action="store_true", help="print the text table")
     ap.add_argument("--data", help="noise_data.py's JSON, passed to noise_sweep (its duplicate shares)")
     ap.add_argument("--lookup", action="store_true", help="price input-addressed moves (embedding, KV write) as L2 lookups")
+    ap.add_argument("--card", help="write the coverage card file (pouw_space.py --add) here")
+    ap.add_argument("--source", default="benchmarks/pouw/theory/step_cover.py",
+                    help="the card's source line: this file at its commit, the run id")
     args = ap.parse_args(argv)
     if args.data:
         nsw.load_data(args.data)
@@ -1185,6 +1283,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         with open(args.json, "w") as fh:
             fh.write(text)
+    if args.card:
+        with open(args.card, "w") as fh:
+            fh.write(card_file(rep, args.source))
     if args.table:
         print(table(rep))
     elif not args.json:
