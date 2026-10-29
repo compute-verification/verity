@@ -248,3 +248,8 @@ where h_forced ≤ h is the hashing or fold work a cheater can't skip. So 99% ne
 - It needs public weights (an exception to everything zero-knowledge) and SAK-UF (rank 4, about the matmul on registered weights).
 - It is the concrete "credit the multiply" option for Daniel's fork. It waits on N-PPL's confirmation: our int8 LUT attention rather than fp32, a second model, full windows.
 - Attention is 96% of the remaining h at T 8,192.
+
+**22:48Z, TENSOR checkpoint 2 (note 20261029T2232Z-report-hash-fold-tensor) retracts the 22:05Z lever entry:**
+- With one R a call, the cheapest route (last step's product plus the carries, `mma_pairsum` on bytes) floors a prover at 0.37× stock, not 1.94×.
+- **A fresh R each k32 step** floors it at 1.43×/1.44× stock. That uses `TensorFloor.lean` (core, sorry-free, arithmetic only) plus H32 and **ByteEntry**, a new rank-5 premise that each byte is formed by one of six named routes. It is not a count. h ≈ 1.58 / 1.53.
+- **Under the capacity reading** it accounts a ≈ 1.43/2.55 ≈ 56%. It is shelved with the other stock-hardware folds pending Daniel's fork. The coordinator's 22:05Z "credit could rest on a count" is withdrawn.
