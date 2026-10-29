@@ -1,5 +1,6 @@
 import Proofs.Pouw.Dimension.H100FloorProofs
 import Proofs.Pouw.Dimension.H100Proofs
+import Proofs.Pouw.Dimension.RouteUProofs
 import Proofs.Pouw.NCP.Proofs
 
 /-!
@@ -26,6 +27,9 @@ floor table `h100Floor`, which is the H200's measured table (`h200Measured = h10
   constants, the input words and the coin words (`coinWords`), the committed `X` registers (all three blocks, biased
   packing: `xAll`, under `xAll_props`' conditions on `R`) and block 1 of `Y` (`yWord`) are targets beside the checked
   and final words.
+* **Any non-final words** (`NfIndep`). The separations read only that the non-final words are independent modulo `V₀`
+  at the input-`0` slice: NCP's canonical words (`nfIndep_canonical`) and route U's (`nfIndep_U`, through
+  `wordUSubV0` and `indepModShift`), which honest commits when `X` is biased; `ncpU_charged` is `ncp_charged` there.
 -/
 
 namespace Pouw.Dimension.SwLean
@@ -360,6 +364,16 @@ theorem mm_unitAt (B : Mat) (r c i j : ℕ) : mm k (unitAt r c) B i j = if i = r
 theorem slice0_nfWord (R B : Mat) (p : ℕ) :
     slice0 (nfWord (m := m) (n := n) (k := k) R B p) = word k m n 1 R (fun _ _ => zeroA) (fun _ => B) 0 p := rfl
 
+/-- A route-U non-final checked word on the call's grid: honest's committed value when `X` is biased by `β`
+(`stackXU`, with `initU`'s start), `checked` plus a shift that reads only `B`, `R` and `F₁`. -/
+def nfWordU (β : ℤ) (R B : Mat) (p : ℕ) : Call m n k → ℚ :=
+  fun g => (checkedUPos β k m n 1 R (fun _ => g.1) (fun _ => B) g.2 0 p : ℚ)
+
+/-- **Non-final words**: a family `nf` whose words at positions `P`, at the input-`0` slice, are independent modulo
+`V₀`. Every non-final separation reads only this. -/
+def NfIndep (nf : ℕ → Call m n k → ℚ) (P : Finset ℕ) : Prop :=
+  IndepMod (V0 1 m n k) (fun x : ↥(({0} : Finset ℕ) ×ˢ P) => slice0 (nf x.1.2))
+
 variable {R : Mat}
 
 /-- The non-final words at positions `P` of the one unit, at the input-`0` slice, are independent modulo `V₀`. -/
@@ -369,6 +383,39 @@ theorem indep_slice (hind : CheckpointIndependent k 16 R) (B : Mat) (P : Finset 
       word k m n 1 R (fun _ _ => zeroA) (fun _ => B) x.1.1 x.1.2) :=
   indep_words_sub (fun _ _ => zeroA) (fun _ => B) hind (by simp)
     (Finset.product_subset_product (subset_refl _) hP)
+
+/-- NCP's canonical non-final words are non-final words. -/
+theorem nfIndep_canonical (hind : CheckpointIndependent k 16 R) (B : Mat) (P : Finset ℕ)
+    (hP : P ⊆ range (nonFinal k m n)) : NfIndep (nfWord (m := m) (n := n) (k := k) R B) P := by
+  intro c hc
+  refine indep_slice hind B P hP c ?_
+  have e : ∀ x : ↥(({0} : Finset ℕ) ×ˢ P), slice0 (nfWord (m := m) (n := n) (k := k) R B x.1.2) =
+      word k m n 1 R (fun _ _ => zeroA) (fun _ => B) x.1.1 x.1.2 := by
+    rintro ⟨⟨u, p⟩, hx⟩
+    obtain ⟨hu, -⟩ := Finset.mem_product.1 hx
+    rw [Finset.mem_singleton] at hu
+    subst hu
+    rfl
+  simpa only [e] using hc
+
+/-- **Route U's non-final words are non-final words**: each is the canonical word plus a shift in `V₀`
+(`wordUSubV0`), and independence modulo `V₀` survives the shift (`indepModShift`). -/
+theorem nfIndep_U (β : ℤ) (hind : CheckpointIndependent k 16 R) (B : Mat) (P : Finset ℕ)
+    (hP : P ⊆ range (nonFinal k m n)) : NfIndep (nfWordU (m := m) (n := n) (k := k) β R B) P := by
+  have h := RouteUProofs.indepModShift (Noise 1 m n k) ↥(({0} : Finset ℕ) ×ˢ P) (V0 1 m n k)
+    (fun x => word k m n 1 R (fun _ _ => zeroA) (fun _ => B) x.1.1 x.1.2)
+    (fun x => wordU β k m n 1 R (fun _ _ => zeroA) (fun _ => B) x.1.1 x.1.2)
+    (fun x => RouteUProofs.wordUSubV0 β k m n 1 R _ _ x.1.1 x.1.2) (indep_slice hind B P hP)
+  intro c hc
+  refine h c ?_
+  have e : ∀ x : ↥(({0} : Finset ℕ) ×ˢ P), slice0 (nfWordU (m := m) (n := n) (k := k) β R B x.1.2) =
+      wordU β k m n 1 R (fun _ _ => zeroA) (fun _ => B) x.1.1 x.1.2 := by
+    rintro ⟨⟨u, p⟩, hx⟩
+    obtain ⟨hu, -⟩ := Finset.mem_product.1 hx
+    rw [Finset.mem_singleton] at hu
+    subst hu
+    rfl
+  simpa only [e] using hc
 
 theorem mem_V0_of_const (q : ℚ) : (fun _ : Noise 1 m n k => q) ∈ V0 1 m n k := by
   have : (fun _ : Noise 1 m n k => q) = q • (1 : Noise 1 m n k → ℚ) := by
@@ -387,29 +434,25 @@ theorem indep_ne {G ι : Type} [Fintype ι] [DecidableEq ι] {V : Submodule ℚ 
   simp [hij] at this
 
 /-- The non-final words of `P`, at the input-`0` slice, are not in `V₀`. -/
-theorem nf_slice_nmem (hind : CheckpointIndependent k 16 R) (B : Mat) {P : Finset ℕ}
-    (hP : P ⊆ range (nonFinal k m n)) {p : ℕ} (hp : p ∈ P) : slice0 (nfWord (m := m) (n := n) (k := k) R B p) ∉ V0 1 m n k := by
-  have := nmem_of_indep (indep_slice (m := m) (n := n) hind B P hP) ⟨(0, p), by simp [hp]⟩
-  simpa [slice0_nfWord] using this
+theorem nf_slice_nmem {nf : ℕ → Call m n k → ℚ} {P : Finset ℕ} (hI : NfIndep nf P) {p : ℕ} (hp : p ∈ P) :
+    slice0 (nf p) ∉ V0 1 m n k :=
+  nmem_of_indep hI ⟨(0, p), by simp [hp]⟩
 
 /-- A non-final word differs on `int7` from every function whose input-`0` slice is in `V₀`. -/
-theorem nf_ne_of_slice_mem (hind : CheckpointIndependent k 16 R) (B : Mat) {P : Finset ℕ}
-    (hP : P ⊆ range (nonFinal k m n)) {p : ℕ} (hp : p ∈ P) {f : Call m n k → ℚ} (hf : slice0 f ∈ V0 1 m n k) :
-    ¬ ∀ g ∈ int7 m n k, nfWord R B p g = f g := by
+theorem nf_ne_of_slice_mem {nf : ℕ → Call m n k → ℚ} {P : Finset ℕ} (hI : NfIndep nf P) {p : ℕ} (hp : p ∈ P)
+    {f : Call m n k → ℚ} (hf : slice0 f ∈ V0 1 m n k) : ¬ ∀ g ∈ int7 m n k, nf p g = f g := by
   intro heq
-  refine nf_slice_nmem hind B hP hp ?_
-  have : slice0 (nfWord (m := m) (n := n) (k := k) R B p) = slice0 f := by
+  refine nf_slice_nmem hI hp ?_
+  have : slice0 (nf p) = slice0 f := by
     funext ω
     exact heq (zeroA, ω) (zero_int7 ω)
   rwa [this]
 
 /-- Two non-final words at different positions differ on `int7`. -/
-theorem nf_ne_nf (hind : CheckpointIndependent k 16 R) (B : Mat) {P : Finset ℕ} (hP : P ⊆ range (nonFinal k m n))
-    {p p' : ℕ} (hp : p ∈ P) (hp' : p' ∈ P) (hne : p ≠ p') :
-    ¬ ∀ g ∈ int7 m n k, nfWord R B p g = nfWord R B p' g := by
+theorem nf_ne_nf {nf : ℕ → Call m n k → ℚ} {P : Finset ℕ} (hI : NfIndep nf P) {p p' : ℕ} (hp : p ∈ P)
+    (hp' : p' ∈ P) (hne : p ≠ p') : ¬ ∀ g ∈ int7 m n k, nf p g = nf p' g := by
   classical
   intro heq
-  have hI := indep_slice (m := m) (n := n) hind B P hP
   have hij : (⟨(0, p), by simp [hp]⟩ : ↥(({0} : Finset ℕ) ×ˢ P)) ≠ ⟨(0, p'), by simp [hp']⟩ := by
     intro h
     exact hne (congrArg (fun x : ↥(({0} : Finset ℕ) ×ˢ P) => x.1.2) h)
@@ -418,12 +461,11 @@ theorem nf_ne_nf (hind : CheckpointIndependent k 16 R) (B : Mat) {P : Finset ℕ
   exact heq (zeroA, ω) (zero_int7 ω)
 
 /-- A non-final word moves with the noise at input `0`. -/
-theorem nf_moves (hind : CheckpointIndependent k 16 R) (B : Mat) {P : Finset ℕ} (hP : P ⊆ range (nonFinal k m n))
-    {p : ℕ} (hp : p ∈ P) : Moves (int7 m n k) NoiseStep (nfWord (m := m) (n := n) (k := k) R B p) := by
+theorem nf_moves {nf : ℕ → Call m n k → ℚ} {P : Finset ℕ} (hI : NfIndep nf P) {p : ℕ} (hp : p ∈ P) :
+    Moves (int7 m n k) NoiseStep (nf p) := by
   by_contra hno
-  refine nf_slice_nmem hind B hP hp ?_
-  have : slice0 (nfWord (m := m) (n := n) (k := k) R B p) =
-      fun _ : Noise 1 m n k => nfWord (m := m) (n := n) (k := k) R B p (zeroA, ω₀) := by
+  refine nf_slice_nmem hI hp ?_
+  have : slice0 (nf p) = fun _ : Noise 1 m n k => nf p (zeroA, ω₀) := by
     funext ω
     by_contra hne
     exact hno ⟨(zeroA, ω), zero_int7 ω, (zeroA, ω₀), zero_int7 ω₀, rfl, hne⟩
@@ -510,37 +552,37 @@ theorem final_ne_of_dichotomy (B : Mat) (i j : ℕ) (hj0 : ∃ l < k, B l j ≠ 
 /-- **The final-word lemma for NCP**: on a call's grid (int7 input, every noise, the weights `B` fixed), with the
 free values the constants, the call's input words and noise-side words `W'` (each in `V₀` at the input-`0` slice, and
 each ignoring the input or moving with the noise: coin words qualify, and so do the formed words in the biased
-packing), the non-final checked words at positions `P` and the final words `A_i·B_j` for `i ∈ Ix`,
-`j ∈ Jx` are distinct and none is free, when `B` is int8 and its columns in `Jx` are nonzero and pairwise distinct.
-There are `|P| + |Ix|·|Jx|` of them. -/
-theorem finalWordTarget [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndependent k 16 R) (B : Mat)
+packing), the non-final words `nf` at positions `P` (`NfIndep`: NCP's canonical words, `nfIndep_canonical`, or
+route U's, `nfIndep_U`) and the final words `A_i·B_j` for `i ∈ Ix`, `j ∈ Jx` are distinct and none is free, when `B`
+is int8 and its columns in `Jx` are nonzero and pairwise distinct. There are `|P| + |Ix|·|Jx|` of them. -/
+theorem finalWordTarget [DecidableEq (Call m n k → ℚ)] (B : Mat)
     (hB : ∀ l j, -255 ≤ B l j ∧ B l j ≤ 255) (W' : Set (Call m n k → ℚ))
     (hW0 : ∀ w ∈ W', slice0 w ∈ V0 1 m n k)
     (hW1 : ∀ w ∈ W', Ignores (int7 m n k) DataStep w ∨ Moves (int7 m n k) NoiseStep w)
-    (P : Finset ℕ) (hP : P ⊆ range (nonFinal k m n)) (Ix Jx : Finset ℕ)
+    (P : Finset ℕ) (nf : ℕ → Call m n k → ℚ) (hI : NfIndep nf P) (Ix Jx : Finset ℕ)
     (hJ0 : ∀ j ∈ Jx, ∃ l < k, B l j ≠ 0) (hJ : ∀ j ∈ Jx, ∀ j' ∈ Jx, j ≠ j' → ∃ l < k, B l j ≠ B l j') :
     DistinctOn (int7 m n k) (FreeCall (inWords m n k ∪ W'))
-        (P.image (nfWord R B) ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∧
-      (P.image (nfWord (m := m) (n := n) (k := k) R B) ∪
+        (P.image nf ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∧
+      (P.image nf ∪
         (Ix ×ˢ Jx).image fun x => finalWord (m := m) (n := n) (k := k) B x.1 x.2).card =
         P.card + Ix.card * Jx.card := by
-  have hnfnf : ∀ p ∈ P, ∀ p' ∈ P, p ≠ p' → ¬ ∀ g ∈ int7 m n k, nfWord R B p g = nfWord R B p' g :=
-    fun p hp p' hp' hne => nf_ne_nf hind B hP hp hp' hne
+  have hnfnf : ∀ p ∈ P, ∀ p' ∈ P, p ≠ p' → ¬ ∀ g ∈ int7 m n k, nf p g = nf p' g :=
+    fun p hp p' hp' hne => nf_ne_nf hI hp hp' hne
   have hff : ∀ x ∈ Ix ×ˢ Jx, ∀ y ∈ Ix ×ˢ Jx, x ≠ y →
       ¬ ∀ g ∈ int7 m n k, finalWord (m := m) (n := n) (k := k) B x.1 x.2 g = finalWord B y.1 y.2 g := by
     rintro ⟨i, j⟩ hx ⟨i', j'⟩ hy hne
     obtain ⟨-, hj⟩ := Finset.mem_product.1 hx
     obtain ⟨-, hj'⟩ := Finset.mem_product.1 hy
     exact final_ne_final B (hJ0 j hj) (hJ j hj j' hj') hne
-  have hcross : ∀ t ∈ P.image (nfWord (m := m) (n := n) (k := k) R B),
+  have hcross : ∀ t ∈ P.image (nf),
       ∀ t' ∈ (Ix ×ˢ Jx).image fun x => finalWord (m := m) (n := n) (k := k) B x.1 x.2,
       ¬ ∀ g ∈ int7 m n k, t g = t' g := by
     intro t ht t' ht'
     obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 ht
     obtain ⟨x, -, rfl⟩ := Finset.mem_image.1 ht'
-    exact differ_of_moves (nf_moves hind B hP hp) (final_ignores_noise B x.1 x.2)
+    exact differ_of_moves (nf_moves hI hp) (final_ignores_noise B x.1 x.2)
   have hnf : DistinctOn (int7 m n k) (FreeCall (inWords m n k ∪ W'))
-      (P.image (nfWord (m := m) (n := n) (k := k) R B)) := by
+      (P.image nf) := by
     refine ⟨fun t ht t' ht' h => ?_, fun t ht f hf => ?_⟩
     · obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 ht
       obtain ⟨p', hp', rfl⟩ := Finset.mem_image.1 ht'
@@ -548,7 +590,7 @@ theorem finalWordTarget [DecidableEq (Call m n k → ℚ)] (hind : CheckpointInd
       · rw [hpp]
       · exact absurd h (hnfnf p hp p' hp' hpp)
     · obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 ht
-      refine nf_ne_of_slice_mem hind B hP hp ?_
+      refine nf_ne_of_slice_mem hI hp ?_
       rcases hf with ⟨q, rfl⟩ | hf | hf
       · exact mem_V0_of_const q
       · obtain ⟨i, c, rfl⟩ := hf
@@ -581,18 +623,19 @@ theorem finalWordTarget [DecidableEq (Call m n k → ℚ)] (hind : CheckpointInd
 /-- **The final word is charged** (NCP, at the H200's measured table): every well-formed `MH100w` program on the
 call's free words that outputs, on every int7 input and every noise, the non-final words at `P` and the final words of
 `Ix × Jx`, costs at least `32·(|P| + |Ix|·|Jx|)`. With `P` all of honest's non-final k32 words, that is 32 for every
-one of honest's words, the final word included, so the final word's `32/K` term closes. -/
-theorem finalWord_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndependent k 16 R) (B : Mat)
+one of honest's words, the final word included, so the final word's `32/K` term closes. Route U's final word is the
+same `A·B` (`checkedU_final`). -/
+theorem finalWord_charged [DecidableEq (Call m n k → ℚ)] (B : Mat)
     (hB : ∀ l j, -255 ≤ B l j ∧ B l j ≤ 255) (W' : Set (Call m n k → ℚ))
     (hW0 : ∀ w ∈ W', slice0 w ∈ V0 1 m n k)
     (hW1 : ∀ w ∈ W', Ignores (int7 m n k) DataStep w ∨ Moves (int7 m n k) NoiseStep w)
-    (P : Finset ℕ) (hP : P ⊆ range (nonFinal k m n)) (Ix Jx : Finset ℕ)
+    (P : Finset ℕ) (nf : ℕ → Call m n k → ℚ) (hI : NfIndep nf P) (Ix Jx : Finset ℕ)
     (hJ0 : ∀ j ∈ Jx, ∃ l < k, B l j ≠ 0) (hJ : ∀ j ∈ Jx, ∀ j' ∈ Jx, j ≠ j' → ∃ l < k, B l j ≠ B l j')
     (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (Call m n k → ℚ)) (Pg : List (Op100 (Call m n k)))
     (hL : ∀ f ∈ L, f ∈ FreeCall (inWords m n k ∪ W')) (hPg : ∀ o ∈ Pg, o.WFw h100Floor (FreeCall (inWords m n k ∪ W')))
-    (hO : OutputsOn fpSem (int7 m n k) Pg L (P.image (nfWord R B) ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2)) :
+    (hO : OutputsOn fpSem (int7 m n k) Pg L (P.image nf ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2)) :
     32 * (P.card + Ix.card * Jx.card) ≤ cost100 h100Floor Pg := by
-  obtain ⟨hD, hc⟩ := finalWordTarget hind B hB W' hW0 hW1 P hP Ix Jx hJ0 hJ
+  obtain ⟨hD, hc⟩ := finalWordTarget B hB W' hW0 hW1 P nf hI Ix Jx hJ0 hJ
   rw [← hc]
   exact charged _ (freeCall_const _) _ fpSem L Pg _ hL hPg hD hO
 
@@ -615,28 +658,28 @@ and the coin words `W'`, the committed operand registers `Op` are targets beside
 the input-`0` slice, moving with the noise, equal to no coin word, and pairwise different on `int7`. Then the
 non-final words at `P`, the final words of `Ix × Jx` and the registers of `Op` are distinct and none is free, so
 there are `|P| + |Ix|·|Jx| + |Op|` of them. -/
-theorem allTarget [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndependent k 16 R) (B : Mat)
+theorem allTarget [DecidableEq (Call m n k → ℚ)] (B : Mat)
     (hB : ∀ l j, -255 ≤ B l j ∧ B l j ≤ 255) (W' : Set (Call m n k → ℚ))
     (hW0 : ∀ w ∈ W', slice0 w ∈ V0 1 m n k)
     (hW1 : ∀ w ∈ W', Ignores (int7 m n k) DataStep w ∨ Moves (int7 m n k) NoiseStep w)
-    (P : Finset ℕ) (hP : P ⊆ range (nonFinal k m n)) (Ix Jx : Finset ℕ)
+    (P : Finset ℕ) (nf : ℕ → Call m n k → ℚ) (hI : NfIndep nf P) (Ix Jx : Finset ℕ)
     (hJ0 : ∀ j ∈ Jx, ∃ l < k, B l j ≠ 0) (hJ : ∀ j ∈ Jx, ∀ j' ∈ Jx, j ≠ j' → ∃ l < k, B l j ≠ B l j')
     (Op : Finset (Call m n k → ℚ)) (hop0 : ∀ w ∈ Op, slice0 w ∈ V0 1 m n k)
     (hopN : ∀ w ∈ Op, Moves (int7 m n k) NoiseStep w) (hopW : ∀ w ∈ Op, ∀ c ∈ W', ¬ ∀ g ∈ int7 m n k, w g = c g)
     (hopd : ∀ w ∈ Op, ∀ w' ∈ Op, (∀ g ∈ int7 m n k, w g = w' g) → w = w') :
     DistinctOn (int7 m n k) (FreeCall (inWords m n k ∪ W'))
-        ((P.image (nfWord R B) ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∪ Op) ∧
-      ((P.image (nfWord (m := m) (n := n) (k := k) R B) ∪
+        ((P.image nf ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∪ Op) ∧
+      ((P.image nf ∪
         (Ix ×ˢ Jx).image fun x => finalWord (m := m) (n := n) (k := k) B x.1 x.2) ∪ Op).card =
         P.card + Ix.card * Jx.card + Op.card := by
-  obtain ⟨hD, hc⟩ := finalWordTarget hind B hB W' hW0 hW1 P hP Ix Jx hJ0 hJ
-  have hcross : ∀ t ∈ P.image (nfWord (m := m) (n := n) (k := k) R B) ∪
+  obtain ⟨hD, hc⟩ := finalWordTarget B hB W' hW0 hW1 P nf hI Ix Jx hJ0 hJ
+  have hcross : ∀ t ∈ P.image nf ∪
       (Ix ×ˢ Jx).image (fun x => finalWord (m := m) (n := n) (k := k) B x.1 x.2),
       ∀ t' ∈ Op, ¬ ∀ g ∈ int7 m n k, t g = t' g := by
     intro t ht w hw
     rcases Finset.mem_union.1 ht with ht | ht
     · obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 ht
-      exact nf_ne_of_slice_mem hind B hP hp (hop0 w hw)
+      exact nf_ne_of_slice_mem hI hp (hop0 w hw)
     · obtain ⟨⟨i, j⟩, hx, rfl⟩ := Finset.mem_image.1 ht
       exact final_ne_of_dichotomy B i j (hJ0 j (Finset.mem_product.1 hx).2) (Or.inr (hopN w hw))
   have hop : DistinctOn (int7 m n k) (FreeCall (inWords m n k ∪ W')) Op := by
@@ -650,11 +693,11 @@ theorem allTarget [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndepende
 /-- **Everything charged** (at the H200's measured table): a well-formed `MH100w` program on the constants, the call's
 input words and coin words that outputs the non-final words at `P`, the final words of `Ix × Jx` and the committed
 operand registers `Op` costs at least `32·(|P| + |Ix|·|Jx| + |Op|)`. -/
-theorem all_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndependent k 16 R) (B : Mat)
+theorem all_charged [DecidableEq (Call m n k → ℚ)] (B : Mat)
     (hB : ∀ l j, -255 ≤ B l j ∧ B l j ≤ 255) (W' : Set (Call m n k → ℚ))
     (hW0 : ∀ w ∈ W', slice0 w ∈ V0 1 m n k)
     (hW1 : ∀ w ∈ W', Ignores (int7 m n k) DataStep w ∨ Moves (int7 m n k) NoiseStep w)
-    (P : Finset ℕ) (hP : P ⊆ range (nonFinal k m n)) (Ix Jx : Finset ℕ)
+    (P : Finset ℕ) (nf : ℕ → Call m n k → ℚ) (hI : NfIndep nf P) (Ix Jx : Finset ℕ)
     (hJ0 : ∀ j ∈ Jx, ∃ l < k, B l j ≠ 0) (hJ : ∀ j ∈ Jx, ∀ j' ∈ Jx, j ≠ j' → ∃ l < k, B l j ≠ B l j')
     (Op : Finset (Call m n k → ℚ)) (hop0 : ∀ w ∈ Op, slice0 w ∈ V0 1 m n k)
     (hopN : ∀ w ∈ Op, Moves (int7 m n k) NoiseStep w) (hopW : ∀ w ∈ Op, ∀ c ∈ W', ¬ ∀ g ∈ int7 m n k, w g = c g)
@@ -662,9 +705,9 @@ theorem all_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndepen
     (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (Call m n k → ℚ)) (Pg : List (Op100 (Call m n k)))
     (hL : ∀ f ∈ L, f ∈ FreeCall (inWords m n k ∪ W')) (hPg : ∀ o ∈ Pg, o.WFw h100Floor (FreeCall (inWords m n k ∪ W')))
     (hO : OutputsOn fpSem (int7 m n k) Pg L
-      ((P.image (nfWord R B) ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∪ Op)) :
+      ((P.image nf ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∪ Op)) :
     32 * (P.card + Ix.card * Jx.card + Op.card) ≤ cost100 h100Floor Pg := by
-  obtain ⟨hD, hc⟩ := allTarget hind B hB W' hW0 hW1 P hP Ix Jx hJ0 hJ Op hop0 hopN hopW hopd
+  obtain ⟨hD, hc⟩ := allTarget B hB W' hW0 hW1 P nf hI Ix Jx hJ0 hJ Op hop0 hopN hopW hopd
   rw [← hc]
   exact charged _ (freeCall_const _) _ fpSem L Pg _ hL hPg hD hO
 
@@ -920,9 +963,9 @@ values the constants, the call's input words and its coin words, a well-formed `
 non-final words at `P`, the final words of `Ix × Jx`, the committed block-1 `X` registers of `Xi` (biased packing) and
 the committed block-1 `Y` registers of `Yi`, on every int7 input and every noise, costs at least
 `32·(|P| + |Ix|·|Jx| + |Xi| + |Yi|)`. The `Y` registers need weights not all `31` mod 256. -/
-theorem block1_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndependent k 16 R) (B : Mat)
+theorem block1_charged [DecidableEq (Call m n k → ℚ)] (B : Mat)
     (hB : ∀ l j, -255 ≤ B l j ∧ B l j ≤ 255)
-    (P : Finset ℕ) (hP : P ⊆ range (nonFinal k m n)) (Ix Jx : Finset ℕ)
+    (P : Finset ℕ) (nf : ℕ → Call m n k → ℚ) (hI : NfIndep nf P) (Ix Jx : Finset ℕ)
     (hJ0 : ∀ j ∈ Jx, ∃ l < k, B l j ≠ 0) (hJ : ∀ j ∈ Jx, ∀ j' ∈ Jx, j ≠ j' → ∃ l < k, B l j ≠ B l j')
     (Xi Yi : Finset (ℕ × ℕ)) (hXi : ∀ x ∈ Xi, x.1 < m ∧ 4 * x.2 < k)
     (hYi : ∀ y ∈ Yi, y.1 < n ∧ 4 * y.2 < k ∧ ∃ t : Fin 4, byte (B (4 * y.2 + t) y.1) ≠ 31)
@@ -930,7 +973,7 @@ theorem block1_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointInde
     (hL : ∀ f ∈ L, f ∈ FreeCall (inWords m n k ∪ coinWords m n k))
     (hPg : ∀ o ∈ Pg, o.WFw h100Floor (FreeCall (inWords m n k ∪ coinWords m n k)))
     (hO : OutputsOn fpSem (int7 m n k) Pg L
-      ((P.image (nfWord R B) ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∪
+      ((P.image nf ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∪
         (Xi.image (fun x => xWord x.1 x.2) ∪ Yi.image fun y => yWord B y.1 y.2))) :
     32 * (P.card + Ix.card * Jx.card + (Xi.card + Yi.card)) ≤ cost100 h100Floor Pg := by
   have hxx : ∀ x ∈ Xi, ∀ x' ∈ Xi, x ≠ x' →
@@ -966,7 +1009,7 @@ theorem block1_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointInde
       by_cases hye : y = y'
       · rw [hye]
       · exact absurd h (hyy y hy y' hy' hye)
-  have h := all_charged hind B hB (coinWords m n k) coinWords_V0 coinWords_ignore P hP Ix Jx hJ0 hJ _
+  have h := all_charged B hB (coinWords m n k) coinWords_V0 coinWords_ignore P nf hI Ix Jx hJ0 hJ _
     (fun w hw => by
       rcases Finset.mem_union.1 hw with hw | hw
       · obtain ⟨x, -, rfl⟩ := Finset.mem_image.1 hw
@@ -1338,9 +1381,9 @@ constants, the call's input words and its coin words, a well-formed `MH100w` pro
 and every noise, the non-final words at `P`, the final words of `Ix × Jx`, the committed `X` registers `XI` (all three
 blocks, biased packing; `xAll_props`' conditions on `R`) and the committed block-1 `Y` registers `Yi` (weights not all
 `31` mod 256), costs at least `32·(|P| + |Ix|·|Jx| + |XI| + |Yi|)`. -/
-theorem ncp_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndependent k 16 R) (B : Mat)
+theorem ncp_charged [DecidableEq (Call m n k → ℚ)] (B : Mat)
     (hB : ∀ l j, -255 ≤ B l j ∧ B l j ≤ 255) (hR : ∀ l, ∑ j ∈ range k, |R j l| ≤ 1)
-    (P : Finset ℕ) (hP : P ⊆ range (nonFinal k m n)) (Ix Jx : Finset ℕ)
+    (P : Finset ℕ) (nf : ℕ → Call m n k → ℚ) (hI : NfIndep nf P) (Ix Jx : Finset ℕ)
     (hJ0 : ∀ j ∈ Jx, ∃ l < k, B l j ≠ 0) (hJ : ∀ j ∈ Jx, ∀ j' ∈ Jx, j ≠ j' → ∃ l < k, B l j ≠ B l j')
     (XI : Finset (ℕ × ℕ × ℕ))
     (hXI : ∀ x ∈ XI, x.1 < 3 ∧ x.2.1 < m ∧
@@ -1354,7 +1397,7 @@ theorem ncp_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndepen
     (hL : ∀ f ∈ L, f ∈ FreeCall (inWords m n k ∪ coinWords m n k))
     (hPg : ∀ o ∈ Pg, o.WFw h100Floor (FreeCall (inWords m n k ∪ coinWords m n k)))
     (hO : OutputsOn fpSem (int7 m n k) Pg L
-      ((P.image (nfWord R B) ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∪
+      ((P.image nf ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∪
         (XI.image (xAll R) ∪ Yi.image fun y => yWord B y.1 y.2))) :
     32 * (P.card + Ix.card * Jx.card + (XI.card + Yi.card)) ≤ cost100 h100Floor Pg := by
   obtain ⟨hx0, hxN, hxW, hxx, hxD⟩ := xAll_props (m := m) (n := n) (k := k) R hR XI hXI h12
@@ -1388,7 +1431,7 @@ theorem ncp_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndepen
       by_cases hye : y = y'
       · rw [hye]
       · exact absurd h (hyy y hy y' hy' hye)
-  have h := all_charged hind B hB (coinWords m n k) coinWords_V0 coinWords_ignore P hP Ix Jx hJ0 hJ _
+  have h := all_charged B hB (coinWords m n k) coinWords_V0 coinWords_ignore P nf hI Ix Jx hJ0 hJ _
     (fun w hw => by
       rcases Finset.mem_union.1 hw with hw | hw
       · obtain ⟨x, hx, rfl⟩ := Finset.mem_image.1 hw
@@ -1409,6 +1452,30 @@ theorem ncp_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndepen
         exact yWord_ne_coin B y.1 y.2 (hYi y hy).2.2 c hc)
     hd fpSem L Pg hL hPg hO
   rwa [hcard] at h
+
+/-- **`ncp_charged` on route U**: honest's committed values when `X` is biased by `128` (`xAll`'s packing), the
+checked words `nfWordU 128` (`initU`'s start, so `C^U_T = A·B`), the final words, the `X` registers and the block-1
+`Y` registers, cost at least `32·(|P| + |Ix|·|Jx| + |XI| + |Yi|)`. -/
+theorem ncpU_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndependent k 16 R) (B : Mat)
+    (hB : ∀ l j, -255 ≤ B l j ∧ B l j ≤ 255) (hR : ∀ l, ∑ j ∈ range k, |R j l| ≤ 1)
+    (P : Finset ℕ) (hP : P ⊆ range (nonFinal k m n)) (Ix Jx : Finset ℕ)
+    (hJ0 : ∀ j ∈ Jx, ∃ l < k, B l j ≠ 0) (hJ : ∀ j ∈ Jx, ∀ j' ∈ Jx, j ≠ j' → ∃ l < k, B l j ≠ B l j')
+    (XI : Finset (ℕ × ℕ × ℕ))
+    (hXI : ∀ x ∈ XI, x.1 < 3 ∧ x.2.1 < m ∧
+      (x.1 = 0 → 4 * x.2.2 < k) ∧
+      (x.1 = 1 → ∃ t : Fin 4, ∃ j < k, R j (4 * x.2.2 + t) ≠ 0) ∧
+      (x.1 = 2 → ∃ t : Fin 4, ∃ j < k, (if j = 4 * x.2.2 + t then 1 else 0) + R j (4 * x.2.2 + t) ≠ 0))
+    (h12 : ∀ i c, (0, i, c) ∈ XI → (1, i, c) ∈ XI →
+      ∃ t : Fin 4, ∃ j < k, R j (4 * c + t) ≠ if j = 4 * c + t then 1 else 0)
+    (Yi : Finset (ℕ × ℕ)) (hYi : ∀ y ∈ Yi, y.1 < n ∧ 4 * y.2 < k ∧ ∃ t : Fin 4, byte (B (4 * y.2 + t) y.1) ≠ 31)
+    (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (Call m n k → ℚ)) (Pg : List (Op100 (Call m n k)))
+    (hL : ∀ f ∈ L, f ∈ FreeCall (inWords m n k ∪ coinWords m n k))
+    (hPg : ∀ o ∈ Pg, o.WFw h100Floor (FreeCall (inWords m n k ∪ coinWords m n k)))
+    (hO : OutputsOn fpSem (int7 m n k) Pg L
+      ((P.image (nfWordU 128 R B) ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∪
+        (XI.image (xAll R) ∪ Yi.image fun y => yWord B y.1 y.2))) :
+    32 * (P.card + Ix.card * Jx.card + (XI.card + Yi.card)) ≤ cost100 h100Floor Pg :=
+  ncp_charged B hB hR P _ (nfIndep_U 128 hind B P hP) Ix Jx hJ0 hJ XI hXI h12 Yi hYi fpSem L Pg hL hPg hO
 
 end FinalWord
 
