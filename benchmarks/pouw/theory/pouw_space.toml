@@ -365,11 +365,11 @@ kind = "unmeasured"
 source = "N-PREM interim 1 §2: served noise std 41-43 units (6-9 for ssn-1l), bracketed by SW-PPL's measured ssn-1l-b4-v1 (+0.01% / +0.17%), so about +0.2% at most (estimate); N-PPL to measure. N-PPL interim 1 §2 (partial, labelled so): -0.03% / -0.07% / -0.45% [-0.71, -0.17] at 2K on 8/16 windows, seeds 0-2 (W2K r20261029-075511-dbba/-075550-5f1f/-075917-4067/-075957-3605, running)"
 
 [t3.ssn-1l-tag-v1]
-models = []
-ctx2k = "?"
-ctx8k = "?"
-kind = "unmeasured"
-source = "N-RED interim 1 §3: served noise std 10.0-16.2 units with the tags (6.0 / 9.2 for ssn-1l), so about 0 to +0.2% interpolated on SW-PPL's b1 and b4 rows (estimate); needs its own SW-PPL row. N-PPL interim 1 §8: queued for its interim 2, waiting on N-RED for the exact tag layout"
+models = ["llama-3.2-1b"]
+ctx2k = -0.00139
+ctx8k = -0.00029
+kind = "measured"
+source = "N-PPL interim 2 §3 (note compute-research/20261029T1055Z-report-np-ppl, art:849fe4d87c66f5cd375283ce5521a2f3e1b9e431a17fa5b881344188dba7e0be): ssn-1l-tag-v1 served noisy, std 14.1 / 14.6, -0.139% [-0.245, -0.042] at 2K (4/16 windows) and -0.029% [-0.103, +0.045] at 8K (6/16), 5 seeds. The coin lanes read it too: their column term folds exactly (fold-range), so the served output carries the tag lanes' noise alone, the lead served noisy (NIGHT §8 decision 10, 12:25Z). Was: N-RED interim 1 §3's estimate, about 0 to +0.2%"
 
 [t3.nsf-v1]
 models = []
