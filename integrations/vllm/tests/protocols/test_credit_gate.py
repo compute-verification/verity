@@ -589,21 +589,6 @@ def test_a_z_written_outside_the_trace_is_refused_as_untraced():
     assert CG.verdict(t, y, z)["reason"] == f"credit: served-output-not-credited-kernel: q y from {ZY}, z from <untraced>"
 
 
-def test_untraced_work_is_no_invocation_of_the_call_and_the_trace_resumes_after_it():
-    with CG.untraced():
-        a = torch.ones(3) * 2
-    with CG.Trace("q") as t:
-        b = torch.ones(3)
-        with CG.untraced():
-            c = b * 2
-            with CG.untraced():
-                d = c + 1
-        e = b * 3
-    assert [i.name for i in t.invocations] == ["aten::ones", "aten::mul"]
-    assert t.producer(c) is None and t.producer(d) is None and t.producer(e).name == "aten::mul"
-    assert a.tolist() == c.tolist() and CG._active() == []
-
-
 def test_a_call_recorded_outside_a_traced_apply_is_not_credited():
     run = PH.H1Run("t", hashlib.sha512(b"salt").digest(), {0: "q"}, [(32, K)], 32, 1)
     run.record(0, torch.zeros(2, K, dtype=torch.int8), torch.ones(2), torch.zeros(32, K, dtype=torch.int8), torch.ones(32, 1))

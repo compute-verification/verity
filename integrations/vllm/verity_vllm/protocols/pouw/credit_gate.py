@@ -20,16 +20,11 @@ y is dq of their z and the served y is theirs.
   ``<untraced>`` is a tensor no traced op wrote, ``<none>`` a z the path never computed.
 * **What it sees.** Only ops through torch's dispatcher.  A kernel launched outside it (a cubin through the driver) writes
   nothing the trace sees, so its output is ``<untraced>`` and earns nothing: a fused kernel is credited once it is a
-  dispatcher op (``torch.library``) returning its z and its y.  The protocol's own commit of a call's values, which runs
-  inside the call once the arm hands them over (`untraced`), is outside its trace: it reads y and z and writes neither,
-  and runs no GEMM.
+  dispatcher op (``torch.library``) returning its z and its y.
 """
 from __future__ import annotations
 
-import threading
 from collections import Counter
-from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import cache
 from typing import Any, Iterable, Mapping, Sequence
@@ -131,11 +126,9 @@ class Trace:
     def __enter__(self) -> Trace:
         self._mode = _mode()(self)
         self._mode.__enter__()
-        _active().append(self)
         return self
 
     def __exit__(self, *exc: Any) -> None:
-        _active().pop()
         self._mode.__exit__(*exc)
 
     def dispatch(self, mode: Any, func: Any, args: Sequence[Any], kwargs: Mapping[str, Any]) -> Any:
@@ -168,34 +161,6 @@ class Trace:
         return self.invocations[self.writer[k]] if k in self.writer else None
 
 
-_THREAD = threading.local()
-
-
-def _active() -> list[Trace]:
-    if not hasattr(_THREAD, "traces"):
-        _THREAD.traces = []
-    return _THREAD.traces
-
-
-@contextmanager
-def untraced() -> Iterator[None]:
-    """The protocol's own work inside a linear's call (its commit of the values the arm handed over), run outside the
-    call's trace: this thread's innermost `Trace` is paused meanwhile, so its ops are no invocation of the call and pay no
-    trace. Traced as before when no trace is active, or when another mode is above the trace's, which only it may pop."""
-    from torch.utils._python_dispatch import _get_current_dispatch_mode
-
-    traces = _active()
-    mode = traces[-1]._mode if traces else None
-    if mode is None or _get_current_dispatch_mode() is not mode:
-        yield
-        return
-    mode.__exit__(None, None, None)
-    try:
-        yield
-    finally:
-        mode.__enter__()
-
-
 def verdict(trace: Trace, y: Any, z: Any) -> dict[str, Any]:
     """The credit rule on one call: y, the tensor the linear handed back to vLLM, and z, the credited kernel's output (None if
     the path computed none)."""
@@ -220,4 +185,4 @@ def reasons(verdicts: Iterable[Mapping[str, Any]]) -> dict[str, int]:
 
 
 __all__ = ["GEMMS", "GEMM_COUNT", "Invocation", "KNOWN", "NONE", "NOT_CREDITED", "NOT_GEMMS", "RECORDS", "Trace", "UNTRACED",
-           "key", "reasons", "untraced", "verdict"]
+           "key", "reasons", "verdict"]

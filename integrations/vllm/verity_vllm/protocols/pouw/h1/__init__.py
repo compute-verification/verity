@@ -456,11 +456,10 @@ class H1Run:
         bisect.insort(self.calls, call, key=lambda c: c.index)
         self._in[s] += 1
         if self.commit:
-            with CG.untraced():
-                self._commit_tables(call, a, s_a, records, zy)
-                if self.served is not None:
-                    self._roots[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, records)
-                TD.flush(self)
+            self._commit_tables(call, a, s_a, records, zy)
+            if self.served is not None:
+                self._roots[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, records)
+            TD.flush(self)
         for fn in self.listeners:
             out = fn(call, a, s_a, weight, weight_scale)
             if out is not None:
