@@ -369,8 +369,8 @@ def certifier_capacity(inp: dict, ll: dict, r1: dict) -> list[dict]:
             continue
         point = inp["points"][p["point"]]
         macs = ll["macs_per_token"] * point["m"]
-        t2 = p["gpu_400g"]["t2_overlapped"]
-        excess = ((t2 - 1.0) * point["t_stock_s"] * peak(inp) - (alpha - 1.0) * macs) / macs
+        t2 = p["gpu_400g"]["t2_judged"]
+        excess = ((t2 - 1.0) * min(point[e] for e in ENGINES) * peak(inp) - (alpha - 1.0) * macs) / macs
         rows.append({"point": p["point"], "t2": t2, "excess_idle_stock_macs_per_stock_mac": excess})
     return rows
 
