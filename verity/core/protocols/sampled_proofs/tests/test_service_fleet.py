@@ -14,7 +14,7 @@ import test_service_sessions as T
 from test_service import SESSION, Clock, _lean, _ports, _record, _refused, _round, _stream
 
 
-def _open(stream: S.Stream, n: int = 6) -> S.Registration:
+def _open(stream: S.Stream, n: int = 6) -> S.WindowCommitmentRecord:
     """A registration the stream receives and leaves open."""
     previous = R.digest(stream._entries[-1].registration.record) if stream._entries else None
     return stream.register(_record(n, row=len(stream._entries), previous=previous), _ports(n))

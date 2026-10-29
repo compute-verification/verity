@@ -763,7 +763,7 @@ def _all(units: list[dict], name: str) -> dict[str, Any]:
 Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 
-def draw_key(coin: bytes, stream: S.Stream, reg: S.Registration) -> Key:
+def draw_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> Key:
     """The window draw's key: the epoch's draw coin, under the stream and the registration and receipt it was opened after."""
     return derive(coin, DRAW_DOMAIN, CC.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
 
@@ -901,7 +901,7 @@ class Challenger:
         ticks = itertools.count()
         self.clock = clock or (lambda: float(next(ticks)))
         self.streams: dict[tuple[str, int], S.Stream] = {}
-        self.regs: dict[str, tuple[S.Stream, S.Registration]] = {}
+        self.regs: dict[str, tuple[S.Stream, S.WindowCommitmentRecord]] = {}
         self.replays: dict[str, str] = {}
         self.passes: dict[str, str] = {}
         self.manifests: dict[str, Any] = {}   # each registered window's pass manifest, read (`_distinct`)
@@ -1010,7 +1010,7 @@ class Challenger:
                                                clock=self.clock, sampler=sampler)
         return self.streams[name, ell]
 
-    def _held(self, name: str) -> tuple[S.Stream, S.Registration]:
+    def _held(self, name: str) -> tuple[S.Stream, S.WindowCommitmentRecord]:
         if name not in self.regs:
             raise _refused("unknown", name)
         return self.regs[name]
@@ -1021,7 +1021,7 @@ class Challenger:
         return self.draws[name]
 
     def register(self, name: str, rec: Mapping[str, Any], stream: str = "window", replay: str | None = None,
-                 manifest: bytes | None = None, recorded: bool = False) -> S.Registration:
+                 manifest: bytes | None = None, recorded: bool = False) -> S.WindowCommitmentRecord:
         """Receive window `rec` from the pass whose manifest is `manifest` (`pass_epoch`), or a control's (`replay`).  A
         window received after the epoch's draw coin was released is refused (`late-registration`)."""
         self.witness[name] = []
@@ -1054,7 +1054,7 @@ class Challenger:
         return reg
 
     def _certified(self, name: str, rec: Mapping[str, Any], stream: str, replay: str | None, manifest: bytes | None,
-                   recorded: bool) -> S.Registration:
+                   recorded: bool) -> S.WindowCommitmentRecord:
         """A certified window's registration (`register`).  First the window's drawn unit must read its salt
         (`salt.unit_reason`, ``unsalted``), which this window's `Pc8TileSide` doesn't, so today every certified window is
         refused here, before its stream receives it and before the certifier is asked for anything.  Past that, the
