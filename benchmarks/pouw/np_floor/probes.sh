@@ -5,7 +5,8 @@
 # is built on its own (one that doesn't build for sm_90a is logged and skipped) and gated outside the lease; under one
 # gpu-lease, probe.py times every probe whose verdict is the declared one, with the SM clock sampled.
 #   research run --on vy-dc-h200-5 --project verity --campaign pouw-night --source <tree> --cwd source \
-#     --env GPU_LEASE_WHO=n-floor -- bash benchmarks/pouw/np_floor/probes.sh
+#     --env GPU_LEASE_WHO=n-floor -- bash benchmarks/pouw/np_floor/probes.sh [SOURCE.cu...]
+# SOURCE.cu... replaces the list (every probe of each is timed): race.cu, the honest wgmma against the word programs.
 # Writes $OUT/build.log, gate-build.{txt,json}, sass/, smi.csv and one probe.py run directory a binary.
 set -uo pipefail
 OUT=${OUT:?run under research run}
@@ -27,9 +28,14 @@ declare -A ONLY=(
   ["$OP/probes/match.cu"]='^match_any'
   ["$OP/probes/pipes.cu"]='^(dfma|i2f64|f2f64|s64|cvt_u64|cvt_frnd64|cvt_f64_u32|cvt_f64_s64)$'
 )
+srcs=("$HERE/tld4.cu" "$OP/probes/lm.cu" "$OP/probes/side.cu" "$OP/probes/collective.cu" "$OP/probes/match.cu"
+  "$OP/probes/pipes.cu")
+if [ $# -gt 0 ]; then
+  srcs=()
+  for s in "$@"; do s=$(cd "$(dirname "$s")" && pwd)/$(basename "$s"); srcs+=("$s"); ONLY[$s]=${ONLY[$s]:-.}; done
+fi
 : >"$WORK/built"
-for s in "$HERE/tld4.cu" "$OP/probes/lm.cu" "$OP/probes/side.cu" "$OP/probes/collective.cu" "$OP/probes/match.cu" \
-  "$OP/probes/pipes.cu"; do
+for s in "${srcs[@]}"; do
   if python3 "$OP/probe.py" build --arch sm_90a --out "$WORK" "$s" >"$WORK/one" 2>>"$OUT/build.log"; then
     cat "$WORK/one" >>"$WORK/built"
     echo "$(basename "$s" .cu) ${ONLY[$s]}" >>"$WORK/only"
