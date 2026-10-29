@@ -7,6 +7,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # What the tests import of `verity`: the audit's codec, receipts and record, on the commitments, the randomness and the
 # profile; its coins on the one challenger, local and as a service.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/record.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
@@ -14,6 +15,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/ml/crypto", "verity/ml/randomness",
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
           "verity/core/protocols/pous",
+          # the deployment layer and its wire, which the session's parties run on (`session_parties.py`)
+          "verity/core/wire", "verity/core/deploy",
           # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and
           # test_gate_ranges.py recompute from codec.encode_word, the f32 evaluators and property/v1's rules, and
           # Exp2Lut127's table, which test_gate_ranges.py holds to vLLM's (fixtures/exp2_lut127.json)

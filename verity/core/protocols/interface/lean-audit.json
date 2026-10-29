@@ -22,6 +22,11 @@
    "imports": ["Lean.Data.Json", "Flock.Bytes", "Flock.Canon"],
    "except": [],
    "why": "the interface is spec: a protocol's properties are stated over `Protocol`, `Outcome`, `Answer`, `Integrity` and `Ratio`, so these import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another"
+  },
+  "CoreProtocol.Record": {
+   "imports": ["Lean.Data.Json", "Flock.Bytes", "Flock.Hash"],
+   "except": [],
+   "why": "the record entry form is spec: a ledger's properties are stated over the entries `Record.ofJson` reads and the `Record.message` they are signed under, so it imports only Lean's JSON and C-Flock's bytes and SHA-512"
   }
  },
  "dependencies": {

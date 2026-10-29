@@ -25,6 +25,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # core protocol interface and the LMS verifier, core's identity and randomness, and C-Flock's verifier with its
 # configuration.
 inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/record.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw", "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs",
           "benchmarks/pouw/h1_lanes/run.py", "benchmarks/pouw/h1_prove/h1unit.py",

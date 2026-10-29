@@ -7,8 +7,8 @@
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). FIELDS (default "255 511 512 521 767 768 1023
 # 1279") names the builds; NVFLAGS adds nvcc flags (a variant's -D); DIAGS ("1 3 7") adds a WT_SK_DIAG build of each
-# field per value; RECEIPT=1 adds -DWT_RECEIPT=1 and builds reader.cu, the receipts' commit; BENCH_ARGS passes through
-# to bench.py. PROFILE, if set, runs bench.py under ncu with those options
+# field per value; RECEIPT=1 adds -DWT_RECEIPT=1 and builds reader.cu, the receipts' commit (bench.py's --sketch wants
+# it); BENCH_ARGS passes through to bench.py. PROFILE, if set, runs bench.py under ncu with those options
 # (out/prof.ncu-rep) and prints its details and SASS source pages.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"

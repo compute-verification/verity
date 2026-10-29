@@ -449,7 +449,7 @@ class NoiseTiles:
 
     def output(self, seed: bytes, j: int) -> bytes:
         m = TILE_DOMAIN + seed + j.to_bytes(8, "big")
-        out = b"".join(hashlib.sha512(m + c.to_bytes(4, "big")).digest() for c in range(-(-self.z_bytes // 64)))
+        out = b"".join(hashlib.sha512(m + c.to_bytes(4, "big")).digest() for c in range(-(-self.z_bytes // DIGEST_BYTES)))
         return out[:self.z_bytes]
 
     def evidence(self, seed: bytes, j: int) -> bytes:

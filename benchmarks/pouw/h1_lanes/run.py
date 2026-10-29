@@ -49,9 +49,9 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   3 whose ``pub`` row holds index 4, which opens no root but lane 4's (REJECT). ``ok-from-public``: the combine whose
   ``o0`` the prover commits afresh, the public file stating it, which the verifier's own reads refuse (REJECT).
   ``lane3-index-from-public``: lane 3 whose ``pub`` row (its index, 3) the prover commits afresh and the public file
-  states, checked against a verifier's file that leaves ``pub`` out and says it is complete: refused by the verifier's
-  `Registered.checkComplete` by name (REJECT, ``WHY``); ``lane3-index-from-public-open``, the same session against that
-  file without ``complete``, which nothing else refuses (ACCEPT, by design: the control).
+  states, checked against a verifier's file that leaves ``pub`` out: refused by the verifier's
+  `Registered.checkComplete`, which flock-verify runs on every statement of a ``--registered`` file, by name (REJECT,
+  ``WHY``).
   ``combine-skips-p5-bit``: the combine over a circuit that reads bit i of ``p5`` in place of its last bit j, two bits the
   honest row holds equal (`lazy_combine`, its own Program), so its ok is 1 on the honest rows and it depends on no bit j:
   the verifier's file marks every A, B and partials port ``read_in_full`` (`leaf_lanes.registered_file`), and Flock's
@@ -119,15 +119,13 @@ STEPS = 1
 EXPECT = {"swap-lane3": "REJECT", "swap-lane4": "REJECT", "swap-combine": "ACCEPT", "lane3-reads-row4": "REJECT",
           "other-leaf": "REJECT", "other-leaf-in-tree-lane5": "REJECT", "other-leaf-in-tree": "REJECT",
           "lane5-partial-off-tree": "REJECT", "receipt-mismatch": "REJECT", "lane3-index4": "REJECT",
-          "ok-from-public": "REJECT", "lane3-index-from-public": "REJECT", "lane3-index-from-public-open": "ACCEPT",
+          "ok-from-public": "REJECT", "lane3-index-from-public": "REJECT",
           "combine-skips-p5-bit": "REJECT", "combine-skips-p5-bit-unmarked": "ACCEPT", "other-registration-file": "REJECT",
           "other-registration-file-held": "ACCEPT"}
 #: the refusal a negative's verdict names
 WHY = {"lane3-index-from-public": "registered reads (complete): the statement's port pub is no port of the verifier's",
        "combine-skips-p5-bit": "registered reads: known port p5: no computed row of the circuit reads bit",
        "other-registration-file": "registered reads: port a0 is not the layout's read of "}
-#: a check of another check's statement against its registered file without ``complete``
-OPEN = {"lane3-index-from-public-open": "lane3-index-from-public"}
 #: a check of another check's statement against its registered file with one port's ``read_in_full`` mark removed
 UNMARKED = {"combine-skips-p5-bit-unmarked": ("combine-skips-p5-bit", "p5")}
 #: the world whose records the verifier holds at a check, where it is not the statement's own
@@ -399,8 +397,7 @@ def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, ind
     `known_opening`); the verifier reads ``w``'s registration and produced roots at `leaf_lanes.reads`' rows and registers
     its known ports (`known_rows`, `produced.known_port`), ``o0`` among them. ``free``: output ports the prover commits
     afresh, which the public file states (``o0`` in ``ok-from-public``). ``dropped``: known input ports committed afresh
-    and left out of the verifier's file too, which still says it is complete (``pub`` in ``lane3-index-from-public``),
-    written beside it without ``complete`` as well. ``lane_index``: the index the lane's ``pub`` row holds, when not
+    and left out of the verifier's file too (``pub`` in ``lane3-index-from-public``). ``lane_index``: the index the lane's ``pub`` row holds, when not
     ``ln``. ``variant``: the stager and Program of ``combine-skips-p5-bit`` (``lazy``), when not ``kind``'s. The lowered
     ok is held to the word reference (`expected`) in place of `UnitStager.reference_check`, as h1_prove's stage does."""
     st = ctx.stagers[variant or kind]
@@ -443,8 +440,6 @@ def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, ind
     vd = ctx.work / "verifier"
     (vd / f"{tag}.pub.bin").write_bytes(pub)
     (vd / f"{tag}.registered.json").write_text(json.dumps(reads))
-    if dropped:
-        (vd / f"{tag}.open.registered.json").write_text(json.dumps({x: v for x, v in reads.items() if x != LL.COMPLETE}))
     return {"tag": tag, "kind": kind, "lane": ln, "world": w.name, "stmt": "combine" if ln is None else str(ln),
             "dir": str(d), "pub": str(vd / f"{tag}.pub.bin"),
             "registered": str(vd / f"{tag}.registered.json"), "program": str(vd / f"{variant or kind}.program.json"),
@@ -603,8 +598,6 @@ def prepare(args) -> None:
     with mp.get_context("fork").Pool(args.jobs) as pool:
         recs = list(pool.imap_unordered(run_job, js))
     by = {r["tag"]: r for r in recs}
-    for tg, of in OPEN.items():
-        by[tg] = {**by[of], "tag": tg, "registered": by[of]["registered"].replace(".registered.json", ".open.registered.json")}
     for tg, (of, port) in UNMARKED.items():
         reads = json.loads(Path(by[of]["registered"]).read_text())
         if reads["ports"][port].pop(LL.READ_IN_FULL, None) is not True:
@@ -618,7 +611,7 @@ def prepare(args) -> None:
         r["holds"] = HOLDS.get(tg, r["world"])
     honest = [jb[0] for jb in js if jb[0] not in EXPECT]
     proved = [jb[0] for jb in js]
-    checks = proved + list(OPEN) + list(UNMARKED) + list(HELD)
+    checks = proved + list(UNMARKED) + list(HELD)
     vd = work / "verifier"
     with open(work / "plan.tsv", "w") as f:
         for tg in proved:
