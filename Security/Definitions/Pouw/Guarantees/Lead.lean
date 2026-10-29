@@ -1,0 +1,95 @@
+import Definitions.Pouw.Assumptions.Lead
+
+/-!
+# The lead's work guarantee (trusted statements)
+
+The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). Its guarantee's proof is
+`Pouw.SecurityProofs.Lead.G : Pouw.Guarantees.Lead.G`, composed from the lanes' pieces under `Proofs/Pouw/Lead/`.
+
+* `G`: for every prover strategy the node can run on a call, its priced W1 work summed over the coin values on which
+  the call is accepted is at least the honest work less the gap, at each of those values (`|O| · honest − |Ω| · gap`),
+  or one of those values' executions hashed a SHA-512 collision with the honest commitment. With `O` every coin value,
+  it is the average: `E_ω[work] ≥ honest − gap`. The gap is `gapRegs`, a defined function of the layout.
+* `GapAt`: the gap's share of stock at T 512 × 64, T 512 × 512 and T 8,192, for every call of `n, K ≥ 4,096`, at cap
+  32: at most 0.190%, 0.168% and 0.165%. `GapAt320`: at cap 320, at most 0.514%, 0.492% and 0.489%.
+* `Honest`: the hypotheses hold at the honest deployed instance: the nominal W1 table, and a set of strategies meeting
+  every premise whose honest strategy is accepted at every coin value.
+* `Nontrivial`: the conclusion fails for a verifier that accepts everything: at the three points the honest work
+  exceeds the gap, and a strategy that does nothing does no work and hashes nothing.
+-/
+
+namespace Pouw.Guarantees.Lead
+
+open Pouw.Lead Pouw.Assumptions.Lead Pouw.Dimension.H100
+
+/-- **The lead's work guarantee.** For every price table `pr` meeting `H32`, lane semantics `fpSem`, hash `H`, call
+`m × K × n` at `T` tokens of whole MMA tiles (`16 ∣ m`, `8 ∣ n`), data `κ` in range, raw coin stream `stream`,
+commitment format `C` with its form classifier `isA`, network certifier `cert` and set `Real` of the strategies the
+node can run, under the named premises, every
+strategy `σ` the node's processors run (`can`) and every set `O` of coin values on which its call is accepted has
+`Σ_{ω ∈ O} work(ω) ≥ 32 · (|O| · honestRegs − |Ω| · gapRegs)`, or at some `ω ∈ O` its execution hashed a SHA-512
+collision with the honest commitment's messages. -/
+def G : Prop :=
+  ∀ (pr : Prices100) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
+    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
+    (stream : Coins (lead T m n K) → ℕ → Fin tileWords → ℤ) (C : Pouw.Lead.Commit (lead T m n K))
+    (isA : Hash.Msg → Bool) {Device : Type} (cert : Device)
+    (runC : Device → Hash.Digest × Coins (lead T m n K) → Hash.Digest × Coins (lead T m n K))
+    (can Real : Strategy (lead T m n K) → Prop),
+    16 ∣ m → 8 ∣ n →
+    DataInRange (lead T m n K) κ → RawStream (lead T m n K) stream → CommitL1w H C isA κ →
+    H32 pr → W1 pr Real → TileGrain stream Real → LaneSemantics fpSem Real → OneInstructionMinimal Real →
+    CardWithinAccelW1 can Real → ShaWrites isA Real → HonestHashRuled H C κ Real →
+    TrustedNebiusHost cert runC → OutsourceWithinEgressLead pr Real →
+    ∀ σ, can σ → ∀ O : Finset (Coins (lead T m n K)), (∀ ω ∈ O, Accepted (lead T m n K) H C κ σ ω) →
+      32 * ((O.card : ℚ) * honestRegs (lead T m n K) C -
+          (Fintype.card (Coins (lead T m n K)) : ℚ) * gapRegs (lead T m n K) C) ≤
+        ∑ ω ∈ O, (σ.work pr ω : ℚ) ∨
+      ∃ ω ∈ O, Break (lead T m n K) H C κ σ ω
+
+/-- A call's commitment at the lead's layout: its words chunks are `wordChunks`. -/
+def ChunksOf (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) : Prop := C.chunks = wordChunks L
+
+/-- **The gap at the three points, cap 32**: for every call of `n, K ≥ 4,096`, the gap's share of stock is at most
+0.190% at T 512 × 64, 0.168% at T 512 × 512 and 0.165% at T 8,192. -/
+def GapAt : Prop :=
+  ∀ n K : ℕ, 4096 ≤ n → 4096 ≤ K →
+    (∀ C : Pouw.Lead.Commit (pt512x64 n K), ChunksOf _ C → gapShare _ C ≤ 190 / 100000) ∧
+    (∀ C : Pouw.Lead.Commit (pt512x512 n K), ChunksOf _ C → gapShare _ C ≤ 168 / 100000) ∧
+    (∀ C : Pouw.Lead.Commit (pt8192 n K), ChunksOf _ C → gapShare _ C ≤ 165 / 100000)
+
+/-- **The gap at the three points, cap 320**: at most 0.514%, 0.492% and 0.489%. -/
+def GapAt320 : Prop :=
+  ∀ n K : ℕ, 4096 ≤ n → 4096 ≤ K →
+    (∀ C : Pouw.Lead.Commit (lead320 512 64 n K), ChunksOf _ C → gapShare _ C ≤ 514 / 100000) ∧
+    (∀ C : Pouw.Lead.Commit (lead320 512 512 n K), ChunksOf _ C → gapShare _ C ≤ 492 / 100000) ∧
+    (∀ C : Pouw.Lead.Commit (lead320 8192 8192 n K), ChunksOf _ C → gapShare _ C ≤ 489 / 100000)
+
+/-- **The honest lemma**: at every call of the lead with data in range, the hypotheses hold at the honest deployed
+instance: the nominal W1 table meets `H32`, and some set of strategies meets every premise of `G` (with the coin stream,
+commitment and certifier the protocol's) and holds an honest strategy accepted at every coin value. -/
+def Honest : Prop :=
+  ∀ (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
+    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ),
+    DataInRange (lead T m n K) κ →
+    ∃ (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (stream : Coins (lead T m n K) → ℕ → Fin tileWords → ℤ)
+      (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool) (Device : Type) (cert : Device)
+      (runC : Device → Hash.Digest × Coins (lead T m n K) → Hash.Digest × Coins (lead T m n K))
+      (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
+      RawStream (lead T m n K) stream ∧ CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧
+      TileGrain stream Real ∧
+      LaneSemantics fpSem Real ∧ OneInstructionMinimal Real ∧ CardWithinAccelW1 Real Real ∧ ShaWrites isA Real ∧
+      HonestHashRuled H C κ Real ∧ TrustedNebiusHost cert runC ∧ OutsourceWithinEgressLead h100Nominal Real ∧
+      Real σ ∧ ∀ ω, Accepted (lead T m n K) H C κ σ ω
+
+/-- **The nontrivial lemma**: `G`'s conclusion fails for a verifier that accepts everything. At the three points the
+honest work exceeds the gap, and a strategy that does nothing does no priced work and hashes nothing, so with every
+coin value accepted only a collision among the honest commitment's own messages would meet the conclusion. -/
+def Nontrivial : Prop :=
+  ∀ n K : ℕ, 4096 ≤ n → 4096 ≤ K →
+    (∀ C : Pouw.Lead.Commit (pt512x64 n K), ChunksOf _ C → gapRegs _ C < honestRegs _ C) ∧
+    (∀ C : Pouw.Lead.Commit (pt512x512 n K), ChunksOf _ C → gapRegs _ C < honestRegs _ C) ∧
+    (∀ C : Pouw.Lead.Commit (pt8192 n K), ChunksOf _ C → gapRegs _ C < honestRegs _ C) ∧
+    ∀ (L : Pouw.Lead.Layout) (pr : Prices100), ∃ σ : Strategy L, ∀ ω, σ.work pr ω = 0 ∧ (σ.exec ω).hashed = []
+
+end Pouw.Guarantees.Lead

@@ -2065,6 +2065,14 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Pouw.Dimension.H100.Op100.WFw": {
+   "owner": "@compute-research",
+   "digest": "3c262f0cf43b42f5fa9eb7e65e712e23e623a61d9d81fb7a09ddd2ef0f3bf917"
+  },
+  "Pouw.Dimension.H100.OutputsOn": {
+   "owner": "@compute-research",
+   "digest": "1a0f317152cb533e338886bbe680b409335537eb42219f370fd865f31302a2f9"
   }
  },
  "meaning": [
@@ -2497,9 +2505,16 @@
    "sealed": true
   },
   "Definitions.Pouw.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw", "Definitions.Pouw.Assumptions"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Core.Assumptions",
+    "Definitions.Claims",
+    "Definitions.Pouw",
+    "Definitions.Pouw.Assumptions"
+   ],
    "except": [],
-   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do",
+   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do; the lead's trusted-host premise instantiates core's (Definitions.Core.Assumptions), as the inference-only policy's do",
    "sealed": true
   },
   "Definitions.Pouw.Guarantees": {
@@ -2517,7 +2532,7 @@
   },
   "Definitions.Pouw": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
-   "except": ["Definitions.Pouw.PearlC.Defs"],
+   "except": ["Definitions.Pouw.PearlC.Defs", "Definitions.Pouw.Lead.Model"],
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
   },
   "Definitions.Pouw.Basic": {
@@ -2535,6 +2550,17 @@
    ],
    "except": [],
    "why": "Pearl-C's Π, definitions only, over Fp8Atom's definitions: the game and the named assumption read it"
+  },
+  "Definitions.Pouw.Lead.Model": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Hash.Basic",
+    "Definitions.Pouw.Lead.Layout",
+    "Definitions.Pouw.Dimension.Pointwise",
+    "Definitions.Pouw.Assumptions.Dimension.H100"
+   ],
+   "except": [],
+   "why": "the lead's strategy model, definitions only: a strategy's trace is MH100's instructions and its price MH100's tables (Op100, Prices100, regs100, cost100, from Definitions.Pouw.Assumptions.Dimension.H100, none of its named assumptions), its run the chunk model's (Definitions.Pouw.Dimension.Pointwise), and a commitment's messages and digests the hash area's (Definitions.Hash.Basic)"
   },
   "Definitions.Pous.Assumptions": {
    "imports": ["Mathlib", "Definitions.Pous", "Definitions.Pous.Assumptions"],
@@ -11015,22 +11041,40 @@
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
   },
   "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor : Pouw.Guarantees.Writes.DistinctWritesMH100Floor"],
+   "assumptions": [],
+   "type_hash": "ffbccb36ecf4e42c8d088293f27130db1b54ed6912cc0d37d0668a3beb9303d6"
   },
   "Pouw.SecurityProofs.Writes.RunBall": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Writes.RunBall : Pouw.Guarantees.Writes.RunBall"],
+   "assumptions": [],
+   "type_hash": "68097eca292ce4d1a0878699cbe7f975ced168d812d6f7faa99f66c6eab28e23"
   },
   "Pouw.SecurityProofs.Writes.RunPairs": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Writes.RunPairs : Pouw.Guarantees.Writes.RunPairs"],
+   "assumptions": [],
+   "type_hash": "296c1fb8da6eac62858c4e96d6069747b6b7b0f55598a0c0c8c3466c3c982caf"
   },
   "Pouw.SecurityProofs.Writes.SsnServedCharged": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Writes.SsnServedCharged : Pouw.Guarantees.Writes.SsnServedCharged"],
+   "assumptions": [],
+   "type_hash": "1c538768e14a10d6260904bf4e423be9985c41ddea6d3ab0fa2f065a9cd4e6eb"
   },
   "Pouw.SecurityProofs.Writes.SsnServedDistinct": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Writes.SsnServedDistinct : Pouw.Guarantees.Writes.SsnServedDistinct"],
+   "assumptions": [],
+   "type_hash": "fbc74786492cbda4c7a5830b2fda966e0d4375f41baf133a165f48d053696d93"
   },
   "Pouw.SecurityProofs.Writes.SsnServedShift": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Writes.SsnServedShift : Pouw.Guarantees.Writes.SsnServedShift"],
+   "assumptions": [],
+   "type_hash": "868e3369af0857a64e550adc2ebc0bae92b4b4e9d59a7012f2fa750af37ba729"
   },
   "RecDeploy.HonestHalfFixture.honest_half_fixture": {
    "owner": "@proofs",
@@ -26129,7 +26173,11 @@
    "definitions": {
     "Pouw.Dimension.Embed.fpVal": "a1d93fe6493e64fe90c44c321fc3634aa0805a5601e59db545abae090dcfa4d4"
    },
-   "guarantees": ["Pouw.Fp8Atom.H1T.Proofs.h1tGamma"]
+   "guarantees": [
+    "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
+    "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
+    "Pouw.SecurityProofs.Writes.SsnServedCharged"
+   ]
   },
   "Definitions.Pouw.Assumptions.Dimension.H100": {
    "digest": "7fb99c30623bc4c9fafb1e72a99287196f7cd11d6979e0ce623ec5e65f1aea81",
@@ -26151,10 +26199,14 @@
     "Pouw.Dimension.H100.cost100": "c6e667ff1a515b6b0306e2c417226b2abdd730d49d9401476ee5e1d3adb91cb5",
     "Pouw.Dimension.H100.regs100": "3c835bc7174e0368cd9c5fe7717a12d248cf4652368ba4f1c691a281f26fdf88"
    },
-   "guarantees": ["Pouw.Fp8Atom.H1T.Proofs.h1tGamma"]
+   "guarantees": [
+    "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
+    "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
+    "Pouw.SecurityProofs.Writes.SsnServedCharged"
+   ]
   },
   "Definitions.Pouw.Assumptions.Dimension.H100Assumptions": {
-   "digest": "661455d1fb61029d4e0a4c80e434e227f959ebdf5c0b4bdb5373e832147e76fd",
+   "digest": "fb22ff8ac0719decfd6dac17cc6dd91d5fa2d3ca90a99ac28183c097d0fbd039",
    "definitions": {
     "Pouw.Dimension.H100.Floor": "779a343c115e76cc39a4b1831f5a2b17c3bb6ef6f059acd29ab10065873e414c",
     "Pouw.Dimension.H100.H32": "c2b063f5d0a4f801815e77964f44ec4871e50a6cf6ac5a43b5425829af301801",
@@ -26181,17 +26233,44 @@
     "Pouw.Dimension.H100.Shape100.rec": "1dbead74ef11d5de78bbd07a830a9c31f563ec2577a08a3b4ba2e0c80779dafe",
     "Pouw.Dimension.H100.Shape100.regPrice": "79bfca032692c212a4adfad8ae9ec9243b19969a43d8ea311aee47fdec672a18",
     "Pouw.Dimension.H100.Shape100.s8": "857c848cfcf3d79aa250471866372aac5b0e8faf039f728f055de7990a189e63",
-    "Pouw.Dimension.H100.Shape100.tf32": "9547cbb0091bc626bc7c9b32c7296888f5669a20e966f1eedf3e04b0a44599f2"
+    "Pouw.Dimension.H100.Shape100.tf32": "9547cbb0091bc626bc7c9b32c7296888f5669a20e966f1eedf3e04b0a44599f2",
+    "Pouw.Dimension.H100.nominalMac": "ff0014d94244d94d379487b71d43cce7fb17cc4f341402b2d2b8c32d1843eb46"
    },
-   "guarantees": ["Pouw.Fp8Atom.H1T.Proofs.h1tGamma"]
+   "guarantees": [
+    "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
+    "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
+    "Pouw.SecurityProofs.Writes.SsnServedCharged"
+   ]
+  },
+  "Definitions.Pouw.Assumptions.Dimension.H100Floor": {
+   "digest": "1e99ab59fc7d1ec661cc444143bd82cab3b8187349d6cee1fa03c52e51b17583",
+   "definitions": {
+    "Pouw.Dimension.H100.h100Floor": "fa43668902dc4c2a388723dcf95ff5ac9ea130a53bdf3301659837ea971a878c"
+   },
+   "guarantees": ["Pouw.SecurityProofs.Writes.SsnServedCharged"]
+  },
+  "Definitions.Pouw.Assumptions.Dimension.H100LoopFree": {
+   "digest": "1b806c9c966783d2bc842d3915f8f364e18f1cebaeaf2b42dc3e4aebfb89fd7b",
+   "definitions": {
+    "Pouw.Dimension.H100.h100LoopFree": "d41f33a1770c7666258b0e6a031cc207f1fc8419e589191e5092b457a790e82a"
+   },
+   "guarantees": ["Pouw.SecurityProofs.Writes.SsnServedCharged"]
   },
   "Definitions.Pouw.Assumptions.Dimension.H100W": {
-   "digest": "babd265d2e6d433d6768f995555fceab51aa3e899426a04373b22b75cc26ff49",
+   "digest": "c935e70527dc086ef76cd313d64d24165c588aa600dfeacac48f2a0c4503db18",
    "definitions": {
+    "Pouw.Dimension.H100.DistinctOn": "663f52479b4c9f8ec4ecf2268636b4f0cf9db200a1246212856631bae3c158d7",
+    "Pouw.Dimension.H100.DistinctWritesMH100Floor": "a201cdd0ed5a64f43a73049d479d41e868ff2f0edd6e18e981a26073e0aca6fb",
     "Pouw.Dimension.H100.Op100.WFw": "3c262f0cf43b42f5fa9eb7e65e712e23e623a61d9d81fb7a09ddd2ef0f3bf917",
-    "Pouw.Dimension.H100.Op100.WFw._sparseCasesOn_1": "91e62f22b455a528014c4c8216b4c4048d582e855ecda44e2a55733df55af5bd"
+    "Pouw.Dimension.H100.Op100.WFw._sparseCasesOn_1": "91e62f22b455a528014c4c8216b4c4048d582e855ecda44e2a55733df55af5bd",
+    "Pouw.Dimension.H100.OutputsOn": "1a0f317152cb533e338886bbe680b409335537eb42219f370fd865f31302a2f9"
    },
-   "guarantees": ["Pouw.Fp8Atom.H1T.Proofs.h1tGamma"]
+   "guarantees": [
+    "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
+    "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
+    "Pouw.SecurityProofs.Writes.SsnServedCharged",
+    "Pouw.SecurityProofs.Writes.SsnServedDistinct"
+   ]
   },
   "Definitions.Pouw.Assumptions.Dimension.Mixing": {
    "digest": "f01e5fcb66acc1b3507c6ad7565d4953f3c4a2e693174c3c6f0c9f92d1aea3cf",
@@ -27051,6 +27130,55 @@
     "Pouw.Dimension.MinRankGe": "933eb6b182a96758dd6a00b6a416628b77478886d52063e30857f9084fd7eaff"
    },
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
+  },
+  "Definitions.Pouw.Dimension.Pointwise": {
+   "digest": "b2a0b5765cbe0046394be625adc0d37bf2cbd842f8fe9437ca2089a7f3dc0bc2",
+   "definitions": {
+    "Pouw.Dimension.Pointwise.Step": "457a797f45b8c536735a705919447fdc20b94df29276bde7116dd4fc0aabdd2b",
+    "Pouw.Dimension.Pointwise.Step.apply": "225c1b966740cb345110c8004561cbf066229b453a273994b6baeb2580e74414",
+    "Pouw.Dimension.Pointwise.Step.casesOn": "633436503aec3c4157f0f36e12270570521218251603d5efdffe32afd705e56c",
+    "Pouw.Dimension.Pointwise.Step.copy": "a60470288ff0e6365da3d45b3e6763839a95248de86cbc2c74229d0c66838141",
+    "Pouw.Dimension.Pointwise.Step.cost": "f6872e5790e1439bfa8e3e3a9d951560a5ec7841f2e463aa6d4ff57cbf6a921c",
+    "Pouw.Dimension.Pointwise.Step.rec": "b61fc908c05c538e8956fdba11147b2dc0bdd37b01b845f68c88efb00e9d5119",
+    "Pouw.Dimension.Pointwise.Step.write": "3cd0eebde86c02af6382e7c2a234c24f38967aba6e786fe6a24fa666d78124e8",
+    "Pouw.Dimension.Pointwise.pairs": "f0ef434f47067be4decb67db62c345b190e5e253a68dbccd7c08c1ed095fecb2",
+    "Pouw.Dimension.Pointwise.run": "39f1a90cb3a6510c063ca61a3b9302f6189a88981f773bb64c8e259728510ad8",
+    "Pouw.Dimension.Pointwise.writes": "557f1c4cc9e520f721fec83531271eb949c2a35e01e2fd1fd2599e286a02a90a"
+   },
+   "guarantees": ["Pouw.SecurityProofs.Writes.RunBall", "Pouw.SecurityProofs.Writes.RunPairs"]
+  },
+  "Definitions.Pouw.Dimension.Ssn": {
+   "digest": "614aa0b2266386aaf81b034cf6f5df30e24eec009db8a7c950d9e2e9c07698c4",
+   "definitions": {
+    "Pouw.Dimension.Ssn.Bits": "361c76227363fba6d5b6efeb6c23a2a67d09ab72d28a62f5abfc2ab78a091e4c",
+    "Pouw.Dimension.Ssn.FreeB": "8fe3f27a9f5e37393e7bb51e211fa36a357d21294d546080290fc18fe2428f41",
+    "Pouw.Dimension.Ssn.ShiftSeparatedOn": "b92a45db2049205cb25ace93cfd3cc8f021a2969cb798111eb6182ef50571545",
+    "Pouw.Dimension.Ssn.aff": "9716b39f925cdc42dcb52cd8349c7ce3fe3c571384a6c8ea8c124c97d41f051b",
+    "Pouw.Dimension.Ssn.bitCoef": "6292b3a8c99a1fb8eaa0b79ee0cdf44098070b6b1e2ddeebb64213a982156127",
+    "Pouw.Dimension.Ssn.code5": "7849fbae5786fc47713fabf7f4f4a3af66e59b65920895a0e6610339b4c64646",
+    "Pouw.Dimension.Ssn.coinCoef": "a6403dcbbe9d2ef048e5a3a9ab8fee0435c61aebb822a8ea317b116f39e33f23",
+    "Pouw.Dimension.Ssn.l4Pos": "c5f0141a016ab619a167186e753f4bcbc80ba7d21f6533ee660e614df9822c63",
+    "Pouw.Dimension.Ssn.l4Src": "4e96965f94df77c81cc65fd6672b8c87fb17157bb8b7f0c9df49901ebb28d8a3",
+    "Pouw.Dimension.Ssn.l4Word": "2ded5a16f7f6bf63c8cc8a2d79daea49f02c1283e3ba60da246a8aec649e20d8",
+    "Pouw.Dimension.Ssn.l4Words": "53149b55af310f5b9930b8b839580a903203a9c8ef2c6c276c68231183055252",
+    "Pouw.Dimension.Ssn.l5Pos": "a803a5adfac0b904ddb21a683f2434d067700e684b1f5e535969f83ef2422734",
+    "Pouw.Dimension.Ssn.l5Src": "a2dd76821ef0e1597526847a0f9f072731b19a799a1ecdd4a92039ffb1eeda07",
+    "Pouw.Dimension.Ssn.l5Word": "fb4e091bf3072bd23aa12e6ac42a87e56d9c95b7223386816141d121f21016b9",
+    "Pouw.Dimension.Ssn.l5Words": "e0c8eaa9158e22b84efcaa327317ebd2f4150df0c6dae115423f10f5c9b071ec",
+    "Pouw.Dimension.Ssn.ssnC": "003060382a6afc466d13da176f5f1c5f2a6cfda97fc30ce34d07d4bdc9e57c0a",
+    "Pouw.Dimension.Ssn.ssnCode": "46623e39d3192d76540517c3b3c7f40fbbd6ab094ec450c72e8b17aa72d0e892",
+    "Pouw.Dimension.Ssn.ssnDigit": "efc9a7503021617bcb45cebab732061c310b67b0da7675790fe91cd5fad706fa",
+    "Pouw.Dimension.Ssn.ssnWordB": "6eaf99cf6dd1332e2d18ae08e613d5aa9bb8a4329980fa88cec2942733a6815f",
+    "Pouw.Dimension.Ssn.ssnWords": "1c24d349350e014d8e448eb99719a9ae8a18a01e31b8656060b07ada872db609",
+    "Pouw.Dimension.Ssn.w1l": "4da1a6bd768888f4b895680f9a8db57fd692c02d16217f848f79320278d2d2ec",
+    "Pouw.Dimension.Ssn.w5": "198974ef1763a910cc02d93368e9cbf65c550a0d60cdadc9c1ee15b1d14fc016",
+    "Pouw.Dimension.Ssn.z5": "f61ebaab2139ab8d738105957929b4804c40059b015a91952cd573f78626896a"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.Writes.SsnServedCharged",
+    "Pouw.SecurityProofs.Writes.SsnServedDistinct",
+    "Pouw.SecurityProofs.Writes.SsnServedShift"
+   ]
   },
   "Definitions.Pouw.Dither": {
    "digest": "fd28260d2b0d3eaf470453e9fa0aac249750d47973a0e9b446eaf49610724c08",
@@ -28338,6 +28466,25 @@
     "Pouw.Guarantees.ShaRealize.ExtractOfRealize": "c1e59f484542dc91173c7134a9905feaadf29ce1c4ca23ec6342f20a09f51a4a"
    },
    "guarantees": ["Pouw.SecurityProofs.ShaRealize.ExtractOfRealize"]
+  },
+  "Definitions.Pouw.Guarantees.Writes": {
+   "digest": "9c1e1a62dc0a63b28e465ac8a50f3c830ecb2f22ddd15324fb06fc9a07b0c4ce",
+   "definitions": {
+    "Pouw.Guarantees.Writes.DistinctWritesMH100Floor": "e0e1af11bc1fbf2fd5bb28968437145f64041b363aa21830905d76064094d33d",
+    "Pouw.Guarantees.Writes.RunBall": "2aa89369655045ee524da819c1566e1832bcb160649a9881152cdb4bcf0e1668",
+    "Pouw.Guarantees.Writes.RunPairs": "82832b893c3158656d5e6f49dd4eb79dbef63b8980bd6204f7b22f9869dc09f3",
+    "Pouw.Guarantees.Writes.SsnServedCharged": "414bb8fa8d8c56432eb10b2386ae017389e253b6ead8696b0d3bbe364eeb86ec",
+    "Pouw.Guarantees.Writes.SsnServedDistinct": "fbdcbbbe7d5a87903a41bc43ee656db6990eeaf3dcc9dc0f8a1a1fa659efd768",
+    "Pouw.Guarantees.Writes.SsnServedShift": "69d500eb4e8a4d159f61f106dbcf09c12115243483e7ec0f720c331a451cd7c7"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
+    "Pouw.SecurityProofs.Writes.RunBall",
+    "Pouw.SecurityProofs.Writes.RunPairs",
+    "Pouw.SecurityProofs.Writes.SsnServedCharged",
+    "Pouw.SecurityProofs.Writes.SsnServedDistinct",
+    "Pouw.SecurityProofs.Writes.SsnServedShift"
+   ]
   },
   "Definitions.Pouw.H1Zy.Chain": {
    "digest": "a6901138796f7f750a365bd092388178e54641ae4dd0fab9a6074931117228f1",

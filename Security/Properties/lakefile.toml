@@ -73,7 +73,7 @@ path = "../../verity/core/protocols/composition"
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
   "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R", "Properties.Pouw.ServedValues", "Properties.Pouw.Strata",
-  "Properties.Pouw.Credit",
+  "Properties.Pouw.Credit", "Properties.Pouw.Lead.Commit",
   "Properties.Nci", "Properties.Nci.Threads", "Properties.CertifierDevice", "Properties.Pous",
   "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd",
   "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt", "Properties.Pous.PeriodDeployed",

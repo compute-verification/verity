@@ -32,7 +32,7 @@ largest share of the digit pairs that `op` sends to one value.
   and the rest's are a product.
 
 The targets are fixed before the draw. A target chosen after it is a branch on the coins, which the adaptive bounds
-treat (`AdaptiveProofs`).
+treat (`Lead.CoinBranch`).
 -/
 
 namespace Pouw.Dimension.Alphabet
