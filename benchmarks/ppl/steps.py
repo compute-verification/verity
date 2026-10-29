@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import atexit
 import math
+import os
 import zlib
 
 import torch
@@ -308,6 +309,8 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str 
     k = mm.x.shape[1]
     coined = mm.cached("pos", lambda: coin_positions(mm, k, density)) if density < 1 else None
     xq, sa = act_quant(mm.x, act, bits, act_top, coined, dither_bits)
+    if os.environ.get("ZCHUNK") and not group:
+        SSNFP_STATS.append(zero_chunks(mm.where, xq))
     if weight == "dither":
         wq = (wq.float() + mm.coins(wq.shape, levels)).to(torch.int8)
     if group:
@@ -1339,10 +1342,22 @@ def ssnfp_noise(mm, fmt: str, m: int, n: int, k: int) -> tuple[torch.Tensor, int
 SSNFP_STATS: list = []
 
 
+def zero_chunks(where: str, xq: torch.Tensor, first: int = 24, later: int = 31) -> dict:
+    """ssn-1l-tag's later-step data chunks of int8 rows (`later` entries a step after step 1's `first`) that are all
+    zero: there a row's step vector is the previous step's plus its coin bit, so a coin-reading prover copies it
+    whenever the bit is 0. `ZCHUNK=1` records one a linear call (`SSNFP_STATS`' file)."""
+    m, k = xq.shape
+    s = -(-(k - first) // later)
+    z = torch.nn.functional.pad(xq[:, first:], (0, s * later - (k - first))).reshape(m, s, later).eq(0).all(dim=2)
+    per_row = z.sum(dim=1)
+    return {"kind": "zchunk", "where": where, "m": m, "k": k, "steps": s + 1, "chunks": m * s, "zero": int(z.sum()),
+            "zero_rows": int(xq.eq(0).all(dim=1).sum()), "rows_any": int((per_row > 0).sum()),
+            "max_row": int(per_row.max()) if m else 0}
+
+
 @atexit.register
 def _ssnfp_dump() -> None:
     import json
-    import os
     run = os.environ.get("RESEARCH_RUN_DIR")
     path = os.environ.get("SSNFP_STATS") or (f"{run}/out/ssnfp_stats" if run else None)
     if path and SSNFP_STATS:
