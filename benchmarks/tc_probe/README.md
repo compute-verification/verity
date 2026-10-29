@@ -39,4 +39,4 @@ reads. `instances_hw.py` writes `probe_results.json` and `capture_<tier>.npz`. `
 writes them with `--out`.
 
 Status: current. `benchmarks/tc_probe_fp4` is the Blackwell FP4 and FP8 counterpart. `tests/` covers the trust levels, the
-input sets and the store declarations without a GPU, and replays a handful of instances where nvcc and a GPU are present.
+input sets and the store declarations without a GPU, and replays a handful of inputs where nvcc and a GPU are present.
