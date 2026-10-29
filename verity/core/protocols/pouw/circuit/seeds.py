@@ -52,6 +52,7 @@ from verity.ml.circuits.refs import Coll, Explicit, array_of, concat
 from verity.ml.circuits.types import Array
 from verity.ml.commitments import domains
 from verity.ml.commitments.gates.sha512 import IV, compress_gadget, pad_tail, words_be
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from . import hashes as H
 from . import words as W
@@ -74,7 +75,7 @@ POS = Array(2, W.U32)
 SEED_PAIR = Array(2, DIGEST)
 DIGEST_BITS = BL.bit_type(DIGEST)
 POS_BITS = BL.bit_type(POS)
-BLOCK_BITS = 512
+BLOCK_BITS = 8 * DIGEST_BYTES["sha512"]
 
 
 def types(boolean: bool) -> tuple[Array, Array]:
@@ -92,7 +93,7 @@ def _u64(x: int) -> bytes:
 
 def _tagged(tag: bytes, salt: bytes, position: int, root_a: bytes, root_b: bytes) -> bytes:
     for what, v in (("salt", salt), ("root_a", root_a), ("root_b", root_b)):
-        if len(v) != 64:
+        if len(v) != DIGEST_BYTES["sha512"]:
             raise ValueError(f"{what} is a 64-byte digest, not {len(v)} bytes")
     p = _u64(position)
     data = tag + bytes(salt) + bytes(root_a) + bytes(root_b)
@@ -117,7 +118,7 @@ def call_seed(salt: bytes, call: int, root_a: bytes, root_b: bytes) -> bytes:
 
 def noise_block(seed_j: bytes, t: int) -> bytes:
     """Block t of the noise stream of seed_j."""
-    if len(seed_j) != 64:
+    if len(seed_j) != DIGEST_BYTES["sha512"]:
         raise ValueError(f"a seed is a 64-byte digest, not {len(seed_j)} bytes")
     return hashlib.sha512(NOISE_TAG + bytes(seed_j) + _u64(t)).digest()
 
