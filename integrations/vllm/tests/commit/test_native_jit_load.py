@@ -150,6 +150,18 @@ def test_a_header_free_source_set_keeps_its_digest(tmp_path):
     assert nj.source_set_digest(paths, cflags=(), cuda_cflags=(), **VERSIONS) == h.hexdigest()
 
 
+def test_the_committer_stages_the_gpus_sha512_header_and_its_bytes_key_the_digest(tmp_path, monkeypatch):
+    from verity.ml.kernels import SHA512
+
+    paths = nj.source_paths()
+    assert ("sha512.cuh", str(SHA512)) in nj.local_headers(paths)
+    digest = nj.source_set_digest(paths, **VERSIONS)
+    moved = tmp_path / "sha512.cuh"
+    moved.write_bytes(SHA512.read_bytes() + b"\n")
+    monkeypatch.setitem(nj.SHARED, "sha512.cuh", str(moved))
+    assert nj.source_set_digest(paths, **VERSIONS) != digest, "a byte of the shared header moves the digest"
+
+
 def test_a_header_outside_the_sources_directory_is_refused(tmp_path):
     (tmp_path / "src").mkdir()
     (tmp_path / "up.h").write_bytes(b"")
