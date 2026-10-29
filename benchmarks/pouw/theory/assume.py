@@ -241,6 +241,30 @@ def superopt_windows(seed: int) -> dict:
     return out
 
 
+def s8(rng: random.Random, n: int = FR.NV) -> list[int]:
+    return [FR.u32(rng.randint(-128, 127)) for _ in range(n)]
+
+
+def superopt_zero_data(seed: int) -> dict:
+    """The zero-data pair step: one s8 coin lane a k32 step, so S_t = S_{t-1} + e_t·f_t is one IMAD, and the step
+    σ ⊕ S_t ⊕ S_{t+1} reads (σ, S_{t-1}, e_t, f_t, e_{t+1}, f_{t+1}). Honest-shaped is three instructions."""
+    rng = random.Random(seed ^ 0x2E40)
+    sig, sp = FR.vecs(rng), FR.vecs(rng)
+    e1, f1, e2, f2 = s8(rng), s8(rng), s8(rng), s8(rng)
+    St = [FR.u32(a + b * c) for a, b, c in zip(sp, e1, f1)]
+    St1 = [FR.u32(a + b * c) for a, b, c in zip(St, e2, f2)]
+    step = [FR.u32(a ^ b ^ c) for a, b, c in zip(sig, St, St1)]
+    pool = {"sig": sig, "Sprev": sp, "e1": e1, "f1": f1, "e2": e2, "f2": f2}
+    out = {"S_t given its operands: one instruction": FR.single(St, pool),
+           "sig^S_t from (sig,Sprev,e1,f1): one instruction": FR.single(
+               [FR.u32(a ^ b) for a, b in zip(sig, St)], {k: pool[k] for k in ("sig", "Sprev", "e1", "f1")}),
+           "pair step from the six: two instructions": FR.two(step, pool)}
+    ext = dict(pool)
+    ext["St"] = St
+    out["sanity: pair step given S_t: two instructions"] = FR.two(step, ext)
+    return out
+
+
 # ---- pricing ----------------------------------------------------------------------------------------------------
 
 def price(h_lead=(120.0, 230.0)) -> dict:
@@ -276,6 +300,7 @@ def main() -> int:
         "persistent_fibre": persistent_fibre(rng, max(20, args.trials // 4)),
         "sign_flip_32": sign_flip_32(rng, args.trials),
         "superopt": superopt_windows(args.seed),
+        "superopt_zero_data": superopt_zero_data(args.seed),
         "price": price(),
     }
     fails = []
@@ -294,6 +319,11 @@ def main() -> int:
         fails.append("the pair step has a two-instruction program")
     if not res["superopt"]["sanity: pair step given S_t: two instructions"]:
         fails.append("sanity: the pair step given S_t should take two instructions")
+    zd = res["superopt_zero_data"]
+    if not zd["S_t given its operands: one instruction"] or not zd["sanity: pair step given S_t: two instructions"]:
+        fails.append("sanity: the zero-data step should be one IMAD, and the pair step given S_t two instructions")
+    if zd["sig^S_t from (sig,Sprev,e1,f1): one instruction"] or zd["pair step from the six: two instructions"]:
+        fails.append("the zero-data pair step has a shorter program than three instructions")
     res["fails"] = fails
     text = json.dumps(res, indent=1, default=str)
     if args.out:
