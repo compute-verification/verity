@@ -131,8 +131,9 @@ def test_a_shard_no_plan_declares_is_refused(spec):
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_a_shard_runs_its_parts_alone_in_their_groups_order_and_lean_audit_on_its_packages(tmp_path, n):
-    for k, parts in enumerate(_resolved(n), 1):
-        assert CHECK.shard(f"{k}/{n}") == {"k": k, "n": n, "parts": parts, "all": D.all_parts(CHECK.JOBS, {"lean-audit": PACKAGES})}
+    for k, planned in enumerate(_resolved(n), 1):
+        parts = [p for p in planned if p.partition(":")[0] not in CHECK.OFF_GATE]
+        assert CHECK.shard(f"{k}/{n}") == {"k": k, "n": n, "parts": parts, "all": D.all_parts(D.gated(CHECK.JOBS), {"lean-audit": PACKAGES})}
         gs = CHECK.groups(tmp_path, 16, only=parts)
         ran = [name for g in gs for name, _, _ in g]
         assert sorted(ran) == sorted({p.partition(":")[0] for p in parts})
@@ -145,6 +146,15 @@ def test_a_shard_runs_its_parts_alone_in_their_groups_order_and_lean_audit_on_it
         audit = [argv for g in gs for name, argv, _ in g if name == "lean-audit"]
         want = [p.partition(":")[2] for p in parts if p.startswith("lean-audit:")]
         assert [[argv[i + 1] for i, x in enumerate(argv) if x == "--package"] for argv in audit] == ([want] if want else [])
+
+
+@pytest.mark.parametrize("n", sorted(D.plans()))
+def test_a_shard_skips_circuit_check_which_its_plan_names_and_the_shards_cover_every_job_on_the_gate(n):
+    shards = [CHECK.shard(f"{k}/{n}") for k in range(1, n + 1)]
+    assert any("circuit-check" in s for s in _resolved(n)), "the plan keeps it, so putting it back on the gate is one line"
+    assert not any("circuit-check" in s["parts"] for s in shards)
+    assert sorted(p for s in shards for p in s["parts"]) == sorted(shards[0]["all"]) == sorted(CHECK.gated_parts())
+    assert "circuit-check" not in shards[0]["all"]
 
 
 def test_a_shard_without_the_other_half_gets_every_core(tmp_path, monkeypatch):

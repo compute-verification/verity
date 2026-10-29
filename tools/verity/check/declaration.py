@@ -11,7 +11,10 @@ A job is a `[[job]]` table:
 - `after`: optional, a job in another group that must end first: this one starts once it has passed or been skipped, and is
   stopped if it fails. The job it names has no `after` of its own;
 - `part`: optional, one of `PARTS`, the part of the check (`check.py PART...`) the job belongs to (`select`); `check.py
-  --deferred JOB,...` names jobs instead (`needed`).
+  --deferred JOB,...` names jobs instead (`needed`);
+- `gate`: optional, default true; false takes the job off the merge gate (`gated`): a recorded check, whole or a shard,
+  skips it, `research merge` requires it of no check, and it runs in drive's after-landing run (`check.py --deferred`), whose red
+  reverts its culprit. Such a job has no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
 
 The file also carries `schema = "ci/v0"`. Anything else is refused: an unknown key, a missing field, a wrong type, a
 duplicate name, or an owner the registry doesn't know. Reading the file runs none of the commit's code. Stdlib only.
@@ -35,7 +38,7 @@ ROOT = Path(__file__).resolve().parents[3]
 PATH = ROOT / "tools" / "verity" / "check" / "ci.toml"
 REGISTRY = ROOT / ".agents" / "skills" / "using-slack" / "registry.json"
 FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": str, "merge_requires": list, "needs": list,
-          "after": str, "part": str}
+          "after": str, "part": str, "gate": bool}
 REQUIRED = ("name", "owner", "group")
 #: the jobs a plan may split, and what their parts are
 SPLIT = {"lean-audit": "the Lake packages with a lean-audit.json"}
@@ -58,6 +61,7 @@ class Job:
     needs: tuple[str, ...] = ()
     after: str | None = None
     part: str | None = None
+    gate: bool = True
 
 
 def _toml(text: str, source: str) -> dict:
@@ -89,6 +93,8 @@ def parse(text: str, handles: set[str], source: str = "ci.toml") -> list[Job]:
             raise DeclarationError(f"{where}: merge_requires must be non-empty path strings")
         if t["group"] < 1:
             raise DeclarationError(f"{where}: group must be 1 or more")
+        if t.get("gate") is False and t.get("merge_requires"):
+            raise DeclarationError(f"{where}: merge_requires on a job off the gate (gate = false), which no merge requires")
         if "part" in t and t["part"] not in PARTS:
             raise DeclarationError(f"{where}: part {t['part']!r} isn't one of {', '.join(PARTS)}")
         if t["name"] in seen:
@@ -100,11 +106,15 @@ def parse(text: str, handles: set[str], source: str = "ci.toml") -> list[Job]:
             raise DeclarationError(f"{where}: needs {bad}, which aren't earlier jobs of its group")
         seen.add(t["name"])
         jobs.append(Job(t["name"], t["owner"], t["group"], t.get("halts", False), t.get("halts_on"),
-                        tuple(t.get("merge_requires", ())), tuple(t.get("needs", ())), t.get("after"), t.get("part")))
+                        tuple(t.get("merge_requires", ())), tuple(t.get("needs", ())), t.get("after"), t.get("part"),
+                        t.get("gate", True)))
     if not jobs:
         raise DeclarationError(f"{source}: declares no job")
     by = {j.name: j for j in jobs}
     for j in jobs:
+        if j.gate and (off := [n for n in (*j.needs, *[j.after] * bool(j.after)) if n in by and not by[n].gate]):
+            raise DeclarationError(f"{source}: job {j.name} is on the gate and waits on {', '.join(off)}, which is off it "
+                                   f"(gate = false): take {j.name} off the gate too, or put {', '.join(off)} back on it")
         if j.after is None:
             continue
         if (a := by.get(j.after)) is None:
@@ -177,6 +187,11 @@ def select(jobs: list[Job], parts: list[str]) -> set[str]:
     if loose := [j.name for j in jobs if j.part is None]:
         raise DeclarationError(f"ci.toml's {', '.join(loose)} declare no part, so a check of parts can't tell whether to run them")
     return needed(jobs, [j.name for j in jobs if j.part in parts])
+
+
+def gated(jobs: list[Job]) -> list[Job]:
+    """The jobs on the merge gate (all but `gate = false`), in file order: what a recorded check runs and a merge requires."""
+    return [j for j in jobs if j.gate]
 
 
 def needed(jobs: list[Job], names: list[str]) -> set[str]:
