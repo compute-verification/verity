@@ -158,7 +158,7 @@ namespace RecDeploy
 
 open Flock
 open FlockDeploy (Coin)
-open Claims.ZKMal (Layout ZKmalAt SeqTape iterSimG iterProver)
+open Claims.ZKMal (RunParts ZKmalAt SeqTape iterSimG iterProver)
 
 variable (IV : Claims.Verifier Coin) (b : Brings)
 
@@ -233,9 +233,9 @@ noncomputable def stepM (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg �
 theorem iterSimG_parts_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (T₀ : SeqTape)
     (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (S₀ : Claims.Simulator)
     (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg) :
-    ∀ (m : ℕ) (c : (iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB (parts IV b (T₀.N × T₀.Ω))) S₀ (fun j x => (SO x j).C)
+    ∀ (m : ℕ) (c : (iterSimG T₀ 0 NB ΩB (RunParts.seq T₀ 0 NB ΩB (parts IV b (T₀.N × T₀.Ω))) S₀ (fun j x => (SO x j).C)
         (fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (fun _ _ => Claims.Recursion.goesOn) m).C x),
-      (Claims.SP.eval H ask ((iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB (parts IV b (T₀.N × T₀.Ω))) S₀
+      (Claims.SP.eval H ask ((iterSimG T₀ 0 NB ΩB (RunParts.seq T₀ 0 NB ΩB (parts IV b (T₀.N × T₀.Ω))) S₀
         (fun j x => (SO x j).C) (fun j x u c => (SO x j).prog (xsOf IV b x j u) c)
         (fun _ _ => Claims.Recursion.goesOn) m).prog x c)).1 =
       (List.finRange m).foldl (fun τ (s : Fin m) => stepM IV b H ask SO x τ s
@@ -261,7 +261,7 @@ noncomputable def simEquiv {W : Type} (ivScope : Claims.Msg → Bool) (I : Claim
     (Claims.Recursion.Sim (deployRec IV ivScope b) I SO).C x ≃
       (simM IV b T₀ NB ΩB (simPre (deployRec IV ivScope b) I) SO).C x :=
   (Equiv.prodAssoc _ _ _).symm.trans (Claims.ZKMal.iterCoins T₀ 0 NB ΩB
-    (Layout.seq T₀ 0 NB ΩB (parts IV b (T₀.N × T₀.Ω))) (simPre (deployRec IV ivScope b) I) (fun j x => (SO x j).C)
+    (RunParts.seq T₀ 0 NB ΩB (parts IV b (T₀.N × T₀.Ω))) (simPre (deployRec IV ivScope b) I) (fun j x => (SO x j).C)
     (fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (fun _ _ => Claims.Recursion.goesOn) x (nS x)).symm
 
 /-- **`simM` at the claim's first-part simulator is `Sim`**: against every verifier, one transcript on the coins
@@ -276,7 +276,7 @@ theorem sim_eval {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursio
   obtain ⟨c₁, c₂, cs⟩ := c
   have hrhs := iterSimG_parts_eval IV b H ask T₀ NB ΩB (simPre (deployRec IV ivScope b) I) SO x (nS x)
     (simEquiv IV b ivScope I T₀ NB ΩB SO x (c₁, c₂, cs))
-  have hc : Claims.ZKMal.iterCoins T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB (parts IV b (T₀.N × T₀.Ω)))
+  have hc : Claims.ZKMal.iterCoins T₀ 0 NB ΩB (RunParts.seq T₀ 0 NB ΩB (parts IV b (T₀.N × T₀.Ω)))
       (simPre (deployRec IV ivScope b) I) (fun j x => (SO x j).C) (fun j x u c => (SO x j).prog (xsOf IV b x j u) c)
       (fun _ _ => Claims.Recursion.goesOn) x (nS x) (simEquiv IV b ivScope I T₀ NB ΩB SO x (c₁, c₂, cs)) =
         ((c₁, c₂), cs) :=
@@ -333,7 +333,7 @@ def ZKBoundM (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
   ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
     Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ →
       Claims.ZKmalRx (fun x => ((T₀ x).iter 0 NB ΩB (nS x)).N) (fun x => ((T₀ x).iter 0 NB ΩB (nS x)).Ω) H
-        (kM IV b) (fun w x => (refPM IV b (pre x) wit PS w).comap (Layout.flatten (T₀ x) 0 NB ΩB (nS x)))
+        (kM IV b) (fun w x => (refPM IV b (pre x) wit PS w).comap (RunParts.flatten (T₀ x) 0 NB ΩB (nS x)))
         (Claims.Recursion.R (deployRec IV ivScope b) I) (Claims.Recursion.Sim (deployRec IV ivScope b) I (SO t))
         (Claims.Recursion.εzk (deployRec IV ivScope b) I t δ₁) (Claims.Recursion.γzk (deployRec IV ivScope b) t)
 
