@@ -106,7 +106,7 @@ def test_the_count_is_the_evaluated_circuit():
 
 @pytest.mark.slow
 def test_each_lane_follows_its_own_half_where_the_halves_disagree(monkeypatch):
-    """``topp_split``'s own divergent rows (verity PR #169, ``test_topp_split_halves``): ordinary logits, the step kernels'
+    """``topp_split``'s own divergent rows (``test_topp_split_halves``): ordinary logits, the step kernels'
     partials constructed so that each half's own scalars decide ``nomask``, in both orders. The circuit, given the same partials
     for its step kernels, is ``sampling.topp_keep`` bit for bit."""
     from verity.ml.definitions.registry import sampling as SM
