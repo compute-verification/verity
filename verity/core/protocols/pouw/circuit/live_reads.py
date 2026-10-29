@@ -14,6 +14,8 @@ HEADER = 5
 #: the live Program's parameters after its ``PREFIX``, and the v2 Program's (`live.program_v2`)
 ROLES = ("slots", "requests", "m", "round")
 ROLES_V2 = (*ROLES, "caps")
+#: the pieced live Program's (`live.program_rows`): its pieces' public bases sit before the caps
+ROLES_ROWS = (*ROLES, "base", "caps")
 #: a slot leaf's and a request header's u16 words a row (u32 little-endian, low half first)
 SLOT_WORDS, HEADER_WORDS = 2, 2 * HEADER
 #: the statement's output row of the unit's ok, which reads the known ``<prefix>live-ok``
@@ -29,6 +31,8 @@ REQUEST_SCHEMA = G.SCHEMA_SEG
 SLOTS, REQUESTS, M_ROWS, ROUND_ROWS = "slots", "requests", "m", "round"
 #: the v2 unit's public caps, one table every round reads (``<prefix>caps``, its port ``cap_<i>`` row i)
 CAPS = "caps"
+#: a piece's public first row ``<prefix>base@<j>`` (piece j's, j R), its port ``base``
+BASE_ROWS = "base"
 
 
 def _cc() -> Any:
@@ -46,9 +50,9 @@ def table(prefix: str, name: str, s: int = 0) -> str:
     ``<prefix>live-ok`` (`OK_VALUE`)."""
     if name in (OK_VALUE, CAPS):
         return f"{prefix}{name}"
-    if name not in (SLOTS, REQUESTS, M_ROWS, ROUND_ROWS) or (name == REQUESTS and s != 0):
+    if name not in (SLOTS, REQUESTS, M_ROWS, ROUND_ROWS, BASE_ROWS) or (name == REQUESTS and s != 0):
         raise ValueError(f"a live statement's tables are {SLOTS}@<s>, {REQUESTS}@0, {M_ROWS}@<s>, {ROUND_ROWS}@<s>, "
-                         f"{CAPS} and {OK_VALUE}, not {name}@{s}")
+                         f"{BASE_ROWS}@<j>, {CAPS} and {OK_VALUE}, not {name}@{s}")
     return f"{prefix}{name}@{int(s)}"
 
 
@@ -100,6 +104,17 @@ def caps_table(program: str, prefix: str, window: str, T: int, max_tokens: Seque
     rows, salts = slot_words(cs), [_cc().public_row_salt(window, q) for q in range(T)]
     return rows, salts, G.Registered.commit(program, table(prefix, CAPS), rows, salts, G.WORD_BITS, G.SCHEMA_V2,
                                             window=window)
+
+
+def base_table(program: str, prefix: str, window: str, j: int, R: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
+    """Piece j's public first row ``<prefix>base@<j>``, the unit's ``base``: one row, j R's two u16 words, under
+    `core_check.public_row_salt` of the open root `window` and j, registered under `program` binding `window`. Every
+    input is public."""
+    if not (isinstance(j, int) and not isinstance(j, bool) and j >= 0 and 0 <= j * R < 1 << 32):
+        raise ValueError(f"a piece's base j R is a u32, not {j!r} × {R!r}")
+    rows, salts = slot_words([j * R]), [_cc().public_row_salt(window, j)]
+    return rows, salts, G.Registered.commit(program, table(prefix, BASE_ROWS, j), rows, salts, G.WORD_BITS,
+                                            G.SCHEMA_V2, window=window)
 
 
 @functools.lru_cache(maxsize=8)
@@ -163,6 +178,53 @@ def reads_file(program: str, T: int, S: int, s: int, roots: dict[str, str], wind
     return {"format": G.READS, "ports": ports}
 
 
-__all__ = ["CAPS", "HEADER", "HEADER_WORDS", "M_ROWS", "OK_PORT", "OK_VALUE", "REQUESTS", "REQUEST_SCHEMA", "ROLES", "ROLES_V2",
-           "ROUND_ROWS", "SLOTS", "SLOT_WORDS", "STATEMENT_OUT_ROWS", "caps", "caps_table", "header_words", "m_table", "ok_table",
-           "reads_file", "round_table", "slot_words", "statement_rows", "table"]
+def statement_rows_pieces(R: int) -> list[tuple[str, str, int, list[str]]]:
+    """The input rows of a piece's statement (`live.PouwLiveRows_v1` at R rows a piece), as `statement_rows` gives them: R
+    slot rows, R headers, ``m``, ``s``, ``base`` and R public caps."""
+    rows = statement_rows(R, v2=True)
+    at = 2 * R + 2
+    return [*rows[:at], ("base", G.SCHEMA_V2, 32, ["base"]), *rows[at:]]
+
+
+def reads_file_rows(program: str, T: int, S: int, R: int, u: int, roots: dict[str, str], window: str, session: str,
+                    m: int, max_tokens: Sequence[int], prefix: str = "") -> dict[str, Any]:
+    """The verifier's ``--registered`` file of unit u of the pieced live Program (`live.program_rows`, S rounds of P = T / R
+    pieces), round s's piece j for (s, j) = divmod(u, P): its ``slot_<i>`` at row j R + i of round s's ``<prefix>slots@<s>``
+    (bound to the open root `window`), its ``req_<i>`` at row i of ``<prefix>requests@0`` (bound to the session `session`),
+    ``m``, ``s`` and ``base`` at their known ``m@<s>``, ``round@<s>`` and ``base@<j>``, ``cap_<i>`` at row i of the known
+    public caps of `max_tokens` (T rows) and ``o0`` at row u of the ok rows (S·P of them), each under `registered.domain`
+    of `program`. Units other than u read nothing. Refused (ValueError) when `roots` lacks a table or u is no unit."""
+    P = T // R if R > 0 and T % R == 0 else 0
+    if not (P and 0 <= u < S * P):
+        raise ValueError(f"unit {u} is none of the {S} rounds' pieces of {R} of {T} rows")
+    s, j = divmod(u, P)
+    sv, rv = table(prefix, SLOTS, s), table(prefix, REQUESTS)
+    if missing := [v for v in (sv, rv) if v not in roots]:
+        raise ValueError(f"unit {u} reads {missing}, whose roots the registration doesn't hold")
+    before = [None] * u
+
+    def port(value: str, words: int, row: int, schema: str = G.SCHEMA_V2, **bind: str) -> dict[str, Any]:
+        return {"value": value, "root": roots[value], "leaves": T, "words": words, "word_bits": G.WORD_BITS,
+                "domain": G.domain(program, value, words, T, **bind).domain_id.hex(), **G.schema_entry(schema),
+                "reads": before + [row]}
+
+    def known(value: str, rows: list, salts: list, reg: G.Registered, row: int) -> dict[str, Any]:
+        return {"value": value, "root": reg.root.hex(), "leaves": len(rows), "words": len(rows[0]),
+                "word_bits": G.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                "reads": before + [row], "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
+
+    ports = {f"slot_{i}": port(sv, SLOT_WORDS, j * R + i, window=window) for i in range(R)}
+    ports |= {f"req_{i}": port(rv, HEADER_WORDS, i, REQUEST_SCHEMA, session=session) for i in range(R)}
+    ports["m"] = known(table(prefix, M_ROWS, s), *m_table(program, prefix, window, s, m), 0)
+    ports["s"] = known(table(prefix, ROUND_ROWS, s), *round_table(program, prefix, window, s), 0)
+    ports["base"] = known(table(prefix, BASE_ROWS, j), *base_table(program, prefix, window, j, R), 0)
+    rows, salts, reg = caps_table(program, prefix, window, T, max_tokens)
+    ports |= {f"cap_{i}": known(table(prefix, CAPS), rows, salts, reg, i) for i in range(R)}
+    ports[OK_PORT] = known(table(prefix, OK_VALUE), *ok_table(program, prefix, window, S * P), u)
+    return {"format": G.READS, "ports": ports}
+
+
+__all__ = ["BASE_ROWS", "CAPS", "HEADER", "HEADER_WORDS", "M_ROWS", "OK_PORT", "OK_VALUE", "REQUESTS", "REQUEST_SCHEMA", "ROLES",
+           "ROLES_ROWS", "ROLES_V2", "ROUND_ROWS", "SLOTS", "SLOT_WORDS", "STATEMENT_OUT_ROWS", "base_table", "caps", "caps_table",
+           "header_words", "m_table", "ok_table", "reads_file", "reads_file_rows", "round_table", "slot_words", "statement_rows",
+           "statement_rows_pieces", "table"]
