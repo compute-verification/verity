@@ -21,9 +21,9 @@ the prose spec and this code differ.
 
 ~~~python
 from verity.core.protocols.pous import audit, band, codec, setup
-from verity.core.protocols.pous.layout import Layout, decode_tensor
+from verity.core.protocols.pous.layout import TensorLayout, decode_tensor
 
-layout = Layout.of(band.SECURE_FIRST, [("w1", n1), ("w2", n2)])       # tensors -> segments of W
+layout = TensorLayout.of(band.SECURE_FIRST, [("w1", n1), ("w2", n2)])       # tensors -> segments of W
 params, prims = layout.params, band.reference(layout.params)
 w = layout.pack({"w1": b1, "w2": b2})
 commitment = setup.commit(params, w)                                   # server, before any salt exists
@@ -72,6 +72,13 @@ Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`
 (`Security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
 compiled circuit to that code.
 
+As an auditor party with a device identity, the challenger reports its sessions under its party's per-period root
+instead (`period_reports`, on `verity.core.attest`): each session is a sampling block whose one public output is its
+liveness record, and the period's root is signed once at its close, for the prover only. The party starts its
+attachment on its key once (`lms.PartyKey.start`), so a challenger restarted within the attachment signs no more of its
+sessions. `period_reports.PERIOD` is not in `memory_challenger.SCHEMES` until `PousCheck.RunProtocol` reads
+`Attest.accepts`.
+
 ~~~python
 from verity.ml.crypto import lms
 from verity.core.protocols.pous import memory_challenger as mc
@@ -114,7 +121,7 @@ streamed-label wipe") has the messages, the bound, the measured fill and round t
 from verity.core.protocols.pous import streamed_wipe as sw
 
 p = sw.WipeParams(labels=n, k=sw.DEPLOYED_K, batch=1, limit_ns=limit, tiers=(("hbm", a), ("dram", b), ("nvme", c)))
-c = sw.Challenger(secret, server_id, session_id, p, signer, log=log)          # the id claimed; the commitment published
+c = sw.WipeMemoryChallenger(secret, server_id, session_id, p, signer, log=log)  # the id claimed; the commitment published
 for start, data in c.fill(chunk=1 << 20):                                     # the labels, streamed to the server
     send(start, data)
 c.run(lambda indices: ask(indices))                                           # one batch at a time; no retry
@@ -133,7 +140,7 @@ the egress counted (`R` the declared memory past the fill), and `M` (vacuous) ot
 undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's leg of the all-protocols period runner.
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
-except with δ (`prCoin_count_le_choose`'s count bound, which the remote bandwidth audit's period shares), every one
+except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
 meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers and devices).
 `wipe_parties` is the same memory challenger and prover as parties of the deployment layer (`verity.core.deploy`), the
 reads the challenger's machine gives it: on the same coins, clock readings, key and reads it signs the bytes

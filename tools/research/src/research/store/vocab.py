@@ -108,7 +108,7 @@ CHALLENGER_MODELS = "challenger-models"               # on a challenger-models/v
 CHALLENGER_MODELS_VALUES = ("head",)
 MEMORY_LINE_OF_RECORD = "memory-line-of-record"       # on a gate run's verifier run, by its lane: who computed its line of record
 MEMORY_LINE_OF_RECORD_PATTERN = r"lean conditional on [A-Z][A-Za-z]*(, [A-Z][A-Za-z]*)*"
-#: What statement C (the line's NoOutsideCompute premise) rests on in a line of record: itself, or the provider's lockdown that grounds it.
+#: What statement C (no outside device computes for the node, `NoOutsideCompute`) rests on in a line of record: itself, or the provider's lockdown that grounds it.
 MEMORY_LINE_GROUNDS = ("NoOutsideCompute", "ProviderLockdown")
 #: The file of the ref run's run record a `memory-line-of-record` label is held to (`check_line_of_record`).
 MEMORY_LINE_FILE = "out/auditor_line.json"
@@ -164,7 +164,7 @@ TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
 #: Mirrors the Glossary's backend families (`README.md`, "Backend family").  A `candidate` label written today names one of these.
 BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
 #: The backend families, then the values the frozen ledger's import derived from a ledger lane, which recorded labels carry
-#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not C-Flock), `SP1` (D-SP1 as the frozen ledger and
+#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not Flock), `SP1` (D-SP1 as the frozen ledger and
 #: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
 CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
 APPROACH_STATUSES = ("live", "parked", "killed", "superseded", "merged")
@@ -341,7 +341,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, TEXT, "on a gate run's verifier run, by its lane: its memory line of record is the "
        "auditor_line.json of --ref's auditor_line.py run, as `lean conditional on NAMES`: that file's line_by, which must be lean (the "
        "Lean verifier's line, held exactly to line.py's; a line.py-only line is not of record), and the names of its conditional_on in "
-       "its order, which must name NoOutsideCompute (statement C in full, a premise of LineHeld) or ProviderLockdown (the provider's "
+       "its order, which must name NoOutsideCompute (statement C in full, which LineHeld reads from the certifiers' record) or ProviderLockdown (the provider's "
        "lockdown that grounds it); `research data label` reads the file from the ref run's record and refuses a label that isn't "
        "its (`check_line_of_record`). Labels up to gate run 10's (lean; credited-..., off-vocab) predate the rule",
        pattern=MEMORY_LINE_OF_RECORD_PATTERN),

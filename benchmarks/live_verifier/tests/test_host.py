@@ -58,6 +58,8 @@ def svc(tmp_path) -> H.Host:
     settings = json.loads((PACKAGING / "verifier.json").read_text())
     settings["challenger"].update(ssh=SSH, peer="auditor-host")
     settings["peers"] = {"gpu-node": next(iter(settings["peers"].values()))}
+    (tmp_path / "site.json").write_text(json.dumps(V.vy_nebius_log("gpu-node").to_json()))
+    settings["peers"]["gpu-node"]["site"] = {"log": str(tmp_path / "site.json"), "host": "gpu-node"}
     (tmp_path / "verifier.json").write_text(json.dumps(settings))
     (tmp_path / "var" / "runs").mkdir(parents=True)
     host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl",
@@ -126,8 +128,10 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
     argv = req["argv"]
     assert argv == doc["argv"]
     assert argv[:3] == ["/usr/bin/python3", "-I", str(H.TREE / "benchmarks" / "remote_session" / "verifier.py")]
-    i = argv.index("--paced")
-    assert dict(zip(argv[3:i:2], argv[4:i:2])) == {
+    i, j = argv.index("--paced"), argv.index("--site")
+    assert argv[j:j + 3] == ["--site", str(svc.config.parent / "site.json"), "gpu-node"]
+    flags = argv[3:j] + argv[j + 3:i]
+    assert dict(zip(flags[::2], flags[1::2])) == {
         "--host": "127.0.0.1", "--port": "7951", "--out": str(svc.runs / RUN / "out"), "--registry": str(svc.registry),
         "--transcript": str(svc.scratch / RUN / "transcripts"), "--challenger": "gate",
         "--challenger-ssh": SSH, "--challenger-peer": "auditor-host", "--challenger-pin": KEY,
@@ -147,6 +151,17 @@ def test_a_run_is_refused_before_anything_starts_while_the_host_has_no_first_par
         f"this host has no {svc.main}, main's first-parent history (infra writes `git rev-list --first-parent "
         "origin/main` there, root's, 0644): the verifier refuses every gate session whose challenger pin it can't find "
         "on it, so no run starts without it")
+    assert units.started == [] and list(svc.runs.iterdir()) == []
+
+
+def test_a_run_is_refused_before_anything_starts_while_its_peer_names_no_site(svc):
+    """verifier.py registers a store only for a host the Site registers (`--site`), so a run for a peer whose settings
+    name no Site, its registration log and its host id, doesn't start."""
+    units = Units()
+    settings = svc.settings()
+    del settings["peers"]["gpu-node"]["site"]
+    svc.config.write_text(json.dumps(settings))
+    assert refused(call(svc, PACED, units)).startswith(f"peer gpu-node names no Site in {svc.config}")
     assert units.started == [] and list(svc.runs.iterdir()) == []
 
 
@@ -194,6 +209,7 @@ def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_ho
             a.challenger_main) == ("gate", SSH, "auditor-host", KEY, "memory-line-1", svc.main)
     assert (a.host_bytes, a.ingress_bytes_per_s, a.hbm_bytes, a.lean_exe, a.host) == (
         1843153879040, 4.4e9, V.HBM_BYTES, None, "127.0.0.1")
+    assert a.site == [str(svc.config.parent / "site.json"), "gpu-node"]
     for spec in a.paced or []:
         V.pace_of(spec, 17.0)
 
@@ -714,3 +730,11 @@ def test_party_log_reads_the_sessions_and_each_ones_stdout_as_the_host_kept_it_f
     assert rc == 0 and json.loads(out)["lines"] == [{"listening": 47611}, {"window": {"t0": "a", "t1": "b"}}]
     assert "party_log" in refused(call(svc, ["party_log", "wipe", "../../etc/passwd"], key="-"))
     assert "no session log" in refused(call(svc, ["party_log", "pous", "20261026T000000Z.jsonl"], key="-"))
+
+
+def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc):
+    (rc, _), ran = party(svc, ["bw_party", "--minutes", "10"])
+    assert rc == 0 and ran[0][-9:] == ["-m", "verity.core.protocols.remote_bandwidth.p2_party", "--device", str(svc.parties / "bw"),
+                                       "--listen", "0.0.0.0:47612", "--registration",
+                                       "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json", "minutes=10"]
+    assert "bw_party takes no flags" in refused(party(svc, ["bw_party", "--registration", "/tmp/x"])[0])

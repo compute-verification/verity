@@ -1,4 +1,4 @@
-"""The remote bandwidth audit over PoUS's P2 store (`p2.py`): the registration from PoUS's setup of a 9-block C*
+"""PoUB over PoUS's P2 store (`p2.py`): the registration from PoUS's setup of a 9-block C*
 (`fixtures/p2-c-star.bin`, the prover's bytes), the unit sketch and its per-block partials, an honest session
 accepted and recorded, and each way an opening goes wrong rejected."""
 
@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from remote_bandwidth_fakes import Clock, Entropy
+from test_registrations import hosts
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes import p2 as pous_p2
 from verity.core.protocols.pous.schemes.p2 import P2Params
@@ -21,28 +23,9 @@ from verity.ml.randomness import frame
 FIXTURES = Path(__file__).parent / "fixtures"
 SOURCE = b"the verifier's secret"
 NODE = b"p2-node-under-test"
+SITE = hosts(NODE.decode())
 SCHEDULE = timing.honest(1000, 2, 300, gap_ns=10, down_ns=20, up_ns=30)
 A = 20 + 30 + 300 + 10
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
-class Entropy:
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 @pytest.fixture(scope="module")
@@ -67,7 +50,7 @@ def vk(fixture):
 
 @pytest.fixture(scope="module")
 def store(fixture, vk) -> p2.Store:
-    reg = p2.register(SOURCE, NODE, bytes.fromhex(fixture["commitment"]), vk)
+    reg = p2.register(SOURCE, NODE, bytes.fromhex(fixture["commitment"]), vk, site=SITE)
     return p2.Store(reg, fixture["blocks"])
 
 
@@ -81,7 +64,7 @@ def drive(store: p2.Store, p: audit.Params, run=None):
     clock = Clock()
     s = p2.Session(p, store.registration, coins.local(store.registration.digest, 0, p.windows, Entropy(b"coins")),
                    not_before_ns=0, clock=clock)
-    prover = p2.Prover(store, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = p2.Prover(store, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(SCHEDULE.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in SCHEDULE.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest
@@ -135,7 +118,9 @@ def test_the_registration_is_pous_setups(fixture, vk, store) -> None:
     assert len({reg.digest, dataclasses.replace(reg, rows=64).digest, dataclasses.replace(reg, node=b"x").digest}) == 3
     other = setup.draw_salt(b"another secret", reg.commitment)
     with pytest.raises(ValueError, match="under the salt"):
-        p2.register(b"another secret", NODE, reg.commitment, vk)
+        p2.register(b"another secret", NODE, reg.commitment, vk, site=SITE)
+    with pytest.raises(ValueError, match="another node is no host the Site registers"):
+        p2.register(SOURCE, b"another node", reg.commitment, vk, site=SITE)
     assert other != reg.salt
     with pytest.raises(ValueError, match="not the registered C"):
         p2.Store(reg, fixture["blocks"][1:] + fixture["blocks"][:1])
@@ -240,7 +225,7 @@ def test_a_p2_store_takes_no_append_and_no_sloth_session(store) -> None:
     v = s.append(bytes(64), 1)
     assert isinstance(v, audit.Verdict) and v.failure == "append"
     with pytest.raises(ValueError, match="p2.Session"):
-        audit.Session(params(reg), reg, None, coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
+        audit.AuditRun(params(reg), reg, None, coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
     sloth = audit.register(SOURCE, NODE, 2, bytes(64), nonce=bytes(32))
     with pytest.raises(ValueError, match="P2 Registration"):
         p2.Session(params(reg), sloth, coins.local(sloth.digest, 0, 2, Entropy(b"c")), not_before_ns=0)

@@ -1,6 +1,6 @@
-"""The remote bandwidth audit beside sbench's served arms on the GPU they share (`sbench.py --bw-passes GIB`, `dbw.py`).
+"""PoUB beside sbench's served arms on the GPU they share (`sbench.py --bw-passes GIB`, `dbw.py`).
 
-One process stands in for the auditor: the remote audit's own verifier (`benchmarks/remote_session/verifier.py`'s
+One process stands in for the auditor: PoUB's own verifier (`benchmarks/remote_session/verifier.py`'s
 `Verifier`, its coins from an in-process challenger, the Lean verifier of record deciding) on a loopback socket. Its
 prover is `prover.py`, unmodified, on the GPU sbench leased (CUDA_VISIBLE_DEVICES inherited) and on --prover-cpus,
 over a store of GIB GiB of seeded payload under kv.cu's p1024 masked codec (`device.py`, the store `run.sh` registers on
@@ -53,7 +53,7 @@ def emit(event: str, **kw) -> None:
 
 
 def lines(r: dict) -> dict:
-    """A session's verdict, pass timeline and memory lines, without its draws: what sbench's report reads."""
+    """A session's verdict, pass timeline and memory lines, without its samples: what sbench's report reads."""
     seen = r.get("windows_seen", [])
     passes = []
     for w in seen:
@@ -87,6 +87,9 @@ def main() -> int:
     ap.add_argument("--pace-pass-ms", type=float, default=0.0,
                     help="a paced stretch's groups are counted at this pass (0: the calibration's median)")
     ap.add_argument("--hbm-bytes", type=int, default=V.GPU_HBM_BYTES, help="the memory line's capacity: one GPU's")
+    ap.add_argument("--node", default="vy-nebius/rtx-pro-6000/0",
+                    help="the prover's node (its --node), the one host of the Site the verifier holds its hello to "
+                         "(`verifier.one_host`)")
     ap.add_argument("--prover-py", default=sys.executable)
     ap.add_argument("--prover-cpus", help="the prover's cores (taskset -c; default this process's)")
     ap.add_argument("prover_args", nargs="*",
@@ -103,7 +106,7 @@ def main() -> int:
         own[name] = value
     store = ["--lib", a.lib, "--kv", a.kv, "--gib", str(a.gib)] if a.lib else []
     cmd = [a.prover_py, str(RS / "prover.py"), "--connect", f"127.0.0.1:{port}", "--out", str(a.out / "prover"),
-           "--plan", a.plan, *store, *a.prover_args]
+           "--plan", a.plan, "--node", a.node, *store, *a.prover_args]
     if a.prover_cpus:
         cmd = ["taskset", "-c", a.prover_cpus, *cmd]
     env = os.environ | {"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"} | own
@@ -142,9 +145,9 @@ def main() -> int:
         return head, body, stamp
 
     conn.send, conn.recv = sent, got
-    v = V.Verifier(conn, source=os.urandom(32), windows=1, window_ns=10 ** 9, samples=2773, delta=2.0 ** -40,
-                   jitter_ns=round(a.jitter_ms * 1e6), log=lambda m: print(m, flush=True), hbm_bytes=a.hbm_bytes,
-                   lean_exe=a.lean_exe)
+    v = V.Verifier(conn, source=os.urandom(32), site=V.one_host(a.node), windows=1, window_ns=10 ** 9, samples=2773,
+                   delta=2.0 ** -40, jitter_ns=round(a.jitter_ms * 1e6), log=lambda m: print(m, flush=True),
+                   hbm_bytes=a.hbm_bytes, lean_exe=a.lean_exe)
     try:
         reg, cal = v.register()
     except (audit.RegistryError, ValueError, wire.Closed) as e:

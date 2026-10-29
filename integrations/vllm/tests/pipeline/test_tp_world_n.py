@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation.reference import evaluate_region
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
 from verity.ml.definitions.registry import b1_tp2 as TP2, prims as P
@@ -77,7 +77,7 @@ def test_allreduce_world_n_is_the_descending_rank_bf16_chain(W, N):
     # acc = parts[W-1]; acc = Bf16Add(acc, parts[r]) for r = W-2..0, one RNE rounding per hop
     assert out == _chain(parts, range(W - 1, -1, -1))
     if N >= 256:
-        # per-hop rounding makes the order observable: the ascending chain (AllReduce_v1's) differs on this draw
+        # per-hop rounding makes the order observable: the ascending chain (AllReduce_v1's) differs on this sample
         assert out != _chain(parts, range(W))
 
 

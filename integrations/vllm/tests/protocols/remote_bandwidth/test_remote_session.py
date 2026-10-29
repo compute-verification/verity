@@ -1,4 +1,4 @@
-"""The remote bandwidth audit run over the node's `Store` end to end on the CPU: `remote.prove` (the prover's side, the
+"""The remote bandwidth audit run over the node's `NodeMemory` end to end on the CPU: `remote.prove` (the prover's side, the
 Commit's hook) connects over localhost TCP to `benchmarks/remote_session`'s verifier, registers the store, records its
 memory map against the registration, and runs each pass after an engine step of a serving-like trace (pages written
 over two steps, held, freed and reused, and one long-lived page re-keyed under L = 2 windows).  The honest audit run is
@@ -29,7 +29,7 @@ import pytest
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, memory_map, receipts as rb
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map, remote
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
-from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, Store
+from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
 
 from .test_memory_map import BLOCK, PAGES, SLOT_BYTES, SLOTS, kv_payload
 from .test_registry import CODEC, RECEIPT
@@ -80,15 +80,15 @@ class PassClock:
 
 
 @contextlib.contextmanager
-def verifying(sock: socket.socket, clock: PassClock, **kw) -> Iterator[verifier.Verifier]:
-    """`verifier.Verifier` over the accepted ``sock`` on ``clock``, torn down however the body ends: the socket shut,
-    so a prover waiting on it sees the audit run end (the verifier's reader thread would hold it open), and the Lean
-    verifier's process (`remote-audit-verifier`) terminated, killed and reaped, so a failing test leaves none waiting
-    on its stdin."""
+def verifying(sock: socket.socket, clock: PassClock, node: str = "test-node", **kw) -> Iterator[verifier.Verifier]:
+    """`verifier.Verifier` over the accepted ``sock`` on ``clock``, under a Site whose one host is the prover's
+    ``node`` (`verifier.one_host`), torn down however the body ends: the socket shut, so a prover waiting on it sees
+    the audit run end (the verifier's reader thread would hold it open), and the Lean verifier's process
+    (`remote-audit-verifier`) terminated, killed and reaped, so a failing test leaves none waiting on its stdin."""
     v = None
     try:
-        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), delta=2.0 ** -40,
-                              jitter_ns=10 ** 9, clock=clock, log=lambda m: None, **kw)
+        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), site=verifier.one_host(node),
+                              delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None, **kw)
         yield v
     finally:
         with contextlib.suppress(OSError):
@@ -100,10 +100,10 @@ def verifying(sock: socket.socket, clock: PassClock, **kw) -> Iterator[verifier.
             v.stop()
 
 
-def store() -> Store:
+def store() -> NodeMemory:
     """A weights chunk, one KV layer of 4 pages (K0 K1 V0 V1 each, page p at store chunks 1 + 4p …), and a chunk of
     host filler: N = 18.  Each chunk a backend encodes is 128 square roots at p512/k2, so the store is small."""
-    s = Store()
+    s = NodeMemory()
     w = np.random.default_rng(0).integers(0, 256, BLOCK, np.uint8)
     s.register("w", "hbm", "weights", ArrayBacking(w), block_bytes=BLOCK, codec=CODEC, receipt=RECEIPT, source="w")
     s.register_kv_pool("kv", [ArrayBacking(np.zeros(PAGES * 2 * SLOTS * SLOT_BYTES, np.uint8))],
@@ -177,7 +177,7 @@ def tampering(monkeypatch, tamper) -> None:
     monkeypatch.setattr(wire, "connect", lambda host, port: Tampering(connect(host, port), tamper))
 
 
-def engine(s: Store, at: int = 0):
+def engine(s: NodeMemory, at: int = 0):
     """A serving trace in the binder's order: pages 0 to 2 in turn, each a request's for three steps (slots 0 to 3 at
     its first, 4 to 7 at its second, read at its third), freed before the step that reuses it, which is after the
     forward of its last step, its last structural reader; page 3 a request's that never finishes, written at steps 0 and 1.  The
@@ -200,7 +200,7 @@ def engine(s: Store, at: int = 0):
 
 def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096, lifetime: int = 2,
         backend=TickingBackend, at: int = 0, **kw):
-    """One audit run of ``plan``, every receipt of a window drawn at the default ``samples``; the backend keeps the
+    """One audit run of ``plan``, every receipt of a window sampled at the default ``samples``; the backend keeps the
     regions the verifier read from its hello (``backend.regions``)."""
     clock = PassClock()
     s = store()
@@ -376,9 +376,9 @@ class Stats:
         return {}
 
 
-def served_store() -> Store:
+def served_store() -> NodeMemory:
     """The Commit's store: two weights chunks and two of filler, no KV pool (N = 4)."""
-    s = Store()
+    s = NodeMemory()
     w = np.random.default_rng(1).integers(0, 256, 2 * BLOCK, np.uint8)
     s.register("w", "hbm", "weights", ArrayBacking(w), block_bytes=BLOCK, codec=CODEC, receipt=RECEIPT, source="w")
     s.register("filler", "hbm", "filler", ArrayBacking(np.zeros(2 * BLOCK, np.uint8)), block_bytes=BLOCK, codec=CODEC,
@@ -386,7 +386,7 @@ def served_store() -> Store:
     return s
 
 
-def served_engine(s: Store):
+def served_engine(s: NodeMemory):
     """The binder's steps with the KV outside the store (`Binder(kv=False)`): each numbered, writing no chunk of it."""
     def step(k: int) -> None:
         s.kv_append([], k)
@@ -405,8 +405,8 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
     clock = PassClock()
     monkeypatch.setattr(remote, "StoreBackend", lambda *a, **kw: TickingBackend(clock, *a, **kw))
     lsock = wire.listen("127.0.0.1", 0)
-    cs = remote.CommitSession(f"127.0.0.1:{lsock.getsockname()[1]}", out=tmp_path, codec=P512, log=lambda m: None,
-                              step_ms=step_ms)
+    cs = remote.CommitSession(f"127.0.0.1:{lsock.getsockname()[1]}", out=tmp_path, node="test-node", codec=P512,
+                              log=lambda m: None, step_ms=step_ms)
     cs.store, cs.binder = served_store() if served else store(), Stats()
     seen: list = []
 
@@ -608,7 +608,8 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
     is answered `bye`, and `prove` raises `remote.Refused` with the verifier's reason."""
     registry, s = audit.Registry(), store()
     b = remote.StoreBackend(s, engine(s))
-    registry.register(os.urandom(32), b"test-node", b.blocks, b.payload_root(b"test-node"), P512)
+    registry.register(os.urandom(32), b"test-node", b.blocks, b.payload_root(b"test-node"), P512,
+                      site=verifier.checked(verifier.one_host("test-node")))
     lsock = wire.listen("127.0.0.1", 0)
     address = f"127.0.0.1:{lsock.getsockname()[1]}"
     raised = []
@@ -635,7 +636,7 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
 def test_a_serving_store_defers_residency_so_a_lifetime_of_one_window_is_refused():
     """The store's appended chunks are resident once their encodes land, and its map re-keys a window ahead, so at
     L = 1 every line would re-key every live chunk: its hello says `deferred`, and a verifier of lifetime 1 answers it
-    `bye` before drawing a registration."""
+    `bye` before sampling a registration."""
     registry, s = audit.Registry(), store()
     b = remote.StoreBackend(s, engine(s))
     lsock = wire.listen("127.0.0.1", 0)

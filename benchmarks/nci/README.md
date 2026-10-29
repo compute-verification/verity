@@ -229,7 +229,7 @@ What registered hardware computes is one circuit, built by appending as it strea
 red teams' top attack, recommitting θ partway through, is closed by that: nothing computed under monitoring ever enters
 θ, so a run of any length is charged inside the one circuit. Any later re-registration channel would reopen the attack,
 so it would have to be slow and priced. A proposed rule puts every multiplication in a public matmul template, which
-would let the partial-sum law apply to the declared circuit directly rather than to one contained recipe. The proposed evidence carries the round-2 red team's verdicts. Render the index
+would let the partial-sum law apply to the registered circuit directly rather than to one contained recipe. The proposed evidence carries the round-2 red team's verdicts. Render the index
 for the full map.
 
 ## What the literature says now
@@ -327,7 +327,7 @@ Three caps keep the library's lower bounds valid. Each was added because a query
 
 Today the policy puts no limit on θ, the registered information. That matters most for seed-based training.
 A developer may commit a noise table, one entry per parameter per direction, and then decode an update with one
-multiply-add per parameter instead of a PRNG draw.
+multiply-add per parameter instead of a PRNG sample.
 
 - **Without a cap** (`kimi-k2-1m-raw-uncapped`), `zo-seed-pool`, `es-population-30` and `mezo-seed-finetune` cost
   about 1.2, 2 and 3.
@@ -356,7 +356,7 @@ in a checkpoint's slack bits, about 2×10¹¹ tokens for a 1T-parameter model re
 training on smuggled data stays bounded, not closed.
 
 **The proof gap.** The thread guarantees say nothing about a developer whose data is in θ, since their premise
-`BaselineRegistered` fails. The fix to pursue states the guarantee with a term for the committed data, degrading by
+`ThetaRegistered` fails. The fix to pursue states the guarantee with a term for the committed data, degrading by
 at most the bits of data the budgets allow.
 
 ## Not yet here

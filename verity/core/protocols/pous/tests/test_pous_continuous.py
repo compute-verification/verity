@@ -9,6 +9,7 @@ import random
 
 import pytest
 
+from pous_fakes import Clock
 from verity.core.protocols.pous import band, dense
 from verity.core.protocols.pous.audit import AUDIT_CAP, DEADLINE_NS, LATE_ROUNDS, UnsignedRounds, challenge_key, run_timed
 from verity.core.protocols.pous.codec import encode_segments
@@ -28,14 +29,6 @@ def world():
     blocks = [b for seg in encode_segments(PARAMS.codec, PARAMS, prims, w, SALT) for b in seg]
     assert len(set(blocks)) == len(blocks)
     return blocks, VerifierKey.from_segments(PARAMS, SALT, [blocks[:16], blocks[16:]])
-
-
-class Clock:
-    def __init__(self):
-        self.now = 0
-
-    def __call__(self):
-        return self.now
 
 
 def _verifier(vk, n, clock, source=b"audit", **kw):
@@ -76,7 +69,7 @@ def _run(v, clock, replies, wait=None):
 
 @pytest.mark.parametrize("root_only", [False, True])
 def test_honest_stream(world, root_only):
-    """Arrivals far apart, each answered within Δ: accepted, every index the single audit's draw sent at its arrival,
+    """Arrivals far apart, each answered within Δ: accepted, every index the single audit's sample sent at its arrival,
     and the stream is not extended past `n`."""
     blocks, vk = world
     clock, gaps, waited, tree = Clock(), random.Random(5), [], MerkleTree(vk.leaves)

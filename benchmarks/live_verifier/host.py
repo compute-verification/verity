@@ -1,4 +1,4 @@
-"""The auditor host's verifier service: the remote bandwidth audit's verifier
+"""The auditor host's verifier service: PoUB's verifier
 (`benchmarks/remote_session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
 from a tree infra pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
 
@@ -32,7 +32,9 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   there, root's and 0644, whenever it pins either host, and no run starts without it), writes every session's transcript
   (`--transcript`) and keeps the registry. The audited node's capacities, which its memory line is measured against
   (`--host-bytes`, `--ingress-bytes-per-s`, `--hbm-bytes`), are the host's for `--peer` (`/etc/vy/verifier.json`),
-  never the request's. The prover reaches the port only through its tunnel account's `ssh -L` (`vy-verifier-tunnel`),
+  never the request's, and so is the Site its hello is held to (`--site LOG HOST`, the peer's `site`: `log`, the
+  registration log of the peer's node infra keeps on this host, and `host`, the node's id in it, which the prover's
+  hello names as its node); a peer with no `site` runs nothing. The prover reaches the port only through its tunnel account's `ssh -L` (`vy-verifier-tunnel`),
   which may open nothing else; `status RUN` says when the verifier listens, and the prover connects after that. The
   unit, `vy-verifier@<run>.service`, leaves `runs/<run>/out/` as `benchmarks/remote_session/run.sh`'s ROLE=verifier
   does (`verifier.json`, `challenger/`, `verifier.log`, `registry.json`), which `auditor_line.py` reads, and the
@@ -63,7 +65,9 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/core/protocols/pous/wipe_party.py`, port 47611) and its block challenger
-  (`challenger_party.py`, port 47610) as `auditor` from the pinned tree, one session per ssh connection: the request line
+  (`challenger_party.py`, port 47610), and `bw_party [--minutes M]` the remote bandwidth audit's P2 party
+  (`verity/core/protocols/remote_bandwidth/p2_party.py`, port 47612, with the registration the host names), as `auditor` from
+  the pinned tree, one session per ssh connection: the request line
   on the gate's stdin, `{"listening"}` and the signed report on its stdout, as a lane's `--challenger-command` expects
   (`benchmarks/pous/block/block.py`). The prover connects to the host's address at the port over direct TCP, which the
   security groups admit from the card only. Each party's LMS key and session log are `<root>/parties/<wipe|pous>/`, made
@@ -135,7 +139,11 @@ STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
 MODEL_PINS = Path("verity/core/protocols/pouw/lean/check/models.json")
 """Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
 PARTIES = {"wipe_party": ("wipe", "verity.core.protocols.pous.wipe_party", 47611),
-           "challenger_party": ("pous", "verity.core.protocols.pous.challenger_party", 47610)}
+           "challenger_party": ("pous", "verity.core.protocols.pous.challenger_party", 47610),
+           "bw_party": ("bw", "verity.core.protocols.remote_bandwidth.p2_party", 47612)}
+PARTY_FIXED = {"bw_party": ["--registration", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"]}
+"""Arguments the host adds to a party's command, never a caller's: the bandwidth session's registration in the pinned
+tree."""
 PARTY_INTS = {"--reads": (1, 1 << 20), "--threads": (1, 256)}
 PARTY_MINUTES = (1, 180)
 """A party session's limit (`--minutes M`, 60 by default): the gate kills the party then, so one no prover joined, or whose ssh
@@ -349,18 +357,25 @@ def bound_paths(host: Host, settings: dict, role: str, tree: Path = TREE) -> tup
 def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: str = "/usr/bin/python3",
                   tree: Path = TREE) -> list[str]:
     """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger,
-    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities; a bound
-    run's (`--model`) its role's checkpoint and core's pin (`bound_paths`), refused when either is missing."""
+    first-parent list of main (`Host.main`, refused when infra hasn't written it), the peer's capacities and its Site
+    (refused when the peer names none); a bound run's (`--model`) its role's checkpoint and core's pin
+    (`bound_paths`), refused when either is missing."""
     ch, node = settings["challenger"], settings["peers"][req["peer"]]
     if not host.main.is_file():
         raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
                       "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
                       "challenger pin it can't find on it, so no run starts without it")
+    site = node.get("site")
+    if not (isinstance(site, dict) and isinstance(site.get("log"), str) and isinstance(site.get("host"), str)):
+        raise Refused(f"peer {req['peer']} names no Site in {host.config} (its `site`: `log`, the registration log of "
+                      "its node infra keeps on this host, and `host`, the node's id in it): the verifier registers a "
+                      "store only for a host the Site registers, so no run starts without it")
     argv = [python, "-I", str(tree / "benchmarks" / "remote_session" / "verifier.py"),
             "--host", "127.0.0.1", "--port", str(req["port"]), "--out", str(host.runs / run / "out"),
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],
-            "--challenger-pin", req["pin"], "--challenger-period", req["period"], "--challenger-main", str(host.main)]
+            "--challenger-pin", req["pin"], "--challenger-period", req["period"], "--challenger-main", str(host.main),
+            "--site", site["log"], site["host"]]
     for key in (*INTS, *DECIMALS, "--quantile"):
         name = key.lstrip("-")
         if name in req:
@@ -581,7 +596,8 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
                           f"; got {flag!r}")
     if "--threads" in extra and "--streamer" not in extra:
         raise Refused("wipe_party --threads sets the native streamer's threads: give --native too")
-    return _as_auditor_python("-m", module, "--device", str(host.parties / name), "--listen", f"0.0.0.0:{port}", *extra)
+    return _as_auditor_python("-m", module, "--device", str(host.parties / name), "--listen", f"0.0.0.0:{port}",
+                              *PARTY_FIXED.get(verb, []), *extra)
 
 
 def exec_party(argv: list[str], sink: BinaryIO, log: Path, minutes: int) -> int:
@@ -703,7 +719,8 @@ def run_keygen(argv: list[str]) -> str:
 USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS] | --sessions N "
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
          "[--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
-         "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] (the request line "
+         "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] "
+         "| bw_party [--minutes M] (the request line "
          "on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
          "| party_log wipe|pous [LOG]")

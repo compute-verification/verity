@@ -4,10 +4,10 @@ import RemoteAudit.Flight
 /-!
 # The verifier's registrations: `audit.py`'s `Registry`
 
-At most one live registration a node (the red team's KB-4). `register` draws a codec seed (`Registration.register`) only
-for a node with none live: a second while one is live is refused and counted (`refused`), and draws nothing, so a retry
-never redraws. A session runs over its node's live registration, drawn by this registry, as its k-th, k its sessions so
-far: the epoch its coins are committed under (`coins.Coins`, epoch k of the one challenger). A registration ends only
+At most one live registration a node (the red team's KB-4), and only for a node the Site registers as a host
+(`hostOf`). `register` draws a codec seed (`Registration.register`) only for a node with none live: a second while one
+is live is refused and counted (`refused`), and draws nothing, so a retry never redraws. A session runs over its node's live registration, drawn by this registry, as its k-th, k its sessions so
+far: the epoch its coins are committed under (`coins.SessionCoins`, epoch k of the one challenger). A registration ends only
 when the verifier closes it (`close`), which counts each of its sessions as it stands: "accepted", the failure that
 rejected it, or `UNENDED`, counted as failed. `drawn` is R, the registrations a node has had, closed and live.
 
@@ -15,7 +15,7 @@ rejected it, or `UNENDED`, counted as failed. `drawn` is R, the registrations a 
 back is live and closable, and runs no session, its sessions' outcomes as they stood.
 
 A call `Registry` refuses with `RegistryError` is `none`; one it raises `ValueError` on (a node not 1 to 64 bytes, a
-registration `Registration.register` refuses) is an error.
+node the Site registers as no host, a registration `Registration.register` refuses) is an error.
 -/
 
 namespace RemoteAudit
@@ -74,12 +74,13 @@ def drawn (r : Registry) (node : ByteArray) : Except String Nat := do
   let node ← node? node
   pure ((r.closed.filter (·.node == node)).size + if r.live.any (·.node == node) then 1 else 0)
 
-/-- `Registration.register`'s draw for a node with no live registration, which it makes live; refused, and counted, for
-one with. -/
-def register (r : Registry) (source node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec)
-    (receipt : Kind) (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray) :
+/-- `Registration.register`'s draw for a node the Site `S` registers as a host (`hostOf`, an error for any other) with
+no live registration, which it makes live; refused, and counted, for one with. -/
+def register (r : Registry) (S : Core.Site) (source node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray)
+    (codec : Codec.Codec) (receipt : Kind) (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray) :
     Except String (Option Registration × Registry) := do
   let node ← node? node
+  let _ ← hostOf S node
   if r.live.any (·.node == node) then
     let refused := match r.refused.findIdx? (·.1 == node) with
       | some i => r.refused.modify i fun (n, k) => (n, k + 1)

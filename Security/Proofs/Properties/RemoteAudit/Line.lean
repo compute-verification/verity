@@ -312,7 +312,7 @@ theorem pooled_delta {ws : Array (ℕ × ℕ)} {δ : ℚ} {b : _root_.RemoteAudi
     cases h
 
 /-- A line the code computes read its pooled bound at a `δ` above 0 and below 1 (`Pooled.pooled` refuses any other), so
-a node whose `δ` is a nonnegative rational (`Node.delta`) leaves out no line the code computes. -/
+a node whose `δ` is a nonnegative rational (`Setup.delta`) leaves out no line the code computes. -/
 theorem line_delta {gs : Array Group} {per blocks blockBytes chipBytes nodeBytes : ℕ} {ws : Array (ℕ × ℕ)} {δ : ℚ}
     {rates : Rates} {l : Line} (h : line gs per blocks blockBytes chipBytes nodeBytes ws δ rates = .ok l) :
     0 < δ ∧ δ < 1 := by

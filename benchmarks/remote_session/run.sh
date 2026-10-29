@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remote bandwidth sessions (cwd = the source tree): the verifier's process on cores of its own, the prover's on GPUS
+# PoUB sessions (cwd = the source tree): the verifier's process on cores of its own, the prover's on GPUS
 # GPUs (default 1) whose HBM holds one store, a contiguous shard each, over TCP. Everything runs under one
 # gpu-lease $GPUS --wait (with TIMED=1, --timed: the fill queue pauses, for a whole-node session): build session.cu and
 # kv.cu (p1024, masked), start the verifier, then the prover, which gates its devices against the driver before
@@ -50,7 +50,10 @@
 # from the auditor host's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
 # CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). The verifier builds
-# the Lean verifier with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
+# the Lean verifier with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`). It registers a store only for
+# a host its Site registers, so VERIFIER_ARGS name the Site under ROLE=verifier and both (`--site LOG HOST`, LOG the
+# registration log of the prover's node and HOST its id there), and the prover's hello names HOST as its node
+# (`--node HOST`, in PROVER_ARGS, or NODE_ARGS under SERVE=node).
 #
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
@@ -62,8 +65,9 @@
 # /workspace/jobs/venv312/bin/python, its `verity-vllm` launcher beside it), this tree's verity_vllm first on its path,
 # against ROLE=verifier with SESSIONS=1 (one session a store). SERVE=tiny runs `serve.py --connect` (the vLLM tests'
 # tiny Llama, PLAN serve or servedrop:K). SERVE=row runs row ROW, `verity-vllm row run ROW CHECKPOINT REPO REV` with
-# the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
-# tunnel; its Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
+# the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit), REMOTE_VERIFIER at the
+# tunnel and EXTRA_COMMIT_ARGS (such as --remote-node HOST, the session's node, default verity-vllm/<hostname>); its
+# Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
 # run, a pass an engine step (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`: one GPU, synchronous scheduling declared in the
 # row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). Milestone 3's thin slice,
 # int8 Llama-3.1-8B:
@@ -77,10 +81,12 @@
 # (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). VERIFIER_ARGS=--host-bytes N puts the serving
 # node's host DRAM (its MemTotal) in the memory line. The north-star run, the verifier on a second node's CPUs:
 #
-#   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=33273 QUANTILE=max \
-#     JITTER_MS=50 VERIFIER_ARGS='--host-bytes 1843153879040' bash benchmarks/remote_session/run.sh   # 16 CPUs
+#   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=<audit.SAMPLES> \
+#     QUANTILE=max JITTER_MS=50 VERIFIER_ARGS='--host-bytes 1843153879040 --site SITE.json PROVER_NODE' \
+#     bash benchmarks/remote_session/run.sh                         # 16 CPUs
 #   ROLE=prover PORT=7799 SERVE=node PLAN=honest,skip:0.0625 ENGINE_CPUS=0-23 PROVER_CPUS=24-47 \
-#     ENGINE_ARGS='--step-hz 2 --align-steps' NODE_ARGS='--decode-s 60 --warm-openings 33273' \
+#     ENGINE_ARGS='--step-hz 2 --align-steps' \
+#     NODE_ARGS='--decode-s 60 --warm-openings <audit.SAMPLES> --node PROVER_NODE' \
 #     bash benchmarks/remote_session/run.sh                         # the whole 8-GPU node, 200 GB of host memory
 #
 # Start the prover first: its lease waits for all 8 GPUs, and once it holds them it waits for the verifier's tunnel;

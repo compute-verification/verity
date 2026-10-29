@@ -111,8 +111,8 @@ def greet(backend, b: rstore.Binding | None, **kw) -> tuple[verifier.Verifier, V
 
     th = threading.Thread(target=prove, daemon=True)
     th.start()
-    v = verifier.Verifier(wire.Conn(x), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
-                          jitter_ns=10 ** 9, log=lambda m: None, binding=b)
+    v = verifier.Verifier(wire.Conn(x), source=os.urandom(32), site=verifier.one_host(NODE.decode()), windows=3,
+                          window_ns=20, samples=6, delta=2.0 ** -40, jitter_ns=10 ** 9, log=lambda m: None, binding=b)
     refused = None
     try:
         v.register()
@@ -275,11 +275,12 @@ def test_verifier_py_refuses_a_pin_whose_files_arent_the_checkpoints_before_it_l
     other = {**pin["checkpoint"], shard: "ab" * 64}
     pin_path = tmp_path / "other-pin.json"
     pin_path.write_text(json.dumps({"name": ROLE, "checkpoint": other, "checkpoint_sha512": rstore.checkpoint_sha512(other)}))
-    out = tmp_path / "out"
+    out, log = tmp_path / "out", tmp_path / "log.json"
+    log.write_text(json.dumps(verifier.vy_nebius_log("node0").to_json()))
     sys_argv = sys.argv
     try:
-        sys.argv = ["verifier.py", "--out", str(out), "--model", ROLE, "--checkpoint", str(ckpt),
-                    "--pin", str(pin_path), "--arena-blocks", "7", "--layout-workers", "1"]
+        sys.argv = ["verifier.py", "--out", str(out), "--site", str(log), "node0", "--model", ROLE, "--checkpoint",
+                    str(ckpt), "--pin", str(pin_path), "--arena-blocks", "7", "--layout-workers", "1"]
         assert verifier.main() == 3
     finally:
         sys.argv = sys_argv

@@ -10,7 +10,7 @@ to.
 **The streamed wipe.** `L_i = SHA-512(LABEL_TAG ‖ K ‖ u64 i)` under the memory challenger's key `K`, which the prover
 never holds. The only state short of a label from which labels resume is the challenger's: SHA-512's state after
 the 67 bytes of `LABEL_TAG ‖ K` (rounds 0–7 in `wipe_stream.c`), which is `K`'s worth. Each prover below runs whole
-sessions of `streamed_wipe.Challenger` (sequential reads, batch size 1), signed by a test signer and judged by
+sessions of `streamed_wipe.WipeMemoryChallenger` (sequential reads, batch size 1), signed by a test signer and judged by
 `wipe_verdict.judge`:
 
 - `honest`: keeps every label. Expect accept.
@@ -85,7 +85,7 @@ def dropped(n: int, k: int) -> int:
 class Honest:
     """Keeps every label; its prior content was the whole store, and the fill overwrites it."""
 
-    def __init__(self, n: int, c: sw.Challenger) -> None:
+    def __init__(self, n: int, c: sw.WipeMemoryChallenger) -> None:
         self.store = bytearray(os.urandom(n * LABEL))
         self.z = bytes(self.store)
 
@@ -103,7 +103,7 @@ class Naive(Honest):
     """Keeps prior content in the room of the last `dropped(N, at_k)` labels (`at_k` the session's reads unless
     given) and answers those reads from it."""
 
-    def __init__(self, n: int, c: sw.Challenger, at_k: int | None = None) -> None:
+    def __init__(self, n: int, c: sw.WipeMemoryChallenger, at_k: int | None = None) -> None:
         self.cut = n - dropped(n, c.params.k if at_k is None else at_k)
         self.store = bytearray(n * LABEL)
         self.store[LABEL * self.cut:] = os.urandom(LABEL * (n - self.cut))
@@ -126,7 +126,8 @@ class Resume(Honest):
     """The band attack's strategy on the streamed fill (module docstring): `KEPT` bytes of each label and 63 of prior
     content a slot, `SEEDS` whole labels, and a key search, the only way to the state labels resume from, at a read."""
 
-    def __init__(self, n: int, c: sw.Challenger, *, clock: Callable[[], int], search_ns: int, tries: int) -> None:
+    def __init__(self, n: int, c: sw.WipeMemoryChallenger, *, clock: Callable[[], int], search_ns: int,
+                 tries: int) -> None:
         self.n, self.clock, self.search_ns, self.tries = n, clock, search_ns, tries
         self.store = bytearray(os.urandom(n * LABEL))
         self.z = self.keep()
@@ -175,7 +176,7 @@ class KeyLeak(Honest):
     """Handed `K`: keeps SHA-512's state after `LABEL_TAG ‖ K`, the challenger's own resume point (32 bytes of `K`),
     and prior content in the whole store; a read is one compression from that state."""
 
-    def __init__(self, n: int, c: sw.Challenger) -> None:
+    def __init__(self, n: int, c: sw.WipeMemoryChallenger) -> None:
         super().__init__(n, c)
         self.head = hashlib.sha512(sw.LABEL_TAG + c.key)
 
@@ -194,7 +195,7 @@ class KeyLeak(Honest):
 class Untiered(Honest):
     """Every label in `outside`, memory the commitment doesn't declare; prior content in the whole declared store."""
 
-    def __init__(self, n: int, c: sw.Challenger) -> None:
+    def __init__(self, n: int, c: sw.WipeMemoryChallenger) -> None:
         super().__init__(n, c)
         self.outside = bytearray(n * LABEL)
 
@@ -219,14 +220,14 @@ def _stats(xs: list[int]) -> dict[str, int] | None:
     return {"n": len(s), "p50": s[len(s) // 2], "p99": s[min(len(s) - 1, (99 * len(s)) // 100)], "max": s[-1]}
 
 
-def session(name: str, make: Callable[[int, sw.Challenger], Any], *, n: int, k: int, limit_ns: int, signer, log,
-            judge: Callable[..., Any], decide: str, clock: Callable[[], int], tag: bytes = b"",
+def session(name: str, make: Callable[[int, sw.WipeMemoryChallenger], Any], *, n: int, k: int, limit_ns: int, signer,
+            log, judge: Callable[..., Any], decide: str, clock: Callable[[], int], tag: bytes = b"",
             coin_secret: bytes | None = None) -> dict[str, Any]:
     """One whole session against the prover `make(n, challenger)` builds; its record (module docstring). The coins
     are the OS's, drawn when the fill completes, unless `coin_secret` fixes them."""
     sid = hashlib.sha512(b"verity-pous/wipe-resume/session\0" + name.encode() + b"\0" + tag).digest()[:32]
-    c = sw.Challenger(os.urandom(32), SERVER, sid, params(n, k, limit_ns), signer, log=log, clock=clock,
-                      coin_secret=coin_secret)
+    c = sw.WipeMemoryChallenger(os.urandom(32), SERVER, sid, params(n, k, limit_ns), signer, log=log, clock=clock,
+                                coin_secret=coin_secret)
     prover = make(n, c)
     z_before = hashlib.sha512(prover.z).hexdigest()
     for start, data in c.fill(1 << 14):

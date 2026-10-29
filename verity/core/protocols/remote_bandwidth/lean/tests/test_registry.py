@@ -39,8 +39,20 @@ def rare(draw, n: int = 30) -> bool:
 
 def node(draw) -> str:
     if rare(draw, 40):
-        return draw(st.sampled_from(["", "00" * 65]))
+        return draw(st.sampled_from(["", "00" * 65, b"node-c".hex(), b"site0".hex(), "ff"]))
     return draw(st.sampled_from(NODES)).hex()
+
+
+def site_of(draw) -> dict:
+    """The Site the case's registrations are held to: one registering every node of `NODES` as a host, now and then
+    one leaving some out, or a log the check refuses (an entry after the wrong head)."""
+    if not rare(draw, 10):
+        return M.site_json(*NODES)
+    if draw(st.booleans()):
+        return M.site_json(*NODES[:draw(st.integers(0, len(NODES) - 1))])
+    v = copy.deepcopy(M.SITE)
+    v["log"]["entries"].append(v["log"]["entries"][0])
+    return v
 
 
 def register_op(draw) -> dict:
@@ -136,7 +148,7 @@ def script(draw, n: str, k: int) -> list[dict]:
 @st.composite
 def registry_inputs(draw) -> dict:
     """Calls over the nodes: most often a registration with a session over it and a few of its events, else one call
-    alone. The strategy keeps which nodes are live, so that a session names a registration drawn in the case by its
+    alone. The strategy keeps which nodes are live, so that a session names a registration sampled in the case by its
     place among those drawn."""
     registry = read_back(draw) if draw(st.integers(0, 2)) == 0 else None
     live = {n: (None, 0) for n in (registry or {}).get("live", ())}
@@ -166,7 +178,8 @@ def registry_inputs(draw) -> dict:
             ops.append({"op": kind, "node": n})
             if kind == "close":
                 live.pop(n, None)
-    return {"source": "" if rare(draw, 60) else M.SOURCE.hex(), "registry": registry, "ops": ops}
+    return {"source": "" if rare(draw, 60) else M.SOURCE.hex(), "site": site_of(draw), "registry": registry,
+            "ops": ops}
 
 
 def test_registry(server) -> None:
@@ -184,7 +197,7 @@ def recorded(name: str, cut: int | None = None) -> dict:
     session = {"op": "session", "registration": 0, "index": 0} | {k: case[k] for k in (
         "params", "coins", "append_coins", "not_before_ns")}
     events = [{"op": "event", "node": reg["node"], "session": 0, "event": e} for e in case["events"][:cut]]
-    return {"source": M.SOURCE.hex(), "registry": None, "ops": [
+    return {"source": M.SOURCE.hex(), "site": M.SITE, "registry": None, "ops": [
         register, session, *events, register, {"op": "close", "node": reg["node"]},
         {"op": "drawn", "node": reg["node"]}, register | {"nonce": "01" * audit.NONCE_BYTES},
         {"op": "live", "node": reg["node"]}, {"op": "drawn", "node": reg["node"]}]}
@@ -209,14 +222,31 @@ def test_a_recorded_session_is_counted_at_close_as_the_lean_ends_it(server, name
 def test_a_registration_that_binds_tiles_is_refused_as_the_lean_refuses_it(server) -> None:
     """A registration that would bind PoUW's tile outputs: for a node with one live, refused and counted, as any second
     registration is; for one with none, refused by both registries outright (the Lean covers receipts of chunks
-    alone), drawing nothing."""
+    alone), sampling nothing."""
     v = recorded("honest")
     bound = v["ops"][0] | {"bind": True}
-    assert D.replay(PORT, {"source": M.SOURCE.hex(), "registry": None, "ops": [bound]}, server)[0] == "reject"
-    out = json.loads(D.replay(PORT, {"source": M.SOURCE.hex(), "registry": None,
+    assert D.replay(PORT, v | {"ops": [bound]}, server)[0] == "reject"
+    out = json.loads(D.replay(PORT, {"source": M.SOURCE.hex(), "site": M.SITE, "registry": None,
                                      "ops": [v["ops"][0], bound, {"op": "drawn", "node": M.NODE.hex()}]}, server)[1])
     assert out["results"][1:] == [{"refused": True}, 1]
     assert out["registry"]["refused"] == {M.NODE.hex(): 1}
+
+
+def test_a_node_the_site_registers_as_no_host_is_refused_before_either_registry_draws(server) -> None:
+    """A registration's node is a host's id in UTF-8 (`RemoteAudit.hostOf`, `audit.host_of`): another host's id, the
+    site's, and bytes that aren't UTF-8 are refused by both registries, which draw nothing; a Site whose log the check
+    refuses holds no node; and once the Site registers the node, it registers."""
+    v = recorded("honest")
+    register = v["ops"][0]
+    for node in (b"node-b", b"site0", b"\xff", b"\xc0\xae", b"\xed\xa0\x80"):
+        assert D.replay(PORT, v | {"ops": [register | {"node": node.hex()}]}, server)[0] == "reject"
+    for hosts in (M.site_json(), M.site_json(b"node-b")):
+        assert D.replay(PORT, v | {"site": hosts, "ops": [register]}, server)[0] == "reject"
+    refused = copy.deepcopy(M.SITE)
+    refused["log"]["entries"].append(refused["log"]["entries"][0])
+    assert D.replay(PORT, v | {"site": refused, "ops": [register]}, server)[0] == "reject"
+    out = json.loads(D.replay(PORT, v | {"site": M.site_json(b"node-b", M.NODE), "ops": [register]}, server)[1])
+    assert out["registry"]["live"].keys() == {M.NODE.hex()}
 
 
 def test_a_session_that_has_not_ended_is_counted_unended(server) -> None:
@@ -232,7 +262,7 @@ def test_a_registry_read_back_closes_its_registration_and_runs_no_session(server
     assert first["live"] == {M.NODE.hex(): {"registration": M.registration_of(
         M.recorded("honest")[0]["registration"]).digest.hex(), "sessions": ["accepted"]}}
     session = copy.deepcopy(v["ops"][1]) | {"registration": M.recorded("honest")[0]["registration"], "index": 1}
-    again = {"source": M.SOURCE.hex(), "registry": first,
+    again = {"source": M.SOURCE.hex(), "site": M.SITE, "registry": first,
              "ops": [session, v["ops"][0], {"op": "close", "node": M.NODE.hex()}]}
     out = json.loads(D.replay(PORT, again, server)[1])
     assert out["results"][:2] == [{"refused": True}] * 2

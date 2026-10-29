@@ -2,7 +2,7 @@
 
 The remote protocol audits a datacenter whose auditor has no devices at the site: the developer commits everything its
 hardware computes, and the auditor checks it from outside with live coins and a Lean verifier. It composes two
-subprotocols into one verdict over one commitment: sampled proofs (the committed values satisfy the declared circuit,
+subprotocols into one verdict over one commitment: sampled proofs (the committed values satisfy the registered circuit,
 except on few proof blocks) and PoUW (the hardware's time went to the declared work).
 
 **The open gap.** Remote's composed soundness theorem, `Verity.Soundness`, is not in Lean yet. It is due after the Lean
@@ -13,14 +13,14 @@ instead of computing them.
 
 This file is an outline with signposts. The Lean is the definition. The vocabulary is the Glossary's: `ARCHITECTURE.md`'s
 Glossary, and `GLOSSARY.md` for the notation and the older names. The lifecycle's terms (a declaration, declaring, the
-declared advice, a declaration block and a declaration period) are in `ARCHITECTURE.md`'s Glossary, under Declaration,
+advice, an execution block and an execution phase) are in `ARCHITECTURE.md`'s Glossary, under Declaration,
 Block and Period. Lean names keep some older names until they are renamed: `Dampener*` means overhead, `*Horizon` a
 monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window` a period.
 
 **Which "remote".** Six things in the tree are called "remote", and this page means the first:
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v0`);
-- PoUB, proof of useful bandwidth, an onsite subprotocol whose code still says "remote bandwidth": its package
+- PoUB, an onsite subprotocol whose code names still say "remote" until they are renamed: its package
   `verity/core/protocols/remote_bandwidth/`, its Lean verifier `RemoteAudit`, its Lean vocabulary `Accounting.Remote`
   (`Security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
   its whole-node benchmark `benchmarks/remote_session/`, and serve-openai's `--remote-verifier`, the address of PoUB's
@@ -33,13 +33,13 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 
 ## Parties
 
-- **The developer** (the prover) runs the datacenter. It registers, declares, commits its values and proves the drawn
-  proof blocks behind the firewall. Nothing it runs or hosts is trusted, and neither is the audited hardware or its
+- **The developer** (the prover) runs the datacenter. It registers, declares, commits its values and proves the sampled
+  proof blocks behind the ZK server. Nothing it runs or hosts is trusted, and neither is the audited hardware or its
   vendor.
 - **The auditor** has two parts, both on auditor hosts that the developer doesn't control: its **challenger** (the
-  live coins, which draw what must be proved) and its **verifier** (the Lean verifier: `flock-verify` for each drawn
+  live coins, which sample what must be proved) and its **verifier** (the Lean verifier: `flock-verify` for each sampled
   proof block, and `remote check` for the verdict). The challenger is the one auditor-trusted device remote relies on
-  (`trusted-host`); the verifier is the auditor's own check. The verifier may also draw on its own coins
+  (`trusted-host`); the verifier is the auditor's own check. The verifier may also use its own coins
   (`IO.getRandomBytes`) instead of the challenger's.
 - **How the coins reach the developer.** The challenger opens each coin only after the developer's commitment is
   recorded, over one TCP stream that the developer's client opens at its own `127.0.0.1` port (`RemoteChallenger`).
@@ -55,12 +55,12 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the declared circuit outside the proof blocks the draw misses | `SampledProofs.OneStage.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
+| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `SampledProofs.OneStage.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
 | PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the declared work's | `PouwCheck.protocol` (`verity/core/protocols/pouw/lean/check`) | `verity/pouw/v1` |
 
 **Coming, not there yet:** the inference-only policy (its Lean is still named `Nci`, `NciCheck`) is to join as a third
-subprotocol. Under it, the declared circuit divides into inference blocks of bounded size, each reading a bounded amount
-of fresh input (input that isn't registered information). Its check reads only the declared circuit and the registered
+subprotocol. Under it, the registered circuit divides into inference blocks of bounded size, each reading a bounded amount
+of fresh input (input that isn't registered information). Its check reads only the registered circuit and the registered
 information, so it needs no hardware at the site. On `main`, `Core.Remote.components` holds only the two rows above.
 
 The code is `CoreRemote.lean`, `protocol = product "verity/remote/v0" [PouwCheck.protocol,
@@ -71,25 +71,25 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
 
 ## Lifecycle
 
-1. **Registration**, once, before any coin. The developer registers R = (θ, D, 𝓘): the registered inputs θ, the declared
+1. **Registration**, once, before any coin. The developer registers R = (θ, D, 𝓘): the registered inputs θ, the registered
    circuit D, and D's (c, k)-partition 𝓘 into inference blocks (`GLOSSARY.md`, `Verity.Declaration`; read by the
    inference-only policy once it joins). It also registers
    each subprotocol's public Program and parameters, by digest.
-2. **Declarations**, one or more per declaration period (a span of one or more sampling periods). A declaration is one
-   act of declaring: the developer reports its declared advice (a bit string that a registered compiler compiles, its
-   length charged), and the compiler appends one declaration block to the declared circuit. The block's values are
-   committed under hiding leaves (hm96 rows in SHA-512 trees) before that declaration period's audit coins.
+2. **Declarations**, one or more per execution phase. A declaration is one
+   act of declaring: the developer reports its advice (a bit string that a registered compiler compiles, its
+   length charged), and the compiler appends one execution block to the registered circuit. The block's values are
+   committed under hiding commitments in SHA-512 trees before any coins are flipped.
    `examples/lifecycle/README.md` ("Terms") runs these terms on a toy model.
-3. **The audit**, in each sampling period. The live coins draw proof blocks. The developer proves each drawn block with
-   C-Flock `--zk` behind the firewall, and the Lean verifier `flock-verify` checks each proof. PoUW's check
-   (`pouw-check`) reads each PoUW period's commitment and its drawn proofs and receipts, and credits that period's work.
+3. **The audit**, in each verification phase. The live coins select proof blocks. The developer proves each sampled proof block with
+   C-Flock `--zk` behind the ZK server, and the Lean verifier `flock-verify` checks each proof. PoUW's check
+   (`pouw-check`) reads each PoUW period's commitment and its sampled proofs and receipts, and credits that period's work.
    No proof is retried, and a failed proof is a visible failure.
 4. **The verdict**, by the composition rule (`verity/core/protocols/composition/README.md`). The composite rejects if
    any subprotocol rejects. It also rejects if the cases don't fit (unknown, missing, repeated or out of order), or if
    the commitment isn't `bind` of the subprotocols' digests. It is undecided if it binds and some subprotocol is
    undecided, and it accepts if every subprotocol accepts and it binds. On accept, it publishes each subprotocol's public
    outputs.
-5. **Accounting**, per monitoring period. The accepted sampling periods' bounds pool over the monitoring period
+5. **Accounting**, per monitoring period. The accepted verification phases' bounds pool over the monitoring period
    (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`
    for PoUW), and the overhead calculator turns them into overhead (see Results).
 
@@ -135,7 +135,7 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 
 - `FlockSoundness.Assumptions.UniformRandomBytes`: the verifier's coins are uniform random bytes.
 - `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ` (`live-verifier`): the record the verifier reads is the one the
-  challenger wrote for the live run, and its draw file is the verifier's own draw.
+  challenger wrote for the live run, and its sample file is the verifier's own sample.
 - `FlockSoundness.Assumptions.TableCRZAt` (`cr/sha-512`) and `FlockSoundness.Discharge.ZkLink.LinkCRZC`
   (`ecr/sha-512`): SHA-512 is collision resistant for the prover's table and link finders. The lock names the table
   finders' premise `TableCRZAt`; the statement reads it through its abbreviation `TableCRZ`.
@@ -212,14 +212,14 @@ runs remote's sampled-proofs half for real, and the vLLM demo runs both halves o
 development run:
 
 - `verity example lifecycle` (`examples/lifecycle/README.md`): the remote composite stepped through one monitoring period
-  on CPU in about 2 s: hardware registration, registration, declarations, live draws, each declaration's verdict and the
+  on CPU in about 2 s: hardware registration, registration, declarations, live samples, each declaration's verdict and the
   period's accounting, with every deviation it lists refused by name. Its prover is a labelled stand-in for C-Flock, and
   its verdict is the composition's Python mirror over per-declaration stand-ins for the two subprotocols, not `remote
   check`. It runs; nothing about it is proved.
 
 - `verity example h200` (`examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
-  are drawn by one live coin, each is proved by C-Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
-  refused. At an 8-block draw, that allows at most 43.77% faulty proof blocks at δ = 1%. It runs, at proof level
+  are sampled by one live coin, each is proved by C-Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
+  refused. At an 8-block sample, that allows at most 43.77% faulty proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
 - `verity example vllm` (`examples/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its

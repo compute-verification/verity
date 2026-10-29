@@ -45,10 +45,15 @@ open Accounting.Rate (Store Oracle Chip World Device)
 block's index, its encoded contents (`b` bits) and the tile output its receipt binds (`a` bits). -/
 abbrev Mix (N a b h : ℕ) : Type := Fin N × Bits b × Bits a → Bits h
 
-/-- A window's coins: the tile outputs, the mix and the `s` sampled blocks. -/
-abbrev Coins (N a b h s : ℕ) : Type := Store N a × Mix N a b h × (Fin s → Fin N)
+/-- What a window's checks read besides its sample: the tile outputs and the mix. -/
+abbrev Pub (N a b h : ℕ) : Type := Store N a × Mix N a b h
 
-instance instFintypeCoins (N a b h s : ℕ) : Fintype (Coins N a b h s) := inferInstanceAs (Fintype (_ × _ × _))
+/-- A window's coins: the live coins (`Verity.Coins`) with the tile outputs and the mix as their public part, and the
+`s` sampled blocks as their draw. -/
+abbrev Coins (N a b h s : ℕ) : Type := Verity.Coins (Pub N a b h) s N
+
+instance instFintypeCoins (N a b h s : ℕ) : Fintype (Coins N a b h s) :=
+  inferInstanceAs (Fintype ((_ × _) × (Fin s → Fin N)))
 
 /-- No certified stream: the receipt absorbs the challenge through the mix. -/
 def noStream : Bits 0 := fun i => i.elim0

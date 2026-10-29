@@ -1,6 +1,5 @@
-"""One live registration a node, the red team's KB-4: each
-registration draws a fresh codec seed, so a prover that registered R times and kept the key that suits it would choose
-log₂ R bits of it, a retry that redraws.  The verifier's `Registry` refuses a second registration while one is live,
+"""One live registration a node: each registration draws a fresh codec seed, so a prover that registered R times and
+kept the key that suits it would choose log₂ R bits of it, a retry that redraws.  The verifier's `Registry` refuses a second registration while one is live,
 and a registration ends only when the verifier closes it, counting its sessions, a failed or unended one as failed."""
 
 from __future__ import annotations
@@ -10,14 +9,42 @@ import json
 import pytest
 
 from test_appends import N, NODE, P512, SOURCE, Run, payload, salts
+from verity.core import site
 from verity.core.protocols.remote_bandwidth import audit
+
+
+def hosts(*ids: str) -> site.Site:
+    """A remote Site of one site holding the hosts `ids`, and a device on the first."""
+    log = site.Registration("remote")
+    locs = [site.Loc("site0", "site"), *(site.Loc(h, "host", "site0") for h in ids)]
+    sheet = site.Sheet(site.DeviceFigures("gpu", 1, 1), 1, 1, 1)
+    log = log.append(log.entry((sheet,), (*locs, site.Loc("gpu0", "device", ids[0], sheet=sheet.digest()))))
+    return site.check(log, site.Auditor((sheet,)))
+
+
+SITE = hosts(NODE.decode(), "another node")
 
 
 def registered_in(registry: audit.Registry, nonce: bytes = bytes(32), node: bytes = NODE) -> audit.Store:
     payloads = [payload(b"weights %d" % j) for j in range(N)]
     ys = salts(b"payload salts", N)
     root = audit.payload_tree(node, payloads, ys).commitment.root
-    return audit.Store(registry.register(SOURCE, node, N, root, P512, nonce=nonce), payloads, ys)
+    return audit.Store(registry.register(SOURCE, node, N, root, P512, nonce=nonce, site=SITE), payloads, ys)
+
+
+def test_only_a_host_the_site_registers_is_registered_and_another_id_draws_nothing(monkeypatch) -> None:
+    """A node's id is a host's id in UTF-8 (`audit.host_of`): a device, the site, an id the Site doesn't hold and bytes
+    that aren't UTF-8 are each refused before the registry draws anything or counts a refusal, and the host then
+    registers."""
+    draws, draw = [], audit.register
+    monkeypatch.setattr(audit, "register", lambda *a, **kw: draws.append(a[1]) or draw(*a, **kw))
+    registry = audit.Registry()
+    for node, why in ((b"gpu0", "gpu0 is no host"), (b"site0", "site0 is no host"), (b"node-b", "node-b is no host"),
+                      (b"\xff" + NODE, "a host's id in UTF-8")):
+        with pytest.raises(ValueError, match=why):
+            registered_in(registry, node=node)
+    assert draws == [] and registry.to_json() == audit.Registry().to_json()
+    assert registered_in(registry).registration.node == NODE and draws == [NODE]
 
 
 def accepted(store: audit.Store, registry: audit.Registry) -> Run:
@@ -64,7 +91,7 @@ def test_a_second_registration_of_a_live_node_is_refused_and_draws_nothing(monke
 
 def test_a_registration_ends_only_when_closed_with_every_session_counted() -> None:
     """Three sessions over one registration, accepted, rejected and unended: the registration stays live through the
-    rejection, so no fresh draw can replace it, and its close counts all three, two of them failed.  Only then does the
+    rejection, so no fresh sample can replace it, and its close counts all three, two of them failed.  Only then does the
     node register again, under a fresh codec seed, R = 2."""
     registry = audit.Registry()
     st = registered_in(registry)
@@ -105,7 +132,7 @@ def test_a_session_runs_only_over_its_node_s_live_registration_drawn_by_the_regi
 
 
 def test_the_registry_outlives_the_verifier_s_process_without_its_secret() -> None:
-    """Read back, a live registration still refuses a second, runs no session (the verifier that drew it is gone),
+    """Read back, a live registration still refuses a second, runs no session (the verifier that sampled it is gone),
     and closes with its sessions as they stood; the record holds no secret and no codec seed."""
     registry = audit.Registry()
     st = registered_in(registry)

@@ -1,20 +1,20 @@
 """The generic POUS protocol: one lifecycle for every scheme, which implements only what differs between schemes.
 
 A scheme (`Scheme`) is a keyed, rate-1 encoding of `W`, one segment at a time, together with the certificate its audit
-carries at its parameters (`Certificate`).  It implements `encode_segment` and `decode_segment`, and `respond` when an
+carries at its parameters (`CapacityBound`).  It implements `encode_segment` and `decode_segment`, and `respond` when an
 honest answer is more than the stored label.  Everything else is written once, here:
 
 1. **Commit.** The server commits to `W` before any salt exists (`commit`).
-2. **Salt.** The verifier draws the salt after the commitment (`draw_salt`).
+2. **Salt.** The verifier samples the salt after the commitment (`draw_salt`).
 3. **Encode.** The server computes `C = Enc(W, salt)` (`encode`).  The verifier builds `vk` (`verifier_key`) either by
    encoding `W` itself (`PRIVATE`) or by decoding the server's `C*` and checking `Dec(C*)` against the commitment
    (`PUBLIC`).  The two give the same guarantee (Lean `pubAuditSecure_exact_iff`).
-4. **Serve.** `decode` of a segment, and `decode_tensor` of one tensor of a `layout.Layout`.
+4. **Serve.** `decode` of a segment, and `decode_tensor` of one tensor of a `layout.TensorLayout`.
 5. **Audit.** `TimedAudit` reveals `k` indices one at a time.  Each answer must arrive within `Δ + RTT` and match `vk`.
    The memory challenger refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit
    gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
 
-Every coin is drawn here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
+Every coin is flipped here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
 none.  The claims a certificate rests on are ids in `verity.core.claims`' format (`claim`).
 """
 
@@ -33,7 +33,7 @@ from verity.ml.randomness import Key
 
 from . import audit, setup
 from .codec import Codec, Geometry, split
-from .layout import Layout
+from .layout import TensorLayout
 from .layout import decode_tensor as _decode_tensor
 from .primitives import Primitives
 from .verifier import VerifierKey
@@ -96,7 +96,7 @@ def claim(id: str) -> Entry:
 
 
 @dataclass(frozen=True)
-class Certificate:
+class CapacityBound:
     """What an accepted audit of a scheme at its parameters establishes: Lean's `Meets S .sequential D Q k ε`.
 
     A server that holds fewer than `⌊rho · |C|⌋` bits when the challenges arrive, and answers each within `rounds`
@@ -182,12 +182,12 @@ class Scheme(ABC):
         self.prims = type(self).backend(params) if prims is None else prims
 
     @property
-    def certificate(self) -> Certificate | None:
+    def certificate(self) -> CapacityBound | None:
         """The certificate at these parameters; None when no theorem covers them."""
         return None
 
     @property
-    def certificates(self) -> tuple[Certificate, ...]:
+    def certificates(self) -> tuple[CapacityBound, ...]:
         """Every certificate at these parameters, the default (`certificate`, when there is one) first.  A scheme with
         guarantees at several round budgets lists them all; the memory challenger audits under the first that covers its
         `k` and deadline."""
@@ -237,7 +237,7 @@ def commit(scheme: Scheme, w: bytes | Iterable[bytes]) -> bytes:
 
 
 def draw_salt(source: bytes, commitment: bytes) -> bytes:
-    """The verifier's salt, drawn after the commitment from its own secret or a later beacon round (`setup.draw_salt`)."""
+    """The verifier's salt, sampled after the commitment from its own secret or a later beacon round (`setup.draw_salt`)."""
     return setup.draw_salt(source, commitment)
 
 
@@ -251,7 +251,7 @@ def decode(scheme: Scheme, salt: bytes, encoded: Iterable[Sequence[bytes]]) -> b
     return b"".join(scheme.decode_segment(salt, s, blocks) for s, blocks in enumerate(encoded))
 
 
-def decode_tensor(scheme: Scheme, layout: Layout, salt: bytes, name: str, block: Callable[[int], bytes]) -> bytes:
+def decode_tensor(scheme: Scheme, layout: TensorLayout, salt: bytes, name: str, block: Callable[[int], bytes]) -> bytes:
     """One tensor of `layout`, decoded from the segments of `C` it overlaps (`block(i)` is label `i` of `C`)."""
     if layout.params != scheme.params:
         raise ValueError("the layout's parameters are not the scheme's")
@@ -303,7 +303,7 @@ class StorageProfile:
     block_bits: int
     k: int
     limit_ns: int
-    certificate: Certificate | None
+    certificate: CapacityBound | None
     gaps: tuple[str, ...] = field(default=())
     experimental: str | None = None
 
@@ -420,5 +420,5 @@ class TimedAudit:
                               self.gaps, self.scheme.experimental)
 
 
-__all__ = ["LOCAL_CLAIMS", "PRIVATE", "PUBLIC", "Certificate", "Scheme", "StorageProfile", "TimedAudit", "challenge_key",
+__all__ = ["LOCAL_CLAIMS", "PRIVATE", "PUBLIC", "CapacityBound", "Scheme", "StorageProfile", "TimedAudit", "challenge_key",
            "claim", "commit", "decode", "decode_tensor", "draw_salt", "encode", "responder", "verifier_key"]

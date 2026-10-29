@@ -1,4 +1,4 @@
-"""The device reader (`reader.cu`): the remote bandwidth driver's receipts, leaves and receipt tree on the GPU, gated
+"""The device reader (`reader.cu`): the PoUB driver's receipts, leaves and receipt tree on the GPU, gated
 byte for byte against the driver (`verity/core/protocols/remote_bandwidth/receipts.py`) and timed against a read of
 the same bytes.
 
@@ -6,7 +6,7 @@ the same bytes.
 segment     a device reader's part of a pass: count = 16 · 2^h chunks of one region, read in order from position
             p = a multiple of count (`verity_vllm.protocols.remote_bandwidth.registry.aligned`); its root is the node (h + 4 levels above
             the chunks) end_pass takes by segment number, and `open` serves an opening's leaf receipts and leaf path
-salts       the store's PRF, SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be leaf) (`Store.salt`), so none is kept
+salts       the store's PRF, SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be leaf) (`NodeMemory.salt`), so none is kept
 ~~~
 
 sketch-sha512 receipts (`receipts.SketchReceipter`) run at k_s = 16 rows (dp4a) and at k_s = 64, a chunk's 2^−64 (int8 tensor

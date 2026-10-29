@@ -38,6 +38,7 @@ from verity.core.protocols.remote_bandwidth import receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
+import verifier  # noqa: E402
 import wire  # noqa: E402
 
 
@@ -187,8 +188,10 @@ def main() -> int:
             k, _, h = tok.partition("h")
             configs.append((g, None, 1) if k == "lock" else (g, int(k), int(h) if h else int(k) + 1))
     port = free_port()
-    vout = a.out / "verifier"
+    vout, site_log = a.out / "verifier", a.out / "site.json"
+    site_log.write_text(json.dumps(verifier.vy_nebius_log("ahead-bench").to_json()))
     v = subprocess.Popen([sys.executable, str(HERE / "verifier.py"), "--port", str(port), "--out", str(vout),
+                          "--site", str(site_log), "ahead-bench",
                           "--windows", str(a.windows), "--window-ms", str(a.window_ms), "--samples", str(a.samples),
                           "--jitter-ms", str(a.jitter_ms), "--sessions", str(len(configs)), "--pings", "50",
                           "--check-workers", str(a.check_workers)],
