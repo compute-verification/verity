@@ -23,7 +23,7 @@ The protocol premises the code can't be checked against yet:
 * `HonestHashRuled`: an accepted execution that exchanges nothing hashes, for each message of the honest commitment, a
   message with its digest.
 * `CommitL1w`: the honest commitment is the lead's layout, at its credited compressions: every words chunk and every
-  row of A is a frame-v3 leaf at its own position.
+  1 KiB segment of A's bytes is a frame-v3 leaf at its own position.
 * `OutsourceWithinEgressLead`: an exchanged bit replaces at most `β` of priced W1 work (class L). The bits are
   bounded by the protocol: `Accepted` refuses a call past its share of the cap (`Layout.callBits`).
 
@@ -120,17 +120,18 @@ def HonestHashRuled (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (κ 
     ∀ y ∈ C.msgs H (word L κ ω) ++ C.aMsgs, ∃ x ∈ (σ.exec ω).hashed, H x = H y
 
 /-- `pouw-commit-l1w` (proposed; the commitments' layout `l1w`, until the Lean code is the served format).
-**The honest commitment is the lead's layout**: each 256 KiB words chunk and each row of A is a frame-v3 leaf at its
-own position, whose message holds the chunk's or the row's bytes. So its words chunks number `wordChunks L`, and at
-every coin value its distinct messages' ShaWrites credit is at least `3,515.38` a words compression of `wordsBlocks`
-and `3,449.05` an A compression of `aBlocks`, whatever A is: equal chunks or equal rows sit at different positions, so
-they are different messages.
+**The honest commitment is the lead's layout**: each 256 KiB words chunk and each 1 KiB segment of A's bytes is a
+frame-v3 leaf at its own position, whose message holds the chunk's or the segment's bytes. So its words chunks number
+`wordChunks L`, and at every coin value its distinct messages' ShaWrites credit is at least `3,515.38` a words
+compression of `wordsBlocks` and `3,449.05` an A compression of `aBlocks`, whatever A is: equal chunks or equal
+segments sit at different positions, so they are different messages.
 
 The premise is stated at this layout and fails for a format that hashes a row's bytes alone. In an `hm96-sha512` row
 tree (`Hash.RowLeaf`), only the 64-byte leaf is framed at its position, so two equal rows of A share their row
 compressions and `dedup` drops the repeat below `aBlocks`.
 
-Rationale: the lead's committer frames each words chunk and each row of A as its own positioned leaf. -/
+Rationale: the lead's committer frames each words chunk and each 1 KiB segment of A as its own positioned leaf
+(`l1wCommit`). -/
 def CommitL1w (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (isA : Hash.Msg → Bool)
     (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) : Prop :=
   C.chunks = wordChunks L ∧ ∀ ω : Coins L,
