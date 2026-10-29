@@ -1,6 +1,6 @@
 """A party: a next-message machine, sans-IO.
 
-`Security/Definitions/Claims.lean` states parties this way: `Prover.next` gives the next message from the messages so far
+`Security/Definitions/Core/Interaction.lean` states parties this way: `Prover.next` gives the next message from the messages so far
 and the prover's tape, `Verifier.next` the next from the prover's messages and its coins. A `Party` is that function as an
 object the runtime drives: `start(params, identity)` and then `on(received)` for each message that reaches it, each
 returning the actions it takes:
