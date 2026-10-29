@@ -115,4 +115,158 @@ what = "inbox/HASH.md: it equals Σ_τ κ_τ Σ_{t≥τ} r_t, computable without
 #   extra_w1_per_mac: honest non-hash commitment work a useful MAC (W1)
 #   t1, t2, t3 = { value, label }: worst over the basis's points (t2 the larger of sync and async)
 #   drops: the lead's premises the design no longer takes; adds: [{ id, rank, part, status, falsification, owner }]
-#   rule_change: the rule a design needs changed (another primitive, a revealed sketch)
+#   combine = { m, rot }: one committed register for m words (xor-m; xorrot-m with rot = 1), derived by the card
+#   fold = { seal_bytes_per_cell, writes_per_word }: every word folded into its cell's state, sealed with the final word
+#   stated = { h, h_bare, t1, t1_dw }: the lane's own figures, compared (h_bare: before the fold's own writes)
+#   rule_change: the rule a design needs changed (another primitive, a revealed sketch); rule_question: one asked
+#   caveats: conditions another lane's note sets on the design, carried as flags
+#   adds[].family: a premise another lane states under another name and rank ([family.*]); the card takes the highest
+
+# Premise families: one statement two lanes name and rank differently.
+[family.xor-fold-writes]
+what = "a program that outputs the XOR of a cell's words (m of them, or all of them sealed with the final word) writes each word and the XOR's three-input LOP3s"
+stated = [{ lane = "SHA", name = "XorWrites_m", rank = "4a" }, { lane = "ASSUME", name = "FoldMaterial (+ XorFoldOpt)", rank = 5 }]
+
+# No-go bounds the lanes have shown, beside the designs.
+[bound.class-c]
+lane = "SHA"
+note = "compute-research/20261029T1947Z-report-hash-sha"
+what = "SHA-512 trees under ShaWrites with DistinctWrites the only other credit, M0: h >= (R/32)(r - T1)"
+value = "h >= 108.6 for any noise (126.2 at the lead's r); no design in the class cuts h by 1.2x"
+label = "checked (derived; arithmetic checked, run r20261029-192202-edd6)"
+
+[bound.zero-data-ceiling]
+lane = "ASSUME"
+note = "compute-research/20261029T1926Z-report-hash-assume"
+what = "a premise only lower-bounds an adversary's cost, so credit <= C0, the zero-data prover's cost, whatever the premise's rank"
+value = "no premise on operands buys h: served stride-k designs keep >= 1/31 words a data MAC (the lead's), outputs-only leaves >= stock uncredited, exact designs at most 1.3x (8B) / 3.2x (70B) at rank 4b and none on 1B"
+label = "proved (paper); classes checked, run r20261029-190731-0ded"
+
+[proposal.sha-trunc16]
+lane = "SHA"
+note = "compute-research/20261029T1947Z-report-hash-sha"
+title = "trunc-16: commit each word's low 16 bits, two halves a message register (one PRMT)"
+status = "proposed"
+h = { value = 63.89, price = "w1-forms", label = "checked", point = "any", model = "llama-3.2-1b", words_chunk = 262144, baseline = 127.5 }
+t1 = { value = 0.00045, label = "checked" }
+t2 = { value = 36.84, label = "estimate" }
+t3 = { value = -0.00021, label = "measured" }
+adds = [{ id = "TruncWrites_16", rank = "4a", part = "hashing", status = "open", owner = "SHA" }]
+caveats = ["the cut tops out at 2x", "T1 under DistinctWrites alone 115%"]
+
+[proposal.sha-xor8]
+lane = "SHA"
+note = "compute-research/20261029T1947Z-report-hash-sha"
+title = "xor-8: one committed register a cell for 8 consecutive words, X = W_t xor ... xor W_t+7"
+status = "proposed"
+combine = { m = 8 }
+stated = { h_bare = 16.18, h = 16.18, t1 = 0.00035, t1_dw = 1.59 }
+t2 = { value = 16.24, label = "estimate" }
+adds = [{ id = "XorWrites_8", family = "xor-fold-writes", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "an exact M0 program for X below honest's writes (hash_sha.py part X; m0_draw): at m 8 the packed adversary pays 29.62 against honest's 12" }]
+rule_question = "is a XOR fold of words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
+
+[proposal.sha-xor11]
+lane = "SHA"
+note = "compute-research/20261029T1947Z-report-hash-sha"
+title = "xor-11: one committed register a cell for 11 consecutive words"
+status = "proposed"
+combine = { m = 11 }
+stated = { h_bare = 11.84, h = 11.84, t1 = 0.00029, t1_dw = 1.57 }
+t2 = { value = 14.35, label = "estimate" }
+adds = [{ id = "XorWrites_11", family = "xor-fold-writes", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "an exact M0 program for X with per-register overhead below 0.21m - 0.5 = 1.8 writes, or forming below 0.29 a word (hash_sha.py part X)" }]
+rule_question = "is a XOR fold of words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
+
+[proposal.sha-xor16]
+lane = "SHA"
+note = "compute-research/20261029T1947Z-report-hash-sha"
+title = "xor-16: one committed register a cell for 16 consecutive words"
+status = "proposed"
+combine = { m = 16 }
+stated = { h_bare = 8.22, h = 8.22, t1 = 0.00028, t1_dw = 1.66 }
+t2 = { value = 12.81, label = "estimate" }
+adds = [{ id = "XorWrites_16", family = "xor-fold-writes", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "an exact M0 program at or below 1.47 writes a word all in against honest's 1.5 (hash_sha.py part X; the packed adversary is at 1.29 a word plus about 14 hand-counted writes a register)" }]
+rule_question = "is a XOR fold of words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
+caveats = ["SHA's own adversary costs 1.29 writes a word against honest's 1.5; only its hand-counted per-block overhead keeps it behind (fragile, SHA's Smells)"]
+
+[proposal.sha-xor31]
+lane = "SHA"
+note = "compute-research/20261029T1947Z-report-hash-sha"
+title = "xor-31: one committed register a cell for 31 consecutive words"
+status = "proposed"
+combine = { m = 31 }
+stated = { h_bare = 4.38, h = 4.38, t1_dw = 1.67 }
+t2 = { value = 11.14, label = "estimate" }
+adds = [{ id = "XorWrites_31", family = "xor-fold-writes", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "an exact M0 program for X below honest's 46 writes a register (hash_sha.py part X: 57.88 at m 31, ratio 1.26)" }]
+rule_question = "is a XOR fold of words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
+caveats = ["SHA states T1 at T 8,192 only", "SHA expects a better encoding to break XorWrites_m at m >= 24"]
+
+[proposal.sha-xorrot11]
+lane = "SHA"
+note = "compute-research/20261029T1947Z-report-hash-sha"
+title = "xorrot-11: X = xor of rot(W_t, rho_t) over 11 words, distinct public rotations"
+status = "proposed"
+combine = { m = 11, rot = 1 }
+stated = { h_bare = 11.84, h = 11.84, t1 = 0.00029, t1_dw = 2.62 }
+t2 = { value = 14.78, label = "estimate" }
+adds = [{ id = "RotXorWrites_11", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "the exact adversary search for xorrot-m (SHA's next step); attacked only on paper so far" }]
+rule_question = "is a XOR fold of rotated words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
+
+[proposal.sha-xorrot16]
+lane = "SHA"
+note = "compute-research/20261029T1947Z-report-hash-sha"
+title = "xorrot-16: X = xor of rot(W_t, rho_t) over 16 words, distinct public rotations"
+status = "proposed"
+combine = { m = 16, rot = 1 }
+stated = { h_bare = 8.22, h = 8.22, t1 = 0.00028, t1_dw = 2.74 }
+t2 = { value = 13.25, label = "estimate" }
+adds = [{ id = "RotXorWrites_16", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "the exact adversary search for xorrot-m (SHA's next step); attacked only on paper so far" }]
+rule_question = "is a XOR fold of rotated words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
+
+[proposal.assume-fold-cell]
+lane = "ASSUME"
+note = "compute-research/20261029T1926Z-report-hash-assume"
+title = "the XOR fold: sigma <- LOP3(sigma, S_t, S_t+1) over every word, (sigma, O') sealed a cell in the words tree"
+status = "proposed"
+fold = { seal_bytes_per_cell = 8, writes_per_word = 0.5 }
+stated = { h = 2.39 }
+t2 = { value = 7.0, label = "estimate" }
+adds = [
+  { id = "FoldMaterial", family = "xor-fold-writes", rank = 5, part = "hashing", status = "open", owner = "ASSUME", falsification = "wider superoptimizer windows with IMAD increments, MMA masked-B and b1 popc routes, bit-sliced routes, and a kernel that outputs sigma with fewer writes (ASSUME Ask 2; two-instruction windows checked, run r20261029-190731-0ded)" },
+  { id = "XorFoldOpt", rank = 3, part = "hashing", status = "open", owner = "ASSUME", falsification = "a program combining N written words in fewer than ceil((N-1)/2) three-source instructions" },
+]
+rule_change = "the one-hash rule's Duo exception covers keyed folds; the XOR fold is unkeyed (ASSUME Ask B (a))"
+caveats = [
+  "ASSUME states h 0.99-4.11 (a cell) against the brief's 120-230 and per matmul K (2,048 / 8,192); the card prices the forward, 2,582 useful MACs a cell",
+  "ASSUME prices sigma alone (O' 'committed anyway'); O' is among the lead's words, so the card seals sigma and O', 8 B a cell",
+  "HIDE §4.6: the seals must share leaves (a keyed leaf a seal puts h at 66.3 at K 2,048) and sit in 4-16 KiB chunks for the drawn unit's opening",
+  "SHA part X: an exact M0 adversary keeps the running words at 0.95 writes a word, below FoldMaterial's one write a word; only the whole XOR's 1.5 a word holds, on hand-counted overhead",
+]
+
+[proposal.assume-fold-row8]
+lane = "ASSUME"
+note = "compute-research/20261029T1926Z-report-hash-assume"
+title = "the XOR fold, one sigma a row of 8 cells, O' a cell"
+status = "proposed"
+fold = { seal_bytes_per_cell = 4.5, writes_per_word = 0.5 }
+stated = { h = 0.75 }
+t2 = { value = 7.0, label = "estimate" }
+adds = [
+  { id = "FoldMaterial", family = "xor-fold-writes", rank = 5, part = "hashing", status = "open", owner = "ASSUME", falsification = "wider superoptimizer windows with IMAD increments, MMA masked-B and b1 popc routes, bit-sliced routes, and a kernel that outputs sigma with fewer writes (ASSUME Ask 2; two-instruction windows checked, run r20261029-190731-0ded)" },
+  { id = "XorFoldOpt", rank = 3, part = "hashing", status = "open", owner = "ASSUME", falsification = "a program combining N written words in fewer than ceil((N-1)/2) three-source instructions" },
+]
+rule_change = "the one-hash rule's Duo exception covers keyed folds; the XOR fold is unkeyed (ASSUME Ask B (a))"
+caveats = [
+  "ASSUME states h 0.58-0.97 (a row of 8) against the brief's 120-230; the card keeps O' a cell, so a row of 8 saves sigma's bytes only",
+  "HIDE §4.6: the seals must share leaves and sit in 4-16 KiB chunks",
+  "SHA part X: an exact M0 adversary keeps the running words at 0.95 writes a word, below FoldMaterial's one write a word",
+]
+
+[proposal.assume-fold-li]
+lane = "ASSUME"
+note = "compute-research/20261029T1926Z-report-hash-assume"
+title = "the li fold under the Duo exception as worded: one instruction a word, (sigma, O') sealed a cell"
+status = "proposed"
+fold = { seal_bytes_per_cell = 8, writes_per_word = 1.0 }
+stated = { h = 4.6 }
+adds = [{ id = "FOLD-OPT (li)", rank = 5, part = "hashing", status = "open", owner = "main (TS accounting)", falsification = "a program that outputs li's fold with fewer writes than one instruction a word (fold_routes.py)" }]
+caveats = ["ASSUME states h about 1.1-4.6 and no T2 for li", "HIDE reads the Duo exception's wording as covering li"]
