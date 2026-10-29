@@ -856,4 +856,103 @@ theorem unit_linkUnit {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin
 
 end Unit
 
+/-! ## At the reference's u16 words -/
+
+theorem bytesOf_append (a b : List ℕ) :
+    RecLinkRef.bytesOf (a ++ b) = RecLinkRef.bytesOf a ++ RecLinkRef.bytesOf b := by
+  apply ByteArray.ext
+  simp [RecLinkRef.bytesOf, List.flatMap_append]
+
+theorem flatMap_zeros : ∀ n : ℕ,
+    (List.replicate n 0).flatMap (fun w : ℕ => [(w % 256).toUInt8, (w / 256 % 256).toUInt8]) =
+      List.replicate (2 * n) (0 : UInt8)
+  | 0 => rfl
+  | n + 1 => by
+    rw [List.replicate_succ, List.flatMap_cons, flatMap_zeros n, show 2 * (n + 1) = 2 * n + 1 + 1 by omega,
+      List.replicate_succ, List.replicate_succ]
+    rfl
+
+theorem bytesOf_replicate (n : ℕ) : RecLinkRef.bytesOf (List.replicate n 0) = zeroB (2 * n) := by
+  unfold RecLinkRef.bytesOf zeroB
+  rw [flatMap_zeros]
+  rfl
+
+theorem zeroB_add (m n : ℕ) : zeroB (m + n) = zeroB m ++ zeroB n := by
+  apply ByteArray.ext
+  simp [zeroB]
+
+theorem toUInt8_toNat (a : UInt8) : a.toNat.toUInt8 = a := by
+  apply UInt8.toNat_inj.1
+  simp
+
+theorem pair_lo (a b : UInt8) : ((a.toNat + 256 * b.toNat) % 256).toUInt8 = a := by
+  rw [Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt (UInt8.toNat_lt a), toUInt8_toNat]
+
+theorem pair_hi (a b : UInt8) : ((a.toNat + 256 * b.toNat) / 256 % 256).toUInt8 = b := by
+  rw [show a.toNat + 256 * b.toNat = a.toNat + b.toNat * 256 by omega, Nat.add_mul_div_right _ _ (by omega),
+    Nat.div_eq_of_lt (UInt8.toNat_lt a), Nat.zero_add, Nat.mod_eq_of_lt (UInt8.toNat_lt b), toUInt8_toNat]
+
+theorem get!_eq (b : ByteArray) (i : ℕ) : b.get! i = b.data.toList.getD i 0 := by
+  cases b with
+  | mk bs =>
+    show bs[i]! = _
+    rw [Array.getElem!_eq_getD]
+    unfold Array.getD
+    split <;> simp_all <;> rfl
+
+theorem pairs_eq : ∀ (l : List UInt8) (m : ℕ), l.length = 2 * m →
+    ((List.range m).map fun i => (l.getD (2 * i) 0).toNat + 256 * (l.getD (2 * i + 1) 0).toNat).flatMap
+      (fun w : ℕ => [(w % 256).toUInt8, (w / 256 % 256).toUInt8]) = l
+  | [], 0, _ => rfl
+  | a :: b :: r, m + 1, h => by
+    rw [List.range_succ_eq_map, List.map_cons, List.flatMap_cons, List.map_map]
+    have hr : r.length = 2 * m := by rw [List.length_cons, List.length_cons] at h; omega
+    have := pairs_eq r m hr
+    simp only [Nat.mul_zero, Nat.zero_add, List.getD_cons_zero, List.getD_cons_succ] at *
+    rw [pair_lo, pair_hi]
+    show a :: b :: _ = a :: b :: r
+    congr 2
+  | [], m + 1, h => by rw [List.length_nil] at h; omega
+  | [_], _, h => by rw [List.length_singleton] at h; omega
+  | _ :: _ :: _, 0, h => by rw [List.length_cons, List.length_cons] at h; omega
+
+/-- `bytes_of(words_of(b))` is `b` for `b` of even size. -/
+theorem bytesOf_wordsOf (b : ByteArray) (h : b.size % 2 = 0) : RecLinkRef.bytesOf (RecLinkRef.wordsOf b) = b := by
+  apply ByteArray.ext
+  apply Array.toList_inj.1
+  unfold RecLinkRef.bytesOf RecLinkRef.wordsOf
+  simp only [get!_eq]
+  have hl : b.data.toList.length = 2 * (b.size / 2) := by
+    rw [Array.length_toList, ByteArray.size_data]
+    omega
+  rw [List.toList_toArray]
+  exact pairs_eq _ _ hl
+
+theorem bytesOf_expected {r : ByteArray} (hr : r.size = 64) :
+    RecLinkRef.bytesOf (RecLinkRef.expected r) = r ++ zeroB 64 :=
+  (bytesOf_append _ _).trans (congr (congrArg (· ++ ·) (bytesOf_wordsOf r (by omega))) (bytesOf_replicate 32))
+
+theorem bytesOf_zeros : RecLinkRef.bytesOf RecLinkRef.zeros = zeroB 64 ++ zeroB 64 :=
+  (bytesOf_replicate 64).trans (zeroB_add 64 64)
+
+/-- **The unit's outputs are the reference's `linkOut`**: on ports that are the bytes of u16 words (`bytesOf`), with
+the siblings `sibsOf` reads off `raux` and `waux`, `linkB`'s `(rin, rout)` are the bytes of `linkOut`'s. -/
+theorem linkB_words (UB PB : ℕ) (trow xr yr raux xw yw waux : List ℕ) :
+    linkB UB PB (RecLinkRef.bytesOf trow) (RecLinkRef.bytesOf xr) (RecLinkRef.bytesOf yr) (RecLinkRef.bytesOf xw)
+        (RecLinkRef.bytesOf yw) (RecLinkRef.sibsOf raux (UB + PB)) (RecLinkRef.sibsOf waux (UB + PB)) =
+      (RecLinkRef.bytesOf (RecLinkRef.linkOut UB PB trow xr yr raux xw yw waux).1,
+        RecLinkRef.bytesOf (RecLinkRef.linkOut UB PB trow xr yr raux xw yw waux).2) := by
+  have hls : ∀ X Y : ByteArray, (RecLinkTree.leaf (Hm96.Default512.commitString X Y)).size = 64 :=
+    fun _ _ => Sha512.hash_size _
+  have h1 := AccChain.climb_size_of RecLinkRef.scheme (fun _ _ => rfl) (RecLinkRef.sibsOf raux (UB + PB))
+    (RecLinkRef.posOf (RecLinkRef.bytesOf trow) 1 2 PB (UB + PB)) _
+    (hls (RecLinkRef.bytesOf xr) (RecLinkRef.bytesOf yr))
+  have h2 := AccChain.climb_size_of RecLinkRef.scheme (fun _ _ => rfl) (RecLinkRef.sibsOf waux (UB + PB))
+    (RecLinkRef.posOf (RecLinkRef.bytesOf trow) 3 4 PB (UB + PB)) _
+    (hls (RecLinkRef.bytesOf xw) (RecLinkRef.bytesOf yw))
+  unfold linkB RecLinkRef.linkOut
+  cases RecLinkRef.okRef UB PB (RecLinkRef.bytesOf trow) (RecLinkRef.bytesOf xr) (RecLinkRef.bytesOf xw)
+  · exact Prod.ext bytesOf_zeros.symm bytesOf_zeros.symm
+  · exact Prod.ext (bytesOf_expected h1).symm (bytesOf_expected h2).symm
+
 end FlockVBridge.RecLink
