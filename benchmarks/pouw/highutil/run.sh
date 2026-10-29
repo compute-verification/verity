@@ -13,8 +13,11 @@
 # COINS: local (default; a development session on this machine, not of record) or gate:USER@HOST (vy-challenger-1 with
 # PEER, CHALLENGER_KEY, the deployment's key record, and GATE_KEY); MAIN (default inputs/main.txt): the verifier's copy of
 # main's first-parent line. CARD (default inputs/card.toml, sent with --send; skipped when absent): θ's card, verity/hardware's
-# card file or its SKU, for summary.json's certified share at the card's clock ceiling and, with NSYS=1, terms.json (terms.py:
-# where θ x wall goes at each reading of the clock, and each period's clock); nvidia-smi's clock event reasons go to clocks-{before,after}.txt. PLAIN (default
+# card file or its SKU, for summary.json's declared utilization (the credited MACs a second over θ at the card's clock
+# ceiling, their MFU) and, with NSYS=1, terms.json (terms.py: where θ x wall goes at each reading of the clock, and each
+# period's clock) and breakdown.json (breakdown.py: each period's time by resource, the protocol's own kernels by role,
+# the GEMM, idle, the tensor pipe, the clock and the host); nvidia-smi's clock event reasons go to
+# clocks-{before,after}.txt. PLAIN (default
 # lt,int_mm): period.py's --plain, the plain arm's baselines, gamma's first: cuBLASLt (v31's lt_setup) and torch._int_mm. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
 # (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS (0: none), NEGATIVE: period.py run's; ROW (default 8192), LP, LP_MAX
 # and L (default 512, 512 and 16384: S = 1 at every layer, down as four K-slices at L' 512; LP_MAX=1024 runs it as two at
@@ -27,7 +30,8 @@
 # TEXT: wikitext-2-raw-v1's test split for capture.py (default the datasets cache's arrow file, else its parquet at the same
 # revision, fetched from the hub into the run's scratch). The H200 (vy-dc-h200-2): GENCODE=arch=compute_90a,code=sm_90a
 # NVFLAGS=-DV31_WG=1 THETA_DEVICE=sm_90 (with the fast path's V31_SCHED=2 V31_LMINB=4 V31_SAHEAD=1), CARD its card file, and the checkpoint built into the node's HF cache first
-# (benchmarks/hash/dither/pin.sh).
+# (benchmarks/hash/dither/pin.sh). SERVED=1: prep --served, every call in its served form (T_1 .. T_{S-1} and O committed; with
+# V31_GEMM=1 V31_RP=5 the GEMM hashes O's rows on warps of its own).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -56,10 +60,13 @@ nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA
   -Xcompiler -fPIC -shared -o "$LIB" $A/v31.cu -lcuda -lcublasLt > "$O/build.log" 2>&1
 echo "build rc $?" >> "$O/rc.txt"
 [ -s "$LIB" ] || { cat "$O/rc.txt"; tail -30 "$O/build.log"; exit 1; }
-sha256sum $A/v31.cu $A/wg_proto.cuh $A/v31.py $A/v31lib.py $D/period.py $D/capture.py $D/terms.py $D/pipes.py $A/h200_step.py > "$O/sources.sha256"
+sha256sum $A/v31.cu $A/wg_proto.cuh $A/v31.py $A/v31lib.py $D/period.py $D/capture.py $D/terms.py $D/breakdown.py \
+  $D/timeline.py $D/pipes.py $A/h200_step.py > "$O/sources.sha256"
 if [ "$CKPT" = seeded ]; then SRC=(--seeded); else SRC=(--checkpoint "$CKPT"); fi
+SERVEDA=()
+[ "${SERVED:-0}" = 1 ] && SERVEDA=(--served)
 uv run -q --no-project --with numpy --with safetensors python $D/period.py prep "$W/cfg" "${SRC[@]}" --row "$ROW" --lp "$LP" --lp-max "$LP_MAX" --L "$L" \
-  > "$O/prep.log" 2>&1
+  "${SERVEDA[@]}" > "$O/prep.log" 2>&1
 r=$?
 echo "prep rc $r" >> "$O/rc.txt"
 [ $r = 0 ] || { cat "$O/rc.txt"; tail -30 "$O/prep.log"; exit 1; }
@@ -128,7 +135,7 @@ $LEASE bash -c '
     for arm in plain proto; do
       ncu --clock-control none --csv --page raw --print-units base --log-file "$O/ncu-$arm.csv" -c 600 \
         --metrics gpu__time_duration.sum,sm__ops_path_tensor_op_imma_src_int8.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,sm__cycles_elapsed.avg.per_second \
-        --kernel-name "regex:^(Kernel2|sm[0-9]+_xmma|leaf_persist|salt_persist|noise_kernel|fill_a_kernel|fill_b_kernel|top_small|bits_kernel|perm_kernel|level_kernel)" \
+        --kernel-name "regex:^(Kernel2|sm[0-9]+_xmma|gemm|serve_rows_kernel|form_|wrap|leaf_persist|salt_persist|noise_kernel|fill_a_kernel|fill_b_kernel|top_small|bits_kernel|perm_kernel|level_kernel)" \
         $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$W/ncu-$arm" --coins "$COINS" --main "$MAIN" $GATE_ARGS --blocks 1 --steps 2 --q 16 --periods 1 \
         --negative "" --arms $arm >> "$O/ncu.log" 2>&1
       echo "ncu $arm rc $?" >> "$O/rc.txt"
@@ -136,10 +143,37 @@ $LEASE bash -c '
       echo "pipes $arm rc $?" >> "$O/rc.txt"
     done
   fi
+  if [ "$NSYS" = 1 ] && [ -s "$O/summary.json" ] && [ -f "$O/card.toml" ]; then
+    $PY $D/breakdown.py "$O" > "$O/breakdown.json" 2>> "$O/nsys.log"
+    echo "breakdown rc $?" >> "$O/rc.txt"
+  fi
   kill $smi 2>/dev/null
   exit $r
 '
 echo "lease rc $?" >> "$O/rc.txt"
+# FILL_UNTIL=UTC: after the lease above (run it with PERIODS=0 for capture and diag alone), protocol periods with no
+# plain arm and no negative, FILL_PERIODS of them a chunk, each chunk under a preemptible lease of its own, so any waiter
+# takes the GPU back between them; until UTC, which must stop short of the node's booked windows (~/.research/lease).
+# Each chunk writes fill-NNN/ (periods.jsonl, summary.json with the declared utilization); smi-fill.csv samples the card.
+if [ -n "${FILL_UNTIL:-}" ] && grep -q "^diag rc 0" "$O/rc.txt"; then
+  END=$(date -u -d "$FILL_UNTIL" +%s)
+  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,utilization.gpu --format=csv -lms 1000 > "$O/smi-fill.csv" 2>&1 &
+  fsmi=$!
+  n=0 bad=0
+  while [ "$(date -u +%s)" -lt "$END" ] && [ $bad -lt 3 ]; do
+    n=$((n + 1))
+    export C=$O/fill-$(printf %03d $n)
+    gpu-lease 1 --wait --preemptible --max-min "${FILL_MIN:-25}" -- bash -c '
+      $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$C" --coins "$COINS" --main "$MAIN" $GATE_ARGS $CARD_ARGS --blocks "$BLOCKS" \
+        --steps "$STEPS" --q "$Q" --periods "${FILL_PERIODS:-6}" --negative "" --arms proto --tag "fill$(basename $C | tr -dc 0-9)" \
+        > "$C.log" 2>&1
+    '
+    fr=$?
+    echo "fill $n rc $fr" >> "$O/rc.txt"
+    if [ $fr = 0 ]; then bad=0; else bad=$((bad + 1)); fi
+  done
+  kill $fsmi 2>/dev/null
+fi
 cat "$O/rc.txt"
 tail -40 "$O/period.log"
 grep -q "^period rc 0" "$O/rc.txt"
