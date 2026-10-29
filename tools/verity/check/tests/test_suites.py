@@ -365,6 +365,7 @@ def _runner_at(home: Path, monkeypatch, root: Path, name: str):
 
     home.mkdir(parents=True, exist_ok=True)
     shutil.copy(HERE / "suites.py", home / "suites.py")
+    shutil.copy(HERE / "settings.py", home / "settings.py")
     shutil.copytree(HERE / "guard", home / "guard", ignore=shutil.ignore_patterns("__pycache__"), dirs_exist_ok=True)
     spec = importlib.util.spec_from_file_location(name, home / "suites.py")
     mod = importlib.util.module_from_spec(spec)
