@@ -5,12 +5,12 @@ the honest prover's schedule over every pipe, the adversary's best, and the gap.
 A word is a dot product's k32 running sum over NCP's 3K-wide stacked product (int8 operands: int7 data plus noise, block 3
 up to ±127). One accumulator register of wgmma s8 m64nNk32 is one word. A lane route makes a word from 32 exact int8
 products plus the instructions that accumulate and extract it. `ROUTES` gives each route's lane instructions a word in
-three readings: `products`, the product instructions alone (the premise P32 and nothing else: the adversary's weakest
-bound), `ideal`, adding the word's own extraction (no operand delivery), and `honest`, adding operand delivery and
-conversion (an estimate until the honest kernel is timed). The `delivered` adversary pays honest's costs, so its rate is
-honest's. A lane instruction's realistic product count: IDP.4A 4 (byte operands: a sum of two NCP entries leaves the
-byte, so no fast algorithm fits), DFMA 2 (two products packed 2^24 apart in the 53-bit mantissa), IMAD 2 (16-bit fields,
-a short chain), FFMA 1, HFMA2 1/2 (an int8 product is four nibble products and FP16 holds 11 bits). The tensor pipe's
+three readings: `products`, the product instructions alone at 4 a IDP.4A, 2 a DFMA (packed 2^24 apart), 2 an IMAD, 1 a
+FFMA and 1/2 a HFMA2; `ideal`, adding the word's own extraction (no operand delivery); and `honest`, adding operand
+delivery and conversion (an estimate until the honest kernel is timed). The `floor` reading is `ncp_p32_check.py`'s:
+the fewest issue slots a word that check finds, with three products a DFMA in chains of 8 and Strassen inside the k32
+step, and it sits under the products reading on DFMA and FFMA. The `delivered` adversary pays honest's costs, so its
+rate is honest's. IDP.4A's 8 a word holds in every reading: a sum of two NCP entries leaves the byte. The tensor pipe's
 other forms (`TENSOR_FORMS`) make fewer words a tensor slot than s8 wgmma and share its slots.
 
 Time is the polytope the H200 census measured (`machine_model/data/devices/sm_90/rows.csv`). Per SMSP-cycle, the
@@ -41,6 +41,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import ncp_p32_check as p32
 from exact_kit.checks import Checks
 from scipy.optimize import linprog
 
@@ -50,7 +51,7 @@ LANES = 32
 G_SAT = 0.0312468 / 4
 SMEM_SHARED = 123.0 / 4
 SS_BYTES_PER_IGMMA = 2560
-KS = (1067, 2048, 4096, 8192)
+KS = (1067, 2048, 4096, 8192, 16384)
 
 CLASSES = ("IMAD", "ALU", "FMA", "FP64", "MIO", "UNI")
 #: Each class's warp instructions a SMSP-cycle alone: the census (IMAD, ALU, FFMA at issue, uniform), the sheet (FP64,
@@ -95,6 +96,21 @@ ROUTES = {
     "uimad": {"products": {"UIMAD": 32 * LANES}, "ideal": {"UIMAD": 32 * LANES}, "honest": {"UIMAD": 32 * LANES},
               "bytes": 0, "why": "a warp-uniform s32 MAC makes one product a warp instruction"},
 }
+
+
+def _floor_reading() -> None:
+    fl = p32.floors(*p32.blocks())
+    d, f, m = fl["dfma"], fl["ffma"], fl["imad"]
+    floor = {"idp4a": {"IDP4A": fl["idp4a"]["slots"]},
+             "dfma2": {"DFMA": d["products"], "DADD": d["combine"], "IADD3": d["extract"]},
+             "ffma": {"FFMA": f["products"], "FADD": f["combine"], "IADD3": f["extract"]},
+             "imad2": {"IMAD": m["products"], "IADD3": m["combine"] + m["extract"]},
+             "hfma2": {"HFMA2": fl["hfma2"]["slots"]}, "uimad": ROUTES["uimad"]["products"]}
+    for r, v in floor.items():
+        ROUTES[r]["floor"] = v
+
+
+_floor_reading()
 #: The tensor pipe's other exact forms, alone, in k32 words a SM-clock: each shares the s8 wgmma's slots (measured for
 #: mma.sync and DMMA; b1, f16 and sparse s8 an estimate), so beside a saturated s8 wgmma each adds none.
 TENSOR_FORMS = {
@@ -214,9 +230,9 @@ def main() -> int:
                  f"{sm * generous:.1f} words/SM-clk, gap {1 - t_only / generous:.1%}")
 
     # (1) Each pipe's words a SM-clock: alone (products reading) and beside a saturated s8 wgmma in each reading.
-    kinds = ("products", "ideal", "honest")
+    kinds = ("products", "floor", "ideal", "honest")
     per_route = {}
-    print("  words/SM-clk        alone   beside: products  ideal  honest")
+    print("  words/SM-clk        alone   beside: products  floor  ideal  honest")
     for r in ROUTES:
         alone = sm * solve(reading("products", [r]), rows, tensor=False)[0]
         beside = {}
@@ -248,7 +264,7 @@ def main() -> int:
 
     # (3) The adversary's best in each reading, against honest on every route.
     adv = {}
-    for kind in ("products", "ideal", "delivered"):
+    for kind in ("products", "floor", "ideal", "delivered"):
         r_a, g_a, w_a = solve(reading("honest" if kind == "delivered" else kind, ROUTES), rows, smem=smem)
         adv[kind] = {"rate": r_a, "words_sm_clk": sm * r_a, "g": g_a, "side": sm * (r_a - WORDS_PER_IGMMA * g_a),
                      "routes": {k.split(":")[0]: sm * v for k, v in w_a.items() if v > 1e-12},
@@ -272,12 +288,12 @@ def main() -> int:
                  "from K 1,067", all(abs(gap(r_h, adv["delivered"]["rate"], k) - 32 / (3 * k)) < 1e-9 for k in KS)
                  and abs(adv["delivered"]["kmin"] - 32 / 0.03) < 1e-6, f"K 2,048 {32 / 6144:.2%}")
     km = {k: a["kmin"] for k, a in adv.items()}
-    checks.check("the product-count premise alone does not give T1 at K 2,048: against the products adversary honest's "
+    checks.check("no product-count premise gives T1 at K 2,048: against the products and floor adversaries honest's "
                  "side falls short (estimate: honest's delivery is modelled, not timed)",
-                 gap(r_h, adv["products"]["rate"], 2048) > 0.01 and km["delivered"] < km["ideal"] < km["products"],
-                 f"gap at K 2,048 {gap(r_h, adv['products']['rate'], 2048):.2%} (products), "
-                 f"{gap(r_h, adv['ideal']['rate'], 2048):.2%} (ideal); T1 from K " +
-                 ", ".join(f"{v:,.0f} ({k})" for k, v in km.items()))
+                 min(gap(r_h, adv[k]["rate"], 2048) for k in ("products", "floor")) > 0.01
+                 and km["delivered"] < km["ideal"] < km["products"] < km["floor"],
+                 ", ".join(f"{gap(r_h, adv[k]['rate'], 2048):.2%} ({k})" for k in ("products", "floor", "ideal"))
+                 + " at K 2,048; T1 from K " + ", ".join(f"{v:,.0f} ({k})" for k, v in km.items()))
 
     # (4) Margins: how much cheaper than its reading an adversary's side word may be with T1 holding at K, and the side
     # honest must reach at K 2,048.
@@ -287,34 +303,35 @@ def main() -> int:
         return gap(r_h, solve(reading(base, ROUTES), rows, smem=smem, scale=sc)[0], k)
 
     margins = {}
-    for kind, k in (("delivered", 2048), ("ideal", 4096), ("products", 8192), ("products", 4096)):
+    for kind, k in (("delivered", 2048), ("ideal", 4096), ("products", 8192), ("floor", 16384), ("floor", 8192)):
         s = bisect(lambda s: gap_scaled(kind, s, k) > 0.01, 0.05, 8.0)
         s_idp = bisect(lambda s: gap_scaled(kind, s, k, "idp4a") > 0.01, 0.05, 8.0)
         margins[f"{kind}@{k}"] = {"every_route": s, "idp4a": s_idp}
     need = {}
-    for kind in ("products", "ideal"):
+    for kind in ("products", "floor", "ideal"):
         r_need = 0.99 * adv[kind]["rate"] / (1 - 32 / (3 * 2048))
         need[kind] = sm * (r_need - WORDS_PER_IGMMA * G_SAT)
     for name, m in margins.items():
         print(f"  margin {name:14s}: T1 holds while every side word costs >= {m['every_route']:.3f}x the reading's "
               f"instructions (IDP.4A alone: >= {8 * m['idp4a']:.2f} a word)")
-    print(f"  honest side at K 2,048: modelled {sm * side_h:.2f} words/SM-clk; T1 needs >= {need['products']:.2f} "
-          f"(products) or >= {need['ideal']:.2f} (ideal)")
+    print(f"  honest side at K 2,048: modelled {sm * side_h:.2f} words/SM-clk; T1 needs >= "
+          + ", ".join(f"{v:.2f} ({k})" for k, v in need.items()))
     # The placement estimates: were a class's warp instructions free of the generic rows beside wgmma (both parties).
     placement = {}
     for cls in ("FP64", "IMAD"):
         rh_f = solve(reading("honest", ROUTES), rows, smem=smem, free=(cls,))[0]
         placement[cls] = {"honest": sm * rh_f}
-        for kind in ("products", "ideal"):
+        for kind in ("products", "floor", "ideal"):
             ra_f = solve(reading(kind, ROUTES), rows, smem=smem, free=(cls,))[0]
             placement[cls][kind] = {"adversary": sm * ra_f, "gap_k2048": gap(rh_f, ra_f, 2048), "kmin": kmin(rh_f, ra_f)}
         print(f"  were {cls} free of JI90 beside wgmma: honest {sm * rh_f:.2f}, gap at K 2,048 "
               + ", ".join(f"{placement[cls][k]['gap_k2048']:.2%} ({k}, T1 from K {placement[cls][k]['kmin']:,.0f})"
-                          for k in ("products", "ideal")))
-    m8 = margins["products@8192"]["every_route"]
-    checks.check("premise P32's margin at K 8,192: T1 holds while an off-tensor word costs at least that fraction of "
-                 "P32's product instructions", m8 < 1.0, f"{m8:.3f}x, i.e. >= {32 * m8:.1f} products a word "
-                 f"(margin {1 / m8:.2f}x)")
+                          for k in ("products", "floor", "ideal")))
+    mf = margins["floor@16384"]["every_route"]
+    checks.check("premise P32's margin at K 16,384 (the floor reading): T1 holds while an off-tensor word costs at least "
+                 "that fraction of the floor's issue slots; at K 8,192 the floor already breaks it",
+                 mf < 1.0 < margins["floor@8192"]["every_route"],
+                 f"{mf:.3f}x (margin {1 / mf:.2f}x); at K 8,192 {margins['floor@8192']['every_route']:.3f}x")
     md = margins["delivered@2048"]["every_route"]
     checks.check("at K 2,048 T1 needs the delivered reading: it holds while an adversary's side word costs at least "
                  "that fraction of honest's instructions", 0.5 < md < 1.0, f"{md:.3f}x (margin {1 / md:.2f}x)")
