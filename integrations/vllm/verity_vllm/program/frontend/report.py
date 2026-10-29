@@ -1,4 +1,4 @@
-"""What a derivation produced (`DeriveReport`) and what it keeps for a relabel (`DeriveSession`); `derive.derive_report` builds both."""
+"""What a derivation produced (`DeriveReport`) and what it keeps for a relabel (`DerivationTail`); `derive.derive_report` builds both."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ class DeriveReport:
 
 
 @dataclass(eq=False)
-class DeriveSession:
+class DerivationTail:
     """What `derive_report(..., session=)` keeps of a successful derivation, for `relabel.rank_report` to run the tail again on a
     re-emitted body: the flat definition, the context, the provenance before the tail, and the tail's arguments."""
     flat: SpecializedDefinition
@@ -62,4 +62,4 @@ class DeriveSession:
     dead_free: bool = False        # the tail's `dead_free`: a rank written from this derivation is in the same form
 
 
-__all__ = ["DeriveReport", "DeriveSession"]
+__all__ = ["DeriveReport", "DerivationTail"]
