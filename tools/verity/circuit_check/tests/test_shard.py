@@ -15,6 +15,7 @@ from circuit_check import cache as CC
 from circuit_check import cli
 from circuit_check import known as KN
 from circuit_check import shard as SH
+from circuit_check import targets as TG
 
 
 def test_a_target_s_shard_is_its_id_s_hash_and_never_its_place():
@@ -263,7 +264,8 @@ def test_the_shard_module_is_outside_the_checker_s_version(tmp_path, monkeypatch
 
 #: a small sidecar set: argmax's chunks and combines and the Boolean scalars, each checked as a Call (`--as-call`), so neither
 #: builds the catalog
-SIDECARS = ["verity/ml/circuits/ops/argmax.circuit-check.py", "verity/ml/circuits/ops/boolean/scalar.circuit-check.py"]
+SIDECARS = [str(TG.REPO / "verity/ml/circuits/ops/argmax.circuit-check.py"),
+            str(TG.REPO / "verity/ml/circuits/ops/boolean/scalar.circuit-check.py")]
 
 
 @pytest.mark.slow
