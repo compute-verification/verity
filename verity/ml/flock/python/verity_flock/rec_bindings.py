@@ -26,9 +26,9 @@ from verity.ml.circuits.codec import canonical_json, decode_program, descriptor_
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.program import Program
 
-from . import rec_open as _rec_open  # noqa: F401  (registers RecOpen)
-from . import rec_residuals as _rec_residuals  # noqa: F401  (registers InnerRepCheck)
-from . import rec_sparse as _rec_sparse  # noqa: F401  (registers RecSparse)
+from . import rec_open as _rec_open  # registers RecOpen
+from . import rec_residuals as _rec_residuals  # registers InnerRepCheck
+from . import rec_sparse as _rec_sparse  # registers RecSparse
 
 #: `population_program`'s program function at each version: v1 names its template, v0 (an old statement's) its count alone
 POPULATION = {1: re.compile(r'TemplateInstances_v1\{template=".*",N=([1-9][0-9]*)\}'),
