@@ -17,7 +17,9 @@ and honest is the only program run on it.
 The decomposition (`attack_nh2`, `attack_nh`) expands each product: the d0 terms by IMAD, row-only and column-only sums
 once a row or a column class (amortized over a CALL_M × CALL_N call), and the cross term Σ_t R_t(i)·K_t(c, g) as s8
 IMMA chains over balanced byte digits, one chain a digit weight x + y ≤ 3 (`imma`), which is exact mod 2³². Every
-attack's S is checked bit for bit against honest's.
+attack's S is checked bit for bit against honest's. d0's step-invariant sums (T·Σ d0a·d0b, Σ d0, T/2·d0²) are the same
+for every block of a group, so each row is priced twice: with them paid every S, and once a call (`if_d0_free`), which
+is the adversary's price whenever a call holds more than one block a group.
 
 Prices (W1, register writes an S): honest pays an MMA a word and an IMAD a pair (nh2 3PT, nh 1.5T); stock is the data
 lanes' share of the words' MMAs. `gap_claimed` = (honest − cheapest)/stock refutes a premise that honest's sketch is
@@ -104,8 +106,8 @@ def honest_nh(W, T):
 
 def attack_nh2(parts, P, T, d0_free=False, lowrank=False):
     """nh2 from the split, block by block. Per S: T·Σ d0a·d0b, ΣR·Σd0, Σ (d0a·ΣC_b + d0b·ΣC_a), P·ΣR², the cross
-    term Σ_t R_t·K_t(c, g) with K_t the group's column sum, and Q(c, g) = Σ_t Σ_p C_a·C_b once a class. `d0_free` takes
-    d0's own sums as precomputed (a salt-independent d0); `lowrank` evaluates the d0 terms from d0 = λ·ρᵀ
+    term Σ_t R_t·K_t(c, g) with K_t the group's column sum, and Q(c, g) = Σ_t Σ_p C_a·C_b once a class. `d0_free`
+    charges d0's step-invariant sums once a call, not once an S; `lowrank` evaluates the d0 terms from d0 = λ·ρᵀ
     (`parts["d0_factors"]`) as IMMA chains of inner dimension k², k and k in place of 4P + 2 IMADs."""
     d0, R, C, cls, share = parts["d0"], parts["R"], parts["C"], parts["cls"], parts["rows_a_class"]
     m, n = d0.shape
@@ -294,8 +296,9 @@ def sweep(parts):
 
 def frontier(rows):
     """For each (instance, layout, P): the first G whose attack is paid credit it didn't spend (gap_share > 1%), and the
-    largest G up to which the credit holds and up to which honest's sketch is the cheapest program (PairWrites), with d0
-    paid and with d0 taken as salt-independent."""
+    largest G up to which the credit holds and up to which honest's sketch is the cheapest program (PairWrites), with
+    d0's step-invariant sums paid every S and once a call (`_if_d0_free`, the one that binds when a call holds more
+    than one block a group)."""
     groups = {}
     for r in rows:
         key = f"{r['inst']} {r['layout']}" + (f" P{r['P']}" if r.get("P") else "")

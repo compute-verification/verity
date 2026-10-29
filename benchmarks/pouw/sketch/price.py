@@ -35,9 +35,9 @@ DESIGNS = {
     "nh2: IMAD of adjacent accumulators, S += w(j)·w(j+1)": (None, None, None, True,
                                                              "none holds: on the lead's separable words each product "
                                                              "expands into row sums and a GEMM over the shared column "
-                                                             "terms (nh_attack, from G 64)", "-"),
+                                                             "terms (nh_attack, from G 32)", "-"),
     "nh: IMAD of consecutive steps, S += w_(2k-1)·w_(2k)": (None, None, None, True,
-                                                            "none holds on the lead's words (nh_attack, from G 32); "
+                                                            "none holds on the lead's words (nh_attack, from G 16); "
                                                             "with one S an output on mirror-π noise, NHWrites", "5"),
     "xor: LOP3, S ^= w ^ w'": (None, None, None, True,
                                "none holds: the lead's narrow words pack two or three to a register and XOR "
