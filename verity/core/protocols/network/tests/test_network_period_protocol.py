@@ -398,12 +398,14 @@ def test_a_scan_in_the_checker_form_is_refused_by_name(server):
         assert verdict == REJECT and "(the checker form)" in json.loads(out)["reason"], (n, out)
 
 
-def test_a_wide_unit_is_charged_its_committed_bits():
-    """A compute audit's faulty bits are its bound times the most bits one of its Program's units commits, read off the
-    Program, not a proof unit's 16-bit public output: over honest clock-form periods whose audits' units commit 8 to
-    320 bits, the mirror's public charges each audit `b · bits`, and some audit of wide units more than `16 · b`. No
-    case is accepted, so Lean's side of it is `terms`' `#guard`s (units of 40 bits, 4 wrong, charged 160)."""
+def test_a_wide_unit_is_charged_its_committed_bits(server):
+    """A compute audit's incorrect proof blocks' bits (`faulty_bits`) are its bound times the most bits one of its
+    Program's units commits, read off the Program, not a proof block's 16-bit public output: over honest clock-form
+    periods whose audits' units commit 8 to 320 bits, each audit is charged `b · bits`, some audit of wide units more
+    than `16 · b`, and Lean's public is the mirror's."""
     wide = 0
+    # No honest clock-form period is decided here, so each charge is read off the mirror's audit facts, and Lean's side
+    # of it is `terms`' `#guard`s (units of 40 bits, 4 wrong, charged 160).
     for n in range(12):
         case = build("honest", n)
         p = PC.params(case["params"])
