@@ -3,9 +3,10 @@
 `libvc.so` (`vc.h`, a C ABI; `vclib.py`, its ctypes binding) is the one CUDA code base every served-path committer calls:
 hm96-sha512 hiding leaves in frame-v3-sha512 trees, byte for byte the formats of `verity.ml.commitments`
 (`verity/ml/commitments/hm96/PROTOCOL.md`, `verity/ml/commitments/frame_v3/PROTOCOL.md` §6, `rowleaf`) and Pearl-C -h3's
-pieces (`verity.core.protocols.pouw.schemes.pearl_c`). It is prover-side code: nothing a verifier runs reads it, so it stays
-here and never in `verity/ml/kernels`. The protocol leads own what is committed and its CPU reference; this library only makes
-it fast, and `conformance.py` holds it to those references.
+pieces (`verity.core.protocols.pouw.schemes.pearl_c`). It is prover-side code: nothing a verifier runs reads it. Its
+frame-v3-sha512 leaf, pad and node and its hm96-sha512 leaf are the GPU's one row commitment (`verity/ml/kernels/row_commit.cuh`),
+which every CUDA committer includes; its schedule stays here. The protocol leads own what is committed and its CPU reference;
+this library only makes it fast, and `conformance.py` holds it to those references.
 
 What it computes:
 
@@ -106,8 +107,9 @@ parsed on the host (`vclib.parse_openings`).
 
 ## Where the code comes from
 
-SHA-512's compression is commit_gpu's (`benchmarks/pouw/commit_gpu/sha512.cuh`), included by path. The rest is vendored
-into `vc.cu`, each piece taking its parameters as `__grid_constant__` kernel parameters rather than `__constant__` memory;
+SHA-512's compression is the GPU's one SHA-512 header (`verity/ml/kernels/sha512.cuh`), and frame-v3-sha512's leaf, pad and
+node, the hm96-sha512 leaf and the builders of their constants are its one row commitment (`verity/ml/kernels/row_commit.cuh`),
+both included by path through `vc_device.cuh`, which names them over libvc's plan. The rest is vendored into `vc.cu`, each piece taking its parameters as `__grid_constant__` kernel parameters rather than `__constant__` memory;
 the head of `vc.cu` names where each piece came from. Row-seg's segments run a thread each from their header's state,
 then a fold a unit, as `benchmarks/pouw/pearl_c_sm120/hash_fast.cuh` does; rows (up to 768 segments) take one launch with
 their segment digests in shared memory, as `s512_rows` in `benchmarks/pouw/pearl_c/hash_h3.cuh` does, and tiles, and rows

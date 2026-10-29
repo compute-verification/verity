@@ -221,13 +221,15 @@ SHA-512s and the SHA-512 of their canonical JSON (`read_pin`), and holds every p
 any (`check`). It then lays out the store the checkpoint alone fixes: \(E\) arenas of \(A\) blocks, one an engine at
 one GPU, each holding the checkpoint's 2-D BF16 weights in vLLM's module order, each from a block boundary, zeros
 between and after, and then host filler of zeros (`arena`, `Store`). Before step 1 the verifier sends a fresh 32-byte
-salt key, and the prover takes block \(j\)'s 192-byte payload salt as `SHAKE256("verity/store/salt/v0\0" ‖ key ‖
-SHA512("verity/remote-session/payload-salts/v0") ‖ u64be j)` (`store_salt`), so the payload root follows from the pin,
-the store's shape and the key (`expected_root`). A hello is refused before the registry draws when its store is shorter
+salt key, and the prover takes block \(j\)'s 192-byte payload salt as `XOF(m)[0 : 192]`, `m = "verity/store/salt/v1\0"
+‖ key ‖ SHA512("verity/remote-session/payload-salts/v0") ‖ u64be j` and `XOF(m) = SHA512(m ‖ u32be 0) ‖ SHA512(m ‖
+u32be 1) ‖ …` (`store_salt`, `codec.xof`'s SHA-512 in counter mode), so the payload root follows from the pin, the
+store's shape and the key (`expected_root`). A hello is refused before the registry draws when its store is shorter
 than the arenas, its layout isn't the store's regions, or its payload root isn't that root (`Binding.hold`). The
-verifier's record keeps the binding: the model's name and `checkpoint_sha512`, the store's shape, both roots and
-`bound`. A period's circuit is this tree's git hash, so the circuit a period signs commits to this code. The binding's
-decision is also Lean (`lean/RemoteAudit/Store.lean`), and reading the files is Python only (§8).
+verifier's record keeps the binding: the model's name and `checkpoint_sha512`, the salts' format (`salt`,
+`store.SALT_VERSION`), the store's shape, both roots and `bound`. A period's circuit is this tree's git hash, so the
+circuit a period signs commits to this code. The binding's decision is also Lean (`lean/RemoteAudit/Store.lean`), and
+reading the files is Python only (§8).
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
 `codec.DEFAULT`. The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
