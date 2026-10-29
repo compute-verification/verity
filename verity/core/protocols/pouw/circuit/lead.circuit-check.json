@@ -1,0 +1,48 @@
+{
+ "definitions": {
+  "PouwLeadFold_v2": {
+   "and": 70,
+   "type": "9d66496746f20b38513045b8abf5ea65cdacab9cf515bd24a1bb478a12409bf55dc918271fc0a7ea225bc92b55744fa732cb70f49da08193ed3aaaa371f44a7d"
+  },
+  "PouwLeadPad0_v2": {
+   "and": 1150,
+   "type": "6b41d8e56e4c9365cbed2715eedc1b0f257621bb646b7b9059af2f95020643ebda3042260e11c3e974ace013da40fae524c0ff260e233d8d0ca9a69b29ad8211"
+  },
+  "PouwLeadPad_v2": {
+   "and": 123,
+   "type": "17a3783cea4acc4236aebee0af9ac3a693f443599e92434348697e6e7b38e56b59e99f2d0ee0790431bb2a3a87555a8b957761f2dbba8b3f9f3e37ad4be25d0a"
+  },
+  "PouwLeadPair32_v2": {
+   "and": 31,
+   "type": "b907fb1df5e3f4be150eb3b7b10362c9b70a6983d071ca388b41b1bd3ca8065f1616d1e7beeb785a8fbd0ffb18dce03233149a33a50d01ccddbdf6de42db5131"
+  },
+  "PouwLeadPairS8_v2": {
+   "and": 8,
+   "type": "0b7914883c027aca5e1ea6d83ab11f43fbc2ebae284a178c78bed1856c0b3c7415f03040502b0a6e01741b9f30f5c7c167bcfc7b5af37c4f5b0974ca035d75b0"
+  },
+  "PouwLeadStep0Row_v1": {
+   "and": 30712,
+   "type": "af895c85c736fc8d96bcd6a716073be154a339462b4ed25278f4cfb171593be88444b80b0bc9b364985045a5e711316085439f16f60dced2a276cbaba1deadbd"
+  },
+  "PouwLeadStep0_v2": {
+   "and": 3839,
+   "type": "c37aa713354d68a95f4e63072a539f3f2eb0e0c092b4db166a33b462c426e162279dbcd1b6e9eec4bbdb377314270b5eeeede37bc189a9f8a0a101a20c4a1728"
+  },
+  "PouwLeadStepRow_v1": {
+   "and": 29688,
+   "type": "666b2338a1009559e1ac6df7a62d9ae3d748454a0dba76fc76e71afad69f550a043c2db330b4a1c2d3be8dba34d52642b5d07262f41a50936dc8a4a4c7ef29d5"
+  },
+  "PouwLeadStep_v2": {
+   "and": 3711,
+   "type": "2a9e836bee1d860921dd68934cb75dd477e45661acea800d90076ffe64154f5407aa3c3852bf7b6790bd855618e648422a300ef64156acc7b4994dc59b0d0e66"
+  },
+  "PouwLeadTagWeight_v2": {
+   "and": 7,
+   "type": "5b9bf9577e8aff956b5162222e61e41c43d548008e51a4b7931670ae5cd748d65c83f614b09282f00a20487e0fba4edb62a7061bf66ac3666ae5d9cb0b0669cf"
+  },
+  "PouwLeadWeigh_v2": {
+   "and": 92,
+   "type": "efa3380a7c946110150c6c6a434767c3789ab2c58114d46c65fb3e29b2b024159df63912a650c65366ab046aa60172cc51faace39c399770ea1dbb1a595df7cb"
+  }
+ }
+}
