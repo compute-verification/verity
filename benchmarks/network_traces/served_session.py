@@ -147,7 +147,7 @@ import auditor as A  # noqa: E402
 
 #: the scan's class (`scan_zk.W63`): at most KI prompt ids in, at most KO ids out a request
 KI, KO = 1024, 64
-#: the session's prompt ids a request, which reach the network certifier in time (KI's don't)
+#: the session's prompt ids a request, which reach the warden in time (KI's don't)
 PROMPT_IDS = 256
 #: the session's requests: what `PEER`'s free disk seals, within 72 GB even if every request runs all KO ids
 #: (the endpoint's sizing: 636.5 MB a full-length request)

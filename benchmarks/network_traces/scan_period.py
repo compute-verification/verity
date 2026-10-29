@@ -57,9 +57,9 @@ def certificates(run: Path, w: int) -> list[dict]:
 
 
 def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
-    """The rows form's case (module docstring) of the network certifier run ``run``'s link-window, as scan_zk.py proved
-    it into ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a
-    refused round (tampered, chain), that round's registration and its refusal."""
+    """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
+    ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
+    (tampered, chain), that round's registration and its refusal."""
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
     doc = json.loads((scan / "answers.json").read_text())
     if len(doc["windows"]) != 1:
