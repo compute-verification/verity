@@ -234,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     b = rng.integers(-127, 128, size=(args.n, args.k))
     g = rng.integers(-3, 4, size=(TAG_LANES, args.n))
     rep = {"n": args.n, "k": args.k, "salts": args.salts, "rows": ROWS, "sparse": SPARSE, "cases": []}
-    runs = [(m, c) for m in (int(x) for x in args.m.split(",")) for c in CASES if CASES[c][0] != "sparse"]
+    runs = [(m, c) for m in (int(x) for x in args.m.split(",")) for c in CASES if CASES[c][0] not in ("sparse", "same")]
     runs += [(ROWS, "sparse"), (ROWS, "sparse-lift"), (ROWS, "same-blc4a")]
     for m, case in runs:
         pad, lift, coins, lane = CASES[case]
