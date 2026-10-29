@@ -3,7 +3,7 @@
 A run is the setup's public outputs (`verity/pous/p2/v4/setup` on acceptance, `{"blocks", "commitment", "root", "salt"}`,
 `root` the root of `C*`'s leaves under `salt`), the memory challenger's table of `C*` (every block's `sha512/row/v2` digest
 in block order, `memory_challenger.block_digest`: the harness's `DIGESTS.bin`) and one signed session (`Session`: the signed
-session, the commitment published before it and its coin openings).  `check` judges it with two inputs of the verifier's
+session, the commitment released with it and its coin openings).  `check` judges it with two inputs of the verifier's
 own: `trusted`, the verifier's list of memory-challenger keys, which never comes from the run's record (whoever writes
 the record could otherwise list its own key), and the 32-byte id the audit fixes for its session, which the verifier
 computes itself and never reads from the record: on the served piece `challenger_party.session_id`, derived from the
@@ -72,7 +72,7 @@ class Setup:
 
 @dataclass(frozen=True, slots=True)
 class Session:
-    """One session as the memory challenger records it: what it signed, the commitment published before it and its coin
+    """One session as the memory challenger records it: what it signed, the commitment released with it and its coin
     openings.  Which keys are trusted is the verifier's, never the record's (`check`'s `trusted`)."""
 
     signed: mc.SignedSession
