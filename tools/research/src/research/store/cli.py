@@ -53,7 +53,7 @@
   research data gc --cite DIR... --cache DIR [--apply --state FILE] [--report FILE] [--work DIR] [--jobs N]
                                                    the remote's blobs only uncited artifacts past their kind's TTL hold (gc.py, README §7.4);
                                                    --apply marks them and deletes those still candidates a grace after their mark
-  research data withdraw ART... --reason T --ref ISSUE --by WHO --cache DIR [--apply]
+  research data withdraw ART... --reason T --ref ISSUE --as HANDLE --cache DIR [--apply]
                                                    delete the blobs of artifacts holding values that must never be shared, cited or
                                                    not, and label each `withdrawn` (withdraw.py, README §7.4); a blob another
                                                    artifact holds is kept and named
@@ -1374,7 +1374,7 @@ def cmd_withdraw(argv: list[str]) -> int:
     ap.add_argument("arts", nargs="+", metavar="ART", help="full art: ids")
     ap.add_argument("--reason", required=True, help="why, in a few words: the `withdrawn` label's value")
     ap.add_argument("--ref", required=True, help="the issue or ruling that asked for it (INF-333)")
-    ap.add_argument("--by", required=True)
+    ap.add_argument("--as", dest="by", required=True, metavar="HANDLE", help="the handle withdrawing them: the labels' `by`")
     ap.add_argument("--cache", required=True, metavar="DIR", help="where manifests read from the remote are kept (gc's cache works)")
     ap.add_argument("--work", metavar="DIR", help="where the pass's blob table goes (default the temp dir)")
     ap.add_argument("--path", dest="paths", action="append", metavar="PREFIX",

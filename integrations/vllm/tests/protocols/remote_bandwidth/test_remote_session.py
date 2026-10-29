@@ -200,7 +200,7 @@ def engine(s: Store, at: int = 0):
 
 def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096, lifetime: int = 2,
         backend=TickingBackend, at: int = 0, **kw):
-    """One audit run of ``plan``, every receipt of a window drawn at the default ``samples``; the backend keeps the
+    """One audit run of ``plan``, every receipt of a window sampled at the default ``samples``; the backend keeps the
     regions the verifier read from its hello (``backend.regions``)."""
     clock = PassClock()
     s = store()
@@ -635,7 +635,7 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
 def test_a_serving_store_defers_residency_so_a_lifetime_of_one_window_is_refused():
     """The store's appended chunks are resident once their encodes land, and its map re-keys a window ahead, so at
     L = 1 every line would re-key every live chunk: its hello says `deferred`, and a verifier of lifetime 1 answers it
-    `bye` before drawing a registration."""
+    `bye` before sampling a registration."""
     registry, s = audit.Registry(), store()
     b = remote.StoreBackend(s, engine(s))
     lsock = wire.listen("127.0.0.1", 0)
