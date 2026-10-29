@@ -253,3 +253,13 @@ where h_forced ≤ h is the hashing or fold work a cheater can't skip. So 99% ne
 - With one R a call, the cheapest route (last step's product plus the carries, `mma_pairsum` on bytes) floors a prover at 0.37× stock, not 1.94×.
 - **A fresh R each k32 step** floors it at 1.43×/1.44× stock. That uses `TensorFloor.lean` (core, sorry-free, arithmetic only) plus H32 and **ByteEntry**, a new rank-5 premise that each byte is formed by one of six named routes. It is not a count. h ≈ 1.58 / 1.53.
 - **Under the capacity reading** it accounts a ≈ 1.43/2.55 ≈ 56%. It is shelved with the other stock-hardware folds pending Daniel's fork. The coordinator's 22:05Z "credit could rest on a count" is withdrawn.
+
+## 22:50Z: RETRACTION of the 22:15Z and 22:25Z entries (coordinator)
+
+- **Retracted: "the multiply isn't credited" and a ≤ h/(1 + h).** Under W1, committing every k32 word forces one write a word, priced at no less than the MMA's 32 units a word. That is DistinctWrites under H32, the rank bound. So the lead credits stock through forced writes (CORE.md §2a: only the final word of each dot product is unforced, 32/K of stock), and hashing on top of it under ShaSpeed. The noise is what makes every word distinct and unpredictable, so each must be written. `decomp` breaks designs that don't consume every word: sketches over aggregates.
+- **Retracted: the capacity denominator.** Daniel's §2a ruling (Wed 7:01 PM PDT) is that the gap is additive against stock, cost(H) − min cost(adv) ≤ 1% of stock, precisely so that a large hashing overhead can't hide a skippable matmul. The card 2034fe69 approval is being reversed with Daniel. The 99% card 7f2658c2 is withdrawn.
+- **What stands under §2a:**
+  - A design's whole honest cost, hashing or fold included, must be forced to within 1% of stock. "Credit = stock" designs whose overhead isn't forced fail (TENSOR's).
+  - Overhead premises need precision of about 1%/h: lead 0.008%, R80X about 0.05%, h ≈ 1 about 1%. That is HASH's second motivation beside T2.
+  - Co-issue is judged in work, not wall time (§2a), which answers SI-THEORY's 14–28% time reading: report it, don't judge on it.
+- HASH re-targets at 23:00Z as planned, under §2a.
