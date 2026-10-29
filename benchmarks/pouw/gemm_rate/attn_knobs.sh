@@ -6,9 +6,9 @@
 #     --env GPU_LEASE_WHO=LANE [--env VENV=DIR] [--env FA3_SO=NS=PATH] -- bash benchmarks/pouw/gemm_rate/attn_knobs.sh
 #
 # Outside the lease: stamp.cu's cubin, and the served vLLM wheel (attn_rate.sh's WHEEL) in VENV (default the run's work
-# directory) unless VENV already has it. Under one gpu-lease (MAX_MIN, default 12): attn_knobs.py over PROMPTS, ARMS, each
-# FA3_SO, WINDOW_MS, WINDOW_LEAD_MS and WINDOW_REPS, with nvidia-smi sampling the SM clock. $OUT gets knobs.jsonl, table.md,
-# smi.csv and rc.txt.
+# directory) unless VENV already has it. Under one gpu-lease (MAX_MIN, default 12): HARNESS.py (default attn_knobs, or
+# attn_kfa3 for the gated not-byte-equal arms) over PROMPTS, ARMS, each FA3_SO, WINDOW_MS, WINDOW_LEAD_MS and WINDOW_REPS,
+# with nvidia-smi sampling the SM clock. $OUT gets knobs.jsonl, table.md, smi.csv and rc.txt.
 set -uo pipefail
 export O=${OUT:?}
 TREE=$PWD
@@ -21,6 +21,7 @@ WHEEL=${WHEEL:-https://wheels.vllm.ai/d9105ea8001e0a6d77a96327d17515bb5791fb36/v
 TORCH_INDEX=${TORCH_INDEX:-https://download.pytorch.org/whl/cu129}
 VENV=${VENV:-$W/venv}
 PROMPTS=${PROMPTS:-"8x1024 16x1024 32x1024"}
+export HARNESS=${HARNESS:-attn_knobs}
 export ARMS=${ARMS:-served,served-eager,kattn,sched,contig,contig-sched,page128,splits0}
 export WINDOW_MS=${WINDOW_MS:-2000} WINDOW_LEAD_MS=${WINDOW_LEAD_MS:-500} WINDOW_REPS=${WINDOW_REPS:-3}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
@@ -52,7 +53,7 @@ $LEASE bash -c '
   G=(); [ -n "${GPU_LEASE_UUID:-}" ] && G=(-i "$GPU_LEASE_UUID")
   nvidia-smi "${G[@]}" --query-gpu=timestamp,clocks.sm,power.draw,temperature.gpu --format=csv -lms 500 > "$O/smi.csv" 2>&1 &
   smi=$!
-  "$PY" benchmarks/pouw/gemm_rate/attn_knobs.py --stamp-cubin "$W/stamp.cubin" "$@" --arms "$ARMS" \
+  "$PY" "benchmarks/pouw/gemm_rate/$HARNESS.py" --stamp-cubin "$W/stamp.cubin" "$@" --arms "$ARMS" \
     --window-ms "$WINDOW_MS" --lead-ms "$WINDOW_LEAD_MS" --rounds "$WINDOW_REPS" --table "$O/table.md" \
     > "$O/knobs.jsonl" 2> "$O/knobs.err"
   echo "knobs rc $?" >> "$O/rc.txt"
