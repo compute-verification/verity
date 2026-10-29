@@ -38,7 +38,7 @@ def LayeredTraining : Prop :=
 Every `S ≤ 2·10⁷` is below `7 + 1` bf16 embedding columns (`8 · 163840 · 16 = 20971520` bits), so a reference circuit
 keyed at `(d₀, e, e_lk) = (17, 2328, 0)` is `(17 − 7, 2328 + 7 · 0) = (10, 2328)`-threaded at every `c`. -/
 def ReferenceThreaded : Prop :=
-  ∀ (r : Declaration) (T : Threading r), Assumptions.ReferenceLayered r T →
-    ∀ (c : ℕ) (S : ℝ), S ≤ 2 * 10 ^ 7 → T.Threaded c S 10 2328
+  ∀ (c : Declaration) (T : Threading c), Assumptions.ReferenceLayered c T →
+    ∀ (Γ : ℕ) (S : ℝ), S ≤ 2 * 10 ^ 7 → T.Threaded Γ S 10 2328
 
 end Nci.Guarantees
