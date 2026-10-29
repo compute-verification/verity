@@ -200,19 +200,6 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       > "$OUT/certifier-front.log" 2>&1
     say "CERTIFIER-FRONT (exit $?): $(tail -1 "$OUT/certifier-front.log" | cut -c1-600)"
   fi
-  release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
-  local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
-  [ "$LOAD" = fixed ] && load=(--fixed "$SLOTS" --window-steps "$WINDOW_STEPS")
-  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
-    --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$OUT/load.log" 2>&1
-  rc=$?
-  say "REQUESTS (exit $rc, release run $release): $(tail -1 "$OUT/load.log" | cut -c1-300)"
-  mkdir -p "$OUT/timings" && cp "$D/load.timings.json" "$OUT/timings/" || say "TIMINGS: no $D/load.timings.json"
-  for _ in $(seq 1 450); do     # every closed window's seal line
-    c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
-    [ "$c" -gt 0 ] && [ "$s" -ge "$c" ] && break
-    sleep 2
-  done
   trap - TERM INT
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
   say "SERVE stopped (exit $?): $c window(s) closed, $s sealed"
