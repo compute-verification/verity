@@ -527,7 +527,7 @@ def test_silu_v2_circuit_units_are_a_power_of_two():
 
 @pytest.mark.parametrize("which", ["gemm-tc-step", "silu-mul"])
 def test_a_units_nonzeros_are_its_netlist_rows_inside_its_slot(which):
-    """`Layout.nonzeros` on a GEMM coordinate's tensor-core step and on SiLU·mul (its table read's rows): the (row, column)
+    """`LoweredUnit.nonzeros` on a GEMM coordinate's tensor-core step and on SiLU·mul (its table read's rows): the (row, column)
     pairs of every row of the unit's ``flock-ir-unit/v2`` text, which the block places in the unit's slot, each below
     ``useful``."""
     from verity.ml.circuits.defs import bind
