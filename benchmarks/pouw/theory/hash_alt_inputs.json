@@ -1,0 +1,71 @@
+{
+  "h200": {
+    "sms": 132,
+    "tensor_units_per_sm_clk": 4096,
+    "tensor_clk_hz": 1.83e9,
+    "hbm_bytes_per_s": 4.8e12,
+    "hbm_achieved_share": 0.8,
+    "source": "Security/Definitions/Core/Accel/H200.lean (data sheet: 1,979 dense INT8 TOPS over 2 x 132 SMs at 1830 MHz; HBM3e 4.8 TB/s); the achieved HBM share for decode's stock step is an assumption"
+  },
+  "w1": {
+    "h32_units_per_write": 32,
+    "mma_c_words_m16n8": 128,
+    "mma_depth": {"s8": 32, "u4": 64, "b1": 256},
+    "source": "W1 / MH100w: every instruction at 32 units or more a 32-bit register written; an m16n8 MMA writes 128 accumulator words a warp, whatever its depth (PTX ISA: m16n8k32 s8, m16n8k64 u4/s4, m16n8k256 b1 and.popc)"
+  },
+  "sha512": {
+    "floor_units_per_byte": 908,
+    "bar_units_per_byte": 1774.85,
+    "export_units_per_word": 848,
+    "source": "the H32 floor of hm96 rows, the bar for SHA-512 on the GPU, and the store of a word to HBM, in W1 units"
+  },
+  "lead": {
+    "alpha": 1.044,
+    "words_per_mac": 0.032625,
+    "card_hash_registers_per_compression": 3532,
+    "network_term_at_card_price": [0.000362, 0.00362],
+    "t2_measured": {"t64": [10.90, 21.28], "t512": [37.34, 65.12], "t8192": [62.08, 74.63]},
+    "coin_latency_s": 0.0006,
+    "coin_stream_bytes_per_token": 1.4e6,
+    "source": "the lead (ssn-1l-tag + blc4a-t64-rot, served, k32, 256 KiB words chunks): alpha and a k32 word every 32 lanes (4 alpha / 32 bytes a MAC), its card's hashing price, its network term at caps 32 / 320 at that price, its measured T2 (sync, async) over the points' stock steps, the coin round trips a step, and its raw coin stream"
+  },
+  "llama_3_2_1b": {
+    "layers": 16,
+    "linears": [[2048, 3072], [2048, 2048], [2048, 16384], [8192, 2048]],
+    "heads": 32,
+    "kv_heads": 8,
+    "head_dim": 64,
+    "kv_bytes_per_value": 2,
+    "source": "Llama-3.2-1B config: hidden 2048, intermediate 8192, 32 q heads, 8 kv heads, head dim 64; fused qkv and gate-up as served; KV cache in bf16"
+  },
+  "points": {
+    "t64": {"m": 64, "attn_ctx": 256, "t_stock_s": [0.00342, 0.00167], "t_gemm_s": 0.000571, "label": "T 512, 64 rows"},
+    "t512": {"m": 512, "attn_ctx": 256, "t_stock_s": [0.00404, 0.00229], "t_gemm_s": 0.001194, "label": "T 512, 512 rows"},
+    "t8192": {"m": 8192, "attn_ctx": 4096, "t_stock_s": [0.03777, 0.03133], "t_gemm_s": 0.01249, "label": "T 8,192"},
+    "dec64_2k": {"m": 64, "attn_ctx": 2048, "decode": true, "label": "decode, batch 64, 2K"},
+    "dec64_8k": {"m": 64, "attn_ctx": 8192, "decode": true, "label": "decode, batch 64, 8K"},
+    "dec1_2k": {"m": 1, "attn_ctx": 2048, "decode": true, "label": "decode, batch 1, 2K"}
+  },
+  "points_source": "stock steps (sync, async) and the linears' GEMM time of the three points as the card's; decode steps are an estimate: the int8 linears' weights and the bf16 KV cache read at the achieved HBM share; prefill attention is causal, so its mean context is half the sequence",
+  "links": {
+    "port_bytes_per_s": 50e9,
+    "gemm_slowdown_under_d2h": 1.0467,
+    "certifier_core_bytes_per_s": 8.1e8,
+    "source": "400 Gb/s a GPU (an HGX H200's compute-fabric NIC); a GEMM's worst slowdown under a concurrent device-to-host stream (measured on one H200); SHA-512 on one Genoa core"
+  },
+  "egress": {
+    "caps_bits_per_token": [32, 320],
+    "source": "OutsourceWithinEgress (Security/Definitions/Pouw/Guarantees/DitherInstance.lean): n_max W_mac E / stock, caps at a 4-byte token id a token and ten times that"
+  },
+  "accounting": {
+    "and_per_int8_mac": 129.9375,
+    "h200_macs_per_s": 3.957e14,
+    "dc_gpus": 100000,
+    "world_macs_per_year": 4.68e30,
+    "window_s": 600,
+    "week_s": 604800,
+    "month_s": 2592000,
+    "year_s": 31536000,
+    "source": "one H200 at its dense int8 peak times 0.4 utilization; the datacenter (benchmarks/census/deployments.json dc-12500-machines-600s); the world (adversary.json world-inference-2027); AND gates an int8 MAC"
+  }
+}
