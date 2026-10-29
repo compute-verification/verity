@@ -283,12 +283,15 @@ A spec-level reference for network accounting's timing channel:
   the stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the `LinkWindows.ties` the
   advised link reads. A size class no sidecar pins has no accepted proof;
 - the lead's calls (`calls`), whose coin source and count the certifier is. Once it holds a call's A root, and not
-  before, it flips the call's coins (`Pouw.Lead.Coins`: the tag bits b, the step-1 bits a₁, the tag weights G, taken by
-  rejection so they are exactly uniform, and the coin lanes) from its own entropy and releases them once, as its reply
-  to that registration. From the A root to the words root every bucket of every boundary link counts against the call,
-  ⌈log2(r + 1)⌉ timing bits and each real frame's content bits, and the call is refused once its count passes its bits,
-  cap · rows · n · K / fwdMacs (`Pouw.Lead.Layout.callBits`), or when the window closes first. The control channel,
-  which carries the registrations in and the coins out, ends at the certifier and is no boundary link.
+  before, it flips the call's coins (`Pouw.Lead.Coins`: the tag bits b from step 1, the step-1 bits a₁, the tag weights
+  G, taken by rejection so they are exactly uniform, and the coin lanes) from its own entropy and releases them once,
+  as its reply to that registration, in the words the lead's kernel reads: each row's bits, each column's G, then a
+  coin tile at a time its lane-coin words (three coins and a public byte each) and its column sources, which are no
+  coins but a public function of them. Every length is fixed by the call's shape. From the A root to the words root
+  every bucket of every boundary link counts against the call, ⌈log2(r + 1)⌉ timing bits and each real frame's content
+  bits, and the call is refused once its count passes its bits, cap · rows · n · K / fwdMacs
+  (`Pouw.Lead.Layout.callBits`), or when the window closes first. The control channel, which carries the registrations
+  in and the releases out, ends at the certifier and is no boundary link.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's

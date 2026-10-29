@@ -1,5 +1,5 @@
-"""The lead's calls at the network certifier: it flips each call's coins once it holds the call's A root, and counts and
-refuses the call's egress.
+"""The lead's calls at the network certifier: it flips each call's coins once it holds the call's A root, releases them as
+the coin feed the lead's kernel reads, and counts and refuses the call's egress.
 
 A **call** is one matmul of the lead (`Pouw.Lead.lead`). The prover registers its A root with its shape, `rows` rows of
 A, `cols` output columns and inner dimension `K`, and later the root of its committed words; between the two the call is
@@ -7,20 +7,25 @@ A, `cols` output columns and inner dimension `K`, and later the root of its comm
 
 * **The coins** (`Pouw.Lead.Coins`). Once the certifier holds a call's A root, and not before, it flips the call's coins
   from its own entropy and releases them once, as its reply to that registration: the release follows the registration,
-  never a clock. Over the call's committed shape (`CallShape`: m rows, n columns, S k32 steps, ⌈m/64⌉ coin tiles) they
-  are
-  - the tag bits b, m × S, and the step-1 bits a₁, m × 4, each a bit of entropy;
-  - the tag weights G = g − 3 in [−3, 3], 4 × n: column j's four are the base-7 digits of the first 32-bit word (big
-    endian) below `G_BOUND` = 7⁴ · ⌊2³² / 7⁴⌋, so they are exactly uniform;
-  - the coin lanes s = 2u − 127, S × tiles × 3 × n, u the low 7 bits of a byte.
+  never a clock. The release is 32-bit words, little endian, every length fixed by the call's committed shape
+  (`CallShape`: m rows, n columns, S k32 steps, H = ⌈(S + 3)/32⌉ row words a row, ⌈m/64⌉ coin tiles), in this order:
+  - the row words, H a row: bit q of row i's is its step-1 bit a₁[i, q] (q < 4), bit t + 3 its tag bit b_t[i] at a step
+    t from 1 to S − 1, and every other bit 0. Step 0 reads no tag bit (`Pouw.Lead.coinTerm`), so none is flipped;
+  - the G words, one a column: byte q of column j's is the int8 G[q, j] = g − 3 in [−3, 3], digit q in base 7 of the
+    first 32-bit word of entropy below `G_BOUND` = 7⁴ · ⌊2³² / 7⁴⌋, so G is exactly uniform;
+  - then a coin tile at a time, the tile's lane-coin words, one a step and column: bytes 0–2 its coin lanes s = 2u − 127
+    as int8, u the low 7 bits of a byte of entropy, and byte 3 public, the column code's top digit C[3, j]
+    (`Pouw.Lead.colCode`) at step 0 and 1 at a later step; and the tile's column sources, one a row class (i mod 2) and
+    column, 0x4B400000 − σ with σ the class's weights (`Pouw.Lead.rotWeight`) against the tile's coin lanes summed over
+    its steps. They are no coins but a public function of them, which the kernel's epilogue folds out.
 * **The count.** Every bucket a boundary link ticks while a call is open counts against it: ⌈log2(r + 1)⌉ timing bits at
   allocation r, and each real frame's content bits. A bucket inside several calls' spans counts against each. The
-  control channel, which carries the registrations in and the coins out, ends at the certifier and is no boundary link.
-  A call whose count passes its bits, cap · rows · n · K / fwdMacs (`Pouw.Lead.Layout.callBits`), is refused at once,
-  compared in integers, and so is a call still open when the window closes. A refusal is the call's verdict in the
+  control channel, which carries the registrations in and the releases out, ends at the certifier and is no boundary
+  link. A call whose count passes its bits, cap · rows · n · K / fwdMacs (`Pouw.Lead.Layout.callBits`), is refused at
+  once, compared in integers, and so is a call still open when the window closes. A refusal is the call's verdict in the
   record, never a dropped frame.
 
-The record (`Calls.summary`) carries each call's shape, roots, coins' digest and verdict; the counts are witness.
+The record (`Calls.summary`) carries each call's shape, roots, release's digest and verdict; the counts are witness.
 """
 
 from __future__ import annotations
@@ -38,16 +43,22 @@ TILE, LANE_BITS = 64, 7
 #: G's rejection bound: the largest multiple of 7⁴ = 2401 not above 2³², 2401 · 1,788,824. The 872 words at or above it
 #: are rejected, so an accepted word's residue mod 2401, G's four digits, is uniform.
 G_BOUND = 7**4 * (2**32 // 7**4)
-#: The tag of the released stream's digest in the record.
-STREAM_TAG = "verity-network-certifier/call-coins/v1"
+#: The most MMA tiles a call's committed words may span over its steps, rowBlocks · colBlocks · S, for the verifier to
+#: admit it (`Pouw.Lead.Layout.Admits`).
+ADMITTED_TILES = 2**40
+#: A row class's weights on the three coin lanes (`Pouw.Lead.rotWeight`): even rows (127, 1, 1), odd rows (1, 127, 1).
+ROT_W = ((127, 1, 1), (1, 127, 1))
+#: A column source's offset, 1.5 · 2²³ as an fp32's bits.
+SOURCE_BIAS = 0x4B400000
+#: The tag of the release's digest in the record.
+RELEASE_TAG = "verity-network-certifier/call-release/v1"
 
 #: The certifier's entropy: `entropy(k)` is the next k bytes.
 Entropy = Callable[[int], bytes]
 
-_BITS = tuple(bytes((x >> k) & 1 for k in range(8)) for x in range(256))
 _LOW = bytes(x % 2**LANE_BITS for x in range(256))
 _S8 = bytes((2 * u - (2**LANE_BITS - 1)) % 256 for u in range(2**LANE_BITS)) + bytes(256 - 2**LANE_BITS)
-_G8 = bytes((g - 3) % 256 for g in range(7)) + bytes(249)
+_G_BYTES = frozenset((g - 3) % 256 for g in range(7))
 
 
 class CallRefusal(ValueError):
@@ -65,7 +76,8 @@ class Verdict(enum.Enum):
 
 @dataclass(frozen=True, slots=True)
 class CallShape:
-    """A call's registered shape: `rows` rows of A, `cols` output columns, inner dimension `K`."""
+    """A call's registered shape: `rows` rows of A, `cols` output columns, inner dimension `K`, one the verifier admits
+    (`ADMITTED_TILES`)."""
 
     rows: int
     cols: int
@@ -76,6 +88,9 @@ class CallShape:
             v = getattr(self, name)
             if type(v) is not int or v < 1:
                 raise CallRefusal(f"a call's {name} is a positive integer, not {v!r}")
+        if self.m // 16 * (self.n // 8) * self.S > ADMITTED_TILES:
+            raise CallRefusal(f"a call of {self.rows} rows, {self.cols} columns and K {self.K} spans more than 2^40 MMA "
+                              "tiles, which the verifier doesn't admit")
 
     @property
     def m(self) -> int:
@@ -93,44 +108,74 @@ class CallShape:
         return 1 + (max(self.K - 21, 0) + 27) // 28
 
     @property
+    def H(self) -> int:
+        """Row words a row: ⌈(S + 3)/32⌉, for its four step-1 bits and S − 1 tag bits."""
+        return (self.S + 3 + 31) // 32
+
+    @property
     def tiles(self) -> int:
         """Coin tiles: ⌈m/64⌉."""
         return -(-self.m // TILE)
 
     @property
     def coins(self) -> int:
-        """Coins the call takes: m·S tag bits, 4m step-1 bits, 4n tag weights and S·tiles·3·n coin lanes."""
-        m, n, S = self.m, self.n, self.S
-        return m * S + 4 * m + 4 * n + S * self.tiles * 3 * n
+        """Coins the call takes: S + 3 bits a row, four tag weights a column and 3·S coin lanes a tile and column."""
+        return self.m * (self.S + 3) + 4 * self.n + 3 * self.S * self.tiles * self.n
+
+    @property
+    def release_bytes(self) -> int:
+        """The release's length: m·H row words, n G words, and S·n lane-coin words and 2n column sources a tile."""
+        return 4 * (self.m * self.H + self.n + self.tiles * (self.S + 2) * self.n)
+
+
+def col_code(j: int, q: int) -> int:
+    """Digit q of column j's code C[:, j], in [−6, 6]: the balanced base-13 digits of j + 1 (`Pouw.Lead.colCode`)."""
+    return (j + 14281) // 13**q % 13 - 6
+
+
+def _row_mask(shape: CallShape) -> int:
+    """The row words' bits that hold coins, as one little-endian integer: each row's first S + 3."""
+    return int.from_bytes(((1 << (shape.S + 3)) - 1).to_bytes(4 * shape.H, "little") * shape.m, "little")
 
 
 @dataclass(frozen=True, slots=True)
 class Coins:
-    """A call's coins, one byte each in `Pouw.Lead.Coins`' index order: `b[i·S + t]` and `a1[i·4 + q]` in {0, 1},
-    `g[q·n + j]` in [0, 7), `u[((t·tiles + k)·3 + ℓ)·n + j]` in [0, 128)."""
+    """A call's coins as the certifier flips them, in the release's words: `rows`, the m·H row words; `g`, the n G words;
+    `u`, the coin lanes' u in [0, 128), `u[((k·S + t)·n + j)·3 + ℓ]` at tile k, step t, column j and lane ℓ, the
+    lane-coin words' order."""
 
     shape: CallShape
-    b: bytes
-    a1: bytes
+    rows: bytes
     g: bytes
     u: bytes
 
     def __post_init__(self) -> None:
         sh = self.shape
-        for name, size, bound in (("b", sh.m * sh.S, 2), ("a1", sh.m * 4, 2), ("g", 4 * sh.n, 7),
-                                  ("u", sh.S * sh.tiles * 3 * sh.n, 2**LANE_BITS)):
+        for name, size, ok in (("rows", 4 * sh.m * sh.H, lambda v: int.from_bytes(v, "little") & ~_row_mask(sh) == 0),
+                               ("g", 4 * sh.n, lambda v: set(v) <= _G_BYTES),
+                               ("u", 3 * sh.S * sh.tiles * sh.n, bytes.isascii)):
             v = getattr(self, name)
-            if type(v) is not bytes or len(v) != size or max(v, default=0) >= bound:
-                raise ValueError(f"{name} is {size} bytes below {bound} at {sh}")
+            if type(v) is not bytes or len(v) != size or not ok(v):
+                raise ValueError(f"{name} isn't {size} bytes of the call's {name} at {sh}")
+
+    def a1(self, i: int, q: int) -> int:
+        """Step-1 bit a₁[i, q]: bit q of row i's first word."""
+        return self.rows[4 * self.shape.H * i] >> q & 1
+
+    def b(self, i: int, t: int) -> int:
+        """Tag bit b_t[i] at a step t ≥ 1: bit t + 3 of row i's words."""
+        if not 1 <= t < self.shape.S:
+            raise IndexError(f"tag bits are at steps 1 to {self.shape.S - 1}, not {t}")
+        return self.rows[4 * self.shape.H * i + (t + 3) // 8] >> (t + 3) % 8 & 1
 
     def G(self, q: int, j: int) -> int:
         """Tag weight G[q, j] = g − 3 (`Coins.G`)."""
-        return self.g[q * self.shape.n + j] - 3
+        return (self.g[4 * j + q] + 128) % 256 - 128
 
     def s(self, t: int, k: int, lane: int, j: int) -> int:
         """Coin lane s_t[k, ℓ, j] = 2u − 127 (`Coins.s`)."""
         sh = self.shape
-        return 2 * self.u[((t * sh.tiles + k) * 3 + lane) * sh.n + j] - (2**LANE_BITS - 1)
+        return 2 * self.u[((k * sh.S + t) * sh.n + j) * 3 + lane] - (2**LANE_BITS - 1)
 
 
 def _read(entropy: Entropy, k: int) -> bytes:
@@ -140,34 +185,59 @@ def _read(entropy: Entropy, k: int) -> bytes:
     return out
 
 
-def _bits(entropy: Entropy, count: int) -> bytes:
-    """`count` bits of entropy, one a byte, each byte's least significant bit first."""
-    return b"".join(map(_BITS.__getitem__, _read(entropy, -(-count // 8))))[:count]
-
-
 def _weights(entropy: Entropy, n: int) -> bytes:
-    """g for n columns: column j's digits are those of the j-th accepted 32-bit word, the words rejected at `G_BOUND`."""
+    """The G words for n columns: column j's from the j-th accepted 32-bit word (little endian), the words at or above
+    `G_BOUND` rejected, byte q the int8 of the residue mod 7⁴'s base-7 digit q, less 3."""
     words: list[int] = []
     while len(words) < n:
         raw = _read(entropy, 4 * (n - len(words)))
-        words += [w % 7**4 for w in struct.unpack(f">{len(raw) // 4}I", raw) if w < G_BOUND]
-    return b"".join(bytes(w // 7**q % 7 for w in words) for q in range(4))
+        words += [w % 7**4 for w in struct.unpack(f"<{len(raw) // 4}I", raw) if w < G_BOUND]
+    return bytes((w // 7**q % 7 - 3) % 256 for w in words for q in range(4))
 
 
 def flip(shape: CallShape, entropy: Entropy = os.urandom) -> Coins:
-    """The call's coins from `entropy`, read in this order: b's bits, a₁'s bits, G's words, the lanes' bytes."""
-    m, n, S = shape.m, shape.n, shape.S
-    b = _bits(entropy, m * S)
-    a1 = _bits(entropy, m * 4)
-    g = _weights(entropy, n)
-    u = _read(entropy, S * shape.tiles * 3 * n).translate(_LOW)
-    return Coins(shape, b, a1, g, u)
+    """The call's coins from `entropy`, read in the release's order: the row words' bytes, each row's bits from S + 3 up
+    cleared; G's 32-bit words; the coin lanes' bytes, each one's low 7 bits a u."""
+    raw = _read(entropy, 4 * shape.m * shape.H)
+    rows = (int.from_bytes(raw, "little") & _row_mask(shape)).to_bytes(len(raw), "little")
+    g = _weights(entropy, shape.n)
+    u = _read(entropy, 3 * shape.S * shape.tiles * shape.n).translate(_LOW)
+    return Coins(shape, rows, g, u)
 
 
-def stream(coins: Coins) -> bytes:
-    """The released stream: each coin one signed byte (two's complement), in `Pouw.Lead.CoinIdx`'s order: b and a₁ as
-    0 or 1, then G in [−3, 3], then s, odd in [−127, 127]."""
-    return coins.b + coins.a1 + coins.g.translate(_G8) + coins.u.translate(_S8)
+def _sources(u: bytes, S: int, n: int) -> bytes:
+    """A tile's column sources from its coin lanes' u: class c's word for column j is 0x4B400000 − σ mod 2³², with
+    σ = Σ_t Σ_ℓ ROT_W[c][ℓ] · s_t[ℓ, j]. The steps' u are added in 64-bit fields of one integer, which no admitted
+    call's S values below 2⁷ carry out of."""
+    wide, total = bytearray(24 * n), 0
+    for t in range(S):
+        wide[0::8] = u[3 * n * t:3 * n * (t + 1)]
+        total += int.from_bytes(wide, "little")
+    U = struct.unpack(f"<{3 * n}Q", total.to_bytes(24 * n, "little"))
+    out = []
+    for w0, w1, w2 in ROT_W:
+        base = SOURCE_BIAS + 127 * S * (w0 + w1 + w2)
+        out.append(struct.pack(f"<{n}I", *((base - 2 * (w0 * a + w1 * b + w2 * c)) % 2**32
+                                           for a, b, c in zip(U[0::3], U[1::3], U[2::3]))))
+    return b"".join(out)
+
+
+def release(coins: Coins) -> bytes:
+    """The call's release: its row words and G words, then a coin tile at a time the tile's lane-coin words (word t·n + j
+    of the tile: bytes 0–2 its lanes s_t[ℓ, k, j] as int8, byte 3 C[3, j] at step 0 and 1 later) and its column sources
+    (word c·n + j for row class c)."""
+    sh = coins.shape
+    S, n = sh.S, sh.n
+    top = bytes(col_code(j, 3) % 256 for j in range(n)) + b"\x01" * ((S - 1) * n)
+    out: list[bytes | bytearray] = [coins.rows, coins.g]
+    span = 3 * S * n
+    for k in range(sh.tiles):
+        u = coins.u[k * span:(k + 1) * span]
+        s = u.translate(_S8)
+        lanes = bytearray(4 * S * n)
+        lanes[0::4], lanes[1::4], lanes[2::4], lanes[3::4] = s[0::3], s[1::3], s[2::3], top
+        out += [lanes, _sources(u, S, n)]
+    return b"".join(out)
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,7 +279,7 @@ class _Call:
     shape: CallShape
     a_root: bytes
     verdict: Verdict | None
-    coins: bytes = b""
+    release: bytes = b""
     words_root: bytes | None = None
     count: int = 0
 
@@ -230,7 +300,7 @@ class Calls:
             raise CallRefusal("the window is closed")
 
     def a_root(self, call: int, root: bytes, shape: CallShape) -> bytes:
-        """Register call `call`'s A root and shape, open its count, and release its coins: the stream, once, as the only
+        """Register call `call`'s A root and shape, open its count, and release its coins (`release`), once, as the only
         reply to this registration. A registration it refuses flips no coin. A call whose coins aren't flipped is
         refused (`NO_COINS`) and never opens, and so is every later call of the window: once the entropy fails, the
         certifier flips nothing more."""
@@ -243,11 +313,11 @@ class Calls:
             raise CallRefusal(f"a call's shape is a CallShape, not {type(shape).__name__}")
         c = self._calls[call] = _Call(shape, _root(root, "an A root"), Verdict.NO_COINS)
         try:
-            out = stream(flip(shape, self._entropy))
+            out = release(flip(shape, self._entropy))
         except Exception:
             self._entropy = _spent
             raise
-        c.coins, c.verdict = tagged_sha512(STREAM_TAG, out), None
+        c.release, c.verdict = tagged_sha512(RELEASE_TAG, out), None
         self._open.add(call)
         return out
 
@@ -274,7 +344,7 @@ class Calls:
         """Register call `call`'s words root and close its count. Returns its verdict: accepted unless refused."""
         self._live()
         if call not in self._open:
-            raise CallRefusal(f"call {call} is not open: its words root follows its A root's coins, once")
+            raise CallRefusal(f"call {call} is not open: its words root follows its A root's release, once")
         c = self._calls[call]
         c.words_root = _root(root, "a words root")
         self._open.discard(call)
@@ -295,9 +365,9 @@ class Calls:
         return {call: c.verdict for call, c in sorted(self._calls.items())}
 
     def summary(self) -> list[dict]:
-        """The record's calls, in id order: each one's shape, roots, coins' digest and verdict (None while it is open).
-        The counts are witness and stay out."""
+        """The record's calls, in id order: each one's shape, roots, release's digest and verdict (None while it is
+        open). The counts are witness and stay out."""
         return [{"call": call, "rows": c.shape.rows, "cols": c.shape.cols, "K": c.shape.K, "a_root": c.a_root.hex(),
-                 "coins": c.coins.hex() or None, "words_root": c.words_root.hex() if c.words_root else None,
+                 "release": c.release.hex() or None, "words_root": c.words_root.hex() if c.words_root else None,
                  "verdict": c.verdict.value if c.verdict else None}
                 for call, c in sorted(self._calls.items())]
