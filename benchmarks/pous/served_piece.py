@@ -282,7 +282,7 @@ def _no(verdict: str, reason: str, commitment: str | None = None, protocol: str 
             "verdict": verdict}
 
 
-def _latencies(session: R.Session, limit_ns: int) -> dict[str, Any]:
+def _latencies(session: R.ChallengerRecord, limit_ns: int) -> dict[str, Any]:
     ns = [r.receipt_ns - r.send_ns for r in session.signed.rounds]
     if not ns:
         return {"rounds": 0}
@@ -389,7 +389,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                 rep = CP.session(party, CP.request_of(node, point, s.root, audit=bind, published=published),
                                  opt.prover(()))
                 key = bytes.fromhex(rep["public_key"])
-                session = R.Session.from_json(rep["session"])
+                session = R.ChallengerRecord.from_json(rep["session"])
             except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
                 why = (f"the memory challenger's session on {party.host} did not complete: "
                        f"{type(e).__name__}: {e}"[:1000])

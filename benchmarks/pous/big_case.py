@@ -64,7 +64,7 @@ def write_case(out_path: Path, size: int, workers: int) -> dict:
         tree = mc.CoinTree.draw(coins, sid, q.blocks, point.k)
         c = mc.MemoryChallenger(tree, signer, log=ts.session_log(d), limit_ns=point.limit_ns, block_bytes=q.block_bytes,
                                 binding=held.published.root)
-        session = R.Session(c.run(period.honest(held.blocks)), c.commitment, c.openings())
+        session = R.ChallengerRecord(c.run(period.honest(held.blocks)), c.commitment, c.openings())
         key = signer.public_key
     times["session_s"] = time.perf_counter() - t
 
