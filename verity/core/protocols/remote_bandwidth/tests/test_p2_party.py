@@ -78,11 +78,12 @@ def _held(params) -> tuple[int, ...]:
 
 def test_the_honest_request_passes_and_the_params_are_the_auditors(store) -> None:
     """A request carrying the auditor's values as they are passes, and `audit.Params` gets the auditor's: `SESSION`,
-    the served bandwidth piece's, by default, or the values a toy party is held to."""
+    the served bandwidth piece's (`benchmarks/pous/held_bandwidth.py`'s defaults), by default, or the values a toy party
+    is held to."""
     reg = store.registration
-    assert p2_party.SESSION == {"deadline_ns": 10**9, "passes": 1, "samples": 1024, "window_ns": 10**9, "windows": 2}
+    assert p2_party.SESSION == {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 * 10**9, "windows": 6}
     params = p2_party.params_of(reg, p2_party.request_of(reg.node, **p2_party.SESSION))
-    assert _held(params) == (10**9, 1, 1024, 10**9, 2)
+    assert _held(params) == (10**9, 4, 1024, 20 * 10**9, 6)
     assert (params.blocks, params.codec, params.rows) == (reg.blocks, reg.codec, reg.rows)
     toy = {"deadline_ns": 400, "passes": 2, "samples": 4, "window_ns": 800, "windows": 3}
     assert _held(p2_party.params_of(reg, p2_party.request_of(reg.node, **toy), toy)) == (400, 2, 4, 800, 3)
