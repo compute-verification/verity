@@ -550,19 +550,6 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 
 /-! ## The check -/
 
-/-- `Certificate.verify` under the LMS key `key` in certifier session `session`: the certificate is the key's (its I)
-and its LMS signature verifies over `certificate_message` of its fields; a message that can't be formed or a signature
-that doesn't decode is false. -/
-def signsIn (lms : Lms.Params) (key session : ByteArray) (c : Certificate) : Bool :=
-  c.keyId == key.extract 0 16 &&
-    match certificateMessage c.keyId session c.link c.direction c.window c.digest,
-        Lms.Signature.decode lms c.signature with
-    | .ok m, .ok sig => (Lms.verify lms key m sig).toOption == some true
-    | _, _ => false
-
-/-- `signsIn` under the parameters' key in their session. -/
-def signs (p : Params) (c : Certificate) : Bool := signsIn p.lms p.key p.session c
-
 /-- `clock_digest`: `tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖ u64be q)` of the sync, ρ = p/q
 in lowest terms; `none` past a u64. -/
 def clockDigest (s : ClockSync) : Option ByteArray :=
@@ -577,9 +564,10 @@ def clockDigest (s : ClockSync) : Option ByteArray :=
 def clearClocks (ss : NetworkCertifier.SyncSet) : List ByteArray :=
   ss.deltas.flatMap fun d => ss.rhos.attach.filterMap fun ρ => clockDigest ⟨d, ρ.1, ss.rhos_pos ρ.1 ρ.2⟩
 
-/-- A certificate of `link`'s end `d` at window `w`, the key's and verifying. -/
+/-- A certificate of `link`'s end `d` at window `w`, the key's and verifying in the parameters' session
+(`Certificate.signs`). -/
 def certifiesOn (p : Params) (link : String) (d : Direction) (w : Nat) (c : Certificate) : Bool :=
-  c.direction == d && c.link == link && c.window == w && signs p c
+  c.direction == d && c.link == link && c.window == w && c.signs p.lms p.key p.session
 
 /-- A certificate of the link's end `d` at window `w`, the key's and verifying. -/
 def certifies (p : Params) (d : Direction) (w : Nat) (c : Certificate) : Bool := certifiesOn p p.link d w c
@@ -913,14 +901,14 @@ def openingsOf (j : Json) : V Openings := do
 
 /-- Why an opening gives no sync (`CertifiedClock.refusal`), or none when it holds: its certificate isn't an egress one
 (`egress`), isn't the key's (`key`), signs another digest than its sync's clock digest salted by its 64-byte salt
-(`clock_commitment`, `opening`), or its signature doesn't verify in the session (`signature`). -/
+(`clock_commitment`, `opening`), or its signature doesn't verify in the session (`Certificate.signs`: `signature`). -/
 def openingRefusal (s : Openings) (o : Opening) : Option String :=
   let c := o.certificate
   if c.direction != .egress then some "egress"
   else if c.keyId != s.key.extract 0 16 then some "key"
   else if !(o.salt.size == saltBytes && (clockDigest o.sync).any (c.digest == certificateDigest o.salt ·)) then
     some "opening"
-  else if !signsIn s.lms s.key s.session c then some "signature"
+  else if !c.signs s.lms s.key s.session then some "signature"
   else none
 
 /-- Each opening's refusal: `openingRefusal`'s, else `salt` where another opening that holds, not this one, has its
