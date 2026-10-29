@@ -113,6 +113,8 @@ ALLOWED: dict[str, str] = {
                                            "network tests' mirror and difftest pin; renamed with the Lean's faulty names",
     "(its wrong units' outputs are the egress's)": "the same refusal's reason, the Lean's text; renamed with the Lean's "
                                                    "faulty names",
+    "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
+                                                    "next rewrites the line beside it; renamed after it lands",
 }
 
 PENDING: dict[str, str] = {
