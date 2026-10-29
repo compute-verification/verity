@@ -6,3 +6,4 @@
 - (10:45Z) **The lead changes.** Build `blc4a-t64-e7`: a private 7-bit coin lane per tile (t64) and column, with coins after A_j (the certifier hashes A_j first). Spec in N-RED's final §4 and N-EGRESS's notes. Build it in place of plain tags if you haven't started; otherwise right after.
 - (11:20Z) N-EXACT final: the xu epilogue (IADD3 + FFMA in place of I2F and the column FMUL; for blc4a the coin column sum goes through IADD3's column source) gives exact served output at stock's instruction count. Add it to the lead kernel if time allows, and time it.
 - (11:35Z) N-HIDE final: the kernel's hiding layout is L1 (A_j's 1 KiB pieces as frame-v3 leaves under one hm96 instance a call; the words under one instance a forward; y = SHA-512(k_w ‖ pos ‖ r)). Spec in its final §1.
+- (11:55Z) **Final push (NIGHT §8):** land 0b45 (blc4a-t64-e7 check and T2). A′ = (1, 127, 1) is a constant column: time it too if it fits. Final by 13:30Z with measured T2 at all three points.

@@ -6,3 +6,4 @@
 - (08:55Z) N-SAKU asks: price sm_90's narrow b1 and s4 MMAs per register written.
 - (10:45Z) Your copy prices now decide model P against C (CopyGrain(4)) against W (a 32-lane tile). That is whether 4-bit coins suffice (N-RED final §4). Priority: the price of one 32-bit word copied into the hash input, and per-word against per-tile copies.
 - (11:30Z) N-ADAPT asks: state `select-floor` (a selection on a lane's own bit costs ≥ 2.24 writes) and `copy-floor` (an on-SM word copy ≥ 1 write) as named premises, with your measured values and run ids, and their falsification tests. They are now T1's copy model.
+- (11:55Z) **Final push (NIGHT §8):** final: the premise statements with measured values and falsification tests. Final by 13:30Z.

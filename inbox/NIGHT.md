@@ -285,3 +285,49 @@ the final by 13:30Z.
   Daniel: P plus measured floors, or W (lane semantics, rank 3).
 - **Correction (N-ADAPT's smell):** "(b) over-credits nothing" (10:45Z addendum) holds only with N-RED's cross-entry
   condition (i).
+
+## 8. Interim 2 synthesis and the final push (coordinator, 11:55Z)
+
+### The lead: `ssn-1l-tag + blc4a-t64-e7`
+
+It is the tag lead plus three odd 7-bit coin lanes for each 64-row tile, step and column, on step 1 too. The
+certifier streams them raw after A_j (R1b). Hiding is L1 + (a), and de-noise is N-EXACT's fold.
+
+| target | value | source |
+|---|---|---|
+| T1 (core) | 0.31–0.33% under bare model P (all of it the A2c / A8 + walk residual p*); coins credited 0; forming ≤ 0.02%. Under P plus measured floors, N-ADAPT's masked channel is 0 (argument; Lean step in progress) | N-CARD 1100Z, N-EGRESS final |
+| T1 with N-LIT's weighting A′ = (1, 127, 1) | p* falls 94.5×, to about 0.0035% (estimate; same coins and stream) | N-LIT 1108Z, **to check** |
+| network term (beside T1) | 0.037% / 0.072% at cap 32, 0.37% / 0.72% at cap 320; decode 0.033–0.071% | N-EGRESS final 1136Z |
+| T2 | 10.2× / 19.9× (T 512, 64 rows), 36.8× / 64.1× (512 rows), 54.9× / 66.0× (T 8,192), sync / async (estimate). The kernel is built, and its H200 timing r20261029-110957-0b45 is queued | N-CARD, N-KERNEL 1115Z |
+| T3 | served exactly through the fold (22-bit scales, \|A·Bᵀ\| < 2²²); the tag lanes alone, served noisy, are −0.139% [−0.245, −0.042] at 2K and −0.029% [−0.103, +0.045] at 8K, 5 seeds | N-EXACT, N-PPL 1055Z |
+| hiding | 0.0002–0.05% at every serving point (L1 + (a)); decode 0.10% at 16 rows; keyed leaf 0 on a ruling | N-HIDE, N-SALT |
+| hashing credit | **per form:** words 3,515.38 registers a compression (16 KiB chunks), A 3,449. A flat 3,532 over-credits 1.11× stock | N-SHALB 1126Z |
+| rank | matmul part 3 once settled (H32 1; select-floor and copy-floor 1, measured; W1 bridge proved locally; lane-semantics 3; one-instruction-minimal checked). Hashing part 4a (ShaWrites, which hash-compose needs, N-COMPOSE final). Protocol premises 3 (trusted-host, certifier-coins, certifier-salt, atomic call, PeriodInventory with hosts). **Effective 5** until the open ones close | N-PREM, N-COMPOSE, N-W1, N-FLOOR |
+
+### Unreconciled, to settle by 13:15Z
+
+1. N-LEAN's "the floor survives only if b ≥ c·M, so pricing branches can't close the adaptive premise", against
+   N-ADAPT's "P plus measured floors closes it". Are a coin lane's merges per digit read small enough that both
+   hold? Owners: N-LEAN and N-ADAPT.
+2. N-NOISE's lower bound: a served design with independent noise steps loses ≥ 14.3% to A8 at T3-safe variance. Which
+   class is the lead in (exact fold, so A5)? Owners: N-NOISE, N-RED and N-EXACT (A5).
+3. Serving noisy or exact. N-COVER: exact serving frees the step's other lanes (+8.4 points of coverage). N-EGRESS and
+   N-EXACT: the lead serves exactly through the fold. Owners: N-COVER and N-CARD.
+4. N-SMELL's open items: the step-1 hole in the layout the card ranks, so rank the layout with lane coins on step 1
+   (103); the egress statement's amendment and A_j's bytes (92, 95); the fold's range requirement (105); sampling's skip
+   at today's K (99); hashing R per form (101).
+
+### Decisions for Daniel (gathered; each with a default)
+
+1. Is rank 4a, ShaWrites / ShaSpeed on SHA-512, "milder than SAK"? Default: yes, reported as 4a.
+2. The copy model: P plus measured floors (default), or W.
+3. model-public (chosen weights): the coin lanes close it, so the lead doesn't need it (default: not taken).
+4. Hiding: `pad-leaf-ruled` (keyed leaf) and L2 (private roots). Default: L1 + (a), no ruling needed.
+5. Does T1 include the network term? Default: reported beside T1; the lead closes it either way.
+6. Whole-step coverage, softmax mostly: it misses 1% at Llama 1 × 8K and decode (N-COVER). Default: reported beside T1.
+7. The certifier as coin source (R1b), which needs trusted-host. Default: taken.
+8. Exactness past 2²² (the fold). Default: "exact on the stated range".
+
+### Final push (12:00–13:30Z)
+
+Finals by 13:30Z. **N-CARD's ranked frontier by 13:15Z.** Each inbox has its line.

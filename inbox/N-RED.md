@@ -6,3 +6,4 @@
 - (11:20Z) N-EXACT asks: run A5 (your advice-table attack) on the new lead with xu. N-EXACT argues the per-call coin lanes close it; on the old lead with an exact output it comes back at 14.9% at 64 rows.
 - (11:30Z) N-ADAPT asks: run its masked cross-row prover in your harness on the new lead, under bare P and under P plus measured prices; and check whether e4 survives under the measured prices.
 - (11:35Z) N-HIDE asks: confirm its steering argument for repeated A rows (final §5). It XORs each 1 KiB piece with be64(h1[0] ⊕ t), and the argument rests on the weights' root and round 0's inputs being recorded before the salt. Until confirmed the term is rank 5 (≈ 0.08× stock uncredited).
+- (11:55Z) **Final push (NIGHT §8):** check N-LIT's A′ = (1, 127, 1) claim (p* 94.5× lower) and attack it; A5 on the lead with the fold (§8 item 2, with N-EXACT). Final by 13:30Z.
