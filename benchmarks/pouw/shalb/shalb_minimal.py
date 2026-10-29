@@ -163,7 +163,9 @@ class Program:
             ones = (z3.BitVecVal(1, 64) << z3.ZeroExt(32, width)) - 1
             return z3.Extract(31, 0, ones << z3.ZeroExt(32, pos))
         if op == "IDP4A":
-            ext = lambda s, v: z3.If(s, z3.SignExt(24, v), z3.ZeroExt(24, v))
+            def ext(s, v):
+                return z3.If(s, z3.SignExt(24, v), z3.ZeroExt(24, v))
+
             sa, sb = z3.Extract(0, 0, self.mode[i]) == 1, z3.Extract(1, 1, self.mode[i]) == 1
             return sum((ext(sa, z3.Extract(8 * q + 7, 8 * q, a)) * ext(sb, z3.Extract(8 * q + 7, 8 * q, b))
                         for q in range(4)), c)
