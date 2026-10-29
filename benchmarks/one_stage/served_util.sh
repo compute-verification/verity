@@ -4,8 +4,8 @@
 # the profile and the server's step trace.  cwd: the source tree's root; the node holds the venv, the B4 row's Build and the
 # taps under UTIL_ROOT.
 #
-# The mix: N requests of exactly 1,024 prompt ids, max_tokens 1, greedy, all queued at once (`serve_load.py --varied N
-# --prompt-range 1024:1024 --max-tokens 1 --rate 1000`), served at T tokens a step with T/1024 requests a step and a window
+# The mix: N requests of exactly PROMPT_IDS (1,024) prompt ids, max_tokens 1, greedy, all queued at once (`serve_load.py
+# --varied N --prompt-range 1024:1024 --max-tokens 1 --rate 1000`), served at T tokens a step with T/PROMPT_IDS requests a step and a window
 # (--max-num-seqs, --window-requests), --window-steps 1, --admit arrival, no prefix cache. WARM requests are served first,
 # outside the capture. Arms (ARM):
 #   stock   --no-commit, no protocol: the ceiling
@@ -18,22 +18,23 @@
 #   graphs  stock with the engine's options overridden by UTIL_ENGINE_JSON (default: enforce_eager off, so torch.compile
 #           with CUDA graphs captured at every power of two up to T, and async scheduling on), without the bench row. Not
 #           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off. Under async
-#           scheduling a step's slots stay held until the step before it is processed, so SEQS defaults to 2·T/1024
+#           scheduling a step's slots stay held until the step before it is processed, so SEQS defaults to 2·T/PROMPT_IDS
 #   async   stock eager with async scheduling on (UTIL_ENGINE_JSON's default {"async_scheduling": true}), without the bench
 #           row, as graphs: not the served stack either (the B4 row's Build declares synchronous scheduling), so util.json's
 #           served_stack is false for both
 # ASYNC=1 serves a Commit arm (noseal, seal, h1) with --async-scheduling, in a tree whose serve-openai takes it with the
 # Commit on (its `serve_row` module). No bench row's Build declares async scheduling yet, so serve-openai's row check (`serve_row.of`) takes
 # the row whichever scheduler it declares, as `tests/pipeline/serve_async_commit_gpu.py` does: its records attest the row's
-# LAG 0 Programs, so the arm is <arm>-async and not the served stack. SEQS defaults to 2·T/1024, as for async.
-# Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
+# LAG 0 Programs, so the arm is <arm>-async and not the served stack. SEQS defaults to 2·T/PROMPT_IDS, as for async.
+# Env: ARM, T (8192), N (64), PROMPT_IDS (1024: each request's prompt ids, so T/PROMPT_IDS requests a step; V3's class is
+# T 512 with 4 a window, PROMPT_IDS 128), WARM (2·T/PROMPT_IDS), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
 # PYHZ, 1000, for the host gaps; its sqlite export keeps none of the Python frames), PYSPY=1 (py-spy 0.4.2, installed under
 # UTIL_ROOT/tools/pyspy, launches the server under the session, since the node's ptrace_scope 1 lets it read only its own
 # children, and records it and its subprocesses at PYSPY_HZ, 20, without pausing them (blocking samples at 250 Hz doubled a
 # 26 ms step), as a Chrome trace in the scratch, which `pyspy_steps.py`
 # cuts to the full steps into pyspy_steps.json), SEAL_SHM=1 (the serve dir's windows/ on /dev/shm, so a seal writes to memory
-# rather than the node's network disk: what the step is when the disk doesn't bound the seal), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
+# rather than the node's network disk: what the step is when the disk doesn't bound the seal), SEQS (--max-num-seqs and --window-requests, T/PROMPT_IDS, 2·T/PROMPT_IDS for graphs and async; the
 # window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
 # commit and parents), RELEASE_AFTER (a Commit arm's values held on the device, --retain device --retain-device-gb
 # RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), SEAL_HOLD_GB (--seal-hold-gb, 32: the committed bytes of the windows
@@ -50,7 +51,8 @@
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=${TREE:-$PWD}
-ARM=${ARM:?ARM is stock, noseal, seal, h1, graphs or async}; T=${T:-8192}; N=${N:-64}; SLOTS=$(( T / 1024 )); WARM=${WARM:-$(( 2 * SLOTS ))}
+ARM=${ARM:?ARM is stock, noseal, seal, h1, graphs or async}; T=${T:-8192}; N=${N:-64}; PROMPT_IDS=${PROMPT_IDS:-1024}
+SLOTS=$(( T / PROMPT_IDS )); WARM=${WARM:-$(( 2 * SLOTS ))}
 case $ARM:${ASYNC:-0} in graphs:*|async:*|*:1) SEQS=${SEQS:-$(( 2 * SLOTS ))} ;; *) SEQS=${SEQS:-$SLOTS} ;; esac
 LABEL=$ARM; [ "${ASYNC:-0}" = 1 ] && LABEL=$ARM-async
 ROOT=${UTIL_ROOT:-/workspace/research/vllm-util80}
@@ -62,14 +64,15 @@ NORM_TAP_SO=${NORM_TAP_SO:-$ROOT/norm_tap/build/verity_norm_tap.so}
 NSYS=${NSYS:-/usr/local/cuda-13.0/bin/nsys}
 SCR=$ROOT/scratch/${RESEARCH_RUN_ID:-local}; D=$SCR/serve
 PORT=${PORT:-18190}
-export TREE ARM LABEL T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW HIDDEN_SO NORM_TAP_SO NSYS SCR D PORT OUT
+export TREE ARM LABEL T N PROMPT_IDS SLOTS SEQS WARM ROOT VENV PY REPO REV ROW HIDDEN_SO NORM_TAP_SO NSYS SCR D PORT OUT
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 
 if [ "${1:-}" != leased ]; then
   case $ARM in stock|noseal|seal|h1|graphs|async) ;; *) say "ARM $ARM: not stock, noseal, seal, h1, graphs or async"; exit 2 ;; esac
   case $ARM:${ASYNC:-0} in *:0|noseal:1|seal:1|h1:1) ;; *) say "ASYNC=1 is for the Commit's arms (noseal, seal, h1): stock's is ARM=async"; exit 2 ;; esac
   { echo "tree $(git -C "$TREE" log -1 --format='%H parents %P' 2>/dev/null)"; for h in ${HEADS:-}; do echo "$h"; done; } > "$OUT/heads.txt"
-  [ $(( T % 1024 )) = 0 ] || { say "T $T: not a multiple of 1,024"; exit 2; }
+  [ "$PROMPT_IDS" -ge 1 ] && [ "$PROMPT_IDS" -le 1024 ] && [ $(( T % PROMPT_IDS )) = 0 ] \
+    || { say "T $T: not a multiple of PROMPT_IDS $PROMPT_IDS (1 to 1,024)"; exit 2; }
   [ -f "$ROW/manifest.json" ] || { say "no B4 row Build under $ROOT"; exit 3; }
   if [ "$ARM" != stock ] && [ "$ARM" != graphs ] && [ "$ARM" != async ] && { [ ! -f "$HIDDEN_SO" ] || [ ! -f "$NORM_TAP_SO" ]; }; then
     say "no taps: $HIDDEN_SO, $NORM_TAP_SO"; exit 3
@@ -227,7 +230,7 @@ fi
 spid=$(ss -Hltnp "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
 say "SERVE $(grep -am1 'SERVE-OPENAI listening' "$SCR/serve.log" | cut -c1-200) (pid ${spid:-unknown})"
 load() {  # $1 requests, $2 seed, $3 name
-  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range 1024:1024 \
+  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range "$PROMPT_IDS:$PROMPT_IDS" \
     --max-tokens 1 --rate 1000 --seed "$2" --out "$SCR/$3.jsonl" > "$SCR/$3.log" 2>&1
 }
 load "$WARM" 7 warm; say "WARM $WARM requests (exit $?)"
