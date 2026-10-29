@@ -3,7 +3,7 @@ import Definitions.Pouw.Dimension.Defs
 /-!
 # `MH100`'s price table and the hypothesis `H32`
 
-**Draft semantics, pending review**, for `H32` and `FragLanes` only (the review below).
+**Draft semantics, pending review**, for `H32` (the 21 `LDGMC` forms) and `FragLanes` only (the review below).
 
 `MH100` (`Pouw.Dimension.H100`) is the H100 (`sm_90`) analogue of `M4090`. Its prices are a parameter `Prices100`, in
 units of one dense int8 MAC at the datasheet's 4,096 MACs per SM per clock, so that a measurement can replace any
@@ -60,8 +60,13 @@ Each definition below was checked against what was measured on one H200 SXM (`sm
 * **`Floor` and `FloorTc`**: **match**. Each says of a table what its docstring says, over every class `Op100.price`
   charges. The H200 meets `FloorTc 32 32`, which is `H32`, so it needs no `c` below 32.
 * **`H32`**: **matches** for every form that was priced. None of 963 `sm_90` SASS forms costs under 32 a register
-  alone (the least is DMUL at 32.00), and each class's cheapest writer is within 1% above 32. 26 forms are unpriced:
-  21 `LDGMC`, 4 `LDL` and `LEPC`. So its marker stays until they are priced.
+  alone (the least is DMUL at 32.00), and each class's cheapest writer is within 1% above 32.
+  - The census's four local loads cost 128.63 to 141.41 a register they load, and 85.75 to 94.28 a register their
+    loop writes (`Pouw.Dimension.H100W`'s review).
+  - `LEPC` writes a constant, which `MH100w` gives free, so `H32` doesn't read its price.
+  - The 21 `LDGMC` forms read a multicast object, which needs GPUs that share an NVSwitch. The measured node, one H200
+    with no NVLink peer, can't create one, so they are unpriced. Its marker stays until they are priced on such a
+    node.
 * **`FragLanes`**: it restricts the adversary's multiplicands, which no measurement can check, so its marker stays.
   The H200 doesn't need it, since no tensor-core form there costs under 32 a register.
 -/
@@ -133,11 +138,11 @@ def Floor (c : ℕ) (pr : Prices100) : Prop :=
 /-- **Hypothesis `H32 pr`** (named; draft semantics): every register writer of `MH100` costs at least 32 per 32-bit
 register written.
 
-It is a floor per instruction class, not per register in time. Round 8 found
-no single writer below 32 loop-free (`h32LoopFree`, `h32Floor`). On the H200, none of 963 `sm_90` SASS forms costs
-under 32 alone, and 26 are unpriced (the module's review). But writers on separate pipes co-issue, and mixes go
-below 32 per register: as low as 21.45 loop-free (1:1 DADD + FADD with an immediate in place of one source each), and
-21.33 at full dispatch (the FP64 pipe's bound). On the H200, 2:1:1 DADD + IMAD + FADD writes one every 21.54. So a
+It is a floor per instruction class, not per register in time. Round 8 found no single writer below 32 loop-free
+(`h32LoopFree`, `h32Floor`). On the H200, none of 963 `sm_90` SASS forms costs under 32 alone, and the 21 `LDGMC`
+forms, which need an NVSwitch, are unpriced (the module's review). But writers on separate pipes co-issue, and mixes
+go below 32 per register: as low as 21.45 loop-free (1:1 DADD + FADD with an immediate in place of one source each),
+and 21.33 at full dispatch (the FP64 pipe's bound). On the H200, 2:1:1 DADD + IMAD + FADD writes one every 21.54. So a
 bound on `cost100` under `H32` bounds additive-W1 work, not time. A time bound needs a maximum over resources. -/
 def H32 (pr : Prices100) : Prop := Floor 32 pr
 

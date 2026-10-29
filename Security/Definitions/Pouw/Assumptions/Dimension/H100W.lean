@@ -69,7 +69,13 @@ definition here is looser. The measurements:
   32: tc 32.003, ffma 32.255, int32 32.277, fp64 32.003 and other 32.279. So the H200's table is `h100Floor` entry
   for entry, and `H32` holds there with no slack.
 * **Opcode census**: every one of 963 `sm_90` SASS forms, each timed alone. None costs under 32 a register; the
-  least is DMUL at 32.00. 26 forms are unpriced: 21 `LDGMC`, 4 `LDL` and `LEPC`.
+  least is DMUL at 32.00. Of the 26 forms it left unpriced:
+  - The four local loads, each timed alone with a LOP3 fold a load, cost 141.41 (LDL.128), 128.63 (LDL.64), 138.72
+    (LDL.LU.128) and 128.63 (LDL.LU.64) a register they load, and 85.75 to 94.28 a register the loop writes. PTX
+    reaches no LDL.LU, so those two are the gated LDL probes with the load's cache-op field set to last use.
+  - `LEPC` writes the address of the code, a constant of the program.
+  - The 21 `LDGMC` forms (`multimem.ld_reduce`) read a multicast object, which the measured node, one H200 with no
+    NVLink peer, can't create.
 * **Lane forms**: each of 58 integer forms, warp forms included, captured on 65,536 inputs against its documented
   function, with 0 mismatches. Every output was checked: its 32-bit words a lane (two for IMAD.WIDE) and its
   predicates.
@@ -95,8 +101,10 @@ The verdicts:
     under-charges it: IMAD and LOP3 alone cost 64.0 and 64.13, shared atomics 64.56, REDG 1,123 a word and the uniform
     datapath 2,048 a word.
   - **Stricter** for `move`, which is free where the hardware's MOV takes an issue slot. A load from a computed
-    address is `other` at 32 a word. On the hardware, a lookup costs at least 128.07 a word, and a copy into shared
-    memory at least 156 (LDGSTS.128, timed alone).
+    address is `other` at 32 a word. On the hardware, a lookup costs at least 128.07 a word, a local load with every
+    lane at one offset 128.63 (85.75 with its fold), and a copy into shared memory at least 156 (LDGSTS.128, timed
+    alone).
+  - **Stricter** for `LEPC`: its word is a constant, which `F` holds, so the model gives it free.
   - **Stricter** for predicate and carry outputs. They aren't words, and the model doesn't price them. On the hardware,
     they cost their instruction's issue slot.
   - Every priced instruction computes any function of the grid. So `MH100w` reads none of the 58 forms' functions,
@@ -123,8 +131,8 @@ The verdicts:
   - `C2FirstRunCopy` is an implication. Its hypothesis is stated precisely in its docstring.
 
 **Not checked here.**
-- `H32` on the 26 unpriced census forms. `LEPC` writes a public constant. `LDL` is estimated at 128 a word. `LDGMC`
-  computes a word in memory (`other`) at a price not yet measured.
+- `H32` on the 21 `LDGMC` forms, which compute a word in memory (`other`) on a node whose GPUs share an NVSwitch,
+  at a price not yet measured.
 - `Embed.lean`'s `M4090`, a 4090 model. Of it `MH100w` reads only `fpVal`.
 -/
 
