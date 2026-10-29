@@ -42,7 +42,7 @@ FORMS = (SNAPSHOT, *line.FORMS)
 """The memory line's forms, in order: `Held`'s, `HeldOverTime`'s and `HeldOverTimeLinks`'s."""
 REJECTION_LOG2 = 64
 """The sample's rejection a sample, in bits: a sample below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
-`Accounting.Remote.Draw.width`), so a uniform first word is rejected with probability below 2^-64."""
+`Accounting.Remote.Sample.width`), so a uniform first word is rejected with probability below 2^-64."""
 DELTA_PARTS = ("profile", "slack", "hiding", "binding", "sketch", "rejection")
 """The memory line's δ parts (`delta_parts`), in the order `memory` adds them."""
 PRF_CLAIM = "prf/sha-512"
@@ -202,7 +202,7 @@ def binding_over(draws: int, receipts: int, samples: int, queries: int) -> float
 
 
 def binding(record: audit.Record, node: Node) -> float:
-    """The receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`): the probability that some opened
+    """The receipts' binding term (`Accounting.Remote.Sample.Receipts.binding`): the probability that some opened
     receipt was presented with an accepted row other than the one its root holds (`Receipts.held`, the plurality of
     the rows it shows over its window's continuations from the cut before its coin).  Window t's fork finder runs the
     prover twice from that cut on independent openings coins and checks both runs' openings, q_t = 2·F·C +

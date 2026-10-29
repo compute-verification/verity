@@ -29,7 +29,7 @@ earlier windows' openings coins kept, window `t`'s and the later ones fresh), wh
 
 namespace Accounting.SecurityProofs.Remote
 
-open Finset Accounting.TS Accounting.Remote.Draw Pouw.RelativeSecurity
+open Finset Accounting.TS Accounting.Remote.Sample Pouw.RelativeSecurity
 open Accounting.SecurityProofs.TS.Plurality (Frk)
 
 namespace Binding

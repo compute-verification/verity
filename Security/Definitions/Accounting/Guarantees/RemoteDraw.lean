@@ -5,7 +5,7 @@ import Definitions.Accounting.Assumptions.RemoteHeld
 # The openings' pooled bound (trusted)
 
 The memory line's `LiveCoins` premise (`Accounting.Remote.Held.Assumptions.LiveCoins`), derived from the verifier's
-opening draw as it runs it (`Accounting.Remote.Draw`): a session of windows `D`, each window's size and correct receipts
+opening draw as it runs it (`Accounting.Remote.Sample`): a session of windows `D`, each window's size and correct receipts
 fixed before its own openings coin (`Live`), whose opened receipts an accepted session found correct or moved off the
 rows their roots hold (`Refused`, at the receipts `R`), and whose wrong receipts count the trace's (`Counted`). The
 prover is sent each coin as it is released, and the challenger's commitment to the session's coins only once the
@@ -53,8 +53,8 @@ coin, but that the receipts' roots read only the cut is not a premise here (the 
 
 namespace Accounting.Guarantees.Remote
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions
 
 /-- **The openings' pooled bound.** On a session whose windows' sizes and correct receipts are fixed before their
 openings coins (`Live`), whose accepted outcomes found every opened receipt correct or moved off the row its root holds

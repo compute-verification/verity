@@ -68,8 +68,8 @@ namespace Accounting.SecurityProofs.Remote
 open Finset Accounting.Rate Accounting.Rate.Pooled
 open Pous (pr)
 open scoped ENNReal
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions
 
 namespace Draw
 

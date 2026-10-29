@@ -21,13 +21,13 @@ that accepts everything (`*_nontrivial`).
   `δ + 2^-64` (and `δs`) for an event of probability `1`.
 -/
 
-namespace Accounting.SecurityProofs.Remote.DrawMeets
+namespace Accounting.SecurityProofs.Remote.SampleMeets
 
 open Finset Accounting.Rate.Pooled
 open Pous (pr)
 open scoped ENNReal
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions Accounting.SecurityProofs.Remote.Meets
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions Accounting.SecurityProofs.Remote.Meets
 
 /-! ## The honest session -/
 
@@ -396,4 +396,4 @@ theorem heldOverTimeLinksDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Block
   norm_num at h
   linarith
 
-end Accounting.SecurityProofs.Remote.DrawMeets
+end Accounting.SecurityProofs.Remote.SampleMeets

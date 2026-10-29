@@ -10,7 +10,7 @@ Window t has U_t receipts and drew s_t of them, S = Σ_t s_t.  Except with δ, t
   x ↦ x^S is monotone, so q ≤ δ^(1/S) and B ≥ d̄·S, at most S·2^-64 and the power's rounding above it.
 - W (`wrong`) is the most Σ_t f_t·U_t those allow: the windows by U_t/s_t falling (`order`), each taking the largest
   share its cap and the budget left allow, min(1 − s_t/U_t, b/s_t) (the fractional knapsack's greedy, its optimum:
-  `Properties.RemoteAudit.PooledCovers` proves the Lean's W at least `Accounting.Remote.Draw.pooled`).
+  `Properties.RemoteAudit.PooledCovers` proves the Lean's W at least `Accounting.Remote.Sample.pooled`).
 - `floors` are each window's share at most on the whole budget, min(1 − s_t/U_t, B/s_t), and `floor` the largest.
 
 The JSON form (`run_json`) is the Lean's: `windows` a list of [U, s], each rational a string `n` or `n/d`; δ given as a

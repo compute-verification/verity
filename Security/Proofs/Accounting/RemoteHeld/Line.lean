@@ -36,8 +36,8 @@ to the line's W, and on it every stretch of the line credits what the trace held
 
 namespace Properties.RemoteAudit.Line.SecurityProofs
 
-open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions _root_.RemoteAudit.Line Accounting.SecurityProofs.Remote Properties.RemoteAudit.Line
+open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions _root_.RemoteAudit.Line Accounting.SecurityProofs.Remote Properties.RemoteAudit.Line
 
 /-- What `ofSummary` reads of a record it accepts: one group a window, and each window's receipts and draws, its draws
 `min(s, U_t)`. -/

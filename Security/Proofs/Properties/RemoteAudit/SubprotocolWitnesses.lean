@@ -45,8 +45,8 @@ deriving instance DecidableEq for RemoteAudit.Line.Group
 
 namespace Properties.RemoteAudit.Subprotocol
 
-open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions Properties.RemoteAudit.Line
+open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions Properties.RemoteAudit.Line
 
 theorem acceptIsVerified_iff : AcceptIsVerified ↔ AcceptIsVerifiedFor RemoteAudit.Protocol.check := Iff.rfl
 
@@ -131,8 +131,8 @@ theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fi
   unfold Session.opened openings at hp
   obtain ⟨q, hq, rfl⟩ := mem_image.1 hp
   have hk : D.draws t ω ≤ D.size t ω := min_le_right _ _
-  exact mem_range.2 (Accounting.SecurityProofs.Remote.Draw.arrange_lt hk
-    (offsets_zero_lt (prf t (ω.2 t)) hk (Accounting.SecurityProofs.Remote.Draw.draws_le D t ω)) q
+  exact mem_range.2 (Accounting.SecurityProofs.Remote.Sample.arrange_lt hk
+    (offsets_zero_lt (prf t (ω.2 t)) hk (Accounting.SecurityProofs.Remote.Sample.draws_le D t ω)) q
     (lt_of_lt_of_le (mem_range.1 hq) hk))
 
 /-- **The premises of `LineHeld` and `LineHeldAtSubprotocol` hold at the honest node.** On any node, at any records of
@@ -174,7 +174,7 @@ theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fin
     sketch_zero _ _ fun ω p _ => ⟨tick ω p, le_refl _, htick ω p, Finset.union_empty _⟩, covered_noOutside _ _,
     ingressCounted_quiet _, fun c t ω ω' _ _ => ⟨Fin.ext (congrArg (min · receiptMax) (hsize c c ω ω' t)), rfl⟩,
     refused_honest _ (hc _ fun _ _ => rfl) prf _ R, counted_of _ _ fun _ _ => Finset.Subset.refl _,
-    fun t => Accounting.SecurityProofs.Remote.Draw.prfAdvantage_honest _ (hc _ fun _ _ => rfl) prf _ t,
+    fun t => Accounting.SecurityProofs.Remote.Sample.prfAdvantage_honest _ (hc _ fun _ _ => rfl) prf _ t,
     fun t => ?_⟩
   · intro ω hv
     obtain ⟨hsz, hpass, hmono, hfp, hrun⟩ := hgs ω hv _ rfl
