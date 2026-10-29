@@ -2,7 +2,7 @@ import Proofs.NetworkCertifier.Witnesses
 import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.Counting
 import Proofs.NetworkCertifier.RecordRows
-import Definitions.NetworkCertifier.HorizonLeak
+import Definitions.NetworkCertifier.PooledLeak
 import Definitions.NetworkCertifier.TapRows
 import Definitions.NetworkCertifier.Schedule
 import Definitions.NetworkCertifier.Ingress
@@ -11,17 +11,17 @@ import Definitions.NetworkCertifier.Assumptions
 /-!
 # The instances the network certifier's count and period witnesses are stated at
 
-Each built by hand, at a positive instance where the guarantee allows one: several steps, two values of content advice,
-two clock-sync values, a non-empty faulty set at a positive `δ`. `CountWitnesses` and `PeriodWitnesses` state the
+Each built by hand, at a positive instance where the guarantee allows one: several steps, two execution blocks of one
+advice bit each, a non-empty faulty set at a positive `δ`. `CountWitnesses` and `PeriodWitnesses` state the
 witnesses; `Witnesses` has the negation `notStmt` and its accepting verifier `leakD`, which these extend.
 
 * `honestI P a`: the honest certifier at the Program `P` under the advice `a`, which records and puts on the wire `P`'s
-  rows, so `P` accepts its run at every horizon (`honestI_accepted`, `honestI_mem`).
-* `fxRate`: the constant-rate Program over two windows of two buckets, one link of two slots, the sync set `syncTwo`
-  (two offsets, one rate) and the content advice `Bool`, whose two frames carry the advice bit and its negation.
-  `fxRate1` is it at the one-value sync set `syncOne`, and `fxFixed` it with its clock fixed.
+  rows, so `P` accepts its run over every number of steps (`honestI_accepted`, `honestI_mem`).
+* `fxRate`: the constant-rate Program over two execution blocks of two buckets (`T = 2`, `g = 1`), one link of two
+  slots and one advice bit per block (`k = 1`), whose two frames, both at the block's first send tick, carry the
+  block's advice bit and its negation.
 * `acceptAll`, the verifier that accepts everything: `AccSeqsAt acceptAll` is `AccSeqs` with it in place of the
-  Program's acceptance, and over any positive horizon its sequences are infinitely many
+  Program's acceptance, and over any positive number of steps its sequences are infinitely many
   (`accSeqsAt_acceptAll_not_le`).
 * `fxLeakI`: a sender whose secret is its every step's frame length, which `fxLeakDec` reads back from the last step of
   the wire or the record, so at `acceptAll` every secret is decoded (`fxLeak_not_le`, `fxLeakObs_not_le`).
@@ -34,7 +34,7 @@ witnesses; `Witnesses` has the negation `notStmt` and its accepting verifier `le
 * `tapD`: `leakD` with every opening passing, where the network certifier's openings `tapOps` register `obs0`
   (`tapOps_opens`), so at every `δ` no witness is in `RLeakTap` (`tapD_noRLeakTap`), and at `δ = 1/8` the per-window
   leak bound of `PeriodLeakAccepted` fails at its silent prover (`tapD_bound_fails`).
-* `horizon_bound_fails`: `HorizonLeakAccepted`'s bound fails at an audit that always accepts, at one window of one step
+* `pooled_bound_fails`: `PooledLeakAccepted`'s bound fails at an audit that always accepts, at one window of one step
   whose faulty set holds the one unit `Fmax = 1` allows none of, at `δ = 1/2`.
 * `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections, `fixtureAgrees`
   checks its egress record), one window of ten buckets of four slots, which `fxQueueSched` fits (`fxQueue_fits`).
@@ -60,7 +60,7 @@ def honestI {L K S : ℕ} {Adv : Type} (P : Program L S Unit Adv) (a : Adv) :
   op := unitOp
   snd := fun _ _ _ => ()
 
-/-- **`P` accepts the honest certifier's run under `a`**, at every horizon. -/
+/-- **`P` accepts the honest certifier's run under `a`**, over every number of steps. -/
 theorem honestI_accepted {L K S : ℕ} {Adv : Type} (P : Program L S Unit Adv) (a : Adv) (n : ℕ) :
     Accepted P unitOp n ((honestI (K := K) P a).obsRun () n) a := by
   intro t ht
@@ -84,53 +84,19 @@ theorem honestI_mem {L K S : ℕ} {Adv : Type} (P : Program L S Unit Adv) (a : A
   obtain ⟨k, xs, as, rfl⟩ := Interaction.mem_obsRun _ () n x hx
   exact Nat.one_pos
 
-/-! ## The shipped schedule -/
+/-! ## The reference schedule -/
 
-/-- Two clock-sync values: offsets `0` and `1`, rate `1`. -/
-def syncTwo : SyncSet where
-  deltas := {0, 1}
-  rhos := {1}
-  deltas_nonempty := ⟨0, Finset.mem_insert_self 0 {1}⟩
-  rhos_nonempty := ⟨1, Finset.mem_singleton_self 1⟩
-  rhos_pos := fun ρ h => by rw [Finset.mem_singleton.1 h]; norm_num
+/-- Two frames on the one link at the execution block's first send tick: the block's advice bit, then its negation. -/
+def fxFrames : List Unit → Fin 2 → (Fin 1 → Bool) → Fin 1 → List LogicalFrame :=
+  fun _ _ v _ => [⟨[v 0], 0⟩, ⟨[!v 0], 0⟩]
 
-/-- `syncTwo`'s value at offset `0`. -/
-def syncTwo0 : syncTwo.Elem := (⟨0, Finset.mem_insert_self 0 {1}⟩, ⟨1, Finset.mem_singleton_self 1⟩)
+/-- **The constant-rate Program** over two execution blocks of two buckets (`T = 2`, `g = 1`), one link of two slots,
+one advice bit per block. -/
+def fxRate : Program 1 2 Unit (Fin 2 → Fin 1 → Bool) :=
+  constantRate 2 1 2 fxFrames
 
-/-- One clock-sync value, offset `0` and rate `1`. -/
-def syncOne : SyncSet where
-  deltas := {0}
-  rhos := {1}
-  deltas_nonempty := ⟨0, Finset.mem_singleton_self 0⟩
-  rhos_nonempty := ⟨1, Finset.mem_singleton_self 1⟩
-  rhos_pos := fun ρ h => by rw [Finset.mem_singleton.1 h]; norm_num
-
-/-- `syncOne`'s one value. -/
-def syncOne0 : syncOne.Elem := (⟨0, Finset.mem_singleton_self 0⟩, ⟨1, Finset.mem_singleton_self 1⟩)
-
-/-- Two frames on the one link, anchored at bucket 0: the content advice bit, then its negation. -/
-def fxFrames : List Unit → Bool → Fin 1 → List LogicalFrame := fun _ c _ => [⟨[c], 0, 0⟩, ⟨[!c], 0, 1⟩]
-
-/-- **The constant-rate Program** over two windows of two buckets, one link of two slots, the sync set `syncTwo`. -/
-def fxRate : Program 1 2 Unit (Bool × (Fin 2 → syncTwo.Elem)) :=
-  constantRate 2 2 syncTwo fxFrames
-
-/-- `fxRate`'s advice: the bit `true`, offset `0` in both windows. -/
-def fxAdv : Bool × (Fin 2 → syncTwo.Elem) := (true, fun _ => syncTwo0)
-
-/-- `fxRate` at the one-value sync set `syncOne`. -/
-def fxRate1 : Program 1 2 Unit (Bool × (Fin 2 → syncOne.Elem)) :=
-  constantRate 2 2 syncOne fxFrames
-
-/-- `fxRate1`'s advice. -/
-def fxAdv1 : Bool × (Fin 2 → syncOne.Elem) := (true, fun _ => syncOne0)
-
-/-- `fxRate` with its clock fixed at `syncTwo0`: a Program whose clock-sync advice is `Unit`. -/
-def fxFixed : Program 1 2 Unit (Bool × (Fin 2 → Unit)) where
-  rows t ins a ℓ := fxRate.rows t ins (a.1, fun _ => syncTwo0) ℓ
-
-/-- `fxFixed`'s advice. -/
-def fxAdvU : Bool × (Fin 2 → Unit) := (true, fun _ => ())
+/-- `fxRate`'s advice: the bit `true` in both execution blocks. -/
+def fxAdv : Fin 2 → Fin 1 → Bool := fun _ _ => true
 
 /-- The honest certifier at `fxRate` under `fxAdv`. -/
 def fxHonestI : Interaction 1 1 2 Unit Unit Unit (Obs 1 1 2) := honestI (K := 1) fxRate fxAdv
@@ -149,8 +115,8 @@ theorem accSeqs_eq_at {L K S : ℕ} {In Adv : Type} (P : Program L S In Adv) (op
     (n D : ℕ) : AccSeqs P op n D = AccSeqsAt (AcceptedUpTo P op n) n D :=
   rfl
 
-/-- **At the verifier that accepts everything, a positive horizon's sequences are infinitely many**: one link of
-`S > 0` slots carries any payload at every step. -/
+/-- **At the verifier that accepts everything, the sequences of a positive number of steps are infinitely many**: one
+link of `S > 0` slots carries any payload at every step. -/
 theorem accSeqsAt_acceptAll_infinite {S : ℕ} (hS : 0 < S) (k : ℕ) :
     (AccSeqsAt (acceptAll (L := 1) (K := 1) (S := S)) (k + 1) 1).Infinite := by
   refine Set.infinite_of_injective_forall_mem
@@ -163,7 +129,7 @@ theorem accSeqsAt_acceptAll_infinite {S : ℕ} (hS : 0 < S) (k : ℕ) :
   · intro m
     simp [AccSeqsAt, acceptAll]
 
-/-- No finite count bounds `AccSeqsAt acceptAll` over a positive horizon. -/
+/-- No finite count bounds `AccSeqsAt acceptAll` over a positive number of steps. -/
 theorem accSeqsAt_acceptAll_not_le {S n : ℕ} (hS : 0 < S) (hn : 0 < n) (N : ℕ) :
     ¬ (AccSeqsAt (acceptAll (L := 1) (K := 1) (S := S)) n 1).encard ≤ N := by
   obtain ⟨k, rfl⟩ : ∃ k, n = k + 1 := ⟨n - 1, by omega⟩
@@ -196,7 +162,7 @@ theorem fxLeak_obs (z k : ℕ) : fxLeakDec (fxLeakI.obsRun z (k + 1)) = z := by
     | simp [fxLeakDec, Interaction.obsRun, Interaction.trace_succ, fxLeakI, List.getLast?_concat]
 
 /-- **At the verifier that accepts everything, every secret of `fxLeakI` is accepted and decoded from the wire**, over
-any positive horizon. -/
+any positive number of steps. -/
 theorem fxLeak_wire_univ {n : ℕ} (hn : 0 < n) :
     {z : ℕ | acceptAll (fxLeakI.obsRun z n) ∧ fxLeakDec (fxLeakI.wireRun z n) = z} = Set.univ := by
   obtain ⟨k, rfl⟩ : ∃ k, n = k + 1 := ⟨n - 1, by omega⟩
@@ -504,17 +470,17 @@ theorem tapD_bound_fails (H : Msg → Msg) :
   simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, tapD_bext, tapD_btap] at h
   linarith [tapD_κ_eighth (Coin := Unit) []]
 
-/-! ## The horizon -/
+/-! ## The monitoring period, pooled -/
 
-/-- **`HorizonLeakAccepted`'s bound fails at an audit that always accepts**, at `δ = 1/2` and `e = e' = 0`: one window
+/-- **`PooledLeakAccepted`'s bound fails at an audit that always accepts**, at `δ = 1/2` and `e = e' = 0`: one window
 of one step whose faulty set holds its one unit, which `Fmax = 1` allows none of, so the good event fails on every
 coin. -/
-theorem horizon_bound_fails :
+theorem pooled_bound_fails :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
-        ¬ HorizonGood (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 (fun _ : Fin 1 => notStmt) (fun _ => notPart)
+        ¬ PooledGood (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 (fun _ : Fin 1 => notStmt) (fun _ => notPart)
           (fun _ _ => false) (fun _ _ _ => ([] : List Bool)) 1 (fun _ => {0}) (fun _ => [obs0])) ≤
       (1 / 2 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) := by
-  simp [Pr, HorizonGood] <;> norm_num
+  simp [Pr, PooledGood] <;> norm_num
 
 /-! ## The Python network certifier's fixture -/
 

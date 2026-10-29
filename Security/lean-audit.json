@@ -2414,29 +2414,21 @@
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
   },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": {
+   "honest": ["NetTiming.Witness.ConstantRate_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeAdviceBits_nontrivial"
+  },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
    "honest": ["NetTiming.Witness.ConstantRate_honest"],
    "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial"
   },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": {
-   "honest": ["NetTiming.Witness.ConstantRateFixedClock_honest"],
-   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial"
-  },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow": {
-   "honest": ["NetTiming.Witness.ConstantRate_honest"],
+   "honest": ["NetTiming.Witness.ConstantRatePerWindow_honest"],
    "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows": {
    "honest": ["NetTiming.Witness.ConstantRate_honest"],
    "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock": {
-   "honest": ["NetTiming.Witness.FixedClock_honest"],
-   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeSync": {
-   "honest": ["NetTiming.Witness.ConstantRate_honest"],
-   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": {
    "honest": ["NetTiming.Witness.EncardAccSeqsSampledLe_honest"],
@@ -2447,7 +2439,7 @@
    "nontrivial": "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial"
   },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow": {
-   "honest": ["NetTiming.Witness.DecodableConstantRate_honest"],
+   "honest": ["NetTiming.Witness.DecodableConstantRatePerWindow_honest"],
    "nontrivial": "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial"
   },
   "NetTiming.SecurityProofs.EncardIngressDecodableLe": {
@@ -2480,13 +2472,13 @@
    "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial",
    "kind": "acceptance"
   },
-  "NetTiming.SecurityProofs.HorizonLeakAccepted": {
-   "honest": ["NetTiming.Witness.HorizonLeakAccepted_honest"],
-   "nontrivial": "NetTiming.Witness.HorizonLeakAccepted_nontrivial"
-  },
   "NetTiming.SecurityProofs.PeriodLeakAccepted": {
    "honest": ["NetTiming.Witness.PeriodLeakAccepted_honest"],
    "nontrivial": "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
+  },
+  "NetTiming.SecurityProofs.PooledLeakAccepted": {
+   "honest": ["NetTiming.Witness.PooledLeakAccepted_honest"],
+   "nontrivial": "NetTiming.Witness.PooledLeakAccepted_nontrivial"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsDisk": {
    "honest": ["Pous.Claims.StreamedWipeMeetsDisk_meets"],
@@ -2766,7 +2758,7 @@
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": "62a501bc4842f040a02106fe3def5bb875618490e8e0f114594c719095f1547d",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "4c1965a5e2a5e713ecff8b0684b90ccb00b7f75cab2d0552c2fb38625f4bfb8e",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "98c1037729d6fbf9d9c120ea1fb9b3799f98cfba802df100bb262266102f1cb4",
-  "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "a04fb3c7473ce600dcf3b75eae2ce8f5c3f7126156b07cf9112a51776a52712f",
+  "NetTiming.SecurityProofs.PooledWrongUnitsLe": "4b11601f70dff05cee40e380db457b79380461d4bb512fd7a54931a34a305d38",
   "NetTiming.SecurityProofs.SampledAuditAccepted": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
   "NetTiming.SecurityProofs.SampledLeakAccepted": "43970f90d531d3e7171623b15c9ce94eef5f67c55a52c6b00059cca4d554f37d",
   "NetTiming.SecurityProofs.SampledLeakRegistered": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3",
@@ -3199,7 +3191,7 @@
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityHorizon, its SamplingBlock and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlock, its ServerBlocks, SamplingBlock and ServerBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.NetworkCertifier.Witnesses": "the toy audit at the negation (`notStmt`, `notProg`, `notPart`, `notLay`, `obs0`) and the accepting verifier `leakD`, at which the count and period witnesses are stated; read only by the witnesses",
-   "Proofs.NetworkCertifier.WitnessToys": "the instances the count and period witnesses are stated at: the honest certifier (`honestI`), the shipped schedule over two windows (`fxRate`, `fxFixed`, `fxRate1`), the verifier and the sender that accept and leak everything (`AccSeqsAt acceptAll`, `fxLeakI`), the ingress certifier `inI`, the sampled audit `sampProg`, the accepting tap verifier `tapD` and the Python certifier's fixture rows (`fxRows`); read only by the witnesses",
+   "Proofs.NetworkCertifier.WitnessToys": "the instances the count and period witnesses are stated at: the honest certifier (`honestI`), the reference schedule over two execution blocks (`fxRate`), the verifier and the sender that accept and leak everything (`AccSeqsAt acceptAll`, `fxLeakI`), the ingress certifier `inI`, the sampled audit `sampProg`, the accepting tap verifier `tapD` and the Python certifier's fixture rows (`fxRows`); read only by the witnesses",
    "Proofs.NetworkCertifier.RecordRows": "the tap record of a rows format (`RowsFormat.tapRecord`) and the Python certifier's fixture schedule (`fxQueueSched`), at which the `honest` witnesses state that the fixture's schedule fits; read only by the witnesses",
    "Proofs.NetworkCertifier.Assumptions": "the named assumption on the sampled verifier's deployed code (`NetTiming.Assumptions.SampledCodeRuns`, over `SamplingDeploy.Code`), which the `honest` witnesses take; it reads the deployed sampling record, still in Proofs under C-Flock's exception"
   }
@@ -9279,16 +9271,8 @@
    "assumptions": [],
    "type_hash": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3"
   },
-  "NetTiming.Witness.ConstantRateFixedClock_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.ConstantRateFixedClock_honest :",
-    "  And (Eq NetTiming.Witness.syncOne.size 1)",
-    "    (Set.instMembership.mem (NetTiming.AccSeqs NetTiming.Witness.fxRate1 NetTiming.Witness.unitOp 4 1)",
-    "      ((NetTiming.Witness.honestI NetTiming.Witness.fxRate1 NetTiming.Witness.fxAdv1).obsRun Unit.unit 4))"
-   ],
-   "assumptions": [],
-   "type_hash": "c65357f31297265f659a1467824a352a0cbd502588a17c818d53fdbcc258119c"
+  "NetTiming.Witness.ConstantRatePerWindow_honest": {
+   "owner": "@network-accounting"
   },
   "NetTiming.Witness.ConstantRate_honest": {
    "owner": "@network-accounting",
@@ -9299,6 +9283,9 @@
    ],
    "assumptions": [],
    "type_hash": "5a89034726c20c95dcc16bf64a927276bf0c4a184d84ba44c38c18f5012948ce"
+  },
+  "NetTiming.Witness.DecodableConstantRatePerWindow_honest": {
+   "owner": "@network-accounting"
   },
   "NetTiming.Witness.DecodableConstantRate_honest": {
    "owner": "@network-accounting",
@@ -9313,16 +9300,8 @@
    "assumptions": [],
    "type_hash": "80712aa6b5c913349c6be2ba002ee5fc0e4afc910f795c840e37fe02ed811f60"
   },
-  "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial :",
-    "  Not",
-    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
-    "      (instHMul.hMul (Fintype.card Bool) (instHPow.hPow 1 4)).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "314b9bb33008b02d83d63a3f451e3341f7a8657f63a2ffab57cc2bfb61259d3f"
+  "NetTiming.Witness.EncardAccSeqsLeAdviceBits_nontrivial": {
+   "owner": "@network-accounting"
   },
   "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial": {
    "owner": "@network-accounting",
@@ -9360,29 +9339,6 @@
    ],
    "assumptions": [],
    "type_hash": "f08aceb65083d6d0443f92da22e620ab4a8581f68f4a58579089d8be8a49a394"
-  },
-  "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial :",
-    "  Not",
-    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
-    "      (instHMul.hMul (Fintype.card Bool) (instHPow.hPow 1 4)).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "314b9bb33008b02d83d63a3f451e3341f7a8657f63a2ffab57cc2bfb61259d3f"
-  },
-  "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial :",
-    "  Not",
-    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
-    "      (instHMul.hMul (instHMul.hMul (Fintype.card Bool) (instHPow.hPow (Fintype.card NetTiming.Witness.syncTwo.Elem) 2))",
-    "          (instHPow.hPow 1 4)).cast)"
-   ],
-   "assumptions": [],
-   "type_hash": "0962efdac04fad9e8b35f65a55760bf7bb8095a7b56db72b9eb6fc68a6388b77"
   },
   "NetTiming.Witness.EncardAccSeqsSampledLe_honest": {
    "owner": "@network-accounting",
@@ -9557,49 +9513,6 @@
    "assumptions": [],
    "type_hash": "3eafe73f21390c2e120cb879038944495ab8c62d872d7928f2404a1207bbf828"
   },
-  "NetTiming.Witness.FixedClock_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.FixedClock_honest :",
-    "  Set.instMembership.mem (NetTiming.AccSeqs NetTiming.Witness.fxFixed NetTiming.Witness.unitOp 4 1)",
-    "    ((NetTiming.Witness.honestI NetTiming.Witness.fxFixed NetTiming.Witness.fxAdvU).obsRun Unit.unit 4)"
-   ],
-   "assumptions": [],
-   "type_hash": "52bace21057536585da9c8e52d5d018cc4865228a0d2781e1f61ef75e4d7be09"
-  },
-  "NetTiming.Witness.HorizonLeakAccepted_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.HorizonLeakAccepted_honest :",
-    "  And",
-    "    (∀ (s : NetTiming.WardenSchedule (Fin 3)),",
-    "      Set.instMembership.mem (Set.instSingletonSet.singleton NetTiming.fxQueueSched) s →",
-    "        (NetTiming.Witness.fxRows.tapRecord NetTiming.Witness.fxRows_wf 4 1).fits s)",
-    "    (∀ (s : NetTiming.WardenSchedule (Fin 3)),",
-    "      Set.instMembership.mem (Set.instSingletonSet.singleton NetTiming.fxQueueSched) s →",
-    "        ∀ (c : Fin 3), instLENat.le (s.cells c) 6)"
-   ],
-   "assumptions": [],
-   "type_hash": "aa2705a63c06e827f3d2a4ec5ef63876b0a75393d352cc66b3fc007e665f8a48"
-  },
-  "NetTiming.Witness.HorizonLeakAccepted_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.HorizonLeakAccepted_nontrivial :",
-    "  Not",
-    "    (Real.instLE.le",
-    "      (Claims.Pr fun x =>",
-    "        And (∀ (x : Fin 1), True)",
-    "          (Not",
-    "            (NetTiming.HorizonGood (fun x => NetTiming.Witness.notLay) (fun x => 1)",
-    "              (fun x => Finset.instEmptyCollection.emptyCollection) 1 (fun x => NetTiming.Witness.notStmt)",
-    "              (fun x => NetTiming.Witness.notPart) (fun x x_1 => Bool.false) (fun x x_1 x_2 => List.nil) 1",
-    "              (fun x => Finset.instSingleton.singleton 0) fun x => List.cons NetTiming.Witness.obs0 List.nil)))",
-    "      (instHAdd.hAdd (instHAdd.hAdd (1 / 2) (Finset.univ.sum fun x => 0)) (Finset.univ.sum fun x => 0)))"
-   ],
-   "assumptions": [],
-   "type_hash": "4893547305821d9ef8ce311d2407ecdb95975441e14d2d13d549fb971669b5cf"
-  },
   "NetTiming.Witness.Ingress_honest": {
    "owner": "@network-accounting",
    "signature": [
@@ -9663,6 +9576,12 @@
    ],
    "assumptions": [],
    "type_hash": "6d5989bb9928b43e730b8de9d106321e4bf69b6f3c022bb3cc664608992a6bd5"
+  },
+  "NetTiming.Witness.PooledLeakAccepted_honest": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.PooledLeakAccepted_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Pous.Claims.StreamedWipeMeetsDisk_fails": {
    "owner": "@memory-accounting",
