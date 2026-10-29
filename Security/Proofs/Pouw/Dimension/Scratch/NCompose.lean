@@ -21,7 +21,9 @@ in a lock, and nothing imports it.
 * **Carried and encoded words** (`Carries`, `Encodes`, `charged_by`): a register carries a target when it equals the
   target plus a constant on `S` (a `wgmma` with a constant accumulator), and encodes it when each is a function of the
   other on `S` (a byte swap, a rotation, a float conversion). The count holds with either, under the matching
-  separation (`SepBy`). `sepShift_needed`: targets that differ by a constant share one carrier. The byte swap
+  separation (`SepBy`). `CarriedWords` (a named premise) is that every admissible program writes a carrier of each
+  committed word; with it, only carriers leave the hash's count (`hashCompose_of_carriedWords`).
+  `sepShift_needed`: targets that differ by a constant share one carrier. The byte swap
   (`bswap32`, little-endian rows read by SHA-512's big-endian words): a carrier `w + s` with `s ≠ 0` does not survive
   the swap up to a constant (`bswap32_shift_not_const`), and the swapped word is no carrier of the word
   (`bswap32_not_carrier`) but encodes it (`bswap32_bswap32`).
@@ -475,6 +477,27 @@ theorem hashCompose_encoded {c : ℕ} {pr : Prices100} (hpr : Floor c pr)
     c * (T.card + R) ≤ cost100 pr P :=
   hashCompose_by hpr hconst hFX (onS_encodes S) hRX hsha hL hP hA hsep hw hOD
 
+/-- **`CarriedWords Adm fpSem S T Dig`** (named premise; rank 3, the hardware's instruction set): every admissible
+program that outputs the digests writes, for each committed word, a register that carries it. `MH100w` alone doesn't
+give it (`words_not_forced`). On little-endian rows SHA-512 reads `bswap32 w`, which is no carrier of `w`
+(`bswap32_not_carrier`), so a `wgmma` whose accumulator absorbs a round's sum doesn't stand in for it; on big-endian
+rows that fold drops the carriers of each later block's `M_0`. -/
+def CarriedWords (Adm : List (Op100 G) → List (G → ℚ) → Prop) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (S : Set G)
+    (T Dig : Finset (G → ℚ)) : Prop :=
+  ∀ (L : List (G → ℚ)) (P : List (Op100 G)), Adm P L → OutputsOn fpSem S P L Dig → WritesBy (Carries S) fpSem P L T
+
+/-- **hash-compose from the premises alone** (rank 0 given `ShaWrites` and `CarriedWords`): an admissible program on
+free inputs that outputs the digests costs at least `c·(|T| + R)`, with only the carriers excluded from the hash's
+count, so every register of the hash that encodes a word without carrying it counts. -/
+theorem hashCompose_of_carriedWords {c : ℕ} {pr : Prices100} (hpr : Floor c pr)
+    {Adm : List (Op100 G) → List (G → ℚ) → Prop} {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {S : Set G} {F X : Set (G → ℚ)}
+    (hconst : ∀ q : ℚ, (fun _ : G => q) ∈ F) (hFX : F ⊆ X) {T Dig : Finset (G → ℚ)} {R : ℕ}
+    (hRX : RelOf (Carries S) T ⊆ X) (hsha : ShaWrites pr Adm fpSem S X Dig R)
+    (hcw : CarriedWords Adm fpSem S T Dig) (hsep : SepBy (Carries S) F T) {L : List (G → ℚ)}
+    {P : List (Op100 G)} (hL : ∀ f ∈ L, f ∈ F) (hP : ∀ o ∈ P, o.WFw pr F) (hA : Adm P L)
+    (hOD : OutputsOn fpSem S P L Dig) : c * (T.card + R) ≤ cost100 pr P :=
+  hashCompose_carried hpr hconst hFX hRX hsha hL hP hA hsep (hcw L P hA hOD) hOD
+
 /-- **Committed words need not be materialized in `MH100w`**: one `int` a digest word outputs the digests and no
 register that carries, or even encodes, a target, when no digest word encodes one. -/
 theorem words_not_forced (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (S : Set G) (T Dig : Finset (G → ℚ))
@@ -823,6 +846,7 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.sepShift_needed
 #print axioms Pouw.Dimension.NCompose.hashCompose_carried
 #print axioms Pouw.Dimension.NCompose.hashCompose_encoded
+#print axioms Pouw.Dimension.NCompose.hashCompose_of_carriedWords
 #print axioms Pouw.Dimension.NCompose.words_not_forced
 #print axioms Pouw.Dimension.NCompose.bswap32_bswap32
 #print axioms Pouw.Dimension.NCompose.bswap32_shift_not_const
