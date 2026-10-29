@@ -52,11 +52,9 @@ theorem perCoin (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
   have hwords : (tileWords * (tileIdx (lead T m n K)).card : ℚ) = wordsRegs (lead T m n K) := by
     rw [tileIdx, Finset.card_product, Finset.card_product, Finset.card_range, Finset.card_range, Finset.card_univ,
       Fintype.card_fin]
-    obtain ⟨a, rfl⟩ := hm
-    obtain ⟨b, rfl⟩ := hn
-    have ha : (16 * a + 15) / 16 = a := by omega
-    have hb : (8 * b + 7) / 8 = b := by omega
-    simp only [wordsRegs, Layout.rowBlocks, Layout.colBlocks, lead, ha, hb, tileWords]
+    have ha : (16 * ((m + 15) / 16) + 15) / 16 = (m + 15) / 16 := by omega
+    have hb : (8 * ((n + 7) / 8) + 7) / 8 = (n + 7) / 8 := by omega
+    simp only [wordsRegs, Layout.rowBlocks, Layout.colBlocks, lead, padRows, padCols, ha, hb, tileWords]
     push_cast
     ring
   have hhash : shaWordsRegs * wordsBlocks (lead T m n K) C + shaARegs * aBlocks (lead T m n K) ≤
@@ -71,8 +69,7 @@ theorem perCoin (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
 /-- **The lead's guarantee** (`Pouw.Guarantees.Lead.G`), from `perCoin` on the twin and the
 averaged bounds. -/
 theorem G : Pouw.Guarantees.Lead.G := by
-  intro pr fpSem H T m n K κ stream C isA Device cert runC can Real hm hn hκ hraw hC h32 hw1 htile hlane hone hcard
-    hsha hhon _hhost hout σ hcan O hacc
+  intro pr H T m n K κ stream C isA can Real hC h32 hw1 htile hone hcard hsha hhon hout σ hcan O hacc
   by_cases hB : ∃ ω ∈ O, Break (lead T m n K) H C κ σ ω
   · exact Or.inr hB
   refine Or.inl ?_
@@ -92,7 +89,7 @@ theorem G : Pouw.Guarantees.Lead.G := by
           32 * (tileWords * tableHits (lead T m n K) κ σ' stream ω : ℚ) - 32 * networkGap (lead T m n K) ≤
         (σ.work pr ω : ℚ) := by
     intro ω hω
-    have h1 := perCoin pr H T m n K κ stream C isA Real hm hn hC h32 hw1 htile hone hsha hhon σ' hσ' ω (htwin ω).1
+    have h1 := perCoin pr H T m n K κ stream C isA Real hC h32 hw1 htile hone hsha hhon σ' hσ' ω (htwin ω).1
       (hacc' ω hω) (hnb' ω hω)
     have h2 := (htwin ω).2.2.2.2
     rw [htw] at h1 ⊢
@@ -102,11 +99,11 @@ theorem G : Pouw.Guarantees.Lead.G := by
   have hrep : ∑ ω ∈ O, (tileWords * repeats (lead T m n K) κ ω : ℚ) ≤
       Fintype.card (Coins (lead T m n K)) * coinBranchGap (lead T m n K) :=
     (Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ O) fun _ _ _ => by positivity).trans
-      (Tags.repeats_le T m n K κ hm hn hκ)
+      (Tags.repeats_le T m n K κ)
   have htab : ∑ ω ∈ O, (tileWords * tableHits (lead T m n K) κ σ' stream ω : ℚ) ≤
       Fintype.card (Coins (lead T m n K)) * tableGap (lead T m n K) :=
     (Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ O) fun _ _ _ => by positivity).trans
-      (PStar.table_le T m n K κ σ' stream hm hn hraw)
+      (PStar.table_le T m n K κ σ' stream)
   rw [← Finset.mul_sum] at hrep htab
   have hO : (O.card : ℚ) ≤ Fintype.card (Coins (lead T m n K)) := by exact_mod_cast Finset.card_le_univ O
   have hN : (0 : ℚ) ≤ Fintype.card (Coins (lead T m n K)) := Nat.cast_nonneg _
@@ -123,19 +120,6 @@ theorem regCount_other {G : Type} (P : List (Op100 G)) (h : ∀ o ∈ P, ∃ f, 
   unfold regCount
   rw [List.map_congr_left fun o ho => show Pouw.Lead.Op100.regs o = 1 by obtain ⟨f, rfl⟩ := h o ho; rfl]
   simp
-
-/-- An `other` instruction's register is among the trace's registers. -/
-theorem mem_regs100_other {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (f : G → ℚ) :
-    ∀ (P : List (Op100 G)) (L : List (G → ℚ)), f ∈ L ∨ Op100.other f ∈ P → f ∈ regs100 fpSem P L
-  | [], L, h => by simpa [regs100] using h
-  | o :: P, L, h => by
-    show f ∈ regs100 fpSem P (L ++ o.outs fpSem L)
-    refine mem_regs100_other fpSem f P _ ?_
-    rcases h with h | h
-    · exact Or.inl (List.mem_append_left _ h)
-    · rcases List.mem_cons.1 h with rfl | h
-      · exact Or.inl (List.mem_append_right _ (by simp [Op100.outs]))
-      · exact Or.inr h
 
 /-- A run's last write is what its slot holds. -/
 theorem run_write_last {A V : Type} [DecidableEq A] {w : ℕ} (m₀ : A → Fin w → V) (P : List (Step A V w)) (a : A)
@@ -192,16 +176,12 @@ theorem blocks_honestMsg (L : Pouw.Lead.Layout) : blocks (honestMsg L) = honestB
   omega
 
 /-- **The honest lemma**: the nominal W1 table meets `H32` (`H32Sat`), and at every call the honest strategy (write each
-committed tile once, hash one message of the honest commitment's compressions rounded up), with no coin stream, meets
-every premise and is accepted at every coin value. -/
+committed tile once, hash one message of the honest commitment's compressions rounded up), with an empty coin stream,
+meets every premise and is accepted at every coin value. -/
 theorem honest : Pouw.Guarantees.Lead.Honest := by
-  intro T m n K H κ _
-  refine ⟨fun _ _ _ _ => 0, fun _ _ _ => 0, honestCommit _, fun _ => false, Unit, (), fun _ => certCode,
-    fun σ => σ = honestStrategy _ κ, honestStrategy _ κ, ?_, ?_, h32Sat, ?_, ?_, ?_, ?_, fun _ h => h, ?_, ?_,
-    fun _ => rfl, ?_, rfl, ?_⟩
-  · refine ⟨fun _ _ => none, fun _ _ _ => rfl, ?_, fun _ _ _ => rfl⟩
-    intro _ _ _ _ _ h
-    cases h
+  intro T m n K H κ
+  refine ⟨⟨fun _ _ => none, fun _ _ _ => rfl, fun _ _ _ _ _ h => by cases h⟩, honestCommit _, fun _ => false,
+    fun σ => σ = honestStrategy _ κ, honestStrategy _ κ, ?_, h32Sat, ?_, ?_, ?_, fun _ h => h, ?_, ?_, ?_, rfl, ?_⟩
   · refine ⟨rfl, fun ω => ?_⟩
     simp only [honestCommit, List.append_nil, List.dedup_cons_of_notMem List.not_mem_nil, List.dedup_nil,
       List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, shaCredit, blocks_honestMsg, wordsBlocks,
@@ -222,11 +202,6 @@ theorem honest : Pouw.Guarantees.Lead.Honest := by
     simp only [honestStrategy]
     rw [← List.map_take, List.take_add_one, List.getElem?_eq_getElem hi, Option.toList_some, List.map_append,
       List.map_singleton, run_write_last]
-  · rintro σ rfl ω a p v h q
-    obtain ⟨v', hv', he⟩ := List.mem_map.1 h
-    cases he
-    refine mem_regs100_other _ _ _ _ (Or.inr (List.mem_append_left _ ?_))
-    exact List.mem_flatMap.2 ⟨_, hv', List.mem_map.2 ⟨q, List.mem_finRange q, rfl⟩⟩
   · rintro σ rfl ω
     rw [regCount_other _ (honest_trace_other _ κ ω)]
     simp only [honestStrategy, writes, List.map_map, Function.comp_def, Step.cost, List.length_append,
