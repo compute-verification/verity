@@ -505,6 +505,8 @@ POINTS = {
     "T8192_1x8k": {"prompts": 1, "tokens": 8192, "decode": False, "label": "T 8,192: one 8,192-token prompt"},
     "dec64_2k": {"prompts": 64, "tokens": 1, "context": 2048, "decode": True, "label": "decode, batch 64, context 2K"},
     "dec64_8k": {"prompts": 64, "tokens": 1, "context": 8192, "decode": True, "label": "decode, batch 64, context 8K"},
+    "dec1_2k": {"prompts": 1, "tokens": 1, "context": 2048, "decode": True, "label": "decode, batch 1, context 2K"},
+    "dec1_8k": {"prompts": 1, "tokens": 1, "context": 8192, "decode": True, "label": "decode, batch 1, context 8K"},
 }
 
 #: the served step's measured parts at T 8,192 (8 × 1K, sync): the step, noise_sweep's GEMM time and the attention
