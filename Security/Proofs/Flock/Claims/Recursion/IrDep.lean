@@ -93,7 +93,7 @@ def fitArr {α : Type} (n : ℕ) (d : α) (a : Array α) : Array α := (Array.ra
 /-- **Rep `rep`'s opening `j` of level `l`** (`rec_vstar.queries`): the position the verifier's rows sample, the proof's
 row and siblings at level `l` (`openAt`, `sibsOf`), fitted to the level's lanes and siblings below its cap. -/
 def depOpen (xI : Msg) (cs : List Coin) (ps : Array (_root_.Flock.Proof × F128)) (rep l j : ℕ) :
-    _root_.VStar.In.Opening :=
+    _root_.VStar.In.Query :=
   let lv := (OpenLower.schAt xI 0).levels[l]!
   let o := FlockSoundness.Refine.openAt (ps.getD rep default).1.ligerito ((OpenLower.schAt xI 0).levels.size - 1) l
   { rep, level := l, j,
@@ -103,7 +103,7 @@ def depOpen (xI : Msg) (cs : List Coin) (ps : Array (_root_.Flock.Proof × F128)
 
 /-- **Both reps' openings**, in rep, level and query order. -/
 def depOpenings (xI : Msg) (cs : List Coin) (ps : Array (_root_.Flock.Proof × F128)) :
-    Array _root_.VStar.In.Opening :=
+    Array _root_.VStar.In.Query :=
   ((List.range 2).flatMap fun rep => (List.range (OpenLower.schAt xI 0).levels.size).flatMap fun l =>
     (List.range ((OpenLower.schAt xI 0).levels[l]!).q).map (depOpen xI cs ps rep l)).toArray
 
@@ -144,7 +144,7 @@ theorem mem_depOpen {xI : Msg} {cs : List Coin} {ps : Array (_root_.Flock.Proof 
 /-- **An opening of `depOpenings`** is one of the two reps', at one of the schedule's levels, at the position the
 verifier's rows sample, of the level's lanes and siblings below its cap. -/
 theorem mem_depOpenings {xI : Msg} {cs : List Coin} {ps : Array (_root_.Flock.Proof × F128)}
-    {o : _root_.VStar.In.Opening} (h : o ∈ depOpenings xI cs ps) :
+    {o : _root_.VStar.In.Query} (h : o ∈ depOpenings xI cs ps) :
     o.rep < 2 ∧ o.level < (OpenLower.schAt xI 0).levels.size ∧
       o.pos = Rows.posAt xI (cs ++ [default]) ⟨0, o.rep, o.level, o.j, (0, 0, 0, 0)⟩ ∧
       o.row.size = 2 ^ ((OpenLower.schAt xI 0).levels[o.level]!).lanes ∧
@@ -479,7 +479,7 @@ def combV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock
 /-- `depOpen` at the schedule `sch` and rep `rep`'s verifier rows `r`, computed once for all its queries. -/
 def depOpenV (sch : _root_.Flock.Schedule)
     (r : Except String (Array F128 × RecAlgebra.Info RecAlgebra.Lin × Array (Array (Array F128))))
-    (ps : Array (_root_.Flock.Proof × F128)) (rep l j : ℕ) : _root_.VStar.In.Opening :=
+    (ps : Array (_root_.Flock.Proof × F128)) (rep l j : ℕ) : _root_.VStar.In.Query :=
   let lv := sch.levels[l]!
   let o := FlockSoundness.Refine.openAt (ps.getD rep default).1.ligerito (sch.levels.size - 1) l
   { rep, level := l, j, pos := posOf r l j,
@@ -488,7 +488,7 @@ def depOpenV (sch : _root_.Flock.Schedule)
 
 /-- `depOpenings` at the setup `v`. -/
 def depOpeningsV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) (cs : List Coin)
-    (ps : Array (_root_.Flock.Proof × F128)) : Array _root_.VStar.In.Opening :=
+    (ps : Array (_root_.Flock.Proof × F128)) : Array _root_.VStar.In.Query :=
   let sch := schV v 0
   ((List.range 2).flatMap fun rep =>
     let r := rowsV v (cs.headD default) cs.tail 0 rep #[]
