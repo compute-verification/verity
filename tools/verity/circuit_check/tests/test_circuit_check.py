@@ -875,6 +875,21 @@ def test_a_lowering_count_off_its_pin_is_named():
     assert any(f["name"].startswith("lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: and 1 -> ") for f in e["failures"])
 
 
+def test_a_proof_blocks_export_counts_its_circuit_types():
+    """`checks._export_counts`, which every lowered template's check reads, exports one proof block's circuit through
+    `boolean_export` and counts it: four ANDs of 4-bit inputs are one circuit type of 4 ANDs, none shared."""
+    from verity_flock import gf2
+
+    def build():
+        C = gf2.Circuit(cse=True)
+        a, b = C.input("a", 4), C.input("b", 4)
+        C.output("out0", [C.AND(x, y) for x, y in zip(a, b)])
+        return C
+
+    assert CK._export_counts(build, "test unit") == {"and": 4, "xor": 0, "not": 0, "subcircuit_types": 1, "flat_ands": 4,
+                                                      "shared_across_types": 0}
+
+
 def _lowering_pin(e: dict) -> dict:
     (r,) = [r for r in e["correspondence"]["realizations"] if r["via"] == "c-flock:ir_lower"]
     return r["pin"]

@@ -15,7 +15,7 @@ from verity_flock import ir_lower as IL
 from verity_flock.gf2 import ONE, Circuit
 
 
-def small() -> IL.Layout:
+def small() -> IL.LoweredUnit:
     """Two input groups, ANDs, a committed bit (B the constant column alone, like an assertion's), an assertion and one
     output group."""
     C = Circuit()
