@@ -83,7 +83,7 @@ from verity.ml.circuits.ops.boolean.gf2k import mul
 from verity.ml.circuits.boolean.forms import ZERO
 from verity.ml.commitments.gates.sha512 import commit
 
-__all__ = ["Coins", "PAD_TO", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "ands", "copy_rows", "definition", "entries",
+__all__ = ["PAD_TO", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "SparsePublics", "ands", "copy_rows", "definition", "entries",
            "inner_points", "layout_factors", "lowering", "message_ports", "out_words", "port_words", "ports", "products",
            "products_structure", "prove", "reads", "registered_claim", "registrations", "rows", "session_rows", "sparse_ref",
            "stage", "statement", "subcircuit", "table", "table_value", "unit_circuit", "unit_name", "v_layout", "verifier_row"]
@@ -296,7 +296,7 @@ def _dot(a: Sequence[int], b: Sequence[int]) -> int:
 
 
 @dataclass(frozen=True)
-class Coins:
+class SparsePublics:
     """A rep's public values the sparse phase reads: the lincheck's ``alpha``, the zerocheck's skip coin ``z``, the row and column
     points' coordinates past the skip's (``x_rest`` = ρ_in's, ``y_rest`` = the column point in bit order, `rec_algebra`'s
     ``r_in``, the lincheck's coins t reversed; at least ELL - 6 each, beyond which they enter only ``U``; `inner_points`), H1's ``zeta_c`` (6), H2's ``pre`` (6, ζ_r), H3's ``rounds`` (r_k then r_s),
@@ -322,12 +322,12 @@ class Coins:
 
 
 def inner_points(inner, rounds: Sequence[Sequence[int]]) -> dict:
-    """``Coins``' ``alpha``, ``z``, ``x_rest`` and ``y_rest`` from the inner rep's coins by round (an inner
+    """``SparsePublics``' ``alpha``, ``z``, ``x_rest`` and ``y_rest`` from the inner rep's coins by round (an inner
     `rec_algebra.Shape`), through `rec_algebra.run`: the row point's ρ_in and the column point in bit order (``r_in``), the
     points the comb is folded at and the inner claim on z has."""
     from . import rec_algebra as A
 
-    info = A.run(inner, A.Coins(rounds), A.symbolic(inner), [], fold_only=True)[1]
+    info = A.run(inner, A.CoinSource(rounds), A.symbolic(inner), [], fold_only=True)[1]
     return {"alpha": info["fold"]["alpha"], "z": info["z"], "x_rest": tuple(info["fold"]["rho_in"]), "y_rest": tuple(info["r_in"])}
 
 
@@ -347,7 +347,7 @@ class RegisteredClaim:
     value = None
 
 
-def registered_claim(sh: Shape, c: Coins, row: int, pad_to: int = PAD_TO) -> RegisteredClaim:
+def registered_claim(sh: Shape, c: SparsePublics, row: int, pad_to: int = PAD_TO) -> RegisteredClaim:
     """Rep ``row``'s claim at the coins' point. A point of fewer than ``pad_to`` coordinates (the stacked table of fewer than
     fast100's least m variables) is padded with zeros in new high variables, the table with zero rows: ``eq(x || 0, b || c)``
     vanishes off ``c = 0``, so the claim is the table's at the unpadded point. How many is the shape's, never the prover's,
@@ -360,7 +360,7 @@ def registered_claim(sh: Shape, c: Coins, row: int, pad_to: int = PAD_TO) -> Reg
     return RegisteredClaim(row, tuple(eq_table(point[:PRE_ROUNDS])), tuple(point[PRE_ROUNDS:]), pad=pad)
 
 
-def verifier_row(sh: Shape, c: Coins) -> list[int]:
+def verifier_row(sh: Shape, c: SparsePublics) -> list[int]:
     """``v``'s elements (`v_layout`) from the rep's coins and the slots' layout factors."""
     from .rec_algebra import skip_weights
 
@@ -989,7 +989,7 @@ def _entry_rounds(T, alpha, ax, ay, W, claim, draw, workers):
 
 
 def prove(sh: Shape, ents: Sequence[tuple[int, int, int, int]], pts: Mapping, U: Sequence[int], h: Sequence[int],
-          draw: Callable[[list[int], int], list[int]], workers: int = 1) -> tuple[Coins, dict]:
+          draw: Callable[[list[int], int], list[int]], workers: int = 1) -> tuple[SparsePublics, dict]:
     """One rep's sparse phase at T = 1 (the module docstring): ``ents`` the hidden circuit's `entries`, ``pts`` the rep's
     `inner_points` (``alpha``, ``z``, ``x_rest``, ``y_rest``), ``U`` its slots' `layout_factors`, ``h`` the 64 elements of the
     rep's h round. Each round's message goes to ``draw(elements, n)``, which answers its n coins (v2's and the claim's
@@ -1057,5 +1057,5 @@ def prove(sh: Shape, ents: Sequence[tuple[int, int, int, int]], pts: Mapping, U:
     zeta_p = tuple(draw(u, sh.P_LOG))
     claim = _dot(eq_table(zeta_p), u)
     draw([claim], 0)
-    coins = Coins(alpha, pts["z"], x_rest, y_rest, zeta_c, tuple(pre), tuple(rk + rs), zeta_p, (), tuple(U))
+    coins = SparsePublics(alpha, pts["z"], x_rest, y_rest, zeta_c, tuple(pre), tuple(rk + rs), zeta_p, (), tuple(U))
     return coins, {"h": list(h), "pre": pre_msgs, "v2": v2, "sc": sc, "u": u, "claim": claim}
