@@ -363,6 +363,7 @@ FORKED = (HARNESS.replace("rep = cli.run(", "import hashlib, os\nfrom circuit_ch
           .replace('"values": {', '"here": here, "keys": sorted({json.dumps(k, sort_keys=True) for k in keyed}), "values": {'))
 
 
+@pytest.mark.slow
 def test_bindings_built_apart_give_a_full_builds_targets_keys_and_records(tmp_path):
     """With ``--jobs``, each binding is built in a process of its own and each target made by the zygote that forks the checks
     of its binding's targets, so this process builds no body, and no check parses a source file again that the process it
