@@ -6,8 +6,7 @@ The kernels take a setup's key prefix, so one arm runs either framing, both on v
 - `V3` (`p2-16448/v4`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
   the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `band_gpu/memory_challenger.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
-  with the scheme's own codec back to `W`'s, when that segment is wholly encoded.  A joint run's `--bandwidth-salt GPU` sets
-  `C` up under the bandwidth audit's salt for that GPU instead (`V3.bind_device`), so the bandwidth verifier audits the same `C`.
+  with the scheme's own codec back to `W`'s, when that segment is wholly encoded.
 - `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
   cap, with two more controls: a tampered block (the top bit of its last byte flipped, one block in ten), which only a hash
   of the whole answer catches, and the honest sessions with a signature bit flipped or a receipt time edited after signing.
@@ -75,10 +74,6 @@ class V1:
     memory_challenger_args: tuple[str, ...] = ()
     accepted = "audits_accepted"
     """The audit document's count of accepted audits that the gates read."""
-    device: bytes | None = None
-    """The GPU whose bandwidth salt the store is set up under (`V3.bind_device`), else None: PoUS's own salt."""
-    setup_source = SETUP_SOURCE
-    """What the setup salt is drawn from, which a bandwidth verifier checks the store's salt against."""
 
     @property
     def c_of(self) -> str:
@@ -132,17 +127,6 @@ class V3(V1):
         self.salt = protocol.draw_salt(SETUP_SOURCE, self.model)
         self.prefix = p2.expand_prefix(self.params, self.salt)
         self.memory_challenger_args = () if research else ("--strict",)
-
-    def bind_device(self, device: bytes) -> None:
-        """Set `C` up under the bandwidth audit's salt for `device` (`bandwidth.audit.draw_salt` over the commitment to `W`
-        from the same setup source, the GPU's 16-byte id bound in) in place of `protocol.draw_salt`'s, for a joint run
-        (`--bandwidth-salt`): the bandwidth verifier then accepts `C` as this device's store, and P2's audit runs over the
-        same `C`, its key prefix and leaves under that salt."""
-        from verity.core.protocols.bandwidth import audit
-
-        self.salt = audit.draw_salt(SETUP_SOURCE, self.model, device)
-        self.prefix = self.p2.expand_prefix(self.params, self.salt)
-        self.device = device
 
     def manifest(self) -> dict[str, Any]:
         return self.params.manifest()
@@ -419,12 +403,6 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     w_host = b"".join(w_segment(ws["id"], s, bps * payload, used) for s in range(segments))
     fr = framing(P, w_host, research)
-    if getattr(a, "bandwidth_salt", ""):
-        if not isinstance(fr, V3):
-            raise SystemExit(f"--bandwidth-salt sets up a registered P2 store (p2-v3-gpu, p2-v3-mc-gpu), not {fr.impl}'s")
-        from verity.core.protocols.bandwidth import audit as bandwidth
-
-        fr.bind_device(bandwidth.read_device(a.bandwidth_salt))
     if isinstance(fr, MC):
         fr.sign_with(getattr(a, "mc_lms_key", "") or "", getattr(a, "mc_session_log", "") or "")
     bound = backend.bind(P, fr.prefix)
@@ -498,8 +476,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                                    "memory_challenger": str(fr.live.relative_to(HERE.parent)), "memory_challenger_args": list(fr.memory_challenger_args)},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
                 "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex(),
-                          "salt_from": "pous" if fr.device is None else "bandwidth",
-                          "device": None if fr.device is None else fr.device.hex(), "keys_version": keys_version(bound)},
+                          "keys_version": keys_version(bound)},
                 **({} if a.audits else H.UNTIMED), "gates": gates, "metrics": metrics, "profile": prof,
                 "measurements": [{"name": n, "value": v, "unit": u} for n, v, u in rows_ if v is not None]}
 

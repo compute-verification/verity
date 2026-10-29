@@ -79,11 +79,11 @@ A partition divides a circuit's computed gates into proof blocks, the result of 
 
 ### The accounting layer
 
-The logical layer is the cryptography: PoUW, PoUS and the bandwidth audits prove lower bounds on what the prover system did, with no device premise. The physical layer reads them against registered hardware, named assumptions and trusted devices' measurements: the device graph, whose zones (a node to start) are spatial units; placement; the timebase; trusted observers; boundary bounds; attribution; and the joint ledger.
+The logical layer is the cryptography: PoUW, PoUS and PoUB prove lower bounds on what the prover system did, with no device premise. The physical layer reads them against registered hardware, named assumptions and trusted devices' measurements: the device graph, whose zones (a node to start) are spatial units; placement; the timebase; trusted observers; boundary bounds; attribution; and the joint ledger.
 
 
 - **Compute.** PoUW credits the noised products' size S, at least (1 − ε)·S of its AND gates right (Glossary, "Credit"). Traffic alone attributes nothing: a zone is credited only through an anchor, fresh trusted data it must consume (bounded by its egress), or the named premise that the fleet is closed.
-- **Memory.** The bandwidth audits prove bits read, and PoUS bits held, at no location. Attribution places them in tiers, less what boundary links carry in.
+- **Memory.** PoUB proves bits read, and PoUS bits held, at no location. Attribution places them in tiers, less what boundary links carry in.
 - **Network.** Certifiers prove ports carried only values in the committed trace, timing aside; gaps cost line rate.
 
 The joint ledger charges each device's time once. Without attribution, it subtracts only from the whole fleet's capacity, if no unregistered hardware helped.

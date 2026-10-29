@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# The KV filler's benchmark on one GPU (cwd = the source tree): builds the top-up (topup.cu, which includes the
-# bandwidth audit's tagger) and the KV codec at p512 (../word_codec/kv.cu) outside the lease, runs the tests, then
-# SCRIPT (default bench.py) under one gpu-lease 1 --wait --max-min MAXMIN (default 25) with ARGS. Results go to
-# $RESEARCH_RUN_DIR/out.
+# The KV filler's benchmark on one GPU (cwd = the source tree): builds the top-up (topup.cu, which includes fill.cu,
+# readers.cu and ../codec_tensor/sha512.cuh) and the KV codec at p512 (../word_codec/kv.cu) outside the lease, runs the
+# tests, then SCRIPT (default bench.py) under one gpu-lease 1 --wait --max-min MAXMIN (default 25) with ARGS. Results go
+# to $RESEARCH_RUN_DIR/out.
 #
 #   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-kv-filler taskset -c 48-95 bash benchmarks/kv_filler/run.sh
 #
@@ -50,7 +50,7 @@ fi
 wait $P1 || { tail -30 "$O/topup.ptxas"; exit 4; }
 wait $P2 || { tail -30 "$O/kv-p512.ptxas"; exit 4; }
 if grep -E "[1-9][0-9]* bytes spill" "$O/topup.ptxas"; then echo "REFUSED: a top-up kernel spills"; exit 4; fi
-sha256sum $KF/topup.cu $KF/fill.cu $KF/readers.cu benchmarks/bandwidth/tagger.cu benchmarks/word_codec/kv.cu "$B"/*.so >> "$O/build.txt"
+sha256sum $KF/topup.cu $KF/fill.cu $KF/readers.cu benchmarks/codec_tensor/sha512.cuh benchmarks/word_codec/kv.cu "$B"/*.so >> "$O/build.txt"
 if [ -d $KF/tests ] && "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $KF/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi
