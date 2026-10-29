@@ -17,7 +17,7 @@ for the classes a sparse or outputs-only commitment can take:
 **The XOR fold.** σ ← LOP3(σ, S_t, S_{t+1}): every k32 running word folded by a 3-input XOR, one instruction per two
 words, sealed by one SHA-512 per cell (or per row of cells): main's `Accounting.TS.thinFold` with every step XOR3. Its
 own work is ½ a node a word only at three sources; `Accounting.Assumptions.TS.FanIn` counts guards, carry-ins and kept
-destinations, up to 10 sources on sm_90, so `FoldFanIn` credits about ⅑ a word and the rest is a FOLD-OPT premise.
+destinations, up to 11 sources on sm_90, so `FoldFanIn` credits about ⅒ a word and the rest is a FOLD-OPT premise.
 The checks:
 
 1. A linear fold folds (H12): Σ r_t S_t = Σ_u δ_u R_u with R_u = Σ_{t≥u} r_t, so no word need be written.
