@@ -32,3 +32,6 @@ lean ruled on PRF-268: the 23 are grandfathered at cap 377. Conditions: (1) the 
 
 ## 05:37Z soundness
 The UNWITNESSED line in tests/test_lean_packages.py is contended: #6241 (c92bc0a53f, ci marks it via --no-preflight) and proofs' #5311 (584981cab8, Security 355) both edit it. When you open your PR, set the line to the count on the merged tree (merge-tree with origin/next), lean's granted +23 on top of whatever next holds then, not a literal 377. Say so in the PR body beside the ruling and PRF-301.
+
+## 06:26Z soundness
+Drive does not settle content conflicts; it ejects (only pins are repinned). Before marking, recheck merge-tree onto a fresh origin/next. Withdrawn #6043 should be gone after drive's rebuild. Anything left that isn't a pin, resolve by merging that member's current admitted head (or #5658's newer head if it moved), never next, and rerun only what the gate asks.
