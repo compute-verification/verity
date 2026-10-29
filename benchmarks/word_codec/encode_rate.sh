@@ -6,8 +6,7 @@
 # launch each of the chains (square, encode, products, fold; NCU=0 skips them). Results in $RESEARCH_RUN_DIR/out. Under
 # the queue (QUEUED=1) the GPU is leased around the whole job and gpu-lease is skipped.
 #
-#   research run --queue --on vy-nebius-1 --gpus 1 --max-min 30 --mem-gb 32 --project verity --source . --cwd source \
-#     --campaign resource-accounting --declared-output 'out/*' --env QUEUED=1 -- bash benchmarks/word_codec/encode_rate.sh
+#   RESEARCH_RUN_DIR=DIR QUEUED=1 bash benchmarks/word_codec/encode_rate.sh
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
