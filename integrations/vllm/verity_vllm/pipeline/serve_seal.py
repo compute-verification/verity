@@ -365,11 +365,7 @@ def served_binder_of(manifest: Mapping[str, Any], steps: Sequence[int], ports: M
     """`served_binder` given the sources' merged ports (`bind.source_ports`) and whether a step-input port is among them."""
     from verity_vllm.query.manifest.bind import Binder
 
-    one: dict[tuple[str, str, int], dict[str, Any]] = {}
-    for row in manifest.get("identities") or []:
-        r = {**row, **(row.get("identity") or {})}
-        if r.get("family") != "weights" and r.get("op_path") != "weights":
-            one.setdefault((str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0))), r)
+    one = _identities_of(manifest)[0]
     placed = [{**r, "identity": None, "request_id": "*", "step": None, "engine_step": int(s), "rank": 0} for s in steps for r in one.values()]
     binder = Binder.of_manifest({**manifest, "identities": placed, "requests_declared": []}, rank=0, ports=dict(ports))
     if has_port:
@@ -386,16 +382,35 @@ def port_identities(manifest: Mapping[str, Any]) -> dict[str, tuple[str, str]]:
     two ids identities is refused."""
     from verity_vllm.query.manifest.format import SERVED_IDS, SERVED_POSITIONS
 
-    fam: dict[tuple[str, str], str] = {}
-    for row in manifest.get("identities") or []:
-        r = {**row, **(row.get("identity") or {})}
-        if r.get("family") != "weights" and r.get("op_path") != "weights":
-            fam.setdefault((str(r["op_path"]), str(r.get("output_member", "out"))), str(r.get("family")))
+    fam = _identities_of(manifest)[1]
     compiled_ids, compiled_pos = (tuple(n.rsplit("/", 1)) for n in (SERVED_IDS, SERVED_POSITIONS))
     ids = sorted({k for k, f in fam.items() if f == "input_token_ids"} | ({compiled_ids} & set(fam)))
     if len(ids) > 1:
         raise ValueError(f"the row's manifest names {len(ids)} input-ids identities, {ids}: the step-input port's ids can be one of them only")
     return ({PORT_NAMES[0]: ids[0]} if ids else {}) | ({PORT_NAMES[1]: compiled_pos} if compiled_pos in fam else {})
+
+
+_WALKED: list[tuple[Any, Any]] = [(None, None)]
+
+
+def _identities_of(manifest: Mapping[str, Any]) -> tuple[dict[tuple[str, str, int], dict[str, Any]], dict[tuple[str, str], str]]:
+    """The manifest's identities, weights aside: each (op_path, member, invocation)'s first row and each (op_path, member)'s
+    family. A seal is handed one manifest object for the run, so the walk runs once for it, not once a window; it is redone
+    for another manifest, or one whose ``identities`` list was replaced or grew. Callers read the dicts and never change them."""
+    rows = manifest.get("identities") or []
+    key, walked = _WALKED[0]
+    if key is None or key[0] is not manifest or key[1] is not rows or key[2] != len(rows):
+        one: dict[tuple[str, str, int], dict[str, Any]] = {}
+        fam: dict[tuple[str, str], str] = {}
+        for row in rows:
+            r = {**row, **(row.get("identity") or {})}
+            if r.get("family") != "weights" and r.get("op_path") != "weights":
+                op, member = str(r["op_path"]), str(r.get("output_member", "out"))
+                one.setdefault((op, member, int(r.get("invocation", 0))), r)
+                fam.setdefault((op, member), str(r.get("family")))
+        walked = (one, fam)
+        _WALKED[0] = ((manifest, rows, len(rows)), walked)
+    return walked
 
 
 def single_ids(com: Any, manifest: Mapping[str, Any]) -> None:

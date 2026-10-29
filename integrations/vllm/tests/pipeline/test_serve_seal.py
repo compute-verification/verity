@@ -351,6 +351,28 @@ def test_the_ports_identities_are_the_manifests_ids_and_compiled_positions():
         ss.port_identities(two)
 
 
+def test_a_manifests_identities_are_walked_once_for_it_and_again_when_they_change():
+    """Every window's seal reads the run's one manifest, so its identity walk is reused across windows: the binder of a window after
+    the first is the first's, and a row added to the manifest, or another manifest, is walked afresh."""
+    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
+
+    def row(op, member, family="served_kernel_values"):
+        return {"op_path": op, "output_member": member, "family": family, "engine_step": 0}
+
+    m = {"identities": [row("c00.input", "ids"), row("logits_processor", "out")]}
+    port = [StepInputPort(SimpleNamespace(chunk=4096), 512)]
+    names = [*PORT_NAMES, "logits_processor/out"]
+    first = ss.served_binder(m, [0, 1], port).bind(1, names)
+    assert ss._identities_of(m) is ss._identities_of(m)
+    assert ss.served_binder(m, [0, 1], port).bind(1, names) == first
+    assert ss.port_identities(m) == {PORT_NAMES[0]: ("c00.input", "ids")}
+    m["identities"].append(row("c00.input", "positions"))
+    assert ss.port_identities(m) == {PORT_NAMES[0]: ("c00.input", "ids"), PORT_NAMES[1]: ("c00.input", "positions")}
+    eager = {"identities": [row("model.embed_tokens", "in", "input_token_ids")]}
+    assert ss.port_identities(eager) == {PORT_NAMES[0]: ("model.embed_tokens", "in")}
+    assert ss.port_identities(m)[PORT_NAMES[0]] == ("c00.input", "ids")
+
+
 def test_a_committer_without_the_commit_of_records_parts_is_named():
     manifest = {"identities": [{"family": "norm_scales"}, {"family": "fa2_hidden_m1_stream"}, {"family": "instance_outputs"}]}
     com = SimpleNamespace(name="native_collect_v2_auto_nw_hp+rows-sha512+sampler_inputs")
