@@ -2876,8 +2876,9 @@ class RecordsGate:
     `AUDIT: FAIL` still writes a record, which reads as a pass, and a head marked on it fails a train's Lean check, about 50
     minutes later.
 
-    Three heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one whose tree is a parent's
-    byte for byte (a merge that resolved to its own side, the parent vouched); one that commits exactly the
+    Four heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one whose tree is a parent's
+    byte for byte (a merge that resolved to its own side, the parent vouched); one whose one parent is vouched and has the
+    package's inputs (`_inputs`, tests and docs aside: a tests-only fix above a record commit); one that commits exactly the
     record a records run of its one parent regenerated for a package that passed there (`--update`'s `record/lean-audit.json`),
     changing nothing but locks; and one that only merged `main` into a vouched commit, every file it changed being main's whole
     but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast path reports `path: reused`
@@ -3163,6 +3164,13 @@ class RecordsGate:
         if len(parents) != 1:
             return None
         below = parents[0]
+        try:
+            same = below not in self._differs(commit, [below], self._inputs(commit, pkg))
+        except (QueueError, ValueError, TypeError, AttributeError):
+            same = False
+        if same:
+            how = self._vouch(below, pkg, depth + 1)
+            return how and f"{commit[:12]} changes none of {pkg}'s records inputs over {below[:12]}, where {how}"
         files = _out(self.repo, "diff", "--name-only", "--no-renames", below, commit).splitlines()
         if not files or any(posixpath.basename(f) != LEAN_LOCK for f in files):
             return None

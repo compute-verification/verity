@@ -2271,7 +2271,8 @@ def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_o
     """`--update` passes by writing the record, kept as `record/lean-audit.json` when it differs from the commit's lock: the head
     it ran on still has the old lock, which a train's Lean check fails.  The commit of exactly that record over it is vouched for
     by the run below it, so a lane needs no second run; any other lock there is refused.  A merge of another PR that resolves to
-    that commit's tree byte for byte is vouched for through it too."""
+    that commit's tree byte for byte is vouched for through it too, and so is a tests-only commit above it; one that changes a
+    file the records read isn't."""
     world.with_store_remote()
     h1 = world.change({LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
     rec = _lock(A="2", B="2")
@@ -2294,6 +2295,12 @@ def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_o
     assert _mark(world, 1, h3) == 0
     assert (f"{h3[:12]} has {h2[:12]}'s tree byte for byte, where {h2[:12]} commits the record records run {rid}"
             in world.logs[-1])
+
+    h4 = world.change({"pkg/tests/T.lean": "def t := 1\n", "pkg/README.md": "pkg\n"}, base=h2)
+    assert _mark(world, 1, h4) == 0
+    assert (f"{h4[:12]} changes none of pkg's records inputs over {h2[:12]}, where {h2[:12]} commits the record records run "
+            f"{rid}" in world.logs[-1])
+    assert _mark(world, 1, world.change({"pkg/A.lean": "theorem a : 1 = 1 := rfl\n"}, base=h2)) == 1
 
 
 def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_for_it_and_one_that_differs_or_cant_be_read_doesnt(
