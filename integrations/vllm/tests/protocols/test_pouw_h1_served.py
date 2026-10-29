@@ -16,6 +16,8 @@ receipt sink and ``ok``) keeps the Program small."""
 from __future__ import annotations
 
 import hashlib
+import io
+import pickle
 from types import SimpleNamespace
 
 import numpy as np
@@ -247,9 +249,10 @@ class _Hashing:
 
 
 def test_a_z_table_hashing_on_the_gpu_is_read_at_its_rounds_close_and_registers_what_a_waited_one_does(monkeypatch):
-    """A z table whose hash is left running (`pouw_h1_registered.commit`'s ``later``, the GPU path) keeps its place in the
-    registration order and is read only when its round closes, after its step's later calls were recorded: the window's
-    trees, entries, digest, manifest roots and round roots are the ones it registers when each hash is waited for."""
+    """A z or public table whose hash is left running (`pouw_h1_registered.commit`'s ``later``, the GPU path) keeps its
+    place in the registration order and is read only when its round closes, after its step's later calls were recorded:
+    the window's trees, entries, digest, manifest roots and round roots are the ones it registers when each hash is waited
+    for."""
     torch.manual_seed(0)
     waited, *_ = _window(W1)
     events, commit = [], NR.commit
@@ -264,8 +267,9 @@ def test_a_z_table_hashing_on_the_gpu_is_read_at_its_rounds_close_and_registers_
     monkeypatch.setattr(NR, "commit", later)
     torch.manual_seed(0)
     run, *_ = _window(W1)
-    zy = [SV.PREFIX + f"zy@{c}" for c in range(len(run.calls))]
-    assert events == [(e, zy[c]) for s in range(STEPS) for e in ("hashing", "read") for c in range(3 * s, 3 * s + 3)]
+    zy, pub = ([SV.PREFIX + f"{t}@{c}" for c in range(len(run.calls))] for t in ("zy", "pub"))
+    order = [[zy[3 * s], zy[3 * s + 1], pub[3 * s], pub[3 * s + 1], zy[3 * s + 2], pub[3 * s + 2]] for s in range(STEPS)]
+    assert events == [(e, v) for vs in order for e in ("hashing", "read") for v in vs]
     assert all(isinstance(r, G.Registered) for r in run.served.registered.values())
     assert list(run.served.registered) == list(waited.served.registered)
     assert run.served.roots() == waited.served.roots() and run.served.entries() == waited.served.entries()
@@ -1190,3 +1194,40 @@ def test_a_j10r_llama_window_at_k_14336_is_credited_at_its_whole_k_and_core_ties
              for e in served.entries()]
     assert CR._weights(window, layout, whole, requests.hex(), session, served.program_digest, pre)[1] == (
         "weights", CR.other_weights_entry(pre + "b/14336", 14336, 32))
+
+
+@pytest.mark.parametrize("j10r", [False, True])
+def test_a_public_table_is_built_again_on_read_and_registers_what_its_held_rows_and_salts_do(j10r):
+    """Each call's ``pub@<c>`` holds no rows or salts but how to build them (`PublicRows`, `PublicSalts`, in a window and a
+    J10-R Llama window): read whole, in any order or one at a time, on the host or as a torch tensor, they are its rows
+    and core's salts, and committing them held, as bytes, registers its root, strings and levels; it pickles as it is,
+    with no tensor, so a window's saved state holds it."""
+    from verity_vllm.protocols.pouw.h1 import handoff as HO
+
+    run = _llama(defn=StandInJ10R)[0] if j10r else _window(W1)[0]
+    served, pre = run.served, SV.PREFIX
+    assert not served.refused and HW.is_j10r(served.program) == j10r
+    for c, (u0, n) in enumerate(HW.call_units(served.program)):
+        r = served.registered[pre + f"pub@{c}"]
+        rows, salts = r.rows, r.salts
+        assert isinstance(rows, SV.PublicRows) and isinstance(salts, NR.PublicSalts) and len(rows) == len(salts) == n
+        words = rows.words(np.arange(n))
+        assert words.dtype == np.uint16 and words.shape == (n, r.words)
+        assert np.array_equal(rows.tensor(torch.device("cpu")).numpy(), words)
+        assert np.array_equal(rows.at([n - 1, 0]), words[[n - 1, 0]]) and np.array_equal(rows[1:], words[1:])
+        assert rows[-1] == tuple(int(v) for v in words[-1])
+        assert salts.at(range(n)) == b"".join(salts) == b"".join(CC.public_row_salt(served.root, u0 + t) for t in range(n))
+        held = NR.commit(served.program_digest, r.value, words, run._key, 0, True, b"".join(salts), window=served.root)
+        assert (held.root, held.bcs, held.levels, held.domain) == (r.root, r.bcs, r.levels, r.domain)
+        buf = io.BytesIO()
+        HO._HostOnly(buf, protocol=5).dump(r)
+        again = pickle.loads(buf.getvalue())
+        assert (again.rows, again.salts, again.root) == (rows, salts, r.root)
+        with pytest.raises(IndexError):
+            rows.at([n])
+        with pytest.raises(IndexError):
+            salts.at([n])
+    with pytest.raises(ValueError, match="u64"):
+        NR.PublicSalts(b"h", (1 << 64) - 1, 2)
+    with pytest.raises(ValueError, match="public row"):
+        SV.PublicRows(SALT[:63], (bytes(64), bytes(64)), 0, 1)
