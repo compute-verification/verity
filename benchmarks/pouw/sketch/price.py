@@ -80,14 +80,13 @@ def price(B, G):
 
 def periods(B, rows):
     macs_per_word = 32 / B["volume"]
-    scopes = [("one GPU", B["mac_rate"]), (f"datacenter ({B['dc_gpus']:,} GPUs)", B["mac_rate"] * B["dc_gpus"])]
+    scopes = [("one GPU", B["mac_rate"]), (f"datacenter ({B['dc_gpus']:,} GPUs)", B["mac_rate"] * B["dc_gpus"]),
+              ("world", B["world_macs_per_year"] / PERIODS["year"])]
     out = []
     for r in rows:
         if r["folds"]:
             continue
-        cells = [(scope, p, rate * s) for scope, rate in scopes for p, s in PERIODS.items()]
-        cells.append(("world", "year", B["world_macs_per_year"]))
-        for scope, p, macs in cells:
+        for scope, p, macs in [(scope, p, rate * s) for scope, rate in scopes for p, s in PERIODS.items()]:
             out.append({"design": r["design"], "scope": scope, "period": p, "useful_macs": macs,
                         "stock_and": macs * AND_PER_MAC, "hashing_w1": macs * r["h"],
                         "opening_and_if_all_opened": None if r["opening_and_per_word"] is None else
@@ -123,8 +122,9 @@ def main():
     print("## Per period (hashing W1, stock AND gates beside it)")
     for row in per:
         if row["design"].startswith(("lead", "nh2", "xor")):
-            print(f"- {row['design'].split(':')[0]}, {row['scope']}, {row['period']}: hashing {row['hashing_w1']:.3g} W1;"
-                  f" stock {row['stock_and']:.3g} AND gates")
+            opened = row["opening_and_if_all_opened"]
+            print(f"- {row['design'].split(':')[0]}, {row['scope']}, {row['period']}: hashing {row['hashing_w1']:.3g} W1,"
+                  f" {opened:.3g} AND gates as a circuit; stock {row['stock_and']:.3g} AND gates")
     if a.json:
         with open(a.json, "w") as f:
             json.dump({"basis": B, "G": a.words_per_value, "designs": rows, "sweep": sweep, "periods": per}, f, indent=1)
