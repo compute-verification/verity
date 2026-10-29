@@ -363,14 +363,52 @@ def bitslice_xor(rng, rows=8, tile=4, s_steps=64, transpose_ops=320):
     return {"state_match": ok, "core_lop3_a_step": core, "honest_writes_a_step": 2, "llama": amort}
 
 
-def naf_weight(k):
-    w = 0
+def naf(k):
+    """Non-adjacent form of k: (position, sign) of each nonzero digit, lowest first."""
+    out, i = [], 0
     while k:
         if k & 1:
-            k -= 2 - (k & 3)
-            w += 1
+            d = 2 - (k & 3)
+            out.append((i, d))
+            k -= d
         k >>= 1
-    return w
+        i += 1
+    return out
+
+
+def bitslice_mul(rng, keys=64):
+    """N k mod 2^32 for 32 states at once, a register a bit, by NAF shift-add: shifts are free; adding or subtracting
+    N << s costs a sum and a carry LOP3 a bit from s up (no carry out of bit 31; a subtraction's complement and its
+    + 1 fold into the LOP3s). Counted exactly and checked bit for bit against the word product."""
+    lanes = 1 << np.arange(32, dtype=np.int64)
+    ops_all, ok = [], True
+    for _ in range(keys):
+        k = int(rng.integers(0, 1 << 31)) * 2 + 1
+        x = rng.integers(0, 1 << 32, 32, dtype=np.int64)
+        n = [int(((x >> b) & 1) @ lanes) for b in range(32)]
+        digits = naf(k)
+        top = max(digits)
+        acc = [0] * top[0] + n[:32 - top[0]]
+        ops = 0
+        for s, d in digits:
+            if (s, d) == top:
+                continue
+            y = [0] * s + n[:32 - s]
+            if d < 0:
+                y = [v ^ U32 if b >= s else 0 for b, v in enumerate(y)]
+            carry = U32 if d < 0 else 0
+            for b in range(s, 32):
+                a_, y_ = acc[b], y[b]
+                acc[b] = a_ ^ y_ ^ carry
+                ops += 1
+                if b < 31:
+                    carry = (a_ & y_) | (a_ & carry) | (y_ & carry)
+                    ops += 1
+        got = np.array([sum(((acc[b] >> j) & 1) << b for b in range(32)) for j in range(32)], dtype=np.int64)
+        ok &= bool((got == (x * k) & U32).all())
+        ops_all.append(ops / 32)
+    return {"state_match": ok, "lop3_a_multiply_mean": float(np.mean(ops_all)),
+            "lop3_a_multiply_min": float(np.min(ops_all))}
 
 
 def separable_share(st, tile):
@@ -385,8 +423,8 @@ def separable_share(st, tile):
 def mulfold(rng, m=32, n=24, tile=8, s_steps=16, r=4):
     """N <- (N ^ D_t) k_t, k_t a live odd u32 a step and call: each step permutes the state. Zero data: the word-grain
     adversary (IADD3 for D_t from the prefixes, LOP3, IMUL) matches at 3 writes a step, the honest's (MMA, LOP3, IMUL);
-    the sparse and skip adversaries miss; the state is no row-plus-column form over Z or GF(2), unlike the linear fold.
-    A bit-sliced multiply by k_t costs (NAF weight - 1) ripple adds of 2 LOP3s a bit for 32 outputs."""
+    the sparse and skip adversaries miss; the state is no row-plus-column form over Z or GF(2), unlike the linear fold;
+    a bit-sliced multiply by k_t alone costs several LOP3s an output (bitslice_mul)."""
     z = np.zeros((m, 28 * s_steps), dtype=np.int64), np.zeros((n, 28 * s_steps), dtype=np.int64)
     honest, coins, rowbit = served_words(rng, z[0], z[1], tile)
     ks = rng.integers(0, 1 << 31, s_steps, dtype=np.int64) * 2 + 1
@@ -409,14 +447,13 @@ def mulfold(rng, m=32, n=24, tile=8, s_steps=16, r=4):
                for d, k in zip(rng.integers(0, 1 << 32, 8), ks[:8]))
     keyed = fold(honest, "keyed", rng.integers(0, 1 << 32, s_steps, dtype=np.int64)[:, None, None])
     lin = fold(honest, "linear")
-    naf = [naf_weight(int(k)) for k in ks]
     return {"word_grain_adv_state_match": bool((mf(words) == want).all()), "word_grain_adv_writes_a_step": 3,
             "honest_writes_a_step": 3, "step_is_permutation": perm,
             "sparse_words_state_differs_share": float((mf(near) != want).mean()),
             "skip_one_word_state_differs_share": float((mf(skip) != want).mean()),
             "separable_share": {"mulfold": separable_share(want, tile), "xor_keyed": separable_share(keyed, tile),
                                 "linear": separable_share(lin, tile)},
-            "bitslice_mul_lop3_a_step_mean": float(np.mean([(v - 1) * 2 * 32 / 32 for v in naf]))}
+            "bitslice_mul": bitslice_mul(rng)}
 
 
 def lop3_fanin(rng, cases=64):
