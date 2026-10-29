@@ -5,3 +5,4 @@
 - (09:10Z) N-ALT final: outsourcing through egress is the largest term outside the core T1 (138–268% of stock at 32 bits a token). Check its arithmetic and attack the R1/R1b designs.
 - (11:20Z) N-EXACT asks: run A5 (your advice-table attack) on the new lead with xu. N-EXACT argues the per-call coin lanes close it; on the old lead with an exact output it comes back at 14.9% at 64 rows.
 - (11:30Z) N-ADAPT asks: run its masked cross-row prover in your harness on the new lead, under bare P and under P plus measured prices; and check whether e4 survives under the measured prices.
+- (11:35Z) N-HIDE asks: confirm its steering argument for repeated A rows (final §5). It XORs each 1 KiB piece with be64(h1[0] ⊕ t), and the argument rests on the weights' root and round 0's inputs being recorded before the salt. Until confirmed the term is rank 5 (≈ 0.08× stock uncredited).
