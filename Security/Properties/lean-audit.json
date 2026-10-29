@@ -5682,7 +5682,7 @@
    "guarantees": ["Properties.NetworkScan.scanScopeAcc", "Properties.SampledProofs.SecurityProofs.drawMisses"]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "e10c5ee4d2e0ef355b85bd1d16b5d54bae6016e72354a77b45b7d069c6473e3c",
+   "digest": "0e1970c9911fd6f9eb25119f558b7c13e5a8290427efed61f52225892e6d0e09",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
     "Claims.Sampling.AuditStatement.desc": "9aba517d0fa98c7dc8fccb8df71878f443a969a34b856cd0ea175f9a594e0496",
@@ -5697,8 +5697,8 @@
     "Claims.Sampling.BGate.reads": "f1f2d422d0ac22f0f3ed607f625d284d05af4f21a2a60b35ee3d6463dd882900",
     "Claims.Sampling.BGate.rec": "aae208cb58f3a18f2edec74fa8a830647138803c6b25cb958b3ee5a1dfbe3c24",
     "Claims.Sampling.BGate.xor": "ffcfb099869784fa5e844b41261cfad381f38bd652c0f2d4619de82a550c6e27",
-    "Claims.Sampling.Commitment": "6f21adfbc654f6e71de5b6f338e836ed805fcb50b98a77646b11e96fbc01b65f",
-    "Claims.Sampling.Deploy": "49288d0c643b72f21a53c77cc0ef2957e0be751d9a1a11ed78c42cbd620e1c63",
+    "Claims.Sampling.CommitmentScheme": "f16d42f6cd8b9ee922f24a2204f69509e7537e3892abff5873b1e225db7fd5f2",
+    "Claims.Sampling.Deploy": "7a8ef4515d3e28d0cb95edf7166c34dd283adf62d43da029e665d09dfe19b378",
     "Claims.Sampling.Deploy.parse": "7c0a22a451ccd9d5fab1bdc852ffa8144c649ca36b8c85c73c6ae86b7cfea583",
     "Claims.Sampling.Deploy.partition": "3778167b1219a7c66ea0f62ecadb8b9515e47d7ff42b79c088e0ded41721c6fa",
     "Claims.Sampling.Deploy.scopeCheck": "9b1760dc76ce539fc56fa7456b3507267ba7414d1ec5cbdd2f42d2476db3b3dc",
