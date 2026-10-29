@@ -51,7 +51,7 @@ opening output. The claims are read as the verifier's (`a.map AClaim.toClaim`): 
 theorem openRel_of_plays {e : ExecHolo} {u : C3Run e}
     {M : Flock.RecAlgebra.Messages Flock.F128} {a : Array (Flock.RecAlgebra.AClaim Flock.F128)}
     {c : Array (Array Flock.F128)} {k₀ k₂ : ℕ} {rsr : Array Flock.F128} {rs : Flock.RecAlgebra.RsPts Flock.F128}
-    (hrs : Flock.RecAlgebra.ringSwitch M a k₀ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((rsr, rs), k₂))
+    (hrs : Flock.RecAlgebra.ringSwitch M a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂))
     (hz : ∀ x ∈ rsr, x = 0) (hne : Flock.RecAlgebra.NoEmpty c) (ha : a.size = 2)
     (hshape : ∀ k < 2, (M.rs[k]!).size = 128 ∧ ((a.map Flock.RecAlgebra.AClaim.toClaim)[k]!).skip.size = 64 ∧
       ((a.map Flock.RecAlgebra.AClaim.toClaim)[k]!).x.size = e.cls.shape.mReg - 6)
