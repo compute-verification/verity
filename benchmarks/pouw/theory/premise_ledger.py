@@ -430,15 +430,17 @@ def hw_distinct_check(salts: int = 24, m: int = 4, n: int = 6, s: int = 4, seed:
 
 
 # ------------------------------------------------------------------------------------------ hitting sets per design
+#: M1 zeroes the final word in noise_sweep: the final-word lemma under the atomic call
+M1 = ("final-word", "atomic-call")
 DESIGNS = [  # (label, noise_sweep name, model, C1, base premises (word credit), coin-branch applies)
     ("ssn_1l", "ssn_1l", "M0", False, ("H32", "W1", "ssn-distinct", "ssn-success-set"), "ssn_1l"),
     ("ssn_1l+C1", "ssn_1l", "M0", True, ("H32", "W1", "ssn-distinct", "ssn-success-set", "formed-charged"), "ssn_1l"),
     ("ssn_1l_hw", "ssn_1l", "M0", False, ("H32", "W1", "ssn-hw-distinct", "ssn-success-set", "coin-branch"),
      "ssn_1l_hw"),
     ("ssn_a", "ssn_a", "M0", False, ("H32", "W1", "ssn-distinct", "ssn-success-set"), "ssn_a"),
-    ("per2 M1+C1", "per2", "M1", True, ("H32", "W1", "per2-distinct", "formed-charged"), None),
-    ("os2 M1+C1", "os2", "M1", True, ("H32", "W1", "weights-distinct", "formed-charged"), None),
-    ("ncp3 M1+C1", "ncp3", "M1", True, ("H32", "W1", "ncp-indep", "formed-charged"), None),
+    ("per2 M1+C1", "per2", "M1", True, ("H32", "W1", "per2-distinct", "formed-charged", *M1), None),
+    ("os2 M1+C1", "os2", "M1", True, ("H32", "W1", "weights-distinct", "formed-charged", *M1), None),
+    ("ncp3 M1+C1", "ncp3", "M1", True, ("H32", "W1", "ncp-indep", "formed-charged", *M1), None),
     ("nsf", "nsf", "M0", False, ("H32", "W1"), "data"),
 ]
 #: the options a minimal set chooses among: each closes terms; ranks are the ledger's settled ranks
