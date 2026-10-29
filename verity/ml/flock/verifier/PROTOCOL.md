@@ -394,6 +394,10 @@ default key. Every identity and binding digest is SHA-512, and the unit draw is 
   `units` being `derived` or `as stated`.
 - **Registered reads.** `Flock.Registered`: with the verifier's own `--registered F`, each read row must open its
   registered root at its position.
+- **Links** between proof blocks are recursion's, not C-Flock's: `verify` sets up each proof block's statement alone,
+  over its own rows and salts. A statement that declares links (META `links`) is refused (`HmRow.LINKS`), and so is a
+  links file (`--links`) to either verifier; that a reader's link row is its writer's output row is the recursive
+  statement's check.
 - **Tail outputs, packed ranges and leaf cuts**, for the GEMM coordinate's statements.
 
 ### 16.11 The typed statement

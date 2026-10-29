@@ -1688,6 +1688,9 @@ def recComposeCmd (args : List String) : IO UInt32 := do
   return (if res.toBool then 0 else 1)
 
 def main (args : List String) : IO UInt32 := do
+  if args.contains "--links" then
+    IO.eprintln HmRow.LINKS
+    return 2
   match args with
   | ["merkle-test", path] => merkleTest path
   | ["coin-tree-check", path] => coinTreeCmd path
