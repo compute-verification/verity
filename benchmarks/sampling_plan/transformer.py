@@ -393,7 +393,7 @@ def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) ->
 
 def plans(m: Model, s: Serving, delta: float = DELTAS[0], *, grid: int = 61, cut_grid: int = 21):
     """The block's DAG, its cost model, objective and candidates, and the frontier of expected cost against certified
-    incorrect proof blocks (screened by `density_bound`)."""
+    faulty proof blocks (screened by `density_bound`)."""
     dag = Dag(m)
     objective = Objective(delta)
     cm = costs(m, s)

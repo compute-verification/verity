@@ -213,7 +213,7 @@ def window(t: Template, k: int, windows: int, r: Rates) -> Window:
 
 def plan(ts: list[Template], share: float, r: Rates) -> list[Window]:
     """Every subcircuit's sampling block at `k = ceil(ln(S/delta)/share)`, delta = 1%: each certifies at most `share` of its
-    units incorrect."""
+    units wrong."""
     k = ceil(log(len(ts) / DELTAS[0]) / share)
     return [window(t, k, len(ts), r) for t in ts]
 
@@ -254,7 +254,7 @@ def window_blocks(ws: list[Window], m: Shape) -> int:
 
 
 def informative_ands(ws: list[Window], delta: float) -> float:
-    """Incorrect ANDs (`Stratified.harm_bound`, each unit its ANDs): not a Lean guarantee."""
+    """Faulty ANDs (`Stratified.harm_bound`, each unit its ANDs): not a Lean guarantee."""
     st = Stratified(tuple(Stratum(w.template.id, w.template.units, w.k) for w in ws))
     return st.harm_bound({w.template.id: float(w.template.ands) for w in ws}, delta)
 

@@ -477,7 +477,7 @@ class Remote:
     #: the inference cut: the remote composition, `Nci.Guarantees.DampenerRemote`, term for term, its envelopes'
     #: premises, and the registration
     CITES = ("Nci.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("Nci.Assumptions.BaselineRegistered",)
-    #: the routes a strategy that never cheats gets: no wrong certificate, incorrect block or detection
+    #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
     ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 
     def envelopes(self) -> dict[str, Any]:
