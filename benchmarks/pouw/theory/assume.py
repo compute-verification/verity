@@ -38,6 +38,18 @@ The checks:
    stay small; the gain is priced at two detector prices and two overhead counts. The thin fold's IADD3 steps break the
    bias that makes the decode exact (a biased XOR is not a biased sum).
 
+**The alternating fold** (main's `thinFold`, XOR3 and IADD3 steps alternating):
+
+8. Affine over GF(2) only at bit 0, never additive over ℤ/2³²; (Inj) for one word; persistent-skip fibres exhaustive
+   at 16 bits by run length and first step; X = 2³¹ is in the fibre of every step-aligned run and of no mid-step one.
+9. The IADD3 step's windows (`fold_routes.single` and `two`): no two-instruction program computes σ + S_t + S_{t+1}
+   from (σ, S_{t−1}, δ_t, δ_{t+1}), nor at zero data from (σ, S_{t−1}, e_t, f_t, e_{t+1}, f_{t+1}); and none writes both
+   it and S_{t+1} in two (one would have to be a single instruction of the pool and the other of the pool and it).
+10. Packing two cells against it at zero data with the borrows tracked (`swar_alt`): a bias of 2^15 on the low field
+    keeps the high field borrow-free; each cell's σ is its low half, packed, and its high half, which an XOR3 step
+    flips on a sign parity and an IADD3 step moves by the low half's signed carry. Bit-exact, and it costs more than
+    honest at every step, with the detector, F_t and the exit decode free.
+
 Run: `python assume.py [--out DIR] [--trials N]`. numpy, and `fold_routes` beside this file.
 """
 from __future__ import annotations
@@ -338,6 +350,201 @@ def swar_xor(rng: np.random.Generator, trials: int, T: int) -> dict:
                           "registers written, 32 if it charges the issue); unpack and decode o instructions a pair"}
 
 
+# ---- the alternating fold (main's `Accounting.TS.thinFold`) -------------------------------------------------------
+
+def thin_fold(words, xor: bool = True, s: int = 0, mask: int = M32) -> int:
+    """`thinFold xor s`: the words two a step, the steps alternating XOR3 and IADD3 from `xor`."""
+    for i in range(0, len(words) - 1, 2):
+        s = (s ^ words[i] ^ words[i + 1]) if xor else (s + words[i] + words[i + 1]) & mask
+        xor = not xor
+    return s & mask
+
+
+def thin_fold_np(W: np.ndarray, xor: bool, s, mask: int) -> np.ndarray:
+    """The same over the last axis of `W` (uint64), every row at once."""
+    s = np.asarray(s, dtype=np.uint64) & np.uint64(mask)
+    for i in range(0, W.shape[-1] - 1, 2):
+        s = (s ^ W[..., i] ^ W[..., i + 1]) if xor else (s + W[..., i] + W[..., i + 1]) & np.uint64(mask)
+        xor = not xor
+    return s
+
+
+def check_alt_affinity(rng: np.random.Generator, trials: int, T: int = 64) -> dict:
+    """GF(2) additivity of the alternating fold in the increments, bit by bit, and ℤ/2³² additivity."""
+    gf2 = np.zeros(32)
+    zadd = 0
+    f = lambda d: thin_fold([int(v) for v in prefix(d, M32)])
+    zero = f(np.zeros(T, dtype=np.uint64))
+    for _ in range(trials):
+        a = rng.integers(0, 2**32, T, dtype=np.uint64)
+        b = rng.integers(0, 2**32, T, dtype=np.uint64)
+        fa, fb, fab = f(a), f(b), f(a ^ b)
+        diff = fab ^ fa ^ fb ^ zero
+        for bit in range(32):
+            gf2[bit] += ((diff >> bit) & 1) == 0
+        zadd += f((a + b) & np.uint64(M32)) == ((fa + fb - zero) & M32)
+    return {"trials": trials, "gf2_additive_rate_by_bit": (gf2 / trials).round(4).tolist(),
+            "z_additive_rate": zadd / trials}
+
+
+def check_alt_single_word_inj(rng: np.random.Generator, trials: int, T: int = 64) -> dict:
+    changed = 0
+    for _ in range(trials):
+        S = [int(v) for v in rng.integers(0, 2**32, T, dtype=np.uint64)]
+        t = int(rng.integers(0, T))
+        S2 = list(S)
+        S2[t] = (S2[t] + int(rng.integers(1, 2**32))) & M32
+        changed += thin_fold(S) != thin_fold(S2)
+    return {"trials": trials, "fold_changed": changed}
+
+
+def alt_persistent_fibre(rng: np.random.Generator, trials: int, lengths=(1, 2, 3, 4, 6, 8, 16, 32, 64),
+                         width: int = 16) -> dict:
+    """#{X ∈ ℤ/2^w : thinFold(S + X on the run) = thinFold(S)}, X = 0 included, exhaustive at w bits, for a run of ℓ
+    shifted words whose first full step is XOR3 or IADD3 (an odd run starts mid-step, beside one unshifted word).
+    With the cell's final word O′ sealed beside σ, every X ≠ 0 shifts O′, so the sealed pair's fibre is 1."""
+    mask = (1 << width) - 1
+    X = np.arange(1 << width, dtype=np.uint64)
+    out = {}
+    for ell in lengths:
+        for first in ("xor", "add"):
+            z = []
+            for _ in range(trials):
+                lead_in = ell % 2
+                S = rng.integers(0, 1 << width, ell + lead_in, dtype=np.uint64)
+                s0 = int(rng.integers(0, 1 << width))
+                shift = np.zeros(ell + lead_in, dtype=np.uint64)
+                shift[lead_in:] = 1
+                W = (S[None, :] + X[:, None] * shift[None, :]) & np.uint64(mask)
+                ref = thin_fold([int(v) for v in S], first == "xor", s0, mask)
+                got = thin_fold_np(W, first == "xor", s0, mask)
+                z.append(int(np.count_nonzero(got == np.uint64(ref))))
+            z = np.array(z)
+            out[f"{ell} {first}"] = {"mean": float(z.mean()), "max": int(z.max()), "p_ge2": float(np.mean(z >= 2))}
+    return {"width": width, "trials": trials, "by_length_and_first_step": out}
+
+
+def alt_sign_flip_32(rng: np.random.Generator, trials: int) -> dict:
+    """X = 2³¹ on a step-aligned run (each step's two words both shifted) is in the alternating fold's fibre always:
+    XOR3 cancels the two top-bit flips and IADD3 adds 2³²; a run that starts mid-step flips σ's top bit."""
+    aligned = mid = 0
+    for _ in range(trials):
+        n = 2 * int(rng.integers(1, 33))
+        S = [int(v) for v in rng.integers(0, 2**32, n, dtype=np.uint64)]
+        p = 2 * int(rng.integers(0, n // 2))
+        Sa = S[:p] + [(v + 2**31) & M32 for v in S[p:]]
+        aligned += thin_fold(Sa) == thin_fold(S)
+        q = p + 1
+        Sm = S[:q] + [(v + 2**31) & M32 for v in S[q:]]
+        mid += thin_fold(Sm) == thin_fold(S)
+    return {"trials": trials, "aligned_in_fibre": aligned, "mid_step_in_fibre": mid}
+
+
+def superopt_iadd3(seed: int) -> dict:
+    """The IADD3 step's windows: σ + S_t + S_{t+1} = σ + 2·S_{t−1} + 2·δ_t + δ_{t+1} from (σ, S_{t−1}, δ_t, δ_{t+1}),
+    and at zero data from (σ, S_{t−1}, e_t, f_t, e_{t+1}, f_{t+1}). The chain also needs S_{t+1}: a two-instruction
+    program for both outputs writes one with each instruction, so it exists only if one output is a single instruction
+    of the pool and the other a single instruction of the pool and the first."""
+    rng = random.Random(seed ^ 0x1AD3)
+    sig, sp, d1, d2 = FR.vecs(rng), FR.vecs(rng), FR.vecs(rng), FR.vecs(rng)
+    St = [FR.u32(a + b) for a, b in zip(sp, d1)]
+    St1 = [FR.u32(a + b) for a, b in zip(St, d2)]
+    step = [FR.u32(a + b + c) for a, b, c in zip(sig, St, St1)]
+    pool = {"sig": sig, "Sprev": sp, "d1": d1, "d2": d2, "0": FR.const(0)}
+    out = {"pair step from (sig,Sprev,d1,d2): two instructions": FR.two(step, pool)}
+    out["pair step from the pool: one instruction"] = FR.single(step, pool)
+    out["S_t+1 from the pool: one instruction"] = FR.single(St1, pool)
+    out["pair step given S_t+1: one instruction"] = FR.single(step, {**pool, "St1": St1})
+    out["S_t+1 given the pair step: one instruction"] = FR.single(St1, {**pool, "sig2": step})
+    out["sanity: pair step given S_t and S_t+1: one instruction"] = FR.single(step, {**pool, "St": St, "St1": St1})
+    out["sanity: pair step given S_t+1: two instructions"] = FR.two(step, {**pool, "St1": St1})
+
+    e1, f1, e2, f2 = s8(rng), s8(rng), s8(rng), s8(rng)
+    Zt = [FR.u32(a + b * c) for a, b, c in zip(sp, e1, f1)]
+    Zt1 = [FR.u32(a + b * c) for a, b, c in zip(Zt, e2, f2)]
+    zstep = [FR.u32(a + b + c) for a, b, c in zip(sig, Zt, Zt1)]
+    zpool = {"sig": sig, "Sprev": sp, "e1": e1, "f1": f1, "e2": e2, "f2": f2}
+    out["zero data: pair step from the six: two instructions"] = FR.two(zstep, zpool)
+    out["zero data: S_t+1 from the six: one instruction"] = FR.single(Zt1, zpool)
+    out["zero data: pair step given S_t+1: one instruction"] = FR.single(zstep, {**zpool, "St1": Zt1})
+    out["zero data: S_t+1 given the pair step: one instruction"] = FR.single(Zt1, {**zpool, "sig2": zstep})
+    out["zero data sanity: S_t is one IMAD"] = FR.single(Zt, zpool)
+    out["zero data sanity: pair step given S_t: two instructions"] = FR.two(zstep, {**zpool, "St": Zt})
+    return out
+
+
+def swar_alt(rng: np.random.Generator, trials: int, T: int) -> dict:
+    """Packing two cells of one row against the alternating fold at zero data, with the borrows tracked, counted
+    instruction by instruction and checked bit-exact against both cells' 32-bit folds.
+
+    P = (S_A + 2^15) + 2^16 S_B: the bias keeps field A in [0, 2^16), so field B never borrows and one IMAD on
+    F_t = f_A + 2^16 f_B advances both while |S_A|, |S_B| < 2^15 (a free detector stops before a step whose words
+    could leave: |S| ≥ 2^14 before it). σ = L + 2^16 H a cell: Q = L_A + 2^16 L_B packed, H_A and H_B in the high
+    halves of their own registers.
+    - XOR3 step (6): X = a ⊕ b; Q ^= X (field A's biases cancel in pairs); M_A, M_B = PRMT sign-replicates of X's
+      bits 15 and 31 (the pair's sign parities); H_A ^= M_A; H_B ^= M_B.
+    - IADD3 step (13): Y = (Q & 0xFFFF) + (a | 0xFFFF0000) + (b & 0xFFFF) = L_A + Σ_A, signed; L_A' = Y & 0xFFFF;
+      H_A += Y − L_A' (the signed carry, in the high half); U = (Q >> 16) + (a >>s 16) + (b >>s 16) = L_B + Σ_B;
+      L_B' = U & 0xFFFF; H_B += U − L_B'; Q = (L_B' << 16) + L_A'.
+    Honest is 2 IMAD and 1 fold instruction a cell a step pair: 6 a step pair for the two cells."""
+    counts = {"xor": 6, "add": 13}
+    honest_pair = 6
+    taus, exact, runs = [], 0, 0
+    for _ in range(trials):
+        e = rng.integers(-128, 128, T)
+        fa, fb = rng.integers(-128, 128, T), rng.integers(-128, 128, T)
+        sa, sb = np.cumsum(e * fa), np.cumsum(e * fb)
+        P, Q, HA, HB, xor, tau = 1 << 15, 0, 0, 0, True, 0
+        words = []
+        for t in range(0, T - 1, 2):
+            pre = (abs(int(sa[t - 1])) if t else 0, abs(int(sb[t - 1])) if t else 0)
+            if max(pre) >= B14 or max(abs(int(sa[t])), abs(int(sb[t]))) >= B14:
+                break
+            a = (P + int(e[t]) * (int(fa[t]) + (int(fb[t]) << 16))) & M32
+            b = (a + int(e[t + 1]) * (int(fa[t + 1]) + (int(fb[t + 1]) << 16))) & M32
+            P = b
+            if xor:
+                X = a ^ b
+                Q ^= X
+                MA = FR.prmt(X, 0, 0x9999)
+                MB = FR.prmt(X, 0, 0xBBBB)
+                HA ^= MA
+                HB ^= MB
+            else:
+                Y = ((Q & 0xFFFF) + (a | 0xFFFF0000) + (b & 0xFFFF)) & M32
+                LA = Y & 0xFFFF
+                HA = (HA + Y - LA) & M32
+                sgn = lambda v: (v >> 16) - (1 << 16) if v >> 31 else v >> 16
+                U = ((Q >> 16) + sgn(a) + sgn(b)) & M32
+                LB = U & 0xFFFF
+                HB = (HB + U - LB) & M32
+                Q = ((LB << 16) + LA) & M32
+            xor = not xor
+            tau += 2
+            words.append((t, t + 1))
+        taus.append(tau)
+        if tau:
+            runs += 1
+            ref_a = thin_fold([int(v) & M32 for v in sa[:tau]])
+            ref_b = thin_fold([int(v) & M32 for v in sb[:tau]])
+            got_a = (HA & 0xFFFF0000) | (Q & 0xFFFF)
+            got_b = (HB & 0xFFFF0000) | (Q >> 16)
+            exact += got_a == ref_a and got_b == ref_b
+    taus = np.array(taus)
+    pair_steps = taus / 2
+    packed_cost = {"xor": 2 + counts["xor"], "add": 2 + counts["add"]}
+    gain_a_pair = {k: honest_pair - v for k, v in packed_cost.items()}
+    return {"T": T, "trials": trials, "mean_packed_words": float(taus.mean()), "max_packed_words": int(taus.max()),
+            "decode_exact": exact, "packed_runs": runs,
+            "instructions_a_step_pair_two_cells": {"honest": honest_pair, "packed": packed_cost},
+            "gain_a_step_pair_instructions": gain_a_pair,
+            "gain_over_stock_free_detector_no_decode": float(max(0.0, np.mean(
+                [sum(gain_a_pair["xor" if i % 2 == 0 else "add"] for i in range(int(k))) for k in pair_steps]))
+                * 32 / (2 * 28 * T)),
+            "accounting": "a step pair = two k32 steps of two cells; packed = 2 IMAD on P plus the step's count; the "
+                          "detector, F_t's formation and the exit decode are left out, in the route's favour"}
+
+
 # ---- pricing ----------------------------------------------------------------------------------------------------
 
 def price(h_lead=(120.0, 230.0)) -> dict:
@@ -376,6 +583,12 @@ def main() -> int:
         "superopt_zero_data": superopt_zero_data(args.seed),
         "injective_luts": injective_luts(),
         "swar_xor": [swar_xor(rng, args.trials * 10, T) for T in (64, 256)],
+        "alt_affinity": check_alt_affinity(rng, args.trials),
+        "alt_single_word_inj": check_alt_single_word_inj(rng, args.trials),
+        "alt_persistent_fibre": alt_persistent_fibre(rng, max(20, args.trials // 4)),
+        "alt_sign_flip_32": alt_sign_flip_32(rng, args.trials),
+        "superopt_iadd3": superopt_iadd3(args.seed),
+        "swar_alt": [swar_alt(rng, args.trials * 10, T) for T in (64, 256)],
         "price": price(),
     }
     fails = []
@@ -404,6 +617,24 @@ def main() -> int:
     for s in res["swar_xor"]:
         if s["decode_exact"] != s["packed_runs"]:
             fails.append(f"SWAR decode not exact at T {s['T']}")
+    if res["alt_single_word_inj"]["fold_changed"] != args.trials:
+        fails.append("the alternating fold is not injective in a word")
+    sf = res["alt_sign_flip_32"]
+    if sf["aligned_in_fibre"] != args.trials or sf["mid_step_in_fibre"]:
+        fails.append(f"X = 2^31: aligned {sf['aligned_in_fibre']}, mid-step {sf['mid_step_in_fibre']} of {args.trials}")
+    si = res["superopt_iadd3"]
+    for k in ("pair step from (sig,Sprev,d1,d2): two instructions", "pair step from the pool: one instruction",
+              "pair step given S_t+1: one instruction", "zero data: pair step from the six: two instructions",
+              "zero data: pair step given S_t+1: one instruction"):
+        if si[k]:
+            fails.append(f"IADD3 window: {k}: {si[k]}")
+    for k in ("sanity: pair step given S_t and S_t+1: one instruction", "sanity: pair step given S_t+1: two instructions",
+              "zero data sanity: S_t is one IMAD", "zero data sanity: pair step given S_t: two instructions"):
+        if not si[k]:
+            fails.append(f"IADD3 window sanity failed: {k}")
+    for s in res["swar_alt"]:
+        if s["decode_exact"] != s["packed_runs"]:
+            fails.append(f"alternating-fold packed route not exact at T {s['T']}: {s['decode_exact']}/{s['packed_runs']}")
     res["fails"] = fails
     text = json.dumps(res, indent=1, default=str)
     if args.out:
