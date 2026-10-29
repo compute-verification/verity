@@ -38,6 +38,7 @@ pub mod glue;
 pub mod proved_scope;
 pub mod pure_block;
 pub mod record_text;
+pub mod run_record;
 #[cfg(feature = "glue")]
 pub mod tables;
 pub mod typed;
@@ -1475,6 +1476,11 @@ impl Server {
     /// The committed coin schedule's root (after `Hello`).
     pub fn coin_root(&self) -> Option<[u8; 64]> {
         self.coin_tree.as_ref().map(|t| t.root())
+    }
+
+    /// The committed coin schedule's session key (after `Hello`), as the session record names it (`coin_tree.key`).
+    pub fn coin_key(&self) -> Option<&[u8; coin_tree::KEY_BYTES]> {
+        self.coin_tree.as_ref().map(|t| t.key())
     }
 
     /// M2: `n` coins of `stream`'s round `round` from the committed schedule, and the answer's words (coins, then opening).
