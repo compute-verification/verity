@@ -7,13 +7,22 @@ metric over the engine's steady state, the step wall time from the server's step
 The steady state is the longest run of consecutive full steps (T tokens scheduled) inside the capture; a step spans the
 previous step's end to its own (the trace's ``t``, taken once the engine has taken the step's output, so window opens and
 closes, seals waited on and every other host gap between steps fall in the step they delay). ``queued`` is the same over
-the steps that start once the last request has arrived. Tensor Active is the GPU's share of SM cycles with the tensor pipe
+the steps that start once the last request has arrived. ``<window>_body`` is a window without its last step, the load's
+last, which also waits on the drain of every response. Tensor Active is the GPU's share of SM cycles with the tensor pipe
 active, sampled every 1/f s, so its mean over the window is the tensor-busy share of the whole step, host gaps included.
 
 Each sample is attributed to the kernels running at its time (CUPTI's kernel records on the same timeline): idle (no
 kernel: split by whether a device-to-host or host-to-device copy is running) or the categories of the kernels running.
 A label's loss is its share of the window times 100 less its mean Tensor Active, in points of Tensor Active; the losses sum
 to 100 less the mean.
+
+Tensor Active counts cycles at the clock the card ran (the GPC Clock Frequency metric, sampled with it). ``sm_clock_mhz`` is
+that clock's mean over the window, and ``tensor_active_pct_at_ref`` the tensor-busy cycles over the cycles the window would
+hold at ``--ref-mhz`` (1,830): the mean over samples of Tensor Active times the sample's clock over the reference.
+
+``served_stack`` is false for the arms that override serve-openai's engine options and drop the bench row (NOT_SERVED),
+and for a Commit arm served async (``<arm>-async``, whose bench row declares sync scheduling), and their UTIL lines say so,
+so a table can't file them as the served step.
 """
 from __future__ import annotations
 
@@ -40,6 +49,8 @@ CATEGORIES = (
     ("elementwise", r"elementwise|vectorized|reduce|norm|rms|silu|act|rotary|rope|add|mul|unrolled|triton|sum|max|where"),
 )
 D2H, H2D = 2, 1                                      # CUPTI_ActivityMemcpyKind
+#: `served_util.sh`'s arms that serve with the engine's options overridden and no bench row
+NOT_SERVED = ("graphs", "async")
 
 
 def category(name: str) -> str:
@@ -172,7 +183,51 @@ def mean_in(ts: list[int], vs: list[float], lo: int, hi: int) -> float | None:
     return statistics.fmean(vs[a:b]) if b > a else None
 
 
-def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None) -> dict[str, Any]:
+def mhz(v: float) -> float:
+    """A clock sample in MHz: Nsight Systems reports the GPC clock in Hz under a [MHz] label."""
+    return v / 1e6 if v > 1e5 else v
+
+
+def at_clock(ts: list[int], tv: list[float], clock: tuple[list[int], list[float]] | None, lo: int, hi: int,
+             ref_mhz: float) -> tuple[float | None, float | None]:
+    """(mean SM clock in MHz, Tensor Active scaled to ``ref_mhz``) over [lo, hi]: each tensor sample times the clock sample
+    at or before it, over the reference."""
+    if clock is None or not clock[0]:
+        return None, None
+    cs, cv = clock
+    a, b = bisect.bisect_left(ts, lo), bisect.bisect_right(ts, hi)
+    got = [(tv[j], mhz(cv[max(0, bisect.bisect_right(cs, ts[j]) - 1)])) for j in range(a, b)]
+    if not got:
+        return None, None
+    return statistics.fmean(c for _, c in got), statistics.fmean(v * c for v, c in got) / ref_mhz
+
+
+#: kernels' steady cut (`--steady`): a window's steps whose wall is over this many times the window's median are dropped
+STEADY_X = 1.5
+
+
+def steady_cut(ts: list[int], tv: list[float], clock: tuple[list[int], list[float]] | None, spans: list[tuple[int, int]],
+               ref_mhz: float) -> dict[str, Any]:
+    """The window's steps ``spans`` ([lo, hi) each) without those over `STEADY_X` times their median wall: how many are kept,
+    their walls, and Tensor Active, the mean clock and Tensor Active at ``ref_mhz`` over the samples in the kept spans."""
+    med = statistics.median(b - a for a, b in spans)
+    kept = [(a, b) for a, b in spans if b - a <= STEADY_X * med]
+    idx = [j for a, b in kept for j in range(bisect.bisect_left(ts, a), bisect.bisect_left(ts, b))]
+    got: dict[str, Any] = {"rule": f"steps over {STEADY_X}x the window's median wall dropped", "steps": len(kept),
+                           "dropped": len(spans) - len(kept),
+                           "step_wall_ms": {"mean": round(statistics.fmean(b - a for a, b in kept) / 1e6, 3),
+                                            "median": round(statistics.median(b - a for a, b in kept) / 1e6, 3)},
+                           "tensor_active_pct": round(statistics.fmean(tv[j] for j in idx), 3) if idx else None,
+                           "sm_clock_mhz": None, "tensor_active_pct_at_ref": None}
+    if clock is not None and clock[0] and idx:
+        cs, cv = clock
+        c = [mhz(cv[max(0, bisect.bisect_right(cs, ts[j]) - 1)]) for j in idx]
+        got |= {"sm_clock_mhz": round(statistics.fmean(c), 1),
+                "tensor_active_pct_at_ref": round(statistics.fmean(tv[j] * x for j, x in zip(idx, c)) / ref_mhz, 3)}
+    return got
+
+
+def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None, ref_mhz: float = 1830.0) -> dict[str, Any]:
     """``sent_s``: when the load's last request was sent (`last_send`), from which the ``queued`` window starts."""
     db = sqlite3.connect(sqlite)
     z = utc0_ns(db)
@@ -181,6 +236,7 @@ def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None) -> d
         or next((i for n, i in names.items() if "tensor" in n.lower()), None)
     if tensor is None:
         raise SystemExit(f"no Tensor Active metric among {sorted(names)}")
+    gpc = next((i for n, i in names.items() if n.lower().startswith("gpc clock")), None)
     ts, tv = series[tensor]
     period = statistics.median(b - a for a, b in zip(ts, ts[1:])) if len(ts) > 1 else 0
     ks, cs = kernels(db), copies(db)
@@ -190,6 +246,8 @@ def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None) -> d
     picks = {"all": steady(st, T, *cap)}
     if sent_s is not None:
         picks["queued"] = steady(st, T, *cap, after_s=sent_s)
+    for key in [k for k, idx in picks.items() if len(idx) > 2]:
+        picks[f"{key}_body"] = picks[key][:-1]           # the load's last step waits on its drain, not on the step
     out: dict[str, Any] = {"capture_s": round(cap[1] - cap[0], 3), "metric_period_us": period / 1e3, "metrics": sorted(names),
                            "tensor_metric": next(n for n, i in names.items() if i == tensor), "steps_traced": len(st),
                            "full_steps_traced": sum(1 for r in st if r["T"] == T), "kernels": len(ks), "memcpys": len(cs)}
@@ -208,6 +266,11 @@ def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None) -> d
                                             "min": round(min(p for p in per if p is not None), 3),
                                             "max": round(max(p for p in per if p is not None), 3)},
              "tokens_per_s": round(T * len(idx) / ((hi - lo) / 1e9), 1)}
+        clk, ref = at_clock(ts, tv, series.get(gpc) if gpc is not None else None, lo, hi, ref_mhz)
+        w |= {"sm_clock_mhz": None if clk is None else round(clk, 1), "ref_mhz": ref_mhz,
+              "tensor_active_pct_at_ref": None if ref is None else round(ref, 3)}
+        w["steady"] = steady_cut(ts, tv, series.get(gpc) if gpc is not None else None,
+                                 [(at(st[i - 1]["t"]), at(st[i]["t"])) for i in idx], ref_mhz)
         for n, i in names.items():
             if i != tensor and i in series:
                 m = mean_in(*series[i], lo, hi)
@@ -294,7 +357,7 @@ def windows(serve_dir: Path) -> dict[str, Any]:
     s = serve_dir / "summary.json"
     if s.exists():
         doc = json.loads(s.read_text())
-        got["summary"] = {k: doc.get(k) for k in ("served", "engine_steps", "engine_error", "stopped_by", "pauses", "sealer")}
+        got["summary"] = {k: doc.get(k) for k in ("served", "engine_steps", "engine_error", "stopped_by", "pauses", "sealer", "release")}
         if isinstance(doc.get("commit"), dict):
             got["summary"]["commit"] = {k: v for k, v in doc["commit"].items() if not isinstance(v, (list, dict)) or k in ("seals", "pouw_h1")}
     return got
@@ -309,9 +372,12 @@ def main() -> int:
     ap.add_argument("--arm", default=None)
     ap.add_argument("--serve-dir", type=Path, default=None)
     ap.add_argument("--timings", type=Path, default=None)
+    ap.add_argument("--ref-mhz", type=float, default=1830.0)
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
-    doc: dict[str, Any] = {"arm": a.arm, "T": a.T, "N": a.N, **analyse(a.sqlite, a.trace, a.T, last_send(a.timings))}
+    served = a.arm not in NOT_SERVED and not str(a.arm).endswith("-async")
+    doc: dict[str, Any] = {"arm": a.arm, "served_stack": served, "T": a.T, "N": a.N,
+                           **analyse(a.sqlite, a.trace, a.T, last_send(a.timings), a.ref_mhz)}
     if a.serve_dir is not None:
         doc["serve"] = windows(a.serve_dir)
     if a.timings is not None and a.timings.exists():
@@ -328,13 +394,21 @@ def main() -> int:
         why = next((r["pouw_h1_error"] for r in doc["serve"].get("windows", []) if r.get("pouw_h1_error")), None)
         print(f"H1 {h1.get('windows')} windows released, {h1.get('tied')} tied, untied {h1.get('untied')}, failed {h1.get('failed')}, "
               f"gate-passed rows {h1.get('gate_passed_rows')}" + (f"; first failure: {why}" if why else ""))
-    for key in ("queued", "all"):
+    for key in ("queued", "queued_body", "all", "all_body"):
         w = doc.get(key)
         if not isinstance(w, dict) or "tensor_active_pct" not in w:
             continue
-        print(f"UTIL {a.arm} T {a.T} [{key}]: tensor active {w['tensor_active_pct']:.2f}% over {w['steps']} full steps, "
+        clock = (f" at {w['sm_clock_mhz']:.0f} MHz ({w['tensor_active_pct_at_ref']:.2f}% at {w['ref_mhz']:.0f} MHz)"
+                 if w.get("sm_clock_mhz") is not None else "")
+        print(f"UTIL {a.arm}{'' if doc['served_stack'] else ' (not the served stack)'} T {a.T} [{key}]: tensor active {w['tensor_active_pct']:.2f}%{clock} over {w['steps']} full steps, "
               f"step wall {w['step_wall_ms']['mean']:.2f} ms (median {w['step_wall_ms']['median']:.2f}), GPU busy {w['gpu_busy_pct']:.1f}%, "
               f"D2H {w['copies']['d2h']['GB']:.1f} GB ({w['copies']['d2h']['busy_pct']:.1f}% of the time)")
+        if (s := w.get("steady")) and s.get("tensor_active_pct") is not None:
+            sclock = (f" at {s['sm_clock_mhz']:.0f} MHz ({s['tensor_active_pct_at_ref']:.2f}% at {w['ref_mhz']:.0f} MHz)"
+                      if s.get("sm_clock_mhz") is not None else "")
+            print(f"  steady (dropped {s['dropped']} of {s['steps'] + s['dropped']} steps over {STEADY_X}x the median): "
+                  f"tensor active {s['tensor_active_pct']:.2f}%{sclock}, step wall {s['step_wall_ms']['mean']:.2f} ms "
+                  f"(median {s['step_wall_ms']['median']:.2f})")
         for r in w["losses"][:8]:
             print(f"  loss {r['loss_pts']:6.2f} pts  {r['label']:<40} {r['share_pct']:6.2f}% of the time at {r['tensor_pct']:.1f}% tensor")
         for r in w["kernels_top"][:12]:
