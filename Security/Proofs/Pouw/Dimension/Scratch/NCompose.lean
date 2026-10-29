@@ -49,7 +49,10 @@ in a lock, and nothing imports it.
   `HostsCounted` counts them), so a host's hashing is credited as hashing. The credited W1 is at most the cards' cost,
   the hosts' counted W1 and what came from outside the boundary, and with the other work on the cards it fits the
   period's capacity with the hosts at their rows (`hostsCounted_capacity`). A row below the hosts' best leaves
-  `Σ_r Tp·n·w_r·(best_r − rate_r)⁺`, resource by resource.
+  `Σ_r Tp·n·w_r·(best_r − rate_r)⁺`, resource by resource. Both premises read the headline's own terms: the hosts'
+  counted W1 is within `Period.cap` at the host resources of the `G` that `OnCard` describes (`hostsW1_le_hostsCounted`,
+  `hostsW1_le_cap`), and `Period.Fits` at hosts counted at the row gives `HostsWithinRow` (`hostsWithinRow_of_fits`;
+  `hostsCounted_others`: the row's own hosts are counted).
 * **Lifting a data-case result to the call grid** (`distinctOn_lift`, `sepBy_lift`): a target set distinct at one
   data case, with that case's free values, is distinct on the call grid with the call's free values, when each call
   free value restricts to a data-case free value.
@@ -1112,6 +1115,47 @@ theorem hostsCounted_capacity {Wc Wcard Wout Tp costA Wother Ccard : ℝ} {n : �
   have := hostsCounted_closes hinv hrow
   linarith
 
+/-- **The row's own hosts are counted**: devices whose other devices are the row's hosts for their `n` cards
+(`HostRow.others`) meet `HostsCounted` at that row. -/
+theorem hostsCounted_others {c : Verity.Accel.Card} (n : ℕ) (hn : 0 < n) (f mem : ℝ) (hr : HostRow) :
+    Pouw.Dither.HostsCounted (c := c) ⟨n, hn, f, hr.others n mem⟩ hr :=
+  ⟨fun r => r, fun _ _ h => h, le_rfl, le_rfl⟩
+
+/-- **The hosts' counted W1 is within the headline's capacity** (rank 0 given `OnCard`'s rates and `HostsCounted`):
+at the `G` the headline is read at, the period's capacity (`Period.cap`) at the host resources, a unit at its credited
+W1, is at least `hostsW1` for the period. So the term `hostsCounted_capacity` adds is capacity the headline's
+`OPT_honest` and `C` already count. -/
+theorem hostsW1_le_cap {GA : Pouw.Dither.Accel} {c : Verity.Accel.Card} {x} {D : Pouw.Dither.Devices c} {P} {L}
+    {e : GA.Res ≃ Verity.Accel.Res ⊕ D.oth.Res} (hon : Pouw.Dither.OnCard GA c x D P L e) (Pd : Pouw.Dither.Period GA)
+    {hr : HostRow} (h : Pouw.Dither.HostsCounted D hr) {w : HostRes → ℝ} (hT : 0 ≤ Pd.T) (hw : ∀ r, 0 ≤ w r) :
+    ∃ j : HostRes → D.oth.Res, Function.Injective j ∧
+      hostsW1 D.n hr w Pd.T ≤ ∑ r, w r * Pd.cap (e.symm (.inr (j r))) := by
+  obtain ⟨j, hj, hle⟩ := hostsW1_le_hostsCounted h hT hw
+  refine ⟨j, hj, hle.trans (le_of_eq (Finset.sum_congr rfl fun r _ => ?_))⟩
+  rw [Pouw.Dither.Period.cap, hon.2.1]
+  ring
+
+/-- **`HostsWithinRow` is the headline's capacity at a row-counted host** (rank 0 given `OnCard`'s rates): if a
+strategy fits the period (`Period.Fits`, which `TimedWorkFits` gives an accepted period's sampling blocks' work) and
+the host resources `j` are counted at no more than the row, then its use of them, a unit at its credited W1, meets
+`HostsWithinRow` at that row. So for the hosts' timed work the premise is the headline's own (G2) rate at θ's row. -/
+theorem hostsWithinRow_of_fits {GA : Pouw.Dither.Accel} {c : Verity.Accel.Card} {x} {D : Pouw.Dither.Devices c} {P}
+    {L} {e : GA.Res ≃ Verity.Accel.Res ⊕ D.oth.Res} (hon : Pouw.Dither.OnCard GA c x D P L e)
+    {Pd : Pouw.Dither.Period GA} {X : GA.Res → ℝ} {z : Pd.J → ℝ} (hfit : Pd.Fits X z)
+    (hneeds : ∀ k r, 0 ≤ Pd.needs k r) (hT : 0 ≤ Pd.T) {hr : HostRow} {j : HostRes → D.oth.Res}
+    (hj : ∀ r, D.oth.rate (j r) ≤ D.n * rateAt hr r) {w : HostRes → ℝ} (hw : ∀ r, 0 ≤ w r) :
+    HostsWithinRow D.n hr w Pd.T (fun r => w r * X (e.symm (.inr (j r)))) := by
+  intro r
+  have hz : 0 ≤ ∑ k, z k * Pd.needs k (e.symm (.inr (j r))) :=
+    Finset.sum_nonneg fun k _ => mul_nonneg (hfit.1 k) (hneeds k _)
+  have h1 := hfit.2 (e.symm (.inr (j r)))
+  have h2 : Pd.cap (e.symm (.inr (j r))) ≤ D.n * rateAt hr r * Pd.T := by
+    rw [Pouw.Dither.Period.cap, hon.2.1]
+    exact mul_le_mul_of_nonneg_right (hj r) hT
+  have hX : X (e.symm (.inr (j r))) ≤ Pd.T * D.n * rateAt hr r := by linarith
+  calc w r * X (e.symm (.inr (j r))) ≤ w r * (Pd.T * D.n * rateAt hr r) := mul_le_mul_of_nonneg_left hX (hw r)
+    _ = Pd.T * D.n * w r * rateAt hr r := by ring
+
 /-- **Route H on a toy, and the host row that closes it**: the card writes the word `tw` (32) and a host hashes the
 digest, credited 32 through its SHA-512. The cards' `PeriodInventory` holds, and the credited 64 is over the card's
 cost. Counted at a row of one compression a second (credited 32), the hosts meet `HostsWithinRow` and the bound of
@@ -1189,4 +1233,7 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.hostRow_residual
 #print axioms Pouw.Dimension.NCompose.hostsCounted_call
 #print axioms Pouw.Dimension.NCompose.hostsCounted_capacity
+#print axioms Pouw.Dimension.NCompose.hostsCounted_others
+#print axioms Pouw.Dimension.NCompose.hostsW1_le_cap
+#print axioms Pouw.Dimension.NCompose.hostsWithinRow_of_fits
 #print axioms Pouw.Dimension.NCompose.routeH_toy
