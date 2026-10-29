@@ -80,7 +80,7 @@ def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
 def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remote_at_full_capacity():
     """Lean's `DampenerRemote` with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`,
     against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
-    capacity, so its padded size ratio is `DampenerRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the overhead is
+    capacity, so its padded size ratio is `DampenerRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the slowdown is
     that `ρ` at the reference's MFU."""
     reg = REG.override({"regime.remote.residual": 0.01, "regime.remote.clock_share": 0.0, "regime.remote.host": 0.0})
     ctx = tiers_context(reg)
@@ -110,7 +110,7 @@ def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
     hardwareMultiple MFU₀`, at the reference training algorithm's MFU (0.4): free compute counts at peak. Under it free
     compute counts at `MFU₀`, so `ρ = max(1, 1/(s + x))`, the padded size ratio. Hosts carry no compute, so tiers'
     server and the H200 give the same `x = 0.33`, and `ρ = 3.04` (1.22 without reference efficiency), as
-    `benchmarks/nci`'s compute dampener reads it. Without both assumptions tiers' server (host CPUs 12.6% of the GPUs)
+    `benchmarks/nci`'s slowdown reads it. Without both assumptions tiers' server (host CPUs 12.6% of the GPUs)
     has `x = 0.45`, which outruns that developer, so `ρ = 1`; the H200 (2.9%) has 1.12."""
     lean_dir = ROOT / "Security" / "Definitions" / "Nci"
     assert REMOTE_DAMPENER in (lean_dir / "Remote.lean").read_text()
@@ -235,7 +235,7 @@ def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest
     4 ⌈log₂ 6⌉ = 12 bits, and a request 1,095 out (1,088 id bits and the count). A link-window holds `4 ⌈32 / 28⌉ = 8`
     requests, so a server takes at most 291,440 bits in a 3.2 s window, 91.1 kbit/s in and 2.7 kbit/s out, against the
     warden's line rate of 655 kbit/s each way. That is never less than the rate over many windows, 52.1 kbit/s, which it
-    equals only at T = D + 1. A faulty ingress unit, which this honest-δ form excludes, would add 356,592 bits
+    equals only at T = D + 1. An incorrect ingress unit, which this honest-δ form excludes, would add 356,592 bits
     (8 · 512 · 16 + 2 · 4 · 36,382), 122% of a window. `regime.onsite` doesn't take it."""
     assert envelopes.REQUEST_HEAD == {"connection ordinal": 32, "content-length": 32, "max_tokens": 32, "seed": 32,
                                       "temperature": 24, "top_p": 24, "model": 406, "user": 406}

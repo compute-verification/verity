@@ -40,7 +40,7 @@ SPLITS = (1, 2, 4, 8, 16, 32)
 RANDOM_VOCABS = (1024, 3000, 4096, 128256)
 TIE_VOCABS = (4096, 128256)
 DRAIN_BATCHES = (64, 18, 17, 9, 8, 7, 6, 5, 4, 3, 2, 1)
-#: The manifest's base seed: every committed fixture's cases are drawn from it.
+#: The manifest's base seed: every committed fixture's cases are sampled from it.
 MANIFEST_SEED = 20260920
 
 

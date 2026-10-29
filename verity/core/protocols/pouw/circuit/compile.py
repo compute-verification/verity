@@ -1057,7 +1057,7 @@ class Compiled:
     def floor(self) -> tuple[Floor, ...]:
         """Every unit's noise-forced work, by slot: W_b, the floor `Accounting.Guarantees.PouwBlockCredit`
         (cursor/attrib-ea24) attributes to the block the unit is placed at, as `Wb · Nmin` with `Wb` the least of the
-        block's units' `macs` and `Nmin` the right units PoUW's draw established. Read off the plan and the scheme's forms,
+        block's units' `macs` and `Nmin` the right units PoUW's sample established. Read off the plan and the scheme's forms,
         as the cover and grind checks are, with no gate walked. It is the attributed floor, not every gate the salt
         reaches: the seed's and the noise's SHA-512 and the receipt fold read the salt too, and the floor counts none of
         them (`Accounting.Assumptions.PouwFloorAdvice`'s scope, the committed words' coin × coin products)."""
