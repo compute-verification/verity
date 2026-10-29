@@ -248,7 +248,7 @@ def _theta(data: Path) -> str | None:
     out += ["### Derived (`machine-model theta` prints the arithmetic)",
             _table(["derived", "sheet", "measured", "how"], body)]
     share = lambda u, rd: "" if (s := T.share(t, u, rd)) is None else f"{100 * s:.2f}%"
-    out += ["### Units RT-UNITS lists, with their verdicts",
+    out += ["### Units, with their verdicts",
             _table(["unit", "what", "verdict", "rates", "bound a SM-clock", "share, sheet", "share, measured", "why",
                     "settles it"],
                    [[f"`{u.key}`", u.what, u.verdict, _code(u.rates),
