@@ -36,7 +36,7 @@ scenarios register a policy as if it were a subprotocol.
 ## The check
 
 `lean/` is the Lake package `nci_check`, code that reads Programs with C-Flock's decoder (`Flock.Program`) and imports
-nothing else but Lean core.
+nothing else but Lean core and the core interface (`core_protocol`).
 
 - `nci-check` runs `NciCheck.Baseline.check`: `NciCheck.Desc.check`, which decides `Nci.Complies Γ α` for a declared
   division aligned to the root's Calls at the cost of the descriptor (one summary per Definition), then each θ entry's
@@ -46,6 +46,10 @@ nothing else but Lean core.
   provenance, which is what `benchmarks/verifier_cost` measures.
 - `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
   each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../tests/test_nci_*.py`.
+- `inference-only` serves `NciCheck.Protocol`, the check as a `Core.Protocol` (`verity/inference-only/v0`), which
+  neither composite runs yet; `../tests/test_inference_only_protocol.py` holds it to the reference. v0 publishes the
+  division and isn't zero-knowledge, so no composite may run it; only v1, the private form, may be composed
+  (`../../composition/tests/test_inference_only_not_composed.py`).
 
 The check stays experimental until its agreement with `Nci.Complies` is proved. `benchmarks/nci` holds the
 literature index and the training algorithms' traits.
