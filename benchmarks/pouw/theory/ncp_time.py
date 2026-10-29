@@ -29,8 +29,13 @@ makes 3K/32 − 1 of honest's 3K/32 words:
 Forming X and Y is charged to honest alone, two ways: the certificate's additive 8/n + 8/m on t_H, and `FORM_LANE`'s
 instructions and bytes beside the wgmma.
 
+`--coissue ROWS` (repeatable; a dc/probes `run.sh sm90` rows.jsonl) reads measured co-issue points beside the wgmma:
+each must lie inside the polytope, honest's rate becomes the best words any point reaches on honest's routes (the
+polytope's honest schedule is what no probe has yet reached), and the adversary is priced both on the polytope (the
+bound) and on the measured points (not a bound).
+
   uv run --with scipy==1.18.1 python benchmarks/pouw/theory/ncp_time.py [--no-smem] [--json OUT] [--mutations]
-      [--verdict PATH]
+      [--verdict PATH] [--coissue ROWS ...]
 
 (scipy at machine_model's pin: the LP's vertex is that version's.)
 """
@@ -76,8 +81,15 @@ ESTIMATES = {
 INSTR = {
     "IDP4A": ("IMAD", 1), "IMAD": ("IMAD", 1), "IADD3": ("ALU", 1), "PRMT": ("ALU", 1), "FFMA": ("FMA", 1),
     "FADD": ("FMA", 1), "HFMA2": ("FMA", 1), "DFMA": ("FP64", 1), "DADD": ("FP64", 1), "LDS128": ("MIO", 1),
-    "STS128": ("MIO", 1), "UIMAD": ("UNI", 1),
+    "STS128": ("MIO", 1), "UIMAD": ("UNI", 1), "LOP3": ("ALU", 1),
 }
+#: dc/probes' co-issue points (`--coissue`, a `run.sh sm90` rows.jsonl): the tensor role alone (wg_, wg1_) and beside lane
+#: warps (wgU_ one a SMSP, wgV_ and wgW_ two), their lanes' SASS patterns by INSTR name. An n128 IGMMA is half an n256.
+COISSUE = re.compile(r"wg1?_s8_n256_a1|wg[UVW]_[a-z0-9_]+")
+PATTERNS = {"IDP.4A*": "IDP4A", "FFMA": "FFMA", "LOP3.LUT": "LOP3", "DFMA": "DFMA", "HFMA2*": "HFMA2", "IMAD": "IMAD",
+            "LDS.128": "LDS128"}
+#: The route a measured lane class makes words on.
+WORD_ROUTE = {"IMAD": "idp4a", "FMA": "ffma"}
 #: Forming the operands: X's 3mK entries every call, and Y's 3Kn when F is fresh every call, so 32/n + 32/m entries a
 #: word. `FORM_CERT` is NCP's certificate's forming charge on honest's work (24 units an entry of A against 32 a word,
 #: 8/n; the same for Y, 8/m), at the 4090's W1 price. `FORM_LANE` is an H200 estimate beside the wgmma: a biased packed
@@ -247,6 +259,56 @@ def kmin(r_h: float, r_a: float) -> float:
     """The least K at which T1 holds, (1 − 32/(3K)) r_h / r_a ≥ 0.99."""
     x = 1 - 0.99 * r_a / r_h
     return math.inf if x <= 0 else 32 / (3 * x)
+
+
+def coissue_points(paths) -> list[dict]:
+    """The co-issue points of dc/probes rows files: each probe's tensor share t = g/G_SAT, its IGMMA_S8_N256 rate g and
+    its lanes' warp instructions a SMSP-cycle by INSTR name (a probe with any other lane pattern is skipped)."""
+    pts = []
+    for path in paths:
+        for line in Path(path).read_text().splitlines():
+            r = json.loads(line)
+            name = r.get("probe") or r.get("name") or ""
+            if not COISSUE.fullmatch(name):
+                continue
+            g, lanes = 0.0, {}
+            for key, v in r["rates"].items():
+                pat = key.split(":", 1)[1]
+                if pat.startswith("IGMMA"):
+                    g += v / 4 * (0.5 if pat.startswith("IGMMA.64x128x32") else 1.0)
+                elif pat in PATTERNS:
+                    lanes[PATTERNS[pat]] = lanes.get(PATTERNS[pat], 0.0) + v / 4
+                else:
+                    break
+            else:
+                pts.append({"probe": name, "t": g / G_SAT, "g": g, "lanes": lanes})
+    return pts
+
+
+def usage(p: dict, rows: dict) -> dict[str, float]:
+    """Each polytope row's use at a measured point (1 is its bound)."""
+    n = dict.fromkeys(CLASSES, 0.0)
+    for ins, v in p["lanes"].items():
+        n[INSTR[ins][0]] += v
+    tot = sum(n.values())
+    u = {name: a * p["g"] + coef * (tot if cls == "ALL" else n[cls]) for name, (cls, a, coef) in rows.items()
+         if cls != "SHFL"}
+    u.update({f"{c} alone": n[c] / ALONE[c] for c in CLASSES})
+    if n["FP64"]:
+        u["FP64_ROW"] = p["g"] / G_SAT + n["FP64"] / ALONE["FP64"]
+    u["issue"] = p["g"] + tot
+    return u
+
+
+def words_at(p: dict, kind: str) -> float:
+    """Words a SMSP-cycle at a measured point, each lane class running its route's `kind` reading and paying only that
+    route's instructions in its own class (the rest free, so an upper estimate)."""
+    w = WORDS_PER_IGMMA * p["g"]
+    for ins, v in p["lanes"].items():
+        cls = INSTR[ins][0]
+        if cls in WORD_ROUTE:
+            w += v * LANES / sum(c for i, c in ROUTES[WORD_ROUTE[cls]][kind].items() if INSTR[i][0] == cls)
+    return w
 
 
 def bisect(f, lo: float, hi: float) -> float:
@@ -425,6 +487,72 @@ def main() -> int:
     checks.check("against the delivered adversary at K 2,048 T1 holds while its side word costs at least that fraction "
                  "of honest's instructions", 0.5 < md < mf, f"{md:.3f}x (margin {1 / md:.2f}x)")
 
+    # (5) The measured co-issue points: inside the polytope, and the schedules they reach.
+    measured = None
+    paths = [checks.args[i + 1] for i, a in enumerate(checks.args) if a == "--coissue"]
+    if paths:
+        pts = coissue_points(paths)
+        for p in pts:
+            u = usage(p, rows)
+            p["row"], p["use"] = max(u.items(), key=lambda kv: kv[1]) if p["lanes"] else ("tensor", p["t"])
+            p["words"] = {k: sm * words_at(p, k) for k in ("honest", "floor", "products")}
+            p["side_issue"] = sm * sum(p["lanes"].values())
+        print("  co-issue point          tensor  lanes (warp instructions/SM-clk)          side  tightest row   "
+              "words: honest  floor")
+        for p in pts:
+            lanes = ", ".join(f"{k} {sm * v:.3f}" for k, v in p["lanes"].items()) or "-"
+            print(f"  {p['probe']:22s} {p['t']:6.4f}  {lanes:40s} {p['side_issue']:5.3f}  {p['row']:9s} "
+                  f"{p['use']:5.3f}   {p['words']['honest']:7.2f} {p['words']['floor']:7.2f}")
+        worst = max(pts, key=lambda p: p["use"])
+        checks.check("every co-issue point lies inside the census polytope: no measured point refutes a row",
+                     worst["use"] <= 1.01, f"{len(pts)} points; tightest {worst['probe']} at {worst['row']} "
+                     f"{worst['use']:.3f}")
+        sat = [p for p in pts if p["t"] >= 0.998 and p["lanes"]]
+        poly_side = min((1 - a * G_SAT) / coef for cls, a, coef in rows.values() if cls == "ALL")
+        best_sat = max(sat, key=lambda p: p["side_issue"])
+        best_h = max(pts, key=lambda p: p["words"]["honest"])
+        best_a = max(pts, key=lambda p: p["words"]["floor"])
+        r_hm = best_h["words"]["honest"] / sm
+        measured = {
+            "points": pts, "polytope_side_issue_at_saturation": sm * poly_side,
+            "best_side_issue_saturated": {"probe": best_sat["probe"], "side_issue": best_sat["side_issue"]},
+            "honest": {"probe": best_h["probe"], "words_sm_clk": sm * r_hm},
+            "adversary_measured": {"probe": best_a["probe"], "words_sm_clk": best_a["words"]["floor"],
+                                   "gap": {k: gap(r_hm, best_a["words"]["floor"] / sm, k) for k in KS},
+                                   "kmin": kmin(r_hm, best_a["words"]["floor"] / sm)},
+            "vs_polytope": {kind: {"gap": {k: gap(r_hm, adv[kind]["rate"], k) for k in KS},
+                                   "kmin": kmin(r_hm, adv[kind]["rate"])} for kind in adv},
+        }
+        print(f"  measured honest: {sm * r_hm:.2f} words/SM-clk ({best_h['probe']}); polytope's honest "
+              f"{sm * r_h:.2f}")
+        for kind, v in measured["vs_polytope"].items():
+            print(f"    vs {kind:9s} adversary {adv[kind]['words_sm_clk']:7.2f} (polytope): gap "
+                  + "  ".join(f"K{k} {v['gap'][k]:6.2%}" for k in KS) + f"  T1 from K {v['kmin']:,.0f}")
+        am = measured["adversary_measured"]
+        print(f"    vs the floor adversary at the measured points {am['words_sm_clk']:7.2f} ({am['probe']}): gap "
+              + "  ".join(f"K{k} {am['gap'][k]:6.2%}" for k in KS) + f"  T1 from K {am['kmin']:,.0f}")
+        checks.check("beside a saturated wgmma no measured mix issues the lane instructions the polytope allows: the "
+                     "census's generic rows are loose there", best_sat["side_issue"] < 0.9 * sm * poly_side,
+                     f"measured {best_sat['side_issue']:.3f} ({best_sat['probe']}) against the rows' "
+                     f"{sm * poly_side:.3f} warp instructions/SM-clk")
+        checks.check("honest's best measured schedule makes fewer words than the polytope's honest, and against the "
+                     "polytope's floor adversary it misses T1 at every K: T1 rests on the rows' slack or on a "
+                     "honest kernel that reaches them", r_hm < r_h and measured["vs_polytope"]["floor"]["kmin"] == math.inf,
+                     f"{sm * r_hm:.2f} ({best_h['probe']}) vs {sm * r_h:.2f}; gap at K 2,048 "
+                     + ", ".join(f"{measured['vs_polytope'][k]['gap'][2048]:.2%} ({k}, T1 from K "
+                                 f"{measured['vs_polytope'][k]['kmin']:,.0f})" for k in ("floor", "products", "ideal",
+                                                                                          "delivered")))
+        checks.check("on the measured points (not a bound) the floor adversary's best is within 0.1% of honest's best, "
+                     "so the gap is about the advice word and T1 holds from K near 1,100",
+                     am["words_sm_clk"] < 1.001 * sm * r_hm and am["kmin"] < 1200,
+                     f"{am['words_sm_clk']:.2f} ({am['probe']}) vs honest {sm * r_hm:.2f} ({best_h['probe']}); T1 from "
+                     f"K {am['kmin']:,.0f}, gap at K 2,048 {am['gap'][2048]:.2%}")
+        if checks.mutations:
+            up = max(usage(dict(best_h, lanes={k: 1.1 * v for k, v in best_h["lanes"].items()}), rows).items(),
+                     key=lambda kv: kv[1])
+            checks.mutation(f"{best_h['probe']}'s lanes 10% faster would leave the polytope: the inside check bites",
+                            up[1] > 1.01, f"{up[0]} {up[1]:.3f}")
+
     if checks.mutations:
         no_imad = {k: v for k, v in rows.items() if not k.startswith("JPI90")}
         ra2 = solve(reading("products", ROUTES), no_imad, smem=smem)[0]
@@ -448,7 +576,8 @@ def main() -> int:
             "adversary": {k: {kk: vv for kk, vv in v.items() if kk != "rate"} for k, v in adv.items()},
             "gap": {kind: {k: gap(r_h, a["rate"], k) for k in KS} for kind, a in adv.items()},
             "margins": margins, "honest_side_need_k2048": need, "honest_side": sm * side_h, "placement": placement,
-            "forming": form_table, "estimates": ESTIMATES, "routes": ROUTES}, indent=1, default=str) + "\n")
+            "forming": form_table, "measured": measured, "estimates": ESTIMATES, "routes": ROUTES}, indent=1,
+            default=str) + "\n")
     return checks.finish()
 
 
