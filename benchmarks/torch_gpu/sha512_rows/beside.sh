@@ -11,8 +11,8 @@
 # Every GPU command is under `timeout STEP_S` (180 s), so a kernel that hangs costs its step and not the lease.
 # nvidia-smi samples every 200 ms beside them. BUILD_ONLY=1 stops after the builds (a CPU node with CUDA 13).
 #
-#   research run --on vy-dc-h200-3 --project verity --campaign hash --source . --cwd source --timeout 60m \
-#     --env GPU_LEASE_WHO=kernels-kcommit -- bash benchmarks/torch_gpu/sha512_rows/beside.sh
+#   research run --on H200_NODE --project verity --source . --cwd source --timeout 60m -- \
+#     bash benchmarks/torch_gpu/sha512_rows/beside.sh
 # STEPS ("lowreg beside"), ROUNDS (3), LAUNCHES (10), TILES (128), SHAPE ("16384 4096 4096": M N K), KERNELS (beside's
 # kernels to gate and time: default every one `beside list` names), NCU_RUNS, STEP_S, LEASE_MIN (20), CUDA (the toolkit:
 # default the first of /usr/local/cuda-13.0 and /usr/local/cuda).
