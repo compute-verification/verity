@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``gumbel-top-p-token-select`` (``GumbelTopPTokenSelect_v1{V}``, one vocabulary row) and its frame-v3
+"""Flock lowering of ``gumbel-top-p-token-select`` (``GumbelTopPTokenSelect_v1{V}``, one vocabulary row) and its frame-v3
 instance file for the statement ``verity/flock-ir-sampling/v1`` (``live/src/ir_sampling.rs``, binary ``flock-ir-sampling``,
 format ``flock-ir-sampling/v1``).
 

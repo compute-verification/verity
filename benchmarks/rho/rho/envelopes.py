@@ -7,7 +7,7 @@ uncertified gates `U` no inference block constrains) and its `delta`, split into
 cryptography's advantage:
 
 * `Pouw`: the certified declared gates were evaluated, `|A[X,J] ∩ W_cert| ≥ (1 − ε_W)|W_cert|`. Its slack is `undecl`
-  (monitored capacity running no certified declared work: the host CPUs, the GPUs outside the floor credit `residual`
+  (monitored capacity running no certified registered work: the host CPUs, the GPUs outside the floor credit `residual`
   and the clock above the credited one, together the audited residual `r̂`) and `skip` (its deficit `ε_W` and the
   certificate slack `ε'`).
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
@@ -124,7 +124,8 @@ class Pouw:
     window_delta_crypto: float = 0.0
     #: the GPUs' capacity above the clock PoUW credits, as a share
     clock_share: float = 0.0
-    #: the host CPUs counted at `host` times their peak (`Location.host_phi`): 1 until something credits or bounds them
+    #: the host CPUs counted at `host` times their peak (`Location.host_phi`): 0 under hosts carry no compute
+    #: (`GLOSSARY.md`), 1 without that assumption
     host: float = 0.0
 
     CITES = ("Nci.Assumptions.PouwSound", "Nci.Guarantees.CertificateSlack")

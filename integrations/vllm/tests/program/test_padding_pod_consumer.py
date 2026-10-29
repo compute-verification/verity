@@ -207,7 +207,7 @@ def test_the_pod_consumer_refuses_a_misplaced_padding_step():
 def test_padding_hook_end_to_end_b2_eos_stop_full_cap_coverage_context_and_population_openings():
     """`padding_for_committer` as `padding_hook` inside finalize (the pod call-site): the executed prefix from served tokens + declared EOS +
     declared LAG; r0 stops by EOS at its 2nd token (LAG 0 -> executed 2 of cap 5), r1 runs to the cap; the padded map covers the FULL cap
-    population, its context (run root, every step root) is the run's, and openings drawn from the population -- padding leaves included --
+    population, its context (run root, every step root) is the run's, and openings sampled from the population -- padding leaves included --
     verify with the committer's verify()."""
     ids = _identities(["r0", "r1"])
     manifest = {"identities": ids, "program_digest": PD}
