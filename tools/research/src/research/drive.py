@@ -58,8 +58,9 @@ one): the landing whose own diff touches what the failure names (`suite_paths`: 
 guard's `outside`), else its declared inputs (`_input_rule`); several are bisected by landing, each step a run of one landing's
 commit judged by that suite alone, while landing goes on.  The ring (`_ring`) quotes the run, the first error line
 (`first_error`) and what a cancel stopped (`not_run`, "not run"), to @ci, the suite's owner and the culprit's; the culprit is
-reverted on `checked`, never on `main`, `FIX_WINDOW_S` after it (`_red_clock`) unless a fix is marked (`_fix`).  A red run
-moves nothing on `main`.  While the oldest landing no run verified is
+reverted on `checked`, never on `main`, `FIX_WINDOW_S` after it (`_red_clock`) unless a fix is marked (`_fix`); a red
+circuit-check's culprit at once (`CIRCUIT_RED`), and while circuit-check is red on `checked` no PR whose own change touches
+its inputs lands (`_circuit_held`), every other one landing on.  A red run moves nothing on `main`.  While the oldest landing no run verified is
 `BEHIND_S` old, @ci and @top are rung every `BEHIND_EVERY_S` (`_behind`).  A run with no readable state `LOST_AFTER_S` after its
 launch is lost.
 
@@ -88,7 +89,7 @@ from pathlib import Path
 from typing import Callable
 
 from .queue import (IDENTITY, PR, Member, Queue, QueueError, StoreLabels,
-                    _git, _out, built_on, changed, hold, lean_change, lean_hold, unreviewed)
+                    _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, unreviewed)
 
 #: who hears what drive can't settle
 CI = "@ci"
@@ -151,6 +152,9 @@ LOST_AFTER_S = 3 * 3600
 #: how long the owners rung for a red suite or step have to mark a fix before drive reverts its culprit (`Driver._red_clock`;
 #: without it PRs keep landing on a `main` no after-landing run passed, and its failures reach only @ci)
 FIX_WINDOW_S = 3600
+#: the red record reverted at once, with no `FIX_WINDOW_S`, and while it stands no PR touching what it reads lands
+#: (`Driver._circuit_held`): circuit-check runs only after landing, so every landing on its red would go unchecked
+CIRCUIT_RED = "step circuit-check"
 #: how far behind `main`'s tip its last verified commit may fall before drive rings @ci and @top, and how often it rings again
 #: while it stays there (`Driver._behind`)
 BEHIND_S, BEHIND_EVERY_S = 3 * 3600, 3600
@@ -1089,8 +1093,6 @@ class Driver:
     def _input_rule(self, key: str, d: Path, rec: dict, tip: str) -> tuple[str, Callable[[str], bool]] | None:
         """What failed's declared inputs (`by_inputs`, for one suite or step): a suite's directory and `[tool.verity.tests]
         inputs`, a Lean step's packages or Lean sources, circuit-check's."""
-        from .queue import forces_cold
-
         if key.startswith("suite "):
             ins = suite_inputs(self.repo, tip, rec.get("suite") or "")
             return f"{key}'s declared inputs", lambda f: under(f, ins)
@@ -1172,10 +1174,12 @@ class Driver:
         c = r.get("culprit")
         owner = self._owner(Member(*c)) if c else None
         nr = f" Not run (a cancel stopped them): {', '.join(r['not_run'])}." if r.get("not_run") else ""
-        clock = (f" Drive reverts #{c[0]} at {time.strftime('%H:%MZ', time.gmtime(r['rung'] + FIX_WINDOW_S))} unless a fix is "
+        clock = ("" if not c else
+                 f" Drive reverts #{c[0]} now, and lands no PR touching circuit-check's inputs until it passes on "
+                 f"`{self.q.into}`" if key == CIRCUIT_RED else
+                 f" Drive reverts #{c[0]} at {time.strftime('%H:%MZ', time.gmtime(r['rung'] + FIX_WINDOW_S))} unless a fix is "
                  f"marked by then: a ready PR whose body names #{c[0]} or says `fixes {key}`, or whose change touches what "
-                 f"failed, or a new head of #{c[0]}"
-                 if c else "")
+                 f"failed, or a new head of #{c[0]}")
         self.refuse(drive, f"red:{key}:{c[3] if c else r['tip']}{tag}",
                     f"{key} is red on `{self.q.into}` {r['tip'][:12]} (run {' '.join(r['ids'])}): {r['first']}. {what[:1].upper()}{what[1:]}."
                     f"{clock}{nr}",
@@ -1205,25 +1209,28 @@ class Driver:
 
     def _red_clock(self, drive: dict) -> None:
         """Revert each red record's culprit `FIX_WINDOW_S` after its ring, unless a fix is marked (`_fix`) or `main` undid it
-        already: `git revert -m 1` of its merge onto `next` (`_revert_landed`), its owner told."""
+        already: `git revert -m 1` of its merge onto `next` (`_revert_landed`), its owner told.  A red circuit-check's culprit
+        (`CIRCUIT_RED`) is reverted at once, a marked fix or not."""
         pl = drive.get("postland") or {}
         if self.dry_run or self.q.shadow:
             return
         for key, r in list((pl.get("red") or {}).items()):
-            if not (c := r.get("culprit")) or r.get("reverted") or self.now() - r["rung"] < FIX_WINDOW_S:
+            now = key == CIRCUIT_RED
+            if not (c := r.get("culprit")) or r.get("reverted") or not now and self.now() - r["rung"] < FIX_WINDOW_S:
                 continue
             one = Member(*c)
             if self._undone(one.commit):
                 r["reverted"] = "undone"
                 continue
-            if fix := self._fix(key, r):
+            if not now and (fix := self._fix(key, r)):
                 if r.get("fix") != fix:
                     r["fix"] = fix
                     self.q.log(f"research queue drive: not reverting #{one.pr} for {key}: a fix is marked, {fix}")
                 continue
             r.pop("fix", None)
             head = f"{key} is red on `{self.q.into}` {r['tip'][:12]} (run {' '.join(r['ids'])}): {r['first']}"
-            blame = (f"#{one.pr} is its culprit ({r['why']}), and no fix was marked within {FIX_WINDOW_S // 60} min of the "
+            blame = (f"#{one.pr} is its culprit ({r['why']}), and a red circuit-check is reverted at once" if now else
+                     f"#{one.pr} is its culprit ({r['why']}), and no fix was marked within {FIX_WINDOW_S // 60} min of the "
                      "ring")
             if self._revert_landed(drive, pl, r["tip"], r["base"], one, head, f"revert:{key}:{one.commit}", blame):
                 r["reverted"] = self.now()
@@ -1752,7 +1759,7 @@ class Driver:
     def _lift(self, drive: dict, chain: list[Member]) -> list[int]:
         """The members the sync moves to the bottom of `next`, in this order (`queue.Queue.lift`, which keeps each after the PRs
         it contains): those with their ready mark and a land verdict at their head (`_reviewed`'s rule), below the members
-        waiting for one (drive.toml's `reviewed_first`: one waiting for its review would hold every reviewed member above it),
+        waiting for one or for circuit-check to pass (`_circuit_held`) (drive.toml's `reviewed_first`: one waiting for its review would hold every reviewed member above it),
         and of those, the ones whose own change is no Lean change first (`nonlean_first`), so they land this tick instead of
         waiting for a Lean change's check.  Nothing moves past a held member (a hold is a verdict, and keeps what is above it),
         a member whose labels can't be read, nor a Lean change whose own check failed (it waits for its owner's fix or hold,
@@ -1773,7 +1780,7 @@ class Driver:
                 break
             if why and why.startswith("held") or (lean.get(m.commit) or {}).get("state") == "failed" and self._lean_change(m):
                 break
-            landing.append((m, why is None))
+            landing.append((m, why is None and not self._circuit_held(m)))
         if reviewed:
             lift = [m for m, ok in landing if ok]
         else:
@@ -1971,13 +1978,27 @@ class Driver:
 
     def _reviewed(self, chain: list[Member]) -> tuple[int, str | None]:
         """(how many members at the bottom of ``chain`` land on their verdicts, why the next one doesn't): each has its ready mark
-        and a land verdict at its head and no hold (`queue.unreviewed`, by none of `_owners`)."""
+        and a land verdict at its head and no hold (`queue.unreviewed`, by none of `_owners`), and a red circuit-check doesn't
+        hold it (`_circuit_held`)."""
         for k, m in enumerate(chain):
             if not self.q.ready(m.pr, m.head):           # an eject writes `ready = false`; a re-mark at that head is newer
                 return k, "its ready mark is withdrawn: it leaves `next` at the next rebuild"
             if (why := unreviewed(self.reviews(m.pr, m.head), self._owners(m))) is not None:
                 return k, why
+            if why := self._circuit_held(m):
+                return k, why
         return len(chain), None
+
+    def _circuit_held(self, m: Member) -> str | None:
+        """Why ``m`` waits while circuit-check is red on `checked` (`CIRCUIT_RED`): its own change touches circuit-check's inputs
+        (`queue.forces_cold`, `_input_rule`'s rule for it, which takes all of `verity/ml/circuits/` and
+        `tools/verity/circuit_check/` but their tests and docs), and its body doesn't say `fixes step circuit-check` (the fix
+        of a red no culprit was named for has to land).  None otherwise."""
+        if CIRCUIT_RED not in ((self._drive or {}).get("postland") or {}).get("red", {}) or not forces_cold(self._own(m)):
+            return None
+        if (p := self._open().get(m.pr)) and re.search(r"\bfixes\s+step\s+`?circuit-check(?![\w/.-])", p.body or "", re.I):
+            return None
+        return f"circuit-check is red on `{self.q.into}`, and its change touches circuit-check's inputs: it lands once that passes"
 
     def _landable(self, drive: dict, chain: list[Member]) -> int:
         """How many members at the bottom of ``chain`` a passed Lean check of drive's keeps in place for the sync, as a running one

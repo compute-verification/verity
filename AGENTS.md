@@ -150,7 +150,7 @@ There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/chec
 `lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes. `circuit-check` is off the
 merge gate (`gate = false` in `tools/verity/check/ci.toml`) until `circuit-check --all` fits inside the rest of the check: a
 recorded check, `research merge` and the move of `main` leave it out, and it runs after landing on `checked`'s tip, where a red
-reverts its culprit.
+reverts its culprit at once and holds the PRs touching its inputs until it passes.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.

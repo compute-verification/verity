@@ -140,19 +140,26 @@ def test_main_follows_once_every_step_on_the_gate_passed_while_circuit_check_sti
     assert h.after == [(main, {tip: "r-post-0"})]
 
 
-def test_a_red_circuit_check_reverts_its_culprit_on_checked_and_holds_no_promotion(world, monkeypatch, tmp_path):
-    h = _gated(world, monkeypatch)
-    tip = _landed(h, {"pkg/x.circuit-check.py": "X = 1\n"})
+def _circuit_red(h: Review, tmp_path) -> None:
+    """The after-landing run of `checked`'s tip passes every step on the gate and fails circuit-check."""
     h.run_state["r-post-0"] = ("done", 1, None)
     h.evidence = [_steps_run(tmp_path, "r-post-0", {**{s: "passed" for s in GATED}, "circuit-check": "failed"})]
+
+
+def test_a_red_circuit_check_reverts_its_culprit_on_checked_at_once_and_holds_no_promotion(world, monkeypatch, tmp_path):
+    """No `FIX_WINDOW_S` for circuit-check, and no marked fix holds its revert: it runs only after landing, so each landing on its
+    red goes unchecked."""
+    h = _gated(world, monkeypatch)
+    tip = _landed(h, {"pkg/x.circuit-check.py": "X = 1\n"})
+    world.gh.put(9, world.change({"c.txt": "9\n"}), body="Lane `lane-9`. fixes step circuit-check")
+    _circuit_red(h, tmp_path)
     h.tick()
-    (ring,) = [p for p in h.posts if "is red on" in p]
-    assert "step circuit-check is red on `checked`" in ring and "Culprit: #1" in ring, ring
-    assert _main(world) == tip
-    h.clock += FIX_WINDOW_S + 1
-    h.tick()
+    (ring,) = [p for p in h.posts if "Culprit: #1" in p]
+    assert "step circuit-check is red on `checked`" in ring and "Drive reverts #1 now" in ring, ring
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and h.posted[-1][0] == reverted
+    assert any("a red circuit-check is reverted at once" in p for p in h.posts), h.posts
+    assert _main(world) == tip
     assert "pkg/x.circuit-check.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
     h.evidence = []
     h.tick()
@@ -160,6 +167,39 @@ def test_a_red_circuit_check_reverts_its_culprit_on_checked_and_holds_no_promoti
     _pass(h)
     h.tick()
     assert _main(world) == reverted and not h.postland()["red"]
+
+
+def test_while_circuit_check_is_red_a_pr_touching_its_inputs_waits_and_an_unrelated_one_lands(world, monkeypatch, tmp_path):
+    """The red here has no culprit (#1 touches none of circuit-check's inputs), so nothing is reverted and it stands until a run
+    passes circuit-check; meanwhile only the PRs whose change touches those inputs (`queue.forces_cold`) wait."""
+    h = _gated(world, monkeypatch)
+    _landed(h, {"a.txt": "1\n"})
+    _circuit_red(h, tmp_path)
+    h.tick()
+    assert h.postland()["red"]["step circuit-check"]["culprit"] is None
+    world.gh.put(2, world.change({"verity/ml/circuits/library.py": "X = 2\n"}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    world.gh.put(4, world.change({"verity/ml/circuits/README.md": "4\n", "verity/ml/circuits/tests/test_x.py": "4\n"}))
+    for n in (2, 3, 4):
+        h.review(n)
+    assert h.tick().startswith("landed #4"), world.logs
+    assert [m.pr for m in h.q.chain()] == [2]
+    assert _subject(world, "checked").startswith("Queue: #4") and _subject(world, "checked^1").startswith("Queue: #3")
+    out = h.tick()
+    assert out.startswith("nothing reviewed lands: #2") and "touches circuit-check's inputs" in out, out
+    _pass(h)
+    assert h.tick().startswith("landed #2"), world.logs
+    assert "step circuit-check" not in h.postland()["red"]
+
+
+def test_a_pr_that_says_it_fixes_the_red_circuit_check_lands_through_the_hold(world, monkeypatch, tmp_path):
+    h = _gated(world, monkeypatch)
+    _landed(h, {"a.txt": "1\n"})
+    _circuit_red(h, tmp_path)
+    h.tick()
+    world.gh.put(2, world.change({"verity/ml/circuits/library.py": "X = 2\n"}), body="Lane `lane-2`. Fixes step `circuit-check`")
+    h.review(2)
+    assert h.tick().startswith("landed #2"), world.logs
 
 
 def test_a_red_circuit_check_cancels_no_step_on_the_gate_still_running(world, monkeypatch, tmp_path):

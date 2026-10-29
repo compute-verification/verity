@@ -1590,7 +1590,8 @@ def contained_first(entries: dict[int, Entry]) -> list[int]:
 
 def forces_cold(files: Iterable[str]) -> bool:
     """Whether a change to ``files`` makes the next check's circuit-check run cold (hours, not seconds), so a sync merges it
-    above the warm PRs (`Queue.order`): a scheduling estimate, never a gate."""
+    above the warm PRs (`Queue.order`), and what drive takes as circuit-check's inputs: the culprit of a red one
+    (`Driver._input_rule`), and what doesn't land while it is red on `checked` (`Driver._circuit_held`)."""
     for f in files:
         if f.endswith(".md") or "/tests/" in f:
             continue

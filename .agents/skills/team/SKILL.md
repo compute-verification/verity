@@ -63,7 +63,9 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   `lean-audit.json` lock or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that
   passed at or above it; Lean proofs alone land on the verdict.
 - One run checks `checked`'s tip after each landing; when it passes every step on the merge gate (not circuit-check), drive fast-forwards `main` there. A red
-  suite's culprit is rung and reverted on `checked` 60 min later unless a fix is marked, and `main` doesn't move.
+  suite's culprit is rung and reverted on `checked` 60 min later unless a fix is marked, and `main` doesn't move. A red
+  circuit-check's culprit is reverted at once, and until circuit-check passes on `checked` no PR touching its inputs lands
+  (a PR whose body says `fixes step circuit-check` does).
   Citations and tables read only commits whose after-landing run passed: `main`'s.
 - A pure move that `verity check move BASE HEAD` certifies lands alone on `main`, ahead of the queue, through the lander;
   drive merges it into `checked`. Only drive's App pushes `main`, `checked` and `next`.

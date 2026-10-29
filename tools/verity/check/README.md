@@ -14,7 +14,7 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 
 A job with `gate = false` in `ci.toml` is off the merge gate: a recorded check and its shards leave it out, and `research
 merge` requires it of no check. Today that is `circuit-check`. It runs after landing, in the run that checks `checked`'s tip, and
-a red there reverts its culprit as any other after-landing red does, but doesn't hold `main`. It goes back on the gate once `circuit-check --all` fits
+a red there reverts its culprit at once, and lands no PR touching its inputs until it passes, but doesn't hold `main`. It goes back on the gate once `circuit-check --all` fits
 inside the rest of the check.
 
 ## Suites and reuse
