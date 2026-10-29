@@ -119,7 +119,7 @@ def A2LemmaAM1 : Prop :=
       ≤ 2 ^ S * (B.choose g) * (∑ h ∈ Finset.range (g + 1), (((g + 1) * Q).choose h : ℝ≥0∞)) / 2 ^ (ℓ * g)
 
 open Assumptions in
-/-- **Pinned as drafted** (`lean/submissions/track-a/A3Prime.lean`, `a3_prime`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/TrackA/A3Prime.lean`, `a3_prime`).
 
 **A3′** (sms5-review-ideal, Track A; the target game's class (b): the state is `S` bits at every challenge and
 each answer gets `(D, Q)`, so `T := Q`). Lemma A for each of the `|Hist| = Σ_{j<k} B^j` histories, a union bound,
@@ -133,7 +133,7 @@ def A3Prime : Prop :=
         pr (fun a => ¬ G W a)
 
 open Assumptions in
-/-- **Pinned as drafted** (`lean/submissions/track-a/A3Prime.lean`, `a3_prime_lam`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/TrackA/A3Prime.lean`, `a3_prime_lam`).
 
 A3′ in the review's form: if `|Hist|·Γ ≤ 2^-λ'`, then `Pr[pass] ≤ ((g − 1)/B)^k + 2^-λ' + Pr[not G]`. -/
 def A3PrimeLam : Prop :=
@@ -209,7 +209,7 @@ def B1IndepSet : Prop :=
     ∃ s : Finset (Fin n), G.IsIndepSet (s : Set (Fin n)) ∧ n ≤ (Δ + 1) * s.card
 
 open DRG in
-/-- **Pinned as drafted** (`lean/submissions/pebbling/B2StackingDraft.lean`, which proves it in this
+/-- **Pinned as drafted** (`Security/Proofs/Pous/Pebbling/B2Stacking.lean`, which proves it in this
 strengthened form: unpebbled green paths).
 
 **B2** (Fisch 2018/702, Claim 12). In `ℓ ≥ 1/(1 − α − δ)` stacked `(n, α, β)`-depth-robust layers joined by
@@ -248,7 +248,7 @@ def B3Chain : Prop :=
 /-! ## Fisch Claims 13–14 and B5 -/
 
 open DRG in
-/-- **Pinned as drafted** (`lean/submissions/pebbling/FischClaims1314Draft.lean`, `claim13`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/Pebbling/FischClaims1314.lean`, `claim13`).
 
 **Claim 13** (Fisch 2018/702). Under B2's hypotheses with `δ < ε/4`, at least `εn/2` nodes of the last layer
 `V_t` end an unpebbled path of at least `βn` nodes, each of whose nodes has an unpebbled green path to `V_t`. -/
@@ -271,7 +271,7 @@ def FischClaim13 : Prop :=
             ∃ b', g.getLast? = some (node t b')
 
 open DRG in
-/-- **Pinned as drafted** (`lean/submissions/pebbling/FischClaims1314Draft.lean`, `claim14`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/Pebbling/FischClaims1314.lean`, `claim14`).
 
 **Claim 14** (Fisch 2018/702). In the white/green pebbling game, an unpebbled path each of whose nodes has an
 unpebbled green path to the last layer `V_t` is pebbled in order: its `k`-th node carries no pebble before round
@@ -287,7 +287,7 @@ def FischClaim14 : Prop :=
     ∀ (k : ℕ) (hk : k < P.length) (r : ℕ), P[k] ∈ C r → k < r
 
 open Labelling in
-/-- **Pinned as drafted** (`lean/submissions/pebbling/B5ExPostFactoDraft.lean`, `b5_ex_post_facto_bounded`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/B5/ExPostFacto.lean`, `b5_ex_post_facto_bounded`).
 
 **B5** (Pietrzak 2018/194, Theorem 10 with §8's data-carrying labels, data fixed before the oracle), in the
 `(D, Q)` model of the audit game. If `Φ(G, VC)` is `(s, D, k)`-hard, then an `m`-bit preprocessor `A₁` and
@@ -307,7 +307,7 @@ def B5ExPostFactoBounded : Prop :=
       N * 2 ^ m * ((((VC.card * (Q + 1) + N) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ w) ^ (s + 1)
 
 open Labelling in
-/-- **Pinned as drafted** (`lean/submissions/pebbling/B5ExPostFactoDraft.lean`, `b5_ex_post_facto`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/B5/ExPostFacto.lean`, `b5_ex_post_facto`).
 
 **B5** in the parallel-query model (`Prog.RoundBounded D q`, at most `D·q` queries per challenge).
 
@@ -326,7 +326,7 @@ def B5ExPostFacto : Prop :=
 /-! ## N10: invertible labels (PIEs ePrint 2018/684 Conjecture 1 at L = 2) -/
 
 open Pous.Invertible in
-/-- **Pinned as drafted** (`lean/submissions/pebbling/InvertibleExPostFactoDraft.lean`, `transpose_mixing`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/P3/InvertibleCore.lean`, `transpose_mixing`).
 
  **Transpose mixing (proved).** Fix a lower node `u`. Its label `c¹_u` collects one component from every top
 label: component `v` of `c¹_u` is a function of `c²_v` alone (`decodeLower … u v` depends on `c2 v`), and every `v`
@@ -339,7 +339,7 @@ def TransposeMixing : Prop :=
     ∃ c2 c2' : Fin n → Lab n wc, (∀ v ∈ S, c2 v = c2' v) ∧ decodeLower P c2 k2 u ≠ decodeLower P c2' k2 u
 
 open Pous.Invertible in
-/-- **Pinned as drafted** (`lean/submissions/pebbling/InvertibleExPostFactoDraft.lean`, `reverse_needs_all_children`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/P3/InvertibleCore.lean`, `reverse_needs_all_children`).
 
  **Reverse move needs all green children (proved).** Unfolding the trusted reverse rule for the `K_{n,n}`
 connector: to place a pebble on a layer-0 node `u` by a reverse (decode) move from configuration `C`, every layer-1
@@ -352,7 +352,7 @@ def ReverseNeedsAllChildren : Prop :=
     ∀ b : Fin n, node2 1 b ∈ C
 
 open Pous.Invertible in
-/-- **Pinned as drafted** (`lean/submissions/pebbling/InvertibleExPostFactoDraft.lean`, `inv_ex_post_facto_two_layer`).
+/-- **Pinned as drafted.**
 
  **N10 as drafted (false, see `N10Refuted`).** If the two-layer P3 graph is white/green `(s, D, k)`-hard, then an
 `m`-bit preprocessor and `(D, Q)`-bounded online programs — which may query `P⁻¹` — answer at least `k` top-label
@@ -370,7 +370,7 @@ def InvExPostFactoTwoLayer : Prop :=
         k ≤ (Finset.univ.filter fun v => (A₂ (A₁ ω) v).run ((p3Model n wc).answer ω) = topLabel G W ω v).card) ≤
       (n : ℝ≥0∞) * 2 ^ m * ((((n * (Q + 1) + 2 * n) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ (n * wc)) ^ (s + 1)
 
-/-- **Pinned as proved** (`lean/submissions/p3-forward/Refutation.lean`, `not_invExPostFactoTwoLayer`).
+/-- **Pinned as proved** (`Security/Proofs/Pous/P3/Refutation.lean`, `not_invExPostFactoTwoLayer`).
 
  **N10 is false.** White/green hardness charges a missing lower label a whole label, but top label `v` reads only
 column `v` of the lower layer, so an adversary pays for lower labels a component at a time (by storing components,
@@ -379,7 +379,7 @@ def N10Refuted : Prop := ¬ InvExPostFactoTwoLayer
 
 /-! ## Sampled audits and the dense scheme -/
 
-/-- **Pinned as drafted** (`lean/submissions/b5/SampledAudit.lean`, `sampled_audit_prod`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/Audit/SampledAudit.lean`, `sampled_audit_prod`).
 
  **Product form** (simultaneous reveal, each answer from the state and its own index: `TimedProdResponder`).
 If, except with probability `p` over the setup, fewer than `k` blocks are answerable, a `t`-sample audit with
@@ -393,7 +393,7 @@ def SampledAuditProd : Prop :=
     pr (timedProdAccepts sch t W A₁ A₂) ≤ p + (((k - 1 : ℕ) : ℝ≥0∞) / sch.B) ^ t
 
 open Pous.Sampled in
-/-- **Pinned as drafted** (`lean/submissions/b5/SampledAudit.lean`, `sampled_audit_seq`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/Audit/SampledAudit.lean`, `sampled_audit_seq`).
 
  **Sequential reveal.** If after every history of fewer than `t` indices, except with probability `p` over the
 setup, fewer than `k` blocks are answerable in the next round, a `t`-round audit passes with probability at most
@@ -410,7 +410,7 @@ def SampledAuditSeq : Prop :=
     pr (seqAccepts sch t W A₁ A₂) ≤
       (((k - 1 : ℕ) : ℝ≥0∞) / sch.B) ^ t + (∑ j ∈ Finset.range t, (sch.B : ℝ≥0∞) ^ j) * p
 
-/-- **Pinned as drafted** (`lean/submissions/b5/SampledAudit.lean`, `sampled_audit_sim`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/Audit/SampledAudit.lean`, `sampled_audit_sim`).
 
  **General simultaneous reveal** (the answer at position `j` may depend on the whole challenge tuple). As in
 `theorem1_iii_timed`, the answerable set at position `j` is `L_j = {i : Pr_I[answer_j(I[j := i]) = c_i] ≥ η}`. If,
@@ -426,7 +426,7 @@ def SampledAuditSim : Prop :=
     pr (simAccepts sch W A₁ A₂) ≤ p + ((((k - 1 : ℕ) : ℝ≥0∞) / sch.B) ^ t + t * η)
 
 open DRG Labelling in
-/-- **Pinned as drafted** (`lean/submissions/b5/SampledAudit.lean`, `stacked_audit_seq`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/Audit/SampledAudit.lean`, `stacked_audit_seq`).
 
  **Sequential audit of the stacked one-way graph** (B5's game). The challenges are `t` uniform last-layer
 indices, the responder carries an `S`-bit state and answers each within `(⌊βn⌋ − 1, Q)`, and it passes iff every
@@ -455,7 +455,7 @@ def StackedAuditSeq : Prop :=
           (N * 2 ^ S * ((((n * (Q + 1) + N) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ w) ^ (⌊(1 - ε) * n⌋₊ + 1))
 
 open DRG Labelling in
-/-- **Pinned as drafted** (`lean/submissions/b5/SampledAudit.lean`, `stacked_audit_one_percent`).
+/-- **Pinned as drafted** (`Security/Proofs/Pous/Audit/SampledAudit.lean`, `stacked_audit_one_percent`).
 
  **At the example parameters**: `n = 2^16` last-layer blocks of `w = 8192` bits (1 KB), `N = 2^17` nodes,
 `Q = 2^20` queries per answer, an `S = ⌊(18/19)·n·w⌋ = 508614548`-bit state (`ρ` of the last layer) and `ε = 1/23`,
