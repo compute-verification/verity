@@ -750,7 +750,7 @@ builds a registered value from the coin server's `b ‖ c` (one row a node, unde
 `out` reads the row of the node it climbs to. The ZK server pays one SHA-512 a node more than for a bare node (the row
 digest).
 
-The rule is also a Lean program, `Flock.Firewall.run` (`../../core/proof_system/flock/Flock/Firewall.lean`, the executable
+The rule is also a Lean program, `Flock.Firewall.run` (`../../core/service/flock/Flock/Firewall.lean`, the executable
 `flock-firewall`): the pinned schedule, the worker's requests and the ZK server's salts in, the coin server's record out. Its
 message type is the contract: each message is the schedule's own value, a count it fixes, zeros, or commitments under the
 ZK server's salts, so nothing a worker sends reaches the coin server any other way. `tests/test_firewall_agreement.py` holds
