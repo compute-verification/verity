@@ -30,6 +30,7 @@ grain (free copies, free decisions), which the free-copy patch cost must exceed;
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import math
 
@@ -211,6 +212,40 @@ def patch(words: np.ndarray, copy_price: int = 1) -> dict:
             "nearest_distance_shares": (hist / hist.sum()).round(4).tolist()}
 
 
+def forest(words: np.ndarray, copy_price: int = 0) -> dict:
+    """A free-decision tile prover that pools positions: it makes each distinct tile once, along a spanning forest of
+    tiles sharing words (Kruskal over shared-word buckets, most shared first), copying its parent at `copy_price` and
+    rewriting the other words; a component's first tile costs TILE, and every repeated instance one copy. Its cost
+    bounds the free-decision optimum from above."""
+    tiles = np.unique(words.reshape(-1, TILE), axis=0)
+    n_t = len(tiles)
+    parent = np.arange(n_t)
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    cost = TILE * n_t + copy_price * (words.size // TILE - n_t)
+    for k in range(TILE - 1, 0, -1):
+        save = TILE - min(TILE, copy_price + TILE - k)
+        if save <= 0:
+            continue
+        for cols in itertools.combinations(range(TILE), k):
+            _, inv = np.unique(tiles[:, list(cols)], axis=0, return_inverse=True)
+            order = np.argsort(inv.reshape(-1), kind="stable")
+            g = inv.reshape(-1)[order]
+            starts = np.r_[True, g[1:] != g[:-1]]
+            rep = order[np.maximum.accumulate(np.where(starts, np.arange(n_t), 0))]
+            for x, y in zip(order[~starts].tolist(), rep[~starts].tolist()):
+                rx, ry = find(x), find(y)
+                if rx != ry:
+                    parent[rx] = ry
+                    cost -= save
+    return {f"forest_saving_copy_{copy_price}": 1 - cost / words.size}
+
+
 def ball(words: np.ndarray) -> dict:
     """`AdaptiveBallTable`'s count at tile grain, with free copies at any address and free decisions.
 
@@ -254,9 +289,10 @@ def small(seed: int = 7, m: int = 48, n: int = 64, s: int = 67) -> tuple[list[di
             words = honest(design, a, b, pub, co, s)
             free = {"patch_saving_free_copy": patch(words, copy_price=0)["patch_saving"]}
             row = {"design": design, "case": case, "m": m, "n": n, "S": s, **oracle(words), **patch(words), **free,
-                   **ball(words)}
-            checks.append({"name": f"{design}/{case} ball bound ≤ free-copy patch cost",
-                           "ok": row["ball_share"] <= 1 - row["patch_saving_free_copy"]})
+                   **forest(words, 0), **forest(words, 1), **ball(words)}
+            checks.append({"name": f"{design}/{case} ball bound ≤ free-copy patch and forest costs",
+                           "ok": row["ball_share"] <= 1 - max(row["patch_saving_free_copy"],
+                                                              row["forest_saving_copy_0"])})
             if design != "fix2" and case in ("cancel", "walk"):
                 adv, writes, pointers = adversary(design, case, a, b, pub, co, s)
                 ok = bool(np.array_equal(adv, words))
