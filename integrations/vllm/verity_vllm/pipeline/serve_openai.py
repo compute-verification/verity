@@ -65,11 +65,10 @@ ingress, its finish, its committed rows and seeds, and its check), ``request_use
 and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
 recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
-commits the attention interiors without retaining them, and each seal's manifest names them (`serve_release.RetentionOptions`).
-``--retain device --release-after P,Q`` holds each window's values in a device pool until every subprotocol named has drawn
-the window, then keeps on host, and seals, only the leaves their drawn blocks open (`serve_release`; PoUW H1's, ``pouw``,
-from its arm in process once each window's draw coin is open, `serve_h1.H1Windows.drawn`, any other's through
-``--draws-dir``). Each
+commits the attention interiors without retaining them, and each seal's manifest names them (`serve_release.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
+device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
+blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's draw coin is open,
+`serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
 window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
 order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
@@ -780,8 +779,7 @@ def main(opts: Options) -> int:
                 mirror()
             return got
 
-        if draws is not None and loop.error is not None:   # no draw is coming: waiting releases and pool takes end by name
-            draws.fail(f"the server failed: {loop.error}")
+        RL.fail(draws, loop.error)
         if sealer is not None:                           # a cancel's SIGKILL can land before the pending seals end
             stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)

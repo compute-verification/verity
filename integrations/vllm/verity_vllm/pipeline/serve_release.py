@@ -335,3 +335,9 @@ def release_of(opts: Any, out: Path, com: Any = None) -> tuple[Draws | None, Dra
         return None, None
     draws = Draws(protocols_of(r.release_after), getattr(com, "device_pool", None))
     return draws, DrawDir(Path(r.draws_dir) if r.draws_dir else Path(out) / "draws", draws)
+
+
+def fail(draws: Draws | None, error: BaseException | None) -> None:
+    """A failed engine loop's end for ``draws``: no draw is coming, so every waiting release and pool take ends by name."""
+    if draws is not None and error is not None:
+        draws.fail(f"the server failed: {error}")
