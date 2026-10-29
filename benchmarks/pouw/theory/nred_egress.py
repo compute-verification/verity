@@ -13,10 +13,15 @@ n_max "the most MACs one exchanged coin bit carries: a node that forwards a call
 has the outside machine do the call's MACs" (= N for a static call, in the file's words).
 
 The attack A-OUT: a replica forwards one call's coin bits (and, within the served-traffic cap, the token id) to an
-outside machine that already holds the weights; the outside machine runs the call and returns the root. The exchanged
-bits carry the call's whole MAC count. With `ssn_1l_hw`'s per-ROW coins (96 bits a gate-up call, not one coin an
-output element) the per-bit yield is K·N / row_bits ≫ N, so the granted slack is 138-268% of stock — larger than the
-matmul itself, so the adversary may skip the entire matmul and still pass. T1 wants the gap ≤ 1%.
+outside machine that already holds the weights; the outside machine runs the call, hashes its words and returns the
+root. The exchanged bits carry the call's whole MAC count and its hashing. With `ssn_1l_hw`'s per-ROW coins (96 bits
+a gate-up row, not one coin an output element) the per-bit yield is K·N / row_bits = 21× N, so at a 32-bit cap the
+adversary skips 1.15% of the honest's MACs, which with their hashing (W_mac ≈ 120-233 units a MAC) is 138-268% of
+stock. T1 wants the gap ≤ 1%.
+
+Corrections (`corrections`): the coins' word padding (an outsourcer forwards the 82 bits a row reads), the served
+chain (a call's input depends on earlier calls' noise, so the outsider needs their coins or a summary of them), and
+R1b's per-leaf certifier salt (an outsider without the salt sides must return each leaf's 512-bit row digest).
 """
 
 from __future__ import annotations
