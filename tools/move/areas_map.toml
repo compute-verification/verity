@@ -1,8 +1,8 @@
 # The Security/ areas move's renames: what `tools/move/rename.py --map tools/move/areas_map.toml` renames.
 #
-# One area name across `Definitions/`, `Properties/` and `Proofs/` (lean's layout note, "Areas, one name each"; the owners
-# agreed on 24 Oct): the per-component property modules become modules of their area, statements (`Properties/`) and their
-# proofs (`Proofs/Properties/`) together, and `Population` becomes `SampledProofs`, the sampled proofs service's name.
+# One area name across `Definitions/`, `Properties/` and `Proofs/` ("Areas, one name each"): the per-component property
+# modules become modules of their area, statements (`Properties/`) and their proofs (`Proofs/Properties/`) together, and
+# `Population` becomes `SampledProofs`, the sampled proofs service's name.
 # - `Properties.{CertifierDevice,CertifierNetwork,NetworkCertifier,NetworkRecords}` become
 #   `Properties.NetworkCertifier.{Device,DeviceOutput,Check,Records}`;
 # - `Properties.NciDesc` becomes `Properties.Nci.Desc`, `Properties.Identity` `Properties.Hash.Identity`,
