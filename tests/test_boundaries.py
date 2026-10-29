@@ -93,10 +93,10 @@ ALLOWED = {
     # proof system's one challenger's (`sampled_proofs.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
     # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
-    # A node's store is the one the registration log registers (`audit.stored`).
+    # A node's store is the one the registration log registers (`audit.stored`), in a site entry of the Site's locations.
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs", "core.protocols.pous", "core.wire",
-                                        "core.deploy", "core.protocols.registration"},
+                                        "core.deploy", "core.protocols.registration", "core.site"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.

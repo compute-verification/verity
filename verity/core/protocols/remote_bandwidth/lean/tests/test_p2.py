@@ -23,6 +23,7 @@ from hypothesis import strategies as st
 import ra_cases as M
 from ra_cases import Entropy
 import verity_difftest as D
+from verity.core import site as S
 from verity.core.protocols import registration as log
 from verity.core.protocols.pous.verifier import MerkleTree, leaf_hash
 from verity.core.protocols.remote_bandwidth import coins, p2, p2_party, receipts
@@ -159,8 +160,8 @@ def stored_inputs(draw) -> dict:
     node = draw(st.sampled_from(["p2-node", "p2-node", "n", "x" * 64, "x" * 65]))
     blocks = draw(st.sampled_from([1, 4, 12]))
     size = blocks * p2.BLOCK_BYTES + draw(st.sampled_from([0] * 6 + [p2.BLOCK_BYTES, 1]))
-    site = log.Hardware(locs=(log.Loc("site", "site"), log.Loc(node, "host", "site"),
-                              log.Loc("c-star", "memory", node, tier="disk", bytes=size)))
+    site = log.site(locs=(S.Loc("site", "site"), S.Loc(node, "host", "site"),
+                          S.Loc("c-star", "memory", node, tier="disk", bytes=size)))
     return {"params": log.params("onsite" if fault(draw, 6) == 1 else "remote", log.Auditor()),
             "log": {"composite": "remote", "entries": [e.to_json() for e in log.chain("remote", [site])]},
             "store": draw(st.sampled_from(["c-star"] * 8 + [node, "other"])), "blocks": blocks}

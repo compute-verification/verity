@@ -51,6 +51,7 @@ import struct
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from verity.core import site as S
 from verity.core.protocols import registration as log
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.params import SALT_BITS
@@ -191,8 +192,8 @@ def site_log(node: bytes, blocks: int, store: str = STORE) -> log.View:
         n = audit._node(node).decode("ascii")
     except UnicodeDecodeError:
         raise ValueError("a node registered in the log has an ASCII id") from None
-    site = log.Hardware(locs=(log.Loc("site", "site"), log.Loc(n, "host", "site"),
-                              log.Loc(store, "memory", n, tier="dram", bytes=blocks * BLOCK_BYTES)))
+    site = log.site(locs=(S.Loc("site", "site"), S.Loc(n, "host", "site"),
+                          S.Loc(store, "memory", n, tier="dram", bytes=blocks * BLOCK_BYTES)))
     return audit.site_view(log.chain(audit.COMPOSITE, [site]))
 
 

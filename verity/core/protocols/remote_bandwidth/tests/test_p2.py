@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from remote_bandwidth_fakes import Clock, Entropy
+from verity.core import site as S
 from verity.core.protocols import registration as log
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes import p2 as pous_p2
@@ -58,8 +59,8 @@ def test_a_p2_store_drawn_from_the_registration_log_is_the_registration_of_its_n
     """The node `register` reads from the log is the one whose memory leaf holds vk's blocks: its registration is
     `_draw`'s of that node, byte for byte.  A leaf of other bytes, or no such leaf, draws nothing."""
     def logged(store_bytes: int) -> log.View:
-        site = log.Hardware(locs=(log.Loc("site", "site"), log.Loc(NODE.decode(), "host", "site"),
-                                  log.Loc("c-star", "memory", NODE.decode(), tier="disk", bytes=store_bytes)))
+        site = log.site(locs=(S.Loc("site", "site"), S.Loc(NODE.decode(), "host", "site"),
+                              S.Loc("c-star", "memory", NODE.decode(), tier="disk", bytes=store_bytes)))
         return log.check(log.Auditor(), "remote", log.chain("remote", [site])).view()
 
     reg, size = store.registration, store.registration.codec.blocks * p2.BLOCK_BYTES
