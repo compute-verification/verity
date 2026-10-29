@@ -228,9 +228,10 @@ def test_pinned_float_ssn_passes_and_differs(llama, ids, monkeypatch, tmp_path):
 def test_a_checkpoint_on_e4m3_serves_through_int8(llama, ids):
     """`checkpoint` rounds only the weights, so int8 then serves the E4M3 checkpoint: the gates pass and the result
     isn't int8 of the bf16 weights."""
-    r = evaluate(llama, ids[:4], ["int8-channel127-v1", "int8-of-fp8-e4m3-channel-v1"])
+    r = evaluate(llama, ids[:4], ["int8-channel127-v1", "int8-of-fp8-e4m3-channel-v1", "ssn-1l-of-fp8-e4m3-channel-v1"])
     assert passed(r), r["gates"]
     assert not np.array_equal(r["nll"]["int8-channel127-v1/s0"], r["nll"]["int8-of-fp8-e4m3-channel-v1/s0"])
+    assert not np.array_equal(r["nll"]["int8-of-fp8-e4m3-channel-v1/s0"], r["nll"]["ssn-1l-of-fp8-e4m3-channel-v1/s0"])
 
 
 def test_seeds(llama, ids, calib):
