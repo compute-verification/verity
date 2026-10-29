@@ -260,8 +260,8 @@ loopback() {
   [ $rc != 0 ] || for i in $(seq ${RECORD_WAIT_S:-300}); do
     [ $(cat $s/sessions/index.jsonl 2>/dev/null | wc -l) -ge $NS ] && break; sleep 1; done
   kill $SP; wait $SP 2>/dev/null
-  LAST=$(find $s/sessions -name session.json -printf '%T@ %h\n' | sort -n | tail -1 | cut -d' ' -f2)
   [ $rc != 0 ] || accepted $s/sessions/index.jsonl || rc=3
+  LAST=$(find $s/sessions -name session.json -printf '%T@ %h\n' | sort -n | tail -1 | cut -d' ' -f2)
   return $rc
 }
 
