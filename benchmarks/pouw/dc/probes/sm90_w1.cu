@@ -257,7 +257,7 @@ DC_DEV void bcast_body(const OpArgs& a) {
   const unsigned base = (unsigned)__cvta_generic_to_shared(sb) + split;
   const unsigned long long gbase = (unsigned long long)a.g + split;
   if constexpr (SPACE == 0) {
-    for (int i = threadIdx.x; i < ROWS * 32 + 64; i += TPB) sb[i] = (unsigned)i * 0x9E3779B9u ^ m;
+    for (int i = threadIdx.x; i < ROWS * 32 + 32; i += TPB) sb[i] = (unsigned)i * 0x9E3779B9u ^ m;
   }
   __syncthreads();
   unsigned acc[U];
