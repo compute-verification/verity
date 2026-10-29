@@ -86,6 +86,14 @@
     "head_dim": 64,
     "source": "Llama-3.2-1B config: hidden 2048, intermediate 8192, 32 q heads, 8 kv heads, head dim 64; fused qkv and gate-up as served"
   },
+  "egress": {
+    "code_lanes": 4,
+    "coin_bits_over_steps": 15,
+    "credited_hash_bytes_per_mac": 0.1307,
+    "cap_bits_per_token": [32, 320],
+    "seed_bits_per_window": 512,
+    "source": "DitherInstance.lean (Security/Definitions/Pouw/Guarantees): an exchanged bit replaces at most beta = n_max W_mac of priced work (OutsourceWithinEgress), W_mac counting the block's hashing, caps set at served traffic, and 'without a streamed side about 1 kbit carries a whole sampling block'; ssn_1l_hw's coins S + 15 bits a row in whole words (N-PREM interim, compute-research/20261029T0740Z-report-np-prem); credited hashing 232.0 W1 units a MAC at HASH-38's bar for ssn-1l/served/s8/k32/w/r256k/cert/min (pouw_space.py, run r20261029-081541-bf69), so 0.1307 B a MAC; caps: a 4-byte token id in or out a token row, and 10x that for text and framing (estimates); the seeded lead's window salt is 512 bits (pouw.salt)"
+  },
   "space_t2": {
     "serial_calls": 64,
     "rtt_s": [2e-6, 10e-6],

@@ -278,6 +278,27 @@ def r1b_arrival_t2(inp: dict, ll: dict) -> dict:
     return {"design": "R1b's arrival-order coins on N-CARD's T2 (async engine)", "rtt_s": s["rtt_s"], "designs": out}
 
 
+def egress_outsourcing(inp: dict, ll: dict) -> dict:
+    """OutsourceWithinEgress's term at caps of served traffic, as a share of stock: an outside machine does the work
+    a counted bit carries (DitherInstance: beta = n_max W_mac, W_mac with the block's hashing)."""
+    cfg, e, s = inp["llama_3_2_1b"], inp["egress"], inp["sha512"]
+    alpha, c = inp["ssn_1l"]["alpha"], e["code_lanes"]
+    steps = lambda k: 1 + math.ceil(max(0, k - (32 - c)) / 31)
+    coin_bits = 32 * cfg["layers"] * sum(math.ceil((steps(k) + e["coin_bits_over_steps"]) / 32) for k, _ in cfg["linears"])
+    w_mac = {price: alpha + e["credited_hash_bytes_per_mac"] * s[price]
+             for price in ("floor_units_per_byte", "bar_units_per_byte")}
+    mac_per_word_bit = 1.0 / (8.0 * words_bytes_per_mac(alpha))
+    caps = {}
+    for cap in e["cap_bits_per_token"]:
+        caps[str(cap)] = {
+            "r1b_live_coins": {p: cap / coin_bits * w for p, w in w_mac.items()},
+            "r1_words_through_the_port": cap * mac_per_word_bit * alpha / ll["macs_per_token"]}
+    return {"coin_bits_per_token": coin_bits, "macs_per_coin_bit": ll["macs_per_token"] / coin_bits,
+            "w_mac": w_mac, "r1_macs_per_imported_bit": mac_per_word_bit,
+            "seeded_lead": f"false: {e['seed_bits_per_window']} bits (the window's salt) carry every call's noise, "
+                           "so one counted message outsources the window", "share_of_stock_at_cap": caps}
+
+
 def r2_memory(inp: dict, ll: dict) -> dict:
     """Store every word in HBM and let a memory challenger demand random ones against a deadline."""
     alpha = inp["ssn_1l"]["alpha"]
@@ -414,6 +435,10 @@ def per_period_bounds(inp: dict, res: dict) -> dict:
          hw["prenoise"]["t8192"]),
         ("R4 elapsed-time reading: tensor pipe idle beyond stock's, SSN overlapped", "T 8,192", r4["t2"],
          r4["excess_idle_stock_macs_per_stock_mac"]),
+        ("R1b egress: OutsourceWithinEgress at a 32-bit-a-token cap, W_mac at SHA-512's floor", "any", None,
+         res["egress"]["share_of_stock_at_cap"]["32"]["r1b_live_coins"]["floor_units_per_byte"]),
+        ("R1 egress: words imported through the port at a 32-bit-a-token cap", "any", None,
+         res["egress"]["share_of_stock_at_cap"]["32"]["r1_words_through_the_port"]),
         ("1% allowance", "any", None, 0.01),
     ]
     rows = [{"bound": name, "point": point, "t2_beside": t2v, "share_of_stock": share,
@@ -481,6 +506,11 @@ def checks(inp: dict, ll: dict, res: dict) -> list[tuple[str, bool, str]]:
         ("R1b: N-CARD's judged T2 reproduces from its async parts (t_H / stock) at every point",
          all(abs(v["space_t2"] / v["space_t2_judged"] - 1) < 0.005
              for pts in res["R1b"]["arrival_t2"]["designs"].values() for v in pts.values()), ""),
+        ("Egress: ssn_1l_hw's coins are N-PREM's 3 words a row at K 2,048 and 9 at K 8,192 (18 a layer, 9,216 bits a token)",
+         res["egress"]["coin_bits_per_token"] == 9216, str(res["egress"]["coin_bits_per_token"])),
+        ("Egress: the credited hashing at the bar is N-CARD's 232 units a MAC",
+         abs(inp["egress"]["credited_hash_bytes_per_mac"] * inp["sha512"]["bar_units_per_byte"] / 232.0 - 1) < 0.002,
+         f"{inp['egress']['credited_hash_bytes_per_mac'] * inp['sha512']['bar_units_per_byte']:.2f}"),
         ("R1: a 400 Gb/s port fits inside the measured PCIe Gen5 x16 device-to-host rate",
          max(res["R1"]["pcie_egress_measured"]["port_400g_share_of_pcie"]) < 1.0,
          ", ".join(f"{x:.3f}" for x in res["R1"]["pcie_egress_measured"]["port_400g_share_of_pcie"])),
@@ -573,6 +603,13 @@ def table(res: dict) -> str:
                      f"{at['rtt_s'][0] * 1e6:g}-{at['rtt_s'][1] * 1e6:g} us): " + "; ".join(
                          f"{k} ({v['a_root_share_of_honest_step']:.0%}) {v['space_t2']:.1f} -> " + ", ".join(
                              f"{ln} {x[0]:.1f}-{x[1]:.1f}" for ln, x in v["arrival_t2"].items()) for k, v in pts.items()))
+    eg = res["egress"]
+    lines.append(f"Egress (OutsourceWithinEgress at served-traffic caps, share of stock): ssn_1l_hw streams {eg['coin_bits_per_token']:,} "
+                 f"coin bits a token ({eg['macs_per_coin_bit']:,.0f} MACs a bit); W_mac {eg['w_mac']['floor_units_per_byte']:.1f}-"
+                 f"{eg['w_mac']['bar_units_per_byte']:.1f} (SHA floor - bar); R1 imports words at {eg['r1_macs_per_imported_bit']:.3f} MACs a bit")
+    for cap, v in eg["share_of_stock_at_cap"].items():
+        lines.append(f"    cap {cap} bits a token: R1b's live coins {v['r1b_live_coins']['floor_units_per_byte']:.1%}-"
+                     f"{v['r1b_live_coins']['bar_units_per_byte']:.1%}; R1 {v['r1_words_through_the_port']:.2e}; the seeded lead {eg['seeded_lead']}")
     r2 = res["R2"]
     lines.append(f"R2  stored words: {r2['words_bytes_per_step_t8192']:.3e} B a step at T 8,192 ({r2['step_over_hbm']:.1f}x HBM); "
                  f"one word recomputes in {r2['recompute_one_word_s'] * 1e6:.2f} us: census RTT {r2['rtt_over_recompute']:,.0f}x, "
@@ -625,6 +662,7 @@ def main() -> int:
     res["R1"]["shapes"] = r1_shapes(inp, ll)
     res["R1b"] = r1b_salt_and_arrival(inp, ll)
     res["R1b"]["arrival_t2"] = r1b_arrival_t2(inp, ll)
+    res["egress"] = egress_outsourcing(inp, ll)
     res["R4"]["certifier_rows"] = certifier_capacity(inp, ll, res["R1"])
     res["period_bounds"] = per_period_bounds(inp, res)
     cks = checks(inp, ll, res)
