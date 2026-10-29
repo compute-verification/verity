@@ -7,7 +7,7 @@ A *model* is the executable, bit-exact semantics of one accumulator coordinate o
   exact products are summed together with the incoming accumulator in fixed-size *groups*; every term of a group
   is rescaled to the adder's ``width``, aligned to the group's maximum exponent by a truncating right shift,
   summed exactly, and the sum is normalised back to ``width`` bits by truncation (round toward zero).  The result
-  of one group is the accumulator of the next.  ``Pipeline`` is this class's historical name and stays an alias.
+  of one group is the accumulator of the next.
 * :class:`BlockScaledAlignAdd` -- Blackwell's block-scaled FP4 path (``mma.sync kind::mxf4nvf4`` on sm_120), as
   measured on the RTX 5090: four *exact* 16-term group dots over E2M1, per-block
   scales applied losslessly, then one five-way align-add of the four scaled terms and the carried accumulator whose
@@ -89,7 +89,6 @@ __all__ = [
     "MODELS",
     "Model",
     "PIPELINES",
-    "Pipeline",
     "group_sum",
     "pipeline_for",
     "tc_dot",
@@ -231,10 +230,6 @@ class GroupSum:
                 return pack_fp32(acc)
             start += size
         return pack_fp32(acc)
-
-
-#: The historical name of :class:`GroupSum`; every existing import keeps working.
-Pipeline = GroupSum
 
 
 def tc_dot(pipeline: GroupSum, acc_bits: int, a: Sequence[int], b: Sequence[int]) -> int:

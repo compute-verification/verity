@@ -33,7 +33,7 @@ run's `cc.json` (same name) and `DIR/tree` with `--meta @DIR/meta.json --ref cir
 
 ## WP1: independence audit of the existing columns
 
-The target names three executable columns of the finite-domain step: Python `verity.ml.circuits.silicon.silicon`, Rust
+The target names three executable columns of the finite-domain step: Python `verity.ml.circuits.silicon.models`, Rust
 `tc.rs` (SP1's guest, deleted with the archive in `2091252fe3`), Lean `veritor/lean/VeritorSpec/TC.lean` in the `veritor` repository (reused unchanged by `TCB.lean`, which only adds the
 casts). Reading them against Hawkeye's pinned simulator (`verity/ml/circuits/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
 `utils/utils.cpp::multiply_bfloat16_to_gfloat`, `src/gfloat.cpp::Gfloat::operator float`):

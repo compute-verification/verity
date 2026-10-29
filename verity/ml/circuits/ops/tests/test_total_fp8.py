@@ -14,7 +14,7 @@ import struct
 import pytest
 
 from verity.ml.circuits.silicon.errors import InvalidArtifact
-from verity.ml.circuits.silicon.silicon import HOPPER_E4M3_K32, tc_dot
+from verity.ml.circuits.silicon.models import HOPPER_E4M3_K32, tc_dot
 from verity.ml.circuits.silicon.total import FP32_CANONICAL_NAN, HOPPER_BF16_WGMMA_K16
 from verity.ml.circuits.silicon.total_fp8 import (
     HOPPER_E4M3_FAMILY_VERSION,

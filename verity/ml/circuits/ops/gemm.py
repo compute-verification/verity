@@ -365,8 +365,8 @@ def _register_kernels() -> None:
     from verity.ml.circuits.evaluation import register_kernel
 
     from verity.ml.kernels import tc as K
-    from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4
-    from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
+    from verity.ml.circuits.silicon.models import (AMPERE_BF16_M16N8K16, BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_MXF4,
+                                                   BLACKWELL_SM120_NVF4)
     from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
     from verity.ml.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32
 

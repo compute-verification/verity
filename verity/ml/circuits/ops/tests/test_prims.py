@@ -10,7 +10,7 @@ import pytest
 from verity.ml.circuits.defs import REGISTRY
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.silicon.cast import f32_to_bf16_hw_word, f32_to_bf16_word, f32_to_e4m3_sat_word
-from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16, tc_dot
 from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 from verity.ml.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
 
