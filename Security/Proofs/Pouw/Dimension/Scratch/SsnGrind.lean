@@ -18,6 +18,8 @@ layouts of the 4-lane and 5-lane column codes.
   `g·n·S + m·C` of the `m·n·S` words stay distinct and non-free, so a program right on that set costs at least
   `32·(m·n·S − g·n·S − m·C)`. The window of a word is its row: only step 0's code tells its columns apart.
 * **The full grid** (`ssnFull`): with no weight `2^31`, all `m·n·S` words are distinct and non-free.
+  `ssnFull_shift` makes that shift-separated: no two words differ by a constant and none is a free value plus a
+  constant, the hypotheses of carrier separation (`ssn1lServed_shift`, `ssn1l5Served_shift` for the served layouts).
 * **Served layouts.** `l4Src`/`l4Pos` is `ssn_1l`'s layout (step 0's lanes at bits `0, 8, 16, 24` of word 0, later
   steps at word 0's other 28 bits in order, then words 1, 2, …) and `l5Src`/`l5Pos` the 5-lane code's (step 0's fifth
   lane at bit 1, later steps at word 0's other 27 bits). Both are injective (`l4_inj`, `l5_inj`), so
@@ -350,6 +352,83 @@ theorem ssnFull (hpos : ∀ s q, pos s q < 32)
   · rw [card_image_of_differ _ _ hne]
     simp [Finset.card_product]
 
+theorem aff_shift {ι : Type} [Fintype ι] {c c' q : ℚ} {a a' : ι → ℚ}
+    (h : ∀ g ∈ (Set.univ : Set (ι → Fin 2)), aff (q := 2) c a g = aff c' a' g + q) :
+    aff (q := 2) c a = aff (c' + q) a' := by
+  funext g
+  have := h g trivial
+  simp only [aff] at this ⊢
+  linarith
+
+/-- **SSN's words are shift-separated on the full grid**: under `ssnFull`'s hypotheses no two words differ by a
+constant, and no word is a free value plus a constant. These are the two hypotheses of carrier separation
+(`SepBy (Carries Set.univ) (FreeB m C) T`): a register that carries one word carries no other and no free value. -/
+theorem ssnFull_shift (hpos : ∀ s q, pos s q < 32)
+    (hinj : ∀ s q s' q', used s q → used s' q' → src s = src s' → pos s q = pos s' q' → s = s' ∧ q = q')
+    (κ : Fin m → ℕ → Fin S → ℤ) (W : Fin S → Fin L → ℕ → ℤ) (hU : ∀ s q j, W s q j ≠ 0 → used s q)
+    (hS : 0 < S) (n : ℕ) (hW1 : ∀ s : Fin S, ∀ j ∈ range n, ∃ q, W s q j ≠ 0)
+    (hW2 : ∀ j ∈ range n, ∀ j' ∈ range n, j ≠ j' → ∃ q, W ⟨0, hS⟩ q j ≠ W ⟨0, hS⟩ q j')
+    (hW31 : ∀ s q j, W s q j ≠ 2 ^ 31) :
+    (∀ t ∈ (univ ×ˢ range n ×ˢ univ).image (fun x : Fin m × ℕ × Fin S =>
+        ssnWordB (C := C) src used pos κ W x.1 x.2.1 x.2.2),
+      ∀ t' ∈ (univ ×ˢ range n ×ˢ univ).image (fun x : Fin m × ℕ × Fin S =>
+        ssnWordB (C := C) src used pos κ W x.1 x.2.1 x.2.2),
+      (∃ q : ℚ, ∀ g ∈ (Set.univ : Set (Bits m C)), t g = t' g + q) → t = t') ∧
+    ∀ t ∈ (univ ×ˢ range n ×ˢ univ).image (fun x : Fin m × ℕ × Fin S =>
+        ssnWordB (C := C) src used pos κ W x.1 x.2.1 x.2.2),
+      ∀ f ∈ FreeB m C, ¬ ∃ q : ℚ, ∀ g ∈ (Set.univ : Set (Bits m C)), f g = t g + q := by
+  classical
+  have mem : ∀ u : Fin m × ℕ × Fin S, u ∈ (univ ×ˢ range n ×ˢ univ : Finset (Fin m × ℕ × Fin S)) ↔ u.2.1 < n := by
+    intro u
+    simp
+  refine ⟨fun w hw w' hw' ⟨q, hq⟩ => ?_, fun w hw f hf ⟨q, hq⟩ => ?_⟩
+  · obtain ⟨u, hu, rfl⟩ := Finset.mem_image.1 hw
+    obtain ⟨u', hu', rfl⟩ := Finset.mem_image.1 hw'
+    have hf := aff_shift hq
+    by_cases huu : u = u'
+    · rw [huu]
+    exfalso
+    have hrk : rk n u ≠ rk n u' := fun h => huu (rk_inj ((mem u).1 hu) ((mem u').1 hu') h)
+    have hc := fun k => coef_eq_of_aff_eq (q := 2) (by norm_num) (c := (κ u.1 u.2.1 u.2.2 : ℚ))
+      (a := bitCoef src used pos W u.1 u.2.1 u.2.2) (c' := (κ u'.1 u'.2.1 u'.2.2 : ℚ) + q)
+      (a' := bitCoef src used pos W u'.1 u'.2.1 u'.2.2) hf k
+    rcases lt_or_gt_of_ne hrk with h | h
+    · obtain ⟨k, -, hk, -⟩ := rows_win hpos hinj W hU hS n hW1 hW2 ((mem u').1 hu') ((mem u).1 hu) h
+      exact hk (hc k).symm
+    · obtain ⟨k, -, hk, -⟩ := rows_win hpos hinj W hU hS n hW1 hW2 ((mem u).1 hu) ((mem u').1 hu') h
+      exact hk (hc k)
+  · obtain ⟨⟨i, j, t⟩, hu, rfl⟩ := Finset.mem_image.1 hw
+    have hj : j < n := (mem _).1 hu
+    have hq' : ∀ g ∈ (Set.univ : Set (Bits m C)), ssnWordB src used pos κ W i j t g = f g + -q := fun g hg => by
+      rw [hq g hg]
+      ring
+    rcases hf with ⟨c, rfl⟩ | ⟨r, c, rfl⟩
+    · obtain ⟨k, -, hk, -⟩ := rows_win0 hpos hinj W hU hS n hW1 (u := (i, j, t)) hj
+      have hf' : ssnWordB src used pos κ W i j t = aff (q := 2) (c + -q) (fun _ => 0) := by
+        funext x
+        rw [hq' x trivial]
+        simp [aff]
+      exact hk (coef_eq_of_aff_eq (q := 2) (by norm_num) (c := (κ i j t : ℚ)) (a := bitCoef src used pos W i j t)
+        (c' := c + -q) (a' := fun _ => 0) hf' k)
+    · have hf' := aff_shift (c := (κ i j t : ℚ)) (a := bitCoef src used pos W i j t) (c' := 0)
+        (a' := coinCoef r c) hq'
+      have hk := coef_eq_of_aff_eq (q := 2) (by norm_num) (c := (κ i j t : ℚ)) (a := bitCoef src used pos W i j t)
+        (c' := 0 + -q) (a' := coinCoef r c) hf' (r, c, ⟨31, by norm_num⟩)
+      simp only [coinCoef, and_self, if_true] at hk
+      by_cases hri : r = i
+      · subst hri
+        by_cases hown : ∃ s₀ q₀, used s₀ q₀ ∧ src s₀ = c ∧ pos s₀ q₀ = 31
+        · obtain ⟨s₀, q₀, hu₀, rfl, hp⟩ := hown
+          have hpt : (⟨31, by norm_num⟩ : Fin 32) = ⟨pos s₀ q₀, hpos s₀ q₀⟩ := Fin.ext hp.symm
+          rw [hpt, bitCoef_at hpos hinj W _ _ _ hu₀] at hk
+          split_ifs at hk
+          · exact hW31 s₀ q₀ j (by exact_mod_cast hk)
+          · norm_num at hk
+        · rw [bitCoef_none W _ j t c _ (fun s q hu hs hp => hown ⟨s, q, hu, hs, hp⟩)] at hk
+          norm_num at hk
+      · rw [bitCoef_row W j t (show (r, c, (⟨31, by norm_num⟩ : Fin 32)).1 ≠ i from hri)] at hk
+        norm_num at hk
+
 /-! ### `ssn_1l` loses whole rows -/
 
 /-- The coin values with every used step-0 lane of row `i₀` at `0`. -/
@@ -624,6 +703,34 @@ theorem ssn1l5ServedRows_charged (hC : S + 4 ≤ 32 * C) (κ : Fin m → ℕ →
     32 * (m * (n * S)) ≤ cost100 h100Floor Pg + 32 * (g * (n * S) + m * C) :=
   ssnRows_charged l5_pos_lt (l5_inj hC) κ w5 w5_used hS n (w5_reach n hn) (w5_cols hS n hn) Sg g hSg fpSem Fs Pg
     hL hPg hO
+
+/-- **`ssn_1l`'s served words are shift-separated** (bit model, full grid, `n ≤ 28,559`): `ssnFull_shift` for
+`l4Src`/`l4Pos` and the 4-lane code. -/
+theorem ssn1lServed_shift (hC : S + 3 ≤ 32 * C) (κ : Fin m → ℕ → Fin S → ℤ) (hS : 0 < S) (n : ℕ)
+    (hn : n ≤ 28559) :
+    (∀ t ∈ (univ ×ˢ range n ×ˢ univ).image (fun x : Fin m × ℕ × Fin S =>
+        ssnWordB (l4Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l4Pos s q) κ w1l x.1 x.2.1 x.2.2),
+      ∀ t' ∈ (univ ×ˢ range n ×ˢ univ).image (fun x : Fin m × ℕ × Fin S =>
+        ssnWordB (l4Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l4Pos s q) κ w1l x.1 x.2.1 x.2.2),
+      (∃ q : ℚ, ∀ g ∈ (Set.univ : Set (Bits m C)), t g = t' g + q) → t = t') ∧
+    ∀ t ∈ (univ ×ˢ range n ×ˢ univ).image (fun x : Fin m × ℕ × Fin S =>
+        ssnWordB (l4Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l4Pos s q) κ w1l x.1 x.2.1 x.2.2),
+      ∀ f ∈ FreeB m C, ¬ ∃ q : ℚ, ∀ g ∈ (Set.univ : Set (Bits m C)), f g = t g + q :=
+  ssnFull_shift l4_pos_lt (l4_inj hC) κ w1l w1l_used hS n (w1l_reach n hn)
+    (code_cols hS w1l (fun q j => by simp [w1l]) n hn) w1l_ne
+
+/-- **The 5-lane code's served words are shift-separated** (bit model, full grid, `n ≤ 371,292`). -/
+theorem ssn1l5Served_shift (hC : S + 4 ≤ 32 * C) (κ : Fin m → ℕ → Fin S → ℤ) (hS : 0 < S) (n : ℕ)
+    (hn : n ≤ 371292) :
+    (∀ t ∈ (univ ×ˢ range n ×ˢ univ).image (fun x : Fin m × ℕ × Fin S =>
+        ssnWordB (l5Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l5Pos s q) κ w5 x.1 x.2.1 x.2.2),
+      ∀ t' ∈ (univ ×ˢ range n ×ˢ univ).image (fun x : Fin m × ℕ × Fin S =>
+        ssnWordB (l5Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l5Pos s q) κ w5 x.1 x.2.1 x.2.2),
+      (∃ q : ℚ, ∀ g ∈ (Set.univ : Set (Bits m C)), t g = t' g + q) → t = t') ∧
+    ∀ t ∈ (univ ×ˢ range n ×ˢ univ).image (fun x : Fin m × ℕ × Fin S =>
+        ssnWordB (l5Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l5Pos s q) κ w5 x.1 x.2.1 x.2.2),
+      ∀ f ∈ FreeB m C, ¬ ∃ q : ℚ, ∀ g ∈ (Set.univ : Set (Bits m C)), f g = t g + q :=
+  ssnFull_shift l5_pos_lt (l5_inj hC) κ w5 w5_used hS n (w5_reach n hn) (w5_cols hS n hn) w5_ne
 
 end Served
 
