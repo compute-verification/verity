@@ -36,9 +36,23 @@ Modes (transformed-state loops):
   full     (32 bits only, no reduction) the set above plus IMAD.WIDE's high word, SHF.R, PRMT with a register
            selector, IDP.4A and IMNMX
 
+An `unsat` proves something only if every example is an input a call can reach. The `window` set draws R_t and C_t
+freely at each step: it covers coin layouts whose prefixes take every residue. The `layout` set draws them as the
+lead's walks truncated to W bits: a row increment is an 8-bit coin b in [0, 254] (a u8 lane 1 + b beside a -1 lane), a
+column increment is odd (three odd coin lanes at odd weights, at most 16,383), so C_t's parity is t's. A window there
+starts at a step t0 of parity `phase` (each instance runs at both, as a program may depend on t), or at the call's
+start, where N_0 is
+
+  zero     0
+  key      kappa, a live word of the call (a source, as the keys are)
+  rowcol   a_i ^ b_j, live words of the row and of the column (sources; the free terms read them)
+
 Every window of s ≥ 2 runs at width 8 and again at width 6 (a smaller formula; `unsat` there is the same proof).
 
-usage: fold_window.py OUT.json [--width=W] [--timeout=S] [--jobs=J] [--only=NAME,...] [--quick]
+`--targets` writes the targets instead: each one's word form, honest cost a step and 32-bit test vectors.
+
+usage: fold_window.py OUT.json [--set=window|layout] [--width=W] [--timeout=S] [--jobs=J] [--only=NAME,...] [--quick]
+       fold_window.py OUT.json --targets
 """
 import json
 import multiprocessing as mp
@@ -173,6 +187,19 @@ class Program:
         return out
 
 
+def layout_walks(rng, s, t0):
+    """Draws of the lead's zero-data row and column prefixes at steps t0 .. t0 + s - 1."""
+    def walk(inc):
+        x, out = 0, []
+        for t in range(1, t0 + s):
+            x += inc()
+            if t >= t0:
+                out.append(x)
+        return out
+    return (lambda: walk(lambda: rng.randrange(0, 255)),
+            lambda: walk(lambda: 2 * rng.randrange(-8192, 8192) + 1))
+
+
 def instance(spec, w, seed):
     """Build the solver for one (target, s, mode, L, F); return (solver, program, source names)."""
     target, s, mode, L, F = spec["target"], spec["s"], spec["mode"], spec["L"], spec["F"]
@@ -192,8 +219,18 @@ def instance(spec, w, seed):
     # boundary's basis is one function for the window that ends there and the one that starts there
     chain = [[odd() for _ in range(s)] for _ in range(nk + 1)]
     keys = chain[1:] if mode == "basis" else chain[:nk]
-    rows = [[row_v() for _ in range(s)] for _ in range(nr)]
-    cols = [[col_v() for _ in range(s)] for _ in range(nc)]
+    start = spec.get("start")
+    if spec.get("layout"):
+        row_walk, col_walk = layout_walks(rng, s, 1 if start else 40 + spec["phase"])
+        rows = [[x & mask for x in row_walk()] for _ in range(nr)]
+        cols = [[x & mask for x in col_walk()] for _ in range(nc)]
+    else:
+        rows = [[row_v() for _ in range(s)] for _ in range(nr)]
+        cols = [[col_v() for _ in range(s)] for _ in range(nc)]
+    if start:
+        kappa = [rng.randrange(0, 1 << w) for _ in range(nk)]
+        arow = [rng.randrange(0, 1 << w) for _ in range(nr)]
+        bcol = [rng.randrange(0, 1 << w) for _ in range(nc)]
     kf = [[z3.BitVec(f"kf{f}_{a}", w) for a in range(nk)] for f in range(F)]
     rf = [[[z3.BitVec(f"rf{f}_{a}_{r}", w) for r in range(nr)] for a in range(nk)] for f in range(F)]
     cf = [[[z3.BitVec(f"cf{f}_{a}_{c}", w) for c in range(nc)] for a in range(nk)] for f in range(F)]
@@ -211,12 +248,17 @@ def instance(spec, w, seed):
             for c, cc in enumerate(cols):
                 for _ in range(nn):
                     n = rng.randrange(0, 1 << w)
+                    lead = [n]
+                    if start:
+                        n = {"zero": 0, "key": kappa[a], "rowcol": arow[r] ^ bcol[c]}[start]
+                        lead = [arow[r], bcol[c]] if start == "rowcol" else [n]
                     d0 = word_v() if target == "offset" else 0
                     ds = [(d0 + rr[t] + cc[t]) & mask for t in range(s)]
-                    elem = [n] + ([d0] if target == "offset" else [])
+                    elem = lead + ([d0] if target == "offset" else [])
                     examples.append((a, elem, [(r, x) for x in rr], [(c, x) for x in cc],
                                      fold_ref(n, ds, ks, mask), ks, n))
-        names = ["N"] + (["d"] if target == "offset" else []) + [f"R{t + 1}" for t in range(s)] + \
+        names = {"rowcol": ["a", "b"], "key": ["kappa"], "zero": ["N0"]}.get(start, ["N"]) + \
+                (["d"] if target == "offset" else []) + [f"R{t + 1}" for t in range(s)] + \
                 [f"C{t + 1}" for t in range(s)]
     names = names + [f"k{t + 1}" for t in range(s)] + [f"keyfun{f}" for f in range(F)]
     if target != "words":
@@ -272,18 +314,36 @@ def solve(spec):
     return out
 
 
-def specs(width, timeout, quick):
+def specs(width, timeout, quick, which="window"):
     out = []
 
-    def add(target, s, mode, L, w, full=False, grid=None):
+    def add(target, s, mode, L, w, full=False, grid=None, phase=None, start=None):
         h = honest(target, s)
-        x = {"name": f"{target}-s{s}-{mode}-L{L}-w{w}" + ("-full" if full else ""), "target": target, "s": s,
-             "mode": mode, "L": L, "F": s, "honest": h, "width": w, "seed": 1000 * s + L, "timeout": timeout,
-             "full": full}
+        name = f"{target}-s{s}-{'start' + start if start else mode}-L{L}-w{w}" + ("-full" if full else "")
+        x = {"name": name + (f"-p{phase}" if phase is not None else ""), "target": target, "s": s, "mode": mode,
+             "L": L, "F": s, "honest": h, "width": w, "seed": 1000 * s + L, "timeout": timeout, "full": full}
         if grid:
             x["grid"] = grid
+        if phase is not None or start:
+            x.update(layout=True, phase=phase, start=start)
         out.append(x)
 
+    if which == "layout":
+        for target in ("zero", "offset"):
+            for p in (0, 1):
+                for mode in ("plain", "basis", "carry"):
+                    add(target, 1, mode, 2, width, phase=p)
+                    add(target, 2, mode, 5, 6, phase=p)
+                add(target, 2, "plain", 5, width, phase=p)
+                add(target, 3, "plain", 8, 6, phase=p)
+            add(target, 1, "plain", 3, width, phase=0)
+        for start, Ls in (("zero", {1: (1,), 2: (3, 4)}), ("key", {1: (2, 3), 2: (5,)}), ("rowcol", {1: (2, 3), 2: (5,)})):
+            for s, ls in Ls.items():
+                for L in ls:
+                    add("zero", s, "plain", L, width, grid=(3, 4, 4, 1), start=start)
+                    if s == 2:
+                        add("zero", s, "plain", L, 6, grid=(3, 4, 4, 1), start=start)
+        return out
     for target in ("zero", "offset", "words"):
         for s in (1, 2, 3):
             h = honest(target, s)
@@ -306,14 +366,51 @@ def specs(width, timeout, quick):
     return out
 
 
+def targets(cases=4, steps=3, seed=0):
+    """Each target's word form, honest cost a step and 32-bit test vectors on the lead's walks (inputs, keys, and N_t
+    after each step), for another harness to check a strategy against bit for bit."""
+    rng = random.Random(seed)
+    mask = (1 << 32) - 1
+    out = {"fold": "N_t = (N_{t-1} ^ D_t) k_t mod 2^32, k_t a live odd u32 a step and call (all of a call's keys known "
+                   "at its start); N_T and D_T committed",
+           "row_increment": "b in [0, 254]", "column_increment": "odd, |x| <= 16383"}
+    for target, form in (("zero", "R_t + C_t"), ("offset", "d + R_t + C_t"), ("words", "given")):
+        for start in (None, "zero", "key", "rowcol") if target == "zero" else (None,):
+            row_walk, col_walk = layout_walks(rng, steps, 1 if start else 40)
+            vecs = []
+            for _ in range(cases):
+                v = {"k": [rng.randrange(0, 1 << 32) | 1 for _ in range(steps)]}
+                if target == "words":
+                    v["D"] = ds = [rng.randrange(-(1 << 27), 1 << 27) & mask for _ in range(steps)]
+                else:
+                    v["R"], v["C"] = row_walk(), [x & mask for x in col_walk()]
+                    v["d"] = rng.randrange(-(1 << 27), 1 << 27) & mask if target == "offset" else 0
+                    ds = [(v["d"] + r + c) & mask for r, c in zip(v["R"], v["C"])]
+                v["N0"] = 0 if start == "zero" else rng.randrange(0, 1 << 32)
+                if start == "key":
+                    v["kappa"] = v["N0"]
+                if start == "rowcol":
+                    v["a"], v["b"] = v["N0"], rng.randrange(0, 1 << 32)
+                    v["N0"] = v["a"] ^ v["b"]
+                v["N"] = [fold_ref(v["N0"], ds[:t + 1], v["k"][:t + 1], mask) for t in range(steps)]
+                vecs.append(v)
+            out[target + (f"-start{start}" if start else "")] = {"D_t": form, "honest_a_step": honest(target, 1),
+                                                                 "vectors": vecs}
+    return out
+
+
 def main():
     args = sys.argv[1:]
     out_path = args[0]
     opt = {a.split("=")[0]: (a.split("=")[1] if "=" in a else True) for a in args[1:]}
+    if "--targets" in opt:
+        with open(out_path, "w") as f:
+            json.dump(targets(), f, indent=1)
+        return 0
     width = int(opt.get("--width", 8))
     timeout = float(opt.get("--timeout", 3600))
     jobs = int(opt.get("--jobs", mp.cpu_count()))
-    todo = specs(width, timeout, "--quick" in opt)
+    todo = specs(width, timeout, "--quick" in opt, opt.get("--set", "window"))
     if "--only" in opt:
         keep = set(opt["--only"].split(","))
         todo = [x for x in todo if x["name"] in keep]
