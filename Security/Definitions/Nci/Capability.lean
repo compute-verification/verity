@@ -1,18 +1,22 @@
 import Definitions.Nci.Capability.Items
 import Definitions.Nci.Capability.Products
 import Definitions.Nci.Capability.Consumers
+import Definitions.Nci.Capability.Pointwise
 
 /-!
 # Local bounds: the vocabulary
 
 One ontology for every local bound on what a small inference block can do, on core's circuit, registration and local
 description length (`Definitions.Core.Formalism`). A block has `c` gates and `k` fresh bits: it can **import**
-information, spending its bits, or **reconstruct** it, spending its gates. Three modules, one per kind of object:
+information, spending its bits, or **reconstruct** it, spending its gates. Three modules, one per kind of object, and
+the decompositions the slowdown counts over:
 
 * `Items`: what a block can hold. `Items`, `Items.sum`, `Selects`, `selectionBits`, `holds`, `HeldPriceAtMost`.
 * `Products`: the counted computation and its incidence. `completedIn`, `served`, `SlotsRead`, `Incidence`.
 * `Consumers`: what a block finishes and what that depends on. `Consumers` (with `ofUses`, `ofOutputs`), `servedIn`,
   `Upstream`, `OverlapWeights`, `RequiresState`.
+* `Pointwise`: one execution's counted computation and its decompositions into qualifying regions and a remainder.
+  `Counted` (with `ofProducts`), `Counted.Decomposition`, `Decomposes`, `Gamma`.
 
 The premises (`Definitions.Nci.Assumptions.Capability`) are stated over items; the bounds
 (`Definitions.Nci.Guarantees.Capability`) consume a budget over items and a structure over products or consumers. The
