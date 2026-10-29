@@ -10,6 +10,7 @@ file once, or a binding that is not two SHA-512 digests is refused, writing noth
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -85,8 +86,8 @@ def test_a_kept_circuit_taken_with_another_binding_is_the_circuit_composed_bound
 def test_a_cache_key_moves_with_what_the_compose_reads_and_nothing_else(tmp_path, monkeypatch):
     """The key is what the compose reads (the caller's ``what``), compose_circuit's own bytes', the caller's composer file's,
     every file's of the packages and the lowering flags': another template, the reads in slots, a changed composer, a changed
-    code or data file or a ``FLOCK_*`` flag moves it; a file under ``tests/`` or ``__pycache__``, or ``FLOCK_WORK`` (a place),
-    does not. ``--reads slots`` is refused without ``--template``."""
+    code or data file or a ``FLOCK_*`` flag moves it; a file under ``tests/`` or ``__pycache__``, a doc, or ``FLOCK_WORK`` (a
+    place), does not. ``--reads slots`` is refused without ``--template``."""
     pkg = tmp_path / "composecachekeypkg"
     for d in ("sub", "tests", "__pycache__"):
         (pkg / d).mkdir(parents=True)
@@ -106,6 +107,7 @@ def test_a_cache_key_moves_with_what_the_compose_reads_and_nothing_else(tmp_path
     assert key() == k != key("T{N=2}") and key(reads="slots") not in (k, key("T{N=2}"))
     (pkg / "tests" / "test_lower.py").write_text("X = 3\n")
     (pkg / "__pycache__" / "lower.py").write_text("X = 3\n")
+    (pkg / "sub" / "README.md").write_text("the lowering\n")
     monkeypatch.setenv("FLOCK_WORK", str(tmp_path))
     assert key() == k
     (pkg / "sub" / "table.json").write_text("[1, 2]")
@@ -138,10 +140,11 @@ def test_an_own_composers_key_moves_with_its_inputs_its_definition_and_its_file(
     assert a5.compose_key(_own(), other, "Toy") != k
     src = tmp_path / "composer_elsewhere.py"
     src.write_text("def compose(out, partition, program):\n    pass\n")
-    ns: dict = {}
-    exec(compile(src.read_text(), str(src), "exec"), ns)
-    ns["compose"].inputs = ("unit/compose-cache-toy", ROWS)
-    assert a5.compose_key(ns["compose"], TOY, "Toy") != k
+    spec = importlib.util.spec_from_file_location("composer_elsewhere", src)
+    elsewhere = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(elsewhere)
+    elsewhere.compose.inputs = ("unit/compose-cache-toy", ROWS)
+    assert a5.compose_key(elsewhere.compose, TOY, "Toy") != k
     plain = _own()
     del plain.inputs
     assert a5.compose_key(plain, TOY, "Toy") is None

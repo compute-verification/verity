@@ -499,7 +499,7 @@ def compose_key(compose: Callable, defn: object, template: str) -> str | None:
     """The cache entry (`compose_circuit.cache_key`) of a caller's composer ``compose``'s circuit for ``template``, None for one
     that doesn't say what it composes from besides its binding (``compose.inputs``, JSON: its stager's label, the template's
     statement): keyed by those inputs, the template, its Definition's program digest, the composer's own file and
-    compose_circuit's, and the composing packages' every file."""
+    compose_circuit's, and the composing packages' code and data (`compose_circuit.tree_digest`)."""
     inputs = getattr(compose, "inputs", None)
     if inputs is None:
         return None

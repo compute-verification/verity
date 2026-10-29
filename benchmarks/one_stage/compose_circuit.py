@@ -34,6 +34,8 @@ from verity_flock import circuit as FC
 COMPOSERS = ("verity", "verity_flock", "verity_vllm")
 #: a package's directories no compose reads: its tests, and what Python and tools write beside its code
 UNREAD = ("tests", "__pycache__")
+#: a package's files no compose reads: bytecode and docs (a suite's inputs leave markdown out too)
+UNREAD_SUFFIXES = (".pyc", ".md")
 #: the ``FLOCK_*`` variables that name where things are, not how a circuit is lowered: every other one is in the key
 PLACES = ("FLOCK_WORK", "FLOCK_STAGE_CACHE", "FLOCK_CIRCUIT")
 _CHUNK = 1 << 26
@@ -42,14 +44,14 @@ _HEX = frozenset("0123456789abcdef")
 
 @functools.cache
 def tree_digest(packages: tuple[str, ...] = COMPOSERS) -> str:
-    """SHA-512 over every file of ``packages`` but those under `UNREAD` and dot directories (its path and bytes): their code and
-    the data their lowerings read (the MUFU tables, the pins), once a process."""
+    """SHA-512 over every file of ``packages`` but those under `UNREAD` and dot directories and those ending in `UNREAD_SUFFIXES`
+    (its path and bytes): their code and the data their lowerings read (the MUFU tables, the pins), once a process."""
     h = hashlib.sha512()
     for name in packages:
         for root in importlib.util.find_spec(name).submodule_search_locations:
             for dp, dns, fns in os.walk(root):
                 dns[:] = sorted(d for d in dns if not d.startswith(".") and d not in UNREAD)
-                for f in sorted(x for x in fns if not x.endswith(".pyc")):
+                for f in sorted(x for x in fns if not x.endswith(UNREAD_SUFFIXES)):
                     p = Path(dp, f)
                     body = p.read_bytes()
                     h.update(f"{name}/{p.relative_to(root)}\0{len(body)}\0".encode() + body)
