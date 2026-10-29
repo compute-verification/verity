@@ -58,7 +58,7 @@ theorem saltAt {C : Type} {r nB mB n : ℕ} (h : r = 1) (hr : 0 < r) (σ : Fin n
 /-- **Joint soundness at stratum `s`'s run**: a window whose drawn tile of stratum `s` has an opening failing its
 relation is one `Credit.window` credits with that tile's window proof block among the proof blocks its draw demanded, since
 `StrataDrawIsCoin` puts every stratum's drawn proof blocks there, which stratum `s`'s `TileServiceSound` bounds. -/
-theorem jointSound_strata {ι C V : Type} [Fintype C] (Cd : Declared ι) (hr : 0 < Cd.rounds) {m nB mB n : ℕ}
+theorem jointSound_strata {ι C V : Type} [Fintype C] (Cd : RegisteredCircuit ι) (hr : 0 < Cd.rounds) {m nB mB n : ℕ}
     (hM : Cd.rounds = m) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Finset (Fin mB)) (s : Fin mB) (hsS : s ∈ S) (unitOf : Fin nB → ℕ) (ws : CreditWindows (StrataCoin C m σ) n)
     (opened : Paths (StrataCoin C m σ) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
@@ -78,7 +78,7 @@ theorem jointSound_strata {ι C V : Type} [Fintype C] (Cd : Declared ι) (hr : 0
   exact Finset.mem_image.2 ⟨i, Finset.mem_univ _, rfl⟩
 
 /-- **Stratum `s`'s live words on its view** are its `creditLive` at the period's `Credit.window` inputs there. -/
-theorem stratumLive_symm {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
+theorem stratumLive_symm {ι K C : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (s : Fin mB) (Wp : WindowPlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (ws : CreditWindows (StrataCoin C m σ) n) (y : Paths (Coin C (Rest σ s) Cd.rounds σ s) n) :
     stratumLive Sc Cd hM σ s Wp ws ((pathsAt C hM σ s n).symm y) = creditLive Sc Cd Wp (creditAt hM σ s ws) y := by
@@ -98,7 +98,7 @@ theorem prefixLen_symm {C : Type} {r m nB mB n : ℕ} (h : r = m) (σ : Fin nB �
 `Proofs.Pouw.PeriodJ10R` applies it, carried from the view to the period's coins. -/
 theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C]
     [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
-    (S : Finset (Fin mB)) (s : Fin mB) (hsS : s ∈ S) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι) {n : ℕ}
+    (S : Finset (Fin mB)) (s : Fin mB) (hsS : s ∈ S) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n : ℕ}
     (hn : 0 < n) (hN : Cd.units ≤ tileCount σ s) (hr : 0 < Cd.rounds) (hM : Cd.rounds = 1) (hKd : 1 ≤ k s)
     (ws : CreditWindows (StrataCoin C 1 σ) n) (opened : Paths (StrataCoin C 1 σ) n → Fin n → ℕ → ℕ → V)
     (enc : C → ByteArray) (place : Paths (StrataCoin C 1 σ) n → Fin n → Fin (tileCount σ s) → Place)

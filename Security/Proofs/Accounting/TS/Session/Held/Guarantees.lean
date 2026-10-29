@@ -38,7 +38,7 @@ def HeldSessionSound : Prop :=
   ∀ {ι Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String)
     (known : Paths Ω S → Fin S → Fin nπ → Array (String × Array (Array ℕ × ByteArray)))
-    (Cd : Fin S → Accounting.Compose.Declared ι) (cls : Fin S → ℕ → Accounting.Served.Cls)
+    (Cd : Fin S → Accounting.Compose.RegisteredCircuit ι) (cls : Fin S → ℕ → Accounting.Served.Cls)
     (unitOf : ∀ x w i, Fin (sess x w i).n → ℕ) (dec : ∀ x w i, (Fin (sess x w i).Circ.N → Bool) → ι → ℤ)
     (right : Paths Ω S → (Fin S → Fin nπ → ℕ → ℕ → Option Bool) → Prop) (δ : ℝ),
     (∀ x w i, (sess x w i).CR) →

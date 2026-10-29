@@ -49,7 +49,7 @@ theorem foldl_min_const (k : ℕ) : ∀ l : List ℕ, (l.map fun _ => k).foldl m
 
 /-- At `k` multiply-adds for every kind, the fewest a credited word stands for is `k`, on a circuit with a credited
 word. -/
-theorem minWordMacs_const {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (k : ℕ) (h : creditedWords Sc Cd ≠ []) :
+theorem minWordMacs_const {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (k : ℕ) (h : creditedWords Sc Cd ≠ []) :
     minWordMacs Sc Cd (fun _ => k) = k := by
   unfold minWordMacs
   obtain ⟨i, l, hl⟩ := List.exists_cons_of_ne_nil h
