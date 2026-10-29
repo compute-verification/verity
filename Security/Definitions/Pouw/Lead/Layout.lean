@@ -1,5 +1,5 @@
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.Rat.Defs
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.Rat.Cast.Order
 
 /-!
 # The lead's layout, coins and committed words (trusted definitions)
@@ -99,7 +99,7 @@ def word (L : Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins
 
 /-- Data the served layout can carry: each step's dot product is of at most 28 int8 lanes, `|κ| ≤ 28 · 127²`. -/
 def DataInRange (L : Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) : Prop :=
-  ∀ i t j, |κ i t j| ≤ 28 * 127 ^ 2
+  ∀ i t j, -(28 * 127 ^ 2) ≤ κ i t j ∧ κ i t j ≤ 28 * 127 ^ 2
 
 /-- k32 steps for inner dimension `K`: step 0 holds 24 data lanes and each later step 28, `1 + ⌈(K − 24)/28⌉`. -/
 def stepsFor (K : ℕ) : ℕ := 1 + (K - 24 + 27) / 28
