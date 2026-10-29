@@ -960,16 +960,16 @@ def split (signed : Signed) : Array (String × Nat) :=
   signed.foldl (init := #[]) fun acc k (_, two) => if two then acc.push k else acc
 
 /-- `network-records verdicts`' `clocks`: on `openingsOf`'s object, each opening's refusal (`openingRefusals`, null
-where it holds), how many link-windows have two or more signed syncs (`split`), and the link's signed syncs
-(`signedSyncs`, each `[δ, num, den]`), which `lean_audit.signed_clocks` reads with `advised.SignedClocks` beside it as
-the reference. -/
+where it holds), the link-windows with two or more signed syncs (`split`, each `[link, window]`), and the link's signed
+syncs (`signedSyncs`, each `[δ, num, den]`), which `lean_audit.signed_clocks` reads with `advised.SignedClocks` beside
+it as the reference, each refusal and each such link-window by identity. -/
 def clocksFn (j : Json) : Except String Json := do
   let s ← openingsOf j
   let codes := openingRefusals s
   let signed := signedBy s codes
   let sync (x : ClockSync) : Json := .arr #[toJson x.delta, toJson x.rho.num, toJson x.rho.den]
   return Json.mkObj [("refused", .arr (codes.map fun | some r => .str r | none => .null)),
-    ("split", toJson (split signed).size),
+    ("split", .arr ((split signed).map fun (l, w) => .arr #[.str l, toJson w])),
     ("syncs", .arr ((signedSyncs s signed).map sync))]
 
 #guard clog2 0 == 0 && clog2 1 == 0 && clog2 2 == 1 && clog2 3 == 2 && clog2 4 == 2 && clog2 5 == 3
