@@ -12,7 +12,8 @@ honest-only work, and each register a compression is priced as a share of stock 
 sha512_latency.cu's output: a call's seed path (A's hash, the seed and its first noise block, which the call's GEMM waits on)
 is priced at a compression's latency on one thread and at the build's issue floor (an estimate), for each of CHAINS' layouts
 of A's leaves and subtree. GEMM j can't start before seed_j and A_j is call j−1's output, so the chain bounds T2 from below at
-1 + its time over the stock step, and it enters the overlap bound in place of the coins' floor (a launch and a noise block).
+1 + its time over the stock step, and it enters every T2 in place of the coins' floor (a launch and a noise block), which
+the two sheet-clock readings keep.
 
 An hm96 instance is one salt: y = PRF_ks(pos) (three compressions from round 8), c = SHA-512(salt_prefix ‖ y) (two) and
 b = x ⊕ M_key·y. A prover that reuses one salt skips all three, and nothing the gadget checks changes, so they are honest-only
@@ -143,7 +144,8 @@ def salts_per_mac(layout: str, rows: int, b: dict, R: int) -> dict:
 
 def opening_ands(layout: str, b: dict, rows: int, R: int, forced: bool) -> dict:
     """In-circuit ANDs to open what a drawn unit reads of one instance, beyond the bytes it reads itself."""
-    extra = 2 * S.ANDS_COMPRESSION + (3 * S.ANDS_FROM_8 if forced else 0)
+    # c, and when forced the PRF and ks's own opening (its inner digest and c; the verifier computes its leaf)
+    extra = 2 * S.ANDS_COMPRESSION + (3 * S.ANDS_FROM_8 + 3 * S.ANDS_COMPRESSION if forced else 0)
     if layout == "L0":
         return {"words row, whole": S.blocks(R) * S.ANDS_COMPRESSION + extra,
                 "words row over the unit's own outputs": max(0, S.blocks(R) - S.blocks(UNIT_OUT_BYTES)) * S.ANDS_COMPRESSION + extra}
@@ -178,14 +180,19 @@ def seed_path(rows: int, k: int, row: str | int = "row-seg", arity: int = 2) -> 
     return leaf + NODE[arity] * levels(leaves, arity) + NODE[2] + HM96_LEAF + 2 + 1
 
 
-def t2(design: str, b: dict, pname: str, rows: int, m: int, rates: dict) -> dict:
+def t2(design: str, b: dict, pname: str, rows: int, m: int, rates: dict, chain_ms: float | None = None) -> dict:
+    """t_H/t_S for each engine and hash rate. What the GEMMs wait on serially is the calls' coin floor, or, given
+    `chain_ms`, the seed path, which contains it."""
     g = N.GEMM[min(N.GEMM, key=lambda x: abs(x - m))]
     gemm_ms = (b["alpha"] - 1) * g["plain_us"] * 1e-3 * rows / m
     B = (b["words"] + b["a"]) * rows
     words = b["words"] / 4 * rows
     export = {e: words * u / UNITS_S * 1e3 for e, u in EXPORT_WORD.items()}
-    coins = CALLS * COIN_CALL_US * 1e-3
-    out = {"GB_forward": B / 1e9, "gemm_extra_ms": gemm_ms, "export_ms": export, "coins_ms": coins, "hash_ms": {}, "engines": {}}
+    coin_floor = CALLS * COIN_CALL_US * 1e-3
+    coins = coin_floor if chain_ms is None else chain_ms
+    out = {"GB_forward": B / 1e9, "gemm_extra_ms": gemm_ms, "export_ms": export, "coins_ms": coins,
+           "coins_src": "coin floor a call" if chain_ms is None else "seed path, row-seg rows, binary (L1), measured", "hash_ms": {},
+           "engines": {}}
     for rn, u in rates.items():
         out["hash_ms"][rn] = B * u / UNITS_S * 1e3
     engines = N.ENGINES.get(pname)
@@ -197,7 +204,7 @@ def t2(design: str, b: dict, pname: str, rows: int, m: int, rates: dict) -> dict
         e = {"stock_ms": stock, "src": src, "stock_mac_times_a_useful_mac": stock * 1e-3 * UNITS_S / fwd_macs,
              "bytes a useful MAC for T2 at the bar, L1 16 KiB chunks": {
                  f"{sched} ≤ {x}": max(0.0, budget) * 1e-3 * UNITS_S / per_byte / fwd_macs for x in (2, 1.1)
-                 for sched, budget, per_byte in (("overlap", x * stock, bar),
+                 for sched, budget, per_byte in (("overlap", x * stock if stock + gemm_ms + coins <= x * stock else 0.0, bar),
                                                  ("serial, HBM export", (x - 1) * stock - gemm_ms - coins,
                                                   bar + EXPORT_WORD["stg"] / 4))}}
         for rn, h in out["hash_ms"].items():
@@ -205,9 +212,9 @@ def t2(design: str, b: dict, pname: str, rows: int, m: int, rates: dict) -> dict
                      "fused": (stock + gemm_ms + h + export["fold"] + coins) / stock,
                      "overlap": max(stock + gemm_ms + export["fold"] + coins, h) / stock}
         e["reading: beside-the-step price on every byte, sheet clock"] = (
-            stock + gemm_ms + B * (STEP_BESIDE + EXPORT_WORD["stg"] / 4) / SHEET_MAC_S * 1e3 + coins) / stock
+            stock + gemm_ms + B * (STEP_BESIDE + EXPORT_WORD["stg"] / 4) / SHEET_MAC_S * 1e3 + coin_floor) / stock
         e["reading: alone 64 KiB high, sheet clock, HBM export"] = (
-            stock + gemm_ms + B * (HASH_ALONE[65536][1] + EXPORT_WORD["stg"] / 4) / SHEET_MAC_S * 1e3 + coins) / stock
+            stock + gemm_ms + B * (HASH_ALONE[65536][1] + EXPORT_WORD["stg"] / 4) / SHEET_MAC_S * 1e3 + coin_floor) / stock
         out["engines"][eng] = e
     return out
 
@@ -269,7 +276,25 @@ def main() -> None:
                 "bytes unforced": need, "bytes forced (a)": need_a,
                 "opening ANDs unforced floor": S.blocks(int(need["floor"])) * S.ANDS_COMPRESSION,
                 "opening ANDs forced (a) floor": S.blocks(int(need_a["floor"])) * S.ANDS_COMPRESSION}
-            pt["t2"] = t2(design, b, pname, real, m, rates)
+            chain = None
+            if lat:
+                pt["seed_path"] = {}
+                launches = CALLS * lat["launch_us"] * 1e-3
+                for lay, (row, arity) in CHAINS.items():
+                    comps = N.LAYERS * sum(seed_path(real, k, row, arity) for _, k in N.LINEARS.values())
+                    v: dict = {"compressions_a_forward": comps, "compressions_a_call": comps / CALLS, "by_latency": {}}
+                    for ln, ns in lat["per_compression_ns"].items():
+                        ms = comps * ns * 1e-6
+                        v["by_latency"][ln] = {"ms": ms, "ms_with_a_launch_a_call": ms + launches, "t2_floor": {
+                            eng: (st + ms + launches) / st for eng, (st, _g, _s) in N.ENGINES.get(pname, {}).items()}}
+                    pt["seed_path"][lay] = v
+                chain = pt["seed_path"]["row-seg rows, binary (L1)"]["by_latency"]["measured"]["ms_with_a_launch_a_call"]
+            pt["t2"] = t2(design, b, pname, real, m, rates, chain)
+            if lat:
+                for e in pt["t2"]["engines"].values():
+                    e["compressions a call for the seed path's T2 floor"] = {
+                        f"≤ {x}, {ln}": max(0.0, ((x - 1) * e["stock_ms"] * 1e3 / CALLS - lat["launch_us"]) / (ns * 1e-3))
+                        for x in (2, 1.1) for ln, ns in lat["per_compression_ns"].items()}
             hash_w1 = {k: {p: b["bpm"] * cb * w for p, w in (("floor", sass["w1_floor"]), ("alone", sass["w1_alone"]))}
                        for k, cb in comps_byte.items()}
             pt["shaspeed"] = {k: {"hash_w1_mac": v,
@@ -295,27 +320,6 @@ def main() -> None:
                             "ms": ms, "of_stock_step": ms / stock if stock else None,
                             "share_of_hashed_bytes": b["a_bpm"] / b["bpm"]}
             pt["pre_noise"] = pre
-            if lat:
-                pt["seed_path"] = {}
-                launches = CALLS * lat["launch_us"] * 1e-3
-                for lay, (row, arity) in CHAINS.items():
-                    comps = N.LAYERS * sum(seed_path(real, k, row, arity) for _, k in N.LINEARS.values())
-                    v: dict = {"compressions_a_forward": comps, "compressions_a_call": comps / CALLS, "by_latency": {}}
-                    for ln, ns in lat["per_compression_ns"].items():
-                        ms = comps * ns * 1e-6
-                        v["by_latency"][ln] = {"ms": ms, "ms_with_a_launch_a_call": ms + launches, "t2_floor": {
-                            eng: (st + ms + launches) / st for eng, (st, _g, _s) in N.ENGINES.get(pname, {}).items()}}
-                    pt["seed_path"][lay] = v
-                t = pt["t2"]
-                h_bar = t["hash_ms"]["at the bar, L1 16 KiB chunks"]
-                chain = pt["seed_path"]["row-seg rows, binary (L1)"]["by_latency"]["measured"]["ms_with_a_launch_a_call"]
-                for eng, e in t["engines"].items():
-                    st = e["stock_ms"]
-                    e["overlap with the seed path, at the bar"] = max(st + t["gemm_extra_ms"] + t["export_ms"]["fold"] + chain,
-                                                                      h_bar) / st
-                    e["compressions a call for the seed path's T2 floor"] = {
-                        f"≤ {x}, {ln}": max(0.0, ((x - 1) * st * 1e3 / CALLS - lat["launch_us"]) / (ns * 1e-3))
-                        for x in (2, 1.1) for ln, ns in lat["per_compression_ns"].items()}
             d["points"][pname] = pt
         out["designs"][design] = d
     dc_mac_s = S.CENSUS["datacenter GPUs"] * S.CENSUS["H200 int8 dense ops/s"] / 2
@@ -361,7 +365,7 @@ def main() -> None:
                                   if isinstance(x, dict) and "serial" in x and rn in ("16 KiB low", "L1 16 KiB chunks low",
                                                                                       "at the bar, L1 16 KiB chunks"))
                 fr = e["bytes a useful MAC for T2 at the bar, L1 16 KiB chunks"]
-                print(f"    T2 {eng} (serial/fused/overlap): {cells}; readings: beside-step "
+                print(f"    T2 {eng} (serial/fused/overlap; {t['coins_src']} {t['coins_ms']:.2f} ms): {cells}; readings: beside-step "
                       f"{e['reading: beside-the-step price on every byte, sheet clock']:.1f}, alone "
                       f"{e['reading: alone 64 KiB high, sheet clock, HBM export']:.1f}; stock "
                       f"{e['stock_mac_times_a_useful_mac']:.2f} MAC-times a useful MAC; B/MAC for T2 "
@@ -381,10 +385,9 @@ def main() -> None:
                           + "".join(f", T2 floor {eng} {f:.2f}" for eng, f in x["t2_floor"].items())
                           for ln, x in v["by_latency"].items()))
             for eng, e in pt["t2"]["engines"].items():
-                if "overlap with the seed path, at the bar" in e:
-                    print(f"    T2 {eng}, overlap with the seed path at the bar {e['overlap with the seed path, at the bar']:.2f}; "
-                          "compressions a call for the seed path's T2 floor " + ", ".join(
-                              f"{k} {n:.1f}" for k, n in e["compressions a call for the seed path's T2 floor"].items()))
+                if "compressions a call for the seed path's T2 floor" in e:
+                    print(f"    T2 {eng}: compressions a call for the seed path's T2 floor " + ", ".join(
+                        f"{k} {n:.1f}" for k, n in e["compressions a call for the seed path's T2 floor"].items()))
 
 
 if __name__ == "__main__":
