@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 DC = Path(__file__).resolve().parents[1] / "dc"
 
@@ -630,3 +631,61 @@ def test_a2u_issue_bound_and_uniform_price(tmp_path):
     assert abs(free["probes"]["a2_tc_i64"]["uniform_price"]) < 1e-12
     edge = a2.analyze(_a2u_out(tmp_path / "edge", 31680))
     assert edge["a2u_holds"] and 1 < edge["max_issue_low"] < 1 + a2.TOL
+
+
+def _h32_run(out: Path, s8_rate: float = 1 / 32, drop: str = "") -> Path:
+    """emp.sh time's output for h32.py: each class's least form at a known rate, and the forms beside it."""
+    acc = {"s8": ("IGMMA.64x256x32.S8.S8*", 128), "e4m3": ("QGMMA.64x256x32.F32.E4M3.E4M3*", 128),
+           "e5m2": ("QGMMA.64x256x32.F32.E5M2.E5M2*", 128), "e4m3f16": ("QGMMA.64x256x32.F16.E4M3.E4M3*", 64),
+           "e5m2f16": ("QGMMA.64x256x32.F16.E5M2.E5M2*", 64), "f16": ("HGMMA.64x256x16.F32*", 128),
+           "f16f16": ("HGMMA.64x256x16.F16*", 64), "bf16": ("HGMMA.64x256x16.F32.BF16*", 128),
+           "tf32": ("HGMMA.64x256x8.F32.TF32*", 128)}
+    rows = [(f"wa_{s}_n256", f"c=wgmma s={s} w={pat}:{regs}", {f"0:{pat}": s8_rate if s == "s8" else 1 / 32})
+            for s, (pat, regs) in acc.items()]
+    rows += [("wa_s8_n8", "c=wgmma s=s8 w=IGMMA.64x8x32.S8.S8*:4", {"0:IGMMA.64x8x32.S8.S8*": 0.2221}),
+             ("wa_b1_n256", "c=tc w=BGMMA.64x256x256.AND.POPC*:128", {"0:BGMMA.64x256x256.AND.POPC*": 1 / 32}),
+             ("ms_f16_k8", "c=tc w=HMMA.1688.F32:4", {"0:HMMA.1688.F32": 0.98}),
+             ("x_fadd_i", "c=ffma w=FADD:1", {"0:FADD": 3.998}),
+             ("x_iadd_r", "c=int32 w=IMAD.IADD:1,IADD3:1", {"0:IMAD.IADD": 2.0, "0:IADD3": 1.9}),
+             ("x_imad_r", "c=int32 w=IMAD:1", {"0:IMAD": 2.0}),
+             ("x_dadd_i", "c=fp64 w=DADD:2", {"0:DADD": 2.0}),
+             ("x_hadd2_i", "c=other w=HADD2:1", {"0:HADD2": 3.55}),
+             ("m_dadd_fadd", "c=mix w=DADD:2,FADD:1", {"0:DADD": 2.0, "0:FADD": 2.0})]
+    lines = [{"binary": "sm90_h32", "probe": p, "note": n, "rates": r, "run": "r1", "tags": [], "stop_gap": None,
+              "until": None} for p, n, r in rows if not p.startswith(drop or "\0")]
+    # the wgmma loop over the kernel's cycles and the lanes' OP_UNTIL loop over the stop's: 10% apart
+    lines.append({"binary": "sm90_h32_tc", "probe": "wu_dadd", "note": "c=mix w=IGMMA.64x128x32.S8.S8*:64,DADD:2",
+                  "rates": {"0:IGMMA.64x128x32.S8.S8*": 0.0625 * 0.9, "1:DADD": 2.0}, "run": "r1", "tags": [],
+                  "stop_gap": 0.1, "until": 2})
+    for b in ("sm90_h32", "sm90_h32_tc"):
+        (out / b).mkdir(parents=True, exist_ok=True)
+        (out / b / "rows.jsonl").write_text("".join(json.dumps(ln) + "\n" for ln in lines if ln["binary"] == b))
+    return out
+
+
+def test_h32_prices_each_class_and_writes_the_lean_table(tmp_path):
+    """h32.py: a probe's price is 4,096 over Σ rate x 32 x REGS of its counted patterns; each field is its class's least
+    price rounded down, `mac` each shape's least price per register over k x elems (nominalMac when all are nominal),
+    b1 wgmma prices tc, a mix only the co-issue minimum (an OP_UNTIL probe read over the stop's cycles). A shape
+    below nominal is written out and fails H32; a class with no probe leaves H32 undecided and writes no Lean."""
+    h = _load("h32")
+    t = h.table(h.read(_h32_run(tmp_path / "nominal")))
+    assert {c: m["mac"] for c, m in t["mac"].items()} == {c: nom for c, _, _, nom in h.SHAPES.values()}
+    assert t["mac"]["s8"]["probe"] == "wa_s8_n256" and abs(t["mac"]["e4m3F16"]["reg_price"] - 64) < 1e-9
+    assert {f: v["value"] for f, v in t["fields"].items()} == {"tc": 32, "ffma": 32, "int32": 32, "fp64": 32,
+                                                               "other": 36}
+    assert t["fields"]["int32"]["probe"] == "x_iadd_r" and t["fields"]["tc"]["probe"] == "wa_b1_n256"
+    assert t["co_issue"]["probe"] == "wu_dadd" and abs(t["co_issue"]["price"] - 16) < 1e-9
+    assert t["h32"] and t["floor_tc"] == {"a": 32, "c": 32} and not t["missing"]
+    assert h.lean(t) == ("def h200Measured : Prices100 where\n  mac := nominalMac\n  tc := 32\n  ffma := 32\n"
+                         "  int32 := 32\n  fp64 := 32\n  other := 36\n")
+    fast = h.table(h.read(_h32_run(tmp_path / "fast", s8_rate=1 / 31)))
+    assert fast["mac"]["s8"]["mac"] == 0 and not fast["h32"] and fast["floor_tc"]["a"] == 0
+    assert "    | .s8 => 0\n    | .f16F32 => 2\n" in h.lean(fast)
+    run = _h32_run(tmp_path / "partial", drop="x_dadd")
+    part = h.table(h.read(run))
+    assert part["missing"] == ["fp64"] and "h32" not in part
+    assert h.main([str(run), "--lean", str(tmp_path / "t.lean")]) == 1 and not (tmp_path / "t.lean").exists()
+    bad = {"binary": "b", "probe": "p", "note": "c=ffma w=FMUL:1", "rates": {"0:FADD": 4.0}, "run": "r1", "tags": []}
+    with pytest.raises(ValueError, match="FMUL"):
+        h.price(bad)
