@@ -696,3 +696,18 @@ def test_h32_prices_each_class_and_writes_the_lean_table(tmp_path):
     bad = {"binary": "b", "probe": "p", "note": "c=ffma w=FMUL:1", "rates": {"0:FADD": 4.0}, "run": "r1", "tags": []}
     with pytest.raises(ValueError, match="FMUL"):
         h.price(bad)
+
+
+def test_h32_counts_predicates_and_uniform_registers_by_their_bits(tmp_path):
+    """h32.py: a pattern's p=PREDS adds rate x PREDS registers and u=WORDS rate x WORDS (32 bits each), beside its
+    w=REGS's rate x 32 x REGS; a probe that counts no write is refused rather than priced at infinity."""
+    h = _load("h32")
+    row = {"binary": "sm90_w1", "probe": "y_lop3p", "run": "r1", "tags": [], "stop_gap": None, "until": None,
+           "note": "c=int32 w=LOP3.LUT:1 p=LOP3.LUT:1", "rates": {"0:LOP3.LUT": 2.0, "0:IADD3": 1.0}}
+    assert abs(h.price(row)["regs_sm_clk"] - (64 + 2)) < 1e-9
+    preds = {**row, "note": "c=int32 w=ISETP.LT.U32.AND:0 p=ISETP.LT.U32.AND:1", "rates": {"0:ISETP.LT.U32.AND": 2.0}}
+    assert abs(h.price(preds)["price"] - 2048) < 1e-9
+    uni = {**row, "note": "c=mix w=LOP3.LUT:1 u=S2UR:1", "rates": {"0:LOP3.LUT": 1.0, "0:S2UR": 1.0}}
+    assert abs(h.price(uni)["regs_sm_clk"] - 33) < 1e-9
+    with pytest.raises(ValueError, match="no register"):
+        h.price({**row, "note": "c=int32 w=LOP3.LUT:0"})

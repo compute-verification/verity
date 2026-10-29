@@ -5,12 +5,14 @@
 RUN_OUT is `emp.sh time`'s output, each binary's rows.jsonl under RUN_OUT/<binary>/. A probe's note names its class and
 the 32-bit registers one warp instruction of each counted pattern writes a lane:
 
-  c=CLASS [s=SHAPE] w=PATTERN:REGS,...
+  c=CLASS [s=SHAPE] w=PATTERN:REGS,... [p=PATTERN:PREDS,...] [u=PATTERN:WORDS,...]
 
 CLASS is ffma, int32, fp64, other or tc (`Prices100`'s fields), wgmma (`mac`, SHAPE its `Shape100` shape) or mix (no
 class: writers co-issued across classes). A probe writes Σ rate × 32 × REGS registers a SM a clock over its counted
 patterns, rate being the pattern's warp instructions a SM a clock in rows.jsonl (every loop); its price is 4,096 over
-that, the unit being one dense int8 MAC at 4,096 a SM a clock. A probe with an OP_UNTIL loop (`until`) is read over
+that, the unit being one dense int8 MAC at 4,096 a SM a clock. Predicates and uniform registers count by their bits: a
+pattern that writes PREDS predicates a lane adds rate × PREDS registers (32 predicate bits a register), and one that
+writes WORDS uniform registers a warp adds rate × WORDS. A pattern may appear in w, p and u at once. A probe with an OP_UNTIL loop (`until`) is read over
 the stop's cycles: its fixed loop's rates are scaled by 1 / (1 - stop_gap), the reading in the adversary's favour. The
 stop is the first fixed warp's, so when the fixed loop is a wgmma whose warpgroups finish apart, that scaling credits
 the window with work done after it. A mix whose fixed loop is a wgmma names its shape (s=SHAPE), and the fixed loop is
@@ -37,13 +39,19 @@ SHAPES = {"e4m3": ("e4m3F32", 32, 1, 1), "e5m2": ("e5m2F32", 32, 1, 1), "e4m3f16
 FIELDS = ("tc", "ffma", "int32", "fp64", "other")
 
 
+#: registers a SM a clock one warp instruction a SM a clock adds for each unit of a w, p or u count
+PER_WARP = {"w": 32, "p": 1, "u": 1}
+
+
 def parse_note(note: str) -> dict:
     tags = dict(t.split("=", 1) for t in note.split() if "=" in t)
-    w = {}
-    for item in tags.get("w", "").split(","):
-        pat, regs = item.rsplit(":", 1)
-        w[pat] = int(regs)
-    return {"class": tags.get("c"), "shape": tags.get("s"), "w": w}
+    out = {"class": tags.get("c"), "shape": tags.get("s")}
+    for kind in PER_WARP:
+        out[kind] = {}
+        for item in filter(None, tags.get(kind, "").split(",")):
+            pat, n = item.rsplit(":", 1)
+            out[kind][pat] = int(n)
+    return out
 
 
 def price(row: dict) -> dict:
@@ -61,15 +69,18 @@ def price(row: dict) -> dict:
     fixed = read_as_is = 0.0
     for key, rate in row["rates"].items():
         loop, pat = key.split(":", 1)
-        if pat in n["w"]:
-            if gap is None or int(loop) == until:
-                read_as_is += rate * 32 * n["w"][pat]
-            else:
-                fixed += rate / (1 - gap) * 32 * n["w"][pat]
-    missing = [p for p in n["w"] if not any(k.split(":", 1)[1] == p for k in row["rates"])]
+        per = sum(PER_WARP[kind] * n[kind].get(pat, 0) for kind in PER_WARP)
+        if gap is None or int(loop) == until:
+            read_as_is += rate * per
+        else:
+            fixed += rate / (1 - gap) * per
+    counted = {p for kind in PER_WARP for p in n[kind]}
+    missing = [p for p in counted if not any(k.split(":", 1)[1] == p for k in row["rates"])]
     if missing:
         raise ValueError(f"{row['probe']}: note counts {missing}, which its rates don't hold")
     regs = read_as_is + (fixed if cap is None else min(fixed, cap))
+    if regs <= 0:
+        raise ValueError(f"{row['probe']}: its note counts no register, predicate or uniform write")
     return {**n, "probe": row["probe"], "binary": row["binary"], "run": row["run"], "tags": row["tags"],
             "regs_sm_clk": regs, "price": UNIT / regs}
 
