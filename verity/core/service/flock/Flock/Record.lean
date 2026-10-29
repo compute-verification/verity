@@ -5,6 +5,7 @@ import Lean.Data.Json
 import Flock.Transcript
 import Flock.Draw
 import Flock.CoinTree
+import Flock.JsonParse
 
 namespace Flock
 
@@ -97,7 +98,7 @@ def check (b : Bool) (why : String) : V Unit := if b then pure () else throw why
 
 /-- Decode the record and run S1–S14 (§5.3). -/
 def decode (spec : SessionSpec) (text : String) : V RunRecord := do
-  let j ← match Json.parse text with
+  let j ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"record: not JSON: {e}"
   -- S1
@@ -107,7 +108,7 @@ def decode (spec : SessionSpec) (text : String) : V RunRecord := do
   match spec.coinTree with
   | none => check ((← str j "hello") == spec.hello) "S2/R7: the session parameters are not the verifier's"
   | some ct =>
-    let some own := (Json.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
+    let some own := (JsonParse.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
     let nonce ← CoinTree.checkHello own (← str j "hello")
     let _ ← CoinTree.checkRecord ct nonce (← fld j "coin_tree")
   -- S3

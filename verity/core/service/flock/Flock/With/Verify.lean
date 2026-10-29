@@ -5,6 +5,7 @@ what hashes nothing is the compiled verifier's own, lifted (`liftTM`, `liftLM`).
 -/
 import Flock.With.Transcript
 import Flock.Verify
+import Flock.JsonParse
 
 namespace Flock
 
@@ -368,7 +369,7 @@ def verifyJWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (j : 
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
 
 theorem verifyWithM_of_parse [LawfulMonad M] (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup)
-    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : Lean.Json.parse record = .ok j) :
+    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : JsonParse.parse record = .ok j) :
     verifyWithM hs spec tabs record proofs = verifyJWithM hs spec tabs j proofs := by
   simp only [verifyWithM, verifyJWithM, Record.decodeWith_of_parse hs spec h]
 

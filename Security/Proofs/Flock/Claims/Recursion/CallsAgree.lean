@@ -176,12 +176,12 @@ theorem pubField_of {pubs : Json} {t : String} {p : ByteArray}
 
 /-- **What `Record.decode` reads of the public words.** -/
 theorem decode_pubs {spec : SessionSpec} {text : String} {sess : RunRecord} (h : Record.decode spec text = .ok sess) :
-    ∃ j l pubs, Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
+    ∃ j l pubs, Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
       List.Forall₂ (PubField pubs) spec.tables.toList sess.publics.toList := by
   revert sess
   show Ret (Record.decode spec text) _
   rw [Record.decode.eq_def]
-  cases hp : Json.parse text with
+  cases hp : Flock.JsonParse.parse text with
   | error e => intro sess h; cases h
   | ok j =>
     simp only []
@@ -214,12 +214,12 @@ theorem decode_pubs {spec : SessionSpec} {text : String} {sess : RunRecord} (h :
 
 /-- **What `liveOf` reads of the public words.** -/
 theorem liveOf_pubs {spec : SessionSpec} {record : String} {lv : Live} (h : liveOf spec record = .ok lv) :
-    ∃ j l pubs, Json.parse record = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
+    ∃ j l pubs, Flock.JsonParse.parse record = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
       List.Forall₂ (PubField pubs) spec.tables.toList lv.publics.toList := by
   revert lv
   show Ret (liveOf spec record) _
   rw [liveOf.eq_def]
-  cases hp : Json.parse record with
+  cases hp : Flock.JsonParse.parse record with
   | error e => intro lv h; cases h
   | ok j =>
     dsimp only

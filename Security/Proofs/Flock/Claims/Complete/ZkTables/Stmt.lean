@@ -5,8 +5,7 @@ import Proofs.Flock.Verifier.Hash
 /-!
 # What the masked record needs of the statement, at several tables
 
-`Case.stmtAt`: at every good case of several tables, `StmtAt` holds under the JSON library's specification
-(`JsonSpec`), from the case's setup alone (`Case.setupTables`: the scope's statements hold no public inputs). So
+`Case.stmtAt`: at every good case of several tables, `StmtAt` holds from the case's setup alone (`Case.setupTables`: the scope's statements hold no public inputs). So
 `StmtOkJ` holds (`stmtOkJ`), and `completeJS`, `completeAllS` are `completeJO`, `completeAll` without it.
 
 * A session of several tables (`setupTables_spec`) keeps the statement's draw, which is a subset or a stratified draw
@@ -16,7 +15,7 @@ import Proofs.Flock.Verifier.Hash
   count), a string, natural numbers and an array of them, so it is printable and has no closure (`good_subset`); a
   stratified one has exactly `law`, `population`, `units`, `k` and `strata`, so it is printable
   (`JsonRT.good_stratified`) and has no closure either (`closure_stratified`); the statement's draw is JSON that
-  `Json.parse` read, so it is well formed.
+  `Flock.JsonParse.parse` read, so it is well formed.
 * A masked statement's coins are its keyed coin tree (`zkCoins`), so the `Hello`'s `coins` entry is the tree's spec with
   a nonce, an object; `canon` prints the `Hello` and `parse` reads back an alike object (`hello_ok`), which stays
   printable with the prover's nonce put in (`good_of_same`, `good_insert`).
@@ -66,13 +65,13 @@ theorem good_coins (ct : CoinTree.Spec) (nonce : String) : Good (ct.coins nonce)
   cases hg with
   | obj hm hg => exact good_insert hm hg (.str _)
 
-theorem hello_of_list (S : JsonSpec) {ct : CoinTree.Spec} {L : List (String × Json)} {hello : String}
+theorem hello_of_list {ct : CoinTree.Spec} {L : List (String × Json)} {hello : String}
     (hh : canon (Json.mkObj L) = .ok hello) (hd : Distinct L) (hg : ∀ p ∈ L, Good p.2)
     (hc : ("coins", ct.coins "") ∈ L) :
-    ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
+    ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
   have hgj := good_mkObj hd hg
-  obtain ⟨j', hp, hs⟩ := S.parse_canon _ _ hgj hh
+  obtain ⟨j', hp, hs⟩ := FlockComplete.JsonRT.parse_canon _ _ hgj hh
   obtain ⟨m, rfl, hm, -⟩ := same_obj_wf hs
   obtain ⟨cv, hcv, hcs⟩ := hs.getObjVal (getObjVal?_mkObj hd hc)
   have hco : ∃ M : Std.TreeMap.Raw String Json compare, ct.coins "" = .obj M := ⟨_, rfl⟩
@@ -99,9 +98,9 @@ theorem hello_of_list (S : JsonSpec) {ct : CoinTree.Spec} {L : List (String × J
 
 /-- **The masked `Hello` reads back** as an object whose `coins` are an object, and the prover's version, with its
 nonce put in, is printable. -/
-theorem hello_ok (S : JsonSpec) {tags : Tags} {sigma : ByteArray} {mPts : ℕ} {ct : CoinTree.Spec}
+theorem hello_ok {tags : Tags} {sigma : ByteArray} {mPts : ℕ} {ct : CoinTree.Spec}
     {names : Array String} {hello : String} (hh : Flock.helloOf tags sigma mPts (.tree ct) names = .ok hello) :
-    ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
+    ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
   have hlink : Good (Json.mkObj [("sigma", Json.str (hexOf sigma)), ("m", Lean.toJson mPts),
       ("points", Lean.toJson (2 : ℕ))]) := by
@@ -116,7 +115,7 @@ theorem hello_ok (S : JsonSpec) {tags : Tags} {sigma : ByteArray} {mPts : ℕ} {
   rcases Bool.eq_false_or_eq_true tags.retainRounds with hr | hr <;>
     rcases Bool.eq_false_or_eq_true tags.hm96Rows with h9 | h9 <;>
     simp only [hr, h9, ite_true, Bool.false_eq_true, ite_false, List.cons_append, List.nil_append] at hh <;>
-    refine hello_of_list S (ct := ct) hh (by simp) ?_ (by simp) <;>
+    refine hello_of_list (ct := ct) hh (by simp) ?_ (by simp) <;>
     simp only [List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq] <;>
     first
       | exact ⟨.str _, good_toJson _, .str _, harr, hlink, good_coins ct "", .str _, .str _⟩
@@ -432,7 +431,7 @@ theorem Case.setupTables (c : Case H rel) :
 the JSON library's specification: `Σ` is a SHA-512 digest, the session's draw is the statement's, a subset or a
 stratified draw that is
 printable and decodes to the session's instances, and its `Hello` reads back with `coins` an object. -/
-theorem Case.stmtAt (S : JsonSpec) (c : Case H rel) (hc : 1 < c.sts.size) : StmtAt c := by
+theorem Case.stmtAt (c : Case H rel) (hc : 1 < c.sts.size) : StmtAt c := by
   obtain ⟨hu, hsig, hd, hh⟩ := setupTables_spec c.setupTables hc
   have hzk : c.s.read.zk = true := readOf_zk (x := c.x) (by
     unfold readOf
@@ -441,7 +440,7 @@ theorem Case.stmtAt (S : JsonSpec) (c : Case H rel) (hc : 1 < c.sts.size) : Stmt
   have hco : c.s.read.coins = .tree (Zk.coinSpec (c.s.read.I.tags.tableNames c.s.read.I.count)) := by
     simp [Readable.Read.coins, hzk, FlockSoundness.Discharge.ZkExec.zkCoins]
   rw [hco] at hh
-  obtain ⟨m, kvs, hp, hm, hkv, hmg, hg⟩ := hello_ok S hh
+  obtain ⟨m, kvs, hp, hm, hkv, hmg, hg⟩ := hello_ok hh
   refine ⟨by rw [hsig]; omega, ?_, hu, m, kvs, hp, hm, hkv, hmg, hg⟩
   unfold DrawOk
   rw [hu]
@@ -459,31 +458,31 @@ theorem Case.stmtAt (S : JsonSpec) (c : Case H rel) (hc : 1 < c.sts.size) : Stmt
     simp [Draw.UnitDraw.proved, hcl]
 
 /-- **`StmtOkJ` holds**, under the JSON library's specification. -/
-theorem stmtOkJ (S : JsonSpec) : StmtOkJ H rel := fun c hc => c.stmtAt S hc
+theorem stmtOkJ : StmtOkJ H rel := fun c hc => c.stmtAt hc
 
 /-- `StmtAt` at every good case: one table's is `StmtOkZk`'s, several's `Case.stmtAt`. -/
-theorem stmtAt_of (S : JsonSpec) (hS : StmtOkZk H rel) (c : Case H rel) : StmtAt c :=
-  c.one_or_several.elim (fun h1 => hS (c.toZk h1)) (c.stmtAt S)
+theorem stmtAt_of (hS : StmtOkZk H rel) (c : Case H rel) : StmtAt c :=
+  c.one_or_several.elim (fun h1 => hS (c.toZk h1)) (c.stmtAt)
 
 /-! ## Completeness without the statement's premise at several tables -/
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables: `completeJO` with the statement's premise at several tables proved (`stmtOkJ`). -/
 theorem completeJS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
+    (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
     (hCJ : RepChecksJ H rel) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) :
     Claims.Flock.Complete H (deployZk rel) :=
-  completeJO H rel S h64 hS hR hPR hRS hLg hIn (stmtOkJ S) hPRJ hRJ hCJ hMR hMF
+  completeJO H rel h64 hS hR hPR hRS hLg hIn (stmtOkJ) hPRJ hRJ hCJ hMR hMF
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables: `completeAll` with the statement's premise `StmtOkZk`'s at one table and proved at several. -/
 theorem completeAllS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel)
+    (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hPR : ∀ c : Case H rel, ProverRunsAt c) (hR : ∀ c : Case H rel, RepShapedAt c)
     (hC : ∀ o : Run H rel, RepChecksAt H rel o) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) :
     Claims.Flock.Complete H (deployZk rel) :=
-  completeAll H rel S h64 (stmtAt_of S hS) hPR hR hC hMR hMF
+  completeAll H rel h64 (stmtAt_of hS) hPR hR hC hMR hMF
 
 end FlockComplete.ZkTables
