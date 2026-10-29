@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # SHA-512's registers written a compression on sm_90a: the committer's sha512.cuh (sha512_probe.cu, SHA_ROLL 0 and 1)
 # against the minimal compression (sha512_min_probe.cu: a variable chaining value, the IV as a constant, a constant
-# padding block, and a chain in chain form, two blocks a trip), each built, disassembled and counted by shalb_sass.py;
-# then the minimal compression's host build checked against hashlib. CPU only: nothing is launched. The CUDA wheels go into a scratch venv outside the run dir.
-# cwd: the source tree's root. Output: $OUT/{*.sass, *.ptxas, counts.json, summary.txt, check.txt, tools.txt}.
+# padding block, and a chain in chain form, two blocks a trip) and an L1 leaf (sha512_l1_probe.cu: ten blocks a trip),
+# each built, disassembled and counted by shalb_sass.py; then the minimal compression's and the L1 leaf's host builds
+# checked against hashlib. CPU only: nothing is launched. The CUDA wheels go into a scratch venv outside the run dir.
+# cwd: the source tree's root. Output: $OUT/{*.sass, *.ptxas, counts.json, summary.txt, check_*.txt, tools.txt}.
 set -euo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 d=$(mktemp -d); trap 'rm -rf "$d"' EXIT
@@ -26,10 +27,13 @@ build min_variable "$HERE/sha512_min_probe.cu" -DSHA_CVC=0
 build min_constant_cv "$HERE/sha512_min_probe.cu" -DSHA_CVC=1
 build min_padding_block "$HERE/sha512_min_probe.cu" -DSHA_PAD=2048
 build min_chain "$HERE/sha512_min_probe.cu" -DSHA_CHAIN=1
+build l1_leaf "$HERE/sha512_l1_probe.cu"
 args=()
 for n in committer_straight committer_rolled min_variable min_constant_cv min_padding_block; do args+=("$n=$OUT/$n.sass"); done
-args+=("min_chain=$OUT/min_chain.sass:2")
+args+=("min_chain=$OUT/min_chain.sass:2" "l1_leaf=$OUT/l1_leaf.sass:10")
 python3 "$HERE/shalb_sass.py" "$OUT/counts.json" "${args[@]}" | tee "$OUT/summary.txt"
-g++ -O2 -std=c++17 -x c++ -D'__host__=' -D'__device__=' -D'__forceinline__=inline' "$HERE/sha512_min_check.cu" -o "$d/check"
-"$d/check" > "$OUT/check.txt"
-python3 "$HERE/sha512_check.py" < "$OUT/check.txt" | tee -a "$OUT/summary.txt"
+for c in min l1; do
+  g++ -O2 -std=c++17 -x c++ -D'__host__=' -D'__device__=' -D'__forceinline__=inline' "$HERE/sha512_${c}_check.cu" -o "$d/$c"
+  "$d/$c" > "$OUT/check_$c.txt"
+  python3 "$HERE/sha512_check.py" < "$OUT/check_$c.txt" | tee -a "$OUT/summary.txt"
+done
