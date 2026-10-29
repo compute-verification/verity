@@ -179,6 +179,9 @@
    "owner": "@memory-accounting",
    "digest": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
   },
+  "Hash.Assumptions.LmsUnforgeable": {
+   "owner": "@soundness"
+  },
   "Nci.Assumptions.ThetaRegistered": {
    "owner": "@compute-accounting",
    "digest": "afd7f09e9bdab67ea4a2a26dc3760bfe5d0d3649fde36ad2357b96c9b16ac1b7"
@@ -270,9 +273,6 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
-  },
-  "Hash.Assumptions.LmsUnforgeable": {
-   "owner": "@soundness"
   }
  },
  "meaning": [
@@ -1140,11 +1140,23 @@
    "assumptions": [],
    "type_hash": "2b69d1ebab2dbc01cb230d75376dded7450fa3910a2ef8f78a5f00418e6f9dc6"
   },
+  "Properties.Composition.acceptSame_honest": {
+   "owner": "@soundness"
+  },
+  "Properties.Composition.acceptSame_nontrivial": {
+   "owner": "@soundness"
+  },
   "Properties.Composition.acceptTied": {
    "owner": "@soundness",
    "signature": ["Properties.Composition.acceptTied : Properties.Composition.AcceptTied"],
    "assumptions": [],
    "type_hash": "2b69d1ebab2dbc01cb230d75376dded7450fa3910a2ef8f78a5f00418e6f9dc6"
+  },
+  "Properties.Composition.acceptTied_honest": {
+   "owner": "@soundness"
+  },
+  "Properties.Composition.acceptTied_nontrivial": {
+   "owner": "@soundness"
   },
   "Properties.Composition.answerAccepts": {
    "owner": "@proofs",
@@ -2671,11 +2683,11 @@
    "assumptions": [],
    "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911"
   },
-  "Verity.soundness_of_legs": {
-   "owner": "@soundness",
-   "signature": ["Verity.soundness_of_legs : Verity.Soundness"],
-   "assumptions": [],
-   "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911"
+  "Verity.remote_soundness_of_legs_honest": {
+   "owner": "@soundness"
+  },
+  "Verity.remote_soundness_of_legs_nontrivial": {
+   "owner": "@soundness"
   },
   "Verity.soundness_at_of_targets": {
    "owner": "@soundness"
@@ -2686,28 +2698,16 @@
   "Verity.soundness_at_of_targets_nontrivial": {
    "owner": "@soundness"
   },
+  "Verity.soundness_of_legs": {
+   "owner": "@soundness",
+   "signature": ["Verity.soundness_of_legs : Verity.Soundness"],
+   "assumptions": [],
+   "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911"
+  },
   "Verity.soundness_of_legs_honest": {
    "owner": "@soundness"
   },
   "Verity.soundness_of_legs_nontrivial": {
-   "owner": "@soundness"
-  },
-  "Verity.remote_soundness_of_legs_honest": {
-   "owner": "@soundness"
-  },
-  "Verity.remote_soundness_of_legs_nontrivial": {
-   "owner": "@soundness"
-  },
-  "Properties.Composition.acceptSame_honest": {
-   "owner": "@soundness"
-  },
-  "Properties.Composition.acceptSame_nontrivial": {
-   "owner": "@soundness"
-  },
-  "Properties.Composition.acceptTied_honest": {
-   "owner": "@soundness"
-  },
-  "Properties.Composition.acceptTied_nontrivial": {
    "owner": "@soundness"
   }
  },
