@@ -34,6 +34,14 @@ A record is one of two kinds:
   its refusal replays on the registry as it stood before (the recorded one, less the refusal's count), where both
   must refuse the node again, by its live registration, and leave the recorded registry.
 
+A record is of the protocol id it names: its sessions' records' `protocol` and its registry's schema, or, where it
+names neither (a rejected session, no registry), the id whose registration tag gives its recorded digest. One of v0
+before MEM-152's move (28 Oct 2026, `poub.retired`, v0's tags then) replays as above, but for what those tags made: its
+registration's digest is held to its fields under v0's registration tag then, by Python's formula (Lean's verifier
+computes only today's), and its registry is read back under today's schema, the one thing in it a tag names. A
+transcript names no id: its `verifier.json`'s is its own. One of v0 before the move doesn't replay: its seeds, receipts
+and openings are under v0's tags then, which neither verifier takes.
+
     uv run python verity/core/protocols/poub/lean/tests/replay.py transcript CASE.json ... \
         [--record VERIFIER.json ...] [--out ROWS.json]
     uv run python verity/core/protocols/poub/lean/tests/replay.py record VERIFIER.json ... [--out ROWS.json]
@@ -55,7 +63,8 @@ from typing import Any
 
 import ra_cases as M
 import verity_difftest as D
-from verity.core.protocols.poub import audit, coins, receipts
+from verity.core.protocols.poub import audit, coins, receipts, retired
+from verity.ml.randomness import frame
 
 SESSION = D.Port(M.EXE, "session", M.session, None, package=M.PACKAGE, of_record=M.OF_RECORD)
 REGISTRY = D.Port(M.EXE, "registry", M.registry, None, package=M.PACKAGE, of_record=M.OF_RECORD, rejects=M.REFUSALS)
@@ -82,6 +91,48 @@ def digests(reg: dict, s: D.Server) -> tuple[D.Outcome, D.Outcome]:
     """The registration's digest by each verifier: Lean's, then Python's."""
     kind, text = s.call("registration_digest", reg)
     return (kind, json.loads(text) if kind == "output" else text), _digest_py(reg)
+
+
+def digest_under(reg: dict, domain: bytes) -> str | None:
+    """`audit.Registration.digest` under registration tag `domain` in place of today's; None for a registration Python
+    refuses."""
+    try:
+        with M.decoding():
+            r = M.registration_of(copy.deepcopy(reg))
+    except D.Reject:
+        return None
+    return hashlib.sha512(domain + frame(r.node) + r.blocks.to_bytes(8, "big") + r.payload_root + r.codec_seed
+                          + frame(r.codec.name) + frame(r.receipt) + bytes((r.bind,)) + frame(r.layout)
+                          + r.rows.to_bytes(4, "big")).hexdigest()
+
+
+#: The protocol id a registry's schema names: today's, and v0's before the move.
+SCHEMAS = {audit.REGISTRY_SCHEMA: audit.PROTOCOL_ID, retired.REGISTRY_SCHEMA: retired.PROTOCOL_ID}
+
+
+def protocol_of(v: dict) -> str:
+    """The protocol id a `verifier.json` names (the module's docstring): its sessions' records' and its registry's,
+    else the one whose registration tag gives its recorded digest (v0's before the move for one recorded before it
+    named its layout and rows, `LATER`), else today's."""
+    named = {((x.get("record") or {}).get("public") or {}).get("protocol") for x in v.get("sessions", [])}
+    named |= {SCHEMAS.get((v.get("registry") or {}).get("schema"))}
+    named.discard(None)
+    if len(named) > 1:
+        raise ValueError(f"a record that names {sorted(named)}")
+    if named:
+        return named.pop()
+    reg = v.get("registration")
+    if reg is not None and (any(k not in reg for k in LATER)
+                            or digest_under(registration_of(reg), retired.REGISTRATION_DOMAIN) == reg.get("digest")):
+        return retired.PROTOCOL_ID
+    return audit.PROTOCOL_ID
+
+
+def today(registry: dict | None) -> dict | None:
+    """`registry` under today's schema: one recorded under v0's before the move differs in nothing else."""
+    if registry is not None and registry.get("schema") == retired.REGISTRY_SCHEMA:
+        return registry | {"schema": audit.REGISTRY_SCHEMA}
+    return registry
 
 
 def summary(outcome: D.Outcome) -> dict:
@@ -282,9 +333,11 @@ def registries(case: dict, s: D.Server) -> tuple[bool, dict | None]:
 
 
 def read_back(registry: dict | None, s: D.Server) -> bool | None:
-    """Whether both verifiers read a record's registry/v0 back and write it out as recorded; None if it keeps none."""
+    """Whether both verifiers read a record's registry/v0 back and write it out as recorded (under today's schema,
+    `today`); None if it keeps none."""
     if registry is None:
         return None
+    registry = today(registry)
     agree, out = registries({"source": "00", "registry": registry, "ops": []}, s)
     return agree and out is not None and out["registry"] == registry
 
@@ -292,7 +345,7 @@ def read_back(registry: dict | None, s: D.Server) -> bool | None:
 def refusal(v: dict, s: D.Server) -> dict:
     """A refused registration's record replayed: its node registered again on the registry as it stood before (the
     recorded one, the node's refusals one fewer), which both verifiers must refuse, leaving the recorded registry."""
-    m, after = REFUSED.match(v["refused"]), v.get("registry")
+    m, after = REFUSED.match(v["refused"]), today(v.get("registry"))
     if m is None or after is None or m[1] not in after.get("refused", {}):
         return {"agree": None, "held": None, "why": "the record keeps no registry to replay its refusal in"}
     node, prefix = m[1], m[2]
@@ -317,20 +370,29 @@ def replay_record(path: Path, s: D.Server) -> list[dict]:
     v = json.loads(path.read_text())
     if v.get("schema") != "verity/remote-session/verifier/v0":
         raise ValueError(f"{path}: not a verity/remote-session/verifier/v0 record")
+    protocol = protocol_of(v)
     if "registration" not in v and "refused" in v:
-        return [{"run": run_of(path), "recorded": "registration refused", "registry": read_back(v.get("registry"), s)}
-                | refusal(v, s)]
+        return [{"run": run_of(path), "protocol": protocol, "recorded": "registration refused",
+                 "registry": read_back(v.get("registry"), s)} | refusal(v, s)]
     registry = read_back(v.get("registry"), s)
     reg = registration_of(v["registration"])
-    lean_digest, py_digest = digests(reg, s)
+    recorded_digest = v["registration"]["digest"]
     earlier = [k for k in LATER if k not in v["registration"]]
+    if earlier:
+        digest, note = None, f"recorded before it named {' and '.join(earlier)}, its digest not today's"
+    elif protocol == retired.PROTOCOL_ID:
+        digest = digest_under(reg, retired.REGISTRATION_DOMAIN) == recorded_digest
+        note = f"recorded under {protocol}, its digest under that id's registration tag then, by Python's formula"
+    else:
+        lean_digest, py_digest = digests(reg, s)
+        digest, note = lean_digest == py_digest == ("output", recorded_digest), None
     rows = []
     for session in v.get("sessions", []):
-        row = {"run": run_of(path), "session": session.get("k"), "recorded": recorded(session),
+        row = {"run": run_of(path), "session": session.get("k"), "protocol": protocol, "recorded": recorded(session),
                "windows": session["windows"], "passes": sum(w["passes"] for w in session.get("windows_seen") or []),
                "window_ns": session["window_ns"],
-               "digest": None if earlier else lean_digest == py_digest == ("output", v["registration"]["digest"])
-               and session.get("registration") == v["registration"]["digest"], "registry": registry}
+               "digest": None if digest is None else digest and session.get("registration") == recorded_digest,
+               "registry": registry}
         if not session.get("windows_seen"):
             rows.append(row | {"agree": None, "held": None, "why": "no window seen"})
             continue
@@ -339,40 +401,47 @@ def replay_record(path: Path, s: D.Server) -> list[dict]:
                                "(groups_per_coin) at one window in flight, which no property covers"})
             continue
         case, made = case_of(v["registration"], session)
-        if earlier:
-            made["registration"] = f"recorded before it named {' and '.join(earlier)}, its digest not today's"
+        if note is not None:
+            made["registration"] = note
         row |= replay(case, s) | {"made": made}
         row["held"], row["why"] = held(session, row["lean"]) if row["agree"] else (False, "the verifiers differ")
         rows.append(row)
-    return rows or [{"run": run_of(path), "recorded": "no session", "agree": None, "held": None,
-                     "digest": None if earlier else lean_digest == py_digest == ("output", v["registration"]["digest"]),
-                     "registry": registry, "why": "the registration ran no session"}]
+    return rows or [{"run": run_of(path), "protocol": protocol, "recorded": "no session", "agree": None, "held": None,
+                     "digest": digest, "registry": registry, "why": "the registration ran no session"}]
 
 
 def recorded_transcripts(records: list[Path]) -> dict[str, dict]:
     """Each transcript's file name, from the `verifier.json`s that recorded it, to its session's pace (`pace_json`),
-    the sha256 of its bytes and the outcome recorded for it (accepted, a failure, or None for an unended session)."""
+    the sha256 of its bytes, the outcome recorded for it (accepted, a failure, or None for an unended session) and the
+    protocol id its record names (`protocol_of`)."""
     known = {}
     for path in records:
-        for session in json.loads(path.read_text()).get("sessions", []):
+        v = json.loads(path.read_text())
+        protocol = protocol_of(v)
+        for session in v.get("sessions", []):
             t = session.get("transcript") or {}
             if "sha256" in t:
                 f = session.get("failure") or {}
                 known[Path(t["path"]).name] = {"pace": pace_json(session), "sha256": t["sha256"],
-                                               "outcome": "accepted" if session.get("accepted") else f.get("failure")}
+                                               "outcome": "accepted" if session.get("accepted") else f.get("failure"),
+                                               "protocol": protocol}
     return known
 
 
 def replay_transcript(path: Path, s: D.Server, records: dict[str, dict] | None = None) -> list[dict]:
     """A transcript replayed through both verifiers, held to the outcome its `verifier.json` recorded when `records`
     (`recorded_transcripts`) has it. One that names no pace takes it from there, and only if its bytes are the
-    recorded ones."""
+    recorded ones. One its `verifier.json` names v0 before the move for isn't replayed (the module's docstring)."""
     data = path.read_bytes()
     case, row = json.loads(data), {"file": str(path)}
     named = "pace" in case.get("params", {})
     sha256 = None if named else hashlib.sha256(data).hexdigest()
     del data
     known = (records or {}).get(path.name)
+    if known is not None and known.get("protocol") == retired.PROTOCOL_ID:
+        return [row | {"agree": None, "held": None, "recorded": known["outcome"],
+                       "why": f"recorded under {retired.PROTOCOL_ID}: its seeds, receipts and openings are under that "
+                       "id's tags then (`poub.retired`), which neither verifier takes"}]
     if not named:
         if known is None:
             return [row | {"agree": None, "held": False, "why": "the transcript names no pace and no verifier.json "
