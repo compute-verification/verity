@@ -161,7 +161,10 @@ names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold la
 owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
 `pr:{n}@{head}`). No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
-conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
+conflicting or ejected PR's owner gets one handoff per head. A PR enters `next` only once drive's sync has run the ready
+mark's preflight on its merge there (the merged tree's checks and Lean build) and it passed, once per head and base tree;
+one it refuses stays out and its owner is told, while the PRs above it go on. No member waits for a Lean check of its own:
+the after-landing run's lean-audit checks Lean. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local

@@ -55,13 +55,12 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
   --changed $(git rev-parse origin/main) --quick"`, plus a suite's slow tier when you changed its core. Prefer small PRs.
   You hear back only if yours is held, ejected or reverted.
-- Drive stacks admitted PRs on `next`, non-Lean changes first. Reviewers ci staffs, never the owner, record a verdict at
+- Drive stacks admitted PRs on `next`, each once the preflight of its merge there passed (one it refuses stays out, and
+  you hear why). Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
-  fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; while no Lean
-  check runs, it moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself (a
-  hold still keeps what is above it). A change to a
-  `lean-audit.json` lock or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that
-  passed at or above it; Lean proofs alone land on the verdict.
+  fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile;
+  it moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself (a
+  hold still keeps what is above it). No PR waits for a Lean check of its own: the after-landing run's `lean-audit` checks Lean.
 - One run checks `checked`'s tip after each landing; when it passes every step on the merge gate (not circuit-check), drive fast-forwards `main` there. A red
   suite's culprit is rung and reverted on `checked` 60 min later unless a fix is marked, and `main` doesn't move. A red
   circuit-check's culprit is reverted at once, and until circuit-check passes on `checked` no PR touching its inputs lands

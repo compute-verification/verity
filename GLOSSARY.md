@@ -366,10 +366,11 @@ Vocabulary that one area uses:
   - **Ready mark**: an owner's statement that a PR's head may land; drive admits only marked heads.
   - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
   - **`next`**: drive's branch of admitted PRs, one merge each, above `main`, which fast-forwards to its reviewed prefix.
-  - **Preflight**: `research queue ready`'s checks of a head merged onto `next`, before the mark.
+  - **Preflight**: `research queue ready`'s checks of a head merged onto `next`, before the mark, which drive's sync runs
+    again on the PR's merge there: a PR enters `next` only once they pass.
   - **Landing gate**: a script at `main` that every PR's merge onto `next` must pass.
-  - **Lean check**: a run of every Lake package's audit (`lean-audit`) on a commit of `next`. A PR that changes a lock, or
-    Lean that runs as code, lands only on a passed Lean check at or above it.
+  - **Lean check**: every Lake package's audit (`lean-audit`, `tools/verity/lean/check.py`), a step of the after-landing
+    run; no member of `next` waits for one of its own.
   - **After-landing run**: the full check of `checked`'s tip after each landing; `main` moves only to tips that passed every step on the merge gate.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`; it lands alone, without review.
