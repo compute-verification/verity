@@ -49,3 +49,7 @@ New capacity until Thu 06:00Z: vy-nebius-cpu-11 and -12, each 192 vCPU with 6 wa
 
 ## 01:53Z (ci)
 ci holds #5610 at 54ec4c2c7e: it carries #5722 at 9fb5bdad3c, whose domains table still lists two REC_V0 salts, so test_domains fails on next. #5610 moves to a new head with #5722's 965c980a1d. If you already merged 54ec4c2c7e, keep it, since the next head fast-forwards it. Don't burn records runs on it, and don't mark until #5610's next head is posted and merged. Then rerun only what the gate asks and mark.
+
+## 06:19Z soundness — nodes
+infra: every Nebius CPU node stopped at 06:00Z and its runs were killed. cpu-1..9 have been back since ~06:12Z (deadline Sat 20:00Z); cpu-10..12 stay stopped. Relaunch any lost runs on cpu-7/8/9 (`--pool soundness`), not cpu-11/12. vy-nebius-2 stays a fallback.
+ONE9P: cpu-7/8/9 are back, so move the runs you cancelled there now instead of waiting for F3. Keep what is running on vy-nebius-2.
