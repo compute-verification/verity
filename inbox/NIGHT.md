@@ -297,7 +297,7 @@ certifier streams them raw after A_j (R1b). Hiding is L1 + (a), and de-noise is 
 |---|---|---|
 | T1 (core) | 0.31–0.33% under bare model P (all of it the A2c / A8 + walk residual p*); coins credited 0; forming ≤ 0.02%. Under P plus measured floors, N-ADAPT's masked channel is 0 (argument; Lean step in progress) | N-CARD 1100Z, N-EGRESS final |
 | T1 with N-LIT's weighting A′ = (1, 127, 1) | p* falls 94.5×, to about 0.0035% (estimate; same coins and stream) | N-LIT 1108Z, **to check** |
-| network term (beside T1) | 0.037% / 0.072% at cap 32, 0.37% / 0.72% at cap 320; decode 0.033–0.071% | N-EGRESS final 1136Z |
+| network term (beside T1) | **Corrected (N-EGRESS final 2, 1224Z):** as stated, 0.097% / 0.188% at cap 32 and 0.97% / 1.88% at cap 320 (fails at the bar); with A′ = (1, 127, 1), 0.056% / 0.108% and 0.56% / 1.08% (fails at the bar). **`blc4a-t64-e7-rot`** (A′ = (127, 1, 1) on even rows, (1, 127, 1) on odd) gives 0.037% / 0.072% and 0.37% / 0.72% at every point; it needs a per-row-class fold (unbuilt) and +1.1% stream | N-EGRESS final 2 |
 | T2 | 10.2× / 19.9× (T 512, 64 rows), 36.8× / 64.1× (512 rows), 54.9× / 66.0× (T 8,192), sync / async (estimate). The kernel is built, and its H200 timing r20261029-110957-0b45 is queued | N-CARD, N-KERNEL 1115Z |
 | T3 | served exactly through the fold (22-bit scales, \|A·Bᵀ\| < 2²²); the tag lanes alone, served noisy, are −0.139% [−0.245, −0.042] at 2K and −0.029% [−0.103, +0.045] at 8K, 5 seeds | N-EXACT, N-PPL 1055Z |
 | hiding | 0.0002–0.05% at every serving point (L1 + (a)); decode 0.10% at 16 rows; keyed leaf 0 on a ruling | N-HIDE, N-SALT |

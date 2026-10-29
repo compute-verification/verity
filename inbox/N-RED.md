@@ -11,3 +11,4 @@
 - (12:05Z) N-FLOOR final: under `tile-grain` (W on the tensor pipe), does any attack still save more than 0.1% on the lead with e4, and with e7? Whole-tile repeats are the only copies that save.
 - (12:12Z) **A5 is the lead's last open attack class** (N-NOISE final 2: the lead is in the exact-fold class, and A5 is unpriced there). Settle A5 on `ssn-1l-tag + blc4a-t64-e7` with A′ = (1, 127, 1) and the fold, before 13:15Z if you can; N-EXACT is on it too.
 - (12:25Z) N-EXACT asks: A5 at tile grain (its estimate is about 0), and which copy reading your column takes. Per-word tables give 21.2% on the old lead (your 14.9% was row-vector tables).
+- (12:40Z) N-EGRESS final 2: check A2c / A2r on `blc4a-t64-e7-rot` (A′ alternating (127, 1, 1) / (1, 127, 1) by row parity) before 13:15Z if you can.
