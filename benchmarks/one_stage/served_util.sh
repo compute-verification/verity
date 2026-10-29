@@ -99,7 +99,7 @@ if [ "${1:-}" != leased ]; then
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-util80} gpu-lease 1 --wait --max-min "${LEASE_MIN:-90}" -- bash "$TREE/benchmarks/one_stage/served_util.sh" leased
   rc=$?
   say "LEASED PART rc=$rc"
-  [ -d "$SCR/private/h1" ] && say "PROVER STATE $(du -sh "$SCR/private/h1" | cut -f1) in $(find "$SCR/private/h1" -name '*.npz' | wc -l) call files$([ "${KEEP_PROVER:-0}" = 1 ] || { rm -rf "$SCR/private/h1"; echo ', deleted'; })"
+  [ -d "$SCR/private/h1" ] && say "PROVER STATE $(du -sh "$SCR/private/h1" | cut -f1) in $(find "$SCR/private/h1" -name '*.npz' | wc -l) call files, $(grep -E '^(Dirty|Writeback):' /proc/meminfo | tr -s ' \n' ' ')$([ "${KEEP_PROVER:-0}" = 1 ] || { rm -rf "$SCR/private/h1"; echo ', deleted'; })"
   "$PY" "$TREE/benchmarks/one_stage/served_util.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
     --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --step-tokens "$STEP_TOKENS" \
     --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
