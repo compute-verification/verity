@@ -23,6 +23,9 @@ Attacks:
 - H2, A's row digests carry no position (frame_v3 PROTOCOL: "an x row and a W column with equal bits have one
   digest"): identical rows of A share every row-seg compression within one call, under L0, L1 and L2 alike, and no
   noise design touches A. Counted on the real messages by an instrumented SHA-512 that must match hashlib.
+- A5 corrected (`a5_step_greedy`): advice tables each row's earliest steps of every linear, the best split of one
+  H200's HBM by exhaustive search; interim 1 tabled whole linears. It needs each linear's input known before the
+  noise; `nred_requant.py` measures how often the served noise changes it.
 
 Every constructive adversary computes one vector a key from data and coins and copies it; its words must equal the
 honest words. `na.oracle` counts the distinct row vectors (and tiles): no copy-based adversary writes fewer.
@@ -31,7 +34,7 @@ honest words. `na.oracle` counts the distinct row vectors (and tiles): no copy-b
 from __future__ import annotations
 
 import argparse
-import hashlib
+import bisect
 import json
 import os
 import struct
@@ -103,6 +106,29 @@ def noise(design: str, pub: dict, co: dict) -> tuple[np.ndarray, np.ndarray]:
         raise ValueError(design)
     cum = np.concatenate([np.zeros((m, 1, n), dtype=np.int64), np.cumsum(inc, axis=1)], axis=1)
     return n1[:, :, None] + cum.transpose(0, 2, 1), np.rint(mean).astype(np.int64)
+
+
+def final_noise(design: str, pub: dict, co: dict) -> np.ndarray:
+    """The served noise N_S − β (m × n), without the m × n × S intermediate."""
+    c, a1, b = pub["c"], co["a1"], co["b"]
+    n1 = a1 @ c + (pub["tags"] @ pub["g"] if design in ("fix", "fix2") else 0)
+    s1 = b.shape[1]
+    if design == "ssn_1l":
+        return n1 + b.sum(1)[:, None] - np.rint(c.sum(0) / 2 + s1 / 2).astype(np.int64)
+    if design == "fix":
+        return n1 + (1 + b).sum(1)[:, None] - np.rint(c.sum(0) / 2 + 1.5 * s1).astype(np.int64)
+    if design == "hw":
+        inc = _exact_matmul(1 + 2 * b, pub["sig"])
+        return n1 + inc - np.rint(7.5 * c.sum(0) + 2 * pub["sig"].sum(0)).astype(np.int64)
+    if design == "fix2":
+        return n1 + _exact_matmul(1 + b, pub["w"]) - np.rint(c.sum(0) / 2 + 1.5 * pub["w"].sum(0)).astype(np.int64)
+    raise ValueError(design)
+
+
+def _exact_matmul(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """x @ y through float64 BLAS; exact while every partial sum stays below 2^53."""
+    assert np.abs(x).max(initial=0) * np.abs(y).max(initial=0) * x.shape[1] < 2 ** 53
+    return np.rint(x.astype(np.float64) @ y.astype(np.float64)).astype(np.int64)
 
 
 def partials(a: np.ndarray, b: np.ndarray, d1: int, s: int) -> np.ndarray:
@@ -449,6 +475,70 @@ def fix2_costs() -> dict:
     return out
 
 
+def final_noise_matches(seed: int = 47) -> dict:
+    rng = np.random.default_rng(seed)
+    out = {}
+    for design in ("ssn_1l", "fix", "hw", "fix2"):
+        m, n, s = 96, 40, 9
+        pub = public(design, n, s, m, rng)
+        co = coins(design, m, n, s, rng)
+        nz, beta = noise(design, pub, co)
+        out[design] = bool(np.array_equal(final_noise(design, pub, co), nz[:, :, -1] - beta[None]))
+    return out
+
+
+def a5_vectors(design: str, t: int) -> float:
+    """A row's possible step-t vectors once the window's public draws are known: 16 a₁ codes times ssn_1l's t offset
+    sums (b_t·1 adds one vector), or fix2's 2^(t−1) sign patterns (each step's w_t differs). With w drawn per call,
+    after any advice, a fix2 vector past step 1 can't be tabled."""
+    if design == "ssn_1l":
+        return 16 * t
+    if design == "fix2":
+        return 16 * 2 ** (t - 1)
+    return 16 if t == 1 else float("inf")
+
+
+def a5_step_greedy(designs=("ssn_1l", "fix2", "fix2_call_w")) -> dict:
+    """A5 corrected: advice tables each row's earliest steps (every possible vector of steps 1..τ_ℓ of linear ℓ) in one
+    H200's HBM, so those words are copies; the row then resumes the k32 chain, a 32-a-word load of its step-τ vector,
+    unless τ_ℓ = S. The best (τ_ℓ) by exhaustive search, its saving as a share of stock. Interim 1's `advice_table`
+    tabled whole linears and understated it."""
+    out = {}
+    lins = [(n, k, ns.steps1l(k)) for n, k in ns.LLAMA.values()]
+    for design in designs:
+        for m in na.MS:
+            per = []
+            for n, k, s in lins:
+                unit = n * m * ns.LLAMA_LAYERS
+                cost, opts = 0.0, [(0.0, 0.0, 0)]
+                for t in range(1, s + 1):
+                    cost += a5_vectors(design, t) * 4 * unit
+                    if cost > na.HBM_BYTES:
+                        break
+                    opts.append((cost, ns.H32 * unit * (t if t == s else t - 1), t))
+                per.append(opts)
+            best = (0.0, (0,) * len(lins))
+            last_costs = [o[0] for o in per[3]]
+            for o0 in per[0]:
+                for o1 in per[1]:
+                    if o0[0] + o1[0] > na.HBM_BYTES:
+                        break
+                    for o2 in per[2]:
+                        room = na.HBM_BYTES - o0[0] - o1[0] - o2[0]
+                        if room < 0:
+                            break
+                        o3 = per[3][bisect.bisect_right(last_costs, room) - 1]
+                        gain = o0[1] + o1[1] + o2[1] + o3[1]
+                        if gain > best[0]:
+                            best = (gain, (o0[2], o1[2], o2[2], o3[2]))
+            stock = sum(n * k * m * ns.LLAMA_LAYERS for n, k, _ in lins)
+            out[f"{design}/m{m}"] = {"gap_share_of_stock": best[0] / stock,
+                                     "steps_tabled": dict(zip(ns.LLAMA, best[1]))}
+    out["fix2_call_w_coin_bits_a_call"] = sum(n * (s - 1) for n, _, s in lins) * ns.LLAMA_LAYERS
+    out["fix2_call_w_sha512_compressions_a_call"] = out["fix2_call_w_coin_bits_a_call"] / 512
+    return out
+
+
 def served_std(seed: int = 43) -> dict:
     """The served noise's std (final word minus A·Bᵀ, de-biased) for each design at Llama's K, m 512."""
     rng = np.random.default_rng(seed)
@@ -489,10 +579,20 @@ def main(argv: list[str] | None = None) -> int:
     checks.append({"check": "A1 rc_magic: > 1% of stock at Llama m 64",
                    "pass": rc["llama_m64"]["A1"] > 0.01, "detail": rc["llama_m64"]})
     checks.append({"check": "A2c fix/hw: > 30% of stock at every m", "pass": min(a2c.values()) > 0.3, "detail": a2c})
+    fn_ok = final_noise_matches()
+    checks.append({"check": "final_noise equals the full model's last step minus β, every design but rc_magic",
+                   "pass": all(fn_ok.values()), "detail": fn_ok})
+    a5 = a5_step_greedy()
+    checks.append({"check": "A5 step-greedy: ssn_1l and fix2 > 1% of stock at m 64; fix2 with per-call w saves 0",
+                   "pass": min(a5[f"{d}/m64"]["gap_share_of_stock"] for d in ("ssn_1l", "fix2")) > 0.01
+                   and max(a5[f"fix2_call_w/m{m}"]["gap_share_of_stock"] for m in na.MS) == 0,
+                   "detail": {k: v["gap_share_of_stock"] for k, v in a5.items() if isinstance(v, dict)}})
     rep = {"checks": checks, "small": det, "birthday": bd, "rc_magic_at_scale": rc, "a2c_at_scale": a2c, "h2": hh,
-           "fix2_costs": fix2_costs(), "served_std": served_std(),
+           "a5_step_greedy": a5, "fix2_costs": fix2_costs(), "served_std": served_std(),
            "periods": {"A2c_m8192": ns.periods(a2c["m8192"], 1.044),
                        "rc_A1_llama_m8192": ns.periods(rc["llama_m8192"]["A1"], rc["llama_m8192"]["alpha"]),
+                       "ssn_1l_A5_m64": ns.periods(a5["ssn_1l/m64"]["gap_share_of_stock"], 1.044),
+                       "fix2_A5_m64": ns.periods(a5["fix2/m64"]["gap_share_of_stock"], 1.044),
                        "hw_A7_m131072": ns.periods(bd["hw/m131072"], 1.044),
                        "hw_A7_m1048576": ns.periods(bd[f"hw/m{1 << 20}"], 1.044)}}
     text = json.dumps(rep, indent=1, default=float)
