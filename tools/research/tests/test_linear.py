@@ -295,7 +295,7 @@ def test_a_state_is_matched_by_name_before_type_so_in_progress_is_never_the_firs
         lin.move("INF-1", "Doing")
 
 
-def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
+def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin, tmp_path):
     lin.subscribers["I1"] = []                                                                 # an issue filed earlier
     rc, out, _ = run(capsys, "linear", "state", "INF-1", "In Progress")
     assert rc == 0 and out.strip() == "INF-1 In Progress" and lin.moved == [("I1", "S3")]
@@ -305,6 +305,12 @@ def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
     assert v["i"] == {"issueId": "I1", "body": "@infra: picked up"}
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "no sender")
     assert rc != 0 and "--as HANDLE" in err
+    body = tmp_path / "postmortem.md"
+    body.write_text("postmortem: a long body\n")
+    assert slack.LENGTH_FIX.startswith("put the body in its Linear issue (`research msg linear comment ISSUE --file BODY.md")
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "--file", str(body), "--as", "infra")
+    assert rc == 0 and out.strip() == "INF-1 commented"
+    assert lin.sent("commentCreate")[-1][1]["i"] == {"issueId": "I1", "body": "@infra: postmortem: a long body\n"}
     rc, out, _ = run(capsys, "linear", "list", "infra")
     assert rc == 0 and out.splitlines()[:2] == ["INF-1  Backlog  first", "INF-2  In Progress  later"]   # oldest first
     assert out.splitlines()[2] == f"states: {slack.LINEAR_STATES}" and "In Progress = someone is on it now" in slack.LINEAR_STATES

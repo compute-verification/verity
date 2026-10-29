@@ -1968,7 +1968,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             i = lin.edit(issue, ns.title, ns.due, brief, ns.parent, send=not ns.dry_run)
             print(("dry-run: would set " if ns.dry_run else f"{issue} set ") + linear.said(i))
             return 0
-        text = need(value, "the TEXT")
+        text = need(value or brief, "the TEXT (or --file BODY.md)")
         if not ns.worker:
             author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender (a lane's worker: --worker NAME)"))["handle"]
             warn_unrouted(text, reg, author)
@@ -4034,8 +4034,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--title", default=None, metavar="T", help="edit: the issue's new title")
     p.add_argument("--due", default=None, metavar="YYYY-MM-DD", help="edit: its due date (`none` clears it)")
     p.add_argument("--file", "--body-file", "--description-file", dest="file", default=None, metavar="F.md",
-                   help="markdown: edit: the issue's new description; update: the update's body; project create, milestone: "
-                        "the description")
+                   help="markdown: edit: the issue's new description; comment: its body (in place of TEXT); update: the "
+                        "update's body; project create, milestone: the description")
     p.add_argument("--parent", default=None, metavar="ID", help="edit: make it a sub-issue of this issue (CMP-92)")
     p.add_argument("--health", default=None, metavar="H", help="update: onTrack, atRisk or offTrack")
     p.add_argument("--team", action="append", default=[], metavar="KEY", help="project create: a team it is in (repeat for more)")
