@@ -1,4 +1,4 @@
-"""`Store`: the node's store as one registry, the reference implementation of `StoreView` and `Lifecycle`.
+"""`NodeMemory`: the node's store as one registry, the reference implementation of `StoreView` and `Lifecycle`.
 
 Regions are numbered into one block index space in registration order.  A KV pool is one page table shared by its
 layer regions (a vLLM block id is a page in every layer): ``fill[page]`` slots of an allocated page are written, and
@@ -29,7 +29,7 @@ The plan and the tree are the remote bandwidth driver's, imported (`rb`, its `re
 `Plan` (canonical runs of distinct blocks; `plan_digest` is its digest in numpy), its tree `rb.domain`'s
 frame-v3-sha512 over leaves of ``PER_LEAF`` receipts in plan order, each `rb.hidden` as an hm96-sha512/row/v2 leaf
 under its salt, and an opening verifies by `rb.verify_leaf`.  `RemoteBandwidthReceipt` is its receipt.  The seed is
-the chained one (`chain`, under its seed domain).  A leaf's salt is `Store.salt`, a PRF of the store's secret key, so
+the chained one (`chain`, under its seed domain).  A leaf's salt is `NodeMemory.salt`, a PRF of the store's secret key, so
 no salt is kept.
 """
 from __future__ import annotations
@@ -47,7 +47,9 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.remote_bandwidth import receipts as rb
-from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, SALT_BYTES, Plan
+from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, Plan
+from verity.core.protocols.remote_bandwidth.store import store_salt
+from verity.ml.circuits import requirement
 from verity.ml.commitments import merkle_depth
 from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, Codec, Counters, Layout, Opening, PageLayout,
                                          PassCommitment, Receipt, Registration, RegionInfo, Segment, Source, Stale,
@@ -57,9 +59,8 @@ from verity_vllm.protocols.remote_bandwidth import memory_map as mm
 CHALLENGE_BYTES = 32
 SEED_BYTES = 64
 REGISTRATION_DOMAIN = b"verity/store/registration/v0\0"
-SALT_DOMAIN = b"verity/store/salt/v0\0"
 
-FillerPlan = Callable[["Store", int], Sequence[tuple[str, Sequence[int]]]]
+FillerPlan = Callable[["NodeMemory", int], Sequence[tuple[str, Sequence[int]]]]
 
 
 def frame(b: bytes) -> bytes:
@@ -293,8 +294,8 @@ class _Pass:
         return self.segments[i].start + q if b is None else int(b[q])
 
 
-class Store:
-    """The node's store.  ``filler_plan(store, pass_index)`` returns the filler a pass reads after the weights and the
+class NodeMemory:
+    """The node's memory.  ``filler_plan(store, pass_index)`` returns the filler a pass reads after the weights and the
     KV, as ``(region, blocks)`` pairs (region block indices in read order); ``chaining`` derives each pass's seed
     (`chain`); ``salt_key`` keys the leaves' salts (`salt`), fresh by default."""
 
@@ -445,6 +446,10 @@ class Store:
         if self._pool is not None:
             self._pool.dirty[:] = self._pool.released[:] = False
         return m
+
+    def audit_store(self) -> requirement.Store:
+        """The node's store, the audit's `requirement.Store`, as its memory map records it (`memory_map.audit_store`)."""
+        return mm.audit_store(self.memory_map)
 
     def end_step(self) -> None:
         """The step's forward has written its KV (`Scheduler.update_from_output`): a memory map takes its digests."""
@@ -657,8 +662,8 @@ class Store:
         return canonical(np.concatenate(parts)) if parts else np.zeros((0, 2), np.int64)
 
     def salt(self, seed: bytes, leaf: int) -> bytes:
-        """Leaf ``leaf``'s salt in the pass seeded ``seed``: ``SHAKE256(D ‖ key ‖ seed ‖ u64be leaf)``, 192 bytes."""
-        return hashlib.shake_256(SALT_DOMAIN + self._salt_key + seed + struct.pack(">Q", leaf)).digest(SALT_BYTES)
+        """Leaf ``leaf``'s salt in the pass seeded ``seed``: `store.store_salt` under the store's key, 192 bytes."""
+        return store_salt(self._salt_key, seed, leaf)
 
     def receipts_at(self, ps: _Pass, lo: int, hi: int, z: Callable[[str, int], bytes | None] | None = None) -> list[bytes]:
         """The receipts of positions ``[lo, hi)``, the reference reader's (`receipts`) for the segments they fall in."""
