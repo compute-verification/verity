@@ -149,8 +149,8 @@ theorem cost_append {G : Type} (P Q : List (Instr G)) : cost (P ++ Q) = cost P +
 
 open Classical in
 /-- One instruction's translation; a non-quadratic FP32 instruction is priced `hi`. -/
-noncomputable def Op.tr (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (hi : ℕ) :
-    Op (Noise N m n k) → List (Noise N m n k → ℚ) → List (Instr (Noise N m n k))
+noncomputable def M4090Instr.tr (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (hi : ℕ) :
+    M4090Instr (Noise N m n k) → List (Noise N m n k → ℚ) → List (Instr (Noise N m n k))
   | .mma outs _, _ => outs.map (Instr.priced 16)
   | .fp32 κ i j l, Rs =>
       [Instr.priced (if QuadStep Rs (fpVal fpSem κ i j l Rs) then 8 else hi) (fpVal fpSem κ i j l Rs)]
@@ -163,7 +163,7 @@ noncomputable def Op.tr (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (hi : ℕ)
 
 /-- A program's translation. -/
 noncomputable def tr (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (hi : ℕ) :
-    List (Op (Noise N m n k)) → List (Noise N m n k → ℚ) → List (Instr (Noise N m n k))
+    List (M4090Instr (Noise N m n k)) → List (Noise N m n k → ℚ) → List (Instr (Noise N m n k))
   | [], _ => []
   | o :: P, Rs => o.tr fpSem hi Rs ++ tr fpSem hi P (Rs ++ o.outs fpSem Rs)
 
@@ -178,7 +178,7 @@ variable (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (hi : ℕ)
     C Vs hi (fpVal fpSem κ i j l Rs))
 include hbig hq8 hfp
 
-theorem op_spec (o : Op (Noise N m n k)) (Rs Vs : List (Noise N m n k → ℚ))
+theorem op_spec (o : M4090Instr (Noise N m n k)) (Rs Vs : List (Noise N m n k → ℚ))
     (hinv : ∀ r ∈ Rs, r ∈ V0 N m n k ∨ r ∈ Vs) (hwf : o.WF) :
     GOK C Vs (o.tr fpSem hi Rs) ∧
       (∀ r ∈ o.outs fpSem Rs, r ∈ V0 N m n k ∨ r ∈ Vs ++ vals (o.tr fpSem hi Rs)) ∧
@@ -190,7 +190,8 @@ theorem op_spec (o : Op (Noise N m n k)) (Rs Vs : List (Noise N m n k → ℚ))
     have hvals : vals (outs.map (Instr.priced 16)) = outs := by
       simp only [vals, List.map_map]
       exact List.map_id' _ ▸ rfl
-    refine ⟨?_, fun r hr => Or.inr (List.mem_append_right _ (by simpa [Op.tr, Op.outs, hvals] using hr)), ?_⟩
+    refine ⟨?_, fun r hr => Or.inr (List.mem_append_right _
+      (by simpa [M4090Instr.tr, M4090Instr.outs, hvals] using hr)), ?_⟩
     · have : ∀ (fs : List (Noise N m n k → ℚ)) (Ws : List (Noise N m n k → ℚ)), GOK C Ws (fs.map (Instr.priced 16)) := by
         intro fs
         induction fs with
@@ -201,54 +202,57 @@ theorem op_spec (o : Op (Noise N m n k)) (Rs Vs : List (Noise N m n k → ℚ))
         simp only [cost, List.map_map]
         rw [show (Instr.price ∘ Instr.priced 16 : (Noise N m n k → ℚ) → ℕ) = fun _ => 16 from rfl, List.map_const',
           List.sum_replicate, smul_eq_mul, Nat.mul_comm]
-      simp only [Op.tr, Op.price, Op.nq, Nat.mul_zero, Nat.add_zero, hc]
+      simp only [M4090Instr.tr, M4090Instr.price, M4090Instr.nq, Nat.mul_zero, Nat.add_zero, hc]
       exact hwf
   | fp32 κ i j l =>
     by_cases hq : QuadStep Rs (fpVal fpSem κ i j l Rs)
-    · have htr : Op.tr fpSem hi (Op.fp32 κ i j l) Rs = [Instr.priced 8 (fpVal fpSem κ i j l Rs)] := by
-        simp [Op.tr, hq]
-      have hnq : Op.nq fpSem (Op.fp32 κ i j l) Rs = 0 := by simp [Op.nq, hq]
+    · have htr : M4090Instr.tr fpSem hi (M4090Instr.fp32 κ i j l) Rs = [Instr.priced 8 (fpVal fpSem κ i j l Rs)] := by
+        simp [M4090Instr.tr, hq]
+      have hnq : M4090Instr.nq fpSem (M4090Instr.fp32 κ i j l) Rs = 0 := by simp [M4090Instr.nq, hq]
       rw [htr, hnq]
       refine ⟨one _ _ (hq8 κ i j l Rs Vs hinv hq), fun r hr => ?_,
-        by simp [cost, Op.price, Instr.price]⟩
-      simp only [Op.outs, List.mem_singleton] at hr
+        by simp [cost, M4090Instr.price, Instr.price]⟩
+      simp only [M4090Instr.outs, List.mem_singleton] at hr
       exact Or.inr (hr ▸ self _ _)
-    · have htr : Op.tr fpSem hi (Op.fp32 κ i j l) Rs = [Instr.priced hi (fpVal fpSem κ i j l Rs)] := by
-        simp [Op.tr, hq]
-      have hnq : Op.nq fpSem (Op.fp32 κ i j l) Rs = 1 := by simp [Op.nq, hq]
+    · have htr : M4090Instr.tr fpSem hi (M4090Instr.fp32 κ i j l) Rs = [Instr.priced hi (fpVal fpSem κ i j l Rs)] := by
+        simp [M4090Instr.tr, hq]
+      have hnq : M4090Instr.nq fpSem (M4090Instr.fp32 κ i j l) Rs = 1 := by simp [M4090Instr.nq, hq]
       rw [htr, hnq]
       refine ⟨one _ _ (hfp κ i j l Rs Vs hinv), fun r hr => ?_, ?_⟩
-      · simp only [Op.outs, List.mem_singleton] at hr
+      · simp only [M4090Instr.outs, List.mem_singleton] at hr
         exact Or.inr (hr ▸ self _ _)
-      · simp only [cost, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Instr.price, Op.price]
+      · simp only [cost, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Instr.price, M4090Instr.price]
         omega
   | int f =>
-    refine ⟨one _ _ (hbig _ _ _ le_rfl), fun r hr => ?_, by simp [Op.tr, cost, Op.price, Op.nq, Instr.price]⟩
-    simp only [Op.outs, List.mem_singleton] at hr
+    refine ⟨one _ _ (hbig _ _ _ le_rfl), fun r hr => ?_,
+      by simp [M4090Instr.tr, cost, M4090Instr.price, M4090Instr.nq, Instr.price]⟩
+    simp only [M4090Instr.outs, List.mem_singleton] at hr
     exact Or.inr (hr ▸ self _ _)
   | dd f =>
-    refine ⟨one _ _ (hbig _ _ _ le_rfl), fun r hr => ?_, by simp [Op.tr, cost, Op.price, Op.nq, Instr.price]⟩
-    simp only [Op.outs, List.mem_singleton] at hr
+    refine ⟨one _ _ (hbig _ _ _ le_rfl), fun r hr => ?_,
+      by simp [M4090Instr.tr, cost, M4090Instr.price, M4090Instr.nq, Instr.price]⟩
+    simp only [M4090Instr.outs, List.mem_singleton] at hr
     exact Or.inr (hr ▸ self _ _)
   | subword f =>
-    refine ⟨one _ _ (hbig _ _ _ le_rfl), fun r hr => ?_, by simp [Op.tr, cost, Op.price, Op.nq, Instr.price]⟩
-    simp only [Op.outs, List.mem_singleton] at hr
+    refine ⟨one _ _ (hbig _ _ _ le_rfl), fun r hr => ?_,
+      by simp [M4090Instr.tr, cost, M4090Instr.price, M4090Instr.nq, Instr.price]⟩
+    simp only [M4090Instr.outs, List.mem_singleton] at hr
     exact Or.inr (hr ▸ self _ _)
   | move i =>
-    refine ⟨trivial, fun r hr => ?_, by simp [Op.tr, cost, Op.nq]⟩
-    simp only [Op.outs, List.mem_singleton] at hr
+    refine ⟨trivial, fun r hr => ?_, by simp [M4090Instr.tr, cost, M4090Instr.nq]⟩
+    simp only [M4090Instr.outs, List.mem_singleton] at hr
     subst hr
-    simpa [Op.tr, vals] using getD_inv hinv i
+    simpa [M4090Instr.tr, vals] using getD_inv hinv i
   | presalt f =>
-    refine ⟨trivial, fun r hr => ?_, by simp [Op.tr, cost, Op.nq]⟩
-    simp only [Op.outs, List.mem_singleton] at hr
+    refine ⟨trivial, fun r hr => ?_, by simp [M4090Instr.tr, cost, M4090Instr.nq]⟩
+    simp only [M4090Instr.outs, List.mem_singleton] at hr
     exact Or.inl (hr ▸ hwf)
   | operand f =>
-    refine ⟨trivial, fun r hr => ?_, by simp [Op.tr, cost, Op.nq]⟩
-    simp only [Op.outs, List.mem_singleton] at hr
+    refine ⟨trivial, fun r hr => ?_, by simp [M4090Instr.tr, cost, M4090Instr.nq]⟩
+    simp only [M4090Instr.outs, List.mem_singleton] at hr
     exact Or.inl (hr ▸ hwf)
 
-theorem tr_spec : ∀ (P : List (Op (Noise N m n k))) (Rs Vs : List (Noise N m n k → ℚ)),
+theorem tr_spec : ∀ (P : List (M4090Instr (Noise N m n k))) (Rs Vs : List (Noise N m n k → ℚ)),
     (∀ r ∈ Rs, r ∈ V0 N m n k ∨ r ∈ Vs) → (∀ o ∈ P, o.WF) →
     GOK C Vs (tr fpSem hi P Rs) ∧
       (∀ r ∈ regs fpSem P Rs, r ∈ V0 N m n k ∨ r ∈ Vs ++ vals (tr fpSem hi P Rs)) ∧
@@ -279,7 +283,7 @@ theorem tr_spec : ∀ (P : List (Op (Noise N m n k))) (Rs Vs : List (Noise N m n
       rw [e1, e2, e3, cost_append, Nat.mul_add]
       omega
 
-theorem embed_gen (L : List (Noise N m n k → ℚ)) (P : List (Op (Noise N m n k))) (hL : ∀ f ∈ L, f ∈ V0 N m n k)
+theorem embed_gen (L : List (Noise N m n k → ℚ)) (P : List (M4090Instr (Noise N m n k))) (hL : ∀ f ∈ L, f ∈ V0 N m n k)
     (hwf : ∀ o ∈ P, o.WF) :
     GOK C [] (tr fpSem hi P L) ∧ (∀ r ∈ regs fpSem P L, r ∈ V0 N m n k ∨ r ∈ slots (tr fpSem hi P L) L) ∧
       cost (tr fpSem hi P L) ≤ cost4090 P + (hi - 8) * nonQuad fpSem P L := by
