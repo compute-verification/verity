@@ -6,8 +6,8 @@
 # rounds as the honest session's, and the prover's record carries the control's own refusal (`EXPECT` below:
 # `prover_stopped`'s, the firewall's, and the verdict's `why`, the Lean frame's stop where it stopped a rep). A `cut-MODE` control (a worker that fails) runs at its table's device rounds 2, half way and the last of
 # the honest session's (`firewall_device_rounds`). Run from the source tree's root:
-#   research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'out/*' --cpus 16 --mem-gb 48 \
-#     -- bash verity/ml/flock/verifier/firewall_controls.sh
+#   bash verity/ml/flock/verifier/firewall_controls.sh
+#   (a job run from the source tree, 16 CPUs, 48 GB, keeping out/*)
 # FC_CONTROLS names the controls (default every one); the builds, staging and config are firewall_finish_agree.sh's
 # (FF_CONFIG, default hidden:256). Results in $RESEARCH_RUN_DIR/out: controls.json and each session's logs.
 set -uo pipefail

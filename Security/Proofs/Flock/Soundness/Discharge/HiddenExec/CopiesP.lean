@@ -40,15 +40,27 @@ section spec
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw : Option Lean.Json} {own : Option ByteArray} {pi : HmIn.Ports} {st : Stmt}
 
-/-- The flat twin's layout, at public inputs (`flat_layout`). -/
+/-- The flat twin's layout, at public inputs (`flat_layoutC`). -/
 theorem flat_layoutP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coins tables draw own pi st) :
-    Layout (Hidden.flatTwin st) :=
-  layout_of (st := Hidden.flatTwin st) (parse_facts (Hidden.parse_untyped ht s.parse).1) s.pin rfl rfl s.m s.kLog
+    Layout (Hidden.flatTwin st) := by
+  cases hi : tags.isTmpl
+  · have hP := s.parse
+    rw [parseCommit_flat hi] at hP
+    exact layout_of (st := Hidden.flatTwin st) (parse_facts (Hidden.parse_untyped ht hP).1) s.pin rfl rfl s.m s.kLog
+  · have hT := s.parse
+    rw [parseCommit_tmpl hi] at hT
+    exact layout_of_tmpl (st := Hidden.flatTwin st) hT s.pin rfl rfl s.m s.kLog
 
-/-- The flat twin's unit facts, at public inputs (`flat_unitFacts`). -/
+/-- The flat twin's unit facts, at public inputs (`flat_unitFactsC`). -/
 theorem flat_unitFactsP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coins tables draw own pi st) :
-    Aliased.UnitFacts tags (Hidden.flatTwin st) :=
-  Hidden.unitFacts_of_parse (st := Hidden.flatTwin st) (Hidden.parse_untyped ht s.parse).1 rfl
+    Aliased.UnitFacts tags (Hidden.flatTwin st) := by
+  cases hi : tags.isTmpl
+  · have hP := s.parse
+    rw [parseCommit_flat hi] at hP
+    exact Hidden.unitFacts_of_parse (st := Hidden.flatTwin st) (Hidden.parse_untyped ht hP).1 rfl
+  · have hT := s.parse
+    rw [parseCommit_tmpl hi] at hT
+    exact Hidden.unitFacts_tmpl (st := Hidden.flatTwin st) hT rfl
 
 /-- **An untyped hidden statement at public inputs reads its flat twin's rows at every unit slot's row it keeps**, at
 unsegmented output rows (`unitRowsFlat`, with `Hidden.deltaEntry_kept`). -/
@@ -60,10 +72,11 @@ theorem unitRowsFlatP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coi
   have hout : ∀ q ∈ Hidden.outPairs st.c, q.1 ≠ r.val := fun q hq => by
     rw [hr]; exact outPairs_ne_unit L F hrows hq hs₀ hb
   obtain ⟨eA, eB⟩ := Hidden.deltaEntry_kept (pin := st.pin) hk j.val
+  have hpin := (Hidden.committed_of_commit s.parse).unpinned_of_rep ht hrows.1
   have hd1 : (HmOut.delta st.c st.pin).1 = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [Hidden.hidden_delta']
+    rw [Hidden.hidden_delta_unpinned hpin]
   have hd2 : (HmOut.delta st.c st.pin).2 = (HmRow.delta st.c st.pin).2 ++ (Hidden.outPairs st.c).toArray := by
-    rw [Hidden.hidden_delta']
+    rw [Hidden.hidden_delta_unpinned hpin]
   refine ⟨?_, ?_⟩
   · show rangesEntry st (slotEntryA st) r.val j.val + deltaEntry st.da r.val j.val =
       rangesEntry st (slotEntryA st) r.val j.val + deltaEntry (HmRow.delta st.c st.pin).1 r.val j.val
@@ -159,17 +172,12 @@ variable {tags : Tags} {st : Stmt} {pi : HmIn.Ports} (L : Layout st) (Lf : Layou
 
 theorem place_val {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) :
-    (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x).val =
+    (L.col regs hg x).val =
       st.c.unitRange.slot (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) +
         x.val % (st.c.unit.inWords * WORD) := by
   have hn := L.unitRows_nIn
   have hx' : x.val < st.c.upv * (unitRows st L.unit_built).nIn := hx
-  unfold stackPlace
-  rw [dite_eq_left hx']
-  show st.c.unitRange.slot (g * st.c.upv + x.val / (unitRows st L.unit_built).nIn) +
-    x.val % (unitRows st L.unit_built).nIn = _
-  rw [hn]
+  rw [L.col_val_in regs hg x hx', hn]
 
 include L in
 /-- **A stacked input off a public leaf is at a row `HmIn.delta` keeps**: a dropped row is a public leaf's bit
@@ -185,7 +193,7 @@ theorem keep_of_neg (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) {g x :
         x % (st.c.unit.inWords * WORD))
     · rfl
     · exfalso
-      obtain ⟨k, -, jj, hjj, t, ht, hq1, hlt, hl⟩ := Hidden.publicCol_at hp he C L.unit_built hq
+      obtain ⟨k, -, jj, hjj, t, ht, hq1, hlt, hl⟩ := Hidden.publicCol_at hp he C (Hidden.unit_groups_fit L) hq
       have hpos : 0 < st.c.unit.inWords * WORD :=
         Nat.pos_of_ne_zero fun h => by rw [h, Nat.mul_zero] at hx; omega
       have hW : st.c.unit.inWords * WORD ≤ 2 ^ st.c.unitRange.slotLog := by
@@ -197,7 +205,7 @@ theorem keep_of_neg (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) {g x :
       have hmem : x % (st.c.unit.inWords * WORD) ∈ portBits st.c.unit.inGroups := by
         rw [e2, ← hj1]; exact port_mem hjs (by rw [hj2]; exact ht)
       have hpo : portOf (portCols st.c.unit.inGroups) (x % (st.c.unit.inWords * WORD)) = jj := by
-        rw [e2, ← hj1]; exact portOf_eq (portBits_nodup L.unit_built) hjs (by rw [hj2]; exact ht)
+        rw [e2, ← hj1]; exact portOf_eq (Aliased.unit_nodup L) hjs (by rw [hj2]; exact ht)
       have hpl : pubLeaf st.c pi x = (pi.leaves.getD (x / (st.c.unit.inWords * WORD)) #[]).getD jj (-1) := by
         unfold pubLeaf
         rw [ite_eq_left ⟨hmem, by rw [hpo]; exact hjj⟩, hpo]
@@ -210,8 +218,7 @@ theorem copyPos_blockHP (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) (h
     (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hneg : pubLeaf st.c pi x.val < 0)
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
-    (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x) =
+    (L.model regs).block z o (L.col regs hg x) =
       (L.model regs).block z o (Aliased.copyPos Lf regs F hg x.val) := by
   have hn := L.unitRows_nIn
   have hx'' : x.val < st.c.upv * (st.c.unit.inWords * WORD) := by
@@ -237,29 +244,25 @@ theorem pub_block (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLo
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     ∃ p t, srcKeyP st.c pi x.val = .pub (pubLeaf st.c pi x.val).toNat t ∧
       (pi.leaves.getD (x.val / (st.c.unit.inWords * WORD)) #[]).getD p (-1) = pubLeaf st.c pi x.val ∧
-      bit ((L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x)) =
+      bit ((L.model regs).block z o (L.col regs hg x)) =
         (inVal st.c pi st.pub o.val (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) p).testBit t := by
   have hn := L.unitRows_nIn
   have hx'' : x.val < st.c.upv * (st.c.unit.inWords * WORD) := by
     rw [← hn]; exact hx
   have hk := Aliased.stack_copy_lt L hg hx''
-  obtain ⟨p, -, t, ht, hxm, hq, hkey⟩ := pubLeaf_at C (portBits_nodup L.unit_built) hpub
+  obtain ⟨p, -, t, ht, hxm, hq, hkey⟩ := pubLeaf_at C (Aliased.unit_nodup L) hpub
   have hplace := place_val L regs hg x hx
   have haddr : inAddr st.c (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) p t =
-      (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x).val := by
+      (L.col regs hg x).val := by
     have hslot : st.c.unitRange.slot (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) =
         st.c.unitRange.start + 2 ^ st.c.unitRange.slotLog * (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) := by
       unfold Range.slot Range.start; ring
     rw [hplace, hslot, hxm, inAddr, inCol]
     ring
   have hfin : inBlockOr st.c.kLog (inAddr st.c (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) p t) =
-      stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x := by
+      L.col regs hg x := by
     unfold inBlockOr
-    rw [dite_eq_left (by rw [haddr]; exact (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-      (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x).isLt)]
+    rw [dite_eq_left (by rw [haddr]; exact (L.col regs hg x).isLt)]
     exact Fin.ext haddr
   obtain ⟨xr, w, s, hxr, hws, hcol, hlo, hhi⟩ :=
     in_cover st.c pi (u := x.val / (st.c.unit.inWords * WORD)) (jj := p) (by rw [← hq]; exact hpub)
