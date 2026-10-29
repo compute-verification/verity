@@ -1,7 +1,8 @@
-import NetworkCheck.Certificate
+import NetworkCheck.Check
 import Lms.Verify
 import Flock.Hm96
 import Flock.Canon
+import Flock.FV3
 import Identity.Tagged
 
 /-!
@@ -16,8 +17,8 @@ proof as the verifier receives it and the link's public fields, and nothing else
 * the statement's public file holds, for the drawn unit, a ``pub`` row commitment that opens under the delivered salt to
   the verifier's own public row (`pubRow`: the registered root, the link-window's served domain (`domainId`), the link,
   the window, each end's declared grid and its profile's row, both certificates' signed digests, and on a served link the
-  window's declared sync, on an advised link the window's view of the advice) and an ``o0`` row commitment that opens to
-  the delivered output word, whose verdict and deadline bits are both 1 (`opened`);
+  window's declared sync) and an ``o0`` row commitment that opens to the delivered output word, whose verdict and
+  deadline bits are both 1 (`opened`);
 * both certificates verify under the network certifier's LMS key in its session over their public fields, and name the
   link, their end (egress first) and the window (`certified`);
 * the window's declared sync is one of Σ_sync.
@@ -27,20 +28,24 @@ grids are the warden's one grid, with no profile, and both carry the warden's pa
 of a certifier's; the warden runs no shaper clock, so a window declares no sync and nothing is read of the syncs
 (`synced`). Its outputs are a plain link's.
 
-Its public outputs are `verdict` and the proved `deadline` bit (on an advised link the advice it read, as given), and
-`digest` binds them to the registration, the sessions and the accept bit (`verdictDigest`). An advised link's window view
-is an input here (`Case.view`), the Python's `advised.view`: that derivation is not ported, so an advised link's verdict
-of record stays the Python's (`service.OF_RECORD`).
+Its public outputs are `verdict` and the proved `deadline` bit, and `digest` binds them to the registration, the
+sessions and the accept bit (`verdictDigest`). A link is plain, served or a warden's (`service.OF_RECORD`); a case of
+kind ``advised`` is refused by name (`caseOf`): no advised link has a verdict of record.
 
 `linkWindowFn` is the `link-window` function of `network-records verdicts` (`Difftest.serve`), which `service.py` calls
-through `lean_audit.SERVER`. Code: it imports only Lean, C-Flock's verifier (`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`,
-`Flock.Hm96`), the identity hash, the LMS port and the certificate's encodings.
+through `lean_audit.SERVER`. `certificatesFn` is its `certificates` function, the client's check of one window's
+certificates as a reveal endpoint served them (`refusals`), which `lean_audit.certificate_refusals` calls with
+`audit.certificate_refusals` as its reference. Both read a certificate as v4's check does (`Check.Certificate`) and
+verify it with its one LMS check (`Check.Certificate.signs`). Code: it imports only Lean, C-Flock's verifier
+(`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`, `Flock.Hm96`, `Flock.FV3`), the identity hash, the LMS port and v4's
+certificate and its encodings (`NetworkCheck.Check`).
 -/
 
 namespace NetworkCheck.LinkWindow
 
 open Lean (Json toJson)
 open Flock (V)
+open NetworkCheck.Check (Certificate)
 
 def verdictFormat : String := "verity-network-certifier/verdict/v0"
 /-- `verity.ml.commitments.window.WINDOW_DOMAIN`, one-stage's served domain. -/
@@ -63,16 +68,6 @@ structure End where
   grid : NetworkCheck.Params
   profile : Option (Array (Array Nat))
 
-/-- A certificate's public fields (`certificate.Certificate`), direction by its code. The public row reads each
-certificate's signed digest from `Case.digests`, as the Python reads it from any object (`public_arguments`). -/
-structure Cert where
-  keyId : ByteArray
-  link : String
-  direction : Direction
-  window : Nat
-  digest : ByteArray
-  signature : ByteArray
-
 /-- One session's finding from the verifier's own Lean run (`proofs.Finding`). -/
 structure Finding where
   accepted : Bool
@@ -85,17 +80,9 @@ structure Sync where
   num : Nat
   den : Nat
 
-/-- An advised window's view of the advice (`advised.WindowView`). -/
-structure View where
-  released : Array Nat
-  floor : Array Nat
-  received : Nat
-
 inductive Kind where
   | plain
   | served
-  /-- the window's view (none where `advised.view` refuses) and the advice output (`advised.digest`, none without one) -/
-  | advised (view : Option View) (advice : Option String)
   /-- the warden's parameters digest (`service.WardenProfile.digest`), which both ends' heads bind -/
   | warden (digest : ByteArray)
 
@@ -116,8 +103,10 @@ structure Case where
   saltOut : Option ByteArray
   output : Option Nat
   sessions : Array String
-  certificates : Array (Option Cert)
-  /-- each certificate's signed digest as the public row reads it, whatever its other fields (empty for none) -/
+  /-- each certificate's public fields, its direction by its code (`certOf`) -/
+  certificates : Array (Option Certificate)
+  /-- each certificate's signed digest as the public row reads it, whatever its other fields (empty for none), as the
+  Python reads it from any object (`public_arguments`) -/
   digests : Array ByteArray
   syncs : Array Sync
   deltas : Array Nat
@@ -157,7 +146,7 @@ private def endOf (j : Json) (ctx : String) : V End := do
   let profile ← (opt j "profile").mapM fun p => do (← asArr p s!"{ctx}.profile").mapM (natsOf · s!"{ctx}.profile")
   pure ⟨grid, profile⟩
 
-private def certOf (j : Json) : V (Option Cert) := do
+private def certOf (j : Json) : V (Option Certificate) := do
   if j.isNull then return none
   let direction ← match ← nat j "direction" "certificate" with
     | 0 => pure Direction.egress
@@ -185,20 +174,16 @@ private def syncOf (j : Json) : V Sync := do
   let (n, m) ← ratOf (.arr #[n, m]) "a sync's rho"
   pure ⟨← asNat d "a sync's delta", n, m⟩
 
-private def viewOf (j : Json) : V View := do
-  pure { released := ← natsOf (← get j "released" "view") "view.released",
-         floor := ← natsOf (← get j "floor" "view") "view.floor", received := ← nat j "received" "view" }
-
 def caseOf (j : Json) : V Case := do
   let kind ← match ← str j "kind" "case" with
     | "plain" => pure Kind.plain
     | "served" => pure Kind.served
-    | "advised" => pure (Kind.advised (← (opt j "view").mapM viewOf) (← (opt j "advice").mapM (asStr · "advice")))
+    | "advised" => throw "an advised link is refused: no advised link has a verdict of record"
     | "warden" => do
       let d ← bytesOf (← get j "warden" "case") "warden"
       unless d.size = digestBytes do throw s!"a warden's parameters digest is {digestBytes} bytes, not {d.size}"
       pure (Kind.warden d)
-    | k => throw s!"a link is plain, served, advised or a warden's, not {k}"
+    | k => throw s!"a link is plain, served or a warden's, not {k}"
   let ss ← get j "sync_set" "case"
   let deltas ← natsOf (← get ss "deltas" "sync_set") "sync_set.deltas"
   let rhos ← (← arr ss "rhos" "sync_set").mapM (ratOf · "sync_set.rhos")
@@ -245,27 +230,15 @@ def le (width x : Nat) : ByteArray := ⟨(Array.range width).map fun i => (x >>>
 /-- `x` as `width` big-endian bytes, `x < 2^(8·width)`. -/
 def be (width x : Nat) : ByteArray := ⟨(Array.range width).map fun i => (x >>> (8 * (width - 1 - i))).toUInt8⟩
 
-/-- frame-v3's framed hash through SHA-512 (`verity.ml.commitments.merkle._message`): the frame tag, the tag, then each
-part length-prefixed. -/
-def frameHash (tag : String) (parts : List ByteArray) : ByteArray :=
-  let t := tag.toUTF8
-  Flock.Sha512.hash (parts.foldl (fun acc p => acc ++ Flock.be64 p.size.toUInt64 ++ p)
-    ("veritor/protocol/merkle/frame/v3".toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t))
-
-/-- `merkle._uint`: the minimal big-endian bytes, one zero byte for 0. -/
-def uint (x : Nat) : ByteArray :=
-  if x = 0 then ⟨#[0]⟩ else be ((Nat.log2 x) / 8 + 1) x
-
 /-- The link-window's served domain id (`LinkWindows.domain(window).domain_id`): one-stage's window domain over four
 leaves, its binding the identity digest of the registered Program, the partition, the value, its schema and leaf count,
-and the run `<run>/<link>/<window>`; the boundary's owner, positions `RangeIndexedDomain(0, 4)`. -/
+and the run `<run>/<link>/<window>`; the boundary's owner, positions `RangeIndexedDomain(0, 4)`
+(`Flock.FV3.Sha512.Domain.make`). -/
 def domainId (c : Case) : V ByteArray := do
   let binding ← Identity.identityDigestSha512 windowDomainTag (Json.mkObj [
     ("program", .str c.program), ("partition", .str c.partition), ("port", .str value), ("schema", .str schema),
     ("leaves", toJson leaves), ("run", .str s!"{c.run}/{c.link}/{c.window}")])
-  let positions ← Identity.identityDigestSha512 "veritor/indexed-domain/range/v1"
-    (Json.mkObj [("start", toJson (0 : Nat)), ("step", toJson (1 : Nat)), ("stop", toJson leaves)])
-  return frameHash "domain" [binding, uint 1, positions, uint leaves]
+  return (Flock.FV3.Sha512.Domain.make binding (-1) 0 leaves).id
 
 /-- Σ_sync as `parameters_digest` reads it, each ρ in lowest terms. -/
 def manifestSet (c : Case) : NetworkCheck.SyncSet :=
@@ -288,15 +261,11 @@ def syncWords (s : Sync) : Option (Nat × Nat × Nat) :=
   let w := (s.delta, s.num / g, s.den / g)
   if w.1 < 2 ^ 16 ∧ w.2.1 < 2 ^ 16 ∧ w.2.2 < 2 ^ 16 then some w else none
 
-/-- An advised count as the unit reads it (`advised._count_bits`, packed): four bytes big-endian. -/
-def countRow (xs : Array Nat) : Option ByteArray :=
-  if xs.all (· < 2 ^ 32) then some (xs.foldl (fun acc x => acc ++ be 4 x) ByteArray.empty) else none
-
 /-- The unit's public row as the verifier derives it from public fields alone (`LinkWindows.public_arguments`, then
 `LinkWindows.row`): both certificates' signed digests, then each end's registered root, served domain, link, window,
-grid and (with a profile) its row for the window, then on a served link the window's declared sync and on an advised
-link its view. None where the unit takes no instance: not two certificates, a signed digest of another length, a window
-past an end's profile, no sync a served unit can hold, or no view. -/
+grid and (with a profile) its row for the window, then on a served link the window's declared sync. None where the unit
+takes no instance: not two certificates, a signed digest of another length, a window past an end's profile, or no sync
+a served unit can hold. -/
 def pubRow (c : Case) : V (Option ByteArray) := do
   let #[d0, d1] := c.digests | return none
   let digests := [d0, d1]
@@ -307,9 +276,6 @@ def pubRow (c : Case) : V (Option ByteArray) := do
         let s ← c.syncs[c.window]?
         let (d, p, q) ← syncWords s
         pure (le 2 d ++ le 2 p ++ le 2 q)
-    | .advised view _ => pure do
-        let v ← view
-        pure ((← countRow v.released) ++ (← countRow v.floor) ++ (← countRow #[v.received]))
   let some tail := tail | return none
   let dom ← domainId c
   let link := c.link.toUTF8
@@ -412,21 +378,12 @@ def opened (c : Case) (row : Option ByteArray) : Option Nat := do
 
 /-! ## The certificates and the sync -/
 
-/-- `Certificate.verify` under the link's LMS key in its certifier session: the key's identifier, and the signature
-verifying over the certificate's message (`certificateMessage`); a message or signature that doesn't decode is false. -/
-def verifies (c : Case) (x : Cert) : Bool :=
-  x.keyId == c.key.extract 0 16 &&
-    match certificateMessage x.keyId c.session x.link x.direction x.window x.digest,
-        Lms.Signature.decode c.lms x.signature with
-    | .ok m, .ok sig => (Lms.verify c.lms c.key m sig).toOption == some true
-    | _, _ => false
-
 /-- The certificates' check (`LinkWindows.certified`): two, each naming this link, its end (egress first) and the window,
-and verifying. -/
+and the key's and verifying in the link's certifier session (`Certificate.signs`). -/
 def certified (c : Case) : Bool :=
   c.certificates.size == 2 && (List.range 2).all fun d =>
     match c.certificates[d]! with
-    | some x => x.link == c.link && x.direction.code == d && x.window == c.window && verifies c x
+    | some x => x.link == c.link && x.direction.code == d && x.window == c.window && x.signs c.lms c.key c.session
     | none => false
 
 /-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ one of the rhos. A warden link
@@ -456,13 +413,10 @@ def verdictDigest (c : Case) (accepted : Bool) (outputs : Json) : V String := do
     ("sessions", .arr (c.sessions.map Json.str)), ("accepted", .bool accepted), ("public", outputs)]
   return Flock.hexOf (Flock.Sha512.hash (← Flock.canon body).toUTF8)
 
-/-- The verdict's public outputs: the accept bit as `verdict`, the proved word's deadline bit (0 where nothing opened),
-and on an advised link the advice it read. -/
-def outputsOf (c : Case) (accepted : Bool) (word : Nat) : Json :=
-  Json.mkObj ([("verdict", toJson (if accepted then 1 else 0 : Nat)), ("deadline", toJson (word / 2 % 2))] ++
-    match c.kind with
-    | .advised _ advice => [("advice", match advice with | some a => .str a | none => .null)]
-    | _ => [])
+/-- The verdict's public outputs: the accept bit as `verdict` and the proved word's deadline bit (0 where nothing
+opened). -/
+def outputsOf (accepted : Bool) (word : Nat) : Json :=
+  Json.mkObj [("verdict", toJson (if accepted then 1 else 0 : Nat)), ("deadline", toJson (word / 2 % 2))]
 
 /-- Whether the link-window is accepted, from its checks: proved, its rows opened to the word 3 (both bits 1), both
 certificates verifying, and the window's sync one of Σ_sync. -/
@@ -477,7 +431,7 @@ def verdict (c : Case) : V Verdict := do
   let cert := certified c
   let sync := synced c
   let accepted := acceptedOf p o cert sync
-  let outputs := outputsOf c accepted (o.getD 0)
+  let outputs := outputsOf accepted (o.getD 0)
   return { accepted, outputs, digest := ← verdictDigest c accepted outputs, proved := p, opened := o, certified := cert,
            synced := sync }
 
@@ -489,5 +443,80 @@ def verdictJson (v : Verdict) : Json :=
 /-- `network-records verdicts`' `link-window`: the verdict on a case, or its refusal of a case it can't read. -/
 def linkWindowFn (j : Json) : Except String Json := do
   return verdictJson (← verdict (← caseOf j))
+
+/-! ## The client's certificates -/
+
+/-- One window's certificates and clock certificates as a reveal endpoint served them, which the client holds to the
+certifier's key in its session (`audit.certificate_refusals`): the LMS key and session, the link and window they must
+name, the certificates and the clock certificates in the answer's order, and the digests that earlier windows' kept
+clock certificates sign. -/
+structure Served where
+  lms : Lms.Params
+  key : ByteArray
+  session : ByteArray
+  link : String
+  window : Nat
+  certificates : Array Certificate
+  clocks : Array Certificate
+  seen : Array ByteArray
+
+section Served
+
+open Flock.J
+
+def servedOf (j : Json) : V Served := do
+  let l ← get j "lms" "served"
+  let lms ← Lms.Params.make (← nat l "N" "lms") (← nat l "W" "lms") (← nat l "H" "lms") (← bool l "toy" "lms")
+  let key ← bytesOf (← get j "key" "served") "key"
+  unless key.size = 16 + lms.N do throw s!"an LMS public key is {16 + lms.N} bytes, not {key.size}"
+  let certs (k : String) : V (Array Certificate) := do
+    (← arr j k "served").mapM fun x => do
+      let some c ← certOf x | throw s!"served.{k}: a certificate, not null"
+      pure c
+  pure { lms, key, session := ← bytesOf (← get j "session" "served") "session", link := ← str j "link" "served",
+         window := ← nat j "window" "served", certificates := ← certs "certificates", clocks := ← certs "clocks",
+         seen := ← (← arr j "seen" "served").mapM (bytesOf · "served.seen") }
+
+end Served
+
+/-- Why the client refuses certificate `x`, in the order it checks, or none where it keeps it: another key's (`key`),
+another link-window's (`link-window`), a clock certificate that isn't egress (`clock`), a signature that doesn't verify
+under the key in the session (`Certificate.signs`: `signature`), a second of its direction among those `kept`
+(`second`), or a clock certificate signing a digest that one kept earlier signs (`signed`: `reused`). -/
+def refusal (s : Served) (clock : Bool) (kept : Array Direction) (signed : Array ByteArray) (x : Certificate) :
+    Option String :=
+  if x.keyId != s.key.extract 0 16 then some "key"
+  else if x.link != s.link || x.window != s.window then some "link-window"
+  else if clock && x.direction != .egress then some "clock"
+  else if !x.signs s.lms s.key s.session then some "signature"
+  else if kept.contains x.direction then some "second"
+  else if clock && signed.contains x.digest then some "reused"
+  else none
+
+/-- Each refusal of one pass over `xs`, each read against those kept before it, which start from none of either
+direction and from `signed`'s digests. -/
+def pass (s : Served) (clock : Bool) (signed : Array ByteArray) (xs : Array Certificate) :
+    Array (Option String) := Id.run do
+  let mut kept : Array Direction := #[]
+  let mut signed := signed
+  let mut out := #[]
+  for x in xs do
+    let why := refusal s clock kept signed x
+    out := out.push why
+    if why.isNone then
+      kept := kept.push x.direction
+      if clock then signed := signed.push x.digest
+  return out
+
+/-- The certificates' refusals, then the clock certificates', the clock certificates read against `seen`. -/
+def refusals (s : Served) : Array (Option String) × Array (Option String) :=
+  (pass s false #[] s.certificates, pass s true s.seen s.clocks)
+
+/-- `network-records verdicts`' `certificates`: each certificate's and each clock certificate's refusal (`refusals`),
+null where the client keeps it, or the refusal of an answer it can't read. -/
+def certificatesFn (j : Json) : Except String Json := do
+  let (certs, clocks) := refusals (← servedOf j)
+  let codes (xs : Array (Option String)) : Json := .arr (xs.map fun | some r => .str r | none => .null)
+  return Json.mkObj [("certificates", codes certs), ("clocks", codes clocks)]
 
 end NetworkCheck.LinkWindow

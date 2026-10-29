@@ -8,8 +8,8 @@
 //   k4 (schoolbook, 4 QMMAs): planes A = [16h, l], B = [16h', l'], the four pairings chained into one accumulator from C0.
 // Every accumulator starts each k32 step from a constant word (the MMA's C input) in a binade wide enough for the step:
 // k4's C0 = 0x4B400000 (1.5 2^23, ulp 1; |T| <= 2^19), k3's C1 = 0x4B7BAB6C (ulp 1; |T1| <= 32768) and C2 = 0x49E07A56
-// (1838922.75, ulp 1/8; -6720 <= T2 <= 7200), each with room to spare. In a binade the FP32 word is C + T exactly
-// (FP-EXACT, art:2521ff4c…), so T is the bits' difference (times the ulp's inverse), and since 15 C1 + 2 C2 = 0 mod 2^32,
+// (1838922.75, ulp 1/8; -6720 <= T2 <= 7200), each with room to spare. In a binade the FP32 word is C + T exactly,
+// so T is the bits' difference (times the ulp's inverse), and since 15 C1 + 2 C2 = 0 mod 2^32,
 // k3's increment is 15 bits(acc1) + 2 bits(acc2) mod 2^32: two integer ops a word, no constant. The int32 prefix word of
 // every k32 step is rebuilt in registers from those bits, never through memory; it is the word IMMA's s32 accumulator
 // holds after the same step.
