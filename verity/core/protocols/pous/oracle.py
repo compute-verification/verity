@@ -1,8 +1,8 @@
 """Parallel oracle programs over P3's primitives, and their costs.
 
-A program is a generator: each `yield` sends one round of queries together (Lean's `OracleProg.round qs k`) and receives
+A program is a generator: each `yield` sends one round of queries together (Lean's `OracleAlgorithm.round qs k`) and receives
 their answers in order, and `return` is Lean's `.ret`.  `run` answers the queries and counts the cost as Lean's
-`OracleProg.depth` (rounds), `OracleProg.work` (queries) and `OracleProg.width` (the largest round) do, so a program's
+`OracleAlgorithm.depth` (rounds), `OracleAlgorithm.work` (queries) and `OracleAlgorithm.width` (the largest round) do, so a program's
 rounds are measured, not claimed.  Local computation between rounds is free.  `parallel` runs programs in lockstep.
 
 The queries are the public interface of the primitives: the tweakable permutation `P_t` and `P_t⁻¹` on labels, and
@@ -122,7 +122,7 @@ type RoundHook = Callable[[int, list[Query], list[int]], None]
 
 
 def run[T](prog: Prog[T], prims: Any, hook: RoundHook | None = None) -> tuple[T, Cost]:
-    """Lean `OracleProg.run` with `answer`, and the path's cost.  `hook(round, queries, answers)` sees every round."""
+    """Lean `OracleAlgorithm.run` with `answer`, and the path's cost.  `hook(round, queries, answers)` sees every round."""
     cost = Cost()
     try:
         queries = next(prog)
