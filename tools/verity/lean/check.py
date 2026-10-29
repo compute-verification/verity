@@ -1578,13 +1578,6 @@ def ranges_dropped(body: dict) -> dict:
     return {**body, "conclusion": kept} if kept else body
 
 
-def negates_a_conjunct(body: dict, heads: list[str]) -> bool:
-    """``body`` is a conjunction one of whose conjuncts is `¬ C …` with C one of ``heads``: the premises hold and the
-    conclusion fails, which says more than `¬ C …` alone."""
-    return body.get("head") == "And" and any(k.get("negated") and k.get("inner") in heads
-                                             for k in body.get("conclusion") or [])
-
-
 def vacuous_meets(body: dict, claim: str) -> str | None:
     """Why a `meets` witness's statement (``body``, `Facts.lean`'s `conclusionOf`) says nothing about the deployment, or None."""
     if not isinstance(body.get("conclusion"), list) or not body["conclusion"]:
@@ -1888,8 +1881,7 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
         where = "the verifier that accepts everything" if kind == "acceptance" else "an explicit circuit"
         if kind == "exclusion":
             fails += exclusion_failures(n, g, read, np_, pin, heads)
-        elif not (read.get("negated") and {read.get("head"), *(read.get("chain") or [])} & set(heads)) and \
-                not negates_a_conjunct(read, heads):
+        elif not (read.get("negated") and {read.get("head"), *(read.get("chain") or [])} & set(heads)):
             fails.append(Failure("witnesses.nontrivial-form", n, f"witnesses: {n} does not state that {g}'s conclusion "
                                  f"fails at {where}: past its ∀ and ∃ binders its statement must be `¬ C …` with C one of "
                                  f"{', '.join(heads) or 'its heads (none reported)'} or a definition unfolding to one, and "
