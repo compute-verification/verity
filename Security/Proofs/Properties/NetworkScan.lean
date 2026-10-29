@@ -92,14 +92,14 @@ def acceptAllDeploy : Claims.Sampling.Deploy Bool ℕ Unit :=
 
 /-- **`ScanScopeAcc`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a scan C-Flock
 canonicalizes as `null` and a deployment whose scope check takes everything and whose statements have that text as
-their descriptor and the empty circuit, a statement is not in `ScopeAcc` at the one-slot schedule: its circuit returns
+their descriptor and the empty circuit, a statement is not in `ScopeAcc` at a schedule (`oneSlot`): its circuit returns
 nothing (`not_fits_of_no_outs`). -/
 theorem scanScopeAcc_nontrivial :
-    ∃ (j : Lean.Json) (c : String) (_ : Flock.canon j = .ok c) (D : Claims.Sampling.Deploy Bool ℕ Unit)
-      (x : Claims.Msg) (_ : D.scopeCheck x = true)
+    ∃ (s : NetworkCheck.Period.Schedule) (j : Lean.Json) (c : String) (_ : Flock.canon j = .ok c)
+      (D : Claims.Sampling.Deploy Bool ℕ Unit) (x : Claims.Msg) (_ : D.scopeCheck x = true)
       (_ : ∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8),
-      ¬ NetTiming.ScopeAcc D (layOf oneSlot) (fun _ => oneSlot.window) x := by
-  refine ⟨.null, "null", canon_null, acceptAllDeploy, [], rfl, fun st hx => ?_, ?_⟩
+      ¬ NetTiming.ScopeAcc D (layOf s) (fun _ => s.window) x := by
+  refine ⟨oneSlot, .null, "null", canon_null, acceptAllDeploy, [], rfl, fun st hx => ?_, ?_⟩
   · cases (Option.some.inj hx : nullStmt = st)
     exact bytes_of_data_toList "null".toUTF8
   · rintro ⟨-, st, hx, hF⟩
