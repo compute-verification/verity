@@ -188,6 +188,11 @@ def search(task) -> dict:
     base = {"function": name, "half": "lo" if half == 0 else "hi", "ops": list(ops)}
     while True:
         rounds += 1
+        left = timeout_s - (time.monotonic() - t0)
+        if left <= 0:
+            return base | {"verdict": "unknown", "samples": len(xs), "rounds": rounds,
+                           "seconds": round(time.monotonic() - t0, 2)}
+        syn.set(timeout=int(left * 1000))
         r = syn.check()
         if r != z3.sat:
             verdict = "none" if r == z3.unsat else "unknown"
@@ -208,43 +213,60 @@ def search(task) -> dict:
         constrain(xs[-1])
 
 
+def summarize(names, k, rs) -> list[dict]:
+    out = []
+    for n in names:
+        for h in ("lo", "hi"):
+            mine = [r for r in rs if r["function"] == n and r["half"] == h]
+            v = {f"n_{x}": sum(r["verdict"] == x for r in mine) for x in ("none", "unknown", "found")}
+            out.append({"function": n, "half": h, "k": k, "opcode_tuples": len(mine), **v,
+                        "max_seconds": max(r["seconds"] for r in mine),
+                        "found": [r["program"] for r in mine if r["verdict"] == "found"][:3],
+                        "unknown": [r["ops"] for r in mine if r["verdict"] == "unknown"]})
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--min-k", type=int, default=1)
     ap.add_argument("--max-k", type=int, default=3)
-    ap.add_argument("--timeout", type=int, default=1800, help="seconds a solver call")
-    ap.add_argument("--control-timeout", type=int, default=7200, help="seconds a solver call, for the controls")
+    ap.add_argument("--timeout", type=int, default=1800, help="seconds a query, all its solver calls together")
+    ap.add_argument("--control-timeout", type=int, default=7200, help="seconds a query, for the controls")
     ap.add_argument("--jobs", type=int, default=len(os.sched_getaffinity(0)))
     ap.add_argument("--only", default="", help="comma-separated function names")
-    ap.add_argument("--json", default="")
+    ap.add_argument("--json", default="", help="the summary, rewritten after each k")
+    ap.add_argument("--jsonl", default="", help="every query's result as it finishes")
     args = ap.parse_args()
     names = [n for n in FUNCS if not args.only or n in args.only.split(",")]
-    summary, results = [], []
+    summary: list[dict] = []
+    stream = open(args.jsonl, "a") if args.jsonl else None
+
+    def dump():
+        if args.json:
+            with open(args.json, "w") as f:
+                json.dump({"summary": summary}, f, indent=1, ensure_ascii=False)
+
     with mp.Pool(args.jobs) as pool:
         controls = pool.map_async(search, [(n, h, ("FSHR", "FSHR", "SHR" if n.startswith("σ") and h else "FSHR",
                                                    "LOP3"), args.control_timeout) for n in names for h in (0, 1)])
-        for k in range(1, args.max_k + 1):
+        for k in range(args.min_k, args.max_k + 1):
             tasks = [(n, h, ops, args.timeout) for n in names for h in (0, 1)
                      for ops in itertools.product(OPS, repeat=k)]
-            t0 = time.monotonic()
-            rs = list(pool.imap_unordered(search, tasks, chunksize=1))
-            results += rs
-            for n in names:
-                for h in ("lo", "hi"):
-                    mine = [r for r in rs if r["function"] == n and r["half"] == h]
-                    v = {f"n_{x}": sum(r["verdict"] == x for r in mine) for x in ("none", "unknown", "found")}
-                    line = {"function": n, "half": h, "k": k, "opcode_tuples": len(mine), **v,
-                            "max_seconds": max(r["seconds"] for r in mine),
-                            "found": [r["program"] for r in mine if r["verdict"] == "found"][:3],
-                            "unknown": [r["ops"] for r in mine if r["verdict"] == "unknown"]}
-                    summary.append(line)
-                    print(json.dumps(line, ensure_ascii=False), flush=True)
+            t0, rs = time.monotonic(), []
+            for r in pool.imap_unordered(search, tasks, chunksize=1):
+                rs.append(r)
+                if stream:
+                    stream.write(json.dumps(r, ensure_ascii=False) + "\n")
+                    stream.flush()
+            for line in summarize(names, k, rs):
+                summary.append(line)
+                print(json.dumps(line, ensure_ascii=False), flush=True)
             print(f"k {k}: {len(tasks)} queries in {time.monotonic() - t0:.0f} s", flush=True)
+            dump()
         for r in controls.get():
             summary.append({"control": r})
             print(json.dumps({"control": r}, ensure_ascii=False), flush=True)
-    if args.json:
-        with open(args.json, "w") as f:
-            json.dump({"summary": summary, "queries": results}, f, indent=1, ensure_ascii=False)
+    dump()
     return 0
 
 
