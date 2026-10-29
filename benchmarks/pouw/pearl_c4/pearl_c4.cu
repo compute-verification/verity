@@ -13,7 +13,7 @@
 //   alpha, inv  rows FP32 (α and RN(1/α));  ae  rows bytes (a_E, UE4M3)
 //   y        m x n BF16, RN(RN(U · inv_A) · inv_B)       digests  m x n/32 x 32 bytes: TurboSHAKE128(C~ chunk | U chunk, 0x21)
 //   leaves   m/64 x n/64 x 32 bytes (0x22)                 dom, root, salt, seed   32 bytes each (commit_rows)
-// Pearl's lottery tickets are not computed: no PoUW check reads them (the coordinator's 06:35Z ruling for pearl-c-sm120).
+// Pearl's lottery tickets are not computed: no PoUW check reads them (the ruling for pearl-c-sm120).
 #include <cstdint>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>

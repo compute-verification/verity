@@ -1,4 +1,4 @@
-// FACET-BREAK's mix kernels: a MMA form and up to two lane ops in one warp's loop (mix), in separate warps (spec), the
+// facet_break's mix kernels: a MMA form and up to two lane ops in one warp's loop (mix), in separate warps (spec), the
 // lanes alone, or the MMA alone. `generate.py` instantiates them from a seeded grid and writes each one's probe-table
 // entry (the exact SASS counts the gate pins); opcode_probe's harness (probe.cuh) gates, poisons and times them.
 //

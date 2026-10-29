@@ -1,4 +1,4 @@
-// The honest step the EPS1 probes time beside other work (side.cu, power.cu): 8 independent int8 IMMA (m16n8k32) on drawn
+// The honest step the probes time beside other work (side.cu, power.cu): 8 independent int8 IMMA (m16n8k32) on drawn
 // operands, then each accumulator's 4 words folded by duo (receipt_folds.cuh's rf_duo_step, 3 scalar instructions a word
 // as ptxas lowers it) into that accumulator's own (y, z), so the fold binds every output word of every MMA.
 #pragma once

@@ -42,8 +42,8 @@ PLACES = ("none", "split", "co")
 PHASES = ("decode", "prefill")
 SMS = 188  # the RTX PRO 6000's SMs
 #: a filler's declarable operands: its chain's own outputs, fresh uniform ±1, fresh uniform {0,1} bits on both sides,
-#: fresh bits A ∈ {0,1} with B = U uniform on {±1..±64} (pfill-bU, note:20261016T0710Z-draft-filler-floor-r2 §5), or
-#: the dither ⌊x/s⌋ + b (data quantized down plus a fresh uniform bit; note:20261016T0525Z-draft-fullfloor-s-r6 §2)
+#: fresh bits A ∈ {0,1} with B = U uniform on {±1..±64} (pfill-bU), or
+#: the dither ⌊x/s⌋ + b (data quantized down plus a fresh uniform bit)
 NOISE = ("chained", "pm1", "bits01", "bitsU", "dither")
 #: a filler's declarable receipt folds (pfill.cuh's pf_absorb): ram (NC 4), duo (NC 2), and at NC 4 XOR-in (rotations 7
 #: and 19, -DPFILL_XIN; superseded), XOR-in (13, 19) (-DPFILL_XIN13) and LOP3+IMAD (-DPFILL_LI); filler-scorer/v5
@@ -201,7 +201,7 @@ class Idle:
 
 
 #: FILL v1's split per (B, L), cuBLASLt re-tuned on the decode partition, chosen on runs 2–5 so decode slows ≤ 5% and
-#: re-measured in the holdout r20261016-040257-cec0 (note:20261016T0318Z-draft-dram-free-filler §0)
+#: re-measured in a holdout run
 FILL_V1_SPLIT = {(1, 2048): 108, (32, 1024): 92, (32, 5120): 108, (32, 8192): 124, (32, 24576): 124, (48, 16384): 124,
                  (128, 2048): 92, (132, 5120): 60, (144, 5120): 60, (256, 1024): 60, (256, 2048): 60}
 
