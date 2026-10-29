@@ -33,6 +33,7 @@ non-free on the salt grid; premises (`PREMISES`) raise that per class. Each op's
 - X: a shuffle or a reduction to memory (a copy or a sum another word already holds); H: bf16x2 arithmetic (rounded).
 - A: a load or address arithmetic (a copy of a committed word, or a function of indices alone), never a target.
 - K: a function of the coins alone (a dither stream's words), free to a prover that reads the coins; never a target.
+- E: an exact value, salt-independent by construction (a de-noised output), free under M0; never a target.
 
 Designs (`PLANS`): `linears` is today (ssn_1l on the linears, the rest stock and uncovered); `lean` adds lean lane
 idioms; `best` adds an int8 lm_head under ssn_1l, int8 attention (`ssn_sh` on QKᵀ and PV), fused C-all lanes and
@@ -45,7 +46,15 @@ router gate, `best_p4_max_s8` the softmax's row max over every 8th score, and `b
 and norm rows (`MEM`), the sampler's two-pass argmax and the row max once every two PV calls (`max_block`);
 `best_p4_nkd` adds noise-keyed dither (`noise_dithered`): u is the pre-round f32's low mantissa byte (SHF, LOP3), a
 function of the noised value, so u and every nonzero round are targets at a T3 cost (`T3["noise_dither"]`);
-`best_p4_smlite` commits only the softmax's MUFU outputs.
+`best_p4_nkd_bmax` rounds P against its own block's strided max (P's zero share, `p_zero`, is the lever: a zero round
+is a constant), rescaled to the running max at the block's end; `best_p4_exact` serves every linear's, the lm_head's
+and the router's output exactly (N-EXACT's epilogue fold, plus two IDP4A an output for the lead's non-separable code
+and tag terms), so every lane but attention's own (`EXACT_REACHED`) reads salt-independent values and forces nothing;
+`best_p4_smlite` commits only the softmax's MUFU outputs. The free part of the de-noise alone (the later steps' row
+bits at the magic conversion, the column mean in the FFMA) leaves the code and the tags served, and the lanes covered.
+
+P's zero share is `ZERO_P` (assumed) until `--pzero FILE` reads attn_pzero.py's measurement: then each softmax takes
+the share over its own rows (`Comp.span`), against the plan's max reference and block.
 
 Every ssn design carries row tags (`-tag`): step 1 gives 4 of its data lanes to a row's tag (balanced base-13 digits of
 a row index) against a [-3, 3] matrix drawn once a window after the model's root, kept in the served output, so rows
@@ -87,10 +96,12 @@ PRICE = {
     "FMNMX": (32, 32.3, 64.13), "UNPK": (32, 32.28, 64.13), "F2FP": (32, 65.5, 65.5), "F2I": (32, 128.2, 128.2),
     "I2F": (32, 128.0, 128.0), "MUFU": (32, 256.0, 256.0), "SHFL": (32, 128.0, 128.0), "HFMA2": (32, 32.28, 32.28),
     "RED": (32, 1000.0, 1000.0), "LOOKUP": (32, 472.0, 472.0), "LD": (32, 32, 32), "ADDR": (32, 32.35, 64.13),
+    "IDP4A": (32, 32.35, 64.13),
 }
 #: I2F.F32.S32 is unmeasured (F2I's 128.2 assumed); RED's is a measured lower bound for a reduction to memory; LD, a
-#: register a load writes, is unmeasured (H32's floor assumed); ADDR is address and loop arithmetic at IADD3's prices
-PRICE_ESTIMATED = ("I2F", "RED", "HFMA2", "FMNMX", "LD")
+#: register a load writes, is unmeasured (H32's floor assumed); ADDR is address and loop arithmetic at IADD3's prices;
+#: IDP4A is unmeasured (IADD3's assumed)
+PRICE_ESTIMATED = ("I2F", "RED", "HFMA2", "FMNMX", "LD", "IDP4A")
 TENSOR = {"s8": {"kreg": 32, "mma": 48.07}, "bf16": {"kreg": 16, "mma": 48.07}}
 REFINED_FLOOR = 32.26
 
@@ -173,6 +184,12 @@ def lane_ops(kind: str, variant: str, exp: str = "mufu", dv: int = 64, mb: int =
         return {"stock": [("I2F", 1, "C"), ("FMUL", 2, "T"), ("F2FP", 0.5, "R")],
                 "lean": [("I2F", 1, "C"), ("FMUL", 2, "T"), ("F2FP", 0.5, "R")],
                 "fused": [("I2F", 1, "C"), ("FMUL", 2, "T")]}[variant]
+    if kind == "epi_exact":
+        # the tag lead's served noise past a separable r_i + c_j is the code a·C_j and the tags T(i)·G_j, 8 int8
+        # products an output: two IDP4A of the row's and the column's packed lanes (coins and indices alone), then
+        # N-EXACT's fold, IADD3(D, magic − r_i, −n) for I2F and FFMA(v, s_j, −(magic + β_j)·s_j) for the column FMUL
+        ops = [("IDP4A", 2, "K"), ("IADD3", 1, "E"), ("FFMA", 1, "E"), ("FMUL", 1, "E")]
+        return ops if variant == "fused" else ops + [("F2FP", 0.5, "R")]
     if kind == "epi_bf16":
         return [("F2FP", 0.5, "R")]
     if kind in ("norm", "norm_nores"):
@@ -428,11 +445,14 @@ class Comp:
     keys: float = 0.0
     rows: float = 0.0
     calls: float = 1.0
+    span: tuple = (0, 0)
 
 
 def components(model: str, point: str) -> list[Comp]:
     sh = point_shape(POINTS[point])
     t, keys = sh["rows"], sh["keys"]
+    p = POINTS[point]
+    span = (p["context"], p["context"] + 1) if p["decode"] else (1, p["tokens"])
     out = []
     if model == "llama":
         L, cfg = LLAMA["layers"], LLAMA
@@ -451,7 +471,7 @@ def components(model: str, point: str) -> list[Comp]:
                         calls=L))
         out.append(Comp("pv", "pv", scores * cfg["dv"], m=m_att, dk=cfg["dk"], dv=cfg["dv"], keys=keys,
                         rows=rows_att, calls=L))
-        out.append(Comp("softmax", "softmax", scores, kind="softmax", dv=cfg["dv"]))
+        out.append(Comp("softmax", "softmax", scores, kind="softmax", dv=cfg["dv"], span=span))
         out.append(Comp("attn_out", "lane", t * cfg["heads"] * cfg["dv"] * L, kind="attn_out"))
         out.append(Comp("quant_o", "lane", t * cfg["d"] * L, kind="quant"))
         out.append(Comp("silu", "lane", t * cfg["ffn"] * L, kind="silu"))
@@ -488,7 +508,7 @@ def components(model: str, point: str) -> list[Comp]:
     rows_att = t * cfg["heads"]
     out.append(Comp("qk", "qk", scores * dk, m=m_att, dk=dk, dv=dv, keys=keys, rows=rows_att))
     out.append(Comp("pv", "pv", scores * dv, m=m_att, dk=dk, dv=dv, keys=keys, rows=rows_att))
-    out.append(Comp("softmax", "softmax", scores, kind="softmax", dv=dv))
+    out.append(Comp("softmax", "softmax", scores, kind="softmax", dv=dv, span=span))
     out.append(Comp("attn_out", "lane", t * cfg["heads"] * dv, kind="attn_out"))
     out.append(Comp("quant_o", "lane", t * cfg["heads"] * cfg["v"], kind="quant"))
     n_ffn = cfg["top_k"] + cfg["shared"]
@@ -521,6 +541,8 @@ class Plan:
     max_block: int = I8_BLOCK
     tag: int = TAG_LANES
     noise_dither: bool = False
+    block_max: bool = False
+    exact: bool = False
     note: str = ""
 
 
@@ -564,6 +586,18 @@ PLANS = [
          static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
          noise_dither=True, premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
          note="best_p4_all with every int8 / u8 round dithered by a hash of its own noisy input (`noise_dithered`)"),
+    Plan("best_p4_nkd_bmax", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
+         static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
+         noise_dither=True, block_max=True,
+         premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="best_p4_nkd with P rounded against its own block's (strided) max, rescaled to the running max at the "
+              "block's end"),
+    Plan("best_p4_exact", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
+         static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
+         noise_dither=True, block_max=True, exact=True,
+         premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="best_p4_nkd_bmax with every linear's, the lm_head's and the router's served output exact (the epilogue "
+              "de-noise): the lanes they feed read salt-independent values; attention stays noisy"),
 ]
 PLAN = {p.name: p for p in PLANS}
 
@@ -571,6 +605,8 @@ PLAN = {p.name: p for p in PLANS}
 #: perplexity rise over stock int8 on WikiText-2; the rest are estimates until their format is measured.
 T3 = {
     "linear": ("~0 (measured: ssn-1l-b1-v1, both 2K and 8K intervals contain 0)", 0.0, "ssn-1l-b1-v1"),
+    "linear_exact": ("0 (the served output equals stock's bit for bit while |A·Bᵀ| < 2²², weight scales rounded to 22-bit "
+                     "significands; N-EXACT's emulation, not yet on the GPU)", 0.0, "ssn-1l-tag-exact-v1"),
     "lm_head": ("+0.03% (estimate: int7 lm_head's +0.07-0.08%, /4 for int8's halved step)", 0.0003, "int8-head-v1"),
     "qk": ("+0.07% (estimate: int7 QKᵀ with q and k Hadamard-rotated, +0.29% at 8K, /4)", 0.0007, "int8-qk-had-v1"),
     "pv": ("+0.16% (estimate: int7 P·V with the sink in its own block, +0.65% at 8K, /4; int7 QKᵀ and P·V together "
@@ -590,7 +626,36 @@ T3 = {
                None, "rowmax-s8-v1"),
     "max_block": ("unmeasured: P's u8 round against a max over two PV calls' keys loses bits where one call's own "
                   "scores sit below the other's", None, "rowmax-s8-b208-v1"),
+    "block_max": ("~0 (estimate: P against its own block's max rounds at a step no coarser than against the running "
+                  "max, so its error is at most int8-pv-u8-v1's)", 0.0, "int8-pv-u8-bmax-v1"),
 }
+
+#: the share of u8 P values (and of their 4-byte packs) a dithered round sends to 0, assumed until `--pzero` reads
+#: attn_pzero.py's measurement; then `p_zero` takes each softmax's own rows, max reference and block from it
+PZERO: dict | None = None
+
+
+def p_zero(c: Comp, plan: Plan) -> tuple[float, float, str]:
+    """(value share, pack share, source) of u8 P rounding to 0 under dither, for softmax `c` under `plan`: the measured
+    share over the row positions in `c.span` (keys- and packs-weighted), against the running max, or the block's own
+    (strided) max under `block_max`, at the plan's max block."""
+    if PZERO is None:
+        return ZERO_P, ZERO_P, "assumed"
+    ref = ("local_s8_d1" if plan.rowmax_stride > 1 else "local") if plan.block_max else "run"
+    blocks = PZERO["all"]
+    b = str(plan.max_block) if str(plan.max_block) in blocks else min(blocks, key=lambda x: abs(int(x) - plan.max_block))
+    lo, hi = c.span
+    keys = packs = zero = pack = 0.0
+    for label, s in blocks[b][ref]["bins"].items():
+        a, z = (int(x) for x in label.split("-"))
+        if a < hi and z >= lo:
+            keys += s["keys"]
+            packs += s["packs"]
+            zero += s["zero_nkd"] * s["keys"]
+            pack += s["pack_zero_nkd"] * s["packs"]
+    if not keys:
+        raise ValueError(f"--pzero has no rows in {c.span} at block {b}")
+    return zero / keys, pack / packs, f"measured: {ref} max, {b}-key block, rows {lo}-{hi - 1}"
 
 
 #: the one per-period basis, stock work held fixed (pouw_space.toml's [scale] and [price]): one H200 serves stock int8
@@ -685,6 +750,11 @@ def lane_variant(c: Comp, plan: Plan) -> tuple[str, bool]:
     return plan.lanes, False
 
 
+#: under `Plan.exact`, the lanes that still read a noisy value: QKᵀ's and PV's (ssn_sh-tag, served noisy) consumers.
+#: Every other lane reads only exact outputs and the exact residual, so its words are salt-independent
+EXACT_REACHED = ("softmax", "attn_out", "quant_o")
+
+
 def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> dict:
     sv = "stock"
     if c.family == "lm_epi":
@@ -710,10 +780,16 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
                 cands = {e: lane_ops("softmax", "i8", exp=e, dv=c.dv, mb=plan.max_block) for e in ("mufu", "poly")}
                 if plan.rowmax_stride > 1:
                     cands = {e: strided_max(o, plan.rowmax_stride) for e, o in cands.items()}
+                if plan.block_max:
+                    # exp(m_b - m_run) a row a max block, folded into the block's rescale and its row-sum term
+                    mb = plan.max_block
+                    cands = {e: o + [("FADD", 1 / mb, "T"), ("MUFU", 1 / mb, "M"), ("FMUL", 1 / mb, "T"),
+                                     ("FFMA", 1 / mb, "T")] for e, o in cands.items()}
+                zp, zpack, _ = p_zero(c, plan)
                 if plan.dither:
-                    cands = {e: dithered(o, ZERO_P, ZERO_P) for e, o in cands.items()}
+                    cands = {e: dithered(o, zp, zpack) for e, o in cands.items()}
                 if plan.noise_dither:
-                    cands = {e: noise_dithered(o, ZERO_P, ZERO_P) for e, o in cands.items()}
+                    cands = {e: noise_dithered(o, zp, zpack) for e, o in cands.items()}
                 if plan.exp == "best":
                     e = min(cands, key=lambda e: (lambda r: (r["honest"] - r["forced"], r["honest"]))(
                         lane_cost(cands[e], reading, plan.premises, True, plan.softmax_targets)))
@@ -726,6 +802,8 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
                     v += f"_max{plan.rowmax_stride}"
                 if plan.max_block != I8_BLOCK:
                     v += f"_mb{plan.max_block}"
+                if plan.block_max:
+                    v += "_bmax"
                 if plan.noise_dither:
                     v += "_nkd"
         else:
@@ -734,9 +812,16 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
             ops = s_ops if (c.kind == "move") else lane_ops(c.kind, v)
             if plan.static_scales and v == "fused" and c.kind in ("quant", "norm", "norm_nores", "kvq"):
                 ops, v = static_scaled(ops), "fused_static"
-            if plan.dither and v.startswith("fused") and any(cls == "R" for _, _, cls in ops):
+            exact_in = plan.exact and c.name not in EXACT_REACHED
+            if exact_in:
+                reach = False
+                if c.kind == "epi":
+                    ops, v = lane_ops("epi_exact", v), v + "_exact"
+                elif c.kind == "router" and v == "fused":
+                    ops, v = [("IDP4A", 2, "K"), ("IADD3", 1, "E")] + ops[1:], "fused_exact"
+            if not exact_in and plan.dither and v.startswith("fused") and any(cls == "R" for _, _, cls in ops):
                 ops, reach, v = dithered(ops), True, v + "_dither"
-            if plan.noise_dither and v.startswith("fused") and any(cls == "R" for _, _, cls in ops):
+            if not exact_in and plan.noise_dither and v.startswith("fused") and any(cls == "R" for _, _, cls in ops):
                 ops, reach, v = noise_dithered(ops), True, v + "_nkd"
             if c.kind != "move":
                 ops = ops + mem_ops(c.kind, v, plan.resident)
@@ -801,6 +886,8 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
             r = lane_comp(c, plan, reading, stock=False, lookup=lookup)
         r["name"], r["family"], r["count"] = c.name, c.family, c.count
         fam = c.family if c.family in ("linear", "lm_head", "qk", "pv", "softmax") else c.kind
+        if plan.exact and fam == "linear":
+            fam = "linear_exact"
         r["t3"] = T3.get(fam, ("~0", 0.0)) if r["design"] not in ("stock", "bf16", "lean") else ("0 (stock)", 0.0)
         rows.append(r)
         for k in tot:
@@ -838,7 +925,8 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
                      (["router"] if plan.router == "i8" and any(r["family"] == "router_gemm" for r in rows) else []))
     t3_formats = sorted({r["t3"][2] for r in rows if len(r["t3"]) > 2 and r["t3"][2]}
                         | {T3[k][2] for k in t3_unmeasured + (["dither"] if plan.dither else [])
-                           + (["noise_dither"] if plan.noise_dither else []) if T3[k][2]})
+                           + (["noise_dither"] if plan.noise_dither else [])
+                           + (["block_max"] if plan.block_max else []) if T3[k][2]})
     alpha = tot["honest"] / st
     macs = sum(c.count for c in comps if c.family in ("linear", "lm_head", "qk", "pv", "router_gemm"))
     lin_gap = groups["linears"]["gap_share"]
@@ -1340,6 +1428,37 @@ def check() -> list[dict]:
        and abs(tb[64][0] * tb[64][1] - 2.0) < 1e-3 and abs(tb[8][0] * tb[8][1] - 3.004) < 2e-3
        and abs(tb[4][0] * tb[4][1] - 6.009) < 2e-2, {**{f"s8_{m}": v for m, v in tc.items()},
                                                      **{f"bf16_{m}": v for m, v in tb.items()}})
+    global PZERO
+    sm = Comp("softmax", "softmax", 1.0, kind="softmax", span=(64, 1024))
+    held, PZERO = PZERO, {"all": {"208": {"local_s8_d1": {"bins": {
+        "1-63": {"keys": 9.0, "packs": 3.0, "zero_nkd": 0.0, "pack_zero_nkd": 0.0},
+        "64-255": {"keys": 1.0, "packs": 1.0, "zero_nkd": 0.2, "pack_zero_nkd": 0.1},
+        "256-1023": {"keys": 3.0, "packs": 1.0, "zero_nkd": 0.6, "pack_zero_nkd": 0.3},
+        "1024-2047": {"keys": 5.0, "packs": 2.0, "zero_nkd": 1.0, "pack_zero_nkd": 1.0}}}}}}
+    try:
+        got = p_zero(sm, PLAN["best_p4_nkd_bmax"])
+        try:
+            far = p_zero(Comp("softmax", "softmax", 1.0, kind="softmax", span=(4096, 4097)), PLAN["best_p4_nkd_bmax"])
+        except ValueError:
+            far = None
+    finally:
+        PZERO = held
+    ok("p_zero weighs the measured bins inside a softmax's rows by keys (values) and packs, at the plan's block and "
+       "max reference; a span with no measured rows is refused",
+       abs(got[0] - 0.5) < 1e-12 and abs(got[1] - 0.2) < 1e-12 and p_zero(sm, PLAN["best_p4_nkd"])[2] == "assumed"
+       and far is None, got)
+    ex = {r["name"]: r for r in evaluate("llama", "T8192_8x1k", PLAN["best_p4_exact"])["components"]}
+    nb = {r["name"]: r for r in evaluate("llama", "T8192_8x1k", PLAN["best_p4_nkd_bmax"])["components"]}
+    lanes_ex = [n for n, r in ex.items() if r["family"] in ("lane", "lm_epi") and n not in EXACT_REACHED]
+    ok("exact outputs: every lane but attention's own forces nothing, attention's lanes and every matmul are as "
+       "without it, and each epilogue output adds two IDP4A",
+       all(ex[n]["forced"] == 0 for n in lanes_ex) and all(ex[n]["forced"] > 0 for n in EXACT_REACHED)
+       and all(ex[n]["forced"] == nb[n]["forced"] for n in EXACT_REACHED)
+       and all(ex[n]["honest"] == nb[n]["honest"] and ex[n]["forced"] == nb[n]["forced"] for n, r in ex.items()
+               if r["family"] in ("linear", "lm_head", "qk", "pv"))
+       and abs(ex["epi_qkv"]["per_element"]["honest"] - nb["epi_qkv"]["per_element"]["honest"]
+               - (2 * PRICE["IDP4A"][1] + PRICE["IADD3"][1] + PRICE["FFMA"][1] - PRICE["I2F"][1] - PRICE["FMUL"][1]))
+       < 1e-9, {n: ex[n]["forced"] for n in lanes_ex})
     for plan in PLANS:
         for model in ("llama", "v4"):
             for point in POINTS:
@@ -1398,7 +1517,7 @@ def report(lookup: bool = False) -> dict:
 
 
 PERIOD_PLANS = ("linears", "best", "best_p4", "best_p4_dither", "best_p4_max", "best_p4_max_s8", "best_p4_all",
-                "best_p4_nkd")
+                "best_p4_nkd", "best_p4_nkd_bmax", "best_p4_exact")
 #: pouw_space.py's points (and this file's further ones) to this file's (model, point)
 CARD_POINTS = {"t512": ("llama", "T512_64"), "t512r512": ("llama", "T512_512"), "t8192": ("llama", "T8192_8x1k"),
                "t8192_1x8k": ("llama", "T8192_1x8k"), "decode_b64_2k": ("llama", "dec64_2k"),
@@ -1496,9 +1615,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--card", help="write the coverage card file (pouw_space.py --add) here")
     ap.add_argument("--source", default="benchmarks/pouw/theory/step_cover.py",
                     help="the card's source line: this file at its commit, the run id")
+    ap.add_argument("--pzero", help="attn_pzero.py's JSON: the measured zero shares of u8 P, in place of ZERO_P")
     args = ap.parse_args(argv)
     if args.data:
         nsw.load_data(args.data)
+    if args.pzero:
+        global PZERO
+        PZERO = json.loads(Path(args.pzero).read_text())
     rep = report(args.lookup)
     text = json.dumps(rep, indent=1, default=lambda o: sorted(o) if isinstance(o, (set, frozenset)) else float(o))
     if args.json:
