@@ -218,6 +218,43 @@ def r1_shapes(inp: dict, ll: dict) -> dict:
             "llama_interpolated": llama}
 
 
+def r1b_salt_and_arrival(inp: dict, ll: dict) -> dict:
+    """The lead with its words hashed on the GPU, but each hm96 leaf's salt side (M·y and c) supplied by the network
+    certifier, and each call's A_j sent to it, which releases the call's coins on arrival."""
+    alpha, r = inp["ssn_1l"]["alpha"], inp["r1b"]
+    b = words_bytes_per_mac(alpha)
+    sha_compressions = inp["h200"]["sms"] * inp["h200"]["fmax_hz"] / inp["sha512"]["sm_clk_per_compression"]
+    links = {"census_100g": inp["links"]["census_reference_bytes_per_s"],
+             "gpu_400g": inp["links"]["per_gpu_400g_bytes_per_s"]}
+    out = []
+    for key, t2s in (("t8192", inp["ssn_1l"]["t2_t8192"]), ("t64", inp["ssn_1l"]["t2_t64"])):
+        point = inp["points"][key]
+        words = b * ll["macs_per_token"] * point["m"]
+        a_bytes = ll["a_bytes_per_token"] * point["m"]
+        step = t2s[1] * point["t_stock_s"]
+        rows = {}
+        for rname, rb in r["row_bytes"].items():
+            leaves = words / rb
+            rows[rname] = {"leaves_per_step": leaves,
+                           "inbound_bytes_per_step": leaves * r["salt_side_bytes_per_leaf"],
+                           "inbound_share_of_words": r["salt_side_bytes_per_leaf"] / rb,
+                           "inbound_bytes_per_s": leaves * r["salt_side_bytes_per_leaf"] / step,
+                           "certifier_compressions_per_s": leaves * r["salt_side_compressions_per_leaf"] / step,
+                           "certifier_h200s_of_sha512": leaves * r["salt_side_compressions_per_leaf"] / step / sha_compressions}
+        out.append({"point": key, "honest_step_overlapped_s": step, "a_bytes_per_step": a_bytes,
+                    "outbound_bytes_per_s": a_bytes / step,
+                    "outbound_link_share": {ln: a_bytes / step / rate for ln, rate in links.items()},
+                    "t2_change_by_rtt": {f"{rtt * 1e6:g}us": (64 * rtt - inp["ssn_1l"]["coin_latency_s"]) / point["t_stock_s"]
+                                         for rtt in (2e-6, 10e-6, 1e-3)},
+                    "rows": rows})
+    return {"design": "ssn_1l, words hashed on the GPU; salt sides from the certifier; A_j to it and coins back on arrival",
+            "points": out,
+            "terms_removed_t8192": {"hiding_k32": r["hiding_term_t8192_k32"], "hashing_before_noise": r["prenoise_term_t8192"]},
+            "premises_removed": ["atomic call + PeriodInventory for hashing A before its noise (3)", "the grinding bound (open)",
+                                 "PoUW's Fiat-Shamir seed exception (the rule's, not a premise)"],
+            "premises_added": ["trusted-host (3)"]}
+
+
 def r2_memory(inp: dict, ll: dict) -> dict:
     """Store every word in HBM and let a memory challenger demand random ones against a deadline."""
     alpha = inp["ssn_1l"]["alpha"]
@@ -401,6 +438,7 @@ def checks(inp: dict, ll: dict, res: dict) -> list[tuple[str, bool, str]]:
         ("R1: at the roofline's knee the per-row slope meets the compute-bound T2",
          all(abs(v["t2_per_row"] * res["R1"]["shapes"]["roofline_knee_rows"] / v["compute_bound_t2"] - 1) < 1e-9
              for d in res["R1"]["shapes"]["roofline"].values() for v in d.values()), ""),
+        ("R1b: A_j is SW-HASH's 229,376 bytes a token", ll["a_bytes_per_token"] == 229_376, str(ll["a_bytes_per_token"])),
         ("R4 at C26's co-run share reproduces its ~51 stock forwards for NCP at 160x (T 8,192)",
          abs(inp["accounting"]["co_run_peak_share_beside_hash"] * 160.0 / stock_tensor_share(inp, ll, pts["t8192"], False) / 51.0 - 1) < 0.1,
          f"{inp['accounting']['co_run_peak_share_beside_hash'] * 160.0 / stock_tensor_share(inp, ll, pts['t8192'], False):.1f}"),
@@ -464,6 +502,18 @@ def table(res: dict) -> str:
     for r in res["R4"]["certifier_rows"]:
         lines.append(f"    capacity reading of certifier commit at {r['point']} (400 Gb/s): T2 {r['t2']:.1f}, excess idle "
                      f"{r['excess_idle_stock_macs_per_stock_mac']:.1f} stock a stock MAC")
+    r1b = res["R1b"]
+    lines.append("R1b " + r1b["design"])
+    for p in r1b["points"]:
+        lines.append(f"    {p['point']:>6}: A_j out {p['outbound_bytes_per_s']:.2e} B/s at the lead's overlapped pace ("
+                     + ", ".join(f"{k} {v:.1%}" for k, v in p["outbound_link_share"].items()) + " of the link); salt sides in: "
+                     + "; ".join(f"{k} rows {v['inbound_share_of_words']:.2%} of the words' bytes, {v['inbound_bytes_per_s']:.2e} B/s, "
+                                 f"certifier {v['certifier_h200s_of_sha512']:.3f} H200s of SHA-512" for k, v in p["rows"].items())
+                     + "; T2 change by 64 round trips less SW-NOISE's coin time: "
+                     + ", ".join(f"{k} {v:+.2f}" for k, v in p["t2_change_by_rtt"].items()))
+    lines.append("    removes at T 8,192 (W1 floor / alone, x stock): hiding " + ", ".join(
+        f"{k} {v[0]}/{v[1]}" for k, v in r1b["terms_removed_t8192"]["hiding_k32"].items()) + "; hashing before the noise "
+        + ", ".join(f"{k} {v[0]}/{v[1]}" for k, v in r1b["terms_removed_t8192"]["hashing_before_noise"].items()))
     r2 = res["R2"]
     lines.append(f"R2  stored words: {r2['words_bytes_per_step_t8192']:.3e} B a step at T 8,192 ({r2['step_over_hbm']:.1f}x HBM); "
                  f"one word recomputes in {r2['recompute_one_word_s'] * 1e6:.2f} us: census RTT {r2['rtt_over_recompute']:,.0f}x, "
@@ -509,6 +559,7 @@ def main() -> int:
     res = {"R0": r0_barrier(inp), "R1": r1_egress(inp, ll), "R2": r2_memory(inp, ll),
            "R3": r3_capacity_occupancy(inp, ll), "R4": r4_capacity_reading(inp, ll), "R6": r6_algebraic(inp)}
     res["R1"]["shapes"] = r1_shapes(inp, ll)
+    res["R1b"] = r1b_salt_and_arrival(inp, ll)
     res["R4"]["certifier_rows"] = certifier_capacity(inp, ll, res["R1"])
     res["periods"] = per_period(inp, ll, res["R4"])
     cks = checks(inp, ll, res)

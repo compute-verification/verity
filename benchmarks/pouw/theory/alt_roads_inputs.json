@@ -42,6 +42,14 @@
     "top_k": 8,
     "source": "SW-NOISE's assumed V4-like shapes (noise_sweep.py V4_DENSE, V4_EXPERT, 8/256 of the rows): K = n = 7,168 dense; expert gate-up K 7,168 n 4,096 and down K 2,048 n 7,168"
   },
+  "r1b": {
+    "salt_side_bytes_per_leaf": 128,
+    "salt_side_compressions_per_leaf": 10,
+    "row_bytes": {"16KiB": 16384, "256KiB": 262144, "1MiB": 1048576},
+    "hiding_term_t8192_k32": {"16KiB": [20.8, 41.6], "256KiB": [1.46, 2.93], "1MiB": [0.42, 0.85]},
+    "prenoise_term_t8192": {"16KiB": [0.236, 0.472], "256KiB": [0.215, 0.432]},
+    "source": "Flock/Merkle.lean hm96Leaf: H(LP || (x xor M.y) || H(SP || y)), M.y and c = H(SP || y) one 64-byte digest each; SW-HASH section 9 (salt side: PRF 3 compressions, M_key.y about 5 compressions' time, c 2; its T 8,192 hiding term, W1 floor / alone, a share of stock) and section 8 (hashing before the noise, W1 floor / alone)"
+  },
   "ssn_1l": {
     "alpha": 1.044,
     "t1_credited_coins": 0.00049,
