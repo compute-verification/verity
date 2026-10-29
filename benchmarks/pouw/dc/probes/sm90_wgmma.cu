@@ -89,12 +89,12 @@ DC_DEV void wg_until(const OpArgs& a) {
 }
 
 // wg_until with a Lane2 multiply lane, each role's registers declared in its own branch (Lane2's FP64 chains stay off
-// the wgmma role's accumulators).
-template <int X, int R, class F = F_s8_n256>
+// the wgmma role's accumulators). WG: the wgmma warpgroups, the block's first; the rest are lane warps.
+template <int X, int R, class F = F_s8_n256, int WG = 2>
 DC_DEV void wg_until2(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
   const Tiles t = fill_tiles<F::TYPE>(sm, a.mode);
-  const bool mma_role = threadIdx.x < 256;
+  const bool mma_role = threadIdx.x < WG * 128;
   uint32_t x = 0;
   OP_BEGIN_STOP
   if (mma_role) {
@@ -527,6 +527,18 @@ OP_KERNEL(wgU_idp4a_ffma, 384) { wg_until2<L_P_IDP4A_FFMA, 64>(a); }
 OP_KERNEL(wgU_idp4a_dfma, 384) { wg_until2<L_P_IDP4A_DFMA, 64>(a); }
 OP_KERNEL(wgU_dfma_ffma, 384) { wg_until2<L_P_DFMA_FFMA, 64>(a); }
 OP_KERNEL(wgU_idp4a_lop3, 384) { wg_until2<L_P_IDP4A_LOP3, 64>(a); }
+OP_KERNEL(wgU_tri, 384) { wg_until2<L_T_IDP4A_FFMA_LOP3, 192>(a); }
+OP_KERNEL(wgU_tri_r384, 384) { wg_until2<L_T_IDP4A_FFMA_LOP3, 384>(a); }
+// Two lane warps a SMSP beside one wgmma warpgroup (wgV_, 384 threads), or beside two on the n128 form, whose 64
+// accumulators fit 512 threads' registers (wgW_); wg1_ is wgV_'s warpgroup alone.
+OP_KERNEL(wg1_s8_n256_a1, 128) { wg_alone<F_s8_n256, 1>(a); }
+OP_KERNEL(wgV_idp4a_r256, 384) { wg_until2<L_IDP4A, 256, F_s8_n256, 1>(a); }
+OP_KERNEL(wgV_ffma_r256, 384) { wg_until2<L_FFMA, 256, F_s8_n256, 1>(a); }
+OP_KERNEL(wgV_lop3_r256, 384) { wg_until2<L_LOP3, 256, F_s8_n256, 1>(a); }
+OP_KERNEL(wgV_idp4a_ffma_r256, 384) { wg_until2<L_P_IDP4A_FFMA, 256, F_s8_n256, 1>(a); }
+OP_KERNEL(wgV_tri_r384, 384) { wg_until2<L_T_IDP4A_FFMA_LOP3, 384, F_s8_n256, 1>(a); }
+OP_KERNEL(wgW_idp4a_ffma_r256, 512) { wg_until2<L_P_IDP4A_FFMA, 256, F_s8_n128>(a); }
+OP_KERNEL(wgW_tri_r384, 512) { wg_until2<L_T_IDP4A_FFMA_LOP3, 384, F_s8_n128>(a); }
 OP_KERNEL(wgUu8_idp4a, 384) { wg_until2<L_IDP4A, 64, F_u8s8_n256>(a); }
 OP_KERNEL(imma_s8_k32, 512) { imma_alone<32>(a); }
 OP_KERNEL(imma_s8_k16, 512) { imma_alone<16>(a); }
@@ -626,6 +638,23 @@ static const OpProbe PROBES[] = {
     P_UNTIL(wgU_idp4a_dfma, "IDP.4A*=32,DFMA=32"),
     P_UNTIL(wgU_dfma_ffma, "DFMA=32,FFMA=32"),
     P_UNTIL(wgU_idp4a_lop3, "IDP.4A*=32,LOP3.LUT=32"),
+    P_UNTIL(wgU_tri, "IDP.4A*=64,FFMA=64,LOP3.LUT=64"),
+    P_UNTIL(wgU_tri_r384, "IDP.4A*=128,FFMA=128,LOP3.LUT=128"),
+#define P_UNTILV(NAME, LPAT) \
+  {.name = #NAME, .kernel = (const void*)NAME, .tpb = 384, .expect = WGI ";" LPAT, .warps = "4;8", .iters = 4096, .until = 2}
+    {.name = "wg1_s8_n256_a1", .kernel = (const void*)wg1_s8_n256_a1, .tpb = 128, .expect = WGI, .iters = 4096},
+    P_UNTILV(wgV_idp4a_r256, "IDP.4A*=256"),
+    P_UNTILV(wgV_ffma_r256, "FFMA=256"),
+    P_UNTILV(wgV_lop3_r256, "LOP3.LUT=256"),
+    P_UNTILV(wgV_idp4a_ffma_r256, "IDP.4A*=128,FFMA=128"),
+    P_UNTILV(wgV_tri_r384, "IDP.4A*=128,FFMA=128,LOP3.LUT=128"),
+#undef P_UNTILV
+#define P_UNTILW(NAME, LPAT)                                                                                      \
+  {.name = #NAME, .kernel = (const void*)NAME, .tpb = 512, .expect = "IGMMA.64x128x32.S8.S8*=4;" LPAT, .warps = "8;8", \
+   .iters = 4096, .until = 2}
+    P_UNTILW(wgW_idp4a_ffma_r256, "IDP.4A*=128,FFMA=128"),
+    P_UNTILW(wgW_tri_r384, "IDP.4A*=128,FFMA=128,LOP3.LUT=128"),
+#undef P_UNTILW
 #define P_MEM(LN, PAT)                                                                                    \
   P_UNTIL(wgU_##LN, PAT "=16"), P_UNTIL(wgU_##LN##_r32, PAT "=32"),                                       \
       {.name = "wgmix_" #LN "_r16", .kernel = (const void*)wgmix_##LN##_r16, .tpb = 256, .expect = WGI "," PAT "=16", \

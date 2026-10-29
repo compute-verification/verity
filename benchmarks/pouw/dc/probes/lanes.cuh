@@ -72,9 +72,10 @@ struct Lane {
 };
 // The multiply lanes a side pipe could make checkpoint words on, in Lane2 so the lanes above keep their SASS. idp4a:
 // dp4a.s32.s32 (IDP.4A.S8.S8, four int8 products into s32); idp2a: dp2a.lo (IDP.2A.LO); dfma: fma.rn.f64 on eight FP64
-// chains of its own; hfma2: fma.rn.f16x2 (two FP16 FMAs); popc and prmt. The p_ kinds alternate two of them (lane_pair).
+// chains of its own; hfma2: fma.rn.f16x2 (two FP16 FMAs); popc and prmt. The p_ kinds alternate two of them (lane_pair),
+// and t_idp4a_ffma_lop3 cycles three, one a pipe (lane_triple).
 enum { L_IDP4A = 32, L_IDP2A, L_DFMA, L_HFMA2, L_POPC, L_PRMT, L_P_IDP4A_FFMA, L_P_IDP4A_DFMA, L_P_DFMA_FFMA,
-       L_P_IDP4A_LOP3 };
+       L_P_IDP4A_LOP3, L_T_IDP4A_FFMA_LOP3 };
 struct Lane2 : Lane {
   double d[8];
   DC_DEV explicit Lane2(uint32_t tid) : Lane(tid) {
@@ -118,6 +119,17 @@ DC_DEV void lane_pair(L& l) {
     l.template op<Y>((q >> 1) + 4);
   }
 }
+// R ops cycling X, Y and Z, R/3 of each.
+template <int X, int Y, int Z, int R, class L>
+DC_DEV void lane_triple(L& l) {
+  static_assert(R % 3 == 0, "a triple lane's R is a multiple of 3");
+#pragma unroll
+  for (int q = 0; q < R; q += 3) {
+    l.template op<X>(q / 3);
+    l.template op<Y>(q / 3 + 2);
+    l.template op<Z>(q / 3 + 4);
+  }
+}
 // R lane ops (the duo lane: R/3 words of three ops each; the LI lane: LI's LOP3 + IMAD pair, R/2 of each; lif: LI with
 // one FFMA filler op in eight, 7 LOP3 + 7 IMAD + 2 FFMA a 16)
 template <int X, int R, class L>
@@ -141,6 +153,8 @@ DC_DEV void lane_ops(L& l) {
     lane_pair<L_DFMA, L_FFMA, R>(l);
   } else if constexpr (X == L_P_IDP4A_LOP3) {
     lane_pair<L_IDP4A, L_LOP3, R>(l);
+  } else if constexpr (X == L_T_IDP4A_FFMA_LOP3) {
+    lane_triple<L_IDP4A, L_FFMA, L_LOP3, R>(l);
   } else {
 #pragma unroll
     for (int q = 0; q < R; q++) l.template op<X>(q);
