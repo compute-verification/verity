@@ -50,7 +50,10 @@ OP_KERNEL(brxv, TPB) { body<V>(a); }
 OP_KERNEL(brxw, TPB) { body<W>(a); }
 OP_KERNEL(brxd, TPB) { body<D>(a); }
 
-#define P(NM, NOTE) {.name = #NM, .kernel = (const void*)NM, .tpb = TPB, .expect = "BRX*=2", .iters = 4096, .note = NOTE}
+// ptxas loads each target from a constant-bank table (LDC) and jumps; the 32 arms are VIADD or IADD3
+#define P(NM, NOTE)                                                                                         \
+  {.name = #NM, .kernel = (const void*)NM, .tpb = TPB, .expect = "BRX=2,VIADD=20,IADD3=13", .iters = 4096, \
+   .note = NOTE}
 static const OpProbe PROBES[] = {
     P(brxu, "brx.idx.uni, coin ptxas sees uniform"),
     P(brxv, "brx.idx.uni on a vector coin"),

@@ -301,6 +301,7 @@ constexpr int BULK_SMEM = STAGE + NB * 8, LANE_SMEM = LSRC + SW * R * 512;
 #define P_SA_LANE(nm, OP, W, IT)                                                                                   \
   {.name = "sa_" #nm, .kernel = (const void*)sa_##nm, .tpb = SW * 32, .expect = OP, .words = W,                    \
    .dyn_smem = LANE_SMEM, .iters = IT}
+// beside honest: the until loop's poll of the stop flag is one more LDS a trip
 #define P_HS_LANE(nm, OP, CNT, W)                                                                                  \
   {.name = "hs_" #nm, .kernel = (const void*)hs_##nm, .tpb = TB_LANE, .expect = IMMA ";" OP, .counted = CNT,     \
    .warps = "16;8", .words = W, .dyn_smem = LANE_SMEM, .iters = 2048, .until = 2}
@@ -330,7 +331,7 @@ static const OpProbe PROBES[] = {
     P_SA_LANE(ldgstg16, "LDG*=8,STG*=8", 128, 256),
     P_HS_LANE(ldgsts4, "LDGSTS*=8", "LDGSTS*", 32),
     P_HS_LANE(ldgsts16, "LDGSTS*=8", "LDGSTS*", 128),
-    P_HS_LANE(ldssts4, "LDS*=8,STS*=8", "STS*", 32),
-    P_HS_LANE(ldssts16, "LDS*=8,STS*=8", "STS*", 128),
+    P_HS_LANE(ldssts4, "LDS*=9,STS*=8", "STS*", 32),
+    P_HS_LANE(ldssts16, "LDS*=9,STS*=8", "STS*", 128),
 };
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

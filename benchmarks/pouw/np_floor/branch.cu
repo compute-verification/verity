@@ -8,14 +8,13 @@
 //   brv    `@p bra.uni` on a coin in a vector register, uniform at run time
 //   brw    `@p bra` on the same coin: ptxas must allow divergence, the warp doesn't diverge
 //   brd    `@p bra` on each lane's own coin bit: the warp diverges and runs both arms
-//   prd    predicated execution: `@p add`, `@!p xor`
 //   sel    both arms, then `selp`
 //   lutb   4 shared-memory lookups a trip, each indexed by 8 bits of a warp-uniform coin (a broadcast LDS)
 //   lutl   the same, each lane its own coin and its own column of a 256 x 32 table (no bank conflict)
 #include "../opcode_probe/probe.cuh"
 
 constexpr int TPB = 1024;
-enum { ARM, BRU, BRV, BRW, BRD, PRD, SEL, LUTB, LUTL };
+enum { ARM, BRU, BRV, BRW, BRD, SEL, LUTB, LUTL };
 
 __device__ __forceinline__ uint32_t coin(uint32_t x) {
   x *= 0x9E3779B1u;
@@ -25,9 +24,6 @@ __device__ __forceinline__ uint32_t coin(uint32_t x) {
 #define BR(UNI)                                                                                                     \
   "{\n\t.reg .pred p;\n\t.reg .b32 t;\n\tand.b32 t, %1, %2;\n\tsetp.ne.b32 p, t, 0;\n\t@p bra" UNI " A;\n\t"         \
   "xor.b32 %0, %0, %3;\n\tbra.uni J;\nA:\n\tadd.u32 %0, %0, %1;\nJ:\n\t}"
-#define PR                                                                                                          \
-  "{\n\t.reg .pred p;\n\t.reg .b32 t;\n\tand.b32 t, %1, %2;\n\tsetp.ne.b32 p, t, 0;\n\t@p add.u32 %0, %0, %1;\n\t" \
-  "@!p xor.b32 %0, %0, %3;\n\t}"
 #define SL                                                                                                          \
   "{\n\t.reg .pred p;\n\t.reg .b32 t, u, v;\n\tand.b32 t, %1, %2;\n\tsetp.ne.b32 p, t, 0;\n\tadd.u32 u, %0, %1;\n\t" \
   "xor.b32 v, %0, %3;\n\tselp.b32 %0, u, v, p;\n\t}"
@@ -38,7 +34,6 @@ __device__ __forceinline__ void decide(uint32_t& x, uint32_t c) {
   if constexpr (V == ARM && !(Q & 1)) asm volatile("add.u32 %0, %0, %1;" : "+r"(x) : "r"(c), "n"(BIT), "n"(K));
   if constexpr (V == BRU || V == BRV) asm volatile(BR(".uni") : "+r"(x) : "r"(c), "n"(BIT), "n"(K));
   if constexpr (V == BRW || V == BRD) asm volatile(BR("") : "+r"(x) : "r"(c), "n"(BIT), "n"(K));
-  if constexpr (V == PRD) asm volatile(PR : "+r"(x) : "r"(c), "n"(BIT), "n"(K));
   if constexpr (V == SEL) asm volatile(SL : "+r"(x) : "r"(c), "n"(BIT), "n"(K));
 }
 
@@ -83,21 +78,22 @@ OP_KERNEL(bru, TPB) { body<BRU>(a); }
 OP_KERNEL(brv, TPB) { body<BRV>(a); }
 OP_KERNEL(brw, TPB) { body<BRW>(a); }
 OP_KERNEL(brd, TPB) { body<BRD>(a); }
-OP_KERNEL(prd, TPB) { body<PRD>(a); }
 OP_KERNEL(sel, TPB) { body<SEL>(a); }
 OP_KERNEL(lutb, TPB) { body<LUTB>(a); }
 OP_KERNEL(lutl, TPB) { body<LUTL>(a); }
 
 #define P(NM, EXP, NOTE) \
   {.name = #NM, .kernel = (const void*)NM, .tpb = TPB, .expect = EXP, .iters = 4096, .note = NOTE}
+// ptxas 13.0 if-converts every two-way form here: a LOP3 that writes a predicate (bru, brv) or R2P, two coin bits to
+// two predicates (brw, brd, sel), then both arms under the predicate and its complement. No BRA is left but the loop's,
+// so these price a predicated decision; brx.cu's BRX and br2.cu's long arms are the forms that jump.
 static const OpProbe PROBES[] = {
-    P(arm, "IADD3=5,LOP3*=5,BRA=1", "the arms alone"),
-    P(bru, "BRA=17", "uniform branch, coin ptxas sees uniform"),
-    P(brv, "BRA=17", "bra.uni on a vector coin"),
-    P(brw, "BRA=17", "bra on a vector coin, uniform at run time"),
-    P(brd, "BRA=17", "bra on each lane's coin bit: divergent"),
-    P(prd, "BRA=1", "predicated arms"),
-    P(sel, "SEL=8,BRA=1", "both arms and a select"),
+    P(arm, "IMAD.IADD=4,LOP3*=5", "the arms alone"),
+    P(bru, "IMAD.IADD=8,LOP3*=17", "bra.uni, coin ptxas sees uniform: if-converted, LOP3 to P"),
+    P(brv, "IMAD.IADD=8,LOP3*=17", "bra.uni on a vector coin: if-converted, LOP3 to P"),
+    P(brw, "R2P=3,IMAD.IADD=8,LOP3*=11", "bra on a vector coin: if-converted, R2P"),
+    P(brd, "R2P=3,IMAD.IADD=8,LOP3*=11", "bra on each lane's coin bit: if-converted, R2P"),
+    P(sel, "R2P=4,IMAD.IADD=8,LOP3*=9", "both arms and selp: predicated, R2P"),
     P(lutb, "LDS*=4,BRA=1", "4 broadcast lookups, 8 coin bits each"),
     P(lutl, "LDS*=4,BRA=1", "4 lane-column lookups, 8 coin bits each"),
 };
