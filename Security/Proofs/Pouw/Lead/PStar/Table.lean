@@ -190,19 +190,13 @@ theorem sum_tableHits_le (he : L.e = 7) (htile : L.tile = 64) (hm : L.m = 16 * L
   have hH : H ≤ (L.rowBlocks * L.colBlocks * L.S : ℚ) * ((2 * L.mem + 1) * Fintype.card (Coins L)) / 2 ^ 100 := by
     rw [le_div_iff₀ (by positivity)]
     linarith
-  have hM : (2 * L.mem + 1 : ℚ) / 2 ^ 100 ≤ (2 * L.mem + 1 : ℚ) / 49 ^ 8 :=
-    div_le_div_of_nonneg_left (by positivity) (by positivity) (by norm_num)
-  have h32 : (0 : ℚ) ≤ 32 / 7 ^ 8 := by positivity
   rw [← mul_sum, tableGap, show ((tileWords : ℕ) : ℚ) = 128 by norm_num [tileWords]]
   calc (128 : ℚ) * H
       ≤ 128 * ((L.rowBlocks * L.colBlocks * L.S : ℚ) * ((2 * L.mem + 1) * Fintype.card (Coins L)) / 2 ^ 100) :=
         mul_le_mul_of_nonneg_left hH (by norm_num)
-    _ = Fintype.card (Coins L) * ((L.rowBlocks * L.colBlocks * 128 : ℚ) *
-          ((2 * L.mem + 1) / 2 ^ 100 + (L.S - 1 : ℚ) * (2 * L.mem + 1) / 2 ^ 100)) := by ring
-    _ ≤ Fintype.card (Coins L) * ((L.rowBlocks * L.colBlocks * 128 : ℚ) *
-          ((2 * L.mem + 1) / 49 ^ 8 + 32 / 7 ^ 8 + (L.S - 1 : ℚ) * (2 * L.mem + 1) / 2 ^ 100)) := by
-        refine mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_left ?_ (by positivity)) (by positivity)
-        linarith
+    _ = Fintype.card (Coins L) *
+          ((L.rowBlocks * L.colBlocks * 128 : ℚ) * (L.S * (2 * L.mem + 1 : ℚ) / 2 ^ 100)) := by
+        ring
 
 end Memory
 
@@ -211,7 +205,7 @@ and the certifier's coin stream, the committed tiles its memory starts with, in 
 are at most `tableGap`. Every step carries the coin lanes, so a tile at any step is a given value with chance at most
 `2^-168` (`call_tile_pstar`: each column's even and odd rows fix its three lanes) and a streamed tile with chance at most
 `2^-105` (`call_tile_stream`: at least five columns free of the stream's lanes); a union over the memory's
-`2 · mem + 1` values (`memHolds_card_le`) gives `(2 · mem + 1) · 2^-100` a tile and step, within `tableGap`'s terms.
+`2 · mem + 1` values (`memHolds_card_le`) gives `(2 · mem + 1) · 2^-100` a tile and step, which is `tableGap`.
 Reads `coinTerm`, `laneTerm`, `word`, `tileOf` and `CoinStream`. -/
 theorem table_le (T m n K : ℕ) (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
     (σ : Strategy (lead T m n K)) (stream : CoinStream (lead T m n K)) :

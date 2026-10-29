@@ -11,18 +11,19 @@ import Proofs.Pouw.Dimension.H100Proofs
 # The lead's guarantee from its pieces
 
 `G`'s proof, at each accepted coin value with no break, on the egress-free twin (`OutsourceWithinEgressLead`), which
-is accepted where the original is (it holds what it holds, registers its root and exchanges nothing) and hashed no
-collision where the original hashed none (beyond the original's, it hashes only the honest commitment's messages):
-1. the twin's run holds every committed tile (`TileGrain`), so its whole-tile writes are at least the distinct
-   committed tiles less the table hits (`CoinBranch.distinct_le_writes`), and the distinct tiles are the committed
-   tiles less the repeats; the lead commits whole tiles, so their words are `m n S` (`perCoin`);
+is accepted where the original is (it registers its root and exchanges nothing) and hashed no collision where the
+original hashed none (beyond the original's, it hashes only the honest commitment's messages):
+1. the twin hashes every honest words message (`HonestHashRuled` with no collision), so each committed tile is one of
+   its run's whole-tile writes or a tile it starts with (`TileGrain`), and its whole-tile writes are at least the
+   distinct committed tiles less the table hits (`CoinBranch.distinct_le_writes`), and the distinct tiles are the
+   committed tiles less the repeats; the lead commits whole tiles, so their words are `m n S` (`perCoin`);
 2. its hashing credit is at least the honest commitment's (`HonestHashRuled` at egress 0, `Commit.hashed_credit_ge`),
    at least the honest compressions' (`CommitL1w`), and its compressions write that many registers (`ShaWrites`);
 3. `OneInstructionMinimal` and `MH100W.cost_ge_regs` (`W1`, `H32`) price those registers at 32 each (`perCoin`);
 4. summed over `O`, the repeats and table hits are at most `|Ω|` times `coinBranchGap` and `tableGap`
-   (`Tags.repeats_le`, `PStar.table_le`); the twin's saving is at most `betaLead` a bit the original exchanged, at
-   most `callBits` at an accepted value (`Accepted`), so `|O|` times `32 · networkGap`; and the head, hiding and `p*`
-   terms are nonnegative.
+   (`Tags.repeats_le` at the call `Accepted` admits, when `O` is nonempty; `PStar.table_le`); the twin's saving is at
+   most `betaLead` a bit the original exchanged, at most `callBits` at an accepted value (`Accepted`), so `|O|` times
+   `32 · networkGap`; and the head, hiding and `p*` terms are nonnegative.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Compose
@@ -36,7 +37,7 @@ theorem perCoin (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
     (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K))
     (isA : Hash.Msg → Bool) (Real : Strategy (lead T m n K) → Prop)
-    (hcommit : CommitL1w H C isA κ) (hpr : H32 pr) (hw1 : W1 pr Real) (hgrain : TileGrain stream Real)
+    (hcommit : CommitL1w H C isA κ) (hpr : H32 pr) (hw1 : W1 pr Real) (hgrain : TileGrain H C κ stream Real)
     (hmin : OneInstructionMinimal Real) (hsha : ShaWrites isA Real) (hhash : HonestHashRuled H C κ Real)
     (σ : Strategy (lead T m n K)) (hσ : Real σ) (ω : Coins (lead T m n K)) (he : (σ.exec ω).egress = 0)
     (hacc : Accepted (lead T m n K) H C κ σ ω) (hnb : ¬ Break (lead T m n K) H C κ σ ω) :
@@ -47,9 +48,15 @@ theorem perCoin (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     exact_mod_cast MH100W.cost_ge_regs pr hpr _ (hw1 σ hσ ω)
   have hmin' : ((tileWords * writes (σ.exec ω).steps + (σ.exec ω).shaRegs : ℕ) : ℚ) ≤ regCount (σ.exec ω).trace := by
     exact_mod_cast hmin σ hσ ω
+  have hall : ∀ y ∈ C.msgs H (word (lead T m n K) κ ω), y ∈ (σ.exec ω).hashed := fun y hy => by
+    obtain ⟨x, hx, hxy⟩ := hhash σ hσ ω he hacc y (List.mem_append_left _ hy)
+    by_cases hne : x = y
+    · exact hne ▸ hx
+    · exact absurd ⟨x, List.mem_append_left _ hx, y, List.mem_append_right _ (List.mem_append_left _ hy), hne,
+        congrArg Verity.Digest.bytes hxy⟩ hnb
   have hdist : (((tileIdx (lead T m n K)).image fun x => tileOf (lead T m n K) κ ω x.1 x.2.1 x.2.2).card : ℚ) ≤
       writes (σ.exec ω).steps + tableHits (lead T m n K) κ σ stream ω := by
-    exact_mod_cast CoinBranch.distinct_le_writes κ σ stream ω (fun y hy => hgrain σ hσ ω he y hy) hacc.1
+    exact_mod_cast CoinBranch.distinct_le_writes κ σ stream ω (hgrain σ hσ ω he hall)
   have hrep : (repeats (lead T m n K) κ ω : ℚ) = (tileIdx (lead T m n K)).card -
       ((tileIdx (lead T m n K)).image fun x => tileOf (lead T m n K) κ ω x.1 x.2.1 x.2.2).card := by
     rw [repeats, Nat.cast_sub Finset.card_image_le]
@@ -80,9 +87,9 @@ theorem G : Pouw.Guarantees.Lead.G := by
   push Not at hB
   obtain ⟨σ', hσ', -, htwin⟩ := hout σ (hcard σ hcan)
   have hacc' : ∀ ω ∈ O, Accepted (lead T m n K) H C κ σ' ω := fun ω hω => by
-    obtain ⟨he, hh, hr, -, -⟩ := htwin ω
-    obtain ⟨hhold, hroot, hbits⟩ := hacc ω hω
-    refine ⟨fun rb hrb cb hcb t => hh _ (hhold rb hrb cb hcb t), hr.trans hroot, ?_⟩
+    obtain ⟨he, hr, -, -⟩ := htwin ω
+    obtain ⟨hadm, hroot, hbits⟩ := hacc ω hω
+    refine ⟨hadm, hr.trans hroot, ?_⟩
     rw [he]
     exact (Nat.cast_nonneg _).trans hbits
   have hnb' : ∀ ω ∈ O, ¬ Break (lead T m n K) H C κ σ' ω := fun ω hω hb => by
@@ -91,7 +98,7 @@ theorem G : Pouw.Guarantees.Lead.G := by
     have hsub : ∀ z ∈ (σ'.exec ω).hashed ++ (C.msgs H (word (lead T m n K) κ ω) ++ C.aMsgs),
         z ∈ (σ.exec ω).hashed ++ (C.msgs H (word (lead T m n K) κ ω) ++ C.aMsgs) := fun z hz => by
       rcases List.mem_append.1 hz with hz | hz
-      · rcases (htwin ω).2.2.2.1 z hz with h | h
+      · rcases (htwin ω).2.2.1 z hz with h | h
         · exact List.mem_append_left _ h
         · exact List.mem_append_right _ h
       · exact List.mem_append_right _ hz
@@ -113,16 +120,19 @@ theorem G : Pouw.Guarantees.Lead.G := by
     intro ω hω
     have h1 := perCoin pr H T m n K κ stream C isA Real hC h32 hw1 htile hone hsha hhon σ' hσ' ω (htwin ω).1
       (hacc' ω hω) (hnb' ω hω)
-    have h2 := (htwin ω).2.2.2.2
+    have h2 := (htwin ω).2.2.2
     have h3 := mul_le_mul_of_nonneg_left (hacc ω hω).2.2 hβ
     rw [htw] at h1 ⊢
     linarith
   have hsum := Finset.sum_le_sum hstep
   simp only [Finset.sum_sub_distrib, ← Finset.mul_sum, Finset.sum_const, nsmul_eq_mul] at hsum
   have hrep : ∑ ω ∈ O, (tileWords * repeats (lead T m n K) κ ω : ℚ) ≤
-      Fintype.card (Coins (lead T m n K)) * coinBranchGap (lead T m n K) :=
-    (Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ O) fun _ _ _ => by positivity).trans
-      (Tags.repeats_le T m n K κ)
+      Fintype.card (Coins (lead T m n K)) * coinBranchGap (lead T m n K) := by
+    rcases O.eq_empty_or_nonempty with rfl | ⟨ω₀, hω₀⟩
+    · rw [Finset.sum_empty]
+      exact mul_nonneg (Nat.cast_nonneg _) (by unfold coinBranchGap stockRegs; positivity)
+    · exact (Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ O) fun _ _ _ => by positivity).trans
+        (Tags.repeats_le T m n K κ (hacc ω₀ hω₀).1)
   have htab : ∑ ω ∈ O, (tileWords * tableHits (lead T m n K) κ σ' stream ω : ℚ) ≤
       Fintype.card (Coins (lead T m n K)) * tableGap (lead T m n K) :=
     (Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ O) fun _ _ _ => by positivity).trans
@@ -145,11 +155,6 @@ theorem regCount_other {G : Type} (P : List (Op100 G)) (h : ∀ o ∈ P, ∃ f, 
   unfold regCount
   rw [List.map_congr_left fun o ho => show Pouw.Lead.Op100.regs o = 1 by obtain ⟨f, rfl⟩ := h o ho; rfl]
   simp
-
-/-- A run's last write is what its slot holds. -/
-theorem run_write_last {A V : Type} [DecidableEq A] {w : ℕ} (m₀ : A → Fin w → V) (P : List (Step A V w)) (a : A)
-    (p : Fin w) (v : V) : run m₀ (P ++ [.write a p v]) a p = v := by
-  simp [run, List.foldl_append, Step.apply]
 
 /-- The committed tiles at `ω`, in `tileIdx`'s order. -/
 noncomputable def tilesAt (L : Pouw.Lead.Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) :
@@ -185,8 +190,7 @@ noncomputable def honestStrategy (L : Pouw.Lead.Layout) (κ : Fin L.m → Fin L.
       shaRegs := honestShaRegs L
       hashed := [honestMsg L]
       egress := 0
-      root := 0
-      holds := fun y => y ∈ tilesAt L κ ω }
+      root := 0 }
 
 theorem honest_trace_other (L : Pouw.Lead.Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) :
     ∀ o ∈ ((honestStrategy L κ).exec ω).trace, ∃ f, o = .other f := by
@@ -204,7 +208,7 @@ theorem blocks_honestMsg (L : Pouw.Lead.Layout) : blocks (honestMsg L) = honestB
 committed tile once, hash one message of the honest commitment's compressions rounded up), with an empty coin stream,
 meets every premise and is accepted at every coin value. -/
 theorem honest : Pouw.Guarantees.Lead.Honest := by
-  intro T m n K H κ
+  intro T m n K H κ hadm
   refine ⟨⟨fun _ _ => none, fun _ _ _ => rfl, fun _ _ _ _ _ h => by cases h⟩, honestCommit _, fun _ => false,
     fun σ => σ = honestStrategy _ κ, honestStrategy _ κ, ?_, h32Sat, ?_, ?_, ?_, fun _ h => h, ?_, ?_, ?_, rfl, ?_⟩
   · refine ⟨rfl, fun ω => ?_⟩
@@ -221,12 +225,9 @@ theorem honest : Pouw.Guarantees.Lead.Honest := by
   · rintro σ rfl ω o ho
     obtain ⟨f, rfl⟩ := honest_trace_other _ κ ω o ho
     trivial
-  · rintro σ rfl ω - y hy
-    obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hy
-    refine ⟨i + 1, .inl 0, ?_⟩
-    simp only [honestStrategy]
-    rw [← List.map_take, List.take_add_one, List.getElem?_eq_getElem hi, Option.toList_some, List.map_append,
-      List.map_singleton, run_write_last]
+  · rintro σ rfl ω - - rb hrb cb hcb t
+    have hy : tileOf _ κ ω rb cb t ∈ tilesAt _ κ ω := List.mem_map.2 ⟨(rb, cb, t), by simp [tileIdx, hrb, hcb], rfl⟩
+    exact Or.inl ⟨.inl 0, 0, List.mem_map.2 ⟨_, hy, rfl⟩⟩
   · rintro σ rfl ω
     rw [regCount_other _ (honest_trace_other _ κ ω)]
     simp only [honestStrategy, writes, List.map_map, Function.comp_def, Step.cost, List.length_append,
@@ -241,15 +242,14 @@ theorem honest : Pouw.Guarantees.Lead.Honest := by
     simp only [honestCommit, List.append_nil, List.mem_singleton] at hy
     exact ⟨honestMsg _, List.mem_singleton_self _, by rw [hy]⟩
   · rintro σ rfl
-    refine ⟨_, rfl, rfl, fun ω => ⟨rfl, fun _ h => h, rfl, fun _ h => Or.inl h, ?_⟩⟩
+    refine ⟨_, rfl, rfl, fun ω => ⟨rfl, rfl, fun _ h => Or.inl h, ?_⟩⟩
     have : ((honestStrategy (lead T m n K) κ).exec ω).egress = 0 := rfl
     rw [this, Nat.cast_zero, mul_zero, add_zero]
   · intro ω
-    refine ⟨fun rb hrb cb hcb t => List.mem_map.2 ⟨(rb, cb, t), ?_, rfl⟩, rfl, ?_⟩
-    · simp [tileIdx, hrb, hcb]
-    · show ((0 : ℕ) : ℚ) ≤ _
-      unfold Layout.callBits
-      push_cast
-      positivity
+    refine ⟨hadm, rfl, ?_⟩
+    show ((0 : ℕ) : ℚ) ≤ _
+    unfold Layout.callBits
+    push_cast
+    positivity
 
 end Pouw.SecurityProofs.Lead.Compose

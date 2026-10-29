@@ -6,6 +6,7 @@ import Proofs.Pouw.Lead.Network
 import Proofs.Pouw.Lead.PStar
 import Proofs.Pouw.Lead.Statement
 import Proofs.Pouw.Lead.Tags
+import Proofs.Pouw.Lead.Tail
 
 /-!
 # The PoUW lead's proofs

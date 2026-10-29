@@ -12,8 +12,8 @@ import Proofs.Pouw.Lead.Tags.Tile
 
 Its proofs are in `Lead/Tags/`, its new declarations in `Pouw.SecurityProofs.Lead.Tags`.
 
-* `Distinct`: the lead's stubs `repeats_le` and `word_exact`. `word_exact` is `Exact`'s bound at `K ≤ 65,536`;
-  `not_repeats_le` refutes `repeats_le` as stated, at `K = 0`.
+* `Distinct`: the lead's `repeats_le`, `repeats_le_of` at a call the verifier admits (`Layout.Admits`), and
+  `word_exact`, `Exact`'s bound at `K ≤ 65,536`; `not_repeats_le`: without the cap the bound fails at `K = 0`.
 * `Repeats`: `repeats_le_of`, `repeats_le`'s bound for an inner dimension of at least 1 and at most `2^40` tiles a
   call (`repeats_le_caps`: at most `2^15` rows, `2^20` columns and an inner dimension of `2^16`), by the call's pairs
   of tiles: each agrees on at most a `2^−56` share of the coins through a tile's own coin lane at its step, or `7^−8`
