@@ -100,3 +100,11 @@ exploration of the design space." Academic: nobody builds it this year. The outp
   - the wiring isn't priced;
   - **Keccak or SHA-512 for the round** is a premise choice for Daniel (a SHA-512 round costs 21% of the s8 MAC every word, or 6–14% at margin 4).
 - Re-targeted: on-chip rank-1 operand noise from the live coin, for power whitening with cheap exact denoising ((uvᵀ)B = u(vᵀB)); closure enumerated; the wiring.
+
+**22:55Z, SI-ALG preliminary (note 20261029T2235Z-report-silicon-alg; runs r20261029-222851-e9b5 and r20261029-220924-1126):**
+- **The best format is exact (Kulisch) accumulation:** a 4-wide FP8 dot product into a 64-bit exact fixed-point register. 841.7 GE a MAC (1.03× the s8 MAC, 0.37× FP8/FP32), 211.8 C-Flock ANDs a MAC against 924. It is exact and order-independent, so FP8 noise cancels exactly and FP8 can be checked by Freivalds. NVFP4 into the same register costs 309.3 GE.
+- For integer work, a 48-bit accumulator (1.07×) or an M31 accumulate (1.40×) replaces today's 1/2-per-draw Freivalds check.
+- **No format cuts h on its own.**
+- **A constraint, checked by `split_check.py`:** a sketch in the accumulator's own ring splits under `decomp`, field-native and binary-field MMAs included. A carry-less GF(2^k) fold over words accumulated with carries does not split. So keep carries in the MAC, and don't adopt a binary-field (Binius-style) MMA for PoUW.
+- The in-unit GF(2^32) fold (+13%, rank 5) is dominated by SI-FOLD's Keccak transcript (2.7%), and is kept as a fallback.
+- Synthesized baselines: s8 MAC and FP8/FP32 MAC, yosys + ABC (`cursor/compute-research-silicon-alg-8e03`).
