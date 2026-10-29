@@ -616,18 +616,22 @@ def call_families(found: dict[str, Any] | None = None) -> set[str]:
     Boolean version of each of those (`boolean_call_families`: the Program on bits calls them in their place).  Any other
     Definition's gates are partitioned inside the Call that contains them.  It builds the whole catalog, or takes ``found``, a
     `suite` built already (`cli._tasks`'s: a later one would also hold what building its bodies registered); `is_call` asks
-    whether one family is among them, mostly without."""
+    whether one family is among them without it, and refuses a family it can't decide so."""
     if not _CALLS:
         words = word_call_families()
         _CALLS.update(words | boolean_call_families(set(words), found))
     return _CALLS
 
 
+class Undecided(LookupError):
+    """`is_call` can't tell whether a family is a Call without building the whole catalog."""
+
+
 def is_call(fam: str) -> bool:
-    """Whether family ``fam`` is in `call_families`, decided without the catalog where its answer doesn't need it: a word Call
-    family is; a family outside `boolean_call_candidates` is not; one `certified_boolean_calls` names is; any other (a Boolean
-    version of a word Call family that only Definitions the catalog reaches inside its roots show) is looked up in
-    `call_families`."""
+    """Whether family ``fam`` is in `call_families`, never building the catalog for it: once `call_families` is known here, by it;
+    else a word Call family is; a family outside `boolean_call_candidates` is not; one `certified_boolean_calls` names is.  Any
+    other (a Boolean version of a word Call family that only Definitions the catalog reaches inside its roots could show) is
+    `Undecided`, by name, with the flags that decide it: the catalog's whole build is what ``--all`` pays once for every target."""
     if _CALLS:
         return fam in _CALLS
     words = word_call_families()
@@ -640,22 +644,31 @@ def is_call(fam: str) -> bool:
     certified, refused = _SHORT.setdefault("certified", set()), _SHORT.setdefault("uncertified", set())
     if fam not in certified | refused:
         (certified if certified_boolean_calls(words, {fam}) else refused).add(fam)
-    return fam in certified or fam in call_families()
+    if fam in certified:
+        return True
+    raise Undecided(f"{fam}: whether a served Program Calls it needs the whole catalog built; give --as-call or --no-as-call, "
+                    "or check it under --all")
 
 
 def boolean_call_candidates(word_calls: set[str]) -> set[str]:
     """A superset of `boolean_call_families` of ``word_calls``, from the Boolean table's links alone (no catalog): each family
     `boolean_version` could return for a Definition of a family in ``word_calls``, by its two lookups, a registered Boolean
-    Definition whose ``word`` is a Definition of such a family, or whose ``word`` is a function of its bindings and whose name is
-    such a family's name.  Each candidate it returns is one of those Definitions, bound."""
-    from verity.ml.circuits.defs import CompositeDefinition, bind
+    Definition whose ``word`` is a Definition of such a family, or whose ``word`` is a function of its bindings, whose name is
+    such a family's name and whose statics a binding of that family could give (each one of the family's statics or one its word
+    computes, ``word_statics``: the by-name lookup reads no other).  Each candidate it returns is one of those Definitions, bound."""
+    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
     from verity.ml.definitions.boolean import _load
 
     exact, by_name, _errors = _load()
-    names = {m[1] for f in word_calls if (m := re.fullmatch(r"(.+)_v(\d+)", f))}
+    statics: dict[str, list[set[str] | None]] = {}
+    for f in word_calls:
+        if m := re.fullmatch(r"(.+)_v(\d+)", f):
+            d = REGISTRY.defs.get(f)
+            statics.setdefault(m[1], []).append(None if d is None else set(getattr(d, "statics", ())))
     out = {f"{d.name}_v{d.version}" for ds in exact.values() for d in ds
            if family(bind(d.word) if isinstance(d.word, CompositeDefinition) else d.word) in word_calls}
-    out.update(f"{d.name}_v{d.version}" for name, ds in by_name.items() if name in names for d in ds)
+    out.update(f"{d.name}_v{d.version}" for name, ds in by_name.items() for d in ds
+               if any(s is None or set(d.statics) <= s | set(getattr(d, "word_statics", {})) for s in statics.get(name, ())))
     return out | on_demand_boolean_families(word_calls)
 
 
@@ -821,8 +834,8 @@ def reachable(roots: Iterable[Any]) -> dict[str, Any]:
     return out
 
 
-#: specialisations over this many gates are checked only when their family has none smaller (served-size kernel self-check
-#: targets such as `TokenSelect_v1{V=151936}` stay with the kernel tests)
+#: specialisations over this many gates are checked only when their family has none smaller or a pin is held for them
+#: (`pinned`; served-size kernel self-check targets such as `TokenSelect_v1{V=151936}` stay with the kernel tests)
 MAX_GATES = 150_000
 
 #: everything the last `suite` reached, `select`'s drops among it: the task list holds what their builds read (`cli.run`)
@@ -833,12 +846,28 @@ def family(fn: Any) -> str:
     return getattr(fn, "base_id", None) or fn.id
 
 
-def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
-    """The specialisations the suite checks: every one of at most ``max_gates`` gates, and a family's smallest otherwise, with its
-    smallest Boolean one too when the smallest is not (a Boolean family bound at a word MUFU and at its Boolean version, which
-    the Program on bits calls); and every by-calls root (`is_by_calls`), whose gates are never counted."""
+#: the pin kinds keyed by a Definition's id, whose pin its check compares (`checks.whole_lowering`, `checks.circuit_digest_pin`)
+PINNED_KINDS = ("definitions", "digests", "pieces")
+
+
+def pinned() -> frozenset[str]:
+    """The ids of the Definitions a pin is held for (`checks.load_pins`, `PINNED_KINDS`), which `select` keeps whatever their
+    size, so ``--all`` compares every pin of a Definition the catalog reaches."""
+    from . import checks as CK
+
+    pins = CK.load_pins()
+    return frozenset(k for kind in PINNED_KINDS for k in pins.get(kind, {}))
+
+
+def select(found: dict[str, Any], max_gates: int | None = None, pinned: Iterable[str] = ()) -> dict[str, Any]:
+    """The specialisations the suite checks: every one of at most ``max_gates`` (default `MAX_GATES`) gates, and a family's
+    smallest otherwise, with its smallest Boolean one too when the smallest is not (a Boolean family bound at a word MUFU and at
+    its Boolean version, which the Program on bits calls); every one whose id is ``pinned`` (`pinned`), whatever its size; and
+    every by-calls root (`is_by_calls`), whose gates are never counted."""
     from verity.ml.circuits import boolean as BL
 
+    max_gates = MAX_GATES if max_gates is None else max_gates
+    pinned = frozenset(pinned)
     by: dict[str, list[Any]] = {}
     out = {}
     for fn in found.values():
@@ -852,7 +881,7 @@ def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
             keep = [min(fns, key=lambda f: f.gates)]
             if not BL.is_boolean(keep[0]) and (bits := [f for f in fns if BL.is_boolean(f)]):
                 keep.append(min(bits, key=lambda f: f.gates))
-        for f in keep:
+        for f in keep + [f for f in fns if f.id in pinned]:
             out[f.id] = f
     return dict(sorted(out.items()))
 
@@ -863,7 +892,7 @@ def suite() -> dict[str, Any]:
     by_unit: list = []
     REACHED.clear()
     REACHED.update(reachable(catalog(by_unit)))
-    out = select(REACHED)
+    out = select(REACHED, pinned=pinned())
     for units, make in pouw_bindings():
         out.update({fn.id: fn for fn in _produce(units, make, by_unit)})
     for units, roots in by_unit:
@@ -886,9 +915,10 @@ def sidecar_dropped(path: str) -> dict[str, Any]:
 def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, list[dict]]]]:
     """``circuit-check path/to/<module>.circuit-check.py``'s targets, without the catalog: the Definitions the sidecar's root
     functions (and ``_model_roots``) reach that its module defines (`sidecars.owner`), selected among themselves as `suite`
-    selects (`select`), with its ``_pouw_roots``' whatever their size, each with its `BINDINGS`; and (label, subcircuit, instance
-    statics) of each template its ``TEMPLATE_PARAMS`` binds, as `templates` makes them.  A family whose members here are all
-    over `MAX_GATES` keeps its smallest here, which ``--all`` may not check when another binding reaches a smaller one."""
+    selects (`select`, its pinned ones kept), with its ``_pouw_roots``' whatever their size, each with its `BINDINGS`; and (label,
+    subcircuit, instance statics) of each template its ``TEMPLATE_PARAMS`` binds, as `templates` makes them.  A family whose
+    members here are all over `MAX_GATES` keeps its smallest here, which ``--all`` may not check when another binding reaches a
+    smaller one and it has no pin."""
     from verity_numerical.bench import templates as TM
 
     from . import sidecars as SC
@@ -910,7 +940,7 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
         _produce((f"{prefix}_model_roots:{label}",), lambda make=make: [(lambda fn: (fn.body, fn)[1])(make())], by_unit)
     reached = reachable(r for _units, roots in by_unit for r in roots)
     owned = {fid: fn for fid, fn in reached.items() if SC.owner(fn) == mod}
-    out = select(owned)
+    out = select(owned, pinned=pinned())
     _DROPPED[p] = {fid: fn for fid, fn in owned.items() if fid not in out}
     for units, roots in by_unit:
         if units[0] == f"{prefix}_pouw_roots":
@@ -930,9 +960,9 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
     return hit
 
 
-__all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "REACHED", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS",
-           "TABLE_PROBES", "TINY", "binding_files", "binding_roots", "boolean_call_candidates", "boolean_call_families",
-           "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units", "certified_boolean_calls",
-           "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call", "kind_of", "load_registries",
-           "pouw_bindings", "reachable", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "subcircuit", "suite",
+__all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "PINNED_KINDS", "REACHED", "REGISTERED", "ROOT_ERRORS",
+           "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
+           "boolean_call_families", "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units",
+           "certified_boolean_calls", "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call",
+           "kind_of", "load_registries", "pinned", "pouw_bindings", "reachable", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "subcircuit", "suite",
            "table_probe", "template_params", "templates", "word_call_families"]

@@ -1,9 +1,9 @@
-"""The proof service's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
+"""The proof system's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
 `SampledProofs.Challenger`, `verity/core/service/sampled_proofs`, which `tests/test_difftest.py` there holds this to).
 
 Coins are indexed by label and index, and named by no protocol.  A layout is a scheme, an epoch (the client's session the
 coins are for) and its families ``(label, count)`` in order: coin ``(label, i)`` sits at its family's offset plus i, at
-most `MAX_COINS` coins.  Before the epoch the challenger draws every coin and its hm96 salt from its own generator and
+most `MAX_COINS` coins.  Before the epoch the challenger samples every coin and its hm96 salt from its own generator and
 publishes the coin commitment:
 
     x_p     = SHA-512(scheme || 0x00 || coin_p)                                     coin_p: 64 fresh bytes (`COIN_BYTES`)
@@ -13,13 +13,13 @@ publishes the coin commitment:
 
 The hm96 leaves keep every unopened coin statistically hidden; binding rests on SHA-512's collision resistance.  The
 challenger opens coin ``(label, i)`` once, after the verifier recorded the root the coin follows (`LiveOpening.after`),
-and never twice: a retry never redraws.  There is no beacon and no Fiat–Shamir: a coin is the challenger's own bytes, and
-a client derives what it draws from the opened coin (`verity.ml.randomness.derive`).  The coins are live and the verifier
+and never twice: a retry never resamples.  There is no beacon and no Fiat–Shamir: a coin is the challenger's own bytes, and
+a client derives what it samples from the opened coin (`verity.ml.randomness.derive`).  The coins are live and the verifier
 designated: an outcome convinces the auditor, who trusts its own challenger, and no third party.
 
 **Every coin source is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` assumption of
-`verity.core.claims` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier of
-record's `coins` (`IO.getRandomBytes`) is ``uniform/io-getrandombytes`` (A3); `named` names another source.  A served
+`verity.core.claims` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
+`coins` (`IO.getRandomBytes`) is ``uniform/io-getrandombytes`` (A3); `named` names another source.  A served
 challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`), so its coins never come from
 `os.urandom` or any other source no assumption covers; a test's seeded stream stays unnamed.
 
@@ -104,7 +104,7 @@ the one pinned key, so a ledger whose key changes is refused: no entry, signed u
 new one.  `ledger_line` writes an entry as the auditor does.
 
 **A window counts toward its period** only when it proves the circuit the period's open committed (`credited_session`):
-the period's `circuit` is the declared circuit's SHA-512 (`circuit_of`), and the verifier holds the descriptor of the
+the period's `circuit` is the registered circuit's SHA-512 (`circuit_of`), and the verifier holds the descriptor of the
 circuit the window's sessions prove, its canonical JSON without annotations (the bytes `program_digest` hashes), so the
 check is one SHA-512 over the descriptor, never a walk over the circuit it unrolls to (`circuit_reason`).  A window in
 no period, in a period that committed no circuit, or whose descriptor hashes to another circuit counts toward none.
@@ -128,7 +128,7 @@ its open names is the auditor-trusted host's word (`trusted-host`).  Every path 
 through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
 `audited_session` checks no pin and credits nothing.
 
-The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
+The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
 `verity.ml.commitments` and `verity.core.claims`, so any client calls it as it is.
 """
@@ -248,7 +248,7 @@ NO_AUDIT = "no auditor's ledger: the verifier trusts a challenger session only a
 COIN_PROPERTY = "uniform"
 NO_CLAIM = ("coins-without-claim: the challenger's entropy is named by no claim instance (its `claim`, a uniform/<instance> "
             "assumption of verity.core.claims), so no assumption covers its coins: a served challenger draws from a named "
-            "source, the Lean verifier of record's `coins` (uniform/io-getrandombytes)")
+            "source, the Lean verifier's `coins` (uniform/io-getrandombytes)")
 
 
 class CoinError(ValueError):
@@ -753,7 +753,7 @@ def root_of(e: dict) -> str:
 
 
 def circuit_of(s: Any) -> str:
-    """A period's circuit as its open records it: the declared circuit's SHA-512 (128 hex digits, kept in lowercase),
+    """A period's circuit as its open records it: the registered circuit's SHA-512 (128 hex digits, kept in lowercase),
     never a Program's id; ValueError otherwise."""
     if type(s) is not str or not CIRCUIT.fullmatch(s):
         raise ValueError(f"--circuit {s!r}: the declared circuit's SHA-512 (128 hex digits), not a Program's id")
@@ -1313,10 +1313,10 @@ def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main
 
 
 class LiveChallenger:
-    """The challenger's side of one epoch's coins.  It draws every coin and hm96 salt of the layout from `entropy` and
+    """The challenger's side of one epoch's coins.  It samples every coin and hm96 salt of the layout from `entropy` and
     commits to them at construction, before the epoch; `open` releases coin (`label`, `index`) once, after the verifier
     recorded `after`.  `entropy` has no default, so nothing here reads the operating system: a served challenger's is the
-    Lean verifier of record's read of it (`IO.getRandomBytes`, A3).  `claim` is the claim instance naming `entropy`
+    Lean verifier's read of it (`IO.getRandomBytes`, A3).  `claim` is the claim instance naming `entropy`
     (`coin_claim`), None for an unnamed source, which a served challenger refuses (`served_claim`)."""
 
     def __init__(self, scheme: str, epoch: int, families: Sequence[tuple[str, int]],
