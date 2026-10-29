@@ -1836,6 +1836,22 @@ def test_the_three_vacuous_guarantees_of_26_october_fail_the_witnesses_rule():
         ["witnesses.nontrivial-assumes"]
 
 
+def test_witnesses_may_state_a_premise_as_an_order_and_fail_the_conclusion_beside_the_premises():
+    """An `honest` lemma may state a plain-range premise at the deployed numbers (`0 ≤ 0`, applying no definition) beside
+    a conjunct that applies one, though not on its own; and a `nontrivial` lemma may be `premises ∧ ¬ C …`, which says
+    that C fails while the premises hold."""
+    order = {"head": "LE.le", "defs": [], "refl": False, "assumed": False}
+    both = wbody("And", conclusion=[wk("P.Compiled"), order])
+    assert witness_codes(*witnessed(honest={"body": both})) == []
+    assert witness_codes(*witnessed(honest={"body": wbody("LE.le", conclusion=[order])})) == \
+        ["witnesses.honest-form", "witnesses.honest-uncovered"]
+    fails = {"head": "Not", "defs": ["P.Holds"], "refl": False, "assumed": False, "negated": True, "inner": "P.Holds"}
+    assert witness_codes(*witnessed(nontrivial={"body": wbody("And", conclusion=[wk("P.Compiled"), fails])})) == []
+    other = fails | {"inner": "P.Other"}
+    assert witness_codes(*witnessed(nontrivial={"body": wbody("And", conclusion=[wk("P.Compiled"), other])})) == \
+        ["witnesses.nontrivial-form"]
+
+
 def test_a_property_of_an_acceptance_has_an_honest_witness_that_the_deployment_is_accepted():
     """A guarantee `shape.properties` lists as a property of a function's acceptance is in scope whatever it reads, and
     its honest witnesses conclude that the function accepts the deployed instance as well as its premises; a property of a
