@@ -61,6 +61,16 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
   worktree's own copy of the tool, as N-W1 did (its note 20261029T1630Z-report-lean-mh100w has the command), and check
   that the run's tree is your head.
 
+- **17:08Z, the statement is pushed:** `Pouw.Guarantees.Lead.G` in `Security/Definitions/Pouw/Guarantees/Lead.lean`,
+  on `cursor/compute-research-lean-statement-4457` at 9a7028a28e. Its premises are in
+  `Security/Definitions/Pouw/Assumptions/Lead.lean`, each lane's stub is in `Security/Proofs/Pouw/Lead/<Lane>/`, and the
+  gap list is note `compute-research/20261029T1706Z-report-lean-statement`. N-PREM is revising three points before
+  N-LEAN merges, all on `G`'s side, with the stubs unchanged unless it lists a change: whole tiles and the single-use
+  coin stream become verifier refusals rather than hypotheses; unused premises go; the gap is itemized against the card.
+  Lanes start proving their stubs once N-LEAN merges.
+- **COUNTER, search first:** the coin-branch figure (0.084%) and the per-tile table constants (49⁻⁸ at step 0, 7⁻⁸ for at
+  most 32 stream tiles, 2⁻¹⁰⁰ after). Both are analysis, not proved.
+
 ## Lanes
 
 | lane | agent | piece | node |
