@@ -176,27 +176,31 @@ def derived(card: dict, hc: dict, lead: dict, spec: dict, fold_writes: bool = Tr
     words (xor-m; xorrot-m with `rot`), `fold` folds every word into its cell's state and seals the state with the
     cell's final word (`seal_bytes_per_cell`). The words' hashing falls to the committed share `keep`, T1's chunk-head
     term with it; the fold's own register writes are added to h at W1; `t1_dw` is T1 with the uncommitted words and
-    the fold's writes uncredited (DistinctWrites alone)."""
+    the fold's writes uncredited (DistinctWrites alone). `t1_add.by_k` adds a lane's T1 term per call depth K,
+    MAC-weighted over the point's calls; `credit = "stock"` (a design credited as stock alone) leaves the fold's own
+    writes uncredited in T1."""
     pr = priced(card, hc, choice(hc, spec.get("swap")))
     cm, fo, mpw = spec.get("combine"), spec.get("fold"), lead["macs_per_word"]
+    by_k = spec.get("t1_add", {}).get("by_k", {})
     rows = {}
     for p in hc["basis"]["points"]:
         q, r = pr["parts"][p], pr["rows"][p]
+        cs = ps.calls(card, p)
+        macs = sum(x["count"] * x["m"] * x["n"] * x["K"] for x in cs)
         if cm:
             m = cm["m"]
             keep = 1 / m
             writes = cm.get("writes_per_word", (math.ceil((m - 1) / 2) + cm.get("rot", 0) * (m - 1)) / m)
         else:
-            cs = ps.calls(card, p)
             cells = sum(x["count"] * x["m"] * x["n"] for x in cs)
-            macs = sum(x["count"] * x["m"] * x["n"] * x["K"] for x in cs)
             keep, writes = fo["seal_bytes_per_cell"] * cells / macs / (4 / mpw), fo["writes_per_word"]
         fold = writes * 32 / mpw if fold_writes and FOLD_WRITES else 0.0
-        t1 = r["t1"] - r["terms"]["chunk_head"] * (1 - keep)
-        rows[p] = {"h": q["h"] - q["words"] * (1 - keep) + fold, "fold": fold, "keep": keep, "t1": t1,
+        add = sum(x["count"] * x["m"] * x["n"] * x["K"] * by_k[str(x["K"])] for x in cs) / macs if by_k else 0.0
+        t1 = r["t1"] - r["terms"]["chunk_head"] * (1 - keep) + add + (fold if spec.get("credit") == "stock" else 0.0)
+        rows[p] = {"h": q["h"] - q["words"] * (1 - keep) + fold, "fold": fold, "keep": keep, "t1": t1, "t1_add": add,
                    "t1_dw": t1 + ((1 - keep) + writes) * 32 / mpw}
     return {"design": pr["design"], "name": pr["name"], "rows": rows,
-            "worst": {k: max(r[k] for r in rows.values()) for k in ("h", "fold", "t1", "t1_dw")}}
+            "worst": {k: max(r[k] for r in rows.values()) for k in ("h", "fold", "t1", "t1_add", "t1_dw")}}
 
 
 def family_rank(hc: dict, add: dict) -> tuple[object, str | None]:
@@ -260,12 +264,22 @@ def design_entry(card: dict, hc: dict, key: str, spec: dict, lead: dict, kind: s
         e["ranks"] = rank_axis(card, prem, adds)
         st = spec.get("stated", {})
         if "h" in st and abs(e["h"] - st["h"]) > 0.01 * max(st["h"], 1.0):
-            flags.append(f"its lane states h {st['h']:g}; the card's {e['h']:.2f} counts the fold's own writes "
-                         f"({w['fold']:.2f} W1 a MAC)" + (f" and seals {spec['fold']['seal_bytes_per_cell']:g} B a cell "
-                                                          f"over the forward" if "fold" in spec else "") if w["fold"] else
-                         f"its lane states h {st['h']:g}, the card {e['h']:.2f}")
+            b = st.get("baseline")
+            why = ([f"the fold's own writes ({w['fold']:.2f} W1 a MAC)"] if w["fold"] and (
+                st.get("excludes_writes") or st.get("h") == st.get("h_bare")) else []) + (
+                [f"a seal of {spec['fold']['seal_bytes_per_cell']:g} B a cell over the forward"] if "fold" in spec else [])
+            flags.append(f"its lane states h {st['h']:g}" + (f" against its lead's {b:g} ({st['h'] * lead['h'] / b:.2f} "
+                                                             f"on the basis lead)" if b else "")
+                         + f"; the card derives {e['h']:.2f}" + (", counting " + " and ".join(why) if why else ""))
         if "t1" in st and abs(e["t1"][0] - st["t1"]) > max(0.1 * st["t1"], 2e-6):
             flags.append(f"its lane states T1 {st['t1']:.4%} (worst), the card {e['t1'][0]:.4%}")
+        if "t1_add" in spec:
+            flags.append(f"T1 adds {spec['t1_add']['why']}, MAC-weighted over each point's calls: +{w['t1_add']:.3%} "
+                         f"at the worst point")
+        if spec.get("credit") == "stock":
+            flags.append(f"credited as stock alone, so on the card's T1 (honest work no premise forces) the fold's own "
+                         f"writes, {w['fold']:.1%} of stock, are uncredited; its lane's T1 is the over-credit, a soundness "
+                         f"term")
     elif "compose" in spec or "swap" in spec:
         try:
             pr = priced(card, hc, choice(hc, spec.get("swap"), spec.get("compose")))
@@ -659,12 +673,14 @@ def run(card: dict, hc: dict, checks: Checks, prefix: str = "") -> dict:
     ok = all(by[f["best"]]["meets"] and by[f["best"]]["status"] not in GONE for f in fr)
     checks.check(f"{prefix}the frontier's h falls (weakly) as rank rises, and every design on it meets T1, T2 and T3 and "
                  f"stands", mono and ok and bool(fr), " → ".join(f"{rank_label(f['rank'])}: {f['best']} {f['h']:.1f}" for f in fr))
-    frs = frontier(entries, rules_stand=True)
-    idle = [f"{rank_label(f['rank'])}: {f['best']}" for f in fr + frs if f["best"] != "lead" and not (f["cut"] > 1 + 1e-9)]
-    checks.check(f"{prefix}every frontier row is headed by the lead or by a design that cuts h: one that only ties the "
-                 f"lead, as a design moving the lead's hashing to the certifier does, doesn't head a rank",
-                 not idle, ", ".join(idle) or " → ".join(f"{rank_label(f['rank'])}: {f['best']}" for f in frs))
-    return {"lead": lead, "readings": readings, "entries": entries, "frontier": fr, "frontier_rules": frs}
+    ties = [by["lead"]] + [e for e, s in moved if s == "lead"]
+    tf = [f for f in frontier(ties, enforce=False) if f["rank"] >= lead["ranks"]["axis"]]
+    checks.check(f"{prefix}a design that moves the lead's hashing to the certifier only ties the lead, and the frontier "
+                 f"keeps the lead at every rank from its own: {', '.join(e['id'] for e in ties[1:])} against the lead on "
+                 f"h alone", len(ties) > 1 and bool(tf) and all(f["best"] == "lead" for f in tf),
+                 " → ".join(f"{rank_label(f['rank'])}: {f['best']}" for f in tf))
+    return {"lead": lead, "readings": readings, "entries": entries, "frontier": fr,
+            "frontier_rules": frontier(entries, rules_stand=True)}
 
 
 def mutations(card: dict, hc: dict, checks: Checks) -> None:
@@ -719,14 +735,8 @@ def mutations(card: dict, hc: dict, checks: Checks) -> None:
     caught("a derived design's h without the fold's own register writes", card, hc, switched("FOLD_WRITES", False))
     caught("h counting only the prover's hashing: R1 at 0, ALT's split at its card share", card, hc,
            switched("COUNT_ELSEWHERE", False))
-    h3 = copy.deepcopy(hc)
-    h3["proposal"]["a-tie"] = {
-        "lane": "TEST", "note": "none", "title": "a seeded design moving the lead's hashing", "status": "proposed",
-        "h": {"value": 50.0, "price": "w1-forms", "label": "estimate"}, "moved_from": "lead",
-        "t1": {"value": 0.0005, "label": "checked"}, "t2": {"value": 50.0, "label": "estimate"},
-        "t3": {"value": 0.0, "label": "measured"}}
-    caught("a frontier that breaks the lead's tie by id, so a design that cuts nothing heads 4a", card, h3,
-           switched("PREFER_LEAD", False))
+    caught("a frontier that breaks the lead's tie by id, so ALT's split, which cuts nothing, heads the lead's ranks",
+           card, hc, switched("PREFER_LEAD", False))
     h4 = copy.deepcopy(hc)
     h4["proposal"]["mut-ruling"] = {
         "lane": "TEST", "note": "none", "title": "a seeded proposal citing no recorded ruling", "status": "proposed",
