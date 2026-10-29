@@ -386,6 +386,14 @@
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
    "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
    "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
+  },
+  "Properties.NetworkScan.scanFits": {
+   "honest": ["Properties.NetworkScan.scan_honest"],
+   "nontrivial": "Properties.NetworkScan.scanFits_nontrivial"
+  },
+  "Properties.NetworkScan.scanScopeAcc": {
+   "honest": ["Properties.NetworkScan.scan_honest"],
+   "nontrivial": "Properties.NetworkScan.scanScopeAcc_nontrivial"
   }
  },
  "unwitnessed": {
@@ -775,9 +783,9 @@
    "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, never a proof"
   },
   "Properties.NetworkScan": {
-   "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit"],
+   "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit", "Properties.NetworkScan"],
    "except": [],
-   "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, and the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`), never a proof"
+   "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening and named deployment premises (`Properties.NetworkScan.Flattens`, `Properties.NetworkScan.Assumptions`), never a proof"
   },
   "Properties.Accounting.DeclaredCircuit": {
    "imports": ["Definitions.Accounting", "Properties.RemoteAudit.Schedule"],
@@ -2341,6 +2349,15 @@
    "signature": ["Properties.NetworkScan.scanScopeAcc : Properties.NetworkScan.ScanScopeAcc"],
    "assumptions": [],
    "type_hash": "d70f95c8f051885651c1b727c6f333e519052fb99bdaf4abc4858f12e4d32ab2"
+  },
+  "Properties.NetworkScan.scanFits_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkScan.scanScopeAcc_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkScan.scan_honest": {
+   "owner": "@network-accounting"
   },
   "Properties.Pouw.Check.acceptMeans": {
    "owner": "@compute-accounting",
@@ -4255,6 +4272,10 @@
     "function": ["NetworkCheck.Period.scanOf", "Flock.canon", "Flock.Program.decode"],
     "outcome": "accept"
    },
+   "Properties.NetworkScan.scanScopeAcc": {
+    "function": ["NetworkCheck.Period.scanOf", "Flock.canon"],
+    "outcome": "accept"
+   },
    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": {
     "function": "NciCheck.Desc.evaluate",
     "outcome": "accept"
@@ -4423,7 +4444,6 @@
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
-   "Properties.NetworkScan.scanScopeAcc": "lemma: ScanFits carried into the sampled audit's scope (NetTiming.ScopeAcc) at a deployment whose statements are their Programs flattened (StmtFlattens), whose scope matches (ScopeMatches) and whose scope check accepts the statement, its descriptor the scan's canonical bytes; it composes the scan check with the deployment's facts, which the realization's scope field supplies, and is not a property of one Lean function",
    "Pous.EndToEnd.RunCertifies": "unstated: a step of periodHeld: it joins the composed check's runCheckAccepts with the setup check's acceptsDecodes and publishesRoot, all three proved, and runCertifies proves it from them",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
