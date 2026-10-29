@@ -11,29 +11,32 @@ costs `reg`. Under DistinctWrites each committed, pairwise-distinct, noise-depen
 - final word: each dot product's last word is A·Bᵀ, free advice until the final-word lemma (32/K at L 32), unless the
   noise is served (`final_target`: the output carries it, so the last word is a target);
 - uncommitted steps: r·(1 − u/L) between words committed every L, where a word is charged u = reg (MH100w's
-  anyFunctionCeiling) or a premise's `word_units` (SW-SEM's BamFloor, 64 − 1024/L; NoSharingGain, L); under a premise
+  anyFunctionCeiling) or a premise's `word_units` (SW-SEM's BamFloor, 64 − 1024/L; PureLanes or CellPure, L to 128); under a premise
   that credits the k32 counting itself, plus what the best-known fast scheme (Strassen-Winograd, `price.fast_matmul`)
   saves on them;
 - forming: the formed operand entries at reg/4 each, unless committed under `commit-forced` or charged by the counting
   lemma;
 - lane fix: the route's second write to each register whose signed bytes cross zero under the noise (SW-SMELL S9), which
   no premise forces;
-- noise derivation: the noise entries derived from XOF bytes (one LOP3 a packed register, CORE-SMELL C28), the same way;
+- noise derivation: the noise entries derived from XOF bytes (one LOP3 a packed register, CORE-SMELL C28), the same way,
+  and the derivation's intermediates no commitment holds (SSN's shift before its LOP3), always;
 - de-noise: the design's correction work, unless forced;
 - pre-noise hashing: bytes hashed before the noise (A's commitment feeds the call's seed), credited once the call is
   atomic; so are rows holding only final words (`final_rows`, C28);
 - hiding: each hm96 leaf's salt side (the PRF, M_key·y and c), which a prover with one fixed salt skips with nothing
   checked changing (SW-HASH §7), unless forced or ruled;
 - hashing slack: credited hashing under ShaSpeed, δ times its work (δ = 0 as §2a states it). δ* is the precision
-  ShaSpeed needs for T1 to hold (CORE-SMELL C27).
+  ShaSpeed needs for T1 to hold (CORE-SMELL C27). The coins' expansion is credited hashing too (raw coin words are free
+  in M0, so expanding them is honest work no word forces); T1 with it uncredited is reported beside T1 (SW-NOISE final).
 
 T2 is t_H / t_S, a serial sum: the stock step, the stacked product's extra over the plain GEMM (NCP's 3K-wide call,
 GD-DENOISE; or the plain GEMM's time a MAC on the extra width), the noise's coins a call and NCP's formed copies
 (SW-GPU's coinsncp and coins), A's root before each call's noise (its chain on the critical
 path, an estimate), exporting each committed word (SW-GPU's k32 rates), and hashing the committed words and operands at
 the layout's measured rate. It is judged on the faster (async) stock step. T3 is the served format's measured perplexity
-rise. The rank is the strongest premise the matmul argument needs; the hashing credit (ShaSpeed and its composition with
-DistinctWrites, rank 4) is shown beside it, since every design that credits hashing needs both.
+rise. The rank is the strongest premise the matmul argument needs; the overall rank, the larger of it and the hashing
+credit's (ShaSpeed and its composition with DistinctWrites, rank 4), is shown beside it, since every design that credits
+hashing needs both.
 
 A design whose card entry leaves a count missing or "?" is refused and never ranked, so an unpriced term can't top the
 table. Every number carries its card source: measured (a run id), estimate, or arithmetic.
@@ -61,8 +64,8 @@ from exact_kit.checks import Checks
 CARD = Path(__file__).with_name("sweep_price.toml")
 TERMS = ("final_word", "uncommitted_steps", "forming", "lane_fix", "noise_derivation", "denoise", "pre_noise_hashing",
          "final_rows", "hiding", "hashing_slack")
-NOISE_FIELDS = ("r", "formed_x", "formed_y", "noise_x", "noise_y", "denoise", "pre_noise_bytes", "operand_max",
-                "lane_fix", "coin_calls", "wide", "final_target", "served", "variant", "source")
+NOISE_FIELDS = ("r", "formed_x", "formed_y", "noise_x", "noise_y", "derive_extra", "denoise", "pre_noise_bytes",
+                "operand_max", "lane_fix", "coin_calls", "wide", "final_target", "served", "variant", "source")
 WIDE = ("measured", "proportional")
 STATUSES = ("proved", "measured", "ruled", "assumed", "scratch", "open", "refuted")
 UNSETTLED = ("open", "scratch")
@@ -115,11 +118,11 @@ def interp(xs: list[float], ys: list[float], x: float) -> float:
 
 def load(path: Path = CARD) -> dict:
     card = tomllib.loads(path.read_text())
-    for key, sw in card.get("sweep", {}).items():
+    for sw in card.get("sweep", {}).values():
         charge = sw.get("charge", {})
         credits = sw.get("credit", {})
-        for L, (tag, ops), count, least, layout, (hid, hprem), (route, rprem), cred in itertools.product(
-                sw["L"], sw["operands"].items(), (False, True) if "count" in charge else (False,),
+        for nz, L, (tag, ops), count, least, layout, (hid, hprem), (route, rprem), cred in itertools.product(
+                sw["noise"], sw["L"], sw["operands"].items(), (False, True) if "count" in charge else (False,),
                 (False, True) if "min" in charge else (False,), sw["layouts"], sw["hiding"].items(),
                 sw["routes"].items(), [None] + list(credits)):
             if (count and {"formed_x", "formed_y"} <= set(ops)) or (least and {"noise_x", "noise_y"} <= set(ops)):
@@ -131,16 +134,16 @@ def load(path: Path = CARD) -> dict:
                 prem.append("commit-forced")
             prem += (charge["count"] if count else []) + (charge["min"] if least else []) + hprem + rprem
             what = ", ".join(ops) if ops else "words only"
-            name = (f"{key}-k{L}" + (f"-{cred}" if cred else "") + f"-{tag}" + ("-count" if count else "")
+            name = (f"{nz}-k{L}" + (f"-{cred}" if cred else "") + f"-{tag}" + ("-count" if count else "")
                     + ("-min" if least else "") + f"-{layout}" + ("" if hid == "open" else f"-{hid}")
                     + ("-u2" if route == "mix" else ""))
             card["design"][name] = {
-                "title": f"{key.upper()}, a word every {L} steps" + (f" credited by {cred}" if cred else "")
+                "title": f"{nz.upper()}, a word every {L} steps" + (f" credited by {cred}" if cred else "")
                          + f", committed: {what}"
                          + ("; forming by the counting lemma" if count else "")
                          + ("; the derivation by OneInstructionMinimal" if least else "")
                          + f"; {layout} rows; hiding {hid}; route {route}",
-                "noise": sw["noise"], "premises": list(dict.fromkeys(prem)), "source": sw["source"], "swept": True,
+                "noise": nz, "premises": list(dict.fromkeys(prem)), "source": sw["source"], "swept": True,
                 "commit": {"L": L, "word_bits": 32, "operands": list(ops), "rows_mix_final": True, "layout": layout,
                            "route": route}}
     return card
@@ -338,6 +341,8 @@ def call_units(card: dict, name: str, m: float, n: float, K: float, g: float = 1
     for k, term in CLASSES.items():
         if not ((forced and k in committed) or term in closes):
             t[term] += ent[k] * reg / epr
+    if "noise_derivation" not in closes:
+        t["noise_derivation"] += get("derive_extra") * reg / epr
     lanes = noise["lane_fix"]
     t["lane_fix"] = min(ev(lanes[k], m=m, n=n, K=K) for k in ROUTES[c["route"]]) * reg / epr
     den = get("denoise")
@@ -365,7 +370,8 @@ def call_units(card: dict, name: str, m: float, n: float, K: float, g: float = 1
     if "hiding" not in closes:
         t["hiding"] = ((0.0 if "hiding_salt" in closes else salt_c) + (0.0 if "hiding_mask" in closes else mask_c)) * unit_c
     salt_b = salt_c * BLOCK if ("hiding_salt" in closes and "hiding" not in closes) else 0.0
-    coin_b = (ent["noise_x"] + ent["noise_y"]) * price["coin_bytes"]["value"]
+    xof = {table: [ev(s, m=m, n=n, K=K) for s in exprs] for table, exprs in noise["coin_calls"].items()}
+    coin_b = sum(map(sum, xof.values())) * price["coin_bytes"]["value"]
     credited_b = word_b + op_b + coin_b + salt_b + (pre_b if "pre_noise_hashing" in closes else 0.0)
 
     lat = price["latency"]
@@ -384,8 +390,7 @@ def call_units(card: dict, name: str, m: float, n: float, K: float, g: float = 1
             "word_bytes": word_b, "operand_bytes": op_b, "pre_noise_bytes": pre_b, "coin_bytes": coin_b, "r": r,
             "x_entries": ent["formed_x"] + ent["noise_x"], "y_entries": ent["formed_y"] + ent["noise_y"],
             "noise_y": ent["noise_y"], "mK": m * K, "nK": n * K, "words": nwords, "extra_macs": (r - 1) * stock,
-            "coinform_ms": sum(coinsncp_ms(card, ev(s, m=m, n=n, K=K) * g, table)
-                               for table, exprs in noise["coin_calls"].items() for s in exprs) / g,
+            "coinform_ms": sum(coinsncp_ms(card, b * g, table) for table, bs in xof.items() for b in bs) / g,
             "a_ms": max(a_chain_s, a_bulk_s) / g * 1e3, "a_chain": chain / g, "bulk_hash_ms": bulk * 1e3,
             "sts_ms": nwords * sts * 1e3, "stg_ms": nwords * stg * 1e3}
 
@@ -451,6 +456,7 @@ def evaluate(card: dict, name: str, point: str, delta: float = 0.0, lenient: boo
     t3w = max(v for v in (t3["ctx2k"], t3["ctx8k"]) if v is not None) if t3["ctx2k"] is not None else None
     matmul_open = [o for o in open_items if o["premise"] not in HASH_CREDIT]
     return {"design": name, "title": d["title"], "point": point, "t1": t1, "terms": terms, "t1_pass": t1 <= TARGET["t1"],
+            "t1_coins_uncredited": t1 + agg["coin_bytes"] * hw / stock,
             "delta": delta, "delta_star": delta_star, "hash_units_per_mac": hash_share,
             "hash_bytes_per_mac": agg["credited_bytes"] / stock, "coin_bytes_per_mac": agg["coin_bytes"] / stock,
             "pre_noise_units": agg["pre_noise_bytes"] * hw / stock,
@@ -551,7 +557,8 @@ def needs(row: dict) -> list[str]:
     out.append(f"ShaSpeed (rank 4, CORE-SMELL C27) to within delta* = {row['delta_star']:.2e} of its "
                f"{row['hash_units_per_mac']:.0f} W1 units a useful MAC, and its composition with DistinctWrites "
                f"(hash-compose); if the honest hasher is our committer, not the bar, its excess alone is "
-               f"{row['committer_gap']:.0f}x stock")
+               f"{row['committer_gap']:.0f}x stock; with the coins' expansion uncredited T1 is "
+               f"{row['t1_coins_uncredited']:.3%}")
     return out
 
 
@@ -647,31 +654,33 @@ def t2s(row: dict) -> str:
 
 def render(card: dict, results: dict) -> str:
     noise = card["noise"]["ncp"]
-    ssn = card["noise"]["ssn-a"]
+    ssn = [v["variant"] for k, v in card["noise"].items() if k.startswith("ssn")]
     lines = ["# PoUW sweep ranking (sweep_price.py)", "",
              "T1: additive gap over stock in W1 units (H32 floor 32 a register, measured on the H200, run "
-             "r20261029-021534-a5a3); terms are shares of stock. T2: t_H/t_S judged on the faster stock step (unfused: "
-             "the words exported to HBM). T3: worst of WikiText-2 2K and 8K over stock int8. Rank: the matmul argument's "
-             "strongest premise (an open one counts 5 in the order until settled); every row also needs the hashing "
-             "credit, ShaSpeed and hash-compose (rank 4, C27), whose precision delta* is given. NCP here is "
-             f"{noise['variant']}, not the tree's ncp-v1; SSN is SW-NOISE's served sparse noise {ssn['variant']}. "
-             "Designs are named <noise>-k<L>[-<credit: bam BamFloor, nsg NoSharingGain>]-<classes committed>[-count]"
-             "[-min]-<rows>[-<hiding charge>][-u2].", ""]
+             "r20261029-021534-a5a3); terms are shares of stock; '+coins' is T1 with the coins' expansion uncredited. "
+             "T2: t_H/t_S judged on the faster stock step (unfused: the words exported to HBM). T3: worst of "
+             "WikiText-2 2K and 8K over stock int8. Rank: the matmul argument's strongest premise (an open one counts 5 "
+             "in the order until settled), then in brackets the overall rank with the hashing credit, ShaSpeed and "
+             "hash-compose (rank 4, C27), whose precision delta* is given. NCP here is "
+             f"{noise['variant']}, not the tree's ncp-v1; SSN is SW-NOISE's served sparse noise ({', '.join(ssn)}). "
+             "Designs are named <noise>-k<L>[-<credit: bam BamFloor, pl PureLanes or CellPure>]-<classes committed>"
+             "[-count][-min]-<rows>[-<hiding charge>][-u2].", ""]
     for point, res in results.items():
         pt = card["point"][point]
         lines += [f"## {pt['title']}", "",
                   f"{len(res['rows'])} designs priced, {len(res['refused'])} refused; the top {SHOWN} and the named "
                   "designs (the CSV has every row).", "",
-                  "| # | design | rank (w/ hash) | T1 | final word | uncommitted | forming | lane fix | derivation | "
-                  "hiding | T2 sync / async (unfused) | T3 | delta* | open (matmul) |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+                  "| # | design | rank matmul (overall) | T1 | +coins | final word | uncommitted | forming | lane fix | "
+                  "derivation | hiding | T2 sync / async (unfused) | T3 | delta* | open (matmul) |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for i, row in enumerate(res["rows"], 1):
             if i > SHOWN and card["design"][row["design"]].get("swept"):
                 continue
             t = row["terms"]
             lines.append(
                 f"| {i} | {row['design']} | {row['rank']} ({row['rank_with_hash']}) | **{pct(row['t1'])}** "
-                f"{'pass' if row['t1_pass'] else 'fail'} | {pct(t['final_word'])} | {pct(t['uncommitted_steps'])} | "
+                f"{'pass' if row['t1_pass'] else 'fail'} | {pct(row['t1_coins_uncredited'])} | {pct(t['final_word'])} | "
+                f"{pct(t['uncommitted_steps'])} | "
                 f"{pct(t['forming'])} | {pct(t['lane_fix'])} | {pct(t['noise_derivation'])} | {pct(t['hiding'])} | "
                 f"{t2s(row)} ({row['t2']['unfused']:.1f}x) {'pass' if row['t2_pass'] else 'fail'} | "
                 f"{pct(row['t3_worst'])} | {row['delta_star']:.1e} | {row['matmul_open']}: {opened(row)} |")
@@ -695,7 +704,10 @@ def render(card: dict, results: dict) -> str:
                 lines.append(f"| {drop} | - | - | - | - | - |" if b is None else
                              f"| {drop} | {b['design']} | {b['rank']} | {pct(b['t1'])} {'pass' if b['t1_pass'] else 'fail'} | "
                              f"{t2s(b)} | {opened(b)} |")
-            for what, b in alternates(res["rows"]).items():
+            alt = alternates(res["rows"])
+            if alt["t1_t2_any_rank"] is None:
+                lines += ["", "No design meets T1 and T2 together at any rank."]
+            for what, b in alt.items():
                 if b is not None and b is not best:
                     lines += ["", f"Best {'meeting T1 and T2 at any rank' if what == 't1_t2_any_rank' else 'if every unmeasured T3 passes'}"
                                   f": {b['design']}, rank {b['rank']}, T1 {pct(b['t1'])}, T2 {t2s(b)}, T3 "
@@ -799,17 +811,24 @@ def main() -> int:
     swept = [n for n, d in card["design"].items() if d.get("swept")]
     checks.check("the sweep generates, for NCP, every L (L > 32 under each of 2 credits) x committed classes x forming "
                  "charge x derivation charge x layout x hiding charge x route, less a charge beside its class committed: "
-                 "(1 + 6 x 2) x 9 x 3 x 4 x 2 = 2,808; for SSN-A 2 x 3 x 4 = 24",
-                 len(swept) == 2832, f"{len(swept)} swept")
-    s = row("t8192", "ssn-k32-w-r16k-hr")
-    checks.check("SSN-A words-only with hiding ruled reproduces SW-NOISE §3's 0.027% at T 8,192 (its one LOP3 a row a "
-                 "step, 32·ceil(K/28)/(nK)), with no final word, forming, lane fix or uncommitted step",
-                 0.00025 < s["t1"] < 0.00029 and s["terms"]["final_word"] == 0 and s["terms"]["forming"] == 0
-                 and s["terms"]["lane_fix"] == 0 and abs(s["terms"]["uncommitted_steps"]) < 1e-12, f"T1 {s['t1']:.4%}")
-    su = call_units(card, "ssn-k32-w-r16k-hr", 64, 3072, 2048)
-    sd = call_units(card, "ssn-k32-w-r16k-hr", 64, 2048, 8192)
-    checks.check("SSN-A's stacked width is 32·ceil(K/28)/K: 1.156 at K 2,048 and 1.145 at K 8,192 (SW-NOISE §2)",
-                 abs(su["r"] - 2368 / 2048) < 1e-12 and abs(sd["r"] - 9376 / 8192) < 1e-12, f"{su['r']:.4f}, {sd['r']:.4f}")
+                 "(1 + 6 x 2) x 9 x 3 x 4 x 2 = 2,808; for the two SSNs 2 x 2 x 3 x 4 = 48",
+                 len(swept) == 2856, f"{len(swept)} swept")
+    for nz, want in (("ssn-1l", (0.00049, 0.00025)), ("ssn-a", (0.00054, 0.00027))):
+        s, se = row("t8192", f"{nz}-k32-w-r16k-hr"), row("t8192", f"{nz}-k32-e-r16k-hr")
+        checks.check(f"{nz} with hiding ruled reproduces SW-NOISE final §3's {want[0]:.3%} without candidate 1 and "
+                     f"{want[1]:.3%} with it at T 8,192 (a SHF and a LOP3 a row a step, the LOP3 forced when committed), "
+                     "with no final word, forming, lane fix or uncommitted step",
+                     abs(s["t1"] - want[0]) < 0.000006 and abs(se["t1"] - want[1]) < 0.000006
+                     and s["terms"]["final_word"] == 0 and s["terms"]["forming"] == 0 and s["terms"]["lane_fix"] == 0
+                     and abs(s["terms"]["uncommitted_steps"]) < 1e-12, f"T1 {s['t1']:.4%}, with C1 {se['t1']:.4%}")
+    widths = {}
+    for nz, want in (("ssn-1l", ((2144 / 2048, 70), (8480 / 8192, 268))), ("ssn-a", ((2368 / 2048, 296), (9376 / 8192, 1172)))):
+        got = [call_units(card, f"{nz}-k32-w-r16k-hr", 64, 2048, K) for K in (2048, 8192)]
+        widths[nz] = [(u["r"], u["coin_bytes"] / card["price"]["coin_bytes"]["value"] * 8 / 64) for u in got]
+        checks.check(f"{nz}'s stacked width and coin bits a row a call are SW-NOISE final §2's: "
+                     f"{want[0][0]:.4f} and {want[0][1]} at K 2,048, {want[1][0]:.4f} and {want[1][1]} at K 8,192",
+                     all(abs(g[0] - w[0]) < 1e-12 and abs(g[1] - w[1]) < 1e-9 for g, w in zip(widths[nz], want)),
+                     f"{widths[nz]}")
     b64 = row("t8192", "ncp-k64-bam-xyef-r16k-hr")
     checks.check("a word every 64 steps at rank <= 3 is credited BamFloor's 48 units, not 64 (SW-SEM): r(1 - 48/64) = 75% "
                  "of stock uncommitted, so it fails T1", abs(b64["terms"]["uncommitted_steps"] - 0.75) < 1e-9
@@ -824,9 +843,14 @@ def main() -> int:
                  "operands its sums leave s8 and it spends 18/8 of the steps, saving nothing (P1's floor)",
                  s256[0] <= 0 and abs(s63[0] - (1 / 8 - 56 / 512 - 16 / 8192)) < 1e-12 and s63[1] == 1 and s126[0] == 0,
                  f"+-63: L 256 {s256[0]:.2%}, L 512 {s63[0]:.3%}; +-126: L 512 {s126[0]:.2%}")
-    r64, r128 = row("t8192", "ncp-k64-nsg-xyef-r16k"), row("t8192", "ncp-k128-nsg-xyef-r16k")
-    checks.check("crediting a word every L > 32 with L units rests on NoSharingGain, rank 5 (SW-SEM: 4 to 5)",
-                 r64["rank"] == 5 and r128["rank"] == 5, f"k64 rank {r64['rank']}, k128 rank {r128['rank']}")
+    r64, r128, r256 = (row("t8192", f"ncp-k{L}-pl-xyef-r16k") for L in (64, 128, 256))
+    checks.check("crediting a word every L > 32 with L units rests on PureLanes or CellPure, rank 4 (SW-SEM final), and "
+                 "only to L 128: at L 256 Hopcroft-Kerr wins by 12.5%, so the word is credited BamFloor's 60 units and "
+                 "3(1 - 60/256) = 229.7% of stock stays uncommitted",
+                 r64["rank"] == 4 and r128["rank"] == 4 and r64["terms"]["uncommitted_steps"] == 0
+                 and r128["terms"]["uncommitted_steps"] == 0
+                 and abs(r256["terms"]["uncommitted_steps"] - 3 * (1 - 60 / 256)) < 1e-9,
+                 f"k64 rank {r64['rank']}, k128 rank {r128['rank']}, k256 uncommitted {r256['terms']['uncommitted_steps']:.1%}")
     fewest = {}
     for p, res in results.items():
         b = res["rows"][0]
@@ -895,14 +919,19 @@ def main() -> int:
         d1 = evaluate(card, "ncp-k32-xyef-r16k-hr", "t8192", delta=1e-4)
         checks.mutation("a ShaSpeed slack of 0.01% breaks T1 for the all-forced design: hashing's work is 666x stock",
                         not d1["t1_pass"], f"T1 {d1['t1']:.2%}")
-        c = mutated(lambda c: c["noise"]["ncp"].__setitem__("operand_max", 63))
-        e = evaluate(c, "ncp-k512-nsg-xyef-r256k-hr-u2", "t8192")
-        checks.mutation("NCP's operands at +-63 instead of +-126 let Strassen-Winograd's sums stay in s8, and "
-                        "ncp-k512-xyef fails T1 at T 8,192 on its uncommitted steps: the operand range keeps it out",
-                        not e["t1_pass"] and e["terms"]["uncommitted_steps"] > 0.01, f"T1 {e['t1']:.2%}")
+        c = mutated(lambda c: c["premise"]["pure-lanes"].__setitem__("word_units", "reg*L/32"))
+        e, e0 = evaluate(c, "ncp-k1024-pl-xyef-r256k-hr", "v4like"), row("v4like", "ncp-k1024-pl-xyef-r256k-hr")
+        checks.mutation("credit PureLanes' full L at every L and ncp-k1024-pl-xyef passes T1 on V4-like (as it topped V4 "
+                        "under NoSharingGain): the cap at L 128 from SW-SEM's margins keeps it out",
+                        e["t1_pass"] and not e0["t1_pass"], f"T1 {e['t1']:.2%} uncapped, {e0['t1']:.0%} capped")
+        c = mutated(lambda c: c["noise"]["ssn-1l"].__setitem__("derive_extra", "0"))
+        e, e0 = evaluate(c, "ssn-1l-k32-e-r16k-hr", "t8192"), row("t8192", "ssn-1l-k32-e-r16k-hr")
+        checks.mutation("drop SSN's shift and committing its noise registers would close the derivation to 0: the SHF no "
+                        "commitment holds is what stays", e["terms"]["noise_derivation"] == 0
+                        and e0["terms"]["noise_derivation"] > 0, f"{e0['terms']['noise_derivation']:.4%} with the SHF")
         c = mutated(lambda c: c["price"]["hash_rows"].__setitem__("hide_share", [0.0] * 4) or
                     c["price"]["hash_rows"].__setitem__("mask_share", [0.0] * 4))
-        e = evaluate(c, "ncp-k64-nsg-w-count-min-r256k-salt-u2", "t8192")
+        e = evaluate(c, "ncp-k64-pl-w-count-min-r256k-salt-u2", "t8192")
         checks.mutation("a card that prices the salt side at nothing lets a design without hiding-ruled or mask-optimal "
                         "pass T1 at T 8,192: the hiding term is what keeps it out", e["t1_pass"], f"T1 {e['t1']:.2%}")
         c = mutated(lambda c: c["point"]["t512"].__setitem__("tokens", 16))
@@ -936,12 +965,14 @@ def main() -> int:
     (out / "sweep_price.json").write_text(json.dumps(blob, indent=1, default=str) + "\n")
     with (out / "ranking.csv").open("w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["point", "position", "design", "rank", "rank_effective", "rank_with_hash", "t1", *TERMS, "t2_sync",
-                    "t2_async", "t2_unfused", "t3_worst", "delta_star", "hash_bytes_per_mac", "open"])
+        w.writerow(["point", "position", "design", "rank", "rank_effective", "rank_with_hash", "t1",
+                    "t1_coins_uncredited", *TERMS, "t2_sync", "t2_async", "t2_unfused", "t3_worst", "delta_star",
+                    "hash_bytes_per_mac", "open"])
         for p, res in results.items():
             for i, r in enumerate(res["rows"], 1):
                 e = r["t2"]["engines"]
                 w.writerow([p, i, r["design"], r["rank"], r["rank_effective"], r["rank_with_hash"], f"{r['t1']:.6g}",
+                            f"{r['t1_coins_uncredited']:.6g}",
                             *(f"{r['terms'][k]:.6g}" for k in TERMS), f"{e['sync']['ratio']:.4g}",
                             f"{e['async']['ratio']:.4g}", f"{r['t2']['unfused']:.4g}",
                             "" if r["t3_worst"] is None else f"{r['t3_worst']:.4g}",
