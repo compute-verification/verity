@@ -62,9 +62,9 @@
    "why": "the driver: the device over core_world's World, with Lean core's IO and channels, nothing of Security"
   },
   "CertifierDevice.Issuer": {
-   "imports": ["CertifierDevice.Driver", "Lms.Sign"],
+   "imports": ["CertifierDevice.Driver", "Lms.Sign", "NetworkCheck.Check"],
    "except": [],
-   "why": "the issuer is code: the driver's World and lms's signing, which reuses network_check's encodings; no Mathlib and nothing of Security"
+   "why": "the issuer is code: the driver's World, lms's signing and network_check's encodings and certificate; no Mathlib and nothing of Security"
   }
  },
  "dependencies": {

@@ -1,6 +1,6 @@
 """The real certifier's published records as the accounting layer's `datacenter.observe.PortRecord`s.
 
-Each certifier record (`verity.core.protocols.certifier.grid.Record`: one link-window's grid and status) becomes a
+Each certifier record (`verity.core.protocols.certifier.grid.BlockGrid`: one link-window's grid and status) becomes a
 `PortRecord`: the port (the block's certifier, `egress` for what leaves the block and `ingress` for what enters it), the
 window, the real frames in each bucket (the grid's occupancy) and a SHA-512 digest of the status and the real frames in
 order. `published` reads a block's from a lab run's directory. `declared` gives the ones the Program says an honest run
@@ -34,7 +34,7 @@ DOMAIN = b"network_sim/certifier-record/v1\0"
 TICK_MS = 1
 
 
-def digest(r: cgrid.Record) -> bytes:
+def digest(r: cgrid.BlockGrid) -> bytes:
     """The record's status and its real frames in grid order. Frames are all B bytes, so the bytes hashed fix the
     frames; the counts fix where each falls."""
     h = hashlib.sha512(DOMAIN)
@@ -45,7 +45,7 @@ def digest(r: cgrid.Record) -> bytes:
     return h.digest()
 
 
-def to_record(r: cgrid.Record, port: Port) -> PortRecord:
+def to_record(r: cgrid.BlockGrid, port: Port) -> PortRecord:
     return PortRecord(port, r.window, cgrid.occupancy(r.grid), digest(r))
 
 

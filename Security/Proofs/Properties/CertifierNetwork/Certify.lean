@@ -43,7 +43,7 @@ theorem verify_facts {head : NetworkCheck.RecordHead} {salt kid : ByteArray} {l 
   · cases h
 
 /-- **At a leaf below `2^H`**, `certify` signs a prepared complete record, and the certificate verifies. -/
-theorem certify_ok {i : Issuer} (hk : ValidKey i.key) {salt : ByteArray} {r : Record} {d : NetworkCheck.Direction}
+theorem certify_ok {i : Issuer} (hk : ValidKey i.key) {salt : ByteArray} {r : BlockGrid} {d : NetworkCheck.Direction}
     {g : Params} {pd : ByteArray} {head : NetworkCheck.RecordHead} {dg m : ByteArray}
     (hprep : i.prepare salt r d g pd true = .ok (head, dg, m)) (hst : r.status = .complete) {q : Nat}
     (hq : q < 2 ^ i.key.params.H) :
@@ -59,7 +59,7 @@ theorem certify_ok {i : Issuer} (hk : ValidKey i.key) {salt : ByteArray} {r : Re
     Except.pure]
 
 /-- A record `prepare` makes the head of, where that head is `record_head`'s with no status, is complete. -/
-theorem complete_of_head {i : Issuer} {salt : ByteArray} {r : Record} {d : NetworkCheck.Direction} {g : Params}
+theorem complete_of_head {i : Issuer} {salt : ByteArray} {r : BlockGrid} {d : NetworkCheck.Direction} {g : Params}
     {pd : ByteArray} {head : NetworkCheck.RecordHead} {dg m : ByteArray}
     (hh : NetworkCheck.recordHead r.link d r.window r.grid none g pd true = .ok head)
     (hprep : i.prepare salt r d g pd true = .ok (head, dg, m)) : r.status = .complete := by
@@ -72,7 +72,7 @@ theorem complete_of_head {i : Issuer} {salt : ByteArray} {r : Record} {d : Netwo
 /-- **A refused start signs nothing.** `certifyWith` hands a start of the session that the signer's state refuses (one it
 has already started, `Core.World.start`) to `finish` as a refused reservation: no certificate, and the link-window is
 listed in `refused`. -/
-theorem finish_refused (i : Issuer) (salt : ByteArray) (e : String) (r : Record) (d : NetworkCheck.Direction)
+theorem finish_refused (i : Issuer) (salt : ByteArray) (e : String) (r : BlockGrid) (d : NetworkCheck.Direction)
     (prepared : NetworkCheck.RecordHead × ByteArray × ByteArray) :
     i.finish salt (.error e) r d prepared = .ok ({ i with refused := i.refused.push (r.link, d, r.window) }, none) := by
   obtain ⟨_, _, _⟩ := prepared
@@ -81,7 +81,7 @@ theorem finish_refused (i : Issuer) (salt : ByteArray) (e : String) (r : Record)
 /-- What the assembly issues for record `r`: a certificate of the head `record_head` makes of `r` under its grid's
 parameters digest, naming `r`'s link-window, of the key's identifier, signing the head's digest under the record's salt,
 and verifying under the key over its message. -/
-structure Issued (c : Config) (i : Issuer) (r : Record) (cr : CertifiedRecord) : Prop where
+structure Issued (c : Config) (i : Issuer) (r : BlockGrid) (cr : CertifiedRecord) : Prop where
   head : ∃ pd, parameters (gridOf c r) (syncSetOf c r) = .ok pd ∧
     NetworkCheck.recordHead r.link (directionOf c r) r.window r.grid none (gridOf c r) pd true = .ok cr.head
   link : cr.certificate.link = r.link
@@ -94,8 +94,8 @@ structure Issued (c : Config) (i : Issuer) (r : Record) (cr : CertifiedRecord) :
     ∃ s, Lms.Signature.decode i.key.params cr.certificate.signature = .ok s ∧
       Lms.verify i.key.params i.key.publicKey m s = .ok true
 
-theorem certifyAll_cons {c : Config} {i i' : Issuer} {next : Nat} {salts : Nat → ByteArray} {r : Record}
-    {rs : List Record} {pd : ByteArray} {cr? : Option CertifiedRecord}
+theorem certifyAll_cons {c : Config} {i i' : Issuer} {next : Nat} {salts : Nat → ByteArray} {r : BlockGrid}
+    {rs : List BlockGrid} {pd : ByteArray} {cr? : Option CertifiedRecord}
     (hpd : parameters (gridOf c r) (syncSetOf c r) = .ok pd)
     (hc : i.certify (salts 0) (reserve i next) r (directionOf c r) (gridOf c r) pd = .ok (i', cr?)) :
     certifyAll c i next salts (r :: rs) =
@@ -107,7 +107,7 @@ theorem certifyAll_cons {c : Config} {i i' : Issuer} {next : Nat} {salts : Nat �
 /-- **The assembly issues a certificate for every record**, in order, given a leaf for each, a head for each and its
 salt (`prepare` succeeds under it). -/
 theorem certifyAll_ok {c : Config} {i : Issuer} (hk : ValidKey i.key) :
-    ∀ (rs : List Record) (next : Nat) (salts : Nat → ByteArray), next + rs.length ≤ 2 ^ i.key.params.H →
+    ∀ (rs : List BlockGrid) (next : Nat) (salts : Nat → ByteArray), next + rs.length ≤ 2 ^ i.key.params.H →
       (∀ n < rs.length, ∀ r, rs[n]? = some r → ∃ pd, parameters (gridOf c r) (syncSetOf c r) = .ok pd ∧
         ∃ head dg m,
         NetworkCheck.recordHead r.link (directionOf c r) r.window r.grid none (gridOf c r) pd true = .ok head ∧
