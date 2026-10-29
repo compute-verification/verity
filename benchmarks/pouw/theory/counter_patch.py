@@ -14,7 +14,8 @@ what decode's 15 padding rows carry). Rows of one parity in one 64-row coin tile
 them differ by `D0(i) − D0(i′)` plus their tag bits' walk: those are the only copies that match.
 
 **Copy-and-patch at m16n8** (`lanes`). A tile (16 × 8 at one step) is copied whole from a source of the same columns
-and step, its rows shifted by an even `δ` inside the coin tile, at 0.40 a word. Its lanes are the m16n8 fragment's
+and step, its rows shifted by an even `δ` inside the coin tile (`--partial`: any even `δ` whose source rows meet the
+coin tile, the rows outside it unmatched, which gives decode's one tile its in-tile sources), at 0.40 a word. Its lanes are the m16n8 fragment's
 32 (rows g and g + 8, columns 2c and 2c + 1). A lane keeps its `k` matching words only under a decision of price
 `p`, and patches the rest at `patch` a word, so it saves `max(0, k · patch − p)` over patching all four. The prover
 knows every match for free (an upper bound for it). Skipping inside a `wgmma` block (64 rows × 64 columns, the
@@ -97,9 +98,23 @@ def _words(cfg: str, k: int, pattern: str, dr: dict, code: np.ndarray, honest_ch
     return lw
 
 
+COLUMNS: np.ndarray | None = None
+
+
 def _col_code(n: int) -> np.ndarray:
-    """The Lean's `colCode` (balanced base-13 digits of `j + 1`), shape (4, n), in place of the ssn code."""
-    return np.array([cs.col_code(j) for j in range(n)], dtype=np.int64).reshape(n, 4).T
+    """The Lean's `colCode` (balanced base-13 digits of `j + 1`), shape (4, n), in place of the ssn code, at
+    columns `0 .. n − 1` or at `COLUMNS`."""
+    cols = range(n) if COLUMNS is None else COLUMNS[:n]
+    assert len(cols) == n
+    return np.array([cs.col_code(int(j)) for j in cols], dtype=np.int64).reshape(n, 4).T
+
+
+def spread_columns(n: int, big_n: int) -> np.ndarray:
+    """`n / 8` blocks of 8 columns spread evenly over `0 .. big_n − 1`. Low columns have small code digits and match
+    more often, so the first `n` columns overstate a `big_n`-column call."""
+    nb = n // 8
+    starts = np.arange(nb) * (big_n // 8) // nb * 8
+    return (starts[:, None] + np.arange(8)).ravel()
 
 
 r4.lead_words, r4.lead_draws, na.code = _words, _draws, _col_code
@@ -141,16 +156,29 @@ def check_port(m: int = 128, n: int = 16, k: int = 300, seed: int = 5) -> dict:
             "steps": s}
 
 
-def _offsets(rb: int, m: int, tile: int = 64) -> list[int]:
+PARTIAL = False
+
+
+def _window(rb: int, m: int, tile: int = 64) -> tuple[int, int]:
     lo = (16 * rb // tile) * tile
-    hi = min(lo + tile, m)
-    return [d for d in range(lo - 16 * rb, hi - 16 * rb - 15) if d and d % 2 == 0]
+    return lo, min(lo + tile, m)
+
+
+def _offsets(rb: int, m: int, tile: int = 64) -> list[int]:
+    """Even row shifts to a source inside the coin tile. `PARTIAL`: any shift whose source rows meet the coin tile,
+    the rows outside it unmatched (copies inside one 16-row tile, the only ones decode has)."""
+    lo, hi = _window(rb, m, tile)
+    first, last = (lo - 16 * rb - 15, hi - 16 * rb) if PARTIAL else (lo - 16 * rb, hi - 16 * rb - 15)
+    return [d for d in range(first, last) if d and d % 2 == 0]
 
 
 def lane_counts(w: np.ndarray, rb: int, d: int) -> np.ndarray:
     """Matches a lane of the m16n8 fragment, tile rows 16 rb.. against rows shifted by d: (8 g, s, n/8, 4 c)."""
     rows = np.arange(16 * rb, 16 * rb + 16)
-    eq = (w[rows] == w[rows + d]).astype(np.int8)
+    lo, hi = _window(rb, w.shape[0])
+    inside = (rows + d >= lo) & (rows + d < hi)
+    eq = np.zeros((16, *w.shape[1:]), dtype=np.int8)
+    eq[inside] = w[rows[inside]] == w[rows[inside] + d]
     m16, s, n = eq.shape
     pair = eq.reshape(16, s, n // 8, 4, 2).sum(axis=4)
     return pair[:8] + pair[8:]
@@ -292,15 +320,20 @@ def main() -> None:
     ap.add_argument("--big-n", type=int, default=4096)
     ap.add_argument("--no-grains", action="store_true")
     ap.add_argument("--head", choices=sorted(cp.HEADS), default="ebe1fcd968")
+    ap.add_argument("--partial", action="store_true", help="sources that meet the coin tile in part (`_offsets`)")
+    ap.add_argument("--spread", type=int, default=None, help="sample the columns across this many (`spread_columns`)")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
+    global PARTIAL, COLUMNS
+    PARTIAL = args.partial
     use_head(args.head)
-    rep: dict = {"port": check_port()}
+    rep: dict = {"config": vars(args), "port": check_port()}
     print("port:", rep["port"], flush=True)
     assert rep["port"]["word_mismatches"] == 0 and rep["port"]["tags_equal"] and rep["port"]["code_equal"]
     for name in args.points:
         m = POINTS[name]
         n = args.cols_8192 if m == 8192 else args.cols
+        COLUMNS = spread_columns(n, args.spread) if args.spread else None
         for k in (args.k_8192 if m == 8192 else args.ks):
             for pattern in args.patterns:
                 for seed in args.seeds:
