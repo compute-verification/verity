@@ -115,11 +115,14 @@ of the audited window is a certified one inside that link-window, and the Lean c
 its case, `case.json`, as `composite.py` reads a piece's (inline, about 83 MB on a served window). Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say), a drawing round whose challenger session didn't open or whose evidence doesn't hold, or a step that can't
-run, the piece refuses (`refused.txt`), which leaves the certifier missing. Each round's challenger evidence goes in
-its public files. An accept's profile names its placement: the certifier on the gate's host, each drawing round's
-coins from the auditor's challenger, and the chain, the period check and their Flock sessions' coins on the prover's
-node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report, whose rows count
-each Commit window's requests, stays beside the fetch.
+run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's profile names its placement: the
+certifier on the gate's host, each drawing round's coins from the auditor's challenger, and the chain, the period check
+and their Flock sessions' coins on the prover's node, so `trusted-host` is assumed with the auditor's devices not
+placed. The chain's endpoint report, whose rows count each Commit window's requests, steps and outputs and its advice's
+bits, stays beside the fetch, and so does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts
+and ε at δ, and the scan's answers) and each round's challenger evidence, which go in its public files: report.md, the
+report's other keys and the steps' summaries count the window's requests and outputs and the advice's bits. The leak
+guard (`--public`) moves any file the piece doesn't declare out of its directory.
 
 ## The chain's run of record
 
@@ -150,7 +153,7 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
 | certificates | each sampling block's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature, and the host audit of the client's own heads |
 | endpoint | the endpoint's own advice bound to the run (each Commit window opened to its registered root, rebuilt from the certified I/O) and the I/O tie on the honest run (`e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
-| N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record: the advised proof block on the bound advice and the certifier's clock certificates on the advice profile (`n2_advised_zk.py --e2e`), the plain one on the others (`n2_zk.py`) | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b faulty ones except with probability δ (the report's `wrong_units_at_delta`, the integrity profile's count bound) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
+| N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record: the advised proof block on the bound advice and the certifier's clock certificates on the advice profile (`n2_advised_zk.py --e2e`), the plain one on the others (`n2_zk.py`) | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b faulty ones except with probability δ (the report's `wrong_units_at_delta`) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of a sampling block, one registration, `verify --zk --registered` | the audit's `wrong_units` at the draw's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
