@@ -1,0 +1,10 @@
+description = "ssn-1l-tag-v1 with the free part of its de-noise: the same coins drawn, the later steps' row lanes folded out at the conversion and the column mean in the column FFMA, so the integer product plus a1 C + T(i) G less rint(sum C / 2) is served (the code and the tags); lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "ssn_1l_tag_pd"
+fused = true

@@ -227,7 +227,8 @@ def test_fused_projections_draw_one_calls_coins():
         return steps.served_linear(mm, lambda _m: torch.zeros(m, n, dtype=torch.int64), rule=rule, fused=fused,
                                    denoise=denoise)
 
-    for rule in ("ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_1l_tag", "aorb_sv4", "ssn_pd", "ssn_a", "raw_byte"):
+    for rule in ("ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_1l_tag", "ssn_1l_tag_pd", "aorb_sv4", "ssn_pd", "ssn_a",
+                 "raw_byte"):
         whole = noise("self_attn.qkv", k + 2 * 32, rule, False)
         q, kk, v = (noise(f"self_attn.{p}_proj", n, rule, True) for p, n in (("q", k), ("k", 32), ("v", 32)))
         assert torch.equal(torch.cat([q, kk, v], 1), whole), rule
@@ -247,6 +248,8 @@ def test_fused_projections_draw_one_calls_coins():
     g = steps.tag_matrix(mm.coins((steps.TAG_LANES,), 2 ** 16), 40)
     want = steps.row_tags(m) @ g + (s - 1) - torch.round(c / 2 + 1.5 * (s - 1)) + torch.round(c / 2 + (s - 1) / 2)
     assert torch.equal(tag - lead, want) and len({tuple(r) for r in (tag - lead).tolist()}) == m
+    tag_pd = noise("mlp.down_proj", 40, "ssn_1l_tag_pd", False)
+    assert torch.equal(tag - tag_pd, lanes + (s - 1) - torch.round(c / 2 + 1.5 * (s - 1)) + torch.round(c / 2))
     mm2 = matmul.MM("linear", "mlp.down_proj", run, x, torch.ones(40, k)).integer(x, torch.ones(40, k))
     nz2 = steps.served_linear(mm2, lambda _m: torch.zeros(m, 40, dtype=torch.int64), rule="ssn_1l_tag", nz=2)
     assert torch.equal(nz2 - tag, lanes - torch.round(c / 2 + 2 * (s - 1)) + torch.round(c / 2 + 1.5 * (s - 1)))

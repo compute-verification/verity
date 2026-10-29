@@ -1094,7 +1094,8 @@ def noise_linear(mm, nxt, *, x_width: int = 0, w_width: int = 0, period: int = 0
 
 
 #: the noise rules `served` adds to the integer product and serves
-SERVED_RULES = ("ssn_a", "ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_1l_tag", "aorb_sv4", "ssn_pd", "ssn2", "raw_byte")
+SERVED_RULES = ("ssn_a", "ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_1l_tag", "ssn_1l_tag_pd", "aorb_sv4", "ssn_pd", "ssn2",
+                "raw_byte")
 #: data entries in a k32 step (the other 4 are noise); `ssn_1l`'s later steps hold 31 and one noise lane
 SSN_DATA = 28
 SSN_1L_DATA = 31
@@ -1262,7 +1263,8 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
     against the rows' sv4 vectors, column tags T(j) against a G a row, later lanes 1 + 2 l a column, l bits
     n x (S - 1), less rint(sum C_i / 2 + 2 (S - 1)) a row, each projection's column coins its own and G one draw
     per fused call; `ssn_pd` is `ssn_1l` with its later steps' row bits
-    folded out at the conversion (the same coins drawn, a1 C less rint(sum C / 2) served); `ssn2` adds a b - S, a and b
+    folded out at the conversion (the same coins drawn, a1 C less rint(sum C / 2) served), and `ssn_1l_tag_pd`
+    `ssn_1l_tag`'s the same way (a1 C + T(i) G less rint(sum C / 2)); `ssn2` adds a b - S, a and b
     bits (m x S x 4 and
     S x 4 x n); `raw_byte` adds sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred.
     `fused`: the row coins are one draw per fused call (`FUSED`), shared by q, k and v and by gate and up, as served;
@@ -1274,8 +1276,9 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
     aorb = rule == "aorb_sv4"
     if aorb and aorb_side_b(m, fused_columns(mm, n, fused), 1 + -(-(k - SSN_TAG_DATA) // SSN_1L_DATA)):
         return aorb_side_b_noise(mm, acc, stream, denoise)
-    if rule in ("ssn_1l", "ssn_1l5", "ssn_pd", "ssn_1l_tag", "aorb_sv4"):
-        five, pd, tag = rule == "ssn_1l5", rule == "ssn_pd", rule in ("ssn_1l_tag", "aorb_sv4")
+    if rule in ("ssn_1l", "ssn_1l5", "ssn_pd", "ssn_1l_tag", "ssn_1l_tag_pd", "aorb_sv4"):
+        five, pd = rule == "ssn_1l5", rule in ("ssn_pd", "ssn_1l_tag_pd")
+        tag = rule in ("ssn_1l_tag", "ssn_1l_tag_pd", "aorb_sv4")
         nz = 2 if aorb else nz
         if coin_lanes and m % BLC_TILE[coin_lanes]:
             raise ValueError(f"served.coin_lanes: {m} rows leave a tile under {BLC_TILE[coin_lanes]}, whose row and "
