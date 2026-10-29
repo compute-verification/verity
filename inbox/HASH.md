@@ -208,3 +208,11 @@ LIT becomes SI-RED, a general attack harness. BRW goes first. COUNTER keeps R80X
 - **The multiply–xor fold needs a live, nonzero N₀** (it agrees with NOISE).
 - The thin fold survives `pack` in COUNTER's price model, but NOISE's `mma_pairsum` breaks it anyway, so it stays closed.
 - Queue: COUNTER finishes its two runs, then attacks R80X (with low-nibble-0x1 constants) and RDX in full, then TENSOR's fold plus the rank-2 lever (target: any prover below 0.867 registers a word). FOLD-ROUNDS takes the constant rule when it reports.
+
+**22:15Z, the denominator smell (SI-THEORY, note 20261029T2203Z-report-silicon-theory; coordinator's arithmetic):**
+- The lead's gap and T1 are stated as shares of stock (useful MACs), while honest work is (1 + h)·stock with h = 127.5.
+- So an error δ in ShaWrites' per-compression floor moves the gap by δ·h·stock. T1 ≤ 1% of stock needs ShaWrites exact to 1%/h, about 0.008%. N-SMELL's R14 is an instance: 0.44% between 3,515.38 and 3,530.92 is 56% of stock.
+- As a share of the device's capacity, (1 + h)·stock, the same error is about δ: robust.
+- Lower h makes the useful-work reading robust too: about 0.06% at R80X and about 1% at h ≈ 1. That is a second reason for HASH beside T2.
+- The card should carry "premise precision needed = T1/h" for every design.
+- Which reading the lead's claim uses is Daniel's (asked 22:15Z). R14's ruling (3,530.92) stands meanwhile; under the capacity reading both figures lie inside the margin.

@@ -80,3 +80,11 @@ exploration of the design space." Academic: nobody builds it this year. The outp
 - Each lane's preliminary note by 00:00Z, which the coordinator synthesizes for Daniel by 00:30Z (5:30 PM PDT).
 - **Done-when:** a map of design classes with the dominant point in each (Pareto over Δarea, h and rank), each number
   marked checked, measured or estimated, and the one or two hardware properties that buy the most.
+
+**22:15Z, SI-THEORY preliminary (note 20261029T2203Z-report-silicon-theory):**
+- **The dominant property is a SHA-512 round inside the MMA unit,** folding accumulator words into internal chained state that SHA-512 seals. h falls to about 0.1–1, and the premise becomes a loose lower bound (going around the unit costs at least the unit, with about 14× margin), still rank 4a.
+- **Second, closure:** only a full-K MMA issue may advance the fold. That credits the MACs in issue time, with no operand noise, so the network limits stop binding.
+- **Next best:** a raw-word SHA-512 round instruction, which gives DistinctWrites credit only. Intel's VSHA512RNDS2 takes the word with its round constant already added, which `decomp` breaks.
+- **On stock hardware** no standard premise credits MACs (KSW, arXiv 2504.09971, confirmed: it credits one unit a word).
+- **Scope:** every credit is relative to the published chip.
+- Area figures are estimates until SI-FOLD's synthesis.
