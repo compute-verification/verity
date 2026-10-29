@@ -59,7 +59,7 @@ def yosys() -> str:
 
 def run_yosys(top: str, work: Path) -> dict:
     reads = "; ".join(f"read_verilog {p}" for p in RTL)
-    front = f"{reads}; hierarchy -top {top}; synth -flatten -top {top}"
+    front = f"{reads}; hierarchy -top {top}; synth -flatten -noabc -top {top}"
     lib_json, xag_json, xag_net, lib_net, ltp = (work / f for f in
                                                  ("lib.json", "xag.json", "xag_net.json", "lib_net.json", "ltp.txt"))
     script = (f"{front}; design -save rtl; "

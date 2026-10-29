@@ -169,9 +169,10 @@ def gen_fp8(rng, n, lanes, accgen):
     for nm in names:
         v[nm] = rbits(rng, n, 8)
     if lanes == 1:
-        # every (a, b) pair once, then random
-        for i in range(min(n, 65536)):
-            v["a"][i], v["b"][i] = i >> 8, i & 255
+        # distinct (a, b) pairs drawn from all 65,536 (every pair once at n >= 65,536), then random
+        pairs = rng.sample(range(65536), min(n, 65536))
+        for i, ab in enumerate(pairs):
+            v["a"][i], v["b"][i] = ab >> 8, ab & 255
         v["acc"] = accgen(rng, v["a"], v["b"])
     else:
         v["acc"] = accgen(rng, n)
