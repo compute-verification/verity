@@ -9,9 +9,9 @@ them: every component accepts or onsite doesn't, and any component's rejection r
 -/
 import CoreComposition.Cases
 import NetworkCheck.Period
+import PoubCheck.Protocol
 import PousCheck.RunProtocol
 import PouwCheck.Protocol
-import PoubCheck.Protocol
 import SampledProofs.OneStage
 
 namespace Core.Onsite
@@ -20,7 +20,7 @@ open Composition
 
 /-- Onsite's components, in the order of their ids. -/
 def components : List Protocol :=
-  [NetworkCheck.Period.protocol, PousCheck.RunProtocol.protocol, PouwCheck.protocol, PoubCheck.Protocol.protocol,
+  [NetworkCheck.Period.protocol, PoubCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.protocol,
     SampledProofs.OneStage.protocol]
 
 def protocol : Protocol := product "verity/onsite/v0" components
@@ -34,8 +34,8 @@ private def answer (xs : List Case) : Answer := Cases.answerCases protocol xs �
 private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 #guard ordered components
-#guard components.map (·.id) == ["verity/certifier/v0", "verity/pous/p2/v4/run", "verity/pouw/v1",
-  "verity/poub/v0", "verity/sampled-proofs/one-stage/v1"]
+#guard components.map (·.id) == ["verity/certifier/v0", "verity/poub/v0", "verity/pous/p2/v4/run", "verity/pouw/v1",
+  "verity/sampled-proofs/one-stage/v1"]
 
 -- every component refuses its case: onsite rejects on each, and makes nothing public
 private def allRefused : Answer := answer (components.map refused)
