@@ -490,7 +490,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     and two row registrations, each named by the registration's roots. The period's mirror reads the block's
     `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
-    pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, and refuses the
+    pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
+    with the block's audit as V3c's ``period.json`` (`rows_case`'s ``v3c``) sampled at one or two proof blocks
+    (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), and refuses the
     forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
     registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block
     whose entries are at other roots by name, and at the wiring (`period_case.UNWIRED`) one whose lanes' chunks are
@@ -536,13 +538,16 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert entries == [f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block', lane=j))}/o0"
                        for j in range(cls.NR)]
 
-    def block_audit(o0: list[dict], ports: list[str] = entries, scan_state: dict | None = state) -> dict:
+    def block_audit(o0: list[dict], ports: list[str] = entries, scan_state: dict | None = state,
+                    sampled: int | None = None) -> dict:
         stated = [{"port": "scan/state", **scan_state}] if scan_state else []
-        breg = R.record(block, bquery, blaw, sz.S.SCHEME,
+        law = sz.DR.parse_law(f"subset:{sampled}") if sampled else blaw
+        breg = R.record(block, bquery, law, sz.S.SCHEME,
                         [*({"port": q, **o} for q, o in zip(ports, o0, strict=True)), *stated], {"kind": "stand-in"},
                         leaf_layer="cc" * 64)
-        bdraw = {**sz.DR.derive(block, bquery, blaw), "population": E, "units": list(range(E))}
-        brec = {"accepted": True, "registration": breg, "draw": bdraw, "proved_units": list(range(E))}
+        units = list(range(sampled or E))
+        bdraw = {**sz.DR.derive(block, bquery, law), "population": E, "units": units}
+        brec = {"accepted": True, "registration": breg, "draw": bdraw, "proved_units": units}
         return {"answer": sz.window_answer(breg, brec, sz.Fraction(1, 100), "unused"),
                 "free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "registration": breg, "steps": 0}
 
@@ -584,6 +589,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
+    for k in (1, 2):
+        (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(block_audit(progs, sampled=k)))
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c))
+        assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
+            "accept", k, E), got
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
         "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "
