@@ -88,6 +88,22 @@ theorem G_tail : Pouw.Guarantees.Lead.G_tail := by
 
 /-- **The tail at the three points and decode** (`Pouw.Guarantees.Lead.TailAt`). -/
 theorem tailAt : Pouw.Guarantees.Lead.TailAt := by
-  sorry
+  intro T n K hn hK L hL htiles
+  have hmem : L.mem = 2 ^ 34 := by
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hL
+    rcases hL with rfl | rfl | rfl | rfl <;> rfl
+  have hcoin := coinTail_le T n K hn hK L hL (htiles.trans (by norm_num))
+  have htab : tableTail L ≤ 1 / 2 ^ 41 + 1 / 2 ^ 103 := by
+    have ht : (L.rowBlocks * L.colBlocks * L.S : ℚ) ≤ 2 ^ 30 := by exact_mod_cast htiles
+    unfold tableTail
+    rw [hmem]
+    calc (L.rowBlocks * L.colBlocks * L.S : ℚ) * ((((2 ^ 34 : ℕ) : ℚ) + 1) / 2 ^ 168 + ((2 ^ 34 : ℕ) : ℚ) / 2 ^ 105)
+        ≤ 2 ^ 30 * ((((2 ^ 34 : ℕ) : ℚ) + 1) / 2 ^ 168 + ((2 ^ 34 : ℕ) : ℚ) / 2 ^ 105) :=
+          mul_le_mul_of_nonneg_right ht (by positivity)
+      _ ≤ 1 / 2 ^ 41 + 1 / 2 ^ 103 := by norm_num
+  have htab' : (tableTail L : ℝ) ≤ ((1 / 2 ^ 41 + 1 / 2 ^ 103 : ℚ) : ℝ) := Rat.cast_le.mpr htab
+  push_cast at htab'
+  unfold etaLead
+  linarith
 
 end Pouw.SecurityProofs.Lead.Tail
