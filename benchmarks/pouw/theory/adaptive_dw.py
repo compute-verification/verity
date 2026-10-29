@@ -362,6 +362,9 @@ def row_levels(design: str, a, co: dict, s: int) -> np.ndarray:
 
 #: MMA output tiles (rows, columns): a warp's 128 words at the finest wgmma, and a warpgroup's m64n8.
 TILES = ((16, 8), (64, 8))
+#: An off-SM copy's least box, 16 bytes of one row-step: its excess is reported, not held to zero, since (i) is stated at
+#: tile grain and a box can repeat where a tile doesn't.
+BOX = (1, 4)
 
 
 def tile_excess(words: np.ndarray, rows: int, cols: int) -> float:
@@ -404,6 +407,7 @@ def class_shared(design: str, case: str, m: int, n: int, s: int, seed: int, k: i
     words = honest(design, a, b, pub, co, s)
     out = {"design": design, "case": case, "m": m, "n": n, "S": s, **entry_credit(words)}
     out |= {f"tile_excess_{r}x{c}": tile_excess(words, r, c) for r, c in TILES if m % r == 0 and n % c == 0}
+    out["box_excess"] = tile_excess(words, *BOX)
     entry = np.repeat(np.arange(m * n), s)
     first = refine(np.zeros(entry.size, dtype=np.int64), words)
     for name, keep in CLASSES.items():
