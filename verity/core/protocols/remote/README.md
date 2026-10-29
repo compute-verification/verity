@@ -84,7 +84,7 @@ EVIDENCE | serve` (`RemoteMain.lean`). The Lake package `core_remote` is code: i
    design and δ, and the size classes. The developer commits to its registered compiler B and its registered
    information θ (for example, model weights), and registers each subprotocol's public Program and parameters, by
    digest. In today's Lean the registration is the log the Site is folded from (`Verity.Registration`), and the
-   committed declaration R = (θ, D, 𝓘) (`Verity.Committed`) is the registered circuit D and its (c, k)-partition 𝓘
+   committed record R = (θ, D, 𝓘) (`Verity.Committed`) holds the registered circuit D and its (c, k)-partition 𝓘
    into inference blocks, which the compiler's execution blocks extend.
 2. **Execution phase.** The hardware runs and the developer reports its advice a_j, a bit string of public length cap
    whose length is charged as leakage. The registered compiler turns it into the phase's execution block E_j, its

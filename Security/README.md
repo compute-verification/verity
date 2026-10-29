@@ -61,9 +61,9 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
   data). Nothing else is carried into J.
 - **Registration**, once and append-only, in the setup phase: the site, θ and the registered compiler B, a public
   program: the log the Site is folded from (`Verity.Registration`, today with the site's entry only). Today's Lean
-  models R = (θ, D, 𝓘), the registered circuit and its inference partition, as the committed declaration
+  models R = (θ, D, 𝓘), the registered circuit and its inference partition, as the committed record
   (`Verity.Committed`), which B's execution blocks extend.
-- **Execution.** For each declared advice a_j (a string of at most ℓ_a bits, private and committed, ℓ_a public), B
+- **Execution.** For each advice a_j (a string of at most ℓ_a bits, private and committed, ℓ_a public), B
   outputs B(a_j) = (E_j, 𝒫_j, 𝓘_j, loc_j):
   - E_j, the execution block: a Boolean circuit whose inputs are θ, earlier blocks' outputs and fresh input;
   - 𝒫_j, a partition of E_j's gates into proof blocks, each block's outputs within its public size class and their
@@ -154,7 +154,7 @@ per-block cap to the circuit). Coverage (part 1) then says which learning method
 test each. Improving the structure never strengthens an information premise; a stronger premise is a new hypothesis,
 named as one.
 
-**Reconstruction, proved** (`Verity.Guarantees.BlockDescription`, Lemma 1). In a committed declaration R with B
+**Reconstruction, proved** (`Verity.Guarantees.BlockDescription`, Lemma 1). In a committed record R with B
 inference blocks of at most c gates and k fresh bits each, if a fixed evaluator of a_blk bits extracts y_I from block I
 within t steps,
 
@@ -376,7 +376,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Step | Lean | Status |
 |---|---|---|
 | The actual circuit | `Accounting.Placed`, `Accounting.Placed.region` | Defined |
-| Declared objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Declaration`, `Verity.Committed`; the site and its registration log, `Verity.Site` and `Verity.Registration`; B, a_j and loc_j not yet in Lean | Partly defined |
+| Registered objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Declaration`, `Verity.Committed`; the site and its registration log, `Verity.Site` and `Verity.Registration`; B, a_j and loc_j not yet in Lean | Partly defined |
 | Coverage | `Nci.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
 | Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.MinEntropyHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
