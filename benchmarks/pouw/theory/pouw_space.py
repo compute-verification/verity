@@ -70,7 +70,9 @@ Ranks (NIGHT.md §1): 0, 1, 2, 3, 4a (ShaSpeed's kind: a standardized public pri
 operands), 4b (SAK on our noised operands), 5. Each premise serves the matmul part or the hashing part, and a design's
 overall rank is the larger; an open premise ranks 5 until settled (the effective rank, beside the nominal one, its
 premises' own). A design an open attack targets can't rank first: an attack targets modules or premises, and one with
-`with_any` only designs that also take one of those.
+`with_any` only designs that also take one of those. An attack that `needs` chosen weights stands while M0 lets the
+prover choose the model (the open model-choice question), and each point also reports its best with every such attack
+refuted (the model fixed).
 
 A design whose modules leave a field unpriced is refused and never ranked; so is one outside its bound's domain (below
 64 rows a call, C15; past its noise's `n_max` columns) or taking a refuted premise. Cards (the `card` tables) name
@@ -115,6 +117,7 @@ CLASSES = {"formed_x": "forming", "formed_y": "forming", "noise_x": "noise_deriv
 HASH_CREDIT = ("ShaSpeed", "sha-writes", "carried-words", "hash-compose")
 HIDING_PREMISES = ("salt-forced", "mask-optimal", "hiding-ruled")
 TARGET = {"t1": 0.01, "t2": 100.0, "t3": 0.05}
+MODEL_FIXED = "every attack needing chosen weights (the model fixed)"
 WORD_BYTES = 4
 BLOCK = 128
 MIN_ROWS = 64
@@ -1006,9 +1009,13 @@ def if_refuted(card: dict, rows: list[dict]) -> list[tuple[str, dict | None]]:
 
 
 def if_attack_refuted(card: dict, rows: list[dict]) -> list[tuple[str, dict | None]]:
-    """The best T1-passing design if each open attack on a passing design is refuted alone, and if all of them are."""
+    """The best T1-passing design if each open attack on a passing design is refuted alone, if every attack that needs
+    the prover to choose the weights is (the model fixed, the open model-choice question), and if all of them are."""
     hit = sorted({a for r in rows if r["t1_pass"] for a in r["attacks"]})
     out = [(a, next((r for r in rows if r["t1_pass"] and set(r["attacks"]) <= {a}), None)) for a in hit]
+    cw = {a for a in hit if card["attack"][a].get("needs") == "chosen weights"}
+    if len(cw) > 1 or cw and len(hit) > 1:
+        out.append((MODEL_FIXED, next((r for r in rows if r["t1_pass"] and set(r["attacks"]) <= cw), None)))
     if len(hit) > 1:
         out.append(("every open attack", next((r for r in rows if r["t1_pass"]), None)))
     return out
@@ -1511,16 +1518,28 @@ def main() -> int:
                  and "nn-a1-a2-chosen" in cardrow("nn-prmt-sv4-aorb")["attacks"]
                  and "nn-sv28-tile" in cardrow("nn-rot2-sv28-aorb")["attacks"],
                  ", ".join(f"{k[0]} {k[1]} {v:.4%}" for k, v in got.items()) + f", sv28 {max(sv28):.1e}")
-    fix2 = {p: dict(results[p]["if_attack_refuted"]).get("fix2-quadrant") for p in llama}
-    checks.check("no design ranks first on Llama (NIGHT §5): every design passing T1 is an SSN code under N-LEAN's open "
-                 "sub-row attack fix2-quadrant, and refuting it alone gives back a tagged SSN lead free of other attacks; "
-                 "on V4-like an unattacked per2 ranks first",
-                 all(results[p]["rows"][0]["t1_pass"] and "fix2-quadrant" in results[p]["rows"][0]["attacks"]
+    tag = designs[nm("ssn-1l-tag", "served", "s8", "k32", "w", "r256k", "cert", "min")]
+    xs = calls(card, "t8192")
+    a2c = sum(x["count"] * x["m"] * x["n"] * (tag["fields"].at(x["m"], x["n"], x["K"])["S"] - 1) * 16
+              for x in xs) / sum(x["count"] * x["m"] * x["n"] * x["K"] for x in xs)
+    checks.check("N-RED's A2c on the tagged lead, a row repeating its previous step's vector at each later step whose "
+                 "coin bit is 0, is (S - 1)·16/K of stock on the card's S: its 51.57% at m 8,192 (checked word for word "
+                 "at m 384); it needs chosen weights, so it is an open attack, not a T1 term",
+                 abs(a2c - 0.5157) < 0.0005 and card["attack"]["a2c-cancel-lane"]["needs"] == "chosen weights",
+                 f"{a2c:.2%}")
+    cw = {"fix2-quadrant", "a2c-cancel-lane"}
+    refuted = {p: dict(results[p]["if_attack_refuted"]) for p in llama}
+    checks.check("no design ranks first on Llama (NIGHT §5): every design passing T1 carries an open attack, the tagged "
+                 "leads both N-LEAN's fix2-quadrant and N-RED's checked A2c (51.6% of stock), each needing the prover "
+                 "to choose the weights; refuting either alone gives no tagged design back, and with the model fixed a "
+                 "tagged SSN lead ranks first free of other attacks; on V4-like an unattacked per2 ranks first",
+                 all(results[p]["rows"][0]["t1_pass"] and cw <= set(results[p]["rows"][0]["attacks"])
                      and all(r["attacks"] for r in results[p]["rows"] if r["t1_pass"]) for p in llama)
-                 and all(b is not None and b["attacks"] == ["fix2-quadrant"] and "tag" in b["choice"]["noise"]
-                         for b in fix2.values())
+                 and all(v.get(a) is None or "tag" not in v[a]["choice"]["noise"] for v in refuted.values() for a in cw)
+                 and all(v.get(MODEL_FIXED) is not None and set(v[MODEL_FIXED]["attacks"]) <= cw
+                         and "tag" in v[MODEL_FIXED]["choice"]["noise"] for v in refuted.values())
                  and not results["v4like"]["rows"][0]["attacks"] and results["v4like"]["rows"][0]["choice"]["noise"] == "per2",
-                 ", ".join(f"{p} {b['design'] if b else 'none'}" for p, b in fix2.items())
+                 ", ".join(f"{p} {v[MODEL_FIXED]['design'] if v.get(MODEL_FIXED) else 'none'}" for p, v in refuted.items())
                  + f"; v4like {results['v4like']['rows'][0]['design']}")
     lead = results["t512"]["rows"][0]
     lean = dict(leaner(card, results["t512"]["rows"], lead))

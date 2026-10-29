@@ -417,7 +417,7 @@ source = "N-COMPOSE interim §3 (words_not_forced, hashCompose_of_carriedWords):
 rank = 0
 status = "open"
 owner = "N-LEAN"
-source = "N-RED interim 1 item 3 and M1 (note compute-research/20261029T0734Z-report-np-red): DistinctWritesMH100On takes any grid set S, and an adaptive prover runs a different straight-line program on each coin branch, so the lifted bound is vacuous; held fixed, a coin-addressed bulk copy is mispriced as `other`. Every design's T1 against a prover that reads the coins (which it must: the noise is an operand) rests on DistinctWrites stated for such programs, each branch charged its words and a bulk copy one address write a tile. The card prices what the branch saves on chosen rows (`coin_branch`) and takes this premise for the rest"
+source = "N-RED interim 1 item 3 and M1 (note compute-research/20261029T0734Z-report-np-red): DistinctWritesMH100On takes any grid set S, and an adaptive prover runs a different straight-line program on each coin branch, so the lifted bound is vacuous; held fixed, a coin-addressed bulk copy is mispriced as `other`. Every design's T1 against a prover that reads the coins (which it must: the noise is an operand) rests on DistinctWrites stated for such programs, each branch charged its words and a bulk copy one address write a tile. The card prices what the branch saves on chosen rows (`coin_branch`) and takes this premise for the rest. N-RED interim 2 (note compute-research/20261029T0940Z-report-np-red; nred_round2.py run r20261029-084132-2bfb, art:bfe76ff2c3fe560bcb11f64926c10b20ed9fc39357382b582e0b0a27a18dad1a; nred_round3.py run r20261029-093222-46ee, art:752f2bd5b9e0fa22bfa6aefd9001b4ee68e6efb173e81fb611e9ac3a1e67d718) §5: A2c and A8 are coin-branching programs whose words equal the honest words, so a free-branch statement loses at least 51.6% of stock on the tagged lead under chosen weights (attack.a2c-cancel-lane) and p*·(S - 1)/S on a small-alphabet private repair (25.8% for fix2); it can hold at 1% only with p* well under 1% (a wide alphabet) and copies priced coarsely"
 
 [premise.weights-distinct]
 rank = 2
@@ -640,13 +640,13 @@ source = "N-RED interim 1 §3 (note compute-research/20261029T0734Z-report-np-re
 rank = 0
 status = "open"
 owner = "the PoUW owner (protocol)"
-source = "N-RED interim 1 §3: ssn_1l-tag's tag weights G in [-3, 3]^(4 x n) are drawn from live coins after the model's root is committed and are unknown when B is chosen; with G public, a B holding G's rows cancels the tags and A1 saves 84.8% again (`public_g`). Drawn once a window its coins and forming are about 0. A protocol rule, not built"
+source = "N-RED interim 1 §3: ssn_1l-tag's tag weights G in [-3, 3]^(4 x n) are drawn from live coins after the model's root is committed and are unknown when B is chosen; with G public, a B holding G's rows cancels the tags and A1 saves 84.8% again (`public_g`). Drawn once a window its coins and forming are about 0. A protocol rule, not built. N-RED interim 2 (note compute-research/20261029T0940Z-report-np-red; nred_round2.py run r20261029-084132-2bfb, art:bfe76ff2c3fe560bcb11f64926c10b20ed9fc39357382b582e0b0a27a18dad1a; nred_round3.py run r20261029-093222-46ee, art:752f2bd5b9e0fa22bfa6aefd9001b4ee68e6efb173e81fb611e9ac3a1e67d718) §1: G guards step 1 only; A2c compares a row with its own previous step, where T(i)·G cancels, so it never reads G and g-private is orthogonal to it"
 
 [premise.copy-floor]
 rank = 1
 status = "open"
 owner = "N-W1"
-source = "N-RED interim 1 A3: per-word copies on identical columns save about 99% in the model (MH100w's moves are free), real only if a per-word copy costs under 32 W1 on the H200; N-RED's W2 found no writer below 32 a 32-bit slot, and N-W1's census is to measure it"
+source = "N-RED interim 1 A3: per-word copies on identical columns save about 99% in the model (MH100w's moves are free), real only if a per-word copy costs under 32 W1 on the H200; N-RED's W2 found no writer below 32 a 32-bit slot, and N-W1's census is to measure it. N-RED interim 2 (note compute-research/20261029T0940Z-report-np-red; nred_round2.py run r20261029-084132-2bfb, art:bfe76ff2c3fe560bcb11f64926c10b20ed9fc39357382b582e0b0a27a18dad1a; nred_round3.py run r20261029-093222-46ee, art:752f2bd5b9e0fa22bfa6aefd9001b4ee68e6efb173e81fb611e9ac3a1e67d718) §3: under W1 as N-W1 states it (model P, free branches and scatter) the copy floor buys nothing against A8, the adversary keeping an unchanged accumulator in its register; under a 32-lane write grain (W) or CopyGrain(4) (C) it helps (fix2w2 1.83% / 5.01%)"
 
 [premise.subtree-layout]
 rank = 0
@@ -1124,7 +1124,8 @@ premises = ["lane-semantics", "one-instruction-minimal"]
 source = "SW-PREMISES final #13: OneInstructionMinimal"
 
 # Attacks (NIGHT.md §5): a design taking a premise or module an open attack targets (and, when `with_any` is given,
-# one of those too) can't rank first. An attack the card prices as a term says so in `priced`.
+# one of those too) can't rank first. An attack the card prices as a term says so in `priced`; `needs` names a
+# condition it rests on that isn't ruled ("chosen weights": M0 letting the prover choose the model).
 [attack.chosen-rows]
 status = "open"
 targets = ["ssn-1l", "ssn-1l5", "ssn-a", "ssn2", "nsf", "lowrank1"]
@@ -1145,14 +1146,30 @@ source = "N-RED interim 1 §3: with G known when B is chosen the tags cancel and
 [attack.replay-table]
 status = "refuted"
 targets = ["ssn-1l-tag"]
-source = "N-RED interim 1 A5: a salt-free table of every (a1, c_t) vector under M0 with device memory, 3.33% / 0.42% / 0.03% of stock at m 64 / 512 / 8,192; closed by the atomic call (every design's base) or a per-call G. N-NOISE interim §9 and N-SMELL list A5 open for side A under M0 with a per-window G, since the table can be built after G is known; N-RED's own condition is the atomic call or a per-call G, so it is closed at atomic-call's rank 3 (its call-local free set excludes the table by fiat, as it does a replayed row, N-COMPOSE) and reopens if the atomic call is refuted"
+source = "N-RED interim 1 A5 (for a served output; an exact epilogue reopens it, attack.replay-exact): a salt-free table of every (a1, c_t) vector under M0 with device memory, 3.33% / 0.42% / 0.03% of stock at m 64 / 512 / 8,192; closed by the atomic call (every design's base) or a per-call G. N-NOISE interim §9 and N-SMELL list A5 open for side A under M0 with a per-window G, since the table can be built after G is known; N-RED's own condition is the atomic call or a per-call G, so it is closed at atomic-call's rank 3 (its call-local free set excludes the table by fiat, as it does a replayed row, N-COMPOSE) and reopens if the atomic call is refuted"
 
 [attack.fix2-quadrant]
 status = "open"
 targets = ["ssn-1l", "ssn-1l5", "ssn-1l-hw", "ssn-1l-tag", "ssn-a", "ssn2", "N.nn-prmt-sv4", "N.nn-prmt-sv4-aorb",
            "N.nn-rot1-sv4-tag-aorb", "N.nn-rgap1-sv4-tag-aorb", "N.nn-rot2-sv28-aorb", "N.nn-rawS-sv4-aorb"]
 priced = "unpriced (estimate: the share p of a chosen step's words whose increment is the likeliest value, a quarter for fix2)"
-source = "N-LEAN interim 1 §2b (estimate, unchecked; N-RED to check, N-NOISE to price): chosen data with a step dot of -1 in every column (A[i, k_t] = -1, B[j, k_t] = 1, fixed before w_t) makes fix2's step increment -1 + (1 + b_t[i])·w_t[j] zero wherever b_t[i] = 0 and w_t[j] = +1, a quarter of the step's entries, with no row vector repeating (4-word tiles repeat about 3.1%). The prover groups B's columns by w_t once a window and the rows by b_t each call (TMA row moves, A1's premise) and skips that quadrant's MMA, about 2 coordinates a row-step against n/4 words. Its general form holds for any per-step increment that is a function of row coins and window-fixed column weights, so every 1-bit and 4-bit SSN variant (fix, fix2, hw); N-NOISE's sv4 and sv28 codes are such increments (N-CARD's reading, unchecked by either lane). As written it needs chosen weights, a weight lane equal to 1 across every output column; with 31 activation lanes against n columns chosen activations can't make it on generic weights (N-SMELL interim 1 item 45), so it stands while M0 lets the prover choose the model, the coordinator's open model-choice question"
+source = "N-LEAN interim 1 §2b (estimate, unchecked; N-RED to check, N-NOISE to price): chosen data with a step dot of -1 in every column (A[i, k_t] = -1, B[j, k_t] = 1, fixed before w_t) makes fix2's step increment -1 + (1 + b_t[i])·w_t[j] zero wherever b_t[i] = 0 and w_t[j] = +1, a quarter of the step's entries, with no row vector repeating (4-word tiles repeat about 3.1%). The prover groups B's columns by w_t once a window and the rows by b_t each call (TMA row moves, A1's premise) and skips that quadrant's MMA, about 2 coordinates a row-step against n/4 words. Its general form holds for any per-step increment that is a function of row coins and window-fixed column weights, so every 1-bit and 4-bit SSN variant (fix, fix2, hw); N-NOISE's sv4 and sv28 codes are such increments (N-CARD's reading, unchecked by either lane). As written it needs chosen weights, a weight lane equal to 1 across every output column; with 31 activation lanes against n columns chosen activations can't make it on generic weights (N-SMELL interim 1 item 45), so it stands while M0 lets the prover choose the model, the coordinator's open model-choice question. N-RED interim 2 (note compute-research/20261029T0940Z-report-np-red; nred_round2.py run r20261029-084132-2bfb, art:bfe76ff2c3fe560bcb11f64926c10b20ed9fc39357382b582e0b0a27a18dad1a; nred_round3.py run r20261029-093222-46ee, art:752f2bd5b9e0fa22bfa6aefd9001b4ee68e6efb173e81fb611e9ac3a1e67d718) §3 checks the per-entry form as A8: fix2 and fix2w2 25.8% under model P, 3.76% / 1.83% under W, 10.25% / 5.01% under C"
+needs = "chosen weights"
+
+[attack.a2c-cancel-lane]
+status = "open"
+targets = ["ssn-1l-tag", "ssn-1l-hw", "N.nn-rot1-sv4-tag-aorb", "N.nn-rgap1-sv4-tag-aorb"]
+needs = "chosen weights"
+priced = "unpriced in T1 while M0's chosen weights are the open model-choice question: under chosen weights a row repeats its previous step's vector at every later step whose coin bit is 0, (S - 1)·16/K, 51.6% of stock at Llama's shapes (checked)"
+source = "N-RED interim 2 (note compute-research/20261029T0940Z-report-np-red; nred_round2.py run r20261029-084132-2bfb, art:bfe76ff2c3fe560bcb11f64926c10b20ed9fc39357382b582e0b0a27a18dad1a; nred_round3.py run r20261029-093222-46ee, art:752f2bd5b9e0fa22bfa6aefd9001b4ee68e6efb173e81fb611e9ac3a1e67d718) §1, checked word for word (m 384, n 32, S 8: 39-43% saved, words equal) and counted at Llama's shapes (51.87% / 51.54% / 51.57% at m 64 / 512 / 8,192): zero data past step 1 except one lane a step with A = 1 and B = -(the step's public counterpart: the constant 1 for ssn-1l-tag's 1 + b_t and N-NOISE's +nz, -σ_t for ssn-1l-hw's public signs) cancels the counterpart's point mass, so a row whose coin is 0 repeats its previous step's vector, a copy. The tags are a step-1 term and cancel in that comparison, so g-private doesn't touch it. B constant across every column in one lane a step is chosen weights (31 activation lanes can't make it on a fixed model); ssn-1l's own b_t·1 falls to plain zero activations (A2, attack.chosen-rows). N-NOISE's rgap1 lane is argued, not checked (side B's +nz is the checked instance). N-RED's repair that survives A2c and A8 is a private wide-alphabet later noise (uw6, uw8) with tags, an exact epilogue and a per-call step weight, unbuilt and unpriced (about 3.2% of stock to de-noise, estimate)"
+
+[attack.replay-exact]
+status = "open"
+targets = ["ssn-1l", "ssn-1l-tag"]
+with_any = ["D.epilogue"]
+needs = "advice after the window's draws"
+priced = "unpriced: 14.9% / 4.0% / 0.27% of stock at m 64 / 512 / 8,192 on the de-noised tag lead if advice may follow G (N-RED's count with A known)"
+source = "N-RED interim 2 (note compute-research/20261029T0940Z-report-np-red; nred_round2.py run r20261029-084132-2bfb, art:bfe76ff2c3fe560bcb11f64926c10b20ed9fc39357382b582e0b0a27a18dad1a; nred_round3.py run r20261029-093222-46ee, art:752f2bd5b9e0fa22bfa6aefd9001b4ee68e6efb173e81fb611e9ac3a1e67d718) §4: A5's table of every step-t vector is defeated on a served chain by the noise itself (measured on Llama-3.2-1B, nred_requant.py run r20261029-084424-6672, art:a27ae640b90a10435b008b9f8be70da89dd66b4376a17661fde4285d0d2eac56: 35-74% of each later linear's int8 input changes, effective A5 0.16% / 0.055% / 0.011%), but an exact epilogue serves the clean chain, so each linear's input is known before its noise and A5 returns at full strength if advice may be computed after the window's G and before the call's coins (Daniel's reading, N-RED Ask 7; if it must precede G, the tag term defeats the table). A per-call step-2 weight closes it under either reading (checked, 0 at every m; about 0.02% of stock, estimate, unpriced here)"
 
 # N-COVER interim 2's whole served step (note compute-research/20261029T0910Z-report-np-cover; step_cover.py on
 # cursor/compute-research-np-cover-5f9b, run r20261029-090037-17a8, art:05a42138487feb2affcb82f4d7cae6ff4fccb9fcee24e5ba07c491748afd56b8;
