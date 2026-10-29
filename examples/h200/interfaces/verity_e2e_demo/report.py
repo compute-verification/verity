@@ -232,7 +232,7 @@ MEASURED: dict[str, str] = {
     "PLANNER": "proofs' planner (`benchmarks/sampling_plan/demo_a.py`) at its commit, and the recorded run of it "
                "at 1% of a one-week sampling block (`--spans week`)",
     "H_POOLED": "PLANNER's run: `for_budget` at 1% of a one-week sampling block, a unit's harm its own ANDs, the plan of "
-                "record's faulty ANDs at δ = 1% (`plan_of_record-week.json` › at › 0.01 › free_compute)",
+                "record's incorrect ANDs at δ = 1% (`plan_of_record-week.json` › at › 0.01 › free_compute)",
     "B_POOLED": "PLANNER's run: the same plan's leaked bits at δ = 1%, output bits plus which units are wrong "
                 "(`plan_of_record-week.json` › at › 0.01 › leak)",
 }
@@ -558,7 +558,7 @@ def _period_names(p: str) -> tuple[str, ...]:
 
 
 def _periods(values: Mapping[str, V], quiet: str | None) -> str:
-    rows = [("| period | one-week sampling blocks | H faulty AND gates | share of the world's AND gates | share of "
+    rows = [("| period | one-week sampling blocks | H incorrect AND gates | share of the world's AND gates | share of "
              "the deployment's AND gates | B leaked bits | share of the world's output bits | share of the "
              "deployment's output bits |"), "|" + " --- |" * 8]
     for p, _ in PERIODS:
