@@ -1,20 +1,22 @@
-"""Copies a coin-reading prover finds in ssn-1l-tag's committed words when a row's data chunks are zero (padding at
-decode, m < 64, or a real row whose 31-entry chunks quantize to zero).
+"""Copies a coin-reading prover finds in the tagged one-lane words when a row's data chunks are zero (padding at decode,
+m < 64, or a real row whose 31-entry chunks quantize to zero), under ssn_1l's later lane and under ssn-1l-tag's.
 
     python pad_copies.py [--salts 16] [--n 48] [--k 2048] [--m 1,8,32] [--json OUT]
 
-After step 1, ssn-1l-tag's noise is one coin bit a row a step, a_t[i], added to every column. A row whose data is zero
-in step t has word(i, ·, t) = word(i, ·, t-1) + a_t[i]·1, so with probability 1/2 its row-step vector equals its
-previous one at the same salt: a copy, never a write. Row tags are in step 1 and don't change that. This counts, over
-salts, the share of row-step vectors equal to any earlier vector of the call at the same salt, for each case:
+After step 1, each later step adds one coin a row a step to every column: ssn_1l's a_t[i], or ssn-1l-tag's 1 + a_t[i]
+(the lift: a public offset the centring subtracts). Under a_t[i], a row whose data is zero in step t has
+word(i, ·, t) = word(i, ·, t-1) + a_t[i]·1, so with probability 1/2 its row-step vector equals its previous one at the
+same salt: a copy, never a write. Row tags are in step 1 and don't change that. Under the lift a zero chunk moves the
+vector by 1 or 2 and never copies it. Data chosen to cancel the lift (a lane of -1 against a weight row of 1) copies
+again; that isn't modelled here. This counts, over salts, the share of row-step vectors equal to any earlier vector of
+the call at the same salt, for each case:
 
-- `zero`: the padding rows are zero.
-- `onehot`: padding row r's lane (r mod 31) of every later step is 1, of step 1 lane (r mod 24); its later-step data
-  is a weight column, nonzero.
-- `zero-lift`: zero padding, with the later-step coin lane carrying 1 + a_t[i] (a public offset the centring
-  subtracts), so a zero chunk moves the vector by 1 or 2 and never copies it.
+- `zero`: the padding rows are zero, under a_t.
+- `onehot`: padding row r's lane (r mod 31) of every later step is 1, of step 1 lane (r mod 24), under a_t; its
+  later-step data is a weight column, nonzero.
+- `zero-lift`: zero padding under the lift.
 - `sparse` and `sparse-lift`: no padding (m = 64 real rows), each real row's later chunks zero with probability 0.98,
-  as the stock int8 recipe's sink-token rows on the down projection, without and with the lift.
+  as the stock int8 recipe's sink-token rows on the down projection, under a_t and under the lift.
 """
 
 from __future__ import annotations
