@@ -40,9 +40,9 @@
    "why": "the check over raw, committed and certified records is code: v2's check, and the difftest server's line protocol for its verdicts, no Mathlib and nothing of Security"
   },
   "NetworkCheck.LinkWindow": {
-   "imports": ["NetworkCheck.Certificate", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Identity.Tagged"],
+   "imports": ["NetworkCheck.Certificate", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Flock.FV3", "Identity.Tagged"],
    "except": [],
-   "why": "N2's link-window verdict of record is code: the certificate's encodings, the LMS verifier, C-Flock's hm96 row commitment and canonical JSON, and core's identity hash, no Mathlib and nothing of Security"
+   "why": "N2's link-window verdict of record is code: the certificate's encodings, the LMS verifier, C-Flock's hm96 row commitment, canonical JSON and frame-v3-sha512 domain, and core's identity hash, no Mathlib and nothing of Security"
   }
  },
  "reads_exempt": {
