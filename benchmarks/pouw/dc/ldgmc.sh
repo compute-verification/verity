@@ -6,8 +6,10 @@
 #       LDGMC, a live sink, no spill) and checks it lowers to the census's form; writes $OUT/ldgmc.tgz and gate.txt
 #   research run --on vy-dc-h200-5 --cwd source --send ldgmc.tgz --env GPU_LEASE_WHO=<lane> -- \
 #     bash benchmarks/pouw/dc/ldgmc.sh time [REPS]
-#       runs the build's binary under `gpu-lease 1`, with the clocks before and after; writes $OUT/ldgmc.txt
-# Exit: 0 done, 1 a gate or a check failed, 2 no nvcc or no inputs, 3 no multicast object on the node.
+#       runs the build's binary under `gpu-lease 1`, with the clocks before and after; writes $OUT/ldgmc.txt. On a
+#       node with no multicast object it then runs each form alone on plain device memory (`ldgmc --unicast`), each
+#       line saying whether the form faulted (exit 4) or ran, and at what price
+# Exit: 0 done, 1 a gate or a check failed, 2 no nvcc or no inputs.
 set -uo pipefail
 MODE=${1:?usage: ldgmc.sh build | time [REPS]}
 OUT=${OUT:?run under research run}
@@ -57,7 +59,14 @@ time)
   lease=()
   command -v gpu-lease >/dev/null && lease=(gpu-lease 1 --wait --max-min 20 --)
   [ ${#lease[@]} -eq 0 ] && { echo "ldgmc.sh: no gpu-lease on this node" >&2; exit 2; }
-  "${lease[@]}" bash -c 'nvidia-smi -q -d CLOCK >"$0/clocks-before.txt"; "$1/ldgmc" --reps "$2"; rc=$?;
+  "${lease[@]}" bash -c 'nvidia-smi -q -d CLOCK >"$0/clocks-before.txt"; "$1/ldgmc" --reps "$2"; rc=$?
+    if [ $rc -eq 3 ]; then
+      rc=0
+      while read -r name _; do
+        "$1/ldgmc" --unicast --form "$name" --reps "$2"; r=$?
+        echo "unicast $name: exit $r"; [ $r -eq 0 ] || [ $r -eq 4 ] || rc=1
+      done < <("$1/ldgmc" --list)
+    fi
     nvidia-smi -q -d CLOCK >"$0/clocks-after.txt"; nvidia-smi topo -m >"$0/topo.txt" 2>&1; exit $rc' \
     "$OUT" "$WORK" "$REPS" | tee "$OUT/ldgmc.txt"
   exit "${PIPESTATUS[0]}"

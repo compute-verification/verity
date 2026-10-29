@@ -8,8 +8,11 @@
 //
 //   ldgmc --list                  the forms, one a line: kernel, the SASS form it must lower to, registers a lane
 //   ldgmc [--reps R] [--iters N]  times every form; one line a form, then a verdict line
+//   ldgmc --unicast [--form NAME] ...  the same on plain device memory, for a node with no multicast object: whether
+//                                 the form runs there at all. A fault leaves the context unusable, so run one form a
+//                                 process (ldgmc.sh does)
 // Exit: 0 every form timed and checked, 1 a check failed or a block shared its SM, 3 the node has no multicast object
-// (LDGMC can't run).
+// (LDGMC can't run), 4 a form faulted on plain memory.
 #include <cuda.h>
 #include <cuda_runtime.h>
 
@@ -198,11 +201,53 @@ static unsigned expected(int nreg, int iters, unsigned tid_global, unsigned tid)
   return t;
 }
 
+// A multicast object of one device, its memory mapped at a unicast address `uc` and a multimem address `mcp`.
+static int multicast(CUdevice dev, size_t want, CUdeviceptr* uc, CUdeviceptr* mcp, size_t* size) {
+  CUmulticastObjectProp mp;
+  memset(&mp, 0, sizeof mp);
+  mp.numDevices = 1;
+  mp.handleTypes = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
+  mp.size = want;
+  size_t mg = 0;
+  CU(cuMulticastGetGranularity(&mg, &mp, CU_MULTICAST_GRANULARITY_RECOMMENDED));
+  CUmemAllocationProp ap;
+  memset(&ap, 0, sizeof ap);
+  ap.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+  ap.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+  ap.location.id = dev;
+  ap.requestedHandleTypes = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
+  size_t ag = 0;
+  CU(cuMemGetAllocationGranularity(&ag, &ap, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
+  const size_t gran = std::max(mg, ag);
+  *size = (want + gran - 1) / gran * gran;
+  mp.size = *size;
+  CUmemGenericAllocationHandle mch, ph;
+  CU(cuMulticastCreate(&mch, &mp));
+  CU(cuMulticastAddDevice(mch, dev));
+  CU(cuMemCreate(&ph, *size, &ap, 0));
+  CU(cuMulticastBindMem(mch, 0, ph, 0, *size, 0));
+  CU(cuMemAddressReserve(uc, *size, gran, 0, 0));
+  CU(cuMemMap(*uc, *size, 0, ph, 0));
+  CU(cuMemAddressReserve(mcp, *size, gran, 0, 0));
+  CU(cuMemMap(*mcp, *size, 0, mch, 0));
+  CUmemAccessDesc ad;
+  memset(&ad, 0, sizeof ad);
+  ad.location = ap.location;
+  ad.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+  CU(cuMemSetAccess(*uc, *size, &ad, 1));
+  CU(cuMemSetAccess(*mcp, *size, &ad, 1));
+  printf("multicast object: 1 device, %zu bytes (granularity %zu)\n", *size, gran);
+  return 0;
+}
+
 int main(int argc, char** argv) {
   int reps = 5, iters = 64;
-  bool list = false;
+  bool list = false, unicast = false;
+  const char* only = nullptr;
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "--list")) list = true;
+    else if (!strcmp(argv[i], "--unicast")) unicast = true;
+    else if (!strcmp(argv[i], "--form") && i + 1 < argc) only = argv[++i];
     else if (!strcmp(argv[i], "--reps") && i + 1 < argc) reps = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--iters") && i + 1 < argc) iters = atoi(argv[++i]);
   }
@@ -223,7 +268,7 @@ int main(int argc, char** argv) {
     printf("ldgmc: %d SMs, more than the %d the layout holds\n", sms, SMS);
     return 3;
   }
-  if (!mc_ok) {
+  if (!mc_ok && !unicast) {
     printf("verdict: no multicast object on this node, so no LDGMC form can run here\n");
     return 3;
   }
@@ -232,40 +277,16 @@ int main(int argc, char** argv) {
   CU(cuCtxSetCurrent(ctx));
 
   const size_t want = NTOT * 2 * U * 4 * 4;
-  CUmulticastObjectProp mp;
-  memset(&mp, 0, sizeof mp);
-  mp.numDevices = 1;
-  mp.handleTypes = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
-  mp.size = want;
-  size_t mg = 0;
-  CU(cuMulticastGetGranularity(&mg, &mp, CU_MULTICAST_GRANULARITY_RECOMMENDED));
-  CUmemAllocationProp ap;
-  memset(&ap, 0, sizeof ap);
-  ap.type = CU_MEM_ALLOCATION_TYPE_PINNED;
-  ap.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
-  ap.location.id = dev;
-  ap.requestedHandleTypes = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
-  size_t ag = 0;
-  CU(cuMemGetAllocationGranularity(&ag, &ap, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
-  const size_t gran = std::max(mg, ag), size = (want + gran - 1) / gran * gran;
-  mp.size = size;
-  CUmemGenericAllocationHandle mch, ph;
-  CU(cuMulticastCreate(&mch, &mp));
-  CU(cuMulticastAddDevice(mch, dev));
-  CU(cuMemCreate(&ph, size, &ap, 0));
-  CU(cuMulticastBindMem(mch, 0, ph, 0, size, 0));
   CUdeviceptr uc, mcp;
-  CU(cuMemAddressReserve(&uc, size, gran, 0, 0));
-  CU(cuMemMap(uc, size, 0, ph, 0));
-  CU(cuMemAddressReserve(&mcp, size, gran, 0, 0));
-  CU(cuMemMap(mcp, size, 0, mch, 0));
-  CUmemAccessDesc ad;
-  memset(&ad, 0, sizeof ad);
-  ad.location = ap.location;
-  ad.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
-  CU(cuMemSetAccess(uc, size, &ad, 1));
-  CU(cuMemSetAccess(mcp, size, &ad, 1));
-  printf("multicast object: 1 device, %zu bytes (granularity %zu)\n", size, gran);
+  size_t size = want;
+  if (unicast) {
+    // no multimem address at all: the forms read plain device memory, which shows whether this node runs them
+    CU(cuMemAlloc(&uc, size));
+    mcp = uc;
+    printf("unicast: plain device memory, %zu bytes, read by multimem.ld_reduce\n", size);
+  } else if (const int r = multicast(dev, want, &uc, &mcp, &size)) {
+    return r;
+  }
   fill<<<sms * 4, 256>>>((unsigned*)uc, size / 4);
   if (cudaDeviceSynchronize() != cudaSuccess) {
     printf("ldgmc: fill failed\n");
@@ -282,6 +303,7 @@ int main(int argc, char** argv) {
   printf("form sass regs_a_lane cycles_median words_a_sm_clock price_a_ldgmc_register price_a_loop_register checked "
          "distinct_sms\n");
   for (const Form& f : FORMS) {
+    if (only && strcmp(f.name, only)) continue;
     std::vector<double> cyc;
     bool ok = true;
     int distinct = sms;
@@ -291,7 +313,7 @@ int main(int argc, char** argv) {
       const cudaError_t e = cudaDeviceSynchronize();
       if (e != cudaSuccess) {
         printf("%s %s fault: %s\n", f.name, f.sass, cudaGetErrorString(e));
-        return 1;
+        return unicast ? 4 : 1;
       }
       cudaMemcpy(hr.data(), rec, sms * sizeof(Rec), cudaMemcpyDeviceToHost);
       cudaMemcpy(hs.data(), sink, hs.size() * sizeof(unsigned), cudaMemcpyDeviceToHost);
