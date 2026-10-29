@@ -1,0 +1,54 @@
+# N-ALT's cards for pouw_space.py (`--add`): R1b, the lead's words hashed on the GPU with each hm96 leaf's salt side
+# supplied by the network certifier and each call's coins released by it when the call's A_j arrives. R1 (every word
+# and operand value hashed off the prover, on the certifier) needs the space to price a design with no prover hashing
+# and a link-bound T2, which it doesn't yet: its numbers are alt_roads.py's.
+
+[premise.trusted-host]
+rank = 3
+part = "hashing"
+status = "assumed"
+owner = "the design rules (AGENTS.md, auditor-trusted devices)"
+source = "the network certifier is the auditor's hardware on a machine the prover doesn't control; trust in it and its host is the named assumption trusted-host"
+
+[premise.certifier-salt]
+rank = 3
+part = "hashing"
+status = "open"
+owner = "N-ALT (a protocol change: the certifier's role; Daniel's ruling)"
+requires = ["trusted-host"]
+closes = ["hiding"]
+source = "R1b (alt_roads.py r1b_salt_and_arrival): the certifier draws each leaf's y, keeps it, and sends M_key·y and c = H(SP ‖ y) (128 B a leaf, 10 compressions on the certifier); the prover hashes H(LP ‖ (x ⊕ M_key·y) ‖ c) only. The gadget checks c and b, so the salt side was honest-only work; supplied by the certifier, neither side does it on the prover, and the leaf hides x under trusted-host. Inbound 0.05% of the words' bytes at 256 KiB rows, 0.78% at 16 KiB"
+
+[premise.certifier-coins]
+rank = 3
+part = "hashing"
+status = "open"
+owner = "N-ALT (a protocol change: live per-call coins; Daniel's ruling)"
+requires = ["trusted-host"]
+closes = ["pre_noise_hashing"]
+source = "R1b: each call's A_j goes to the certifier, which commits it and releases the call's coins only on its arrival, so A_j is fixed before its noise without the prover hashing it first, and the per-matmul seed is a live coin (no Fiat-Shamir exception, no grinding term). pouw_space credits the closed pre_b under ShaSpeed and keeps A's root chain in T2 (a_ms); under R1b the prover hashes no A and T2 pays a round trip a call instead (64 calls at 2-10 us add 0.04-0.19 at T 512's 64 rows, -0.14 to +0.01 net of SW-NOISE's coin time): both inexact, neither moves T1"
+
+[H.hiding.cert]
+premises = ["trusted-host", "certifier-salt"]
+source = "R1b: the salt side from the certifier (premise certifier-salt)"
+
+[card.np-alt-r1b]
+title = "R1b: ssn-1l with the salt sides and the per-call coins from the network certifier, 256 KiB rows"
+origin = "N-ALT"
+note = "compute-research/20261029T0757Z-report-np-alt"
+modules = { N = "ssn-1l", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "cert", final = "none", forming = "none", derivation = "none" }
+premises = ["certifier-coins"]
+source = "alt_roads.py r1b_salt_and_arrival on cursor/compute-research-np-alt-7c3e; the coin branch N-PREM found for prover-chosen rows (ssn_1l_hw: 0, 0.014% and 0.148% at the three Llama points) is no module of the space yet and is not in these claims"
+claims.t512 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "SW-NOISE's ssn_1l gap with hiding and pre-noise hashing closed (alt_roads_inputs.json ssn_1l)" }
+claims.t512r512 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as at t512: ssn_1l's noise is 4S entries a row, so its share doesn't depend on m" }
+claims.t8192 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as at t512" }
+
+[card.np-alt-r1b-r16k]
+title = "R1b at 16 KiB rows: with hiding off the prover, rows no longer trade hiding against A's chain"
+origin = "N-ALT"
+note = "compute-research/20261029T0757Z-report-np-alt"
+modules = { N = "ssn-1l", D = "served", F = "s8", density = "k32", operands = "w", rows = "r16k", hiding = "cert", final = "none", forming = "none", derivation = "none" }
+premises = ["certifier-coins"]
+source = "alt_roads.py r1b_salt_and_arrival; the certifier's salt-side work at 16 KiB rows is 16x 256 KiB's (alt_roads' table)"
+claims.t512 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as card np-alt-r1b: rows change hashing time, not T1, once hiding is closed" }
+claims.t8192 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as card np-alt-r1b" }
