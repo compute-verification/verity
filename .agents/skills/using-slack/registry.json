@@ -228,6 +228,7 @@
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
+        "benchmarks/int8_class_rate/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
         "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
@@ -310,6 +311,7 @@
       ],
       "linear": "MEM",
       "owns": [
+        "verity/core/deploy/",
         "Security/Definitions/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/bandwidth/",
@@ -417,6 +419,7 @@
       ],
       "linear": "NET",
       "owns": [
+        "verity/core/protocols/network/",
         "verity/core/protocols/certifier/",
         "verity/core/devices/certifier/",
         "Security/Definitions/NetworkCertifier/",
@@ -570,6 +573,7 @@
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
+        "verity/ml/windows/",
         "integrations/vllm/",
         "examples/vllm/",
         "ruff.toml"
