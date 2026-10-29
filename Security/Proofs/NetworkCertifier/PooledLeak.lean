@@ -316,7 +316,7 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
     (hWtn : ∀ z i, Wt z i ⊆ range ((tiedReaches (T i)).length)) (Fmax Ft : ℕ) :
     {z | z ∈ Zs ∧ PooledGood lay k reg Dj sw Pw ρ op T Fmax Ft (W z) (Wt z) (run tap (sched z, srv z)).2}.encard ≤
       Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) *
-        ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card * Dj ^ k (sw i)) *
+        (∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card * Dj ^ k (sw i))) *
         min (((∑ i, (tiedReaches (T i)).length) + 1) ^ Ft * 2 ^ ((univ.sup fun i => tiedWidth (T i)) * Ft))
           (2 ^ ∑ i, (tiedSpan (T i)).card) : ℕ) : ℕ∞) := by
   classical
@@ -455,7 +455,7 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
   have hcap1 : 0 < ∏ c, (cap c + 1) := Finset.prod_pos fun c _ => Nat.succ_pos _
   have hroom : ((∑ i, n i) + 1) ^ Fmax * (2 ^ (b * Fmax) * P0 * min A1 A2) ≤
       (∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) *
-        ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card * Dj ^ k (sw i)) * min A1 A2 := by
+        (∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card * Dj ^ k (sw i))) * min A1 A2 := by
     calc ((∑ i, n i) + 1) ^ Fmax * (2 ^ (b * Fmax) * P0 * min A1 A2)
         ≤ (∏ c, (cap c + 1)) * (((∑ i, n i) + 1) ^ Fmax * (2 ^ (b * Fmax) * P0 * min A1 A2)) :=
           Nat.le_mul_of_pos_left _ hcap1
