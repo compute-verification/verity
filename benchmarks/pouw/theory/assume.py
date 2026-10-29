@@ -61,7 +61,10 @@ C_t(class(i), j) (`lead_rot_words`, COUNTER's `lead:rot` Draw replicated, its sp
     LOP3) and applies each IADD3 step in two IADD3s: 5 a cell a period against honest's 6, bit-exact against
     `thin_fold`. Its four mutations are caught, and the XOR3 step taken carry-free agrees only at bit 0. The gap
     against FoldMaterial's credit is priced over the column precompute's cost, with its break-even.
-13. The folds that force every word (`fold_fix_costs`): the XOR fold alone, and an XOR3 on every pair plus an IADD3
+13. Why item 9's windows held and missed it (`alt_span_split`): they give each increment as one per-cell register,
+    so the IADD3 shortcut σ + 2S + 2δ_a + δ_b is no one- or two-instruction program (three, honest's count). Split
+    into free row and column registers, σ + 2S + P + Q is two. The gain is the split, which no per-cell window sees.
+14. The folds that force every word (`fold_fix_costs`): the XOR fold alone, and an XOR3 on every pair plus an IADD3
     every k-th pair over the same words, (1 + 1/k)/2 a word.
 
 Run: `python assume.py [--out DIR] [--trials N]`. numpy, and `fold_routes` beside this file.
@@ -750,6 +753,21 @@ def _carry_free_xor(x, rho, gamma, cls):
     return sigma
 
 
+def alt_span_split(seed: int) -> dict:
+    """Why item 9's windows held and still missed the decomposition: they give each increment as one per-cell register.
+    The IADD3 step's shortcut σ + 2S + 2δ_a + δ_b then needs three instructions (no gain over honest's three), while
+    with the increment split into free row and column registers P and Q it is two, σ + 2S + P + Q."""
+    rng = random.Random(seed ^ 0x5A17)
+    sig, S, da, db, P, Q = (FR.vecs(rng) for _ in range(6))
+    percell = [FR.u32(a + 2 * b + 2 * c + d) for a, b, c, d in zip(sig, S, da, db)]
+    split = [FR.u32(a + 2 * b + c + d) for a, b, c, d in zip(sig, S, P, Q)]
+    pool_cell = {"sig": sig, "S": S, "da": da, "db": db, "0": FR.const(0)}
+    pool_split = {"sig": sig, "S": S, "P": P, "Q": Q, "0": FR.const(0)}
+    return {"per-cell: one instruction": FR.single(percell, pool_cell),
+            "per-cell: two instructions": FR.two(percell, pool_cell),
+            "split: two instructions": FR.two(split, pool_split)}
+
+
 def fold_fix_costs() -> dict:
     """Two folds that force every word (so decomposition skips none) and break the SWAR bias (so packing fails), with
     their fold cost a word. `(1+1/k)/2` is one LOP3 a pair (½ a word) plus one IADD3 every k-th pair over the same,
@@ -808,6 +826,7 @@ def main() -> int:
         "swar_alt": [swar_alt(rng, args.trials * 10, T) for T in (64, 256)],
         "alt_carry_couples": alt_carry_couples(),
         "fold_decomp": fold_decomp(rng, args.trials),
+        "alt_span_split": alt_span_split(args.seed),
         "fold_fix_costs": fold_fix_costs(),
         "price": price(),
     }
@@ -868,6 +887,11 @@ def main() -> int:
         fails.append(f"decomposition mutations not caught: {missed}")
     if not fd["mutations"]["carry_free_agrees_at_bit_0"]:
         fails.append("the carry-free XOR3 step should agree with the fold at bit 0")
+    sp = res["alt_span_split"]
+    if sp["per-cell: one instruction"] or sp["per-cell: two instructions"]:
+        fails.append(f"per-cell IADD3 shortcut is shorter than three: {sp}")
+    if not sp["split: two instructions"]:
+        fails.append("sanity: the split IADD3 shortcut should take two instructions")
     res["fails"] = fails
     text = json.dumps(res, indent=1, default=str)
     if args.out:
