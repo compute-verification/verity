@@ -48,12 +48,13 @@ each in-tree module whose import registered it, as a module it ran (so a wrapper
 the module that registers a kernel is imported with the registries, and no check of a target without one runs any of it.  And
 its reads of `verity.ml.circuits.defs.REGISTRY` (`_RecordedDefs`, ``registrars``), each by what was registered once the
 registries were loaded (`_AT_LOAD`, the same on every path of a run; `_registration`): the id of every Definition it reached or
-found there and of every kernel it looked up, by whether the module that registered its Definition, or one that registered its
-kernels, has a sidecar; every id it looked up and found absent (`ABSENT`), by whether anything registered it, else the on-demand
+found there and of every kernel it looked up, by whether a module whose import registered its Definition (every in-tree module
+whose code was running, and the one `targets.load_registries` was importing: `_REGISTRAR`), or one that registered its kernels,
+has a sidecar; every id it looked up and found absent (`ABSENT`), by whether anything registered it, else the on-demand
 family that makes it (`_where` of its maker); a lookup of the Boolean Definition of one word (`_WORD_ENUMERATORS`) by those of
 that word; any other enumeration of the registry (``*``) by the modules the registries import for having a sidecar, every one.
-So a new or removed sidecar reruns the targets that reached or found what its module registers, or looked it up absent (its own
-bindings and pins are units and pins), and those that enumerated the registry.  A binding's record (`circuit_check.units`)
+So a new or removed sidecar reruns the targets that reached or found what its module's import registers, or looked it up absent
+(its own bindings and pins are units and pins), and those that enumerated the registry.  A binding's record (`circuit_check.units`)
 holds its absent ids and enumerations, without the sidecars (``registered``).  A
 package an enumerator listed (`targets.load_registries`, the vLLM registry's ``catalog.load`` and ``boolean._load``,
 `_ENUMERATORS`: each imports every module it lists and names any that fails, nothing else) is held by its listing, the modules
@@ -499,14 +500,18 @@ _REGISTRIES: list[str] = []
 #: builds no binding): each Definition id's registering module, each kernel key's, the Boolean Definitions by the id of their
 #: word, the on-demand families
 _AT_LOAD: dict[str, Any] = {}
-#: the module whose import registered each Definition id, noted until the registries are loaded (`_instrument`)
-_REGISTRAR: dict[str, str | None] = {}
+#: the modules whose import registered each Definition id, noted until the registries are loaded (`_instrument`): every in-tree
+#: module whose code was running, and each an enumerator was importing (`_LOADING`)
+_REGISTRAR: dict[str, list[str | None]] = {}
+#: the modules an enumerator (`_enumerator`: `targets.load_registries`, which imports each module with a sidecar) is importing
+#: now, outermost first: an import of ``a.b.c`` runs package ``a.b`` before any code of ``a.b.c``
+_LOADING: list[str] = []
 
 
 def registries(modules: Iterable[str]) -> None:
     """The modules the registries import for having a sidecar (`targets.load_registries`): the task list's key holds them all,
-    and a target only whether the module that registered each Definition its check reached or found has a sidecar, and what
-    the registries register of each id it looked up and found absent (`_registration`)."""
+    and a target only whether a module whose import registered each Definition its check reached or found has a sidecar, and
+    what the registries register of each id it looked up and found absent (`_registration`)."""
     _REGISTRIES[:] = sorted(modules)
     _INTERNAL.append(True)
     try:
@@ -624,13 +629,19 @@ def _instrument() -> None:
 
     def import_module(name, package=None):
         f = sys._getframe(1)
+        bare = name.lstrip(".")
+        loading = not _AT_LOAD and _enumerator(f)
+        if loading:
+            _LOADING.append(_absolute(bare, {"__package__": package}, len(name) - len(bare)))
         try:
             m = by_name0(name, package)
         except ImportError:
             if not _INTERNAL:
-                bare = name.lstrip(".")
                 _FRAMES[-1].missing.add(_absolute(bare, {"__package__": package}, len(name) - len(bare)))
             raise
+        finally:
+            if loading:
+                _LOADING.pop()
         if not _INTERNAL:
             if not _enumerator(f):
                 _FRAMES[-1].named.add(m.__name__)
@@ -660,11 +671,15 @@ def _instrument() -> None:
         finally:
             _INTERNAL.pop()
         if self is D.REGISTRY and not _AT_LOAD and (fid := getattr(d, "id", None)) not in _REGISTRAR:
-            f = sys._getframe(1)
-            while f is not None and not (f.f_code.co_name == "<module>" and _rel(f.f_code.co_filename) is not None):
+            # not only the innermost: a sidecar beside a module that imports this one, or whose package imports it, is what
+            # makes the registries register it
+            mods, f = [*_LOADING], sys._getframe(1)
+            while f is not None:
+                if f.f_code.co_name == "<module>" and _rel(f.f_code.co_filename) is not None:
+                    mods.append(f.f_globals.get("__name__"))
                 f = f.f_back
-            if f is not None:
-                _REGISTRAR[fid] = f.f_globals.get("__name__")
+            if mods:
+                _REGISTRAR[fid] = mods
         return out
 
     D.Registry.add = add
@@ -1353,7 +1368,7 @@ def _function_module(d: Any) -> str | None:
 
 
 def _registrations() -> dict[str, Any]:
-    """`_AT_LOAD` now: each registered Definition's id with the module whose import registered it (`_REGISTRAR`; one registered
+    """`_AT_LOAD` now: each registered Definition's id with the modules whose import registered it (`_REGISTRAR`; one registered
     before tracing began, the module of the function it builds or evaluates by), each kernel key with the modules whose import
     registered its kernels (`_RecordedKernels.by`; one registered before, its functions' modules), the ids of the Boolean
     Definitions of each word, and the on-demand families (`verity.ml.circuits.codec.register_lazy_family`), in order."""
@@ -1370,10 +1385,10 @@ def _registrations() -> dict[str, Any]:
     for name, m in list(sys.modules.items()):
         if isinstance(f := getattr(m, "__file__", None), str):
             names.setdefault(os.path.abspath(f), name)
-    defs: dict[str, str | None] = {}
+    defs: dict[str, list[str | None]] = {}
     words: dict[str, list[str]] = {}
     for fid, d in list(dict.items(REGISTRY.defs)):
-        defs[fid] = _REGISTRAR.get(fid) or _function_module(d)
+        defs[fid] = _REGISTRAR.get(fid) or [_function_module(d)]
         try:
             w = getattr(d, "word", None)
             word = getattr(w, "id", None) if w is not None and callable(getattr(d, "build", None)) else None
@@ -1393,14 +1408,17 @@ def _registrations() -> dict[str, Any]:
 
 def _registration(x: str, flags: bool) -> str | None:
     """Read ``x`` of the Definition registry as the registries left it (`_AT_LOAD`): for an id a check reached or found, whether
-    the module that registered its Definition, or one that registered its kernels, has a sidecar (`_REGISTRIES`; only a
-    target's, ``flags``); for an `ABSENT` one, whether anything registered it, else the on-demand family that makes it (`_where`
-    of its maker); for a `WORD` read, the Boolean Definitions of that word (with ``flags``, each with whether its module has a
-    sidecar); for ``*`` (the registry enumerated), the modules with a sidecar.  None when there is nothing of these.
+    a module whose import registered its Definition (`_REGISTRAR`), or one that registered its kernels, has a sidecar
+    (`_REGISTRIES`; only a target's, ``flags``); for an `ABSENT` one, whether anything registered it, else the on-demand family
+    that makes it (`_where` of its maker); for a `WORD` read, the Boolean Definitions of that word (with ``flags``, each with
+    whether a module that registered it has a sidecar); for ``*`` (the registry enumerated), the modules with a sidecar.  None
+    when there is nothing of these.
 
     Whether an id the check found was registered by then, and by which module, does not count: a registry module moved where
     no enumeration lists it is imported by a binding before any check instead, registering the same (as `_moved` takes a
-    listing), and what the check ran of it is held as a module."""
+    listing), and what the check ran of it is held as a module.  Whether a sidecar made the registries register it does: every
+    module whose import registered it counts, so removing the sidecar of one that imports the registering module (or whose
+    package does) reruns the check, which would find it absent."""
     if x == "*":
         return hashlib.sha256("\n".join(_REGISTRIES).encode()).hexdigest()
     if not _AT_LOAD:
@@ -1412,11 +1430,12 @@ def _registration(x: str, flags: bool) -> str | None:
             return "registered"
         return next((_where(mk) for pat, mk in _AT_LOAD["lazy"] if pat.fullmatch(fid)), None)
     if x.startswith(WORD):
-        got = sorted([i, defs.get(i) in side] if flags else [i] for i in _AT_LOAD["words"].get(x[len(WORD):], ()))
+        got = sorted([i, any(m in side for m in defs.get(i, ()))] if flags else [i]
+                     for i in _AT_LOAD["words"].get(x[len(WORD):], ()))
         return hashlib.sha512(json.dumps(got).encode()).hexdigest() if got else None
     if not flags:
         return None
-    got = [defs.get(x) in side, any(m in side for m in _AT_LOAD["kernels"].get(x, ()))]
+    got = [any(m in side for m in defs.get(x, ())), any(m in side for m in _AT_LOAD["kernels"].get(x, ()))]
     return json.dumps(got) if any(got) else None
 
 

@@ -60,8 +60,8 @@ def test_every_registered_definition_is_checked(suite):
 
 def test_the_registries_import_every_module_with_a_sidecar_and_key_the_task_list_on_them():
     """A Definition module is registered by having a sidecar, not by a line in `targets.py`, so the set of them is in the task
-    list's key (`cache.registries`), and a target's holds none of them: it holds whether each module that registered what its
-    check read has a sidecar (``registrars``)."""
+    list's key (`cache.registries`), and a target's holds none of them: it holds whether a module whose import registered what
+    its check read has a sidecar (``registrars``)."""
     import hashlib
     import sys
 
