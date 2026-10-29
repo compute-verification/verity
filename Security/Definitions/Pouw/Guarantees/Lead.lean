@@ -19,8 +19,9 @@ The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). 
 * `GapAtDecode`: at decode (`m = 1`, committed as 16 rows), the gap is at most 3.71% of served compute (the unpadded
   MACs, `servedRegs`) at cap 32 and 4.03% at cap 320. Served compute is what credit counts, so this is decode's
   figure; the share of the padded stock, 0.231% and 0.252%, counts 15 padding rows as compute and is secondary.
-* `Honest`: the hypotheses hold at the honest deployed instance: the nominal W1 table, and a set of strategies meeting
-  every premise whose honest strategy is accepted at every coin value.
+* `Honest`: the hypotheses are jointly satisfiable at every call: the nominal W1 table, and some coin stream,
+  commitment format and set of strategies meeting every premise, with an honest strategy accepted at every coin value.
+  The commitment format is existential, so `Honest` does not say the served format meets `CommitL1w`.
 * `Nontrivial`: the conclusion fails for a verifier that accepts everything: at the three points the honest work
   exceeds the gap, and a strategy that does nothing does no work and hashes nothing.
 -/
@@ -79,9 +80,9 @@ def GapAtDecode : Prop :=
     (∀ C : Pouw.Lead.Commit (lead320 T 1 n K), ChunksOf _ C →
       gapServed _ C ≤ 403 / 10000 ∧ gapShare _ C ≤ 252 / 100000)
 
-/-- **The honest lemma**: at every call of the lead, the hypotheses hold at the honest deployed instance: the nominal
-W1 table meets `H32`, and some set of strategies meets every premise of `G` (with the coin stream and commitment the
-protocol's) and holds an honest strategy accepted at every coin value. -/
+/-- **The honest lemma**: at every call of the lead, the hypotheses are jointly satisfiable: the nominal W1 table meets
+`H32`, and for some coin stream, commitment format and set of strategies every premise of `G` holds, with an honest
+strategy accepted at every coin value. The stream and the format are existential, not the protocol's. -/
 def Honest : Prop :=
   ∀ (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ),
