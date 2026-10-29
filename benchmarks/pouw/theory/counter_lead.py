@@ -17,6 +17,10 @@ work − gap" breaks when a strategy's saving exceeds the gap at the same instan
   - Widths: 16 × 8 is `mma.sync` m16n8k32. 16 × 256 is a warp's share of the lead's `IGMMA.64x256x32` at BN 256, and
     64 × 256 is the warpgroup's (N-FLOOR final 2, note 20261029T1225Z-report-np-floor).
 - Chosen data: A2c (identical zero-data rows) and A2r (the alternating cancel), as N-RED's earlier rounds.
+- **The grains** (`grains`): `nred_round4.shares` at the gap's row counts, MAC-weighted over Llama-3.2-1B's linears:
+  literal P and P′ at word grain (what a tile-grain premise excludes) beside tile grain (`W/tile`, `W/whole`).
+- **The tag collapse** (`--g-zero`): G's chosen tag lanes set to 0 in every column. A 64-row tile's wide tags differ
+  in lane 0 and a carry into lane 1, so on this event (1/255 a column a lane) its rows' T·G take one or two values.
 
 The draws are made the lead's way: G and the coin lanes per column, drawn a column block at a time; the row tags, a₁ and b
 per row, drawn once, so a tile's columns share their rows as in one instance.
@@ -65,8 +69,8 @@ def _block_repeats(w: np.ndarray, tm: int) -> int:
 
 
 def copier(m: int, n: int, k: int, seed: int, pattern: str, tag: str = "wide", cfg: str = LEAD,
-           widths: tuple = WIDTHS) -> dict:
-    """The copier's whole-tile repeats on one instance (m rows, n columns, depth k)."""
+           widths: tuple = WIDTHS, g_zero: tuple[int, ...] = ()) -> dict:
+    """The copier's whole-tile repeats on one instance (m rows, n columns, depth k), with G's `g_zero` lanes 0."""
     tile, e, lanes = r4.LAYOUTS[cfg]
     s, ntiles = ns.steps1l(k), -(-m // tile)
     rng = np.random.default_rng(seed)
@@ -83,6 +87,7 @@ def copier(m: int, n: int, k: int, seed: int, pattern: str, tag: str = "wide", c
         nb = min(COL_BLOCK, n - j0)
         g = (rng.integers(-127, 128, (na.TAG_LANES, nb)) if tag == "wide"
              else rng.integers(-na.G_MAX, na.G_MAX + 1, (na.TAG_LANES, nb)))
+        g[list(g_zero)] = 0
         coin = rng.choice(odd, (lanes, ntiles, s - 1, nb))
         dr = {"tags": row["tags"], "g": g, "a1": row["a1"], "b": row["b"], "coin": coin}
         lw = r4.lead_words(cfg, k, pattern, dr, code[:, j0:j0 + nb])
@@ -97,7 +102,7 @@ def copier(m: int, n: int, k: int, seed: int, pattern: str, tag: str = "wide", c
             h = held[tm].reshape(m // tm, tm, s, nb).sum(axis=1)
             cnt[:, :, j0 // tn] += h.sum(axis=2) if tn >= nb else 0
     out = {"m": m, "n": n, "k": k, "steps": s, "seed": seed, "pattern": pattern, "tag": tag, "cfg": cfg,
-           "equal_to_honest": bool(equal), "held_words": {str(tm): held_words[tm] / (m * s * n) for tm in tms},
+           "g_zero": list(g_zero), "equal_to_honest": bool(equal), "held_words": {str(tm): held_words[tm] / (m * s * n) for tm in tms},
            "copier": {}}
     stock = m * n * k
     for (tm, tn), cnt in counts.items():
@@ -111,10 +116,12 @@ def copier(m: int, n: int, k: int, seed: int, pattern: str, tag: str = "wide", c
     return out
 
 
-def llama_copier(m: int, n: int, seed: int, pattern: str, tag: str = "wide", cfg: str = LEAD) -> dict:
+def llama_copier(m: int, n: int, seed: int, pattern: str, tag: str = "wide", cfg: str = LEAD,
+                 g_zero: tuple[int, ...] = ()) -> dict:
     """The copier at Llama-3.2-1B's depths, MAC-weighted over its linears (one instance a depth)."""
     shape = ns.LLAMA
-    per_k = {kk: copier(m, n, kk, seed + kk, pattern, tag, cfg) for kk in sorted({kk for _, kk in shape.values()})}
+    per_k = {kk: copier(m, n, kk, seed + kk, pattern, tag, cfg, g_zero=g_zero)
+             for kk in sorted({kk for _, kk in shape.values()})}
     stock = sum(nn * kk for nn, kk in shape.values())
     keys = per_k[min(per_k)]["copier"].keys()
     return {"per_k": per_k,
@@ -123,14 +130,35 @@ def llama_copier(m: int, n: int, seed: int, pattern: str, tag: str = "wide", cfg
                       for key in keys}}
 
 
+GRAINS = ("P/lag1", "P/entry", "P/xrow", "P/tilecol", "P/column", "P'32/lag1", "P'32/entry", "P'32/xrow",
+          "P'32/tilecol", "P'32/column", "P/masked", "M/masked", "W/tile", "W/whole")
+
+
+def grains(m: int, n: int, seed: int, pattern: str, tag: str = "wide", cfg: str = LEAD) -> dict:
+    """`nred_round4.shares` on m rows and n columns at Llama-3.2-1B's depths, MAC-weighted over its linears."""
+    rng = np.random.default_rng(seed)
+    insts = {}
+    for kk in sorted({kk for _, kk in ns.LLAMA.values()}):
+        inst = r4.lead_instance(cfg, kk, m, n, rng, pattern, tag)
+        inst["share_keys"] = list(r4.shares(inst, kk, n).keys())
+        insts[kk] = inst
+    return {"m": m, "n": n, "seed": seed, "pattern": pattern, "tag": tag, "cfg": cfg,
+            "equal_to_honest": all(v["equal_to_honest"] for v in insts.values()),
+            "share": {g: v for g, v in r4.weighted(insts, ns.LLAMA).items() if g in GRAINS},
+            "per_k": {f"k{kk}": {"saved": v["saved"], "tile_grain": v["tile_grain"], "steps": v["steps"]}
+                      for kk, v in insts.items()}}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--mode", choices=("copier", "grains"), default="copier")
     ap.add_argument("--rows", type=int, nargs="+", default=[64, 512])
     ap.add_argument("--cols", type=int, default=256)
     ap.add_argument("--seeds", type=int, nargs="+", default=[1])
     ap.add_argument("--patterns", nargs="+", default=["a2c", "a2r"])
     ap.add_argument("--tags", nargs="+", default=["wide"])
     ap.add_argument("--cfgs", nargs="+", default=[LEAD])
+    ap.add_argument("--g-zero", type=int, nargs="*", default=[], help="tag lanes of G set to 0 in every column")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
     rep = {}
@@ -140,7 +168,10 @@ def main() -> None:
                 for pattern in args.patterns:
                     for seed in args.seeds:
                         key = f"{cfg}/{tag}/m{m}/{pattern}/s{seed}"
-                        r = llama_copier(m, args.cols, seed, pattern, tag, cfg)
+                        if args.mode == "grains":
+                            r = grains(m, args.cols, seed, pattern, tag, cfg)
+                        else:
+                            r = llama_copier(m, args.cols, seed, pattern, tag, cfg, tuple(args.g_zero))
                         rep[key] = r
                         print(f"{key:44s} eq={r['equal_to_honest']}  " + "  ".join(
                             f"{c}={100 * v:.4f}%" for c, v in r["share"].items()), flush=True)
