@@ -313,7 +313,7 @@ def members() -> dict[str, tuple]:
     return {name: plan[name] for name in MEMBERS}
 
 
-def link_windows(tie: TS.IngressTie, link: Q.Link, adv: TS.LinkAdvice, edit=None) -> SimpleNamespace:
+def link_windows(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, edit=None) -> SimpleNamespace:
     """Every link-window of the member as the warden and the prover hold it before it registers: the warden's cells
     (`warden_rows.Cells`: a warden run's own, else fresh salts) and its head, the verifier's lanes of `adv` (``own``,
     None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a tuple, the

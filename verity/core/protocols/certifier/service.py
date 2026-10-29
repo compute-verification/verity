@@ -836,7 +836,7 @@ class LinkWindows:
         """Whether the unit's input holds the window's declared sync on a served link."""
         return self.served is None or sync is not None
 
-    def arguments(self, opening: Opening, root: bytes, syncs: Sequence[ClockSync] = ()) -> dict[str, list[int]] | None:
+    def arguments(self, opening: Hidden, root: bytes, syncs: Sequence[ClockSync] = ()) -> dict[str, list[int]] | None:
         """The unit's arguments on the opening under `root`, the registered root, by parameter, each its leaves' bits
         (each end's `head_check.arguments`, and on a served link the window's declared sync): the prover's side. None
         where the unit takes no instance (`head_checks`), or on a served link no sync its input can hold."""
@@ -873,7 +873,7 @@ class LinkWindows:
         bits = [b for n in self.layout[row] for b in args[n]]
         return bytes(sum(b << j for j, b in enumerate(bits[k:k + 8])) for k in range(0, len(bits), 8))
 
-    def outputs(self, opening: Opening, root: bytes, syncs: Sequence[ClockSync] = ()) -> int:
+    def outputs(self, opening: Hidden, root: bytes, syncs: Sequence[ClockSync] = ()) -> int:
         """The unit's output word on the opening under `root` by each gate's reference (`head_check.reference`, and on
         a served link `served_check`), which the tests hold to the circuits: bit 0 the verdict, bit 1 the deadline. What
         the prover claims, and the debug comparison's."""
@@ -1028,7 +1028,7 @@ class LinkWindows:
         return {"accepted": out["accepted"], "digest": out["digest"], "public": out["public"]}
 
     def verify(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
-               delivered: Delivered, *, circuit_sha512: str, opening: Opening | None = None) -> dict[str, Any]:
+               delivered: Delivered, *, circuit_sha512: str, opening: Hidden | None = None) -> dict[str, Any]:
         """The verdict of record on the link-window's delivered proof, from public inputs and the proof alone: accepted
         when
         - the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
@@ -1065,7 +1065,7 @@ class LinkWindows:
             verdict["clear"] = {"accepted": self.clear(opening, draw, syncs)["accepted"]}
         return verdict
 
-    def clear(self, opening: Opening, draw: S.Draw, syncs: Sequence[ClockSync]) -> dict[str, Any]:
+    def clear(self, opening: Hidden, draw: S.Draw, syncs: Sequence[ClockSync]) -> dict[str, Any]:
         """The in-the-clear check on the opening, the witness: the debug comparison `verify` makes on request and the
         tests' reference, never a verdict of record. Accepted when the opening reproduces the registered root under the
         link-window's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
@@ -1106,7 +1106,7 @@ class LinkWindows:
             return False
         return SV.reference(*self.served_key(), ingress.head.counts, egress.head.counts, sync)
 
-    def stand_in(self, opening: Opening, draw: S.Draw, frames: Sequence[LogicalFrame],
+    def stand_in(self, opening: Hidden, draw: S.Draw, frames: Sequence[LogicalFrame],
                  syncs: Sequence[ClockSync]) -> bool:
         """The in-the-clear accept bit, the tests' oracle: the opening reproduces the registered root, the host audit
         (`audit.Audit`) accepts both records with the egress grid compared with the Program's, from its logical
@@ -1122,14 +1122,14 @@ class LinkWindows:
                 "window": reg["window"]["window"], "root": reg["roots"][0]["root"]}
 
     def outcome(self, stream: S.Stream, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
-                delivered: Delivered, *, circuit_sha512: str, opening: Opening | None = None) -> S.Outcome:
+                delivered: Delivered, *, circuit_sha512: str, opening: Hidden | None = None) -> S.Outcome:
         """`stream.outcome` on the verifier of record's verdict (`verify`), with the registered root as the session's:
         the root the proof's public row names, which it opens only to the verifier's own copy."""
         verdict = self.verify(draw, certificates, syncs, delivered, circuit_sha512=circuit_sha512, opening=opening)
         return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
                               session_roots={VALUE: draw.registration.record["roots"][0]["root"]})
 
-    def unproved_outcome(self, stream: S.Stream, draw: S.Draw, opening: Opening,
+    def unproved_outcome(self, stream: S.Stream, draw: S.Draw, opening: Hidden,
                          syncs: Sequence[ClockSync]) -> S.Outcome:
         """`stream.outcome` for a run that proves nothing (a rehearsal, the simulator): on the in-the-clear check
         (`clear`), which reads the opening, so it is never zero-knowledge, and its
@@ -1295,5 +1295,5 @@ class LinkWindows:
         return out
 
 
-__all__ = ["BC_BYTES", "Delivered", "HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "OUT_BITS", "Opening", "PORTS",
+__all__ = ["BC_BYTES", "Delivered", "HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "OUT_BITS", "Hidden", "PORTS",
            "PUBLIC", "PUBLIC_SERVED", "ROWS", "SCHEMA", "VALUE", "encode", "output_row", "rows", "unit"]

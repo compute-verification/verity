@@ -184,7 +184,7 @@ def lean(proof: PF.Proof, *, circuit_sha512: str, program: bytes, partition: dic
     return out, None
 
 
-def decide(lw: SVC.LinkWindows, stream: S.Stream, draw: S.Draw, opening: SVC.Opening, syncs: Sequence[Any], out: Path,
+def decide(lw: SVC.LinkWindows, stream: S.Stream, draw: S.Draw, opening: SVC.Hidden, syncs: Sequence[Any], out: Path,
            *, certificates: Sequence[Any] | None = None, **kw: Any) -> S.Outcome:
     """The drawn link-window proved on `opening` (`prove`, with `kw`), delivered and decided by the verifier of record
     on the proof and the certificates (by default the opening's), with the opening's in-the-clear check beside it as the
