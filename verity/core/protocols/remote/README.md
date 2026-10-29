@@ -9,8 +9,7 @@ registered circuit is inference, not training).
 **The open gap.** Remote's composed soundness theorem, `Verity.Soundness`, is not in Lean yet. It is due after the Lean
 dedupe (one vocabulary), and its owner is soundness. Today the pieces below compose by hand: each is proved on its own,
 and no Lean theorem states remote's guarantee from them. Nothing yet ties the deployed verifier's verdicts to those
-theorems either, because remote reads sampled proofs' one-stage v1, which takes the sessions' verdicts as evidence
-instead of computing them.
+theorems either.
 
 This file is an outline with signposts. The Lean is the definition. The vocabulary is the Glossary's: `ARCHITECTURE.md`'s
 Glossary, and `GLOSSARY.md` for the notation and the older names. The lifecycle's terms (the reported advice, the
@@ -58,17 +57,12 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 |---|---|---|---|
 | Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses, on the proofs themselves, which it reads as blobs | `SampledProofs.OneStageZk.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
 | PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the registered work's | `PouwCheck.protocol` (`verity/core/protocols/pouw/lean/check`) | `verity/pouw/v1` |
-| The inference-only policy ([README](../network/nci/README.md); its Lean is still named `Nci`, `NciCheck`) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
-
-The inference-only policy's check reads only the registered circuit and the registered information, so it needs no
-hardware at the site. Its commitment is the run's record, which must name the registered circuit, and remote refuses
-unless it is the record PoUW's window and sampled proofs commit to (one record, below). Its evidence, the division
-and θ's provenance, reaches the verifier in the clear, not inside a zero-knowledge proof.
+| The inference-only policy ([README](../network/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`, `protocol = sameB "verity/remote/v0" ids components` over `components =
-[NciCheck.Protocol.protocol, PouwCheck.protocol, SampledProofs.OneStageZk.protocol]`, `ids` their ids: every one of the
-three commits to the run's record, and once the cases fit, two records' digests reject remote whatever the subprotocols
-answer (`Core.Composition.same`; the `#guard`s pin a policy on one record and the others on another). Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
+[NciCheck.Protocol.protocol, PouwCheck.protocol, SampledProofs.OneStageZk.protocol]`. All three commit to the run's
+record, which names the registered circuit; once the cases fit, two different records reject remote whatever the
+subprotocols answer (`Core.Composition.same`). Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
 (`RemoteMain.lean`). The Lake package `core_remote` is code: it has no Mathlib and nothing of `Security/`
 (`lean-audit.json`). The product's rule and its difftest are the composition's ([README](../composition/README.md),
 `verity/core/protocols/composition/tests/test_composition_difftest.py`).
