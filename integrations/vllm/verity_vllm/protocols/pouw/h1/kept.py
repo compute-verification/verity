@@ -1,5 +1,5 @@
 """A row of a served H1 window's registered tree, rebuilt from what the prover kept: the served trees a window
-saves (`pouw_h1_handoff.suspend`) keep no rows (`pouw_h1_registered.Rows`), so an opening of a drawn proof block's row takes its
+saves (`pouw_h1_handoff.suspend`) keep no rows (`pouw_h1_registered.Rows`), so an opening of a sampled proof block's row takes its
 words from the prover's directory (`pouw_h1_prover`: each call's A codes, scales and z/y records) and the saved state (each
 linear's weight), as `pouw_h1_served.Served` committed them, and holds them to the tree's ``b || c`` at the row.
 """
