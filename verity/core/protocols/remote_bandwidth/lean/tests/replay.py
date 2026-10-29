@@ -6,8 +6,8 @@ A record is one of two kinds:
 * A transcript: the difftest's case, every event the verifier's `Session` saw with the clock it read, its W + ⌈W/g⌉
   coins (g its `groups_per_coin`, 1 when absent) and its append coins. Both verifiers replay all of it and must give every event the same result, and the session the same
   outcome and record. The outcome is the verdict, and a rejection's failure, window and draw are its reason. Given
-  the `verifier.json` that recorded it (`--record`), the outcome must be the recorded one. A transcript written before
-  it named its session's pace (20 Oct) replays only with the pace its `verifier.json` gives, and only if its bytes are
+  the `verifier.json` that recorded it (`--record`), the outcome must be the recorded one. A transcript that doesn't
+  name its session's pace replays only with the pace its `verifier.json` gives, and only if its bytes are
   the ones whose sha256 that record keeps: replayed unpaced, a paced session's windows would be held to no cap on their
   roots.
 * A remote session's `verifier.json` (`verity/remote-session/verifier/v0`). Per session it keeps the registration,
@@ -17,7 +17,7 @@ A record is one of two kinds:
   registered store its plan (an accepted pass's recorded length when that is shorter) and its step the recorded one
   (else its count in the session), each boundary at its time and each draw closed at its last window at its time
   (every window at `groups_per_coin` 1), under synthetic coins and with no appends, releases or openings. A session
-  recorded before the window was stated (13 Oct, 36e0ea654) may have a window shorter than its `window_ns`, a
+  recorded before the window was stated (commit 36e0ea654) may have a window shorter than its `window_ns`, a
   boundary today's `Session` refuses; its case states its shortest. A session drawn more than one window a coin at
   one window in flight isn't replayed: no property covers it, and the driver refuses it. Both verifiers replay that
   case as above, and `held` holds their verdict to the recorded one:
@@ -137,7 +137,7 @@ def codec_of(name: str) -> dict:
     return {"field": field, "masked": masked == ["masked"], "rounds": int(rounds[1:])}
 
 
-#: What a registration has named, and its digest bound, since 13 Oct 09:24Z (36e0ea654). One recorded before names
+#: What a registration has named, and its digest bound, since commit 36e0ea654. One recorded before names
 #: neither: it had the one layout and its kind's rows, and its digest is one neither verifier computes now.
 LATER = ("layout", "rows")
 
