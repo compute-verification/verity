@@ -62,7 +62,8 @@ Fixed in `methodology.py`; `run.py eval` refuses any other window list, context 
 
 An arm is a TOML file: a list of steps for the linears (`[[linear]]`: q, k, v, o, gate, up and down, each y = x Wᵀ) and
 one for attention (`[[attention]]`: S = Q Kᵀ and O = P V). Each step names a registered function and its parameters.
-`layers = [...]` and, on linears, `linears = [...]` restrict where a step applies. The output head (`lm_head`) takes
+`layers = [...]`, on linears `linears = [...]` and on attention `matmuls = ["qk"]` or `["pv"]` restrict where a step
+applies. The output head (`lm_head`) takes
 only the linear steps that name it in `linears`, without calibration or `layers`. `specs/adopted.toml`:
 
 ~~~toml

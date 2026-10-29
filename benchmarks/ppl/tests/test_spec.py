@@ -1,3 +1,4 @@
+import json
 import tomllib
 
 import pytest
@@ -67,7 +68,7 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
     want["int8-channel127-v3"] = want["fp8-block"] = ("linears", "int8-linears", False)
     for name in ("int8-channel127-v1", "ncp-v1-served", "ncp-v1-served-head", "ncp-linears"):
         want[name] = ("linears", "int8-linears", False)
-    want["ncp-v1-served-attn"] = ("all", "int8-all", False)
+    want["ncp-v1-served-attn"] = want["ncp-v1-served-pv"] = ("all", "int8-all", False)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
@@ -127,6 +128,30 @@ def test_lm_head_takes_only_the_steps_that_name_it():
     for bad in ('step = "smooth"\nalpha = 0.5', 'step = "int8"\nlayers = [0]', 'step = "int8"\ngptq = true'):
         with pytest.raises(ValueError, match="lm_head takes steps without calibration or layers"):
             parse(f'[[linear]]\n{bad}\nlinears = ["lm_head"]')
+
+
+def test_an_attention_step_takes_only_the_matmuls_it_names():
+    pv, both = spec.load("ncp-v1-served-pv"), spec.load("ncp-v1-served-attn")
+    assert pv.linear == both.linear
+    (s,) = pv.attention
+    assert s.matmuls == {"pv"} and s.applies(0, "pv", "pv") and not s.applies(0, "qk", "qk")
+    assert all(t.applies(0, "qk", "qk") and t.applies(0, "pv", "pv") for t in both.attention)
+    assert s.key != parse('[[attention]]\nstep = "int8"\np_top = 63\nv_top = 63').attention[0].key
+    assert parse(tomllib_dumps({"attention": [s.to_toml()]})).attention == pv.attention
+    for bad in ("[]", '["qk", "sv"]'):
+        with pytest.raises(ValueError, match="matmuls are some of"):
+            parse(f'[[attention]]\nstep = "int8"\nmatmuls = {bad}')
+    with pytest.raises(ValueError, match="unknown parameters"):
+        parse('[[linear]]\nstep = "int8"\nmatmuls = ["pv"]')
+
+
+def tomllib_dumps(data: dict) -> str:
+    out = []
+    for kind, tables in data.items():
+        for t in tables:
+            out.append(f"[[{kind}]]")
+            out += [f"{k} = {json.dumps(v)}" for k, v in t.items()]
+    return "\n".join(out)
 
 
 @pytest.mark.parametrize("b", [1, 2, 3, 4])
