@@ -450,7 +450,7 @@ def stored(view: log.View, store: str) -> tuple[bytes, int, bytes]:
     x = view.site.loc(store)
     if x is None or x.kind != "memory":
         raise ValueError(f"the registration log registers no memory leaf {store}")
-    host = view.site.host(x)
+    host = view.site.host(store)
     if host is None:
         raise ValueError(f"the store {store} is in no host")
     if x.bytes % BLOCK_BYTES:
