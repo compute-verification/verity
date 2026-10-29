@@ -74,7 +74,15 @@ T1 = forming(N, F) − forced(C) + de-noise(D) + final word(D, P) + uncommitted 
 - **Premises:** H32 (1, measured), W1 (3, unnamed), ShaSpeed (4a) for the credited hashing, hash-compose (4a, unstated),
   atomic call + PeriodInventory for hashing A before its noise (3), the distinctness lemma (0 once proved; open), a
   grinding bound (open).
-- **It fails T1 today on hiding:** hm96's salt PRF, mask and c are honest-only, 1.46× stock at 256 KiB rows (SW-HASH §9).
+- **It fails T1 today on hiding:** hm96's salt PRF, mask and c are honest-only: 7.2× stock at 16 KiB rows, about 1.2× at
+  256 KiB (118% at SW-PRICE's best row) and 0.15× at 1 MiB, in W1. Salts from the coins are necessary, not sufficient
+  (SW-SMELL).
+- **Since 06:20Z (the sweep's finals; note 20261029T0745Z-report-pouw-sweep):**
+  - SSN's distinctness is proved in scratch Lean (SW-LEAN) for the coin-bit map SW-NOISE stated. It is unlocked and on
+    MH100w semantics marked draft.
+  - SW-NOISE's 5-lane code covers 371,292 columns, enough for lm_head and V4-Pro.
+  - With T3 measured, SSN leads at T 512 too (SW-PRICE: 12.6× / 24.9×). NCP was first there only while SSN's T3 was
+    unknown.
 
 **The tradeoff that sets every design's rank (coordinator's reading; attack it):**
 
