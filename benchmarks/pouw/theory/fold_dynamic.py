@@ -39,7 +39,9 @@ What this script checks (CPU):
 The counting theorem. Let P(L) be the straight-line programs of L instructions over a form set of size F (opcode,
 modifiers, immediate shift or LUT, predicate guard), each operand an input (n of them), an earlier result (two a
 two-output instruction) or a 32-bit constant, at least one operand not a constant (a minimal program has none: fold the
-constant into its readers). |P(L)| ≤ (F · 3(n + 2L) · (n + 2L + 2^32)^2)^L = 2^(d(L)·L). If θ is uniform on 2^(bT)
+constant into its readers), and the result that is the output one of n + 2L. |P(L)| ≤ (n + 2L) · (F · 3(n + 2L) ·
+(n + 2L + 2^32)^2)^L = (n + 2L) · 2^(d(L)·L), and `Pouw.FoldDyn.card_computed_by_short_le` (Security/Proofs/Pouw/
+FoldDyn.lean) proves the count of members some such program computes, under any semantics. If θ is uniform on 2^(bT)
 members and each function is at most 2^(T(b - b')) members' (`LOSS`), then Pr_θ[some program in P(L) computes f_θ]
 ≤ |P(L)| · 2^(-b'T). So with
 probability ≥ 1 - 2^-s, every program computing f_θ has L ≥ (b'T - s)/d(L). It counts per-output SIMT programs
@@ -100,10 +102,11 @@ def d_bits(L: int, n: int = INPUTS) -> float:
 
 
 def counting_bound(b: float, T: int, s: int = SECURITY, n: int = INPUTS) -> int:
-    """The least L with d(L)·L ≥ bT - s: below it, at most 2^-s of the members have a program of L instructions."""
+    """The least L with log2 |Prog(L)| = log2(n + 2L) + d(L)·L ≥ bT - s (`Pouw.FoldDyn.card_prog`, the output's
+    result chosen among n + 2L): below it, at most 2^-s of the members have a program of L instructions."""
     need = b * T - s
     L = 0
-    while d_bits(L + 1, n) * (L + 1) < need:
+    while math.log2(n + 2 * (L + 1)) + d_bits(L + 1, n) * (L + 1) < need:
         L += 1
     return L + 1
 
@@ -235,6 +238,73 @@ def decomp(fam: str, W: int, T: int, seed: int) -> dict:
     return {"ranks": ranks, "residue": bad / tot}
 
 
+def fold32(fam: str, T: int, N: int, seed: int):
+    """The 32-bit state after T zero-data steps of a random member over an N x N block of outputs: words
+    w_t = x_t + R_t(i) + C_t(j), with R_t and C_t walks of 14-bit increments (about 20 bits at T = 74, as the lead's)."""
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    u32 = np.uint32
+    s = np.full((N, N), rng.integers(0, 2 ** 32, dtype=np.uint64).astype(u32), dtype=u32)
+    R = np.zeros(N, dtype=u32)
+    C = np.zeros(N, dtype=u32)
+    with np.errstate(over="ignore"):
+        for _ in range(T):
+            R += rng.integers(0, 2 ** 14, N, dtype=np.uint64).astype(u32)
+            C += rng.integers(0, 2 ** 14, N, dtype=np.uint64).astype(u32)
+            x0, x, y = (u32(int(v)) for v in rng.integers(0, 2 ** 32, 3, dtype=np.uint64))
+            k = u32(int(rng.integers(0, 2 ** 32, dtype=np.uint64)) | 1)
+            r = u32(int(rng.integers(1, 32)))
+            w = x0 + R[:, None] + C[None, :]
+            if fam == "arxm":
+                u = s ^ x
+                s = ((u << r) | (u >> (u32(32) - r))) + w
+                s = s * k + y
+            elif fam == "lik":
+                s = (s ^ w ^ x) * k + y
+            elif fam == "xormul":
+                s = (s ^ w) * k
+            elif fam == "xor":
+                s = s ^ w
+            else:
+                raise ValueError(fam)
+    return s
+
+
+def gf2_rank_np(bits) -> int:
+    """GF(2) rank of an (N, N) 0/1 matrix, N a multiple of 64, by elimination on packed rows."""
+    import numpy as np
+
+    M = np.packbits(bits.astype(np.uint8), axis=1, bitorder="little").view(np.uint64).copy()
+    rows, n = M.shape[0], bits.shape[1]
+    rank = 0
+    for col in range(n):
+        wd, b = divmod(col, 64)
+        bit = np.uint64(1 << b)
+        cand = np.nonzero(M[rank:, wd] & bit)[0]
+        if cand.size == 0:
+            continue
+        p = rank + int(cand[0])
+        if p != rank:
+            M[[rank, p]] = M[[p, rank]]
+        hit = (M[:, wd] & bit) != 0
+        hit[rank] = False
+        M[hit] ^= M[rank]
+        rank += 1
+        if rank == rows:
+            break
+    return rank
+
+
+def decomp32(fam: str, T: int, N: int, seed: int, bits=(0, 1, 2, 3, 8, 16, 31)) -> dict:
+    """decomp at full width: each listed state bit's GF(2) rank over an N x N block. A bit-sliced rank-r decomposition
+    costs about r/4 lane instructions an output, so a rank near N with N >= 12T is no cheaper than honest arxm."""
+    import numpy as np
+
+    F = fold32(fam, T, N, seed)
+    return {str(b): gf2_rank_np(((F >> np.uint32(b)) & np.uint32(1)).astype(np.uint8)) for b in bits}
+
+
 # ---- injectivity of one step ----------------------------------------------------------------------------------------
 
 def one_step_tables(fam: str, W: int):
@@ -320,7 +390,7 @@ def main() -> int:
         for T in (1, 2, 4):
             res = decomp(fam, W_dec, T, 7 + T)
             report["decomp"][f"{fam}.T{T}"] = res
-            print(f"decomp {fam:10s} W={W_dec} T={T}: ranks {res['ranks']}  residue {res['residue']:.3f}")
+            print(f"decomp {fam:10s} W={W_dec} T={T}: ranks {res['ranks']}  residue {res['residue']:.3f}", flush=True)
     full_rank = (1 << W_dec)
 
     def resists(res: dict) -> bool:
@@ -338,6 +408,32 @@ def main() -> int:
                     not resists(report["decomp"]["xor.T4"]), f"ranks {report['decomp']['xor.T4']['ranks']}")
     ck.check("decomp: xormul's low bit stays low rank (a T-function: bit 0 reads bits 0 only)",
              report["decomp"]["xormul.T4"]["ranks"][0] <= 2, f"ranks {report['decomp']['xormul.T4']['ranks']}")
+
+    # 2b. decomp at 32 bits: each state bit's GF(2) rank over an N x N block of zero-data outputs
+    N32, Ts32 = (2048, (1, 4, 74, 293)) if full else (512, (1, 4, 16, 74))
+    report["decomp32"] = {"N": N32}
+    for fam in ("xor", "xormul", "lik", "arxm"):
+        for T in Ts32:
+            r = decomp32(fam, T, N32, 11 + T)
+            report["decomp32"][f"{fam}.T{T}"] = r
+            print(f"decomp32 {fam:7s} N={N32} T={T}: ranks by bit {r}", flush=True)
+    d32 = report["decomp32"]
+    ck.check("decomp32 control: the unkeyed XOR fold's bit 0 has rank <= 2 and its bit 31 <= 1 at every T",
+             all(d32[f"xor.T{T}"]["0"] <= 2 and d32[f"xor.T{T}"]["31"] <= 1 for T in Ts32))
+    ck.check("decomp32 control: arxm's first step's bit 0 is row xor column (rank <= 2)", d32["arxm.T1"]["0"] <= 2)
+    ck.check(f"decomp32: from 4 steps every tested bit of arxm has rank >= N - 8 on an N = {N32} block (32 bits)",
+             all(v >= N32 - 8 for T in Ts32 if T >= 4 for v in d32[f"arxm.T{T}"].values()),
+             "; ".join(f"T {T}: min {min(d32[f'arxm.T{T}'].values())}" for T in Ts32 if T >= 4))
+    ck.check("decomp32: (c4) and lik keep bit 0 row xor column at every T (the T-function's free low bit)",
+             all(d32[f"{f_}.T{T}"]["0"] <= 2 for f_ in ("xormul", "lik") for T in Ts32))
+    if ck.mutations:
+        ck.mutation("the unkeyed XOR fold in arxm's place fails the 32-bit rank check",
+                    not all(v >= N32 - 8 for T in Ts32 if T >= 4 for v in d32[f"xor.T{T}"].values()))
+    if full:
+        r = decomp32("arxm", 293, 4096, 304)
+        d32["arxm.T293.N4096"] = r
+        ck.check("decomp32: arxm at 293 steps is full rank on a 4096 block (a rank route costs >= 1024 an output, "
+                 "honest 879)", all(v >= 4096 - 8 for v in r.values()), str(r))
 
     # 1. the battery
     with tempfile.TemporaryDirectory() as tmp:
@@ -369,7 +465,7 @@ def main() -> int:
             report["search"][name]["raw"] = res["members"]
             sm = report["search"][name]
             print(f"search {name:24s} N1 {sm['n1']:9d}  members {sm['members']:5d}  found {sm['found_at']}  "
-                  f"shorter than honest {sm['shorter_than_honest']}  {sm['examples'][:1]}")
+                  f"shorter than honest {sm['shorter_than_honest']}  {sm['examples'][:1]}", flush=True)
 
         S_ = report["search"]
         raw = lambda n: S_[n]["raw"]
