@@ -27,7 +27,7 @@ def test_the_sketch_warps_sum_each_store_block(nbs, nchunks, groups):
     blocks = SR.gemm_blocks(store, SB)
     assert blocks.shape == (2 * nbs * nchunks, SR.BLOCK)
     mma = SR.fragment_sketch(store, nbs, nchunks, SB, groups, SR.sign_frags(SR.sign_bits(SEED)))
-    assert np.array_equal(SR.sketches(SR.signs(SEED), blocks), mma)
+    assert np.array_equal(SR.sketches(SEED, blocks), mma)
     j0 = 11
     receipter = SR.rb.SketchReceipter(SEED)
     assert SR.receipts_of(SEED, mma, j0) == [receipter(j0 + v, blocks[v].tobytes()) for v in range(len(blocks))]
@@ -42,7 +42,7 @@ def test_the_64_row_sketch_warps_sum_each_store_block(nbs, nchunks, groups):
     store[:SR.BLOCK], store[SR.BLOCK:2 * SR.BLOCK] = 0x80, 0x7F
     blocks = SR.gemm_blocks(store, SB)
     mma = SR.fragment_sketch64(store, nbs, nchunks, SB, groups, SR.sign_planes(SR.sign_bits(SEED, SR.ROWS64)))
-    assert np.array_equal(SR.sketches(SR.signs(SEED, SR.ROWS64), blocks), mma)
+    assert np.array_equal(SR.sketches(SEED, blocks, SR.ROWS64), mma)
     receipter = SR.rb.receipter(SR.rb.SKETCH_SHA512, SEED, 64)
     assert SR.receipts_of(SEED, mma, 5) == [receipter(5 + v, blocks[v].tobytes()) for v in range(len(blocks))]
     assert SR.receipts_of(SEED, mma[:, :SR.ROWS], 5)[0] != SR.rb.SketchReceipter(SEED)(5, blocks[0].tobytes())
@@ -121,7 +121,7 @@ def test_reader_sketch64_fragments_are_the_64_row_sketch():
                     b[nt, 4 * t:4 * t + 4, g], b[nt, 16 + 4 * t:20 + 4 * t, g] = reg(word, r), reg(word, r + 1)
             d += a @ b
     sigma = d.transpose(1, 0, 2).reshape(16, RD.ROWS64)
-    assert np.array_equal(sigma, SR.sketches(SR.signs(SEED, RD.ROWS64), blocks))
+    assert np.array_equal(sigma, SR.sketches(SEED, blocks, RD.ROWS64))
     assert not np.array_equal(SR.signs(SEED, RD.ROWS64)[:SR.ROWS], SR.signs(SEED))
 
 
@@ -132,7 +132,7 @@ def test_attention_sketches_each_token_layer():
     blocks = np.random.default_rng(13).integers(0, 256, (6, SR.BLOCK), dtype=np.uint8)
     blocks[0], blocks[1] = 0x80, 0x7F
     s, e = SR.signs(SEED), blocks.view(np.int8).astype(np.int64)
-    sigma = SR.sketches(s, blocks)
+    sigma = SR.sketches(SEED, blocks)
     assert np.array_equal(SR.kv_fragment_sketch(blocks, SR.kv_sign_frags(SR.sign_bits(SEED))), sigma)
     pos = [SR.kv_positions(g) for g in range(SR.KV_HEADS)]
     assert np.array_equal(np.sort(np.concatenate(pos)), np.arange(SR.BLOCK))
