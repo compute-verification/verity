@@ -222,7 +222,7 @@ def header_sampling(ctx: StepContext) -> dict:
 
 def request_sampling(ctx: StepContext) -> dict[str, dict]:
     """request id -> {seed, temperature, top_p, top_k} of the run header's request record (children of an n>1 request: the
-    recorded fork fact parent seed + index); the workload's sampling block supplies what a record does not pin."""
+    recorded fork fact parent seed + index); the workload's sampling parameters supply what a record does not pin."""
     wl = ctx.header.workload or {}
     s = header_sampling(ctx)
     per = {p["request_id"]: p for p in s.get("per_request", []) or []}

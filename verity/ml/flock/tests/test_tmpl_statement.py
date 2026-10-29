@@ -6,7 +6,7 @@ section, which the Lean verifier reads with ``HmOut.parseTmpl``.
 ``Flock.Test.TmplLayout``'s vectors and to a Definition two call paths reach, which is where the modes differ. The Boolean
 toy's templated statement unrolls to its flat unit and differs from the flat statement's META in the templated keys alone.
 The Lean verifier derives from it the class `circuit.class_digest` computes and the regions, Δ and partition check it
-derives from the flat statement. Until the templated statement's proof lands it is outside the verifier's ``Tags.all``, and
+derives from the flat statement. It is outside the verifier's ``Tags.all``, in its own list (``Tags.templated``), and
 the Lean test skips unless the verifier knows it, as TMPL1's does (``FLOCK_VERIFY_TMPL``: its flock-verify)."""
 from __future__ import annotations
 
@@ -167,7 +167,7 @@ def test_a_structural_stager_writes_the_templated_statement_of_struct_lowers_tem
         CS.UnitStager(*args, structural=True)
 
 
-#: the auditor's host runs the lowering on numpy and C-Flock's Python alone
+#: the auditor's host runs the lowering on numpy and Flock's Python alone
 NO_TORCH = """
 import importlib.abc, sys
 class _Block(importlib.abc.MetaPathFinder):
@@ -206,13 +206,14 @@ def test_the_templated_statement_is_written_without_torch(tmp_path):
 
 def test_a_unit_past_k_max_is_refused_before_its_template_is_written(monkeypatch, tmp_path):
     """A templated unit whose block passes ``K_MAX`` is refused before compose writes its template's text, which for a
-    served lane is gigabytes (the K=14336 lane's 16.5M lines took a refused compose from 12.8 to 15.1 GiB)."""
+    served lane is gigabytes (the K=14336 lane's 16.5M lines took a refused compose from 12.8 to 15.1 GiB). At 19, below
+    every block's 2^20 and above the unit's own slot, the refusal is compose's, not `UnitStager`'s before lowering."""
     def written(_t):
         raise AssertionError("the template was written before the block was checked")
 
-    monkeypatch.setattr(FC, "K_MAX", 10)
+    monkeypatch.setattr(FC, "K_MAX", 19)
     monkeypatch.setattr(T, "write", written)
-    with pytest.raises(ValueError, match="unit/tmpl-no-torch: an instance needs a block of 2\\^\\d+ bits \\(at most 2\\^10\\)"):
+    with pytest.raises(ValueError, match="unit/tmpl-no-torch: an instance needs a block of 2\\^\\d+ bits \\(at most 2\\^19\\)"):
         exec(WRITE, {"OUT": tmp_path / "c.txt", "MODE": MODE})
 
 
@@ -231,7 +232,7 @@ def verifier() -> Path:
     p = subprocess.run([str(b), "statement", "--statement", FC.TMPL_STATEMENT, "--circuit", os.devnull, "--public", os.devnull],
                        capture_output=True, text=True)
     if "unknown statement" in p.stderr:
-        pytest.skip(f"{b} does not know {FC.TMPL_STATEMENT} (outside Tags.all until its proof lands; FLOCK_VERIFY_TMPL: TMPL1's flock-verify)")
+        pytest.skip(f"{b} does not know {FC.TMPL_STATEMENT} (not in its Tags.templated; FLOCK_VERIFY_TMPL: TMPL1's flock-verify)")
     return b
 
 

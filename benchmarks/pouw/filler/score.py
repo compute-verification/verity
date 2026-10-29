@@ -11,7 +11,7 @@
 
 A climber's run, from a clean pushed checkout:
 
-  research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \\
+  research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \\
     -- python3 benchmarks/pouw/filler/score.py <arm|benchmarks/pouw/filler/my_arm.py:MyArm>
 
 `score.py ARM` builds dcap.cu and dscore.cu (outside the lease), then under `gpu-lease 1 --wait` runs the gates before
@@ -23,7 +23,7 @@ serving alone on the whole GPU and K reps under the arm's placement, each arm bl
 filler alone on the same SMs as long), every rep's SM clock and board power read (clocks are never set), then serving
 alone, the arm and the filler alone each sustained for a settled power window (the energy counter's watts; secondary).
 Each filler round (a point's calibration, each arm and standalone block) numbers its tiles from a public range the scorer
-fixes from the point and the round, then draws the round's coins from the OS; the replay gate checks the ranges and that
+fixes from the point and the round, then flips the round's coins from the OS; the replay gate checks the ranges and that
 no tile id, coins or sampled seed repeats across rounds. The honest gate's too-good check compares each point's filler
 beside serving with the median of its standalone blocks, its limit 1 + max(2%, their trimmed spread), and a positive control
 (`control.jsonl`: at one point, a filler credited for S steps a tile that runs S - S/16 beside serving) must be caught.

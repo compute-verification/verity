@@ -17,11 +17,11 @@ import pytest
 
 from verity.ml.circuits.evaluation import evaluate, evaluate_words
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.codec import _spec_id
+from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
-from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Value
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as MP
@@ -30,7 +30,7 @@ from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetPr
 from verity.ml.definitions.replay import replayer
 
 F32, BF16 = Value(32), Value(16)
-PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", Record(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
+PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", RecordType(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
 
 
 def _derived(fns=None):
@@ -78,7 +78,7 @@ def test_the_table_reads_the_boolean_definitions_word_links():
     assert BB.boolean_version(W.F32AddFtz) is bind(BA.F32AddFtz)
     assert BB.boolean_version(MP.F2fpBf16) is bind(BG.F2fpBf16)
     word = bind(G.DotBf16, K=64, DOT=MP.HopperBF16WgmmaDot16)
-    assert _spec_id(BB.boolean_version(word)) == 'DotBf16_v3{K=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"}}'
+    assert descriptor_id(BB.boolean_version(word)) == 'DotBf16_v3{K=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"}}'
 
 
 def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_statics_entry(monkeypatch):
@@ -98,7 +98,7 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
     monkeypatch.setattr(BB, "_TABLE", [(exact, {**by_name, "Twice": [bits]}, errors)])
     monkeypatch.setattr(BB, "_VERSIONS", {})
     got = BB.boolean_version(bind(word, N=3))
-    assert _spec_id(got) == 'Twice_v2{N=3,ADD={"fn":"F32AddFtz_v3"}}'
+    assert descriptor_id(got) == 'Twice_v2{N=3,ADD={"fn":"F32AddFtz_v3"}}'
     x = _inputs(32)[0][:, :3]
     want = np.array([evaluate(bind(word, N=3), list(map(int, r))) for r in x], dtype=np.uint64)
     assert (evaluate_words(got, x).astype(np.uint64) == want).all()
@@ -117,8 +117,8 @@ def test_the_served_norms_bind_their_mufu_statics_to_mufus_boolean_versions():
     from verity.ml.definitions.registry import b1, boolean_norms as BN
     cuda = BB.boolean_version(bind(b1.RMSNormFusedCuda, N=16, EPS=1e-5))
     triton = BB.boolean_version(bind(b1.RMSNormTriton, N=16, EPS=1e-5))
-    assert _spec_id(cuda) == _spec_id(bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, RSQRT=bind(BM.RsqrtApprox)))
-    assert _spec_id(triton) == _spec_id(bind(BN.RMSNormTriton, N=16, EPS=1e-5, SQRT=bind(BM.MufuSqrtFtz),
+    assert descriptor_id(cuda) == descriptor_id(bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, RSQRT=bind(BM.RsqrtApprox)))
+    assert descriptor_id(triton) == descriptor_id(bind(BN.RMSNormTriton, N=16, EPS=1e-5, SQRT=bind(BM.MufuSqrtFtz),
                                              SCALEA=bind(BM.DivFullScaleA), RCP=bind(BM.DivFullRcp)))
     assert BL.is_boolean(cuda) and BL.is_boolean(triton)
 
@@ -126,7 +126,7 @@ def test_the_served_norms_bind_their_mufu_statics_to_mufus_boolean_versions():
 def test_lift_computes_the_word_function_on_bits():
     word = _derived()
     bits = BB.lift(word)
-    assert _spec_id(bits).endswith(',IR="boolean"}') and bits.name == word.name
+    assert descriptor_id(bits).endswith(',IR="boolean"}') and bits.name == word.name
     assert [n.fn for n in bits.body.nodes] == [BB.boolean_version(n.fn) for n in word.body.nodes]
     assert bits.signature() == (tuple((n, BL.bit_type(t)) for n, t in PARAMS), BL.bit_type(word.signature()[1]))
     x, y, rec = _inputs(64)
@@ -159,12 +159,12 @@ def test_a_word_derivation_report_becomes_its_program_on_bits():
 
     P = Program(_derived(), annotations={"note": "carried"})
     desc = encode_program(P)
-    prov = {"result": {"root": _spec_id(P.fn), "digest": program_digest(desc), "gates": P.gates}}
-    word = DeriveReport(P, None, prov, prov["result"]["digest"], _spec_id(P.fn), P.gates, descriptor=desc)
+    prov = {"result": {"root": descriptor_id(P.fn), "digest": program_digest(desc), "gates": P.gates}}
+    word = DeriveReport(P, None, prov, prov["result"]["digest"], descriptor_id(P.fn), P.gates, descriptor=desc)
     rep = derived(word)
     bits = Program(BB.lift(P.fn))
     assert rep.ok and rep.digest == program_digest(bits) == program_digest(rep.descriptor) != word.digest
-    assert rep.root == _spec_id(bits.fn) and rep.gates == bits.gates and rep.program.annotations == {"note": "carried"}
+    assert rep.root == descriptor_id(bits.fn) and rep.gates == bits.gates and rep.program.annotations == {"note": "carried"}
     assert rep.provenance["ir"] == {"ir": "boolean", "word_root": word.root, "word_digest": word.digest,
                                     "sigma_check": {"nodes": 6, "definitions": 5, "ok": True}}
     assert rep.provenance["result"]["digest"] == rep.digest and word.provenance["result"]["digest"] == word.digest
@@ -184,8 +184,8 @@ def test_sigma_check_reads_the_boolean_function_against_sigma_of_the_word_functi
     word = _derived()
     assert BB.sigma_check(word, BB.lift(word)) == {"nodes": 6, "definitions": 5, "mismatches": [], "mismatch_n": 0, "ok": True}
     callee = BB.sigma_check(word, BB.lift(_derived({"mul": W.F32AddFtz})))
-    assert not callee["ok"] and callee["mismatches"] == [f"node 1: Calls {_spec_id(BB.boolean_version(W.F32AddFtz))}, "
-                                                         f"σ(F32MulFtz_v1) = {_spec_id(BB.boolean_version(W.F32MulFtz))}"]
+    assert not callee["ok"] and callee["mismatches"] == [f"node 1: Calls {descriptor_id(BB.boolean_version(W.F32AddFtz))}, "
+                                                         f"σ(F32MulFtz_v1) = {descriptor_id(BB.boolean_version(W.F32MulFtz))}"]
     assert BB.sigma_check(one_add(1), BB.lift(one_add(1)))["ok"]
     assert BB.sigma_check(one_add(1), BB.lift(one_add(0)))["mismatches"] == ["node 0 operand 1: not the word operand's bits"]
 
@@ -221,7 +221,7 @@ def test_derive_refuses_a_call_with_no_boolean_version_by_name():
 
 
 def test_bit_offsets_are_the_prefix_sums_of_the_leaf_widths():
-    for t in (Record(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32))), Array(3, TupleT(BF16, Array(2, F32), Value(1))),
+    for t in (RecordType(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32))), Array(3, TupleT(BF16, Array(2, F32), Value(1))),
               TupleT(Array(0, F32), F32, Array(2, TupleT()), BF16), Array(5, BF16)):
         widths = t.leaf_widths()
         off = BB.bit_offsets(t)

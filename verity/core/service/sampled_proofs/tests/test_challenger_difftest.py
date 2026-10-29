@@ -18,8 +18,8 @@ its cap, committing no cap or circuit or closing with other windows, a record on
 or refused hellos the ledger didn't seal, infra's published heads forked, each malformed form. The pins log's
 (`PINNED`) are a session whose open seals the host's pins log and pins its commit, then a commit off main or pinned
 after the open, no pins log, a malformed one or line, one cut or with a sealed line edited, and an open sealing
-none. A draw's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `SampledProofs.ChallengerCoins`) are
-a draw's coins from one family of a ledger session's challenger, opened after the prover's commitment between other
+none. A sample's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `SampledProofs.ChallengerCoins`) are
+a sample's coins from one family of a ledger session's challenger, opened after the prover's commitment between other
 roots, the bytes it read and the session's evidence, then a coin opened after the commitment and skipped, a wrong
 opening, coins opened before the commitment (their `after` rewritten or not), a coin opened and not read, the bytes
 tampered or longer, another commitment, a release log edited, the window of another session the ledger opens (a prover
@@ -656,9 +656,9 @@ CIRCUITS = ["ab" * 64, "0" * 128, "c" * 128]
 STARTS = ["2026-10-20T12:00:00Z", "2024-02-28T23:59:59Z", "2100-02-28T12:00:00Z", "2026-12-31T23:30:00Z",
           "0001-01-01T00:00:00Z", "9999-12-31T11:00:00Z"]
 PEERS = ["10.0.0.7", "vy-nebius-1", "::1"]
-#: a body's note, each written as `ledger_text` escapes it: ASCII without DEL, as the entry's signed digest (canonical
-#: JSON, which refuses any other) holds
-NOTES = ["~", "a\"b\\c\n", "\x01", "\x1f "]
+#: a body's note, each written as `ledger_text` escapes it (none past the Basic Multilingual Plane, which it writes as a
+#: surrogate pair)
+NOTES = ["\u00e9", "a\"b\\c\n", "\x7f\x01", "\u2026"]
 #: a key `_body` removes
 DROP = object()
 #: an open's `reserve` that `Ledger.lines` resolves to its session's reserve's seq
@@ -999,15 +999,13 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             lines = lg.lines()
             j["ledger"] = lines[:i] + [json.dumps(json.loads(lines[i]))] + lines[i + 1:]
         case "unicode":
-            note = rng.choice(["\U0001f600", "\\ud800", "\\udfff", "\u00e9", "\u00e9"])
-            if note.isascii():
-                j["ledger"] = lg.lines(edit=_body_edit(o, note=note))
+            if rng.random() < 0.5:
+                lines = lg.lines(edit=_body_edit(o, note=rng.choice(["\U0001f600", "\\ud800", "\\udfff"])))
+                j["ledger"] = lines
             else:
-                # no entry's signed digest (canonical JSON) holds a string past ASCII, so the note goes into the signed
-                # line's text: the emoji as `ledger_text` escapes it (a surrogate pair), é as itself (not canonical)
-                lines = lg.lines(edit=_body_edit(o, note="?"))
-                text = json.dumps(note, ensure_ascii=note != "\u00e9")
-                j["ledger"] = lines[:o] + [lines[o].replace('"note":"?"', '"note":' + text, 1)] + lines[o + 1:]
+                lines = lg.lines(edit=_body_edit(o, note="\u00e9"))
+                j["ledger"] = lines[:o] + [json.dumps(json.loads(lines[o]), sort_keys=True, separators=(",", ":"),
+                                                      ensure_ascii=False)] + lines[o + 1:]
         case "torn":
             lines = lg.lines()
             j["ledger"] = lines[:i] + [lines[i][:rng.randrange(1, len(lines[i]))]] + lines[i + 1:]
@@ -1171,7 +1169,7 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             j["ledger"] = lg.lines(edit=_body_edit(p, cap=rng.choice([0, -1, Ch.CAP[1] + 1, "4", True, None, [4]])))
         case "circuit":
             j["ledger"] = lg.lines(edit=_body_edit(p, circuit=rng.choice(["AB" * 64, "aB" * 64, "", "-x", "a b", 5,
-                                                                           "x" * 257, None, "~"])))
+                                                                           "x" * 257, None, "\u00e9"])))
         case "no-cap":
             j["ledger"] = lg.lines(edit=_body_edit(p, **rng.choice([{"cap": DROP, "circuit": DROP},
                                                                      {"cap": None, "circuit": None}])))
@@ -1502,7 +1500,7 @@ def pinned_case(rng: random.Random, name: str) -> Any:
     return j
 
 
-# ---- a draw's coins -----------------------------------------------------------------------------------------------------
+# ---- a sample's coins -----------------------------------------------------------------------------------------------------
 
 def read(j: Any) -> Any:
     _request(j, ["after", "commitment", "read", "roots", "segment"])
@@ -1533,7 +1531,7 @@ def _pairs(log: Sequence[dict]) -> list[str]:
 
 
 class Drawn:
-    """A draw's coins from family `draw` of a ledger session's challenger, as `ChallengerCoins` opens them after `after`
+    """A sample's coins from family `draw` of a ledger session's challenger, as `ChallengerCoins` opens them after `after`
     (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
     the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
     the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
@@ -1587,7 +1585,7 @@ class Drawn:
         return rng.choice(others) if others else _window(rng)["root"]
 
 
-#: each a mutation of the draw's segment or bytes, which both pieces refuse
+#: each a mutation of the sample's segment or bytes, which both pieces refuse
 DRAW_MUTATIONS = ["skipped", "wrong-opening", "before", "unread", "read-tampered", "other-after", "segment-form",
                   "opening-form"]
 
@@ -1651,7 +1649,7 @@ READ_NAMES = ["honest"] + DRAW_MUTATIONS + ["commitment-form", "request"]
 
 
 def _seeded(rng: random.Random) -> random.Random:
-    """A plain generator seeded from `rng`: a `Drawn` session draws more bytes than Hypothesis's smallest example may
+    """A plain generator seeded from `rng`: a `Drawn` session samples more bytes than Hypothesis's smallest example may
     hold when its `randoms` record each one."""
     return random.Random(rng.getrandbits(64))
 

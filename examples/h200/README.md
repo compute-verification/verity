@@ -1,7 +1,7 @@
 # The H200 example
 
 It shows the remote protocol's sampled-proofs half (`examples/README.md`) at a frozen shape on one H200: a step's every
-value committed, proof blocks drawn by one live coin, each proved by C-Flock `--zk` and checked by the Lean verifier
+value committed, proof blocks drawn by one live coin, each proved by Flock `--zk` and checked by the Lean verifier
 (`phases.sh`, the run of record). It claims nothing else.
 
 The GPU serving loop of the one-H200 demo: steps of the frozen MQA shape (`shape.FROZEN`, `served_weights`'s `H200`) on the
@@ -61,7 +61,7 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | PoUW | `--subcircuit e2e_h200.percall:kraqwxsc` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraqwxsc build (`percall:kraq` is the earlier build), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled units held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its two blockers are named in the record (`percall.CREDIT`) | J10-R's lane Definitions and Credit.window over the tile stratum; window_salt's live salt and the real roots (`percall.STANDS_IN`) |
 | Network | `e2e_h200/engine.py`: the loop as network's demo endpoint's engine (`demo_endpoint.py --engine e2e_h200.engine:frozen`): each sequence its own slot and positions, no EOS (8 prompt ids, 24 generated) | — |
 | Bundle and record | `record.py`: provisional v0 schemas | `verity/drawn-unit-bundle/v1` and `verity/block-record/v1` (`examples/h200/interfaces`) |
-| Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the staged path's P2 store; bandwidth not run; sampled proofs are the replay and the opening | PoUS's and the memory wipe's runs, the bandwidth audit, network certification's signed records, C-Flock `--zk` and the Lean verifier |
+| Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the staged path's P2 store; bandwidth not run; sampled proofs are the replay and the opening | PoUS's and the memory wipe's runs, the bandwidth audit, network certification's signed records, Flock `--zk` and the Lean verifier |
 
 `e2e_h200/served_weights.py` is the demo's seeded weights and their registration root, for any decoder
 shape (`H200`, Phase 1's CPU model, `TINY`): a SHA-512 counter generator from (seed, tensor, row) to every tensor, the weights

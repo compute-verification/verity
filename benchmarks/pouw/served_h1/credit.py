@@ -1,4 +1,4 @@
-"""served_h1's credit by the padded-window rule (PADCREDIT round 2 with RT10's fixes): credit
+"""served_h1's credit by the padded-window rule: credit
 only the admitted slots, from admissions that always-proved units compute from the committed request queue and the rows'
 scales.
 
@@ -26,7 +26,7 @@ scales.
               window.level(window.floor_point(Cr)) and the published credit Pub = window.point(level) <= Cr
 
 Every admit unit is proved in every window (`proof_plan`); the tally is no proof block until a tally Definition exists.  The
-draw is uniform over every unit position of the window, dead ones included, never weighted by an annotation.  Numpy and
+sample is uniform over every unit position of the window, dead ones included, never weighted by an annotation.  Numpy and
 `pouw.circuit.admit`'s word.
 """
 from __future__ import annotations

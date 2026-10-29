@@ -1,6 +1,6 @@
 # A3: why per test, what ties it to the verifier, its scope, and where it is used
 
-The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event), which the unit draw takes, and
+The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event), which the unit sample takes, and
 `UniformRandomBytesTest L t E η` (A3 per test, one event within `η`, either way), which zero knowledge takes.
 
 - **Why per test.** The every-event form is refutable at the deployed source. Linux's CRNG (5.18 and later,
@@ -9,14 +9,14 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `n` uniform bytes: any source with fewer outcomes than byte strings fails it
   (note:proofs/20261018T1925Z-report-redteam-zk-server-os, P4). Its zero is an idealization, the CSPRNG taken as exactly
   uniform; the true bound carries the CSPRNG's distinguishing advantage against the theorem's test, which is the per-test
-  form's `η`. A salt is 192 bytes and a rep's draws are `drawBytes` bytes, so zero knowledge takes the per-test form.
-  The unit draw still takes the every-event form, under the same idealization, since its reads are past 32 bytes too.
+  form's `η`. A salt is 192 bytes and a rep's samples are `drawBytes` bytes, so zero knowledge takes the per-test form.
+  The unit sample still takes the every-event form, under the same idealization, since its reads are past 32 bytes too.
 - **Why it is not stated about `IO.getRandomBytes`.** To Lean's logic an `IO` action is a function of the world and
   `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random would be refutable, and every theorem
   taking it vacuous. At run time, Lean v4.34.0's runtime implements it as `lean_io_get_random_bytes`
   (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on Windows. Re-read it at every
   toolchain bump.
-- **What ties the statement to the verifier** is `drawOS_def`: the live draw `Flock.Draw.drawOS` is
+- **What ties the statement to the verifier** is `drawOS_def`: the live sample `Flock.Draw.drawOS` is
   `Flock.Draw.drawWith` with every stream's bytes from `IO.getRandomBytes`, and the theorems are about `drawWith`. The
   step from `IO` to the model rests on `drawWith` being generic in its monad, together with A3.
 - **Where it is used.** `drawOS_subset_escape_le`, `drawOS_stratified_escape_le`, `drawOS_work_escape_le`,
@@ -24,7 +24,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   bytes `L` the model reads. The live verifier reads as many as its reruns need, and its acceptance probability is the
   limit as `L` grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take
   uniform streams as their probability space, the same assumption. The recursive audit's sessions of V* need none of
-  it: their law is the full draw, which draws every unit at every byte string (`execOS_subset_full_mem`,
+  it: their law is the full sample, which samples every unit at every byte string (`execOS_subset_full_mem`,
   `execOS_subset_full_escape`), so `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditC3` are proved from
   their forms with no A3 premise (`…NoA3`). `RecursiveSound` is proved the same way but is no longer a guarantee: its
   form admits a possibilistic break, and the recursion's guarantee is `Flock.Guarantees.RecursiveKS`. Those are fork
@@ -39,9 +39,9 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `DecompB` at what each part's circuit accepts (`PartAccepts`).
   Holo statements are candidate 3's own model, and `BitsLin2` at the dense
   statements follows from it (`bitsLin2On_of_ksLin2On`).
-- **The salts.** C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
+- **The salts.** Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
   from the operating system (`getrandom`, the kernel's `getrandom(2)`, which `/dev/urandom` also reads; under the
-  firewall, from its tap), and the recursive audit's firewall and a registrant read theirs the same way (`os.urandom`).
+  ZK server, from its tap), and the recursive audit's ZK server and a registrant read theirs the same way (`os.urandom`).
   A3 per test (`UniformRandomBytesTest`) is that those reads pass the theorem's test as independent uniform bytes do, up
   to `η`. Zero knowledge's hiding theorems are stated at uniform salts; `Discharge/ZkView/OsSalts.lean` reads 192 bytes
   as one salt, one for one (`saltEquiv`; `leaf_os`: the executable's leaf at those bytes is the model's), and takes them
@@ -49,12 +49,12 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `n` leaves), `hides_os` and `hides_leaves_os` (a registration, at one event), and, for the recursive audit,
   `Flock.SecurityProofs.recursiveZK_os_gap` (`Recursive/OsSalts.lean`).
 - **Its scope: the masks and the Reed–Solomon padding** are the operating system's bytes too (`live/src/zk_hooks.rs`),
-  read by the firewall's Lean processes. Each rep's frame reads its draws in one call at its start (`flock-firewall
+  read by the ZK server's Lean processes. Each rep's frame reads its samples in one call at its start (`flock-firewall
   frame`; `Frame.cmd` is `Frame.cmdWith IO.getRandomBytes`, and `Frame.drawsWith` refuses a read of any other length):
   the pads `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt and the pads tree's salts. The tap
   (`flock-firewall tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
   salts and the coin tree's nonce. What ties them to the model is `Claims.ZKServer.frame_cmd` and `frame_draws` (the
-  frame's read, on rep `i`'s stream of the tape, is the release's draws), as `drawOS_def` is for the unit draw;
+  frame's read, on rep `i`'s stream of the tape, is the release's samples), as `drawOS_def` is for the unit sample;
   `Claims/ZK/Os.lean` takes the ZK server's three theorems to those bytes (`zkServerLeanOs`). So no premise on a stream
   generator is left on the salts or the masks.
 - **What is outside it.** A VM snapshot restored more than once repeats the kernel's CRNG state unless the kernel

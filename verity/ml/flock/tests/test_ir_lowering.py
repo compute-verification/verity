@@ -1316,7 +1316,7 @@ def test_hopper_wgmma_piece_is_the_ir_primitive():
 
 
 def test_a_cells_domain_is_the_one_its_statement_proves():
-    """red-team-flock-3's M0 (coordinator 2026-09-27 13:45Z): ``ir_bench`` and ``bench`` wrote ``domain: finite`` for every cell.
+    """A red-team finding: ``ir_bench`` and ``bench`` wrote ``domain: finite`` for every cell.
     An IR lowering asserts nothing, so every encoding is proven to give the IR's output: ``total``.  A pure unit asserts its
     operands (and accumulator) finite: ``finite-only``, unless it is a total unit."""
     from types import SimpleNamespace

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, over a GPU-served window: Llama-3.2-1B int8 batch-invariant eager on one H200 (ROW, default the B4
-# I256/O32 h200 row of #4770), its Build and Match of record and a deferred config-run Commit under rows-sha512 whose
+# I256/O32 h200 row), its Build and Match of record and a deferred config-run Commit under rows-sha512 whose
 # --serving-rows window (llama32_1b_rope_d64_l0.json: every RoPEHead_v1{D=64} head of layer 0 at steps 1-7, by subset:1) is
 # committed at its C2 site before the bundle is sealed (`c2_replay.serving_rows`): a `served` window under the Commit's 64-byte
 # run root. Then the Commit's C2 replay on CPU from the sealed bundle, and a5.sh (WINDOW=served, A5_ROW_DIR) on that bundle and
@@ -8,7 +8,7 @@
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --mem-gb 192 --timeout 6h \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/one_stage/a5_llama1b_h200.sh
 # Needs on the node what served_verdicts.sh does: vLLM's venv /workspace/cp/venv312, the int8 checkpoint in /workspace/hf, the
-# sm_90 taps of r20261026-185144-3ccb under /workspace/research/vllm-composed-h200int8 and gpu-lease (the row leases the GPU for
+# sm_90 taps under /workspace/research/vllm-composed-h200int8 and gpu-lease (the row leases the GPU for
 # its Match capture and its Commit's engine only). The uv venv, Lean's verifiers and M0's flock-circuit build in the background
 # while the GPU stages run (M0 in A5_ROOT/flock-work, kept for a rerun). The row dir and the window stay on the node, kept
 # there; $OUT keeps the row's records, the window's public files, a5.sh's out ($OUT/a5) and summary.txt, whose A5 line
@@ -56,7 +56,7 @@ rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "row dir $D"; echo "CUDA_HOME $CUDA_HOME"; nvidia-smi -L
   sha256sum "$FA3" "$FA3G" "$NT"; } | tee "$OUT/machine.txt"
 rs keep "$ROOT" --owner @vllm --expires 7d --priority normal \
-  --why "VLLM-17: A5 over a GPU-served rows-sha512 window (Llama-3.2-1B int8 H200): the row dir, its sealed bundle and window" | tail -2
+  --why "A5 over a GPU-served rows-sha512 window (Llama-3.2-1B int8 H200): the row dir, its sealed bundle and window" | tail -2
 
 row() {  # NAME ARGS...: one `verity-vllm row run` of the row dir, its output in $OUT/NAME.out
   local name=$1; shift
