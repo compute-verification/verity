@@ -153,9 +153,6 @@ def test_unsupported_configurations_are_refused():
         NativeHostCommitter(None, leaf_scheme="blake3-keyed/row/v2")
     with pytest.raises(ValueError):
         NativeHostCommitter(None, leaf_scheme=hiding.NAME, gpu_tree=True)
-    c = committer()
-    with pytest.raises(ValueError):
-        c.add_padding_steps([object()])
 
 
 def test_a_committer_whose_steps_take_another_leaf_path_is_refused():

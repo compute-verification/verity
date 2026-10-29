@@ -8,8 +8,8 @@
 // PRODUCER's current stream (c10 current CUDA stream of the calling thread) -- so the snapshot is stream-ordered after the producer kernel
 // and before any later kernel that overwrites the value in place (the known-safe placement; no collector stream, no event per tensor).
 // On a miss (first step of a shape class, or a changed shape/name) the collector switches this step to LEARN mode: the plan is truncated at
-// the miss and rebuilt from the tensors actually seen, with the SAME offset rule as the Python fast path (4-byte alignment, gaps zeroed)
-// so the packed arena bytes -- and hence the 256-B chunk tree root -- are bit-identical to `native_host_fast+hidden_m1_gputree`.
+// the miss and rebuilt from the tensors actually seen, with the SAME offset rule as the offline core's packed stream (4-byte alignment,
+// gaps zeroed), so the packed bytes -- and hence the step's rows-sha512 root -- are bit-identical to `commit_block_offline`'s.
 //
 // Nothing here changes what is committed or how it is laid out: same values, same byte offsets, same zero gaps, same names/dtypes/shapes.
 #include <torch/extension.h>
@@ -39,12 +39,6 @@
 #include "native_plans.h"
 
 extern "C" int verity_gather_launch(const void* d_desc, int n, int blocks_per_desc, cudaStream_t stream);   // native_gather.cu
-extern "C" int verity_chunk_leaves_launch(const uint32_t* stream, uint32_t* out, long n_chunks, int chunk_words, uint32_t launch_tag,
-                                          uint32_t src_mask, uint32_t HB, uint32_t M, uint32_t NB, cudaStream_t st);   // native_tree.cu
-extern "C" int verity_chunk_leaves_launch_base(const uint32_t* stream, uint32_t* out, long n_chunks, int chunk_words, uint32_t launch_tag,
-                                               uint32_t src_mask, uint32_t HB, uint32_t M, uint32_t NB, long ci_base, cudaStream_t st);
-extern "C" int verity_tree_level_launch(const uint32_t* in, uint32_t* out, long n_in, cudaStream_t st);                // native_tree.cu
-extern "C" int verity_tree_levels_launch(const uint32_t* in, uint32_t* out, long n_in, int n_levels, cudaStream_t st);  // native_tree.cu
 extern "C" int verity_rows_params_bytes();                                                                              // native_rows.cu
 extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, const uint8_t* row_prefix, const uint8_t* salt_prefix,
                                  const uint8_t* leaf_prefix, const char* schema, int schema_len, uint32_t lb, void* out);
@@ -74,10 +68,9 @@ inline double now_s() {
   return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-// A level of more than kWideLevel nodes is built by one launch of a thread a parent (verity_tree_level_launch, verity_rows_level_launch;
-// rows-sha512 capped: launches of at most RowStep::max_blocks blocks);
-// the narrower ones kFusedLevels at a time, one launch each (verity_tree_levels_launch, verity_rows_levels_launch: a block folds its own
-// aligned slice of 2^kFusedLevels nodes).  A block's threads idle as its slice narrows, which on a wide level costs more than the
+// A level of more than kWideLevel nodes is built by one launch of a thread a parent (verity_rows_level_launch; capped: launches of at
+// most RowStep::max_blocks blocks); the narrower ones kFusedLevels at a time, one launch each (verity_rows_levels_launch: a block folds
+// its own aligned slice of 2^kFusedLevels nodes).  A block's threads idle as its slice narrows, which on a wide level costs more than the
 // launches saved (a 2^22-leaf tree a third slower on H200 folded from its leaves), while below kWideLevel a level's launch is its cost.
 constexpr int64_t kWideLevel = int64_t{1} << 16;
 constexpr int64_t kFusedLevels = 10;
@@ -86,45 +79,6 @@ int64_t levels_to_root(int64_t n) {
   int64_t k = 0;
   for (; n > 1; n = (n + 1) / 2) ++k;
   return k;
-}
-
-// vllm-v1: the n_up levels above `base` (int32 [n, 8] on the current stream `side`), lowest first; each launch's levels are views of
-// one tensor.
-std::vector<at::Tensor> tree_levels_above(const at::Tensor& base, int64_t n_up, cudaStream_t side) {
-  std::vector<at::Tensor> up;
-  at::Tensor cur = base;
-  while (n_up > 0) {
-    if (cur.size(0) > kWideLevel) {
-      at::Tensor out = at::empty({(cur.size(0) + 1) / 2, 8}, base.options());
-      int lrc = verity_tree_level_launch(reinterpret_cast<const uint32_t*>(cur.data_ptr()), reinterpret_cast<uint32_t*>(out.data_ptr()),
-                                         cur.size(0), side);
-      if (lrc != 0) throw std::runtime_error(std::string("tree_level: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
-      up.push_back(out);
-      cur = out;
-      --n_up;
-      continue;
-    }
-    const int64_t k = std::min(n_up, kFusedLevels);
-    std::vector<int64_t> widths;
-    int64_t total = 0;
-    for (int64_t i = 0, n = cur.size(0); i < k; ++i) {
-      n = (n + 1) / 2;
-      widths.push_back(n);
-      total += n;
-    }
-    at::Tensor buf = at::empty({total, 8}, base.options());
-    int lrc = verity_tree_levels_launch(reinterpret_cast<const uint32_t*>(cur.data_ptr()), reinterpret_cast<uint32_t*>(buf.data_ptr()),
-                                        cur.size(0), static_cast<int>(k), side);
-    if (lrc != 0) throw std::runtime_error(std::string("tree_levels: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
-    int64_t off = 0;
-    for (int64_t w : widths) {
-      up.push_back(buf.narrow(0, off, w));
-      off += w;
-    }
-    cur = up.back();
-    n_up -= k;
-  }
-  return up;
 }
 
 // rows-sha512: the n_up levels above `base` (uint8 [n, 64], n a nonzero multiple of 2^n_up, of level `level`, the first node at index
@@ -1600,11 +1554,6 @@ struct Fa3Wrap {
   }
 };
 
-// The worker's per-step GPU commitment as ONE native call with the GIL released.  Mirrors
-// `NativeHostCommitter._commit_step_gpu` exactly (same kernels -- native_tree.cu is hidden_gpu_tree.cu -- same header fields
-// (chunk_words 64, launch_tag = step, src_mask, HB = step, M = padded/4, NB = 0), same zero padding to 256 B, same retained copy, same
-// "root D2H + done event synchronised before the block is released" ordering).  The Python worker then only binds the root
-// (hashlib, ~50 us) and files the StepCommitment; nothing Python-side runs concurrently with the serving thread's hook path.
 // rows-sha512 (verity_vllm.commit.step_rows): one step's kernel parameters -- its frame domain's templates and midstates and its salt
 // key -- built once on the host (native_rows.cu) and passed by value to every launch of the step.
 struct RowStep {
@@ -1627,236 +1576,16 @@ struct RowStep {
 };
 
 struct StepHasher {
-  cudaEvent_t ev0 = nullptr, ev1 = nullptr, ev2 = nullptr, done = nullptr;
-  uint32_t* root_host = nullptr;                 // pinned, 32 B
-  uint8_t* root64_host = nullptr;                // pinned, 64 B (rows-sha512)
+  cudaEvent_t ev1 = nullptr, ev2 = nullptr, done = nullptr;
+  uint8_t* root64_host = nullptr;                // pinned, 64 B
   StepHasher() {
-    cudaEventCreateWithFlags(&ev0, cudaEventDefault); cudaEventCreateWithFlags(&ev1, cudaEventDefault); cudaEventCreateWithFlags(&ev2, cudaEventDefault);
+    cudaEventCreateWithFlags(&ev1, cudaEventDefault); cudaEventCreateWithFlags(&ev2, cudaEventDefault);
     cudaEventCreateWithFlags(&done, cudaEventDisableTiming);
-    cudaHostAlloc(reinterpret_cast<void**>(&root_host), 32, cudaHostAllocDefault);
     cudaHostAlloc(reinterpret_cast<void**>(&root64_host), 64, cudaHostAllocDefault);
   }
   ~StepHasher() {
-    if (ev0) cudaEventDestroy(ev0); if (ev1) cudaEventDestroy(ev1); if (ev2) cudaEventDestroy(ev2); if (done) cudaEventDestroy(done);
-    if (root_host) cudaFreeHost(root_host);
+    if (ev1) cudaEventDestroy(ev1); if (ev2) cudaEventDestroy(ev2); if (done) cudaEventDestroy(done);
     if (root64_host) cudaFreeHost(root64_host);
-  }
-
-  // windowed: leaves of ONE window of a step's packed stream.  `slot` holds the window's bytes (nbytes, a multiple of 256; the caller
-  // zero-pads the tail of the last window), `first_chunk` its first global chunk index, `m_words` the step's padded words (layout v1 binds it
-  // into every leaf header; v2 passes 0).  Runs on `stream_ptr` (the worker's side stream); returns the [n, 8] int32 device leaves.
-  at::Tensor leaves_window(at::Tensor slot, int64_t nbytes, int64_t first_chunk, int64_t step, int64_t src_mask, int64_t chunk_bytes, int64_t m_words,
-                           int64_t stream_ptr) {
-    if (!slot.is_cuda() || slot.scalar_type() != at::kByte || !slot.is_contiguous()) throw std::runtime_error("leaves_window: slot must be a contiguous CUDA uint8 tensor");
-    if (nbytes % chunk_bytes != 0 || nbytes > slot.numel()) throw std::runtime_error("leaves_window: nbytes must be a chunk multiple within the slot");
-    const long n = nbytes / chunk_bytes;
-    at::Tensor leaves;
-    {
-      py::gil_scoped_release nogil;
-      c10::InferenceMode inf;
-      cudaStream_t st = reinterpret_cast<cudaStream_t>(stream_ptr);
-      c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(st, slot.device().index());
-      c10::cuda::CUDAStreamGuard g(cs);
-      leaves = at::empty({n, 8}, at::TensorOptions().dtype(at::kInt).device(slot.device()));
-      int lrc = verity_chunk_leaves_launch_base(reinterpret_cast<const uint32_t*>(slot.data_ptr()), reinterpret_cast<uint32_t*>(leaves.data_ptr()), n,
-                                                static_cast<int>(chunk_bytes / 4), static_cast<uint32_t>(step), static_cast<uint32_t>(src_mask),
-                                                static_cast<uint32_t>(step), static_cast<uint32_t>(m_words), 0u, first_chunk, st);
-      if (lrc != 0) throw std::runtime_error(std::string("chunk_leaves(window): ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
-    }
-    return leaves;
-  }
-
-  // windowed: tree levels over given device leaves (same node/lift rule), root D2H, optional levels -> pinned host; one event sync.
-  // -> (levels, root: bytes(32), tree_ms)
-  py::tuple tree(at::Tensor leaves, int64_t stream_ptr, bool levels_host = false, at::Tensor levels_dst = at::Tensor()) {
-    if (!leaves.is_cuda() || leaves.scalar_type() != at::kInt || !leaves.is_contiguous() || leaves.dim() != 2 || leaves.size(1) != 8) throw std::runtime_error("tree: leaves must be a contiguous CUDA int32 [n,8] tensor");
-    std::vector<at::Tensor> levels;
-    float tree_ms = 0.f;
-    {
-      py::gil_scoped_release nogil;
-      c10::InferenceMode inf;
-      cudaStream_t side = reinterpret_cast<cudaStream_t>(stream_ptr);
-      c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(side, leaves.device().index());
-      c10::cuda::CUDAStreamGuard g(cs);
-      cudaEventRecord(ev1, side);
-      levels.push_back(leaves);
-      for (auto& lv : tree_levels_above(leaves, levels_to_root(leaves.size(0)), side)) levels.push_back(lv);
-      cudaEventRecord(ev2, side);
-      cudaError_t rc = cudaMemcpyAsync(root_host, levels.back().data_ptr(), 32, cudaMemcpyDeviceToHost, side);
-      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(root): ") + cudaGetErrorString(rc));
-      if (levels_host) {
-        int64_t total = 0;
-        for (auto& lv : levels) total += lv.numel();
-        at::Tensor hbuf;
-        if (levels_dst.defined() && levels_dst.numel() >= total * 4) hbuf = levels_dst.narrow(0, 0, total * 4).view(at::kInt);
-        else hbuf = at::empty({total}, at::TensorOptions().dtype(at::kInt).device(at::kCPU).pinned_memory(true));
-        std::vector<at::Tensor> hl;
-        int64_t hoff = 0;
-        for (auto& lv : levels) {
-          at::Tensor h = hbuf.narrow(0, hoff, lv.numel()).view({lv.size(0), 8});
-          hoff += lv.numel();
-          rc = cudaMemcpyAsync(h.data_ptr(), lv.data_ptr(), static_cast<size_t>(lv.numel()) * 4, cudaMemcpyDeviceToHost, side);
-          if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(level->host): ") + cudaGetErrorString(rc));
-          hl.push_back(h);
-        }
-        cudaEventRecord(done, side);
-        rc = cudaEventSynchronize(done);
-        if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaEventSynchronize: ") + cudaGetErrorString(rc));
-        levels.swap(hl);
-      } else {
-        cudaEventRecord(done, side);
-        rc = cudaEventSynchronize(done);
-        if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaEventSynchronize: ") + cudaGetErrorString(rc));
-      }
-      cudaEventElapsedTime(&tree_ms, ev1, ev2);
-    }
-    py::list lv;
-    for (auto& t : levels) lv.append(t);
-    return py::make_tuple(lv, py::bytes(reinterpret_cast<const char*>(root_host), 32), static_cast<double>(tree_ms));
-  }
-
-  // windowed absorb: the subtree of ONE window.  Window k covers leaves [k*2^j, (k+1)*2^j) of the step (W = chunk * 2^j), so for every
-  // level L <= j the full tree's nodes over that range are a closed computation on the window's own leaves (pairs never cross the
-  // 2^(j-L)-aligned boundary; the lift rule for the odd trailing node fires only in the LAST window, where the global trailing node is)
-  // -> building `n_levels` levels per window (0 = leaves .. n_levels-1) and then the ordinary tree over the per-window top nodes gives
-  // exactly the whole-step tree (same root, same levels).  Each level L is copied D2H into `host_dsts[L]` (pinned slices of the step's
-  // level buffers); the top node stays on device (returned) for the upper tree.  Device transient: one window's leaves + levels.
-  at::Tensor tree_window(at::Tensor leaves, int64_t n_levels, int64_t stream_ptr, std::vector<at::Tensor> host_dsts) {
-    if (!leaves.is_cuda() || leaves.scalar_type() != at::kInt || !leaves.is_contiguous() || leaves.dim() != 2 || leaves.size(1) != 8) throw std::runtime_error("tree_window: leaves must be a contiguous CUDA int32 [n, 8]");
-    if (static_cast<int64_t>(host_dsts.size()) != n_levels) throw std::runtime_error("tree_window: one host destination per level");
-    if (n_levels < 1) throw std::runtime_error("tree_window: n_levels must be positive");
-    py::gil_scoped_release nogil;
-    c10::InferenceMode inf;
-    cudaStream_t side = reinterpret_cast<cudaStream_t>(stream_ptr);
-    c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(side, leaves.device().index());
-    c10::cuda::CUDAStreamGuard g(cs);
-    std::vector<at::Tensor> levels{leaves};                          // a level of one node climbs by lifts (the collapsed last window to the window level)
-    for (auto& lv : tree_levels_above(leaves, n_levels - 1, side)) levels.push_back(lv);
-    for (int64_t L = 0; L < n_levels; ++L) {
-      const at::Tensor& h = host_dsts[static_cast<size_t>(L)];
-      const at::Tensor& cur = levels[static_cast<size_t>(L)];
-      if (h.numel() != cur.numel()) throw std::runtime_error("tree_window: level " + std::to_string(L) + " host slice has " + std::to_string(h.numel() / 8)
-                                                             + " nodes, computed " + std::to_string(cur.size(0)));
-      cudaError_t rc = cudaMemcpyAsync(h.data_ptr(), cur.data_ptr(), static_cast<size_t>(cur.numel()) * 4, cudaMemcpyDeviceToHost, side);
-      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(window level->host): ") + cudaGetErrorString(rc));
-    }
-    at::Tensor cur = levels.back();
-    cudaEventRecord(done, side);                                     // the host slices are complete (and `leaves` may be freed) once this fires
-    cudaError_t rc = cudaEventSynchronize(done);
-    if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaEventSynchronize: ") + cudaGetErrorString(rc));
-    return cur;
-  }
-
-  // tree_window without the host copies (a run that keeps no tree levels: its openings take their paths from a replay): the same levels on
-  // the device and the same top node, and no host sync -- every tensor here is allocated on `stream_ptr`, and the caller releases the
-  // window's slot with an event recorded on that stream after these kernels.
-  at::Tensor tree_window_top(at::Tensor leaves, int64_t n_levels, int64_t stream_ptr) {
-    if (!leaves.is_cuda() || leaves.scalar_type() != at::kInt || !leaves.is_contiguous() || leaves.dim() != 2 || leaves.size(1) != 8) throw std::runtime_error("tree_window_top: leaves must be a contiguous CUDA int32 [n, 8]");
-    if (n_levels < 1) throw std::runtime_error("tree_window_top: n_levels must be positive");
-    py::gil_scoped_release nogil;
-    c10::InferenceMode inf;
-    cudaStream_t side = reinterpret_cast<cudaStream_t>(stream_ptr);
-    c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(side, leaves.device().index());
-    c10::cuda::CUDAStreamGuard g(cs);
-    std::vector<at::Tensor> up = tree_levels_above(leaves, n_levels - 1, side);
-    return up.empty() ? leaves : up.back();
-  }
-
-  // -> (levels: list[Tensor int32 [n,8]] leaves first, keep: Tensor uint8 [padded] (device | host | empty), root: bytes(32), padded, leaf_ms, tree_ms)
-  // keep_mode (retention policy): 0 = compact DEVICE copy, 1 = HOST copy (D2H on the side stream; pageable), 2 = no copy
-  // (openings by replay).  The leaves are always hashed from the arena block first, so the root does not depend on keep_mode.
-  py::tuple commit(at::Tensor arena, int64_t used, int64_t step, int64_t src_mask, int64_t chunk_bytes, int64_t side_stream_ptr, int64_t step_event_ptr,
-                   int64_t keep_mode = 0, at::Tensor keep_dst = at::Tensor(), bool levels_host = false, at::Tensor levels_dst = at::Tensor()) {
-    if (!arena.is_cuda() || arena.scalar_type() != at::kByte || !arena.is_contiguous()) throw std::runtime_error("StepHasher: arena must be a contiguous CUDA uint8 tensor");
-    const int64_t padded = ((used + chunk_bytes - 1) / chunk_bytes) * chunk_bytes;
-    if (padded > arena.numel()) throw std::runtime_error("StepHasher: padded step larger than the arena block (overflow chaining not supported)");
-    std::vector<at::Tensor> levels;
-    at::Tensor keep;
-    float leaf_ms = 0.f, tree_ms = 0.f;
-    {
-      py::gil_scoped_release nogil;
-      c10::InferenceMode inf;
-      const auto dev = arena.device().index();
-      cudaStream_t side = reinterpret_cast<cudaStream_t>(side_stream_ptr);
-      c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(side, dev);
-      c10::cuda::CUDAStreamGuard g(cs);
-      cudaError_t rc = cudaStreamWaitEvent(side, reinterpret_cast<cudaEvent_t>(step_event_ptr), 0);
-      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaStreamWaitEvent: ") + cudaGetErrorString(rc));
-      char* base = reinterpret_cast<char*>(arena.data_ptr());
-      if (padded > used) {
-        rc = cudaMemsetAsync(base + used, 0, padded - used, side);
-        if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemsetAsync(pad): ") + cudaGetErrorString(rc));
-      }
-      const long n = padded / chunk_bytes;
-      at::Tensor leaves = at::empty({n, 8}, at::TensorOptions().dtype(at::kInt).device(arena.device()));
-      cudaEventRecord(ev0, side);
-      int lrc = verity_chunk_leaves_launch(reinterpret_cast<const uint32_t*>(base), reinterpret_cast<uint32_t*>(leaves.data_ptr()), n,
-                                           static_cast<int>(chunk_bytes / 4), static_cast<uint32_t>(step), static_cast<uint32_t>(src_mask),
-                                           static_cast<uint32_t>(step), static_cast<uint32_t>(padded / 4), 0u, side);
-      if (lrc != 0) throw std::runtime_error(std::string("chunk_leaves: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
-      cudaEventRecord(ev1, side);
-      levels.push_back(leaves);
-      for (auto& lv : tree_levels_above(leaves, levels_to_root(n), side)) levels.push_back(lv);
-      cudaEventRecord(ev2, side);
-      if (keep_mode == 0) {
-        keep = at::empty({padded}, arena.options());                     // compact retained copy (lazy openings); arena block recycled by the caller
-        rc = cudaMemcpyAsync(keep.data_ptr(), base, padded, cudaMemcpyDeviceToDevice, side);
-        if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(keep): ") + cudaGetErrorString(rc));
-      } else if (keep_mode == 1) {
-        // host copy: into the caller's PINNED buffer when given (pageable D2H runs at ~1 GB/s and serialises the side stream; pinned
-        // runs at PCIe rate and stays asynchronous), else a fresh pageable tensor
-        if (keep_dst.defined() && keep_dst.numel() >= padded) {
-          if (keep_dst.is_cuda() || keep_dst.scalar_type() != at::kByte || !keep_dst.is_contiguous()) throw std::runtime_error("StepHasher: keep_dst must be a contiguous host uint8 tensor");
-          keep = keep_dst.narrow(0, 0, padded);
-        } else {
-          keep = at::empty({padded}, at::TensorOptions().dtype(at::kByte).device(at::kCPU));
-        }
-        rc = cudaMemcpyAsync(keep.data_ptr(), base, padded, cudaMemcpyDeviceToHost, side);
-        if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(keep->host): ") + cudaGetErrorString(rc));
-      } else {
-        keep = at::empty({0}, at::TensorOptions().dtype(at::kByte).device(at::kCPU));
-      }
-      rc = cudaMemcpyAsync(root_host, levels.back().data_ptr(), 32, cudaMemcpyDeviceToHost, side);
-      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(root): ") + cudaGetErrorString(rc));
-      if (levels_host) {
-        // authentication state to PINNED host memory on the side stream (one D2H per level, one event sync below); the device
-        // levels are dropped when this scope ends.  A Python-side `.cpu()` per level would synchronise the worker with the DEFAULT stream,
-        // i.e. with the engine's step, which with backpressure stalls every decode step (30 ms vs 10.5 ms control).
-        std::vector<at::Tensor> hl;
-        hl.reserve(levels.size());
-        int64_t total = 0;
-        for (auto& lv : levels) total += lv.numel();
-        // one pinned buffer for all levels of the step: the caller's pool block when given (recycled per run; a fresh cudaHostAlloc per
-        // level per step cost ~7 ms/decode step), else one pinned allocation
-        at::Tensor hbuf;
-        if (levels_dst.defined() && levels_dst.numel() >= total * 4) {
-          if (levels_dst.is_cuda() || levels_dst.scalar_type() != at::kByte || !levels_dst.is_contiguous()) throw std::runtime_error("StepHasher: levels_dst must be a contiguous host uint8 tensor");
-          hbuf = levels_dst.narrow(0, 0, total * 4).view(at::kInt);
-        } else {
-          hbuf = at::empty({total}, at::TensorOptions().dtype(at::kInt).device(at::kCPU).pinned_memory(true));
-        }
-        int64_t hoff = 0;
-        for (auto& lv : levels) {
-          at::Tensor h = hbuf.narrow(0, hoff, lv.numel()).view({lv.size(0), 8});
-          hoff += lv.numel();
-          rc = cudaMemcpyAsync(h.data_ptr(), lv.data_ptr(), static_cast<size_t>(lv.numel()) * 4, cudaMemcpyDeviceToHost, side);
-          if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(level->host): ") + cudaGetErrorString(rc));
-          hl.push_back(h);
-        }
-        cudaEventRecord(done, side);
-        rc = cudaEventSynchronize(done);
-        if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaEventSynchronize: ") + cudaGetErrorString(rc));
-        levels.swap(hl);                                                  // device levels freed here (still under nogil)
-      }
-      cudaEventRecord(done, side);
-      rc = cudaEventSynchronize(done);                                    // keep-copy + root D2H complete before the arena block can be reused
-      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaEventSynchronize: ") + cudaGetErrorString(rc));
-      cudaEventElapsedTime(&leaf_ms, ev0, ev1);
-      cudaEventElapsedTime(&tree_ms, ev1, ev2);
-    }
-    py::list lv;
-    for (auto& t : levels) lv.append(t);
-    return py::make_tuple(lv, keep, py::bytes(reinterpret_cast<const char*>(root_host), 32), padded, static_cast<double>(leaf_ms), static_cast<double>(tree_ms));
   }
 
   // rows-sha512: the leaves of positions first .. first + m - 1 of a step of n_total leaves (a pad at every position >= n_total), row i
@@ -2055,13 +1784,6 @@ struct StepHasher {
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   py::class_<StepHasher>(m, "StepHasher")
       .def(py::init<>())
-      .def("leaves_window", &StepHasher::leaves_window, py::arg("slot"), py::arg("nbytes"), py::arg("first_chunk"), py::arg("step"), py::arg("src_mask"),
-           py::arg("chunk_bytes"), py::arg("m_words"), py::arg("stream_ptr"))
-      .def("tree", &StepHasher::tree, py::arg("leaves"), py::arg("stream_ptr"), py::arg("levels_host") = false, py::arg("levels_dst") = at::Tensor())
-      .def("tree_window", &StepHasher::tree_window, py::arg("leaves"), py::arg("n_levels"), py::arg("stream_ptr"), py::arg("host_dsts"))
-      .def("tree_window_top", &StepHasher::tree_window_top, py::arg("leaves"), py::arg("n_levels"), py::arg("stream_ptr"))
-      .def("commit", &StepHasher::commit, py::arg("arena"), py::arg("used"), py::arg("step"), py::arg("src_mask"), py::arg("chunk_bytes"),
-           py::arg("side_stream_ptr"), py::arg("step_event_ptr"), py::arg("keep_mode") = 0, py::arg("keep_dst") = at::Tensor(), py::arg("levels_host") = false, py::arg("levels_dst") = at::Tensor())
       .def("rows_leaves", &StepHasher::rows_leaves, py::arg("rs"), py::arg("rows"), py::arg("nbytes"), py::arg("first"), py::arg("m"), py::arg("n_total"),
            py::arg("tn"), py::arg("stream_ptr"), py::arg("stride") = 0, py::arg("salts") = py::none(), py::arg("want_bc") = false, py::arg("want_h") = false)
       .def("rows_h", &StepHasher::rows_h, py::arg("rs"), py::arg("rows"), py::arg("nbytes"), py::arg("first"), py::arg("tn"), py::arg("stream_ptr"),

@@ -10,7 +10,7 @@ the client is a drop-in for `verity-vllm commit ARGS` (row_pod.sh `HOT_ENGINE=1`
 Key (what may share an engine) = sha256 of
   * CODE identity: `source_identity.code_identity` of the executing repository -- content hashes of its import closure (the integration
     plus Verity core, `research_tools.CLOSURE`), so an edited pod tree is a different key ("hot" never executes stale code),
-  * the native extensions the job would load (`--hidden-so`, $NATIVE_COLLECT_BUILD/*.so, the hidden_gpu_tree torch extension) by sha256,
+  * the native extensions the job would load (`--hidden-so`, $NATIVE_COLLECT_BUILD/*.so) by sha256,
   * the interpreter (`sys.executable`) and the process environment that shapes the engine / collector (PYTHONPATH, VLLM_*, VERITY_* except
     the per-job VERITY_TIMELINE / VERITY_FOOTPRINT, CUDA_*, HF_*),
   * the engine-shaping arguments: the workload file's engine-relevant blocks (case / model, its `engine` block, execution), --checkpoints
@@ -55,7 +55,7 @@ SCHEMA = "verity-sweep/hot-commit/v1"
 # PATH / LD_LIBRARY_PATH are part of the identity: they decide which nvcc / ninja / CUDA libs a JIT build in the worker would use (a worker
 # spawned from a shell without the venv on PATH cannot build the native collector), so a client with a different toolchain view
 # must not inherit that engine
-ENV_PREFIXES = ("PYTHONPATH", "PATH", "LD_LIBRARY_PATH", "VLLM_", "VERITY_", "CUDA_", "HF_", "TORCH", "NATIVE_COLLECT_BUILD", "HIDDEN_GPU_BUILD",
+ENV_PREFIXES = ("PYTHONPATH", "PATH", "LD_LIBRARY_PATH", "VLLM_", "VERITY_", "CUDA_", "HF_", "TORCH", "NATIVE_COLLECT_BUILD",
                 "TOKENIZERS_PARALLELISM", "OMP_")
 ENV_PER_JOB = {"VERITY_TIMELINE", "VERITY_FOOTPRINT", "VERITY_TRACEDUMP", "VERITY_HOT_RESTART_REASON", "VERITY_HOT_SUBMIT", "VERITY_WEIGHTS_HASH", "HASH_THREADS"}
 WORKLOAD_ENGINE_KEYS = ("case", "model", "engine", "execution")
@@ -146,12 +146,6 @@ def so_identity(argv: list[str]) -> dict[str, str | None]:
         except Exception:  # noqa: BLE001 -- no torch / no sources here: fall back to the directory listing
             keyed = []
         paths += keyed or sorted(glob.glob(os.path.join(ncb, "*.so")) + glob.glob(os.path.join(ncb, "*", "*.so")))
-    hgb = settings.HIDDEN_GPU_BUILD
-    # the .so lives one level down, in the source-keyed child (native_jit.jit_load); the flat legacy location is listed too
-    cands = sorted(glob.glob(os.path.join(hgb, "*.so")) + glob.glob(os.path.join(hgb, "*", "*.so"))) if hgb else sorted(
-        glob.glob(os.path.expanduser("~/.cache/torch_extensions/*/hidden_gpu_tree/*.so"))
-        + glob.glob(os.path.expanduser("~/.cache/torch_extensions/*/hidden_gpu_tree/*/*.so")))
-    paths += cands
     out: dict[str, str | None] = {}
     for p in paths:
         out[p] = sha256_file(p) if os.path.exists(p) else f"missing:{p}"

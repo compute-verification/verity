@@ -19,8 +19,7 @@ class LeafSchemeRule:
     hm96 fails closed on the path the leaves take: only ``NativeHostCommitter``'s own host path salts (``_salted``), a committer
     whose step path is another (the GPU chunk tree, a subclass's native hashing) is refused at construction, the context digest
     binds the scheme only for a step whose leaves were salted (every step root is bound through it: ``commit_block_offline`` and the
-    native collector's roots included), and a step without one salt per leaf neither opens nor finalizes.  Padding steps keep
-    position leaves and are refused."""
+    native collector's roots included), and a step without one salt per leaf neither opens nor finalizes."""
 
     name: str
     hiding: HidingLeaves | None = None
@@ -75,10 +74,6 @@ class LeafSchemeRule:
         if len(salts) != len(inner) * y:
             return None
         return [self.hiding.leaf(x, salts[i * y:(i + 1) * y]) for i, x in enumerate(inner)]
-
-    def _refuse_padding(self, padding: list) -> None:
-        if padding and self.hiding is not None:
-            raise ValueError(f"padding steps are position-leaf blocks: not implemented under {NAME} leaves")
 
     def _leaf_record(self, steps: list) -> dict:
         """The run record's leaf-scheme fields; under hm96, refuses a run with a step that lacks one salt per leaf."""

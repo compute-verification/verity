@@ -12,11 +12,8 @@ from verity_vllm.check import oracle_compare as OC
 from verity_vllm.commit import opened as OV
 from verity_vllm.commit import step_rows as R
 from verity_vllm.commit import store_dump as SD
-from verity_vllm.commit.committer.native_collect import (
-    GPU_CHUNK_BYTES,
-    _HostRanges,
-    _HostWindows,
-)
+from verity_vllm.commit.committer.native_collect import _HostRanges, _HostWindows
+from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES
 
 
 def _k(cs):
@@ -103,13 +100,6 @@ def test_sparse_host_retainers_dump_what_they_hold(tmp_path, cs):
     assert got[(0, "model.embed_tokens")] is None                    # window 2 (bytes 1024 k..1536 k) not retained: not a read, never zeros
     assert OC.OpenedReader(store, run)(2, "model.layers.0.mlp.down_proj", 0, 1000 * K) == bytes(i % 251 for i in range(1000 * K))
     assert OC.OpenedReader(store, run)(2, "model.layers.0.mlp.down_proj", 1000 * K, 1100 * K) is None
-
-
-def test_a_store_with_padding_steps_is_refused(tmp_path, cs):
-    com, rc = commit_steps(steps(cs), commit_scheme=cs)
-    com._padding = {3: object()}
-    with pytest.raises(ValueError, match="padding steps"):
-        SD.dump(com, rc, tmp_path)
 
 
 def test_the_dumped_block_is_the_retained_block(tmp_path, cs):

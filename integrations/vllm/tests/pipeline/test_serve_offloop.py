@@ -29,6 +29,7 @@ try:
 except ModuleNotFoundError:
     pytest.skip("could not import 'torch'", allow_module_level=True)
 
+from tests.pipeline import predicted
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, events, records
 
 A = {0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]}
@@ -176,6 +177,44 @@ def test_the_pool_is_warmed_before_serving_in_blocks_that_hold_any_one_take(monk
         pool.take(n)
     assert pool.allocs == 3 and len(pool.in_use) == 3, "the first window's takes are served from the warmed blocks"
     pool.mode = None
+
+
+def test_every_committer_method_the_serving_modules_call_is_the_collectors():
+    """serve-openai's tests hand its modules stand-in committers, so a call to a method the collector does not have (a warm step
+    before serving, say) would fail only on a GPU, before the first request: every ``com.<method>(...)`` the serving modules make
+    names a method of the collector `pipeline.commit.make_committer` builds for `serve_seal.DECLARED_COMMITTER`."""
+    import ast
+
+    from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
+
+    assert ss.DECLARED_COMMITTER == "native_collect_v2b"
+    calls: dict[str, str] = {}
+    for f in sorted(Path(ss.__file__).parent.glob("serve_*.py")):
+        for n in ast.walk(ast.parse(f.read_text())):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and isinstance(n.func.value, ast.Name) and n.func.value.id == "com":
+                calls.setdefault(n.func.attr, f"{f.name}:{n.lineno}")
+    assert "size_arena" in calls and "enable_windows" in calls
+    assert not {a: at for a, at in calls.items() if not callable(getattr(NativeCollectCommitter, a, None))}
+
+
+def test_the_pool_warms_on_the_committer_itself(monkeypatch):
+    """`warm_pool` reads the real committer (its offline core, CPU only), not a stand-in: the pool it grows is the committer's own."""
+    from tests.check.opened import committer
+
+    monkeypatch.setattr(ss, "WARM_BLOCK", 1 << 20)
+    monkeypatch.setattr(PP, "_shared_map", lambda n: (torch.zeros(n, dtype=torch.uint8), None))
+    monkeypatch.setattr(PP, "_populate", lambda *_a: True)
+    monkeypatch.setattr(PP, "_register", lambda *_a: None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    com = committer()
+    pool = com.pool
+    try:
+        assert ss.warm_pool(com, 3 * (1 << 20) / ss.GB)["blocks"] == 3 and pool.allocs == 1 and pool.reserved_bytes == pool.block_bytes
+        for _ in range(3):
+            pool.take(1 << 20)
+        assert pool.allocs == 1, "the takes are served from the block the warm-up made"
+    finally:
+        pool.mode = None
 
 
 def test_a_close_waits_for_room_only_while_the_windows_awaiting_their_seal_hold_the_bound():
@@ -664,7 +703,7 @@ def test_a_draining_loop_refuses_new_requests_and_ends_once_idle():
 
 
 def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
     base = ["--model", "m", "--revision", "r", "--out", str(tmp_path / "new" / "dir"), "--seal", "--window-gb", "10", "--disk-floor-gb", "300",
             "--required-manifest", str(man)]
     opts = cli.parse("serve-openai", base, environ={})
