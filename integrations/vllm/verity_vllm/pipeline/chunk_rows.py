@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.ml.windows import rows as CS
+from verity.ml.windows import interface as IF, rows as CS
 
 #: flock-circuit's spec shape (`verity/ml/flock/live/src/circuit.rs`'s `shape_in_range`, `benchmarks/one_stage/a6.py`'s `M_MAX`):
 #: a statement's dense size m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
@@ -19,12 +19,6 @@ M_MAX = 35
 def s8_words(K: int) -> int:
     """A ``ScaledMmS8Coordinate_v1{K}`` input row's u16 words: the K s8 codes' bytes, then the f32 scale's (A6's ``x`` / ``w``)."""
     return K // 2 + 2
-
-
-def fields(tp: Any) -> list[Any]:
-    """Template ``tp``'s return fields in order, `UnitStager`'s output ports ``o<j>``."""
-    ret = tp.fn.signature()[1]
-    return [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
 
 
 #: the whole-row templates whose MUFU table reads `reads` lays out in lookup slots: the attention rows (in neither ``CUT`` nor
@@ -57,23 +51,25 @@ def reads(tp: Any) -> str:
 def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: a ``ScaledMmS8Coordinate``'s A6 rows,
     ``x``     (the token's s8 codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2), then the v2 output row
-    ``o0``; a ``COORDS`` coordinate's, a ``COLS`` column block's, a ``SLICES`` slice's, a ``KCHUNKS`` K-chunk's or a chunked row
-    template's or whole ``PARTS`` part's (`serving_rows.chunked`) ``in<g>``, one v2 row per parameter (its port), then one v2
-    output row ``o<j>`` per return field.  A ``SPLITS`` part's or combine's are `split_rows.unit_rows`."""
+    ``o0``; any other chunked template's (`serving_rows.chunked`) its Definition's bit rows (`interface.unit_rows`) under its
+    cuts (`split_rows.cuts`, a ``SPLITS`` combine's), parameter g's row ``in<g>``, or ``in<g>.<s>`` for its row s when cut."""
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_vllm.pipeline import split_rows as SP
     from verity_vllm.query.program_view import spec_statics
 
-    if tp.layout == "split":
-        return SP.unit_rows(tp)
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
-    if tp.layout in ("coord", "cols", "slice", "kchunk", "row", "part"):
-        params, _ret = tp.fn.signature()
-        return ([(f"in{g}", V2, sum(ty.leaf_widths()), [nm]) for g, (nm, ty) in enumerate(params)],
-                [(V2, (j,)) for j in range(len(fields(tp)))])
-    raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")
+    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "split"):
+        raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")
+    g = {nm: k for k, (nm, _ty) in enumerate(tp.fn.signature()[0])}
+
+    def port(row: str) -> str:
+        nm, _, s = row.partition("#")
+        return f"in{g[nm]}" + (f".{s}" if s else "")
+
+    in_rows, out_rows = IF.unit_rows(tp.fn, SP.cuts(tp) if tp.layout == "split" else None)
+    return [(port(p), *rest) for p, *rest in in_rows], out_rows
 
 
 def chunk_cap(tp: Any) -> int:
