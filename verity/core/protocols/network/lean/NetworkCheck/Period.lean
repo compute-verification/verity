@@ -872,13 +872,13 @@ def protocol : Core.Protocol where
 
 /-- A salted clock certificate's opening (`certificate.CertifiedClock`): the sync the certifier ran the window under and
 its salt `salt_c`, both witness, and the certificate, which signs the sync's clock digest salted by it. -/
-structure Opening where
+structure ClockOpening where
   sync : ClockSync
   salt : ByteArray
   certificate : Certificate
 
 /-- Two openings are one: the same sync, salt and certificate, field by field. -/
-def Opening.same (a b : Opening) : Bool :=
+def ClockOpening.same (a b : ClockOpening) : Bool :=
   let x := a.certificate
   let y := b.certificate
   a.sync.delta == b.sync.delta && a.sync.rho == b.sync.rho && a.salt == b.salt && x.keyId == y.keyId &&
@@ -892,7 +892,7 @@ structure Openings where
   key : ByteArray
   session : ByteArray
   link : String
-  openings : Array Opening
+  openings : Array ClockOpening
 
 /-- `{"key", "link", "lms", "openings", "session"}`, each opening `{"certificate", "salt", "sync"}`, its certificate as
 the evidence's and its sync `[δ, num, den]`. -/
@@ -914,7 +914,7 @@ def openingsOf (j : Json) : V Openings := do
 /-- Why an opening gives no sync (`CertifiedClock.refusal`), or none when it holds: its certificate isn't an egress one
 (`egress`), isn't the key's (`key`), signs another digest than its sync's clock digest salted by its 64-byte salt
 (`clock_commitment`, `opening`), or its signature doesn't verify in the session (`signature`). -/
-def openingRefusal (s : Openings) (o : Opening) : Option String :=
+def openingRefusal (s : Openings) (o : ClockOpening) : Option String :=
   let c := o.certificate
   if c.direction != .egress then some "egress"
   else if c.keyId != s.key.extract 0 16 then some "key"
