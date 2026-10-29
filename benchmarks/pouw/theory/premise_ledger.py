@@ -1658,8 +1658,8 @@ def periods(data: dict, cb: dict) -> dict:
                 cb_terms("ssn_1l_tag/G8", "coin_branch_requests_patch"),
             "coin branch, ssn_1l_tag + blc4a-t64-e7, copy-and-patch within a 64-row tile, a held partner, model P "
             "(c_a = 0)": cb["llama_T8192"]["patch_held_ca0_ssn_1l_tag_t64"],
-            "coin branch, ssn_1l_tag + blc4a-t64-e7, copy-and-patch within a 64-row tile, a held partner, select-floor "
-            "(c_a = 1)": cb["llama_T8192"]["patch_held_ca1_ssn_1l_tag_t64"],
+            "coin branch, ssn_1l_tag + blc4a-t64-e7, copy-and-patch within a 64-row tile, a held partner, CopyGrain(4) "
+            "as stated (c_a = 1)": cb["llama_T8192"]["patch_held_ca1_ssn_1l_tag_t64"],
             "coin branch, ssn_1l_tag + blc4a-t64-e7, copy-and-patch within a 64-row tile, any earlier row, T1's copy "
             f"model (P with select-floor, c_a = {SELECT_FLOOR_CA})":
                 cb["llama_T8192"][f"patch_any_ca{SELECT_FLOOR_CA}_ssn_1l_tag_t64"],
@@ -1898,6 +1898,11 @@ def checks(rep: dict) -> list[dict]:
     ok("every passing set with big rows names its leaf size", all(
         s["big_rows_leaf"] for d in rep["hitting"].values() for s in d["minimal_sets"]
         if any(o.startswith("hiding: big rows") for o in s["options"])))
+    swap = {"hiding: ruled": "hiding: L1 + (a)"}
+    ok("L1 + (a) stands in for the hiding ruling in every set that takes it, at the same settled rank", all(
+        any(sorted(swap.get(o, o) for o in s["options"]) == sorted(t["options"])
+            and t["rank_settled"] == s["rank_settled"] for t in d["minimal_sets"])
+        for d in rep["hitting"].values() for s in d["minimal_sets"] if "hiding: ruled" in s["options"]))
     g1 = rep["g1"]
     ok("one call's outputs fit HBM at every point", all(v["fits"]["call_out"] for v in g1.values()))
     en = rep["energy"]
