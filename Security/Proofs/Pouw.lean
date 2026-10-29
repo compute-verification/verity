@@ -12,9 +12,11 @@ import Proofs.Pouw.Dither
 import Proofs.Pouw.DitherWitness
 import Proofs.Pouw.DitherInstance
 import Proofs.Pouw.Dimension.A2WordsProofs
+import Proofs.Pouw.Dimension.AdaptiveProofs
 import Proofs.Pouw.Dimension.CausalProofs
 import Proofs.Pouw.Dimension.EmbedProofs
 import Proofs.Pouw.Dimension.ForestProofs
+import Proofs.Pouw.Dimension.GrindProofs
 import Proofs.Pouw.Dimension.Fp8MmaProofs
 import Proofs.Pouw.Dimension.H100CiteProofs
 import Proofs.Pouw.Dimension.H100DenseProofs
@@ -31,12 +33,13 @@ import Proofs.Pouw.Dimension.MinRankProofs
 import Proofs.Pouw.Dimension.MixingProofs
 import Proofs.Pouw.Dimension.OpenPipeProofs
 import Proofs.Pouw.Dimension.PipeProofs
+import Proofs.Pouw.Dimension.PointwiseAdaptiveProofs
 import Proofs.Pouw.Dimension.PointwiseProofs
-import Proofs.Pouw.Dimension.AdaptiveProofs
 import Proofs.Pouw.Dimension.Proofs
 import Proofs.Pouw.Dimension.RouteUPipeProofs
 import Proofs.Pouw.Dimension.RouteUProofs
 import Proofs.Pouw.Dimension.SsnProofs
+import Proofs.Pouw.Dimension.TagProofs
 import Proofs.Pouw.Exact
 import Proofs.Pouw.Fp8Atom.Checks
 import Proofs.Pouw.Fp8Atom.Checks.Ada
@@ -195,12 +198,11 @@ import Proofs.Pouw.TileBound.Witness
 import Proofs.Pouw.Window
 import Proofs.Pouw.Witness
 import Proofs.Pouw.Writes
-import Proofs.Pouw.Adaptive
 
 /-!
 # PoUW's proofs
 
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
-named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Adaptive`, `Barrier`, `Dimension`,
+named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
 `Game`, `NCP`, `PearlC`, `Receipt`, `Writes`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
 -/

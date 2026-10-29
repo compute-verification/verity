@@ -13,7 +13,6 @@ import Definitions.Pouw.Guarantees.RelativeSecurity
 import Definitions.Pouw.Guarantees.ShaRealize
 import Definitions.Pouw.Guarantees.Window
 import Definitions.Pouw.Guarantees.Writes
-import Definitions.Pouw.Guarantees.Adaptive
 
 /-!
 # PoUW's guarantees (trusted)

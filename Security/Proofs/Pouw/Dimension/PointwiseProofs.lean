@@ -12,6 +12,12 @@ import Definitions.Pouw.Dimension.Pointwise
 * **Balls** (`run_ball_le`). Take radii `r y` for the targets, with each target further than `r y` from every initial
   chunk and any two further apart than the sum of their radii. Then the run writes at least `Σ_y (r y + 1)`: the chain
   of new values that reaches `y` passes through every distance `0, …, r y` from it, and the balls are disjoint.
+* **The path run** (`pathRun_attained`). One slot visits the targets in any order, patching each from the one before:
+  it holds every target at some point and writes exactly the path's Hamming length (`pathLen`). So in this model a
+  run's writes lie between `Σ_y (r y + 1)` and the shortest such path, and a target that agrees with an earlier one
+  on a fraction of its positions saves that fraction.
+* **Branching on the coins** (`adaptive_pairs_le`). Each bound reads only the targets a coin outcome realizes, so it
+  holds outcome by outcome for a program chosen from the coins, and sums over the outcomes.
 -/
 
 namespace Pouw.Dimension.Pointwise
@@ -304,5 +310,89 @@ theorem run_values_le [DecidableEq V] [Inhabited V] (m₀ : A → Fin 1 → V) (
       obtain ⟨v, hv, rfl⟩ := mem_image.1 hpv
       refine mem_filter.2 ⟨mem_biUnion.2 ⟨fun _ => v, mem_image.2 ⟨v, hv, rfl⟩, mem_pairs.2 rfl⟩, ?_⟩
       exact fun a => hnew v hv a
+
+/-! ## The path run: one slot, patched from each target to the next -/
+
+/-- Patch slot `a` from `x` to `y`: one write per differing position. -/
+noncomputable def patch [DecidableEq V] (a : A) (x y : Fin w → V) : List (Step A V w) :=
+  (univ.filter fun p => x p ≠ y p).toList.map fun p => .write a p (y p)
+
+/-- Visit the chunk values `ys` in order in slot `a`, starting from `x`, patching each from the one before. -/
+noncomputable def pathRun [DecidableEq V] (a : A) : (Fin w → V) → List (Fin w → V) → List (Step A V w)
+  | _, [] => []
+  | x, y :: ys => patch a x y ++ pathRun a y ys
+
+/-- The path's length: the Hamming distances from `x` to the first target and between consecutive ones. -/
+def pathLen [DecidableEq V] : (Fin w → V) → List (Fin w → V) → ℕ
+  | _, [] => 0
+  | x, y :: ys => hammingDist x y + pathLen y ys
+
+theorem run_append (m : A → Fin w → V) (P Q : List (Step A V w)) : run m (P ++ Q) = run (run m P) Q := by
+  simp [run, List.foldl_append]
+
+omit [DecidableEq A] in
+theorem writes_append (P Q : List (Step A V w)) : writes (P ++ Q) = writes P + writes Q := by
+  simp [writes]
+
+theorem run_writes (m : A → Fin w → V) (a : A) (y : Fin w → V) (L : List (Fin w)) :
+    run m (L.map fun p => Step.write a p (y p)) = Function.update m a (fun p => if p ∈ L then y p else m a p) := by
+  induction L generalizing m with
+  | nil => simp [run]
+  | cons p L ih =>
+    change run (Step.apply (.write a p (y p)) m) _ = _
+    rw [ih]
+    simp only [Step.apply, Function.update_self, Function.update_idem, List.mem_cons]
+    congr 1
+    funext q
+    by_cases hq : q ∈ L
+    · simp [hq]
+    · by_cases hqp : q = p
+      · subst hqp; simp [hq]
+      · simp [hq, hqp]
+
+theorem run_patch [DecidableEq V] (m : A → Fin w → V) (a : A) (y : Fin w → V) :
+    run m (patch a (m a) y) a = y := by
+  unfold patch
+  rw [run_writes, Function.update_self]
+  funext p
+  by_cases h : m a p = y p <;> simp [h]
+
+omit [DecidableEq A] in
+theorem writes_patch [DecidableEq V] (a : A) (x y : Fin w → V) : writes (patch a x y) = hammingDist x y := by
+  simp [writes, patch, Step.cost, hammingDist, Function.comp_def]
+
+/-- **The path run is attained**: from any memory, the run that visits `ys` in one slot holds each of them at some
+point and writes exactly the path's length. So no bound in this model exceeds the shortest path through the targets
+from an initial chunk. -/
+theorem pathRun_attained [DecidableEq V] (m₀ : A → Fin w → V) (a : A) (ys : List (Fin w → V)) :
+    (∀ y ∈ ys, ∃ i, run m₀ ((pathRun a (m₀ a) ys).take i) a = y) ∧
+      writes (pathRun a (m₀ a) ys) = pathLen (m₀ a) ys := by
+  induction ys generalizing m₀ with
+  | nil => simp [pathRun, pathLen, writes]
+  | cons y ys ih =>
+    have hy : run m₀ (patch a (m₀ a) y) a = y := run_patch m₀ a y
+    obtain ⟨ih1, ih2⟩ := ih (run m₀ (patch a (m₀ a) y))
+    rw [hy] at ih1 ih2
+    refine ⟨fun y' hy' => ?_, ?_⟩
+    · rcases List.mem_cons.1 hy' with rfl | hy'
+      · exact ⟨(patch a (m₀ a) y').length, by simp [pathRun, hy]⟩
+      · obtain ⟨i, hi⟩ := ih1 y' hy'
+        refine ⟨(patch a (m₀ a) y).length + i, ?_⟩
+        simp only [pathRun]
+        rw [List.take_length_add_append, run_append]
+        exact hi
+    · simp only [pathRun, pathLen, writes_append, writes_patch, ih2]
+
+open Classical in
+/-- **A program that branches on the coins** (`adaptive_pairs_le`): at each coin outcome `ω` it is a run `P ω` from the
+memory `m₀ ω` holding the targets `Y ω`, so summed over any outcomes its writes are at least each outcome's new
+(position, value) pairs. The bound reads only the targets each outcome realizes; a design whose targets repeat a
+(position, value) pair at some outcomes loses those pairs there, whatever the program. -/
+theorem adaptive_pairs_le [DecidableEq V] [Inhabited V] {Ω : Type} (O : Finset Ω) (m₀ : Ω → A → Fin w → V)
+    (P : Ω → List (Step A V w)) (Y : Ω → Finset (Fin w → V))
+    (hY : ∀ ω ∈ O, ∀ y ∈ Y ω, ∃ i a, run (m₀ ω) ((P ω).take i) a = y) :
+    ∑ ω ∈ O, (((Y ω).biUnion pairs).filter fun pv : Fin w × V => ∀ a, m₀ ω a pv.1 ≠ pv.2).card ≤
+      ∑ ω ∈ O, writes (P ω) :=
+  sum_le_sum fun ω hω => run_pairs_le (m₀ ω) (P ω) (Y ω) (hY ω hω)
 
 end Pouw.Dimension.Pointwise

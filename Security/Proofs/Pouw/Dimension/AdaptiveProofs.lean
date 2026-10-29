@@ -1,229 +1,211 @@
-import Definitions.Pouw.Dimension.Adaptive
-import Proofs.Pouw.Dimension.PointwiseProofs
+import Proofs.Pouw.Dimension.GrindProofs
 
 /-!
-# adaptive-dw: proofs
+# A program chosen from the coins, in `MH100w` (proofs; draft semantics, pending review)
 
-* **Chunk provenance** (`run_chunks_le`). By `good_prefix`, every slot after every prefix holds an initial chunk value
-  or one of `writes P` new ones; so the target chunk values no initial chunk holds number at most `writes P`.
-* **The lifts** (`adaptiveDW_chunks`, `adaptiveDW_ball`): the pointwise bounds (`run_chunks_le`, `run_ball_le`),
-  summed over the draws.
-* **Tables** (`run_ball_table_le`, `adaptiveDW_ball_table`). An initial chunk within `r y` of a target is within it of
-  no other, so any initial memory costs the balls at most `R + 1` a slot.
-* **The obstruction** (`holds_flat`, `not_adaptiveDW`, `card_levels_le`, `not_adaptiveDW_levels`). Writing each
-  distinct target value once into one slot (`fill`) holds them all at `w` writes a value. Row-step chunks
-  `base i + c i t · 1` number at most `Σ_i |{c i t}|`, so adaptive-dw fails above `w` times that.
-* **Repeats on a `false` bit** (`card_rows_le`, `card_image_le_ones`, `not_adaptiveDW_ones`). A row whose chunk
-  repeats at every step whose bit is `false` takes at most `1 + #true bits` values, so adaptive-dw fails above `w`
-  times their sum over rows and draws.
+`MH100w`'s programs are straight-line and fixed before the coins. A program that reads coin bits and branches is, at
+each grid point `x`, the straight-line program `prog x` it chose there, run on every grid point where it makes the same
+choice: its cell `{y | prog y = prog x}`. `DistinctWritesMH100Floor` holds for every set of grid points, so it applies
+cell by cell (`adaptive_floor`): the chosen program pays `c` for each target that stays pairwise distinct and non-free
+on its cell.
+
+With `lost_le`'s window conditions (`adaptive_lost`), a cell of measure `q^−g` loses at most `g·M + |Ec|` targets, `M`
+the most words whose window holds one block of digits: the adaptive bound is `c·(|Ω| − g·M − |Ec|)` at every point.
+
+What reading costs is not here: a branch or predicate per coin bit read is priced separately (`adaptive_total`). The
+targets that merge on a cell are the design's: a word that equals another on every point of a cell, or a free value
+there, earns nothing at the points of that cell. For served sparse noise (`ssnWordB_eq_of_zero`), a row's words after
+two steps with equal data constants merge on the cell where the bits between them are 0 (`ssnWordB_step_merge` for
+consecutive steps). In the served 4-lane layout (`l4_step_merge`) that is one bit: reading it merges a row's `n` words
+of a step into the step before on half the points, so `lost_le`'s `M` is at least `n` there. Counted
+(`l4_cell_loss`): on that cell every set of words distinct and non-free is at least `n` short of the layout's
+`m·n·S`, so the floor there credits at most `c·(m·n·S − n)`.
 -/
 
-namespace Pouw.Dimension.Pointwise
+namespace Pouw.Dimension.H100
 
-open Finset
+variable {G : Type}
 
-variable {A V : Type} {w : ℕ}
+/-- **The floor, cell by cell**: a well-formed `MH100w` program chosen at each grid point from the coins, whose choice at
+`x` holds every target of `T` on the points where it is chosen, pays at `x` at least `c` for each target of a subset
+`D` pairwise distinct and non-free on that cell. -/
+theorem adaptive_floor (hDW : DistinctWritesMH100Floor) {c : ℕ} {pr : Prices100} (hc : Floor c pr)
+    {F : Set (G → ℚ)} (hF : ∀ q : ℚ, (fun _ : G => q) ∈ F) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (G → ℚ))
+    (hL : ∀ f ∈ L, f ∈ F) (prog : G → List (Op100 G)) (hwf : ∀ x, ∀ o ∈ prog x, o.WFw pr F)
+    (T : Finset (G → ℚ)) (hout : ∀ x, OutputsOn fpSem {y | prog y = prog x} (prog x) L T)
+    (x : G) (D : Finset (G → ℚ)) (hD : D ⊆ T) (hDd : DistinctOn {y | prog y = prog x} F D) :
+    c * D.card ≤ cost100 pr (prog x) :=
+  hDW c pr hc G F hF {y | prog y = prog x} fpSem L (prog x) D hL (hwf x) hDd fun t ht => hout x t (hD ht)
 
-/-- Write the chunk value `y` into slot `a₀`, word by word. -/
-def fill (a₀ : A) (y : Fin w → V) : List (Step A V w) := (List.finRange w).map fun p => .write a₀ p (y p)
-
-theorem writes_append (P Q : List (Step A V w)) : writes (P ++ Q) = writes P + writes Q := by
-  simp [writes]
-
-theorem writes_fill (a₀ : A) (y : Fin w → V) : writes (fill a₀ y) = w := by
-  have h : (Step.cost ∘ fun p => (Step.write a₀ p (y p) : Step A V w)) = fun _ => 1 := funext fun _ => rfl
-  simp [writes, fill, h]
-
-theorem writes_flatMap_fill (a₀ : A) (l : List (Fin w → V)) : writes (l.flatMap (fill a₀)) = w * l.length := by
-  induction l with
-  | nil => simp [writes]
-  | cons y l ih => rw [List.flatMap_cons, writes_append, writes_fill, ih, List.length_cons]; ring
-
-variable [DecidableEq A]
-
-open Classical in
-theorem run_chunks_le [DecidableEq V] [Inhabited V] (m₀ : A → Fin w → V) (P : List (Step A V w))
-    (Y : Finset (Fin w → V)) (hY : Holds m₀ P Y) : (Y.filter fun y => ∀ a, m₀ a ≠ y).card ≤ writes P := by
-  obtain ⟨L, -, hcov⟩ := good_prefix m₀ P
-  calc (Y.filter fun y => ∀ a, m₀ a ≠ y).card ≤ ((range (writes P)).image L).card := by
-        apply card_le_card
-        intro y hy
-        rw [mem_filter] at hy
-        obtain ⟨i, a, hia⟩ := hY y hy.1
-        rcases hcov i a with ⟨b, hb⟩ | ⟨k, hk, hkL⟩
-        · exact absurd (hb.trans hia) (hy.2 b)
-        · exact mem_image.2 ⟨k, mem_range.2 hk, hkL.trans hia⟩
-    _ ≤ (range (writes P)).card := card_image_le
-    _ = writes P := card_range _
+/-- **With the reads priced**: if choosing at `x` costs `read x` (its branches and predicates), the total at `x` is at
+least `read x` plus `c` for each target distinct and non-free on the cell. -/
+theorem adaptive_total (hDW : DistinctWritesMH100Floor) {c : ℕ} {pr : Prices100} (hc : Floor c pr)
+    {F : Set (G → ℚ)} (hF : ∀ q : ℚ, (fun _ : G => q) ∈ F) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (G → ℚ))
+    (hL : ∀ f ∈ L, f ∈ F) (prog : G → List (Op100 G)) (hwf : ∀ x, ∀ o ∈ prog x, o.WFw pr F)
+    (T : Finset (G → ℚ)) (hout : ∀ x, OutputsOn fpSem {y | prog y = prog x} (prog x) L T) (read : G → ℕ)
+    (x : G) (D : Finset (G → ℚ)) (hD : D ⊆ T) (hDd : DistinctOn {y | prog y = prog x} F D) :
+    read x + c * D.card ≤ read x + cost100 pr (prog x) :=
+  Nat.add_le_add_left (adaptive_floor hDW hc hF fpSem L hL prog hwf T hout x D hD hDd) _
 
 open Classical in
-theorem adaptiveDW_chunks [DecidableEq V] [Inhabited V] (Ω : Type) [Fintype Ω] (m₀ : A → Fin w → V)
-    (Y : Ω → Finset (Fin w → V)) : AdaptiveDW Ω m₀ Y (∑ g, ((Y g).filter fun y => ∀ a, m₀ a ≠ y).card) :=
-  fun P hP => sum_le_sum fun g _ => run_chunks_le m₀ (P g) (Y g) (hP g)
+/-- **The adaptive bound for affine targets**: on the coin digits `ι → Fin q`, a well-formed `MH100w` program chosen from
+the coins, whose choice at `x` holds every target word on its cell, pays at `x` at least `c·(|Ω| − g·M − |Ec|)` when
+that cell has measure at least `q^−g`, under `lost_le`'s window conditions. Each digit's worth of reading can merge
+up to `M` words, so the bound is empty once a program has read `|Ω|/M` digits' worth. -/
+theorem adaptive_lost {ι : Type} [Fintype ι] [DecidableEq ι] {q : ℕ} (hq : 1 < q)
+    (hDW : DistinctWritesMH100Floor) {c : ℕ} {pr : Prices100} (hc : Floor c pr)
+    {K U E : Type} [DecidableEq K] [DecidableEq U] [DecidableEq E]
+    (blk : ι → K) (ord : K → ℕ) (hord : Function.Injective ord)
+    (Ω : Finset U) (ν : U → ℕ) (hν : Set.InjOn ν Ω) (wc : U → ℚ) (wa : U → ι → ℚ) (win : U → Finset K)
+    (hwin : ∀ u ∈ Ω, ∀ u' ∈ Ω, ν u' < ν u → ∃ k, blk k ∈ win u ∧ wa u k ≠ wa u' k ∧
+      ∀ k', ord (blk k) < ord (blk k') → wa u k' = wa u' k')
+    (hwin0 : ∀ u ∈ Ω, ∃ k, blk k ∈ win u ∧ wa u k ≠ 0 ∧ ∀ k', ord (blk k) < ord (blk k') → wa u k' = 0)
+    (Ec : Finset E) (ec : E → ℚ) (ea : E → ι → ℚ)
+    (F : Set ((ι → Fin q) → ℚ)) (hF : ∀ f ∈ F, (∃ c : ℚ, f = fun _ => c) ∨ ∃ e ∈ Ec, f = Ssn.aff (ec e) (ea e))
+    (hFc : ∀ r : ℚ, (fun _ : ι → Fin q => r) ∈ F)
+    (M : ℕ) (hM : ∀ b, (Ω.filter fun u => b ∈ win u).card ≤ M)
+    (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List ((ι → Fin q) → ℚ)) (hL : ∀ f ∈ L, f ∈ F)
+    (prog : (ι → Fin q) → List (Op100 (ι → Fin q))) (hwf : ∀ x, ∀ o ∈ prog x, o.WFw pr F)
+    (hout : ∀ x, OutputsOn fpSem {y | prog y = prog x} (prog x) L (Ω.image fun u => Ssn.aff (wc u) (wa u)))
+    (x : ι → Fin q) (g : ℕ)
+    (hcell : q ^ Fintype.card ι ≤ q ^ g * (Finset.univ.filter fun y => prog y = prog x).card) :
+    c * (Ω.card - (g * M + Ec.card)) ≤ cost100 pr (prog x) := by
+  obtain ⟨D, hDΩ, hDd, hDc, hΩ⟩ := Grind.lost_le hq _ g hcell blk ord hord Ω ν hν wc wa win hwin hwin0 Ec ec ea F
+    hF M hM
+  have hcoe : (↑(Finset.univ.filter fun y => prog y = prog x) : Set (ι → Fin q)) = {y | prog y = prog x} := by
+    ext y; simp
+  rw [hcoe] at hDd
+  have h := adaptive_floor hDW hc hFc fpSem L hL prog hwf _ hout x _ (Finset.image_subset_image hDΩ) hDd
+  rw [hDc] at h
+  exact le_trans (Nat.mul_le_mul_left c (by omega)) h
 
-/-- **The balls' lift**: when each draw's targets sit further than `r g y` from every initial chunk and pairwise
-further apart than the sum of their radii, adaptive-dw holds at `Σ_g Σ_y (r g y + 1)`. -/
-theorem adaptiveDW_ball [DecidableEq V] [Inhabited V] (Ω : Type) [Fintype Ω] (m₀ : A → Fin w → V)
-    (Y : Ω → Finset (Fin w → V)) (r : Ω → (Fin w → V) → ℕ)
-    (hI : ∀ g, ∀ y ∈ Y g, ∀ a, r g y < hammingDist (m₀ a) y)
-    (hYY : ∀ g, ∀ y ∈ Y g, ∀ y' ∈ Y g, y ≠ y' → r g y + r g y' < hammingDist y y') :
-    AdaptiveDW Ω m₀ Y (∑ g, ∑ y ∈ Y g, (r g y + 1)) :=
-  fun P hP => sum_le_sum fun g _ => run_ball_le m₀ (P g) (Y g) (hP g) (r g) (hI g) (hYY g)
+end Pouw.Dimension.H100
 
-/-- **Balls against any initial memory**: targets pairwise further apart than the sum of their radii, each radius at
-most `R`, need `Σ_y (r y + 1)` writes less `R + 1` a slot. An initial chunk lies within `r y` of at most one target,
-so dropping those targets leaves `run_ball_le`'s hypotheses. -/
-theorem run_ball_table_le [Fintype A] [DecidableEq V] [Inhabited V] (m₀ : A → Fin w → V) (P : List (Step A V w))
-    (Y : Finset (Fin w → V)) (hY : ∀ y ∈ Y, ∃ i a, run m₀ (P.take i) a = y) (r : (Fin w → V) → ℕ) (R : ℕ)
-    (hR : ∀ y ∈ Y, r y ≤ R) (hYY : ∀ y ∈ Y, ∀ y' ∈ Y, y ≠ y' → r y + r y' < hammingDist y y') :
-    ∑ y ∈ Y, (r y + 1) ≤ writes P + Fintype.card A * (R + 1) := by
+namespace Pouw.Dimension.Ssn
+
+open Finset Pouw.Dimension.H100
+
+variable {m S C L : ℕ}
+
+/-- **Two of a row's words merge where the bits they weigh differently are 0**: if row `i`'s words of column `j` after
+steps `t` and `t'` have equal data constants, they are equal at every coin point where each bit with different weights
+in the two is 0. For the 4-lane layout and `t' = t − 1` that is the one bit of step `t`'s lane, so a program that reads
+it merges the row's `n` words of step `t` into step `t − 1`'s on half the points. -/
+theorem ssnWordB_eq_of_zero (src : Fin S → Fin C) (used : Fin S → Fin L → Prop) [∀ s q, Decidable (used s q)]
+    (pos : Fin S → Fin L → ℕ) (κ : Fin m → ℕ → Fin S → ℤ) (W : Fin S → Fin L → ℕ → ℤ) (i : Fin m) (j : ℕ)
+    (t t' : Fin S) (hκ : κ i j t = κ i j t') (x : Bits m C)
+    (hx : ∀ k, bitCoef src used pos W i j t k ≠ bitCoef src used pos W i j t' k → x k = 0) :
+    ssnWordB src used pos κ W i j t x = ssnWordB src used pos κ W i j t' x := by
+  unfold ssnWordB aff
+  rw [hκ]
+  congr 1
+  refine Finset.sum_congr rfl fun k _ => ?_
+  by_cases h : bitCoef src used pos W i j t k = bitCoef src used pos W i j t' k
+  · rw [h]
+  · simp [hx k h]
+
+/-- Consecutive steps weigh a bit of row `i` the same unless the later step reads it. -/
+theorem bitCoef_step (src : Fin S → Fin C) (used : Fin S → Fin L → Prop) [∀ s q, Decidable (used s q)]
+    (pos : Fin S → Fin L → ℕ) (W : Fin S → Fin L → ℕ → ℤ) (i : Fin m) (j : ℕ) {t t' : Fin S}
+    (htt : (t' : ℕ) + 1 = t) (k : Fin m × Fin C × Fin 32)
+    (hk : ¬ (k.1 = i ∧ ∃ q, used t q ∧ src t = k.2.1 ∧ pos t q = k.2.2)) :
+    bitCoef src used pos W i j t k = bitCoef src used pos W i j t' k := by
+  unfold bitCoef
+  split_ifs with hki
+  · refine Finset.sum_congr rfl fun s _ => Finset.sum_congr rfl fun q _ => ?_
+    by_cases hst : s = t
+    · subst hst
+      have hn : ¬ (used s q ∧ src s = k.2.1 ∧ pos s q = k.2.2) := fun h => hk ⟨hki, q, h⟩
+      have hst' : ¬ s ≤ t' := by rw [Fin.le_iff_val_le_val]; omega
+      simp only [hn, hst', and_false, ite_false]
+    · have hiff : s ≤ t ↔ s ≤ t' := by
+        rw [Fin.le_iff_val_le_val, Fin.le_iff_val_le_val]
+        have := Fin.val_ne_of_ne hst
+        omega
+      simp only [hiff]
+  · rfl
+
+/-- **One step's bits decide a merge**: a row's words after steps `t − 1` and `t` with equal data constants are equal
+wherever every bit step `t` reads in that row is 0. -/
+theorem ssnWordB_step_merge (src : Fin S → Fin C) (used : Fin S → Fin L → Prop) [∀ s q, Decidable (used s q)]
+    (pos : Fin S → Fin L → ℕ) (κ : Fin m → ℕ → Fin S → ℤ) (W : Fin S → Fin L → ℕ → ℤ) (i : Fin m) (j : ℕ)
+    {t t' : Fin S} (htt : (t' : ℕ) + 1 = t) (hκ : κ i j t = κ i j t') (x : Bits m C)
+    (hx : ∀ k : Fin m × Fin C × Fin 32, k.1 = i → (∃ q, used t q ∧ src t = k.2.1 ∧ pos t q = k.2.2) → x k = 0) :
+    ssnWordB src used pos κ W i j t x = ssnWordB src used pos κ W i j t' x :=
+  ssnWordB_eq_of_zero src used pos κ W i j t t' hκ x fun k hne => by
+    by_contra hxk
+    exact hne (bitCoef_step src used pos W i j htt k fun ⟨h1, h2⟩ => hxk (hx k h1 h2))
+
+/-- **The served 4-lane layout: one bit merges a row's step into the one before.** For `t ≥ 1`, in every column whose
+data constants are equal across the step, row `i`'s words after steps `t − 1` and `t` are equal wherever its bit
+`l4Pos t 0` of coin word `l4Src t` is 0: half the coins, for all `n` columns at once. -/
+theorem l4_step_merge (hC : S + 3 ≤ 32 * C) (κ : Fin m → ℕ → Fin S → ℤ) (i : Fin m) (j : ℕ) {t t' : Fin S}
+    (htt : (t' : ℕ) + 1 = t) (hκ : κ i j t = κ i j t') (x : Bits m C)
+    (hx : ∀ k : Fin m × Fin C × Fin 32, k.1 = i → k.2.1 = l4Src hC t → (k.2.2 : ℕ) = l4Pos t 0 → x k = 0) :
+    ssnWordB (l4Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l4Pos s q) κ w1l i j t x =
+      ssnWordB (l4Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l4Pos s q) κ w1l i j t' x := by
+  refine ssnWordB_step_merge _ _ _ κ w1l i j htt hκ x fun k hk ⟨q, hq, hs, hp⟩ => hx k hk hs.symm ?_
+  have hq0 : q = 0 := hq.resolve_left (by omega)
+  subst hq0
+  simpa using hp.symm
+
+/-- `n` disjoint pairs inside `T`, each meeting `D ⊆ T` at most once, leave `D` at least `n` short of `T`. -/
+theorem card_add_le_of_pairs {α : Type} [DecidableEq α] {n : ℕ} (T D : Finset α) (a b : Fin n → α) (hD : D ⊆ T)
+    (ha : ∀ j, a j ∈ T) (hb : ∀ j, b j ∈ T)
+    (hdisj : ∀ j j', j ≠ j' → a j ≠ a j' ∧ a j ≠ b j' ∧ b j ≠ a j' ∧ b j ≠ b j')
+    (hone : ∀ j, ¬ (a j ∈ D ∧ b j ∈ D)) : D.card + n ≤ T.card := by
+  let e : Fin n → α := fun j => if a j ∈ D then b j else a j
+  have he : Function.Injective e := by
+    intro j j' h
+    by_contra hne
+    obtain ⟨h1, h2, h3, h4⟩ := hdisj j j' hne
+    simp only [e] at h
+    split_ifs at h <;> contradiction
+  have hdis : Disjoint D (univ.image e) := by
+    rw [disjoint_left]
+    intro x hxD hxE
+    obtain ⟨j, -, rfl⟩ := mem_image.1 hxE
+    simp only [e] at hxD
+    split_ifs at hxD with h
+    · exact hone j ⟨h, hxD⟩
+    · exact h hxD
+  have hsub : D ∪ univ.image e ⊆ T := union_subset hD fun x hx => by
+    obtain ⟨j, -, rfl⟩ := mem_image.1 hx
+    simp only [e]
+    split_ifs
+    exacts [hb j, ha j]
+  calc D.card + n = (D ∪ univ.image e).card := by
+        rw [card_union_of_disjoint hdis, card_image_of_injective _ he, card_univ, Fintype.card_fin]
+    _ ≤ T.card := card_le_card hsub
+
+/-- **On the cell of one bit, the 4-lane layout loses a row's `n` words.** For `t ≥ 1` and a row `i` whose data
+constants are equal across step `t` in every column, any words `D` of the layout pairwise distinct and non-free on a
+set `X` of coin points where row `i`'s bit `l4Pos t 0` of word `l4Src t` is 0 number at least `n` fewer than the
+layout's: `adaptive_floor` there credits at most `c·(m·n·S − n)`. -/
+theorem l4_cell_loss (hC : S + 3 ≤ 32 * C) (κ : Fin m → ℕ → Fin S → ℤ) (hS : 0 < S) (n : ℕ) (hn : n ≤ 28559)
+    (i : Fin m) {t t' : Fin S} (htt : (t' : ℕ) + 1 = t) (hκ : ∀ j < n, κ i j t = κ i j t') (X : Set (Bits m C))
+    (hX : ∀ x ∈ X, ∀ k : Fin m × Fin C × Fin 32, k.1 = i → k.2.1 = l4Src hC t → (k.2.2 : ℕ) = l4Pos t 0 → x k = 0)
+    (D : Finset (Bits m C → ℚ)) (hD : D ⊆ l4Words hC κ n) (hDd : DistinctOn X (FreeB m C) D) :
+    D.card + n ≤ (l4Words hC κ n).card := by
   classical
-  let far : (Fin w → V) → Prop := fun y => ∀ a, r y < hammingDist (m₀ a) y
-  have h1 : ∑ y ∈ Y.filter far, (r y + 1) ≤ writes P :=
-    run_ball_le m₀ P _ (fun y hy => hY y (mem_filter.1 hy).1) r (fun y hy => (mem_filter.1 hy).2)
-      fun y hy y' hy' => hYY y (mem_filter.1 hy).1 y' (mem_filter.1 hy').1
-  have hnear : ∀ y ∈ Y.filter (¬ far ·), ∃ a, hammingDist (m₀ a) y ≤ r y := fun y hy => by
-    have := (mem_filter.1 hy).2
-    simp only [far, not_forall, not_lt] at this
-    exact this
-  have hcard : (Y.filter (¬ far ·)).card ≤ Fintype.card A :=
-    calc _ ≤ (univ.biUnion fun a => Y.filter fun y => hammingDist (m₀ a) y ≤ r y).card := by
-          apply card_le_card
-          intro y hy
-          obtain ⟨a, ha⟩ := hnear y hy
-          exact mem_biUnion.2 ⟨a, mem_univ _, mem_filter.2 ⟨(mem_filter.1 hy).1, ha⟩⟩
-      _ ≤ ∑ a, (Y.filter fun y => hammingDist (m₀ a) y ≤ r y).card := card_biUnion_le
-      _ ≤ ∑ _a : A, 1 := sum_le_sum fun a _ => card_le_one.2 fun y hy y' hy' => by
-          by_contra hne
-          rw [mem_filter] at hy hy'
-          have := hammingDist_triangle y (m₀ a) y'
-          rw [hammingDist_comm y (m₀ a)] at this
-          have := hYY y hy.1 y' hy'.1 hne
-          omega
-      _ = Fintype.card A := by simp
-  have h2 : ∑ y ∈ Y.filter (¬ far ·), (r y + 1) ≤ Fintype.card A * (R + 1) :=
-    calc _ ≤ ∑ _y ∈ Y.filter (¬ far ·), (R + 1) := sum_le_sum fun y hy => by
-          have := hR y (mem_filter.1 hy).1
-          omega
-      _ = (Y.filter (¬ far ·)).card * (R + 1) := by rw [sum_const, smul_eq_mul]
-      _ ≤ _ := Nat.mul_le_mul_right _ hcard
-  calc ∑ y ∈ Y, (r y + 1) = ∑ y ∈ Y.filter far, (r y + 1) + ∑ y ∈ Y.filter (¬ far ·), (r y + 1) :=
-        (sum_filter_add_sum_filter_not Y far _).symm
-    _ ≤ _ := Nat.add_le_add h1 h2
+  set φ : Fin m × ℕ × Fin S → Bits m C → ℚ := fun x =>
+    ssnWordB (l4Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l4Pos s q) κ w1l x.1 x.2.1 x.2.2 with hφ
+  have hdom : (univ ×ˢ range n ×ˢ univ : Finset (Fin m × ℕ × Fin S)).card = m * (n * S) := by
+    simp [card_product]
+  have hinj : Set.InjOn φ (univ ×ˢ range n ×ˢ univ : Finset (Fin m × ℕ × Fin S)) :=
+    card_image_iff.1 ((ssn1lServed_full hC κ hS n hn).2.trans hdom.symm)
+  have hmem : ∀ (j : Fin n) (s : Fin S), ((i, (j : ℕ), s) : Fin m × ℕ × Fin S) ∈ (univ ×ˢ range n ×ˢ univ) :=
+    fun j s => by simp
+  have hne : t ≠ t' := fun h => by rw [h] at htt; omega
+  refine card_add_le_of_pairs _ D (fun j => φ (i, j, t)) (fun j => φ (i, j, t')) hD
+    (fun j => mem_image.2 ⟨_, hmem j t, rfl⟩) (fun j => mem_image.2 ⟨_, hmem j t', rfl⟩) ?_ ?_
+  · intro j j' hjj
+    have hv : (j : ℕ) ≠ j' := fun h => hjj (Fin.ext h)
+    refine ⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩ <;>
+      exact hv (congrArg (fun x : Fin m × ℕ × Fin S => x.2.1) (hinj (hmem _ _) (hmem _ _) h))
+  · rintro j ⟨h1, h2⟩
+    have heq : φ (i, j, t) = φ (i, j, t') :=
+      hDd.1 _ h1 _ h2 fun x hx => l4_step_merge hC κ i j htt (hκ j j.isLt) x (hX x hx)
+    exact hne (congrArg (fun x : Fin m × ℕ × Fin S => x.2.2) (hinj (hmem _ _) (hmem _ _) heq))
 
-/-- **The tables' lift**: over the draws, adaptive-dw holds at `Σ_g Σ_y (r g y + 1)` less `R + 1` a slot a draw, for
-any initial memory. -/
-theorem adaptiveDW_ball_table [Fintype A] [DecidableEq V] [Inhabited V] (Ω : Type) [Fintype Ω]
-    (m₀ : A → Fin w → V) (Y : Ω → Finset (Fin w → V)) (r : Ω → (Fin w → V) → ℕ) (R : ℕ)
-    (hR : ∀ g, ∀ y ∈ Y g, r g y ≤ R)
-    (hYY : ∀ g, ∀ y ∈ Y g, ∀ y' ∈ Y g, y ≠ y' → r g y + r g y' < hammingDist y y') :
-    AdaptiveDW Ω m₀ Y (∑ g, ∑ y ∈ Y g, (r g y + 1) - Fintype.card Ω * (Fintype.card A * (R + 1))) := by
-  intro P hP
-  have h := sum_le_sum fun g (_ : g ∈ univ) => run_ball_table_le m₀ (P g) (Y g) (hP g) (r g) R (hR g) (hYY g)
-  rw [sum_add_distrib, sum_const, card_univ, smul_eq_mul] at h
-  omega
-
-theorem fill_aux (a₀ : A) (y : Fin w → V) (ps : List (Fin w)) (m : A → Fin w → V) (p : Fin w) :
-    ((ps.map fun q => (Step.write a₀ q (y q) : Step A V w)).foldl (fun m st => st.apply m) m) a₀ p =
-      if p ∈ ps then y p else m a₀ p := by
-  induction ps generalizing m with
-  | nil => simp
-  | cons q ps ih =>
-    rw [List.map_cons, List.foldl_cons, ih]
-    by_cases hp : p ∈ ps
-    · simp [hp]
-    · by_cases hpq : p = q
-      · subst hpq
-        simp [Step.apply]
-      · simp [hp, hpq, Step.apply]
-
-theorem fill_run (a₀ : A) (y : Fin w → V) (m : A → Fin w → V) :
-    ((fill a₀ y).foldl (fun m st => st.apply m) m) a₀ = y := by
-  funext p
-  rw [fill, fill_aux]
-  simp [List.mem_finRange]
-
-/-- **Any finite set of chunk values is held by a run of `w` writes a value.** -/
-theorem holds_flat (a₀ : A) (m₀ : A → Fin w → V) (Y : Finset (Fin w → V)) :
-    Holds m₀ (Y.toList.flatMap (fill a₀)) Y ∧ writes (Y.toList.flatMap (fill a₀)) = w * Y.card := by
-  refine ⟨fun y hy => ?_, by rw [writes_flatMap_fill, Finset.length_toList]⟩
-  obtain ⟨l₁, l₂, h⟩ := List.append_of_mem (Finset.mem_toList.2 hy)
-  refine ⟨(l₁.flatMap (fill a₀) ++ fill a₀ y).length, a₀, ?_⟩
-  rw [h, List.flatMap_append, List.flatMap_cons, ← List.append_assoc, List.take_left, run, List.foldl_append,
-    fill_run]
-
-/-- **No adaptive-dw above `w·Σ_g |Y g|`**: a run that writes each distinct target value once holds them all. -/
-theorem not_adaptiveDW (a₀ : A) (Ω : Type) [Fintype Ω] (m₀ : A → Fin w → V) (Y : Ω → Finset (Fin w → V)) (B : ℕ)
-    (hB : w * ∑ g, (Y g).card < B) : ¬ AdaptiveDW Ω m₀ Y B := by
-  intro h
-  have h₁ := h (fun g => (Y g).toList.flatMap (fill a₀)) fun g => (holds_flat a₀ m₀ (Y g)).1
-  have h₂ : ∑ g, writes ((Y g).toList.flatMap (fill a₀)) = w * ∑ g, (Y g).card := by
-    rw [Finset.mul_sum]
-    exact sum_congr rfl fun g _ => (holds_flat a₀ m₀ (Y g)).2
-  omega
-
-/-- Row-step values number at most the sum over rows of each row's distinct values. -/
-theorem card_rows_le {X ι T : Type} [DecidableEq X] (rows : Finset ι) (steps : Finset T) (F : ι → T → X) :
-    ((rows ×ˢ steps).image fun it => F it.1 it.2).card ≤ ∑ i ∈ rows, (steps.image (F i)).card := by
-  calc _ ≤ (rows.biUnion fun i => steps.image (F i)).card := by
-        apply card_le_card
-        intro y hy
-        obtain ⟨⟨i, t⟩, hit, rfl⟩ := mem_image.1 hy
-        rw [mem_product] at hit
-        exact mem_biUnion.2 ⟨i, hit.1, mem_image.2 ⟨t, hit.2, rfl⟩⟩
-    _ ≤ _ := card_biUnion_le
-
-omit [DecidableEq A] in
-/-- **Column-free increments collapse**: row-step chunks `base i + c i t · 1` number at most `Σ_i |{c i t}|`. -/
-theorem card_levels_le [DecidableEq V] [Add V] {ι T : Type} (rows : Finset ι) (steps : Finset T)
-    (base : ι → Fin w → V) (c : ι → T → V) :
-    ((rows ×ˢ steps).image fun it => base it.1 + fun _ => c it.1 it.2).card ≤
-      ∑ i ∈ rows, (steps.image (c i)).card := by
-  refine (card_rows_le rows steps fun i t => base i + fun _ => c i t).trans (sum_le_sum fun i _ => ?_)
-  calc (steps.image fun t => base i + fun _ => c i t).card
-        = ((steps.image (c i)).image fun x => base i + fun _ => x).card := by rw [image_image]; rfl
-    _ ≤ _ := card_image_le
-
-/-- **A sequence that repeats at every step whose bit is `false` takes at most `1 + #true bits` values.** -/
-theorem card_image_le_ones {X : Type} [DecidableEq X] (f : ℕ → X) (b : ℕ → Bool) (k : ℕ)
-    (hf : ∀ t < k, b t = false → f (t + 1) = f t) :
-    ((range (k + 1)).image f).card ≤ 1 + ((range k).filter fun t => b t).card := by
-  induction k with
-  | zero => simp
-  | succ k ih =>
-    have ih' := ih fun t ht => hf t (by omega)
-    rw [range_add_one (n := k + 1), image_insert]
-    cases hb : b k with
-    | true =>
-      have hf' : ((range (k + 1)).filter fun t => b t) = insert k ((range k).filter fun t => b t) := by
-        rw [range_add_one, filter_insert]; simp [hb]
-      have hk : k ∉ (range k).filter fun t => b t := by simp
-      rw [hf', card_insert_of_notMem hk]
-      calc _ ≤ ((range (k + 1)).image f).card + 1 := card_insert_le _ _
-        _ ≤ _ := by omega
-    | false =>
-      have hm : f k ∈ (range (k + 1)).image f := mem_image_of_mem f (mem_range.2 (Nat.lt_succ_self k))
-      rw [hf k (Nat.lt_succ_self k) hb, insert_eq_of_mem hm]
-      exact ih'.trans (by gcongr; omega)
-
-/-- **The walk's obstruction**: when every draw's targets are row-step chunks `base g i + c g i t · 1`, adaptive-dw
-fails at any bound above `w·Σ_g Σ_i |{c g i t}|`. -/
-theorem not_adaptiveDW_levels [DecidableEq V] [Add V] {ι T : Type} (a₀ : A) (Ω : Type) [Fintype Ω]
-    (m₀ : A → Fin w → V) (rows : Finset ι) (steps : Finset T) (base : Ω → ι → Fin w → V) (c : Ω → ι → T → V)
-    (B : ℕ) (hB : w * ∑ g, ∑ i ∈ rows, (steps.image (c g i)).card < B) :
-    ¬ AdaptiveDW Ω m₀ (fun g => (rows ×ˢ steps).image fun it => base g it.1 + fun _ => c g it.1 it.2) B := by
-  refine not_adaptiveDW a₀ Ω m₀ _ B (lt_of_le_of_lt ?_ hB)
-  exact Nat.mul_le_mul_left w (sum_le_sum fun g _ => card_levels_le rows steps (base g) (c g))
-
-/-- **The cancel's obstruction**: when every row's chunk at step `t + 1` repeats its chunk at step `t` whenever the
-bit `b g i t` is `false`, adaptive-dw fails at any bound above `w·Σ_g Σ_i (1 + #{t < k : b g i t})`. -/
-theorem not_adaptiveDW_ones [DecidableEq V] {ι : Type} (a₀ : A) (Ω : Type) [Fintype Ω] (m₀ : A → Fin w → V)
-    (rows : Finset ι) (k : ℕ) (F : Ω → ι → ℕ → Fin w → V) (b : Ω → ι → ℕ → Bool)
-    (hF : ∀ g i t, t < k → b g i t = false → F g i (t + 1) = F g i t) (B : ℕ)
-    (hB : w * ∑ g, ∑ i ∈ rows, (1 + ((range k).filter fun t => b g i t).card) < B) :
-    ¬ AdaptiveDW Ω m₀ (fun g => (rows ×ˢ range (k + 1)).image fun it => F g it.1 it.2) B := by
-  refine not_adaptiveDW a₀ Ω m₀ _ B (lt_of_le_of_lt ?_ hB)
-  exact Nat.mul_le_mul_left w (sum_le_sum fun g _ => (card_rows_le rows _ (F g)).trans
-    (sum_le_sum fun i _ => card_image_le_ones (F g i) (b g i) k (hF g i)))
-
-end Pouw.Dimension.Pointwise
+end Pouw.Dimension.Ssn
