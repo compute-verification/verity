@@ -88,3 +88,15 @@ exploration of the design space." Academic: nobody builds it this year. The outp
 - **On stock hardware** no standard premise credits MACs (KSW, arXiv 2504.09971, confirmed: it credits one unit a word).
 - **Scope:** every credit is relative to the published chip.
 - Area figures are estimates until SI-FOLD's synthesis.
+
+**22:40Z, SI-FOLD preliminary (note 20261029T2230Z-report-silicon-fold; run r20261029-222434-a055):**
+- **A fused split transcript.** The accumulator stays stock, so outputs and denoising are unchanged. Beside the write-back port, a transcript register absorbs every instruction's accumulator words through one Keccak-f[1600] round, starting at the call's live coin and never feeding the output. Only full-K credited instructions advance it, each absorbing its shape tag, and each tile is sealed once by SHA-512.
+- **Results:** h ≈ 0.28; area 2.7% of an s8 MAC (1.0% of FP8), or 5.7% at a round every 15 words for margin 4 on sm_120; depth 8 against the MAC's 45; proof +1.56 ANDs a MAC against the lead's +65; T1 = 0 against `decomp`, `pack` and injection.
+- **Premise:** no program computes the chained rounds for less than the MMA's cost of the words. Rank 4a; rank 2 in the round-structured model.
+- **Why the split is forced:** in-line mixing breaks outputs (0/128 exact), and affine mixers are faked by `decomp` (48/48). Absorbing per tile only gives T1 98.4%; without the trigger rule, 50%.
+- **Open:**
+  - **the energy gap:** about 6% under a 700 W cap, because zero operands run faster, so this credits issues, not energy;
+  - closure is argued, not enumerated;
+  - the wiring isn't priced;
+  - **Keccak or SHA-512 for the round** is a premise choice for Daniel (a SHA-512 round costs 21% of the s8 MAC every word, or 6–14% at margin 4).
+- Re-targeted: on-chip rank-1 operand noise from the live coin, for power whitening with cheap exact denoising ((uvᵀ)B = u(vᵀB)); closure enumerated; the wiring.
