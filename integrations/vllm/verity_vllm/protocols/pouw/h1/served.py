@@ -396,11 +396,12 @@ class Served:
             if into is not None:
                 into["z"] = later.also().hex()
 
-    def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray, out: np.ndarray | None = None) -> np.ndarray:
-        """Call ``call``'s A table's words over the Program's M slots: its rows' int8 ``codes`` [m, K] and f32 ``scales``
-        [m], then zero codes of scale 0, each row `weights.chunks` (K) = n leaves (`chunk_words`, n·M leaves), written into
-        ``out`` when given."""
-        return chunk_words(codes, scales, Wt.chunks(call.k), self.m, out)
+    def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray, out: np.ndarray | None = None,
+                slots: int | None = None) -> np.ndarray:
+        """Call ``call``'s A table's words over the Program's M slots (or the first ``slots``): its rows' int8 ``codes``
+        [m, K] and f32 ``scales`` [m], then zero codes of scale 0, each row `weights.chunks` (K) = n leaves (`chunk_words`,
+        n·M leaves), written into ``out`` when given."""
+        return chunk_words(codes, scales, Wt.chunks(call.k), self.m if slots is None else slots, out)
 
     def _a_rows(self, call: Any, value: str, mine: Sequence[int], codes: np.ndarray, scales: np.ndarray
                 ) -> np.ndarray | None:
