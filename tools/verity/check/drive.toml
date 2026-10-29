@@ -5,8 +5,8 @@
 # syncs, each tick refuses, with the fix, a name used here that doesn't exist: the `land_into` branch and drive's push to it,
 # each machine of `on`, each of `landing_gates` (`drive_names`). ci owns this file; infra runs drive from it on the control pod.
 
-# the keys drive's command line may override: `--on` and `--first`, which the control pod's drive args (/data/drive/args) pass;
-# any other flag there refuses the tick
+# the keys drive's command line (the control pod's /data/drive/args) may override: `--on` and `--first`; any other flag there
+# refuses the tick
 command_line = ["on", "first"]
 # the machines train.sh launches drive's Lean checks and its after-landing run on (a machine, or `auto`)
 on = ["vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
