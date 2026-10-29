@@ -14,8 +14,8 @@ is the total width of the distinct gates its segments name, wherever no gate is 
 * `widthIn_eq`: a component's width is its items' gates' width; a frame alone counts copies times one copy's
   (`Desc.sum_copies`).
 * `sweep_eq`: `sweepStep`'s sweep over items sorted by start splits them into components no gate is in two of.
-* `frameFold_inv`: frames of one start, period and count merge into one with the union of their gates (`Array.qsort`
-  only permutes, `Properties.RemoteAudit.qsort_toList_perm`).
+* `frameFold_inv`: frames of one start, period and count merge into one with the union of their gates (`List.mergeSort`
+  only permutes, `List.mergeSort_perm`).
 * `copiesStep_inv`: a segment of copies gives its copies' intervals or one frame of them, with its gates.
 * `tail_eq` and `novelWidth_sum` put them together, given `GateIvsExact` (`novelWidthExact_of`): `Desc.gateIvs` gives a
   piece list's gates as intervals, with their widths.
@@ -534,9 +534,9 @@ theorem sorted_mergeSort (L : List (ℕ × ℕ × ℕ)) :
 
 /-- **What follows the segments' step.** Intervals and frames whose widths are `W`'s: the frames sorted and merged, the
 items swept by start and each component counted by `widthIn` give the width of all their gates. -/
-theorem tail_eq (W : ℕ → ℕ) (ivs : Array (ℕ × ℕ × ℕ)) (cls : Array Cl) (lt : Cl → Cl → Bool)
+theorem tail_eq (W : ℕ → ℕ) (ivs : Array (ℕ × ℕ × ℕ)) (cls : Array Cl) (le : Cl → Cl → Bool)
     (hI : Agree W ivs.toList) (hF : ∀ x ∈ cls.toList, FrameOk W x) :
-    let frames := (cls.qsort lt).foldl frameStep #[]
+    let frames := (cls.toList.mergeSort le).foldl frameStep #[]
     let n := ivs.size
     let items := (ivs.mapIdx fun i x => (x.1, x.2.1, i)) ++
       (frames.mapIdx fun i x => (x.lo, x.lo + (x.cnt - 1) * x.period + x.span, n + i))
@@ -544,10 +544,9 @@ theorem tail_eq (W : ℕ → ℕ) (ivs : Array (ℕ × ℕ × ℕ)) (cls : Array
     (if fin.2.1.isEmpty then fin.1 else fin.1 + widthIn ivs frames fin.2.1) =
       ∑ a ∈ ivGates ivs.toList ∪ FGs cls.toList, W a := by
   intro frames n items fin
-  have hperm := Properties.RemoteAudit.qsort_toList_perm cls lt
-  obtain ⟨hFr, hFg⟩ := frameFold_inv W (cls.qsort lt).toList #[] (by simp)
+  have hperm := List.mergeSort_perm cls.toList le
+  obtain ⟨hFr, hFg⟩ := frameFold_inv W (cls.toList.mergeSort le) #[] (by simp)
     (fun x hx => hF x (hperm.mem_iff.1 hx))
-  rw [Array.foldl_toList] at hFr hFg
   have hitem : ∀ c, c ∈ items.toList ↔ (∃ i, ∃ h : i < ivs.size, c = (ivs[i].1, ivs[i].2.1, i)) ∨
       ∃ i, ∃ h : i < frames.size, c = (frames[i].lo, frames[i].lo + (frames[i].cnt - 1) * frames[i].period +
         frames[i].span, n + i) := by
@@ -972,16 +971,12 @@ def IvsOfExact : Prop :=
     (∀ iv ∈ (ivsOf qs).toList, ∀ a, iv.1 ≤ a → a < iv.2 → ∃ q ∈ qs.toList, (a : ℤ) ∈ elems q) ∧
     ∀ q ∈ qs.toList, ∀ e ∈ elems q, ∃ iv ∈ (ivsOf qs).toList, iv.1 ≤ e.toNat ∧ e.toNat < iv.2
 
-theorem mem_qsort_toList {α : Type} {xs : Array α} {lt : α → α → Bool} {a : α} :
-    a ∈ (xs.qsort lt).toList ↔ a ∈ xs.toList :=
-  (Properties.RemoteAudit.qsort_toList_perm xs lt).mem_iff
-
 theorem mem_gateIvs {qs : Array Piece} {z : ℕ × ℕ × ℕ} : z ∈ (gateIvs qs).toList ↔
     ∃ w, (∃ q ∈ qs.toList, q.tgt = .gate w) ∧ ∃ iv ∈ (ivsOf (qs.filter (·.tgt == .gate w))).toList, z = (iv.1, iv.2, w) := by
   unfold gateIvs
   simp only [Array.toList_flatMap, List.mem_flatMap, Array.toList_map, List.mem_map]
   simp only [List.mem_eraseDups]
-  simp only [mem_qsort_toList]
+  simp only [List.mem_mergeSort]
   simp only [Array.mem_toList_iff, Array.mem_filterMap]
   constructor
   · rintro ⟨w, ⟨q, hq, h⟩, iv, hiv, rfl⟩
