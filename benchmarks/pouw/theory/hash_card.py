@@ -180,7 +180,8 @@ def derived(card: dict, hc: dict, lead: dict, spec: dict, fold_writes: bool = Tr
         q, r = pr["parts"][p], pr["rows"][p]
         if cm:
             m = cm["m"]
-            keep, writes = 1 / m, (math.ceil((m - 1) / 2) + cm.get("rot", 0) * (m - 1)) / m
+            keep = 1 / m
+            writes = cm.get("writes_per_word", (math.ceil((m - 1) / 2) + cm.get("rot", 0) * (m - 1)) / m)
         else:
             cs = ps.calls(card, p)
             cells = sum(x["count"] * x["m"] * x["n"] for x in cs)
@@ -210,21 +211,31 @@ def design_entry(card: dict, hc: dict, key: str, spec: dict, lead: dict, kind: s
     """One design on the basis: h, cut against the lead, T1/T2/T3 with labels, ranks, status and flags."""
     flags: list[str] = []
     adds = []
+    refuted = []
     for a in spec.get("adds", []):
         rank, why = family_rank(hc, a)
-        adds.append(a | {"rank": rank})
+        fam = hc.get("family", {}).get(a.get("family", ""), {})
+        adds.append(a | {"rank": rank} | ({"status": "refuted"} if fam.get("status") == "refuted" else {}))
         if why:
             flags.append(why)
+        if a.get("rank_stated"):
+            flags.append(f"{a['id']}: its lane states rank {a['rank_stated']}, not on the card's scale; carded at {rank}")
+        if fam.get("status") == "refuted":
+            refuted.append(f"{a['id']} (family {a['family']}) refuted: {fam['refuted_by']}")
+    flags += refuted
     e = {"id": key, "kind": kind, "title": spec.get("title", key), "lane": spec.get("lane", ""),
          "note": spec.get("note", ""), "status": spec.get("status", "proposed"), "rule_change": spec.get("rule_change", ""),
          "what": spec.get("what", ""), "extra_w1_per_mac": float(spec.get("extra_w1_per_mac", 0.0)), "adds": adds,
          "rule_question": spec.get("rule_question", "")}
+    if refuted and e["status"] not in GONE:
+        e["status"] = "refuted"
     if "combine" in spec or "fold" in spec:
         dv = derived(card, hc, lead, spec)
         w = dv["worst"]
-        e["design"] = dv["name"] + "+" + ("xorrot" if spec.get("combine", {}).get("rot") else "xor") + (
-            f"-{spec['combine']['m']}" if "combine" in spec else "-fold")
-        e["h"], e["h_label"] = w["h"] + e["extra_w1_per_mac"], "checked" if "combine" in spec else "estimate"
+        e["design"] = dv["name"] + "+" + spec.get("form", ("xorrot" if spec.get("combine", {}).get("rot") else "xor") + (
+            f"-{spec['combine']['m']}" if "combine" in spec else "-fold"))
+        e["h"] = w["h"] + e["extra_w1_per_mac"]
+        e["h_label"] = spec.get("h_label", "checked" if "combine" in spec else "estimate")
         e["t1"] = (w["t1"], spec.get("t1_label", "checked" if "combine" in spec else "estimate"))
         e["t1_dw"] = w["t1_dw"]
         e["fold_w1"] = w["fold"]
@@ -235,7 +246,7 @@ def design_entry(card: dict, hc: dict, key: str, spec: dict, lead: dict, kind: s
         prem = [p for p in lead["premises"] if p not in spec.get("drops", [])]
         e["ranks"] = rank_axis(card, prem, adds)
         st = spec.get("stated", {})
-        if "h" in st and abs(e["h"] / st["h"] - 1) > 0.01:
+        if "h" in st and abs(e["h"] - st["h"]) > 0.01 * max(st["h"], 1.0):
             flags.append(f"its lane states h {st['h']:g}; the card's {e['h']:.2f} counts the fold's own writes "
                          f"({w['fold']:.2f} W1 a MAC)" + (f" and seals {spec['fold']['seal_bytes_per_cell']:g} B a cell "
                                                           f"over the forward" if "fold" in spec else "") if w["fold"] else
@@ -448,6 +459,17 @@ def render(hc: dict, lead: dict, readings: list[dict], entries: list[dict], fr: 
             e = by[f["best"]]
             L.append(f"| {rank_label(f['rank'])} | {f['best']} | {f['h']:.2f} | {fmt(f['cut'], digits=2)}× | "
                      f"{rank_label(e['ranks']['axis_effective'])} | {'; '.join(e['done_missing']) or 'nothing'} |")
+    best = list(dict.fromkeys(["lead"] + [f["best"] for f in fr + fr_rules]))
+    L += ["", "## Per monitoring period: honest commitment work of the frontier's designs (h × stock, W1 at stock's AND rate)",
+          "", "Pooled totals over each period and scope; the share of the compute covered is h itself (and T1's uncredited "
+          "share beside it). The window is one 600 s window.", "",
+          "| design | h (share of stock) | T1 | period | one H200 | datacenter | world |", "|---|---|---|---|---|---|---|"]
+    for k in best:
+        e = by[k]
+        for period in ("window", "week", "month", "year"):
+            s = {sc: per[period][sc]["stock_ands"] for sc in ("h200", "datacenter", "world")}
+            L.append(f"| {k} | {e['h']:.2f}× | {fmt(e['t1'][0], pct=True, digits=2)} | {period} | "
+                     + " | ".join(f"{e['h'] * s[sc]:.3e} (T1 {e['t1'][0] * s[sc]:.2e})" for sc in ("h200", "datacenter", "world")) + " |")
     done = [e for e in entries if not e["done_missing"]]
     L += ["", f"**Done-when (a 10× cut holding the targets, credit checked, cost measured or bounded, each new premise "
           f"with a falsification test, no ruling pending):** {'met by ' + ', '.join(e['id'] for e in done) if done else 'not met'}.",

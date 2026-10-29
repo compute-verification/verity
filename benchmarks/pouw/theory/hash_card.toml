@@ -126,6 +126,12 @@ what = "inbox/HASH.md: it equals Σ_τ κ_τ Σ_{t≥τ} r_t, computable without
 [family.xor-fold-writes]
 what = "a program that outputs the XOR of a cell's words (m of them, or all of them sealed with the final word) writes each word and the XOR's three-input LOP3s"
 stated = [{ lane = "SHA", name = "XorWrites_m", rank = "4a" }, { lane = "ASSUME", name = "FoldMaterial (+ XorFoldOpt)", rank = 5 }]
+status = "refuted"
+refuted_by = "COUNTER's pack (run r20261029-202456-94fa, checked bit for bit): at the lead's layout 2-3 cells' zero-data words share a register, so the cheapest prover undercuts the credit by 28-36% of stock (the XOR fold), 21-24% (xor-16) and 12-15% (xor-11); credit = stock alone is sound but leaves honest's words and fold uncredited (T1 about 77%)"
+
+[family.fold-opt]
+what = "FOLD-OPT (Accounting.Assumptions.TS): honest's fold program is the cheapest that outputs the fold, instantiated at a keyed fold (li, Duo, fx1, or SPARSE's multiply-xor)"
+stated = [{ lane = "SPARSE", name = "FOLD-OPT", rank = "4a" }, { lane = "ASSUME", name = "FOLD-OPT", rank = 5 }]
 
 # No-go bounds the lanes have shown, beside the designs.
 [bound.class-c]
@@ -210,6 +216,7 @@ stated = { h_bare = 11.84, h = 11.84, t1 = 0.00029, t1_dw = 2.62 }
 t2 = { value = 14.78, label = "estimate" }
 adds = [{ id = "RotXorWrites_11", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "the exact adversary search for xorrot-m (SHA's next step); attacked only on paper so far" }]
 rule_question = "is a XOR fold of rotated words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
+caveats = ["not reached by COUNTER's pack, since a 32-bit rotation spills a packed lane into its neighbour; no exact search yet"]
 
 [proposal.sha-xorrot16]
 lane = "SHA"
@@ -221,6 +228,7 @@ stated = { h_bare = 8.22, h = 8.22, t1 = 0.00028, t1_dw = 2.74 }
 t2 = { value = 13.25, label = "estimate" }
 adds = [{ id = "RotXorWrites_16", rank = "4a", part = "hashing", status = "open", owner = "SHA", falsification = "the exact adversary search for xorrot-m (SHA's next step); attacked only on paper so far" }]
 rule_question = "is a XOR fold of rotated words before SHA-512 within the one-hash rule? (SHA Ask 3; HIDE: unkeyed folds are outside the Duo exception's wording)"
+caveats = ["not reached by COUNTER's pack, since a 32-bit rotation spills a packed lane into its neighbour; no exact search yet"]
 
 [proposal.assume-fold-cell]
 lane = "ASSUME"
@@ -268,5 +276,103 @@ title = "the li fold under the Duo exception as worded: one instruction a word, 
 status = "proposed"
 fold = { seal_bytes_per_cell = 8, writes_per_word = 1.0 }
 stated = { h = 4.6 }
-adds = [{ id = "FOLD-OPT (li)", rank = 5, part = "hashing", status = "open", owner = "main (TS accounting)", falsification = "a program that outputs li's fold with fewer writes than one instruction a word (fold_routes.py)" }]
+adds = [{ id = "FOLD-OPT (li)", family = "fold-opt", rank = 5, part = "hashing", status = "open", owner = "main (TS accounting)", falsification = "a program that outputs li's fold with fewer writes than one instruction a word (fold_routes.py)" }]
 caveats = ["ASSUME states h about 1.1-4.6 and no T2 for li", "HIDE reads the Duo exception's wording as covering li"]
+
+[proposal.sparse-c4]
+lane = "SPARSE"
+note = "compute-research/20261029T1955Z-report-hash-sparse"
+title = "(c4) the multiply-xor fold N <- (N xor D_t)·k_t, k_t a live odd u32, every word; N_T and the last word hashed"
+status = "proposed"
+fold = { seal_bytes_per_cell = 8, writes_per_word = 2.0 }
+form = "mulxor-fold"
+stated = { h = 2.94 }
+t2 = { value = 9.7, label = "estimate" }
+adds = [{ id = "FOLD-OPT (mul-xor)", family = "fold-opt", rank = "4a", rank_stated = "4", part = "hashing", status = "open", owner = "SPARSE", falsification = "two- and three-step windows (<= 5 or <= 8 instructions) and transformed-state loops (fold_search.py; one- and two-instruction programs, bit-slicing at 13.53 LOP3s and tables checked none cheaper, run r20261029-200526-98a7)" }]
+caveats = [
+  "SPARSE states h 2.94 from hashing alone; the card adds the fold's LOP3 and IMUL, 2 writes a word",
+  "T1 is the card's under the lead's tile grain (SPARSE: 0.026% / 0.0044% / 0.0014%); with an 8-bit row coin instead, 0.45% / 0.42% / 0.42% (rows sharing fold states)",
+  "T2 is SPARSE's estimate on a fold rate measured on vy-dc-h200-5 (runs r20261029-201359-18a8, r20261029-201628-f2a5), not a served T2",
+  "keyed u32 mul/xor fold: within the Duo exception's wording (HIDE's reading); binds under H-mu+, not yet in a lock",
+  "FOLD-OPT's every-certificate form is false for this fold (SPARSE interim 2); only the at-pi* form is a candidate",
+]
+
+[proposal.sparse-c4-r1]
+lane = "SPARSE"
+note = "compute-research/20261029T1955Z-report-hash-sparse"
+title = "(c4) with R1: the multiply-xor fold on the prover, the certifier hashes the residual"
+status = "proposed"
+fold = { seal_bytes_per_cell = 0, writes_per_word = 2.0 }
+form = "mulxor-fold+R1"
+stated = { h = 0.0 }
+t2 = { value = 14.9, label = "estimate" }
+adds = [{ id = "FOLD-OPT (mul-xor)", family = "fold-opt", rank = "4a", rank_stated = "4", part = "hashing", status = "open", owner = "SPARSE", falsification = "two- and three-step windows and transformed-state loops (fold_search.py)" }]
+caveats = ["the card keeps A's leaves and the bound blocks on the prover (0.27); the fold's writes stay the prover's", "the residual's hashing rests on trusted-host (rank 3)"]
+
+[proposal.noise-mirrorpi-quad]
+lane = "NOISE"
+note = "compute-research/20261029T2000Z-report-hash-noise"
+title = "mirror-pi/quad-l4-w4: a per-output quadratic sketch sum_t w_t^2 mod 2^32 over mirror-pi noise, 4 coin lanes a step and a wide step-0 block"
+status = "proposed"
+h = { ratio = 0.0198, baseline = 120.0, label = "estimate" }
+t1 = { value = 0.0062, label = "estimate" }
+t2 = { value = 2.6, label = "estimate" }
+adds = [{ id = "SketchWrites2", rank = "4bU", rank_stated = "4a+", part = "hashing", status = "open", owner = "NOISE", falsification = "a program for the sketch below 2 eq a word; commit_space.py's edge and middle-block decompositions are its attacks so far (run r20261029-200124-8f0f)" }]
+caveats = [
+  "another noise (mirror-pi), not the lead's: its T1 base is mirror's (0.62%, open: base pools and A2r above 1% at 8,192 rows without a row salt), its T3 unmeasured",
+  "NOISE states h as h/lead against the brief's 120-230 and counts the sketch's arithmetic as hashing",
+  "mirror's network term is about 28% at cap 32 unless row coins are drawn per column tile",
+]
+
+[proposal.noise-rfp4]
+lane = "NOISE"
+note = "compute-research/20261029T2000Z-report-hash-noise"
+title = "RFP-4 committed at block ends (N-DENSE's dense noise)"
+status = "proposed"
+h = { ratio = 0.0322, baseline = 120.0, label = "estimate" }
+t1 = { value = 0.35, label = "estimate" }
+t3 = { value = 0.0368, label = "estimate" }
+adds = [{ id = "reuse lemma (M1)", rank = 5, part = "hashing", status = "open", owner = "NOISE", falsification = "the skip in M0 (50-100%)" }]
+caveats = ["T1 is 0 only in M1 with the reuse lemma; 35% on the argued projection bound, 50-100% in M0"]
+
+[proposal.sketch-nh]
+lane = "SKETCH"
+note = "compute-research/20261029T2031Z-report-hash-sketch"
+title = "NH over the running words: S += w(j)·w(j+1), one IMAD a pair, one S committed a 1,024 words"
+status = "proposed"
+combine = { m = 1024, writes_per_word = 0.5 }
+form = "nh-1024"
+h_label = "estimate"
+t1_label = "estimate"
+stated = { h = 0.959 }
+layout = { macs_per_word = 30.65 }
+t2 = { value = 1.39, label = "estimate" }
+adds = [{ id = "PairWrites", rank = "4a", part = "hashing", status = "open", owner = "SKETCH", falsification = "small-instance synthesis for a cheaper nh / nh2 program (synth.py, QF_BV; none found, honest's nh2 optimal at T 2 and 32 bits)" }]
+rule_question = "an unkeyed quadratic fold sealed by SHA-512: SKETCH reads no rule change, HIDE reads it outside the Duo exception's wording"
+caveats = [
+  "SKETCH states h 0.959 against the lead's 119.5 at 1.044 W1 a committed register a MAC (30.65 MACs a word)",
+  "the lead's zero-data words are separable (d0 + R_t(i) + C_t(class, j)); quadratic sketches over them break by decomposition (NOISE: sum w_t^2 at 189%) and expansion (COUNTER: squares at 63%); NH's adjacent products over the same words are not yet attacked there",
+]
+
+[proposal.alt-split]
+lane = "ALT"
+note = "compute-research/20261029T2017Z-report-hash-alt"
+title = "the card/certifier split at T2 <= 100: the card hashes the least share f of the words that fits, the rest ship to the certifier"
+status = "proposed"
+h = { value = 100.9, price = "floor", label = "estimate", point = "t8192", model = "llama-3.2-1b", words_chunk = 262144, baseline = 118.5 }
+t1 = { value = 0.000656, label = "checked" }
+t2 = { value = 100.0, label = "estimate" }
+t3 = { value = -0.00021, label = "measured" }
+caveats = ["h is 0 at T 512 with 64 rows and at decode batch 1 and batch 64 at 8K, 97.8 at 512 rows, 100.9 at T 8,192 (floor); rank 3 where f = 0, 4a else", "the certifier hashes 50 GB/s a prover GPU: about 62 Genoa cores each"]
+
+[proposal.alt-dout]
+lane = "ALT"
+note = "compute-research/20261029T2017Z-report-hash-alt"
+title = "D-OUT: outputs only, (A + R)·B^T with dense binary R on the activations, served noisy, public weights"
+status = "proposed"
+h = { value = 1.41, price = "floor", label = "estimate", point = "any", model = "llama-3.2-1b", words_chunk = 262144, baseline = 118.5 }
+t1 = { value = 0.0074, label = "estimate" }
+t2 = { value = 2.0, label = "estimate" }
+adds = [{ id = "SAK-UF(B)", rank = "4bU", rank_stated = "4", part = "matmul", status = "open", owner = "ALT", falsification = "a MAC-weighted gap above 1% at 1-bit R on the registered weights (hash_alt_weights.py, per model): 0.52% on Llama-3.2-1B's int8 weights, 16% on Student-t(3) synthetic weights" }]
+rule_change = "public weights: the weights are values a program brings under 'everything zero-knowledge' (the model-public ruling)"
+caveats = ["the linears only: attention stays at the lead's density, so the whole step's h is 3.39 at T 512 and 26.7 at T 8,192 (4.4x)", "T3 unmeasured (about int7-equivalent activations on every linear)"]
