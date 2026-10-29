@@ -72,8 +72,8 @@ each step the parts it ran. `--record --combine RUN...` records, on the clean co
 parts, each once (the preflight's steps once, passed in every shard), when `research.merge.shard_set` accepts them: the
 shards' Attempts are passing runs of the declared command with `--shard K/N` on that clean commit, their results passed with
 no step failed or stopped, all of one plan (one N, K = 1..N once each) and one config (the commit's), and their parts are
-every part, each once, covering every job the commit's `ci.toml` puts on the gate (no plan holds one off it: circuit-check
-runs after landing alone). `research merge` takes the combined Attempt only
+every part, each once, covering every job the commit's `ci.toml` puts on the gate (a shard skips a job off it, which a plan
+still names: circuit-check runs after landing alone). `research merge` takes the combined Attempt only
 after judging its shards again the same way and finding its steps theirs, so a missing, repeated, failed or mismatched shard
 passes nothing. A step skipped in its shard (lean-agreement without the upstream build) is skipped in the combined check too.
 
@@ -1272,16 +1272,17 @@ def deferred_parts(steps: str) -> list[str]:
 
 
 def shard(spec: str) -> dict:
-    """    `--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, "all": every part a recorded
-    unsharded check covers, its jobs on the gate (`gated_parts`)}, on this tree's Lake packages (`declaration.resolve`).  DeclarationError when there is no such plan or shard,
-    or the tree can't be listed."""
+    """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
+    gate, "all": every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages
+    (`declaration.resolve`).  DeclarationError when there is no such plan or shard, or the tree can't be listed."""
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
     plans = DECLARATION.plans()
     if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
     parts_of = _parts_of()
-    return {"k": k, "n": n, "parts": DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1],
+    return {"k": k, "n": n,
+            "parts": [p for p in DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1] if p.partition(":")[0] not in OFF_GATE],
             "all": DECLARATION.all_parts(DECLARATION.gated(JOBS), parts_of)}
 
 

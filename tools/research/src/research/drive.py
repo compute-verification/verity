@@ -42,8 +42,7 @@ Lean checks that runs or passed, `next` is kept (`queue.lean_hold`, `--first` ab
 alone that is pushed or loses its mark leaves, and `next` is rebuilt from it.  ci's hand Lean check goes through drive
 (`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
 from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
-time of `main`'s tip (`train.sh MAIN MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`), circuit-check and any
-other job off the merge gate (`gate = false`, which no recorded check runs and no merge requires) among them, `--no-cache
+time of `main`'s tip (`train.sh MAIN MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`), `--no-cache
 --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
 by hand).  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (a cancel

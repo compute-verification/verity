@@ -12,8 +12,8 @@ A job is a `[[job]]` table:
   stopped if it fails. The job it names has no `after` of its own;
 - `part`: optional, one of `PARTS`, the part of the check (`check.py PART...`) the job belongs to (`select`); `check.py
   --deferred JOB,...` names jobs instead (`needed`);
-- `gate`: optional, default true; false takes the job off the merge gate (`gated`): a recorded check and every plan leave
-  it out, `research merge` requires it of no check, and it runs in drive's after-landing run (`check.py --deferred`), whose red
+- `gate`: optional, default true; false takes the job off the merge gate (`gated`): a recorded check, whole or a shard,
+  skips it, `research merge` requires it of no check, and it runs in drive's after-landing run (`check.py --deferred`), whose red
   reverts its culprit. Such a job has no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
 
 The file also carries `schema = "ci/v0"`. Anything else is refused: an unknown key, a missing field, a wrong type, a
@@ -21,9 +21,8 @@ duplicate name, or an owner the registry doesn't know. Reading the file runs non
 
 A `[[plan]]` is one way to split a check over several machines (`check.py --shard K/N`): `shards`, a list of N lists of
 selectors, shard K the K-th. A selector is a job's name, or for a job in `SPLIT`, `JOB:PART` (one part: for `lean-audit`, a
-Lake package with a `lean-audit.json`) or `JOB:*` (its parts no other selector of the plan names). Every job on the gate is in
-exactly one shard, whole or, for a split job, as named parts plus exactly one `*`, and no job off it is in any (a sharded
-check is one a gate reads); a shard holds what each of its jobs `needs` or runs
+Lake package with a `lean-audit.json`) or `JOB:*` (its parts no other selector of the plan names). Every job is in exactly one
+shard, whole or, for a split job, as named parts plus exactly one `*`; a shard holds what each of its jobs `needs` or runs
 `after`; no two plans have the same N (`plans`). `resolve` turns a plan into each shard's parts for a tree's parts
 (`parts_of`), and refuses a named part the tree lacks, so a stale plan stops the shard instead of leaving something out.
 """
@@ -164,10 +163,7 @@ def parse_plans(text: str, jobs: list[Job], source: str = "ci.toml") -> dict[int
                 (whole.setdefault(job, []).append(k) if part is None else parts.setdefault(job, []).append((k, part)))
         for j in jobs:
             w, p = whole.get(j.name, []), parts.get(j.name, [])
-            if not j.gate and (w or p):
-                raise DeclarationError(f"{where}: shard {(w or [p[0][0]])[0]} runs {j.name}, which is off the gate (gate = false): "
-                                       f"a plan's shards make a check a gate reads, and drive's after-landing run runs {j.name}")
-            if j.gate and not w and not p:
+            if not w and not p:
                 raise DeclarationError(f"{where}: no shard runs {j.name}")
             if w and (len(w) > 1 or p):
                 raise DeclarationError(f"{where}: {j.name} is in more than one shard")
