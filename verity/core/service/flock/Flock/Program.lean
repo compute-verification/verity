@@ -422,10 +422,305 @@ def recordFunctionIds (fid : String) : Array String :=
     | .ok j => fnRefs acc j
     | .error _ => acc) #[]
 
+/-! ### §4.4 A leaf read at the width it was committed with
+
+`E_REINTERPRET` (`defs.Builder.finish`): a node's argument or a body's return that names a leaf of a parameter or of an
+earlier node (any node, for the return) of another width than its own type gives that position is a silent
+reinterpretation, and the decoder refuses the Definition as it finishes decoding it, with the codec's message. A reference
+to the node itself or a later one is not this check's. The check reads the description: each reference part is compared
+by the structure of the two types, and leaves are walked one by one only where the structure doesn't decide, at most
+`WALK` of them in a Program, past which it is refused (`E_REINTERPRET unchecked`). -/
+
+namespace Widths
+
+/-- The widths of `t`'s leaves `lo … hi - 1`, each once (`types.range_widths`), from the type's structure. -/
+def rangeWidths (t : Ty) (lo hi : Nat) : List Nat :=
+  match t with
+  | .value w => if lo == 0 && 0 < hi then [w] else []
+  | .array n e =>
+    let L := e.leaves
+    let hi := min hi (n * L)
+    if L == 0 || hi ≤ lo then [] else
+      let a := lo / L
+      let b := (hi - 1) / L
+      if a == b then rangeWidths e (lo - a * L) (hi - a * L)
+      else (rangeWidths e (lo - a * L) L ++ (if a + 1 < b then rangeWidths e 0 L else []) ++
+        rangeWidths e 0 (hi - b * L)).eraseDups
+  | .tuple fs => (fs.foldl (fun (acc : List Nat × Nat) f =>
+      let o := acc.2
+      let m := f.leaves
+      (if o + m ≤ lo || hi ≤ o then acc.1 else acc.1 ++ rangeWidths f (lo - o) (min hi (o + m) - o), o + m)) ([], 0)).1.eraseDups
+  | .record fs => (fs.foldl (fun (acc : List Nat × Nat) f =>
+      let o := acc.2
+      let m := f.2.leaves
+      (if o + m ≤ lo || hi ≤ o then acc.1 else acc.1 ++ rangeWidths f.2 (lo - o) (min hi (o + m) - o), o + m)) ([], 0)).1.eraseDups
+termination_by t
+decreasing_by
+  all_goals first
+    | decreasing_tactic
+    | (simp only [Ty.tuple.sizeOf_spec]; exact Ty.sizeOf_lt_of_mem ‹_›)
+    | (simp only [Ty.record.sizeOf_spec]; exact Ty.sizeOf_snd_lt_of_mem ‹_›)
+
+/-- The width of leaf `j` of `t`. -/
+def wAt (t : Ty) (j : Nat) : Nat :=
+  match t with
+  | .value w => w
+  | .array _ e => let L := e.leaves; if L == 0 then 0 else wAt e (j % L)
+  | .tuple fs => (fs.foldl (fun (acc : Option Nat × Nat) f => match acc.1 with
+      | some _ => acc
+      | none => let m := f.leaves; (if j < acc.2 + m then some (wAt f (j - acc.2)) else none, acc.2 + m)) (none, 0)).1.getD 0
+  | .record fs => (fs.foldl (fun (acc : Option Nat × Nat) f => match acc.1 with
+      | some _ => acc
+      | none => let m := f.2.leaves; (if j < acc.2 + m then some (wAt f.2 (j - acc.2)) else none, acc.2 + m)) (none, 0)).1.getD 0
+termination_by t
+decreasing_by
+  all_goals first
+    | decreasing_tactic
+    | (simp only [Ty.tuple.sizeOf_spec]; exact Ty.sizeOf_lt_of_mem ‹_›)
+    | (simp only [Ty.record.sizeOf_spec]; exact Ty.sizeOf_snd_lt_of_mem ‹_›)
+
+/-- The smallest part of `t` holding its leaves `lo … hi - 1` (`hi > lo`), and the leaf of `t` it starts at. -/
+def cover (t : Ty) (lo hi : Nat) : Ty × Nat :=
+  match t with
+  | .value _ => (t, 0)
+  | .array _ e =>
+    let L := e.leaves
+    let a := lo / L
+    if L == 0 || a != (hi - 1) / L then (t, 0) else
+      let (c, o) := cover e (lo - a * L) (hi - a * L)
+      (c, o + a * L)
+  | .tuple fs => (fs.foldl (fun (acc : Option (Ty × Nat) × Nat) f => match acc.1 with
+      | some _ => acc
+      | none =>
+        let m := f.leaves
+        (if acc.2 ≤ lo && hi ≤ acc.2 + m then
+          let (c, o) := cover f (lo - acc.2) (hi - acc.2)
+          some (c, o + acc.2) else none, acc.2 + m)) (none, 0)).1.getD (t, 0)
+  | .record fs => (fs.foldl (fun (acc : Option (Ty × Nat) × Nat) f => match acc.1 with
+      | some _ => acc
+      | none =>
+        let m := f.2.leaves
+        (if acc.2 ≤ lo && hi ≤ acc.2 + m then
+          let (c, o) := cover f.2 (lo - acc.2) (hi - acc.2)
+          some (c, o + acc.2) else none, acc.2 + m)) (none, 0)).1.getD (t, 0)
+termination_by t
+decreasing_by
+  all_goals first
+    | decreasing_tactic
+    | (simp only [Ty.tuple.sizeOf_spec]; exact Ty.sizeOf_lt_of_mem ‹_›)
+    | (simp only [Ty.record.sizeOf_spec]; exact Ty.sizeOf_snd_lt_of_mem ‹_›)
+
+/-- The leaf counts of `t`'s children where it has more than one (an Array's elements, a Tuple's or Record's fields). -/
+def childLeaves : Ty → Array Nat
+  | .value _ => #[]
+  | .array n e => Array.replicate (min n 2) e.leaves
+  | .tuple fs => fs.map (·.leaves)
+  | .record fs => fs.map (·.2.leaves)
+
+/-- `t`'s one width, where all its leaves have one. -/
+def homo (t : Ty) : Option Nat :=
+  match rangeWidths t 0 t.leaves with
+  | [w] => some w
+  | _ => none
+
+/-- Leaves walked one by one, past which a Program is refused: references this irregular are not read in closed form. -/
+def WALK : Nat := 2 ^ 20
+
+/-- How deep two types are taken apart. -/
+def DEPTH : Nat := 256
+
+abbrev M := EStateM String Nat
+
+def UNCHECKED : String :=
+  s!"its references are read leaf by leaf past {WALK} leaves to compare their widths, past which this verifier refuses them"
+
+def step : M Unit := do
+  let s ← get
+  if s ≥ WALK then throw UNCHECKED
+  set (s + 1)
+
+/-- `{k · stride mod L : k < count}`, where it has at most `cap` members. -/
+def residues (stride : Int) (count L cap : Nat) : Option (List Nat) :=
+  let s := (stride % (L : Int)).toNat
+  let g := Nat.gcd s L
+  if count ≥ L / g then (if L / g ≤ cap then some ((List.range (L / g)).map (· * g)) else none)
+  else if count ≤ cap then some ((List.range count).map fun k => k * s % L).eraseDups else none
+
+/-- Whether `t`'s leaves `a … a + n - 1` have the widths of `S`'s leaves `b … b + n - 1`. -/
+def eqRange : Nat → Ty → Nat → Ty → Nat → Nat → M Bool
+  | 0, _, _, _, _, _ => throw UNCHECKED
+  | fuel + 1, t, a, S, b, n => do
+    if n == 0 then return true
+    match rangeWidths t a (a + n), rangeWidths S b (b + n) with
+    | [x], [y] => return x == y
+    | [_], _ | _, [_] => return false
+    | _, _ =>
+      let (ct, ot) := cover t a (a + n)
+      let (cs, os) := cover S b (b + n)
+      if a - ot == b - os && ct == cs then return true
+      if let (.array _ e, .array _ f) := (ct, cs) then
+        let L := e.leaves
+        let L' := f.leaves
+        if L > 0 && L' > 0 then
+          if L == L' && n ≥ L then
+            -- every residue mod `L` is met: `e`'s leaf `r` is read as `f`'s leaf `(r + d) % L`
+            let d := ((b - os) + L - (a - ot) % L) % L
+            return (← eqRange fuel e 0 f d (L - d)) && (← eqRange fuel e (L - d) f 0 d)
+          let P := Nat.lcm L L'
+          -- both sides repeat every `P` leaves: one window of `P` decides the rest
+          if n > P then return ← eqRange fuel t a S b P
+      -- a Tuple's or Record's fields are the description's, an Array's elements are walked: split by the side with fields
+      let byS := match cs with | .array _ _ | .value _ => false | _ => true
+      let (c, oc, base) := if byS then (cs, os, b) else (ct, ot, a)
+      let pieces : Array (Nat × Nat) := match c with
+        | .array _ e =>
+          let L := e.leaves
+          if L == 0 then #[] else
+            let first := (base - oc) / L
+            let last := (base + n - 1 - oc) / L
+            (Array.range (min (last + 1 - first) (WALK + 1))).map fun k => (oc + (first + k) * L, L)
+        | _ => (childLeaves c).foldl (fun (acc : Array (Nat × Nat) × Nat) m => (acc.1.push (acc.2, m), acc.2 + m)) (#[], oc) |>.1
+      if pieces.isEmpty then return false
+      for (o, m) in pieces do
+        let lo := max base o
+        let hi := min (base + n) (o + m)
+        if lo < hi then
+          step
+          let k := lo - base
+          if !(← eqRange fuel t (a + k) S (b + k) (hi - lo)) then return false
+      if let some (o, m) := pieces.back? then
+        if o + m < base + n then throw UNCHECKED
+      return true
+
+/-- A body's leaf sources: its parameters' types, and its nodes' outputs below `below`. -/
+structure Src where
+  params : Array Ty
+  nodes : Array Ty
+  hp : Array (Option Nat)
+  hn : Array (Option Nat)
+  below : Nat
+
+def Src.ty? (s : Src) (p : Bool) (i : Nat) : Option Ty :=
+  if p then s.params[i]? else if i < s.below then s.nodes[i]? else none
+
+def Src.homo? (s : Src) (p : Bool) (i : Nat) : Option Nat :=
+  if p then (s.hp[i]?).join else (s.hn[i]?).join
+
+/-- Whether the references of part `q`, read as `t`'s leaves `a …` (`t`'s one width `ht`, if it has one), name leaves of
+the widths `t` gives them. -/
+def partOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M Bool := do
+  match q with
+  | .explicit items =>
+    return (List.range items.size).all fun k =>
+      let r := items[k]!
+      match s.ty? r.p r.i with
+      | some S => wAt S r.j == wAt t (a + k)
+      | none => true
+  | .affine p i base n =>
+    let some S := s.ty? p i | return true
+    if ht.isSome && ht == s.homo? p i then return true
+    eqRange DEPTH t a S base n
+  | .strided p i base inner os is n =>
+    let some S := s.ty? p i | return true
+    if n == 0 || (ht.isSome && ht == s.homo? p i) then return true
+    let at_ := fun (k : Nat) => (base + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is).toNat
+    if let some w := ht then
+      let q' := (n - 1) / inner
+      let corners : List (Nat × Nat) := [(0, 0), (0, min inner n - 1), (q', 0), (q', (n - 1) % inner)] ++
+        (if q' > 0 then [(q' - 1, inner - 1)] else [])
+      let vals := corners.map fun (x, y) => (base + (x : Int) * os + (y : Int) * is).toNat
+      let lo := vals.foldl min vals.head!
+      let hi := vals.foldl max vals.head!
+      if rangeWidths S lo (hi + 1) == [w] then return true
+      let (cs, off) := cover S lo (hi + 1)
+      if let .array _ f := cs then
+        let L := f.leaves
+        if L > 0 then
+          if let (some A, some B) := (residues os ((n + inner - 1) / inner) L 4096, residues is inner L 4096) then
+            if A.length * B.length ≤ 4096 then
+              let r0 := (base - (off : Int)) % (L : Int)
+              if A.all fun x => B.all fun y => wAt f ((r0 + x + y) % (L : Int)).toNat == w then return true
+    for k in [0:n] do
+      step
+      if wAt S (at_ k) != wAt t (a + k) then return false
+    return true
+
+/-- The first leaf of part `q`, read as `t`'s leaves `a …`, that names a leaf of another width than `t` gives it, as an
+offset into `q`, where `partOk` found one: an affine part's by bisection over its prefixes (`eqRange` on each), any
+other's leaf by leaf. -/
+def firstBad (s : Src) (t : Ty) (a : Nat) (q : Part) : M (Option Nat) := do
+  let bad := fun (k : Nat) => let r := q.get k
+    match s.ty? r.p r.i with
+    | some S => wAt S r.j != wAt t (a + k)
+    | none => false
+  match q with
+  | .affine p i base n =>
+    let some S := s.ty? p i | return none
+    -- leaves `0 … lo - 1` are read at their widths, and some leaf below `hi` is not
+    let mut lo := 0
+    let mut hi := n
+    for _ in [0:n.log2 + 2] do
+      if hi ≤ lo + 1 then break
+      let mid := (lo + hi) / 2
+      if ← eqRange DEPTH t a S base mid then lo := mid else hi := mid
+    return if hi == lo + 1 && bad lo then some lo else none
+  | _ =>
+    for k in [0:q.count] do
+      step
+      if bad k then return some k
+    return none
+
+/-- The first part of the references `seq`, read as a `t`, that names leaves of another width, with the leaf it starts at. -/
+def seqBad (s : Src) (t : Ty) (seq : Seq) : M (Option (Nat × Part)) := do
+  let ht := homo t
+  for q in seq.parts, a in seq.starts do
+    if !(← partOk s t ht a q) then return some (a, q)
+  return none
+
+def TAIL : String :=
+  "a silent reinterpretation. A word is read only at the width it was committed with; a runtime word is split into " ++
+  "limbs only by a registered LimbSplit Definition, which computes the limbs and their carries"
+
+/-- The refusal of composite `key`, whose body `B`'s references `what` read as a `t` name leaves of other widths in part
+`q` from leaf `a` on: the codec's message, at the first such leaf, where it is found within `WALK` steps. -/
+def refusal (B : Body) (key what : String) (s : Src) (t : Ty) (a : Nat) (q : Part) : String :=
+  match (firstBad s t a q).run 0 with
+  | .ok (some k) _ =>
+    let r := q.get k
+    let src := if r.p then s!"parameter '{(B.params[r.i]?.map (·.1)).getD ""}'" else s!"node {r.i}"
+    s!"definition '{key}': E_REINTERPRET: {what}: leaf {a + k} is typed Value<{wAt t (a + k)}> but names leaf {r.j} of " ++
+      s!"{src}, a Value<{((s.ty? r.p r.i).map (wAt · r.j)).getD 0}>: {TAIL}"
+  | _ => s!"definition '{key}': E_REINTERPRET: {what}: the references from its leaf {a} name leaves of other widths " ++
+      s!"than its type {t.render} gives them: {TAIL}"
+
+/-- Where the body `B` of composite `key` reads a leaf at another width (`defs.Builder.finish`'s order: each node's
+arguments, then the return), as its refusal; `defs` holds its callees. -/
+def bodyBad (defs : Array Defn) (key : String) (B : Body) : M (Option String) := do
+  let outs := B.nodes.map (·.out)
+  let s : Src := { params := B.params.map (·.2), nodes := outs, hp := B.params.map (homo ·.2), hn := outs.map homo,
+                   below := 0 }
+  for k in [0:B.nodes.size] do
+    let node := B.nodes[k]!
+    let callee := defs[node.fn]!
+    for i in [0:node.args.size] do
+      let a := node.args[i]!
+      let sk := { s with below := k }
+      if let some (pos, q) ← seqBad sk a.ty a.seq then
+        let pn := (callee.params[i]?.map (·.1)).getD s!"{i}"
+        return some (refusal B key s!"node {k} ({node.form.name} {callee.id}) argument '{pn}'" sk a.ty pos q)
+  let sr := { s with below := B.nodes.size }
+  if let some (pos, q) ← seqBad sr B.retType B.ret then
+    return some (refusal B key "the body's return" sr B.retType pos q)
+  return none
+
+end Widths
+
 private structure DecState where
   defs : Array Defn := #[]
   index : Std.HashMap String Nat := {}
   busy : Std.HashSet String := {}
+  /-- leaves the width check has walked one by one so far (`Widths.WALK`) -/
+  walked : Nat := 0
 
 private abbrev D := StateT DecState (Except String)
 
@@ -622,7 +917,13 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
     | .error e => throw s!"definition '{fid}' ret: {e}"
   if ret.count != retType.leaves then
     throw s!"definition '{fid}' ret: reference count {ret.count} does not match type {retType.render} ({retType.leaves} leaves)"
-  return { key := fid, id, prim := false, params, ret := retType, body := { params, retType, nodes, ret, offsets },
+  let body : Body := { params, retType, nodes, ret, offsets }
+  let st ← get
+  match (Widths.bodyBad st.defs fid body).run st.walked with
+  | .ok (some m) _ => throw m
+  | .ok none w => set { st with walked := w }
+  | .error e _ => throw s!"definition '{fid}': E_REINTERPRET unchecked: {e}"
+  return { key := fid, id, prim := false, params, ret := retType, body,
            gates := offsets.back!, paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := retType.leaves }
 
 /-- The functions a static value names (`static_of`): `{"fn": id}` decodes `id`. -/
