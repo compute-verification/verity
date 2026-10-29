@@ -376,7 +376,7 @@ def test_each_k_is_committed_in_one_form_with_its_leaf_programs():
 @pytest.mark.slow
 def test_credit_reads_the_real_leaf_programs_off_their_descriptors():
     """At the real zy unit (16 × 8, K = 384): `leaf_unit_id` reads K's lane and combine unit ids off the window's
-    descriptor, and `leaf_of` accepts `h1window.leaf_program`'s descriptor for its kind and K and no other. What the
+    descriptor (each its descriptor id, as the partition names templates), and `leaf_of` accepts `h1window.leaf_program`'s descriptor for its kind and K and no other. What the
     stand-in can't show is that credit's descriptor-level check matches the real derivation: the window traces the tile's
     seed and noise circuits (about 30 s), and each leaf Program's descriptor takes about 6 s."""
     k, tile = 384, (16, 8)
@@ -385,7 +385,7 @@ def test_credit_reads_the_real_leaf_programs_off_their_descriptors():
     shape = Cr.shape_of(codec.canonical_json({x: v for x, v in desc.items() if x != "annotations"}))
     leafs = {}
     for kind in (LL.LANE, LL.COMBINE):
-        assert Cr.leaf_unit_id(shape, k, kind) == HW.leaf_unit(prog, k, kind).id
+        assert Cr.leaf_unit_id(shape, k, kind) == codec.descriptor_id(HW.leaf_unit(prog, k, kind))
         d = codec.encode_program(HW.leaf_program(prog, k, kind)[0])
         leafs[kind] = codec.canonical_json({x: v for x, v in d.items() if x != "annotations"})
     for kind, other in ((LL.LANE, LL.COMBINE), (LL.COMBINE, LL.LANE)):

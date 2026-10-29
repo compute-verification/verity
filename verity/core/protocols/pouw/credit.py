@@ -1680,7 +1680,8 @@ def _zy_tile(shape: dict, k: int) -> str | None:
 
 
 def leaf_unit_id(shape: dict, k: int, kind: str) -> str | None:
-    """The id of the unit drawn leaf statement `kind` proves at K (`h1window.leaf_unit`'s): `h1zy.lane` or `h1zy.combine`
+    """The descriptor id (`codec.descriptor_id`, as the partition names templates) of the unit drawn leaf statement `kind`
+    proves at K (`h1window.leaf_unit`'s): `h1zy.lane` or `h1zy.combine`
     over the TILE of the window's own template at K, ``PouwH1LaneZy_v1{TILE=…}`` or ``PouwH1Combine_v1{TILE=…}``;
     None when that template's unit is not the zy unit."""
     tile = _zy_tile(shape, k)
