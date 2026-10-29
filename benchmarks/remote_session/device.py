@@ -1,6 +1,6 @@
 """The prover's GPU backend: an encoded store across the visible GPUs, its payload tree, chained sketch-sha512 passes
 over it with the device reader (`../codec_tensor/reader.cu` in `session.cu`) and the openings of what the verifier
-draws.
+samples.
 
 ~~~text
 segments   the store's N blocks as contiguous segments of whole chunks: first a shard a GPU in its HBM, as even as the
@@ -10,8 +10,8 @@ segments   the store's N blocks as contiguous segments of whole chunks: first a 
            whatever the GPUs and tiers (one GPU and no host tier is the same code)
 payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024 and p512), or a
            buffer a GPU as it is (`hbm`: a serving engine's weights, `node.py`) and then a host tier of zeros (the
-           store `remote_bandwidth.store` lays out), its tree the driver's `audit.payload_tree` with salt_j = SHAKE256(D(store
-           salt) ‖ key ‖ PAYLOAD_LABEL ‖ u64be j), key the verifier's (`set_payload_key`) or else the store's own;
+           store `remote_bandwidth.store` lays out), its tree the driver's `audit.payload_tree` with salt_j =
+           `store_salt(key, PAYLOAD_LABEL, j)`, key the verifier's (`set_payload_key`) or else the store's own;
            built a chunk at a time on the chunk's GPU and retained on the CPU, so it does not displace the store
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) on each segment's GPU at the
            registration's key and the store's positions
@@ -24,7 +24,7 @@ pass       on each GPU, its seed, signs and constants derived from the previous 
            the pass before it runs, so the passes follow one another on the devices with no host step between them.
            A pass keeps its packed signs (8 KiB), each segment's levels h0 … hc and the levels above, nothing per block,
            in rings allocated with the store and copied to host memory as its part ends, so a pass allocates nothing
-opening    a window's draws at once, segment by segment on its GPU's opening stream: each drawn leaf's subtree of 2^h0
+opening    a window's samples at once, segment by segment on its GPU's opening stream: each drawn leaf's subtree of 2^h0
            leaves recomputed from the segment under its pass's constants by a second copy of the library
            (`rs_subtrees`), then its receipts and its path below hc gathered from those subtrees and the segment's kept
            levels in one launch (`rs_gather64`), the blocks in another; the path above hc comes from the pass's top
