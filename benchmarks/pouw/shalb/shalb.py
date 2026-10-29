@@ -460,6 +460,7 @@ def main() -> None:
     ap.add_argument("--row-kib", type=int, default=256)
     ap.add_argument("--l1-leaves", default="1,4,64,512,4096")
     ap.add_argument("--l1-value", type=int, default=1024)
+    ap.add_argument("--lead-w1", type=float, default=233.0, help="the lead's hashing, W1 a useful MAC")
     ap.add_argument("--json", default="")
     args = ap.parse_args()
     out: dict = {}
@@ -580,6 +581,37 @@ def main() -> None:
               f"{r['unproved_w1']:.3g} W1 against T1's {r['t1_budget_w1']:.3g} ({r['unproved_and']:.3g} AND gates "
               f"against stock's {r['stock_and']:.3g})")
     out["pooled"] = pooled
+
+    l1 = out["l1"][-1]
+    per_comp, di = l1["per_compression"], l1["data_independent"] / l1["registers"]
+    delta = 0.01 / args.lead_w1
+    over = 3532 / per_comp - 1
+    out["sha_writes_l1"] = {"lead_w1_per_mac": args.lead_w1, "per_compression": per_comp, "delta": delta,
+                            "delta_registers": delta * per_comp, "over_credit_at_3532": over,
+                            "t1_over_credit_at_3532": over * args.lead_w1, "data_independent": di,
+                            "t1_data_independent_if_salt_fixed": di * args.lead_w1, "periods": []}
+    print(f"## ShaWrites under L1 at the lead's volume ({args.lead_w1:g} W1 of hashing a useful MAC; "
+          f"{l1['leaves']} leaves of {l1['value_bytes']} B a call)")
+    print(f"- R a compression: {per_comp:.1f}; δ = 0.01 / {args.lead_w1:g} = {delta:.3g}, {delta * per_comp:.3f} "
+          f"registers a compression")
+    print(f"- crediting 3,532 a compression over-credits {over:.3%} of the hashing: a T1 term of "
+          f"{over * args.lead_w1:.3g}× stock against T1's 0.01×")
+    print(f"- with the salt fixed on the grid, the data-independent {di:.2%} is constant there, so free: a T1 term of "
+          f"{di * args.lead_w1:.3g}× stock")
+    scopes = [(scope, rate * s, p) for scope, rate in (("one H200", H200_MACS_PER_S),
+                                                       ("datacenter (100,000 H200)", H200_MACS_PER_S * DC_GPUS))
+              for p, s in PERIODS.items()]
+    scopes += [("world", WORLD_MACS_PER_YEAR * s / PERIODS["year"], p) for p, s in PERIODS.items()]
+    for scope, macs, p in scopes:
+        regs = macs * args.lead_w1 / W1_PER_REG
+        comp = regs / per_comp
+        row = {"scope": scope, "period": p, "stock_macs": macs, "compressions": comp, "hash_and": comp * ands,
+               "stock_and": macs * AND_PER_MAC, "R": (1 - delta) * regs, "delta_registers": delta * regs,
+               "over_credit_and": over * comp * ands, "data_independent_and": di * comp * ands}
+        out["sha_writes_l1"]["periods"].append(row)
+        print(f"- {scope}, {p}: {comp:.3g} compressions ({row['hash_and']:.3g} AND gates; stock {row['stock_and']:.3g}"
+              f"); R = {row['R']:.4g} registers, δ·R = {row['delta_registers']:.3g}; over-credit at 3,532 "
+              f"{row['over_credit_and']:.3g} AND gates; data-independent {row['data_independent_and']:.3g}")
 
     if args.minimal:
         out["minimal"] = json.loads(Path(args.minimal).read_text())["summary"]
