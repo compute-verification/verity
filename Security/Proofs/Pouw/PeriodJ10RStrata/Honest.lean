@@ -54,7 +54,7 @@ theorem rounds1 (N : ℕ) : (HonestJ10R.circuit N).rounds = 1 :=
 
 /-- The period's windows as `Credit.window` reads them: window `w` registers `regOf` of its round coin, and the rest of
 its inputs are `evOf` of its round coin and the block's draw. -/
-def windows (regOf : Bool → Registered) (evOf : Bool → BlockDraw σ → Answered) (n : ℕ) :
+def windows (regOf : Bool → PreDraw) (evOf : Bool → BlockDraw σ → Answered) (n : ℕ) :
     CreditWindows (StrataCoin Bool 1 σ) n where
   reg x w := regOf (coinAt (coinAt x w).1 ⟨0, Nat.one_pos⟩)
   ev x w := evOf (coinAt (coinAt x w).1 ⟨0, Nat.one_pos⟩) (coinAt x w).2
@@ -64,7 +64,7 @@ end Instance
 section Meets
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
-  (S : Finset (Fin mB)) (unitOf : Fin nB → ℕ) (regOf : Bool → Registered) (evOf : Bool → BlockDraw σ → Answered)
+  (S : Finset (Fin mB)) (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw) (evOf : Bool → BlockDraw σ → Answered)
   (enc : Bool → ByteArray)
 
 /-- **The period-wide premises**, and the accepted prefix is every window: the registration reads only the round coin,
