@@ -65,7 +65,7 @@ structure PartView where
   identifier : Bool
 
 /-- **The `VERDICT` `verify --rec-part` writes of it** (`FlockVerify.verifyCmd`, `recSharedInput`). -/
-def PartView.verdict (v : PartView) : RecCompose.Verdict where
+def PartView.verdict (v : PartView) : RecCompose.PartVerdict where
   accepted := v.accepted
   why := v.why
   part := v.part

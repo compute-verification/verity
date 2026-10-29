@@ -133,7 +133,7 @@ def Shared.diff (s t : Shared) : String :=
     "its rec_shared is not the first part's"
 
 /-- **A part's verdict as `rec-compose` reads it** off its `VERDICT` line. -/
-structure Verdict where
+structure PartVerdict where
   accepted : Bool
   why : String
   part : Option Nat
@@ -144,7 +144,7 @@ structure Verdict where
   identifier : Bool
   deriving Repr, Inhabited
 
-def Verdict.ofJson (j : Json) : Verdict where
+def PartVerdict.ofJson (j : Json) : PartVerdict where
   accepted := (j.getObjValAs? Bool "accepted").toOption == some true
   why := (j.getObjValAs? String "why").toOption.getD ""
   part := (j.getObjValAs? Nat "rec_part").toOption
@@ -167,7 +167,7 @@ SHA-512 `rows` and inner shape's `inner`: one verdict per statement, `rec_part` 
 at one of them,
 `--zk`, with no identifier, at `rows`; one `Shared` in the compiled verifier's form at `inner` that every part names; and
 every session's coin key named, no two alike. -/
-def Accepts (n : Nat) (rows inner : String) (vs : List Verdict) : Prop :=
+def Accepts (n : Nat) (rows inner : String) (vs : List PartVerdict) : Prop :=
   0 < n ∧ vs.length = n ∧ (∀ j, j < n → (vs.map (·.part)).count (some j) = 1) ∧
     (∀ v ∈ vs, v.accepted = true ∧ v.zk = some true ∧ v.identifier = false ∧ v.rows = some rows ∧
       ∃ j, v.part = some j ∧ j < n) ∧
@@ -184,16 +184,16 @@ def verdicts (log : String) : Except String (Array Json) :=
     else pure out
 
 /-- **One part's log**: it has exactly one `VERDICT` (a V* part is one session). Its verdict. -/
-def partOf (name log : String) : Except String (String × Verdict) := do
+def partOf (name log : String) : Except String (String × PartVerdict) := do
   let vs ← (verdicts log).mapError (s!"{name}: " ++ ·)
   match vs.toList with
-  | [v] => pure (name, Verdict.ofJson v)
+  | [v] => pure (name, PartVerdict.ofJson v)
   | [] => throw s!"{name}: no VERDICT"
   | _ => throw s!"{name}: {vs.size} VERDICTs: a V* part is one session (RecDeploy.V runs one per part)"
 
 /-- **One part's verdict on its own**: accepted, at one of V*'s `n` statements, `--zk`, without an identifier, and at
 the composition's rows file of SHA-512 `rows`. -/
-def checkOne (n : Nat) (rows : String) (name : String) (v : Verdict) : Except String Unit :=
+def checkOne (n : Nat) (rows : String) (name : String) (v : PartVerdict) : Except String Unit :=
   if v.accepted = false then .error s!"{name}: a session is not accepted ({v.why})"
   else match v.part with
   | none => .error s!"{name}: its VERDICT names no rec_part: not one of V*'s parts (--rec-part J)"
@@ -232,13 +232,13 @@ def checkForm (name inner : String) (s : Shared) : Except String Unit :=
     else .ok ()
 
 /-- **Every part names the one shared set** `sh`. -/
-def checkShared (sh : Shared) (name : String) (v : Verdict) : Except String Unit :=
+def checkShared (sh : Shared) (name : String) (v : PartVerdict) : Except String Unit :=
   match v.shared with
   | none => .error s!"{name}: its VERDICT names no rec_shared: the inputs it shares with the other parts are not named"
   | some s => if s = sh then .ok () else .error s!"{name}: {s.diff sh}"
 
 /-- **No two sessions share a coin key**, each named. -/
-def checkKeys : List (String × Verdict) → Except String Unit
+def checkKeys : List (String × PartVerdict) → Except String Unit
   | [] => .ok ()
   | (name, v) :: rest =>
     match v.coinKey with
@@ -249,14 +249,14 @@ def checkKeys : List (String × Verdict) → Except String Unit
       else checkKeys rest
 
 /-- `rec_part j` has one part. -/
-def checkIndex (vs : List (String × Verdict)) (j : Nat) : Except String Unit :=
+def checkIndex (vs : List (String × PartVerdict)) (j : Nat) : Except String Unit :=
   if (vs.map (·.2.part)).count (some j) = 1 then .ok ()
   else .error s!"rec_part {j}: {(vs.map (·.2.part)).count (some j)} logs, not one"
 
 /-- **The composition on the parts' verdicts** (name, verdict): `checkOne` on each, the first part's shared inputs in
 the compiled verifier's form at `inner` (`checkForm`) and every part's the same (`checkShared`), one part per statement
 (`checkIndex`, and as many parts as statements) and fresh coin keys (`checkKeys`). -/
-def checkVerdicts (n : Nat) (rows inner : String) (vs : List (String × Verdict)) : Except String Unit :=
+def checkVerdicts (n : Nat) (rows inner : String) (vs : List (String × PartVerdict)) : Except String Unit :=
   if n = 0 then .error "no V* statement" else
   (vs.forM fun p => checkOne n rows p.1 p.2) >>= fun _ =>
   match vs with
@@ -294,7 +294,7 @@ theorem forM_ok {α : Type} {f : α → Except String Unit} :
     | head => exact hb
     | tail _ hm => exact forM_ok h a hm
 
-theorem checkOne_ok {n : Nat} {rows name : String} {v : Verdict} (h : checkOne n rows name v = .ok ()) :
+theorem checkOne_ok {n : Nat} {rows name : String} {v : PartVerdict} (h : checkOne n rows name v = .ok ()) :
     v.accepted = true ∧ v.zk = some true ∧ v.identifier = false ∧ v.rows = some rows ∧
       ∃ j, v.part = some j ∧ j < n := by
   unfold checkOne at h
@@ -329,7 +329,7 @@ theorem checkForm_ok {name inner : String} {s : Shared} (h : checkForm name inne
   refine ⟨by rw [hr]; simpa using hi, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     simp_all [Option.isNone_iff_eq_none, Option.isSome_iff_ne_none]
 
-theorem checkShared_ok {sh : Shared} {name : String} {v : Verdict} (h : checkShared sh name v = .ok ()) :
+theorem checkShared_ok {sh : Shared} {name : String} {v : PartVerdict} (h : checkShared sh name v = .ok ()) :
     v.shared = some sh := by
   unfold checkShared at h
   repeat' split at h
@@ -337,7 +337,7 @@ theorem checkShared_ok {sh : Shared} {name : String} {v : Verdict} (h : checkSha
   rename_i hs e
   rw [hs, e]
 
-theorem checkKeys_ok : ∀ {vs : List (String × Verdict)}, checkKeys vs = .ok () →
+theorem checkKeys_ok : ∀ {vs : List (String × PartVerdict)}, checkKeys vs = .ok () →
     (∀ p ∈ vs, p.2.coinKey.isSome) ∧ (vs.map (·.2.coinKey)).Nodup
   | [], _ => ⟨by simp, List.nodup_nil⟩
   | (name, v) :: rest, h => by
@@ -362,7 +362,7 @@ theorem checkKeys_ok : ∀ {vs : List (String × Verdict)}, checkKeys vs = .ok (
       rw [List.any_eq_true]
       exact ⟨q, hq, by simp [he, hk]⟩
 
-theorem checkIndex_ok {vs : List (String × Verdict)} {j : Nat} (h : checkIndex vs j = .ok ()) :
+theorem checkIndex_ok {vs : List (String × PartVerdict)} {j : Nat} (h : checkIndex vs j = .ok ()) :
     (vs.map (·.2.part)).count (some j) = 1 := by
   unfold checkIndex at h
   split at h
@@ -370,7 +370,7 @@ theorem checkIndex_ok {vs : List (String × Verdict)} {j : Nat} (h : checkIndex 
   · cases h
 
 /-- **`checkVerdicts` accepts only what `Accepts` states.** -/
-theorem checkVerdicts_accepts {n : Nat} {rows inner : String} {vs : List (String × Verdict)}
+theorem checkVerdicts_accepts {n : Nat} {rows inner : String} {vs : List (String × PartVerdict)}
     (h : checkVerdicts n rows inner vs = .ok ()) : Accepts n rows inner (vs.map (·.2)) := by
   unfold checkVerdicts at h
   split at h
