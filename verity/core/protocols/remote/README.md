@@ -231,12 +231,11 @@ The time credit adds the data sheet's rates.
 ### 4. The inference-only policy
 
 **Establishes.** The registered circuit divides into inference blocks of at most Γ gates, each reading at most α_f
-fresh bits per gate, anything outside the registered information θ (`Nci.CompliesRate Γ α_f`), so each block meets the
-(c, k) budgets at c = Γ and k = α_f·Γ; and θ is registered information. A partition meeting that is, once padded, a
-(c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋, or k = ⌊α_f·Γ·W⌋ for the bit-level expansion at Γ·W gates,
+fresh bits per gate, anything outside the registered information θ (`Nci.CompliesRate Γ α_f`); and θ is registered
+information. A partition meeting that is, once padded, a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋, or
+k = ⌊α_f·Γ·W⌋ for the bit-level expansion at Γ·W gates,
 (`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. With gates up to W bits wide, the bit-level
-expansion meets it at Γ·W gates. The Lean slowdown bound `DampenerRemote` instead takes `Nci.Complies c k`, a
-(c, k)-partition of the registered circuit itself, as a hypothesis.
+expansion meets it at Γ·W gates. The Lean slowdown bound `DampenerRemote` instead takes `Nci.Complies c k` of d itself.
 
 **How it is checked.**
 
@@ -272,10 +271,8 @@ part 6's premises say why that shape trains little.
 3. *A compliance verdict of `Desc.evaluate` ⇒ `Nci.CompliesRate Γ α_f` of the laid-out registered circuit (a `Verity.Declaration`), on every
    expansion:*
    `NciCheck.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
-   is the definition's), **proved**; and every block of the declared division has at most c = Γ gates and k = α_f·Γ
-   fresh input bits (`NciCheck.Properties.SecurityProofs.Refines`), **proved**. `DampenerRemote`'s hypothesis
-   `Complies c k d` asks for blocks of exactly c gates in d itself, which a verdict gives only once padded (link 4):
-   for the Lean bound, links 1 and 2 and that step remain open.
+   is the definition's), and each block within (Γ, α_f·Γ) (`Refines`), **proved**. `DampenerRemote` takes
+   `Complies c k d`, exactly c gates a block, which a verdict gives only padded (link 4): links 1, 2 and that step are open.
 4. *`CompliesRate` ⇒ the padded (c, k)-partition the local bounds read:* `Nci.Guarantees.CompliesCK`, and through the
    bit-level expansion `Nci.Guarantees.ExpandComplies`, **proved**. Joining them to link 3 for the run's registered circuit
    is open with links 1 and 2.
@@ -415,9 +412,8 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
 - **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
   with a rule tying its registration to the one sampled proofs and PoUW bind; the policy's check accepting as a
-  property (`baseline_desc` is a proof lemma); the step from a verdict's rate to `DampenerRemote`'s (c, k)-partition of
-  the registered circuit itself; bounds on k_F and k_a per inference block; and the bound reading the result instead of
-  assuming `Complies`.
+  property (`baseline_desc` is a proof lemma); a verdict's rate to `Complies c k` of d itself; bounds on k_F and k_a per
+  inference block; and the bound reading the result instead of assuming `Complies`.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
   its check inside the ZK server is open.
 - **The utilization policy.** Nothing bounds the free share f over every accepted run.
@@ -511,9 +507,8 @@ The slowdown, `DampenerRemote`:
 - `Nci.Assumptions.WeightsIncompressible` (`Security/Definitions/Nci/Assumptions/Threads.lean`): no small subcircuit
   rebuilds the weights it uses from fewer bits than their width. It is the older form, which the local bounds below
   replace (`Security/README.md`, part 2).
-- `Nci.Complies c k` (`Security/Definitions/Nci.lean`): the registration has a (c, k)-partition, the inference-only
-  policy; the check reads its rate form, `Nci.CompliesRate`. `DampenerRemote` takes `Complies` as a hypothesis; part 4
-  is what discharges it once its open links close.
+- `Nci.Complies c k` (`Security/Definitions/Nci.lean`): the registration has a (c, k)-partition, the inference-only policy.
+  `DampenerRemote` takes it as a hypothesis; part 4 is what discharges it once its open links close.
 
 The local bounds (part 6):
 
