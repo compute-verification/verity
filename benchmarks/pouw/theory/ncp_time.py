@@ -29,6 +29,11 @@ makes 3K/32 − 1 of honest's 3K/32 words:
 Forming X and Y is charged to honest alone, two ways: the certificate's additive 8/n + 8/m on t_H, and `FORM_LANE`'s
 instructions and bytes beside the wgmma.
 
+CORE.md §2a judges T1 in priced work, not time: cost(H) − min cost(adversary) ≤ 1% of cost(stock), in W1 units (an int8
+MAC one unit, a register written at least 32 under H32), hashing credited and honest the best possible program. Section
+(6) prices its two terms against stock's mnK, the final word's 32/K and forming's 3p(1/n + 1/m) at each `FORM_PRICE`,
+over single shapes and Llama-3.2-1B's block linears (`LLAMA_1B`), and reports the time reading beside them.
+
 `--coissue ROWS` (repeatable; a dc/probes `run.sh sm90` rows.jsonl) reads measured co-issue points beside the wgmma:
 each must lie inside the polytope, honest's rate becomes the best words any point reaches on honest's routes (the
 polytope's honest schedule is what no probe has yet reached), and the adversary is priced both on the polytope (the
@@ -100,6 +105,14 @@ FORM_LANE = {"IADD3": 1 / 4, "PRMT": 1 / 6, "STS128": 1 / 16}
 FORM_BYTES = 1.0
 #: (n, m): m None when F is reused across calls and Y is formed once; m < 64 is below wgmma's tight N.
 FORM_SHAPES = ((2048, None), (2048, 8192), (2048, 512), (2048, 64), (2048, 16))
+#: Forming's price an entry in W1 units (MH100's prices): the certificate's (one packed add, 4 entries a register at
+#: H32's 32), and FORM_LANE's adds and permutes at H32's 32 and at the nominal table's int32 64, its store into the
+#: wgmma's tile at `other` (32 a word, 4 entries).
+FORM_PRICE = {"certificate": 8.0, "FORM_LANE at H32": 32 * (1 / 4 + 1 / 6) + 32 / 4,
+              "FORM_LANE nominal": 64 * (1 / 4 + 1 / 6) + 32 / 4}
+#: Llama-3.2-1B's linears in a decoder layer: (name, out features n, in features K).
+LLAMA_1B = (("q", 2048, 2048), ("k", 512, 2048), ("v", 512, 2048), ("o", 2048, 2048), ("gate", 8192, 2048),
+            ("up", 8192, 2048), ("down", 2048, 8192))
 #: Each route's lane instructions a word: `products` the product instructions alone, `ideal` adding the word's own
 #: extraction, `honest` adding operand delivery and conversion (an estimate), and `bytes` the shared-memory bytes an honest
 #: word reads.
@@ -577,6 +590,94 @@ def main() -> int:
             checks.mutation(f"{best_h['probe']}'s lanes 10% faster would leave the polytope: the inside check bites",
                             up[1] > 1.01, f"{up[0]} {up[1]:.3f}")
 
+    # (6) CORE.md §2a: T1 in priced work, cost(H) − min cost(adversary) ≤ 1% of cost(stock), in W1 units, hashing
+    # credited and honest the best possible program. Under H32 a register written costs at least 32, the tensor's price
+    # of a k32 word, and a side word writes at least 8, so the cheapest word is the tensor's: co-issue drops out, Theorem D
+    # bounds the adversary at 32 a target, and honest pays 32 a word and its forming. Stock costs mnK, honest's words 3mnK.
+    side_regs = min(sum(v[k].values()) for v in ROUTES.values() for k in ("products", "floor", "ideal"))
+    checks.check("in work units a side word writes at least 8 registers (no CUDA-core instruction makes more than 4 of "
+                 "its 32 products), 256 units at H32 against the tensor's 32: the cheapest word is the tensor's, so "
+                 "co-issue lowers time, not work, and drops out of the gap", side_regs >= 8,
+                 f"fewest instructions a side word {side_regs:g} (every route, products, floor and ideal readings)")
+
+    def work(k: int, n: int, m: int | None, p: float) -> tuple[float, float]:
+        """The gap's two terms a unit of stock: the final word's 32/K, which Theorem D leaves free (A·Bᵀ is pre-noise),
+        and forming's 3p(1/n + 1/m), X's 3mK entries and Y's 3nK at p units an entry (m None: Y formed once)."""
+        return 32 / k, 3 * p * (1 / n + (1 / m if m else 0))
+
+    def model(t: int, p: float) -> dict[str, float]:
+        stock = sum(t * n * k for _, n, k in LLAMA_1B)
+        fw = sum(32 * t * n for _, n, _ in LLAMA_1B) / stock
+        fo = sum(3 * p * k * (t + n) for _, n, k in LLAMA_1B) / stock
+        return {"final_word": fw, "forming": fo, "total": fw + fo, "after_fix": fo}
+
+    final = {k: work(k, 2048, None, 0)[0] for k in KS}
+    form_w = {f"n {n}, m {m or 'F reused'}": {name: work(2048, n, m, p)[1] for name, p in FORM_PRICE.items()}
+              for n, m in FORM_SHAPES}
+    llama = {f"T {t}": {name: model(t, p) for name, p in FORM_PRICE.items()} for t in (64, 512, 8192)}
+    print("  work gap (W1 units, a share of stock): final word 32/K "
+          + "  ".join(f"K{k} {v:6.2%}" for k, v in final.items()))
+    print("  forming 3p(1/n + 1/m)        " + "  ".join(f"{name} (p {p:.2f})" for name, p in FORM_PRICE.items()))
+    for shape, row in form_w.items():
+        print(f"    {shape:22s}     " + "  ".join(f"{v:12.2%}" for v in row.values()))
+    for t, row in llama.items():
+        print(f"  Llama-3.2-1B block linears, {t:6s}: final word {row['certificate']['final_word']:.2%}; forming "
+              + ", ".join(f"{v['forming']:.2%} ({name})" for name, v in row.items()) + "; total "
+              + ", ".join(f"{v['total']:.2%}" for v in row.values()))
+    cert = FORM_PRICE["certificate"]
+    checks.check("the final-word term is 32/K of stock: 1.5625% at K 2,048 and 0.39% at K 8,192, so T1 from it alone "
+                 "needs K >= 3,200", final[2048] == 1 / 64 and final[8192] == 1 / 256 and 32 / 0.01 == 3200,
+                 "  ".join(f"K {k:,} {v:.3%}" for k, v in final.items()))
+    fw = llama["T 512"]["certificate"]["final_word"]
+    checks.check("over Llama-3.2-1B's block linears the final-word term is 32·Σn / ΣnK at every T, about 1.24%",
+                 all(abs(v["certificate"]["final_word"] - 32 * 23552 / 60817408) < 1e-12 for v in llama.values())
+                 and 0.0123 < fw < 0.0125, f"{fw:.3%}")
+    checks.check("forming against stock is 3x the certificate's charge on honest's 3K-deep work: 24/n + 24/m at its 8 "
+                 "units an entry, where 8/n + 8/m is a share of honest's work, not stock's",
+                 all(abs(work(2048, n, m, cert)[1] - 3 * FORM_CERT * forming(n, m)[0] / 32) < 1e-12
+                     for n, m in FORM_SHAPES), f"n 2,048, m 8,192: {work(2048, 2048, 8192, cert)[1]:.2%} of stock, "
+                 f"{FORM_CERT * forming(2048, 8192)[0] / 32:.2%} of honest's work")
+    checks.check("with the final word a target (the fix), forming alone misses T1 at n 2,048 at every m and price: X's "
+                 "3p/n is 1.17% at the certificate's price, whatever K", all(v > 0.01 for row in form_w.values()
+                                                                               for v in row.values()),
+                 f"least {min(v for row in form_w.values() for v in row.values()):.2%} (n 2,048, F reused, certificate)")
+    checks.check("over Llama-3.2-1B at the certificate's price the gap misses T1 at T 64, 512 and 8,192, before and "
+                 "after the fix", all(v["certificate"]["after_fix"] > 0.01 for v in llama.values()),
+                 "; ".join(f"{t} {v['certificate']['total']:.2%} -> {v['certificate']['after_fix']:.2%}"
+                           for t, v in llama.items()))
+
+    def beside(rh: float, ra: float, k: int) -> dict[str, float]:
+        """The time reading at K: relative to t_H, and additive against stock's time on the tensor alone (t_H / t_stock
+        is 3·rho_T / R_H)."""
+        g = gap(rh, ra, k)
+        return {"relative_to_t_H": g, "additive_vs_stock": g * 3 * t_only / rh}
+
+    f8192, f512 = form_table["n 2048, m 8192"], form_table["n 2048, m 512"]
+    times = {"polytope honest vs the floor adversary": (r_h, adv["floor"]["rate"]),
+             "polytope honest forming beside (m 8,192) vs the floor adversary": (f8192["honest_words_sm_clk"] / sm,
+                                                                                adv["floor"]["rate"]),
+             "polytope honest forming beside (m 512) vs the floor adversary": (f512["honest_words_sm_clk"] / sm,
+                                                                              adv["floor"]["rate"])}
+    if measured:
+        times["measured honest with operand reads vs the floor adversary"] = (r_hd, adv["floor"]["rate"])
+        times["measured honest with operand reads vs the measured points (not a bound)"] = (r_hd, r_am)
+    time_reading = {name: {k: beside(rh, ra, k) for k in KS} for name, (rh, ra) in times.items()}
+    for name, row in time_reading.items():
+        print(f"  time reading (not judged), {name}: "
+              + "  ".join(f"K{k} {v['relative_to_t_H']:6.2%} / {v['additive_vs_stock']:6.2%}" for k, v in row.items())
+              + "  (of t_H / of t_stock)")
+    tr = time_reading["polytope honest vs the floor adversary"][2048]
+    checks.check("the time reading's additive form is about 3x its share of t_H (t_H is about 3 t_stock)",
+                 2.8 < tr["additive_vs_stock"] / tr["relative_to_t_H"] < 3.1,
+                 f"K 2,048: {tr['relative_to_t_H']:.2%} of t_H, {tr['additive_vs_stock']:.2%} of t_stock")
+    work_gap = {"side_word_registers_min": side_regs, "final_word": final, "forming": form_w, "form_price": FORM_PRICE,
+                "llama_3_2_1b_block_linears": llama, "time_reading": time_reading}
+    if checks.mutations:
+        coord = 8 / 2048 + 8 / 8192
+        checks.mutation("reading the certificate's 8/n + 8/m as a share of stock would pass T1 after the fix at n 2,048, "
+                        "m 8,192: the 3x decides the verdict", coord < 0.01 < work(2048, 2048, 8192, cert)[1],
+                        f"{coord:.2%} against {work(2048, 2048, 8192, cert)[1]:.2%}")
+
     if checks.mutations:
         no_imad = {k: v for k, v in rows.items() if not k.startswith("JPI90")}
         ra2 = solve(reading("products", ROUTES), no_imad, smem=smem)[0]
@@ -600,7 +701,8 @@ def main() -> int:
             "adversary": {k: {kk: vv for kk, vv in v.items() if kk != "rate"} for k, v in adv.items()},
             "gap": {kind: {k: gap(r_h, a["rate"], k) for k in KS} for kind, a in adv.items()},
             "margins": margins, "honest_side_need_k2048": need, "honest_side": sm * side_h, "placement": placement,
-            "forming": form_table, "measured": measured, "estimates": ESTIMATES, "routes": ROUTES}, indent=1,
+            "forming": form_table, "measured": measured, "work_gap": work_gap, "estimates": ESTIMATES,
+            "routes": ROUTES}, indent=1,
             default=str) + "\n")
     return checks.finish()
 
