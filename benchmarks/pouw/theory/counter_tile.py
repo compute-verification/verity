@@ -113,6 +113,38 @@ def block_dedup(lay: dict, seed: int) -> dict:
     return {"seed": seed, "tiles": total, "repeats": repeats}
 
 
+def step0_bits(lay: dict, rb: int, cb: int) -> float:
+    """log2 of the coin configurations a step-0 committed tile reads: `G[q, j]` for the block's columns where some row's
+    tag digit `q` is nonzero, `a₁[i, q]` for its rows where some column's code digit `q` is nonzero. The coins are
+    uniform, so each value the tile reaches has probability at least `2^-bits`."""
+    rows = range(16 * rb, min(16 * rb + 16, lay["m"]))
+    cols = range(8 * cb, min(8 * cb + 8, lay["n"]))
+    g = sum(len(cols) for q in range(4) if any(cs.row_tag(i)[q] for i in rows))
+    a = sum(len(rows) for q in range(4) if any(cs.col_code(j)[q] for j in cols))
+    return g * math.log2(7) + a
+
+
+def table_lemma(lay: dict) -> dict:
+    """`tableGap` read as a lemma: a pre-coin table saves at most `tableGap` registers a coin value.
+
+    Tile (0, 0) at step 0 reads `G[0:2, 0:8]` and `a₁[0:16, 0:2]` (rows 0–15 and columns 0–7 have tag and code digits 2
+    and 3 zero), and determines `G[0, 0:8]`, `a₁[0:12, 0]` and `a₁[0:12, 1]` (row 10's tag is 6 and the bits are
+    below it), so it reaches at least `7^8 · 2^24 ≈ 2^46.5` values, each with probability at least `2^-bits`. A table of
+    `mem` of them holds the committed tile with probability at least `mem · 2^-bits`, saving 128 registers then."""
+    rb_n, cb_n = blocks(lay)
+    bits = {(rb, cb): step0_bits(lay, rb, cb) for rb in range(min(rb_n, 12)) for cb in range(min(cb_n, 12))}
+    low = min(bits.values())
+    hit = Q(MEM) * Q(1, 7 ** 16 * 2 ** 32) if math.isclose(low, 16 * math.log2(7) + 32) else None
+    saved = Q(cs.TILE_WORDS) * hit if hit is not None else None
+    g = gap_tile(lay)
+    return {"min_bits": low, "tiles_below_100_bits": sum(b < 100 for b in bits.values()),
+            "tiles_examined": len(bits), "hit_lower_bound": float(hit) if hit else None,
+            "saved_regs_lower_bound": float(saved) if saved else None, "table_gap_regs": float(g["table"]),
+            "lemma_breaks": bool(saved is not None and saved > g["table"]),
+            "lemma_excess": float(saved / g["table"]) if saved else None,
+            "G_gap_regs": float(g["gap"])}
+
+
 def k_threshold(m: int, n: int, k_max: int = 20000) -> int | None:
     """The least K at which the cover strategy breaks `G` at m × n."""
     for k in range(24, k_max):
@@ -155,6 +187,27 @@ def main() -> None:
             rep[f"{name}_n{n}"] = c | v | {"gapShare": float(g["gapShare"])}
             print(f"{name} n{n}: cover saves {c['saved_regs']} (tiles {c['covered_tiles']}), gap share "
                   f"{100 * float(g['gapShare']):.5f}%, breaks={v['breaks']}", flush=True)
+
+    for name, (t, m) in cs.POINTS.items():
+        lay = cs.layout(t, m, 4096, 4096)
+        rep[f"table_lemma_{name}"] = table_lemma(lay)
+        r = rep[f"table_lemma_{name}"]
+        print(f"table lemma {name}: step-0 tiles below 100 bits {r['tiles_below_100_bits']} of "
+              f"{r['tiles_examined']} examined, min {r['min_bits']:.2f} bits; table saves ≥ "
+              f"{r['saved_regs_lower_bound']:.3e} regs a coin value vs tableGap {r['table_gap_regs']:.3e} "
+              f"({r['lemma_excess']:.2f}×, lemma breaks={r['lemma_breaks']}); G's gap {r['G_gap_regs']:.0f}",
+              flush=True)
+    rng = np.random.default_rng(7)
+    lay = cs.layout(1, 16, 8, 24)
+    draws = 1 << 18
+    om = {"b": np.zeros((16, 1), dtype=np.int64), "a1": None, "G": None, "s": np.zeros((1, 1, 3, 8), dtype=np.int16)}
+    keys = set()
+    for _ in range(draws):
+        om["a1"] = rng.integers(0, 2, (16, 4))
+        om["G"] = rng.integers(0, 7, (4, 8)) - 3
+        keys.add(cs.words_at(lay, om, np.arange(16), np.arange(8))[:, 0, :].tobytes())
+    rep["tile00_distinct"] = {"draws": draws, "distinct": len(keys)}
+    print(f"tile (0, 0) at step 0: {len(keys)} distinct of {draws} draws", flush=True)
 
     rep["block"] = {}
     sizes = {"small": [(16, 8, 24 + 28 * 3), (64, 64, 24 + 28 * 7), (64, 512, 24 + 28 * 7), (512, 64, 24 + 28 * 7)],
