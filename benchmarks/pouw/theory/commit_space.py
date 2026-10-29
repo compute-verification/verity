@@ -390,6 +390,41 @@ def sketch_pools(m: int, n: int, s: int, lanes: int, r0: int, salt_bits: int, ti
     return out
 
 
+def partition_search(edge: dict, block: dict, s: int, sketch_bytes: int = SKETCH_BYTES) -> dict:
+    """The cheapest split of one output's s words into honest words (2 eq), middle blocks decomposed from the word
+    before them (3 eq + rank·bytes/32), and edges decomposed jointly (rank·bytes/32) or with the wide block split off
+    (4 eq + rank₀·bytes/32), by dynamic programming over every partition the measured ranks cover. Returns the cost
+    and the saving against honest's 2s, eq an output."""
+    inf = float("inf")
+
+    def seg(ranks: dict, size: int, fixed: float) -> dict:
+        return {n: fixed + r * sketch_bytes / 32 for n, r in ranks.items() if r < size}
+
+    def edge_costs(side: str) -> dict:
+        costs = seg(edge[side], edge["size"], 0)
+        if edge["r0"]:
+            for n, c in seg(block[side], block["size"], 4).items():
+                costs[n] = min(c, costs.get(n, inf))
+        return costs
+    pre, suf = edge_costs("prefix"), edge_costs("suffix")
+    mid = seg(block["prefix"], block["size"], 3)
+    best = [inf] * (s + 1)
+    best[0] = 0.0
+    for n, c in pre.items():
+        if n <= s:
+            best[n] = min(best[n], c)
+    for t in range(s):
+        if best[t] == inf:
+            continue
+        best[t + 1] = min(best[t + 1], best[t] + 2)
+        if t > 0:
+            for n, c in mid.items():
+                if t + n <= s:
+                    best[t + n] = min(best[t + n], best[t] + c)
+    cost = min([best[s]] + [best[s - n] + c for n, c in suf.items() if n < s])
+    return {"cost": cost, "saving": 2 * s - cost}
+
+
 def pools_grid(shapes: tuple = ((512, 64), (8192, 64), (64, 8192)), salts: tuple = (0, 18, 24, 31)) -> list[dict]:
     """`sketch_pools` over rows × columns, one lane (mirror's) and four (with and without the step-0 block), and salt
     widths."""
@@ -458,6 +493,10 @@ def checks(m: int = 128, n: int = 128, s: int = 74, seed: int = 0) -> dict:
         v["lead"] <= lead_rank_bound(int(key[1:].split("_")[0]), tiles=v["lead_tiles"]) for key, v in out["sketch"].items())
     out["rfp4"] = rfp4_check()
     out["edge"] = {f"l{ln}_r{r0}": edge_attack(ln, r0) for ln in (1, 2, 3, 4) for r0 in (0, 4, 8)}
+    out["partition"] = {f"l{ln}_r{r0}_B{nb}": {st: partition_search(out["edge"][f"l{ln}_r{r0}"],
+                                                                     out["edge"][f"l{ln}_r0"], st, nb)["saving"]
+                                                 for st in (74, 293)}
+                        for ln in (2, 3, 4) for r0 in (0, 4, 8) for nb in (2, 3, 4)}
     return out
 
 
