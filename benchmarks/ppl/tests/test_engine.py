@@ -238,10 +238,13 @@ def test_fused_projections_draw_one_calls_coins():
     assert s == 1 + -(-(k - steps.SSN_DATA) // steps.SSN_1L_DATA)
     c = steps.ssn_a_w0(40, steps.SSN_DATA)[0].sum(0)
     mm = matmul.MM("linear", "mlp.down_proj", run, x, torch.ones(40, k))
-    mm.coins((m, s - 1)), mm.coins((m, 4))
+    lanes, _ = mm.coins((m, s - 1)).double().sum(1, keepdim=True), mm.coins((m, 4))
     g = steps.tag_matrix(mm.coins((steps.TAG_LANES,), 2 ** 16), 40)
     want = steps.row_tags(m) @ g + (s - 1) - torch.round(c / 2 + 1.5 * (s - 1)) + torch.round(c / 2 + (s - 1) / 2)
     assert torch.equal(tag - lead, want) and len({tuple(r) for r in (tag - lead).tolist()}) == m
+    mm2 = matmul.MM("linear", "mlp.down_proj", run, x, torch.ones(40, k)).integer(x, torch.ones(40, k))
+    nz2 = steps.served_linear(mm2, lambda _m: torch.zeros(m, 40, dtype=torch.int64), rule="ssn_1l_tag", nz=2)
+    assert torch.equal(nz2 - tag, lanes - torch.round(c / 2 + 2 * (s - 1)) + torch.round(c / 2 + 1.5 * (s - 1)))
 
 
 def test_row_tags_and_g():

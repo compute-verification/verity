@@ -1139,10 +1139,12 @@ def _check_served(p):
         raise ValueError("served.bits is 1, 2 or 4, and widens only ssn_a's mask and ssn_1l's and ssn_1l5's lanes")
     if p["fused"] and p["rule"] == "ssn2":
         raise ValueError("served.fused shares row coins; ssn2's b is per column")
+    if p["nz"] not in (1, 2) or (p["rule"] != "ssn_1l_tag" and p["nz"] != 1):
+        raise ValueError("served.nz is 1 or 2, the weight of ssn_1l_tag's later lane bit")
 
 
 @linear_step("served", phase="integer", seeded=True, check=_check_served, source="SW-NOISE")
-def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False):
+def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz: int = 1):
     """Noise added to the exact integer product and served, never subtracted, fresh every call, over S = ceil(k / 28)
     k32 steps: `ssn_a` adds a W0 (`ssn_a_w0`) less rint((2^bits - 1) / 2 sum W0) per column, a uniform on
     {0, ..., 2^bits - 1}^(m x S x 4); `ssn_1l` (S = 1 + ceil((k - 28) / 31)) adds a1 C + rowsum(l) less
@@ -1151,8 +1153,9 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False):
     (S = 1 + ceil((k - 27) / 31), a1 bits m x 5, C `ssn_code5`); `ssn_1l_hw` is `ssn_1l` hardened: a1 uniform on
     {0, ..., 15}^(m x 4) and every later step t adds s_t[j] (1 + 2 b_t), b bits m x (S - 1) and s the public column
     signs (`column_signs`), less rint(7.5 sum C + 2 sum_t s_t[j]); `ssn_1l_tag` is `ssn_1l` with row tags (S = 1 +
-    ceil((k - 24) / 31)): it adds T(i) G (`row_tags`, `tag_matrix`, G fresh every call) and serves 1 + l, so its bias is
-    rint((sum C + 3 (S - 1)) / 2), drawing ssn_1l's coins first; `ssn_pd` is `ssn_1l` with its later steps' row bits
+    ceil((k - 24) / 31)): it adds T(i) G (`row_tags`, `tag_matrix`, G fresh every call) and serves 1 + nz l (`nz` 1
+    or 2), so its bias is rint((sum C + (2 + nz) (S - 1)) / 2), drawing ssn_1l's coins first; `ssn_pd` is `ssn_1l`
+    with its later steps' row bits
     folded out at the conversion (the same coins drawn, a1 C less rint(sum C / 2) served); `ssn2` adds a b - S, a and b
     bits (m x S x 4 and
     S x 4 x n); `raw_byte` adds sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred.
@@ -1168,9 +1171,9 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False):
         off = fused_offset(mm.name, k, n)
         code = mm.shared(("ssn_code5" if five else "ssn_code", n, off, str(acc.device)),
                          lambda: (ssn_code5(n, off) if five else ssn_a_w0(n, SSN_DATA, off)[0]).to(acc.device))
-        lanes = (mm.coins((m, s - 1), 2 ** bits, name=stream).double() + tag).sum(1, keepdim=True) * (not pd)
+        lanes = (nz * mm.coins((m, s - 1), 2 ** bits, name=stream).double() + tag).sum(1, keepdim=True) * (not pd)
         a1 = mm.coins((m, code.shape[0]), 2, name=stream).double()
-        bias = torch.round(code.sum(0) / 2 + (not pd) * ((2 ** bits - 1) / 2 + tag) * (s - 1))
+        bias = torch.round(code.sum(0) / 2 + (not pd) * (nz * (2 ** bits - 1) / 2 + tag) * (s - 1))
         if tag:
             tags = mm.shared(("ssn_tags", m, str(acc.device)), lambda: row_tags(m).to(acc.device))
             g = tag_matrix(mm.coins((TAG_LANES,), 2 ** 16, name=stream), n, off).to(acc.device)
