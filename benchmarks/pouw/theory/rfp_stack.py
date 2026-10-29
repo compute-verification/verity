@@ -28,11 +28,16 @@
    word, so N-SAKU's middle-segment skip runs backward from it and skips a segment of L: in RFP-4's order 1, 2, 3, 4 the
    word at 2K is A·(B+F), so the skip is taken twice; the order 1, 3, 2, 4 (X = [A+E | G−A | −E·π | −G·π′]) leaves only
    the final word known.
+7. **Relations among the words at zero activations.** A word that is a combination of earlier words is as good as
+   known: one merge makes it, and the segment ending at it is skipped. At A = 0 the four blocks' sums are two forms,
+   so in every block order one block-boundary word besides the final one is a copy or a one-merge combination of
+   earlier ones. Checked as forms (rank over coin draws, exact mod 2⁶¹ − 1) in all 24 orders.
 
     python3 benchmarks/pouw/theory/rfp_stack.py [--seeds 16] [--out PATH]
 """
 
 import argparse
+import itertools
 import json
 import math
 import random
@@ -253,6 +258,101 @@ def rfp4_known_words(K, L, order, draws=2, m=2, n=2):
             "skip_share_of_stock": len(known) * L / K}
 
 
+P61 = (1 << 61) - 1
+
+
+def rank_mod_p(rows, p=P61):
+    rows = [[v % p for v in r] for r in rows]
+    rank = 0
+    for col in range(len(rows[0]) if rows else 0):
+        piv = next((i for i in range(rank, len(rows)) if rows[i][col]), None)
+        if piv is None:
+            continue
+        rows[rank], rows[piv] = rows[piv], rows[rank]
+        inv = pow(rows[rank][col], p - 2, p)
+        rows[rank] = [v * inv % p for v in rows[rank]]
+        for i in range(len(rows)):
+            if i != rank and rows[i][col]:
+                f = rows[i][col]
+                rows[i] = [(a - f * b) % p for a, b in zip(rows[i], rows[rank])]
+        rank += 1
+    return rank
+
+
+def _derive(w, others):
+    """The cheapest way to make the word `w` (its values over the draws) from the words `others` without products:
+    a constant 0 (free), a signed copy (free) or a merge of two signed words (one instruction, 32)."""
+    if not any(w):
+        return "zero", 0
+    for a, u in others.items():
+        for s in (1, -1):
+            if all(x == s * y for x, y in zip(w, u)):
+                return f"{'+' if s > 0 else '-'}W({a})", 0
+    for a, u in others.items():
+        for c, v in others.items():
+            if a < c:
+                for s in (1, -1):
+                    for t in (1, -1):
+                        if all(x == s * y + t * z for x, y, z in zip(w, u, v)):
+                            return f"{'+' if s > 0 else '-'}W({a}) {'+' if t > 0 else '-'} W({c})", 32
+    return None, None
+
+
+def rfp4_word_relations(K, L, data="zero", full_rank_orders=((1, 2, 3, 4), (1, 3, 2, 4), (1, 3, 4, 2)), seed=0):
+    """Linear relations among RFP-4's running words as forms in the coins, at fixed data, π and π′, in every block order.
+
+    At zero activations (A = 0) the blocks' sums are E·(B+F), G·F, −E·(B+F) and −G·F: two forms, so besides the final
+    word (0) one more block-boundary word is a combination of the others in every order. An adversary makes it with at
+    most one merge and skips the segment of L that ends at it, as N-SAKU's skip does at the final word. Each boundary
+    word's cheapest derivation from the earlier boundary words (so the program stays a forward chain), the units the
+    skips save a dot product, and the rank deficit of all the running words with a constant (over draws of E, G, F;
+    exact, mod 2⁶¹ − 1), which shows whether the boundaries hold every relation."""
+    rng = random.Random(104729 * K + 131 * L + seed)
+    A = [0] * K if data == "zero" else [rng.randint(-INT7, INT7) for _ in range(K)]
+    B = [rng.randint(-INT7, INT7) for _ in range(K)]
+    pi, pi2 = list(range(K)), list(range(K))
+    rng.shuffle(pi)
+    rng.shuffle(pi2)
+    J = K // L
+    draws = 4 * J + 16
+    chunk = {b: [] for b in (1, 2, 3, 4)}
+    for _ in range(draws):
+        E = [rng.randint(-64, 64) for _ in range(K)]
+        G = [rng.randint(-64, 64) for _ in range(K)]
+        F = [rng.randint(-64, 64) for _ in range(K)]
+        x = {1: [A[i] + E[i] for i in range(K)], 2: [-E[k] for k in pi], 3: [G[i] - A[i] for i in range(K)],
+             4: [-G[k] for k in pi2]}
+        y = {1: [B[i] + F[i] for i in range(K)], 2: [B[k] + F[k] for k in pi], 3: F, 4: [F[k] for k in pi2]}
+        for b in chunk:
+            prods = [u * v for u, v in zip(x[b], y[b])]
+            chunk[b].append([sum(prods[j * L:(j + 1) * L]) for j in range(J)])
+    out = []
+    for order in itertools.permutations((1, 2, 3, 4)):
+        words = []
+        for d in range(draws):
+            run, ws = 0, []
+            for b in order:
+                for s in chunk[b][d]:
+                    run += s
+                    ws.append(run)
+            words.append(ws)
+        bound = {q * K: [words[d][q * J - 1] for d in range(draws)] for q in (1, 2, 3, 4)}
+        skip = []
+        for p, w in bound.items():
+            how, c = _derive(w, {a: u for a, u in bound.items() if a < p})
+            if how is not None and c < L:
+                skip.append({"word": p, "made_as": how, "units": c})
+        units = sum(L - s["units"] for s in skip)
+        row = {"order": list(order), "skip": skip, "skip_units": units, "skip_share_of_stock": units / K,
+               "boundary_rank_deficit": 5 - rank_mod_p(list(bound.values()) + [[1] * draws])}
+        if tuple(order) in full_rank_orders:
+            row["all_words_rank_deficit"] = 4 * J + 1 - rank_mod_p(
+                [[words[d][w] for d in range(draws)] for w in range(4 * J)] + [[1] * draws])
+        out.append(row)
+    return {"K": K, "L": L, "data": data, "draws": draws, "orders": out,
+            "least_skip_share_of_stock": min(r["skip_share_of_stock"] for r in out)}
+
+
 STACKS = {
     # blocks, X adds per entry of A, Y adds per entry of B, coin entries per entry of A and of B
     "RFP-3": {"blocks": 3, "x_adds": 1, "y_adds": 1, "coins_a": 1, "coins_b": 1},
@@ -305,6 +405,8 @@ def main():
                                  for s in range(2)],
            "zero_activation_known_words": [rfp4_known_words(K, L, order) for K, L in ((2048, 128), (8192, 256))
                                            for order in ((1, 2, 3, 4), (1, 3, 2, 4))],
+           "word_relations": [rfp4_word_relations(K, L, data) for K, L, data in
+                              ((2048, 64, "zero"), (2048, 128, "zero"), (8192, 256, "zero"), (2048, 128, "int7"))],
            "llama_3_2_1b": llama_terms()}
     text = json.dumps(res, indent=1)
     if a.out:
