@@ -27,8 +27,10 @@ supplies each of the statement's quantities as at most the check's number:
 
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs and no faulty term,
 though a wrong unit's outputs would reach the egress; `RowsTiedDrawn` says the check accepts no tied audit with a unit
-undrawn. Beside it, its nontrivial lemma's objects: `RowsTiedDrawnOf`, the property of any period check, and
-`acceptAllRows`, a check that accepts every period.
+undrawn. `RowsUnwiredRefused` says the rows form accepts no period of a link-window, while no check reads how its
+scan's `prog` entries are wired from `SlotEntry_v1` units. Beside them, their nontrivial lemmas' objects:
+`RowsTiedDrawnOf` and `RowsUnwiredRefusedOf`, the properties of any period check, and `acceptAllRows`, a check that
+accepts every period.
 -/
 
 namespace Properties.NetworkPeriod
@@ -82,8 +84,24 @@ def RowsTiedDrawnOf (chk : Params → Commitment → Evidence → Core.Outcome P
       ∀ (i : ℕ) (reg : Registration) (x : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some x →
         tiedIn c.audits c.windows i = true → DrawnWhole i reg x
 
+/-- **The rows form accepts no period of a link-window.** If the check accepts a period in the rows form, the period
+has no link-window: until a check reads that each due, occupied slot's entry of the scan's `prog` is a wire from a
+`SlotEntry_v1` unit, the read bit is the prover's word, and which slots are due and occupied is private, so the check
+refuses every such period (`unwired`). -/
+def RowsUnwiredRefused : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+      p.windows = 0
+
+/-- `RowsUnwiredRefused` of any period check. -/
+def RowsUnwiredRefusedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+      p.windows = 0
+
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
-`RowsTiedDrawnOf` must fail at for `RowsTiedDrawn` to say something. -/
+`RowsTiedDrawnOf` and `RowsUnwiredRefusedOf` must fail at for `RowsTiedDrawn` and `RowsUnwiredRefused` to say
+something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
 

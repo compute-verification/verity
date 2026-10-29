@@ -19,7 +19,8 @@ link-windows come in one of two forms, which the parameters name:
 
 It accepts when every link-window passes its form's check and every compute audit accepted; it then publishes `K`, the
 bits a covert sender in the server can move through the network certifier in the period, as
-`NetTiming.Guarantees.PeriodLeakAccepted` counts them.
+`NetTiming.Guarantees.PeriodLeakAccepted` counts them. The rows form accepts no period of a link-window yet: no check
+reads how its scan's Programs' row is wired (`unwired`, below).
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
@@ -129,7 +130,12 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   registration's digest, accepted with one level of its Program's units drawn `subset:k` or stratified (a work law's
   draw is stratified), and its `bound`; in the rows form, an audit tied to a link-window's scan (`tiedIn`: some
   link-window's `prog` is its output) is refused unless every unit is drawn (`Σ k = N`), as `K` charges no faulty term
-  for it.
+  for it;
+* in the rows form, the period, if it has a link-window (`unwired`): each due, occupied slot's entry of the scan's
+  `prog` must be a wire from a `SlotEntry_v1` unit of its Program, or its read bit is the prover's word, and an entry
+  with read 1 and no outputs passes for a request no Program reads (in a link-window an unwired row is a free input the
+  prover commits, not a zero). No check reads that wiring yet, and which slots are due and occupied is private, so the
+  refusal is of every such period, and states the fix (`Properties.NetworkPeriod.RowsUnwiredRefused`).
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
 
@@ -846,6 +852,17 @@ def auditCheck (i : Nat) (a : Audit) (reg : Registration) (x : Core.Answer) (tie
 def auditChecks (p : Params) (c : Commitment) (e : Evidence) : Array (Found Facts) :=
   ((p.audits.zip c.audits).zip e.audits).zipIdx.map fun (((a, reg), x), i) => auditCheck i a reg x (tiedOf p.form c i)
 
+/-- The rows form's refusal of every link-window while no check reads how the scan's Programs' row is wired: each due,
+occupied slot's `prog` entry must be a wire from a `SlotEntry_v1` unit of its Program, or the read bit is the prover's
+word, and an entry of read 1 and no outputs passes for a request no Program reads. Which slots are due and occupied is
+private, so the check refuses a period of any link-window in the rows form. -/
+def unwired : Form → Nat → Option (Core.Verdict × String)
+  | .rows .., _ + 1 => some (.reject, "the rows form: the scan's prog entries aren't wired from SlotEntry_v1 units, \
+      so a due, occupied slot's read bit is the prover's word (an entry with read 1 and no outputs passes for a \
+      request no Program reads): wire each slot's prog entry from its Program's SlotEntry_v1 unit, and check that \
+      wiring here")
+  | _, _ => none
+
 def findingOf {α : Type} : Found α → Option (Core.Verdict × String)
   | .error x => some x
   | .ok _ => none
@@ -959,7 +976,8 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
       (scans.find? (·.1.delta != f0.delta)).map fun (f, _) =>
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
     let as := auditChecks p c e
-    match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf) with
+    match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf ++
+        [unwired p.form p.windows]) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>
