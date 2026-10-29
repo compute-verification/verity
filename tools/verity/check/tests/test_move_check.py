@@ -554,6 +554,104 @@ def test_a_word_that_renames_nothing_the_range_moved_is_refused(tmp_path):
     assert f["path"] == "notes.md" and "+The core's statements are `S/Definitions/Core/` (`Definitions.Core`). Checked." in f["hunk"]
 
 
+DECL_BASE = {
+    "tools/move/sample_map.toml": '[words]\n"DrawIsCoin" = "SampleIsCoin"\n\n[[words_in]]\nfiles = ["P/S/Law.lean", '
+                                  '"P/S/Use.lean"]\nwords = { "escape" = "acceptProb" }\n\n[rewrite]\n'
+                                  'exclude = ["tools/move/**", "**/CHANGELOG.md"]\n',
+    "P/lakefile.toml": 'name = "p"\n',
+    "P/S/Law.lean": "/-- The coin is a draw. -/\ndef DrawIsCoin : Prop := True\n\n/-- An escape. -/\ndef escape : Nat := 1\n",
+    "P/S/Use.lean": "import S.Law\n\ntheorem t : DrawIsCoin := trivial\ntheorem u : escape = 1 := rfl\n",
+    "P/lean-audit.json": _lock(assumptions={"DrawIsCoin": {"owner": "@lean"}},
+                               reads={"S.Law": {"digest": "dd", "definitions": {"DrawIsCoin": "ee", "escape": "ff"}}}),
+    "notes.md": "`DrawIsCoin` holds; an escape is rare.\n",
+    "CHANGELOG.md": "Added `DrawIsCoin`.\n",
+}
+DECL_HEAD = {
+    "P/S/Law.lean": "/-- The coin is a draw. -/\ndef SampleIsCoin : Prop := True\n\n/-- An acceptProb. -/\ndef acceptProb : Nat := 1\n",
+    "P/S/Use.lean": "import S.Law\n\ntheorem t : SampleIsCoin := trivial\ntheorem u : acceptProb = 1 := rfl\n",
+    "P/lean-audit.json": _lock(assumptions={"SampleIsCoin": {"owner": "@lean"}},
+                               reads={"S.Law": {"digest": "dd", "definitions": {"DrawIsCoin": "ee", "escape": "ff"}}}),
+    "notes.md": "`SampleIsCoin` holds; an escape is rare.\n",
+}
+
+
+def _declared(tmp_path: Path, base_extra: dict | None = None, **over: str) -> dict:
+    """`DrawIsCoin` and the scoped `escape` renamed as `tools/move/rename.py` renames them: no path moves."""
+    repo, base = _repo(tmp_path, {**DECL_BASE, **(base_extra or {})})
+    _write(repo, {**DECL_HEAD, **over})
+    return _check(repo, base)
+
+
+def test_a_lean_declaration_rename_is_certified(tmp_path):
+    """A word that renames a declaration of an edited `.lean` file to a name the base never spells is kept, as is a
+    `[[words_in]]` entry's in its files; a lock's records keep the old names for `check.py --update --moved`."""
+    r = _declared(tmp_path)
+    assert r["certified"], r["refusals"]
+    assert {e["path"]: e["kind"] for e in r["edits"]} == dict.fromkeys(["P/S/Law.lean", "P/S/Use.lean", "P/lean-audit.json",
+                                                                        "notes.md"], "words")
+
+
+def test_a_declaration_rename_onto_a_name_the_base_spells_is_refused(tmp_path):
+    """`SampleIsCoin` is already a name at the base, so renaming `DrawIsCoin` to it would merge two names."""
+    r = _declared(tmp_path, base_extra={"other.md": "`SampleIsCoin` is another premise.\n"})
+    assert {f["path"] for f in r["refusals"]} == {"P/S/Law.lean", "P/S/Use.lean", "P/lean-audit.json", "notes.md"}
+
+
+def test_a_new_name_a_lean_comment_already_uses_is_no_merge(tmp_path):
+    """A `.lean` file's prose may already say `acceptProb`: a comment names nothing, so the rename stays certified. The same
+    word in its code is a name the rename would merge with."""
+    for kind, line in [("comment", "-- the acceptProb is P_a\n"), ("code", "theorem v : acceptProb = acceptProb := rfl\n")]:
+        (tmp_path / kind).mkdir()
+        old, new = DECL_BASE["P/S/Use.lean"] + line, DECL_HEAD["P/S/Use.lean"] + line
+        r = _declared(tmp_path / kind, base_extra={"P/S/Use.lean": old}, **{"P/S/Use.lean": new})
+        assert r["certified"] == (kind == "comment"), r["refusals"]
+
+
+def test_a_map_of_scoped_words_alone_is_read(tmp_path):
+    """A map whose `[words]` is empty renames only in the files of its `[[words_in]]` entries, and is read all the same."""
+    scoped = ('[words]\n\n[[words_in]]\nfiles = ["P/S/Law.lean", "P/S/Use.lean"]\nwords = { "escape" = "acceptProb" }\n\n'
+              '[rewrite]\nexclude = ["tools/move/**", "**/CHANGELOG.md"]\n')
+    keep = {p: DECL_BASE[p] for p in ("notes.md", "P/lean-audit.json")}
+    r = _declared(tmp_path, base_extra={"tools/move/sample_map.toml": scoped}, **keep, **{
+        "P/S/Law.lean": DECL_BASE["P/S/Law.lean"].replace("escape", "acceptProb"),
+        "P/S/Use.lean": DECL_BASE["P/S/Use.lean"].replace("escape", "acceptProb")})
+    assert r["certified"], r["refusals"]
+    assert {e["path"] for e in r["edits"]} == {"P/S/Law.lean", "P/S/Use.lean"}
+
+
+def test_a_scoped_word_renames_only_in_its_files(tmp_path):
+    """`escape` is renamed only in the files its `[[words_in]]` entry names; a prose `escape` elsewhere stays."""
+    [f] = _declared(tmp_path, **{"notes.md": "`SampleIsCoin` holds; an acceptProb is rare.\n"})["refusals"]
+    assert f["path"] == "notes.md"
+
+
+def test_a_stale_word_of_another_map_is_not_kept(tmp_path):
+    """An earlier move's map also renames `DrawIsCoin`, to a name the base no longer spells; the range didn't make that
+    rename, so its word is not applied."""
+    stale = '[words]\n"DrawIsCoin" = "CoinIsDrawn"\n\n[rewrite]\nexclude = ["tools/move/**"]\n'
+    r = _declared(tmp_path, base_extra={"tools/move/a_stale_map.toml": stale})
+    assert r["certified"], r["refusals"]
+
+
+def test_a_word_no_edited_lean_file_declares_is_refused(tmp_path):
+    """Renaming a declaration's mentions while its `.lean` files stay as they were renames no declaration."""
+    repo, base = _repo(tmp_path, DECL_BASE)
+    _write(repo, {"notes.md": DECL_HEAD["notes.md"]})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "notes.md"
+
+
+def test_lean_declared_reads_declarations_constructors_and_fields():
+    """Each name as written and in full: below its namespaces, a field or a constructor below its structure or type; a
+    section or a `mutual` block adds no part, and `end` closes it."""
+    text = ("/-- `def notMe` in a docstring. -/\n@[simp] private theorem a_b : True := trivial\nnamespace Law.X\n"
+            "structure S where\n  draw : Nat\n  h : draw = 1 := by rfl\ninductive T\n  | leaf\n  | node (l : T) : T\n"
+            "section\ndef f : T → Nat\n  | .leaf => 0\n  | x => 1\nend\n-- def notMeEither\nend Law.X\n"
+            "noncomputable def escape := 1\n")
+    assert MC.lean_declared(text) == ["a_b", "Law.X", "S", "Law.X.S", "draw", "Law.X.S.draw", "h", "Law.X.S.h", "T",
+                                      "Law.X.T", "leaf", "Law.X.T.leaf", "node", "Law.X.T.node", "f", "Law.X.f", "escape"]
+
+
 AREAS = {
     "tools/move/areas_map.toml": '[words]\n"S/Area" = "S/Area/Check"\n"S.Area" = "S.Area.Check"\n',
     "P/lakefile.toml": 'name = "p"\n',
