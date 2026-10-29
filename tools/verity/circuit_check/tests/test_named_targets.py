@@ -55,6 +55,14 @@ def test_named_targets_run_on_every_core_and_reuse_checks_cache(runs, tmp_path, 
     assert got[-1]["cache"] == tmp_path / "mine" and got[-1]["jobs"] == cli.auto_jobs()
 
 
+def test_as_call_says_a_targets_call_either_way_or_leaves_it_to_is_call(runs):
+    """``--as-call`` and ``--no-as-call`` say whether a Definition target is a Call, which is all a target `targets.is_call` can't
+    decide without the catalog needs; with neither, `is_call` decides it."""
+    got, _ = runs
+    for flags, want in (([], None), (["--as-call"], True), (["--no-as-call"], False)):
+        assert cli.main(["F32Add_v1", *flags]) == 0 and got[-1]["as_call"] is want
+
+
 def test_all_keeps_one_job_and_no_cache_unless_given(runs, tmp_path):
     """check.py gives `--all` its slot's jobs and cache explicitly; a bare `--all` stays as it was."""
     got, _ = runs
