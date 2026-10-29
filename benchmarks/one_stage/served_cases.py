@@ -1,19 +1,21 @@
-"""Sampled proofs' v2 case and the inference-only case for a served window, from its records audit, each beside its
-own Lean answer, in the directory form a composition of the window's subprotocols reads as its cases:
+"""Sampled proofs' one-stage v1 case and the inference-only case for a served window, from its records audit, each
+beside its own Lean answer, in the directory form a composition of the window's subprotocols reads as its cases (with
+``--v2``, one-stage v2's case too):
 
     served_cases.py (--audit DIR | --serve-dir D) --private DIR [--alpha N/D --gamma G | --from-division]
-                    [--log FILE] [--v2-exe PATH] [--inference-only-exe PATH]
+                    [--log FILE] [--v1-exe PATH] [--inference-only-exe PATH] [--v2 [--v2-exe PATH]]
 
 ``--audit`` is the window's `records_audit.py audit --circuit --registered` out directory (`served_verdicts.sh`'s
-``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case. Both cases commit to the same
-bytes, the window's registration record (``window/case.json``'s commitment, the record the audit sampled against),
+``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case. Every case commits to the
+same bytes, the window's registration record (``window/case.json``'s commitment, the record the audit sampled against),
 and each Lean answer must name that record's digest, SHA-512(format ‖ 0 ‖ canon(record)) (`registration.digest`), or
 nothing is written: that digest is what a composition's record tie compares.
 
-* **`verity/sampled-proofs/one-stage/v2`** (`v2_case`): a5's ``window/case-v2.json`` (`a5.case_v2`: v1's case with the
-  verdicts replaced by the sampled member's proofs' files, and ``blobs``), refused when it commits to another record
-  than v1's case or names a blob that isn't there, and when a5 wrote none (its ``case-v2-error.txt`` says why: v2
-  verifies one member's `--zk` sessions). Its answer is `sampled-proofs-one-stage-zk check` on the case and its blobs.
+* **`verity/sampled-proofs/one-stage/v1`** (`window_case`, `V1`): a5's ``window/case.json`` as a5 wrote it
+  (`a5.write_case`: the registration record, the evidence the audit's record was handed, the sessions' verdicts among
+  it, and the verifier's params), exactly those three, and none when a5 wrote its ``case-error.txt`` instead (which says
+  why). It is the sampled proofs subprotocol both composites name (`Core.Remote.components`, `Core.Onsite.components`).
+  Its answer is `sampled-proofs-one-stage check` on the case.
 * **The inference-only case** (`inference_only_case`, `INFERENCE_ONLY`: `verity/inference-only/v0`, the inference-only
   policy's check as a core protocol, `inference-only`):
   - params: ``alpha`` and ``gamma`` (the policy's α and Γ: given, ``--alpha`` and ``--gamma``, or with
@@ -31,20 +33,28 @@ nothing is written: that digest is what a composition's record tie compares.
     block a slot (k the most fresh-input bits in one) would give Γ = c and α = k/c, this one's gives Γ = m·c and α at
     most k/c. The Program registers no root input (its inputs are `Input<w>`), so ``theta`` and ``provenance`` are
     empty and every input bit counts as fresh against α.
+* **`verity/sampled-proofs/one-stage/v2`** (`v2_case`, only with ``--v2``): a5's ``window/case-v2.json``
+  (`a5.case_v2`: v1's case with the verdicts replaced by the sampled member's proofs' files, and ``blobs``), refused
+  when it commits to another record than v1's case or names a blob that isn't there, and when a5 wrote none (its
+  ``case-v2-error.txt`` says why: v2 verifies one member's `--zk` sessions). Its answer is `sampled-proofs-one-stage-zk
+  check` on the case and its blobs. Neither composite names v2, so its directory is written only when asked: a
+  composition's ``--cases`` takes every case directory under the one it's given.
 
-Each case goes to its own directory under ``--private`` (``sampled-proofs-v2/``, ``inference-only/``; 0700, files
-0600): ``case.json`` (``{"params", "commitment", "evidence"}``, hex commitment and evidence, and v2's ``blobs``) and
-``answer.json``, its Lean answer line, the directory a composition's ``--cases`` reads (and, given
-``--from-division``, the inference-only case's ``policy.json``). The Lean runs on files in a 0700 scratch directory under ``--private``. This
-prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and a ``NOT_WRITTEN {"protocol", "reason"}``
-line per case refused, and nothing of a case's params or evidence: not α and Γ either, which ``--from-division``
-reads off the division, so on a one-block window they'd publish its block's gates and fresh-input bits. The lines go
-to a private log (a reason may quote a5's ``case-v2-error.txt``), of which only a line's ``protocol`` and
-``verdict`` are public. Exit 0 when every case is written, 1 when one is refused, 64 on a usage error.
+Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``, ``inference-only/``,
+``sampled-proofs-v2/``; 0700, files 0600): ``case.json`` (``{"params", "commitment", "evidence"}``, hex commitment and
+evidence, and v2's ``blobs``) and ``answer.json``, its Lean answer line, the directory a composition's ``--cases``
+reads (and, given ``--from-division``, the inference-only case's ``policy.json``). The Lean runs on files in a 0700
+scratch directory under ``--private``. This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
+a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence: not α and Γ
+either, which ``--from-division`` reads off the division, so on a one-block window they'd publish its block's gates
+and fresh-input bits. The lines go to a private log (a reason may quote a5's ``case-error.txt`` or
+``case-v2-error.txt``), of which only a line's ``protocol`` and ``verdict`` are public. Exit 0 when every case is
+written, 1 when one is refused, 64 on a usage error.
 """
 from __future__ import annotations
 
 import argparse
+import fcntl
 import functools
 import importlib.util
 import json
@@ -59,14 +69,17 @@ from typing import Any
 
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.one_stage import verifier as VF
 from verity.ml.circuits import codec
 
 ROOT = Path(__file__).resolve().parents[2]
+V1 = R.PROTOCOL
+V1_LEAN = (VF.PACKAGE, "sampled-proofs-one-stage")
 V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
 INFERENCE_ONLY_LEAN = (ROOT / "verity/core/protocols/network/nci/lean", "inference-only")
 NCI_REFERENCE = INFERENCE_ONLY_LEAN[0] / "scripts" / "nci_reference.py"
-DIRS = {V2: "sampled-proofs-v2", INFERENCE_ONLY: "inference-only"}
+DIRS = {V1: "sampled-proofs-v1", INFERENCE_ONLY: "inference-only", V2: "sampled-proofs-v2"}
 CASE_KEYS = {"commitment", "evidence", "params"}
 USAGE = 64
 #: α and Γ past any block's (its gates and its fresh-input bits are each under 2^64), at which the policy's check reports
@@ -105,9 +118,13 @@ def record_of(case: Mapping[str, Any]) -> tuple[dict[str, Any], str]:
 
 
 def window_case(audit: Path) -> dict[str, Any]:
-    """v1's case of the audit (a5's ``window/case.json``), whose commitment is the window's registration record."""
-    case = _json(audit / "window" / "case.json")
-    _need(isinstance(case, dict) and CASE_KEYS <= set(case), f"{audit}/window/case.json is not a case")
+    """v1's case of the audit (module docstring), whose commitment is the window's registration record."""
+    w = audit / "window"
+    if not (w / "case.json").is_file() and (w / "case-error.txt").is_file():
+        raise Refused(f"no v1 case: {(w / 'case-error.txt').read_text().strip()}")
+    case = _json(w / "case.json")
+    _need(isinstance(case, dict) and set(case) == CASE_KEYS,
+          f"{audit}/window/case.json is not a case: it holds exactly {sorted(CASE_KEYS)}")
     return case
 
 
@@ -257,8 +274,12 @@ def write(d: Path, case: Mapping[str, Any], line: str, also: Mapping[str, Any] |
 
 
 def build(package: Path, name: str) -> Path:
-    """``lake build name`` in ``package``; the executable's path."""
-    p = subprocess.run(["lake", "build", name], cwd=package, capture_output=True, text=True)
+    """``lake build name`` in ``package`` under `verifier.BUILD_LOCK`: each of these packages has Lake build the flock
+    package in place, and two builds at once would rewrite one module's C under each other. The executable's path."""
+    VF.BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with open(VF.BUILD_LOCK, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        p = subprocess.run(["lake", "build", name], cwd=package, capture_output=True, text=True)
     _need(p.returncode == 0, f"lake build {name} in {package} failed ({p.returncode})")
     return package / ".lake" / "build" / "bin" / name
 
@@ -278,7 +299,7 @@ def produce(a: argparse.Namespace) -> int:
         v1 = window_case(audit)
         _, digest = record_of(v1)
     except Refused as e:
-        for id in DIRS:
+        for id in [V1, INFERENCE_ONLY] + ([V2] if a.v2 else []):
             print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
         return 1
 
@@ -298,7 +319,7 @@ def produce(a: argparse.Namespace) -> int:
         print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": answer.get("verdict")},
                                    sort_keys=True), flush=True)
 
-    one(V2, lambda: v2_case(audit), functools.cache(lambda: a.v2_exe or PF.v2_executable()))
+    one(V1, lambda: v1, functools.cache(lambda: a.v1_exe or build(*V1_LEAN)))
     inference_only_exe = functools.cache(lambda: a.inference_only_exe or build(*INFERENCE_ONLY_LEAN))
 
     def inference_only() -> dict[str, Any]:
@@ -313,6 +334,8 @@ def produce(a: argparse.Namespace) -> int:
         return inference_only_case(v1, alpha, gamma, log)
 
     one(INFERENCE_ONLY, inference_only, inference_only_exe)
+    if a.v2:
+        one(V2, lambda: v2_case(audit), functools.cache(lambda: a.v2_exe or PF.v2_executable()))
     return bad
 
 
@@ -333,11 +356,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--from-division", action="store_true",
                     help="α and Γ read off the case's own division (division_policy) instead of given")
     ap.add_argument("--log", type=Path, help="the deployment's registration records before the window's, a JSON list")
-    ap.add_argument("--v2-exe", help="sampled-proofs-one-stage-zk (default: built here)")
+    ap.add_argument("--v1-exe", help=f"{V1_LEAN[1]} (default: built here)")
     ap.add_argument("--inference-only-exe", help=f"{INFERENCE_ONLY_LEAN[1]} (default: built here)")
+    ap.add_argument("--v2", action="store_true", help="one-stage v2's case too (v2_case), in sampled-proofs-v2/")
+    ap.add_argument("--v2-exe", help=f"{PF.V2_EXE}, with --v2 (default: built here)")
     a = ap.parse_args(argv)
     if a.from_division and (a.alpha is not None or a.gamma is not None):
         ap.error("--from-division reads α and Γ off the division: not with --alpha or --gamma")
+    if a.v2_exe is not None and not a.v2:
+        ap.error("--v2-exe is v2's Lean, which only --v2 runs")
     return produce(a)
 
 
