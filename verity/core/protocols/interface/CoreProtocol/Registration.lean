@@ -19,8 +19,8 @@ names the whole log. An entry is one of two kinds, each under its own versioned 
 
 An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))` over the entry's canonical JSON, its format and `previous`
 among its keys, and the genesis of a composite's log is the Site's (`Core.Site.Registration.sha512`), so a log of site
-entries alone has the Site's head. Registration is ASCII-only without DEL: a log or parameters holding any other byte
-is refused (`ascii`, in `Core.canonicalJson`'s words) before anything is decoded.
+entries alone has the Site's head. Registration is ASCII-only without DEL: a log or parameters holding any other
+character, as itself or escaped, is refused (`ascii`, in `Core.canonicalJson`'s words) before any entry is read.
 
 The check (`check`) holds each entry to the log before it, and refuses the first entry that fails by the first check it
 fails: a site entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), and an information
@@ -257,12 +257,16 @@ structure Params where
   composite : Composite
   auditor : Auditor
 
-/-- Registration is ASCII without DEL, refused in `Core.canonicalJson`'s words before anything is decoded. -/
-def ascii (b : ByteArray) : V Unit :=
-  if b.data.any (· ≥ 0x7f) then throw "not ASCII without DEL (a byte at or above 0x7f)" else pure ()
+/-- Registration is ASCII without DEL, refused in `Core.canonicalJson`'s words: `j`'s strings, unescaped
+(`Flock.canonUtf8`), hold no character from 0x7f up, so its digest is the same however a canonical JSON escapes the rest.
+`Flock.canon` escapes such a character, so the bytes can't be the test: a `\u00e9` in the committed text is refused as
+`é` is. -/
+def ascii (j : Json) : V Unit :=
+  if ((Flock.canonUtf8 j).toOption.getD "").all (fun (c : Char) => c.toNat < 0x7f) then pure ()
+  else throw "not ASCII without DEL (a byte at or above 0x7f)"
 
 def Params.ofJson (j : Json) : V Params := do
-  ascii j.compress.toUTF8
+  ascii j
   exactly j ["auditor", "composite"] "the params"
   pure { composite := ← Site.Registration.Composite.ofJson (← Flock.J.get j "composite" "the params"),
          auditor := ← Site.Registration.Auditor.ofJson (← Flock.J.get j "auditor" "the params") }
@@ -273,8 +277,9 @@ structure Commitment where
   head : ByteArray
 
 def commitmentOf (b : ByteArray) : V Commitment := do
-  ascii b
-  let committed ← Committed.ofJson (← canonicalJson b)
+  let j ← canonicalJson b
+  ascii j
+  let committed ← Committed.ofJson j
   pure { committed, head := ← Flock.unhex (head committed.composite committed.log) }
 
 def evidenceOf (b : ByteArray) : V Unit := do
@@ -437,13 +442,18 @@ private def answer (c : Composite) (log : Committed) : Answer :=
 #guard (answer .onsite { composite := .onsite, log := chain .onsite bare }).reason == some "entry 0: uncertified"
 private def accented : Committed :=
   { composite := .onsite, log := chain .onsite [information [.theta { weights with value := "poids\u00e9" }]] }
--- a log or parameters outside ASCII without DEL is refused before anything is decoded (`ascii`)
+-- a log or parameters outside ASCII without DEL is refused before any entry is read (`ascii`)
 #guard (protocol.answer (bytes (params .onsite)) accented.toJson.compress.toUTF8 "{}".toUTF8).reason ==
   some "commitment: not ASCII without DEL (a byte at or above 0x7f)"
 private def deleted : Committed :=
   { composite := .onsite, log := chain .onsite [information [.theta { weights with value := "poids\x7f" }]] }
 #guard (protocol.answer (bytes (params .onsite)) deleted.toJson.compress.toUTF8 "{}".toUTF8).reason ==
   some "commitment: not ASCII without DEL (a byte at or above 0x7f)"
+-- escaped (`Flock.canon`, `\u00e9`) or as itself in UTF-8 (`Flock.canonUtf8`), it is refused the same
+private def raw (j : Json) : ByteArray := ((Flock.canonUtf8 j).toOption.getD "").toUTF8
+#guard [accented, deleted].all fun l => [bytes l.toJson, raw l.toJson].all fun b =>
+  (protocol.answer (bytes (params .onsite)) b "{}".toUTF8).reason ==
+    some "commitment: not ASCII without DEL (a byte at or above 0x7f)"
 
 end Example
 
