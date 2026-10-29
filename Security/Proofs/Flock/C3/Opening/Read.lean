@@ -171,7 +171,7 @@ theorem opening_of_steps (e : ExecHolo) (l : List Step) (s : Fin 2 → Fin 128 �
 /-- **`RecOpening.run`'s residuals are zero only when each claim passes the verifier's value check** on its ring
 switch: its first stage is `ringSwitch` (`ringSwitch_checks`). -/
 theorem checks_of_run {sh : Flock.Shape} {M : Flock.RecAlgebra.Messages F128}
-    {a : Fin 2 → Flock.RecAlgebra.AClaim F128} {k₀ k₁ : ℕ} {src : Flock.RecAlgebra.Coins} {res : Array F128}
+    {a : Fin 2 → Flock.RecAlgebra.AClaim F128} {k₀ k₁ : ℕ} {src : Flock.RecAlgebra.CoinSource} {res : Array F128}
     (h : Flock.RecOpening.run sh M #[a 0, a 1] k₀ src = .ok (res, k₁)) (hz : ∀ x ∈ res, x = 0) (i : Fin 2) :
     Flock.dot (FlockSoundness.Refine.wOf (a i).toClaim) M.rs[i.val]! = (a i).toClaim.value := by
   unfold Flock.RecOpening.run at h
@@ -201,7 +201,7 @@ def OpeningRead (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArra
   F.AtAccepted dg N k Rw fun R ω t Lb =>
     let u := F.run R ω t Lb
     ∃ (sh : Flock.Shape) (M : Flock.RecAlgebra.Messages F128) (a : Fin 2 → Flock.RecAlgebra.AClaim F128)
-      (src : Flock.RecAlgebra.Coins) (k₀ k₁ : ℕ) (res : Array F128) (ρ : Fin 2 → Fin 7 → GF128) (γ : Fin 2 → GF128),
+      (src : Flock.RecAlgebra.CoinSource) (k₀ k₁ : ℕ) (res : Array F128) (ρ : Fin 2 → Fin 7 → GF128) (γ : Fin 2 → GF128),
       Flock.RecOpening.shape? (holoAt st hp).cls.shape.mReg 2 = some sh ∧
       Flock.RecOpening.run sh M #[a 0, a 1] k₀ src = .ok (res, k₁) ∧ (∀ x ∈ res, x = 0) ∧
       (∀ i, FlockSoundness.Refine.ClaimRel (holoAt st hp).cls.shape.mReg (a i).toClaim (u.claim i).toClaim) ∧
