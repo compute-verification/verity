@@ -607,7 +607,8 @@ def periods(data: dict, cb: dict) -> dict:
             "ShaSpeed's slack at δ*": ALLOW - t["forming"],
             "hiding at 256 KiB, unforced (W1 floor)": t["hiding"],
             "coin branch, WikiText": t["coin_branch_natural"],
-            "coin branch, identical rows at T 8,192": t["coin_branch_chosen"]}
+            "coin branch, chosen rows (worse of identical and zero)": t["coin_branch_chosen"],
+            "coin branch, ssn_1l_hw, chosen rows": design_terms("ssn_1l_hw", "llama_T8192", data, cb)["coin_branch_chosen"]}
     mac_s = {"one H200": INT8_MAC_S / alpha, "datacenter": INT8_MAC_S / alpha * NS.DATACENTER}
     out = {}
     for scope, rate in mac_s.items():
