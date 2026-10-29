@@ -193,3 +193,13 @@ Out:
   Daniel's call.
 - **Coverage:** the linears are 78% of a decode token's MACs at the demo's contexts and 55% at 8K keys. QKᵀ has no NCP
   layout.
+
+## 10. Final (03:10Z): note:compute-research/20261029T0310Z-report-pouw-core-ranking
+
+CORE-SMELL's final (note 20261029T0304Z-report-core-smell) is folded in:
+- C26: priced work bounds the gap but not idle capacity.
+- C27: with hashing credited, ShaSpeed is SAK for SHA-512, needed to about 0.0015%, so NCP is rank 4 overall.
+- C30: "T 512" is the demo's 64 real tokens.
+- Hash-to-noise conversion adds 8/n + 8/m unless it counts as coins.
+
+Open for Daniel: keep hashing credited; shared weight noise per window; the capacity guarantee.
