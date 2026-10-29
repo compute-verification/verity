@@ -109,7 +109,7 @@ def analyse(dtype: str, A, B, scale, exact_q, exact_true, mode: str, block, boun
             pinned_rows = ~forms[0].unpinnable
             res["affine_fail_pinnable_rows"] = int((~(core == core[:1]).all(0))[pinned_rows].sum())
             res["free_pinnable_rows"] = int(fm[pinned_rows].sum())
-            res["p_minus_log2_rms"] = float(np.median(p - np.log2(np.sqrt((exact_q / scale) ** 2).mean(1) + 1e-300)))
+            res["p_minus_log2_rms"] = float(np.median(p - np.log2(np.sqrt(((exact_q / scale) ** 2).mean(1)) + 1e-300)))
     # served values and the T3 proxy over the llama rows and the untouched columns, every salt
     sel = (slice(len(ROWS), None), slice(NCOLS, None))
     rms = np.sqrt((exact_true[sel] ** 2).mean())
