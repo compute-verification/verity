@@ -22,6 +22,7 @@ from verity.ml.circuits.boolean import forms as F  # noqa: E402
 from verity.ml.circuits.boolean.forms import ONE, ZERO, NOT, Circuit, add, compress_columns, const_bits, lzc  # noqa: E402
 from verity.ml.circuits.boolean.forms import multiply, mux, or_reduce, shl_window, sub  # noqa: E402
 from verity.ml.circuits.silicon import fp  # noqa: E402
+from synth import pack  # noqa: E402
 
 
 def put(cols, bits, shift, width):
@@ -374,15 +375,20 @@ def run(name, n, seed):
     rng = random.Random(f"cflock:{name}:{seed}")
     vec = spec["gen"](rng, n)
     n = len(next(iter(vec.values())))
-    ins = {nm: [sum(((x >> j) & 1) << i for i, x in enumerate(vec[nm])) for j in range(len(bits))]
-           for nm, bits in C.inputs.items()}
+    ins = {nm: [pack(vec[nm], j) for j in range(len(bits))] for nm, bits in C.inputs.items()}
     outs, _ = C.evaluate(ins, n)
+    got = {}
+    for k, planes in outs.items():
+        words = [0] * n
+        for j, v in enumerate(planes):
+            for i, c in enumerate(format(v, f"0{n}b")[::-1]):
+                if c == "1":
+                    words[i] |= 1 << j
+        got[k] = words
     bad = 0
     for i in range(n):
-        want = spec["ref"](vec, i)
-        for k, w in want.items():
-            got = sum(((outs[k][j] >> i) & 1) << j for j in range(len(outs[k])))
-            bad += got != w
+        for k, w in spec["ref"](vec, i).items():
+            bad += got[k][i] != w
     c = C.counts()
     return {"design": name, "lanes": spec["lanes"], "ands": c["ands"], "ands_per_mac": c["ands"] / spec["lanes"],
             "vectors": n, "mismatches": bad}

@@ -1,7 +1,7 @@
 """Synthesize SI-ALG's MACs (rtl/*.v) with yosys + ABC, check every netlist against refs.py, and tabulate.
 
 For each design (yosys's array/macc multiplier mapping; yosys 0.33 has no Booth pass):
-- GE: ABC maps to generic.lib (gate equivalents, NAND2 = 1); the accumulator register is added at a DFF's 5.667 GE a bit.
+- GE: ABC (ABC_SCRIPT) maps to generic.lib (gate equivalents, NAND2 = 1); the accumulator register is added at a DFF's 5.667 GE a bit.
 - ANDs: ABC maps to AND/XOR (NOT free), the cost model of C-Flock's Boolean circuits; an upper bound on the
   multiplicative complexity, since ABC doesn't minimize ANDs specifically.
 - depth: the longest path in the AND/XOR netlist (`ltp -noff`), a latency proxy.
@@ -30,6 +30,9 @@ HERE = Path(__file__).resolve().parent
 RTL = [HERE / "rtl" / "baseline.v", HERE / "rtl" / "formats.v"]
 LIB = HERE / "generic.lib"
 DFF_GE = 4.522 / 0.798
+# ABC's default mapping script less its SAT sweeping (&fraig, scorr), which takes tens of minutes on the wide
+# multipliers. On the two baselines it maps 3-4% larger than the default script and keeps their ratio.
+ABC_SCRIPT = "+strash;dc2;strash;&get,-n;&dch,-f;&nf;&put"
 
 CELL = {
     "$_NOT_": lambda p, m: ~p["A"] & m, "INV": lambda p, m: ~p["A"] & m,
@@ -63,9 +66,9 @@ def run_yosys(top: str, work: Path) -> dict:
     lib_json, xag_json, xag_net, lib_net, ltp = (work / f for f in
                                                  ("lib.json", "xag.json", "xag_net.json", "lib_net.json", "ltp.txt"))
     script = (f"{front}; design -save rtl; "
-              f"abc -liberty {LIB}; opt_clean; tee -q -o {lib_json} stat -json -liberty {LIB}; "
+              f"abc -liberty {LIB} -script {ABC_SCRIPT}; opt_clean; tee -q -o {lib_json} stat -json -liberty {LIB}; "
               f"write_json {lib_net}; design -load rtl; "
-              f"abc -g AND,XOR; opt_clean; tee -q -o {xag_json} stat -json; write_json {xag_net}; "
+              f"abc -g AND,XOR -script {ABC_SCRIPT}; opt_clean; tee -q -o {xag_json} stat -json; write_json {xag_net}; "
               f"tee -q -o {ltp} ltp -noff")
     log = work / "yosys.log"
     with open(log, "w") as fh:
@@ -90,6 +93,11 @@ def run_yosys(top: str, work: Path) -> dict:
     }
 
 
+def pack(col: list[int], bit: int) -> int:
+    """Bit `bit` of every vector as one int, vector i at bit i."""
+    return int("".join("1" if (x >> bit) & 1 else "0" for x in reversed(col)) or "0", 2)
+
+
 def simulate(net: dict, top: str, vec: dict, n: int) -> dict:
     """Evaluate a yosys JSON netlist on n vectors at once (a Python int a net, bit i = vector i)."""
     mod = net["modules"][top]
@@ -101,7 +109,7 @@ def simulate(net: dict, top: str, vec: dict, n: int) -> dict:
         col = vec[name]
         for bit, net_id in enumerate(port["bits"]):
             if isinstance(net_id, int):
-                val[net_id] = sum(((x >> bit) & 1) << i for i, x in enumerate(col))
+                val[net_id] = pack(col, bit)
     cells = list(mod["cells"].values())
     users: dict = {}
     need = []
@@ -128,8 +136,9 @@ def simulate(net: dict, top: str, vec: dict, n: int) -> dict:
         word = [0] * n
         for bit, net_id in enumerate(port["bits"]):
             v = val[net_id] if isinstance(net_id, int) else (mask if net_id == "1" else 0)
-            for i in range(n):
-                word[i] |= ((v >> i) & 1) << bit
+            for i, c in enumerate(format(v, f"0{n}b")[::-1]):
+                if c == "1":
+                    word[i] |= 1 << bit
         out[name] = word
     return out
 
