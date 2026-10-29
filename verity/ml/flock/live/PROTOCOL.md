@@ -34,7 +34,7 @@ Everything below is on the rep's live stream (`circuit/rep{r}`), in this order. 
 M0 and upstream Flock.
 
 ~~~text
-bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (68-lane level-0 tree)
+bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (level 0's tree, 68 lanes)
 zerocheck           label flock-zerocheck-v0
   M1                label verity-flock-zk-pads-v0 · bytes pads root (64)
                     squeeze r_skip (6) · squeeze r_outer (m-13)

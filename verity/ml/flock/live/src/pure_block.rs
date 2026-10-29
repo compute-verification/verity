@@ -1,5 +1,5 @@
 //! `verity/flock-pure-block/v1`: the Flock backend's committed relation as ONE block R1CS, so Flock-CUDA can prove it
-//! (no union prover, no wiring argument). Lane flock-gpu-link; the backend and the CPU union statement are flock-backend's.
+//! (no union prover, no wiring argument). The CPU union statement is the Flock backend's own.
 //!
 //! Block `b = 3 v + c` is chunk `c` of VU `v` (a 16-bit row is 3 BLAKE3 chunks, each read by 32 units). `k_log` 20:
 //! - slots 0..16 (2^14 bits each): the x row's chunk `c`, 16 compressions (Flock's circuit);
@@ -50,7 +50,7 @@ pub const TAG: &[u8] = b"verity/flock-pure-block/v2";
 /// Coordinates per verifier point: the regions' free in-block bits come from `r[..16]`, block bits from `r[16..]`.
 pub const PT_LOCAL: usize = 16;
 
-/// The `flock-unit-io/v1` lowered unit (flock-backend's `verity_flock.lowering`), read-only.
+/// The `flock-unit-io/v1` lowered unit (`verity_flock.lowering`), read-only.
 /// The block shape of one relation family.
 /// - `Chunk(n)` (rows of n whole BLAKE3 chunks, 32 units per chunk: 16-bit K = 1536 is `Chunk(3)`, K = 2048 `Chunk(4)`,
 ///   K = 8192 `Chunk(16)`; 8-bit K = 2048 `Chunk(2)`, K = 8192 `Chunk(8)`): block (v, c) is chunk c of VU v; `k_log` 20;
@@ -313,7 +313,7 @@ impl UnitNet {
     }
 }
 
-/// The instance file (`flock-pure-instances/v1`, flock-backend's `verity_flock.instances`), read-only.
+/// The instance file (`flock-pure-instances/v1`, `verity_flock.instances`), read-only.
 #[derive(Clone)]
 pub struct Instances {
     pub header: serde_json::Value,
