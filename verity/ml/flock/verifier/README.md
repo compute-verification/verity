@@ -29,19 +29,24 @@ A recursive statement is one `verify --zk` per V* part, and no part sees another
 (`rec_inner_sha512`), of the inner session's record and its transcript (`rec_inner_session_sha512`,
 `rec_inner_transcript_sha512`) and of every input V*'s parts share (`rec_shared`: the inner shape, the inner
 statement's files and how it is set up, the inner session's record, the coin server's transcript, the registration),
-whether it ran `--zk` and its session's coin key. `flock-verify rec-compose --rec-inner F --rec-rows F LOG...`
-(`Flock.RecCompose.check`) gives the statement's verdict: it accepts only when there is one log per V* statement with
-one `VERDICT`, every part is accepted under `--zk` without an identifier at the one rows file the prover staged (`acc0`,
-the tops, the `rec-c<k>` rows) and the composition's own inner shape, every part read one set of the other shared
-inputs, in the compiled verifier's form, and no two sessions share a coin key (`RecCompose.Accepts`, `check_accepts`;
-`Proofs.Flock.Claims.Recursion.ComposeParts.composed_parts` reads it at the compiled verifier's parts).
-`verity_flock.rec_compose` is its Python mirror (`tests/test_lean_rec_compose.py`). The pod's Lean step
-(`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part those files.
+whether it ran `--zk` and its session's coin key. `flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F
+LOG...` (`Flock.RecCompose.check`) gives the statement's verdict: it accepts only when there is one log per V* statement
+with one `VERDICT`, every part is accepted under `--zk` without an identifier at the one rows file the prover staged
+(`acc0`, the tops, the `rec-c<k>` rows) and the composition's own inner shape, every part read one set of the other
+shared inputs, in the compiled verifier's form, and no two sessions share a coin key (`RecCompose.Accepts`,
+`check_accepts`; `Proofs.Flock.Claims.Recursion.ComposeParts.composed_parts` reads it at the compiled verifier's parts).
 
-It doesn't check that the parts' sessions are one run of the compiled verifier: that is the open condition C10
-`OneRun` (one session per part, every session the coin server opened for the statement's parts recorded, the staging
-before the first part's Hello), which needs the service's interactive-run record, a later PR. Until it holds, a prover
-can retry a part and hand over only the accepted session, and the recursive verdict is not a claim a guarantee backs.
+It also holds the parts to one run, C10 `OneRun`, through `--rec-run`: the interactive-run record
+(`verity/rec-run/v1`) the service's challenger keeps for the run (`sampled_proofs.challenger.RunRecord`). The record
+stages the rows file and `rec_shared` before any session, logs every session the challenger opened for the run's parts
+(a retry's too) and is closed after the last; it holds no coin, since each part's coins are fresh at its Hello
+(Decision 8). `rec-compose` refuses a part with two sessions or none, a session opened and not composed, a composed
+session the record didn't open, a staging after the first Hello, a second staging or one of other inputs, and a record
+that isn't closed (`RecCompose.checkRun`; `check_oneRun` proves acceptance gives `OneRun`, and
+`ComposeParts.composed_run` reads it at the compiled verifier's parts). The record is the auditor's: it is read from the
+challenger's host (`trusted-host`), never from the prover's bundle. `verity_flock.rec_compose` is its Python mirror
+(`tests/test_lean_rec_compose.py`). The pod's Lean step (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every
+part those files, and without a `rec-run.json` it doesn't compose the statement.
 
 **Archived formats.** The statement names pinned at older commits (`verity/flock-circuit@<commit>`, back to
 `verity/flock-netlist/v1`) are still parsed, so recorded sessions keep their names, and every one before `hm96-sha512`
