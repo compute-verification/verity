@@ -39,8 +39,9 @@ The parts:
   cells): h in the words tree and with each seal hidden on its own, counting sigma alone and sigma with its O's; a drawn
   unit's committed output bits and size class; and, a chunk size at a time, the drawn unit's in-circuit opening against
   T1's `chunk_head`.
-- ``xor_m``: the XOR of m consecutive words, one register for m: the same output bits, opening and `chunk_head` rows,
-  and h with each XOR hidden on its own.
+- ``xor_m``: one u32 for m consecutive words (their XOR; at m = 2 also trunc-16's layout, and at m 1,024 and 4,096 a
+  sketch value): the same output bits, opening and `chunk_head` rows, h with each value hidden on its own, and at the
+  five points hiding's T1 and a call's `chunk_head` on Llama-3.2-1B's linears.
 - ``per_output``: one or two u32 values an output in place of its words (a multiply-xor fold's state, alone or with the
   last word, and a quadratic sketch): hiding's T1 under the keyed leaf and under L1 + (a), h with each output hidden on
   its own, a SHA-512 keystream pad over the values on a link, a drawn unit's output bits, size class and opening, and
@@ -310,24 +311,36 @@ def fold_seal(sha: int) -> dict:
 
 
 def xor_m(sha: int) -> dict:
-    """The XOR of m consecutive words of a cell committed in their place (m = 1 is the lead)."""
+    """One u32 committed every m consecutive words in their place: m = 1 is the lead, m = 2 also trunc-16's layout (two
+    words' low halves a u32), and m in the thousands a sketch value (nh2, nh or xor at G = m). h divides the lead's
+    whole h by m, A's rows included, so at large m it under-reads by A's rows. ``by_point`` takes a call's words as one
+    stream and counts its last chunk part-filled."""
     recompute = UNIT_WORDS * 32 * ANDS_MAC
     mech = per_value()["mechanisms"]
     keep = (KEYED, HM96A)
+    chunks = (1024, 4096, 16384, 65536, 262144)
     out = {}
-    for m in (1, 8, 11, 16, 31):
+    for m in (1, 2, 8, 11, 16, 31, 1024, 4096):
         bits = 32 * math.ceil(UNIT_WORDS / m)
         unit_b = bits / 8
         row = {"committed_output_bits": bits, "size_class": size_class(bits),
                "class_share_of_lead": size_class(bits) / 262_144, "h_hashing_in_tree": H_LEAD["basis"] / m,
                "h_each_hidden": {x: H_LEAD["basis"] / m + H_LEAD["basis"] * mech[x]["total"] / (m * MACS_WORD)
-                                 / LEAD_C_MAC for x in keep}, "by_chunk_kib": {}}
-        for c in (4096, 16384, 65536, 262144):
+                                 / LEAD_C_MAC for x in keep}, "by_chunk_kib": {}, "by_point": {}}
+        for c in chunks:
             opening = max(1, math.ceil(unit_b / c)) * blocks(c) * sha
             row["by_chunk_kib"][c // 1024] = {
                 "opening_ands": opening, "opening_over_recompute": opening / recompute,
                 "t1_chunk_head_pct": 100 * CHUNK_HEAD_REGS * REG / (c / WORD_BYTES * m * MACS_WORD)}
-        out[f"xor-{m}" if m > 1 else "lead (every word)"] = row
+        for point, rows in POINT_ROWS.items():
+            stock = rows * LAYERS * sum(k * n for _, k, n in LLAMA)
+            row["by_point"][point] = {
+                "hiding_t1_pct": {KEYED: 0.0, "L1 + (a), floor / alone": L1_TERM[point]},
+                "t1_chunk_head_pct_by_chunk_kib": {ch // 1024: 100 * LAYERS * CHUNK_HEAD_REGS * REG * sum(
+                    math.ceil(rows * n * lead_steps(k) * WORD_BYTES / m / ch) for _, k, n in LLAMA) / stock
+                    for ch in chunks}}
+        name = {1: "lead (every word)", 2: "xor-2 or trunc-16"}.get(m, f"xor-{m}")
+        out[name if m < 1024 else f"sketch, a u32 every {m:,} words"] = row
     return out
 
 
@@ -444,6 +457,10 @@ def main() -> None:
         "fold seal, K 2,048, a cell, a keyed leaf a seal, h": fs["K 2,048, a seal a cell"][o_seal]["h_each_seal_hidden"][KEYED],
         "fold seal, K 8,192, a row of 8, in the tree, h": fs["K 8,192, a seal a row of 8 cells"][o_seal]["h_in_tree"],
         "xor-16, in the tree, h": out["xor_m"]["xor-16"]["h_hashing_in_tree"],
+        "sketch a u32 every 1,024 words, in the tree, h (the u32s' hashing only)":
+            out["xor_m"]["sketch, a u32 every 1,024 words"]["h_hashing_in_tree"],
+        "sketch a u32 every 1,024 words, a keyed leaf each, h (the u32s' hashing only)":
+            out["xor_m"]["sketch, a u32 every 1,024 words"]["h_each_hidden"][KEYED],
         "fold N_T and D_T, in the tree, h (hashing only)": po["fold, N_T and D_T"]["h_mac_weighted"]["in_tree"],
         "fold N_T and D_T, a SHA-512 pad on a shared link, h": po["fold, N_T and D_T"]["h_mac_weighted"]["sha512_pad_on_a_link"],
         "quadratic sketch, in the tree, h (hashing only)": po["quadratic sketch"]["h_mac_weighted"]["in_tree"],
@@ -491,12 +508,15 @@ def main() -> None:
         c16 = v["by_chunk_kib"][16]
         print(f"  {p:28s} {s['h_in_tree']:.3f} / {o['h_in_tree']:.3f}; keyed {o['h_each_seal_hidden'][KEYED]:.2f}; "
               f"class {v['unit']['size_class']}; {c16['opening_ands']:,.0f} ANDs / {c16['t1_chunk_head_pct']:.5f}%")
-    print("xor-m (class; h in tree; keyed leaf each; 16 KiB opening / T1):")
+    print("a u32 every m words (class; h in tree; keyed leaf / hm96 + (a) each; 16 KiB opening / T1; a call's T1 "
+          "chunk_head at 16 KiB, T 512 64 rows / decode 1 row):")
     for p, v in out["xor_m"].items():
-        c16 = v["by_chunk_kib"][16]
-        print(f"  {p:18s} class {v['size_class']:7d}; {v['h_hashing_in_tree']:.2f}; "
-              f"{v['h_each_hidden'][KEYED]:.1f}; "
-              f"{c16['opening_ands']:,.0f} / {c16['t1_chunk_head_pct']:.4f}%")
+        c16, bp = v["by_chunk_kib"][16], v["by_point"]
+        print(f"  {p:32s} class {v['size_class']:7d}; {v['h_hashing_in_tree']:.4f}; "
+              f"{v['h_each_hidden'][KEYED]:.2f} / {v['h_each_hidden'][HM96A]:.1f}; "
+              f"{c16['opening_ands']:,.0f} / {c16['t1_chunk_head_pct']:.5f}%; "
+              f"{bp['T 512, 64 rows']['t1_chunk_head_pct_by_chunk_kib'][16]:.5f}% / "
+              f"{bp['decode, 1 row']['t1_chunk_head_pct_by_chunk_kib'][16]:.5f}%")
     print("u32s an output (h in tree, keyed leaf each, pad; class; 1 KiB opening; T1 chunk_head 1 / 16 / 256 KiB):")
     for p, v in out["per_output"].items():
         for k, x in v["by_K"].items():
