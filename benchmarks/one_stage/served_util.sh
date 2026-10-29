@@ -31,7 +31,8 @@
 # UTIL_ROOT/tools/pyspy, launches the server under the session, since the node's ptrace_scope 1 lets it read only its own
 # children, and records it and its subprocesses at PYSPY_HZ, 20, without pausing them (blocking samples at 250 Hz doubled a
 # 26 ms step), as a Chrome trace in the scratch, which `pyspy_steps.py`
-# cuts to the full steps into pyspy_steps.json), SEAL_SHM=1 (the serve dir's windows/ on /dev/shm, so a seal writes to memory
+# cuts to the full steps into pyspy_steps.json; PYSPY_GIL=1 samples only the thread holding the GIL, so each thread's time
+# is its time holding it), SEAL_SHM=1 (the serve dir's windows/ on /dev/shm, so a seal writes to memory
 # rather than the node's network disk: what the step is when the disk doesn't bound the seal), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
 # window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
 # commit and parents), RELEASE_AFTER (a Commit arm's values held on the device, --retain device --retain-device-gb
@@ -152,7 +153,7 @@ if [ "${SEAL_SHM:-0}" = 1 ]; then
   mkdir -p "/dev/shm/vllm-util80/${RESEARCH_RUN_ID:-local}" && rm -rf "$D/windows" && ln -sfn "/dev/shm/vllm-util80/${RESEARCH_RUN_ID:-local}" "$D/windows"
 fi
 if [ "${PYSPY:-0}" = 1 ]; then
-  serve=("$ROOT/tools/pyspy/bin/py-spy" record --rate "${PYSPY_HZ:-20}" --nonblocking --idle --threads --subprocesses
+  serve=("$ROOT/tools/pyspy/bin/py-spy" record --rate "${PYSPY_HZ:-20}" --nonblocking "$([ "${PYSPY_GIL:-0}" = 1 ] && echo --gil || echo --idle)" --threads --subprocesses
          --nolineno --format chrometrace -o "$SCR/pyspy.json" -- "${serve[@]}")
   date -u +%s.%N > "$SCR/pyspy.t0"
 fi
