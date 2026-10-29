@@ -11,7 +11,7 @@ eight items:
 1. **Statement format.** `x` is the canonical bytes of what the compiled verifier reads, parsed by its own parser
    (`Deploy.parse`) into the inner statement's bytes, the inner statement's dimensions as the verifier sets it up, the
    commitment to the circuit (the private-circuit variant only), the recursion's form, and each V* session's draw as
-   its record holds it, where the statement carries the records (`Stmt`, `Form`, `Draw`).
+   its record holds it, where the statement carries the records (`CompiledStatement`, `Form`, `Draw`).
 2. **Witness.** The inner protocol's (`W`), in both variants. In the private-circuit one the circuit is in the inner
    witness, which the universal unit's relation reads, and its commitment is hm96 rows that unit outputs.
 3. **Relation (inherited).** `R(x, w) :⇔ x` parses, has no circuit commitment, and `R_I(x_I, w)` (`R`). The private
@@ -336,7 +336,7 @@ def Draw.Full (d : Draw) : Prop :=
 from its files (`none` where the verifier holds none), the commitment to the circuit (the private-circuit variant),
 the form, and each V* session's draw as its record holds it (`none` where it holds none the verifier reads; no draws
 where the records are run messages rather than the statement's). -/
-structure Stmt where
+structure CompiledStatement where
   inner : Msg
   innerDims : Option (ℕ × ℕ × ℕ)
   circ : Option Msg
@@ -353,7 +353,7 @@ claims and two per region, its circuits public or private (`holo` either way); a
 `T_LOG = 0`, the inner statement's `(m, k_log, regions)` the form's, its unit range's slots inside the block, and R at
 the phase's `table_m = max(22, NU + P_LOG)` with a fast100 schedule and the two reps' claims. Every V* session's
 record holds a draw, and it is the full draw (`Draw.Full`). -/
-def InScope (s : Stmt) : Prop :=
+def InScope (s : CompiledStatement) : Prop :=
   s.circ = none ∧ 22 ≤ s.form.m ∧ s.form.m ≤ 35 ∧ 6 ≤ s.form.kLog ∧ s.form.claims = 2 + 2 * s.form.regions ∧
     (s.form.sparse = none ∧ s.form.stacked = none ∨
       ∃ nu ell sLog, s.form.sparse = some (nu, ell, sLog, 0) ∧ 1 ≤ nu ∧ 6 ≤ ell ∧ ell ≤ s.form.kLog ∧
@@ -418,7 +418,7 @@ and the run's coins (`innerCalls`, the compiled verifier's coins, whose first ar
 default. -/
 structure Deploy (Coin : Type) where
   V : Verifier Coin
-  parse : Msg → Option Stmt
+  parse : Msg → Option CompiledStatement
   scopeCheck : Msg → Bool
   kS : Msg → ℕ
   nC : Msg → ℕ
@@ -510,7 +510,7 @@ section Recursion
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
 /-- The inner statement's bytes. -/
-def xI (D : Deploy Coin) (x : Msg) : Msg := ((D.parse x).map Stmt.inner).getD []
+def xI (D : Deploy Coin) (x : Msg) : Msg := ((D.parse x).map CompiledStatement.inner).getD []
 
 /-- **The relation, inherited**: `x` parses, with no circuit commitment, and the inner relation holds at its inner
 statement. -/
