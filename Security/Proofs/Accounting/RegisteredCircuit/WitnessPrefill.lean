@@ -1,8 +1,8 @@
 import Mathlib
-import Proofs.Accounting.DeclaredCircuit.Witness
+import Proofs.Accounting.RegisteredCircuit.Witness
 
 /-!
-# An honest run with a prefill meets every hypothesis of `DeclaredCircuitRequirement`
+# An honest run with a prefill meets every hypothesis of `RegisteredCircuitRequirement`
 
 `Witness.lean`'s run decodes one token a step, so at most two pages of a sequence, layer and plane are incomplete when
 read, and its page-parity groups meet `OneBlockEach`. A served session prefills: a chunk completes several pages at once,
@@ -34,11 +34,11 @@ It meets every hypothesis of `G` but the world's (`meets`), so `G` bounds it (`a
   `life30_70b`).
 -/
 
-namespace Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill
+namespace Accounting.SecurityProofs.RegisteredCircuitWitnessPrefill
 
 open Pous (pr)
 open scoped ENNReal
-open Accounting.SecurityProofs.DeclaredCircuitWitness (dec_div dec_mod dec_le dec_inj blk_lt tw tw_eq req req_lt
+open Accounting.SecurityProofs.RegisteredCircuitWitness (dec_div dec_mod dec_le dec_inj blk_lt tw tw_eq req req_lt
   disjoint_ticks honestSession hashBudget circuitCarriers restricted property sum_ge gamma_bound)
 
 /-! ## The KV pool -/
@@ -559,7 +559,7 @@ theorem lifetimeCapped {n P N ρ L : ℕ} {Ω Ca : Type} (hL : 0 < L) :
 
 /-! ## The witness -/
 
-/-- **An honest run with a prefill meets every hypothesis of `DeclaredCircuitRequirement`** but the world's
+/-- **An honest run with a prefill meets every hypothesis of `RegisteredCircuitRequirement`** but the world's
 (`SketchRank`, `KeyBinding`, `SquaringFloor`, `ChainSum` and their floor), at every value of the session's parameters
 with the link carrying the stream (`ρ·256 ≤ L_r·τ`), `N` queries within the caps and a carrier life `L ≥ 1`, at any nonnegative
 caps, codec and append choices, and any token bits. -/
@@ -601,7 +601,7 @@ theorem meets (n P N ρ S q Xr Lr qr τ L B εnum εden : ℕ) {Ω Ca Ch : Type}
 
 /-- **`G` at the honest prefill run**: given `G` and the world's assumptions, its conclusion holds at the run of
 `meets`. -/
-theorem applies (hG : Guarantees.DeclaredCircuitRequirement) (n P N ρ S q Xr Lr qr τ k L E es B εnum εden : ℕ)
+theorem applies (hG : Guarantees.RegisteredCircuitRequirement) (n P N ρ S q Xr Lr qr τ k L E es B εnum εden : ℕ)
     (ε δ : ℝ≥0∞) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
     (enc : Ω → Fin (1 + n * P * (N + 4)) → Ch → (Fin (1 + n * P * (N + 4)) → Ca) → Fin 1 →
       (Fin 128 → RateSketch.Sector))
@@ -904,4 +904,4 @@ theorem life30_70b {N ρ S Lr τ Xr k L P E R : ℕ} (caps : Gates.Caps) (Aud : 
     norm_num at hγ
     constructor <;> linarith
 
-end Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill
+end Accounting.SecurityProofs.RegisteredCircuitWitnessPrefill

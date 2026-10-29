@@ -5,7 +5,7 @@ import Proofs.Accounting.RateAudit.DeployedSketchSum
 /-!
 # A pass on some of its tiles: what it obtained there
 
-The pieces of `Accounting.SecurityProofs.DeclaredCircuitRequirement` that count one pass on a set `U` of its tiles. The
+The pieces of `Accounting.SecurityProofs.RegisteredCircuitRequirement` that count one pass on a set `U` of its tiles. The
 positions a run read in `U`'s tiles and the stream are at most its distinct memory reads there, its link steps and its
 rebuilds there (`Chip.card_reads_tiles_le`), so what a device obtained there is at most its on-chip state, those reads,
 the link and those rebuilds (`Device.card_obtained_tiles`). A pass whose memory reads in `U` plus the slack fall short of

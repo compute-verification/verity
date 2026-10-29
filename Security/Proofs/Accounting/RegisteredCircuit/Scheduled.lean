@@ -1,12 +1,12 @@
-import Proofs.Accounting.DeclaredCircuit.Requirement
-import Properties.Accounting.DeclaredCircuit
+import Proofs.Accounting.RegisteredCircuit.Requirement
+import Properties.Accounting.RegisteredCircuit
 import Proofs.Properties.RemoteAudit.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap, proved
 
-`Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement`, the theorem of
-`Properties.DeclaredCircuit.ScheduledRequirement`: `Accounting.SecurityProofs.DeclaredCircuitRequirement`'s argument on
+`Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement`, the theorem of
+`Properties.RegisteredCircuit.ScheduledRequirement`: `Accounting.SecurityProofs.RegisteredCircuitRequirement`'s argument on
 the coins the schedule check accepts. At each prefix, `Properties.RemoteAudit.steered_of_checked` over the coins the
 check accepts there makes the layout the slot of the schedule's `cap + 1` padded bits (`steered_on`). The session priced
 (`RateSketch.pr_session_le`) is `A` on summaries of `a + (cap + 1)` bits, the devices' `a` then the schedule's
@@ -60,7 +60,7 @@ theorem pass_congr {a a' k : ℕ} {A : SketchSummarySession a n P N 128 ρ 512 S
 
 end Accounting.RateSketch
 
-namespace Properties.DeclaredCircuit.SecurityProofs
+namespace Properties.RegisteredCircuit.SecurityProofs
 
 open Accounting Accounting.RateSketch
 open Pous (pr)
@@ -92,7 +92,7 @@ theorem steered_on {Pfx Y : Type} {N T M blocks cap : ℕ} {idx : Pfx → ℕ}
   exact hs c ⟨y, hy⟩
 
 /-- **A declared circuit's held and moved bits from an accepted stacked audit, at the committed steering cap**,
-`Properties.DeclaredCircuit.ScheduledRequirement`. -/
+`Properties.RegisteredCircuit.ScheduledRequirement`. -/
 theorem scheduledRequirement : ScheduledRequirement := by
   intro n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M ε δ ιW Wc caps Aud Ω Ca Ch _ _ enc choose dflt steer
     joined A blocks cap idx appended sent V Kg Dv _ _ W pl ℓ grp bind mm plan addr layout hn hP hN hE0 hrank hKB hSq
@@ -222,4 +222,4 @@ theorem scheduledRequirement : ScheduledRequirement := by
         (by push_cast; ring) hw
   · ring
 
-end Properties.DeclaredCircuit.SecurityProofs
+end Properties.RegisteredCircuit.SecurityProofs

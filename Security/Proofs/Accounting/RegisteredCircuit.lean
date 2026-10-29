@@ -1,9 +1,9 @@
 import Mathlib
-import Definitions.Accounting.Guarantees.DeclaredCircuit
+import Definitions.Accounting.Guarantees.RegisteredCircuit
 import Proofs.Accounting.Stacking
 
-/-! The first pieces of the proof of `Accounting.Guarantees.DeclaredCircuitRequirement`, whose theorem is in
-`DeclaredCircuit/Requirement.lean`: a carrier of a declared circuit's is within its census over its life, its inputs
+/-! The first pieces of the proof of `Accounting.Guarantees.RegisteredCircuitRequirement`, whose theorem is in
+`RegisteredCircuit/Requirement.lean`: a carrier of a declared circuit's is within its census over its life, its inputs
 within the run-input bytes the stacking property's caps allow its windows (`Provenance.OfCircuit.budget`), a uniform
 function restricted along an injection is uniform (`pr_comp_embedding`), and key binding moves a store whose layout is
 steered after the coins to
