@@ -30,9 +30,9 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
   and ``period.json``, each case's answers.
 * **V3c's audit** (``--v3c``, ``records_audit.py period``'s ``period.json``, for scans proved on V3c's trees,
   ``scan_zk.py --v3c``): the one compute audit, its Program's `SelectEntry_v1` chunks' o0 the scan's ``scan/prog<j>``
-  and its `SCAN_STATE` the scan's ``scan/state``. The honest case is then accepted where V3c's draw took every unit or
-  its slot entries' and scan slots' templates whole, and refused at the draw (the mirror's ``UNDRAWN``) where it drew
-  them in part, as by ``subset:1``.
+  and its `SCAN_STATE` the scan's ``scan/state``. The honest case is then accepted where V3c's sample took every proof
+  block or its slot entries' and scan slots' templates whole, and refused at the sample (the mirror's ``UNDRAWN``)
+  where it took them in part, as ``subset:1`` does.
 """
 from __future__ import annotations
 
@@ -72,9 +72,9 @@ def certificates(run: Path, w: int) -> list[dict]:
 def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None) -> dict:
     """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
-    (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``, ``records_audit.py
-    period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's, in place of
-    ``answers.json``'s."""
+    (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
+    ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
+    in place of ``answers.json``'s."""
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
     doc = json.loads((scan / "answers.json").read_text())
     if v3c is not None:
@@ -149,7 +149,7 @@ def main(argv=None) -> int:
         scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
         honest = not round_ and scan_said == {"accept"}
         if honest and a.v3c:
-            want = "accept, or reject at the draw where V3c drew its slot entries in part"
+            want = "accept, or reject at the sample where V3c took its slot entries in part"
             good = (py.get("verdict") == lean.get("verdict") and py.get("public") == lean.get("public")
                     and (py.get("verdict") == "accept"
                          or py.get("verdict") == "reject" and m.UNDRAWN in py.get("reason", "")

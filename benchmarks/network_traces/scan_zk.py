@@ -417,16 +417,17 @@ def tree(kind: str, rows: list[list[int]], heads: list, session: bytes) -> ADV.C
 
 
 class Held:
-    """A tree another registration committed, which the scan's units read in place of one of their own (``--v3c``,
-    `v3c_trees`): bit rows of ``n_bits`` under ``salts`` at ``domain``, of any owner, each leaf framed as `advice`
-    frames a row (`advice.leaf`), so its root is that registration's wherever its rows and salts are."""
+    """A tree another registration committed, which the scan's proof blocks read in place of one of their own
+    (``--v3c``, `v3c_trees`): bit rows of ``n_bits`` under ``salts`` at ``domain``, of any owner, each leaf framed as
+    `advice` frames a row (`advice.leaf`), so its root is that registration's wherever its rows and salts are."""
 
     def __init__(self, domain: CommitmentDomain, n_bits: int, rows: Sequence[bytes], salts: Sequence[bytes],
                  key: bytes = ADV.INST.default_key) -> None:
         if len(rows) != len(salts) or len(rows) != domain.count:
             raise ValueError(f"a held tree is its domain's {domain.count} rows, a salt each")
         self.domain, self.n_bits, self.rows, self.salts, self.key = domain, n_bits, tuple(rows), tuple(salts), key
-        self.leaves = tuple(ADV.leaf(domain, n_bits, i, r, s, key) for i, (r, s) in enumerate(zip(self.rows, self.salts)))
+        self.leaves = tuple(ADV.leaf(domain, n_bits, i, r, s, key)
+                            for i, (r, s) in enumerate(zip(self.rows, self.salts)))
         self.root = tree_scheme(self).root(ADV.PORT, self.leaves)
 
     def open(self, i: int) -> ADV.Opening:
@@ -694,18 +695,18 @@ def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
 
 
 def v3c_entries(window: Path, rec: dict, win: dict, cls: IS.Class, entries: list[list[list[int]]]) -> dict[str, Held]:
-    """Each lane j's ``prog<j>``: chunk j's o0 of V3c's `SELECT_ENTRY` template, cut into one member a lane of nb units
-    (``<descriptor id>/c<j>``, unit b slot j·nb + b's entry, the window's slots lane-major), its rows and salts that
-    member's prover body ``m<k>-private.bin`` (each instance's rows of its ports but the wired ones, then their salts,
-    `verity.ml.windows.rows.write`), under its o0 frame domain, held to the root its ``window.json`` and its
-    registration's ``roots`` name and to the scan's lane j ``entries``."""
+    """Each lane j's ``prog<j>``: chunk j's o0 of V3c's `SELECT_ENTRY` template, cut into one member a lane of nb
+    proof blocks (``<descriptor id>/c<j>``, block b slot j·nb + b's entry, the window's slots lane-major), its rows and
+    salts that member's prover body ``m<k>-private.bin`` (each instance's rows of its ports but the wired ones, then
+    their salts, `verity.ml.windows.rows.write`), under its o0 frame domain, held to the root its ``window.json`` and
+    its registration's ``roots`` name and to the scan's lane j ``entries``."""
     nb, NE = len(entries[0]), IS.entry_bits(cls)
     ms = [m for m in win.get("members") or () if str(m.get("template", "")).startswith(SELECT_ENTRY + "{")]
     tids = sorted({m["template"] for m in ms})
     shape = [(m["name"], m["n"]) for m in ms]
     if len(tids) != 1 or shape != [(f"{tids[0]}/c{j}", nb) for j in range(cls.NR)]:
         raise _v3c_refused(window, f"its {SELECT_ENTRY} members are {shape}, not one template's {cls.NR} chunks of "
-                                   f"{nb} units, a lane each")
+                                   f"{nb} proof blocks, a lane each")
     roots = {r["port"]: r for r in rec.get("roots") or ()}
     out = {}
     for j, m in enumerate(ms):
@@ -965,8 +966,8 @@ def wired(members) -> list[str]:
 def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Setup = W63, group: int = 1,
          start: int = 0, v3c: Path | None = None) -> SimpleNamespace:
     """The run (`link`'s, of `run` when given, on V3c's trees with `v3c`) and every round's members as the host reads
-    them (no lowering, no proof): what the test holds. A sampled draw (`draw`) changes no round: each is refused by
-    Lean's registered reads, which hold every table row, drawn or not."""
+    them (no lowering, no proof): what the test holds. A sample (`draw`) changes no round: each is refused by
+    Lean's registered reads, which hold every table row, sampled or not."""
     at = link(out, run, setup, group, start, v3c)
     got = {}
     for name, (templates, outcome) in rounds_of(at).items():

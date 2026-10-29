@@ -125,7 +125,7 @@ def test_a_v3c_window_that_isnt_the_scans_is_refused_by_name(tmp_path, scanned, 
            "state root": f"isn't its registered {sz.IS.SCAN_STATE}'s root and domain",
            "entry row": f"{TID}/c1's o0 rows [1] aren't the scan's lane 1 slot entries",
            "entry root": f"isn't the root and domain its registration names for {TID}/c2/o0",
-           "chunks": "not one template's 4 chunks of 2 units, a lane each",
+           "chunks": "not one template's 4 chunks of 2 proof blocks, a lane each",
            "body": "m2-private.bin is"}[case]
     with pytest.raises(SystemExit) as e:
         sz.v3c_trees(w, S.cls, scanned["states"], scanned["entries"])
@@ -137,11 +137,11 @@ def test_v3c_is_one_link_window_from_link_window_0(tmp_path, scanned):
         sz.link(tmp_path, setup=S, group=2, v3c=scanned["window"])
 
 
-def test_v3cs_draw_reaches_the_period_check_whole_where_its_slot_entries_and_scan_slots_strata_are_drawn_whole():
-    """The served accept's draw: `drawsWhole` reads the audit's profile by template, so a stratified profile whose slot
-    entries' and scan slots' strata have k == size passes with every other template drawn in part, whatever expansion
-    gives those sizes. `stratified:K`'s own sizes short of the population, and `subset:1`, leave the honest period at
-    `UNDRAWN`."""
+def test_v3cs_sample_reaches_the_period_check_whole_where_its_slot_entries_and_scan_slots_strata_are_whole():
+    """The served accept's sample: `drawsWhole` reads the audit's profile by template, so a stratified profile whose
+    slot entries' and scan slots' strata have k == size passes with every other template sampled in part, whatever
+    expansion gives those sizes. `stratified:K`'s own sizes short of the population, and `subset:1`, leave the honest
+    period at `UNDRAWN`."""
     import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
