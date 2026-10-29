@@ -22,10 +22,14 @@ larger of the two, a lower bound for async, beside-the-GEMM and fused-epilogue h
 
 T1 terms, MAC-weighted over the linears and additive over stock's m·n·K (W1 units, one dense int8 MAC = 1):
   interior under H32 alone: NCP's tensor work (3) plus the honest pack instructions less 32 a committed register a MAC;
-  interior under SemK32 (the semantics premise that every k32 word is computed once any L-th is committed, and for a
-  packed width that one accumulator register holds one dot product, so the packed register is a target): the pack
-  instructions less 32 a packed register (0 unpacked);
-  final word: 32/K, or L/K under SemK32 at L > 32 (0 with a final-word design, L ≤ 7K/8);
+  interior under the counting lemma (every instruction class computes its documented function, and nonlinear lanes don't
+  beat bilinear ones): a committed code, one w-bit residue of a word every L steps, credited 64 − 1024/L, and a register
+  of packed codes their credits plus its pack instructions at the floor, which the adversary makes too (the extension to
+  packed codes, that codes of distinct dot products share a register only through a merge, is unstated);
+  interior under OwnProducts (an L-sum costs at least L/32 tensor writes, so a code is credited L; packed as above): the
+  pack instructions' price over the floor (0 at the floor);
+  final word: 32/K, the counting lemma's (64 − 1024/L)/K, or L/K under OwnProducts (0 with a final-word design,
+  L ≤ 7K/8);
   forming: f/n + f/m at f = 24, closed when the formed operands are committed (8 an entry, forced at 32 a 4-code register);
   noise derivation: 8/n + 8/m, closed when E₁ and F₁ are committed;
   hiding: per leaf the salt kernel's time less the frame leaf's first block, which a prover with one fixed salt skips, as a
@@ -60,6 +64,7 @@ BAR_RATE = 0.01803                                  # the bar: compressions of 1
 BAR_MAC_TIMES = 4096 / BAR_RATE
 FORM, NOISE = 24, 8                                 # W1 units an operand entry: ncp-v1's forming, and deriving a noise entry
 PACK_INSTR = {32: 0, 16: 1, 64 / 3: 2}              # honest instructions a packed 32-bit register (PRMT; shifts and an OR)
+MERGES = {32: 0, 16: 1, 64 / 3: 1.5}                # the fewest merges a packed register (3 codes in 2 registers take 3)
 PRICE = {"floor": 32.0, "alone": 64.13}             # W1 a pack instruction
 ROWS_16K = 16384
 ANDS_COMPRESSION, ANDS_FROM_8 = 58_120, 53_568
@@ -82,6 +87,7 @@ OPTIONS = {
     "L 128": {"L": 128, "w": 32},
     "L 256": {"L": 256, "w": 32},
     "L 1024": {"L": 1024, "w": 32},
+    "W16 at L 64": {"L": 64, "w": 16},
     "k32 + C1": {"L": 32, "w": 32, "ops": True},
     "k32 + C1 + noise": {"L": 32, "w": 32, "ops": True, "noise": True},
     "W16 + C1 + noise": {"L": 32, "w": 16, "ops": True, "noise": True},
@@ -152,13 +158,19 @@ def t1_terms(o: dict, m: int) -> dict:
 
     def regs(k: int) -> float:
         return math.ceil(-(-3 * k // o["L"]) * o["w"] / 32)
+    def code(L: int) -> float:
+        return 64 - 1024 / L
     out = {}
-    packed = o["w"] < 32
+    L, w = o["L"], o["w"]
     for p, price in PRICE.items():
-        out[f"interior_h32_{p}"] = agg(lambda n, k: max(0.0, 3 + regs(k) * PACK_INSTR[o["w"]] * price / k - 32 * regs(k) / k))
-        out[f"interior_semk32_{p}"] = agg(lambda n, k: max(0.0, regs(k) * (PACK_INSTR[o["w"]] * price - 32 * packed) / k))
+        def honest(k: int) -> float:
+            return 3 + regs(k) * PACK_INSTR[w] * price / k
+        out[f"interior_h32_{p}"] = agg(lambda n, k: max(0.0, honest(k) - 32 * regs(k) / k))
+        out[f"interior_counting_{p}"] = agg(lambda n, k: max(0.0, honest(k) - regs(k) * (32 / w * code(L) + MERGES[w] * 32) / k))
+        out[f"interior_ownproducts_{p}"] = agg(lambda n, k: max(0.0, honest(k) - regs(k) * (32 / w * L + MERGES[w] * 32) / k))
     out["final_word"] = agg(lambda n, k: 32 / k)
-    out["final_word_semk32"] = agg(lambda n, k: max(32, o["L"]) / k)
+    out["final_word_counting"] = agg(lambda n, k: code(L) / k)
+    out["final_word_ownproducts"] = agg(lambda n, k: L / k)
     out["final_word_fixable"] = all(o["L"] <= 7 * k / 8 for _, k in N.LINEARS.values())
     out["forming"] = 0.0 if o.get("ops") else agg(lambda n, k: FORM / n + FORM / m)
     out["noise"] = 0.0 if o.get("noise") else agg(lambda n, k: NOISE / n + NOISE / m)
@@ -296,9 +308,11 @@ def main() -> None:
                         f"{x['pre_noise']['share_of_hashed']:.4%} of the bytes, time {x['engines']['sync']['pre_noise_time_of_stock']:.2%}"
                         f" of stock, {x['engines']['sync']['pre_noise_time_of_tH']:.4%} of t_H")
         t1 = res["points"]["T 8,192"]["t1"]
-        line.append(f"  T1 at T 8,192: interior H32 {t1['interior_h32_floor']:.2%}/{t1['interior_h32_alone']:.2%}, SemK32 "
-                    f"{t1['interior_semk32_floor']:.2%}/{t1['interior_semk32_alone']:.2%}, final word "
-                    f"{t1['final_word']:.2%} (SemK32 {t1['final_word_semk32']:.2%}, fixable {t1['final_word_fixable']}), forming "
+        line.append(f"  T1 at T 8,192: interior H32 {t1['interior_h32_floor']:.2%}/{t1['interior_h32_alone']:.2%}, counting "
+                    f"{t1['interior_counting_floor']:.2%}/{t1['interior_counting_alone']:.2%}, OwnProducts "
+                    f"{t1['interior_ownproducts_floor']:.2%}/{t1['interior_ownproducts_alone']:.2%}, final word "
+                    f"{t1['final_word']:.2%} (counting {t1['final_word_counting']:.2%}, OwnProducts "
+                    f"{t1['final_word_ownproducts']:.2%}, fixable {t1['final_word_fixable']}), forming "
                     f"{t1['forming']:.2%}, noise {t1['noise']:.2%}")
         print("\n".join(line))
     for name in OPTIONS:
