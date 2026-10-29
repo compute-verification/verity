@@ -8,7 +8,7 @@
 #   corpus.tsv      a cubin a line: sha256, bytes, architecture, the file it came from
 #   counts/*.json   `sass_count.py count` of each cubin's life-range listing; failed.txt the cubins nvdisasm refused or
 #                   took longer than CUBIN_S seconds on (counted from cuobjdump -sass, without writes); skipped.txt
-#                   the cubins not reached BUDGET seconds after the start
+#                   the cubins not reached BUDGET seconds after the disassembly starts (smallest first)
 #   census.json     `sass_count.py merge` of them all; summary.txt its totals; writes.tsv `sass_count.py writes`
 #   build.log       the wheels' extraction and the Verity and CUTLASS builds (a source that fails is named and skipped)
 #
@@ -17,7 +17,6 @@
 # BUDGET (default 6000) and CUBIN_S (default 900) bound the disassembly within the check slot's two hours.
 set -uo pipefail
 OUT=${OUT:?run under research run}
-DEADLINE=$(($(date +%s) + ${BUDGET:-6000}))
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 ARCHS=${ARCHS:-sm_90 sm_90a}
@@ -85,21 +84,25 @@ if [ "${CUTLASS:-1}" != 0 ]; then
   fi
 fi
 
-# every cubin of the kept architectures, one copy each: fat binaries extracted, plain cubins kept by their .target
+# every cubin of the kept architectures, one copy each: fat binaries extracted (in parallel, a directory a file),
+# plain cubins kept by their .target, then deduplicated by content
 find "$WORK/corpus" "$WORK/bin" -type f \( -name '*.so' -o -name '*.so.*' -o -name '*.cubin' -o -name '*.fatbin' \
-  -o -perm -u+x \) | sort >"$WORK/files"
-n=0
-while read -r f; do
-  n=$((n + 1))
+  -o -perm -u+x \) | sort | awk '{print NR "\t" $0}' >"$WORK/files"
+export ARCHS
+tr '\n' '\0' <"$WORK/files" | xargs -0 -P "$JOBS" -I{} bash -c '
+  IFS=$'"'"'\t'"'"' read -r n f <<<"$1"
   d=$WORK/x/$n
   mkdir -p "$d"
+  printf "%s" "$f" >"$d/.src"
   case "$f" in
   *.cubin)
-    a=$(nvdisasm "$f" 2>/dev/null | grep -m1 -o '\.target\s*sm_[0-9a-z]*' | grep -o 'sm_[0-9a-z]*')
+    a=$(nvdisasm "$f" 2>/dev/null | grep -m1 -o "\.target\s*sm_[0-9a-z]*" | grep -o "sm_[0-9a-z]*")
     case " $ARCHS " in *" $a "*) cp "$f" "$d/$(basename "$f" .cubin).$a.cubin" ;; esac ;;
   *) for a in $ARCHS; do (cd "$d" && cuobjdump -arch "$a" -xelf all "$f" </dev/null >/dev/null 2>&1); done
      case "$f" in "$WORK"/corpus/*) rm -f "$f" ;; esac ;;
-  esac
+  esac' _ {}
+for d in "$WORK"/x/*; do
+  f=$(cat "$d/.src")
   for c in "$d"/*.cubin; do
     [ -f "$c" ] || continue
     sha=$(sha256sum "$c" | cut -c1-16)
@@ -108,13 +111,16 @@ while read -r f; do
       "$(stat -c %s "$WORK/cubins/$sha.cubin")" "$a" "${f#$WORK/}"; }
   done
   rm -rf "$d"
-done <"$WORK/files" >"$OUT/corpus.tsv"
+done >"$OUT/corpus.tsv"
 wc -l <"$OUT/corpus.tsv" | xargs echo "life.sh: cubins"
 
+# the budget runs from here, so a slow extraction can't spend it; smallest cubins first, so a budget that runs out
+# drops the largest (the fewest sources a byte)
+DEADLINE=$(($(date +%s) + ${BUDGET:-6000}))
 export HERE OUT WORK DEADLINE CUBIN_S=${CUBIN_S:-900}
 : >"$OUT/failed.txt"
 : >"$OUT/skipped.txt"
-sort -t$'\t' -k2,2nr "$OUT/corpus.tsv" | tr '\n' '\0' | xargs -0 -P "$JOBS" -I{} bash -c '
+sort -t$'\t' -k2,2n "$OUT/corpus.tsv" | tr '\n' '\0' | xargs -0 -P "$JOBS" -I{} bash -c '
   set -o pipefail
   IFS=$'"'"'\t'"'"' read -r sha bytes arch src <<<"$1"
   lib=$(basename "$src")
@@ -128,6 +134,7 @@ sort -t$'\t' -k2,2nr "$OUT/corpus.tsv" | tr '\n' '\0' | xargs -0 -P "$JOBS" -I{}
 
 python3 "$HERE/sass_count.py" merge "$OUT/counts" >"$OUT/census.json"
 python3 "$HERE/sass_count.py" summary "$OUT/census.json" | tee "$OUT/summary.txt"
-python3 "$HERE/sass_count.py" writes "$OUT/census.json" --family sm_90 >"$OUT/writes.tsv"
 wc -l <"$OUT/failed.txt" | xargs echo "life.sh: nvdisasm refused"
 wc -l <"$OUT/skipped.txt" | xargs echo "life.sh: past the budget"
+python3 "$HERE/sass_count.py" writes "$OUT/census.json" --family sm_90 >"$OUT/writes.tsv" \
+  || { echo "life.sh: no sm_90 census (every cubin past the budget?): raise BUDGET" >&2; exit 1; }
