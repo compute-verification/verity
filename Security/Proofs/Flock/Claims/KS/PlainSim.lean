@@ -275,12 +275,6 @@ theorem plainSim_firstK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω
   simp only [plainSimK, Claims.OC.eval, plainMsgK]
   rfl
 
-/-- `plainSim_firstK` at the deployed plain verifier (`keep := id`). -/
-theorem plainSim_first {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
-    (u : plainTape x) :
-    (((plainSim P x spec st).next x [] (ω, u)).eval sha512).1 = ((P.next x [] ω).eval sha512).1 :=
-  plainSim_firstK id (Ω := Ω) (P := P) (x := x) (spec := spec) (st := st) (ω := ω) (u := u)
-
 /-- **The simulator sends `P`'s roots** (`plainRoot_of_first`). -/
 theorem plainSim_rootK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (h : 2 * spec.mPts ≤ 65536) (u : plainTape x) :
