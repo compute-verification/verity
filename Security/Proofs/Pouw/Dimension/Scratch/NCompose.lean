@@ -1018,6 +1018,22 @@ theorem hostsW1_eq (n : ℕ) (hr : HostRow) (w : HostRes → ℝ) (Tp : ℝ) :
     hostsW1 n hr w Tp = Tp * n * w .amx * hr.amx + Tp * n * w .sha * hr.sha := by
   simp only [hostsW1, sum_hostRes, rateAt]
 
+/-- **The headline's `HostsCounted` covers the hosts' counted W1**: when the period's devices count the `n` cards'
+hosts at the row `hr` (`Pouw.Dither.HostsCounted`), some injection of the host resources into the other devices'
+gives those devices, at the credited W1 a unit, at least `hostsW1` for the period. So the call model's count reads
+the same rows as the headline's capacity. -/
+theorem hostsW1_le_hostsCounted {c : Verity.Accel.Card} {D : Pouw.Dither.Devices c} {hr : HostRow}
+    (h : Pouw.Dither.HostsCounted D hr) {w : HostRes → ℝ} {Tp : ℝ} (hTp : 0 ≤ Tp) (hw : ∀ r, 0 ≤ w r) :
+    ∃ j : HostRes → D.oth.Res, Function.Injective j ∧ hostsW1 D.n hr w Tp ≤ ∑ r, Tp * w r * D.oth.rate (j r) := by
+  obtain ⟨j, hj, ha, hs⟩ := h
+  refine ⟨j, hj, ?_⟩
+  have h1 : Tp * w .amx * (D.n * hr.amx) ≤ Tp * w .amx * D.oth.rate (j .amx) :=
+    mul_le_mul_of_nonneg_left ha (mul_nonneg hTp (hw _))
+  have h2 : Tp * w .sha * (D.n * hr.sha) ≤ Tp * w .sha * D.oth.rate (j .sha) :=
+    mul_le_mul_of_nonneg_left hs (mul_nonneg hTp (hw _))
+  rw [hostsW1_eq, sum_hostRes]
+  linarith
+
 /-- **`PeriodInventoryT1 Wc Wcard hc Wout`** (named premise; rank 3; T1's): inside the network certifier's boundary
 every device is a card of the inventory or one of those cards' hosts. So the period's credited W1 `Wc` is at most what
 the cards computed (`Wcard`), what the hosts computed through each host resource (`hc r`, at its credited W1), and what
@@ -1168,6 +1184,7 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.carriedWords_unrestricted_false
 #print axioms Pouw.Dimension.NCompose.sum_hostRes
 #print axioms Pouw.Dimension.NCompose.hostsW1_eq
+#print axioms Pouw.Dimension.NCompose.hostsW1_le_hostsCounted
 #print axioms Pouw.Dimension.NCompose.hostsCounted_closes
 #print axioms Pouw.Dimension.NCompose.hostRow_residual
 #print axioms Pouw.Dimension.NCompose.hostsCounted_call
