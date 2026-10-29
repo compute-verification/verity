@@ -1304,10 +1304,8 @@ class _RecordedDefs(dict):
 
     def _note(self, key: Any) -> None:
         if len(_FRAMES) > 1 and not _INTERNAL:
-            try:
-                found = dict.__contains__(self, key)
-            except TypeError:                          # unhashable: the lookup itself raises
-                return
+            # an unhashable key raises here the TypeError the lookup itself would
+            found = dict.__contains__(self, key)
             _FRAMES[-1].registered.add(str(key) if found else f"{ABSENT}{key}")
 
     def _all(self) -> None:
@@ -1371,16 +1369,12 @@ def _registrations() -> dict[str, Any]:
     """`_AT_LOAD` now: each registered Definition's id with the modules whose import registered it (`_REGISTRAR`; one registered
     before tracing began, the module of the function it builds or evaluates by), each kernel key with the modules whose import
     registered its kernels (`_RecordedKernels.by`; one registered before, its functions' modules), the ids of the Boolean
-    Definitions of each word, and the on-demand families (`verity.ml.circuits.codec.register_lazy_family`), in order."""
-    try:
-        from verity.ml.circuits import codec
-        from verity.ml.circuits.defs import REGISTRY
-    except ImportError:
-        return {}
-    try:
-        from verity.ml.circuits.evaluation import batch
-    except ImportError:
-        batch = None
+    Definitions of each word, and the on-demand families (`verity.ml.circuits.codec.register_lazy_family`), in order.  The
+    registries were just loaded from these modules, so a failed import raises: an empty `_AT_LOAD` would hold no registration."""
+    from verity.ml.circuits import codec
+    from verity.ml.circuits.defs import REGISTRY
+    from verity.ml.circuits.evaluation import batch
+
     names = {}
     for name, m in list(sys.modules.items()):
         if isinstance(f := getattr(m, "__file__", None), str):
@@ -1389,20 +1383,17 @@ def _registrations() -> dict[str, Any]:
     words: dict[str, list[str]] = {}
     for fid, d in list(dict.items(REGISTRY.defs)):
         defs[fid] = _REGISTRAR.get(fid) or [_function_module(d)]
-        try:
-            w = getattr(d, "word", None)
-            word = getattr(w, "id", None) if w is not None and callable(getattr(d, "build", None)) else None
-        except Exception:  # noqa: BLE001  (a word whose id does not format: no Boolean Definition of one)
-            word = None
+        # as `verity_flock.ir_lower._boolean_build` reads it
+        w = getattr(d, "word", None)
+        word = getattr(w, "id", None) if w is not None and callable(getattr(d, "build", None)) else None
         if isinstance(word, str):
             words.setdefault(word, []).append(fid)
     kernels: dict[str, list[str]] = {}
-    if batch is not None:
-        by = getattr(batch._KERNELS, "by", {})
-        for k, ks in list(dict.items(batch._KERNELS)):
-            mods = {names[f] for f in map(os.path.abspath, by.get(str(k), ())) if f in names} \
-                or {m for kn in ks.values() if isinstance(m := getattr(kn.fn, "__module__", None), str)}
-            kernels[str(k)] = sorted(mods)
+    by = getattr(batch._KERNELS, "by", {})
+    for k, ks in list(dict.items(batch._KERNELS)):
+        mods = {names[f] for f in map(os.path.abspath, by.get(str(k), ())) if f in names} \
+            or {m for kn in ks.values() if isinstance(m := getattr(kn.fn, "__module__", None), str)}
+        kernels[str(k)] = sorted(mods)
     return {"defs": defs, "kernels": kernels, "words": words, "lazy": list(codec._LAZY_PRIMITIVE_FAMILIES)}
 
 
@@ -1441,10 +1432,8 @@ def _registration(x: str, flags: bool) -> str | None:
 
 def _registry_id(d: Any) -> str | None:
     """The id a Definition is registered by and its kernels are looked up under: a specialization's, its Definition's."""
-    try:
-        return getattr(d, "base_id", None) or getattr(d, "id", None)
-    except Exception:  # noqa: BLE001  (an id that does not format: none to hold)
-        return None
+    rid = getattr(d, "base_id", None) or getattr(d, "id", None)
+    return rid if isinstance(rid, str) else None
 
 
 # --- a binding file's units -------------------------------------------------------------------------------------------------
