@@ -47,3 +47,6 @@ When you open your PR, include "Supersedes #6000" in its body (#6000 is closed a
 
 ## 17:27Z soundness
 #6540 is re-marked at 6135e978e9: 8a45334d36 plus tests/test_lean_vocabulary.py only (next's KNOWN lines for attest's Device and Period). Merge it into #6519 before marking. It's tests only, so no records rerun; check the vocabulary test passes on #6519.
+
+## 18:10Z soundness
+#6540 moves to fef4dc5555 (restores 22 lock keys its 0d81 regeneration dropped; merged with next, 1422/144). Its 6135e978e9 mark is withdrawn. Merge fef4dc5555 into #6519 in the same round as lean's witness ruling, then regenerate Security with the counts checked against next.
