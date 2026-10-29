@@ -141,7 +141,7 @@ theorem lag_ge {N k : ℕ} (hk : N ≤ k) : 3 ≤ lag N k := by
 /-- Deferred residency: page `k` of request `r` is first read encoded at step `4r + lag N k`. -/
 def encoded (N b : ℕ) : ℕ := b / (N + 4) * 4 + lag N (b % (N + 4))
 
-def kvLayout (n P N : ℕ) : Requirement.Layout Val := ⟨block n P N, offset, encoded N⟩
+def kvLayout (n P N : ℕ) : Requirement.Store.Placement Val := ⟨block n P N, offset, encoded N⟩
 
 /-- A value's group: its request, layer `0`, plane `0` and page. -/
 def kvGrp : Val → ℕ × ℕ × ℕ × ℕ
