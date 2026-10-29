@@ -119,7 +119,7 @@ The physical layer:
   circuit's floor, the time a folded and a whole share of `1` cost (`κ`, and `κ + (1 − μ_f)·N_w·φ*/B_♭`), and
   `ε = ε_♭ + ε_μ + r` at the logical layer's bound `r`.
 * `Fits`, `ModelScope`: the model is the circuit's on the data sheet; the model's ranges.
-* `Certificate`, `Certificate.Holds`, `certOf`: the interface the physical layer's ledger consumes:
+* `CreditCertificate`, `CreditCertificate.Holds`, `certOf`: the interface the physical layer's ledger consumes:
   work of each kind in a device window (`Accounting.Window`, its ticks), its credit, `ε`, `δ`, `γ_♭ = T(H)/T_cred`
   (W1: `♭` reported, not pinned) and the coin mode `ε` is for (`live` from `CircuitCredit`, `seeded` from
   `CircuitCreditSeeded`), so the issuer of composed certificates, which doesn't exist yet, can refuse the live `ε`
@@ -956,7 +956,7 @@ honest's time over the credit, `γ_♭ = T(H)/T_cred`, which says what the floor
 yet, refuses a live `eps` for a seeded window.
 It is what the physical layer's ledger consumes, never a credit by itself: the ledger admits a set of certificates on
 one device only if the credit inside every interval of its ticks fits in it, so one device's time is credited once. -/
-structure Certificate where
+structure CreditCertificate where
   window : Accounting.Window
   units : Kind → ℕ
   credit : ℝ
@@ -967,7 +967,7 @@ structure Certificate where
 
 /-- **The certificate holds for a play**: its accepted runs take less than `(1 − eps)·credit` with probability at
 most `delta`. -/
-def Certificate.Holds {Ω : Type} [Fintype Ω] {S : ℕ} {K T L U : Type} (c : Certificate) (P : Play Ω S K T L U) :
+def CreditCertificate.Holds {Ω : Type} [Fintype Ω] {S : ℕ} {K T L U : Type} (c : CreditCertificate) (P : Play Ω S K T L U) :
     Prop :=
   prob (fun x => P.accepts x ∧ (P.run x).run.time < (1 - c.eps) * c.credit) ≤ c.delta
 
@@ -976,7 +976,7 @@ bound `r`, the given `δ`, `γ_♭` against honest kernel `H`, and the coin mode
 `CircuitCredit`, `.seeded` in `CircuitCreditSeeded`). -/
 noncomputable def certOf {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (H : Honest K)
-    (lam : R → ℝ) (r δ : ℝ) (win : Accounting.Window) (coins : CoinMode) : Certificate where
+    (lam : R → ℝ) (r δ : ℝ) (win : Accounting.Window) (coins : CoinMode) : CreditCertificate where
   window := win
   units := kindCount Cd
   credit := creditOf Sc Cd Z
