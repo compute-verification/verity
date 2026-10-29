@@ -30,7 +30,8 @@ MACs. It needs (a): with one fixed y every partial is a constant.
 
 Honest-only work a public digest, W1 at the floor (32 a register, 116,224 a compression) and alone (64.13, 232,888):
 "premise-free" counts every hash and register the design adds; "credited" lets ShaWrites credit forced hashing as the lead's
-set does ((a)'s PRF and c, the pad's compression). Salt counts: L1 is N-HIDE's (one public digest a call for A_j and one a
+set does ((a)'s PRF and c, the pad's compression). The pad's 16 XORs are charged unless b's words are read into
+DistinctWrites' set of committed words (they are committed, distinct and non-free), which credits 32 each. Salt counts: L1 is N-HIDE's (one public digest a call for A_j and one a
 forward for its words); L0 is one a K-byte activation row a call and one an R-byte row of ssn_1l's words.
 """
 from __future__ import annotations
@@ -218,6 +219,10 @@ def designs() -> dict:
                                                  "credited": fm_com, "compressions": 5, "leaf": "hm96"},
         "pad (P1)": {"layouts": ["L1", "L0, 256 KiB rows", "L0, 16 KiB rows"],
                      "premise_free": {p: comp[p] + xor[p] for p in reg}, "credited": xor, "compressions": 1, "leaf": "pad"},
+        "pad (P1), b in DistinctWrites' set": {"layouts": ["L1", "L0, 256 KiB rows", "L0, 16 KiB rows"],
+                                               "premise_free": {p: comp[p] + xor[p] for p in reg},
+                                               "credited": {p: DIGEST_REGS * (v - reg["floor"]) for p, v in reg.items()},
+                                               "compressions": 1, "leaf": "pad"},
         "keyed digest (P2)": {"layouts": ["L1", "L0, 256 KiB rows", "L0, 16 KiB rows"],
                               "premise_free": dict(comp), "credited": {p: 0.0 for p in reg}, "compressions": 1, "leaf": "keyed"},
         "keyed leaf (P3)": {"layouts": ["L1", "L0, 256 KiB rows", "L0, 16 KiB rows"],
@@ -244,16 +249,15 @@ def shares(ds: dict) -> dict:
 
 def in_circuit() -> dict:
     """ANDs a drawn unit's proof spends hiding one public digest beyond x itself (hm96's gadget: c's 2 compressions and
-    the leaf's 2 over private (b, c), M_key·y XORs only), and once a proof (ks's leaf, S, the keyed leaf's prefix
-    midstate). The keyed leaf's pos sits in the padding block; with row-bound's pos in the first block it is one
-    compression a digest, which row-bound already spends."""
+    the leaf's 2 over private (b, c), M_key·y XORs only), and once a proof (ks's leaf and S). The keyed leaf's first
+    block, row-bound's, is public data hashed from the secret S, so it moves one compression into the circuit."""
     hm96 = 4 * ANDS_COMPRESSION
     return {"hm96 today": {"a digest": hm96, "once": 0},
             "hm96 + (a)": {"a digest": hm96 + 3 * ANDS_FROM_8, "once": KS_OPEN},
             "hm96 + (a) + FM": {"a digest": hm96 + 3 * ANDS_FROM_8 + N_OUT * WORDS * (26 + 11), "once": KS_OPEN},
             "pad (P1)": {"a digest": ANDS_COMPRESSION, "once": KS_OPEN + ANDS_COMPRESSION},
             "keyed digest (P2)": {"a digest": ANDS_COMPRESSION, "once": KS_OPEN + ANDS_COMPRESSION},
-            "keyed leaf (P3)": {"a digest": 0, "once": KS_OPEN + 2 * ANDS_COMPRESSION}}
+            "keyed leaf (P3)": {"a digest": ANDS_COMPRESSION, "once": KS_OPEN + ANDS_COMPRESSION}}
 
 
 def per_period(share: float) -> dict:
