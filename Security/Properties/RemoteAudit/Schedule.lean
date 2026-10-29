@@ -139,11 +139,11 @@ def OpensAtPosition : Prop :=
     let j := w.passes[i]!.plan.block p
     ∃ t, position reg.blocks (appends.map fun a => (a.first, a.count)) j = some (t, j) ∧ ∃ payload,
       (t = 0 ∧ Codec.decode o.block j reg.key none = .ok (some payload) ∧
-        FrameV3.verifyOpening reg.payloadDomain reg.payloadRoot j (hidden payload o.payloadSalt) SCHEMA
+        reg.payloadDomain.verifyOpening reg.payloadRoot reg.payloadDomain.count j (hidden payload o.payloadSalt) SCHEMA
           o.payloadPath = true) ∨
       (0 < t ∧ ∃ a, appends[t - 1]? = some a ∧
         Codec.decode o.block j reg.key (some (o.digest, some a.coin)) = .ok (some payload) ∧
-        FrameV3.verifyOpening (appendDomain reg.digest a.first a.count) a.root j (hidden payload o.payloadSalt)
-          SCHEMA o.payloadPath = true)
+        (appendDomain reg.digest a.first a.count).verifyOpening a.root (appendDomain reg.digest a.first a.count).count
+          j (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)
 
 end Properties.RemoteAudit

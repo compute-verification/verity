@@ -112,7 +112,7 @@ def domain_u64(v) -> str:
 
 
 def test_domain_u64(server):
-    """`Domain.makeU64` against `merkle`'s range-u64 domain over drawn bindings, owners and counts up to 2^64 - 1, the
+    """`Attest.domainU64` against `merkle`'s range-u64 domain over drawn bindings, owners and counts up to 2^64 - 1, the
     period tree's binding and owner among them, and what both refuse: a binding not 64 bytes, an owner below -2 or
     whose owner + 2 is past a u64, a count past a u64."""
     bindings = mostly(st.one_of(st.just(attest.BINDING), st.binary(min_size=64, max_size=64)),
