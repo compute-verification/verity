@@ -55,8 +55,9 @@ calculator (`noise_sweep.gap_terms`: forming, de-noise, the final word, duplicat
   verdict is also given at c_a = 0 (model P), 2 and 3, over the rows within two coefficients of a row's own (one
   lookup a column predicts each equality) and over one held partner a row (its tile still in the thread's registers,
   stored again at no write), both constructive. Copy-floor prices reuse from memory, not a held tile, so it bounds
-  the term by the held reading; select-floor puts c_a at 1.93 or more (2.24 on a lane's own bit), the price T1's copy
-  model (P plus both floors) takes. The new lead, the tag with `blc4a-t64-e7`'s lanes,
+  the term by the held reading; select-floor puts c_a at 1.93 or more (2.24 on a lane's own bit) where issue slots
+  bind. Beside the lead's wgmma both floors fail, and T1's copy model is model W with tile-grain: a reuse saves only
+  whole MMA tiles' words, at most 4× the c_a = 3 share (c_a = "tile"). The new lead, the tag with `blc4a-t64-e7`'s lanes,
   is the tag within each 64-row tile (`ssn_1l_tag_t64`), and with G as bytes `ssn_1l_tag8_t64`.
 
 Other sections: ShaSpeed's precision at each point and what Daniel's 02:01Z ruling covers, what rank ≤ 3 overall would
@@ -391,22 +392,44 @@ LEDGER = [
     ("copy-floor", "A coin-addressed copy, load or gather of a word from memory costs at least one register write "
      "(32) a word it moves: LDGSTS at any size, LDS then STS, LDG, TMA, the copy engines, and the port's gather (a "
      "16 B descriptor, or a batched copy's entry, a contiguous run)", "1",
-     "measured on the H200's GPU routes (N-FLOOR: ≥ 156 a word alone on every route; beside honest ≥ 48.7 on the "
-     "lane routes and 108 on TMA, its poll included); on-SM at word grain it is part of T1's copy model (NIGHT, "
-     "11:30Z); open, and off the SM: the copy engines beside honest, the port's gather", "1",
-     "a route moving a coin-addressed word under 32: TMA beside honest without its poll (N-FLOOR's time3), the copy "
-     "engines beside a saturated wgmma, a GPUDirect gather list of 16 B runs", "N-FLOOR (measure) / N-ALT (the port)",
+     "measured where issue slots bind (N-FLOOR: ≥ 156 a word alone on every route; beside EPS1's step ≥ 48.7 on the "
+     "lane routes and 108 on TMA, its poll included); false beside the lead's wgmma (a lane's 4-byte copy costs it "
+     "0.40 a word, TMA 0.018), so withdrawn as T1's copy model (NIGHT, 12:05Z: tile-grain); open off the SM: the copy "
+     "engines beside honest, the port's gather", "1",
+     "probes.sh copy.cu, then prices.py: refuted where a gated route's lost units a word are under 32 (every hw_* row "
+     "beside the lead's wgmma today); a GPUDirect gather list of 16 B runs", "N-FLOOR (measure) / N-ALT (the port)",
      "no T1 term alone: it prices reuse from memory (another thread's words, rows no longer held), not a word a "
      "thread still holds, which it stores again at no write; so it bounds copy-and-patch by the rows a thread "
      "holds (the held reading), and with hashing on the prover the hasher's own loads gather anyway"),
     ("select-floor", "A coin-dependent selection (a copy source, a branch target, the register a store reads, a "
      "predicate fed by a word's value or a coin) costs at least one register write (32) a lane", "1",
-     "measured in time (N-FLOOR: ≥ 1.93 writes a lane a two-way selection beyond its arms, ≥ 2.23 for the predicated "
-     "and branching forms W1 prices at 0, 10.3 an 8-bit lookup; 2.24 on a lane's own bit); not in W1, whose bare "
-     "model P prices those forms 0; T1's copy model is P plus this floor and copy-floor (NIGHT, 11:30Z)",
-     "1", "a selection form under 32 a lane outside N-FLOOR's census", "N-ADAPT (statement) / N-FLOOR (measure)",
-     "copy-and-patch's decisions: a tile's mask of matching words is a selection, so c_a ≥ 1.93 (2.24 on a lane's "
-     "own bit), where the new lead's tile is under 1% on every reading; bare model P's c_a is 0"),
+     "measured in time where issue slots bind (N-FLOOR: ≥ 1.93 writes a lane a two-way selection beyond its arms, "
+     "≥ 2.23 for the predicated and branching forms W1 prices at 0, 10.3 an 8-bit lookup; 2.24 on a lane's own bit); "
+     "false beside the lead's wgmma (a side warp's selection costs it ≤ 0.12 units a lane-entry); not in W1, whose "
+     "bare model P prices those forms 0; T1's copy model with copy-floor from NIGHT's 11:30Z addendum, withdrawn at "
+     "12:05Z for tile-grain",
+     "1", "probes.sh branch.cu brx.cu br2.cu, then prices.py: refuted if a gated two-way form costs under 71.8 a lane "
+     "(61.8 as selp); beside the lead's kernel, probes.sh lag.cu (refuted there today)",
+     "N-ADAPT (statement) / N-FLOOR (measure)",
+     "copy-and-patch's decisions in an issue-bound kernel: a tile's mask of matching words is a selection, so "
+     "c_a ≥ 1.93 (2.24 on a lane's own bit), where the new lead's tile is under 1% on every reading; bare model P's "
+     "c_a is 0"),
+    ("tile-grain", "On sm_90 the tensor pipe's work, which binds the lead's kernel, is skipped only a whole MMA at a "
+     "time: at least 128 words a warp at the floor's price (m16n8; wgmma m64nN is 128 a warp too), 64 for m8n8 at "
+     "about twice it; a copy or a selection that replaces fewer words saves no time", "1",
+     "measured (N-FLOOR: every sm_90 MMA form timed, gated; a held word saves nothing while another pipe binds); T1's "
+     "default copy model since NIGHT's 12:05Z revision, read through model-W", "1",
+     "opcode_probe's MMA census on sm_90a: refuted by a form with fewer than 128 output words a warp at under twice "
+     "the floor's price a register; probes.sh lag.cu beside the lead's wgmma, then prices.py: refuted if copying a "
+     "word instead of computing it (hw_l1, hw_lag1) lets the wgmma keep more than hw_cmp does", "N-FLOOR",
+     "copy-and-patch across a call's repeated rows, with model-W: a reuse saves only words of whole MMA tiles, at "
+     "most 4× the c_a = 3 share; not alone, since T1 counts W1 work and this is a statement in time"),
+    ("model-W", "T1 charges a register write for its whole warp (N-W1's model W, a lane semantics), and on the tensor "
+     "pipe a whole MMA tile (tile-grain), so a program saves a word only where the whole warp's, and the whole "
+     "tile's, words repeat", "3", "stated (NIGHT's 12:05Z default for Daniel's decision 2; N-ADAPT proves "
+     "adaptive-dw under W, no lock); bare model P stays the conservative column", "3",
+     "— (a choice of cost model; N-W1 states it as a lane semantics)", "N-W1 / Daniel",
+     "copy-and-patch and N-ADAPT's masked channel, with tile-grain"),
     ("adaptive-dw", "The lifted DistinctWrites bound holds pointwise in the coins for a prover that reads them as "
      "they arrive (the lift needs no premise; a design supplies the pointwise count, here on data a public model "
      "reaches)", "0", "open", "5",
@@ -658,6 +681,8 @@ def coin_branch_terms(data: dict) -> dict:
             for key, v in vals.items():
                 for (reading, c), share in v.items():
                     e[f"patch_{reading}_ca{c}_{key}"] = share
+        for key in [k for k in e if k.startswith("patch_") and "_ca3_" in k]:
+            e[key.replace("_ca3_", f"_ca{TILE}_")] = TILE_CHUNKS_BOUND * e[key]
         out[point] = e
     return out
 
@@ -1128,12 +1153,18 @@ def walk_words_check(variant: str = "ssn_1l_tag", n: int = 64, s: int = 67, salt
 #: N-ADAPT's chunk model: a copy of an aligned 4-word chunk costs c_a words (its source address and issue) and each word
 #: it leaves wrong a priced write, so a tile sharing k words with an earlier row's tile saves k − c_a; T1 takes c_a = 1
 PATCH_CA = 1
-#: T1's copy model is P plus N-FLOOR's measured floors (NIGHT, 11:30Z): select-floor prices a coin-dependent selection,
-#: here a tile's mask of matching words, at ≥ 71.8 units a lane on a lane's own bit (2.24 writes) and ≥ 61.8 on a
-#: warp-uniform bit (1.93); copy-floor prices an on-SM copy at ≥ a write a word, leaving only rows a thread holds
+#: P plus N-FLOOR's measured floors, T1's copy model from NIGHT's 11:30Z addendum until 12:05Z: select-floor prices a
+#: coin-dependent selection, here a tile's mask of matching words, at ≥ 71.8 units a lane on a lane's own bit (2.24
+#: writes) and ≥ 61.8 on a warp-uniform bit (1.93); copy-floor prices an on-SM copy at ≥ a write a word, leaving only
+#: rows a thread holds. Both hold only where issue slots bind, and fail beside the lead's wgmma (N-FLOOR)
 SELECT_FLOOR_CA = 2.24
 SELECT_FLOOR_UNIFORM_CA = 1.93
 PATCH_CAS = (0, 1, SELECT_FLOOR_UNIFORM_CA, 2, SELECT_FLOOR_CA, 3)
+#: tile-grain (N-FLOOR; T1's default copy model since NIGHT's 12:05Z revision): the tensor pipe is skipped only a whole
+#: MMA at a time (≥ 128 words a warp, m16n8), so a reuse saves only words of tiles whose every aligned 4-word chunk
+#: repeats. Those words are at most 4× the c_a = 3 share, where a whole chunk saves one word: an upper bound, any reading
+TILE = "tile"
+TILE_CHUNKS_BOUND = 4
 #: the reading T1 takes: `any` (every earlier row, decisions free), an upper bound; `table` (neighbours within two
 #: coefficients) and `held` (the nearest neighbour, still in registers) are constructive lower bounds. c_a = 0 is model
 #: P's reading (moves and decisions free), c_a = 1 select-floor's (one write a coin-dependent selection, a tile's mask)
@@ -1660,9 +1691,11 @@ def periods(data: dict, cb: dict) -> dict:
             "(c_a = 0)": cb["llama_T8192"]["patch_held_ca0_ssn_1l_tag_t64"],
             "coin branch, ssn_1l_tag + blc4a-t64-e7, copy-and-patch within a 64-row tile, a held partner, CopyGrain(4) "
             "as stated (c_a = 1)": cb["llama_T8192"]["patch_held_ca1_ssn_1l_tag_t64"],
-            "coin branch, ssn_1l_tag + blc4a-t64-e7, copy-and-patch within a 64-row tile, any earlier row, T1's copy "
-            f"model (P with select-floor, c_a = {SELECT_FLOOR_CA})":
+            "coin branch, ssn_1l_tag + blc4a-t64-e7, copy-and-patch within a 64-row tile, any earlier row, P with "
+            f"select-floor (c_a = {SELECT_FLOOR_CA})":
                 cb["llama_T8192"][f"patch_any_ca{SELECT_FLOOR_CA}_ssn_1l_tag_t64"],
+            "coin branch, ssn_1l_tag + blc4a-t64-e7, copy-and-patch within a 64-row tile, any earlier row, tile-grain "
+            "(T1's default copy model, at most 4× c_a = 3)": cb["llama_T8192"][f"patch_any_ca{TILE}_ssn_1l_tag_t64"],
             "coin branch, ssn_1l_tag8 + blc4a-t64-e7, copy-and-patch within a 64-row tile, neighbours within two "
             "coefficients, model P (c_a = 0)": cb["llama_T8192"]["patch_table_ca0_ssn_1l_tag8_t64"],
             "coin branch, ssn_1l_tag, crafted weights without model-public (the walk)":
@@ -1806,6 +1839,15 @@ def checks(rep: dict) -> list[dict]:
        and t8[f"patch_any_ca{SELECT_FLOOR_CA}_ssn_1l_tag"] > ALLOW,
        str({k: round(v, 5) for k, v in t8.items()
             if f"_ca{SELECT_FLOOR_CA}_" in k or f"_ca{SELECT_FLOOR_UNIFORM_CA}_" in k}))
+    tile = [k for e in cb.values() for k in e if f"_ca{TILE}_" in k]
+    ok("under tile-grain (T1's default copy model since 12:05Z; a reuse saves only whole MMA tiles' words, at most 4× "
+       "the c_a = 3 share) the new lead's tile stays under 0.1% of stock on every reading at every point, no bound "
+       "exceeds its c_a = 0 share, and the tag and G as bytes pass on both routes",
+       bool(tile) and all(e[f"patch_{r}_ca{TILE}_ssn_1l_tag_t64"] < ALLOW / 10
+                          for e in cb.values() for r in PATCH_READINGS)
+       and all(e[k] <= e[k.replace(f"_ca{TILE}_", "_ca0_")] + 1e-12 for e in cb.values() for k in e if f"_ca{TILE}_" in k)
+       and passes(vca[TILE], "ssn_1l_tag") and passes(vca[TILE], "ssn_1l_tag/G8"),
+       str({k: round(v, 5) for k, v in t8.items() if f"_ca{TILE}_" in k and "tag" in k}))
     ok("with hashing on the prover the tag (G in [−3, 3]) passes again only once a copy costs 3 words: not at c_a = 2, "
        "at c_a = 3", not passes(vca["2"], "ssn_1l_tag") and passes(vca["3"], "ssn_1l_tag"))
     ok("copy-and-patch on 8,192 repeated rows: the tag's exceeds 1% of stock at c_a = 1 and 2 over any earlier row and "
@@ -1953,12 +1995,12 @@ def report(data_path: str | None) -> dict:
     rep["hitting"] = {lab: minimal_sets(lab, data, cb) for lab, *_ in DESIGNS}
     rep["verdict"] = rank_verdict(rep["hitting"])
     rep["verdict_by_ca"] = {str(PATCH_CA): rep["verdict"]}
-    for c in PATCH_CAS[1:]:
+    for c in (*PATCH_CAS[1:], TILE):
         if c != PATCH_CA:
             rep["verdict_by_ca"][str(c)] = rank_verdict({lab: minimal_sets(lab, data, cb, c_a=c) for lab in VERDICT})
     rep["verdict_table"] = rank_verdict({lab: minimal_sets(lab, data, cb, reading="table") for lab in VERDICT})
     rep["verdict_held"] = {str(c): rank_verdict({lab: minimal_sets(lab, data, cb, c_a=c, reading="held")
-                                                 for lab in VERDICT}) for c in (0, 1, SELECT_FLOOR_CA)}
+                                                 for lab in VERDICT}) for c in (0, 1, SELECT_FLOOR_CA, TILE)}
     rep["patch"] = {p: {k: v for k, v in e.items() if k.startswith("patch_")} for p, e in cb.items()}
     rep["side_b_repair"] = side_b_repair()
     rep["walk"] = {str(s): walk_saved(s) for s in (67, 265)}
