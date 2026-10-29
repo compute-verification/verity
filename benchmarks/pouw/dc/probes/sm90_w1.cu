@@ -23,6 +23,10 @@
 //   b_ubra16, b_dbra16  the same with 16-op arms, which ptxas keeps as branches (BRA; BSSY/BSYNC when divergent).
 //                 The loop holds both arms and a decision runs one (divergent: both), so h32.py's price is not a
 //                 decision's; a decision's time is the loop's over its 16 (64) decisions
+//   b_brx4        brx.idx.uni on 2 bits of the trip's coin word to one of 4 arms of 16 ops (BRX, its target table
+//                 from LDC): a decision reads 2 coin bits; priced as b_ubra16, from the loop's time over its 16 decisions
+//   y_lea, y_iadd64, y_shfli, y_shflu  shl+add (ptxas: LEA and IMAD), add.u64 (IADD3 and IMAD.X), shfl.sync .idx at
+//                 a lane index from a register and .up by 1
 #include "../../opcode_probe/probe.cuh"
 #include "w1.cuh"
 
@@ -82,6 +86,10 @@ Y(vimax3_imad, W_VIMAX3, W_IMAD)
 Y(lop3_r, W_LOP3)
 Y(imad_r, W_IMAD)
 Y(imad_lop3, W_IMAD, W_LOP3)
+Y(lea, W_LEA)
+Y(iadd64, W_IADD64)
+Y(shfli, W_SHFLI)
+Y(shflu, W_SHFLU)
 #undef Y
 #undef Y64
 
@@ -113,6 +121,7 @@ OP_KERNEL(b_ubra, TPB) { b_run<64, W_UBRA>(a); }
 OP_KERNEL(b_dbra, TPB) { b_run<64, W_DBRA>(a); }
 OP_KERNEL(b_ubra16, TPB) { b_run<16, W_UBRA16>(a); }
 OP_KERNEL(b_dbra16, TPB) { b_run<16, W_DBRA16>(a); }
+OP_KERNEL(b_brx4, TPB) { b_run<16, W_BRX4>(a); }
 
 // ---- loads ----------------------------------------------------------------------------------------------------------
 constexpr int ROWS = 64;
@@ -430,6 +439,11 @@ static const OpProbe PROBES[] = {
     P(b_dbra, "IMAD=256,LOP3.LUT=320", "c=mix w=IMAD:1,LOP3.LUT:1"),
     P(b_ubra16, "IMAD=257,LOP3.LUT=273,BRA=33", "c=mix w=IMAD:1,LOP3.LUT:1"),
     P(b_dbra16, "IMAD=256,LOP3.LUT=272,BSSY=16,BSYNC=16,BRA=33", "c=mix w=IMAD:1,LOP3.LUT:1"),
+    P(b_brx4, "IMAD=513,LOP3.LUT=528,BRX=16,BRA=49,LDC=16,IMAD.SHL.U32=16,SHF.R.S32.HI=16", "c=mix w=IMAD:1,LOP3.LUT:1"),
+    P(y_lea, "LEA=112,IMAD=144", "c=int32 w=LEA:1,IMAD:1"),
+    P(y_iadd64, "IADD3=256,IMAD.X=256", "c=int32 w=IADD3:1,IMAD.X:1"),
+    P(y_shfli, "SHFL.IDX=256", "c=other w=SHFL.IDX:1"),
+    P(y_shflu, "SHFL.UP=256", "c=other w=SHFL.UP:1"),
     PS(l_ldsm1, "LDSM.16.M88=8", "LDSM.16.M88*8", ldsm_off, ROWS * 128, "c=other w=LDSM.16.M88:1"),
     PS(l_ldsm2, "LDSM.16.M88.2=8", "LDSM.16.M88.2*8", ldsm_off, ROWS * 128, "c=other w=LDSM.16.M88.2:2"),
     PS(l_ldsm4, "LDSM.16.M88.4=8", "LDSM.16.M88.4*8", ldsm_off, ROWS * 128, "c=other w=LDSM.16.M88.4:4"),

@@ -23,6 +23,9 @@ enum : int {
   // word cw (warp-uniform), and on bit i of a lane's own chain word (divergent), each arm 4 ops on 4 chains (16 ops
   // for the *16 forms)
   W_IMADP, W_SEL, W_UBRA, W_DBRA, W_UBRA16, W_DBRA16,
+  // the census's unprobed writers: shift-and-add (LEA), a 64-bit add (IADD3 and its carry-in IADD3.X), shuffles at a
+  // lane index and up; an indexed branch on 2 bits of the trip's coin word to one of 4 arms of 16 ops (BRX)
+  W_LEA, W_IADD64, W_SHFLI, W_SHFLU, W_BRX4,
 };
 
 struct WLane {
@@ -155,7 +158,7 @@ struct WLane {
                    : "r"(pm), "r"(r[t]), "r"(0x9E3779B9u));
     if constexpr (X == W_SEL)
       asm volatile("{\n.reg .pred p;\nsetp.ne.u32 p,%1,0;\nselp.b32 %0,%2,%0,p;\n}" : "+r"(r[s]) : "r"(pm), "r"(r[t]));
-    if constexpr (X == W_UBRA || X == W_DBRA || X == W_UBRA16 || X == W_DBRA16) {
+    if constexpr (X == W_UBRA || X == W_DBRA || X == W_UBRA16 || X == W_DBRA16 || X == W_BRX4) {
 #define W1_M4 "mad.lo.u32 %0,%0,%6,%7;\nmad.lo.u32 %1,%1,%6,%7;\nmad.lo.u32 %2,%2,%6,%7;\nmad.lo.u32 %3,%3,%6,%7;\n"
 #define W1_L4 \
   "lop3.b32 %0,%0,%6,%7,0x96;\nlop3.b32 %1,%1,%6,%7,0x96;\nlop3.b32 %2,%2,%6,%7,0x96;\nlop3.b32 %3,%3,%6,%7,0x96;\n"
@@ -172,11 +175,24 @@ struct WLane {
       if constexpr (X == W_DBRA16)
         asm volatile(W1_ARMS("bra", W1_M4 W1_M4 W1_M4 W1_M4, W1_L4 W1_L4 W1_L4 W1_L4) W1_OUT
                      : "r"(r[t]), "r"(m), "r"(r[t]), "r"(0x9E3779B9u));
+      if constexpr (X == W_BRX4)
+        asm volatile("{\n.reg .u32 k;\nshr.b32 k,%4,%5;\nand.b32 k,k,3;\nW1X: .branchtargets W1A,W1B,W1C,W1D;\nbrx.idx.uni k,W1X;\n"
+                     "W1A:\n" W1_M4 W1_M4 W1_M4 W1_M4 "bra.uni W1Z;\n"
+                     "W1B:\n" W1_L4 W1_L4 W1_L4 W1_L4 "bra.uni W1Z;\n"
+                     "W1C:\nmad.lo.u32 %0,%0,%7,%6;\nmad.lo.u32 %1,%1,%7,%6;\nmad.lo.u32 %2,%2,%7,%6;\n"
+                     "mad.lo.u32 %3,%3,%7,%6;\n" W1_M4 W1_M4 W1_M4 "bra.uni W1Z;\n"
+                     "W1D:\nlop3.b32 %0,%0,%7,%6,0x69;\nlop3.b32 %1,%1,%7,%6,0x69;\nlop3.b32 %2,%2,%7,%6,0x69;\n"
+                     "lop3.b32 %3,%3,%7,%6,0x69;\n" W1_L4 W1_L4 W1_L4 "W1Z:\n}" W1_OUT
+                     : "r"(cw), "r"(2u * (uint32_t)(i & 15)), "r"(r[t]), "r"(0x9E3779B9u));
 #undef W1_OUT
 #undef W1_ARMS
 #undef W1_L4
 #undef W1_M4
     }
+    if constexpr (X == W_LEA) asm volatile("{\n.reg .b32 q;\nshl.b32 q,%0,3;\nadd.u32 %0,q,%1;\n}" : "+r"(r[s]) : "r"(r[t]));
+    if constexpr (X == W_IADD64) asm volatile("add.u64 %0,%0,%1;" : "+l"(q[s]) : "l"(q[t]));
+    if constexpr (X == W_SHFLI) asm volatile("shfl.sync.idx.b32 %0,%0,%1,0x1f,0xffffffff;" : "+r"(r[s]) : "r"(r[t]));
+    if constexpr (X == W_SHFLU) asm volatile("shfl.sync.up.b32 %0,%0,1,0,0xffffffff;" : "+r"(r[s]));
   }
   DC_DEV uint32_t fold() const {
     uint32_t x = pm;
