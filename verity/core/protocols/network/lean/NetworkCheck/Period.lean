@@ -573,8 +573,10 @@ def slotEntryDigest (j : Json) (key : String) : V String := do
 /-- The slot entry's Definitions the check takes, by closure digest (`slotEntryDigest`): `io_shell.SlotEntry_v1` at
 its circuit-check rows, `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`
 (a Llama-3 tokenizer's 17-bit ids and end-of-text id), in that order. A template under `SlotEntry_v1`'s name with
-another body has neither digest, so its entries are no slot entries (`wired`); a new binding or body of `SlotEntry_v1`
-is pinned here. -/
+another body has neither digest, so its entries are no slot entries (`wired`). These are the rows a window circuit's
+slot entries take as a template of their own; its `SlotEntry_v1:4` row (KO 4, 32 prompt ids) is no pin, since at KO 4
+a slot's entry is a `SelectEntry_v1` unit's (`selectEntryPins`). A new body of `SlotEntry_v1`, or a binding a window
+circuit takes as its slot entries' template, is pinned here. -/
 def slotEntryPins : List String :=
   ["8c8a033047ec49110114023204a9c265720ae9d1b63963c51a98e14f0314ebd3\
     7b741b90d6a374aeb681a1a5fe364580b68ff60cf5514fdf57fdaff88b36de30",
@@ -587,8 +589,8 @@ def slotEntryPins : List String :=
 `SlotEntry_v1` it calls): `SelectEntry_v1` at `SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4,STOP=[]}`,
 `SelectEntry_v1{V=128256,C=16,KO=4,FIRST=false,IDB=17,NP=32,STOP=[128001]}` and
 `SelectEntry_v1{V=128256,C=16,KO=64,FIRST=false,IDB=17,NP=1024,STOP=[128001]}`, in that order, each calling the
-`SlotEntry_v1` that writes the scan's read bit. `io_shell` doesn't define `SelectEntry_v1` yet, so no template it
-builds has these digests until it defines that body at those rows. A new binding or body is pinned here. -/
+`SlotEntry_v1` that writes the scan's read bit: `io_shell.SelectEntry_v1` at its circuit-check rows. A new binding or
+body is pinned here. -/
 def selectEntryPins : List String :=
   ["f817250e0ac1d5028ea992bbe0c1ab12925bc1b709f020fdc54a57a0ebc0c9dc\
     bd6513d2bf72aa243c499833d1173fb14236e85bb27b4d03de88df93344007d2",
