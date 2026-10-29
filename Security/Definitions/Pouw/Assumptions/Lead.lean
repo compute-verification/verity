@@ -28,10 +28,10 @@ The protocol premises the code can't be checked against yet:
   bounded by the protocol: `Accepted` refuses a call past its share of the cap (`Layout.callBits`).
 
 The device premise:
-* `CertifierCoins` (`trusted-host` at the network certifier): the certifier draws the coins from its own entropy after
-  it holds the call's `A`. `G` reads it through the model rather than as a hypothesis: the certifier's coins are a
-  `CoinStream`, a strategy fixes its tables before the coins (`Strategy`), `G` fixes the data before them, and every
-  bound averages over the coins uniformly. `CertifierCoins` is what ties that model to the deployed certifier.
+* `CertifierCoins` (`trusted-host` at the network certifier): the certifier reads the `A` root a strategy registered
+  and releases the coins, a one-to-one decoding of its own entropy, to the node alone. `G` takes it as a hypothesis
+  and is stated over the entropy: at each entropy value, the strategy runs at the coins the device releases
+  (`released`), so its bound averages over the coins uniformly because the device runs `certCode`.
 -/
 
 namespace Pouw.Assumptions.Lead
@@ -155,18 +155,27 @@ def OutsourceWithinEgressLead (pr : Prices100) (β : ℚ) (H : Hash.Msg → Hash
     (σ'.work pr ω : ℚ) ≤ σ.work pr ω + β * (σ.exec ω).egress
 
 /-- The network certifier's code for the lead's coins: it reads `A`'s root and its own entropy, and returns the root
-with `coinsOf` of the entropy, a fixed decoding of the entropy alone. -/
-def certCode {Ent : Type} (coinsOf : Ent → Coins L) : Hash.Digest × Ent → Hash.Digest × Coins L :=
+with `coinsOf` of the entropy, a fixed one-to-one decoding of the entropy alone. -/
+def certCode {Ent : Type} (coinsOf : Ent ≃ Coins L) : Hash.Digest × Ent → Hash.Digest × Coins L :=
   fun x => (x.1, coinsOf x.2)
 
 /-- `pouw-certifier-coins` (proposed; `trusted-host` at the network certifier). **The certifier draws the coins after
-it holds `A`**: the auditor-trusted certifier `cert` runs `certCode coinsOf`, reading `A`'s root and the device's own
-entropy and releasing `coinsOf` of the entropy, so the coins are uniform when the entropy is and independent of `A`
-and of a strategy's pre-coin tables. Not a property of `NetworkCertifier`: that program draws and releases no coins.
+it reads `A`'s root**: the auditor-trusted certifier `cert` runs `certCode coinsOf`, reading the root a strategy
+registered and the device's own entropy and releasing `coinsOf` of the entropy. `coinsOf` is an equivalence, so
+uniform entropy gives uniform coins, independent of `A` and of a strategy's pre-coin tables: a short seed with a fixed
+expansion doesn't meet it. The device releases the coins only to the node, over the link it counts, and to no one
+else until the call's words root registers; `G`'s model reads that as the coins entering only the node's execution
+(`Strategy.exec`). Not a property of `NetworkCertifier`: that program draws and releases no coins.
 
 Rationale: `trusted-host`; the certifier is the auditor's hardware on a machine the prover doesn't control. -/
-def CertifierCoins {Device Ent : Type} (cert : Device) (coinsOf : Ent → Coins L)
+def CertifierCoins {Device Ent : Type} (cert : Device) (coinsOf : Ent ≃ Coins L)
     (runC : Device → Hash.Digest × Ent → Hash.Digest × Coins L) : Prop :=
   Verity.Assumptions.TrustedHost cert runC (certCode coinsOf)
+
+/-- **The coins the certifier releases** to a strategy's call at the entropy `e`: what the device `cert`, run as
+`runC`, returns on the `A` root the strategy registered and `e`. -/
+def released {Device Ent : Type} (cert : Device) (runC : Device → Hash.Digest × Ent → Hash.Digest × Coins L)
+    (σ : Strategy L) (e : Ent) : Coins L :=
+  (runC cert (σ.aRoot, e)).2
 
 end Pouw.Assumptions.Lead

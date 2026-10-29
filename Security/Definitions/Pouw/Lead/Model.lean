@@ -6,8 +6,10 @@ import Definitions.Hash.Basic
 /-!
 # A prover's strategy on one call of the lead, in model W at tile grain (trusted definitions)
 
-A strategy fixes its tables before the coins (`Strategy.pre`) and then, at each value `ω` of the call's coins, runs
-an execution (`Exec`), so it may branch on the coins anywhere.
+A strategy fixes its tables and registers `A`'s root before the coins (`Strategy.pre`, `Strategy.aRoot`) and then, at
+each value `ω` of the call's coins, runs an execution (`Exec`), so it may branch on the coins anywhere. The coins are
+what the network certifier releases after it reads `A`'s root (`Pouw.Assumptions.Lead.CertifierCoins`, which `G`
+takes).
 
 * **An execution** carries
   - `trace`: the instructions it executes, in `MH100w`'s classes (`Op100 Unit`: at one coin value a register is a
@@ -69,8 +71,9 @@ def coinAt {L : Layout} (ω : Coins L) : CoinIdx L → ℤ
 
 /-- **The certifier's coin stream**: raw coins in an arrangement fixed before the coins (`ι`), each streamed word zero
 or one coin, each coin at one position at most, within the node's memory of tiles. The certifier draws the coins after
-it holds `A_j` and the strategy's tables are fixed (`trusted-host`): `Strategy` fixes its tables before the coins,
-`G` fixes the data before them, and every bound averages over `Coins` uniformly. -/
+it reads `A_j`'s root and the strategy's tables are fixed (`Pouw.Assumptions.Lead.CertifierCoins`): `Strategy` fixes
+its tables and `A`'s root before the coins, `G` fixes the data before them, and every bound averages over the
+certifier's entropy uniformly, which `CertifierCoins` decodes one to one into `Coins`. -/
 structure CoinStream (L : Layout) where
   /-- The coin at each streamed tile's word, or none (zero). -/
   ι : ℕ → Fin tileWords → Option (CoinIdx L)
@@ -83,13 +86,15 @@ structure CoinStream (L : Layout) where
 def CoinStream.val {L : Layout} (st : CoinStream L) (ω : Coins L) (c : ℕ) : Fin tileWords → ℤ :=
   fun p => (st.ι c p).elim 0 (coinAt ω)
 
-/-- **A prover's strategy on a call**: tables fixed before the coins, within the node's memory, and an execution at
-each coin value. -/
+/-- **A prover's strategy on a call**: tables fixed before the coins, within the node's memory, `A`'s root registered
+before the coins, and an execution at each coin value. -/
 structure Strategy (L : Layout) where
   /-- The pre-coin tables (any, chosen after the data), one tile a slot. -/
   pre : ℕ → Fin tileWords → ℤ
   /-- The tables fit the node's memory: `L.mem` tiles. -/
   pre_supp : ∀ a, L.mem ≤ a → pre a = 0
+  /-- The `A` root it registers before the coins, which the certifier reads before it releases them. -/
+  aRoot : Hash.Digest
   /-- The execution at each value of the coins. -/
   exec : Coins L → Exec
 

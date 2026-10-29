@@ -9,12 +9,14 @@ The honest strategy writes each committed tile once with one `other` instruction
 messages with one `other` instruction a credited register, registers the commitment's root and exchanges nothing. For
 every coin stream and every commitment format it meets every premise of `G` but `CommitL1w`, and at an admitted call
 (`Layout.Admits`) it is accepted at every coin value (`honestAt`): the stream enters only the memory the run starts
-from, and the honest run writes every committed tile. So the honest lemma holds at every stream and every commitment meeting `CommitL1w` (`honestOfCommit`),
-and at a deployed instance it is `CommitL1w` at the deployed commitment. That holds where the commitment's messages
-include frame-v3 leaves, at ranks below `2^64`, over the words' bytes in the lead's chunks and over A's rows
-(`commitL1w_of_leaves`): a frame leaf carries its domain's id and its rank (`leafMsg_id_inj`, `leafMsg_rank_inj`), so
-leaves at distinct ranks are distinct messages however their values repeat, and its header puts one more compression on
-its value's (`blocks_leafMsg`). `honest` is `honestOfCommit` at a one-message commitment and the empty stream.
+from, and the honest run writes every committed tile. So the honest lemma holds at every stream and every commitment
+meeting `CommitL1w` (`honestOfCommit`), and at a deployed instance it is `CommitL1w` at the deployed commitment. That
+holds where the commitment's messages include frame-v3 leaves, at ranks below `2^64`, over the words' bytes in the
+lead's chunks and over A's rows (`commitL1w_of_leaves`): a frame leaf carries its domain's id and its rank
+(`leafMsg_id_inj`, `leafMsg_rank_inj`), so leaves at distinct ranks are distinct messages however their values repeat,
+and its header puts one more compression on its value's (`blocks_leafMsg`). `honest` is `honestOfCommit` at a
+one-message commitment and the empty stream, beside a certifier that runs `certCode` with the coins as its entropy
+(`certifierCoins`).
 -/
 
 namespace Pouw.SecurityProofs.Lead.Compose
@@ -49,6 +51,7 @@ noncomputable def honestStrategy (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.D
     (isA : Hash.Msg → Bool) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) : Strategy L where
   pre _ _ := 0
   pre_supp _ _ := rfl
+  aRoot := 0
   exec ω :=
     { trace := ((tilesAt L κ ω).flatMap fun v => (List.finRange tileWords).map fun q => .other fun _ => (v q : ℚ)) ++
         List.replicate (shaRegsOf isA (commitMsgs L H C κ ω)) (.other 0)
@@ -326,10 +329,15 @@ theorem commitL1w_oneMsg (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (
   norm_num only [shaWordsRegs, shaARegs]
   linarith
 
+/-- **A certifier meeting `CertifierCoins`**: a device that runs `certCode`, its entropy the coins themselves. -/
+theorem certifierCoins (L : Pouw.Lead.Layout) :
+    CertifierCoins () (Equiv.refl (Coins L)) fun (_ : Unit) => certCode (Equiv.refl (Coins L)) :=
+  fun _ => rfl
+
 /-- **The honest lemma** (`Pouw.Guarantees.Lead.Honest`): `honestAt` at the one-message commitment, which meets
-`CommitL1w` (`commitL1w_oneMsg`), and the empty stream, at every admitted call. -/
+`CommitL1w` (`commitL1w_oneMsg`), and the empty stream, at every admitted call, beside `certifierCoins`. -/
 theorem honest : Pouw.Guarantees.Lead.Honest := fun T m n K H κ hadm =>
-  ⟨noStream _, oneMsgCommit _, fun _ => false,
+  ⟨⟨Unit, _, (), _, _, certifierCoins _⟩, noStream _, oneMsgCommit _, fun _ => false,
     honestOfCommit T m n K H κ (noStream _) (oneMsgCommit _) (fun _ => false) (commitL1w_oneMsg _ H κ) hadm⟩
 
 end Pouw.SecurityProofs.Lead.Compose

@@ -23,6 +23,10 @@ original hashed none (beyond the original's, it hashes only the honest commitmen
    (`Tags.repeats_le` at the call `Accepted` admits, when `O` is nonempty; `PStar.table_le`); the twin's saving is at
    most `betaLead` a bit the original exchanged, at most `callBits` at an accepted value (`Accepted`), so `|O|` times
    `32 · networkGap`; and the head, hiding and `p*` terms are nonnegative.
+
+That is `G_coins`, over the coin values. `G` is `G_coins` at the coins the certifier releases: under
+`CertifierCoins` they are `coinsOf` of its entropy, an equivalence, so a set of entropy values maps one to one onto a
+set of coin values of the same size and sum.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Compose
@@ -76,10 +80,18 @@ theorem perCoin (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
   rw [htw] at hmin' hwords ⊢
   linarith
 
-/-- **The lead's guarantee** (`Pouw.Guarantees.Lead.G`), from `perCoin` on the twin and the
-averaged bounds. -/
-theorem G : Pouw.Guarantees.Lead.G := by
-  intro pr H T m n K κ stream C isA can Real hC h32 hw1 htile hone hcard hsha hhon hout σ hcan O hacc
+/-- **The lead's guarantee over the coin values**, from `perCoin` on the twin and the averaged bounds. -/
+theorem G_coins (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
+    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
+    (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K))
+    (isA : Hash.Msg → Bool) (can Real : Strategy (lead T m n K) → Prop) (hC : CommitL1w H C isA κ)
+    (h32 : H32 pr) (hw1 : W1 pr Real) (htile : TileGrain H C κ stream Real) (hone : OneInstructionMinimal Real)
+    (hcard : CardWithinAccelW1 can Real) (hsha : ShaWrites isA Real) (hhon : HonestHashRuled H C κ Real)
+    (hout : OutsourceWithinEgressLead pr (betaLead (lead T m n K) C) H C κ Real) (σ : Strategy (lead T m n K))
+    (hcan : can σ) (O : Finset (Coins (lead T m n K))) (hacc : ∀ ω ∈ O, Accepted (lead T m n K) H C κ σ ω) :
+    32 * ((O.card : ℚ) * honestRegs (lead T m n K) C -
+        (Fintype.card (Coins (lead T m n K)) : ℚ) * gapRegs (lead T m n K) C) ≤ ∑ ω ∈ O, (σ.work pr ω : ℚ) ∨
+      ∃ ω ∈ O, Break (lead T m n K) H C κ σ ω := by
   by_cases hB : ∃ ω ∈ O, Break (lead T m n K) H C κ σ ω
   · exact Or.inr hB
   refine Or.inl ?_
@@ -148,5 +160,26 @@ theorem G : Pouw.Guarantees.Lead.G := by
   have hps := mul_nonneg hN (show 0 ≤ pStarGap (lead T m n K) by unfold pStarGap stockRegs; positivity)
   unfold gapRegs
   linarith
+
+/-- **The lead's guarantee** (`Pouw.Guarantees.Lead.G`): `G_coins` at the coins the certifier releases, which
+`CertifierCoins` makes `coinsOf` of the entropy, an equivalence, so the entropy values map one to one onto coin
+values. -/
+theorem G : Pouw.Guarantees.Lead.G := by
+  intro pr H T m n K κ stream C isA can Real Device Ent cert coinsOf runC hcert hC h32 hw1 htile hone hcard hsha hhon
+    hout σ hcan O hacc
+  have hrel : ∀ e, released cert runC σ e = coinsOf e := fun e => by
+    unfold released
+    rw [hcert (σ.aRoot, e)]
+    rfl
+  simp only [hrel] at hacc ⊢
+  have h := G_coins pr H T m n K κ stream C isA can Real hC h32 hw1 htile hone hcard hsha hhon hout σ hcan
+    (O.map coinsOf.toEmbedding) fun ω hω => by
+      obtain ⟨e, he, rfl⟩ := Finset.mem_map.1 hω
+      exact hacc e he
+  rw [Finset.card_map, Finset.sum_map] at h
+  rcases h with h | ⟨ω, hω, hb⟩
+  · exact Or.inl h
+  · obtain ⟨e, he, rfl⟩ := Finset.mem_map.1 hω
+    exact Or.inr ⟨e, he, hb⟩
 
 end Pouw.SecurityProofs.Lead.Compose
