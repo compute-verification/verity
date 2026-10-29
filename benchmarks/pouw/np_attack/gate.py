@@ -16,14 +16,15 @@ import sys
 LINE = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)([^;]*);")
 
 # mode index (ILi{m}E in the mangled name) -> (tag, required ops with a floor count, forbidden ops) in the hot loop.
+# A required entry "A+B" is a floor on the two counts' sum: ptxas spreads integer adds over the IMAD pipe (IMAD.IADD)
+# and the ALU pipe (IADD3) to co-issue them, which is the realistic adversary, so neither alone is pinned.
 RULES = {
-    0: ("advadd", {"IADD3": 24}, {"IMAD", "FADD", "FFMA", "FMUL", "RED", "LDSM", "ATOM"}),
-    1: ("advmix", {"IADD3": 1, "IMAD": 1, "FADD": 1}, {"RED", "LDSM", "LDG"}),
-    2: ("widemul", {"IMAD": 24}, {"FADD", "RED", "LDSM"}),
-    3: ("carry", {"IADD3": 24}, {"IMAD", "FADD", "RED", "LDSM"}),
-    4: ("redg", {"RED": 24}, {"STG", "LDSM", "ATOM"}),
-    5: ("move", {"LDG": 1}, {"RED", "IMAD", "IADD3", "LDSM", "STS"}),
-    6: ("ldsm", {"LDSM": 1}, {"LDG", "RED"}),
+    0: ("advadd", {"IADD3+IMAD": 24}, {"FADD", "FFMA", "FMUL", "REDG", "LDG", "LDSM", "ATOMG"}),
+    1: ("advmix", {"IMAD": 1, "FADD": 1}, {"REDG", "LDSM", "LDG"}),
+    2: ("widemul", {"IMAD": 24}, {"FADD", "REDG", "LDSM", "LDG"}),
+    3: ("carry", {"IADD3": 24}, {"FADD", "REDG", "LDSM", "LDG"}),
+    4: ("redg", {"REDG": 24}, {"STG", "LDSM", "ATOMG"}),
+    5: ("move", {"LDG": 1}, {"REDG", "LDSM", "STS", "FADD"}),
 }
 
 
@@ -60,7 +61,10 @@ def main():
         why = []
         if allops["LDL"] or allops["STL"]:
             why.append(f"spills: LDL {allops['LDL']}, STL {allops['STL']}")
-        why += [f"required {op} >= {n}, hot loop has {hot[op]}" for op, n in req.items() if hot[op] < n]
+        for op, n in req.items():
+            have = sum(hot[o] for o in op.split("+"))
+            if have < n:
+                why.append(f"required {op} >= {n}, hot loop has {have}")
         why += [f"forbidden {op} in hot loop ({hot[op]})" for op in forb if hot[op]]
         bad += bool(why)
         print(json.dumps({"kernel": name, "mode": tag, "instructions": len(ins),

@@ -16,7 +16,6 @@
 //   carry    add.cc + addc: a 64-bit add, the carry out a second register
 //   redg     red.global.add.s32: the word summed in the memory path (an L2 atomic); nothing written on the SM
 //   move     LDG.E.128: the real price of moving a precomputed word (free in MH100w; this is the hardware number)
-//   ldsm     ldmatrix.x4: four registers an instruction, from shared memory (a multi-register load)
 //
 //   nattack check             every compute mode's sink (or red counter) against a CPU reference; non-zero on a mismatch
 //   nattack run REPS ITERS    one JSON line a (mode, ctas-an-SM): clock64 span, words produced, words a SM a clock, and
@@ -45,8 +44,8 @@ typedef int32_t i32;
     }                                                                                        \
   } while (0)
 
-enum Mode { ADVADD, ADVMIX, WIDEMUL, CARRY, REDG, MOVE, LDSM, N_MODES };
-static const char* NAMES[N_MODES] = {"advadd", "advmix", "widemul", "carry", "redg", "move", "ldsm"};
+enum Mode { ADVADD, ADVMIX, WIDEMUL, CARRY, REDG, MOVE, N_MODES };
+static const char* NAMES[N_MODES] = {"advadd", "advmix", "widemul", "carry", "redg", "move"};
 
 constexpr int WPT = 32;   // words (or loads) a thread a loop trip
 constexpr int TPB = 128;  // threads a block (4 warps), as the honest kernel
@@ -70,11 +69,6 @@ __global__ void __launch_bounds__(TPB) probe_k(int iters, const u32* __restrict_
   u32 base[WPT];
 #pragma unroll
   for (int k = 0; k < WPT; k++) base[k] = gbase[(gid * WPT + k) & MASK];  // once, outside the loop: free-move advice
-  __shared__ u32 sh[TPB * WPT];
-  if constexpr (MODE == LDSM) {
-    for (int k = threadIdx.x; k < TPB * WPT; k += TPB) sh[k] = gbase[(blockIdx.x * TPB * WPT + k) & MASK];
-    __syncthreads();
-  }
   u32 sink = 0x9e3779b9u ^ gid;
   u32 noise = noise0(gid);
   const u32 mulv = (u32)iters | 1u;  // a runtime value ptxas can't fold
@@ -138,17 +132,6 @@ __global__ void __launch_bounds__(TPB) probe_k(int iters, const u32* __restrict_
         uint4 v = reinterpret_cast<const uint4*>(gmove)[((gid * WPT + k + it) & MASK) >> 2];  // LDG.E.128
         acc ^= v.x ^ v.y ^ v.z ^ v.w;
       }
-    } else if constexpr (MODE == LDSM) {
-#pragma unroll
-      for (int k = 0; k < WPT; k += 4) {
-        u32 r0, r1, r2, r3;
-        // one 16-byte row a lane (ldmatrix needs each row address 16-byte aligned); 4 u32 a row
-        u32* ptr = sh + ((((threadIdx.x & 31) + (k / 4) * 32 + it * 8) * 4) % (TPB * WPT));
-        u32 addr = (u32)__cvta_generic_to_shared(ptr);
-        asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0,%1,%2,%3}, [%4];"
-                     : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(addr));
-        acc ^= r0 ^ r1 ^ r2 ^ r3;
-      }
     }
     sink = acc;
   }
@@ -158,8 +141,8 @@ __global__ void __launch_bounds__(TPB) probe_k(int iters, const u32* __restrict_
 }
 
 typedef void (*Kern)(int, const u32*, u32*, i32*, const u32*, long long*);
-static const Kern KERNS[N_MODES] = {probe_k<ADVADD>, probe_k<ADVMIX>, probe_k<WIDEMUL>, probe_k<CARRY>,
-                                    probe_k<REDG>,   probe_k<MOVE>,    probe_k<LDSM>};
+static const Kern KERNS[N_MODES] = {probe_k<ADVADD>, probe_k<ADVMIX>, probe_k<WIDEMUL>,
+                                    probe_k<CARRY>,  probe_k<REDG>,   probe_k<MOVE>};
 
 // ---- host -----------------------------------------------------------------------------------------------------------
 static int sms() {
@@ -218,7 +201,7 @@ int main(int argc, char** argv) {
     const int iters = 3;
     int bad = 0;
     for (int m = 0; m < N_MODES; m++) {
-      if (m == MOVE || m == LDSM) continue;  // loads: no committed-word semantics to check
+      if (m == MOVE) continue;  // a load: no committed-word semantics to check
       CK(cudaMemset(gred, 0, N * 4));
       CK(cudaMemset(gsink, 0, (size_t)S * 3 * TPB * 4));
       KERNS[m]<<<1, TPB>>>(iters, gbase, gsink, gred, gmove, gspan);
