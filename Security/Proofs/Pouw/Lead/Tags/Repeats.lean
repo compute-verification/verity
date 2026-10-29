@@ -1,3 +1,4 @@
+import Definitions.Pouw.Lead.Gap
 import Proofs.Pouw.Lead.Tags.Tile
 
 /-!
@@ -274,5 +275,184 @@ theorem tile_cross_card_le (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : 
   refine mem_filter.2 ⟨mem_univ _, fun j hj => ⟨?_, ?_⟩⟩
   · rw [← tileOf_at κ ω (by omega) hi₁ t (hJ j hj), hω']
   · rw [← tileOf_at κ ω (by omega) hi₂ t (hJ j hj), hω']
+
+/-! ## The lead -/
+
+/-- A pair's share of the coins: `7^−8` for tiles at one column block and step, `49^−8` more against a step-0
+tile, and `2^−56` for any. -/
+def pairShare (L : Pouw.Lead.Layout) (x y : ℕ × ℕ × Fin L.S) : ℚ :=
+  (if y.2.1 = x.2.1 ∧ y.2.2 = x.2.2 then 1 / 7 ^ 8 else 0) + (if (y.2.2 : ℕ) = 0 then 1 / 49 ^ 8 else 0) +
+    1 / 2 ^ 56
+
+theorem pairShare_nonneg (L : Pouw.Lead.Layout) (x y : ℕ × ℕ × Fin L.S) : 0 ≤ pairShare L x y := by
+  unfold pairShare; split_ifs <;> positivity
+
+/-- **Each pair of tiles** of a layout of 64-row coin tiles, 7-bit coin lanes and whole MMA tiles, below 28,560
+rows, agrees on at most its `pairShare` of the coins. -/
+theorem pair_le (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (htile : L.tile = 64) (he : L.e = 7)
+    (hm16 : L.m = 16 * L.rowBlocks) (hR : L.rowBlocks ≤ 1785) (hn8 : L.n = 8 * L.colBlocks)
+    {x y : ℕ × ℕ × Fin L.S} (hx : x ∈ tileIdx L) (hy : y ∈ (tileIdx L).erase x) :
+    ((univ.filter fun ω : Coins L => tileOf L κ ω y.1 y.2.1 y.2.2 = tileOf L κ ω x.1 x.2.1 x.2.2).card : ℚ) ≤
+      Fintype.card (Coins L) * pairShare L x y := by
+  obtain ⟨rb, cb, t⟩ := x
+  obtain ⟨rb', cb', t'⟩ := y
+  obtain ⟨hne, hy'⟩ := mem_erase.1 hy
+  simp only [tileIdx, mem_product, mem_range, mem_univ, and_true] at hx hy'
+  have hLm : L.m ≤ 28560 := by omega
+  have hrowB : ∀ r, r < L.rowBlocks → 16 * r + 16 ≤ L.m := fun r hr => by omega
+  have hcols : ∀ c, c < L.colBlocks → (colsOf L c).card = 8 := fun c hc => colsOf_card (by omega)
+  have hN : (0 : ℚ) ≤ Fintype.card (Coins L) := Nat.cast_nonneg _
+  have of_mul : ∀ c D : ℕ, 0 < D → c * D ≤ Fintype.card (Coins L) →
+      (c : ℚ) ≤ Fintype.card (Coins L) * (1 / D) := by
+    intro c D hD h
+    rw [mul_one_div, le_div_iff₀ (by exact_mod_cast hD)]
+    exact_mod_cast h
+  have hs0 : (0 : ℚ) ≤ if cb' = cb ∧ t' = t then 1 / 7 ^ 8 else 0 := by split_ifs <;> positivity
+  have hs1 : (0 : ℚ) ≤ if (t' : ℕ) = 0 then 1 / 49 ^ 8 else 0 := by split_ifs <;> positivity
+  have hlane2 : (2 ^ L.e) ^ (colsOf L cb).card = 2 ^ 56 := by rw [hcols cb hx.2, he]; norm_num
+  have hlane2' : (2 ^ L.e) ^ (colsOf L cb').card = 2 ^ 56 := by rw [hcols cb' hy'.2, he]; norm_num
+  have lane : ((univ.filter fun ω : Coins L => tileOf L κ ω rb' cb' t' = tileOf L κ ω rb cb t).card : ℚ) ≤
+      Fintype.card (Coins L) * (1 / (2 ^ 56 : ℕ)) →
+      ((univ.filter fun ω : Coins L => tileOf L κ ω rb' cb' t' = tileOf L κ ω rb cb t).card : ℚ) ≤
+        Fintype.card (Coins L) * pairShare L (rb, cb, t) (rb', cb', t') := fun h => by
+    refine h.trans (mul_le_mul_of_nonneg_left ?_ hN)
+    unfold pairShare
+    push_cast
+    linarith
+  by_cases hlt : t < t'
+  · refine lane (of_mul _ _ (by positivity) ?_)
+    rw [← hlane2']
+    exact tile_lane_card_le κ htile hy'.1 (by have := Fin.lt_def.1 hlt; omega) (Or.inl hlt)
+  by_cases hgt : t' < t
+  · refine lane (of_mul _ _ (by positivity) ?_)
+    rw [← hlane2, filter_congr fun ω _ => eq_comm]
+    exact tile_lane_card_le κ htile hx.1 (by have := Fin.lt_def.1 hgt; omega) (Or.inl hgt)
+  have htt : t' = t := le_antisymm (not_lt.1 hlt) (not_lt.1 hgt)
+  subst htt
+  by_cases hl : (t' : ℕ) ≠ 0 ∧ (cb' ≠ cb ∨ rb' / 4 ≠ rb / 4)
+  · refine lane (of_mul _ _ (by positivity) ?_)
+    rw [← hlane2']
+    exact tile_lane_card_le κ htile hy'.1 hl.1 (Or.inr (hl.2.imp (fun h e => h e.symm) fun h e => h e.symm))
+  by_cases hcb : cb' = cb
+  · subst hcb
+    refine (of_mul _ (7 ^ 8) (by positivity) ?_).trans (mul_le_mul_of_nonneg_left ?_ hN)
+    · rw [← hcols cb' hy'.2]
+      exact tile_agree_card_le κ hLm (by rw [he]; norm_num) (by omega) hy'.1 hx.1 hne
+    · unfold pairShare
+      rw [ite_eq_left ⟨rfl, rfl⟩]
+      push_cast
+      linarith
+  · have h0 : (t' : ℕ) = 0 := by
+      by_contra h
+      exact hl ⟨h, Or.inl hcb⟩
+    refine (of_mul _ (49 ^ 8) (by positivity) ?_).trans (mul_le_mul_of_nonneg_left ?_ hN)
+    · rw [← hcols cb' hy'.2]
+      exact tile_cross_card_le κ hLm t' t' (hrowB rb' hy'.1) (Ne.symm hcb)
+    · unfold pairShare
+      rw [ite_eq_left h0]
+      push_cast
+      linarith
+
+/-- A filter's share sum: `c` on each element meeting `p`. -/
+theorem sum_ite_le {α : Type} (s : Finset α) (p : α → Prop) [DecidablePred p] (c : ℚ) (hc : 0 ≤ c) {M : ℕ}
+    (hM : (s.filter p).card ≤ M) : ∑ y ∈ s, (if p y then c else 0) ≤ M * c := by
+  rw [← sum_filter, sum_const, nsmul_eq_mul]
+  exact mul_le_mul_of_nonneg_right (by exact_mod_cast hM) hc
+
+/-- **A layout's repeats** of 64-row coin tiles, 7-bit coin lanes and whole MMA tiles, for at most 1,785 row blocks,
+`2^17` column blocks and 2,341 steps and an inner dimension of at least 4,096 with at most 28 a step: in words and
+averaged over the coins, at most `coinBranchGap`. -/
+theorem repeats_le_layout (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (htile : L.tile = 64) (he : L.e = 7)
+    (hLm : L.m = 16 * L.rowBlocks) (hRle : L.rowBlocks ≤ 1785) (hLn : L.n = 8 * L.colBlocks)
+    (hCle : L.colBlocks ≤ 131072) (hSle : L.S ≤ 2341) (hS28 : 28 * L.S ≤ L.K + 31) (hK : 4096 ≤ L.K) :
+    ∑ ω : Coins L, (tileWords * repeats L κ ω : ℚ) ≤ Fintype.card (Coins L) * coinBranchGap L := by
+  set N := (Fintype.card (Coins L) : ℚ)
+  have hN : 0 ≤ N := Nat.cast_nonneg _
+  set R := L.rowBlocks with hR
+  set C := L.colBlocks with hC
+  have hA : (tileIdx L).card = R * C * L.S := by
+    simp only [tileIdx, card_product, card_range, card_univ, Fintype.card_fin, hR, hC, mul_assoc]
+  have hrow : ∀ x ∈ tileIdx L, ((tileIdx L).filter fun y => y.2.1 = x.2.1 ∧ y.2.2 = x.2.2).card ≤ R := by
+    intro x _
+    refine (card_le_card_of_injOn (fun y => y.1) (by
+      intro y hy
+      simp only [coe_filter, tileIdx, mem_product, mem_range, mem_univ, and_true, Set.mem_ofPred_eq] at hy
+      simp only [coe_range, Set.mem_Iio]
+      exact hy.1.1) ?_).trans (card_range R).le
+    intro y hy y' hy' h
+    simp only [coe_filter, Set.mem_ofPred_eq] at hy hy'
+    exact Prod.ext h (Prod.ext (hy.2.1.trans hy'.2.1.symm) (hy.2.2.trans hy'.2.2.symm))
+  have hzero : ((tileIdx L).filter fun y => (y.2.2 : ℕ) = 0).card ≤ R * C := by
+    refine (card_le_card_of_injOn (fun y => (y.1, y.2.1)) (t := range R ×ˢ range C) (by
+      intro y hy
+      simp only [coe_filter, tileIdx, mem_product, mem_range, mem_univ, and_true, Set.mem_ofPred_eq] at hy
+      simp only [coe_product, coe_range, Set.mem_prod, Set.mem_Iio]
+      exact hy.1) ?_).trans (by rw [card_product, card_range, card_range])
+    intro y hy y' hy' h
+    simp only [coe_filter, Set.mem_ofPred_eq] at hy hy'
+    simp only [Prod.mk.injEq] at h
+    exact Prod.ext h.1 (Prod.ext h.2 (Fin.ext (hy.2.trans hy'.2.symm)))
+  have hsum : ∀ x ∈ tileIdx L, ∑ y ∈ tileIdx L, pairShare L x y ≤
+      R / 7 ^ 8 + R * C / 49 ^ 8 + R * C * L.S / 2 ^ 56 := by
+    intro x hx
+    unfold pairShare
+    rw [sum_add_distrib, sum_add_distrib, sum_const, nsmul_eq_mul, hA]
+    have a := sum_ite_le (tileIdx L) (fun y => y.2.1 = x.2.1 ∧ y.2.2 = x.2.2) (1 / 7 ^ 8) (by positivity)
+      (hrow x hx)
+    have b := sum_ite_le (tileIdx L) (fun y => (y.2.2 : ℕ) = 0) (1 / 49 ^ 8) (by positivity) hzero
+    push_cast at a b ⊢
+    linarith
+  have h1 : ∑ ω : Coins L, (tileWords * repeats L κ ω : ℚ) = 128 * ((∑ ω : Coins L, repeats L κ ω : ℕ) : ℚ) := by
+    rw [Nat.cast_sum, mul_sum]; norm_num [tileWords]
+  have h2 : ((∑ ω : Coins L, repeats L κ ω : ℕ) : ℚ) ≤
+      ∑ x ∈ tileIdx L, ∑ y ∈ tileIdx L, N * pairShare L x y := by
+    refine (Nat.cast_le.2 (sum_repeats_le κ)).trans ?_
+    push_cast
+    refine sum_le_sum fun x hx => (sum_le_sum fun y hy => pair_le κ htile he hLm hRle hLn hx hy).trans ?_
+    exact sum_le_sum_of_subset_of_nonneg (erase_subset _ _) fun y _ _ => mul_nonneg hN (pairShare_nonneg L x y)
+  have h3 : ∑ x ∈ tileIdx L, ∑ y ∈ tileIdx L, N * pairShare L x y ≤
+      (R * C * L.S : ℕ) * (N * (R / 7 ^ 8 + R * C / 49 ^ 8 + R * C * L.S / 2 ^ 56)) := by
+    rw [← hA, ← nsmul_eq_mul, ← sum_const]
+    exact sum_le_sum fun x hx => by rw [← mul_sum]; exact mul_le_mul_of_nonneg_left (hsum x hx) hN
+  have hR0 : (0 : ℚ) ≤ R := Nat.cast_nonneg _
+  have hC0 : (0 : ℚ) ≤ C := Nat.cast_nonneg _
+  have hS0 : (0 : ℚ) ≤ L.S := Nat.cast_nonneg _
+  have hbr : (R : ℚ) / 7 ^ 8 + R * C / 49 ^ 8 + R * C * L.S / 2 ^ 56 ≤
+      1785 / 7 ^ 8 + 1785 * 131072 / 49 ^ 8 + 1785 * 131072 * 2341 / 2 ^ 56 := by
+    have hR' : (R : ℚ) ≤ 1785 := by exact_mod_cast hRle
+    have hC' : (C : ℚ) ≤ 131072 := by exact_mod_cast hCle
+    have hS' : (L.S : ℚ) ≤ 2341 := by exact_mod_cast hSle
+    gcongr
+  have hS28' : 28 * (L.S : ℚ) ≤ L.K + 31 := by exact_mod_cast hS28
+  have hK0 : (4096 : ℚ) ≤ L.K := by exact_mod_cast hK
+  have hkey : 128 * (L.S : ℚ) * (R / 7 ^ 8 + R * C / 49 ^ 8 + R * C * L.S / 2 ^ 56) ≤ 84 / 100000 * (4 * L.K) := by
+    have := mul_le_mul_of_nonneg_left hbr (by positivity : (0 : ℚ) ≤ 128 * L.S)
+    refine this.trans ?_
+    norm_num
+    linarith
+  have hgap : coinBranchGap L = 84 / 100000 * (16 * R * (8 * C) * L.K / 32) := by
+    unfold coinBranchGap stockRegs
+    rw [hLm, hLn]
+    push_cast
+    rfl
+  rw [h1, hgap]
+  calc 128 * ((∑ ω : Coins L, repeats L κ ω : ℕ) : ℚ)
+      ≤ 128 * ((R * C * L.S : ℕ) * (N * (R / 7 ^ 8 + R * C / 49 ^ 8 + R * C * L.S / 2 ^ 56))) := by
+        gcongr; exact h2.trans h3
+    _ = N * (R * C) * (128 * L.S * (R / 7 ^ 8 + R * C / 49 ^ 8 + R * C * L.S / 2 ^ 56)) := by push_cast; ring
+    _ ≤ N * (R * C) * (84 / 100000 * (4 * L.K)) := by gcongr
+    _ = N * (84 / 100000 * (16 * R * (8 * C) * L.K / 32)) := by ring
+
+/-- **The lead's repeats**, for at most 28,560 rows, `2^20` columns and an inner dimension from 4,096 to 65,536: in
+words and averaged over the coins, at most `coinBranchGap`. -/
+theorem repeats_le_of (T m n K : ℕ)
+    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ) (hm : m ≤ 28560)
+    (hn : n ≤ 2 ^ 20) (hK : 4096 ≤ K) (hK' : K ≤ 65536) :
+    ∑ ω : Coins (lead T m n K), (tileWords * repeats (lead T m n K) κ ω : ℚ) ≤
+      Fintype.card (Coins (lead T m n K)) * coinBranchGap (lead T m n K) :=
+  repeats_le_layout κ rfl rfl (by simp only [Layout.rowBlocks, lead, padRows]; omega)
+    (by simp only [Layout.rowBlocks, lead, padRows]; omega) (by simp only [Layout.colBlocks, lead, padCols]; omega)
+    (by simp only [Layout.colBlocks, lead, padCols]; omega) (by simp only [lead, stepsFor]; omega)
+    (by simp only [lead, stepsFor]; omega) hK
 
 end Pouw.SecurityProofs.Lead.Tags
