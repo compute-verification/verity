@@ -891,11 +891,11 @@ def renaming(base: Tree, table: dict[str, str], declared: list[str], now: set[st
             hits |= {o: m for o, m in table.items() if o not in hits and words({o: m}).sub(d, "-") != d}
     if not hits:
         return {}
-    try:
-        out = git("grep", "-l", "-z", "-F", *(a for n in hits.values() for a in ("-e", n)), base.rev, "--", cwd=base.cwd)
-    except subprocess.CalledProcessError:
-        out = b""
-    for p in (p.decode("utf-8", "surrogateescape").partition(":")[2] for p in out.split(b"\0") if p):
+    grep = subprocess.run(["git", "grep", "-l", "-z", "-F", *(a for n in hits.values() for a in ("-e", n)), base.rev, "--"],
+                          cwd=base.cwd, capture_output=True)
+    if grep.returncode not in (0, 1):  # 1: nothing matches
+        raise subprocess.CalledProcessError(grep.returncode, grep.args, grep.stdout, grep.stderr)
+    for p in (p.decode("utf-8", "surrogateescape").partition(":")[2] for p in grep.stdout.split(b"\0") if p):
         if not rewrites(p) or (text := base.text(p)) is None:
             continue
         if p.endswith(".lean"):
