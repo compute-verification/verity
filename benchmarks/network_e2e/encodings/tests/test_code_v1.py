@@ -131,7 +131,7 @@ def _tiny_windows():
 def test_decode_accepts_exactly_the_encoders_strings(prior):
     """Exhaustive over a small alphabet: of every bit string up to the longest codeword, `decode` accepts exactly the
     encoder's codewords, each back to its residual. They are prefix-free with Kraft's sum at most 1, so v1's charge
-    meets `BitsCount`."""
+    meets the sampled leak bound's `hAs`."""
     book = V.Book(TINY, V.Book.uniform(TINY).models, prior)
     words = {}
     for win in _tiny_windows():
