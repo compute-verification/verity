@@ -20,9 +20,9 @@ the verdict passed and no step listed twice.  A sharded check (`check.py --shard
 `check-shard/v1`) passes only through the Attempt of `check.py --combine RUN...` on the same commit, and only when the gate,
 reading the shards itself (`shard_set`), finds them a passing check of that clean commit (one plan, K = 1..N once each, the
 commit's own `tools/verity/check/`, every part once, every job its `ci.toml` puts on the gate, no step failed) and the combine's
-steps theirs; a shard alone passes nothing.  A job off the gate (`gate = false`: circuit-check) is required of no check, whole
-or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red there reverts
-its culprit.  With a usable remote the catalog's attempts are refreshed first, so an attempt
+steps theirs; a shard alone passes nothing.  A job off the gate (`gate = false`: circuit-check, ratchet-gate) is required of no
+check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
+there reverts its culprit.  With a usable remote the catalog's attempts are refreshed first, so an attempt
 recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
 ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: what the target gained is in REF already, as when a
@@ -194,8 +194,8 @@ SHARD_KIND = "check-shard/v1"
 
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:
     """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` puts on the merge gate (every job but those with
-    `gate = false`), or why they can't be read.  A job off the gate (circuit-check) runs after landing, in drive's after-landing
-    run, whose red reverts its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
+    `gate = false`), or why they can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's
+    after-landing run, whose red reverts its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
     import tomllib
 
     from .store import tools_registry
@@ -242,9 +242,9 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     ``command`` with `--shard K/N` (`invocation`), whose own result is a passed `SHARD_KIND` naming that shard, ``commit`` and
     its config (``commit``'s tree of `tools/verity/check/`), with no step but passed or skipped and its steps' parts its shard's parts;
     together, one N with K = 1..N once each, one list of every part, which their parts make exactly once and which covers every
-    job ``commit``'s `ci.toml` puts on the gate (`declared_jobs`: not circuit-check, which runs after landing), and the same
-    steps outside their parts (the preflight), passed in each.  The steps: those once, then each part as its shard's step ran
-    it."""
+    job ``commit``'s `ci.toml` puts on the gate (`declared_jobs`: not circuit-check or ratchet-gate, which run after landing),
+    and the same steps outside their parts (the preflight), passed in each.  The steps: those once, then each part as its
+    shard's step ran it."""
     if not ids or len(set(ids)) != len(ids):
         return None, "a set of shards names each shard's attempt once" if ids else "no shard is named"
     config = _git(repo, "rev-parse", "--verify", "-q", f"{commit}:tools/verity/check", check=False).stdout.strip()

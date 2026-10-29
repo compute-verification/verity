@@ -30,9 +30,9 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
                           skips its Lean group there): a skip passes nothing
     lean-changed          no verdict, never required: it vouches for nothing, the audit decides
     ratchet-gate          no verdict, never required: it judges the merges above the check's base, not COMMIT's tree, and
-                          the train's check runs it
+                          is off the merge gate
 
-A job off the merge gate (ci.toml's `gate = false`: circuit-check) is listed, and none of its parts is required.
+A job off the merge gate (ci.toml's `gate = false`: circuit-check, ratchet-gate) is listed, and none of its parts is required.
 
 The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict of their own.  Each is
 `implied` when every part that reads what it makes has passed (`implied_by`), and `must-run` when one hasn't.  Why those passes
