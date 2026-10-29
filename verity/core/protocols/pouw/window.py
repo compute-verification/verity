@@ -50,7 +50,7 @@ leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domain
 `side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
 `public_inputs`); `tests/vectors/window.json` pins them.
 
-**Live windows** (decision 36).  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
+**Live windows**.  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
 (`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
 derivation from the salt and the prover's roots.  A live window's comes from the proof system's challenger
 (`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout

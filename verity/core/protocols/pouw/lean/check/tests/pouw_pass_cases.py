@@ -516,7 +516,7 @@ def _mutate_live(h: dict, name: str, rng: random.Random) -> None:
             u = rng.choice(man["matmuls"])
             u["index"] = rng.choice([CC.CALL_BOUND, CC.CALL_BOUND + rng.randrange(1, 1 << 20), (1 << 64) - 1])
         case "h1-layout" | "not-salt-only":
-            # #3868's session: H1's layout, its salt coin alone released, so ended incomplete; or another layout or scheme
+            # an H1 session: H1's layout, its salt coin alone released, so ended incomplete; or another layout or scheme
             layout, scheme = (Wd.live_families(rng.choice([1, 2])), Wd.LIVE_SCHEME) if name == "h1-layout" else \
                 rng.choice([(((Wd.SALT, 1), (Wd.DRAW, 1)), Wd.LIVE_SCHEME), (((Wd.SALT, 2),), Wd.LIVE_SCHEME),
                             (Wd.SALT_FAMILIES, "verity/vllm/commit-coins/v1")])
