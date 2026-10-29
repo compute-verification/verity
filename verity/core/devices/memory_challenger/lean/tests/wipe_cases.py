@@ -29,6 +29,8 @@ SECRET = b"streamed-wipe-lean/auditor secret"
 SERVERS = [b"server-7", b"s", "é".encode()]
 #: Tier names, ASCII and not, which the header writes as `json.dumps` does.
 TIER_NAMES = ["gpu", "host-dram", "é ü", 'a"b\\', "\t\x00", "𝄞"]
+#: The tier names a protocol case can hold: its canonical JSON's strings are ASCII without DEL.
+CASE_TIER_NAMES = [n for n in TIER_NAMES if n.isascii() and "\x7f" not in n]
 U = sw.EGRESS_UNIT_BITS
 
 
@@ -130,16 +132,17 @@ EGRESS = st.one_of(st.integers(0, 4 * U), st.sampled_from([0, 1, U, U + 1, sw.EG
 
 
 @st.composite
-def sessions(draw, signer: M.AtLeaf | None = None) -> Session:
+def sessions(draw, signer: M.AtLeaf | None = None, names: list[str] = TIER_NAMES) -> Session:
     """An honest run of `Challenger` at a drawn batch size, every answer on time and right (some at the deadline itself),
-    or one batch late or one answer wrong; signed by `signer` or a drawn test signer at a drawn leaf."""
+    or one batch late or one answer wrong; signed by `signer` or a drawn test signer at a drawn leaf, its tiers named
+    from `names`."""
     if signer is None:
         height = draw(st.integers(1, 2))
         signer = M.test_signer(draw(st.sampled_from(M.SECRETS)), height, draw(st.integers(0, 2 ** height - 1)))
     labels, k = draw(st.integers(1, 48)), draw(st.integers(1, 6))
     batch = draw(st.one_of(st.just(1), st.integers(1, k)))
     limit = draw(st.integers(1, 10 ** 6))
-    names = draw(st.permutations(TIER_NAMES))
+    names = draw(st.permutations(names))
     cuts = draw(st.lists(st.integers(1, max(1, labels - 1)), max_size=2))
     outside = draw(st.sampled_from([0, 0, 1, sw.LABEL_BYTES, 4096]))
     params = sw.WipeParams(labels, k, batch, limit, tiers_of(labels, cuts, names, outside))

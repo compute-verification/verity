@@ -3,9 +3,10 @@
 `identity-difftest` (`Identity.Difftest.table`) serves streaming SHA-512 absorbed in pieces (against `hashlib.sha512`),
 `taggedSha512` (against `identity.tagged_sha512`) and `identityDigestSha512` (against `identity.identity_digest_sha512`).
 Tags are drawn from all of Unicode, the empty tag and non-strings among them, which Python refuses and so must Lean;
-payloads cross the 128-byte block boundaries and the padding's 112-byte edge; manifests are any JSON with integers (Python
-writes no float into a request, so a float manifest is out of the harness's reach: `Flock.canon` refuses a non-integer
-number, as Python refuses a float).
+payloads cross the 128-byte block boundaries and the padding's 112-byte edge; manifests are any JSON with integers and
+strings of ASCII without DEL (Python writes no float into a request, so a float manifest is out of the harness's reach:
+`Flock.canon` refuses a non-integer number, as Python refuses a float; Python refuses any other string, which
+`Flock.canon` writes as UTF-8).
 """
 
 from __future__ import annotations
@@ -84,9 +85,13 @@ def sha512_inputs(draw) -> dict:
     return {"payload": payload, "pieces": pieces}
 
 
+#: Strings `canonical_json_bytes` takes: ASCII without DEL, control characters included. It refuses any other, which
+#: `Flock.canon` writes as UTF-8, so the harness draws none.
+TEXT = st.text(st.characters(max_codepoint=0x7e), max_size=12)
 JSON = st.recursive(
-    st.none() | st.booleans() | st.integers(-(1 << 130), 1 << 130) | st.text(max_size=12),
-    lambda inner: st.lists(inner, max_size=4) | st.dictionaries(st.text(max_size=6), inner, max_size=4),
+    st.none() | st.booleans() | st.integers(-(1 << 130), 1 << 130) | TEXT,
+    lambda inner: st.lists(inner, max_size=4) | st.dictionaries(st.text(st.characters(max_codepoint=0x7e), max_size=6),
+                                                                inner, max_size=4),
     max_leaves=12)
 
 FNS = {
