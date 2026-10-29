@@ -16,6 +16,8 @@ at least one link (`empty`) and `grid L` rows (`count`), then each link in order
 input row read twice (`twice`) and to its reader row's words being its writer row's (`unequal`). `check_sound`: whatever it
 accepts, its table is its links then fillers, and every link holds. No statement the verifier accepts reaches it: it is
 what V*'s link unit is held to, and `verity_flock.rec_links` mirrors it for the prover (`flock-rec-links`, the difftest).
+Its witnesses: `check_sound_honest`, `check` accepting the prover's table of one link that holds, and
+`check_sound_nontrivial`, its conclusion failing at a table a check that accepts everything accepts.
 -/
 
 namespace Flock
@@ -256,6 +258,31 @@ theorem check_sound {sh : Shape} {inRow outRow : Nat → Nat → Array Nat} {row
             · cases hxs : xs.filterMap id with
               | nil => simp [hxs] at he
               | cons _ _ => simp
+
+/-! ## `check_sound`'s witnesses -/
+
+/-- The honest instance: one unit with one one-word input row and one one-word output row, its output row read into its
+input row, both rows `#[0]`. -/
+def honestShape : Shape := ⟨1, #[1], #[1]⟩
+
+def honestRow (_ _ : Nat) : Array Nat := #[0]
+
+def honestLink : Link := ⟨0, 0, 0, 0⟩
+
+/-- **`check_sound`'s honest lemma**: its hypothesis holds at an honest table, the prover's (`table`) of one link that
+holds at the honest instance, which `check` accepts with its one link. -/
+theorem check_sound_honest : check honestShape honestRow honestRow (table [honestLink]) = .ok 1 := by
+  set_option maxRecDepth 100000 in rfl
+
+/-- **`check_sound`'s nontrivial lemma**: its conclusion fails at a one-row table whose row is empty, for one link,
+whatever links are named: the row decodes to no link (`row-size`). -/
+theorem check_sound_nontrivial : ∀ ls : List Link,
+    ¬ (decodeAll (#[ByteArray.empty] : Array ByteArray).toList =
+          .ok (ls.map some ++ List.replicate ((#[ByteArray.empty] : Array ByteArray).size - 1) none) ∧
+        1 = ls.length ∧ 0 < 1 ∧ (#[ByteArray.empty] : Array ByteArray).size = grid 1 ∧
+        (∀ l ∈ ls, Holds honestShape honestRow honestRow l) ∧ (ls.map fun l => (l.reader, l.port)).Nodup) := by
+  rintro ls ⟨h, -⟩
+  simp [decodeAll, decode, ROW_BYTES] at h
 
 end RecLinks
 end Flock

@@ -285,6 +285,12 @@
    "repeatM"
   ]
  },
+ "witnesses": {
+  "Flock.RecLinks.check_sound": {
+   "honest": ["Flock.RecLinks.check_sound_honest"],
+   "nontrivial": "Flock.RecLinks.check_sound_nontrivial"
+  }
+ },
  "compile_time": {
   "Flock.With.ReturnsWalk": {
    "why": "returns_walk, a tactic macro (syntax and macro_rules only) that expands to core tactics (repeat', first, extract_lets, with_reducible apply/refine/exact, intro, assumption, split, conv whnf) and the Flock.With.Returns lemmas; it runs no IO and declares nothing a guarantee reads",
@@ -469,7 +475,9 @@
    ],
    "assumptions": [],
    "type_hash": "5798bc5808809e9f728d09061afde55a0dcb498935b09a22455d695061437a91"
-  }
+  },
+  "Flock.RecLinks.check_sound_honest": {"owner": "@proofs"},
+  "Flock.RecLinks.check_sound_nontrivial": {"owner": "@proofs"}
  },
  "shape": {
   "premises": [],
@@ -491,6 +499,24 @@
    "Flock.Firewall.Contract.holds_finish": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
    "Flock.Firewall.Contract.holds_fixed": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
    "Flock.Firewall.Contract.holds_masked": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement"
+  },
+  "inline": {
+   "Flock.Firewall.Contract.holds_coins": {
+    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.coins stream k cs relayed opening)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.Firewall.Contract.holds_commit": {
+    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.commit msg i sent)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.Firewall.Contract.holds_computed": {
+    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.fixed what src want sent ps)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Or (Eq src Flock.Firewall.Contract.By.recheck) (Or (Eq src Flock.Firewall.Contract.By.shadow) (Eq src Flock.Firewall.Contract.By.own))": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.Firewall.Contract.holds_fixed": {
+    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.fixed what src want sent ps)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.Firewall.Contract.holds_masked": {
+    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.masked v p sent)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   }
   }
  },
  "reads": {
@@ -759,5 +785,14 @@
  },
  "dependencies": {
   "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
+ },
+ "unwitnessed": {
+  "Flock.Firewall.Contract.holds_coins": "f7c75fc8ff69fd14d2eb14fdf528503aa90514b4631c436a3973c0793267c6eb",
+  "Flock.Firewall.Contract.holds_coins_binding": "2f38b70ba9aae0ea55033e2810725f001faa26ae99c11c7b348a0a78f2c07c06",
+  "Flock.Firewall.Contract.holds_commit": "9e86b324d2e725880221dddee14f20fb05839f5e4ffff11ada6ddabd2f2b0361",
+  "Flock.Firewall.Contract.holds_computed": "9c0c81dfbc7167b19c682b77768e00765a7a0a77b778d97ca5f45f0eef5fd3a4",
+  "Flock.Firewall.Contract.holds_finish": "aa67703052894f171a7b02e9bb4cc0ac0b3da1a2da9592ca3ebf2c136a3accc5",
+  "Flock.Firewall.Contract.holds_fixed": "01861c4768c06289a8317df2c471999f9378506a0c7c59972ed9bab24531ec36",
+  "Flock.Firewall.Contract.holds_masked": "5e617dd64b1e2cd62d76d06af0007fbc6d7f698d153f042690fab45ac466a7de"
  }
 }
