@@ -55,14 +55,15 @@ def PARTITION_PROVISIONAL : String := "flock-circuit/unit-cover/v0"
 def isSha512Hex (s : String) : Bool := s.length == 128 && s.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f'))
 
 /-- The class of the instances a circuit file proves: SHA-512 of the file with META's bindings removed (META re-serialized
-canonically), which a partition can name before it is bound. -/
+compact and sorted, strings in UTF-8 as upstream's `serde_json` writes them: `canonUtf8`), which a partition can name before
+it is bound. -/
 def classOf (bytes : ByteArray) (head : String) (mj : Json) : V ByteArray := do
   let some n1 := findByte bytes 10 | throw "circuit: no META line"
   let some n2 := findByte bytes 10 (n1 + 1) | throw "circuit: no section after META"
   let m := match mj with
     | .obj kvs => Json.mkObj (kvs.toArray.filter (fun kv => !BINDING_KEYS.contains kv.1)).toList
     | j => j
-  return Sha512.hash (head.toUTF8 ++ "\nMETA ".toUTF8 ++ (← canon m).toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
+  return Sha512.hash (head.toUTF8 ++ "\nMETA ".toUTF8 ++ (← canonUtf8 m).toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
 
 /-- `classOf` with its hash in a task (`classOf_eq_task`), for `parseFastFrom`. Not inlined, for `parseFastFrom`'s
 reason. -/
@@ -72,7 +73,7 @@ reason. -/
   let m := match mj with
     | .obj kvs => Json.mkObj (kvs.toArray.filter (fun kv => !BINDING_KEYS.contains kv.1)).toList
     | j => j
-  let c ← canon m
+  let c ← canonUtf8 m
   return Task.spawn fun _ => Sha512.hash (head.toUTF8 ++ "\nMETA ".toUTF8 ++ c.toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
 
 theorem classOf_eq_task (bytes : ByteArray) (head : String) (mj : Json) :
@@ -80,7 +81,7 @@ theorem classOf_eq_task (bytes : ByteArray) (head : String) (mj : Json) :
   unfold classOf classOfTask
   split
   · split
-    · dsimp only; cases canon _ <;> rfl
+    · dsimp only; cases canonUtf8 _ <;> rfl
     · rfl
   · rfl
 
@@ -1303,8 +1304,10 @@ def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
   | _, some _ => throw "partition: the circuit binds the provisional unit cover, not a verity/partition/v1 object"
   | _, none => return { rule, digest, derived := false, note := "units taken as stated, not derived: the provisional unit cover names no query" }
 
+/-- SHA-512 of the public header and the public bytes after it, the header as upstream's `Instances::public_digest` writes
+it (`serde_json`, strings in UTF-8: `canonUtf8`). -/
 def publicDigest (header : Json) (pubs : ByteArray) : V ByteArray := do
-  return Sha512.hash ((← canon header).toUTF8 ++ pubs)
+  return Sha512.hash ((← canonUtf8 header).toUTF8 ++ pubs)
 
 /-- Header `shared_rows` (from PR #83 `967b8d06`): exactly the circuit's input ports, each a table of at least one row (a count
 that is not a non-negative integer counts as none, as upstream reads it); none for a per-instance file. -/
@@ -1588,7 +1591,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
     (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
-  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
+  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← identityBytes identity)
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
     h := pushLe64 h d.size
@@ -2316,7 +2319,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
   let identity := if HmRow.pinnedCount c.metaJ > 0 then Tags.pinnedIdentity identity else identity
-  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
+  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← identityBytes identity)
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
     h := pushLe64 h d.size
@@ -2473,7 +2476,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
   let identity := if HmRow.pinnedCount c.metaJ > 0 then Tags.pinnedIdentity identity else identity
-  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
+  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← identityBytes identity)
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
     h := pushLe64 h d.size

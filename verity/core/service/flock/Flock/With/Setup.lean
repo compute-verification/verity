@@ -198,7 +198,7 @@ def classOfWith (hs : Hashes M) (bytes : ByteArray) (head : String) (mj : Json) 
   let m := match mj with
     | .obj kvs => Json.mkObj (kvs.toArray.filter (fun kv => !BINDING_KEYS.contains kv.1)).toList
     | j => j
-  hs.sha512 (head.toUTF8 ++ "\nMETA ".toUTF8 ++ (← canon m).toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
+  hs.sha512 (head.toUTF8 ++ "\nMETA ".toUTF8 ++ (← canonUtf8 m).toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
 
 /-- `parse`'s sections after META from the state `s`, the nets so far and the line it reads next: each block line's net. -/
 def sectionsLoop (tags : Tags) (lines : Array String) (s : Array (String × Net) × Nat) : V (Array (String × Net) × Nat) :=
@@ -493,7 +493,7 @@ def checkPartitionWith (hs : Hashes M) (c : Circuit) (obj : Option Json) : M Par
 
 /-- `publicDigest` through the oracle. -/
 def publicDigestWith (hs : Hashes M) (header : Json) (pubs : ByteArray) : M ByteArray := do
-  hs.sha512 ((← canon header).toUTF8 ++ pubs)
+  hs.sha512 ((← canonUtf8 header).toUTF8 ++ pubs)
 
 /-- `loadPublic` through the oracle. -/
 def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (file : ByteArray) : M Public := do
@@ -680,7 +680,7 @@ def Stmt.setupHWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : Byte
     (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
-  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
+  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← identityBytes identity)
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
     h := pushLe64 h d.size
@@ -864,7 +864,7 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
   let identity := if HmRow.pinnedCount c.metaJ > 0 then Tags.pinnedIdentity identity else identity
-  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
+  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← identityBytes identity)
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
     h := pushLe64 h d.size
