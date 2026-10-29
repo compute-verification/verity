@@ -203,13 +203,15 @@ def lane_ops(kind: str, variant: str, exp: str = "mufu", dv: int = 64) -> list[t
             ("FMNMX", 1, "S"), ("FADD", 2, "R"), ("FADD", 1, "T"), ("FFMA", 3, "T"), ("SHF", 1, "R"), ("IADD3", 1, "T")]
         return [("IADD3", 1, "T"), ("FADD", 1, "T"), ("FMUL", 1, "T"), ("FMNMX", 1, "S"), ("FFMA", 1, "T")] + ex + [
             ("FADD", 1, "T"), ("FFMA", 1, "R"), ("PRMT", 0.75, "R"), ("IADD3", dv / b, "T"), ("FADD", dv / b, "T"),
-            ("FFMA3", dv / b, "T"), ("SHFL", 2 / q, "X"), ("FMNMX", 2 / q, "S"), ("MUFU", 1 / q, "M")]
+            ("FMUL", dv / b, "T"), ("FADD", dv / b, "T"), ("SHFL", 2 / q, "X"), ("FMNMX", 2 / q, "S"),
+            ("MUFU", 1 / q, "M")]
     if kind == "combine":
         return {"stock": [("UNPK", 9, "R"), ("FADD", 8, "T"), ("F2FP", 0.5, "R")],
                 "lean": [("UNPK", 9, "R"), ("FADD", 8, "T"), ("F2FP", 0.5, "R")],
                 "fused": [("FADD", 8, "T")]}[variant]
     if kind == "router":
-        return [("UNPK", 1, "R"), ("FMUL", 1, "T"), ("MUFU", 2, "M"), ("FADD", 2, "T"), ("FMNMX", 8, "S")]
+        score = [("FMUL", 1, "T"), ("MUFU", 2, "M"), ("FADD", 2, "T"), ("FMNMX", 8, "S")]
+        return ([("I2F", 1, "C")] if variant == "fused" else [("UNPK", 1, "R")]) + score
     if kind == "sampler":
         return [("UNPK", 1, "R"), ("FMNMX", 3, "S")] if variant == "stock" else [("FMNMX", 3, "S")]
     if kind == "move":
@@ -233,14 +235,35 @@ def dithered(ops: list[tuple[str, float, str]]) -> list[tuple[str, float, str]]:
     return out
 
 
-def lane_cost(ops, reading: str, premises: frozenset, reachable: bool) -> dict:
-    """Honest units, forced units, committed words and the honest units no word forces, an element."""
+def static_scaled(ops: list[tuple[str, float, str]]) -> list[tuple[str, float, str]]:
+    """A quantize with a calibrated static scale: its amax (the FMNMX selections and their SHFL tree) is gone, and a
+    saturating FFMA (x·s/254 + 0.5 under .SAT) bounds what the scale no longer does; it is a new value wherever it
+    doesn't clamp."""
+    return [o for o in ops if not (o[2] == "S" or o[0] == "SHFL")] + [("FFMA", 1, "T")]
+
+
+def strided_max(ops: list[tuple[str, float, str]], stride: int) -> list[tuple[str, float, str]]:
+    """Softmax with the row max taken over every `stride`-th score of a block plus a margin, and p saturated to [0, 1]
+    by an FFMA.SAT (a new value wherever it doesn't clamp) before P's round."""
+    out, done = [], False
+    for op, cnt, cls in ops:
+        if not done and (op, cnt, cls) == ("FMNMX", 1, "S"):
+            out.append((op, cnt / stride, cls))
+            done = True
+        else:
+            out.append((op, cnt, cls))
+    return out + [("FFMA", 1, "T")]
+
+
+def lane_cost(ops, reading: str, premises: frozenset, reachable: bool, targets: str = "TMC") -> dict:
+    """Honest units, forced units, committed words and the honest units no word forces, an element. Only the classes
+    in `targets` are committed."""
     ri = _ri(reading)
     out = {"honest": 0.0, "forced": 0.0, "words": 0.0, "unforced": 0.0}
     for op, cnt, cls in ops:
         p = PRICE[op][ri]
         h, f = cnt * p, 0.0
-        if reachable and cls in ("T", "M", "C"):
+        if reachable and cls in targets:
             base = REFINED_FLOOR if "MeasuredFloor" in premises else H32
             if cls == "M" and "MufuSpeed" in premises:
                 base = PRICE["MUFU"][1]
@@ -393,6 +416,10 @@ class Plan:
     commit_pad: bool = True
     small_m: str = "best"
     dither: bool = False
+    static_scales: bool = False
+    softmax_targets: str = "TMC"
+    router: str = "stock"
+    rowmax_stride: int = 1
     note: str = ""
 
 
@@ -415,6 +442,18 @@ PLANS = [
     Plan("best_p4_dither", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused", dither=True,
          premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
          note="best_p4 with dithered rounding"),
+    Plan("best_p4_smlite", lm_head="ssn_1l", attention="i8", exp="mufu", lanes="fused", dither=True,
+         softmax_targets="M", premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="best_p4_dither committing only the softmax's MUFU outputs (T2 for uncovered share)"),
+    Plan("best_max", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused", small_m="wgmma64", dither=True,
+         static_scales=True, router="i8", note="best_dither with static activation scales and an int8 router gate"),
+    Plan("best_p4_max", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused", dither=True, static_scales=True,
+         router="i8", premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="best_p4_dither with static activation scales and an int8 router gate"),
+    Plan("best_p4_max_s8", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused", dither=True,
+         static_scales=True, router="i8", rowmax_stride=8,
+         premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="best_p4_max with the softmax row max over every 8th score plus a margin, P saturated"),
 ]
 PLAN = {p.name: p for p in PLANS}
 
@@ -428,6 +467,10 @@ T3 = {
     "softmax": ("~0 (poly exp2 checked below; P is u8 at 1/255)", 0.0),
     "dither": ("+1.2% (estimate: rounding variance x2 on every int8 activation, interpolated between int8 and int7 "
                "activations' measured +3.5%; P and QKᵀ's int8 inside the attention terms)", 0.012),
+    "static": ("unmeasured: one calibrated scale a tensor for every activation quantize, instead of a token's amax", None),
+    "router": ("unmeasured: the router's gate in int8 can flip an expert choice", None),
+    "rowmax": ("unmeasured: a strided row max with a margin costs P the margin's bits and clamps the scores it misses",
+               None),
 }
 
 
@@ -438,7 +481,8 @@ def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
     sp, spad, sinstr = tc_best(c.m, dtype_stock, reading)
     stock_units = c.count * sp * spad
     covered = not stock and (fam == "linear" or (fam == "lm_head" and plan.lm_head != "stock")
-                             or (fam in ("qk", "pv") and plan.attention == "i8"))
+                             or (fam in ("qk", "pv") and plan.attention == "i8")
+                             or (fam == "router_gemm" and plan.router == "i8"))
     if not covered:
         return {"stock": stock_units, "honest": stock_units, "forced": 0.0, "words": 0.0, "forming": 0.0, "coins": 0.0,
                 "coin_calls": [], "instr": sinstr, "design": "stock", "alpha": 1.0, "unforced": stock_units,
@@ -451,7 +495,7 @@ def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
         t = ssn1l_terms(c.m, c.n, c.k, lanes) if plan.linears == "ssn_1l" else ssn_sh_terms(c.m, c.n, c.k)
         forming, coins = t["forming"] * c.count, t["coins"] * c.count
         coin_calls = [(t["coin_bytes_call"], c.calls * (c.count / (c.m * c.n * c.k * c.calls)))]
-    elif fam == "lm_head":
+    elif fam in ("lm_head", "router_gemm"):
         t = ssn1l_terms(c.m, c.n, c.k, lanes)
         forming, coins = t["forming"] * c.count, t["coins"] * c.count
         coin_calls = [(t["coin_bytes_call"], 1)]
@@ -493,7 +537,9 @@ def lane_variant(c: Comp, plan: Plan) -> tuple[str, bool]:
         if plan.lm_head == "stock":
             return "bf16", False
         return ("fused" if plan.lanes == "fused" else "stock"), plan.lanes == "fused"
-    if c.kind in ("router", "move"):
+    if c.kind == "router":
+        return ("fused", True) if plan.router == "i8" and plan.lanes == "fused" else ("stock", False)
+    if c.kind == "move":
         return "stock", False
     if plan.lanes == "fused":
         return "fused", c.kind != "quant"
@@ -522,19 +568,27 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
                 ops = s_ops
             else:
                 cands = {e: lane_ops("softmax", "i8", exp=e, dv=c.dv) for e in ("mufu", "poly")}
+                if plan.rowmax_stride > 1:
+                    cands = {e: strided_max(o, plan.rowmax_stride) for e, o in cands.items()}
                 if plan.dither:
                     cands = {e: dithered(o) for e, o in cands.items()}
                 if plan.exp == "best":
                     e = min(cands, key=lambda e: (lambda r: (r["honest"] - r["forced"], r["honest"]))(
-                        lane_cost(cands[e], reading, plan.premises, True)))
+                        lane_cost(cands[e], reading, plan.premises, True, plan.softmax_targets)))
                 else:
                     e = plan.exp
                 ops, v = cands[e], f"i8_{e}" + ("_dither" if plan.dither else "")
+                if plan.softmax_targets != "TMC":
+                    v += f"_commit_{plan.softmax_targets}"
+                if plan.rowmax_stride > 1:
+                    v += f"_max{plan.rowmax_stride}"
         else:
             ops = s_ops if (c.kind == "move") else lane_ops(c.kind, v)
-            if plan.dither and v == "fused" and any(cls == "R" for _, _, cls in ops):
-                ops, reach, v = dithered(ops), True, "fused_dither"
-        h = lane_cost(ops, reading, plan.premises, reach)
+            if plan.static_scales and v == "fused" and c.kind in ("quant", "norm", "norm_nores", "kvq"):
+                ops, v = static_scaled(ops), "fused_static"
+            if plan.dither and v.startswith("fused") and any(cls == "R" for _, _, cls in ops):
+                ops, reach, v = dithered(ops), True, v + "_dither"
+        h = lane_cost(ops, reading, plan.premises, reach, plan.softmax_targets if c.kind == "softmax" else "TMC")
         design = v
     return {"stock": st["honest"] * c.count, "honest": h["honest"] * c.count, "forced": h["forced"] * c.count,
             "words": h["words"] * c.count, "unforced": h["unforced"] * c.count, "forming": 0.0, "coins": 0.0,
@@ -625,6 +679,8 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
         r["design"] != "stock" for r in rows) else 0.0
     if plan.dither:
         t3 += T3["dither"][1]
+    t3_unmeasured = ((["static"] if plan.static_scales else []) + (["rowmax"] if plan.rowmax_stride > 1 else []) +
+                     (["router"] if plan.router == "i8" and any(r["family"] == "router_gemm" for r in rows) else []))
     alpha = tot["honest"] / st
     return {"model": model, "point": point, "plan": plan.name, "reading": reading, "stock_units": st,
             "honest_units": tot["honest"], "alpha_w1": alpha, "linears_stock_share": lin_share,
@@ -632,6 +688,7 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
             "t1_coins_uncredited": t1_mm + cov + coins, "uncovered_share": tot["unforced"] / st,
             "slack_share": (tot["honest"] - tot["forced"] - tot["unforced"]) / st,
             "hash_bytes": 4 * tot["words"], "groups": groups, "t2": t2, "t3_estimate": t3,
+            "t3_unmeasured": t3_unmeasured,
             "components": [{k: v for k, v in r.items() if k not in ("ops", "coin_calls")} for r in rows]}
 
 
