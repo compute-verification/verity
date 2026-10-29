@@ -15,6 +15,8 @@
 //                 the warp shares but ptxas can't prove uniform (a broadcast), 8 fixed 16-B cells a thread inside a
 //                 window L1 holds; each load folded into its own chain by LOP3, which the note counts too, so the row
 //                 prices every register the loop writes
+//   m_lds128b_g<G>  CORE-H32's scalar co-issue minimum (DADD, IMAD, DADD, FADD) with a broadcast LDS.128 every G ops,
+//                 its words that round's DADD operands; m_dadd2_imad_fadd, the same mix without loads, in this harness
 #include "../../opcode_probe/probe.cuh"
 #include "w1.cuh"
 
@@ -288,6 +290,51 @@ DC_DEV void bcast_body(const OpArgs& a) {
   for (int u = 0; u < U; u++) t ^= acc[u];
   OP_SINK(t)
 }
+// CORE-H32's scalar co-issue minimum (DADD, IMAD, DADD, FADD round-robin) with one broadcast LDS.128 every G of its
+// ops: that round's two DADDs add the load's two aligned register pairs, so the load adds no instruction and ptxas
+// can't narrow it. The cells hold doubles in [1, 2) (an odd word's high bits 0x3FF), so no chain overflows.
+__host__ __device__ inline unsigned bmix_off(int k, int, int, int it) {
+  return (unsigned)(k * 32) ^ (((unsigned)it & 1u) << 4);
+}
+constexpr int BMIX_WORDS = 512 + 32;
+template <int G>
+DC_DEV void bmix_body(const OpArgs& a) {
+  extern __shared__ __align__(128) unsigned sb[];
+  const unsigned base = (unsigned)__cvta_generic_to_shared(sb);
+  for (int i = threadIdx.x; i < BMIX_WORDS; i += TPB) {
+    const unsigned h = (unsigned)i * 0x9E3779B9u ^ (unsigned)a.mode;
+    sb[i] = (i & 1) ? 0x3FF00000u | (h & 0xFFFFFu) : h;
+  }
+  __syncthreads();
+  WLane l(threadIdx.x ^ (uint32_t)a.mode);
+  OP_BEGIN
+  OP_LOOP(it) {
+    const unsigned s0 = base ^ (((unsigned)it & 1u) << 4);
+#pragma unroll
+    for (int b = 0; b < 128; b++) {
+      if (b % (G / 4) == 0) {
+        unsigned p, q, r, s;
+        asm volatile("ld.shared.v4.u32 {%0,%1,%2,%3}, [%4];"
+                     : "=r"(p), "=r"(q), "=r"(r), "=r"(s)
+                     : "r"(s0 + (b / (G / 4)) * 32)
+                     : "memory");
+        asm volatile("{\n.reg .b64 x;\nmov.b64 x,{%1,%2};\nadd.rn.f64 %0,%0,x;\n}" : "+d"(l.d[(4 * b) & 7]) : "r"(p), "r"(q));
+        l.op<W_IMAD>(4 * b + 1);
+        asm volatile("{\n.reg .b64 x;\nmov.b64 x,{%1,%2};\nadd.rn.f64 %0,%0,x;\n}" : "+d"(l.d[(4 * b + 2) & 7]) : "r"(r), "r"(s));
+        l.op<W_FADD>(4 * b + 3);
+      } else {
+        w1_round_<W_DADD, W_IMAD, W_DADD, W_FADD>(l, b, std::make_index_sequence<4>{});
+      }
+    }
+  }
+  OP_END
+  OP_SINK(l.fold() ^ threadIdx.x)
+}
+OP_KERNEL(m_lds128b_g8, TPB) { bmix_body<8>(a); }
+OP_KERNEL(m_lds128b_g16, TPB) { bmix_body<16>(a); }
+OP_KERNEL(m_lds128b_g32, TPB) { bmix_body<32>(a); }
+OP_KERNEL(m_dadd2_imad_fadd, TPB) { w_run<512, W_DADD, W_IMAD, W_DADD, W_FADD>(a); }
+
 OP_KERNEL(l_lds128b, TPB) { bcast_body<4, 0>(a); }
 OP_KERNEL(l_lds64b, TPB) { bcast_body<2, 0>(a); }
 OP_KERNEL(l_ldg128b, TPB) { bcast_body<4, 1>(a); }
@@ -353,6 +400,13 @@ static const OpProbe PROBES[] = {
     P(l_tld4, "TLD.LZ=8", "c=other w=TLD.LZ:4"),
     P(l_tex, "TEX.LL=8", "c=other w=TEX.LL:4"),
     PS(l_atoms64, "ATOMS.EXCH.64=8", "ATOMS.EXCH.64*8", atoms64_off, U * TPB * 8, "c=other w=ATOMS.EXCH.64:2"),
+    PS(m_lds128b_g8, "DADD=256,IMAD=128,FADD=128,LDS.128=64", "LDS.128*64", bmix_off, BMIX_WORDS * 4,
+       "c=mix w=DADD:2,IMAD:1,FADD:1,LDS.128:4"),
+    PS(m_lds128b_g16, "DADD=256,IMAD=128,FADD=128,LDS.128=32", "LDS.128*32", bmix_off, BMIX_WORDS * 4,
+       "c=mix w=DADD:2,IMAD:1,FADD:1,LDS.128:4"),
+    PS(m_lds128b_g32, "DADD=256,IMAD=128,FADD=128,LDS.128=16", "LDS.128*16", bmix_off, BMIX_WORDS * 4,
+       "c=mix w=DADD:2,IMAD:1,FADD:1,LDS.128:4"),
+    P(m_dadd2_imad_fadd, "DADD=256,IMAD=128,FADD=128", "c=mix w=DADD:2,IMAD:1,FADD:1"),
     PS(l_lds128b, "LDS.128=8,LOP3.LUT=17,IMAD.SHL.U32=1,VIADD=1", "LDS.128*8", bcast_off, ROWS * 128 + 128,
        "c=other w=LDS.128:4,LOP3.LUT:1,IMAD.SHL.U32:1,VIADD:1 p=ISETP.GE.AND:1"),
     PS(l_lds64b, "LDS.64=8,LOP3.LUT=9,IMAD.SHL.U32=1,VIADD=1", "LDS.64*8", bcast_off, ROWS * 128 + 128,
