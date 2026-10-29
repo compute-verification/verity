@@ -162,6 +162,32 @@ def test_the_committer_stages_the_gpus_sha512_header_and_its_bytes_key_the_diges
     assert nj.source_set_digest(paths, **VERSIONS) != digest, "a byte of the shared header moves the digest"
 
 
+def test_the_committer_stages_the_row_commit_header_and_the_sha512_header_it_includes(tmp_path, monkeypatch):
+    from verity.ml.kernels import ROW_COMMIT, SHA512
+
+    paths = nj.source_paths()
+    assert {("row_commit.cuh", str(ROW_COMMIT)), ("sha512.cuh", str(SHA512))} <= set(nj.local_headers(paths))
+    digest = nj.source_set_digest(paths, **VERSIONS)
+    moved = tmp_path / "row_commit.cuh"
+    moved.write_bytes(ROW_COMMIT.read_bytes() + b"\n")
+    monkeypatch.setitem(nj.SHARED, "row_commit.cuh", str(moved))
+    assert ("sha512.cuh", str(SHA512)) in nj.local_headers(paths), "the moved header's sha512.cuh is still the shared one"
+    assert nj.source_set_digest(paths, **VERSIONS) != digest, "a byte of the shared header moves the digest"
+
+
+def test_a_shared_header_that_includes_an_unshared_header_beside_it_is_refused(tmp_path):
+    for d in ("src", "lib"):
+        (tmp_path / d).mkdir()
+    (tmp_path / "lib" / "one.cuh").write_bytes(b'#include "two.cuh"\n#include "absent.cuh"\n')
+    (tmp_path / "lib" / "two.cuh").write_bytes(b"")
+    (tmp_path / "src" / "ext.cu").write_bytes(b'#include "one.cuh"\n')
+    with pytest.raises(ValueError, match="not shared"):
+        nj.local_headers([str(tmp_path / "src" / "ext.cu")], {"one.cuh": str(tmp_path / "lib" / "one.cuh")})
+    (tmp_path / "lib" / "two.cuh").unlink()
+    assert nj.local_headers([str(tmp_path / "src" / "ext.cu")], {"one.cuh": str(tmp_path / "lib" / "one.cuh")}) == \
+        [("one.cuh", str(tmp_path / "lib" / "one.cuh"))]
+
+
 def test_a_header_outside_the_sources_directory_is_refused(tmp_path):
     (tmp_path / "src").mkdir()
     (tmp_path / "up.h").write_bytes(b"")
