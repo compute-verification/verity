@@ -2591,6 +2591,29 @@ def test_a_61_word_reply_posts_with_a_note_naming_the_count_the_limit_and_the_fi
     assert len(posts(fake)) == 2 and slack.plain(posts(fake)[-1]["text"]) == words(61)
 
 
+def test_a_reply_with_a_retired_term_posts_with_a_note_naming_what_to_write(fake, registry, capsys):
+    root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
+    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", "the draw's coins and a faulty block")
+    assert rc == 0 and len(posts(fake)) == 1
+    assert "retired term(s), posted anyway: 'draw': write the sample" in err and "'faulty block': write incorrect proof block" in err
+    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", 'the sample, `firewall/` and "leg"')
+    assert rc == 0 and "retired" not in err and len(posts(fake)) == 2
+
+
+def test_the_retired_terms_name_what_to_write_and_skip_code_and_quoted_mentions():
+    """`research msg` reads the table from tests/test_retired_terms.py, its one home."""
+    from research import vocabulary
+    doc = vocabulary.table()["DOC_TERMS"]
+    service = "proof " + "service"                                   # the tree's own scan refuses the term written whole
+    assert vocabulary.retired(f"two legs, the NCI, a commit period and the {service}") == [
+        (service, "proof system"), ("legs", doc["leg"]), ("NCI", doc["NCI, novel communication intensity"]),
+        ("commit period", doc["sampling period, sampling block, PoUW's commit period"])]
+    assert vocabulary.retired('a proof block, `drawn.py` and "draw"') == []
+    assert vocabulary.instead("nothing like it") == "see GLOSSARY.md's older names"
+    assert "no/such/table.py" in vocabulary.table(Path("no/such/table.py"))["error"] and vocabulary.retired("a draw", {}) == []
+    assert "skipped" not in vocabulary.table()
+
+
 def test_a_121_word_reply_is_refused_with_the_fix_and_nothing_is_posted(fake, registry, capsys):
     root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
     for dry in ((), ("--dry-run",)):
