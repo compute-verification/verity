@@ -1,7 +1,8 @@
 """ShaLB's numbers: SHA-512's registers written a compression, the bounds below it, and what each leaves of T1: stdlib.
 
     python3 benchmarks/pouw/shalb/shalb.py [--counts COUNTS_JSON] [--minimal MINIMAL_JSON] [--json OUT]
-        [--l1-leaves 1,4,64,512,4096] [--l1-value BYTES]
+        [--l1-leaves 1,4,64,512,4096] [--l1-value BYTES] [--l1-row-bytes 2048,...] [--l1-row-leaves N]
+        [--lead-w1 W1] [--honest-extra-per-compression REGISTERS]
 
 - **The structural count.** One compression in the minimal kernel's dataflow (sha512_min.cuh), each 64-bit word tagged
   with a level and constants propagated: Σ/σ 8 registers (6 SHF, 2 LOP3), Ch and Maj 2 (a LOP3 a half), an add of m
@@ -16,7 +17,8 @@
   values, in the call's own range-u64 domain (frame_v3/PROTOCOL.md §1 and §6), with the shared work counted once a call
   (each leaf's prefix through the domain id, each level's node midstate, the domain id), the per-item work split into
   data and data-independent, and what an exact repeat of a leaf's value shares: its blocks' schedules, ASICBoost's reuse
-  across chaining values.
+  across chaining values. With row-seg rows as the leaves' values (`rowseg_row`: 1 KiB segments, each from its own
+  prefix block, with or without (salt_w, f, j, row) bound into it), the layout ShaWrites at the lead is priced at.
 - **Honest against DistinctOn** (`distinct_writes`): the minimal kernel's 3,534 registers, simulated, on a random grid:
   pairwise distinct, none constant, none an input half plus a constant, so they witness ShaWrites' R for it.
 - **The bound ladder** (rungs B0–B3): what each rank's premise proves about any program's registers written a compression, and the
@@ -30,6 +32,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import math
 from pathlib import Path
@@ -166,6 +169,12 @@ def frame_message(tag: bytes, parts: list[tuple[bytes | int, int]]) -> list[list
         n = len(part) if level == CONST else part
         msg += [(CONST, x) for x in n.to_bytes(8, "big")]
         msg += [(CONST, x) for x in part] if level == CONST else [(level, None)] * n
+    return _blocks(msg)
+
+
+def _blocks(msg: list[tuple[int, int | None]]) -> list[list[int]]:
+    """A message's bytes, each (level, byte) with the byte given only for a constant, as SHA-512 blocks of word levels,
+    padding included; a word of constant bytes all zero is ZERO."""
     bits = 8 * len(msg)
     msg += [(CONST, x) for x in b"\x80" + bytes(-(len(msg) + 17) % BLOCK) + bits.to_bytes(16, "big")]
 
@@ -180,6 +189,12 @@ def message_cost(blocks: list[list[int]], cv: int = CONST) -> dict:
     """One message's registers by level, its per-item blocks in chain form, and `repeat`: what a message with the same
     DATA words but other ITEM words (another rank or position, so another chaining value) shares with it, the schedule
     ops that read no ITEM word (ASICBoost's reuse of a block's schedule across chaining values)."""
+    r = _message_cost(tuple(map(tuple, blocks)), cv)
+    return {**r, "by_level": dict(r["by_level"])}
+
+
+@functools.lru_cache(maxsize=None)
+def _message_cost(blocks: tuple[tuple[int, ...], ...], cv: int) -> dict:
     by = {CALL: 0, ITEM: 0, DATA: 0}
     repeat, item = 0, []
     for words in blocks:
@@ -188,7 +203,7 @@ def message_cost(blocks: list[list[int]], cv: int = CONST) -> dict:
             by[lv] += c.at(lv)
         d = sum(1 << i for i, w in enumerate(words) if w == ITEM)
         repeat += sum(n for n, lv, m in c.sched if lv == DATA and not m & d)
-        cv = max([cv] + words)
+        cv = max(cv, *words)
         if cv >= ITEM:
             item.append(cv)
     for p in range(len(item) // 2):
@@ -202,23 +217,72 @@ def _ulen(x: int) -> int:
     return max(1, (x.bit_length() + 7) // 8)
 
 
-def l1_call(leaves: int, value_bytes: int = 1024, schema: str = "u8") -> dict:
+ROW_SEG_TAG, ROW_SEG_SEGMENT_TAG, ROW_SEG_BYTES = b"verity/sha512-row-seg/v1\0", b"verity/sha512-row-seg/v1/segment\0", 1024
+
+
+def rowseg_row(row_bytes: int, bound: bool = True, value: int = DATA) -> dict:
+    """One `sha512/row-seg/v1` row (`verity.ml.commitments.rowleaf`): each 1 KiB segment hashed from its own 128-byte
+    prefix block S(j, s, m), then the outer hash over Q(n_bits) and the segments' digests. `bound`: (salt_w, f, j, row)
+    follow S(j, s, m) in the prefix block (N-HIDE's prefix binding; the 32-byte salt and the call per call, the row per
+    item), else the prefix block is a constant midstate. `value`: DATA, or CONST for a row the prover makes all zero.
+    message_cost's fields summed over the row's messages; `repeat` counts only the segments' schedules (a repeated row
+    under binding has other segment digests), and `digest` is the row digest's level."""
+    s = -(-row_bytes // ROW_SEG_BYTES)
+    by, comp, per_item, repeat, seg_level = {CALL: 0, ITEM: 0, DATA: 0}, 0, 0, 0, CONST
+    for j in range(s):
+        m = min(ROW_SEG_BYTES, row_bytes - ROW_SEG_BYTES * j)
+        msg = [(CONST, x) for x in ROW_SEG_SEGMENT_TAG + j.to_bytes(8, "big") + s.to_bytes(8, "big")
+               + (8 * m).to_bytes(8, "big")]
+        msg += [(CALL, None)] * 48 + [(ITEM, None)] * 8 if bound else []
+        msg += [(CONST, 0)] * (BLOCK - len(msg))
+        msg += [(DATA, None)] * m if value == DATA else [(CONST, 0)] * m
+        c = message_cost(_blocks(msg))
+        for lv in by:
+            by[lv] += c["by_level"][lv]
+        comp, per_item, repeat = comp + c["compressions"], per_item + c["per_item"], repeat + c["repeat"]
+        seg_level = max([seg_level] + [lv for lv, _ in msg])
+    outer = [(CONST, x) for x in (ROW_SEG_TAG + (8 * row_bytes).to_bytes(8, "big") + s.to_bytes(8, "big")
+                                  + ROW_SEG_BYTES.to_bytes(4, "big")).ljust(BLOCK, b"\0")]
+    c = message_cost(_blocks(outer + [(seg_level, None)] * (64 * s)))
+    for lv in by:
+        by[lv] += c["by_level"][lv]
+    if not bound:
+        repeat += c["repeat"]
+    return {"compressions": comp + c["compressions"], "per_item": per_item + c["per_item"], "by_level": by,
+            "repeat": repeat, "digest": seg_level}
+
+
+def l1_call(leaves: int, value_bytes: int = 1024, schema: str = "u8", row_bytes: int = 0, bound: bool = True) -> dict:
     """One call's hashing under L1 (`hm96-sha512/subtree/v1`): `leaves` frame-v3-sha512 leaves of `value_bytes` each in
     the call's own range-u64 domain (positions 0..leaves − 1), their tree, the domain id and the call's hm96 instance
-    (c, its leaf and the salt PRF, 3 compressions). Shared work is counted once: the leaves' prefix through the domain id
-    (a midstate a call), each level's node midstate, the domain id. Per call, by level; and what a value the prover
-    makes constant saves (its blocks' schedule is then a constant: `constant_value_share`, of the leaf and of the
-    call)."""
+    (c, its leaf and the salt PRF, 3 compressions). With `row_bytes`, each leaf's value is instead a
+    `sha512/row-seg/v1` row's digest (`rowseg_row`, `bound` as there) under the schema `hm96-sha512/row-seg/v1`, and
+    the rows' hashing is the leaves'. Shared work is counted once: the leaves' prefix through the domain id (a midstate a
+    call), each level's node midstate, the domain id. Per call, by level; and what a value the prover makes constant
+    saves (its blocks' schedule is then a constant: `constant_value_share`, of the leaf and of the call)."""
     depth = (leaves - 1).bit_length()
     rl = _ulen(leaves - 1)
+    if row_bytes:
+        schema, value_bytes = "hm96-sha512/row-seg/v1", 64
 
-    def leaf_cost(value: tuple[bytes | int, int]) -> dict:
-        return message_cost(frame_message(b"leaf", [(64, CALL), (rl, ITEM), (rl, ITEM), (schema.encode(), CONST),
-                                                    value]))
+    def leaf_cost(value: int) -> dict:
+        if row_bytes:
+            row = rowseg_row(row_bytes, bound, value)
+            value = row["digest"]
+        part = (bytes(value_bytes), CONST) if value == CONST else (value_bytes, value)
+        c = message_cost(frame_message(b"leaf", [(64, CALL), (rl, ITEM), (rl, ITEM), (schema.encode(), CONST),
+                                                 part]))
+        if row_bytes:
+            c = {"compressions": c["compressions"] + row["compressions"], "per_item": c["per_item"] + row["per_item"],
+                 "by_level": {lv: c["by_level"][lv] + row["by_level"][lv] for lv in c["by_level"]},
+                 "repeat": c["repeat"] + row["repeat"]}
+        return c
 
-    leaf = leaf_cost((value_bytes, DATA))
-    constant = leaf_cost((bytes(value_bytes), CONST))
-    rows = [{"what": f"leaf ({value_bytes} B value)", "n": leaves, **leaf}]
+    leaf = leaf_cost(DATA)
+    constant = leaf_cost(CONST)
+    what = f"row-seg row ({row_bytes} B, {'bound' if bound else 'constant'} prefix) and its leaf" if row_bytes \
+        else f"leaf ({value_bytes} B value)"
+    rows = [{"what": what, "n": leaves, **leaf}]
     for lvl in range(1, depth + 1):
         width, real = 1 << depth - lvl, -(-leaves // (1 << lvl))
         node = message_cost(frame_message(b"node", [(64, CALL), (1, CALL), (_ulen(width - 1), ITEM), (64, DATA),
@@ -258,7 +322,8 @@ def l1_call(leaves: int, value_bytes: int = 1024, schema: str = "u8") -> dict:
     total = items + sum(shared.values())
     leaf_regs = sum(leaf["by_level"][lv] for lv in (ITEM, DATA))
     constant_drop = leaf_regs - sum(constant["by_level"][lv] for lv in (ITEM, DATA))
-    return {"leaves": leaves, "value_bytes": value_bytes, "rows": rows, "shared_once_a_call": shared,
+    return {"leaves": leaves, "value_bytes": value_bytes, "row_bytes": row_bytes, "bound": bound, "rows": rows,
+            "shared_once_a_call": shared,
             "registers": total, "compressions": comp, "per_compression": total / comp,
             "data": data, "data_independent": total - data, "chained_3532": 3532 * comp,
             "leaf_repeat_share": leaf["repeat"] / leaf_regs,
@@ -485,10 +550,13 @@ def main() -> None:
     ap.add_argument("--row-kib", type=int, default=256)
     ap.add_argument("--l1-leaves", default="1,4,64,512,4096")
     ap.add_argument("--l1-value", type=int, default=1024)
+    ap.add_argument("--l1-row-bytes", default="2048,8192,65536,1048576",
+                    help="row-seg row sizes; the last, with bound prefixes, is the lead's layout below")
+    ap.add_argument("--l1-row-leaves", type=int, default=512)
     ap.add_argument("--lead-w1", type=float, default=233.0, help="the lead's hashing, W1 a useful MAC")
-    ap.add_argument("--honest-extra-per-leaf", type=float, default=0.0,
-                    help="registers a leaf an honest build writes beyond R (a measured SASS count less R): priced as "
-                         "honest-only work")
+    ap.add_argument("--honest-extra-per-compression", type=float, default=0.0,
+                    help="registers a compression an honest build writes beyond R (a measured SASS count less R): "
+                         "priced as honest-only work")
     ap.add_argument("--json", default="")
     args = ap.parse_args()
     out: dict = {}
@@ -537,6 +605,18 @@ def main() -> None:
     for row in out["l1"][-1]["rows"]:
         print(f"  - {row['what']}: {row['n']} × {row['registers']} ({row['compressions']} compressions, "
               f"{row['per_item']} per item; {', '.join(f'{LEVELS[k]} {v}' for k, v in row['by_level'].items())})")
+    out["l1_rows"] = []
+    print(f"## L1 with sha512/row-seg/v1 rows (N-HIDE's layout: a frame-v3 leaf over each row's row-seg digest), "
+          f"{args.l1_row_leaves} rows a call")
+    for k in (int(x) for x in args.l1_row_bytes.split(",")):
+        for bound in (True, False):
+            r = l1_call(args.l1_row_leaves, row_bytes=k, bound=bound)
+            out["l1_rows"].append(r)
+            print(f"- {k:,} B rows, {'bound' if bound else 'constant'} segment prefixes: {r['per_compression']:.1f} a "
+                  f"compression ({r['per_compression'] / 3532 - 1:+.3%} against 3,532 chained), "
+                  f"{r['registers'] / (k * args.l1_row_leaves):.3f} a row byte; data-independent "
+                  f"{r['data_independent'] / r['registers']:.2%}; a constant row {r['constant_value_share']:.2%} of "
+                  f"the call; an exact repeat of a row shares {r['leaf_repeat_share']:.2%} of its registers")
 
     dw = distinct_writes()
     out["distinct_writes"] = dw
@@ -610,7 +690,7 @@ def main() -> None:
               f"against stock's {r['stock_and']:.3g})")
     out["pooled"] = pooled
 
-    l1 = out["l1"][-1]
+    l1 = next(r for r in reversed(out["l1_rows"]) if r["bound"])
     per_comp, di = l1["per_compression"], l1["data_independent"] / l1["registers"]
     delta = 0.01 / args.lead_w1
     over = 3532 / per_comp - 1
@@ -619,7 +699,7 @@ def main() -> None:
                             "t1_over_credit_at_3532": over * args.lead_w1, "data_independent": di,
                             "t1_data_independent_if_salt_fixed": di * args.lead_w1, "periods": []}
     print(f"## ShaWrites under L1 at the lead's volume ({args.lead_w1:g} W1 of hashing a useful MAC; "
-          f"{l1['leaves']} leaves of {l1['value_bytes']} B a call)")
+          f"{l1['leaves']} row-seg rows of {l1['row_bytes']:,} B a call, bound segment prefixes)")
     print(f"- R a compression: {per_comp:.1f}; δ = 0.01 / {args.lead_w1:g} = {delta:.3g}, {delta * per_comp:.3f} "
           f"registers a compression")
     print(f"- crediting 3,532 a compression over-credits {over:.3%} of the hashing: a T1 term of "
@@ -627,16 +707,15 @@ def main() -> None:
     print(f"- with the salt fixed on the grid, the data-independent {di:.2%} is constant there, so free: a T1 term of "
           f"{di * args.lead_w1:.3g}× stock")
     cv_share = l1["constant_value_share"]
-    print(f"- a value the prover makes constant (or an exact repeat) has a constant (or shared) schedule: the leaf "
-          f"{l1['leaf_constant_value_share']:.2%}, the call {cv_share:.2%}; credited at R, a T1 term of "
+    print(f"- a row the prover makes constant (or an exact repeat) has a constant (or shared) schedule: the row and its "
+          f"leaf {l1['leaf_constant_value_share']:.2%}, the call {cv_share:.2%}; credited at R, a T1 term of "
           f"{cv_share * args.lead_w1:.3g}× stock")
     keyed = compression_levels(CALL, [DATA] * 16)
     print(f"- a compression from a per-window midstate (a keyed first block): {keyed.at(ITEM, DATA)} registers a "
           f"digest and {keyed.at(CALL)} once a window (from the IV: {compression(False, [True] * 16)['registers']})")
-    leaf_per_call = l1["registers"] / l1["leaves"]
-    honest_only = args.honest_extra_per_leaf / leaf_per_call
-    if args.honest_extra_per_leaf:
-        print(f"- an honest build {args.honest_extra_per_leaf:g} registers a leaf above R: honest-only "
+    honest_only = args.honest_extra_per_compression / per_comp
+    if args.honest_extra_per_compression:
+        print(f"- an honest build {args.honest_extra_per_compression:g} registers a compression above R: honest-only "
               f"{honest_only:.3g} of the hashing, {honest_only * args.lead_w1:.3g}× stock")
     out["sha_writes_l1"].update({"constant_value_share": cv_share, "t1_constant_value": cv_share * args.lead_w1,
                                  "keyed_per_digest": keyed.at(ITEM, DATA), "keyed_once_a_window": keyed.at(CALL),
@@ -661,7 +740,7 @@ def main() -> None:
               f"({row['over_credit_and']:.3g} AND gates); data-independent {row['data_independent_w1']:.3g} W1 "
               f"({row['data_independent_and']:.3g} AND gates); constant values {row['constant_value_w1']:.3g} W1 "
               f"({row['constant_value_and']:.3g} AND gates)"
-              + (f"; honest-only {row['honest_only_w1']:.3g} W1" if args.honest_extra_per_leaf else ""))
+              + (f"; honest-only {row['honest_only_w1']:.3g} W1" if args.honest_extra_per_compression else ""))
 
     if args.minimal:
         out["minimal"] = json.loads(Path(args.minimal).read_text())["summary"]
