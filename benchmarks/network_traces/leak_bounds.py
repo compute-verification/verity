@@ -17,7 +17,7 @@ of the scan's statement:
   which the rows form charges to the sampling block (`tiedAudits`). If ``prog`` is an input only at its anchored
   entries, they are an entry's 33 + KO·IDB bits a request (`ingress_scan.entry_layout`);
 * no faulty proof block, every one being drawn;
-* Dj = 1, so the jitter term is 0 (assumed, `NetTiming.JitterBounded`).
+* the jitter term at D_j = `JITTER_BOUND`, ⌈log2 D_j^T⌉ = T bits a sampling block, one a bucket (`JITTER`).
 
 A link runs m = s / (T·τ) sampling blocks and certifies rate·s requests over a monitoring period of s seconds
 (`PERIODS`). ε = m·δ_scan is the rows form's `eps`: the union of the scans' δ, what K fails with at most beside the
@@ -51,6 +51,12 @@ DELTAS: tuple[Fraction, ...] = WM.DELTAS
 TAU = Fraction(W.WardenParams().bucket_ms, 1000)
 #: a sampling block's scan's δ when a link names none: `scan_zk --delta`'s default
 SCAN_DELTA = Fraction(1, 2 ** 20)
+#: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
+#: steps, one a bucket, pays ⌈log2 D_j^k⌉ = k bits. Each bucket leaves at a time fixed before it is made
+#: (`warden.Warden(paced=…)`, `active.Proxy(paced=…)`), yet the host's state after the server's writes for the next
+#: bucket still moves a bucket's arrival offset, so J isn't met at D_j = 1
+JITTER_BOUND = 2
+JITTER = "J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel)"
 CENSUS = Path(__file__).resolve().parents[1] / "census"
 
 
@@ -121,6 +127,11 @@ class LinkLoad:
         return 2 * self.cell
 
     @property
+    def jitter(self) -> int:
+        """A sampling block's jitter term, over its scan's T steps (`jitter_bits`)."""
+        return jitter_bits(self.T)
+
+    @property
     def block_s(self) -> float | Fraction:
         """A sampling block's seconds."""
         return self.T * self.tau
@@ -149,7 +160,7 @@ class LinkLoad:
         blocks = self.blocks(period)
         requests = self.rate * seconds(period)
         free = self.free(reading)
-        k = float(requests * self.cap + blocks * free["block"] + requests * free["request"])
+        k = float(requests * self.cap + blocks * (free["block"] + self.jitter) + requests * free["request"])
         if delta is None:
             return k
         f = fmax(delta)
@@ -164,6 +175,11 @@ def seconds(period: str | float | Fraction) -> float | Fraction:
     if not period > 0:
         raise ValueError(f"a monitoring period's seconds are positive, not {period!r}")
     return period
+
+
+def jitter_bits(steps: int) -> int:
+    """K's jitter term over `steps` steps at `JITTER_BOUND`, ⌈log2 D_j^steps⌉ (`NetworkCheck.Period`'s)."""
+    return (JITTER_BOUND ** steps - 1).bit_length()
 
 
 def fmax(delta: float | Fraction) -> int:
