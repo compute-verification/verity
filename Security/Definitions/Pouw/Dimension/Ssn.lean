@@ -11,13 +11,15 @@ whose semantics are still marked pending review.
 * **The free values** (`FreeB`) are the constants and the raw coin words `Σ_b 2^b·x(r, c, b)`.
 * **A committed word** (`ssnWordB`) of row `i`, column `j`, after step `t` is its data case's constant `κ i j t` plus,
   at every bit, the weight of the used lane that reads it (`bitCoef`): step `s` reads lane `q` from bit `pos s q` of
-  coin word `src s` and weighs it `W s q j` in column `j`. `ssnWords` is the set of a call's words over `n` columns.
+  coin word `src s` and weighs it `W s q j` in column `j`. `ssnWords` is the set of a call's words over `n` columns,
+  and `ShiftSeparatedOn` says no two differ by a constant and none is a free value plus one.
 * **The 4-lane served layout** (`l4Src`, `l4Pos`): step 0's four lanes at bits 0, 8, 16 and 24 of word 0, every later
   step's lane at word 0's other 28 bits in order, then at words 1, 2, …. Its weights `w1l` put the column code
-  `ssnCode` (the base-13 digits of `ssnC j`, less 6) on step 0 and weight 1 on every later step's lane 0.
+  `ssnCode` (the base-13 digits of `ssnC j`, less 6) on step 0 and weight 1 on every later step's lane 0; `l4Words`
+  are its committed words.
 * **The 5-lane served layout** (`l5Src`, `l5Pos`): the same with a fifth step-0 lane at bit 1 of word 0, so later steps
   start at word 0's other 27 bits. Its weights `w5` put the balanced base-13 code `code5` of
-  `z_j = 185,646 ± (⌊j/2⌋ + 1)` on step 0.
+  `z_j = 185,646 ± (⌊j/2⌋ + 1)` on step 0; `l5Words` are its committed words.
 -/
 
 namespace Pouw.Dimension.Ssn
@@ -27,6 +29,12 @@ open Finset
 /-- An affine function of `q`-ary digits: `c + Σ_k a k · x k`. -/
 def aff {ι : Type} [Fintype ι] {q : ℕ} (c : ℚ) (a : ι → ℚ) : (ι → Fin q) → ℚ :=
   fun x => c + ∑ k, a k * ((x k : ℕ) : ℚ)
+
+/-- Targets `T` shift-separated on the grid points `S`: no two differ on `S` by a constant, and none is a free value
+plus a constant on `S`. -/
+def ShiftSeparatedOn {G : Type} (S : Set G) (F : Set (G → ℚ)) (T : Finset (G → ℚ)) : Prop :=
+  (∀ t ∈ T, ∀ t' ∈ T, (∃ q : ℚ, ∀ g ∈ S, t g = t' g + q) → t = t') ∧
+    ∀ t ∈ T, ∀ f ∈ F, ¬ ∃ q : ℚ, ∀ g ∈ S, f g = t g + q
 
 section Bits
 
@@ -122,6 +130,14 @@ def code5 (e : Fin 5) (j : ℕ) : ℤ := ((z5 j / 13 ^ (e : ℕ) % 13 : ℕ) : �
 /-- The 5-lane layout's weights: step 0 the code on five lanes, every later step one lane of weight 1 for every
 column. -/
 def w5 (s : Fin S) (q : Fin 5) (j : ℕ) : ℤ := if (s : ℕ) = 0 then code5 q j else if q = 0 then 1 else 0
+
+/-- The 4-lane layout's committed words over `n` columns, for the data case `κ`. -/
+def l4Words {m : ℕ} (hC : S + 3 ≤ 32 * C) (κ : Fin m → ℕ → Fin S → ℤ) (n : ℕ) : Finset (Bits m C → ℚ) :=
+  ssnWords (l4Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l4Pos s q) κ w1l n
+
+/-- The 5-lane layout's committed words over `n` columns, for the data case `κ`. -/
+def l5Words {m : ℕ} (hC : S + 4 ≤ 32 * C) (κ : Fin m → ℕ → Fin S → ℤ) (n : ℕ) : Finset (Bits m C → ℚ) :=
+  ssnWords (l5Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l5Pos s q) κ w5 n
 
 end Served
 

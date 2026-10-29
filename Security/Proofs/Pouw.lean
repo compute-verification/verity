@@ -31,9 +31,11 @@ import Proofs.Pouw.Dimension.MinRankProofs
 import Proofs.Pouw.Dimension.MixingProofs
 import Proofs.Pouw.Dimension.OpenPipeProofs
 import Proofs.Pouw.Dimension.PipeProofs
+import Proofs.Pouw.Dimension.PointwiseProofs
 import Proofs.Pouw.Dimension.Proofs
 import Proofs.Pouw.Dimension.RouteUPipeProofs
 import Proofs.Pouw.Dimension.RouteUProofs
+import Proofs.Pouw.Dimension.SsnProofs
 import Proofs.Pouw.Exact
 import Proofs.Pouw.Fp8Atom.Checks
 import Proofs.Pouw.Fp8Atom.Checks.Ada
@@ -191,11 +193,12 @@ import Proofs.Pouw.TileBound.WinogradStrassen
 import Proofs.Pouw.TileBound.Witness
 import Proofs.Pouw.Window
 import Proofs.Pouw.Witness
+import Proofs.Pouw.Writes
 
 /-!
 # PoUW's proofs
 
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
-`Game`, `NCP`, `PearlC`, `Receipt`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
+`Game`, `NCP`, `PearlC`, `Receipt`, `Writes`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
 -/
