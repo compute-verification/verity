@@ -599,12 +599,10 @@ def _gone(pid: Any, ticks: Any, proc: Path) -> bool:
     pid, or a stat without a start time, is not known gone."""
     if not isinstance(pid, int) or isinstance(pid, bool):
         return False
-    try:
-        fields = (proc / str(pid) / "stat").read_text().rsplit(")", 1)[1].split()
-    except FileNotFoundError:
+    text = _quiet(lambda: (proc / str(pid) / "stat").read_text())
+    if text is None:
         return True
-    except (OSError, IndexError):
-        return False
+    fields = text.rsplit(")", 1)[-1].split()
     return isinstance(ticks, int) and len(fields) > 19 and fields[19].isdigit() and int(fields[19]) != ticks
 
 
