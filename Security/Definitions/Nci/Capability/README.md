@@ -11,7 +11,7 @@ enter the security argument is `Security/README.md`, part 2.
 
 | Object | Symbol | Lean | Meaning |
 |---|---|---|---|
-| Committed declaration | R | `Verity.Committed` | the declared circuit, the registered values θ, and a partition into B blocks |
+| Committed declaration | R | `Verity.Committed` | the registered circuit, the registered values θ, and a partition into B blocks |
 | Block | I | `Verity.Partition.IsCK` | c gates, at most k fresh bits; its **view** is those bits and its index |
 | Decoder budget | t | `Verity.LDL` | the time a reconstruction may take |
 | Item family | X | `Nci.Capability.Items` | things a block may hold; each item has **cells** (the gates of one version of its value) and a **price** p_i in bits |
@@ -144,11 +144,12 @@ when no block holds anything.
 Each bound has two witnesses, listed under the lock's `witnesses` and proved: an honest one, its premises holding
 together, and a nontrivial one, its conclusion failing where a premise is dropped. They are stated at the toy circuit
 `Nci.Capability.Toy` (four one-bit gates, one counted product; `Guarantees/Capability/Witnesses.lean`), and
-`CapabilityFloor`'s at the toy task `Accounting.Slowdown.Toy`. The structural premises are proved there. Of the
-information premises, `MinEntropyHard` holds without degeneracy (the product's value is a uniform bit), while
-`DescriptionHard`, `SourceHard` and `Recovers` hold at deficit 0 only because the toy decoder reads programs of exactly
-two bits and compresses nothing. Coverage holds at η = 0 only because every computation there has the covered
-structure.
+`CapabilityFloor`'s at the toy task `Accounting.Slowdown.Toy`. The structural premises are proved there, and so are the
+information premises, none degenerately. `MinEntropyHard` holds at Λ = 0 for the product's value, a uniform bit. The toy
+decoder compresses: it describes `11`, the value of gates 2 and 3 in an honest run, in one bit, and every other two-bit
+string in three. Against it `DescriptionHard` holds at Λ = 1, `SourceHard` at δ = 1 and `Recovers` at amb = 1, and each
+witness also proves its parameter spent: at 0 the premise fails. Coverage holds at η = 1/2 and fails at η = 0: the
+covered structure is two gates, and a one-gate guess lacks it and reaches the target on half the coins.
 
 ## Standard assemblies
 
@@ -180,10 +181,17 @@ hardness.
 
 ## The frontier
 
-- **A use's width.** The dependency bounds charge one fresh bit per use, which is why their caps grow like k². How
-  many bits of a token's upstream values a block must import before rebuilding the rest becomes cheap is a local
-  description length of the operand given what the block holds. Near a hidden state's size, the cap becomes linear in k.
-  This is the measurement worth most.
+- **One meaningful instantiation.** The witnesses so far are a four-gate toy: they show the premises consistent, each
+  parameter spent, against a decoder that compresses one string. The next advance is one instance on a training
+  circuit satisfying them simultaneously: a block-extraction capability at the protocol's decoder budget, a positive
+  information rate, a checked dependency certificate, and parameters giving a nontrivial cap. A failed instantiation
+  says concretely which premise breaks.
+- **A use's import cost.** The dependency bounds charge one fresh bit per imported use. A justified joint input cost of
+  b bits per use gives h_w·(k/b + c/g), and without reconstruction about k²/b: a larger b improves the coefficient, not
+  the quadratic growth. A cap linear in k needs another structural fact, such as fan-out limiting products by the
+  activation coordinates a block can obtain. A hidden state's literal width is not that cost: compression, shared
+  descriptions and reconstruction from what the block holds all lower it. The question is the justified joint input
+  cost of supporting additional uses, and which structural bound it enables.
 - **An output budget.** With a bound on a block's outgoing bits as well (onsite's network certification bounds a
   server's traffic), the Loomis–Whitney inequality bounds a matrix product's work by the square root of the product of
   its three projections, a cap between the rectangle and fan-out bounds.
