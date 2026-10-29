@@ -911,37 +911,53 @@ def openingRefusal (s : Openings) (o : Opening) : Option String :=
   else if !c.signs s.lms s.key s.session then some "signature"
   else none
 
+/-- The openings that hold by `first` (none), by salt: the first of each salt, and whether another of that salt isn't
+it. -/
+def bySalt (s : Openings) (first : Array (Option String)) : Std.TreeMap.Raw (Array UInt8) (Opening × Bool) :=
+  (s.openings.zip first).foldl (init := ∅) fun m (o, r) =>
+    if r.isSome then m
+    else m.alter o.salt.data fun
+      | some (x, another) => some (x, another || !x.same o)
+      | none => some (o, false)
+
 /-- Each opening's refusal: `openingRefusal`'s, else `salt` where another opening that holds, not this one, has its
-salt, under which two windows of one sync would sign one digest; none where it holds. -/
+salt, under which two windows of one sync would sign one digest; none where it holds. The openings are keyed by salt
+once (`bySalt`), so past their signatures this takes n log n steps in the openings. -/
 def openingRefusals (s : Openings) : Array (Option String) :=
   let first := s.openings.map (openingRefusal s)
-  let held := (s.openings.zip first).filterMap fun (o, r) => if r.isNone then some o else none
+  let salts := bySalt s first
   (s.openings.zip first).map fun (o, r) =>
-    if r.isSome then r else if held.any fun x => x.salt == o.salt && !x.same o then some "salt" else none
+    if r.isSome then r else if (salts.get? o.salt.data).any (·.2) then some "salt" else none
 
-/-- The distinct syncs the openings that hold (`codes` none) sign for `link`'s window `w`. -/
-def signedAt (s : Openings) (codes : Array (Option String)) (link : String) (w : Nat) : Array ClockSync :=
-  (s.openings.zip codes).foldl (init := #[]) fun acc (o, r) =>
-    if r.isNone && o.certificate.link == link && o.certificate.window == w &&
-        !acc.any fun x => x.delta == o.sync.delta && x.rho == o.sync.rho then acc.push o.sync
-    else acc
+/-- Link-windows in order: by link, then by window. -/
+def linkWindowOrder (a b : String × Nat) : Ordering := (compare a.1 b.1).then (compare a.2 b.2)
+
+/-- What the openings that hold sign, by link-window: the first one's sync, and whether another signs another sync. -/
+abbrev Signed := Std.TreeMap.Raw (String × Nat) (ClockSync × Bool) linkWindowOrder
+
+/-- The openings that hold (`codes` none), keyed by link-window once, so that `signedSyncs` and `split` take n log n
+steps in the openings. -/
+def signedBy (s : Openings) (codes : Array (Option String)) : Signed :=
+  (s.openings.zip codes).foldl (init := ∅) fun m (o, r) =>
+    if r.isSome then m
+    else m.alter (o.certificate.link, o.certificate.window) fun
+      | some (x, two) => some (x, two || !(x.delta == o.sync.delta && x.rho == o.sync.rho))
+      | none => some (o.sync, false)
 
 /-- `SignedClocks.syncs(link)`: window 0's sync on, each the one sync the holding openings sign for the window, up to
 the first window without exactly one. -/
-def signedSyncs (s : Openings) (codes : Array (Option String)) : Array ClockSync := Id.run do
+def signedSyncs (s : Openings) (signed : Signed) : Array ClockSync := Id.run do
   let mut out := #[]
   for w in [0:s.openings.size] do
-    match signedAt s codes s.link w with
-    | #[x] => out := out.push x
+    match signed.get? (s.link, w) with
+    | some (x, false) => out := out.push x
     | _ => break
   return out
 
-/-- The link-windows, of any link, that the holding openings sign two or more syncs for, which have none. -/
-def split (s : Openings) (codes : Array (Option String)) : Nat :=
-  let held := (s.openings.zip codes).filterMap fun (o, r) => if r.isNone then some o.certificate else none
-  let windows := held.foldl (init := #[]) fun acc c =>
-    if acc.contains (c.link, c.window) then acc else acc.push (c.link, c.window)
-  (windows.filter fun (l, w) => (signedAt s codes l w).size > 1).size
+/-- The link-windows, of any link, that the holding openings sign two or more syncs for, which have none, in
+`linkWindowOrder`. -/
+def split (signed : Signed) : Array (String × Nat) :=
+  signed.foldl (init := #[]) fun acc k (_, two) => if two then acc.push k else acc
 
 /-- `network-records verdicts`' `clocks`: on `openingsOf`'s object, each opening's refusal (`openingRefusals`, null
 where it holds), how many link-windows have two or more signed syncs (`split`), and the link's signed syncs
@@ -950,9 +966,11 @@ the reference. -/
 def clocksFn (j : Json) : Except String Json := do
   let s ← openingsOf j
   let codes := openingRefusals s
+  let signed := signedBy s codes
   let sync (x : ClockSync) : Json := .arr #[toJson x.delta, toJson x.rho.num, toJson x.rho.den]
   return Json.mkObj [("refused", .arr (codes.map fun | some r => .str r | none => .null)),
-    ("split", toJson (split s codes)), ("syncs", .arr ((signedSyncs s codes).map sync))]
+    ("split", toJson (split signed).size),
+    ("syncs", .arr ((signedSyncs s signed).map sync))]
 
 #guard clog2 0 == 0 && clog2 1 == 0 && clog2 2 == 1 && clog2 3 == 2 && clog2 4 == 2 && clog2 5 == 3
 #guard atMost 10 0 == 1 && atMost 10 1 == 11 && atMost 10 2 == 56 && atMost 4 9 == 16 && atMost 0 3 == 1
