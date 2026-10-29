@@ -50,7 +50,10 @@ coin bytes against public weights. Its final word A·Bᵀ + ρ_i + κ·G_j is sa
 back from a final word the prover knows, has none to start from and each of the S words still costs a write; the
 magic removes ρ_i + κ·G_j. Chosen identical or zero rows lose only final words whose offsets meet (`tagx_final_bound`).
 `ssn_1l_tag_xf` folds only G_0j, in the FFMA, and loses identical rows' final words; `ssn_1l_tag_mix` takes each
-where its range bound is free and the other elsewhere.
+where its range bound is free and the other elsewhere. `ssn_1l_tag_xh` writes no fallback: a row the free bound fails
+gets ‖q_i‖₂ (8/n), and a row neither bound certifies writes zeros to step S's added lanes, so its final word and served
+output are the lead's. Its words are each row's x or lead words, and chosen out-of-range rows cost the bound rather than
+a write an output; `ssn_1l_tag_xh_mix` takes it after an RMSNorm and xf elsewhere.
 
 Data models: M0 (free set: constants, salt-independent functions, raw coin words), M1u (the call's own words on a grid
 uniform in A: the final-word lemma, under PeriodInventory and the atomic call) and M1s (M1 on a grid that keeps the
@@ -331,6 +334,9 @@ class Design:
     verdict: str
     exact: bool = True
     notes: list[str] = field(default_factory=list)
+    #: what a row past the magic's range costs: the fallback write ("fallback"), or the lead's step S and served output
+    #: once the free and Cauchy–Schwarz bounds both fail ("lead")
+    range_mode: str = "fallback"
 
 
 def _z(m: int, n: int, k: int) -> float:
@@ -608,6 +614,23 @@ def designs() -> list[Design]:
                "offset's collision bound (counting)", "the lead's committed words to step S − 1 and a non-free final "
                "word, so no middle-segment skip; chosen identical or zero rows lose only final words with equal "
                "offsets; chosen out-of-range rows force the fallback write"),
+        Design("ssn_1l_tag_xh", "ssn_1l_tag_x where a per-row bound certifies the magic's range (the free bound from "
+               "stock's row scale after an RMSNorm, else ‖q_i‖₂ by K/4 IDP4A against each tile's largest ‖B_j‖₂); a row "
+               "neither certifies writes zeros to step S's added lanes, so its final word and served output are the "
+               "lead's: no fallback write", lambda k: H32 * tagx_steps(k) / k,
+               lambda m, n, k: H32 * (ns.ssn_1l_forming_writes(tagx_steps(k)) + 3
+                                      + math.ceil((2 + tagx_extra(k)) / 4) + 2) / (n * k),
+               lambda m, n, k: 2 * H32 / (m * k), lambda m, n, k: H32 * tagx_steps(k) / (n * k),
+               lambda m, n, k: H32 / (m * k),
+               lambda m, n, k: H32 * (popc_writes(tagx_steps(k)) + 4) / (n * k) + 2 * H32 / (m * k), False,
+               lambda m, n, k: 32 * row_words(tagx_steps(k) + 26) * m,
+               lambda m, n, k: 4 * tagx_steps(k) / (n * k) + 4 / (m * k), _no_dup, False,
+               "0 on rows a bound certifies (stock's bit for bit where 1.5·2^23·s_j is exact); the lead's served noise "
+               "on the rest (`served_noisy_rows`)",
+               f"{premises_m0}; {coins}; ssn-tag-distinct, g-private, copy-floor (open, the lead's); the final row "
+               "offset's collision bound (counting)", "each row's words are ssn_1l_tag_x's or the lead's, so no "
+               "middle-segment skip; chosen out-of-range rows cost the bound (8/n), not a write an output",
+               range_mode="lead"),
         Design("ssn_1l_tag_xf", "the tag lead with step S cancelling the code (a1 against −C_j), the tag (κ − T(i) "
                "against G_j with κ = (1, 0, 0, 0), leaving G_0j) and the walk (its base-127 digits against −1 and "
                "−127); only G_0j is folded, in the FFMA: no range limit below 2^24 and no row check",
@@ -642,7 +665,12 @@ def designs() -> list[Design]:
         Design("ssn_1l_tag_mix", "ssn_1l_tag_x on linears fed by an RMSNorm, ssn_1l_tag_xf on the rest",
                *([lambda *a: float("nan")] * 3), *([_z] * 3), False, _z, _z, _no_dup, True, "0 (exact)",
                f"{premises_m0}; {coins}; ssn-tag-distinct, g-private, copy-floor (open, the lead's)",
-               "the served lead de-noised: each linear takes the cheaper path")]
+               "the served lead de-noised: each linear takes the cheaper path"),
+        Design("ssn_1l_tag_xh_mix", "ssn_1l_tag_xh on linears fed by an RMSNorm, ssn_1l_tag_xf on the rest",
+               *([lambda *a: float("nan")] * 3), *([_z] * 3), False, _z, _z, _no_dup, False,
+               "0 on rows a bound certifies; the lead's served noise on the rest",
+               f"{premises_m0}; {coins}; ssn-tag-distinct, g-private, copy-floor (open, the lead's)",
+               "the served lead de-noised with no fallback write after an RMSNorm", range_mode="lead")]
 
 
 def _per2_words(k: int) -> int:
@@ -659,6 +687,7 @@ BRANCH = {
     "rc_hg": ("rc_hg", hg_steps), "rc_hg_ffma": ("rc_hg_ffma", hw_steps), "rc_hgc_ffma": ("rc_hgc_ffma", hgc_steps),
     "rc_hws_ffma": ("rc_hws_ffma", hws_steps), "ssn_1l_tag": ("ssn_1l_tag", tag_steps),
     "ssn_1l_tag_x": ("ssn_1l_tag_x", tagx_steps), "ssn_1l_tag_xf": ("ssn_1l_tag_xf", tagx_steps),
+    "ssn_1l_tag_xh": ("ssn_1l_tag_x", tagx_steps),
     "ncp3": ("dense", lambda k: 3 * k // 32), "os2": ("dense", lambda k: 2 * k // 32), "per2": ("dense", _per2_words),
     "lowrank1": ("dense", _per2_words), "pair": ("none", lambda k: 2 * k // 32), "plain": ("plain", lambda k: k // 32),
 }
@@ -668,7 +697,8 @@ POST_NORM = {"qkv", "gate_up"}
 #: per linear, the path a mixed design takes
 MIX = {"rc_hw_mix": lambda lin: "rc_hw" if lin in POST_NORM else "rc_hw_ffma",
        "rc_hg_mix": lambda lin: "rc_hg" if lin in POST_NORM else "rc_hg_ffma",
-       "ssn_1l_tag_mix": lambda lin: "ssn_1l_tag_x" if lin in POST_NORM else "ssn_1l_tag_xf"}
+       "ssn_1l_tag_mix": lambda lin: "ssn_1l_tag_x" if lin in POST_NORM else "ssn_1l_tag_xf",
+       "ssn_1l_tag_xh_mix": lambda lin: "ssn_1l_tag_xh" if lin in POST_NORM else "ssn_1l_tag_xf"}
 MAGIC_DESIGNS = {"rc_magic", "rc_hybrid", "rc_hw", "rc_hg", "ssn_pd", "ssn_xd", "ssn_xr", "ssn_1l_tag_x"}
 
 
@@ -686,7 +716,7 @@ def gap_terms(d: Design, m: int, n: int, k: int, model: str, c1: bool, lin: str 
     cx, cy = (d.forced_x(m, n, k), d.forced_y(m, n, k)) if c1 else (0.0, 0.0)
     final = H32 / k if d.final_free_m0 and model == "M0" else 0.0
     dup = d.dup(model, m, k, lin)
-    fb, check, chosen_range = range_terms(d, m, n, k, lin)
+    fb, check, chosen_range, noisy = range_terms(d, m, n, k, lin)
     cb = coin_branch(d.name, m, k, model)
     bm, sf = BRANCH.get(d.name, ("none", lambda k: 1))
     wc = word_cancel(bm, n) * max(0, sf(k) - 2) / sf(k)
@@ -699,32 +729,52 @@ def gap_terms(d: Design, m: int, n: int, k: int, model: str, c1: bool, lin: str 
     t["word_cancel"] = a * wc
     t["range_chosen"] = chosen_range
     data_terms = t["dup"] + t["coin_branch_natural"] + t["fallback"]
+    lead = d.range_mode == "lead"
+    if lead:
+        # the bound's cost depends on the data, and chosen rows can fail it and be identical at once
+        data_terms += check
+        t["range_chosen"] = chosen_range + t["coin_branch_chosen"]
     t["gap_chosen"] = t["gap"] - data_terms + max(data_terms, t["coin_branch_chosen"], t["range_chosen"])
     # the word cancel repeats steps 2..S−1 and chosen identical rows copy final words: one choice of data does both
-    t["gap_chosen_weights"] = t["gap"] - data_terms + max(data_terms, t["range_chosen"], t["coin_branch_weights"],
-                                                          min(a, t["coin_branch_chosen"] + t["word_cancel"]))
+    t["gap_chosen_weights"] = t["gap"] - data_terms + max(
+        data_terms, t["range_chosen"], t["coin_branch_weights"],
+        min(a, t["coin_branch_chosen"] + t["word_cancel"]) + (chosen_range if lead else 0.0))
+    t["served_noisy_rows"] = noisy if d.exact else 1.0
     t["coins"] = d.coin_bits(m, n, k) / 8 * ns.COIN_PRICED_BYTE / (m * n * k)
     t["gap_coins_uncredited"] = t["gap"] + t["coins"]
     t["forced_share_of_forming"] = (cx + cy) / max(1e-30, d.form_x(m, n, k) + d.form_y(m, n, k))
     return t
 
 
-def range_terms(d: Design, m: int, n: int, k: int, lin: str) -> tuple[float, float, float]:
+def range_terms(d: Design, m: int, n: int, k: int, lin: str) -> tuple[float, float, float, float]:
     """The magic's range, for a design that decides per row tile whether |A·Bᵀ| < 2²²: the fallback write on unsafe
     tiles of the served data, the decision's own cost (free from stock's row scale after an RMSNorm, else ‖q_i‖ by
-    K/4 IDP4A a row, 8/n) and, on prover-chosen out-of-range rows, the fallback on every row (32/K). A weight matrix
-    whose 127·max_j ‖B_j‖₁ is below 2²² in every layer needs none of them."""
+    K/4 IDP4A a row, 8/n), on prover-chosen out-of-range rows the fallback on every row (32/K), and the share of rows
+    served noisy. A weight matrix whose 127·max_j ‖B_j‖₁ is below 2²² in every layer needs none of them.
+
+    `range_mode="lead"` writes no fallback: after an RMSNorm it computes ‖q_i‖ only on rows the free bound fails, and a
+    row that neither bound certifies takes the lead's step S and serves the lead's output; chosen rows fail both, so
+    they cost the bound on every row (8/n) and are served noisy."""
+    if d.range_mode == "lead":
+        st = EXACT.get("static", {}).get(lin)
+        if st and st["static_safe_layers"] == st["layers"]:
+            return 0.0, 0.0, 0.0, 0.0
+        cs = exact_share("cs_unsafe_rows_share", m, lin)
+        free = exact_share("free_unsafe_rows_share", m, lin) if lin in POST_NORM else 1.0
+        if cs is None or free is None:
+            return 0.0, float("nan"), 8 / n, float("nan")
+        return 0.0, 8 / n * free, 8 / n, min(cs, free)
     if not d.fallback and d.name not in MAGIC_DESIGNS:
-        return 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0, 0.0
     st = EXACT.get("static", {}).get(lin)
     if st and st["static_safe_layers"] == st["layers"]:
-        return 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0, 0.0
     field_ = "free_unsafe" if lin in POST_NORM else "cs_unsafe"
     u = exact_share(f"{field_}_row_tiles_share", m, lin)
     if u is None:
         u = exact_share(f"{field_}_rows_share", m, lin) if field_ == "cs_unsafe" else None
     fb = (float("nan") if u is None else H32 / k * u) if d.fallback else 0.0
-    return fb, 0.0 if lin in POST_NORM else 8 / n, H32 / k if d.fallback else 0.0
+    return fb, 0.0 if lin in POST_NORM else 8 / n, H32 / k if d.fallback else 0.0, 0.0
 
 
 def coin_branch(name: str, m: int, k: int, model: str) -> dict:
@@ -1162,19 +1212,21 @@ def sim_hws(case: str, salts: int = 24, m: int = 4, n: int = 6, seed: int = 1, s
 
 def sim_tag(case: str, variant: str = "x", salts: int = 24, m: int = 4, n: int = 6, seed: int = 1, s: int = 4,
             e: int = 2) -> dict:
-    """The tag lead (`variant="lead"`, served), ssn_1l_tag_x (`"x"`, e lanes of u2) or ssn_1l_tag_xf (`"xf"`) on S
-    steps: its committed words on the salt grid (raw coin words and G free, T(i) a constant) and, de-noised, the
-    epilogue's output against A·Bᵀ."""
+    """The tag lead (`variant="lead"`, served), ssn_1l_tag_x (`"x"`, e lanes of u2), ssn_1l_tag_xh (`"xh"`: x with
+    the odd rows taking the lead's step S) or ssn_1l_tag_xf (`"xf"`) on S steps: its committed words on the salt grid
+    (raw coin words and G free, T(i) a constant) and, de-noised, the epilogue's output against A·Bᵀ (`"xh"`: the
+    de-noised rows' output, and whether the others' final words are the lead's)."""
     rng = np.random.default_rng(seed)
-    extra = {"lead": 0, "x": TAGX_FIXED + e, "xf": TAGX_FIXED}[variant]
+    extra = {"lead": 0, "x": TAGX_FIXED + e, "xh": TAGX_FIXED + e, "xf": TAGX_FIXED}[variant]
     k = TAG_FIRST + 31 * (s - 2) + 31 - extra
     a, b = ns._data(case, m, n, 160, rng)
     a, b = a[:, :k], b[:k]
     code = ns.ssn_a_w0(n, ns.DATA_PER_STEP)[0]
     tag = tag_digits(m)
     one = np.ones((1, n), dtype=np.int64)
-    kappa = np.array(TAGX_KAPPA if variant == "x" else (1, 0, 0, 0))
-    xs, ys, raw, rs, cs = [], [], [], [], []
+    kappa = np.array(TAGX_KAPPA if variant in ("x", "xh") else (1, 0, 0, 0))
+    lead_rows = (np.arange(m) % 2 == 1) if variant == "xh" else np.zeros(m, dtype=bool)
+    xs, ys, raw, rs, cs, leads = [], [], [], [], [], []
     for _ in range(salts):
         hr = rng.integers(0, 2 ** 32, (m,), dtype=np.int64)
         hu = rng.integers(0, 2 ** 32, (m,), dtype=np.int64)
@@ -1191,8 +1243,9 @@ def sim_tag(case: str, variant: str = "x", salts: int = 24, m: int = 4, n: int =
                 lx, ly = [at[:, t:t + 1]], [one]
             else:
                 lx, ly = [at[:, t:t + 1]], [one]
-                if variant == "x":
-                    lx += [a1, kappa - tag, u0, u1] + [u2] * e
+                if variant in ("x", "xh"):
+                    added = np.concatenate([a1, kappa - tag, u0, u1] + [u2] * e, axis=1)
+                    lx += [np.where(lead_rows[:, None], 0, added)]
                     ly += [-code, g, one, LANE_MAX * one] + [LANE_MAX * one] * e
                 elif variant == "xf":
                     lx += [a1, kappa - tag, -(walk % LANE_MAX), -(walk // LANE_MAX)]
@@ -1207,12 +1260,17 @@ def sim_tag(case: str, variant: str = "x", salts: int = 24, m: int = 4, n: int =
         xs.append(np.concatenate(xl, axis=1))
         ys.append(np.concatenate(yl, axis=0))
         raw.append(np.concatenate([hr, hu, g.ravel()]))
-        rs.append((u0 + LANE_MAX * u1 + LANE_MAX * e * u2 + walk)[:, 0] if variant == "x" else np.zeros(m, np.int64))
+        rs.append((u0 + LANE_MAX * u1 + LANE_MAX * e * u2 + walk)[:, 0] if variant in ("x", "xh")
+                  else np.zeros(m, np.int64))
         cs.append(kappa @ g)
+        leads.append(a1 @ code + tag @ g + walk)
     words = ns._words(np.stack(xs), np.stack(ys))
     out = ns._distinct([words], [np.stack(raw)])
     resid = words[:, :, :, -1] - np.stack(rs)[:, :, None] - np.stack(cs)[:, None, :]
-    out["exact_after_epilogue"] = bool((resid == (a @ b)[None]).all())
+    out["exact_after_epilogue"] = bool((resid[:, ~lead_rows] == (a @ b)[None, ~lead_rows]).all())
+    if variant == "xh":
+        out["lead_rows_lead_final"] = bool((words[..., -1][:, lead_rows] - np.stack(leads)[:, lead_rows]
+                                            == (a @ b)[None, lead_rows]).all())
     out["final_bad"] = ns._distinct([words[:, :, :, -1]], [np.stack(raw)])["bad_share"]
     return out
 
@@ -1596,6 +1654,18 @@ def check() -> list[dict]:
        and all(0 < tg["xf"][c]["bad_share"] <= 1 / 4 for c in ("identical_rows", "zero_row"))
        and all(r["bad_share"] == 0 for c, r in tg["xf"].items() if c not in ("identical_rows", "zero_row")),
        {c: (r["exact_after_epilogue"], r["bad_share"]) for c, r in tg["xf"].items()})
+    th = {c: sim_tag(c, "xh") for c in ns.CASES}
+    ok("ssn_1l_tag_xh with half its rows past the bound: every word distinct and non-free on every data case; the "
+       "certified rows' output is A·Bᵀ and the others' final words are the lead's",
+       all(r["bad_share"] == 0 and r["exact_after_epilogue"] and r["lead_rows_lead_final"] for r in th.values()),
+       {c: (r["bad_share"], r["exact_after_epilogue"], r["lead_rows_lead_final"]) for c, r in th.items()})
+    dn = {d.name: d for d in designs()}
+    rx = {lin: (gap_terms(dn["ssn_1l_tag_xh"], 8192, n, k, "M0", False, lin),
+                gap_terms(dn["ssn_1l_tag_x"], 8192, n, k, "M0", False, lin)) for lin, (n, k) in ns.LLAMA.items()}
+    ok("ssn_1l_tag_xh writes no fallback, and on chosen out-of-range rows its bound (8/n) and coin branch cost less "
+       "than ssn_1l_tag_x's check and write an output at every Llama linear",
+       all(h["fallback"] == 0 and h["range_chosen"] < x["range_chosen"] + x["range_check"] for h, x in rx.values()),
+       {lin: (h["range_chosen"], x["range_chosen"] + x["range_check"]) for lin, (h, x) in rx.items()})
     ok("ssn_1l_tag_x keeps the lead's steps (67 / 232 / 265 at K 2,048 / 7,168 / 8,192) with its lanes in step S, and "
        "its final row offset has Q ≥ 2^17", all(tagx_steps(k) == tag_steps(k) == ns.steps1l(k) and tagx_extra(k) >= 0
                                                 and tagx_offset_q(k) >= 2 ** 17 for k in (2048, 7168, 8192)),
@@ -1669,7 +1739,7 @@ def best(rep: dict) -> dict:
 def table(rep: dict) -> str:
     hdr = ("design", "model", "C1", "L T512(64)", "L T512(512)", "L T8192", "V4d T512(64)", "V4d T8192",
            "L T512(64) +coins", "L T8192 +coins", "V4d T8192 +coins", "L T512(512) chosen", "L T8192 chosen",
-           "V4d T8192 chosen", "L T8192 chosen+W", "alpha L", "T2 8192", "T2 512(64)")
+           "V4d T8192 chosen", "L T8192 chosen+W", "alpha L", "T2 8192", "T2 512(64)", "L noisy rows T512(64) / T8192")
     lines = [" | ".join(hdr)]
     for r in rep["rows"]:
         def f(key: str, basis: str = "gap") -> str:
@@ -1682,7 +1752,8 @@ def table(rep: dict) -> str:
                                  f("llama_T8192", "gap_chosen"), f("v4dense_T8192", "gap_chosen"),
                                  f("llama_T8192", "gap_chosen_weights"),
                                  f"{r['llama_T8192']['alpha']:.4f}", f"{r['t2_T8192']:.1f}x",
-                                 f"{r['t2_T512_64tok']:.1f}x"]))
+                                 f"{r['t2_T512_64tok']:.1f}x",
+                                 f"{f('llama_T512_64tok', 'served_noisy_rows')} / {f('llama_T8192', 'served_noisy_rows')}"]))
     lines.append("")
     for c in rep["checks"]:
         lines.append(f"{'PASS' if c['pass'] else 'FAIL'}  {c['check']}")
@@ -1704,7 +1775,7 @@ def main(argv: list[str] | None = None) -> int:
     rep["best"] = best(rep)
     for name in ("rc_magic", "rc_ffma", "rc_hybrid", "rc_hw", "rc_hw_mix", "rc_hw_ffma", "rc_hg", "rc_hg_mix",
                  "rc_hg_ffma", "rc_hgc_ffma", "rc_hws_ffma", "ssn_1l", "ssn_1l_hw", "ssn_1l_hg", "ssn_1l_tag",
-                 "ssn_1l_tag_x", "ssn_1l_tag_xf", "ssn_1l_tag_mix", "per2"):
+                 "ssn_1l_tag_x", "ssn_1l_tag_xf", "ssn_1l_tag_mix", "ssn_1l_tag_xh", "ssn_1l_tag_xh_mix", "per2"):
         for model in ("M0", "M1u"):
             r = next(r for r in rep["rows"] if r["design"] == name and r["model"] == model and not r["c1"])
             for basis in ("gap", "gap_coins_uncredited", "gap_chosen", "gap_chosen_weights"):
