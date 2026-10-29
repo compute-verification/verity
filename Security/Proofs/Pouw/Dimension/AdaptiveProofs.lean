@@ -10,6 +10,9 @@ import Proofs.Pouw.Dimension.PointwiseProofs
 * **The obstruction** (`holds_flat`, `not_adaptiveDW`, `card_levels_le`, `not_adaptiveDW_levels`). Writing each
   distinct target value once into one slot (`fill`) holds them all at `w` writes a value. Row-step chunks
   `base i + c i t · 1` number at most `Σ_i |{c i t}|`, so adaptive-dw fails above `w` times that.
+* **Repeats on a `false` bit** (`card_rows_le`, `card_image_le_ones`, `not_adaptiveDW_ones`). A row whose chunk
+  repeats at every step whose bit is `false` takes at most `1 + #true bits` values, so adaptive-dw fails above `w`
+  times their sum over rows and draws.
 -/
 
 namespace Pouw.Dimension.Pointwise
@@ -94,20 +97,49 @@ theorem not_adaptiveDW (a₀ : A) (Ω : Type) [Fintype Ω] (m₀ : A → Fin w �
     exact sum_congr rfl fun g _ => (holds_flat a₀ m₀ (Y g)).2
   omega
 
+/-- Row-step values number at most the sum over rows of each row's distinct values. -/
+theorem card_rows_le {X ι T : Type} [DecidableEq X] (rows : Finset ι) (steps : Finset T) (F : ι → T → X) :
+    ((rows ×ˢ steps).image fun it => F it.1 it.2).card ≤ ∑ i ∈ rows, (steps.image (F i)).card := by
+  calc _ ≤ (rows.biUnion fun i => steps.image (F i)).card := by
+        apply card_le_card
+        intro y hy
+        obtain ⟨⟨i, t⟩, hit, rfl⟩ := mem_image.1 hy
+        rw [mem_product] at hit
+        exact mem_biUnion.2 ⟨i, hit.1, mem_image.2 ⟨t, hit.2, rfl⟩⟩
+    _ ≤ _ := card_biUnion_le
+
 omit [DecidableEq A] in
 /-- **Column-free increments collapse**: row-step chunks `base i + c i t · 1` number at most `Σ_i |{c i t}|`. -/
 theorem card_levels_le [DecidableEq V] [Add V] {ι T : Type} (rows : Finset ι) (steps : Finset T)
     (base : ι → Fin w → V) (c : ι → T → V) :
     ((rows ×ˢ steps).image fun it => base it.1 + fun _ => c it.1 it.2).card ≤
       ∑ i ∈ rows, (steps.image (c i)).card := by
-  calc _ ≤ (rows.biUnion fun i => (steps.image (c i)).image fun x => base i + fun _ => x).card := by
-        apply card_le_card
-        intro y hy
-        obtain ⟨⟨i, t⟩, hit, rfl⟩ := mem_image.1 hy
-        rw [mem_product] at hit
-        exact mem_biUnion.2 ⟨i, hit.1, mem_image.2 ⟨c i t, mem_image.2 ⟨t, hit.2, rfl⟩, rfl⟩⟩
-    _ ≤ ∑ i ∈ rows, ((steps.image (c i)).image fun x => base i + fun _ => x).card := card_biUnion_le
-    _ ≤ _ := sum_le_sum fun i _ => card_image_le
+  refine (card_rows_le rows steps fun i t => base i + fun _ => c i t).trans (sum_le_sum fun i _ => ?_)
+  calc (steps.image fun t => base i + fun _ => c i t).card
+        = ((steps.image (c i)).image fun x => base i + fun _ => x).card := by rw [image_image]; rfl
+    _ ≤ _ := card_image_le
+
+/-- **A sequence that repeats at every step whose bit is `false` takes at most `1 + #true bits` values.** -/
+theorem card_image_le_ones {X : Type} [DecidableEq X] (f : ℕ → X) (b : ℕ → Bool) (k : ℕ)
+    (hf : ∀ t < k, b t = false → f (t + 1) = f t) :
+    ((range (k + 1)).image f).card ≤ 1 + ((range k).filter fun t => b t).card := by
+  induction k with
+  | zero => simp
+  | succ k ih =>
+    have ih' := ih fun t ht => hf t (by omega)
+    rw [range_add_one (n := k + 1), image_insert]
+    cases hb : b k with
+    | true =>
+      have hf' : ((range (k + 1)).filter fun t => b t) = insert k ((range k).filter fun t => b t) := by
+        rw [range_add_one, filter_insert]; simp [hb]
+      have hk : k ∉ (range k).filter fun t => b t := by simp
+      rw [hf', card_insert_of_notMem hk]
+      calc _ ≤ ((range (k + 1)).image f).card + 1 := card_insert_le _ _
+        _ ≤ _ := by omega
+    | false =>
+      have hm : f k ∈ (range (k + 1)).image f := mem_image_of_mem f (mem_range.2 (Nat.lt_succ_self k))
+      rw [hf k (Nat.lt_succ_self k) hb, insert_eq_of_mem hm]
+      exact ih'.trans (by gcongr; omega)
 
 /-- **The walk's obstruction**: when every draw's targets are row-step chunks `base g i + c g i t · 1`, adaptive-dw
 fails at any bound above `w·Σ_g Σ_i |{c g i t}|`. -/
@@ -117,5 +149,16 @@ theorem not_adaptiveDW_levels [DecidableEq V] [Add V] {ι T : Type} (a₀ : A) (
     ¬ AdaptiveDW Ω m₀ (fun g => (rows ×ˢ steps).image fun it => base g it.1 + fun _ => c g it.1 it.2) B := by
   refine not_adaptiveDW a₀ Ω m₀ _ B (lt_of_le_of_lt ?_ hB)
   exact Nat.mul_le_mul_left w (sum_le_sum fun g _ => card_levels_le rows steps (base g) (c g))
+
+/-- **The cancel's obstruction**: when every row's chunk at step `t + 1` repeats its chunk at step `t` whenever the
+bit `b g i t` is `false`, adaptive-dw fails at any bound above `w·Σ_g Σ_i (1 + #{t < k : b g i t})`. -/
+theorem not_adaptiveDW_ones [DecidableEq V] {ι : Type} (a₀ : A) (Ω : Type) [Fintype Ω] (m₀ : A → Fin w → V)
+    (rows : Finset ι) (k : ℕ) (F : Ω → ι → ℕ → Fin w → V) (b : Ω → ι → ℕ → Bool)
+    (hF : ∀ g i t, t < k → b g i t = false → F g i (t + 1) = F g i t) (B : ℕ)
+    (hB : w * ∑ g, ∑ i ∈ rows, (1 + ((range k).filter fun t => b g i t).card) < B) :
+    ¬ AdaptiveDW Ω m₀ (fun g => (rows ×ˢ range (k + 1)).image fun it => F g it.1 it.2) B := by
+  refine not_adaptiveDW a₀ Ω m₀ _ B (lt_of_le_of_lt ?_ hB)
+  exact Nat.mul_le_mul_left w (sum_le_sum fun g _ => (card_rows_le rows _ (F g)).trans
+    (sum_le_sum fun i _ => card_image_le_ones (F g i) (b g i) k (hF g i)))
 
 end Pouw.Dimension.Pointwise

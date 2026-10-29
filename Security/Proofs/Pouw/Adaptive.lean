@@ -22,4 +22,8 @@ theorem LevelsObstruction : Pouw.Guarantees.Adaptive.LevelsObstruction :=
   fun _ _ _ _ _ _ _ _ Ω _ _ m₀ rows steps base c B hB =>
     not_adaptiveDW_levels (Classical.arbitrary _) Ω m₀ rows steps base c B hB
 
+theorem OnesObstruction : Pouw.Guarantees.Adaptive.OnesObstruction :=
+  fun _ _ _ _ _ _ Ω _ _ m₀ rows k F b hF B hB =>
+    not_adaptiveDW_ones (Classical.arbitrary _) Ω m₀ rows k F b hF B hB
+
 end Pouw.SecurityProofs.Adaptive

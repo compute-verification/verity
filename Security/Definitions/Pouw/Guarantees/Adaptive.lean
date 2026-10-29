@@ -12,6 +12,8 @@ Each statement is over the chunk model (`Pouw.Dimension.Pointwise`, draft) with 
   new target chunk values.
 * `LevelsObstruction`: when each draw's targets are row-step chunks `base i + c i t · 1` (a column-free increment),
   adaptive-dw fails above `w · Σ_g Σ_i |{c i t}|`, whatever the initial memory.
+* `OnesObstruction`: when each row's chunk repeats at every step whose coin bit is `false`, adaptive-dw fails above
+  `w · Σ_g Σ_i (1 + #true bits)`, whatever the initial memory.
 -/
 
 namespace Pouw.Guarantees.Adaptive
@@ -42,5 +44,16 @@ def LevelsObstruction : Prop :=
     (m₀ : A → Fin w → V) (rows : Finset ι) (steps : Finset T) (base : Ω → ι → Fin w → V) (c : Ω → ι → T → V)
     (B : ℕ), w * ∑ g, ∑ i ∈ rows, (steps.image (c g i)).card < B →
     ¬ AdaptiveDW Ω m₀ (fun g => (rows ×ˢ steps).image fun it => base g it.1 + fun _ => c g it.1 it.2) B
+
+/-- **Chunks that repeat on a `false` bit refute adaptive-dw** (chunk model; draft model, pending review): when draw
+`g`'s targets are row-step chunks `F g i t`, `t ≤ k`, and each row's chunk at step `t + 1` equals its chunk at `t`
+whenever the bit `b g i t` is `false`, adaptive-dw fails at every bound above `w · Σ_g Σ_i (1 + #{t < k : b g i t})`,
+from any initial memory with a slot. -/
+def OnesObstruction : Prop :=
+  ∀ (A V : Type) [DecidableEq A] [DecidableEq V] (w : ℕ) (ι : Type) (Ω : Type) [Fintype Ω] [Nonempty A]
+    (m₀ : A → Fin w → V) (rows : Finset ι) (k : ℕ) (F : Ω → ι → ℕ → Fin w → V) (b : Ω → ι → ℕ → Bool),
+    (∀ g i t, t < k → b g i t = false → F g i (t + 1) = F g i t) → ∀ B : ℕ,
+    w * ∑ g, ∑ i ∈ rows, (1 + ((range k).filter fun t => b g i t).card) < B →
+    ¬ AdaptiveDW Ω m₀ (fun g => (rows ×ˢ range (k + 1)).image fun it => F g it.1 it.2) B
 
 end Pouw.Guarantees.Adaptive
