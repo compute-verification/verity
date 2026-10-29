@@ -466,8 +466,8 @@ PoUW has other guarantees, outside protocol soundness.
 
 Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
 site. It composes three subprotocols, sampled proofs' one-stage audit on the proofs themselves (v2), PoUW's period check
-(`verity/pouw/period/v1`, onsite's work component too) and the inference-only policy's check (`NciCheck.Protocol`), and
-accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when all
+(`verity/pouw/period/v1`, onsite's work subprotocol too) and the inference-only policy's check (`NciCheck.Protocol`),
+and accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when all
 three commit to one record (`Core.Composition.same`): the policy's and v2's commitments, and the Commit record every
 window of the period names (`Core.Remote.windowRecords`). Onsite adds PoUS, PoUB, network certification and memory
 wipes.
