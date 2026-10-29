@@ -243,9 +243,10 @@ def test_a_slots_entry_counts_its_outputs_cuts_its_ids_and_is_zero_when_empty(KO
                          ids=["small", "ko4", "record"])
 def test_a_slots_entry_is_the_scans_entry_bit_for_bit(KO, NP, STOP):
     """`SlotEntry_v1`'s row is the network certifier's entry at the scan's class of its KO (`ingress_scan.entry_encode`,
-    in `entry_layout`'s order: read, n, the ids), so the scan reads an honest slot as its Program wrote it: an empty
-    slot's entry is `NONE`, an occupied slot's read 1 with its n and ids, and a request the class can't hold read 1 and
-    n = KO + 1, which the scan refuses. At KO 4 a row without the read bit is as long, so only the bits tell them apart."""
+    in `entry_layout`'s order: read at bit 0, n from bit 1 and the ids from bit 33, 33 + KO·IDB bits a request, 1,121 at
+    KO 64), so the scan reads an honest slot as its Program wrote it: an empty slot's entry is `NONE`, an occupied
+    slot's read 1 with its n and ids, and a request the class can't hold read 1 and n = KO + 1, which the scan refuses.
+    At KO 4 a row without the read bit is as long, so only the bits tell them apart."""
     cls, e, ids = SS.scan_class(4, KO, 16), bind(X.SlotEntry, KO=KO, IDB=17, NP=NP, STOP=STOP), [100 + i for i in range(KO)]
     assert 16 * X.entry_words(KO, 17) == IS.entry_bits(cls)
     for occ, lp, m, want in ((0, 1, KO, IS.NONE), (2, 1, KO, IS.NONE), (1, 1, 1, IS.entry(1, ids[:1])),
