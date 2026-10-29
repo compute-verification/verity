@@ -22,7 +22,9 @@ b = 1 for `hw`), computes one vector a key from data and coins alone, and copies
 one pointer a row-step. Its words must equal `honest`'s, which multiplies the served lane layout out. `oracle` counts
 distinct row vectors and 4-word tiles: no prover that copies whole row vectors (tiles), at one pointer a copy, writes
 fewer. `patch` is a constructive tile prover (copy the nearest earlier tile at one word, rewrite the rest), whose
-saving is open to a design whose words carry few coin bits each. `at_scale` runs the walk at Llama's S.
+saving is open to a design whose words carry few coin bits each. `ball` is `AdaptiveBallTable`'s lower bound at tile
+grain (free copies, free decisions), which the free-copy patch cost must exceed; `rows_sweep` follows it as rows grow.
+`at_scale` runs the walk at Llama's S.
 """
 
 from __future__ import annotations
@@ -209,6 +211,37 @@ def patch(words: np.ndarray, copy_price: int = 1) -> dict:
             "nearest_distance_shares": (hist / hist.sum()).round(4).tolist()}
 
 
+def ball(words: np.ndarray) -> dict:
+    """`AdaptiveBallTable`'s count at tile grain, with free copies at any address and free decisions.
+
+    Targets are the distinct 4-word tiles, pooled over positions. A tile sharing no 2 of its words with another
+    target is at distance ≥ 3 from all of them and gets radius 1, any other radius 0, so a run writes at least
+    Σ (r + 1) less 2 a memory slot. The share is that count over the honest words."""
+    tiles = np.unique(words.reshape(-1, TILE), axis=0)
+    near = np.zeros(len(tiles), dtype=bool)
+    for p in range(TILE):
+        for q in range(p + 1, TILE):
+            _, inv, cnt = np.unique(tiles[:, [p, q]], axis=0, return_inverse=True, return_counts=True)
+            near |= cnt[inv.reshape(-1)] > 1
+    bound = 2 * len(tiles) - int(near.sum())
+    return {"distinct_tiles_pooled": len(tiles), "radius_1_tiles": len(tiles) - int(near.sum()),
+            "ball_share": bound / words.size}
+
+
+def rows_sweep(seed: int = 13, ms: tuple[int, ...] = (48, 512, 4096), n: int = 64, s: int = 67) -> list[dict]:
+    """`fix2`'s ball share and pooled distinct tiles as one call's rows grow, for identical rows and zero tails."""
+    rng = np.random.default_rng(seed)
+    out = []
+    for case in ("same", "zero"):
+        for m in ms:
+            pub = public("fix2", n, s, rng)
+            a, b = data(case, "fix2", m, n, s, pub, rng)
+            words = honest("fix2", a, b, pub, coins("fix2", m, n, s, rng), s)
+            out.append({"design": "fix2", "case": case, "m": m, "n": n, "S": s,
+                        "tile_instances": words.size // TILE, **ball(words)})
+    return out
+
+
 def small(seed: int = 7, m: int = 48, n: int = 64, s: int = 67) -> tuple[list[dict], list[dict]]:
     rng = np.random.default_rng(seed)
     rows, checks = [], []
@@ -219,7 +252,11 @@ def small(seed: int = 7, m: int = 48, n: int = 64, s: int = 67) -> tuple[list[di
             a, b = data(case, design, m, n, s, pub, rng)
             co = coins(design, m, n, s, rng)
             words = honest(design, a, b, pub, co, s)
-            row = {"design": design, "case": case, "m": m, "n": n, "S": s, **oracle(words), **patch(words)}
+            free = {"patch_saving_free_copy": patch(words, copy_price=0)["patch_saving"]}
+            row = {"design": design, "case": case, "m": m, "n": n, "S": s, **oracle(words), **patch(words), **free,
+                   **ball(words)}
+            checks.append({"name": f"{design}/{case} ball bound ≤ free-copy patch cost",
+                           "ok": row["ball_share"] <= 1 - row["patch_saving_free_copy"]})
             if design != "fix2" and case in ("cancel", "walk"):
                 adv, writes, pointers = adversary(design, case, a, b, pub, co, s)
                 ok = bool(np.array_equal(adv, words))
@@ -262,8 +299,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", help="write the results here")
     args = p.parse_args(argv)
     rows, checks = small()
-    res = {"small": rows, "checks": checks, "at_scale": at_scale()}
-    for r in rows:
+    res = {"small": rows, "checks": checks, "at_scale": at_scale(), "rows_sweep": rows_sweep()}
+    for r in rows + res["rows_sweep"]:
         print({k: (round(v, 4) if isinstance(v, float) else v) for k, v in r.items()})
     print(json.dumps(res["at_scale"], indent=1))
     passed = sum(c["ok"] for c in checks)
