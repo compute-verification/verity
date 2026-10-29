@@ -158,6 +158,15 @@ print("UTIL engine options overridden (not the served stack):", json.dumps(over)
 sys.exit(cli.main())' serve-openai)
     say "ENGINE $UTIL_ENGINE_JSON" ;;
 esac
+if [ "${H1_NODUMP:-0}" = 1 ]; then
+  # measurement only: --h1-prover without each window's live rows (pouw_h1_live.dump), to size what that dump costs the step
+  serve=("$PY" -c 'import sys
+from verity_vllm.pipeline import cli
+from verity_vllm.protocols.pouw.h1 import live as LV
+LV.dump = lambda run, out: {"dir": str(out), "rounds": 0, "skipped": "H1_NODUMP"}
+print("UTIL pouw_h1_live.dump skipped (H1_NODUMP, measurement only)", flush=True)
+sys.exit(cli.main())' serve-openai)
+fi
 if [ "${ASYNC:-0}" = 1 ]; then
   args+=(--async-scheduling)
   serve=("$PY" -c 'import json, sys
