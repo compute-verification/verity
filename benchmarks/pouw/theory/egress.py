@@ -29,7 +29,7 @@ from pathlib import Path
 import alt_roads
 
 HERE = Path(__file__).resolve().parent
-POINTS = {"decode1": None, "t64": "t512", "t512": "t512r512", "t8192": "t8192"}
+POINTS = {"decode1": None, "decode16": None, "t64": "t512", "t512": "t512r512", "t8192": "t8192"}
 LEAD_T2 = "ssn-1l-tag/served/s8/k32/w/r256k/cert/min"
 COORDINATOR_LEAD = "blc4a-t64-e7"
 
@@ -105,13 +105,14 @@ def lane_counts(design: dict, steps_: int, frac: float, la: int) -> list[int]:
     """blc1a / blc4a's lane coins a step: ceil(steps_ frac) steps' worth at la a step (a tile of frac T rows), on step
     1 and spread evenly, one lane or two a step where la > 1 so that no run of steps without them is longer than it
     must be. Mutations: interim 2's layout (step1_coins False), the coined steps first ("front"), la lanes a coined
-    step ("packed")."""
+    step ("packed"). pack_rows: la lanes a coined step on a tile of at least that many rows (the row count is
+    public), spread below it."""
     if not design.get("step1_coins", True):
         return [0] + [la * p for p in coin_plan(steps_ - 1, math.ceil((steps_ - 1) * frac))]
     coined = math.ceil(steps_ * frac)
     if design.get("plan") == "front":
         return [la * (t < coined) for t in range(steps_)]
-    if design.get("lanes") == "packed":
+    if design.get("lanes") == "packed" or frac * design["tile"] >= design.get("pack_rows", math.inf):
         return [la * p for p in spread(steps_, coined)]
     base, extra = divmod(la * coined, steps_)
     return [base + p for p in spread(steps_, extra)]
@@ -257,6 +258,9 @@ def designs(lay: dict) -> list[dict]:
     out.append({"id": "blc4a-t64-e7-packed", "kind": "blc4a", "tile": 64, "e": 7, "lanes": "packed",
                 "title": "blc4a-t64-e7 with all three lanes on each of a small tile's coined steps (fewer cp.asyncs at "
                          "decode, longer runs without lane coins)"})
+    out.append({"id": "blc4a-t64-e7-pack16", "kind": "blc4a", "tile": 64, "e": 7, "pack_rows": 16,
+                "title": "blc4a-t64-e7 with three lanes on each coined step of a tile of 16 rows or more, and spread "
+                         "below 16 rows"})
     return out
 
 
@@ -515,7 +519,7 @@ def price_design(design: dict, inp: dict, einp: dict, ll: dict) -> dict:
     base = {"alpha": inp["ssn_1l"]["alpha"], "hash_bytes_per_mac": inp["egress"]["credited_hash_bytes_per_mac"]}
     pts = {}
     for key, space_key in POINTS.items():
-        m = inp["points"][key]["m"]
+        m = {**inp["points"], **einp["points"]}[key]["m"]
         calls = [(k, n, call(design, m, k, n, lead, lay, pr["reg_units"])) for k, n in cfg["linears"]]
         ivs = [list(intervals(c, m, n, k)) for k, n, c in calls]
         macs = cfg["layers"] * sum(m * k * n for k, n, _ in calls)
@@ -845,6 +849,19 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
          f"x{packed['beta']['floor'] / packed['beta_call']['floor']:.3f} at {packed['beta_at']}, "
          f"{packed['caps']['320']['stated']['bar']:.4f} vs "
          f"{d['blc4a-t64-e7']['points']['decode1']['caps']['320']['stated']['bar']:.4f}"),
+        ("blc4a-t64-e7 packed from 16 rows and spread below: its term is at most 1% at cap 320 at both prices and A2c "
+         "plus the walk at most 1%, at every point; at 16 rows it streams under half what the spread does, and from "
+         "64 rows and at one row it is the spread",
+         all(p["caps"]["320"]["stated"][q] <= 0.01 and p["a2c"]["model_p_share"] + p["a2c"]["walk_share"] <= 0.01
+             for p in d["blc4a-t64-e7-pack16"]["points"].values() for q in ("floor", "bar"))
+         and d["blc4a-t64-e7-pack16"]["points"]["decode16"]["stream_bytes_per_token"]
+         < 0.5 * d["blc4a-t64-e7"]["points"]["decode16"]["stream_bytes_per_token"]
+         and all(d["blc4a-t64-e7-pack16"]["points"][k]["stream_bytes_per_token"]
+                 == d["blc4a-t64-e7"]["points"][k]["stream_bytes_per_token"]
+                 and d["blc4a-t64-e7-pack16"]["points"][k]["beta"] == d["blc4a-t64-e7"]["points"][k]["beta"]
+                 for k in ("decode1", "t64", "t512", "t8192")),
+         ", ".join(f"{k} {p['caps']['320']['stated']['bar']:.4f} {p['stream_bytes_per_token'] / 1e6:.2f} MB"
+                   for k, p in d["blc4a-t64-e7-pack16"]["points"].items())),
         ("Mutation: the same lane coins on a small tile's first steps leave a run of coin-free steps whose interval "
          "carries more a bit than the call; the term passes 1% at T 512 with 64 rows, where spread evenly it doesn't",
          muts["front-loaded"]["points"]["t64"]["caps"]["32"]["stated"]["bar"] > 0.01

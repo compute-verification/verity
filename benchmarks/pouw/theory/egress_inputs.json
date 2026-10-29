@@ -11,6 +11,9 @@
     "t1_coins_uncredited": 0.0042,
     "source": "pouw_space.toml at N-CARD's f697396586 (cursor/compute-research-np-card-7c2d): S - 1 + c coin bits a row in whole 32-bit coin words (ssn-1l-hw's S + 15 fill the same words at Llama's K), B' lane 31 a public weight lane; T1 0.000% credited, 0.420% with the coins' XOF hashing uncredited (NIGHT.md section 7). ssn-1l-tag as built (N-KERNEL's 1034Z report, checked exact on the H200): step 1's lanes 0-23 hold A's data, 24-27 the row tag T(i), the balanced base-13 digits of z_i = (floor(i/2) + 1)(-1)^i, against G[0..3, j], and 28-31 the row's code bits a_1[i] against C; G is drawn per call after B, column j's from coin word m H + j of the call's stream, v = floor(u 2401 / 2^32), G[e, j] = v's base-7 digit e minus 3; S = 1 + ceil((K - 24)/31), 67 and 265 at Llama's K"
   },
+  "points": {
+    "decode16": {"m": 16, "label": "decode, 16 rows (N-CARD's and N-HIDE's decode point); no stock step, so no T2"}
+  },
   "layouts": {
     "tile_rows": [64, 128],
     "lane_entropy_bits": [1, 2, 4, 7],
