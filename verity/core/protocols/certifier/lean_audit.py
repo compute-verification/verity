@@ -51,7 +51,7 @@ from verity.core.protocols.certifier.audit import Published, Verdict
 from verity.core.protocols.certifier.certificate import (STATUS_CODES, Certificate, CertifiedRecord, Direction, LmsKey,
                                                         PublicKey)
 from verity.core.protocols.certifier.commitment import CommittedRecord
-from verity.core.protocols.certifier.grid import GridParams, Record, Status
+from verity.core.protocols.certifier.grid import GridParams, BlockGrid, Status
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
 
 PACKAGE = Path(__file__).resolve().parents[1] / "network" / "lean"
@@ -110,7 +110,7 @@ def encode(record: Published) -> bytes:
     elif isinstance(record, CommittedRecord):
         kind, body = COMMITTED, b"".join([_text(record.link, "link"), _u(record.window, 8, "window"),
                                           _status(record.status), _text(record.digest, "digest")])
-    elif isinstance(record, Record):
+    elif isinstance(record, BlockGrid):
         kind, body = RAW, b"".join([_text(record.link, "link"), _u(record.window, 8, "window"), _status(record.status),
                                     _grid(record.grid)])
     else:

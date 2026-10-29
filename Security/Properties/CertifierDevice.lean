@@ -217,8 +217,8 @@ verifies (`CertifiedRecord.verify`) under the parameters and the key's public ke
 def IssuerVerifies : Prop :=
   ∀ (N W H : Nat) (toy : Bool) (p : Lms.Params) (I seed : ByteArray) (k : Lms.PrivateKey) (session : ByteArray)
     (refused : Array (String × NetworkCheck.Direction × Nat)) (i' : Issuer) (salt : ByteArray) (leaf : Except String Nat)
-    (record : Record) (direction : NetworkCheck.Direction) (params : Params) (parameters : ByteArray) (deadline : Bool)
-    (cr : CertifiedRecord),
+    (record : BlockGrid) (direction : NetworkCheck.Direction) (params : Params) (parameters : ByteArray)
+    (deadline : Bool) (cr : CertifiedRecord),
     Lms.Params.make N W H toy = .ok p → Lms.key p I seed = .ok k →
     ({ key := k, session, refused } : Issuer).certify salt leaf record direction params parameters deadline =
       .ok (i', some cr) →

@@ -4,7 +4,7 @@ import NetworkCheck.Certificate
 /-!
 # One link's certifier: constant-rate, left-packed, FIFO and fail-closed
 
-The executable form of `grid.py`'s `Certifier` and `Record` (W1–W6). A grid's parameters are `NetworkCheck.Params` (T, r,
+The executable form of `grid.py`'s `Certifier` and `BlockGrid` (W1–W6). A grid's parameters are `NetworkCheck.Params` (T, r,
 B, τ_b, Q), the record's status is `NetworkCertifier.Status`, and a slot holds a frame's bytes or padding (`none`), as in
 `grid.Row`.
 -/
@@ -31,8 +31,8 @@ def Status.reason? : Status → Option Reason
   | .complete => none
   | .notEstablished r => some r
 
-/-- `grid.Record` (W5): the network certificate of one link-window is exactly the grid and one status. -/
-structure Record where
+/-- `grid.BlockGrid` (W5): the network certificate of one link-window is exactly the grid and one status. -/
+structure BlockGrid where
   link : String
   window : Nat
   grid : Array Slots
@@ -78,7 +78,7 @@ def tick (c : Certifier) : Certifier × Slots :=
 
 /-- `close_window`: the sampling block's record, with one untimed status, and the next sampling block; queued frames
 carry over. -/
-def closeSamplingBlock (c : Certifier) : Certifier × Record :=
+def closeSamplingBlock (c : Certifier) : Certifier × BlockGrid :=
   let status := match c.fault with | none => Status.complete | some r => .notEstablished r
   ({ c with rows := #[], fault := none, window := c.window + 1 }, ⟨c.link, c.window, c.rows, status⟩)
 

@@ -871,14 +871,14 @@ def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root()
     does the honest row at another position."""
     WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)
     from verity.core.protocols.certifier.active import DATA, HEADER, PAD
-    from verity.core.protocols.certifier.grid import COMPLETE, Record
+    from verity.core.protocols.certifier.grid import COMPLETE, BlockGrid
     from verity.core.protocols.certifier.warden import WardenParams, cell
 
     params = WardenParams(cell_bytes=64, slots=2, lanes=2, window=2)
     B, S = params.cell_bytes, params.grid.allocation
     grid = ((cell(DATA, 1, b"abc", B), cell(PAD, 1, b"", B)) + (None,) * (S - 2), (None,) * S)
     salts = [bytes([k + 1]) * WR.SALT_BYTES for k in range(params.window)]
-    cells = WR.Cells.of("tie", Direction.EGRESS, Record("tie", 0, grid, COMPLETE), params, SESSION, salts, bytes(64))
+    cells = WR.Cells.of("tie", Direction.EGRESS, BlockGrid("tie", 0, grid, COMPLETE), params, SESSION, salts, bytes(64))
     assert cells.wiring.connections == ((1, 0, 2),) and len(cells.rows[0]) == S * B
     row = cells.rows[0]
     bad = bytearray(row)
