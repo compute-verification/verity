@@ -34,9 +34,9 @@ predicate is a rank-1 premise (the ISA as the H200 executes it); its falsificati
 class semantic, the bilinear accumulator model (`Bam`) is the
 reduction's target (`AlgSuffL`, rank 3, the analogue of `A2_algebraicSufficiency`). In it:
 
-* the counting lemma without purity (`BamFloor`, a sketch) gives `N·(64 − 1024/L)` for `N` running words, at most two
-  registers a word whatever `L`; its arithmetic core is `lcommitFloorArith`, and the rank fact it rests on is
-  `innerProductRank`;
+* the counting lemma without purity (`BamFloor`, a sketch) gives `48` a word for `N` running words (`128/3` at
+  `L = 64`), one and a half registers a word whatever `L`; its arithmetic core is `bamFloorArith`, and the rank fact it
+  rests on is `innerProductRank`;
 * on cell-pure programs (`CellPure`, rank 4, Theorem K's purity) the count is the full `L` a word, `L/32` registers of
   32 (`PureCount`, a sketch of a short proof from `innerProductRank`);
 * on pure lanes (`PureLanes`: no tensor-core lane sums two noise variables) it is the full `L` a word whatever the
@@ -331,9 +331,12 @@ abbrev Lane (α : Type) := Option α → ℤ
 /-- The lane's value at noise `e`. -/
 def Lane.eval {α : Type} [Fintype α] (u : Lane α) (e : α → ℤ) : ℤ := u none + ∑ i, u (some i) * e i
 
+/-- The lane fits the type on noise in `[nlo, nhi]`: on every such noise value it lies in `[lo, hi]`. -/
+def Lane.FitsOn {α : Type} [Fintype α] (nlo nhi : ℤ) (τ : BamType) (u : Lane α) : Prop :=
+  ∀ e : α → ℤ, (∀ i, nlo ≤ e i ∧ e i ≤ nhi) → τ.lo ≤ u.eval e ∧ u.eval e ≤ τ.hi
+
 /-- The lane fits the type: on every noise value in `[−32, 31]` it lies in `[lo, hi]`. -/
-def Lane.Fits {α : Type} [Fintype α] (τ : BamType) (u : Lane α) : Prop :=
-  ∀ e : α → ℤ, (∀ i, -32 ≤ e i ∧ e i ≤ 31) → τ.lo ≤ u.eval e ∧ u.eval e ≤ τ.hi
+def Lane.Fits {α : Type} [Fintype α] (τ : BamType) (u : Lane α) : Prop := u.FitsOn (-32) 31 τ
 
 /-- A lane as a coordinate vector. -/
 def Lane.vec {α : Type} (u : Lane α) : Option α → ℚ := fun i => (u i : ℚ)
@@ -368,6 +371,12 @@ def BamOp.price {α β : Type} : BamOp α β → ℕ
 at most three registers. -/
 def BamOp.WF {α β : Type} [Fintype α] [Fintype β] (Ts : List BamType) : BamOp α β → Prop
   | .tc τ _ u v => τ ∈ Ts ∧ (∀ t, (u t).Fits τ) ∧ ∀ t, (v t).Fits τ
+  | .merge c => c.length ≤ 3
+  | _ => True
+
+/-- Well-formed at the types `Ts` on noise in `[nlo, nhi]`. -/
+def BamOp.WFOn {α β : Type} [Fintype α] [Fintype β] (nlo nhi : ℤ) (Ts : List BamType) : BamOp α β → Prop
+  | .tc τ _ u v => τ ∈ Ts ∧ (∀ t, (u t).FitsOn nlo nhi τ) ∧ ∀ t, (v t).FitsOn nlo nhi τ
   | .merge c => c.length ≤ 3
   | _ => True
 
@@ -406,23 +415,29 @@ def runForms {m K n : ℕ} (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n �
 
 /-! ## Pinned statements (sketch, pending review) -/
 
+/-- `BamFloor`'s rate a word: `128/3` at `L = 64`, where two words may share a pre-image, and `48` above. -/
+def bamFloorRate (L : ℕ) : ℚ := if L = 64 then 128 / 3 else 48
+
 /-- **The counting lemma without purity** (sketch; rank 2, a combinatorial fact about the model, not proved): for
 `32 ∣ L`, `L ∣ K` and `L ≥ 64`, every well-formed program at the H200's types whose registers include the forms of all
-`N = m·n·(K/L)` running words of int7 data costs at least `N·(64 − 1024/L)`, that is `32·N·(2 − 32/L)`.
+`N = m·n·(K/L)` running words of int7 data costs at least `N · bamFloorRate L`: `48` a word, `128/3` at `L = 64`.
 
-The count: every form is written (32 each, distinct writes). No lane of a noise variable holds more than 32 products
-(`b1`'s and int4's lanes can't carry one, since a noise variable spans 64 values), and two distinct words' noise parts
-differ by rank at least `L` (`innerProductRank`). So a word written by a tensor-core register has a pre-image (its
-`src`) that is neither a word nor a constant, and for `L > 64` no two words share one. A word written by a merge reads
-a register outside the other words' span. With `p` words of the first kind, the cost is at least
-`32·max(p·L/32, N) + 32·(N − p)`, least at `p = 32N/L` (`lcommitFloorArith`). That a merge's auxiliary register is
-its own word's is the step not yet checked. -/
+The count is of distinct non-constant forms, each first written by a priced instruction (32). The `N` words are
+linearly independent, and so are their noise parts. No lane of a noise variable holds more than 32 products (`b1`'s
+and int4's lanes can't carry one, since a noise variable spans 64 values), and two distinct words' noise parts differ
+by rank at least `L` (`innerProductRank`). So a word written by a tensor-core register has a pre-image (its `src`)
+that is neither a word nor a constant; for `L > 64` no two words share one, and at `L = 64` at most two do. A word
+written by a merge is `w = Σ (earlier words) + Σ (other registers read)`; ordered by write time these combinations
+are triangular in the words, so the non-word registers the `N − p` merges read span at least `N − p` dimensions.
+Pre-images and merge inputs may coincide, so with `p` words of the first kind there are at least `N + max(p, N − p)`
+forms (`N + max(p/2, N − p)` at `L = 64`), least at `p = N/2` (`p = 2N/3`): `bamFloorArith`. The rank fact it rests on
+is `innerProductRank`. -/
 def BamFloor (L : ℕ) : Prop :=
   32 ∣ L → 64 ≤ L →
     ∀ (m K n : ℕ) (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n → ℤ)
       (P : List (BamOp (Fin m × Fin K) (Fin K × Fin n))),
       L ∣ K → Int7 a → Int7 b → (∀ o ∈ P, o.WF h200Types) → (∀ f ∈ runForms a b L, f ∈ bamRegs P) →
-        (m * n * (K / L) : ℚ) * (64 - 1024 / L) ≤ bamCost P
+        (m * n * (K / L) : ℚ) * bamFloorRate L ≤ bamCost P
 
 /-- The registers an instruction reads. -/
 def BamOp.reads {α β : Type} : BamOp α β → List ℕ
@@ -468,9 +483,11 @@ def PureCount (L : ℕ) : Prop :=
 /-- A lane that carries at most one noise variable. -/
 def Lane.Pure {α : Type} (u : Lane α) : Prop := ∀ i j, u (some i) ≠ 0 → u (some j) ≠ 0 → i = j
 
-/-- **`PureLanes P`**: every tensor-core lane of `P` carries at most one noise variable (no summed lanes). At `h200Types`
-an s8 lane is pure whenever the noised operand spans all 256 values; at this file's 64-value noise it is a restriction
-on the adversary (rank 4), since an s8 lane holds up to four noise variables on small data and an `f16` lane many. -/
+/-- **`PureLanes P`**: every tensor-core lane of `P` carries at most one noise variable (no summed lanes). A lane that
+fits a type on noise in `[nlo, nhi]` is pure once the type's range is narrower than `2·(nhi − nlo)`
+(`Lane.pure_of_fitsOn`): an s8 lane on noise spanning 129 values (`[−64, 64]` beside int7 data), but no `f16`, `bf16` or
+`tf32` lane on any noise an s8 operand can carry. At this file's 64-value noise it is a restriction on the adversary
+(rank 4), since an s8 lane holds up to four noise variables there and an `f16` lane many. -/
 def PureLanes {α β : Type} (P : List (BamOp α β)) : Prop :=
   ∀ o ∈ P, match o with
     | .tc _ _ u v => (∀ t, (u t).Pure) ∧ ∀ t, (v t).Pure
@@ -523,7 +540,7 @@ def AlgSuffL (L : ℕ) : Prop :=
 
 /-- **The work bound at commit interval `L`** (sketch): under the semantic premises, every `MH100w` program at
 `h100Floor` that outputs the running words on fresh noise costs at least `c` a word. `AlgSuffL L ∧ BamFloor L` gives
-it at `c = 64 − 1024/L`, and `AlgSuffL L ∧ NoSharingGain L` at `c = L` (on cell-pure programs `PureCount L`, and
+it at `c = bamFloorRate L`, and `AlgSuffL L ∧ NoSharingGain L` at `c = L` (on cell-pure programs `PureCount L`, and
 on pure lanes `CoverCount L`, in place of `NoSharingGain L`). -/
 def LCommitBound (L : ℕ) (c : ℚ) : Prop :=
   ∀ (I : Sm90Isa), DecOK I.dec →

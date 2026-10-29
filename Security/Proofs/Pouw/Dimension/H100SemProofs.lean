@@ -8,8 +8,10 @@ import Definitions.Pouw.Assumptions.Dimension.H100Sem
   finite set of targets at `32` each. **The tensor-core premise alone buys nothing** (`tcOnlyCeiling`): that program
   has no tensor-core instruction, so it meets `Sm90TcOnly`.
 * **The rank fact** (`innerProductRank`): an `L`-term inner product of fresh variables needs `L` rank-one terms.
-* **The counting lemma's arithmetic** (`lcommitFloorArith`): `BamFloor`'s minimisation over the number of words a
+* **The counting lemma's arithmetic** (`bamFloorArith`): `BamFloor`'s minimisation over the number of words a
   tensor-core register writes.
+* **Range-forced purity** (`Lane.pure_of_fitsOn`, `pureLanes_of_wfOn`, `pureLanes_s8_rfp`): on noise spanning more than
+  half a type's range, its lanes are pure; s8 lanes on noise in `[−64, 64]` are.
 -/
 
 namespace Pouw.Dimension.H100
@@ -88,33 +90,73 @@ theorem innerProductRank (L r : ℕ) (α β : Fin r → Fin L → ℚ)
   rw [hAB, h1] at h2
   omega
 
-/-- **The counting lemma's arithmetic**: with `p ≤ N` words of the chain kind at `L/32` registers each and every other
-word paying a merge, `32·max(p·L/32, N) + 32·(N − p) ≥ N·(64 − 1024/L)`. -/
-theorem lcommitFloorArith (L N p : ℚ) (hL : 32 ≤ L) (hp0 : 0 ≤ p) (hpN : p ≤ N) :
-    N * (64 - 1024 / L) ≤ 32 * max (p * L / 32) N + 32 * (N - p) := by
-  have hL0 : 0 < L := by linarith
-  rcases le_total (p * L / 32) N with h | h
-  · rw [max_eq_right h]
-    have : p ≤ 32 * N / L := by
-      rw [le_div_iff₀ hL0]; linarith
-    have e : N * (64 - 1024 / L) = 64 * N - 32 * (32 * N / L) := by field_simp; ring
-    rw [e]; linarith
-  · rw [max_eq_left h]
-    have hN : 0 ≤ N := le_trans hp0 hpN
-    have e : N * (64 - 1024 / L) = 64 * N - 1024 * N / L := by field_simp
-    have h' : 32 * N ≤ p * L := by linarith
-    have hq : 1024 * N / L ≤ 32 * p := by
-      rw [div_le_iff₀ hL0]; nlinarith
-    have : 32 * N + p * L - 32 * p ≥ 64 * N - 1024 * N / L := by
-      have : p * L - 32 * p ≥ 32 * N - 1024 * N / L := by
-        have h4 : (p - 32 * N / L) * (L - 32) ≥ 0 := by
-          apply mul_nonneg
-          · rw [sub_nonneg, div_le_iff₀ hL0]; linarith
-          · linarith
-        have e2 : (p - 32 * N / L) * (L - 32) = p * L - 32 * p - 32 * N + 1024 * N / L := by
-          field_simp; ring
-        linarith
-      linarith
-    linarith
+/-- **The counting lemma's arithmetic**: with `p` of the `N` words written by a tensor-core register, `N` words and at least
+`max(p, N − p)` other forms (`max(p/2, N − p)` when two words may share a pre-image) cost at least `48` a word
+(`128/3`). -/
+theorem bamFloorArith (N p : ℚ) :
+    N * 48 ≤ 32 * (N + max p (N - p)) ∧ N * (128 / 3) ≤ 32 * (N + max (p / 2) (N - p)) := by
+  have h1 := le_max_left p (N - p)
+  have h2 := le_max_right p (N - p)
+  have h3 := le_max_left (p / 2) (N - p)
+  have h4 := le_max_right (p / 2) (N - p)
+  constructor <;> linarith
+
+/-- **Range-forced purity**: a lane that fits a type on noise in `[nlo, nhi]` carries at most one noise variable once
+the type's range is narrower than `2·(nhi − nlo)`. Two variables with nonzero integer coefficients move the lane by at
+least `2·(nhi − nlo)` between two corners of the noise box. -/
+theorem Lane.pure_of_fitsOn {α : Type} [Fintype α] {nlo nhi : ℤ} {τ : BamType} {u : Lane α}
+    (hle : nlo ≤ nhi) (hw : τ.hi - τ.lo < 2 * (nhi - nlo)) (hu : u.FitsOn nlo nhi τ) : u.Pure := by
+  classical
+  intro i j hi hj
+  by_contra hij
+  let lo1 : α → ℤ := fun k => if 0 < u (some k) then nlo else nhi
+  let hi1 : α → ℤ := fun k => if 0 < u (some k) then nhi else nlo
+  let e₁ : α → ℤ := fun k => if k = i ∨ k = j then lo1 k else nlo
+  let e₂ : α → ℤ := fun k => if k = i ∨ k = j then hi1 k else nlo
+  have hr₁ : ∀ k, nlo ≤ e₁ k ∧ e₁ k ≤ nhi := by
+    intro k; simp only [e₁, lo1]; split_ifs <;> omega
+  have hr₂ : ∀ k, nlo ≤ e₂ k ∧ e₂ k ≤ nhi := by
+    intro k; simp only [e₂, hi1]; split_ifs <;> omega
+  have gain : ∀ k, (k = i ∨ k = j) → nhi - nlo ≤ u (some k) * (e₂ k - e₁ k) := by
+    intro k hk
+    have hne : u (some k) ≠ 0 := by rcases hk with rfl | rfl <;> assumption
+    simp only [e₁, e₂, lo1, hi1, hk, ↓reduceIte]
+    split_ifs with hpos
+    · nlinarith
+    · have : u (some k) ≤ -1 := by omega
+      nlinarith
+  have hdiff : u.eval e₂ - u.eval e₁ = u (some i) * (e₂ i - e₁ i) + u (some j) * (e₂ j - e₁ j) := by
+    have : u.eval e₂ - u.eval e₁ = ∑ k, u (some k) * (e₂ k - e₁ k) := by
+      simp only [Lane.eval, mul_sub, sum_sub_distrib]; ring
+    rw [this, Fintype.sum_eq_add i j hij]
+    intro k ⟨hki, hkj⟩
+    simp [e₁, e₂, hki, hkj]
+  have h₁ := hu e₁ hr₁
+  have h₂ := hu e₂ hr₂
+  have gi := gain i (Or.inl rfl)
+  have gj := gain j (Or.inr rfl)
+  omega
+
+/-- **Range-forced purity of a program**: on noise in `[nlo, nhi]`, a program whose every type is narrower than
+`2·(nhi − nlo)` has pure lanes, so `CoverCount`'s covering count applies to it. -/
+theorem pureLanes_of_wfOn {α β : Type} [Fintype α] [Fintype β] {nlo nhi : ℤ} {Ts : List BamType}
+    (hle : nlo ≤ nhi) (hTs : ∀ τ ∈ Ts, τ.hi - τ.lo < 2 * (nhi - nlo)) (P : List (BamOp α β))
+    (hP : ∀ o ∈ P, o.WFOn nlo nhi Ts) : PureLanes P := by
+  intro o ho
+  have h := hP o ho
+  cases o with
+  | tc τ src u v =>
+    obtain ⟨hτ, hu, hv⟩ := h
+    exact ⟨fun t => Lane.pure_of_fitsOn hle (hTs τ hτ) (hu t),
+      fun t => Lane.pure_of_fitsOn hle (hTs τ hτ) (hv t)⟩
+  | merge c => trivial
+  | copy i => trivial
+  | const q => trivial
+
+/-- **s8 lanes on noise in `[−64, 64]` are pure**: the noise spans 129 values, so int7 data plus noise is an s8 value
+and no s8 lane sums two noise variables. -/
+theorem pureLanes_s8_rfp {α β : Type} [Fintype α] [Fintype β] (P : List (BamOp α β))
+    (hP : ∀ o ∈ P, o.WFOn (-64) 64 [⟨32, -128, 127, 32⟩]) : PureLanes P :=
+  pureLanes_of_wfOn (by norm_num) (by decide) P hP
 
 end Pouw.Dimension.H100
