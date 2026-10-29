@@ -1,5 +1,5 @@
-"""warden-serve: the active network certifier (`verity.core.protocols.certifier.warden`) on one host, a relay that knows
-bytes only, in front of any TCP server, and the offline check of what it published.
+"""warden-serve: the active warden (`verity.core.protocols.certifier.warden`) on one host, a relay that knows bytes
+only, in front of any TCP server, and the offline check of what it published.
 
 **Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one
 connection to the server (`--upstream HOST:PORT`) for it and forwards each direction's bytes unchanged in content, on
