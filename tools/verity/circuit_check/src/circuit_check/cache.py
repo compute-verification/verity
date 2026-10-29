@@ -1787,6 +1787,9 @@ def key(request: dict) -> dict:
 
 
 _OWN: dict[int, tuple[Any, str]] = {}
+#: each specialization's distinct callees and statics, once: a body calls a few Definitions from many nodes, and every target's
+#: descriptor walks all it reaches
+_NEXT: dict[int, tuple[Any, bool, tuple[Any, ...]]] = {}
 
 
 def descriptor(fn: Any) -> str:
@@ -1825,9 +1828,11 @@ def descriptor(fn: Any) -> str:
                         e = _OWN[id(f)] = (f, hashlib.sha512(C.canonical_json(own)).hexdigest())
                     parts.append([C.descriptor_id(f), e[1]])
                 if isinstance(f, SpecializedDefinition):
-                    if not by_calls:
-                        stack.extend(n.fn for n in f.body.nodes)
-                    stack.extend(statics(f.bindings))
+                    nxt = _NEXT.get(id(f))
+                    if nxt is None or nxt[0] is not f or nxt[1] != by_calls:
+                        got = {id(g): g for g in [*(() if by_calls else (n.fn for n in f.body.nodes)), *statics(f.bindings)]}
+                        nxt = _NEXT[id(f)] = (f, by_calls, tuple(got.values()))
+                    stack.extend(nxt[2])
         except Exception as e:  # noqa: BLE001  (its check raises too, and an errored check is never stored)
             return f"error:{type(e).__name__}"
     return hashlib.sha512(json.dumps(sorted(parts)).encode()).hexdigest()

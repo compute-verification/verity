@@ -1312,3 +1312,57 @@ def test_the_checker_s_version_is_its_code_not_its_prose(tmp_path, monkeypatch):
     assert CC.version() == here
     data.write_text('{"a": 1}')
     assert CC.version() != here
+
+
+def _walked(fn) -> str:
+    """`cache.descriptor` as a walk of every body node and static, with no memo: what its memo must give."""
+    import hashlib
+
+    from verity.ml.circuits import codec as C
+    from verity.ml.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+
+    def statics(v):
+        if isinstance(v, FunctionDefinition):
+            yield v
+        elif isinstance(v, (list, tuple, dict)):
+            for x in v.values() if isinstance(v, dict) else v:
+                yield from statics(x)
+
+    parts, seen, stack = [], set(), [fn]
+    while stack:
+        f = stack.pop()
+        if id(f) in seen:
+            continue
+        seen.add(id(f))
+        if isinstance(f, (PrimitiveDefinition, SpecializedDefinition)):
+            parts.append([C.descriptor_id(f), hashlib.sha512(C.canonical_json(C.definition_entry(f))).hexdigest()])
+        if isinstance(f, SpecializedDefinition):
+            stack.extend(n.fn for n in f.body.nodes)
+            stack.extend(statics(f.bindings))
+    return hashlib.sha512(json.dumps(sorted(parts)).encode()).hexdigest()
+
+
+def test_a_descriptor_is_its_walk_of_every_body_node_however_often_a_body_calls_one_definition():
+    """`cache.descriptor` takes each specialization's distinct callees and statics once (`cache._NEXT`): every digest, first
+    and again, is the one a walk of every node gives, for a body that calls one Definition from many nodes, a function
+    static, and two specializations that share a callee."""
+    from verity.ml.circuits import Array, bind
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity.ml.circuits.ops.scalar import BIT, F32, F32Eq
+    from verity.ml.circuits.refs import tuple_of
+    from verity.ml.circuits.types import Tuple
+
+    from circuit_check import cache as CC
+
+    same = CompositeDefinition("DescSame", 1, (), lambda S: ((("a", F32), ("b", F32)), BIT),
+                               lambda B, S, a, b: B.call(F32Eq, a, b), register=False)
+    many = CompositeDefinition("DescMany", 1, ("N",), lambda S: ((("x", Array(S.N, F32)), ("y", Array(S.N, F32))),
+                                                                  Tuple(*[BIT] * S.N)),
+                               lambda B, S, x, y: tuple_of(*(B.call(bind(same), x[i], y[i]) for i in range(S.N))),
+                               register=False)
+    via = CompositeDefinition("DescVia", 1, ("OP",), lambda S: ((("a", F32), ("b", F32)), BIT),
+                              lambda B, S, a, b: B.call(S.OP, a, b), register=False)
+    roots = [bind(many, N=5), bind(many, N=2), bind(via, OP=bind(same)), bind(same), F32Eq]
+    first = [CC.descriptor(fn) for fn in roots]
+    assert first == [_walked(fn) for fn in roots] == [CC.descriptor(fn) for fn in roots]
+    assert len(set(first)) == len(roots) and not any(d.startswith("error:") for d in first)
