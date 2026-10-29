@@ -41,7 +41,7 @@ open Machine (Operand)
 abbrev hm : Machine := ⟨card, s8Open⟩
 
 /-- An instruction of the kernel: an opcode, its input operands and its output operands. -/
-abbrev Ins : Type := Op s8Open × (ℕ → Operand) × (ℕ → Operand)
+abbrev Ins : Type := Opcode s8Open × (ℕ → Operand) × (ℕ → Operand)
 
 /-- The instruction on the machine, unpredicated. -/
 def Ins.instr (a : Ins) : hm.Instr := .op a.1 (fun i => a.2.1 i) (fun i => a.2.2 i) none
@@ -134,7 +134,7 @@ def load (n c : ℕ) : Ins :=
   else copyN .dram .smem (n / 4) (addrB n (c - n) 0) (addrB n (c - n) 0)
 
 /-- The `wgmma`: `s8` by `s8` into 32-bit accumulators, `64 × 256 × 32`, both operands in shared memory. -/
-def mmaOp : Op s8Open := .mma () ⟨64, 256, 32⟩ .smem .smem
+def mmaOp : Opcode s8Open := .mma () ⟨64, 256, 32⟩ .smem .smem
 
 /-- The blocks of 64 rows and 256 columns a slice has. -/
 def blocks (n : ℕ) : ℕ := n / 64 * (n / 256)
@@ -278,7 +278,7 @@ theorem foldl_update_mem (f : α → β) (g : α → γ) :
         hnd'.1 (hinj a' (by simp [ha']) a (by simp) e ▸ ha')), Function.update_self]
     · exact foldl_update_mem f g l _ (fun a ha a' ha' => hinj a (by simp [ha]) a' (by simp [ha'])) hnd'.2 a ha'
 
-theorem execOp_direct {m : Machine} (o : Op m.sem) (src : Fin o.nIn → Operand) (d : Fin o.nOut → ℕ) (M : m.Mem) :
+theorem execOp_direct {m : Machine} (o : Opcode m.sem) (src : Fin o.nIn → Operand) (d : Fin o.nOut → ℕ) (M : m.Mem) :
     Machine.execOp o src (fun i => .direct (d i)) none M =
       (List.finRange o.nOut).foldl (fun M' i => Function.update M' (m.loc (o.outStore i) (d i))
         (o.eval (fun i => (src i).readIn (o.inStore i) M) i)) M := by
@@ -305,8 +305,8 @@ theorem copy_exec (s t : Store) (len a b : ℕ) (M : hm.Mem) :
   refine (execOp_direct (m := hm) (.move s t len 1) _ (fun i => b + i.val) M).trans ?_
   congr 1
   funext M' i
-  have hi : (i : ℕ) < len := by have := i.isLt; simp only [Op.nOut] at this; omega
-  simp [Op.eval, getD, Op.outStore, Op.inStore, Op.nIn, Machine.Operand.readIn, Machine.Operand.locIn,
+  have hi : (i : ℕ) < len := by have := i.isLt; simp only [Opcode.nOut] at this; omega
+  simp [Opcode.eval, getD, Opcode.outStore, Opcode.inStore, Opcode.nIn, Machine.Operand.readIn, Machine.Operand.locIn,
     Nat.mod_eq_of_lt hi, hi]
 
 theorem copy_at (s t : Store) (len a b : ℕ) (M : hm.Mem) (u : Store) (q : ℕ) (hq : q < hm.card.size u)
@@ -455,7 +455,7 @@ theorem mma_in (n p : ℕ) (M : hm.Mem) (i : ℕ) (hi : i < 18944) :
   simp only [mmaV, getD, show i < (mma n p).1.nIn by rw [hn]; exact hi, ↓reduceDIte]
   have ha : (⟨64, 256, 32⟩ : Shape).wa (s8Open.fa ()) = 512 := rfl
   have hb : (⟨64, 256, 32⟩ : Shape).wb (s8Open.fb ()) = 2048 := rfl
-  simp only [mma, mmaOp, Op.inStore, ha, hb, Machine.Operand.readIn, Machine.Operand.locIn]
+  simp only [mma, mmaOp, Opcode.inStore, ha, hb, Machine.Operand.readIn, Machine.Operand.locIn]
   by_cases h1 : i < 512
   · simp [h1]
   · by_cases h2 : i < 2560

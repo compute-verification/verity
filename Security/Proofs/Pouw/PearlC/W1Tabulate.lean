@@ -6,7 +6,7 @@ import Proofs.Pouw.Prob
 # A cheap winning W1 program refutes TT_OUT at W1, and W1 charges only the branch a run takes
 
 `TTOutW1` (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`), `Gγ` and `GγPerCoin` bound every adversary by its cost and
-its oracle calls. W1 itself bounds a program's text (`W1.Prog.bounded`: at every layout `2^64` code nodes and `2^64`
+its oracle calls. W1 itself bounds a program's text (`W1.CodeImage.bounded`: at every layout `2^64` code nodes and `2^64`
 constants), and nothing else bounds an adversary. These lemmas make that exact, as attack tools for
 the TT family restated at `W1.w1Priced`.
 
@@ -126,9 +126,9 @@ theorem size_tree (leaf : List Bool → W1.Code) : ∀ (n : ℕ) (path : List Bo
       omega
 
 /-- **No W1 program's code is a tree of `ite`s of depth above 64**, at any layout and whatever the tree's leaves: the
-tree has at least `2^n` nodes (`size_tree`), and W1's text bound (`Prog.bounded`) allows `2^64`. The table of one
+tree has at least `2^n` nodes (`size_tree`), and W1's text bound (`CodeImage.bounded`) allows `2^64`. The table of one
 leaf per salt, `tree leaf 256 []` on the salt's 256 bits, is one of them. -/
-theorem tree_not_code (leaf : List Bool → W1.Code) {n : ℕ} (hn : 64 < n) (path : List Bool) (pr : Prog)
+theorem tree_not_code (leaf : List Bool → W1.Code) {n : ℕ} (hn : 64 < n) (path : List Bool) (pr : CodeImage)
     (L : Layout) : pr.code L ≠ tree leaf n path := by
   intro h
   have h1 := (pr.bounded L).1
@@ -188,7 +188,7 @@ def tabP : Protocol Unit Unit Unit where
   Wref := fun _ _ => 1
 
 /-- The empty program: one node of text, within W1's bound. -/
-def emptyProg : Prog := ⟨fun _ => [], fun _ => .done, fun _ => by norm_num [W1.Code.size]⟩
+def emptyProg : CodeImage := ⟨fun _ => [], fun _ => .done, fun _ => by norm_num [W1.Code.size]⟩
 
 /-- The adversary that runs the empty program on zero activations, with no preprocessing. -/
 def emptyAdv (dv : W1Device) : Adversary (W1.w1Priced dv (fun _ : Unit => []) : CostModel Unit Unit Unit) :=
