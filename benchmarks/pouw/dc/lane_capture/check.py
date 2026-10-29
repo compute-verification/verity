@@ -1,5 +1,5 @@
 """Compare lane_capture's H200 outputs with the semantics derive_minimal_ssn.py reads (its `prmt`, `shf` and `sgxt`) and
-the documented function of every other form, word for word.
+the documented function of every other form (PTX ISA; a warp form's of its warp's 32 lanes), word for word.
 
   python3 check.py CAPTURE.bin [--sass FILE] [--json OUT]   # exit 0 iff every word of every form matches
 
@@ -60,6 +60,33 @@ def bmsk(pos: int, w: int) -> int:
     return ((1 << w) - 1) << pos & M32
 
 
+def i2ip(bits: int, signed: bool, with_c: bool):
+    """cvt.pack.sat: a and b (s32) saturated to `bits`, b in the low field and a above it, c's low bits above both"""
+    lo, hi = (-(1 << bits - 1), (1 << bits - 1) - 1) if signed else (0, (1 << bits) - 1)
+    m = (1 << bits) - 1
+
+    def f(a, b, c):
+        d = (max(lo, min(hi, s32(b))) & m) | (max(lo, min(hi, s32(a))) & m) << bits
+        return (d | c << 2 * bits & M32) if with_c else d
+    return f
+
+
+def halves(op, signed: bool):
+    """`op` on each 16-bit half of a, b and c, the result's low 16 bits in that half"""
+    return lambda a, b, c: sum((op(half(a, k, signed), half(b, k, signed), half(c, k, signed)) & 0xFFFF) << 16 * k
+                               for k in range(2))
+
+
+def s16(x: int) -> int:
+    x &= 0xFFFF
+    return x - 65536 if x >> 15 else x
+
+
+def maj_pred(a, b, c):
+    p, q, r = a != 0, b < c, s32(c) > s32(a)
+    return int(p and q or q and r or p and r)
+
+
 ONE = {
     "lop3_96": lop3(0x96), "lop3_e8": lop3(0xE8), "lop3_ca": lop3(0xCA), "lop3_1e": lop3(0x1E),
     "mad_lo": lambda a, b, c: (a * b + c) & M32,
@@ -91,6 +118,22 @@ ONE = {
     "bfind_u": lambda a, b, c: a.bit_length() - 1 & M32,
     "brev": lambda a, b, c: int(f"{a:032b}"[::-1], 2),
     "sel": lambda a, b, c: a if c & 1 else b,
+    "viadd_imm": lambda a, b, c: (a + 0x9E3779B9) & M32,
+    "i2ip_s8": i2ip(8, True, True), "i2ip_u8": i2ip(8, False, True), "i2ip_u16": i2ip(16, False, False),
+    "plop3_maj": maj_pred,
+    "min_s16x2": halves(lambda x, y, z: min(x, y), True),
+    "max_u16x2": halves(lambda x, y, z: max(x, y), False),
+    "max3_s16x2": halves(lambda x, y, z: max(x, y, z), True),
+    "addmax_s16x2": halves(lambda x, y, z: max(s16(x + y), z), True),
+    "addmax_relu": lambda a, b, c: max(s32((a + b) & M32), s32(c), 0),
+}
+WARP = {
+    "match_any": lambda w, A, B, C, i: sum(1 << j % 32 for j in w if A[j] & 3 == A[i] & 3),
+    "match_all": lambda w, A, B, C, i: M32 if len({C[j] & 15 == 0 for j in w}) == 1 else 0,
+    "ballot": lambda w, A, B, C, i: sum((C[j] & 1) << j % 32 for j in w),
+    "vote_any": lambda w, A, B, C, i: int(any(C[j] & 1 for j in w)),
+    "vote_all": lambda w, A, B, C, i: int(all(C[j] & 7 for j in w)),
+    "voteu_any": lambda w, A, B, C, i: A[i] if any(C[j] & 1 for j in w) else B[i],
 }
 TWO = {
     "mad_wide": lambda a, b, c: divmod((a * b + (c << 32 | (a ^ b))) & M64, 1 << 32)[::-1],
@@ -149,6 +192,10 @@ def main() -> int:
             want = [(ONE[name](A[i], B[i], C[i]), 0) for i in range(n)]
         elif name in TWO:
             want = [TWO[name](A[i], B[i], C[i]) for i in range(n)]
+        elif name in WARP:
+            if n % 32:
+                raise SystemExit(f"check: warp form {name} needs whole warps, and {n} inputs isn't a multiple of 32")
+            want = [(WARP[name](range(i - i % 32, i - i % 32 + 32), A, B, C, i), 0) for i in range(n)]
         else:
             raise SystemExit(f"check: no semantics for form {name}")
         miss = [i for i in range(n) if (x[i], y[i]) != want[i]]
@@ -157,7 +204,7 @@ def main() -> int:
                      "first": [{"a": A[i], "b": B[i], "c": C[i], "got": [x[i], y[i]], "want": list(want[i])}
                                for i in miss[:4]]})
         print(f"{'ok ' if not miss else 'BAD'} {name:12} {len(miss):6} of {n}  {' '.join(sass.get(name) or [])}")
-    missing = (set(ONE) | set(TWO)) - set(outs)
+    missing = (set(ONE) | set(TWO) | set(WARP)) - set(outs)
     if missing:
         print(f"check: forms with semantics but no capture: {sorted(missing)}", file=sys.stderr)
     verdict = {"inputs": n, "forms": len(rows), "forms_matching": len(rows) - bad, "rows": rows}

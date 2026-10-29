@@ -1,6 +1,8 @@
-// Lane captures on sm_90a: every integer lane form derive_minimal_ssn.py certifies, applied to N input triples on the
+// Lane captures on sm_90a: every integer lane form derive_minimal_ssn.py certifies, and the integer bases outside
+// Core/Accel's Lane (VIADD, I2IP, PLOP3, the 16x2 and RELU DPX forms, MATCH and VOTE), applied to N input triples on the
 // GPU, one kernel a form so its SASS names the opcode ptxas chose. check.py compares each output word with the Python
-// semantics the one-instruction-minimal check reads.
+// semantics the one-instruction-minimal check reads, and a warp form's with its function of the warp's 32 lanes (lanes
+// are consecutive indices, every warp full).
 //
 //   lane_capture OUT.bin [N]     # writes "VLC1", N, the form count, each form's name (NUL-terminated), then a, b, c
 //                                # and every form's outputs (two words a form, the second 0 for one-word forms), u32 LE
@@ -80,7 +82,29 @@ struct Out2 {
   F(popc, { o.x = __popc(a); })                                                                                         \
   F(bfind_u, { asm("bfind.u32 %0,%1;" : "=r"(o.x) : "r"(a)); })                                                         \
   F(brev, { o.x = __brev(a); })                                                                                         \
-  F(sel, { o.x = (c & 1) ? a : b; })
+  F(sel, { o.x = (c & 1) ? a : b; })                                                                                    \
+  F(viadd_imm, { asm("add.u32 %0,%1,0x9e3779b9;" : "=r"(o.x) : "r"(a)); })                                             \
+  F(i2ip_s8, { asm("cvt.pack.sat.s8.s32.b32 %0,%1,%2,%3;" : "=r"(o.x) : "r"(a), "r"(b), "r"(c)); })                    \
+  F(i2ip_u8, { asm("cvt.pack.sat.u8.s32.b32 %0,%1,%2,%3;" : "=r"(o.x) : "r"(a), "r"(b), "r"(c)); })                    \
+  F(i2ip_u16, { asm("cvt.pack.sat.u16.s32 %0,%1,%2;" : "=r"(o.x) : "r"(a), "r"(b)); })                                 \
+  F(plop3_maj, {                                                                                                        \
+    asm("{.reg .pred p,q,r,s,t,u;\n setp.ne.u32 p,%1,0;\n setp.lt.u32 q,%2,%3;\n setp.gt.s32 r,%3,%1;\n"                \
+        " and.pred s,p,q;\n and.pred t,q,r;\n and.pred u,p,r;\n or.pred s,s,t;\n or.pred s,s,u;\n selp.u32 %0,1,0,s;}" \
+        : "=r"(o.x) : "r"(a), "r"(b), "r"(c));                                                                          \
+  })                                                                                                                    \
+  F(min_s16x2, { o.x = __vmins2(a, b); })                                                                               \
+  F(max_u16x2, { o.x = __vmaxu2(a, b); })                                                                               \
+  F(max3_s16x2, { o.x = __vimax3_s16x2(a, b, c); })                                                                     \
+  F(addmax_s16x2, { o.x = __viaddmax_s16x2(a, b, c); })                                                                 \
+  F(addmax_relu, { o.x = (uint32_t)__viaddmax_s32_relu((int)a, (int)b, (int)c); })                                      \
+  F(match_any, { asm("match.any.sync.b32 %0,%1,0xffffffff;" : "=r"(o.x) : "r"(a & 3)); })                              \
+  F(match_all, {                                                                                                        \
+    asm("{.reg .pred p;\n match.all.sync.b32 %0|p,%1,0xffffffff;}" : "=r"(o.x) : "r"((uint32_t)((c & 15) == 0)));     \
+  })                                                                                                                    \
+  F(ballot, { o.x = __ballot_sync(0xffffffffu, c & 1); })                                                               \
+  F(vote_any, { o.x = __any_sync(0xffffffffu, c & 1); })                                                                \
+  F(vote_all, { o.x = __all_sync(0xffffffffu, (c & 7) != 0); })                                                         \
+  F(voteu_any, { o.x = __any_sync(0xffffffffu, c & 1) ? a : b; })
 
 #define KERNEL(NAME, BODY)                                                                                   \
   extern "C" __global__ void lc_##NAME(const uint32_t* A, const uint32_t* B, const uint32_t* C, Out2* O, int n) { \
