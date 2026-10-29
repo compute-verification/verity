@@ -31,19 +31,19 @@ open Accounting.Gates
 /-! ## An `S8Dot_v1` coordinate -/
 
 /-- The constant 0 a chain or a fresh tail group starts from (`prims.ZERO32`), at engine step `t`. -/
-def zero32 (t : ℕ) : Gate ℕ := ⟨.const 0, [], 0, 0, t, "Const32[0x00000000]_v1", .other, false⟩
+def zero32 (t : ℕ) : IntGate ℕ := ⟨.const 0, [], 0, 0, t, "Const32[0x00000000]_v1", .other, false⟩
 
 /-- Step `s` of an `S8Dot_v1` body with statics `K`, `L` and the tail's atom counts, at engine step `t`, on the
 accumulator at gate `acc` and operands `a`, `b`: `BlackwellU8S8ImmaDot32_v1` (u8·s8, wrapping) when `u8`, else
 `BlackwellS8ImmaDot32_v1` (s8·s8, clamped). -/
-def s8Step (u8 : Bool) (K L : ℕ) (atoms : List ℕ) (t s acc : ℕ) (a b : List ℕ) (commit : Bool) : Gate ℕ :=
+def s8Step (u8 : Bool) (K L : ℕ) (atoms : List ℕ) (t s acc : ℕ) (a b : List ℕ) (commit : Bool) : IntGate ℕ :=
   ⟨.mma (if u8 then .u8 else .s8) .s8 32 (!u8), acc :: (a ++ b), s32Min, s32Max, t,
     if u8 then "BlackwellU8S8ImmaDot32_v1" else "BlackwellS8ImmaDot32_v1", .dot K L atoms s, commit⟩
 
 /-- `n` chained steps appended to `C`, numbered from `s₀`: the first reads the accumulator at gate `acc`, each later one
 the step before it, and step `i` reads operands `a i` and `b i`. -/
 def chain (u8 : Bool) (K L : ℕ) (atoms : List ℕ) (t s₀ n acc : ℕ) (a b : ℕ → List ℕ) (commit : ℕ → Bool)
-    (C : Dag ℕ) : Dag ℕ :=
+    (C : IntDag ℕ) : IntDag ℕ :=
   C ++ (List.range n).map fun i =>
     s8Step u8 K L atoms t (s₀ + i) (if i = 0 then acc else C.length + i - 1) (a i) (b i) (commit i)
 
@@ -53,12 +53,12 @@ accumulator at gate `acc`, or from a constant 0 (`T0 = "zero"`), `K/32` steps of
 when `tu8`) over tail atom `j`'s `ta j` and `tb j`, from `T_{K/L}` (`chain`, the first group only) or a constant 0.
 Returns the circuit and its words' gates: `T_1 … T_{K/L}`, then each group's last step `D_g`. -/
 def s8Dot (t : ℕ) (u8 tu8 : Bool) (K L : ℕ) (acc : Option ℕ) (tail : List (ℕ × Bool)) (a b ta tb : ℕ → List ℕ)
-    (pre : Dag ℕ) : Dag ℕ × List ℕ :=
+    (pre : IntDag ℕ) : IntDag ℕ × List ℕ :=
   let atoms := tail.map Prod.fst
   let C₀ := if acc.isSome then pre else pre ++ [zero32 t]
   let C₁ := chain u8 K L atoms t 0 (K / 32) (acc.getD pre.length) a b (fun s => 32 * (s + 1) % L == 0) C₀
   let T := ((List.range (K / 32)).filter fun s => 32 * (s + 1) % L == 0).map fun s => C₀.length + s
-  let r := tail.foldl (fun (st : Dag ℕ × ℕ × List ℕ) g =>
+  let r := tail.foldl (fun (st : IntDag ℕ × ℕ × List ℕ) g =>
     let C := if g.2 then st.1 else st.1 ++ [zero32 t]
     let j := st.2.1
     (chain tu8 K L atoms t (K / 32 + j) g.1 (if g.2 then C.length - 1 else C.length - 1)
@@ -69,11 +69,11 @@ def s8Dot (t : ℕ) (u8 tu8 : Bool) (K L : ℕ) (acc : Option ℕ) (tail : List 
 /-! ## `intervals` against `s8.no_wrap` -/
 
 /-- A budgeted gate declaring `iv`: an operand's or an incoming accumulator's producer (a quantizer's clamp). -/
-def producer (iv : Iv) : Gate ℕ := plainGate (.budgeted .rounding fun _ => iv.1) [] iv.1 iv.2 ""
+def producer (iv : Iv) : IntGate ℕ := plainGate (.budgeted .rounding fun _ => iv.1) [] iv.1 iv.2 ""
 
 /-- Gate `i` is not an s8-family step, or is one in its window by interval analysis (`Proven`'s conditions on it): its
 derived interval within s32 and its operands' derived intervals within their formats. -/
-def stepOk (C : Dag ℕ) (ivs : List Iv) (i : ℕ) : Bool :=
+def stepOk (C : IntDag ℕ) (ivs : List Iv) (i : ℕ) : Bool :=
   match C[i]? with
   | none => true
   | some g =>
@@ -86,7 +86,7 @@ def stepOk (C : Dag ℕ) (ivs : List Iv) (i : ℕ) : Bool :=
     | _ => true
 
 /-- The derived intervals of the gates `ws` when every s8-family step of `C` is in its window, else none. -/
-def wordIntervals (C : Dag ℕ) (ws : List ℕ) : Option (List Iv) :=
+def wordIntervals (C : IntDag ℕ) (ws : List ℕ) : Option (List Iv) :=
   let ivs := intervals C
   if (List.range C.length).all (stepOk C ivs) then some (ws.map fun j => ivs.getD j (0, 0)) else none
 
@@ -101,7 +101,7 @@ producers declaring `A` and `B`, from an incoming accumulator declaring `C` or f
 none when some step leaves its window. -/
 def s8Interval (K L : ℕ) (C : Option Iv) (u8 : Bool) (A B : Iv) (tu8 : Bool) (tail : List (ℕ × Bool × Iv × Iv)) :
     Option (List Iv) :=
-  let pre : Dag ℕ := [producer A, producer B] ++ C.toList.map producer ++
+  let pre : IntDag ℕ := [producer A, producer B] ++ C.toList.map producer ++
     tail.flatMap fun g => [producer g.2.2.1, producer g.2.2.2]
   let base := if C.isSome then 3 else 2
   let atoms := tail.map Prod.fst
@@ -147,16 +147,16 @@ def inputId : Binding → ℕ → String
   | _, _ => ""
 
 /-- An input gate of slot `i`, bound at `b`, declared at a signed `w`-bit word's whole range. -/
-def inputGate (b : Binding) (w i : ℕ) : Gate ℕ :=
+def inputGate (b : Binding) (w i : ℕ) : IntGate ℕ :=
   ⟨.input b i, [], -2 ^ (w - 1), 2 ^ (w - 1) - 1, 0, inputId b w, .other, false⟩
 
 /-- A limb step of primitive `prim` (class `cls`) reading gate `y`, at engine step `t`. -/
-def limbGate (t : ℕ) (prim : String) (cls : Budget) (y : ℕ) (lo hi : ℤ) : Gate ℕ :=
+def limbGate (t : ℕ) (prim : String) (cls : Budget) (y : ℕ) (lo hi : ℤ) : IntGate ℕ :=
   ⟨.budgeted cls fun v => v.headD 0, [y], lo, hi, t, prim, .other, false⟩
 
 /-- `LimbSplit_v1{FORM = "bytes"}`'s steps from the word at gate `r` with `n` carries to go, appended to `C`: its low
 byte and its carry, and from the carry on; the last limb a low byte. -/
-def limbBytes (t : ℕ) : ℕ → ℕ → Dag ℕ → Dag ℕ
+def limbBytes (t : ℕ) : ℕ → ℕ → IntDag ℕ → IntDag ℕ
   | 0, r, C => C ++ [limbGate t "S32LowByte_v1" .rounding r (-128) 127]
   | n + 1, r, C =>
       limbBytes t n (C.length + 1)
@@ -164,7 +164,7 @@ def limbBytes (t : ℕ) : ℕ → ℕ → Dag ℕ → Dag ℕ
 
 /-- **`LimbSplit_v1{FORM, N}`** of the word at gate `y`, at engine step `t`, appended to `C`: `"byteclamp"` (`clamp`,
 `N = 3`) is `h = S32ByteCarry(y)`, `S32LowByte(y)`, `S32ClampS8(h)` and `S32ClampRest(h)`, and `"bytes"` `limbBytes`. -/
-def limbSplit (t : ℕ) (clamp : Bool) (N y : ℕ) (C : Dag ℕ) : Dag ℕ :=
+def limbSplit (t : ℕ) (clamp : Bool) (N y : ℕ) (C : IntDag ℕ) : IntDag ℕ :=
   if clamp then
     C ++ [limbGate t "S32ByteCarry_v1" .rounding y s32Min s32Max, limbGate t "S32LowByte_v1" .rounding y (-128) 127,
       limbGate t "S32ClampS8_v1" .compareSelect C.length (-128) 127,
@@ -177,7 +177,7 @@ step). The inputs are, in order: the incoming accumulators (`acc`: `N` s32 words
 `K`, registered when `regB`), `ta` (32 codes a tail atom), `tb` (`N` rows of those, registered when `regB`) and the limb
 splits' words (s32), every other one a run input. -/
 def censusDag (matmul : Bool) (N K L : ℕ) (acc u8 tu8 : Bool) (tail : List (ℕ × Bool)) (regB : Bool)
-    (limbs : List (Bool × ℕ)) : Dag ℕ :=
+    (limbs : List (Bool × ℕ)) : IntDag ℕ :=
   let m := 32 * (tail.map Prod.fst).sum
   let rb : Binding := if regB then .registered else .run
   let nAcc := if acc then N else 0
@@ -186,7 +186,7 @@ def censusDag (matmul : Bool) (N K L : ℕ) (acc u8 tu8 : Bool) (tail : List (�
   let taB := bB + N * K
   let tbB := taB + m
   let yB := tbB + N * m
-  let ins : Dag ℕ :=
+  let ins : IntDag ℕ :=
     (List.range nAcc).map (fun i => inputGate .run 32 i) ++
       (List.range K).map (fun i => inputGate .run 8 (aB + i)) ++
       (List.range (N * K)).map (fun i => inputGate rb 8 (bB + i)) ++
@@ -251,16 +251,16 @@ def laneRow (r c ln s : ℕ) : ℕ := ln / (c / 8) + r / 4 * s
 def laneCol (c ln s : ℕ) : ℕ := 2 * (ln % (c / 8)) + 2 * (c / 8) * (s / 2) + s % 2
 
 /-- A budgeted gate of class `cls` and primitive `prim` reading `args`, at engine step 0. -/
-def h1Gate (prim : String) (cls : Budget) (args : List ℕ) (place : Place := .other) (commit : Bool := false) : Gate ℕ :=
+def h1Gate (prim : String) (cls : Budget) (args : List ℕ) (place : Place := .other) (commit : Bool := false) : IntGate ℕ :=
   ⟨.budgeted cls fun v => v.headD 0, args, s32Min, s32Max, 0, prim, place, commit⟩
 
 /-- A lane's segment dot of primitive `prim` (`PouwSegDot_v2` from the accumulator at gate `acc`, or `PouwSegDot0_v2`
 from the zero there): `acc + Σ a_k·b_k` over 32 s8 pairs, wrapping. -/
-def segDot (prim : String) (acc : ℕ) (a b : List ℕ) : Gate ℕ :=
+def segDot (prim : String) (acc : ℕ) (a b : List ℕ) : IntGate ℕ :=
   ⟨.mma .s8 .s8 32 false, acc :: (a ++ b), s32Min, s32Max, 0, prim, .other, false⟩
 
 /-- A step of a cell's `z`: `BlackwellS8ImmaDot32_v2` (s8·s8, clamped) on the accumulator at gate `acc`. -/
-def immaStep (acc : ℕ) (a b : List ℕ) : Gate ℕ :=
+def immaStep (acc : ℕ) (a b : List ℕ) : IntGate ℕ :=
   ⟨.mma .s8 .s8 32 true, acc :: (a ++ b), s32Min, s32Max, 0, "BlackwellS8ImmaDot32_v2", .other, false⟩
 
 /-- **An H1 + fx1 tile's circuit** (`h1tile.PouwH1Tile` with `EXACT` the s8 accumulator `GemmAccumulatorS8_v2{K}` over
@@ -271,7 +271,7 @@ def immaStep (acc : ℕ) (a b : List ℕ) : Gate ℕ :=
 `PouwXinFinal`; the receipt's `2·(KS + m)` words, each the XOR over lanes of one half after one set, at its receipt place
 and committed; and `z`, each cell's `K/32` steps from the zero. Its noise and fold keys read the salt, and its digits read
 `X` directly: the counts it is held to read neither. -/
-def h1Dag (r c K : ℕ) : Dag ℕ :=
+def h1Dag (r c K : ℕ) : IntDag ℕ :=
   let ks := K / 32
   let m := nDigits ks
   let sets := ks + m
@@ -349,7 +349,7 @@ theorem h1Of_h1Rows : h1Rows.all (fun (r, c, K, out) => h1Of r c K == out) := by
 /-! ## Every gate of an H1 + fx1 tile is its primitive's -/
 
 /-- A gate at a dot step is an s8-family step. -/
-def mmaAtDot (g : Gate ℕ) : Bool :=
+def mmaAtDot (g : IntGate ℕ) : Bool :=
   match g.place, g.op with
   | .dot .., .mma .. => true
   | .dot .., _ => false
@@ -357,17 +357,17 @@ def mmaAtDot (g : Gate ℕ) : Bool :=
 
 /-- `Classed` through a list `S` of primitives and classes, as the kernel decides it: each of `S` is listed in its class
 (`Class.listed`), and each gate's primitive and class is one of `S`, an s8-family step when it is at a dot step. -/
-def classedIn (S : List (String × Class)) (C : Dag ℕ) : Bool :=
+def classedIn (S : List (String × Class)) (C : IntDag ℕ) : Bool :=
   (S.all fun p => classOf p.1 == some p.2.listed) && C.all fun g => decide ((g.prim, g.op.cls) ∈ S) && mmaAtDot g
 
-theorem classed_of_classedIn {S : List (String × Class)} {C : Dag ℕ} (h : classedIn S C = true) : Classed C := by
+theorem classed_of_classedIn {S : List (String × Class)} {C : IntDag ℕ} (h : classedIn S C = true) : Classed C := by
   simp only [classedIn, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq] at h
   intro g hg
   obtain ⟨hmem, hm⟩ := h.2 g hg
   refine ⟨by simpa using h.1 _ hmem, fun K L tail s hs => ?_⟩
   unfold mmaAtDot at hm
   rw [hs] at hm
-  cases hop : g.op <;> simp_all [Op.IsMma]
+  cases hop : g.op <;> simp_all [IntOp.IsMma]
 
 /-- An H1 + fx1 tile's primitives with their gates' classes (`h1Dag`): its inputs (the salt a coin, by its port), its
 zero, its noise and digit words, its lanes' segment dots, folds and finals, its receipt words and `z`'s IMMA steps. -/
@@ -561,7 +561,7 @@ theorem classOf_tableReadRows : tableReadRows.all (fun (id, tag, k) => classTag 
 
 /-- The operation of `cl id`'s class at gate `i` (an input reads slot `i`): `units` reads only the class, a gather's
 index-bit kind and its operands, so an affine map is the empty sum and a budgeted primitive the constant 0. -/
-def opOf (cl : String → Option Class) (id : String) (i : ℕ) : Option (Op ℕ) :=
+def opOf (cl : String → Option Class) (id : String) (i : ℕ) : Option (IntOp ℕ) :=
   (cl id).map fun
     | .input b => .input b i
     | .const => .const 0
@@ -571,7 +571,7 @@ def opOf (cl : String → Option Class) (id : String) (i : ℕ) : Option (Op ℕ
     | .budgeted cls => .budgeted cls fun _ => 0
 
 /-- The circuit of gates `(id, operands)`, each the operation `opOf cl` gives it; none when an id is unlisted. -/
-def dagOf (cl : String → Option Class) (gs : List (String × List ℕ)) : Option (Dag ℕ) :=
+def dagOf (cl : String → Option Class) (gs : List (String × List ℕ)) : Option (IntDag ℕ) :=
   gs.zipIdx.mapM fun e => (opOf cl e.1.1 e.2).map fun op => ⟨op, e.1.2, s32Min, s32Max, 0, e.1.1, .other, false⟩
 
 /-- A circuit's units by budgeted class, its ids classed by `cl`: roundings, compare-selects, gathers and folds. -/
