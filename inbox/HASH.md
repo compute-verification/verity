@@ -241,3 +241,10 @@ where h_forced ≤ h is the hashing or fold work a cheater can't skip. So 99% ne
 - One live word a call (κ) still fails, at 1.51%. Starting at N₀ = a_i ⊕ b_j (live words a row and a column) leaves nothing known below honest; SAT finds no 2-instruction step 1.
 - One-step windows are `unsat` below honest; two steps are `unsat` at random data. Two- and three-step windows at zero and chosen data are still running on cpu-2. Don't relay this as "checked over windows" yet.
 - Under Daniel's capacity reading (22:25Z) the fold accounts at most h/(1 + h), about 61–75%. It is recorded, and the lane stays idle until Daniel settles the fork: a premise about the matmul, the hashing lead, or silicon.
+
+**22:45Z, ALT's D-OUT under the capacity reading (note 20261029T2229Z-report-hash-alt):**
+- **T3 is checked on CPU with 5 seeds.** Served as specified, D-OUT fails at +430% (2K): noise on the BOS row swamps its scale. `sink` (BOS row exact) gives +3.19% / +2.91%; `sink_nodown` +0.62%, but it credits only 72.4% of the linears.
+- **The lead's hashing on attention and the BOS row, outputs-only on the rest:** h 3.4 / 26.8 / 43.1 at T 512 / T 8,192 / decode, at a = 99.45% / 99.20% / 99.18%. That is 35×, 4.4× and 2.7× less hashing than the lead, at 99%.
+- It needs public weights (an exception to everything zero-knowledge) and SAK-UF (rank 4, about the matmul on registered weights).
+- It is the concrete "credit the multiply" option for Daniel's fork. It waits on N-PPL's confirmation: our int8 LUT attention rather than fp32, a second model, full windows.
+- Attention is 96% of the remaining h at T 8,192.
