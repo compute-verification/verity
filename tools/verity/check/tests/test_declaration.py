@@ -88,6 +88,26 @@ def test_a_malformed_declaration_is_refused_with_the_reason(body, why):
         _parse(body)
 
 
+def test_a_job_off_the_gate_parses_and_ci_toml_takes_circuit_check_alone_off_it():
+    """circuit-check runs after landing, off the gate, until `circuit-check --all` fits inside the rest of the check."""
+    a, b = _parse('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\n')
+    assert (a.gate, b.gate) == (False, True) and D.gated([a, b]) == [b]
+    assert [j.name for j in D.load() if not j.gate] == ["circuit-check"] and CHECK.OFF_GATE == ("circuit-check",)
+
+
+@pytest.mark.parametrize("body, why", [
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = "no"\n', "gate must be bool"),
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\nmerge_requires = ["x/"]\n', "merge_requires on a job off the gate"),
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 1\nneeds = ["a"]\n',
+     "job b is on the gate and waits on a, which is off it"),
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\nafter = "a"\n',
+     "job b is on the gate and waits on a, which is off it"),
+])
+def test_a_job_off_the_gate_that_a_merge_or_a_job_on_it_would_need_is_refused(body, why):
+    with pytest.raises(D.DeclarationError, match=why):
+        _parse(body)
+
+
 def test_a_wrong_schema_is_refused():
     with pytest.raises(D.DeclarationError, match="schema"):
         D.parse('schema = "ci/v9"\n[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n', HANDLES)
