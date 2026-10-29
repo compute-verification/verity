@@ -436,6 +436,51 @@ def test_a_step_table_with_a_calls_rows_shifted_by_a_call_is_refused_by_core(tmp
     assert (at == "a-link" or a_link is None) and refused[0] == at and refused[1].startswith(why), (a_link, arow)
 
 
+@pytest.mark.parametrize("k", [64, 8192])
+def test_the_taps_check_of_a_step_table_is_the_whole_tables_comparison(k):
+    """`commit._theirs`, which builds each call's words only to its own rows and requires zero words past them, decides as
+    comparing the whole table of the Commit's rows (each block padded to M) does, over Commit rows fewer or more than the
+    window's, rows of zero codes and scale 0 standing for padding, an edited scale or padding word, empty calls, blocks
+    swapped and a table a block short."""
+    served, call = SimpleNamespace(m=8), SimpleNamespace(k=k)
+    served.a_words = lambda call, codes, scales, out=None, slots=None: SV.Served.a_words(served, call, codes, scales, out,
+                                                                                          slots)
+    rng = np.random.default_rng(k)
+
+    def rows(m, zero=0):
+        codes, scales = rng.integers(-127, 128, (m, k), dtype=np.int8), (rng.random(m) + 0.5).astype("<f4")
+        codes[m - zero:], scales[m - zero:] = 0, 0
+        return codes, scales
+
+    def table(held):
+        return np.concatenate([served.a_words(call, c, s) for c, s in held])
+
+    def poke(t, at):
+        t = t.copy()
+        t[at] += 1
+        return t
+
+    a, b, three = rows(5), rows(4), rows(3)
+    n = Wt.chunks(k)
+    cases = {
+        "honest": ([a, b], table([a, b]), True),
+        "window-more": ([(a[0][:3], a[1][:3]), b], table([a, b]), False),
+        "window-more-zero": ([three, b], table([(np.concatenate([three[0], np.zeros((2, k), np.int8)]),
+                                                 np.concatenate([three[1], np.zeros(2, "<f4")])), b]), True),
+        "commit-more": ([a, b], table([(a[0][:3], a[1][:3]), b]), False),
+        "commit-more-zero": ([rows(5, zero=2), b], None, True),
+        "scale": ([a, b], poke(table([a, b]), (8 * n + 2 * n - 1, -1)), False),
+        "padding": ([a, b], poke(table([a, b]), (8 * n - 1, 0)), False),
+        "empty": ([rows(0), rows(0)], table([rows(0), rows(0)]), True),
+        "swapped": ([a, b], table([b, a]), False),
+        "short": ([a, b], table([a]), False),
+    }
+    for name, (held, words, want) in cases.items():
+        words = table([(c[:len(c) - 2], s[:len(s) - 2]) for c, s in held[:1]] + held[1:]) if words is None else words
+        whole = np.array_equal(table(held), words)
+        assert CT._theirs(served, call, held, words) == whole == want, name
+
+
 def test_input_ids_off_the_prompts_credit_nothing(tmp_path, monkeypatch):
     """Step 0's Commit ids with one id that isn't its request's prompt token: round 0's input-ids table is the prompts'
     (built before step 0's forward), so the Commit registers its own tree as input-ids/0 and the serving process credits

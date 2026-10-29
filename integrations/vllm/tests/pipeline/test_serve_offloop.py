@@ -180,21 +180,42 @@ def test_the_pool_is_warmed_before_serving_in_blocks_that_hold_any_one_take(monk
     pool.mode = None
 
 
-def test_the_gpu_tree_extension_is_built_before_serving_only_for_a_worker_that_loads_it():
-    """A windowed or ``--gpu-tree`` committer's worker loads the extension in its first step, so it is built before serving;
-    any other committer never builds it."""
-    loads: list[Any] = []
+def test_every_committer_method_the_serving_modules_call_is_the_collectors():
+    """serve-openai's tests hand its modules stand-in committers, so a call to a method the collector does not have (a warm step
+    before serving, say) would fail only on a GPU, before the first request: every ``com.<method>(...)`` the serving modules make
+    names a method of the collector `pipeline.commit.make_committer` builds for `serve_seal.DECLARED_COMMITTER`."""
+    import ast
 
-    def com(**kw):
-        c = SimpleNamespace(**({"windowed": False, "gpu_tree": False} | kw))
-        c._gpu_ext_load = lambda: loads.append(c)
-        return c
+    from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
-    for kw in ({"windowed": True}, {"gpu_tree": True}):
-        c, t = com(**kw), iter([2.0, 31.25])
-        assert ss.warm_gpu_ext(c, clock=lambda: next(t)) == 29.25 and loads == [c]
-        loads.clear()
-    assert ss.warm_gpu_ext(com(), clock=lambda: pytest.fail("no build to time")) is None and loads == []
+    assert ss.DECLARED_COMMITTER == "native_collect_v2b"
+    calls: dict[str, str] = {}
+    for f in sorted(Path(ss.__file__).parent.glob("serve_*.py")):
+        for n in ast.walk(ast.parse(f.read_text())):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and isinstance(n.func.value, ast.Name) and n.func.value.id == "com":
+                calls.setdefault(n.func.attr, f"{f.name}:{n.lineno}")
+    assert "size_arena" in calls and "enable_windows" in calls
+    assert not {a: at for a, at in calls.items() if not callable(getattr(NativeCollectCommitter, a, None))}
+
+
+def test_the_pool_warms_on_the_committer_itself(monkeypatch):
+    """`warm_pool` reads the real committer (its offline core, CPU only), not a stand-in: the pool it grows is the committer's own."""
+    from tests.check.opened import committer
+
+    monkeypatch.setattr(ss, "WARM_BLOCK", 1 << 20)
+    monkeypatch.setattr(PP, "_shared_map", lambda n: (torch.zeros(n, dtype=torch.uint8), None))
+    monkeypatch.setattr(PP, "_populate", lambda *_a: True)
+    monkeypatch.setattr(PP, "_register", lambda *_a: None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    com = committer()
+    pool = com.pool
+    try:
+        assert ss.warm_pool(com, 3 * (1 << 20) / ss.GB)["blocks"] == 3 and pool.allocs == 1 and pool.reserved_bytes == pool.block_bytes
+        for _ in range(3):
+            pool.take(1 << 20)
+        assert pool.allocs == 1, "the takes are served from the block the warm-up made"
+    finally:
+        pool.mode = None
 
 
 def test_a_close_waits_for_room_only_while_the_windows_awaiting_their_seal_hold_the_bound():
@@ -358,7 +379,8 @@ def test_the_engine_serves_the_next_windows_while_a_seal_is_held(tmp_path, monke
     wins = records(out, "windows.jsonl")
     assert [w["window"] for w in wins] == [0, 1, 2] and all(w["seal"] == {"row_dir": str(out / "windows" / f"w{w['window']}"),
                                                                       "off_loop": True} for w in wins)
-    assert not (out / "seals.jsonl").exists() and len(records(tmp_path / "OUT", "requests.jsonl")) == 3
+    assert not (out / "seals.jsonl").exists() and len(records(tmp_path / "OUT", sc.REQUEST_USERS)) == 3
+    assert not (tmp_path / "OUT" / "requests.jsonl").exists(), "the requests' ids stay in the serve dir"
     assert not s.windows.summary()["passed"] and s.windows.summary()["seals"]["awaiting"] == 3
     held.set()
     sealer.close()
@@ -777,36 +799,24 @@ def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
 def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_path):
     src, dst = tmp_path / "serve", tmp_path / "OUT"
     src.mkdir()
-    (src / "requests.jsonl").write_bytes(b'{"a": 1}\n{"b": ')
+    (src / "windows.jsonl").write_bytes(b'{"a": 1}\n{"b": ')
     (src / "serve.json").write_text("{}")
+    (src / "requests.jsonl").write_text('{"prompt_ids": [1]}\n')
+    (src / "advice_trace.jsonl").write_text('{"kind": "header"}\n')
     m = sc.Mirror(src, dst)
     m()
-    assert (dst / "requests.jsonl").read_bytes() == b'{"a": 1}\n' and (dst / "serve.json").read_text() == "{}"
-    with open(src / "requests.jsonl", "ab") as f:
+    assert (dst / "windows.jsonl").read_bytes() == b'{"a": 1}\n' and (dst / "serve.json").read_text() == "{}"
+    with open(src / "windows.jsonl", "ab") as f:
         f.write(b'2}\n{"c": 3}\n')
     m()
-    assert (dst / "requests.jsonl").read_bytes() == (src / "requests.jsonl").read_bytes()
-    (src / "requests.jsonl").write_bytes(b'{"d": 4}\n')
+    assert (dst / "windows.jsonl").read_bytes() == (src / "windows.jsonl").read_bytes()
+    (src / "windows.jsonl").write_bytes(b'{"d": 4}\n')
     m()
-    assert (dst / "requests.jsonl").read_bytes() == b'{"d": 4}\n' and not m.errors
+    assert (dst / "windows.jsonl").read_bytes() == b'{"d": 4}\n' and not m.errors
     assert sc.records_mirror(src, str(src)) is None and sc.records_mirror(src, None) is None
-    assert json.loads((dst / "serve.json").read_text()) == {} and not (dst / "windows.jsonl").exists()
-
-
-def test_the_records_mirror_drains_the_step_traces_writer_before_it_copies(tmp_path):
-    """serve-openai's step trace is written by a thread of its own (`advice_trace`): its lines so far reach the file only at a
-    `drain`, which the mirror calls first."""
-    src, dst = tmp_path / "serve", tmp_path / "OUT"
-    src.mkdir()
-    (src / "advice_trace.jsonl").write_bytes(b'{"kind": "header"}\n{"kind": "st')
-
-    def drain() -> None:
-        with open(src / "advice_trace.jsonl", "ab") as f:
-            f.write(b'ep"}\n')
-
-    m = sc.records_mirror(src, str(dst), before=drain)
-    m()
-    assert (dst / "advice_trace.jsonl").read_bytes() == b'{"kind": "header"}\n{"kind": "step"}\n' and not m.errors
+    assert json.loads((dst / "serve.json").read_text()) == {} and not (dst / "seals.jsonl").exists()
+    assert not (dst / "requests.jsonl").exists(), "the requests' ids stay in the serve dir"
+    assert not (dst / "advice_trace.jsonl").exists(), "the step trace stays in the serve dir"
 
 
 def test_a_seal_writes_its_binding_map_in_pieces_to_the_bytes_and_digest_one_dumps_writes(tmp_path, host_blocks, monkeypatch):

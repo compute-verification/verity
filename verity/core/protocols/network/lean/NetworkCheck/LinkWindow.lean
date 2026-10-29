@@ -6,32 +6,32 @@ import Flock.FV3
 import Identity.Tagged
 
 /-!
-# N2's link-window verdict of record
+# N2's execution phase verdict of record
 
-`verdict` decides one link-window of N2 (`verity/core/protocols/certifier/service.py`, `LinkWindows.verify`) from the
-proof as the verifier receives it and the link's public fields, and nothing else: it is accepted exactly when
+`verdict` decides one execution phase of N2 (`verity/core/protocols/certifier/service.py`, `LinkWindows.verify`) from
+the proof as the verifier receives it and the link's public fields, and nothing else: it is accepted exactly when
 
 * the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, whose findings `Case.findings` carries) refused
-  nothing, every gate of the link's unit names a pinned circuit digest (`pinned`), one or more sessions each accepted
-  and named the registered Program, and each proved exactly the drawn units;
-* the statement's public file holds, for the drawn unit, a ``pub`` row commitment that opens under the delivered salt to
-  the verifier's own public row (`pubRow`: the registered root, the link-window's served domain (`domainId`), the link,
+  nothing, every gate of the link's proof block names a pinned circuit digest (`pinned`), one or more sessions each
+  accepted and named the registered Program, and each proved exactly the sampled proof blocks;
+* the statement's public file holds, for the sampled proof block, a ``pub`` row commitment that opens under the
+  delivered salt to the verifier's own public row (`pubRow`: the registered root, the execution phase's served domain
+  (`domainId`), the link,
   the window, each end's declared grid and its profile's row, both certificates' signed digests, and on a served link the
-  window's declared sync, on an advised link the window's view of the advice) and an ``o0`` row commitment that opens to
-  the delivered output word, whose verdict and deadline bits are both 1 (`opened`);
+  window's declared sync) and an ``o0`` row commitment that opens to the delivered output word, whose verdict and
+  deadline bits are both 1 (`opened`);
 * both certificates verify under the network certifier's LMS key in its session over their public fields, and name the
   link, their end (egress first) and the window (`certified`);
 * the window's declared sync is one of Σ_sync.
 
-A warden link (`Kind.warden`, `service.WardenProfile`) is the plain unit under the active warden's records: both ends'
-grids are the warden's one grid, with no profile, and both carry the warden's parameters digest (`gridBytes`) in place
-of a certifier's; the warden runs no shaper clock, so a window declares no sync and nothing is read of the syncs
-(`synced`). Its outputs are a plain link's.
+A network certifier link (`Kind.warden`, `service.WardenProfile`) is the plain proof block under the active network
+certifier's records: both ends' grids are the network certifier's one grid, with no profile, and both carry the network
+certifier's parameters digest (`gridBytes`) in place of a certifier's; the active network certifier runs no shaper
+clock, so a window declares no sync and nothing is read of the syncs (`synced`). Its outputs are a plain link's.
 
-Its public outputs are `verdict` and the proved `deadline` bit (on an advised link the advice it read, as given), and
-`digest` binds them to the registration, the sessions and the accept bit (`verdictDigest`). An advised link's window view
-is an input here (`Case.view`), the Python's `advised.view`: that derivation is not ported, so an advised link's verdict
-of record stays the Python's (`service.OF_RECORD`).
+Its public outputs are `verdict` and the proved `deadline` bit, and `digest` binds them to the registration, the
+sessions and the accept bit (`verdictDigest`). A link is plain, served or a warden's (`service.OF_RECORD`); a case of
+kind ``advised`` is refused by name (`caseOf`): no advised link has a verdict of record.
 
 `linkWindowFn` is the `link-window` function of `network-records verdicts` (`Difftest.serve`), which `service.py` calls
 through `lean_audit.SERVER`. `certificatesFn` is its `certificates` function, the client's check of one window's
@@ -81,17 +81,9 @@ structure Sync where
   num : Nat
   den : Nat
 
-/-- An advised window's view of the advice (`advised.WindowView`). -/
-structure View where
-  released : Array Nat
-  floor : Array Nat
-  received : Nat
-
 inductive Kind where
   | plain
   | served
-  /-- the window's view (none where `advised.view` refuses) and the advice output (`advised.digest`, none without one) -/
-  | advised (view : Option View) (advice : Option String)
   /-- the warden's parameters digest (`service.WardenProfile.digest`), which both ends' heads bind -/
   | warden (digest : ByteArray)
 
@@ -183,20 +175,16 @@ private def syncOf (j : Json) : V Sync := do
   let (n, m) ← ratOf (.arr #[n, m]) "a sync's rho"
   pure ⟨← asNat d "a sync's delta", n, m⟩
 
-private def viewOf (j : Json) : V View := do
-  pure { released := ← natsOf (← get j "released" "view") "view.released",
-         floor := ← natsOf (← get j "floor" "view") "view.floor", received := ← nat j "received" "view" }
-
 def caseOf (j : Json) : V Case := do
   let kind ← match ← str j "kind" "case" with
     | "plain" => pure Kind.plain
     | "served" => pure Kind.served
-    | "advised" => pure (Kind.advised (← (opt j "view").mapM viewOf) (← (opt j "advice").mapM (asStr · "advice")))
+    | "advised" => throw "an advised link is refused: no advised link has a verdict of record"
     | "warden" => do
       let d ← bytesOf (← get j "warden" "case") "warden"
       unless d.size = digestBytes do throw s!"a warden's parameters digest is {digestBytes} bytes, not {d.size}"
       pure (Kind.warden d)
-    | k => throw s!"a link is plain, served, advised or a warden's, not {k}"
+    | k => throw s!"a link is plain, served or a warden's, not {k}"
   let ss ← get j "sync_set" "case"
   let deltas ← natsOf (← get ss "deltas" "sync_set") "sync_set.deltas"
   let rhos ← (← arr ss "rhos" "sync_set").mapM (ratOf · "sync_set.rhos")
@@ -232,8 +220,8 @@ end Decode
 
 /-! ## The public row -/
 
-/-- A 64-byte digest as the unit reads it (`head_check._digest_bits`, packed): each 8-byte big-endian word's bits least
-significant first, so each word's bytes reversed. -/
+/-- A 64-byte digest as the proof block reads it (`head_check._digest_bits`, packed): each 8-byte big-endian word's bits
+least significant first, so each word's bytes reversed. -/
 def digestRow (d : ByteArray) : ByteArray :=
   ⟨(Array.range d.size).map fun i => d.get! (8 * (i / 8) + 7 - i % 8)⟩
 
@@ -258,7 +246,8 @@ def manifestSet (c : Case) : NetworkCheck.SyncSet :=
   ⟨c.deltas.map Int.ofNat, c.rhos.map fun (n, d) => ((n / Nat.gcd n d : Nat), d / Nat.gcd n d)⟩
 
 /-- An end's grid as its head encodes it (`head_check.grid_bytes`): T, r, B and τ_b as u32 big-endian, then the grid's
-parameters digest, which binds Σ_sync on egress; on a warden link, both ends' the warden's (`LinkWindows.grid`). -/
+parameters digest, which binds Σ_sync on egress; on a network certifier link, both ends' the network certifier's
+(`LinkWindows.grid`). -/
 def gridBytes (c : Case) (d : Nat) : V ByteArray := do
   let e := if d = 0 then c.egress else c.ingress
   let g := e.grid
@@ -267,22 +256,18 @@ def gridBytes (c : Case) (d : Nat) : V ByteArray := do
     | _ => parametersDigest g (if d = 0 then some (manifestSet c) else none)
   return be 4 g.buckets ++ be 4 g.allocation ++ be 4 g.frameBytes ++ be 4 g.bucketMs ++ digest
 
-/-- The served unit's `sync` input (`served.sync_words`): δ, then ρ's numerator and denominator in lowest terms, each a
-u16; none past 2^16. -/
+/-- The served proof block's `sync` input (`served.sync_words`): δ, then ρ's numerator and denominator in lowest terms,
+each a u16; none past 2^16. -/
 def syncWords (s : Sync) : Option (Nat × Nat × Nat) :=
   let g := Nat.gcd s.num s.den
   let w := (s.delta, s.num / g, s.den / g)
   if w.1 < 2 ^ 16 ∧ w.2.1 < 2 ^ 16 ∧ w.2.2 < 2 ^ 16 then some w else none
 
-/-- An advised count as the unit reads it (`advised._count_bits`, packed): four bytes big-endian. -/
-def countRow (xs : Array Nat) : Option ByteArray :=
-  if xs.all (· < 2 ^ 32) then some (xs.foldl (fun acc x => acc ++ be 4 x) ByteArray.empty) else none
-
 /-- The unit's public row as the verifier derives it from public fields alone (`LinkWindows.public_arguments`, then
 `LinkWindows.row`): both certificates' signed digests, then each end's registered root, served domain, link, window,
-grid and (with a profile) its row for the window, then on a served link the window's declared sync and on an advised
-link its view. None where the unit takes no instance: not two certificates, a signed digest of another length, a window
-past an end's profile, no sync a served unit can hold, or no view. -/
+grid and (with a profile) its row for the window, then on a served link the window's declared sync. None where the unit
+takes no instance: not two certificates, a signed digest of another length, a window past an end's profile, or no sync
+a served unit can hold. -/
 def pubRow (c : Case) : V (Option ByteArray) := do
   let #[d0, d1] := c.digests | return none
   let digests := [d0, d1]
@@ -293,9 +278,6 @@ def pubRow (c : Case) : V (Option ByteArray) := do
         let s ← c.syncs[c.window]?
         let (d, p, q) ← syncWords s
         pure (le 2 d ++ le 2 p ++ le 2 q)
-    | .advised view _ => pure do
-        let v ← view
-        pure ((← countRow v.released) ++ (← countRow v.floor) ++ (← countRow #[v.received]))
   let some tail := tail | return none
   let dom ← domainId c
   let link := c.link.toUTF8
@@ -324,16 +306,16 @@ def pinned (g : String) : Bool :=
     !defn.isEmpty && !defn.contains '\n' && rest.head? == some '@' && (rest.drop 1).all hex
   else false
 
-/-- Whether the findings prove this link's unit and the draw (`LinkWindows.proved`, then each session's units): nothing
-refused, every gate pinned, one or more sessions, each accepted, naming the registered Program and proving exactly the
-drawn units. -/
+/-- Whether the findings prove this link's proof block and the sample (`LinkWindows.proved`, then each session's proof
+blocks): nothing refused, every gate pinned, one or more sessions, each accepted, naming the registered Program and
+proving exactly the sampled proof blocks. -/
 def proved (c : Case) : Bool :=
   match c.findings with
   | none => false
   | some fs => c.gates.all pinned && !fs.isEmpty &&
       fs.all fun f => f.accepted && f.program == some c.program && f.units == c.units
 
-/-- The row commitments the public file holds for its one instance whose unit index is `unit`, by port
+/-- The row commitments the public file holds for its one instance whose proof block index is `unit`, by port
 (`service._commitments`): the header line's `units.indices` names it once; then the instances' commitments, three
 each, instance-major, or in a shared-row file (`shared_rows`, one table a port, each at least one row) each port's table
 then every instance's refs (u32 little-endian, ports in order). None when no one instance is, or the file is short. -/
@@ -384,8 +366,8 @@ def opens (row : ByteArray) (bits : Nat) (salt : Option ByteArray) (bc : ByteArr
   | some s => s.size == saltBytes && Flock.Hm96.Default512.commitString (rowDigest row bits) s == bc
   | none => false
 
-/-- The drawn unit's output word, once its public row commitment opens to `row` and its output row commitment to the
-delivered word, each under the salt delivered (`service._opened`); else none. -/
+/-- The sampled proof block's output word, once its public row commitment opens to `row` and its output row commitment
+to the delivered word, each under the salt delivered (`service._opened`); else none. -/
 def opened (c : Case) (row : Option ByteArray) : Option Nat := do
   let row ← row
   let file ← c.statement
@@ -406,8 +388,8 @@ def certified (c : Case) : Bool :=
     | some x => x.link == c.link && x.direction.code == d && x.window == c.window && x.signs c.lms c.key c.session
     | none => false
 
-/-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ one of the rhos. A warden link
-declares none (the warden runs no shaper clock), so nothing is read of the syncs there. -/
+/-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ one of the rhos. A network certifier
+link declares none (the active network certifier runs no shaper clock), so nothing is read of the syncs there. -/
 def synced (c : Case) : Bool :=
   match c.kind with
   | .warden _ => true
@@ -433,20 +415,17 @@ def verdictDigest (c : Case) (accepted : Bool) (outputs : Json) : V String := do
     ("sessions", .arr (c.sessions.map Json.str)), ("accepted", .bool accepted), ("public", outputs)]
   return Flock.hexOf (Flock.Sha512.hash (← Flock.canon body).toUTF8)
 
-/-- The verdict's public outputs: the accept bit as `verdict`, the proved word's deadline bit (0 where nothing opened),
-and on an advised link the advice it read. -/
-def outputsOf (c : Case) (accepted : Bool) (word : Nat) : Json :=
-  Json.mkObj ([("verdict", toJson (if accepted then 1 else 0 : Nat)), ("deadline", toJson (word / 2 % 2))] ++
-    match c.kind with
-    | .advised _ advice => [("advice", match advice with | some a => .str a | none => .null)]
-    | _ => [])
+/-- The verdict's public outputs: the accept bit as `verdict` and the proved word's deadline bit (0 where nothing
+opened). -/
+def outputsOf (accepted : Bool) (word : Nat) : Json :=
+  Json.mkObj [("verdict", toJson (if accepted then 1 else 0 : Nat)), ("deadline", toJson (word / 2 % 2))]
 
-/-- Whether the link-window is accepted, from its checks: proved, its rows opened to the word 3 (both bits 1), both
+/-- Whether the execution phase is accepted, from its checks: proved, its rows opened to the word 3 (both bits 1), both
 certificates verifying, and the window's sync one of Σ_sync. -/
 def acceptedOf (p : Bool) (o : Option Nat) (cert sync : Bool) : Bool :=
   p && o == some 3 && cert && sync
 
-/-- The verdict of record on the link-window (the module docstring). -/
+/-- The verdict of record on the execution phase (the module docstring). -/
 def verdict (c : Case) : V Verdict := do
   let p := proved c
   let row ← pubRow c
@@ -454,7 +433,7 @@ def verdict (c : Case) : V Verdict := do
   let cert := certified c
   let sync := synced c
   let accepted := acceptedOf p o cert sync
-  let outputs := outputsOf c accepted (o.getD 0)
+  let outputs := outputsOf accepted (o.getD 0)
   return { accepted, outputs, digest := ← verdictDigest c accepted outputs, proved := p, opened := o, certified := cert,
            synced := sync }
 

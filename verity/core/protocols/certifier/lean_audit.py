@@ -3,9 +3,9 @@
 
 `Audit` here has `audit.Audit`'s interface and returns its `Verdict`s, so a caller switches by its import line alone.
 `audit.Audit` keeps running beside the Lean check as its reference, on every call with the same arguments: the verdicts
-are the Lean's, the Python's are kept (`Audit.reference`), a link-window where the two differ is a `disagreement` violation,
-and a call that one answers and the other raises on raises. Each call is one unit of the Lean protocol, sent to one
-`network-records verdicts` process kept open across calls and audits:
+are the Lean's, the Python's are kept (`Audit.reference`), an execution phase where the two differ is a `disagreement`
+violation, and a call that one answers and the other raises on raises. Each call is one unit of the Lean protocol, sent
+to one `network-records verdicts` process kept open across calls and audits:
 
 - `check_link`: egress links `["", link]` (`"clock"` when `link` is empty) over windows 0 … len(syncs) − 1, the first
   link carrying no frames and the spatial unit's clock as its syncs (`Audit.syncs`, each window's set by the first call
@@ -27,7 +27,7 @@ after a request starts its own executable at its first; `SERVER`'s is closed at 
 `link-window` (`Server.call`), N2's verdict of record on one link-window's proof (`service.LinkWindows.verify`),
 `certificates`, the client's check of one window's served certificates (`certificate_refusals`, with
 `audit.certificate_refusals` beside it as the reference), and `clocks`, the syncs the certifier signed for a link read
-through its clock certificates' openings (`signed_clocks`, with `advised.SignedClocks` beside it as the reference).
+through its clock certificates' openings (`signed_clocks`, with `certificate.SignedClocks` beside it as the reference).
 
 `encode` is the commitment's encoding of one published record (`NetworkCheck/Records.lean`'s module docstring).
 """
@@ -49,10 +49,9 @@ from typing import Any
 
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit
-from verity.core.protocols.certifier.advised import SignedClocks
 from verity.core.protocols.certifier.audit import Published, Verdict
 from verity.core.protocols.certifier.certificate import (STATUS_CODES, Certificate, CertifiedClock, CertifiedRecord,
-                                                        Direction, LmsKey, PublicKey)
+                                                        Direction, LmsKey, PublicKey, SignedClocks)
 from verity.core.protocols.certifier.commitment import CommittedRecord
 from verity.core.protocols.certifier.grid import GridParams, BlockGrid, Status
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
@@ -184,13 +183,13 @@ class Server:
             self._pid, self._proc, self._lock = os.getpid(), None, threading.Lock()
 
     def verdicts(self, case: dict, fn: str = "verdicts") -> list[dict]:
-        """Every link-window's verdict on `case` (`{"direction", "link", "verdict", "window"}`, in the audit's order) by
-        `fn`, `verdicts` or `verdicts-no-grid`; `ValueError` when the Lean check refuses the case."""
+        """Every execution phase's verdict on `case` (`{"direction", "link", "verdict", "window"}`, in the audit's
+        order) by `fn`, `verdicts` or `verdicts-no-grid`; `ValueError` when the Lean check refuses the case."""
         return self.call(fn, case)["link_windows"]
 
     def call(self, fn: str, case: dict) -> Any:
         """`fn`'s output on `case` (`verdicts`, `verdicts-no-grid`, or `link-window`: `NetworkCheck.LinkWindow`'s verdict
-        of record on one link-window); `ValueError` when the Lean refuses the case."""
+        of record on one execution phase); `ValueError` when the Lean refuses the case."""
         self._own()
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
@@ -260,8 +259,8 @@ def _verdicts(out: list[dict], direction: Direction, link: str, windows: int) ->
 @dataclass
 class Audit:
     """`audit.Audit`, each verdict the Lean check's, with `audit.Audit` (`python`) run beside it on every call as the
-    reference: `lean` holds the Lean check's verdicts and `reference` the Python's, and a link-window where they differ is
-    a `disagreement` violation in `verdicts`. A call where one raises and the other answers raises."""
+    reference: `lean` holds the Lean check's verdicts and `reference` the Python's, and an execution phase where they
+    differ is a `disagreement` violation in `verdicts`. A call where one raises and the other answers raises."""
 
     verdicts: list[Verdict] = field(default_factory=list)
     syncs: dict[int, ClockSync] = field(default_factory=dict)
@@ -378,12 +377,12 @@ def _opening_json(o: CertifiedClock) -> dict:
 
 def signed_clocks(key: PublicKey, session: bytes, link: str, openings: Sequence[CertifiedClock],
                   server: Server | None = None) -> tuple[tuple[ClockSync, ...], list[str | None]]:
-    """`advised.SignedClocks(key, session, openings).syncs(link)`, the syncs the certifier signed for `link`'s windows
-    read through their openings, the Lean's (`NetworkCheck.Period.signedSyncs`, `network-records verdicts`'
+    """`certificate.SignedClocks(key, session, openings).syncs(link)`, the syncs the certifier signed for `link`'s
+    windows read through their openings, the Lean's (`NetworkCheck.Period.signedSyncs`, `network-records verdicts`'
     ``clocks``), with each opening's refusal (`NetworkCheck.Period.openingRefusals`, None where it holds) and
-    `advised.SignedClocks` run beside it as the reference. Where the two differ on the syncs, on any opening's refusal
-    code (`SignedClocks.codes`), or on which link-windows have two or more signed syncs (`SignedClocks.split`), no
-    window has a sync and every opening is refused as `disagreement`. A key other than an `LmsKey`, an opening that
+    `certificate.SignedClocks` run beside it as the reference. Where the two differ on the syncs, on any opening's
+    refusal code (`SignedClocks.codes`), or on which link-windows have two or more signed syncs (`SignedClocks.split`),
+    no window has a sync and every opening is refused as `disagreement`. A key other than an `LmsKey`, an opening that
     isn't a `CertifiedClock` or anything else the Lean refuses to read raises `ValueError`; a reference that raises
     where the Lean answers raises `RuntimeError`."""
     if not isinstance(key, LmsKey):

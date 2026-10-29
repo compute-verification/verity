@@ -1,10 +1,11 @@
-"""The I/O tie's prototype (`io_tie`) on the warden's own egress: variable-length responses on a link served through
-the warden's schedule (`warden.Warden._egress` cuts every cell, the certifier's grid lays them out a row a bucket, as
-`warden_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's map (through
-advice v1's order permutation where the engine's numbering isn't the arrival order, as on the corpus's heavy trace);
-and the Commit's sampled ids, one hiding row a step, which each bucket's unit reads at its outputs' steps as
-registered rows. The reference accepts every honest window and refuses every way the cells can differ from the map and
-the port, every port that isn't the Commit's and a connection the warden failed; the Boolean parts agree with it."""
+"""The I/O tie's prototype (`io_tie`) on the network certifier's own egress: variable-length responses on a link served
+through the network certifier's schedule (`warden.Warden._egress` cuts every cell, the certifier's grid lays them out a
+row a bucket, as `warden_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's
+map (through advice v1's order permutation where the engine's numbering isn't the arrival order, as on the corpus's
+heavy trace); and the Commit's sampled ids, one hiding row a step, which each bucket's proof block reads at its outputs'
+steps as registered rows. The reference accepts every honest window and refuses every way the cells can differ from the
+map and the port, every port that isn't the Commit's and a connection the network certifier failed; the Boolean parts
+agree with it."""
 
 import hashlib
 import json
@@ -43,15 +44,15 @@ def _h(label: bytes) -> bytes:
 
 
 def wardens(shape: IT.Shape, slots: int, delay: int) -> W.WardenParams:
-    """The warden's schedule a shape reads: B, T and lanes·r = R."""
+    """The network certifier's schedule a shape reads: B, T and lanes·r = R."""
     return W.WardenParams(cell_bytes=shape.B, slots=slots, delay=delay, lanes=shape.R // slots, window=shape.T)
 
 
 class Link(NamedTuple):
-    """A fake upstream's link served through the warden: its schedule, its egress rows (bucket b's R cells, a slot no
-    connection holds B zero bytes), advice v0's outputs and release buckets, each advice request's admission bucket
-    and arrival order (`order`), the Commit's rows of sampled ids (one a step of the session), the warden's
-    `fails` frames, and the egress records its grid closed, a window each."""
+    """A fake upstream's link served through the network certifier: its schedule, its egress rows (bucket b's R cells, a
+    slot no connection holds B zero bytes), advice v0's outputs and release buckets, each advice request's admission
+    bucket and arrival order (`order`), the Commit's rows of sampled ids (one a step of the session), the network
+    certifier's `fails` frames, and the egress records its grid closed, a window each."""
 
     params: W.WardenParams
     rows: list[list[bytes]]
@@ -66,12 +67,12 @@ class Link(NamedTuple):
 
 def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], responses: list[list[int]], buckets: int,
           engine: list[int] | None = None, late: frozenset[int] = frozenset()) -> Link:
-    """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with response responses[k] (its ids), and the warden's
-    own egress (`warden.Warden._egress`) serves it for `buckets` buckets: admitted at the first bucket with a free lane
-    in arrival order, its server's bytes all there (its events of P bytes each, then `TRAILER`), but for a connection
-    in `late`, whose last event never comes, so the warden fails it there. Advice request i is arrival engine[i] (the
-    identity by default), its output j sampled at step r·s + (i mod 2) + j, in the batch row of its rank by i among
-    the step's requests."""
+    """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with response responses[k] (its ids), and the network
+    certifier's own egress (`warden.Warden._egress`) serves it for `buckets` buckets: admitted at the first bucket with
+    a free lane in arrival order, its server's bytes all there (its events of P bytes each, then `TRAILER`), but for a
+    connection in `late`, whose last event never comes, so the network certifier fails it there. Advice request i is
+    arrival engine[i] (the identity by default), its output j sampled at step r·s + (i mod 2) + j, in the batch row of
+    its rank by i among the step's requests."""
     B, r, D, P = params.cell_bytes, params.slots, params.delay, params.payload
     fails: list[bytes] = []
     warden = SimpleNamespace(params=params, fails=SimpleNamespace(enqueue=fails.append))
@@ -114,9 +115,9 @@ def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], response
 
 
 def commit(shape: IT.Shape, link: Link, window: int, seed: bytes = b"w", order: list[int] | None = None) -> IT.Instance:
-    """Window `window`'s tie: its rows committed as the warden registers them (a row a bucket), the map and each
-    bucket's steps the verifier computes from the advice (with `order`, the link's by default), and each bucket's port
-    rows opened from the Commit's rows at its steps."""
+    """Window `window`'s tie: its rows committed as the network certifier registers them (a row a bucket), the map and
+    each bucket's steps the verifier computes from the advice (with `order`, the link's by default), and each bucket's
+    port rows opened from the Commit's rows at its steps."""
     p = link.params
     cmap, steps = IT.window_map(shape, link.outputs, link.release, window, link.admitted, p.delay, p.slots,
                                 link.order if order is None else order)
@@ -132,7 +133,8 @@ def commit(shape: IT.Shape, link: Link, window: int, seed: bytes = b"w", order: 
 
 
 def with_cells(inst: IT.Instance, cells) -> IT.Instance:
-    """The window with the warden's cells replaced, committed as the warden commits what it saw."""
+    """The window with the network certifier's cells replaced, committed as the network certifier commits what it
+    saw."""
     return replace(inst, cells=tuple(cells),
                    cells_root=IT.rows_root(inst.cells_domain, IT.bucket_rows(inst.shape, cells), inst.cell_salts))
 
@@ -259,7 +261,8 @@ def test_a_rows_root_is_its_domains_tree_and_a_path_opens_its_row():
 
 
 def test_every_window_of_the_wardens_egress_is_accepted(link, big):
-    """Every window of the busy link, each cell the warden's own, is accepted, the idle ones too; so is SMALL's."""
+    """Every window of the busy link, each cell the network certifier's own, is accepted, the idle ones too; so is
+    SMALL's."""
     kinds = set()
     for w in range(6):
         inst = commit(BIG, link, w)
@@ -273,9 +276,9 @@ def test_every_window_of_the_wardens_egress_is_accepted(link, big):
 
 
 def test_each_buckets_row_is_the_wardens_registered_row(link):
-    """The units read the warden's registration v2 (`warden_rows`): bucket t's row is row t of the record the grid
-    closed (`window_rows`, its wiring read off it), it opens the warden's root at t, and the verifier's port
-    (`bucket_port`) has unit t read row t, an idle window's too."""
+    """The proof blocks read the network certifier's registration v2 (`warden_rows`): bucket t's row is row t of the
+    record the grid closed (`window_rows`, its wiring read off it), it opens the network certifier's root at t, and the
+    verifier's port (`bucket_port`) has proof block t read row t, an idle window's too."""
     p = link.params
     assert len(link.records) == 6
     for w, record in enumerate(link.records):
@@ -298,7 +301,7 @@ def _swap(cells, a, b):
 
 
 def _cell_tampers(inst):
-    """Each way a server or a prover can make the window's cells differ from what the warden was certified to
+    """Each way a server or a prover can make the window's cells differ from what the network certifier was certified to
     release, as a function of the cells. None where the window has no cells to do it with."""
     sh, m, B, R = inst.shape, inst.map, inst.shape.B, inst.shape.R
     data = [i for i in range(sh.N) if not _marker(m[i])]
@@ -392,9 +395,9 @@ def test_each_way_the_cells_differ_from_the_map_and_the_port_is_refused(big):
 
 
 def test_a_connection_the_warden_failed_is_refused():
-    """A server whose last event isn't there by its deadline: the warden sends its `FAIL` in that slot (and its reason
-    to the `fails` record). The advice that claims the whole response is refused at that cell, and one that claims
-    the cells the warden sent maps an `END` where the `FAIL` is."""
+    """A server whose last event isn't there by its deadline: the network certifier sends its `FAIL` in that slot (and
+    its reason to the `fails` record). The advice that claims the whole response is refused at that cell, and one that
+    claims the cells the network certifier sent maps an `END` where the `FAIL` is."""
     honest, failed = busy(3), busy(3, late=frozenset({4}))
     assert not honest.fails and len(failed.fails) == 1 and W.read_reason(failed.fails[0], BIG.B) == (5, "late")
     windows = [w for w in range(6) if failed.rows[w * BIG.T:(w + 1) * BIG.T] != honest.rows[w * BIG.T:(w + 1) * BIG.T]]
@@ -411,8 +414,9 @@ def test_a_connection_the_warden_failed_is_refused():
 
 
 def port_statement(inst: IT.Instance, s: int) -> tuple[dict, list[bytes]]:
-    """A statement's registered entry of port row s over the window's T bucket units (unit t's s-th read row at its
-    step, with its path) and each table row's b ‖ c, as `warden_rows.Cells.statement` gives the bucket rows'."""
+    """A statement's registered entry of port row s over the window's T bucket proof blocks (proof block t's s-th read
+    row at its step, with its path) and each table row's b ‖ c, as `warden_rows.Cells.statement` gives the bucket
+    rows'."""
     T = inst.shape.T
     entry = {"value": IT.SAMPLED, "positions": [inst.steps[t][s] for t in range(T)],
              "paths": [b"".join(inst.paths[t][s]).hex() for t in range(T)]}
@@ -446,8 +450,9 @@ def test_the_hosts_registered_reads_climb_the_domain_the_verifiers_port_names():
 def test_the_ports_reads_are_the_commits_registration():
     """The fake Commit's port tree is `verity.ml.commitments.advice`'s registration of its rows (`hm96-sha512/row/v2`
     leaves under `domain`), the form the served rows' registration takes, so its root is one the Lean verifier's
-    registered reads open. `port_reads` has unit `reads_from + t` read its bucket's s-th step at `port[s]`, a row of
-    2P u16 words, keys a one-row port `port`, and refuses units of unequal S and a read past the Commit's rows."""
+    registered reads open. `port_reads` has proof block `reads_from + t` read its bucket's s-th step at `port[s]`, a row
+    of 2P u16 words, keys a one-row port `port`, and refuses proof blocks of unequal S and a read past the Commit's
+    rows."""
     link = small()
     inst, count = commit(SMALL, link, 0), len(link.port)
     binding, salts = _h(b"portw"), [IT.fake_salt(b"wp", s) for s in range(count)]
@@ -495,10 +500,10 @@ def test_a_port_that_isnt_the_commits_is_refused(link, big):
 
 
 def test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused():
-    """Advice v0 numbers requests in order of first row, the warden streams in order of arrival, and the map holds
-    every slot's stream to its request's: so a request whose number isn't its arrival order puts its cells on another
-    stream than a v0 map names. Advice v1's order permutation names the arrival, so the same cells are accepted
-    through it, and only through the permutation that is the warden's."""
+    """Advice v0 numbers requests in order of first row, the network certifier streams in order of arrival, and the map
+    holds every slot's stream to its request's: so a request whose number isn't its arrival order puts its cells on
+    another stream than a v0 map names. Advice v1's order permutation names the arrival, so the same cells are accepted
+    through it, and only through the permutation that is the network certifier's."""
     rng = random.Random(21)
     arrivals = [0, 0, 1, 1, 2, 2]
     responses = [[rng.randrange(V) for _ in range(n)] for n in (5, 7, 3, 9, 4, 6)]
@@ -511,11 +516,11 @@ def test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused():
 
 
 def serve_trace(shape: IT.Shape, trace: dict) -> tuple[Link, list[int]]:
-    """A recorded link's egress through the warden's own egress: its admission buckets, delay, lanes and output
-    lengths, r = 1. The trace's `order` is each request's rank in the warden's release order (by released bucket,
-    then ordinal), so its arrival order, the ordinal's, is its rank by (admitted, order), which the warden's FIFO
-    admission keeps. Request i is connection order[i] (`serve`'s engine), its output k released at bucket
-    admitted[i] + delay + k; ids are synthetic. Returns the link and the arrival order."""
+    """A recorded link's egress through the network certifier's own egress: its admission buckets, delay, lanes and
+    output lengths, r = 1. The trace's `order` is each request's rank in the network certifier's release order (by
+    released bucket, then ordinal), so its arrival order, the ordinal's, is its rank by (admitted, order), which the
+    network certifier's FIFO admission keeps. Request i is connection order[i] (`serve`'s engine), its output k released
+    at bucket admitted[i] + delay + k; ids are synthetic. Returns the link and the arrival order."""
     admitted, lens, delay = trace["admitted"], trace["output_len"], trace["delay"]
     arrival = sorted(range(len(admitted)), key=lambda i: (admitted[i], trace["order"][i]))
     order = [0] * len(arrival)
@@ -537,10 +542,10 @@ def serve_trace(shape: IT.Shape, trace: dict) -> tuple[Link, list[int]]:
 def test_the_heavy_traces_honest_egress_is_accepted_through_its_order():
     """The trace corpus's heavy trace (`fixtures/warden-heavy-order.json`, whose ``source`` names the trace): 1,000
     requests, 126,502 outputs over buckets 301 … 589, whose engine admits in the API server's body-read order, out of
-    the warden's arrival order. Served through the warden's own egress, every egress window of T = 16 buckets of 1,024
-    lanes is accepted through advice v1's order permutation, each request on its stream from admission. Without it
-    (v0's identity) the map can't be built: the advice's admissions aren't in its numbering's order, which the
-    warden's FIFO would need."""
+    the network certifier's arrival order. Served through the network certifier's own egress, every egress window of T =
+    16 buckets of 1,024 lanes is accepted through advice v1's order permutation, each request on its stream from
+    admission. Without it (v0's identity) the map can't be built: the advice's admissions aren't in its numbering's
+    order, which the network certifier's FIFO would need."""
     trace = json.loads((Path(__file__).parent / "fixtures" / "warden-heavy-order.json").read_text())
     sh = IT.Shape(256, 16, 1_024, P=1_024, S=2, DS=10)
     link, order = serve_trace(sh, trace)

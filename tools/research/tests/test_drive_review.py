@@ -179,7 +179,7 @@ def test_an_after_landing_run_sends_a_base_below_its_tip_so_ratchet_gate_judges_
     assert [m.pr for m in h.d.landed_since(kw["base"], tip)] == [1, 2]                    # the landings it judges
 
 
-def test_an_unreviewed_member_new_to_next_or_a_held_one_stops_the_prefix_below_it(world, monkeypatch):
+def test_an_unreviewed_member_new_to_next_stops_the_prefix_below_it_and_a_held_one_goes_to_the_top(world, monkeypatch):
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
@@ -189,11 +189,13 @@ def test_an_unreviewed_member_new_to_next_or_a_held_one_stops_the_prefix_below_i
     assert _subject(world, "main").startswith("Queue: #1")
     h.review(2)
     h.review(2, "hold", by="other", ref="reads a stale fixture")
+    assert h.tick().startswith("landed #3"), world.logs
+    assert [m.pr for m in h.q.chain()] == [2]
     out = h.tick()
     assert out.startswith("nothing reviewed lands: #2") and "held by other (reads a stale fixture)" in out, out
-    assert _subject(world, "main").startswith("Queue: #1")
+    assert _subject(world, "main").startswith("Queue: #3")
     h.review(2, by="other")                                     # each reviewer's newest verdict counts
-    assert h.tick().startswith("landed #3")
+    assert h.tick().startswith("landed #2")
     assert _main(world) == _tip(world)
     assert h.launched == []
 
@@ -792,8 +794,9 @@ def test_an_unreviewed_member_below_reviewed_ones_no_longer_stops_them_landing(w
     assert h.tick().startswith("landed #1") and _main(world) == _tip(world)
 
 
-def test_a_held_member_still_stops_the_members_above_it_a_hold_is_a_verdict(world, monkeypatch):
-    """Nothing moves past a held member: what is below it lands, past an unreviewed one, and what is above it waits."""
+def test_a_held_member_goes_to_the_top_and_the_lift_passes_over_it(world, monkeypatch):
+    """A held member held every member above it, deep in `next`.  It goes to the top, and the reviewed members on both sides
+    of it go below the unreviewed one and land; the unreviewed one and the held one hold only themselves."""
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
@@ -801,11 +804,12 @@ def test_a_held_member_still_stops_the_members_above_it_a_hold_is_a_verdict(worl
     h.review(2)
     h.review(3, "hold", by="other", ref="reads a stale fixture")
     h.review(4)
-    assert h.tick().startswith("landed #2"), world.logs
-    assert [m.pr for m in h.q.chain()] == [1, 3, 4]
+    assert h.tick().startswith("landed #4"), world.logs
+    assert _subject(world, "main^1").startswith("Queue: #2")
+    assert [m.pr for m in h.q.chain()] == [1, 3]
     out = h.tick()
     assert out.startswith("nothing reviewed lands: #1"), out
-    assert [m.pr for m in h.q.chain()] == [1, 3, 4] and _subject(world, "main").startswith("Queue: #2")
+    assert [m.pr for m in h.q.chain()] == [1, 3] and _subject(world, "main").startswith("Queue: #4")
 
 
 def test_reviewed_first_keeps_a_stacked_pr_after_the_pr_it_contains(world, monkeypatch):
@@ -1105,17 +1109,19 @@ def _red_landing(world, monkeypatch, tmp_path) -> tuple[Review, str]:
     return h, tip
 
 
-def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_reverts_it_an_hour_later(world, monkeypatch,
-                                                                                                       tmp_path):
-    """Without a culprit, PRs keep landing on a `main` whose after-landing runs all fail, each failure going to @ci alone.
-    Drive names the one landing whose change touches the failing test, rings its owner and the suite's with the run and the first
-    error line, and reverts it once `FIX_WINDOW_S` passed with no fix marked."""
+def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_and_reverts_it_an_hour_later(world, monkeypatch,
+                                                                                                             tmp_path):
+    """Without a culprit, PRs keep landing on a `main` whose after-landing runs all fail, each failure going to ci alone.
+    Drive names the one landing whose change touches the failing test, rings its lane with the suite's owner in one post
+    (neither ci nor top) with the run and the first error line, and reverts it once `FIX_WINDOW_S` passed with no fix
+    marked, telling the same two."""
     from research.drive import FIX_WINDOW_S
 
     h, tip = _red_landing(world, monkeypatch, tmp_path)
     assert _main(world) == tip
     (ring,) = [p for p in h.posts if "is red on" in p]
-    assert ring.startswith("@ci @pkg-owner @lane-2 queue: suite pkg is red on `main`") and "(run r-post-0)" in ring, ring
+    assert ring.startswith("@lane-2 @pkg-owner queue: suite pkg is red on `main`") and "(run r-post-0)" in ring, ring
+    assert "@ci" not in ring and "@top" not in ring, ring
     assert "failed tests/test_x.py::test_y" in ring and "NameError: name '_once' is not defined" in ring, ring
     assert "Culprit: #2 (its change touches pkg/tests/test_x.py)" in ring and "unless a fix is marked" in ring, ring
     assert h.postland()["red"]["suite pkg"]["culprit"][0] == 2
@@ -1128,7 +1134,8 @@ def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_rev
     assert _git(world.origin, "rev-parse", f"{main}^") == tip                            # one revert on top of the landing
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", main)
     (post,) = [p for p in h.posts if "reverted" in p]
-    assert post.startswith("@ci @lane-2 queue: #2 reverted on `main`") and "no fix was marked within 60 min" in post, post
+    assert post.startswith("@lane-2 @pkg-owner queue: #2 reverted on `main`") and "no fix was marked within 60 min" in post, post
+    assert "@ci" not in post and "@top" not in post, post
     assert h.posted[-1][0] == main and h.launched == []                                  # the next run checks the new tip
     h.run_state[f"r-post-{len(h.posted) - 1}"] = ("done", 0, None)
     h.evidence = [_steps_run(world.tmp, f"r-post-{len(h.posted) - 1}", {s: "passed" for s in h.posted[-1][1].split(",")})]
@@ -1321,7 +1328,7 @@ def test_a_revert_whose_push_loses_a_race_is_retried_on_the_next_tick(world, mon
     main = _main(world)
     assert _git(world.origin, "rev-parse", f"{main}^") == raced[0] and _reverts(world, tip) == 1
     assert _git(world.origin, "show", f"{main}:c.txt") == "landed in between"
-    assert any(p.startswith("@ci @lane-1 queue: #1 reverted on `main`") for p in h.posts), h.posts
+    assert any(p.startswith("@lane-1 queue: #1 reverted on `main`") for p in h.posts), h.posts
 
 
 def test_a_drive_killed_after_a_revert_pushed_does_not_revert_again_on_restart(world, monkeypatch, tmp_path):
@@ -1424,13 +1431,14 @@ def test_a_read_guard_failure_rings_the_pr_that_added_the_reading_test(world, mo
     h.evidence = [run]
     h.tick()
     (ring,) = [p for p in h.posts if "is red on" in p]
-    assert ring.startswith("@ci @pkg-owner @lane-1 queue: suite pkg is red"), ring
+    assert ring.startswith("@lane-1 @pkg-owner queue: suite pkg is red"), ring
     assert "read outside its declared inputs: data/x.json" in ring and "Culprit: #1" in ring, ring
 
 
-def test_main_far_behind_its_last_verified_commit_rings_ci_and_top_every_hour(world, monkeypatch, tmp_path):
+def test_main_far_behind_its_last_verified_commit_for_a_red_rings_the_culprits_lane_every_hour(world, monkeypatch, tmp_path):
     """A `main` many hours without a verified commit must reach someone.  Once its oldest unverified landing is
-    `BEHIND_S` old, drive rings @ci and @top, again every `BEHIND_EVERY_S` while it stays behind."""
+    `BEHIND_S` old, drive rings who acts on what is red there, the culprit's lane and the suite's owner (not ci and top, which
+    hear only while nothing red explains it), again every `BEHIND_EVERY_S` while it stays behind."""
     from research.drive import BEHIND_EVERY_S, BEHIND_S
 
     h, tip = _red_landing(world, monkeypatch, tmp_path)
@@ -1441,7 +1449,7 @@ def test_main_far_behind_its_last_verified_commit_rings_ci_and_top_every_hour(wo
     h.clock += 20
     h.tick()
     (alarm,) = [p for p in h.posts if "behind its tip" in p]
-    assert alarm.startswith("@ci @top queue: `main`'s last verified commit") and "red: suite pkg (culprit #2)" in alarm, alarm
+    assert alarm.startswith("@lane-2 @pkg-owner queue: `main`'s last verified commit") and "red: suite pkg (culprit #2)" in alarm, alarm
     h.clock += BEHIND_EVERY_S - 30
     h.tick()
     assert len([p for p in h.posts if "behind its tip" in p]) == 1
@@ -1465,7 +1473,7 @@ def test_a_healthy_after_landing_run_under_way_is_not_an_alarm(world, monkeypatc
     h.clock += POSTLAND_RUN_S
     h.tick()
     (alarm,) = [p for p in h.posts if "behind its tip" in p]
-    assert "its run r-post-0" in alarm and "red: nothing named red" in alarm, alarm
+    assert alarm.startswith("@ci @top queue: ") and "its run r-post-0" in alarm and "red: nothing named red" in alarm, alarm
 
 
 def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_broke_it(world, monkeypatch, tmp_path):
@@ -1506,7 +1514,7 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     h.tick()
     assert "bisect" not in h.postland() and not [p for p in h.posts if "reverted" in p]
     (ring,) = [p for p in h.posts if "Culprit: #2, by bisection" in p]
-    assert ring.startswith("@ci @lane-2 queue: suite pkg is red") and "passes on #1's landing" in ring, ring
+    assert ring.startswith("@lane-2 queue: suite pkg is red") and "passes on #1's landing" in ring, ring
     h.clock += FIX_WINDOW_S + 1
     h.tick()
     main = _main(world)
@@ -1514,7 +1522,7 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     assert _subject(world, revert).startswith('Revert "Queue: #2')
     assert _git(world.origin, "show", f"{main}:pkg/tests/test_x.py") == "def test_y():\n    pass"
     (post,) = [p for p in h.posts if "reverted" in p]
-    assert post.startswith("@ci @lane-2 queue: #2 reverted on `main`"), post
+    assert post.startswith("@lane-2 queue: #2 reverted on `main`"), post
 
 
 def _bisecting(world, monkeypatch, tmp_path, revert: bool = False) -> tuple[Review, str]:
@@ -1749,9 +1757,10 @@ def test_review_without_sha_refuses_a_head_pushed_since_the_sync_and_takes_a_sho
     assert Q.review(h.q, world.store, labels, 1, "land", None, "lane-9", sha=new) == 0
 
 
-def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pair_of_heads(world, monkeypatch):
-    """A marked PR can wait on another's unmarked commits, and that one's owner is told, the marked one's beside it.  They hear once per
-    (head of the waiting PR, head of the unmarked one), and nothing once it's admitted or when the waiting PR isn't marked."""
+def test_the_owner_of_an_unmarked_pr_marked_ones_wait_for_is_told_once_with_theirs_until_its_head_changes(world, monkeypatch):
+    """A marked PR can wait on another's unmarked commits, and that one's owner is told, in one post with every marked PR it takes
+    out and their owners.  It is told again when its head moves, not when a PR it takes out moves, and not at all for a waiting PR
+    that isn't marked; nothing once it's admitted."""
     _registry(world, "lane-5", "lane-7", "lane-8", "lane-9")
     h = Review(world, monkeypatch)
     old = world.change({"x.txt": "x = 1\n"})
@@ -1764,52 +1773,53 @@ def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pai
     world.store.add_label(label_target(7, world.gh.prs[7].head), vocab.READY, "true", "marker7")
 
     def told() -> list[str]:
-        return [p for p in h.posts if "waits for your mark" in p]
+        return [p for p in h.posts if "isn't marked ready" in p]
 
     h.tick()
     five = world.gh.prs[5].head
     assert told() == [
-        f"@ci @lane-5 @lane-7 queue: #7 (marked by marker7) waits for your mark of #5, which it contains (at {old[:12]}): mark #5 ready at "
-        f"{five[:8]}, or withdraw it (`research queue eject 5 --reason ...`) and #7 carries it",
-        f"@ci @lane-5 @lane-9 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]}): mark #5 ready at "
-        f"{five[:8]}, or withdraw it (`research queue eject 5 --reason ...`) and #9 carries it"], told()
+        f"@ci @lane-5 @lane-7 @lane-9 queue: #5 at {five[:8]} isn't marked ready. It takes out #7 (marked by marker7; at an older "
+        f"head of #5), #9 (marked by lane-9), which contain it. Fix: mark #5 ready at {five[:8]}, or withdraw it (`research queue "
+        f"eject 5 --reason ...`) and they carry it"], told()
     h.tick()
-    assert len(told()) == 2                                     # once per pair of heads
+    assert len(told()) == 1
     world.gh.put(7, world.change({"k.txt": "kernels 2\n"}, base=world.gh.prs[7].head))
     h.tick()
-    assert len(told()) == 3 and told()[-1].startswith("@ci @lane-5 @lane-7 queue: #7 (marked by lane-7) waits for your mark of #5")
+    assert len(told()) == 1                                     # the same root, PRs and reason
     world.gh.put(5, world.change({"x.txt": "x = 3\n"}, base=five), ready=False)
     h.tick()
     # #9 holds #5's older head now; it only shares `old` with #8, which waits for nothing of #9's or #7's (`Queue.entries`)
-    assert [p.split(": mark")[0] for p in told()[3:]] == [
-        f"@ci @lane-5 @lane-7 queue: #7 (marked by lane-7) waits for your mark of #5, which it contains (at {old[:12]})",
-        f"@ci @lane-5 @lane-9 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]})"], told()
-    world.gh.ready.add((5, world.gh.prs[5].head))
+    new = world.gh.prs[5].head
+    assert told()[1:] == [
+        f"@ci @lane-5 @lane-7 @lane-9 queue: #5 at {new[:8]} isn't marked ready. It takes out #7 (marked by lane-7; at an older "
+        f"head of #5), #9 (marked by lane-9; at an older head of #5), which contain it. Fix: mark #5 ready at {new[:8]}, or "
+        f"withdraw it (`research queue eject 5 --reason ...`) and they carry it"], told()
+    world.gh.ready.add((5, new))
     h.tick()
-    assert len(told()) == 5 and h.q.status()[7].state != "waiting"
+    assert len(told()) == 2 and h.q.status()[7].state != "waiting"
 
 
 def test_a_marked_pr_left_out_for_an_ejected_pr_it_holds_an_older_head_of_is_told_once_with_the_fix(world, monkeypatch):
     """#7 branched from #6, which moved on and was ejected at its new head: #7 holds #6's commits at an older head, so the sync
-    leaves it off `next`.  Both owners hear once per pair of heads, with the fix, and nothing at the same heads after."""
+    leaves it off `next`.  Both owners hear once, in #6's post with the fix, and nothing while that stays."""
     _registry(world, "lane-6", "lane-7")
     h = Review(world, monkeypatch)
     old = world.change({"x.txt": "x = 1\n"})
     world.gh.put(6, old, ready=False)
     h.tick()                                                                    # drive sees #6 at `old`
     world.gh.put(6, new := world.change({"x.txt": "x = 2\n"}, base=old))
-    world.gh.put(7, seven := world.change({"k.txt": "kernels\n"}, base=old))
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))
     h.q.eject(6, "breaks circuits", "ci")
     world.gh.ready.discard((6, new))
 
     def told() -> list[str]:
-        return [p for p in h.posts if "is out of `next`" in p]
+        return [p for p in h.posts if "isn't admitted" in p]
 
     h.tick()
     assert told() == [
-        f"@ci @lane-7 @lane-6 queue: #7 at {seven[:8]} is out of `next`: it contains #6's commits (at an older head), and #6 at "
-        f"{new[:8]} isn't admitted (ejected at {new[:8]}: breaks circuits (a new push or ready mark re-admits it)). Fix: mark #6 "
-        f"ready at {new[:8]}, drop #6's commits from #7, or ask @top to close #6"], told()
+        f"@ci @lane-6 @lane-7 queue: #6 at {new[:8]} isn't admitted (ejected at {new[:8]}: breaks circuits (a new push or ready "
+        f"mark re-admits it)). It takes out #7 (at an older head of #6), which contains it. Fix: mark #6 ready at {new[:8]}, drop "
+        f"#6's commits from #7, or ask @top to close #6"], told()
     assert h.q.status()[7].state == "waiting"
     h.tick()
     assert len(told()) == 1

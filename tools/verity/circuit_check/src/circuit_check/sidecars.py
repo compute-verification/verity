@@ -207,7 +207,10 @@ def pin_owner(kind: str, key: str) -> str | None:
         from verity_numerical.bench import templates as TM
 
         return TM.__name__ if key.partition("/")[0] in TM.TEMPLATES else None
-    d = named(key.partition("{")[0])
+    fid = key.partition("{")[0]
+    if (have := HANDED.get(fid)) is not None:
+        return have
+    d = named(fid)
     return owner(d) if d is not None else None
 
 
@@ -270,6 +273,10 @@ def _top_level_names(path: str) -> set[str]:
 
 
 _INDEX: dict[int, tuple[Any, str]] = {}
+#: each Definition's owner by id as a process that has imported every module a full build imports before its checks has it
+#: (`units.owners`), taken before this process's own (`owner`, `pin_owner`): set where the catalog comes from the bindings'
+#: records, whose bodies no one process builds
+HANDED: dict[str, str] = {}
 
 
 def _index() -> dict[int, tuple[Any, str]]:
@@ -300,12 +307,14 @@ def _index() -> dict[int, tuple[Any, str]]:
 
 def owner(d: Any) -> str | None:
     """The module that defines Definition ``d`` (a specialization's, its Definition's): the module whose top level binds it
-    other than by import (`_index`), else, for one made on demand, the module of the function that builds or evaluates it.
-    Read once the registries are loaded."""
+    other than by import (`_index`; `HANDED`, where set, by its id), else, for one made on demand, the module of the function
+    that builds or evaluates it.  Read once the registries are loaded."""
     d = getattr(d, "defn", d)
+    if (have := HANDED.get(getattr(d, "id", None))) is not None:
+        return have
     e = _index().get(id(d))
     return e[1] if e is not None and e[0] is d else _function_module(d)
 
 
-__all__ = ["PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "binding_modules", "discover", "load_pins", "named", "owner",
+__all__ = ["HANDED", "PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "binding_modules", "discover", "load_pins", "named", "owner",
            "path_of", "pin_file", "pin_files", "pin_owner", "pin_reads", "rel", "shared_pin", "write_pins"]

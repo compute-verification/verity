@@ -1,11 +1,8 @@
 """The certifier's signed clock sync, salted as a record digest is (`certificate.CertifiedClock`,
-`Issuer.salted_clock`), as an advised link's clock source of record (`advised.SignedClocks`,
-`LinkWindows(certified_clocks=…)`): an honest link whose certifier signed each egress window's sync is accepted; a
-window declaring a sync other than the one signed for it is refused, a δ below the certified one among
-them; and a window whose opening doesn't hold has no sync, which refuses it and every window after, each refused
-opening named with why: a forged signature, an altered digest, a reused salt, a wrong window, another key, session or
-link, an ingress or a record certificate, a record's opening, and two syncs for one window. The issuer signs no clock
-under a salt an earlier signed one took."""
+`Issuer.salted_clock`), read through its opening (`certificate.SignedClocks`): a window has a sync only from one
+opening that names it and holds, and each refused opening is named with why: a forged signature, an altered digest, a
+reused salt, a wrong window, another key, session or link, an ingress or a record certificate, a record's opening, and
+two syncs for one window. The issuer signs no clock under a salt an earlier signed one took."""
 
 import hashlib
 from dataclasses import replace
@@ -14,43 +11,27 @@ from fractions import Fraction
 import pytest
 
 from verity.ml.commitments.identity import tagged_sha512
-from verity.core.protocols.certifier import advice as A, advised as AD, service as SVC
 from verity.core.protocols.certifier.certificate import CLOCK_TAG, SALT_BYTES, CertifiedClock, Direction, Issuer, \
-    SignerRefused, clock_commitment, clock_digest, parameters_digest
+    SignedClocks, SignerRefused, clock_commitment, clock_digest, parameters_digest
+from verity.core.protocols.certifier.grid import Certifier, GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
-from verity.core.protocols.certifier.service import LinkWindows
 
 import signers
-import standin
-from advised_traffic import LINK, P, SYNC_SET, SYNCS, WINDOWS, held, serve
-from test_network_certifier_advised import Run
 
-T, R = 8, 2
-#: a coincident release: one request of 2 frames certified in bucket 3, its output released in bucket 3 too
-FRAMING = tuple(-(-n // 2) for n in range(1, 9))
-LOOSE = SyncSet((0, 1), (1,))
+LINK, WINDOWS = "responses", 4
+P = GridParams(buckets=8, allocation=3, frame_bytes=1)
+SYNC_SET = SyncSet((1, 2), (2, 4))
+SYNCS = [ClockSync(1, 2), ClockSync(2, 4), ClockSync(2, 2), ClockSync(1, 4)]
 INSTANT, ONE = ClockSync(0, 1), ClockSync(1, 1)
 
 
-@pytest.fixture(autouse=True)
-def lean(monkeypatch):
-    monkeypatch.setattr(SVC.PF, "verify", standin.lean)
-
-
-class SignedRun(Run):
-    """`Run` whose verifier of record takes the syncs from the certifier's salted clock certificates alone,
-    `sign(issuer)` signed by the run's own certifier."""
-
-    def __init__(self, tmp_path, sign) -> None:
-        tmp_path.mkdir()
-        super().__init__(tmp_path, clocks=None)
-        self.lw = replace(self.lw, certified_clocks=tuple(sign(self.issuer)))
-        self.stream = self.lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test",
-                                     coins=lambda n: b"\x07" * n, clock=lambda: 0.0)
-
-
-def _signed(syncs, link=LINK):
-    return lambda issuer: [issuer.salted_clock(link, w, s) for w, s in enumerate(syncs)]
+def _egress():
+    """One egress window's record of `LINK`: a frame in its first bucket."""
+    cert = Certifier(LINK, P)
+    cert.enqueue(b"e")
+    for _ in range(P.buckets):
+        cert.tick()
+    return cert.close_window()
 
 
 class Refusing:
@@ -81,45 +62,6 @@ def test_the_clock_commitment_is_the_syncs_clock_digest_salted_as_a_record_diges
         clock_commitment(salt[:-1], SYNCS[0])
 
 
-def test_an_honest_link_is_accepted_on_its_certifiers_signed_syncs(tmp_path):
-    """Each egress window's sync signed beside its record, the verifier of record accepts every window, on the clock
-    source the link's own key and session give (`LinkWindows.clock_source`), and refuses no opening."""
-    run = SignedRun(tmp_path / "honest", _signed(SYNCS))
-    source = run.lw.clock_source
-    assert type(source) is AD.SignedClocks and source.syncs(LINK) == tuple(SYNCS) and source.refused == ()
-    assert len({c.salt for c in run.lw.certified_clocks}) == WINDOWS
-    assert run.link(serve(1)) == [True] * WINDOWS
-
-
-def test_a_declared_sync_other_than_the_signed_one_is_refused(tmp_path):
-    """The certifier signed each window at a δ one above the declared one: every window is refused. On the
-    coincident release, δ = 0 declared is accepted where the certifier signed δ = 0, refused where it signed δ = 1."""
-    slower = [ClockSync(s.delta + 1, s.rho) for s in SYNCS]
-    assert SignedRun(tmp_path / "slower", _signed(slower)).link(serve(1)) == [False] * WINDOWS
-    issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
-    key = issuer.signer.public_key()
-    adv = A.Advice((A.RequestAdvice("a", 4, 1, "eos"),), (A.StepAdvice((A.Row(0, "prefill", 0, 4),)),), (3,))
-    link = AD.LinkAdvice(adv, (2,))
-
-    def view(signed):
-        clocks = AD.SignedClocks(key, signers.SESSION, [issuer.salted_clock(LINK, 0, signed)])
-        return AD.view(link, 0, T, R, [INSTANT], LOOSE, FRAMING, clocks=clocks.syncs(LINK), **held(link))
-
-    v = view(INSTANT)
-    assert AD.reference(T, 4, 0, [0, 0, 0, 2, 0, 0, 0, 0], [0, 0, 0, 1, 0, 0, 0, 0], v.released, v.floor, v.received)
-    with pytest.raises(ValueError, match=r"declares ClockSync\(delta=0.*the certifier ran it under ClockSync\(delta=1"):
-        view(ONE)
-
-
-def test_an_unsigned_or_wrongly_signed_link_is_refused(tmp_path):
-    """No clock certificates, or each signed by another certifier's key: every window is refused."""
-    session = serve(1)
-    assert SignedRun(tmp_path / "unsigned", lambda issuer: ()).link(session) == [False] * WINDOWS
-    stranger = Issuer(signers.signer(tmp_path, seed=b"stranger"), signers.SESSION)
-    assert SignedRun(tmp_path / "stranger", lambda issuer: _signed(SYNCS)(stranger)).link(session) == \
-        [False] * WINDOWS
-
-
 @pytest.fixture
 def signed(tmp_path):
     """An issuer, its key and its honest openings of `SYNCS`, one an egress window of `LINK`."""
@@ -128,7 +70,7 @@ def signed(tmp_path):
 
 
 def _source(key, openings, session=signers.SESSION):
-    return AD.SignedClocks(key, session, openings)
+    return SignedClocks(key, session, openings)
 
 
 def _name(c, window=None):
@@ -218,7 +160,7 @@ def test_another_key_session_link_or_form_is_refused_by_name(signed, tmp_path):
     elsewhere = issuer.salted_clock("requests", 0, SYNCS[0])
     salt = bytes(range(SALT_BYTES))
     ingress = CertifiedClock(SYNCS[0], salt, issuer.sign(LINK, Direction.INGRESS, 0, clock_commitment(salt, SYNCS[0])))
-    record = issuer.certify(serve(1).egress[0], Direction.EGRESS, P, parameters_digest(P, SYNC_SET))
+    record = issuer.certify(_egress(), Direction.EGRESS, P, parameters_digest(P, SYNC_SET))
     as_clock = CertifiedClock(SYNCS[0], record.salt, record.certificate)
     second = issuer.salted_clock(LINK, 0, SYNCS[1])
     source = _source(key, [foreign, ingress, as_clock, record, *honest, second])
@@ -251,16 +193,7 @@ def test_the_issuer_signs_no_clock_under_a_salt_it_drew_for_one_before(tmp_path)
     with pytest.raises(ValueError, match="gave an earlier clock certificate's salt again"):
         issuer.salted_clock(LINK, 1, SYNCS[0])
     assert len(signers.used(issuer.signer)) == leaves and issuer.refused == [(LINK, Direction.EGRESS, 0)]
-    record = issuer.certify(serve(1).egress[0], Direction.EGRESS, P, parameters_digest(P, SYNC_SET))
+    record = issuer.certify(_egress(), Direction.EGRESS, P, parameters_digest(P, SYNC_SET))
     assert record.salt == first.salt and record.verify(issuer.signer.public_key(), signers.SESSION)
     with pytest.raises(ValueError, match="gave 63 bytes for a 64-byte salt"):
         Issuer(issuer.signer, signers.SESSION, coins=lambda n: bytes(n - 1)).salted_clock(LINK, 0, SYNCS[0])
-
-
-def test_a_link_takes_clock_certificates_or_a_stand_in_source_not_both(tmp_path):
-    key = signers.signer(tmp_path).public_key()
-    args = (LINK, P, SYNC_SET, key, "r-clocks", signers.SESSION)
-    with pytest.raises(ValueError, match="not both"):
-        LinkWindows(*args, clocks=AD.SignedClocks(key, signers.SESSION, ()), certified_clocks=())
-    assert LinkWindows(*args).clock_source is None
-    assert LinkWindows(*args, certified_clocks=()).clock_source.syncs(LINK) == ()

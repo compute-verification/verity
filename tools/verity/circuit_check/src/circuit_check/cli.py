@@ -726,11 +726,19 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     if units:
         try:
             plan = UN.plan(cache, REPO, log, apart)
+            if plan is not None:
+                # `SC.owner` reads what a full build has imported before its checks, which no process of this run imports
+                t0 = time.time()
+                SC.HANDED.update(UN.owners(plan))
+                if log:
+                    log(f"circuit-check: {len(SC.HANDED)} Definitions' owners as a full build has them, from a process that "
+                        f"imported every module the bindings' builds did ({time.time() - t0:.1f}s)")
             planned = _planned(plan, opts, cache, forked=apart is not None, keep=keep) if plan is not None else None
         except UN.Stale as e:
             why = str(e)
             plan, planned = None, None
             TG.BINDINGS.clear()
+            SC.HANDED.clear()
     if planned is not None:
         tasks, keys, hits = planned
         if plan.listed is None:

@@ -81,7 +81,7 @@ def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_revert
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == main
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
-    assert any(p.startswith("@ci @lane-2 queue: #2 reverted on `checked`") for p in h.posts), h.posts
+    assert any(p.startswith("@lane-2 @pkg-owner queue: #2 reverted on `checked`") for p in h.posts), h.posts
     assert h.posted[-1][0] == reverted
     _pass(h, ("pkg",))
     h.tick()
@@ -283,7 +283,9 @@ def test_a_checked_below_a_moved_main_fast_forwards_to_it(world, monkeypatch):
 
 
 def test_land_into_takes_checked_or_main_and_only_drive_pushes_checked(world, monkeypatch):
-    assert DriveFlags.parse('land_into = "checked"\n').land_into == "checked" and DriveFlags().land_into == "main"
+    assert DriveFlags.parse('land_into = "checked"\n').land_into == "checked" and DriveFlags().land_into is None
+    # a config that doesn't set it leaves the queue to read drive.toml's at `main`, as with no config
+    assert DriveFlags.parse('on = ["m"]\n').land_into is None
     with pytest.raises(QueueError, match="land_into"):
         DriveFlags.parse('land_into = "staging"\n')
     monkeypatch.delenv("RESEARCH_DRIVE", raising=False)

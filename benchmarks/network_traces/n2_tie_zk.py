@@ -1,31 +1,32 @@
-"""The ingress tie in zero knowledge: each ingress link-window's T bucket rows of the warden's cells, each proved as
-IoTieRequest (`tie_service.IngressTie`, its unit `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`), registered on the link's
-own stream, proved by Flock `prove --zk` behind the Lean firewall with each unit's witness row read off the warden's
+"""The ingress tie in zero knowledge: each ingress execution phase's T bucket rows of the network certifier's cells,
+each proved as IoTieRequest (`tie_service.IngressTie`, its proof block `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`),
+registered on the link's own stream, proved by Flock `prove --zk` behind the Lean firewall with each proof block's
+witness row read off the network certifier's
 root (`warden_rows.bucket_port`), delivered, decided by the tie's verifier of record on its own lanes from the advice
-and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `advised.IoTieVerdict` on the link
-and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read through
-`tie_service.Ties`, the advised link's tie source).
+and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `tie_service.IoTieVerdict` on
+the link and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read
+through `tie_service.Ties`, the verifier's tie source).
 
     python benchmarks/network_traces/n2_tie_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--class test|served|warden] [--warden-run RUN] [--windows K] [--gpu] [--jobs 1] [--debug-clear] [--dry]
 
 * **The link** (`PARAMS`, the pinned size class): a span, three id requests of 5, 40 and 5 prompt tokens
-  served through the warden's own ingress (`io_request.serve`) in two windows of T = 4 buckets of two lanes of r = 2
-  512-byte cells, request 1's `DATA` in bucket 3 and its `END` in bucket 4, so it spans the windows. The advice is v0
-  of one prefill step, each request one kept output, with the link's `received`; it and the warden's release are
+  served through the network certifier's own ingress (`io_request.serve`) in two windows of T = 4 buckets of two lanes
+  of r = 2 512-byte cells, request 1's `DATA` in bucket 3 and its `END` in bucket 4, so it spans the windows. The advice
+  is v0 of one prefill step, each request one kept output, with the link's `received`; it and the network certifier's release are
   public, and the cells and their salts are witness. ``--class served`` (`CLASSES`) is the served link's ingress
-  instead, `n2_advised_zk`'s: one window of T = 60 buckets of one lane of r = 1 4,096-byte cell, the unit
+  instead: one window of T = 60 buckets of one lane of r = 1 4,096-byte cell, the unit
   `IoTieRequest_v1{B=4096,L=1,R=1}`, with the ``honest`` and ``forged`` members alone.
-* **A warden's run** (``--class warden --warden-run RUN``, `warden_link`): the gate's ``warden-rehearse``'s real ingress
-  in place of the served link, its first K link-windows (``--windows``, 1 by default), every connection in them
-  starting and ending there. The verifier reads ``deployment.json`` (the schedule, its digest, the warden's key and
-  session) and each window's registration in ``cells.jsonl``, its head's signature verified under that key; the
-  prover's rows are the ingress records under ``cells.salts``, held to that head, as `scan_zk.warden_run` reads them.
-  The release is the cells' headers (each connection's first bucket, checked against the warden's wiring, and its
-  `DATA` and `END` cells a bucket) and the honest advice's prompt lengths the requests' own (their bytes'
-  ``prompt``). The unit is the schedule's, ``IoTieRequest_v1{B, L, R}``, and the members are ``honest`` and
-  ``forged``: the honest advice on rows of which one has a prompt digit changed, a row IoTieRequest accepts but the
-  warden never signed, so Lean's registered reads refuse it ("does not open").
+* **A network certifier's run** (``--class warden --warden-run RUN``, `warden_link`): the gate's ``warden-rehearse``'s
+  real ingress in place of the served link, its first K execution phases (``--windows``, 1 by default), every connection
+  in them starting and ending there. The verifier reads ``deployment.json`` (the schedule, its digest, the network
+  certifier's key and session) and each window's registration in ``cells.jsonl``, its head's signature verified under
+  that key; the prover's rows are the ingress records under ``cells.salts``, held to that head, as `scan_zk.warden_run`
+  reads them. The release is the cells' headers (each connection's first bucket, checked against the network certifier's
+  wiring, and its `DATA` and `END` cells a bucket) and the honest advice's prompt lengths the requests' own (their
+  bytes' ``prompt``). The proof block is the schedule's, ``IoTieRequest_v1{B, L, R}``, and the members are ``honest``
+  and ``forged``: the honest advice on rows of which one has a prompt digit changed, a row IoTieRequest accepts but the
+  network certifier never signed, so Lean's registered reads refuse it ("does not open").
 * **Members.** One stream each, over the link's two windows: ``honest``, tied in both; ``carried``, bucket 4 proved on
   its lane's carry-in fields + 5 with its carry-out's + 5, which IoTieRequest accepts but whose
   ``pub`` row is no public row of the verifier's, so Lean's registered read of it refuses window 1; ``forged``, an
@@ -70,7 +71,7 @@ sys.path.insert(0, str(HERE))
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
 import n2_zk as Z  # noqa: E402
-from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC  # noqa: E402
+from verity.core.protocols.certifier import advice as ADV, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import io_request as Q, service as SVC  # noqa: E402
 from verity.core.protocols.certifier import tie_service as TS, warden as W, warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, HEADER, ID_DIGITS, id_request  # noqa: E402
@@ -91,11 +92,11 @@ FORGED = (5, 45, 5)
 SPLIT, SPLIT_ARRIVALS, SPLIT_RATES = (40, 5), (0, 0), (600, 10 ** 6)
 #: what the carried member adds to bucket 4's lane 0 carry-in fields and carry-out fields
 CARRIED = 5
-PROFILE = AD.AdvisedProfile(2, TS.framing(B, 64), 0)
+PROFILE = TS.AdvisedProfile(2, TS.framing(B, 64), 0)
 MEMBERS = ("honest", "carried", "forged", "split")
 #: each member's windows' outcomes of record, which are its tie's
 EXPECT = {"honest": (True, True), "carried": (True, False), "forged": (False, False), "split": (False, False)}
-#: what the verifier receives per link-window, by file (`member`)
+#: what the verifier receives per execution phase, by file (`member`)
 def _received(T: int) -> dict[str, str]:
     return {"registration.json": "the registration record (the warden's salted root)", "draw.json": "the stream's draw",
             f"pub-{T}.bin": "the statement's public file",
@@ -108,22 +109,22 @@ def _received(T: int) -> dict[str, str]:
 RECEIVED = _received(T)
 WINDOWS = 2
 #: the size classes `use` sets: ``test``, the pinned test class above with every member; ``served``, the served link's
-#: ingress (`n2_advised_zk`: B = 4,096, T = 60 buckets a window, an allocation of one cell, IoTieRequest_v1{B=4096,L=1,
-#: R=1}), one window, honest and forged
+#: ingress (B = 4,096, T = 60 buckets a window, an allocation of one cell, IoTieRequest_v1{B=4096,L=1,R=1}), one
+#: window, honest and forged
 CLASSES = {
     "test": {"B": B, "params": PARAMS, "windows": WINDOWS, "expect": EXPECT},
     "served": {"B": 4096, "params": W.WardenParams(cell_bytes=4096, slots=1, lanes=1, window=60, delay=1),
                "windows": 1, "expect": {"honest": (True,), "forged": (False,)}},
     "warden": None,
 }
-#: the warden run ``--class warden`` reads (`warden_link`), None at the other classes
+#: the network certifier run ``--class warden`` reads (`warden_link`), None at the other classes
 REAL = None
 
 
 def use(name: str, run: Path | None = None, windows: int = 1) -> None:
-    """Set the driver's size class to `CLASSES` [name]: its B, warden parameters, windows, and members with their
-    verdicts; ``warden`` reads them off the warden run `run`'s first `windows` link-windows (`warden_link`), the
-    forged member's window 0 refused and the rest tied."""
+    """Set the driver's size class to `CLASSES` [name]: its B, network certifier parameters, windows, and members with
+    their verdicts; ``warden`` reads them off the network certifier run `run`'s first `windows` execution phases
+    (`warden_link`), the forged member's window 0 refused and the rest tied."""
     global B, PARAMS, T, PROFILE, MEMBERS, EXPECT, RECEIVED, WINDOWS, LINK, SESSION, REAL
     if name == "warden":
         if run is None or windows < 1:
@@ -135,7 +136,7 @@ def use(name: str, run: Path | None = None, windows: int = 1) -> None:
         c, REAL = CLASSES[name], None
         B, PARAMS, WINDOWS, EXPECT = c["B"], c["params"], c["windows"], dict(c["expect"])
     T, MEMBERS = PARAMS.window, tuple(EXPECT)
-    PROFILE = AD.AdvisedProfile(WINDOWS, TS.framing(B, max((64, *(REAL.prompt_lens if REAL else ())))), 0)
+    PROFILE = TS.AdvisedProfile(WINDOWS, TS.framing(B, max((64, *(REAL.prompt_lens if REAL else ())))), 0)
     RECEIVED = _received(T)
 
 
@@ -151,11 +152,11 @@ def requests(prompt_lens) -> list[bytes]:
             for i, n in enumerate(prompt_lens)]
 
 
-def advice(prompt_lens, got) -> AD.LinkAdvice:
+def advice(prompt_lens, got) -> TS.LinkAdvice:
     """An advice v0 of one prefill step, each request one kept output, with the link's `received`."""
     reqs = tuple(ADV.RequestAdvice(f"u{j}", n, 1, "eos") for j, n in enumerate(prompt_lens))
     steps = (ADV.StepAdvice(tuple(ADV.Row(j, "prefill", 0, n) for j, n in enumerate(prompt_lens))),)
-    return AD.LinkAdvice(ADV.Advice(reqs, steps, tuple(range(len(prompt_lens)))), tuple(got))
+    return TS.LinkAdvice(ADV.Advice(reqs, steps, tuple(range(len(prompt_lens)))), tuple(got))
 
 
 def served(prompt_lens, arrivals, rates) -> Q.ServedIngress:
@@ -169,8 +170,8 @@ def received(link: Q.ServedIngress) -> tuple[int, ...]:
 
 
 def _found(run: Path, name: str) -> Path:
-    """A warden run's file: in the run's directory (`warden_serve.py serve --out`), else its ``witness/`` (the gate's
-    ``warden-rehearse``)."""
+    """A network certifier run's file: in the run's directory (`warden_serve.py serve --out`), else its ``witness/``
+    (the gate's ``warden-rehearse``)."""
     for d in (run, run / "witness"):
         if (d / name).is_file():
             return d / name
@@ -178,9 +179,10 @@ def _found(run: Path, name: str) -> Path:
 
 
 def warden_link(run: Path, windows: int) -> SimpleNamespace:
-    """The warden run's ingress link-windows 0 … windows − 1 (the module docstring, "A warden's run"): each window's
-    rows under the warden's salts, held to the head the verifier read off its signed registration, the windows'
-    release and their requests' prompt lengths, refused by name where any of it doesn't hold."""
+    """The network certifier run's ingress execution phases 0 … windows − 1 (the module docstring, "A network
+    certifier's run"): each window's rows under the network certifier's salts, held to the head the verifier read off
+    its signed registration, the windows' release and their requests' prompt lengths, refused by name where any of it
+    doesn't hold."""
     import warden_serve as WS
 
     dep = json.loads(_found(run, "deployment.json").read_text())
@@ -221,7 +223,7 @@ def warden_link(run: Path, windows: int) -> SimpleNamespace:
 
 def _released(params: W.WardenParams, cells: list) -> tuple[list[Q.Release], tuple[int, ...]]:
     """The windows' release read off their cells' headers, each connection's first bucket and its request cells a
-    bucket to its `END`, its first bucket the warden's wiring's; and each request's prompt length, its bytes'
+    bucket to its `END`, its first bucket the network certifier's wiring's; and each request's prompt length, its bytes'
     ``prompt``. Refused where a connection's ingress runs past the windows or the ordinals aren't 1, 2, …"""
     B_, T_, seen = params.cell_bytes, params.window, {}
     for c in cells:
@@ -257,7 +259,8 @@ def _released(params: W.WardenParams, cells: list) -> tuple[list[Q.Release], tup
 
 
 class Forge(NamedTuple):
-    """A prover's row in place of the warden's: link-window `window`'s bucket `bucket`, byte `at` changed."""
+    """A prover's row in place of the network certifier's: execution phase `window`'s bucket `bucket`, byte `at`
+    changed."""
 
     window: int
     bucket: int
@@ -271,7 +274,7 @@ PROMPT_FIELD = re.compile(rb"[\[,] *[0-9]+")
 
 def forge(link: SimpleNamespace) -> Forge:
     """Window 0's first request cell's first prompt field whole in it, its id's last digit changed: an id request of
-    the same prompt length, so IoTieRequest accepts the row, but not the row the warden signed."""
+    the same prompt length, so IoTieRequest accepts the row, but not the row the network certifier signed."""
     c = link.cells[0]
     for t, row in enumerate(c.rows):
         for s in range(0, len(row), B):
@@ -313,14 +316,14 @@ def members() -> dict[str, tuple]:
     return {name: plan[name] for name in MEMBERS}
 
 
-def link_windows(tie: TS.IngressTie, link: Q.ServedIngress, adv: AD.LinkAdvice, edit=None) -> SimpleNamespace:
+def link_windows(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, edit=None) -> SimpleNamespace:
     """Every link-window of the member as the warden and the prover hold it before it registers: the warden's cells
-    (`warden_rows.Cells`: a warden run's own, else fresh salts) and its head, the verifier's lanes of `adv` (``own``,
-    None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a tuple, the
-    lanes of those prompt lengths), the prover's rows (the warden's, or a `Forge`'s), each unit's arguments on the
-    prover's lanes and rows and the verifier's public arguments on its own, each output word by the gate's reference,
-    whether each unit's public row is the verifier's (``opens``) and the host's read of the registered rows (``held``,
-    `warden_rows.refusal`: None where every row opens the warden's root)."""
+    (`warden_rows.Cells`: a network certifier run's own, else fresh salts) and its head, the verifier's lanes of `adv`
+    (``own``, None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a
+    tuple, the lanes of those prompt lengths), the prover's rows (the network certifier's, or a `Forge`'s), each proof
+    block's arguments on the prover's lanes and rows and the verifier's public arguments on its own, each output word by
+    the gate's reference, whether each proof block's public row is the verifier's (``opens``) and the host's read of the
+    registered rows (``held``, `warden_rows.refusal`: None where every row opens the network certifier's root)."""
     out = []
     for w, rec in enumerate(link.records):
         cells = link.cells[w] if getattr(link, "cells", None) else \
@@ -445,10 +448,10 @@ def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNa
 
 def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleNamespace, out: Path,
            port: int) -> dict:
-    """The member's link-windows on its own stream, in order: the warden registers, the challenger selects, the prover
-    proves the statement live behind the firewall and delivers, and the verifier of record decides on the proof
-    (`IngressTie.outcome`); then the tie from the stream's outcomes of record (`IngressTie.tie`). Writes what the
-    verifier receives under ``out / "verifier"`` (`RECEIVED`), each window's files prefixed by its window."""
+    """The member's execution phases on its own stream, in order: the network certifier registers, the challenger
+    selects, the prover proves the statement live behind the firewall and delivers, and the verifier of record decides
+    on the proof (`IngressTie.outcome`); then the tie from the stream's outcomes of record (`IngressTie.tie`). Writes
+    what the verifier receives under ``out / "verifier"`` (`RECEIVED`), each window's files prefixed by its window."""
     stream = tie.stream(budget=len(rd.windows), delta=cs.DELTA, challenger="n2-tie-zk", coins=cs._no_coins,
                         clock=time.monotonic)
     # the firewall rechecks a witness the host computed, so a device prover takes the host's (flock-circuit's
@@ -457,7 +460,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=a.gpu)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
-    digest = AD.digest(rd.advice)
+    digest = TS.digest(rd.advice)
     (vdir / "advice.json").write_text(json.dumps({"advice": ADV.to_json(rd.advice.advice),
                                                   "received": list(rd.advice.received), "digest": digest,
                                                   "releases": [list(r) for r in rd.releases]}, sort_keys=True))
@@ -566,7 +569,7 @@ def _member_ok(name: str, res: dict, rd) -> bool:
     verifier received, and the control holding every held cell."""
     rec = res["received"]
     return (all(r["as_expected"] for r in res["windows"]) and tuple(res["tie"]["accepted"]) == EXPECT[name]
-            and res["tie"]["advice"] == AD.digest(rd.advice) and res["tie"]["link"] == LINK
+            and res["tie"]["advice"] == TS.digest(rd.advice) and res["tie"]["link"] == LINK
             and len(res["tie"]["registrations"]) == len(rd.windows)
             and not rec["leaked"] and rec["control"]["holds_all"])
 
@@ -587,7 +590,7 @@ def prove(a) -> int:
                               "gates": [g.id for g in tie.gates()], "pinned": all(HC.pinned(g) for g in tie.gates()),
                               "bits": {p: tie.bits(p) for p in TS.PORTS}},
                      "changed": {name: what for name, (_, _, _, what) in plan.items()},
-                     "advice": {name: AD.digest(rd.advice) for name, rd in rounds.items()},
+                     "advice": {name: TS.digest(rd.advice) for name, rd in rounds.items()},
                      "debug_clear": a.debug_clear, "received": RECEIVED}
     summary["instances_s"] = round(time.time() - t, 1)
     for name, rd in rounds.items():
@@ -653,15 +656,15 @@ def prove(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="n2_tie_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("prove", help="each ingress link-window's bucket rows proved --zk as IoTieRequest, decided by "
-                                     "the tie's verifier of record, and the tie built from the outcomes")
+    p = sub.add_parser("prove", help="each ingress execution phase's bucket rows proved --zk as IoTieRequest, "
+                                     "decided by the tie's verifier of record, and the tie built from the outcomes")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
     p.add_argument("--class", dest="cls", choices=sorted(CLASSES), default="test", help="the size class (`CLASSES`)")
     p.add_argument("--warden-run", type=Path, help="--class warden: a warden_serve run's directory (the gate's "
                                                    "warden-rehearse's, its witness under witness/)")
-    p.add_argument("--windows", type=int, default=1, help="--class warden: its first link-windows proved")
+    p.add_argument("--windows", type=int, default=1, help="--class warden: its first execution phases proved")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
     p.add_argument("--port", type=int, default=7981)
     p.add_argument("--jobs", type=int, default=1, help="1: the members proved one after another (n2_zk.ONE_SESSION); "

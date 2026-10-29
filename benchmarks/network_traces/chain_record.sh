@@ -12,8 +12,8 @@
 #   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the run and the I/O tie on it, both in the clear
 #            (network-e2e's e2e.py --no-prove: chain.served_advice and chain.tie)
 #   n2       N2's units proved by Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
-#            (a sampled draw on signed clocks); else on the advice profile n2_advised_zk.py --e2e on the bound
-#            advice and the certifier's clock certificates, and on the others n2_zk.py prove
+#            (a sampled draw on signed clocks); else n2_zk.py prove, and on the advice profile, whose egress counts no
+#            N2 unit holds, not run
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
 #            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it)
 #   tie      on the warden path, the I/O tie on the warden's ingress, proved (n2_tie_zk.py prove --class warden)
@@ -23,27 +23,25 @@
 #            $OUT/leak-guard.json), and the rest of the hold released to $OUT
 # CR_PATH=warden is the warden path: every step reads the active warden's own run (CR_WARDEN_RUN, or the one gate run
 # holding a certified.jsonl) and nothing of a certifier rehearsal's, which in CR_GATES is refused by name: certs
-# --warden-run, endpoint (chain_record.py endpoint, the advice bound to the certified I/O off the warden's cells),
-# n2_zk.py prove --warden-run, the tie and the scan; the report requires every one (chain_record.WARDEN).
+# --warden-run, endpoint (chain_record.py endpoint, the advice bound to the certified I/O off the network certifier's
+# cells), n2_zk.py prove --warden-run, the tie and the scan; the report requires every one (chain_record.WARDEN).
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
 #      CR_GATES (space-separated: a tarball's name under the run's inputs/, an art: id, or a directory)
 #      CR_CLIENT (the client's kept files, a path under the unpacked gates; by default the certifier rehearsal's
 #      own client/, else its honest directory, never a file of another gate run)  CR_DEPLOYED=1 (certs refuses a key that
 #      isn't LMS at lms.DEPLOYED, H = 20)
 #      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
-#      an art: id, or a directory; on the warden path it may be the served node's endpoint report instead, a
+#      an art: id, or a directory; on the network certifier path it may be the served node's endpoint report instead, a
 #      report.json beside no advice_trace.jsonl, which the endpoint step then reads rather than runs)
-#      CR_N2_ROUNDS (n2_zk.py's --rounds)  CR_N2_WINDOWS (n2_advised_zk.py's --windows)
-#      CR_N2_MEMBERS (its --members)  CR_N2_STANDIN=simulated (a dry run's: on the advice profile when the
-#      advice doesn't bind, the advised unit on n2_advised_zk's simulated link, labelled a stand-in)
-#      CR_N2_ARGS (more n2_advised_zk.py arguments, e.g. "--draw 4", a sampled period on the verifier's own coins)
+#      CR_N2_ROUNDS (n2_zk.py's --rounds)
 #      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
-#      CR_WARDEN_RUN (the warden rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more scan_zk.py
-#      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
-#      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no warden rows: the scan isn't run
-#      or required, and the report names what that path stubs, chain_record.STUBBED)
-#      CR_PATH=warden (above)  CR_EOS_IDS (the warden path's endpoint step: the model's EOS token ids, comma-separated,
-#      e.g. 128001 for Llama-3.2-1B; a warden run records none)  CR_TIE_WINDOWS (the tie's link-windows, the run's all
+#      CR_WARDEN_RUN (the network certifier rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more
+# scan_zk.py      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
+#      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no active network certifier's rows:
+# the scan isn't run      or required, and the report names what that path stubs, chain_record.STUBBED)
+#      CR_PATH=warden (above)  CR_EOS_IDS (the network certifier path's endpoint step: the model's EOS token ids,
+# comma-separated,      e.g. 128001 for Llama-3.2-1B; a network certifier run records none)  CR_TIE_WINDOWS (the tie's
+# execution phases, the run's all
 #      by default)  CR_TIE_GPU=1 and CR_N2_GPU=1 (the tie's and N2's provers on the GPU)  CR_N2_DRAW (n2_zk.py's
 #      --draw K: N2's period sampled, K of the link-windows drawn on the verifier's coins; every one by default)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
@@ -55,12 +53,12 @@
 #      in jobs of its own)  CR_CACHE (the build cache; hidden_zk's by default)
 #      CR_QUARANTINE (where what the record mustn't hold goes, 0700 and outside the run dir: by default quarantine/RUN
 #      beside the runs root, /workspace/research/quarantine/RUN on a node, kept until its owner removes it)
-# n2 runs, then (on the warden path) the tie, then scan: outer proofs go through the ZK server one at a time
+# n2 runs, then (on the network certifier path) the tie, then scan: outer proofs go through the ZK server one at a time
 # (n2_zk.ONE_SESSION), so no two of their provers' firewalled sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
-# state, a gate run's witness/ (custody uploads all of $OUT; a warden run's witness is its lane key's only) nor a
-# rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows).
+# state, a gate run's witness/ (custody uploads all of $OUT; a network certifier run's witness is its lane key's only)
+# nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows).
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
 # them), so none of it may hold the gates' witness. Every step writes to the hold, $Q/held (0700, outside the run dir),
 # and so does the job's own stdout and stderr (released as out/stdout.log), so nothing it writes reaches the record
@@ -201,8 +199,6 @@ elif [ -n "${CR_ENDPOINT:-}" ]; then
   mkdir -p "$OUT/endpoint"; cp "$E2E"/report.json "$E2E"/report.md "$E2E"/endpoint/advice.log "$OUT/endpoint/" 2>/dev/null
   [ -d "$E2E/rehearsal" ] || ln -s "${HONEST%/honest}" "$E2E/rehearsal"
 fi
-BOUND=$("$PY" -c 'import json, sys; b = json.load(open(sys.argv[1]))["chain"]["bits"]; print(int(bool(b["bound"] and b["rebuilt"])))' \
-  "$E2E/report.json" 2>/dev/null || echo 0)
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
@@ -218,23 +214,14 @@ keep() {   # keep FROM TO: the public files and what the verifier received, neve
 }
 n2() {
   export HONEST CLIENT BIN LEAN E2E N2OUT=$W/n2
-  local advised="$PY benchmarks/network_traces/n2_advised_zk.py prove --bin $BIN --lean $LEAN --out $N2OUT \
-    ${CR_N2_MEMBERS:+--members $CR_N2_MEMBERS} ${CR_N2_ARGS:-}"
   if [ -n "${CR_N2_CMD:-}" ]; then cmd=$CR_N2_CMD
   elif [ "${CR_PATH:-}" = warden ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --warden-run $WARDEN \
     --bin $BIN --lean $LEAN --out $N2OUT ${CR_N2_GPU:+--gpu} ${CR_N2_DRAW:+--draw $CR_N2_DRAW}"
   elif [ "$PROFILE" != advice ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --run $HONEST --bin $BIN \
     --lean $LEAN --out $N2OUT ${CR_N2_ROUNDS:+--rounds $CR_N2_ROUNDS}"
-  elif [ "$BOUND" = 1 ]; then cmd="$advised --e2e $E2E ${CR_N2_WINDOWS:+--windows $CR_N2_WINDOWS}"
   else
-    why="the run is on the advice profile, whose counts N2's advised unit decides on the endpoint's advice, and "
-    if [ -z "${CR_ENDPOINT:-}" ]; then why+="no endpoint records were given (CR_ENDPOINT)"
-    else why+="the endpoint's advice doesn't bind to the run: $("$PY" -c 'import json, sys
-b = json.load(open(sys.argv[1]))["chain"]["bits"]; print((b.get("bound_why") or b.get("why") or "")[:400])' "$E2E/report.json" 2>/dev/null)"; fi
-    if [ "${CR_N2_STANDIN:-}" = simulated ]; then
-      echo "the advised unit on n2_advised_zk's simulated link (its certifier signs each window's sync), not the gate's: $why" \
-        > "$W/n2.standin"; cmd=$advised
-    else echo "$why" > "$W/n2.why"; log "chain: n2 not run: $why"; echo 2 > "$W/n2.rc"; return; fi
+    why="the run is on the advice profile, whose egress counts no N2 unit holds"
+    echo "$why" > "$W/n2.why"; log "chain: n2 not run: $why"; echo 2 > "$W/n2.rc"; return
   fi
   log "chain: n2: $cmd"
   bash -c "$cmd" > "$OUT/n2.log" 2>&1

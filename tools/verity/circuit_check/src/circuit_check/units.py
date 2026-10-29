@@ -52,6 +52,11 @@ first one registered of that word, so a check forked from here finds the one a f
 dies fails the run, as it would kill a build in one process.  When every binding was built apart, the task list's entry is
 stored as a full build stores it, its reads every binding's share and this process's own; it and each record are digested
 where this process stores them, as a full build's are (a full build digests none of its reads where it builds them either).
+
+A run from the records, forked or not, has no process that imported every module a full build has imported before its
+checks, and `sidecars.owner` reads those: a Definition a factory makes is owned by the module that binds it at its top level,
+which only another binding's body may import, and the block check (`checks.UNIT_OWNERS`) and a by-calls root's callees go by
+that owner.  So each Definition's owner is handed down as a full build has it (`owners`, `sidecars.HANDED`).
 """
 from __future__ import annotations
 
@@ -79,10 +84,10 @@ class Stale(Exception):
 @dataclass
 class Entry:
     """One binding as this run has it: its units, kind and label (`targets.catalog_units`), its key, the roots it made now,
-    what they reach (its record's, or `_reach` of the bodies built now) and whether its record counted.  Built in a process of
-    its own (``apart``, `built_apart`), with what that process read: its record's reads and its share of the task list's
-    (``listed``), and the CPU seconds it took (``seconds``, which its record keeps).  ``words``: the Boolean Definitions its
-    build registered (`_words`), where a process built it apart."""
+    what they reach (its record's, or `_reach` of the bodies built now) and whether its record counted, with that record's
+    reads.  Built in a process of its own (``apart``, `built_apart`), with what that process read: its record's reads and its
+    share of the task list's (``listed``), and the CPU seconds it took (``seconds``, which its record keeps).  ``words``: the
+    Boolean Definitions its build registered (`_words`), where a process built it apart."""
     units: tuple[str, ...]
     kind: str
     label: str
@@ -329,9 +334,9 @@ def _unchanged(was: dict, now: dict) -> bool:
     return True
 
 
-def _lookup(cache: Path, repo: Path, e: Entry) -> dict | None:
-    """``e``'s record when every read it holds is unchanged (`_unchanged`) and it lists the roots made now; None otherwise, and
-    for one that cannot be read."""
+def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str]]] | None:
+    """``e``'s record and its reads when every read it holds is unchanged (`_unchanged`) and it lists the roots made now; None
+    otherwise, and for one that cannot be read."""
     with CC.internal():
         found = sorted(CC._dir(cache, e.key).glob("*.json"))
     for p in found:
@@ -348,7 +353,7 @@ def _lookup(cache: Path, repo: Path, e: Entry) -> dict | None:
                 continue
             for fid in e.root_ids:
                 got["nodes"][fid]["k"]
-            return got
+            return got, reads
         except (OSError, KeyError, TypeError, AttributeError, ValueError):
             continue
     return None
@@ -405,8 +410,9 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
             TG.ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
             continue
         entry = Entry(units, kind, label, key(units, n), roots)
-        rec = _lookup(cache, repo, entry) if stored else None
-        if rec is not None:
+        hit = _lookup(cache, repo, entry) if stored else None
+        if hit is not None:
+            rec, entry.reads = hit
             entry.nodes, entry.reused, entry.words, entry.seconds = rec["nodes"], True, rec.get("words"), rec.get("seconds")
         elif kind == "model" and apart is None:
             try:
@@ -416,8 +422,9 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
                 TG.ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
                 continue
         entries.append(entry)
-    rec = _lookup(cache, repo, entries[0]) if stored else None
-    if rec is not None:
+    hit = _lookup(cache, repo, entries[0]) if stored else None
+    if hit is not None:
+        rec, entries[0].reads = hit
         entries[0].nodes, entries[0].reused, entries[0].words, entries[0].seconds = (rec["nodes"], True, rec.get("words"),
                                                                                      rec.get("seconds"))
     if not any(e.reused for e in entries) and apart is None:
@@ -462,6 +469,45 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
             f"{sum(e.apart for e in entries)} built apart, {len(objects)} Definitions built here and {words} Boolean "
             "Definitions another process's build registered made or imported here")
     return out
+
+
+def owners(plan: Plan) -> dict[str, str]:
+    """`sidecars.owner` of each Definition a loaded module binds at its top level, by id, as a full build has it before its
+    checks: in a process forked from this one that imports every module of `sidecars.PACKAGES` a binding's build imported (its
+    reads' ``modules``, its record's or its process's), so this process imports none of them, as it builds no body.  Where two
+    Definitions of one id are bound, the first owner by name.  `Stale` when one of them doesn't import there."""
+    import importlib
+    import tempfile
+    import warnings
+
+    from . import sidecars as SC
+
+    mods = sorted({m for e in plan.entries for m in (e.reads or {}).get("modules", ()) if m.partition(".")[0] in SC.PACKAGES})
+    sys.stdout.flush()
+    sys.stderr.flush()
+    with CC.internal(), tempfile.TemporaryDirectory(prefix="circuit-check-owners-") as tmp:
+        out = Path(tmp, "owners.json")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)    # an xdist worker's idle threads
+            pid = os.fork()
+        if pid == 0:
+            try:
+                for m in mods:
+                    importlib.import_module(m)
+                SC._INDEX.clear()
+                got: dict[str, str] = {}
+                for v, mod in sorted(SC._index().values(), key=lambda e: e[1]):
+                    got.setdefault(v.id, mod)
+                out.write_text(json.dumps({"owners": got}))
+            except BaseException as ex:  # noqa: BLE001  (named where this process reads it: the run builds the whole catalog)
+                out.write_text(json.dumps({"error": f"{type(ex).__name__}: {str(ex)[:200]}"}))
+            finally:
+                os._exit(0)
+        _, status = os.waitpid(pid, 0)
+        got = json.loads(out.read_text()) if out.exists() else {"error": f"its process died ({os.waitstatus_to_exitcode(status)})"}
+    if "error" in got:
+        raise Stale(f"the modules the bindings' builds imported, imported in one process for their Definitions' owners: {got['error']}")
+    return got["owners"]
 
 
 def made_words(plan: Plan) -> int:

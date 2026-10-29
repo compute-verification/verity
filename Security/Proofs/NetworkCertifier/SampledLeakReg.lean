@@ -7,13 +7,13 @@ import Proofs.Flock.Claims.Finder
 /-!
 # The leak bound at the registration's values
 
-`RAcc` pins the circuit's inputs to the trace's committed values, and holds every faulty unit's committed gate as
+`RAcc` pins the circuit's inputs to the trace's committed values, and holds every faulty proof block's committed gate as
 advice. At a registered input that is a free input:
 
-* in a faulty unit, the gate is held (`FaultyGate`: an input is on its unit's boundary), so its input value is never
-  read;
-* in any other unit, the unit is correct on its committed values, so the trace opens the gate (`val_some_of_input`) and
-  its value there is the opened one (`traceVal_of_val`).
+* in a faulty proof block, the gate is held (`FaultyGate`: an input is on its proof block's boundary), so its input
+  value is never read;
+* in any other proof block, the proof block is correct on its committed values, so the trace opens the gate
+  (`val_some_of_input`) and its value there is the opened one (`traceVal_of_val`).
 
 So when the trace agrees with the registration at the registered inputs it opens, the accepted advice can be moved to
 the inputs pinned at the registration's values (`rLeak_reg_of_rAcc`), a set the statement and the registration fix. An
@@ -28,7 +28,7 @@ namespace NetTiming
 
 open Claims Claims.Sampling NetTiming.SampledAuditProof
 
-/-! ### A registered input of a correct unit is opened at the trace's value -/
+/-! ### A registered input of a correct proof block is opened at the trace's value -/
 
 theorem val_some_of_input {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit}
     (hP : P.Partitions s.prog) {g : ℕ} (hg : s.prog.gates[g]? = some .input)
@@ -36,14 +36,10 @@ theorem val_some_of_input {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : Au
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H Cm s P w
   have hlt : g < s.prog.gates.length := (List.getElem?_eq_some_iff.1 hg).1
   have hmem : g ∈ P.gates := hP.2.2.1 g hlt fun b h => by rw [hg] at h; cases h
-  obtain ⟨v, r, u, hr, hu, hgu⟩ := exists_of_mem_gates hmem
-  have hv : v ∉ faulty H Cm s P w := fun hv => hnf ⟨v, hv, r, hr, mem_ru_gates hu hgu, boundary_of_input hg⟩
-  obtain ⟨b, hb, -⟩ := (hι v r hr hv u hu g hgu).2 (boundary_of_input hg)
-  have hc : ¬ (g ∈ RU.gates r ∧ s.prog.Boundary (RU.gates r) g = false) := fun h => by
-    rw [boundary_of_input hg] at h
-    exact Bool.noConfusion h.2
-  unfold RU.ref at hb
-  rw [ite_eq_right hc] at hb
+  obtain ⟨v, u, hu, hgu⟩ := exists_of_mem_gates hmem
+  have hv : v ∉ faulty H Cm s P w := fun hv => hnf ⟨v, hv, u, hu, hgu, boundary_of_input hg⟩
+  obtain ⟨b, hb, -⟩ := (hι v u hu hv g hgu).2 (boundary_of_input hg)
+  rw [ref_of_boundary (boundary_of_input hg)] at hb
   exact ⟨b, hb⟩
 
 theorem traceVal_of_val {C : Prog} {ref : ℕ → Option Bool} {g : ℕ} {b : Bool} (hg : C.gates[g]? = some .input)
