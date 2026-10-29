@@ -18,7 +18,7 @@ One line per fact on stdout, one per failure on stderr. It checks:
 - that the tree's and the cache's filesystems have the space a check takes: 45 GB, or 1.25 times the most the recent checks
   recorded on this machine took (their `resources.jsonl`) when that is more, plus 1.25 times each dependency tree to restore.
   A machine with check slots (`slot.py`) shares its disk with other work, which a recorded drop in free space counts, so
-  there it is 45 GB (vy-nebius-1, 1 Oct: a 2 GB check "took" 607 GB while the node's jobs wrote).
+  there it is 45 GB (a 2 GB check can seem to take hundreds of GB while the node's other jobs write).
 The run's `--send` files are in RESEARCH_PREFLIGHT_INPUTS.
 """
 from __future__ import annotations

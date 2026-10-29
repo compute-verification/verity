@@ -223,8 +223,8 @@ def test_without_the_audits_dependencies_the_tree_fetches_its_own_once(repo, tmp
 
 
 def test_a_links_file_left_empty_by_a_failed_write_is_no_links(repo, tmp_path, capsys):
-    """A write of `links.json` in place that failed on a full disk after truncating it left it empty, and every later
-    run on that slot's tree failed reading it (r20261019-232316-c617). The tree takes its dependencies again, as a new
+    """A write of `links.json` in place that fails on a full disk after truncating it leaves it empty, and every later
+    run on that slot's tree would fail reading it. The tree takes its dependencies again, as a new
     tree does, and the file is replaced whole."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     k = LC.LA.deps_key(repo / "a")
@@ -347,7 +347,7 @@ def test_it_names_one_package_and_one_run_holds_a_tree(repo, tmp_path, capsys, m
 
 def test_a_run_waits_for_the_one_that_holds_its_tree_and_then_runs(repo, tmp_path, monkeypatch, capsys):
     """A node without SLOTS gives every `--records` run the one `local` tree; a second run waits for the first instead of
-    refusing in 0 s (vy-nebius-cpu-2, 19 Oct), and then runs, naming itself as the holder."""
+    refusing in 0 s, and then runs, naming itself as the holder."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     tree.mkdir(parents=True)
     held = open(tree / ".lock", "w")
@@ -448,8 +448,8 @@ def test_the_record_update_wrote_is_kept_so_its_commit_runs_nothing_and_requirer
 
 def test_a_package_that_reads_the_same_files_as_one_that_passed_still_runs(reuse, tmp_path, monkeypatch, capsys):
     """`Security` and `Security/Properties` are each in the other's `closure`, so their records read the same files. A pass of
-    `--records Security`, whose requirer `Security/Properties` failed, was taken as that requirer's: `--records
-    Security/Properties --update` then ran nothing and wrote no record (r20261026-050354-87cc). Here `a` requires `p` by
+    `--records Security`, whose requirer `Security/Properties` failed, is not that requirer's: taken as its, `--records
+    Security/Properties --update` would run nothing and write no record. Here `a` requires `p` by
     path and `p` is proved in `a`."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')

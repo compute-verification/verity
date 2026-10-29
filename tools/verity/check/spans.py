@@ -1,8 +1,7 @@
 """trace/v1 spans over a check run: `spans.jsonl` beside `steps.jsonl`, the queryable summary layer the watcher and the
 dashboard read (the observability report's section 2; the first slice of the job schema).
 
-One span is one JSON line.  The shape, FROZEN 14 Oct 2026 19:13Z (a contract infra's watcher builds against; change no
-field):
+One span is one JSON line.  The shape is frozen (a contract the watcher builds against; change no field):
 
     {"trace_id": "<run id>", "span_id": "...", "parent_span_id": null, "name": "...",
      "start_utc": "...", "end_utc": null, "status": null, "attributes": {"step": "pytest", "rc": 0}}

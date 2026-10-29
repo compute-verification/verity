@@ -1,11 +1,11 @@
 """Every suite that builds or runs a Lake package is one `check` runs after its Lean steps (`AFTER_LEAN`): Lake builds a
 package's path requirements in their own `.lake`, so a `lake build` from the pytest step writes the verifier's build directory
-while lean-build does (main 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while benchmarks/one_stage and
-verity-network-e2e built sampled-proofs-verifier, which requires flock, from the pytest step).
+while lean-build does (lean-build can find a `Flock` `.olean` gone while a suite builds sampled-proofs-verifier, which
+requires flock, from the pytest step).
 
 What says so is the suite's metadata alone, which every suite may read: no scan of test code tells a suite that builds the Lean
-from one that only imports the modules that would (on r20261024-080026-8753's records, import reach from the tests to a module
-that runs `lake` flagged 31 suites outside `AFTER_LEAN`, of which 5 ran `lake`). A suite whose tests build a Lake package lists
+from one that only imports the modules that would (import reach from the tests to a module that runs `lake` flags several
+times as many suites as run `lake`). A suite whose tests build a Lake package lists
 its lakefile under `inputs` (what `lake` reads, which no tracer sees: the testing skill), and that is what this holds; a suite
 that lists one only to read it is in `READS_ONLY`, with the reason."""
 from __future__ import annotations
