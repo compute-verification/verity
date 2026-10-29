@@ -27,7 +27,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # serve-openai's endpoint (`integrations/vllm/verity_vllm`) over a stand-in engine.
 inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
           "examples/h200/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
-          "benchmarks/prove_path/records_audit.py", "examples/vllm/serve_load.py",
+          "benchmarks/prove_path/records_audit.py", "examples/vllm/serve_load.py", "examples/vllm/serve.sh",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.json",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.bin",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-registration.json",
