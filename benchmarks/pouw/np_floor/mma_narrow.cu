@@ -1,7 +1,7 @@
-// sm_90's narrow mma.sync forms as word writers, on probe.cuh: s4 (m8n8k32, m16n8k32, m16n8k64) and b1 with AND and XOR
-// popc (m8n8k128, m16n8k128, m16n8k256), beside int8 m16n8k32. As ../opcode_probe/probes/mma.cu: 16 warps, 8
-// independent accumulators a warp and one MMA each an iteration, so the rate is the tensor pipe's and not one chain's
-// latency. A warp instruction writes 64 s32 registers (m8n8) or 128 (m16n8): `words`.
+// sm_90's narrow mma.sync forms as word writers, on probe.cuh: s4 (m8n8k32, m16n8k32, m16n8k64), b1 with AND and XOR
+// popc (m8n8k128, m16n8k128, m16n8k256) and int8 (m8n8k16, m16n8k16, m16n8k32). As ../opcode_probe/probes/mma.cu: 16
+// warps, 8 independent accumulators a warp and one MMA each an iteration, so the rate is the tensor pipe's and not one
+// chain's latency. A warp instruction writes 64 s32 registers (m8n8) or 128 (m16n8): `words`.
 #include "../opcode_probe/probe.cuh"
 
 constexpr int TPB = 512;
@@ -25,6 +25,8 @@ constexpr int TPB = 512;
 #define M8(SHAPE, TYPES) "mma.sync.aligned." SHAPE ".row.col.s32." TYPES " {%0,%1}, {%2}, {%3}, {%0,%1};"
 
 FORM(S8k32, 4, M16("m16n8k32", "s8.s8.s32", "{%4,%5,%6,%7}, {%8,%9}"), D4, A4, B2)
+FORM(S8k16, 4, M16("m16n8k16", "s8.s8.s32", "{%4,%5}, {%6}"), D4, A2, B1)
+FORM(S8m8k16, 2, M8("m8n8k16", "s8.s8.s32"), D2, A1, B1)
 FORM(S4k64, 4, M16("m16n8k64", "s4.s4.s32", "{%4,%5,%6,%7}, {%8,%9}"), D4, A4, B2)
 FORM(S4k32, 4, M16("m16n8k32", "s4.s4.s32", "{%4,%5}, {%6}"), D4, A2, B1)
 FORM(S4m8k32, 2, M8("m8n8k32", "s4.s4.s32"), D2, A1, B1)
@@ -55,6 +57,8 @@ __device__ __forceinline__ void body(const OpArgs& a) {
 }
 
 OP_KERNEL(imma_s8_k32, TPB) { body<S8k32>(a); }
+OP_KERNEL(imma_s8_k16, TPB) { body<S8k16>(a); }
+OP_KERNEL(imma_s8_m8k16, TPB) { body<S8m8k16>(a); }
 OP_KERNEL(imma_s4_k64, TPB) { body<S4k64>(a); }
 OP_KERNEL(imma_s4_k32, TPB) { body<S4k32>(a); }
 OP_KERNEL(imma_s4_m8k32, TPB) { body<S4m8k32>(a); }
@@ -72,6 +76,10 @@ OP_KERNEL(bmma_xor_m8k128, TPB) { body<XorM8k128>(a); }
 static const OpProbe PROBES[] = {
     {.name = "imma_s8_k32", .kernel = (const void*)imma_s8_k32, .tpb = TPB, .expect = "IMMA.16832.S8.S8=8",
      .words = 128, .iters = 4096, .note = "int8 m16n8k32: 128 s32 registers a warp instruction"},
+    {.name = "imma_s8_k16", .kernel = (const void*)imma_s8_k16, .tpb = TPB, .expect = "IMMA.16816.S8.S8=8",
+     .words = 128, .iters = 4096, .note = "int8 m16n8k16: 128 s32 registers a warp instruction"},
+    {.name = "imma_s8_m8k16", .kernel = (const void*)imma_s8_m8k16, .tpb = TPB, .expect = "IMMA.8816.S8.S8=8",
+     .words = 64, .iters = 4096, .note = "int8 m8n8k16: 64 s32 registers a warp instruction"},
     {.name = "imma_s4_k64", .kernel = (const void*)imma_s4_k64, .tpb = TPB, .expect = EMULATED, .words = 128,
      .iters = 4096, .note = "s4 m16n8k64: 128 s32 registers a warp instruction"},
     {.name = "imma_s4_k32", .kernel = (const void*)imma_s4_k32, .tpb = TPB, .expect = EMULATED, .words = 128,
