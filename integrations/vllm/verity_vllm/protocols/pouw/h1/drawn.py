@@ -412,7 +412,8 @@ class FileStager:
         self.meta, self.pin, self.class_sha512 = meta, h_pin.hexdigest(), h_cls.hexdigest()
         self.ports = FC._meta_ports(meta)
         self.row_ports = [r for r, *_ in in_rows]
-        port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
+        def port(nm: str) -> SimpleNamespace:
+            return SimpleNamespace(name=nm, dtype="u16")
         content = json.dumps([t.id, [list(r[:3]) + [list(r[3])] for r in in_rows],
                               [[s, list(ps)] for s, ps in out_rows]]).encode()
         outs = sorted({p for _s, ps in out_rows for p in ps})
