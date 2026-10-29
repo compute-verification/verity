@@ -36,6 +36,7 @@ import hashlib
 import json
 import random
 import sys
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -268,7 +269,7 @@ def _small_session(py, rng: random.Random, **force) -> _Session:
     paths = [list(tree.path(i)) for i in range(len(blocks))]
     public = force.get("public", rng.random() < 0.6)
     delta = rng.choice([R.DELTA_NS, rng.randint(0, 10**6)])
-    rtt = rng.choice([0, R.MAX_RTT_ALLOWANCE_NS, rng.randint(0, 10**6)])
+    rtt = rng.choice([0, R.RTT_ALLOWANCE_CAP_NS, rng.randint(0, 10**6)])
     flags = force.get("flags", rng.choice([0, 1, 1, 3]))
     s = _Session(py, rng, params, commitment, salt, tree.root, blocks.__getitem__, paths.__getitem__,
                  blocks if public else None, force.get("mode", rng.choice([0, 0, 1])),
@@ -564,7 +565,7 @@ def _full_audit(py, rng: random.Random, name: str) -> dict:
     """A deployment-shaped audit: k = 105, Δ = 0.5 ms, an RTT allowance, mode 0, decode off, and one named edit."""
     R = py[0]
     d = _deployment_store(py)
-    rtt = {"rtt-over-cap": R.MAX_RTT_ALLOWANCE_NS + 29}.get(name, rng.choice([0, 10_000, R.MAX_RTT_ALLOWANCE_NS]))
+    rtt = {"rtt-over-cap": R.RTT_ALLOWANCE_CAP_NS + 29}.get(name, rng.choice([0, 10_000, R.RTT_ALLOWANCE_CAP_NS]))
     s = _Session(py, rng, d["params"], d["commitment"], d["salt"], d["root"], d["block"], d["path"], None, 0,
                  R.K_AUDIT if name != "k-104" else 104, 0x01 if name == "decode" else 0, R.DELTA_NS, rtt)
     j = rng.randrange(s.k)
@@ -602,7 +603,7 @@ def _vector_audits(py) -> list[dict]:
                 "verifier_source": v["audit_source"], "beacons": None, "seen": [], "private_root": None, "w_bytes": None,
                 "expected_final": v["final"]})
     full = json.loads(R.AUDIT_VECTORS.read_bytes())["full_width_response"]
-    q = R.Params(R.DEPLOYMENT.w, R.DEPLOYMENT.c0, 2054, blocks_per_segment=1, segments=1)
+    q = replace(R.DEPLOYMENT, blocks_per_segment=1, segments=1)
     manifest, commitment = full["manifest"].encode(), bytes.fromhex(full["w_commitment"])
     salt, root = bytes.fromhex(full["setup_salt"]), bytes.fromhex(full["verification_root"])
     epoch, aid = bytes.fromhex(full["epoch_id"]), bytes.fromhex(full["audit_id"])
@@ -612,7 +613,7 @@ def _vector_audits(py) -> list[dict]:
         setup = Wi.setup_messages(manifest, commitment, salt, [bytes.fromhex(full["block"])], root)
         if mode == 0:
             setup = setup[:2] + [Wi.envelope(Wi.SETUP_ROOT, commitment + salt + (1).to_bytes(8, "big") + root + b"\x00")]
-        frames = setup + [Wi.open_message(epoch, aid, 0, 1, R.DELTA_NS, R.MAX_RTT_ALLOWANCE_NS, 0x01, counter),
+        frames = setup + [Wi.open_message(epoch, aid, 0, 1, R.DELTA_NS, R.RTT_ALLOWANCE_CAP_NS, 0x01, counter),
                           Wi.challenge_message(epoch, aid, 0, 0, key.stream(("nonce", 0), 32)), bytes.fromhex(full["response"])]
         assert q.blocks == 1
         out.append({"kind": "audit", "name": f"vector-full-width-response-setup-mode-{mode}", "frames": [f.hex() for f in frames],

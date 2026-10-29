@@ -203,12 +203,16 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `P2RingRoundSecureWide` and `CoinCommitHides`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
   rests on.
 - **Python.** `schemes.p2`: `P2Params`, the schemes `P2` (`p2-16448/v4`) and `P2ChaCha` (`p2-16448/v2`),
-  `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `encode_segment`,
-  `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the fastest cooperating
-  16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`). `benchmarks/pous/p2_v1/reference.py`
-  is the reference (the maps, keys, salt, tree and derivations), and `wire.py` beside it is `p2-audit-wire/v4`
+  `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `sha512_keys_indexed`,
+  `encode_segment`, `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the
+  fastest cooperating 16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`).
+  `benchmarks/pous/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
+  `sha512_keys_indexed`) under the reference's names and refusals, its `K_AUDIT`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`
+  are `CERT_K`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`, its `DEPLOYMENT` is the certificate's store as a `P2Params`
+  (`Params.of`), its salt, key prefix, leaves and derivations are its own, and
+  the tree over its leaves is `verifier.py`'s (`MerkleTree`, `verify_path`). `wire.py` beside it is `p2-audit-wire/v4`
   (`envelope`, `setup_messages`, `open_message`, `challenge_message`, `response_message`, `record`, `final_message`,
-  `verify_path`, `parse_envelope`, `verify_audit`, `parse_final`).
+  `parse_envelope`, `verify_audit`, `parse_final`).
 - **The registered scheme and the wire.** `p2-16448/v4` runs the generic protocol's setup, so four things differ from
   `reference.py` and the wire: its setup salt (24 bytes from `setup.draw_salt`, not 32 from `verity/pous/p2-setup/v4`
   over the commitment), its key prefix (it frames that salt), its leaf (`0x00 ‖ tag_s ‖ u16le(v) ‖ R`, not

@@ -338,9 +338,17 @@ def below(p: int, candidates) -> int:
 def sha512_keys(params: P2Params, prefix: bytes, s: int, j: int) -> tuple[int, int]:
     """v4: block `j` of segment `s`'s `(K, t)` after `prefix` (`expand_prefix`), the spec's streams: `K` is the first
     `w/8` bytes of `stream(base, "K")`, and `t` the first `w/8`-byte word of `stream(base, "t")` below `p`."""
-    nb, base = params.block_bytes, prefix + s.to_bytes(8, "big") + j.to_bytes(8, "big")
+    return sha512_keys_indexed(params, prefix, s, j)[:2]
+
+
+def sha512_keys_indexed(params: P2Params, prefix: bytes, s: int, j: int) -> tuple[int, int, int]:
+    """`sha512_keys` and which word of `stream(base, "t")` `t` is (the spec's `t_rejection_index`).  It reads only `w` and
+    `p`, so the spec's own params (`benchmarks/pous/p2_v1/reference.py`'s `Params`) take it as well."""
+    nb, base = params.w // 8, prefix + s.to_bytes(8, "big") + j.to_bytes(8, "big")
     k = int.from_bytes(stream(base, b"K", nb), "big")
-    return k, below(params.p, (int.from_bytes(stream(base, b"t", (i + 1) * nb)[i * nb:], "big") for i in itertools.count()))
+    words = (int.from_bytes(stream(base, b"t", (i + 1) * nb)[i * nb:], "big") for i in itertools.count())
+    i, t = next((i, x) for i, x in enumerate(words) if x < params.p)
+    return k, t, i
 
 
 def chacha_keys(params: P2Params, seed: bytes, j: int) -> tuple[int, int]:
@@ -520,4 +528,5 @@ def wide320_certificate(params: P2Params) -> Certificate | None:
 __all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_K_WIDE320", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
            "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "P2", "P2ChaCha", "P2Params",
            "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
-           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "stream", "wide_certificate"]
+           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "sha512_keys_indexed", "stream",
+           "wide_certificate"]
