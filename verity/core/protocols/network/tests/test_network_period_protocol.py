@@ -133,9 +133,9 @@ def test_the_rows_form_refuses_what_it_must(server):
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
     another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
-    no `SlotEntry_v1` or `SelectEntry_v1` template's entries, an audit a scan's `prog` is tied to with a unit undrawn
-    and no strata, or with its slot entries' or its scan slots' stratum drawn in part, and a scan whose state is not its
-    wired audit's `SCAN_STATE`: Lean and the mirror each refuse every one at that check."""
+    not the entries of an entry template its circuit record registers, an audit a scan's `prog` is tied to with a unit
+    undrawn and no strata, or with its slot entries' or its registered whole templates' stratum drawn in part, and a
+    scan whose state is not its wired audit's `SCAN_STATE`: Lean and the mirror each refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -205,14 +205,15 @@ def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
 
 
 def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
-    """The scan reads each slot's entry, read bit included, from the `SlotEntry_v1` unit of that slot's Program, lane
-    j's from chunk j, so the rows form refuses, in Lean and in the mirror and by name, each way a tied link-window's
-    wiring can fail at one lane (`PC.UNWIRES`): the audit's chunk entry at an output port (another unit's `o<j>`, or
-    the chunk's own `o1`), at the entries port of a `SlotEntry_v1` template the audit's Program doesn't have, at
-    another chunk's entries port, of other than T / every leaves, the scan's lane entry named another lane's, that
-    template one member off a slot each, or that template under the slot entry's name and descriptor id with another
-    body; and a mirror that skips the wiring, which the state tie reads too, accepts what Lean refuses at the
-    wiring."""
+    """The scan reads each slot's entry, read bit included, from the entry template's unit of that slot's Program,
+    lane j's from chunk j, so the rows form refuses, in Lean and in the mirror and by name, each way a tied
+    link-window's wiring can fail at one lane (`PC.UNWIRES`): the audit's chunk entry at an output port (another unit's
+    `o<j>`, or the chunk's own `o1`), at the entries port of a template the audit's Program doesn't have, at another
+    chunk's entries port, of other than T / every leaves, the scan's lane entry named another lane's, that template
+    one member off a slot each, or under its descriptor id with another body than the one its circuit record
+    registers, the record registering another closure digest for it or no entries, and a registration that binds no
+    record, another, or its digest in capitals; and a mirror that skips the wiring, which the state tie reads too,
+    accepts what Lean refuses at the wiring."""
     unwire = PC.UNWIRES
     for u in unwire:
         monkeypatch.setattr(PC, "UNWIRES", (u,))
@@ -227,37 +228,54 @@ def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
         refused_by_lean_alone(build("rows-prog-unwired", n, small=True), server, PC.UNWIRED)
 
 
-def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkeypatch):
-    """`wired` pins the slot entry's and the select entry's Definitions by closure digest (`PC.SLOT_ENTRY_PINS` and
-    `PC.SELECT_ENTRY_PINS`, Lean's `entryPins`): the cases' templates (`PC.slot_entry`, `io_shell.SlotEntry_v1` at its
-    smallest circuit-check row, and `PC.select_entry`, `SelectEntry_v1` at its smallest binding) have each list's
-    first, and a template under either's name and
-    descriptor id (`PC.SLOT_KEY`, `PC.SELECT_KEY`) with another body (`PC.RENAMED_SLOT_ENTRY`,
-    `PC.RENAMED_SELECT_ENTRY`) has none, so Lean and the mirror refuse its link-window at the wiring, Lean by the pin;
-    and a mirror that pins that digest too accepts it, the pin being all that refuses it."""
-    others = {}
-    for select, key, entry, pins in ((False, PC.SLOT_KEY, PC.SLOT_ENTRY, "SLOT_ENTRY_PINS"),
-                                     (True, PC.SELECT_KEY, PC.SELECT_ENTRY, "SELECT_ENTRY_PINS")):
-        good = json.loads(PC.audit_descriptor(((1, 2),), (2,), False, select, (1,) if select else ()))
-        bad = json.loads(PC.audit_descriptor(((1, 2),), (2,), True, select, (1,) if select else ()))
-        assert good["definitions"][key]["id"] == bad["definitions"][key]["id"] == entry
-        assert PC.slot_entry_digest(good, key) == getattr(PC, pins)[0]
-        assert (other := PC.slot_entry_digest(bad, key)) not in PC.SLOT_ENTRY_PINS + PC.SELECT_ENTRY_PINS
-        others[pins] = other
-    monkeypatch.setattr(PC, "UNWIRES", ("body",))
-    selects = set()
-    for n in range(4):
-        case = build("rows-prog-unwired", n, small=n % 2 == 0)
-        selects.add(any(PC.SELECT_KEY in a["program"]["definitions"] for a in case["params"]["audits"]))
-        assert PC.UNWIRED in reference(case)["reason"], (n, reference(case))
-        verdict, out = D.replay(PORT, case, server)
-        assert verdict == REJECT and "whose template is a pinned SlotEntry_v1 or SelectEntry_v1" in json.loads(
-            out)["reason"], (n, out)
+def test_a_second_model_needs_no_verifier_change(server, monkeypatch):
+    """The check names no model: it reads each tied audit's entry templates, the vocabulary size and stop ids they
+    bind and the templates drawn whole beside them from the audit's circuit record. A period whose tied audits serve
+    a second model (`PC.MODELS["other"]`: a stand-in under a Definition id the check has never seen, at V = 512 and
+    STOP = [3, 7], beside a stand-in of its own drawn whole) is accepted by Lean with the mirror's public, its audits
+    drawn whole or in part; and refused when tampered, at the wiring (its Program's entry template under its
+    descriptor id with another body, the record registering another closure digest or no entries, or a registration
+    that doesn't bind the record) or as parameters (a record whose stop ids or vocabulary size aren't the ones its
+    entry template binds, or that is otherwise malformed, `PC.bad_circuits`). A mirror that takes the record's
+    closure digest on its word, or the registration's binding, accepts what Lean refuses there."""
+    monkeypatch.setattr(PC, "MODELS", {"other": PC.MODELS["other"]})
+    for m in ("rows-honest", "rows-tied-partial"):
+        for n in range(3):
+            case = build(m, n, small=n % 2 == 0)
+            stops = {tuple(a.registered.stop) for a in PC.params(case["params"]).audits if a.registered.templates}
+            assert stops == {(3, 7)}, (m, n, stops)
+            out = reference(case)
+            assert out["verdict"] == ACCEPT, (m, n, out)
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (m, n, got)
+    for u in ("body", "digest", "unregistered", "unbound"):
+        monkeypatch.setattr(PC, "UNWIRES", (u,))
+        for n in range(2):
+            case = build("rows-prog-unwired", n, small=n % 2 == 0)
+            assert PC.UNWIRED in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.UNWIRED in json.loads(out)["reason"], (u, n, out)
+    case = build("rows-honest", 0, small=True)
+    p = case["params"]
+    tied = next(i for i, a in enumerate(PC.params(p).audits) if a.registered.templates)
+    for bad in PC.bad_circuits(p["audits"][tied]):
+        broken = case | {"params": p | {"audits": [*p["audits"][:tied], bad, *p["audits"][tied + 1:]]}}
+        assert reference(broken)["reason"].startswith("params:"), (bad, reference(broken))
+        verdict, out = D.replay(PORT, broken, server)
+        assert verdict == REJECT and json.loads(out)["reason"].startswith("params:"), (bad, out)
+    audit = PC._audit
+
+    def on_its_word(a, ctx):
+        x = audit(a, ctx)
+        return dataclasses.replace(x, entries=tuple((k, n, d) for (k, n, _), (_, d) in zip(x.entries,
+                                                                                         x.registered.templates)))
+    for u, owner, name, f in (("body", PC, "_audit", on_its_word), ("digest", PC, "_audit", on_its_word),
+                              ("unbound", PC.Audit, "bound_in", lambda self, reg: True)):
+        monkeypatch.setattr(PC, "UNWIRES", (u,))
         with monkeypatch.context() as mp:
-            for pins, other in others.items():
-                mp.setattr(PC, pins, (*getattr(PC, pins), other))
-            assert reference(case)["verdict"] == ACCEPT, (n, reference(case))
-    assert selects == {False, True}, selects
+            mp.setattr(owner, name, f)
+            for n in range(2):
+                refused_by_lean_alone(build("rows-prog-unwired", n, small=True), server, PC.UNWIRED)
 
 
 def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
@@ -292,12 +310,12 @@ def charged(case: dict, public: dict) -> list[int]:
 
 def test_only_a_tied_audit_must_draw_its_entries_whole(server, monkeypatch):
     """K charges an audit a scan's `prog` is tied to its free inputs, and its incorrect proof blocks only as the entries
-    they can set, so the rows form refuses one drawn in part unless its slot entries' and scan slots' templates are
-    strata drawn whole (`rows-tied-undrawn`, `rows-tied-entries-undrawn` and `rows-tied-slots-undrawn` above), and only
-    such an audit: over honest rows periods, which the mirror accepts, every tied audit draws all its units and some
-    untied audit fewer, and Lean accepts each such period with the mirror's public; a mirror that skips the draw's
-    refusal accepts what Lean refuses at the draw, and so does one that holds only the slot entries' template whole a
-    period whose scan slots' stratum is drawn in part."""
+    they can set, so the rows form refuses one drawn in part unless its slot entries' templates and those its circuit
+    record registers whole beside them are strata drawn whole (`rows-tied-undrawn`, `rows-tied-entries-undrawn` and
+    `rows-tied-slots-undrawn` above), and only such an audit: over honest rows periods, which the mirror accepts, every
+    tied audit draws all its units and some untied audit fewer, and Lean accepts each such period with the mirror's
+    public; a mirror that skips the draw's refusal accepts what Lean refuses at the draw, and so does one that holds
+    only the slot entries' template whole a period whose registered whole template's stratum is drawn in part."""
     partial = []
     for n in range(24):
         case = build("rows-honest", n)
@@ -311,7 +329,7 @@ def test_only_a_tied_audit_must_draw_its_entries_whole(server, monkeypatch):
         verdict, got = D.replay(PORT, case, server)
         assert verdict == ACCEPT and json.loads(got)["public"] == reference(case)["public"], got
     with monkeypatch.context() as mp:
-        mp.setattr(PC, "_draws_whole", lambda audit, prof, f: True)
+        mp.setattr(PC, "_draws_whole", lambda audit, reg, prof, f: True)
         for m in ("rows-tied-undrawn", "rows-tied-entries-undrawn", "rows-tied-slots-undrawn"):
             for n in range(2):
                 refused_by_lean_alone(build(m, n, small=True), server, PC.UNDRAWN)
@@ -321,12 +339,13 @@ def test_only_a_tied_audit_must_draw_its_entries_whole(server, monkeypatch):
 
 
 def test_a_tied_audit_drawn_in_part_is_charged_its_link_windows_entries(server):
-    """A tied audit whose slot entries' and scan slots' templates are strata drawn whole may draw the rest in part at
-    its δ (`rows-tied-partial`): Lean accepts the period with the mirror's public, in which that audit's link-window's
-    term charges every entry its at most `b` incorrect proof blocks can set, `faulty_entries` = E_w = lanes · T /
-    every · the entry's bits, when `b ≥ 1` and none when `b = 0`, every other link-window's none, and `eps` holds that
-    audit's δ beside the scans'; the cases' audits select (`SelectEntry_v1` beside `ScanSlots_v2`) or don't
-    (`SlotEntry_v1`)."""
+    """A tied audit whose slot entries' templates and those its circuit record registers whole are strata drawn whole
+    may draw the rest in part at its δ (`rows-tied-partial`): Lean accepts the period with the mirror's public, in
+    which that audit's link-window's term charges every entry its at most `b` incorrect proof blocks can set,
+    `faulty_entries` = E_w = lanes · T / every · the entry's bits, when `b ≥ 1` and none when `b = 0`, every other
+    link-window's none, and `eps` holds that audit's δ beside the scans'; the cases' audits serve each model
+    (`PC.MODELS`: `SlotEntry_v1`, `SelectEntry_v1` beside its scan slots, and the second model's entry template beside
+    its own)."""
     seen = Counter()
     for n in range(8):
         case = build("rows-tied-partial", n, small=n % 2 == 0)
@@ -345,8 +364,8 @@ def test_a_tied_audit_drawn_in_part_is_charged_its_link_windows_entries(server):
             for reg in c["windows"]], (n, pub)
         assert pub["eps"] == str(sum((Fraction(t["delta"]) for t in pub["scans"]), Fraction(pub["audits"][i]["delta"])))
         seen["charged" if b else "uncharged"] += 1
-        seen["select" if p.audits[i].scan_slots else "slot"] += 1
-    assert all(seen[k] for k in ("charged", "uncharged", "select", "slot")), seen
+        seen[p.audits[i].registered.templates[0][0].split("{")[0]] += 1
+    assert all(seen[k] for k in ("charged", "uncharged", "SlotEntry_v1", "SelectEntry_v1", "NetworkPeriodEntry_v1")), seen
 
 
 def test_an_output_port_is_a_units_past_o0():
@@ -357,21 +376,18 @@ def test_an_output_port_is_a_units_past_o0():
                                         "u/prog", "", 1, None]))
 
 
-def test_an_entries_port_is_a_slot_entry_templates_chunks_o0():
-    """`entries_port_name` is Lean's `entriesPortName` on its `#guard`s: a `SlotEntry_v1` or `SelectEntry_v1`
-    template's `<id>/c<j>/o0`, the chunk's index in ASCII digits without a leading zero."""
-    assert PC.entries_port("SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}") == "SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}/c0/o0"
-    assert PC.entries_port("SelectEntry_v1{}", 3) == "SelectEntry_v1{}/c3/o0"
-    assert all(map(PC.entries_port_name, [PC.entries_port("SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}"),
-                                          "SlotEntry_v1{}/c0/o0", "SlotEntry_v1{KO=2}/c1/o0",
-                                          PC.entries_port(PC.SELECT_KEY, 3), "SelectEntry_v1{}/c0/o0",
-                                          "SelectEntry_v1{KO=2}/c10/o0"]))
-    assert not any(map(PC.entries_port_name, ["SlotEntry_v2{KO=2}/c0/o0", "SlotEntry_v1{KO=2}/c01/o0",
-                                              "SlotEntry_v1{KO=2}/c0/o1", "SlotEntry_v1/c0/o0", "", 1, None,
-                                              "SlotEntry_v1{KO=2}/c/o0", "SlotEntry_v1{KO=2}c0/o0",
-                                              "SlotEntry_v1{KO=2}/cx/o0", "SlotEntry_v1{KO=2}/c\u0663/o0",
-                                              "SelectEntry_v2{KO=2}/c0/o0", "SelectEntry_v1{KO=2}/c1/o1",
-                                              "SelectEntry_v1/c0/o0", "ScanSlots_v2{KO=2}/c0/o0"]))
+def test_an_entries_port_is_a_templates_chunks_o0():
+    """`entries_port_name` is Lean's `entriesPortName` on its `#guard`s: any template's `<id>/c<j>/o0`, the chunk's
+    index in ASCII digits without a leading zero; never another port, or one with no descriptor id."""
+    assert PC.entries_port("E{IDB=8,KO=2,NP=4,STOP=1}") == "E{IDB=8,KO=2,NP=4,STOP=1}/c0/o0"
+    assert PC.entries_port("F{}", 3) == "F{}/c3/o0"
+    assert all(map(PC.entries_port_name, [PC.entries_port("E{IDB=8,KO=2,NP=4,STOP=1}"), "E{}/c0/o0", "E{KO=2}/c1/o0",
+                                          PC.entries_port("F{V=256,C=16,KO=2,FIRST=false,STOP=[]}", 3),
+                                          "F{KO=2}/c10/o0", "G{V=512,STOP=[3]}/c2/o0", "E/c0/o0",
+                                          PC.entries_port(PC.SELECT_KEY, 3)]))
+    assert not any(map(PC.entries_port_name, ["E{KO=2}/c01/o0", "E{KO=2}/c0/o1", "/c0/o0", "c0/o0", "", 1, None,
+                                              "E{KO=2}/c/o0", "E{KO=2}c0/o0", "E{KO=2}/cx/o0", "E{KO=2}/c\u0663/o0",
+                                              "F{KO=2}/c1/o1", "F{KO=2}/C1/o0", "u/o0"]))
 
 
 def test_a_prog_port_is_a_lanes_programs_rows():
@@ -385,26 +401,55 @@ def test_a_prog_port_is_a_lanes_programs_rows():
 
 def test_each_lanes_prog_is_its_own_chunk():
     """`_wired` is Lean's `wired` on its two-lane `#guard` (T = 4, `every` 2): lane j's `scan/prog<j>` is chunk j's
-    entries port, of 2 leaves, of one pinned template of 4 members; not with the lanes swapped, a chunk of other
-    leaves, lane 1's tree missing, or another template's chunk 1; and the scan's lane-1 tree alone ties the audit."""
-    s = types.SimpleNamespace(schedule=types.SimpleNamespace(window=4, every=2, lanes=2),
-                              audits=[PC.Audit(0, 0, "", 4, 0, (("SlotEntry_v1{KO=1}", 4, PC.SLOT_ENTRY_PINS[0]),))])
+    entries port, of 2 leaves, of one template of 4 members at the closure digest its circuit record registers, a
+    record its registration binds; not with the lanes swapped, a chunk of other leaves, lane 1's tree missing, another
+    template's chunk 1, the template at another digest than the registered one, or the record not its registration's;
+    and the scan's lane-1 tree alone ties the audit."""
+    a = PC.Audit(0, 0, "", 4, 0, (("E{KO=1}", 4, "d0"),), "c", PC.Entries((("E{KO=1}", "d0"),)))
+    s = types.SimpleNamespace(schedule=types.SimpleNamespace(window=4, every=2, lanes=2), audits=[a])
 
     def reg(*ports) -> dict:
         return {"roots": [{"port": q, "leaves": n, "root": root, "domain": "d"} for q, root, n in ports]}
 
-    def chunks(l0: int, l1: int, k1: str) -> dict:
-        return reg(("SlotEntry_v1{KO=1}/c0/o0", "r0", l0), (k1 + "/c1/o0", "r1", l1))
+    def chunks(l0: int, l1: int, k1: str, c: str = "c") -> dict:
+        return reg(("E{KO=1}/c0/o0", "r0", l0), (k1 + "/c1/o0", "r1", l1)) | {"window": {"circuit": c}}
 
     def scan(r0: str, r1: str) -> dict:
         return reg(("scan/prog0", r0, 2), ("scan/prog1", r1, 2))
 
-    assert PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=1}")], scan("r0", "r1"))
-    assert not PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=1}")], scan("r1", "r0"))
-    assert not PC._wired(s, [chunks(3, 1, "SlotEntry_v1{KO=1}")], scan("r0", "r1"))
-    assert not PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=1}")], reg(("scan/prog0", "r0", 2)))
-    assert not PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=2}")], scan("r0", "r1"))
-    assert PC._tied_audits([chunks(2, 2, "SlotEntry_v1{KO=1}")], reg(("scan/prog1", "r1", 2))) == [0]
+    assert PC._wired(s, [chunks(2, 2, "E{KO=1}")], scan("r0", "r1"))
+    assert not PC._wired(s, [chunks(2, 2, "E{KO=1}")], scan("r1", "r0"))
+    assert not PC._wired(s, [chunks(3, 1, "E{KO=1}")], scan("r0", "r1"))
+    assert not PC._wired(s, [chunks(2, 2, "E{KO=1}")], reg(("scan/prog0", "r0", 2)))
+    assert not PC._wired(s, [chunks(2, 2, "E{KO=2}")], scan("r0", "r1"))
+    other = types.SimpleNamespace(schedule=s.schedule, audits=[dataclasses.replace(a, entries=(("E{KO=1}", 4, "d1"),))])
+    assert not PC._wired(other, [chunks(2, 2, "E{KO=1}")], scan("r0", "r1"))
+    assert not PC._wired(s, [chunks(2, 2, "E{KO=1}", "x")], scan("r0", "r1"))
+    assert PC._tied_audits([chunks(2, 2, "E{KO=1}")], reg(("scan/prog1", "r1", 2))) == [0]
+
+
+def test_a_tied_audit_draws_its_registered_templates_whole():
+    """`_draws_whole` is Lean's `drawsWhole` on its `#guard`: a tied audit of 3 units, its slot entries' template "E"
+    of 1 and "S" of 1, which its circuit record "c" registers whole, drawn whole, or with both strata whole and the
+    record its registration's; not with either stratum sampled, the record not its registration's, nor drawn in part
+    with no slot entries' template."""
+    a = PC.Audit(0, 0, "", 3, 0, (("E", 1, ""),), "c", PC.Entries(whole=("S",)))
+
+    def prof(*strata) -> dict:
+        return {"levels": [{"draw": {"law": "stratified", "strata": [{"name": n, "size": z, "k": k}
+                                                                   for n, z, k in strata]}}]}
+
+    def reg(c: str) -> dict:
+        return {"window": {"circuit": c}}
+
+    whole = prof(("E", 1, 1), ("S", 1, 1), ("R", 1, 0))
+    f = PC.Facts(3, 2, Fraction(1, 10), 1)
+    assert PC._draws_whole(a, reg("c"), whole, f)
+    assert PC._draws_whole(a, reg("x"), prof(("E", 1, 0)), PC.Facts(3, 3, Fraction(1, 10), 0))
+    assert not PC._draws_whole(a, reg("c"), prof(("E", 1, 1), ("S", 1, 0), ("R", 1, 1)), f)
+    assert not PC._draws_whole(a, reg("c"), prof(("E", 1, 1), ("R", 2, 1)), f)
+    assert not PC._draws_whole(a, reg("x"), whole, f)
+    assert not PC._draws_whole(dataclasses.replace(a, entries=()), reg("c"), whole, f)
 
 
 def test_the_scan_is_read_off_its_program(server):
@@ -487,7 +532,8 @@ AUDIT_REFUSALS = {m: why for f in ("", "rows-") for m, why in (
 def test_an_audit_is_held_to_its_program(server):
     """An audit whose registration names another Program than its descriptor's, or whose answer is over another number
     of units than its Program's template instances, is refused at that check by Lean and the mirror; and an audit
-    whose Program isn't a descriptor, is of another schema or has no template is refused as parameters."""
+    whose Program isn't a descriptor, is of another schema or has no template, or whose circuit record is malformed or
+    registers entries its Program doesn't have as registered (`PC.bad_circuits`), is refused as parameters."""
     for m, (lean, mirror) in AUDIT_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
