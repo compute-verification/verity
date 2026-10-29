@@ -6,3 +6,4 @@
 - (07:12Z) SW-SMELL final: "proved (rank 0)" stands on MH100w semantics still marked "draft, pending review". The locking path must clear that; say so in every claim.
 - (08:55Z) N-SAKU asks: instantiate its Lean `Machine` (cursor/compute-research-np-saku-ea97) over MH100w, if cheap.
 - (10:45Z) N-RED asks: confirm the sampling ε is stated against honest work including hashing (≤ 8.4e-5). Also, grinding needs a redraw: 71.1% on A2c at m 1 with 4,096 free draws.
+- (11:30Z) N-ADAPT will add the priced selection step to its own PointwiseAdaptiveProofs.lean, so you needn't take it; review it if you have time.

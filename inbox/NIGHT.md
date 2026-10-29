@@ -268,3 +268,20 @@ the final by 13:30Z.
   model P, so e = 7** (conservative; N-RED recommends it). Under C or W, e4 suffices. That is for Daniel, and N-FLOOR's
   copy prices bear on it.
 - **New lead to build and measure:** `ssn-1l-tag + blc4a-t64-e7` with coins after A_j.
+
+### Addendum (11:30Z): adaptive-dw (N-ADAPT final, note 20261029T1124Z-report-np-adapt)
+
+- **Proved in Lean** (`adaptive_entries_le`, `adaptive_registers_le`, `adaptive_lanes_le`; axioms clean; r20261029-105546-5885):
+  for any program that branches on the coins, cost ≥ check (b)'s credit (an entry's distinct values), under models
+  P, C and W. Two conditions: (i) no two entries share a value at the model's copy grain; (ii) the initial memory holds
+  none of the words (A5).
+- **On the new lead,** model W pays everything (b) credits. Bare model P doesn't: masked copies across identical chosen
+  rows are credited but not paid, **about 8.9% of stock** (checked, r20261029-111608-21b8). CopyGrain(4) is false on
+  sm_90 (N-FLOOR), so C reduces to P.
+- **New coordinator default (replaces 10:45Z's "model P"): T1 rests on model P plus N-FLOOR's measured floors.** A
+  selection on a lane's own bit costs ≥ 2.24 writes (`select-floor`), and an on-SM copy ≥ 1 write a word
+  (`copy-floor`, word grain); both are rank 1, measured. Under them the masked channel is 0, by argument; the Lean step
+  that prices selections is N-ADAPT's next task. Keep e = 7 unless N-RED shows e4 survives under these prices. For
+  Daniel: P plus measured floors, or W (lane semantics, rank 3).
+- **Correction (N-ADAPT's smell):** "(b) over-credits nothing" (10:45Z addendum) holds only with N-RED's cross-entry
+  condition (i).
