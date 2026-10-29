@@ -53,6 +53,10 @@ in a lock, and nothing imports it.
   counted W1 is within `Period.cap` at the host resources of the `G` that `OnCard` describes (`hostsW1_le_hostsCounted`,
   `hostsW1_le_cap`), and `Period.Fits` at hosts counted at the row gives `HostsWithinRow` (`hostsWithinRow_of_fits`,
   `hostsCounted_closes_of_fits`; `hostsCounted_others`: the row's own hosts are counted).
+* **Which grid** (`shaWrites_of_slice`, `shaWrites_grid_not_slice`): `ShaWrites` on the slice where the prover's chosen
+  values are fixed and only the window's coins vary gives it on the data grid, not conversely; the data grid credits
+  the digest of a value the prover chose, which the slice can't. So `R` is counted on the slice, and a chosen block's
+  constant work drops out of it.
 * **Lifting a data-case result to the call grid** (`distinctOn_lift`, `sepBy_lift`): a target set distinct at one
   data case, with that case's free values, is distinct on the call grid with the call's free values, when each call
   free value restricts to a data-case free value.
@@ -1203,6 +1207,64 @@ theorem routeH_toy :
 
 end Hosts
 
+/-! ## 10. Which grid: the window's coins at the prover's values -/
+
+section Slice
+
+variable {G : Type}
+
+/-- **The slice's statement is the stronger** (rank 0): `ShaWrites` on a part `S'` of the grid `S` gives it on `S`.
+On the slice where the prover's chosen values are fixed and only the window's coins vary, a program specialized to
+those values must match the digests only there; so the premise that binds it is the slice's, and the data grid's
+follows from it. -/
+theorem shaWrites_of_slice {pr : Prices100} {Adm : List (Op100 G) → List (G → ℚ) → Prop}
+    {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {S S' : Set G} (hS : S' ⊆ S) {X : Set (G → ℚ)} {Dig : Finset (G → ℚ)} {R : ℕ}
+    (h : ShaWrites pr Adm fpSem S' X Dig R) : ShaWrites pr Adm fpSem S X Dig R := by
+  classical
+  intro L P hL hP hA hOD
+  obtain ⟨H, hR, hD, hO⟩ := h L P hL hP hA fun t ht => by
+    obtain ⟨r, hr, hrS⟩ := hOD t ht
+    exact ⟨r, hr, fun g hg => hrS g (hS hg)⟩
+  choose! ρ hρR hρS using hO
+  have hinj : Set.InjOn ρ H := fun t ht t' ht' heq => hD.1 t ht t' ht' fun g hg => by
+    rw [← hρS t ht g hg, ← hρS t' ht' g hg, heq]
+  refine ⟨H.image ρ, ?_, ⟨fun r hr r' hr' heq => ?_, fun r hr f hf heq => ?_⟩, fun r hr => ?_⟩
+  · rw [Finset.card_image_of_injOn hinj]
+    exact hR
+  · obtain ⟨t, ht, rfl⟩ := Finset.mem_image.1 hr
+    obtain ⟨t', ht', rfl⟩ := Finset.mem_image.1 hr'
+    rw [hD.1 t ht t' ht' fun g hg => by rw [← hρS t ht g hg, ← hρS t' ht' g hg]; exact heq g (hS hg)]
+  · obtain ⟨t, ht, rfl⟩ := Finset.mem_image.1 hr
+    exact hD.2 t ht f hf fun g hg => by rw [← hρS t ht g hg]; exact heq g (hS hg)
+  · obtain ⟨t, _, rfl⟩ := Finset.mem_image.1 hr
+    exact ⟨ρ t, hρR t (by assumption), fun _ _ => rfl⟩
+
+/-- **The data grid credits what the slice can't** (rank 0): on the two-point grid of a value the prover may choose,
+the digest `tw` of that value is credited one register over every program. On the slice where the prover chose
+`false`, the digest is the constant 0 there, an operand outputs it, and `ShaWrites` fails at the same count. So a
+value block the prover chose (constant, or a repeat) drops out of `R` on the slice; `AtomicCall`, which reads the
+call's input words, doesn't remove it. -/
+theorem shaWrites_grid_not_slice :
+    ShaWrites h100Floor (fun _ _ => True) (fun _ _ _ _ => 0) Set.univ (Consts Bool) {tw} 1 ∧
+      ¬ ShaWrites h100Floor (fun _ _ => True) (fun _ _ _ _ => 0) {false} (Consts Bool) {tw} 1 := by
+  refine ⟨fun L P _ _ _ hOD => ⟨{tw}, by simp, ⟨fun t ht t' ht' _ => by simp at ht ht'; rw [ht, ht'],
+    fun t ht f hf => by simp at ht; rw [ht]; exact tw_not_const f hf⟩, hOD⟩, fun h => ?_⟩
+  have hregs : regs100 (fun _ _ _ _ => 0) [Op100.operand (fun _ : Bool => (0 : ℚ))] [] = [fun _ => 0] := by
+    simpa using regs100_map_operand (fun _ _ _ _ => 0) [fun _ : Bool => (0 : ℚ)] []
+  obtain ⟨H, hR, hD, hO⟩ := h [] [Op100.operand (fun _ => 0)] (by simp)
+    (fun o ho => by simp at ho; rw [ho]; exact consts_mem 0) trivial fun t ht => by
+      simp at ht
+      rw [ht, hregs]
+      exact ⟨fun _ => 0, by simp, fun g hg => by simp at hg; rw [hg]; simp [tw]⟩
+  obtain ⟨t, ht⟩ : H.Nonempty := Finset.card_pos.1 (by omega)
+  obtain ⟨r, hr, hrS⟩ := hO t ht
+  rw [hregs] at hr
+  simp at hr
+  rw [hr] at hrS
+  exact hD.2 t ht _ (consts_mem 0) fun g hg => (hrS g hg).symm
+
+end Slice
+
 end Pouw.Dimension.NCompose
 
 #print axioms Pouw.Dimension.NCompose.charged_by
@@ -1251,3 +1313,5 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.hostsWithinRow_of_fits
 #print axioms Pouw.Dimension.NCompose.hostsCounted_closes_of_fits
 #print axioms Pouw.Dimension.NCompose.routeH_toy
+#print axioms Pouw.Dimension.NCompose.shaWrites_of_slice
+#print axioms Pouw.Dimension.NCompose.shaWrites_grid_not_slice
