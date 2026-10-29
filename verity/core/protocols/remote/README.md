@@ -193,7 +193,7 @@ its work. The composite accepts only if every subprotocol accepts and their comm
 **Assumes.** PoUW's premises:
 
 - the proof system is sound (`Properties.Pouw.Period.ServiceSound`), a named assumption no theorem discharges yet;
-- the published draw is the coin's (`DrawIsCoin`), and registration precedes the draw (`RegisteredBeforeDraw`);
+- the published draw is the coin's (`SampleIsCoin`), and registration precedes the draw (`RegisteredBeforeSample`);
 - the salt is a live coin (`SaltIsLiveCoin`), and the staged statement pins the receipts' tile (`StagedPins`);
 - PoUW's per-step receipts bind (`OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`, `UnitFixed`).
 
@@ -355,9 +355,9 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
 - `Properties.Pouw.Period.ServiceSound`: the proof system is sound at δ_ks against PoUW's check, which is C-Flock's
   soundness at each drawn unit (`Flock.Guarantees.EndToEndRegisteredRows` for one session). It is a named assumption: no
   theorem discharges it yet.
-- `Properties.Pouw.Period.DrawIsCoin`: the units the check publishes as drawn are the model's draw at the period's live
+- `Properties.Pouw.Period.SampleIsCoin`: the units the check publishes as drawn are the model's draw at the period's live
   coin. A protocol-code fact still to prove.
-- `Properties.Pouw.Period.RegisteredBeforeDraw`: each period's registration is fixed before its draw coin. It states
+- `Properties.Pouw.Period.RegisteredBeforeSample`: each period's registration is fixed before its draw coin. It states
   the order only, and the binding it is used for also needs the rows committed by the registration, which the deployed
   path doesn't do yet: its registered roots are tags, with no row committed (`anchors []`).
 - `Properties.Pouw.Period.SaltIsLiveCoin`: each period's salt is its round's live coin. The deployed path doesn't meet

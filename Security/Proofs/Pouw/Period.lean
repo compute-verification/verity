@@ -10,8 +10,8 @@ import Proofs.Pouw.RelativeSecurity
 with the check's verdict (`checkedRun`). There a window is credited exactly when it and every earlier window are
 accepted (`credited_iff`, at `K_d > 0`: the check's verdict is every drawn tile's), so the run's accepted prefix and its
 live words are the check's (`prefixLen_eq`, `creditedLive_eq`). `JointSound` holds at `δ_ks`: an unsound drawn tile of
-an accepted window is a unit the check publishes as drawn (`DrawIsCoin`) whose opening fails its relation, which
-`ServiceSound` bounds (`jointSound_checked`). `Pins` is the hypothesis itself, and `RegisteredBeforeDraw`, protocol
+an accepted window is a unit the check publishes as drawn (`SampleIsCoin`) whose opening fails its relation, which
+`ServiceSound` bounds (`jointSound_checked`). `Pins` is the hypothesis itself, and `RegisteredBeforeSample`, protocol
 structure, is not read.
 
 `H1CheckedCreditPeriod` is `CheckedCreditPeriod` at H1's numbers, with `SplitRateClosed`'s rate there
@@ -62,13 +62,13 @@ theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : RegisteredCir
   exact Finset.sum_congr rfl fun w _ => if_congr (credited_iff hK hKd p ws opened rel right x w) rfl rfl
 
 /-- **Joint soundness at the check's run from the service's**: in each window, an accepted window with a drawn tile
-whose opening fails its relation is one the check accepts with a published unit (`DrawIsCoin`: the drawn tile's unit is
+whose opening fails its relation is one the check accepts with a published unit (`SampleIsCoin`: the drawn tile's unit is
 among `Public.drawn`) whose opening fails its relation, which `ServiceSound` bounds at `δ_ks`. -/
 theorem jointSound_checked {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : RegisteredCircuit ι) {Kd Np n : ℕ}
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (p : Params) (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
-    {δks : ℝ} (hD : DrawIsCoin hK p ws) (hS : ServiceSound p ws opened rel δks) :
+    {δks : ℝ} (hD : SampleIsCoin hK p ws) (hS : ServiceSound p ws opened rel δks) :
     (checkedLayer Cd hr hK p ws opened rel right).JointSound δks := by
   intro w
   refine (Pouw.RelativeSecurity.prob_mono fun x hx => ?_).trans (hS w)

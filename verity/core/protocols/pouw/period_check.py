@@ -109,7 +109,7 @@ def _window_form(nm: str, i: int, w: Any) -> str | None:
         ks.append(k)
     if len(ks) > 1:
         return (f"window {i} of period {nm} has units at {len(ks)} K's ({ks}), so its draw is over that "
-                f"many strata, and {GUARANTEE} draws from one tile stratum (TileDrawIsCoin): serve a window's linears "
+                f"many strata, and {GUARANTEE} draws from one tile stratum (TileSampleIsCoin): serve a window's linears "
                 "at one K")
     return None
 
