@@ -1,4 +1,0 @@
-order = 310
-path = "`proof_sampling.py`"
-runs_on = "CPU"
-what = "The whole-dot-product proof draw under one σ (Llama-3.1-8B and 70B, prefill and decode, designs A and Bc): the cheater's best response to a draw (skips, steering levers and their Fan), the minimax draw in closed form and as an LP, the producer closure, and ε against PRF-57's proof cost (SAMPLING, note:20261017T0608Z-draft-eps1-sampling)"

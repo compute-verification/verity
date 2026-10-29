@@ -1,7 +1,7 @@
 // The warp-uniform chains the uniform-datapath probes carry: eight pairs of registers folded in place, so ptxas keeps
 // them on the uniform datapath (UIMAD/ULOP3/… ) wherever it keeps a chain uniform, and never hoists or folds them to a
 // constant. uniform.cuh carries them beside the synchronous honest step (mma.sync); async_uni (sm90/sm100) carries the
-// same chains beside a saturated asynchronous tensor op (wgmma, tcgen05.mma), the FACET-BREAK the model has not measured.
+// same chains beside a saturated asynchronous tensor op (wgmma, tcgen05.mma), the facet_break the model has not measured.
 #pragma once
 #include <cstdint>
 

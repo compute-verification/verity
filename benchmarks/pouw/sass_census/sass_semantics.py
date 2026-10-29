@@ -1,5 +1,5 @@
-"""What each SASS base opcode does, as RT-ISA classifies it against A7's menu: can it form a multiply (head a fresh
-product), does it write a word, and which menu route (if any) prices it.
+"""What each SASS base opcode does, as diff_menu.py classifies it against A7's menu: can it form a multiply (head a
+fresh product), does it write a word, and which menu route (if any) prices it.
 
 A7 (`SheetSemantics`) says no unit outside the menu heads a fresh committed word (NoSum) and a side unit costs at least
 its per-word vector (SideUnits). A committed word is a fresh s32: the running sum of 32 int8 products of noised operands.
@@ -25,13 +25,13 @@ from __future__ import annotations
 
 # The tensor-core MMA families. Each heads products on the tensor route (A3). `omega` forms, operand formats and peaks
 # are the sheet's; a form whose operand type has no sheet peak is priced at 0 (DMMA FP64, b1, s4 on sm_120) -- a gap A3
-# can't price (RT-ISA/RT-MACHINE). mul=True, word=True, route="tensor".
+# can't price. mul=True, word=True, route="tensor".
 MMA_SYNC = ["HMMA", "IMMA", "DMMA", "BMMA", "QMMA", "OMMA"]          # mma.sync (register accumulators)
 MMA_WGMMA = ["HGMMA", "IGMMA", "QGMMA", "OGMMA", "BGMMA"]           # Hopper async warpgroup wgmma
 MMA_TCGEN05 = ["UTCHMMA", "UTCIMMA", "UTCQMMA", "UTCOMMA", "UTCBMMA"]  # Blackwell tcgen05.mma (TMEM accumulators)
 MMA = MMA_SYNC + MMA_WGMMA + MMA_TCGEN05
 
-# Lane multiply-accumulate / multiply opcodes: exact integer MAC (the honest route), FP MAC, dot products.
+# The lanes' multiply-accumulate and multiply opcodes: exact integer MAC (the honest route), FP MAC, dot products.
 LANE_MUL = {
     "IMAD": "s32 integer multiply-add (the honest lane MAC; IMAD.WIDE -> s64 pair)",
     "IMUL": "s32 integer multiply (high/low)",

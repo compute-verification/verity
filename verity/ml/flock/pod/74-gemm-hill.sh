@@ -103,10 +103,9 @@ trap done_ EXIT
 GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial"
 # the preflight check's three GPU cases at once, each its own process, while 3 x one case's device memory fits the GPU's free
 # memory (class_statement's guard), else one at a time. One case's bound per K (B = 16) is its measured peak (selftest.per_case)
-# with some room: at most 4794, 5074, 9272 and 17678 MiB at K = 2048, 4096, 8192 and 16384 (r20261001-092917-8b05,
-# r20261001-131526-f969), with the pod's host memory at most 12, 16, 27 and 53 GB with the three at once. K = 32768 has none, so
-# its cases run one at a time: at BF16's k_log 27 one case holds about 30 GiB, and three at once overfilled the 97,887 MiB card
-# (r20261002-113014-821f). Each case's stderr is kept as out/gate/classes/*/selftest-<case>.err, beside the class's prove.out
+# with some room: at most 4794, 5074, 9272 and 17678 MiB at K = 2048, 4096, 8192 and 16384, with the pod's host memory at most 12, 16, 27 and 53 GB with the three at once. K = 32768 has none, so
+# its cases run one at a time: at BF16's k_log 27 one case holds about 30 GiB, and three at once overfilled the 97,887 MiB card.
+# Each case's stderr is kept as out/gate/classes/*/selftest-<case>.err, beside the class's prove.out
 case $K in 2048|4096) CASE_MIB=6144 ;; 8192) CASE_MIB=12288 ;; 16384) CASE_MIB=20480 ;; *) CASE_MIB= ;; esac
 [ -n "$GS" ] && [ -n "$CASE_MIB" ] && GS+=" SELFTEST_JOBS=3 SELFTEST_CASE_MIB=$CASE_MIB"
 ok=1

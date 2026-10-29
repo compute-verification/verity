@@ -223,14 +223,15 @@ theorem setup_zero_c {I : Inputs} (ht : I.tags.typed = false) (hh : I.tags.hidde
   have ht' : (zkTags I).typed = false := (zkTags_typed I).trans ht
   rcases HiddenExec.setupTables_okH hh' hs with ⟨-, st, hst, -, rfl⟩ | ⟨hlt, hsz, hj, -, -⟩
   · refine ⟨by simp, ?_⟩
-    have h1 : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok st.c := (Hidden.setupHidden_spec' hst).parse
+    have h1 : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok st.c := (Hidden.setupHidden_spec' hst).parseF (HmOut.parse_isTmpl hc)
     rw [hc] at h1
     exact (Except.ok.inj h1).symm
   · have h0 : 0 < sts.size := by omega
     obtain ⟨d, hd⟩ := hj 0 h0
     refine ⟨h0, ?_⟩
     have h1 : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok sts[0].c :=
-      (ZkHidden.parseH_identity ht' _ _ _).symm.trans (Hidden.setupHidden_spec' hd).parse
+      (ZkHidden.parseH_identity ht' _ _ _).symm.trans ((Hidden.setupHidden_spec' hd).parseF
+        (HmOut.parse_isTmpl ((ZkHidden.parseH_identity ht' _ _ _).trans hc)))
     rw [hc] at h1
     exact (Except.ok.inj h1).symm
 

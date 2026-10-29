@@ -2,7 +2,9 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
+import Proofs.Flock.Soundness.Discharge.Hidden.DerivedP
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 import Proofs.Flock.Soundness.Discharge.Hidden.Binding
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
@@ -10,6 +12,9 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 import Proofs.Flock.Soundness.Discharge.Hidden.Layout
 import Proofs.Flock.Soundness.Discharge.Hidden.LayoutP
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
+import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
+import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Theorems
@@ -24,6 +29,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegV2
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegPort
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFitP
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SharedP
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 
 /-!
@@ -33,6 +40,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Spec`: `setupHidden_spec'`, the walk of `Stmt.setupHidden` to its `Spec`;
 * `PortsP`: the public leaves `HmIn.parse` accepted (`publicCol_at`), and the rows `HmIn.delta` keeps (`keepCol`,
   `deltaEntry_inDelta`);
+* `DerivedP`: the public inputs the verifier derives itself (`derivedGroup_some`, `checkDerived_words`: instance `i`'s
+  word `i mod G`);
 * `Facts`: what is read off `Spec` and `HmOut.parse` (`setupHidden_hm96`, `setupHidden_wf`, `parse_untyped`, ...);
 * `Binding`: the row commitment's extractor (`commitPair_spec'`) and `OutputsBinding` from `OutputsCommitted`;
 * `Public`: what the statement takes from the public file (`public_exposes'`);
@@ -40,9 +49,14 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Rows`: an output row is a padded lone port or an exact run of ports (`checkRows_out`: `HmOut.checkRows`), and
   `sha512/row/v1` output rows are one per output port (`out_rows_v1`);
 * `Layout`: an untyped statement's layout (`hidden_layout'`), `layout_of`'s with `outPairs` past its Δ;
+* `SpecOf`: `Spec` on the circuit the caller parsed (`setupHiddenOf_spec`, the walk of `Stmt.setupHiddenOf`);
+* `Commit`: the session on the committed circuit, `HmOut.parseCommit`'s (`parseCommit_untyped`, `specC_wf`,
+  `hidden_layoutC`, `setupHidden_specC`, `setupHiddenOf_specC`);
 * `LayoutP`: its layout at public inputs (`hidden_layoutP`), Δ without the pairs into a public leaf's bits;
 * `Flat`: the flat twin (`HmRow.delta`'s Δ alone), which a satisfying witness also satisfies (`sat_flat`), and an output
   row's message bits as copies of `outSrc` (`msg_copy`);
+* `Unpin`: the statement without Δ's pinned copies (`unpin`), its layout (`unpin_layout`), and a satisfying witness of
+  the accepted statement satisfies it and carries 0 on the pinned bits (`sat_unpin`, `Pinned.sat_unpin`);
 * `Committed`: an output row's registered `b ‖ c` at a drawn unit is the commit string of its prefix and the output words
   its template instance computes (`outputs_committed'`);
 * `Theorems`: one theorem per frozen statement;
@@ -77,11 +91,15 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
   in a satisfying witness of the untyped statement (`Any.seg_bc_tgt`);
 * `Wide.SegFit`: `Wide.Fit`'s output-row lemmas with only the output rows unsegmented (`Any.PadRow`, `Any.OutRowsS`), an
   input row of any kind (`Any.msg_copyF`, `Any.sat_flatF`);
+* `Wide.SegFitP`: those at public inputs, off the unit input rows `HmIn.delta` drops (`unitIn_of_drop`,
+  `Any.msg_copyFP`, `Any.sat_flatFP`);
 * `Wide.FitS`: the rows the hidden-output headlines cover, each unsegmented (`Any.PadRow`) or a `sha512/row-seg/v1` row
   of any mix (`Any.RowsFitS`), and a row's `b ‖ c` under its own bytes (`Any.rowMsg`, `Any.row_bc_tgtS`);
 * `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
 * `Wide.Shared`: a shared-row population's `b ‖ c` at a drawn unit (`bc_drawnW`), and the Wide statements
   (`outputs_committed_wide'`, `outputs_binding_wide_of`);
+* `Wide.SharedP`: that `b ‖ c` at public inputs, the public file read under the public input words (`inRows`,
+  `loadPublic_inRows`, `bc_drawnWP`);
 * `Wide.Upv`: a unit per template instance from acceptance (`check_upv_pos`, `setupHidden_upv_pos`), since `HmRow.check`
   refuses `units_per_vu = 0`;
 * `Wide.Block`: a template instance per block from acceptance (`check_g_pos`, `setupH_g_pos`), since `HmRow.check`
