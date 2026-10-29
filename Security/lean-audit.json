@@ -2101,6 +2101,14 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Accounting.ServingBlocks.ServingSizes": {
+   "owner": "@training",
+   "digest": "c38ff4a7c85ecd9a3b1d4832a712152c3b145aa0d4fa9018416abfbc2d36c925"
+  },
+  "Accounting.ServingBlocks.WeightsAtMost": {
+   "owner": "@training",
+   "digest": "be8cdd72aa1fbaa879af6dd1d6c45d80e3961755905c109c9d89473025cf8dd8"
   }
  },
  "meaning": [
@@ -15001,9 +15009,9 @@
    ]
   },
   "Definitions.Accounting.Guarantees.ServingBlocks": {
-   "digest": "cd0b927fcce886300c2cca95619a517519f81513189fcf93de7bc056392e4a79",
+   "digest": "23dcd0f9cb82049b34bafa3037aecbafd1da54663e89d8afc1508aebcfd34459",
    "definitions": {
-    "Accounting.Guarantees.ServingBlocks.ServingBlockBound": "922fbed01e695a4ed5f404cbf4665a54d3454c2c793cf9b2dffa02717bccf331",
+    "Accounting.Guarantees.ServingBlocks.ServingBlockBound": "48dcb6e3641944ea2fc12c95eeb224370d3233f0866859509898883b7c967559",
     "Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote": "846b726a81f804bd67eb7d113e8f23cb1d295e3c2c74adb0f494df8eaf450475",
     "Accounting.Guarantees.ServingBlocks.UncertifiedElementary": "0a605e91df625ae9e62b56ef6da4dc9ccc7801740b697fd878aba19c8b0f67c7"
    },
@@ -15014,14 +15022,12 @@
    ]
   },
   "Definitions.Accounting.Guarantees.ServingBlocks.Witnesses": {
-   "digest": "f2dedc96277747be80d81705ebc395808548c93c56343bf9e6546ec6a0b031df",
+   "digest": "0c016b9a001056d353da9bad446c414936efe778a125c570058f11a83458dc18",
    "definitions": {
     "Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote_honest": "d5be92f9a03b750549983780c78876f22414a3b0e0adaa024fdbc1a04823bfac",
-    "Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote_nontrivial": "631fc2e7aa90f456fe4a797214ab27fe896abdd288c369f15a6e9040b9105af5",
-    "Accounting.Guarantees.ServingBlocks.ServingBlockBound_honest": "a901ed06e34cf053a2507f0e09d98c7d86c4d7c4191d1af828ce925b42c173a4",
-    "Accounting.Guarantees.ServingBlocks.ServingBlockBound_nontrivial": "7353cad3a93e8f3ca86c86462a1acbf7a0cd94a7266975b84da4d6dd692aa7f0",
-    "Accounting.Guarantees.ServingBlocks.ServingBlockBound_nontrivial_bodies": "40a66cc2271e9ae2c168f5d3708989ee16ca5d1031e23fc72da707957ac304aa",
-    "Accounting.Guarantees.ServingBlocks.ServingBlockBound_nontrivial_overlap": "9d29230e9a7500922271d27c8c12a97bc708f8f749c7b00e15aacca2f79a7482",
+    "Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote_nontrivial": "65775de1e629af9f3de42c94e01675eabd65f308235c7b21361bb6bd950f32e7",
+    "Accounting.Guarantees.ServingBlocks.ServingBlockBound_honest": "ec2488d779ec58535e1fa006e1fb53542082f13d6da8e247ec727817dee660e2",
+    "Accounting.Guarantees.ServingBlocks.ServingBlockBound_nontrivial": "e1ced7caf338f3f45fa0cc4f611572e4a9d93b9d8361ec53b1714b0a874b801d",
     "Accounting.Guarantees.ServingBlocks.UncertifiedElementary_honest": "39297f0455c773717a789927476a6192244e90acc6947134c45de4e91f258111",
     "Accounting.Guarantees.ServingBlocks.UncertifiedElementary_nontrivial": "a1b23ab6ae01bca0eb727d1994c5642587b946fef15c65dcc0a4f51d30806615"
    },
@@ -15030,8 +15036,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial"
    ]
@@ -16769,7 +16773,7 @@
    "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
   },
   "Definitions.Accounting.ServingBlocks": {
-   "digest": "7eaba61f4bbba5c61dc4c58e4ffb1c68350aad45f5c256be909269710c80db49",
+   "digest": "6b09057ab6c0bebeb1574647529d5e5a0ec4c173e379eca6b97f8d5edd690e60",
    "definitions": {
     "Accounting.ServingBlocks.Counted": "71598a7d97c57ce6b1387d2f0f321b7852380aeea5729b8b04749d09182ade2f",
     "Accounting.ServingBlocks.Counted.V": "d0a9ef76265f98a5ba41e8fc2c482a0ff509d190c835c4339b7d01c0035f2f22",
@@ -16782,7 +16786,9 @@
     "Accounting.ServingBlocks.OperationBodies": "25425610b273220a8177cad6271ffe78c05b706834d70442816fd8bb0615e31a",
     "Accounting.ServingBlocks.Overlap": "39ca4a60bde57a084d35293484eafdb933d63532bca41e07fc5779e234c73dcb",
     "Accounting.ServingBlocks.PerBlockCap": "fc80a20590bcf892400edbf6b11e8183eae21ac9f59a29ea41bc65787f7f05fd",
-    "Accounting.ServingBlocks.UncertifiedCap": "60d8c4b679a995ba4d2a6fcde0e0c8f8b429091b0f298ebc745f2186524375d1"
+    "Accounting.ServingBlocks.ServingSizes": "c38ff4a7c85ecd9a3b1d4832a712152c3b145aa0d4fa9018416abfbc2d36c925",
+    "Accounting.ServingBlocks.UncertifiedCap": "60d8c4b679a995ba4d2a6fcde0e0c8f8b429091b0f298ebc745f2186524375d1",
+    "Accounting.ServingBlocks.WeightsAtMost": "be8cdd72aa1fbaa879af6dd1d6c45d80e3961755905c109c9d89473025cf8dd8"
    },
    "guarantees": [
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound",
@@ -16791,14 +16797,12 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial"
    ]
   },
   "Definitions.Accounting.ServingBlocks.Instances": {
-   "digest": "e1120cceea9840ad0a465937230f0f2b56bba409ecf69066a62e26e3495509e3",
+   "digest": "d6cfdf960c8b97ed3e042790aca3d446ec0b6467cdb227a41c8df8bb6599a2b7",
    "definitions": {
     "Accounting.ServingBlocks.Counter.C": "4b847921ab33546fa4f9cfc485025687315111d7af172db34a1c1dcab3289126",
     "Accounting.ServingBlocks.Counter.J": "d1d2495817a80ca4354944ce1ff9ad8b5215a254cfe454241b4bfbfe9f21deb6",
@@ -16809,13 +16813,6 @@
     "Accounting.ServingBlocks.Counter.d": "48a2d354c4107e5672458b7461123066ef952bc3d0f7efcc09e35fc2515ac205",
     "Accounting.ServingBlocks.Counter.q": "a8640e1613fb9f77a00eb9503a3bb4aaf7405049cb5479ee9144bf918a9045c4",
     "Accounting.ServingBlocks.Counter.r": "f6e344ff2eb1511cac802ec3ada1d61b71e76117cfa4f357d2e69ddee1b0cd1c",
-    "Accounting.ServingBlocks.Detached.C": "a7711c62b0de7e8f8b33c7ccd153b9f7d94094d8c7fb28a00044720092a99dae",
-    "Accounting.ServingBlocks.Detached.J": "65aaa48518cd159f3bc99487a93bb8ace56b76de742f58174b69b83788098450",
-    "Accounting.ServingBlocks.Detached.P": "731fda3bcc7e294b9393c970c7ec2ff5d7f2e4a53f302eaea5ab5ae625f842b2",
-    "Accounting.ServingBlocks.Detached.S": "ed459beb8879998f070ffd45200821050e614e48f9621030d4a2a921d8893d72",
-    "Accounting.ServingBlocks.Detached.d": "7a76a8fbeea0e27f8d100cffc7a9396bb10cbbccfaface6fe58616189c7759f2",
-    "Accounting.ServingBlocks.Detached.q": "ad45e3d47b1aa56a625fd1b96268a068b7b9191cba59593e70bd581b1d14ecfe",
-    "Accounting.ServingBlocks.Detached.r": "2f58befd273bb9f5ffd56ba8d1299cc6affed90d8b0867173d3277ef04f347c1",
     "Accounting.ServingBlocks.Honest.C": "5573e1fc19d1880c7a52a2225a6bcc32e9839ec648a3bb79f1483f99c735e627",
     "Accounting.ServingBlocks.Honest.J": "8615d421dd4a790309af91620f419f17b0f35e05835b8a53d6df082fb65ce745",
     "Accounting.ServingBlocks.Honest.P": "30664f2df62a13e7a69dc4b85e394b8af22c403cccf05a5df3da70149bc9aaf0",
@@ -16823,13 +16820,6 @@
     "Accounting.ServingBlocks.Honest.d": "8585145f67a7b8e75ee6be21681c9d8ec89c1ab8c58732b98b73548832d05140",
     "Accounting.ServingBlocks.Honest.q": "ff10d6a5f6fc4e4e2358b01325aed2926711dee3bdeaf454f1d88b4c42756a63",
     "Accounting.ServingBlocks.Honest.r": "290a74404e57c9ee0ded82f864f042dc81735838406244cb3e969b62cac53b4f",
-    "Accounting.ServingBlocks.Straddle.C": "6760d6505a12f71686f8e5810c122bf99a352b99c958be2d5ee04d22ff381e52",
-    "Accounting.ServingBlocks.Straddle.J": "fcda9fd36597fcab0c46a37dfebeec0356847012d631abc1408808d7c340ff97",
-    "Accounting.ServingBlocks.Straddle.P": "631d178c5563bb145127d496a3fbad65eb93c98c6bc2ba2e2e6ae6eac642bf0b",
-    "Accounting.ServingBlocks.Straddle.S": "e38719641b985b506548935312ac526f16dc0cdfe6fc4c8c7efdd6387172a7cb",
-    "Accounting.ServingBlocks.Straddle.d": "f121acaabd57a0d12c77b6f68c1820dee0caf8174567585d2a89855120e8f19e",
-    "Accounting.ServingBlocks.Straddle.q": "54e76bd0fbd06a182997cf8d5815c1a691459b387bad2868e91e005be4ae9183",
-    "Accounting.ServingBlocks.Straddle.r": "568d42d39e4009381f38308d98c60e3d33bcdf134cc57f78dc0e04ea9c7d418d",
     "Accounting.ServingBlocks.refl": "4de4c309977842adf6fe8fc41b7adadf84c1ec44b9953b917376c03d263ec87d"
    },
    "guarantees": [
@@ -16837,8 +16827,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial"
    ]
@@ -19135,8 +19123,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
@@ -19310,8 +19296,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
     "Nci.Cover.SecurityProofs.CoverTraining",
@@ -19547,8 +19531,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
     "Nci.SecurityProofs.CompliesCK",
     "Nci.SecurityProofs.PartitionCovers",
     "Verity.SecurityProofs.AndSizeLe",
@@ -20393,8 +20375,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
