@@ -1325,7 +1325,7 @@ def main() -> int:
                  f"k64 rank {rk(r64)}, k256 uncommitted {r256['terms']['uncommitted_steps']:.1%}")
     t = row("t8192", nm("ncp", "cancel", "int7-U", "k32", "w", "r16k", "mask", "fw"))
     checks.check("ranks split by part: ShaWrites (ShaSpeed's form its theorem) and mask-optimal are 4a on the hashing "
-                 "part, W1 and PeriodInventory 3 on the matmul part, and the overall rank is the "
+                 "part, W1 (card-within-accel-w1) and PeriodInventory 3 on the matmul part, and the overall rank is the "
                  "larger; PeriodInventory "
                  "is open, so the effective rank is 5", t["ranks"]["hashing"] == 4.0 and t["ranks"]["matmul"] == 3.0
                  and t["rank"] == 4.0 and card["premise"]["ShaSpeed"]["rank"] == 0

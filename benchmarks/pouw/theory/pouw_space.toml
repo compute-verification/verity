@@ -349,13 +349,13 @@ source = "SW-NOISE final: nsf served, error at most w units (estimate); unmeasur
 rank = 1
 status = "measured"
 owner = "CORE-H32"
-source = "every register written costs >= 32 W1 units on the H200: h200Measured = h100Floor, run r20261029-021534-a5a3 (Lean h32H200Measured, h200MeasuredFloor on cursor/compute-research-core-h32-1e0b)"
+source = "every register written costs >= 32 W1 units on the H200: h200Measured = h100Floor, run r20261029-021534-a5a3 (Lean h32H200Measured, h200MeasuredFloor on cursor/compute-research-core-h32-1e0b). N-W1 interim 1 (note compute-research/20261029T0835Z-report-np-w1): none of 58 further probes writes under 32 a register, multi-output forms included (IMAD beside LOP3 32.49, CS2R beside IMAD 32.14, broadcast LDS.128 65.19 and LDS.64 65.50; replicate r20261029-072204-c6ab, broadcast run r20261029-080145-4dba, art:bd7f12b4808e09e8d26ed9285f071e6619c2c3e14238e5a9c018cb032b1df1d0, art:fe23035cb7617347e2e6224c8f77f9a64e7a9d36ad2e8a97b3cbf9796ac644d7); N-FLOOR final §5's routes agree (LDS.64 128.4, NVJPG 110,000 a word at most)"
 
-[premise.W1]
+[premise.card-within-accel-w1]
 rank = 3
-status = "assumed"
-owner = "SW-PREMISES"
-source = "MH100w is faithful to the H200: CardWithinAccel, in the lock (CORE.md §2: model faithfulness, rank 3; SW-PREMISES interim #15)"
+status = "open"
+owner = "N-W1"
+source = "W1, MH100w faithful to the H200 in its writes: CardWithinAccelW1 at cw = 32, every function the card's machine computes is realized by a program writing at most w/32 words (N-W1 interim 1 §2, W1Accel.lean and W1AccelProofs.lean on cursor/compute-research-np-w1-e69e, stated, elaboration queued, nothing proved; model faithfulness, rank 3). It is its own premise: the locked CardWithinAccel charges time only, and the H200 instance's time card admits a tick at 6.4 units a fresh word (W1TimeH200Le, 8,448 red.v8 beside 8,448 DFMA), so no row credits W1 to CardWithinAccel (N-W1's ask). Was 'W1' (SW-PREMISES interim #15), read as CardWithinAccel in the lock"
 
 [premise.atomic-call]
 rank = 3
@@ -685,10 +685,10 @@ source = "a noise whose words repeat on data (a zero k32 block dot product, iden
 [space]
 slots = [["N", "noise"], ["D", "denoise"], ["F", "format"], ["C", "density"], ["C", "operands"], ["H", "rows"],
          ["H", "hiding"], ["P", "final"], ["P", "forming"], ["P", "derivation"]]
-base = ["H32", "W1", "adaptive-dw", "atomic-call", "row-bound", "period-inventory", "host-row", "ShaSpeed", "sha-writes", "carried-words", "hash-compose"]
+base = ["H32", "card-within-accel-w1", "adaptive-dw", "atomic-call", "row-bound", "period-inventory", "host-row", "ShaSpeed", "sha-writes", "carried-words", "hash-compose"]
 fields = { pre_noise_bytes = "m*K", rows_mix_final = 1, word_bits = 32, format_forming = 0 }
 probe = { m = 64, n = 2048, K = 2048 }
-source = "NIGHT.md §2's axes; base: the DistinctWrites price at H32 in W1, stated for programs that read the coins (adaptive-dw), the atomic call for A's commitment hashed before the noise and each row digest bound to (salt, forward, position) (N-COMPOSE), PeriodInventory with HostsCounted at θ's rows and its host row (N-FLOOR final), and the hashing credit (ShaWrites at ShaLB's count, ShaSpeed's form and the composition its theorems, with CarriedWords, NIGHT §1 default 1)"
+source = "NIGHT.md §2's axes; base: the DistinctWrites price at H32 in W1 (CardWithinAccelW1 at 32, N-W1), stated for programs that read the coins (adaptive-dw), the atomic call for A's commitment hashed before the noise and each row digest bound to (salt, forward, position) (N-COMPOSE), PeriodInventory with HostsCounted at θ's rows and its host row (N-FLOOR final), and the hashing credit (ShaWrites at ShaLB's count, ShaSpeed's form and the composition its theorems, with CarriedWords, NIGHT §1 default 1)"
 
 # N, the noise. Fields: noise_x / noise_y the derived noise entries (one LOP3 a packed register from XOF bytes, CORE-SMELL
 # C28), derive_extra the derivation's intermediates no commitment holds, dup the share of words the data repeats, n_max
