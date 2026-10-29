@@ -24,6 +24,8 @@ lanes, which the IADD3 removes through its column source loaded per tile.
   address must hold jointly.
 - `LIT_WEIGHTS`: N-LIT's coin-lane weighting A′ = (1, 127, 1) through the same fold, with A5's bound for it
   (`weighted_bound`).
+- `SMALL_COIN_BITS`: coins of 4 bits (odd in ±15), which suffice under the tile-grain copy model, through the same fold,
+  with the bound for any per-word table under bare P at that width.
 
 Output: JSON (`--json`); exit 0 iff every check passes.
 """
@@ -49,6 +51,9 @@ COIN_LANES = 3
 #: the coin lanes' A′: blc4a's, and N-LIT's weighting
 COIN_WEIGHTS = (1, 1, 1)
 LIT_WEIGHTS = (1, 127, 1)
+#: a coin of b bits is odd in ±(2^b − 1): the lead's 7, and the 4 the tile-grain copy model needs
+COIN_BITS = 7
+SMALL_COIN_BITS = 4
 TILE = 64
 KS = (2048, 7168, 8192)
 FIXED = es.TAGX_FIXED
@@ -201,8 +206,8 @@ def tile_words(x: np.ndarray, y: np.ndarray, tile: int) -> np.ndarray:
     return out
 
 
-def _coins(rng, s, tiles, n):
-    return 2 * rng.integers(0, 128, (s, COIN_LANES, tiles, n)) - 127
+def _coins(rng, s, tiles, n, bits=COIN_BITS):
+    return 2 * rng.integers(0, 2 ** bits, (s, COIN_LANES, tiles, n)) - (2 ** bits - 1)
 
 
 def _signed(v):
@@ -213,7 +218,7 @@ SIM_CASES = ns.CASES + ["identical_rows_tiles", "zero_all", "identical_all"]
 
 
 def sim_blc(case: str, k: int, s: int, e: int, salts: int = 24, m: int = 4, n: int = 6, tile: int = 2,
-            seed: int = 1, weights=COIN_WEIGHTS) -> dict:
+            seed: int = 1, weights=COIN_WEIGHTS, bits: int = COIN_BITS) -> dict:
     """blc4a + de-noise on s steps over a salt grid (raw coin words, G and the lane coins free; T(i) a constant)."""
     rng = np.random.default_rng(seed)
     a, b = ns._data(case if case in ns.CASES else "random", m, n, k, rng)
@@ -229,7 +234,7 @@ def sim_blc(case: str, k: int, s: int, e: int, salts: int = 24, m: int = 4, n: i
         hr = rng.integers(0, 2 ** 32, (m,), dtype=np.int64)
         hu = rng.integers(0, 2 ** 32, (m,), dtype=np.int64)
         g = rng.integers(-3, 4, (4, n))
-        coins = _coins(rng, s, tiles, n)
+        coins = _coins(rng, s, tiles, n, bits)
         a1 = np.stack([(hr >> q) & 1 for q in range(4)], axis=1)
         at = np.stack([np.zeros(m, dtype=np.int64)] + [1 + ((hr >> (4 + t)) & 1) for t in range(s - 1)], axis=1)
         u = (hu[:, None] & 0x7F, _signed(hu[:, None] >> 8), _signed(hu[:, None] >> 16))
@@ -244,7 +249,8 @@ def sim_blc(case: str, k: int, s: int, e: int, salts: int = 24, m: int = 4, n: i
     return out
 
 
-def exact_full(k: int, m: int = 128, n: int = 8, salts: int = 2, seed: int = 5, weights=COIN_WEIGHTS) -> dict:
+def exact_full(k: int, m: int = 128, n: int = 8, salts: int = 2, seed: int = 5, weights=COIN_WEIGHTS,
+               bits: int = COIN_BITS) -> dict:
     """blc4a + de-noise at Llama's K with its step count, on 64-row tiles: the final word minus ρ_i and the per-tile
     column source is A·Bᵀ, and the magic epilogue equals stock's bit for bit (22-bit column scales)."""
     rng = np.random.default_rng(seed)
@@ -257,7 +263,8 @@ def exact_full(k: int, m: int = 128, n: int = 8, salts: int = 2, seed: int = 5, 
         at = np.concatenate([np.zeros((m, 1), np.int64), 1 + rng.integers(0, 2, (m, s - 1))], axis=1)
         u = (rng.integers(0, 128, (m, 1)), rng.integers(-128, 128, (m, 1)), rng.integers(-128, 128, (m, 1)))
         g = rng.integers(-3, 4, (4, n))
-        x, y, rho, col = operands(a, b, s, e, TILE, a1, at, u, g, _coins(rng, s, tiles, n), es.TAGX_KAPPA, weights)
+        x, y, rho, col = operands(a, b, s, e, TILE, a1, at, u, g, _coins(rng, s, tiles, n, bits), es.TAGX_KAPPA,
+                                weights)
         w = tile_words(x[None], y[None], TILE)[0]
         peak = max(peak, int(np.abs(w).max()))
         p = a @ b
@@ -457,12 +464,12 @@ def linear_bound(ch: Chain, m: int, grain: int = 1, gfac: float = 1.0, pairs: bo
     return ns.H32 * HBM_BYTES / ENTRY_BYTES * p / stock(m)
 
 
-def sigma_pmax(weights, t: int) -> float:
-    """The likeliest σ_t, the sum of t steps' coin lanes weighted by their A′ (FFT convolution)."""
+def sigma_pmax(weights, t: int, bits: int = COIN_BITS) -> float:
+    """The likeliest σ_t, the sum of t steps' coin lanes of `bits` bits weighted by their A′ (FFT convolution)."""
     parts = []
     for w in weights:
-        p = np.zeros(254 * w + 1)
-        p[::2 * w] = 1 / 128
+        p = np.zeros(2 * (2 ** bits - 1) * w + 1)
+        p[::2 * w] = 1 / 2 ** bits
         parts += [p] * t
     size = sum(len(p) - 1 for p in parts) + 1
     nfft = 1 << (size - 1).bit_length()
@@ -472,10 +479,10 @@ def sigma_pmax(weights, t: int) -> float:
     return float(np.fft.irfft(spec, nfft)[:size].max())
 
 
-def weighted_bound(weights, m: int, gfac: float = 1.0, pairs: bool = True) -> float:
+def weighted_bound(weights, m: int, gfac: float = 1.0, pairs: bool = True, bits: int = COIN_BITS) -> float:
     """`linear_bound` with the coin lanes weighted by `weights`: a pair's second hit is at step 2 or later, where the
     walk's likeliest value is 1/2 (1 at step 1)."""
-    p = sigma_pmax(weights, 2) * 0.5 if pairs else sigma_pmax(weights, 1)
+    p = sigma_pmax(weights, 2, bits) * 0.5 if pairs else sigma_pmax(weights, 1, bits)
     return ns.H32 * HBM_BYTES / ENTRY_BYTES * p * gfac / CODES / stock(m)
 
 
@@ -632,12 +639,33 @@ def report() -> dict:
        abs(weighted_bound(COIN_WEIGHTS, 64) - words["m64"]["P_G_known_bound"]) < 1e-12
        and lit["m64"]["P_G_known_bound"] < 1e-4, lit)
 
+    small_sims = {case: sim_blc(case, FIRST + DATA * 3 - 5, 5, 12, bits=SMALL_COIN_BITS) for case in SIM_CASES}
+    small_full = {str(k): exact_full(k, bits=SMALL_COIN_BITS) for k in KS}
+    small = {}
+    for name, wts in (("blc4a", COIN_WEIGHTS), ("lit", LIT_WEIGHTS)):
+        small[name] = {"sigma_pmax_step1": sigma_pmax(wts, 1, SMALL_COIN_BITS),
+                       "sigma_pmax_step2": sigma_pmax(wts, 2, SMALL_COIN_BITS)}
+        for m in MS:
+            small[name][f"m{m}"] = {
+                "P_G_known_bound": weighted_bound(wts, m, bits=SMALL_COIN_BITS),
+                "P_G_known_bound_resume_free": weighted_bound(wts, m, pairs=False, bits=SMALL_COIN_BITS),
+                "P_G_call_bound": weighted_bound(wts, m, gfac=1 / 7, bits=SMALL_COIN_BITS)}
+    ok("4-bit coins (odd in ±15) keep the fold: on the salt grid every word distinct and non-free and the final word "
+       "exact after the per-tile column source; at Llama's K exact, the magic equal to stock's; the 7-bit bound "
+       "recomputed at 7 bits is the chain's",
+       all(r["bad_share"] == 0 and r["final_bad"] == 0 and r["exact_after_epilogue"] for r in small_sims.values())
+       and all(v["exact_after_epilogue"] and v["magic_equals_stock"] for v in small_full.values())
+       and abs(weighted_bound(COIN_WEIGHTS, 64, bits=COIN_BITS) - words["m64"]["P_G_known_bound"]) < 1e-12,
+       {"sim": {c: (r["bad_share"], r["final_bad"], r["exact_after_epilogue"]) for c, r in small_sims.items()},
+        "full": small_full, "a5": small})
+
     alpha = price_added_step()["alpha_blcx"]
     per = {f"{key}_m{m}": ns.periods(words[f"m{m}"][key], alpha)
            for m in MS for key in ("P_G_known_gross", "P_G_call_gross", "P_G_call_net")}
     return {"checks": checks, "layout": lay, "price_added_step": price_added_step(), "sim": sims, "full": full,
             "a5_rows_old": rows_old, "a5_rows_blc4a": rows_blc, "a5_words": words, "a5_monte_carlo": mc,
-            "lit_weighting": {"sim": lit_sims, "full": lit_full, "a5": lit}, "periods": per}
+            "lit_weighting": {"sim": lit_sims, "full": lit_full, "a5": lit},
+            "small_coins": {"sim": small_sims, "full": small_full, "a5": small}, "periods": per}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -653,7 +681,8 @@ def main(argv: list[str] | None = None) -> int:
         print(("PASS " if c["pass"] else "FAIL ") + c["check"])
     print(json.dumps({"layout": rep["layout"], "price_added_step": rep["price_added_step"],
                       "a5_words": rep["a5_words"], "a5_monte_carlo": rep["a5_monte_carlo"],
-                      "lit_a5": rep["lit_weighting"]["a5"]}, indent=1, default=float))
+                      "lit_a5": rep["lit_weighting"]["a5"], "small_coins_a5": rep["small_coins"]["a5"]},
+                     indent=1, default=float))
     return 0 if all(c["pass"] for c in rep["checks"]) else 1
 
 
