@@ -1336,9 +1336,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   each with a `Relay` form): `Accounting.SecurityProofs.Remote.Conservation` at the per-pass routes proved for
   it. The openings are
   `Accounting.Guarantees.RateWindowDraw`, a window's pooled draw over its passes' receipts, and `RateSessionDraw`,
-  the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of
-  one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ in \(U_t\), and its draws are
-  distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
+  the monitoring period and every window at once, both from `PooledSampling`, the causal bound over the monitoring
+  period. They take windows of one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ
+  in \(U_t\), and its draws are distinct, which only lowers the chance that they all pass. `pooled` applies the same
+  argument at each window's own
   size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed draw (`Accounting.Remote.Draw`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each draw's first
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
