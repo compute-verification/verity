@@ -9,8 +9,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # a5, which prove_path imports; `verity`: what both import; `verity_numerical.bench`'s input sets and templates, which a5
 # imports; `leak_scan.py`: the received-pieces scan served_tie_zk and served_statics_zk import; the certifier piece's
 # kept warden run, which window-commit's scan reads (`kept_scan`): certifier_piece and warden_chain, what they import, and
-# the site.json and host.json that served_session and auditor read on import.
+# the site.json and host.json that served_session and auditor read on import; scan_zk (with warden_zk, which it imports),
+# whose --v3c reads the scan state window-commit opens for it (`scan_state_opening`).
 inputs = ["verity", "integrations/vllm", "benchmarks/one_stage", "benchmarks/network_traces/leak_scan.py",
+          "benchmarks/network_traces/scan_zk.py", "benchmarks/network_traces/warden_zk.py",
           "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py",
           "benchmarks/network_traces/warden_chain.py", "benchmarks/network_traces/certifier_serve.py",
           "benchmarks/network_traces/warden_serve.py", "benchmarks/network_traces/active_replay.py",
