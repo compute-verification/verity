@@ -14,15 +14,13 @@ Code:
   one matrix may hold more than 2^32 nonzeros. The GPU prover's are 32-bit: `--gpu` refuses a circuit past them
   (`circuit::GPU_NNZ_MAX`).
 
-**Status.** CPU prototype, one template (RoPE d64), lane flock-zk. Every message a session sends is masked, committed or
-public, and the audit (`zkaudit`) attributes every byte. The target notion is VEIL's special honest-verifier zero
-knowledge for the whole session (both repetitions), meaning one simulator for every fixed coin sequence (DESIGN.md §11),
-statistical in the common-reference-string model under the assumptions of §7. Malicious-verifier zero knowledge is M2's
-goal, from its coin commitment and single rewind (§9). It does not hold yet: a verifier that commits a zerocheck outer coin
-`r_j = 1` gets an answer that depends on the witness, until the prover refuses that coin. The first red-team review
-(red-team-m1-zk) found that the two reps shared level 0's extra lanes; §7 now gives each rep its own pair, and the
-re-review grants M1 with conditions. The proof class
-stays `NON_ZK_PROOF` until the Lean proof covers it.
+**Claim.** Every message a session sends is masked, committed or public, and the audit (`zkaudit`) attributes every
+byte. The target notion is VEIL's special honest-verifier zero knowledge for the whole session (both repetitions),
+meaning one simulator for every fixed coin sequence (DESIGN.md §11), statistical in the common-reference-string model
+under the assumptions of §7. Malicious-verifier zero knowledge is M2's, from its coin commitment and single rewind (§9).
+The prover refuses the degenerate coins (`β = 0`, a mask slot of deficient rank, dependent `ρ`, a zerocheck outer coin
+`r_j = 1`) as they open, before it sends anything that depends on them. Each rep has its own pair of level 0's extra
+lanes (§7). The proof class stays `NON_ZK_PROOF` until the Lean proof covers it.
 
 Conventions. The field is GF(2^128) (`F128`, characteristic 2, so `+` is `−`). F256 is `F128 ⊕ F128·U`, written by
 coordinates `(c0, c1)`. An F128's bytes are `lo` then `hi`, each little-endian. `v'` is a sent (masked) value, `v` the
@@ -95,7 +93,7 @@ The first `hab` pads mask sent values, and the last four are committed auxiliari
 the zerocheck label and the opening's label. Level 0 is masked between `verity-flock-zk-l0-open-v0` and `-close-v0`.
 
 **Randomness.** Everything comes from `ProverRng`, and in a proving build every draw is the OS's own bytes (`getrandom`),
-read where it is drawn (Daniel, 9 Oct, decision 4). `f128s(stream, index, n)` reads `16n` fresh bytes, whatever its
+read where it is drawn. `f128s(stream, index, n)` reads `16n` fresh bytes, whatever its
 address, so each value below is drawn once and kept where it is used again: level 0's hiding for the table's session (the
 device's commit and the firewall's recheck take the same), each rep's pads in the rep's state, and each block's mask words
 with the table's witness. Under the outer firewall (§10.4) the Lean server reads all of them and the prover only carries
@@ -289,7 +287,7 @@ level-0 queries, levels 1+, and the inner proof. The prover's randomness is spen
 The other pair's entries in rep `r`'s rows are fixed the same way, by the other rep's identity. So for every witness the
 session's view is uniform subject to the public identities, which is how the simulator samples it (§8). Nothing is
 spent twice. A pair shared by the two reps would be: `(y_1'^0, ybar^0)` and `(y_1'^1, ybar^1)` would both draw on one
-`(R, pad_R)`, and `N·(·)^0 + (·)^1` with `N = W^1 (W^0)^-1` eliminates it. That was red-team-m1-zk's finding, a witness
+`(R, pad_R)`, and `N·(·)^0 + (·)^1` with `N = W^1 (W^0)^-1` eliminates it: a witness
 functional at every level-0 position either rep opens and at the level-1 positions both open. With `k` extra lanes
 shared by both reps, joint uniformity needs the `4 × k` matrix `[W^0; W^1]` to have rank 4, so a pair per rep (4 lanes)
 is the minimum.
@@ -328,7 +326,7 @@ is the minimum.
   with distance about `N·2^-192`. The claim ids are `statistical-hiding`, `common-reference-string` and `hash-derived-key`.
   No random oracle is involved.
 - **No premise on a stream generator.** Every pad, mask, padding coefficient and extra lane (`ProverRng`) and every leaf
-  salt (`LeafSalts`) is the OS's own bytes (Daniel, 9 Oct, decisions 4 and 4(a)), so the claim is statistical with the OS
+  salt (`LeafSalts`) is the OS's own bytes, so the claim is statistical with the OS
   generator's output as the uniform prover randomness it assumes, and nothing rests on ChaCha20 as a PRG. (A test
   harness's injected seed expands all of them with ChaCha20, so its proofs repeat; a proving build has no injected seed.)
 - **Collision resistance** (`cr/sha-512`) enters only soundness (binding of the prover's trees) and M2's binding of the
@@ -352,7 +350,7 @@ Negatives, each rejected on both reps (RoPE CPU selftest):
 - `ybar` forged;
 - `e` forged with an honest `T'`. Ligerito accepts this one, and only the inner proof's lane-phase rows reject it.
 
-## 8. The simulator, evidence, and what M1 still needs
+## 8. The simulator, the statistics and the audit
 
 **The simulator** (`simulate_full`, per rep, fixed coins; both reps from one dummy session, so the session's structure is
 the dummy's with the dummy's randomness). Its input is the public statement, the verifier's coins for the rep's stream
@@ -375,14 +373,7 @@ and per session the two cross-rep relations of §7 (`rel_level0`, `rel_level1`).
 bit-balance and cross-run-XOR tests. Positions constant in every real and simulated transcript are public structure:
 F256 messages after the code switch are base-valued (5 such positions in the levels-1+ sample). A level-0 position both
 reps open holds one row, so its second copy is excluded (one row of the sample under these coins). The control (all
-prover randomness zero) must be distinguished.
-
-Results for RoPE at `m = 25`, 64 sessions (128 transcripts) per kind:
-- real and simulated agree on all 13 classes; the smallest of the 65 p-values is 0.009;
-- the control is distinguished on all 9 masked classes, both relations included (p ≈ 0, every position constant);
-- all 128 simulated proofs are accepted.
-
-Evidence: `lanes/flock-zk/evidence/`.
+prover randomness zero) must be distinguished, and every simulated proof accepted.
 
 **The audit** (`zkaudit --zk`). Every byte the verifier keeps, and the proofs' opened data (with the opening's batching
 nonces and the commitment's parameters), is attributed to a class. The inner proof's round values are `final_c'`, `[ρ, σ]`
@@ -395,29 +386,15 @@ and `Y`, in that order (selftest `zk_audit_attributes_the_inner_proof`). The aud
 This is attribution, not hiding: that a mask is applied, not that it hides. Hiding is §7's argument, its exact check and
 the statistics' relation classes.
 
-**What M1 still needs:**
-- **The red team's re-review** of §4–§7 after its first review (F1: the reps' shared extra lanes, fixed in §7; F2: level
-  0's query count, §7 item 6; F5: the prover's own lincheck fold is an argument of `replay`, never read from a proof).
-- **Cost.** Measured on a 4-core VM, per rep, from loopback sessions (median of three timed runs):
-
-  | | M0 prove | M1 prove | upstream under M1 | proof per rep |
-  |---|---|---|---|---|
-  | RoPE `m = 25` (4 and 16 instances) | 0.24–0.27 s | 0.31–0.33 s (+21–32%) | 0.26–0.27 s | 560 → 865 KB |
-  | RoPE `m = 27` (64 instances) | 0.36–0.37 s | 0.46 s (+24–27%) | 0.39–0.40 s | 618 → 843 KB |
-
-  - The prover's own replay takes its lincheck's folded `comb` (`LincheckProof::comb_partial`, never serialized). The
-    remaining fixed part is 0.026 s of replay and 0.02 s for the pads commitment.
-  - Upstream's share (+7% at `m = 27`) is mostly level 0's padding codewords, one full NTT per lane (68 × 2L). One
-    interleaved NTT of the padded input from layer 0 would cost about `68/64` of upstream's encoding.
-  - The proof grows by the inner proof, mostly its 168 paths (130 KB per rep), which could share a cap, plus `ybar`
-    (18 KB), the four extra lanes' entries, and level 0's 277 queries in place of 218.
+The prover's own replay takes its lincheck's folded `comb` as an argument (`LincheckProof::comb_partial`, never
+serialized), never from a proof.
 
 ## 9. M2: the verifier's coin commitment and the single-rewind simulator
 
 The design for malicious-verifier zero knowledge for one batched session, in the soundness lane's model (ASSUMPTIONS.md
 §2 and §6, DESIGN.md §11.1): the verifier commits to every coin before the prover's first message, then opens them round
-by round, and a Goldreich–Kahan simulator rewinds once, to just after that commitment. It is not yet zero knowledge
-against every committed coin sequence: the prover must also refuse a zerocheck outer coin `r_j = 1` (see Status).
+by round, and a Goldreich–Kahan simulator rewinds once, to just after that commitment. The prover refuses the
+degenerate coins as they open (the Claim above).
 
 **The coin commitment** (`src/coin_tree.rs`, the keyed coin tree `coin-tree/hm96-sha512/v2`,
 `SessionConfig::coin_tree`; the verifier's side is `verity/ml/flock/verifier/PROTOCOL.md` §7.4).
@@ -469,7 +446,7 @@ against every committed coin sequence: the prover must also refuse a zerocheck o
 
 **The parameter `t` grows with the security parameter:** `t = Θ(λ)`, so that `p̃ ∈ [p/2, 2p]` except with probability
 `2^-Ω(λ)`, and then all `4t/p̃ ≥ 2t/p` rewinds fail with probability at most `e^-2t`. A fixed `t` would leave a failure
-probability that is noticeable against some V* (red-team-m2-zk G2, G3). The tests run at `t = 4` (`zkrewind --gk-t`); that
+probability that is noticeable against some V*. The tests run at `t = 4` (`zkrewind --gk-t`); that
 is a test's λ, not a bound for any production claim.
 
 Against the theorem's statement (ASSUMPTIONS.md §6): one extraction run of the honest prover on a dummy witness (step 1,
@@ -484,39 +461,16 @@ spends once).
 the tape, falls below a threshold (about half the sessions); `adaptive-coins`, which at such a round answers a coin it
 picks from the prover's message under the committed coin's opening (the prover stops there); `zero-beta`, which commits
 to `β = 0` at rep 0's β round (the prover refuses it before sending `Y`); and two gated ones, which continue for sure if
-one message hashes "good" (half the time) and otherwise with probability `ε = 1/16`: `cap-gated` on the witness cap
-(red-team-m2-zk's), `late-gated` on rep 0's round with `T'` and `ybar`. A simulator that reused messages across rewinds
+one message hashes "good" (half the time) and otherwise with probability `ε = 1/16`: `cap-gated` on the witness cap,
+`late-gated` on rep 0's round with `T'` and `ybar`. A simulator that reused messages across rewinds
 fails against the gated ones. `zkrewind --zk --n N` prints N real and N simulated views per strategy, and
 `tests/zk_rewind_stats.py` compares how they end (a permutation test), their verdicts, rep 0's first 256 masked values,
 every received proof's checked fields and the session relations of §7.
 
 **The rewinds are independent trials** (`zkgk --zk --attempts A --reuse-dummy`): for each gated V*, conditioned on an
 extraction run whose gate was bad, A rewinds with fresh dummy openings complete at the rate of A real sessions (a Fisher
-test in `zk_rewind_stats.py`), while A rewinds on the extraction run's own dummy opening (red-team-m2-zk G1, the defect)
+test in `zk_rewind_stats.py`), while A rewinds on the extraction run's own dummy opening (the defect a reusing simulator has)
 complete at about ε, which shows the test's power.
-
-Results for RoPE at `m = 25`, 40 real and 40 simulated views per strategy, one V* tape, `t = 4`, `ε = 1/16`:
-
-| V* | complete views, real / simulated | how views end (p) | extraction runs reaching the proofs | estimation runs | rewinds | failures |
-|---|---|---|---|---|---|---|
-| honest | 40 / 40, all accepted | identical | 40 of 40 | 160 | 40 | 0 |
-| abort | 26 / 22, all accepted | 0.18 | 22 of 40 | 157 | 47 | 0 |
-| adaptive-coins | 23 / 28, all accepted | 0.13 | 28 of 40 | 175 | 52 | 0 |
-| zero-beta | 0 / 0 (all stop at the β round) | identical | 0 of 40 | 0 | 0 | 0 |
-| cap-gated | 22 / 23, all accepted | 1.0 | 23 of 40 | 193 | 55 | 0 |
-| late-gated | 24 / 23, all accepted | 1.0 | 23 of 40 | 176 | 45 | 0 |
-
-Rep 0's online values, the proofs' checked fields (11 classes) and the session relations are indistinguishable real
-against simulated wherever there are enough views, with no value reused across reps and a column the inner proof opens
-twice counted once (smallest of 363 p-values 0.003, α = 10^-3 per test; as one family, Bonferroni-adjusted p = 1). The rewinds are independent trials (`zkgk`, 40 attempts):
-
-| gated V* | real sessions complete | fresh rewinds complete (p) | rewinds on one reused dummy (p), the defect |
-|---|---|---|---|
-| cap-gated | 22 | 24 (0.82) | 5 (1.1·10^-4) |
-| late-gated | 25 | 25 (1.0) | 40 (1.2·10^-5) |
-
-The reused opening is caught in both directions: cap-gated's rewinds then complete at about ε, and late-gated's replay the
-extraction run's lucky pass every time. Evidence is kept in the private store.
 
 Selftest negatives: `zk_verifier_coin_off_its_commitment` (the prover stops at rep 0's round 3),
 `zk_verifier_commits_beta_zero` (it stops at the β round, 98), `zk_verifier_commits_outer_coin_one` (it stops at the
@@ -525,51 +479,30 @@ rejected by the inner proof alone), `zk_failing_witness_stops_before_tau` (an ho
 flipped unit bit stops after the batching coins: rep 0's stream ends with `[ρ, σ]`, and no `τ` commitment, `β` or proof
 goes out).
 
-**Still to do.**
-- **C1's level-0 root check** stays: both reps prove one witness, level 0's randomness is drawn once per session and
-  belongs to its one tree, and the pads trees take `next_id() ≥ 1`.
-- **GPU.** `--zk` is CPU-only. The mask slot fill, §7's padding and extra lanes, and `commit_zk` belong on the device,
-  taking the host's OS reads as the hm96 salts are taken, tree by tree.
-- **Several tables per session** (the public-circuit ZK proof's §2.3 and gap 1) are on the CPU prover, `--session-tables J`:
-  - the draw's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
-    table's Σ. The server refuses at configuration a Bernoulli sampling design (its count is random), a count J does not
-    divide, and tables `--zk` cannot prove. The session's sampling design is the record's `unit_draw`: each table's
-    header carries only its part as a subset draw;
-  - randomness per table (§2) and a rank check per table (§6). Per table is the joint check here, because no claim or
-    message reads two tables' witnesses or masks. The tables' witnesses may be correlated: two drawn units in different
-    tables can read the same row;
-  - one `Commit` carrying every table's level-0 root: a later table commits its root before any stream opens, and its reps
-    stop unless they bind it;
-  - a coin subtree per table and rep;
-  - every proof after the session's last coin (the barrier).
+**Level 0's root check (C1).** Both reps prove one witness, level 0's randomness is drawn once per session and belongs
+to its one tree, and the pads trees take `next_id() ≥ 1`.
 
-  The selftests are `tables_two_in_one_session`, `tables_proofs_before_the_last_coin_detected` (a prover without the
-  barrier is accepted by the verifier and caught by the order check), `zk_tables_share_no_randomness` and
-  `tables_unsplittable_draw_refused`. The device prover still proves one table per session.
+**Several tables per session** (the public-circuit ZK proof's §2.3) are on the CPU prover, `--session-tables J`; the
+device prover proves one table per session and refuses J above 1:
+- the draw's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
+  table's Σ. The server refuses at configuration a Bernoulli sampling design (its count is random), a count J does not
+  divide, and tables `--zk` cannot prove. The session's sampling design is the record's `unit_draw`: each table's
+  header carries only its part as a subset draw;
+- randomness per table (§2) and a rank check per table (§6). Per table is the joint check here, because no claim or
+  message reads two tables' witnesses or masks. The tables' witnesses may be correlated: two drawn units in different
+  tables can read the same row;
+- one `Commit` carrying every table's level-0 root: a later table commits its root before any stream opens, and its reps
+  stop unless they bind it;
+- a coin subtree per table and rep;
+- every proof after the session's last coin (the barrier).
 
-  **The simulator over several tables.** `zkrewind` and `zkgk` take `--session-tables J`: `gk_simulate` extracts,
-  simulates and replays every table's streams in the prover's order. `zk_rewind_stats.py` tests each table's proofs and
-  relations as their own classes, and fails any value that table j shares with table 0 in every view (`across_tables`).
-  At J = 2 on RoPE (two tables of m = 25), 40 real and 40 simulated views per strategy:
+The selftests are `tables_two_in_one_session`, `tables_proofs_before_the_last_coin_detected` (a prover without the
+barrier is accepted by the verifier and caught by the order check), `zk_tables_share_no_randomness` and
+`tables_unsplittable_draw_refused`.
 
-| V* | complete views, real / simulated | how views end (p) | extraction runs reaching the proofs | estimation runs | rewinds | failures |
-|---|---|---|---|---|---|---|
-| honest | 40 / 40, all accepted | 1.0 | 40 of 40 | 160 | 40 | 0 |
-| abort | 14 / 18, all accepted | 0.70 | 18 of 40 | 181 | 64 | 0 |
-| adaptive-coins | 17 / 14, all accepted | 0.74 | 14 of 40 | 147 | 51 | 0 |
-| zero-beta | 0 / 0 (all stop at table 0's β round) | identical | 0 of 40 | 0 | 0 | 0 |
-| cap-gated | 20 / 24, all accepted | 0.51 | 24 of 40 | 194 | 49 | 0 |
-| late-gated | 21 / 22, all accepted | 1.0 | 22 of 40 | 164 | 35 | 0 |
-
-  - No value is shared across the tables in any strategy.
-  - As one family of 688 tests the run passes: the smallest p-value is 3.2·10^-4, Bonferroni-adjusted 0.22.
-  - That p-value, the one test below α = 10^-3, is the real side's xor test on table 1's `inner_y` in the abort strategy,
-    which reads the real views alone. Rerun with 40 fresh views per kind, it is 0.30, and every one of the abort
-    strategy's 136 tests passes.
-  - The rewinds are independent trials (`zkgk`, 40 attempts). cap-gated: 22 real sessions complete and 21 fresh rewinds
-    (p = 1.0), against 1 rewind on a reused dummy. late-gated: 16 real and 24 fresh (p = 0.12), against 40 reused.
-- **Review.** A red team on §5, §7 and this section, then the Lean reference prover and its differential test, before any
-  `COMPLETE_*` class.
+**The simulator over several tables.** `zkrewind` and `zkgk` take `--session-tables J`: `gk_simulate` extracts,
+simulates and replays every table's streams in the prover's order. `zk_rewind_stats.py` tests each table's proofs and
+relations as their own classes, and fails any value that table j shares with table 0 in every view (`across_tables`).
 
 ## 10. The firewall's send check: nothing leaves the GPU that the firewall did not fix
 
@@ -991,17 +924,6 @@ server received) and `--what unsalted` (a record of clear tops), refused `FIREWA
 `85-rec-reprice.sh` runs both phases (`STEP=icheck`; `STEP=oprove MODES=firewall WARM=0 RUNS=1 CONTROLS=L6`, one
 session per staged statement, and `MODES=dev,host` in a job of its own for the firewall's cost).
 
-**What it cost** with Rust's shadow opening and `commit_zk` recheck, before the Lean finish held them (node 1, one RTX PRO 6000, the prover's 16 cores shared with the firewall; K = 4096, V*'s eight `--zk`
-statements L0–L6 and the algebra, m = 28–32; medians of 3 sessions after 1 warm, summed over the eight): prove 46.8 s
-firewalled against 7.4 s with the host witness unfirewalled and 6.7 s with the device's witness; the proof bytes are the same. The
-firewall's CPU is about 176 CPU seconds a session (the firewalled process's over the unfirewalled one's). Of the 39 s the firewall adds to
-prove, the level-0 recheck is 5.2 s (51 CPU seconds; L0's alone 1.8 s and 17.8), the device's wait for the shadow opening
-13.4 s, the firewall's own comb fold 10.5 s, and the rest the device's host phases slowed by the firewall's threads on the same
-cores. All of it is CPU work. Three changes not yet made would shorten it: the firewall on cores of its own (the contention,
-about 10 s), the recheck a session ahead (it reads only the host witness and the firewall's own salts and hiding), and the
-device skipping the opening the shadow replaces (freeing the device's share of the cores). The shadow's own opening (15.7 s
-over the eight, under contention) and the comb fold stay on the session's path.
-
 ### 10.5 What a stop reveals: the whole recursive session
 
 A recursive session is the inner phase's session and the outer phase's sessions, one per V* statement (at K = 4096 eight: the
@@ -1073,7 +995,7 @@ language: that assumption covers the values one session's transcript reports the
 decides them on the record, session by session, before anything leaves; the tests' Python relay decides its own unchecked,
 and refuses a schedule.
 
-**Outer proofs as independent sessions.** AGENTS.md's rule (Daniel's provisional batch, 24 Oct): each staged statement
+**Outer proofs as independent sessions.** AGENTS.md's rule: each staged statement
 is fixed before any session draws coins and gets exactly one session; each session draws its own live coins in its own
 firewall pass; no statement reads another session's transcript or coins; every session is recorded and every verdict counts.
 Sessions may therefore run at once (pod 85's `STEP=oprove`, `OPROVE_JOBS`, which enforces the rule). This relay is stricter:
@@ -1081,7 +1003,7 @@ it has one slot across streams and protocols (`slot.lock` in its state directory
 shares). An outer session takes it at its first request other than `Ping` and holds it until the session is released or
 fails; a session that asks meanwhile waits (`wait`) and takes it after, so in the record each `slot` is followed by its
 session's outcome before the next `slot`. Through it the auditor's outer sessions run in sequence, never interleaved, the
-shape soundness composes (`Multi.seqC`, note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2);
+shape soundness composes (`Multi.seqC`);
 sessions run at once rest on the provisional batch until a composition for them is proved. The slot orders sessions but
 doesn't choose which goes first: across streams the worker picks the interleaving. Rule 3's schedule fixes it: each
 scheduled outer session's proofs leave at its own public time, so the interleaving across streams is the schedules', not
@@ -1131,34 +1053,17 @@ session a release schedule, recorded at its open: `start_ms`, the time its conne
 a statement, in the order `--parts` fixes. Statement j's proofs and `Finish` leave at `start_ms + w0 + ... + wj`, never
 earlier (a session ready early waits) and never late (a session not ready by then is a stop, a missed time). The schedule is fixed
 before the session and depends on nothing secret: not on how long the inner session or any outer one took. Only the Rust
-firewall keeps the times; the Python relay refuses a scheduled session rather than release it early. Windows from node 1's
-honest sessions at K = 4096 (`r20261006-065256-f517`, 10 timed sessions a statement, all accepted, the firewall on the same
-cores as the prover): the release of part j follows part j − 1's verdict by its session's end to end, so
+firewall keeps the times; the Python relay refuses a scheduled session rather than release it early. The release of part
+j follows part j − 1's verdict by its session's end to end, so a window is sized from honest timed sessions as
 `w_j = 1.5 × (max e2e_j + max gap_{j−1})` rounded up to a second, `gap` being a slot's hold beyond the session
-(`tp_s − e2e_s`, the verdict):
+(`tp_s − e2e_s`, the verdict).
 
-| part | max e2e_j (s) | max gap_{j−1} (s) | need (s) | window (s) | margin |
-|---|---|---|---|---|---|
-| L0 | 7.84 | (from `start_ms`, below) | 7.84 | 12 | 1.53× |
-| L1 | 4.92 | 1.47 | 6.38 | 10 | 1.57× |
-| L2 | 5.02 | 1.36 | 6.38 | 10 | 1.57× |
-| L3 | 3.11 | 1.37 | 4.48 | 7 | 1.56× |
-| L4 | 3.23 | 1.19 | 4.42 | 7 | 1.58× |
-| L5 | 2.13 | 1.12 | 3.25 | 5 | 1.54× |
-| L6 | 2.32 | 0.72 | 3.05 | 5 | 1.64× |
-| algebra | 16.99 | 1.27 | 18.26 | 28 | 1.53× |
-
-The windows sum to 84 s, against 224 s for one period (8 × the algebra's 28 s). Two limits. L0's window counts from the
-connection's accept, so on top of L0's session it must cover the inner session and the V* stage (`InnerFold`, 1:59 at
-step 3, `r20261006-022005-409a`; the inner session's prove 0.98 s, `--zk` 5.41 s, in `r20261006-021550-4e4b`); 12 s covers
-L0's session alone, and no run has yet timed a whole recursive session against its schedule. And the slot is shared: two
-recursive sessions whose outer phases overlap in time take turns at it, so the later one misses its times. That is a
-failure, never an early release, but an honest operator must space recursive sessions so their outer phases don't
-overlap, and nothing enforces that yet. Dedicated cores for the firewall (infra's I1, a firewall VM, priced, not created)
-would take the recheck and serve's verify off the prover's cores. On node 1 the algebra's worst session is 1.5× its median
-(16.99 s against 11.33 s) and a contended `serve` has taken 15–44 s to verify L1 (`r20261006-024439-6203`), either of which
-turns an honest session into a missed time. With dedicated cores the margin could fall toward the measured spread, and
-co-tenant load could no longer spend the budget.
+Two limits. L0's window counts from the connection's accept, so on top of L0's session it must cover the inner session and
+the V* stage (`InnerFold`). And the slot is shared: two recursive sessions whose outer phases overlap in time take turns at
+it, so the later one misses its times. That is a failure, never an early release, but an honest operator must space
+recursive sessions so their outer phases don't overlap, and nothing enforces that yet. A firewall on cores of its own would
+take the recheck and serve's verify off the prover's cores, so co-tenant load could not turn an honest session into a
+missed time and spend the budget.
 
 **The bound over a stream.** Over a stream of n recursive sessions with budget b, rules 1–4 leave the challenger: which
 recursive sessions failed (at most b, by rule 4), and for each failure j, the form it took (one, at one position of the
