@@ -69,7 +69,7 @@ FORM = 8 * WORDS                                     # FM's formed registers R_{
 GATHER = 3 * N_OUT // 4 + 7 * N_OUT // 32            # FM: byte 0 of four partials by three PRMTs, eight registers by seven LEA.HI
 ANDS_COMPRESSION = 58_120                            # a SHA-512 compression in-circuit
 ANDS_FROM_8 = 53_568                                 # one from round 8 (the PRF's)
-KS_OPEN = 5 * ANDS_COMPRESSION                       # ks's hm96 leaf opened in-circuit: inner digest 1, c 2, leaf 2
+KS_OPEN = 3 * ANDS_COMPRESSION                       # ks's hm96 instance in-circuit: inner digest 1, c 2 (the leaf is native)
 H200_MACS = 9.89e14                                  # the one basis for pooled figures (N-CARD): stock held fixed at MFU_SERVE
 MFU_SERVE = 0.4
 DATACENTER_H200 = 100_000
@@ -199,15 +199,16 @@ def sha512_blocks(m: bytes) -> list[bytes]:
 
 
 def check_kleaf(seed: int) -> dict:
-    """The keyed leaf: the digest is SHA-512(ks ‖ salt_w ‖ head ‖ row), head a 128-byte block carrying (forward, position,
-    length) as row-bound's does, so it is the cascade from S with exactly one compression more than SHA-512(head ‖ row) from
+    """The keyed leaf: the digest is SHA-512(ks ‖ salt_w ‖ head ‖ row), head a 128-byte block carrying (position, forward,
+    length), the fastest-varying field first so that no round is shared across a window's digests (S already carries
+    salt_w), so it is the cascade from S with exactly one compression more than SHA-512(head ‖ row) from
     the IV, and that one is S, shared a window; equal rows at distinct positions give distinct digests; and head fixes the
     length, so the padded block sequences after S are prefix-free (Salt.lean's prefix_free_of_head)."""
     rng = random.Random(seed)
     ks, salt_w = rng.randbytes(64), rng.randbytes(64)
 
     def head(forward: int, position: int, n: int, length: bool = True) -> bytes:
-        return (forward.to_bytes(8, "big") + position.to_bytes(8, "big")
+        return (position.to_bytes(8, "big") + forward.to_bytes(8, "big")
                 + (n.to_bytes(8, "big") if length else b"")).ljust(128, b"\0")
 
     def prefix_free(length: bool) -> bool:
@@ -284,10 +285,11 @@ def shares(ds: dict) -> dict:
 
 def in_circuit() -> dict:
     """ANDs a drawn unit's proof spends hiding one public digest beyond x itself (hm96's gadget: c's 2 compressions and
-    the leaf's 2 over private (b, c), M_key·y XORs only), and once a proof (ks's leaf and S). At L0 the keyed leaf's first
+    M_key·y's XORs; the proof publishes b ‖ c and the verifier hashes the leaf natively, hm96 PROTOCOL §5), and once a proof
+    (ks's instance and S). At L0 the keyed leaf's first
     block, row-bound's, is public data hashed from the secret S, so it moves one compression into the circuit; under L1
     the keyed hash is the subtree root's node hash, whose blocks hold the private children and are in the circuit anyway."""
-    hm96 = 4 * ANDS_COMPRESSION
+    hm96 = 2 * ANDS_COMPRESSION
     return {"hm96 today": {"a digest": hm96, "once": 0},
             "hm96 + (a)": {"a digest": hm96 + 3 * ANDS_FROM_8, "once": KS_OPEN},
             "hm96 + (a) + FM": {"a digest": hm96 + 3 * ANDS_FROM_8 + N_OUT * WORDS * (26 + 11), "once": KS_OPEN},
