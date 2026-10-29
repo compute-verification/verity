@@ -149,7 +149,7 @@ def session(sh: RS.Shape, seed: int = 0, inner: dict | None = None, tau: list[in
     eqk, eqp = eq_table(r_k), eq_table(zeta_p)
     vt = [RS._dot(eqp, [_xor(e for e, bit in zip(eqk, P[p]) if bit) for p in range(sh.PP)]) for P in tables]
     rho = [g.getrandbits(128) for _ in range(sh.T_LOG)]
-    coins = RS.Coins(alpha, z, tuple(rho_in), tuple(t_top), tuple(zeta_c), tuple(zeta_r), tuple(rounds), tuple(zeta_p),
+    coins = RS.SparsePublics(alpha, z, tuple(rho_in), tuple(t_top), tuple(zeta_c), tuple(zeta_r), tuple(rounds), tuple(zeta_p),
                      tuple(rho), tuple(U))
     msgs = {"h": h, "pre": pre, "v2": v2, "sc": sc, "u": u, "vt": vt, "claim": _mle(vt, rho), "tau": tau}
     if not sh.stacked:
@@ -276,13 +276,13 @@ def test_y_rest_is_the_inner_column_point_in_bit_order():
     sh, inner = RS.Shape(2, 8, 1, 1), A.Shape(22, 10, 2)
     rounds = _inner_rounds(inner)
     pts = RS.inner_points(inner, rounds)
-    info = A.run(inner, A.Coins(rounds), A.symbolic(inner), A._extras_like(inner))[1]
+    info = A.run(inner, A.CoinSource(rounds), A.symbolic(inner), A._extras_like(inner))[1]
     ts = info["fold"]["ts"]
     assert pts["y_rest"] == info["claims"][0].x[:inner.k_log - 6] == tuple(ts[::-1]) != tuple(ts)
     assert pts["x_rest"] == tuple(info["fold"]["rho_in"]) and pts["alpha"] == info["fold"]["alpha"] and pts["z"] == info["z"]
     coins, msgs, _ = session(sh, 0, inner=pts)
     assert _ref(sh, msgs, RS.verifier_row(sh, coins)) == [0] * RS.out_words(sh)
-    rounds_order = RS.Coins(**{**coins.__dict__, "y_rest": tuple(ts)})
+    rounds_order = RS.SparsePublics(**{**coins.__dict__, "y_rest": tuple(ts)})
     assert "h3" in _hits(sh, _ref(sh, msgs, RS.verifier_row(sh, rounds_order)))
 
 
@@ -323,7 +323,7 @@ def test_the_registered_claim_is_a_row_at_the_coins_point_never_a_public_extra_c
     assert (rc.row, rc.port, rc.value) == (1, "claim", None)
     inner = A.Shape(22, 10, 3)
     with pytest.raises(TypeError, match="registered claim"):
-        A.run(inner, A.Coins(_inner_rounds(A.Shape(22, 10, 3))), A.symbolic(inner), [rc])
+        A.run(inner, A.CoinSource(_inner_rounds(A.Shape(22, 10, 3))), A.symbolic(inner), [rc])
 
 
 def test_h_is_the_inner_sessions_h_round_read_at_row_r():

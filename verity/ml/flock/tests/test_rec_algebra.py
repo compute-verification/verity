@@ -199,7 +199,7 @@ def test_a_nonzero_nonce_is_refused(session, monkeypatch):
             A.decode(rep.shape, bytes(b))
 
 
-def _ports(rep: Rep, seed: int) -> tuple[dict, A.Layout, list[int], list[int]]:
+def _ports(rep: Rep, seed: int) -> tuple[dict, A.GfPorts, list[int], list[int]]:
     """The structure, its layout, and its v and w ports on the honest rep, the running sums starting at a random value."""
     S, lay = A.structure(rep.shape)
     g = random.Random(seed)
