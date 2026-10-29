@@ -38,12 +38,11 @@ python tools/verity/lean/upstream.py PKG [--lean]        what the pinned depende
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 
-A lane's edit loop is `verity lean try FILE [--on NODE]`: through `research run` (default vy-nebius-cpu-1's `research` pool) it runs
-`lean_changed.py --try FILE` on this checkout, its uncommitted edits included, which takes one of the node's `build` Lean slots and
-that slot's tree, the one `--records` keeps warm, syncs the closure of the package that owns FILE and its dependencies there, runs
-`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`, and prints Lean's output with the
-run's wall time, exiting with lean's status. It never runs this audit and never writes a record: `--records PKG --update` is for the
-lock and the mark only (`lean_changed.py`'s docstring).
+The edit loop is `verity lean try FILE`: `lake env lean FILE` in the Lake package that holds FILE (the nearest lakefile above it),
+against its built imports, exiting with lean's status. With `--on NODE`, through `research run`, it runs `lean_changed.py --try
+FILE` on this checkout, uncommitted edits included: in one of the node's `build` Lean slots, on the tree `--records` keeps warm,
+`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`. Neither runs this audit or writes
+a record: `--records PKG --update` is for the lock and the mark only (`lean_changed.py`'s docstring).
 
 ## What it checks
 
@@ -77,6 +76,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   vocabulary);
 - the trees hold (`trees`, below): no guarantee's statement reads a definition of the proofs tree, and no module of the
   definitions or properties tree imports one;
+- every `Prop` a guarantee takes is named or a plain range (`inline_failures`; `shape.inline` excepts some);
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;

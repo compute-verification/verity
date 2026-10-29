@@ -9,8 +9,7 @@
 # Both outputs stay on the node (about 705 GB of base and 757 GB of pin), recorded with `research keep` under pin_glm53.toml's
 # owner until its expiries; the pin entry's resolved_by is its `by`. cwd = the source tree.
 #
-#   research run --on vy-nebius-cpu-1 --pool research --as WHO --project verity --source . --cwd source \
-#     --timeout 8h -- bash benchmarks/hash/dither/pin_glm53.sh pin|make
+#   bash benchmarks/hash/dither/pin_glm53.sh pin|make      (on the CPU host whose HF cache serves it, up to 8 hours)
 set -euo pipefail
 MODE=${1:?usage: pin_glm53.sh pin|make}
 ROLE=GLM53_INT8 REPO=verity-int8/GLM-5.3-INT8-V3 RECIPE=verity-int8-channel127/v3 JOBS=${JOBS:-10}

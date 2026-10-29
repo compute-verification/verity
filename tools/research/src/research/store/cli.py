@@ -63,7 +63,7 @@
   research data pending [--json]                   the write-through queue: what this store holds that the remote lacks (exit 1 if any)
   research data reconcile-attempts (RUN... | --all) [--apply] [--json]
                                                    local attempts that differ from the remote's write-once copy; --apply supersedes them (audited)
-  research data parity --fresh DIR [--render] [--json-out FILE]
+  research data parity --fresh DIR [--json-out FILE]
                                                    content parity against a store built from the remote alone (parity.py); exit 0 iff explained
   research data catalog [--json]                   catalog schema version vs the code's (older catalogs migrate forward on open; a newer one is
                                                    refused, exit 3, unless RESEARCH_CATALOG_IGNORE_VERSION=1), row counts per table
@@ -787,19 +787,16 @@ def cmd_refresh(argv: list[str]) -> int:
 
 def cmd_parity(argv: list[str]) -> int:
     """Content parity of this store against a store built from the remote alone (`parity.py`): artifacts, attempts, labels, replica
-    rows, and with `--render` the canonical tables.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
+    rows.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
     from . import parity as PA  # noqa: PLC0415
 
     ap = _ap("parity")
     ap.add_argument("--fresh", required=True, metavar="DIR", help="where to build the store from the remote alone (a new directory)")
-    ap.add_argument("--render", action="store_true", help="also compare the daily render (tables + drilldowns) over the same records")
-    ap.add_argument("--render-source", default=None, metavar="TREE", help="the tree to render with (default: steward.toml [[render]] source)")
     ap.add_argument("--jobs", type=int, default=32, metavar="N")
     ap.add_argument("--json-out", metavar="FILE", help="write the full report (every difference and its cause) here")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
-    rep = PA.run(store_root(ns.store), Path(ns.fresh), jobs=max(1, ns.jobs), render=ns.render,
-                 log=None if ns.json else (lambda m: print(m, file=sys.stderr)), source=Path(ns.render_source) if ns.render_source else None)
+    rep = PA.run(store_root(ns.store), Path(ns.fresh), jobs=max(1, ns.jobs), log=None if ns.json else (lambda m: print(m, file=sys.stderr)))
     if ns.json_out:
         Path(ns.json_out).write_text(json.dumps(rep, indent=1, sort_keys=True, default=str))
     if ns.json:

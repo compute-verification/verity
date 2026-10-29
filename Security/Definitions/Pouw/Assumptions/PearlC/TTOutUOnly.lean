@@ -4,7 +4,7 @@ import Definitions.Pouw.PearlC.W1
 /-!
 # TT_OUT over U alone (trusted; the game under U-only binding, and the named `Prop`)
 
-Under the `-h1` hashing format's U-only messages (P1 of `internal/pouw/hashing-sm120-options.md`) the verifier checks a
+Under the `-h1` hashing format's U-only messages (option P1) the verifier checks a
 unit's useful words U and not its ticket words C̃. A unit is then correct when its activations pass, its debit is within
 the cap, its weight rows pass and its U words are right (`CorrectU`); `correctSetU` and the γ-gap property `GγU` are
 `correctSet` and `Gγ` with that. `TTOutU` is `TTOut` over `correctSetU`, and `TTOutPearlCDevUOnly` is it at rev1's
@@ -68,10 +68,10 @@ def TTOutU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q
 
 - **What it adds to the (C̃, U) row.** U is four BF16 k16 steps accumulated into C̃'s word, so U reads C̃ down to the bits
   its first step keeps: a word's U ignores a +1-ulp move of C̃ on about 30% of words and a +4-ulp move on about 5%
-  (`pearlc_u_only_skips.py`; bc-3006c44a's `r20260930-063237-5549`: ≤ 1.6% at 16 ulps). A tile is credited only if all
+  (`pearlc_u_only_skips.py`: ≤ 1.6% at 16 ulps). A tile is credited only if all
   its U words are right, so a C̃ that is off anywhere beyond that slack fails the tile.
 - **The debit carries over unchanged.** No lone atom skip that changes C̃ leaves U unchanged (0 per family at `k = 1,024`,
-  promoted and unpromoted; 0 of 4,096 words at `k = 8,192`, `r20260930-063237-5549`). Promotion stays forced: U from the
+  promoted and unpromoted; 0 of 4,096 words at `k = 8,192`). Promotion stays forced: U from the
   unpromoted C̃ is the pinned U on at most 78% of words at `k = 1,024` and 12% at `k = 8,192`, and no tile passes.
 - **What it carries beyond the (C̃, U) row.** Cross-atom sets whose effect on C̃ lands inside U's slack, not only sets
   that leave C̃ unchanged. Finding one needs each atom's effect on the word's rounding, which is its products, as for

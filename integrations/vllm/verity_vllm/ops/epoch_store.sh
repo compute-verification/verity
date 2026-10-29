@@ -1,10 +1,10 @@
 #!/bin/bash
-# epoch_store.sh ROWDIR: a row's Build and records as fixture/v1 trees, each under its meta (serving-view's record-build layout), stored
+# epoch_store.sh ROWDIR: a workload's Build and records as fixture/v1 trees, each under its meta (serving-view's record-build layout), stored
 # by store_trees.sh (`research data put --preserve` with this run's own custody key, then `research data preserved` on every tree it
-# stored).  Run by epoch_row.sh inside the row's job, on every end of the row.
-#   build    the row dir without match/, commit/ and vu-export/: Programs, workload Program, manifest, summaries, logs (files <= 8 GB)
-#   records  match/ and commit/ files under 200 MB, and the row's verdict / stage / log files
-#   capture  match/capture/ as one tar, when it holds more than CAPTURE_TAR_FILES files (default 100000): a TP row's capture is ~0.5M
+# stored).  Run by epoch_row.sh inside the workload's job, on every end of it.
+#   build    the workload dir without match/, commit/ and vu-export/: Programs, workload Program, manifest, summaries, logs (files <= 8 GB)
+#   records  match/ and commit/ files under 200 MB, and the workload's verdict / stage / log files
+#   capture  match/capture/ as one tar, when it holds more than CAPTURE_TAR_FILES files (default 100000): a TP workload's capture is ~0.5M
 #            small files, which a per-file upload does not finish inside a pod's life; the records tree then leaves it out
 #   large    (STORE_KINDS=... large) the match/ and commit/ files over 200 MB
 # Staged as hardlinks under $RESEARCH_STORE/../stage/<run id>/; what is left out is listed in evidence/store_omitted.txt.

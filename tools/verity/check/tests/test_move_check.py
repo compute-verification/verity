@@ -861,6 +861,33 @@ def test_a_word_that_names_no_moved_path_is_refused_in_prose(tmp_path):
     assert f["path"] == "README.md" and f["reason"] == "edit beyond moved paths and module names"
 
 
+WORD_OLD = {"examples/toy/run.sh": "echo toy\n",
+            "README.md": "The end-to-end examples (`examples/toy/run.sh`) are the milestone's.\n",
+            "registry.json": '{"examples": ["who runs `examples/`?"], "owns": ["examples/toy/"]}\n',
+            "pkg/app/ladder.py": 'def examples(root):\n    return sorted((root / "examples").iterdir())\n'}
+WORD_NEW = {"README.md": "The end-to-end examples (`demos/toy/run.sh`) are the milestone's.\n",
+            "registry.json": '{"examples": ["who runs `demos/`?"], "owns": ["demos/toy/"]}\n',
+            "pkg/app/ladder.py": 'def examples(root):\n    return sorted((root / "demos").iterdir())\n'}
+
+
+def _word(tmp_path: Path, edits: dict[str, str]) -> dict:
+    repo, base = _repo(tmp_path, WORD_OLD)
+    _move(repo, "examples/toy/run.sh", "demos/toy/run.sh")
+    _write(repo, edits)
+    return _check(repo, base)
+
+
+def test_a_moved_top_level_name_left_standing_as_a_word_is_certified(tmp_path):
+    r = _word(tmp_path, WORD_NEW)
+    assert r["certified"], r["refusals"]
+
+
+def test_a_moved_top_level_name_rewritten_to_anything_else_is_refused(tmp_path):
+    [f] = _word(tmp_path, {**WORD_NEW, "README.md": WORD_NEW["README.md"].replace("end-to-end examples", "end-to-end samples")})[
+        "refusals"]
+    assert f["path"] == "README.md" and "samples" in f["hunk"]
+
+
 def test_anchor_that_names_another_directory_is_refused(tmp_path):
     [f] = _app(tmp_path, {}, {"pkg/tests/protocols/bandwidth/test_remote.py": "ROOT = Path(__file__).resolve().parents[4]\n"})[
         "refusals"]

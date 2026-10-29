@@ -2,7 +2,7 @@ import Proofs.Pouw.PearlC.DeviceRev1Gamma
 import Definitions.Pouw.PearlC.DeviceKernelWref
 
 /-!
-# γ against the honest kernel's `W_ref`, from the record's TT_OUT (the price-twins lane's file; staged)
+# γ against the honest kernel's `W_ref`, from the record's TT_OUT (staged)
 
 * **TT_OUT does not read `W_ref`** (`ttOut_wref`, `ttOutTile_wref`): TT_OUT at a protocol holds at the same protocol
   with any other `W_ref`, and per tile with any other `W_ref` and credited rows' `W_ref`. So TT_OUT at a record gives

@@ -91,7 +91,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
             com.attach_source(msrc)
             moe_attached = True
             if args.required_classes is None and "moe_block_stream" not in required_classes:
-                required_classes = required_classes + ("moe_block_stream",)     # a bound MoE block is a required class of an MoE model (REL-02)
+                required_classes = required_classes + ("moe_block_stream",)     # a bound MoE block is a required class of an MoE model
             print(f"[delta] MoE block source attached: {len(msrc.layers)} MoE layers -> committer {com.name}; required classes {list(required_classes)}", flush=True)
         elif args.moe_source == "on":
             print("[delta] REFUSE: --moe-source on but the model has no MoE-runner modules", flush=True)

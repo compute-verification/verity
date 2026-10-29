@@ -2,7 +2,7 @@
 (PROTOCOL.md, "The replay's state chain").
 
 The compile unit replays the scheduler from advice v1 and the certified record, one step unit per engine step, each
-`replay_step.ReplayStep_v1` (ENC-REPLAY's step): the committed queue state, the next A certified arrivals and the next A
+`replay_step.ReplayStep_v1` (the replay's step): the committed queue state, the next A certified arrivals and the next A
 decisions in, the step's rows and the next state out. A window is many steps, so the state passes between units as
 rows of produced values, each unit reading its rows at public positions. This module is that chain: the rows (`Shape`,
 `Row`, `Window`, `encode`, `decode`), their commitment and reads (`commit_window`, `reads`), the verifier's check of how
@@ -77,10 +77,10 @@ dropped (`ReplayAdvance`'s `active` = 0).
 about 2·width for the idle select and the equality), three reads and one state row. Per window: P steps, one
 `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3 path of depth ⌈log2(P + 2)⌉ or 1.
 Per session one `ReplayClose` and its two reads.
-On TRACE-CORPUS's 15 sync traces a step is 16,569 to 80,959 ANDs and a window 3.5e7 to 1.9e8 (PROTOCOL.md, before
-the carry). AS and EW widen the rows by the step's own fields, and the parts with them: at vLLM run 8eb1's engine class
-(R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, `ReplayAdvance` is 1,761 ANDs sync, 1,814 at AS = 1 and 2,102 with 17-bit
-walk entries, and `ReplayLoad` 1,944, 2,000 and 2,144 (protocol/served-shape.md).
+On the trace corpus's 15 sync traces a step is 16,569 to 80,959 ANDs and a window 3.5e7 to 1.9e8 (PROTOCOL.md, before
+the carry). AS and EW widen the rows by the step's own fields, and the parts with them: at the served vLLM run's engine
+class (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, `ReplayAdvance` is 1,761 ANDs sync, 1,814 at AS = 1 and 2,102 with
+17-bit walk entries, and `ReplayLoad` 1,944, 2,000 and 2,144 (protocol/served-shape.md).
 """
 
 from __future__ import annotations

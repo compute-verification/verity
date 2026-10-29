@@ -164,8 +164,7 @@ def test_a_served_runs_clock_source_is_its_certifiers_signed_syncs_even_beside_a
 def test_a_clocks_jsonl_that_isnt_a_regular_file_is_the_signed_source_not_a_run_without_one(tmp_path):
     """A run's ``clocks.jsonl`` that is there but isn't a regular file (a dangling symlink, a directory) is the
     certifier's clock certificates, which can't be read, so the run is refused, the stand-in asked for or not; it is
-    never taken for a run without them, whose unsigned proxy log beside it could hold phase 11's δ = 0 (REDTEAM
-    phase 18)."""
+    never taken for a run without them, whose unsigned proxy log beside it could hold δ = 0."""
     _proxy_log(tmp_path, [replace(s, delta=0) for s in AT.SYNCS])
     (tmp_path / "clocks.jsonl").symlink_to(tmp_path / "gone" / "clocks.jsonl")
     for stand_in in (False, True):
@@ -257,8 +256,7 @@ def test_the_proof_unit_on_the_staged_rows_is_the_gates_references():
 def test_the_scan_names_both_ends_pieces_and_leaves_out_what_the_public_rows_hold():
     """The scan looks for every piece of both ends' heads, salts and siblings, and leaves out the pieces the windows'
     ``pub`` rows hold: on an advised link the egress head's counts in an accepted window are its public ``released``,
-    so a piece of them with frames in it (run r20261024-084443-2f66's ``egress head 0 @2128``, bucket 509's two
-    frames) is public, while no piece of a salt or sibling is."""
+    so a piece of them with frames in it (an egress head's piece holding a bucket's frames) is public, while no piece of a salt or sibling is."""
     _, rounds = _link(n2.T)
     rd = rounds["honest"]
     blobs, held = n2.Z.blobs_of(rd)
@@ -302,9 +300,9 @@ def test_a_sampled_period_adds_the_other_subset_member_and_an_unsampled_one_refu
 def test_the_provers_instance_holds_every_piece_the_control_expects_of_a_head_but_its_zero_padded_tail():
     """The control (`a8.received` on the prover's own instance files) expects every held piece of each head, but not its
     zero-padded last chunk: the advised unit's head is 157 + L + 4T bytes, 2214 at T = 512, so its last 6 bytes end
-    off a 16-byte boundary, and the wit row holds the head followed by its salt's field, never by zeros. Run
-    r20261025-183805-7c27's control failed on exactly those 8 pieces (``head egress 0 @2208`` …), holding the other 57
-    of the scan's 337. Here the windows' wit rows, the rows the instance files hold as they are, stand in for them."""
+    off a 16-byte boundary, and the wit row holds the head followed by its salt's field, never by zeros, so a
+    control on the instance files fails on exactly those pieces. Here the sampling blocks' wit rows, the rows the
+    instance files hold as they are, stand in for them."""
     _, rounds = _link(n2.T)
     rd = rounds["honest"]
     blobs, held = n2.Z.blobs_of(rd)

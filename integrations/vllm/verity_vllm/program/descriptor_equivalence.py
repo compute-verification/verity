@@ -1,4 +1,4 @@
-"""Graph/reference correspondence of two encodings of one program (frontend rulings §8.5).
+"""Graph/reference correspondence of two encodings of one program.
 
 A reference-codec change moves the program digest even when the denoted circuit is unchanged, because the digest
 hashes the serialised descriptor. Digest equality is therefore the wrong test across a codec transition; this

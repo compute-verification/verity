@@ -9,7 +9,7 @@ def _boolean_roots() -> list[Any]:
     """The fused proof block on the H200's step at D = 64, at the e2e demo's longest attention row, T = 32 (its context, in both
     phases), and at T = 1, a request's first position; the softmax alone at N = 1 (at N = 32 it is inside the fused proof block's
     T = 32); the padded proof block at T = 32, M3's one attention statement for every key count; the head's whole attention at
-    the frozen shape's statics (T = K = 32, D = 64), the proof block of CIR-107's ``pv`` fusion; and the masked softmax at N = 4,
+    the frozen shape's statics (T = K = 32, D = 64), the ``pv`` fusion's proof block; and the masked softmax at N = 4,
     small enough to pin."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG

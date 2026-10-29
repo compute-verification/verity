@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
 import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 
 /-!
-# #874's compiled `--zk` count curve at the hidden-output tables
+# The compiled `--zk` count curve at the hidden-output tables
 
 `zk_flock_countC_execOS_cr` reads its tables only through the plan, so it holds at the one-table hidden-output plan
 `planAtZKH` as stated. The hidden-output binding enters through `place` and `vb`, which read the drawn units' places

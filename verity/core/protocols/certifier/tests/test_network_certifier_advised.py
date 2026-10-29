@@ -198,7 +198,7 @@ def test_the_ingress_ends_are_derived_from_v0s_prompt_lengths():
 
 
 def _signed_end(counts, own, end):
-    """CERT-VARLEN's rule: the first bucket where the ingress head's signed counts, less one own frame a window, reach
+    """The first bucket where the ingress head's signed counts, less one own frame a window, reach
     `end` request frames."""
     total = 0
     for t, n in enumerate(counts):
@@ -210,7 +210,7 @@ def _signed_end(counts, own, end):
 
 @pytest.mark.parametrize("own", [0, 1])
 def test_the_ingress_ends_are_where_the_signed_counts_put_them(own):
-    """CERT-VARLEN's rule: request k ends in the first bucket where the ingress head's signed counts, less one own frame
+    """Request k ends in the first bucket where the ingress head's signed counts, less one own frame
     a window, reach `advised.ends`'s k-th, Σ_{i ≤ k} request_frames[prompt_len_i − 1]. With each window's own frame at
     the head of its queue, ahead of carried request frames (`active.Bucketer`), that is the bucket that releases
     request k's last frame in every session, salted sessions whose windows start with frames carried in among them, and

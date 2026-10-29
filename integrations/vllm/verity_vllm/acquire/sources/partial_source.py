@@ -653,7 +653,7 @@ class TPPartialSource:
                               f"exactly the declared count of partials per site per step ({len(self.sites)} sites; 1 each, a mid-module site its "
                               "static call count); value correspondence: tp/match.py cross-rank "
                               "provenance (received == AllReduce2/AllGather2(part_rank0, part_rank1) bit-exact; part_rank_r == Gemm_v1{K/W} "
-                              f"on the shard, R13 tp2_semantics); kinds seen {self.stats['kinds']}; shapes seen {self.stats['shapes']}")}]
+                              f"on the shard); kinds seen {self.stats['kinds']}; shapes seen {self.stats['shapes']}")}]
 
 
 __all__ = ["TPPartialSource", "SITES", "COVERS_FAMILIES"]
@@ -702,9 +702,9 @@ def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
             if eq or step < 2 or len(pairs) < 96:
                 pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "out_sha": hashlib.sha256(a).hexdigest()[:16],
                               "next_norm_sha": hashlib.sha256(b).hexdigest()[:16], "nbytes": len(a), "equal": eq})
-    # [tp fold of moe cf29c7e72] a dense TP row (Llama: no fused-MoE `/out` member in any step) has nothing for this detector to
-    # compare -- record NOT APPLICABLE (result None, applicable False) rather than a False that reads as a detected late read;
-    # on a MoE row the rule is moe's: True only with > 0 pairs compared, 0 equal, 0 missing
+    # a dense TP workload (Llama: no fused-MoE `/out` member in any step) has nothing for this detector to compare -- record NOT
+    # APPLICABLE (result None, applicable False) rather than a False that reads as a detected late read; on a MoE workload the rule is
+    # the MoE one: True only with > 0 pairs compared, 0 equal, 0 missing
     applicable = steps > 0
     return {"schema": "verity/commit-integ/t6_4-check/v1", "rank": int(rank), "applicable": applicable,
             "result": (bool(compared > 0 and equal == 0 and missing == 0 and not_verified == 0) if applicable else None),

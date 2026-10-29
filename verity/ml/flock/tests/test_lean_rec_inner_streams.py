@@ -881,7 +881,7 @@ NO_REGISTRATION = ("rec inner registration: candidate 3's session needs R's circ
 
 
 @pytest.mark.parametrize("cmd,transcript,why", [
-    ("statement", False, (1, f"setup: {NO_TRANSCRIPT}")),
+    pytest.param("statement", False, (1, f"setup: {NO_TRANSCRIPT}"), marks=pytest.mark.slow),
     ("statement", True, (2, NO_REGISTRATION)),
     ("verify", True, (2, NO_REGISTRATION)),
 ], ids=["no-transcript", "no-registration", "verify-no-registration"])

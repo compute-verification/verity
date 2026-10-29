@@ -6,7 +6,7 @@
 # committed value is changed (committed consistently, the prover's self-check skipped), which Lean must refuse. M0's
 # flock-circuit and Lean's flock-verify are built from this tree, in scratch.
 #   PP_TP=DIR: a deferred TP Commit's row dir (DIR/commit with its sealed bundles, DIR/build/rank<r>), as GLM-5.3 B1's Commit
-#     on vy-nebius-cpu-2 (/workspace/cp/circuits/glm-v2/rows/$ROW). Its advice is the declared run's,
+#     (/workspace/cp/circuits/glm-v2/rows/$ROW). Its advice is the declared run's,
 #     from integrations/vllm/workloads/$ROW.json. The honest partition is PP_PARTITION (default a5's step-16 SiluMul_v2,
 #     stratified:4); the forged one SiluMul_v2{I=1536} at step 16, all 3 units drawn, on ranks PP_FORGED_RANKS (default 0).
 #   PP_LLAMA=art:ID: a single-GPU (TP1) Commit's row dir in the store, fetched once per node into PP_CACHE (default
@@ -45,11 +45,11 @@
 #   llama32_1b_tg_l0_step24.json PP_FORGE=0:0 (a RoPE head, drawn because every one is).
 #   PP_CHALLENGER=local: each window drawn on a local challenger session's coins (--challenger local, a5_coins), not the
 #   verifier's own, pinned on main's first-parent history fetched from the clone's origin. PP_CHALLENGER=gate:USER@HOST:
-#   vy-challenger-1's, through its SSH gate with the lane's gate key PP_GATE_KEY, its challenger on PP_PEER's 127.0.0.1 (this
+#   the auditor host's, through its SSH gate with the lane's gate key PP_GATE_KEY, its challenger on PP_PEER's 127.0.0.1 (this
 #   node, as the gate's /etc/vy/peers names it), under the key record PP_CHALLENGER_KEY (challenger-key/v1). The gate opens a
 #   root once, and both arms register under the window's one run root: with the gate, run one arm (PP_ONLY).
-#   research run --on vy-nebius-cpu-2 --project verity --source . --cwd clone --mem-gb 64 --mem-wait 3600 \
-#     --env PP_LLAMA=art:ID -- bash benchmarks/prove_path/run.sh
+# From a clone of the tree, with 64 GB of memory, the outputs in $OUT (default $RESEARCH_RUN_DIR/out):
+#   PP_LLAMA=art:ID bash benchmarks/prove_path/run.sh
 # Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records), the binaries' sha256; never the
 # advice or its opening (the prover's, private: the verifier is handed the opening, the named gap), a prover's file (inst-*,
 # *-private.bin: the rows and their salts) nor a circuit (its pin is).

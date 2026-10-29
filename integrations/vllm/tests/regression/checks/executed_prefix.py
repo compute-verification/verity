@@ -5,7 +5,7 @@ capture dir was moved -- the workload's caps and request order, the Program's de
 `cap_exhausted` / `eos_stop` the record states (tokens.json's own columns, and G6's `lengths_by_request` in `global_match.json`), the
 same EOS-stopped set as `global_match.json.lag.eos_stop_requests`, and `ok`.
 
-Pure and fast (ms).  WEAK by the reference's own admission: no R19 row exercises an EOS stop (`lag.exercised = false` everywhere), so
+Pure and fast (ms).  WEAK by the reference's own admission: no reference row exercises an EOS stop (`lag.exercised = false` everywhere), so
 the LAG arithmetic (a_r + LAG) is never exercised by these rows -- only the length-stop branch and the fail-closed rules on the declared
 inputs are.  A v2 that changes the rule for EOS stops will pass this check and must be covered by a synthetic unit test instead
 (`tests/program/test_continuation.py`, `tests/commit`).
@@ -38,7 +38,7 @@ def applies(row: resolver.Row) -> str | None:
 
 
 def _order(fx: dict) -> dict[str, str]:
-    """workload request_id (UUID) -> r<k> by position in the workload manifest (COORD R15 ruling 2)."""
+    """workload request_id (UUID) -> r<k> by position in the workload manifest."""
     return {str(r.get("request_id")): f"r{i}" for i, r in enumerate(fx.get("requests") or [])}
 
 

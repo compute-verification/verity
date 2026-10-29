@@ -15,7 +15,7 @@ sys.path.insert(0, str(HERE.parent))
 import free_codec as FC  # noqa: E402
 import squaring as S  # noqa: E402
 
-# Security/Proofs/Accounting/Gates.lean's `codecRows` (6b, #2363 @ d6df95f24a): (n, c, cs, K, τ, i, m, encodeWord).
+# Security/Proofs/Accounting/Gates.lean's `codecRows` (6b, at d6df95f24a): (n, c, cs, K, τ, i, m, encodeWord).
 CODEC_ROWS = [
     (8, 5, [17, 200, 99], 248, 3, 5, 219, 234), (8, 5, [92, 7], 253, 18, 54, 195, 147),
     (8, 5, [44, 209], 252, 132, 41, 181, 166), (8, 5, [139, 0], 254, 232, 36, 68, 225),

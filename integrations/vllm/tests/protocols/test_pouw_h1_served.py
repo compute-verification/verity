@@ -798,10 +798,10 @@ class _Staged(_Prepared):
 
 
 def test_a_producer_with_stage_is_handed_each_served_calls_device_rows_before_its_asked_them(monkeypatch):
-    """A receipt producer with a ``stage`` is handed each served call and its rows ``a`` where they are on a CUDA device
-    (kernels' device codes, note:kernels-rcpt/20261024T0430Z-draft-served-device-codes): the engine's tensor itself, in call
-    order, before any of its step's calls of K are asked; each receipt table is still the producer's ask's words. Rows on
-    the host stage nothing, and a ``stage`` that refuses refuses the window, naming the call."""
+    """A receipt producer with a ``stage`` is handed each served call and its rows ``a`` where they are on a CUDA
+    device: the engine's tensor itself, in call order, before any of its step's calls of K are asked; each receipt table
+    is still the producer's ask's words. Rows on the host stage nothing, and a ``stage`` that refuses refuses the
+    window, naming the call."""
     commit, seen = SV.Served.commit, {}
 
     def on_device(self, run, call, a, *rest):

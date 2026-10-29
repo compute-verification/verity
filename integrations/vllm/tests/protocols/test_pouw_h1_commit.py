@@ -390,7 +390,7 @@ UNTIED_A = "roots1: round 0's A table h1/a/64@0 of calls [0, 1] is not the Commi
 
 @pytest.mark.parametrize("edit,own", [(_zero, 2), (_one_row, 1)], ids=["a-all-zero", "one-a-row-off"])
 def test_a_served_a_off_the_commits_arow_credits_nothing(tmp_path, monkeypatch, edit, own):
-    """H1 handed codes other than the ones the Commit acquired (every A all zero, the RT4 A = 0 probe; or one row of call
+    """H1 handed codes other than the ones the Commit acquired (every A all zero, the A = 0 probe; or one row of call
     0), with an honest Commit: the Commit registers those steps' rows as trees of its own at another root, so the
     serving process credits no call (`UNTIED`), and core's credit refuses the window at ``arow`` (also
     `test_credit_gate.test_a_window_whose_tables_are_not_the_commits_is_refused_by_core`)."""

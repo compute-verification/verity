@@ -72,7 +72,6 @@
   "glm53_multimem_replay": {"run": "r20261019-023101-2f28"},
   "tp4_nccl_tree_replay": {"runs": ["r20261018-213408-ac4a", "r20261018-234106-807f", "r20261018-235000-713a"]},
   "rmsnorm_fused_cuda_b1_row": {"closed": "2026-09-08"},
-  "window_fixed_slots": {"ask": "ASK-122"},
   "dense_quarantine": {"by": "lane dense"},
   "bf16_mul_scalar_tensor_difftest": {"by": "lane dense, R13 X-08"},
   "softcap_attention_difftest": {"by": "lane gemma", "job": "0917T223335-9ad747"},

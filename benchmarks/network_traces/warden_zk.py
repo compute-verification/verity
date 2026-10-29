@@ -1,7 +1,7 @@
 """warden-zk: the warden's bucket rows read by the proof system. A toy unit over one row's bits, its port registered
 against the warden's signed egress root (`warden_rows`), proved by C-Flock `prove --zk` behind the Lean firewall and
 held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through the one-stage audit as
-N2-ZK's driver proves N2's head checks.
+`n2_zk.py` proves N2's head checks.
 
     python benchmarks/network_traces/warden_zk.py prove --run DIR --bin flock-circuit --lean flock-verify --out DIR
       [--units 16] [--dry]
@@ -194,7 +194,7 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int = 0) -> st
     return WR.refusal(port, at.dom, mr.entry, [WR.bc(r, s) for r, s in zip(mr.rows, mr.salts)])
 
 
-# --- the audit (N2-ZK's flow on one-stage's a0, a7 and a8) --------------------------------------------------------------
+# --- the audit (`n2_zk`'s flow on one-stage's a0, a7 and a8) ------------------------------------------------------------
 
 def _one_stage():
     sys.path.insert(0, str(ONE_STAGE))

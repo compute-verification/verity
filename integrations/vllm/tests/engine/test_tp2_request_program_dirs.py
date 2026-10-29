@@ -1,5 +1,5 @@
-"""CPU tests for TP-13 (moe): the per-rank sampled replay resolves each declared request's Program DIR by the manifest's lookup of record
-(`required_manifest._program_dirs_for`), so a B>=2 mixed row's nominal-shape request -- which row_pod builds under the bare `build_request/`
+"""CPU tests: the per-rank sampled replay resolves each declared request's Program DIR by the manifest's lookup of record
+(`required_manifest._program_dirs_for`), so a B>=2 mixed workload's nominal-shape request -- which row_pod builds under the bare `build_request/`
 (result.json LP/T), not `build_request_LP<lp>_T<t>` -- is found, and a missing or near shape is still refused by name (never a near shape)."""
 from __future__ import annotations
 

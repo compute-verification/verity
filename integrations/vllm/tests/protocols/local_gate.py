@@ -1,4 +1,4 @@
-"""Infra's challenger gate (`benchmarks/live_challenger/auditor.py` of `cursor/infra-challenger-host-98f5`) run on one node
+"""Infra's challenger gate (`benchmarks/live_challenger/auditor.py`) run on one node
 under a test key, for a rehearsal of a served window (`pouw_h1_rehearsal.py`); run by hand or by that job, never collected.
 
     python -I local_gate.py DIR init --tree TGZ --commit SHA [--params W,H] [--peer NAME] [--ports LO-HI] [--coins lean|stub]
@@ -14,12 +14,12 @@ its own main, since nothing here fetches main) and its LMS key at ``--params``
 (default 4,5: 32 leaves), and builds the Lean verifier whose `one_stage.verifier.coins` serve.py draws its coins from
 (``--coins lean``; ``stub`` serves `stub_serve.py`'s seeded bytes instead, and ``init`` falls back to it, saying why, when
 the build fails). Every verb then runs infra's own code from that tree, which goes first on ``sys.path`` before any
-``verity`` import: `auditor.gate` with its hooks as root and `auditor` would run them on vy-challenger-1 (`reserve`,
+``verity`` import: `auditor.gate` with its hooks as root and `auditor` would run them on the auditor host (`reserve`,
 `admit`, `period`, `await_commitment`, `model_register`), each in this process, and a session's unit (`auditor.run`,
 serve.py with ``--root`` and the session's secret) a detached ``DIR run SESSION`` that holds ``DIR/units/SESSION.lock``
 while it runs, which is the gate's ``active``. The model registry is infra's (`models.py` of the tree): ``admin
 model-register`` reads the checkpoint role's manifest and core's pin from the tree, so the archive carries both
-checkpoint manifests (vLLM's and the torch loop's) beside ``verity``. What differs from vy-challenger-1: one account
+checkpoint manifests (vLLM's and the torch loop's) beside ``verity``. What differs from the auditor host: one account
 runs everything (no ``auditor`` user, ``runuser``, sudoers or systemd unit, so ``own`` does nothing and the registry isn't
 made append-only); the key is a test key of ``--params``, not ``lms.DEPLOYED``; serve.py
 listens on the node itself (no ``--peer``, so no ``ssh -R`` tunnel), on ``--ports`` (default 27811-27899, off the live

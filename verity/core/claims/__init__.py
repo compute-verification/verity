@@ -6,7 +6,7 @@ Id format (shared with the docs site's assumptions registry): an assumption over
 composing a :data:`PROPERTIES` entry with an :data:`INSTANCES` entry -- ``cr/sha-512`` is collision resistance of SHA-512,
 labelled ``CR · SHA-512``, and an algebraic instance makes it ``algebraic``; every other claim is a bare kebab-case id
 (``logup``, ``live-verifier``) in :data:`ENTRIES`, and never contains ``/``.  This module is the source of the ids a render
-cites; ``bench.views --format entities`` carries each cited entry, which is what the site imports.  :func:`get` resolves either.  Only what a render cites is here; a new claim is a new
+cites.  :func:`get` resolves either.  Only what a render cites is here; a new claim is a new
 entry, and an id, once cited, is never renamed.  Stdlib only; imports no other core module.
 """
 
@@ -218,17 +218,33 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
           "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
           "standard"),
+    # The four per-party assumptions of `Accounting.Assumptions.Parties` (Security/Definitions/Accounting/Assumptions/
+    # Parties.lean), each about one auditor party p; the reason to believe them is that p runs on a machine the auditor
+    # owns, which is not itself an assumption.  The device-attest statements (`Properties.Attest`) read them
+    Entry("faithful", "assumption",
+          "Faithful p: the auditor party p runs its stated code on its true inputs, its own clock's readings and its own "
+          "coin source's draws among them, and its state persists: each step starts from the state the last one left, "
+          "never an earlier copy (NIST SP 800-208's no snapshot restore of a stateful hash-based key)", "Faithful party",
+          "standard"),
+    Entry("secret", "assumption",
+          "Secret p: the prover can neither read nor set the auditor party p's signing keys, its LMS leaf states or its "
+          "coins not yet released; what it learns of them is what p's outputs carry", "Secret party", "standard"),
+    Entry("confined", "assumption",
+          "Confined p: the auditor party p's only outputs are the messages of its declared channels (toward the auditor, "
+          "its manifest's public messages, such as one liveness record per sampling block): no other channel, timing "
+          "included, carries its state out", "Confined party", "standard"),
+    Entry("witness-path-private", "assumption",
+          "Witness path private: the path between an auditor party and the prover carries no observer but its two "
+          "endpoints, so the party's private messages (its signed roots and records, the prover's witness) reach nobody "
+          "else; they travel unencrypted for now", "Witness path private", "standard"),
     # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
     # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
     Entry("certifier-coverage", "assumption",
           "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
           "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
           "Certifier coverage", "standard"),
-    # `Accounting.Placed.LatencyAtMost` (Security/Definitions/Accounting/Physical.lean) is its Lean form, a premise of the
-    # proof-of-space pool's count (Accounting.Guarantees.Actual.AnsweredOfQuiet, WipeReadHeld): with the memory
-    # challenger's acceptance of late answers only (Accounting.Assumptions.LateAnswers) it refuses a label sent before
-    # its read (red team 3's H2). Falsified by a delivery slower than the ceiling, measured on the server's certified
-    # egress links
+    # `Accounting.Placed.LatencyAtMost` (Security/Definitions/Accounting/Physical.lean) is its Lean form. Falsified by a
+    # delivery slower than the ceiling, measured on the server's certified egress links
     Entry("latency-ceiling", "assumption",
           "Latency ceiling: every wire from the audited server to the network certifier on its egress delivers within "
           "the stated ceiling of its send, and nothing between them holds a value longer",

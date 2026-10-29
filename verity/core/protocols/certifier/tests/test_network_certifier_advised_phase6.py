@@ -23,7 +23,7 @@ import signers
 from advised_traffic import LINK, StandInClocks, StandInTie, held
 
 T, R, RIN = 4, 32, 9
-#: CERT-VARLEN's id-request framing at B = 4096 (`active.id_request_frames`): a prompt of up to 337 tokens is one
+#: The id-request framing at B = 4096 (`active.id_request_frames`): a prompt of up to 337 tokens is one
 #: frame, of 338 to 399 two
 RF = (1,) * 337 + (2,) * 62
 SHORT, LONG = 16, 338

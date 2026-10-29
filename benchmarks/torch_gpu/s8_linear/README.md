@@ -42,17 +42,17 @@ gates the kernel on the demo's seeded weights at the H200 shape (`e2e_h200.serve
 | `tune.py` | the config sweep (kbench's interleaved timing, each config gated before it is timed) |
 | `bench.py`, `lt.py`, `roofline.py` | time against M for the exact kernels, cuBLASLt int8 autotuned and vLLM's CUTLASS, against the s8 peak (measured and data-sheet readings) and the measured DRAM bandwidth |
 | `commit.py` | a layer's op outputs as hm96-sha512 row tables, timed against the layer's linears |
-| `run.sh` | steps of these scripts on one leased GPU of vy-dc-h200, a lease each, from build.sh's ship |
+| `run.sh` | steps of these scripts on one leased GPU of an H200, a lease each, from build.sh's ship |
 
 `tests/` holds the twin to the Definition's evaluator for both steps, `int_mm.linear` on the CPU and its PTX audit to the
 twin and small listings, wgmma.py's host side and the SASS gate to the kernel's source and small listings, and the
 roofline analysis to synthetic curves (CPU).
 
 ~~~text
-research run --on auto --project verity --campaign e2e-demo --source . --cwd source -- \
-  bash -lc 'uv sync -q --all-packages --extra torch-cpu && bash benchmarks/torch_gpu/s8_linear/build.sh "$OUT/ship"'
-tar -C BUILD_RUN/out/ship -cf /tmp/s8-ship.tar .
-research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 90m \
-  --env GPU_LEASE_WHO=LANE --send /tmp/s8-ship.tar -- bash benchmarks/torch_gpu/s8_linear/run.sh "run.py" "tune.py" \
+# from the tree's root, on a CPU node with CUDA 13's nvcc
+uv sync --all-packages --extra torch-cpu && bash benchmarks/torch_gpu/s8_linear/build.sh /tmp/s8-linear-ship
+tar -C /tmp/s8-linear-ship -cf /tmp/s8-ship.tar .
+# on an H200 with CUDA torch, vLLM and `gpu-lease`
+OUT=DIR S8_SHIP=/tmp/s8-ship.tar bash benchmarks/torch_gpu/s8_linear/run.sh "run.py" "tune.py" \
   "bench.py --configs @OUT@/2-tune/best.json"
 ~~~

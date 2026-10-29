@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# exactlin's served standard number on node 2 (RTX PRO 6000), vy-dc-h200 or vy-dc-b200: dither's sbench.py (the arms stock,
+# exactlin's served standard number on an RTX PRO 6000, an H200 or a B200: dither's sbench.py (the arms stock,
 # stock-percall, stock-cutlass on sm_90, exact and exact-fused, which need none of Dither's libraries) on one leased GPU for
 # at most SERVED_MAX_MIN (25) minutes, with the clocks read before and after, and with an exact-fused arm only after kgate.py's
 # bitwise gate (every config row, both models) passed in the same lease.  Extra arguments go to sbench.py; stock first, so its
@@ -7,8 +7,8 @@
 # SERVED_SCRIPT (a path from the repository root) runs another script in sbench.py's place, e.g. values.py; SERVED_KGATE=1|0
 # forces the gate on or off.  Inside the lease everything runs on the leased GPU's NUMA node, as dither's sbench.sh runs it
 # (benchmarks/hash/dither/numabind.py, DITHER_NUMA=0 unbound; env/numa.json and summary.json's "numa" say which).
-#   research run --on vy-dc-h200 --project verity --campaign exactlin --source . --cwd source \
-#     --env GPU_LEASE_WHO=WHO -- bash benchmarks/hash/exactlin/served.sh \
+# On an H200 under a GPU lease:
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/exactlin/served.sh \
 #     --arms stock-cutlass,stock,exact,exact-fused --gate --ops decode --reps 3 --t 64 --gpu-mem 0.2
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/env"

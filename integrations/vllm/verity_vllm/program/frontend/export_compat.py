@@ -233,11 +233,11 @@ def host_facts() -> dict:
     return h
 
 
-#: [R13 moe] the vLLM dispatcher custom ops whose body is PURE PYTHON DISPATCH to the computation (no kernel of their own):
+#: the vLLM dispatcher custom ops whose body is PURE PYTHON DISPATCH to the computation (no kernel of their own):
 #: `vllm.moe_forward[_shared](hidden, router_logits, ..., layer_name)` -> `MoERunner._forward_impl`, and inside it
 #: `vllm.fused_experts(...)` -> `fused_moe.fused_experts_op` -> `fused_experts_impl` (the router top-k, the block schedule, the two
 #: grouped-GEMM Triton launches, the activation and the routed sum).  Exported as opaque nodes they hide the whole MoE block behind
-#: ONE mutating op no rule can bind (R12 F-moe-02 / B-MOE); traced through their bodies, the block is the leaf kernels the rules bind
+#: ONE mutating op no rule can bind; traced through their bodies, the block is the leaf kernels the rules bind
 #: (`_moe_C.topk_softmax`, `_moe_C.moe_align_block_size`, `fused_moe_kernel` x2 via `verity_cba::triton_launch`, `_C.silu_and_mul`,
 #: `_moe_C.moe_sum`) -- the same launches the eager capture records.  Generic: names the dispatcher ops, not a model/layer.
 _MOE_DISPATCH_OPS = ("moe_forward", "moe_forward_shared", "fused_experts")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Verity R8 lane B-kernel: build one FA2 forward variant as a standalone torch extension.
+"""Verity: build one FA2 forward variant as a standalone torch extension.
 
 Compiles the pinned vllm-flash-attn (506341a1) hdim64 bf16 split-KV forward kernels
 (+ pinned flash_api.cpp, our varlen_fwd-only registration and link stubs) with
@@ -36,7 +36,7 @@ class Options:
     files: str = option('--files', default='split_causal,split_align_noncausal,split_noncausal,split_align_causal',
                         help='comma list of kernel .cu groups to compile (per head dim)')
     hdims: str = option('--hdims', default='64',
-                        help='R13 fa2 v8: comma list of bf16 head dims whose split-KV kernels are compiled (64,96,128,256)')
+                        help='v8: comma list of bf16 head dims whose split-KV kernels are compiled (64,96,128,256)')
     arch: str = option('--arch', default='8.0')
     no_ptxas_v: bool = option('--no-ptxas-v', default=False, action='store_true')
     tree_commit: str = option('--tree-commit', default='')

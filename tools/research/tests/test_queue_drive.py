@@ -276,7 +276,7 @@ def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refus
     assert drive.merge_thread_post("x", ("@ci", "@lean"), sender="lean")
     assert argv[-1][argv[-1].index("--as") + 1] == "lean"
     assert argv[-1][argv[-1].index("--to"):argv[-1].index("--quiet")] == ["--to", "@ci"]
-    assert all("--machine" in cmd for cmd in argv)                       # a report, held to no post length
+    assert all("--report" in cmd for cmd in argv)                       # a report, held to no post length
 
     h = Harness(world, monkeypatch)
     logged = []

@@ -9,7 +9,7 @@
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
 
-It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
+It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
 ``data: {...}`` event per engine output, the usage chunk, ``data: [DONE]``), or as one JSON response. vLLM's OpenAI server
 is the reference: under ``--protocol vllm`` (the default) a request is parsed by its ``CompletionRequest`` (defaults,
@@ -80,7 +80,7 @@ it is written before the pending seals too, and its ``final`` is true only once 
 ``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
-through infra's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
+through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to the remote
 bandwidth audit's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
 record is ``remote_session.json``, and a rejected session fails the exit.
@@ -700,9 +700,7 @@ def main(opts: Options) -> int:
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
-        if opts.protocols:
-            arm = SH.H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
-                               config=SH.config_of(opts.protocols_config), sessions=SH.sessions_of(opts))
+        arm = SH.arm_of(opts, llm, com, out)
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -788,6 +786,8 @@ def main(opts: Options) -> int:
             stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
+        if arm is not None:                              # each H1 window's release (off the loop) ends before ``final``
+            arm.drain()
         watchdog.stop()
         summary = stopped(True)
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)

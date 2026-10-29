@@ -1,4 +1,4 @@
-"""R16 pin -- form (B) qualification evidence (BRIEF §4B, COORD R16 ruling 4): a COLLECTOR-SIDE perturbation with the reference observation
+"""Form (B) qualification evidence: a COLLECTOR-SIDE perturbation with the reference observation
 UNCHANGED must fail the oracle-compare.
 
 The two identity->value paths (code provenance, rg on the release tree):

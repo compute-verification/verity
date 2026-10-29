@@ -244,7 +244,6 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
     | .error e => Except.error s!"setup: {e}"
   let programSha := programDigest p.program
   let want := getD p.partition "program"
-  let mut setups : Array (Option String × V (Flock.SessionSpec × Array Flock.Setup × Json × Json)) := #[]
   let mut coinKeys : Array String := #[]
   let mut out : Array (String × Json) := #[]
   let mut proved : Array Nat := #[]
@@ -253,13 +252,8 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
     let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
       | throw s!"session {s.name}'s record is not UTF-8"
     let draw := Flock.Witness.recordDraw record
-    let key := draw.map fun d => (Flock.canon d).toOption.getD ""
-    let mut st : V (Flock.SessionSpec × Array Flock.Setup × Json × Json) := .error "setup: none"
-    match setups.find? (·.1 == key) with
-    | some (_, x) => st := x
-    | none =>
-      st := setupOf draw
-      setups := setups.push (key, st)
+    -- never another session's setup: every draw whose canonical JSON fails would share one key
+    let st := setupOf draw
     let files : V (Array ByteArray) := do
       let (spec, _, _) ← st
       spec.repStreams.mapM fun (_, _, w) => do

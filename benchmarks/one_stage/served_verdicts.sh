@@ -12,7 +12,10 @@
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
-#     so the engine's idle closes them into one window. The lease ends once every closed window is sealed. Each request's
+#     so the engine's idle closes them into one window. With LOAD=fixed (default varied) they are one full window of fixed
+#     length instead (`serve_load.py --fixed SLOTS --window-steps WINDOW_STEPS`): SLOTS requests of PROMPTS tokens, each
+#     with ignore_eos and max_tokens WINDOW_STEPS, all prefilled at the window's first step and run through its last. The
+#     lease ends once every closed window is sealed. Each request's
 #     send, first-token and done times (the load's timings file, `serve_load.py`'s docstring) go to $OUT/timings/; each
 #     committed step's end is $OUT/serve/step_trace.jsonl's t_end, on the clock of the timings' start_unix.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
@@ -86,6 +89,7 @@ export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
 count() { cat "$1" 2>/dev/null | grep -c .; }
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
+case ${LOAD:=varied} in varied | fixed) ;; *) say "PREFLIGHT: LOAD is varied or fixed, not $LOAD"; exit 3 ;; esac
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
 weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
@@ -188,9 +192,17 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   fi
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$OUT/serve.log" | cut -c1-300)"
   weights
+  if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier's warden in front of the endpoint, before the requests
+    # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests
+    (cd "$TREE" && timeout -k 1m 20m bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$OUT/certifier-front") \
+      > "$OUT/certifier-front.log" 2>&1
+    say "CERTIFIER-FRONT (exit $?): $(tail -1 "$OUT/certifier-front.log" | cut -c1-600)"
+  fi
   release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
-  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$REQUESTS" --rate "$RATE" --prompt-range "$PROMPTS" \
-    --max-tokens "$MAX_TOKENS" --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$OUT/load.log" 2>&1
+  local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
+  [ "$LOAD" = fixed ] && load=(--fixed "$SLOTS" --window-steps "$WINDOW_STEPS")
+  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
+    --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$OUT/load.log" 2>&1
   rc=$?
   say "REQUESTS (exit $rc, release run $release): $(tail -1 "$OUT/load.log" | cut -c1-300)"
   mkdir -p "$OUT/timings" && cp "$D/load.timings.json" "$OUT/timings/" || say "TIMINGS: no $D/load.timings.json"

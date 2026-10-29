@@ -1,6 +1,6 @@
 """block-certifier: certifier/v0's period answer as the block record's certifier entry (``legs.certifier`` of
-``verity/block-record/v1``, CMP-95 item 6), and the answer ``network-period check`` gives on a period's case, which
-`chain_record` re-decides an answer by before it writes the entry.
+``verity/block-record/v1``), and the answer ``network-period check`` gives on a period's case, which `chain_record`
+re-decides an answer by before it writes the entry.
 
 * `check`: ``network-period check`` on a case (`NetworkCheck.Period`'s formats: its ``params``, ``commitment`` and
   ``evidence``), its answer.
@@ -44,10 +44,10 @@ def check(exe: str, case: Mapping[str, Any]) -> dict[str, Any]:
 
 def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real",
               owner: str | None = "network-accounting") -> dict[str, Any]:
-    """The block record's certifier leg (``legs.certifier`` of ``verity/block-record/v1``, CMP-95 item 6) of one
-    period's ``network-period check`` answer, in the clock form or the rows form: the answer's verdict, reason,
-    commitment and public; the quantity K, the bits a covert sender in ``server`` can move over the link in the
-    period's ``windows`` link-windows; the error the answer's exact ``eps``; and the certificate at each δ of
+    """The block record's certifier leg (``legs.certifier`` of ``verity/block-record/v1``) of one period's
+    ``network-period check`` answer, in the clock form or the rows form: the answer's verdict, reason, commitment and
+    public; the quantity K, the bits a covert sender in ``server`` can move over the link in the period's ``windows``
+    sampling blocks; the error the answer's exact ``eps``; and the certificate at each δ of
     `BLOCK_DELTAS`, K wherever ``eps`` ≤ δ, else not established. ``runs``: the run ids it comes from; ``source``:
     ``real`` or ``fixture``. Only an accepted answer certifies a K, so any other is a ValueError: the record's
     quantity has no shape for a period that certifies nothing."""

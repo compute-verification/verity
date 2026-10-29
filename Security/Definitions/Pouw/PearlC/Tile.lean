@@ -2,18 +2,18 @@ import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.PearlC.Instance
 
 /-!
-# The per-tile cap and the sampled audit (trusted; the cheap-binding lane's file)
+# The per-tile cap and the sampled audit (trusted)
 
 The verifier opens drawn tiles, not units: `verity.protocols.accounting.work.pouw.audit` draws `t` tiles independently, each with probability
 `W_ref(tile)/W`, and recomputes each drawn tile from its openings (its activation rows and weight rows over the full k).
-So the debit cap has to be decided on a tile, and γ has to hold for a verifier that checks drawn tiles only (the red
-team's F1, `internal/pouw/red-team-pearl-c-vllm.md`). This file states both; `TileGamma` proves γ from them.
+So the debit cap has to be decided on a tile, and γ has to hold for a verifier that checks drawn tiles only. This
+file states both; `TileGamma` proves γ from them.
 
 - **A tile** is the output words `rows g × cols g` of one unit (`Tiling`). The named tiling is the audit's grid of
   `64 × 64` words (`auditTiling`).
 - **Credited rows.** A tile's rows whose activation row passes Π's rules (`PearlCSem.RowOK`, `PearlCSem.passRows`) are
   credited. A row that fails them (a massive activation the fixed `S_ℓ` doesn't cover) stays in its unit, computed and
-  bound, and earns no credit: the plan's one per-row rule (`docs/pouw/pearl-c-vllm-plan.md` §13). The verifier checks
+  bound, and earns no credit: the plan's one per-row rule. The verifier checks
   that an excluded row fails the rules, which is what makes it uncredited here.
 - **A good tile** (`TileGood`): its replayed debit on its credited rows is within the cap, each of its weight rows
   passes the rules (`weightOK`), and each ticket and useful word of its credited rows is correct. A weight row is never
@@ -23,13 +23,13 @@ team's F1, `internal/pouw/red-team-pearl-c-vllm.md`). This file states both; `Ti
     over the words, is replayed from the openings;
   - the forming debit reads the tile's rows and its words' flags.
 - **The credit** of a good tile is fixed at `(1 − ρ)·creditOf` times its credited rows' share of its unit's words
-  (`pearlCTiles`), whatever its debit within the cap. The kernel lane credits an accepted tile this way.
+  (`pearlCTiles`), whatever its debit within the cap. The kernel credits an accepted tile this way.
 - **The draw's weights** are every tile's full `W_ref`, fixed by the layout; the certified work counts credited rows only
   (`TileRules.Wcred`).
 - **Blank units** are the ones the prover leaves uncommitted. Their tiles are never checked and never credited.
 - **`GγSampled`:** for every adversary, the probability that the audit accepts and the credited work, less `ε_s` of the
   layout's, exceeds `T/(1 − γ)` is at most `(1 − ε_s)^t + η(q, N)`. The draw is independent of the oracle and the salt,
-  so its source must be fixed only after the transcript's commitment (the red team's F8).
+  so its source must be fixed only after the transcript's commitment.
 -/
 
 namespace Pouw.PearlC
@@ -181,7 +181,7 @@ open Classical in
 /-- **A tile's replayed debit** in H100 units, on the unit's noisy codes and flags (`unitChain`, `Skip.unitFlags`):
 - **the chain:** `debitOf` of the tile's flagged atom-words, its words' share of the unit's `atoms` (additive over words,
   and each word's flags read only its two rows);
-- **the forming, P3's per-tile rule** (`internal/pouw-fp8/pearl-c-forming.md`, "The per-tile cap"): each A′ element of
+- **the forming, P3's per-tile rule** ("The per-tile cap"): each A′ element of
   the tile's rows that is salt-dead, or that no word of the tile needs (every word `(i, j)` with `j` in the tile's
   columns has the atom containing it flagged), at `fs` times the tile's column share `|cols|/n`, the share of the
   element's forming that the tile's credit carries. Needed is judged on the tile's own words, which over-debits against
@@ -203,8 +203,7 @@ noncomputable def PearlCSem.tileDebit (sem : PearlCSem Q R S) (c : Costs) (H : Q
 - `rowOK`: `PearlCSem.RowOK`, Π's rules on one activation row;
 - `credit`: `(1 − ρ)·creditOf` times the credited rows' share, fixed;
 - `capOK`: the replayed debit on the credited rows (`tileDebit`) is at most `ρ·creditOf` times their share;
-- `Wref`: `wrefOf` times the tile's share, as `verity.protocols.accounting.work.pouw.audit`'s `tickets` weigh a tile once its `wref` is `wrefOf`
-  (the red team's F2);
+- `Wref`: `wrefOf` times the tile's share, as `verity.protocols.accounting.work.pouw.audit`'s `tickets` weigh a tile once its `wref` is `wrefOf`;
 - `Wcred`: `wrefOf` times the credited rows' share. -/
 noncomputable def pearlCTiles (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) : TileRules Q R S where
   tiling := auditTiling 64 64

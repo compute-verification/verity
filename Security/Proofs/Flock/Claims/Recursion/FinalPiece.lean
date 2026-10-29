@@ -8,7 +8,7 @@ The final check's residuals pieces are `GfResiduals`' groups: a `rec-residuals` 
 residuals at the elements their input columns read (`partAccepts_inner`), and check 5 asks them to be zero at the held
 messages' rows and the coins' coefficients. This file states that piece's lowering fact (`partAccepts_resZero`) with
 one hypothesis, check 5's tie at the `m<r>` rows (`ResTie`: a copy's output columns are zero and its `v` port reads the
-verifier's `v`), which waits on the vcalls ask (`note:20261024T2340Z-draft-vcalls-ask`): the tie goes from "same
+verifier's `v`), which is open: the tie goes from "same
 digest" to "same row" through a collision with the verifier's own evaluations, which only option A's escape charges.
 
 * **The residuals vanish where the tie holds** (`resVal_zero_of_tie`): a copy's output columns hold its residuals

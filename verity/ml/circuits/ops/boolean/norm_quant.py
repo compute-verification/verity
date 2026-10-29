@@ -1,4 +1,4 @@
-"""RMSNorm into the s8 quantizer as Boolean Definitions whose norm output is never committed (CIR-107): a proof block reads a
+"""RMSNorm into the s8 quantizer as Boolean Definitions whose norm output is never committed: a proof block reads a
 C-word part of the row x, the gain w's same words and the row's S chunk sums, recomputes the norm's output there and returns
 what the quantizer's block over that output returns.
 

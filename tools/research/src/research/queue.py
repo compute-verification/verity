@@ -139,7 +139,8 @@ mark (`Queue._carried`); drive tells the owner of an unmarked one that a marked 
 on its diff against `main`, or against the PR it's stacked on) and contains none of those merged with it goes below every Lean
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
 Members the sync keeps never move for it, but for drive's lift (`Queue.lift`, `Driver._lift`): while no Lean check of `next` runs
-or passed, the reviewed members that change no Lean above its lowest Lean change go to the bottom, and land at once.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
+or passed, the members with a land verdict go below those waiting for one (drive.toml's `reviewed_first`), those that change no
+Lean first, each after the PRs it contains and none past a held member, and land at once.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them; while its head stays, later syncs try it, and the PRs that contain it,
 above everything else, whatever `--first` or non-Lean first would say, so a sync with nothing new keeps `next`.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
@@ -389,6 +390,9 @@ class DriveFlags:
     #: what a sync merges onto `next` anyway goes non-Lean changes first (`Queue._nonlean_order`), so they don't wait above a
     #: Lean change for its Lean check
     nonlean_first: bool = True
+    #: while no Lean check of `next` runs, members with a land verdict go below those waiting for one (`Driver._lift`), so a
+    #: member waiting for its review holds only itself
+    reviewed_first: bool = True
     #: days an open PR unmarked at its head stays idle before it is stale (`research.stale`: `status` says so, drive rings its
     #: owner once a day), and before drive closes it; 0 is off
     stale_days: int = 0
@@ -431,7 +435,7 @@ class DriveFlags:
             if not (isinstance(doc["marked_after"], str) and MARK_TIME_RE.fullmatch(doc["marked_after"])):
                 raise bad("marked_after", "a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
             got["marked_after"] = doc["marked_after"]
-        for k in ("regenerate_locks", "nonlean_first"):
+        for k in ("regenerate_locks", "nonlean_first", "reviewed_first"):
             if k in doc:
                 if not isinstance(doc[k], bool):
                     raise bad(k, "true or false")
@@ -805,7 +809,8 @@ class Queue:
                  before_cutoff: Callable[[int, str], str | None] | None = None,
                  marked_by: Callable[[int, str], str | None] | None = None,
                  marked_at: Callable[[int, str], str | None] | None = None,
-                 prefetch: Callable[[list[tuple[int, str]]], None] | None = None, nonlean_first: bool | None = None):
+                 prefetch: Callable[[list[tuple[int, str]]], None] | None = None, nonlean_first: bool | None = None,
+                 reviewed_first: bool | None = None):
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         self.shadow, self.log, self._rules, self.auth, self.first = shadow, log, rules, auth, tuple(first)
         self.before_cutoff, self.marked_by, self.marked_at, self.prefetch = before_cutoff, marked_by, marked_at, prefetch
@@ -814,13 +819,16 @@ class Queue:
         self.hold = 0
         #: whether a sync merges non-Lean changes first (`_nonlean_order`); None: drive.toml's `nonlean_first` at `main`
         self.nonlean_first = nonlean_first
+        #: whether drive's lift puts members with a land verdict below those without (`Driver._lift`); None: drive.toml's
+        #: `reviewed_first` at `main`
+        self.reviewed_first = reviewed_first
         #: each (head, base)'s `lean_change`
         self._lean_of: dict[tuple[str, str], bool] = {}
         #: members a running check (or a `hold`ing passed one) covers that keep their place at the head it checks though their PR's head has moved
         #: (`Driver`: a new head doesn't cancel a running check, and its PR rejoins above once that check ends)
         self.frozen: set[int] = set()
-        #: members `next` keeps that this sync moves below the rest, in this order, at the heads it holds (`Driver._lift`: reviewed
-        #: ones that change no Lean, above a Lean change no running or passed Lean check holds); what `order` moved of them
+        #: members `next` keeps that this sync moves below the rest, in this order, at the heads it holds (`Driver._lift`: those
+        #: with a land verdict, non-Lean first, while no Lean check of `next` runs or passed); what `order` moved of them
         self.lift: list[int] = []
         self._lifted: list[int] = []
         self.now: Callable[[], float] = time.time
@@ -1085,6 +1093,11 @@ class Queue:
             place(n)
         return out
 
+    def flag(self, name: str) -> bool:
+        """drive.toml's ``name`` (`nonlean_first`, `reviewed_first`) as this queue takes it: its own setting, else `main`'s."""
+        own = getattr(self, name)
+        return own if own is not None else getattr(flags_at(self.workdir, "refs/remotes/origin/main"), name)
+
     def _same_or_fixed(self, m: Member, entries: dict[int, Entry]) -> bool:
         """Whether member ``m``'s PR is at the head `next` holds, or at a head that descends from it (a fix on top, or a merge of a
         PR below it): such a re-mark keeps its place, since its new head is preflighted and checked like any other, and a PR
@@ -1244,10 +1257,10 @@ class Queue:
 
         def nonlean() -> bool:
             if not flag:
-                flag.append(self.nonlean_first if self.nonlean_first is not None else flags_at(self.workdir, main).nonlean_first)
+                flag.append(self.flag("nonlean_first"))
             return flag[0]
 
-        order = last(self.order(chain, entries, self.lift if self.lift and nonlean() else ()))
+        order = last(self.order(chain, entries, self.lift))
         heads = {n: frozen.get(n, entries[n].pr.head) for n in order}
 
         def kept(order: list[int]) -> int:
@@ -1256,8 +1269,8 @@ class Queue:
 
         k = kept(order)
         if lifted := k < len(self._lifted):
-            self.log(f"research queue: {' '.join(f'#{n}' for n in self._lifted)} (reviewed, no Lean change) go to the bottom of "
-                     f"`{self.branch}`, below a Lean change that waits for its Lean check")
+            self.log(f"research queue: {' '.join(f'#{n}' for n in self._lifted)} (reviewed) go to the bottom of `{self.branch}`, "
+                     "below what waits for a review or a Lean check")
         # a lift merges the members above it again in their order: only what comes new goes non-Lean first, so an unreviewed
         # member doesn't go below the Lean change and keep it from its Lean check
         j = max(k, max((i + 1 for i, n in enumerate(order) if n in on), default=0)) if lifted else k
@@ -3800,7 +3813,8 @@ def main(argv: list[str]) -> int:
             flags = base.override(a)
             if not flags.on:
                 raise QueueError(f"drive needs a machine for the checks it launches: set `on` in {where}, or pass --on MACHINE")
-            q.first, q.nonlean_first, a.marked_after = flags.first, flags.nonlean_first, flags.marked_after
+            q.first, q.nonlean_first, q.reviewed_first = flags.first, flags.nonlean_first, flags.reviewed_first
+            a.marked_after = flags.marked_after
             labels.since = a.marked_after
             q.log(f"research queue drive: flags from {where}: {flags.line()}")
         if not a.marked_after:

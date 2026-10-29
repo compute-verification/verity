@@ -1,4 +1,4 @@
-"""M3's live draw over the H200 block's step (PRF-172, plan (b)): commit a lockstep run's steps under salt keys only the prover
+"""M3's live draw over the H200 block's step: commit a lockstep run's steps under salt keys only the prover
 can rebuild, register their roots, and after the auditor's live coin re-run the same steps, hold every slot root and step root
 to the registered ones, and write the drawn units' values and openings.
 

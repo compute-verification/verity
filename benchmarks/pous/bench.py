@@ -1,5 +1,4 @@
-"""The POUS benchmark harness: one command per (scheme, implementation, weight set, hardware), recorded through
-`research run` as an Attempt.
+"""The POUS benchmark harness: one command per (scheme, implementation, weight set, hardware).
 
     python benchmarks/pous/bench.py --scheme band-chain/d12/v1 --impl reference --weight-set qwen2.5-0.5b/linears+head \\
       --hardware l40s-48gb/bf16 --out DIR [--workers N] [--max-segments N] [--audits 20]
@@ -9,7 +8,7 @@
       --weight-set qwen2.5-0.5b/linears+head --hardware rtx-4090/e4m3 --out DIR [--nvme-dir DIR]
 
 Every implementation passes the same gates and reports the same metrics, written to `bench-result.json`
-(`verity-pous/bench-result/v1`) and, under `research run`, to `$RESEARCH_RUN_DIR/result.json`:
+(`verity-pous/bench-result/v1`) and, when `RESEARCH_RUN_DIR` is set, to `$RESEARCH_RUN_DIR/result.json`:
 
 * **Gates.**
   - The scheme's pinned conformance vectors (`verity/core/protocols/pous/tests/fixtures/schemes/<name>.json`), through
@@ -27,9 +26,9 @@ Implementations (`IMPLS`), each adding one class:
 
 * `reference`: `verity.core.protocols.pous` itself, the specification, over CPU processes. W is filled deterministically, since the
   decode's cost does not depend on its bytes.
-* `vllm-gpu`: the GPU twins and kernels of `verity_vllm.engine.pous` (#172, #188), from `--impl-tree`.
+* `vllm-gpu`: the GPU twins and kernels of `verity_vllm.engine.pous`, from `--impl-tree`.
   - It runs through that tree's frozen harness, `verity-vllm pous-dense-bench`, with the flags of the band's run of
-    record (`r20260928-032701-b4a1`, `FROZEN_FLAGS`).
+    record (`FROZEN_FLAGS`).
   - Nothing here changes that harness; its `dense-bench.json` is read back.
 * `p2-v1-gpu`: P2 v4, the specification (`p2_v1/`): its reference pinned by the spec's vectors, its GPU library
   (decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots) and the same harness steps as `band-gpu`
@@ -75,7 +74,7 @@ SCHEMA = "verity-pous/bench-result/v1"
 WEIGHT_SETS = HERE / "weight_sets.json"
 FROZEN_FLAGS = ["--reps", "3", "--thread-rows", "500", "--word-io", "--fused", "--pair", "--pair-max-rows", "7500", "--chunked",
                 "--chunked-threads", "64", "--split", "--fused-x", "--whole-chain"]
-"""`pous-dense-bench`'s kernel flags in the band's run of record (`r20260928-032701-b4a1`, #188 at `4e491631`)."""
+"""`pous-dense-bench`'s kernel flags in the band's run of record (the implementation at `4e491631`)."""
 SALT = bytes(range(24))
 BATCHES = ("1", "8", "32")
 
@@ -242,7 +241,7 @@ class Reference:
                 "elapsed_max_ns": max(elapsed), "elapsed_median_ns": statistics.median(elapsed)}
 
 
-# ---------------------------------------------------------------------------------------------------------- vllm-gpu (#188)
+# ---------------------------------------------------------------------------------------------------------------- vllm-gpu
 
 class VllmGpu:
     """The GPU twins of `verity_vllm.engine.pous`, through their tree's frozen harness `verity-vllm pous-dense-bench`."""
@@ -423,7 +422,7 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the memory challenger's round-trip allowance")
     ap.add_argument("--workers", type=int, default=cpus(), help="reference: CPU processes (default: the usable CPUs)")
     ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v1-gpu: only the first N segments (0: all)")
-    ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous (#188)")
+    ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous")
     ap.add_argument("--impl-commit", help="the implementation's source commit, recorded")
     ap.add_argument("--build-dir", default="/workspace/pous_build", help="vllm-gpu, band-gpu, p2-v1-gpu: the pous_native JIT build directory")
     ap.add_argument("--python", default=sys.executable, help="vllm-gpu: the interpreter with torch")

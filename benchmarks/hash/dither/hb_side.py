@@ -9,7 +9,7 @@ seeds and none of the units. Every other version and every other attribute is h1
 coins, poisoning and `dither_fused.check` (every receipt against h1r v1, three units against h1tile.reference) are
 unchanged. What is committed, before which coin, and every receipt are the same as `dither-side`'s.
 
-The library is h1u.cu built by job.sh (a variant's .so, `HB_H1U`), sent to the run with --send.
+The library is h1u.cu built by job.sh (a variant's .so, `HB_H1U`), in the run's inputs.
 """
 from __future__ import annotations
 

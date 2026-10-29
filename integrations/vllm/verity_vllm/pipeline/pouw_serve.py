@@ -6,7 +6,7 @@ first call's tiles tampered.
 
 The engine is `verity_vllm.LLM` on the workload's pinned model, with ``pouw:ncp-v2`` installed. Every linear call is
 committed natively as it is served (`protocol_options.pouw_native`), under an epoch whose salt is the salt coin of the
-auditor host's challenger at ``--challenger``, in the session infra's gate opened for the window (``--session``, the
+auditor host's challenger at ``--challenger``, in the session the gate opened for the window (``--session``, the
 gate's answer, `protocol_options.pouw_h1_challenger`), opened after the weights' root. Without ``--challenger`` the salt
 is the command's own challenger's (`verity.core.protocols.pouw.coins.Challenger`, epoch 0, its coins the Lean verifier of
 record's, `pouw.verifier.coins`): the command is then its run's auditor, and the run is a measurement, not a window any
@@ -55,7 +55,7 @@ class Options:
 
 
 def protocols_config(a: Options) -> dict[str, Any]:
-    """PoUW's settings: the salt from the auditor host's challenger in the session infra's gate opened (``--challenger``,
+    """PoUW's settings: the salt from the auditor host's challenger in the session the gate opened (``--challenger``,
     ``--session``), else from the command's own in-process challenger."""
     if a.challenger is None:
         if a.session is not None:

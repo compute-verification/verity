@@ -228,8 +228,7 @@ class Wipe:
 
     #: the per-server bound against `M_s` is a draft; per device, the streamed wipe
     SERVER = ("draft:wipe-per-server",)
-    DEVICE = ("Pous.Guarantees.StreamedWipeMeets2600GB", "Accounting.Guarantees.Actual.WipeReadHeld",
-              "Accounting.Guarantees.Actual.WipeLag")
+    DEVICE = ("Pous.Guarantees.StreamedWipeMeets2600GB",)
 
     def __post_init__(self) -> None:
         if self.per not in PER:
