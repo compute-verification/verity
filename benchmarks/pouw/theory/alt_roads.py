@@ -220,7 +220,7 @@ def r4_capacity_reading(inp: dict, ll: dict) -> dict:
                          "excess_idle_stock_macs_per_stock_mac": excess,
                          "over_budget": excess / 0.01,
                          "t2_allowed": 1.0 + (0.01 + alpha - 1.0) * e_lin,
-                         "excess_at_co_run_rate": excess * acc["co_run_rate_beside_hash"]})
+                         "excess_at_co_run_rate": acc["co_run_peak_share_beside_hash"] * (t2 - 1.0) / e_lin})
     ratio_floor = 0.0619 * s["floor_units_per_byte"]
     ratio_sha = 0.0619 * s["sm_clk_per_compression"] * inp["h200"]["tensor_units_per_sm_clk"] / 128.0
     point = inp["points"]["t8192"]
@@ -328,6 +328,9 @@ def checks(inp: dict, ll: dict, res: dict) -> list[tuple[str, bool, str]]:
          res["R2"]["rtt_over_recompute"] > 1, f"{res['R2']['rtt_over_recompute']:.0f}x"),
         ("R4: every SSN schedule leaves more than 1% of stock idle on the tensor pipe",
          all(r["over_budget"] > 1 for r in res["R4"]["rows"]), ""),
+        ("R4 at C26's co-run share reproduces its ~51 stock forwards for NCP at 160x (T 8,192)",
+         abs(inp["accounting"]["co_run_peak_share_beside_hash"] * 160.0 / stock_tensor_share(inp, ll, pts["t8192"], False) / 51.0 - 1) < 0.1,
+         f"{inp['accounting']['co_run_peak_share_beside_hash'] * 160.0 / stock_tensor_share(inp, ll, pts['t8192'], False):.1f}"),
     ]
     return out
 

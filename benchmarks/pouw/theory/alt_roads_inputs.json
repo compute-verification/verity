@@ -65,7 +65,7 @@
     "year_s": 31536000,
     "dc_gpus": 100000,
     "world_flop_per_year": 9.36e30,
-    "co_run_rate_beside_hash": 0.11,
+    "co_run_peak_share_beside_hash": 0.071,
     "source": "SW-PREMISES section 5 (2,079/16 ANDs an int8 MAC); benchmarks/census/deployments.json dc-12500-machines-600s; adversary.json world-inference-2027; C26's one co-run (GEMMs beside the hash at 11% of their rate, power-limited, not a bound)"
   }
 }
