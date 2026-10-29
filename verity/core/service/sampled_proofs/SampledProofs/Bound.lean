@@ -85,11 +85,12 @@ def bernoulliBound (population : Nat) (p δ : Ratio) : Nat := Id.run do
     if escapes p δ mid then lo := mid else hi := mid
   return lo
 
-/-- The strata a profile's draw reads as (`IntegrityProfile.strata`): its own, or one stratum for a uniform k-subset;
-`none` for a Bernoulli draw. -/
+/-- The strata a profile's draw reads as (`IntegrityProfile.strata`): its own, a work design's at their `k_s`, or one
+stratum for a uniform k-subset; `none` for a Bernoulli draw. -/
 def strataOf (population : Nat) : Core.Draw → Option (Array Stratum)
   | .subset k => some #[{ name := "unit", size := population, k }]
   | .stratified strata => some strata
+  | .work _ strata => some (strata.map (·.toStratum))
   | .bernoulli _ => none
 
 /-- `IntegrityProfile.bound`: the most wrong units an accepted transcript has at δ, over the strata the draw reads as

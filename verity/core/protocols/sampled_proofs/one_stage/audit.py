@@ -28,7 +28,7 @@ from typing import Any, Mapping, Sequence
 
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.partition import Level
-from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
+from verity.core.protocols.profile import Bernoulli, Draw, IntegrityProfile, Stratified, Stratum, Subset, Work, WorkStratum
 
 from .draw import check_draw, check_proved, law_of
 from .registration import digest as registration_digest
@@ -67,6 +67,21 @@ def core_law(law: Mapping[str, Any], population: int) -> Stratified | None:
     if law.get("law") in ("stratified", "work"):
         return Stratified(tuple(Stratum(s["template"], sum(hi - lo for lo, hi in s["units"]), s["k"]) for s in law["strata"]))
     return None
+
+
+def design(law: Mapping[str, Any]) -> Draw:
+    """The sampling design of a well-formed law or draw (`check_draw`'s), as the profile writes it (Lean
+    `Core.Draw.ofFlock`): each stratum named by its template, its size its ranges' total, and a work sampling design's
+    `Work` with its works and floors."""
+    if law["law"] == "subset":
+        return Subset(law["k"])
+    if law["law"] == "bernoulli":
+        return Bernoulli(Fraction(law["p"]))
+    sizes = [sum(hi - lo for lo, hi in s["units"]) for s in law["strata"]]
+    if law["law"] == "work":
+        return Work(law["k"], tuple(WorkStratum(s["template"], n, s["k"], s["work"], s["floor"])
+                                    for s, n in zip(law["strata"], sizes)))
+    return Stratified(tuple(Stratum(s["template"], n, s["k"]) for s, n in zip(law["strata"], sizes)))
 
 
 def wrong_units(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> dict[str, Any]:
@@ -168,5 +183,5 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["FORMAT", "LEVEL", "PROFILE", "audit_record", "core_law", "integrity_profile", "profile", "session_registered",
-           "wrong_units"]
+__all__ = ["FORMAT", "LEVEL", "PROFILE", "audit_record", "core_law", "design", "integrity_profile", "profile",
+           "session_registered", "wrong_units"]
