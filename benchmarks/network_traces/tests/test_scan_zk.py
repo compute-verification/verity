@@ -732,10 +732,10 @@ def test_w63k4s_rounds_read_as_w63s(tmp_path):
     assert at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28} and [x.q for x in at.chain.scan[29].slots] == [5, 2, 3, 4]
     assert at.outputs == {q: r for q, r in enumerate(s.responses, 1)}
     rounds = {k: {m.name: m for m in ms} for k, ms in h.rounds.items()}
-    blk, nb = rounds["block"], T // s.cls.EVERY
-    assert [(m.name, m.n, m.refused, m.outputs) for m in blk.values()] == [
-        (f"block-c{j}", nb, None, None) for j in range(s.cls.NR)]
-    assert sum(m.n for m in blk.values()) == sz.entries_of(s.cls, 1, T) == 8
+    nb = T // s.cls.EVERY
+    assert [(m.name, m.base, m.n, m.lane, m.refused, m.outputs) for m in rounds["block"].values()] == [
+        (f"block-c{j}", j * nb, nb, j, None, None) for j in range(s.cls.NR)]
+    assert s.cls.NR * nb == sz.entries_of(s.cls, 1, T) == 8
     honest = rounds["honest"]
     assert [(m.name, m.base, m.n) for m in honest.values()] == [("first", 0, 1), ("ingress-0", 1, T - 2),
                                                                 ("last", T - 1, 1), ("egress-0", T, T)]

@@ -34,14 +34,14 @@ the checker form is a bad scan (`bad_scans`), as is each check's negative of wha
 (`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold the
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
-draw (a work law's) and its bound on wrong units, every unit drawn for an audit a scan's `prog` is tied to, or its slot
-entries' and scan slots' templates whole and the rest in part (`tied-partial`, a stratum a template, `_by_template`;
-refused: `tied-undrawn`, one such audit drawn `subset:k`, k < N, and `tied-entries-undrawn` and `tied-slots-undrawn`,
-its slot entries' or scan slots' stratum in part), and a link-window whose scan's state is not its wired audit's
-`SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions, at another root
-or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a
-decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a
-composition's difftest takes a real component's cases.
+draw (a work law's) and its bound on incorrect proof blocks, every unit drawn for an audit a scan's `prog` is tied to,
+or its slot entries' and scan slots' templates whole and the rest in part (`tied-partial`, a stratum a template,
+`_by_template`; refused: `tied-undrawn`, one such audit drawn `subset:k`, k < N, and `tied-entries-undrawn` and
+`tied-slots-undrawn`, its slot entries' or scan slots' stratum in part), and a link-window whose scan's state is not its
+wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
+at another root or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a
+verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
+its answer, as a composition's difftest takes a real component's cases.
 
 This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
 so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by path."""
@@ -82,7 +82,7 @@ ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"
 ONE_STAGE = R.PROTOCOL
 FORMATS = (R.FORMAT, R.FORMAT_V2)
-#: a proof unit's public outputs are at most 16 bits (the values it commits can be wider)
+#: a proof block's public outputs are at most 16 bits (the values it commits can be wider)
 OUT_BITS = 16
 UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
@@ -184,7 +184,7 @@ class Params:
 class Scan:
     """`Scan`: the scan's monitoring period (T), its own free inputs (none: its `prog` is a compute audit's slot
     entries, `_wired`, whose free inputs a link-window's term counts, `_tied_audits`), the bits one ingress and one
-    egress instance commit, and its slot entries' bits (`E_w`), all a tied audit's wrong units can set."""
+    egress instance commit, and its slot entries' bits (`E_w`), all a tied audit's incorrect proof blocks can set."""
     steps: int
     free: int
     ingress: int
@@ -1013,8 +1013,8 @@ def _facts_json(f: Facts) -> dict:
 
 def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries: int | None = None) -> dict:
     """`AuditTerms.of` (a compute audit's, `per_unit` its Program's widest unit's committed bits) and `Scan.terms` (a
-    scan's, `per_unit` the wider instance's committed bits, `entries` the slot entry bits its tied audits' wrong units
-    can set, `faulty_entries`)."""
+    scan's, `per_unit` the wider instance's committed bits, `entries` the slot entry bits its tied audits' incorrect
+    proof blocks can set, `faulty_entries`)."""
     return _facts_json(f) | {"faulty_bits": f.wrong * per_unit, "faulty_sets": clog2(at_most(f.units, f.wrong)),
                              "free": free, "jitter": clog2(jitter ** steps)} | (
         {} if entries is None else {"faulty_entries": entries})
@@ -1025,7 +1025,7 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | 
     """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
     link-windows' scans (`scans`, each its facts, its tied audits' free inputs and its `β_w`; None in the clock form),
     where a compute audit's own terms are in none, a tied audit's free inputs are in its link-window's `free` and its
-    wrong units in its `faulty_entries`, and the δ of a tied audit drawn in part (`charged`) is in `eps`."""
+    incorrect proof blocks in its `faulty_entries`, and the δ of a tied audit drawn in part (`charged`) is in `eps`."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
@@ -1345,8 +1345,8 @@ def _unit_sig(S):
     return (("x", Array(1, U16)),), Array(S.OUT, BYTE)
 
 
-#: A compute audit's stand-in unit: it commits `OUT` bytes, a proof unit's 16-bit public output (`OUT` = 2) or more or
-#: fewer, each one gate.
+#: A compute audit's stand-in unit: it commits `OUT` bytes, a proof block's 16-bit public output (`OUT` = 2) or more
+#: or fewer, each one gate.
 AUDIT_UNIT = CompositeDefinition("NetworkPeriodAuditUnit", 0, ("OUT",), _unit_sig,
                                  lambda B, S, x: B.batch(LOW, x[0], axes=(None,), n=S.OUT), register=False)
 #: The stand-in unit's widths in bytes: one under, at and over the public output's 16 bits.
