@@ -214,12 +214,12 @@ is in `eps`:
   at the tied audits' samples (`tiedPool`): `N_t` the tied audits' proof blocks over the link-windows, `q_t` the least
   per-proof-block detection probability of a tied audit's sample (`drawRate`: `k / n`, or the least `k_s / n_s` of its
   strata), `δ_t` the least δ of a charged one, `F_t ≥ ln(1/δ_t)/q_t` (`tiedF`), and `R` its link-window's `E_w`, every
-  entry bit a tied proof block's outputs can reach. `pool` is that pool when its count is the smaller, else null and
-  `κ_t = Σ_w β_w`.
+  entry bit a tied proof block's outputs can reach. `pool` is that pool, null when no tied audit is charged or a tied
+  sample detects nothing, and then `κ_t = Σ_w β_w`, as it is when the pool's count is not the smaller.
 * `eps` is the scans' δ summed, `m · δ`, each tied audit's drawn in part (`chargedOf`), whose bound `faulty_entries`
-  reads, and `δ_t` when `pool` is not null: the δ part of the union over the monitoring period's windows that
-  `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors, and of the
-  tied audits' pooled bound, at `δ_t` plus their knowledge errors.
+  reads, and `δ_t` when `κ_t` is the pool's count, below `Σ_w β_w` (`Public.charging`): the δ part of the union over
+  the monitoring period's windows that `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error
+  and its collision errors, and of the tied audits' pooled bound, at `δ_t` plus their knowledge errors.
 
 **Profile**: the link and `m`.
 
@@ -1311,15 +1311,19 @@ structure Public where
   charged : Array Facts := #[]
   /-- `κ_t`, the tied audits' capacity term over the monitoring period (`Pool.capacity`; 0 in the clock form). -/
   capacity : Nat := 0
-  /-- The tied audits' pool when `κ_t` is its count rather than `Σ_w β_w` (`rowsTerms`), so whose δ is in `eps`. -/
+  /-- The tied audits' pool (`tiedPool`), whose count `κ_t` is when it is below `Σ_w β_w` (`Public.charging`). -/
   pool : Option Pool := none
 
 def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.units.map (·.bits)).foldl (· + ·) 0 + x.capacity
 
-/-- `Σ_i δ_i` over the units, the charged audits and the pool, exactly, in lowest terms: the union bound on `K`
-failing. -/
+/-- The pool when `κ_t` is its count, below the units' `Σ_w β_w`, so whose δ is in `eps`. -/
+def Public.charging (x : Public) : Option Pool :=
+  x.pool.filter (·.bits < (x.units.map (·.faultyEntries)).foldl (· + ·) 0)
+
+/-- `Σ_i δ_i` over the units, the charged audits and the pool `κ_t` charges, exactly, in lowest terms: the union
+bound on `K` failing. -/
 def Public.eps (x : Public) : Core.Ratio :=
-  let (n, d) := ((x.units.map (·.facts) ++ x.charged).map (·.delta) ++ (x.pool.map (·.delta)).toArray).foldl
+  let (n, d) := ((x.units.map (·.facts) ++ x.charged).map (·.delta) ++ (x.charging.map (·.delta)).toArray).foldl
     (fun (n, d) (δ : Core.Ratio) => (n * δ.den + δ.num * d, d * δ.den)) (0, 1)
   ⟨n / Nat.gcd n d, d / Nat.gcd n d⟩
 
@@ -1346,8 +1350,7 @@ def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array (Facts × Nat �
     (jitter windows : Nat) (charged : Array Facts := #[]) (pool : Option Pool := none) : Public :=
   let span := (scans.map (·.2.2)).foldl (· + ·) 0
   { audits := facts, cells := capsTerm cells, units := scans.map fun (f, t, b) => scan.terms f t b jitter,
-    rows := true, schedules := capsTerm cells, windows, charged, capacity := Pool.capacity pool span,
-    pool := pool.filter (·.bits < span) }
+    rows := true, schedules := capsTerm cells, windows, charged, capacity := Pool.capacity pool span, pool }
 
 /-- Audit `i`'s facts when the rows form charges it: accepted, tied to a link-window's scan (`tiedOf`) and drawn in
 part, so its at most `b` wrong units are in its link-windows' terms (`faultyEntries`) and its δ in `eps`. -/
@@ -1593,8 +1596,8 @@ def protocol : Core.Protocol where
   let f : Facts := { units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }
   let pool : Pool := { f := 14, reach := 896, blocks := 16, delta := ⟨1, 10 ^ 6⟩, q := ⟨1, 1⟩ }
   let over := fun (m : Nat) => rowsTerms #[] scan ((Array.range m).map fun _ => (f, 9088, 896)) #[] 1 m #[] (some pool)
-  pool.bits == 12614 && (over 1).capacity == 896 && (over 1).K == 9088 + 896 && (over 1).pool.isNone &&
-    (over 1).eps.toString == "1/100" && (over 20).capacity == 12614 && (over 20).K == 20 * 9088 + 12614 &&
-    (over 20).pool.isSome && (over 20).eps.toString == "200001/1000000"
+  pool.bits == 12614 && (over 1).capacity == 896 && (over 1).K == 9088 + 896 && (over 1).pool.isSome &&
+    (over 1).charging.isNone && (over 1).eps.toString == "1/100" && (over 20).capacity == 12614 &&
+    (over 20).K == 20 * 9088 + 12614 && (over 20).charging.isSome && (over 20).eps.toString == "200001/1000000"
 
 end NetworkCheck.Period

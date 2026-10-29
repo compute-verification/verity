@@ -1077,9 +1077,9 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | 
     where a compute audit's own terms are in none, a tied audit's free inputs are in its link-window's `free`, and the δ
     of a tied audit drawn in part (`charged`) is in `eps`. The entry bits the tied audits' incorrect proof blocks can set
     are charged once a period as `capacity` (`Pool.capacity`): min(F_t (R + ⌈log2 (N_t + 1)⌉), Σ_w β_w) at the tied
-    audits' `pool` (`_tied_pool`), whose δ is in `eps` when its count is the smaller."""
+    audits' `pool` (`_tied_pool`), whose δ is in `eps` when its count is the smaller (`Public.charging`)."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
-    capacity, shown = 0, None
+    capacity, charging = 0, None
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
         schedules = clog2((len(p.sync_set.deltas) * len(p.sync_set.rhos)) ** p.windows)
@@ -1091,14 +1091,14 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | 
         span = sum(b for _, _, b in scans)
         bits = None if pool is None else pool["f"] * (pool["reach"] + clog2(pool["blocks"] + 1))
         capacity = span if bits is None else min(bits, span)
-        shown = pool if bits is not None and bits < span else None
+        charging = pool if bits is not None and bits < span else None
         out = {"audits": [_facts_json(f) for f in facts], "capacity": capacity,
-               "pool": None if shown is None else {"blocks": shown["blocks"], "delta": str(shown["delta"]),
-                                                   "f": shown["f"], "q": str(shown["q"]), "reach": shown["reach"]},
+               "pool": None if pool is None else {"blocks": pool["blocks"], "delta": str(pool["delta"]),
+                                                  "f": pool["f"], "q": str(pool["q"]), "reach": pool["reach"]},
                "scans": units}
     K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"] for t in units) + capacity
     eps = sum((Fraction(t["delta"]) for t in units), Fraction(0)) + sum((f.delta for f in charged), Fraction(0)) + (
-        Fraction(0) if shown is None else shown["delta"])
+        Fraction(0) if charging is None else charging["delta"])
     return out | {"K": K, "cells": cells, "eps": str(eps), "schedules": schedules, "windows": p.windows}
 
 
