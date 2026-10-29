@@ -11,13 +11,14 @@ At a coin value `ω` of `O` where nothing hashed collides with the honest commit
 
 * `32 · regCount ≤ work σ′` (`regs_le_cost`): `H32` floors every register writer at 32 a register, and `W1` makes each
   instruction well formed;
-* `writes + shaRegs ≤ regCount`: `OneInstructionMinimal`;
+* `tileWords · writes + shaRegs ≤ regCount`: `OneInstructionMinimal`, a tile write `tileWords` registers;
 * the hash part of the honest work is at most `shaRegs` (`hash_le_shaRegs`): `HonestHashRuled` and no collision put
   every distinct honest message among the hashed ones, `CommitL1w` bounds their ShaWrites credit below by the hash part,
   and `ShaWrites` bounds the hashed credit by `shaRegs`;
 * `work σ′ ≤ work σ + 32 · networkGap`: `OutsourceWithinEgressLead`.
 
-Summed over `O`, the words floor bounds `Σ writes`, and `|O| ≤ |Ω|` charges the network term within the gap.
+Summed over `O`, the words floor bounds `Σ tileWords · writes`, and `|O| ≤ |Ω|` charges the network term within the
+gap.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Compose
@@ -25,7 +26,8 @@ namespace Pouw.SecurityProofs.Lead.Compose
 open Finset Pouw.Lead Pouw.Assumptions.Lead Pouw.Dimension.H100 Pouw.Dimension.Pointwise
 
 /-- The gap less the network term: the words floor's share. -/
-def wordsGap (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) : ℚ := headGap L C + hidingGap L + coinBranchGap L + pStarGap L
+def wordsGap (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) : ℚ :=
+  headGap L C + hidingGap L + coinBranchGap L + pStarGap L + tableGap L
 
 theorem gapRegs_eq (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) : gapRegs L C = wordsGap L C + networkGap L := by
   unfold gapRegs wordsGap; ring
@@ -37,8 +39,8 @@ theorem honestRegs_eq (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) : honestRe
   unfold honestRegs hashRegs; ring
 
 /-- **The words floor** at the lead (the piece taken as a hypothesis): summed over coin values `O` on which an
-egress-free realizable strategy is accepted, its run writes at least `|O|` times the words less `|Ω|` times the words
-gap. -/
+egress-free realizable strategy is accepted, its run's tile writes, `tileWords` registers each, are at least `|O|` times
+the words less `|Ω|` times the words gap. -/
 def WordsFloor : Prop :=
   ∀ (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
@@ -49,7 +51,7 @@ def WordsFloor : Prop :=
     ∀ σ, Real σ → ∀ O : Finset (Coins (lead T m n K)),
       (∀ ω ∈ O, (σ.exec ω).egress = 0 ∧ Accepted (lead T m n K) H C κ σ ω) →
       (O.card : ℚ) * wordsRegs (lead T m n K) - (Fintype.card (Coins (lead T m n K)) : ℚ) * wordsGap _ C ≤
-        ∑ ω ∈ O, (writes (σ.exec ω).steps : ℚ)
+        ∑ ω ∈ O, ((tileWords * writes (σ.exec ω).steps : ℕ) : ℚ)
 
 /-- An instruction's price is at least 32 a register it writes, under `H32`, when it is well formed. -/
 theorem op_regs_le_price {G : Type} {pr : Prices100} (h : H32 pr) {F : Set (G → ℚ)} (o : Op100 G)
@@ -120,23 +122,25 @@ theorem G_of_wordsFloor (hW : WordsFloor) : Pouw.Guarantees.Lead.G := by
   have hacc' : ∀ ω ∈ O, (σ'.exec ω).egress = 0 ∧ Accepted (lead T m n K) H C κ σ' ω := fun ω hω => by
     obtain ⟨he, hh, hr, -, -⟩ := htwin ω
     obtain ⟨hhold, hroot⟩ := hacc ω hω
-    exact ⟨he, fun i t j => hh _ _ (hhold i t j), hr.trans hroot⟩
+    exact ⟨he, fun rb hrb cb hcb t => hh _ (hhold rb hrb cb hcb t), hr.trans hroot⟩
   have hnb' : ∀ ω ∈ O, ¬ Break (lead T m n K) H C κ σ' ω := fun ω hω => by
     unfold Break
     rw [(htwin ω).2.2.2.1]
     exact hB ω hω
   have hfloor := hW fpSem H T m n K κ stream C Real hκ hC.1 htile hlane σ' hσ' O hacc'
   have hstep : ∀ ω ∈ O,
-      32 * ((writes (σ'.exec ω).steps : ℚ) + hashRegs (lead T m n K) C) - 32 * networkGap (lead T m n K) ≤
+      32 * (((tileWords * writes (σ'.exec ω).steps : ℕ) : ℚ) + hashRegs (lead T m n K) C) -
+          32 * networkGap (lead T m n K) ≤
         (σ.work pr ω : ℚ) := by
     intro ω hω
     have hreg : (32 * regCount (σ'.exec ω).trace : ℚ) ≤ σ'.work pr ω := by
       exact_mod_cast regs_le_cost h32 _ (hw1 σ' hσ' ω)
-    have hmin : ((writes (σ'.exec ω).steps + (σ'.exec ω).shaRegs : ℕ) : ℚ) ≤ regCount (σ'.exec ω).trace := by
+    have hmin : ((tileWords * writes (σ'.exec ω).steps + (σ'.exec ω).shaRegs : ℕ) : ℚ) ≤
+        regCount (σ'.exec ω).trace := by
       exact_mod_cast hone σ' hσ' ω
     have hh := hash_le_shaRegs hC hsha hhon hσ' (hacc' ω hω).2 (hnb' ω hω)
     have hn := (htwin ω).2.2.2.2
-    push_cast at hmin
+    push_cast at hmin ⊢
     linarith
   have hsum := sum_le_sum hstep
   rw [sum_sub_distrib, ← mul_sum, sum_add_distrib, sum_const, nsmul_eq_mul, sum_const, nsmul_eq_mul] at hsum
