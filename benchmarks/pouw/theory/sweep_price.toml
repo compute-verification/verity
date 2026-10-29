@@ -57,6 +57,12 @@ ms = [0.011485, 0.01153, 0.011666, 0.012316, 0.019577, 0.020197, 0.026735, 0.054
 kind = "measured"
 source = "SW-GPU interim §1-2: coinsncp, one operand's NCP noise from SHA-512 counter-mode coins and its three formed copies (E2 = E1 shifted 24) written to HBM, a whole call, checked bit-exact, run r20261029-044623-0ed1 (r20261029-045206-f69c within 0.4%), vy-dc-h200-5 (art:0e8dd09b9791fed32c68cea5d1c8514345307fcdb290a00f6a752b265bed180e); log-log between sizes, the smallest call's time below it (one compression's dependency chain), linear above"
 
+[price.coins]
+entries = [131072, 458752, 524288, 1048576, 3670016, 4194304, 6291456, 14680064, 16777216, 29360128, 33554432, 51380224, 58720256, 67108864, 262668288, 1073741824]
+ms = [0.009281, 0.00948, 0.009505, 0.009547, 0.015947, 0.016231, 0.022925, 0.049361, 0.055948, 0.095494, 0.108784, 0.162192, 0.188602, 0.214764, 0.805472, 3.259232]
+kind = "measured"
+source = "SW-GPU final §2: coins alone, SHA-512 counter-mode XOF bytes for a whole call, one byte an entry, checked bit-exact, run r20261029-044623-0ed1 (art:c6d75315170fee55e03eb81f0e1d345024d57a872e39535c599f662c3f215401), vy-dc-h200-5; a 9.3 us floor below 1 M entries"
+
 [price.extract]
 sts_units_per_word = 125.96
 sts_mhz = 1814.2
@@ -197,6 +203,13 @@ ctx8k = 0.0348
 kind = "measured"
 source = "CORE-NCP final §4: NCP as served (int7 activations and weights on +-63) over stock int8, Llama-3.2-1B (art:0b068bfc0614cbff8c589585b4ec68577d738a9c2aced3f043cdba7685dcd1fb; runs r20261029-005411-f350 and the parts listed there)"
 
+[t3.ssn-a-b1-v1]
+models = []
+ctx2k = "?"
+ctx8k = "?"
+kind = "unmeasured"
+source = "SW-NOISE §5's served format (P' = P + a·W0 - beta, stock int8 +-127); SW-NOISE estimates the served noise's std at 6.1 accumulator units at K 2,048, about 2% of the int8 quantization error's; SW-PPL to measure (not in its 05:30Z note)"
+
 [t3.int8-stock]
 ctx2k = 0.0
 ctx8k = 0.0
@@ -207,7 +220,9 @@ source = "the served product is stock's own int8 product (the noise cancels exac
 # faithfulness, 4 SAK, 5 hardness). status: proved, measured, ruled, assumed, scratch (proved outside the lock), open
 # (stated, not yet proved or run), refuted. A premise closes T1 terms (`closes`; hiding_salt credits the salt side's PRF
 # and c as hashing, hiding_mask closes M_key·y, hiding the whole salt side), forces honest's committed registers
-# (`forces_committed`), makes a word committed every L <= `word_forces_steps` force its L/32 steps, and may require others.
+# (`forces_committed`), charges a committed word every L steps `word_units` W1 units (an expression in L and reg; `reg`
+# without one, MH100w's anyFunctionCeiling), with the fast scheme's saving charged against it when `fast_saving`, and
+# may require others.
 [premise.H32]
 rank = 1
 status = "measured"
@@ -295,28 +310,70 @@ owner = "SW-SEM"
 requires = ["H32"]
 source = "SW-PREMISES interim #6 TensorSemantics: a tensor instruction's output register is the captured exact s8 k32 dot of its operand tiles plus its accumulator (P1Int, P2Local, the captured dots), at its measured price; rank 1 with H32's rank-3 completeness (SW-OLD ranks it 3). The bridge into MH100w (whose wgmma writes any function) isn't stated"
 
+[premise.class-semantics]
+rank = 1
+status = "open"
+owner = "SW-SEM"
+requires = ["H32", "tensor-semantics"]
+source = "SW-SEM interim (H100Sem.lean on cursor/compute-research-sw-sem-0bb6 at 7efe5af4cb): every instruction class semantic, .int, .other and .fp64 as well as the tensor (rank 1, the ISA as the H200 executes it). tcOnlyCeiling (proved): the tensor premise alone buys nothing, since a program with no tensor instruction meets it and writes any word at 32 by .other"
+
 [premise.forming-counting]
 rank = 0
 status = "open"
 owner = "SW-SEM"
-requires = ["tensor-semantics"]
+requires = ["tensor-semantics", "class-semantics"]
 closes = ["forming"]
-source = "CORE-TIME final §3; SW-PREMISES #6; SW-OLD top 3 #1 (Claim P, paper): with the tensor's semantics a program whose words are NCP's bilinear forms writes (3mK + 3nK)/4 formed registers or pays more tensor words; unproved"
+source = "CORE-TIME final §3; SW-PREMISES #6; SW-OLD final pick 1 (Claim P with Theorem C, paper): with the tensor's semantics a program whose words are NCP's bilinear forms writes (3mK + 3nK)/4 formed registers or pays more tensor words; unproved. It takes every class semantic, not the tensor's alone: by SW-SEM's tcOnlyCeiling a program writing NCP's words by .other at 32 each forms nothing and meets the tensor premise"
 
 [premise.merge-k64]
 rank = 0
-status = "open"
+status = "refuted"
 owner = "SW-SEM"
 requires = ["tensor-semantics"]
-word_forces_steps = 64
-source = "SW-OLD top 3 #2: with tensor semantics, Theorems B and C (a merge saves <= L/2 at kappa = 1/2, a reused word <= L) make merges harmless up to L = 64 at H32's 32 a merge; needs B and C in Lean, kappa = 1/2 proved (only searched), c = 1 for s32 words (the hardest open item) and NCP's noise at rank >= L a chunk (A13). Fast bilinear schemes are priced separately (price.fast_matmul)"
+word_units = "reg*L/32 if L <= 64 else reg"
+fast_saving = true
+source = "refuted by SW-OLD final (note compute-research/20261029T0450Z-report-sw-old, art:23672edccf40d63a2c04662f14ec099d1473d7ccc155c2c2cba7fffc96cbced7): Theorem B's kappa = 1 is asymptotically tight, about 35 saved a merge at L 64 against 32 a register, so merge counting certifies no more than write counting. Was SW-OLD top 3 #2 (kappa = 1/2 by search)"
 
-[premise.own-products]
-rank = 4
-status = "assumed"
+[premise.alg-suff-l]
+rank = 3
+status = "open"
 owner = "SW-SEM"
-word_forces_steps = 1073741824
-source = "SW-PREMISES interim #23 OwnProducts: a committed L-sum costs at least L/32 tensor writes, no bilinear exchange or wider instruction cheaper; rank 4 today (CORE-RANK), the only premise that commits less often than every k64"
+source = "SW-SEM interim AlgSuffL, A2's analogue for a word every L: nonlinear lanes (bit planes, nibbles, lookups) don't beat bilinear ones; model faithfulness, rank 3"
+
+[premise.bam-floor]
+rank = 2
+status = "open"
+owner = "SW-SEM"
+requires = ["class-semantics", "alg-suff-l"]
+word_units = "64 - 1024/L"
+source = "SW-SEM interim BamFloor, the counting lemma: with every class semantic a committed word every L steps costs at least 64 - 1024/L (48 at L 64, 56 at L 128, 60 at L 256), which is all rank <= 3 premises certify; a floor over every program, so no fast scheme is charged against it. Its arithmetic core lcommitFloorArith and the rank fact innerProductRank are proved; the combinatorial step (a merge-free word's chain has L/32 registers of its own) is a prose sketch, rank 2 once proved"
+
+[premise.no-sharing-gain]
+rank = 5
+status = "open"
+owner = "SW-SEM"
+requires = ["class-semantics"]
+word_units = "reg*L/32"
+fast_saving = true
+source = "SW-SEM interim NoSharingGain (open, rank 4 to 5; priced at 5): a lower bound on matrix multiplication's cost, a committed L-sum costing L/32 registers with merges priced and operand ranges enforced; false without the operand ranges (one Strassen-Winograd level gains past L about 256-384), so the fast scheme's saving at the operands' range is charged against it. Replaces SW-PREMISES' OwnProducts (#23, rank 4)"
+
+[premise.ncp-r-check]
+rank = 2
+status = "open"
+owner = "SW-SEM"
+source = "SW-SEM interim: NCP's noise isn't fresh (blocks 2 and 3 reuse E1 through R), so a bound for a word every L covers NCP only after a rank-modulo-earlier check per R; a CPU check, not yet run"
+
+[premise.ssn-distinct]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+source = "SW-NOISE interim §4 (a): SSN-A's words D_t(i,j) + sum_{s<=t,q} a_{i,s,q} W0[s,q,j] - beta_j are pairwise distinct and non-free as functions of the coins whatever A and B (distinct rows' coins, W0's injective step-1 code, a nonzero pattern a step); a polynomial-identity lemma, the int8 case of DistinctLiveH1T (open, not refuted); checked by run r20261029-050602-bc03 on simulated degenerate data only"
+
+[premise.ssn-success-set]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+source = "SW-NOISE interim §4 (e): b1's mask gives 4 bits a row a step, so a success set of measure 2^-4 can erase a step's noise for a row; DistinctWrites charges words distinct on the success set S, which distinctness over every salt doesn't give. Needs a lemma bounding the words lost against S's measure (b4's 16 bits a step at the same cost is the safer default)"
 
 [premise.lane-semantics]
 rank = 3
@@ -359,8 +416,28 @@ pre_noise_bytes = "m*K"
 operand_max = 126
 served = "int7-pm63"
 lane_fix = { U = "3*n*K", "U'" = "4*m*K" }
+coin_calls = { coinsncp = ["m*K", "n*K"] }
+wide = "measured"
+final_target = false
 variant = "ncp-k32-sha512-fresh"
 source = "verity/core/protocols/pouw/schemes/ncp.py's structure: X = [A+E1 | A+E2 | -(A+E3)], Y = [B+F1; B+F2; B+F3], E2 = E1·R and F2 = -R·F1 word moves (word_perm), E3, F3 inside IADD3s; the noise cancels inside the 3K-wide product, no de-noise; E1's seed reads root(A). The variant priced here is not the tree's ncp-v1 (SW-SMELL P5): k32 words, not every 16-deep step; SHA-512, not SHAKE256; F1 fresh every call, not per (epoch, weight); Y and c0 formed every call, not once per run (circuit/ncp2.py). lane_fix (SW-SMELL S9, entries at reg/4): route U makes X + beta u8 and Y s8, and Y's signed bytes cross zero under the noise, so each Y register takes a second write (24/m); route U' makes X s8 and Y + gamma u8, a second write a X register and the row init -gamma·sum_k A_ik (24/n + 8/n). c0 is fixed per weight on route U (SW-SMELL: the F's cancel in Y's column sums)"
+
+[noise.ssn-a]
+r = "32*ceil(K/28)/K"
+formed_x = "0"
+formed_y = "0"
+noise_x = "4*m*ceil(K/28)"
+noise_y = "0"
+denoise = "0"
+pre_noise_bytes = "m*K"
+operand_max = 127
+served = "ssn-a-b1-v1"
+lane_fix = { none = "0" }
+coin_calls = { coins = ["4*m*ceil(K/28)"] }
+wide = "proportional"
+final_target = true
+variant = "ssn-a-b1-v1"
+source = "SW-NOISE interim §4 (note compute-research/20261029T0511Z-report-sw-noise; noise_sweep.py on cursor/compute-research-sw-noise-5e1a at 2bd86b3343, run r20261029-050602-bc03, art:c5ef8493accf11159affbc36721a185e44d272bcafc12c533fb8f1fe65f733a4): served sparse noise. Each k32 step holds 28 of A's entries and one register a = h & 0x01010101 of a raw 32-bit coin word h a row (one LOP3 a row a step: the derivation, 4 entries a register); Y's 4 rows a step are the public W0, so nothing is formed (the producer writes A in the gapped layout by free moves) and nothing is de-noised; the noise is served, so the final word is a target and no final-word lemma is needed; stock int8 +-127 on both sides, so no lane fix and no wrap. Every k32 word is committed (L 32 only: at L 64 the step count ceil(K/28) is odd at K 8,192, and a word every L > 32 needs SW-SEM's credit, which SW-NOISE didn't price). The stacked width's extra GEMM is priced at the plain GEMM's time a MAC (estimate: no 28+4 kernel exists); coins are 4 XOF bytes a row a step"
 
 # The hm96 row layouts: a_row is A's commitment's leaf ("row": one activation row of K bytes, the shortest chain before
 # the call's noise; else bytes, capped at A's), row the leaf of the committed words and operands.
@@ -397,22 +474,41 @@ commit = { L = 64, word_bits = 32, operands = ["formed_x", "formed_y", "noise_x"
 premises = ["H32", "W1", "atomic-call", "period-inventory", "weights-distinct", "final-word-lemma", "commit-forced", "ShaSpeed", "hash-compose"]
 source = "a control: density without candidate 2"
 
-# The sweep: every combination of a word every L, the classes committed, how forming is charged when X and Y aren't
-# committed (`count`: the counting lemma), how the derivation is charged when E and F aren't (`min`:
-# OneInstructionMinimal), the row layout, how the salt side's hiding is charged (`hiding`), and the route. Each takes
-# `base`; L in `steps` adds that entry's premises, a committed class adds commit-forced, and `count`, `min`, `hiding` and
-# `routes` add theirs. Named ncp-k<L>-<classes>[-count][-min]-<layout>[-<hiding>][-u2].
+[design.ncp-k64-merge-0505]
+title = "the 05:05Z interim's best, ncp-k64-w-count-min, on the k64 merge charge (refused: merge-k64 is refuted)"
+noise = "ncp"
+commit = { L = 64, word_bits = 32, operands = [], rows_mix_final = true, layout = "r256k", route = "mix" }
+premises = ["H32", "W1", "atomic-call", "period-inventory", "weights-distinct", "final-word-lemma", "tensor-semantics", "merge-k64", "class-semantics", "forming-counting", "lane-semantics", "one-instruction-minimal", "hiding-ruled", "route-u2", "ShaSpeed", "hash-compose"]
+source = "note compute-research/20261029T0450Z-report-sw-price, 05:05Z revision"
+
+# The sweep: every combination of a word every L, how a word every L > 32 is credited (`credit`: SW-SEM's BamFloor at
+# rank <= 3, or NoSharingGain), the classes committed, how forming is charged when X and Y aren't committed (`count`:
+# the counting lemma), how the derivation is charged when E and F aren't (`min`: OneInstructionMinimal), the row layout,
+# how the salt side's hiding is charged (`hiding`), and the route. Each takes `base`; a credit adds its premises, a
+# committed class adds commit-forced, and `count`, `min`, `hiding` and `routes` add theirs. Named
+# <noise>-k<L>[-<credit>]-<classes>[-count][-min]-<layout>[-<hiding>][-u2]. The k64 merge charge is refuted (SW-OLD
+# final) and swept no more.
 [sweep.ncp]
 noise = "ncp"
 L = [32, 64, 128, 256, 512, 1024, 2048]
+credit = { bam = ["tensor-semantics", "class-semantics", "alg-suff-l", "bam-floor", "ncp-r-check"], nsg = ["tensor-semantics", "class-semantics", "no-sharing-gain", "ncp-r-check"] }
 operands = { w = [], ef = ["noise_x", "noise_y"], xy = ["formed_x", "formed_y"], xyef = ["formed_x", "formed_y", "noise_x", "noise_y"] }
-steps = { 64 = ["tensor-semantics", "merge-k64"], above = ["own-products"] }
-charge = { count = ["tensor-semantics", "forming-counting"], min = ["lane-semantics", "one-instruction-minimal"] }
+charge = { count = ["tensor-semantics", "class-semantics", "forming-counting"], min = ["lane-semantics", "one-instruction-minimal"] }
 layouts = ["r16k", "r256k", "r1m"]
 hiding = { open = [], salt = ["salt-forced"], mask = ["salt-forced", "mask-optimal"], hr = ["hiding-ruled"] }
 routes = { U = [], mix = ["route-u2"] }
 base = ["H32", "W1", "atomic-call", "period-inventory", "weights-distinct", "final-word-lemma", "ShaSpeed", "hash-compose"]
-source = "SWEEP.md candidates 1 (commit X and Y), 2 (the k32 semantics) and 3 (the final-word lemma); CORE-SMELL C28 (the noise's derivation); SW-HASH §5, §7 (rows, hiding); SW-SMELL S9 (routes)"
+source = "SWEEP.md candidates 1 (commit X and Y), 2 (the k32 semantics) and 3 (the final-word lemma); CORE-SMELL C28 (the noise's derivation); SW-HASH §5, §7 (rows, hiding); SW-SMELL S9 (routes); SW-SEM interim (the credit a word every L)"
+
+[sweep.ssn]
+noise = "ssn-a"
+L = [32]
+operands = { w = [], e = ["noise_x"] }
+layouts = ["r16k", "r256k", "r1m"]
+hiding = { open = [], salt = ["salt-forced"], mask = ["salt-forced", "mask-optimal"], hr = ["hiding-ruled"] }
+routes = { none = [] }
+base = ["H32", "W1", "atomic-call", "ssn-distinct", "ssn-success-set", "ShaSpeed", "hash-compose"]
+source = "SW-NOISE interim §4 (SSN-A, served sparse noise, under M0: no final-word lemma, so no PeriodInventory or weights-distinct); candidate 1 commits the noise registers (e); SW-HASH §5, §7 (rows, hiding)"
 
 # Designs the calculator must refuse until their terms are priced (CORE-RANK's top three led only because of that).
 [design.dither-c]

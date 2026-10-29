@@ -8,9 +8,12 @@ written `reg` = 32 under H32, measured on the H200). The honest program is the b
 costs `reg`. Under DistinctWrites each committed, pairwise-distinct, noise-dependent word costs the adversary at least
 `reg`. The gap is honest's work that no premise forces, by term:
 
-- final word: each dot product's last word is A·Bᵀ, free advice until the final-word lemma (32/K at L 32);
-- uncommitted steps: r·(1 − reg/L) between words committed every L, unless the k32 semantics make a word force its L/32
-  steps; then what the best-known fast scheme (Strassen-Winograd, `price.fast_matmul`) saves on them;
+- final word: each dot product's last word is A·Bᵀ, free advice until the final-word lemma (32/K at L 32), unless the
+  noise is served (`final_target`: the output carries it, so the last word is a target);
+- uncommitted steps: r·(1 − u/L) between words committed every L, where a word is charged u = reg (MH100w's
+  anyFunctionCeiling) or a premise's `word_units` (SW-SEM's BamFloor, 64 − 1024/L; NoSharingGain, L); under a premise
+  that credits the k32 counting itself, plus what the best-known fast scheme (Strassen-Winograd, `price.fast_matmul`)
+  saves on them;
 - forming: the formed operand entries at reg/4 each, unless committed under `commit-forced` or charged by the counting
   lemma;
 - lane fix: the route's second write to each register whose signed bytes cross zero under the noise (SW-SMELL S9), which
@@ -24,8 +27,9 @@ costs `reg`. Under DistinctWrites each committed, pairwise-distinct, noise-depen
 - hashing slack: credited hashing under ShaSpeed, δ times its work (δ = 0 as §2a states it). δ* is the precision
   ShaSpeed needs for T1 to hold (CORE-SMELL C27).
 
-T2 is t_H / t_S, a serial sum: the stock step, the 3K-wide product's extra over the plain GEMM (GD-DENOISE), the noise's
-coins and NCP's formed copies a call (SW-GPU's coinsncp), A's root before each call's noise (its chain on the critical
+T2 is t_H / t_S, a serial sum: the stock step, the stacked product's extra over the plain GEMM (NCP's 3K-wide call,
+GD-DENOISE; or the plain GEMM's time a MAC on the extra width), the noise's coins a call and NCP's formed copies
+(SW-GPU's coinsncp and coins), A's root before each call's noise (its chain on the critical
 path, an estimate), exporting each committed word (SW-GPU's k32 rates), and hashing the committed words and operands at
 the layout's measured rate. It is judged on the faster (async) stock step. T3 is the served format's measured perplexity
 rise. The rank is the strongest premise the matmul argument needs; the hashing credit (ShaSpeed and its composition with
@@ -58,11 +62,12 @@ CARD = Path(__file__).with_name("sweep_price.toml")
 TERMS = ("final_word", "uncommitted_steps", "forming", "lane_fix", "noise_derivation", "denoise", "pre_noise_hashing",
          "final_rows", "hiding", "hashing_slack")
 NOISE_FIELDS = ("r", "formed_x", "formed_y", "noise_x", "noise_y", "denoise", "pre_noise_bytes", "operand_max",
-                "lane_fix", "served", "variant", "source")
+                "lane_fix", "coin_calls", "wide", "final_target", "served", "variant", "source")
+WIDE = ("measured", "proportional")
 STATUSES = ("proved", "measured", "ruled", "assumed", "scratch", "open", "refuted")
 UNSETTLED = ("open", "scratch")
 COMMIT_FIELDS = ("L", "word_bits", "operands", "rows_mix_final", "layout", "route")
-ROUTES = {"U": ("U",), "mix": ("U", "U'")}
+ROUTES = {"U": ("U",), "mix": ("U", "U'"), "none": ("none",)}
 CLASSES = {"formed_x": "forming", "formed_y": "forming", "noise_x": "noise_derivation", "noise_y": "noise_derivation"}
 HASH_CREDIT = ("ShaSpeed", "hash-compose")
 REQUIRED = ("H32", "W1") + HASH_CREDIT
@@ -92,7 +97,7 @@ def ev(s, **v) -> float:
         raise Refused(["unpriced"])
     if isinstance(s, (int, float)):
         return float(s)
-    return float(eval(_code(str(s)), {"__builtins__": {}}, v))
+    return float(eval(_code(str(s)), {"__builtins__": {}, "ceil": math.ceil}, v))  # noqa: S307 - the card's arithmetic
 
 
 def interp(xs: list[float], ys: list[float], x: float) -> float:
@@ -111,22 +116,27 @@ def interp(xs: list[float], ys: list[float], x: float) -> float:
 def load(path: Path = CARD) -> dict:
     card = tomllib.loads(path.read_text())
     for key, sw in card.get("sweep", {}).items():
-        for L, (tag, ops), count, least, layout, (hid, hprem), (route, rprem) in itertools.product(
-                sw["L"], sw["operands"].items(), (False, True), (False, True), sw["layouts"], sw["hiding"].items(),
-                sw["routes"].items()):
+        charge = sw.get("charge", {})
+        credits = sw.get("credit", {})
+        for L, (tag, ops), count, least, layout, (hid, hprem), (route, rprem), cred in itertools.product(
+                sw["L"], sw["operands"].items(), (False, True) if "count" in charge else (False,),
+                (False, True) if "min" in charge else (False,), sw["layouts"], sw["hiding"].items(),
+                sw["routes"].items(), [None] + list(credits)):
             if (count and {"formed_x", "formed_y"} <= set(ops)) or (least and {"noise_x", "noise_y"} <= set(ops)):
                 continue
-            prem = list(sw["base"])
-            if L > 32:
-                prem += sw["steps"].get(str(L), sw["steps"]["above"])
+            if (L > 32) != (cred is not None):
+                continue
+            prem = list(sw["base"]) + (credits[cred] if cred else [])
             if ops:
                 prem.append("commit-forced")
-            prem += (sw["charge"]["count"] if count else []) + (sw["charge"]["min"] if least else []) + hprem + rprem
+            prem += (charge["count"] if count else []) + (charge["min"] if least else []) + hprem + rprem
             what = ", ".join(ops) if ops else "words only"
-            name = (f"{key}-k{L}-{tag}" + ("-count" if count else "") + ("-min" if least else "") + f"-{layout}"
-                    + ("" if hid == "open" else f"-{hid}") + ("-u2" if route == "mix" else ""))
+            name = (f"{key}-k{L}" + (f"-{cred}" if cred else "") + f"-{tag}" + ("-count" if count else "")
+                    + ("-min" if least else "") + f"-{layout}" + ("" if hid == "open" else f"-{hid}")
+                    + ("-u2" if route == "mix" else ""))
             card["design"][name] = {
-                "title": f"{key.upper()}, a word every {L} steps, committed: {what}"
+                "title": f"{key.upper()}, a word every {L} steps" + (f" credited by {cred}" if cred else "")
+                         + f", committed: {what}"
                          + ("; forming by the counting lemma" if count else "")
                          + ("; the derivation by OneInstructionMinimal" if least else "")
                          + f"; {layout} rows; hiding {hid}; route {route}",
@@ -150,7 +160,19 @@ def validate(card: dict, name: str, lenient: bool = False) -> list[str]:
             if noise.get(f) in (None, "?", {}):
                 if not lenient:
                     out.append(f"noise.{d['noise']}.{f} unpriced")
-            elif f not in ("served", "variant", "source", "r"):
+            elif f == "coin_calls":
+                for table, exprs in noise[f].items():
+                    if table not in card["price"] or "entries" not in card["price"][table]:
+                        out.append(f"noise.{d['noise']}.coin_calls: no measured call table price.{table}")
+                    for s in exprs:
+                        try:
+                            ev(s, m=64, n=64, K=64)
+                        except Exception as e:  # noqa: BLE001 - the card's expression is the input under test
+                            out.append(f"noise.{d['noise']}.coin_calls.{table} = {s!r} doesn't evaluate ({e})")
+            elif f == "wide":
+                if noise[f] not in WIDE:
+                    out.append(f"noise.{d['noise']}.wide {noise[f]!r} is not one of {WIDE}")
+            elif f not in ("served", "variant", "source", "final_target"):
                 for k, s in (noise[f].items() if isinstance(noise[f], dict) else [(None, noise[f])]):
                     try:
                         ev(s, m=64, n=64, K=64)
@@ -198,14 +220,18 @@ def validate(card: dict, name: str, lenient: bool = False) -> list[str]:
     return out
 
 
-def effects(card: dict, ids: list[str]) -> tuple[set[str], bool, int]:
-    """The terms the premises close, whether committed registers are forced, and the largest L at which a committed
-    word forces its L/32 steps (32: only at every k32 word)."""
+def effects(card: dict, ids: list[str], L: int) -> tuple[set[str], bool, float, bool]:
+    """The terms the premises close, whether committed registers are forced, the W1 units a committed word every L
+    steps is charged (`reg` under DistinctWrites alone, MH100w's anyFunctionCeiling; more under a premise's
+    `word_units`), and whether the best-known fast scheme's saving is charged against that credit (`fast_saving`: a
+    premise that credits the k32 counting itself, not a floor over every program)."""
     prem = card["premise"]
+    reg = card["price"]["reg"]["value"]
     closes = set().union(*(set(prem[p].get("closes", [])) for p in ids if p in prem))
     forced = any(prem[p].get("forces_committed", False) for p in ids if p in prem)
-    steps = max([32] + [int(prem[p].get("word_forces_steps", 32)) for p in ids if p in prem])
-    return closes, forced, steps
+    u, fast = max([(reg, False)] + [(ev(prem[p]["word_units"], L=L, reg=reg), bool(prem[p].get("fast_saving")))
+                                    for p in ids if p in prem and "word_units" in prem[p]])
+    return closes, forced, u, fast
 
 
 def calls(card: dict, point: str) -> list[dict]:
@@ -256,8 +282,8 @@ def leaf_hiding(card: dict, leaf: float) -> tuple[float, float]:
     return (hide - mask) / h["comp_ns"], mask / h["comp_ns"]
 
 
-def coinsncp_ms(card: dict, entries: float) -> float:
-    c = card["price"]["coinsncp"]
+def coinsncp_ms(card: dict, entries: float, table: str = "coinsncp") -> float:
+    c = card["price"][table]
     if entries >= c["entries"][-1]:
         return c["ms"][-1] * entries / c["entries"][-1]
     return interp(c["entries"], c["ms"], entries)
@@ -272,7 +298,6 @@ def call_units(card: dict, name: str, m: float, n: float, K: float, g: float = 1
     c = d["commit"]
     price = card["price"]
     reg, epr, hw = price["reg"]["value"], price["entries_per_reg"]["value"], price["hash_work"]["value"]
-    closes, forced, steps = effects(card, d.get("premises", []))
 
     def get(f, default=0.0):
         if noise is None or noise.get(f) in (None, "?"):
@@ -284,26 +309,29 @@ def call_units(card: dict, name: str, m: float, n: float, K: float, g: float = 1
     if noise is None and lenient:
         return {"terms": dict.fromkeys(TERMS, 0.0), "stock": m * n * K, "r": 1.0, "mK": m * K, "nK": n * K} | dict.fromkeys(
             ("credited_bytes", "hashed_bytes", "word_bytes", "operand_bytes", "pre_noise_bytes", "coin_bytes", "x_entries",
-             "y_entries", "noise_y", "words", "coinform_ms", "a_ms", "bulk_hash_ms", "sts_ms", "stg_ms", "a_chain"), 0.0)
+             "y_entries", "noise_y", "words", "coinform_ms", "a_ms", "bulk_hash_ms", "sts_ms", "stg_ms", "a_chain",
+             "extra_macs"), 0.0)
     r = get("r", 1.0)
     L = c["L"] if isinstance(c.get("L"), int) else (32 if lenient else None)
     if L is None:
         raise Refused(["commit.L unpriced"])
-    if (r * K) % L:
-        raise Refused([f"{r:g}K = {r * K:g} is not a whole number of words at L {L}"])
-    if L >= r * K:
-        raise Refused([f"a word every {L} steps commits only the final word of a {r * K:g}-deep dot product, and the "
+    depth = round(r * K, 6)
+    if depth % L:
+        raise Refused([f"{r:g}K = {depth:g} is not a whole number of words at L {L}"])
+    if L >= depth:
+        raise Refused([f"a word every {L} steps commits only the final word of a {depth:g}-deep dot product, and the "
                        f"final word isn't noise-dependent"])
+    closes, forced, u_word, fast = effects(card, d.get("premises", []), L)
     stock = m * n * K
-    words = r * K / L
-    steps = L <= steps
-    u_word = reg * L / 32 if steps else reg
-    final_free = "final_word" not in closes
+    words = depth / L
+    final_free = "final_word" not in closes and not (noise or {}).get("final_target", False)
     honest_tensor = r * m * n * K
     t = dict.fromkeys(TERMS, 0.0)
     t["final_word"] = m * n * u_word if final_free else 0.0
     t["uncommitted_steps"] = honest_tensor - m * n * words * u_word
-    if steps and L > 32:
+    if abs(t["uncommitted_steps"]) < 1e-9 * honest_tensor:
+        t["uncommitted_steps"] = 0.0
+    if fast and L > 32:
         t["uncommitted_steps"] += fast_saving(card, L, m, n, get("operand_max"))[0] * honest_tensor
     committed = set(c.get("operands", []))
     ent = {k: get(k) for k in CLASSES}
@@ -355,16 +383,18 @@ def call_units(card: dict, name: str, m: float, n: float, K: float, g: float = 1
     return {"stock": stock, "terms": t, "credited_bytes": credited_b, "hashed_bytes": word_b + op_b + pre_b,
             "word_bytes": word_b, "operand_bytes": op_b, "pre_noise_bytes": pre_b, "coin_bytes": coin_b, "r": r,
             "x_entries": ent["formed_x"] + ent["noise_x"], "y_entries": ent["formed_y"] + ent["noise_y"],
-            "noise_y": ent["noise_y"], "mK": m * K, "nK": n * K, "words": nwords,
-            "coinform_ms": (coinsncp_ms(card, m * K * g) + coinsncp_ms(card, n * K * g)) / g,
+            "noise_y": ent["noise_y"], "mK": m * K, "nK": n * K, "words": nwords, "extra_macs": (r - 1) * stock,
+            "coinform_ms": sum(coinsncp_ms(card, ev(s, m=m, n=n, K=K) * g, table)
+                               for table, exprs in noise["coin_calls"].items() for s in exprs) / g,
             "a_ms": max(a_chain_s, a_bulk_s) / g * 1e3, "a_chain": chain / g, "bulk_hash_ms": bulk * 1e3,
             "sts_ms": nwords * sts * 1e3, "stg_ms": nwords * stg * 1e3}
 
 
 def t3_of(card: dict, served: str | None, model: str) -> dict:
     e = card.get("t3", {}).get(served or "")
-    if not e or ("models" in e and model not in e["models"]):
-        return {"ctx2k": None, "ctx8k": None, "kind": "unmeasured", "source": f"no T3 for {served!r} on {model}"}
+    if not e or ("models" in e and model not in e["models"]) or e.get("kind") == "unmeasured":
+        why = f": {e['source']}" if e and e.get("kind") == "unmeasured" else ""
+        return {"ctx2k": None, "ctx8k": None, "kind": "unmeasured", "source": f"no T3 for {served!r} on {model}{why}"}
     return {"ctx2k": e["ctx2k"], "ctx8k": e["ctx8k"], "kind": e["kind"], "source": e["source"]}
 
 
@@ -382,7 +412,7 @@ def evaluate(card: dict, name: str, point: str, delta: float = 0.0, lenient: boo
     rate = pt.get("hash_rate", card["price"]["hash_rate"]["value"])
     keys = ("stock", "credited_bytes", "hashed_bytes", "word_bytes", "operand_bytes", "pre_noise_bytes", "coin_bytes",
             "x_entries", "y_entries", "noise_y", "mK", "nK", "words", "coinform_ms", "a_ms", "a_chain", "bulk_hash_ms",
-            "sts_ms", "stg_ms")
+            "sts_ms", "stg_ms", "extra_macs")
     agg: dict = dict.fromkeys(keys, 0.0) | {"terms": dict.fromkeys(TERMS, 0.0)}
     per_matmul = {}
     r = None
@@ -406,8 +436,8 @@ def evaluate(card: dict, name: str, point: str, delta: float = 0.0, lenient: boo
     t1 = rest + terms["hashing_slack"]
     delta_star = max(0.0, TARGET["t1"] - rest) / hash_share if hash_share else math.inf
     committer_gap = agg["credited_bytes"] * (card["price"]["hash_work_committer"]["value"] - hw) / stock
-    t2 = t2_of(card, point, agg, r)
     noise = card["noise"].get(d["noise"], {})
+    t2 = t2_of(card, point, agg, r, noise.get("wide", "measured"))
     t3 = t3_of(card, noise.get("served"), pt["model"])
     prem = card["premise"]
     ids = d["premises"]
@@ -431,9 +461,11 @@ def evaluate(card: dict, name: str, point: str, delta: float = 0.0, lenient: boo
             "stock_macs_forward": stock, "commit": d["commit"], "a_chain_compressions": agg["a_chain"]}
 
 
-def t2_of(card: dict, point: str, agg: dict, r: float) -> dict:
-    """t_H / t_S a forward: stock, plus the 3K product's extra, the coins and formed copies a call, A's root before each
-    call's noise, the words' export, and hashing; and CORE-NCP's reading (GD-DENOISE's stand-ins for forming)."""
+def t2_of(card: dict, point: str, agg: dict, r: float, wide: str = "measured") -> dict:
+    """t_H / t_S a forward: stock, plus the stacked product's extra (`measured`: GD-DENOISE's 3K-wide call;
+    `proportional`: the plain GEMM's time per MAC on the extra width, an estimate), the coins and formed copies a call,
+    A's root before each call's noise, the words' export, and hashing; and CORE-NCP's reading (GD-DENOISE's stand-ins
+    for forming, NCP's only)."""
     pt = card["point"][point]
     price = card["price"]
     src = card["point"][pt.get("gemm_from", point)]
@@ -446,7 +478,10 @@ def t2_of(card: dict, point: str, agg: dict, r: float) -> dict:
     else:
         plain = src["plain_gemm_ms"]
         stock = dict(pt["stock_ms"])
-    gemm = plain * (parts["wide"] * (r - 1) / 2 + parts["noised"])
+    if wide == "proportional":
+        gemm = plain * agg["extra_macs"] / agg["stock"]
+    else:
+        gemm = plain * (parts["wide"] * (r - 1) / 2 + parts["noised"])
     extra_parts = {"wide_gemm": gemm, "coins_forming": agg["coinform_ms"], "a_root": agg["a_ms"],
                    "export": agg["sts_ms"]}
     extra = sum(extra_parts.values())
@@ -594,6 +629,13 @@ def if_refuted(card: dict, rows: list[dict]) -> list[tuple[str, dict | None]]:
     return out
 
 
+def alternates(rows: list[dict]) -> dict[str, dict | None]:
+    """The best row that meets T1 and T2 at any rank, and the best if every unmeasured T3 came in under its target."""
+    hopeful = sorted(rows, key=lambda r: rank_key(r | {"t3_pass": r["t3_pass"] or r["t3_worst"] is None}))
+    return {"t1_t2_any_rank": next((r for r in rows if r["t1_pass"] and r["t2_pass"]), None),
+            "if_unmeasured_t3_passes": hopeful[0] if hopeful else None}
+
+
 def pct(x: float | None) -> str:
     return "?" if x is None else f"{x:.2%}"
 
@@ -605,14 +647,16 @@ def t2s(row: dict) -> str:
 
 def render(card: dict, results: dict) -> str:
     noise = card["noise"]["ncp"]
+    ssn = card["noise"]["ssn-a"]
     lines = ["# PoUW sweep ranking (sweep_price.py)", "",
              "T1: additive gap over stock in W1 units (H32 floor 32 a register, measured on the H200, run "
              "r20261029-021534-a5a3); terms are shares of stock. T2: t_H/t_S judged on the faster stock step (unfused: "
              "the words exported to HBM). T3: worst of WikiText-2 2K and 8K over stock int8. Rank: the matmul argument's "
              "strongest premise (an open one counts 5 in the order until settled); every row also needs the hashing "
              "credit, ShaSpeed and hash-compose (rank 4, C27), whose precision delta* is given. NCP here is "
-             f"{noise['variant']}, not the tree's ncp-v1. Designs are named "
-             "ncp-k<L>-<classes committed>[-count][-min]-<rows>[-<hiding charge>][-u2].", ""]
+             f"{noise['variant']}, not the tree's ncp-v1; SSN is SW-NOISE's served sparse noise {ssn['variant']}. "
+             "Designs are named <noise>-k<L>[-<credit: bam BamFloor, nsg NoSharingGain>]-<classes committed>[-count]"
+             "[-min]-<rows>[-<hiding charge>][-u2].", ""]
     for point, res in results.items():
         pt = card["point"][point]
         lines += [f"## {pt['title']}", "",
@@ -651,6 +695,11 @@ def render(card: dict, results: dict) -> str:
                 lines.append(f"| {drop} | - | - | - | - | - |" if b is None else
                              f"| {drop} | {b['design']} | {b['rank']} | {pct(b['t1'])} {'pass' if b['t1_pass'] else 'fail'} | "
                              f"{t2s(b)} | {opened(b)} |")
+            for what, b in alternates(res["rows"]).items():
+                if b is not None and b is not best:
+                    lines += ["", f"Best {'meeting T1 and T2 at any rank' if what == 't1_t2_any_rank' else 'if every unmeasured T3 passes'}"
+                                  f": {b['design']}, rank {b['rank']}, T1 {pct(b['t1'])}, T2 {t2s(b)}, T3 "
+                                  f"{pct(b['t3_worst'])}, open: {opened(b)}."]
             lines += [""] + period_table(card, best)
             nxt = next((r for r in res["rows"] if r["t1_pass"] and r["rank"] > best["rank"]), None)
             if nxt:
@@ -738,6 +787,9 @@ def main() -> int:
     words_hide = hk["terms"]["hiding"] - 0.0553 * hk["pre_noise_units"]
     checks.check("the salt side's hiding on k32 words at 16 KiB rows lies between SW-HASH §7's floor and alone readings "
                  "(20.8x and 41.6x stock)", 20.7 < words_hide < 41.7, f"{words_hide:.1f}x")
+    hb = card["price"]["extract"]["units_per_clock"] * 1980e6 / card["price"]["hash_rate"]["value"]
+    checks.check("T2's hash rate at 16 KiB rows is SW-GPU final's measured 2,043-2,159 units a byte at 1,980 MHz alone "
+                 "(r20261029-042705-c421, -045936-22a0, -050641-3a03, -051426-adb8)", 2043 <= hb <= 2159, f"{hb:.0f}")
     checks.check("coinsncp's interpolation returns the measured times at measured sizes, and the smallest call's time below",
                  abs(coinsncp_ms(card, 16777216) - 0.061657) < 1e-12 and coinsncp_ms(card, 1000) == 0.011485, None)
     a = call_units(card, "ncp-k32-w-r256k-hr", 64, 3072, 2048, 1, 510.48e9)
@@ -745,31 +797,52 @@ def main() -> int:
                  a["a_chain"] == 38, f"{a['a_chain']:g}")
 
     swept = [n for n, d in card["design"].items() if d.get("swept")]
-    checks.check("the sweep generates every L x committed classes x forming charge x derivation charge x layout x hiding "
-                 "charge x route, less a charge beside its class committed: 7 x 9 x 3 x 4 x 2 = 1,512 designs",
-                 len(swept) == 1512, f"{len(swept)} swept")
+    checks.check("the sweep generates, for NCP, every L (L > 32 under each of 2 credits) x committed classes x forming "
+                 "charge x derivation charge x layout x hiding charge x route, less a charge beside its class committed: "
+                 "(1 + 6 x 2) x 9 x 3 x 4 x 2 = 2,808; for SSN-A 2 x 3 x 4 = 24",
+                 len(swept) == 2832, f"{len(swept)} swept")
+    s = row("t8192", "ssn-k32-w-r16k-hr")
+    checks.check("SSN-A words-only with hiding ruled reproduces SW-NOISE §3's 0.027% at T 8,192 (its one LOP3 a row a "
+                 "step, 32·ceil(K/28)/(nK)), with no final word, forming, lane fix or uncommitted step",
+                 0.00025 < s["t1"] < 0.00029 and s["terms"]["final_word"] == 0 and s["terms"]["forming"] == 0
+                 and s["terms"]["lane_fix"] == 0 and abs(s["terms"]["uncommitted_steps"]) < 1e-12, f"T1 {s['t1']:.4%}")
+    su = call_units(card, "ssn-k32-w-r16k-hr", 64, 3072, 2048)
+    sd = call_units(card, "ssn-k32-w-r16k-hr", 64, 2048, 8192)
+    checks.check("SSN-A's stacked width is 32·ceil(K/28)/K: 1.156 at K 2,048 and 1.145 at K 8,192 (SW-NOISE §2)",
+                 abs(su["r"] - 2368 / 2048) < 1e-12 and abs(sd["r"] - 9376 / 8192) < 1e-12, f"{su['r']:.4f}, {sd['r']:.4f}")
+    b64 = row("t8192", "ncp-k64-bam-xyef-r16k-hr")
+    checks.check("a word every 64 steps at rank <= 3 is credited BamFloor's 48 units, not 64 (SW-SEM): r(1 - 48/64) = 75% "
+                 "of stock uncommitted, so it fails T1", abs(b64["terms"]["uncommitted_steps"] - 0.75) < 1e-9
+                 and not b64["t1_pass"] and b64["rank"] == 3, f"{b64['terms']['uncommitted_steps']:.2%}, rank {b64['rank']}")
+    checks.check("the 05:05Z best (ncp-k64-w-count-min on the k64 merge charge) is refused: SW-OLD final refutes it",
+                 all("ncp-k64-merge-0505" in res["refused"] for res in results.values())
+                 and "refuted" in results["t8192"]["refused"]["ncp-k64-merge-0505"][0],
+                 results["t8192"]["refused"].get("ncp-k64-merge-0505", ["ranked"])[0][:70])
     s256, s63, s126 = (fast_saving(card, L, 8192, 8192, om) for L, om in ((256, 63), (512, 63), (512, 126)))
     checks.check("Strassen-Winograd on operands within +-63 saves nothing against the k32 counting at L 256 "
                  "(1/8 - 56/256 < 0) and 1/8 - 56/512 - 8(2/8192) = 1.37% at L 512, m = n = 8,192; on NCP's +-126 "
                  "operands its sums leave s8 and it spends 18/8 of the steps, saving nothing (P1's floor)",
                  s256[0] <= 0 and abs(s63[0] - (1 / 8 - 56 / 512 - 16 / 8192)) < 1e-12 and s63[1] == 1 and s126[0] == 0,
                  f"+-63: L 256 {s256[0]:.2%}, L 512 {s63[0]:.3%}; +-126: L 512 {s126[0]:.2%}")
-    r64, r128 = row("t8192", "ncp-k64-xyef-r16k"), row("t8192", "ncp-k128-xyef-r16k")
-    checks.check("a word every 64 steps rests on merge-k64 at rank 3 (with W1); every 128 or more on OwnProducts, rank 4",
-                 r64["rank"] == 3 and r128["rank"] == 4, f"k64 rank {r64['rank']}, k128 rank {r128['rank']}")
+    r64, r128 = row("t8192", "ncp-k64-nsg-xyef-r16k"), row("t8192", "ncp-k128-nsg-xyef-r16k")
+    checks.check("crediting a word every L > 32 with L units rests on NoSharingGain, rank 5 (SW-SEM: 4 to 5)",
+                 r64["rank"] == 5 and r128["rank"] == 5, f"k64 rank {r64['rank']}, k128 rank {r128['rank']}")
     fewest = {}
     for p, res in results.items():
         b = res["rows"][0]
-        peers = [r for r in res["rows"] if r["t1_pass"] and r["t2_pass"] and r["rank"] == b["rank"]]
+        peers = [r for r in res["rows"] if r["t1_pass"] and r["t2_pass"] and r["t3_pass"] == b["t3_pass"]
+                 and r["rank"] == b["rank"]]
         fewest[p] = not b["t2_pass"] or len(b["open"]) == min(len(r["open"]) for r in peers)
-    checks.check("the best meeting T1 and T2 at its rank takes the fewest unsettled premises of the rows that do, whatever "
-                 "their T2 (SW-SMELL P1: an open premise is not free)", all(fewest.values()), f"{fewest}")
-    passing = {p: [r for r in res["rows"] if r["t1_pass"]] for p, res in results.items()}
-    checks.check("at T 512's 64 rows every design passing T1 takes route U' (route-u2): route U's Y lane fix alone is "
+    checks.check("the best meeting T1 and T2 at its rank takes the fewest unsettled premises of the rows that do with its "
+                 "T3 verdict, whatever their T2 (SW-SMELL P1: an open premise is not free; an unmeasured T3 doesn't pass)",
+                 all(fewest.values()), f"{fewest}")
+    passing = {p: [r for r in res["rows"] if r["t1_pass"] and card["design"][r["design"]]["noise"] == "ncp"]
+               for p, res in results.items()}
+    checks.check("at T 512's 64 rows every NCP design passing T1 takes route U' (route-u2): route U's Y lane fix alone is "
                  "37.5% (SW-SMELL S9)", passing["t512"] and all("route-u2" in r["premises"] for r in passing["t512"]),
                  f"{len(passing['t512'])} pass")
-    checks.check("at T 8,192 every design passing T1 takes hiding-ruled or mask-optimal: the salt side's M_key·y alone "
-                 "costs over 1% of stock in every layout (SW-HASH §7)",
+    checks.check("at T 8,192 every NCP design passing T1 takes hiding-ruled or mask-optimal: the salt side's M_key·y "
+                 "alone costs over 1% of stock in every layout (SW-HASH §7)",
                  passing["t8192"] and all({"hiding-ruled", "mask-optimal"} & set(r["premises"]) for r in passing["t8192"]),
                  f"{len(passing['t8192'])} pass")
 
@@ -791,7 +864,7 @@ def main() -> int:
             fn(c)
             return c
 
-        few = ["ncp-k32", "ncp-k32-xyef-r16k", "ncp-k32-xy-r16k", "ncp-k32-w-r16k", "ncp-k64-w-count-min-r256k-hr-u2"]
+        few = ["ncp-k32", "ncp-k32-xyef-r16k", "ncp-k32-xy-r16k", "ncp-k32-w-r16k", "ncp-k64-bam-w-count-min-r256k-hr-u2"]
         c = mutated(lambda c: c["noise"]["ncp"].pop("formed_y"))
         checks.mutation("an NCP card without its weight-side forming count is refused, not priced at 0",
                         all(n in ranking(c, "t8192", names=few)[1] for n in ("ncp-k32", "ncp-k32-xyef-r16k")),
@@ -823,13 +896,13 @@ def main() -> int:
         checks.mutation("a ShaSpeed slack of 0.01% breaks T1 for the all-forced design: hashing's work is 666x stock",
                         not d1["t1_pass"], f"T1 {d1['t1']:.2%}")
         c = mutated(lambda c: c["noise"]["ncp"].__setitem__("operand_max", 63))
-        e = evaluate(c, "ncp-k512-xyef-r256k-hr-u2", "t8192")
+        e = evaluate(c, "ncp-k512-nsg-xyef-r256k-hr-u2", "t8192")
         checks.mutation("NCP's operands at +-63 instead of +-126 let Strassen-Winograd's sums stay in s8, and "
                         "ncp-k512-xyef fails T1 at T 8,192 on its uncommitted steps: the operand range keeps it out",
                         not e["t1_pass"] and e["terms"]["uncommitted_steps"] > 0.01, f"T1 {e['t1']:.2%}")
         c = mutated(lambda c: c["price"]["hash_rows"].__setitem__("hide_share", [0.0] * 4) or
                     c["price"]["hash_rows"].__setitem__("mask_share", [0.0] * 4))
-        e = evaluate(c, "ncp-k64-w-count-min-r256k-salt-u2", "t8192")
+        e = evaluate(c, "ncp-k64-nsg-w-count-min-r256k-salt-u2", "t8192")
         checks.mutation("a card that prices the salt side at nothing lets a design without hiding-ruled or mask-optimal "
                         "pass T1 at T 8,192: the hiding term is what keeps it out", e["t1_pass"], f"T1 {e['t1']:.2%}")
         c = mutated(lambda c: c["point"]["t512"].__setitem__("tokens", 16))
@@ -852,6 +925,9 @@ def main() -> int:
                            "refused_swept": len([k for k in res["refused"] if card["design"][k].get("swept")]),
                            "best": res["rows"][0]["design"] if res["rows"] else None,
                            "best_needs": needs(res["rows"][0]) if res["rows"] else [],
+                           "alternates": {k: b and {"design": b["design"], "rank": b["rank"], "t1": b["t1"],
+                                                    "t2": b["t2"]["judged"], "t3": b["t3_worst"], "needs": needs(b)}
+                                          for k, b in alternates(res["rows"]).items()},
                            "best_periods": periods(card, res["rows"][0]) if res["rows"] else None,
                            "if_refuted": [{"refuted": drop, "best": b and b["design"], "t1": b and b["t1"],
                                            "t2": b and b["t2"]["judged"], "open": b and [o["premise"] for o in b["open"]]}
