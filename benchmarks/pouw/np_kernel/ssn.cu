@@ -41,7 +41,8 @@
 //
 //   ssn check                 every exported word, the final outputs and the formed registers against the host reference
 //                             on small shapes (random, extreme and zero data; columns past the code's skip; S = 1 and a
-//                             partial last step), in both layouts
+//                             partial last step; random data with every lane coin 127), in the four layouts, then under
+//                             XU=1 on the three tag layouts with each served output against stock's epilogue
 //   ssn time REPS M [BUDGET_GB [ROW_BYTES ...]]
 //                             Llama-3.2-1B's fused linears at M rows, one JSON line a timing (see time_all), the hash pass
 //                             by each ROW_BYTES (0: row-seg; default 0 65536 16384)
@@ -1121,8 +1122,10 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
   CK(cudaMemset(dW, 0xA5, words * 4));
   CK(cudaMemset(dout, 0xA5, (size_t)m * n * 4));
   std::vector<u32> lc;
+  // kind 4: random data with every lane coin 127, sigma at its most
   if (g_blc)
-    for (size_t x = 0; x < (size_t)(m / 64) * lc_steps(S) * n; x++) lc.push_back(lane_word(seed * 0x9E3779B97F4A7C15ull + x));
+    for (size_t x = 0; x < (size_t)(m / 64) * lc_steps(S) * n; x++)
+      lc.push_back(kind == 4 ? 0x017F7F7Fu : lane_word(seed * 0x9E3779B97F4A7C15ull + x));
   u32* dlc = lc.empty() ? nullptr : up(lc);
   // XU=1: scales with 22-bit significands, the column source from the lane coins, and the served outputs
   const int xa = xu_at(K, S), xe = xu_e(xa);
@@ -1138,11 +1141,13 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
     const u32 w = lc[((size_t)(i / 64) * lc_steps(S) + t - 1 + c1) * n + j];
     return g_lw[0] * (int8_t)w + g_lw[1] * (int8_t)(w >> 8) + g_lw[2] * (int8_t)(w >> 16);
   };
+  long long max_sigma = 0;
   for (int rt = 0; rt < m / 64; rt++)
     for (int j = 0; j < n; j++) {
       int s = 0;
       for (int t = 0; t < S; t++) s += lane_sum(64 * rt, t, j);
       xc[(size_t)rt * n + j] = beta[j] - s;
+      max_sigma = std::max(max_sigma, (long long)std::abs(s));
     }
   int* dxr = nullptr;
   u32* dxo = nullptr;
@@ -1281,10 +1286,12 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
          "\"word_mismatches\": %zu, \"final_mismatches\": %zu, \"formed_mismatches\": %zu, \"b_mismatches\": %zu, "
          "\"max_abs_word\": %lld, \"step_bits_set\": %zu, \"step_bits\": %zu, \"coin_blocks\": %lld, "
          "\"coin_word_mismatches\": %zu, \"lane_coin_words\": %zu, \"blc_w\": [%d, %d, %d], \"xu_lane\": %d, \"xu_e\": %d, "
-         "\"row_source_mismatches\": %zu, \"served_outputs\": %zu, \"served_mismatches\": %zu, \"served_past_2_22\": %zu}\n",
-         layout_name(), m, n, K, S, BN, kind == 0 ? "random" : kind == 1 ? "max" : kind == 2 ? "min" : "zero",
+         "\"max_abs_sigma\": %lld, \"row_source_mismatches\": %zu, \"served_outputs\": %zu, \"served_mismatches\": %zu, "
+         "\"served_past_2_22\": %zu}\n",
+         layout_name(), m, n, K, S, BN,
+         kind == 0 ? "random" : kind == 1 ? "max" : kind == 2 ? "min" : kind == 3 ? "zero" : "random_max_coins",
          words, bad_w, bad_o, bad_form, bad_g, maxabs, ones, (size_t)m * (S - 1), nb, bad_coin, lc.size(), g_lw[0], g_lw[1],
-         g_lw[2], g_xu ? xa : -1, g_xu ? xe : 0, bad_xr, g_xu ? (size_t)m * n - past : 0, bad_served, past);
+         g_lw[2], g_xu ? xa : -1, g_xu ? xe : 0, max_sigma, bad_xr, g_xu ? (size_t)m * n - past : 0, bad_served, past);
   fflush(stdout);
   if (dlc) CK(cudaFree(dlc));
   if (g_xu) {
@@ -1309,7 +1316,7 @@ static int check() {
   const C cs[] = {{128, 512, 2048, 256, 0}, {128, 512, 2048, 128, 0}, {64, 256, 8192, 256, 0}, {64, 512, 100, 256, 0},
                   {64, 256, 28, 256, 0},    {64, 256, 59, 128, 0},    {64, 16384, 90, 256, 0}, {64, 256, 8192, 256, 1},
                   {64, 256, 8192, 256, 2},  {128, 256, 2048, 256, 3}, {192, 768, 2048, 256, 0}, {64, 256, 24, 256, 0},
-                  {64, 256, 25, 128, 0},    {28544, 256, 24, 256, 0}};
+                  {64, 256, 25, 128, 0},    {28544, 256, 24, 256, 0}, {64, 256, 8192, 256, 4}, {128, 512, 2048, 128, 4}};
   // T is injective on the rows its 4 digits reach
   {
     std::map<std::vector<int>, int> seen;
