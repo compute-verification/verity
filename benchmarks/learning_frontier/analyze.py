@@ -202,18 +202,20 @@ def compare(fam: dict, dense: dict, fam_fit: dict, dense_fit: dict, target: floa
     return row | at_envelope(fam, sf, dense, sd, target, group, envelopes)
 
 
-def least(s: dict, step: float, shorter: list[dict], target: float) -> tuple[float, dict]:
-    """The run that reaches `target` at the least FLOPs, the main one (`s`, at `step`) or a shorter-horizon one, and its step."""
-    reach = [(step, s), *((st, e) for e in shorter if (st := step_at(e, target)) is not None)]
-    return min(reach, key=lambda p: p[0] * p[1]["flops_per_step"])
+def least(s: dict, step: float | None, shorter: list[dict], target: float) -> tuple[float, dict] | None:
+    """The run that reaches `target` at the least FLOPs, the main one (`s`, at `step`, None if it can't place the target) or a
+    shorter-horizon one, and its step; None if none does."""
+    reach = [*([(step, s)] if step is not None else []), *((st, e) for e in shorter if (st := step_at(e, target)) is not None)]
+    return min(reach, key=lambda p: p[0] * p[1]["flops_per_step"]) if reach else None
 
 
-def at_envelope(fam: dict, sf: float, dense: dict, sd: float, target: float, group: str,
+def at_envelope(fam: dict, sf: float, dense: dict, sd: float | None, target: float, group: str,
                 envelopes: tuple[list[dict], list[dict]]) -> dict:
     """kappa and alpha between the family's envelope and dense's (`envelopes`: each one's shorter-horizon runs)."""
-    if not any(envelopes):
+    if not any(envelopes) or (fam_least := least(fam, sf, envelopes[0], target)) is None or (
+            dense_least := least(dense, sd, envelopes[1], target)) is None:
         return {}
-    (fs, f), (ds, d) = least(fam, sf, envelopes[0], target), least(dense, sd, envelopes[1], target)
+    (fs, f), (ds, d) = fam_least, dense_least
     row = {"envelope_tokens_per_param": [f["tpp"], d["tpp"]],
            "kappa_flops_envelope": fs * f["flops_per_step"] / (ds * d["flops_per_step"]),
            "kappa_tokens_envelope": fs * f["tokens_per_step"] / (ds * d["tokens_per_step"]),
@@ -222,20 +224,25 @@ def at_envelope(fam: dict, sf: float, dense: dict, sd: float, target: float, gro
 
 
 def own_final(fam: dict, dense: dict, group: str, envelopes: tuple[list[dict], list[dict]]) -> dict:
-    """kappa and alpha at the family's final loss; where dense never gets that low, at dense's final loss instead."""
+    """kappa and alpha at the family's final loss; where dense never gets that low, at dense's final loss instead. Where dense's
+    main run is already there at its first checkpoint, only its shorter runs can place the target, and kappa in tokens is at
+    least the family's steps over that checkpoint's."""
     target, at = float(fam["loss"].min()), "family's final loss"
-    if step_at(dense, target) is None:
+    if float(dense["loss"].min()) > target:
         target, at = float(dense["loss"].min()), "dense's final loss"
     target += 1e-9
     sd, sf = step_at(dense, target), step_at(fam, target)
-    if sd is None or sf is None:
-        return {"target": target, "at": at, "reached": False}
-    return {"target": target, "at": at, "reached": True,
-            "kappa_flops": sf * fam["flops_per_step"] / (sd * dense["flops_per_step"]), "kappa_tokens": sf / sd,
-            "kappa_time": ratio(seconds(fam, sf), seconds(dense, sd)),
-            "alpha": sd * per_step(dense, group, fam) / (sf * per_step(fam, group, fam)),
-            "alpha_stock": stock(dense, sd) / stock(fam, sf) if group == "lowrank" else None,
-            **at_envelope(fam, sf, dense, sd, target, group, envelopes)}
+    row = {"target": target, "at": at, "reached": sd is not None and sf is not None}
+    if sf is None:
+        return row
+    if sd is None:
+        row["kappa_tokens_at_least"] = sf * fam["tokens_per_step"] / (dense["step"][0] * dense["tokens_per_step"])
+    else:
+        row |= {"kappa_flops": sf * fam["flops_per_step"] / (sd * dense["flops_per_step"]), "kappa_tokens": sf / sd,
+                "kappa_time": ratio(seconds(fam, sf), seconds(dense, sd)),
+                "alpha": sd * per_step(dense, group, fam) / (sf * per_step(fam, group, fam)),
+                "alpha_stock": stock(dense, sd) / stock(fam, sf) if group == "lowrank" else None}
+    return row | at_envelope(fam, sf, dense, sd, target, group, envelopes)
 
 
 def plot(out: Path, size: str, group: str, curves: dict[str, dict], shorter: dict[str, list[dict]], tgts: list[float]) -> str:
@@ -354,8 +361,10 @@ def tables(report: dict) -> str:
                                + " | ".join(fmt(r.get(k)) for k in (*MAIN, *ENVELOPES)) + f" | {horizons(r)} |")
             out += ["", f"| config | at | loss | {HEAD} |", "|---|---|---|" + "---|" * 10]
             for lab, f in comp["own_final"].items():
-                out.append(f"| {lab} | {f['at']} | {f['target']:.4f} | "
-                           + " | ".join(fmt(f.get(k)) for k in (*MAIN, *ENVELOPES)) + f" | {horizons(f)} |")
+                low = f.get("kappa_tokens_at_least")
+                out.append(f"| {lab} | {f['at']} | {f['target']:.4f} | " + " | ".join(
+                    f">{low:.1f}" if k == "kappa_tokens" and low is not None else fmt(f.get(k)) for k in (*MAIN, *ENVELOPES))
+                           + f" | {horizons(f)} |")
     sizes = sorted(report["comparisons"], key=lambda s: report["non_embedding"][s])
     for title, keys in (("main runs", ("kappa_flops", "alpha", "alpha_stock")),
                         ("envelopes", ("kappa_flops_envelope", "alpha_envelope", "alpha_stock_envelope"))):
