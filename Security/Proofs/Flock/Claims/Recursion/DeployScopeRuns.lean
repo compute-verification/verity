@@ -8,7 +8,7 @@ them on a run: every V* session of an accepted run ends on a decision the compil
 (`run_decides`), at the session's last round. Before the last session, the next session's first round refuses a
 session that ended on a coin (`decided`, which `run_round` reads); the last session's last round is the run's, which
 accepts (`stepWith_acc_last`). So the compiled verifier refuses an accepted run whose inner shape the setup's checks
-refuse or one of whose V* records doesn't draw every unit (`run_acc_scope`; `Draw.Full`, `run_acc_full`), and what it
+refuse or one of whose V* records doesn't draw every unit (`run_acc_scope`; `DrawRecord.Full`, `run_acc_full`), and what it
 reads of the statement with the sessions' records is in `InScope` (`run_acc_inScope_records`).
 -/
 
@@ -153,7 +153,7 @@ theorem run_decides (hacc : (run H P (V IV st) x ω r).out = .acc) {s : ℕ} (hs
 
 /-- **The compiled verifier refuses an accepted run out of scope**: on an accepted run, the setup's checks accept the
 inner shape `x` carries, and every V* session's decision is on a record that draws every unit of its population
-(`RecScope.fullDrawOk`, hence `Draw.Full` by `RecScope.fullDrawOk_iff`). -/
+(`RecScope.fullDrawOk`, hence `DrawRecord.Full` by `RecScope.fullDrawOk_iff`). -/
 theorem run_acc_scope (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∃ xr, readX x = some xr ∧ RecScope.accepts (readOf xr) = true ∧
       ∀ s < nS x, ∃ i f, i < (run H P (V IV st) x ω r).msgs.length ∧
@@ -184,7 +184,7 @@ theorem run_acc_scope (hacc : (run H P (V IV st) x ω r).out = .acc) :
     exact ⟨i, f, hi, hD, hf⟩
 
 /-- **Every V\* session of an accepted run draws every unit**: its decision's record holds a draw, and it is the full
-draw (`Draw.Full`). -/
+draw (`DrawRecord.Full`). -/
 theorem run_acc_full (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∀ s < nS x, ∃ i f, i < (run H P (V IV st) x ω r).msgs.length ∧
       DecidesAt IV st x r (run H P (V IV st) x ω r).msgs i s f ∧
