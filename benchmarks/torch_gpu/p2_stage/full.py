@@ -77,26 +77,6 @@ def sync() -> None:
         torch.cuda.synchronize()
 
 
-def events(fn, reps: int, before=None) -> list[float]:
-    """`reps` runs of `fn`, each timed alone (CUDA events on the GPU), with `before` run untimed ahead of each."""
-    times = []
-    for _ in range(reps):
-        if before is not None:
-            before()
-        if DEVICE.type == "cuda":
-            a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-            a.record()
-            fn()
-            b.record()
-            b.synchronize()
-            times.append(a.elapsed_time(b) / 1e3)
-        else:
-            t0 = time.perf_counter()
-            fn()
-            times.append(time.perf_counter() - t0)
-    return times
-
-
 class Segments:
     """An encoded store's segment files `needed`, in that order, each read once and held to its `seg/<s>.json`'s SHA-512,
     `ahead` of the one in use in a thread pool; `rows` asks for blocks in increasing order."""
@@ -211,15 +191,15 @@ class Audit:
 
     def read_gap(self, segs: Segments, r: range, reps: int) -> None:
         rows = segs.rows(r)
-        self.gap_s += min(events(partial(self.P.read, rows, r.start, r.start, r.stop), reps))
+        self.gap_s += min(S.timed(partial(self.P.read, rows, r.start, r.start, r.stop), reps, DEVICE))
         self.gap_units += len(r) // self.K.PER
         del rows
 
     def finish(self, reps: int) -> dict:
         P, tree = self.P, self.tree
-        y_s = min(events(partial(self.K.receipts, self.seed, P.sigma, 0, tree.y), reps))
-        root_s = min(events(partial(tree.root, self.seed, self.salts), reps))
-        finish_s = min(events(partial(P.finish, tree, self.salts), reps))
+        y_s = min(S.timed(partial(self.K.receipts, self.seed, P.sigma, 0, tree.y), reps, DEVICE))
+        root_s = min(S.timed(partial(tree.root, self.seed, self.salts), reps, DEVICE))
+        finish_s = min(S.timed(partial(P.finish, tree, self.salts), reps, DEVICE))
         return {"seed": self.seed.hex(), "challenge": self.challenge.hex(), "pass": self.index,
                 "previous": self.previous.hex(), "units": self.units, "store_units": self.store_units,
                 "padding_units_left_out": self.store_units - self.units,
@@ -304,11 +284,12 @@ def stage_pass(args, lay: L.StoreLayout, src: L.Weights, tensors: list[L.Tensor]
             if w is not None:
                 poison = partial(S.flat(w).fill_, 0xA5)
                 if audit:
-                    tw = events(partial(sketched, store, audit.P, t.layer, t.name, w), args.reps, poison)
-                    tk = events(partial(audit.P.read, store.rows, store.first, t.first_block, t.block_range.stop), args.reps)
+                    tw = S.timed(partial(sketched, store, audit.P, t.layer, t.name, w), args.reps, DEVICE, poison)
+                    tk = S.timed(partial(audit.P.read, store.rows, store.first, t.first_block, t.block_range.stop),
+                                 args.reps, DEVICE)
                     rec.update(decode_sketch_s=[round(x, 6) for x in tw], sketch_s=[round(x, 6) for x in tk])
                     with_s, sketch_s = with_s + min(tw), sketch_s + min(tk)
-                ts = events(partial(sketched, store, None, t.layer, t.name, w), args.reps, poison)
+                ts = S.timed(partial(sketched, store, None, t.layer, t.name, w), args.reps, DEVICE, poison)
                 host = S.flat(w).to("cpu", copy=True).numpy()
                 fut = hashers.submit(digests, src, t, host)
                 rec.update(decode_s=[round(x, 6) for x in ts], decode_gb_s=round(t.size / min(ts) / 1e9, 2),
@@ -404,7 +385,7 @@ def gemm_pass(args, lay: L.StoreLayout, src: L.Weights, read: L.Read, out: Out) 
                     n1 = min(t.n, n0 + args.n_chunk)
                     wc, swc = w[n0:n1], sw[n0:n1]
                     y = int_mm.linear(x, sx, wc, swc, epilogue)
-                    secs += min(events(partial(int_mm.linear, x, sx, wc, swc, epilogue), args.reps))
+                    secs += min(S.timed(partial(int_mm.linear, x, sx, wc, swc, epilogue), args.reps, DEVICE))
                     res = G.twin(x, sx, wc, swc, y)
                     words, bad = words + res["words"], bad + res["mismatches"]
                     first += [{**f, "n": f["n"] + n0} for f in res["first"]][:8 - len(first)]
