@@ -25,6 +25,8 @@ largest share of the digit pairs that `op` sends to one value.
 * **The coin lane, `1 + b + s`** (`lane_fiber_le`, `lane_sum_hits_le`): with a row bit `b ∈ {0, 1}` and an odd column
   coin `s`, parity fixes `b` and then `s`, so each value has at most one preimage and `p* = 1/(2|B|)`: `2^−(e+1)` for
   coins odd in `±(2^e − 1)`.
+* **A lane in a sum** (`fiber_add_card_le`, `lane_add_card_le`): a lane on its own row and column digits caps the `p*`
+  of any sum it enters at its own, whatever the other lanes, on other digits, add.
 
 The targets are fixed before the draw. A target chosen after it is a branch on the coins, which the adaptive bounds
 treat (`AdaptiveProofs`).
@@ -264,5 +266,53 @@ theorem lane_sum_hits_le (e : ℕ) (hr : 0 < r) (hs : 0 < s) (v : Fin r → Fin 
   calc 2 ^ (e + 2) * ∑ D ∈ draws {0, 1} (oddLane (e + 1)) (r' + 1) (s' + 1), hits lane v D
       ≤ 2 ^ (e + 2) * (1 * ((r' + 1) * (s' + 1)) * (2 ^ r' * (2 ^ (e + 1)) ^ s')) := Nat.mul_le_mul_left _ h
     _ = (r' + 1) * (s' + 1) * (2 ^ (r' + 1) * (2 ^ (e + 1)) ^ (s' + 1)) := by ring
+
+/-- **A lane on its own coins caps any sum it enters**: with row digits `A₁ × A'` and column digits `B₁ × B'`, the
+entry `op a₁ b₁ + rest a' b'` hits `v` on at most `P·|A'|·|B'|` digit pairs when no value of `op` has more than `P`
+preimages in `A₁ × B₁`. So its `p*` is at most `op`'s, `P/(|A₁||B₁|)`, whatever the other lanes add. -/
+theorem fiber_add_card_le {α β : Type*} [DecidableEq α] [DecidableEq β] (op : ℤ → ℤ → ℤ) (rest : α → β → ℤ)
+    (A₁ B₁ : Finset ℤ) (A' : Finset α) (B' : Finset β) {P : ℕ} (hP : ∀ v, (fiber op A₁ B₁ v).card ≤ P) (v : ℤ) :
+    (((A₁ ×ˢ A') ×ˢ (B₁ ×ˢ B')).filter fun p => op p.1.1 p.2.1 + rest p.1.2 p.2.2 = v).card
+      ≤ P * (A'.card * B'.card) := by
+  set T := ((A₁ ×ˢ A') ×ˢ (B₁ ×ˢ B')).filter fun p => op p.1.1 p.2.1 + rest p.1.2 p.2.2 = v with hT
+  have hmaps : ∀ p ∈ T, (p.1.2, p.2.2) ∈ A' ×ˢ B' := by
+    intro p hp
+    rw [hT, mem_filter] at hp
+    simp only [mem_product] at hp ⊢
+    exact ⟨hp.1.1.2, hp.1.2.2⟩
+  rw [card_eq_sum_card_fiberwise fun p hp => hmaps p hp]
+  calc ∑ y ∈ A' ×ˢ B', (T.filter fun p => (p.1.2, p.2.2) = y).card
+      ≤ ∑ _y ∈ A' ×ˢ B', P := sum_le_sum fun y _ => by
+        refine (card_le_card_of_injOn (fun p => (p.1.1, p.2.1)) (fun p hp => ?_) ?_).trans
+          (hP (v - rest y.1 y.2))
+        · rw [mem_coe, mem_filter, hT, mem_filter] at hp
+          obtain ⟨⟨hpm, hpv⟩, hpy⟩ := hp
+          simp only [mem_product] at hpm
+          rw [mem_coe, fiber, mem_filter, mem_product]
+          refine ⟨⟨hpm.1.1, hpm.2.1⟩, ?_⟩
+          rw [← hpy]
+          dsimp only
+          linarith
+        · intro p hp q hq he
+          rw [mem_coe, mem_filter] at hp hq
+          have h1 : (p.1.2, p.2.2) = (q.1.2, q.2.2) := hp.2.trans hq.2.symm
+          have h2 : (p.1.1, p.2.1) = (q.1.1, q.2.1) := he
+          obtain ⟨h1a, h1b⟩ := Prod.mk.inj h1
+          obtain ⟨h2a, h2b⟩ := Prod.mk.inj h2
+          exact Prod.ext (Prod.ext h2a h1a) (Prod.ext h2b h1b)
+    _ = P * (A'.card * B'.card) := by rw [sum_const, card_product, nsmul_eq_mul, Nat.cast_id, mul_comm]
+
+/-- **The coin lane in any sum**: a lane `1 + b + s` on its own row bit and odd column coin keeps `p* ≤ 1/(2|B₁|)` per
+entry whatever other lanes, on other digits, add to it. -/
+theorem lane_add_card_le {α β : Type*} [DecidableEq α] [DecidableEq β] (rest : α → β → ℤ) (B₁ : Finset ℤ)
+    (hB : ∀ x ∈ B₁, Odd x) (A' : Finset α) (B' : Finset β) (v : ℤ) :
+    2 * B₁.card * ((((({0, 1} : Finset ℤ) ×ˢ A') ×ˢ (B₁ ×ˢ B')).filter fun p =>
+        lane p.1.1 p.2.1 + rest p.1.2 p.2.2 = v).card)
+      ≤ ((({0, 1} : Finset ℤ) ×ˢ A') ×ˢ (B₁ ×ˢ B')).card := by
+  have h := fiber_add_card_le lane rest {0, 1} B₁ A' B' (P := 1) (lane_fiber_le B₁ hB) v
+  have h2 : ({0, 1} : Finset ℤ).card = 2 := by decide
+  rw [card_product, card_product, card_product, h2]
+  calc 2 * B₁.card * _ ≤ 2 * B₁.card * (1 * (A'.card * B'.card)) := Nat.mul_le_mul_left _ h
+    _ = 2 * A'.card * (B₁.card * B'.card) := by ring
 
 end Pouw.Dimension.Alphabet
