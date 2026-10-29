@@ -1043,8 +1043,12 @@ def tiedAudits (audits : Array Json) (reg : Json) : Array Nat :=
 def progTied (audits : Array Json) (reg : Json) : Bool := !(tiedAudits audits reg).isEmpty
 
 /-- Audit `a`'s registration `reg` binds its circuit record: the registration's window names the record's SHA-512
-(`Audit.circuit`) as its `circuit`, so what the record registers was fixed with the registration, before any coin. -/
-def Audit.boundIn (a : Audit) (reg : Json) : Bool := (reg.getObjValD "window").getObjValD "circuit" == .str a.circuit
+(`Audit.circuit`) as its `circuit`, so what the record registers was fixed with the registration, before any coin. It
+compares strings, not `Json`, whose equality is partial, so the kernel reduces it. -/
+def Audit.boundIn (a : Audit) (reg : Json) : Bool :=
+  match (reg.getObjValD "window").getObjValD "circuit" with
+  | .str c => c == a.circuit
+  | _ => false
 
 /-- The scan's Programs' rows are a compute audit's slot entries, a lane a chunk: for each lane `j`, the root and domain
 of the scan's registration's `scan/prog<j>` entry (`progName`) are those of chunk `j`'s entries port
