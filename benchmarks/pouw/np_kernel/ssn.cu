@@ -28,7 +28,8 @@
 //   ssn time REPS M [BUDGET_GB [ROW_BYTES ...]]
 //                             Llama-3.2-1B's fused linears at M rows, one JSON line a timing (see time_all), the hash pass
 //                             by each ROW_BYTES (0: row-seg; default 0 65536 16384)
-// L1=1 replaces root(A_j) and the seed message's coins with L1 + (a)'s seed path (l1.h), checked by `ssn check`.
+// L1=1 replaces root(A_j) and the seed message's coins with L1 + (a)'s seed path (l1.h), checked by `ssn check`; L1=2 runs
+// the same path shaped for latency beside the hash streams (l1_root2_k, l1_nf_k; L1_CTA 64 or 128), checked against L1=1's.
 // Build: run.sh (ssn.cu, the served committer's native_rows.cu and its plain-leaf copy from plain_rows.py).
 #include <cuda_runtime.h>
 
@@ -197,16 +198,18 @@ __global__ void form_k(uint8_t* __restrict__ A, const u32* __restrict__ coins, i
 
 // ssn-1l-tag's G: column j's coin word u gives G[0..3, j], the base-7 digits of floor(u 2401 / 2^32) minus 3 (within
 // 2401 / 2^32 of uniform on [-3, 3]^4), one 32-bit store into B' step 1's lanes 24-27
-__global__ void g_k(uint8_t* __restrict__ B, const u32* __restrict__ gc, int n, int S, int BN) {
-  const int j = blockIdx.x * blockDim.x + threadIdx.x;
-  if (j >= n) return;
-  u32 v = (u32)(((u64)gc[j] * 2401u) >> 32), r = 0;
+__device__ __forceinline__ void g_store(uint8_t* __restrict__ B, u32 u, int j, int S, int BN) {
+  u32 v = (u32)(((u64)u * 2401u) >> 32), r = 0;
 #pragma unroll
   for (int e = 0; e < 4; e++) {
     r |= (u32)(uint8_t)(int8_t)((int)(v % 7) - 3) << (8 * e);
     v /= 7;
   }
   *reinterpret_cast<u32*>(B + (size_t)(j / BN) * S * BN * KB + kmaj_off(j % BN, 24, KB)) = r;
+}
+__global__ void g_k(uint8_t* __restrict__ B, const u32* __restrict__ gc, int n, int S, int BN) {
+  const int j = blockIdx.x * blockDim.x + threadIdx.x;
+  if (j < n) g_store(B, gc[j], j, S, BN);
 }
 
 // L1 + (a)'s seed path (l1.h), a call: l1_root_k's CTAs each hash 256 of A_j's 1 KiB leaves (a thread a leaf) and fold
@@ -272,6 +275,110 @@ __global__ void l1_coins_k(const l1::Call* __restrict__ kc, const u64* __restric
   uint4* c = reinterpret_cast<uint4*>(coins + 16 * b);
   for (int j = 0; j < 4; j++)
     c[j] = make_uint4((u32)(o[2 * j] >> 32), (u32)o[2 * j], (u32)(o[2 * j + 1] >> 32), (u32)o[2 * j + 1]);
+}
+
+// L1=2, the same seed path shaped for latency beside the hash streams. l1_root2_k's CTAs are CTA threads (64 or 128, at
+// least the leaves / 512), so a CTA needs a quarter or half of an SM's registers instead of all of them (a cap, -DL1_REGS=R,
+// spills below about 210); the last CTA to finish folds the CTAs' roots, so there is no second launch. Its shared memory holds the
+// level being folded and the next: 1.5 cap digests, cap = max(CTA, CTAs). l1_nf_k then derives the noise blocks, G and the
+// forming in one launch.
+typedef u64 Dig[8];
+template <int CTA>
+__device__ Dig* l1_fold2(const l1::Call& k, Dig* src, Dig* dst, int m, int level, u64 first) {
+  for (; m > 1; m >>= 1, level++) {
+    for (int p = threadIdx.x; p < m / 2; p += CTA)
+      l1::node_of(k, level, (first >> (level + 1)) + p, src[2 * p], src[2 * p + 1], dst[p]);
+    __syncthreads();
+    Dig* t = src;
+    src = dst;
+    dst = t;
+  }
+  return src;
+}
+#ifndef L1_REGS
+#define L1_REGS 0
+#endif
+template <int CTA>
+__global__ void __launch_bounds__(CTA, L1_REGS ? 65536 / (CTA * (L1_REGS ? L1_REGS : 1)) : 1) l1_root2_k(const l1::Call* __restrict__ kc, const uint8_t* __restrict__ A,
+                                                             u64* __restrict__ roots, u64* __restrict__ seed,
+                                                             unsigned* __restrict__ ticket, int cap) {
+  constexpr int LG = CTA == 64 ? 6 : 7;
+  extern __shared__ u64 l1s[];
+  __shared__ bool last;
+  Dig* a = reinterpret_cast<Dig*>(l1s);
+  Dig* b = a + cap;
+  const l1::Call& k = *kc;
+  const int t = threadIdx.x, nct = (int)gridDim.x;
+  const u64 first = (u64)blockIdx.x * CTA;
+  if (first + t < k.n) l1::a_leaf(k, first + t, A + (size_t)l1::SEG * (first + t), a[t]);
+  __syncthreads();
+  Dig* r = l1_fold2<CTA>(k, a, b, (int)(k.n - first < CTA ? k.n - first : CTA), 0, first);
+  if (nct == 1) {
+    if (!t) l1_seed(k, r[0], seed);
+    return;
+  }
+  if (!t) {
+    for (int i = 0; i < 8; i++) roots[8 * blockIdx.x + i] = r[0][i];
+    __threadfence();
+    last = atomicAdd(ticket, 1u) == (unsigned)nct - 1;
+  }
+  __syncthreads();
+  if (!last) return;
+  __threadfence();
+  for (int i = t; i < nct; i += CTA)
+    for (int j = 0; j < 8; j++) a[i][j] = __ldcg(roots + 8 * i + j);
+  if (!t) *ticket = 0;
+  __syncthreads();
+  r = l1_fold2<CTA>(k, a, b, nct, LG, 0);
+  if (!t) l1_seed(k, r[0], seed);
+}
+// Thread i < m: row i's H coin words (from the one or two noise blocks they fall in) to coins, step 1's noise register,
+// and lane 31 of steps 2..S as a byte store (bit t + 2, plus 1 under the tag layout; A's producer leaves the lane 0).
+// Thread m + g, under the tag layout: noise block m H / 16 + g (m H is a multiple of 16) to coins, and G for columns
+// 16 g .. 16 g + 15.
+__global__ void __launch_bounds__(128) l1_nf_k(const l1::Call* __restrict__ kc, const u64* __restrict__ seed,
+                                               u32* __restrict__ coins, uint8_t* __restrict__ A, uint8_t* __restrict__ B,
+                                               int m, int n, int S, int BN, bool tag) {
+  __shared__ u32 hw[128][17];
+  const long long x = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+  const int H = coin_words(S);
+  u64 s[8];
+  for (int i = 0; i < 8; i++) s[i] = seed[i];
+  if (x < m) {
+    const int i = (int)x;
+    const long long w0 = (long long)i * H, b0 = w0 / 16, b1 = (w0 + H - 1) / 16;
+    u32* h = hw[threadIdx.x];
+    for (long long bk = b0; bk <= b1; bk++) {
+      u64 o[8];
+      l1::noise_of(*kc, s, (u64)bk, o);
+#pragma unroll
+      for (int q = 0; q < 16; q++) {
+        const long long w = 16 * bk + q;
+        if (w >= w0 && w < w0 + H) {
+          const u32 u = q & 1 ? (u32)o[q / 2] : (u32)(o[q / 2] >> 32);
+          h[w - w0] = u;
+          coins[w] = u;
+        }
+      }
+    }
+    uint8_t* reg = A + (size_t)(i >> 6) * S * TA + kmaj_off(i & 63, 28, KB);
+    *reinterpret_cast<u32*>(reg) = ((h[0] & 0xFu) * 0x00204081u) & 0x01010101u;
+    for (int t = 1; t < S; t++) {
+      const int p = t + 3;
+      reg[(size_t)t * TA + 3] = (uint8_t)((tag ? 1u : 0u) + ((h[p >> 5] >> (p & 31)) & 1u));
+    }
+  } else if (tag && x < m + (n + 15) / 16) {
+    const int g = (int)(x - m);
+    const long long bk = (long long)m * H / 16 + g;
+    u64 o[8];
+    l1::noise_of(*kc, s, (u64)bk, o);
+#pragma unroll
+    for (int q = 0; q < 16; q++) {
+      const u32 u = q & 1 ? (u32)o[q / 2] : (u32)(o[q / 2] >> 32);
+      coins[16 * bk + q] = u;
+      if (16 * g + q < n) g_store(B, u, 16 * g + q, S, BN);
+    }
+  }
 }
 
 __global__ void clock_k(Clk* clk, long long cycles) {
@@ -422,12 +529,14 @@ static void coins_form(const u64* msg, u32* coins, uint8_t* A, uint8_t* B, int m
 struct L1Dev {
   l1::Call* k;
   u64 *roots, *seed;
-  int nct;
+  unsigned* ticket;
+  int nct, cta2, nct2;  // l1_root_k's CTAs; l1_root2_k's CTA size and CTAs
 };
+static int g_l1_cta = 64;  // L1_CTA: l1_root2_k's least CTA size, 64 or 128
 static L1Dev l1_dev(const l1::Window& w, u64 call, u64 bytes) {
   const u64 n = bytes / l1::SEG;
-  if (bytes % l1::SEG || !n || (n & (n - 1)) || n > 65536 || call >= 256) {
-    fprintf(stderr, "ERR the L1 seed path takes a power-of-two count of 1 KiB leaves up to 65,536 and a call below 256\n");
+  if (bytes % l1::SEG || n < 128 || (n & (n - 1)) || n > 65536 || call >= 256) {
+    fprintf(stderr, "ERR the L1 seed path takes a power-of-two count of 1 KiB leaves from 128 to 65,536 and a call below 256\n");
     exit(2);
   }
   L1Dev d{};
@@ -435,9 +544,38 @@ static L1Dev l1_dev(const l1::Window& w, u64 call, u64 bytes) {
   CK(cudaMalloc(&d.k, sizeof k));
   CK(cudaMemcpy(d.k, &k, sizeof k, cudaMemcpyHostToDevice));
   d.nct = (int)((n + 255) / 256);
-  CK(cudaMalloc(&d.roots, 64 * (size_t)d.nct));
+  d.cta2 = (int)std::max<u64>(g_l1_cta, n / 512);
+  d.nct2 = (int)(n / d.cta2);
+  CK(cudaMalloc(&d.roots, 64 * (size_t)std::max(d.nct, d.nct2)));
   CK(cudaMalloc(&d.seed, 128));
+  CK(cudaMalloc(&d.ticket, sizeof(unsigned)));
+  CK(cudaMemset(d.ticket, 0, sizeof(unsigned)));
   return d;
+}
+static void l1_free(const L1Dev& d) {
+  CK(cudaFree(d.k)); CK(cudaFree(d.roots)); CK(cudaFree(d.seed)); CK(cudaFree(d.ticket));
+}
+// L1=2: root(A_j) and the seed, then (nf) the noise blocks, G and the forming of A' and B' on st
+static void l1_path2(const L1Dev& d, const uint8_t* A, u32* coins, uint8_t* Ap, uint8_t* Bp, int m, int n, int S, int BN,
+                     cudaStream_t st, bool nf = true) {
+  static bool init = false;
+  if (!init) {
+    CK(cudaFuncSetAttribute(l1_root2_k<64>, cudaFuncAttributeMaxDynamicSharedMemorySize, 512 * 96));
+    CK(cudaFuncSetAttribute(l1_root2_k<128>, cudaFuncAttributeMaxDynamicSharedMemorySize, 512 * 96));
+    init = true;
+  }
+  const int cap = std::max(d.cta2, d.nct2);
+  if (d.cta2 == 64) l1_root2_k<64><<<d.nct2, 64, (size_t)cap * 96, st>>>(d.k, A, d.roots, d.seed, d.ticket, cap);
+  else l1_root2_k<128><<<d.nct2, 128, (size_t)cap * 96, st>>>(d.k, A, d.roots, d.seed, d.ticket, cap);
+  if (nf) {
+    if (m % 16) {
+      fprintf(stderr, "ERR l1_nf_k takes rows in multiples of 16\n");
+      exit(2);
+    }
+    const long long th = m + (g_tag ? (n + 15) / 16 : 0);
+    l1_nf_k<<<(unsigned)((th + 127) / 128), 128, 0, st>>>(d.k, d.seed, coins, Ap, Bp, m, n, S, BN, g_tag);
+  }
+  CK(cudaGetLastError());
 }
 // root(A_j) and the seed (parts & COINS also the noise blocks) on st
 static void l1_path(const L1Dev& d, const uint8_t* A, u32* coins, long long blocks, cudaStream_t st, int parts = COINS) {
@@ -491,7 +629,62 @@ static int check_l1() {
            (unsigned long long)(a.size() / l1::SEG), d.nct, seed_ok ? "true" : "false", blocks, bad_blocks);
     fflush(stdout);
     bad += !seed_ok || bad_blocks;
-    CK(cudaFree(dA)); CK(cudaFree(dc)); CK(cudaFree(d.k)); CK(cudaFree(d.roots)); CK(cudaFree(d.seed));
+    // L1=2 at both least CTA sizes: its seed against the reference, and l1_nf_k's coin words, A' and B' against l1_coins_k's
+    // blocks with coins_form's G and forming, over A' and B' as their producer writes them, in both layouts
+    const int keep_cta = g_l1_cta;
+    const bool keep_tag = g_tag;
+    for (int cta : {64, 128}) {
+      g_l1_cta = cta;
+      const L1Dev d2 = l1_dev(w, c.call, a.size());
+      for (int tag = 0; tag < 2; tag++) {
+        g_tag = tag;
+        Lin L{(int)c.rows, 256, (int)c.K, steps_of((int)c.K), 256, {}, {}};
+        fill(L, 0, sd * 31 + tag);
+        const auto ta = tile_a(L), tb = tile_b(L);
+        const int m = L.m, n = L.n, S = L.S;
+        const long long nb = coin_blocks(m, S, n), nw = (long long)m * coin_words(S) + (tag ? n : 0);
+        uint8_t *A1 = up(ta), *B1 = up(tb), *A2 = up(ta), *B2 = up(tb);
+        u32 *c1, *c2;
+        CK(cudaMalloc(&c1, nb * 64));
+        CK(cudaMalloc(&c2, nb * 64));
+        CK(cudaMemset(c2, 0xA5, nb * 64));
+        CK(cudaMemset(d2.seed, 0xA5, 128));
+        l1_path(d, dA, c1, nb, 0);
+        coins_form(nullptr, c1, A1, B1, m, n, S, L.BN, 0, FORM | GDRAW);
+        l1_path2(d2, dA, c2, A2, B2, m, n, S, L.BN, 0);
+        CK(cudaDeviceSynchronize());
+        u64 s2[9];
+        CK(cudaMemcpy(s2, d2.seed, sizeof s2, cudaMemcpyDeviceToHost));
+        const bool ok2 = l1::digest_bytes(s2) == r.seed && s2[8] == l1::be64(r.root_a.data());
+        std::vector<uint8_t> fa1(ta.size()), fa2(ta.size()), fb1(tb.size()), fb2(tb.size());
+        std::vector<u32> w1(nw), w2(nw);
+        CK(cudaMemcpy(fa1.data(), A1, ta.size(), cudaMemcpyDeviceToHost));
+        CK(cudaMemcpy(fa2.data(), A2, ta.size(), cudaMemcpyDeviceToHost));
+        CK(cudaMemcpy(fb1.data(), B1, tb.size(), cudaMemcpyDeviceToHost));
+        CK(cudaMemcpy(fb2.data(), B2, tb.size(), cudaMemcpyDeviceToHost));
+        CK(cudaMemcpy(w1.data(), c1, nw * 4, cudaMemcpyDeviceToHost));
+        CK(cudaMemcpy(w2.data(), c2, nw * 4, cudaMemcpyDeviceToHost));
+        size_t da = 0, db = 0, dw = 0, formed = 0;
+        for (size_t i = 0; i < ta.size(); i++) da += fa1[i] != fa2[i], formed += fa1[i] != ta[i];
+        for (size_t i = 0; i < tb.size(); i++) db += fb1[i] != fb2[i];
+        for (long long i = 0; i < nw; i++) dw += w1[i] != w2[i];
+        printf("{\"check\": \"l1_seed_path2\", \"rows\": %llu, \"K\": %llu, \"call\": %llu, \"data\": \"%s\", \"cta\": %d, "
+               "\"ctas\": %d, \"layout\": \"%s\", \"seed_and_root_a_match\": %s, \"coin_words\": %lld, "
+               "\"coin_word_mismatches\": %zu, \"a_bytes\": %zu, \"a_bytes_formed\": %zu, \"a_byte_mismatches\": %zu, "
+               "\"b_bytes\": %zu, \"b_byte_mismatches\": %zu}\n",
+               (unsigned long long)c.rows, (unsigned long long)c.K, (unsigned long long)c.call, c.zero ? "zero" : "random",
+               d2.cta2, d2.nct2, tag ? "ssn_1l_tag" : "ssn_1l", ok2 ? "true" : "false", nw, dw, ta.size(), formed, da,
+               tb.size(), db);
+        fflush(stdout);
+        bad += !ok2 || dw || da || db;
+        CK(cudaFree(A1)); CK(cudaFree(B1)); CK(cudaFree(A2)); CK(cudaFree(B2)); CK(cudaFree(c1)); CK(cudaFree(c2));
+      }
+      l1_free(d2);
+    }
+    g_l1_cta = keep_cta;
+    g_tag = keep_tag;
+    CK(cudaFree(dA)); CK(cudaFree(dc));
+    l1_free(d);
   }
   return bad;
 }
@@ -969,8 +1162,10 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     lins.push_back(d);
   }
   // L1=1: root(A_j) and the seed by L1 + (a)'s seed path (l1_path; ROOT_A and the call's seed message unused), call 4 l + i
-  // the forward's linear i in layer l
-  const bool use_l1 = getenv("L1") && atoi(getenv("L1"));
+  // the forward's linear i in layer l; L1=2 by l1_path2 (CTAs of at least L1_CTA threads)
+  const int l1_mode = getenv("L1") ? atoi(getenv("L1")) : 0;
+  const bool use_l1 = l1_mode > 0;
+  if (getenv("L1_CTA")) g_l1_cta = atoi(getenv("L1_CTA")) == 128 ? 128 : 64;
   if (use_l1) {
     const l1::Window w = l1::window_of(7, 0, 64);
     for (size_t i = 0; i < lins.size(); i++)
@@ -1104,6 +1299,10 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
              l1_path(d.l1[0], d.A0, d.coins, nbk, 0);
              cf(FORM | GDRAW);
            }), macs, abytes / 4.0, (double)abytes, "l1");
+      line("l1_root2", &d, T.ms(std::max(reps, 51), [&] { l1_path2(d.l1[0], d.A0, d.coins, d.A, d.B, M, d.n, d.S, d.BN, 0, false); }),
+           macs, abytes / 4.0, d.l1[0].cta2, "l1");
+      line("l1_seed_path2", &d, T.ms(std::max(reps, 51), [&] { l1_path2(d.l1[0], d.A0, d.coins, d.A, d.B, M, d.n, d.S, d.BN, 0); }),
+           macs, abytes / 4.0, d.l1[0].cta2, "l1");
     }
     for (int r : ras) {
       Hasher& h = hra[r];
@@ -1123,7 +1322,9 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   line("fwd_plain_gemm", nullptr, T.ms(reps, fwd_plain, s1), fwd_macs, 0, 0);
   // a call's work before its GEMM: root(A_j) (ROOT_A) and coins from the seed message, or L1's seed path; then G and forming
   auto pre = [&](const LinDev& d, int l, cudaStream_t st) {
-    if (use_l1) {
+    if (l1_mode == 2) {
+      l1_path2(d.l1[l], d.A0, d.coins, d.A, d.B, M, d.n, d.S, d.BN, st);
+    } else if (use_l1) {
       l1_path(d.l1[l], d.A0, d.coins, coin_blocks(M, d.S, d.n), st);
       coins_form(d.msg, d.coins, d.A, d.B, M, d.n, d.S, d.BN, st, FORM | GDRAW);
     } else {
@@ -1171,10 +1372,10 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   }
   printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d, \"hash_cap\": %llu, "
          "\"root_a_in_forward\": %d, \"root_a_rows\": %d, \"root_a_tree\": 1, \"words_tree\": %d, \"rowseg_leaf\": "
-         "\"sz_finish\", \"prio\": %d, \"layout\": \"%s\", \"l1\": %d, \"small_threads\": %d, "
+         "\"sz_finish\", \"prio\": %d, \"layout\": \"%s\", \"l1\": %d, \"l1_cta\": %d, \"small_threads\": %d, "
          "\"small_rows_max\": %llu}\n",
          f0, sm_mhz(dclk), nbuf, (unsigned long long)hash_cap, root_a, root_a_rows, (int)words_tree, (int)prio,
-         g_tag ? "ssn_1l_tag" : "ssn_1l", (int)use_l1,
+         g_tag ? "ssn_1l_tag" : "ssn_1l", l1_mode, g_l1_cta,
 #ifdef SSN_SMALL_ROWS
          SSN_SMALL_ROWS, (unsigned long long)small_rows_max()
 #else

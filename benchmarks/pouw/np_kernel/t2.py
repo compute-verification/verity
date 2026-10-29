@@ -55,6 +55,9 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
             "g_draw_us": 1e3 * r["ms"] if (r := g("g_draw")) else None,
             "l1_root_us": 1e3 * r["ms"] if (r := g("l1_root", "l1")) else None,
             "l1_seed_path_us": 1e3 * r["ms"] if (r := g("l1_seed_path", "l1")) else None,
+            "l1_root2_us": 1e3 * r["ms"] if (r := g("l1_root2", "l1")) else None,
+            "l1_seed_path2_us": 1e3 * r["ms"] if (r := g("l1_seed_path2", "l1")) else None,
+            "l1_cta2": int(r["extra"]) if (r := g("l1_root2", "l1")) else None,
         }
     fwd = {"plain_gemm": by.get(("fwd_plain_gemm", "all", "none"))}
     for h in hashers:
@@ -68,6 +71,7 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
            "root_a_rows": clock.get("root_a_rows", -1), "root_a_tree": clock.get("root_a_tree", 0),
            "words_tree": clock.get("words_tree", 0), "rowseg_leaf": clock.get("rowseg_leaf", "segment digests"),
            "prio": clock.get("prio", 0), "layout": clock.get("layout", "ssn_1l"), "l1": clock.get("l1", 0),
+           "l1_cta": clock.get("l1_cta", 0),
            "small_threads": clock.get("small_threads", 0),
            "small_rows_max": clock.get("small_rows_max", 0),
            "small_leaves_check": {"cases": len(small), "leaves": sum(r["leaves"] for r in small),
@@ -131,8 +135,14 @@ def main() -> None:
             if x["l1_root_us"] is not None:
                 print(f"- L1 + (a), {n}: root(A_j) through the seed {x['l1_root_us']:.1f} µs; with the noise blocks, G and "
                       f"forming {x['l1_seed_path_us']:.1f} µs")
+            if x["l1_root2_us"] is not None:
+                print(f"- L1 + (a) for latency (CTAs of {x['l1_cta2']}), {n}: root(A_j) through the seed "
+                      f"{x['l1_root2_us']:.1f} µs; with the noise blocks, G and forming {x['l1_seed_path2_us']:.1f} µs")
         print(f"- layout {r['layout']}")
-        if r["l1"]:
+        if r["l1"] == 2:
+            print(f"- the forwards below run L1 + (a)'s seed path for latency (CTAs of at least {r['l1_cta']}), its noise "
+                  "blocks, G and forming in one launch, ahead of each call's GEMM")
+        elif r["l1"]:
             print("- the forwards below run L1 + (a)'s seed path (root(A_j) through the noise blocks) ahead of each call's G "
                   "and forming")
         elif r["root_a_in_forward"]:
