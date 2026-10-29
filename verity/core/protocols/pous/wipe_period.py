@@ -16,7 +16,7 @@ honest server) unless a test passes another, such as `keeping`. Then the verifie
 What an accepted wipe certifies is `certify`'s: `{"certified", "egress_mib", "eps", "foreign_bits", "k", "memory_bits",
 "r"}`, `memory_bits = M` the declared tiers' bits (the fill's `n · 512` and `R` past it, the memory it doesn't reach),
 `k` the session's timed reads, which the memory challenger chose (`wipe_party --reads`), and `r = ratio(k)`, the
-largest `r` with `(r − 1)^k · 2^129 ≤ r^k`. When the bound covers the session (`k` at most `MAX_READS`, an egress count
+largest `r` with `(r − 1)^k · 2^129 ≤ r^k`. When the bound covers the session (`k` from 1 to `MAX_READS`, an egress count
 that isn't saturated) `foreign_bits` is `Pous.Guarantees.StreamedWipeMeetsReads`' threshold
 `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `eps = 2^-128` (`foreign_bits`), with `E` the egress the network
 certifier counted over the session. Off it, `foreign_bits` is `M` and `eps` 0, the vacuous statement, and the profile
@@ -122,9 +122,12 @@ def foreign_bits(p: sw.WipeParams, r: int) -> int:
 
 
 def gaps(p: sw.WipeParams, egress_mib: int) -> list[str]:
-    """`MemoryChallenger.WipeProtocol.gaps`: why the bound doesn't cover an accepted wipe (none when it does)."""
+    """`MemoryChallenger.WipeProtocol.gaps`: why the bound doesn't cover an accepted wipe (none when it does). `k = 0` is
+    one: `WipeParams` refuses it, but `ratio(0) = 1` doesn't sample."""
     out = []
-    if p.k > MAX_READS:
+    if p.k == 0:
+        out.append("k = 0: a session of no timed reads bounds nothing")
+    elif p.k > MAX_READS:
         out.append(f"k = {p.k}: the certificate is computed for at most {MAX_READS} reads")
     if not 0 <= egress_mib < sw.EGRESS_MAX_UNITS:
         out.append(f"the egress count is {egress_mib} MiB, outside 0 to {sw.EGRESS_MAX_UNITS - 1}: it bounds nothing")
