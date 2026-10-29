@@ -1,10 +1,11 @@
 """A stock decode step of the int8 Llama-3.2-1B on vLLM at B rows: the denominator of decode's T2.
 
-    python stock_decode.py [--rows 1 16] [--steps 128] [--reps 5] [--async] [--json FILE]
+    python stock_decode.py [--rows 1 16] [--steps 128] [--reps 5] [--async] [--graphs] [--json FILE]
 
 vLLM's offline engine on verity-int8/Llama-3.2-1B-INT8 at the revision benchmarks/one_stage/served_util.sh serves, its
 linears on serve-openai's default precision (verity_int8: verity_vllm's int8 linears, registered as serve-openai registers
-them), eager, no prefix cache, synchronous scheduling (--async: asynchronous). B requests of 16 prompt ids decode
+them), eager (--graphs: vLLM's default compilation and CUDA graphs), no prefix cache, synchronous scheduling (--async:
+asynchronous). B requests of 16 prompt ids decode
 STEPS + 1 tokens each, greedy, ignoring EOS; a step is (t(STEPS + 1 tokens) - t(1 token)) / STEPS, the median over REPS,
 so it is the whole decode step at B rows, host included. Not serve-openai: no HTTP, no bench row, no taps.
 """
@@ -29,12 +30,13 @@ def main() -> None:
     ap.add_argument("--steps", type=int, default=128)
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--async", dest="async_", action="store_true")
+    ap.add_argument("--graphs", action="store_true")
     ap.add_argument("--json")
     a = ap.parse_args()
     from verity_vllm.engine.int8_ranks import register
 
     register(["linears"])
-    llm = LLM(model=REPO, revision=REV, quantization="verity_int8", enforce_eager=True, enable_prefix_caching=False,
+    llm = LLM(model=REPO, revision=REV, quantization="verity_int8", enforce_eager=not a.graphs, enable_prefix_caching=False,
               async_scheduling=a.async_, max_num_seqs=max(a.rows), gpu_memory_utilization=0.5, seed=0,
               worker_extension_cls="verity_vllm.engine.int8_ranks.Int8Ranks")
     res = []
@@ -64,7 +66,7 @@ def main() -> None:
         res.append(r)
     if a.json:
         with open(a.json, "w") as f:
-            json.dump({"model": REPO, "revision": REV, "eager": True, "results": res}, f, indent=1)
+            json.dump({"model": REPO, "revision": REV, "eager": not a.graphs, "results": res}, f, indent=1)
 
 
 if __name__ == "__main__":
