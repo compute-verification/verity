@@ -112,8 +112,8 @@ the I/O to `io.json` for the I/O tie and N2's advised counts, and compares it wi
 requests the plan sent.
 On the advice profile each link-window is registered by its one-stage registration record (its salted root, chained)
 with the check's own receipt, which no proof stream issues since N2 gives no outcome, and its certified records are
-held to the certifier's key and session (`_certified`). The verdict is `accepted` when every window's records are
-certified, the I/O, the audit and the salt accept.
+held to the certifier's key and session by the Lean's audit (`_certified`). The verdict is `accepted` when every
+window's records are certified, the I/O, the audit and the salt accept.
 
 **Subcommands**, all from the repository root or with `benchmarks/network_traces` on the path:
 
@@ -226,7 +226,7 @@ from pathlib import Path
 
 import active_replay as ar
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import audit as host_audit, calibration, out_commit
+from verity.core.protocols.certifier import calibration, out_commit
 from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
     Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
@@ -1357,16 +1357,20 @@ def egress_bytes(setup: ar.Setup, out_records) -> dict:
             "frames_bytes_per_window": {k: round(mean * b, 1) for k, b in sizes.items()}}
 
 
-def _certified(lw: LinkWindows, opening, syncs: Sequence[ClockSync]) -> bool:
-    """The host audit of one link-window's two certified records under the certifier's key and session, comparing no
-    grid: N2's audit (`LinkWindows.verify`) without its head checks, which need a profile."""
+def _certified(lw: LinkWindows, opening, syncs: Sequence[ClockSync]) -> dict:
+    """The audit of one link-window's two certified records under the certifier's key and session, comparing no grid:
+    N2's audit (`LinkWindows.verify`) without its head checks, which need a profile. Its verdict, ``accepted``, is the
+    Lean's (`lean_audit.Audit`: `NetworkCheck.Records`' ``verdicts-no-grid``, ``by`` ``lean``), with `audit.Audit` run
+    beside it as the reference, whose accept bit is ``reference``; a link-window where the two differ is refused."""
     w, (egress, ingress) = opening.window, opening.records
-    a = host_audit.Audit()
+    a = Audit()
     out = a.check_link(lw.link, [egress], (), list(syncs)[:w + 1], lw.sync_set, lw.params, key=lw.key,
                        session=lw.certifier_session, grid=False)
     inn = a.check_ingress_link(lw.link, [ingress], w + 1, key=lw.key, params=lw.ingress_params,
                                session=lw.certifier_session)
-    return len(out) > w and out[w].accepted and inn[w].accepted
+    ref = a.reference
+    return {"accepted": len(out) > w and out[w].accepted and inn[w].accepted, "by": "lean",
+            "reference": len(out) > w and ref[w].accepted and ref[len(out) + w].accepted}
 
 
 def _no_coins(n: int) -> bytes:
@@ -1426,7 +1430,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
                 again = _refusal(err)
         row["salt_fingerprint"] = ar.fingerprint(salts[w]) if w in salts else None
         if advice:
-            row["certified"] = _certified(lw, opening, syncs)
+            row["certified"] = _certified(lw, opening, syncs)["accepted"]
             row["n2"] = NO_N2
             continue
         if served is not None:
