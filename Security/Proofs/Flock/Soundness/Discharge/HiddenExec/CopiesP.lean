@@ -161,22 +161,17 @@ variable {tags : Tags} {st : Stmt} {pi : HmIn.Ports} (L : Layout st) (Lf : Layou
 
 theorem place_val {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) :
-    (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x).val =
+    (L.col regs hg x).val =
       st.c.unitRange.slot (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) +
         x.val % (st.c.unit.inWords * WORD) := by
-  have hn := L.unitRows_nIn
   have hx' : x.val < st.c.upv * (unitRows st L.unit_built).nIn := hx
-  unfold stackPlace
-  rw [dite_eq_left hx']
-  show st.c.unitRange.slot (g * st.c.upv + x.val / (unitRows st L.unit_built).nIn) +
-    x.val % (unitRows st L.unit_built).nIn = _
-  rw [hn]
+  rw [L.col_val_in regs hg x hx', L.unitRows_nIn]
 
 include L in
 /-- **A stacked input off a public leaf is at a row `HmIn.delta` keeps**: a dropped row is a public leaf's bit
 (`Hidden.publicCol_at`), which is the input's own port bit, so the input is at that public leaf. -/
-theorem keep_of_neg (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) {g x : ℕ} (hg : g < st.c.g)
+theorem keep_of_neg (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) (htm : st.c.tmpl = none) {g x : ℕ}
+    (hg : g < st.c.g)
     (hx : x < st.c.upv * (st.c.unit.inWords * WORD)) (hneg : pubLeaf st.c pi x < 0) :
     keepCol st.c pi (st.c.unitRange.slot (g * st.c.upv + x / (st.c.unit.inWords * WORD)) +
       x % (st.c.unit.inWords * WORD)) = true := by
@@ -187,7 +182,7 @@ theorem keep_of_neg (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) {g x :
         x % (st.c.unit.inWords * WORD))
     · rfl
     · exfalso
-      obtain ⟨k, -, jj, hjj, t, ht, hq1, hlt, hl⟩ := Hidden.publicCol_at hp he C L.unit_built hq
+      obtain ⟨k, -, jj, hjj, t, ht, hq1, hlt, hl⟩ := Hidden.publicCol_at hp he C (L.built_flat htm) hq
       have hpos : 0 < st.c.unit.inWords * WORD :=
         Nat.pos_of_ne_zero fun h => by rw [h, Nat.mul_zero] at hx; omega
       have hW : st.c.unit.inWords * WORD ≤ 2 ^ st.c.unitRange.slotLog := by
@@ -199,7 +194,7 @@ theorem keep_of_neg (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) {g x :
       have hmem : x % (st.c.unit.inWords * WORD) ∈ portBits st.c.unit.inGroups := by
         rw [e2, ← hj1]; exact port_mem hjs (by rw [hj2]; exact ht)
       have hpo : portOf (portCols st.c.unit.inGroups) (x % (st.c.unit.inWords * WORD)) = jj := by
-        rw [e2, ← hj1]; exact portOf_eq (portBits_nodup L.unit_built) hjs (by rw [hj2]; exact ht)
+        rw [e2, ← hj1]; exact portOf_eq (portBits_nodup (L.built_flat htm)) hjs (by rw [hj2]; exact ht)
       have hpl : pubLeaf st.c pi x = (pi.leaves.getD (x / (st.c.unit.inWords * WORD)) #[]).getD jj (-1) := by
         unfold pubLeaf
         rw [ite_eq_left ⟨hmem, by rw [hpo]; exact hjj⟩, hpo]
@@ -212,9 +207,7 @@ theorem copyPos_blockHP (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) (h
     (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hneg : pubLeaf st.c pi x.val < 0)
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
-    (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x) =
-      (L.model regs).block z o (Aliased.copyPos Lf regs F hg x.val) := by
+    (L.model regs).block z o (L.col regs hg x) = (L.model regs).block z o (Aliased.copyPos Lf regs F hg x.val) := by
   have hn := L.unitRows_nIn
   have hx'' : x.val < st.c.upv * (st.c.unit.inWords * WORD) := by
     rw [← hn]; exact hx
@@ -227,41 +220,37 @@ theorem copyPos_blockHP (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) (h
   rw [dite_eq_left hx'']
   exact copyAt_blockR L Lf regs F hs hm _ hplace
     (fun j => hR _ hs _ (lt_of_lt_of_le hm (L.fit st.c.unitNet).2) _ j hplace
-      (by rw [hplace]; exact keep_of_neg L hp C hg hx'' hneg)) hz o
+      (by rw [hplace]; exact keep_of_neg L hp C F.parse.tmpl hg hx'' hneg)) hz o
 
 /-- **A stacked input at a public leaf carries bit `t` of its leaf's word in the in regions** (`Layout.in_cover`,
 `Layout.in_pinned`): leaf `p` of its unit slot, at its key's bit `t`. -/
 theorem pub_block (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {ri : Array Region} (hRi : HmIn.regions st.c pi st.pub = .ok ri) (hri : ∀ r ∈ ri.toList, r ∈ st.regions.toList)
-    (hne : pi.ports.isEmpty = false) (C : CheckFacts st.c) {g : ℕ} (hg : g < st.c.g)
+    (hne : pi.ports.isEmpty = false) (C : CheckFacts st.c) (htm : st.c.tmpl = none) {g : ℕ} (hg : g < st.c.g)
     (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hpub : 0 ≤ pubLeaf st.c pi x.val)
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     ∃ p t, srcKeyP st.c pi x.val = .pub (pubLeaf st.c pi x.val).toNat t ∧
       (pi.leaves.getD (x.val / (st.c.unit.inWords * WORD)) #[]).getD p (-1) = pubLeaf st.c pi x.val ∧
-      bit ((L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x)) =
+      bit ((L.model regs).block z o (L.col regs hg x)) =
         (inVal st.c pi st.pub o.val (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) p).testBit t := by
   have hn := L.unitRows_nIn
   have hx'' : x.val < st.c.upv * (st.c.unit.inWords * WORD) := by
     rw [← hn]; exact hx
   have hk := Aliased.stack_copy_lt L hg hx''
-  obtain ⟨p, -, t, ht, hxm, hq, hkey⟩ := pubLeaf_at C (portBits_nodup L.unit_built) hpub
+  obtain ⟨p, -, t, ht, hxm, hq, hkey⟩ := pubLeaf_at C (portBits_nodup (L.built_flat htm)) hpub
   have hplace := place_val L regs hg x hx
   have haddr : inAddr st.c (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) p t =
-      (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x).val := by
+      (L.col regs hg x).val := by
     have hslot : st.c.unitRange.slot (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) =
         st.c.unitRange.start + 2 ^ st.c.unitRange.slotLog * (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) := by
       unfold Range.slot Range.start; ring
     rw [hplace, hslot, hxm, inAddr, inCol]
     ring
   have hfin : inBlockOr st.c.kLog (inAddr st.c (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) p t) =
-      stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x := by
+      L.col regs hg x := by
     unfold inBlockOr
-    rw [dite_eq_left (by rw [haddr]; exact (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-      (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x).isLt)]
+    rw [dite_eq_left (by rw [haddr]; exact (L.col regs hg x).isLt)]
     exact Fin.ext haddr
   obtain ⟨xr, w, s, hxr, hws, hcol, hlo, hhi⟩ :=
     in_cover st.c pi (u := x.val / (st.c.unit.inWords * WORD)) (jj := p) (by rw [← hq]; exact hpub)
@@ -296,8 +285,8 @@ theorem aliased_of_keyP (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) (h
       rw [ht, Aliased.srcKeyP_of_neg (by omega)] at hkey
       cases hkey
     have hne := ports_of_pub hp h1
-    obtain ⟨p, t, hk1, hq1, hb1⟩ := pub_block L regs hregs hRi hri hne C hg c hc h1 hz o
-    obtain ⟨p', t', hk2, hq2, hb2⟩ := pub_block L regs hregs hRi hri hne C hg c' hc' h2 hz o
+    obtain ⟨p, t, hk1, hq1, hb1⟩ := pub_block L regs hregs hRi hri hne C F.parse.tmpl hg c hc h1 hz o
+    obtain ⟨p', t', hk2, hq2, hb2⟩ := pub_block L regs hregs hRi hri hne C F.parse.tmpl hg c' hc' h2 hz o
     rw [hk1, hk2, Aliased.KeyP.pub.injEq] at hkey
     obtain ⟨hq, rfl⟩ := hkey
     have hq' : pubLeaf st.c pi c.val = pubLeaf st.c pi c'.val := by
