@@ -5,8 +5,9 @@ import Definitions.Pouw.Dimension.Ssn
 /-!
 # What writing distinct words costs: the guarantees (trusted; draft semantics, pending review)
 
-**Draft semantics, pending review.** Each statement is over a model still marked pending review: `MH100w`
-(`Pouw.Dimension.H100`, `H100W.lean`) or the chunk model (`Pouw.Dimension.Pointwise`). Its proof is the theorem
+**Draft semantics, pending review**, except `DistinctWritesMH100Floor`. Each other statement reads definitions still
+marked pending review: the served layouts (`Pouw.Dimension.Ssn`) or the chunk model (`Pouw.Dimension.Pointwise`).
+`MH100w` (`Pouw.Dimension.H100`) is reviewed against the H200's measurements in `H100W.lean`. Their proof is the theorem
 `Pouw.SecurityProofs.Writes.G : Pouw.Guarantees.Writes.G`.
 
 * **What each model covers.** `MH100w` prices one straight-line program fixed before the coins, whose registers are
@@ -25,7 +26,7 @@ namespace Pouw.Guarantees.Writes
 
 open Finset Pouw.Dimension.H100 Pouw.Dimension.Ssn Pouw.Dimension.Pointwise
 
-/-- **The distinct-writes bound at any floor** (`MH100w`; draft semantics, pending review): under `Floor c`, for every
+/-- **The distinct-writes bound at any floor** (`MH100w`): under `Floor c`, for every
 set `S` of grid points and free values `F` containing the constants, a well-formed `MH100w` program on free inputs that
 matches on `S` every target of a finite set `T`, pairwise distinct on `S` and none equal on `S` to a free value, costs
 at least `c·|T|`. -/

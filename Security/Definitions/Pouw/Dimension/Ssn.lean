@@ -4,8 +4,8 @@ import Mathlib.Data.Rat.Cast.Order
 /-!
 # Served sparse noise in the bit model: the committed words and the served layouts (trusted definitions)
 
-**Draft semantics, pending review.** These are targets of `MH100w` programs (`Pouw.Dimension.H100`, `H100W.lean`),
-whose semantics are still marked pending review.
+**Draft semantics, pending review**, for the definitions here. They are targets of `MH100w` programs
+(`Pouw.Dimension.H100`), whose semantics `H100W.lean` reviews against the H200's measurements.
 
 * **The grid** is every value of a call's coin bits, `Bits m C`: bit `b` of row `i`'s 32-bit coin word `c`. Targets and
   free values are affine in the bits (`aff`).
