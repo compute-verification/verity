@@ -16,8 +16,8 @@ module composes that bound from four pieces, each a hypothesis here:
   boundary (`PeriodInventory`, `PeriodInventoryT1`, `hostsCounted_call`).
 
 `call_floor` adds the first two on each large share (`hashCompose`) and bounds the outcomes where they don't reach by
-the paths times `m` (`parts_le`). `call_priced` charges the network term, and `lead_gap` restates the result as the
-honest work less `gap`.
+the paths times `m` (`parts_le`). `call_priced` charges the network term, `lead_gap` restates the result as the
+honest work less `gap`, and `lead_bound` puts the three together over a strategy's runs on the devices.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Compose
@@ -93,6 +93,30 @@ theorem lead_gap {c N R Nh Rh E W : ℕ} (hN : N ≤ Nh) (hR : R ≤ Rh) (hW : c
   calc c * (N + R) + c * a + c * b ≤ W + E + c * a + c * b := by
         exact Nat.add_le_add_right (Nat.add_le_add_right hW _) _
     _ = W + (c * a + c * b + E) := by ring
+
+/-- **The lead's bound from its pieces**: a strategy that runs `Pa g` on the devices at the outcome `g`, its
+instructions path `path g`'s program, has its work on the counted devices `I` at least the honest work less `gap`
+at every outcome of `S` but at most `m` a path, given the matmul floor (`hmm`), `ShaWrites` (`hsha`) and the network
+term (`hE`). -/
+theorem lead_bound {Dev : Type} {c : ℕ} {pr : Prices100} (hpr : Floor c pr)
+    {Adm : List (Op100 G) → List (G → ℚ) → Prop} {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {F X : Set (G → ℚ)}
+    (hconst : ∀ q : ℚ, (fun _ : G => q) ∈ F) (hFX : F ⊆ X) {Dig : Finset (G → ℚ)} {N R m Nh Rh E : ℕ} {ι : Type}
+    [DecidableEq ι] (S : Finset G) (path : G → ι) (L : ι → List (G → ℚ)) (P : ι → List (Op100 G))
+    (hL : ∀ i, ∀ f ∈ L i, f ∈ F) (hP : ∀ i, ∀ o ∈ P i, o.WFw pr F) (hA : ∀ i, Adm (P i) (L i))
+    (hODig : ∀ i, OutputsOn fpSem (↑(S.filter fun g => path g = i) : Set G) (P i) (L i) Dig)
+    (hmm : ∀ i, m ≤ (S.filter fun g => path g = i).card → ∃ D : Finset (G → ℚ), N ≤ D.card ∧
+      (∀ t ∈ D, t ∈ X) ∧ DistinctOn (↑(S.filter fun g => path g = i) : Set G) F D ∧
+      OutputsOn fpSem (↑(S.filter fun g => path g = i) : Set G) (P i) (L i) D)
+    (hsha : ∀ S' ⊆ S, m ≤ S'.card → ShaWrites pr Adm fpSem (↑S' : Set G) X Dig R)
+    (Pa : G → Run Dev G) (hops : ∀ g, ops (Pa g) = P (path g)) {I : Set Dev} (hE : ∀ g, costOn pr Iᶜ (Pa g) ≤ E)
+    (hN : N ≤ Nh) (hR : R ≤ Rh) :
+    (S.filter fun g => costOn pr I (Pa g) + gap c N R Nh Rh E < c * (Nh + Rh)).card ≤ (S.image path).card * m := by
+  refine (Finset.card_le_card fun g hg => ?_).trans (call_floor hpr hconst hFX S path L P hL hP hA hODig hmm hsha)
+  obtain ⟨hgS, hlt⟩ := Finset.mem_filter.1 hg
+  refine Finset.mem_filter.2 ⟨hgS, not_le.1 fun hle => ?_⟩
+  have h1 : c * (N + R) ≤ costOn pr I (Pa g) + E :=
+    call_priced (N := N) (R := R) (by rw [hops]; exact hle) (hE g)
+  exact absurd (lead_gap hN hR h1) (not_le.2 hlt)
 
 end Sketch
 
