@@ -3,7 +3,7 @@
 The remote protocol audits a datacenter whose auditor has no devices at the site: the developer commits everything its
 hardware computes, and the auditor checks it from outside with live coins and a Lean verifier. It composes two
 subprotocols into one verdict over one commitment: sampled proofs (the committed values satisfy the registered circuit,
-except on few proof blocks) and PoUW (the hardware's time went to the declared work).
+except on few proof blocks) and PoUW (the hardware's time went to the registered work).
 
 **The open gap.** Remote's composed soundness theorem, `Verity.Soundness`, is not in Lean yet. It is due after the Lean
 dedupe (one vocabulary), and its owner is soundness. Today the pieces below compose by hand: each is proved on its own,
@@ -12,8 +12,8 @@ theorems either, because remote reads sampled proofs' one-stage v1, which takes 
 instead of computing them.
 
 This file is an outline with signposts. The Lean is the definition. The vocabulary is the Glossary's: `ARCHITECTURE.md`'s
-Glossary, and `GLOSSARY.md` for the notation and the older names. The lifecycle's terms (a declaration, declaring, the
-advice, an execution block and an execution phase) are in `ARCHITECTURE.md`'s Glossary, under Declaration,
+Glossary, and `GLOSSARY.md` for the notation and the older names. The lifecycle's terms (the reported advice, the
+registered compiler, an execution block and an execution phase) are in `ARCHITECTURE.md`'s Glossary, under Reported advice,
 Block and Period. Lean names keep some older names until they are renamed: `Dampener*` means overhead, `*Horizon` a
 monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window` a period.
 
@@ -33,7 +33,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 
 ## Parties
 
-- **The developer** (the prover) runs the datacenter. It registers, declares, commits its values and proves the sampled
+- **The developer** (the prover) runs the datacenter. It registers, reports its advice, commits its values and proves the sampled
   proof blocks behind the ZK server. Nothing it runs or hosts is trusted, and neither is the audited hardware or its
   vendor.
 - **The auditor** has two parts, both on auditor hosts that the developer doesn't control: its **challenger** (the
@@ -56,7 +56,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
 | Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `SampledProofs.OneStage.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
-| PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the declared work's | `PouwCheck.protocol` (`verity/core/protocols/pouw/lean/check`) | `verity/pouw/v1` |
+| PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the registered work's | `PouwCheck.protocol` (`verity/core/protocols/pouw/lean/check`) | `verity/pouw/v1` |
 
 **Coming, not there yet:** the inference-only policy (its Lean is still named `Nci`, `NciCheck`) is to join as a third
 subprotocol. Under it, the registered circuit divides into inference blocks of bounded size, each reading a bounded amount
@@ -71,19 +71,26 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
 
 ## Lifecycle
 
-1. **Registration**, once, before any coin. The developer registers R = (θ, D, 𝓘): the registered inputs θ, the registered
-   circuit D, and D's (c, k)-partition 𝓘 into inference blocks (`GLOSSARY.md`, `Verity.Declaration`; read by the
-   inference-only policy once it joins). It also registers
-   each subprotocol's public Program and parameters, by digest.
-2. **Declarations**, one or more per execution phase. A declaration is one
-   act of declaring: the developer reports its advice (a bit string that a registered compiler compiles, its
-   length charged), and the compiler appends one execution block to the registered circuit. The block's values are
-   committed under hiding commitments in SHA-512 trees before any coins are flipped.
-   `examples/lifecycle/README.md` ("Terms") runs these terms on a toy model.
-3. **The audit**, in each verification phase. The live coins select proof blocks. The developer proves each sampled proof block with
-   C-Flock `--zk` behind the ZK server, and the Lean verifier `flock-verify` checks each proof. PoUW's check
-   (`pouw-check`) reads each PoUW period's commitment and its sampled proofs and receipts, and credits that period's work.
-   No proof is retried, and a failed proof is a visible failure.
+1. **Setup phase**, once, before any coin. It fixes the public parameters (the protocol and its version, the sampling
+   design and δ, the size classes, the inference-only policy's c and k, the advice length ℓ_a, and each subprotocol's
+   public Program and parameters, by digest), the registered information θ (for example the weights) and the registered
+   compiler B. It fixes no circuit. The Lean (`Verity.Declaration`, `Verity.Committed`) still states the older shape, a
+   circuit with a partition committed beside it.
+2. **Execution phase** j. The hardware runs, and the developer commits every value it computes under hiding commitments
+   in SHA-512 trees: the committed trace.
+3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, "How an audit works"):
+   1. The developer reports its advice a_j, at most ℓ_a bits, committed. B(a_j) outputs the execution block E_j,
+      partitioned into inference blocks, each of which is partitioned into proof blocks, with its placement. The
+      developer proves through the ZK server that it ran B correctly on the committed advice of at most ℓ_a bits, and
+      that B's output explains the committed trace: each proof block's inputs and outputs are committed values. The
+      same statement can prove that every inference block has c gates and reads at most k bits outside θ, which is the
+      inference-only policy's check.
+   2. Only then does the challenger flip the coins that select the sample, so the partition is fixed before any coin.
+   3. The developer proves each sampled proof block with C-Flock `--zk` behind the ZK server, and the Lean verifier
+      `flock-verify` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment and its sampled
+      proofs and receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
+   4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
+      accounting adds the phase's share (Accounting, below).
 4. **The verdict**, by the composition rule (`verity/core/protocols/composition/README.md`). The composite rejects if
    any subprotocol rejects. It also rejects if the cases don't fit (unknown, missing, repeated or out of order), or if
    the commitment isn't `bind` of the subprotocols' digests. It is undecided if it binds and some subprotocol is
