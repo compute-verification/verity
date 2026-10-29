@@ -166,7 +166,7 @@ def site_node(log: Path, host: str, keys: Path | None = None, host_card: str = h
     `host_card` with the placeholders `placeholders` names read as open (by default a vy-nebius node's): the log
     (`verity.core.site.Registration`'s JSON) checked entry by entry (`site.check`) against the auditor's data sheets,
     every GPU card file's, and its own devices' keys, `keys` (a JSON object of id to key)."""
-    auditor = site.Auditor.of_files([load(sku) for sku in skus("gpu")], json.loads(keys.read_text()) if keys else None)
+    auditor = site.Auditor.of_files([load(sku) for sku in skus("gpu")], keys=json.loads(keys.read_text()) if keys else None)
     return ledger.figures(site.check(site.Registration.of_json(json.loads(log.read_text())), auditor), host,
                           host_card, placeholders)
 
