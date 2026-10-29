@@ -5,9 +5,9 @@ The decoders mirror the Lean's: byte strings lowercase hex, the parameters natur
 record's fields, the fill's times and the egress integers of either sign, and the record exactly the canonical JSON of
 what it decodes to. Past decoding every reference is the Python's own function on the decoded objects.
 
-Sessions are run by `streamed_wipe.Challenger` itself against `streamed_wipe.Prover`, on an injected clock, and signed by
-a test signer's key at a leaf the test picks (`mc_cases.AtLeaf`) or by a deployed-parameter key (`mc_cases.deployed_signer`).
-No real key is read."""
+Sessions are run by `streamed_wipe.WipeMemoryChallenger` itself against `streamed_wipe.Prover`, on an injected clock,
+and signed by a test signer's key at a leaf the test picks (`mc_cases.AtLeaf`) or by a deployed-parameter key
+(`mc_cases.deployed_signer`). No real key is read."""
 
 from __future__ import annotations
 
@@ -101,10 +101,11 @@ def tiers_of(labels: int, cuts: list[int], names: list[str], outside: int = 0) -
 def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], session_id: bytes = bytes(32),
         start: int = 1_000, fill_ns: int = 7, spends=lambda b: 1, tampered=frozenset(), egress_bits: int = 1234,
         coins: bytes = b"coins") -> Session:
-    """One session of `Challenger` against the honest `Prover`: batch `b`'s answer takes `spends(b)` ns, and the batches in
-    `tampered` have their first answer's last bit flipped."""
+    """One session of `WipeMemoryChallenger` against the honest `Prover`: batch `b`'s answer takes `spends(b)` ns, and
+    the batches in `tampered` have their first answer's last bit flipped."""
     clock = M.Clock(start)
-    c = sw.Challenger(SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock, coin_secret=coins)
+    c = sw.WipeMemoryChallenger(SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
+                                coin_secret=coins)
     prover = sw.Prover(params)
     for first, data in c.fill(max(1, params.labels // 3)):
         prover.receive(first, data)
