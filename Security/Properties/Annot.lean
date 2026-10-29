@@ -49,9 +49,9 @@ def Holds (Φ : Meaning) (P : Prog) (n : Nat) (e : Array (Array Nat)) : Prop :=
   (∀ c, Φ.maxGates = some c → ∀ l < n, (holds e l).length ≤ c)
 
 /-- **The check at the size of the description agrees with the meaning gate by gate.** Whenever `Flock.Annot.check Φ`
-accepts annotation `D` of program `P`, `D` expands, and `Φ` holds of the expansion with the verdict's label count. -/
+accepts annotation `D` of program `P`, `D` expands, and `Φ` holds of the expansion with the result's label count. -/
 def CheckAgrees (Φ : Meaning) : Prop :=
-  ∀ (P : Prog) (D : Desc) (v : Verdict), check Φ P D = .ok v → v.accept = true →
+  ∀ (P : Prog) (D : Desc) (v : CheckResult), check Φ P D = .ok v → v.accept = true →
     ∃ e, expand P D = .ok e ∧ Holds Φ P v.count e
 
 end Properties.Annot
