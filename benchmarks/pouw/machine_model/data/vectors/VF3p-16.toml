@@ -1,7 +1,7 @@
-# VF3p-16: VF3o-16 with the uniform datapath on the issue rows (EPS1 P10, uniform.cu; decision 73): UNI 1 on issue and 0.7416 of a vector instruction's coefficient on each of JI3o_0..2, the share that holds every uniform.cu point at the 2% noise margin (0.8168 holds them exactly; the honest step + 32 FFMA at K=64 sets it); UP refit to 0.766 a SMSP-cycle.
+# VF3p-16: VF3o-16 with the uniform datapath on the issue rows (uniform.cu; a uniform instruction takes an issue slot): UNI 1 on issue and 0.7416 of a vector instruction's coefficient on each of JI3o_0..2, the share that holds every uniform.cu point at the 2% noise margin (0.8168 holds them exactly; the honest step + 32 FFMA at K=64 sets it); UP refit to 0.766 a SMSP-cycle.
 name = "VF3p-16"
 epoch = "VF3p-16"
-summary = "VF3o-16 with the uniform datapath on the issue rows (EPS1 P10, uniform.cu; decision 73): UNI 1 on issue and 0.7416 of a vector instruction's coefficient on each of JI3o_0..2, the share that holds every uniform.cu point at the 2% noise margin (0.8168 holds them exactly; the honest step + 32 FFMA at K=64 sets it); UP refit to 0.766 a SMSP-cycle."
+summary = "VF3o-16 with the uniform datapath on the issue rows (uniform.cu; a uniform instruction takes an issue slot): UNI 1 on issue and 0.7416 of a vector instruction's coefficient on each of JI3o_0..2, the share that holds every uniform.cu point at the 2% noise margin (0.8168 holds them exactly; the honest step + 32 FFMA at K=64 sets it); UP refit to 0.766 a SMSP-cycle."
 superseded_by = "VF3q-16"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
