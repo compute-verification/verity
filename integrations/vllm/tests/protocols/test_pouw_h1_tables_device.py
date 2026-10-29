@@ -139,9 +139,9 @@ def test_a_window_whose_tables_hash_beside_the_forward_records_each_root_before_
     launched = []
 
     class Later:
-        def __init__(self, tables, key):
+        def __init__(self, tables, key, names=("a", "z")):
             roots = TD.host_roots(tables, key)
-            self.roots, self.ready = lambda: launched.remove(self) or roots, lambda: False
+            self.roots, self.ready, self.names = lambda: launched.remove(self) or roots, lambda: False, names
             launched.append(self)
 
     monkeypatch.setattr(TD, "device_hash", Later)
