@@ -15,13 +15,14 @@ row's A entry is x_t.
   x_t + 1 + b_t, in {0, 1} or {−1, 0}: a lazy walk, so a row holds about √(2S/π) distinct vectors instead of S.
 - `cancel`: p_t = 1 (`tag`, `fix2`) or σ_t (`hw`), x_t = −1. The step's coin term is then b_t·1, 2b_t·σ_t or a word
   (1 + b_t)w_t[j] − 1, which is zero where b_t = 0 (and w_t[j] = +1 for `fix2`).
-- `zero`: zero data past step 1 (padding tails).
+- `zero`: zero data past step 1 (padding tails); `same`: that, with every row's step-1 data equal (identical rows).
 
 The constructive adversary (`adversary`) keys row i's step t on its coin state (W_t for `tag`, the set of steps with
 b = 1 for `hw`), computes one vector a key from data and coins alone, and copies it to every row-step with that key at
 one pointer a row-step. Its words must equal `honest`'s, which multiplies the served lane layout out. `oracle` counts
 distinct row vectors and 4-word tiles: no prover that copies whole row vectors (tiles), at one pointer a copy, writes
-fewer. `at_scale` runs the walk at Llama's S.
+fewer. `patch` is a constructive tile prover (copy the nearest earlier tile at one word, rewrite the rest), whose
+saving is open to a design whose words carry few coin bits each. `at_scale` runs the walk at Llama's S.
 """
 
 from __future__ import annotations
@@ -99,9 +100,9 @@ def data(case: str, design: str, m: int, n: int, s: int, pub: dict, rng: np.rand
     k = d1 + 31 * (s - 1)
     a = np.zeros((m, k), dtype=np.int64)
     b = np.zeros((k, n), dtype=np.int64)
-    a[:, :d1] = rng.integers(-127, 128, size=(m, d1))
+    a[:, :d1] = rng.integers(-127, 128, size=(1 if case == "same" else m, d1))
     b[:d1] = rng.integers(-127, 128, size=(d1, n))
-    if case == "zero":
+    if case in ("zero", "same"):
         return a, b
     for t in range(1, s):
         lane = d1 + 31 * (t - 1)
@@ -187,18 +188,39 @@ def oracle(words: np.ndarray) -> dict:
     }
 
 
+def patch(words: np.ndarray, copy_price: int = 1) -> dict:
+    """A tile prover that copies the nearest earlier tile at its column position and rewrites the words that differ.
+
+    Tiles are made in (row, step) order; a tile costs min(TILE, copy_price + its Hamming distance to the nearest
+    earlier tile at its position), in words. Cross-position and salt-free sources are left out, so the saving is a
+    floor on what this prover gets."""
+    m, s, n = words.shape
+    tiles = words.reshape(m * s, n // TILE, TILE)
+    cost = 0
+    hist = np.zeros(TILE + 1, dtype=np.int64)
+    for q in range(n // TILE):
+        t = tiles[:, q, :]
+        d = (t[:, None, :] != t[None, :, :]).sum(axis=-1)
+        d[np.triu_indices(len(t))] = TILE
+        near = d.min(axis=1)
+        hist += np.bincount(near, minlength=TILE + 1)
+        cost += np.minimum(TILE, copy_price + near).sum()
+    return {"patch_saving": 1 - cost / words.size,
+            "nearest_distance_shares": (hist / hist.sum()).round(4).tolist()}
+
+
 def small(seed: int = 7, m: int = 48, n: int = 64, s: int = 67) -> tuple[list[dict], list[dict]]:
     rng = np.random.default_rng(seed)
     rows, checks = [], []
-    for design, cases in (("tag", ("zero", "cancel", "walk")), ("hw", ("zero", "cancel")),
-                          ("fix2", ("zero", "cancel", "walk"))):
+    for design, cases in (("tag", ("zero", "same", "cancel", "walk")), ("hw", ("zero", "same", "cancel")),
+                          ("fix2", ("zero", "same", "cancel", "walk"))):
         for case in cases:
             pub = public(design, n, s, rng)
             a, b = data(case, design, m, n, s, pub, rng)
             co = coins(design, m, n, s, rng)
             words = honest(design, a, b, pub, co, s)
-            row = {"design": design, "case": case, "m": m, "n": n, "S": s, **oracle(words)}
-            if design != "fix2" and case != "zero":
+            row = {"design": design, "case": case, "m": m, "n": n, "S": s, **oracle(words), **patch(words)}
+            if design != "fix2" and case in ("cancel", "walk"):
                 adv, writes, pointers = adversary(design, case, a, b, pub, co, s)
                 ok = bool(np.array_equal(adv, words))
                 mut, _, _ = adversary(design, case, a, b, pub, co, s, key_bits=False)
