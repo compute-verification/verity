@@ -93,7 +93,7 @@ theorem unitServed_of {K nw : ℕ} {Pub : Type} {dq : List ℤ → ℤ}
 
 end Accounting.TS.Lanes
 
-open Accounting.TS Accounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes
+open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes
 
 /-- **The decodes read the committed leaf, from acceptance**: where each session has a unit, its served roots
 registered, whose units read their one-row ports at their rows (`ReadsOwnRow`), whose registrants' rows agree at one
@@ -155,7 +155,7 @@ theorem Accounting.TS.Lanes.decodes_of_checks {K nw : ℕ} {sess : Option (Fin 3
     rw [decComb_ok, ho]
     rfl
 
-open Accounting.TS Accounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes in
+open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes in
 /-- **`GroupRealizes` at option A's 33 statements, from the circuits' lowerings** (the honest witness of
 `accounting-ts-group-realizes` at the 32 × 32 leaf, one chunk a lane): where the lanes' and the combine's circuits
 compute their pieces' compositions (`LaneLowers`, `CombineLowers`), the 33 statements realize the unit's served checks
@@ -183,21 +183,12 @@ followed by its `o0` row 1 under its salt (`Accounting.TS.Group.okKnown`). -/
 theorem Accounting.TS.Lanes.knownOf_okKnown (P : LanePub) (salts : String → ByteArray) (k : Option (Fin 32)) :
     ∃ pre, knownOf P salts k = Accounting.TS.Group.okKnown pre (salts "o0") := by
   cases k with
-  | none =>
-    exact ⟨#[], by
-      first
-        | rfl
-        | (apply Array.ext'; simp [knownOf, PouwWindow.Lanes.knownRows, Accounting.TS.Group.okKnown])
-        | simp [knownOf, PouwWindow.Lanes.knownRows, Accounting.TS.Group.okKnown]⟩
+  | none => exact ⟨#[], rfl⟩
   | some l =>
     exact ⟨#[("admit", #[(PouwWindow.Lanes.admitRow (List.ofFn P.admit), salts "admit")]),
-      ("pub", #[(PouwWindow.Lanes.pubRow P.salt P.position P.roots l.val, salts "pub")])], by
-      first
-        | rfl
-        | (apply Array.ext'; simp [knownOf, PouwWindow.Lanes.knownRows, Accounting.TS.Group.okKnown])
-        | simp [knownOf, PouwWindow.Lanes.knownRows, Accounting.TS.Group.okKnown]⟩
+      ("pub", #[(PouwWindow.Lanes.pubRow P.salt P.position P.roots l.val, salts "pub")])], rfl⟩
 
-open Accounting.TS.Lanes in
+open Accounting.TS.Checked Accounting.TS.Lanes in
 /-- **A leaf's 33 linked C-Flock sessions realize one unit** (`Accounting.Guarantees.TS.LeafLanesSound`):
 `Accounting.TS.Group.group_soundAt` at `leafLayer` and its 33 statements, at the known content of the path's public
 inputs (`knownOf`, which names `o0`), the ports read in full at the layout (`PouwWindow.Lanes.readFull`), the leaf
