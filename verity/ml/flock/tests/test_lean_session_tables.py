@@ -2,10 +2,10 @@
 statement from its part of the session's draw (without one, of the population's units), never from anything in the record.
 The sessions are #306's live ones on RoPE, all accepted by its server, and none is `--zk`. Without `--plain-tables`, several
 tables without `--zk` are a form the one-table plain claim does not cover (§16.15), so the verifier refuses every session, for
-that once every check has passed: a drawn one for its subset draw without `--zk` at setup first, and a draw it sets no
+that once every check has passed: a drawn one for its subset sample without `--zk` at setup first, and a sample it sets no
 statement up from keeps its setup's reason. Under `--plain-tables` (`flock_verify_sound`'s plain multi-table claim, at up to
-64 tables and a subset draw) with the verifier's own program (the RoPE Definition's, META's `program_sha512`), both drawn
-sessions are accepted, a tampered one keeps its check's reason, the draw-less one meets D12's refusal, and the verifier
+64 tables and a subset sample) with the verifier's own program (the RoPE Definition's, META's `program_sha512`), both drawn
+sessions are accepted, a tampered one keeps its check's reason, the sample-less one meets D12's refusal, and the verifier
 refuses an honest session verified against another program than the one META binds, or without one."""
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def _draw(**kw):
     return lambda rec: rec["unit_draw"].update(kw)
 
 
-#: the drawn session's draw (units 3..6 of 8) edited, and the refusal it meets
+#: the drawn session's sample (units 3..6 of 8) edited, and the refusal it meets
 DRAWS = {
     "a table's part as the session's draw": (_draw(k=2, units=[3, 4]), SUBSET),
     "a Bernoulli draw": (lambda rec: rec.update(unit_draw={"law": "bernoulli", "population": 8, "p": "1/1", "units": list(range(8))}),
@@ -112,7 +112,7 @@ def verdicts(rope, tmp_path_factory):
 @pytest.mark.slow
 @pytest.mark.parametrize("name", ["honest", "a missing root", "a short y", "swapped files", "swapped files and digests"])
 def test_a_drawn_session_of_two_tables_is_refused(verdicts, name):
-    """Honest or tampered, the drawn session's statements set up and it meets the refusal of its draw's law."""
+    """Honest or tampered, the drawn session's statements set up and it meets the refusal of its sample's law."""
     v = verdicts[name]
     assert not v["accepted"] and v["why"] == SUBSET, v["why"]
 
@@ -121,7 +121,7 @@ def test_a_drawn_session_of_two_tables_is_refused(verdicts, name):
 @pytest.mark.skipif("not os.environ.get('FLOCK_VERIFIER_SLOW') and not config.getoption('--slow', False)",
                     reason="about three minutes: set FLOCK_VERIFIER_SLOW=1 (or pass --slow)")
 def test_every_live_session_is_refused(rope):
-    """J = 2 without a draw, the other drawn session, and J = 4: only when asked for."""
+    """J = 2 without a sample, the other drawn session, and J = 4: only when asked for."""
     assert [v["why"] for v in _verify(rope, 2, _session(rope, "j2"), _session(rope, "j2-draw", 1))] == [_refused(2), SUBSET]
     assert [v["why"] for v in _verify(rope, 4, _session(rope, "j4"))] == [_refused(4)]
 
@@ -129,7 +129,7 @@ def test_every_live_session_is_refused(rope):
 @pytest.mark.slow
 def test_another_table_count_is_refused(rope, tmp_path):
     """J is the verifier's: a J = 2 session read as one table names other tables and another Σ (S2), before any proof (a
-    session without a draw: a drawn one meets its law's refusal first)."""
+    session without a sample: a drawn one meets its law's refusal first)."""
     s = _copy(_session(rope, "j2"), tmp_path / "s")
     for r in (0, 1):
         shutil.copy(s / f"circuit-00.rep{r}.bin", s / f"circuit.rep{r}.bin")
@@ -140,7 +140,7 @@ def test_another_table_count_is_refused(rope, tmp_path):
 @pytest.mark.slow
 @pytest.mark.parametrize("name", list(DRAWS))
 def test_the_parts_come_from_the_sessions_draw(verdicts, name):
-    """A table's part as the session's draw sets up and meets its law's refusal; a draw the tables cannot split is refused
+    """A table's part as the session's sample sets up and meets its law's refusal; a sample the tables cannot split is refused
     at setup."""
     v = verdicts[name]
     assert not v["accepted"] and v["why"].startswith(DRAWS[name][1]), v["why"]
@@ -154,7 +154,7 @@ def test_statements_without_several_tables_refuse_them(rope):
     assert not v["accepted"] and v["why"].startswith("setup: tables: at most 64 per session"), v["why"]
 
 
-#: a session without a draw, under `--plain-tables` as without it: every claim is about a drawn session (D12)
+#: a session without a sample, under `--plain-tables` as without it: every claim is about a drawn session (D12)
 DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 
 
@@ -182,7 +182,7 @@ def program(tmp_path_factory) -> Path:
 
 @pytest.fixture(scope="module")
 def plain(rope, program, tmp_path_factory):
-    """`--plain-tables` verdicts by name, in one verifier run: both drawn J = 2 sessions, the draw-less one, and the drawn
+    """`--plain-tables` verdicts by name, in one verifier run: both drawn J = 2 sessions, the sample-less one, and the drawn
     session tampered."""
     w = tmp_path_factory.mktemp("plain")
     s = _session(rope, "j2-draw")

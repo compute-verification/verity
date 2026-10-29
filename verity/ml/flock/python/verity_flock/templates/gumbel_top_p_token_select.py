@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``gumbel-top-p-token-select`` (GumbelTopPTokenSelect_v1{V}): V identical lane units lowered from the
+"""Flock lowering of ``gumbel-top-p-token-select`` (GumbelTopPTokenSelect_v1{V}): V identical lane units lowered from the
 IR composites of the Definition's three scans (``TemperatureLane``, ``TopPMaskStep``'s select, ``GumbelSelectStep``), the
 row-level values (the top-p keep word, the Gumbel noise, the temperature's row scalars) native public cut words, under
 ``verity/flock-ir-sampling/v1`` (``verity_flock.ir_sampling``).
