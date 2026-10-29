@@ -36,6 +36,7 @@
 // L1=1 replaces root(A_j) and the seed message's coins with L1 + (a)'s seed path (l1.h), checked by `ssn check`; L1=2 runs
 // the same path shaped for latency beside the hash streams (l1_root2_k, l1_nf_k; L1_CTA 64 or 128), checked against L1=1's.
 // Build: run.sh (ssn.cu, the served committer's native_rows.cu and its plain-leaf copy from plain_rows.py).
+#include <cuda.h>
 #include <cuda_runtime.h>
 
 #include <algorithm>
@@ -60,6 +61,16 @@
       fprintf(stderr, "ERR %s:%d %s: %s\n", __FILE__, __LINE__, #x, cudaGetErrorString(e_)); \
       exit(2);                                                                               \
     }                                                                                        \
+  } while (0)
+#define CU(x)                                                          \
+  do {                                                                 \
+    CUresult r_ = (x);                                                 \
+    if (r_ != CUDA_SUCCESS) {                                          \
+      const char* s_ = "";                                             \
+      cuGetErrorString(r_, &s_);                                       \
+      fprintf(stderr, "ERR %s:%d %s: %s\n", __FILE__, __LINE__, #x, s_); \
+      exit(2);                                                         \
+    }                                                                  \
   } while (0)
 
 typedef uint32_t u32;
@@ -1329,7 +1340,52 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   int least = 0, greatest = 0;
   if (prio) CK(cudaDeviceGetStreamPriorityRange(&least, &greatest));
   CK(cudaStreamCreateWithPriority(&s1, cudaStreamNonBlocking, greatest));
-  for (auto& s : s2) CK(cudaStreamCreateWithPriority(&s, cudaStreamNonBlocking, least));
+  // SPLIT=R: beside's critical stream sb (root(A_j), coins, forming, the link's waits, the GEMMs) in a green context of R SMs
+  // (the device rounds R up to its partition size) and the hash streams in one of the other SMs, so neither stream's chains
+  // share an SM with the other's. The serial forward isn't timed under SPLIT; the plain GEMM runs on s1, every SM.
+  const int split = getenv("SPLIT") ? atoi(getenv("SPLIT")) : 0;
+  cudaStream_t sb = s1;
+  unsigned split_sms[2] = {0, 0};
+  CUcontext cx_a = nullptr, cx_b = nullptr;
+  if (split) {
+    CUdevice dev;
+    CU(cuDeviceGet(&dev, 0));
+    CUdevResource all, part, rest;
+    CU(cuDeviceGetDevResource(dev, &all, CU_DEV_RESOURCE_TYPE_SM));
+    unsigned groups = 1;
+    CU(cuDevSmResourceSplitByCount(&part, &groups, &all, &rest, 0, (unsigned)split));
+    CUdevResourceDesc da, db;
+    CU(cuDevResourceGenerateDesc(&da, &part, 1));
+    CU(cuDevResourceGenerateDesc(&db, &rest, 1));
+    CUgreenCtx ga, gb;
+    CU(cuGreenCtxCreate(&ga, da, dev, CU_GREEN_CTX_DEFAULT_STREAM));
+    CU(cuGreenCtxCreate(&gb, db, dev, CU_GREEN_CTX_DEFAULT_STREAM));
+    CU(cuCtxFromGreenCtx(&cx_a, ga));
+    CU(cuCtxFromGreenCtx(&cx_b, gb));
+    split_sms[0] = part.sm.smCount;
+    split_sms[1] = rest.sm.smCount;
+    CU(cuGreenCtxStreamCreate((CUstream*)&sb, ga, CU_STREAM_NON_BLOCKING, greatest));
+    for (auto& s : s2) CU(cuGreenCtxStreamCreate((CUstream*)&s, gb, CU_STREAM_NON_BLOCKING, least));
+  } else {
+    for (auto& s : s2) CK(cudaStreamCreateWithPriority(&s, cudaStreamNonBlocking, least));
+  }
+  // an event is recorded only on a stream of the context it was created in
+  auto event_in = [](CUcontext cx, unsigned flags) {
+    cudaEvent_t e;
+    if (cx) CU(cuCtxPushCurrent(cx));
+    CU(cuEventCreate((CUevent*)&e, flags));
+    if (cx) {
+      CUcontext o;
+      CU(cuCtxPopCurrent(&o));
+    }
+    return e;
+  };
+  Timer TB;
+  if (split) {
+    TB.a = event_in(cx_a, CU_EVENT_DEFAULT);
+    TB.b = event_in(cx_a, CU_EVENT_DEFAULT);
+    if (g_blc) ev_a = event_in(cx_a, CU_EVENT_DISABLE_TIMING);
+  }
   const double f0 = sm_mhz(dclk);
   auto line = [&](const char* what, const LinDev* d, double ms, double macs, double words, double extra, std::string hn = "") {
     const double u = units(ms, f0);
@@ -1422,20 +1478,20 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
       coins_form(d.msg, d.coins, d.A, d.B, M, d.n, d.S, d.BN, st);
     }
   };
-  // BLC=1: A_j to the certifier once A_j is ready (s1's work so far), then each chunk's lane coins back ahead of its GEMM
-  auto link_a = [&](const LinDev& d) {
+  // BLC=1: A_j to the certifier once A_j is ready (st's work so far), then each chunk's lane coins back ahead of its GEMM
+  auto link_a = [&](const LinDev& d, cudaStream_t st) {
     if (!g_blc) return;
-    CK(cudaEventRecord(ev_a, s1));
+    CK(cudaEventRecord(ev_a, st));
     CK(cudaStreamWaitEvent(sc, ev_a));
     CK(cudaMemcpyAsync(hA, d.A0, (size_t)M * d.K, cudaMemcpyDeviceToHost, sc));
   };
-  auto link_c = [&](const LinDev& d, int par, int r0, int mc, bool copy) -> const u32* {
+  auto link_c = [&](const LinDev& d, int par, int r0, int mc, bool copy, cudaStream_t st) -> const u32* {
     const u32* p = lane_at(d, par, r0);
     if (p && copy) {
       const size_t off = (size_t)(r0 / 64) * (d.S - 1) * d.n;
       CK(cudaMemcpyAsync(dlc[par] + off, hlc + off, (size_t)(mc / 64) * (d.S - 1) * d.n * 4, cudaMemcpyHostToDevice, sc));
       CK(cudaEventRecord(ev_c, sc));
-      CK(cudaStreamWaitEvent(s1, ev_c));
+      CK(cudaStreamWaitEvent(st, ev_c));
     }
     return p;
   };
@@ -1443,11 +1499,11 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     int call = 0;
     for (int l = 0; l < 16; l++)
       for (const LinDev& d : lins) {
-        link_a(d);
+        link_a(d, s1);
         pre(d, l, s1);
         for (int r0 = 0; r0 < M; r0 += d.chunk) {
           const int mc = std::min(d.chunk, M - r0);
-          const u32* cv = link_c(d, call & 1, r0, mc, true);
+          const u32* cv = link_c(d, call & 1, r0, mc, true, s1);
           gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, s1, cv);
           hsv[nbuf * hi].run(Wb[0], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s1, 0, words_tree);
         }
@@ -1456,8 +1512,8 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   };
   std::vector<cudaEvent_t> done(nbuf), full(nbuf);
   for (int b = 0; b < nbuf; b++) {
-    CK(cudaEventCreateWithFlags(&done[b], cudaEventDisableTiming));
-    CK(cudaEventCreateWithFlags(&full[b], cudaEventDisableTiming));
+    done[b] = event_in(cx_b, CU_EVENT_DISABLE_TIMING);
+    full[b] = event_in(cx_a, CU_EVENT_DISABLE_TIMING);
   }
   // BARE=1 also times beside with nothing ahead of each call's GEMM (no root(A_j), coins, G, forming or BLC's link; the GEMM
   // still reads lane coins): the schedule's floor
@@ -1468,34 +1524,35 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     for (int l = 0; l < 16; l++)
       for (const LinDev& d : lins) {
         if (with_pre) {
-          link_a(d);
-          pre(d, l, s1);
+          link_a(d, sb);
+          pre(d, l, sb);
         }
         for (int r0 = 0; r0 < M; r0 += d.chunk, c++) {
           const int mc = std::min(d.chunk, M - r0), b = c % nbuf;
-          const u32* cv = link_c(d, call & 1, r0, mc, with_pre);
-          CK(cudaStreamWaitEvent(s1, done[b]));
-          gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[b], nullptr, nullptr, s1, cv);
-          CK(cudaEventRecord(full[b], s1));
+          const u32* cv = link_c(d, call & 1, r0, mc, with_pre, sb);
+          CK(cudaStreamWaitEvent(sb, done[b]));
+          gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[b], nullptr, nullptr, sb, cv);
+          CK(cudaEventRecord(full[b], sb));
           CK(cudaStreamWaitEvent(s2[b], full[b]));
           hsv[nbuf * hi + b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2[b], hash_cap, words_tree);
           CK(cudaEventRecord(done[b], s2[b]));
         }
         call++;
       }
-    for (int b = 0; b < nbuf; b++) CK(cudaStreamWaitEvent(s1, done[b]));
+    for (int b = 0; b < nbuf; b++) CK(cudaStreamWaitEvent(sb, done[b]));
   };
+  Timer& tb = split ? TB : T;
   for (hi = 0; hi < (int)rbs.size(); hi++) {
-    line("fwd_serial", nullptr, T.ms(reps, fwd_serial, s1), fwd_macs, fwd_words, 0);
-    line("fwd_beside", nullptr, T.ms(reps, [&] { fwd_beside_of(true); }, s1), fwd_macs, fwd_words, 0);
-    if (bare) line("fwd_beside_bare", nullptr, T.ms(reps, [&] { fwd_beside_of(false); }, s1), fwd_macs, fwd_words, 0);
+    if (!split) line("fwd_serial", nullptr, T.ms(reps, fwd_serial, s1), fwd_macs, fwd_words, 0);
+    line("fwd_beside", nullptr, tb.ms(reps, [&] { fwd_beside_of(true); }, sb), fwd_macs, fwd_words, 0);
+    if (bare) line("fwd_beside_bare", nullptr, tb.ms(reps, [&] { fwd_beside_of(false); }, sb), fwd_macs, fwd_words, 0);
   }
   printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d, \"hash_cap\": %llu, "
          "\"root_a_in_forward\": %d, \"root_a_rows\": %d, \"root_a_tree\": 1, \"words_tree\": %d, \"rowseg_leaf\": "
-         "\"sz_finish\", \"prio\": %d, \"layout\": \"%s\", \"l1\": %d, \"l1_cta\": %d, \"small_threads\": %d, "
-         "\"small_rows_max\": %llu}\n",
+         "\"sz_finish\", \"prio\": %d, \"layout\": \"%s\", \"l1\": %d, \"l1_cta\": %d, \"split_sms\": [%u, %u], "
+         "\"small_threads\": %d, \"small_rows_max\": %llu}\n",
          f0, sm_mhz(dclk), nbuf, (unsigned long long)hash_cap, root_a, root_a_rows, (int)words_tree, (int)prio,
-         layout_name(), l1_mode, g_l1_cta,
+         layout_name(), l1_mode, g_l1_cta, split_sms[0], split_sms[1],
 #ifdef SSN_SMALL_ROWS
          SSN_SMALL_ROWS, (unsigned long long)small_rows_max()
 #else

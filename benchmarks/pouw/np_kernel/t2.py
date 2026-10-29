@@ -73,7 +73,7 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
            "root_a_rows": clock.get("root_a_rows", -1), "root_a_tree": clock.get("root_a_tree", 0),
            "words_tree": clock.get("words_tree", 0), "rowseg_leaf": clock.get("rowseg_leaf", "segment digests"),
            "prio": clock.get("prio", 0), "layout": clock.get("layout", "ssn_1l"), "l1": clock.get("l1", 0),
-           "l1_cta": clock.get("l1_cta", 0),
+           "l1_cta": clock.get("l1_cta", 0), "split_sms": clock.get("split_sms", [0, 0]),
            "small_threads": clock.get("small_threads", 0),
            "small_rows_max": clock.get("small_rows_max", 0),
            "small_leaves_check": {"cases": len(small), "leaves": sum(r["leaves"] for r in small),
@@ -163,6 +163,9 @@ def main() -> None:
                   f"blocks; its leaves against the served build's: {c['mismatched']} of {c['leaves']} differ ({c['cases']} cases)")
         if r["prio"]:
             print("- the GEMM stream runs at the greatest stream priority, the hash streams at the least")
+        if r["split_sms"][0]:
+            print(f"- beside's GEMM stream runs in a green context of {r['split_sms'][0]} SMs, its hash streams in one of "
+                  f"{r['split_sms'][1]} (no serial forward)")
         for w, x in r["forward"].items():
             print(f"- forward {w}: {x['ms']:.3f} ms, {x['units_per_stock_mac']:.3f} units a stock MAC")
         for w, x in r["forward"].items():
