@@ -61,6 +61,10 @@ in a lock, and nothing imports it.
   mixed with a key word (XOR or addition) is one constant on the slice only if the value takes at least as many values
   there as the key. So the mixed blocks' schedule stays in `R` unless the prover's choices after the coins reach as
   many values as the key has, and that count is tight.
+* **Branching on the coins** (`shaWrites_branch`, `distinctOn_subslice`): `ShaWrites` on the slice says nothing
+  about a path's program, which matches only on its part. Stated on every part of at least `m` points, it leaves at most
+  `m` cheap coins a path. The honest witness holds on such parts once its registers' level sets have fewer than `m`
+  points.
 * **Lifting a data-case result to the call grid** (`distinctOn_lift`, `sepBy_lift`): a target set distinct at one
   data case, with that case's free values, is distinct on the call grid with the call's free values, when each call
   free value restricts to a data-case free value.
@@ -1302,6 +1306,52 @@ theorem mix_nonconst_strict_needed :
       ∀ g ∈ (Finset.univ : Finset Bool), Bool.xor (V g) (Z g) = false :=
   ⟨id, id, rfl, fun g _ => by cases g <;> rfl⟩
 
+/-- **The honest witness survives on a large part of the slice** (rank 0). If no two counted registers agree, and no
+register agrees with a free value, on `m` or more points of the slice `S`, they are pairwise distinct and non-free on
+every part `S'` of at least `m` points. So a `DistinctOn` witness checked on the slice holds on each part a branching
+program can take, once its registers' level sets are small. -/
+theorem distinctOn_subslice {S S' : Finset G} (hS : S' ⊆ S) {m : ℕ} (hm : m ≤ S'.card) {X : Set (G → ℚ)}
+    {H : Finset (G → ℚ)} (hpair : ∀ t ∈ H, ∀ t' ∈ H, t ≠ t' → (S.filter fun g => t g = t' g).card < m)
+    (hfree : ∀ t ∈ H, ∀ f ∈ X, (S.filter fun g => t g = f g).card < m) : DistinctOn (↑S' : Set G) X H := by
+  refine ⟨fun t ht t' ht' heq => ?_, fun t ht f hf heq => ?_⟩
+  · by_contra hne
+    have hsub : S' ⊆ S.filter fun g => t g = t' g := fun g hg =>
+      Finset.mem_filter.2 ⟨hS hg, heq g (Finset.mem_coe.2 hg)⟩
+    exact absurd (hm.trans (Finset.card_le_card hsub)) (not_le.2 (hpair t ht t' ht' hne))
+  · have hsub : S' ⊆ S.filter fun g => t g = f g := fun g hg =>
+      Finset.mem_filter.2 ⟨hS hg, heq g (Finset.mem_coe.2 hg)⟩
+    exact absurd (hm.trans (Finset.card_le_card hsub)) (not_le.2 (hfree t ht f hf))
+
+/-- **A program that branches on the coins is cheap on few of them** (rank 0 given `ShaWrites` on every part of at
+least `m` points). Each path `i` runs a straight-line program `P i` that outputs the digests only on its part of the
+slice, the coins `path` sends to it. If `ShaWrites` holds on every part of the slice of at least `m` points, the coins on
+which the program costs less than `c·R` number at most `m` a path. `ShaWrites` on the whole slice doesn't give this:
+a path's program needn't match there (`shaWrites_grid_not_slice`). -/
+theorem shaWrites_branch {c : ℕ} {pr : Prices100} (hpr : Floor c pr) {Adm : List (Op100 G) → List (G → ℚ) → Prop}
+    {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {X : Set (G → ℚ)} (hconst : ∀ q : ℚ, (fun _ : G => q) ∈ X)
+    {Dig : Finset (G → ℚ)} {R m : ℕ} {ι : Type} [DecidableEq ι] (S : Finset G) (path : G → ι)
+    (L : ι → List (G → ℚ)) (P : ι → List (Op100 G))
+    (hsha : ∀ S' ⊆ S, m ≤ S'.card → ShaWrites pr Adm fpSem (↑S' : Set G) X Dig R)
+    (hL : ∀ i, ∀ f ∈ L i, f ∈ X) (hP : ∀ i, ∀ o ∈ P i, o.WFw pr X) (hA : ∀ i, Adm (P i) (L i))
+    (hOD : ∀ i, OutputsOn fpSem (↑(S.filter fun g => path g = i) : Set G) (P i) (L i) Dig) :
+    (S.filter fun g => cost100 pr (P (path g)) < c * R).card ≤ (S.image path).card * m := by
+  rw [Finset.card_eq_sum_card_fiberwise (f := path) (t := S.image path) fun g hg =>
+    Finset.mem_coe.2 (Finset.mem_image_of_mem path (Finset.mem_filter.1 (Finset.mem_coe.1 hg)).1)]
+  refine (Finset.sum_le_card_nsmul _ _ m fun i _ => ?_).trans (smul_eq_mul _ _).le
+  by_cases hbig : m ≤ (S.filter fun g => path g = i).card
+  · have hcost : c * R ≤ cost100 pr (P i) :=
+      shaWrites_floor hpr hconst (hsha _ (Finset.filter_subset _ _) hbig) (hL i) (hP i) (hA i) (hOD i)
+    have hempty : ((S.filter fun g => cost100 pr (P (path g)) < c * R).filter fun g => path g = i) = ∅ :=
+      Finset.filter_eq_empty_iff.2 fun g hg hgi => by
+        have hlt := (Finset.mem_filter.1 hg).2
+        rw [hgi] at hlt
+        exact absurd hcost (not_le.2 hlt)
+    rw [hempty, Finset.card_empty]
+    exact Nat.zero_le _
+  · refine (Finset.card_le_card fun g hg => ?_).trans (Nat.le_of_lt (not_le.1 hbig))
+    obtain ⟨hgb, hgi⟩ := Finset.mem_filter.1 hg
+    exact Finset.mem_filter.2 ⟨(Finset.mem_filter.1 hgb).1, hgi⟩
+
 end Slice
 
 end Pouw.Dimension.NCompose
@@ -1357,3 +1407,5 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.mix_const_card_le
 #print axioms Pouw.Dimension.NCompose.mix_nonconst
 #print axioms Pouw.Dimension.NCompose.mix_nonconst_strict_needed
+#print axioms Pouw.Dimension.NCompose.distinctOn_subslice
+#print axioms Pouw.Dimension.NCompose.shaWrites_branch
