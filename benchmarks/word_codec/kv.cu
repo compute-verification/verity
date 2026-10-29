@@ -1341,7 +1341,7 @@ constexpr int MNB = 2, MDW = MMA_OK ? MT * HW / 32 : 1, MWT = 32 * (MDW + MW);
 constexpr int mws_smem() { return MNB * MT * MTS + 2 * MNB * 8 + NL * 4; }
 static_assert(MT * HW % 32 == 0 && 32 % HW == 0, "whole decoder warps, a token's words in one warp");
 
-// Form 13 (RC = 3) is the remote bandwidth driver's sketch-sha512 receipt of each token-layer, the store's 4 KiB block
+// Form 13 (RC = 3) is the PoUB driver's sketch-sha512 receipt of each token-layer, the store's 4 KiB block
 // of whole words (store-order/v0), under the pass's own 16 sign rows S (wt.cu's wt_pass). A decoder lane's raw word of
 // each tile is B, column g' its token 8 i + g' of warp i's eight: k-step κ (0..RK - 1) is registers x[2κ], x[2κ + 1],
 // the word's bytes 8κ .. 8κ + 7, against A, S's rows at those bytes' positions in the block (kRcA[g][κ][lane], lane

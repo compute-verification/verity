@@ -1788,7 +1788,7 @@ __global__ void __launch_bounds__(128) pipe_kernel(u64 steps, unsigned long long
 
 // --- the pass's receipt key (red team F29) ----------------------------------------------------------------------------
 //
-// A WT_RECEIPT build's receipt is sketch-sha512 (`receipts.SketchReceipter`, the remote bandwidth driver's kind). Pass j's
+// A WT_RECEIPT build's receipt is sketch-sha512 (`receipts.SketchReceipter`, the PoUB driver's kind). Pass j's
 // seed is s_j = SHA512(PASS_DOMAIN ‖ σ ‖ u32be j ‖ root_(j−1)), the whole 64 bytes (`receipts.seed`), and its receipt
 // is under s_j: the signs K_S = derive(s_j, "verity/remote-bandwidth/sketch-signs/v0", {"k": k_s, "n": 4096, "tag":
 // "sketch-sha512"}) at the registration's k_s (16 or 64), and the receipts' prefix. So the ±1 matrix is fresh every
