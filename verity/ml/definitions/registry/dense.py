@@ -403,12 +403,7 @@ def Bf16MulScalar(B, S, x, c=None):
 #: c10::BFloat16, gelu_tanh_kernel<c10::BFloat16>, true, false, false>(out, in, mask, d, n, float, float, float)` whose SASS is
 #: (cuobjdump on the pod, lane report `gelu_tanh_and_mul.sm89.sass`):
 #: 
-#:     PRMT R3, RZ, 0x5410, R0        ; f = (float)x            FMUL R0, R3, R3 ; FMUL R0, R3, R0      ; x_cube = (f*f)*f
-#:     FFMA R0, R0, 0.044714998, R3   ; f + KAPPA*x_cube        FMUL R3, R3, 0.5                       ; 0.5f*f
-#:     FADD R16, R16, c[0x0][0x188]   ; y + <float arg> (= +0.0f for gelu_tanh_and_mul: turns y = -0 into +0, identity otherwise)
-#:     FMUL R13, R0, 0.79788458       ; inner = BETA*(...)      MUFU.EX2 / MUFU.RCP / FFMA...          ; libdevice tanhf(inner)
-#:     FADD R18, R18, 1 ; FMUL R3, R3, R18 ; F2FP.BF16.F32.PACK_AB R3, RZ, R3 ; PRMT R3, RZ, 0x5410, R3   ; act = bf16(...) -> f32
-#:     FMUL R3, R16, R3 ; F2FP.BF16.F32.PACK_AB R0, RZ, R3 ; STG.E.U16                                   ; bf16((y+0)*act)
+#: `GELU_TANH_MUL_SASS`, below, each instruction beside what it computes.
 #: 
 #: The `y + 0.0f` was found by the difftest's `zeros` edge kind (every `y = -0` word came back `+0`; 16/20 -> 20/20 cases).
 #: 
@@ -417,6 +412,16 @@ def Bf16MulScalar(B, S, x, c=None):
 #: gives the kernel's 0x7FFF for NaN, including x = -inf where `(0.5f * -inf) * 0` is NaN; the alternative association
 #: `0.5f * (f * (1 + t))` is wrong on 129 words (overflow at |f| > 1.7e38), and FFMA vs separate FMUL+FADD for `inner` is not
 #: distinguishable on the domain.  `tanhf` is the lane's `TanhF32Rn` stand-in (see `tanh_f32.py`).
+
+#: the pinned build's SASS for one output word of `GeluTanhMulBf16`, each instruction beside what it computes
+GELU_TANH_MUL_SASS = """
+    PRMT R3, RZ, 0x5410, R0        ; f = (float)x            FMUL R0, R3, R3 ; FMUL R0, R3, R0      ; x_cube = (f*f)*f
+    FFMA R0, R0, 0.044714998, R3   ; f + KAPPA*x_cube        FMUL R3, R3, 0.5                       ; 0.5f*f
+    FADD R16, R16, c[0x0][0x188]   ; y + <float arg> (= +0.0f for gelu_tanh_and_mul: turns y = -0 into +0, identity otherwise)
+    FMUL R13, R0, 0.79788458       ; inner = BETA*(...)      MUFU.EX2 / MUFU.RCP / FFMA...          ; libdevice tanhf(inner)
+    FADD R18, R18, 1 ; FMUL R3, R3, R18 ; F2FP.BF16.F32.PACK_AB R3, RZ, R3 ; PRMT R3, RZ, 0x5410, R3   ; act = bf16(...) -> f32
+    FMUL R3, R16, R3 ; F2FP.BF16.F32.PACK_AB R0, RZ, R3 ; STG.E.U16                                   ; bf16((y+0)*act)
+"""
 
 BETA_BITS = 0x3F4C422A       # f32(M_SQRT2 * M_2_SQRTPI * 0.5)
 KAPPA_BITS = 0x3D372713      # f32(0.044715)
