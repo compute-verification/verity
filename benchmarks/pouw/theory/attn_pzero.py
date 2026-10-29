@@ -47,8 +47,9 @@ def new_tally(blocks) -> dict:
     return {b: {r: torch.zeros(len(EDGES) - 1, len(FIELDS), dtype=torch.float64) for r in REFS} for b in blocks}
 
 
-def tally_rows(t: dict, q, k, v, scaling: float, blocks, rows: int, stride: int = 8, margin: float = 1.0) -> None:
-    """Adds one sequence's counts (q: H × s × d, k and v: G × s × d) to `t`."""
+def tally_rows(t: dict, q, k, v, scaling: float, blocks, rows: int, stride: int = 8, margin: float = 1.0,
+               row_stride: int = 1) -> None:
+    """Adds one sequence's counts (q: H × s × d, k and v: G × s × d) to `t`, over query rows 1, 1 + row_stride, …"""
     H, s, _ = q.shape
     G = k.shape[0]
     rep = H // G
@@ -56,15 +57,16 @@ def tally_rows(t: dict, q, k, v, scaling: float, blocks, rows: int, stride: int 
     sv = v.abs().amax(-1) / 127
     pos = torch.arange(s)
     rbin = torch.bucketize(pos, torch.tensor(EDGES), right=True) - 1
+    sel = torch.arange(1, s, row_stride)
     for g in range(G):
-        for r0 in range(1, s, rows):
-            r1 = min(s, r0 + rows)
-            R = r1 - r0
-            live = pos[None, :] <= pos[r0:r1, None]
+        for c0 in range(0, len(sel), rows):
+            idx = sel[c0:c0 + rows]
+            R = len(idx)
+            live = pos[None, :] <= idx[:, None]
             live[:, 0] = False
-            sc = ((q[g * rep:(g + 1) * rep, r0:r1] @ k[g].T) * scaling).masked_fill(~live, -math.inf)
+            sc = ((q[g * rep:(g + 1) * rep, idx] @ k[g].T) * scaling).masked_fill(~live, -math.inf)
             any4 = live.view(R, s // 4, 4).any(-1)
-            bins = rbin[r0:r1]
+            bins = rbin[idx]
             for b in blocks:
                 nb = -(-s // b)
                 pad = nb * b - s
@@ -90,7 +92,7 @@ def tally_rows(t: dict, q, k, v, scaling: float, blocks, rows: int, stride: int 
                     t[b][r].index_add_(0, bins, per_row)
 
 
-def walk_rows(q, k, v, scaling: float, block: int, stride: int = 8, margin: float = 1.0) -> dict:
+def walk_rows(q, k, v, scaling: float, block: int, stride: int = 8, margin: float = 1.0, row_stride: int = 1) -> dict:
     """`tally_rows` for one block size as a kernel walks it: each row's blocks in order, a key at a time."""
     H, s, _ = q.shape
     rep = H // k.shape[0]
@@ -98,7 +100,7 @@ def walk_rows(q, k, v, scaling: float, block: int, stride: int = 8, margin: floa
     t = {r: torch.zeros(len(EDGES) - 1, len(FIELDS), dtype=torch.float64) for r in REFS}
     for h in range(H):
         g = h // rep
-        for i in range(1, s):
+        for i in range(1, s, row_stride):
             sc = (q[h, i] @ k[g].T) * scaling
             bi = next(n for n in range(len(EDGES) - 1) if EDGES[n] <= i < EDGES[n + 1])
             mrun = -math.inf
@@ -133,13 +135,14 @@ def selfcheck() -> dict:
     q = torch.randn(H, s, d, generator=g, dtype=torch.float64) * 2
     k = torch.randn(G, s, d, generator=g, dtype=torch.float64) * 2
     v = torch.randn(G, s, d, generator=g, dtype=torch.float64)
-    t = new_tally((16, 32))
-    tally_rows(t, q, k, v, 0.5, (16, 32), 50)
     worst = 0.0
-    for b in (16, 32):
-        w = walk_rows(q, k, v, 0.5, b)
-        for r in REFS:
-            worst = max(worst, float((t[b][r] - w[r]).abs().max()))
+    for rs in (1, 3):
+        t = new_tally((16, 32))
+        tally_rows(t, q, k, v, 0.5, (16, 32), 50, row_stride=rs)
+        for b in (16, 32):
+            w = walk_rows(q, k, v, 0.5, b, row_stride=rs)
+            for r in REFS:
+                worst = max(worst, float((t[b][r] - w[r]).abs().max()))
     return {"max_abs_diff": worst, "ok": worst < 1e-6}
 
 
@@ -167,6 +170,7 @@ def main(argv=None) -> int:
     ap.add_argument("--windows", type=int, default=4, help="the first N windows")
     ap.add_argument("--blocks", default="104,208")
     ap.add_argument("--rows", type=int, default=256, help="query rows a chunk")
+    ap.add_argument("--row-stride", type=int, default=1, help="tally query rows 1, 1 + N, … (the forward runs every row)")
     ap.add_argument("--data")
     ap.add_argument("--out")
     ap.add_argument("--selfcheck", action="store_true", help="only check the counts against a per-key walk")
@@ -203,7 +207,8 @@ def main(argv=None) -> int:
         def attention(q, k, v, run, sdpa=sdpa, lt=lt, layer=layer):
             for i in range(q.shape[0]):
                 one = new_tally(blocks)
-                tally_rows(one, q[i].float(), k[i].float(), v[i].float(), layer.scaling, blocks, a.rows)
+                tally_rows(one, q[i].float(), k[i].float(), v[i].float(), layer.scaling, blocks, a.rows,
+                           row_stride=a.row_stride)
                 for b in blocks:
                     for r in REFS:
                         whole[b][r] += one[b][r]
@@ -218,7 +223,8 @@ def main(argv=None) -> int:
         print(json.dumps({"layer": li, "seconds": round(time.time() - t0, 1),
                           **{r: round(per_layer[-1][r]["zero_nkd"], 4) for r in REFS}}), flush=True)
     W.close()
-    res = {"model": a.model, "set": a.set, "ctx": a.ctx, "windows": N, "blocks": list(blocks), "edges": list(EDGES),
+    res = {"model": a.model, "set": a.set, "ctx": a.ctx, "windows": N, "row_stride": a.row_stride,
+           "blocks": list(blocks), "edges": list(EDGES),
            "refs": list(REFS), "wrec": wrec, "all": summary(whole), "layers": per_layer,
            "seconds": round(time.time() - t0, 1)}
     (out / "attn_pzero.json").write_text(json.dumps(res, indent=1))
