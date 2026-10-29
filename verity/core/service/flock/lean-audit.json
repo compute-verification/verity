@@ -38,6 +38,7 @@
   "Flock.Test.KnownRead",
   "Flock.Test.RegRows",
   "Flock.Test.SpillRows",
+  "Flock.Test.RecCapSmall",
   "Flock.Test.PlainLeaves",
   "Flock.Test.PlainShared",
   "Flock.Test.Wires",
@@ -74,7 +75,7 @@
   "FlockWitness": "the flock-witness executable's entry point, one line; its command is Flock.Witness.cmd, audited under Flock",
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
   "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock",
-  "Flock.Test.RecCap": "a test, not a proof: its #guards evaluate whole V* lists in the interpreter, 1,097-1,246 s to build on every check node (26 Oct), so it gated every Flock-touching Lean check by about 18 min; built right after landing by verity/ml/flock/tests/test_lean_rec_cap_guards.py instead (top 06:18Z 26 Oct, Daniel's 11 Oct tier for parts whose cold run is over 10 min; proofs' PRF-190 adds a small-shape guard back to the roots)"
+  "Flock.Test.RecCap": "a test, not a proof: its one #guard builds V*'s whole list at the deployed inner shape (RecVStar.statements) in the interpreter, about 20 min on every check node, so it would gate every Flock-touching Lean check; built right after landing by verity/ml/flock/tests/test_lean_rec_cap_guards.py instead, the tier for parts whose cold run is over 10 min. Flock.Test.RecCapSmall, a root, holds RecCap's refusals and the checks statements runs on its list at m 22, in 25 s"
  },
  "assumptions": {
   "Flock.Firewall.Contract.FirewallComputes": {
