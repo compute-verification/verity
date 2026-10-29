@@ -1,4 +1,5 @@
-"""`check`: the repository's one check, what a merge into `main` requires (`research merge`).
+"""`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs ci.toml takes off
+the merge gate (`gate = false`: circuit-check), which run after landing, in drive's after-landing run on `main`'s tip.
 
     uv run --extra torch-cpu python tools/verity/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
@@ -12,12 +13,15 @@
                                                             `after_landing_shards`: one run per shard, at once)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
                                                             a regenerated record (drive's after-landing run)
-    ... --no-cache [--circuit-cache]                        reuse no pass (the nightly `audit-main`); with --circuit-cache,
+    ... --no-cache [--circuit-cache]                        reuse no pass, and run every job, those off the gate too (the
+                                                            nightly `audit-main`, which gates nothing); with --circuit-cache,
                                                             circuit-check alone still reuses and stores its per-target passes,
                                                             and only its entries of a pack are imported: drive's after-landing
                                                             run, where a cold `--all` (~4 h) outlasted every run
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
-                                                            multi-core CPU pod): an Attempt of the clean commit checked out, the
+                                                            multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
+                                                            ci.toml's `gate = false`: circuit-check), which only `--deferred`
+                                                            and `--no-cache` run: an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
                                                             inputs when the commit changes verity/ml/flock/ against --base REF
                                                             (default origin/main), and presigned URLs for the pinned Lean
@@ -70,7 +74,8 @@ each step the parts it ran. `--record --combine RUN...` records, on the clean co
 parts, each once (the preflight's steps once, passed in every shard), when `research.merge.shard_set` accepts them: the
 shards' Attempts are passing runs of the declared command with `--shard K/N` on that clean commit, their results passed with
 no step failed or stopped, all of one plan (one N, K = 1..N once each) and one config (the commit's), and their parts are
-every part, each once, covering every job the commit's `ci.toml` declares. `research merge` takes the combined Attempt only
+every part, each once, covering every job the commit's `ci.toml` puts on the gate (a shard skips a job off it, which a plan
+still names: circuit-check runs after landing alone). `research merge` takes the combined Attempt only
 after judging its shards again the same way and finding its steps theirs, so a missing, repeated, failed or mismatched shard
 passes nothing. A step skipped in its shard (lean-agreement without the upstream build) is skipped in the combined check too.
 
@@ -112,7 +117,8 @@ doesn't name:
                     alone when no Lean step does (`cc_mem_gb`), and all of it once every step beside it has ended
                     (`grant_when_alone`): every registered Definition and template
                     (`tools/verity/circuit_check`),
-                    its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
+                    its report beside the run's result (off the gate: a recorded check skips it, and the after-landing
+                    run, `--deferred` with every job, runs it); then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`verity/core/service/flock`), then its partition check against
                     `verity.ml.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
@@ -1302,17 +1308,18 @@ def deferred_parts(steps: str) -> list[str]:
 
 
 def shard(spec: str) -> dict:
-    """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, "all": every part an unsharded
-    check covers}, on this tree's Lake packages (`declaration.resolve`).  DeclarationError when there is no such plan or shard,
-    or the tree can't be listed."""
+    """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
+    gate, "all": every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages
+    (`declaration.resolve`).  DeclarationError when there is no such plan or shard, or the tree can't be listed."""
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
     plans = DECLARATION.plans()
     if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
     parts_of = _parts_of()
-    return {"k": k, "n": n, "parts": DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1],
-            "all": DECLARATION.all_parts(JOBS, parts_of)}
+    return {"k": k, "n": n,
+            "parts": [p for p in DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1] if p.partition(":")[0] not in OFF_GATE],
+            "all": DECLARATION.all_parts(DECLARATION.gated(JOBS), parts_of)}
 
 
 def _parts_of() -> dict[str, list[str]]:
@@ -1325,6 +1332,16 @@ def _parts_of() -> dict[str, list[str]]:
 def shard_parts() -> list[str]:
     """Every part an unsharded check covers on this tree (`declaration.all_parts`)."""
     return DECLARATION.all_parts(JOBS, _parts_of())
+
+
+#: the jobs off the merge gate (ci.toml's `gate = false`), which a recorded check leaves to drive's after-landing run
+OFF_GATE = tuple(j.name for j in JOBS if not j.gate)
+
+
+def gated_parts() -> list[str]:
+    """Every part of the jobs on the merge gate (`declaration.gated`): what a recorded check runs, unsharded or as a plan's
+    shards together, and what `research merge` requires of it."""
+    return DECLARATION.all_parts(DECLARATION.gated(JOBS), _parts_of())
 
 
 def _rev(rev: str) -> str | None:
@@ -2216,6 +2233,14 @@ def main(argv: list[str]) -> int:
               f"{ROOT}'s own environment: `uv run --extra torch-cpu python tools/verity/check/check.py` there", file=sys.stderr)
         return 2
     run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None
+    only = sharded["parts"] if sharded else None
+    if only is None and OFF_GATE and cache and run_dir is not None:
+        try:
+            only = gated_parts()
+        except DECLARATION.DeclarationError as e:
+            print(f"check: {e}", file=sys.stderr)
+            return 2
+        print(f"check: off the merge gate, left to the after-landing run (`--deferred`): {', '.join(OFF_GATE)}", flush=True)
     out = run_dir or Path(tempfile.mkdtemp(prefix="check-"))
     verdicts = {"in": verdicts_in(pack, run_dir, None if cache else CIRCUIT_ENTRIES)} if pack and circuit_cache else {}
     before = VERDICTS.snapshot() if run_dir is not None and circuit_cache else None
@@ -2226,8 +2251,7 @@ def main(argv: list[str]) -> int:
     packs = Packs(run_dir / "verdicts.tar.gz", before) if before is not None else None
     reused = Reused(run_dir, before, None if cache else CIRCUIT_ENTRIES) if before is not None else None
     try:
-        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None, packs, reused, regenerate,
-                       circuit_cache)
+        ok, done = run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache)
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)
