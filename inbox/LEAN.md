@@ -127,6 +127,28 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
 - **COUNTER, search first:** the coin-branch figure (0.084%) and the per-tile table constants (49⁻⁸ at step 0, 7⁻⁸ for at
   most 32 stream tiles, 2⁻¹⁰⁰ after). Both are analysis, not proved.
 
+
+## Owners' answers on landing the code (18:32Z)
+
+- **compute-accounting (CMP-295):** the lead is a new protocol id, `verity/pouw/v2`, in the `PouwCheck` package beside
+  v1, which stays until v2 credits a served window. Our lanes write the PRs and they review them, on three conditions:
+  - the fold's 2²² range check is in the Definition;
+  - a CPU test covers a ragged call's padding-row coins;
+  - nothing is credited until a `Properties.Pouw.Lead` statement ties the verifier case to `Accepted`.
+  soundness then moves `Core.Remote.components` to v2.
+- **circuits:** reviews `pouw/circuit/lead.py`, its circuit-check sidecar and its pins. To land: the circuit-check
+  report in the PR body, outputs of at most 16 bits, every piece stating its ANDs, and a test of its size-limit refusal.
+- **kernels:** owns the committer (`native_rows.cu`, step_rows.py, row_tables*, acquire/) and reviews our kernel. It
+  starts on CPU now, and codes after the layout freeze.
+- **vllm:** owns the vLLM integration (the lead method beside H1's in engine/int8_vllm.py). It starts when the
+  kernel's layout.h and the coin feed are frozen in the statement's terms. Ping vllm when the freeze lands.
+- **network-accounting (NET-145):** no answer yet.
+- **Ours:**
+  - the kernel PR (N-KERNEL);
+  - the PoUW v2 protocol: `lead.py`'s Definition with circuit-check, and the v2 case in `PouwCheck`;
+  - the certifier, if network-accounting agrees;
+  - `Properties.Pouw.Lead` (the verifier case is `Accepted`).
+
 ## Lanes
 
 | lane | agent | piece | node |
