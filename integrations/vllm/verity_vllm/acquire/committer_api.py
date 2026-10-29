@@ -58,7 +58,7 @@ class Opening:
     value: bytes
     path: tuple                 # siblings (None for lifts) — production `commit.path_shape` shape
     identity: dict              # verifier-derivable (tensor ordinal, name, dtype, shape, byte offset)
-    salt: bytes = b""           # the leaf's 128-byte salt under hm96-sha256/v1 leaves; empty under vllm-v1
+    salt: bytes = b""           # the row's salt (`step_rows.salt`, `step_rows.SALT_BYTES`)
 
 
 class Committer(Protocol):

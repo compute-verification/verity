@@ -18,7 +18,7 @@ from verity_vllm.pipeline import replay_bundle as RB
 
 CHUNK = 16
 GEO = bytes(range(32))
-WK = bytes(range(64, 128))
+WK = bytes(37 * i % 256 for i in range(64, 128))            # no run of the committed steps' bytes: a keep holding it holds the key
 RNG = np.random.default_rng(7)
 PARTS = {"model.layers.0.self_attn.q_proj.weight": RNG.integers(0, 1 << 16, (4, 8), dtype=np.uint16),
          "model.layers.0.self_attn.k_proj.weight": RNG.integers(0, 1 << 16, (2, 8), dtype=np.uint16),
@@ -270,7 +270,7 @@ def test_a_workers_baseline_is_the_word_replays_unless_measured():
     assert CPU.worker_peak(CPU.Options(bundle="b", row_dir="r", checkpoint_dir="c", worker_peak_gb=1.5)) == int(1.5 * (1 << 30))
 
 
-STEPS = {0: [("model.embed_tokens", bytes(range(256)) * 5), ("model.layers.0.self_attn.qkv_proj", b"\x07" * 900)],
+STEPS = {0: [("model.embed_tokens", bytes(range(256)) * 20), ("model.layers.0.self_attn.qkv_proj", b"\x07" * 900)],
          1: [("model.embed_tokens", bytes(reversed(range(256))) * 3), ("runner.sampler", b"\x01\x02\x03\x04")],
          2: [("model.layers.0.mlp.down_proj", bytes(i % 251 for i in range(3000)))]}
 PICKS = [(0, "model.layers.0.self_attn.qkv_proj", 10, 20), (1, "runner.sampler", 0, 4)]

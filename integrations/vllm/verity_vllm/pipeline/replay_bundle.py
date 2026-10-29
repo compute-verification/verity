@@ -75,7 +75,6 @@ def refuse(args: Any) -> None:
         return
     why = ("no --program-dir / --programs-root: there is no C2 replay to defer" if not (args.program_dir or args.programs_root) else
            "one instrumented committer only (no --arms, no control-only process)" if args.arms or args.only_arm == "control" else
-           "--padded-finalize: padding steps are not in the replay bundle's store" if args.padded_finalize else
            f"--compiled-taps {args.compiled_taps}: the compiled check is its own C2" if args.compiled_taps != "off" else
            "--vu-export-dir exports from the replay, which does not run here" if args.vu_export_dir else
            "slim with --serving-rows: the plan would commit the window and seal every unit it reads; a full deferral commits it at "

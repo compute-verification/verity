@@ -17,7 +17,7 @@ workload the record served.  Neither side evaluates a row, so the Definitions th
 one-stage proof is over the verifier's own template.  `source` holds a registration's window to it: ``served``, its run ``<TP run root>/rank<r>`` under a
 SHA-512 TP run root, its ``tp`` the record's and its served Programs the ones the verifier loaded.  A served window names a SHA-512
 commitment, as `deferred_rows.source` holds a deferred Commit's: a TP Commit's run root is SHA-512 (``verity/tp-run-root/v2``), and a
-record under the SHA-256 v1 root (an old record, or ``--commit-scheme vllm-v1``) passes no window as served (``sha512``).
+record under the SHA-256 v1 root (an old record's) passes no window as served (``sha512``).
 
 A TP Commit that deferred its ranks' replay to sealed bundles and wrote no window has its windows from those bundles afterwards
 (``verity-vllm tp-serving-rows COMMIT_OUT --partition F --out O``, `from_bundle`): rank ``r``'s bundle opened against the record as

@@ -7,7 +7,7 @@ committed by the production CPU committer and sealed into a replay bundle with i
 
 writes ``OUT/commit``, ``OUT/row`` and ``OUT/partition.json`` (every RoPE head, ``subset:1``) and prints them with the run root as
 one JSON line.  ``--served`` also writes ``OUT/hook``, the in-Commit hook's window over the same members (`hook`).  The members
-are committed under rows-sha512; `commit` takes ``commit_scheme="vllm-v1"`` by name only to stand in for an old record."""
+are committed under rows-sha512."""
 from __future__ import annotations
 
 import argparse
@@ -26,14 +26,13 @@ from verity_vllm.pipeline import replay_bundle as RB
 D = 64
 ROPE = f"RoPEHead_v1{{D={D}}}"
 LAW = "subset:1"
-CHUNK = 64
 HEADS = 2 * 4 * (3 + 1)       # 2 requests x 4 tokens (2 prefill + 2 decode) x (3 query + 1 key heads)
 
 
-def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None = None, commit_scheme: str = step_rows.NAME) -> dict:
+def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None = None) -> dict:
     """The deferred Commit's output dir, its row dir and the verifier's partition file under ``root``, and the world that served it.
     ``seed`` draws its weights; ``silu`` names its act rows' Definition (``SiluMul_v2``: GLM-5.3's) and ``I`` their width, in place
-    of the toy's ``SiluMul_v1{I=T.I}``; ``commit_scheme`` the members': rows-sha512, or vllm-v1 by name standing in for an old record."""
+    of the toy's ``SiluMul_v1{I=T.I}``."""
     import tests.check.test_sampled_replay as T
     from tests.check.opened import commit_members
     from verity_vllm.commit import store_dump as SD
@@ -54,7 +53,7 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None
         prompts = {"r0": [1, 2], "r1": [5, 3]}
         world = T.Honest(inst, woff, w, prompts)
         bmap, _ = world.bmap_and_reader()
-        com, rc = commit_members(dict(sorted(world.store.items())), commit_scheme=commit_scheme)
+        com, rc = commit_members(dict(sorted(world.store.items())))
     finally:
         T.DH, T.I = dh, i0
 
@@ -73,12 +72,10 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None
         raw = np.ascontiguousarray(w[flo:fhi]).view(np.uint8)
         name = field[len(prefix):]
         names.append([name, "bfloat16", [fhi - flo], int(raw.size)])
-        roots.append(step_rows.tensor_root(geo, i, names[-1], raw, wk) if com.rows else CPU.tensor_root(raw, CHUNK))
+        roots.append(step_rows.tensor_root(geo, i, names[-1], raw, wk))
         (p / "weights" / "extra" / f"{i}.bin").write_bytes(raw.tobytes())
         extra[name] = i
-    tree = (step_rows.weights_tree(geo, names, scheme.names_digest(names), roots, wk) if com.rows else
-            {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(geo, scheme.names_digest(names), roots).hex(),
-             "chunk": CHUNK, "geo_digest": geo.hex()})
+    tree = step_rows.weights_tree(geo, names, scheme.names_digest(names), roots, wk)
     wroot = tree["root"]
     (p / "weights" / "tree.json").write_text(json.dumps(tree | {"extra": extra}))
     (out / "binding_map_p1.json").write_text(json.dumps(bmap))
@@ -124,12 +121,10 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
     ap.add_argument("--served", action="store_true")
-    ap.add_argument("--commit-scheme", default=step_rows.NAME, choices=(step_rows.NAME,),
-                    help="the members' scheme: rows-sha512 only (vllm-v1 is kept to read recorded runs, which this Commit isn't)")
     a = ap.parse_args(argv)
     root = Path(a.out)
     root.mkdir(parents=True, exist_ok=True)
-    c = commit(root, commit_scheme=a.commit_scheme)
+    c = commit(root)
     out = {"commit": str(c["out"]), "bundle": str(RB.path(c["out"], 1)), "row_dir": str(c["row_dir"]),
            "partition": str(c["partition"]), "run_root": c["run_root"], "program_digest": c["inst"]["digest"]}
     if a.served:

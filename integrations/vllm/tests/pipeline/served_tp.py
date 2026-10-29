@@ -3,14 +3,12 @@
 (GLM-5.3's Definition), committed under rows-sha512 as `tp-commit` commits a rank, each rank's window written by
 `pipeline.tp.serving_rows.write` as a vLLM rank writes it, under the SHA-512 TP run root of the ranks' roots (`tp.run_root`), beside
 what the verifier reads: the TP Commit's record (``commit/runs.jsonl``, ``commit/versions.json``), the Build's rank Programs
-(``build/rank<r>``), the workload and the partition file.  ``--commit-scheme vllm-v1`` stands in for an old record: vllm-v1 ranks
-under the SHA-256 ``verity/tp-run-root/v1``.  ``--deferred``: the Commit wrote no window and deferred every rank's replay, as
+(``build/rank<r>``), the workload and the partition file.  ``--deferred``: the Commit wrote no window and deferred every rank's replay, as
 ``tp-commit --replay-deferred`` leaves it (each rank's store, weights tree and binding map sealed as its pair-0 bundle
 ``commit/replay_bundle_p0_rank<r>``, ``commit/replay_deferred.json`` naming them, every rank PENDING), so its windows come from the
 bundles (`pipeline.tp.serving_rows.from_bundle`).
 
-    python -m tests.pipeline.served_tp OUT [--world 2] [--I 256] [--law subset:2] [--template T ...]
-        [--commit-scheme rows-sha512|vllm-v1] [--deferred]
+    python -m tests.pipeline.served_tp OUT [--world 2] [--I 256] [--law subset:2] [--template T ...] [--deferred]
     (from integrations/vllm)
 
 ``--template``: a template of the toy's Programs the partition holds before ``SiluMul_v2{I}`` (``RoPEHead_v1{D=64}``, the advice
@@ -35,7 +33,7 @@ ROWS = "rows-sha512"
 MAX_TOKENS = 3
 
 
-def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2", commit_scheme: str = ROWS, deferred: bool = False,
+def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2", deferred: bool = False,
            templates: tuple[str, ...] = ()) -> dict:
     """The TP Commit's files under ``root`` (module docstring), and its TP run root, record and windows (deferred: none)."""
     from verity_vllm.check.replay import driver as SR
@@ -50,8 +48,7 @@ def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2", c
     pf.write_text(json.dumps({"templates": [*templates, f"SiluMul_v2{{I={int(I)}}}"], "law": law}))
     ranks = []
     for r in range(world):
-        c = served_rope.commit(root / "ranks" / f"rank{r}", seed=17 + r, silu="SiluMul_v2", I=I,
-                               commit_scheme=commit_scheme)
+        c = served_rope.commit(root / "ranks" / f"rank{r}", seed=17 + r, silu="SiluMul_v2", I=I)
         b = root / "build" / f"rank{r}"
         b.mkdir(parents=True)
         shutil.copyfile(c["row_dir"] / "build_request" / "instances.json.gz", b / "instances.json.gz")
@@ -64,7 +61,7 @@ def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2", c
     wl_sha = va.load_workload(wl)["sha256"]
     reqs = [{"request_id": f"r{i}", "arrive_step": 0, "prompt_len": len(pr), "max_tokens": MAX_TOKENS} for i, pr in enumerate(prompts.values())]
     roots = {r: bytes(o.run.run_root) for r, (_c, o) in enumerate(ranks)}
-    tag = (RT.TP_ROOT_TAG if commit_scheme == ROWS else RT.TP_ROOT_TAG_V1).decode()
+    tag = RT.TP_ROOT_TAG.decode()
     tp_root = RT.combine(tag, world, roots)
     of_record = {str(r): [c["inst"]["digest"]] for r, (c, _o) in enumerate(ranks)}
     tp = {"world": world, "tp_run_root": tp_root.hex(), "roots": {str(r): x.hex() for r, x in roots.items()}, "root_tag": tag}
@@ -94,7 +91,7 @@ def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2", c
     rows = [{"pair": 0, "arm": "control", "label": LABEL},
             {"pair": 0, "arm": "instrumented", "label": LABEL, "workload_sha256": wl_sha, "commit": commit_doc}]
     (out / "runs.jsonl").write_text("".join(json.dumps(x) + "\n" for x in rows))
-    (out / "versions.json").write_text(json.dumps({"root_tag": tag, "commit_scheme": commit_scheme, "sampled_replay": {"of_record": of_record},
+    (out / "versions.json").write_text(json.dumps({"root_tag": tag, "commit_scheme": ROWS, "sampled_replay": {"of_record": of_record},
                                                    "argv": ["tp-commit", "--workload", wl.name, "--tp", str(world), "--label", LABEL]}))
     return {"commit": out, "build": root / "build", "workload": wl, "partition": pf, "windows": None if deferred else Path(req["dir"]),
             "tp_run_root": tp_root.hex(), "world": world, "tp": windows}
@@ -134,11 +131,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--I", type=int, default=256)
     ap.add_argument("--law", default="subset:2")
     ap.add_argument("--template", action="append", default=[], help="a template the partition holds before SiluMul_v2{I} (repeatable)")
-    ap.add_argument("--commit-scheme", default=ROWS, choices=(ROWS, "vllm-v1"))
     ap.add_argument("--deferred", action="store_true", help="no window: every rank's replay deferred to its sealed bundle")
     a = ap.parse_args(argv)
-    c = commit(Path(a.out), world=a.world, I=a.I, law=a.law, commit_scheme=a.commit_scheme, deferred=a.deferred,
-               templates=tuple(a.template))
+    c = commit(Path(a.out), world=a.world, I=a.I, law=a.law, deferred=a.deferred, templates=tuple(a.template))
     print(json.dumps({k: str(c[k]) for k in ("commit", "build", "workload", "partition", "windows", "tp_run_root", "world")}))
     return 0
 

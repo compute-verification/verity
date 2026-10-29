@@ -103,7 +103,6 @@ SECONDS: dict[str, float] = {
     "tests/program/test_tp_allreduce_multimem.py": 44,
     "tests/program/test_token_select_chunks.py": 42,
     "tests/program/test_lifted_mixed_padrev.py": 40,
-    "tests/program/test_padded_commit_tiny.py": 40,
     "tests/properties/test_dsv4_compressor_capture.py": 38,
     "tests/program/test_mhc.py": 37,
     "tests/program/test_sigmoid_moe_fp8_derive.py": 37,
