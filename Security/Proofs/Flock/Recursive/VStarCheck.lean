@@ -221,6 +221,8 @@ theorem checkParsed_ok {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkP
   unfold RecVStar.checkParsed at h
   dsimp only at h
   split at h
+  · cases h
+  split at h
   · rename_i u hs
     refine ⟨u, hs, ?_⟩
     rw [pure_bind] at h
@@ -245,6 +247,8 @@ theorem checkParsed_v1 {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkP
   unfold RecVStar.checkParsed at h
   dsimp only at h
   split at h
+  · cases h
+  split at h
   · rw [pure_bind] at h
     split at h
     · cases h
@@ -259,12 +263,26 @@ theorem checkParsed_v1 {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkP
           · exact absurd (by rw [Bool.or_eq_true]; exact Or.inr (List.any_eq_true.2 ⟨p, hp, hv⟩)) h3
   · cases h
 
+/-- **A circuit V*'s parse check passed carries no template.** -/
+theorem checkParsed_flat {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkParsed s c = .ok ()) :
+    c.tmpl = none := by
+  unfold RecVStar.checkParsed at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rename_i h0
+    cases ht : c.tmpl with
+    | none => rfl
+    | some _ => simp [ht] at h0
+
 /-- **The parse check's output leaves**: the circuit's output leaves are its unit's output words in order, as V*'s
 `leaves_out` (`VStar.Compose`'s META) writes them. -/
 theorem checkParsed_leavesOut {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkParsed s c = .ok ()) :
     ∃ u, s.unit = .ok u ∧ c.leavesOut.getD 0 #[] = Array.range u.outWords := by
   unfold RecVStar.checkParsed at h
   dsimp only at h
+  split at h
+  · cases h
   split at h
   · rename_i u hs
     refine ⟨u, hs, ?_⟩
