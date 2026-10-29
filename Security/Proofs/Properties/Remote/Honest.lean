@@ -36,15 +36,15 @@ theorem canonical_text {b : ByteArray} {j : Json} (h : canonicalJson b = .ok j) 
   · simp [hu, throw, throwThe, MonadExceptOf.throw] at h
   · simp only [hu] at h
     rcases hp : Json.parse s with e | j0
-    · simp [hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+    · simp [hp, throw, throwThe, MonadExceptOf.throw, Bind.bind, Except.bind] at h
     · rcases hc : Flock.canon j0 with e | t
-      · simp [hp, hc, bind, Except.bind, pure, Except.pure] at h
+      · simp [hp, hc, Bind.bind, Except.bind, pure, Except.pure] at h
       · by_cases ht : t = s
         · subst ht
-          simp [hp, hc, bind, Except.bind, pure, Except.pure] at h
+          simp [hp, hc, Bind.bind, Except.bind, pure, Except.pure] at h
           subst h
           exact ⟨_, hc, toUTF8_of_fromUTF8? hu⟩
-        · simp [hp, hc, bind, Except.bind, pure, Except.pure, ht, throw, throwThe, MonadExceptOf.throw] at h
+        · simp [hp, hc, Bind.bind, Except.bind, pure, Except.pure, ht, throw, throwThe, MonadExceptOf.throw] at h
 
 /-- The policy's commitment: the record its bytes are, and its digest, SHA-512 of the record's format tag and its
 canonical text. -/
@@ -54,11 +54,11 @@ theorem policy_of {b : ByteArray} {c : NciCheck.Protocol.Commitment} (h : NciChe
         then NciCheck.Baseline.FORMAT_V2 else NciCheck.Baseline.FORMAT).toUTF8.push 0 ++ s.toUTF8) := by
   unfold NciCheck.Protocol.commitmentOf at h
   rcases hj : canonicalJson b with e | j
-  · simp [hj, bind, Except.bind] at h
+  · simp [hj, Bind.bind, Except.bind] at h
   rcases hc : Flock.canon j with e | s
-  · cases j <;> simp [hj, hc, bind, Except.bind, NciCheck.Baseline.digest, pure, Except.pure, throw, throwThe,
+  · cases j <;> simp [hj, hc, Bind.bind, Except.bind, NciCheck.Baseline.digest, pure, Except.pure, throw, throwThe,
       MonadExceptOf.throw] at h
-  cases j <;> simp [hj, hc, bind, Except.bind, NciCheck.Baseline.digest, pure, Except.pure, throw, throwThe,
+  cases j <;> simp [hj, hc, Bind.bind, Except.bind, NciCheck.Baseline.digest, pure, Except.pure, throw, throwThe,
       MonadExceptOf.throw, FlockComplete.JsonRT.unhex_hexOf] at h
   subst h
   exact ⟨rfl, s, hc, by simp⟩
@@ -69,10 +69,10 @@ theorem stage_of {b : ByteArray} {c : SampledProofs.OneStage.Commitment}
     canonicalJson b = .ok c.record ∧ SampledProofs.Registration.digest c.record = .ok c.digest := by
   unfold SampledProofs.OneStage.commitmentOf at h
   rcases hj : canonicalJson b with e | j
-  · simp [hj, bind, Except.bind] at h
+  · simp [hj, Bind.bind, Except.bind] at h
   rcases hg : SampledProofs.Registration.digest j with e | d
-  · cases j <;> simp [hj, hg, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
-  cases j <;> simp [hj, hg, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  · cases j <;> simp [hj, hg, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  cases j <;> simp [hj, hg, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   subst h
   exact ⟨rfl, hg⟩
 
@@ -83,8 +83,8 @@ theorem pouw_of {b : ByteArray} {c : PouwCheck.Registration} (h : PouwCheck.regi
       c.bytes = b := by
   unfold PouwCheck.registrationOf at h
   rcases hj : canonicalJson b with e | j
-  · simp [hj, bind, Except.bind] at h
-  simp only [hj, bind, Except.bind] at h
+  · simp [hj, Bind.bind, Except.bind] at h
+  simp only [hj, Bind.bind, Except.bind] at h
   rcases hf : (PouwCheck.str? (PouwCheck.get j "format")).filter (PouwCheck.formats.contains ·) with _ | f
   · rw [hf] at h
     simp [throw, throwThe, MonadExceptOf.throw] at h
@@ -129,7 +129,7 @@ theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cW : Pou
     simp [NciCheck.Baseline.strAt, hget, NciCheck.Baseline.strOf?]
   have hSg : SampledProofs.getD j "format" = .str cW.format := by rw [stage_getD, hget]
   unfold SampledProofs.Registration.digest at hdS
-  simp only [hSg, hs, bind, Except.bind, pure, Except.pure] at hdS
+  simp only [hSg, hs, Bind.bind, Except.bind, pure, Except.pure] at hdS
   have hdS' := (Except.ok.inj hdS).symm
   unfold PouwCheck.Registration.digest
   rw [hdI, hdS', hN, hbytes, ← hsb]
