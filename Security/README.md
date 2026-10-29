@@ -60,8 +60,9 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
 - **Initial information**: the registered information θ, input gates whose values are committed before J (models, code,
   data). Nothing else is carried into J.
 - **Registration**, once and append-only, in the setup phase: the site, θ and the registered compiler B, a public
-  program. Today's Lean models the registration as R = (θ, D, 𝓘), the registered circuit and its inference partition
-  (`Verity.Registration`), which B's execution blocks extend.
+  program: the log the Site is folded from (`Verity.Registration`, today with the site's entry only). Today's Lean
+  models R = (θ, D, 𝓘), the registered circuit and its inference partition, as the committed record
+  (`Verity.Committed`), which B's execution blocks extend.
 - **Execution.** For each advice a_j (a string of at most ℓ_a bits, private and committed, ℓ_a public), B
   outputs B(a_j) = (E_j, 𝒫_j, 𝓘_j, loc_j):
   - E_j, the execution block: a Boolean circuit whose inputs are θ, earlier blocks' outputs and fresh input;
@@ -374,7 +375,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Step | Lean | Status |
 |---|---|---|
 | The actual circuit | `Accounting.Placed`, `Accounting.Placed.region` | Defined |
-| Registered objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Declaration`, `Verity.Registration`; the site, B, a_j and loc_j not yet in Lean | Partly defined |
+| Registered objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Declaration`, `Verity.Committed`; the site and its registration log, `Verity.Site` and `Verity.Registration`; B, a_j and loc_j not yet in Lean | Partly defined |
 | Coverage | `Nci.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
 | Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.MinEntropyHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |

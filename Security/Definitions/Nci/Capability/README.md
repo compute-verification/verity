@@ -11,7 +11,7 @@ enter the security argument is `Security/README.md`, part 2.
 
 | Object | Symbol | Lean | Meaning |
 |---|---|---|---|
-| Registration | R | `Verity.Registration` | the declared circuit, the registered values θ, and a partition into B blocks |
+| Committed declaration | R | `Verity.Committed` | the declared circuit, the registered values θ, and a partition into B blocks |
 | Block | I | `Verity.Partition.IsCK` | c gates, at most k fresh bits; its **view** is those bits and its index |
 | Decoder budget | t | `Verity.LDL` | the time a reconstruction may take |
 | Item family | X | `Nci.Capability.Items` | things a block may hold; each item has **cells** (the gates of one version of its value) and a **price** p_i in bits |

@@ -25,7 +25,7 @@ blocks within `t`, description hardness at deficit `Λ` bounds what every proof 
 The evaluator is chosen per selection: one evaluator for every selection would have to output the empty selection's
 empty string on every program, so no block could hold an item with a nonempty cell. -/
 def HeldBudget : Prop :=
-  ∀ (R : Registration) (c k : ℕ), R.P.IsCK R.d c k →
+  ∀ (R : Committed) (c k : ℕ), R.P.IsCK R.d c k →
     ∀ {ι : Type} (X : Items R.d.D ι) (ρ : Type) (M : Decoder ρ) (r : ρ) (t aBlk : ℕ) (Λ : ℝ),
       (∀ (U : Fin R.B → Finset ι) (σ : ι → Finset (Fin R.d.D.N)),
         (∀ u, Selects X (U u) σ ∧ ∀ i ∈ U u, σ i ⊆ holds R.d.D (R.P.gates u)) →
@@ -38,7 +38,7 @@ a proof block's held values are a function of its at most `k` unregistered input
 selection has probability at least `2^-k`; min-entropy hardness at deficit `Λ` then bounds what every proof block holds:
 `Σ_{i ∈ U} price_i ≤ k + Λ`. No decoder, no time budget and no block index enter. -/
 def StatHeldBudget : Prop :=
-  ∀ (R : Registration) (c k : ℕ), R.P.IsCK R.d c k →
+  ∀ (R : Committed) (c k : ℕ), R.P.IsCK R.d c k →
     ∀ {ι : Type} (X : Items R.d.D ι) (μ : PMF R.d.D.Transcript) (Λ : ℝ),
       (∀ a ∈ μ.support, R.Honest a) → Assumptions.MinEntropyHard R X μ Λ →
       HeldPriceAtMost R X ((k : ℝ) + Λ)
@@ -48,7 +48,7 @@ most `aBlk` bits, source hardness at deficiency `δ` and recovery at `βv` bits 
 ambiguity give, for every proof block, `βv · J u ≤ k + ⌈log₂ B⌉ + aBlk + δ + amb`. When the ambiguity grows with the
 outputs, `amb ≤ ε · J u` with `ε < βv`, this is `(βv − ε) · J u ≤ k' + δ`: ambiguity lowers the information per output. -/
 def RecoveredBudget : Prop :=
-  ∀ (R : Registration) (c k : ℕ), R.P.IsCK R.d c k →
+  ∀ (R : Committed) (c k : ℕ), R.P.IsCK R.d c k →
     ∀ (ρ : Type) (M : Decoder ρ) (r : ρ) (τ aBlk : ℕ) (e : List Bool) (z : R.d.D.Transcript → List Bool)
       (ℓz δ βv amb : ℝ) (J : Fin R.B → ℕ), e.length ≤ aBlk →
       Assumptions.SourceHard R M r τ z ℓz δ → Assumptions.Recovers R M r τ e z ℓz βv amb J →
