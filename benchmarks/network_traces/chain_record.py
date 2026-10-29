@@ -714,7 +714,7 @@ def leak(run: Path, scan: dict | None = None, weights=None, audit: dict | None =
                          f"checking term 0, which needs every proof block sampled (scan_zk --draw {units})")
     rate = v["requests"] / v["windows"]
     window_s = T * params.bucket_ms / 1000
-    at = {"T": T, "tau": Fraction(params.bucket_ms, 1000), "egress_cells": params.egress_cells}
+    at = {"T": T, "tau": Fraction(params.bucket_ms, 1000)}
     per_s = Fraction(v["requests"], v["windows"]) / (T * at["tau"])
     link = LB.link(cls, per_s, **at)
     links = {"link": 1, "datacenter": LB.datacenter_links(), "world": LB.world_links()}
@@ -732,7 +732,7 @@ def leak(run: Path, scan: dict | None = None, weights=None, audit: dict | None =
         return LB.datacenter({one: links[scope]}, period, reading, delta, weights=weights)
 
     def terms(b: LB.Bound) -> dict:
-        return b.terms._asdict() | {"timing": b.terms.timing, "K": b.bits, "share": b.share}
+        return b.terms._asdict() | {"K": b.bits, "share": b.share}
 
     def tie(reading: str, one: LB.LinkLoad) -> dict:
         return {"tie": reading, "sampling": "whole" if reading == "stand-in" or one.audit_whole else "in part"}
@@ -756,8 +756,7 @@ def leak(run: Path, scan: dict | None = None, weights=None, audit: dict | None =
             "draw": {"units": units, "drawn": drawn}, "audit": audit,
             "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
                     "link_window_s": window_s, "accepted": v.get("accepted")},
-            "terms": {"schedules_per_request": link.cell, "cells_per_request": link.cell,
-                      "cap_per_request": link.cap, "jitter_per_block": link.jitter, "jitter_bound": LB.JITTER_BOUND,
+            "terms": {"jitter_per_block": link.jitter, "jitter_bound": LB.JITTER_BOUND,
                       "jitter_term": LB.JITTER, "e_w": link.e_w, "unchecked": LB.UNCHECKED,
                       "b": link.b, "fmax": {f"{float(d):g}": LB.fmax(d) for d in LB.DELTAS},
                       "scan_delta": str(link.scan_delta)},
@@ -766,18 +765,15 @@ def leak(run: Path, scan: dict | None = None, weights=None, audit: dict | None =
             "conditions": [
                 "the generator reading of the scan's statement (each proof block's registered rows its boundary "
                 "values): a claim, not yet a locked guarantee",
-                "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and "
-                "NetworkCheck.Period doesn't check; the schedules and the fail cells are charged at that cap, "
-                "⌈log2(cap + 1)⌉ each a request, as its rows form charges them",
-                f"the jitter term is T bits a link-window, one a bucket: {LB.JITTER}",
-                "the scan proves link-window 0 of the warden run; a monitoring period's terms are its "
-                "per-link-window and per-request terms at the run's request rate",
+                f"timing is the jitter term, T bits a link-window, one a bucket: {LB.JITTER}. The schedules and the "
+                "fail cells are no term: the scan fixes each lane's length and renders no fail cell, and the record "
+                "shows the schedule",
+                "the scan proves link-window 0 of the warden run; a monitoring period's terms are its link-windows' "
+                "terms, and its requests the run's request rate's",
                 "the datacenter's rows sum as many identical links as the census's reference datacenter has machines, "
                 "and the world's as many as the adversary resource model's compute fills in machines of its GPUs "
                 f"(leak_bounds.datacenter, world), each link pooled at δ / links ({split}) and paying its own "
-                "incorrect proof blocks: our composition, which no Lean statement covers. Each link certifies the "
-                "run's rate; the adversary model's requests past the links' rate are uncertified, and no row counts "
-                "them",
+                "incorrect proof blocks: our composition, which no Lean statement covers",
                 "ε is the scans' δ summed over the period's link-windows and the links (NetworkCheck.Period's "
                 "eps, m·δ), each scan at the scan's δ; a served tied audit sampled in part adds its δ (chargedOf), "
                 "which these rows don't",
@@ -811,13 +807,13 @@ def leak_markdown(doc: dict) -> str:
         return "no bound" if t["unchecked"] else f"{bits(t['timing'] + t['checking'])} + side channels"
 
     lines = [f"K's terms in bits, K's share of one copy of the weights ({doc['weights']['label']}) and ε, the scans' "
-             f"δ summed. Timing is the schedules and fail cells and the jitter term, one bit a bucket ({LB.JITTER}). "
+             f"δ summed. Timing is the jitter term, one bit a bucket ({LB.JITTER}). "
              "The checking column is the per-period form's; the pooled forms' K adds their incorrect proof blocks. "
              f"The stand-in tie's content is labelled {LB.UNCHECKED} and added to no K.", "",
              "A link-window:", "",
-             "| tie | sampled | timing (caps + jitter) | side channels | checking | K |", "|---|---|---|---|---|---|"]
-    lines += [f"| {t['tie']} | {t['sampling']} | {bits(t['timing'])} ({bits(t['caps'])} + {bits(t['jitter'])}) | "
-              f"{side(t)} | {bits(t['checking'])} | {k(t)} |" for t in doc["per_link_window"]]
+             "| tie | sampled | timing | side channels | checking | K |", "|---|---|---|---|---|---|"]
+    lines += [f"| {t['tie']} | {t['sampling']} | {bits(t['timing'])} | {side(t)} | {bits(t['checking'])} | {k(t)} |"
+              for t in doc["per_link_window"]]
     lines.append("")
     for t in doc["per_link_window"]:
         lines += [f"**{doc['readings'][t['tie']]}**, sampled {t['sampling']}:", "",

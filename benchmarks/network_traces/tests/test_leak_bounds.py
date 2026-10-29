@@ -1,10 +1,9 @@
 """leak_bounds, the one calculator of K. `per_link`, `datacenter` and `world` give chain_record.leak's rows on a warden
 run's files, and `datacenter` is links × `per_link` for identical links, each link at δ / links.
 
-K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lean (`clog2`, `capsTerm`, `rowsTerms`,
-`Scan.terms`, `faultyEntries`, `eps`) rather than from the calculator, in three parts:
-- timing: a request's caps charged twice, as schedules and as fail cells, each ⌈log2(cap + 1)⌉, and a link-window's
-  jitter term ⌈log2 D_j^T⌉ over its scan's T steps, at D_j = 2;
+K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lean (`clog2`, `rowsTerms`, `Scan.terms`,
+`faultyEntries`, `eps`) rather than from the calculator, in three parts:
+- timing: a link-window's jitter term ⌈log2 D_j^T⌉ over its scan's T steps, at D_j = 2, whatever the request rate;
 - the side channels: the tied audit's free inputs, given for a served audit and none for the stand-in tie, whose
   content, NR·T / EVERY slot entries of `ingress_scan.entry_bits` a link-window (E_w), is unchecked and in no K;
 - the checking term: 0 with every proof block sampled, E_w a link-window when the served audit is sampled in part, and
@@ -70,11 +69,11 @@ def test_per_link_datacenter_and_world_are_chain_records_rows(tmp_path):
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
     (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
     doc = cr.leak(run, {"draw": {"honest": 64}})
-    at = {"T": 32, "tau": Fraction(1, 10), "egress_cells": 65}
+    at = {"T": 32, "tau": Fraction(1, 10)}
     per_s = Fraction(100, 75) / Fraction(32, 10)
 
     def terms(b):
-        return b.terms._asdict() | {"timing": b.terms.timing, "K": b.bits, "share": b.share}
+        return b.terms._asdict() | {"K": b.bits, "share": b.share}
 
     assert {(r["tie"], r["sampling"]) for r in doc["rows"]} == {("stand-in", "whole"), ("served", "whole"),
                                                                 ("served", "in part")}
@@ -144,7 +143,7 @@ def test_the_stand_in_ties_content_is_unchecked_and_in_no_bound():
             got = link.terms(period, "stand-in")
             assert (got.side, got.unchecked, got.checking) == (None, m * e_w, 0)
             assert got.bits is None and link.bits(period, "stand-in") is None
-            assert got.timing == float(RATE * LB.seconds(period) * link.cap + m * 32)
+            assert got.timing == float(m * 32)
         bound = LB.per_link(cls, RATE, "week", "stand-in", T=32, audit_free=FREE)
         assert (bound.bits, bound.share, bound.terms.unchecked) == (None, None, 189_000 * e_w)
         assert LB.per_link(cls, RATE, "week", "stand-in", Fraction(1, 100), T=32).bits is None
@@ -154,16 +153,16 @@ def test_the_stand_in_ties_content_is_unchecked_and_in_no_bound():
 
 def test_the_served_reading_is_its_audits_free_inputs_and_e_w_when_sampled_in_part():
     tau = Fraction(4)
-    four = dict(T=32, tau=tau, egress_cells=65)
+    four = dict(T=32, tau=tau)
     rate = Fraction(4) / (32 * tau)
-    timing = 2 * clog2(65 + 1) * 4 + clog2(LB.JITTER_BOUND ** 32)
-    assert timing == 88
+    timing = clog2(LB.JITTER_BOUND ** 32)
+    assert timing == 32
     whole = LB.link(W63, rate, **four, audit_free=0)
     part = LB.link(W63, rate, **four, audit_free=0, audit_whole=False)
-    assert whole.terms(whole.block_s, "served") == LB.Terms(56, 32, 0, 0, 0)
-    assert whole.bits(whole.block_s, "served") == timing == 88
-    assert part.terms(part.block_s, "served") == LB.Terms(56, 32, 0, 9_088, 0)
-    assert part.bits(part.block_s, "served") == timing + 9_088 == 9_176
+    assert whole.terms(whole.block_s, "served") == LB.Terms(32, 0, 0, 0)
+    assert whole.bits(whole.block_s, "served") == timing == 32
+    assert part.terms(part.block_s, "served") == LB.Terms(32, 0, 9_088, 0)
+    assert part.bits(part.block_s, "served") == timing + 9_088 == 9_120
     free = LB.link(W63, rate, **four, audit_free=FREE)
     assert free.bits(free.block_s, "served") == timing + FREE
     assert free.terms("week", "served").side == free.blocks("week") * FREE
@@ -185,19 +184,17 @@ def test_the_checking_term_is_charged_in_one_place():
                 pooled = n * e_w + f * math.log2(n * 64 + 1) + link.b * f
                 assert link.checking("week", reading, delta) == pytest.approx(pooled)
                 assert link.terms("week", reading, delta).checking == link.checking("week", reading, delta)
-                assert link.terms("week", reading, delta)[:3] == link.terms("week", reading)[:3]
+                assert link.terms("week", reading, delta)[:2] == link.terms("week", reading)[:2]
     with pytest.raises(ValueError, match="stand-in, served"):
         LB.link(W63, RATE, T=32).checking("week", "registered")
 
 
-def test_the_caps_are_charged_twice_at_lean_s_ceilings():
-    for cells in range(1, W63.KO + 2):
-        link = LB.link(W63, RATE, T=32, egress_cells=cells)
-        assert link.cell == clog2(cells + 1) and link.cap == 2 * clog2(cells + 1)
-    assert [LB.link(W63, RATE, T=32, egress_cells=c).cap for c in (1, 2, 3, 63, 64, 65)] == [2, 4, 4, 12, 14, 14]
+def test_timing_is_the_jitter_term_at_lean_s_ceiling_whatever_the_rate():
     assert LB.JITTER_BOUND == 2
     steps = (16, 32, 48)
     assert [LB.link(W63, RATE, T=t).jitter for t in steps] == [clog2(2 ** t) for t in steps] == list(steps)
+    for rate in (0, RATE, 1_000):
+        assert LB.link(W63, rate, T=32).terms("week", "served").timing == 189_000 * 32
 
 
 def test_the_census_sets_the_datacenter_and_the_world():
@@ -266,8 +263,6 @@ def test_a_window_class_and_refusals():
         LB.link(KO1, RATE)
     with pytest.raises(TypeError, match="ingress_scan.Class"):
         LB.link(SimpleNamespace(buckets=32), RATE)
-    with pytest.raises(ValueError, match="KO \\+ 1 = 2"):
-        LB.link(KO1, RATE, T=32, egress_cells=3)
     with pytest.raises(ValueError, match="rate"):
         LB.link(KO1, -1, T=32)
     with pytest.raises(ValueError, match="multiple of EVERY = 16"):

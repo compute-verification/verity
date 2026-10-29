@@ -11,9 +11,9 @@ scan's ``prog`` is the outputs of a compute audit, the tied audit (`NetworkCheck
 name, `wired`). K's terms are those of `NetworkCheck.Period`'s rows form (`rowsTerms`, `Scan.terms`) in the generator
 reading of the scan's statement, in three parts (`Terms`):
 
-* timing: the schedules and the fail cells, ⌈log2(cap + 1)⌉ each a request (`capsTerm`, charged twice as `#Ss ≤ ∏_c
-  (cap_c + 1)`), a connection's cap its lane's egress_cells; and the jitter term at D_j = `JITTER_BOUND`,
-  ⌈log2 D_j^T⌉ = T bits a link-window, one a bucket (`JITTER`);
+* timing: the jitter term at D_j = `JITTER_BOUND`, ⌈log2 D_j^T⌉ = T bits a link-window, one a bucket (`JITTER`). The
+  schedules and the fail cells are no term: the scan fixes each lane's length and renders no fail cell, and the record
+  shows the schedule;
 * the side channels: the tied audit's unregistered free inputs, which the rows form charges to the link-window
   (`tiedAudits`);
 * the checking term, what the sampled proofs leave unchecked (`LinkLoad.checking`): 0 with every proof block sampled,
@@ -91,18 +91,13 @@ STATEMENTS = {"per_period": "NetTiming.Guarantees.PeriodLeakAccepted",
 
 
 class Terms(NamedTuple):
-    """K's terms over a span, in bits: timing, the schedules and fail cells (``caps``) and ``jitter``; the side channels
-    (``side``, None where none is given: the stand-in tie, or a served audit whose free inputs aren't); and the checking
-    term (``checking``). ``unchecked`` is the stand-in tie's content, which no bound adds."""
-    caps: float
-    jitter: float
+    """K's terms over a span, in bits: ``timing``, the jitter term; the side channels (``side``, None where none is
+    given: the stand-in tie, or a served audit whose free inputs aren't); and the checking term (``checking``).
+    ``unchecked`` is the stand-in tie's content, which no bound adds."""
+    timing: float
     side: float | None
     checking: float
     unchecked: float = 0
-
-    @property
-    def timing(self) -> float:
-        return self.caps + self.jitter
 
     @property
     def bits(self) -> float | None:
@@ -127,14 +122,13 @@ class Bound(NamedTuple):
 @dataclass(frozen=True)
 class LinkLoad:
     """What one network certifier on one uplink certifies: its scan class, its certified requests a second, its
-    link-window's T buckets each way of ``tau`` seconds, its egress cells a connection and its scan's δ; and in the
-    served reading its tied audit's unregistered free inputs' bits a link-window (``audit_free``, None when not given)
-    and whether that audit is sampled whole (``audit_whole``)."""
+    link-window's T buckets each way of ``tau`` seconds and its scan's δ; and in the served reading its tied audit's
+    unregistered free inputs' bits a link-window (``audit_free``, None when not given) and whether that audit is
+    sampled whole (``audit_whole``)."""
     scan: IS.Class
     rate: float | Fraction
     T: int
     tau: float | Fraction
-    egress_cells: int
     scan_delta: float | Fraction = SCAN_DELTA
     audit_free: int | None = None
     audit_whole: bool = True
@@ -158,16 +152,6 @@ class LinkLoad:
     def b(self) -> int:
         """A proof block's committed bits, an incorrect proof block's charge in the pooled form."""
         return IS.state_bits(self.scan) + IS.view_bits(self.scan)
-
-    @property
-    def cell(self) -> int:
-        """⌈log2(egress_cells + 1)⌉, a connection's cap's term (`clog2 (cap + 1)`)."""
-        return self.egress_cells.bit_length()
-
-    @property
-    def cap(self) -> int:
-        """A request's schedules and fail-cell terms, one `cell` each (`rowsTerms`'s `schedules` and `cells`)."""
-        return 2 * self.cell
 
     @property
     def jitter(self) -> int:
@@ -206,10 +190,10 @@ class LinkLoad:
     def terms(self, period: str | float | Fraction, reading: str, delta: float | Fraction | None = None) -> Terms:
         """K's terms over ``period`` (a `PERIODS` name, or its seconds) in ``reading`` (`READINGS`): the per-period
         form, or with ``delta`` the pooled form."""
-        blocks, requests = self.blocks(period), self.rate * seconds(period)
+        blocks = self.blocks(period)
         side = None if _reading(reading) == "stand-in" or self.audit_free is None else float(blocks * self.audit_free)
-        return Terms(float(requests * self.cap), float(blocks * self.jitter), side,
-                     self.checking(period, reading, delta), float(blocks * self.e_w) if reading == "stand-in" else 0.0)
+        return Terms(float(blocks * self.jitter), side, self.checking(period, reading, delta),
+                     float(blocks * self.e_w) if reading == "stand-in" else 0.0)
 
     def bits(self, period: str | float | Fraction, reading: str, delta: float | Fraction | None = None) -> float | None:
         """K over ``period`` in ``reading`` (`terms`), None where the side channels aren't given."""
@@ -264,12 +248,10 @@ def world_links() -> int:
 
 
 def link(cls: Any, rate: float | Fraction, *, T: int | None = None, tau: float | Fraction = TAU,
-         egress_cells: int | None = None, scan_delta: float | Fraction = SCAN_DELTA, audit_free: int | None = None,
-         audit_whole: bool = True) -> LinkLoad:
+         scan_delta: float | Fraction = SCAN_DELTA, audit_free: int | None = None, audit_whole: bool = True) -> LinkLoad:
     """The link of class ``cls`` certifying ``rate`` requests a second. ``cls`` is a scan class (`ingress_scan.Class`,
-    which needs ``T``) or a window class (its `scan`, and its ``buckets`` the default T). ``egress_cells`` is by
-    default the scan's KO + 1, the most `ingress_scan.Class.serves` takes. ``audit_free`` and ``audit_whole`` are the
-    served tied audit's (`LinkLoad`)."""
+    which needs ``T``) or a window class (its `scan`, and its ``buckets`` the default T). ``audit_free`` and
+    ``audit_whole`` are the served tied audit's (`LinkLoad`)."""
     if isinstance(cls, IS.Class):
         scan = cls
     elif isinstance(getattr(cls, "scan", None), IS.Class):
@@ -278,19 +260,16 @@ def link(cls: Any, rate: float | Fraction, *, T: int | None = None, tau: float |
         raise TypeError(f"a link's class is an ingress_scan.Class or a window class with its scan, not {cls!r}")
     if T is None:
         raise ValueError("a scan class's link needs T, its link-window's buckets each way (a window class's buckets)")
-    egress_cells = scan.KO + 1 if egress_cells is None else egress_cells
     if type(T) is not int or T < 1 or T % scan.EVERY or not tau > 0 or not rate >= 0:
         raise ValueError(f"a link's T is a positive multiple of EVERY = {scan.EVERY}, its τ positive and its rate at "
                          f"least 0, not T = {T!r}, τ = {tau!r} and rate = {rate!r}")
-    if type(egress_cells) is not int or not 1 <= egress_cells <= scan.KO + 1:
-        raise ValueError(f"egress_cells is an integer from 1 to KO + 1 = {scan.KO + 1}, not {egress_cells!r}")
     if not 0 < scan_delta < 1:
         raise ValueError(f"the scan's δ is in (0, 1), not {scan_delta!r}")
     if audit_free is not None and (type(audit_free) is not int or audit_free < 0):
         raise ValueError(f"the tied audit's free inputs are a count of bits, at least 0, or None, not {audit_free!r}")
     if type(audit_whole) is not bool:
         raise TypeError(f"whether the tied audit is sampled whole is a bool, not {audit_whole!r}")
-    return LinkLoad(scan, rate, T, tau, egress_cells, scan_delta, audit_free, audit_whole)
+    return LinkLoad(scan, rate, T, tau, scan_delta, audit_free, audit_whole)
 
 
 def _bound(terms: Terms, delta: float | Fraction | None, eps: float | Fraction, statement: str,
@@ -301,12 +280,11 @@ def _bound(terms: Terms, delta: float | Fraction | None, eps: float | Fraction, 
 
 def per_link(cls: Any, rate: float | Fraction, period: str | float | Fraction, reading: str,
              delta: float | Fraction | None = None, *, T: int | None = None, tau: float | Fraction = TAU,
-             egress_cells: int | None = None, scan_delta: float | Fraction = SCAN_DELTA,
-             audit_free: int | None = None, audit_whole: bool = True, weights: Weights = WEIGHTS) -> Bound:
+             scan_delta: float | Fraction = SCAN_DELTA, audit_free: int | None = None, audit_whole: bool = True,
+             weights: Weights = WEIGHTS) -> Bound:
     """K over a monitoring period for one link (`link`'s arguments), the count `PeriodLeakAccepted` bounds for one
     network certifier on one uplink (δ None), or `PooledLeakAccepted`'s pooled at ``delta``."""
-    one = link(cls, rate, T=T, tau=tau, egress_cells=egress_cells, scan_delta=scan_delta, audit_free=audit_free,
-               audit_whole=audit_whole)
+    one = link(cls, rate, T=T, tau=tau, scan_delta=scan_delta, audit_free=audit_free, audit_whole=audit_whole)
     statement = STATEMENTS["per_period" if delta is None else "pooled"]
     return _bound(one.terms(period, reading, delta), delta, one.eps(period), statement, weights)
 
@@ -354,6 +332,5 @@ def datacenter(links: Sequence[LinkLoad] | Mapping[LinkLoad, int], period: str |
 def world(one: LinkLoad, period: str | float | Fraction, reading: str, delta: float | Fraction | None = None, *,
           weights: Weights = WEIGHTS) -> Bound:
     """K over a monitoring period summed over the world's links (`world_links`), each ``one``: `datacenter` at the
-    adversary resource model's size. Each link certifies ``one``'s rate, and requests past it are uncertified, so K
-    doesn't count them."""
+    adversary resource model's size."""
     return datacenter({one: world_links()}, period, reading, delta, weights=weights)

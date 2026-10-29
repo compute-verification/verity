@@ -503,17 +503,16 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
     assert doc["widths"] == {"NS": 149_648, "NE": 1_136, "entries": 8, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
-    assert doc["terms"]["schedules_per_request"] == doc["terms"]["cells_per_request"] == 7
+    assert not {"schedules_per_request", "cells_per_request", "cap_per_request"} & set(doc["terms"])
     assert (doc["terms"]["jitter_bound"], doc["terms"]["jitter_per_block"]) == (2, 32)
     assert (doc["terms"]["e_w"], doc["terms"]["unchecked"]) == (9_088, "unchecked (stand-in tie)")
     assert doc["links"] == {"link": 1, "datacenter": 12_500, "world": 18_550_229}
     assert "BF16" in doc["weights"]["label"] and "BF16" in cr.leak_markdown(doc)
     json.dumps(doc)
-    lw, rate, cap = 604_800 / 3.2, 100 / 75, 2 * 7
+    lw = 604_800 / 3.2
     window = {(t["tie"], t["sampling"]): t for t in doc["per_link_window"]}
     assert list(window) == [("stand-in", "whole"), ("served", "whole"), ("served", "in part")]
-    for t in window.values():
-        assert (t["caps"], t["jitter"], t["timing"]) == pytest.approx((rate * cap, 32, rate * cap + 32))
+    assert all(t["timing"] == 32 and "caps" not in t for t in window.values())
     assert (window["stand-in", "whole"]["unchecked"], window["stand-in", "whole"]["K"]) == (9_088, None)
     assert [window["served", s]["checking"] for s in ("whole", "in part")] == [0, 9_088]
     assert all(t["side"] is None and t["K"] is None for t in window.values())
@@ -530,8 +529,8 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
             n * part["per_period"]["timing"])
         assert Fraction(rows["week", scope, "stand-in", "whole"]["eps"]) == n * Fraction(189_000, 2 ** 20)
     md = cr.leak_markdown(doc)
-    assert "| stand-in | whole | 51 (19 + 32) | unchecked (stand-in tie): 9,088 | 0 | no bound |" in md
-    assert "| served | in part | 51 (19 + 32) | not given (--audit) | 9,088 | 9,139 + side channels |" in md
+    assert "| stand-in | whole | 32 | unchecked (stand-in tie): 9,088 | 0 | no bound |" in md
+    assert "| served | in part | 32 | not given (--audit) | 9,088 | 9,120 + side channels |" in md
     with pytest.raises(SystemExit, match="sampled 16 of its 64"):
         cr.leak(run, {"draw": {"honest": 16}})
     (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
@@ -552,7 +551,7 @@ def test_leak_reads_a_served_audits_free_inputs_and_sampling(tmp_path):
     (window / "circuit.json").write_text(json.dumps({
         "templates": [["T", 4]], "external": ["T/y"], "wires": [],
         "statements": {"T": {"in_rows": [["x", 0, 8, ["x"]], ["y", 1, 16, ["y"]]]}}}))
-    lw, rate, cap = 604_800 / 3.2, 100 / 75, 2 * 7
+    lw = 604_800 / 3.2
     for k, sampling, checking in ((4, "whole", 0), (2, "in part", 9_088)):
         (window / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": k}}))
         out = tmp_path / f"leak-{k}.json"
@@ -562,10 +561,10 @@ def test_leak_reads_a_served_audits_free_inputs_and_sampling(tmp_path):
         served = [t for t in doc["per_link_window"] if t["tie"] == "served"]
         assert [t["sampling"] for t in served] == [sampling]
         assert served[0]["side"] == 32 and served[0]["checking"] == checking
-        assert served[0]["K"] == pytest.approx(rate * cap + 32 + 32 + checking)
+        assert served[0]["K"] == 32 + 32 + checking
         week = next(r for r in doc["rows"] if (r["period"], r["scope"], r["tie"]) == ("week", "link", "served"))
         assert week["per_period"]["side"] == pytest.approx(lw * 32)
-        assert week["per_period"]["K"] == pytest.approx(lw * (rate * cap + 32 + 32 + checking))
+        assert week["per_period"]["K"] == pytest.approx(lw * (32 + 32 + checking))
         assert week["per_period"]["share"] == week["per_period"]["K"] / doc["weights"]["bits"]
         stand_in = next(t for t in doc["per_link_window"] if t["tie"] == "stand-in")
         assert (stand_in["side"], stand_in["unchecked"], stand_in["K"]) == (None, 9_088, None)

@@ -220,12 +220,10 @@ link-window, whether its certificates, N2 and the scan accepted.
 
 The three terms, in the generator reading of the scan's statement (each proof block's registered rows its boundary
 values):
-- Timing: the schedules and the fail cells, ⌈log2(cap_c + 1)⌉ each a connection (`capsTerm`, charged twice, as
-  `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_request`). Here cap_c bounds `WardenSchedule.cells c`, the
-  egress cells of connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network
-  certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive. And the jitter term,
-  charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits a link-window (the record's
-  `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is one bound
+- Timing: the jitter term, charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits a link-window
+  (the record's `terms.jitter_per_block`). The schedules and the fail cells are no term: the scan fixes each lane's
+  length and renders no fail cell, and the record shows the schedule. The endpoint's slot count isn't a term of the
+  network certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive. J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is one bound
   over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The warden hands each bucket to a pacer
   that releases it at a time fixed before the bucket is made (`warden.Warden(paced=…)`, `warden_serve.py
   --paced-ms`), and a warden on the host's clock always paces. Still, the host's state after the server's writes for
@@ -285,18 +283,15 @@ The scale:
   (`benchmarks/census/adversary.json`) in machines of the reference datacenter's GPUs, one link each
   (`leak_bounds.world_links`).
 - Every link has one network certifier in front of all its machine's compute, serving at the run's rate. A
-  datacenter's and the world's links are each pooled at δ / links. The world's requests past its links' rate are
-  uncertified, and no row counts them.
+  datacenter's and the world's links are each pooled at δ / links.
 - The weights are one copy of Llama-3.2-1B in BF16 (`leak_bounds.WEIGHTS`), whatever the links. The served checkpoint
   is int8, so every share names the copy it is of.
 
 K also rests on these conditions:
 - The generator reading of the scan's statement, in which each proof block's registered rows are its boundary values.
   That reading is a claim, not yet a locked guarantee.
-- Each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and
-  `NetworkCheck.Period` doesn't check.
-- The scan proves link-window 0. A monitoring period's figures scale its per-link-window and per-request terms at the
-  run's rate.
+- The scan proves link-window 0. A monitoring period's figures scale its per-link-window terms, and its requests are
+  the run's rate's.
 - The jitter term is T bits a link-window, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
   host-state channel).
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
