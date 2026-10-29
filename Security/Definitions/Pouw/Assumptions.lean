@@ -14,6 +14,7 @@ import Definitions.Pouw.Assumptions.Dimension.H100Frag
 import Definitions.Pouw.Assumptions.Dimension.H100LoopFree
 import Definitions.Pouw.Assumptions.Dimension.H100Measured
 import Definitions.Pouw.Assumptions.Dimension.H100PeakTc
+import Definitions.Pouw.Assumptions.Dimension.H100Sem
 import Definitions.Pouw.Assumptions.Dimension.H100W
 import Definitions.Pouw.Assumptions.Dimension.Mixing
 import Definitions.Pouw.Assumptions.Dimension.OpenPipe

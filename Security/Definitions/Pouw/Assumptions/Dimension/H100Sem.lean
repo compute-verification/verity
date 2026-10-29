@@ -30,13 +30,17 @@ it writes, from what it may read:
 predicate is a rank-1 premise (the ISA as the H200 executes it); its falsification is in the sweep's report.
 
 **What they buy.** The tensor premise alone buys nothing: `.other` still writes any word at 32
-(`anyFunctionCeiling`, `tcOnlyCeiling`). With every class semantic, the bilinear accumulator model (`Bam`) is the
-reduction's target (`AlgSuffL`, rank 3, the analogue of `A2_algebraicSufficiency`). In it the counting lemma
-(`BamFloor`) gives `N·(64 − 1024/L)` for `N` running words, at most two registers a word whatever `L`; its arithmetic
-core is `lcommitFloorArith`, and the rank fact it rests on is `innerProductRank`. The full `L` a word, `L/32` registers
-of 32, is `NoSharingGain`: a lower bound on matrix multiplication's cost with merges and operand ranges, open (rank 4
-to 5). Without operand ranges it is false: one level of Strassen–Winograd costs `7L/8` of the tensor work plus at
-most one merge a word.
+(`anyFunctionCeiling`, `tcOnlyCeiling`; the proved facts are in `Proofs.Pouw.Dimension.H100SemProofs`). With every
+class semantic, the bilinear accumulator model (`Bam`) is the
+reduction's target (`AlgSuffL`, rank 3, the analogue of `A2_algebraicSufficiency`). In it:
+
+* the counting lemma without purity (`BamFloor`, a sketch) gives `N·(64 − 1024/L)` for `N` running words, at most two
+  registers a word whatever `L`; its arithmetic core is `lcommitFloorArith`, and the rank fact it rests on is
+  `innerProductRank`;
+* on cell-pure programs (`CellPure`, rank 4, Theorem K's purity) the count is the full `L` a word, `L/32` registers of
+  32 (`PureCount`, a sketch of a short proof from `innerProductRank`);
+* without purity the full `L` is `NoSharingGain`, a lower bound on matrix multiplication's cost with merges priced and
+  operand ranges enforced: open at `L` 64 and 128, likely false from 256 (small data lets summed lanes fit s8).
 -/
 
 namespace Pouw.Dimension.H100
@@ -381,16 +385,16 @@ def h200Types : List BamType :=
   [⟨32, -128, 127, 32⟩, ⟨32, -16, 16, 32⟩, ⟨32, -8, 8, 32⟩, ⟨16, -2048, 2048, 32⟩, ⟨8, -2048, 2048, 32⟩,
     ⟨16, -256, 256, 32⟩, ⟨64, -8, 7, 32⟩, ⟨256, 0, 1, 32⟩]
 
-/-- The bilinear form of the running word `(r, c, j)` at interval `L`, over data `a`, `b`: the constant-constant entry
-is `Σ a·b`, the linear entries the data, and noise pair `((r, i), (i, c))` has coefficient 1, for the first
-`(j + 1)·L` inner indices. -/
+/-- The bilinear form of the running word `(r, c, j)` at interval `L`, over data `a`, `b` and the centered noise in
+`[−32, 31]` (`xN` and `yN` less their data): the constant-constant entry is `Σ a·b`, the linear entries the data, and
+noise pair `((r, i), (i, c))` has coefficient 1, for the first `(j + 1)·L` inner indices. -/
 def runForm {m K n : ℕ} (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n → ℤ) (L : ℕ) (r : Fin m) (c : Fin n)
     (j : ℕ) : BForm (Fin m × Fin K) (Fin K × Fin n) :=
   Matrix.of fun p q =>
     match p, q with
-    | none, none => ∑ i : Fin K with i.val < (j + 1) * L, ((a r i - 32) * (b i c - 32) : ℚ)
-    | some (r', i), none => if r' = r ∧ i.val < (j + 1) * L then (b i c - 32 : ℚ) else 0
-    | none, some (i, c') => if c' = c ∧ i.val < (j + 1) * L then (a r i - 32 : ℚ) else 0
+    | none, none => ∑ i : Fin K with i.val < (j + 1) * L, ((a r i * b i c : ℤ) : ℚ)
+    | some (r', i), none => if r' = r ∧ i.val < (j + 1) * L then (b i c : ℚ) else 0
+    | none, some (i, c') => if c' = c ∧ i.val < (j + 1) * L then (a r i : ℚ) else 0
     | some (r', i), some (i', c') => if r' = r ∧ c' = c ∧ i = i' ∧ i.val < (j + 1) * L then 1 else 0
 
 /-- The running words' forms. -/
@@ -400,16 +404,17 @@ def runForms {m K n : ℕ} (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n �
 
 /-! ## Pinned statements (sketch, pending review) -/
 
-/-- **The counting lemma in the bilinear accumulator model** (sketch; rank 2, a combinatorial fact about the model):
-for `32 ∣ L`, `L ∣ K` and `L ≥ 64`, every well-formed program at the H200's types whose registers include the forms of
-all `N = m·n·(K/L)` running words of int7 data costs at least `N·(64 − 1024/L)`, that is
-`32·N·(2 − 32/L)`.
+/-- **The counting lemma without purity** (sketch; rank 2, a combinatorial fact about the model, not proved): for
+`32 ∣ L`, `L ∣ K` and `L ≥ 64`, every well-formed program at the H200's types whose registers include the forms of all
+`N = m·n·(K/L)` running words of int7 data costs at least `N·(64 − 1024/L)`, that is `32·N·(2 − 32/L)`.
 
-The count: every form is written (32 each, distinct writes); a word whose cone has no merge is a chain of tensor-core
-registers whose noise part differs from every other register's by rank at least `L` (`innerProductRank`), so its
-chain has `L/32` registers of its own, since no lane of a noise variable holds more than 32 products (`b1`'s and int4's
-lanes can't carry a noise variable, which spans 64 values); every other word pays a merge. With `p` words of the first
-kind, the cost is at least `32·max(p·L/32, N) + 32·(N − p)`, least at `p = 32N/L` (`lcommitFloorArith`). -/
+The count: every form is written (32 each, distinct writes). No lane of a noise variable holds more than 32 products
+(`b1`'s and int4's lanes can't carry one, since a noise variable spans 64 values), and two distinct words' noise parts
+differ by rank at least `L` (`innerProductRank`). So a word written by a tensor-core register has a pre-image (its
+`src`) that is neither a word nor a constant, and for `L > 64` no two words share one. A word written by a merge reads
+a register outside the other words' span. With `p` words of the first kind, the cost is at least
+`32·max(p·L/32, N) + 32·(N − p)`, least at `p = 32N/L` (`lcommitFloorArith`). That a merge's auxiliary register is
+its own word's is the step not yet checked. -/
 def BamFloor (L : ℕ) : Prop :=
   32 ∣ L → 64 ≤ L →
     ∀ (m K n : ℕ) (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n → ℤ)
@@ -417,12 +422,57 @@ def BamFloor (L : ℕ) : Prop :=
       L ∣ K → Int7 a → Int7 b → (∀ o ∈ P, o.WF h200Types) → (∀ f ∈ runForms a b L, f ∈ bamRegs P) →
         (m * n * (K / L) : ℚ) * (64 - 1024 / L) ≤ bamCost P
 
-/-- **`NoSharingGain L`** (open; rank 4 to 5): the same programs cost at least `N·L`, the honest `L/32` registers of 32
-a word. It is a lower bound on matrix multiplication's cost with merges priced and operand ranges enforced.
-Without the ranges it is false: one Strassen–Winograd level costs `7L/8` of the tensor work plus `m` merges a word
-(`m` from 1/2 to 1 by schedule), below `L` once `L > 256·m`. With them, D4's proved `NaiveBeatsStrassen` is the evidence for Strassen's
-and Winograd's schemes at full int8 range, and its range argument extends to NCP's operands (190 values a block-1
-entry). -/
+/-- The registers an instruction reads. -/
+def BamOp.reads {α β : Type} : BamOp α β → List ℕ
+  | .tc _ src _ _ => [src]
+  | .merge c => c.map Prod.snd
+  | .copy i => [i]
+  | .const _ => []
+
+/-- A tensor-core instruction. -/
+def BamOp.isTc {α β : Type} : BamOp α β → Bool
+  | .tc .. => true
+  | _ => false
+
+/-- Register `s` is in the cone of register `t` of `P` (register `t` is instruction `t`'s): `t` itself, or read by a
+register of the cone. -/
+inductive InCone {α β : Type} (P : List (BamOp α β)) (t : ℕ) : ℕ → Prop
+  | self : InCone P t t
+  | read {u s : ℕ} (hu : InCone P t u) (h : u < P.length) (hs : s ∈ (P.get ⟨u, h⟩).reads) : InCone P t s
+
+/-- **`CellPure P idx`** (rank 4, a restriction on the adversary's programs that no check observes; the analogue of
+Theorem K's row and charging purity): no tensor-core register is in the cones of two cells' words, where word `p`
+(cell `(p.1, p.2.1)`, chunk `p.2.2`) is register `idx p`. Prefix chains within a cell, merges and copies are free. -/
+def CellPure {α β : Type} {m n : ℕ} (P : List (BamOp α β)) (J : ℕ) (idx : Fin m × Fin n × ℕ → ℕ) : Prop :=
+  ∀ τ (hτ : τ < P.length), (P.get ⟨τ, hτ⟩).isTc = true →
+    ∀ p q : Fin m × Fin n × ℕ, p.2.2 < J → q.2.2 < J → InCone P (idx p) τ → InCone P (idx q) τ →
+      p.1 = q.1 ∧ p.2.1 = q.2.1
+
+/-- **The count on cell-pure programs** (sketch of a theorem; rank 0 once proved): for `L ∣ K`, every well-formed
+program at the H200's types whose register `idx p` is the form of running word `p`, and which is `CellPure`, costs at
+least `N·L`, the honest `L/32` registers of 32 a word, for every data.
+
+The proof: a cell's last word has noise part of rank `K` (`innerProductRank`); it is a combination of the products of
+the tensor-core registers in its cone, at most 32 to a register; and cell purity makes the cones of distinct cells'
+last words share no tensor-core register. So each cell has `K/32` registers of 32, `mnK = N·L` in all. -/
+def PureCount (L : ℕ) : Prop :=
+  ∀ (m K n : ℕ) (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n → ℤ)
+    (P : List (BamOp (Fin m × Fin K) (Fin K × Fin n))) (idx : Fin m × Fin n × ℕ → ℕ),
+    L ∣ K → (∀ o ∈ P, o.WF h200Types) →
+      (∀ p : Fin m × Fin n × ℕ, p.2.2 < K / L →
+        idx p < P.length ∧ (bamRegs P).getD (idx p) 0 = runForm a b L p.1 p.2.1 p.2.2) →
+      CellPure P (K / L) idx → (m * n * (K / L) : ℚ) * L ≤ bamCost P
+
+/-- **`NoSharingGain L`** (open at `L` 64 and 128; rank 4 to 5): the same programs cost at least `N·L`, the honest
+`L/32` registers of 32 a word. It is a lower bound on matrix multiplication's cost with merges priced and operand
+ranges enforced, over every int7 data. `PureCount` gives it on the programs `CellPure` admits; the open part is the
+programs that share products across cells, which need summed lanes.
+
+The ranges block a summed lane only where the data are large: two entries' sum fits s8 when the two data values sum
+to at most 64 in magnitude, and with zero data four entries' sum fits. So it is likely false from `L = 256` (an
+estimate): one Strassen–Winograd level costs `7L/8` of the tensor work plus about one merge a word on running words,
+`L` at `L = 256`; Hopcroft–Kerr's `⟨p, 2, n⟩` about `3L/4` plus `m` merges, below `L` once `L > 128·m`. D4's proved
+`NaiveBeatsStrassen` covers full-range data only. -/
 def NoSharingGain (L : ℕ) : Prop :=
   32 ∣ L → 64 ≤ L →
     ∀ (m K n : ℕ) (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n → ℤ)
@@ -445,7 +495,8 @@ def AlgSuffL (L : ℕ) : Prop :=
 
 /-- **The work bound at commit interval `L`** (sketch): under the semantic premises, every `MH100w` program at
 `h100Floor` that outputs the running words on fresh noise costs at least `c` a word. `AlgSuffL L ∧ BamFloor L` gives
-it at `c = 64 − 1024/L`, and `AlgSuffL L ∧ NoSharingGain L` at `c = L`. -/
+it at `c = 64 − 1024/L`, and `AlgSuffL L ∧ NoSharingGain L` at `c = L` (on cell-pure programs, `PureCount L`
+in place of `NoSharingGain L`). -/
 def LCommitBound (L : ℕ) (c : ℚ) : Prop :=
   ∀ (I : Sm90Isa), DecOK I.dec →
     ∀ (m K n : ℕ) (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n → ℤ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ)
@@ -453,107 +504,5 @@ def LCommitBound (L : ℕ) (c : ℚ) : Prop :=
       L ∣ K → Int7 a → Int7 b → (∀ f ∈ L₀, f ∈ SaltFree _) → (∀ o ∈ P, o.WFw h100Floor (SaltFree _)) →
         Sm90Sem I fpSem (SaltFree _) L₀ P → (∀ t ∈ runWordsN a b L, t ∈ regs100 fpSem P L₀) →
           (m * n * (K / L) : ℚ) * c ≤ cost100 h100Floor P
-
-/-! ## Proved facts -/
-
-theorem TcKind.minK_mem (κ : TcKind) : κ.minK ∈ κ.ks := by cases κ <;> decide
-
-theorem TcKind.minK_le (κ : TcKind) : ∀ k ∈ κ.ks, κ.minK ≤ k := by cases κ <;> decide
-
-theorem regs100_map_other (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (l L : List (G → ℚ)) :
-    regs100 fpSem (l.map Op100.other) L = L ++ l := by
-  induction l generalizing L with
-  | nil => simp [regs100]
-  | cons f l ih =>
-    have h := ih (L ++ [f])
-    simp only [regs100, List.map_cons, List.foldl_cons, Op100.outs] at h ⊢
-    rw [h, List.append_assoc, List.singleton_append]
-
-theorem cost100_map_other (pr : Prices100) (l : List (G → ℚ)) :
-    cost100 pr (l.map Op100.other) = pr.other * l.length := by
-  induction l with
-  | nil => simp [cost100]
-  | cons f l ih =>
-    simp only [cost100, List.map_map, List.map_cons, List.sum_cons, List.length_cons] at ih ⊢
-    rw [ih]; simp [Op100.price]; ring
-
-/-- **`MH100w` credits a word 32, whatever `L`**: for every finite set of targets, writing each with one `other`
-instruction is a well-formed program at `h100Floor` that outputs them all at exactly `32·|T|`. -/
-theorem anyFunctionCeiling (F : Set (G → ℚ)) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (T : Finset (G → ℚ))
-    (L : List (G → ℚ)) :
-    ∃ P : List (Op100 G), (∀ o ∈ P, o.WFw h100Floor F) ∧ (∀ t ∈ T, t ∈ regs100 fpSem P L) ∧
-      cost100 h100Floor P = 32 * T.card := by
-  refine ⟨T.toList.map Op100.other, ?_, ?_, ?_⟩
-  · intro o ho
-    obtain ⟨f, -, rfl⟩ := List.mem_map.1 ho
-    trivial
-  · intro t ht
-    rw [regs100_map_other]
-    exact List.mem_append_right _ (Finset.mem_toList.2 ht)
-  · rw [cost100_map_other, Finset.length_toList]
-    rfl
-
-/-- **The tensor-core premise alone buys nothing**: the same program meets it (it has no tensor-core instruction). -/
-theorem tcOnlyCeiling (I : Sm90Isa) (F : Set (G → ℚ)) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (T : Finset (G → ℚ))
-    (L : List (G → ℚ)) :
-    ∃ P : List (Op100 G), (∀ o ∈ P, o.WFw h100Floor F) ∧ Sm90TcOnly I fpSem F L P ∧
-      (∀ t ∈ T, t ∈ regs100 fpSem P L) ∧ cost100 h100Floor P = 32 * T.card := by
-  obtain ⟨P, hwf, hout, hcost⟩ := anyFunctionCeiling F fpSem T L
-  refine ⟨T.toList.map Op100.other, ?_, ?_, ?_, ?_⟩
-  · intro o ho
-    obtain ⟨f, -, rfl⟩ := List.mem_map.1 ho
-    trivial
-  · intro i hi
-    simp [Op100.TcOnly]
-  · intro t ht
-    rw [regs100_map_other]
-    exact List.mem_append_right _ (Finset.mem_toList.2 ht)
-  · rw [cost100_map_other, Finset.length_toList]
-    rfl
-
-/-- **The rank fact**: if `r` rank-one terms `α p ⊗ β p` sum to the identity on `L` coordinates, then `L ≤ r`. So an
-`L`-term inner product of fresh variables needs `L` products, at most 32 to an accumulator register. -/
-theorem innerProductRank (L r : ℕ) (α β : Fin r → Fin L → ℚ)
-    (h : ∀ k l, ∑ p, α p k * β p l = if k = l then 1 else 0) : L ≤ r := by
-  let A : Matrix (Fin L) (Fin r) ℚ := Matrix.of fun k p => α p k
-  let B : Matrix (Fin r) (Fin L) ℚ := Matrix.of fun p l => β p l
-  have hAB : A * B = 1 := by
-    ext k l
-    simp only [A, B, Matrix.mul_apply, Matrix.of_apply, Matrix.one_apply]
-    exact h k l
-  have h1 : (1 : Matrix (Fin L) (Fin L) ℚ).rank = L := by simp
-  have h2 : (A * B).rank ≤ A.rank := Matrix.rank_mul_le_left A B
-  have h3 : A.rank ≤ r := by simpa using Matrix.rank_le_width A
-  rw [hAB, h1] at h2
-  omega
-
-/-- **The counting lemma's arithmetic**: with `p ≤ N` words of the chain kind at `L/32` registers each and every other
-word paying a merge, `32·max(p·L/32, N) + 32·(N − p) ≥ N·(64 − 1024/L)`. -/
-theorem lcommitFloorArith (L N p : ℚ) (hL : 32 ≤ L) (hp0 : 0 ≤ p) (hpN : p ≤ N) :
-    N * (64 - 1024 / L) ≤ 32 * max (p * L / 32) N + 32 * (N - p) := by
-  have hL0 : 0 < L := by linarith
-  rcases le_total (p * L / 32) N with h | h
-  · rw [max_eq_right h]
-    have : p ≤ 32 * N / L := by
-      rw [le_div_iff₀ hL0]; linarith
-    have e : N * (64 - 1024 / L) = 64 * N - 32 * (32 * N / L) := by field_simp; ring
-    rw [e]; linarith
-  · rw [max_eq_left h]
-    have hN : 0 ≤ N := le_trans hp0 hpN
-    have e : N * (64 - 1024 / L) = 64 * N - 1024 * N / L := by field_simp
-    have h' : 32 * N ≤ p * L := by linarith
-    have hq : 1024 * N / L ≤ 32 * p := by
-      rw [div_le_iff₀ hL0]; nlinarith
-    have : 32 * N + p * L - 32 * p ≥ 64 * N - 1024 * N / L := by
-      have : p * L - 32 * p ≥ 32 * N - 1024 * N / L := by
-        have h4 : (p - 32 * N / L) * (L - 32) ≥ 0 := by
-          apply mul_nonneg
-          · rw [sub_nonneg, div_le_iff₀ hL0]; linarith
-          · linarith
-        have e2 : (p - 32 * N / L) * (L - 32) = p * L - 32 * p - 32 * N + 1024 * N / L := by
-          field_simp; ring
-        linarith
-      linarith
-    linarith
 
 end Pouw.Dimension.H100

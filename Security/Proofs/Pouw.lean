@@ -24,6 +24,7 @@ import Proofs.Pouw.Dimension.H100LoopFreeProofs
 import Proofs.Pouw.Dimension.H100MeasuredProofs
 import Proofs.Pouw.Dimension.H100PeakTcProofs
 import Proofs.Pouw.Dimension.H100Proofs
+import Proofs.Pouw.Dimension.H100SemProofs
 import Proofs.Pouw.Dimension.H100WProofs
 import Proofs.Pouw.Dimension.LiftProofs
 import Proofs.Pouw.Dimension.Lifting
