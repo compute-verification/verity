@@ -13,7 +13,7 @@
 //   call, copied by g_k into B' step 1's lanes 24-27), and lanes 28-31 a1 against C; step t >= 2's lane 31 is 1 + a_t[i] against 1;
 //   S = 1 + ceil((K - 24) / 31); beta_j = floor((sum_e C[e, j] + 3 (S - 1) + 1) / 2); word (i, j, t) is
 //   D_t(i, j) - beta_j + sum_e a1[i, e] C[e, j] + sum_e T(i)[e] G[e, j] + sum_{2 <= t' <= t} (1 + a_t'[i]).
-// BLC=1 is blc4a-t64-e7 (N-EGRESS): the tag layout's step 1, and each later step lanes 0-27 data, lanes 28-30 A' = 1 (written
+// BLC=1 is blc4a-t64-e7: the tag layout's step 1, and each later step lanes 0-27 data, lanes 28-30 A' = 1 (written
 //   by A's producer) against the call's lane coins s_t[e, tile, j], odd and uniform in [-127, 127], one set a 64-row tile, and
 //   lane 31 1 + a_t[i] against 1; S = 1 + ceil((K - 24) / 28). The certifier streams a word a (tile, step, column), the three
 //   coins and lane 31's 1, after A_j; the GEMM copies it into B' lanes 28-31 of its stage (ssn_k's cv). Word (i, j, t) adds
@@ -55,10 +55,13 @@
 //                             digit wraps; S = 1 and a
 //                             partial last step; random data with every lane coin 127), in the four layouts, then under
 //                             XU=1 on the three tag layouts with each served output against stock's epilogue, then
-//                             blc4a-t64-e7-s1 under ROT=1 without XU, with XU=1 and with FOLD=1. Ragged calls
+//                             blc4a-t64-e7-s1 under ROT=1 without XU, with XU=1 and with FOLD=1; then the lead (FOLD=1)
+//                             at Llama-3.2-1B's fused linears on 64 rows and on one, at both tile widths. Ragged calls
 //                             (decode's one row; rows and columns off the tiles)
 //                             are served over whole tiles with zero data past the call, and the rows to pad_rows(m)
-//                             must carry their tags, lane-coin A' and coins
+//                             must carry their tags, lane-coin A' and coins. Each line holds the served outputs within
+//                             FOLD_BOUND and says so ("fold_bound"); its buffers start as 0xA5, and the no-write controls,
+//                             which form nothing and launch no GEMM, must be rejected. Exits 1 on any failure
 //   ssn time REPS M [BUDGET_GB [ROW_BYTES ...]]
 //                             Llama-3.2-1B's fused linears at M rows (whole 64-row tiles, or one decode call under 64
 //                             rows over its padded tile), one JSON line a timing (see
@@ -913,9 +916,16 @@ static size_t word_at(int i, int j, int t, int S, int n, int BN) {
   return blk * (64 * (size_t)BN) + ((size_t)ni * 128 + 32 * w + 4 * g + q) * 4 + 2 * eh + el;
 }
 
+// The fold's bound (serving.LEAD_FOLD_BOUND): xu_fold serves stock's epilogue on the integer p it reads back bit for bit
+// while |p| <= 2^22, and past it reads back another integer (2^22 + 1 as 2^22 + 2) with nothing on the device to flag it,
+// so the check holds every served output with |p| within it to stock's epilogue and counts those past it, unchecked
+constexpr long long FOLD_BOUND = 1ll << 22;
+
 // A call of cm rows and cn columns, served over whole kernel tiles (m rows, n columns) with zero data past the call: the
-// committed words are pad_rows(cm) x pad_cols(cn), and every computed word is checked
-static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed) {
+// committed words are pad_rows(cm) x pad_cols(cn), and every computed word is checked. Every buffer the check reads back
+// from the GEMM is filled with 0xA5 before the call; the control (no-write) forms nothing and launches no GEMM, and passes
+// when the check rejects it.
+static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed, bool control = false) {
   const int m = (cm + 63) / 64 * 64, n = (cn + BN - 1) / BN * BN;
   Lin L{m, n, K, steps_of(K), BN, {}, {}};
   fill(L, kind, seed);
@@ -983,8 +993,10 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed) {
     CK(cudaMemset(dxo, 0xA5, (size_t)m * n * 2));
     xu = Xu{dxr, up(si), up(xc), up(xj), dxo, 2};
   }
-  form_g(dcoins, dA, dB, m, n, R, C, S, BN, 0, FORM | GCOPY, xa, dxr);
-  gemm(BN, true, dA, dB, dbeta, m, n, S, dW, dout, nullptr, 0, dlc, xu);
+  if (!control) {
+    form_g(dcoins, dA, dB, m, n, R, C, S, BN, 0, FORM | GCOPY, xa, dxr);
+    gemm(BN, true, dA, dB, dbeta, m, n, S, dW, dout, nullptr, 0, dlc, xu);
+  }
   CK(cudaDeviceSynchronize());
   std::vector<int> xr(m);
   std::vector<uint16_t> xo((size_t)m * n);
@@ -1049,7 +1061,7 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed) {
   // under the tag layout + sum_e T(i)[e] G[e, j] and 1 + a_t'[i] for a_t'[i], under blc4a-t64-e7 also + the three lane coins
   // of (i / 64, t', j) at each step t'; under XU=1 the last step's - sum_e a1[i, e] C[e, j] - sum_e T(i)[e] G[e, j] + u0 +
   // 127 u1 + 127 e u2. The served output against stock's epilogue, bf16(fl(fl(float(D) s_j) s_i)), on D = A_i . B_j (XU=1)
-  // or on the final word less sigma (FOLD=1), where |D| <= 2^22, and the outputs past it counted
+  // or on the final word less sigma (FOLD=1), where |D| <= FOLD_BOUND, and the outputs past it counted
   size_t bad_w = 0, bad_o = 0, ones = 0, bad_xr = 0, bad_served = 0, past = 0;
   long long maxabs = 0;
   std::vector<int> code(4 * (size_t)n);
@@ -1086,7 +1098,7 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed) {
       bad_o += out[(size_t)i * n + j] != (int)acc;
       if (served) {
         const long long pv = g_xu ? ab : acc - sig;
-        if (pv < -(1 << 22) || pv > (1 << 22)) {
+        if (pv < -FOLD_BOUND || pv > FOLD_BOUND) {
           past++;
           continue;
         }
@@ -1095,14 +1107,17 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed) {
     }
     for (int t = 1; t < S; t++) ones += bit(i, t + 3);
   }
-  printf("{\"check\": \"%s\", \"m\": %d, \"n\": %d, \"K\": %d, \"S\": %d, \"BN\": %d, \"call_m\": %d, \"call_n\": %d, "
+  const bool rejected = bad_w || bad_o || bad_form || bad_g || bad_feed || g_range || bad_xr || bad_served || coinless;
+  printf("{\"check\": \"%s\", \"control\": %s, \"rejected\": %s, \"poison\": \"0xA5\", \"fold_bound\": %lld, "
+         "\"m\": %d, \"n\": %d, \"K\": %d, \"S\": %d, \"BN\": %d, \"call_m\": %d, \"call_n\": %d, "
          "\"committed_m\": %d, \"committed_n\": %d, \"coinless_padding_rows\": %zu, \"data\": \"%s\", \"words\": %zu, "
          "\"word_mismatches\": %zu, \"final_mismatches\": %zu, \"formed_mismatches\": %zu, \"b_mismatches\": %zu, "
          "\"max_abs_word\": %lld, \"step_bits_set\": %zu, \"step_bits\": %zu, \"feed_words\": %lld, "
          "\"feed_word_mismatches\": %zu, \"g_redraws\": %zu, \"g_out_of_range\": %zu, \"lane_coin_words\": %zu, \"blc_w\": [%d, %d, %d], \"xu_lane\": %d, \"xu_e\": %d, "
          "\"max_abs_sigma\": %lld, \"row_source_mismatches\": %zu, \"served_outputs\": %zu, \"served_mismatches\": %zu, "
          "\"served_past_2_22\": %zu}\n",
-         layout_name(), m, n, K, S, BN, cm, cn, pad_rows(cm), pad_cols(cn), coinless,
+         layout_name(), control ? "\"no-write\"" : "null", rejected ? "true" : "false", FOLD_BOUND, m, n, K, S, BN, cm, cn,
+         pad_rows(cm), pad_cols(cn), coinless,
          kind == 0 ? "random" : kind == 1 ? "max" : kind == 2 ? "min" : kind == 3 ? "zero" : "random_max_coins",
          words, bad_w, bad_o, bad_form, bad_g, maxabs, ones, (size_t)m * (S - 1), fw, bad_feed, g_rej, g_range, lc.size(), g_lw[0], g_lw[1],
          g_lw[2], g_xu ? xa : -1, g_xu ? xe : 0, max_sigma, bad_xr, served ? (size_t)m * n - past : 0, bad_served, past);
@@ -1113,7 +1128,7 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed) {
   }
   CK(cudaFree(dA)); CK(cudaFree(dB)); CK(cudaFree(dbeta)); CK(cudaFree(dcoins));
   CK(cudaFree(dW)); CK(cudaFree(dout));
-  return bad_w || bad_o || bad_form || bad_g || bad_feed || g_range || bad_xr || bad_served || coinless;
+  return control ? !rejected : rejected;
 }
 
 static int check() {
@@ -1155,6 +1170,17 @@ static int check() {
     g_blc = g_rot ? 2 : std::max(0, (g_xu ? lay - 3 : lay) - 1);
     u64 seed = 1;
     for (const C& c : cs) bad += check_one(c.m, c.n, c.K, c.BN, c.kind, seed++);
+  }
+  // the lead (layout 9) at the shapes it serves, Llama-3.2-1B's fused linears (n, K), on a 64-row tile and on decode's one
+  // row at both tile widths, then the no-write control on decode's qkv and on a call off the tiles
+  {
+    const int served[][2] = {{3072, 2048}, {2048, 2048}, {16384, 2048}, {2048, 8192}};
+    u64 seed = 100;
+    for (const auto& s : served)
+      for (int cm : {64, 1})
+        for (int bn : {128, 256}) bad += check_one(cm, s[0], s[1], bn, 0, seed++);
+    bad += check_one(1, 3072, 2048, 128, 0, seed++, true);
+    bad += check_one(17, 13, 100, 128, 0, seed++, true);
   }
   g_rot = false;
   g_xu = false;

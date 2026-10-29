@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# ssn_1l's kernel on one H200 in one gpu-lease: built and SASS-gated (IGMMA in every ssn_k, no local memory) before the
-# lease; under it the exact check of every word, then the timings at each M, the SM clock sampled beside it all.
-# Measurement only. cwd: the source tree's root.
+# ssn_1l's kernel on one H200 in one gpu-lease: built, SASS-gated (the harness's sass_gate.py: sass_gate.json) and its
+# mainloop checked (IGMMA in every ssn_k, no local memory) before the lease, the tree's files it read listed with their
+# sha256 (sources.sha256); under it the exact check of every word (check.jsonl), then the timings at each M, the SM clock
+# sampled beside it all. `gate.py OUT --run RUN` then makes the lead's GateRecord from them. Measurement only. cwd: the
+# source tree's root.
 #   MS (64 512 8192: Llama-3.2-1B's T 512 at 64 and 512 rows, and T 8,192; an M under 64 is one decode call over its
 #   padded tile, e.g. "1 16"), REPS (5), BUDGET_GB (16: the exported words a
 #   hash chunk holds), ROWS (0 65536 16384: the hash pass's row bytes, 0 for row-seg, -B for L1's plain leaves of B-byte
 #   rows), CUDA_HOME (/usr/local/cuda-13.0),
-#   BUILD_ONLY (0; 1 stops after the build and the SASS gate, on any machine with a CUDA toolkit: no lease, no GPU),
+#   BUILD_ONLY (0; 1 stops after the build and the two SASS checks, on any machine with a CUDA toolkit: no lease, no GPU),
 #   LEASE_MIN (25), CHECK (1; 0 skips the exact check), TIME (1; 0 skips the timings), NOT_AFTER (a UTC time past which
 #   the leased part does no GPU work), CAPS (0: beside's caps on a row hash launch's blocks, each a pass
 #   over MS; time_m<M>_cap<C>.jsonl), ROOT_A (0; 1 puts root(A_j), its leaves and the tree above them, in the forward ahead
@@ -56,11 +58,31 @@ if [ "${1:-}" != leased ]; then
     [ "$n" = 4 ] || { say "the small-block copy of native_rows.cu took $n of its 4 edits"; exit 3; }
     SRCS+=("$BUILD_DIR/native_rows_s.cu" -DSSN_SMALL_ROWS="$SMALL_THREADS" -I "$COMMITTER")
   fi
-  "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v "${SRCS[@]}" -lcuda \
+  "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v --no-compress "${SRCS[@]}" -lcuda \
     -o "$BUILD_DIR/ssn" > "$OUT/build_ssn.log" 2>&1
   rc=$?; say "build ssn rc $rc"; [ "$rc" = 0 ] || { tail -40 "$OUT/build_ssn.log"; exit 3; }
+  # the tree's files the build read (nvcc -M of each translation unit, plain_rows.py and this script), sha256sum's format:
+  # gate.py names the variant by them
+  for f in "$HERE/ssn.cu" "$COMMITTER/native_rows.cu"; do
+    "$CUDA/bin/nvcc" -M -std=c++17 -gencode arch=compute_90a,code=sm_90a -I "$COMMITTER" "$f" || exit 3
+  done > "$BUILD_DIR/deps.mk" 2>> "$OUT/build_ssn.log"
+  python3 - "$BUILD_DIR/deps.mk" "$HERE/plain_rows.py" "$HERE/run.sh" > "$OUT/sources.sha256" <<'EOF'
+import hashlib, os, sys
+root = os.getcwd()
+toks = open(sys.argv[1]).read().replace("\\\n", " ").split() + sys.argv[2:]
+paths = {os.path.relpath(os.path.realpath(t), root) for t in toks if os.path.isfile(t)}
+for p in sorted(p for p in paths if not p.startswith("..")):
+    print(hashlib.sha256(open(p, "rb").read()).hexdigest(), p)
+EOF
+  rc=$?; say "sources rc $rc ($(wc -l < "$OUT/sources.sha256") files)"; [ "$rc" = 0 ] || exit 3
+  # the SASS gate (benchmarks/pouw/harness): no .FTZ and no bare FP32 MUFU outside a pinned IEEE sequence, under a pinned
+  # ptxas; it reads only uncompressed fatbins, hence --no-compress
+  POUW_CUDA_BIN="$CUDA/bin" POUW_SASS_GATE_CACHE=none python3 benchmarks/pouw/harness/sass_gate.py "$BUILD_DIR/ssn" \
+    --json "$OUT/sass_gate.json" 2>&1 | tee -a "$OUT/steps.txt"
+  rc=${PIPESTATUS[0]}; say "SASS gate rc $rc"; [ "$rc" = 0 ] || exit 4
+  # the mainloop: IGMMA in every ssn_k and no local memory (a spill)
   "$CUDA/bin/cuobjdump" -sass "$BUILD_DIR/ssn" > "$OUT/ssn.sass"
-  python3 - "$OUT/ssn.sass" > "$OUT/gate_ssn.json" <<'EOF'
+  python3 - "$OUT/ssn.sass" > "$OUT/mainloop_ssn.json" <<'EOF'
 import json, re, sys
 funcs, cur = {}, None
 for line in open(sys.argv[1]):
@@ -75,7 +97,7 @@ ok = len(gemms) == 4 and all(v["IGMMA"] > 0 and v["local"] == 0 for v in gemms.v
 print(json.dumps({"ok": ok, "functions": funcs}))
 sys.exit(0 if ok else 1)
 EOF
-  rc=$?; say "SASS gate rc $rc"; [ "$rc" = 0 ] || { cat "$OUT/gate_ssn.json"; exit 4; }
+  rc=$?; say "mainloop check rc $rc"; [ "$rc" = 0 ] || { cat "$OUT/mainloop_ssn.json"; exit 4; }
   [ "${BUILD_ONLY:-0}" = 1 ] && { say "BUILD_ONLY: no lease, no GPU work"; exit 0; }
   gpu-lease status 2>&1 | tee -a "$OUT/steps.txt"
   say "lease requested"
