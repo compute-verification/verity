@@ -178,6 +178,48 @@ theorem totalWork_eq (ws : Array Flock.Draw.WorkStratum) :
   | nil => simp
   | cons s l ih => intro a; simp only [List.foldl_cons, ih, List.map_cons, List.sum_cons, Nat.mul_comm s.work]; omega
 
+theorem foldl_size_map (S : Array (String × Array (ℕ × ℕ))) (kf : String × Array (ℕ × ℕ) → ℕ) :
+    (S.map fun p => ({ template := p.1, units := p.2, k := kf p } : Flock.Draw.Stratum)).foldl
+      (fun a s => a + s.size) 0 = strataSize S := by
+  rw [Array.foldl_map]
+  simp only [stratum_size]
+  exact size_strata S
+
+theorem min_wholeK (n c : ℕ) : min n (max (min n (max 1 c)) c) = min n (max 1 c) := by omega
+
+/-- **A stratified law's design under either rule `strataProblem` takes** (every stratum's `k` `stratumK`'s, or every
+one its size or `wholeK`'s) has as `P_a` the `strataPa` of its strata's sizes and draws. -/
+theorem stratified_Pa_map (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (kf : String × Array (ℕ × ℕ) → ℕ)
+    (W : Finset ℕ)
+    (hok : (∀ p ∈ S, kf p = Flock.Draw.stratumK k (rsSize p.2) (strataSize S)) ∨
+      ∀ p ∈ S, kf p = rsSize p.2 ∨ kf p = Flock.Draw.wholeK k (rsSize p.2) (strataSize S)) :
+    (oneStageOf (.stratified k (S.map fun p => { template := p.1, units := p.2, k := kf p }))).Pa
+      (S.toList.map fun p => rsSize p.2) W = strataPa (S.toList.map fun p => (rsSize p.2, kf p)) 0 W := by
+  simp only [oneStageOf, foldl_size_map]
+  split
+  · rename_i hall
+    simp only [OneStage.Pa, List.map_map]
+    congr 1
+    refine List.map_congr_left fun p hp => ?_
+    have hkp : kf p = Flock.Draw.stratumK k (rsSize p.2) (strataSize S) := by
+      simpa [stratum_size] using Array.all_eq_true'.1 hall _ (Array.mem_map_of_mem (Array.mem_def.2 hp))
+    exact (congrArg (Prod.mk (rsSize p.2)) hkp).symm
+  · rename_i hnot
+    have hall : ∀ p ∈ S, kf p = rsSize p.2 ∨ kf p = Flock.Draw.wholeK k (rsSize p.2) (strataSize S) := by
+      rcases hok with h | h
+      · refine absurd (Array.all_eq_true'.2 fun s hs => ?_) hnot
+        obtain ⟨p, hp, rfl⟩ := Array.mem_map.1 hs
+        simp [stratum_size, h p hp]
+      · exact h
+    simp only [OneStage.Pa, Array.toList_map, List.map_map, List.zip_map', Function.comp_def, Nat.mul_one]
+    congr 1
+    refine List.map_congr_left fun p hp => ?_
+    simp only [Prod.mk.injEq, true_and]
+    rcases hall p (Array.mem_def.2 hp) with h | h <;> rw [h]
+    · exact Nat.min_eq_left (le_max_left _ _)
+    · simp only [Flock.Draw.wholeK, Flock.Draw.workK, Nat.mul_one]
+      exact min_wholeK _ _
+
 /-- **The population's first stage misses `W`** with probability at most the claims' `P_a(W)` of the law it samples, on
 the population's strata: the units `drawUnits` draws hold none at a slot of `W`. -/
 theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
@@ -205,7 +247,7 @@ theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
     rw [hlen]; have := List.mem_range'.1 (hperm.subset hx); omega
   have hns : pop.toList.map (·.size) = S.toList.map fun p => rsSize p.2 := (laysOut_units _ _ hlays).2.2
   have hsum : (pop.toList.map (·.size)).sum = (popUnits S).length := by rw [hns, length_popUnits]
-  rcases deriveLaw_cases d query named table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S', k, law', hS', rfl, hlaw⟩
+  rcases deriveLaw_cases d query named table derived hd with ⟨rfl, hk1, hk2, -⟩ | ⟨S', k, law', hS', rfl, hlaw⟩
   · obtain ⟨hU, hcard⟩ := image_units _ hnd hlt W hW
     have hmiss : ∀ units : Array ℕ, (∀ v ∈ W, (popUnits S).getD v 0 ∉ units) →
         ∀ u ∈ W.image fun v => (popUnits S).getD v 0, u ∉ units := fun units hm u hu => by
@@ -221,12 +263,13 @@ theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
     · exact absurd hk hk2
   · have hS'eq : S' = S := by rw [strata_eq d query rs he] at hS'; exact (Except.ok.inj hS').symm
     subst hS'eq
-    rcases hlaw with hder | ⟨t, tab, ht, hwork⟩
+    rcases hlaw with hder | ⟨t, tab, ht, hwork⟩ | ⟨bases, hwhole⟩
     · obtain rfl := derive_ok k _ law' hder
       refine le_trans (Claims.Pr_mono fun src ⟨units, read, hu, hm⟩ => ⟨units, read, hu, fun v hv => ?_⟩)
         (strata_bound _ _ (Or.inl ⟨k, rfl⟩) _ W L) |>.trans_eq ?_
-      · rw [hns]
-        simp [oneStageOf, OneStage.Pa, stratum_size, Flock.Draw.stratumK, strataSize, Function.comp_def]
+      · rw [hns, Option.getD_some,
+          stratified_Pa_map k S (fun p => Flock.Draw.stratumK k (rsSize p.2) (strataSize S)) W (Or.inl fun _ _ => rfl)]
+        simp [stratum_size, Function.comp_def]
       · simpa [popUnits, List.flatMap_map] using hm v hv
     · obtain ⟨ws, hF, rfl⟩ := deriveWork_ok k _ tab law' hwork
       have hunits := units_of_forall₂ _ _ hF
@@ -245,6 +288,13 @@ theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
             (S.toList.map (·.2)).flatMap (fun u => expand u.toList) := by rw [hunits]
         simp only [List.flatMap_map] at h1
         simpa [popUnits, List.flatMap_map, Function.comp_def, h1] using hm v hv
+    · obtain ⟨-, -, rfl⟩ := deriveWhole_ok k bases _ law' hwhole
+      refine le_trans (Claims.Pr_mono fun src ⟨units, read, hu, hm⟩ => ⟨units, read, hu, fun v hv => ?_⟩)
+        (strata_bound _ _ (Or.inl ⟨k, rfl⟩) _ W L) |>.trans_eq ?_
+      · rw [hns, Option.getD_some, stratified_Pa_map k S (fun p => if bases.any (Flock.Draw.ofBase p.1) then rsSize p.2
+          else Flock.Draw.wholeK k (rsSize p.2) (strataSize S)) W (Or.inr fun p _ => by (try dsimp only); split <;> simp)]
+        simp [stratum_size, Function.comp_def]
+      · simpa [popUnits, List.flatMap_map] using hm v hv
 
 /-- **`Slots.select` misses `B` no more often than the claims' `P_a(B)`** (`Properties.SampledProofs.DrawMisses`). -/
 theorem drawMisses : DrawMisses := by

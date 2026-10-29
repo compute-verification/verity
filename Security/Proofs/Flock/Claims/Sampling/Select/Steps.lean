@@ -110,14 +110,15 @@ theorem flockLaw_cases (law : Json) (n : ℕ) (parsed : Flock.Draw.Law) (h : Dra
     · exact absurd h (throw_ne _ _)
   next => exact absurd h (throw_ne _ _)
 
-/-- **`deriveLaw`'s expansion**: none for a law of neither kind `stratified` nor `work`, else the stratified or work law
-`Flock.Draw.derive` or `Flock.Draw.deriveWork` expands over the query's strata. -/
+/-- **`deriveLaw`'s expansion**: none for a law of no kind `stratified`, `work` or `whole`, else the stratified, work or
+whole law `Flock.Draw.derive`, `Flock.Draw.deriveWork` or `Flock.Draw.deriveWhole` expands over the query's strata. -/
 theorem deriveLaw_cases (d : Program) (query law : Json) (table : Option Json)
     (derived : Option Flock.Draw.Law) (h : Draw.deriveLaw d query law table = .ok derived) :
-    (derived = none ∧ kindOf law ≠ "stratified" ∧ kindOf law ≠ "work") ∨
+    (derived = none ∧ kindOf law ≠ "stratified" ∧ kindOf law ≠ "work" ∧ kindOf law ≠ "whole") ∨
       ∃ S k law', Partition.strata d query = .ok S ∧ derived = some law' ∧
         (Flock.Draw.derive k S = .ok law' ∨
-          ∃ t tab, Flock.Draw.workTableOfJson t = .ok tab ∧ Flock.Draw.deriveWork k S tab = .ok law') := by
+          (∃ t tab, Flock.Draw.workTableOfJson t = .ok tab ∧ Flock.Draw.deriveWork k S tab = .ok law') ∨
+          ∃ bases, Flock.Draw.deriveWhole k bases S = .ok law') := by
   unfold Draw.deriveLaw at h
   split at h
   next s hs =>
@@ -126,8 +127,8 @@ theorem deriveLaw_cases (d : Program) (query law : Json) (table : Option Json)
     split at h
     · rename_i hc
       obtain rfl := (Except.ok.inj h).symm
-      simp only [Bool.not_eq_true', Bool.or_eq_false_iff, beq_eq_false_iff_ne, ne_eq] at hc
-      exact Or.inl ⟨rfl, hk ▸ hc.1, hk ▸ hc.2⟩
+      simp only [Bool.not_eq_true', Bool.or_eq_false_iff, beq_eq_false_iff_ne, ne_eq, and_assoc] at hc
+      exact Or.inl ⟨rfl, hk ▸ hc.1, hk ▸ hc.2.1, hk ▸ hc.2.2⟩
     · obtain ⟨S, hS, h⟩ := bind_eq_ok.1 h
       split at h
       · split at h
@@ -135,11 +136,19 @@ theorem deriveLaw_cases (d : Program) (query law : Json) (table : Option Json)
           obtain rfl := (Except.ok.inj h).symm
           exact Or.inr ⟨S, _, law', hS, rfl, Or.inl hd⟩
         · split at h
-          · obtain ⟨tab, ht, h⟩ := bind_eq_ok.1 h
-            obtain ⟨law', hd, h⟩ := bind_eq_ok.1 h
-            obtain rfl := (Except.ok.inj h).symm
-            exact Or.inr ⟨S, _, law', hS, rfl, Or.inr ⟨_, tab, ht, hd⟩⟩
-          · exact absurd h (throw_ne _ _)
+          · split at h
+            · exact absurd h (throw_bind_ne _ _ _)
+            · split at h
+              · obtain ⟨law', hd, h⟩ := bind_eq_ok.1 h
+                obtain rfl := (Except.ok.inj h).symm
+                exact Or.inr ⟨S, _, law', hS, rfl, Or.inr (Or.inr ⟨_, hd⟩)⟩
+              · exact absurd h (throw_ne _ _)
+          · split at h
+            · obtain ⟨tab, ht, h⟩ := bind_eq_ok.1 h
+              obtain ⟨law', hd, h⟩ := bind_eq_ok.1 h
+              obtain rfl := (Except.ok.inj h).symm
+              exact Or.inr ⟨S, _, law', hS, rfl, Or.inr (Or.inl ⟨_, tab, ht, hd⟩)⟩
+            · exact absurd h (throw_ne _ _)
       · exact absurd h (throw_ne _ _)
   next hne =>
     have hk : kindOf law = "" := by
@@ -151,7 +160,7 @@ theorem deriveLaw_cases (d : Program) (query law : Json) (table : Option Json)
     swap
     · rename_i hc; exact absurd (by decide) hc
     obtain rfl := (Except.ok.inj h).symm
-    exact Or.inl ⟨rfl, by rw [hk]; decide, by rw [hk]; decide⟩
+    exact Or.inl ⟨rfl, by rw [hk]; decide, by rw [hk]; decide, by rw [hk]; decide⟩
 
 /-- The units of ascending ranges `[lo, hi)`. -/
 def rsSize (rs : Array (ℕ × ℕ)) : ℕ := (expand rs.toList).length
@@ -191,6 +200,22 @@ theorem derive_ok (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (law' : F
   split at h
   · exact absurd h (throw_bind_ne _ _ _)
   · obtain rfl := (Except.ok.inj h).symm
+    simp only [size_rs, size_strata]
+
+/-- **`Flock.Draw.deriveWhole`'s law, with its refusal**: `1 ≤ k ≤ N`, each stratum its ranges, drawing all its units when
+its template is of a base id in `whole`, else `wholeK` of them. -/
+theorem deriveWhole_ok (k : ℕ) (whole : Array String) (S : Array (String × Array (ℕ × ℕ))) (law' : Flock.Draw.Law)
+    (h : Flock.Draw.deriveWhole k whole S = .ok law') :
+    1 ≤ k ∧ k ≤ strataSize S ∧ law' = .stratified k (S.map fun p => { template := p.1, units := p.2,
+      k := if whole.any (Flock.Draw.ofBase p.1) then rsSize p.2 else Flock.Draw.wholeK k (rsSize p.2) (strataSize S) }) := by
+  unfold Flock.Draw.deriveWhole at h
+  dsimp only at h
+  split at h
+  · exact absurd h (throw_bind_ne _ _ _)
+  · rename_i hc
+    obtain rfl := (Except.ok.inj h).symm
+    simp only [size_rs, size_strata, Bool.or_eq_true, decide_eq_true_eq, not_or, not_lt] at hc
+    refine ⟨by omega, by omega, ?_⟩
     simp only [size_rs, size_strata]
 
 /-- **`Flock.Draw.deriveWork`'s law**: each stratum its ranges, drawing `workK` of its units by its work and floor. -/

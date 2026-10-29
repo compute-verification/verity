@@ -36,11 +36,15 @@ def puGates (pu : ℕ × ℕ) : List ℕ := List.range' pu.1 (pu.2 - pu.1)
 def slotPartition (l : Slots.Layout) : Claims.Sampling.Partition :=
   ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map fun r => r.pus.toList.map puGates⟩
 
-/-- The claims' one-stage design of a C-Flock law. -/
+/-- The claims' one-stage design of a C-Flock law. A stratified law whose `k_s` are not all the stratified rule's
+(`Flock.Draw.stratumK`), such as the whole rule's (`Flock.Draw.deriveWhole`), is the work design at unit work with each
+stratum's own `k_s` its floor. -/
 def oneStageOf : Flock.Draw.Law → Claims.Sampling.OneStage
   | .subset k => .subset k
   | .bernoulli num den => .bernoulli num den
-  | .stratified k _ => .stratified k
+  | .stratified k ss =>
+    if ss.all fun s => s.k == Flock.Draw.stratumK k s.size (ss.foldl (fun a s => a + s.size) 0) then .stratified k
+    else .work k (ss.toList.map fun _ => 1) (ss.toList.map (·.k))
   | .work k ws => .work k (ws.toList.map (·.work)) (ws.toList.map (·.floor))
 
 /-- **The design `Slots.select` draws** under `rule` on `d` and `query` with the work `table`: the population's first

@@ -25,8 +25,11 @@ theorem getD_k (v : Json) (m : ℕ) : getD (Json.mkObj [("law", v), ("k", Lean.t
 
 theorem getD_p (v : Json) : getD (Json.mkObj [("law", "bernoulli"), ("p", v)]) "k" = Json.null := rfl
 
-/-- **A law `parseLaw` writes names `k ≥ 1`**, where it names a `k`: `subset:K`, `stratified:K` and `work:K` at
-`K ≥ 1`, and a Bernoulli law none. -/
+theorem getD_kw (v w : Json) (m : ℕ) :
+    getD (Json.mkObj [("law", v), ("k", Lean.toJson m), ("whole", w)]) "k" = Lean.toJson m := rfl
+
+/-- **A law `parseLaw` writes names `k ≥ 1`**, where it names a `k`: `subset:K`, `stratified:K`, `work:K` and
+`whole:K:B1,…` at `K ≥ 1`, and a Bernoulli law none. -/
 theorem parseLaw_k (t : String) (named : Json) (h : Select.parseLaw t = .ok named) (k : ℕ)
     (hk : nat? (getD named "k") = some k) : 1 ≤ k := by
   unfold Select.parseLaw at h
@@ -38,7 +41,8 @@ theorem parseLaw_k (t : String) (named : Json) (h : Select.parseLaw t = .ok name
        subst h
        first
          | (rw [getD_p] at hk; simp [nat?, int?] at hk)
-         | (rw [getD_k, nat_toJson, Option.some.injEq] at hk; subst hk; simp_all))
+         | (rw [getD_k, nat_toJson, Option.some.injEq] at hk; subst hk; simp_all)
+         | (rw [getD_kw, nat_toJson, Option.some.injEq] at hk; subst hk; simp_all))
 
 /-- **`Flock.Draw.derive`'s bounds**: `1 ≤ k ≤ N`. -/
 theorem derive_bounds (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (law' : Flock.Draw.Law)
@@ -391,6 +395,24 @@ theorem partition_covered (d : Program) (query : Lean.Json) (rs : Array Flock.Te
 
 /-! ## The design -/
 
+/-- **A stratified law's design is well formed** over its strata of at least one unit each, at `1 ≤ k ≤ N` and each
+stratum's `k` at least one. -/
+theorem stratified_wf (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (kf : String × Array (ℕ × ℕ) → ℕ)
+    (hk1 : 1 ≤ k) (hkn : k ≤ strataSize S) (hpos : ∀ m ∈ S.toList.map (fun p => rsSize p.2), 1 ≤ m)
+    (hkf : ∀ p ∈ S, 1 ≤ kf p) :
+    (oneStageOf (.stratified k (S.map fun p => { template := p.1, units := p.2, k := kf p }))).WellFormed
+      (S.toList.map fun p => rsSize p.2) := by
+  simp only [oneStageOf]
+  split
+  · exact ⟨hk1, hkn, hpos⟩
+  · simp only [OneStage.WellFormed, Array.toList_map, List.map_map, List.length_map, Function.comp_def]
+    refine ⟨rfl, rfl, fun x hx => ?_, ?_, hpos⟩
+    · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hx
+      exact hkf p (Array.mem_def.2 hp)
+    · have h0 : 0 < strataSize S := by omega
+      rw [List.zip_map', List.map_map]
+      simpa [Function.comp_def, strataSize] using h0
+
 /-- **The population's first stage is well formed over its strata**: the law the draw samples, over strata of sizes
 `ns` summing to `n`, each of at least one unit. -/
 theorem first_wf (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
@@ -400,7 +422,7 @@ theorem first_wf (rule : Select.Rule) (d : Program) (query : Json) (table : Opti
     (hsum : strataSize S = n) (hpos : ∀ m ∈ S.toList.map (fun p => rsSize p.2), 1 ≤ m) :
     (oneStageOf (derived.getD parsed)).WellFormed (S.toList.map fun p => rsSize p.2) := by
   have hsum' : (S.toList.map fun p => rsSize p.2).sum = n := hsum
-  rcases deriveLaw_cases d query named table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S', k, law', hS', rfl, hlaw⟩
+  rcases deriveLaw_cases d query named table derived hd with ⟨rfl, hk1, hk2, -⟩ | ⟨S', k, law', hS', rfl, hlaw⟩
   · have hnamed' : ∃ t, Select.parseLaw t = .ok named := by
       cases rule with
       | all => exact absurd rfl hne
@@ -413,10 +435,12 @@ theorem first_wf (rule : Select.Rule) (d : Program) (query : Json) (table : Opti
     · exact absurd hk hk2
   · rw [hS] at hS'
     obtain rfl := Except.ok.inj hS'
-    rcases hlaw with hder | ⟨t, tab, ht, hwork⟩
+    have hpos' : ∀ p ∈ S, 1 ≤ rsSize p.2 := fun p hp => hpos _ (List.mem_map_of_mem (Array.mem_def.1 hp))
+    rcases hlaw with hder | ⟨t, tab, ht, hwork⟩ | ⟨bases, hwhole⟩
     · obtain ⟨hk1, hkn⟩ := derive_bounds k _ law' hder
       obtain rfl := derive_ok k _ law' hder
-      exact ⟨hk1, by rw [hsum']; rw [hsum] at hkn; exact hkn, hpos⟩
+      exact stratified_wf k S (fun p => Flock.Draw.stratumK k (rsSize p.2) (strataSize S)) hk1 hkn hpos
+        fun _ _ => le_max_left _ _
     · obtain ⟨ws, hF, htot, rfl⟩ := deriveWork_wf k _ tab law' hwork
       have hunits := units_of_forall₂ _ _ (hF.imp fun _ _ h => h.1)
       have hsz : S.toList.map (fun p => rsSize p.2) = ws.toList.map (·.size) := by
@@ -435,6 +459,13 @@ theorem first_wf (rule : Select.Rule) (d : Program) (query : Json) (table : Opti
       · rw [hsz, List.zip_map', List.map_map]
         rw [totalWork_eq] at htot
         exact Nat.pos_of_ne_zero (by simpa [Function.comp_def] using htot)
+    · obtain ⟨hk1, hkn, rfl⟩ := deriveWhole_ok k bases _ law' hwhole
+      refine stratified_wf k S (fun p => if bases.any (Flock.Draw.ofBase p.1) then rsSize p.2
+        else Flock.Draw.wholeK k (rsSize p.2) (strataSize S)) hk1 hkn hpos fun p hp => ?_
+      try dsimp only
+      split
+      · exact hpos' p hp
+      · exact le_min (hpos' p hp) (le_max_left _ _)
 
 /-- **The design the draw runs is well formed on the partition it runs over**
 (`Properties.SampledProofs.DesignWellFormed`). -/

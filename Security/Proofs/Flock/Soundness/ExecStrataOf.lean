@@ -11,8 +11,9 @@ on the statement's form: they follow from the verifier accepting.
 
 * `StrataExec.ofJson_stratified`: what `ofJson` checks of a stratified law: `strataProblem` finds nothing, and each stratum
   passed `stratumOfJson`, whose units are non-empty ranges `lo < hi` (`stratumOfJson_ranges`).
-* `StrataExec.strataProblem_none`: what `strataProblem` checks: `1 ≤ k ≤ pop`, each stratum's `k` the rule's
-  (`stratumK`), and the ranges, sorted by their starts, chain from `0` to `pop` (`Chain`).
+* `StrataExec.strataProblem_none`: what `strataProblem` checks: `1 ≤ k ≤ pop`, each stratum's `k` the rule's (every
+  one `stratumK`, or every one its size or `wholeK`), and the ranges, sorted by their starts, chain from `0` to `pop`
+  (`Chain`).
 * `StrataExec.chain_facts`: a chain of non-empty ranges from `a` to `b` covers each unit of `[a, b)` exactly once.
 * `Law.execStrata_of_strataProblem`: those checks give `σ`, each unit's stratum the one whose ranges hold it.
 -/
@@ -151,7 +152,8 @@ theorem loopB (msg : String) (l : List (Nat × Nat)) (a : Nat) :
       left; rfl
 
 theorem strataProblem_none {k : Nat} {S : Array Stratum} {pop : Nat} (h : strataProblem k S pop = none) :
-    1 ≤ k ∧ k ≤ pop ∧ (∀ s ∈ S, s.k = stratumK k s.size pop) ∧
+    1 ≤ k ∧ k ≤ pop ∧
+      ((∀ s ∈ S, s.k = stratumK k s.size pop) ∨ ∀ s ∈ S, s.k = s.size ∨ s.k = wholeK k s.size pop) ∧
       Chain 0 pop ((S.foldl (fun x1 x2 => x1 ++ x2.units) #[]).qsort fun a b => decide (a.fst < b.fst)).toList := by
   unfold strataProblem at h
   split at h
@@ -159,13 +161,14 @@ theorem strataProblem_none {k : Nat} {S : Array Stratum} {pop : Nat} (h : strata
   · next hk =>
     simp only [Std.Legacy.Range.forIn_eq_forIn_range', Id.run_bind] at h
     have hk' : 1 ≤ k ∧ k ≤ pop := by simp at hk; omega
+    generalize hst : (S.all fun s => s.k == stratumK k s.size pop) = st at h
     rcases loopA (List.range' 0 [:S.size].size) (fun i __s =>
             if ((S.extract 0 i).any fun x => x.template == S[i]!.template) = true then
               pure
                 (ForInStep.done
                   (some (some (toString "U2: template '" ++ toString S[i]!.template ++ toString "' twice")), ()))
             else
-              if (S[i]!.k != stratumK k S[i]!.size pop) = true then
+              if (!(st || S[i]!.k == S[i]!.size || S[i]!.k == wholeK k S[i]!.size pop)) = true then
                 pure
                   (ForInStep.done
                     (some
@@ -190,14 +193,20 @@ theorem strataProblem_none {k : Nat} {S : Array Stratum} {pop : Nat} (h : strata
         cases h
       · simp only [Array.forIn_toList] at hn2 hc
         simp only [hn2] at h
-        refine ⟨hk'.1, hk'.2, fun s hs => ?_, ?_⟩
-        · obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hs
-          have := hall i (by simp [List.mem_range']; omega)
-          split at this
-          · cases this
-          · split at this
+        refine ⟨hk'.1, hk'.2, ?_, ?_⟩
+        · cases st
+          · right
+            intro s hs
+            obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hs
+            have := hall i (by simp [List.mem_range']; omega)
+            split at this
             · cases this
-            · next hne => simpa [getElem!_pos S i hi] using hne
+            · split at this
+              · cases this
+              · next hne => simpa [getElem!_pos S i hi] using hne
+          · left
+            intro s hs
+            simpa using Array.all_eq_true'.1 hst s hs
         · split at h
           · next heq => rw [← beq_iff_eq.1 heq]; exact hc
           · cases h
@@ -380,14 +389,21 @@ theorem execStrata_of_strataProblem {k pop : ℕ} {S : Array Stratum}
   refine ⟨σ, fun i => ⟨rfl, hcard i, ?_⟩, fun i => ?_⟩
   swap
   · have hmem : S[i] ∈ S := Array.getElem_mem _
-    rw [← hcard i, hks _ hmem]
-    refine stratumK_le ?_ hkp hk1
-    rw [StrataExec.size_eq]
-    obtain ⟨r, rs, hrs⟩ := List.exists_cons_of_ne_nil (fun h0 => hne _ hmem (Array.toList_eq_nil_iff.1 h0))
-    have hr := hlt _ hmem r (Array.mem_def.2 (hrs ▸ List.mem_cons_self))
-    rw [hrs]
-    simp [StrataExec.flat]
-    omega
+    have hz : 1 ≤ S[i].size := by
+      rw [StrataExec.size_eq]
+      obtain ⟨r, rs, hrs⟩ := List.exists_cons_of_ne_nil (fun h0 => hne _ hmem (Array.toList_eq_nil_iff.1 h0))
+      have hr := hlt _ hmem r (Array.mem_def.2 (hrs ▸ List.mem_cons_self))
+      rw [hrs]
+      simp [StrataExec.flat]
+      omega
+    rw [← hcard i]
+    rcases hks with hks | hks
+    · rw [hks _ hmem]
+      exact stratumK_le hz hkp hk1
+    · rcases hks _ hmem with h' | h'
+      · exact h'.le
+      · rw [h']
+        exact Nat.min_le_left _ _
   · rw [hset i]
     ext x
     simp only [Finset.mem_image, Finset.mem_range, List.mem_toFinset, unit_eq, StrataExec.size_eq]
