@@ -225,7 +225,8 @@ def _consistent_statics(a, b) -> bool:
 def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) -> "SpecializedDefinition":
     """Explicit binding record. Partial binds compose; all statics must be bound before the body is built. A record
     the composite's `refuse` names a reason for is refused (`ValueError`) before it is cached, and before the cache is
-    read: the key holds 1 and True alike, so a record refused for its type is refused after an equal-keyed one binds.
+    read: the key holds a list and a tuple of equal items alike (`_static_key`), so a record refused for its type is
+    refused after an equal-keyed one binds.
 
     Specializations are shared through a per-definition cache keyed by the binding record. Function-valued
     statics are keyed by id, so a cache hit whose function references are *different* definitions under the
