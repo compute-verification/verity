@@ -3,7 +3,8 @@ everywhere but the Lean, and `DOC_TERMS`, retired in the maintained docs' prose 
 warns when a post uses one (`retired`).
 
 The table has one home, the test, which every lane's rename edits; this reads its assignments from the checkout rather
-than keeping a second copy. A checkout without it, or a table this can't read, flags nothing: a post is never held on it."""
+than keeping a second copy. A checkout without it, or a table this can't read (`table()["error"]`), flags nothing: a post is
+never held on it."""
 from __future__ import annotations
 
 import ast
@@ -23,20 +24,21 @@ def table_path() -> Path | None:
 
 @cache
 def table(path: Path | None = None) -> dict:
-    """The table's NAMES as the test file assigns them, or {} when it can't be read."""
+    """The table's NAMES as the test file assigns them, `skipped` naming any it couldn't evaluate; {"error": why} when it
+    can't be read, which flags nothing."""
     path = path or table_path()
     try:
         tree = ast.parse(path.read_text()) if path else None
-    except (OSError, SyntaxError, ValueError):
-        return {}
+    except (OSError, SyntaxError, ValueError) as e:
+        return {"error": f"{path}: {e}"}
     ns: dict = {}
     for node in tree.body if tree else []:
         target = node.targets[0] if isinstance(node, ast.Assign) and len(node.targets) == 1 else getattr(node, "target", None)
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and isinstance(target, ast.Name) and target.id in NAMES and node.value:
             try:
                 ns[target.id] = _value(node.value, ns)
-            except (ValueError, KeyError, TypeError, re.error):    # a form this reader doesn't know: skip that name
-                continue
+            except (ValueError, KeyError, TypeError, re.error) as e:   # a form this reader doesn't know: skip that name
+                ns.setdefault("skipped", []).append(f"{target.id}: {e}")
     return ns
 
 

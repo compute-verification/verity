@@ -2582,7 +2582,8 @@ def test_the_retired_terms_name_what_to_write_and_skip_code_and_quoted_mentions(
         ("commit period", doc["sampling period, sampling block, PoUW's commit period"])]
     assert vocabulary.retired('a proof block, `drawn.py` and "draw"') == []
     assert vocabulary.instead("nothing like it") == "see GLOSSARY.md's older names"
-    assert vocabulary.table(Path("no/such/table.py")) == {} and vocabulary.retired("a draw", {}) == []
+    assert "no/such/table.py" in vocabulary.table(Path("no/such/table.py"))["error"] and vocabulary.retired("a draw", {}) == []
+    assert "skipped" not in vocabulary.table()
 
 
 def test_a_121_word_reply_is_refused_with_the_fix_and_nothing_is_posted(fake, registry, capsys):
