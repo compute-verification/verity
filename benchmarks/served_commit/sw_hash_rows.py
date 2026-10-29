@@ -4,7 +4,8 @@ rows_leaf_data_kernel): the leaf rate with derived salts and with given salts (n
 root of a small padded domain is checked against step_rows before it is timed. Measurement only; JSON to $OUT/sw_hash_rows.json.
 
     bash benchmarks/served_commit/sw_hash_rows.sh   (ROWS default 128 1024 4096 16384 65536 262144; GB below 4 KiB GB_SMALL
-                                                     (4), from 64 KiB GB_BIG (64), else GB (16); REPS 5; hash_cost.py's build)
+                                                     (4), from 64 KiB GB_BIG (64), else GB (16); REPS 5; ORDER, the legs
+                                                     in order, default "derived given"; hash_cost.py's build)
 
 h, the MAC-times a row byte costs, is the leaves' time x the ruler (4,096 MACs an SM-clock x SMs x the SM clock sampled over
 the leg) / the row bytes.
@@ -71,7 +72,9 @@ def main() -> None:
         salts = torch.empty(192 * m, dtype=torch.uint8, device="cuda").random_(0, 256)
         P = R.params(domain(m, rb), os.urandom(step_rows.KEY_BYTES), rb)
         entry.update(rows=m, row_bytes=m * rb, compressions_leaf=compressions_leaf(rb), row_blocks=(rb + 17 + 127) // 128)
-        for name, given in (("derived", None), ("given", salts)):
+        legs = {"derived": None, "given": salts}
+        for name in os.environ.get("ORDER", "derived given").split():
+            given = legs[name]
             with clk.leg(0.0) as c:
                 ms = timed(lambda st, g=given: launch(R, P, data, rb, m, lv, scratch, st, g), reps, s)
             ruler = MACS_SM_CLK * sms * (c["mhz"] or 0) * 1e6
