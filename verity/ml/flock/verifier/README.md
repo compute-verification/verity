@@ -49,7 +49,7 @@ challenger's host (`trusted-host`), never from the prover's bundle. `verity_floc
 (`tests/test_lean_rec_compose.py`). The pod's Lean step (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every
 part those files and composes V*'s parts over the run's record: on loopback the pod is the challenger's host, and under
 `MODES=firewall` (one session per staged statement) it lists every session its coin servers served (`opens.jsonl`)
-and assembles the record from them after the sessions (`lean_verdicts.loopback_records`), the staged set computed
+and assembles the record from them after the sessions (`lean_verdicts.loopback_record`), the staged set computed
 from the files every part was given (`rec_compose.shared_of_args`), not read from any part's `VERDICT`. Under
 `MODES=dev` or `host`, with WARM + RUNS sessions a part, it doesn't compose the statement.
 
