@@ -30,6 +30,7 @@ from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import served as SV
 
+from tests.pipeline import predicted
 from tests.pipeline.test_commit_coins import GATE, KEY, PEER, _Auditor
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving, records, serve_concurrently
 from tests.protocols import challenger_host as CH
@@ -179,7 +180,8 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     families for S rounds, as this peer), round 0 opens it on the window's open root once its port listens, and the
     window's close waits for its end entry, closed and complete. The window's salt, round and draw coins are that
     session's, its record carries the session without its secret, and the verifier's check of the record against the
-    auditor's ledger (`pouw_h1_challenger.session_reason`) passes."""
+    auditor's ledger (`pouw_h1_challenger.session_reason`) passes. No file the windows wrote holds the weight trees' salt
+    key (`pouw_h1.WEIGHT_KEY`), raw or in hex."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
     sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
@@ -208,6 +210,8 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     assert len(set(sids)) == 2 and ports == [7811, 7811]
     reserves = [shlex.split(a[-1]) for a in auditor.argv if shlex.split(a[-1])[0] == "reserve"]
     assert reserves == [["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.families(STEPS)]] * 2
+    written = [f.read_bytes() for f in tmp_path.rglob("*") if f.is_file()]
+    assert written and not any(PH.WEIGHT_KEY in b or PH.WEIGHT_KEY.hex().encode() in b for b in written)
     srv.src.uninstall()
 
 
@@ -674,7 +678,7 @@ def test_commit_windows_write_a_windows_line_once_its_arms_release_ends(tmp_path
 def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp_path):
     """Among them a token budget the rows-sha512 Commit's step-input port can't take (whole 512-id rows), with H1 or
     without, so H1's own 32-row rule is met by every T the Commit takes."""
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
 
     def refusal(*more: str) -> str | None:
         opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), *more],
