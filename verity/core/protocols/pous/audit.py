@@ -111,7 +111,7 @@ class HonestResponder:
 
 
 @dataclass(frozen=True, slots=True)
-class Answer:
+class ChallengeReply:
     """One answer: its index, verdict, and either its oracle cost (`simulate`) or its latency (`UnsignedRounds`), with
     the responder's own `report` (for example its device and server nanoseconds) beside it.  `rejected` is an answer
     past the hard deadline, or none by then: its block is never checked, and it is neither correct nor on time."""
@@ -131,7 +131,7 @@ class AuditResult:
     """The answers recorded, and whether the audit was `aborted` past its duration cap, which rejects it whatever its
     answers."""
 
-    answers: tuple[Answer, ...]
+    answers: tuple[ChallengeReply, ...]
     aborted: bool = False
 
     @property
@@ -164,7 +164,7 @@ def deadline_rounds(deadline_ns: int = DEADLINE_NS, rtt_allowance_ns: int = RTT_
 def simulate(vk: VerifierKey, responder: Responder, prims: Primitives, key: Key, k: int | None = None,
              deadline_ns: int = DEADLINE_NS, rtt_allowance_ns: int = RTT_ALLOWANCE_NS, call_ns: int | None = None,
              rounds: int | None = None, work: int = WORK,
-             on_answer: Callable[[Answer], None] | None = None) -> AuditResult:
+             on_answer: Callable[[ChallengeReply], None] | None = None) -> AuditResult:
     """The audit in the oracle model: rounds are the clock, `rounds` per answer if given, else
     `deadline_rounds(deadline_ns, rtt_allowance_ns, call_ns)`.  `k` and `call_ns` default to the parameters' own
     (`challenges`, `call_ns`), else P3's."""
@@ -177,7 +177,7 @@ def simulate(vk: VerifierKey, responder: Responder, prims: Primitives, key: Key,
         i = key.uniform(vk.params.blocks, j)
         value, cost = run(responder.answer(j, i), prims)
         correct = type(value) is int and 0 <= value < 1 << m and vk.check(i, value.to_bytes(mb, "little"))
-        a = Answer(j, i, correct, cost.depth <= budget and cost.work <= work, cost=cost)
+        a = ChallengeReply(j, i, correct, cost.depth <= budget and cost.work <= work, cost=cost)
         if on_answer is not None:
             on_answer(a)
         answers.append(a)
@@ -210,7 +210,7 @@ class UnsignedRounds:
 
     def __init__(self, vk: VerifierKey, key: Key, k: int | None = None, deadline_ns: int = DEADLINE_NS,
                  rtt_allowance_ns: int = RTT_ALLOWANCE_NS, clock: Callable[[], int] = time.perf_counter_ns,
-                 on_answer: Callable[[Answer], None] | None = None, root_only: bool = False,
+                 on_answer: Callable[[ChallengeReply], None] | None = None, root_only: bool = False,
                  late_deadline_ns: int | None = None, audit_cap: int | None = None) -> None:
         if deadline_ns < 0 or rtt_allowance_ns < 0:
             raise ValueError("deadlines and allowances are nonnegative")
@@ -229,7 +229,7 @@ class UnsignedRounds:
         self.vk, self.key, self.k, self.root_only = vk, key, _challenges(vk) if k is None else k, root_only
         self.deadline_ns, self.rtt_allowance_ns, self.late_deadline_ns = deadline_ns, rtt_allowance_ns, late_deadline_ns
         self.clock, self.on_answer, self.call_ns, self.audit_cap = clock, on_answer, call_ns, audit_cap
-        self.answers: list[Answer] = []
+        self.answers: list[ChallengeReply] = []
         self.aborted = False
         self._open: tuple[int, int] | None = None
         self._first: int | None = None
@@ -291,7 +291,7 @@ class UnsignedRounds:
             self._first = self._open[1]
         return i
 
-    def respond(self, block: bytes, path: tuple[bytes, ...] | None = None, report: object = None) -> Answer:
+    def respond(self, block: bytes, path: tuple[bytes, ...] | None = None, report: object = None) -> ChallengeReply:
         stop = self.clock()
         if self._open is None:
             raise RuntimeError("no challenge is open")
@@ -301,13 +301,13 @@ class UnsignedRounds:
         if self._past_cap(stop):
             self.aborted = True
         if self.aborted or (self.late_limit_ns is not None and elapsed > self.late_limit_ns):
-            return self._record(Answer(len(self.answers), i, False, False, elapsed_ns=elapsed, report=report,
+            return self._record(ChallengeReply(len(self.answers), i, False, False, elapsed_ns=elapsed, report=report,
                                        rejected=True))
         correct = self.vk.check_path(i, block, path or ()) if self.root_only else self.vk.check(i, block)
-        return self._record(Answer(len(self.answers), i, correct, elapsed <= self.limit_ns, elapsed_ns=elapsed,
+        return self._record(ChallengeReply(len(self.answers), i, correct, elapsed <= self.limit_ns, elapsed_ns=elapsed,
                                    report=report))
 
-    def expire(self) -> Answer:
+    def expire(self) -> ChallengeReply:
         """Close the open challenge unanswered, once its hard deadline or the audit's cap has passed: rejected, and
         past the cap the audit is aborted."""
         if self._open is None:
@@ -323,16 +323,16 @@ class UnsignedRounds:
     def _past_cap(self, now: int) -> bool:
         return self.ends_at is not None and now > self.ends_at
 
-    def _expire(self, now: int) -> Answer | None:
+    def _expire(self, now: int) -> ChallengeReply | None:
         i, start = self._open
         if self._past_cap(now):
             self.aborted = True
         elif self.late_limit_ns is None or now - start <= self.late_limit_ns:
             return None
         self._open = None
-        return self._record(Answer(len(self.answers), i, False, False, elapsed_ns=now - start, rejected=True))
+        return self._record(ChallengeReply(len(self.answers), i, False, False, elapsed_ns=now - start, rejected=True))
 
-    def _record(self, a: Answer) -> Answer:
+    def _record(self, a: ChallengeReply) -> ChallengeReply:
         self.answers.append(a)
         if self.on_answer is not None:
             self.on_answer(a)
@@ -345,7 +345,8 @@ class UnsignedRounds:
 def run_timed(challenger: UnsignedRounds, respond: Callable[[int], bytes | tuple[bytes, object]],
               path: Callable[[int], tuple[bytes, ...]] | None = None) -> AuditResult:
     """Drive `challenger` against `respond(index)` until all `k` are answered.  `respond` returns the block, or
-    `(block, report)` to keep the responder's own record in the `Answer`; `path(index)` serves a root-only memory challenger."""
+    `(block, report)` to keep the responder's own record in the `ChallengeReply`; `path(index)` serves a root-only
+    memory challenger."""
     while not challenger.done:
         i = challenger.challenge()
         out = respond(i)
