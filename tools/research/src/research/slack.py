@@ -1847,9 +1847,9 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                          "--worker NAME for a lane's worker, which holds no handle")
     if ns.worker and not WORKER_RE.fullmatch(ns.worker):
         raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
-    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment"):
+    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment", "file"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
-                         "`place` or `comment`, which have one")
+                         "`place`, `comment` or `file`, which have one")
     try:
         brief = Path(ns.file).read_text() if ns.file else None
     except OSError as e:
@@ -1895,6 +1895,18 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 raise SlackError(f"linear milestone {ns.target}: give PROJECT (a prefix of its name, one word or quoted) and NAME")
             else:
                 print(lin.milestone(ns.value[0], " ".join(ns.value[1:]), ns.date, brief, ns.rename, create=ns.target == "create"))
+            return 0
+        if ns.verb == "file":
+            team = need(ns.target, "the TEAM (a handle or its key)")
+            team = next((h["linear"] for h in reg["handles"] if h["handle"] == team.lstrip("@") and h.get("linear")), team)
+            body = need(brief or value, "the body: --file BRIEF.md or TEXT")
+            sender = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the issue's sender"))["handle"]
+            if ns.dry_run:
+                print(f"dry-run: would file in {team} as {sender}" + (f" under {ns.parent}" if ns.parent else "")
+                      + f": {ns.title or linear.title(body)}")
+                return 0
+            made = lin.file(team, sender, body, parent=ns.parent, title=ns.title)
+            print(f"{made['identifier']} {made['url']}")
             return 0
         issue = need(ns.target, "the ISSUE (e.g. INF-12)")
         if ns.verb == "relate":
@@ -3956,7 +3968,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("linear", "Linear issues, relations, projects and milestones, through the app (never the Linear MCP connector, "
                       "which acts as Daniel): `check` (what "
                       "the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` (by name; " + LINEAR_STATES + "), "
-                      "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `list TEAM [--state S]` (open by "
+                      "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `file TEAM --as HANDLE --title T "
+                      "--file BRIEF.md [--parent ID]` (an issue in any team, the lane's own included), `list TEAM [--state S]` (open by "
                       "default), `audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, with its fix; exit "
                       "1 on any), `place ISSUE PROJECT [--milestone M]` (by name prefixes), `edit ISSUE [--title T] "
                       "[--due YYYY-MM-DD|none] [--file BRIEF.md] [--parent ID]`, `relate ISSUE blocks|blocked-by|related|"
@@ -3965,25 +3978,25 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `milestone create|edit PROJECT NAME "
                       "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`; none sends a state")
     p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
-                                    "project", "milestone"))
-    p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
-                                             "team (a handle or its key); update: the project; project, milestone: create or edit")
-    p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
+                                    "project", "milestone", "file"))
+    p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit, "
+                                             "file: the team (a handle or its key); update: the project; project, milestone: create or edit")
+    p.add_argument("value", nargs="*", help="state: the state's name; comment, file: the text; place: the project; audit: more teams; "
                                             "relate: the kind and the other issue; unrelate: the other issue; project create: "
                                             "its name; milestone: the project (one word or quoted) and the milestone's name")
     p.add_argument("--state", default=None, metavar="NAME", help="list: only issues in this state (default: every open one)")
     p.add_argument("--write", default=None, metavar="TEAM", help="check: also file, comment on and cancel a test issue in TEAM")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
-                   help="comment: its sender, a handle you hold (or --worker); check: the test issue's sender (default comms)")
+                   help="comment, file: its sender, a handle you hold (or --worker); check: the test issue's sender (default comms)")
     p.add_argument("--worker", default=None, metavar="NAME",
                    help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME, "
                         "LANE the handle of the issue's team, and rings no one")
-    p.add_argument("--title", default=None, metavar="T", help="edit: the issue's new title")
+    p.add_argument("--title", default=None, metavar="T", help="edit: the issue's new title; file: its title (default: the body's first line)")
     p.add_argument("--due", default=None, metavar="YYYY-MM-DD", help="edit: its due date (`none` clears it)")
     p.add_argument("--file", "--body-file", "--description-file", dest="file", default=None, metavar="F.md",
-                   help="markdown: edit: the issue's new description; update: the update's body; project create, milestone: "
+                   help="markdown: edit: the issue's new description; file: its description; update: the update's body; project create, milestone: "
                         "the description")
-    p.add_argument("--parent", default=None, metavar="ID", help="edit: make it a sub-issue of this issue (CMP-92)")
+    p.add_argument("--parent", default=None, metavar="ID", help="edit: make it a sub-issue of this issue (CMP-92); file: file it as one")
     p.add_argument("--health", default=None, metavar="H", help="update: onTrack, atRisk or offTrack")
     p.add_argument("--team", action="append", default=[], metavar="KEY", help="project create: a team it is in (repeat for more)")
     p.add_argument("--lead", default=None, metavar="USER",

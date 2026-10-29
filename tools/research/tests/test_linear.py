@@ -316,6 +316,23 @@ def test_a_dry_run_writes_nothing_to_linear_and_prints_what_it_would_do(fake, re
     rc, out, _ = run(capsys, "linear", "place", "INF-1", "Runs", "--dry-run")
     assert rc == 0 and out.strip() == "dry-run: would place INF-1 in Runs"
 
+def test_file_files_an_issue_in_any_team_the_senders_own_included(fake, registry, capsys, lin, tmp_path):
+    """`ask` refuses an ask to the asker's own handle, so a lane had no way to file in its own team."""
+    brief = tmp_path / "L3.md"
+    brief.write_text("number: 45 min\nmechanism: shards")
+    rc, out, _ = run(capsys, "linear", "file", "infra", "--as", "infra", "--title", "L3: shards", "--file", str(brief))
+    assert rc == 0 and out.strip() == "INF-1 https://linear.app/x/issue/INF-1"
+    (_, v, _), = lin.sent("issueCreate")
+    assert v["i"]["title"] == "L3: shards" and v["i"]["description"] == "number: 45 min\nmechanism: shards"
+    assert lin.sent("teams(filter")[0][1] == {"n": "INF"}                                      # the handle's key
+    rc, out, _ = run(capsys, "linear", "file", "INF", "first line\nmore", "--as", "infra", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would file in INF as infra: First line" and len(lin.sent("issueCreate")) == 1
+    rc, _, err = run(capsys, "linear", "file", "infra", "--as", "infra")
+    assert rc != 0 and "give the body" in err
+    rc, _, err = run(capsys, "linear", "file", "infra", "text")
+    assert rc != 0 and "--as HANDLE" in err
+
+
 def test_a_comment_rings_the_issues_team_and_the_names_it_starts_with_but_never_its_author(fake, registry, routes_dirs, capsys, lin):
     """No one subscribes to Linear comments (each would echo its author), so without this ring a lane would poll its issues."""
     lin.subscribers["I1"] = []

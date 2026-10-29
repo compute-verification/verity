@@ -86,6 +86,8 @@ skill).
   - `research msg linear state ISSUE STATE`;
   - `research msg linear place ISSUE PROJECT --milestone M`;
   - `research msg linear edit ISSUE --title T --due D`;
+  - `research msg linear file TEAM --as ME --title T --file BRIEF.md [--parent ISSUE]`, an issue in any team, your own
+    included, which `ask` refuses; it rings no one;
   - `research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER`, and `unrelate ISSUE OTHER`;
   - `research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F`, a project update;
   - `research msg linear project create NAME --team KEY` and `milestone create|edit PROJECT NAME [--date D]`.
