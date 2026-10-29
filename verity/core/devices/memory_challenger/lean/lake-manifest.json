@@ -3,6 +3,13 @@
  "packages":
  [{"type": "path",
    "scope": "",
+   "name": "core_attest",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../../attest/lean",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
    "name": "verity_difftest",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
