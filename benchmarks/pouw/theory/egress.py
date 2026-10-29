@@ -467,9 +467,13 @@ def fold_check(kind: str, seed: int) -> bool:
     s = [[rng.choice([v for v in range(-15, 16, 2)]) for _ in range(n)] for _ in range(st)]
     coined = [t % 2 == 0 or kind == "blc1" for t in range(st)]
     exact = [[sum(a[i][x] * b[x][j] for x in range(k)) for j in range(n)] for i in range(m)]
-    a31 = lambda i, t: 1 + bits[i][t] if coined[t] else rowc[i][t]
-    lane = (lambda i, j, t: (1 + bits[i][t]) * s[t][j]) if kind == "blc1" else \
-        (lambda i, j, t: a31(i, t) * w[t] + (s[t][j] if coined[t] else 0))
+    def a31(i: int, t: int) -> int:
+        return 1 + bits[i][t] if coined[t] else rowc[i][t]
+
+    def lane(i: int, j: int, t: int) -> int:
+        if kind == "blc1":
+            return (1 + bits[i][t]) * s[t][j]
+        return a31(i, t) * w[t] + (s[t][j] if coined[t] else 0)
     acc = [[exact[i][j] + sum(lane(i, j, t) for t in range(st)) for j in range(n)] for i in range(m)]
     noise = [[acc[i][j] - exact[i][j] for j in range(n)] for i in range(m)]
     if any(noise[i][j] - noise[i][0] - noise[0][j] + noise[0][0] for i in range(m) for j in range(n)):
@@ -594,7 +598,8 @@ def table(res: dict) -> str:
     for x in res["designs"]:
         p = x["points"]["t8192"]
         c32, c320 = p["caps"]["32"], p["caps"]["320"]
-        f = lambda c: " / ".join(f"{c['stated'][q]:.4%}" for q in ("floor", "floor_chained", "bar"))
+        def f(c: dict) -> str:
+            return " / ".join(f"{c['stated'][q]:.4%}" for q in ("floor", "floor_chained", "bar"))
         att = "; ".join(f"{a} {v['whole_cap']:.4%} / {v['slack']:.4%} ({v['of_stated']:.3f})"
                         for a, v in c32["attack"]["floor"].items())
         a2c = ("A2c p* " + " / ".join(f"{q['a2c']['pstar']:.5f}" for q in x["points"].values()) + " model P "
@@ -663,7 +668,9 @@ def main() -> int:
     res["designs_by_id"] = {x["id"]: x for x in res["designs"]}
     closing = [x for x in res["designs"] if x["id"].startswith(("blc1-t", "blc1a-t"))
                and all(p["caps"]["32"]["stated"]["bar"] <= 0.01 for p in x["points"].values())]
-    a2c_open = lambda x: x["a2c"] is None or x["a2c"]["model_p_share"] > 0.01
+    def a2c_open(x: dict) -> bool:
+        return x["a2c"] is None or x["a2c"]["model_p_share"] > 0.01
+
     best = min(closing, key=lambda x: (x["points"]["t8192"]["served"] != "exact", a2c_open(x),
                                        x["points"]["t8192"]["stream_bytes_per_token"],
                                        x["points"]["t8192"]["caps"]["32"]["stated"]["bar"]))
