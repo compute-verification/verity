@@ -246,7 +246,7 @@ def test_the_draw_is_held_to_this_stream_and_the_period_it_committed(tmp_path):
     run = Run(tmp_path)
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), 2, Coins())
-    another = run.lw.stream(budget=8, delta=run.stream.delta, challenger="another", coins=lambda n: b"\x07" * n)
+    another = run.lw.stream(budget=8, delta=run.stream.delta, challenger="another")
     with pytest.raises(ValueError, match="this stream's"):
         run.lw.network_verdict(another, drawn=drawn)
     swapped = list(reversed(drawn["roots"]))

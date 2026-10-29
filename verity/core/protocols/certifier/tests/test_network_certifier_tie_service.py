@@ -82,7 +82,7 @@ class Run:
         self.tmp, self.now, self.previous, self.served = tmp_path, [0.0], None, served
         self.tie = TS.IngressTie(link, params, SESSION, proof_deadline=60.0)
         self.stream = self.tie.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test",
-                                      coins=lambda n: b"\x07" * n, clock=lambda: self.now[0])
+                                      clock=lambda: self.now[0])
         self.cells = [WR.Cells.of(link, Direction.INGRESS, rec, params, SESSION,
                                   [hashlib.sha512(b"salt %d %d" % (w, t)).digest() * 3 for t in range(params.window)],
                                   hashlib.sha512(b"wiring %d" % w).digest())

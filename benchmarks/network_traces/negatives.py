@@ -1536,7 +1536,7 @@ def n2(run: Path, clock=time.monotonic) -> dict:
     link-window's codes (`codes`), and their union."""
     lw, plan = link(run)
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
-    st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="negatives", coins=cs._no_coins, clock=clock)
+    st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="negatives", clock=clock)
     certified, refused = cs.read_certified(run / "certified.jsonl")
     rows, previous = [], None
     for w in range(plan["windows"]):

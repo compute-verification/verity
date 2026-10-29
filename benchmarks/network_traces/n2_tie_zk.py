@@ -433,7 +433,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
     proves the statement live behind the firewall and delivers, and the verifier of record decides on the proof
     (`IngressTie.outcome`); then the tie from the stream's outcomes of record (`IngressTie.tie`). Writes what the
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each window's files prefixed by its window."""
-    stream = tie.stream(budget=len(rd.windows), delta=cs.DELTA, challenger="n2-tie-zk", coins=cs._no_coins,
+    stream = tie.stream(budget=len(rd.windows), delta=cs.DELTA, challenger="n2-tie-zk",
                         clock=time.monotonic)
     # the firewall rechecks a witness the host computed, so a device prover takes the host's (flock-circuit's
     # FIREWALL-REFUSED otherwise), as a8's fw arm does
