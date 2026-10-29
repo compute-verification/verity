@@ -41,6 +41,10 @@ in a lock, and nothing imports it.
 * **Lifting a data-case result to the call grid** (`distinctOn_lift`, `sepBy_lift`): a target set distinct at one
   data case, with that case's free values, is distinct on the call grid with the call's free values, when each call
   free value restricts to a data-case free value.
+* **The ledger's cost forms** (`ShaSpeedW1`, `HashComposeW1`): ShaSpeed in `MH100w` and `hash-compose` as named
+  Props. Both follow from `ShaWrites` (`shaSpeedW1_of_shaWrites`, `hashComposeW1_of_shaWrites`); the second doesn't
+  follow from the first and distinct targets (`hashComposeW1_not_of_shaSpeedW1`), so the ledger needs `ShaWrites`,
+  not ShaSpeed plus `hash-compose`.
 -/
 
 namespace Pouw.Dimension.NCompose
@@ -833,6 +837,63 @@ theorem sepBy_carries_lift {S S' : Set G} {F F' : Set (G → ℚ)} {T : Finset (
 
 end Lift
 
+/-! ## 8. The ledger's cost forms: ShaSpeed in `MH100w` and `hash-compose` -/
+
+section Ledger
+
+variable {G : Type}
+
+/-- **`ShaSpeedW1 pr Adm fpSem S F Dig B`** (named premise; rank 4a at `δ`, with `B = (1 − δ)` of honest's priced
+hashing): every admissible well-formed program on free inputs that outputs the digests costs at least `B` in
+`MH100w`. -/
+def ShaSpeedW1 (pr : Prices100) (Adm : List (Op100 G) → List (G → ℚ) → Prop) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ)
+    (S : Set G) (F : Set (G → ℚ)) (Dig : Finset (G → ℚ)) (B : ℕ) : Prop :=
+  ∀ (L : List (G → ℚ)) (P : List (Op100 G)), (∀ f ∈ L, f ∈ F) → (∀ o ∈ P, o.WFw pr F) → Adm P L →
+    OutputsOn fpSem S P L Dig → B ≤ cost100 pr P
+
+/-- **`HashComposeW1 pr Adm fpSem S F T Dig c B`**, the ledger's `hash-compose`: every admissible well-formed program
+on free inputs that outputs the committed words `T` and the digests costs at least `c·|T| + B`, so hashing shares no
+work with the words. -/
+def HashComposeW1 (pr : Prices100) (Adm : List (Op100 G) → List (G → ℚ) → Prop) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ)
+    (S : Set G) (F : Set (G → ℚ)) (T Dig : Finset (G → ℚ)) (c B : ℕ) : Prop :=
+  ∀ (L : List (G → ℚ)) (P : List (Op100 G)), (∀ f ∈ L, f ∈ F) → (∀ o ∈ P, o.WFw pr F) → Adm P L →
+    OutputsOn fpSem S P L T → OutputsOn fpSem S P L Dig → c * T.card + B ≤ cost100 pr P
+
+/-- **`ShaWrites` gives ShaSpeed's `MH100w` form** at `B = c·R`. -/
+theorem shaSpeedW1_of_shaWrites {c : ℕ} {pr : Prices100} (hpr : Floor c pr)
+    {Adm : List (Op100 G) → List (G → ℚ) → Prop} {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {S : Set G} {F X : Set (G → ℚ)}
+    (hconst : ∀ q : ℚ, (fun _ : G => q) ∈ X) (hFX : F ⊆ X) {Dig : Finset (G → ℚ)} {R : ℕ}
+    (hsha : ShaWrites pr Adm fpSem S X Dig R) : ShaSpeedW1 pr Adm fpSem S F Dig (c * R) :=
+  fun _ _ hL hP hA hO =>
+    shaWrites_floor hpr hconst hsha (fun f hf => hFX (hL f hf)) (fun o ho => wfw_mono hFX o (hP o ho)) hA hO
+
+/-- **`ShaWrites` gives the ledger's `hash-compose`** at `B = c·R`, for words that are message words (in `X`) and
+`DistinctOn` targets. -/
+theorem hashComposeW1_of_shaWrites {c : ℕ} {pr : Prices100} (hpr : Floor c pr)
+    {Adm : List (Op100 G) → List (G → ℚ) → Prop} {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {S : Set G} {F X : Set (G → ℚ)}
+    (hconst : ∀ q : ℚ, (fun _ : G => q) ∈ F) (hFX : F ⊆ X) {T Dig : Finset (G → ℚ)} {R : ℕ}
+    (hTX : ∀ t ∈ T, t ∈ X) (hT : DistinctOn S F T) (hsha : ShaWrites pr Adm fpSem S X Dig R) :
+    HashComposeW1 pr Adm fpSem S F T Dig c (c * R) := fun _ _ hL hP hA hOT hOD => by
+  have h := hashCompose hpr hconst hFX hTX hsha hL hP hA hT hOT hOD
+  rwa [Nat.mul_add] at h
+
+/-- **ShaSpeed's cost form and `DistinctOn` targets don't give `hash-compose`**: on the toy where the digest is the
+target, ShaSpeed's form holds at `32` and the target is distinct, but a program outputting both costs `32`, below
+`32·1 + 32`. -/
+theorem hashComposeW1_not_of_shaSpeedW1 :
+    ∃ Adm : List (Op100 Bool) → List (Bool → ℚ) → Prop,
+      ShaSpeedW1 h100Floor Adm (fun _ _ _ _ => 0) Set.univ (Consts Bool) {tw} 32 ∧
+        DistinctOn Set.univ (Consts Bool) {tw} ∧
+        ¬ HashComposeW1 h100Floor Adm (fun _ _ _ _ => 0) Set.univ (Consts Bool) {tw} {tw} 32 32 := by
+  obtain ⟨Adm, P, hsha, hA, hP, hT, hO, hc⟩ := compose_needs_exclusion
+  refine ⟨Adm, fun L P' hL hP' hA' hO' => ?_, hT, fun h => ?_⟩
+  · simpa using shaWrites_floor h32Floor (fun q => consts_mem q) hsha hL hP' hA' hO'
+  · have h' := h [] P (by simp) hP hA hO hO
+    rw [Finset.card_singleton] at hc h'
+    omega
+
+end Ledger
+
 end Pouw.Dimension.NCompose
 
 #print axioms Pouw.Dimension.NCompose.charged_by
@@ -862,3 +923,6 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.outsourced_uncredited
 #print axioms Pouw.Dimension.NCompose.distinctOn_lift
 #print axioms Pouw.Dimension.NCompose.sepBy_carries_lift
+#print axioms Pouw.Dimension.NCompose.shaSpeedW1_of_shaWrites
+#print axioms Pouw.Dimension.NCompose.hashComposeW1_of_shaWrites
+#print axioms Pouw.Dimension.NCompose.hashComposeW1_not_of_shaSpeedW1
