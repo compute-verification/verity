@@ -4,7 +4,7 @@
 
 vllm-flash-attn 506341a1 splits a varlen launch when `fa3_model.split_plan`'s static bound exceeds 1 (GLM-5.3 TP8's head-256
 prefill at 8 heads: 321 to 1664 rows), each sequence at its own dynamic count NS.  The tile of query rows m (`kBlockM` rows,
-`targets.fa3_tile_m`) visits key blocks 0 .. NBM - 1, NBM = min(ceil(T_seq / BN), ceil((m + 1) kBlockM / BN))
+`fa3_model.kblock_m_for`) visits key blocks 0 .. NBM - 1, NBM = min(ceil(T_seq / BN), ceil((m + 1) kBlockM / BN))
 (`block.h get_n_block_min_max`), and split s of the tile the blocks [s PER, min((s + 1) PER, NBM)), PER = ceil(NBM / NS)
 (`split_per`).  A row of T keys sees the blocks below ceil(T / BN): its split s is [s PER, min((s + 1) PER, ceil(T / BN))),
 non-empty while s PER < ceil(T / BN) (`row_splits`).  The tile's other splits are fully masked for the row, so their running sum

@@ -39,7 +39,7 @@ from typing import Any, Callable, NoReturn, Sequence
 
 import torch
 
-from verity.ml.circuits.codec import _spec_id, canonical_json, encode_program, program_digest
+from verity.ml.circuits.codec import descriptor_id, canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
 from verity.ml.circuits.defs import bind as ir_bind
 from verity.ml.circuits.program import Program
@@ -594,12 +594,12 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     dead = _dead_gates(program, limit=32)
     # a family claim replaces the flat body by the family's: the correspondence describes the FLAT Calls and stays with the flat root
     corr_applies = program is flat_program
-    prov["result"] = {"root": _spec_id(program.fn), "digest": digest, "gates": program.gates, "flat_root": _spec_id(flat_sd),
+    prov["result"] = {"root": descriptor_id(program.fn), "digest": digest, "gates": program.gates, "flat_root": descriptor_id(flat_sd),
                       "flat_digest": flat_digest, "dead_gates": dead.total,
                       "correspondence_digest": corr_digest if corr_applies else None,
                       "correspondence": {"schema": corr_doc["schema"], "calls": len(corr_doc["calls"]), "occurrences": len(corr_doc["occurrences"]),
-                                         "applies_to": "program_fn" if corr_applies else f"flat body only ({_spec_id(flat_sd)}); not attached", "digest": corr_digest}}
-    return DeriveReport(program, None, prov, digest, _spec_id(program.fn), program.gates, dead, flat_digest, _spec_id(flat_sd),
+                                         "applies_to": "program_fn" if corr_applies else f"flat body only ({descriptor_id(flat_sd)}); not attached", "digest": corr_digest}}
+    return DeriveReport(program, None, prov, digest, descriptor_id(program.fn), program.gates, dead, flat_digest, descriptor_id(flat_sd),
                         prov.get("family"), flat_sd, corr_digest if corr_applies else None, flat_desc if corr_applies else None)
 
 
