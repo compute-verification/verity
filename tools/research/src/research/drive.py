@@ -175,8 +175,8 @@ FIX_WINDOW_S = 3600
 #: the red record reverted at once, with no `FIX_WINDOW_S`, and while it stands no PR touching what it reads lands
 #: (`Driver._circuit_held`): circuit-check runs only after landing, so every landing on its red would go unchecked
 CIRCUIT_RED = "step circuit-check"
-#: how far behind `main`'s tip its last verified commit may fall before drive rings @ci and @top, and how often it rings again
-#: while it stays there (`Driver._behind`)
+#: how far behind `main`'s tip its last verified commit may fall before drive rings (the reds' owners, else `CI` and `TOP`),
+#: and how often it rings again while it stays there (`Driver._behind`)
 BEHIND_S, BEHIND_EVERY_S = 3 * 3600, 3600
 #: how long an after-landing run may run before its running no longer explains that lag (a cold one takes about 4 h,
 #: circuit-check most of it)
