@@ -41,13 +41,13 @@ from verity.ml.randomness import derive
 
 PATH = Path(__file__).with_name("vectors.json")
 PAYLOAD_DOMAIN = b"verity/poub/test-payload/v0\0"
-SOURCE = b"verity remote bandwidth vector source"
-NODE = b"verity remote bandwidth vector node"
+SOURCE = b"verity poub vector source"
+NODE = b"verity poub vector node"
 NONCE = bytes(range(32))
-COIN_LABEL = b"verity remote bandwidth vector coins"
-PAYLOAD_SALT_LABEL = b"verity remote bandwidth vector payload salts"
-LEAF_SALT_LABEL = b"verity remote bandwidth vector receipt salts"
-APPEND_COIN_LABEL = b"verity remote bandwidth vector append coin"
+COIN_LABEL = b"verity poub vector coins"
+PAYLOAD_SALT_LABEL = b"verity poub vector payload salts"
+LEAF_SALT_LABEL = b"verity poub vector receipt salts"
+APPEND_COIN_LABEL = b"verity poub vector append coin"
 APPEND_COIN = hashlib.sha512(APPEND_COIN_LABEL).digest()[:codec.COIN_BYTES]
 BLOCKS = 21
 BOUND_BLOCKS = (0, 20)

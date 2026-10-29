@@ -990,7 +990,7 @@ int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
   };
   const uint8_t zero[64] = {};
   int o = 0;
-  put(P.seed, o, "verity/poub/seed/v0", 32);
+  put(P.seed, o, "verity/poub/seed/v0", 20);
   put(P.seed, o, challenge, 32);
   P.seed_i = o;
   put(P.seed, o, zero, 4);
@@ -1017,7 +1017,7 @@ int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
   P.derive_len = o;
 
   o = 0;
-  put(P.receipt, o, "verity/poub/sketch-receipt/v0", 42);
+  put(P.receipt, o, "verity/poub/sketch-receipt/v0", 30);
   P.receipt_seed = o + 9;
   frame(P.receipt, o, 'b', zero, 64);
 
