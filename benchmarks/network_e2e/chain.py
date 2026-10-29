@@ -376,7 +376,7 @@ def _same(committed: dict | None, info: dict | None) -> bool | None:
 
 def per_unit(rank: dict) -> dict[str, dict]:
     """A rank's timing per drawn unit, by member, as the prove path's `per_unit` reads it: each drawn
-    member's prover and Lean verify seconds over the units its one statement proves (``draw_counts``; C-Flock's own
+    member's prover and Lean verify seconds over the units its one statement proves (``draw_counts``; Flock's own
     ``units`` count its virtual units), and its proof's bytes over its reps."""
     out = {}
     for key, t in (rank.get("timing") or {}).items():

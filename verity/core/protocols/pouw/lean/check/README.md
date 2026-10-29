@@ -9,7 +9,7 @@ Python reference held to it.
 | `Params` | the verifier's own: the check item (`entries`, `scheme`, `template`, `tile_work`, and optionally `coins`, the window's coin mode, `live` or `seeded`), `eps` and `delta` as ratio strings, `grid_bits`, the declared `range` of tile counts, the window's `context`, the check query's SHA-512; the template one `PouwCheck.tiles` pins, with its tile work and query; and the rows' fixed `length` (`{max_tokens, stop}`, stop `fixed`) |
 | `Commitment` | the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window `{kind, context, public}` holding `window.REGISTERED`, whose `length` item must be a fixed-length window's at the verifier's max_tokens (`PouwWindow.lengthProblem`; a window without one, registered before the rule, is refused as `window-form: no-fixed-length`) |
 | `digest` | the record's own: SHA-512(format ‖ 0 ‖ the canonical record), `registration.digest` |
-| `Evidence` | the proof service's answer for a registration, read by `Core.Answer.ofJson` (protocol one-stage's): on acceptance the profile, read by `Core.Integrity.ofJson`, and the public outputs `{"draw": d}`, `d` the verifier's draw as one-stage's `draw.py` writes it (`subset`, `bernoulli`, `stratified` or `work`, with exactly `check_draw`'s keys) |
+| `Evidence` | the proof system's answer for a registration, read by `Core.Answer.ofJson` (protocol one-stage's): on acceptance the profile, read by `Core.Integrity.ofJson`, and the public outputs `{"draw": d}`, `d` the verifier's draw as one-stage's `draw.py` writes it (`subset`, `bernoulli`, `stratified` or `work`, with exactly `check_draw`'s keys) |
 | `check` | `PouwCheck.check`: PoUW's rule over the registration (`registered`), then the service's answer to it (`outcome`); every refusal is the first rule it breaks, with `core_check.py`'s reason |
 | `Public` | `window.PUBLIC`: `verdict`, `work`, `check`, `sampling`, `length`, `drawn`, `root_W` |
 | `Profile` | the service's `Core.Integrity`, passed through once it is the registered partition's N units drawn subset:K′ at the window's δ, and the draw is subset:K′ over N |
@@ -43,14 +43,14 @@ verifies against), and each opened row's b ‖ c its side tree's leaf at the uni
 first two ports, `a0` and `b0` (`PC8_PORTS`), are an A row and a B row of the fp8-p schemas. A salted template's
 (`Salted`: today the H1 tile unit at K = 64, R = 4, C = 8) are its R A rows, its C B rows and its public row `pub`, each
 `hm96-sha512/row/v2`, its entry's side trees holding R rows per tile row and C per tile column. Each schema is read by
-port name, and C-Flock reads port k's b ‖ c at the body's k-th place, in the circuit's port order, so a header whose
+port name, and Flock reads port k's b ‖ c at the body's k-th place, in the circuit's port order, so a header whose
 keys, in key order (serde's), don't list the opened side rows first and in port order (`portsOf`) is refused, never
 read in its own order (every pinned template's side ports sort in port order). The public row's
 b ‖ c must be `publicBc` of the window's context, the certified salt the verifier passes (`opening`'s `salt`,
 `core_check.certified_salt`, the salt `passEpoch` checked), the unit's position and the entry's side roots. Only a
 certified window opens a salted template's units, and only under a 64-byte salt; it opens no unsalted template's unit,
 so a certified window passed no salt opens nothing. So the circuit a window's units are proved over is
-the pinned one, not whatever builds it: a change to a template's Definition or to C-Flock's lowering lands its new digest
+the pinned one, not whatever builds it: a change to a template's Definition or to Flock's lowering lands its new digest
 in `PouwCheck/Tile.lean` (and `core_check.TILES`), which benchmarks/pouw's staged-unit test enforces at K = 128. A
 template has one circuit, so its units proved under an earlier lowering no longer open.
 `served_commit.check` keeps the draw, the level and the population's domain and calls the opening rule for the rest.

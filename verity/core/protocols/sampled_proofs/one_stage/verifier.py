@@ -9,7 +9,7 @@ alone, or an audit record that does not accept, has no profiles and fails its `v
 or run, or that refuses an input (a form its decoders don't read), disagrees with any Python outcome: it fails closed.
 
 * `check`: R1-R7 (`registration.check`), compared on `ok` and the codes; the details are Python's (the Lean reports codes);
-* `matches_public`, `check_draw`, `check_proved`, and the proof service's public-items rule (`check_public`) and hold on
+* `matches_public`, `check_draw`, `check_proved`, and the proof system's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's draw (`service.select_draw`, which the service passes in with the bytes of its coins that
   draw read), compared whole with the number of bytes read; the draw of record is the Lean's;
@@ -283,7 +283,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 def check_public(python: Verdict, record: Any, scheme: str, query: Mapping[str, Any], values: Iterable[tuple[str, bool]],
                  declared: Iterable[str]) -> Verdict:
-    """The proof service's public-items rule by the verifier of record. Its Python is the service's (`service.check_public`,
+    """The proof system's public-items rule by the verifier of record. Its Python is the service's (`service.check_public`,
     which imports this module), so `python` is that verdict, on `record` with `scheme`, the check's `query`, the values as
     `(name, registered)` and the Spec's declared items."""
     got = lean("check_public", {"record": record, "scheme": scheme, "query": dict(query),
@@ -292,7 +292,7 @@ def check_public(python: Verdict, record: Any, scheme: str, query: Mapping[str, 
 
 
 def check_verdicts(python: Verdict, verdicts: Mapping[str, Any], sessions: Sequence[str], outputs: Sequence[str]) -> Verdict:
-    """The proof service's hold on an outcome's verdicts (`service.check_verdicts`, whose verdict is `python`) by the
+    """The proof system's hold on an outcome's verdicts (`service.check_verdicts`, whose verdict is `python`) by the
     verifier of record, on the verdicts, the delivered sessions and the check's public outputs."""
     got = lean("check_verdicts", {"verdicts": verdicts, "sessions": list(sessions), "outputs": list(outputs)})
     return _decide(got, python, whole=True)
@@ -395,7 +395,7 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
 
 def stream(params: Mapping[str, Any], state: Mapping[str, Any], op: Mapping[str, Any], decision: Mapping[str, Any],
            after: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Verdict]:
-    """A proof service stream's rules on `op` (the Lean's `Stream.run` on `state`) against Python's `decision` and the
+    """A proof system stream's rules on `op` (the Lean's `Stream.run` on `state`) against Python's `decision` and the
     state `after` it (`service._step`'s), compared without Python's `detail`, which the decision of record keeps: the
     decision and the state of record, and the verdict, `disagree` where the two differ."""
     return _ruled("stream", {"params": dict(params), "state": dict(state), "op": dict(op)}, decision, after)
@@ -403,7 +403,7 @@ def stream(params: Mapping[str, Any], state: Mapping[str, Any], op: Mapping[str,
 
 def fleet(state: Mapping[str, Any], op: Mapping[str, Any], decision: Mapping[str, Any],
           after: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Verdict]:
-    """A proof service fleet's rules on `op` (the Lean's `Fleet.run` on `state`) against Python's `decision` and the state
+    """A proof system fleet's rules on `op` (the Lean's `Fleet.run` on `state`) against Python's `decision` and the state
     `after` it (`service._fleet_step`'s), as `stream` compares a stream's."""
     return _ruled("fleet", {"state": dict(state), "op": dict(op)}, decision, after)
 

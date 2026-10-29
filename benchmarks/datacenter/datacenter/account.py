@@ -157,7 +157,7 @@ class Account:
         """No refused port-window and nothing overcredited: the AND over this model's own record check
         (`claims.check_records`), with no ε or share credit. The network verdict of record is the certifier's
         `LinkWindows.network_verdict` (`verity/core/protocols/certifier/service.py`), the same AND over a link's outcomes
-        of record; this model builds no proof-service streams, so it doesn't read it."""
+        of record; this model builds no proof-system streams, so it doesn't read it."""
         return not self.refused and not self.overcredited
 
     @property

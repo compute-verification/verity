@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One unit a served H1 window's own draw selected, proved as its 32 lanes, each a C-Flock --zk statement under the Lean
+# One unit a served H1 window's own draw selected, proved as its 32 lanes, each a Flock --zk statement under the Lean
 # firewall, and verified by the Lean verifier against the window's registered roots (served.py's docstring).
 #   research run --on NODE --project verity --campaign C --source . --cwd source --mem-gb G --timeout 600m \
 #     --declared-output 'out/*' --env H1L_MEM_GB=G --env H1S_CALLS=... [...] -- bash benchmarks/pouw/h1_lanes/served.sh

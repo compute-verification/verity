@@ -22,7 +22,7 @@
 #   bundle    each drawn block's one-member window and replay bundle, checked against both registrations (m3proper_job.sh
 #             PHASE=build); then the tree goes to the evidence store (kind m3-drawn-blocks/v1). REG, DRAW,
 #             RECEIPT: coin's receipt.json, WEIGHTS_OPEN: open's weights-open.json
-#   prove     the draw re-derived from the coin, every block held to the step registration, then each proved by C-Flock --zk
+#   prove     the draw re-derived from the coin, every block held to the step registration, then each proved by Flock --zk
 #             behind the firewall one at a time and decided by Lean, one flipped bit refused (prove_bundle.sh). TREE_ART:
 #             bundle's art id, COIN_DIR: coin's out/coin with its session's ledger, on CPU_NODE
 # Machines: H200_NODE (an H200 node), CPU_NODE and WEIGHTS_NODE (CPU nodes); each defaults to the node its run of record
