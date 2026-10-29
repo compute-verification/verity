@@ -306,6 +306,10 @@
    "owner": "@compute-accounting",
    "digest": "a3015e37e566a0c7ee1e316f8de97fc5f69cba2ea45f38cada428f9dac1fd92f"
   },
+  "Accounting.Compose.WindowPlay.EveryWindow": {
+   "owner": "@compute-accounting",
+   "digest": "c98626accb7df5b1c0074aa9db7c4b154b316997637babcf44034dc4aba884f9"
+  },
   "Accounting.Compose.WorkAt": {
    "owner": "@compute-accounting",
    "digest": "c786810e5192b85c62797ddee3bd7abd25776e4bee69ebcc99c11284c3b325f6"
@@ -2101,10 +2105,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Accounting.Compose.WindowPlay.EveryWindow": {
-   "owner": "@compute-accounting",
-   "digest": "c98626accb7df5b1c0074aa9db7c4b154b316997637babcf44034dc4aba884f9"
   }
  },
  "meaning": [
