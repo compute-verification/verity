@@ -19,6 +19,10 @@ over an abstract priced machine, what a design that rests on SAK-U alone gets:
   run at the coins that make the instance a fixed `u₀` computes the useful output for every data. So `E` costs at
   least the cheapest useful-product program, less the cost of the coin map.
 
+Two later sections cover any design (`Gen`): DataCantHelp has no cheap proof by reduction in a useful design
+(`gap_at_base`) but holds within a cheap correction (`dch_within`); and the middle-segment skip, premise-free
+(`skip_adv`, `skip_words`).
+
 Costs are data-oblivious, one number a program, as a fixed kernel's priced work is. The machine is abstract: `pre`
 composes a program with a map, at `mapCost` more. The probability reading of `reduction` is the bijection: uniform
 coins map to a uniform instance, so the two success probabilities are equal.
@@ -189,6 +193,19 @@ theorem gap_at_base (G : Gen) (d₀ : G.Data) (ρ : ToBase G d₀) (H : M.Prog (
   have := honest_pays_base G d₀ ρ H hH hS
   have _ := hpub
   omega
+
+/-- **DataCantHelp within a correction.** If a post-map `σ` turns data `d`'s words into the base data's at the same
+coins, every program for `d`'s words costs at least the base data's lower bound `pubW`, less `σ`'s cost. For data whose
+cross terms with the noise are cheap (low rank, zero blocks, repeated rows), `σ` subtracts them, so DataCantHelp holds
+there up to their cost with no premise beyond `pubW`. -/
+theorem dch_within (G : Gen) (d₀ d : G.Data) (σ : G.Coin → G.Words → G.Words) (hσ : ∀ c, σ c (G.W d c) = G.W d₀ c)
+    {pubW : Nat} (hS : ∀ Q : M.Prog G.Coin G.Words, (∀ c, M.eval Q c = G.W d₀ c) → pubW ≤ M.cost Q)
+    (p : M.Prog G.Coin G.Words) (hp : ∀ c, M.eval p c = G.W d c) :
+    pubW ≤ M.cost p + M.postCost σ := by
+  have hQ : ∀ c, M.eval (M.post p σ) c = G.W d₀ c := by
+    intro c
+    rw [M.eval_post, hp, hσ]
+  exact Nat.le_trans (hS _ hQ) (M.cost_post p σ)
 
 /-- A pad design as a `Gen`. -/
 @[reducible] def Design.gen (D : Design) : Gen :=
