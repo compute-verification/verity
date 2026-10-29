@@ -16,6 +16,8 @@ Units: W1, 1/32 of a register write; stock is 1 W1 a useful MAC; h is honest has
   estimated parts with the words' export and hashing scaled by the committed bits, and the honest's added integer
   writes at H200's 64 int32 lanes a clock an SM).
 - L. Additive combining is linear: the sum of two rows' words is the word of the summed rows, one IMMA output.
+  xorrot-m commits the XOR of the m words each rotated by a distinct public amount (the first by 0): honest adds an
+  SHF a word but the first, which a packed lane can't take.
 - X. XOR of m consecutive words of a cell (xor-m) at M0, the lead's later steps' increments: an exact adversary that
   packs three cells' low 21 bits in 64 bits around a per-block base and reads the high bits off the lanes' bit 20.
   Bit for bit against honest, with its register writes counted instruction by instruction against honest's
@@ -113,6 +115,9 @@ CANDIDATES = {
     **{f"xor-{m}": {"bits": 32 / m, "honest": 1 + math.ceil((m - 1) / 2) / m, "credit_dw": 1 / m,
                     "credit_p": 1 + math.ceil((m - 1) / 2) / m, "premise": f"XorWrites_{m}"}
        for m in (2, 4, 8, 11, 16, 24, 31)},
+    **{f"xorrot-{m}": {"bits": 32 / m, "honest": 1 + (m - 1) / m + math.ceil((m - 1) / 2) / m, "credit_dw": 1 / m,
+                       "credit_p": 1 + (m - 1) / m + math.ceil((m - 1) / 2) / m, "premise": f"RotXorWrites_{m}"}
+       for m in (11, 16, 24)},
     "sum-2": {"bits": 16, "honest": 1.5, "credit_dw": 0.5, "credit_p": 0.5, "premise": "none (linear, part L)"},
 }
 
@@ -156,8 +161,8 @@ def part_p(checks: Checks, lead: dict, f: dict) -> dict:
                  "packing 32/k residues is uncredited", all(out[n]["points"][pt]["t1_premise"] > T1_BAR
                                                              for n in tr for pt in POINTS),
                  ", ".join(f"{n} {out[n]['points']['t8192']['t1_premise']:.1%}" for n in tr))
-    ten = [n for n in out if n.startswith("xor-") and out[n]["points"]["t8192"]["cut"] >= 10]
-    checks.check("P: xor-m cuts h 10x from m = 11, holding T1 and T2 at every point if XorWrites_m holds",
+    ten = [n for n in out if n.startswith("xor") and out[n]["points"]["t8192"]["cut"] >= 10]
+    checks.check("P: xor-m and xorrot-m cut h 10x from m = 11, holding T1 and T2 at every point if their premise holds",
                  ten and min(int(n.split("-")[1]) for n in ten) == 11
                  and all(out[n]["points"][pt]["t1_premise"] <= T1_BAR and max(out[n]["points"][pt]["t2"].values()) <= 100
                          for n in ten for pt in POINTS),
