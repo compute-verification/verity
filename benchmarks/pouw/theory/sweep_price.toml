@@ -1,0 +1,292 @@
+# The PoUW sweep's card (sweep_price.py): every price, shape, point, premise, noise and design it reads, each with its
+# source. `kind` is "measured" (a run id in `source`), "estimate" (its basis in `source`) or "arith" (exact from the
+# definitions). The calculator refuses a design whose field is missing or "?", so an unpriced term can't rank.
+
+schema = "sw-price/card/v1"
+
+[price.reg]
+value = 32
+unit = "W1 units a 32-bit register written"
+kind = "measured"
+source = "CORE-H32 final: the H200's table is h100Floor (tc, ffma, int32, fp64, other all 32), run r20261029-021534-a5a3, replicate r20261029-014532-a2da; cheapest int32 writer 32.277 (IMAD beside LOP3)"
+
+[price.entries_per_reg]
+value = 4
+unit = "int8 entries a 32-bit register"
+kind = "arith"
+source = "four packed int8 entries a register, so a formed or derived entry costs reg/4 = 8 at the floor"
+
+[price.hash_work]
+value = 1774.85
+unit = "W1 units a hashed byte"
+kind = "estimate"
+source = "HASH-38's bar, the public best SHA-512 on the H200: 0.01803 compressions an SM-clock (r20261027-044217-d499, r20261027-062350-7163), 128 B a compression, priced at its issue time, 4096/(128 x 0.01803) (CORE-SMELL C27: pricing an issue-bound hash at its time; co-issue would raise it)"
+
+[price.hash_work_committer]
+value = 2123.4
+unit = "W1 units a hashed byte"
+kind = "estimate"
+source = "GD-HASH's h_x at 16 KiB hm96 rows, framing and tree included (art:5cf3621a988a946e98dcb8d36eafbecc3496b898df7ae7f481f757f5308ff991); the committer, not the best possible"
+
+[price.hash_rate]
+value = 519.63e9
+unit = "B/s"
+kind = "measured"
+source = "SHA-512 leaves and the level-form tree over 64 GiB of 16 KiB hm96 rows in 132.2461 ms, vy-dc-h200-5, run r20261029-013634-94e5 (CORE-NCP final)"
+
+[price.coin_rate]
+value = 4.449e9
+unit = "SHA-512 compressions/s"
+kind = "measured"
+source = "the committer's leaves, run r20261029-013634-94e5 (CORE-NCP final); a fresh noise matrix's coins are one XOF byte an entry, 64 a compression"
+
+[price.coin_bytes]
+value = 2
+unit = "hashed bytes a derived noise entry"
+kind = "arith"
+source = "one XOF byte a noise entry and 64 XOF bytes a 128-byte compression: each entry's coins cost two hashed bytes of credited work under ShaSpeed (the adversary needs the noise to write noise-dependent words)"
+
+[price.mac_rate_peak]
+value = 9.89e14
+unit = "int8 MAC/s"
+kind = "measured"
+source = "CORE-TIME final: one H200's tensor peak, 127.99 k32 words/SM-clk x 132 SMs at 1.83 GHz"
+
+[price.and_per_mac]
+value = 129.9375
+unit = "AND gates an int8 MAC"
+kind = "estimate"
+source = "CORE-TIME final's per-period tables: 2,079/16 AND gates an int8 MAC (relayed, not re-derived here)"
+
+# Per monitoring period (AGENTS.md): the datacenter and the world, from the census.
+[scale]
+datacenter_gpus = 100000
+window_s = 600
+datacenter_source = "benchmarks/census/deployments.json dc-12500-machines-600s: 12,500 machines of 8 GPUs, 10-minute windows (its GPUs taken as H200s, an estimate)"
+world_mac_per_year = 4.68e30
+world_source = "benchmarks/census/adversary.json world-inference-2027: 9.36e30 FLOP a year, 2 FLOP a MAC"
+
+# The models: each matmul is [name, n out, K in, calls a forward, rows a call as a multiple of the point's tokens].
+[model."llama-3.2-1b"]
+title = "Llama-3.2-1B int8, its 16 layers' linears as vLLM serves them (qkv and gate_up fused; the bf16 head and attention outside)"
+layers = 16
+matmuls = [["qkv", 3072, 2048, 16, 1.0], ["o", 2048, 2048, 16, 1.0], ["gate_up", 16384, 2048, 16, 1.0],
+           ["down", 2048, 8192, 16, 1.0]]
+source = "CORE-NCP final §7 (ncp_k32_price.py LINEARS); unsloth/Llama-3.2-1B config"
+
+[model.v4-like]
+title = "a DeepSeek-V4-like matmul, K = n = 7,168 (CORE.md §7)"
+layers = 1
+matmuls = [["v4-like", 7168, 7168, 1, 1.0]]
+source = "inbox/CORE.md §7: K = n = 7,168, m >= 8,192"
+
+[model.v4-pro]
+title = "DeepSeek-V4-Pro's active matmuls a forward, int8-priced (experts' gate and up fused; head, compressors and mHC outside; routing uniform)"
+layers = 61
+matmuls = [["wq_a", 1536, 7168, 61, 1.0], ["wkv", 512, 7168, 61, 1.0], ["wq_b", 65536, 1536, 61, 1.0],
+           ["wo_a", 1024, 4096, 976, 1.0], ["wo_b", 7168, 16384, 61, 1.0], ["indexer_wq_b", 8192, 1536, 30, 1.0],
+           ["router", 384, 7168, 61, 1.0], ["shared_gate_up", 6144, 7168, 61, 1.0], ["shared_down", 7168, 3072, 61, 1.0],
+           ["expert_gate_up", 6144, 7168, 23424, 0.015625], ["expert_down", 7168, 3072, 23424, 0.015625]]
+source = "benchmarks/rho/data/models.toml model.deepseek-v4-pro.matrices (from integrations/vllm/tests/check/fixtures/deepseek_v4/config.json); an expert's call holds T x 6/384 rows on average (estimate: uniform routing)"
+
+# The points: tokens a call, and the T2 inputs that exist for them.
+[point.t512]
+title = "T 512: the demo's step, 64 real tokens a call"
+model = "llama-3.2-1b"
+tokens = 64
+stock_ms = { sync = 3.42, async = 1.67 }
+stock_kind = "estimate"
+stock_source = "CORE-NCP final: p1a-levers' T 8,192 parts scaled (kernels 0.96 ms, gap 2.46 / 0.71 ms), as GD-HASH used them"
+plain_gemm_ms = 0.5708
+gemm_parts = { wide = 0.996, a_side = 1.893, noised = -0.001, w_side = 5.683 }
+gemm_kind = "measured"
+gemm_source = "GD-DENOISE's table, cuBLASLt int8, the 16 layers' linears (art:43138e61baa8fa11988e5ff9873a51133bde30c26784f90a321c67899822be5e, run r20261028-194021-247f); parts over plain: one 3K-wide call less the noised one, fresh A-side noise, the noised GEMM, the weight side formed a call (stand-ins for NCP's forming)"
+hash_rate = 510.48e9
+hash_rate_source = "measured: T 512's 64-token forward of k32 words, 21.75 GiB hashed whole in 45.7495 ms, run r20261029-013634-94e5"
+
+[point.t512r512]
+title = "T 512 with 512 real tokens a call (CORE-SMELL C30: the other reading of T 512)"
+model = "llama-3.2-1b"
+tokens = 512
+stock_ms = { sync = 4.04, async = 2.29 }
+stock_kind = "estimate"
+stock_source = "CORE-NCP final: the 64-token step's kernels with its GEMMs at m 512 (cuBLASLt plain rows); likely low (the served linears measured 1.76 ms, not 1.19)"
+plain_gemm_ms = 1.1943
+gemm_parts = { wide = 1.169, a_side = 2.059, noised = 0.012, w_side = 2.739 }
+gemm_kind = "measured"
+gemm_source = "GD-DENOISE's table (art:43138e61baa8fa11988e5ff9873a51133bde30c26784f90a321c67899822be5e, run r20261028-194021-247f)"
+
+[point.t8192]
+title = "T 8,192: 8,192 tokens a call"
+model = "llama-3.2-1b"
+tokens = 8192
+stock_ms = { sync = 37.77, async = 31.33 }
+stock_kind = "measured (sync); estimate (async)"
+stock_source = "sync: HASH-56's served step, run r20261028-023029-1f82 (host gap 8.73 ms); async: the same with p1a-levers' async gap of 2.29 ms (estimate)"
+plain_gemm_ms = 12.4942
+gemm_parts = { wide = 1.536, a_side = 2.424, noised = 0.043, w_side = 0.265 }
+gemm_kind = "measured"
+gemm_source = "GD-DENOISE's table (art:43138e61baa8fa11988e5ff9873a51133bde30c26784f90a321c67899822be5e, run r20261028-194021-247f)"
+
+[point.v4like]
+title = "V4-like matmul at 8,192 rows"
+model = "v4-like"
+tokens = 8192
+matmul_only = true
+gemm_from = "t8192"
+gemm_kind = "estimate"
+gemm_source = "the matmul alone at Llama's measured cuBLASLt rate at m 8,192, with its parts' ratios (no V4 kernel timed on the H200)"
+
+[point.v4pro]
+title = "DeepSeek-V4-Pro's forward at 8,192 tokens (experts at 128 rows a call)"
+model = "v4-pro"
+tokens = 8192
+matmul_only = true
+gemm_from = "t8192"
+gemm_kind = "estimate"
+gemm_source = "the matmuls alone at Llama's measured cuBLASLt rate at m 8,192, with its parts' ratios (no V4 kernel timed on the H200)"
+
+# T3: perplexity rise over stock int8 (WikiText-2), by the served operand format.
+[t3.int7-pm63]
+models = ["llama-3.2-1b"]
+ctx2k = 0.0368
+ctx8k = 0.0348
+kind = "measured"
+source = "CORE-NCP final §4: NCP as served (int7 activations and weights on +-63) over stock int8, Llama-3.2-1B (art:0b068bfc0614cbff8c589585b4ec68577d738a9c2aced3f043cdba7685dcd1fb; runs r20261029-005411-f350 and the parts listed there)"
+
+[t3.int8-stock]
+ctx2k = 0.0
+ctx8k = 0.0
+kind = "arith"
+source = "the served product is stock's own int8 product (the noise cancels exactly and the operands are stock's)"
+
+# The premises. rank: CORE.md §2's ladder (0 theorem, 1 measured hardware floor, 2 CPU-checkable fact, 3 model
+# faithfulness, 4 SAK, 5 hardness). status: proved, measured, ruled, assumed, open (stated, not yet proved or measured),
+# refuted. A premise closes T1 terms (`closes`), forces honest's committed registers (`forces_committed`), makes a
+# committed word force its uncommitted steps (`word_forces_steps`), and may require others.
+[premise.H32]
+rank = 1
+status = "measured"
+owner = "CORE-H32"
+source = "every register written costs >= 32 W1 units on the H200: h200Measured = h100Floor, run r20261029-021534-a5a3 (Lean h32H200Measured, h200MeasuredFloor on cursor/compute-research-core-h32-1e0b)"
+
+[premise.W1]
+rank = 3
+status = "assumed"
+owner = "SW-PREMISES"
+source = "MH100w is faithful to the H200 (CORE.md §2: model faithfulness, rank 3); unmeasured as a whole"
+
+[premise.atomic-call]
+rank = 0
+status = "ruled"
+owner = "Daniel"
+source = "each A·B call is atomic, with fresh noise every call (Daniel, Wed 28 Oct 4:30 and 4:49 PM PDT; CORE.md §1, §2a)"
+
+[premise.final-word-lemma]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+requires = ["atomic-call"]
+closes = ["final_word", "pre_noise_hashing", "final_rows"]
+source = "CORE-TIME final §2: FinalWordTarget, DistinctWritesFloor at the call's own words (input, coin, formed operand words, constants), not their span; stated, not proved. With the call atomic, work before the noise inside the call (A's commitment, rows of final words) is charged too (CORE-SMELL C28)"
+
+[premise.commit-forced]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+requires = ["final-word-lemma"]
+forces_committed = true
+source = "SWEEP.md candidate 1: a committed, pairwise-distinct, noise-dependent formed operand or noise register is a DistinctWrites target, so committing X and Y (and E, F) forces forming (and deriving). Needs the final-word lemma at a free set without the formed words (CORE-TIME's FreeCall holds them, which would leave them free), and distinctness where A or B has a zero 4-entry group (X1 = E1 there)"
+
+[premise.k32-semantics]
+rank = 3
+status = "open"
+owner = "SW-SEM"
+requires = ["H32"]
+word_forces_steps = true
+source = "SWEEP.md candidate 2: a tensor instruction writes a k32 partial sum of its operand registers, not any function; with its counting lemma a word committed every L forces L/32 k32 steps. Rank provisional (3, model faithfulness) until SW-SEM rules"
+
+[premise.forming-counting]
+rank = 0
+status = "open"
+owner = "SW-SEM"
+requires = ["k32-semantics"]
+closes = ["forming"]
+source = "CORE-TIME final §3: with the tensor's real semantics, a program whose words are NCP's bilinear forms writes (3mK + 3nK)/4 formed registers or pays more tensor words; neither part exists"
+
+[premise.SAK]
+rank = 4
+status = "assumed"
+owner = "CORE-RANK"
+source = "symmetric algorithmic knowledge on a distribution (CORE.md §2's rank 4): the Dither and Accel families' SAKMatmul"
+
+[premise.ShaSpeed]
+rank = 4
+status = "assumed"
+owner = "SW-HASH"
+source = "CORE.md §2a: hashing is credited, no program computes SHA-512 faster than the best implementation; CORE-SMELL C27: SAK for SHA-512, rank 4, needed to delta* = (1% - the other terms) / hashing's work"
+
+# The noise structures. Counts are a call's, in entries, as expressions in m (rows), n (columns) and K (depth):
+# r the product's stacked K-blocks; formed_x / formed_y the formed operand entries; noise_x / noise_y the derived noise
+# entries (one LOP3 a packed register from XOF bytes, CORE-SMELL C28); denoise the de-noise work in W1 units;
+# pre_noise_bytes the bytes hashed before the noise (A's commitment feeds the call's seed).
+[noise.ncp]
+r = 3
+formed_x = "3*m*K"
+formed_y = "3*n*K"
+noise_x = "m*K"
+noise_y = "n*K"
+denoise = "0"
+pre_noise_bytes = "m*K"
+served = "int7-pm63"
+source = "verity/core/protocols/pouw/schemes/ncp.py: X = [A+E1 | A+E2 | -(A+E3)], Y = [B+F1; B+F2; B+F3], E2 = E1·R and F2 = -R·F1 word moves (word_perm), E3, F3 inside IADD3s; F1 fresh every call; the noise cancels inside the 3K-wide product, no de-noise; E1's seed reads root(A)"
+
+# The designs: a noise × a commitment × a premise set. commit.L is the depth between committed words (32 = every k32
+# step), commit.word_bits their width, commit.operands the formed and noise classes committed (formed_x, formed_y,
+# noise_x, noise_y), commit.rows_mix_final whether every hm96 row mixes final words with noise-dependent ones.
+[design.ncp-k32]
+title = "NCP + the rank bound, every k32 word committed (tonight's #1, CORE-TIME / CORE-NCP finals)"
+noise = "ncp"
+commit = { L = 32, word_bits = 32, operands = [], rows_mix_final = true }
+premises = ["H32", "W1", "atomic-call", "ShaSpeed"]
+source = "CORE-TIME final; CORE-NCP final"
+
+[design.ncp-k64-nosem]
+title = "NCP, a word every 64 steps without the k32 semantics (a control: the uncommitted steps are gap)"
+noise = "ncp"
+commit = { L = 64, word_bits = 32, operands = ["formed_x", "formed_y", "noise_x", "noise_y"], rows_mix_final = true }
+premises = ["H32", "W1", "atomic-call", "final-word-lemma", "commit-forced", "ShaSpeed"]
+source = "a control: density without candidate 2"
+
+# The sweep: every combination of a word every L, the classes committed, and how forming is charged when X and Y aren't
+# committed ("none", or the counting lemma). Each takes `base`; L > 32 adds k32-semantics, a committed class adds
+# commit-forced, and the counting lemma adds forming-counting (and k32-semantics). Named ncp-k<L>-<classes>[-count].
+[sweep.ncp]
+noise = "ncp"
+L = [32, 64, 128, 256]
+operands = { w = [], ef = ["noise_x", "noise_y"], xy = ["formed_x", "formed_y"], xyef = ["formed_x", "formed_y", "noise_x", "noise_y"] }
+forming = ["none", "count"]
+base = ["H32", "W1", "atomic-call", "final-word-lemma", "ShaSpeed"]
+source = "SWEEP.md candidates 1 (commit X and Y), 2 (the k32 semantics) and 3 (the final-word lemma); CORE-SMELL C28 (the noise's derivation)"
+
+# Designs the calculator must refuse until their terms are priced (CORE-RANK's top three led only because of that).
+[design.dither-c]
+title = "Dither-C (CORE-RANK #1 by its order rule)"
+noise = "?"
+commit = { L = 32, word_bits = "?", operands = [], rows_mix_final = "?" }
+premises = ["SAK", "ShaSpeed"]
+source = "CORE-RANK final R09: forming and de-noise unpriced under §2a"
+
+[design.fresh-u]
+title = "Fresh-U (CORE-RANK #2)"
+noise = "?"
+commit = { L = "?", word_bits = "?", operands = [], rows_mix_final = "?" }
+premises = ["SAK", "ShaSpeed"]
+source = "CORE-RANK final R11: a′'s forming unpriced under §2a"
+
+[design.accel-d5-d6]
+title = "Accel D5 / D6 (CORE-RANK #3)"
+noise = "?"
+commit = { L = "?", word_bits = "?", operands = [], rows_mix_final = "?" }
+premises = ["SAK", "ShaSpeed"]
+source = "CORE-RANK final R33: unpriced under §2a"
