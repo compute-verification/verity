@@ -3,15 +3,15 @@ reference (`reference.py`: the trial's composition rule with reject dominance, o
 core interface and the subprotocols' own Python). Hypothesis draws each subprotocol's case to accept, reject, be
 undecided or fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases` and, made once,
 `pouw_period_cases`' periods, the network certifier's period `build`, the inference-only policy's `drawn`, which is never
-undecided, sampled proofs' audits as v2's cases, `v2_case`, the wipe's signed wipes, `wipe_protocol_case.case`; space's
+undecided, sampled proofs' audits as one-stage v2's cases under the form ``one-stage``, `v2_case`, the wipe's signed wipes, `wipe_protocol_case.case`; space's
 and bandwidth's from the small periods of their hooks, `periods.py`), often recommits the subprotocols each composite
-ties to one record (`one_record`: remote's three to PoUW's window record, onsite's policy to the one-stage audit's
+ties to one record (`one_record`: remote's three to PoUW's window record, onsite's policy to sampled proofs'
 registration record, on that audit's own declared circuit, `policy_on`), hands every subprotocol the same blobs (`BLOBS`,
 v2's circuit and public file), then often breaks the composition's own inputs (a component dropped, unknown, repeated or
 out of order, a case under other params, a wrong or short commitment, non-canonical or malformed evidence, blobs missing
 or malformed) or the case itself (a field missing or not hex, not an object), and every field of the outcome but its
-reason must agree exactly. v2 accepts only on a session's proof, which no case carries, so integrity is undecided at best
-and no product accepts here."""
+reason must agree exactly. v2 accepts only on a session's proof, which no case carries, so sampled proofs is undecided at
+best and no product accepts here."""
 
 from __future__ import annotations
 
@@ -84,14 +84,24 @@ def empty_draws(draw) -> dict:
 
 
 #: One change to a v2 case that v2 refuses: verdicts handed in, no proofs, a circuit that is no digest, a public file in
-#: no blob, a session the proofs name that the evidence doesn't.
-V2_BREAKS = ["verdicts", "no-proofs", "circuit", "public", "session"]
+#: no blob, a session the proofs name that the evidence doesn't; or that `VStar.Recursive.Sampled` refuses: params or
+#: evidence naming no form, another form, or the recursive form with none of its files.
+V2_BREAKS = ["verdicts", "no-proofs", "circuit", "public", "session", "params-no-form", "params-form-other",
+             "params-recursive", "evidence-no-form", "evidence-recursive"]
+
+
+def _with_form(x, br: str | None, side: str):
+    """Sampled proofs' form on the params or the evidence (`VStar.Recursive.Sampled`): ``one-stage``, unless `br` breaks
+    it."""
+    if not isinstance(x, dict) or br == f"{side}-no-form":
+        return x
+    return {**x, "form": {f"{side}-form-other": "two-stage", f"{side}-recursive": "recursive"}.get(br, "one-stage")}
 
 
 def v2_case(a: dict, br: str | None = None) -> dict:
-    """An audit (`{"params", "record", "evidence"}`) as v2's case (`SampledProofs.OneStageZk`): the params naming `CIRCUIT`
-    by its digest and no registered file, the evidence its sessions' files in place of verdicts (each record in no blob),
-    with one of `V2_BREAKS`."""
+    """An audit (`{"params", "record", "evidence"}`) as sampled proofs' one-stage case (`SampledProofs.OneStageZk`, under
+    the form ``one-stage``): the params naming `CIRCUIT` by its digest and no registered file, the evidence its sessions'
+    files in place of verdicts (each record in no blob), with one of `V2_BREAKS`."""
     e = {k: v for k, v in a["evidence"].items() if k != "verdicts" or br == "verdicts"} \
         if isinstance(a["evidence"], dict) else a["evidence"]
     names = e.get("sessions") if isinstance(e, dict) and isinstance(e.get("sessions"), list) else []
@@ -103,7 +113,8 @@ def v2_case(a: dict, br: str | None = None) -> dict:
     p = a["params"]
     if isinstance(p, dict) and br != "no-proofs":
         p = {**p, "proofs": {"circuit": "ab" if br == "circuit" else _sha(CIRCUIT), "registered": None}}
-    return OS._case({"params": p, "record": a["record"], "evidence": e})
+    return OS._case({"params": _with_form(p, br, "params"), "record": a["record"],
+                     "evidence": _with_form(e, br, "evidence")})
 
 
 #: v2's cases by the verdict they aim at: an audit that drew nothing (undecided, v2's best with no session's proof), and
@@ -326,14 +337,14 @@ def reference(product: R.Product, seen: collections.Counter):
 
 
 class UndecidedPort(D.ProtocolPort):
-    """A product port whose best verdict is undecided: integrity (v2) accepts only on a session's proof, which no case
+    """A product port whose best verdict is undecided: sampled proofs accepts only on a session's proof, which no case
     carries, so the run's non-vacuity bar is a case every subprotocol left undecided or accepted."""
     accepted = R.UNDECIDED
 
 
 class RejectingPort(D.ProtocolPort):
     """A product port whose sampled cases reject: its three subprotocols must commit to one window record, and on one
-    record integrity (v2) refuses PoUW's window (its program reads registered values, outside v2's mirror), so the
+    record sampled proofs refuses PoUW's window (its program reads registered values, outside v2's mirror), so the
     sampled cases don't reach undecided. Its bar is the two ways its subprotocols' records meet, counted in `seen`."""
     accepted = R.REJECT
 
@@ -379,7 +390,7 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int,
            kinds: tuple[str, ...] = (R.REJECT, R.UNDECIDED, "reject, a component undecided",
                                      "reject, no component rejected")) -> None:
     """Lean and Python agree on every case, and the cases reach each of `kinds` (by default each verdict but
-    acceptance: integrity (v2) accepts only on a session's proof, which no case carries, so no product accepts)."""
+    acceptance: sampled proofs accepts only on a session's proof, which no case carries, so no product accepts)."""
     seen.clear()
     stats = D.run(p, examples=examples, seed=0, server=server)
     print(f"{p.label}: {stats}, verdicts {dict(seen)}")

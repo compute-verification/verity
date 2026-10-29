@@ -11,12 +11,12 @@ import Flock.Hash
 
 The verifier of record is one compiled Lean function, `Core.Onsite.protocol`'s `answer` on the caller's blobs: the
 composition of its components (`Core.Composition.sameB`), whose inference-only policy (`NciCheck.Protocol.protocol`)
-and sampled proofs' one-stage audit must commit to one record (`Core.Onsite.tied`). Five of its components decide a
-period, one per `Accounting.Audit`:
+and sampled proofs must commit to one record (`Core.Onsite.tied`). Five of its components decide a period, one per
+`Accounting.Audit`:
 
 | subprotocol | `Audit` | component |
 | --- | --- | --- |
-| sampled proofs | `.sampled` | `SampledProofs.OneStageZk.protocol` |
+| sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol`: one-stage v2's audit or the recursive audit, as its params' `form` names it |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` |
 | the bandwidth audit | `.poub` | `RemoteAudit.Protocol.protocol` |
@@ -77,7 +77,7 @@ open scoped ENNReal
 
 /-- The compiled component of onsite that decides `Audit` `a`. -/
 def component : Audit → BlobProtocol
-  | .sampled => SampledProofs.OneStageZk.protocol
+  | .sampled => VStar.Recursive.Sampled.protocol
   | .pouw => PouwCheck.Period.protocol
   | .pous => PousCheck.RunProtocol.protocol
   | .poub => RemoteAudit.Protocol.protocol
@@ -116,8 +116,8 @@ def ComponentAccepts (a : Audit) (s : Sent) : Prop := CaseAccepts (component a) 
 /-- **Onsite's cases are an accepted composition whose policy and sampled proofs commit to one record**: on some
 blobs, onsite's three byte strings decode, the cases are an accepted composition of its components on the blobs
 (`Properties.Composition.Accepted`: every component accepts its own case, the policy's among them, and the commitment
-binds their digests), and the cases of `Onsite.tied`, the policy's and sampled proofs' one-stage audit's, commit to one
-record: none has a digest other than the first's (`Composition.strays`). -/
+binds their digests), and the cases of `Onsite.tied`, the policy's and sampled proofs', commit to one record: none has a
+digest other than the first's (`Composition.strays`). -/
 def RecordAccepts (s : Sent) : Prop :=
   ∃ bs ps b ev, Decoded s ps b ev ∧ ∃ pub prof,
     Properties.Composition.Accepted "verity/onsite/v0" (componentsOn bs) ps b ev pub prof ∧

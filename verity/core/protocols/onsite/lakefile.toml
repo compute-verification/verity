@@ -53,6 +53,12 @@ path = "../pous/check"
 name = "remote_audit"
 path = "../remote_bandwidth/lean"
 
+# Integrity: sampled proofs in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled
+# check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).
+[[require]]
+name = "core_vstar_recursive"
+path = "../../service/vstar/recursive"
+
 # The wipe: the memory challenger's streamed-label wipe verdict (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`).
 [[require]]
 name = "core_memory_challenger"

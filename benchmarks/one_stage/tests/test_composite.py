@@ -17,7 +17,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import composite as C
 
-V2 = "verity/sampled-proofs/one-stage/v2"
+V2 = "verity/sampled-proofs/v1"
 POUW = "verity/pouw/v1"
 POLICY = "verity/inference-only/v0"
 
@@ -67,10 +67,10 @@ def test_remote_case_orders_by_id_and_binds_the_digests(tmp_path):
     out = tmp_path / "private"
     assert (out / "params.json").read_bytes() == \
         b'{"components":[{"id":"verity/inference-only/v0","params":{"g":1}},{"id":"verity/pouw/v1","params":{"k":2}},' \
-        b'{"id":"verity/sampled-proofs/one-stage/v2","params":{"delta":"1/100"}}]}'
+        b'{"id":"verity/sampled-proofs/v1","params":{"delta":"1/100"}}]}'
     body = ('{"components":[{"commitment":"' + "cc" * 64 + '","id":"verity/inference-only/v0"},{"commitment":"' +
             "bb" * 64 + '","id":"verity/pouw/v1"},{"commitment":"' + "aa" * 64 +
-            '","id":"verity/sampled-proofs/one-stage/v2"}]}')
+            '","id":"verity/sampled-proofs/v1"}]}')
     assert (out / "commitment.bin").read_bytes() == hashlib.sha512(b"verity/remote/v0\0" + body.encode()).digest()
     e = json.loads((out / "evidence.json").read_bytes())
     assert [x["id"] for x in e["components"]] == [POLICY, POUW, V2]

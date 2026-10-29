@@ -3,9 +3,10 @@ Remote Verity (`verity/remote/v0`): what the verifier establishes with no hardwa
 components are the inference-only policy (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`: the declared circuit
 divides into inference blocks within their gate and fresh-input budgets, which reads only the declared circuit and the
 registered information and so needs no hardware at the site), work by proof of useful work (`PouwCheck.protocol`), and
-integrity by sampled proofs' one-stage audit on the proofs themselves (`SampledProofs.OneStageZk.protocol`,
-`verity/sampled-proofs/one-stage/v2`: flock-verify `--zk` run on each session's files, which the caller hands in as
-blobs). `Core.Composition.sameB` composes them on the caller's blobs: every component accepts or remote doesn't, and any
+integrity by sampled proofs on the proofs themselves (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in
+the form its params name: one-stage v2's audit, flock-verify `--zk` run on each session's files, or the recursive audit,
+V*'s compiled check run on the recursive session's parts, each on the files the caller hands in as blobs).
+`Core.Composition.sameB` composes them on the caller's blobs: every component accepts or remote doesn't, and any
 one's rejection rejects remote whatever the others answer. Each one's commitment is the run's record, and all three must
 commit to the same one: two records' digests reject remote whatever the components answer.
 
@@ -19,6 +20,7 @@ import CoreComposition.Cases
 import NciCheck.Protocol
 import PouwCheck.Protocol
 import SampledProofs.OneStageZk
+import VStarRecursive.Sampled
 
 namespace Core.Remote
 
@@ -26,7 +28,7 @@ open Composition
 
 /-- Remote's components, in the order of their ids. -/
 def components : List BlobProtocol :=
-  [NciCheck.Protocol.protocol, PouwCheck.protocol, SampledProofs.OneStageZk.protocol]
+  [NciCheck.Protocol.protocol, PouwCheck.protocol, VStar.Recursive.Sampled.protocol]
 
 def protocol : BlobProtocol := sameB "verity/remote/v0" (components.map (·.id)) components
 
@@ -40,7 +42,7 @@ private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 #guard orderedB components
 #guard components.map (·.id) ==
-  ["verity/inference-only/v0", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"]
+  ["verity/inference-only/v0", "verity/pouw/v1", "verity/sampled-proofs/v1"]
 
 -- every component refuses its case: remote rejects on each, and makes nothing public
 private def allRefused : Answer := answer (components.map refused)
@@ -48,15 +50,18 @@ private def allRefused : Answer := answer (components.map refused)
 #guard allRefused.published.isNone && allRefused.profile.isNone
 #guard allRefused.reason.map (·.startsWith "verity/inference-only/v0 reject: params: ") == some true
 #guard allRefused.reason.map (contains · "; verity/pouw/v1 reject: params: ") == some true
-#guard allRefused.reason.map (contains · "; verity/sampled-proofs/one-stage/v2 reject: params: ") == some true
-#guard (answer [refused PouwCheck.protocol, refused SampledProofs.OneStageZk.protocol]).reason ==
+#guard allRefused.reason.map (contains · "; verity/sampled-proofs/v1 reject: params: ") == some true
+#guard (answer [refused PouwCheck.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/inference-only/v0 is missing"
 #guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.protocol]).reason ==
-  some "params: verity/sampled-proofs/one-stage/v2 is missing"
--- v1's audit is not remote's integrity component
+  some "params: verity/sampled-proofs/v1 is missing"
+-- neither v1's nor v2's one-stage audit alone is remote's integrity component
 #guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.protocol,
     refused SampledProofs.OneStage.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
+#guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.protocol,
+    refused SampledProofs.OneStageZk.protocol]).reason ==
+  some "params: verity/sampled-proofs/one-stage/v2 is not a component of this composition"
 
 /-- A registration record every component's commitment decodes, naming the program `p`. -/
 private def record (p : String) : ByteArray :=
@@ -77,8 +82,8 @@ private def recordsOf (rs : List ByteArray) : Answer := answer (components.zipWi
   (·.startsWith "record: verity/inference-only/v0 committed ") == some true
 #guard (recordsOf [record "y", record "x", record "x"]).reason.map (contains · ", verity/pouw/v1 committed ") == some true
 #guard !((recordsOf [record "y", record "x", record "x"]).reason.map (contains · "reject: params")).getD true
--- so is a one-stage audit of another record than the policy's and PoUW's
+-- so is sampled proofs of another record than the policy's and PoUW's
 #guard (recordsOf [record "x", record "x", record "y"]).reason.map
-  (contains · ", verity/sampled-proofs/one-stage/v2 committed ") == some true
+  (contains · ", verity/sampled-proofs/v1 committed ") == some true
 
 end Core.Remote

@@ -51,7 +51,6 @@ from verity.core.protocols.pouw import window as pouw_window_rules
 from verity.core.protocols.sampled_proofs import parties
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
 from verity.core.protocols.sampled_proofs.one_stage import registered as R
-from verity.core.protocols.sampled_proofs.one_stage.proofs import V2
 from verity.core.wire import Body, Int, Message, Schema
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
@@ -889,9 +888,11 @@ def frame_commitment(data: bytes, salt: bytes) -> str:
     return hashlib.sha512(b"lifecycle/frame/v1\0" + salt + data).hexdigest()
 
 
-IDS = {**parties.IDS, "sampled-proofs": V2, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL}
-"""Each subprotocol's id as the composites run it (`products`): integrity is one-stage v2 (`SampledProofs.OneStageZk`) in
-both, onsite's work is PoUW's period, and onsite's memory challenger also runs a wipe."""
+IDS = {**parties.IDS, "sampled-proofs": "verity/sampled-proofs/v1", "pouw-period": period_check.ID,
+       "wipe": wipe_period.PROTOCOL}
+"""Each subprotocol's id as the composites run it (`products`): integrity is sampled proofs (`VStar.Recursive.Sampled`,
+one-stage v2's audit or the recursive audit) in both, onsite's work is PoUW's period, and onsite's memory challenger
+also runs a wipe."""
 
 
 def label(seed: str, i: int) -> str:
