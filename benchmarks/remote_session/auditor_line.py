@@ -39,8 +39,8 @@ The ledger check: its longest head verified under the pinned key (`ledger_head`,
 the period's lane, cap and circuit, and that it closed; each session reserved and opened by the lane for the peer under
 the pin at epoch k, opened at its window root R_k, ended closed with no refused hello, inside the period; σ_0 asked
 after R_k, and each coin released after its root's receipt. The peer is the verifier machine's name at the challenger
-host, as the run's own record gives it (`peer_of`): vy-nebius-1 for a verifier there, vy-auditor-1 for a host run.
-`--peer` overrides it, and a gate run whose record names none is refused. A session served by `--challenger serve`
+host, as the run's own record gives it (`peer_of`): the node's own name for a verifier on a node, the verifier host's
+for a host run. `--peer` overrides it, and a gate run whose record names none is refused. A session served by `--challenger serve`
 (the verifier's machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not
 the auditor's.
 
@@ -97,7 +97,7 @@ certifiers cover the gate node's boundary. A relay prover, a thin node forwardin
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
 as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
 grounded or not. The `memory-line-of-record` label names what the file names (`line_label`: `lean conditional on
-NoOutsideCompute, binding-split`), and `research data label` refuses one that doesn't.
+NoOutsideCompute, binding-split`), and the evidence store's labeller refuses one that doesn't.
 
 **The lockdown** (`--lockdown FILE`, `read_lockdown`, `lockdown_check`). Infra's record of the provider's lockdown of
 the gate node: the security group's allow list, each interval it was applied, with infra's records, and whether the
@@ -724,7 +724,7 @@ def conditional_on(rows: list[dict]) -> dict:
 
 def line_label(doc: dict) -> str:
     """The `memory-line-of-record` value naming the doc's line: who computed it and what it is conditional on, as
-    `research data label` holds it to this file (`vocab.check_line_of_record`)."""
+    the evidence store's labeller holds it to this file (`vocab.check_line_of_record`)."""
     return f"{doc['line_by']} conditional on {', '.join(doc['conditional_on'])}"
 
 
