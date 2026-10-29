@@ -359,9 +359,6 @@ theorem reject_arith (m S : ℕ) (hm : 0 < m) (hS : 0 < S) (q : ℕ → ℝ≥0�
       ← add_mul, mul_comm (t : ℝ≥0∞), ← Nat.cast_mul, ← Nat.cast_add]
   rw [hsum, mul_comm, ENNReal.mul_div_cancel_right (by exact_mod_cast hS.ne') (ENNReal.natCast_ne_top _)]
 
-theorem width_pos (m : ℕ) : 0 < Flock.Draw.width m := by
-  unfold Flock.Draw.width; omega
-
 open Classical in
 /-- **The rejection sampler**: if every value `r < m` it can return is followed by an event of probability at most `q r`
 on the rest of the stream, the draw returns some `r` and then that event with probability at most the average of `q`. -/

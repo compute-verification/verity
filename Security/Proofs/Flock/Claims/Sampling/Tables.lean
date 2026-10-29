@@ -99,10 +99,6 @@ noncomputable def withTabSim (L : Leaky W) [Fintype L.G.Coin]
   dmsg := L.dmsg
   sim := L.tabSim Mc nS
 
-theorem withTabSim_prover (L : Leaky W) [Fintype L.G.Coin]
-    (Mc : ∀ lx x, L.G.Nonce → (Fin (L.G.K x) → L.G.Coin) → (L.proto lx).TCoinModel x) (nS : Msg → ℕ) :
-    (L.withTabSim Mc nS).G.prover = L.G.prover := rfl
-
 /-- **`SHVZK` of `withTabSim` at the leaf layer `lx`**, within `2·n_B·δ₁`, from the message links and the tables there,
 where every model's tape has at most `n_S(x)` elements. -/
 theorem withTabSim_shvzk (L : Leaky W) [Fintype L.G.Coin] (H : Msg → Msg) (R : Rel W) {δ₁ : ENNReal}

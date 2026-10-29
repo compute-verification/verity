@@ -62,8 +62,6 @@ def toSubcircuit (d : Verity.Declaration) (I : Finset (Fin d.D.N)) : Nci.Coverin
     exact hgi (mem_inputs.2 ⟨hg, Or.inr h⟩)
   sources_ins g hg hs := mem_inputs.2 ⟨hg, Or.inl (mem_sources.1 hs)⟩
 
-theorem toSubcircuit_inner (I : Finset (Fin d.D.N)) : (toSubcircuit d I).inner = (ofGates d).computed I := rfl
-
 /-- On a declaration's gates the inference blocks are `Nci.Covering`'s. -/
 theorem inferenceBlock_iff (s k : ℕ) (I : Finset (Fin d.D.N)) :
     (ofGates d).InferenceBlock s k I ↔ Nci.Covering.InferenceBlock d s k (toSubcircuit d I) := Iff.rfl
@@ -146,9 +144,6 @@ def mulBlocksOf (B : Nci.Covering.MulBlocks d) : MulBlocks (ofGates d) (Fin B.nt
     B.m_disjoint _ (mem_swap.1 hp) _ (mem_swap.1 hq) fun h => hpq (by simpa using congrArg Prod.swap h)
   o p := B.o p.swap
   m_outputs p hp := outputs_eq_of_reach (B.o_mem _ (mem_swap.1 hp)) (B.reach _ (mem_swap.1 hp))
-
-theorem card_P_mulBlocksOf (B : Nci.Covering.MulBlocks d) : (mulBlocksOf B).P.card = B.P.card :=
-  card_image_of_injective _ Prod.swap_injective
 
 open Classical in
 theorem weightsCompleted_eq (B : Nci.Covering.MulBlocks d) (S : Nci.Covering.Subcircuit d.D) :

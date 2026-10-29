@@ -179,48 +179,4 @@ theorem bits_nz (M : ℕ) (P : Finset ℕ) :
     rw [card_insert_of_notMem ha, pow_succ]
     linarith
 
-/-- **NzNCP is satisfiable.** -/
-theorem wordNzWitness : WordNzWitness := fun M _ P hP r hr =>
-  bits_nz M P hP r fun p hp => (hr p hp).2.1
-
-/-- **FinalOnly is satisfiable.** -/
-theorem wordFinalWitness : WordFinalWitness := by
-  intro M A hV u
-  classical
-  show identCount _ _ _ _ ≤ 0
-  unfold identCount
-  refine (card_eq_zero.2 (filter_eq_empty_iff.2 fun p hp ⟨_, hall0⟩ => ?_)).le
-  have hall : ∀ ω : Fin M → Bool, bits ω p = (A.rule u p).target (bits ω) := hall0
-  have hpM : p < M := mem_range.1 hp
-  let a : Fin M := ⟨p, hpM⟩
-  let ω₀ : Fin M → Bool := fun _ => false
-  apply bits_flip_self a ω₀
-  show bits (RCopy.flip a ω₀) p = bits ω₀ p
-  rw [hall (RCopy.flip a ω₀), hall ω₀]
-  exact target_congr _ p (hV u p hpM) _ _ fun q hq => bits_flip_ne a ω₀ q (by simp only [a]; omega)
-
-/-- **Zero noise.** -/
-theorem wordZeroNoise : WordZeroNoise := by
-  intro Ω _ _ n x N γ₀ hγ1 ⟨u0, hu0, hn0⟩
-  classical
-  have hc : cost n N (constAdv x) = 0 := by simp [cost, unitCost, constAdv, Rule.cost]
-  refine ⟨?_, hc, ?_, ?_⟩
-  · intro u P _ r hr
-    rcases P.eq_empty_or_nonempty with rfl | ⟨p, hp⟩
-    · simpa using pr_le_one _
-    · rw [pr_eq_zero fun ω h => (hr p hp).2.2 fun _ => h p hp]
-      positivity
-  · intro u
-    unfold identCount
-    rw [filter_true_of_mem fun p _ => ⟨fun h => (by simp [constAdv] at h), fun _ => rfl⟩, card_range]
-  · apply pr_eq_one
-    intro ω
-    have hs : Word.correctSet n (fun _ => x) N (constAdv x) ω = range N :=
-      filter_true_of_mem fun u _ p _ => Or.inr rfl
-    rw [hc, hs]
-    have : 0 < ∑ u ∈ range N, (n u : ℝ) :=
-      sum_pos' (fun _ _ => by positivity) ⟨u0, mem_range.2 hu0, by exact_mod_cast hn0⟩
-    simp only [Nat.cast_zero, zero_div]
-    linarith
-
 end Pouw.NCP.WordProofs

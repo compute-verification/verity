@@ -60,8 +60,6 @@ theorem foldKs_push (a : Array F256) (r : F256) (x : Array F256) :
     foldKs (a.push r).toList x = foldK r (foldKs a.toList x) := by
   simp [foldKs, Array.toList_push, List.foldl_append]
 
-theorem foldKs_nil (x : Array F256) : foldKs (#[] : Array F256).toList x = x := rfl
-
 theorem embedF_c0 (g : Array F128) : (embedF g).map F256.c0 = g := by
   apply Array.ext (by simp [embedF])
   intro i h₁ h₂
