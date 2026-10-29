@@ -3,9 +3,11 @@ the gate's fetch, witness and all, 0700 under the serve dir's private/certifier,
 and its outcome. The piece, on a serve dir whose window was the warden's synthetic run's certified requests (the run
 `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when the chain accepted and the window's requests are certified ones in the scan's
-link-window: the period mirror's certifier/v0 accept (`period_case`) then goes through `served_verdicts.py record` into
-the block record's certifier leg, which `block_record.check` holds and its schema admits, and its case.json is the three
-files `network-period` read, as `composite.py` reads a piece's case. A window request the warden didn't certify is
+link-window: the period mirror's certifier/v0 accept (`period_case`), its profile with the placement (the certifier on
+the kept gate's host, the checks on the prover's node), then goes through `served_verdicts.py record` into the window
+report and the block record's certifier leg, which `block_record.check` holds and its schema admits, and its case.json
+is the three files `network-period` read, as `composite.py` reads a piece's case; the chain's endpoint report, with
+each Commit window's counts, stays in the kept run. A window request the warden didn't certify is
 rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
 rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run (no kept run, no
 report, no build, the time limit) refuse, which leaves the certifier missing. The leak guard reads the piece's DIR
@@ -23,6 +25,7 @@ import importlib.util
 import json
 import os
 import shlex
+import socket
 import sys
 import tarfile
 import threading
@@ -49,6 +52,7 @@ K = 3
 PASSED = {"run": RUN, "rc": 0, "ended": "the rehearsal ended", "verdict": {"accepted": True, "problems": 0}}
 LATE = {"run": RUN, "rc": 1, "ended": "the rehearsal exited 1",
         "verdict": {"accepted": False, "problems": 8, "requests": 4, "ended": 0, "failed": ["fail"]}}
+GATE_HOST = "gate-host"
 
 
 @pytest.fixture(scope="module")
@@ -103,13 +107,17 @@ def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: b
     if kept:
         (d / CP.PRIVATE / RUN).mkdir(parents=True)
         (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(warden[fetch].read_bytes())
+        (d / CP.PRIVATE / RUN / CP.SESSION).write_text(json.dumps({"run": RUN, "gate": f"research@{GATE_HOST}"}))
     return d
 
 
 def _chain_out(d: Path, verdict: str, w: int) -> Path:
-    """What the chain leaves in its run dir's out/: its report and the scan's one link-window."""
+    """What the chain leaves in its run dir's out/: its report, the endpoint's and the scan's one link-window."""
     out = d / "out"
     (out / "report").mkdir(parents=True)
+    (out / "endpoint").mkdir(parents=True)
+    (out / "endpoint" / "report.json").write_text(json.dumps({"chain": {"bits": {"commit_windows": [
+        {"window": K, "requests": 3, "carried": 0, "outputs": 12, "t0_s": 0.5}]}}}))
     (out / "scan" / "joint").mkdir(parents=True)
     (out / "report" / "report.json").write_text(json.dumps({"verdict": verdict, "why": None if verdict == "accepted"
                                                             else {"n2": "a window refused"}}))
@@ -166,8 +174,16 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     piece = tmp_path / "pieces" / "certifier"
     assert (got["certifier"]["verdict"], got["certifier"]["rc"]) == ("accept", 0), (piece / "piece.log").read_text()
     assert "MISSING the network certifier" not in capsys.readouterr().out
-    assert json.loads((piece / "answer.json").read_text()) == accept
+    got = json.loads((piece / "answer.json").read_text())
+    where = got["profile"].pop("placement")
+    assert got == accept
+    node = socket.gethostname()
+    assert (where["kind"], where["parties"]) == ("not-placed", {"network_certifier": GATE_HOST, "prover": node,
+                                                                "verifier": node})
+    assert where[CP.PREMISE].startswith("assumed, the auditor's devices not placed")
+    assert [(x["name"], x["counted"]) for x in where["links"]] == [("certified", True), ("gate", False)]
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
+    assert not (piece / "chain" / "endpoint").exists()
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, "chain", "piece.log"}
     seen = {f.name: f.read_bytes() for f in (tmp_path / "seen").iterdir()}
     raw = (piece / CP.CASE).read_bytes()
@@ -178,11 +194,14 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     log = (piece / "piece.log").read_text()
     assert "leak guard (exit 0)" in log and f"case: {CP.CASE}, {len(raw)} bytes" in log
     keep = d / CP.PRIVATE / RUN
-    assert sorted(p.name for p in keep.iterdir()) == ["chain", "endpoint", "fetch.tar.gz"]
+    assert sorted(p.name for p in keep.iterdir()) == ["chain", "endpoint", "fetch.tar.gz", CP.SESSION]
+    assert (keep / "chain" / "out" / "endpoint" / "report.json").is_file()
     assert [(keep / "endpoint" / f).stat().st_mode & 0o777 for f in CP.ENDPOINT] == [0o600] * 4
     row = S.piece_row("communication", tmp_path / "pieces")
     assert (row["verdict"], row["quantity"], row["owner"]) == ("accept", accept["public"], "network-accounting")
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
+    verdicts = json.loads((tmp_path / "record" / "verdicts.json").read_text())
+    assert verdicts["protocols"]["communication"]["answer"]["profile"]["placement"] == where
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert BR.check(rec) == {} and not line["check"]
     assert "certifier" not in line["record_missing"] and line["verdicts"]["the network certifier"] == "accept"
@@ -312,6 +331,19 @@ def test_the_case_is_written_only_from_period_files_the_leak_guard_left(tmp_path
             assert sorted(p.name for p in (d / "period").iterdir()) == ["commitment.bin", "params.json"]
 
 
+def test_the_placement_names_the_kept_gate_a_local_gate_the_prover_node_and_refuses_without_the_session(tmp_path,
+                                                                                                      warden):
+    d = _serve_dir(tmp_path / "serve", warden)
+    assert CP.placement(d, RUN)["parties"]["network_certifier"] == GATE_HOST
+    (d / CP.PRIVATE / RUN / CP.SESSION).write_text(json.dumps({"run": RUN, "gate": "local"}))
+    p = CP.placement(d, RUN)
+    assert (p["kind"], p["links"]) == ("prover-node", []) and p[CP.PREMISE].startswith("unmet")
+    assert p["parties"]["network_certifier"] == p["parties"]["prover"] == socket.gethostname()
+    (d / CP.PRIVATE / RUN / CP.SESSION).unlink()
+    with pytest.raises(CP.NotRun, match="keep the run with this tree's front"):
+        CP.placement(d, RUN)
+
+
 def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
     assert CP.sized(1, []) == ["CR_N2_DRAW=", "CR_TIE_WINDOWS=1"]
     assert CP.sized(8, ["CR_N2_DRAW=4"]) == ["CR_TIE_WINDOWS=8", "CR_N2_DRAW=4"]
@@ -340,6 +372,8 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert [p.stat().st_mode & 0o777 for p in (serve / "private", serve / CP.PRIVATE, kept)] == [0o700, 0o700, 0o600]
     assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "session.json", "start.json", "status.json"]
     assert json.loads((out / "session.json").read_text())["keep"] == str(kept)
+    assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
+    assert json.loads((out / "session.json").read_text())["gate"] == CP.SS.GATE
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
     assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
 
