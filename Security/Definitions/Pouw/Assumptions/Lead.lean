@@ -1,6 +1,5 @@
 import Definitions.Pouw.Lead.Gap
 import Definitions.Pouw.Assumptions.Dimension.H100W
-import Definitions.Core.Assumptions
 
 /-!
 # The lead's named premises (trusted statements)
@@ -12,16 +11,18 @@ with its claim id; a `(proposed)` id is not yet in `verity.core.claims`.
 The device and model premises:
 * `W1`: the node's instructions are `MH100w`'s, priced by the W1 table, with no free value at a coin value.
 * `TileGrain` (CopyGrain at the tile width, under model W): what the node holds, its run at tile grain holds.
-* `LaneSemantics`: each word the run writes is a register value its trace computes.
 * `OneInstructionMinimal`: each word written and each compression register is its own register of the trace.
 * `CardWithinAccelW1`: every strategy the node's processors run, hosts counted, is in `Real`.
 * `ShaWrites`: a SHA-512 compression writes about 3,500 registers, credited per form.
 
 The protocol premises the code can't be checked against yet:
 * `HonestHashRuled`: an accepted execution hashes, for each message of the honest commitment, a message with its digest.
-* `TrustedNebiusHost`: the network certifier draws `G` and streams the coin lanes after it holds `A_j`.
 * `CommitL1w`: the honest commitment is the lead's layout, at its credited compressions.
 * `OutsourceWithinEgressLead`: work outsourced within the egress cap is at most the network term.
+
+`trusted-host` at the lead's network certifier is read through the model rather than as a premise: the certifier's
+coins are a `CoinStream`, a strategy fixes its tables before the coins (`Strategy`), `G` fixes the data before them,
+and every bound averages over the coins uniformly.
 -/
 
 namespace Pouw.Assumptions.Lead
@@ -49,15 +50,6 @@ this is the copy model, one line to change. -/
 def TileGrain (stream : CoinStream L) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∀ ω, (σ.exec ω).egress = 0 → ∀ y, (σ.exec ω).holds y →
     ∃ k a, run (σ.init stream ω) ((σ.exec ω).steps.take k) a 0 = y
-
-/-- `pouw-lane-semantics` (proposed). **Each word the run writes is a register value its trace computes**: at every
-coin value, every word of every tile a realizable strategy's run writes is the value of a register of its trace under
-the measured lane functions `fpSem`.
-
-Rationale: the lane forms' semantics are measured on the card. -/
-def LaneSemantics (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (Real : Strategy L → Prop) : Prop :=
-  ∀ σ, Real σ → ∀ ω, ∀ a p v, Step.write a p v ∈ (σ.exec ω).steps →
-    ∀ q, (fun _ : Unit => (v q : ℚ)) ∈ regs100 fpSem (σ.exec ω).trace []
 
 /-- `pouw-one-instruction-minimal` (proposed). **Each word written and each compression register is its own register
 of the trace**: at every coin value, a realizable strategy's run's tile writes (`tileWords` registers each) and its
@@ -111,19 +103,6 @@ def CommitL1w (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (isA : Has
   C.chunks = wordChunks L ∧ ∀ ω : Coins L,
     shaWordsRegs * wordsBlocks L C + shaARegs * aBlocks L ≤
       (((C.msgs H (word L κ ω) ++ C.aMsgs).dedup).map (shaCredit isA)).sum
-
-/-- The network certifier's code on a call: it holds `A_j`'s root, then draws the coins from its own entropy and
-streams them, bound to that root. -/
-def certCode : Hash.Digest × Coins L → Hash.Digest × Coins L := id
-
-/-- `trusted-host`, at the lead's network certifier (`trusted-nebius-host`). **The certifier draws `G` and streams the
-coin lanes after it holds `A_j`**: the certifier device runs `certCode` on its host, so the coins it streams are its own
-draw, uniform and fixed after the call's `A_j` and the strategy's pre-coin tables.
-
-Rationale: the auditor's hardware on a host the prover doesn't control. -/
-def TrustedNebiusHost {Device : Type} (cert : Device)
-    (runC : Device → Hash.Digest × Coins L → Hash.Digest × Coins L) : Prop :=
-  Verity.Assumptions.TrustedHost cert runC certCode
 
 /-- `pouw-outsource-egress` (proposed; the lead's instance at its cap). **Outsourcing within the egress cap costs at
 most the network term**: every realizable strategy has a realizable twin that exchanges nothing, with the same

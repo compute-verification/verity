@@ -24,24 +24,21 @@ namespace Pouw.Guarantees.Lead
 
 open Pouw.Lead Pouw.Assumptions.Lead Pouw.Dimension.H100
 
-/-- **The lead's work guarantee.** For every price table `pr` meeting `H32`, lane semantics `fpSem`, hash `H`, call
+/-- **The lead's work guarantee.** For every price table `pr` meeting `H32`, hash `H`, call
 `m × K × n` at `T` tokens (every call, decode included: `lead` commits it over whole MMA tiles), data `κ`, certifier's
-coin stream `stream`, commitment format `C` with its form classifier `isA`, network certifier `cert` and set `Real` of
-the strategies the node can run, under the named premises, every strategy `σ` the node's processors run (`can`) and
+coin stream `stream`, commitment format `C` with its form classifier `isA` and set `Real` of the strategies the node
+can run, under the named premises, every strategy `σ` the node's processors run (`can`) and
 every set `O` of coin values on which its call is accepted has
 `Σ_{ω ∈ O} work(ω) ≥ 32 · (|O| · honestRegs − |Ω| · gapRegs)`, or at some `ω ∈ O` its execution hashed a SHA-512
 collision with the honest commitment's messages. -/
 def G : Prop :=
-  ∀ (pr : Prices100) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
+  ∀ (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
     (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K))
-    (isA : Hash.Msg → Bool) {Device : Type} (cert : Device)
-    (runC : Device → Hash.Digest × Coins (lead T m n K) → Hash.Digest × Coins (lead T m n K))
-    (can Real : Strategy (lead T m n K) → Prop),
+    (isA : Hash.Msg → Bool) (can Real : Strategy (lead T m n K) → Prop),
     CommitL1w H C isA κ →
-    H32 pr → W1 pr Real → TileGrain stream Real → LaneSemantics fpSem Real → OneInstructionMinimal Real →
-    CardWithinAccelW1 can Real → ShaWrites isA Real → HonestHashRuled H C κ Real →
-    TrustedNebiusHost cert runC → OutsourceWithinEgressLead pr Real →
+    H32 pr → W1 pr Real → TileGrain stream Real → OneInstructionMinimal Real → CardWithinAccelW1 can Real →
+    ShaWrites isA Real → HonestHashRuled H C κ Real → OutsourceWithinEgressLead pr Real →
     ∀ σ, can σ → ∀ O : Finset (Coins (lead T m n K)), (∀ ω ∈ O, Accepted (lead T m n K) H C κ σ ω) →
       32 * ((O.card : ℚ) * honestRegs (lead T m n K) C -
           (Fintype.card (Coins (lead T m n K)) : ℚ) * gapRegs (lead T m n K) C) ≤
@@ -73,20 +70,16 @@ def GapAtDecode : Prop :=
     gapShare _ C ≤ 266 / 100000 ∧ gapRegs _ C ≤ 425 / 10000 * ((n * K : ℚ) / 32)
 
 /-- **The honest lemma**: at every call of the lead, the hypotheses hold at the honest deployed instance: the nominal
-W1 table meets `H32`, and some set of strategies meets every premise of `G` (with the coin stream, commitment and
-certifier the protocol's) and holds an honest strategy accepted at every coin value. -/
+W1 table meets `H32`, and some set of strategies meets every premise of `G` (with the coin stream and commitment the
+protocol's) and holds an honest strategy accepted at every coin value. -/
 def Honest : Prop :=
   ∀ (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ),
-    ∃ (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (stream : CoinStream (lead T m n K))
-      (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool) (Device : Type) (cert : Device)
-      (runC : Device → Hash.Digest × Coins (lead T m n K) → Hash.Digest × Coins (lead T m n K))
+    ∃ (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool)
       (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
-      CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧
-      TileGrain stream Real ∧
-      LaneSemantics fpSem Real ∧ OneInstructionMinimal Real ∧ CardWithinAccelW1 Real Real ∧ ShaWrites isA Real ∧
-      HonestHashRuled H C κ Real ∧ TrustedNebiusHost cert runC ∧ OutsourceWithinEgressLead h100Nominal Real ∧
-      Real σ ∧ ∀ ω, Accepted (lead T m n K) H C κ σ ω
+      CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧ TileGrain stream Real ∧
+      OneInstructionMinimal Real ∧ CardWithinAccelW1 Real Real ∧ ShaWrites isA Real ∧ HonestHashRuled H C κ Real ∧
+      OutsourceWithinEgressLead h100Nominal Real ∧ Real σ ∧ ∀ ω, Accepted (lead T m n K) H C κ σ ω
 
 /-- **The nontrivial lemma**: `G`'s conclusion fails for a verifier that accepts everything. At the three points the
 honest work exceeds the gap, and a strategy that does nothing does no priced work and hashes nothing, so with every
