@@ -110,7 +110,7 @@ T1 = forming(N, F) − forced(C) + de-noise(D) + final word(D, P) + uncommitted 
 | **N-FP8** | new | FP8 E4M3 and BF16 serving on the H200: SSN-like lanes with exact small values, the accumulator's real semantics, distinctness under rounding | a verdict and the best floating-point design |
 | **N-HIDE** | SW-HASH (now) | Close the hiding term: salt derivation forced in the drawn unit's proof, the mask's price, rows against proof cost, hiding randomness consumed by forced work. Then the hashing frontier at SSN's volume (bytes a MAC, T2, δ) | a hiding design at ≤ 0.1% of stock with its premises |
 | **N-KERNEL** | SW-GPU (now) | `ssn_1l`'s kernel on the H200: s8 wgmma with 31 + 1 lanes, every k32 word exported and hm96-hashed (separate and overlapped), words checked against a CPU reference; T2 at Llama's shapes; the forming pass and coin latency timed | measured T2 with run ids |
-| **N-ATTACK** | new | Red team on the hardware: write the cheapest adversary you can for SSN's committed words and measure it against honest; try every route around H32 and W1 (non-SM engines, TMA and reductions, sparse, b1, FP8, multi-output instructions, the host) | the adversary's measured cost, and every route under the floor (or none) |
+| **N-FLOOR** | new | Cost-floor audit on the hardware: implement the most efficient program you can that produces the lead's committed words (and their hashing), and measure its priced cost against honest's; measure the price per register written of every alternative instruction route and engine the model's floor must cover | the measured cost per committed word of the most efficient program, and every route priced below the floor (or none) |
 | **N-RED** | new | Red team on the theory: grinding and the success set, chosen inputs, free-set loopholes, reuse across calls, advice, coin expansion, the span caveat, hash-compose loopholes, ZK leakage of served noise, served output against committed output | a ranked attack list with severities and fixes |
 | **N-COVER** | new | The whole served step: attention (QKᵀ, PV, softmax), decode, experts, lm_head, epilogue and nonlinear ops, each in W1; the best design per component; the whole step's T1 and T2 | a coverage table and the step's T1 |
 | **N-LEAN** | SW-LEAN (07:35Z) | Lean for the lead: SSN's distinctness lemma, the grinding bound, and the path to locking DistinctWrites | proofs, axioms printed |
@@ -124,10 +124,10 @@ T1 = forming(N, F) − forced(C) + de-noise(D) + final word(D, P) + uncommitted 
 - **Cards.** Every design goes to N-CARD as a card: its module per axis, its terms with sources, its premises. N-CARD
   posts the card format in its inbox by 08:15Z; until then, use SW-NOISE §5's card table.
 - **Ranking:** overall rank (with 4a/4b, matmul part and hashing part shown), then T1 at T 512 and T 8,192, then T2, then
-  T3. An open premise ranks 5. A design with an open attack (N-RED, N-ATTACK) can't rank first.
+  T3. An open premise ranks 5. A design with an open finding from N-RED or N-FLOOR can't rank first.
 - **Labels:** proved (Lean, with `#print axioms`), checked (CPU, with run id), measured (GPU, with run id), estimate.
   Never "locked" unless the lock has it.
-- **Red-team every lead.** N-RED and N-ATTACK attack whatever leads at each interim.
+- **Check every lead.** N-RED (on paper) and N-FLOOR (measured on the H200) test whatever leads at each interim.
 - **Per monitoring period:** state any new bound per window, week, month and year at one H200, the reference datacenter
   and the world, on the one basis N-CARD fixes in its card format (SW-SMELL: five bases were in use, up to 4.5× apart).
 
