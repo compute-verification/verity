@@ -360,7 +360,7 @@ def plan(cache: Path, repo: Path, log: Callable[[str], None] | None = None) -> P
         n, seen[units] = seen[units], seen[units] + 1
         try:
             roots = TG._produce(units, make)
-        except Exception as e:  # noqa: BLE001  (a model's error is named, as the catalog names it)
+        except Exception as e:  # a model's error is named, as the catalog names it
             if kind != "model":
                 raise
             TG.ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
@@ -431,7 +431,7 @@ def made_entries() -> list[Entry]:
         n, seen[units] = seen[units], seen[units] + 1
         try:
             roots = TG._produce(units, make)
-        except Exception as e:  # noqa: BLE001  (a model's error is named, as the catalog names it)
+        except Exception as e:  # a model's error is named, as the catalog names it
             if kind != "model":
                 raise
             TG.ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))

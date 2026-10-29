@@ -114,7 +114,8 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
 def test_the_audit_replays_the_import_closure_against_the_kept_cache_and_a_fresh_one_against_its_own(tmp_path, monkeypatch):
     _tree(tmp_path, monkeypatch)
     cache = tmp_path / "cache"
-    argv = lambda out: json.loads((out / "argv.json").read_text())
+    def argv(out):
+        return json.loads((out / "argv.json").read_text())
     LA.run(tmp_path / "kept", cache / "lean-audit", cache / "lean-deps", log=lambda s: None)
     a = argv(tmp_path / "kept")
     assert "--closure" in a and Path(a[a.index("--replay-cache") + 1]).resolve() == (cache / "lean-replay").resolve()
@@ -223,7 +224,8 @@ def test_one_changed_byte_in_any_input_misses(tmp_path, monkeypatch):
     files = sorted([*LA.COMMON.tracked_files(), "pkg/a/Sub/C.lean"])
     monkeypatch.setattr(LA.COMMON, "tracked_files", lambda r=None: files)
     _requires_a_at(root, "pkg/b", "../a")
-    keys = lambda: {p: LA.key(p, files, LA.FLAGS) for p in ("pkg/a", "pkg/b")}
+    def keys():
+        return {p: LA.key(p, files, LA.FLAGS) for p in ("pkg/a", "pkg/b")}
     was = keys()
     for f in LA.inputs("pkg/b", files):
         before = (root / f).read_bytes()
@@ -245,7 +247,8 @@ def test_one_changed_byte_in_any_input_misses(tmp_path, monkeypatch):
     assert keys()["pkg/b"] == was["pkg/b"]                          # the same content there: the same key
     shutil.copytree(root / "pkg/c", root / "pkg/d")
     files += [f"pkg/d/{f[6:]}" for f in files if f.startswith("pkg/c/")]
-    single = lambda d: (root / "pkg/b/lakefile.toml").write_text(f"name = \"b\"\n\n[[require]]\nname = \"a\"\npath = '../{d}'\n")
+    def single(d):
+        return (root / "pkg/b/lakefile.toml").write_text(f"name = \"b\"\n\n[[require]]\nname = \"a\"\npath = '../{d}'\n")
     single("c")
     k = keys()["pkg/b"]
     _requires_a_at(root, "pkg/b", "../d")
@@ -295,8 +298,8 @@ def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     for i, name in enumerate(sorted(LA.NOT_READ), 5):
         f = f"tools/verity/lean/{name}"
         (root / f).write_text(f"{i}\n")
-        monkeypatch.setattr(LA.COMMON, "tracked_files", lambda r=None, files=sorted({*files, f}): files)
-        files = LA.COMMON.tracked_files()
+        files = sorted({*files, f})
+        monkeypatch.setattr(LA.COMMON, "tracked_files", lambda r=None, files=files: files)
         rc, ran, doc = _run(tmp_path, i)
         assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"], name
     (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": [f"tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)]}))
@@ -310,7 +313,8 @@ def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/b/lean-audit.json").write_text("{}")
     store = tmp_path / "cache" / "lean-builds"
-    builds = lambda n: sorted((tmp_path / f"out{n}" / "builds.txt").read_text().split("\n")[:-1])
+    def builds(n):
+        return sorted((tmp_path / f"out{n}" / "builds.txt").read_text().split("\n")[:-1])
     assert _run(tmp_path, 1)[0] == 0 and builds(1) == ["pkg/a cold", "pkg/b cold"]
     ka, kb = LA.build_key("pkg/a", root), LA.build_key("pkg/b", root)
     assert (store / ka / "lib/lean/A.olean").is_file() and (store / kb / "lib/lean/B.olean").is_file()
@@ -506,7 +510,8 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
         assert (tmp_path / f"out{n}" / "lean-artifacts.tar.gz").exists() == bundle
     out = tmp_path / "steps"
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
-    step = lambda: dict((name, argv) for name, argv, _ in CHECK.lean_steps(out))["lean-audit"]
+    def step():
+        return dict((name, argv) for name, argv, _ in CHECK.lean_steps(out))["lean-audit"]
     assert "--bundle" not in step()
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261026-000000-abcd")
     assert "--bundle" in step()
@@ -538,7 +543,8 @@ def test_a_moved_package_takes_the_build_it_left(tmp_path, monkeypatch):
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/b/lean-audit.json").write_text("{}")
     _requires_a_at(root, "pkg/b", "../a")
-    builds = lambda n: sorted((tmp_path / f"out{n}" / "builds.txt").read_text().split("\n")[:-1])
+    def builds(n):
+        return sorted((tmp_path / f"out{n}" / "builds.txt").read_text().split("\n")[:-1])
     assert _run(tmp_path, 1)[0] == 0
     kb = LA.build_key("pkg/b", root)
     _move(root, monkeypatch, "pkg/a", "core/a")
@@ -880,7 +886,8 @@ def test_setup_takes_a_cold_packages_pinned_bundle_from_the_store_and_replaces_n
     (tmp_path / "made" / "dep").mkdir(parents=True)
     (tmp_path / "made" / "dep" / "built").write_text("x")
     pin = LA.bundle(tmp_path / "made", tmp_path / f"{k}.tar.gz")
-    pins = lambda p: (root / LA.PIN).write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": p}))
+    def pins(p):
+        return (root / LA.PIN).write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": p}))
     pins({k: {"package": "pkg/a", **pin, "run": "r1"}})
     monkeypatch.setattr(pytest.importorskip("research.store.remote"), "load_remote",
                         lambda: types.SimpleNamespace(presign=lambda key, ttl: (tmp_path / f"{k}.tar.gz").as_uri()))
