@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``token-select-chunk`` (TokenSelectChunk_v2{C}): one V-chunk of the registered compiler's greedy select
+"""Flock lowering of ``token-select-chunk`` (TokenSelectChunk_v2{C}): one V-chunk of the registered compiler's greedy select
 (``dead_free.TokenSelect_v4``) as ONE unit (``ir_lower.whole``: the chunk's scan carries its best from lane to lane, so its gate
 graph is no row of identical units), lowered piece by piece from the word Definition. At C = 64 its input row is 64 bf16 logits,
 one SHA-512 block (1,024 bits).

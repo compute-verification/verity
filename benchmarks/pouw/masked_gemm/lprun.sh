@@ -5,7 +5,7 @@
 # against hashlib and numpy, and lptable.py renders the table (an arm whose gate failed is marked). Clocks are read,
 # never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --env GPU_LEASE_WHO=T1 \
+#   research run --on vy-nebius-2 --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/masked_gemm/lprun.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/lprun.sh"'
 # STAGE=build|all (default all); REPS (default 7); SHAPES; LP_ARMS.
 set -uo pipefail

@@ -107,7 +107,7 @@ class LinkLoad:
 
     @property
     def b(self) -> int:
-        """A proof block's committed bits, a faulty proof block's charge in the pooled form."""
+        """A proof block's committed bits, an incorrect proof block's charge in the pooled form."""
         return IS.state_bits(self.scan) + IS.view_bits(self.scan)
 
     @property
@@ -167,7 +167,7 @@ def seconds(period: str | float | Fraction) -> float | Fraction:
 
 
 def fmax(delta: float | Fraction) -> int:
-    """F = ⌈ln(1/δ)⌉: the faulty proof blocks the pooled form pays for at q = 1."""
+    """F = ⌈ln(1/δ)⌉: the incorrect proof blocks the pooled form pays for at q = 1."""
     if not 0 < delta < 1:
         raise ValueError(f"δ is in (0, 1), not {delta!r}")
     return math.ceil(math.log(1 / delta))
@@ -237,11 +237,11 @@ def datacenter(links: Sequence[LinkLoad] | Mapping[LinkLoad, int], period: str |
     This is our composition: no Lean statement covers it. `PeriodLeakAccepted` and `PooledLeakAccepted` are each
     about one device on one uplink. Summing their bits takes the secrets a sender moves through every link at once to
     number at most the product of the links' counts. That holds except where some link's statement fails, a union
-    bound, so a datacenter at δ takes each link at δ / links and pays each link's own faulty proof blocks,
+    bound, so a datacenter at δ takes each link at δ / links and pays each link's own incorrect proof blocks,
     F = ⌈ln(links / δ)⌉ of them, and its ε is the links' summed. Two shortcuts would be unsound:
 
-    * Pooling by weight copy, one pooled count over every link that serves a copy of the weights, paying the faulty
-      proof blocks once at δ: `PooledLeakAccepted` counts the faulty proof blocks of one device's record, and links
+    * Pooling by weight copy, one pooled count over every link that serves a copy of the weights, paying the incorrect
+      proof blocks once at δ: `PooledLeakAccepted` counts the incorrect proof blocks of one device's record, and links
       are separate devices with separate records, so no statement pools their proof blocks into one period's.
     * Dividing by the copies: every copy is the same secret, so the share is of one copy (``weights``) whatever the
       links.

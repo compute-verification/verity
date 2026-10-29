@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The proof leg (prove_leg.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the
-# Lean flock-verify, cached under $LEG_CACHE) with the firewall's Lean frame and the sampled-proofs verifier built in the
+# The proof leg (prove_leg.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the
+# Lean flock-verify, cached under $LEG_CACHE) with the ZK server's Lean frame and the sampled-proofs verifier built in the
 # tree. From a clone:
 #   research run --on auto --source . --as proofs --project verity --cwd clone --cpus 8 --mem-gb 32 \
 #     --env LEG_CACHE=/workspace/research/cache/pouw-hidden-zk -- bash benchmarks/one_stage/prove_leg.sh
@@ -9,7 +9,7 @@
 #      LEG_REGISTERED=1 (the registered-weights stand-in at the first K, verified with --registered)
 #      LEG_DEFS="gemm:1b:2048 rope:1b ..." (vLLM's served Definitions, prove_leg.py defs, in place of the stand-in)
 #      LEG_CENSUS=1 (with LEG_DEFS: size each shape only)  LEG_LOWER_REFUSED=1 (with LEG_DEFS: lower a shape the census
-#      refuses, for C-Flock's own refusal)  LEG_READS=slots|inline (with LEG_DEFS: a unit's MUFU table reads in lookup
+#      refuses, for Flock's own refusal)  LEG_READS=slots|inline (with LEG_DEFS: a unit's MUFU table reads in lookup
 #      slots or inline; unset, its template's own, chunk_rows.reads)
 # Kept in $OUT/leg: the leg's records (leg.json, audit.json, registration, draw), the public files and the sessions; never a
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts. They are

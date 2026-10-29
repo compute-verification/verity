@@ -82,8 +82,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   which the lane's own gate key writes for its lane (`--name P`), or vy-admin for any lane (`period-open --name P --lane
   LANE`, `period-close --name P`). A period's name is used once, and a lane has one period open at a time. Its open
   commits, before window 0's first coin, the most windows it may hold (`--cap`, a positive integer) and its circuit
-  (`--circuit`: the declared circuit's SHA-512, never a Program's id, which the gate records and CHAL1 checks each window
-  against), and with `--draw-k K` the draw K the proof system selects each window's units with (`draw_k`, a positive
+  (`--circuit`: the registered circuit's SHA-512, never a Program's id, which the gate records and CHAL1 checks each window
+  against), and with `--draw-k K` the sample K the proof system selects each window's units with (`draw_k`, a positive
   integer at most 2^24, which PoUW's credit reads; an open without it commits none), with `--rows T` the served tables'
   rows (`rows`, each round's request and slot tables' leaves, which bound every step's served rows m_s in PoUW's
   credit and whose `h1window.slot` is each window's A slot M; an open without it credits nothing), and with `--model M` (or
@@ -334,7 +334,7 @@ WARDEN_WINDOW_LEAVES = 5
 WARDEN_WINDOW_MS = 60_000
 WARDEN_TOKENS = (16, 256)
 #: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
-#: `WARDEN_RATE` a second drawn from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
+#: `WARDEN_RATE` a second sampled from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
 WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
 #: a scan rehearsal's (`--scan`) schedule, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`), the only one
 #: `scan_zk.py prove --warden-run` takes but for its tick (`SCAN_BUCKET_MS`), as `warden_serve.py`'s flags
@@ -1734,7 +1734,7 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
            tree: Path = TREE) -> dict:
     """`period-open NAME LANE BY CAP CIRCUIT [draw_k=K] [rows=T] [weights_root=W] [circuit_files=JSON]` or `period-close NAME LANE|- BY` (LANE - for
     vy-admin's close of any lane's period): the signed entry, or Refused. A period's name is used once and a lane has one
-    period open at a time; its open commits the most windows it may hold (`cap`), its circuit and, when given, its draw
+    period open at a time; its open commits the most windows it may hold (`cap`), its circuit and, when given, its sample
     K (`draw_k`) and table rows (`rows`), its model (`models.opened`: the registry's weights' root and model for the circuit, or for a circuit
     the registry has no entry of the model alone, from core's pin in `tree`), its fixed length (`length`) and each K's
     circuit file's SHA-512

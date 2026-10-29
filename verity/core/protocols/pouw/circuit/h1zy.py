@@ -7,7 +7,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   y_u = dq(z_u, s_a, s_w) in bf16, row-major, little-endian (`int8_exact.zy_records`; 6,144 bytes at the served 32 × 32).
   As the unit's ``zy`` it is one bit row of 48 R C bits, `RECORD`'s leaves: z's R C words, then y's. It is a run input,
   committed in its call's z table under round s's root before round s's coin (`h1window.table`), not a registered value
-  in the declared circuit's sense, which is committed before coin 0.
+  in the registered circuit's sense, which is committed before coin 0.
 * **Types.** A record's z words are s32 (`S32`, two's complement, [-2^31, 2^31 - 1]) and a row's codes s8 (`S8`): an
   extractor that read z as u32 would see z mod 2^32, and the product of a negative dot would fail. The circuit's types are
   bits either way; the names say how each word reads.
@@ -43,7 +43,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   lanes and their combine). Option A is a proof strategy, not a new Served form (RT4-LOGIC-30): a drawn leaf is one Cd
   unit and meets Served as `PouwH1TileZy_v1` does, and BRIDGE2's linked realization carries the 33 statements to it.
   CP-W's receipt is the XOR over the leaf's lanes of their partials (`h1tile.fold`). The partials are proof-layer values,
-  not Cd inputs: the prover commits them after the draw under hiding leaves, like a proof's own outputs, one row per lane
+  not Cd inputs: the prover commits them after the sample under hiding leaves, like a proof's own outputs, one row per lane
   (``partials``, row l lane l; proofs' service piece, `one_stage.produced`), and the 33 statements open that one
   commitment as registered ports of the verifier's own, lane l's ``partials`` at row l and the combine's ``p0`` .. ``p31``
   at rows 0 .. 31 (#3116's `pouw.leaf_lanes.reads`; each statement's ok is its ``o0``), since a port ``own`` doesn't name
@@ -83,7 +83,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   the digit coins, absorbs O' and D_1 .. D_(m-1), and reads ``admit``, ``zy`` and ``partials``, with the whole lane's
   checks: its words masked by the admit gate are the partials row, and its cells pass `PouwZyCheck_v1{4, 8}`. Each chunk
   past the first holds its rows' scales to the carried ones, so every bit of each chunk row and carry row is read and a
-  token row's chunks agree on its scale. The carries are proof-layer values, committed after the draw like the partials,
+  token row's chunks agree on its scale. The carries are proof-layer values, committed after the sample like the partials,
   never outputs; the partials and the combine are the whole lane's, so such a leaf is 32 n + 1 statements. Over v1 only:
   v3's z corrects O' and the digits over every segment of K.
 * **The unit on chunk rows.** A window at such a K binds `PouwH1TileZyChunks_v1{UNIT, CHUNKS = n}` (`window_unit`), UNIT
