@@ -26,7 +26,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.core.wire import NAME, Refused, Registry, Schema
+from verity.core.wire import NAME, MessageTypes, Refused, Schema
 
 PRINCIPALS = ("developer", "auditor", "anyone")
 OWNERS = ("developer", "auditor")
@@ -92,11 +92,11 @@ class Manifest:
             if not set(c.messages) | set(c.after) <= types:
                 raise ValueError(f"{self.protocol}: {sorted(set(c.messages + c.after) - types)} on {c.sender} -> "
                                  f"{c.receiver} are not its messages")
-        Registry(self.messages)
+        MessageTypes(self.messages)
 
     @property
-    def registry(self) -> Registry:
-        return Registry(self.messages)
+    def registry(self) -> MessageTypes:
+        return MessageTypes(self.messages)
 
     def role(self, name: str) -> Role:
         r = next((r for r in self.parties if r.name == name), None)
@@ -108,7 +108,7 @@ class Manifest:
     def channel(self, sender: str, receiver: str) -> Channel | None:
         return next((c for c in self.channels if (c.sender, c.receiver) == (sender, receiver)), None)
 
-    def sends(self, sender: str, receiver: str) -> Registry:
+    def sends(self, sender: str, receiver: str) -> MessageTypes:
         """The messages `sender` may send `receiver`: what the runtime lets it send, and what `receiver` accepts."""
         c = self.channel(sender, receiver)
         return self.registry.only(c.messages if c else ())
