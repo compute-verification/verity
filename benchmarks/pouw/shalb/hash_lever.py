@@ -21,14 +21,20 @@ holds, and each correction cell is a product with R that it forms:
   row), so the carries between the three (COUNTER's `decomp`);
 - walk: Δ is the row-plane less the bytes of s and of the walk r_t + q_t, the walk's own row-plane priced by its own
   cheapest scratch, prev or partner route.
-Under H32 a register write forms at most 32 products with s8 R entries, so a nonzero Δ cell (8 products, 16 past
-|Δ| = 128) costs at least 8/32 of a register. Under DistinctWrites a write carries at least 32 operand bits, so the cell
-costs at least its width over 32: 1 bit for |Δ| = 1, 4 to 8, 8 to 128, 16 past it. Zero cells cost nothing, which
-grants the prover free gathering. The state adds Z (16 bytes) and Z·Q (128 products) a row a step: 8/BN registers a
-word. The floor is the mean over row-planes of the cheapest route, summed over b.
+Δ is two s8 digits, Δ = d0 + 256·d1 (against R and 256·R mod 2^16). Under H32 a register write forms at most 32
+products with s8 R entries, so each nonzero digit costs 8/32 of a register every step. Under DistinctWrites a write
+carries at most 32 operand bits, so a digit whose cell moved since the route's last step costs its width over 32 (1 bit
+for |d| = 1, 4 to 8, 8 past it); a register keeps a value that didn't move. Zero cells cost nothing, which grants the
+prover free gathering. The state adds Z (16 bytes) and Z·Q (128 products) a row a step: 8/BN registers a word. The
+floor is the mean over row-planes of the cheapest route, summed over b.
+
+With one R a call (the checkpoint's fold) a product carries from step to step. With a fresh R_t a step (uniform s8,
+drawn live, read by wgmma from shared memory) none does: prev and incr are gone, partners are the step's own rows, and
+the static part's products are formed every step.
 
 - D. The lever: every byte plane full rank, no row close to another, and the words bit-exact with the lead's plus L.
-- F. The floor at K 2,048 and 8,192, ρ = 2 and 1, against the lead's tag form, with the winning route per byte.
+- F. The floor at K 2,048 and 8,192, ρ = 2 and 1, against the lead's tag form, one R and fresh R, with the winning
+  route per byte.
 - X. Attacks priced as programs: the class-sharing prover (`hash_tensor.pack_share`) on lever words, `pack`'s lane
   widths, and each route's natural-layout cost (every cell of a nonzero fragment pays, and Δ's registers are written).
 - H. Honest's extra writes and the lever's coin bytes.
@@ -68,26 +74,33 @@ def lever_words(rng, m: int, n: int, S: int, rho: int) -> dict:
     return d
 
 
-def digit_cost(x: np.ndarray) -> np.ndarray:
-    a = np.abs(x)
-    bits = np.where(a <= 1, 1, np.where(a <= 8, 4, 8))
-    return np.where(a == 0, 0, 8 + bits) / 32
-
-
-def cell_cost(delta: np.ndarray) -> np.ndarray:
-    """Registers a cell, at least, to add Δ·R for one cell: Δ = d0 + 256·d1 with d0 in [-128, 128), and each nonzero
-    digit costs 8 products (with R, or 256·R mod 2^16) and its operand width (1, 4 or 8 bits), over 32."""
+def digits(delta: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Δ = d0 + 256·d1 with d0 in [-128, 128): two s8 digits, against R and 256·R mod 2^16."""
     d1 = (np.asarray(delta) + 128) // 256
-    return digit_cost(delta - 256 * d1) + digit_cost(d1)
+    return delta - 256 * d1, d1
 
 
-def plane_cost(delta: np.ndarray) -> np.ndarray:
-    return cell_cost(delta).sum(axis=-1)
+def width(x: np.ndarray) -> np.ndarray:
+    a = np.abs(x)
+    return np.where(a == 0, 0, np.where(a <= 1, 1, np.where(a <= 8, 4, 8)))
 
 
-def best_other(x: np.ndarray, y: np.ndarray, exclude_self: bool) -> np.ndarray:
-    """For each row of x (m, n), the cheapest Δ against any row of y (m, n)."""
-    c = plane_cost(x[:, None, :] - y[None, :, :])
+def plane_cost(delta: np.ndarray, prev: np.ndarray | None = None, bits: bool = True) -> np.ndarray:
+    """Registers a row-plane, at least, to add Δ·R: 8 products a nonzero digit, formed every step, and the digits'
+    operand widths where Δ moved since the route's last step (a register keeps a value that didn't move), over 32."""
+    lo, hi = digits(delta)
+    prods = 8 * ((lo != 0).astype(np.int64) + (hi != 0))
+    w = width(lo) + width(hi) if bits else 0
+    if bits and prev is not None:
+        w = np.where(delta == prev, 0, w)
+    return (prods + w).sum(axis=-1) / 32
+
+
+def best_other(x, y, xp=None, yp=None, exclude_self: bool = False) -> np.ndarray:
+    """For each row of x (m, n), the cheapest Δ against any row of y (m, n); xp and yp are the same rows a step
+    earlier, for the operand bits."""
+    prev = None if xp is None else xp[:, None, :] - yp[None, :, :]
+    c = plane_cost(x[:, None, :] - y[None, :, :], prev)
     if exclude_self:
         c = c + np.where(np.eye(len(x), dtype=bool), np.inf, 0)
     return c.min(axis=1)
@@ -96,7 +109,7 @@ def best_other(x: np.ndarray, y: np.ndarray, exclude_self: bool) -> np.ndarray:
 def route_costs(d: dict, steps, fresh: bool = False) -> dict:
     """Each route's cost (registers a row-plane) for every (t, i, b) in `steps`, and the shared parts' amortized cost.
     With `fresh` R a step, no product carries from one step to the next: prev and incr are gone, partners are the
-    step's own rows, and decomp and walk pay the static part's product every step."""
+    step's own rows, and decomp and walk form the static part's products every step (its bits stay in registers)."""
     wint = d["wint"]
     S, m, n = wint.shape
     Pi = cell_bytes(wint & M32)
@@ -109,27 +122,36 @@ def route_costs(d: dict, steps, fresh: bool = False) -> dict:
     per_class = m // (int(d["cls"].max()) + 1)
     out = {r: [] for r in ROUTES}
     for t in steps:
+        u = max(t - 1, 0)
         for b in range(4):
-            x = Pi[t, :, :, b]
-            static = plane_cost(Bs[:, :, b]) if fresh else plane_cost(Bs[:, :, b]).mean() / S
-            out["scratch"].append(plane_cost(x))
+            x, xp = Pi[t, :, :, b], (Pi[t - 1, :, :, b] if t > 0 else None)
+            static = (plane_cost(Bs[:, :, b], bits=False) if fresh
+                      else plane_cost(Bs[:, :, b]).mean() / S)
+            out["scratch"].append(plane_cost(x, xp))
             if t > 0 and not fresh:
-                xp = Pi[t - 1, :, :, b]
-                out["prev"].append(plane_cost(x - xp))
-                out["partner"].append(np.minimum(best_other(x, x, True), best_other(x, xp, False)))
-                out["incr"].append(plane_cost(x - xp - Bc[t, :, :, b]) + plane_cost(Bc[t, :, :, b]) / per_class / 2)
+                xpp = Pi[t - 2, :, :, b] if t > 1 else np.zeros_like(xp)
+                out["prev"].append(plane_cost(x - xp, xp - xpp))
+                out["partner"].append(np.minimum(best_other(x, x, exclude_self=True), best_other(x, xp)))
+                cp = Bc[u, :, :, b] if t > 1 else np.zeros_like(xp)
+                out["incr"].append(plane_cost(x - xp - Bc[t, :, :, b], xp - xpp - cp)
+                                   + plane_cost(Bc[t, :, :, b]) / per_class / 2)
             else:
                 for r in ("prev", "incr"):
                     out[r].append(np.full(m, np.inf))
-                out["partner"].append(best_other(x, x, True))
-            shared = static + plane_cost(Bq[t, d["cls"], :, b]) / per_class + 8 / 32
-            out["decomp"].append(plane_cost(x - Bs[:, :, b] - Br[t, :, None, b] - Bq[t, d["cls"], :, b]) + shared)
-            wx = Bw[t, :, :, b]
-            wcost = plane_cost(wx)
+                out["partner"].append(best_other(x, x, xp, xp, exclude_self=True) if t > 0
+                                      else best_other(x, x, exclude_self=True))
+            q, qp = Bq[t, d["cls"], :, b], Bq[u, d["cls"], :, b]
+            shared = static + plane_cost(q, qp if t > 0 else None) / per_class + 8 / 32
+            dx = x - Bs[:, :, b] - Br[t, :, None, b] - q
+            dxp = (xp - Bs[:, :, b] - Br[u, :, None, b] - qp) if t > 0 else None
+            out["decomp"].append(plane_cost(dx, dxp) + shared)
+            wx, wxp = Bw[t, :, :, b], (Bw[t - 1, :, :, b] if t > 0 else None)
+            wcost = np.minimum(plane_cost(wx, wxp), best_other(wx, wx, wxp, wxp, exclude_self=True) if t > 0
+                               else best_other(wx, wx, exclude_self=True))
             if t > 0 and not fresh:
-                wcost = np.minimum(wcost, plane_cost(wx - Bw[t - 1, :, :, b]))
-            wcost = np.minimum(wcost, best_other(wx, wx, True))
-            out["walk"].append(plane_cost(x - Bs[:, :, b] - wx) + wcost + static)
+                wcost = np.minimum(wcost, plane_cost(wx - wxp))
+            out["walk"].append(plane_cost(x - Bs[:, :, b] - wx, (xp - Bs[:, :, b] - wxp) if t > 0 else None)
+                               + wcost + static)
     return {r: np.array(v).reshape(len(steps), 4, m) for r, v in out.items()}
 
 
