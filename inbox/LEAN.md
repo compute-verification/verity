@@ -128,6 +128,16 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
   most 32 stream tiles, 2⁻¹⁰⁰ after). Both are analysis, not proved.
 
 
+- **18:55Z, KERNEL on the H200** (runs 182946-137d, 183517-14b3, 183816-c88c; note 20261029T1851Z-report-lean-kernel):
+  - The final layout serves with 0 mismatches across ten layouts, decode and ragged calls included.
+  - T2 served, sync / async: 10.90× / 21.27× (64 rows), 37.62× / 65.61× (512) and 62.50× / 75.14× (8,192), within 1% of
+    last night's.
+  - Decode costs what a 64-row call does, because of a fixed per-call path: L1's seed hashing of A_j.
+  - **Decided: the certifier draws every coin raw after A_j's root** (G by rejection sampling, b, a₁ and the lanes).
+    Nothing is derived on the card from a seed that follows root(A_j): that path put grinding of A_j outside the
+    statement, against live coins only. `Coins` stays as stated. The coin feed changes before the freeze, and
+    N-KERNEL writes its spec.
+
 ## Owners' answers on landing the code (18:32Z)
 
 - **compute-accounting (CMP-295):** the lead is a new protocol id, `verity/pouw/v2`, in the `PouwCheck` package beside
