@@ -68,12 +68,14 @@ def module(name: str, path: Path) -> ModuleType:
     return m
 
 
-#: One-stage v2 in Python on the cases it decides without a proof (`answer`), over sampled proofs' one-stage difftest
-#: (`ONE_STAGE`: `one_stage` behind the decoders `OneStage` reads, whose strategies draw audits).
-ZK = module("one_stage_zk_case", CORE / "service/sampled_proofs/tests/one_stage_zk_case.py")
-ONE_STAGE = ZK.ONE_STAGE
+#: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, and its strategies
+#: draw audits.
+ONE_STAGE = module("one_stage_difftest", CORE.parents[1] / "verity/core/service/sampled_proofs/tests/test_difftest.py")
 #: PoUW's check difftest's cases: honest windows and one mutation each.
 POUW_CASES = module("pouw_check_cases", CORE / "protocols/pouw/lean/check/tests/pouw_check_cases.py")
+#: One-stage v2 in Python on the cases it decides without a proof (`answer`), over `ONE_STAGE` (the module it loads is
+#: the one above: `module` loads each name once).
+ZK = module("one_stage_zk_case", CORE.parents[1] / "verity/core/service/sampled_proofs/tests/one_stage_zk_case.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/check/tests/pouw_period_cases.py")
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
