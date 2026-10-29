@@ -80,10 +80,20 @@ kind = "measured"
 source = "SW-GPU interim §3: k32's persistent wgmma m64n256k32 s8 on smem-resident tiles; every k32 word exported to shared memory (sts, 2 CTAs an SM: 158.08 units a word over plain's 32.12) or to HBM (stg, 3 CTAs: 888.10), run r20261029-044623-0ed1, at each mode's sampled clock; rates without a served GEMM's operand traffic (SW-GPU's smell)"
 
 [price.latency]
-compression_s = 7.3e-6
+compression_s = 4.23e-6
 launch_s = 2.7e-6
-kind = "estimate"
-source = "SW-GPU interim §2: one compression's dependency chain floors a coins call at 9.28 us (131,072 entries, compress_from<8>) where a copy of the same size takes 2.70 us (run r20261029-044623-0ed1): 6.6 us for 72 rounds, 7.3 us for 80; a kernel launch 2.7 us. Prices A's root, which the call's noise seed reads, on the step's critical path: its leaf chain, three compressions a tree level, the seed, and a launch a level (no measurement of this chain exists)"
+kind = "measured (compression); estimate (launch, the chain's count)"
+source = "N-HIDE interim 1 item 10 (note compute-research/20261029T0715Z-report-np-hide): one SHA-512 compression on one thread in the committer's rolled build takes 4.23 us (8,385 cycles at 1,980 MHz), measured on vy-dc-h200-5, run r20261029-070648-ac09 (unrolled 3.93 us on one SM, 5.16 us with all 132 SMs running it); a kernel launch 2.7 us (SW-GPU interim §2, run r20261029-044623-0ed1). Prices A's root, which the call's noise seed reads, on the step's critical path: its leaf chain, three compressions a tree level, the seed, and a launch a level; the chain's count is the card's layout's, not N-HIDE's (its 2,928 compressions a forward at T 8,192)"
+
+[price.salt]
+unforced = 791892
+forced = 238080
+c_compressions = 2
+alone = { unforced = 1586849, forced = 477127 }
+time = { unforced = 1923352, forced = 1200447 }
+unit = "W1 units an hm96 salt at the floor (the PRF, c and M_key·y)"
+kind = "checked"
+source = "N-HIDE interim 1 §2 (note compute-research/20261029T0715Z-report-np-hide; benchmarks/served_commit/np_hide_price.py on cursor/compute-research-np-hide-9090 at 4839409549, run r20261029-073640-fd4e, art:675eb0f6…, on SW-HASH's measured rows and SASS, art:c4b98cbf…): a salt's registers at the floor, 32 a register and 116,224 a compression; forced (a) leaves M_key·y alone (7,440 registers); c is two compressions, the PRF the rest (321,364). `alone` prices a register at one LOP3's measured 64.13; `time` is the salt kernel's GPU time in MAC-times, not W1. Replaces the card's leaf-time price (hash_rows' shares), which priced one salt 1.29x higher at 256 KiB (N-SMELL item 12); SW-HASH's claims are checked at their own (`salt_basis = \"leaf-time\"`)"
 
 [price.coin_bytes]
 value = 2
@@ -292,6 +302,20 @@ ctx8k = "?"
 kind = "unmeasured"
 source = "SW-NOISE final §8's ssn-1l5-b1-v1 (the 5-lane balanced code): its served std is below ssn-1l-b1-v1's at every shape (qkv 5.26 against 5.94 units, down 8.72 against 9.22; estimate, ssn_code5.py run r20261029-070428-c03f), and lm_head's noise lands on the logits; SW-PPL to measure"
 
+[t3.ssn-1l-hw-v1]
+models = []
+ctx2k = "?"
+ctx8k = "?"
+kind = "unmeasured"
+source = "N-PREM interim 1 §2: served noise std 41-43 units (6-9 for ssn-1l), bracketed by SW-PPL's measured ssn-1l-b4-v1 (+0.01% / +0.17%), so about +0.2% at most (estimate); N-PPL to measure"
+
+[t3.ssn-1l-tag-v1]
+models = []
+ctx2k = "?"
+ctx8k = "?"
+kind = "unmeasured"
+source = "N-RED interim 1 §3: served noise std 10.0-16.2 units with the tags (6.0 / 9.2 for ssn-1l), so about 0 to +0.2% interpolated on SW-PPL's b1 and b4 rows (estimate); needs its own SW-PPL row"
+
 [t3.nsf-v1]
 models = []
 ctx2k = "?"
@@ -322,19 +346,39 @@ owner = "SW-PREMISES"
 source = "MH100w is faithful to the H200: CardWithinAccel, in the lock (CORE.md §2: model faithfulness, rank 3; SW-PREMISES interim #15)"
 
 [premise.atomic-call]
-rank = 0
+rank = 3
 status = "ruled"
 owner = "Daniel"
-requires = ["period-inventory"]
 closes = ["pre_noise_hashing", "final_rows"]
-source = "each A·B call is atomic, with fresh noise every call (Daniel, Wed 28 Oct 4:30 and 4:49 PM PDT; CORE.md §1, §2a). The call's noise seed reads root(A), so A's commitment is hashed by any program that gets the noise: credited hashing under ShaSpeed (SW-SMELL P3; CORE-SMELL C28), as are rows of final words. The closure takes PeriodInventory beside the ruling (SW-PREMISES final: the one route for hashing before the noise, 0.42-0.72x stock)"
+source = "each A·B call is atomic, with fresh noise every call (Daniel, Wed 28 Oct 4:30 and 4:49 PM PDT; CORE.md §1, §2a). The call's noise seed reads root(A), so A's commitment is hashed by any program that gets the noise: credited hashing (SW-SMELL P3; CORE-SMELL C28), as are rows of final words. N-COMPOSE interim (note compute-research/20261029T0745Z-report-np-compose §6, atomicCall_closes, scratch NCompose.lean at 23c5552e0f): AtomicCall is a rank-3 protocol premise, and with ShaWrites over every digest of the call, root(A)'s included, the card is charged A's hashing beside the targets; its own-card part needs no PeriodInventory (N-PREM interim 1 agrees), which is the egress layer's"
 
 [premise.hash-compose]
+rank = 0
+part = "hashing"
+status = "scratch"
+owner = "N-COMPOSE"
+requires = ["sha-writes", "carried-words"]
+source = "N-COMPOSE interim §1-5 (note compute-research/20261029T0745Z-report-np-compose; Security/Proofs/Pouw/Dimension/Scratch/NCompose.lean on cursor/compute-research-np-compose-0616 at 23c5552e0f, `verity lean try` run r20261029-073643-1db7, axioms propext/Classical.choice/Quot.sound only, art:828c2cd710caca37bd2c13cd0f7dcf1d03d5340c3462696a2a0a933b9ce7bfa6; in no lock): hashCompose_by / hashCompose_floor, a program writing a register related to each separated target and outputting the digests costs at least 32·(|T| + R), given ShaWrites and CarriedWords. On frame-v3's little-endian rows no SHA-512 register carries a committed word (bswap32_shift_not_const, checked); on big-endian rows the fold is a counterexample (1/16 of the target credit), so the word order is load-bearing. Was SW-SMELL P3's unstated composition"
+
+[premise.sha-writes]
 rank = "4a"
 part = "hashing"
+status = "assumed"
+owner = "N-COMPOSE"
+source = "N-COMPOSE interim §1-2 (ShaWrites): every admissible program that outputs the digests writes at least R registers, pairwise distinct on the grid and none equal to an excluded value; ShaSpeed restated as a count, strictly stronger than ShaSpeed at the same rank (compose_needs_exclusion: a cost floor alone doesn't add to DistinctWrites). N-SHALB interim 1's falsifiable form is ShaLB(3,534): the minimal kernel's 3,534 registers a compression against the committer's 3,632 (run r20261029-074922-d49c)"
+
+[premise.carried-words]
+rank = 3
+part = "hashing"
 status = "open"
-owner = "SW-LEAN"
-source = "SW-SMELL P3: adding ShaSpeed's credit for hashed bytes to DistinctWrites' bound (MH100w) needs a composition of MH100w with ShaSpeed (Accel) that no lemma states; every design that credits hashing takes it, beside ShaSpeed"
+owner = "N-COMPOSE"
+source = "N-COMPOSE interim §3 (words_not_forced, hashCompose_of_carriedWords): committed words need not be materialized in MH100w, and a wgmma may start from any register, so the premise is that every admissible program writes a carrier of each committed word (w plus a constant on the grid); model faithfulness, rank 3. For SSN, N-COMPOSE asks N-LEAN for its words carrier-separated (SepBy (Carries S)), not only DistinctOn"
+
+[premise.adaptive-dw]
+rank = 0
+status = "open"
+owner = "N-LEAN"
+source = "N-RED interim 1 item 3 and M1 (note compute-research/20261029T0734Z-report-np-red): DistinctWritesMH100On takes any grid set S, and an adaptive prover runs a different straight-line program on each coin branch, so the lifted bound is vacuous; held fixed, a coin-addressed bulk copy is mispriced as `other`. Every design's T1 against a prover that reads the coins (which it must: the noise is an operand) rests on DistinctWrites stated for such programs, each branch charged its words and a bulk copy one address write a tile. The card prices what the branch saves on chosen rows (`coin_branch`) and takes this premise for the rest"
 
 [premise.weights-distinct]
 rank = 2
@@ -384,7 +428,7 @@ source = "SW-SMELL S9: route U' (X s8, Y + gamma u8, the row init) needs its own
 rank = 3
 status = "open"
 owner = "SW-PREMISES"
-source = "every device the prover runs in the monitoring period is counted on both sides of T1, the host's SHA-512 and AMX included; stated in DitherInstance.lean, held open, not in the lock (SW-PREMISES interim #18; SW-LEAN interim §2: what the final-word lemma's grid rests on)"
+source = "every device the prover runs in the monitoring period is counted on both sides of T1, the host's SHA-512 and AMX included; stated in DitherInstance.lean, held open, not in the lock (SW-PREMISES interim #18; SW-LEAN interim §2: what the final-word lemma's grid rests on). The egress layer's (N-COMPOSE §7, egress_charged; N-PREM interim 1), closing no T1 term, and in every design's set (N-FLOOR interim 1's fix): without it the H200's own host (SHA-512 at 6.24 GB/s, 1.19% of the card's served rate; AMX int8 at 15.6 T MACs/s; PCIe 55.4 GB/s; runs r20261029-072411-22ce, r20261029-072843-21ae) takes 1.42x stock of credited W1 off the card at no time cost, 142x T1's budget, and 5.6x on θ's H200 node (estimates on measured parts); with it the host's work is priced at the card's own rate for the same work"
 
 [premise.final-word-lemma]
 rank = 0
@@ -443,17 +487,17 @@ rank = 2
 status = "open"
 owner = "SW-SEM"
 requires = ["class-semantics", "alg-suff-l"]
-word_units = "64 - 1024/L"
-source = "SW-SEM interim BamFloor, the counting lemma: with every class semantic a committed word every L steps costs at least 64 - 1024/L (48 at L 64, 56 at L 128, 60 at L 256), which is all rank <= 3 premises certify; a floor over every program, so no fast scheme is charged against it. Its arithmetic core lcommitFloorArith and the rank fact innerProductRank are proved; the combinatorial step (a merge-free word's chain has L/32 registers of its own) is a prose sketch, rank 2 once proved"
+word_units = "128/3 if L == 64 else 48"
+source = "N-DENSE interim 1 §2 (note compute-research/20261029T0755Z-report-np-dense; bamFloorArith proved, BamFloor with bamFloorRate on its branch): with every class semantic a committed word every L steps costs at least N + max(p, N - p) forms at 32, least at p = N/2, so 48 a word for L > 64 and 128/3 at L 64 (N + max(p/2, N - p), least at p = 2N/3), which is all rank <= 3 premises certify; a floor over every program, so no fast scheme is charged against it. SW-SEM's 64 - 1024/L counted pre-images and merge inputs twice (N-DENSE's correction). The combinatorial step is a sketch, rank 2 once proved"
 
 [premise.pure-lanes]
 rank = "4b"
 status = "open"
 owner = "SW-SEM"
 requires = ["class-semantics", "alg-suff-l"]
-word_units = "reg*L/32 if L <= 128 else 64 - 1024/L"
+word_units = "reg*L/32 if L <= 128 else 48"
 fast_saving = true
-source = "SW-SEM final (art:ceb5dee0521b95c8699b4572640f949fc5348c0271e231838e6ebc687471bc7d, run r20261029-052329-aa9b): PureLanes (no tensor lane sums two noise variables; CoverCount) or CellPure (no tensor register shared between two cells' words; PureCount), either rank 4, gives a committed word every L its full L/32 registers. Credited only to L 128: SW-SEM's margins at one merge a word have Strassen-Winograd at +37.5% / +12.5% / 0 and Hopcroft-Kerr at +25% / 0 / -12.5% at L 64 / 128 / 256, so from L 256 the restriction excludes a cheaper program and only BamFloor's 64 - 1024/L is credited. The best-known scheme's saving at the operands' range is charged against it. Replaces NoSharingGain (open at L 64, a tie at 128, likely false from 256)"
+source = "SW-SEM final (art:ceb5dee0521b95c8699b4572640f949fc5348c0271e231838e6ebc687471bc7d, run r20261029-052329-aa9b): PureLanes (no tensor lane sums two noise variables; CoverCount) or CellPure (no tensor register shared between two cells' words; PureCount), either rank 4, gives a committed word every L its full L/32 registers. Credited only to L 128: SW-SEM's margins at one merge a word have Strassen-Winograd at +37.5% / +12.5% / 0 and Hopcroft-Kerr at +25% / 0 / -12.5% at L 64 / 128 / 256, so from L 256 the restriction excludes a cheaper program and only BamFloor's 48 is credited (N-DENSE's correction). The best-known scheme's saving at the operands' range is charged against it. Replaces NoSharingGain (open at L 64, a tie at 128, likely false from 256). N-DENSE interim 1: the reuse lemma can hold only below about L = 2·sqrt(32K) (an intersection attack beats honest above it, checked)"
 
 [premise.ncp-r-check]
 rank = 2
@@ -504,7 +548,46 @@ source = "CORE.md §2a: hashing is credited, no program computes SHA-512 faster 
 rank = "4bU"
 status = "assumed"
 owner = "N-SAKU"
-source = "NIGHT.md §1 default 1: symmetric algorithmic knowledge on literally uniform operands, 4b's mildest form, its own row; no module takes it until N-SAKU's card prices a design on it"
+source = "NIGHT.md §1 default 1: symmetric algorithmic knowledge on literally uniform operands, 4b's mildest form, its own row. N-SAKU interim 1 (note compute-research/20261029T0733Z-report-np-saku; Security/Proofs/Pouw/SakU.lean, gap_of_sakUSum, axioms run r20261029-072920-3a9d): under SAK-U alone every design's certified gap is at least stock, about 100% at every T and density, so no module takes it; what's left of SAKMatmul once SAK-U is granted is DataCantHelp, rank 4b"
+
+[premise.ssn-hw-distinct]
+rank = 0
+status = "open"
+owner = "N-LEAN"
+source = "N-PREM interim 1 §2 (note compute-research/20261029T0740Z-report-np-prem): ssn_1l_hw's words (a1 in {0..15}^4 from the nibble mask on coin word 0; step lanes 1 + 2b_t against public column signs s_t[j]) are pairwise distinct and non-free as functions of the coin bits; CPU-checked on 7 data cases with three mutations caught; a proof extends ssnTargetG to nibble lanes on a shared coin word and to affine step lanes"
+
+[premise.ssn-tag-distinct]
+rank = 0
+status = "open"
+owner = "N-LEAN"
+source = "N-RED interim 1 §3 (note compute-research/20261029T0734Z-report-np-red; nred_attacks.py's `fix` on cursor/compute-research-np-red-cfad at 3b423fc48a, run r20261029-072732-aba9, art:c8aa7a3d467b84df0db5335cadfc1b4467a0ca8f4c4e83add3377979e40738aa): ssn_1l-tag's row vectors are distinct on identical rows, prefix rows and zero tails (two rows differ by (T(i) - T(i'))·G + (a1 - a1')·C + dc·1, G drawn after A and B are committed); checked on N-RED's attack set, no proof"
+
+[premise.g-private]
+rank = 0
+status = "open"
+owner = "the PoUW owner (protocol)"
+source = "N-RED interim 1 §3: ssn_1l-tag's tag weights G in [-3, 3]^(4 x n) are drawn from live coins after the model's root is committed and are unknown when B is chosen; with G public, a B holding G's rows cancels the tags and A1 saves 84.8% again (`public_g`). Drawn once a window its coins and forming are about 0. A protocol rule, not built"
+
+[premise.copy-floor]
+rank = 1
+status = "open"
+owner = "N-W1"
+source = "N-RED interim 1 A3: per-word copies on identical columns save about 99% in the model (MH100w's moves are free), real only if a per-word copy costs under 32 W1 on the H200; N-RED's W2 found no writer below 32 a 32-bit slot, and N-W1's census is to measure it"
+
+[premise.subtree-layout]
+rank = 0
+part = "hashing"
+status = "open"
+owner = "N-HIDE"
+source = "N-HIDE interim 1 §1 (L1, proposed hm96-sha512/subtree/v1): an hm96 instance's inner digest x is the root of a frame-v3-sha512 subtree over a seed group's committed values, so hiding is hm96 PROTOCOL §3 unchanged (it holds for any x) and binding §4 plus the subtree's collision resistance (cr/sha-512); the one rule it adds, the path below x opened only inside a zero-knowledge proof, the design rule already requires. Proposed, not built; the drawn unit's proof opens a path of 1.7-2.9M ANDs, outside T1"
+
+[premise.private-roots]
+rank = 0
+part = "hashing"
+status = "open"
+owner = "the PoUW owner (ruling)"
+requires = ["subtree-layout"]
+source = "N-HIDE interim 1 §1 (L2): root(A_j) becomes a witness the unit's proof opens against the window's (or the forward's) one hm96 instance, in a proof that already derives seed_j (PouwSeed), at 2 compressions a level in-circuit; pouw.roots' registered values change to the instance root. A PoUW protocol change that needs the PoUW owner's ruling (N-HIDE's ask)"
 
 [premise.ssn5-layout]
 rank = 0
@@ -571,21 +654,24 @@ source = "a noise whose words repeat on data (a zero k32 block dot product, iden
 [space]
 slots = [["N", "noise"], ["D", "denoise"], ["F", "format"], ["C", "density"], ["C", "operands"], ["H", "rows"],
          ["H", "hiding"], ["P", "final"], ["P", "forming"], ["P", "derivation"]]
-base = ["H32", "W1", "atomic-call", "period-inventory", "ShaSpeed", "hash-compose"]
+base = ["H32", "W1", "adaptive-dw", "atomic-call", "period-inventory", "ShaSpeed", "sha-writes", "carried-words", "hash-compose"]
 fields = { pre_noise_bytes = "m*K", rows_mix_final = 1, word_bits = 32, format_forming = 0 }
 probe = { m = 64, n = 2048, K = 2048 }
-source = "NIGHT.md §2's axes; base: the DistinctWrites price at H32 in W1, the atomic call with PeriodInventory for A's commitment hashed before the noise (SW-PREMISES final), and the hashing credit (ShaSpeed with its composition, NIGHT §1 default 1)"
+source = "NIGHT.md §2's axes; base: the DistinctWrites price at H32 in W1, stated for programs that read the coins (adaptive-dw), the atomic call for A's commitment hashed before the noise (N-COMPOSE), PeriodInventory in every design's set (N-FLOOR), and the hashing credit (ShaSpeed, its count ShaWrites, CarriedWords and the composition, NIGHT §1 default 1)"
 
 # N, the noise. Fields: noise_x / noise_y the derived noise entries (one LOP3 a packed register from XOF bytes, CORE-SMELL
 # C28), derive_extra the derivation's intermediates no commitment holds, dup the share of words the data repeats, n_max
-# the most columns its distinctness lemma covers; `coins` the XOF bytes a call by the measured table that times them
+# the most columns its distinctness lemma covers, branch_rows the row-words a call a prover that branches on the coins
+# skips on m identical chosen rows (a row-word whose vector equals an earlier row's at this salt is a copy, free in
+# MH100w: N-RED A1, N-PREM's coin branch; rep_sum and rep_bits are its exact expected counts, rep_lanes an estimate
+# that takes the state to be the lanes' sums); `coins` the XOF bytes a call by the measured table that times them
 # (also the coins' credited hashing, two hashed bytes a byte); `t3` the served format by F when served. [N.<id>.D.<d>]
 # holds what the noise needs under de-noise d: r the stacked width over K, formed_x / formed_y the formed operand
 # entries, denoise in W1 units, operand_max, wide_measured (1: T2 prices the extra width by GD-DENOISE's measured 3K
 # call; 0: at the plain GEMM's time a MAC), fix_U / fix_U2 route U's and U''s second writes (SW-SMELL S9).
 [N.ncp]
 title = "NCP: E1, F1 fresh a call, E2 = E1·R, F2 = -R·F1 word moves, E3, F3 inside IADD3s"
-fields = { noise_x = "m*K", noise_y = "n*K", derive_extra = "0", dup = 0, noise_max = 63 }
+fields = { noise_x = "m*K", noise_y = "n*K", derive_extra = "0", dup = 0, noise_max = 63, branch_rows = "0" }
 coins = { coinsncp = ["m*K", "n*K"] }
 premises_when = [["L > 32", ["ncp-r-check"]]]
 variant = "ncp-k32-sha512-fresh"
@@ -597,11 +683,12 @@ source = "X = [A+E1 | A+E2 | -(A+E3)], Y = [B+F1; B+F2; B+F3]: the noise cancels
 
 [N.ssn-1l]
 title = "ssn-1l, served sparse noise: step 1 holds 28 entries and 4 coin bits against the column's public base-13 code, each later k32 step 31 entries and 1 bit against a weight lane of 1"
-fields = { c = 4, S = "1 + ceil(max(0, K - (32 - c))/31)", bits = "S - 1 + c", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", noise_x = "4*m*S + 4*m*(c - 4)", noise_y = "0", derive_extra = "4*m*rot + 4*m*(c - 4)", dup = 0, noise_max = 1, n_max = 28559, s8_ok = 1 }
+fields = { c = 4, S = "1 + ceil(max(0, K - (32 - c))/31)", bits = "S - 1 + c", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", noise_x = "4*m*S + 4*m*(c - 4)", noise_y = "0", derive_extra = "4*m*rot + 4*m*(c - 4)", dup = 0, noise_max = 1, n_max = 28559, s8_ok = 1, branch_rows = "rep_sum(m, c, S)" }
 coins = { coins = ["4*m*ceil(bits/32)"] }
 premises = ["ssn-distinct", "ssn-success-set"]
 t3 = { s8 = "ssn-1l-b1-v1" }
 variant = "ssn-1l-b1-v1"
+branch_source = "N-RED interim 1 A1 and N-PREM interim 1 §2: on identical rows step t's vector is fixed by (a1, the prefix sum of the step bits), 2^c x t classes, so rep_sum counts the expected repeats exactly (an estimate of the attack's saving: zero rows and prefix rows save more, 96-104% of stock in N-PREM's simulation)"
 source = "SW-NOISE final §4-5 (note compute-research/20261029T0551Z-report-sw-noise; noise_sweep.py on cursor/compute-research-sw-noise-5e1a at 2ba11b9bfa, art:d90a3d9d0ed503b9190dabc34367dd25ad30f3b247e2cfd0b855122c8a09fafc): c code lanes in step 1, S = 1 + ceil((K - (32 - c))/31) steps, S - 1 + c coin bits a row. A row's step costs a LOP3 (noise_x: candidate 1 forces it when committed) and, after step 1, a funnel-shift rotate except where the lane's bit is already at 24 (derive_extra, ssn_1l_layout: word 0's 32 - c bits, then 32 a word, so one rotate saved a whole coin word past the first); a code lane past 4 costs a rotate and a LOP3 a row (ssn_code5.py). Coins: the row's ceil((S - 1 + c)/32) whole coin words. B' is public apart from B, formed once at load; stock s8 x s8 at +-127, so no int7, sign fix or route"
 
 [N.ssn-1l.D.served]
@@ -634,9 +721,37 @@ t3 = { s8 = "ssn-1l5-b1-v1" }
 variant = "ssn-1l5-b1-v1"
 source = "SW-NOISE final §4 Domain and §10.5 (ssn_code5.py at 7d7de85b2b on cursor/compute-research-sw-noise-5e1a, run r20261029-070428-c03f, art:b26744eced7e1ea737fd280b7b8971137ae47aea8fd20500d965826b4888c8dd): z_j = (floor(j/2) + 1)(-1)^j in five balanced base-13 digits, injective and nonzero for n <= 13^5 - 1; lane 27 holds a1[i, 4] from bit 1 of h_{i,0} (a rotate and a LOP3 a row, C1 forcing the LOP3); the same alpha and coin words as ssn-1l at every K priced. ssn_code5.py counts S - W rotates a row where noise_sweep.py's layout counts S - 1 - floor((S - 22)/32), one more at Llama's K (32/(nK), immaterial); the card prices the layout's"
 
+[N.ssn-1l-hw]
+title = "ssn-1l-hw, ssn-1l hardened: a1 in {0..15}^4 by the nibble mask on coin word 0 against the column code, each later step's lane 1 + 2b_t against public column signs"
+fields = { c = 4, S = "1 + ceil(max(0, K - (32 - c))/31)", bits = "S - 1 + 16", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", noise_x = "4*m*S", noise_y = "0", derive_extra = "4*m*rot", dup = 0, noise_max = 15, n_max = 28559, s8_ok = 1, branch_rows = "rep_bits(m, 16, S)" }
+coins = { coins = ["4*m*ceil(bits/32)"] }
+premises = ["ssn-hw-distinct", "ssn-success-set"]
+t3 = { s8 = "ssn-1l-hw-v1" }
+variant = "ssn-1l-hw-v1"
+branch_source = "N-PREM interim 1 §2: two identical rows coincide at step t only if their 16 code bits and every step bit to t match, so step t has 2^(15 + t) uniform classes and rep_bits counts the expected repeats exactly (N-PREM's simulation, one draw: 0 / 0.014% / 0.148% at T 512, 512 rows and T 8,192; zero rows the same or less, a_t odd)"
+source = "N-PREM interim 1 §2 (note compute-research/20261029T0740Z-report-np-prem, on SW-NOISE's calculator at 7d7de85b2b): ssn_1l with a1 from coin word 0 by the mask 0x0F0F0F0F (16 bits a row) and a_t = 1 + 2b_t in {1, 3} against public pseudo-random signs s_t[j] in B' lane 31, formed at load; the constant 1 sits in A''s padded layout, so forming stays one LOP3 a step plus the rotates (estimate: the card prices ssn-1l's rotates). S + 15 coin bits a row fit in ssn-1l's coin words at every K priced (3, 8 and 9 at K 2,048, 7,168, 8,192), so its coin term is ssn-1l's. The 4-lane code covers n <= 28,559; the 5-lane code would need the same nibble treatment (N-PREM)"
+
+[N.ssn-1l-hw.D.served]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "N-PREM: served, as ssn-1l; the extra width at the plain GEMM's time a MAC (estimate)"
+
+[N.ssn-1l-tag]
+title = "ssn-1l-tag, ssn-1l with row tags: step 1 holds 24 data lanes, 4 lanes of the row index's balanced base-13 digits against coin-drawn G and 4 coin bits against the column code; later lanes 1 + a_t"
+fields = { c = 4, tag = 4, S = "1 + ceil(max(0, K - (32 - c - tag))/31)", bits = "S - 1 + c", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", noise_x = "4*m*S", noise_y = "0", derive_extra = "4*m*rot", dup = 0, noise_max = 3, n_max = 28559, s8_ok = 1, branch_rows = "0" }
+coins = { coins = ["4*m*ceil(bits/32)"] }
+premises = ["ssn-tag-distinct", "g-private", "copy-floor", "ssn-success-set"]
+t3 = { s8 = "ssn-1l-tag-v1" }
+variant = "ssn-1l-tag-v1"
+branch_source = "N-RED interim 1 §3, checked: every row vector distinct on identical rows, prefix rows and zero tails (4-word tiles repeat 0.07%), so the branch skips nothing"
+source = "N-RED interim 1 §3 (note compute-research/20261029T0734Z-report-np-red, nred_attacks.py's `fix`, run r20261029-072732-aba9): the tag lanes T(i), z_i = (floor(i/2) + 1)(-1)^i in balanced base-13 (injective for m <= 28,560), are salt-free row constants, loaded, not derived; G in [-3, 3]^(4 x n) drawn once a window after the model's root (its coins and forming about 0; per call they would be 2.25% of stock uncredited at m 64); S is ssn-1l's at every Llama K (67 / 67 / 67 / 265), since the tags take step 1's slack. Later lanes 1 + a_t in {1, 2}: the card prices them at ssn-1l's one LOP3 and rotates (estimate; {1, 2} sets bits 24 and 25 from one coin bit, which N-PREM's {1, 3} does in one LOP3). The tags stay in the served output (A4 otherwise)"
+
+[N.ssn-1l-tag.D.served]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "N-RED: served, the tags kept in the output; the extra width at the plain GEMM's time a MAC (estimate)"
+
 [N.ssn-a]
 title = "ssn-a, served sparse noise: each k32 step 28 entries and a register a = (h >> q) & 0x01010101 a row against public W0"
-fields = { S = "ceil(K/28)", noise_x = "4*m*S", noise_y = "0", derive_extra = "4*m*S", dup = 0, noise_max = 1, n_max = 28559, s8_ok = 1 }
+fields = { S = "ceil(K/28)", noise_x = "4*m*S", noise_y = "0", derive_extra = "4*m*S", dup = 0, noise_max = 1, n_max = 28559, s8_ok = 1, branch_rows = "rep_lanes(m, 4, S)" }
 coins = { coins = ["m*S/2"] }
 premises = ["ssn-distinct", "ssn-success-set"]
 t3 = { s8 = "ssn-a-b1-v1" }
@@ -655,7 +770,7 @@ source = "N-CARD's composition (estimate): ssn-a's 4S lanes again, negated, in c
 
 [N.ssn2]
 title = "ssn2, served sparse noise on both sides: each k32 step 28 entries, 4 bits a row and 4 bits a column"
-fields = { S = "ceil(K/28)", noise_x = "4*m*S", noise_y = "4*n*S", derive_extra = "4*m*S + 4*n*S", dup = 0, noise_max = 1, n_max = 1e30, s8_ok = 1 }
+fields = { S = "ceil(K/28)", noise_x = "4*m*S", noise_y = "4*n*S", derive_extra = "4*m*S + 4*n*S", dup = 0, noise_max = 1, n_max = 1e30, s8_ok = 1, branch_rows = "rep_lanes(m, 4, S)" }
 coins = { coins = ["(m + n)*S/2"] }
 premises = ["ssn2-distinct", "ssn-success-set"]
 t3 = { s8 = "ssn2-b1-v1" }
@@ -667,7 +782,7 @@ source = "SW-NOISE final: served, the final word a target"
 
 [N.per2]
 title = "per2, one-sided periodic noise that cancels: X = [A + V·P | V (x) limbs], Y = [B; -limbs(fold32 B)], V in [-4, 3]^(m x 32)"
-fields = { limbs = "12 if K <= 2048 else 21", noise_x = "32*m", noise_y = "0", derive_extra = "0", dup = 0, noise_max = 3, act124_ok = 1 }
+fields = { limbs = "12 if K <= 2048 else 21", noise_x = "32*m", noise_y = "0", derive_extra = "0", dup = 0, noise_max = 3, act124_ok = 1, branch_rows = "0" }
 coins = { coins = ["12*m"] }
 premises = ["per2-distinct", "weights-distinct"]
 variant = "per2"
@@ -679,7 +794,7 @@ source = "SW-NOISE final §2: forming X is A + V·P (K entries a row) and the li
 
 [N.os2]
 title = "os2, one-sided two-block noise: X = [A + E | E], Y = [B; -B], E = (h & 7) - 4"
-fields = { noise_x = "m*K", noise_y = "0", derive_extra = "0", dup = 0, noise_max = 4, act124_ok = 1 }
+fields = { noise_x = "m*K", noise_y = "0", derive_extra = "0", dup = 0, noise_max = 4, act124_ok = 1, branch_rows = "0" }
 coins = { coins = ["3*m*K/8"] }
 premises = ["os2-distinct", "weights-distinct"]
 source = "SW-NOISE final (noise_sweep.py os2): alpha 2, A + E formed (m·K) and E derived (m·K), 3 coin bits an entry; activations clamped to +-124; SW-NOISE: dominated by per2"
@@ -690,7 +805,7 @@ source = "SW-NOISE final: [A + E | E]·[B; -B] = A·B, exact"
 
 [N.lowrank1]
 title = "lowrank1: X = [A + u·vᵀ | u (x) limbs], v public, u fresh a row"
-fields = { limbs = "12 if K <= 2048 else 21", noise_x = "0", noise_y = "0", derive_extra = "m*K", dup = 0, noise_max = 3, act124_ok = 1 }
+fields = { limbs = "12 if K <= 2048 else 21", noise_x = "0", noise_y = "0", derive_extra = "m*K", dup = 0, noise_max = 3, act124_ok = 1, branch_rows = "(m - distinct(m, 256))*r*K/32" }
 coins = { coins = ["m"] }
 premises = ["lowrank-distinct", "weights-distinct"]
 source = "SW-NOISE final (noise_sweep.py lowrank1): forming A + u·vᵀ (m·K, forced when committed) and the u·vᵀ table select (m·K, not committed), one coin byte a row; SW-NOISE: dominated by per2"
@@ -842,8 +957,11 @@ when = "formed_x + formed_y > 0 and noise_x + noise_y > 0"
 premises = ["commit-forced"]
 source = "SWEEP.md candidate 1: the formed operands and the noise committed"
 
-# H, the hashing: hm96 rows (a_row A's commitment's leaf, row the leaf of the committed words and operands) and how
-# the salt side's hiding is charged.
+# H, the hashing: hm96 rows (a_row A's commitment's leaf, row the leaf of the committed words and operands; under a
+# subtree layout the chunk a subtree leaf holds) and how the salt side's hiding is charged. The hiding term counts
+# salts (N-HIDE): `layout` "l0" (the default) salts every leaf; "l1" one hm96 instance a call over a subtree of its
+# committed values, plus `forward_salts` a forward; "l2" one instance a forward or a window (`forward_salts`), root(A_j)
+# private. hash_time_ratio, when given, is the layout's hash time a byte against 16 KiB rows (T2).
 [H.rows.r16k]
 fields = { a_row = 16384, row = 16384 }
 source = "CORE-NCP's measured layout: 16 KiB rows everywhere (r20261029-013634-94e5)"
@@ -855,6 +973,27 @@ source = "SW-HASH §5: 256 KiB rows save 10.7% of hash time a byte; A per activa
 [H.rows.r1m]
 fields = { a_row = 262144, row = 1048576 }
 source = "SW-HASH §7 (b): the fewest leaves, so the least hiding; A at 256 KiB rows trades a long chain before the noise for less hiding"
+
+[H.rows.l1]
+layout = "l1"
+forward_salts = 1
+fields = { a_row = "K", row = 16384, hash_time_ratio = 0.9307 }
+premises = ["subtree-layout"]
+source = "N-HIDE interim 1 §1-2 (L1): instance j covers call j-1's words and call j's A rows, its root root(A_j) in seed_j, so one salt a call and one more a forward (65 a forward on Llama, against 6.4e7 at 16 KiB rows); words in 16 KiB chunks at 0.9307 of 16 KiB rows' hash time (estimate, scaled from SW-HASH's leaf kernels); A's rows as subtree leaves, one an activation row (the card's chain count)"
+
+[H.rows.l2f]
+layout = "l2"
+forward_salts = 1
+fields = { a_row = "K", row = 16384, hash_time_ratio = 0.9307 }
+premises = ["subtree-layout", "private-roots"]
+source = "N-HIDE interim 1 §1-2 (L2 a forward): the forward's calls are leaves of one tree under one hm96 instance, root(A_j) private and opened in the unit's proof; one salt a forward"
+
+[H.rows.l2w]
+layout = "l2"
+forward_salts = 0
+fields = { a_row = "K", row = 16384, hash_time_ratio = 0.9307 }
+premises = ["subtree-layout", "private-roots"]
+source = "N-HIDE interim 1 §1-2 (L2 a window): one hm96 instance a window, about 0 salts a forward (N-HIDE: 1e-11 of stock at T 8,192)"
 
 [H.hiding.open]
 source = "the salt side's PRF, M_key·y and c charged as honest-only work (NIGHT.md §1 default 2)"
@@ -900,8 +1039,53 @@ when = "noise_x + noise_y > 0 and commit_noise_x + commit_noise_y < 2"
 premises = ["lane-semantics", "one-instruction-minimal"]
 source = "SW-PREMISES final #13: OneInstructionMinimal"
 
-# Attacks (NIGHT.md §5): a design taking a premise or module an open attack targets can't rank first.
-[attack]
+# Attacks (NIGHT.md §5): a design taking a premise or module an open attack targets (and, when `with_any` is given,
+# one of those too) can't rank first. An attack the card prices as a term says so in `priced`.
+[attack.chosen-rows]
+status = "open"
+targets = ["ssn-1l", "ssn-1l5", "ssn-a", "ssn2", "nsf", "lowrank1"]
+priced = "coin_branch (identical rows; zero and prefix rows save more)"
+source = "N-RED interim 1 A1, A1b, A2 (run r20261029-072732-aba9, checked word for word): a prover that reads the call's coins collapses identical rows to one vector a class, 19.3% / 66.0% / 100.2% of stock at m 64 / 512 / 8,192; rows equal to their last block 19.2-99.1%; zero tails 51.5-51.7% at every m. N-PREM interim 1 §2 (coin branch, simulated): ssn_1l 24.0% / 74.7% / 101.7% identical and 96-104% zero rows; ssn_a 1.2-10.0% identical and 8.6-42.8% zero; nsf about 100% on zero rows. ssn2 shares ssn_a's row lanes (its column bits are common to every row) and lowrank1's u is one coin byte a row (N-CARD's reading, unchecked by either lane)"
+
+[attack.zero-data]
+status = "open"
+targets = ["ssn-1l", "ssn-1l5", "ssn-1l-hw", "ssn-1l-tag", "ssn-a", "ssn2"]
+with_any = ["bam-floor", "pure-lanes"]
+source = "N-SAKU interim 1 (note compute-research/20261029T0733Z-report-np-saku, saku.py run r20261029-072745-10df, ssn_zero bit-exact): at A = B = 0 each SSN word committed every L > 32 stacked lanes is the column-code term plus the row's coin prefix sum, made without the GEMM, so the gap is 52.2% / 78.3% / 91.3% / 101.1% of stock at L 64 / 128 / 256 / 1,024 under any premise; SSN can't commit sparser than every k32"
+
+[attack.public-g]
+status = "refuted"
+targets = ["ssn-1l-tag"]
+source = "N-RED interim 1 §3: with G known when B is chosen the tags cancel and A1 saves 84.8% again; closed by g-private (G drawn after the model's root), which the design takes"
+
+[attack.replay-table]
+status = "refuted"
+targets = ["ssn-1l-tag"]
+source = "N-RED interim 1 A5: a salt-free table of every (a1, c_t) vector under M0 with device memory, 3.33% / 0.42% / 0.03% of stock at m 64 / 512 / 8,192; closed by the atomic call (every design's base) or a per-call G"
+
+# N-COVER interim 1's whole served step (note compute-research/20261029T0745Z-report-np-cover; step_cover.py on
+# cursor/compute-research-np-cover-5f9b, run r20261029-073342-47ea, art:f00fddacf69da4869d35b6a4e019684fea9a3919aac28035df6da24d5da22676;
+# estimates): T1 over the whole step, the linears under ssn_1l and every other component by plan, and the share of
+# W1 no target covers. Printed beside each point's ranking; the card's T1 is the linears' term alone.
+[cover.t8192]
+step_t1 = { stock = 0.329, best = 0.113, best_p4 = 0.042, best_p4_dither = 0.021 }
+uncovered = { best = 0.064, best_p4_dither = 0.0195 }
+t3_added = { best = 0.0026, best_p4_dither = 0.0146 }
+source = "N-COVER interim 1 TL;DR: Llama T 8,192; best: int8 lm_head under ssn_1l, int8 attention under ssn_sh, fused C-all lane epilogues; p4: MeasuredFloor, CvtMinimal, TensorSemantics, MufuSpeed (rank 4a); dither: int8 rounds dithered by an in-kernel xorshift"
+
+[cover.t512]
+step_t1 = { stock = 0.292, best = 0.086, best_p4 = 0.025, best_p4_dither = 0.013 }
+uncovered = { best_p4_dither = 0.0129 }
+source = "N-COVER interim 1 TL;DR: Llama T 512 (64 tokens)"
+
+[cover.v4like]
+step_t1 = { stock = 0.212 }
+source = "N-COVER interim 1 TL;DR: V4 T 8,192 (at T 512 with 64 tokens, best_p4 0.71% and dither 0.44%)"
+
+[cover.decode]
+step_t1 = { stock = 0.683, best = 0.184, best_p4 = 0.052, best_p4_dither = 0.028 }
+uncovered = { best_p4_dither = 0.0246 }
+source = "N-COVER interim 1 TL;DR: Llama decode with 2K context (8K: stock 85.7%, dither 3.7%); best pads every matmul to 64 rows for 12.6%"
 
 # Cards (the format in the N-CARD note): a design named by its module on each axis, with the premises it adds, its
 # own claimed numbers (checked against the calculator: `basis` "t1", "gap" or "hiding_words", and the terms it sums).
@@ -1042,11 +1226,64 @@ origin = "SW-HASH"
 note = "compute-research/20261029T0535Z-report-sw-hash"
 modules = { N = "ncp", D = "cancel", F = "int7-U", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "fw", forming = "count", derivation = "min" }
 source = "SW-HASH final §9's table, k32 at 256 KiB, unforced (floor), words only (A's rows apart)"
-claims.t8192 = { hiding_words = 1.46, tol = 0.02, kind = "measured salt kernel, estimate in W1", source = "SW-HASH final §9: 1.46x stock at 256 KiB, 20.8x at 16 KiB" }
+claims.t8192 = { hiding_words = 1.46, tol = 0.02, salt_basis = "leaf-time", kind = "measured salt kernel, estimate in W1", source = "SW-HASH final §9: 1.46x stock at 256 KiB, 20.8x at 16 KiB" }
 
 [card.sw-hash-k32-r16k]
 title = "SW-HASH's hiding term at 16 KiB rows"
 origin = "SW-HASH"
 modules = { N = "ncp", D = "cancel", F = "int7-U", density = "k32", operands = "w", rows = "r16k", hiding = "open", final = "fw", forming = "count", derivation = "min" }
 source = "SW-HASH final §9"
-claims.t8192 = { hiding_words = 20.8, tol = 0.2, kind = "measured salt kernel, estimate in W1", source = "SW-HASH final §9: 20.8x at 16 KiB" }
+claims.t8192 = { hiding_words = 20.8, tol = 0.2, salt_basis = "leaf-time", kind = "measured salt kernel, estimate in W1", source = "SW-HASH final §9: 20.8x at 16 KiB" }
+
+[card.n-hide-l0-r256k]
+title = "N-HIDE's L0 at 256 KiB rows: ssn_1l's words on 256 KiB hm96 leaves, A one activation row a leaf, unforced"
+origin = "N-HIDE"
+note = "compute-research/20261029T0715Z-report-np-hide"
+modules = { N = "ssn-1l", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "N-HIDE interim 1 §2's table (np_hide_price.py at 4839409549, run r20261029-073640-fd4e): salts times the floor's per-salt price"
+claims.t8192 = { hiding = 0.446, tol = 0.0005, kind = "checked", source = "N-HIDE §2: L0 256 KiB rows, 44.6% (floor)" }
+
+[card.n-hide-l1]
+title = "N-HIDE's L1: one hm96 instance a call over a subtree of its committed values, unforced"
+origin = "N-HIDE"
+modules = { N = "ssn-1l-hw", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "N-HIDE interim 1 §2 (ssn_1l's hiding is identical for any SSN layout, since salts are counted a call)"
+claims.t512 = { hiding = 0.00083, tol = 0.000005, kind = "checked", source = "N-HIDE §2: L1, 0.083% at 64 rows (floor)" }
+claims.t512r512 = { hiding = 0.00010, tol = 0.000005, kind = "checked", source = "N-HIDE §2: L1, 0.010% at 512 rows" }
+claims.t8192 = { hiding = 0.000006, tol = 0.0000005, kind = "checked", source = "N-HIDE §2: L1, 0.0006% at T 8,192" }
+
+[card.n-hide-l1a]
+title = "N-HIDE's L1 + (a): the PRF and c forced, M_key·y left whole"
+origin = "N-HIDE"
+modules = { N = "ssn-1l-hw", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "salt", final = "none", forming = "none", derivation = "none" }
+source = "N-HIDE interim 1 §2"
+claims.t512 = { hiding = 0.00025, tol = 0.000005, kind = "checked", source = "N-HIDE §2: L1 + (a), 0.025% at 64 rows" }
+claims.t512r512 = { hiding = 0.00003, tol = 0.000005, kind = "checked", source = "N-HIDE §2: L1 + (a), 0.003% at 512 rows" }
+
+[card.n-hide-l2f]
+title = "N-HIDE's L2 a forward: one hm96 instance a forward, root(A_j) private"
+origin = "N-HIDE"
+modules = { N = "ssn-1l-hw", D = "served", F = "s8", density = "k32", operands = "w", rows = "l2f", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "N-HIDE interim 1 §2"
+claims.t512 = { hiding = 0.000013, tol = 0.0000005, kind = "checked", source = "N-HIDE §2: L2 a forward, 0.0013% at 64 rows" }
+
+[card.n-red-a1]
+title = "N-RED's A1 on ssn_1l: identical rows collapsed by a prover that branches on the coins"
+origin = "N-RED"
+note = "compute-research/20261029T0734Z-report-np-red"
+modules = { N = "ssn-1l", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "salt", final = "none", forming = "none", derivation = "none" }
+source = "N-RED interim 1 §1 (nred_attacks.py, run r20261029-072732-aba9, checked word for word, one draw of the coins); the card's is the expectation over the coins"
+claims.t512 = { coin_branch = 0.1933, tol = 0.006, kind = "checked (one draw) against the card's expectation", source = "N-RED §1: A1 identical rows, 19.33% at m 64" }
+claims.t512r512 = { coin_branch = 0.6596, tol = 0.002, kind = "checked (one draw)", source = "N-RED §1: 65.96% at m 512" }
+claims.t8192 = { coin_branch = 1.0023, tol = 0.001, kind = "checked (one draw)", source = "N-RED §1: 100.23% at m 8,192" }
+claims.v4like = { coin_branch = 0.9771, tol = 0.001, kind = "checked (one draw)", source = "N-RED §1: 97.71% on V4 dense at m 8,192" }
+
+[card.n-prem-hw]
+title = "N-PREM's hardened lead ssn_1l_hw: the coin branch left on identical rows"
+origin = "N-PREM"
+note = "compute-research/20261029T0740Z-report-np-prem"
+modules = { N = "ssn-1l-hw", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "salt", final = "none", forming = "none", derivation = "none" }
+source = "N-PREM interim 1 §2's table (simulated, one draw of two 64-bit keys); the card's is the expectation (rep_bits)"
+claims.t512r512 = { coin_branch = 0.00014, tol = 0.00005, kind = "simulated (one draw: about 4 repeated row-steps a call)", source = "N-PREM §2: 0.014% at 512 rows" }
+claims.t8192 = { coin_branch = 0.00148, tol = 0.00005, kind = "simulated (one draw)", source = "N-PREM §2: 0.148% at T 8,192" }
+claims.v4like = { coin_branch = 0.00054, tol = 0.00002, kind = "simulated (one draw)", source = "N-PREM §2: 0.054% on V4 dense T 8,192" }
