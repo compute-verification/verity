@@ -2,6 +2,7 @@ import Proofs.Pouw.Lead.CoinBranch.Cells
 import Proofs.Pouw.Lead.CoinBranch.Kept
 import Proofs.Pouw.Lead.CoinBranch.Registers
 import Proofs.Pouw.Lead.CoinBranch.Revisit
+import Proofs.Pouw.Lead.CoinBranch.Writes
 
 /-!
 # The lead's coin-branch bound (proofs)

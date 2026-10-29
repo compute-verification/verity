@@ -5,8 +5,8 @@ import Definitions.Pouw.Lead.Model
 
 Every quantity is in registers; the W1 work is 32 a register (`H32`'s floor).
 
-* **Stock** (`stockRegs`): the call's unmodified FP8 matmul, `m · n · K / 32` k32 `wgmma` registers. Every share is
-  of stock.
+* **Stock** (`stockRegs`): the call's unmodified FP8 matmul over whole MMA tiles, `m · n · K / 32` k32 `wgmma`
+  registers with `m` and `n` padded. Every share is of stock, and the honest work and the gap are the padded call's.
 * **The honest work** (`honestRegs`): the committed words, one register each (`m · n · S`), and the SHA-512
   compressions of the commitment at ShaWrites' registers per form: `3,515.38` a words compression and `3,449.05` an A
   compression (`shaWordsRegs`, `shaARegs`).
@@ -17,7 +17,7 @@ Every quantity is in registers; the W1 work is 32 a register (`H32`'s floor).
     rows and patching the rest (copy-and-patch at tile grain), 0.084% of stock;
   - `pStarGap`: the coin lanes' guess at `-rot`'s weights, 0.0035% of stock;
   - `networkGap`: work outsourced within the egress cap, 0.036% of stock a 32 bits of cap;
-  - `tableGap`: pre-coin tables holding a committed tile, within the node's memory (negligible).
+  - `tableGap`: pre-coin tables and the coin stream holding a committed tile, within the node's memory.
 * `gapShare` is the gap over stock, which `Pouw.Guarantees.Lead.GapAt` evaluates at the three points.
 -/
 
@@ -38,8 +38,8 @@ def shaARegs : ℚ := 344905 / 100
 /-- The words' bytes in 128-byte compressions, with one padding block a chunk: `4 m n S / 128 + chunks`. -/
 def wordsBlocks (L : Layout) (C : Commit L) : ℚ := 4 * wordsRegs L / 128 + C.chunks
 
-/-- A's FP8 rows in 128-byte compressions: `m · K / 128`. -/
-def aBlocks (L : Layout) : ℚ := (L.m * L.K : ℚ) / 128
+/-- A's rows, unpadded, in 128-byte compressions: `rows · K / 128`. -/
+def aBlocks (L : Layout) : ℚ := (L.rows * L.K : ℚ) / 128
 
 /-- **The honest work** in registers: the words, and the commitment's compressions at ShaWrites' registers. -/
 def honestRegs (L : Layout) (C : Commit L) : ℚ :=
@@ -60,10 +60,14 @@ def pStarGap (L : Layout) : ℚ := 35 / 1000000 * stockRegs L
 /-- Work outsourced within the egress cap: 0.036% of stock a 32 bits of cap. -/
 def networkGap (L : Layout) : ℚ := 36 / 100000 * (L.cap / 32 : ℚ) * stockRegs L
 
-/-- Pre-coin tables and the coin stream holding a committed tile: twice the node's memory in tiles, times the call's
-tiles and their words, at `2^-100`, a bound on the chance that a tile fixed before the coins, or a fixed arrangement of
-coins, is a given committed tile. -/
-def tableGap (L : Layout) : ℚ := 2 * L.mem * (L.rowBlocks * L.colBlocks * L.S * tileWords : ℚ) / 2 ^ 100
+/-- Pre-coin tables and the coin stream holding a committed tile, in a call of whole tiles: a memory's `2 · mem + 1`
+tile values (the tables', the stream's and zero) against each committed tile's words. A step-0 tile is a given value
+with chance at most `49^-8` (its 16 rows' tags span two digits against each column's `G`), and at most `7^-8` for the
+32 stream tiles that can hold its block's `G`; a later step's at most `2^-100` (each column's two row parities fix its
+three coin lanes, at least five columns free of the stream's lanes). -/
+def tableGap (L : Layout) : ℚ :=
+  (L.rowBlocks * L.colBlocks * tileWords : ℚ) *
+    ((2 * L.mem + 1 : ℚ) / 49 ^ 8 + 32 / 7 ^ 8 + (L.S - 1 : ℚ) * (2 * L.mem + 1) / 2 ^ 100)
 
 /-- **The gap** in registers: the sum of the six terms. -/
 def gapRegs (L : Layout) (C : Commit L) : ℚ :=
