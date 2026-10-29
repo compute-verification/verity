@@ -166,7 +166,6 @@
         "benchmarks/native_peak/",
         "benchmarks/tc_probe/",
         "benchmarks/tc_probe_fp4/",
-        "benchmarks/load_time/",
         "benchmarks/bool_build_cost/",
         "verity/ml/circuits/ops/",
         "integrations/vllm/verity_vllm/program/",
