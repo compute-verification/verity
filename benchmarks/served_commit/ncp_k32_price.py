@@ -7,9 +7,10 @@ step of depth d: 3K/d words of 4 bytes a dot product, so 12/d bytes a useful MAC
 ncp-v1 and ncp-v2 today: 0.75). The words go into hm96 SHA-512 rows of 16 KiB. A forward's hashing takes
 (B h_x − h_leaf min(B, G)) / (540,672 f) seconds for B bytes (GD-HASH's model, its inputs measured on vy-dc-h200-5), and
 NCP's GEMMs cost what GD-DENOISE measured for a 3K-wide cuBLASLt call and fresh noise on both operands. t_H / t_S is the
-stock step plus both, over the stock step; "matmuls alone" reads t_S as the plain GEMMs only, without the rest of the
-step. Every input is a measurement (its art and run) or an estimate (its source),
-and the output says which. Coverage: each matmul's final-word gap d/(3K), against 1%, and its share of the MACs.
+stock step plus both, over the stock step; "at the bar" hashes at HASH-38's bar, the public best SHA-512 on the H200
+(leaves only), instead; "matmuls alone" reads t_S as the plain GEMMs only, without the rest of the step. Every input is a
+measurement (its art and run) or an estimate (its source), and the output says which. Coverage: each matmul's final-word
+gap d/(3K), against 1%, and its share of the MACs.
 """
 from __future__ import annotations
 
@@ -26,6 +27,9 @@ HBM = 4.8e12                                        # H200 HBM3e bytes a second 
 ROWS = {4096: {"h_x": 2703.3, "h_leaf": 2569.9, "G": 3.4545e9},
         16384: {"h_x": 2123.4, "h_leaf": 2077.6, "G": 4.4836e9}}
 U_RULE = 0.258                                      # GD-HASH's stock utilization on GPU-busy time at T 8,192
+# HASH-38's bar, the public best SHA-512 on the H200 (sx0000 against hashcat, r20261027-044217-d499, r20261027-062350-7163):
+# 0.01803 compressions of 128 B a SM-clock, as MAC-times a byte, leaves only (no tree)
+H_BAR = 4096 / (128 * 0.01803)
 
 LAYERS = 16
 LINEARS = {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192)}
@@ -108,7 +112,8 @@ def main() -> None:
                 _, gapfirst = hash_ms(B, 16384, gap)
                 row["engines"][e] = {"stock_ms": stock, "hash_ms_gap_first": gapfirst, "src": src,
                                      "tH_tS": (stock + gapfirst + gemm_ms) / stock,
-                                     "tH_tS_no_gap": (stock + excl + gemm_ms) / stock}
+                                     "tH_tS_no_gap": (stock + excl + gemm_ms) / stock,
+                                     "tH_tS_at_bar_no_gap": (stock + excl * H_BAR / ROWS[16384]["h_x"] + gemm_ms) / stock}
             out["points"].setdefault(f"d {d}{', head too' if head else ''}",
                                      {"bytes_mac": t["bytes"] / t["macs"], "J_rule_T8192": rule})[pname] = row
     for ctx, decode in ((144, True), (288, True), (2048, True), (8192, True), (2048, False), (8192, False)):
@@ -119,7 +124,8 @@ def main() -> None:
         for pname, r in p.items():
             if not isinstance(r, dict):
                 continue
-            eng = "  ".join(f"{e} {x['tH_tS']:.1f}x (no gap {x['tH_tS_no_gap']:.1f}x)" for e, x in r["engines"].items())
+            eng = "  ".join(f"{e} {x['tH_tS']:.1f}x (no gap {x['tH_tS_no_gap']:.1f}x, at the bar {x['tH_tS_at_bar_no_gap']:.1f}x)"
+                            for e, x in r["engines"].items())
             if r["tH_tS_matmuls"] is not None:
                 eng += f"  matmuls alone {r['tH_tS_matmuls']:.0f}x"
             print(f"  {pname:<20} {r['bytes_token'] / 1e6:6.1f} MB/token {r['GB_forward']:8.1f} GB/fwd "
