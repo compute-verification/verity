@@ -112,6 +112,70 @@ theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : 
         refine hA.trans ?_
         exact_mod_cast Nat.le_mul_of_pos_left _ hcap1
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
+/-- **At the network certifier's rows and the registered values**: `TapProof.rLeakTap_of_r` with the registered inputs
+pinned at `ρ`, at a trace that also agrees with `ρ` wherever it opens a registered input. A registered free input the
+trace leaves unopened is in a faulty unit, held as advice, so its input value is never read (`valOver_congr_held`). -/
+theorem rLeakTap_reg_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) {δ : ℝ} (hδ : 0 ≤ δ) {Dj : ℕ} (tops : AuditStatement → List (Opening Bool))
+    (reg : AuditStatement → Finset ℕ) (ρ : AuditStatement → ℕ → Bool) {x : Msg} (hx : ScopeAcc D lay k x) {w : Wit}
+    (hR : R H D.commit D.parse D.partition δ x w)
+    (hagree : ∀ s, D.parse x = some s → (∀ q ∈ tops s, D.commit.Opens H s.roots q = true) →
+      ∀ g, (∃ q ∈ tops s, q.pos = g) → ∀ b, w.val H D.commit s g = some b → b = tapVal (tops s) g)
+    (hreg : ∀ s, D.parse x = some s → ∀ g ∈ reg s, ∀ b, w.val H D.commit s g = some b → b = ρ s g) :
+    RLeakTap H D.commit D.parse D.partition L K S lay k δ (fun s _ => AsReg s.prog (lay s) (k s) (reg s) (ρ s)) Dj
+      tops x w := by
+  obtain ⟨s, P, hs, hP, hM⟩ := hR
+  obtain ⟨⟨s₁, P₁, hs₁, hP₁, hsc⟩, s₂, hs₂, hfit⟩ := hx
+  rw [hs] at hs₁ hs₂
+  obtain rfl := Option.some.inj hs₁
+  obtain rfl := Option.some.inj hs₂
+  rw [hP] at hP₁
+  obtain rfl := Option.some.inj hP₁
+  have hF := faulty_mem_faultySets hM (SampledAuditProof.disjoint_allSlots hδ hM)
+  obtain ⟨ι, hι⟩ := SampledAuditProof.correct_of_not_faulty H D.commit s P w
+  refine ⟨s, P, hs, hP, fun op o htap hcov hl hD => ?_⟩
+  have hext : ∀ g b, w.val H D.commit s g = some b →
+      TapProof.fill (w.val H D.commit s) (tapVal (tops s)) g = some b :=
+    TapProof.fill_ext
+  have hcar := TapProof.carries_fill hfit htap (hagree s hs htap.1)
+  have hacc := SampledAuditProof.accepted_of hsc.1 hsc.2.1 hfit ι
+    (fun v r hr hv u hu => TapProof.correct_mono (TapProof.ruRef_mono hext) (hι v r hr hv u hu)) hcar hcov
+  set tv := traceVal s.prog (w.val H D.commit s) with htv
+  set G := freeInputs s.prog (lay s) (k s) with hG
+  let a' : ℕ → Bool := fun g => if g ∈ G then (if g ∈ reg s then ρ s g else tv g) else false
+  refine ⟨hl, hD, _, hF, a', ⟨fun g hg hgf => ?_, fun g hg => ite_eq_right hg⟩,
+    SampledAuditProof.heldAdv s.prog P (faulty H D.commit s P w) (TapProof.fill (w.val H D.commit s) (tapVal (tops s))),
+    fun g b h => SampledAuditProof.faultyGate_of_heldAdv h, ?_⟩
+  · show (if g ∈ G then (if g ∈ reg s then ρ s g else tv g) else false) = ρ s g
+    rw [ite_eq_left hgf, ite_eq_left hg]
+  · intro t ht
+    obtain ⟨h, hr, hst⟩ := hacc t ht
+    refine ⟨h, ?_, hst⟩
+    have hv : valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t)
+          (traceVal s.prog (TapProof.fill (w.val H D.commit s) (tapVal (tops s)))))
+          (SampledAuditProof.heldAdv s.prog P (faulty H D.commit s P w)
+            (TapProof.fill (w.val H D.commit s) (tapVal (tops s)))) =
+        valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) a')
+          (SampledAuditProof.heldAdv s.prog P (faulty H D.commit s P w)
+            (TapProof.fill (w.val H D.commit s) (tapVal (tops s)))) :=
+      funext (valOver_congr_held s.prog _ fun i hi hfi => by
+        have hnf : ¬ FaultyGate s.prog P (faulty H D.commit s P w) i := fun hfg => by
+          rw [SampledAuditProof.heldAdv_of hfg] at hfi
+          cases hfi
+        obtain ⟨b, hb⟩ := val_some_of_input hsc.2.1 hi hnf
+        refine (inputOf_restrict s.prog (lay s) (k s) _ _ hi).trans (inputOf_congr_at (lay s) (k s) _ ?_)
+        show (if i ∈ G then _ else false) = if i ∈ G then (if i ∈ reg s then ρ s i else tv i) else false
+        by_cases hiG : i ∈ G
+        · rw [ite_eq_left hiG, ite_eq_left hiG, traceVal_of_val hi (hext i b hb)]
+          by_cases hir : i ∈ reg s
+          · rw [ite_eq_left hir]
+            exact hreg s hs i hir b hb
+          · rw [ite_eq_right hir, htv, traceVal_of_val hi hb]
+        · rw [ite_eq_right hiG, ite_eq_right hiG])
+    rw [hr]
+    simp only [circuitProgram, hv]
+
 /-- **The leak bound at the network certifier's rows and the registration's values**: `TapProof.sampledLeak_tap` with
 the registered inputs pinned at the registration's values (`AsReg` at `regVal`), on the statements in scope whose
 registration opens their registered inputs (`RegOpens`): `Pr[acc ∧ ¬RLeakTap] ≤ δ + ε_ks + ε_bind + Pr[B_tap] +
@@ -129,7 +193,36 @@ theorem sampledLeak_tap_registered (H : Msg → Msg) (D : Deploy Coin Col T) (hk
       κ D δ x + Real.sqrt (γ D x * PrB H D.V P x) + (Bext H D.V (E D decode) Ω P x).Pr H +
         (Btap H D.V (E D decode) D.commit D.parse tops Ω P x).Pr H +
         (Breg H D.V (E D decode) D.commit D.parse rops Ω P x).Pr H := by
-  sorry
+  have hks' := hks δ decode hδ hdec x hx.1 Ω P
+  rw [one_mul] at hks'
+  unfold PrBad at hks' ⊢
+  calc Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x =>
+        (run H P D.V x s.1 s.2.1).out = .acc ∧
+          ¬ (RLeakTap H D.commit D.parse D.partition L K S lay k δ
+            (fun st _ => AsReg st.prog (lay st) (k st) (reg st) (regVal (rops st))) Dj tops).ext x
+            ((E D decode).eval H P x s.1 s.2.1 s.2.2).1)
+      ≤ Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x =>
+          (((run H P D.V x s.1 s.2.1).out = .acc ∧
+            ¬ (R H D.commit D.parse D.partition δ).ext x ((E D decode).eval H P x s.1 s.2.1 s.2.2).1) ∨
+            TapProof.TapColl H D decode tops P x s) ∨ RegColl H D decode rops P x s) := by
+        refine Pr_mono fun s ⟨hac, hR⟩ => ?_
+        rcases hw : ((E D decode).eval H P x s.1 s.2.1 s.2.2).1 with _ | w
+        · exact Or.inl (Or.inl ⟨hac, by simp [Rel.ext]⟩)
+        · rw [hw] at hR
+          by_cases hA : R H D.commit D.parse D.partition δ x w
+          · by_contra hnc
+            refine hR (rLeakTap_reg_of_r H D lay k hδ tops reg (fun st => regVal (rops st)) hx hA
+              (fun st hst hpass g hq b hwb => ?_) (fun st hst g hg b hwb => ?_))
+            · by_contra hne
+              exact hnc (Or.inl (Or.inr
+                (TapProof.tapColl_of_disagree H D hb decode tops P x s hst hpass hac hw hq hwb hne)))
+            · by_contra hne
+              exact hnc (Or.inr (regColl_of_disagree H D hb decode reg rops P x s hst (hreg st hst) hac hw hg hwb hne))
+          · exact Or.inl (Or.inl ⟨hac, hA⟩)
+    _ ≤ _ := Pr_union_le _ _
+    _ ≤ _ := add_le_add (Pr_union_le _ _) le_rfl
+    _ ≤ _ := add_le_add (add_le_add hks' (TapProof.Pr_tapColl_le_Btap H D decode tops P x))
+        (Pr_regColl_le_Breg H D decode rops P x)
 
 /-- **The leak through the network certifier over a monitoring period**: `Guarantees.PeriodLeakAccepted`, from
 `sampledLeak_tap_registered` and `encard_periodGood_le`. -/

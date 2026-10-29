@@ -83,8 +83,8 @@ theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d
       B.Pr H) :
     r.Sound c p .network (n * (δ + εks + 3 * B.Pr H)) ∧
       ∀ {Z : Type} (Zs : Set Z) (schedOf : Z → WardenSchedule R.Conn) (srvOf : Z → R.Srv)
-        (hs : ∀ z ∈ Zs, schedOf z ∈ R.Ss) (dec : (R.Conn → List (ℕ × CellView R.Cell)) → Z)
-        (hdz : ∀ z ∈ Zs, dec (R.run R.device (schedOf z, srvOf z)).1 = z)
+        (_hs : ∀ z ∈ Zs, schedOf z ∈ R.Ss) (dec : (R.Conn → List (ℕ × CellView R.Cell)) → Z)
+        (_hdz : ∀ z ∈ Zs, dec (R.run R.device (schedOf z, srvOf z)).1 = z)
         (op : Fin n → ℕ → List (Obs L Kₒ S) → List Bool) (x : Z → Fin n → Msg) (wit : Z → Fin n → Wit),
         (∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → TapOpens H D.commit (lay s) (k s) (op i) s (R.tops s)
             ((R.run R.device (schedOf z, srvOf z)).2 i)) →
@@ -92,7 +92,11 @@ theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d
               ((R.run R.device (schedOf z, srvOf z)).2 i)}.encard ≤ N ∧ (N : ℝ) ≤ 2 ^ c.K := by
   refine ⟨?_, ?_⟩
   swap
-  · sorry
+  · intro Z Zs schedOf srvOf hs dec hdz op x wit htap
+    obtain ⟨N, hN, hNK⟩ := R.count_le
+    exact ⟨N, ((hsrc H D hks L Kₒ S lay k δ decode hδ hdec reg Dj R.sw R.Pw R.hPw R.ρ op R.β R.hβ R.arr R.fmt
+      R.device R.run R.trusted R.cap R.Ss R.hcap R.hfit Zs schedOf srvOf hs dec hdz x wit R.tops R.rops hb).2
+        htap).trans hN, hNK⟩
   intro ξ
   have hlin := ksLin_of_periodLeak hsrc H D hks L Kₒ S lay k δ decode hδ hdec reg Dj R.tops R.rops hb
   calc Pouw.pr (fun x : Ω (r.own .network) =>
