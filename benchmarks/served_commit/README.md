@@ -17,6 +17,13 @@ labeled run, `served.py` the served arm's runs).
   Llama-3.2-1B's served step on the H200, from the measured hash rates and 3K-wide GEMM costs it cites, and what NCP covers
   (estimates; stdlib, no GPU).
 - `tp_decode.py` and `tp_decode.sh`: one Commit arm against stock in one TP engine, eager (GLM-5.3 TP8).
+- SHA-512 on the H200, measured: `sha512_sass.sh` compiles `sha512_probe.cu` (the committer's `sha512.cuh`, rolled and
+  unrolled) and `sha512_sass.py` counts a compression's instructions and registers written from its SASS (W1);
+  `sw_hash_rows.sh` (`sw_hash_rows.py`) times hm96-sha512 leaves alone at each row size; `sha512_latency.sh` times one
+  compression's latency on one thread (`sha512_latency.cu`). Priced from those outputs (stdlib, no GPU):
+  `sw_hash_price.py`, DistinctWrites' interior commitment options; `np_hide_price.py`, hm96's hiding work under each
+  commitment layout, the proof's cost to open, served sparse noise's T2 and hashing frontier, ShaSpeed's precision, and
+  each call's seed path. Each script's docstring has its arguments.
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
   serving on a high-priority stream over the worker's hashing, NVTX ranges; `-base` and `-batch`
   arms turn the decode host-cost changes off, or all but the batched captured copies; `-ring8` and `-w64` arms size the
