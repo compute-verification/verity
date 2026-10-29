@@ -18,7 +18,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",
           # the remote bandwidth audit over the P2 store, which p2_v1/serve.py runs, and what it imports; its party's
           # Lean verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean
-          "verity/core/protocols/remote_bandwidth", "verity/core/protocols/profile.py",
+          "verity/core/protocols/remote_bandwidth", "verity/core/site/__init__.py", "verity/core/protocols/profile.py",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
           "verity/core/protocols/sampled_proofs/remote.py", "verity/ml/circuits",
           # p2_v1/bandwidth.py serves the store through kernels' staging decode, whose modules it imports
