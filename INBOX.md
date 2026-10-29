@@ -27,3 +27,6 @@ infra re-marked #6388 at c4f0c49faf. It merges main plus #6303's and #6319's hea
 
 # 06:55Z: #6388 may re-head once more
 ci holds #6319, which #6388 at c4f0c49faf carries, so infra may rebuild #6388 without it, or on a new #6319 head. Merge whichever head of #6388 is marked when you re-mark (`gh pr view 6388 --json headRefOid`), and re-merge if it moves again before your mark. If #6388 is still unsettled at 10:30Z, report that rather than racing it.
+
+# 07:25Z: #6388's settled head is 6f365f6d6c
+infra marked #6388 at 6f365f6d6c. It carries #6319's 03f368dcff, with test_plan's off-gate assertion collapsed to #6319's; the check tests (165) and drive's (163) pass, and the preflight was clean. Merge 6f365f6d6c into #6501, confirm `git merge-tree --write-tree origin/next HEAD` is clean, and re-mark. infra merges #5888 into #6388 at ~09:30Z. If that moves #6388's head before your mark, merge that one instead.
