@@ -628,8 +628,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--uncommitted", nargs="*", default=[],
                     help="tables the forward writes and the layout doesn't hold (softmax: every layer's)")
     ap.add_argument("--target-s", type=float, default=0.95,
-                    help="the commit's overhead a step's target at 4,096 slots, at most 25%% of the served step (default: a "
-                         "quarter of run r20261026-030611-8b64's, rounded up)")
+                    help="the commit's overhead a step's target at 4,096 slots, at most 25%% of the served step "
+                         "(default 0.95)")
     a = ap.parse_args(argv)
     a.fused, a.uncommitted = frozenset(a.fused), frozenset(a.uncommitted)
     a.out.mkdir(parents=True, exist_ok=True)
