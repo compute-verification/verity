@@ -24,14 +24,15 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (Strin
   {draw : Option Json} {own : Option ByteArray} {pi : HmIn.Ports} {st : Stmt}
 
 /-- **An untyped hidden-output statement accepted at public inputs has the layout the placement reads.** -/
-theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tables draw own pi st) : Layout st := by
+theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tables draw own pi st)
+    (hpin : HmRow.pinnedCount st.c.metaJ = 0) : Layout st := by
   obtain ⟨hp, hc⟩ := parse_untyped ht s.parse
   have P := parse_facts hp
   obtain ⟨ls, hcheck⟩ := P.check
   have C := check_facts P.typed hcheck
   have L : Layout { st with da := (HmRow.delta st.c st.pin).1, db := (HmRow.delta st.c st.pin).2 } :=
     layout_of P s.pin rfl rfl s.m s.kLog
-  have hd := hidden_delta' st.c st.pin
+  have hd := hidden_delta_unpinned hpin st.pin
   obtain ⟨rest, h1, h2⟩ := L.delta
   have h1' : (HmRow.delta st.c st.pin).1.toList = constPairs st.c st.pin ++ rest := h1
   have hkc : ∀ p ∈ constPairs st.c st.pin, keepCol st.c pi p.1 = true := by
@@ -39,7 +40,7 @@ theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tab
     cases he : pi.ports.isEmpty
     · by_contra hk
       have hq : HmIn.publicCol st.c pi a = true := by simpa [keepCol, he] using hk
-      obtain ⟨k, hk', jj, -, t, -, hq1, hlt, -⟩ := publicCol_at s.ports he C L.unit_built hq
+      obtain ⟨k, hk', jj, -, t, -, hq1, hlt, -⟩ := publicCol_at s.ports he C (L.built_flat P.tmpl) hq
       rw [hq1] at hab
       exact L.constPairs_not_below L.unit_mem L.unit_kind hk' (lt_of_lt_of_le hlt L.unit_in) b hab
     · exact keepCol_noPorts he _
@@ -52,6 +53,7 @@ theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tab
     unit_kind := L.unit_kind
     unit_count := L.unit_count
     unit_built := L.unit_built
+    unit_at := L.unit_at
     unit_lookup := L.unit_lookup
     unit_in := L.unit_in
     unit_const := L.unit_const
