@@ -146,7 +146,41 @@ theorem exists_charge_window {b_w b_a : ℝ} (hw : 0 ≤ b_w) (ha : 0 ≤ b_a) (
       · exact Or.inr ⟨insert g T, subset_refl _, not_le.mp hc, (charge_insert_le c hw ha R g T).trans (by linarith)⟩
     · exact Or.inr ⟨T', hT'.trans (subset_insert _ _), h1, h2⟩
 
+/-- A product of the first multiplication is charged `b_w + b_a`: one weight entry and one input entry, which links
+to no entry. -/
+theorem charge_first_product {b_w b_a : ℝ} (R : Finset (Fin D.N)) (hL : 0 < c.L) (t : Fin c.N)
+    (i : Fin (c.e ⟨0, hL⟩)) (j : Fin (c.d ⟨0, hL⟩)) :
+    c.charge R b_w b_a {c.prod ⟨0, hL⟩ t i j} = b_w + b_a := by
+  classical
+  have hw : (c.weightsUsed {c.prod ⟨0, hL⟩ t i j}).card = 1 := by
+    refine le_antisymm ?_ (card_pos.mpr ⟨⟨⟨0, hL⟩, i, j⟩, mem_filter.mpr ⟨mem_univ _, t, mem_singleton_self _⟩⟩)
+    simpa [Chain.weightsUsed] using card_weightsUsed_insert_le c (c.prod ⟨0, hL⟩ t i j) ∅
+  have ha : ((c.inputsUsed {c.prod ⟨0, hL⟩ t i j}).filter fun x => ¬ c.LinkedWhole R x.1 x.2.1 x.2.2).card = 1 := by
+    refine le_antisymm ?_ (card_pos.mpr ⟨⟨⟨0, hL⟩, t, j⟩, mem_filter.mpr
+      ⟨mem_filter.mpr ⟨mem_univ _, i, mem_singleton_self _⟩, by simp [Chain.LinkedWhole]⟩⟩)
+    simpa [Chain.inputsUsed] using card_inputsUsed_insert_le c (fun x => ¬ c.LinkedWhole R x.1 x.2.1 x.2.2)
+      (c.prod ⟨0, hL⟩ t i j) ∅
+  simp [Chain.charge, hw, ha]
+
 end Charge
+
+/-- **What falsifies support form at its rates**: a product of the first multiplication takes at most `2^width` values,
+so `ActivationsSupport` at a cap of at least `b_w + b_a` bounds `b_w + b_a` by that product gate's width. Measured rates
+above a product's support falsify it. -/
+theorem rates_le_width_of_support {D : Declaration} {θv : D.D.Transcript} {c : Chain D.D} {K b_w b_a : ℝ}
+    (h : Assumptions.ActivationsSupport D θv c K b_w b_a) (hK : b_w + b_a ≤ K) (hL : 0 < c.L) (t : Fin c.N)
+    (i : Fin (c.e ⟨0, hL⟩)) (j : Fin (c.d ⟨0, hL⟩)) : b_w + b_a ≤ D.D.w (c.prod ⟨0, hL⟩ t i j) := by
+  set g := c.prod ⟨0, hL⟩ t i j
+  have hc := charge_first_product c (b_w := b_w) (b_a := b_a) {g} hL t i j
+  have hs := h {g} (singleton_subset_iff.mpr (by simpa [Circuit.computed] using c.prod_computed _ t i j)) {g}
+    (subset_refl _) (hc ▸ hK)
+  rw [hc] at hs
+  have hu : (support D θv {g} : ℝ) ≤ (2 : ℝ) ^ (D.D.w g : ℝ) := by
+    rw [Real.rpow_natCast]
+    have := support_le_width D θv {g}
+    simp only [Circuit.width, sum_singleton] at this
+    exact_mod_cast this
+  exact (Real.rpow_le_rpow_left_iff (by norm_num : (1 : ℝ) < 2)).mp (hs.trans hu)
 
 /-- **Support form gives the draft's incompressibility**: `ActivationsSupport` at cap `K + b_w + b_a`, for any committed
 values of the baseline, gives `ActivationsIncompressible` at cap `K`, for IUs of any size. -/
