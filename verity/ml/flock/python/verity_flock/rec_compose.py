@@ -1,6 +1,7 @@
 """`flock-verify rec-compose` in Python (`Flock/RecCompose.lean`, `RecCompose.check`), reason for reason, which
 `tests/test_lean_rec_compose.py` holds to the Lean binary on honest and tampered part sets. The Lean is the verifier;
-this is for writing part sets and their verdicts (``verdict``) in tests and stand-ins.
+this is for writing part sets and their verdicts (``verdict``) in tests and stand-ins, and a run's record (`run_record`)
+staging the shared set its parts' files give (`shared_of_args`, held to ``verify``'s by `tests/test_lean_rec_coins.py`).
 
 A recursive statement's V* parts each ran ``flock-verify verify --zk --rec-part J`` once. Their logs compose when there
 is one log per V* statement with one ``VERDICT``; ``rec_part`` 0 to n - 1 each once; every ``VERDICT`` accepts, ran
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 #: ``rec_shared``'s fields in `RecCompose.Shared`'s order: key, and what it is (`Shared.diff`'s words)
 SHARED = (
@@ -49,6 +51,46 @@ def shared(**files) -> dict:
             v = digest(v)
         out[k] = v
     return out
+
+
+#: `Flock/Lookup.lean`'s ``MUFU_TABLES``, in its order: the tables ``--rec-inner-tables DIR`` holds as ``<name>.u32``
+MUFU_TABLES = ("rsq", "sqrt", "rcp", "ex2")
+
+
+def shared_of_args(args: list[str]) -> dict:
+    """``rec_shared`` from ``verify``'s arguments, each file read at its path (`FlockVerify.recSharedInput`): what a
+    part given ``args`` reads, independently of the ``VERDICT`` it writes."""
+    def arg(k: str) -> str | None:
+        return args[args.index(k) + 1] if k in args[:-1] else None
+
+    def read(k: str, suffix: str = "") -> bytes | None:
+        f = arg(k)
+        return None if f is None else Path(f + suffix).read_bytes()
+
+    if arg("--archive") is not None:
+        raise ValueError("rec_shared from an --archive's files is not mirrored here")
+    statement = arg("--rec-inner-statement")
+    tables = None
+    if statement is not None:
+        d = arg("--rec-inner-tables")
+        tables = [] if d is None else [(t, (Path(d) / f"{t}.u32").read_bytes()) for t in MUFU_TABLES
+                                       if (Path(d) / f"{t}.u32").exists()]
+    return shared(rec_inner=read("--rec-inner"), inner_circuit=read("--rec-inner-circuit"),
+                  inner_public=read("--rec-inner-public"), inner_partition=read("--rec-inner-partition"),
+                  inner_coins=read("--rec-inner-coins"), inner_session=read("--rec-inner-session", "/session.json"),
+                  inner_transcript=read("--rec-inner-transcript"), inner_registration=read("--rec-inner-registration"),
+                  inner_statement=statement,
+                  inner_statement_coins=None if statement is None else
+                  "os" if arg("--rec-inner-statement-coins") == "os" else "seed",
+                  inner_tables=tables, inner_draw=read("--rec-inner-draw"))
+
+
+def run_record(rows: str, rec_shared: dict, opens: list[tuple[str, int, str]]) -> str:
+    """A closed ``verity/rec-run/v1`` record's text (`RecCompose.runOf`'s form): the staging of the rows file's SHA-512
+    ``rows`` and ``rec_shared``, the sessions ``opens`` ((session, part, coin key)) in order, the close."""
+    events = [{"event": "stage", "rec_rows_sha512": rows, "rec_shared": rec_shared},
+              *({"event": "open", "session": s, "rec_part": j, "coin_key": k} for s, j, k in opens), {"event": "close"}]
+    return json.dumps({"events": events, "kind": RUN_KIND}, sort_keys=True, separators=(",", ":")) + "\n"
 
 
 def verdict(j: int, rows: bytes, rec_shared: dict, coin_key: str, accepted: bool = True, why: str = "",
