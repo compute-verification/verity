@@ -109,6 +109,21 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
   - On the integration head, two things are broken: Compose's `G_of_wordsFloor` lacks the coin-stream binder, so
     COMPOSE must fix it against `CoinStream`; and `tests/test_lean_vocabulary.py` fails on `Pouw.Lead.Coins`,
     `Pouw.Lead.Layout` and `CoinBranch.Priced.Prog`, which their owners list or rename.
+- **17:42Z, network restated** (N-PREM, statement branch at aa1d45c779, note 20261029T1742Z-report-lean-statement-network):
+  - `Accepted` refuses a call whose egress exceeds `callBits`, the call's share of its forward's cap. This is a
+    certifier requirement: it counts per call, where today it charges per window.
+  - `OutsourceWithinEgressLead` is per bit, with β = 256/3·W_mac.
+  - **The layout changed:** step 0 now carries the three coin lanes and 21 data lanes, so n_max is 256/3 at every step.
+  - `HonestHashRuled` applies at egress 0. `CertifierCoins` is a named `trusted-host` assumption.
+  - The totals are unchanged at the three points: 0.165–0.190% at cap 32 and 0.488–0.513% at cap 320. Decode is
+    0.232% at cap 32 and 0.252% at cap 320, of padded stock.
+  - **Per lane:**
+    - NETWORK: prove the stubs in `Network/Term.lean` and import it from your `Network.lean`.
+    - TAGS: step 0's words now include the coin lanes, so the exactness range has to cover them.
+    - PSTAR: re-check the step-0 stream term (32/7⁸), since step 0 now has lanes.
+    - KERNEL: step 0's three coin lanes and 21 data lanes, plus the padding rows.
+    - COMPOSE: `G` and `honest` changed: the per-bit premise, the egress refusal, and `HonestHashRuled` at egress 0.
+  - N-PPL is measuring T3 on this layout.
 - **COUNTER, search first:** the coin-branch figure (0.084%) and the per-tile table constants (49⁻⁸ at step 0, 7⁻⁸ for at
   most 32 stream tiles, 2⁻¹⁰⁰ after). Both are analysis, not proved.
 
