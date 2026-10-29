@@ -31,6 +31,7 @@ import Proofs.Flock.Recursive.Sessions
 import Proofs.Flock.Recursive.OuterZK
 import Proofs.Flock.Recursive.Firewall
 import Proofs.Flock.Recursive.FirewallZK
+import Proofs.Flock.Recursive.OuterSessionZK
 import Proofs.Flock.Recursive.FirewallRun
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
