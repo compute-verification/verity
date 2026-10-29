@@ -34,11 +34,11 @@ def _resolved(n: int, packages=PACKAGES) -> list[list[str]]:
 
 def test_the_plans_are_the_documented_ones():
     assert D.plans() == {
-        3: ((*SECURITY, "pytest"),
+        3: ((*SECURITY, "pytest", "ratchet-gate"),
             ("lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"),
             ("flock-circuit-build", "circuit-check", "flock-rust-tests")),
         5: (SECURITY, ("lean-audit:*", "lean-changed"), ("lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"),
-            ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests"))}
+            ("pytest", "ratchet-gate"), ("flock-circuit-build", "circuit-check", "flock-rust-tests"))}
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
@@ -304,4 +304,4 @@ def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     monkeypatch.setattr(subprocess, "run", run)
     for args in (["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
         assert CHECK.record(["--base", "HEAD", "--on", "pod", *args]) == 0
-    assert parts == [[list(SECURITY)], [["pytest"]], [[]], []], "an unsharded check sends none"
+    assert parts == [[list(SECURITY)], [["pytest", "ratchet-gate"]], [[]], []], "an unsharded check sends none"

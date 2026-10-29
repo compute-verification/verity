@@ -83,6 +83,14 @@ merge_requires = ["verity/ml/flock/python/verity_flock/rec_vstage.py", "verity/m
                   "verity/core/protocols/sampled_proofs/one_stage/registered.py", "verity/core/service/flock/VStar/In.lean",
                   "verity/core/service/vstar/"]
 
+# Group 7: no merge above the check's base grows the vLLM integration's lint ratchets (`ratchet_gate.py`, as the base has it):
+# on a train, each `Queue: #N` merge against the one below, so a failure names its PR.
+[[job]]
+name = "ratchet-gate"
+owner = "vllm"
+part = "tests"
+group = 7
+
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
 # shards). Balanced on a cold check's costs on one pod (lean-audit 46 min, soundness alone 45-70 of it; pytest 27, lean-suites
@@ -95,7 +103,7 @@ merge_requires = ["verity/ml/flock/python/verity_flock/rec_vstage.py", "verity/m
 # 3 pods: the security analysis's audit beside the suites; the rest of the Lean; the Rust build and the circuits.
 [[plan]]
 shards = [
-    ["lean-audit:Security", "lean-audit:Security/Proofs", "pytest"],
+    ["lean-audit:Security", "lean-audit:Security/Proofs", "pytest", "ratchet-gate"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
 ]
@@ -106,6 +114,6 @@ shards = [
     ["lean-audit:Security", "lean-audit:Security/Proofs"],
     ["lean-audit:*", "lean-changed"],
     ["lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"],
-    ["pytest"],
+    ["pytest", "ratchet-gate"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
 ]
