@@ -15,6 +15,8 @@
   (`pinned`), and refused before any draw without them;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
+* under a work law, every unit of each ``--whole`` family is proved and at least one of every other template, in the
+  verifier's own work table, which the audit holds a record registered by its digest to;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
 * none of it imports `verity_vllm`, and the served compiler's command (``prove_path.py circuit``) refuses advice it can't
   compile and charges the length the registration does;
@@ -69,12 +71,14 @@ print(a.say if a.say is not None else json.dumps({"bits": 8 * len(data) if a.bit
 '''
 
 
-def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True, compiler: dict = COMPILER) -> SimpleNamespace:
+def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True, compiler: dict = COMPILER, law: str = LAW) -> SimpleNamespace:
     """A window of ``n`` coordinates in members of ``cap``, its advice committed under ``compiler`` (or none), written and
-    registered through the interface under core's registration."""
+    registered through the interface under core's registration, by ``law`` under the verifier's work table (`whole_table`)."""
     reg = IF.commit_advice(compiler, ADVICE)
     bound = IF.advice_binding(compiler, reg.root.hex(), 8 * len(ADVICE)) if advice else None
-    win = IF.Window(IF.Circuit("test", ((COORD, n),)), RUN, D.parse_law(LAW), cap, advice=bound)
+    rule = D.parse_law(law)
+    win = IF.Window(IF.Circuit("test", ((COORD, n),)), RUN, rule, cap, advice=bound,
+                    work_table=RA.whole_table(rule, [(TID, n)], ()))
     rng = np.random.default_rng(0)
     x, w = (rng.integers(-128, 128, (n, K)).astype(np.int8) for _ in range(2))
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
@@ -620,6 +624,84 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
         with pytest.raises(Opened):
             RA.main([*args, *extra])
         assert seen == want
+
+
+def _sample(drawn: dict) -> list[int]:
+    """The first k units of each stratum of a derived law: a sample its `check_draw` accepts."""
+    return sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
+
+
+def test_a_work_law_proves_every_unit_of_the_whole_families_and_at_least_one_of_every_other_template():
+    """V3c's work law (`whole_table`): at every K, every unit of each family ``--whole`` names is proved and at least one
+    of every other template, a family of several templates sampled template by template; a sample trading a whole
+    family's unit for another unit is refused (`check_draw`), and so is a registration whose law samples the whole
+    families like the rest (R1 compares the laws). ``--whole`` is refused under another law, naming a family the circuit
+    has no template of, or naming every template's."""
+    S8 = G.GEMM_SM120_S8
+    c = IF.Circuit("test", ((COORD, 40), (bind(G.ScaledMmS8CoordinateRows, K=K, R=2, **S8), 3),
+                            (bind(G.ScaledMmS8Coordinate, K=32, **S8), 6),
+                            (bind(G.ScaledMmS8ResidualCoordinateRows, K=K, R=2, **S8), 2)))
+    program, query = c.program()
+    templates = list(zip(c.ids, (n for _, n in c.templates)))
+    whole = [c.ids[1].split("{")[0], c.ids[3].split("{")[0]]
+    for k in (1, 2, 30):
+        law = D.parse_law(f"work:{k}")
+        drawn = D.derive(program, query, law, RA.whole_table(law, templates, whole))
+        got = {s["template"]: (s["k"], sum(hi - lo for lo, hi in s["units"])) for s in drawn["strata"]}
+        assert [got[t][0] for t in c.ids[1::2]] == [3, 2]
+        assert all(1 <= got[t][0] <= got[t][1] for t in c.ids[0::2]) and (k > 1 or [got[t][0] for t in c.ids[0::2]] == [1, 1])
+        units = _sample(drawn)
+        draw = {**drawn, "population": 51, "units": units}
+        assert D.check_draw(draw, {"population": 51}, drawn).ok
+        gone = next(lo for s in drawn["strata"] if s["template"] == c.ids[3] for lo, _ in s["units"])
+        traded = [u for u in units if u != gone] + [next(u for u in range(51) if u not in units)]
+        v = D.check_draw({**draw, "units": sorted(traded)}, {"population": 51}, drawn)
+        assert not v.ok and "strata-count" in v.codes
+        flat = D.derive(program, query, law, {t: {"work": 1, "floor": 1} for t in c.ids})
+        assert not D.same_law(flat, drawn)
+    assert RA.whole_table(D.parse_law("subset:1"), templates, ()) is None
+    for law, names, why in (("subset:1", whole, "the work law"), ("work:1", ["SelectEntry_v1"], "no template of that family"),
+                            ("work:1", [*whole, "ScaledMmS8Coordinate_v1"], "every template")):
+        with pytest.raises(ValueError, match=why):
+            RA.whole_table(D.parse_law(law), templates, names)
+
+
+def test_the_audit_holds_the_records_work_table_to_the_verifiers_own(tmp_path, monkeypatch, capsys):
+    """Under a work law, the audit of a circuit registered by its digest builds its own work table from the record's
+    templates (`whole_table`) and hands a5 the window only where the record states that table (`held_table`): a record
+    stating none and a ``--whole`` naming every template are refused before any session, and ``--whole`` with a compiled
+    circuit is refused, whose table is its compiler's."""
+    import a5 as A5
+
+    class Opened(Exception):
+        pass
+
+    seen = {}
+
+    def audit(a, sets, out, mine, *args, **kw):
+        seen["table"] = mine.work_table
+        raise Opened
+
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(A5, "audit", audit)
+
+    def argv(got: SimpleNamespace, *extra: str) -> list[str]:
+        return ["audit", "--window", str(got.dir), "--law", "work:2", "--circuit", got.rec["window"]["circuit"], "--run", RUN,
+                "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"), *extra]
+
+    work = _write(tmp_path / "work", advice=False, law="work:2")
+    assert work.doc["work_table"] == {TID: {"work": 1, "floor": 1}}
+    with pytest.raises(Opened):
+        RA.main(argv(work))
+    assert seen["table"] == work.doc["work_table"]
+    for got, extra, why in ((_write(tmp_path / "none", advice=False), (), "not the verifier's own"),
+                            (work, ("--whole", TID.split("{")[0]), "every template")):
+        capsys.readouterr()
+        assert RA.main(argv(got, *extra)) == 1
+        assert why in json.loads(capsys.readouterr().out.split("RECORDS ", 1)[1])["refused"]["records"]
+    compiled = [x for x in argv(work, "--whole", "F") if x not in ("--circuit", work.rec["window"]["circuit"])]
+    with pytest.raises(SystemExit):
+        RA.main([*compiled, "--opening", "o", "--compilers", "c"])
 
 
 def test_the_audit_from_the_records_imports_no_vllm(written, tmp_path):

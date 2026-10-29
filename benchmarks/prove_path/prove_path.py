@@ -55,7 +55,7 @@ Two kinds of committed run:
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
         --checkpoint-dir DIR --out DIR [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--law L] [--cap N] \\
-        [--workers N] [--hf-config F] [--target F] [--cap-bits L]
+        [--whole FAMILY ...] [--workers N] [--hf-config F] [--target F] [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -119,6 +119,9 @@ Two kinds of committed run:
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
   any other's reads are free; a stand-in scan state a per-window value under the run root. ``--out`` is the window's records for ``records_audit.py audit --circuit``: the circuit is the
   class's, a function of the class alone, so the verifier's own ``window-circuit`` record is the circuit it holds it to.
+  Under a ``work:K`` ``--law``, the window registers under the work table `records_audit.whole_table` builds from the
+  circuit's templates, every unit of each ``--whole`` family proved and at least one of every other template, the table
+  ``records_audit.py audit --whole`` holds its record's to.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -164,7 +167,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from records_audit import PORTS, REFUSED, free_ports, pin_arg, pins_of, registration_roots  # noqa: E402, F401
+from records_audit import PORTS, REFUSED, free_ports, pin_arg, pins_of, registration_roots, whole_table  # noqa: E402, F401
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
@@ -1367,6 +1370,8 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
         low = WC.lower(registered, cls)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
+    law = DR.parse_law(a.law)
+    table = whole_table(law, zip(low.circuit.ids, (n for _, n in low.circuit.templates)), a.whole)
     lap("lower")
     r = record1(str(a.bundle), str(a.row_dir))
     run = bytes(r.run.run_root).hex()
@@ -1413,7 +1418,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     lap("weights")
     filled = WRS.Rows(low, slots, values)
     lap("rows")
-    win = IF.Window(low.circuit, run, DR.parse_law(a.law), a.cap, registered=values, forms=WRS.FORMS)
+    win = IF.Window(low.circuit, run, law, a.cap, registered=values, work_table=table, forms=WRS.FORMS)
     win.supply(CR)
     filled.record(win)
     lap("record")
@@ -1596,6 +1601,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards, checked when given (each tensor is "
                    "held to its committed tensor root either way)")
     p.add_argument("--law", default="subset:1", help="the proof system's law of the window")
+    p.add_argument("--whole", action="append", default=[], metavar="FAMILY", help="with a work:K law: a template "
+                   "family every unit of which is proved, in the work table the window registers under "
+                   "(`records_audit.whole_table`, the one `records_audit.py audit --whole` holds it to; repeatable)")
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement)")
     p.add_argument("--workers", type=int, default=None, help="commit workers (default min(16, CPUs))")
     for name in ("window-circuit", "class-size", "window-commit"):

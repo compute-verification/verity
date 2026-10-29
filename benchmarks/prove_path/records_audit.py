@@ -52,7 +52,7 @@ them out of an audit (its summary says so), for a run of several audits of one c
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
-        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
+        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives] [--whole FAMILY ...]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
 
 ``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
@@ -91,6 +91,10 @@ deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 ``--forged``: the window holds a forged unit, and the
 audit passes when every check before the draw passed and Lean refused the outcome (the prover runs with its self-check
 skipped, ``FC_ZK_SELF_CHECK=skip``, so it sends proofs of the false witness).
+
+``--whole FAMILY`` (with ``--circuit`` and a ``work:K`` law, repeatable): the verifier's own work table (`whole_table`), built
+from the record's templates alone: every unit of a named family is proved, and at least one unit of every other template.
+The record must state that table (`held_table`), since its registration's law was derived under the record's.
 """
 from __future__ import annotations
 
@@ -404,6 +408,46 @@ def pin_roots(entries: Mapping[str, Mapping[str, Any]]) -> dict[str, str]:
     return pins
 
 
+def whole_table(law: Mapping[str, Any], templates: Iterable[Iterable[Any]], whole: Iterable[str]) -> dict[str, Any] | None:
+    """The verifier's work table (`draw.work_table`) of a circuit's ``templates`` (``(descriptor id, units)`` in order, the
+    circuit record's) under ``law``: under ``work:K``, each template of a family ``whole`` names (its descriptor id's name
+    before ``{``) works 0 with its floor all its units, so every unit of it is proved (`draw.work_k`), and every other
+    works 1 with floor 1, so at least one unit of it is; None under any other law. The window's committer registers under
+    it (``prove_path.py window-commit --whole``) and the audit holds the record's to it (`held_table`). Refused
+    (ValueError) where ``whole`` names a family under another law, a family the circuit has no template of, or every
+    template's (nothing would be sampled)."""
+    fams = list(dict.fromkeys(whole))
+    if law.get("law") != "work":
+        if fams:
+            raise ValueError(f"--whole {fams}: every unit of a family proved beside a sample of the rest is the work law "
+                             f"(work:K), not {dict(law)}")
+        return None
+    units: dict[str, int] = {}
+    for t, n in templates:
+        units[str(t)] = units.get(str(t), 0) + int(n)
+    family = {t: t.split("{")[0] for t in units}
+    if missing := [f for f in fams if f not in family.values()]:
+        raise ValueError(f"--whole {missing[0]}: the circuit has no template of that family")
+    if all(f in fams for f in family.values()):
+        raise ValueError(f"--whole {fams} names every template of the circuit: nothing is sampled, so its selection is all, "
+                         "not a work law")
+    return {t: {"work": 0, "floor": n} if family[t] in fams else {"work": 1, "floor": 1} for t, n in units.items()}
+
+
+def held_table(doc: Mapping[str, Any], law: Mapping[str, Any], whole: Iterable[str]) -> None:
+    """That the work table a circuit record states, the one its registration's law was derived under
+    (`interface.window_of_record`), is the verifier's own (`whole_table` of the record's templates), or a ValueError naming
+    the templates where they differ: for a circuit registered by its digest (``--circuit``), whose table is otherwise
+    the committer's word. A compiled circuit's table is its compiler's, which the compile check holds with the rest of
+    its record."""
+    mine, stated = whole_table(law, doc["templates"], whole), doc.get("work_table")
+    if stated != mine:
+        a, b = (x if isinstance(x, Mapping) else {} for x in (stated, mine))
+        other = sorted(t for t in {*a, *b} if a.get(t) != b.get(t))
+        raise ValueError(f"the circuit record's work table is not the verifier's own (`whole_table` under {dict(law)}, "
+                         f"whole {sorted(set(whole))}): they differ at {other[:3] or 'its form'}")
+
+
 def tied_values(circuit: Mapping[str, Any], values: Iterable[str], resolve: Callable[[str], Any] = IF.resolve) -> set[str]:
     """Those of ``values`` (registered parameters of the stated record ``circuit``) that are ties: every leaf an input
     port's registered read takes is a leaf some output port's read of the circuit writes, so the Lean verifier's opening
@@ -646,6 +690,8 @@ def audit(a: argparse.Namespace) -> int:
     law = D.parse_law(a.law)
     try:
         mine, doc, sets = verifier_window(wdir, law, Path(a.template_sets) if a.template_sets else None)
+        if not a.opening:
+            held_table(doc, law, a.whole)
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
         def resolve(t: str) -> Any:
             return sets[t][1] if t in sets else IF.resolve(t)
@@ -802,6 +848,9 @@ def main(argv: list[str] | None = None) -> int:
                    "values} (`pinned`), for a circuit that reads them")
     p.add_argument("--skip-negatives", action="store_true", help="no negatives in this audit (module docstring): a run of "
                    "several audits runs them in its first")
+    p.add_argument("--whole", action="append", default=[], metavar="FAMILY", help="with --circuit and a work:K law: a "
+                   "template family every unit of which is proved, in the verifier's own work table (`whole_table`), which "
+                   "the circuit record must state (repeatable)")
     p = sub.add_parser("count", help="a stated circuit record's leak count from its description alone (declared_count)")
     p.add_argument("--circuit", required=True, help="the circuit record (circuit.json), or its description")
     p.add_argument("--bits", type=int, required=True, help="the advice's registered length in bits, the charge")
@@ -829,6 +878,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
         ap.error("a compiled circuit: --opening FILE --compilers FILE; a circuit with no compiler: --circuit SHA512")
+    if a.opening and a.whole:
+        ap.error("--whole: a compiled circuit's work table is its compiler's, which the compile check holds")
     if a.challenger:
         if a.challenger != "local" and not a.challenger.startswith(("gate:", "loopback:")):
             ap.error(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST, not {a.challenger!r}")
