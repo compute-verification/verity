@@ -1,0 +1,6 @@
+description = "int8-channel127-v1 with vLLM's epilogue order s_a (s_w float(P)) (ScaledEpilogue) in place of this bench's (float(P) s_a) s_w; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+epilogue = "vllm"

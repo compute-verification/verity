@@ -1,0 +1,13 @@
+description = "ssn-1l-tag-magic-v1 with the weight scales on 22-bit significands, so every column's FFMA constant is exact and it serves int8-vllm-s22-v1 bit for bit; lm_head and attention bf16"
+plain = "int8-vllm-s22-v1"
+
+[[linear]]
+step = "int8"
+epilogue = "magic"
+scale_bits = 22
+
+[[linear]]
+step = "served"
+rule = "ssn_1l_tag"
+fused = true
+denoise = true

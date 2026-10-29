@@ -1,0 +1,10 @@
+description = "AorB/rgap1/sv4+tag+nz: stock int8, then on each call's cheaper side (served.aorb_side_b) ssn-1l-tag-nz-v1 with the n shortest nonzero vectors of Z^4 as its code (side A, the noise a row's), or the same with rows and columns exchanged (side B, the noise a column's: a1 bits a column against the rows' sv4 vectors, column tags against a G a row), S = 1 + ceil((k - 24) / 31), row coins and G one draw per fused call, served uncorrected; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "aorb_sv4"
+fused = true

@@ -1,0 +1,7 @@
+description = "int8-vllm-v1 with every weight scale rounded half to even to a 22-bit significand, so the magic epilogue's constant RN(1.5 2^23 s_w) is exact; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+epilogue = "vllm"
+scale_bits = 22

@@ -213,22 +213,27 @@ def test_column_signs_are_one_public_pattern():
 
 
 def test_fused_projections_draw_one_calls_coins():
-    """With `fused`, q, k and v (gate and up) each serve their own columns of the one fused call's noise."""
+    """With `fused`, q, k and v (gate and up) each serve their own columns of the one fused call's noise; `denoise`
+    serves the product."""
+    rows = {"self_attn.q_proj": 96, "self_attn.k_proj": 32, "self_attn.v_proj": 32}
     run = types.SimpleNamespace(seed=1, li=3, window=5, rotations={}, gates=matmul.G.Gates(),
-                                arm=types.SimpleNamespace(name="t"), checking=False, cache={})
+                                arm=types.SimpleNamespace(name="t"), checking=False, cache={},
+                                layer=types.SimpleNamespace(weight=lambda name: torch.empty(rows[name], 0)))
     m, k = 16, 96
     x = torch.ones(m, k)
 
-    def noise(name, n, rule, fused):
+    def noise(name, n, rule, fused, denoise=False):
         mm = matmul.MM("linear", name, run, x, torch.ones(n, k)).integer(x, torch.ones(n, k))
-        return steps.served_linear(mm, lambda _m: torch.zeros(m, n, dtype=torch.int64), rule=rule, fused=fused)
+        return steps.served_linear(mm, lambda _m: torch.zeros(m, n, dtype=torch.int64), rule=rule, fused=fused,
+                                   denoise=denoise)
 
-    for rule in ("ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_1l_tag", "ssn_pd", "ssn_a", "raw_byte"):
+    for rule in ("ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_1l_tag", "aorb_sv4", "ssn_pd", "ssn_a", "raw_byte"):
         whole = noise("self_attn.qkv", k + 2 * 32, rule, False)
         q, kk, v = (noise(f"self_attn.{p}_proj", n, rule, True) for p, n in (("q", k), ("k", 32), ("v", 32)))
         assert torch.equal(torch.cat([q, kk, v], 1), whole), rule
         apart = noise("self_attn.k_proj", 32, rule, False)
         assert not torch.equal(apart, kk), rule
+        assert not bool((kk == 0).all()) and bool((noise("self_attn.k_proj", 32, rule, True, True) == 0).all()), rule
     assert run.gates.log["accumulator"]["failed"] == 0
     lead, pd = (noise("mlp.down_proj", 40, r, False) for r in ("ssn_1l", "ssn_pd"))
     rows = (lead - pd) - (lead - pd)[:1]
@@ -258,6 +263,89 @@ def test_row_tags_and_g():
     assert set(g.unique().tolist()) == set(range(-3, 4)) and abs(float(g.mean())) < 0.1
     assert torch.equal(steps.tag_matrix(key, 512, 2048), g[:, 2048:2560])
     assert not torch.equal(steps.tag_matrix(key + 1, 3072), g)
+
+
+def test_sv4_code_and_aorb_sides():
+    c = steps.sv_code(4, 88)
+    norms = (c * c).sum(0)
+    assert c.shape == (4, 88) and len({tuple(v) for v in c.T.tolist()}) == 88
+    assert [int((norms == r).sum()) for r in (1, 2, 3, 4)] == [8, 24, 32, 24]
+    assert bool((norms[1:] >= norms[:-1]).all()) and torch.equal(steps.sv_code(4, 300)[:, :88], c)
+    # Llama-3.2-1B's calls: k 2048 gives S = 67, k 8192 (down) S = 265
+    assert [steps.aorb_side_b(2048, n, 67) for n in (3072, 2048, 16384, 512)] == [False, False, False, True]
+    assert [steps.aorb_side_b(8192, n, 67) for n in (16384, 8192, 3072, 2048)] == [False, False, True, True]
+    assert not steps.aorb_side_b(2048, 2048, 265) and steps.aorb_side_b(8192, 2048, 265)
+
+
+@pytest.mark.parametrize("m, n, side_b", [(16, 40, False), (64, 20, True)])
+def test_aorb_noise_is_its_formula(m, n, side_b):
+    """`aorb_sv4` on each side against its literal formula: side A a row's noise against the columns' sv4 vectors and
+    row tags against G, side B the same with rows and columns exchanged."""
+    k = 96
+    s = 1 + -(-(k - steps.SSN_TAG_DATA) // steps.SSN_1L_DATA)
+    assert steps.aorb_side_b(m, n, s) == side_b
+    run = types.SimpleNamespace(seed=2, li=1, window=4, rotations={}, gates=matmul.G.Gates(),
+                                arm=types.SimpleNamespace(name="t"), checking=False, cache={})
+    x = torch.ones(m, k)
+    mm = matmul.MM("linear", "mlp.down_proj", run, x, torch.ones(n, k)).integer(x, torch.ones(n, k))
+    got = steps.served_linear(mm, lambda _m: torch.zeros(m, n, dtype=torch.int64), rule="aorb_sv4")
+    mm = matmul.MM("linear", "mlp.down_proj", run, x, torch.ones(n, k))
+    a, b = (n, m) if side_b else (m, n)
+    lanes = (1 + 2 * mm.coins((a, s - 1))).double().sum(1, keepdim=True)
+    a1 = mm.coins((a, 4)).double()
+    key = mm.coins((steps.TAG_LANES,), 2 ** 16)
+    code = steps.sv_code(4, b)
+    want = (a1 @ code + lanes + steps.row_tags(a) @ steps.tag_matrix(key, b)
+            - torch.round(code.sum(0) / 2 + 2 * (s - 1)))
+    assert torch.equal(got, want.T if side_b else want) and run.gates.log["accumulator"]["failed"] == 0
+
+
+def test_round_significand():
+    s = torch.rand(1000, generator=torch.Generator().manual_seed(0)) * 1e-2 + 1e-6
+    assert torch.equal(steps.round_significand(s, 24), s)
+    r = steps.round_significand(s, 22)
+    assert float(((r.double() - s.double()) / s.double()).abs().max()) <= 2 ** -22 and not torch.equal(r, s)
+    assert torch.equal(steps.round_significand(r, 22), r)
+    assert bool(((-steps.MAGIC * r).double() == -steps.MAGIC * r.double()).all())
+    assert not bool(((-steps.MAGIC * s).double() == -steps.MAGIC * s.double()).all())
+
+
+def test_magic_epilogue_is_vllms_where_its_constant_is_exact():
+    """The magic conversion reads MAGIC + P; under 22-bit scales every column's FFMA constant is exact and the output
+    is vLLM's s_a (s_w float(P)) bit for bit; raw scales leave some constants inexact, and only those columns differ.
+    Row 0 (all 127) passes the Cauchy-Schwarz bound and falls back; its product with column 0 (all 127) is wide."""
+    small = torch.tensor([-2 ** 22, -1, 0, 1, 2 ** 22 - 1])
+    assert torch.equal((small + steps.MAGIC_BITS).to(torch.int32).view(torch.float32).double(),
+                       steps.MAGIC + small.double())
+    g = torch.Generator().manual_seed(0)
+    m, k, n = 40, 1024, 48
+    xq = torch.randint(-15, 16, (m, k), generator=g, dtype=torch.int8)
+    wq = torch.randint(-127, 128, (n, k), generator=g, dtype=torch.int8)
+    xq[0], wq[0] = 127, 127
+    sa, sw = torch.rand(m, generator=g) * 1e-2 + 1e-4, torch.rand(n, generator=g) * 1e-3 + 1e-5
+    p = xq.long() @ wq.long().T
+
+    def epilogue(sw):
+        run = types.SimpleNamespace(seed=0, li=0, window=0, rotations={}, gates=matmul.G.Gates(),
+                                    arm=types.SimpleNamespace(name="t"), checking=False, cache={})
+        mm = matmul.MM("linear", "mlp.down_proj", run, xq.float(), wq.float())
+        return steps.magic_epilogue(mm, p, sa, sw, xq, wq), run.gates.log
+
+    def vllm(sw):
+        return (p.float() * sw[None, :]) * sa[:, None]
+
+    s22 = steps.round_significand(sw, 22)
+    y, log = epilogue(s22)
+    assert torch.equal(y, vllm(s22)) and log["epilogue"]["failed"] == 0 and log["epilogue_differs"]["failed"] == 0
+    assert log["epilogue_fallback"]["by"] == {"t": [m, 1]} and log["epilogue_wide"]["by"] == {"t": [m * n, 1]}
+    tallied = matmul.G.Gates()
+    tallied.tally("epilogue_differs", 4, 2)
+    assert tallied.passed and tallied.log["epilogue_differs"]["failed"] == 2
+    y, log = epilogue(sw)
+    exact = (-steps.MAGIC * sw).double() == -steps.MAGIC * sw.double()
+    assert 0 < int(exact.sum()) < n and log["epilogue"]["failed"] == 0
+    assert torch.equal(y[:, exact], vllm(sw)[:, exact]) and not torch.equal(y, vllm(sw))
+    assert torch.equal(y[0], vllm(sw)[0])
 
 
 def test_u8pv_is_the_online_softmax_kernel():
@@ -335,6 +423,25 @@ def test_served_noise_stays_in_the_product(llama, ids):
     assert not np.array_equal(nll["head-ssn_1l5"], nll["head"])
     rise = {a.name: abs(ppl(nll[a.name]) / ppl(nll["stock"]) - 1) for a in arms[1:]}
     assert max(rise["ssn_a-1"], rise["ssn_1l-1"], rise["ssn_1l5-1"]) < rise["raw_byte-1"]
+
+
+def test_a_denoised_lead_serves_stock(llama, ids):
+    """De-noised, the lead serves stock bit for bit; under the magic epilogue it serves vLLM's epilogue bit for bit at
+    22-bit scales, and the tallies count each arm's own outputs."""
+    arms = ["int8-channel127-v1", "ssn-1l-tag-dn-v1", "int8-vllm-v1", "int8-vllm-s22-v1", "ssn-1l-tag-magic-v1",
+            "ssn-1l-tag-magic-s22-v1", "aorb-sv4-v1", "ssn-1l-tag-v1"]
+    r = evaluate(llama, ids[:4], arms)
+    g = r["gates"]
+    assert passed({"gates": {n: v for n, v in g.items() if n not in matmul.G.TALLIES}}), g
+    nll = {k.split("/")[0]: v for k, v in r["nll"].items()}
+    assert np.array_equal(nll["ssn-1l-tag-dn-v1"], nll["int8-channel127-v1"])
+    assert np.array_equal(nll["ssn-1l-tag-magic-s22-v1"], nll["int8-vllm-s22-v1"])
+    assert not np.array_equal(nll["ssn-1l-tag-v1"], nll["int8-channel127-v1"])
+    assert not np.array_equal(nll["aorb-sv4-v1"], nll["int8-channel127-v1"])
+    by = g["epilogue_differs"]["by"]
+    assert set(by) == {"ssn-1l-tag-magic-v1", "ssn-1l-tag-magic-s22-v1"} and by["ssn-1l-tag-magic-s22-v1"][1] == 0
+    assert by["ssn-1l-tag-magic-v1"][0] == by["ssn-1l-tag-magic-s22-v1"][0] > 0
+    assert g["epilogue"]["checked"] > 0 and g["epilogue"]["failed"] == 0
 
 
 def test_seeds(llama, ids, calib):

@@ -1,0 +1,11 @@
+description = "ssn-1l-tag-v1 de-noised: the same noise drawn, committed and gated, then removed from the integer accumulator in the epilogue, which leaves the exact product, so it serves int8-channel127-v1 bit for bit; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "ssn_1l_tag"
+fused = true
+denoise = true

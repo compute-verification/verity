@@ -246,6 +246,56 @@ def _check_int8_linear(p):
                          "(the grid step thins both operands)")
     _check_dither_bits(p["dither_bits"], "int8.dither_bits",
                        [p[f"{x}_top"] for x in ("act", "weight") if p[x] == "dither"], 1)
+    if p["epilogue"] not in EPILOGUES or (p["epilogue"] != "torch" and p["group"]):
+        raise ValueError(f"int8.epilogue is one of {EPILOGUES}, and only `torch` reads per-group scales")
+    if p["scale_bits"] and not 2 <= p["scale_bits"] <= 23:
+        raise ValueError("int8.scale_bits rounds the weight scales to 2..23-bit significands (0: as computed)")
+
+
+#: the epilogue's orders: `torch` (float(P) s_a) s_w, as this bench has always served; `vllm` s_a (s_w float(P)),
+#: vLLM's ScaledEpilogue; `magic` vLLM's with its I2F and column FMUL folded (`magic_epilogue`)
+EPILOGUES = ("torch", "vllm", "magic")
+#: the magic conversion: an s32 P in [-2^22, 2^22) plus MAGIC_BITS reads as the fp32 MAGIC + P
+MAGIC, MAGIC_BITS, MAGIC_RANGE = 1.5 * 2 ** 23, 0x4B400000, 2 ** 22
+
+
+def round_significand(s: torch.Tensor, bits: int) -> torch.Tensor:
+    """fp32 s rounded half to even to `bits`-bit significands."""
+    m, e = torch.frexp(s.double())
+    return torch.ldexp(torch.round(m * 2 ** bits) / 2 ** bits, e).float()
+
+
+def magic_epilogue(mm, p: torch.Tensor, sa: torch.Tensor, sw: torch.Tensor, xq: torch.Tensor, wq: torch.Tensor):
+    """vLLM's s_a (s_w float(P)) with two instructions replaced, none added: I2F by IADD3(P, MAGIC_BITS - r_i, -c_j),
+    which reads as the fp32 MAGIC + P - r_i - c_j while that is within MAGIC_RANGE (here r = c = 0: a served step's
+    de-noise has already left the exact product), and the column FMUL by FFMA(v, s_w, -RN(MAGIC s_w)), one rounding
+    of s_w (v - MAGIC) when MAGIC s_w is exact in fp32. Rows whose Cauchy-Schwarz bound |x_i| max_j |w_j| reaches
+    MAGIC_RANGE take the fallback, vLLM's own conversion. Gated (`epilogue`) on every call: the converted rows within
+    the range, and the output vLLM's bit for bit in every column whose constant is exact; tallied: the rows routed to
+    the fallback, the products outside the range, and the served bf16 outputs that differ from vLLM's."""
+    c = -MAGIC * sw
+    exact = c.double() == -MAGIC * sw.double()
+    wmax = float(wq.long().pow(2).sum(1).max())
+    out = torch.empty(p.shape, dtype=torch.float32, device=p.device)
+    ok, fallback, wide, differs = True, 0, 0, 0
+    for i in range(0, p.shape[0], NOISE_ROWS):
+        pb, sb = p[i:i + NOISE_ROWS], sa[i:i + NOISE_ROWS, None]
+        ref = (pb.float() * sw[None, :]) * sb
+        rows = xq[i:i + NOISE_ROWS].double().pow(2).sum(1) * wmax < MAGIC_RANGE ** 2
+        v = (pb.to(torch.int64) + MAGIC_BITS).to(torch.int32).view(torch.float32)
+        y = (v.double() * sw.double()[None, :] + c.double()[None, :]).float() * sb
+        y = torch.where(rows[:, None], y, ref)
+        ok = ok and bool((pb[rows].abs() < MAGIC_RANGE).all()) and torch.equal(y[:, exact], ref[:, exact])
+        fallback += int((~rows).sum())
+        wide += int((pb.abs() >= MAGIC_RANGE).sum())
+        differs += int((y.bfloat16() != ref.bfloat16()).sum())
+        out[i:i + NOISE_ROWS] = y
+    mm.gate("epilogue", ok, {"exact_columns": int(exact.sum()), "columns": int(exact.numel())})
+    arm = mm.run.arm.name
+    mm.run.gates.tally("epilogue_fallback", p.shape[0], fallback, mm.where, by=arm)
+    mm.run.gates.tally("epilogue_wide", p.numel(), wide, mm.where, by=arm)
+    mm.run.gates.tally("epilogue_differs", p.numel(), differs, mm.where, {"exact_columns": int(exact.sum())}, by=arm)
+    return out
 
 
 def _check_dither_bits(b: int, name: str, tops: list, floor_room: int) -> None:
@@ -260,7 +310,8 @@ def _check_dither_bits(b: int, name: str, tops: list, floor_room: int) -> None:
 @linear_step("int8", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, calib=lambda p: p["gptq"],
              check=_check_int8_linear, source="D4-PPL, D4-70B, LOWBIT-DESIGN, EPS-BUDGET, PPL-DITHER-SIZE")
 def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str = "round", weight_top: int = 127,
-                group: int = 0, gptq: bool = False, density: float = 1.0, dither_bits: int = 1, exact: bool = False):
+                group: int = 0, gptq: bool = False, density: float = 1.0, dither_bits: int = 1, exact: bool = False,
+                epilogue: str = "torch", scale_bits: int = 0):
     """The int8 grid: activations one scale per token (`round` to [-act_top, act_top], or `dither`: floor(x / s) + b,
     b a fresh coin bit, s = absmax / (act_top - 1)), weights one scale per output row (or per (row, `group` inputs),
     each group's s32 read and scaled on its own) on [-weight_top, weight_top], rounded, by GPTQ (blocks of 128, on
@@ -313,6 +364,8 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str 
     xq, sa = act_quant(mm.x, act, bits, act_top, coined, dither_bits)
     if weight == "dither":
         wq = (wq.float() + mm.coins(wq.shape, levels)).to(torch.int8)
+    if scale_bits:
+        sw = round_significand(sw, scale_bits)
     if group:
         k = xq.shape[1]
         y = torch.zeros(xq.shape[0], wq.shape[0], device=xq.device)
@@ -320,7 +373,12 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str 
             a, b = j * group, (j + 1) * group
             y += nxt(mm.integer(xq[:, a:b].contiguous(), wq[:, a:b].contiguous(), keys=(a, b))).float() * sw[None, :, j]
         return y * sa[:, None]
-    return nxt(mm.integer(xq, wq)).float() * sa[:, None] * sw[None, :]
+    p = nxt(mm.integer(xq, wq))
+    if epilogue == "magic":
+        return magic_epilogue(mm, p, sa, sw, xq, wq)
+    if epilogue == "vllm":
+        return (p.float() * sw[None, :]) * sa[:, None]
+    return p.float() * sa[:, None] * sw[None, :]
 
 
 # ================================================================ attention
@@ -1036,7 +1094,7 @@ def noise_linear(mm, nxt, *, x_width: int = 0, w_width: int = 0, period: int = 0
 
 
 #: the noise rules `served` adds to the integer product and serves
-SERVED_RULES = ("ssn_a", "ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_1l_tag", "ssn_pd", "ssn2", "raw_byte")
+SERVED_RULES = ("ssn_a", "ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_1l_tag", "aorb_sv4", "ssn_pd", "ssn2", "raw_byte")
 #: data entries in a k32 step (the other 4 are noise); `ssn_1l`'s later steps hold 31 and one noise lane
 SSN_DATA = 28
 SSN_1L_DATA = 31
@@ -1132,6 +1190,37 @@ def ssn_a_w0(n: int, k: int, offset: int = 0) -> torch.Tensor:
     return w0
 
 
+def sv_code(lanes: int, n: int) -> torch.Tensor:
+    """lanes x n: the n shortest nonzero vectors of Z^lanes, by squared norm, then lexicographically."""
+    r = 1
+    while True:
+        g = torch.arange(-r, r + 1, dtype=torch.int64)
+        v = torch.cartesian_prod(*[g] * lanes)
+        norm = (v * v).sum(1)
+        if int((norm <= r * r).sum()) - 1 >= n:
+            break
+        r += 1
+    v, norm = v[norm > 0], norm[norm > 0]
+    return v[torch.sort(norm, stable=True).indices[:n]].T.double().contiguous()
+
+
+def aorb_side_b(m: int, n: int, s: int) -> bool:
+    """`aorb_sv4`'s side: B (the noise a column's) when its forming, w / m a column's plus the side-B tags' 2 / n,
+    undercuts side A's w / n. w counts rgap1's writes over the S - 1 lane steps (one a step, plus a shift for each
+    four steps but one a word of eight) and sv4's one LOP3; a tie stays on A."""
+    versions = -(-(s - 1) // 4)
+    w = (s - 1) + versions - -(-versions // 8) + 1
+    return w / m + 2 / n < w / n
+
+
+def fused_columns(mm, n: int, fused: bool) -> int:
+    """The columns of the call a projection is served in: its fused linear's (`FUSED`), or its own."""
+    group = FUSED.get(mm.name) if fused else None
+    if group is None:
+        return n
+    return sum(mm.run.layer.weight(name).shape[0] for name, g in FUSED.items() if g == group)
+
+
 def _check_served(p):
     if p["rule"] not in SERVED_RULES:
         raise ValueError(f"served.rule is one of {SERVED_RULES}")
@@ -1144,8 +1233,9 @@ def _check_served(p):
 
 
 @linear_step("served", phase="integer", seeded=True, check=_check_served, source="SW-NOISE")
-def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz: int = 1):
-    """Noise added to the exact integer product and served, never subtracted, fresh every call, over S = ceil(k / 28)
+def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz: int = 1, denoise: bool = False):
+    """Noise added to the exact integer product and served (`denoise`: committed, gated on the committed words, and
+    removed in the epilogue, which leaves the exact product), fresh every call, over S = ceil(k / 28)
     k32 steps: `ssn_a` adds a W0 (`ssn_a_w0`) less rint((2^bits - 1) / 2 sum W0) per column, a uniform on
     {0, ..., 2^bits - 1}^(m x S x 4); `ssn_1l` (S = 1 + ceil((k - 28) / 31)) adds a1 C + rowsum(l) less
     rint(sum C / 2 + (2^bits - 1) (S - 1) / 2) per column, C step 0 of W0, a1 bits (m x 4) and l uniform on
@@ -1154,8 +1244,12 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
     {0, ..., 15}^(m x 4) and every later step t adds s_t[j] (1 + 2 b_t), b bits m x (S - 1) and s the public column
     signs (`column_signs`), less rint(7.5 sum C + 2 sum_t s_t[j]); `ssn_1l_tag` is `ssn_1l` with row tags (S = 1 +
     ceil((k - 24) / 31)): it adds T(i) G (`row_tags`, `tag_matrix`, G fresh every call) and serves 1 + nz l (`nz` 1
-    or 2), so its bias is rint((sum C + (2 + nz) (S - 1)) / 2), drawing ssn_1l's coins first; `ssn_pd` is `ssn_1l`
-    with its later steps' row bits
+    or 2), so its bias is rint((sum C + (2 + nz) (S - 1)) / 2), drawing ssn_1l's coins first; `aorb_sv4` is
+    AorB/rgap1/sv4+tag+nz: on side A (`aorb_side_b` false, for the whole call's columns) `ssn_1l_tag` at nz 2 with
+    C the call's columns' `sv_code(4)` vectors; on side B the same with rows and columns exchanged: a1 bits n x 4
+    against the rows' sv4 vectors, column tags T(j) against a G a row, later lanes 1 + 2 l a column, l bits
+    n x (S - 1), less rint(sum C_i / 2 + 2 (S - 1)) a row, each projection's column coins its own and G one draw
+    per fused call; `ssn_pd` is `ssn_1l` with its later steps' row bits
     folded out at the conversion (the same coins drawn, a1 C less rint(sum C / 2) served); `ssn2` adds a b - S, a and b
     bits (m x S x 4 and
     S x 4 x n); `raw_byte` adds sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred.
@@ -1165,12 +1259,17 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
     (m, k), n = mm.x.shape, acc.shape[1]
     s = -(-k // SSN_DATA)
     stream = FUSED.get(mm.name) if fused else None
-    if rule in ("ssn_1l", "ssn_1l5", "ssn_pd", "ssn_1l_tag"):
-        five, pd, tag = rule == "ssn_1l5", rule == "ssn_pd", rule == "ssn_1l_tag"
+    aorb = rule == "aorb_sv4"
+    if aorb and aorb_side_b(m, fused_columns(mm, n, fused), 1 + -(-(k - SSN_TAG_DATA) // SSN_1L_DATA)):
+        return aorb_side_b_noise(mm, acc, stream, denoise)
+    if rule in ("ssn_1l", "ssn_1l5", "ssn_pd", "ssn_1l_tag", "aorb_sv4"):
+        five, pd, tag = rule == "ssn_1l5", rule == "ssn_pd", rule in ("ssn_1l_tag", "aorb_sv4")
+        nz = 2 if aorb else nz
         s = 1 + -(-(k - (SSN_1L5_DATA if five else SSN_TAG_DATA if tag else SSN_DATA)) // SSN_1L_DATA)
         off = fused_offset(mm.name, k, n)
-        code = mm.shared(("ssn_code5" if five else "ssn_code", n, off, str(acc.device)),
-                         lambda: (ssn_code5(n, off) if five else ssn_a_w0(n, SSN_DATA, off)[0]).to(acc.device))
+        code = mm.shared(("sv4" if aorb else "ssn_code5" if five else "ssn_code", n, off, str(acc.device)),
+                         lambda: (sv_code(4, off + n)[:, off:] if aorb else ssn_code5(n, off) if five
+                                  else ssn_a_w0(n, SSN_DATA, off)[0]).contiguous().to(acc.device))
         lanes = (nz * mm.coins((m, s - 1), 2 ** bits, name=stream).double() + tag).sum(1, keepdim=True) * (not pd)
         a1 = mm.coins((m, code.shape[0]), 2, name=stream).double()
         bias = torch.round(code.sum(0) / 2 + (not pd) * (nz * (2 ** bits - 1) / 2 + tag) * (s - 1))
@@ -1183,7 +1282,8 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
             if tag:
                 noise += tags[i:i + NOISE_ROWS] @ g
             top = max(top, G.absmax(noise))
-            acc[i:i + NOISE_ROWS] += noise
+            if not denoise:
+                acc[i:i + NOISE_ROWS] += noise
         bound = k * G.absmax(mm.x.float()) * G.absmax(mm.weight().float()) + top
         mm.gate("accumulator", bound <= G.S32, bound)
         return acc
@@ -1208,7 +1308,33 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
                  - torch.round((2 ** bits - 1) / 2 * w0.sum(0)))
     bound = k * G.absmax(mm.x.float()) * G.absmax(mm.weight().float()) + G.absmax(noise)
     mm.gate("accumulator", bound <= G.S32, bound)
-    return acc + noise
+    return acc if denoise else acc + noise
+
+
+def aorb_side_b_noise(mm, acc: torch.Tensor, stream: str | None, denoise: bool) -> torch.Tensor:
+    """`aorb_sv4` on side B (`served_linear`): the noise a column's, against the rows' sv4 vectors and a G a row."""
+    (m, k), n = mm.x.shape, acc.shape[1]
+    s = 1 + -(-(k - SSN_TAG_DATA) // SSN_1L_DATA)
+    off = fused_offset(mm.name, k, n)
+    tags = zigzag_digits(n, TAG_LANES, off)
+    if tags is None:
+        raise ValueError(f"aorb_sv4: {off + n} columns outrun the 4-digit balanced base-13 tag")
+    lanes = (1 + 2 * mm.coins((n, s - 1), 2).double()).sum(1)
+    a1 = mm.coins((n, 4), 2).double()
+    code = mm.shared(("sv4_rows", m, str(acc.device)), lambda: sv_code(4, m).T.contiguous().to(acc.device))
+    g = tag_matrix(mm.coins((TAG_LANES,), 2 ** 16, name=stream), m).T.to(acc.device)
+    col, lanes = torch.cat([a1.T, tags], 0).to(acc.device), lanes.to(acc.device)
+    bias = torch.round(code.sum(1, keepdim=True) / 2 + 2 * (s - 1))
+    top = 0.0
+    for i in range(0, m, NOISE_ROWS):
+        r = slice(i, i + NOISE_ROWS)
+        noise = torch.cat([code[r], g[r]], 1) @ col + lanes - bias[r]
+        top = max(top, G.absmax(noise))
+        if not denoise:
+            acc[i:i + NOISE_ROWS] += noise
+    bound = k * G.absmax(mm.x.float()) * G.absmax(mm.weight().float()) + top
+    mm.gate("accumulator", bound <= G.S32, bound)
+    return acc
 
 
 @attention_step("grid", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["p"], p["v"]),

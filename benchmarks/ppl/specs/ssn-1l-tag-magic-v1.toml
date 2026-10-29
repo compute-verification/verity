@@ -1,0 +1,12 @@
+description = "ssn-1l-tag-dn-v1 under the magic epilogue at raw weight scales: vLLM's s_a (s_w float(P)) with I2F as IADD3(P, 0x4B400000 - r_i, -c_j) and the column FMUL as FFMA(v, s_w, -RN(1.5 2^23 s_w)), rows past the Cauchy-Schwarz bound on vLLM's conversion; reported against int8-vllm-v1, which it serves bit for bit wherever the FFMA's constant is exact; lm_head and attention bf16"
+plain = "int8-vllm-v1"
+
+[[linear]]
+step = "int8"
+epilogue = "magic"
+
+[[linear]]
+step = "served"
+rule = "ssn_1l_tag"
+fused = true
+denoise = true

@@ -81,8 +81,11 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
     for name in ("noise-ef1", "noise-ef2", "noise-ef4", "noise-ef32", "noise-x1-none", "ncp-dither", "ncp-dither-both",
                  "ssn-a-b1-v1", "ssn-a-b4-v1", "ssn-1l-b1-v1", "ssn-1l-b4-v1", "ssn2-b1-v1", "raw-byte-served-v1",
                  "ssn-1l-b1-fused-v1", "ssn-1l5-lin-b1-v1", "ssn-1l5-b1-v1", "dither-int8-v1",
-                 "ssn-1l-hw-v1", "ssn-1l-tag-v1", "ssn-1l-tag-nz-v1", "ssn-pd-v1"):
+                 "ssn-1l-hw-v1", "ssn-1l-tag-v1", "ssn-1l-tag-nz-v1", "ssn-pd-v1", "ssn-1l-tag-dn-v1", "aorb-sv4-v1"):
         want[name] = ("linears", stock, True)
+    want["int8-vllm-v1"] = want["int8-vllm-s22-v1"] = ("linears", stock, False)
+    want["ssn-1l-tag-magic-v1"] = ("linears", "int8-vllm-v1", True)
+    want["ssn-1l-tag-magic-s22-v1"] = ("linears", "int8-vllm-s22-v1", True)
     for name in ("int8-qk-had-v1", "int8-pv-u8-v1", "int8-attn-v1", "dither-int8-pv-v1", "ssn-all-v1"):
         want[name] = ("all", stock, True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
@@ -281,7 +284,8 @@ def test_round_trip():
 def test_defaults_are_filled_and_typed():
     a = parse('[[linear]]\nstep = "int8"\nweight_top = 63\n[[linear]]\nstep = "int8"\nlayers = [0]\nact = "dither"')
     assert a.linear[0].kw == {"act": "round", "act_top": 127, "weight": "round", "weight_top": 63, "group": 0,
-                              "gptq": False, "density": 1.0, "dither_bits": 1, "exact": False}
+                              "gptq": False, "density": 1.0, "dither_bits": 1, "exact": False, "epilogue": "torch",
+                              "scale_bits": 0}
     assert a.linear[1].layers == frozenset({0})
     s = parse('[[linear]]\nstep = "smooth"\nalpha = 1').linear[0]
     assert s.kw["alpha"] == 1.0 and isinstance(s.kw["alpha"], float)
