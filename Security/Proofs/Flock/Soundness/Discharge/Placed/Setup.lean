@@ -171,7 +171,7 @@ noncomputable def progPlaces (outs : Finset (Fin N)) (inst : ∀ u, (p.partition
   inst := inst
   o := si.o
   col := si.col hrows
-  placed := si.placed hrows
+  placed S R u h := (si.placed hrows S R u h).sat
   aliased := hal
 
 /-- **`ProgPlaces` from setupH's accept, its aliasing from `Layout.Aliased`** at each drawn unit's template instance and

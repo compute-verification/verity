@@ -40,7 +40,7 @@
 #      H1_QUANT (h1: H1's ±110/[-126, 125] quantizers; vllm: vLLM's per-row absmax → ±127, over the first H1_K entries
 #      below K = 4096, so a smoke's tiles hold A = 127)
 set -uo pipefail
-# its checks expect the Lean verifier's ACCEPT, which a templated statement never gets until its proof lands
+# its checks expect the Lean verifier's ACCEPT, which a templated statement with --registered never gets
 # (h1unit.layout), so this job stages only the flat statement; h1_lanes/job.sh proves the structural one end to end
 case "${H1_TMPL:-flat}" in
   flat) ;;

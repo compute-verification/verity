@@ -44,7 +44,7 @@ def gI : Inner Bool Unit where
 /-- The outer statement: a circuit with no gates and no outputs, so every witness is in its relation. -/
 def gs₀ : Flock.Stmt :=
   ⟨0, 0, ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩, fun _ _ => .pub 0, fun _ _ => .pub 0, [],
-    ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false⟩⟩
+    ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false, false⟩⟩
 
 /-- The outer verifier: one round, accepting at its coin `false`. -/
 def gVO : Verifier Bool := ⟨fun _ => 1, fun _ _ cs => .ret (if cs.getD 0 true = false then .acc else .rej)⟩
