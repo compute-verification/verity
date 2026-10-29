@@ -895,3 +895,41 @@ caveats = [
   "an error e in SAK-UF's credit costs c·e / (1 + h) of capacity: 0.22e / 0.028e / 0.015e at the three points",
 ]
 
+
+[proposal.dynamic-arxm]
+lane = "DYNAMIC"
+note = "compute-research/20261029T2200Z-report-hash-fold-dynamic"
+title = "arxm, a fold drawn per call: s' = (rotl(s xor x, r) + w)·k + y with x, r, k and y live a step (rotation an immediate, the kernel specialized per window); sigma sealed a cell by SHA-512; credited as stock (credit B)"
+status = "proposed"
+fold = { seal_bytes_per_cell = 4, writes_per_word = 3 }
+form = "arxm-fold"
+credit = "stock"
+t1_label = "checked"
+stated = { h = 3.87, t1 = 0.0 }
+t2 = { value = 14.1, label = "estimate" }
+c0 = { value = 2.79, label = "checked", what = "DYNAMIC's counting bound, 1.000 eq a step at T 293 (1.014 at T 74) on every per-output SIMT program except 2^-80 a draw, 1.153 stock at 27.75 MACs a word (the counting step proved in Lean, FoldDyn.lean; its inputs checked), plus the seal outside the fold (1.64 at the worst point)" }
+adds = [{ id = "DynFoldXO (arxm)", rank = 5, part = "hashing", status = "open", owner = "DYNAMIC", falsification = "a program, bit-exact against fold_dyn's reference on the zero-data words, that computes sigma_T for g >= 2 outputs at under 0.866 eq per output-step for most draws, at full width on a GPU or at reduced width on a CPU with a cost model pricing width; next, one program for every output with free row and column features (DYNAMIC §4)" }]
+rules = ["one-hash-fold", "duo-moot"]
+caveats = [
+  "the per-output part is a counting theorem (run r20261029-215905-862a: card_computed_le, card_prog and card_computed_by_short_le, propext, Classical.choice and Quot.sound only), whose inputs, the census's form count and the operand model (rank 2) and the fibre bound from the symmetries checked at widths 3-6, enter as hypotheses; the cross-output part (packing, bit-slicing, decomp, tables, shuffles, IMMA fragments) is DynFoldXO, rank 5 (4 in SAK-U's shape if adopted)",
+  "decomp bites only at step 1 (checked, run r20261029-215715-8561): every tested bit of arxm has full GF(2) rank at 32 bits; the depth-2 superoptimizer (run r20261029-213207-94c3, quick tier r20261029-223120-f29a) finds nothing below honest but the degenerate keys (rotl(x, r) at 0 or the top bit), and can't reach honest's 3",
+  "DYNAMIC states h 3.87-6.88 (a seal of 1-2 words an output, T 293 to 74) at 28 MACs a word; the card prices the fold at the basis's 27.75 and the seal at one word a cell at its worst point",
+  "honest's 3 lane instructions a word (LOP3, LEA.HI, IMAD) are checked in SASS at sm_90a and sm_120 (run r20261029-210915-8588); T2 7.0-14.1x is SPARSE's measured (c4) rate scaled by instruction count, unmeasured",
+  "credit A (the fold's own cost) would be T1 67% on counting alone, so DYNAMIC credits stock (credit B, 0.866 eq a step)",
+]
+
+[proposal.dynamic-arxm-reg]
+lane = "DYNAMIC"
+note = "compute-research/20261029T2200Z-report-hash-fold-dynamic"
+title = "arxm with the rotation in a register (fixed code drawing r per call, a SHF.L.W a word more)"
+status = "proposed"
+fold = { seal_bytes_per_cell = 4, writes_per_word = 4 }
+form = "arxm-fold-reg"
+credit = "stock"
+t1_label = "checked"
+stated = { h = 5.01, t1 = 0.0 }
+t2 = { value = 18.4, label = "estimate" }
+c0 = { value = 2.79, label = "checked", what = "as dynamic-arxm's: the counting bound, 1.153 stock, plus the seal (1.64)" }
+adds = [{ id = "DynFoldXO (arxm)", rank = 5, part = "hashing", status = "open", owner = "DYNAMIC", falsification = "as dynamic-arxm's (DYNAMIC §4)" }]
+rules = ["one-hash-fold", "duo-moot"]
+caveats = ["as dynamic-arxm's, at 4 instructions a word; T2 7.3-18.4x, unmeasured"]
