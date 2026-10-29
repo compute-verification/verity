@@ -2,11 +2,13 @@
 cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the warden's root and decided by
 the verifier of record on its own lanes), and `advised.IoTieVerdict` built from the stream's outcomes of record alone.
 An honest link is tied, `advised.ends` reads the tie, and the advised link takes it only from `Ties`, the tie, its
-stream and the release as its source of record; a carried field count, a forged advice and the swapped split are
-refused, as are an outcome on another advice, in the clear or late, a stream short of the advice's windows,
-out of order or past them, a profile that frames requests otherwise than the warden cuts them, a row that isn't the
-warden's, a head of another window, an advice whose `received` isn't the release's, and an unpinned size class.
-Nothing in `verity` but the tie service builds the verdict."""
+stream and the release as its source of record; the verifier's registered reads name every port of the statement, as
+C-Flock's Lean verifier requires (`Registered.checkComplete`, which the stand-in mirrors); a carried field count, a
+forged advice and the swapped split are refused, as are an output 0 or rows under fresh salts, an outcome on another
+advice, in the clear or late, a stream short of the advice's windows, out of order or past them, a profile that frames
+requests otherwise than the warden cuts them, a row that isn't the warden's, a head of another window, an advice whose
+`received` isn't the release's, and an unpinned size class. Nothing in `verity` but the tie service builds the
+verdict."""
 
 import ast
 import hashlib
@@ -25,7 +27,7 @@ from verity.core.protocols.certifier.certificate import Direction
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as R
 
 import signers
 import standin
@@ -140,6 +142,62 @@ def test_an_honest_link_is_tied_and_advised_ends_reads_the_tie(tmp_path):
     assert AD.ends(advice, PROFILE.request_frames, **run.held(verdict)) == (1, 3, 4)
     assert run.stream.records[-1]["public"] == {"verdict": 1, "advice": AD.digest(advice)}
     assert run.stream.log[0]["roots"][0]["root"] == run.cells[0].root.hex()
+
+
+def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_path):
+    """C-Flock's Lean verifier rejects every session of a statement with a port its `--registered` file doesn't name
+    (`Registered.checkComplete`), which the stand-in mirrors: the verifier's own file names ``wit`` at the warden's
+    root and ``pub`` and ``o0`` at known content, its own lanes of each bucket and the output word 1 under public
+    salts, so an honest window's proof is proved and accepted, where a file naming ``wit`` alone rejects it at
+    ``pub``."""
+    run, advice = Run(tmp_path), _advice(SPAN)
+    draw, delivered = run.prove(0, advice)
+    head, lanes = run.cells[0].head, run.tie.lanes(advice, SERVED.releases, 0)
+    reads = run.tie.registered(head, lanes)
+    assert sorted(reads["ports"]) == sorted(TS.PORTS) and TS.KNOWN_KEY not in reads["ports"][TS.REGISTERED]
+    assert reads["ports"]["pub"][TS.KNOWN_KEY]["rows"] == [
+        WR.words(run.tie.row(run.tie.public_arguments(ln), "pub")) for ln in lanes]
+    assert reads["ports"]["o0"][TS.KNOWN_KEY]["rows"] == [[1]] * run.tie.T
+    assert {p: reads["ports"][p]["reads"] for p in TS.PORTS} == {p: list(range(run.tie.T)) for p in TS.PORTS}
+    assert run.tie.registered(head, lanes[1:]) is None and run.tie.registered(head, None) is None
+    kw = {"circuit_sha512": standin.circuit_sha512(delivered), "program": run.tie.program,
+          "partition": run.tie.partition}
+    findings, refused = standin.lean(delivered.proof, registered=reads, **kw)
+    assert refused is None and run.tie.proved(findings)
+    wit_only = WR.reads_file({TS.REGISTERED: reads["ports"][TS.REGISTERED]})
+    findings, refused = standin.lean(delivered.proof, registered=wit_only, **kw)
+    assert refused is None and findings and not any(f.accepted for f in findings)
+    assert "port pub is no port of the verifier's registered reads" in findings[0].why
+    assert run.stream.deliver(draw, delivered.sessions()) is None
+    assert run.decide(0, draw, delivered, advice).accepted
+
+
+def test_an_output_0_or_rows_under_fresh_salts_fail_the_registered_reads(tmp_path, monkeypatch):
+    """The ``o0`` row is read off the verifier's known root of output words 1, and the ``pub`` row off its known root
+    of its own lanes under their public salts: the forged advice's proof of window 0, on the warden's rows and the
+    verifier's own lanes, fails ``o0``'s read at the bucket IoTieRequest refuses, whatever word it delivers, and a
+    proof whose ``pub`` and ``o0`` rows are committed under fresh salts fails ``pub``'s."""
+    forged, advice = _advice((5, 45, 5)), _advice(SPAN)
+    run = Run(tmp_path / "zero")
+    lanes = run.tie.lanes(forged, SERVED.releases, 0)
+    assert 0 in [run.tie.outputs(r, ln) for r, ln in zip(run.cells[0].rows, lanes)]
+    _, delivered = run.prove(0, forged, words={u: 1 for u in range(4)})
+    kw = {"circuit_sha512": standin.circuit_sha512(delivered), "program": run.tie.program,
+          "partition": run.tie.partition}
+    findings, refused = standin.lean(delivered.proof, registered=run.tie.registered(run.cells[0].head, lanes), **kw)
+    assert refused is None and not findings[0].accepted and "port o0: table row" in findings[0].why
+
+    run = Run(tmp_path / "fresh")
+    lanes, known_tree = run.tie.lanes(advice, SERVED.releases, 0), TS.IngressTie.known_tree
+    monkeypatch.setattr(TS.IngressTie, "known_tree", lambda self, head, port, rows: G.Registered.commit(
+        (t := known_tree(self, head, port, rows)).program, t.value, t.rows, None, t.word_bits, t.schema,
+        window=t.window))
+    draw, delivered = run.prove(0, advice)
+    monkeypatch.setattr(TS.IngressTie, "known_tree", known_tree)
+    findings, refused = standin.lean(delivered.proof, registered=run.tie.registered(run.cells[0].head, lanes), **kw)
+    assert refused is None and not findings[0].accepted and "port pub: table row" in findings[0].why
+    assert run.stream.deliver(draw, delivered.sessions()) is None
+    assert not run.decide(0, draw, delivered, advice).accepted
 
 
 def test_the_advised_link_reads_the_tie_only_from_its_source_of_record(tmp_path):

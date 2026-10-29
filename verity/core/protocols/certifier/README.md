@@ -267,7 +267,8 @@ A spec-level reference for network accounting's timing channel:
 - the ingress tie through the proof system (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
   units, one a bucket row of the warden's registered ingress cells, proved as `NetworkIngressTieBucket` (one gate
   naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
-  (`warden_rows.bucket_port`), decided by the verifier of record on its own lanes from the advice and the warden's
+  (`warden_rows.bucket_port`) and its lanes and output row off values the verifier registers at known content
+  (`IngressTie.known`), decided by the verifier of record on its own lanes from the advice and the warden's
   release, and `IngressTie.tie`, which builds `advised.IoTieVerdict` on the link and the stream's registrations from
   the stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the `LinkWindows.ties` the
   advised link reads. A size class no sidecar pins has no accepted proof.
