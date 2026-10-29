@@ -48,7 +48,7 @@ STREAM, TAKEN = b"verity/pouw/h1/stream/v1", b"taken"
 _REBUILT = ("listeners", "_opener", "_recorded", "_tables", "_slot_tables", "_weights", "rounds", "draw", "served")
 
 
-class Resumed(remote.RemoteChallenger):
+class Resumed(remote.ChallengerClient):
     """A session's client past its hello, on the stream (``sock``) another process opened it on: its coin commitment is the
     one that hello was answered with."""
 
@@ -86,11 +86,11 @@ class _HostOnly(pickle.Pickler):
         return None
 
 
-def client_of(run: PH.H1Run) -> remote.RemoteChallenger:
+def client_of(run: PH.H1Run) -> remote.ChallengerClient:
     """The window's session on the auditor host's challenger: refused (ValueError) unless its coins are that session's and
     the window is open and unclosed."""
     client = getattr(run.rounds, "challenger", None)
-    if run.coin_source != PH.CHALLENGER or not isinstance(client, remote.RemoteChallenger):
+    if run.coin_source != PH.CHALLENGER or not isinstance(client, remote.ChallengerClient):
         raise ValueError(f"{run.entry}: only a window whose coins are the auditor host's session hands off")
     if run.closed or run._salt is None or run._unopened is not None or client._ended is not None:
         raise ValueError(f"{run.entry}: a window hands off once its salt is open, before its close, its session live")
@@ -168,7 +168,7 @@ def _declare(served: SV.Served, run: PH.H1Run) -> None:
             raise ValueError(f"{run.entry}: the window Program declared again is not the one its tables were registered under")
 
 
-def send_stream(client: remote.RemoteChallenger, path: str | Path) -> None:
+def send_stream(client: remote.ChallengerClient, path: str | Path) -> None:
     """Hand the session's stream to the `Holder` listening at `path`, and return once it has it."""
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as u:
         u.connect(str(path))

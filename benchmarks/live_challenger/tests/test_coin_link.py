@@ -1,5 +1,5 @@
 """The coin link on the challenger's host (`coin_link.py`) over loopback, in front of `serve.py` with a test key and its
-coins stubbed (`stub_serve.py`): the real client (`RemoteChallenger`) takes its session through the link, whose record
+coins stubbed (`stub_serve.py`): the real client (`ChallengerClient`) takes its session through the link, whose record
 exempts exactly the coins it opened and counts the commitment and the close; the tunnel goes straight to the peer's line
 of the peers file (a fake `ssh` records its argv), one that names a jump host or a proxy is refused, and a tunnel that ends
 first stops the link; and the gate's `run` starts the session's link once serve.py listens and stops it once serve.py
@@ -149,7 +149,7 @@ def test_the_gates_run_starts_the_link_once_serve_listens_and_stops_it_once_serv
 
     def client(proc, seconds):
         address = (out / "stdout.log").read_text().split()[1]
-        R.RemoteChallenger.connect(address, SECRET).close()
+        R.ChallengerClient.connect(address, SECRET).close()
         return proc.wait()
 
     end = A.run(host, session, signer=signer, pinned="c" * 40, now=lambda: T1, wait=client)

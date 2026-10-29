@@ -146,7 +146,7 @@ def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, sign
     verifier replays it against the commitment and roots it trusts from the challenger's directory and the auditor's
     ledger (`remote.trusted_session`)."""
     host = Host(tmp_path, signer)
-    client = R.RemoteChallenger.connect(host.address)
+    client = R.ChallengerClient.connect(host.address)
     coins = T.ChallengerCoins(C.LiveRecord(client, "positions", itertools.count().__next__))
     segment = coins.commit(ROOT)
     source, read = _reading(coins)
@@ -204,7 +204,7 @@ def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):
     draws = {}
 
     def serve(host: Host, served: list[str]) -> None:
-        client = R.RemoteChallenger.connect(host.address)
+        client = R.ChallengerClient.connect(host.address)
         coins = T.ChallengerCoins(C.LiveRecord(client, "positions", itertools.count().__next__))
         for name in served:
             stream, reg = register(coins, COIN_CASES.index(name), None if name == "no-window" else window["root"])

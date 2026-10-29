@@ -106,7 +106,7 @@ def serve(host, signer, session, client, tmp_path, monkeypatch) -> dict:
 
     def wait(proc, seconds):
         address = (out / "stdout.log").read_text().split()[1]
-        with R.RemoteChallenger.connect(address, SECRET) as c:
+        with R.ChallengerClient.connect(address, SECRET) as c:
             client(c)
         return proc.wait()
 

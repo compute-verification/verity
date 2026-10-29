@@ -1,6 +1,6 @@
 """The proof system's challenger on its auditor host, in this process: a `LiveChallenger` its test hands in, its session
 opened under an id with its record signed with an LMS key (`remote.open_session`), and `remote.serve` on one end of a socket
-pair, the serving side's `RemoteChallenger` on the other; the session's close is signed at the key's next leaf. The
+pair, the serving side's `ChallengerClient` on the other; the session's close is signed at the key's next leaf. The
 auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``, v2) opens the session for its window before the first coin and
 ends it once it has ended, sealing its files (the refused hellos' log, empty here, among them) and naming its record's
 leaf, its commitment and how many hellos it refused. The verifier reads `directory` under `key`, as the ledger opens and ends it.
@@ -421,7 +421,7 @@ class Host:
         self._ended = False
         self._thread = threading.Thread(target=self._serve, args=(ours, session_))
         self._thread.start()
-        self.client = R.RemoteChallenger(theirs)
+        self.client = R.ChallengerClient(theirs)
 
     def _serve(self, sock: socket.socket, session: R.Session) -> None:
         with sock:

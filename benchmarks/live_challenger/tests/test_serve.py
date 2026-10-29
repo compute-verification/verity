@@ -116,7 +116,7 @@ def close(out: Path) -> dict:
 
 
 def session(address: str, roots: int = 1) -> None:
-    with R.RemoteChallenger.connect(address) as client:
+    with R.ChallengerClient.connect(address) as client:
         record = C.LiveRecord(client, "positions", itertools.count().__next__)
         for i in range(roots):
             record.record(bytes([i]) * 64)
@@ -243,11 +243,11 @@ def test_refused_hellos_are_logged_and_the_next_connection_is_taken_until_one_is
     address = first.split()[1]
     host, port = address.split(":")
     with pytest.raises(C.CoinError, match="the session's secret"):
-        R.RemoteChallenger.connect(address)
+        R.ChallengerClient.connect(address)
     with pytest.raises(C.CoinError, match="not the session's"):
-        R.RemoteChallenger.connect(address, bytes(32))
+        R.ChallengerClient.connect(address, bytes(32))
     socket.create_connection((host, int(port))).close()
-    with R.RemoteChallenger.connect(address, secret) as client:
+    with R.ChallengerClient.connect(address, secret) as client:
         with pytest.raises(ConnectionRefusedError):
             socket.create_connection((host, int(port)))
         C.LiveRecord(client, "positions", itertools.count().__next__).record(bytes(64))
@@ -273,7 +273,7 @@ SALTED = ["--families", json.dumps([["pouw/salt", 1], ["pouw/round", 1]])]
 def test_with_a_root_a_salt_opens_only_after_it(tmp_path, after, served):
     """A salt opens only after the session's root: one that followed a root unrelated to its window's Commit is refused."""
     proc, out, first = start(tmp_path, "out", None, "--root", "ab" * 64, *SALTED)
-    with R.RemoteChallenger.connect(first.split()[1]) as client:
+    with R.ChallengerClient.connect(first.split()[1]) as client:
         record = C.LiveRecord(client, "pouw/salt", itertools.count().__next__)
         if served:
             record.record(bytes.fromhex(after * 64))
@@ -290,7 +290,7 @@ def test_with_a_root_a_salt_opens_only_after_it(tmp_path, after, served):
 
 def test_without_a_root_a_salt_opens_after_any_root(tmp_path):
     proc, out, first = start(tmp_path, "out", None, *SALTED)
-    with R.RemoteChallenger.connect(first.split()[1]) as client:
+    with R.ChallengerClient.connect(first.split()[1]) as client:
         C.LiveRecord(client, "pouw/salt", itertools.count().__next__).record(bytes(64))
     assert finish(proc)[0] == 0
 

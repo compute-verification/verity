@@ -96,9 +96,9 @@ class _Session:
         self.window: dict = CH.WINDOW
         self._thread = threading.Thread(target=self._serve, args=(ours, session))
         self._thread.start()
-        self.client = R.RemoteChallenger(theirs)
+        self.client = R.ChallengerClient(theirs)
         self.commitment, self.secrets = self.challenger.commitment.root.hex(), []
-        monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at, secret=None: self._reach(at, secret)))
+        monkeypatch.setattr(R.ChallengerClient, "connect", classmethod(lambda cls, at, secret=None: self._reach(at, secret)))
         monkeypatch.setitem(T.SESSION, "commitment", self.commitment)
 
     def open(self, session: str, root: str) -> dict:

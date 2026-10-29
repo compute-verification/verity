@@ -21,7 +21,7 @@ the coin through the prover's roots (`receipts.seed`); the openings are drawn fr
 answers the append's root, a commitment the prover has already made: committed before the session like every coin, it
 opens after that root, once.
 
-`Coins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.RemoteChallenger` on the challenger's
+`Coins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.ChallengerClient` on the challenger's
 host) and one `LiveRecord` a family, so each coin is asked for after its root and recorded with it.  What the verifier
 takes from the challenger afterwards, the commitment it signed and the roots its signed release log shows it received
 (`trusted`: `remote.trusted_session` under the auditor's ledger, whose window `{root: R}` opens exactly one session,
@@ -118,7 +118,7 @@ def coin_reason(commitment: LiveCommitment, opening: Any, label: str, index: int
 
 class Coins:
     """Session `session`'s coins over the registration whose digest is `registration`, `windows` windows drawn
-    `per_coin` a coin (`openings_coins`), through `challenger` (a `LiveChallenger` or a `remote.RemoteChallenger`),
+    `per_coin` a coin (`openings_coins`), through `challenger` (a `LiveChallenger` or a `remote.ChallengerClient`),
     committed before the session.  Each family's coins open in order, each once, after the root recorded for it
     (`LiveRecord`, on `clock`); two the session asks for one behind the other may go in one round trip (`ahead`)."""
 

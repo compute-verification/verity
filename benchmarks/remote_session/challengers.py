@@ -93,10 +93,10 @@ class Serve:
     def __init__(self, out: Path, key: Path, params: str | None = None, python: str = sys.executable) -> None:
         self.out, self.key, self.params, self.python = out, key, params, python
         self.run = secrets.token_hex(4)
-        self._live: dict[int, tuple[subprocess.Popen, Path, str, remote.RemoteChallenger]] = {}
+        self._live: dict[int, tuple[subprocess.Popen, Path, str, remote.ChallengerClient]] = {}
 
     def open(self, registration: bytes, k: int, windows: int, appends: int,
-             per_coin: int = 1) -> remote.RemoteChallenger:
+             per_coin: int = 1) -> remote.ChallengerClient:
         sid = session_id(registration, k, self.run)
         out = self.out / sid
         families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin)])
@@ -112,7 +112,7 @@ class Serve:
             proc.wait()
             raise RuntimeError(f"serve.py for {sid} did not listen (exit {proc.returncode}; {self.out / sid}.log)")
         try:
-            client = remote.RemoteChallenger.connect(line[1])
+            client = remote.ChallengerClient.connect(line[1])
         except (Ch.CoinError, OSError):
             proc.kill()
             proc.wait()
@@ -173,7 +173,7 @@ class Gate:
         self.out, self.call, self.peer, self.pin, self.period, self.minutes = out, call, peer, pin, period, minutes
         self.main, self.address, self.pause, self.polls = main, address, pause, polls
         self._key: Ch.ChallengerKey | None = None
-        self._live: dict[int, tuple[dict, remote.RemoteChallenger]] = {}
+        self._live: dict[int, tuple[dict, remote.ChallengerClient]] = {}
 
     def _ask(self, words: list[str]) -> bytes:
         rc, got = self.call(words)
@@ -194,7 +194,7 @@ class Gate:
         return self._key
 
     def open(self, registration: bytes, k: int, windows: int, appends: int,
-             per_coin: int = 1) -> remote.RemoteChallenger:
+             per_coin: int = 1) -> remote.ChallengerClient:
         self.key()
         families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin)])
         r = json.loads(self._ask(["reserve", "--peer", self.peer, "--scheme", coins.SCHEME, "--families", families,
@@ -207,7 +207,7 @@ class Gate:
         client = None
         for _ in range(self.polls):
             try:
-                client = remote.RemoteChallenger.connect(self.address(o), bytes.fromhex(o["secret"]))
+                client = remote.ChallengerClient.connect(self.address(o), bytes.fromhex(o["secret"]))
                 break
             except ConnectionRefusedError:
                 self.pause()

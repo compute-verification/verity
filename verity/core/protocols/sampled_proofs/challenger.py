@@ -1364,7 +1364,7 @@ class LiveChallenger:
 
     def open_many(self, requests: Sequence[tuple[str, int, bytes]]) -> list[LiveOpening]:
         """`open` of each (label, index, after) of `requests`, in order: the in-process twin of
-        `remote.RemoteChallenger.open_many`, so a caller asks either challenger for several coins at once."""
+        `remote.ChallengerClient.open_many`, so a caller asks either challenger for several coins at once."""
         return [self.open(label, index, after) for label, index, after in requests]
 
 

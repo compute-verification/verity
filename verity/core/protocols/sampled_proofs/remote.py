@@ -29,7 +29,7 @@ refuses a hello that doesn't carry it, so no other process that reaches the port
 `greet` reads the hello alone, so a server can refuse a bad one and take the next connection: a refused hello releases
 nothing.
 
-`RemoteChallenger` is the client's `LiveChallenger`, its `commitment`, `open(label, index, after)` and `open_many`, so
+`ChallengerClient` is the client's `LiveChallenger`, its `commitment`, `open(label, index, after)` and `open_many`, so
 `LiveRecord` (and a client's seam over it) runs on it unchanged.  `open_many` asks for several coins in one round trip:
 their frames back to back, then the replies in order, the wire and the release log as the same opens one at a time.  It
 raises `CoinError` on a refusal, a broken stream, or an opening that isn't the coin asked for opened against the
@@ -69,7 +69,7 @@ ROOT_BYTES = 64
 HEADER = struct.Struct(">II")
 MAX_HEAD = 1 << 20
 MAX_BATCH = 64
-"""The most coins `RemoteChallenger.open_many` asks for at once: its frames (about 200 bytes each) are written before
+"""The most coins `ChallengerClient.open_many` asks for at once: its frames (about 200 bytes each) are written before
 any reply is read, so they must fit the stream's send buffer while the challenger writes its replies back."""
 SEQUENCE = "a client's frames are hello, then open {label, index, after} per coin, then close"
 SESSION_ID = f"a session id is at most {Ch.MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'"
@@ -297,7 +297,7 @@ def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = time
     return reason
 
 
-class RemoteChallenger:
+class ChallengerClient:
     """The client of a challenger on its own host over the connected stream `sock`: `LiveChallenger`'s `commitment` (the
     challenger's answer to hello) and `open`.  After a refusal, a broken stream or a bad opening it refuses every coin."""
 
@@ -307,7 +307,7 @@ class RemoteChallenger:
         self.commitment = self._ask(hello, "commitment", LiveCommitment.from_json)
 
     @classmethod
-    def connect(cls, address: str, secret: bytes | None = None) -> RemoteChallenger:
+    def connect(cls, address: str, secret: bytes | None = None) -> ChallengerClient:
         """The challenger at ``HOST:PORT``, its session's `secret` in the hello when it has one (`connect_when_listening`
         waits for a session's tunnel to listen)."""
         host, sep, port = address.rpartition(":")
@@ -382,7 +382,7 @@ class RemoteChallenger:
         self._ask({"type": "close"}, "closed", lambda _: None)
         self._end("the client closed the session")
 
-    def __enter__(self) -> RemoteChallenger:
+    def __enter__(self) -> ChallengerClient:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -401,8 +401,8 @@ def connect_when_listening(address: str, secret: bytes | None, connect: Callable
                            sleep: Callable[[float], None] = time.sleep) -> Any:
     """The session's client at `address` once something listens there. A refused connection sends no hello and opens no
     coin, so it is tried again every half second for up to `wait_s`, then refused (`CoinError`); any other failure raises
-    at once.  `connect` is `RemoteChallenger.connect` by default, read at the call."""
-    connect = connect or RemoteChallenger.connect
+    at once.  `connect` is `ChallengerClient.connect` by default, read at the call."""
+    connect = connect or ChallengerClient.connect
     deadline = clock() + wait_s
     while True:
         try:
@@ -507,5 +507,5 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
 
 
 __all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
-           "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
+           "ChallengerClient", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
            "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]

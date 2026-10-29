@@ -127,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         client = None
         for _ in range(600):
             try:
-                client = remote.RemoteChallenger.connect(f"127.0.0.1:{o['port']}", bytes.fromhex(o["secret"]))
+                client = remote.ChallengerClient.connect(f"127.0.0.1:{o['port']}", bytes.fromhex(o["secret"]))
                 break
             except ConnectionRefusedError:
                 time.sleep(1)

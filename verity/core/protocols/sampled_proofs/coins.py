@@ -148,7 +148,7 @@ class OwnRandomness:
 
 class ChallengerCoins:
     """A draw's coins from one family of the auditor's challenger (`record`, the verifier's `LiveRecord` of it, on a
-    `LiveChallenger` or a `remote.RemoteChallenger`): the stream is the concatenation of the coins opened after the
+    `LiveChallenger` or a `remote.ChallengerClient`): the stream is the concatenation of the coins opened after the
     prover's commitment, in order, with no hash and no derivation, so it passes as `service.Stream`'s `coins`.
 
     `commit(after)` takes the prover's commitment (its registration's digest, or its run's root, 64 bytes) and fixes the

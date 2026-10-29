@@ -25,7 +25,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
   (`Security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
   its whole-node benchmark `benchmarks/remote_session/`, and serve-openai's `--remote-verifier`, the address of PoUB's
   verifier;
-- `RemoteChallenger` (`verity/core/protocols/sampled_proofs/remote.py`), the client of a challenger on another host;
+- `ChallengerClient` (`verity/core/protocols/sampled_proofs/remote.py`), the client of a challenger on another host;
 - `RemoteCertifier` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;
 - the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
   `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol (see the guarantee below), not a part of it;
@@ -42,7 +42,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
   (`trusted-host`); the verifier is the auditor's own check. The verifier may also draw on its own coins
   (`IO.getRandomBytes`) instead of the challenger's.
 - **How the coins reach the developer.** The challenger opens each coin only after the developer's commitment is
-  recorded, over one TCP stream that the developer's client opens at its own `127.0.0.1` port (`RemoteChallenger`).
+  recorded, over one TCP stream that the developer's client opens at its own `127.0.0.1` port (`ChallengerClient`).
   Deployed (the auditor host vy-challenger-1), that port is the far end of a coin link the auditor host opens to the
   developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network certification's
   code running on the auditor host (`benchmarks/live_challenger/coin_link.py`). No coin path of remote's own, with no
