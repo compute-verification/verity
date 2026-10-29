@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # fused_arm (the fused tables' FusedStep), wherever loaded from
-from arms import FILL_V1_SPLIT, NONE, Filler, Placement, point_lookup
+from arms import FILL_V1_SPLIT, NONE, Colocation, Filler, point_lookup
 
 SOURCES = ("benchmarks/pouw/filler/dcap.cu", "benchmarks/pouw/filler/pfill.cuh",
            "benchmarks/pouw/filler/pfill_arm.py")
@@ -50,7 +50,7 @@ class PFillRam:
     def placement(self, phase, b, l):
         if phase == "prefill":
             return NONE
-        return Placement("split", point_lookup(FILL_V1_SPLIT, b, l))
+        return Colocation("split", point_lookup(FILL_V1_SPLIT, b, l))
 
 
 @dataclass
@@ -90,8 +90,8 @@ class PFillPowerSplit(PFillRam):
 
     def placement(self, phase, b, l):
         if phase == "prefill":
-            return Placement("split", 4)
-        return Placement("split", point_lookup(POWER_SPLIT, b, l))
+            return Colocation("split", 4)
+        return Colocation("split", point_lookup(POWER_SPLIT, b, l))
 
 
 @dataclass
@@ -189,8 +189,8 @@ class PFillKPhase(PFillK):
 
     def placement(self, phase, b, l):
         if phase == "prefill":
-            return Placement("split", 4)
-        return Placement("split", self._row(b, l)[0])
+            return Colocation("split", 4)
+        return Colocation("split", self._row(b, l)[0])
 
     def phase(self, phase, b, l):
         return None if phase == "prefill" else self._row(b, l)[1]
@@ -246,8 +246,8 @@ class PFillKFused(PFillK):
 
     def placement(self, phase, b, l):
         if phase == "prefill":
-            return Placement("split", 4)
-        return Placement("split", self._row(b, l)[0])
+            return Colocation("split", 4)
+        return Colocation("split", self._row(b, l)[0])
 
     def fused(self, phase, b, l):
         return None if phase == "prefill" else self._row(b, l)[1]
