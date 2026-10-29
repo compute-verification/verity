@@ -25,7 +25,8 @@ W1.lean`) and every sm_120 SASS opcode that writes a 32-bit register (`OPCODES`)
 - hi: hi32(f(x) g(y) + h) + h' + e. The same over the reals, to within the floors' error.
 - bit: a 3-input LUT of bits at one position. At some bit, some 3x3 grid has 3 distinct rows and 3 distinct columns.
 - eq: a word of equality bits (MATCH). Two distinct rows of a bit share no 1, nor do their complements.
-- fp: FADD, FMUL, FFMA, FMNMX and the half and bf16 pairs. Monotone in one side's value at each value of the other.
+- fp: FADD, FMUL, FFMA, FMNMX and the half and bf16 pairs, one family a view (fp32, fp16, bf16). Monotone in one
+  side's value at each value of the other, and never a non-canonical NaN.
 - dot: IDP4A, IDP.2A, VABSDIFF4's sum. The mixed differences are bounded by 2^26 and of rank at most 4 over Q.
 - pick: one side's value or the other's, by a free predicate (SEL, FSEL, IMNMX, a predicated move). Right on at most
   one cell a row and one a column, since F is injective in each argument.
@@ -35,7 +36,8 @@ W1.lean`) and every sm_120 SASS opcode that writes a 32-bit register (`OPCODES`)
 **Beyond one write** (part T): the amortized routes. The add, mul, hi and dot invariants read only mixed differences, so
 they hold for F minus any functions of x alone and of y alone: they also refute Y + Z with Y one-sided and Z one
 instruction (the round's IADD3 adding Y and Z for free). For Z a LOP3, both LUT orientations are refuted exhaustively at
-8 bits, which the low byte of any width inherits. A P2R'd correction of up to 8 predicate bits in one byte is refuted by
+8 bits, which the low byte of any width inherits, for every constant half whose low byte isn't byte-degenerate; the
+halves whose low byte is are listed as open. A P2R'd correction of up to 8 predicate bits in one byte is refuted by
 the mixed differences. The ballot route (VOTE.ANY of 32 lanes' bits) and a table lookup at a summed address are
 priced, not refuted (part T's last checks).
 
@@ -61,6 +63,7 @@ M32 = (1 << 32) - 1
 TWO32 = 1 << 32
 CONSTS = sorted({xc(t) >> s & M32 for t in range(80) for s in (0, 32)})
 BAD = (0, 1 << 31, M32, (1 << 31) - 1)
+DEGENERATE_BYTES = (0x00, 0x01, 0x7F, 0x80, 0xFE, 0xFF)  # BAD's analogues on a byte, and +-1 from them
 SPAN = 1 << 20
 
 # Every SASS opcode of sm_120 that writes a general or uniform 32-bit register from data, by family. Opcodes that write
@@ -211,14 +214,15 @@ FP_VIEWS = {"fp32": (32, 8), "fp16": (16, 5), "bf16": (16, 8)}  # (bits read fro
 
 
 def fp_key(w, view):
-    """The real order of an IEEE word as an integer key (infinities at the ends), and its NaN cells, which are wildcards
-    because a NaN result is producible."""
+    """The real order of an IEEE word as an integer key (infinities at the ends), its NaN cells, and the NaN cells an FP
+    instruction can't write: arithmetic writes only the canonical NaN (all ones but the sign), and FMNMX returns its
+    non-NaN operand or the canonical NaN."""
     bits, ebits = FP_VIEWS[view]
     w = w & ((1 << bits) - 1)
     sign = w >> (bits - 1)
     mag = w & ((1 << (bits - 1)) - 1)
     nan = mag > (((1 << ebits) - 1) << (bits - 1 - ebits))
-    return np.where(sign == 1, -mag, mag), nan
+    return np.where(sign == 1, -mag, mag), nan, nan & (w != (1 << (bits - 1)) - 1)
 
 
 def _orders_clash(k, nan, axis):
@@ -243,12 +247,40 @@ def _orders_clash(k, nan, axis):
     return out
 
 
-def v_fp(v):
-    out = np.ones(len(v), bool)
-    for view in FP_VIEWS:  # FP32 on the word; the pairs' FP16 and BF16 on the low half
-        k, nan = fp_key(v, view)
-        out &= _orders_clash(k, nan, 1) & _orders_clash(k, nan, 2)
-    return out
+def fp_val(w, view):
+    """An IEEE word's real value and its ulp, in float64."""
+    if view == "fp16":
+        f = (w & 0xFFFF).astype(np.uint16).view(np.float16)
+        return f.astype(np.float64), np.abs(np.spacing(f)).astype(np.float64)
+    f = ((w & 0xFFFF) << 16 if view == "bf16" else w & M32).astype(np.uint32).view(np.float32)
+    return f.astype(np.float64), np.abs(np.spacing(f)).astype(np.float64) * (1 << 16 if view == "bf16" else 1)
+
+
+def _real_rank2(v, view):
+    """FADD, FMUL and every FFMA of one-sided operands round, once a cell, a function u v + p + q of x and y alone
+    (u, v, p, q one-sided), whose 2x2 matrix of mixed differences has rank at most 1. Configurations holding a
+    non-finite value, 0 or 1 (saturation's and flush-to-zero's outputs) are skipped."""
+    with np.errstate(all="ignore"):
+        t, ulp = fp_val(v, view)
+        skip = np.any(~np.isfinite(t) | (t == 0) | (t == 1), axis=(1, 2))
+        t = np.where(np.isfinite(t), t, 0.0)
+        d = [[t[:, i, j] - t[:, 0, j] - t[:, i, 0] + t[:, 0, 0] for j in (1, 2)] for i in (1, 2)]
+        u = np.max(np.where(np.isfinite(ulp), ulp, 0.0), axis=(1, 2))
+        mag = sum(np.abs(d[i][j]) for i in (0, 1) for j in (0, 1))
+        det = d[0][0] * d[1][1] - d[0][1] * d[1][0]
+        tol = 4 * u * mag + 32 * u * u + 2.0 ** -40 * (np.abs(d[0][0] * d[1][1]) + np.abs(d[0][1] * d[1][0]))
+        return ~skip & (np.abs(det) > tol)
+
+
+def v_fp(view):
+    """One view's FP instructions (FP32 on the word; the pairs' FP16 and BF16 on the low half). Each is monotone, up to
+    reversal, in the side that fills one slot at each value of the other, so one orientation's orders agree; its real
+    mixed differences have rank at most 1 (`_real_rank2`); and it never writes a non-canonical NaN."""
+    def inv(v):
+        k, nan, unwritable = fp_key(v, view)
+        clash = _orders_clash(k, nan, 1) & _orders_clash(k, nan, 2)
+        return clash | _real_rank2(v, view) | np.any(unwritable, axis=(1, 2))
+    return inv
 
 
 def _rank_p(m, p=2_147_483_647):
@@ -281,7 +313,7 @@ def v_pick(v):
 
 FAMILIES = {  # name: (rows, cols, invariant)
     "add": (2, 2, v_add), "mul": (3, 3, v_mul), "hi": (3, 3, v_hi), "bit": (3, 3, v_bit), "eq": (2, 3, v_eq),
-    "fp": (3, 3, v_fp), "dot": (6, 6, v_dot), "pick": (3, 3, v_pick),
+    **{f"fp/{view}": (3, 3, v_fp(view)) for view in FP_VIEWS}, "dot": (6, 6, v_dot), "pick": (3, 3, v_pick),
 }
 N_CFG = {"dot": 300}
 
@@ -375,24 +407,27 @@ def f2_bounds(rng, c, dom, n):
     a2 = sample(rng, dom, 20000).astype(np.int64)
     step = signed((((a2 + (1 << (8 * j))) & M32) ^ c) - (a2 ^ c))
     out["IDP.4A(a, k, b)"] = 1 - float(np.mean(np.abs(step) > 300)) / 2
-    # FP ops reading a: at a fixed b, monotone in a's value or its magnitude.
+    # FP ops reading a, per view: at a fixed b, monotone in a's value or its magnitude, one output for every NaN a, and
+    # never a non-canonical NaN.
     v_in = sample(rng, dom, (n, 3)).astype(np.int64)
     b = rng.integers(0, TWO32, (n, 1)).astype(np.int64)
     v_out = ((v_in ^ c) + b) & M32
-    clash = np.ones(n, bool)
+    worst = 0.0
     for view in FP_VIEWS:
-        ki, ni = fp_key(v_in, view)
-        ko, no = fp_key(v_out, view)
+        ki, ni, _ = fp_key(v_in, view)
+        ko, no, unwritable = fp_key(v_out, view)
         for key in (ki, np.abs(ki)):
             same = np.zeros(n, bool)
             opp = np.zeros(n, bool)
+            split = np.any(unwritable, axis=1)
             for p, q in itertools.combinations(range(3), 2):
                 s = np.sign(key[:, q] - key[:, p]) * np.sign(ko[:, q] - ko[:, p])
                 ok = ~(ni[:, p] | ni[:, q] | no[:, p] | no[:, q])
                 same |= (s == 1) & ok
                 opp |= (s == -1) & ok
-            clash &= same & opp
-    out["FP ops reading a (FADD, FMUL, FFMA, FMNMX, the pairs)"] = 1 - float(np.mean(clash)) / 3
+                split |= ni[:, p] & ni[:, q] & (v_out[:, p] != v_out[:, q])
+            worst = max(worst, 1 - float(np.mean((same & opp) | split)) / 3)
+    out["FP ops reading a (FADD, FMUL, FFMA, FMNMX, the pairs)"] = worst
     return out
 
 
@@ -498,7 +533,7 @@ def main() -> int:
                  lat, f"pick <= {worst_pick:.2g} at a 2^20 span; PRMT <= {prmt_byte_bound():.4f}")
     fams_named = set(OPCODES)
     checks.check("coverage: every family in the opcode table has an invariant (pick, shift and PRMT by count)",
-                 fams_named <= set(FAMILIES) | {"shift"}, sorted(fams_named))
+                 fams_named <= {f.split("/")[0] for f in FAMILIES} | {"shift"}, sorted(fams_named))
 
     # positive controls: the four bad constants are single additions, and the add invariant must not refute them.
     ctl = []
@@ -515,6 +550,15 @@ def main() -> int:
     checks.check("controls: the honest first write, w = x + y, satisfies the add invariant everywhere",
                  float(np.mean(v_add(v))) == 0.0)
 
+    def ffma(x, y, c, k):
+        u = (x % 1000).astype(np.float32) * np.float32(1.7) + np.float32(0.3)
+        w = (y % 977).astype(np.float32) * np.float32(-2.1) + np.float32(5.5)
+        return (u * w * np.float32(k) + np.float32(3.25) * u - w).view(np.uint32).astype(np.uint64)
+    ctl_fp = [float(np.mean(v_fp("fp32")(grid(rng, "full", 2000, 3, 3, lambda x, y, c: ffma(x, y, c, k), 0))))
+              for k in (0, 1)]
+    checks.check("controls: an FP32 add and an FFMA of one-sided values satisfy the fp32 invariant everywhere",
+                 max(ctl_fp) == 0.0, str(ctl_fp))
+
     # part T: amortized routes.
     p2r = []
     for dom in ("full", "span"):
@@ -524,10 +568,14 @@ def main() -> int:
                  "predicate bits and two carry-ins: refuted for every constant, wrong on at least the fraction shown",
                  min(p2r) > 0, f"min {min(p2r):.3g}")
     lows = sorted({c & 0xFF for c in CONSTS})
-    lops = [lop3_plus_one_sided(f1, c) for c in lows]
-    checks.check(f"T: F1 as Y + Z with Z a LOP3 (any LUT, either orientation) and Y one-sided: no solution at 8 bits "
-                 f"for any of the {len(lows)} distinct low bytes of the constants, so none at any width",
-                 not any(a or b for a, b in lops), f"{sum(a or b for a, b in lops)} of {len(lops)} admit one")
+    admit = {c for c in lows if any(lop3_plus_one_sided(f1, c))}
+    open_halves = [(t, s // 32, f"{xc(t) >> s & M32:#010x}") for t in range(80) for s in (0, 32)
+                   if xc(t) >> s & 0xFF in admit]
+    checks.check("T: F1 as Y + Z with Z a LOP3 (any LUT, either orientation) and Y one-sided: no solution at 8 bits, so "
+                 "none at any width, for every constant half whose low byte isn't byte-degenerate (0x00, 0x01, 0x7f, "
+                 "0x80, 0xfe, 0xff); the halves (position, half) whose low byte is one aren't refuted at 8 bits",
+                 admit <= set(DEGENERATE_BYTES),
+                 f"{len(lows) - len(admit)} of {len(lows)} low bytes refuted; open: {open_halves}")
     ctl_l = [lop3_plus_one_sided(f1, c) for c in (0, 0x80, 0xFF)]
     checks.check("T controls: at c in {0, 0x80, 0xFF} (an add) the search finds Y + LOP3 (Y = x, Z = y or ~y)",
                  all(a or b for a, b in ctl_l), str(ctl_l))
@@ -540,9 +588,9 @@ def main() -> int:
     if checks.mutations:
         with checks.mutant("the constants include 2^31 (XOR as an add)"):
             checks.check("constants avoid the bad values", not (set(CONSTS) | {1 << 31}) & set(BAD))
-        with checks.mutant("the add invariant with carry-ins of up to 2^20"):
+        with checks.mutant("the add invariant with unbounded carry-ins"):
             v = grid(rng, "span", 2000, 2, 2, f1, CONSTS[0])
-            checks.check("add refutes", float(np.mean(np.abs(signed(mixed(v, 1, 1))) > 1 << 22)) > 0)
+            checks.check("add refutes", float(np.mean(np.abs(signed(mixed(v, 1, 1))) > 1 << 31)) > 0)
         with checks.mutant("the target is the honest add, w = x + y"):
             v = grid(rng, "full", 2000, 2, 2, lambda x, y, c: (x + y) & M32, 0)
             checks.check("add refutes", float(np.mean(v_add(v))) > 0)
