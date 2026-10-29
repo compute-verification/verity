@@ -6,10 +6,11 @@
 #       builds each SRC for sm_90a, gates every probe's SASS (probe.py gate) and writes $OUT/bins.tgz, $OUT/sass/,
 #       gate-build.txt and gate-build.json. A source that fails to build is named and skipped; the rest still build.
 #   research run --on vy-dc-h200 --project verity --campaign pouw --source <tree> --cwd source --send bins.tgz \
-#     --env GPU_LEASE_WHO=rt-h200-emp -- bash benchmarks/pouw/dc/emp.sh time [REPS]
+#     --gpu-host --env GPU_LEASE_WHO=rt-h200-emp -- bash benchmarks/pouw/dc/emp.sh time [REPS]
 #       unpacks the build's bins.tgz (from $RESEARCH_RUN_DIR/inputs/), records the clocks (A1: nvidia-smi -q -d CLOCK
 #       before and after, clocks sampled every 200 ms under the lease) and runs probe.py run on every binary (gate, the
-#       poisoned sink and its control, then the interleaved timing) into $OUT/<binary>/.
+#       poisoned sink and its control, then the interleaved timing) into $OUT/<binary>/. With EMP_ONLY=REGEX it times
+#       only the probes whose name matches (probe.py run --only).
 # Exit: 0 done, 1 nothing built or a gate verdict not the declared one, 2 no nvcc or no inputs.
 set -uo pipefail
 MODE=${1:?usage: emp.sh build SRC... | time [REPS]}
@@ -70,7 +71,8 @@ time)
   rc=0
   for b in "$WORK"/*; do
     [ -x "$b" ] || continue
-    python3 "$PROBE" run "$b" --out "$OUT/$(basename "$b")" --reps "$REPS" || { echo "emp.sh: probe.py run $(basename "$b") failed" >&2; rc=1; }
+    python3 "$PROBE" run "$b" --out "$OUT/$(basename "$b")" --reps "$REPS" ${EMP_ONLY:+--only "$EMP_ONLY"} \
+      || { echo "emp.sh: probe.py run $(basename "$b") failed" >&2; rc=1; }
   done
   nvidia-smi "${dev[@]}" -q -d CLOCK,PERFORMANCE,POWER >"$OUT/env/clocks-after.txt" 2>&1
   exit $rc
