@@ -106,7 +106,8 @@ def series(r: dict) -> dict:
          "n_steps": c["n_steps"], "flops_per_step": c["flops_per_token"] * tokens_per_step, "tokens_per_step": tokens_per_step,
          "seconds_per_step": res["seconds_per_step"], "bits": c["bits_per_value"], "total": counts["total"],
          "trained": counts["trained_per_window"] if args["family"] == "lowrank" else counts["total"],
-         "window": args["window"], "replicas": args["replicas"], "sync": args["sync"] if args["family"] == "localsgd" else 1}
+         "window": args["window"], "replicas": args["replicas"], "sync": args["sync"] if args["family"] == "localsgd" else 1,
+         "tpp": args["tokens_per_param"]}
     if args["family"] == "lowrank":
         s |= {"shapes": matrix_shapes(SIZES[args["size"]], c["vocab"]), "rank": args["rank"], "norms": counts["norms"]}
     return s
@@ -161,14 +162,17 @@ def flops_from_fit(f: dict, target: float) -> float | None:
     return (f["A"] / (target - f["E"])) ** (1 / f["b"]) if target > f["E"] and f["b"] > 0 else None
 
 
-def targets(dense: dict, configs: dict[str, dict]) -> list[float]:
-    worst_final = max(float(s["loss"].min()) for s in configs.values()) + 1e-6
+def targets(dense: dict, configs: dict[str, dict]) -> tuple[list[float], list[str]]:
+    """The loss targets, and the configurations left out of choosing them: those never below the comparison's lowest
+    first-checkpoint loss, where no curve's crossing could be interpolated."""
     first = min(float(s["loss"][0]) for s in configs.values())
+    out = [lab for lab, s in configs.items() if float(s["loss"].min()) >= first - 1e-3]
+    worst_final = max(float(s["loss"].min()) for lab, s in configs.items() if lab not in out) + 1e-6
     quarter = float(np.interp(QUARTER * dense["n_steps"], dense["step"], np.minimum.accumulate(dense["loss"])))
     hi = min(quarter, first - 1e-3)
     if hi <= worst_final + 1e-3:
         hi = (first + worst_final) / 2
-    return [hi, (hi + worst_final) / 2, worst_final]
+    return [hi, (hi + worst_final) / 2, worst_final], out
 
 
 def ratio(a: float | None, b: float | None) -> float | None:
@@ -194,28 +198,35 @@ def compare(fam: dict, dense: dict, fam_fit: dict, dense_fit: dict, target: floa
             "omega": omega, "omega_dense": omega_dense, "alpha": omega_dense / omega}
     if group == "lowrank":
         row |= {"stock": stock(fam, sf), "alpha_stock": stock(dense, sd) / stock(fam, sf)}
-    if envelope:
-        reach = [(st, e) for e in envelope if (st := step_at(e, target)) is not None]
-        best_step, best = min([(sd, dense), *reach], key=lambda p: p[0] * p[1]["flops_per_step"])
-        row |= {"dense_envelope_flops": best_step * best["flops_per_step"],
-                "kappa_flops_envelope": sf * fam["flops_per_step"] / (best_step * best["flops_per_step"]),
-                "alpha_envelope": best_step * per_step(best, group, fam) / omega}
-    return row
+    return row | at_envelope(fam, sf, dense, sd, target, group, envelope)
 
 
-def own_final(fam: dict, dense: dict, group: str) -> dict:
+def at_envelope(fam: dict, sf: float, dense: dict, sd: float, target: float, group: str, envelope: list[dict]) -> dict:
+    """kappa and alpha against dense's envelope: the dense run (main or shorter-horizon) that reaches `target` at the least FLOPs."""
+    if not envelope:
+        return {}
+    reach = [(st, e) for e in envelope if (st := step_at(e, target)) is not None]
+    best_step, best = min([(sd, dense), *reach], key=lambda p: p[0] * p[1]["flops_per_step"])
+    return {"dense_envelope_flops": best_step * best["flops_per_step"], "dense_envelope_tokens_per_param": best["tpp"],
+            "kappa_flops_envelope": sf * fam["flops_per_step"] / (best_step * best["flops_per_step"]),
+            "alpha_envelope": best_step * per_step(best, group, fam) / (sf * per_step(fam, group, fam))}
+
+
+def own_final(fam: dict, dense: dict, group: str, envelope: list[dict]) -> dict:
     """kappa and alpha at the family's final loss; where dense never gets that low, at dense's final loss instead."""
     target, at = float(fam["loss"].min()), "family's final loss"
     if step_at(dense, target) is None:
         target, at = float(dense["loss"].min()), "dense's final loss"
-    sd, sf = step_at(dense, target + 1e-9), step_at(fam, target + 1e-9)
+    target += 1e-9
+    sd, sf = step_at(dense, target), step_at(fam, target)
     if sd is None or sf is None:
         return {"target": target, "at": at, "reached": False}
     return {"target": target, "at": at, "reached": True,
             "kappa_flops": sf * fam["flops_per_step"] / (sd * dense["flops_per_step"]), "kappa_tokens": sf / sd,
             "kappa_time": ratio(seconds(fam, sf), seconds(dense, sd)),
             "alpha": sd * per_step(dense, group, fam) / (sf * per_step(fam, group, fam)),
-            "alpha_stock": stock(dense, sd) / stock(fam, sf) if group == "lowrank" else None}
+            "alpha_stock": stock(dense, sd) / stock(fam, sf) if group == "lowrank" else None,
+            **at_envelope(fam, sf, dense, sd, target, group, envelope)}
 
 
 def plot(out: Path, size: str, group: str, curves: dict[str, dict], tgts: list[float]) -> str:
@@ -270,11 +281,12 @@ def main(argv: list[str] | None = None) -> int:
             members = {"dense": ser["dense"]} | {lab: ser[lab] for lab, r in labels.items() if "@" not in lab and member(r)}
             if len(members) < 2:
                 continue
-            tgts = targets(ser["dense"], members)
+            tgts, out_of_targets = targets(ser["dense"], members)
             rows = {lab: [compare(s, ser["dense"], fits[lab], fits["dense"], t, group, envelope) for t in tgts]
                     for lab, s in members.items() if lab != "dense"}
-            finals = {lab: own_final(s, ser["dense"], group) for lab, s in members.items() if lab != "dense"}
-            report["comparisons"].setdefault(size, {})[group] = {"targets": tgts, "rows": rows, "own_final": finals}
+            finals = {lab: own_final(s, ser["dense"], group, envelope) for lab, s in members.items() if lab != "dense"}
+            report["comparisons"].setdefault(size, {})[group] = {"targets": tgts, "never_below_first_checkpoint": out_of_targets,
+                                                                 "rows": rows, "own_final": finals}
             report["plots"].append(plot(a.out, size, group, members, tgts))
     (a.out / "analysis.json").write_text(json.dumps(report, indent=1) + "\n")
     (a.out / "tables.md").write_text(tables(report))
@@ -295,7 +307,10 @@ def tables(report: dict) -> str:
             out.append(f"| {size} | {lab} | {cells} |")
     for size, groups in sorted(report["comparisons"].items()):
         for group, comp in groups.items():
+            never = comp["never_below_first_checkpoint"]
             out += ["", f"## Size {size}, {group}: targets " + ", ".join(f"{t:.4f}" for t in comp["targets"]), "",
+                    *([f"Never below the comparison's first checkpoint, so left out of the targets: {', '.join(never)}.", ""]
+                      if never else []),
                     "| config | best lr | target | kappa FLOPs | kappa tokens | kappa time | kappa FLOPs (fit) | kappa FLOPs (envelope) |"
                     " alpha | alpha (envelope) | alpha (stock) |", "|---|---|---|---|---|---|---|---|---|---|---|"]
             for lab, rows in comp["rows"].items():
@@ -304,11 +319,12 @@ def tables(report: dict) -> str:
                     out.append(f"| {lab} | {lr:g} | {r['target']:.4f} | " + " | ".join(
                         fmt(r.get(k)) for k in ("kappa_flops", "kappa_tokens", "kappa_time", "kappa_flops_fit",
                                                 "kappa_flops_envelope", "alpha", "alpha_envelope", "alpha_stock")) + " |")
-            out += ["", "| config | at | loss | kappa FLOPs | kappa tokens | kappa time | alpha | alpha (stock) |",
-                    "|---|---|---|---|---|---|---|---|"]
+            out += ["", "| config | at | loss | kappa FLOPs | kappa tokens | kappa time | kappa FLOPs (envelope) | alpha |"
+                    " alpha (envelope) | alpha (stock) |", "|---|---|---|---|---|---|---|---|---|---|"]
             for lab, f in comp["own_final"].items():
                 out.append(f"| {lab} | {f['at']} | {f['target']:.4f} | " + " | ".join(
-                    fmt(f.get(k)) for k in ("kappa_flops", "kappa_tokens", "kappa_time", "alpha", "alpha_stock")) + " |")
+                    fmt(f.get(k)) for k in ("kappa_flops", "kappa_tokens", "kappa_time", "kappa_flops_envelope", "alpha",
+                                            "alpha_envelope", "alpha_stock")) + " |")
     sizes = sorted(report["comparisons"], key=lambda s: report["non_embedding"][s])
     out += ["", "## Across sizes: kappa (FLOPs) / alpha at each target rule (low rank: then alpha on the stock)", "",
             "| group | config | target | " + " | ".join(sizes) + " |", "|---|---|---|" + "---|" * len(sizes)]
