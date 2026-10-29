@@ -806,7 +806,7 @@ def test_hopper_gemm_v2_is_registered_and_dispatches_on_the_dot_static():
     for bad in ({}, {"DOT": "k16"}, {"DOT": '{"fn":"Hopper; drop"}'}, {"DOT": 12}):
         with pytest.raises(EV._Unresolved, match="does not name a registered primitive"):
             RK.gemm_dot_prim(bad)
-    # the spec text of a real Hopper row parses to the same statics the Build wrote (codec._spec_id form)
+    # the spec text of a real Hopper row parses to the same statics the Build wrote (codec.descriptor_id form)
     st = RM.spec_statics('Gemm_v2{K=2048,N=6144,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}')
     assert st == {"K": 2048, "N": 6144, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'} and RK.gemm_dot_prim(st) == "HopperBF16WgmmaDot16_v1"
     assert set(D.TC_DOT16_BY_PRIM) == {"AmpereBF16TcDot16_v2", "HopperBF16WgmmaDot16_v1"}

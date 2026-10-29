@@ -10,7 +10,7 @@ Arms:
             2^521 - 1, 2^256 - 189 or 2^512 - 569, k rounds, k = 0 its plain payloads)
   tensor    the same with the tensor-core codec's fused GEMM (`wt.cu`, ``--tensor-lib``: Sloth over its field, decoder warps
             decoding in shared memory ahead of one MMA warp, k >= 1 rounds)
-  pstack    the remote bandwidth audit's own kernels in their plain forms (`stack.py`): wt.cu's GEMM over plain fragments,
+  pstack    PoUB's own kernels in their plain forms (`stack.py`): wt.cu's GEMM over plain fragments,
             the BF16 lm_head as it is, paged.cu's attention and KV append over vLLM's own cache; stack's denominator
   stack     the same kernels over codec words only (`stack.py`, ``--wt-lib`` a WT_RECEIPT build at a full-slot field,
             ``--reader-lib``, ``--paged-lib``): every linear's fused decode + GEMM + sketch-sha512 receipts and each decode
@@ -619,14 +619,14 @@ def main() -> None:
     binder = None
     if args.store:
         from verity_vllm.protocols.remote_bandwidth.binder import Binder, Every
-        from verity_vllm.protocols.remote_bandwidth.registry import Store
+        from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
         window = {}
         if args.store_window:
             from verity.core.protocols.remote_bandwidth.audit import NoiseTiles
             sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
             window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
                       "tiles": NoiseTiles()}
-        binder = Binder(Store(), weights=lambda r: store_weights(r, install, args), **window).install()
+        binder = Binder(NodeMemory(), weights=lambda r: store_weights(r, install, args), **window).install()
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
     if not args.compiled:

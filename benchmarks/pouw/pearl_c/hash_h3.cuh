@@ -5,7 +5,8 @@
 // hm96-sha512 leaves (`audit.Hm96Domain`, `verity.ml.commitments.hm96.SHA512`) salted by ChaCha20 (`audit.hm96_salt`).
 // Every SHA-512 word is big-endian; buffers hold bytes, loaded as little-endian u32 (`rs_be64`).  A frame message's integers
 // have minimal big-endian lengths, so each thread assembles it in its own slice of shared memory (`SMsg`), never in a local
-// array.  SHA-512's compression is sha512.cuh's.  pearl_c_sm120.cu includes it; hash_host.cpp builds it for the host tests.
+// array.  SHA-512's compression is sha512.cuh's; the frame messages and the hm96 leaf are verity/ml/kernels/row_commit.cuh's
+// over it.  pearl_c_sm120.cu includes it; hash_host.cpp builds it for the host tests.
 #pragma once
 #include <cstdint>
 
@@ -14,6 +15,13 @@ struct Args { uint64_t p[16]; int32_t i[16]; };
 #define DEV __device__ __forceinline__
 
 #include "sha512.cuh"
+#include "../../../verity/ml/kernels/row_commit.cuh"
+
+// Pearl-C's compression (rs_compress) as the row commitment's policy
+struct PcSha {
+  static RC_HD void compress(uint64_t* st, uint64_t* w) { sx::compress<0, 0>(st, w); }
+  static RC_HD void compress_kw(uint64_t* st, const uint64_t* kw) { sx::compress_kw<0, 0>(st, kw); }
+};
 
 DEV void load_key(uint64_t p, uint32_t* k) {   // 32 bytes at device address p as 8 words
 #pragma unroll
@@ -298,59 +306,33 @@ extern "C" __global__ void __launch_bounds__(32, 1) s512_tile_leaves(const Args 
 }
 
 // ---------------------------------------------------------------- frame-v3-sha512 messages, a thread's own in shared memory
-// FRAME ‖ u32be len(tag) ‖ tag ‖ (u64be len(part) ‖ part)*: `merkle._message`.  Byte n of a thread's message is byte n % 4 of
-// word (n / 4) · stride of its slice, so a warp's threads writing their n-th bytes hit 32 banks.
+// The row commitment's sink (rc::put_*): byte n of a thread's message is byte n % 4 of word (n / 4) · stride of its slice, so
+// a warp's threads writing their n-th bytes hit 32 banks.
 constexpr int SMSG_WORDS = 96;   // 384 bytes: a node's message (at most 282 bytes) and its padding
-__constant__ uint8_t FRAME_V3[33] = {'v', 'e', 'r', 'i', 't', 'o', 'r', '/', 'p', 'r', 'o', 't', 'o', 'c', 'o', 'l', '/',
-                                     'm', 'e', 'r', 'k', 'l', 'e', '/', 'f', 'r', 'a', 'm', 'e', '/', 'v', '3', 0};
 __constant__ uint8_t HM96_SCHEMA[22] = {'h', 'm', '9', '6', '-', 's', 'h', 'a', '5', '1', '2', '/', 'r', 'o', 'w', '-', 's', 'e',
                                         'g', '/', 'v', '1'};
 struct SMsg {
   uint32_t* w;
   int stride, n;
-};
-DEV void sm_byte(SMsg& m, uint32_t v) {
-  uint32_t& x = m.w[(m.n >> 2) * m.stride];
-  const int s = 8 * (m.n & 3);
-  x = (s ? x & ~(0xFFu << s) : 0u) | (v & 0xFF) << s;
-  m.n++;
-}
-DEV void sm_be(SMsg& m, uint64_t v, int bytes) {
-  for (int i = bytes - 1; i >= 0; i--) sm_byte(m, (uint32_t)(v >> (8 * i)));
-}
-DEV void sm_uint(SMsg& m, uint64_t v) {   // a part: `merkle._uint`, minimal big-endian, at least one byte
-  const int bytes = v ? (71 - __clzll((long long)v)) / 8 : 1;
-  sm_be(m, (uint64_t)bytes, 8);
-  sm_be(m, v, bytes);
-}
-DEV void sm_mem64(SMsg& m, uint64_t p) {   // a part: the 64 bytes at device address p
-  sm_be(m, 64, 8);
-  const uint32_t* q = reinterpret_cast<const uint32_t*>(p);
-  for (int i = 0; i < 16; i++) {
-    const uint32_t x = q[i];
-    for (int j = 0; j < 4; j++) sm_byte(m, x >> (8 * j));
+  RC_HD void put(uint32_t v) {
+    uint32_t& x = w[(n >> 2) * stride];
+    const int s = 8 * (n & 3);
+    x = (s ? x & ~(0xFFu << s) : 0u) | (v & 0xFF) << s;
+    n++;
   }
+  RC_HD uint64_t word(int i) const { return sx::be64(w[2 * i * stride], w[(2 * i + 1) * stride]); }
+};
+DEV void sm_mem64(SMsg& m, uint64_t p) {   // a part: the 64 bytes at device address p
+  rc::put_words(m, reinterpret_cast<const uint32_t*>(p), 16);
 }
-DEV void sm_frame(SMsg& m, const char* tag, int len, uint64_t dom) {   // FRAME ‖ the tag ‖ the domain id's part
-  for (int i = 0; i < 33; i++) sm_byte(m, FRAME_V3[i]);
-  sm_be(m, (uint64_t)len, 4);
-  for (int i = 0; i < len; i++) sm_byte(m, (uint32_t)(uint8_t)tag[i]);
+DEV void sm_frame(SMsg& m, const char* tag, uint64_t dom) {   // the tag, then the domain id's part
+  rc::put_tag(m, tag);
   sm_mem64(m, dom);
 }
 // SHA-512 of the message, into p (64 bytes)
 DEV void sm_hash(SMsg& m, uint64_t p) {
-  const int total = m.n;
-  sm_byte(m, 0x80);
-  while ((m.n & 127) != 112) sm_byte(m, 0);
-  sm_be(m, 0, 8);
-  sm_be(m, 8ull * total, 8);
-  uint64_t st[8], w[16];
-  rs_iv(st);
-  for (int b = 0; b < m.n / 128; b++) {
-#pragma unroll
-    for (int i = 0; i < 16; i++) w[i] = rs_be64(m.w[(32 * b + 2 * i) * m.stride], m.w[(32 * b + 2 * i + 1) * m.stride]);
-    rs_compress(st, w);
-  }
+  uint64_t st[8];
+  rc::digest<PcSha>(m, st);
   s512_store(p, st, 8);
 }
 #define SMSG(T)                                       \
@@ -362,17 +344,17 @@ extern "C" __global__ void __launch_bounds__(64) s512_pads(const Args a) {
   SMSG(64);
   const uint64_t rank = (uint64_t)a.i[0] + (size_t)blockIdx.x * blockDim.x + threadIdx.x;
   if (rank >= (uint64_t)a.i[1]) return;
-  sm_frame(m, "pad", 3, a.p[1]);
-  sm_uint(m, rank);
+  sm_frame(m, "pad", a.p[1]);
+  rc::put_uint(m, rank);
   sm_hash(m, a.p[0] + 64 * rank);
 }
 
 // node i of level i0 + 1 from nodes 2i and 2i + 1 of level i0, `CommitmentDomain.node`
 DEV void s512_node(SMsg& m, uint64_t dom, int level, uint64_t i, uint64_t below, uint64_t above) {
   m.n = 0;
-  sm_frame(m, "node", 4, dom);
-  sm_uint(m, (uint64_t)level);
-  sm_uint(m, i);
+  sm_frame(m, "node", dom);
+  rc::put_uint(m, (uint64_t)level);
+  rc::put_uint(m, i);
   sm_mem64(m, below + 128 * i);
   sm_mem64(m, below + 128 * i + 64);
   sm_hash(m, above + 64 * i);
@@ -439,46 +421,19 @@ extern "C" __global__ void __launch_bounds__(64) hm_leaves(const Args a) {
                                 : (uint64_t)(uint32_t)a.i[1] | (uint64_t)(uint32_t)a.i[2] << 32;
   const uint64_t* mid = reinterpret_cast<const uint64_t*>(a.p[3]);
   const uint64_t* tables = reinterpret_cast<const uint64_t*>(a.p[3] + 128);
-  uint32_t key[8], y[48];
+  uint32_t key[8], y[48], mk[16];
   load_key(a.p[2], key);
 #pragma unroll
   for (int j = 0; j < 3; j++) chacha20_block(key, 3 * i + j, nonce, y + 16 * j);
-  uint64_t mk[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  rc::mask_positions(rc::PosTab<false>{reinterpret_cast<const uint8_t*>(tables)}, y, mk);
+  const uint32_t* x = reinterpret_cast<const uint32_t*>(a.p[0] + 64 * i);
+  uint64_t B[16], h[8];
+  rc::mask_words(mk, B);
 #pragma unroll
-  for (int q = 0; q < 48; q++) {
-#pragma unroll
-    for (int r = 0; r < 4; r++) {
-      const uint4* e = reinterpret_cast<const uint4*>(tables + ((size_t)(4 * q + r) * 256 + ((y[q] >> (8 * r)) & 0xFF)) * 8);
-#pragma unroll
-      for (int k = 0; k < 4; k++) {
-        const uint4 v = e[k];
-        mk[2 * k] ^= (uint64_t)v.y << 32 | v.x;
-        mk[2 * k + 1] ^= (uint64_t)v.w << 32 | v.z;
-      }
-    }
-  }
-  const uint64_t* x = reinterpret_cast<const uint64_t*>(a.p[0] + 64 * i);   // the digest's bytes as the mask's limbs
-  uint64_t b[8];
-#pragma unroll
-  for (int k = 0; k < 8; k++) b[k] = x[k] ^ mk[k];
-  uint64_t st[8], lt[8], w[16];
-#pragma unroll
-  for (int j = 0; j < 8; j++) st[j] = mid[j];
-#pragma unroll
-  for (int j = 0; j < 16; j++) w[j] = rs_be64(y[2 * j], y[2 * j + 1]);
-  rs_compress(st, w);
-#pragma unroll
-  for (int j = 0; j < 16; j++) w[j] = j < 8 ? rs_be64(y[32 + 2 * j], y[33 + 2 * j]) : 0;
-  w[8] = 0x8000000000000000ull;
-  w[15] = 8 * (128 + 192);
-  rs_compress(st, w);   // st: c
-#pragma unroll
-  for (int j = 0; j < 8; j++) lt[j] = mid[8 + j];
-#pragma unroll
-  for (int k = 0; k < 8; k++) { w[k] = rs_bswap64(b[k]); w[8 + k] = st[k]; }
-  rs_compress(lt, w);
-  rs_pad(lt, 256);
-  s512_store(a.p[1] + 64 * i, lt, 8);
+  for (int k = 0; k < 8; k++) B[k] ^= rs_be64(x[2 * k], x[2 * k + 1]);   // b = x ⊕ M·y
+  rc::salt_digest<PcSha>(mid, rc::SaltU32{y, 1}, B + 8);
+  rc::hm96_value<PcSha>(mid + 8, sx::kw_pad256(), B, h);
+  s512_store(a.p[1] + 64 * i, h, 8);
 }
 
 // level 0 of an `audit.HM96` tree from hm_leaves' hl, in place: leaf i < i1 the frame leaf over hl_i (schema
@@ -487,11 +442,10 @@ extern "C" __global__ void __launch_bounds__(64) s512_frame_leaves(const Args a)
   SMSG(64);
   const uint64_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= (uint64_t)a.i[1]) return;
-  sm_frame(m, "leaf", 4, a.p[1]);
-  sm_uint(m, i);
-  sm_uint(m, i);
-  sm_be(m, 22, 8);
-  for (int j = 0; j < 22; j++) sm_byte(m, HM96_SCHEMA[j]);
+  sm_frame(m, "leaf", a.p[1]);
+  rc::put_uint(m, i);
+  rc::put_uint(m, i);
+  rc::put_part(m, HM96_SCHEMA, 22);
   sm_mem64(m, a.p[0] + 64 * i);
   sm_hash(m, a.p[0] + 64 * i);
 }
