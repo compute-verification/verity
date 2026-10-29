@@ -98,9 +98,12 @@ __global__ void __launch_bounds__(TPB) probe_k(int iters, const u32* __restrict_
         } else if (k % 3 == 1) {
           asm volatile("mad.lo.s32 %0, %1, 1, %2;" : "=r"(w) : "r"(base[k]), "r"(noise));  // IMAD pipe
         } else {
+          // FADD pipe. The operands are masked to finite normals in [1,2) so the sum is bit-reproducible on host and
+          // device; a real adversary's words above 2^24 are not exact in f32 (a reported caveat), but the rate is the point.
+          u32 bb = (base[k] & 0x007fffffu) | 0x3f800000u, nn = (noise & 0x007fffffu) | 0x3f800000u;
           float f;
-          asm volatile("add.f32 %0, %1, %2;" : "=f"(f) : "f"(__int_as_float(base[k])), "f"(__int_as_float(noise)));
-          w = __float_as_int(f);  // FADD pipe; exact only while the operands' float sum is, a reported caveat
+          asm volatile("add.f32 %0, %1, %2;" : "=f"(f) : "f"(__int_as_float(bb)), "f"(__int_as_float(nn)));
+          w = __float_as_int(f);
         }
         acc ^= w;
       }
@@ -178,7 +181,11 @@ static u32 ref_sink(int m, int t, int iters, const std::vector<u32>& hbase) {
       } else if (m == ADVMIX) {
         if (k % 3 == 0) w = base[k] + noise;
         else if (k % 3 == 1) w = base[k] * 1u + noise;
-        else { float f = __int_as_float(base[k]) + __int_as_float(noise); w = __float_as_int(f); }
+        else {
+          u32 bb = (base[k] & 0x007fffffu) | 0x3f800000u, nn = (noise & 0x007fffffu) | 0x3f800000u;
+          float fb, fn; std::memcpy(&fb, &bb, 4); std::memcpy(&fn, &nn, 4);
+          float f = fb + fn; std::memcpy(&w, &f, 4);
+        }
       } else if (m == WIDEMUL) {
         u64 d = (u64)base[k] * (u64)(noise); w = (u32)d ^ (u32)(d >> 32);
       } else {  // CARRY
