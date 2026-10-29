@@ -9,7 +9,12 @@ NEW=$PWD; ID=${RESEARCH_RUN_ID:-local}
 B=$(mktemp -d "$(dirname "$NEW")/ab-base.XXXXXX")
 trap 'git -C "$NEW" worktree remove --force "$B/tree" 2>/dev/null; rm -rf "$B"' EXIT
 git -C "$NEW" worktree add -q --detach "$B/tree" "${BASE:?BASE is the commit without the change}" || exit 2
-{ echo "new $(git -C "$NEW" rev-parse HEAD) base $(git -C "$B/tree" rev-parse HEAD)"; df -h "${UTIL_ROOT:-/workspace/research/vllm-util80}"; free -g; } > "$OUT0/ab_env.txt" 2>&1
+disk() {
+  echo "$(date -u +%H:%M:%SZ) $1: vm.dirty ratio $(cat /proc/sys/vm/dirty_ratio) background $(cat /proc/sys/vm/dirty_background_ratio)" \
+    "bytes $(cat /proc/sys/vm/dirty_bytes) $(grep -E '^(Dirty|Writeback):' /proc/meminfo | tr -s ' \n' ' ')"
+  df -h "${UTIL_ROOT:-/workspace/research/vllm-util80}" | tail -1; free -g | sed -n 2p
+}
+{ echo "new $(git -C "$NEW" rev-parse HEAD) base $(git -C "$B/tree" rev-parse HEAD)"; disk start; } > "$OUT0/ab_env.txt" 2>&1
 for arm in ${ARMS:-base new noprover newspy}; do
   tree=$NEW
   case $arm in
@@ -21,4 +26,5 @@ for arm in ${ARMS:-base new noprover newspy}; do
   esac
   (cd "$tree" && env "$@" OUT="$OUT0/$arm" TREE="$tree" RESEARCH_RUN_ID="$ID-$arm" bash "$tree/benchmarks/one_stage/served_util.sh")
   echo "$(date -u +%H:%M:%SZ) $arm rc=$?" | tee -a "$OUT0/ab.txt"
+  disk "after $arm" >> "$OUT0/ab_env.txt" 2>&1
 done
