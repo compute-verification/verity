@@ -15,6 +15,9 @@ needs: stdlib.
   S with k multiplications has k >= rank(H)/2, H being S's Hessian in the variables (Strassen: for a quadratic form,
   products of linear forms are as good as any program). The rank is computed over GF(p) for a 61-bit prime (equal to
   the rational rank with high probability) and over GF(2), where the odd lanes' 2y vanishes and only the coin bits stay.
+- **The operands.** A program with exactly rank(H)/2 products has operands spanning H's column space; a raw coin word is
+  free, so the count of coordinate vectors e_i in that space (`coin_coordinates_in_colspace`; in RREF, e_i is in it iff
+  i is a pivot column whose row is e_i) is how many operands could be free. Zero means every operand is a written value.
 """
 from __future__ import annotations
 
@@ -25,22 +28,28 @@ import random
 P = (1 << 61) - 1
 
 
-def rank_mod(rows, p):
-    m = [r[:] for r in rows]
-    rk, ncol = 0, len(m[0]) if m else 0
+def rref_mod(rows, p):
+    """The reduced row echelon form's nonzero rows and their pivot columns."""
+    m = [[v % p for v in r] for r in rows]
+    rk, ncol, pivots = 0, len(m[0]) if m else 0, []
     for col in range(ncol):
-        piv = next((r for r in range(rk, len(m)) if m[r][col] % p), None)
+        piv = next((r for r in range(rk, len(m)) if m[r][col]), None)
         if piv is None:
             continue
         m[rk], m[piv] = m[piv], m[rk]
         inv = pow(m[rk][col], p - 2, p)
         m[rk] = [(v * inv) % p for v in m[rk]]
         for r in range(len(m)):
-            if r != rk and m[r][col] % p:
+            if r != rk and m[r][col]:
                 f = m[r][col]
                 m[r] = [(a - f * b) % p for a, b in zip(m[r], m[rk])]
+        pivots.append(col)
         rk += 1
-    return rk
+    return m[:rk], pivots
+
+
+def rank_mod(rows, p):
+    return len(rref_mod(rows, p)[1])
 
 
 def coefficient_vectors(T, rng, a=(127, 1, 1)):
@@ -90,11 +99,13 @@ def main():
         }
         for name, (pairs, honest_products, words) in cases.items():
             H = hessian(pairs, n)
-            rp = rank_mod(H, P)
+            basis, pivots = rref_mod(H, P)
+            rp = len(pivots)
+            free_in_span = [c for r, c in zip(basis, pivots) if sum(1 for v in r if v) == 1]
             r2 = rank_mod([[x % 2 for x in row] for row in H], 2)
             row = {"sketch": name, "T": T, "variables": n, "words": words, "honest_products": honest_products,
                    "rank_gfp": rp, "rank_gf2": r2, "products_lower_bound": (rp + 1) // 2,
-                   "tight": (rp + 1) // 2 == honest_products}
+                   "tight": (rp + 1) // 2 == honest_products, "coin_coordinates_in_colspace": len(free_in_span)}
             rows.append(row)
             print(json.dumps(row), flush=True)
     if a.json:
