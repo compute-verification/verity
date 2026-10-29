@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import gates as G
 import methodology
 
 
@@ -59,7 +60,10 @@ def table(r: dict) -> str:
     g = r["gates"]
     lines.append("")
     lines.append("gates: " + ", ".join(f"{n} {v['checked']}" + (f" (skipped: {v['skipped']})" if v.get("skipped") else "")
-                                       for n, v in g.items()))
+                                       for n, v in g.items() if n not in G.TALLIES))
+    lines.append("tallies: " + ", ".join(f"{n} {v['failed']}/{v['checked']}" for n, v in g.items() if n in G.TALLIES))
+    for n in G.TALLIES:
+        lines.extend(f"  {n} {arm}: {hits}/{of}" for arm, (of, hits) in sorted(g.get(n, {}).get("by", {}).items()))
     return "\n".join(lines)
 
 
