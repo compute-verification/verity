@@ -38,7 +38,7 @@ theorem prefixLen_eq {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) 
     (x : Paths (Coin C Ξ m σ sT) n) :
     (tileRun σ k hk sT unitOf ws opened rel right).prefixLen x = ws.prefixLen x := by
   classical
-  unfold PeriodRun.prefixLen CreditWindows.prefixLen
+  unfold Outcomes.prefixLen CreditWindows.prefixLen
   congr 1
   exact Finset.filter_congr fun w _ => credited_iff σ k hk sT unitOf hKd ws opened rel right x w
 

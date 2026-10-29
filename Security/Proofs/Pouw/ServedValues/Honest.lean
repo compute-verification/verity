@@ -173,7 +173,7 @@ theorem stages_skipPeriod {Ω : Type} {N : ℕ} :
     · exact stages_skipPeriod n x.2 w'
 
 /-- **No block of the skipping period is paid.** -/
-theorem skip_not_paid {B V : Type} {s N n : ℕ} (pr : PeriodRun Bool B (circuit N).rounds s N n V)
+theorem skip_not_paid {B V : Type} {s N n : ℕ} (pr : Outcomes Bool B (circuit N).rounds s N n V)
     (x : Paths (Paths Bool (circuit N).rounds × B) n) (u : Fin n × Fin N) :
     periodMode (circuit N) (skipPeriod _ N n) pr x u ≠ .paid := by
   unfold periodMode
