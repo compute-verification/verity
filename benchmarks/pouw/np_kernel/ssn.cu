@@ -10,11 +10,11 @@
 //   D_t(i, j) - beta_j + sum_e a1[i, e] C[e, j] + sum_{2 <= t' <= t} a_t'[i], and the last is ssn-1l-b1-v1's P'.
 // Coins: a row's S + 3 bits are bits 0..S+2 of its H = ceil((S + 3) / 32) coin words (a1[i, e] bit e, a_t[i] bit t + 2);
 // row i's words are coin words i H .. i H + H - 1 of the call's stream, whose 16-word block c is SHA-512(seed || be64 c),
-// seed = SHA-512 of the call's 256-byte seed message (tag, salt, forward, position, root(A_j), root(B_j)).
+// seed = SHA-512 of the call's 224-byte seed message (tag, salt, forward, position, root(A_j), root(B_j)).
 // Operands are tiled: A' tile (64-row block, step) and B' tile (BN-column block, step) are contiguous, in dc.cuh's K-major
 // layout, so a step's tiles are one linear copy. Exported words: a block (row tile, column tile, step) of 64 x BN s32 in
-// wgmma's fragment order (uint4 j * 128 + thread holds the thread's d[4 j .. 4 j + 3]); the hash pass hashes each block as
-// one hm96 row (served_zk's sz_segments over 1 KiB segments, then each row's segment digests).
+// wgmma's fragment order (uint4 j * 128 + thread holds the thread's d[4 j .. 4 j + 3]); the hash pass (Hasher) hashes them
+// as the served committer's rows or as served_zk's row-seg rows.
 //
 //   ssn check                 every exported word, the final outputs and the formed registers against the host reference
 //                             on small shapes (random, extreme and zero data; columns past the code's skip; S = 1 and a
@@ -32,6 +32,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -361,6 +362,8 @@ extern "C" int verity_rows_leaves_sf_launch(const void* params, const uint8_t* r
                                             const uint8_t* salts, const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total,
                                             uint8_t* out, uint8_t* bc, uint8_t* hs, uint8_t* scratch, uint64_t max_blocks,
                                             cudaStream_t st);
+extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level,
+                                         uint64_t base, int n_levels, cudaStream_t st);
 
 // The hash pass over a run of exported words. rb 0: served_zk's row-seg rows (sz_segments), one row an exported block: its
 // 1 KiB segments, then its segment digests. rb > 0: the served committer's hm96-sha512/row/v2 leaves of rb-byte rows over
@@ -369,7 +372,7 @@ extern "C" int verity_rows_leaves_sf_launch(const void* params, const uint8_t* r
 struct Hasher {
   int rb = 0;
   u64* mids = nullptr;
-  uint8_t *dig = nullptr, *dig2 = nullptr, *tn = nullptr, *leaves = nullptr, *scratch = nullptr;
+  uint8_t *dig = nullptr, *dig2 = nullptr, *tn = nullptr, *leaves = nullptr, *scratch = nullptr, *lv = nullptr;
   std::vector<uint8_t> params;
   void init(size_t max_bytes, int row_bytes) {
     rb = row_bytes;
@@ -387,6 +390,7 @@ struct Hasher {
       tn = up(t);
       const size_t rows = max_bytes / rb + 2;
       CK(cudaMalloc(&leaves, rows * 64));
+      CK(cudaMalloc(&lv, rows * 64));
       CK(cudaMalloc(&scratch, rows * 192));
       return;
     }
@@ -431,6 +435,32 @@ struct Hasher {
     const int s = block_bytes / 1024;
     seg(W, blocks, block_bytes, s, dig, st);
     seg(dig, blocks, s * 64, s * 64 / 1024, dig2, st);
+  }
+  // A root over `bytes` (a multiple of 64 KiB). rb > 0: the leaves, then the frame tree's nodes above them, up to ten levels
+  // a launch (the leaf count a power of two, so no pads). Row-seg: its segment and block digests, with no tree above them.
+  void root(const uint8_t* data, u64 bytes, cudaStream_t st) {
+    run((const uint4*)data, (long long)(bytes / 65536), 65536, st);
+    if (!rb) return;
+    u64 n = bytes / rb;
+    if (n & (n - 1)) {
+      fprintf(stderr, "ERR root over %llu leaves: not a power of two\n", (unsigned long long)n);
+      exit(2);
+    }
+    const uint8_t* in = leaves;
+    uint8_t* out = lv;
+    for (int level = 0; n > 1;) {
+      int L = 0;
+      while (L < 10 && (n >> L) > 1) L++;
+      const int rc = verity_rows_levels_launch(params.data(), in, out, n, level, 0, L, st);
+      if (rc) {
+        fprintf(stderr, "ERR verity_rows_levels_launch %d\n", rc);
+        exit(2);
+      }
+      in = out + 64 * (n - (n >> (L - 1)));
+      out += 64 * (n - (n >> L));
+      n >>= L;
+      level += L;
+    }
   }
 };
 
@@ -638,21 +668,33 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   // beside's cap on a row hash launch's blocks (HASH_CAP; 0 none): the committer's max_blocks, which leaves SM slots to the
   // GEMM stream's export
   const u64 hash_cap = getenv("HASH_CAP") ? strtoull(getenv("HASH_CAP"), nullptr, 10) : 0;
-  // root(A_j), which each call's seed reads: the hasher's leaves over A_j's M·K bytes (the tree above them untimed), on its
-  // own Hasher so it never shares buffers with the words' hash streams. ROOT_A=1 puts it in the forward, ahead of the coins,
-  // by the words' scheme, or by ROOT_A_ROWS's (row bytes, 0 row-seg) when that is set.
+  // root(A_j), which each call's seed reads, over A_j's M·K bytes (Hasher::root: the leaves and the tree above them), on
+  // Hashers of its own so it never shares buffers with the words' hash streams. Timed a call by each of ROOT_A_LIST's
+  // schemes (row bytes, 0 row-seg; default the words'). ROOT_A=1 puts it in the forward, ahead of the coins, by the words'
+  // scheme, or by ROOT_A_ROWS's when that is set.
   const int root_a = getenv("ROOT_A") ? atoi(getenv("ROOT_A")) : 0;
   const int root_a_rows = getenv("ROOT_A_ROWS") ? atoi(getenv("ROOT_A_ROWS")) : -1;
-  std::vector<Hasher> hra(rbs.size() + 1);
-  for (size_t h = 0; h < rbs.size(); h++) hra[h].init((size_t)M * 8192, rbs[h]);
-  if (root_a_rows >= 0) hra[rbs.size()].init((size_t)M * 8192, root_a_rows);
-  auto hash_a = [&](const LinDev& d, int h, cudaStream_t st) {
-    hra[h].run((const uint4*)d.A0, (long long)M * d.K / 65536, 65536, st);
-  };
+  std::vector<int> ras = rbs;
+  if (const char* e = getenv("ROOT_A_LIST")) {
+    ras.clear();
+    for (char* p = (char*)e; *p;) {
+      char* q;
+      const long v = strtol(p, &q, 10);
+      if (q == p) break;
+      ras.push_back((int)v);
+      p = q;
+    }
+  }
+  std::map<int, Hasher> hra;
+  for (int r : ras) hra[r];
+  for (int r : rbs) hra[r];
+  if (root_a_rows >= 0) hra[root_a_rows];
+  for (auto& [r, h] : hra) h.init((size_t)M * 8192, r);
   auto fwd_root_a = [&](const LinDev& d, cudaStream_t st) {
-    if (root_a) hash_a(d, root_a_rows >= 0 ? (int)rbs.size() : hi, st);
+    if (root_a) hra[root_a_rows >= 0 ? root_a_rows : rbs[hi]].root(d.A0, (u64)M * d.K, st);
   };
-  auto hname = [&](int h) { return h < 0 ? std::string("none") : rbs[h] ? "rows" + std::to_string(rbs[h]) : std::string("rowseg"); };
+  auto rname = [](int rb) { return rb ? "rows" + std::to_string(rb) : std::string("rowseg"); };
+  auto hname = [&](int h) { return h < 0 ? std::string("none") : rname(rbs[h]); };
   int* dout;
   CK(cudaMalloc(&dout, (size_t)M * 16384 * 4));
   Timer T;
@@ -661,12 +703,13 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   CK(cudaStreamCreateWithFlags(&s1, cudaStreamNonBlocking));
   for (auto& s : s2) CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
   const double f0 = sm_mhz(dclk);
-  auto line = [&](const char* what, const LinDev* d, double ms, double macs, double words, double extra) {
+  auto line = [&](const char* what, const LinDev* d, double ms, double macs, double words, double extra, std::string hn = "") {
     const double u = units(ms, f0);
+    if (hn.empty()) hn = std::strstr(what, "hash") || std::strstr(what, "fwd_s") || std::strstr(what, "fwd_b") ? hname(hi) : "none";
     printf("{\"what\": \"%s\", \"hasher\": \"%s\", \"linear\": \"%s\", \"M\": %d, \"n\": %d, \"K\": %d, \"S\": %d, \"BN\": %d, \"ms\": %.6f, "
            "\"mhz\": %.1f, \"units\": %.6e, \"stock_macs\": %.6e, \"units_per_stock_mac\": %.6f, \"words\": %.6e, "
            "\"units_per_word\": %.3f, \"units_per_byte\": %.3f, \"extra\": %.6g}\n",
-           what, std::strstr(what, "hash") || std::strstr(what, "fwd_s") || std::strstr(what, "fwd_b") ? hname(hi).c_str() : "none",
+           what, hn.c_str(),
            d ? d->name : "all", M, d ? d->n : 0, d ? d->K : 0, d ? d->S : 0, d ? d->BN : 0, ms, f0, u, macs,
            macs > 0 ? u / macs : 0, words, words > 0 ? u / words : 0, words > 0 ? u / (4 * words) : 0, extra);
     fflush(stdout);
@@ -697,9 +740,14 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
          words, (double)M * d.S);
     line("coins_forming", &d, T.ms(std::max(reps, 51), [&] { coins_form(d.msg, d.coins, d.A, M, d.S, 0); }), macs, words,
          (double)M * d.S);
-    for (hi = 0; hi < (int)rbs.size(); hi++)
-      line("root_a_hash", &d, T.ms(std::max(reps, 51), [&] { hash_a(d, hi, 0); }), macs, (double)M * d.K / 4, (double)M * d.K);
-    hi = -1;
+    const u64 abytes = (u64)M * d.K;
+    for (int r : ras) {
+      Hasher& h = hra[r];
+      line("root_a_hash", &d, T.ms(std::max(reps, 51), [&] { h.run((const uint4*)d.A0, (long long)(abytes / 65536), 65536, 0); }),
+           macs, abytes / 4.0, (double)abytes, rname(r));
+      line("root_a_root", &d, T.ms(std::max(reps, 51), [&] { h.root(d.A0, abytes, 0); }), macs, abytes / 4.0, (double)abytes,
+           rname(r));
+    }
   }
   double fwd_words = 0;
   for (const LinDev& d : lins) fwd_words += 16.0 * M * d.n * d.S;
@@ -750,8 +798,8 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     line("fwd_beside", nullptr, T.ms(reps, fwd_beside, s1), fwd_macs, fwd_words, 0);
   }
   printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d, \"hash_cap\": %llu, "
-         "\"root_a_in_forward\": %d, \"root_a_rows\": %d}\n", f0, sm_mhz(dclk), nbuf, (unsigned long long)hash_cap, root_a,
-         root_a_rows);
+         "\"root_a_in_forward\": %d, \"root_a_rows\": %d, \"root_a_tree\": 1}\n", f0, sm_mhz(dclk), nbuf,
+         (unsigned long long)hash_cap, root_a, root_a_rows);
   return 0;
 }
 

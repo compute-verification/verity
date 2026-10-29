@@ -49,6 +49,7 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
             "hash": {h: {"ms": r["ms"], "units_per_byte": r["units_per_byte"], "gb_per_s": 4 * words / (r["ms"] * 1e6)}
                      for h in hashers if (r := g("hash_pass", h))},
             "root_a_us": {h: 1e3 * r["ms"] for h in hashers if (r := g("root_a_hash", h))},
+            "root_a_root_us": {h: 1e3 * r["ms"] for h in hashers if (r := g("root_a_root", h))},
         }
     fwd = {"plain_gemm": by.get(("fwd_plain_gemm", "all", "none"))}
     for h in hashers:
@@ -57,7 +58,7 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
                 fwd[f"{sched}/{h}"] = r
     clock = next((r for r in rows if r["what"] == "clock"), {})
     out = {"M": rows[0]["M"], "mhz": rows[0]["mhz"], "root_a_in_forward": clock.get("root_a_in_forward", 0),
-           "root_a_rows": clock.get("root_a_rows", -1), "linears": lin,
+           "root_a_rows": clock.get("root_a_rows", -1), "root_a_tree": clock.get("root_a_tree", 0), "linears": lin,
            "forward": {k: {"ms": r["ms"], "units": r["units"], "units_per_stock_mac": r["units_per_stock_mac"],
                            "units_per_word": r["units_per_word"], "words": r["words"], "stock_macs": r["stock_macs"]}
                        for k, r in fwd.items() if r}}
@@ -106,10 +107,13 @@ def main() -> None:
         for n, x in r["linears"].items():
             if x["root_a_us"]:
                 print(f"- root(A_j) leaves, {n}: " + "; ".join(f"{h} {v:.1f} µs" for h, v in x["root_a_us"].items()))
+            if x["root_a_root_us"]:
+                print(f"- root(A_j) leaves and tree, {n}: " + "; ".join(f"{h} {v:.1f} µs" for h, v in x["root_a_root_us"].items()))
         if r["root_a_in_forward"]:
             ra = r["root_a_rows"]
             by_scheme = "the words' scheme" if ra < 0 else f"rows{ra}" if ra else "rowseg"
-            print(f"- the forwards below hash A_j ahead of each call's coins, by {by_scheme}")
+            what = "root(A_j), leaves and tree," if r["root_a_tree"] else "A_j's leaves"
+            print(f"- the forwards below compute {what} ahead of each call's coins, by {by_scheme}")
         for w, x in r["forward"].items():
             print(f"- forward {w}: {x['ms']:.3f} ms, {x['units_per_stock_mac']:.3f} units a stock MAC")
         for k, v in r.get("t2", {}).items():
