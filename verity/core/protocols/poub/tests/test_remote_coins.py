@@ -1,4 +1,4 @@
-"""The audit's coins from the proof service's challenger as a service (`sampled_proofs.remote`), served on a thread over a
+"""The audit's coins from the proof system's challenger as a service (`sampled_proofs.remote`), served on a thread over a
 socket pair: a session whose coins that service released is accepted, and what it signed holds them
 (`Session.released_reason`). Under the auditor's ledger (`Session.trusted_reason`) a session's coins are those of the one
 challenger session the ledger opens for the session's own window R inside its period, run from a tree the host's pins

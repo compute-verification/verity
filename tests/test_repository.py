@@ -30,7 +30,7 @@ ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 ALLOWED_EXTRA = (
     "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
 )
-#: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. C-Flock
+#: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. Flock
 #: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network certifier's sections (``protocol/<topic>.md``, each
 #: keeping its heading in ``PROTOCOL.md`` with a one-line pointer).
 SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",

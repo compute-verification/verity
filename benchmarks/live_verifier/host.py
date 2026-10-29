@@ -1,4 +1,4 @@
-"""The auditor host's verifier service (vy-auditor-1): the remote bandwidth audit's verifier
+"""The auditor host's verifier service: the remote bandwidth audit's verifier
 (`benchmarks/remote_session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
 from a tree infra pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
 
@@ -25,7 +25,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   that reaches the challenger's gate (`.ssh/vy-challenger-gate`, which infra registers there for the lane in
   `verifier.json`).
 - **A run** (`run`) is verifier.py with the whitelisted parameters and the host's own: it listens on 127.0.0.1 at
-  `--port` (one of `PORTS`), takes each session's coins from vy-challenger-1 through its gate (`--challenger gate`, the
+  `--port` (one of `PORTS`), takes each session's coins from the challenger host through its gate (`--challenger gate`, the
   host's key and this host's name there, under the lane's `--period` and `--pin`), holds each session's pin to the
   challenger's pins log, which it fetches through the same gate (`pins`), and to main's first-parent history at
   `/opt/vy-verifier/main-first-parent.txt` (`--challenger-main`; infra writes `git rev-list --first-parent origin/main`
@@ -73,8 +73,8 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
   count reaches the host. A session waits for no verifier unit to run, each party serves one session at a time, and the
   gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
-- **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` (`research
-  data put --kind verifier-run/v1 --tree ... --preserve`, from the pinned tree) with the credential infra keeps in
+- **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` in the
+  evidence store (a preserved tree of kind `verifier-run/v1`, by the pinned tree's store client) with the credential infra keeps in
   `/etc/vy/verifier-store.env`, which only that unit reads.
 """
 from __future__ import annotations
@@ -930,8 +930,8 @@ def replay_run(host: Host, run: str, *, now: Callable[[], datetime],
 
 
 def publish(host: Host, run: str, *, put: Callable[[list[str]], int] | None = None) -> int:
-    """Put the run's directory in the evidence store (`research data put --tree --preserve`, the pinned tree's
-    `research`), its request as the artifact's meta."""
+    """Put the run's directory in the evidence store as a preserved tree, through the pinned tree's store client, its
+    request as the artifact's meta."""
     req = request_of(host, run)
     meta = {k: req.get(k) for k in ("run", "by", "pinned", "peer", "period", "requested_utc")}
     meta["end"] = {k: (read_json(host.runs / run / "end.json") or {}).get(k) for k in ("rc", "ended_utc")}

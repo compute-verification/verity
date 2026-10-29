@@ -39,7 +39,7 @@ noncomputable section
 /-- The comb a table's fold gives at a shape's residual coins, as `combOf` computes it from a table's files. -/
 def combRead (st : Setup) (sh : Shape) (rounds : Array (Array F128)) (extras : Array Claim) : Array F128 :=
   let c : Array F128 :=
-    match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) extras with
+    match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) extras with
     | .ok (_, info) =>
       match st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn
           info.lc.fold.ts with

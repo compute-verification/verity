@@ -124,7 +124,8 @@ class Pouw:
     window_delta_crypto: float = 0.0
     #: the GPUs' capacity above the clock PoUW credits, as a share
     clock_share: float = 0.0
-    #: the host CPUs counted at `host` times their peak (`Location.host_phi`): 1 until something credits or bounds them
+    #: the host CPUs counted at `host` times their peak (`Location.host_phi`): 0 under hosts carry no compute
+    #: (`GLOSSARY.md`), 1 without that assumption
     host: float = 0.0
 
     CITES = ("Nci.Assumptions.PouwSound", "Nci.Guarantees.CertificateSlack")

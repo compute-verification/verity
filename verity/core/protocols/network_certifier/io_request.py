@@ -596,7 +596,7 @@ IoTieRequestStep = _part(
     "a lane's scan state after one cell (`IoTieRequestFrame`'s output): its request's bytes left and prompt fields "
     "so far (over: 2^32 or more), whether a pad has been seen in the lane, and ok, which drops unless the cell is a "
     "pad, or a request cell before the lane's pads while its request hasn't ended (left 0 with fields)")
-# C-Flock's lowering calls a static-free Definition's builder without S, as `block_check._part` builds them
+# Flock's lowering calls a static-free Definition's builder without S, as `block_check._part` builds them
 IoTieRequestStep.build = lambda C, *e: _build_step(C, SimpleNamespace(), *e)  # type: ignore[attr-defined]
 
 

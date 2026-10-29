@@ -1,5 +1,5 @@
 """A stand-in for N2's proof of a link-window, and for the ingress tie's of an ingress link-window (`prove_tie`), for
-tests: what C-Flock's prover behind the firewall would deliver, and a stand-in for the verifier's own run of C-Flock's
+tests: what Flock's prover behind the ZK server would deliver, and a stand-in for the verifier's own run of Flock's
 Lean verifier (`proofs.verify`), which reads each session's verdict from the session file the stand-in prover writes.
 The proof's output word is the unit's on the prover's opening by each gate's reference (`LinkWindows.outputs`,
 `IngressTie.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't claim another. So the tests
@@ -31,7 +31,7 @@ def prove(lw: SVC.LinkWindows, opening: SVC.Opening, draw: S.Draw, syncs: Sequen
           program: str | None = None, accepted: bool = True, word: int | None = None, root: bytes | None = None,
           salts: dict[str, bytes] | None = None, units: Sequence[int] | None = None,
           advice: Any = None) -> SVC.Delivered:
-    """The delivered proof of the drawn unit on `opening` under the registered root (or `root`), on an advised link of
+    """The delivered proof of the sampled proof block on `opening` under the registered root (or `root`), on an advised link of
     `advice`: the statement's public file, its one instance's rows committed under `SALTS` (``pub``, ``wit``, ``o0``),
     one session naming `program` (default: the link's registered Program) that the stand-in Lean `accepted`, and the
     circuit file. Where the unit takes no instance, the rows are zero and the output 0. `word` forges the output word,
