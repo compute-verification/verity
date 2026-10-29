@@ -3,7 +3,7 @@ units (the floor, 32 a register, is 128 registers an SM-clock).
 
 copy       a role's words an SM-clock (probe.py's rate x words a warp instruction), 4096 / that a word, and its share of
            the floor's 128 words an SM-clock; beside honest (hs_*), the same for the role's words while the honest warps
-           ran, the honest IMMA's rate as a share of its rate beside idle warps (honest_b, honest_l), and the SM time
+           ran, the honest MMA's rate as a share of its rate beside idle warps (honest_b, honest_l, honest_w), and the SM time
            honest lost a word placed: (1 - kept) x 4096 / words an SM-clock.
 decisions  4096 x the median block's cycles / (iters x warps x decisions a trip) units a warp decision, its coin bits
            (bits a decision: one for the two-way forms, 4 for BRX16, a digit for a lookup), units a bit read by the
@@ -37,6 +37,8 @@ DECIDE = {
 }
 HONEST = {"hs_g2s1k": "honest_b", "hs_g2s4k": "honest_b", "hs_g2s4kh": "honest_b", "hs_s2g4k": "honest_b",
           "hs_g2s16k": "honest_b", "hs_g2s4kz": "honest_b", "hs_g2s16kz": "honest_b", "hs_s2g4kz": "honest_b",
+          "hw_g2s4k": "honest_w", "hw_g2s16k": "honest_w", "hw_g2s4kz": "honest_w", "hw_g2s4khz": "honest_w",
+          "hw_s2g4kz": "honest_w",
           "hs_ldgsts4": "honest_l", "hs_ldgsts16": "honest_l", "hs_ldssts4": "honest_l", "hs_ldssts16": "honest_l"}
 
 
@@ -51,7 +53,7 @@ def load(d: Path) -> tuple[dict, dict]:
 
 
 def imma(r: dict) -> float:
-    return next(v for k, v in r["rates"].items() if "IMMA" in k)
+    return next(v for k, v in r["rates"].items() if "MMA" in k)
 
 
 def main(out: Path) -> None:
