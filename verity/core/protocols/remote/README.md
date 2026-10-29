@@ -79,8 +79,7 @@ answer (`Core.Composition.same`; the `#guard`s pin a policy on one record and th
    design and δ, the size classes, the inference-only policy's c and k, the advice length ℓ_a, and each subprotocol's
    public Program and parameters, by digest), the registered information θ (for example the weights) and the registered
    compiler B. It fixes no circuit. The Lean (`Verity.Declaration`, `Verity.Committed`) still states the older shape, a
-   circuit with a partition committed beside it; soundness's COMPILEREG PR (after V3) restates it as
-   `Verity.Registered`, with the compiler's output explaining the committed trace.
+   circuit with a partition committed beside it.
 2. **Execution phase** j. The hardware runs, and the developer commits every value it computes under hiding commitments
    in SHA-512 trees: the committed trace.
 3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, "How an audit works"):
@@ -175,7 +174,7 @@ commitments' hiding gap.
 
 **Establishes.** Live coins, drawn after the commitment, pick which proof blocks are proved. If every drawn block is
 proved, only the blocks the draw missed can hold faults:
-Pr[accept ∧ more faulty proof blocks than the draw allows at δ] ≤ δ + ε_ks + ε_bind, ε_bind the binding error of the
+Pr[accept ∧ more incorrect proof blocks than the draw allows at δ] ≤ δ + ε_ks + ε_bind, ε_bind the binding error of the
 links between proof blocks.
 
 **Assumes.** Part 1's assumptions; the challenger is the auditor's device (`Verity.Assumptions.TrustedHost`); its coins
@@ -186,7 +185,7 @@ theorem as a hypothesis.
 
 ### 3. The audit of each sampling period
 
-**Establishes.** Sampled proofs bound the faulty proof blocks. PoUW establishes that the period's credited live work is
+**Establishes.** Sampled proofs bound the incorrect proof blocks. PoUW establishes that the period's credited live work is
 at least (1 − ε) of the declared work, crediting only noised calls: an un-noised call has no live coin, so nothing forces
 its work. The composite accepts only if every subprotocol accepts and their commitments bind into one.
 
@@ -217,7 +216,7 @@ The time credit adds the data sheet's rates.
 **Establishes.** The sampling periods' bounds pool over a monitoring period, even when the developer adapts each period
 to the coins before it: the chance that some subprotocol of some period accepts while its claim fails is at most the sum
 of their errors. For sampled proofs,
-Pr[every period accepted ∧ faulty proof blocks ≥ ln(1/δ)/q] ≤ δ + Σ_t (ε_ks,t + ε_bind,t), q the draw's coverage.
+Pr[every period accepted ∧ incorrect proof blocks ≥ ln(1/δ)/q] ≤ δ + Σ_t (ε_ks,t + ε_bind,t), q the draw's coverage.
 PoUW's per-period δ is 2^-40 (`verity/core/protocols/pouw/credit.py`'s `DELTA`), so the pooled δ stays small over a year
 of periods.
 
@@ -386,7 +385,7 @@ The overhead, `DampenerRemote`:
 - In `Security/Definitions/Nci/Assumptions/Remote.lean`, three:
   - `Nci.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p. What backs p is
     the time credit `CircuitCredit`, which reads the data sheet; no PoUW guarantee instantiates it yet.
-  - `Nci.Assumptions.SampledDetection`: sampled proofs catch each faulty proof block with probability at least q,
+  - `Nci.Assumptions.SampledDetection`: sampled proofs catch each incorrect proof block with probability at least q,
     whatever came before.
   - `Nci.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
 - `Nci.Assumptions.BaselineRegistered` (`Security/Definitions/Nci/Assumptions/Baseline.lean`): the data the
@@ -440,7 +439,7 @@ development run:
 
 - `verity example h200` (`examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
   are sampled by one live coin, each is proved by C-Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
-  refused. At an 8-block sample, that allows at most 43.77% faulty proof blocks at δ = 1%. It runs, at proof level
+  refused. At an 8-block sample, that allows at most 43.77% incorrect proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
 - `verity example vllm` (`examples/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
