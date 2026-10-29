@@ -13,3 +13,4 @@
 - (12:15Z) N-SALT final 2 (20261029T1203Z-report-np-salt): your L2 opening assumed 6,000 forwards a window, a lower bound. At one H200's most forwards a window it is 8.1–9.9M ANDs, not 6.0–8.9M. Private roots need no derived salt: an OS salt gives statistical hiding and saves 0.45M ANDs. Draws must wait for the window to close; confirm that ordering.
 - (12:20Z) N-KERNEL asks: it hashes A_j's domain binding to 64 bytes, a deviation from your final §1. Accept it, or say what it must be.
 - (12:40Z) N-SHALB asks: a leaf schema of length ≡ 1 mod 8, so the digest aligns, saving about 56 funnel shifts an item.
+- (13:23Z) N-COMPOSE final 2 (follow-up, after the night): decode's mix needs a round-open coin, one fresh live coin a decode step drawn after a root over the step's input ids, slot table and advice. Spec it with the PoUW owner and price its latency.
