@@ -8,7 +8,8 @@ if known) and the stock GEMMs' time a forward, all in ms. T2 is the step with ss
   swap  (stock - stock GEMM + forward) / stock: this forward in place of the stock GEMMs
 where forward is the 16 layers' four linears with coins, forming, every k32 word exported and hashed, run serially (one
 stream) or beside (each chunk's hash on a second stream while the next chunk's GEMM runs), for each hash scheme (hasher:
-rowseg, or rows<B> for the served committer's hm96 leaves of B-byte rows).
+rowseg, rows<B> for the served committer's hm96 leaves of B-byte rows, or plain<B> for L1's plain frame-v3 leaves of B-byte
+rows).
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ def load(out: Path) -> dict[str, list[dict]]:
 def summarize(rows: list[dict], stock: dict | None) -> dict:
     by = {(r["what"], r.get("linear"), r.get("hasher", "rowseg" if "hash" in r["what"] or r["what"][4:] in ("serial", "beside")
                                                     else "none")): r for r in rows if "linear" in r}
-    hashers = sorted({h for (_, _, h) in by if h != "none"})
+    hashers = sorted({h for (_, _, h) in by if h not in ("none", "l1")})
     lin = {}
     for name in LINEARS:
         g = lambda w, h="none": by.get((w, name, h))  # noqa: E731
@@ -51,6 +52,9 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
             "tree_ms": {h: r["ms"] for h in hashers if (r := g("hash_tree", h))},
             "root_a_us": {h: 1e3 * r["ms"] for h in hashers if (r := g("root_a_hash", h))},
             "root_a_root_us": {h: 1e3 * r["ms"] for h in hashers if (r := g("root_a_root", h))},
+            "g_draw_us": 1e3 * r["ms"] if (r := g("g_draw")) else None,
+            "l1_root_us": 1e3 * r["ms"] if (r := g("l1_root", "l1")) else None,
+            "l1_seed_path_us": 1e3 * r["ms"] if (r := g("l1_seed_path", "l1")) else None,
         }
     fwd = {"plain_gemm": by.get(("fwd_plain_gemm", "all", "none"))}
     for h in hashers:
@@ -63,7 +67,8 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
     out = {"M": first["M"], "mhz": first["mhz"], "root_a_in_forward": clock.get("root_a_in_forward", 0),
            "root_a_rows": clock.get("root_a_rows", -1), "root_a_tree": clock.get("root_a_tree", 0),
            "words_tree": clock.get("words_tree", 0), "rowseg_leaf": clock.get("rowseg_leaf", "segment digests"),
-           "prio": clock.get("prio", 0), "small_threads": clock.get("small_threads", 0),
+           "prio": clock.get("prio", 0), "layout": clock.get("layout", "ssn_1l"), "l1": clock.get("l1", 0),
+           "small_threads": clock.get("small_threads", 0),
            "small_rows_max": clock.get("small_rows_max", 0),
            "small_leaves_check": {"cases": len(small), "leaves": sum(r["leaves"] for r in small),
                                   "mismatched": sum(r["mismatched_leaves"] for r in small)},
@@ -121,7 +126,16 @@ def main() -> None:
                 print(f"- root(A_j) leaves, {n}: " + "; ".join(f"{h} {v:.1f} µs" for h, v in x["root_a_us"].items()))
             if x["root_a_root_us"]:
                 print(f"- root(A_j) leaves and tree, {n}: " + "; ".join(f"{h} {v:.1f} µs" for h, v in x["root_a_root_us"].items()))
-        if r["root_a_in_forward"]:
+            if x["g_draw_us"] is not None:
+                print(f"- G's draw, {n}: {x['g_draw_us']:.1f} µs")
+            if x["l1_root_us"] is not None:
+                print(f"- L1 + (a), {n}: root(A_j) through the seed {x['l1_root_us']:.1f} µs; with the noise blocks, G and "
+                      f"forming {x['l1_seed_path_us']:.1f} µs")
+        print(f"- layout {r['layout']}")
+        if r["l1"]:
+            print("- the forwards below run L1 + (a)'s seed path (root(A_j) through the noise blocks) ahead of each call's G "
+                  "and forming")
+        elif r["root_a_in_forward"]:
             ra = r["root_a_rows"]
             by_scheme = "the words' scheme" if ra < 0 else f"rows{ra}" if ra else "rowseg"
             what = "root(A_j), leaves and tree," if r["root_a_tree"] else "A_j's leaves"
