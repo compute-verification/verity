@@ -47,7 +47,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.refs import Coll, PartLog, concat, prefix_runs, runs
-from verity.ml.circuits.types import Array, Record, Tuple, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple, Type, Value
 
 SCHEMA = "verity-vllm/boolean-purity/v1"
 #: a Boolean derive dir's word Program, the one its Program is σ-checked against node by node (its digest the derive report's
@@ -259,7 +259,7 @@ def _bits(t: Type) -> int:
         return t.n * _bits(t.elem)
     if isinstance(t, Tuple):
         return sum(_bits(f) for f in t.fields)
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         return sum(_bits(f) for _, f in t.fields)
     raise TypeError(t)
 

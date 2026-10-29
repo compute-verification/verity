@@ -21,7 +21,7 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
-from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Value
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as MP
@@ -30,7 +30,7 @@ from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetPr
 from verity.ml.definitions.replay import replayer
 
 F32, BF16 = Value(32), Value(16)
-PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", Record(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
+PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", RecordType(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
 
 
 def _derived(fns=None):
@@ -221,7 +221,7 @@ def test_derive_refuses_a_call_with_no_boolean_version_by_name():
 
 
 def test_bit_offsets_are_the_prefix_sums_of_the_leaf_widths():
-    for t in (Record(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32))), Array(3, TupleT(BF16, Array(2, F32), Value(1))),
+    for t in (RecordType(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32))), Array(3, TupleT(BF16, Array(2, F32), Value(1))),
               TupleT(Array(0, F32), F32, Array(2, TupleT()), BF16), Array(5, BF16)):
         widths = t.leaf_widths()
         off = BB.bit_offsets(t)
