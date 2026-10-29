@@ -179,7 +179,6 @@
     {"file": "tests/program/test_moe_pad_route_a3.py", "kind": "F841", "symbol": "test_2_the_lift_of_record_is_the_hand_authored_lmoeffnl_on_both_paths_disabled_slots_bot_disabled_block_all_bot", "detail": "Local variable `u` is assigned to but never used"},
     {"file": "tests/program/test_padding_pod_consumer.py", "kind": "F401", "symbol": "test_the_padding_entrys_step_is_the_engine_step_when_a_member_arrives_late", "detail": "`json` imported but unused"},
     {"file": "tests/program/test_rmsnorm_fused.py", "kind": "BLE001", "symbol": "_numerics", "detail": "Do not catch blind exception: `Exception`", "count": 2},
-    {"file": "tests/program/test_running_example.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.defs.CompositeDefinition` imported but unused"},
     {"file": "tests/program/test_sampling_policy.py", "kind": "F401", "symbol": "test_geometry_refusals_are_named", "detail": "`verity_vllm.program.frontend.target_profile.TargetProfile` imported but unused"},
     {"file": "tests/program/test_sparse_mla.py", "kind": "B018", "symbol": "test_statics_are_checked", "detail": "Found useless attribute access. Either assign it to a variable or remove it.", "count": 2},
     {"file": "tests/program/test_sparse_mla_split.py", "kind": "B018", "symbol": "test_a_part_has_keys", "detail": "Found useless attribute access. Either assign it to a variable or remove it."},
