@@ -9,6 +9,7 @@ from __future__ import annotations
 import functools
 import json
 import shlex
+import threading
 from concurrent.futures import Future
 from datetime import datetime, UTC
 from types import SimpleNamespace
@@ -321,6 +322,143 @@ def test_a_release_that_fails_off_the_loop_is_its_windows_outcome_in_order(tmp_p
     srv.src.uninstall()
 
 
+class _PeriodAuditor(_GateAuditor):
+    """`_GateAuditor` whose reserves join period ``p1``, whose open committed ``draw_k`` K, and which answers ``ledger``."""
+
+    K = 2
+
+    def run(self, argv: list[str]) -> tuple[int, str]:
+        words = shlex.split(argv[-1])
+        if words[0] == "ledger":
+            opened = json.dumps({"kind": "period-open", "body": {"period": "p1", "draw_k": self.K}})
+            return 0, "\n".join([*self.gate.lines, opened])
+        rc, text = super().run(argv)
+        return (rc, json.dumps({**json.loads(text), "period": "p1"})) if words[0] == "reserve" else (rc, text)
+
+
+def _own_leaves(values: list[tuple[str, bytes]], chunk: int) -> list[tuple[str, bytes]]:
+    """``values`` as a step commits them, each starting a leaf of its own (a pad value after it), so a leaf is one value's."""
+    out, at = [], 0
+    for i, (name, raw) in enumerate(values):
+        out.append((name, raw))
+        at += len(raw) + (-len(raw)) % 4
+        if pad := (-at) % chunk:
+            out.append((f"pad/{i}", bytes(pad)))
+            at += pad
+    return out
+
+
+@pytest.mark.parametrize("coins", ["in-process", "gate"])
+def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_reads_after_its_coin(tmp_path, monkeypatch,
+                                                                                                    coins):
+    """``--retain device --seal --release-after pouw``: a window served on the server's Commit, its values held on the
+    device (here a CPU pool) as the Commit acquired them, waits on the sealer's thread until its H1 release, off the loop,
+    has opened its draw coin and put H1's draw; the release then keeps exactly the leaves of the Commit's values the drawn
+    proof blocks open (core's draw from the window's own record: each drawn unit's call's x_q and s_a rows of its row tile,
+    at the engine step its step maps to, under the names the Commit acquired them by), byte-equal to what was committed,
+    and drops every other value: the other calls' rows and the step's input ids. In process the draw is at the proof
+    service's K on the window's calls_root; on a gate session at its period-open's K on its open root."""
+    from tests.commit.test_device_pool import committed
+    from tests.pipeline.test_serve_release import _Waits
+    from tests.protocols.test_pouw_h1_commit import Committer
+    from verity_vllm.commit import step_rows as R
+    from verity_vllm.pipeline import serve_release as SL
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
+    acquired: dict[int, list[tuple[str, bytes]]] = {}
+
+    def acquire(self: Any, name: str, t: Any, job: Any) -> None:
+        acquired.setdefault(int(job.step), []).append((name, t.detach().cpu().contiguous().numpy().tobytes()))
+    monkeypatch.setattr(Committer, "_acquire", acquire)
+    srv, closer, draws = _Server(monkeypatch), Later(), SL.Draws((SH.DRAWER,))
+    draws._cv = _Waits()
+    sessions = None
+    if coins == "gate":
+        auditor = _PeriodAuditor(tmp_path, monkeypatch)
+        sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+        k = _PeriodAuditor.K
+    else:
+        monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
+        k = 1
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions,
+                       closer=closer)
+    arm.drawing(draws)
+    arm.open(0)
+    srv.serve(PROMPTS[0], 0)
+    pending = arm.close(0)
+    host, _rc, dev = committed(R.NAME, {s: _own_leaves(v, R.ROW_BYTES) for s, v in acquired.items()})
+    released: list[Any] = []
+
+    def seal() -> None:
+        try:
+            released.append(draws.release(0, dev))
+        except SL.DrawRefused as e:
+            released.append(e)
+    sealer = threading.Thread(target=seal)
+    sealer.start()
+    draws._cv.entered.acquire()
+    assert not released and dev.device_pool.held > 0 and not pending.done(), "no release before the window's draw coin"
+    assert not (tmp_path / "h1" / "w0" / PH.CALLS_FILE).exists()
+    closer.run()
+    sealer.join()
+    (rec,) = released
+    assert isinstance(rec, dict), rec
+
+    record = json.loads((tmp_path / "h1" / "w0" / PH.CALLS_FILE).read_text())
+    c = record["commitment"]
+    stream = c["session"]["root"] if coins == "gate" else c["calls_root"]
+    units, why = PHC.drawn_of(record, {"root": stream}, k, SV.descriptor(arm.program))
+    assert why is None and 0 < len(units) < c["units"], (why, units)
+    sites, values = _manifest_sites(range(STEPS)), {(s, n): raw for s, v in acquired.items() for n, raw in v}
+    want = set()
+    for u in units:
+        call = next(r for r in record["calls"] if r["base"] <= u < r["base"] + r["units"])
+        i, op = (u - call["base"]) // (call["n"] // 32), sites[(call["step"], call["module"])]
+        lo, hi = 32 * i, min(32 * (i + 1), len(values[(call["step"], f"{op}/0")]) // call["k"])
+        if hi > lo:
+            want |= {(call["step"], f"{op}/0", lo * call["k"], hi * call["k"]), (call["step"], f"{op}/1", lo * 4, hi * 4)}
+    assert want
+    out = pending.result()
+    assert out["draw"] == {"k": k, "k_from": "period p1's open" if coins == "gate" else
+                           "the proof service's draw_k (in-process coins)", "units": len(units), "reads": len(want),
+                           "bytes": sum(hi - lo for _s, _n, lo, hi in want)}, out["draw"]
+
+    kept = SL.leaves_of(dev, sorted(want))
+    assert rec["union_leaves"] == rec["drawn_leaves"] == sum(len(v) for v in kept.values()) > 0
+    assert draws.refused(0, sorted(want), dev) == []
+    for s, leaves in kept.items():
+        for i in leaves:
+            assert bytes(dev.open_range(s, i, i + 1).value) == host[s][i * dev.chunk:(i + 1) * dev.chunk]
+    drawn = {(s, n) for s, n, _lo, _hi in want}
+    others = [(s, n, 0, len(raw)) for (s, n), raw in values.items() if (s, n) not in drawn]
+    assert any(n.endswith("/0") for _s, n, _lo, _hi in others), "some call's rows were not drawn"
+    assert len(draws.refused(0, others, dev)) == len(others), "every value no drawn block opens is dropped"
+    srv.src.uninstall()
+
+
+def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch):
+    """Under ``--release-after pouw`` a window's seal never waits on a draw that isn't coming: a window whose H1 never
+    opened, and a gate window whose session joined no period (so no period-open committed its K), each refuse their
+    release by name, and the outcome says why."""
+    from verity_vllm.pipeline import serve_release as SL
+
+    srv, auditor, draws = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch), SL.Draws((SH.DRAWER,))
+    sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
+    arm.drawing(draws)
+    assert arm.close(3) is None
+    with pytest.raises(SL.DrawRefused, match="window 3's H1 window never opened"):
+        draws.wait(window=3)
+    arm.open(0)
+    srv.serve(PROMPTS[0], 0)
+    out = arm.close(0)
+    assert out["tied"] and "joined no period" in out["draw"]["refused"], out
+    with pytest.raises(SL.DrawRefused, match="joined no period"):
+        draws.wait(window=0)
+    assert arm.describe()["draw"] == f"put as {SH.DRAWER} into the draw-gated release"
+    srv.src.uninstall()
+
+
 class ArmSpy:
     """`serve_h1.H1Windows` as `CommitWindows` drives it: at each open and close, whether the committer's patches of the
     runner are on; ``fail`` the windows whose open raises."""
@@ -449,6 +587,14 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     assert "(pouw)" in refusal(*h1, "--protocols-config", json.dumps({"pous": {}}))
     assert "'admission' is one of" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"admission": "never"}}))
     assert "--protocols-config {" in refusal(*h1, "--protocols-config", "{not json")
+
+    def h1_refusal(*more: str) -> str | None:
+        return SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man),
+                                                     *more], environ={}))
+    device = ("--retain", "device", "--retain-device-gb", "64", "--seal", "--release-after", SH.DRAWER)
+    assert h1_refusal(*h1, *device) is None
+    assert f"--release-after {SH.DRAWER} waits for PoUW H1's draw" in h1_refusal(*device)
+    assert h1_refusal(*device[:-1], "other") is None, "a drawer other than H1's comes in through --draws-dir"
 
 
 def test_the_window_program_holds_a_tile_unit_for_each_32_rows_of_slot_and_32_columns_of_each_linear_at_each_step():
