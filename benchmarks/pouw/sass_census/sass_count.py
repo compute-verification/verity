@@ -55,7 +55,8 @@ def family(arch: str) -> str:
 
 def count(lines, source: str, only: str | None = None) -> dict:
     """Each architecture's functions, instructions and dotted opcodes in a listing; with `only`, that architecture's
-    sections alone (cuobjdump's `-arch` filter may also pass a sibling's)."""
+    sections alone (cuobjdump's `-arch` filter may also pass a sibling's), and a listing naming none (CUDA 12's
+    nvdisasm prints `.headerflags`, no `.target`) is its."""
     archs: dict[str, dict] = {}
     cur = None
     skip = False
@@ -87,7 +88,8 @@ def count(lines, source: str, only: str | None = None) -> dict:
             skip = only is not None and m.group(1) != only
             if not skip:
                 cur = archs.setdefault(m.group(1), {"funcs": 0, "instrs": 0, "ops": {}})
-        elif FUNC.match(line) and cur is not None and not skip:
+        elif FUNC.match(line) and not skip and (cur is not None or only):
+            cur = cur or archs.setdefault(only, {"funcs": 0, "instrs": 0, "ops": {}})
             cur["funcs"] += 1
     return {"source": source, "archs": archs}
 

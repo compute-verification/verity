@@ -94,6 +94,19 @@ def test_count_reads_the_writes_off_nvdisasm_life_ranges():
     assert rows["BRA"]["dispatch_floor"] is None and rows["R2P"]["lane_regs"] == 0
 
 
+def test_count_takes_a_listing_without_a_target_as_the_given_architecture():
+    """CUDA 12's nvdisasm, which life.sh runs on CUDA 12 cubins, prints `.headerflags` and no `.target`: with `only`
+    (the corpus's architecture) its functions, instructions and writes are that architecture's; without, unknown."""
+    text = (FIX.parent / "sass_census_life.sass").read_text().splitlines(keepends=True)
+    lines = [ln for ln in text if ".target" not in ln]
+    assert len(lines) == len(text) - 1
+    obj = sass_count.count(lines, "life12", "sm_90")
+    assert set(obj["archs"]) == {"sm_90"}
+    a = obj["archs"]["sm_90"]
+    assert a["funcs"] == 1 and a["instrs"] == 11 and a["ops"]["IMAD.WIDE.U32"][2] == {"GPR=2": 1}
+    assert set(sass_count.count(lines, "life12")["archs"]) == {"unknown"}
+
+
 # ---- the classification ---------------------------------------------------------------------------------------------------
 
 

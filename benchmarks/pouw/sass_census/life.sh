@@ -6,7 +6,8 @@
 # flashinfer's cubins), Verity's own sm_90a probes and Pearl-C, and CUTLASS's Hopper examples. Writes under $OUT:
 #   toolkit.txt     nvcc, cuobjdump and nvdisasm --version, and the wheels downloaded
 #   corpus.tsv      a cubin a line: sha256, bytes, architecture, the file it came from
-#   counts/*.json   `sass_count.py count` of each cubin's life-range listing; failed.txt the cubins nvdisasm refused or
+#   counts/*.json   `sass_count.py count` of each cubin's life-range listing (CUDA 13's nvdisasm, else 12.9's);
+#                   failed.txt the cubins both refused or
 #                   took longer than CUBIN_S seconds on (counted from cuobjdump -sass, without writes); skipped.txt
 #                   the cubins not reached BUDGET seconds after the disassembly starts (smallest first)
 #   census.json     `sass_count.py merge` of them all; summary.txt its totals; writes.tsv `sass_count.py writes`
@@ -33,7 +34,15 @@ uv pip install -q --python "$PY" nvidia-cuda-nvcc==13.0.88 nvidia-cuda-crt==13.0
 uv pip install -q --python "$PY" --no-deps nvidia-cuda-cuobjdump nvidia-cuda-nvdisasm || exit 2
 CU=$("$PY" -c 'import nvidia, os; print(os.path.join(nvidia.__path__[0], "cu13"))')
 export PATH="$CU/bin:$PATH" CUDA_HOME=$CU LIBRARY_PATH=$CU/lib NVCC=$CU/bin/nvcc POUW_CUDA_BIN=$CU/bin
-{ nvcc --version; cuobjdump --version; nvdisasm --version; } >"$OUT/toolkit.txt" 2>&1
+# CUDA 13's nvdisasm runs no dataflow, so prints no life ranges, on a CUDA 12 cubin (ELF ABI 7), nor 12's on a 13 one;
+# NVIDIA's redistributable 12.9 nvdisasm (PyPI's starts at 13.2) takes the 12 ones
+ND12=cuda_nvdisasm-linux-x86_64-12.9.88-archive
+curl -fsSL "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvdisasm/linux-x86_64/$ND12.tar.xz" \
+  -o "$WORK/nd12.tar.xz" &&
+  echo "49296dd550e05434185a8588ec639f1325b2de413e2321ddd7e56c5182a476ff  $WORK/nd12.tar.xz" | sha256sum -c --quiet &&
+  tar xJf "$WORK/nd12.tar.xz" -C "$WORK" || exit 2
+export NVDISASM12=$WORK/$ND12/bin/nvdisasm
+{ nvcc --version; cuobjdump --version; nvdisasm --version; "$NVDISASM12" --version; } >"$OUT/toolkit.txt" 2>&1
 
 # torch's CUDA 13.0 wheel with its dependencies (every NVIDIA library it loads); the rest without theirs
 read -r -a specs <<<"$WHEELS"
@@ -125,8 +134,9 @@ sort -t$'\t' -k2,2n "$OUT/corpus.tsv" | tr '\n' '\0' | xargs -0 -P "$JOBS" -I{} 
   IFS=$'"'"'\t'"'"' read -r sha bytes arch src <<<"$1"
   lib=$(basename "$src")
   [ "$(date +%s)" -lt "$DEADLINE" ] || { echo "$sha $src" >>"$OUT/skipped.txt"; exit 0; }
-  if ! timeout "$CUBIN_S" nvdisasm -plr -lrm narrow "$WORK/cubins/$sha.cubin" 2>/dev/null \
-      | python3 "$HERE/sass_count.py" count --source "$lib@$sha" >"$OUT/counts/$sha.json"; then
+  plr() { timeout "$CUBIN_S" "$1" -plr -lrm narrow "$WORK/cubins/$sha.cubin" 2>/dev/null \
+    | python3 "$HERE/sass_count.py" count --source "$lib@$sha" --arch "$arch" >"$OUT/counts/$sha.json"; }
+  if ! plr nvdisasm && ! plr "$NVDISASM12"; then
     echo "$sha $src" >>"$OUT/failed.txt"
     cuobjdump -sass "$WORK/cubins/$sha.cubin" | python3 "$HERE/sass_count.py" count --source "$lib@$sha" --arch "$arch" \
       >"$OUT/counts/$sha.json"
