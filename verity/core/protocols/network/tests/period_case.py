@@ -1627,7 +1627,7 @@ def _output_entries(rp: random.Random, i: int, ties: dict, nb: int, aimed: int, 
                 port = rp.choice([f"block-{w}/o0", f"block-{w}/prog", f"block-{w}/o01", "o1", f"block-{w}/O1",
                                   f"block-{w}/o", f"block-{w}/o1x", f"block-{w}/o\u0663", f"block-{w}/o\u00b9", 1,
                                   port.replace(f"/c{j}/", f"/c0{j}/"), port.replace(f"/c{j}/", "/c/"),
-                                  port.replace(f"/c{j}/", "/"), port[port.index("{"):]])
+                                  port.replace(f"/c{j}/", "/")])
             elif broken and unwire == "output":
                 port = rp.choice([f"block-{w}/o{rp.choice([1, 2, 10])}", port.removesuffix("o0") + "o1"])
             elif broken and unwire == "key":
