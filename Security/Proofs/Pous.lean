@@ -194,8 +194,7 @@ theorem StreamedWipeMeetsFamily : Pous.Guarantees.StreamedWipeMeetsFamily :=
 theorem StreamedWipeMeets96GiB : Pous.Guarantees.StreamedWipeMeets96GiB := PousStreamedWipe.streamed_wipe_meets_96GiB
 theorem StreamedWipeMeets141GB : Pous.Guarantees.StreamedWipeMeets141GB := PousStreamedWipe.streamed_wipe_meets_141GB
 theorem StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads := PousStreamedWipe.streamed_wipe_meets_reads
-theorem StreamedWipeMeets141GB5 : Pous.Guarantees.StreamedWipeMeets141GB5 :=
-  PousStreamedWipe.streamed_wipe_meets_141GB5
+theorem StreamedWipeMeetsH200 : Pous.Guarantees.StreamedWipeMeetsH200 := PousStreamedWipe.streamed_wipe_meets_H200
 theorem StreamedWipeMeetsReadsTight : Pous.Guarantees.StreamedWipeMeetsReadsTight :=
   PousStreamedWipe.streamed_wipe_meets_reads_tight
 theorem StreamedWipeMeetsServer : Pous.Guarantees.StreamedWipeMeetsServer := PousStreamedWipe.streamed_wipe_meets_server
