@@ -79,7 +79,7 @@ abbrev sourceVerdict (P : Audits ΩW ΩQ) (ω₀ : (ringRO (2 ^ 19) 16448 (2 ^ 1
 /-- **`Sha512Prf` at the challenger's two tests**, at every value of the other audits' coins: the coin key (`derive`'s
 one input after the source) and the streams' blocks (105 · 64 inputs after the key), each the period's event at the
 primitive `ω₀`, at advantage `ε` and the tests' time `t` (`PeriodHeldSha512`'s premises). -/
-abbrev PrfTests (run : Run d α ΩW ΩQ (HmCoins × Streams)) (P : Audits ΩW ΩQ) (S : ℝ)
+abbrev PrfTests [Fintype ι] (run : Run d α ΩW ΩQ (HmCoins × Streams)) (P : Audits ΩW ΩQ) (S : ℝ)
     (ω₀ : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) (ε : ℕ → ℕ → ℝ≥0∞) (t : ℕ) : Prop :=
   ∀ o : ΩW × ΩQ,
     Hash.Assumptions.Sha512Prf sha512Digest ε derivePre 64 (fun _ : Unit => deriveTail (2 ^ 19) P.sid)
