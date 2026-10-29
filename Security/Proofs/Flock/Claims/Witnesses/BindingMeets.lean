@@ -62,10 +62,10 @@ with no siblings. -/
 theorem opensLeaf_one (dom payload : ByteArray) :
     _root_.Flock.Registered.opensLeaf
       { name := "", value := "",
-        root := _root_.Flock.Registered.climb dom (_root_.Flock.Registered.rowLeaf dom 0 payload) 0 0 (bytes []),
+        root := _root_.Flock.FV3.Sha512.climb dom (_root_.Flock.Registered.rowLeaf dom 0 payload) 0 0 (bytes []),
         leaves := 1, words := none, wordBits := 16, domain := dom, readsRel := #[] } payload 0 (bytes []) = true := by
   have h1 : _root_.Flock.log2ceil 1 = 0 := rfl
-  simp [_root_.Flock.Registered.opensLeaf, _root_.Flock.Registered.leafAs, _root_.Flock.Registered.rowLeaf, h1,
+  simp [_root_.Flock.Registered.opensLeaf, _root_.Flock.FV3.Sha512.leafAs, _root_.Flock.Registered.rowLeaf, h1,
     size_bytes]
 
 /-- **An opening passes at the deployed record**: at every code that registers one port of one leaf, at the root the
@@ -73,7 +73,7 @@ opening's row climbs to with no siblings, and addresses that root's leaf `0` wit
 theorem Binding_meets_one (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (c : SamplingDeploy.Code) (roots : List Msg) (o : Opening Bool) (root : Msg) (dom : ByteArray)
     (hat : c.at_ roots o.pos = some (root, 0)) (hπ : c.π o = [])
-    (hroot : bytes root = _root_.Flock.Registered.climb dom (_root_.Flock.Registered.rowLeaf dom 0
+    (hroot : bytes root = _root_.Flock.FV3.Sha512.climb dom (_root_.Flock.Registered.rowLeaf dom 0
       (bytes (digBytes (H512 (hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o)))))) 0 0 (bytes []))
     (hown : c.own =
       #[{ name := "", value := "", root := bytes root, leaves := 1, words := none, wordBits := 16, domain := dom,

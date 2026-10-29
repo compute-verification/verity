@@ -12,7 +12,7 @@ refactor item that changes it, and what has landed since.
 |---|---|---|---|
 | Sampled proofs / C-Flock | `--zk` | Proved. `sampling_assembled` is not a lock guarantee | item 1, landed: `sampling_assembled` is the `deployZk` instance of `sampling_assembled_of`, and `sampling_deployed_of` gives one deployed record over any Flock record |
 | | plain | Proved in the game form. No sampling theorem at plain in claims form | item 1, FINTAU, landed: #4037's `sampling_assembled_plain`, at the trimmed record. Flock's KS at the untrimmed record is on main (#4081), without a sampling instance there yet. The game-to-claims link is the broken shared row: E2EMAP's plan, 22:00Z 25 Oct |
-| | recursive | Effectively none: proved, but near-vacuous. No KS-to-sampling for recursion | item 12, REC100 and RESLOW on the RecursiveKS track, Fri 30 Oct, after Daniel's vcalls ruling (default A on 30 Oct). Item 1's recursive instance follows it |
+| | recursive | Effectively none: proved, but near-vacuous. No KS-to-sampling for recursion | item 12, after the `vcalls` escape (the compiled verifier's own evaluations in the V* parts' collision escape). Item 1's recursive instance follows it |
 | PoUW | `--zk` | Chain broken at KS → A: `SessionSoundAt` needs `AcceptedLive`, which no served path meets yet | item 9, proofs (ZKFIN, after FinishIs): `SessionSoundAt` to `ProofSoundAt` (δs + δ), with the TS headlines its instances, Tue 27 Oct. `AcceptedLive` on a served path needs FinishIs (Mon 26 Oct) and a served window whose lanes all verify (PRF-131's first pass verified 9 of 32): Wed 28 Oct |
 | | plain, recursive | none | none posted |
 | PoUS | all | none (ideal model only) | item 11, over item 1 as a hypothesis |
@@ -42,11 +42,11 @@ certifier's, NCI's or accounting's, so this is a C-Flock question, plus one PoUW
     - recursion's `RecDeploy.PlainLeavesAdmitted`.
   - The conclusions are acceptance events and the verifier's checks, events a bound measures, antecedents inside a
     conclusion, and fields of setups built from the verifier's own. PoUW's `CanonRead` is one of them, a selector.
-  - It also found premises the scan doesn't print: recursion's draw custody (`ZkOuterD.hDraw`, `ZkOuterR.hDraw`), and
+  - It also found premises the scan doesn't print: recursion's sample custody (`ZkOuterD.hDraw`, `ZkOuterR.hDraw`), and
     `--zk`'s `TableCRZ` and `LinkCRZC`.
 - **Form conditions**, a third class: `StmtWF` and `RegionsWF` (26 guarantees each), `PadOK` (29), and perhaps
   `isRow` and `isRead`. The first sort counts them as conclusions: the first three are fields of setups that
-  `drawSetup*_of` builds from flock-verify's setup, and the last two are selectors. A four-class sort (conclusion,
+  `drawSetup*_of` builds from the Lean verifier's setup, and the last two are selectors. A four-class sort (conclusion,
   premise, form condition, well-formedness) says whether the compiled verifier checks each form condition. A form
   condition the verifier doesn't check comes to this page as a gap.
 - **Moved and listed:** on main, these premises are named assumptions listed in the lock: the plain custody

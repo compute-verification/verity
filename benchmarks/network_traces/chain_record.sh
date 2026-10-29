@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # The network chain's run of record (chain_record.py) on a CPU machine, from the gate's fetched tarballs, on hidden_zk's
-# builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify, the verifier of record) with the
+# builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify, the verifier of record) with the
 # firewall's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in one of
 # the network slots, as a job of at most 240 minutes on a CPU node whose input is the gate's tarball GATE.tgz:
 #   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     env CR_MEM_GB=128 CR_GATES=GATE.tgz bash benchmarks/network_traces/chain_record.sh
 # Steps, each kept under $OUT and read by the report:
 #   custody  each gate run's files against its end.json (chain_record.py custody)
-#   certs    the client's kept certificates.jsonl (or certified.jsonl) and clocks.jsonl, verified (chain_record.py certs)
+#   certs    the client's kept certificates.jsonl (or certified.jsonl) and clocks.jsonl, verified, and the run's
+#            certified records held by the Lean's audit, network-records (chain_record.py certs)
 #   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the run and the I/O tie on it, both in the clear
 #            (network-e2e's e2e.py --no-prove: chain.served_advice and chain.tie)
-#   n2       N2's units proved by C-Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
+#   n2       N2's units proved by Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
 #            (a sampled draw on signed clocks); else on the advice profile n2_advised_zk.py --e2e on the bound
 #            advice and the certifier's clock certificates, and on the others n2_zk.py prove
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
@@ -53,7 +54,7 @@
 #      in jobs of its own)  CR_CACHE (the build cache; hidden_zk's by default)
 #      CR_QUARANTINE (where what the record mustn't hold goes, 0700 and outside the run dir: by default quarantine/RUN
 #      beside the runs root, /workspace/research/quarantine/RUN on a node, kept until its owner removes it)
-# n2 runs, then (on the warden path) the tie, then scan: outer proofs go through the firewall one at a time
+# n2 runs, then (on the warden path) the tie, then scan: outer proofs go through the ZK server one at a time
 # (n2_zk.ONE_SESSION), so no two of their provers' firewalled sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
@@ -146,6 +147,10 @@ mkdir -p "$OUT/gates"
   ! -name plan.json ! -name probe.json ! -name io.json ! -name out-witness.jsonl -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
 
 setup
+(cd verity/core/protocols/network/lean && lake build network-records ${CR_PERIOD_ANSWER:+network-period}) \
+  > "$OUT/build-network-records.log" 2>&1 || { tail -40 "$OUT/build-network-records.log"; exit 7; }
+export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/core/protocols/network/lean/.lake/build/bin/network-records
+[ -z "${CR_PERIOD_ANSWER:-}" ] || export VERITY_NETWORK_PERIOD_EXE=$SRC/verity/core/protocols/network/lean/.lake/build/bin/network-period
 "$PY" "$CR" custody --gates "$G" --out "$OUT/custody.json" 2>&1 | tee -a "$OUT/job.log" | cut -c1-2000
 if [ "${CR_PATH:-}" = warden ]; then
   "$PY" "$CR" certs --warden-run "$WARDEN" ${CR_DEPLOYED:+--deployed} --out "$OUT/certs.json" 2>&1 \
@@ -188,10 +193,6 @@ BOUND=$("$PY" -c 'import json, sys; b = json.load(open(sys.argv[1]))["chain"]["b
   "$E2E/report.json" 2>/dev/null || echo 0)
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-(cd verity/core/protocols/network/lean && lake build network-records ${CR_PERIOD_ANSWER:+network-period}) \
-  > "$OUT/build-network-records.log" 2>&1 || { tail -40 "$OUT/build-network-records.log"; exit 7; }
-export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/core/protocols/network/lean/.lake/build/bin/network-records
-[ -z "${CR_PERIOD_ANSWER:-}" ] || export VERITY_NETWORK_PERIOD_EXE=$SRC/verity/core/protocols/network/lean/.lake/build/bin/network-period
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
   > "$OUT/build-firewall.log" 2>&1

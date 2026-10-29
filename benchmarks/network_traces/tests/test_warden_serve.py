@@ -311,6 +311,18 @@ def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_group
     assert not (tmp_path / "run").exists()
 
 
+def test_the_warden_always_paces_and_serve_and_rehearse_refuse_a_release_within_the_slack(tmp_path):
+    """`serve` and `rehearse`, the deployed warden and the gate's rehearsal of it, always pace: `--paced-ms 0` (once the
+    loop's write) and a release within the slack or past the next boundary are refused before anything runs."""
+    serve = ["serve", "--upstream", "127.0.0.1:9", "--listen", "127.0.0.1:0", "--key", str(tmp_path / "key"),
+             "--session", "00" * 32, "--windows", "1", "--out", str(tmp_path / "run")]
+    for paced in ("0", "25", "100"):
+        for argv in (serve, ["rehearse", "--fake", "--out", str(tmp_path / "run")]):
+            with pytest.raises(SystemExit, match="the warden always paces"):
+                ws.main([*argv, "--paced-ms", paced])
+    assert not (tmp_path / "run").exists()
+
+
 def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_group_windows(tmp_path):
     """The bound `group_windows` rests on, on the warden itself at the scan's schedule: a group of `lanes` id requests
     admitted together at a window's first bucket, each answered with `tokens` id events and the trailer (the loop's
