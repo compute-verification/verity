@@ -346,11 +346,13 @@ def tile_credit(B: np.ndarray, rows: int = 8) -> dict:
     return out
 
 
-def planes_for(lo: int, hi: int) -> int:
-    p = 0
-    while not (-(1 << p) <= lo and hi <= (1 << p) - 1):
-        p += 1
-    return p + 1
+_BITLEN = np.array([i.bit_length() for i in range(256)])
+
+
+def planes_of(lo: np.ndarray, hi: np.ndarray) -> np.ndarray:
+    """Planes 0..p and a sign plane, for the least p with every value in [-2^p, 2^p - 1] (int8 values)."""
+    lo, hi = lo.astype(np.int64), hi.astype(np.int64)
+    return np.maximum(_BITLEN[np.clip(-lo - 1, 0, 255)], _BITLEN[np.clip(hi, 0, 255)]) + 1
 
 
 def sorted_tile_credit(B: np.ndarray, r_bits: int, group: int, cols: int = 8, block: int = 1) -> float:
@@ -368,14 +370,13 @@ def sorted_tile_credit(B: np.ndarray, r_bits: int, group: int, cols: int = 8, bl
             key = np.abs(blk).max(axis=0).reshape(-1, block).max(axis=1)
             idx = (np.argsort(key, kind="stable")[:, None] * block + np.arange(block)).ravel()
             blk = blk[:, idx]
-        for j in range(0, blk.shape[0], cols):
-            t = blk[j:j + cols]
-            for g in range(0, K, 256):
-                c256 = t[:, g:g + 256]
-                b1 = r_bits * 0.125 * planes_for(int(c256.min()), int(c256.max()))
-                u4 = np.mean([0.5 if planes_for(int(c.min()), int(c.max())) <= 4 else 1.0
-                              for c in (c256[:, h:h + 64] for h in range(0, 256, 64))]) if r_bits <= 4 else 1.0
-                tot += min(b1, u4, 1.0) * c256.size
+        t = blk.reshape(blk.shape[0] // cols, cols, K // 64, 64)
+        lo64, hi64 = t.min(axis=(1, 3)), t.max(axis=(1, 3))
+        lo256, hi256 = lo64.reshape(-1, K // 256, 4).min(axis=2), hi64.reshape(-1, K // 256, 4).max(axis=2)
+        b1 = r_bits * 0.125 * planes_of(lo256, hi256)
+        u4 = (np.where(planes_of(lo64, hi64) <= 4, 0.5, 1.0).reshape(-1, K // 256, 4).mean(axis=2)
+              if r_bits <= 4 else 1.0)
+        tot += float(np.minimum(np.minimum(b1, u4), 1.0).sum()) * cols * 256
     return tot / B.size + (1.0 / (cols * group) if group and block == 1 else 0.0)
 
 
