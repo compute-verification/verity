@@ -272,8 +272,9 @@ theorem gate_refused_nil {s : P2.Params} {k delta rtt : Nat} (h : (Certificate.g
     have hlt : Certificate.DELTA_NS + rtt < Certificate.ROOT_CALL_NS := by
       unfold Certificate.ROOT_CALL_NS at hd'; rw [← hδ']; unfold Certificate.ROOT_CALL_NS; omega
     refine ⟨trivial, hk, hδ', hr, ?_⟩
-    simp [Certificate.CapacityBound.refusals, Certificate.deadlineRefusals, Certificate.CapacityBound.effectiveRounds,
-      Certificate.CERT_BLOCKS, Certificate.POINT, hlt, hδ', Nat.not_lt.2 hk, Nat.not_lt.2 hr]
+    simp [Certificate.CapacityBound.refusals, Certificate.deadlineRefusals,
+      Certificate.CapacityBound.effectiveRounds, Certificate.CERT_BLOCKS, Certificate.POINT, hlt, hδ',
+      Nat.not_lt.2 hk, Nat.not_lt.2 hr]
   · simp [hp] at h
 
 /-! ## The verdict -/
