@@ -61,119 +61,87 @@ def EncardFifoGrids : Prop :=
 string of exactly `k` bits for each of `E` execution blocks, padded to that length whatever is used. The accepted
 observation sequences of length `n` with jitter below `D` number at most `2^(E·k) · D^n`, that is `k` bits per
 execution block plus jitter. Every advice value has the same length, so the charge is `k` whatever an honest session
-used, and nothing used is counted: no cap per sampling block, no Kraft inequality and no `BitsCount`. -/
+used, and nothing used is counted: no cap per `T` buckets, no Kraft inequality and no `BitsCount`. -/
 def EncardAccSeqsLeAdviceBits : Prop :=
   ∀ {L K S : ℕ} {In : Type} (E k : ℕ) (P : Program L S In (Fin E → Fin k → Bool))
     (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
     (AccSeqs P op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞)
 
-/-- **Theorem 3, the clock-sync form.** This is the `2^A` cap with the advice type `Ac × (Fin W → Sync)`: one
-clock-sync value per window from `Sync`, for example an offset δ and a rate ρ, 16 × 8 values. Over `W` windows the
-accepted sequences number at most `#Ac · #Sync^W · D^n`, that is `A_c + W·log2 #Sync` bits plus jitter.
-
-Instantiated for constant-rate release, this bounds the timing channel when the Program's only timing advice is the
-clock sync. The shipped schedule is such a Program by its definition (`constantRate`), and
-`EncardAccSeqsLeConstantRate` states this bound for it. A sync alphabet that varies by window is covered by
-`encard_accSeqs_le_advice` directly. -/
-def EncardAccSeqsLeSync : Prop :=
-  ∀ {L K S : ℕ} {In Ac Sync : Type} [Fintype Ac] [Fintype Sync] (W : ℕ)
-    (P : Program L S In (Ac × (Fin W → Sync))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
-    (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * Fintype.card Sync ^ W * D ^ n : ℕ) : ℕ∞)
-
-/-- **A fixed clock.** With the clock-sync value fixed (`Sync = Unit`), the accepted sequences number at most
-`#Ac · D^n`. Instantiated for constant-rate release under a fixed logical schedule, timing carries nothing beyond the
-jitter, and nothing at all under J (`D = 1`): the zero-capacity theorem, with content advice. -/
-def EncardAccSeqsLeFixedClock : Prop :=
-  ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (W : ℕ)
-    (P : Program L S In (Ac × (Fin W → Unit))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
-    (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * D ^ n : ℕ) : ℕ∞)
-
 /-! ## Theorem 3 for the shipped schedule: the constant-rate Program
 
-`constantRate T W ss frames` (`NetTiming.Protocol.Schedule`) is the Program of `schedule.py`: windows of `T` buckets,
-`W` of them with advice, one clock-sync value of `ss` per window, and the Program's frames, anchors and logical indices
-`frames ins c ℓ` read from the ingress and the content advice `c`. None of these guarantees has a dataflow hypothesis.
-The four counts take a horizon within the windows with advice (`hn : n ≤ W * T`): the audit (`Audit.check_link`) gives
-verdicts for those `W` windows only, so every step counted is a step it checks. -/
+`constantRate T g E frames` (`Definitions.NetworkCertifier.Schedule`) is the Program of one link's monitoring period:
+`E` execution blocks, each of `g·T` buckets, each block's frames and send ticks `frames ins e v ℓ` read from the
+ingress and that block's advice `v`, a string of `k = |a|` bits. None of these guarantees has a dataflow
+hypothesis. The counts take a horizon within the `E` blocks (`hn : n ≤ E·(g·T)`): the audit gives verdicts for those
+blocks only, so every step counted is a step it checks. -/
 
-/-- **Theorem 3's clock-sync form, for the shipped schedule.** The constant-rate Program's accepted observation
-sequences of length `n` with jitter below `D` number at most `#Ac · #Σ_sync^W · D^n`: `A_c + W·log2 #Σ_sync` bits plus
-jitter, which is 7 bits per window at 16 × 8 sync values. This holds for every frame function, sync set and operator. -/
+/-- **Theorem 3 for the shipped schedule.** The constant-rate Program's accepted observation sequences of length `n`
+with jitter below `D` number at most `2^(E·k) · D^n`: `|a|` bits per execution block plus jitter. This holds for every
+frame function and operator. -/
 def EncardAccSeqsLeConstantRate : Prop :=
-  ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (T W : ℕ) (ss : SyncSet)
-    (frames : List In → Ac → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
-    (hn : n ≤ W * T),
-    (AccSeqs (constantRate (S := S) T W ss frames) op n D).encard ≤
-      ((Fintype.card Ac * ss.size ^ W * D ^ n : ℕ) : ℕ∞)
+  ∀ {L K S : ℕ} {In : Type} (T g E k : ℕ)
+    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
+    (n D : ℕ) (hn : n ≤ E * (g * T)),
+    (AccSeqs (constantRate (S := S) T g E frames) op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞)
 
-/-- **A fixed clock, for the shipped schedule.** With one clock-sync value (`#Σ_sync = 1`), the constant-rate
-Program's accepted sequences number at most `#Ac · D^n`: timing carries nothing beyond the jitter, and under J
-(`D = 1`) nothing at all, at most `#Ac` sequences for the content advice. -/
-def EncardAccSeqsLeConstantRateFixedClock : Prop :=
-  ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (T W : ℕ) (ss : SyncSet) (hfix : ss.size = 1)
-    (frames : List In → Ac → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
-    (hn : n ≤ W * T),
-    (AccSeqs (constantRate (S := S) T W ss frames) op n D).encard ≤ ((Fintype.card Ac * D ^ n : ℕ) : ℕ∞)
-
-/-- **A window's rows read only its own and earlier windows' syncs** (PROTOCOL.md, "The audit"; `expected_grids`).
-Two lists of declared syncs that agree on every window up to step `t`'s, `t / T`, give the same row at `t`: a frame is
-eligible no earlier than its anchor, hand times only rise in canonical order, and the queue carries forward. The syncs
-are any clock-sync values, in the set or not, so an out-of-set sync never changes an earlier window's verdict. -/
+/-- **A step's rows read only its execution block's advice.** Two advice values that agree on the block holding step
+`t`, `t / (g·T)`, give the same rows at `t`: the block's frames read only its own advice, and the FIFO starts empty at
+the block's first bucket. The advice is any value, in a registered set or not, so advice declared for a later block
+never changes an earlier block's verdict. -/
 def ExpectedRowCausal : Prop :=
-  ∀ (S T W : ℕ) (syncs syncs' : Fin W → ClockSync) (frames : List LogicalFrame) (t : ℕ)
-    (hw : ∀ w : Fin W, (w : ℕ) ≤ t / T → syncs w = syncs' w),
-    expectedRow S T W syncs frames t = expectedRow S T W syncs' frames t
+  ∀ {L S : ℕ} {In Adv : Type} (T g E : ℕ) (frames : List In → Fin E → Adv → Fin L → List LogicalFrame) (t : ℕ)
+    (ins : List In) (a a' : Fin E → Adv) (ha : ∀ e : Fin E, (e : ℕ) = t / (g * T) → a e = a' e),
+    (constantRate (S := S) T g E frames).rows t ins a = (constantRate (S := S) T g E frames).rows t ins a'
 
-/-- **Seven bits per window opened.** If the horizon `n` lies within the first `m` windows (`n ≤ m·T`), the
-constant-rate Program's accepted sequences number at most `#Ac · #Σ_sync^min(W, m) · D^n`: only the syncs of windows
-the horizon reaches count, however many windows the advice covers. -/
+/-- **`|a|` bits per execution block opened.** If the horizon `n` lies within the first `m` execution blocks
+(`n ≤ m·(g·T)`), the constant-rate Program's accepted sequences number at most `2^(min(E, m)·k) · D^n`: only the advice
+of blocks the horizon reaches counts, however many blocks the advice covers. -/
 def EncardAccSeqsLeConstantRateWindows : Prop :=
-  ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (T W : ℕ) (ss : SyncSet)
-    (frames : List In → Ac → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D m : ℕ)
-    (hn : n ≤ W * T) (hm : n ≤ m * T),
-    (AccSeqs (constantRate (S := S) T W ss frames) op n D).encard ≤
-      ((Fintype.card Ac * ss.size ^ min W m * D ^ n : ℕ) : ℕ∞)
+  ∀ {L K S : ℕ} {In : Type} (T g E k : ℕ)
+    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
+    (n D m : ℕ) (hn : n ≤ E * (g * T)) (hm : n ≤ m * (g * T)),
+    (AccSeqs (constantRate (S := S) T g E frames) op n D).encard ≤ ((2 ^ (min E m * k) * D ^ n : ℕ) : ℕ∞)
 
 /-- **The composed statement for the shipped schedule (W2 and J).** A decoder reads the wire of the first `n` steps,
-within the first `m` windows, and recovers every secret in `Zs`, all of whose runs the constant-rate Program accepts up
-to `n`. Then `Zs` has at most `#Ac · #Σ_sync^min(W, m) · D^n` elements: a covert sender inside X moves at most
-`A_c + m·log2 #Σ_sync + n·log2 D` bits through egress timing, and with a fixed clock under J only the content advice. -/
+within the first `m` execution blocks, and recovers every secret in `Zs`, all of whose runs the constant-rate Program
+accepts up to `n`. Then `Zs` has at most `2^(min(E, m)·k) · D^n` elements: a covert sender inside X moves at most
+`m·|a| + n·log2 D` bits through egress timing and content advice together, and under J only the advice's. -/
 def EncardDecodableLeConstantRate : Prop :=
-  ∀ {L K S : ℕ} {Z In Act Wire Ac : Type} [Fintype Ac]
-    (I : Interaction L K S Z In Act Wire) (T W : ℕ) (ss : SyncSet)
-    (frames : List In → Ac → Fin L → List LogicalFrame) (n D m : ℕ) (hn : n ≤ W * T) (hm : n ≤ m * T)
+  ∀ {L K S : ℕ} {Z In Act Wire : Type}
+    (I : Interaction L K S Z In Act Wire) (T g E k : ℕ)
+    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (n D m : ℕ) (hn : n ≤ E * (g * T))
+    (hm : n ≤ m * (g * T))
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
-    (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T W ss frames) I.op n (I.obsRun z n))
+    (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T g E frames) I.op n (I.obsRun z n))
     (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z),
-    Zs.encard ≤ ((Fintype.card Ac * ss.size ^ min W m * D ^ n : ℕ) : ℕ∞)
+    Zs.encard ≤ ((2 ^ (min E m * k) * D ^ n : ℕ) : ℕ∞)
 
-/-- **Seven bits per window, over the run's first `m` windows.** Take the run's first `m` whole windows of `T` buckets
-within the `W` windows with advice (`hn` is `EncardAccSeqsLeConstantRateWindows`'s `n ≤ W·T` at the horizon `n = m·T`).
-The constant-rate Program's accepted sequences of length `m·T` with jitter below `D` number at most
-`#Ac · (#Σ_sync · D^T)^m`: the content advice's `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window, which is 7
-bits at 16 × 8 sync values under J (`D = 1`). The factor is the bound's, not a count per window: content advice and an
-earlier window's sync can first show in a later window, so one window may continue a given prefix in more than
-`#Σ_sync · D^T` ways. So the bound is cumulative from the run's first window: a temporal unit that starts later is not
-bounded by its own windows. -/
+/-- **`|a|` bits per execution block, over the session's first `m` blocks.** Take the session's first `m` whole
+execution blocks of `g·T` buckets within the `E` blocks (`hn` is `EncardAccSeqsLeConstantRateWindows`'s `n ≤ E·(g·T)` at
+the horizon `n = m·(g·T)`). The constant-rate Program's accepted sequences of that length with jitter below `D` number
+at most `(2^k · D^(g·T))^m`: `|a| + g·T·log2 D` bits per execution block, `|a|` under J (`D = 1`). -/
 def EncardAccSeqsLeConstantRatePerWindow : Prop :=
-  ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (T W : ℕ) (ss : SyncSet)
-    (frames : List In → Ac → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (m D : ℕ)
-    (hn : m * T ≤ W * T),
-    (AccSeqs (constantRate (S := S) T W ss frames) op (m * T) D).encard ≤
-      ((Fintype.card Ac * (ss.size * D ^ T) ^ m : ℕ) : ℕ∞)
+  ∀ {L K S : ℕ} {In : Type} (T g E k : ℕ)
+    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
+    (m D : ℕ) (hn : m * (g * T) ≤ E * (g * T)),
+    (AccSeqs (constantRate (S := S) T g E frames) op (m * (g * T)) D).encard ≤
+      (((2 ^ k * D ^ (g * T)) ^ m : ℕ) : ℕ∞)
 
-/-- **Seven bits per window, through the wire (W2 and J).** `EncardDecodableLeConstantRate` at the horizon of `m` whole
-windows, `n = m·T`: a decoder of the wire recovers at most `#Ac · (#Σ_sync · D^T)^m` secrets, so over the run's first
-`m` windows a covert sender inside X moves at most `A_c + m·(log2 #Σ_sync + T·log2 D)` bits through egress timing. -/
+/-- **`|a|` bits per execution block, through the wire (W2 and J).** `EncardDecodableLeConstantRate` at the horizon of
+`m` whole execution blocks, `n = m·(g·T)`: a decoder of the wire recovers at most `(2^k · D^(g·T))^m` secrets, so over
+the session's first `m` blocks a covert sender inside X moves at most `m·(|a| + g·T·log2 D)` bits through egress timing
+and content advice. -/
 def EncardDecodableLeConstantRatePerWindow : Prop :=
-  ∀ {L K S : ℕ} {Z In Act Wire Ac : Type} [Fintype Ac]
-    (I : Interaction L K S Z In Act Wire) (T W : ℕ) (ss : SyncSet)
-    (frames : List In → Ac → Fin L → List LogicalFrame) (m D : ℕ) (hn : m * T ≤ W * T)
+  ∀ {L K S : ℕ} {Z In Act Wire : Type}
+    (I : Interaction L K S Z In Act Wire) (T g E k : ℕ)
+    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (m D : ℕ)
+    (hn : m * (g * T) ≤ E * (g * T))
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
     (Zs : Set Z)
-    (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T W ss frames) I.op (m * T) (I.obsRun z (m * T)))
-    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z (m * T)) = z),
-    Zs.encard ≤ ((Fintype.card Ac * (ss.size * D ^ T) ^ m : ℕ) : ℕ∞)
+    (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T g E frames) I.op (m * (g * T))
+      (I.obsRun z (m * (g * T))))
+    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z (m * (g * T))) = z),
+    Zs.encard ≤ (((2 ^ k * D ^ (g * T)) ^ m : ℕ) : ℕ∞)
 
 /-! ## The ingress bound: what the outside can deliver into X through timing -/
 
@@ -265,29 +233,28 @@ def EncardIngressObsDecodableLeContentsPerWindow : Prop :=
 /-!
 ## The schedule's declared bound and the coins
 
-This section fixes the two terms of the charge that the capacity bounds leave open: the content advice `A_c` and the
-coins (D7). Nothing in it is implemented yet. The numbers are at the llama8b-node1 calibration
+This section fixes the two terms of the charge that the capacity bounds leave open: what the advice's content part
+counts and the coins (D7). Nothing in it is implemented yet. The numbers are at the llama8b-node1 calibration
 (`calibrations/llama8b-node1.json`): T = 600 buckets of 100 ms, B = 4,096, one egress link at r = 1,686, one ingress
-link (`requests`) at r_in = 34 and τ_in = 100 ms, Σ_sync of 16 × 8 values, and J (D = 1).
+link (`requests`) at r_in = 34 and τ_in = 100 ms, and J (D = 1).
 
-### What `A_c` counts
+### What the advice counts
 
-`constantRate T W ss frames` takes the advice `Ac × (Fin W → Σ_sync)`, and `frames ins c ℓ` gives every egress frame
-(its payload, anchor, logical index and canonical position) from the ingress `ins` and the content advice `c`.
-Acceptance is existential: a run is accepted if some advice value explains it (`AcceptedUpTo`). The proof
-(`encard_accSeqs_le_advice`) maps each accepted sequence to an advice value that accepts it, plus its jitter code. So
-`A_c = log2 #Ac` counts every content-advice value the audit would admit as an explanation, whenever and however it was
-chosen. It is charged once per run of W windows, not per window. The number means something only if the set `Ac` and
-the function `frames` are fixed before the run, independently of the sender's secret, and the audit refuses advice
-outside `Ac`, as it refuses a sync outside Σ_sync.
+`constantRate T g E frames` takes one advice value per execution block, and `frames ins e v ℓ` gives every egress frame
+of block `e` (its payload, send tick and canonical position) from the ingress `ins` and the block's advice `v`, a string
+of exactly `|a|` bits. Acceptance is existential: a run is accepted if some advice value explains it (`AcceptedUpTo`).
+The proof (`encard_accSeqs_le_advice`) maps each accepted sequence to an advice value that accepts it, plus its jitter
+code. So each execution block counts `2^|a|`, whatever value was chosen and whenever: B's codec decides how the bits are
+spent, on send ticks, on content decisions or on anything else, and the charge is `|a|` either way. The number means
+something only if `|a|` and B are registered before the session, independently of the sender's secret, and the audit
+refuses advice of any other length.
 
-For a served Program the content advice is the schedule: the per-step batch composition from which the circuit is
-built. The anchors and logical indices are read from the ingress and the session. The schedule reaches the egress
-frames through their canonical order, which is step-major, through how many tokens each event holds, and through any
-batch-variant numerics. Today the schedule is whatever the workload manifest declares: each request's `arrive_step`
-and the engine's scheduler settings. So `#Ac` has no bound, and the charge has no number. A monotone map from buckets
-to steps that is free at up to s_max steps per bucket is worth `T·log2(s_max + 1)` bits per window. At s_max = 15
-that is 2,400 bits per window, 343 times the sync's 7.
+For a served Program the content part of the advice is the schedule: the per-step batch composition from which the
+circuit is built. The schedule reaches the egress frames through their canonical order, which is step-major, through
+how many tokens each event holds, and through any batch-variant numerics. Today the schedule is whatever the workload
+manifest declares: each request's `arrive_step` and the engine's scheduler settings. A monotone map from buckets to
+steps that is free at up to s_max steps per bucket is worth `T·log2(s_max + 1)` bits per `T` buckets, which `|a|`
+would have to hold: 2,400 bits at s_max = 15. The declaration below makes it a few bits.
 
 ### The declaration
 
@@ -297,39 +264,34 @@ that is 2,400 bits per window, 343 times the sync's 7.
 - **Admission on a step clock.** The profile sets κ, a whole number of engine steps per bucket. Request q is admitted
   at step `κ · anchor(q)`. Its anchor is the bucket in which the ingress certifier released its last frame, read from
   the ingress certificate. Requests released in one bucket are admitted in the ingress release order. The engine never
-  starts step κ·b before the releases of bucket b are in. When it runs slower, it lags, and a lag past the declared sync
-  is an honest miss, as now. Given p, the schedule is then a function of the ingress certificates, and p is the only
-  free choice. `verity_vllm.engine.arrivals` already admits each request right before engine step `arrive_step`, on
-  the step counter and never on wall time. The declaration sets `arrive_step = κ · anchor`. The module's rule that an
-  idle engine admits the next arrival at once is itself a function of the schedule.
+  starts step κ·b before the releases of bucket b are in. When it runs slower, it lags, and a lag past the send ticks
+  the advice gives is an honest miss. Given p, the schedule is then a function of the ingress certificates, and p is
+  the only free choice. `verity_vllm.engine.arrivals` already admits each request right before engine step
+  `arrive_step`, on the step counter and never on wall time. The declaration sets `arrive_step = κ · anchor`. The
+  module's rule that an idle engine admits the next arrival at once is itself a function of the schedule.
 - **A registered list of profiles.** `P_cap = (p_0, …, p_{N−1})`. Each profile holds κ and every scheduler setting the
   schedule reads: the batch caps (sequences and tokens per step), the chunked-prefill threshold, the KV block count,
   which fixes preemption, and the output lag of asynchronous scheduling. The list is a public parameter of the audit,
-  registered with Σ_sync, (T, r, B, τ_b, Q), r_in and τ_in before the audit's first window and before any coin. Like
-  Σ_sync, it is the deployment's structure.
+  registered with `|a|`, (T, r, B, τ_b, Q), r_in and τ_in before the audit's first execution phase and before any
+  coins are flipped. Like `|a|`, it is the deployment's structure.
   - If the developer wants the profiles hidden, the list is a frame-v3-sha512 root over hm96-sha512 rows, one per
     profile, with N public. A sender inside X could then pick the list itself, so a hidden list also costs its own size
     once per registration: at most N·b_p bits for b_p-bit rows. A public list costs nothing.
 - **The profile in use.** Its index i < N goes under the schedule root, with the per-step schedule rows. That root is
   a frame-v3-sha512 tree of hm96-sha512 rows (circuits' X3), hidden, and registered before any coin that depends on it.
   The registration statement proves that the rows are `Sched_E(p_i, arrivals)` for the arrivals the ingress
-  certificates give, and that i < N. The count holds whenever i was chosen, since acceptance takes any value in the set.
-  The rule that the root precedes the coins is there for the sampled proofs, so that the circuit can't be shaped around
-  the draw.
+  certificates give, and that i < N. The count holds whenever i was chosen, since acceptance takes any value of the
+  advice. The rule that the root precedes the coins is there for the sampled proofs, so that the circuit can't be shaped
+  around the sample.
 
-**The count.** With one profile per audit, `#Ac = N` and `A_c = log2 N`, once. Switching profiles at window
-boundaries, declared at each window's first bucket with the sync, makes the advice one (profile, sync) pair per window:
-`log2(N · #Σ_sync)` bits per window. `SecurityProofs.EncardAccSeqsLeConstantRate` with `Ac = Fin N`, or with
-`Fin W → Fin N` for switching, states both, so no new guarantee is needed.
+**The count.** The profile's index is `log2 N` of each execution block's `|a|` bits, read by B's codec beside the send
+ticks. `SecurityProofs.EncardAccSeqsLeConstantRate` counts it with the rest of the advice, so no new guarantee is
+needed.
 
 **At the recorded parameters.** The recordings use one scheduler configuration. κ needs a grid that covers the honest
-step rate, calibrated as ρ's 8 values are, and κ has none. Taking 8 values of κ gives N = 8:
-
-| Charge | Per window | Per audit of W = 1,440 windows (a day) |
-|---|---|---|
-| Egress, one profile per audit | 7 bits, plus 3 bits once | 3 + 1,440 · 7 = 10,083 bits |
-| Egress, a profile per window | 7 + 3 = 10 bits | 14,400 bits |
-| Egress with one clock, `A_c` left out | 7 bits | 10,080 bits (`egress_bits_per_day_one_clock`) |
+step rate, and κ has none. Taking 8 values of κ gives N = 8, 3 bits of each execution block's `|a|`. A codec that spends
+7 bits per `T` buckets on send ticks, as an offset and a rate from 16 × 8 values, then needs `|a| = 7g + 3`: 17 bits
+at g = 2, which is 12,240 bits a day of 720 execution blocks.
 
 ### The coins (D7)
 
