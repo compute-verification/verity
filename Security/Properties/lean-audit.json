@@ -9627,7 +9627,7 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "NetworkCheck.Period": {
-   "digest": "1c8e6325d1b052bad7454598ba0e961ae9127b627feed514abde7d37042bb227",
+   "digest": "d9d6f945d774fa2e538470b971f36e9f5422869c9f8172226ff691ec8629f583",
    "definitions": {
     "NetworkCheck.Period.Audit": "0d641bb152e911020e01f254af27bca6b76ff4e2cb57994e3121b4fcb8e976f4",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -9779,7 +9779,7 @@
     "NetworkCheck.Period.signs._sparseCasesOn_1": "c0bafc4e420f6d28385997c68e2025bc80c6e11f8764a0d9a8d09ada5fad4b29",
     "NetworkCheck.Period.slotEntryDigest._sparseCasesOn_8": "01a472c0d9bafeba8dea78237e900d07340625e45391e10ecd21f10d1a0a16f4",
     "NetworkCheck.Period.slotEntryId": "9cd4ed22d37dcc794e537408ce5ffe2cf351c6a5ecea47f495429916805274ff",
-    "NetworkCheck.Period.slotEntryPins": "ae7d8c0e7ad44f3902cabcd17e597e3a097e91db9c457f0d9a7fb4b7d9736b44",
+    "NetworkCheck.Period.slotEntryPins": "c6a2c0219235ee0e2d1b7f0b79cce264c3fa10e900c49591150b2558ad46161c",
     "NetworkCheck.Period.stateCheck": "c54c31c285d20f003a2d4ce77c606df963e0ec96f50ff5bc5a181b2f5dce6a38",
     "NetworkCheck.Period.stateChecks": "5133b0d3f653d38e1c998650e64db8e436cfca0c96118c4f517d3d03c69e140b",
     "NetworkCheck.Period.stateEntries": "5a648cb61b5ffdc78fa18c928fe590aaed55a85bd2a0693eb037d7043fad449d",
