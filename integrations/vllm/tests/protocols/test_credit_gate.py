@@ -566,8 +566,10 @@ def test_the_honest_forgery_stand_in_is_credited():
 
 @pytest.mark.parametrize("name", [None, *FORGERIES])
 def test_the_value_check_on_the_device_is_the_hosts(name):
-    """`pouw_h1_records.reason` of a call's records, scales and served y left on a CUDA device, as the arm leaves them, is
-    what it is of their host copies: None for honest records, and each forgery's own refusal."""
+    """A call's records, scales and served y left on a CUDA device, as the arm leaves them, are judged as their host copies
+    are: `pouw_h1_records.holds_on` there holds exactly when `reason` of the host copies is None (honest records), and
+    `reason` of the device's records is each forgery's own refusal. `reason` takes y as its bf16 bits and the scales as
+    arrays, as `H1Run` hands them over (`numpy_of`, `row_words`)."""
     if not torch.cuda.is_available():
         pytest.skip("needs CUDA")
     w = Linear(64, 1, None)
@@ -575,9 +577,11 @@ def test_the_value_check_on_the_device_is_the_hosts(name):
     y, zy = E.scaled_mm_zy(xq, s_a, w.weight, w.weight_scale, ROWS)
     if name is not None:
         y, zy = FORGERIES[name][0](y.clone(), zy.clone(), xq, s_a, w.weight, w.weight_scale)
-    host = ZR.reason(zy.numpy(), ROWS, 64, y, s_a, w.weight_scale)
+    bits, sa, sw = y.contiguous().view(torch.int16).numpy(), PH.numpy_of(s_a), PH.numpy_of(w.weight_scale)
+    host = ZR.reason(zy.numpy(), ROWS, 64, bits, sa, sw)
     assert host == (None if name is None else FORGERIES[name][1])
-    assert ZR.reason(zy.cuda(), ROWS, 64, y.cuda(), s_a.cuda(), w.weight_scale.cuda()) == host
+    assert ZR.holds_on(zy.cuda(), ROWS, 64, y.cuda(), s_a.cuda(), w.weight_scale.cuda()) == (host is None)
+    assert ZR.reason(zy.cuda(), ROWS, 64, bits, sa, sw) == host
 
 
 def test_a_z_written_outside_the_trace_is_refused_as_untraced():
