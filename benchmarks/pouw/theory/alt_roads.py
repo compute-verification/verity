@@ -250,7 +250,8 @@ def r1b_salt_and_arrival(inp: dict, ll: dict) -> dict:
                     "t2_change_by_rtt": {f"{rtt * 1e6:g}us": (64 * rtt - inp["ssn_1l"]["coin_latency_s"]) / point["t_stock_s"]
                                          for rtt in (2e-6, 10e-6, 1e-3)},
                     "rows": rows})
-    return {"design": "ssn_1l, words hashed on the GPU; salt sides from the certifier; A_j to it and coins back on arrival",
+    return {"design": "ssn-1l-tag (or ssn_1l_hw), words hashed on the GPU; salt sides from the certifier; A_j to it and coins back "
+                      "on arrival",
             "points": out,
             "terms_removed_t8192": {"hiding_k32": r["hiding_term_t8192_k32"], "hashing_before_noise": r["prenoise_term_t8192"]},
             "premises_removed": ["atomic call + PeriodInventory for hashing A before its noise (3)", "the grinding bound (open)",
