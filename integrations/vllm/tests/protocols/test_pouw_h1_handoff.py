@@ -73,7 +73,7 @@ def _served(settings, n=40, arm=Int8Arm):
 
 def test_a_window_closed_by_another_process_is_the_one_its_session_served(tmp_path, monkeypatch):
     """The serving process saves its window and hands its challenge phase's stream to a holder, and its own end of the stream
-    goes; the window resumed from the file on that descriptor closes, opens its last round's coin and its draw, and
+    goes; the window resumed from the file on that descriptor closes, opens its last round's coin and its sample, and
     closes the challenge phase: the record is one manifest under the coins the auditor's challenge phase released, in order, and each
     call's A table is under its round's root."""
     host = _host(tmp_path, monkeypatch)

@@ -25,7 +25,7 @@
 // [32 pos, 32 pos + 32)), `rows` (n rows of l bits at a byte stride; an int8 operand's own memory is rows of 8 L bits) and
 // `seg` (the same rows under sha512/row-seg/v1 and schema hm96-sha512/row-seg/v1: 1 KiB segments hashed a thread each, then
 // the outer hash over their digests, so a long row's hash is not one serial chain; P is then Q(l)). `tile` and `tileseg`
-// (Decision 46) commit an M x K int8 operand in place as tile leaves: leaf pos is block (pos % ceil(M/R), pos / ceil(M/R))
+// commit an M x K int8 operand in place as tile leaves: leaf pos is block (pos % ceil(M/R), pos / ceil(M/R))
 // of R rows x 32 values, its row the block's 32 R bytes in row-major order (rows past M zero), as sha512/row/v2 or
 // sha512/row-seg/v1 rows: the reference's commitment of the permuted operand (reference.permute).
 //
@@ -41,12 +41,15 @@
 #include <string>
 #include <vector>
 
-#include "sha512.cuh"
+#include "../../../verity/ml/kernels/sha512.cuh"
 
 using u64 = uint64_t;
 using u32 = uint32_t;
 #ifndef DEV
 #define DEV __device__ __forceinline__
+#endif
+#ifndef HD
+#define HD __host__ __device__ __forceinline__
 #endif
 
 #ifndef CK
@@ -313,7 +316,7 @@ DEV void hash_after_block(const u64* cv, const Src& src, u32 lb, u64* x, bool pf
   }
 }
 
-// The tile layout (Decision 46): an M x K int8 operand (row-major, K a multiple of 32) as ceil(M/R) x K/32 blocks of R rows
+// The tile layout: an M x K int8 operand (row-major, K a multiple of 32) as ceil(M/R) x K/32 blocks of R rows
 // x 32 values; leaf pos is block (b_r, b_c) = (pos % ceil(M/R), pos / ceil(M/R)), its bytes the block's in row-major order
 // (32 R bytes; rows past M are zero), so a check's 128-row tile at one 32-step is 128/R adjacent leaves.
 struct TileGeom {

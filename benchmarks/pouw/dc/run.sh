@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# EPS1 DC on one datacenter GPU: the probes (M3 on sm_90a, M4 on sm_100a), the scalar pipes, and the Dither GEMM gate and
-# bench. From a pushed commit, on a 1x H200 or 1x B200 node:
+# The data-centre probes on one GPU: the probes (M3 on sm_90a, M4 on sm_100a), the scalar pipes, and the Dither GEMM
+# gate and bench. From a pushed commit, on a 1x H200 or 1x B200 node:
 #
 #   research run --on <node> --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90|sm100
@@ -13,7 +13,7 @@
 # analyze.py (analysis.json, verdict.json).
 # Exit: 0 all done, 1 build or gate refused, 4 a dgemm gate not exact (probes still ran), 2 wrong device or no nvcc.
 # DC_BUILD_ONLY=1 stops after the build and SASS gate and needs no GPU (any machine with CUDA 13.0).
-# sm90jb is DC-DESIGN's stress of the H200 rows (probes/sm90_jbreak.cu): probes only, no dgemm. DC_ONLY=REGEX times only
+# sm90jb is the stress of the H200 rows (probes/sm90_jbreak.cu): probes only, no dgemm. DC_ONLY=REGEX times only
 # the probes it matches and skips dgemm and fp8acc; DC_PASSED_ONLY=1 times what passes when some probes are refused.
 set -uo pipefail
 FAM=${1:?usage: run.sh sm90|sm100}

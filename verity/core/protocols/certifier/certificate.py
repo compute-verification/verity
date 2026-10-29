@@ -45,7 +45,7 @@ with its length as a u64be:
     message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [signed digest] ),
               tag = "verity/network-certificate-message/v2", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
 
-`session` is the certifier session's id, 32 bytes (`lms.SESSION_BYTES`) that the challenger draws for the session and
+`session` is the certifier session's id, 32 bytes (`lms.SESSION_BYTES`) that the challenger samples for the session and
 issues to the certifier; the audit takes it from its parameters, as it takes the key, so the record head and the
 certificate's encoding don't carry it. The tag is the message's own, distinct from the ids of the checks that read it
 (`verity/network-certificate/v4`, `verity/network-records/v3`).
@@ -87,6 +87,7 @@ from pathlib import Path
 from typing import Protocol
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier.grid import Grid, GridParams, Reason, Record, Status, row_left_packed
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
@@ -98,7 +99,7 @@ FRAME_TAG = b"verity-network-certifier/frame/v2\0"
 EMPTY_TAG = b"verity-network-certifier/empty/v2\0"
 NODE_TAG = b"verity-network-certifier/node/v2\0"
 CERTIFICATE_TAG = b"verity/net-cert/v1"
-DIGEST_BYTES = 64
+DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 SALT_BYTES = 64
 
 STATUS_CODES: dict[Reason | None, int] = {
@@ -434,7 +435,7 @@ class Certificate:
 
 @dataclass(frozen=True, slots=True)
 class CertifiedRecord:
-    """What the certifier hands over per link-window: the record head, the salt it drew for it (`salt_c`, witness like
+    """What the certifier hands over per link-window: the record head, the salt it sampled for it (`salt_c`, witness like
     the head) and the certificate, which signs the head's digest salted by it (`certificate_digest`)."""
 
     head: RecordHead
@@ -477,7 +478,7 @@ class CertifiedRecord:
 @dataclass(frozen=True, slots=True)
 class CertifiedClock:
     """What the certifier hands over per egress link-window beside its record: the sync its shaper ran the window under
-    and the salt it drew for it (`salt_c`), both witness as a head and its salt are, and the certificate, the one public
+    and the salt it sampled for it (`salt_c`), both witness as a head and its salt are, and the certificate, the one public
     part, which signs the sync's clock digest salted by it (`clock_commitment`)."""
 
     sync: ClockSync
