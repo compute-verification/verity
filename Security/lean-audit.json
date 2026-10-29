@@ -11180,6 +11180,12 @@
    "assumptions": [],
    "type_hash": "d29489247f5da3d50fd1a297d4dedec5e94940fa1ff83ecab62fd5b8fae592df"
   },
+  "Verity.SecurityProofs.CommittedMeets": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.CommittedMeets : Verity.Guarantees.CommittedMeets"],
+   "assumptions": [],
+   "type_hash": "20861215c23df66e4b3c08f6ba2721de029e7b1e815b169414feebe4d281342e"
+  },
   "Verity.SecurityProofs.Compose": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.Compose : Verity.Guarantees.Compose"],
@@ -11359,12 +11365,6 @@
    "signature": ["Verity.SecurityProofs.RefineWrong : Verity.Guarantees.RefineWrong"],
    "assumptions": [],
    "type_hash": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6"
-  },
-  "Verity.SecurityProofs.RegisteredMeets": {
-   "owner": "@proofs",
-   "signature": ["Verity.SecurityProofs.RegisteredMeets : Verity.Guarantees.RegisteredMeets"],
-   "assumptions": [],
-   "type_hash": "20861215c23df66e4b3c08f6ba2721de029e7b1e815b169414feebe4d281342e"
   },
   "Verity.SecurityProofs.ServingBlockSum": {
    "owner": "@lean",
