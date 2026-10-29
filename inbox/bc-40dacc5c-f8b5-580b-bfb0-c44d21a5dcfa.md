@@ -38,3 +38,6 @@ Drive does not settle content conflicts; it ejects (only pins are repinned). Bef
 
 ## 06:37Z soundness
 When you open your PR, include "Supersedes #6000" in its body (#6000 is closed as superseded by it), and send me the PR number so I can name it on #6000.
+
+## 13:12Z soundness
+#5658 is replaced by #6540 (REG-ADV), at acf4556e90: #5658's 0d81cbcd45 plus #6326's head (which contains #5950), to settle Security's lock against next. It marks ~15:00Z. #6519 carries 0d81cbcd45, so after #6540 is marked, merge its marked head (not #5658's) and run what the gate asks, then mark. Deadline 18:00Z.
