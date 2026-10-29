@@ -144,6 +144,12 @@ def ingress_verdicts(records, windows, key=None, session=SESSION):
                                                             session=session)]
 
 
+def certified(raw):
+    """The raw audit's verdicts as the certified audit gives them: the issuer certifies no incomplete record, so a
+    window the raw audit rejects on its status has no certificate and is a `no-verdict`."""
+    return ["no-verdict" if v is not None and v.startswith("status:") else v for v in raw]
+
+
 def scenarios():
     """The audit and commitment tests' egress runs: honest, late, tampered, faulted, duplicated, missing a window,
     and out-of-set advice with and without a tampered later window."""
@@ -173,14 +179,13 @@ def scenarios():
 
 def test_certified_audit_matches_raw_audit_on_every_egress_scenario(tmp_path):
     """The difftest on the test vectors: with an honest issuer, every egress scenario gets the raw audit's verdicts,
-    rejections included, and the committed (v1) audit agrees."""
+    rejections included (a status one as a `no-verdict`), and the committed (v1) audit agrees."""
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     seen = set()
     for name, (records, syncs) in scenarios().items():
         raw = egress_verdicts(records, syncs=syncs)
-        certified = certify_all(Issuer(signer, SESSION), records)
-        assert egress_verdicts(certified, key, syncs) == raw, name
+        assert egress_verdicts(certify_all(Issuer(signer, SESSION), records), key, syncs) == certified(raw), name
         assert egress_verdicts([commit(r, P) for r in records], syncs=syncs) == raw, name
         seen.update(raw)
     assert seen == {None, "mismatch", "status:monitor-unavailable", "no-verdict", "duplicate", "advice"}
@@ -202,8 +207,8 @@ def test_certified_audit_matches_raw_audit_with_two_links_and_one_clock(tmp_path
 
 
 def test_certified_audit_matches_raw_audit_on_ingress(tmp_path):
-    """Ingress: different timings are both accepted, and an incomplete status, a duplicate and a missing window are the
-    raw audit's violations, certified."""
+    """Ingress: different timings are both accepted, and a duplicate and a missing window are the raw audit's
+    violations, certified; an incomplete status, certified nothing, is a `no-verdict`."""
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     early = ingress_run([[2, 0, 0, 0], [1, 1, 0, 0], [0, 0, 0, 0]])
@@ -211,8 +216,22 @@ def test_certified_audit_matches_raw_audit_on_ingress(tmp_path):
     faulted = ingress_run([[1, 0, 0, 0], [0, 2, 0, 0]], faults={1: Reason.DELIVERY_REFUSED})
     for records, windows in ((early, 3), (late, 3), ([faulted[0], *faulted], 3), (faulted, 2)):
         raw = ingress_verdicts(records, windows)
-        assert ingress_verdicts(certify_all(Issuer(signer, SESSION), records, INGRESS), windows, key) == raw
+        assert ingress_verdicts(certify_all(Issuer(signer, SESSION), records, INGRESS), windows, key) == certified(raw)
     assert ingress_verdicts([faulted[0], *faulted], 3) == ["duplicate", "status:delivery-refused", "no-verdict"]
+
+
+def test_an_honest_window_is_complete_so_the_issuer_refuses_nothing_honest(tmp_path):
+    """Honest runs close every window complete, egress and ingress at either timing, so the issuer, which certifies
+    only a complete record, certifies every window and refuses none."""
+    signer = signers.signer(tmp_path)
+    egress = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    early = ingress_run([[2, 0, 0, 0], [1, 1, 0, 0], [0, 0, 0, 0]])
+    late = ingress_run([[0, 0, 0, 2], [0, 0, 1, 1], [0, 0, 0, 3]])
+    issuer = Issuer(signer, SESSION)
+    for records, direction in ((egress, EGRESS), (early, INGRESS), (late, INGRESS)):
+        assert all(r.status.complete for r in records)
+        assert len(certify_all(issuer, records, direction)) == len(records)
+    assert issuer.refused == []
 
 
 def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
@@ -249,17 +268,26 @@ def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
     assert egress_verdicts(certified, key) == [None, None, None]
 
 
-def test_a_relayed_status_the_certificate_disagrees_with_is_a_signature_violation(tmp_path):
-    """The status is the signed head's: a relay that edits a faulted head to complete breaks the certificate."""
+def test_an_incomplete_record_gets_no_certificate_and_a_relayed_status_is_bound(tmp_path):
+    """The issuer certifies only a complete record: a faulted one is listed in `refused`, with no session started and
+    no leaf spent, and its window is a `no-verdict`. The status is the signed head's: a faulted head signed anyway (by
+    `sign`, as a forger would have to) that a relay edits to complete breaks the certificate."""
     signer = signers.signer(tmp_path)
     w = Certifier("requests", P)
     w.fault(Reason.DROPPED)
     for _ in range(P.buckets):
         w.tick()
-    faulted = certify_all(Issuer(signer, SESSION), [w.close_window()], INGRESS)[0]
+    record = w.close_window()
+    issuer = Issuer(signer, SESSION)
+    key = signer.public_key()
+    assert certify_all(issuer, [record], INGRESS) == [] and not issuer.started
+    assert issuer.refused == [("requests", INGRESS, 0)]
+    assert ingress_verdicts([], 1, key) == ["no-verdict"]
+    head = record_head("requests", INGRESS, 0, record.grid, record.status, P, parameters_digest(P, None))
+    salt = bytes(64)
+    faulted = CertifiedRecord(head, salt, issuer.sign("requests", INGRESS, 0, certificate_digest(salt, head.digest())))
     lying = CertifiedRecord(RecordHead(**{f: getattr(faulted.head, f) for f in RecordHead.__slots__}
                                        | {"status": COMPLETE}), faulted.salt, faulted.certificate)
-    key = signer.public_key()
     assert ingress_verdicts([faulted], 1, key) == ["status:dropped"]
     assert ingress_verdicts([lying], 1, key) == ["signature"]
 

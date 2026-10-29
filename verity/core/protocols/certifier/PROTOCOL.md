@@ -110,8 +110,9 @@ v1 stays as it is, and readable: `CommittedRecord` and `record_digest` are uncha
 
 **The trust change.** The **network certifier**, the device on a node's uplink that shapes each link into the grid
 (`grid.Certifier`), is auditor-trusted: the auditor trusts it to run the grid and to sign what it ran. A raw or
-committed record reaches the auditor as published. Instead, once per sampling block, the certifier signs a **network
-certificate**: a signature over a hiding digest of the window's record, salted by the certifier (`certificate.Issuer`).
+committed record reaches the auditor as published. Instead, once per sampling block whose status is complete, the
+certifier signs a **network certificate**: a signature over a hiding digest of the window's record, salted by the
+certifier (`certificate.Issuer`). Any other sampling block gets none (`Issuer.refused`) and fails closed (W6).
 The record head and the salt are witness. They enter proofs, which open frames of the record in-circuit, and never
 reach the auditor in the clear, so the record's own hashes are unsalted. The audit checks the certificate against the
 certifier's public key. With an honest certifier every certificate verifies, and the audit's verdicts are those of the
