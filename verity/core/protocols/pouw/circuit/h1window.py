@@ -815,7 +815,7 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
     weights' ``b/<K>``), ``partials``' entry ``partials`` and a J10-R leaf's carries' and ok rows' theirs in
     ``produced`` (each `produced.entry` under the window's registration). A read of an A row, a B row, a partials row,
     a carry or an ok row is marked `READ_IN_FULL` (`leaf_lanes.read_in_full`), never an ``o0``. Then ``known_ports``
-    (`produced.known_port` of `leaf_known_rows`)."""
+    (`produced.known_port` of `leaf_known_rows`), and ``complete``."""
     S = program.fn.S()
     c = call_of(program, u)[0]
     shape, b = _shapes(program, c, steps), f"{S.PREFIX}b/{_k(S)[S.CALLS[c][0]]}"

@@ -16,11 +16,11 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 (developer, verifier); `onsite.py` adds the network certifier, the memory challenger and the onsite verifier's subprotocols;
 `remote.py` is the two-party deployment; `tests/test_lifecycle.py` runs both, honest and with every deviation.
 
-**The proofs are a stand-in.** `prove(statement, witness) -> proof` returns the drawn unit's openings, and
+**The proofs are a stand-in**, answering under the id both composites run for integrity, one-stage v2
+(`SampledProofs.OneStageZk`). `prove(statement, witness) -> proof` returns the drawn unit's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
-It is sound for the example and not zero-knowledge, though its answer carries the id both composites run for integrity,
-one-stage v2 (`SampledProofs.OneStageZk`); C-Flock's zero-knowledge proofs behind the firewall replace it
-(`verity/ml/flock/`, `verity/core/service/flock/`). Everything else is the repository's own code, as (b) says.
+It is sound for the example and not zero-knowledge; C-Flock behind the firewall replaces it (`verity/ml/flock/`,
+`verity/core/service/flock/`). Everything else is the repository's own code, as (b) says.
 
 ## Terms
 
@@ -158,8 +158,9 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `draw(coins, block)`, `draw_size` | verifier | live coins | the drawn proof blocks | `verity/core/protocols/sampled_proofs/coins.py` (`draw_first`), `verity/core/protocols/pouw/window.py` (`bucket`, `k_prime`) |
 | `prove(statement, witness)` | firewall | a `Statement`, the openings | a proof | STAND-IN for C-Flock |
 | `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for C-Flock's verifier |
-| `sampled_proofs`, `pouw_window`, `inference_only`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
+| `sampled_proofs`, `pouw_window`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
 | `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/core/protocols/composition/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
+| `inference_only` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as a per-declaration function: written in the example |
 | `account(baseline, declarations, lines, layout)` | verifier | the period's records and verdicts | period verdict, credit, bound, projections, scaling | missing: written in the example |
 | `Certifier`, `certified(I, view, direction)` | network certifier | frames seen | a signed view | `verity/ml/crypto/lms.py` (`certificate_message`, `sign_at`, `verify`) |
 | `Challenger`, `theta_reach(layout, store)`, `label` | memory challenger, verifier | an open round; the layout | PoUS, bandwidth and wipe report; rate and latency | missing: written in the example (the wipe a STAND-IN for `verity/wipe/v0`) |
