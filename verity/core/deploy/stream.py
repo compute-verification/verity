@@ -12,8 +12,8 @@ exception out of the party, the codec or the stream is the caller's: nothing is 
 
 `Side` is a party's side as another process runs it, on this machine or another: `host`, the machine's name; `command`,
 the argv that starts it there, which reads its request as one JSON line on stdin, prints `{"listening": PORT}`, serves
-one stream and prints its report as its last line; `address`, where the stream connects, None for this machine at the
-port the side prints. `Side.of` reads which machine from a node's `period.json`: its `challenger_host` (the node itself
+one stream and prints its report as its last line, or prints `{"refused": REASON}` instead of listening; `address`,
+where the stream connects, None for this machine at the port the side prints. `Side.of` reads which machine from a node's `period.json`: its `challenger_host` (the node itself
 by default), and `challenger.<key>`'s `command` and `address` (`"HOST:PORT"`), which infra writes once that host serves
 the side. `talk(request, drive)` starts the side, hands `drive` the connected socket, and returns the side's report
 with what `drive` returned.
@@ -121,7 +121,7 @@ class Side:
 
     def talk(self, request: Mapping[str, Any], drive: Callable[[socket.socket], T]) -> tuple[dict[str, Any], T]:
         """One session with this side: `request` sent, `drive` handed the stream once it connects, and the side's
-        report; refused (RuntimeError) when the side exits before it listens or exits nonzero."""
+        report; refused (RuntimeError) when the side refuses, exits before it listens or exits nonzero."""
         p = subprocess.Popen(list(self.command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         try:
             p.stdin.write(json.dumps(dict(request), sort_keys=True) + "\n")
@@ -129,7 +129,10 @@ class Side:
             line = p.stdout.readline()
             if not line:
                 raise RuntimeError(f"the side on {self.host} exited {p.wait()} before it listened")
-            port = json.loads(line)["listening"]
+            doc = json.loads(line)
+            if "listening" not in doc:
+                raise RuntimeError(f"the side on {self.host} refused: {doc.get('refused', line.strip()[:200])}")
+            port = doc["listening"]
             with socket.create_connection(self.address or ("127.0.0.1", port)) as s:
                 got = drive(s)
             report = json.loads(p.stdout.readline())
