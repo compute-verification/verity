@@ -66,6 +66,7 @@ integrations/vllm/tests/protocols/fixtures/challenger_periods
 benchmarks/network_e2e/encodings/tests/fixtures
 benchmarks/network_e2e/tests/data/endpoint_carry/advice_trace.jsonl
 benchmarks/network_traces/tests/fixtures/weights-v1-h200-digests.json
+benchmarks/tc_probe_fp4/tests/fixtures/tc-sm100-f8-2026-10-19.json
 verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json
 verity/core/protocols/certifier/tests/fixtures/cache_step_vectors.json
 verity/core/protocols/certifier/tests/fixtures/cache_step_v2_vectors.json
@@ -166,14 +167,10 @@ integrations/vllm/workloads/workload_llama32_1b_32x16_1req.json
 integrations/vllm/workloads/workload_phi3_mini_32x16_1req.json
 integrations/vllm/workloads/workload_qwen05_32x16_1req.json
 integrations/vllm/workloads/workload_qwen15_32x16_1req.json
-verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_0/out_row.u16
-verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_1/out_row.u16
-verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_2/out_row.u16
-verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_0/out_row.u16
-verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_1/out_row.u16
-verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_2/out_row.u16
+verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z
 verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz
 verity/ml/circuits/ops/tests/fixtures/tc-hopper-wgmma-bf16-2026-09-26/records.json.gz
+verity/ml/circuits/ops/tests/fixtures/tc-sm120-mxf4-2026-10-01
 verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/4090/cvt_special.json
 verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz
 verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/cvt_special.json
