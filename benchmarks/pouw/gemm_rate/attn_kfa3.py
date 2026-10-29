@@ -15,8 +15,8 @@ and `so:NS:contig` (fa3_tile.sh). Its output need not equal FA3's bytes, so each
   most FA3's plus one ulp of max |reference|.
 
 An arm that fails one is reported and never timed. Per-element ulps are reported, not gated: where an output is near zero
-its ulp is tiny, so any kernel whose bytes differ from FA3's is many ulp from it there, and FA3 itself is ~30,000 from
-the reference (a sign across zero). Each gate row carries
+its ulp is tiny, so any kernel whose bytes differ from FA3's is many ulp from it there, and FA3 itself is many ulp from
+the reference there (a sign across zero). Each gate row carries
 the max abs and max ulp against FA3 and the reference, and the shares of output elements that differ from FA3 and that
 are more than ULP_BOUND ulp from it. Timing is attn_knobs.py's: rounds interleave the passing arms in graphed windows,
 and a window's useful causal MACs a SM clock are against bf16's 2,048.
