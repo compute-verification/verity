@@ -241,14 +241,15 @@ struct Bufs {
   size_t entries = 0;
   unsigned char *A = nullptr, *D = nullptr, *X = nullptr;
 };
-// A in offset-binary int7 (1..127), D (and coins) as bytes: what the kernels read. Filled on the device (the per-forward
-// operands are gigabytes); check() reads them back.
+// A in offset-binary int7 (1..127) and D as E + 31 in 0..63, so A + D + 33 can't carry between a word's bytes (formncp
+// masks its coin bytes to 0..63 itself). Filled on the device (the per-forward operands are gigabytes); check() reads them
+// back.
 __global__ void fill_k(unsigned char* A, unsigned char* D, size_t n) {
   for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n + 64; i += (size_t)gridDim.x * blockDim.x) {
     u64 x = i + 0x9e3779b97f4a7c15ull;
     x ^= x >> 33; x *= 0xff51afd7ed558ccdull; x ^= x >> 33; x *= 0xc4ceb9fe1a85ec53ull; x ^= x >> 33;
     if (i < n) A[i] = (unsigned char)(1 + (x >> 8) % 127);
-    D[i] = (unsigned char)x;
+    D[i] = (unsigned char)(x & 63);
   }
 }
 static void alloc(Bufs& b, size_t entries) {

@@ -217,8 +217,9 @@ struct Host {
 static Host make_host() {
   Host h;
   h.A.resize(TA); h.DA.resize(TA); h.B.resize(TB); h.DB.resize(TB);
-  for (int i = 0; i < TA; i++) { h.A[i] = (int8_t)mix32(i + 1); h.DA[i] = (int8_t)mix32(i + 0x10000); }
-  for (int i = 0; i < TB; i++) { h.B[i] = (int8_t)mix32(i + 0x20000); h.DB[i] = (int8_t)mix32(i + 0x30000); }
+  // operands offset-binary in 1..127 and noise bytes in 0..63, so the 4-entry word add can't carry between bytes
+  for (int i = 0; i < TA; i++) { h.A[i] = (int8_t)(1 + mix32(i + 1) % 127); h.DA[i] = (int8_t)(mix32(i + 0x10000) & 63); }
+  for (int i = 0; i < TB; i++) { h.B[i] = (int8_t)(1 + mix32(i + 0x20000) % 127); h.DB[i] = (int8_t)(mix32(i + 0x30000) & 63); }
   h.kA.resize(TA); h.kDA.resize(TA); h.fA.resize(TA); h.fDA.resize(TA); h.kB.resize(TB); h.kDB.resize(TB);
   for (int r = 0; r < 64; r++)
     for (int k = 0; k < KB; k++) {
