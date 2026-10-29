@@ -10,7 +10,7 @@ byte the one V* writes for its statement by the byte it differs at. V*'s parts a
 inner shape's claims are two and two per region, and the verifier's registered reads hold exactly the statement's
 message-round ports. A session is the statement the verifier names (`--rec-part J`), and META binds the verifier's own
 bindings (`--rec-bindings F`, which `verity_flock.rec_bindings` computes from the partition object and program) exactly,
-`program_digests` by value. Candidate 3's session adds RecSparse, R's levels under names of their own
+`program_digests` by value, its one key V*'s template of the statement. Candidate 3's session adds RecSparse, R's levels under names of their own
 (`rec-open-stacked/l<LANES>-h<H>`) and R's opening at META's shape, each needed. The honest sessions themselves are replayed on the pod: their statements are
 hundreds of MB. Each `rec-statements` builds the algebra's parts at its shape, about 5 s, so every test is slow; its runs are
 kept on the machine while the verifier and their inputs are unchanged (`keyed.run`)."""
@@ -396,6 +396,24 @@ def test_meta_binds_the_verifiers_own_program_digests_by_value(l16_h1, tmp_path)
         f"rec-open/l16-h1: META program_digests {canon(digest)}, the verifier's bindings' {canon(other)}"), line
     rc, line = _statements(inner, "--circuit", str(tmp_path / "honest.txt"), *flags)
     assert rc == 1 and line["error"] == "rec-open/l16-h1: pass the verifier's own bindings (--rec-bindings F)", line
+
+
+def test_a_statement_relabelled_under_another_template_is_refused(l16_h1, tmp_path):
+    """`RecVStar.checkTemplate`: `rec-open/l16-h1` whose META and the verifier's bindings both name its template as
+    `RecOpen_v4{LANES=16,H=2}`, the digest unchanged, is V*'s file under those bindings (every byte compared agrees) and is
+    refused by the template, V*'s `RecOpen_v4{LANES=16,H=1}`; `verify` runs the same check (`checkCircuit`)."""
+    inner = _inner(tmp_path / "inner.json", 23, 22, 8)
+    honest, own = l16_h1
+    mine = json.loads(own.read_text())
+    ((tid, digest),) = mine["program_digests"].items()
+    other = tid.replace("H=1", "H=2")
+    assert tid == "RecOpen_v4{LANES=16,H=1}" and honest.count(tid.encode()) == 1
+    (tmp_path / "relabelled.txt").write_bytes(honest.replace(tid.encode(), other.encode()))
+    (tmp_path / "relabelled.json").write_text(json.dumps({**mine, "program_digests": {other: digest}}))
+    rc, line = _statements(inner, "--circuit", str(tmp_path / "relabelled.txt"), "--instances", "142", "--rec-part", "2",
+                           "--rec-bindings", str(tmp_path / "relabelled.json"))
+    assert rc == 1 and line["error"] == (
+        f"rec-open/l16-h1: the verifier's bindings' program_digests names {other}, not V*'s template of the statement {tid}"), line
 
 
 def test_verify_refuses_a_v_star_statement_without_the_session_index_or_the_verifiers_bindings(staged, tmp_path):  # noqa: F811

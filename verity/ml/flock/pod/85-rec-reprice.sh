@@ -836,7 +836,7 @@ lean)
   done
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
   # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
-  # partition object and program), and the one shared rows file every part is verified against (rows.json,
+  # partition object and program, its template V*'s Definition of the unit's statement), and the one shared rows file every part is verified against (rows.json,
   # rec_vstage.staged_shared_rows: the honest algebra's row ports but v and out, R's levels' tops, and each level's tops
   # rec-top-L<l> as L<l> and its cap read them; without the algebra, the first level's acc as acc0), whose digest
   # lean_verdicts.py's rec-compose holds every part's verdict to
@@ -852,6 +852,7 @@ from verity_flock import rec_vstage as VS
 o, v, vs = map(Path, sys.argv[1:])
 (line,) = [json.loads(ln[9:]) for ln in (o / "rec-statements.txt").read_text().splitlines() if ln.startswith("RECVSTAR ")]
 names = [s[0] for s in line["statements"]]
+holo = json.loads((o / "rec-inner.json").read_text()).get("holo", False)
 try:
     (o / "rows.json").write_text(json.dumps(VS.staged_shared_rows(v)))
 except ValueError as e:
@@ -864,7 +865,8 @@ for s in sorted(p for p in vs.iterdir() if p.is_dir()):
     if unit in names:
         flags += ["--rec-part", str(names.index(unit))]
     try:
-        b = RB.bindings(json.loads((c / "partition.json").read_text()), json.loads((c / "program.json").read_text()))
+        b = RB.bindings(json.loads((c / "partition.json").read_text()), json.loads((c / "program.json").read_text()),
+                        RB.vstar_definition(unit, holo) if unit in names else None)
         (o / f"bindings-{s.name}.json").write_text(json.dumps(b))
         flags += ["--rec-bindings", str(o / f"bindings-{s.name}.json")]
     except ValueError as e:
