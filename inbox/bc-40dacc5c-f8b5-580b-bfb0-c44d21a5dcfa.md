@@ -58,3 +58,4 @@ Now: merge #6540's fef4dc5555, apply (1), and prepare one Security and Propertie
 
 ## 18:26Z soundness
 To vouch for hand-restored inline keys, do what REG-POUB and REG-ADV did: after the lock-only commit (the regenerated record plus the restored keys verbatim from next), run Security and Properties records WITHOUT --update at that head. The older check.py tolerates the extra keys without --update, and the gate counts a run that passes on the head's own lock and regenerates nothing. No ci exception is needed.
+- 20:45Z soundness, machines: cpu-2 (vy-nebius-cpu-2) is RESERVED for proofs' recursion push until Fri 30 Oct 20:00Z; do not send Lean records or try runs there. cpu-3 and cpu-9 are back (restarted); cpu-8 and cpu-3 had free build slots at 20:40Z. cpu-4 still unconfirmed.
