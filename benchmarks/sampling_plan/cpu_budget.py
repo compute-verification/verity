@@ -140,7 +140,7 @@ def render(r: dict) -> str:
                      f"{'' if w['measured'] else '*'} | {w['slots_each']} | {w['wall_each_s']:.0f} | {w['slot_s']:.4g} | "
                      f"{w['K0']['0.01']:,} | {w['share']['0.01']:.3g} | {w['K0']['1e-06']:,} | {w['share']['1e-06']:.3g} |")
     lines += ["", f"\\* m outside the calibration ({min(CALIBRATION)} to {max(CALIBRATION)}): extrapolated.", "",
-              "Faulty proof blocks over a period, summed over the templates: pooled over all its blocks (`IntegrityHorizon`, "
+              "Incorrect proof blocks over a period, summed over the templates: pooled over all its blocks (`IntegrityHorizon`, "
               "with its share of the period's units), and in every block at once (delta split over the period's windows, "
               "with its share of a block's units).", "",
               "| period | fleet | blocks | pooled at 1% | share | pooled at 1e-6 | share | each block at 1% | at 1e-6 |",
