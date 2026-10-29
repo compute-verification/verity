@@ -7,8 +7,9 @@ compared configuration reaches:
 
 - κ(ℓ) = C_family(ℓ) / C_dense(ℓ), the cost to first reach loss ℓ, in analytic training FLOPs, in tokens and in measured
   training seconds;
-- α(ℓ) = Ω_dense(ℓ) / Ω_family(ℓ), Ω the restricted quantity spent up to ℓ: total novel bits for per-window low rank, total
-  bits communicated for local SGD.
+- α(ℓ) = Ω_dense(ℓ) / Ω_family(ℓ), Ω the restricted quantity spent up to ℓ: total novel bits for per-window low rank (the
+  values each window trains, what a server block spanning the window would take in as fresh input), total bits communicated for
+  local SGD.
 
 These are small-scale ratios on one corpus, one token budget and one window length or sync interval each, not frontier-scale
 numbers; a size trend across three sizes is not an extrapolation past them.
