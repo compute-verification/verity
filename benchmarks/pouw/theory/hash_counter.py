@@ -55,6 +55,10 @@ either apart over separable words: row-only and column-only sums are shared (col
 `TILE`-row coin tile, as the lead's column coins are drawn a tile), and each value's cross term Σ_t R_t(i)·Ĉ_t(g) is
 u8-digit IMMA chains, so its products are batched 32 a write.
 
+`agg` `mulxor` is FOLD-OPT's multiply–xor fold N ← (N ⊕ f_t)·k_t from N_0 = 0, k_t = r_t | 1 a live odd word a step,
+sealed with the final word (64 bits hashed); honest pays its word, a LOP3 and an IMUL a step. `edge` starts it from
+free terms: N_1 = D_1·k_1 is one IADD3 (two instructions with a per-cell offset).
+
 Run: `uv run --no-project --with numpy --with-editable benchmarks/pouw/exact_kit python -B hash_counter.py OUT.json
 [--quick] [--mutations] [--aggs=...] [--bits=...]` (from this directory).
 """
@@ -220,6 +224,11 @@ def aggregate(rule: Rule, d: Draw, fields):
         return xor_blocks(rule, fields)
     if nh_kind(rule):
         return nh_sketch(rule, fields)
+    if rule.agg == "mulxor":
+        N = np.zeros(fields.shape[:2], np.int64)
+        for t in range(fields.shape[2]):
+            N = mulmod(N ^ fields[:, :, t], d.r[t] | 1)
+        return N
     return mulmod(g_of(rule, d, fields), d.r[None, None, :]).sum(axis=2) & M32
 
 
@@ -270,7 +279,7 @@ def common_hash(rule: Rule, nP: int) -> float:
         return -(-nP // xor_block(rule)) * 32 * WB
     if nh_kind(rule):
         return 32 * WB / entries_a_value(rule)
-    return (64 if rule.agg == "xor" else 32) * WB
+    return (64 if rule.agg in ("xor", "mulxor") else 32) * WB
 
 
 def commit_ops(rule: Rule, nP: int) -> float:
@@ -281,6 +290,8 @@ def commit_ops(rule: Rule, nP: int) -> float:
         return nP * e + xor_lop3s(rule, nP)
     if nh_kind(rule):
         return nP * e + (nP / 2 if nh_kind(rule)[0] == "nh2" else nP // 2 + nP % 2)
+    if rule.agg == "mulxor":
+        return nP * (e + 2)
     if rule.agg == "lin":
         return nP * (e + 1)
     if degree(rule):
@@ -590,6 +601,23 @@ def decomp(rule, inst, d):
     return cost, s, f"row and column sums + {chains} IMMA writes a value for Σ R·Ĉ ({nR}×4 digits)"
 
 
+def edge(rule, inst, d):
+    """The multiply–xor fold from N_0 = 0 over separable words: N_1 = D_1·k_1 = x·k_1 + R_1·k_1 + C_1·k_1, one IADD3 of
+    free terms (an IMAD more for a per-cell offset x), then honest's word, LOP3 and IMUL a step."""
+    if rule.agg != "mulxor" or rule.k != 32 or inst.data != "zero" or inst.rec != "add" or d.P[0] != 0:
+        return None
+    parts = separable(inst, d)
+    if parts is None:
+        return None
+    R, C, cls, _, _ = parts
+    k1 = int(d.r[0] | 1)
+    N = (mulmod(d.w0 & M32, k1) + mulmod(R[:, :1] & M32, k1) + mulmod(C[cls, :, 0] & M32, k1)) & M32
+    for idx in range(1, len(d.P)):
+        N = mulmod(N ^ d.w[:, :, d.P[idx]], d.r[idx] | 1)
+    first = 1 + bool(np.any(d.w0))
+    return inst.S + commit_ops(rule, len(d.P)) - 3 + first, N, f"first step {first} write(s) from free terms"
+
+
 def pack(rule, inst, d):
     """An `xor` fold over words w = d0(i, j) + R_t(i) + C_t(j) at zero data: each lane's V is constant across the
     columns (a row term), or its U takes at most four row patterns (a column term a row class, as the lead's
@@ -676,8 +704,9 @@ def table(rule, inst, d):
 
 
 STRATEGIES = {"honest": honest, "skip": skip, "fold": fold, "bitslice": bitslice, "four_russians": four_russians,
-              "bsketch": bsketch, "expand": expand, "pack": pack, "decomp": decomp, "copy": copy, "table": table}
-LEAD_STRATEGIES = ("honest", "pack", "decomp", "copy", "table")
+              "bsketch": bsketch, "expand": expand, "pack": pack, "decomp": decomp, "edge": edge, "copy": copy,
+              "table": table}
+LEAD_STRATEGIES = ("honest", "pack", "decomp", "edge", "copy", "table")
 
 
 def evaluate(rule: Rule, inst: Inst, strategies=STRATEGIES):
@@ -814,6 +843,12 @@ def mutations(checks: Checks):
         d6.U[1::2, :, 2:] = d6.U[0::2, :, 2:]
         _, out6, _ = decomp(rule6, inst6, d6)
         checks.mutation(f"decomp {agg} with the row-parity classes merged", not np.array_equal(out6, ref6))
+    rule7, inst7 = Rule("all", "32", "mulxor"), Inst(64, 16, 67, 5, "zero", "add", 7, "lead:rot")
+    d7 = Draw(inst7, rule7)
+    _, ref7, _ = honest(rule7, inst7, d7)
+    d7.w0 = np.zeros_like(d7.w0)
+    _, out7, _ = edge(rule7, inst7, d7)
+    checks.mutation("edge dropping the per-cell offset", not np.array_equal(out7, ref7))
 
 
 def main() -> int:
@@ -871,6 +906,13 @@ def main() -> int:
         checks.check("decomp is cheapest and breaks T1 on every zero-data separable all/32/nh instance",
                      all(r["cheapest"] == "decomp" and r["breaks_T1"] for r in nh),
                      sorted({(r["rule"], r["inst"]["coins"], r["inst"]["S"], round(r["gap_share"], 3)) for r in nh})[:8])
+    mx = [r for r in results if r["rule"] == "all/32/mulxor" and r["inst"]["data"] == "zero"
+          and (r["inst"]["coins"].startswith("lead:") or r["inst"]["coins"] == "sep")]
+    if mx:
+        checks.check("edge is cheapest on every zero-data separable all/32/mulxor instance, 1–2 writes under honest",
+                     all(r["cheapest"] == "edge" and 1 <= r["strategies"]["honest"]["writes"] - r["cheapest_writes"]
+                         <= 2 for r in mx),
+                     sorted({(r["inst"]["coins"], r["inst"]["S"], round(r["gap_claimed"], 4)) for r in mx}))
     if checks.mutations:
         mutations(checks)
     by_rule = {}
