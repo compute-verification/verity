@@ -2088,7 +2088,7 @@ def parse (c : Circuit) : V (Array (Nat × Nat × Nat)) := do
 an input node, its index, members, first gate and gates per member. Unit `u` is counted across them in order, member `m` of
 node `k` holding gates `[offset + m · gates, offset + (m + 1) · gates)`; `unitAt` and `ownerAt` read a unit from this list,
 never from its members unrolled (`LinkUnits`). -/
-def nodes (P : Program.Prog) : List Node :=
+def nodes (P : Program.Prog) : List NodeUnits :=
   let body := (P.defs[P.root]!).body
   (List.range body.nodes.size).filterMap fun k =>
     let node := body.nodes[k]!
