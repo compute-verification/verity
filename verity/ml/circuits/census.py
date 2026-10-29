@@ -112,7 +112,7 @@ from typing import Any, Callable, Iterable, Iterator
 from . import boolean as BL
 from . import ports
 from .codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
-from .defs import CompositeDefinition, Node, PrimitiveDefinition, bind
+from .defs import CompositeDefinition, BodyNode, PrimitiveDefinition, bind
 from .intervals import Intervals, contains, full, norm, ref_intervals, total
 from .layout import resolve
 from .liveness import _MEMBER_LIMIT
@@ -474,7 +474,7 @@ class _Aliases:
         return runs
 
     def resolved(self, k: int) -> tuple[list[int], list[tuple[int, int, Refs, bool]]]:
-        """Node `k`'s runs (`node`) with every pass-through followed, as runs `[lo, hi)` of its output leaves with what they
+        """BodyNode `k`'s runs (`node`) with every pass-through followed, as runs `[lo, hi)` of its output leaves with what they
         resolve to and whether that is the body's parameters (`resolve`'s pieces at their leaves), by `lo`, and their `lo`s."""
         todo = [k]
         while todo:  # a node's sources are earlier nodes: resolve them first, without recursing down a chain
@@ -610,7 +610,7 @@ class _Analysis:
         self._reads[id(fn)] = (fn, r)
         return r
 
-    def node(self, node: Node, m: _Marks) -> None:
+    def node(self, node: BodyNode, m: _Marks) -> None:
         r = self.reads(node.fn)
         n = node.n if node.form in ("batch", "scan") else 1
         m.select_gates += n * r.select_gates

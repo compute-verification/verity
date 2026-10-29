@@ -28,7 +28,7 @@ from .types import Array, RecordType, Tuple as TupleT, Type, Value, field_at, fi
 StaticValue = Any  # int | str | tuple[int, ...] | FunctionDefinition
 
 
-class Registry:
+class DefinitionTable:
     """Registered function definitions by id `Name_vN`."""
 
     def __init__(self) -> None:
@@ -48,7 +48,7 @@ class Registry:
         return fid in self.defs
 
 
-REGISTRY = Registry()
+REGISTRY = DefinitionTable()
 
 
 class FunctionDefinition:
@@ -255,7 +255,7 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
 
 
 @dataclass(eq=False)
-class Node:
+class BodyNode:
     """One body node: a primitive call, a composite call, a `batch`, or a `scan`. Each node denotes one
     interval of gates in the canonical layout."""
 
@@ -285,7 +285,7 @@ class Node:
 class Body:
     params: tuple[tuple[str, Type], ...]
     ret_type: Type
-    nodes: list[Node]
+    nodes: list[BodyNode]
     ret: Refs
     offsets: list[int]  # gate offset of node k within this function; len == len(nodes) + 1
 
@@ -511,7 +511,7 @@ class _Widths:
     node `below`'s arguments cannot read in dataflow order: such a descriptor decodes, and the checkers name the defect
     (PROTOCOL.md §4.4)."""
 
-    def __init__(self, params: tuple[tuple[str, Type], ...], nodes: list["Node"]) -> None:
+    def __init__(self, params: tuple[tuple[str, Type], ...], nodes: list["BodyNode"]) -> None:
         self.params, self.nodes = params, nodes
         self.below = len(nodes)
         self.forward = False  # a reference to node `below` or later was passed over: the `PartLog` memo is off from then on
@@ -682,11 +682,11 @@ class Builder:
     def __init__(self, params: tuple[tuple[str, Type], ...], ret_type: Type) -> None:
         self.params = params
         self.ret_type = ret_type
-        self.nodes: list[Node] = []
+        self.nodes: list[BodyNode] = []
         self.offsets: list[int] = [0]
 
     # -- helpers --------------------------------------------------------------------
-    def _emit(self, node: Node) -> Coll:
+    def _emit(self, node: BodyNode) -> Coll:
         k = len(self.nodes)
         self.nodes.append(node)
         self.offsets.append(self.offsets[-1] + node.gates)
@@ -710,7 +710,7 @@ class Builder:
             fn = bind(fn)
         _, ret = self._check_args(fn, args, "call")
         form = "primitive" if isinstance(fn, PrimitiveDefinition) else "call"
-        return self._emit(Node(form, fn, tuple(args), ret, name=name))
+        return self._emit(BodyNode(form, fn, tuple(args), ret, name=name))
 
     def batch(self, fn, *args: Coll, axes: Sequence[int | None], n: int | None = None, name: str | None = None) -> Coll:
         """`batch(F, args, axes)`: `n` independent calls of `F` (dataflow-independent). `axes[i]` is the
@@ -741,7 +741,7 @@ class Builder:
             n = next(iter(lengths))
         if n is None:
             raise TypeError("batch: n is required when no argument is mapped")
-        return self._emit(Node("batch", fn, tuple(args), Array(n, ret), axes=axes, n=n, name=name))
+        return self._emit(BodyNode("batch", fn, tuple(args), Array(n, ret), axes=axes, n=n, name=name))
 
     def scan(self, step, init: Coll, xs: Sequence[Coll] = (), shared: Sequence[Coll] = (), n: int | None = None,
              name: str | None = None) -> Coll:
@@ -779,7 +779,7 @@ class Builder:
         if n is None:
             raise TypeError("scan: n is required when there are no xs")
         out_t = TupleT(carry_t, Array(n, y_t))
-        return self._emit(Node("scan", step, (init,) + xs + shared, out_t, n=n, n_xs=len(xs), name=name))
+        return self._emit(BodyNode("scan", step, (init,) + xs + shared, out_t, n=n, n_xs=len(xs), name=name))
 
     def finish(self, out: Coll) -> Body:
         if not isinstance(out, Coll):
@@ -823,5 +823,5 @@ def composite(name: str, version: int, statics: Sequence[str], signature, doc: s
     return deco
 
 
-__all__ = ["Registry", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "Node",
+__all__ = ["DefinitionTable", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "BodyNode",
            "Body", "Builder", "TABLE_KINDS", "primitive", "composite", "Explicit", "concat"]
