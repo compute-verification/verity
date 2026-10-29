@@ -115,9 +115,10 @@ source = "N-HIDE interim 1 §2 (note compute-research/20261029T0715Z-report-np-h
 
 [price.egress_cap]
 value = 32
+alt = 320
 unit = "bits a served token across the replica's boundary"
 kind = "estimate"
-source = "N-ALT final, the egress layer (note compute-research/20261029T0903Z-report-np-alt; alt_roads.py run r20261029-090132-52bb, art:6e3a7a4157cd2c4334fef32498a90094404f85118e23681b517a03f08ec7dd30): DitherInstance's slack carries n_max · W_mac · E / W_reg, E the bits exchanged across the replica's boundary capped at served traffic, the challenger's signed coin stream excluded; a 4-byte token id a token, and 10x that (320) for text and framing. The network term is linear in it"
+source = "N-ALT final, the egress layer (note compute-research/20261029T0903Z-report-np-alt; alt_roads.py run r20261029-090132-52bb, art:6e3a7a4157cd2c4334fef32498a90094404f85118e23681b517a03f08ec7dd30): DitherInstance's slack carries n_max · W_mac · E / W_reg, E the bits exchanged across the replica's boundary capped at served traffic, the challenger's signed coin stream excluded; a 4-byte token id a token, and 10x that (320, `alt`) for text and framing. The network term is linear in it; N-EGRESS interim 2 (note compute-research/20261029T1002Z-report-np-egress) prices both caps, and the cap's rule is cap-served (N-PREM, open)"
 
 [price.coin_bytes]
 value = 2
@@ -417,7 +418,7 @@ source = "N-COMPOSE interim §3 (words_not_forced, hashCompose_of_carriedWords):
 rank = 0
 status = "open"
 owner = "N-LEAN"
-source = "N-RED interim 1 item 3 and M1 (note compute-research/20261029T0734Z-report-np-red): DistinctWritesMH100On takes any grid set S, and an adaptive prover runs a different straight-line program on each coin branch, so the lifted bound is vacuous; held fixed, a coin-addressed bulk copy is mispriced as `other`. Every design's T1 against a prover that reads the coins (which it must: the noise is an operand) rests on DistinctWrites stated for such programs, each branch charged its words and a bulk copy one address write a tile. The card prices what the branch saves on chosen rows (`coin_branch`) and takes this premise for the rest. N-RED interim 2 (note compute-research/20261029T0940Z-report-np-red; nred_round2.py run r20261029-084132-2bfb, art:bfe76ff2c3fe560bcb11f64926c10b20ed9fc39357382b582e0b0a27a18dad1a; nred_round3.py run r20261029-093222-46ee, art:752f2bd5b9e0fa22bfa6aefd9001b4ee68e6efb173e81fb611e9ac3a1e67d718) §5: A2c and A8 are coin-branching programs whose words equal the honest words, so a free-branch statement loses at least 51.6% of stock on the tagged lead under chosen weights (attack.a2c-cancel-lane) and p*·(S - 1)/S on a small-alphabet private repair (25.8% for fix2); it can hold at 1% only with p* well under 1% (a wide alphabet) and copies priced coarsely"
+source = "N-RED interim 1 item 3 and M1 (note compute-research/20261029T0734Z-report-np-red): DistinctWritesMH100On takes any grid set S, and an adaptive prover runs a different straight-line program on each coin branch, so the lifted bound is vacuous; held fixed, a coin-addressed bulk copy is mispriced as `other`. Every design's T1 against a prover that reads the coins (which it must: the noise is an operand) rests on DistinctWrites stated for such programs, each branch charged its words and a bulk copy one address write a tile. The card prices what the branch saves on chosen rows (`coin_branch`) and takes this premise for the rest. N-RED interim 2 (note compute-research/20261029T0940Z-report-np-red; nred_round2.py run r20261029-084132-2bfb, art:bfe76ff2c3fe560bcb11f64926c10b20ed9fc39357382b582e0b0a27a18dad1a; nred_round3.py run r20261029-093222-46ee, art:752f2bd5b9e0fa22bfa6aefd9001b4ee68e6efb173e81fb611e9ac3a1e67d718) §5: A2c and A8 are coin-branching programs whose words equal the honest words, so a free-branch statement loses at least 51.6% of stock on the tagged lead under chosen weights (attack.a2c-cancel-lane) and p*·(S - 1)/S on a small-alphabet private repair (25.8% for fix2); it can hold at 1% only with p* well under 1% (a wide alphabet) and copies priced coarsely. N-ADAPT interim 2 (note compute-research/20261029T1004Z-report-np-adapt) §1-2: stated pointwise in the coins, it is refuted for ssn-1l-tag and ssn-1l-hw under chosen weights at any ε < 0.49 (A2c, the walk); for fix2-type designs it is open and needs select-floor, lane-semantics and CopyGrain(4). N-LEAN interim 2 (note compute-research/20261029T1015Z-report-np-lean): adaptive-pointwise is proved in MH100w (adaptive_lost, draft semantics) and closes adaptive-dw only where M·c ≤ b, which no frontier design meets"
 
 [premise.weights-distinct]
 rank = 2
@@ -479,8 +480,8 @@ part = "hashing"
 status = "open"
 owner = "N-ALT (a protocol change: live per-call coins; Daniel's ruling)"
 requires = ["trusted-host"]
-closes = ["pre_noise_hashing"]
-source = "R1b: each call's A_j goes to the certifier, which commits it and releases the call's coins only on its arrival, so A_j is fixed before its noise without the prover hashing it first, and the per-matmul seed is a live coin (no Fiat-Shamir exception, no grinding term). pouw_space credits the closed pre_b under ShaSpeed and keeps A's root chain in T2 (a_ms); under R1b the prover hashes no A and T2 pays a round trip a call instead (64 calls at 2-10 us add 0.04-0.19 at T 512's 64 rows, -0.14 to +0.01 net of SW-NOISE's coin time): both inexact, neither moves T1"
+closes = ["pre_noise_hashing", "coin_hashing"]
+source = "R1b: each call's A_j goes to the certifier, which commits it and releases the call's coins only on its arrival, and the prover hashes no XOF for them, so their bytes aren't credited (N-EGRESS interim 2 §2: the lead's 0.42% XOF term removed); so A_j is fixed before its noise without the prover hashing it first, and the per-matmul seed is a live coin (no Fiat-Shamir exception, no grinding term). pouw_space credits the closed pre_b under ShaSpeed and keeps A's root chain in T2 (a_ms); under R1b the prover hashes no A and T2 pays a round trip a call instead (64 calls at 2-10 us add 0.04-0.19 at T 512's 64 rows, -0.14 to +0.01 net of SW-NOISE's coin time): both inexact, neither moves T1"
 
 [premise.route-u2]
 rank = 0
@@ -688,6 +689,12 @@ status = "open"
 owner = "N-COVER"
 source = "D.epilogue: the served int8 epilogue writes each output through a per-row multiply that an FFMA with a per-row bias replaces at no added instruction, so subtracting a per-row term costs m registers a call, not m·n; a SASS fact about the served epilogue (vLLM's cutlass scaled_mm), unchecked. N-EXACT interim 1 §2 (proved on paper, checked by emulation): stock converts each int32 accumulator with I2F, then the column and row scales; I2F as IADD3(D, 0x4B400000 - r_i, -c_j) and the column FMUL as FFMA(v, s_j, -1.5·2^23·s_j) remove a separable r_i + c_j at no added instruction, bit for bit while |A·Bᵀ| < 2^22; a noise that isn't separable costs a write an output (32/K). Open until it is checked on the served epilogue's SASS"
 
+[premise.fold-range]
+rank = 1
+status = "measured"
+owner = "N-EXACT"
+source = "N-PREM interim 2's ledger (note compute-research/20261029T1027Z-report-np-prem): the free epilogue fold's range condition |D - r - c| < 2^22 holds on served data (N-EXACT, measured); N-EGRESS's coin lanes add at most 127 a step, 430-1,220 LSB rms, far inside it. That the certifier's per-tile column sum folds in IADD3's column source as N-EXACT's c_j does is N-EGRESS's ask to N-EXACT"
+
 [premise.ssn2-distinct]
 rank = 0
 status = "open"
@@ -729,7 +736,7 @@ source = "a noise whose words repeat on data (a zero k32 block dot product, iden
 slots = [["N", "noise"], ["D", "denoise"], ["F", "format"], ["C", "density"], ["C", "operands"], ["H", "rows"],
          ["H", "hiding"], ["P", "final"], ["P", "forming"], ["P", "derivation"]]
 base = ["H32", "card-within-accel-w1", "adaptive-dw", "atomic-call", "row-bound", "period-inventory", "host-row", "ShaSpeed", "sha-writes", "carried-words", "hash-compose"]
-fields = { pre_noise_bytes = "m*K", rows_mix_final = 1, word_bits = 32, format_forming = 0 }
+fields = { pre_noise_bytes = "m*K", rows_mix_final = 1, word_bits = 32, format_forming = 0, stream_bits = 0 }
 probe = { m = 64, n = 2048, K = 2048 }
 source = "NIGHT.md §2's axes; base: the DistinctWrites price at H32 in W1 (CardWithinAccelW1 at 32, N-W1), stated for programs that read the coins (adaptive-dw), the atomic call for A's commitment hashed before the noise and each row digest bound to (salt, forward, position) (N-COMPOSE), PeriodInventory with HostsCounted at θ's rows and its host row (N-FLOOR final), and the hashing credit (ShaWrites at ShaLB's count, ShaSpeed's form and the composition its theorems, with CarriedWords, NIGHT §1 default 1)"
 
@@ -816,7 +823,7 @@ coins = { coins = ["4*m*ceil(bits/32)"] }
 premises = ["ssn-tag-distinct", "g-private", "copy-floor", "adaptive-pointwise"]
 t3 = { s8 = "ssn-1l-tag-v1" }
 variant = "ssn-1l-tag-v1"
-branch_source = "N-RED interim 1 §3, checked: every row vector distinct on identical rows, prefix rows and zero tails (4-word tiles repeat 0.07%), so the branch skips nothing"
+branch_source = "N-RED interim 1 §3, checked: every row vector distinct on identical rows, prefix rows and zero tails (4-word tiles repeat 0.07%), so the branch skips nothing on a fixed model. N-LEAN interim 2 (note compute-research/20261029T1015Z-report-np-lean; tag_tile_le, tag_sum_agree, pathRun_attained): A1 on whole tiles is closed given g-private and copy-floor; per-word patches leak |J|/q a pair on step 1, and the later steps are open under chosen weights (attack.a2c-cancel-lane, attack.walk)"
 source = "N-RED interim 1 §3 (note compute-research/20261029T0734Z-report-np-red, nred_attacks.py's `fix`, run r20261029-072732-aba9): the tag lanes T(i), z_i = (floor(i/2) + 1)(-1)^i in balanced base-13 (injective for m <= 28,560), are salt-free row constants, loaded, not derived; G in [-3, 3]^(4 x n) drawn once a window after the model's root (its coins and forming about 0; per call they would be 2.25% of stock uncredited at m 64); S is ssn-1l's at every Llama K (67 / 67 / 67 / 265), since the tags take step 1's slack. Later lanes 1 + a_t in {1, 2}: the card prices them at ssn-1l's one LOP3 and rotates (estimate; {1, 2} sets bits 24 and 25 from one coin bit, which N-PREM's {1, 3} does in one LOP3). The tags stay in the served output (A4 otherwise)"
 
 [N.ssn-1l-tag.D.served]
@@ -828,6 +835,41 @@ fields = { r = "32*(S + 1)/K", formed_x = "0", formed_y = "0", denoise = "m*reg"
 premises = ["ssn-fold-distinct", "weights-distinct", "epilogue-fold"]
 t3 = { s8 = "int8-epi" }
 source = "N-CARD's composition (estimate; N-EXACT's interim 2 prices the served lead's own): N-EXACT's fold removes a separable noise r_i + c_j at no added instruction, but the tag lead's final word also carries a1[i]·C_j and T(i)·G_j, rank 4 each, which cost a write an output to remove in the epilogue (32/K, N-EXACT §2; N-NOISE's epi_full+tag+nz, two IDP4A an output, T1 2.53%). Cancelled instead in one more k32 step (-a1 derived, a LOP3 a row; -T loaded, as T is) against C and G, the final word is A·Bᵀ + r_i + c_j with r_i the sum of the S - 1 later lanes, which N-EXACT's IADD3 and FFMA remove for free (m registers a call for 0x4B400000 - r_i), so the output is stock's int8 product. The tags no longer separate that word: on chosen identical rows it is fixed by r_i alone, S classes with the sum binomial, so the coin branch copies the repeats at that step (rep_at, the same count rep_sum makes for ssn-1l; N-RED's A4 at the final word, unchecked)"
+
+# N-EGRESS interim 2's coin lanes (note compute-research/20261029T1002Z-report-np-egress; egress.py on
+# cursor/compute-research-np-alt-7c3e at f9dc82b936, run r20261029-101228-3741,
+# art:507fae63372e9a0b1bfa8393738c3def50c79d05e9608e3fd6ff160f020f9ffa): the tag lead with blc_lanes coin lanes a later
+# step against a constant A' = 1, one blc_bits-bit odd coin a (blc_tile-row tile, step, column) streamed raw by the
+# certifier after A_j arrives (R1b), so the coins' bits count in the network term's n_max (stream_bits) and no XOF
+# hashes them. A tile of r < blc_tile rows carries coins in ceil((S - 1)·r/blc_tile) of its later steps and the public
+# lane in the rest (blc_steps). branch_rows prices A2c and A8 under chosen weights (model P): a later step repeats a
+# row's word with p* = blc_p where it carries a coin (exact enumeration, N-EGRESS §2a) and ½ where it carries the
+# public lane (A2c), charged in T1 with or without model-public.
+[N.tag-blc1a-t128]
+title = "ssn-1l-tag with one certifier-streamed 7-bit odd coin lane a later step a 128-row tile and column, at 30 data lanes (blc1a-t128-e7)"
+fields = { c = 4, tag = 4, blc_lanes = 30, blc_tile = 128, blc_bits = 7, blc_p = 0.00390625, blc_loads = 1, S = "1 + ceil(max(0, K - (32 - c - tag))/blc_lanes)", bits = "S - 1 + c", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", blc_steps = "ceil((S - 1)*min(m, blc_tile)/blc_tile)", blc_entries = "n*ceil(m/blc_tile)*blc_steps", stream_bits = "blc_bits*blc_entries", noise_x = "4*m*S", noise_y = "blc_loads*blc_entries", derive_extra = "4*m*rot", dup = 0, noise_max = 3, n_max = 28559, s8_ok = 1, branch_rows = "m*(blc_steps*blc_p + (S - 1 - blc_steps)/2)" }
+coins = { coins = ["4*m*ceil(bits/32)"] }
+premises = ["ssn-tag-distinct", "g-private", "copy-floor", "adaptive-pointwise", "trusted-host", "certifier-coins", "fold-range"]
+t3 = { s8 = "ssn-1l-tag-v1" }
+variant = "ssn-1l-tag-v1"
+branch_source = "N-EGRESS §2a (estimate): with the coin s odd in ±127, a chosen lane fixed before the draw repeats a word only where (1 + b_t) + s_t + d = 0, p* = ½·2^-7 = 1/256, against A2c's ½ on the lead; N-RED's model-P points are 1.032·p* of stock (checked to 1%), so about 0.40% here, scaled, not N-RED's check. The walk's returns over longer intervals need an interval's coins to sum to the walk's offset; model P counts one-step repeats only (N-CARD's reading: N-RED to check under W and C)"
+source = "N-EGRESS interim 2 §2: each later k32 step gives up a data lane (30 left) for B' lane 30 = s_t[tile, j], odd uniform in ±127, against a constant 1 in A''s layout; lane 31 is the lead's 1 + b_t(i). The prover patches the streamed bytes into the B tile in shared memory, one 32-bit load a 4 entries (noise_y at reg/4 an entry; the four byte stores are unpriced in W1, and the load is credited only where one-instruction-minimal covers it, N-CARD's reading) plus the certifier's per-tile column sums, which N-EXACT's fold removes (fold-range), so the lane serves no noise past the lead's. Words ×1.031 by S (30 data lanes), and with it hashing and W_mac. The network term's cap is cap-served (N-PREM; outside T1)"
+
+[N.tag-blc1a-t128.D.served]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "served as the tag lead; the lane's column term folded (N-EGRESS §2 T3); the extra width at the plain GEMM's time a MAC (estimate)"
+
+[N.tag-blc1a-t64]
+like = "tag-blc1a-t128"
+title = "blc1a at 64-row tiles: a coin in every later step of a 64-row call (blc1a-t64-e7)"
+fields = { blc_tile = 64 }
+source = "N-EGRESS §2c: blc1a-t64-e7, twice the stream and lane loads of t128 for half the term; at 64 rows a call every later step carries a coin, where t128 leaves half of them to the public lane"
+
+[N.tag-blc4a-t64]
+like = "tag-blc1a-t128"
+title = "ssn-1l-tag with three certifier-streamed 7-bit coin lanes a later step a 64-row tile and column by one 4-byte cp.async, at 28 data lanes (blc4a-t64-e7)"
+fields = { blc_lanes = 28, blc_tile = 64, blc_bits = 21, blc_p = 0.00293, blc_loads = 0 }
+source = "N-EGRESS interim 2 §2b: lanes 28-30 hold coins against A' = 1 beside the row lane 31, at 28 data lanes a later step; one 4-byte cp.async a (64-row tile, step, column) carries the three coins and lane 31's public weight, so no register is written (forming 0.001%, unpriced here); words ×1.105; the three lanes' sum is a column term the fold removes; p* 0.00293 (N-EGRESS), about 0.30% under model P. The layout for a 320-bit cap"
 
 [N.ssn-a]
 title = "ssn-a, served sparse noise: each k32 step 28 entries and a register a = (h >> q) & 0x01010101 a row against public W0"
@@ -1134,7 +1176,7 @@ source = "N-RED interim 1 A1, A1b, A2 (run r20261029-072732-aba9, checked word f
 
 [attack.zero-data]
 status = "open"
-targets = ["ssn-1l", "ssn-1l5", "ssn-1l-hw", "ssn-1l-tag", "ssn-a", "ssn2"]
+targets = ["ssn-1l", "ssn-1l5", "ssn-1l-hw", "ssn-1l-tag", "ssn-a", "ssn2", "tag-blc1a-t128", "tag-blc1a-t64", "tag-blc4a-t64"]
 with_any = ["bam-floor", "pure-lanes"]
 source = "N-SAKU interim 1 (note compute-research/20261029T0733Z-report-np-saku, saku.py run r20261029-072745-10df, ssn_zero bit-exact): at A = B = 0 each SSN word committed every L > 32 stacked lanes is the column-code term plus the row's coin prefix sum, made without the GEMM, so the gap is 52.2% / 78.3% / 91.3% / 101.1% of stock at L 64 / 128 / 256 / 1,024 under any premise; SSN can't commit sparser than every k32"
 
@@ -1162,6 +1204,13 @@ targets = ["ssn-1l-tag", "ssn-1l-hw", "N.nn-rot1-sv4-tag-aorb", "N.nn-rgap1-sv4-
 needs = "chosen weights"
 priced = "unpriced in T1 while M0's chosen weights are the open model-choice question: under chosen weights a row repeats its previous step's vector at every later step whose coin bit is 0, (S - 1)·16/K, 51.6% of stock at Llama's shapes (checked)"
 source = "N-RED interim 2 (note compute-research/20261029T0940Z-report-np-red; nred_round2.py run r20261029-084132-2bfb, art:bfe76ff2c3fe560bcb11f64926c10b20ed9fc39357382b582e0b0a27a18dad1a; nred_round3.py run r20261029-093222-46ee, art:752f2bd5b9e0fa22bfa6aefd9001b4ee68e6efb173e81fb611e9ac3a1e67d718) §1, checked word for word (m 384, n 32, S 8: 39-43% saved, words equal) and counted at Llama's shapes (51.87% / 51.54% / 51.57% at m 64 / 512 / 8,192): zero data past step 1 except one lane a step with A = 1 and B = -(the step's public counterpart: the constant 1 for ssn-1l-tag's 1 + b_t and N-NOISE's +nz, -σ_t for ssn-1l-hw's public signs) cancels the counterpart's point mass, so a row whose coin is 0 repeats its previous step's vector, a copy. The tags are a step-1 term and cancel in that comparison, so g-private doesn't touch it. B constant across every column in one lane a step is chosen weights (31 activation lanes can't make it on a fixed model); ssn-1l's own b_t·1 falls to plain zero activations (A2, attack.chosen-rows). N-NOISE's rgap1 lane is argued, not checked (side B's +nz is the checked instance). N-RED's repair that survives A2c and A8 is a private wide-alphabet later noise (uw6, uw8) with tags, an exact epilogue and a per-call step weight, unbuilt and unpriced (about 3.2% of stock to de-noise, estimate)"
+
+[attack.walk]
+status = "open"
+targets = ["ssn-1l", "ssn-1l5", "ssn-1l-tag", "N.nn-rot1-sv4-tag-aorb", "N.nn-rgap1-sv4-tag-aorb"]
+needs = "chosen weights"
+priced = "unpriced in T1 while M0's chosen weights are the open model-choice question: about 91% of stock MAC-weighted on the tag lead (N-ADAPT), 94.97% on N-PREM's generator"
+source = "N-ADAPT interim 2 (note compute-research/20261029T1004Z-report-np-adapt; art:7dd007cd9cd9c78e5b93994ba8889bc0705f64023e042551a872e008c1c4404b) §2, built word for word at small shapes and a count at scale: A2c's chosen lane alternating -1 and -2 makes a row's later vectors its step-1 vector plus W_t·1, W a lazy ±1 walk, about 1 + √(2S/π) distinct vectors a row (7.0 of 67 at K 2,048, 13.5 of 265 at K 8,192), saving 89.5% / 94.9% of the committed words; N-PREM interim 2 (note compute-research/20261029T1027Z-report-np-prem, walk_words_check) reproduces it on ssn_1l, the tag lead and AorB's side A. N-ADAPT found no walk for hw (σ_t's signs). Each later step's public coin weight is what it cancels, so only a weight drawn after B closes it (N-RED's fix2 or uw, N-EGRESS's coin lanes)"
 
 [attack.replay-exact]
 status = "open"
