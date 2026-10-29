@@ -4,8 +4,9 @@ import Definitions.Pouw.Guarantees.Lead
 # The gap at the three points, and the nontrivial lemma (STATEMENT; owner N-PREM)
 
 `gapAt` and `gapAt320` evaluate `Pouw.Lead.gapShare` at T 512 × 64, T 512 × 512 and T 8,192 for every call of
-`n, K ≥ 4,096`, at caps 32 and 320; the worst call is at `K = 4,113`, the first `K` past 4,096 that adds a step.
-`gapAtDecode` evaluates it at decode. `nontrivial` is the guarantee's nontrivial lemma.
+`n, K ≥ 4,096`, at caps 32 and 320; the worst call is at `K = 4,110`, the first `K` past 4,096 that adds a step.
+`gapAtDecode` evaluates it at decode at both caps. `nontrivial` is the guarantee's nontrivial lemma. The network term
+is `Network.networkGap_le` and `Network.networkGap_le320`.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Statement
@@ -13,7 +14,7 @@ namespace Pouw.SecurityProofs.Lead.Statement
 open Pouw.Guarantees.Lead
 
 /-- Owner: N-PREM. The gap's share of stock at the three points, cap 32: rational arithmetic over `n, K ≥ 4,096`, with
-`stepsFor K ≤ (K + 32) / 28` and `wordChunks ≤ m n S / 65,536 + 1`. -/
+`stepsFor K ≤ (K + 34) / 28` and `wordChunks ≤ m n S / 65,536 + 1`. -/
 theorem gapAt : GapAt := by
   sorry
 
@@ -21,7 +22,8 @@ theorem gapAt : GapAt := by
 theorem gapAt320 : GapAt320 := by
   sorry
 
-/-- Owner: N-PREM. The gap at decode, padded to 16 rows: its share of the padded and the unpadded stock. -/
+/-- Owner: N-PREM. The gap at decode, padded to 16 rows, at caps 32 and 320: its share of the padded and the unpadded
+stock. -/
 theorem gapAtDecode : GapAtDecode := by
   sorry
 

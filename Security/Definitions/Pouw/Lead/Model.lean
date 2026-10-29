@@ -22,7 +22,8 @@ an execution (`Exec`), so it may branch on the coins anywhere.
 * **The commitment format** (`Commit`): the messages the honest commitment of a call's words hashes (leaves and
   nodes), its root, and their SHA-512 compressions.
 * **Accepted** (`Accepted`): the execution holds every MMA tile of committed words whole at some point (the leaves
-  hash whole chunks of them), and registers the honest commitment's root.
+  hash whole chunks of them), registers the honest commitment's root, and exchanges at most the call's bits
+  (`Layout.callBits`), which the network certifier counts and refuses past.
 * **The break** (`Break`): a SHA-512 collision among what the execution hashed and what the honest commitment hashes.
 -/
 
@@ -160,12 +161,12 @@ noncomputable def tableHits (L : Layout) (κ : Fin L.m → Fin L.S → Fin L.n �
   ((tileIdx L).filter fun x =>
     (∃ a, σ.pre a = tileOf L κ ω x.1 x.2.1 x.2.2) ∨ ∃ c, stream.val ω c = tileOf L κ ω x.1 x.2.1 x.2.2).card
 
-/-- **The execution at `ω` is accepted**: it holds every MMA tile of committed words whole at some point, and
-registers the honest root. -/
+/-- **The execution at `ω` is accepted**: it holds every MMA tile of committed words whole at some point, registers
+the honest root, and exchanges at most the call's bits (the network certifier refuses a call past them). -/
 def Accepted (L : Layout) (H : Hash.Msg → Hash.Digest) (C : Commit L) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
     (σ : Strategy L) (ω : Coins L) : Prop :=
   (∀ rb < L.rowBlocks, ∀ cb < L.colBlocks, ∀ t : Fin L.S, (σ.exec ω).holds (tileOf L κ ω rb cb t)) ∧
-    (σ.exec ω).root = C.root H (word L κ ω)
+    (σ.exec ω).root = C.root H (word L κ ω) ∧ ((σ.exec ω).egress : ℚ) ≤ L.callBits
 
 /-- The break a statement ends in: two different messages with one SHA-512 digest, both among what the execution at
 `ω` hashed and what the honest commitment of its words hashes (the verifier's check hashes those). -/
