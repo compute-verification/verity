@@ -2703,7 +2703,7 @@ def lanes_files(files: dict) -> str | None:
     names = {f"{kind}{k}" for k in leaf for kind in (LL.LANE, LL.COMBINE)}
     if progs is None and not names:
         return None
-    if not (isinstance(progs, dict) and set(progs) == names and all(_digest(v) is not None for v in progs.values())):
+    if not (names and isinstance(progs, dict) and set(progs) == names and all(_digest(v) is not None for v in progs.values())):
         return (f"{LEAF_PROGRAMS} is not {{lane<K>: SHA-512, combine<K>: SHA-512}} over exactly the lanes form's files "
                 f"{sorted(names)}: commit each lanes-form K's lane and combine leaf Program's descriptor digest "
                 "(h1window.leaf_program) beside its circuit files")

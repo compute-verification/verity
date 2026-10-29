@@ -118,10 +118,11 @@ def served(prefix: str, value: str, u: int) -> str:
 
 
 def known_salt(registration: str, value: str) -> bytes:
-    """The salt a served leaf's known row ``value`` (its `served` name) is committed under: SHA-512 of `KNOWN_SALT_TAG`,
-    the window's draw root ``registration`` (64 bytes in hex) and the name, public, so the prover's tree is the
-    verifier's."""
-    return hashlib.sha512(KNOWN_SALT_TAG + bytes.fromhex(registration) + value.encode()).digest()
+    """The salt a served leaf's known row ``value`` (its `served` name) is committed under, public, so the prover's tree is
+    the verifier's: SHA-512 of `KNOWN_SALT_TAG`, i (u32 little-endian), the window's draw root ``registration`` (64 bytes
+    in hex) and the name, for i = 0, 1, 2, the 192 bytes of an hm96-sha512 row's salt."""
+    head = bytes.fromhex(registration) + value.encode()
+    return b"".join(hashlib.sha512(KNOWN_SALT_TAG + i.to_bytes(4, "little") + head).digest() for i in range(3))
 
 
 def n_digits(ks: int) -> int:
