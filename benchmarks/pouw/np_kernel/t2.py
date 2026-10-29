@@ -6,7 +6,7 @@ OUT is a run's out/ (time_m<M>[_cap<C>].jsonl). Each --stock gives, at M rows, t
 if known) and the stock GEMMs' time a forward, all in ms. T2 is the step with ssn_1l's linears over the stock step, two ways:
   own   (stock + forward - forward's plain GEMM on the same kernel) / stock: ssn_1l's extra over this kernel's own plain GEMM
   swap  (stock - stock GEMM + forward) / stock: this forward in place of the stock GEMMs
-where forward is the 16 layers' four linears with coins, forming, every k32 word exported and hashed, run serially (one
+where forward is the 16 layers' four linears with root(A_j), the certifier's feed, forming, every k32 word exported and hashed, run serially (one
 stream) or beside (each chunk's hash on a second stream while the next chunk's GEMM runs), for each hash scheme (hasher:
 rowseg, rows<B> for the served committer's hm96 leaves of B-byte rows, or plain<B> for L1's plain frame-v3 leaves of B-byte
 rows). beside_bare (BARE=1) is beside with nothing ahead of each call's GEMM, and beside_crit beside's GEMM stream alone (the
@@ -46,18 +46,18 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
             "n": p["n"], "K": p["K"], "S": p["S"], "BN": p["BN"], "words": words, "stock_macs": p["stock_macs"],
             "plain_ms": p["ms"], "ssn_ms": s["ms"], "alpha_time": s["ms"] / p["ms"], "alpha_layout": 32 * p["S"] / p["K"],
             "export_ms": e["ms"], "export_units_per_word_over_ssn": (e["units"] - s["units"]) / words,
-            "coins_us": 1e3 * g("coins")["ms"], "forming_us": 1e3 * g("forming")["ms"],
-            "coins_forming_us": 1e3 * g("coins_forming")["ms"],
+            "feed_us": 1e3 * g("feed")["ms"], "feed_bytes": int(g("feed")["extra"]), "forming_us": 1e3 * g("forming")["ms"],
+            "feed_forming_us": 1e3 * g("feed_forming")["ms"],
             "hash": {h: {"ms": r["ms"], "units_per_byte": r["units_per_byte"], "gb_per_s": 4 * words / (r["ms"] * 1e6)}
                      for h in hashers if (r := g("hash_pass", h))},
             "tree_ms": {h: r["ms"] for h in hashers if (r := g("hash_tree", h))},
             "root_a_us": {h: 1e3 * r["ms"] for h in hashers if (r := g("root_a_hash", h))},
             "root_a_root_us": {h: 1e3 * r["ms"] for h in hashers if (r := g("root_a_root", h))},
-            "g_draw_us": 1e3 * r["ms"] if (r := g("g_draw")) else None,
+            "g_copy_us": 1e3 * r["ms"] if (r := g("g_copy")) else None,
             "l1_root_us": 1e3 * r["ms"] if (r := g("l1_root", "l1")) else None,
-            "l1_seed_path_us": 1e3 * r["ms"] if (r := g("l1_seed_path", "l1")) else None,
+            "l1_path_us": 1e3 * r["ms"] if (r := g("l1_path", "l1")) else None,
             "l1_root2_us": 1e3 * r["ms"] if (r := g("l1_root2", "l1")) else None,
-            "l1_seed_path2_us": 1e3 * r["ms"] if (r := g("l1_seed_path2", "l1")) else None,
+            "l1_path2_us": 1e3 * r["ms"] if (r := g("l1_path2", "l1")) else None,
             "l1_cta2": int(r["extra"]) if (r := g("l1_root2", "l1")) else None,
             "lane_link_us": 1e3 * r["ms"] if (r := g("lane_link")) else None,
             "lane_coin_bytes": int(r["extra"]) if (r := g("lane_link")) else None,
@@ -118,14 +118,14 @@ def main() -> None:
         res.append(summarize(rows, stocks.get(rows[0]["M"])) | {"file": name})
     for r in res:
         print(f"## {r['file']}: M {r['M']} (SM clock {r['mhz']:.0f} MHz)")
-        print("| linear | S | BN | plain ms | ssn ms | α time / layout | export ms | export units a word | coins µs | "
-              "forming µs | coins+forming µs | hash ms, units a byte, GB/s by scheme |")
+        print("| linear | S | BN | plain ms | ssn ms | α time / layout | export ms | export units a word | feed µs | "
+              "forming µs | feed+forming+G µs | hash ms, units a byte, GB/s by scheme |")
         print("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|")
         for n, x in r["linears"].items():
             hs = "; ".join(f"{h} {v['ms']:.3f} / {v['units_per_byte']:.0f} / {v['gb_per_s']:.0f}" for h, v in x["hash"].items())
             print(f"| {n} | {x['S']} | {x['BN']} | {x['plain_ms']:.4f} | {x['ssn_ms']:.4f} | {x['alpha_time']:.3f} / "
                   f"{x['alpha_layout']:.3f} | {x['export_ms']:.3f} | {x['export_units_per_word_over_ssn']:.0f} | "
-                  f"{x['coins_us']:.1f} | {x['forming_us']:.1f} | {x['coins_forming_us']:.1f} | {hs} |")
+                  f"{x['feed_us']:.1f} | {x['forming_us']:.1f} | {x['feed_forming_us']:.1f} | {hs} |")
         for n, x in r["linears"].items():
             if x["tree_ms"]:
                 print(f"- the words' tree above their leaves, {n}: " + "; ".join(f"{h} {v:.3f} ms ({v / x['hash'][h]['ms']:.1%} "
@@ -134,30 +134,31 @@ def main() -> None:
                 print(f"- root(A_j) leaves, {n}: " + "; ".join(f"{h} {v:.1f} µs" for h, v in x["root_a_us"].items()))
             if x["root_a_root_us"]:
                 print(f"- root(A_j) leaves and tree, {n}: " + "; ".join(f"{h} {v:.1f} µs" for h, v in x["root_a_root_us"].items()))
-            if x["g_draw_us"] is not None:
-                print(f"- G's draw, {n}: {x['g_draw_us']:.1f} µs")
+            print(f"- the certifier's feed, {n}: {x['feed_bytes']} bytes, {x['feed_us']:.1f} µs host to device")
+            if x["g_copy_us"] is not None:
+                print(f"- G's copy, {n}: {x['g_copy_us']:.1f} µs")
             if x["l1_root_us"] is not None:
-                print(f"- L1 + (a), {n}: root(A_j) through the seed {x['l1_root_us']:.1f} µs; with the noise blocks, G and "
-                      f"forming {x['l1_seed_path_us']:.1f} µs")
+                print(f"- L1 + (a), {n}: root(A_j) {x['l1_root_us']:.1f} µs; with root(A_j) up, the feed back, forming and G "
+                      f"{x['l1_path_us']:.1f} µs")
             if x["l1_root2_us"] is not None:
-                print(f"- L1 + (a) for latency (CTAs of {x['l1_cta2']}), {n}: root(A_j) through the seed "
-                      f"{x['l1_root2_us']:.1f} µs; with the noise blocks, G and forming {x['l1_seed_path2_us']:.1f} µs")
+                print(f"- L1 + (a) for latency (CTAs of {x['l1_cta2']}), {n}: root(A_j) {x['l1_root2_us']:.1f} µs; with "
+                      f"root(A_j) up, the feed back, forming and G {x['l1_path2_us']:.1f} µs")
             if x["lane_link_us"] is not None:
                 print(f"- blc4a-t64-e7's link, {n}: A_j to the host and the call's {x['lane_coin_bytes'] / 1e6:.2f} MB of lane "
                       f"coins back, {x['lane_link_us']:.1f} µs")
         print(f"- layout {r['layout']}" + (f", A' = ({', '.join(map(str, r['blc_w']))}) in the lane-coin lanes"
                                            if r["layout"].startswith("blc") else ""))
         if r["l1"] == 2:
-            print(f"- the forwards below run L1 + (a)'s seed path for latency (CTAs of at least {r['l1_cta']}), its noise "
-                  "blocks, G and forming in one launch, ahead of each call's GEMM")
+            print(f"- the forwards below compute root(A_j) by L1 + (a) for latency (CTAs of at least {r['l1_cta']}), then "
+                  "send it up and take the feed back, ahead of each call's forming and G")
         elif r["l1"]:
-            print("- the forwards below run L1 + (a)'s seed path (root(A_j) through the noise blocks) ahead of each call's G "
-                  "and forming")
+            print("- the forwards below compute root(A_j) by L1 + (a), then send it up and take the feed back, ahead of "
+                  "each call's forming and G")
         elif r["root_a_in_forward"]:
             ra = r["root_a_rows"]
             by_scheme = "the words' scheme" if ra < 0 else f"rows{ra}" if ra else "rowseg"
             what = "root(A_j), leaves and tree," if r["root_a_tree"] else "A_j's leaves"
-            print(f"- the forwards below compute {what} ahead of each call's coins, by {by_scheme}")
+            print(f"- the forwards below compute {what} ahead of each call's feed, by {by_scheme}")
         print(f"- the forwards below hash the words' leaves{' and the tree above each chunk' if r['words_tree'] else ''}; "
               f"rowseg's leaf: {r['rowseg_leaf']}")
         if r["small_threads"]:

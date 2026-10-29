@@ -10,13 +10,13 @@
 #   LEASE_MIN (25), CHECK (1; 0 skips the exact check), TIME (1; 0 skips the timings), NOT_AFTER (a UTC time past which
 #   the leased part does no GPU work), CAPS (0: beside's caps on a row hash launch's blocks, each a pass
 #   over MS; time_m<M>_cap<C>.jsonl), ROOT_A (0; 1 puts root(A_j), its leaves and the tree above them, in the forward ahead
-#   of each call's coins, by the words' scheme or by ROOT_A_ROWS's: row bytes, 0 row-seg over A_j's rows), ROOT_A_LIST (the
+#   of each call's feed, by the words' scheme or by ROOT_A_ROWS's: row bytes, 0 row-seg over A_j's rows), ROOT_A_LIST (the
 #   schemes root(A_j) is timed by a call; default ROWS), WORDS_TREE (0; 1 builds the tree above each chunk's leaves in the
 #   forwards), PRIO (0; 1 runs the forwards' GEMM stream at the greatest stream priority, the hash streams at the least),
 #   SMALL_THREADS (unset; N builds native_rows.cu a second time with blocks of N threads, a build-time edit of a copy, for
 #   the leaves of any launch of fewer than SMALL_ROWS_MAX rows), TAG (0; 1 times the ssn-1l-tag layout; the check runs both),
-#   L1 (0; 1 puts L1 + (a)'s seed path, root(A_j) through the seed and noise blocks, before each call's forming; 2 the same
-#   path shaped for latency, its noise blocks, G and forming in one launch), L1_CTA (64; L1=2's least CTA size, 64 or 128),
+#   L1 (0; 1 puts L1 + (a)'s root(A_j) before each call's feed and forming; 2 the same root shaped for latency),
+#   L1_CTA (64; L1=2's least CTA size, 64 or 128),
 #   BLC (0; 1 times blc4a-t64-e7: the tag layout with three lane coins a 64-row tile in each later step, streamed after A_j;
 #   2 blc4a-t64-e7-s1, the same with lane coins on step 1 too; the check runs all four layouts), BLC_W (1:1:1: A' in the
 #   three lane-coin lanes, e.g. 1:127:1; the check runs under it too), ROT (0; 1 with BLC times blc4a-t64-e7-rot, A' in

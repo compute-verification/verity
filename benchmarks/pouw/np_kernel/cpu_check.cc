@@ -14,9 +14,13 @@
 //                  from the recorded values, and the fold serves stock's epilogue on A_i . B_j + n_ij where it is within
 //                  2^22 (FOLD's S is the Python's S, or one less at K 8,192, where xu adds a step; the first S steps of
 //                  the recorded coins are used).
+//           The recorded a1, a_t, u and G enter as the certifier feeds them (layout.h's row_words, u word and g_word) and
+//           are read back through the feed's format (rc_bit, u0_of..u2_of, g_of).
 //           ssn's lanes differ from the Python's (their positions; kappa 0; e by its own rule), which changes the
 //           words and not what is served, so the check is on what is served. As a control, the other row
 //           class's column source is also tried, and under ROT=1 it must serve wrong outputs.
+//   draw    G's rejection draw (g_word_of) over all 2^32 words: each of the 2,401 G in [-3, 3]^4 from exactly
+//           floor(2^32 / 2401) words, and the other 872 rejected.
 // Build: g++ -O2 -std=c++17 -ffp-contract=off cpu_check.cc -o cpu_check. Usage: cpu_check DIR (fold_vectors.py's --out).
 // One JSON line a vector and a summary line; exit 1 on any mismatch.
 #include <cinttypes>
@@ -149,19 +153,22 @@ static bool layout_check(const std::string& label, const Vec& v, const std::stri
     return false;
   }
   const int H = coin_words(S), xa = xu_at(K, S), xe = xu_e(xa);
-  // the private values as the forming reads them: a1 bits 0-3 and a_t's bit t + 3 of the row's coin words, the u word
+  // the private values as the certifier feeds them and the forming reads them: a1 bits 0-3 and a_t - 1 bit t + 3 of the
+  // row's feed words, the u word
   std::vector<uint32_t> h((size_t)m * H, 0);
   std::vector<RowCoins> rc(m);
   size_t bad_private = 0;
+  std::vector<int> bt(S, 0);
   for (int i = 0; i < m; i++) {
-    for (int e = 0; e < 4; e++) h[(size_t)i * H] |= (uint32_t)(a1.i(4 * i + e) & 1) << e;
+    int y1[4];
+    for (int e = 0; e < 4; e++) y1[e] = (int)a1.i(4 * i + e), bad_private += y1[e] != 0 && y1[e] != 1;
     bad_private += at.i((size_t)i * py_s) != 0;
     for (int t = 1; t < S; t++) {
       const int64_t x = at.i((size_t)i * py_s + t);
       bad_private += x != 1 && x != 2;
-      const int q = t + 3;
-      h[(size_t)i * H + (q >> 5)] |= (uint32_t)(x - 1) << (q & 31);
+      bt[t] = (int)x - 1;
     }
+    row_words(y1, bt.data(), S, &h[(size_t)i * H]);
     const int64_t x0 = u0.i(i), x1 = u1.i(i), x2 = u2.i(i);
     bad_private += x0 < 0 || x0 > 127 || x1 < -128 || x1 > 127 || x2 < -128 || x2 > 127;
     rc[i] = RowCoins{&h[(size_t)i * H], (uint32_t)x0 | ((uint32_t)x1 & 0xFFu) << 8 | ((uint32_t)x2 & 0xFFu) << 16};
@@ -170,9 +177,14 @@ static bool layout_check(const std::string& label, const Vec& v, const std::stri
   for (size_t x = 0; x < A.size(); x++) A[x] = (int8_t)a.i(x);
   for (int k = 0; k < K; k++)
     for (int j = 0; j < n; j++) Bt[(size_t)j * K + k] = (int8_t)b.i((size_t)k * n + j);
+  // G through its feed word
   std::vector<int> G(4 * (size_t)n);
-  for (int j = 0; j < n; j++)
-    for (int e = 0; e < 4; e++) G[4 * j + e] = (int)g.i((size_t)e * n + j);
+  for (int j = 0; j < n; j++) {
+    int x[4];
+    for (int e = 0; e < 4; e++) x[e] = (int)g.i((size_t)e * n + j), bad_private += x[e] < -3 || x[e] > 3;
+    const uint32_t w = g_word(x);
+    for (int e = 0; e < 4; e++) G[4 * j + e] = g_of(w, e), bad_private += G[4 * j + e] != x[e];
+  }
   // the certifier's lane-coin word of (step t, tile q, column j): the three coins and coin_word_top
   auto lw = [&](int t, int q, int j) {
     uint32_t w = coin_word_top(t, j);
@@ -245,6 +257,36 @@ static bool layout_check(const std::string& label, const Vec& v, const std::stri
   return ok;
 }
 
+// every 32-bit word through g_word_of: G's index sum_e (G[e] + 3) 7^e counted over the kept words
+static bool draw_check() {
+  std::vector<uint64_t> hits(2401, 0);
+  uint64_t rejected = 0, bad = 0;
+  for (uint64_t u = 0; u < (1ull << 32); u++) {
+    uint32_t w;
+    if (!g_word_of((uint32_t)u, &w)) {
+      rejected++;
+      continue;
+    }
+    int v = 0;
+    for (int e = 3; e >= 0; e--) {
+      const int d = g_of(w, e);
+      bad += d < -3 || d > 3;
+      v = 7 * v + d + 3;
+    }
+    hits[v]++;
+  }
+  const uint64_t each = (1ull << 32) / 2401;
+  uint64_t lo = hits[0], hi = hits[0];
+  for (uint64_t x : hits) lo = std::min(lo, x), hi = std::max(hi, x);
+  const bool ok = !bad && lo == each && hi == each && rejected == (1ull << 32) - 2401 * each && G_KEEP == 2401 * each;
+  printf("{\"level\": \"draw\", \"words\": %llu, \"kept_per_g_min\": %llu, \"kept_per_g_max\": %llu, "
+         "\"kept_per_g_want\": %llu, \"rejected\": %llu, \"digits_out_of_range\": %llu, \"pass\": %s}\n",
+         1ull << 32, (unsigned long long)lo, (unsigned long long)hi, (unsigned long long)each, (unsigned long long)rejected,
+         (unsigned long long)bad, ok ? "true" : "false");
+  fflush(stdout);
+  return ok;
+}
+
 int main(int argc, char** argv) {
   if (argc != 2) {
     fprintf(stderr, "usage: cpu_check DIR (fold_vectors.py's --out)\n");
@@ -269,8 +311,9 @@ int main(int argc, char** argv) {
       for (const bool xu : {true, false}) lay_n++, lay_ok += layout_check(label, v, w, xu);
     fflush(stdout);
   }
-  const bool ok = fold_n && lay_n && fold_ok == fold_n && lay_ok == lay_n;
+  const bool draw_ok = draw_check();
+  const bool ok = fold_n && lay_n && fold_ok == fold_n && lay_ok == lay_n && draw_ok;
   printf("{\"summary\": true, \"fold_vectors\": %d, \"fold_pass\": %d, \"layout_checks\": %d, \"layout_pass\": %d, "
-         "\"pass\": %s}\n", fold_n, fold_ok, lay_n, lay_ok, ok ? "true" : "false");
+         "\"draw_pass\": %s, \"pass\": %s}\n", fold_n, fold_ok, lay_n, lay_ok, draw_ok ? "true" : "false", ok ? "true" : "false");
   return ok ? 0 : 1;
 }

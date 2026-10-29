@@ -84,8 +84,41 @@ static inline int kidx(int t, int l, int K) {
   return k >= 0 && k < K ? k : -1;
 }
 
+// The certifier's coin feed for a call of R committed rows (pad_rows) and C committed columns (pad_cols): u32 words,
+// each coin drawn raw by the certifier once it holds root(A_j), in this order:
+//   row words  R coin_words(S) words, row i's from word i coin_words(S): bit e is a1[i, e] (e < 4), bit t + 3 the step bit
+//              b_t[i] (0-based t = 1 .. S - 1), every other bit 0 (b at step 0 enters no word)
+//   G words    under the tag layout C words, column j's byte e the int8 G[e, j] in [-3, 3], drawn by g_word_of
+//   u words    under XU=1 R words, row i's u word
+// The lane-coin words (one a (64-row tile, step, column)) follow in the same release.
+static inline long long feed_words(int R, int S, int C) {
+  return (long long)R * coin_words(S) + (g_tag ? C : 0) + (g_xu ? R : 0);
+}
+static inline void row_words(const int* a1, const int* b, int S, uint32_t* h) {
+  for (int q = 0; q < coin_words(S); q++) h[q] = 0;
+  for (int e = 0; e < 4; e++) h[0] |= (uint32_t)(a1[e] & 1) << e;
+  for (int t = 1; t < S; t++) h[(t + 3) >> 5] |= (uint32_t)(b[t] & 1) << ((t + 3) & 31);
+}
+static inline uint32_t g_word(const int* G) {
+  uint32_t w = 0;
+  for (int e = 0; e < 4; e++) w |= (uint32_t)(uint8_t)(int8_t)G[e] << (8 * e);
+  return w;
+}
+static inline int g_of(uint32_t w, int e) { return (int8_t)(uint8_t)(w >> (8 * e)); }
+// G by rejection: a 32-bit draw u is kept when u < 2401 floor(2^32 / 2401) = 4,294,966,424 (872 of the 2^32 are
+// rejected and redrawn), and G[e, j] is digit e of u mod 2401 in base 7, minus 3, so G is uniform on [-3, 3]^4 exactly
+constexpr uint32_t G_KEEP = 2401u * (uint32_t)(4294967296ull / 2401u);
+static inline bool g_word_of(uint32_t u, uint32_t* w) {
+  if (u >= G_KEEP) return false;
+  int G[4];
+  uint32_t v = u % 2401u;
+  for (int e = 0; e < 4; e++, v /= 7) G[e] = (int)(v % 7) - 3;
+  *w = g_word(G);
+  return true;
+}
+
 // A row's private values as the forming reads them: a1[e] is bit e and a_t bit t + 3 (step t >= 1, 0-based) of the row's
-// coin words h, and u its u word: u0 its low 7 bits, u1 and u2 its signed bytes 1 and 2
+// feed words h, and u its u word: u0 its low 7 bits, u1 and u2 its signed bytes 1 and 2
 struct RowCoins {
   const uint32_t* h;
   uint32_t u;
