@@ -49,7 +49,8 @@ mass with the weights drawn too, is reported beside it. r is `revisit_share` (N-
 coins walks each entry so that its words revisit values it already holds, and an entry pays only for its distinct
 values; `a2r_equal` reads it with every weight 1. The closed classes also read `tile_saving`: owners identical
 with zero data, the words a prover saves by copying a TILE-word tile equal to another (one address write a tile),
-from any owner and step, or skipping a zero word, by Monte Carlo.
+from any owner and step, or skipping a zero word, by Monte Carlo. Their frontiers, mirror and the densest closed
+designs then read `joint_saving`, tiles and A2r as one attack in which each word is saved once.
 
 `symbolic_check` decides data-independent distinctness exactly on a small instance: every committed word (and C1's
 formed registers) is a multilinear polynomial in the coin bits with coefficients polynomial in the data, and a pair is
@@ -554,6 +555,66 @@ def tile_saving(side: str, inj: str, s: int, code: str, owners: int, others: int
         saved += float(np.where(zu == TILE, cnt * TILE, zu + (cnt - 1) * (TILE - 1)).sum())
         total += key.size * TILE
     return saved / total if total else 0.0
+
+
+def _strategies(inc: np.ndarray, lo: np.ndarray, hi: np.ndarray, mu: np.ndarray) -> list[np.ndarray]:
+    """`_walk_share`'s data increments for steps × columns supports: none, centred, lazy."""
+    odd = (np.arange(inc.shape[0]) % 2 == 0)[:, None]
+    return [np.zeros_like(mu), -np.rint(mu), -np.where(odd, lo, hi)]
+
+
+@lru_cache(maxsize=None)
+def joint_saving(side: str, inj: str, s: int, code: str, owners: int, others: int, nz: str = "none",
+                 tag: str = "none", weights: str = "ones", dn: str = "served") -> float:
+    """`tile_saving` and `revisit_share` as one attack: owners with equal data, at TILE_POSITIONS tiles, the data
+    increment set per column (so rows stay equal) by `_strategies`. Each word is saved once: a tile equal to an
+    earlier tile of any owner and step costs one address write, and otherwise each of its words that repeats an
+    earlier word of its entry, or is zero, is free. The best strategy's share of all (owner, step) words. Sides A and B
+    only; the rest read `tile_saving`."""
+    if side not in ("A", "B"):
+        return tile_saving(side, inj, s, code, owners, others, nz, tag, weights, dn)
+    rng = np.random.default_rng(zlib.crc32(repr(("joint", side, inj, s, code, owners, others, nz, tag, weights,
+                                                 dn)).encode()))
+    count = lane_steps(inj, s, code, dn)
+    start = s - count
+    plan = lane_plan(count, dn == "mirror")
+    coined = 1 + max((c for lanes in plan for c, _ in lanes), default=-1)
+    pm = lane_pmfs(inj, coined, nz)
+    lo = np.array([min(v for v, _ in q) for q in pm], dtype=float)[:, None]
+    hi = np.array([max(v for v, _ in q) for q in pm], dtype=float)[:, None]
+    mu = np.array([sum(v * y for v, y in q) for q in pm], dtype=float)[:, None]
+    mult = rng.integers(1, 2 ** 63, TILE, dtype=np.uint64) | np.uint64(1)
+    saved, total = np.zeros(3), 0.0
+    for pos in rng.choice(others // TILE, size=min(TILE_POSITIONS, others // TILE), replace=False):
+        cols = np.arange(pos * TILE, (pos + 1) * TILE)
+        base = _code_part(code, owners, cols, others, rng).astype(float)
+        if tag != "none":
+            base = base + owner_tags(owners).T @ rng.integers(-3, 4, (TAG_LANES, TILE))
+        lanes = _lane_draws(inj, coined, owners, nz, rng)
+        w = _weight_draws(weights, coined, TILE, rng)
+        inc = np.zeros((s, owners, TILE))
+        lo_s, hi_s, mu_s = (np.zeros((s, TILE)) for _ in range(3))
+        a, b = lo * w, hi * w
+        clo, chi, cmu = np.minimum(a, b), np.maximum(a, b), mu * w
+        for t in range(start, s):
+            for c, sg in plan[t - start]:
+                inc[t] += sg * lanes[c][:, None] * w[c][None, :]
+                lo_s[t] += clo[c] if sg > 0 else -chi[c]
+                hi_s[t] += chi[c] if sg > 0 else -clo[c]
+                mu_s[t] += sg * cmu[c]
+        for i, d in enumerate(_strategies(inc, lo_s, hi_s, mu_s)):
+            words = base[None] + np.cumsum(inc + d[:, None, :], axis=0)
+            order = np.argsort(words, axis=0, kind="stable")
+            srt = np.take_along_axis(words, order, axis=0)
+            rep = np.zeros(words.shape, dtype=bool)
+            np.put_along_axis(rep, order[1:], srt[1:] == srt[:-1], axis=0)
+            free = (rep | (words == 0)).sum(2).ravel()
+            key = (words.astype(np.int64).astype(np.uint64) * mult).sum(2).ravel()
+            tile_rep = np.ones(key.size, dtype=bool)
+            tile_rep[np.unique(key, return_index=True)[1]] = False
+            saved[i] += np.where(tile_rep, np.maximum(free, TILE - 1), free).sum()
+        total += s * owners * TILE
+    return float(saved.max() / total) if total else 0.0
 
 
 Pmf = tuple  # ((value, mass), ...)
@@ -1534,6 +1595,36 @@ def _apply_tile(r: dict, upd: dict) -> None:
     r["tile_checked"] = True
 
 
+def joint_update(point: dict) -> dict:
+    """A scored design's `joint_saving`, MAC-weighted, at CLOSED_WORKLOADS."""
+    p = Point(**point)
+    out = {}
+    for wl in CLOSED_WORKLOADS:
+        shapes, m = WORKLOADS[wl]
+        j = tot = 0.0
+        for n, k in shapes.values():
+            t = terms(p, m, n, k)
+            j += m * n * k * t["alpha"] * joint_saving(t["side"], p.inject, t["s"], p.code, t["owners"], t["others"],
+                                                         p.nz, p.tag, p.weights,
+                                                         "mirror" if p.denoise == "mirror" else "served")
+            tot += m * n * k
+        out[wl] = j / tot
+    return out
+
+
+def joint_check(rows: list[dict], pmap) -> None:
+    """Raise each row's chosen reading to `joint_saving` where it is larger (the closed designs only: it costs about a
+    minute a design at 8,192 rows)."""
+    todo = [r for r in rows if not r.get("joint_checked")]
+    for r, upd in zip(todo, pmap(joint_update, [r["point"] for r in todo])):
+        for wl, j in upd.items():
+            row = r[wl]
+            row["joint_saving"] = j
+            row["dup_chosen"] = max(row["dup_chosen"], j)
+            row["gap_chosen"] = row["gap"] + row["dup_chosen"]
+        r["joint_checked"] = True
+
+
 def tile_check(rows: list[dict], pmap) -> None:
     todo = [r for r in rows if not r.get("tile_checked")]
     for r, upd in zip(todo, pmap(tile_update, [r["point"] for r in todo])):
@@ -1632,6 +1723,8 @@ def run(jobs: int = 1) -> dict:
         refs = {key: by_name[nm] for key, nm in REFERENCES.items()}
         beats = {key: _beating(rows, ref, pmap) for key, ref in refs.items()}
         dense = densest(rows, pmap)
+        joint = [r for cls, v in classes.items() if CLASSES[cls][2] for r in v] + beats["mirror"] + [refs["mirror"]]
+        joint_check(list({r["name"]: r for r in joint + [by_name[nm] for nm in dense["closed"]]}.values()), pmap)
     reasons: dict = {}
     for v in invalid.values():
         reasons[v] = reasons.get(v, 0) + 1
@@ -1640,7 +1733,9 @@ def run(jobs: int = 1) -> dict:
                        "structural_checks": len(checks), **{f"frontier {c}": len(v) for c, v in classes.items()},
                        **{f"dominate_{key}": len(v) for key, v in beats.items()},
                        "vector_closed": vector_closed, "tile_checked": len(checked),
-                       "tile_closed": sum(map(_closed, checked))},
+                       "tile_closed": sum(map(_closed, checked)),
+                       "joint_checked": sum(1 for r in rows if r.get("joint_checked")),
+                       "joint_closed": sum(1 for r in rows if r.get("joint_checked") and _closed(r))},
             "invalid_reasons": reasons, "shares_source": SHARES_SOURCE, **refs, "frontier": front,
             "class_frontiers": {c: [r["name"] for r in v] for c, v in classes.items()},
             **{f"dominate_{key}": [r["name"] for r in v] for key, v in beats.items()},
@@ -1656,8 +1751,9 @@ def _row(r: dict) -> str:
                        f"{100 * L64['gap_coins_uncredited']:.3f}%", f"{100 * L['gap_coins_uncredited']:.3f}%",
                        f"{100 * L64['gap_adaptive']:.4f}%",
                        f"{100 * L64['gap_chosen']:.2f}%/{100 * L['gap_chosen']:.2f}%",
-                       f"{100 * L64['tile_saving']:.2f}%/{100 * L['tile_saving']:.2f}%" if r.get("tile_checked")
-                       else "-",
+                       (f"{100 * L64['tile_saving']:.2f}%/{100 * L['tile_saving']:.2f}%" if r.get("tile_checked")
+                        else "-") + (f", joint {100 * L64['joint_saving']:.2f}%/{100 * L['joint_saving']:.2f}%"
+                                     if r.get("joint_checked") else ""),
                        f"{100 * L['p_fixed']:.3f}%/{100 * L['p_bound']:.3f}%",
                        f"{100 * L['a2r']:.2f}%/{100 * L['a2r_equal']:.2f}%",
                        f"{1 / L['coin_bits_per_mac']:.0f}" if L["coin_bits_per_mac"] else "-",
