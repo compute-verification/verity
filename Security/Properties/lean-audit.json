@@ -10,6 +10,7 @@
   "Properties.Pouw.Strata",
   "Properties.Pouw.Credit",
   "Properties.Pouw.Lead.Commit",
+  "Properties.Pouw.Lead.V2",
   "Properties.Nci",
   "Properties.Nci.Threads",
   "Properties.Nci.Baseline",
@@ -343,7 +344,8 @@
     "Properties.Pouw.Credit",
     "Properties.Pouw.Period",
     "Properties.Pouw.PeriodJ10R",
-    "Properties.Pouw.ServedValues"
+    "Properties.Pouw.ServedValues",
+    "Properties.Pouw.Lead.V2"
    ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -576,6 +578,11 @@
    "imports": ["Definitions.Core.Formalism", "Properties.Pouw.PeriodJ10R"],
    "except": [],
    "why": "the served period's values in AND gates are stated against served H1's period and premises (`Properties.Pouw.PeriodJ10R`) and the AND count (`Definitions.Core.Formalism`), never a proof"
+  },
+  "Properties.Pouw.Lead.V2": {
+   "imports": ["CoreProtocol.Protocol", "Definitions.Pouw.Lead"],
+   "except": [],
+   "why": "the lead's acceptance at PoUW's v2 case is stated against `Core.Protocol`'s acceptance and the lead's statement (`Definitions.Pouw.Lead`), never a proof"
   }
  },
  "reads_exempt": {
