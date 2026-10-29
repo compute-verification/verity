@@ -26,7 +26,7 @@ scans' knowledge and collision errors. K takes one of two forms:
 * δ None, the per-period form: `NetTiming.Guarantees.PeriodLeakAccepted`'s count, which has no δ term with every proof
   block drawn. Each sampling block's audit fails with at most its own error, which the statement leaves to the
   caller's union bound (`NetTiming.periodLeak_le_sum`).
-* δ given, the pooled form: `NetTiming.Guarantees.HorizonLeakAccepted`'s count at q = 1. It is the per-period count
+* δ given, the pooled form: `NetTiming.Guarantees.PooledLeakAccepted`'s count at q = 1. It is the per-period count
   plus F·log2(N + 1) + b·F, where F = ⌈ln(1/δ)⌉ (`fmax`), N is the period's proof blocks and b = NS + NV, and it fails
   with at most δ beside ε. It is conditional: hesc and hleak await SampledKSLive and P2.
 """
@@ -68,7 +68,7 @@ WEIGHTS = Weights(1_235_814_400 * 16, "Llama-3.2-1B in BF16")
 READINGS = {"registered": "`prog` as registered, the tied audit's slot entries (the record's K)",
             "anchors": "`prog` only at its anchored entries (conditional on the generator-form lowering)"}
 STATEMENTS = {"per_period": "NetTiming.Guarantees.PeriodLeakAccepted",
-              "pooled": "HorizonLeakAccepted, conditional: hesc and hleak await SampledKSLive and P2",
+              "pooled": "PooledLeakAccepted, conditional: hesc and hleak await SampledKSLive and P2",
               "datacenter": "the sum over links of each link's statement, each at δ / links: our composition, which no "
                             "Lean statement covers"}
 
@@ -222,7 +222,7 @@ def per_link(cls: Any, rate: float | Fraction, period: str | float | Fraction, r
              egress_cells: int | None = None, scan_delta: float | Fraction = SCAN_DELTA,
              weights: Weights = WEIGHTS) -> Bound:
     """K over a monitoring period for one link (`link`'s arguments), the count `PeriodLeakAccepted` bounds for one
-    network certifier on one uplink (δ None), or `HorizonLeakAccepted`'s pooled at ``delta``."""
+    network certifier on one uplink (δ None), or `PooledLeakAccepted`'s pooled at ``delta``."""
     one = link(cls, rate, T=T, tau=tau, egress_cells=egress_cells, scan_delta=scan_delta)
     bits = one.bits(period, reading, delta)
     statement = STATEMENTS["per_period" if delta is None else "pooled"]
@@ -234,14 +234,14 @@ def datacenter(links: Sequence[LinkLoad] | Mapping[LinkLoad, int], period: str |
     """K over a monitoring period summed over a datacenter's ``links`` (each a `LinkLoad`, or each with its count),
     each at δ / links (`STATEMENTS`'s ``datacenter``).
 
-    This is our composition: no Lean statement covers it. `PeriodLeakAccepted` and `HorizonLeakAccepted` are each
+    This is our composition: no Lean statement covers it. `PeriodLeakAccepted` and `PooledLeakAccepted` are each
     about one device on one uplink. Summing their bits takes the secrets a sender moves through every link at once to
     number at most the product of the links' counts. That holds except where some link's statement fails, a union
     bound, so a datacenter at δ takes each link at δ / links and pays each link's own faulty proof blocks,
     F = ⌈ln(links / δ)⌉ of them, and its ε is the links' summed. Two shortcuts would be unsound:
 
     * Pooling by weight copy, one pooled count over every link that serves a copy of the weights, paying the faulty
-      proof blocks once at δ: `HorizonLeakAccepted` counts the faulty proof blocks of one device's record, and links
+      proof blocks once at δ: `PooledLeakAccepted` counts the faulty proof blocks of one device's record, and links
       are separate devices with separate records, so no statement pools their proof blocks into one period's.
     * Dividing by the copies: every copy is the same secret, so the share is of one copy (``weights``) whatever the
       links.
