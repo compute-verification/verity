@@ -9,12 +9,14 @@ coins; S = f(IV, ks ‖ salt_w) is the window's midstate (ks ‖ salt_w is one 1
 domain, rank and position, distinct under one ks.
   pad (P1, N-LIT's): the public digest is b = x ⊕ f(S, pos ‖ padding), one compression a digest and b's 16 XORs;
   keyed digest (P2, N-HIDE's e3 shape): the public digest is f(S, pos ‖ x ‖ padding), one compression, no XOR;
-  keyed leaf (P3): the public digest is x's own last hash, its frame-v3 prefix hashed from S instead of from the IV, so
-    nothing is added a digest (the (domain, level) midstates are computed either way).
+  keyed leaf (P3): the public digest is x's own hash started from S instead of from the IV, its first block
+    row-bound's (salt, forward, position) block with the length (without pos, equal rows give equal digests), which
+    row-bound already spends; a frame-v3 node's message already carries (domain, level, index). Nothing is added a
+    digest, and the first block makes the messages prefix-free.
 Each binds through ks: ks's hm96 leaf fixes ks, so the pad (or key) is fixed and x is unique under cr/sha-512, for any ks
 the prover picks. Each hides at SHA-512's PRF property: P1 and P2 on one block from S (exactly the generator convention of
 hm96 PROTOCOL §3, as today's served salts SHA-512(Ks ‖ pos ‖ r) read it), P3 on a prefix-free cascade of blocks
-(Bellare-Canetti-Krawczyk's reduction to the same property). A drawn unit's proof opens ks, computes S and checks the digest.
+(Bellare-Canetti-Krawczyk's reduction to the same property, which prefix-freeness protects from length extension). A drawn unit's proof opens ks, computes S and checks the digest.
 
 The forced mask (FM) keeps hm96-sha512/v1 bit for bit. y is the salt as 48 little-endian 32-bit words h_w; each word is
 formed into eight registers R_{w,k} = h_w & (0x01010101 << k), one LOP3 each, so int8 lane e of R_{w,k} is 2^k·y_j for
@@ -66,7 +68,7 @@ FORM = 8 * WORDS                                     # FM's formed registers R_{
 GATHER = 3 * N_OUT // 4 + 7 * N_OUT // 32            # FM: byte 0 of four partials by three PRMTs, eight registers by seven LEA.HI
 ANDS_COMPRESSION = 58_120                            # a SHA-512 compression in-circuit
 ANDS_FROM_8 = 53_568                                 # one from round 8 (the PRF's)
-KS_OPEN = 3 * ANDS_COMPRESSION                       # ks's hm96 leaf opened in-circuit: its inner digest and c
+KS_OPEN = 5 * ANDS_COMPRESSION                       # ks's hm96 leaf opened in-circuit: inner digest 1, c 2, leaf 2
 H200_MACS = 9.89e14                                  # the one basis for pooled figures (N-CARD): stock held fixed at MFU_SERVE
 MFU_SERVE = 0.4
 DATACENTER_H200 = 100_000
@@ -241,12 +243,17 @@ def shares(ds: dict) -> dict:
 
 
 def in_circuit() -> dict:
-    """ANDs a drawn unit's proof adds to open one public digest beyond x itself, and once a proof (ks and S)."""
-    return {"hm96 + (a)": {"a digest": 3 * ANDS_FROM_8 + 2 * ANDS_COMPRESSION, "once": KS_OPEN},
+    """ANDs a drawn unit's proof spends hiding one public digest beyond x itself (hm96's gadget: c's 2 compressions and
+    the leaf's 2 over private (b, c), M_key·y XORs only), and once a proof (ks's leaf, S, the keyed leaf's prefix
+    midstate). The keyed leaf's pos sits in the padding block; with row-bound's pos in the first block it is one
+    compression a digest, which row-bound already spends."""
+    hm96 = 4 * ANDS_COMPRESSION
+    return {"hm96 today": {"a digest": hm96, "once": 0},
+            "hm96 + (a)": {"a digest": hm96 + 3 * ANDS_FROM_8, "once": KS_OPEN},
+            "hm96 + (a) + FM": {"a digest": hm96 + 3 * ANDS_FROM_8 + N_OUT * WORDS * (26 + 11), "once": KS_OPEN},
             "pad (P1)": {"a digest": ANDS_COMPRESSION, "once": KS_OPEN + ANDS_COMPRESSION},
             "keyed digest (P2)": {"a digest": ANDS_COMPRESSION, "once": KS_OPEN + ANDS_COMPRESSION},
-            "keyed leaf (P3)": {"a digest": 0, "once": KS_OPEN + 2 * ANDS_COMPRESSION},
-            "hm96 + (a) + FM": {"a digest": 3 * ANDS_FROM_8 + 2 * ANDS_COMPRESSION + N_OUT * WORDS * (26 + 11), "once": KS_OPEN}}
+            "keyed leaf (P3)": {"a digest": 0, "once": KS_OPEN + 2 * ANDS_COMPRESSION}}
 
 
 def per_period(share: float) -> dict:

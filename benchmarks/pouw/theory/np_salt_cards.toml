@@ -19,13 +19,6 @@ status = "open"
 owner = "the coordinator, for Daniel"
 source = "N-SALT: the pad family's public digest is not an hm96 leaf (AGENTS.md: commitments are hm96 rows), so it needs a ruling. Its hiding is computational at SHA-512's PRF property keyed by a secret 64-byte block, which is hm96 PROTOCOL §3's generator convention, the one (a)'s derived salts and today's served salts already read: Salt.lean's pad_reduction and pad_ideal_hiding (keyed_ideal_hiding) prove the ideal hybrid exact, with every position used once (a repeated position leaks: pad_repeat_leaks, keyed_repeat_leaks). Whoever holds ks reads every x in its scope (pad_key_reveals), so ks is never published"
 
-[premise.frame-prefix-free]
-rank = 2
-part = "hashing"
-status = "open"
-owner = "N-SALT"
-source = "N-SALT: the keyed leaf's public digests are SHA-512 cascades from S over frame-v3 messages with the 16-byte pos appended, and Bellare-Canetti-Krawczyk reduce their PRF property to the compression function's only on a prefix-free set; it holds if a message's first block (its frame-v3 prefix tag) fixes its length. A CPU-checkable fact about frame-v3's layouts, not checked"
-
 [premise.fm-distinct]
 rank = 2
 part = "hashing"
@@ -51,9 +44,9 @@ source = "N-SALT's keyed digest (N-HIDE's e3 shape): d = f(S, pos ‖ x ‖ padd
 [H.hiding.kleaf]
 name = "kleaf"
 enumerate = false
-premises = ["pad-leaf-ruled", "frame-prefix-free"]
+premises = ["pad-leaf-ruled", "row-bound"]
 salt = { unforced = 0, forced = 0 }
-source = "N-SALT's keyed leaf: the public digest is the subtree's or leaf's own last hash with pos appended, its frame-v3 prefix block hashed from S instead of the IV (a per-window midstate, as the IV's is constant), and pos fits the padding block SHA-512 already spends (16 + 17 bytes), so nothing is added a public digest; the drawn unit's proof opens ks and checks the digest"
+source = "N-SALT's keyed leaf: the public digest's own hash started from S instead of the IV, its first block row-bound's (salt, forward, position) block with the length, which row-bound already spends a compression on (a frame-v3 node's message already carries (domain, level, index)); nothing is added a public digest. Its messages are prefix-free by that block (Salt.lean prefix_free_of_head, proved), so Bellare-Canetti-Krawczyk reduce its hiding to the compression function's PRF property, with no length extension; the drawn unit's proof opens ks and hashes from S"
 
 [H.hiding.fm]
 name = "fm"

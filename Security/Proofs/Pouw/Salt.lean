@@ -7,7 +7,8 @@ is committed under its own hm96 leaf before the window's coins, so nothing in it
 * the pad (P1): `b = x ⊕ prf ks pos`, `prf ks pos = f(f(IV, ks ‖ salt_w), pos ‖ padding)`, `pos` the digest's frame-v3
   domain, rank and position;
 * the keyed digest (P2) and the keyed leaf (P3): `d = G (ks, pos, x)`, SHA-512 of `ks ‖ salt_w ‖ pos ‖ x` (P2) or the
-  subtree's own last hash started from `f(IV, ks ‖ salt_w)` (P3, `x` its frame-v3 content).
+  digest's own hash started from `f(IV, ks ‖ salt_w)`, its first block row-bound's, which carries the position (P3, `x`
+  its content).
 
 Binding, premise-free over the functions:
 
@@ -23,6 +24,8 @@ Hiding, in the ideal hybrid (the PRF replaced by a uniform function of the posit
   so under uniform `F` the two views have one distribution. `keyed_ideal_hiding` is the same for P2 and P3.
 * `pad_repeat_leaks`, `keyed_repeat_leaks`: a repeated position reveals `x u ⊕ x v` (the pad) or whether `x u = x v`
   (the keyed forms). `pad_key_reveals`: whoever holds ks reads every `x` in its scope.
+* `prefix_free_of_head`: P3's messages are prefix-free when the first block fixes the length, so the cascade from `S`
+  reduces to the compression function's PRF property (Bellare-Canetti-Krawczyk) with no length extension.
 
 The forced mask (FM) computes hm96-sha512/v1's mask `M_key · y` over GF(2) as an int8 tensor-core product:
 
@@ -170,6 +173,21 @@ theorem keyed_ideal_hiding [DecidableEq X] (pos : U → P) (hpos : ∀ u v, pos 
     simp only [keyedSwap_swap]
   · funext u
     simp only [keyedView, keyedSwap_use pos hpos]
+
+/-- The keyed leaf's messages, as block lists hashed from `S`, are prefix-free if every message is nonempty and its first
+block fixes its length (row-bound's first block carries the position, and a position's layout fixes the length): no
+message extends another, which is the set Bellare-Canetti-Krawczyk's cascade reduction needs. -/
+theorem prefix_free_of_head {B : Type} (S : List B → Prop) (hne : ∀ m, S m → m ≠ [])
+    (hlen : ∀ m m', S m → S m' → m.head? = m'.head? → m.length = m'.length) :
+    ∀ m t, S m → S (m ++ t) → t = [] := by
+  intro m t hm hmt
+  have hh : (m ++ t).head? = m.head? := by
+    cases m with
+    | nil => exact absurd rfl (hne _ hm)
+    | cons a l => rfl
+  have hl := hlen m (m ++ t) hm hmt hh.symm
+  rw [List.length_append] at hl
+  exact List.eq_nil_of_length_eq_zero (by omega)
 
 /-- At a repeated position the keyed forms reveal whether the two data are equal. -/
 theorem keyed_repeat_leaks (pos : U → P) (x : U → X) (F : P × X → D) {u v : U} (h : pos u = pos v) (he : x u = x v) :
