@@ -2188,15 +2188,15 @@ def main(argv: list[str]) -> int:
         print(f"check: {sys.executable} would run this tree's steps against another checkout's code ({away}); run check with "
               f"{ROOT}'s own environment: `uv run --extra torch-cpu python tools/verity/check/check.py` there", file=sys.stderr)
         return 2
+    run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None
     only = sharded["parts"] if sharded else None
-    if only is None and OFF_GATE and cache and os.environ.get("RESEARCH_RUN_ID"):
+    if only is None and OFF_GATE and cache and run_dir is not None:
         try:
             only = gated_parts()
         except DECLARATION.DeclarationError as e:
             print(f"check: {e}", file=sys.stderr)
             return 2
         print(f"check: off the merge gate, left to the after-landing run (`--deferred`): {', '.join(OFF_GATE)}", flush=True)
-    run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None
     out = run_dir or Path(tempfile.mkdtemp(prefix="check-"))
     verdicts = {"in": verdicts_in(pack, run_dir, None if cache else CIRCUIT_ENTRIES)} if pack and circuit_cache else {}
     before = VERDICTS.snapshot() if run_dir is not None and circuit_cache else None
