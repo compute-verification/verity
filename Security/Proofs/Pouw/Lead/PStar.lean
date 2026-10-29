@@ -15,8 +15,9 @@ Its proofs are in `Lead/PStar/`, its new declarations in `Pouw.SecurityProofs.Le
 
 * `AlphabetProofs`: the per-entry and matrix hit counts for digits drawn after the data, for `uw6`, the coin lane
   `1 + b + s` and hw's row lane, alone or in a sum of lanes.
-* `Call`: `Tile`'s bound over a call's coins (`Pouw.Lead.Coins`): at a step `t ≥ 1` an MMA tile's committed words
-  (`Pouw.Lead.word`) are a value fixed before the coins on at most a `2^−184` share of them, whatever the data.
+* `Call`: `Tile`'s argument over a call's coins (`Pouw.Lead.Coins`): at any step an MMA tile's committed words
+  (`Pouw.Lead.word`) are a value fixed before the coins on at most a `2^−168` share of them, whatever the data, by the
+  tile's coin lanes alone (a column's even and odd rows fix its three lanes).
 * `ExpansionProofs`: the affine expansion `u + t·v` is pairwise uniform on a prime modulus, with the two moments of
   the hit count over steps.
 * `Lanes`: `blc4a-t64-e7`'s three coin lanes sharing one draw a tile under `-rot`'s weights, `(127, 1, 1)` on even rows
