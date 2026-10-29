@@ -26,7 +26,10 @@ T1 reads word production with hashing excluded (ShaSpeed: both parties hash the 
 product is A·Bᵀ, which the adversary holds as advice, so it makes 3K/32 − 1 of honest's 3K/32 words:
   t_adv / t_H = (1 − 32/(3K)) · R_H / R_A.
 
-  uv run python benchmarks/pouw/theory/ncp_time.py [--no-smem] [--json OUT] [--mutations] [--verdict PATH]
+  uv run --with scipy==1.18.1 python benchmarks/pouw/theory/ncp_time.py [--no-smem] [--json OUT] [--mutations]
+      [--verdict PATH]
+
+(scipy at machine_model's pin: the LP's vertex is that version's.)
 """
 from __future__ import annotations
 
