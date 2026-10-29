@@ -302,8 +302,11 @@ the local bound (an activation price, a joint price, a recoverable source), each
 - `Nci.Guarantees.DampenerRemote`: **proved**, but it is the threaded dampener, an older and different bound,
   ρ = max(1, 1/(s + …)/MFU₀) over the thread structure, not the bound displayed above. It is arithmetic over inline
   hypotheses (`Nci.Assumptions.PouwSound` among them, which no PoUW guarantee discharges), not over the local bounds.
-- Over a monitoring period, `Nci.Guarantees.DampenerRemotePeriod`: **stated** (its lock entry is
-  `DampenerRemotePeriodStated`).
+- Over a monitoring period, `Nci.Guarantees.DampenerRemotePeriod`: **proved** (`Nci.SecurityProofs.DampenerRemotePeriod`
+  in `Security/Proofs/Nci/RemotePeriod.lean`), under `TerminalDetection`, with each window's bounds as hypotheses (PoUW's
+  certificate wrong with probability at most `p`, the sample missing `m` faulty blocks with probability at most
+  `(1 − q)^m`, a sampled faulty block undetected with probability at most `ks t`, each registered run within
+  `Throttled`'s bound), which no served path discharges yet.
 - The block-description bound (`Verity.Guarantees.BlockDescription`) and the counting bound
   (`Verity.Guarantees.Counting`): **proved**.
 
