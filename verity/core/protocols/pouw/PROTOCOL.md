@@ -109,10 +109,10 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    - **The reveal deadline** (`Proxy(reveal_deadline=…)`, one PoUW window by default) is a parameter: p's registration
      takes the reveal from p's last ingress record until that long past p's end on the certifier's clock (by the end of
      p + 1 at the default), which bounds how long the prover holds p's salt before its work is registered under it. It must be sized against a measured commit pipeline: a deadline shorter than the honest
-     pipeline's time past p's end refuses every honest window, and SERVE-H1's window spends 439 s on receipts
-     (r20261018-234409-19cd). No Lean statement covers the certified window's timing yet (`EndToEndWindow`'s t_d is the
+     pipeline's time past p's end refuses every honest window, and the served H1 window spends 439 s on receipts.
+     No Lean statement covers the certified window's timing yet (`EndToEndWindow`'s t_d is the
      uncertified window's).
-   - **The certifier–challenger link** (network's NET-50). The certifier runs on the link and the challenger on an
+   - **The certifier–challenger link**. The certifier runs on the link and the challenger on an
      auditor host, so the challenger asks through the certifier's client (`certifier.active.CertifierClient`, served by
      `serve_reveals`): each `committed` and `reveal` is a request the challenger signs for the certifier's run and an
      answer the certifier signs over its run, p, the registration's digest and the value, which the client verifies
