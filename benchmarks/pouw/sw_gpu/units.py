@@ -209,12 +209,16 @@ def hashing(out: Path, res: dict) -> list[str]:
           "Alone at the data sheet's f_max (1,980 MHz), and at the SM clock nvidia-smi sampled over the alone leg; beside from the "
           "GEMM's loss in SM-cycles at its own clock. A word is 4 bytes (an s32 accumulator word); a plain k32 word is 32 MAC-times "
           "of tensor work.", "",
-          "| arm | row | T | cap (CTAs) | hash GB/s | G compressions/s | GEMM loss (Mcycles) | units a byte | units a word | "
-          "words' cost over their 32 MACs | kappa |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+          "The GEMM is int8_fused's Triton plan or its persistent wgmma kernel (`wgmma`), bare (back-to-back forwards) or in "
+          "the served step's loop (`step`: the non-GEMM kernels between the linears and the host gap), at its TMAC/s alone.", "",
+          "| arm | GEMM | row | T | cap (CTAs) | hash GB/s | G compressions/s | GEMM loss (Mcycles) | units a byte | units a word | "
+          "words' cost over their 32 MACs | kappa |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     hs = []
     clock = smi_clock(out)
     for d in sorted(p for p in out.iterdir() if (p / "hash_cost.json").exists()):
         j = json.loads((d / "hash_cost.json").read_text())
+        g = j.get("gemm", {})
+        gemm = f"{j.get('gemm_kind', 'triton')}{' step' if j.get('step') else ''} {g.get('tmacs_per_s', '?')}"
         marks = j.get("clock_marks", [])
         for rb, s in j["forms"]["t256"]["sizes"].items():
             h_alone = RULER * 1980e6 / (s["leaf_gbps"] * 1e9)
@@ -222,16 +226,16 @@ def hashing(out: Path, res: dict) -> list[str]:
             win = [f for t, f in clock if i is not None and i + 1 < len(marks) and marks[i][1] <= t < marks[i + 1][1]]
             f_alone = sorted(win)[len(win) // 2] if win else None
             h_meas = RULER * f_alone * 1e6 / (s["leaf_gbps"] * 1e9) if f_alone else None
-            hs.append({"arm": d.name, "row": int(rb), "T": j["T"], "cap": "alone", "gbps": s["leaf_gbps"],
+            hs.append({"arm": d.name, "gemm": gemm, "row": int(rb), "T": j["T"], "cap": "alone", "gbps": s["leaf_gbps"],
                        "gcomp": s["leaf_gcomp_per_s"], "h": h_alone, "h_sampled": h_meas, "mhz_sampled": f_alone})
             meas = f" ({h_meas:.0f} at {f_alone:.0f} MHz)" if h_meas else ""
-            md.append(f"| {d.name} | {int(rb) // 1024} KiB | {j['T']} | alone | {s['leaf_gbps']} | {s['leaf_gcomp_per_s']} | | "
+            md.append(f"| {d.name} | | {int(rb) // 1024} KiB | {j['T']} | alone | {s['leaf_gbps']} | {s['leaf_gcomp_per_s']} | | "
                       f"{h_alone:.0f}{meas} | {4 * h_alone:.0f} | {4 * h_alone / 32:.0f}× | |")
             for b in s.get("beside", []):
                 h = b["delta_mcycles"] * 1e6 * RULER / b["bytes"]
-                hs.append({"arm": d.name, "row": int(rb), "T": j["T"], "cap": b["cap"], "gbps": b["hash_gbps"], "h": h,
-                           "kappa": b["kappa_window"], "delta_mcycles": b["delta_mcycles"], "bytes": b["bytes"]})
-                md.append(f"| {d.name} | {int(rb) // 1024} KiB | {j['T']} | {b['cap'] or 'all'} | {b['hash_gbps']} | | "
+                hs.append({"arm": d.name, "gemm": gemm, "row": int(rb), "T": j["T"], "cap": b["cap"], "gbps": b["hash_gbps"],
+                           "h": h, "kappa": b["kappa_window"], "delta_mcycles": b["delta_mcycles"], "bytes": b["bytes"]})
+                md.append(f"| {d.name} | {gemm} | {int(rb) // 1024} KiB | {j['T']} | {b['cap'] or 'all'} | {b['hash_gbps']} | | "
                           f"{b['delta_mcycles']:.1f} | {h:.0f} | {4 * h:.0f} | {4 * h / 32:.0f}× | {b['kappa_window']} |")
     res["hash"] = hs
     return md
