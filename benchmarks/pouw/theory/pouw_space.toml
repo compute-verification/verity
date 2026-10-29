@@ -436,7 +436,7 @@ status = "scratch"
 owner = "SW-LEAN"
 requires = ["atomic-call", "period-inventory", "weights-distinct"]
 closes = ["final_word"]
-source = "SW-LEAN interim: finalWordTarget / finalWord_charged, proved in Security/Proofs/Pouw/Dimension/Scratch/SwLean.lean (cursor/compute-research-sw-lean-fa5d at 19904038b9, art:bef3acdfa62b1252ed4478a6915fd140997ab6a9bd2d1f4ee52030717e42ab9c; axioms clean, run r20261029-044839-bed3), in no lock; on the grid uniform in the call's input, so rank 0 given the atomic call and PeriodInventory. Padding rows, repeated rows and replayed requests make A_i·B free, as do zero or equal weight columns (SW-SMELL S8: weights-distinct). SW-LEAN final §2-3 (3726b081f0, art:70d0373aa78e8ae12570e6b7b8be77e2e643bea30c425d288966368a7018fad2): for any non-final words independent modulo V0 (NfIndep), NCP's canonical words and route U's (nfIndep_U), and with candidate 1 in one free set (ncp_charged, ncpU_charged); route U''s checked values are not defined (route-u2)"
+source = "Closes the final word only on the grid (a claim's data_model = \"grid\"): T1 quantifies over the data the prover chooses (M0), where it can know A·Bᵀ (zero data), and N-SAKU interim 2 §1's middle-segment skip (note compute-research/20261029T0815Z-report-np-saku; skip_adv and skip_words proved premise-free in Security/Proofs/Pouw/SakU.lean on cursor/compute-research-np-saku-ea97, run r20261029-081448-b32a, art:cfbebcd0abfe9c6c1b5da0bebdfeab87eeede4ae8aef2eb132ec41ec375bfb2d; checked bit-exact on ncp3, run r20261029-081412-782c) then frees a whole segment, L/K of stock, for every exact design. SW-LEAN interim: finalWordTarget / finalWord_charged, proved in Security/Proofs/Pouw/Dimension/Scratch/SwLean.lean (cursor/compute-research-sw-lean-fa5d at 19904038b9, art:bef3acdfa62b1252ed4478a6915fd140997ab6a9bd2d1f4ee52030717e42ab9c; axioms clean, run r20261029-044839-bed3), in no lock; on the grid uniform in the call's input, so rank 0 given the atomic call and PeriodInventory. Padding rows, repeated rows and replayed requests make A_i·B free, as do zero or equal weight columns (SW-SMELL S8: weights-distinct). SW-LEAN final §2-3 (3726b081f0, art:70d0373aa78e8ae12570e6b7b8be77e2e643bea30c425d288966368a7018fad2): for any non-final words independent modulo V0 (NfIndep), NCP's canonical words and route U's (nfIndep_U), and with candidate 1 in one free set (ncp_charged, ncpU_charged); route U''s checked values are not defined (route-u2)"
 
 [premise.commit-forced]
 rank = 0
@@ -1014,7 +1014,7 @@ source = "the hiding ruling, ruled out by NIGHT.md §1 default 2"
 # (the counting lemma, when the formed operands aren't committed) and the noise's derivation (OneInstructionMinimal).
 [P.final.none]
 name = ""
-source = "the final word free in M0 when the noise cancels"
+source = "the final word free in M0 when the noise cancels, and with it a whole segment (N-SAKU's skip, L/K)"
 
 [P.final.fw]
 when = "final_target == 0"
@@ -1088,7 +1088,9 @@ uncovered = { best_p4_dither = 0.0246 }
 source = "N-COVER interim 1 TL;DR: Llama decode with 2K context (8K: stock 85.7%, dither 3.7%); best pads every matmul to 64 rows for 12.6%"
 
 # Cards (the format in the N-CARD note): a design named by its module on each axis, with the premises it adds, its
-# own claimed numbers (checked against the calculator: `basis` "t1", "gap" or "hiding_words", and the terms it sums).
+# own claimed numbers (checked against the calculator: `basis` "t1", "gap", "hiding_words" or a term, and the terms it
+# sums). A claim made on its origin's model says so: `data_model = "grid"` (inputs uniform on the grid, so N-SAKU's skip
+# is off and the final-word lemma closes the final word) and `salt_basis = "leaf-time"` (SW-HASH's salt price).
 # A term no module prices comes as a module or a field, never as a number beside the design. A module a card names
 # that the card doesn't define and the space doesn't hold refuses the card.
 [card.ncp-k32]
@@ -1170,8 +1172,8 @@ title = "per2 under M1 (the final-word lemma) without candidate 1"
 origin = "SW-NOISE"
 modules = { N = "per2", D = "cancel", F = "act124", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "fw", forming = "none", derivation = "none" }
 source = "noise_sweep.py at 2ba11b9bfa"
-claims.t8192 = { gap = 0.0019026, terms = ["final_word", "uncommitted_steps", "forming", "lane_fix", "denoise"], tol = 0.000002, kind = "checked", source = "noise_sweep.py --json, per2 M1 n, llama_T8192 (it counts V's 32 entries in the limb block, not their derivation from coin bits, which the card prices as noise_derivation: 256/(nK) more)" }
-claims.v4like = { gap = 0.0011211, terms = ["final_word", "uncommitted_steps", "forming", "lane_fix", "denoise"], tol = 0.000002, kind = "checked", source = "noise_sweep.py --json, per2 M1 n, v4dense_T8192 (forming only, as above)" }
+claims.t8192 = { data_model = "grid", gap = 0.0019026, terms = ["final_word", "uncommitted_steps", "forming", "lane_fix", "denoise"], tol = 0.000002, kind = "checked", source = "noise_sweep.py --json, per2 M1 n, llama_T8192 (it counts V's 32 entries in the limb block, not their derivation from coin bits, which the card prices as noise_derivation: 256/(nK) more)" }
+claims.v4like = { data_model = "grid", gap = 0.0011211, terms = ["final_word", "uncommitted_steps", "forming", "lane_fix", "denoise"], tol = 0.000002, kind = "checked", source = "noise_sweep.py --json, per2 M1 n, v4dense_T8192 (forming only, as above)" }
 
 [card.sw-noise-per2-m0]
 title = "per2 under M0 without candidate 1 (the final word free)"
@@ -1185,14 +1187,14 @@ title = "os2 under M1 without candidate 1"
 origin = "SW-NOISE"
 modules = { N = "os2", D = "cancel", F = "act124", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "fw", forming = "none", derivation = "none" }
 source = "noise_sweep.py at 2ba11b9bfa"
-claims.t8192 = { gap = 0.0037716, tol = 0.000002, kind = "checked", source = "noise_sweep.py --table, os2 M1 n, L T8192" }
+claims.t8192 = { data_model = "grid", gap = 0.0037716, tol = 0.000002, kind = "checked", source = "noise_sweep.py --table, os2 M1 n, L T8192" }
 
 [card.sw-noise-ncp3-m1-c1]
 title = "ncp3 under M1 with candidate 1"
 origin = "SW-NOISE"
 modules = { N = "ncp", D = "cancel", F = "int7-U", density = "k32", operands = "xy", rows = "r256k", hiding = "open", final = "fw", forming = "none", derivation = "none" }
 source = "noise_sweep.py at 2ba11b9bfa: candidate 1 forces X and Y, and the gap left is E1's and F1's derivation, 8/n + 8/m; SW-NOISE prices no lane fix (SW-SMELL S9 came after it), which the card adds: route U's 24/m"
-claims.t8192 = { gap = 0.0028623, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "checked", source = "noise_sweep.py --table, ncp3 M1 y, L T8192" }
+claims.t8192 = { data_model = "grid", gap = 0.0028623, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "checked", source = "noise_sweep.py --table, ncp3 M1 y, L T8192" }
 
 [card.sw-premises-s1]
 title = "SW-PREMISES' S1 (the atomic call: the final word closed) on Llama fused, NCP"
@@ -1200,25 +1202,25 @@ origin = "SW-PREMISES"
 note = "compute-research/20261029T0450Z-report-sw-premises"
 modules = { N = "ncp", D = "cancel", F = "int7-mix", density = "k32", operands = "w", rows = "r16k", hiding = "open", final = "fw", forming = "none", derivation = "none" }
 source = "premise_buys.py at 468c91f3d0, llama-3.2-1b fused rows"
-claims.t8192 = { gap = 0.0138, tol = 0.0001, kind = "checked", source = "premise_buys.py: S1, llama fused, T 8192" }
-claims.t512r512 = { gap = 0.0776, tol = 0.0001, kind = "checked", source = "premise_buys.py: S1, llama fused, T 512 (512 rows)" }
+claims.t8192 = { data_model = "grid", gap = 0.0138, tol = 0.0001, kind = "checked", source = "premise_buys.py: S1, llama fused, T 8192" }
+claims.t512r512 = { data_model = "grid", gap = 0.0776, tol = 0.0001, kind = "checked", source = "premise_buys.py: S1, llama fused, T 512 (512 rows)" }
 
 [card.sw-premises-s2]
 title = "SW-PREMISES' S2 (every class semantic, the counting lemma)"
 origin = "SW-PREMISES"
 modules = { N = "ncp", D = "cancel", F = "int7-mix", density = "k32", operands = "w", rows = "r16k", hiding = "open", final = "fw", forming = "count", derivation = "none" }
 source = "premise_buys.py at 468c91f3d0"
-claims.t8192 = { gap = 0.0053, tol = 0.0001, kind = "checked", source = "premise_buys.py: S2, llama fused, T 8192" }
-claims.t512r512 = { gap = 0.0251, tol = 0.0001, kind = "checked", source = "premise_buys.py: S2, llama fused, T 512" }
+claims.t8192 = { data_model = "grid", gap = 0.0053, tol = 0.0001, kind = "checked", source = "premise_buys.py: S2, llama fused, T 8192" }
+claims.t512r512 = { data_model = "grid", gap = 0.0251, tol = 0.0001, kind = "checked", source = "premise_buys.py: S2, llama fused, T 512" }
 
 [card.sw-premises-s3]
 title = "SW-PREMISES' S3 (and OneInstructionMinimal): only the sign fix remains"
 origin = "SW-PREMISES"
 modules = { N = "ncp", D = "cancel", F = "int7-mix", density = "k32", operands = "w", rows = "r16k", hiding = "open", final = "fw", forming = "count", derivation = "min" }
 source = "premise_buys.py at 468c91f3d0"
-claims.t8192 = { gap = 0.0024, tol = 0.00005, kind = "checked", source = "premise_buys.py: S3, llama fused, T 8192" }
-claims.t512r512 = { gap = 0.0075, tol = 0.00005, kind = "checked", source = "premise_buys.py: S3, llama fused, T 512" }
-claims.v4like = { gap = 0.0029, tol = 0.00005, kind = "checked", source = "premise_buys.py: S3, v4-like dense, T 8192" }
+claims.t8192 = { data_model = "grid", gap = 0.0024, tol = 0.00005, kind = "checked", source = "premise_buys.py: S3, llama fused, T 8192" }
+claims.t512r512 = { data_model = "grid", gap = 0.0075, tol = 0.00005, kind = "checked", source = "premise_buys.py: S3, llama fused, T 512" }
+claims.v4like = { data_model = "grid", gap = 0.0029, tol = 0.00005, kind = "checked", source = "premise_buys.py: S3, v4-like dense, T 8192" }
 
 [card.sw-hash-k32-r256k]
 title = "SW-HASH's hiding term: NCP's k32 words at 256 KiB rows, unforced, in W1 at the floor"

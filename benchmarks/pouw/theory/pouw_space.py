@@ -11,8 +11,11 @@ written `reg` = 32 under H32, measured on the H200). The honest program is the b
 costs `reg`. Under DistinctWrites each committed, pairwise-distinct, noise-dependent word costs the adversary at least
 `reg`. The gap is honest's work that no premise forces, by term:
 
-- final word: each dot product's last word is A·Bᵀ, free advice until the final-word lemma (32/K at L 32), unless the
-  de-noise leaves noise in it (`final_target`: the last word is a target);
+- final word: each dot product's last word is A·Bᵀ, free advice (32/K at L 32), unless the de-noise leaves noise in it
+  (`final_target`: the last word is a target). T1 quantifies over the data the prover chooses (M0), so it can know the
+  total, and N-SAKU's middle-segment skip (proved premise-free) then frees a whole segment: an exact design pays
+  max(word, L)/K whatever the premise, and the final-word lemma, stated on the grid uniform in the call's input,
+  closes the term only under a claim's `data_model = "grid"` (its origin's model);
 - uncommitted steps: r·(1 − u/L) between words committed every L, where a word is charged u = reg (MH100w's
   anyFunctionCeiling) or a premise's `word_units` (BamFloor, 128/3 at L 64 and 48 beyond, N-DENSE's correction of
   SW-SEM; PureLanes or CellPure, L to 128), plus what the best-known fast scheme (Strassen-Winograd, `price.fast_matmul`)
@@ -538,10 +541,11 @@ def call_units(card: dict, d: dict, m: float, n: float, K: float, g: float = 1.0
     closes, forced, u_word, fast = effects(card, d["premises"], L)
     stock = m * n * K
     words = depth / L
-    final_free = "final_word" not in closes and not f["final_target"]
+    skip = not f["final_target"] and d.get("data_model", "m0") == "m0"
+    final_free = ("final_word" not in closes or skip) and not f["final_target"]
     honest_tensor = r * m * n * K
     t = dict.fromkeys(TERMS, 0.0)
-    t["final_word"] = m * n * u_word if final_free else 0.0
+    t["final_word"] = m * n * (max(u_word, L) if skip else u_word) if final_free else 0.0
     t["uncommitted_steps"] = honest_tensor - m * n * words * u_word
     if abs(t["uncommitted_steps"]) < 1e-9 * honest_tensor:
         t["uncommitted_steps"] = 0.0
@@ -1112,7 +1116,8 @@ def main() -> int:
                 continue
             cl = claims.get(point) or {}
             try:
-                card_rows[cid][point] = evaluate(card, d | {"salt_basis": cl.get("salt_basis", "w1")}, point, delta)
+                card_rows[cid][point] = evaluate(card, d | {"salt_basis": cl.get("salt_basis", "w1"),
+                                                             "data_model": cl.get("data_model", "m0")}, point, delta)
             except Refused as e:
                 card_rows[cid][point] = e.reasons
     results["_cards"] = card_rows
@@ -1181,10 +1186,12 @@ def main() -> int:
                  and r["terms"]["pre_noise_hashing"] == 0, f"{r['pre_noise_units']:.3f}x")
     checks.check("deriving E1 and F1 from XOF bytes is 8/n + 8/m: 0.29% fused at T 8,192 (CORE-SMELL C28)",
                  abs(r["terms"]["noise_derivation"] - 0.0029) < 0.0002, f"{r['terms']['noise_derivation']:.3%}")
-    sh = row("t8192", nm("ncp", "cancel", "int7-U", "k32", "xyef", "r16k", "mask", "fw"))
+    grid = {"data_model": "grid"}
+    sh = evaluate(card, designs[nm("ncp", "cancel", "int7-U", "k32", "xyef", "r16k", "mask", "fw")] | grid, "t8192")
     rest = sum(v for k, v in sh["terms"].items() if k != "hashing_slack")
     checks.check("with every honest write forced and the salt side closed, credited hashing is about 670x stock at "
-                 "T 8,192 (CORE-SMELL C27: delta* about 0.0015%), and delta* spends what route U's lane fix leaves of 1%",
+                 "T 8,192 (CORE-SMELL C27: delta* about 0.0015%), and on the grid delta* spends what route U's lane fix "
+                 "leaves of 1%",
                  660 < sh["hash_units_per_mac"] < 700 and abs(sh["delta_star"] * sh["hash_units_per_mac"] + rest - 0.01)
                  < 1e-12, f"delta* {sh['delta_star']:.2e}, {sh['hash_units_per_mac']:.0f} units a MAC, other terms {rest:.3%}")
     for point, want in (("t8192", 0.024), ("t512", 0.520)):
@@ -1219,10 +1226,10 @@ def main() -> int:
                  "(96 bits) at K 2,048, 8,480/8,192 and 9 words (288 bits) at K 8,192 (ssn_1l_layout)",
                  all(abs(g[0] - x[0]) < 1e-12 and abs(g[1] - x[1]) < 1e-9
                      for g, x in zip(got, ((2144 / 2048, 96), (8480 / 8192, 288)))), f"{got}")
-    pw = row("t8192", nm("per2", "cancel", "act124", "k32", "w", "r16k", "mask", "fw"))
-    px = row("t8192", nm("per2", "cancel", "act124", "k32", "xyef", "r16k", "mask", "fw"))
-    checks.check("per2 under the final-word lemma with the salt side closed is SW-NOISE's 0.190% plus its words' leftover "
-                 "hiding, and 0 gap with X and V committed", abs(pw["gap"] - 0.0019) < 0.00003 and px["gap"] < 1e-12,
+    pw, px = (evaluate(card, designs[nm("per2", "cancel", "act124", "k32", o, "r16k", "mask", "fw")] | grid, "t8192")
+              for o in ("w", "xyef"))
+    checks.check("per2 under the final-word lemma on the grid with the salt side closed is SW-NOISE's 0.190% plus its "
+                 "words' leftover hiding, and 0 gap with X and V committed", abs(pw["gap"] - 0.0019) < 0.00003 and px["gap"] < 1e-12,
                  f"gap {pw['gap']:.4%}, with C1 {px['gap']:.4%}")
     b64 = row("t8192", nm("ncp", "cancel", "int7-U", "k64-bam", "xyef", "r16k", "open", "fw"))
     checks.check("a word every 64 steps at rank <= 3 is credited BamFloor's 128/3 units, not 64 (N-DENSE): "
@@ -1256,15 +1263,20 @@ def main() -> int:
                  "the matmul part, and the overall rank is the larger; PeriodInventory is open, so the effective rank "
                  "is 5", t["ranks"]["hashing"] == 4.0 and t["ranks"]["matmul"] == 3.0 and t["rank"] == 4.0
                  and t["rank_effective"] == 5.0 and RANKS["4a"] < RANKS["4bU"] < RANKS["4b"] < RANKS[5], rk(t))
-    passing = {p: [r for r in res["rows"] if r["t1_pass"] and r["choice"]["noise"] == "ncp"]
-               for p, res in results.items() if not p.startswith("_")}
-    checks.check("at T 512's 64 rows every NCP design passing T1 takes route U' (route-u2): route U's Y lane fix alone is "
-                 "37.5% (SW-SMELL S9)", passing["t512"] and all("route-u2" in r["premises"] for r in passing["t512"]),
-                 f"{len(passing['t512'])} pass")
-    checks.check("at T 8,192 every NCP design passing T1 takes mask-optimal or a subtree layout: with hiding required "
-                 "and a salt every leaf, the salt side costs over 1% of stock (N-HIDE §2: 44.6% at 256 KiB leaves)",
-                 passing["t8192"] and all({"mask-optimal", "subtree-layout"} & set(r["premises"]) for r in passing["t8192"]),
-                 f"{len(passing['t8192'])} pass")
+    llama = ("t512", "t512r512", "t8192")
+    exact = {p: [r for r in results[p]["rows"] if r["choice"]["denoise"] == "cancel"] for p in llama}
+    checks.check("in M0 every exact design (the noise cancelled in the GEMM) fails T1 at every Llama point: N-SAKU's "
+                 "skip frees a segment a dot product whatever the premise, at L 32 the 32·Σn/ΣnK = 1.239% the final-word "
+                 "lemma closes only on the grid", all(exact.values()) and all(
+                     not r["t1_pass"] and r["terms"]["final_word"] >= 32 * 23552 / 60817408 - 1e-12
+                     for v in exact.values() for r in v),
+                 ", ".join(f"{p} {len(v):,} exact, least T1 {min(r['t1'] for r in v):.2%}" for p, v in exact.items()))
+    gu = evaluate(card, designs[nm("ncp", "cancel", "int7-U", "k32", "w", "r16k", "open")] | grid, "t512")
+    gs = evaluate(card, designs[nm("ncp", "cancel", "int7-U", "k32", "w", "r256k", "salt", "fw")] | grid, "t8192")
+    checks.check("on the grid NCP at 64 rows still needs route U' (route U's Y lane fix is 37.5%, SW-SMELL S9), and at "
+                 "T 8,192 with a salt every 256 KiB leaf the salt side alone is over 1% (N-HIDE §2)",
+                 gu["terms"]["lane_fix"] > 0.01 and gs["terms"]["hiding"] > 0.01,
+                 f"lane fix {gu['terms']['lane_fix']:.1%}, salt side {gs['terms']['hiding']:.1%}")
     ok = True
     for p, res in results.items():
         if p.startswith("_"):
@@ -1320,9 +1332,9 @@ def main() -> int:
             fn(c)
             return c
 
-        def one(c: dict, choice: dict, point: str = "t8192"):
+        def one(c: dict, choice: dict, point: str = "t8192", model: str = "m0"):
             try:
-                return evaluate(c, compose(c, choice), point)
+                return evaluate(c, compose(c, choice) | {"data_model": model}, point)
             except Refused as e:
                 return e.reasons
 
@@ -1363,9 +1375,9 @@ def main() -> int:
         c = mutated(lambda c: c["premise"]["pure-lanes"].__setitem__("word_units", "reg*L/32"))
         k1024 = {"noise": "ncp", "denoise": "cancel", "format": "int7-mix", "density": "k1024-pl", "operands": "xyef",
                  "rows": "r256k", "hiding": "mask", "final": "fw", "forming": "none", "derivation": "none"}
-        e, e0 = one(c, k1024, "v4like"), one(card, k1024, "v4like")
-        checks.mutation("credit PureLanes' full L at every L and ncp/k1024-pl/xyef passes T1 on V4-like: the cap at L 128 "
-                        "from SW-SEM's margins keeps it out", e["t1_pass"] and not e0["t1_pass"],
+        e, e0 = one(c, k1024, "v4like", "grid"), one(card, k1024, "v4like", "grid")
+        checks.mutation("credit PureLanes' full L at every L and ncp/k1024-pl/xyef passes T1 on V4-like on the grid: the "
+                        "cap at L 128 from SW-SEM's margins keeps it out", e["t1_pass"] and not e0["t1_pass"],
                         f"T1 {e['t1']:.2%} uncapped, {e0['t1']:.0%} capped")
         ssn_e = {"noise": "ssn-1l", "denoise": "served", "format": "s8", "density": "k32", "operands": "ef",
                  "rows": "r16k", "hiding": "mask", "final": "none", "forming": "none", "derivation": "none"}
@@ -1403,7 +1415,12 @@ def main() -> int:
         checks.mutation("restore the hiding ruling and ssn-1l-tag passes T1 at T 8,192 with the salt side waived: default 2 "
                         "is what keeps it out", isinstance(e, dict) and e["t1_pass"] and e["hiding_closed"] > TARGET["t1"],
                         f"T1 {e['t1']:.3%}, waived {e['hiding_closed']:.0%}" if isinstance(e, dict) else str(e)[:60])
-        pool = {k: v for k, v in designs.items() if v["choice"]["noise"] in ("ssn-1l-tag", "per2")}
+        p2 = designs[nm("per2", "cancel", "act124", "k32", "w", "r256k", "mask", "fw", "count", "min")]["choice"]
+        e, e0 = one(card, p2, "t8192", "grid"), one(card, p2)
+        checks.mutation("price on the grid, where the final-word lemma holds, and per2/cancel under it passes T1 at "
+                        "T 8,192: N-SAKU's skip in M0 is what keeps every exact design out", e["t1_pass"] and not e0["t1_pass"],
+                        f"T1 {e['t1']:.3%} on the grid, {e0['t1']:.2%} in M0")
+        pool = {k: v for k, v in designs.items() if v["choice"]["noise"] in ("ssn-1l-tag", "ssn-1l-hw")}
         c = mutated(lambda c: c["attack"].__setitem__("x", {"targets": ["ssn-tag-distinct"], "status": "open", "source": "test"}))
         rows_c, _ = ranking(c, pool, "t8192")
         rows_0, _ = ranking(card, pool, "t8192")
