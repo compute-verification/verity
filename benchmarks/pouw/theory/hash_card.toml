@@ -1,0 +1,116 @@
+# The HASH card's data (hash_card.py): the basis, the lead, the h readings in circulation, the designs and the rule
+# for comparing them. pouw_space.toml prices every composed design; this file holds what pouw_space doesn't: measured
+# figures carried from the lanes, the readings to reconcile, and the HASH proposals as their notes state them.
+
+[basis]
+title = "W1 at H32 (a register write 32 units, a stock MAC 1), hashing at ShaWrites' per-form constant R"
+price = "w1-forms"
+model = "llama-3.2-1b"
+points = ["t512", "t512r512", "t8192"]
+words_chunk = 262144
+lead = { noise = "tag-blc4a-t64-rot", denoise = "served", format = "s8", density = "k32", operands = "w", rows = "l1w", hiding = "l1a", final = "none", forming = "none", derivation = "min" }
+lead_name = "tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min"
+h_definition = "h: the honest program's credited commitment work over stock, W1 units a useful MAC: SHA-512 at R per form (pouw_space price.sha_forms), plus any non-hash commitment work a design adds (a sketch's MACs, lookups), at W1"
+source = "N-CARD final (note compute-research/20261029T1250Z-report-np-card), pouw_space at 5e6e05cc21; inbox/HASH.md's figure of merit"
+
+# The prices an h may be stated at, in W1 units a hashed byte, and what each is.
+[price.w1-forms]
+per_byte = "per-form"
+kind = "register count"
+source = "ShaWrites' constant per form (N-SHALB final §1): words at their chunk's R, A at 3,449.05, pouw_space price.sha_forms"
+
+[price.sha-3532]
+per_byte = 883.0
+kind = "register count"
+source = "a chained compression's 3,532 registers, flat (pouw_space price.hash_work): over-credits 0.034% at 256 KiB words, 0.475% at 16 KiB"
+
+[price.floor]
+per_byte = 908.0
+kind = "register count"
+source = "the served committer's 3,632 registers a compression (pouw_space price.hash_work_floor; SW-HASH final)"
+
+[price.bar]
+per_byte = 1774.85
+kind = "time"
+source = "HASH-38's bar, the public best SHA-512 on the H200 priced at its issue time (pouw_space price.hash_work_bar): a time price, not a register count; the card priced hashing at it until 09:58Z"
+
+# The h figures in circulation for the lead. Each is reproduced from its design and its price, or by arithmetic on the
+# bytes its card printed when its code is no longer the card's.
+[reading.brief-233]
+value = 233.0
+said = "inbox/HASH.md: h ≈ 233 at 16 KiB words"
+design = "ssn-1l-tag/served/s8/k32/w/r256k/mask/min"
+compose = { noise = "ssn-1l-tag", denoise = "served", format = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "salt", final = "none", forming = "none", derivation = "min" }
+compose_why = "today's card refuses `mask` (mask-optimal is refuted, N-HIDE final §8), so its bytes are compared on `salt`, which credits the same bytes"
+price = "bar"
+bytes_per_mac_then = 0.13104
+then = "pouw_space at a93377e30d (08:32Z), the card behind N-CARD interim 1 (note compute-research/20261029T0840Z-report-np-card): 'the lead's hashing is 233 W1 units a useful MAC'; its hash_work was the bar's 1,774.85"
+words_chunk = 262144
+
+[reading.brief-119_5]
+value = 119.5
+said = "inbox/HASH.md: h ≈ 119.5 at 256 KiB"
+design = "ssn-1l/served/s8/k32/w/r256k/salt/min"
+compose = { noise = "ssn-1l", denoise = "served", format = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "salt", final = "none", forming = "none", derivation = "min" }
+price = "floor"
+then = "N-PREM interim 1 (note compute-research/20261029T0740Z-report-np-prem): ssn_1l at 256 KiB rows, 119.5 W1 units a MAC on Llama 'at the W1 floor', 239.5 at the price measured alone; N-PREM's own calculator"
+words_chunk = 262144
+tolerance = 0.01
+
+# The lead's measured figures, carried (the card reproduces none of them).
+[lead.t2_measured]
+t512 = [10.90, 21.28]
+t512r512 = [37.34, 65.12]
+t8192 = [62.08, 74.63]
+label = "measured"
+source = "N-KERNEL final (sync / async over CORE-NCP's stock step), runs r20261029-115734-aaa5 and r20261029-115600-9b5d, art:37090110e40cd8d4b50ac644bf09a1dc0b0e05b1ee0611c5481f48d286ddcf5b; as N-CARD final carries them"
+
+[lead.t3_measured]
+ctx2k = -0.00164
+ctx8k = -0.00021
+label = "measured"
+source = "N-PPL final: the lead as served, WikiText-2 2K / 8K, 5 seeds, against the bench's int8 (art:c649801ef1f7e3034ebc5f881976d99f0f45d6bd8a844345b8e3428dd8467e3b); upper bounds +0.14% / +0.09% against vLLM's int8"
+
+# The designs the brief lists as known, priced on the card where the card composes them (`compose`), else carried.
+# `swap` replaces the named slots of the lead's composition.
+[known.r16k-words]
+title = "the lead with its words in 16 KiB chunks (N-HIDE's module, L1 at 16 KiB rows)"
+swap = { rows = "l1" }
+status = "known"
+what = "the chunk size the brief pairs with h = 233"
+
+[known.r1]
+title = "R1: the certifier hashes every word (N-ALT final)"
+swap = { rows = "r256k", hiding = "r1" }
+status = "closed"
+what = "inbox/HASH.md: moves the hashing off the prover but ships the words, T2 97.5x-665x"
+
+[known.k64]
+title = "a word every 64 steps (road (b), N-DENSE)"
+swap = { density = "k64-none" }
+status = "refuted"
+what = "inbox/HASH.md: the middle-segment skip (N-SAKU, proved premise-free) frees the uncommitted middle; carried from N-DENSE, since the card can't lay the lead's 1.1445·K-step depth out in 64-step words"
+
+[known.module-sis]
+title = "Module-SIS h = A·x mod 2^32 in place of SHA-512 (GD-SIS)"
+status = "closed"
+h = { value = 896.0, price = "w1-forms", unit = "int8 MACs a committed byte, W1 1 a MAC", label = "estimate", point = "any", model = "any", words_chunk = 0, baseline = "none" }
+per_byte = true
+rule_change = "a second primitive beside SHA-512 (the one-hash rule)"
+what = "inbox/HASH.md: 896 int8 MACs a committed byte, and its opening in C-Flock is 24-36x SHA-512's rows; it never beats SHA-512 at any row size"
+note = "compute-research/20261028T2230Z-report-gd-hash-reframe"
+
+[known.linear-sketch]
+title = "a linear sketch Σ r_t w_t over running words (H12, N-LIT)"
+status = "refuted"
+what = "inbox/HASH.md: it equals Σ_τ κ_τ Σ_{t≥τ} r_t, computable without the words, so the adversary's cost is about 0 and nothing is credited"
+
+# HASH proposals, as each lane's note states them. Fields:
+#   lane, agent, note, title, status (proposed | checked | measured | proved | refuted | closed)
+#   compose / swap: a pouw_space composition the card prices itself (checked), or
+#   bytes_per_mac: credited SHA-512 bytes a useful MAC at the basis's per-form price, or
+#   h = { value, price, label, point, model, words_chunk, baseline }: h as the lane states it, converted by price
+#   extra_w1_per_mac: honest non-hash commitment work a useful MAC (W1)
+#   t1, t2, t3 = { value, label }: worst over the basis's points (t2 the larger of sync and async)
+#   drops: the lead's premises the design no longer takes; adds: [{ id, rank, part, status, falsification, owner }]
+#   rule_change: the rule a design needs changed (another primitive, a revealed sketch)
