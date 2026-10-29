@@ -49,6 +49,8 @@ def refused (i : Inner) : Option String :=
 #guard ((refused (linked 18 (UB := 31))).map (·.startsWith "RecLink's UB is 0 to 30")) == some true
 
 #guard (Inner.ofJson (linked 18).toJson).toOption == some (linked 18)
+-- the fewest bits that number n units or rows (`linkShapeOf`)
+#guard [0, 1, 2, 3, 4, 5, 8, 9, 1024, 1025].map bitsFor == [0, 0, 1, 2, 2, 3, 3, 4, 10, 11]
 #guard (Inner.ofJson inner.toJson).toOption == some inner
 #guard (match Inner.ofJson (Json.setObjVal! inner.toJson LINKS_KEY (Json.mkObj [("UB", toJson (6 : Nat))])) with
   | .error e => e == "rec-inner: links is not the link table's shape (UB, PB, rows)"

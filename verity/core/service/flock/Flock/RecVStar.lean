@@ -79,12 +79,23 @@ structure Inner where
 /-- A recursive session's inner statement (§16.16) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
 def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
 
-/-- The inner statement's shape, from its circuit, public file and the verifier's own partition object and program. -/
-def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) (holo : Bool := false) :
-    V Inner := do
+/-- The fewest bits that number `n` things: `0` for at most one. -/
+def bitsFor (n : Nat) : Nat := if n ≤ 1 then 0 else Nat.log2 (n - 1) + 1
+
+/-- **The link table's shape at the inner statement** `st`, of `rows` rows: the fewest bits that number its units
+(`UB`) and the fewest that number its input rows and its output rows (`PB`, `HmOut.nIn` input rows, one output row a
+row port), the positions of the rows trees `RecLinkTree.rowsRoot` builds. -/
+def linkShapeOf (st : Stmt) (rows : Nat) : LinkShape :=
+  { UB := bitsFor st.pub.n, PB := bitsFor (max (HmOut.nIn st.c) st.c.outRowPorts.size), rows }
+
+/-- The inner statement's shape, from its circuit, public file and the verifier's own partition object and program;
+with `links`, the row count of the link table the statement carries, that table's shape (`linkShapeOf`). -/
+def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) (holo : Bool := false)
+    (links : Option Nat := none) : V Inner := do
   let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB Coins.os 1 (partition := partition) (program := program)
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
-  pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo }
+  pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo,
+         links := links.map (linkShapeOf st) }
 
 /-- The recursion's statement version: V*'s statements whose verifier-registered values are under SHA-512 salts
 (`RecCoins.saltOf`). -/

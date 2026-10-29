@@ -532,16 +532,21 @@ def sparseInput (args : List String) : Except String (Option RecSparse.Shape) :=
     | [some nu, some ell, some sLog, some tLog] => .ok (some { nu, ell, sLog, tLog })
     | _ => .error s!"--sparse {v}: NU,ELL,S_LOG,T_LOG, four natural numbers"
 
-/-- `rec-inner --circuit F --public F [--partition F] [--program F] [--hide] [--sparse NU,ELL,S_LOG,T_LOG]`: the shape of
-V*'s inner session (`RecVStar.innerOf`) from the inner statement, as one `verity/rec-inner/v2` line, for `verify
---rec-inner`; `--hide`: the verifier's own word that the inner session's circuits are private (`RecVStar.Inner.holo`);
-`--sparse`: its word that the session is candidate 3's, with the bucket's RecSparse shape (`RecVStar.Inner.sparse`). R's
-shape (`RecVStar.Inner.stacked`) is the inner circuit's META's (`RecVStar.stackedShapeOf`), the shape staging committed R
-at; a META naming one with no `--sparse` is refused, since R opens the sparse phase's claims. -/
+/-- `rec-inner --circuit F --public F [--partition F] [--program F] [--hide] [--sparse NU,ELL,S_LOG,T_LOG]
+[--rec-links ROOT:N]`: the shape of V*'s inner session (`RecVStar.innerOf`) from the inner statement, as one
+`verity/rec-inner/v2` line, for `verify --rec-inner`; `--hide`: the verifier's own word that the inner session's circuits
+are private (`RecVStar.Inner.holo`); `--sparse`: its word that the session is candidate 3's, with the bucket's RecSparse
+shape (`RecVStar.Inner.sparse`); `--rec-links`: the link table the statement carries, whose `N` rows and the inner
+statement's units and rows give the table's shape (`RecVStar.linkShapeOf`, `RecVStar.Inner.links`). R's shape
+(`RecVStar.Inner.stacked`) is the inner circuit's META's (`RecVStar.stackedShapeOf`), the shape staging committed R at; a
+META naming one with no `--sparse` is refused, since R opens the sparse phase's claims. -/
 def recInnerCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify rec-inner --circuit F --public F [--partition F] [--program F] [--hide] [--sparse NU,ELL,S_LOG,T_LOG]"
+  let usage := "usage: flock-verify rec-inner --circuit F --public F [--partition F] [--program F] [--hide] [--sparse NU,ELL,S_LOG,T_LOG] [--rec-links ROOT:N]"
   let (some circuit, some pub) := (argOf args "--circuit", argOf args "--public")
     | IO.eprintln usage; return 2
+  let links ← match RecLinkTree.linksArg args with
+    | .ok l => pure (l.map (·.2))
+    | .error e => IO.eprintln e; return 2
   let partition ← match ← partitionInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
@@ -559,7 +564,8 @@ def recInnerCmd (args : List String) : IO UInt32 := do
     IO.eprintln (s!"rec-inner: the inner circuit's META names R's shape (m {r.m}, claims {r.claims}), and the verifier names " ++
       "no RecSparse shape (--sparse NU,ELL,S_LOG,T_LOG): R opens the sparse phase's claims, so V*'s list would miss RecSparse")
     return 1
-  match RecVStar.innerOf (← IO.FS.readBinFile circuit) (← IO.FS.readBinFile pub) partition program (args.contains "--hide") with
+  match RecVStar.innerOf (← IO.FS.readBinFile circuit) (← IO.FS.readBinFile pub) partition program (args.contains "--hide")
+      links with
   | .ok i => IO.println { i with sparse, stacked }.toJson.compress; return 0
   | .error e => IO.eprintln s!"rec-inner: {e}"; return 1
 
