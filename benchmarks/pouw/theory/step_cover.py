@@ -50,6 +50,7 @@ function of the noised value, so u and every nonzero round are targets at a T3 c
 is a constant), rescaled to the running max at the block's end; `best_p4_exact` serves every linear's, the lm_head's
 and the router's output exactly (N-EXACT's epilogue fold, plus two IDP4A an output for the lead's non-separable code
 and tag terms), so every lane but attention's own (`EXACT_REACHED`) reads salt-independent values and forces nothing;
+`best_p4_exact_sep` is the same for a separable noise, with no IDP4A (the lanes' own cost of exactness);
 `best_p4_smlite` commits only the softmax's MUFU outputs. The free part of the de-noise alone (the later steps' row
 bits at the magic conversion, the column mean in the FFMA) leaves the code and the tags served, and the lanes covered.
 
@@ -180,7 +181,8 @@ def ssn_sh_terms(m: int, n: int, k: int, tag: int = 0) -> dict:
 
 # ---------------------------------------------------------------- lane idioms (op, count an element, class)
 
-def lane_ops(kind: str, variant: str, exp: str = "mufu", dv: int = 64, mb: int = I8_BLOCK) -> list[tuple[str, float, str]]:
+def lane_ops(kind: str, variant: str, exp: str = "mufu", dv: int = 64, mb: int = I8_BLOCK,
+             idp4a: int = 2) -> list[tuple[str, float, str]]:
     red_s, red_l = 5 / EPT_STOCK, 5 / EPT_LEAN
     if kind == "epi":
         return {"stock": [("I2F", 1, "C"), ("FMUL", 2, "T"), ("F2FP", 0.5, "R")],
@@ -188,9 +190,9 @@ def lane_ops(kind: str, variant: str, exp: str = "mufu", dv: int = 64, mb: int =
                 "fused": [("I2F", 1, "C"), ("FMUL", 2, "T")]}[variant]
     if kind == "epi_exact":
         # the tag lead's served noise past a separable r_i + c_j is the code a·C_j and the tags T(i)·G_j, 8 int8
-        # products an output: two IDP4A of the row's and the column's packed lanes (coins and indices alone), then
-        # N-EXACT's fold, IADD3(D, magic − r_i, −n) for I2F and FFMA(v, s_j, −(magic + β_j)·s_j) for the column FMUL
-        ops = [("IDP4A", 2, "K"), ("IADD3", 1, "E"), ("FFMA", 1, "E"), ("FMUL", 1, "E")]
+        # products an output: `idp4a` (2) IDP4A of the row's and the column's packed lanes (coins and indices alone),
+        # then N-EXACT's fold, IADD3(D, magic − r_i, −n) for I2F and FFMA(v, s_j, −(magic + β_j)·s_j) for the column FMUL
+        ops = ([("IDP4A", idp4a, "K")] if idp4a else []) + [("IADD3", 1, "E"), ("FFMA", 1, "E"), ("FMUL", 1, "E")]
         return ops if variant == "fused" else ops + [("F2FP", 0.5, "R")]
     if kind == "epi_bf16":
         return [("F2FP", 0.5, "R")]
@@ -545,6 +547,7 @@ class Plan:
     noise_dither: bool = False
     block_max: bool = False
     exact: bool = False
+    exact_idp4a: int = 2
     note: str = ""
 
 
@@ -600,6 +603,12 @@ PLANS = [
          premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
          note="best_p4_nkd_bmax with every linear's, the lm_head's and the router's served output exact (the epilogue "
               "de-noise): the lanes they feed read salt-independent values; attention stays noisy"),
+    Plan("best_p4_exact_sep", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
+         static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
+         noise_dither=True, block_max=True, exact=True, exact_idp4a=0,
+         premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="best_p4_exact for a separable served noise (rc_magic's), which the fold removes with no IDP4A: the "
+              "lanes' own cost of exactness (the linears' terms stay ssn_1l-tag's)"),
 ]
 PLAN = {p.name: p for p in PLANS}
 
@@ -818,9 +827,10 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
             if exact_in:
                 reach = False
                 if c.kind == "epi":
-                    ops, v = lane_ops("epi_exact", v), v + "_exact"
+                    ops, v = lane_ops("epi_exact", v, idp4a=plan.exact_idp4a), v + "_exact"
                 elif c.kind == "router" and v == "fused":
-                    ops, v = [("IDP4A", 2, "K"), ("IADD3", 1, "E")] + ops[1:], "fused_exact"
+                    ops = ([("IDP4A", plan.exact_idp4a, "K")] if plan.exact_idp4a else []) + [("IADD3", 1, "E")] + ops[1:]
+                    v = "fused_exact"
             if not exact_in and plan.dither and v.startswith("fused") and any(cls == "R" for _, _, cls in ops):
                 ops, reach, v = dithered(ops), True, v + "_dither"
             if not exact_in and plan.noise_dither and v.startswith("fused") and any(cls == "R" for _, _, cls in ops):
@@ -1566,7 +1576,7 @@ def report(lookup: bool = False) -> dict:
 
 
 PERIOD_PLANS = ("linears", "best", "best_p4", "best_p4_dither", "best_p4_max", "best_p4_max_s8", "best_p4_all",
-                "best_p4_nkd", "best_p4_nkd_bmax", "best_p4_exact")
+                "best_p4_nkd", "best_p4_nkd_bmax", "best_p4_exact", "best_p4_exact_sep")
 #: pouw_space.py's points (and this file's further ones) to this file's (model, point)
 CARD_POINTS = {"t512": ("llama", "T512_64"), "t512r512": ("llama", "T512_512"), "t8192": ("llama", "T8192_8x1k"),
                "t8192_1x8k": ("llama", "T8192_1x8k"), "decode_b64_2k": ("llama", "dec64_2k"),
