@@ -325,7 +325,87 @@ def test_a_run_without_its_record_is_not_composed(tmp_path, capsys):
         _vpart(tmp_path, p, j, h)
     rc = LV.main(["--compose", binary, str(tmp_path), "L0", "cap"])
     out = capsys.readouterr().out.splitlines()
-    assert rc == 0 and out[-2].startswith("lean compose: no interactive-run record (rec-run.json)")
+    assert rc == 0 and out[-2].startswith("lean compose: no interactive-run record (rec-run.json, or a firewalled oprove")
+
+
+def _loopback(d: Path, sessions: list[tuple[str, str]], parts: dict[str, int], session: str = "s") -> None:
+    """85's oprove under MODES=firewall: ``opens.jsonl`` with one line per (statement, key name) of ``sessions``, the
+    files ``rec-shared-args.txt`` names (`_shared`'s, at the inner session record ``session``), and each V* part's
+    ``--rec-part`` in its ``own-PART.txt``."""
+    for name, b in (("c", b"c"), ("p", b"p"), ("partition.json", b"{}"), ("t", b"t")):
+        (d / name).write_bytes(b)
+    (d / "sess").mkdir(exist_ok=True)
+    (d / "sess" / "session.json").write_text(session)
+    (d / "rec-shared-args.txt").write_text(
+        f"--rec-inner {d / 'rec-inner.json'} --rec-inner-circuit {d / 'c'} --rec-inner-public {d / 'p'} "
+        f"--rec-inner-partition {d / 'partition.json'} --rec-inner-session {d / 'sess'} --rec-inner-transcript {d / 't'} "
+        "--rec-inner-statement i --rec-inner-statement-coins os")
+    (d / "opens.jsonl").write_text("".join(json.dumps({"statement": st, "session": f"{st}.l{i:04}", "coin_key": _key(k)})
+                                           + "\n" for i, (st, k) in enumerate(sessions)))
+    for p, j in parts.items():
+        (d / f"own-{p}.txt").write_text(f"--rec-rows rows.json --rec-part {j}")
+
+
+def test_a_firewalled_oprove_composes_over_its_coin_servers_sessions(tmp_path, capsys):
+    """Without a challenger's record, the run's record is assembled from oprove's ``opens.jsonl``: the staging of the
+    rows file and of the shared set the given files have (not a part's VERDICT), each session for its statement's part,
+    the close; the parts compose over it."""
+    binary, h = _composer(tmp_path, 3)
+    parts = {"L0": 0, "alg-p0": 1, "cap": 2}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h)
+    _loopback(tmp_path, [(p, p) for p in parts], parts)
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0 and out[-2] == 'lean compose: REC-COMPOSE {"accepted": true, "parts": 3}', out
+    run = json.loads((tmp_path / "rec-run.json").read_text())
+    assert run["events"][0]["rec_shared"] == _shared(tmp_path, None, "s", "t")
+    assert [(e["session"], e["rec_part"]) for e in run["events"][1:-1]] == [("L0.l0000", 0), ("alg-p0.l0001", 1),
+                                                                          ("cap.l0002", 2)]
+
+
+def test_a_second_session_on_a_parts_coin_server_does_not_compose(tmp_path, capsys):
+    """A statement whose coin server served two sessions (the accepted one handed over) shows both in the record, and
+    the composition refuses."""
+    binary, h = _composer(tmp_path, 2)
+    parts = {"L0": 0, "cap": 1}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h)
+    _loopback(tmp_path, [("L0", "L0-first"), ("L0", "L0"), ("cap", "cap")], parts)
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and out[-2].startswith("lean compose: REC-COMPOSE") and out[-2].endswith("<- FAILS")
+
+
+def test_a_part_given_other_shared_files_than_the_staged_ones_does_not_compose(tmp_path, capsys):
+    """The staging is the shared set of the files the pod gives, so parts whose VERDICTs name another inner session's
+    record than those files' are refused, though they agree with each other."""
+    binary, h = _composer(tmp_path, 2)
+    parts = {"L0": 0, "cap": 1}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h, session="other")
+    _loopback(tmp_path, [(p, p) for p in parts], parts)
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    assert rc == 1 and capsys.readouterr().out.splitlines()[-2].endswith("<- FAILS")
+
+
+def test_a_forgery_is_composed_over_its_own_sessions_in_its_parts_place(tmp_path, capsys):
+    """A forgery of a part composes over a record that opens the forgery's session for that part, so its composition is
+    refused by the forgery's own verdict, not by a session the record lacks."""
+    binary, h = _composer(tmp_path, 2)
+    parts = {"L0": 0, "cap": 1}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h)
+    _vpart(tmp_path, "forged-sum-L0", 0, h, rc=1, accepted=False)
+    _loopback(tmp_path, [("L0", "L0"), ("cap", "cap"), ("forged-sum-L0", "forged-sum-L0")],
+              {**parts, "forged-sum-L0": 0})
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts, "forged-sum-L0"])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    forged = json.loads((tmp_path / "rec-run-forged-sum-L0.json").read_text())
+    assert [(e["session"], e["rec_part"]) for e in forged["events"][1:-1]] == [("cap.l0001", 1),
+                                                                             ("forged-sum-L0.l0002", 0)]
+    assert "lean compose forged-sum-L0: REC-COMPOSE" in out
 
 
 def test_a_part_checked_against_other_rows_is_refused(tmp_path, capsys):
