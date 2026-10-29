@@ -9747,11 +9747,14 @@
    "owner": "@memory-accounting",
    "signature": [
     "Pous.SecurityProofs.ObligationWide320_honest :",
-    "  Pous.Guarantees.RoundsBound (43 / 1000) (instHPow.hPow (ENNReal.instInv.inv 2) 137) 320",
-    "    (instHPow.hPow (ENNReal.instInv.inv 2) 20)"
+    "  And",
+    "    (Pous.Guarantees.RoundsBound (43 / 1000) (instHPow.hPow (ENNReal.instInv.inv 2) 137) 320",
+    "      (instHPow.hPow (ENNReal.instInv.inv 2) 20))",
+    "    (And (instLENat.le (instHPow.hPow 2 19) (instHPow.hPow 2 19))",
+    "      (instLENat.le (instHPow.hPow 2 19) (instHPow.hPow 2 27)))"
    ],
    "assumptions": [],
-   "type_hash": "0fe48a27cbcba8450f6bd5e62caa7f83b45002045681842835976f6ae6f37000"
+   "type_hash": "d6de92b952fd6aa1e355dbf69e5f9ee06390e9c4081e19ac4ba4b951273384e1"
   },
   "Pous.SecurityProofs.ObligationWide320_nontrivial": {
    "owner": "@memory-accounting",
