@@ -18,22 +18,28 @@ kind = "arith"
 source = "four packed int8 entries a register, so a formed or derived entry costs reg/4 = 8 at the floor"
 
 [price.hash_work]
+value = 883.5
+unit = "W1 units a hashed byte"
+kind = "measured"
+source = "N-SHALB interim 1 §1.1 (note compute-research/20261029T0753Z-report-np-shalb): the best honest SHA-512 on sm_90a, sha512_min.cuh, writes 3,534 registers a compression for a variable chaining value and block (1,728 SHF, 896 LOP3, 910 adds; SASS run r20261029-074922-d49c, art:89d31f3a0f7d7440f934833133332c825f2d05d4dfb724f8064aa938f5b38130; bit-exact on the H200, r20261029-074752-6e23), 3,534 x 32 / 128 a byte. W1 counts registers, and CORE.md §2a takes the honest program to be the best, so every T1 term that prices hashing reads this; ShaSpeed's sharper form is ShaLB(3,534)"
+
+[price.hash_work_bar]
 value = 1774.85
 unit = "W1 units a hashed byte"
 kind = "estimate"
-source = "HASH-38's bar, the public best SHA-512 on the H200: 0.01803 compressions an SM-clock (r20261027-044217-d499, r20261027-062350-7163), 128 B a compression, priced at its issue time, 4096/(128 x 0.01803) (CORE-SMELL C27: pricing an issue-bound hash at its time; co-issue would raise it)"
+source = "HASH-38's bar, the public best SHA-512 on the H200: 0.01803 compressions an SM-clock (r20261027-044217-d499, r20261027-062350-7163), 128 B a compression, priced at its issue time, 4096/(128 x 0.01803) (CORE-SMELL C27). A time price, not a register count: read only by the checks that reproduce CORE-SMELL C27 and C28, which priced hashing at it"
 
-[price.hash_work_committer]
-value = 2123.4
-unit = "W1 units a hashed byte"
-kind = "estimate"
-source = "GD-HASH's h_x at 16 KiB hm96 rows, framing and tree included (art:5cf3621a988a946e98dcb8d36eafbecc3496b898df7ae7f481f757f5308ff991); the committer, not the best possible"
+[price.sha_and]
+value = 58120
+unit = "AND gates a SHA-512 compression"
+kind = "arith"
+source = "N-SHALB interim 1, Per monitoring period: SHA-512's compression as a Boolean circuit, 58,120 AND gates (454 a hashed byte); the per-period table prints the credited hashing in these real AND gates beside its W1 at stock's AND rate (N-SMELL item 36)"
 
 [price.hash_work_floor]
 value = 908.0
 unit = "W1 units a hashed byte, at H32's floor"
 kind = "measured"
-source = "SW-HASH final (note compute-research/20261029T0535Z-report-sw-hash, its sources table): SHA-512 a compression in the committer's build on sm_90a writes 3,632 registers, 116,224 W1 units at the floor table (h200Measured = h100Floor), SASS run r20261029-044108-5169; 116,224/128 a byte. Prices honest-only hashing work, the salt side's hiding, which T1 counts at W1's instruction prices (SW-HASH §9's floor column); the credited hashing keeps hash_work, the bar's issue-time price"
+source = "SW-HASH final (note compute-research/20261029T0535Z-report-sw-hash, its sources table): SHA-512 a compression in the committer's build on sm_90a writes 3,632 registers, 116,224 W1 units at the floor table (h200Measured = h100Floor), SASS run r20261029-044108-5169; 116,224/128 a byte. The committer as served (N-SHALB confirms 3,632 rolled), 2.7% over hash_work's best count: its excess is the committer gap a needs list prints, and SW-HASH's leaf-time salt basis reads it (SW-HASH §9's floor column)"
 
 [price.hash_rate]
 value = 519.63e9

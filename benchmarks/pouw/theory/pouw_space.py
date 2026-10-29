@@ -704,7 +704,7 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
     rest = sum(v for k, v in terms.items() if k != "hashing_slack")
     t1 = rest + terms["hashing_slack"]
     delta_star = max(0.0, TARGET["t1"] - rest) / hash_share if hash_share else math.inf
-    committer_gap = agg["credited_bytes"] * (card["price"]["hash_work_committer"]["value"] - hw) / stock
+    committer_gap = agg["credited_bytes"] * (card["price"]["hash_work_floor"]["value"] - hw) / stock
     t2 = t2_of(card, point, agg, r, bool(wide_measured))
     t3 = t3_of(card, d["t3"], pt["model"])
     prem = card["premise"]
@@ -725,7 +725,8 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
             "delta": delta, "delta_star": delta_star, "hash_units_per_mac": hash_share,
             "hash_bytes_per_mac": agg["credited_bytes"] / stock, "coin_bytes_per_mac": agg["coin_bytes"] / stock,
             "pre_noise_units": agg["pre_noise_bytes"] * hw / stock,
-            "committer_gap": committer_gap, "t2": t2, "t2_pass": t2["judged"] <= TARGET["t2"],
+            "committer_gap": committer_gap, "sha_regs": hw * BLOCK / card["price"]["reg"]["value"],
+            "t2": t2, "t2_pass": t2["judged"] <= TARGET["t2"],
             "t3": t3, "t3_worst": t3w, "t3_pass": t3w is not None and t3w <= TARGET["t3"], "ranks": rk,
             "rank": rk["overall"], "rank_effective": rk["overall_effective"], "premises": ids, "choice": d["choice"],
             "open": open_items, "scratch": scratch, "assumed": assumed, "attacks": att, "per_matmul": per_matmul,
@@ -856,11 +857,12 @@ def needs(row: dict) -> list[str]:
         out.append(f"T3 unmeasured: {row['t3']['source']}")
     elif not row["t3_pass"]:
         out.append(f"T3 {row['t3_worst']:+.2%} > 5%")
-    out.append(f"ShaSpeed (rank 4a, CORE-SMELL C27) to within delta* = {row['delta_star']:.2e} of its "
-               f"{row['hash_units_per_mac']:.0f} W1 units a useful MAC, and its composition with DistinctWrites "
-               f"(hash-compose); if the honest hasher is our committer, not the bar, its excess alone is "
-               f"{row['committer_gap']:.0f}x stock; with the coins' expansion uncredited T1 is "
-               f"{row['t1_coins_uncredited']:.3%}")
+    regs = row["sha_regs"] * min(row["delta_star"], 1.0)
+    out.append(f"ShaSpeed as ShaLB({row['sha_regs']:,.0f}) (rank 4a, N-SHALB) exact to {regs:.2f} registers a compression "
+               f"(delta* = {row['delta_star']:.2e} of its {row['hash_units_per_mac']:.0f} W1 units a useful MAC), and "
+               f"its composition with DistinctWrites (hash-compose); if the honest hasher is our committer (3,632 "
+               f"registers), not the best, its excess alone is {row['committer_gap']:.2f}x stock; with the coins' "
+               f"expansion uncredited T1 is {row['t1_coins_uncredited']:.3%}")
     return out
 
 
@@ -868,10 +870,11 @@ def periods(card: dict, row: dict) -> dict:
     """Over each period, on the card's one basis ([scale] basis): stock work held fixed, for one H200 and the datacenter
     at the int8 tensor peak times mfu_serve, and for the world at the census's inference compute. Each scope gives its
     stock work, the gap (T1 of it), the allowance (1% of it), ShaSpeed's credited hashing and the slack delta* leaves
-    it, in AND gates (W1 units x and_per_mac); the hardware that serves it under the design is T2 times stock's, beside
-    it, never folded in."""
+    it, in W1 at stock's AND rate (W1 units x and_per_mac), and the credited hashing in real AND gates too (`sha_and` a
+    compression); the hardware that serves it under the design is T2 times stock's, beside it, never folded in."""
     sc = card["scale"]
     and_mac = card["price"]["and_per_mac"]["value"]
+    sha_and_mac = row["hash_bytes_per_mac"] * card["price"]["sha_and"]["value"] / BLOCK
     tH = min(e["t_H_ms"] for e in row["t2"]["engines"].values())
     tS = min(e["stock_ms"] for e in row["t2"]["engines"].values())
     gpu = card["price"]["mac_rate_peak"]["value"] * sc["mfu_serve"]
@@ -887,6 +890,7 @@ def periods(card: dict, row: dict) -> dict:
             work = macs_s * s * and_mac
             out[p][scope] = {"stock_ands": work, "gap_ands": row["t1"] * work, "allowance_ands": 0.01 * work,
                              "shaspeed_ands": row["hash_units_per_mac"] * work,
+                             "shaspeed_real_ands": sha_and_mac * macs_s * s,
                              "shaspeed_slack_ands": min(row["delta_star"], 1e9) * row["hash_units_per_mac"] * work}
     return out
 
@@ -897,15 +901,19 @@ def period_table(card: dict, row: dict) -> list[str]:
     lines = [f"Per monitoring period on the card's one basis: {sc['basis']} AND gates at "
              f"{card['price']['and_per_mac']['value']:g} an int8 MAC (estimate). The design serves that work on "
              f"{per['hardware_multiple']:.1f}x stock's hardware (T2). The gap is T1 x the stock work and the allowance 1% of "
-             f"it; ShaSpeed's slack is delta* x its credited hashing, the most it may err before T1 exceeds 1%.", "",
-             "| period | scope | stock work | gap (T1) | allowance (1%) | ShaSpeed-credited hashing | ShaSpeed slack at delta* |",
-             "|---|---|---|---|---|---|---|"]
+             f"it, in W1 at stock's AND rate, since T1 is judged in W1; ShaSpeed's slack is delta* x its credited "
+             f"hashing, the most it may err before T1 exceeds 1%. The credited hashing is also given in real AND gates, "
+             f"{card['price']['sha_and']['value']:,} a compression.", "",
+             "| period | scope | stock work | gap (T1) | allowance (1%) | ShaSpeed-credited hashing, W1 at stock's AND "
+             "rate | the same in real AND gates | ShaSpeed slack at delta* |",
+             "|---|---|---|---|---|---|---|---|"]
     for p in PERIODS:
         for scope in ("h200", "datacenter", "world"):
             v = per[p][scope]
             lines.append(f"| {p} ({per[p]['seconds']:,} s) | {scope} | {v['stock_ands']:.3e} | {v['gap_ands']:.3e} "
                          f"({row['t1']:.3%}) | {v['allowance_ands']:.3e} | {v['shaspeed_ands']:.3e} "
-                         f"({row['hash_units_per_mac']:.0f}x) | {v['shaspeed_slack_ands']:.3e} |")
+                         f"({row['hash_units_per_mac']:.0f}x) | {v['shaspeed_real_ands']:.3e} "
+                         f"({v['shaspeed_real_ands'] / v['stock_ands']:.2f}x) | {v['shaspeed_slack_ands']:.3e} |")
     return lines
 
 
@@ -1182,18 +1190,20 @@ def main() -> int:
     checks.check("ncp-k32 hashes 0.375 B of k32 words a useful MAC (12/32, CORE-NCP §2)",
                  abs(r["t2"]["bytes_forward"] / r["stock_macs_forward"] - (0.375 + 14336 / 60817408)) < 1e-9,
                  f"{r['t2']['bytes_forward'] / r['stock_macs_forward']:.4f} B (words 0.375 and A's commitment)")
-    checks.check("hashing A's commitment before the noise is 0.42x stock at T 8,192 (CORE-SMELL C28: 0.42-0.72x), credited "
-                 "under the atomic call (SW-SMELL P3), not left as gap", 0.40 < r["pre_noise_units"] < 0.44
-                 and r["terms"]["pre_noise_hashing"] == 0, f"{r['pre_noise_units']:.3f}x")
+    bar = card["price"]["hash_work_bar"]["value"] / card["price"]["hash_work"]["value"]
+    checks.check("hashing A's commitment before the noise is 0.21x stock at T 8,192 at ShaLB's count, CORE-SMELL C28's "
+                 "0.42x at the bar's issue-time price, credited under the atomic call (SW-SMELL P3), not left as gap",
+                 0.40 < r["pre_noise_units"] * bar < 0.44 and 0.20 < r["pre_noise_units"] < 0.22
+                 and r["terms"]["pre_noise_hashing"] == 0, f"{r['pre_noise_units']:.3f}x ({r['pre_noise_units'] * bar:.3f}x at the bar)")
     checks.check("deriving E1 and F1 from XOF bytes is 8/n + 8/m: 0.29% fused at T 8,192 (CORE-SMELL C28)",
                  abs(r["terms"]["noise_derivation"] - 0.0029) < 0.0002, f"{r['terms']['noise_derivation']:.3%}")
     grid = {"data_model": "grid"}
     sh = evaluate(card, designs[nm("ncp", "cancel", "int7-U", "k32", "xyef", "r16k", "mask", "fw")] | grid, "t8192")
     rest = sum(v for k, v in sh["terms"].items() if k != "hashing_slack")
-    checks.check("with every honest write forced and the salt side closed, credited hashing is about 670x stock at "
-                 "T 8,192 (CORE-SMELL C27: delta* about 0.0015%), and on the grid delta* spends what route U's lane fix "
-                 "leaves of 1%",
-                 660 < sh["hash_units_per_mac"] < 700 and abs(sh["delta_star"] * sh["hash_units_per_mac"] + rest - 0.01)
+    checks.check("with every honest write forced and the salt side closed, credited hashing is about 346x stock at "
+                 "T 8,192 at ShaLB's count, CORE-SMELL C27's 670x at the bar's issue-time price, and on the grid "
+                 "delta* spends what route U's lane fix leaves of 1%",
+                 660 < sh["hash_units_per_mac"] * bar < 700 and abs(sh["delta_star"] * sh["hash_units_per_mac"] + rest - 0.01)
                  < 1e-12, f"delta* {sh['delta_star']:.2e}, {sh['hash_units_per_mac']:.0f} units a MAC, other terms {rest:.3%}")
     for point, want in (("t8192", 0.024), ("t512", 0.520)):
         t = cardrow("ncp-k32", point)["terms"]
@@ -1371,7 +1381,7 @@ def main() -> int:
         checks.mutation("forming one copy a side would be a third of NCP's 24/n + 24/m: the stack's 3 copies decide the term",
                         abs(3 * a1 - b1) < 1e-12 and b1 > 0.0085, f"{a1:.3%} vs {b1:.3%}")
         d1 = evaluate(card, designs[nm("ncp", "cancel", "int7-U", "k32", "xyef", "r16k", "mask", "fw")], "t8192", delta=1e-4)
-        checks.mutation("a ShaSpeed slack of 0.01% breaks T1 for the all-forced design: hashing's work is 670x stock",
+        checks.mutation("a ShaSpeed slack of 0.01% breaks T1 for the all-forced design: hashing's work is 346x stock",
                         not d1["t1_pass"], f"T1 {d1['t1']:.2%}")
         c = mutated(lambda c: c["premise"]["pure-lanes"].__setitem__("word_units", "reg*L/32"))
         k1024 = {"noise": "ncp", "denoise": "cancel", "format": "int7-mix", "density": "k1024-pl", "operands": "xyef",
