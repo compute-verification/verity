@@ -23,6 +23,7 @@ import functools
 import json
 import math
 import random
+from fractions import Fraction
 from pathlib import Path
 
 import alt_roads
@@ -33,16 +34,54 @@ LEAD_T2 = "ssn-1l-tag/served/s8/k32/w/r256k/cert/min"
 COORDINATOR_LEAD = "blc4a-t64-e7"
 
 
-def steps(k: int, c: int) -> int:
-    return 1 + math.ceil(max(0, k - (32 - c)) / 31)
+def steps(k: int, d1: int, dl: int = 31) -> int:
+    return 1 + math.ceil(max(0, k - d1) / dl)
 
 
-def steps4(k: int, data_lanes: int) -> int:
-    return 1 + math.ceil(max(0, k - 28) / data_lanes)
+def row_bits(k: int, d1: int, c: int) -> int:
+    return 32 * math.ceil((steps(k, d1) - 1 + c) / 32)
 
 
-def row_bits(k: int, c: int) -> int:
-    return 32 * math.ceil((steps(k, c) - 1 + c) / 32)
+def balanced_digits(z: int, base: int, count: int) -> list[int]:
+    h, out = base // 2, []
+    for _ in range(count):
+        d = (z + h) % base - h
+        out.append(d)
+        z = (z - d) // base
+    if z:
+        raise ValueError("tag out of range")
+    return out
+
+
+def tag_rank(m: int, lead: dict) -> int:
+    """The rank of the row tags T(i), the balanced base-b digits of z_i = (floor(i/2) + 1)(-1)^i, over a call's m rows:
+    the digits up to the largest |z_i| = floor((m - 1)/2) + 1. Step 1's words read G[., j] only through T(i) G[., j],
+    an injective function of G's first rank digits, so they read rank log2(digit values) bits a column."""
+    if not lead["tag_lanes"]:
+        return 0
+    zmax, b, r = (m - 1) // 2 + 1, lead["tag_row_digit_base"], 1
+    while (b ** r - 1) // 2 < zmax:
+        r += 1
+    if r > lead["tag_lanes"]:
+        raise ValueError(f"{m} rows: T isn't injective in {lead['tag_lanes']} digits")
+    return r
+
+
+def exact_rank(rows: list[list[int]]) -> int:
+    basis: list[list[Fraction]] = []
+    for row in {tuple(r) for r in rows}:
+        v = [Fraction(x) for x in row]
+        for b in basis:
+            p = next(i for i, x in enumerate(b) if x)
+            if v[p]:
+                v = [x - v[p] / b[p] * y for x, y in zip(v, b)]
+        if any(v):
+            basis.append(v)
+    return len(basis)
+
+
+def tag_bits(m: int, n: int, lead: dict) -> float:
+    return n * tag_rank(m, lead) * math.log2(lead["tag_digit_values"]) if lead["tag_lanes"] else 0.0
 
 
 def odd_mean_square(e: int) -> float:
@@ -93,21 +132,26 @@ def call(design: dict, m: int, k: int, n: int, lead: dict, lay: dict, reg: float
     words against the lead's and the served noise rms. off_lane and off_elem are the fewest bits the accumulators' coin
     state takes after a lane-coined step: e bits a (tile, column), a sum of at least one e-bit odd coin, and an init
     coin's e bits an element. design["step1_coins"] False is interim 2's layout: step 1 without lane coins, a small
-    tile's coined later steps spread evenly; "front" puts them on its first steps."""
-    c = lead["code_lanes"]
-    s, rb = steps(k, c), row_bits(k, c)
+    tile's coined later steps spread evenly; "front" puts them on its first steps. The tag lead's step 1 holds
+    step1_data_lanes data lanes, tag_lanes of the row tag T(i) against the call's column coin G (one coin word a column
+    in the certifier's stream, read by the words at tag_bits) and code_lanes of the row's code bits; code_bits, the
+    state step 1 leaves, holds both."""
+    c, d1 = lead["code_lanes"], lead["step1_data_lanes"]
+    s, rb = steps(k, d1), row_bits(k, d1, c)
+    g, gw = tag_bits(m, n, lead), (n if lead["tag_lanes"] else 0)
     kind = design["kind"]
-    out = {"bytes": m * rb / 8.0, "forming": m * rb / 32.0 * reg, "words": 1.0, "noise_rms": 0.0, "lead_steps": s,
-           "code_bits": m * c, "off_lane": 0.0, "off_elem": 0.0}
+    out = {"bytes": m * rb / 8.0 + gw * lead["tag_coin_word_bytes"], "forming": (m * rb / 32.0 + gw) * reg,
+           "words": 1.0, "noise_rms": 0.0, "lead_steps": s, "code_bits": m * c + g, "tag_bits": g,
+           "off_lane": 0.0, "off_elem": 0.0}
     if kind == "rows":
-        return {**out, **stepped(k, 32 - c, 31, [m * c] + [m] * (s - 1), [False] * s),
+        return {**out, **stepped(k, d1, 31, [m * c + g] + [m] * (s - 1), [False] * s),
                 "later": s - 1, "coin_steps": s - 1, "plan": [True] * (s - 1)}
     if kind == "blc1":
         tile = design["tile"] or m
         tiles, coin_steps = math.ceil(m / tile), math.ceil((s - 1) * min(1.0, m / tile))
         plan = coin_plan(s - 1, coin_steps)
         entries = tiles * n * coin_steps
-        return {**out, **stepped(k, 32 - c, 31, [m * c] + [m + (tiles * n * design["e"] if p else 0) for p in plan],
+        return {**out, **stepped(k, d1, 31, [m * c + g] + [m + (tiles * n * design["e"] if p else 0) for p in plan],
                                  [False] + plan),
                 "bytes": out["bytes"] + entries, "forming": out["forming"] + entries / 4.0 * reg, "entries": entries,
                 "later": s - 1, "coin_steps": coin_steps, "plan": plan, "off_lane": tiles * n * design["e"],
@@ -115,8 +159,8 @@ def call(design: dict, m: int, k: int, n: int, lead: dict, lay: dict, reg: float
     if kind in ("blc1a", "blc4a"):
         la, dl = (1, lay["lane_add"]["data_lanes"]) if kind == "blc1a" else \
             (lay["lanes4"]["lanes"] - 1, lay["lanes4"]["data_lanes"])
-        d1 = 28 - la if design.get("step1_coins", True) else 28
-        sa = 1 + math.ceil(max(0, k - d1) / dl)
+        d1 = d1 - la if design.get("step1_coins", True) else d1
+        sa = steps(k, d1, dl)
         tiles = math.ceil(m / design["tile"])
         lc = lane_counts(design, sa, min(1.0, m / design["tile"]), la)
         lane = [x > 0 for x in lc]
@@ -127,10 +171,10 @@ def call(design: dict, m: int, k: int, n: int, lead: dict, lay: dict, reg: float
         cells, entry_bits = tiles * n * coined, tiles * n * design["e"]
         corr = 4.0 * tiles * n if coined > 1 else 0.0
         lane_bytes = cells if kind == "blc1a" else cells * lay["lanes4"]["lanes"]
-        sb = [m * c + lc[0] * entry_bits] + [m + x * entry_bits if x else m * max(ef, 1) for x in lc[1:]]
+        sb = [m * c + g + lc[0] * entry_bits] + [m + x * entry_bits if x else m * max(ef, 1) for x in lc[1:]]
         return {**out, **stepped(k, d1, dl, sb, lane),
-                "bytes": m * rba / 8.0 + lane_bytes + corr,
-                "forming": m * rba / 32.0 * reg + (cells / 4.0 * reg if kind == "blc1a" else 0.0),
+                "bytes": m * rba / 8.0 + gw * lead["tag_coin_word_bytes"] + lane_bytes + corr,
+                "forming": (m * rba / 32.0 + gw) * reg + (cells / 4.0 * reg if kind == "blc1a" else 0.0),
                 "words": sa / s, "entries": lane_bytes, "later": sa - 1, "coin_steps": coin_steps, "plan": plan,
                 "fill": fill, "off_lane": entry_bits, "min_lanes": min(x for x in lc if x),
                 "word_noise_rms": math.sqrt(sum(lc) * odd_mean_square(design["e"]) + (
@@ -138,18 +182,19 @@ def call(design: dict, m: int, k: int, n: int, lead: dict, lay: dict, reg: float
                     if ef else 0.0))}
     if kind == "blc4":
         l4, d4 = lay["lanes4"]["lanes"], lay["lanes4"]["data_lanes"]
-        s4 = steps4(k, d4)
+        s4 = steps(k, d1, d4)
         tiles, coin_steps = math.ceil(m / design["tile"]), math.ceil((s4 - 1) * min(1.0, m / design["tile"]))
         plan = coin_plan(s4 - 1, coin_steps)
         entries = tiles * n * l4 * coin_steps
-        return {**out, **stepped(k, 28, d4, [m * c] + [m + (tiles * n * l4 * design["e"] if p else 0) for p in plan],
+        return {**out, **stepped(k, d1, d4,
+                                 [m * c + g] + [m + (tiles * n * l4 * design["e"] if p else 0) for p in plan],
                                  [False] + plan),
                 "bytes": out["bytes"] + entries, "words": s4 / s, "entries": entries,
                 "off_lane": tiles * n * design["e"],
                 "noise_rms": math.sqrt((2.5 + (l4 - 1)) * (s4 - 1) * odd_mean_square(design["e"]))}
     if kind == "cinit":
         e = math.ceil(k / lay["cinit_n_target"])
-        return {**out, **stepped(k, 32 - c, 31, [m * c + m * n * e] + [m] * (s - 1), [False] * s),
+        return {**out, **stepped(k, d1, 31, [m * c + g + m * n * e] + [m] * (s - 1), [False] * s),
                 "bytes": out["bytes"] + m * n * math.ceil(e / 8), "forming": out["forming"] + m * n * reg,
                 "off_elem": m * n * e, "noise_rms": math.sqrt((4 ** e - 1) / 12.0)}
     if kind == "dither_a":
@@ -196,8 +241,8 @@ def designs(lay: dict) -> list[dict]:
     for t in lay["tile_rows"]:
         for e in lay["lane_entropy_bits"][1:]:
             out.append({"id": f"blc1a-t{t}-e{e}", "kind": "blc1a", "tile": t, "e": e,
-                        "title": f"a coin lane against A' = 1 beside the lead's row lane (30 data lanes; 27 on step 1, "
-                                 f"beside its code lanes), a {e}-bit odd coin a ({t}-row tile, step, column), on step 1 "
+                        "title": f"a coin lane against A' = 1 beside the lead's row lane (30 data lanes; 23 on step 1, "
+                                 f"beside its tag and code lanes), a {e}-bit odd coin a ({t}-row tile, step, column), on step 1 "
                                  "and spread evenly, patched, served exactly"})
     for e in (2, 7):
         out.append({"id": f"blc4-t64-e{e}", "kind": "blc4", "tile": 64, "e": e,
@@ -205,7 +250,7 @@ def designs(lay: dict) -> list[dict]:
                              "step, column), cp.async"})
     for t, e in ((64, 4), (64, 7), (128, 7)):
         out.append({"id": f"blc4a-t{t}-e{e}", "kind": "blc4a", "tile": t, "e": e,
-                    "title": f"three coin lanes against A' = 1 beside the lead's row lane (28 data lanes; 25 on step "
+                    "title": f"three coin lanes against A' = 1 beside the lead's row lane (28 data lanes; 21 on step "
                              f"1), {e}-bit odd coins a ({t}-row tile, step, column), on step 1 and spread evenly, one "
                              "lane or two a step on a small tile, one 4-byte cp.async with the public weight, served "
                              "exactly"})
@@ -342,7 +387,8 @@ def walk_share(design: dict, lay: dict, calls: list, m: int, reg: float, window:
     return saved / macs
 
 
-def a8_words(design: dict, lay: dict, w: int, m: int, n: int, later: int, seed: int, plan_shift: int = 0) -> dict:
+def a8_words(design: dict, lay: dict, w: int, m: int, n: int, later: int, seed: int, d1: int,
+             plan_shift: int = 0) -> dict:
     """A8 under model P word for word on a small instance (nred_round3.build_entries' adversary on this layout): chosen
     data, zero past step 1 except each later step's first lane with A = 1 and B = -v* of the step's type; honest
     words are the k32 partial sums of A B plus the step's coins (step 1's lane coins included); the adversary keeps an
@@ -353,7 +399,7 @@ def a8_words(design: dict, lay: dict, w: int, m: int, n: int, later: int, seed: 
     kind, tile, e = design["kind"], design["tile"], design["e"]
     la, dl = (1, lay["lane_add"]["data_lanes"]) if kind == "blc1a" else \
         (lay["lanes4"]["lanes"] - 1, lay["lanes4"]["data_lanes"])
-    d1, ef = 28 - la, lay["lane_add"]["fill_row_coin_bits"]
+    d1, ef = d1 - la, lay["lane_add"]["fill_row_coin_bits"]
     lc = lane_counts(design, later + 1, min(1.0, m / tile), la)
     lanes_u, plan = lc[1:], [x > 0 for x in lc[1:]]
     dists = step_dists(design, lay, w)
@@ -695,19 +741,34 @@ def noise_mc(e: int, s_count: int, trials: int, seed: int) -> float:
 def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, str]]:
     d = {x["id"]: x for x in res["designs"]}
     ar = alt_roads.egress_outsourcing(inp, ll)
-    rows8 = d["rows"]["points"]["t8192"]
-    best = d[res["closing"]["id"]]["points"]
-    blc = call({"kind": "blc1", "tile": 128, "e": 2}, 8192, 2048, 16384, einp["lead"], einp["layouts"], 32)
-    brute = 8192 * 70 + sum(16384 * 66 * 2 for _ in range(0, 8192, 128))
-    ratio = {p: rows8["caps"]["32"]["stated"][p] / ar["share_of_stock_at_cap"]["32"]["r1b_live_coins"][
-        f"{p}_units_per_byte"] for p in ("floor", "bar")}
-    lead_a2c, nred_pt = d["rows"]["points"]["t8192"]["a2c"], einp["nred"]["model_p_saving_at_pstar"][0]
     lay, w, reg = einp["layouts"], einp["nred"]["public_lane_weight"], einp["prices"]["reg_units"]
+    lead, d1 = einp["lead"], einp["lead"]["step1_data_lanes"]
+    pre = {**einp, "lead": {**lead, "step1_data_lanes": 32 - lead["code_lanes"], "tag_lanes": 0}}
     by_id = {x["id"]: x for x in designs(lay)}
-    muts = {name: price_design({**by_id[did], **over, "id": name}, inp, einp, ll)
-            for name, did, over in (("interim 2's step 1", "blc1a-t128-e7", {"step1_coins": False}),
-                                    ("interim 2's step 1 on blc4a", "blc4a-t64-e7", {"step1_coins": False}),
-                                    ("front-loaded", "blc1a-t128-e7", {"plan": "front"}))}
+    rows8 = d["rows"]["points"]["t8192"]
+    pre8 = price_design(by_id["rows"], inp, pre, ll)["points"]["t8192"]
+    best = d[res["closing"]["id"]]["points"]
+    blc = call({"kind": "blc1", "tile": 128, "e": 2}, 8192, 2048, 16384, lead, lay, 32)
+    brute = 8192 * 70 + 16384 * 4 * math.log2(7) + sum(16384 * 66 * 2 for _ in range(0, 8192, 128))
+    ratio = {p: pre8["caps"]["32"]["stated"][p] / ar["share_of_stock_at_cap"]["32"]["r1b_live_coins"][
+        f"{p}_units_per_byte"] for p in ("floor", "bar")}
+    cols = inp["llama_3_2_1b"]["layers"] * sum(n for _, n in inp["llama_3_2_1b"]["linears"])
+    lead_a2c, nred_pt = d["rows"]["points"]["t8192"]["a2c"], einp["nred"]["model_p_saving_at_pstar"][0]
+    muts = {name: price_design({**by_id[did], **over, "id": name}, inp, e_, ll)
+            for name, did, over, e_ in (("interim 2's step 1", "blc1a-t128-e7", {"step1_coins": False}, pre),
+                                        ("interim 2's step 1 on blc4a", "blc4a-t64-e7", {"step1_coins": False}, pre),
+                                        ("tag lead, interim 2's step 1 on blc4a", "blc4a-t64-e7",
+                                         {"step1_coins": False}, einp),
+                                        ("front-loaded", "blc1a-t128-e7", {"plan": "front"}, einp))}
+    hole = muts["tag lead, interim 2's step 1 on blc4a"]["points"]
+    hole8 = 8192 * 16384 * d1 / (8192 * 4 + 16384 * 4 * math.log2(7))
+    ranks = {m: (tag_rank(m, lead), exact_rank([balanced_digits((i // 2 + 1) * (-1) ** i, 13, 4) for i in range(m)]))
+             for m in (1, 12, 13, 64, 168, 169, 512, 2196, 2197, 8192, 28560)}
+    try:
+        tag_rank(28561, lead)
+        over = False
+    except ValueError:
+        over = True
     packed = d["blc4a-t64-e7-packed"]["points"]["decode1"]
     lay0 = json.loads(json.dumps(lay))
     lay0["lane_add"]["fill_row_coin_bits"] = 0
@@ -721,32 +782,45 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
     for c in ("closing", "closing_320"):
         des = by_id[res[c]["id"]]
         t = des["tile"]
-        a8[f"{des['id']} m {2 * t}"] = a8_words(des, lay, w, 2 * t, 128, 11, 71)
-        a8[f"{des['id']} m {t // 2}"] = a8_words(des, lay, w, t // 2, 32, 128, 73)
+        a8[f"{des['id']} m {2 * t}"] = a8_words(des, lay, w, 2 * t, 128, 11, 71, d1)
+        a8[f"{des['id']} m {t // 2}"] = a8_words(des, lay, w, t // 2, 32, 128, 73, d1)
     half = by_id[res["closing"]["id"]]
-    a8_bad = a8_words(half, lay, w, half["tile"] // 2, 32, 128, 73, plan_shift=1)
+    a8_bad = a8_words(half, lay, w, half["tile"] // 2, 32, 128, 73, d1, plan_shift=1)
     g = lay["lane_add"]["copy_grain_words"]
     ww0 = walk_words(64, 128, lay["lane_add"]["data_lanes"], g, False, 83)
     ww1 = walk_words(64, 128, lay["lane_add"]["data_lanes"], g, True, 83)
     clo = [(res[c]["id"], k_, p["a2c"]) for c in ("closing", "closing_320")
            for k_, p in d[res[c]["id"]]["points"].items()]
     return [
-        ("The lead's coins: alt_roads' 9,216 streamed bits a token (whole 32-bit words), of which its words read 7,648 "
-         "(S - 1 + c a row); its work a bit peaks at the whole gate-up call, 2,048 x 16,384 / 70 MACs a bit at its words",
-         rows8["stream_bytes_per_token"] * 8 == ar["coin_bits_per_token"] and rows8["coin_bits_per_token"] == 7648
-         and abs(rows8["n_eff"]["floor"] / (2048 * 16384 / 70) - 1) < 1e-12 and rows8["beta_at"].endswith("1-67 of 67")
-         and "K 2048 N 16384" in rows8["beta_at"],
-         f"{rows8['stream_bytes_per_token'] * 8:.0f}, {rows8['coin_bits_per_token']:.0f}, n_eff "
-         f"{rows8['n_eff']['floor']:,.1f} at {rows8['beta_at']}; n_max {rows8['n_max']:,.1f} at {rows8['n_max_at']}"),
-        ("The lead's stated term at a 32-bit cap is alt_roads' (137.6% floor, 267.8% bar, at the 96 bits a gate-up row "
-         "streams) x 96 / 70, the bits its words read",
+        ("The lead before its tag (28 data lanes on step 1, no G): alt_roads' 9,216 streamed bits a token (whole "
+         "32-bit words), of which its words read 7,648 (S - 1 + c a row); its work a bit peaks at the whole gate-up "
+         "call, 2,048 x 16,384 / 70 MACs a bit at its words",
+         pre8["stream_bytes_per_token"] * 8 == ar["coin_bits_per_token"] and pre8["coin_bits_per_token"] == 7648
+         and abs(pre8["n_eff"]["floor"] / (2048 * 16384 / 70) - 1) < 1e-12 and pre8["beta_at"].endswith("1-67 of 67")
+         and "K 2048 N 16384" in pre8["beta_at"],
+         f"{pre8['stream_bytes_per_token'] * 8:.0f}, {pre8['coin_bits_per_token']:.0f}, n_eff "
+         f"{pre8['n_eff']['floor']:,.1f} at {pre8['beta_at']}; n_max {pre8['n_max']:,.1f} at {pre8['n_max_at']}"),
+        ("The lead before its tag: its stated term at a 32-bit cap is alt_roads' (137.6% floor, 267.8% bar, at the 96 "
+         "bits a gate-up row streams) x 96 / 70, the bits its words read",
          all(abs(r - 96 / 70) < 1e-9 for r in ratio.values()),
-         f"{rows8['caps']['32']['stated']['floor']:.4f}, {rows8['caps']['32']['stated']['bar']:.4f}"),
+         f"{pre8['caps']['32']['stated']['floor']:.4f}, {pre8['caps']['32']['stated']['bar']:.4f}"),
+        ("The tag lead as built: S = 67 and 265 at Llama's K with 24 data lanes on step 1; at T 8,192 its stream adds "
+         "G's coin word a column a call to the 9,216 bits, and its words read G's four digits, 4 log2 7 bits a column a "
+         "call",
+         steps(2048, d1) == 67 and steps(8192, d1) == 265
+         and rows8["stream_bytes_per_token"] * 8 == ar["coin_bits_per_token"] + 32 * cols / 8192
+         and abs(rows8["coin_bits_per_token"] - 7648 - cols * 4 * math.log2(7) / 8192) < 1e-9,
+         f"{rows8['stream_bytes_per_token'] * 8:.0f}, {rows8['coin_bits_per_token']:.1f}; term at cap 32 "
+         f"{rows8['caps']['32']['stated']['floor']:.4f} / {rows8['caps']['32']['stated']['bar']:.4f}"),
+        ("The row tags' rank by exact elimination equals the digit count tag_rank reads (1 digit to 12 rows, 2 to 168, "
+         "3 to 2,196, 4 to 28,560) and T stops being injective in four digits past 28,560 rows",
+         all(a == b for a, b in ranks.values()) and over, ", ".join(f"{m} {a}/{b}" for m, (a, b) in ranks.items())),
         ("blc1's coin bits at gate-up, 8,192 rows, 128-row tiles, 2 bits: the formula equals a tile-by-tile count",
-         blc["bits"] == brute, f"{blc['bits']:,.0f}"),
-        ("Mutation: interim 2's blc1a-t128-e7 and blc4a-t64-e7, step 1 without lane coins: gate-up's step 1 carries "
-         "28 x 16,384 / 4 MACs a bit, the term passes 1% at cap 32 at every point, and the interval outsourcer, its "
-         "512-bit root a call counted, saves more than 5% of stock at cap 32 (term, outsourcer, floor)",
+         abs(blc["bits"] - brute) < 1e-6, f"{blc['bits']:,.1f}"),
+        ("Mutation: interim 2's blc1a-t128-e7 and blc4a-t64-e7 on the lead before its tag, step 1 without lane coins: "
+         "gate-up's step 1 carries 28 x 16,384 / 4 MACs a bit, the term passes 1% at cap 32 at every point, and the "
+         "interval outsourcer, its 512-bit root a call counted, saves more than 5% of stock at cap 32 (term, "
+         "outsourcer, floor)",
          all(p["n_max"] == 28 * 16384 / 4 and p["caps"]["32"]["stated"]["floor"] > 0.01
              and p["caps"]["32"]["attack"]["floor"]["interval"]["whole_cap"] > 0.05
              for mu in ("interim 2's step 1", "interim 2's step 1 on blc4a") for p in muts[mu]["points"].values()),
@@ -754,6 +828,15 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
                                           f"{p['caps']['32']['attack']['floor']['interval']['whole_cap']:.3f}"
                                           for k, p in muts[mu]["points"].items())
                    for mu in ("interim 2's step 1", "interim 2's step 1 on blc4a"))),
+        ("Mutation: the same on the tag lead: G closes step 1's hole at decode and 64 rows (term under 1% at cap 32) "
+         "but not at T 8,192, where gate-up's step 1 carries 8,192 x 16,384 x 24 / (8,192 x 4 + 16,384 x 4 log2 7) "
+         "MACs a bit, the term passes 1% and the interval outsourcer saves more than 5% of stock",
+         all(hole[k]["caps"]["32"]["stated"]["bar"] < 0.01 for k in ("decode1", "t64"))
+         and abs(hole["t8192"]["n_max"] / hole8 - 1) < 1e-12 and "steps 1-1 of" in hole["t8192"]["n_max_at"]
+         and hole["t8192"]["caps"]["32"]["stated"]["floor"] > 0.01
+         and hole["t8192"]["caps"]["32"]["attack"]["floor"]["interval"]["whole_cap"] > 0.05,
+         ", ".join(f"{k} {p['caps']['32']['stated']['floor']:.4f}-{p['caps']['32']['stated']['bar']:.4f} n_max "
+                   f"{p['n_max']:,.0f}" for k, p in hole.items())),
         ("Mutation: blc4a-t64-e7 with three lanes on each coined step: at decode a run between coined steps carries "
          "more than twice the call's work a bit and the term passes 1% at cap 320; one or two lanes a step it doesn't",
          packed["beta"]["floor"] > 2 * packed["beta_call"]["floor"]
