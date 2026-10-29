@@ -110,7 +110,6 @@ theorem distinctOn_image [DecidableEq (G → ℚ)] {S : Set G} {Rel : (G → ℚ
   · refine Finset.card_image_of_injOn fun t ht t' ht' h => ?_
     have h' : Rel t' (ρ t) := by
       have := hρ t' ht'
-      simp only at h
       rwa [← h] at this
     exact hsep.1 t ht t' ht' (ρ t) (hρ t ht) h'
 
@@ -273,9 +272,7 @@ theorem card_le_of_match {S : Set G} {X : Set (G → ℚ)} {H Dig : Finset (G �
   choose! σ hσ hσS using hm
   refine Finset.card_le_card_of_injOn σ (fun h hh => hσ h hh) fun h hh h' hh' heq => ?_
   refine hD.1 h hh h' hh' fun g hg => ?_
-  rw [← hσS h hh g hg, ← hσS h' hh' g hg]
-  simp only at heq
-  rw [heq]
+  rw [← hσS h hh g hg, ← hσS h' hh' g hg, heq]
 
 /-- **Over all of `MH100w`, `ShaWrites` is false** for `R > |Dig|`: one `int` instruction a digest word writes the
 digests and nothing else. So `hash-compose` is no theorem of `MH100w`; it needs the class of programs the hardware
@@ -708,7 +705,7 @@ theorem toy_attained :
   · intro t ht
     simp at ht
     exact ⟨td, by rw [hregs]; simp, fun g _ => by rw [ht]⟩
-  · rw [costOn_eq h100Floor (fun _ _ => trivial)]
+  · rw [costOn_eq (I := Set.univ) h100Floor (fun _ _ => Set.mem_univ _), Finset.card_singleton]
     decide
 
 end Call
