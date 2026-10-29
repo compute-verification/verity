@@ -371,30 +371,30 @@ theorem prCoin_challenger_le (N : ℕ) (sid : ByteArray) (F : HmCoins → Stream
 /-! ## The four guarantees -/
 
 theorem periodHeldCoins : PeriodHeldCoins := by
-  intro hC D Q L hW ι α ΩW ΩQ _ _ d r P τ round S hdev hinst hS o hs hd hsch ω
-  refine (prCoin_le_of_pr _ (periodHeld hC D Q L hW ι α ΩW ΩQ d r P τ round S hdev hinst hS o)
+  intro D Q L hW ι α ΩW ΩQ _ _ d r P τ round S hdev hinst hS o hs hd hsch ω
+  refine (prCoin_le_of_pr _ (periodHeld D Q L hW ι α ΩW ΩQ d r P τ round S hdev hinst hS o)
     (fun ω ω' y => ?_) ω).trans ofReal_bound
   simp only [Audits.Accepts, Audits.Break, Accounting.Run.held, hs ω ω' y, hd ω ω' y, hsch ω ω' y]
 
 theorem periodHeldSha512 : PeriodHeldSha512 := by
-  intro hC D Q L hW ι α ΩW ΩQ _ _ d r P τ round S hdev hinst hS o hs hd hsch ω ε t h1 h2
+  intro D Q L hW ι α ΩW ΩQ _ _ d r P τ round S hdev hinst hS o hs hd hsch ω ε t h1 h2
   exact prCoin_challenger_le (2 ^ 19) P.sid (fun c s => AcceptedShort r P S (o.1, o.2, (ω, c, s)))
-    (periodHeldCoins hC D Q L hW ι α ΩW ΩQ d r P τ round S hdev hinst hS o hs hd hsch ω) ε t h1 h2
+    (periodHeldCoins D Q L hW ι α ΩW ΩQ d r P τ round S hdev hinst hS o hs hd hsch ω) ε t h1 h2
 
 theorem rounds_105 {p ε₀ c : ℝ≥0∞} (h : Pous.Guarantees.RoundsBound p ε₀ 105 c) : (1 - p) ^ 105 + 105 * ε₀ ≤ c := by
   unfold Pous.Guarantees.RoundsBound at h
   rwa [Nat.cast_ofNat] at h
 
 theorem periodHeldCoinsAt : PeriodHeldCoinsAt := by
-  intro p ε₀ D Q L hnum hW pt N _ h1 h2 hH ι α ΩW ΩQ _ _ d r P round S hdev hS o hs hd hsch ω
+  intro p ε₀ D Q L hnum hW pt N _ h1 h2 ι α ΩW ΩQ _ _ d r P round S hdev hS o hs hd hsch ω
   refine (prCoin_le_of_pr _ (periodHeldAt p ε₀ D Q L (rounds_105 hnum) hW pt N (le_trans (by norm_num) h1)
-    (h2.trans (by norm_num)) hH ι α ΩW ΩQ d r P round S hdev hS o) (fun ω ω' y => ?_) ω).trans ofReal_bound
+    (h2.trans (by norm_num)) ι α ΩW ΩQ d r P round S hdev hS o) (fun ω ω' y => ?_) ω).trans ofReal_bound
   simp only [AuditsOf.Accepts, AuditsOf.Break, Accounting.Run.held, hs ω ω' y, hd ω ω' y, hsch ω ω' y]
 
 theorem periodHeldSha512At : PeriodHeldSha512At := by
-  intro p ε₀ D Q L hnum hW pt N _ h1 h2 hH ι α ΩW ΩQ _ _ d r P round S hdev hS o hs hd hsch ω ε t k1 k2
+  intro p ε₀ D Q L hnum hW pt N _ h1 h2 ι α ΩW ΩQ _ _ d r P round S hdev hS o hs hd hsch ω ε t k1 k2
   exact prCoin_challenger_le N P.sid (fun c s => AcceptedShortAt pt N r P S (o.1, o.2, (ω, c, s)))
-    (periodHeldCoinsAt p ε₀ D Q L hnum hW pt N h1 h2 hH ι α ΩW ΩQ d r P round S hdev hS o hs hd hsch ω) ε t k1 k2
+    (periodHeldCoinsAt p ε₀ D Q L hnum hW pt N h1 h2 ι α ΩW ΩQ d r P round S hdev hS o hs hd hsch ω) ε t k1 k2
 
 /-! ## Their witnesses -/
 

@@ -115,16 +115,15 @@ the primitive (`ReadsNoPrimitive`: a run of the coin game, which has none), at e
 decision accepts the period with no break while the capacity account held fewer than `S · len` bit-ticks with
 probability at most `δ + ε_max` over the memory challenger's hm96 coins and its streams, uniform. -/
 def PeriodHeldCoins : Prop :=
-  Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
-    ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
-      ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-        (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-        (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
-        DeviceModel r P τ D Q L round → Instantiates P τ → Fits d (r.win .capacity).len round S Pous.EndToEnd.S →
-          ∀ o : ΩW × ΩQ, ReadsNoPrimitive P.session o → ReadsNoPrimitive P.device o → ReadsNoPrimitive r.schedule o →
-            ∀ ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω,
-              Verity.Game.prCoin (fun y : HmCoins × Streams => AcceptedShort r P S (o.1, o.2, (ω, y))) ≤
-                ENNReal.ofReal Params.δ + Params.εMax
+  ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
+    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
+      (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+      (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
+      DeviceModel r P τ D Q L round → Instantiates P τ → Fits d (r.win .capacity).len round S Pous.EndToEnd.S →
+        ∀ o : ΩW × ΩQ, ReadsNoPrimitive P.session o → ReadsNoPrimitive P.device o → ReadsNoPrimitive r.schedule o →
+          ∀ ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω,
+            Verity.Game.prCoin (fun y : HmCoins × Streams => AcceptedShort r P S (o.1, o.2, (ω, y))) ≤
+              ENNReal.ofReal Params.δ + Params.εMax
 
 /-- **PoUS's per-period guarantee in the coin game, at the deployed challenger's SHA-512 streams.** `PeriodHeldCoins`
 with the memory challenger's streams derived from its 64-byte secret source (`challengerStreams` at `2^19` blocks and
@@ -133,21 +132,20 @@ the designated session): given `Sha512Prf` (`prf/sha-512`) with advantage `ε` a
 whole decision accepts the period with no break while the capacity account held fewer than `S · len` bit-ticks with
 probability at most `δ + ε_max + ε(t, 1) + ε(t, 6720)` over the source and the hm96 coins. -/
 def PeriodHeldSha512 : Prop :=
-  Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
-    ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
-      ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-        (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-        (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
-        DeviceModel r P τ D Q L round → Instantiates P τ → Fits d (r.win .capacity).len round S Pous.EndToEnd.S →
-          ∀ o : ΩW × ΩQ, ReadsNoPrimitive P.session o → ReadsNoPrimitive P.device o → ReadsNoPrimitive r.schedule o →
-            ∀ (ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) (ε : ℕ → ℕ → ℝ≥0∞) (t : ℕ),
-              Hash.Assumptions.Sha512Prf sha512Digest ε derivePre 64 (fun _ : Unit => deriveTail (2 ^ 19) P.sid)
-                (fun (c : HmCoins) k => AcceptedShort r P S (o.1, o.2, (ω, c, streamsOf (keyOf (k ()))))) t →
-              Hash.Assumptions.Sha512Prf sha512Digest ε FlockSoundness.Randomness.STREAM.data.toList 32
-                streamInputs (fun (c : HmCoins) U => AcceptedShort r P S (o.1, o.2, (ω, c, streamsOfBlocks U))) t →
-                Verity.Game.prCoin (fun z : Bytes 64 × HmCoins =>
-                    AcceptedShort r P S (o.1, o.2, (ω, z.2, challengerStreams (2 ^ 19) P.sid z.1))) ≤
-                  ENNReal.ofReal Params.δ + Params.εMax + ε t 1 + ε t (105 * 64)
+  ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
+    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
+      (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+      (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
+      DeviceModel r P τ D Q L round → Instantiates P τ → Fits d (r.win .capacity).len round S Pous.EndToEnd.S →
+        ∀ o : ΩW × ΩQ, ReadsNoPrimitive P.session o → ReadsNoPrimitive P.device o → ReadsNoPrimitive r.schedule o →
+          ∀ (ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) (ε : ℕ → ℕ → ℝ≥0∞) (t : ℕ),
+            Hash.Assumptions.Sha512Prf sha512Digest ε derivePre 64 (fun _ : Unit => deriveTail (2 ^ 19) P.sid)
+              (fun (c : HmCoins) k => AcceptedShort r P S (o.1, o.2, (ω, c, streamsOf (keyOf (k ()))))) t →
+            Hash.Assumptions.Sha512Prf sha512Digest ε FlockSoundness.Randomness.STREAM.data.toList 32
+              streamInputs (fun (c : HmCoins) U => AcceptedShort r P S (o.1, o.2, (ω, c, streamsOfBlocks U))) t →
+              Verity.Game.prCoin (fun z : Bytes 64 × HmCoins =>
+                  AcceptedShort r P S (o.1, o.2, (ω, z.2, challengerStreams (2 ^ 19) P.sid z.1))) ≤
+                ENNReal.ofReal Params.δ + Params.εMax + ε t 1 + ε t (105 * 64)
 
 /-- **`PeriodHeldAt` in the coin game, at uniform streams**: `PeriodHeldCoins` at every point `pt` and block count
 `2^19 = 524,288 ≤ N ≤ 134,217,728 = 2^27`, under `PeriodHeldAt`'s premises (its 105-round bound
@@ -157,7 +155,6 @@ def PeriodHeldCoinsAt : Prop :=
     Pous.Guarantees.RoundsBound p ε₀ 105 (ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130)) →
     Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
       ∀ (pt : Run.Point) (N : ℕ) [NeZero N], 524288 ≤ N → N ≤ 134217728 →
-        Pous.P2.Assumptions.CoinCommitHides (coinViewAt N) ((2⁻¹ : ℝ≥0∞) ^ 131) →
         ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
           (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
           (P : AuditsAt N ΩW ΩQ) (round : ℕ) (S : ℝ),
@@ -175,7 +172,6 @@ def PeriodHeldSha512At : Prop :=
     Pous.Guarantees.RoundsBound p ε₀ 105 (ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130)) →
     Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
       ∀ (pt : Run.Point) (N : ℕ) [NeZero N], 524288 ≤ N → N ≤ 134217728 →
-        Pous.P2.Assumptions.CoinCommitHides (coinViewAt N) ((2⁻¹ : ℝ≥0∞) ^ 131) →
         ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
           (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
           (P : AuditsAt N ΩW ΩQ) (round : ℕ) (S : ℝ),
