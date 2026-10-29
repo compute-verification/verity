@@ -75,9 +75,34 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
 - **Pearl-C4** (`pearl-c-nvfp4-v0`, `schemes/pearl_c4.py`): Pearl-C with the FP8 product replaced by sm_120's
   block-scaled FP4, NVFP4 only.
 - **NCP** (`ncp-v1`, `schemes/ncp.py`): noise-cancelling polarization over int7 activations.
-- **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
+- **Dither**, a no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`. It rests
+  on SAK and is no longer the bar or the plan (below).
 
 Each scheme module's docstring states its steps and roundings, with pinned vectors under `tests/vectors`.
+
+## The bar and the next scheme
+
+PoUW's bar (Daniel, 28 Oct, CMP-294), on the H200, under an assumption milder than SAK. It supersedes Dither and SAK
+(`SAKMatmul`, `SAKHigh`) as the bar.
+
+- **T1**: the gap between honest and adversary is at most 1% of stock, additive, in priced work. The honest program is
+  the best possible, hashing is credited, and every matmul takes fresh noise on every call.
+- **T2**: honest overhead is at most 100×.
+- **T3**: perplexity rises at most 5%.
+
+The next scheme is **the lead** (Daniel, 29 Oct, ASK-189 A′; CMP-295), protocol id `verity/pouw/v2`: NCP-family served
+sparse noise with row tags and three certifier-streamed coin lanes, every k32 word committed. Its defaults:
+
+- ShaWrites (rank 4a) counts as milder than SAK, with "honest is best" for hashing's credit;
+- the copy model is tile grain;
+- hiding is the keyed leaf (ASK-192, d = SHA-512(ks_w ‖ salt_w ‖ M_top));
+- the certifier is the coin source, on a trusted host;
+- the network term and whole-step coverage are reported beside T1;
+- the fold is exact on |A·Bᵀ| ≤ 2^22;
+- stock's decode price is reported both ways.
+
+v1 (H1, `verity/pouw/v1`) stays until v2 credits a served window. The lead's figures so far are
+note:compute-research/20261029T0745Z-report-pouw-sweep's.
 
 ## Security assumptions and guarantees
 
