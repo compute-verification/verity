@@ -48,6 +48,19 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
   vy-dc-h200. **Window booked (infra, INF-367, 16:08Z): vy-dc-h200-5 from about 18:15Z to 20:45Z.** Start once infra
   posts that it is up; the coordinator relays it. Have GPU runs done by 20:30Z.
 
+## Settled during the program
+
+- **16:45Z, coin-addressed stores** (N-W1's review): MH100w covers branching provers cell by cell (`adaptive_floor`), but
+  not a store to a coin-computed address. So "for every prover strategy" can't rest on MH100w alone. The statement covers
+  such stores through `CardWithinAccelW1` (the ACCEL premise Daniel signed off in ASK-169), at cw = 32 with
+  `w1EntryWordsAt`, which the commitment writes read. N-PREM states it so. N-RED searches scatter-store strategies
+  against it.
+- **No run ids, PR numbers, tracker ids, dates or lane names in Lean docstrings or comments** (`tests/lint/test_repo_lane_text.py`).
+  The coordinator's earlier "with run ids" was wrong. Evidence goes in your checkpoint note or the PR body.
+- **`verity lean try` from a worktree builds the checkout the installed tool lives in,** not your worktree. Run the
+  worktree's own copy: `uv run --project WORKTREE verity lean try ...` or `python3 WORKTREE/tools/verity/...`, and
+  check that the run's tree is your head.
+
 ## Lanes
 
 | lane | agent | piece | node |
