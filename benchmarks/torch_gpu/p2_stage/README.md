@@ -29,7 +29,7 @@ on that buffer.
   `int_mm.linear` against the twin. `check.py --sample N` checks N blocks of every tensor of the store
   against the reference afterwards.
 - `sketch.py`: the remote bandwidth audit's receipts beside the decode (Demo B's bandwidth leg; the interface is
-  `verity/core/protocols/remote_bandwidth/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
+  `verity/core/protocols/poub/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
   a pass attached (`store.sketch = sketch.Pass(seed, units, device)`, `units = sketch.plan_units(layout.tensors)`: the
   units the store's tensors lie in, so the encoded padding past the head is in no receipt), `Store.decode_rows`
   sketches the units of each chunk before decoding it, from the same rows on the device: σ of each unit's 8,224 stored

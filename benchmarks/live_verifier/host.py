@@ -1,5 +1,5 @@
 """The auditor host's verifier service: the remote bandwidth audit's verifier
-(`benchmarks/remote_session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
+(`benchmarks/poub_session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
 from a tree infra pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
 
     vy-verifier-gate run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS]
@@ -34,13 +34,13 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   (`--host-bytes`, `--ingress-bytes-per-s`, `--hbm-bytes`), are the host's for `--peer` (`/etc/vy/verifier.json`),
   never the request's. The prover reaches the port only through its tunnel account's `ssh -L` (`vy-verifier-tunnel`),
   which may open nothing else; `status RUN` says when the verifier listens, and the prover connects after that. The
-  unit, `vy-verifier@<run>.service`, leaves `runs/<run>/out/` as `benchmarks/remote_session/run.sh`'s ROLE=verifier
+  unit, `vy-verifier@<run>.service`, leaves `runs/<run>/out/` as `benchmarks/poub_session/run.sh`'s ROLE=verifier
   does (`verifier.json`, `challenger/`, `verifier.log`, `registry.json`), which `auditor_line.py` reads, and the
   transcripts gzipped in `out/transcripts/` with their `SHA256SUMS`; then `end.json` (exit code, who stopped it, each
   file's SHA-512). One unit runs at a time, a run or a replay, so a replay never takes a live session's cores.
 - **A bound run** (`--model ROLE --arena-blocks A [--engines E]`, ROLE of [A-Z0-9_], E 1..8 and verifier.py's 8 by
   default, A at most 2^25) binds the registered store to a pinned model (`verifier.py --model`,
-  `remote_bandwidth.store.Binding`), which `auditor_line.py`'s `bound` check needs. The lane names the role and the store's shape, never a path: the gate
+  `poub.store.Binding`), which `auditor_line.py`'s `bound` check needs. The lane names the role and the store's shape, never a path: the gate
   adds `--checkpoint <models>/<ROLE>`, the host's directory of the role's checkpoint, and `--pin` core's pin in the
   pinned tree (`verity/core/protocols/pouw/lean/check/models.json`, `MODEL_PINS`), which the gate's own `--pin` (the
   challenger's key, verifier.py's `--challenger-pin`) is not. It refuses the run, before writing or starting anything,
@@ -49,7 +49,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   `models`, default `/var/lib/vy-verifier/models`. Infra provisions a role's directory: every file the role's entry
   pins, at the pinned revision, as a root-held regular file (0644, in a root-held 0755 directory), copied out of a
   download, never an HF cache's snapshot, whose files are symlinks into its blobs and which
-  `remote_bandwidth.store.check` refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
+  `poub.store.check` refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
 
       hf download Qwen/Qwen2.5-32B --revision 1818d35814b8319459f4bd55ed1ac8709630f003 --local-dir /tmp/q
       install -d -m 0755 -o root -g root /var/lib/vy-verifier/models/QWEN25_32B_BF16
@@ -59,7 +59,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   `models.json` pins it.
 - **A replay** (`replay RUN`, `vy-verifier-replay@<run>.service`) checks each transcript against `SHA256SUMS` and
   against the sha256 and bytes `verifier.json` recorded for it, and replays them through both verifiers
-  (`verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript --record verifier.json`), or the record
+  (`verity/core/protocols/poub/lean/tests/replay.py transcript --record verifier.json`), or the record
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/core/protocols/pous/wipe_party.py`, port 47611) and its block challenger
@@ -102,8 +102,8 @@ from typing import Any, BinaryIO, Callable, Iterator
 
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
-VERIFIER = TREE / "benchmarks" / "remote_session" / "verifier.py"
-REPLAY = TREE / "verity" / "core" / "protocols" / "remote_bandwidth" / "lean" / "tests"
+VERIFIER = TREE / "benchmarks" / "poub_session" / "verifier.py"
+REPLAY = TREE / "verity" / "core" / "protocols" / "poub" / "lean" / "tests"
 DIFFTEST = TREE / "verity" / "core" / "difftest" / "python"
 RESEARCH = TREE / "tools" / "research" / "src"
 
@@ -356,7 +356,7 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
         raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
                       "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
                       "challenger pin it can't find on it, so no run starts without it")
-    argv = [python, "-I", str(tree / "benchmarks" / "remote_session" / "verifier.py"),
+    argv = [python, "-I", str(tree / "benchmarks" / "poub_session" / "verifier.py"),
             "--host", "127.0.0.1", "--port", str(req["port"]), "--out", str(host.runs / run / "out"),
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],

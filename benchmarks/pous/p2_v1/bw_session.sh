@@ -43,7 +43,7 @@ MODE=${MODE:-both}
 WINDOWS=${WINDOWS:-2} PASSES=${PASSES:-1} SAMPLES=${SAMPLES:-1024} WINDOW_S=${WINDOW_S:-1} DEADLINE_S=${DEADLINE_S:-1}
 SKIP_LAYER=${SKIP_LAYER:-51} CHEAT_SAMPLES=${CHEAT_SAMPLES:-1024}
 LEASE_MIN=${LEASE_MIN:-10}
-VERIFIER=${VERIFIER:-$PY -m verity.core.protocols.remote_bandwidth.p2_party --registration $REG --stdio}
+VERIFIER=${VERIFIER:-$PY -m verity.core.protocols.poub.p2_party --registration $REG --stdio}
 CONNECT=${CONNECT:-}; CHEAT_CONNECT=${CHEAT_CONNECT:-$CONNECT}; TUNNEL=${TUNNEL:-}
 PARTY=${PARTY:-} PARTY_HOST=${PARTY_HOST:-}
 S=$(mktemp -d)
@@ -83,7 +83,7 @@ step registration $?
 "$PY" "$D/bandwidth.py" toy "$S/toy" > "$O/toy.log" 2>&1 \
   && "$PY" "$D/bandwidth.py" session --store "$S/toy/store" --layout "$S/toy/layout.json" --node p2-toy-node \
     --registration "$S/toy/registration.json" --device cpu --ref-decode --samples 16 --window-s 0.001 --deadline-s 0.001 \
-    --verifier "$PY -m verity.core.protocols.remote_bandwidth.p2_party --registration $S/toy/registration.json --stdio" \
+    --verifier "$PY -m verity.core.protocols.poub.p2_party --registration $S/toy/registration.json --stdio" \
     --out "$O/toy" --expect accept >> "$O/toy.log" 2>&1
 step toy $?
 grep -qE "^(ship|registration|toy) rc [1-9]" "$O/rc.txt" && { cat "$O/rc.txt" "$O/registration.log" "$O/toy.log"; exit 2; }

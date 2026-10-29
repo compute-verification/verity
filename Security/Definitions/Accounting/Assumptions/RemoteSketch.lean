@@ -39,7 +39,7 @@ $$\Pr_x\big[E(\mathrm{keys}(b, D, x))\big] \le \Pr_\kappa\big[E(\kappa)\big] + \
 It is the one random-oracle step `SketchBoundSession` takes: the bound is derived over the model's coins
 (`Accounting.Remote.Sketch.Coins`, each candidate's key uniform and independent of the prover's coins, the store and
 the other keys), and this premise carries it to the trace's outcomes, whose keys are SHA-512's, at a cost of `ε`. The
-signs are `S_i`, which `remote_bandwidth.receipts` expands from the seed by SHA-512, and the receipt hash is SHA-512
+signs are `S_i`, which `poub.receipts` expands from the seed by SHA-512, and the receipt hash is SHA-512
 keyed by the seed (`SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)`) read as a function of the block's index and sketch words.
 
 SHA-512 is one fixed function, and for it the premise is false in Lean at small `ε`: a fixed function's outputs are one

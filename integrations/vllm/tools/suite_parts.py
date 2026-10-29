@@ -62,7 +62,7 @@ SECONDS: dict[str, float] = {
     "tests/predict/test_steps.py": 137,
     "tests/program/test_boolean_dense.py": 137,
     "tests/program/test_dead_free.py": 134,
-    "tests/store/test_remote_session.py": 111,
+    "tests/store/test_poub_session.py": 111,
     "tests/program/test_sampling_shared_greedy.py": 108,
     "tests/program/test_fa2_split.py": 108,
     "tests/program/test_lifted_dense_b1.py": 108,

@@ -36,8 +36,8 @@ import sketch as K  # noqa: E402
 import stage as S  # noqa: E402
 from p2_v1 import serve  # noqa: E402
 
-from verity.core.protocols.remote_bandwidth import p2  # noqa: E402
-from verity.core.protocols.remote_bandwidth import receipts as R  # noqa: E402
+from verity.core.protocols.poub import p2  # noqa: E402
+from verity.core.protocols.poub import receipts as R  # noqa: E402
 
 STORE_UNITS = -(-68_013_623 // p2.UNIT_BLOCKS)
 CHUNK = 1 << 16

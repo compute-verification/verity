@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's opening of a drawn receipt (`verity.core.protocols.remote_bandwidth`, PROTOCOL.md §6's checks
+"""The remote bandwidth audit's opening of a drawn receipt (`verity.core.protocols.poub`, PROTOCOL.md §6's checks
 1-3 and 5, as §8 deploys them) as one Boolean Definition: what a proof runs on a drawn receipt in place of opening it, so the
 block, its payload, its receipt leaf and every salt and path stay the unit's witness and the verifier reads the unit's
 verdict.
@@ -633,7 +633,7 @@ def _opening_body(B, S, *colls):
 BlockOpeningCheck = CompositeDefinition(
     "BlockOpeningCheck", 1, ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "P", "DR", "DP", "DV"), _opening_signature,
     _opening_body, conformance="exact-model-tested",
-    doc="A drawn receipt's opening (remote_bandwidth §6 checks 1-3 and 5): the receipt leaf on its path to the pass's root "
+    doc="A drawn receipt's opening (poub §6 checks 1-3 and 5): the receipt leaf on its path to the pass's root "
         "and plan[pos] = j (receipt-path); every word of block below p and decoding to payload under the codec key at j, with "
         "b_j(c_a) of the payload's own digest and coin if bound (codec); the payload on its path to the payload root or its "
         "append's and, if bound, to the value commitment (payload-path); the block's sketch receipt the leaf's entry pos & 15 "

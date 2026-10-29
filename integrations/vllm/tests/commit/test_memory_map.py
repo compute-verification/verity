@@ -1,7 +1,7 @@
 """memory-map/v1 from the circuit (`verity_vllm.commit.memory_map`) on a small Llama's request Programs: rows of 1 KiB (4 KV heads
 of 128 bf16) in pages of 4 slots, so a plane of a page is one 4 KiB block; request r0 (a 4-row prefill, then 5 decode steps) from
 step 0, and r1 (a 4-row prefill, then 1 decode step) from step 1, which ends while r0 runs.  The record is one
-`remote_bandwidth.memory_map.Replay` accepts, a complete block is in it exactly while the requirement has its rows live, and the
+`poub.memory_map.Replay` accepts, a complete block is in it exactly while the requirement has its rows live, and the
 pages are the ones the engine's slots name.  A warm request (a prefix-cache hit) reads its first page from the request that
 computed it: the page is written once and freed after the last reader of either.  GLM-5.3's MLA: the DSA stand-in's rows are its
 latent rows, one plane a layer, in MLA's latent page, and 1152-byte latent rows lay out 18 blocks a page of 64 slots, rows
@@ -18,8 +18,8 @@ import torch
 from tests.program.predict.test_predict import TINY, _phi
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
-from verity.core.protocols.remote_bandwidth import codec
-from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, parse
+from verity.core.protocols.poub import codec
+from verity.core.protocols.poub.memory_map import Replay, dumps, parse
 from verity.ml.circuits.census import step_of
 from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program, is_input

@@ -2,14 +2,14 @@
 plan cut into the store's shards, one instance a shard a pass, every instance held to the unit's reference, each distinct one
 to the circuit, and one staged by C-Flock's `UnitStager` for its fit in M0's block.
 
-    uv run python benchmarks/one_stage/plan_shards.py --session remote_session.json --record verifier.json --out DIR \\
+    uv run python benchmarks/one_stage/plan_shards.py --session poub_session.json --record verifier.json --out DIR \\
         [--S 32768] [--gaps 0] [--no-circuit] [--no-stage]
 
 * **The plan.** The verifier's record (``verifier.json``, its session's record): each window's passes, their steps, plan
   lengths and stale bounds, and the store's blocks. v0's record keeps no plan, so a pass's plan is read from its public data
   only where that fixes it: nothing appended or released and a plan of every block below the stale bound, N of N, is every
   block in store order. Any other pass is refused here.
-* **The blocks each step reads.** The session's registered layout (``remote_session.json``'s ``layout``, one region a
+* **The blocks each step reads.** The session's registered layout (``poub_session.json``'s ``layout``, one region a
   registration, weights or filler; its registration digest the record's): every weight block, a gathered table (the
   embedding) counted whole. That is each instance's ``regmask`` at every step, a superset of the step's registered reads,
   which is what the one-sided clause needs; the circuit's other reads (its KV) are outside this store.
@@ -106,7 +106,7 @@ def stage(defn, S, a: dict, scratch: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--session", type=Path, required=True, help="vllm's remote_session.json")
+    ap.add_argument("--session", type=Path, required=True, help="vllm's poub_session.json")
     ap.add_argument("--record", type=Path, required=True, help="the remote verifier's verifier.json")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--S", type=int, default=1 << 15, help="a shard's blocks")

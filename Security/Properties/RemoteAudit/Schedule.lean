@@ -4,7 +4,7 @@ import RemoteAudit.Schedule
 /-!
 # The schedule check fixes each credited pass's plan (`RemoteAudit.Schedule`)
 
-`RemoteAudit.Schedule.check` (`verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Schedule.lean`, which
+`RemoteAudit.Schedule.check` (`verity/core/protocols/poub/lean/RemoteAudit/Schedule.lean`, which
 `schedule.py` is held to by the difftest, and without whose acceptance `audit.ledger` credits nothing after the seed)
 holds a session's passes and appends to the schedule the prover publishes, at the cap on the schedule's bits the
 prover committed before the session's first coin, and returns the schedule's bits.

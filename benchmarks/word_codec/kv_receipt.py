@@ -16,7 +16,7 @@ B          unbound (ro-sketch-blake3/v0): S[c][p]. Bound (ro-bound-sketch-blake3
            where S[c][p] = −1; z is the MMA warps' PV accumulators after that tile (`kv.cu`'s layout)
 sketch     v[r][c] = Σ_p e_r[p] · B[p][c], 16 int32
 receipt    BLAKE3-keyed(K, u64be(vector) ‖ sketch as 16 int32 LE), K = tags.Blake3Tag(NAME).key(σ)
-SHA-512    the half-block receipt in the remote driver's hash (`remote_bandwidth.receipts`' y, seed-first):
+SHA-512    the half-block receipt in the remote driver's hash (`poub.receipts`' y, seed-first):
            SHA512(Z(SHA_DOMAIN ‖ frame(σ)) ‖ u64be(half) ‖ its 8 sketches as 128 int32 LE), Z zero-padding to one
            128-byte block, so 5 compressions after the prefix's midstate
 ~~~

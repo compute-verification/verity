@@ -87,8 +87,8 @@ it is written before the pending seals too, and its ``final`` is true only once 
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to the remote
-bandwidth audit's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
-record is ``remote_session.json``, and a rejected session fails the exit.
+bandwidth audit's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_poub`): its
+record is ``poub_session.json``, and a rejected session fails the exit.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 another thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
@@ -114,7 +114,7 @@ from typing import Any
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
-                                   serve_remote as SR, serve_row as RW, serve_seal as SS)
+                                   serve_poub as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
@@ -750,7 +750,7 @@ def main(opts: Options) -> int:
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "window_requests": opts.window_requests or None, "protocols": arm.describe() if arm is not None else None,
-              "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
+              "poub_session": session.describe() if session is not None else None, "row_scheduling": row,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
               "required_manifest_path": getattr(com, "required_manifest_path", None), **SS.retention_record(opts, com),
@@ -773,7 +773,7 @@ def main(opts: Options) -> int:
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
                    "release": draws.summary() if draws is not None else None,
                    "mirror_errors": mirror.errors[:10] if mirror else None,
-                   "remote_session": session.end() if session is not None else None}
+                   "poub_session": session.end() if session is not None else None}
             (out / "summary.json").write_text(json.dumps(got, indent=1))
             if mirror is not None:
                 mirror()

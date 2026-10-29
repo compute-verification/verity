@@ -35,7 +35,7 @@ codec and the coins of the appends before it, every layout `slot` of `N` distinc
   `Pr_{ω,κ}[appendCoinBlocks enc choose slot (ω, κ) ∈ ev] ≤ Pr_E[E ∈ ev] + δ`.
 
 `ω` is the codec in the ideal encoding model (its rounds' random function, below). The coins are the appends'
-(remote_bandwidth's PROTOCOL.md §3–§4), drawn at the node's one live registration and after: the registration is
+(poub's PROTOCOL.md §3–§4), drawn at the node's one live registration and after: the registration is
 append `0`, whose coin is the seed, drawn after its payload root; every other append's coin `c_a` is 32 bytes, drawn
 once, when the append's root arrives, after that root has committed every digest. A registered block is its payload
 encoded under the seed's key. An appended block is its payload `p_j` encoded with the bound tweak
@@ -61,7 +61,7 @@ values `p` and above (`2^n − p` of `2^n`, at `p = 2^n − c`). Not covered: a 
 choice among the registrations, which the one live registration rules out; and a layout chosen from the encodings
 after the coins, which the stacked guarantees fix before. Under the seed's key alone a writer picks an appended
 block's encoding by writing its decoding: measured in
-`verity/core/protocols/remote_bandwidth/tests/test_key_binding.py`, which also fails 64 tries under the bound key and
+`verity/core/protocols/poub/tests/test_key_binding.py`, which also fails 64 tries under the bound key and
 keys a block under each coin apart. -/
 def KeyBinding {Ω Ca Ch B : Type} [Fintype Ω] [Fintype Ca] [Fintype B] (T M : ℕ) (δ : ℝ≥0∞)
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → B) : Prop :=
@@ -91,7 +91,7 @@ reads its append's coin, drawn after its payload is committed (`KeyBinding`), so
 carries nothing about its encoding, and only work after the coin helps rebuild it. Two claims about the code back the
 rest:
 
-* no pass reads an append's blocks `L` or more windows after the one it joined (remote_bandwidth's `lifetime`,
+* no pass reads an append's blocks `L` or more windows after the one it joined (poub's `lifetime`,
   `Properties.RemoteAudit.LifetimeCapped`, proved), whose game form is this premise's hypothesis;
 * a re-key appends the block again and draws a fresh coin (`Properties.RemoteAudit.AppendsInOrder`, proved
   with the live coins uniform): each append has its own uniform coin, as in the game's coins.

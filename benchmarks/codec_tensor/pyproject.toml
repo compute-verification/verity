@@ -15,7 +15,7 @@ inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "b
           "benchmarks/word_codec/kv_receipt.py", "benchmarks/word_codec/kv_twin.py",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/bandwidth/__init__.py", "verity/core/protocols/bandwidth/tags.py",
-          "verity/core/protocols/remote_bandwidth", "verity/core/protocols/sampled_proofs/__init__.py",
+          "verity/core/protocols/poub", "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/ml/__init__.py", "verity/ml/crypto",

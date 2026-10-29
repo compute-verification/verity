@@ -175,7 +175,7 @@ def serve_dir(d: Path) -> dict[str, Any]:
         ld["client"] = client_metrics(json.loads(f.read_text())) | {"file": f.name}
         ld.update({k: ld["client"][k] for k in CLIENT})
     return {"dir": str(d), "run_id": s.get("run_id"), "commit": s.get("commit"), "protocols": s.get("protocols"),
-            "remote_session": s.get("remote_session"), "identity": identity(d),
+            "poub_session": s.get("poub_session"), "identity": identity(d),
             "scheduler": {k: v for k, v in trace[0]["config"].items() if k != "num_gpu_blocks"},
             "loads": got}
 
@@ -238,7 +238,7 @@ def table(composed: list[Path], stock: list[Path], *, allow: tuple[str, ...] = (
     parts = {k: summary([ld["windows"][k] for ld in c1]) for k in ("open_s", "close_on_loop_s", "arm_close_s")}
     span = summary([ld["span_s"] for ld in c1])
     return {"schema": "verity-bench/served-overhead/v0", "metrics": rows, "composed_parts": parts, "composed_span_s": span,
-            "composed": [{k: x[k] for k in ("dir", "run_id", "commit", "protocols", "remote_session", "scheduler")} | {"loads": x["loads"]}
+            "composed": [{k: x[k] for k in ("dir", "run_id", "commit", "protocols", "poub_session", "scheduler")} | {"loads": x["loads"]}
                          for x in cs],
             "stock": [{k: x[k] for k in ("dir", "run_id", "scheduler")} | {"loads": x["loads"]} for x in ss],
             "identity": ref, "allowed": allowed, "single_protocol": single_rows(served_table) if served_table else []}

@@ -1516,6 +1516,22 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/remote_session/": "benchmarks/poub_session/",
+        "integrations/vllm/tests/pipeline/test_serve_remote.py": "integrations/vllm/tests/pipeline/test_serve_poub.py",
+        "integrations/vllm/tests/protocols/remote_bandwidth/": "integrations/vllm/tests/protocols/poub/",
+        "integrations/vllm/tests/protocols/remote_bandwidth/test_remote_session.py": "integrations/vllm/tests/protocols/poub/test_poub_session.py",
+        "integrations/vllm/verity_vllm/pipeline/remote_session.py": "integrations/vllm/verity_vllm/pipeline/poub_session.py",
+        "integrations/vllm/verity_vllm/pipeline/serve_remote.py": "integrations/vllm/verity_vllm/pipeline/serve_poub.py",
+        "integrations/vllm/verity_vllm/protocols/remote_bandwidth/": "integrations/vllm/verity_vllm/protocols/poub/",
+        "verity/core/protocols/remote_bandwidth/": "verity/core/protocols/poub/",
+        "verity/core/protocols/remote_bandwidth/tests/remote_bandwidth_vectors.py": "verity/core/protocols/poub/tests/poub_vectors.py",
+        "verity/core/protocols/remote_bandwidth/tests/test_remote_bandwidth.py": "verity/core/protocols/poub/tests/test_poub.py",
+        "verity/core/protocols/remote_bandwidth/tests/test_remote_bandwidth_vectors.py": "verity/core/protocols/poub/tests/test_poub_vectors.py",
+        "verity/core/protocols/remote_bandwidth/tests/test_remote_coins.py": "verity/core/protocols/poub/tests/test_poub_coins.py"
+      }
     }
   ]
 }
