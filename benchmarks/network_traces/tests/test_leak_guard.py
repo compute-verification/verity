@@ -1,11 +1,10 @@
 """`leak_guard`: before custody publishes a run dir, each file in it that holds a gate run's witness (under a witness/
 directory or by a declared witness name, a witness piece raw or as hex at any offset, an archive member that does, or an
-archive the guard can't read, and with ``--public`` a file of a path the record doesn't declare public) is moved to the
-quarantine outside the run dir, and the report names it by path alone; the gate's public files, their JSON written
-again and a witness file equal to a public one are no finds, and a declared allowlist entry excuses its piece (with
-``*``, any piece of its witness file) only in the records it names. chain_record.sh moves a gate sent under inputs/ to
-the quarantine once unpacked, runs the guard on every exit and is refused by it (exit 3), and withholds out/, inputs/
-and the logs whole on a signal or when the guard can't run."""
+archive the guard can't read) is moved to the quarantine outside the run dir, and the report names it by path alone; the
+gate's public files, their JSON written again and a witness file equal to a public one are no finds, and a declared
+allowlist entry excuses its piece (with ``*``, any piece of its witness file) only in the records it names. chain_record.sh moves a gate sent under inputs/ to the
+quarantine once unpacked, runs the guard on every exit and is refused by it (exit 3), and withholds out/, inputs/ and
+the logs whole on a signal or when the guard can't run."""
 from __future__ import annotations
 
 import gzip
@@ -202,29 +201,6 @@ def test_a_wildcard_entry_excuses_every_piece_of_its_witness_file_in_its_records
     assert [p["witness"] for p in held["found"][0]["pieces_found"]] == [f"{GATE}/witness/cells.salts"]
 
 
-def test_a_record_that_declares_what_is_public_holds_nothing_else(tmp_path):
-    """With ``--public``, a file whose path no glob declares is a find whatever it holds (here a window's counts, which
-    no witness piece shows), and a declared one is still read for the witness; without it, the counts are no find."""
-    _gate(tmp_path / "G" / "g1")
-    piece, _ = _sig_piece()
-    run = tmp_path / "run"
-    files = {"answer.json": b'{"verdict": "accept"}', "chain/report/report.json": b'{"verdict": "accepted"}',
-             "chain/endpoint/report.json": b'{"requests": 3, "steps": 9, "outputs": 12}',
-             "chain/scan/answers.json": piece}
-    _put(run, files)
-    rc, report, _ = _guard(tmp_path, run, "--dry")
-    assert rc == 3 and [d["path"] for d in report["found"]] == ["chain/scan/answers.json"]
-    rc, report, _ = _guard(tmp_path, run, "--public", "answer.json", "--public", "chain/report/*", "--public",
-                           "chain/scan/answers.json")
-    assert rc == 3 and {d["path"]: d["why"] for d in report["found"]} == {
-        "chain/endpoint/report.json": ["not declared public (--public)"],
-        "chain/scan/answers.json": ["1 witness pieces"]}
-    assert sorted(p.relative_to(run).as_posix() for p in run.rglob("*") if p.is_file()) == [
-        "answer.json", "chain/report/report.json"]
-    assert (tmp_path / "q" / "files" / "chain" / "endpoint" / "report.json").read_bytes() == files[
-        "chain/endpoint/report.json"]
-
-
 def test_the_guard_refuses_a_quarantine_the_record_would_take(tmp_path):
     """A quarantine inside the run dir, a missing gates directory, or a declared entry without its reason or with a
     sha256 that is neither a digest nor ``*`` refuses the guard before it moves anything."""
@@ -243,17 +219,116 @@ def test_the_guard_refuses_a_quarantine_the_record_would_take(tmp_path):
 
 @pytest.mark.parametrize("numpy", [True, False])
 def test_the_finder_finds_a_needle_at_any_offset_and_across_chunks(monkeypatch, numpy):
-    """`Finder.stream` finds each needle at any offset, one straddling two chunks among them, with numpy and in pure
-    Python alike, and nothing that only shares a needle's first 8 bytes."""
+    """`Finder.stream` finds each needle at any offset, one straddling two chunks among them, and of needles sharing their
+    first 8 bytes the one there, with numpy and in pure Python alike, among enough needles to size its table past its
+    least; and nothing that only shares a needle's first 8 bytes."""
     if not numpy:
         monkeypatch.setattr(LG, "np", None)
     monkeypatch.setattr(LG, "CHUNK", 64)
     rnd = random.Random(3)
     a, b, c = rnd.randbytes(32), rnd.randbytes(16), rnd.randbytes(16)
-    data = rnd.randbytes(50) + a + rnd.randbytes(77) + b + c[:8] + rnd.randbytes(40)
-    f = LG.Finder({a, b, c})
-    assert f.stream(io.BytesIO(data)) == {a, b} == f.find(data)
-    assert f.stream(io.BytesIO(data[:51] + data[52:])) == {b}
+    twin = a[:8] + rnd.randbytes(24)
+    data = rnd.randbytes(50) + a + rnd.randbytes(77) + b + c[:8] + rnd.randbytes(9) + twin + rnd.randbytes(31)
+    f = LG.Finder([a, b, c, twin, *(rnd.randbytes(32) for _ in range(1 << 14))])
+    named = lambda ix: {f.items[i] for i in ix}  # noqa: E731
+    assert named(f.stream(io.BytesIO(data))) == {a, b, twin} == named(f.hits(data))
+    assert named(f.stream(io.BytesIO(data[:51] + data[52:]))) == {b, twin}
+
+
+def _held(tmp: Path) -> tuple[Path, Path, Path]:
+    """A run dir, its out/ and a hold beside it: a clean output, and one planting a salt as hex."""
+    run, hold = tmp / "run", tmp / "hold"
+    (run / "out").mkdir(parents=True)
+    _put(hold, {"report.json": b'{"verdict": "accepted"}', "n2/planted.json": json.dumps({"s": SALTS[16:32].hex()}).encode()})
+    return run, run / "out", hold
+
+
+def test_a_held_output_reaches_the_record_only_once_the_guard_passes_it(tmp_path):
+    """With --hold, the guard reads the held outputs with the run dir and moves to out/ only what it passes: a planted
+    witness value is refused (its file to the quarantine under its record path, never in out/), the clean output is
+    released, and the report says so by counts and paths."""
+    _gate(tmp_path / "G" / "g1")
+    run, out, hold = _held(tmp_path)
+    rc, report, _ = _guard(tmp_path, run, "--hold", str(hold))
+    assert rc == 3 and [(d["path"], d["held"]) for d in report["found"]] == [("out/n2/planted.json", True)]
+    assert (report["held"], report["released"]) == (2, 1)
+    assert sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()) == ["report.json"]
+    assert (tmp_path / "q" / "files" / "out" / "n2" / "planted.json").is_file()
+    assert not any(p.is_file() for p in hold.rglob("*"))
+    assert SALTS[16:32].hex() not in (tmp_path / "report.json").read_text()
+
+
+def test_the_guard_refuses_a_hold_custody_would_take(tmp_path):
+    """A hold inside the run dir, or one where a held file would replace a record file that isn't a log, refuses the guard
+    with nothing released; a held log is appended to the log already there."""
+    _gate(tmp_path / "G" / "g1")
+    run, out, hold = _held(tmp_path)
+    assert LG.main([str(run), str(tmp_path / "q"), "--hold", str(out / "h")]) == 2
+    _put(run, {"out/report.json": b"{}", "out/job.log": b"before\n"})
+    _put(hold, {"job.log": b"after\n"})
+    assert LG.main([str(run), str(tmp_path / "q"), "--hold", str(hold)]) == 2
+    assert (hold / "report.json").is_file() and (out / "report.json").read_bytes() == b"{}"
+    (out / "report.json").unlink()
+    (hold / "n2" / "planted.json").unlink()
+    assert LG.main([str(run), str(tmp_path / "q"), "--hold", str(hold), "--gates", str(tmp_path / "G")]) == 0
+    assert (out / "job.log").read_bytes() == b"before\nafter\n"
+
+
+def test_public_bundle_files_are_matched_by_sha256_and_not_scanned(monkeypatch, tmp_path):
+    """A record holding the gate's public bundle (the fetch less witness/, as a gate publishes it to any key) and a copy
+    of one of its files: each member and the copy equal to a public file is public by its sha256 and never scanned, so
+    the bytes scanned are the other records' alone; a member that differs from every public file is scanned and found."""
+    g = _gate(tmp_path / "G" / "g1")
+    bundle = {f"{GATE}/{p.relative_to(g).as_posix()}": p.read_bytes() for p in sorted(g.rglob("*"))
+              if p.is_file() and "witness" not in p.relative_to(g).parts}
+    run = tmp_path / "run"
+    _tar(run / "out" / "bundle.tgz", bundle)
+    _put(run, {"out/gates/certificates.jsonl": (g / "out" / "certificates.jsonl").read_bytes(),
+               "out/start.json": b'{"run": "c0"}'})
+    scanned = []
+    hits = LG.Finder.hits
+    monkeypatch.setattr(LG.Finder, "hits", lambda self, data: scanned.append(len(data)) or hits(self, data))
+    rc, report, _ = _guard(tmp_path, run)
+    assert (rc, report["found"], report["public_files"]) == (0, [], len(bundle) + 1)
+    assert sum(scanned) == len(b'{"run": "c0"}')
+    _tar(run / "out" / "bundle.tgz", {**bundle, f"{GATE}/out/extra.json": b"[" + _sig_piece()[0] + b"]"})
+    rc, report, _ = _guard(tmp_path, run, "--dry")
+    assert rc == 3 and [d["path"] for d in report["found"]] == ["out/bundle.tgz"] and report["public_files"] == len(bundle) + 1
+
+
+def test_the_guard_stops_past_its_budget_and_releases_nothing(monkeypatch, tmp_path):
+    """Past --budget-s on the guard's clock (a fake one here, a minute a reading) the guard stops (exit 2): nothing is
+    released and the held outputs stay in the hold, out of the record."""
+    _gate(tmp_path / "G" / "g1")
+    run, out, hold = _held(tmp_path)
+    ticks = iter(range(0, 10**6, 60))
+    monkeypatch.setattr(LG, "clock", lambda: next(ticks))
+    assert _guard_rc(tmp_path, run, "--hold", str(hold), "--budget-s", "100") == 2
+    assert not list(out.iterdir()) and (hold / "report.json").is_file() and (hold / "n2" / "planted.json").is_file()
+
+
+def _guard_rc(tmp: Path, run: Path, *extra: str) -> int:
+    return LG.main([str(run), str(tmp / "q"), "--gates", str(tmp / "G"), *extra])
+
+
+def test_a_guard_ended_by_sigterm_leaves_out_without_the_held_files(tmp_path):
+    """A slow guard (here held reading its gates, a FIFO the test closes once it has signalled, so a signal that lands
+    just before the guard's read is seen when the read returns) ended by SIGTERM, as a job's time limit ends it, exits
+    143 and releases nothing: out/ holds none of the held outputs, which stay in the hold. Without the signal the
+    empty gate would be refused (exit 2)."""
+    _gate(tmp_path / "G" / "g1")
+    run, out, hold = _held(tmp_path)
+    fifo = tmp_path / "fetch.tgz"
+    os.mkfifo(fifo)
+    p = subprocess.Popen([sys.executable, str(HERE / "leak_guard.py"), str(run), str(tmp_path / "q"), "--hold",
+                          str(hold), "--gates", str(tmp_path / "G"), "--gates", str(fifo)],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    with open(fifo, "wb"):
+        p.send_signal(signal.SIGTERM)
+    said, _ = p.communicate()
+    assert p.returncode == 143, said
+    assert "SIGTERM ended the guard: nothing more released" in said
+    assert not list(out.iterdir()) and (hold / "report.json").is_file() and (hold / "n2" / "planted.json").is_file()
 
 
 def test_the_declared_data_is_well_formed():
@@ -294,12 +369,15 @@ def test_chain_record_moves_a_sent_gate_out_and_the_guard_refuses_the_run(tmp_pa
     out, _ = p.communicate()
     q = tmp_path / "quarantine" / "r1"
     assert p.returncode == 3, out
-    assert "gate 1's inputs/gate.tgz, which holds its witness, moved to the quarantine" in out
     assert "leak guard: refused" in out and "out/n2/leak.json: 1 witness pieces" in out
+    log = (run / "out" / "job.log").read_text()
+    assert "gate 1's inputs/gate.tgz, which holds its witness, moved to the quarantine" in log
+    assert "chain: no tarball absent.tgz" in (run / "out" / "stdout.log").read_text()
     assert (q / "files" / "inputs" / "gate.tgz").is_file() and (q / "files" / "out" / "n2" / "leak.json").is_file()
     assert not (run / "inputs" / "gate.tgz").exists() and not (run / "out" / "n2" / "leak.json").exists()
     report = json.loads((run / "out" / "leak-guard.json").read_text())
     assert report["gate_runs"] == [GATE] and [d["path"] for d in report["found"]] == ["out/n2/leak.json"]
+    assert report["held"] == report["released"] == 2 and list((q / "held").iterdir()) == []
     assert list((tmp_path / "tmp").iterdir()) == []
 
 
@@ -329,3 +407,25 @@ def test_chain_record_withholds_the_record_on_a_signal(tmp_path):
     assert "SIGTERM ended the run before the leak guard read it" in out
     assert sorted(x.name for x in run.iterdir()) == []
     assert (tmp_path / "quarantine" / "r1" / "files" / "inputs" / "gate.tgz").is_file()
+
+
+def test_chain_record_releases_nothing_when_sigterm_ends_its_guard(tmp_path):
+    """A timeout's SIGTERM to the job's process group while the guard reads (held here unpacking one more gate, a FIFO the
+    test closes once it has signalled) ends the guard and the job (exit 143) with nothing released: the run dir is left
+    empty, and the job's outputs and logs stay in the hold, out of the record."""
+    run = _sent(tmp_path)
+    fifo = tmp_path / "slow.tgz"
+    os.mkfifo(fifo)
+    py = tmp_path / "py"
+    py.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@" --gates "{fifo}"\n')
+    py.chmod(0o755)
+    p = _chain(tmp_path, "gate.tgz absent.tgz", py=str(py), start_new_session=True)
+    with open(fifo, "wb"):
+        os.killpg(p.pid, signal.SIGTERM)
+    out, _ = p.communicate()
+    q = tmp_path / "quarantine" / "r1"
+    assert p.returncode == 143, out
+    assert "SIGTERM ended the leak guard (exit 143)" in out and "nothing released from" in out
+    assert sorted(x.name for x in run.iterdir()) == []
+    assert sorted(x.name for x in (q / "held").iterdir()) == ["job.log", "stdout.log"]
+    assert not (q / "files" / "out" / "job.log").exists()
