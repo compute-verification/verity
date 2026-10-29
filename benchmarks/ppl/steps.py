@@ -14,6 +14,7 @@ A new intervention is one more function here (or in any module `run.py --plugin`
 `@attention_step`; `spec.py` says what it receives."""
 from __future__ import annotations
 
+import atexit
 import math
 import zlib
 
@@ -1157,6 +1158,201 @@ def fp_linear(mm, nxt, *, fmt: str, scale: str, keep_weight: bool = False):
         return torch.cat(by_rows(lambda r: fake_quant(r, fmt, scale, amax=amax), w))
 
     return nxt(mm.replace(x=x, w=mm.cached("fp", weights)))
+
+
+#: the pinned float SSN (`ssnfp`): data entries in step 0 and in each later step (one MMA's k less the code lanes, then
+#: less the one coin lane), the word's fraction bits at the pinned binade, the exact powers of two an operand holds, and
+#: the weight-side noise scale (C 2^sigma must be a format value for |C| <= 6)
+SSNFP = {"e4m3": {"first": 28, "later": 31, "fb": 13, "pow2": (-9, 8), "sigma": 6},
+         "bf16": {"first": 12, "later": 15, "fb": 23, "pow2": (-133, 127), "sigma": 0}}
+SSNFP_BOUNDS = ("partial", "l1", "cs", "holder")
+#: elements a (rows, columns, k) block of the emulation holds
+SSNFP_BLOCK = 1 << 25
+
+
+def ssnfp_layout(fmt: str, k: int) -> tuple[int, torch.Tensor]:
+    """S steps and each data entry's step: step 0 holds `first` entries, every later step `later`."""
+    c = SSNFP[fmt]
+    s = 1 + max(0, -(-(k - c["first"]) // c["later"]))
+    step = torch.clamp((torch.arange(k) - c["first"]) // c["later"] + 1, min=0)
+    return s, step
+
+
+def ssnfp_bound(fmt: str, xv: torch.Tensor, wv: torch.Tensor, bound: str) -> dict:
+    """Each row's bound on |every product| and |every step-boundary partial sum| of xv wv^T (format values, float64):
+    `partial` the exact maximum (an oracle: it is the product itself), `l1` sum_k |x_ik| max_j |w_jk| (|X| against one
+    extra weight column), `cs` |x_i|_2 max_j |w_j|_2, `holder` |x_i|_inf max_j |w_j|_1. Every one is returned, with the
+    chosen one under "dmax"."""
+    m, k = xv.shape
+    s, step = ssnfp_layout(fmt, k)
+    ax, aw = xv.abs(), wv.abs()
+    out = {"l1": ax @ aw.amax(0), "cs": xv.norm(dim=1) * wv.norm(dim=1).max(),
+           "holder": ax.amax(1) * aw.sum(1).max()}
+    part = (ax * aw.amax(0)).amax(1)
+    rows = max(1, SSNFP_BLOCK // max(1, wv.shape[0] * s))
+    for a in range(0, m, rows):
+        xb = xv[a:a + rows]
+        acc = torch.zeros(xb.shape[0], wv.shape[0], dtype=torch.float64, device=xv.device)
+        best = torch.zeros(xb.shape[0], dtype=torch.float64, device=xv.device)
+        for t in range(s):
+            sel = step == t
+            acc += xb[:, sel] @ wv[:, sel].T
+            best = torch.maximum(best, acc.abs().amax(1))
+        part[a:a + rows] = torch.maximum(part[a:a + rows], best)
+    out["partial"] = part
+    out["dmax"] = out[bound]
+    return out
+
+
+def ssnfp_product(fmt: str, xv: torch.Tensor, wv: torch.Tensor, dmax: torch.Tensor, nmax: int):
+    """The pinned word's data part, exactly: u_i = 2^(p_i - fb) with 2^p_i > 2 (dmax_i + nmax u_i), and
+    E4M3 (k32): sum_k trunc_u(x_ik w_jk), each product truncated toward zero to the row's grid u (the 14-bit adder at the
+    accumulator's exponent p; the sum is exact in the binade). BF16 (k16): per step, floor_u of the step's products each
+    truncated to u / 4 (the 26-bit adder), as the 24-bit word truncates the positive sum. Returns (data part, u, p,
+    unpinnable rows), the data part in float64 on the format's values."""
+    c = SSNFP[fmt]
+    fb, (lo, hi), sigma = c["fb"], c["pow2"], c["sigma"]
+    need = 2 * dmax / (1 - 2 * nmax * 2.0 ** -fb)
+    p = torch.ceil(torch.log2(need.clamp(min=2.0 ** -60))).long()
+    unpinnable = (p - fb - sigma) > hi
+    p = torch.clamp(p - fb - sigma, min=lo) + fb + sigma
+    u = torch.exp2((p - fb).double())
+    m, k = xv.shape
+    n = wv.shape[0]
+    s, _ = ssnfp_layout(fmt, k)
+    x32, w32 = xv.float(), wv.float()
+    y = torch.zeros(m, n, dtype=torch.float64, device=xv.device)
+    rows = 8
+    if fmt == "e4m3":
+        # 256 truncated products of |x w / u| < 2^12 sum exactly in FP32
+        kc = 256
+        for a in range(0, m, rows):
+            inv = (1.0 / u[a:a + rows]).float()[:, None, None]
+            for b in range(0, k, kc):
+                y[a:a + rows] += _ssnfp_kernel("e4m3")(x32[a:a + rows, b:b + kc], w32[:, b:b + kc], inv).double()
+        return y * u[:, None], u, p, unpinnable
+    # step 0's `first` entries padded in front to `later`, so every step is one block of `later`
+    pad = c["later"] - c["first"]
+    x32 = torch.nn.functional.pad(x32, (pad, s * c["later"] - pad - k))
+    w32 = torch.nn.functional.pad(w32, (pad, s * c["later"] - pad - k))
+    sc = 16
+    for a in range(0, m, rows):
+        inv = (4.0 / u[a:a + rows]).float()[:, None, None]
+        for t in range(0, s, sc):
+            e = slice(t * c["later"], min(s, t + sc) * c["later"])
+            y[a:a + rows] += _ssnfp_kernel("bf16")(x32[a:a + rows, e], w32[:, e], inv)
+    return y * u[:, None], u, p, unpinnable
+
+
+def _ssnfp_e4m3(x, w, inv):
+    return torch.trunc(x[:, None, :] * w[None, :, :] * inv).sum(-1)
+
+
+def _ssnfp_bf16(x, w, inv):
+    q = torch.trunc(x[:, None, :] * w[None, :, :] * inv).double()
+    q = q.reshape(x.shape[0], w.shape[0], -1, SSNFP["bf16"]["later"]).sum(-1)
+    return torch.floor(q / 4).sum(-1)
+
+
+_SSNFP_KERNELS: dict = {}
+
+
+def _ssnfp_kernel(fmt: str):
+    """The fused (torch.compile) form of one block's truncated products, or the eager one where compiling fails."""
+    if fmt not in _SSNFP_KERNELS:
+        eager = _ssnfp_e4m3 if fmt == "e4m3" else _ssnfp_bf16
+        try:
+            fn = torch.compile(eager, dynamic=True)
+            probe = torch.ones(2, 30 if fmt == "bf16" else 4)
+            fn(probe, probe, torch.ones(2, 1, 1))
+        except Exception:  # noqa: BLE001 (no compiler on this node: the eager form is the same arithmetic)
+            fn = eager
+        _SSNFP_KERNELS[fmt] = fn
+    return _SSNFP_KERNELS[fmt]
+
+
+def ssnfp_noise(mm, fmt: str, m: int, n: int, k: int) -> tuple[torch.Tensor, int]:
+    """The served noise in units of u (m x n) and its bound: step 0's four code lanes carry +-2^r against C 2^sigma
+    (C the fused linear's injective base-13 code, `ssn_a_w0`), each later step's coin lane +-2^r against 2^sigma; every
+    sign a fresh coin, so the noise is zero-mean with no centring."""
+    s, _ = ssnfp_layout(fmt, k)
+    off = fused_offset(mm.name, k, n)
+    code = mm.shared(("ssn_code", n, off, str(mm.device)), lambda: ssn_a_w0(n, SSN_DATA, off)[0].to(mm.device))
+    signs = 2 * mm.coins((m, 4 + s - 1), 2).double() - 1
+    noise = signs[:, :4] @ code + signs[:, 4:].sum(1, keepdim=True)
+    return noise, 24 + s - 1
+
+
+SSNFP_STATS: list = []
+
+
+@atexit.register
+def _ssnfp_dump() -> None:
+    import json
+    import os
+    run = os.environ.get("RESEARCH_RUN_DIR")
+    path = os.environ.get("SSNFP_STATS") or (f"{run}/out/ssnfp_stats" if run else None)
+    if path and SSNFP_STATS:
+        with open(f"{path}.{os.getpid()}.jsonl", "a") as f:
+            for r in SSNFP_STATS:
+                f.write(json.dumps(r) + "\n")
+        SSNFP_STATS.clear()
+
+
+def _check_ssnfp(p):
+    if p["fmt"] not in SSNFP:
+        raise ValueError(f"ssnfp.fmt is one of {sorted(SSNFP)}")
+    if p["scale"] not in ("tensor", "channel"):
+        raise ValueError("ssnfp.scale is tensor or channel")
+    if p["bound"] not in SSNFP_BOUNDS:
+        raise ValueError(f"ssnfp.bound is one of {SSNFP_BOUNDS}")
+
+
+@linear_step("ssnfp", phase="quantize", seeded=lambda p: p["noise"], check=_check_ssnfp, source="N-FP8")
+def ssnfp_linear(mm, nxt, *, fmt: str = "e4m3", scale: str = "channel", bound: str = "partial", noise: bool = True):
+    """Served sparse noise on the H200's float MMA, the binade-pinned design (benchmarks/pouw/ssn_fp8): operands on
+    `fmt` (e4m3 under `scale` as `fp`; bf16 rounded to nearest even, unscaled), each row's accumulator started at
+    1.5 2^p_i, p_i from the row's `bound` (`ssnfp_bound`) so every k-step word stays in [2^p_i, 2^(p_i + 1)), and the
+    noise (`ssnfp_noise`, unit u_i = 2^(p_i - fb)) served; the epilogue subtracts 1.5 2^p_i. The product is the MMA's
+    exactly (`ssnfp_product`), not the FP32 product. `noise = false` keeps the pinned grid and drops the noise."""
+    if fmt == "e4m3":
+        top = FORMATS["e4m3"][0]
+        x = mm.x.float()
+        sx = (x.abs().amax() if scale == "tensor" else x.abs().amax(-1, keepdim=True)).clamp(min=1e-30) / top
+        xv = to_format(x / sx, "e4m3")
+
+        def weights():
+            w = mm.weight().float()
+            sw = (w.abs().amax() if scale == "tensor" else w.abs().amax(-1, keepdim=True)).clamp(min=1e-30) / top
+            return to_format(w / sw, "e4m3"), sw
+    else:
+        sx = torch.ones(1, device=mm.device)
+        xv = mm.x.to(torch.bfloat16).float()
+
+        def weights():
+            return mm.weight().to(torch.bfloat16).float(), torch.ones(1, device=mm.device)
+    wv, sw = mm.cached(f"ssnfp_{fmt}_{scale}", weights)
+    xv, wv = xv.double(), wv.double()
+    m, k = xv.shape
+    n = wv.shape[0]
+    nz, nmax = ssnfp_noise(mm, fmt, m, n, k) if noise else (None, 24 + ssnfp_layout(fmt, k)[0] - 1)
+    b = ssnfp_bound(fmt, xv, wv, bound)
+    data, u, p, unpinnable = ssnfp_product(fmt, xv, wv, b["dmax"], nmax)
+    y = data + (nz * u[:, None] if noise else 0)
+    exact = xv @ wv.T
+    ref = exact.norm().clamp(min=1e-300)
+    live = b["partial"] > 0
+    SSNFP_STATS.append({
+        "where": mm.where, "m": m, "n": n, "k": k, "unpinnable": int(unpinnable.sum()),
+        "err_data": float((data - exact).norm() / ref), "err_noise": float((nz * u[:, None]).norm() / ref) if noise else 0.0,
+        "err_total": float((y - exact).norm() / ref),
+        "loose_bits": {name: float(torch.log2(b[name][live] / b["partial"][live]).mean()) if live.any() else 0.0
+                       for name in SSNFP_BOUNDS},
+        "headroom_bits": float((p[live].double() - torch.log2(exact[live].abs().amax(1).clamp(min=1e-300))).mean())
+        if live.any() else 0.0})
+    if len(SSNFP_STATS) >= 64:
+        _ssnfp_dump()
+    return (y * sx * (sw.reshape(1, -1) if sw.dim() == 2 else sw)).float()
 
 
 @attention_step("fp", phase="quantize", check=_check_fp, source="PPL-COMPILE")

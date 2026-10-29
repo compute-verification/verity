@@ -1,0 +1,8 @@
+description = "served sparse noise on the H200's FP8 MMA, binade-pinned (ssnfp): fp8-e4m3-channel-v1's operands, each row's accumulator at 1.5 2^p with p from the row's l1 bound, every product truncated to the row's grid 2^(p - 13) as the k32 MMA's 14-bit adder does, and the +-1 coin lanes' noise served at that unit; lm_head and attention bf16"
+plain = "fp8-e4m3-channel-v1"
+
+[[linear]]
+step = "ssnfp"
+fmt = "e4m3"
+scale = "channel"
+bound = "l1"

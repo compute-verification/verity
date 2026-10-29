@@ -1,0 +1,7 @@
+description = "plain FP8 E4M3 linears, no PoUW: one scale per tensor for activations and for weights, rounded to nearest, the product of the format's values in FP32; lm_head and attention bf16 (int8-channel127-v1's scope)"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "fp"
+fmt = "e4m3"
+scale = "tensor"

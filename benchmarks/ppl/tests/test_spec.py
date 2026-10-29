@@ -81,6 +81,10 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
     for name in ("noise-ef1", "noise-ef2", "noise-ef4", "noise-ef32", "noise-x1-none", "ncp-dither", "ncp-dither-both",
                  "ssn-a-b1-v1", "ssn-a-b4-v1", "ssn-1l-b1-v1", "ssn-1l-b4-v1", "ssn2-b1-v1", "raw-byte-served-v1"):
         want[name] = ("linears", stock, True)
+    want["fp8-e4m3-channel-v1"] = want["fp8-e4m3-tensor-v1"] = ("linears", stock, False)
+    want["ssnfp-bf16-l1-v1"] = ("linears", stock, True)
+    for b in ("partial", "l1"):
+        want[f"ssnfp-e4m3-channel-{b}-v1"] = ("linears", "fp8-e4m3-channel-v1", True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
