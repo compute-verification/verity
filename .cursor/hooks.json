@@ -6,7 +6,8 @@
     ],
     "preToolUse": [
       {"command": "sh tools/agent-guard/hook.sh task_hook.py", "matcher": "Task", "timeout": 10},
-      {"command": "sh tools/agent-guard/hook.sh task_hook.py", "matcher": "CallDynamicTool", "timeout": 10}
+      {"command": "sh tools/agent-guard/hook.sh task_hook.py", "matcher": "CallDynamicTool", "timeout": 10},
+      {"command": "sh tools/agent-guard/hook.sh task_hook.py", "matcher": "^MCP:", "timeout": 10}
     ]
   }
 }
