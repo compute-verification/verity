@@ -26,6 +26,19 @@ theorem plays_verified {node : Audited} {r : Replay} {a b e : ByteArray} (h : Pl
   rw [hc, hl] at hrun
   exact ⟨hq, s, hrun, hout⟩
 
+/-- Where the subprotocol accepts bytes that play the record on the node, the verifier records the session: the check's
+replay ends with a record (`acceptIsVerified`), and it is the record's run on the node (`run_of_replay`). -/
+theorem plays_summary {node : Audited} {r : Replay} {a b e : ByteArray} (h : Plays node r a b e) :
+    ∃ sm, r.summary node = some sm := by
+  obtain ⟨c, ev, -, -, hc, -, hl, hq, pub, prof, hacc⟩ := h
+  obtain ⟨-, s, sm, -, hrep, -, -, hsm, -⟩ := acceptIsVerified _ _ _ _ _ hacc
+  obtain ⟨params, hq', hrun⟩ := Properties.RemoteAudit.P2Line.SecurityProofs.run_of_replay hrep
+  have e : RemoteAudit.P2Session.requestOf c.held r.request = .ok node.params := by rw [hc]; exact hq
+  obtain rfl : params = node.params := Except.ok.inj (hq'.symm.trans e)
+  rw [hc, hl] at hrun
+  have hrun' : r.run node = .ok s := hrun
+  exact ⟨sm, by simp only [Replay.summary, hrun', hsm]⟩
+
 /-- **PoUB-P2's line of record at the subprotocol** (`LineHeldAtSubprotocol` at the subprotocol's acceptance), proved:
 its event is inside `P2Line.SecurityProofs.LineHeld`'s (`plays_verified`), on the same premises and bound. -/
 theorem lineHeldAtSubprotocol : LineHeldAtSubprotocol Plays Verified Replay.summary := by

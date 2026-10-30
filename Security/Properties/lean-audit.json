@@ -56,6 +56,7 @@
   "Properties.RemoteAudit.Component",
   "Properties.RemoteAudit.P2Subprotocol",
   "Properties.RemoteAudit.P2Line",
+  "Properties.RemoteAudit.P2Line.Premises",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
   "Properties.Challenger",
@@ -3145,7 +3146,8 @@
    "Definitions.NetworkCertifier.Premises",
    "Definitions.Accounting.Assumptions",
    "Properties.RemoteAudit.Line.Premises",
-   "Properties.RemoteAudit.Schedule"
+   "Properties.RemoteAudit.Schedule",
+   "Properties.RemoteAudit.P2Line.Premises"
   ],
   "statements": ["Properties"],
   "properties": {
