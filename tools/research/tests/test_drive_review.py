@@ -17,7 +17,7 @@ import pytest
 import research.queue as Q
 from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP
-from research.queue import QueueError, StoreLabels, label_target, lean_change
+from research.queue import PR, QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
 from test_queue import World, _git
 from test_queue_drive import Harness, _failed_run, _killed_run, _live_run, _steps_run, _tip
@@ -103,13 +103,13 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
     assert "lean-agreement" in pl["verified_as"]["steps"]         # ci's baseline passed it, and nothing it checks changed since
 
 
-def test_an_unreviewed_or_held_member_stops_the_prefix_below_it(world, monkeypatch):
+def test_an_unreviewed_member_new_to_next_or_a_held_one_stops_the_prefix_below_it(world, monkeypatch):
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
     h.review(1)
     h.review(3)
-    assert h.tick().startswith("landed #1"), world.logs
+    assert h.tick().startswith("landed #1"), world.logs        # the lift moves only what `next` held before the sync
     assert _subject(world, "main").startswith("Queue: #1")
     h.review(2)
     h.review(2, "hold", by="other", ref="reads a stale fixture")
@@ -497,6 +497,19 @@ def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_c
     assert h.q.chain()[0].pr == 2                                         # proofs only: non-Lean first puts it below
 
 
+def test_a_two_demos_lean_change_lands_on_its_verdict_and_another_waits(world, monkeypatch):
+    """A PR whose title says "two demos" lands on its land verdict with no Lean check first (its records passed at its
+    ready mark, and the after-landing lean-audit checks it); any other lock change still waits for one."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, head := world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.prs[1] = PR(1, head, "Two demos: the lock", "Lane `lane-1`.")
+    world.gh.put(2, world.change({"pkg/lean-audit.json": "{\n}"}, base=head))
+    for n in (1, 2):
+        h.review(n)
+    assert h.tick().startswith("landed #1"), world.logs
+    assert h.launched and h.launched[0][0] != head, world.logs              # #2's own check, never #1's
+
+
 def test_a_lean_check_is_stacked_at_nexts_top_for_a_lean_change_above_a_running_one(world, monkeypatch):
     """Lean changes that come onto `next` above a running Lean check's commit don't wait for it to pass, then for a whole
     check of their own (~1 h).  While it runs, one is stacked at `next`'s top, reviewed or not, with no free check slot needed,
@@ -630,7 +643,7 @@ def test_members_that_change_no_lean_go_below_a_lean_change_and_land_while_its_l
 def test_reviewed_members_that_change_no_lean_above_a_lean_change_at_the_bottom_go_below_it_before_its_check_runs(
         world, monkeypatch):
     """A Lean change already at the bottom of `next` would hold every reviewed member above it for its Lean check: non-Lean
-    first orders only what a sync merges anyway, and the check launches on the reviewed prefix's top, holding them all.  While no Lean check of `next` runs, they go below it and land that tick, and its check starts on
+    first orders only what a sync adds, and the check launches on the reviewed prefix's top, holding them all.  While no Lean check of `next` runs, they go below it and land that tick, and its check starts on
     what is left.  Once it runs, nothing moves below it: one reviewed after waits above it, and lands on its pass."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
@@ -644,7 +657,7 @@ def test_reviewed_members_that_change_no_lean_above_a_lean_change_at_the_bottom_
     assert h.tick().startswith("landed #3"), world.logs
     assert _subject(world, "main").startswith("Queue: #3") and _subject(world, "main^1").startswith("Queue: #2")
     assert [m.pr for m in h.q.chain()] == [1] and h.launched == [(_tip(world), "m1", False)] and h.cancelled == []
-    assert any("#2 #3 (reviewed, no Lean change) go to the bottom" in x for x in world.logs), world.logs
+    assert any("#2 #3 #1 (reviewed) go to the bottom" in x for x in world.logs), world.logs
     world.gh.put(4, world.change({"c.txt": "4\n"}))
     h.review(4)
     assert not h.tick().startswith("landed")
@@ -683,6 +696,88 @@ def test_a_lift_leaves_an_unreviewed_member_a_pr_stacked_on_the_lean_change_and_
     h.review(2)
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1, 2, 3] and len(h.launched) == 1, world.logs
+
+
+def test_an_unreviewed_member_below_reviewed_ones_no_longer_stops_them_landing(world, monkeypatch):
+    """A member with no land verdict held every reviewed member above it, deep in `next`.  The members with a land verdict
+    go below those waiting for one, and land that tick; the one waiting holds only itself."""
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3]
+    h.review(2)
+    h.review(3)
+    assert h.tick().startswith("landed #3"), world.logs
+    assert _subject(world, "main").startswith("Queue: #3") and _subject(world, "main^1").startswith("Queue: #2")
+    assert [m.pr for m in h.q.chain()] == [1]
+    assert any("#2 #3 (reviewed) go to the bottom" in x for x in world.logs), world.logs
+    h.review(1)
+    assert h.tick().startswith("landed #1") and _main(world) == _tip(world)
+
+
+def test_a_held_member_still_stops_the_members_above_it_a_hold_is_a_verdict(world, monkeypatch):
+    """Nothing moves past a held member: what is below it lands, past an unreviewed one, and what is above it waits."""
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    h.review(3, "hold", by="other", ref="reads a stale fixture")
+    h.review(4)
+    assert h.tick().startswith("landed #2"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 3, 4]
+    out = h.tick()
+    assert out.startswith("nothing reviewed lands: #1"), out
+    assert [m.pr for m in h.q.chain()] == [1, 3, 4] and _subject(world, "main").startswith("Queue: #2")
+
+
+def test_reviewed_first_keeps_a_stacked_pr_after_the_pr_it_contains(world, monkeypatch):
+    """A reviewed PR stacked on an unreviewed one stays above it; one stacked on a reviewed one goes down after it."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}, base=world.gh.prs[1].head))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    world.gh.put(4, world.change({"d.txt": "4\n"}, base=world.gh.prs[3].head))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3, 4]
+    for n in (2, 3, 4):
+        h.review(n)
+    assert h.tick().startswith("landed #4"), world.logs
+    assert _subject(world, "main").startswith("Queue: #4") and _subject(world, "main^1").startswith("Queue: #3")
+    assert [m.pr for m in h.q.chain()] == [1, 2]
+    h.review(1)
+    assert h.tick().startswith("landed #2") and _main(world) == _tip(world)
+
+
+def test_a_member_whose_labels_cant_be_read_stops_the_lift_not_the_tick(world, monkeypatch):
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    h.review(3)
+    reviews = h.d.reviews
+
+    def stale(pr, head):
+        if pr == 3:
+            raise QueueError(f"STALE: the labels of pr:3@{head} weren't pulled from the store's remote")
+        return reviews(pr, head)
+
+    h.d.reviews = stale
+    assert h.tick().startswith("landed #2"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 3]
+    assert any("the lift stops below #3: STALE" in x for x in world.logs), world.logs
+
+
+def test_reviewed_first_off_keeps_an_unreviewed_member_where_it_is(world, monkeypatch):
+    h = Review(world, monkeypatch, reviewed_first=False)
+    for n, f in ((1, "a.txt"), (2, "b.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    assert h.tick().startswith("nothing reviewed lands: #1"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 2]
 
 
 @pytest.mark.parametrize("fault", ["enospc", "after-audit"])
@@ -1910,6 +2005,69 @@ def test_a_passed_lean_check_holds_next_until_it_lands_and_an_ejection_below_it_
     h.tick()
     chain = h.q.chain()
     assert [m.pr for m in chain] == [1, 3] and chain[0].commit == one and top not in {m.commit for m in chain}, world.logs
+
+
+def _two_lean_checks(world, monkeypatch, higher: str) -> tuple[Review, list[str]]:
+    """Five unreviewed members on `next`, a Lean check running at #2's commit and one at #4's in state ``higher`` (running or
+    passed): (the harness, the chain's commits)."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    for n in range(1, 6):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    h.tick()
+    commits = [m.commit for m in h.q.chain()]
+    h.d.hand_lean(commits[1], "ci")
+    h.d.hand_lean(commits[3], "ci")
+    if higher == "passed":
+        rid = h.lean_ids()[1]
+        h.run_state[rid] = ("done", 0, None)
+        h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    h.tick()
+    lean = h.d.q.load_state()["drive"]["lean"]
+    assert lean[commits[1]]["state"] is None and lean[commits[3]]["state"] == (None if higher == "running" else "passed")
+    assert [m.commit for m in h.q.chain()] == commits, world.logs
+    return h, commits
+
+
+@pytest.mark.parametrize("higher", ["running", "passed"])
+def test_next_stays_up_to_the_higher_of_two_lean_checks_and_first_goes_above_it(world, monkeypatch, higher):
+    """A sync that put a `--first` fix and a re-head above the lower check's commit only would take the higher one's commit off
+    `next`, and with it a pass no land verdict yet lands (its prefix unreviewed), or a check mid-audit."""
+    h, commits = _two_lean_checks(world, monkeypatch, higher)
+    world.gh.put(5, world.change({"f5.txt": "five\n"}))                    # above both checks: it moves to the tip
+    world.gh.put(6, world.change({"f6.txt": "6\n"}))
+    h.q.first = (6,)
+    h.tick()
+    chain = h.q.chain()
+    assert [m.commit for m in chain[:4]] == commits[:4], world.logs
+    assert [m.pr for m in chain] == [1, 2, 3, 4, 6, 5] and h.cancelled == [], world.logs
+    assert commits[3] in h.d.q.load_state()["drive"]["lean"]
+
+
+@pytest.mark.parametrize("leaves", ["ejected", "re-headed"])
+def test_a_member_below_the_lower_lean_check_that_leaves_rebuilds_next_from_it(world, monkeypatch, leaves):
+    """The passed checks hold `next` only while every member up to them stays: one ejected, or pushed to a new head, below
+    the lower one leaves, and `next` is rebuilt from it."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    for n in range(1, 6):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    h.tick()
+    commits = [m.commit for m in h.q.chain()]
+    for c in (commits[2], commits[3]):
+        h.d.hand_lean(c, "ci")
+        rid = h.lean_ids()[-1]
+        h.run_state[rid] = ("done", 0, None)
+        h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+        h.tick()
+    assert {c: r["state"] for c, r in h.d.q.load_state()["drive"]["lean"].items()} == {commits[2]: "passed", commits[3]: "passed"}
+    if leaves == "ejected":
+        world.gh.ready.discard((2, world.gh.prs[2].head))
+    else:
+        world.gh.put(2, world.change({"f2.txt": "two\n"}))
+    h.tick()
+    chain = h.q.chain()
+    assert chain[0].commit == commits[0] and chain[1].commit != commits[1], world.logs
+    assert [m.pr for m in chain] == ([1, 3, 4, 5] if leaves == "ejected" else [1, 3, 4, 5, 2]), world.logs
+    assert not {commits[2], commits[3]} & {m.commit for m in chain}
 
 
 def test_an_eject_off_drive_leaves_next_under_a_running_lean_check_and_records_the_ejection(world, monkeypatch, capsys):

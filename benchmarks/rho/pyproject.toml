@@ -9,7 +9,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # tests/test_hardware.py holds the locations to the census's devices and the world fleets to its adversary.
 # test_classes and test_attacks cross-check the threaded class and the shard attack against benchmarks/nci's
 # implementations, imported by path (slowdown.py imports catalog.py). families.Nci reads the NCI library's algorithms
-# and their traits.
+# and their traits. test_envelopes pins theorem.multiple_bound to Lean's remoteDampener and DampenerRemote's text.
 inputs = ["Security/lean-audit.json", "Security/Properties/lean-audit.json", "benchmarks/nci/tiers.py",
+          "Security/Definitions/Nci/Remote.lean", "Security/Definitions/Nci/Guarantees/Remote.lean",
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/nci/slowdown.py",
           "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json"]

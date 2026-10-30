@@ -1,7 +1,7 @@
 """The matmul chain's table, rendered on demand from a recorded run's ``chain.json`` (`chain.py`) and the code: nothing it
 prints is stored, in Git or the evidence store.
 
-  python render.py art:XXXXXXXX [--json]      the run's tree from the evidence store (``research data fetch``)
+  python render.py art:XXXXXXXX [--json]      the run's tree from the evidence store
   python render.py OUT/chain.json [--json]
 
 Per point and arm: the chain's time (the median over reps), its overhead over its divisor (`sweep.divisor`: the fastest native
@@ -395,7 +395,7 @@ def storage_lines(st: dict, memory: float | None, label: str = "") -> list[str]:
     lines.append(f"S_cert's basis: {C.S_BASIS}.")
     if st["stored"] is not None:
         lines.append(f"The deployed store is {_blocks(st['blocks'])} blocks, |C| = {_gb(st['stored'])} GB of the card's "
-                     f"{_f(memory and memory / 1e9, '.0f')} GB (M); lane ra-pous-scale is sizing the store to the device.")
+                     f"{_f(memory and memory / 1e9, '.0f')} GB (M); the store is not yet sized to the device.")
     lines.append(f"Capacity {C.RESIDUAL}: M − S_cert = {_gb(cap['residual'])} of {_gb(cap['capacity'])} GB = honest overhead "
                  f"M − |C| {_gb(cap['honest_overhead'])} GB + soundness slack |C| − S_cert {_gb(cap['soundness_slack'])} GB.")
     return lines

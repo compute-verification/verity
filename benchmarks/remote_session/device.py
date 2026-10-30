@@ -88,7 +88,8 @@ OPEN_BATCH = 128
 
 def stream_head(seed: bytes) -> bytes:
     """The head of row 0's stream of a pass's signs (`skr.sign_bits`), its last byte the row: `rs_signs16`'s input."""
-    key = randomness.derive(rb._digest(seed, "a pass seed"), skr.SIGN_DOMAIN, {"tag": skr.KIND, "k": skr.ROWS, "n": BLOCK})
+    key = randomness.derive(rb._digest(seed, "a pass seed"), rb.SIGN_DOMAIN,
+                            {"tag": rb.SKETCH_SHA512, "k": skr.ROWS, "n": BLOCK})
     return randomness._STREAM + key.value + randomness.frame(randomness.frame("row") + randomness.frame(0))
 
 
@@ -668,7 +669,7 @@ class DeviceStore:
         dom = rb.domain(seed, self.plan)
         lib.set_tree(rb.prefix(seed), rb.DIGEST_BYTES * PER_LEAF, rb.DIGEST_BYTES * PER_LEAF, dom.domain_id,
                      SALT_DOMAIN + self.key + seed, self.blocks)
-        lib.call("rb_sketch_set", skr.prefix(seed))
+        lib.call("rb_sketch_set", rb.sketch_prefix(seed))
 
     def launch(self, i: int, after: Ticket | None, seed: bytes | None = None) -> Ticket:
         """Queue pass i chained from `after`'s root (None: the window's previous root, `start_chain`) on every GPU,

@@ -23,7 +23,7 @@ execution and default seed from `serve.json`.  A window's advice is `window_advi
 one before it runs on at its carried state, and `carry_of` holds that state to the endpoint's records, the advice of the last
 window before K that ran steps (`windows.jsonl`), whose close K must open on (`window_advice.follows`); K is refused (exit 2) when
 it doesn't, or when it carries a request in and that advice isn't there.  The Build dirs go into `--out` itself (default the
-window's row dir, `windows/w<K>/`, beside its sealed `commit/`), as `build_request_*/`, with `manifest.json`: each request's
+window's workload dir, `windows/w<K>/`, beside its sealed `commit/`), as `build_request_*/`, with `manifest.json`: each request's
 Program digest and Build dir, the registration the advice is bound to, and the carry.
 
     cd integrations/vllm; PYTHONPATH=.:../.. /workspace/jobs/venv312/bin/python tools/advice_compile.py RUN --out DIR [--partial]

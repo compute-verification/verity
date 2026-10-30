@@ -77,7 +77,7 @@ def shape_of(r: dict) -> tuple[int, ...]:
 
 def execution_of_workload(w: Workload) -> str:
     """The row's declared execution label: `sweep.execution` when present, else the `sweep.row_id` suffix (`…__bi-eager`,
-    `…__bi-compiled`, `…__bi-eager-fa2`) -- exec's EXEC-02 `execution_of_workload` over the workload record, kept local so the
+    `…__bi-compiled`, `…__bi-eager-fa2`) -- `execution_of_workload` over the workload record, kept local so the
     Build does not import the adapter.  The record has no top-level `execution` or `row_id` (no writer writes one), so a workload
     carrying either is refused by name before it gets here."""
     sweep = w.sweep or {}
@@ -162,7 +162,7 @@ def workload_lag(manifest: dict, shapes: dict) -> dict:
         return {"schema": "verity/workload-program/v1/lag", "value": None, "refusal": f"the manifest's target block does not parse as a TargetProfile: {e}"}
     decl = tp.async_scheduling_declaration()
     out = {"schema": "verity/workload-program/v1/lag", **decl,
-           "rule": "LAG is a required declared specialization parameter of the workload Program (static `lag` of Workload_v1, in the "
+           "rule": "R17-1: LAG is a required declared specialization parameter of the workload Program (static `lag` of Workload_v1, in the "
                    "digest), coupled to the serving profile's RESOLVED async_scheduling; Build and GM-01 consume this declaration, the "
                    "record header must attest the same resolved value (G1), never inferred from the trace; the post-EOS step under LAG=1 "
                    "is active internal computation whose sampled token is not a served output",
@@ -229,10 +229,10 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
         return {"schema": "verity/workload-program/v1/moe_construction", "value": None, "refusal": f"the manifest's target block does not parse as a TargetProfile: {e}"}
     decl = tp.moe_construction_declaration()
     out = {"schema": "verity/workload-program/v1/moe_construction", **decl,
-           "rule": "the fused-MoE construction is a declared-and-bound Program static (TargetProfile.moe_construction; "
+           "rule": "R17-42 / R17-45 (a): the fused-MoE construction is a declared-and-bound Program static (TargetProfile.moe_construction; "
                    "indexed-read = MOE-01, padded = MoeFfnFixedL_v1 per token with the hand-authored lift LMoeFfnL_v1 of record); the Build "
                    "binds the declared construction only, the digest differs by construction on the same trace, GP-01 refuses components of "
-                   "another construction by name; never attested by the record, never inferred from it",
+                   "another construction by name; never attested by the record, never inferred from it (moe M-1066 (2a))",
            "components": {}, "moe_block_present": False, "refusal": None}
     own, other = _MOE_CONSTRUCTION_SPECS[decl["value"]], {s for v in _MOE_CONSTRUCTION_SPECS.values() for s in v} - set(_MOE_CONSTRUCTION_SPECS[decl["value"]])
     for s, d in sorted(shapes.items()):
@@ -512,14 +512,14 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampl
 
 
 def weights_of_record_binding(components: dict[str, dict]) -> dict:
-    """[MAN-09] The WEIGHTS OF RECORD per component: `weights_of_record.json`
+    """The WEIGHTS OF RECORD per component: `weights_of_record.json`
     (root_of_record = H(the served tensors composed from the PINNED safetensors shards, in Program order; for a rank Program of TP world W,
     that rank's shard slices) written beside the component by row_pod / tp2's Build.  GP-01 does not compute a second root (one function,
     one owner); it CARRIES each component's record into the workload Program, and REFUSES when the records cannot all be one workload's:
       (a) a record whose program_digest is not the component's recorded digest (a stale record beside a re-derived component);
       (b) two components of the same rank with different roots (the compose would span two checkpoints);
       (c) a record that is not complete (a field with no composition rule) -- fail closed, named.
-    A component with no record is carried as null (the row's Commit then fails 'weights unpinned', MAN-09), never invented.
+    A component with no record is carried as null (the row's Commit then fails 'weights unpinned'), never invented.
     `components`: {"LP,T": {"dir", "recorded_digest"}}."""
     per: dict[str, dict | None] = {}
     by_rank: dict[int, tuple[str, str]] = {}
@@ -695,7 +695,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     art["applicability"] = app
     if exp:
         art["experimental"] = {"reason": "per-event split schedule from the DECLARED chronology; mechanism evidence, not canonical", "components": exp}
-    # [MAN-09] the weights of record per component (per rank for TP), carried, never recomputed here
+    # the weights of record per component (per rank for TP), carried, never recomputed here
     wor = weights_of_record_binding({k: {"dir": v["dir"], "recorded_digest": v.get("recorded_digest")} for k, v in comp_provenance.items()})
     if wor["refusal"]:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "weights_of_record", "message": wor["refusal"], "weights_of_record": wor,

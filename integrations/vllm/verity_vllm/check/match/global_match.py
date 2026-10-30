@@ -73,7 +73,6 @@ PROTOCOL SUMMARY (Match stage: the record checker -- GM-01, the runtime match ve
     without the declaration); X-09 is evidence inside G3, never the verdict; the other within-step criterion is recorded beside the verdict,
     never merged; MATCH_IMPL selects fast (the Match of record, the CLI's default) | record (the audit checker) -- an unknown name is an
     error, never a fallback; capture/tokens.json is required on a row of record.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
 
@@ -188,7 +187,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
            "chronology_unit": "engine_step", "request_id_convention": "r<k> (k = manifest position; record UUIDs mapped via workload_request_id)",
            "within_step_criterion": within_step,
            "within_step_note": ("sequence: X-09 instance sequence per request step (r14-v1 verdict)" if within_step == "sequence" else
-                                "dag: criterion of record (COORD ruling M-0177 on DECISION M-0021/M-0031) -- order-insensitive "
+                                "dag: criterion of record -- order-insensitive "
                                 "Merkle DAG multiset per request step, canonical addressing by structural identity, dependency order enforced "
                                 "(G8); the sequence verdict is recorded beside it under alternate_verdict"),
            "checks": [], "requests": []}
@@ -267,7 +266,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
                                                      for e in alt["requests"]],
                                         "seconds": alt["seconds"],
                                         "note": f"the {other} criterion's verdict on the same record, recorded beside the verdict of record "
-                                                f"({within_step}); COORD ruling M-0177 / M-0031"}
+                                                f"({within_step})"}
         except Exception as e:  # noqa: BLE001 - traceability material, not the verdict
             res["alternate_verdict"] = {"criterion": other, "verdict": "ERROR", "error": repr(e)[:300]}
         mark("alternate_criterion")
@@ -340,7 +339,7 @@ def impl_info(mod) -> dict:
         info["stats"] = dict(GMF.last_stats) if GMF.last_stats else {k: int(v) for k, v in sorted(GMF.stats.items())}
         # the DECLARED configuration (workers cap, operand form, switches as read), beside the counters
         info["config"] = dict(GMF.config)
-        # the same fold_load under the DECLARED configuration too: the fast documents of record (int-2..int-5) named it there; readers keep working
+        # the same fold_load under the DECLARED configuration too: earlier fast documents of record named it there; readers keep working
         info["config"]["fold_load"] = dict(PL.LOAD_NOTES)
     return info
 
@@ -349,18 +348,18 @@ def impl_info(mod) -> dict:
 class Options:
     oracle: str = option("--oracle", help="Match dir: program.json + instances.jsonl + capture/log.jsonl.gz")
     global_program: str | None = option("--global-program", default=None, help="cb-a/global-program/v1 JSON; omit to assemble the mock from --workload + --component")
-    gprog: str | None = option("--gprog", default=None, help="lane gprog's workload_program.json (GP-01) -> converted with from_gprog")
+    gprog: str | None = option("--gprog", default=None, help="the Build's workload_program.json (GP-01) -> converted with from_gprog")
     workload: str | None = option("--workload", type=workload_arg, default=None, help="workload manifest (for the mock global Program)")
     component: list[str] = option("--component", action="append", default=[], help="request component dir (derive_step output); repeatable")
     log: str | None = option("--log", default=None)
     tokens: str | None = option("--tokens", default=None)
-    tokens_optional: bool = option("--tokens-optional", default=False, action="store_true", help="accept a record without capture/tokens.json (G6 output-association legs skipped, " "LABELLED checks[G6].tokens_json=false; mechanism/fixture runs only, never a row of record) [F-r17-01]")
+    tokens_optional: bool = option("--tokens-optional", default=False, action="store_true", help="accept a record without capture/tokens.json (G6 output-association legs skipped, " "LABELLED checks[G6].tokens_json=false; mechanism/fixture runs only, never a row of record)")
     no_x09: bool = option("--no-x09", default=False, action="store_true")
-    within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP, help="within-engine-step correspondence of a request's instances: dag (default of record, COORD ruling M-0177/M-0031) | " "sequence (the r14-v1 criterion); the other criterion's verdict is recorded beside it (alternate_verdict)")
+    within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP, help="within-engine-step correspondence of a request's instances: dag (default of record) | " "sequence (the r14-v1 criterion); the other criterion's verdict is recorded beside it (alternate_verdict)")
     no_alternate: bool = option("--no-alternate", default=False, action="store_true", help="do not run/record the other criterion's verdict beside the verdict of record")
     out: str | None = option("--out", default=None)
-    decomp_out: str | None = option("--decomp-out", default=None, help="[COORD R17-28, P1] also write the X-09 batch decomposition document here (cb_a.batch_decomp's CLI " "schema, the same decompose() call whose verdict is this document's x09 block): row_pod's match_decomp.json " "without a second batch_decomp process over the same fold and components. Exit 4 when X-09 names " "missing derived shapes (batch_decomp's protocol: derive them and rerun), else GM-01's 0 / 3.")
-    derived: list[str] = option("--derived", action="append", default=[], help="[P1] derived request-wrapper dir X-09 may use beside the global Program's " "components (repeatable): the shapes row_pod derived after an exit 4")
+    decomp_out: str | None = option("--decomp-out", default=None, help="also write the X-09 batch decomposition document here (cb_a.batch_decomp's CLI " "schema, the same decompose() call whose verdict is this document's x09 block): row_pod's match_decomp.json " "without a second batch_decomp process over the same fold and components. Exit 4 when X-09 names " "missing derived shapes (batch_decomp's protocol: derive them and rerun), else GM-01's 0 / 3.")
+    derived: list[str] = option("--derived", action="append", default=[], help="derived request-wrapper dir X-09 may use beside the global Program's " "components (repeatable): the shapes row_pod derived after an exit 4")
 
 
 def main(a: Options) -> int:
@@ -368,7 +367,7 @@ def main(a: Options) -> int:
     _gc_tune()
     if a.decomp_out and a.no_x09:
         raise UsageError("--decomp-out needs the X-09 run (drop --no-x09)")
-    loaded = {X09_EXTRA_DERIVED: list(a.derived)}   # shared with check(): the fold / components decoded once + the X-09 document (P1)
+    loaded = {X09_EXTRA_DERIVED: list(a.derived)}   # shared with check(): the fold / components decoded once + the X-09 document
     if a.global_program:
         gp = json.load(open(a.global_program))
     elif a.gprog:

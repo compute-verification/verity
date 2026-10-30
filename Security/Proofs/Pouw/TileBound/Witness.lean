@@ -3,9 +3,8 @@ import Proofs.Pouw.TileBound.Proofs
 /-!
 # The chain's satisfiability witness (a later bundle; outside the 36 merged pins)
 
-bc-22298e90's re-review (`internal/pouw/fp4-tile-lean/statement-review.md`, 09:50Z) proved in a scratch file that the
-honest one-gate program meets `tile_cost_ge_of_gates`' whole three-input hypothesis on one live pair. This module
-restates that in the package:
+The honest one-gate program meets `tile_cost_ge_of_gates`' whole three-input hypothesis on one live pair. This module
+proves it:
 * `oneGateP` and `oneGateQ` carry `(e_(0,0), 0)` and `(0, e_(0,0))`, and are exact on all 128 words (`decide +kernel`);
 * `oneGateProg_eval`: the honest one-gate program computes `X·Y` at every input;
 * `oneGateProg_gates` is the hypothesis `hg` of `tile_cost_ge_of_gates` for `oneGateProg`, with live entries

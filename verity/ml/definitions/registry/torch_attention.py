@@ -10,6 +10,15 @@ kernels that compute it (the two versions' kernels are the same at f32 and bf16)
     RopeHf_v1{D}                   (x: Array<D, BF16>, cs: Array<D, BF16>) -> Array<D, BF16>
     RopeHfBackward_v1{D}           (g: Array<D, BF16>, cs: Array<D, BF16>) -> Array<D, BF16>
     RepeatKvBackward_v1{NREP, N}   (g: Array<NREP, Array<N, BF16>>) -> Array<N, BF16>                      2 <= NREP <= 16
+    EagerAttentionTorch_v1{N, NH, KVH, D}
+                                   (q: Array<N, Array<NH·D, BF16>>, k, v: Array<N, Array<KVH·D, BF16>>, cs: Array<N, Array<D, BF16>>,
+                                   n: Array<N, U16> of kind position)
+                                   -> Tuple<o: Array<N, Array<NH·D, BF16>>, qe: Array<N, Array<NH·D, BF16>>,
+                                            ke: Array<N, Array<KVH·D, BF16>>, y: Array<N, Array<NH, Array<N, F32>>>,
+                                            p: Array<N, Array<NH, Array<N, BF16>>>>
+    EagerAttentionTorchBackward_v1{N, NH, KVH, D}
+                                   (do: Array<N, Array<NH·D, BF16>>, qe, ke, v, y, p, cs)
+                                   -> Tuple<dq: Array<N, Array<NH·D, BF16>>, dk, dv: Array<N, Array<KVH·D, BF16>>>
 
 `SoftmaxTorch` is `softmax_warp_forward<float, float, float, L>` (PersistentSoftmax.cuh), which `host_softmax` runs on an f32 row
 of N <= 2048. With P = 2^L the least power of two >= N, a warp of WS = min(P, 32) lanes holds the row: lane l reads
@@ -53,6 +62,19 @@ includes +0 is +0.
 read one KV head (Reduce.cuh, ``sum_functor<BFloat16, float>``, vt0 = 4). The reduced dimension isn't the fastest, so each
 thread folds one output's NREP inputs alone (no input split). ``thread_reduce_impl`` keeps four f32 accumulators from +0 and
 adds input i into accumulator i mod 4, in order. It then combines them as ``((a0 + a1) + a2) + a3`` and rounds once to bf16.
+
+**The step's blocks** are one sequence's attention, wiring these and the bmm's with no gate of their own. Values are committed
+token-major: q, k and v are the projections' outputs, row i holding token i's heads, and cs's row i is position i's
+[cos | sin]. Query head h reads KV head h / R, R = NH / KVH. `EagerAttentionTorch` applies `RopeHf` to each head of q and k,
+then for each query row i takes the scores of its NH heads, one bmm (`BatchedGemm_v2` over the NH heads, k16 steps
+`HopperBF16WgmmaDot16_v2`) against each head's key rows. `EagerSoftmax` follows on each (i, h), where row i sees n[i] keys
+(i + 1 under the causal mask). The PV bmm then takes P's row against Vᵀ, which `Transpose_v1` tiles of at most 128 x 128 make
+(`transposes`). o is o_proj's input, and qe, ke, y and p are what autograd saves. `EagerAttentionTorchBackward` runs from
+o_proj's dX (do) to dq, dk and dv in projection space:
+- dP is dO's row against V's rows, and dS is `EagerSoftmaxBackward` of each (i, h);
+- dV, dQ and dK are each row's bmm: Pᵀ's row against dOᵀ, dS's row against Kᵀ, and dSᵀ's row against Qᵀ;
+- `RepeatKvBackward` sums the dK and dV of each KV head's R query heads (none at R = 1), and `RopeHfBackward` takes dq and dk
+  back through RoPE.
 """
 from __future__ import annotations
 
@@ -60,19 +82,25 @@ from typing import Any
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, const_bits, mux, or_reduce
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops import fp32 as W
+from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean.elementwise import specialized
 from verity.ml.circuits.ops.boolean.mufu import mufu_ex2
 from verity.ml.circuits.ops.boolean.scalar import gt_u
 from verity.ml.circuits.ops.boolean.softmax import f32_gt
 from verity.ml.circuits.ports import In, Ports
+from verity.ml.circuits.refs import Coll, concat, strided_view, tuple_of
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array, Tuple
 
 from . import boolean_moe as BMOE
+from . import cublas_bf16 as CB
+from .torch_train import Transpose
 
-__all__ = ["EagerSoftmax", "EagerSoftmaxBackward", "RepeatKvBackward", "RopeHf", "RopeHfBackward", "SoftmaxTorch",
-           "SoftmaxTorchBackward", "geometry", "scale_bits"]
+__all__ = ["EagerAttentionTorch", "EagerAttentionTorchBackward", "EagerSoftmax", "EagerSoftmaxBackward", "RepeatKvBackward",
+           "RopeHf", "RopeHfBackward", "SoftmaxTorch", "SoftmaxTorchBackward", "geometry", "scale_bits", "transpose",
+           "transposes"]
 
 F32 = Array(32, BL.BIT)
 BF16 = Array(16, BL.BIT)
@@ -85,6 +113,10 @@ QNAN = 0x7FC00000
 BF16_MIN = 0xFF7F
 MAX_FORWARD, MAX_BACKWARD, MAX_NREP = 2048, 1024, 16
 VT0 = 4
+#: a `Transpose_v1` tile's most rows and columns: a row of 128 bf16 words is one 256 B commitment row
+TILE = 128
+#: the bmm's k16 step: N and D are multiples of it
+K16 = 16
 
 
 def _add(C, a, b):
@@ -344,3 +376,165 @@ RepeatKvBackward = specialized(
         "input i into i mod 4, combined in order), one F2FP",
     refuse=_refuse(NREP=None, N=1 << 20),
     conformance=f"exact-model-tested; the key and value gradients (NREP = 3, N = 64) of both layers of {GPU_STEP}: {ON_GPU}")
+
+# --- the step's blocks ------------------------------------------------------------------------------------------------------
+
+
+def transposes(B, x: Coll, R: int, C: int, bases, stride: int) -> list[Coll]:
+    """The R x C matrices of bf16 words in x at word offsets ``bases``, each row ``stride`` words past the last, as their C x R
+    transposes, by `Transpose_v1` tiles of at most TILE x TILE: one batch a tile shape over all the matrices' tiles."""
+    L = BF16.leaves
+    rows = [(r, min(TILE, R - r)) for r in range(0, R, TILE)]
+    cols = [(c, min(TILE, C - c)) for c in range(0, C, TILE)]
+    out = {}
+    for rn, cn in sorted({(rn, cn) for _, rn in rows for _, cn in cols}):
+        at = [(m, r, c) for m in range(len(bases)) for r, n in rows for c, k in cols if (n, k) == (rn, cn)]
+        tiles = Coll(Array(len(at), Array(rn, Array(cn, BF16))), concat(
+            [strided_view(x, L * (bases[m] + r * stride + c), L * cn, L * stride, 1, L * rn * cn) for m, r, c in at]))
+        y = B.batch(bind(Transpose, R=rn, C=cn), tiles, axes=(0,))
+        out.update({k: y[i] for i, k in enumerate(at)})
+    return [Coll(Array(C, Array(R, BF16)), concat([out[(m, r, j - j % TILE)][j % TILE].refs for j in range(C) for r, _ in rows]))
+            for m in range(len(bases))]
+
+
+def transpose(B, x: Coll, R: int, C: int) -> Coll:
+    """A token-major R x C matrix of bf16 words as its C x R transpose (`transposes`)."""
+    return transposes(B, x, R, C, (0,), C)[0]
+
+
+def _bmm(op: str, heads: int, N: int, D: int) -> Any:
+    """torch.bmm ``op``'s row over the heads at N tokens (`cublas_bf16.TRAIN_BMM`): `BatchedGemm_v2{heads, K, N}` on the k16
+    step `HopperBF16WgmmaDot16_v2`, the very binding `cublas_bf16.attention_bmm` makes at the (N, D) its capture covers."""
+    k, n = CB.TRAIN_BMM[op][2](N, D)
+    return bind(CB.BatchedGemm, B=heads, K=k, N=n, DOT=BG.HopperBF16WgmmaDot16)
+
+
+def _heads(x: Coll, N: int, NH: int, KVH: int, D: int) -> Coll:
+    """Each query head's N rows of D words in x (N rows of KVH heads): head h reads KV head h // (NH / KVH)."""
+    L, R = BF16.leaves, NH // KVH
+    return Coll(Array(NH, Array(N, Array(D, BF16))),
+                concat([strided_view(x, L * (h // R) * D, L * D, L * KVH * D, 1, L * N * D) for h in range(NH)]))
+
+
+def _stack(ms: list[Coll], picks) -> Coll:
+    """The matrices ms[g] for g in picks, as one Array."""
+    picks = list(picks)
+    return Coll(Array(len(picks), ms[0].type), concat([ms[g].refs for g in picks]))
+
+
+def _rows_of(ms: list[Coll]) -> Coll:
+    """For each row index j, row j of each matrix of ms."""
+    t = ms[0].type
+    return Coll(Array(t.n, Array(len(ms), t.elem)), concat([m[j].refs for j in range(t.n) for m in ms]))
+
+
+def _each_head(B, d, x: Coll, cs: Coll, N: int, H: int, D: int) -> Coll:
+    """d at D on each of the H heads of each of x's N rows, with that row's cs."""
+    rows = Coll(Array(N * H, Array(D, BF16)), concat([cs[i].refs for i in range(N) for _ in range(H)]))
+    return B.batch(bind(d, D=D), x.reshape(Array(N * H, Array(D, BF16))), rows, axes=(0, 0)).reshape(
+        Array(N, Array(H * D, BF16)))
+
+
+def _sum_heads(B, g: Coll, N: int, KVH: int, R: int, D: int) -> Coll:
+    """repeat_kv's backward on each row's KVH·R heads of g: `RepeatKvBackward` over each KV head's R, g itself at R = 1."""
+    if R == 1:
+        return g.reshape(Array(N, Array(KVH * D, BF16)))
+    return B.batch(bind(RepeatKvBackward, NREP=R, N=D), g.reshape(Array(N * KVH, Array(R, Array(D, BF16)))),
+                   axes=(0,)).reshape(Array(N, Array(KVH * D, BF16)))
+
+
+def _attention(B, S, q, k, v, cs, n):
+    N, NH, KVH, D = S.N, S.NH, S.KVH, S.D
+    R = NH // KVH
+    qe = _each_head(B, RopeHf, q, cs, N, NH, D)
+    ke = _each_head(B, RopeHf, k, cs, N, KVH, D)
+    s = B.batch(_bmm("qk", NH, N, D), qe.reshape(Array(N, Array(NH, Array(D, BF16)))), _heads(ke, N, NH, KVH, D), axes=(0, None))
+    ns = Coll(Array(N * NH, U16), concat([n[i].refs for i in range(N) for _ in range(NH)]))
+    sm = B.batch(bind(EagerSoftmax, N=N, D=D), s.reshape(Array(N * NH, Array(N, BF16))), ns, axes=(0, 0))
+    F, H = F32.leaves * N, BF16.leaves * N
+    y = Coll(Array(N, Array(NH, Array(N, F32))), strided_view(sm, 0, F, F + H, 1, N * NH * F))
+    p = Coll(Array(N, Array(NH, Array(N, BF16))), strided_view(sm, F, H, F + H, 1, N * NH * H))
+    vt = transposes(B, v, N, D, [g * D for g in range(KVH)], KVH * D)
+    o = B.batch(_bmm("pv", NH, N, D), p, _stack(vt, [h // R for h in range(NH)]), axes=(0, None))
+    return tuple_of(o.reshape(Array(N, Array(NH * D, BF16))), qe, ke, y, p)
+
+
+def _attention_backward(B, S, do, qe, ke, v, y, p, cs):
+    N, NH, KVH, D = S.N, S.NH, S.KVH, S.D
+    R = NH // KVH
+    dp = B.batch(_bmm("dp", NH, N, D), do.reshape(Array(N, Array(NH, Array(D, BF16)))), _heads(v, N, NH, KVH, D), axes=(0, None))
+    ds = B.batch(bind(EagerSoftmaxBackward, N=N, D=D), dp.reshape(Array(N * NH, Array(N, BF16))),
+                 y.reshape(Array(N * NH, Array(N, F32))), axes=(0, 0))
+    by_head = [h * N for h in range(NH)]
+    qh = [h * D for h in range(NH)]
+    kvh = [g * D for g in range(KVH)]
+    dv = B.batch(_bmm("dv", NH, N, D), _rows_of(transposes(B, p, N, N, by_head, NH * N)),
+                 _stack(transposes(B, do, N, D, qh, NH * D), range(NH)), axes=(0, None))
+    dq = B.batch(_bmm("dq", NH, N, D), ds.reshape(Array(N, Array(NH, Array(N, BF16)))),
+                 _stack(transposes(B, ke, N, D, kvh, KVH * D), [h // R for h in range(NH)]), axes=(0, None))
+    dk = B.batch(_bmm("dk", NH, N, D), _rows_of(transposes(B, ds, N, N, by_head, NH * N)),
+                 _stack(transposes(B, qe, N, D, qh, NH * D), range(NH)), axes=(0, None))
+    return tuple_of(_each_head(B, RopeHfBackward, dq, cs, N, NH, D),
+                    _each_head(B, RopeHfBackward, _sum_heads(B, dk, N, KVH, R, D), cs, N, KVH, D),
+                    _sum_heads(B, dv, N, KVH, R, D))
+
+
+_BLOCK_KEYS = ("N", "NH", "KVH", "D")
+
+
+def _block_refusal(b: dict, most: int) -> str | None:
+    for k, lo, hi in (("N", K16, most), ("NH", 1, 1 << 10), ("KVH", 1, 1 << 10), ("D", K16, 1 << 16)):
+        v, k16 = b.get(k), k in ("N", "D")
+        if v is not None and (isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi or (k16 and v % K16)):
+            return (f"{k} = {v!r} is outside {lo}..{hi}{' or not a multiple of 16 (the bmm k16 step)' if k16 else ''}, the "
+                    "range of the kernels this is")
+    NH, KVH = b.get("NH"), b.get("KVH")
+    if isinstance(NH, int) and isinstance(KVH, int) and (NH % KVH or NH // KVH > MAX_NREP):
+        return f"NH = {NH} is not 1 to {MAX_NREP} times KVH = {KVH}, repeat_kv's query heads a KV head"
+    return None
+
+
+def _block_refuse(most: int):
+    return lambda b: _block_refusal(b, most)
+
+
+def _block(S: Any, most: int) -> tuple[int, int, int, int]:
+    if r := _block_refusal({k: getattr(S, k) for k in _BLOCK_KEYS}, most):
+        raise ValueError(r)
+    return S.N, S.NH, S.KVH, S.D
+
+
+def _block_types(S: Any, most: int):
+    N, NH, KVH, D = _block(S, most)
+    return (Array(N, Array(NH * D, BF16)), Array(N, Array(KVH * D, BF16)), Array(N, Array(D, BF16)),
+            Array(N, Array(NH, Array(N, F32))), Array(N, Array(NH, Array(N, BF16))))
+
+
+def _attention_sig(S):
+    q, kv, cs, y, p = _block_types(S, MAX_FORWARD)
+    return (("q", q), ("k", kv), ("v", kv), ("cs", cs), ("n", Array(S.N, U16))), Tuple(q, q, kv, y, p)
+
+
+def _attention_backward_sig(S):
+    q, kv, cs, y, p = _block_types(S, MAX_BACKWARD)
+    return (("do", q), ("qe", q), ("ke", kv), ("v", kv), ("y", y), ("p", p), ("cs", cs)), Tuple(q, kv, kv)
+
+
+_BLOCK = (f"exact-model-tested; against numerics.torch_blocks' model, composed of its Definitions' models, at N = 16 "
+          f"(tests/test_torch_attention.py), "
+          f"which is the GPU's on every output and intermediate of both layers' attention, forward and backward, of {GPU_STEP} "
+          f"(10,452,992 words): a cc 12.0 GPU (torch 2.14.0+cu130), 0 mismatches; its bmm's are "
+          f"cublas_bf16.attention_bmm's wherever that binds (S = 256 and 512 at D = 64, TRAIN_CAPTURE)")
+
+EagerAttentionTorch = CompositeDefinition(
+    "EagerAttentionTorch", 1, _BLOCK_KEYS, _attention_sig, _attention,
+    doc="HF's eager attention forward on one sequence of N tokens, NH query heads on KVH KV heads of D: RopeHf_v1 on each "
+        "head of q and k, each query row's bmm against its heads' keys (BatchedGemm_v2), EagerSoftmax_v1 on each (row, head) "
+        "with row i seeing n[i] keys, then P's row against Vᵀ (Transpose_v1 tiles); o_proj's input and what autograd saves",
+    conformance=_BLOCK, refuse=_block_refuse(MAX_FORWARD), ports=_POSITION)
+EagerAttentionTorchBackward = CompositeDefinition(
+    "EagerAttentionTorchBackward", 1, _BLOCK_KEYS, _attention_backward_sig, _attention_backward,
+    doc="EagerAttentionTorch_v1's backward from o_proj's dX: dP (dO's row against V), EagerSoftmaxBackward_v1, the dV, dQ "
+        "and dK bmm's on rows of Pᵀ, dS and dSᵀ (Transpose_v1 tiles), RepeatKvBackward_v1 over each KV head's query heads, "
+        "RopeHfBackward_v1 on dq and dk",
+    conformance=_BLOCK, refuse=_block_refuse(MAX_BACKWARD))

@@ -6,15 +6,13 @@ import Definitions.Pouw.Game.Params
 
 /-!
 # NCP's game instance: pinned statements (trusted)
-
-Plain-language map: `internal/pouw/new-crypto/barrier.md` in the project store.
 -/
 
 namespace Pouw.NCP.GamePinned
 
 open Finset
 
-/-- **The three-block int32 bound** (red-team N4), a sanity bound for the symmetric noise range: for a
+/-- **The three-block int32 bound**, a sanity bound for the symmetric noise range: for a
 signed-permutation `R`, int7 `A` and `B`, `E₁` and `F₁` in `[−31, 31]` and `k ≤ 107,524`, every running sum of the
 stacked product (inner depth `τ ≤ 3k`) is in int32. Blocks 1 and 2 give at most `2·95²·k`; in block 3 the running sum
 is `A·B` minus the rest of block 3, at most `64²·k + 126²·k`. The checked values are taken mod `2^32` (NA2), so
@@ -82,7 +80,7 @@ def OneSegment : Prop :=
             < ∑ u ∈ checkedSet P.toProtocol ⟨Lay, fun _ => 0⟩ H s (A.transcript ⟨Lay, fun _ => 0⟩ H s),
                 3 * ((Lay.shape u).Wmm : ℝ)
 
-/-- **`Barrier.Segment`'s hypotheses hold jointly with the lead's noise** (red-team B4): for all factor sources and
+/-- **`Barrier.Segment`'s hypotheses hold jointly with the lead's noise**: for all factor sources and
 every inner dimension `k` of the default domain, at `L = 3k/16`, `d = 16`, `α(A) = [A | A | −A]`, `β(B) = [B; B; B]`
 and the noise `Barrier.stackNoise` with an `R` that passes the rejection rule: `L ≥ 1`, `L·d = 3k`, `α 0 = 0`,
 `β 0 = 0`, the noise cancels at the zero input, a layout is in the domain (`leadDomain` with inner dimension `k`) at
@@ -103,7 +101,7 @@ def SegmentLead : Prop :=
         (Barrier.stackNoise k Rm e f) (fun L u => 3 * (L.shape u).Wmm)).Complete
         (fun L => leadDomain L ∧ ∀ u < L.N, (L.shape u).k = k)
 
-/-- **The lead's instance, jointly** (red-team NL1 and B4): an NCP instance with `IsLead` (`d = 16`, noise in
+/-- **The lead's instance, jointly**: an NCP instance with `IsLead` (`d = 16`, noise in
 `[−31, 32]`, the rejection rule), signed-permutation `R` on domain shapes, no oracle queries and `W_ref = 3·W_mm`; its
 protocol is complete on `leadDomain`, the output-priced model at `3·m·k·n` runs its `H_ref` with no oracle calls, and
 TT_NCP(γ₀) holds there with error 0 at every `γ₀ ∈ [0, 1)`; and a layout with at least one unit and `d ∣ k` on every
@@ -120,7 +118,7 @@ def LeadWitness : Prop :=
       Assumptions.TTNCP (outputPriced3 Unit Unit Salt) P.toProtocol P.d leadDomain γ₀ (fun _ _ => 0)) ∧
     (⟨Lay, fun _ => 0⟩ : Workload).InDomain leadDomain ∧ 0 < Lay.N ∧ ∀ u < Lay.N, P.d ∣ (Lay.shape u).k
 
-/-- **The int8 range at the lead's noise** (red-team P2-2): for `R` a signed permutation, `E₁`, `F₁` in `[−31, 32]`
+/-- **The int8 range at the lead's noise**: for `R` a signed permutation, `E₁`, `F₁` in `[−31, 32]`
 and int7 `A`, `B`, every entry of both stacked operands lies in `[−127, 127]`. -/
 def RangeLead : Prop :=
   ∀ (k : ℕ) (A B E1 F1 R : Mat), SignedPerm k R →

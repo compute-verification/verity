@@ -30,7 +30,8 @@ for _ in $(seq 60); do [ -e "$DEV" ] && break; sleep 2; done
 [ -e "$DEV" ] || { log "no data disk at $DEV"; exit 1; }
 if [ -z "$(blkid -o value -s TYPE "$DEV" || true)" ]; then
   log "formatting $DEV (it holds no filesystem)"
-  mkfs.ext4 -q -L vy-data -m 0 -i 262144 -E lazy_itable_init=1,lazy_journal_init=1 "$DEV"
+  # one inode per 64 KiB: at 256 KiB a 2 TB disk ran out of inodes with 46% of its bytes used, a Lean build tree being 0.5-1M inodes
+  mkfs.ext4 -q -L vy-data -m 0 -i 65536 -E lazy_itable_init=1,lazy_journal_init=1 "$DEV"
 fi
 mkdir -p /workspace
 grep -q ' /workspace ' /etc/fstab || echo "LABEL=vy-data /workspace ext4 defaults,noatime,nofail,x-systemd.device-timeout=120 0 2" >> /etc/fstab
@@ -46,9 +47,10 @@ if [ -n "${VY_FS_TAG:-}" ]; then   # a shared filesystem launch.sh attached (NEB
   mountpoint -q /workspace/fs || mount /workspace/fs
   chown "$U:$U" /workspace/fs
 fi
-echo 'd /workspace/tmp 1777 root root 10d' > /etc/tmpfiles.d/workspace-tmp.conf
+# 12 h, not 10 d: every job's TMPDIR, so a suite's dead pytest temp trees cost inodes until they age out
+echo 'd /workspace/tmp 1777 root root 12h' > /etc/tmpfiles.d/workspace-tmp.conf
 touch /etc/environment
-# UV_SYSTEM_CERTS (the pinned uv's name for what was --native-tls): uv reads the system trust store, not the roots it ships (INF-314)
+# UV_SYSTEM_CERTS (the pinned uv's name for what was --native-tls): uv reads the system trust store, not the roots it ships
 for kv in HF_HOME=/workspace/hf UV_CACHE_DIR=/workspace/cache/uv LEASE_DIR=$LEASE_DIR CUDA_DEVICE_ORDER=PCI_BUS_ID TMPDIR=/workspace/tmp \
     UV_SYSTEM_CERTS=1; do
   grep -q "^${kv%%=*}=" /etc/environment || echo "$kv" >> /etc/environment
@@ -85,7 +87,7 @@ apt-get update -q
 # python3 (node 2 and cpu-1 lacked it, 11 Oct). python3.12-dev and build-essential: Triton compiles cuda_utils.c against
 # Python.h at a vLLM engine's first start (vy-glm53-eu 16 Oct and vy-glm53-eu2 17 Oct lacked it; circuits)
 apt-get install -y -q git rsync fio jq python3-venv python3-numpy python3.12-dev build-essential util-linux ripgrep
-# The trust store (INF-314): the Nebius images ship with apt's daily timers off, so ca-certificates stayed at the image's and
+# The trust store: the Nebius images ship with apt's daily timers off, so ca-certificates stayed at the image's and
 # kept roots Ubuntu had removed. Upgrade it now, and let unattended-upgrades keep it, and only it, current: no driver or kernel
 # package moves under a run. Strict: a whitelist that isn't only raises its packages' priority and upgrades everything else
 # too. `research deploy drift` lists a node that still trusts a distrusted root.

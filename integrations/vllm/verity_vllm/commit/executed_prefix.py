@@ -45,7 +45,6 @@ PROTOCOL SUMMARY (Commit phase: the execution extent check (`executed_prefix`) -
     accepted (condition (a) above): it rests on the Match account or on served tokens opened from the run root, both when both are beside the
     Commit and the row committed its sampled ids; the lag must agree on every account (declared == tokens.json == G6, or declared == the
     token record's == the engine's read-back); the boundary linkage a token record leans on runs over the same executed prefix; a committed Call past the prefix fails by name.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
 
