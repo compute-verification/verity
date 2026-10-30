@@ -7,14 +7,19 @@ import random
 
 from verity.core.protocols.pouw.circuit import lead as L
 
-RECORD_NAMES = ["short_root", "long_key_leaf", "no_calls", "too_many_calls", "negative_calls", "calls_not_int", "bad_hex"]
+RECORD_NAMES = ["short_root", "short_stream", "long_prover", "long_key_leaf", "no_calls", "too_many_calls",
+                "negative_calls", "calls_not_int", "bad_hex"]
 
 
 def record_instance(rng: random.Random, name: str) -> dict:
-    x = {"weights_root": rng.randbytes(64).hex(), "key_leaf": rng.randbytes(64).hex(),
-         "calls": rng.choice([1, rng.randrange(1, 300), L.WORDS_POSITION - 1])}
+    x = {"weights_root": rng.randbytes(64).hex(), "stream": rng.randbytes(64).hex(), "prover": rng.randbytes(64).hex(),
+         "key_leaf": rng.randbytes(64).hex(), "calls": rng.choice([1, rng.randrange(1, 300), L.WORDS_POSITION - 1])}
     if name == "short_root":
         x["weights_root"] = x["weights_root"][:-2]
+    elif name == "short_stream":
+        x["stream"] = x["stream"][:rng.choice([0, 64, 126])]
+    elif name == "long_prover":
+        x["prover"] += "00"
     elif name == "long_key_leaf":
         x["key_leaf"] += "00"
     elif name == "no_calls":
@@ -26,7 +31,8 @@ def record_instance(rng: random.Random, name: str) -> dict:
     elif name == "calls_not_int":
         x["calls"] = rng.choice(["7", [7], True, None])
     elif name == "bad_hex":
-        x["key_leaf"] = "zz" + x["key_leaf"][2:]
+        k = rng.choice(["weights_root", "stream", "prover", "key_leaf"])
+        x[k] = "zz" + x[k][2:]
     return x
 
 
@@ -135,9 +141,10 @@ def egress_instance(rng: random.Random, name: str) -> dict:
     return x
 
 
-WINDOW_NAMES = ["bad_record", "record_of_other_calls", "short_root", "no_calls", "a_before_salt", "second_salt",
-                "overlap", "closed", "already", "no_position", "bad_shape", "words_not_open", "egress_refused",
-                "still_open", "unknown_kind", "malformed_a", "malformed_words", "calls_not_int", "events_not_list"]
+WINDOW_NAMES = ["bad_record", "record_of_other_calls", "record_of_other_prover", "short_root", "no_calls", "a_before_salt",
+                "second_salt", "overlap", "closed", "already", "no_position", "bad_shape", "words_not_open",
+                "egress_refused", "still_open", "unknown_kind", "malformed_a", "malformed_words", "calls_not_int",
+                "events_not_list"]
 
 
 def _a(f: int, j: int, shape: list[int]) -> dict:
@@ -151,26 +158,29 @@ def _w(f: int, verdict: str = L.ACCEPTED) -> dict:
 def window_instance(rng: random.Random, name: str) -> dict:
     """A window of 1 to 6 calls a forward and up to 4 forwards, each call's A root in a shuffled order, then the words."""
     calls = rng.choice([1, 2, 3, 6])
-    root, leaf = rng.randbytes(64), rng.randbytes(64)
+    root, stream, prover, leaf = (rng.randbytes(64) for _ in range(4))
     events: list[dict] = [{"kind": "salt"}]
     for f in range(rng.randint(0, 4)):
         order = list(range(calls))
         rng.shuffle(order)
         events += [_a(f, j, _shape(rng)) for j in order[:rng.randint(1, calls)]] + [_w(f)]
-    x = {"record": L.lead_record(root, leaf, calls).hex(), "weights_root": root.hex(), "key_leaf": leaf.hex(),
-         "calls": calls, "events": events}
+    x = {"record": L.lead_record(root, stream, prover, leaf, calls).hex(), "weights_root": root.hex(),
+         "stream": stream.hex(), "prover": prover.hex(), "key_leaf": leaf.hex(), "calls": calls, "events": events}
     a = [k for k, e in enumerate(events) if e["kind"] == "a_root"]
     w = [k for k, e in enumerate(events) if e["kind"] == "words_root"]
-    if not a and name not in ("bad_record", "record_of_other_calls", "short_root", "no_calls", "second_salt",
-                              "unknown_kind", "calls_not_int", "events_not_list", "words_not_open"):
+    if not a and name not in ("bad_record", "record_of_other_calls", "record_of_other_prover", "short_root", "no_calls",
+                              "second_salt", "unknown_kind", "calls_not_int", "events_not_list", "words_not_open"):
         events += [_a(0, 0, _shape(rng)), _w(0)]
         a, w = [len(events) - 2], [len(events) - 1]
     if name == "bad_record":
         x["record"] = rng.randbytes(64).hex()
     elif name == "record_of_other_calls":
-        x["record"] = L.lead_record(root, leaf, calls + 1).hex()
+        x["record"] = L.lead_record(root, stream, prover, leaf, calls + 1).hex()
+    elif name == "record_of_other_prover":
+        x["record"] = L.lead_record(root, stream, rng.randbytes(64), leaf, calls).hex()
     elif name == "short_root":
-        x[rng.choice(["record", "weights_root", "key_leaf"])] = rng.randbytes(rng.choice([0, 32, 63, 65])).hex()
+        k = rng.choice(["record", "weights_root", "stream", "prover", "key_leaf"])
+        x[k] = rng.randbytes(rng.choice([0, 32, 63, 65])).hex()
     elif name == "no_calls":
         x["calls"] = rng.choice([0, -1, L.WORDS_POSITION])
     elif name == "a_before_salt":

@@ -68,8 +68,9 @@ block past the call's steps. `Call` is the reference: a call's data and coins, i
 inputs and verdict.
 
 **The window.** A window registers, before the certifier draws salt_w (its existing 512-bit window salt), one 64-byte
-record in the certifier's `commit_weights` slot, signed by the prover: `lead_record`, SHA-512(``pouw/lead/register/v1`` ‖
-root(weights) ‖ keyLeaf ‖ u64be(calls)), keyLeaf the hm96-sha512 leaf of the window's key ks_w and calls the calls a
+record in the certifier's `commit_weights` slot, signed by the prover, in `pouw_record`'s place: `lead_record`,
+SHA-512(``verity/pouw-lead-record/v1`` ‖ root(weights) ‖ stream ‖ prover ‖ keyLeaf ‖ u64be(calls)), with `pouw_record`'s
+stream and prover, keyLeaf the hm96-sha512 leaf of the window's key ks_w, every part 64 bytes, and calls the calls a
 forward. Each call j of forward f then commits A_j, its rows · K bytes row-major in `A_SEGMENT`-byte leaves, at instance
 position f · calls + j (`a_position`), and each forward its calls' committed words in `CHUNK_WORDS`-word leaves, each
 call's chunks after the call before's, at 2^63 + f (`words_position`). An instance's tree is frame-v3-sha512 over
@@ -81,9 +82,10 @@ column tile `Shape.bn`, the tiles past m and n skipped, each tile's 128 s32 litt
 at its first A root and closes it at its words root, one forward open at a time, and counts against it every bucket a
 boundary link ticks while it is open, holding the node's links at r = 0 and counting the boundary's release once
 (`forward_count`); it refuses a forward whose count passes its calls' bits (`egress_refused`, the per-forward bound).
-The verifier refuses the window (`window_refusal`) unless its record opens to its weights' root, keyLeaf and call count,
-every A root follows salt_w, the forwards are serial, and the certifier accepted every forward's egress. Its Lean reader
-is `PouwCheck.Lead` (`lean/check/PouwCheck/Opening.lean`), which the package's difftest holds to these functions.
+The verifier refuses the window (`window_refusal`) unless its record opens to its weights' root, stream, prover, keyLeaf
+and call count, every A root follows salt_w, the forwards are serial, and the certifier accepted every forward's egress.
+Its Lean reader is `PouwCheck.Lead` (`lean/check/PouwCheck/Opening.lean`), which the package's difftest holds to these
+functions.
 """
 from __future__ import annotations
 
@@ -955,8 +957,9 @@ class Call:
 
 # -- the window ---------------------------------------------------------------------------------------------------------------
 
-#: the lead's registration record's tag: the record is SHA-512(RECORD_TAG ‖ root(weights) ‖ keyLeaf ‖ u64be(calls))
-RECORD_TAG = b"pouw/lead/register/v1"
+#: the lead's registration record's tag: the record is SHA-512(RECORD_TAG ‖ root(weights) ‖ stream ‖ prover ‖ keyLeaf ‖
+#: u64be(calls))
+RECORD_TAG = b"verity/pouw-lead-record/v1"
 #: an instance's tree binding's tag, and its leaves' schemas
 INSTANCE_TAG, WORDS_SCHEMA, A_SCHEMA = b"pouw/lead/instance/v1", "pouw/lead/words/v1", "pouw/lead/a/v1"
 #: the first words instance's position: A_j's instances are below it, a forward's words at it and above
@@ -970,12 +973,19 @@ ACCEPTED = "accepted"
 DIGEST = 64
 
 
-def lead_record(weights_root: bytes, key_leaf: bytes, calls: int) -> bytes:
+def lead_record(weights_root: bytes, stream: bytes, prover: bytes, key_leaf: bytes, calls: int) -> bytes:
     """The window's registration record, the 64 bytes the prover signs into the certifier's `commit_weights` slot before
-    salt_w is drawn: SHA-512(RECORD_TAG ‖ root(weights) ‖ keyLeaf ‖ u64be(calls)), each root 64 bytes."""
-    if len(weights_root) != DIGEST or len(key_leaf) != DIGEST or not 1 <= calls < WORDS_POSITION:
-        raise ValueError("a record binds a 64-byte weights root, a 64-byte keyLeaf and 1 .. 2^63 - 1 calls a forward")
-    return hashlib.sha512(RECORD_TAG + bytes(weights_root) + bytes(key_leaf) + calls.to_bytes(8, "big")).digest()
+    salt_w is drawn, in `pouw_record`'s place: SHA-512(RECORD_TAG ‖ root(weights) ‖ stream ‖ prover ‖ keyLeaf ‖
+    u64be(calls)), 290 bytes hashed. The verifier's calls are 1 .. 2^63 - 1, the positions' range."""
+    parts = (weights_root, stream, prover, key_leaf)
+    if not _digests(*parts) or type(calls) is not int or not 1 <= calls < WORDS_POSITION:
+        raise ValueError("a record binds a 64-byte weights root, stream, prover and keyLeaf and 1 .. 2^63 - 1 calls a "
+                         "forward")
+    return hashlib.sha512(RECORD_TAG + b"".join(parts) + calls.to_bytes(8, "big")).digest()
+
+
+def _digests(*xs) -> bool:
+    return all(type(x) is bytes and len(x) == DIGEST for x in xs)
 
 
 def position_refusal(forward: int, calls: int, call: int) -> str | None:
@@ -1118,23 +1128,24 @@ def forward_count(buckets: list[tuple[int, list[int]]], release: int) -> int:
     return sum(r.bit_length() + sum(frames) for r, frames in buckets) + release.bit_length()
 
 
-def window_refusal(record: bytes, weights_root: bytes, key_leaf: bytes, calls: int, events: list[dict]) -> str | None:
+def window_refusal(record: bytes, weights_root: bytes, stream: bytes, prover: bytes, key_leaf: bytes, calls: int,
+                   events: list[dict]) -> str | None:
     """Why the verifier refuses the lead's window from the certifier's record, else None. ``record`` is the window's
-    signed `commit_weights` record, which must be `lead_record` of its weights' root, keyLeaf and call count; ``events``
-    is the certifier's record in its order, each ``{"kind": "salt"}`` (salt_w drawn, once), ``{"kind": "a_root",
-    "forward", "call", "rows", "cols", "K", "bn"}`` (a call's A root and shape, which opens its forward) or
-    ``{"kind": "words_root", "forward", "verdict"}`` (the forward's words root, which closes it, and the certifier's
-    verdict on its egress). Refused: a record that doesn't open; an event of none of these kinds, or with a field that
-    isn't an integer (the verdict a string); an A root recorded before salt_w; a call with no position, a shape the
-    verifier doesn't admit, or a second A root of a call; an A root while another forward is open, so forwards overlap, or
-    of a closed forward; a words root of a forward not open; a forward whose verdict isn't `ACCEPTED`; and a forward still
-    open when the record ends. `PouwCheck.Lead.windowRefusal` is its Lean."""
+    signed `commit_weights` record, which must be `lead_record` of its weights' root, stream, prover, keyLeaf and call
+    count; ``events`` is the certifier's record in its order, each ``{"kind": "salt"}`` (salt_w drawn, once),
+    ``{"kind": "a_root", "forward", "call", "rows", "cols", "K", "bn"}`` (a call's A root and shape, which opens its
+    forward) or ``{"kind": "words_root", "forward", "verdict"}`` (the forward's words root, which closes it, and the
+    certifier's verdict on its egress). Refused: a record that doesn't open; an event of none of these kinds, or with a
+    field that isn't an integer (the verdict a string); an A root recorded before salt_w; a call with no position, a shape
+    the verifier doesn't admit, or a second A root of a call; an A root while another forward is open, so forwards
+    overlap, or of a closed forward; a words root of a forward not open; a forward whose verdict isn't `ACCEPTED`; and a
+    forward still open when the record ends. `PouwCheck.Lead.windowRefusal` is its Lean."""
     if not (type(calls) is int and 1 <= calls < WORDS_POSITION):
         return f"a window of {calls} calls a forward"
-    if len(weights_root) != DIGEST or len(key_leaf) != DIGEST or len(record) != DIGEST:
-        return "the record, the weights' root and keyLeaf are 64-byte SHA-512 digests"
-    if record != lead_record(weights_root, key_leaf, calls):
-        return "the window's record does not open to its weights' root, keyLeaf and call count"
+    if not _digests(record, weights_root, stream, prover, key_leaf):
+        return "the record, the weights' root, the stream, the prover and keyLeaf are 64 bytes each"
+    if record != lead_record(weights_root, stream, prover, key_leaf, calls):
+        return "the window's record does not open to its weights' root, stream, prover, keyLeaf and call count"
     salted, open_, seen, closed = False, None, set(), set()
     for k, e in enumerate(events):
         kind = e.get("kind") if isinstance(e, dict) else None

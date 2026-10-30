@@ -596,7 +596,8 @@ def _tally(fn: str, out: dict) -> dict:
 
 
 def lead_record(x: dict) -> dict:
-    record, why = _refused(L.lead_record, _hex(x, "weights_root"), _hex(x, "key_leaf"), _int(x, "calls"))
+    record, why = _refused(L.lead_record, *(_hex(x, k) for k in ("weights_root", "stream", "prover", "key_leaf")),
+                           _int(x, "calls"))
     return _tally("record", {"record": record.hex()} if why is None else {"refused": why})
 
 
@@ -639,10 +640,11 @@ def lead_egress(x: dict) -> dict:
 
 
 def lead_window(x: dict) -> dict:
-    record, root, leaf, calls = _hex(x, "record"), _hex(x, "weights_root"), _hex(x, "key_leaf"), _int(x, "calls")
+    digests = [_hex(x, k) for k in ("record", "weights_root", "stream", "prover", "key_leaf")]
+    calls = _int(x, "calls")
     if type(x.get("events")) is not list:
         raise D.Reject("the input's events is not a list")
-    return _tally("window", {"reason": L.window_refusal(record, root, leaf, calls, x["events"])})
+    return _tally("window", {"reason": L.window_refusal(*digests, calls, x["events"])})
 
 
 #: each lead function's reference, its cases and their mutations' names
@@ -653,7 +655,7 @@ LEADS = {"record": (lead_record, lead_cases.record_instance, lead_cases.RECORD_N
          "window": (lead_window, lead_cases.window_instance, lead_cases.WINDOW_NAMES)}
 #: the outcomes each one's run and sweep reach: every refusal, written as `_template` writes it
 LEAD_OUTCOMES = {
-    "record": {"ok", "a record binds a #-byte weights root, a #-byte keyLeaf and # .. #^# - # calls a forward"},
+    "record": {"ok", "a record binds a #-byte weights root, stream, prover and keyLeaf and # .. #^# - # calls a forward"},
     "instance": {"ok", "a #-byte salt_w and a u# position"},
     "unit": {"ok", "call #: K = # is outside [#, #], the inner dimensions the verifier admits",
              "call #: a call of # rows and # columns is outside the [#, #] rows and [#, #] columns the verifier admits",
@@ -664,8 +666,8 @@ LEAD_OUTCOMES = {
              "block # starts past the call's # steps"},
     "egress": {"ok", "refused"},
     "window": {"ok", "a window of # calls a forward",
-               "the record, the weights' root and keyLeaf are #-byte SHA# digests",
-               "the window's record does not open to its weights' root, keyLeaf and call count",
+               "the record, the weights' root, the stream, the prover and keyLeaf are # bytes each",
+               "the window's record does not open to its weights' root, stream, prover, keyLeaf and call count",
                "event #: not a salt, an A root or a words root", "event #: the a_root event's fields are malformed",
                "event #: the words_root event's fields are malformed", "event #: a second salt_w",
                "event #: forward #'s call # has an A root recorded before salt_w",

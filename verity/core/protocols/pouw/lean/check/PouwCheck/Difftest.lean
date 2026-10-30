@@ -38,15 +38,15 @@ harness (`verity/core/difftest`):
 The lead's window (`PouwCheck.Lead`, `circuit/lead.py`'s), a refusal as `{"refused": why}` where Python raises
 `ValueError`, and a malformed input a reject:
 
-* `lead-record` (`weights_root`, `key_leaf` as hex, `calls`): `lead_record` as `{"record": hex}`.
+* `lead-record` (`weights_root`, `stream`, `prover`, `key_leaf` as hex, `calls`): `lead_record` as `{"record": hex}`.
 * `lead-instance` (`salt` as hex, `position`, `schema`, `values` a list of hex): `instance_domain` over the values, as
   `{"domain", "leaves", "root"}`, leaf r the domain's leaf at rank r of value r and the root the tree's over them.
 * `lead-unit` (`shapes` a list of `[rows, cols, K, bn]`, `call`, `R0`, `C0`, `BLK`): `unit_opening` as `{"words": [[t,
   leaf, word], …], "a": [[lo, hi], …], "segments"}`.
 * `lead-egress` (`count`, `shapes` the forward's, admitted, `cap`, `fwd_macs`, `buckets` a list of `[r, [bits, …]]`,
   `release`): `egress_refused` and `forward_count` as `{"refused": bool, "count": n}`.
-* `lead-window` (`record`, `weights_root`, `key_leaf` as hex, `calls`, `events` the certifier's record): `window_refusal`
-  as `{"reason"}`, null when the window holds.
+* `lead-window` (`record`, `weights_root`, `stream`, `prover`, `key_leaf` as hex, `calls`, `events` the certifier's
+  record): `window_refusal` as `{"reason"}`, null when the window holds.
 -/
 
 namespace PouwCheck.Difftest
@@ -149,7 +149,8 @@ def shapesOf (j : Json) (k : String) : Except String (List Lead.Shape) := do
     | _ => throw s!"the input's {k} is malformed"
 
 def leadRecordOf (j : Json) : Except String Json := do
-  pure <| match Lead.leadRecord? (← hex j "weights_root") (← hex j "key_leaf") (← intOf j "calls") with
+  pure <| match Lead.leadRecord? (← hex j "weights_root") (← hex j "stream") (← hex j "prover") (← hex j "key_leaf")
+      (← intOf j "calls") with
     | .ok r => Json.mkObj [("record", .str (Flock.hexOf r))]
     | .error why => refused why
 
@@ -189,8 +190,8 @@ def leadEgressOf (j : Json) : Except String Json := do
 
 def leadWindowOf (j : Json) : Except String Json := do
   let .arr events ← get j "events" | throw "the input's events is not a list"
-  let why := Lead.windowRefusal (← hex j "record") (← hex j "weights_root") (← hex j "key_leaf") (← intOf j "calls")
-    events.toList
+  let why := Lead.windowRefusal (← hex j "record") (← hex j "weights_root") (← hex j "stream") (← hex j "prover")
+    (← hex j "key_leaf") (← intOf j "calls") events.toList
   pure (Json.mkObj [("reason", match why with
     | some r => .str r
     | none => .null)])

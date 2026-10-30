@@ -228,7 +228,8 @@ end PouwCheck
 # The lead's window (`circuit/lead.py`, "the window")
 
 The lead (`verity/pouw/v2`) registers before its window's salt: its 64-byte record in the certifier's `commit_weights`
-slot is `leadRecord?`, SHA-512 of `RECORD_TAG ‖ root(weights) ‖ keyLeaf ‖ u64be(calls)`, `calls` its calls a forward.
+slot, in `pouwRecord`'s place, is `leadRecord?`, SHA-512 of `RECORD_TAG ‖ root(weights) ‖ stream ‖ prover ‖ keyLeaf ‖
+u64be(calls)`, `calls` its calls a forward.
 Each call's A and each forward's words are an instance at a position of their own: A_j of forward f at f · calls + j
 (`aPosition`), the forward's words at 2^63 + f (`wordsPosition`). An instance is a frame-v3-sha512 tree bound to salt_w
 and its position (`instanceDomain?`), leaf r at rank and position r: A_j's rows · K bytes, row-major, in `A_SEGMENT`-byte
@@ -238,10 +239,11 @@ tiles in (row tile, column tile, step, column, row) order (`Shape.tile`), every 
 skipped, and a tile's 128 words in wgmma's fragment order (`fragment`). So a unit's opening (`unitOpening`) is a leaf and
 an offset for each step the unit reads, and an A run for each of its rows.
 
-`windowRefusal` reads the certifier's record of the window. The record opens to the window's weights' root, keyLeaf and
-call count. salt_w is drawn once, before any A root. Forwards are serial: a forward opens at its first A root, and its
-words root closes it under the certifier's verdict on its egress (`egressRefused`, its count kept under the certifier's
-boundary hold, `forwardCount`). Each call has one position and a shape the verifier admits (`Shape.refuse`).
+`windowRefusal` reads the certifier's record of the window. The record opens to the window's weights' root, stream,
+prover, keyLeaf and call count. salt_w is drawn once, before any A root. Forwards are serial: a forward opens at its
+first A root, and its words root closes it under the certifier's verdict on its egress (`egressRefused`, its count kept
+under the certifier's boundary hold, `forwardCount`). Each call has one position and a shape the verifier admits
+(`Shape.refuse`).
 -/
 
 namespace PouwCheck.Lead
@@ -251,7 +253,7 @@ open PouwWindow (pyGet? strictInt? bitLength)
 open PouwCommit (Domain)
 
 /-- The lead's registration record's tag. -/
-def RECORD_TAG : ByteArray := "pouw/lead/register/v1".toUTF8
+def RECORD_TAG : ByteArray := "verity/pouw-lead-record/v1".toUTF8
 /-- An instance's tree binding's tag, and its leaves' schemas. -/
 def INSTANCE_TAG : ByteArray := "pouw/lead/instance/v1".toUTF8
 def WORDS_SCHEMA : String := "pouw/lead/words/v1"
@@ -279,12 +281,13 @@ def MAX_COLS : Nat := 2 ^ 20
 def ACCEPTED : String := "accepted"
 def DIGEST : Nat := 64
 
-/-- `lead_record`: SHA-512(`RECORD_TAG` ‖ root(weights) ‖ keyLeaf ‖ u64be(calls)), each root 64 bytes and
-1 ≤ calls < 2^63. -/
-def leadRecord? (weightsRoot keyLeaf : ByteArray) (calls : Int) : Except String ByteArray :=
-  if weightsRoot.size != DIGEST || keyLeaf.size != DIGEST || !(1 ≤ calls && calls < (WORDS_POSITION : Int)) then
-    throw "a record binds a 64-byte weights root, a 64-byte keyLeaf and 1 .. 2^63 - 1 calls a forward"
-  else pure (Flock.Sha512.hash (RECORD_TAG ++ weightsRoot ++ keyLeaf ++ PouwCommit.be8 calls.toNat))
+/-- `lead_record`: SHA-512(`RECORD_TAG` ‖ root(weights) ‖ stream ‖ prover ‖ keyLeaf ‖ u64be(calls)), every part
+64 bytes and 1 ≤ calls < 2^63. -/
+def leadRecord? (weightsRoot stream prover keyLeaf : ByteArray) (calls : Int) : Except String ByteArray :=
+  let parts := [weightsRoot, stream, prover, keyLeaf]
+  if parts.any (·.size != DIGEST) || !(1 ≤ calls && calls < (WORDS_POSITION : Int)) then
+    throw "a record binds a 64-byte weights root, stream, prover and keyLeaf and 1 .. 2^63 - 1 calls a forward"
+  else pure (Flock.Sha512.hash (parts.foldl (· ++ ·) RECORD_TAG ++ PouwCommit.be8 calls.toNat))
 
 /-- `position_refusal`: why call `call` of forward `forward` has no position in a window of `calls` calls a forward. -/
 def positionRefusal (forward calls call : Int) : Option String :=
@@ -431,16 +434,18 @@ def forwardCount (buckets : List (Nat × List Nat)) (release : Nat) : Nat :=
   (buckets.map fun (r, frames) => bitLength r + frames.sum).sum + bitLength release
 
 /-- `window_refusal`: why the verifier refuses the lead's window from the certifier's record, else none. `record` is the
-window's signed `commit_weights` record, which must be `leadRecord?` of its weights' root, keyLeaf and call count, and
-`events` the certifier's record in its order: `{"kind": "salt"}` (salt_w drawn, once), `{"kind": "a_root", "forward",
-"call", "rows", "cols", "K", "bn"}` (a call's A root and shape, which opens its forward), or `{"kind": "words_root",
-"forward", "verdict"}` (the forward's words root, which closes it, and the certifier's verdict on its egress). -/
-def windowRefusal (record weightsRoot keyLeaf : ByteArray) (calls : Int) (events : List Json) : Option String := Id.run do
+window's signed `commit_weights` record, which must be `leadRecord?` of its weights' root, stream, prover, keyLeaf and
+call count, and `events` the certifier's record in its order: `{"kind": "salt"}` (salt_w drawn, once), `{"kind":
+"a_root", "forward", "call", "rows", "cols", "K", "bn"}` (a call's A root and shape, which opens its forward), or
+`{"kind": "words_root", "forward", "verdict"}` (the forward's words root, which closes it, and the certifier's verdict
+on its egress). -/
+def windowRefusal (record weightsRoot stream prover keyLeaf : ByteArray) (calls : Int) (events : List Json) :
+    Option String := Id.run do
   if !(1 ≤ calls && calls < (WORDS_POSITION : Int)) then return some s!"a window of {calls} calls a forward"
-  if weightsRoot.size != DIGEST || keyLeaf.size != DIGEST || record.size != DIGEST then
-    return some "the record, the weights' root and keyLeaf are 64-byte SHA-512 digests"
-  unless (leadRecord? weightsRoot keyLeaf calls).toOption == some record do
-    return some "the window's record does not open to its weights' root, keyLeaf and call count"
+  if [record, weightsRoot, stream, prover, keyLeaf].any (·.size != DIGEST) then
+    return some "the record, the weights' root, the stream, the prover and keyLeaf are 64 bytes each"
+  unless (leadRecord? weightsRoot stream prover keyLeaf calls).toOption == some record do
+    return some "the window's record does not open to its weights' root, stream, prover, keyLeaf and call count"
   let mut salted := false
   let mut opened : Option Int := none
   let mut seen : List (Int × Int) := []

@@ -358,13 +358,35 @@ def _shape_at(rows: int, cols: int, S: int, bn: int) -> L.Shape:
     return sh
 
 
-def test_the_record_is_the_tagged_preimage():
-    root, leaf = hashlib.sha512(b"weights").digest(), hashlib.sha512(b"key leaf").digest()
-    assert L.lead_record(root, leaf, 7) == hashlib.sha512(b"pouw/lead/register/v1" + root + leaf + bytes(7) + b"\x07").digest()
-    assert len({L.lead_record(root, leaf, c) for c in (1, 2, 1 << 62)} | {L.lead_record(leaf, root, 1)}) == 4
-    for bad in ((root[:63], leaf, 1), (root, leaf + b"\0", 1), (root, leaf, 0), (root, leaf, 1 << 63)):
+def test_the_record_form():
+    """The record is SHA-512(b"verity/pouw-lead-record/v1" ‖ weights' root ‖ stream ‖ prover ‖ keyLeaf ‖ u64be(calls)),
+    290 bytes, pinned on the keyed leaf's two known answers: the lead's keyed vector (its keyLeaf the `hm96.SHA512` tree
+    leaf over ks_w) and one of consecutive bytes. Any other part is another record; a part that isn't 64 bytes, and calls
+    outside 1 .. 2^63 - 1 (the positions' range, within a positive u64), are refused."""
+    weights, ks_w, stream, prover = (hashlib.sha512(f"lead/keyed/vector/{n}".encode()).digest()
+                                     for n in ("weights", "ks_w", "stream", "prover"))
+    leaf = bytes.fromhex("e121d1ae87e74b21ddb3585cff79d9c21aac50281d5e3a77fa18453007ae3f8d"
+                         "1315a9b3c0dda315ed6e199f57f62a9dee19a9fa4fcd25ac67be7c612672c095")
+    assert L.lead_record(weights, stream, prover, leaf, 64).hex() == (
+        "546ffb4bbb7d5ead4ecbdbe7ada190d9e4201369fb8659b6327e459d21c5b7f3"
+        "a2860f62d77c0ed21185f131b71eabf5fb9f45b9e074891f0e300fa0cfe6edbe")
+    stream, prover, root, leaf = (bytes(range(i, i + 64)) for i in (0, 64, 128, 192))
+    assert L.lead_record(root, stream, prover, leaf, 3).hex() == (
+        "7d1472590172ae63855670e09f66e734792de175ac711a0a6be3992c94a3f6e7"
+        "671957517ba0a0db3c3541aea569ceb0fbcd912675444e1e5a0dd91aba53075f")
+    message = L.RECORD_TAG + root + stream + prover + leaf + (3).to_bytes(8, "big")
+    assert len(message) == 290 and L.lead_record(root, stream, prover, leaf, 3) == hashlib.sha512(message).digest()
+    parts = [root, stream, prover, leaf]
+    others = {L.lead_record(*parts, c) for c in (1, 2, 1 << 62)}
+    others |= {L.lead_record(*parts[:k], ks_w, *parts[k + 1:], 1) for k in range(4)}
+    assert len(others) == 7
+    for k in range(4):
+        for bad in (parts[k][:63], parts[k] + b"\0", bytearray(parts[k]), parts[k].hex()):
+            with pytest.raises(ValueError):
+                L.lead_record(*parts[:k], bad, *parts[k + 1:], 1)
+    for calls in (0, -1, 1 << 63, True, 3.0):
         with pytest.raises(ValueError):
-            L.lead_record(*bad)
+            L.lead_record(*parts, calls)
 
 
 def test_positions_are_injective_and_the_domains_are_the_committers():
@@ -464,9 +486,11 @@ def test_egress_is_bounded_per_forward_under_the_hold():
     assert L.forward_count([(3, [1, 2]), (1, [7])], 3) == 2 + 3 + 1 + 7 + 2
 
 
+PARTS = [hashlib.sha512(n).digest() for n in (b"weights", b"stream", b"prover", b"key leaf")]
+
+
 def _window(calls: int, events: list[dict], record: bytes | None = None) -> str | None:
-    root, leaf = hashlib.sha512(b"weights").digest(), hashlib.sha512(b"key leaf").digest()
-    return L.window_refusal(L.lead_record(root, leaf, calls) if record is None else record, root, leaf, calls, events)
+    return L.window_refusal(L.lead_record(*PARTS, calls) if record is None else record, *PARTS, calls, events)
 
 
 def _a(f: int, j: int, rows: int = 5, cols: int = 64, K: int = 128, bn: int = 128) -> dict:
@@ -484,8 +508,8 @@ SALTED = {"kind": "salt"}
     (2, [SALTED, _a(0, 0), _a(0, 1), _w(0), _a(1, 1), _a(1, 0), _w(1)], None, None),
     (2, [SALTED], None, None),
     (2, [SALTED, _a(0, 0), _w(0)], b"\0" * 64, "does not open"),
-    (3, [SALTED, _a(0, 0), _w(0)], L.lead_record(hashlib.sha512(b"weights").digest(), hashlib.sha512(b"key leaf").digest(),
-                                                 2), "does not open"),
+    (3, [SALTED, _a(0, 0), _w(0)], L.lead_record(*PARTS, 2), "does not open"),
+    (3, [SALTED, _a(0, 0), _w(0)], L.lead_record(*PARTS[:2], PARTS[0], PARTS[3], 3), "does not open"),
     (2, [_a(0, 0), SALTED, _w(0)], None, "before salt_w"),
     (2, [SALTED, SALTED], None, "second salt_w"),
     (2, [SALTED, _a(0, 0), _a(1, 0), _w(1), _w(0)], None, "overlap"),
