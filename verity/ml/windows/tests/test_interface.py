@@ -415,7 +415,7 @@ def test_a_record_that_lists_its_members_declares_its_window_ingress_and_is_coun
     with pytest.raises(ValueError, match="both fill rows"):
         I.input_count({**listed, W: [first.doc(), {**first.doc(), "at": 1, "units": 1}]})
     for k, v in (("cuts", {GID: {"x": 2}}), ("ingress", [first.doc()])):
-        with pytest.raises(ValueError, match="no cuts, registered reads, ingress or blocks"):
+        with pytest.raises(ValueError, match="no cuts, run ingress or blocks"):
             I.circuit_record(win.window, "chain", [(GID, 8)], declared={k: v})
         with pytest.raises(ValueError, match="one or the other"):
             I.window_of_record({**listed, k: v}, LAW, by_id)
@@ -425,6 +425,41 @@ def test_a_record_that_lists_its_members_declares_its_window_ingress_and_is_coun
         I.circuit_record(win.window, "chain", [(GID, 8)], cap=2, wires=chain().wires, declared={W: [first.doc()]})
     with pytest.raises(ValueError, match="one or the other"):
         I.window_of_record({**json.loads(I.circuit_bytes(win.circuit_record())), W: [first.doc()]}, LAW, by_id)
+
+
+def test_a_record_that_lists_its_members_declares_its_registered_reads_and_counts_them_free():
+    """A listed record carries registered reads beside its members and its window ingress (a served window's of its
+    weights), in the stated record's form, and the verifier's window and the count read them; the count leaves their rows
+    free, pinned or not, since no audit opens a listed record's reads against the pinned roots. A read of part of a member,
+    cut, of no registered parameter, of rows that aren't whole rows of its parameter or past its leaves, of a wired row or
+    of the window ingress's rows is refused by the record, the verifier's window and the count, as are a listed record's
+    tables."""
+    win, by_id, W = I.Window(chain(), RUN, LAW, 2), {GID: GEMM}.__getitem__, I.WINDOW_INGRESS
+    read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, REQUESTS * STEPS), base=0, step=(256, 0))
+    reg, first = I.Registered({"w": LAYERS * 256}, reads=(read,)), I.Ingress(GID, "x", 0, REQUESTS, 0)
+    declared = {W: [first.doc()], "registered": reg.doc()}
+    listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "chain", [(GID, 8)], declared=declared)))
+    assert listed["registered"] == json.loads(json.dumps(reg.doc())) and "cap" not in listed
+    assert I.window_of_record(listed, LAW, by_id).members == win.window.members
+    x, w = 16 * 16, 16 * 16 * 16
+    count = {"units": 8, "inputs": 8 * (x + w), "wired": 6 * x, "registered": 0, "ingress": 0, W: 2 * x, "free": 8 * w + 2 * x}
+    assert I.input_count(listed) == I.input_count(listed, pins={"w": "ab"}, roots={"w": "ab"}) == count
+    for bad, why in [(I.Read(GID, "w", "w", 1, (1,), 0, (0,)), "a read covers whole members"),
+                     (I.Read(GID, "w", "w", 0, (2,), 0, (0,), cut=(0, 2)), "an uncut read"),
+                     (I.Read(GID, "w", "v", 0, (2,), 0, (0,)), "of a registered parameter"),
+                     (I.Read(GID, "w", "w", 0, (2,), 16, (0,)), "whole rows of"),
+                     (I.Read(GID, "w", "w", 0, (2,), 512, (0,)), "whole rows of"),
+                     (I.Read(GID, "x", "w", 4, (2,), 0, (0,)), "a wire or a shared-row table fills it"),
+                     (I.Read(GID, "x", "w", 0, (2,), 0, (0,)), "both fill rows")]:
+        doc = json.loads(json.dumps(replace(reg, reads=(bad,)).doc()))
+        with pytest.raises(ValueError, match=why):
+            I.circuit_record(win.window, "chain", [(GID, 8)], declared={**declared, "registered": doc})
+        for f in (lambda d: I.window_of_record(d, LAW, by_id), I.input_count):
+            with pytest.raises(ValueError, match=why):
+                f({**listed, "registered": doc})
+    tables = json.loads(json.dumps(replace(reg, tables=(I.Table("t", "w", 0, 16, 32),)).doc()))
+    with pytest.raises(ValueError, match="registers reads only"):
+        I.input_count({**listed, "registered": tables})
 
 
 def test_a_wire_reads_whole_rows_among_its_templates_units_each_reader_port_once():
