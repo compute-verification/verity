@@ -30,7 +30,8 @@ verifier at which `Claims.Sampling.KS` holds, and every public layout `lay` and 
 With no unit faulty, the advice holds no gate, and `Accepted` is exact. -/
 def SampledAuditAccepted : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-    (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ),
+    (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ),
     KS H D → KSAccepted H D L K S lay k
 
 end NetTiming.Guarantees
