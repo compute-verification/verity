@@ -2,6 +2,7 @@ import Definitions.Core
 import Definitions.Core.Accel
 import Definitions.Core.Assumptions.Accel
 import Definitions.Core.Blocks
+import Definitions.Core.Period
 import Definitions.Core.DeviceFigures
 import Definitions.Core.Site
 import Definitions.Nci
@@ -16,6 +17,7 @@ import Definitions.Pous.Guarantees.StreamedWipeFamily
 import Definitions.Pous.Guarantees.StreamedWipeReads
 import Definitions.Pous.Guarantees.StreamedWipeServer
 import Definitions.Pous.Guarantees.StreamedWipeDisk
+import Definitions.Pous.Guarantees.StreamedWipeInfo
 import Definitions.Pouw
 import Definitions.NetworkCertifier
 import Definitions.NetworkCertifier.Guarantees.SampledAudit
