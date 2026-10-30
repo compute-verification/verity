@@ -405,6 +405,10 @@
    "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
    "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
   },
+  "Properties.NetworkCertifier.forwardsNoControlWhileOpen": {
+   "honest": ["Properties.NetworkCertifier.forwardsNoControlWhileOpen_honest"],
+   "nontrivial": "Properties.NetworkCertifier.forwardsNoControlWhileOpen_nontrivial"
+  },
   "Properties.NetworkCertifier.refusesPastCallBits": {
    "honest": ["Properties.NetworkCertifier.refusesPastCallBits_honest"],
    "nontrivial": "Properties.NetworkCertifier.refusesPastCallBits_nontrivial"
@@ -2268,6 +2272,15 @@
    "assumptions": [],
    "type_hash": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953"
   },
+  "Properties.NetworkCertifier.forwardsNoControlWhileOpen": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkCertifier.forwardsNoControlWhileOpen_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkCertifier.forwardsNoControlWhileOpen_nontrivial": {
+   "owner": "@network-accounting"
+  },
   "Properties.NetworkCertifier.refusesPastCallBits": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkCertifier.refusesPastCallBits : Properties.NetworkCertifier.RefusesPastCallBits"],
@@ -4111,6 +4124,10 @@
     "function": "NetworkCheck.LinkWindow.verdict",
     "outcome": "accept"
    },
+   "Properties.NetworkCertifier.forwardsNoControlWhileOpen": {
+    "function": "NetworkCertifier.Calls.run",
+    "outcome": "none"
+   },
    "Properties.NetworkCertifier.refusesPastCallBits": {
     "function": "NetworkCertifier.Calls.run",
     "outcome": "accept"
@@ -4656,6 +4673,8 @@
    "Properties.Site.checks_nontrivial": "lemma: Checks's nontrivial lemma: a log check that accepts everything accepts staleLog, which is not valid, so Checks says something of the code's check",
    "Properties.Site.refusedAt_honest": "completeness: RefusedAt's honest lemma: the code's check accepts honestLog and refuses staleLog at its second entry, as not following the head, each decided by the code's check, so RefusedAt holds at a concrete log",
    "Properties.Site.refusedAt_nontrivial": "lemma: RefusedAt's nontrivial lemma: a log check that refuses everything at its first entry, as not following the head, names a refusal the spec does not give honestLog's first entry, so RefusedAt says something of the code's check",
+   "Properties.NetworkCertifier.forwardsNoControlWhileOpen_honest": "completeness: ForwardsNoControlWhileOpen's honest lemma: the certifier program's calls answer closedEvents' close with the record of its forward, its call, words root and verdict, decided by the program's run, so the record ForwardsNoControlWhileOpen reads is answered at a concrete window",
+   "Properties.NetworkCertifier.forwardsNoControlWhileOpen_nontrivial": "lemma: ForwardsNoControlWhileOpen's nontrivial lemma: a certifier answering every event with a record (forwardsAll) forwards honestEvents' A root while the count it opens is open, so ForwardsNoControlWhileOpen says something of the program's calls",
    "Properties.NetworkCertifier.refusesPastCallBits_honest": "completeness: RefusesPastCallBits' honest lemma: the certifier program's calls accept honestEvents' forward of one call at its words root, its bucket's bits and the release's at its cap, decided by the program's run, so RefusesPastCallBits holds at a concrete window",
    "Properties.NetworkCertifier.refusesPastCallBits_nontrivial": "lemma: RefusesPastCallBits' nontrivial lemma: a certifier taking every event (acceptsAll) accepts pastEvents' forward, whose 1,001 bits pass its cap of 32, so RefusesPastCallBits says something of the program's calls",
    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest": "completeness: WipeSigned's honest lemma: at S1's deployed LMS parameters a key Lms.keygen derives signs the honest session at r20261026-094403-bb5f's parameters (2^24 labels, k = 2152 reads one at a time, 20 ms each) and clock readings (each read at the slowest round trip measured, 1.40 ms), and the wipe's compiled check of the period that trusts the key accepts it, so WipeSigned's hypothesis holds at the honest deployed instance",

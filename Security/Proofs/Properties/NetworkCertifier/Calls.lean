@@ -1,7 +1,7 @@
 import Properties.NetworkCertifier.Calls
 
 /-!
-# The certifier's calls: `RefusesPastCallBits`
+# The certifier's calls: `RefusesPastCallBits` and `ForwardsNoControlWhileOpen`
 
 `refusesPastCallBits`: a forward whose words root the certifier accepts stayed within its bits. The proof carries an
 invariant (`Inv`) over the window's events and answers so far and the certifier's state after them: each forward's
@@ -13,6 +13,12 @@ doesn't pass the cap.
 Its witnesses: `refusesPastCallBits_honest`, that the certifier accepts `honestEvents`' forward at its words root, and
 `refusesPastCallBits_nontrivial`, that a certifier taking every event (`acceptsAll`) accepts `pastEvents`' forward,
 which is past its bits.
+
+`forwardsNoControlWhileOpen`: the certifier forwards nothing received on the control channel while a forward's count is
+open. Only a close the certifier takes is answered with the record (`step_sent`), and that close ends every count. Its
+witnesses: `forwardsNoControlWhileOpen_honest`, that the certifier answers `closedEvents`' close with the record of its
+forward, and `forwardsNoControlWhileOpen_nontrivial`, that a certifier answering every event with a record
+(`forwardsAll`) forwards `honestEvents`' A root while the count it opens is open.
 -/
 
 open NetworkCertifier.Calls
@@ -634,6 +640,36 @@ theorem step_wordsRoot_accepted {cap : Cap} {rb : Nat} {st : State} {k : Nat} {r
     injection hv with hv
     exact ⟨f, hf, hv⟩
 
+/-! ## What leaves -/
+
+theorem sent_refused {a : CallAnswer} (h : sent a = true) : refused a = false := by
+  cases a <;> simp_all [sent, refused]
+
+/-- Only a close is answered with the record. -/
+theorem step_sent (cap : Cap) (rb : Nat) (st : State) (ev : Event) (h : sent (step cap rb st ev).2 = true) :
+    ev = .close := by
+  cases ev with
+  | aRoot forward call root shape =>
+    simp only [step] at h
+    split at h
+    · simp [sent] at h
+    · cases hf : NetworkCertifier.Calls.flip shape st.entropy with
+      | none => simp [hf, sent] at h
+      | some p => obtain ⟨c, e⟩ := p; simp [hf, sent] at h
+  | bucket r frames =>
+    simp only [step] at h
+    split at h
+    · simp [sent] at h
+    · cases ho : st.isOpen <;> simp [ho, sent] at h
+  | wordsRoot forward root =>
+    simp only [step] at h
+    split at h
+    · simp [sent] at h
+    · cases hf : st.forwards.find? (·.id == forward) with
+      | none => simp [hf, sent] at h
+      | some f => simp [hf, sent] at h
+  | close => rfl
+
 end CallsProofs
 
 open CallsProofs
@@ -709,5 +745,40 @@ theorem refusesPastCallBits_nontrivial : ¬WithinBits witnessCap 0 (acceptsAll p
   have := h 0 (by decide) _ rfl ⟨0, witnessRoot, witnessShape, rfl, rfl⟩
   revert this
   decide
+
+/-- **The certifier forwards nothing received on the control channel while a forward's count is open.** -/
+theorem forwardsNoControlWhileOpen : ForwardsNoControlWhileOpen := by
+  rintro cap rb e evs j ⟨ev, a⟩ hx hs k ⟨c, hc, y, hy, ht, hn⟩
+  have hz := hx
+  rw [List.getElem?_zip_eq_some] at hz
+  obtain ⟨hev, hans⟩ := hz
+  rw [run_getElem?, hev] at hans
+  simp only [Option.map_some, Option.some.injEq] at hans
+  have hsent : sent a = true := hs
+  have hclose : ev = .close :=
+    step_sent cap rb (run cap rb (State.init e) (evs.take j)).2 ev (by rw [hans]; exact hsent)
+  by_cases hcj : c < j
+  · exact hn j hcj (Nat.lt_succ_self j) _ hx ⟨sent_refused hsent, Or.inl hclose⟩
+  · obtain rfl : c = j := by omega
+    rw [hx] at hy
+    cases hy
+    obtain ⟨c', root, s, he, -⟩ := ht
+    simp [hclose] at he
+
+/-! ## Its witnesses -/
+
+/-- `ForwardsNoControlWhileOpen`'s honest witness: the certifier answers `closedEvents`' close with the record of its
+forward, its call, words root and verdict. -/
+theorem forwardsNoControlWhileOpen_honest :
+    (closedEvents.zip (run witnessCap honestReleaseBits (State.init honestEntropy) closedEvents).1)[3]? =
+      some (.close, .record [⟨0, [⟨0, witnessShape, witnessRoot⟩], some witnessRoot, .accepted⟩]) := by
+  rfl
+
+/-- `ForwardsNoControlWhileOpen`'s nontrivial witness: a certifier answering every event with a record (`forwardsAll`)
+forwards `honestEvents`' A root while the count it opens is open. -/
+theorem forwardsNoControlWhileOpen_nontrivial : ¬NoControlWhileOpen (forwardsAll honestEvents) := by
+  intro h
+  exact h 0 _ rfl rfl 0 ⟨0, Nat.zero_lt_one, _, rfl, ⟨0, witnessRoot, witnessShape, rfl, rfl⟩,
+    fun d h0 h1 => absurd h1 (by omega)⟩
 
 end Properties.NetworkCertifier

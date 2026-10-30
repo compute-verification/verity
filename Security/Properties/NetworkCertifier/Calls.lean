@@ -3,20 +3,28 @@ import NetworkCertifier.Calls
 /-!
 # The certifier's calls: what its Lean code (`NetworkCertifier.Calls`) does
 
-The property of `NetworkCertifier.Calls.run`, the certifier program's window of calls (`calls.Calls` in
-`verity/core/protocols/certifier/calls.py`, held to it by `CallsDifftest`), stated against its functions as they run:
-`RefusesPastCallBits`, that a forward whose words root the certifier accepts stayed within its bits. From any call of
-the forward the certifier took to its words root, the bits of every bucket it counted, with the node's release at the
-boundary, are at most `cap · Σ macs / fwdMacs` over the forward's calls, compared in integers. A forward past them is
-refused. `Proofs.Properties.NetworkCertifier.Calls` proves it.
+The properties of `NetworkCertifier.Calls.run`, the certifier program's window of calls (`calls.Calls` in
+`verity/core/protocols/certifier/calls.py`, held to it by `CallsDifftest`), stated against its functions as they run.
+`Proofs.Properties.NetworkCertifier.Calls` proves them.
+
+* `RefusesPastCallBits`: a forward whose words root the certifier accepts stayed within its bits. From any call of the
+  forward the certifier took to its words root, the bits of every bucket it counted, with the node's release at the
+  boundary, are at most `cap · Σ macs / fwdMacs` over the forward's calls, compared in integers. A forward past them is
+  refused.
+* `ForwardsNoControlWhileOpen`: the certifier forwards nothing received on the control channel while a forward's count
+  is open. The one answer that leaves for anyone but an event's sender is the window's record (`sent`), which carries
+  the prover's registrations, and once the certifier has answered it, no forward's count is open (`OpenAfter`): none
+  took a call that no words root of its own or close it took has ended since.
 
 The predicates below read a window's events beside the certifier's answers to them (`evs.zip (run …).1`): the bits of
 a bucket it counted (`countedBits`, its timing bits and its real frames' content bits) and the MACs of a call it took
 (`callMacs`), in the program's own terms (`timingBits`, `Shape.macs`). None restates the count.
 
-Its two lemmas read the instances at the end: the honest one, that the certifier accepts a forward of one call at its
-words root (`honestEvents`); the nontrivial one, that a certifier taking every event (`acceptsAll`) accepts a forward
-past its bits (`pastEvents`).
+The lemmas read the instances at the end. `RefusesPastCallBits`': the honest one, that the certifier accepts a forward
+of one call at its words root (`honestEvents`); the nontrivial one, that a certifier taking every event (`acceptsAll`)
+accepts a forward past its bits (`pastEvents`). `ForwardsNoControlWhileOpen`'s: the honest one, that the certifier
+answers the window's close with the record (`closedEvents`); the nontrivial one, that a certifier answering every event
+with a record (`forwardsAll`) forwards an A root while the count it opens is open.
 -/
 
 open NetworkCertifier.Calls
@@ -63,10 +71,38 @@ def RefusesPastCallBits : Prop :=
     (evs.zip (run cap releaseBits (State.init e) evs).1)[i]? = some (.wordsRoot k root, .verdict .accepted) →
       WithinBits cap releaseBits (evs.zip (run cap releaseBits (State.init e) evs).1) i k
 
+/-- Whether an answer leaves for anyone but its event's sender: the window's record, which goes to the auditor. A
+release, a verdict and a refusal answer the prover on the control channel, and a counted bucket its link. -/
+def sent : CallAnswer → Bool
+  | .record _ => true
+  | _ => false
+
+/-- `x` ends forward `k`'s count: a words root of `k`, or the window's close, that the certifier took. -/
+def EndsCount (k : Nat) (x : Event × CallAnswer) : Prop :=
+  refused x.2 = false ∧ (x.1 = .close ∨ ∃ root, x.1 = .wordsRoot k root)
+
+/-- Forward `k`'s count is open after the first `j` events of `xs`: the certifier took a call of `k` among them, and
+none of them since ended `k`'s count. -/
+def OpenAfter (xs : List (Event × CallAnswer)) (j k : Nat) : Prop :=
+  ∃ c < j, ∃ x, xs[c]? = some x ∧ TookCall k x ∧ ∀ d, c < d → d < j → ∀ y, xs[d]? = some y → ¬EndsCount k y
+
+/-- No answer of `xs` leaves while a forward's count is open: after an event the certifier answers with what leaves
+(`sent`), no forward's count is open. -/
+def NoControlWhileOpen (xs : List (Event × CallAnswer)) : Prop :=
+  ∀ j x, xs[j]? = some x → sent x.2 = true → ∀ k, ¬OpenAfter xs (j + 1) k
+
+/-- **The certifier forwards nothing received on the control channel while a forward's count is open**
+(`NoControlWhileOpen`): in a window from its start with entropy `e`, each event beside the certifier's answer to it,
+the record, which carries the prover's registrations, leaves only once every count has ended. -/
+def ForwardsNoControlWhileOpen : Prop :=
+  ∀ (cap : Cap) (releaseBits : Nat) (e : List Nat) (evs : List Event),
+    NoControlWhileOpen (evs.zip (run cap releaseBits (State.init e) evs).1)
+
 /-! ## The witnesses' instances
 
-A forward of one call the certifier accepts, one past its bits, and a certifier that takes every event: what the
-property's honest and nontrivial witnesses (`Proofs.Properties.NetworkCertifier.Calls`) are stated at. -/
+A forward of one call the certifier accepts, one past its bits, the first with the window's close, a certifier that
+takes every event and one that forwards every event: what the properties' honest and nontrivial witnesses
+(`Proofs.Properties.NetworkCertifier.Calls`) are stated at. -/
 
 /-- A call of one row, one column and an inner dimension of 1: 16 rows and 8 columns committed in one step, 120 bytes of
 entropy. -/
@@ -95,12 +131,19 @@ def pastEvents : List Event :=
   [.aRoot 0 0 witnessRoot witnessShape, .bucket 1 [1000], .wordsRoot 0 witnessRoot]
 
 /-- A certifier that takes every event: each A root answered with an empty release, each bucket counted, each words
-root accepted, and the close with no verdicts. -/
+root accepted, and the close with an empty record. -/
 def acceptsAll (evs : List Event) : List (Event × CallAnswer) :=
   evs.map fun ev => (ev, match ev with
     | .aRoot .. => .release []
     | .bucket .. => .counted
     | .wordsRoot .. => .verdict .accepted
-    | .close => .verdicts [])
+    | .close => .record [])
+
+/-- `honestEvents` and the window's close. -/
+def closedEvents : List Event := honestEvents ++ [.close]
+
+/-- A certifier that forwards every event it takes: each answered with a record. -/
+def forwardsAll (evs : List Event) : List (Event × CallAnswer) :=
+  evs.map fun ev => (ev, .record [])
 
 end Properties.NetworkCertifier
