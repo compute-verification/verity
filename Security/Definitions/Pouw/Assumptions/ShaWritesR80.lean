@@ -47,18 +47,13 @@ namespace Pouw.Assumptions.R80
 
 open Pouw.PearlC Pouw.PearlC.W1
 
-/-- `k` rotated right a byte at a time, at most `r` times, until both 32-bit halves have a nonzero bit in 4..6. -/
-def xcRot : ℕ → ℕ → ℕ
-  | 0, k => k
-  | r + 1, k => if (k >>> 4) % 8 ≠ 0 ∧ (k >>> 36) % 8 ≠ 0 then k else xcRot r (Sha512.rotr k 8)
-
-/-- **R80X's constant for word `t`** of a block: `K_{t+40}` rotated by `xcRot`, then each 32-bit half's low nibble
-set to `0x1`. Each half is odd and not `2^32 - 1` or `2^31 - 1`, so the XOR is no add (it would be at `0`, `2^31`,
-`2^32 - 1` and `2^31 - 1`); bits 4..6 keep each half's low byte off `0x01` and `0x81`, where a one-sided add and a
-`LOP3` match the XOR on the low byte. -/
+/-- **R80X's constant for word `t`** of a block: `K_{t+40}` with each 32-bit half's low five bits set to `0x11`, so
+each half ends in `0x1` with bit 4 set. Each half is odd and not `2^32 - 1` or `2^31 - 1`, so the XOR is no add (it
+would be at `0`, `2^31`, `2^32 - 1` and `2^31 - 1`); bit 4 keeps each half's low byte off `0x01` and `0x81`, where a
+one-sided add and a `LOP3` match the XOR on the low byte. -/
 def xc (t : ℕ) : ℕ :=
-  let k := xcRot 8 (Sha512.K.getD ((t + 40) % 80) 0)
-  k - k % 16 - (k >>> 32) % 16 * 2 ^ 32 + 2 ^ 32 + 1
+  let k := Sha512.K.getD ((t + 40) % 80) 0
+  k - k % 32 - (k >>> 32) % 32 * 2 ^ 32 + 0x11 * 2 ^ 32 + 0x11
 
 /-- A state's 8 words as the working registers. -/
 def regsOf (cv : List ℕ) : Sha512.Regs :=
@@ -146,7 +141,7 @@ def ShaWritesR80X (dv : W1Device) (ε : ℚ) {D S : Type} [Fintype S] {m : ℕ} 
     Prop :=
   ShaWritesR80 xc dv 30 14 ε inst
 
-example : xc 0 = 0xa2bfe8a14cf10361 ∧ xc 1 = 0x01a81a614bbc4231 ∧ xc 79 = 0x3b92722185148231 := by decide +kernel
+example : xc 0 = 0xa2bfe8b14cf10371 ∧ xc 1 = 0xa81a6651bc423011 ∧ xc 79 = 0x92722c9114823531 := by decide +kernel
 
 example : block (fun _ => 0) Sha512.IV (Sha512.schedule 64 (Sha512.blockWords (Sha512.pad [0x61, 0x62, 0x63]))) =
     Sha512.compress Sha512.IV (Sha512.blockWords (Sha512.pad [0x61, 0x62, 0x63])) := by decide +kernel

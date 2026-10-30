@@ -99,22 +99,24 @@ def round_ref(st: list[int], w: int, k: int, v: int = 0) -> list[int]:
 DEGENERATE_BYTES = (0x00, 0x01, 0x7F, 0x80, 0x81, 0xFE, 0xFF)
 
 
-XC_NIBBLE = 0x1
+XC_LOW = 0x11
 
 
 @functools.lru_cache(maxsize=None)
 def xc(t: int) -> int:
-    """The per-position constant XORed into a word before an add-only injection, t its position in the block: K_{t+40},
-    rotated right a byte at a time until both 32-bit halves have a nonzero bit in 4..6, then each half's low nibble set
-    to XC_NIBBLE. A half ending in 0x1 is odd and not ~0 or 2^31 - 1, so it is none of the four values that let the XOR
-    pass through an add (0, 2^31, ~0, 2^31 - 1), and its nibble admits no two-instruction skip at four bits. Bits 4..6
-    keep its low byte off 0x01 and 0x81 (bit 7 alone XORs as an add of 0x80 mod 2^8, so 0x81 is 0x01 shifted), the
-    bytes at which a one-sided add and a LOP3 match it (hash_addxor.py, DEGENERATE_BYTES). Every K_t needs at most two
-    bytes of rotation."""
+    """The per-position constant XORed into a word before an add-only injection, t its position in the block: K_{t+40}
+    with each 32-bit half's low five bits set to XC_LOW's, so every half ends in 0x1 with bit 4 set. A half ending in 0x1
+    is odd and not ~0 or 2^31 - 1, so it is none of the four values that let the XOR pass through an add (0, 2^31, ~0,
+    2^31 - 1). Bit 4 keeps its low byte off 0x01 and 0x81 (bit 7 alone XORs as an add of 0x80 mod 2^8, so 0x81 is 0x01
+    shifted), the bytes at which a one-sided add and a LOP3 match it (hash_addxor.py, DEGENERATE_BYTES).
+
+    Bit 4 also fixes how narrow a window can certify a half's word entry, N + ((R + C) ^ c) + K_t at zero data, against
+    a two-instruction skip: every minor that rules out a skip vanishes mod 2^(j + 3), j the half's lowest set bit above
+    bit 0, so a window needs j + 4 bits, 8 for every half. At 4 bits there is no two-instruction skip with one free term
+    a side, except the parity product where K_t's half is 0 mod 4, a width artifact (at 32 bits it needs c = 1 and K_t's
+    half 0 mod 2^30); the certificates at 8 bits are pending."""
     k = K[(t + 40) % 80]
-    while not all(k >> s >> 4 & 0x7 for s in (0, 32)):
-        k = rotr(k, 8)
-    return k & ~(0xF << 32 | 0xF) | XC_NIBBLE << 32 | XC_NIBBLE
+    return k & ~(0x1F << 32 | 0x1F) | XC_LOW << 32 | XC_LOW
 
 
 def sched_ref(w16: list[int], m: int = 0) -> int:

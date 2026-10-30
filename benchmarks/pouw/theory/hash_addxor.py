@@ -57,7 +57,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exact_kit"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from exact_kit.checks import Checks
-from hash_rounds import DEGENERATE_BYTES, XC_NIBBLE, xc
+from hash_rounds import DEGENERATE_BYTES, XC_LOW, xc
 
 M32 = (1 << 32) - 1
 TWO32 = 1 << 32
@@ -493,10 +493,10 @@ def main() -> int:
         n = int(checks.args[checks.args.index("--configs") + 1])
     rng = np.random.default_rng(20261029)
 
-    checks.check("constants: the 160 halves of xc(t) are distinct, each with low nibble 0x1 and a nonzero bit in 4..7, so "
-                 "they avoid the four values that make the XOR an add or a negation (0, 2^31, ~0, 2^31 - 1) and the "
-                 "byte-degenerate low bytes (0x00, 0x01, 0x7f, 0x80, 0x81, 0xfe, 0xff)",
-                 len(CONSTS) == 160 and all(c & 0xF == XC_NIBBLE and c >> 4 & 0xF for c in CONSTS)
+    checks.check("constants: the 160 halves of xc(t) are distinct, each ending in 0x1 with bit 4 set, so they avoid the "
+                 "four values that make the XOR an add or a negation (0, 2^31, ~0, 2^31 - 1) and the byte-degenerate "
+                 "low bytes (0x00, 0x01, 0x7f, 0x80, 0x81, 0xfe, 0xff)",
+                 len(CONSTS) == 160 and all(c & 0x1F == XC_LOW for c in CONSTS)
                  and not set(CONSTS) & set(BAD) and not {c & 0xFF for c in CONSTS} & set(DEGENERATE_BYTES),
                  f"{len(CONSTS)} halves, low bytes {sorted({c & 0xFF for c in CONSTS})}")
 
