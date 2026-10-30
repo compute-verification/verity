@@ -51,7 +51,7 @@ theorem Pa_hole (B : Finset ℕ) : holeStmt.design.Pa toyPart B = 0 := by
   rw [Pa_subset_gt (by decide), zero_mul]
 
 /-- **No witness is in the relation** at the hole, at any `δ ≥ 0`: `M_δ` is empty. -/
-theorem not_relS_hole (H : Msg → Msg) (Cm : Commitment Bool) {δ : ℝ} (hδ : 0 ≤ δ) (w : Wit) :
+theorem not_relS_hole (H : Msg → Msg) (Cm : CommitmentScheme Bool) {δ : ℝ} (hδ : 0 ≤ δ) (w : Wit) :
     ¬ RelS H Cm δ holeStmt toyPart w := by
   intro h
   have h' : δ < holeStmt.design.Pa toyPart (faulty H Cm holeStmt toyPart w) := h
