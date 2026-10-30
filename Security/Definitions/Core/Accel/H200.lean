@@ -11,12 +11,22 @@ A table is a SKU's, at its firmware's maximum. This one is the H200 SXM 141 GB (
 and 3201 MHz HBM3e, the card's maximum and application clocks (Table 3: 'GPU Boost Clock … 1980 MHz', footnote 2 'GPU
 Peak Clock and GPU Boost Clock are synonymous'). Its supported clocks top at those two, and its SM and memory clock
 offset ranges are [0, 0]. Each rate is at its clock's ceiling, not at a clock a loaded card holds: the tensor's at
-1830 MHz (`tensorClock`), the tensor boost clock the data sheet quotes its dense tensor peaks at and the most the SMs'
-own clock (clock64 over the global timer) reads with the tensor pipe full, while the driver reports 1980; every other
-resource's at 1980 MHz (`clock`). Under its power limit a loaded card holds lower clocks. Which SKU and firmware a
-node's cards are is part of the premise that reads the table
-(`Assumptions.CardWithinAccel`); nothing the protocol checks attests it. Data-sheet numbers until measurements replace
-them.
+1830 MHz (`tensorClock`), while the driver reports 1980; every other resource's at 1980 MHz (`clock`). Under its power
+limit a loaded card holds lower clocks. Which SKU and firmware a node's cards are is part of the premise that reads
+the table (`Assumptions.CardWithinAccel`); nothing the protocol checks attests it. Data-sheet numbers until
+measurements replace them.
+
+**The tensor's 1830 MHz**, on two readings:
+* the data sheet's: its 1,979 dense INT8 TOPS are 2 · 132 SMs · 4096 MACs at 1830 MHz, the tensor boost clock it
+  quotes its dense tensor peaks at;
+* the card's (art:f1bb35d70476): with the SM clock locked at 1980 MHz and power at the board's 700 W maximum, over
+  zero, constant, uniform and random operands (`s8` on `wgmma` and `mma.sync`, `e4m3` on `wgmma`) and tensor duty
+  cycles from 50% to 100% (1% steps above 90%, the rest idle or FP32 work), at most 988.48 · 10¹² `s8` MACs a second
+  over the host's wall clock, 0.99904 of 132 · 4096 · 1830 · 10⁶, and the SMs' clock64 over the global timer at most
+  1830.03 MHz in the tensor phases.
+
+Any run above 132 · 4096 · 1830 · 10⁶ = 9.894 · 10¹⁴ `s8` MACs a second falsifies it. DMMA keeps the 1980 MHz the
+data sheet quotes its FP64 tensor peak at, through its weight.
 
 **Stores** (32-bit words): the register file, 64 Ki registers an SM, plus the uniform registers and the predicates
 (4494 words an SM); shared memory with L1, 256 KB an SM; L2, 50 MiB; HBM3e, 141 GiB (H200 data sheet, 'GPU Memory

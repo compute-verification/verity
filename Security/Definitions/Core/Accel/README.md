@@ -28,9 +28,10 @@ Resources: `tensor` (s8 MACs), `issue` (warp instructions), the `alu`, `imad`, `
 Both cards' firmware refuses or clamps every clock above these, and both report SM and memory clock offset ranges of
 [0, 0]. The H200's tensor rate is taken at its tensor clock's ceiling, 1830 MHz (`Accel.H200.tensorClock`): the clock
 its data sheet quotes the tensor peaks at, and the most its SMs' clock reads with the tensor pipe full while the driver
-reports 1980. Every rate is a ceiling, not a clock a loaded card holds: under its power limit it holds less. The table also gives the device model's limits (`Card.toDevice`, `Accounting.Device`). A run that fits the
-model stays within them summed over a window (`fits_toDevice`), and no per-tick `Accounting.Schedule` is built from a
-run.
+reports 1980 (`H200.lean` gives both readings). Every rate is a ceiling, not a clock a loaded card holds: under its
+power limit it holds less. The table also gives the device model's limits (`Card.toDevice`, `Accounting.Device`). A
+run that fits the model stays within them summed over a window (`fits_toDevice`), and no per-tick
+`Accounting.Schedule` is built from a run.
 
 ## The ACCEL ops (`Accel.Op`, `Card.use`)
 
