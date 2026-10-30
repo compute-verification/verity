@@ -16,6 +16,7 @@
     "PousCheck.RunProtocol",
     "PouwCheck.Period",
     "RemoteAudit.P2Protocol",
+    "SampledProofs.OneStage",
     "SampledProofs.OneStageZk"
    ],
    "except": [],
