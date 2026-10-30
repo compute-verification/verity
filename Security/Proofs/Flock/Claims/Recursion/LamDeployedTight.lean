@@ -255,7 +255,7 @@ theorem lamLin2_deployed_ge_dep_tight (rel : _root_.Flock.Readable.Parsed → _r
       FlockDeploy.tableLen_plain_bounds st this.1 this.2.1
     exact k_le_200 (N := FlockDeploy.N₀ false (xIOf x)) (hhi.trans (by gcongr))
   have hsum : ((List.range (nS x)).map fun j => (nums b.st x j).rounds).sum ≤ nS x * 880002 := by
-    refine (List.sum_le_card_nsmul _ 880002 fun a ha => ?_).trans (le_of_eq (by simp))
+    refine (List.sum_le_length_nsmul _ 880002 fun a ha => ?_).trans (le_of_eq (by simp))
     obtain ⟨j, hj, rfl⟩ := List.mem_map.1 ha
     obtain ⟨i, spec', sts', hp⟩ := hO j (List.mem_range.1 hj)
     exact numsOf_rounds_le hp
