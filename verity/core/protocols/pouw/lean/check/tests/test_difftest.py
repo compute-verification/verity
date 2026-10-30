@@ -465,7 +465,7 @@ def test_credit(pass_server):
                  "which only round # commits",
                  "window arow: round #'s request root (requests, the one the window's open root binds) is not",
                  "window registration: registered value ", "ids@#'s domain is not the one the window's registration",
-                 "requests@#'s domain is not the one the window's registration",
+                 "requests@#'s domain is not the one the window's registration", "zy@#'s domain is not the one the window's registration",
                  "window arow: the window's request table's root is not round #'s request_table",
                  "window arow: the window registers request table x/",
                  "or receipt table of the window", "'s receipt table, its round #'s, which only round # commits",
@@ -650,7 +650,7 @@ def test_live_salt(pass_server):
     """Generated live Pearl-C passes, salted by a salt-only session the auditor's signed ledger reserves, opens on the
     pass's salt epoch's root and ends complete, read through the session's own files, then each mutation over a few
     seeds (`replay`): a `pass_index` that isn't an integer in [0, 2^64), a call index of 2^32 or more, a session opened
-    on another root (W itself, another epoch's, or one the manifest doesn't name), #3868's H1 layout, a session reserved for another layout or ended
+    on another root (W itself, another epoch's, or one the manifest doesn't name), H1's layout, a session reserved for another layout or ended
     incomplete, a log showing another root, coins other than the session's, a session the manifest misnames, and every
     other refusal of `core_check.live_salt`."""
     LIVE_SALTED.clear()

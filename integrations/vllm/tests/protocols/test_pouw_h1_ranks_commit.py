@@ -138,7 +138,7 @@ def test_each_steps_a_table_spans_both_ranks_and_is_the_commits_arow(monkeypatch
     run, tap = holder.run, holder.run.served.tap
     assert run.static() and run.modules == {0: "model.layers.0@tp0", 1: "model.layers.1@tp0", 2: "model.layers.0@tp1",
                                             3: "model.layers.1@tp1"}
-    assert run.details["roots1"] == {"tied": True, "reason": None, "values": 2 * STEPS, "own_trees": 0,
+    assert run.details["roots1"] == {"tied": True, "reason": None, "values": 2 * STEPS + len(run.calls), "own_trees": 0,
                                      "steps": {"0": FIRST, "1": FIRST + 1}}
     for s in range(2):
         assert tap.where[CR.commit_rows(s, K)] == {
@@ -146,7 +146,7 @@ def test_each_steps_a_table_spans_both_ranks_and_is_the_commits_arow(monkeypatch
             "sites": [CT.site(run.modules[w]) for w in range(4)], "rows": [len(run.owners[s])] * 4}
     assert tap.round_ids[0] == [8, 9, 5, 6, 7] and not tap.refused
     core = _verdict(holder)
-    assert core["tied"] and core["commit_values"] == 2 * STEPS, core
+    assert core["tied"] and core["commit_values"] == 2 * STEPS + len(run.calls), core
     assert {g["reason"] for g in run.gated().values()} == {PH.IN_PROCESS} and _reasons(run) == {None}
     assert sorted(holder.committed) == [0, 2] and all(w._h1rank is None for w in workers)
     assert all((c["commit_scheme"], c["run_root"]) == (CT.SCHEME, "00" * CT.ROOT_BYTES) for c in holder.committed.values())
@@ -213,7 +213,7 @@ def test_a_moes_expert_calls_on_both_ranks_are_in_their_steps_a_tables_and_the_c
     run, tap = holder.run, holder.run.served.tap
     assert [run.modules[w] for w in range(7, 14)] == ["model.layers.0@tp1", *(f"{MOE}.{e}.{p}@tp1" for e in range(EXPERTS)
                                                                              for p in X.PROJECTIONS)]
-    assert run.details["roots1"] == {"tied": True, "reason": None, "values": 3 * STEPS, "own_trees": 0,
+    assert run.details["roots1"] == {"tied": True, "reason": None, "values": 3 * STEPS + len(run.calls), "own_trees": 0,
                                      "steps": {"0": FIRST, "1": FIRST + 1}}
     for s, rows in ((0, [2, 3, 0]), (1, [0, 1, 1])):
         assert tap.where[CR.commit_rows(s, I)] == {
@@ -225,7 +225,7 @@ def test_a_moes_expert_calls_on_both_ranks_are_in_their_steps_a_tables_and_the_c
     assert not tap.refused and not tap._x
     assert RG.expert_calls(run) == {"calls": 12 * STEPS, "with_rows": 16, "ranks": ["tp0", "tp1"]}
     core = _verdict(holder)
-    assert core["tied"] and core["commit_values"] == 3 * STEPS, core
+    assert core["tied"] and core["commit_values"] == 3 * STEPS + len(run.calls), core
     assert _reasons(run) == {None}
     sites = [m.quant_method for w in workers for m in w.layers if isinstance(m, X.ExpertSite)]
     assert len(sites) == 12 and not any({"apply", "observe", "zy_rows"} & set(vars(q)) for q in sites)

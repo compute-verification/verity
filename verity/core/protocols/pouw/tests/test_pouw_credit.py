@@ -114,6 +114,7 @@ WINDOW_EXPECT = {
     "proof-other-circuit": ("registration", "was verified against another circuit than the window's"),
     "proof-no-a": ("registration", "opened no A value …/a/"),
     "proof-no-b": ("registration", "'s proof opened no weights "),
+    "proof-no-zy": ("registration", "'s proof opened no z table "),
     "proof-other-call": ("registration", "opened no A value …/a/"),
     "proof-unregistered": ("registration", "which the window registers not"),
     "entry-twice": ("weights", "'s weights twice ("),
@@ -125,6 +126,8 @@ WINDOW_EXPECT = {
     "weights-leaves": ("weights", "'s entry is not the registration of K = "),
     "a-zero": ("arow", NOT_COMMITS + "row-table/"), "a-row-off": ("arow", NOT_COMMITS + "row-table/"),
     "ids-off": ("arow", NOT_COMMITS + "input-ids/"), "ids-missing": ("arow", "'s input-ids table "),
+    "zy-off": ("arow", "linear's output the Commit committed at the call's tiles"),
+    "zy-other-domain": ("registration", OTHER_REGISTRATION),
     "commit-missing": ("arow", "the Commit record registers "), "commit-twice": ("arow", "the Commit record registers "),
     "commit-missing-expert": ("arow", f"/k{cases.EXPERT_K} not: the served Commit registers each round's A table"),
     "ids0-outside": ("arow", Cr.IDS_OUTSIDE), "ids0-root-off": ("arow", Cr.IDS_OUTSIDE),
@@ -265,7 +268,7 @@ def test_honest_window_credits_its_bits(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_credit_bit_changed_after_draw_is_refused(seed):
-    """RT4-INT-32 (a): a verdict withdrawn (or granted) after the draw coin, the draw root recomputed over the new bits,
+    """A verdict withdrawn (or granted) after the draw coin, the draw root recomputed over the new bits,
     is not the root the challenger's log shows the draw followed."""
     for name in ("withdrawn", "changed"):
         _, (got, refused) = _credited(name, seed)
@@ -282,7 +285,7 @@ def test_credited_call_needs_a_bit_and_a_z_root(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_failed_or_missing_drawn_unit_refuses_the_window(seed):
-    """RT4-INT-32 (b): no partial credit."""
+    """No partial credit."""
     assert _outcome("honest", seed) is None
     missing, failed = _outcome("missing", seed), _outcome("failed", seed)
     assert missing[0] == "missing" and "Prove and verify every drawn unit" in missing[1]
@@ -292,7 +295,7 @@ def test_failed_or_missing_drawn_unit_refuses_the_window(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_tree_not_tied_to_the_round_roots_is_refused(seed):
-    """RT4-INT-34: an A tree registered over rows other than those each round's root committed before its coin."""
+    """An A tree registered over rows other than those each round's root committed before its coin."""
     assert Cr._a_link(**cases.a_link_instance(random.Random(f"honest/{seed}"))) is None
     for name in ("untied", "late-rows", "rewritten"):
         refused = Cr._a_link(**cases.a_link_instance(random.Random(f"{name}/{seed}"), name))
@@ -597,7 +600,7 @@ def test_entries_of_another_registration_refuse(seed):
     opened them at those roots. Their domains are not the ones the window's registration gives them, so the window is
     refused."""
     d = cases.window_instance(random.Random(f"other-registration/{seed}"), "other-registration")
-    assert Cr._a_link(d["rounds"], d["entries"]) is None
+    assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None
     got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert got is None and refused[0] == "registration" and OTHER_REGISTRATION in refused[1]
 
@@ -636,24 +639,25 @@ def test_an_honest_window_of_call_tables_credits_its_bits(seed):
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_table_the_served_commit_did_not_commit_refuses(seed):
     """ROOTS1: a round's A table of a K with every row zero, one row off or its rows offset by one call, or a round's
-    input-ids table with one row off, each tied to the round roots (`_a_link` accepts) and opened by the drawn units'
-    proofs at its root, is not the Commit's value of the same rows, so the window is refused before any proof is read;
+    input-ids table or a call's z table with one row off, each tied to the round roots (`_a_link` accepts) and opened
+    by the drawn units' proofs at its root, is not the Commit's value of the same rows, so the window is refused before any proof is read;
     one with a call missing has fewer rows than the layout gives it, which `_a_link` refuses first. The honest window's tables are the Commit's, by its names: each round's A table of each K
-    ``row-table/<round>/k<K>`` and each round's ``input-ids/<round>``."""
+    ``row-table/<round>/k<K>``, each round's ``input-ids/<round>`` and each call's ``coord-out/<call>``."""
     d = cases.window_instance(random.Random(f"honest/{seed}"))
     (_digest, reg), _ = Cr.commit_of(d["commit"])
     lay, steps = Cr.layout_of(bytes.fromhex(d["descriptor"]))[0], len(d["rounds"])
     names = {e["value"] for e in reg}
     assert {Cr.commit_rows(s, k) for s, k, _cs in Cr.step_tables(lay, steps)} <= names
     assert {Cr.commit_ids(s) for s in range(steps)} <= names
-    for name in ("a-zero", "a-row-off", "a-call-off", "a-call-missing", "ids-off"):
+    assert {Cr.commit_outputs(c) for c in range(len(lay["calls"]))} <= names
+    for name in ("a-zero", "a-row-off", "a-call-off", "a-call-missing", "ids-off", "zy-off"):
         d = cases.window_instance(random.Random(f"{name}/{seed}"), name)
-        assert Cr._a_link(d["rounds"], d["entries"]) is None, name
+        assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None, name
         got, refused = Cr._window_outcomes(*cases.window_args(d))
         if name == "a-call-missing":
             assert got is None and refused[0] == "a-link" and "the window's layout gives it" in refused[1], refused
         else:
-            assert got is None and refused[0] == "arow" and "(ROOTS1)" in refused[1], (name, refused)
+            assert got is None and refused[0] == "arow" and "(ROOTS1" in refused[1], (name, refused)
 
 
 def _no_pads(*_args, **_kwargs):
@@ -852,7 +856,7 @@ def test_a_call_table_registered_without_the_window_root_refuses(seed):
     window), its tree under that domain so the round roots commit it (`_a_link` accepts), and the drawn units' proofs
     opened it: its domain is not the one the window's registration gives it, so the window is refused."""
     d = cases.window_instance(random.Random(f"a-call-unbound/{seed}"), "a-call-unbound")
-    assert Cr._a_link(d["rounds"], d["entries"]) is None
+    assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None
     got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert got is None and refused[0] == "registration" and OTHER_REGISTRATION in refused[1]
 
@@ -922,7 +926,7 @@ def test_a_window_is_credited_only_with_every_drawn_unit_accepted(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_period_counts_only_closed_and_complete(seed):
-    """RT4-INT-42: a closed, complete period earns each window's credit, in its close's order; with no close, a window
+    """A closed, complete period earns each window's credit, in its close's order; with no close, a window
     incomplete, missing or out of order, or one of no period among it, it earns nothing."""
     d = cases.period_instance(random.Random(f"honest/{seed}"))
     got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
@@ -965,7 +969,7 @@ def test_a_window_whose_session_ran_a_branch_commit_refuses_the_period(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_the_freshness_floor_counts_from_the_open_pin_not_mains_head(seed):
-    """CMP74-FOLLOW: a period's open records the commit it opened under (`credit.committed_pin`) and a freshness floor
+    """A period's open records the commit it opened under (`credit.committed_pin`) and a freshness floor
     (`credit.committed_floor`, first-parent commits, default 0 when the open records no floor). A window counts only when
     its pin is at most the floor behind the open pin on main's line, counted from that pin and never from main's head
     (`credit._pin_hygiene`): a window past the open pin plus the floor is refused, but a window within it stays credited
@@ -1207,8 +1211,8 @@ def test_a_link_mutation(name):
 def test_a_calls_receipt_table_in_its_rounds_segments_is_tied_and_an_unknown_segment_is_not():
     """vllm's served path lists call c's ``receipt@<c>`` among the segments of c's round (the rounds the calls' equal
     blocks) and registers it: `_a_link` ties it to that round's root as it does a round's A table, and still refuses a
-    round segment of no registered A value, input-ids table or receipt table (``zy@<c>``, ``receipt@0<c>``, a call's
-    receipt table the window doesn't register), and a receipt table when the window's call count isn't given."""
+    round segment of no registered A value, input-ids table, z table or receipt table (a ``zy@<c>`` or a call's receipt
+    table the window doesn't register, ``receipt@0<c>``), and a receipt table when the window's call count isn't given."""
     tied = 0
     for seed in range(40):
         d = cases.a_link_instance(random.Random(f"receipt/{seed}"))
@@ -1222,7 +1226,8 @@ def test_a_calls_receipt_table_in_its_rounds_segments_is_tied_and_an_unknown_seg
             refused = Cr._a_link(d["rounds"], d["entries"])
             assert refused[0] == "a-link" and "rounds' equal blocks with a call" in refused[1], seed
         refused = Cr._a_link(**cases.a_link_instance(random.Random(f"receipt-unknown/{seed}"), "receipt-unknown"))
-        assert refused[0] == "a-link" and "which is no registered A value, input-ids table or receipt table" in refused[1]
+        assert refused[0] == "a-link" and \
+            "which is no registered A value, input-ids table, z table or receipt table" in refused[1]
     assert tied
 
 

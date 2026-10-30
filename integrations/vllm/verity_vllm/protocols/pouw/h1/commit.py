@@ -1,20 +1,24 @@
 """ROOTS1 on vllm's side: the Commit in H1's serving engine, whose record registers each step's A table of K
-``a/<K>@<s>`` as its AROW of the step's calls of K and each round's input-ids table ``ids@<s>`` as its step's
-input token ids, layer 0's input. Core's credit holds each to the Commit's value of the same rows (`credit._arow`).
+``a/<K>@<s>`` as its AROW of the step's calls of K, each round's input-ids table ``ids@<s>`` as its step's
+input token ids, layer 0's input, and each call's z table ``zy@<c>`` as the linear's output y at the call's tiles.
+Core's credit holds each to the Commit's value of the same rows (`credit._arow`).
 
 * **The Commit** (`acquire.h1_commit.attach`): the windowed collector under rows-sha512 (`SCHEME`: hm96-sha512 rows in
   frame-v3-sha512 trees, 64-byte roots; with no Build, so not a Commit of record) with the int8 source
   (`acquire.h1_commit.H1Source`) at each linear H1 records, at the linear's Int8RowQuant_v1 site `site(module)` at every
   engine step (`Sites`: no Build names its fx node), a routed expert's by its H1 name (under its call, an idle
-  expert's zero rows too), and the step-input port (`served_record.StepInputPort`): the step's input token ids, taken
+  expert's zero rows too), each linear's output y at `out_site(module)` (``/0``, the bf16 y its forward returned),
+  and the step-input port (`served_record.StepInputPort`): the step's input token ids, taken
   at the model's forward, so also on a model that gathers its embedding fused and never calls it (GLM-5.3 and
   DeepSeek-V3.2 at TP1). `CommitTap` wraps
   the committer's acquire and keeps a host copy of what the Commit acquired at each engine step: each site's x_q
-  (``/0``) and s_a (``/1``), and the ids. `committed` is what a run records of the Commit, refused unless its root is
+  (``/0``) and s_a (``/1``), each linear's y, and the ids. `committed` is what a run records of the Commit, refused unless its root is
   rows-sha512's.
 * **The server's Commit** (`acquire.h1_commit.tap`): on serve-openai's rows-sha512 collector H1 builds no committer.
   The tap reads each linear's x_q and s_a where the bench row's int8 source acquires them, under the manifest's op path
-  ``<module>/<fx node>`` (``ops``, read as `site(module)`), and a step's ids at its step-input port.
+  ``<module>/<fx node>`` (``ops``, read as `site(module)`), and a step's ids at its step-input port. That source
+  acquires no linear's output, so no call's z table is the Commit's there, and such a window credits nothing until the
+  server's Commit commits each linear's y.
 * **The ids** (``port``): the port's T ids, zero past the step's scheduled tokens, read up to those tokens, so they
   carry no CUDA graph's padding.
 * **Its values** (`CommitTap.arow`, `CommitTap.input_ids`): call c = (s, w)'s rows are the Commit's x_q and s_a of
@@ -22,14 +26,15 @@ input token ids, layer 0's input. Core's credit holds each to the Commit's value
   AROW of step s and K is those of step s's calls of K, call after call in call order (`Served.step_calls`) whatever
   order the forward ran them in, registered as `credit.commit_rows` of (s, K) once they are all in; round s's input ids
   are the Commit's port ids at that engine step (`pouw_h1_served.ids_words`), registered as `credit.commit_ids`
-  of s. Step s's first call to come, whichever linear its forward runs first, maps s to the next engine step the
+  of s; call c's z table is the window's z/y records with each cell's y the Commit's y of its site at that engine
+  step (`CommitTap.outputs`), registered as `credit.commit_outputs` of c. Step s's first call to come, whichever linear its forward runs first, maps s to the next engine step the
   Commit acquired (an empty call's to none). When the rows are the window's, the Commit registers the window's own
   tree, one commitment; rows off them make a tree of the Commit's own under the same domain and salts, at another root.
 * **The record** (`CommitTap.record`, the commitment's ``commit``, `CommitTap.hex`): a ``verity/registration/v2`` record
   (one-stage's `registration`) of those values, with what the tap refused, its canonical JSON in hex as
   `credit.commit_of` reads it. `pouw_h1.calls_root` binds its digest (`credit.calls_root`), so the sampling coin follows it.
-* **The serving process's own check** (`roots1`, at the window's close): each step's A table of each K and each round's
-  input-ids table is the Commit's value of the same rows (`credit._arow`'s rule), the tap refused nothing, and each
+* **The serving process's own check** (`roots1`, at the window's close): each step's A table of each K, each round's
+  input-ids table and each call's z table is the Commit's value of the same rows (`credit._arow`'s rule), the tap refused nothing, and each
   prefill row's input id is its request's prompt token (`ids_reason`, until Served.lean's layer-0 tie holds it in core).
   A window that fails credits nothing (`UNTIED`, `pouw_h1.H1Run.gated`).
 """
@@ -44,6 +49,7 @@ from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES
+from verity_vllm.protocols.pouw.h1.words import record_words
 
 #: the scheme H1's own Commit commits under, and its run root's bytes
 SCHEME, ROOT_BYTES = step_rows.NAME, 64
@@ -51,13 +57,18 @@ SCHEME, ROOT_BYTES = step_rows.NAME, 64
 IDS_PORT = PORT_NAMES[0]
 
 #: the credit refusal of every call of a window whose tables aren't the Commit's values (``details.roots1``)
-UNTIED = ("credit: a-not-the-commits: a call's A table or a round's input-ids table is not the Commit's value of its "
-          "rows, or a step's input ids are not its requests' prompt tokens (details.roots1)")
+UNTIED = ("credit: a-not-the-commits: a call's A table or z table or a round's input-ids table is not the Commit's value "
+          "of its rows, or a step's input ids are not its requests' prompt tokens (details.roots1)")
 
 
 def site(module: str) -> str:
     """Linear ``module``'s Int8RowQuant_v1 site: the op path its x_q and s_a are committed under (``<site>/0``, ``/1``)."""
     return f"{module}/row_quant"
+
+
+def out_site(module: str) -> str:
+    """Linear ``module``'s output: the op path its bf16 y, what its forward returned, is committed under (``<site>/0``)."""
+    return f"{module}/out"
 
 
 class Sites(dict):
@@ -83,6 +94,14 @@ def _host(t: Any) -> np.ndarray:
     return t.detach().cpu().numpy() if hasattr(t, "detach") else np.asarray(t)
 
 
+def _bits(t: Any) -> np.ndarray:
+    """A bf16 tensor's bits as int16 (numpy has no bf16); an array as given."""
+    if "bfloat16" in str(getattr(t, "dtype", "")):
+        import torch
+        t = t.view(torch.int16)
+    return _host(t)
+
+
 def _same(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
     return all(a.get(k) == b.get(k) for k in ("root", "domain", "leaves"))
 
@@ -97,7 +116,8 @@ class CommitTap:
     port: str | None = None
     ops: dict[str, str] = field(default_factory=dict)
     refused: list[str] = field(default_factory=list)
-    #: the Commit's registered entries by its name of them (`credit.commit_rows`, `credit.commit_ids`), and where it
+    #: the Commit's registered entries by its name of them (`credit.commit_rows`, `credit.commit_ids`,
+    #: `credit.commit_outputs`), and where it
     #: acquired each; how many are trees of the Commit's own (rows off the window's)
     values: dict[str, dict[str, Any]] = field(default_factory=dict)
     where: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -109,6 +129,10 @@ class CommitTap:
     #: site -> [engine step, x_q, s_a] the Commit acquired last; engine step -> its ids, the port's cut to the step's
     #: scheduled tokens; H1 step -> engine step
     _x: dict[str, list[Any]] = field(default_factory=dict)
+    #: output site -> [engine step, y bits] the Commit acquired last
+    _y: dict[str, list[Any]] = field(default_factory=dict)
+    #: output site -> the z table waiting for the Commit's y there (`outputs`), with its engine step last
+    _pend: dict[str, tuple[Any, ...]] = field(default_factory=dict)
     _ids: dict[int, np.ndarray] = field(default_factory=dict)
     _steps: dict[int, int | None] = field(default_factory=dict)
     #: each open step A table's rows as the Commit acquired them so far (one block a call, by call) and where
@@ -135,8 +159,8 @@ class CommitTap:
             self._com = None
 
     def take(self, name: str, t: Any, step: int, n: int | None = None) -> None:
-        """One tensor the Commit acquired at engine step ``step``: a site's x_q or s_a, or the step's input ids, the
-        port's first ``n``, the step's scheduled tokens."""
+        """One tensor the Commit acquired at engine step ``step``: a site's x_q or s_a, a linear's output y, or the step's
+        input ids, the port's first ``n``, the step's scheduled tokens."""
         if self.port is not None and name == self.port:
             if n is None:
                 self.refused.append(f"engine step {step}: the port's input ids with no count of the step's scheduled tokens")
@@ -145,6 +169,12 @@ class CommitTap:
             return
         op, _, port = name.rpartition("/")
         op = self.ops.get(op, op)
+        if op.endswith("/out") and port == "0":
+            y = _bits(t)
+            self._y[op] = [step, y.reshape(len(y), int(np.prod(y.shape[1:]))).astype(np.int16)]
+            if op in self._pend and self._pend[op][-1] == step:
+                self._out(*self._pend.pop(op))
+            return
         if not op.endswith("/row_quant") or port not in ("0", "1"):
             return
         self.acquired[(step, op, port)] = name
@@ -201,6 +231,50 @@ class CommitTap:
         self._put(CR.commit_rows(call.step, call.k), reg, same,
                   {"round": call.step, **{f: [x[i] for x in at] for i, f in enumerate(("calls", "steps", "sites", "rows"))}})
 
+    def outputs(self, run: Any, served: Any, call: Any, value: str, words: np.ndarray) -> None:
+        """Call ``call``'s z table as the Commit's value `credit.commit_outputs` of its index: the window's z/y records
+        ``words`` (its z table ``value``'s rows) with each tile cell's y the Commit's y of the call's linear at the engine
+        step its step maps to (`arow`'s; zero rows when it acquired none there), so the window's tree of ``value``
+        when its y is the Commit's, else the Commit's own, at another root. After `arow` of the call. The window
+        registers the z table inside the linear's forward, before the Commit acquires the y it returns, so the value
+        waits for that y (`take`) or the window's close (`flush`)."""
+        j, s = self._steps.get(call.step), out_site(call.module)
+        got = self._y.get(s)
+        if j is not None and (got is None or got[0] != j):
+            if s in self._pend:
+                self._out(*self._pend.pop(s))
+            self._pend[s] = (run, served, call, value, words, j)
+            return
+        self._out(run, served, call, value, words, j)
+
+    def flush(self) -> None:
+        """Register each z table still waiting for the Commit's y (`outputs`) with what the Commit acquired."""
+        for s in list(self._pend):
+            self._out(*self._pend.pop(s))
+
+    def _out(self, run: Any, served: Any, call: Any, value: str, words: np.ndarray, j: int | None) -> None:
+        s = out_site(call.module)
+        got = self._y.get(s)
+        y = np.zeros((0, call.n), np.int16)
+        if j is not None and got is not None and got[0] == j:
+            del self._y[s]
+            if got[1].shape[1:] != (call.n,):
+                self.refused.append(f"call {call.index}: the Commit's y at {s} is not one row of {call.n}")
+            else:
+                y = got[1]
+        if len(y) > served.m:
+            self.refused.append(f"call {call.index}: the Commit's {len(y)} rows of y are past its {served.m} slots")
+            y = y[:served.m]
+        r, c = served.tile
+        mine = np.array(words, copy=True)
+        mine[:, 2 * r * c:] = record_words(np.zeros((len(y), call.n), "<i4"), y, served.m, served.tile)[:, 2 * r * c:]
+        same = np.array_equal(mine, words) and value in served.registered
+        if same:
+            served.settle()
+        reg = served.registered[value] if same else served.zy_tree(run, call, mine)
+        self._put(CR.commit_outputs(call.index), reg, same,
+                  {"call": call.index, "round": call.step, "step": j, "site": s, "rows": len(y)})
+
     def ids_at(self, r: int) -> list[int]:
         """Round r's input ids: the Commit's ids of the engine step H1's step r maps to (none for a step it acquired
         nothing at), its scheduled tokens, so none of the positions a CUDA graph padded the step with
@@ -227,6 +301,7 @@ class CommitTap:
 
     def record(self, served: Any) -> dict[str, Any]:
         """The Commit's ``verity/registration/v2`` record of its values, under the window's Program."""
+        self.flush()
         return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": served.program_digest,
                 "window": {"kind": "served", "refused": list(self.refused)},
                 "registered": [self.values[n] for n in sorted(self.values)]}
@@ -247,9 +322,11 @@ def digest(commit: str) -> bytes:
 
 def untied(run: Any) -> str | None:
     """Why the window's tables aren't the Commit's values (`credit._arow`'s rule, on the serving process's own trees): a
-    tap that refused, a step's A table of K that isn't the Commit's `credit.commit_rows` of its round and K, or a round's
-    input-ids table that isn't its `credit.commit_ids`, in root, domain and leaf count. None when each is."""
+    tap that refused, a step's A table of K that isn't the Commit's `credit.commit_rows` of its round and K, a round's
+    input-ids table that isn't its `credit.commit_ids`, or a call's z table that isn't its `credit.commit_outputs`, in
+    root, domain and leaf count. None when each is."""
     served, tap = run.served, run.served.tap
+    tap.flush()
     if tap.refused:
         return f"roots1: the Commit's tap refused: {'; '.join(tap.refused[:4])}"
     if served.refused or served.program is None:
@@ -267,6 +344,13 @@ def untied(run: Any) -> str | None:
         if mine is None or got is None or not _same(mine.entry(), got):
             return (f"roots1: round {s}'s input-ids table is not the Commit's {CR.commit_ids(s)}: its step's input ids "
                     "are not the ones the Commit acquired" + (", round 0's its prompts' tokens" if s == 0 else ""))
+    for c in range(len(served.calls)):
+        v, name = served.zy_table(c), CR.commit_outputs(c)
+        mine, got = served.registered.get(v), tap.values.get(name)
+        if mine is None or got is None or not _same(mine.entry(), got):
+            at = tap.where.get(name, {})
+            return (f"roots1: call {c}'s z table {v} is not the Commit's {name} ({at.get('site')} at engine step "
+                    f"{at.get('step')}): its y is not the linear's output the Commit acquired")
     return None
 
 
@@ -332,4 +416,4 @@ def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes
 
 
 __all__ = ["IDS_PORT", "ROOT_BYTES", "SCHEME", "CommitTap", "Sites", "UNTIED", "calls_root", "committed", "digest", "ids_reason", "record_of",
-           "roots1", "site", "untied"]
+           "out_site", "roots1", "site", "untied"]

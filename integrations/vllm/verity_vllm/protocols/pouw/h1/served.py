@@ -55,14 +55,16 @@
   (the last of K's linears in step 0), then, once both roots exist, each of the step's calls of K's ``pub@<c>``
   (`Served._pubs`) and, with ``receipts``, its receipt table. A z table hashed on the GPU hashes there while the step's
   later calls run, its place in `registered` taken when it's recorded and its tree and root put in once hashed
-  (`Served.settle`, at the latest when `H1Run.tables` reads the step's roots at its round's close). Each root goes into
-  that call's manifest row (``tables.registered``), so its
-  round's root commits it before the round's coin, and round s's root also lists step s's A tables whole
-  (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
+  (`Served.settle`, at the latest when `H1Run.tables` or `Served.segments` reads the step's roots at its round's close).
+  Each root goes into that call's manifest row (``tables.registered``), so its
+  round's root commits it before the round's coin, and round s's root also lists step s's A tables and its calls' z
+  tables whole (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
   is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
   ``b/<K>`` there, under the run's key.
 * **The Commit** (ROOTS1): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) its
-  AROW of each step's calls of K is that step's A table's value (`credit.commit_rows`), and the window also registers each round's input-ids table ``ids@<s>`` (`ids_words`: its M slots' token ids, two words each),
+  AROW of each step's calls of K is that step's A table's value (`credit.commit_rows`), its output y at call c's
+  tiles is call c's z table's value (`credit.commit_outputs`: the z/y records with the Commit's y, `zy_tree`), and the
+  window also registers each round's input-ids table ``ids@<s>`` (`ids_words`: its M slots' token ids, two words each),
   outside the Program's values (`ids`, in `entries`), and lists it whole under round s's root (`segments`). Round 0's
   is its prompts' tokens in step 0's batch order, registered before the window opens (`open_ids`), its root inside
   round 0's request root and its domain bound to the session (`ids_tree`); each later round's
@@ -87,8 +89,12 @@ from __future__ import annotations
 
 import collections
 import functools
+import gc
+import gzip
 import hashlib
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
@@ -98,15 +104,17 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.circuit import h1device as HD
+from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
-from verity.ml.circuits.codec import canonical_json, encode_program
+from verity.ml.circuits.codec import canonical_json, descriptor_chunks, encode_program
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1.model_key import ModelKey, model_key
 from verity_vllm.protocols.pouw.h1.served_files import FILE, WindowCommitmentEntries, file_name, reads_file, register, trees
 from verity_vllm.protocols.pouw.h1.words import (EMPTY_ID, chunk_words, ids_words, receipt_words, record_words,
                                                          row_words, zy_words)
@@ -178,11 +186,47 @@ def declared(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows
     return HW.program([tuple(x) for x in lay["linears"]], [tuple(x) for x in lay["calls"]], lay["m"], tile, prefix, unit)
 
 
+def unit_of(name: str | None, tile: tuple[int, int] = PH.TILE) -> Callable[[int], Any] | None:
+    """`declared`'s ``unit`` for the pouw setting ``unit`` ``name`` (`pouw_h1_settings.UNITS`): None for v1 (unset), the
+    default; for ``j10r`` `h1window.tile_unit` over J10-R's `h1tile.PouwH1Tile5`, one noise stream a call, the tile a
+    period's guarantee covers (core's `period_check.COVERED_TILE`)."""
+    if name in (None, "v1"):
+        return None
+    if name == "j10r":
+        return functools.partial(HW.tile_unit, tile=tuple(tile), definition=HT.PouwH1Tile5)
+    raise ValueError(f"no tile unit {name!r}: the pouw setting 'unit' is v1 or j10r")
+
+
 def descriptor(program: Program) -> bytes:
     """`program`'s descriptor as the period commits it: its canonical JSON without annotations, the bytes whose SHA-512
     is its `codec.program_digest` (the period-open's ``circuit``) and from which core's credit reads the window's
     layout (`credit.layout_of`)."""
     return canonical_json({k: v for k, v in encode_program(program).items() if k != "annotations"})
+
+
+def write_program(program: Program, layout: Mapping[str, Any], out: Path | str, *, rows: int, steps: int) -> str:
+    """`program`'s `codec.program_digest`, streamed once into ``out``'s `pouw_h1.PROGRAM` (its `descriptor`, gzipped) as it
+    is hashed, and its `pouw_h1.PROGRAM_META`: the digest, the descriptor's bytes, its `layout` (`declared_layout`, which
+    core's `credit.layout_of` reads from it), T ``rows`` and S ``steps``. A period-open commits the digest and the circuit
+    files built from these (``served_verdicts.py period``)."""
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    h, size, on = hashlib.sha512(), 0, gc.isenabled()
+    gc.disable()
+    try:
+        with gzip.open(out / PH.PROGRAM, "wb", compresslevel=1) as f:
+            for chunk in descriptor_chunks(program):
+                h.update(chunk)
+                f.write(chunk)
+                size += len(chunk)
+    finally:
+        if on:
+            gc.enable()
+    digest = h.hexdigest()
+    meta = {"program_digest": digest, "file_sha512": digest, "bytes": size, "rows": int(rows), "steps": int(steps),
+            "layout": dict(layout)}
+    (out / PH.PROGRAM_META).write_text(json.dumps(meta, indent=1) + "\n")
+    return digest
 
 
 def declared_layout(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
@@ -255,38 +299,6 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
         words = np.concatenate(rows)
         reg[k] = NR.commit(circuit, f"{prefix}b/{k}", words, key, B_NONCE + i, keep_rows=True)
     return Weights(circuit, reg, at)
-
-
-@dataclass(frozen=True)
-class ModelKey:
-    """The auditor's registration of the served model under the period's circuit, as the gate's ``model-key --model M
-    --circuit C`` answers a lane's gate key: its role ``model``, ``circuit``, the weights' root ``weights_root`` (hex) that
-    ``period-open --model M`` signs, and ``key``, the 32-byte salt key its ``b/<K>`` rows were committed under."""
-
-    model: str
-    circuit: str
-    weights_root: str
-    key: bytes = field(repr=False)
-
-
-def _hex512(v: Any) -> bool:
-    return type(v) is str and len(v) == 128 and all(c in "0123456789abcdef" for c in v)
-
-
-def model_key(answer: Mapping[str, Any]) -> ModelKey:
-    """The gate's ``model-key`` answer as a `ModelKey`; ValueError on a refusal, or an answer whose key isn't 32 bytes
-    whose SHA-512 is its ``key_sha512``, or whose circuit or weights' root isn't a SHA-512 digest."""
-    if "refused" in answer:
-        raise ValueError(f"model-key: refused: {answer['refused']}")
-    try:
-        key = bytes.fromhex(answer["key"])
-    except (KeyError, TypeError, ValueError):
-        raise ValueError("model-key: the answer has no key in hex") from None
-    if len(key) != 32 or hashlib.sha512(key).hexdigest() != answer.get("key_sha512"):
-        raise ValueError("model-key: the key is not 32 bytes whose SHA-512 is the answer's key_sha512")
-    if not (type(answer.get("model")) is str and _hex512(answer.get("circuit")) and _hex512(answer.get("weights_root"))):
-        raise ValueError("model-key: the answer names no model, circuit and weights' root (SHA-512 digests in hex)")
-    return ModelKey(answer["model"], answer["circuit"], answer["weights_root"], key)
 
 
 @dataclass
@@ -455,6 +467,15 @@ class Served:
         """Call ``c``'s step's A table of its K, ``<prefix>a/<K>@<s>`` (`h1window.table`)."""
         return HW.table(self.program, "a", c, self.steps)
 
+    def zy_table(self, c: int) -> str:
+        """Call ``c``'s z table, ``<prefix>zy@<c>`` (`h1window.table`)."""
+        return HW.table(self.program, "zy", int(c))
+
+    def zy_tree(self, run: Any, call: Any, words: np.ndarray) -> G.Registered:
+        """The tree of call ``call``'s z table over ``words`` (`record_words`' rows) as `commit` would register it, under
+        the same domain and salts, unregistered (`pouw_h1_commit.CommitTap.outputs`)."""
+        return self._tree(run, self.zy_table(call.index), words, nonce(call.index, "zy"), self.root)
+
     def receipt_table(self, c: int) -> str:
         """Call ``c``'s receipt table, ``<prefix>receipt@<c>`` (`h1window.table`'s `h1window.RECEIPTS`)."""
         return HW.table(self.program, HW.RECEIPTS, int(c))
@@ -585,9 +606,11 @@ class Served:
         if len(rows) == len(mine):
             whole = np.concatenate([b for _c, b in sorted(self._a.pop(value).items())])
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
-        self._register_later(run, HW.table(self.program, "zy", call.index), zy_rows, nonce(call.index, "zy"), out)
+        zy = self.zy_table(call.index)
+        self._register_later(run, zy, zy_rows, nonce(call.index, "zy"), out)
         if self.tap is not None:
             self.tap.arow(run, self, call, value, whole)
+            self.tap.outputs(run, self, call, zy, zy_rows)
         b = self.program.fn.bindings["PREFIX"] + f"b/{call.k}"
         if b not in self.registered and not self._take_b(run, call, b, out):
             return {}
@@ -684,14 +707,16 @@ class Served:
     def segments(self, run: Any, r: int) -> dict[str, list[tuple[int, int, bytes]]]:
         """Round r's A segments (`credit.round_root`): step r's A table ``a/<K>@<r>`` of each K its calls have, whole, as
         the aligned subtrees (`credit.cover`, each ``(level, index, root)``) of its registered tree, so round r's root
-        commits it before round r's coin and no other round lists it; with ``receipts``, each of step r's calls' receipt
-        table alike; and round r's input-ids table and its live slot table ``slots@<r>`` (`pouw_h1_live`). Nothing once the
+        commits it before round r's coin and no other round lists it; each of step r's calls' z table alike, and with
+        ``receipts`` its receipt table; and round r's input-ids table and its live slot table ``slots@<r>`` (`pouw_h1_live`). Nothing once the
         window is refused."""
         if self.refused or self.program is None:
             return {}
+        self.settle()
         per, out = len(self.linears), {}
         mine = range(r * per, min((r + 1) * per, len(self.calls)))
         values = dict.fromkeys(self.a_table(c) for c in mine)
+        values.update(dict.fromkeys(self.zy_table(c) for c in mine))
         if self.receipts is not None:
             values.update(dict.fromkeys(self.receipt_table(c) for c in mine))
         regs = [self.registered.get(v) for v in values]
@@ -764,6 +789,7 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
 
 
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Served",
+           "unit_of",
            "V2", "Weights", "WindowCommitmentEntries", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
            "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
-           "weights_of"]
+           "weights_of", "write_program"]

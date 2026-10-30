@@ -285,9 +285,9 @@ def periodic(tmp_path, monkeypatch):
 
 
 def _commit(tap, x, ids, n):
-    """The Commit's acquires at the window's one engine step (`pouw_h1_commit.CommitTap.take`): the step's input ids at
-    its step-input port, its first `n` the step's scheduled tokens, and linear ``q``'s ``row_quant`` of `x`, as the int8
-    source takes them at its site."""
+    """The Commit's acquires at the window's one engine step (`pouw_h1_commit.CommitTap.take`) before linear ``q``'s
+    forward: the step's input ids at its step-input port, its first `n` the step's scheduled tokens, and ``q``'s
+    ``row_quant`` of `x`, as the int8 source takes them at its site (`_serve` takes its y after the forward)."""
     tap.take(PORT, torch.tensor(ids), 0, n)
     xq, s_a = int8_ops.row_quant(x.reshape(-1, K))
     tap.take(f"{CT.site('q')}/0", xq, 0)
@@ -323,6 +323,8 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
         if served is not None:
             _commit(served.tap, x, (list(range(m)) if ids is None else ids) + [0] * pad, m)
         y = layer.quant_method.apply(layer, x)
+        if served is not None:
+            served.tap.take(f"{CT.out_site('q')}/0", y, 0)
         run = pouw.h1_run(ENTRY)
         run.close()
         if exact:
@@ -775,7 +777,7 @@ def test_the_gpu_harness_holds_an_in_process_window_to_cores_roots1_steps(edit):
     assert run.commits.get("coin_source") != PH.CHALLENGER and not run.served.refused
     record = {"commitment": dict(run.commits), "calls": run.manifest()}
     v = G.core_verdict({**record, "descriptor": _descriptor().hex()})
-    assert v["manifest"] is None and v["a_link"] is None and v["commit_values"] == 2, v
+    assert v["manifest"] is None and v["a_link"] is None and v["commit_values"] == 3, v
     assert v["tied"] if edit is None else (v["arow"][0] == "arow" and "is not the Commit's" in v["arow"][1]), v
     off = {**record["commitment"], "calls_root": "00" * 64}
     assert "calls_root is not over" in G.record_reason({**record, "commitment": off})

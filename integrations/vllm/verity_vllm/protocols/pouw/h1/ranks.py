@@ -25,8 +25,8 @@ slices the pinned checkpoint into shards yet.
 
 With ``commit`` (ROOTS1) the Commit runs on every rank (`acquire.h1_commit.RankCommit`, the engine's
 ``worker_extension_cls`` then: the rows-sha512 committer, the int8 source and the step-input port on the rank's model),
-and the rank's tap (`RankTap`) ships what it acquired to the holder: each H1 linear's x_q and s_a at its site, renamed to
-the window's name of the linear (``…qkv_proj@tp1/row_quant``), and the port's input ids, cut to the step's scheduled
+and the rank's tap (`RankTap`) ships what it acquired to the holder: each H1 linear's x_q and s_a at its site and its y at
+its output, renamed to the window's name of the linear (``…qkv_proj@tp1/row_quant``, ``…/out``), and the port's input ids, cut to the step's scheduled
 tokens. The holder's one `pouw_h1_commit.CommitTap` takes them before the calls (`feed`), so its
 AROW of each (step, K) is every rank's calls' rows, call after call, as the window's A table is. The input ids are the
 first rank's (the one holding linear 0), one ``ids@<s>`` a round for the window; another rank's ids at the same engine
@@ -106,7 +106,8 @@ class RankRun(PH.H1Run):
 @dataclass
 class RankTap(CT.CommitTap):
     """A rank's tap on its Commit (`acquire.h1_commit.RankCommit.h1rank_commit`): what the holder's `pouw_h1_commit.CommitTap` reads of what
-    the Commit acquired, each H1 linear's x_q (``/0``) and s_a (``/1``) at its site and the port's input ids, its first
+    the Commit acquired, each H1 linear's x_q (``/0``) and s_a (``/1``) at its site, its y at its output (`CT.out_site`,
+    ``/0``, its bits) and the port's input ids, its first
     ``n`` (None with no count of the step's scheduled tokens), copied to the host with the engine step, each site under the
     window's name of its linear (``names``: the rank's module name, or a routed expert's H1 name
     ``prefix.expert.projection``, to the window's), kept until the holder's next pull (`drain`)."""
@@ -122,6 +123,8 @@ class RankTap(CT.CommitTap):
         module = op.removesuffix("/row_quant")
         if module != op and port in ("0", "1"):
             self.out.append((f"{CT.site(self.names.get(module, module))}/{port}", int(step), np.array(CT._host(t))))
+        elif (module := op.removesuffix("/out")) != op and port == "0":
+            self.out.append((f"{CT.out_site(self.names.get(module, module))}/0", int(step), np.array(CT._bits(t))))
 
     def drain(self) -> list[tuple[str, int, np.ndarray]]:
         out, self.out = self.out, []
