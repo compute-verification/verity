@@ -2083,7 +2083,8 @@ def refines(a, b) -> bool:
     """Does every set of `a` lie inside one set of `b` (`Verity.Annotation.Refines`), on every Program and in every
     activation where both evaluate?  Decided from the two terms (Query objects or their string form) alone, never from a
     Program: `each` and `where` stay inside their base's sets, `minus` and `inter` inside an operand's; `group` and an
-    affine `label` merge their base's sets, `concat` holds its parts', and `root()` everything; `members`, `nodes`, `zip`
+    affine `label` merge their base's sets, `concat` holds its parts', and `root()` everything; a bare `rest()` is the
+    complement of its own `concat`, so it refines `root()` alone, never another term's `rest()`; `members`, `nodes`, `zip`
     and `table` lie inside `instances` of their path, `members` inside `nodes` of its selector and inside `members` whose
     block sizes are multiples of its own; `each(F, G)` refines `each(F, H)` when G refines H; `default` and `frontier`
     refine themselves at a larger width.  Sound, not complete: False says only that no rule shows it.  A `label` by
@@ -2102,6 +2103,8 @@ def _rows_cols(k: int | tuple[int, int]) -> tuple[int, int | None]:
 
 @functools.lru_cache(maxsize=4096)
 def _refines(a: Query, b: Query) -> bool:
+    if isinstance(a, Rest) and a.base is None:
+        return isinstance(b, Root)
     if a == b or isinstance(b, Root):
         return True
     if isinstance(a, (Each, Where)) and _refines(a.base, b):

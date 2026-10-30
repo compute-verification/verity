@@ -117,6 +117,8 @@ def test_the_rules(a, b):
     ('each(instances("@*"), frontier(64))', 'each(instances("@*"), frontier(32))', "calls"),
     ('default(64)', 'default(32)', "calls"),
     (f'zip({L}, [{ROWS}, {MULS}])', f'nodes({L}, {ROWS})', "layer"),
+    *((f'concat({p}, rest())', f'concat(instances({L}), rest())', "layer")
+      for p in (f'nodes({L}, {ROWS})', f'nodes({L}, {MULS})', f'members({L}, {ROWS}, k=2)')),
 ])
 def test_what_it_refuses_is_no_refinement_on_some_program(a, b, on):
     assert not G.refines(a, b)
