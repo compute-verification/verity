@@ -52,8 +52,8 @@ circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (`g
 verified `checked` commit, below the tip, for ratchet-gate to judge the
 landings above; with drive.toml's `after_landing_shards` N, as N runs at once (`--shard K/N` each, on machines of `on` no other
 shard has while there are N: `shard_machines`), passed once every shard passed, a run ci launched in place of a shard's twin
-counting once `/data/infra/drive.sh queue drive-shard-add TIP K RUN_ID` adds it to shard K (`queue.drive_shard_add`; cancel
-the twin after);
+counting once `/data/infra/drive.sh queue drive-shard-add TIP K RUN_ID` adds it to shard K (`queue.drive_shard_add`: only a
+run whose own record is shard K/N of TIP's commit; cancel the twin after);
 `--no-cache --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and
 `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `checked`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
