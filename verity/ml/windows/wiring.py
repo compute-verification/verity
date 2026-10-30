@@ -90,6 +90,23 @@ def _strings(publics: Mapping[str, bytes], m: Any, port: str) -> np.ndarray | No
     return None if (refs >= counts[j]).any() else table.reshape(counts[j], BC_BYTES)[refs]
 
 
+def string_at(m: Any, body: bytes, port: str, unit: int) -> int | None:
+    """Where member ``m``'s unit ``unit``'s ``b || c`` of its row ``port`` starts in its public body ``body``, as `_strings`
+    reads it: a shared-row member's, the row of the port's table its ref names. None where `_strings` reads none."""
+    names = [q for q, _ in m.all_rows]
+    if port not in names:
+        return None
+    j = names.index(port)
+    if not m.tables:
+        return (unit * len(names) + j) * BC_BYTES if len(body) == m.n * len(names) * BC_BYTES else None
+    counts = [dict(m.tables).get(q, m.n) for q in names]
+    at = BC_BYTES * sum(counts)
+    if len(body) != at + 4 * m.n * len(names):
+        return None
+    ref = int(np.frombuffer(body, dtype="<u4", count=1, offset=at + 4 * (unit * len(names) + j))[0])
+    return None if ref >= counts[j] else BC_BYTES * (sum(counts[:j]) + ref)
+
+
 def check(members: Sequence[Any], publics: Mapping[str, bytes]) -> dict[str, str]:
     """The verifier's wiring check on every member's public body (``publics[member]``, which the leaf layer binds): each wired
     row's ``b || c`` is its writer's output row's.  ``{member: why}``; empty when every wire holds."""
