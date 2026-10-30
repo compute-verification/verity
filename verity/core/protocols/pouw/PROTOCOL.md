@@ -85,9 +85,9 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    or prover, is refused, and the challenger checks that first (`core_check.recorded_reason`), asking for the reveal
    only after. So one proxy records one stream and prover for p. The certifier reveals p's salt once, and
    only until its reveal deadline on its own clock after p's end (`Proxy(reveal_deadline=…)`, one PoUW window by
-   default), so one registration of p, made after p's work, gets it. `salt.Registrations` is a once-only registration
-   ledger: p registers once per stream and prover, when the challenger receives it, before its draw and any proof (its
-   tiles are private, so that is the finest public key), and a second registration under them is refused
+   default), so one registration of p, made after p's work, gets it. `salt.WindowOpens` is a once-only ledger of
+   opens: p opens once per stream and prover, when the challenger receives it, before its draw and any proof (its
+   tiles are private, so that is the finest public key), and a second open under them is refused
    (`reregistered`). It is not credit: a window's credit is its outcome's verdict, and no period record yet closes a
    stream's credit at its first refused window (#2722).
    - **No served-zk certified window is credited today.** A certified window credits only units that read its salt
