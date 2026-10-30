@@ -54,8 +54,9 @@ verdict_first = true
 # the low-risk lane: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next`, in its order, onto
 # `checked` on their ready mark alone (no land verdict, no Lean check), each whose merge onto `checked`'s tip changes nothing
 # `lowrisk_excludes` names, merges with no conflict, contains no unlanded PR and passes `landing_gates` and the compile gate;
-# the after-landing run checks them, and a red one reverts its culprit. It waits while a Lean check of `next` runs or awaits
-# its landing (a landing off `next` rebuilds it). false: drive lands only on review
+# the after-landing run checks them, and a red one reverts its culprit. A landing off `next` rebuilds it, and each Lean check
+# of `next` that runs or passed moves to the same member's new commit when the trees differ in nothing `lowrisk_excludes`
+# names; the lane waits only while one can't move. false: drive lands only on review
 lowrisk_lane = true
 lowrisk_per_tick = 20
 # what keeps a change off the low-risk lane: a directory from the root (ending in `/`), or a file name glob (any directory).
