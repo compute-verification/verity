@@ -1985,8 +1985,8 @@ def test_a_detached_lean_launch_that_ends_without_run_ids_registered_no_run_and_
     h.printed[str(tmp_path / "launch-1")] = ([], "train: no run launched in the wait; stopped its launcher")
     assert not h.tick().startswith("landed")
     (post,) = [p for p in h.posts if "registered no run" in p]
-    assert f"train.sh {top[:12]} m1 --deferred {LEAN_STEP} registered no run: train: no run launched" in post, post
-    assert f"{tmp_path / 'launch-1'}/log" in post
+    assert post.startswith(f"@ci @top queue: train.sh {top[:12]} m1 --deferred {LEAN_STEP} registered no run 1 time since "), post
+    assert post.endswith(f"(log {tmp_path / 'launch-1'}/log): train: no run launched in the wait; stopped its launcher"), post
     assert starts == [top, top]                                           # dropped, and launched again in the same tick
     rec = h.d.q.load_state()["drive"]["lean"][top]
     assert rec["launch"]["dir"] == str(tmp_path / "launch-2") and rec["state"] is None
@@ -1995,7 +1995,10 @@ def test_a_detached_lean_launch_that_ends_without_run_ids_registered_no_run_and_
     assert starts == [top, top]
     h.clock += 1                                                          # printing nothing past it, it registered no run
     h.tick()
-    assert starts == [top, top, top] and len([p for p in h.posts if "registered no run" in p]) == 1   # told once per commit
+    posts = [p for p in h.posts if "registered no run" in p]
+    assert starts == [top, top, top] and len(posts) == 2, posts           # another reason rings at once
+    assert "registered no run 2 times since" in posts[1] and posts[1].endswith(": no run ids 60 min after its launch: "
+                                                                               "train: abc on m1; log x"), posts[1]
     rec = {"ids": [], "launch": {"dir": "d", "pid": 0}, "at": h.clock - LAUNCH_LOST_S - 1}
     assert h.d._resolve(rec, "x").startswith("no run ids 60 min after its launch") and "launch" not in rec
 
@@ -2062,6 +2065,77 @@ def test_the_after_landing_run_launches_detached_and_one_that_registered_no_run_
     h.evidence = [_steps_run(world.tmp, "r-post", {s: "passed" for s in AFTER_LANDING})]
     assert h.tick().startswith("landed #1"), world.logs
     assert h.postland()["verified"] == main
+    assert "postland" not in h.d.q.load_state()["drive"]["launch_failed"]     # its launch registered a run: the count ends
+
+
+def test_an_after_landing_launch_that_exits_1_rings_ci_and_top_once_an_hour_and_the_behind_ring_names_it(
+        world, monkeypatch, tmp_path):
+    """A train.sh that refuses before any step exits 1 at every launch, and drive launches the run again each tick.  Told once to
+    ci alone, nobody acted for hours while the behind-ring said the run was `(launching)` for 0.0 h.  Each launch that
+    registered no run rings ci and top at once with its reason's last line, the same reason at the same tip again only an hour
+    later, and the behind-ring counts the failures."""
+    from datetime import UTC, datetime
+
+    from research.drive import BEHIND_S, LAUNCH_RING_EVERY_S
+
+    h = Review(world, monkeypatch)
+    starts = _detached(h, tmp_path, lean=False, post=True)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1")
+    main, landed = _main(world), h.clock
+    assert starts == [main]
+    refused = "train.sh: refused: its settings check failed (exit 1)"
+    h.d.launched = lambda launch: ([], f"train: checking settings\n{refused}")
+
+    def rings() -> list[str]:
+        return [p for p in h.posts if "registered no run" in p]
+
+    h.clock += 60
+    h.tick()
+    (ring,) = rings()
+    since = f"{datetime.fromtimestamp(h.clock, UTC):%H:%M}Z"
+    assert ring.startswith(f"@ci @top queue: train.sh {main[:12]} m1 --deferred "), ring
+    assert ring.endswith(f"registered no run 1 time since {since} (log {tmp_path / 'launch-1'}/log): {refused}"), ring
+    assert "checking settings" not in ring and starts == [main, main]
+    h.clock += 600
+    h.tick()                                                              # the same failure within the hour: no ring
+    assert len(rings()) == 1 and starts == [main] * 3
+    assert h.d.q.load_state()["drive"]["launch_failed"]["postland"]["n"] == 2
+    h.clock += LAUNCH_RING_EVERY_S - 600
+    h.tick()
+    assert len(rings()) == 2 and f"registered no run 3 times since {since}" in rings()[1], rings()
+    h.clock = landed + BEHIND_S + 60
+    h.tick()
+    (alarm,) = [p for p in h.posts if "behind its tip" in p]
+    assert alarm.startswith("@ci @top queue: `main`'s last verified commit"), alarm
+    assert f"its launch registered no run 4 times since {since}: {refused}; red: nothing named red" in alarm, alarm
+    assert "(launching)" not in alarm and "has run" not in alarm, alarm
+
+
+def test_a_lean_check_launch_that_exits_1_rings_ci_and_top_and_again_only_an_hour_later(world, monkeypatch, tmp_path):
+    from research.drive import LAUNCH_RING_EVERY_S
+
+    h = Review(world, monkeypatch)
+    starts = _detached(h, tmp_path)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    h.review(1)
+    h.tick()
+    top = _tip(world)
+    h.d.launched = lambda launch: ([], "train.sh: refused: its settings check failed (exit 1)")
+
+    def rings() -> list[str]:
+        return [p for p in h.posts if "registered no run" in p]
+
+    h.tick()
+    (ring,) = rings()
+    assert ring.startswith(f"@ci @top queue: train.sh {top[:12]} m1 --deferred {LEAN_STEP} registered no run 1 time"), ring
+    h.clock += LAUNCH_RING_EVERY_S - 1
+    h.tick()
+    assert len(rings()) == 1 and starts == [top] * 3
+    h.clock += 1
+    h.tick()
+    assert len(rings()) == 2 and "registered no run 3 times since" in rings()[1], rings()
 
 
 def test_detach_returns_before_train_sh_prints_its_run_ids_and_launched_reads_them_or_an_exit_without_them(tmp_path, monkeypatch):
