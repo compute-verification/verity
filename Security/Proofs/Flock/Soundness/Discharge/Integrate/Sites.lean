@@ -1,6 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Exec
 import Proofs.Flock.Soundness.Discharge.Layout
 import Proofs.Flock.Soundness.Discharge.Placed
+import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+import Proofs.Flock.Soundness.Discharge.Exec.Shape
+import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 
 /-!
 # The tables and sites of a one-table session
