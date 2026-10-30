@@ -1,5 +1,7 @@
-"""The keyed coin tree, ``coin-tree/hm96-sha512/v2`` (``live/src/coin_tree.rs``, which this mirrors byte for byte): the
-challenger's commitment, at ``Hello``, to every coin of a session, and the check of each round's opening against it.
+"""The keyed coin tree, ``coin-tree/hm96-sha512/v2`` (``verity/ml/flock/live/src/coin_tree.rs``, which this mirrors byte
+for byte): the challenger's commitment, at ``Hello``, to every coin of a session, and the check of each round's opening
+against it. The challenger's device draws and opens it (`verity.core.protocols.sampled_proofs.challenger`,
+`LiveChallenger.draw_tree` and `open_tree`), and a prover's side checks each opening (`check`).
 
 At ``Hello`` the challenger samples a fresh hm96 key ``K`` and every coin of the session, a block of ``block`` coins for
 each (stream, round), and commits to all of them under one SHA-512 Merkle root: one keyed hm96 leaf a (stream, round), each
@@ -89,7 +91,9 @@ class Rules:
         self._key_int = int.from_bytes(key, "little")
         self._windows: list[int] | None = None
         self._base = hashlib.sha512(self.nonce)
-        tag = lambda name: f"verity/coin-tree/{name}/v2\0".encode()
+        def tag(name: str) -> bytes:
+            return f"verity/coin-tree/{name}/v2\0".encode()
+
         self.tail, self.chain_tag, self.round_tag, self.pad_tag = tag("tail"), tag("chain"), tag("round"), tag("pad")
         self.salt_prefix = _padded128(SALT_TAG)
         self.leaf_prefix = _padded128(LEAF_TAG, hashlib.sha512(key).digest())

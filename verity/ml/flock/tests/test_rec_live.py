@@ -9,8 +9,8 @@ import json
 import struct
 
 import pytest
-from verity_flock import coin_tree as CT
 from verity_flock import rec_live as RL
+from verity.ml.commitments import coin_tree as CT
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 
@@ -316,22 +316,39 @@ def _tree_session(proxy, hello=None):
     return _session(proxy, hello=hello or _tree_hello())
 
 
+class _Logged(RL.OsTree):
+    """`RL.OsTree` that keeps what each opening was asked for, as the device's release log does."""
+
+    def __init__(self, rand):
+        super().__init__(rand)
+        self.asked: list[tuple[str, int, int, bytes]] = []
+
+    def tree_open(self, root, stream, rnd, n, after):
+        self.asked.append((stream, rnd, n, after))
+        return super().tree_open(root, stream, rnd, n, after)
+
+
+def _tree_coins(source=None):
+    return RL.CoinServer(_counter_rand(), TREE, source or _Logged(_counter_rand()))
+
+
 def test_on_the_coin_tree_every_coin_opens_the_challengers_root_and_the_record_names_its_nonce():
-    coins = RL.CoinServer(_counter_rand(), TREE)
+    coins = _tree_coins()
     proxy = _proxy(coins=coins)
     resp = _tree_session(proxy)
     assert resp[1][0] == RL.RESP_COINS and len(resp[1][1]) == 20
     root, key = CT.answer_of(resp[1][1])
-    assert (root, key) == (coins.tree.root(), coins.tree.key)
+    tree = coins.source.trees[root]
+    assert key == tree.key
     assert [(r[0], len(r[1])) for r in resp[2:3] + resp[5:8]] == [(RL.RESP_COINS, 8), (RL.RESP_COINS, 6), (RL.RESP_COINS, 1),
                                                                    (RL.RESP_COINS, 2)]
     assert resp[-1][0] == RL.RESP_VERDICT
-    assert resp[2][1] == coins.tree.open(0, 0, 8)[0]
-    assert [r[1] for r in resp[5:8]] == [coins.tree.open(1, k, n)[0] for k, n in enumerate((6, 1, 2))]
+    assert resp[2][1] == tree.open(0, 0, 8)[0]
+    assert [r[1] for r in resp[5:8]] == [tree.open(1, k, n)[0] for k, n in enumerate((6, 1, 2))]
     assert set(coins.tree_openings) == {(RL.LINK_COINS, 0), ("circuit/rep0", 0), ("circuit/rep0", 1), ("circuit/rep0", 2)}
     rec = proxy.session_record()
-    nonce = coins.tree.nonce.hex()
-    assert nonce != PROVER_NONCE and rec["coin_tree"] == coins.tree.record()
+    nonce = tree.nonce.hex()
+    assert nonce != PROVER_NONCE and rec["coin_tree"] == tree.record() == coins.tree_record
     assert rec["hello"] == RL.canonical({**json.loads(HELLO), "coins": {**TREE.to_json(), "nonce": nonce}})
     assert CT.hello_nonce(rec["hello"]).hex() == nonce
     pub = json.dumps(coins.record())
@@ -340,37 +357,111 @@ def test_on_the_coin_tree_every_coin_opens_the_challengers_root_and_the_record_n
     assert RL.schedule_of(coins.record()) == SCHEDULE
 
 
+def test_on_the_coin_tree_each_round_is_opened_after_the_coin_servers_record_of_what_it_answers():
+    """The source opens the link points after ``Commit``'s salted tops and each round after its record without the coins,
+    so a release log of the openings binds them to the coin server's record."""
+    coins = _tree_coins()
+    _tree_session(_proxy(coins=coins))
+    rec = coins.record()
+    link = hashlib.sha512(RL.canonical(rec["link"]["roots"]).encode()).digest()
+    want = [(CT.SESSION, 0, 8, link)] + [(r["stream"], r["k"], r["n"], RL.round_after(r)) for r in rec["rounds"]]
+    assert coins.source.asked == want and len({a for *_, a in want}) == len(want)
+    assert RL.round_after(rec["rounds"][1]) != RL.round_after({**rec["rounds"][1], "commits": [CAP1.hex()]})
+
+
 def test_on_the_coin_tree_a_coin_that_does_not_open_stops_the_session():
     class Altered(RL.CoinServer):
-        def _draw(self, stream, k, n):
-            got = super()._draw(stream, k, n)
+        def _draw(self, stream, k, n, after):
+            got = super()._draw(stream, k, n, after)
             return [got[0] ^ 1, *got[1:]] if stream == "circuit/rep0" and k == 1 else got
 
-    proxy = _proxy(coins=Altered(_counter_rand(), TREE))
+    proxy = _proxy(coins=Altered(_counter_rand(), TREE, RL.OsTree(_counter_rand())))
     why = next(r[1] for r in _tree_session(proxy) if r[0] == RL.RESP_REFUSED)
     assert why.startswith("rec proxy: FIREWALL-REFUSED: ") and "circuit/rep0 round 1" in why
 
     class Forged(RL.CoinServer):
-        def _draw(self, stream, k, n):
-            got = super()._draw(stream, k, n)
+        def _draw(self, stream, k, n, after):
+            got = super()._draw(stream, k, n, after)
             if stream == "circuit/rep0" and k == 1:
                 self.tree_openings[(stream, k)] = [self.tree_openings[(stream, k)][0] ^ 1, *self.tree_openings[(stream, k)][1:]]
             return got
 
-    proxy = _proxy(coins=Forged(_counter_rand(), TREE))
+    proxy = _proxy(coins=Forged(_counter_rand(), TREE, RL.OsTree(_counter_rand())))
     why = next(r[1] for r in _tree_session(proxy) if r[0] == RL.RESP_REFUSED)
     assert "do not open its coin tree" in why
 
 
 def test_the_prover_hello_names_the_challengers_tree_and_live_coins_refuse_one():
     other = CT.Spec(TREE.streams + ("sparse/rep0",), TREE.rounds_log, TREE.block)
-    proxy = _proxy(coins=RL.CoinServer(_counter_rand(), TREE))
+    proxy = _proxy(coins=_tree_coins())
     why = next(r[1] for r in _tree_session(proxy, _tree_hello(other)) if r[0] == RL.RESP_REFUSED)
     assert why.startswith("rec proxy: FIREWALL-REFUSED: Hello: coins ") and proxy.coins.hello is None
     live = _proxy()
     assert "live coins" in next(r[1] for r in _tree_session(live) if r[0] == RL.RESP_REFUSED) and live.coins.hello is None
     with pytest.raises(ValueError, match="at Hello"):
-        RL.CoinServer(_counter_rand(), TREE).commit_coins(SCHEDULE)
+        _tree_coins().commit_coins(SCHEDULE)
+
+
+def test_the_coin_server_draws_no_coin_tree_of_its_own():
+    with pytest.raises(ValueError, match="takes it from a source"):
+        RL.CoinServer(_counter_rand(), TREE)
+
+
+def test_the_test_source_refuses_what_the_challenger_refuses():
+    src = RL.OsTree(_counter_rand())
+    _, root, _ = src.tree(TREE.to_json())
+    after = bytes(64)
+    with pytest.raises(ValueError, match="next round"):
+        src.tree_open(root, "circuit/rep0", 1, 1, after)
+    src.tree_open(root, "circuit/rep0", 0, 1, after)
+    for rnd, n, a in ((0, 1, after), (1, TREE.block + 1, after), (1, 1, bytes(63))):
+        with pytest.raises(ValueError, match="next round"):
+            src.tree_open(root, "circuit/rep0", rnd, n, a)
+    with pytest.raises(ValueError, match="no coin tree"):
+        src.tree_open(root, "sparse/rep0", 0, 1, after)
+    with pytest.raises(ValueError, match="no coin tree"):
+        src.tree_open(bytes(64), "circuit/rep0", 0, 1, after)
+
+
+@pytest.mark.parametrize("argv, why", [
+    (["--coin-tree"], "--coin-tree takes its trees"),
+    (["--coin-tree", "--tree-from", "h:1", "--tree-test-os"], "--coin-tree takes its trees"),
+    (["--tree-test-os"], "name where --coin-tree's trees come from"),
+    (["--coin-tree", "--tree-test-os", "--tree-secret-file", "f"], "--tree-secret-file is --tree-from's"),
+])
+def test_the_coin_tree_names_one_source(argv, why, tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        RL.main(["--listen", "127.0.0.1:0", "--out", str(tmp_path), "--schedule", str(tmp_path / "s.json"), *argv])
+    assert why in capsys.readouterr().err
+
+
+def test_tree_from_takes_the_trees_from_the_challengers_session_and_closes_it(tmp_path, monkeypatch):
+    from verity.core.protocols.sampled_proofs import remote
+
+    class Device(RL.OsTree):
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    got = {}
+
+    def connect(address, secret):
+        got["at"], got["secret"], got["device"] = address, secret, Device(_counter_rand())
+        return got["device"]
+
+    def serve(*args, **kw):
+        got["source"], got["tree"] = kw["source"], kw["tree"]
+        return []
+
+    monkeypatch.setattr(remote.RemoteChallenger, "connect", staticmethod(connect))
+    monkeypatch.setattr(RL, "serve", serve)
+    (tmp_path / "s.json").write_text(json.dumps(SCHEDULE))
+    (tmp_path / "secret").write_text("0a" * 32 + "\n")
+    assert RL.main(["--listen", "127.0.0.1:0", "--out", str(tmp_path), "--schedule", str(tmp_path / "s.json"), "--coin-tree",
+                    "--tree-from", "challenger:7000", "--tree-secret-file", str(tmp_path / "secret")]) == 0
+    assert (got["at"], got["secret"]) == ("challenger:7000", bytes([10]) * 32)
+    assert got["source"] is got["device"] and got["tree"] == RL.INNER_COIN_SPEC and got["device"].closed
 
 
 def test_the_inner_coin_tree_holds_every_stream_a_schedule_opens():
