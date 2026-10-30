@@ -121,10 +121,10 @@ def test_the_lead_serves_verity_int8s_y_at_the_served_shapes(cpu_check, served_c
 
 
 def test_83d82109a8s_fold_doesnt_serve_verity_int8s_y(cpu_check, served_calls):
-    """#6630's fold at 83d82109a8, which served a y other than stock's for 18.9% of the audited outputs, on the same
-    words: n_ij = the word less sigma less A . B left in (row source 0, column source 0x4B400000 - sigma), FFMA(v, s_j,
-    fl(-1.5 2^23 s_j)) and the weight's scale first. The served level tells it, and each of its departures alone, from
-    verity_int8's y, so a check on it fails."""
+    """A fold that takes sigma alone out of the word (83d82109a8's FOLD=1 fold) doesn't serve verity_int8's y: on the
+    same words it leaves n_ij = the word less sigma less A . B in (row source 0, column source 0x4B400000 - sigma), rounds
+    through FFMA(v, s_j, fl(-1.5 2^23 s_j)) and applies the weight's scale first. The served level tells that fold, and
+    each of its departures alone, from verity_int8's y, so a check against verity_int8's y fails on it."""
     _, calls = served_lines(cpu_check, served_calls)
     out = sum(x["outputs"] for x in calls)
     share = {k: sum(x[f"control_{k}_mismatches"] for x in calls) / out
