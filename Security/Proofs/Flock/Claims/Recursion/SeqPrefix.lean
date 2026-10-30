@@ -65,8 +65,6 @@ instance instAddCommGroupXorBytes : AddCommGroup XorBytes where
   nsmul := nsmulRec
   zsmul := zsmulRec
 
-theorem xorBytes_add (a b : XorBytes) : a + b = xorBytes a b := rfl
-
 /-! ## Probabilities, both ways -/
 
 theorem Pr_le_of_prCoin {α β : Type} [Fintype α] [Nonempty α] [Fintype β] [Nonempty β] {p : α → Prop} {q : β → Prop}

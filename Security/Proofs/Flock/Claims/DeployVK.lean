@@ -22,15 +22,6 @@ def verifyWithK (keep : Bool → Bool) (h : ByteArray → ByteArray) (spec : Ses
     (record : String) (proofs : Array ByteArray) : V Unit :=
   verifyWithMK (M := V) keep (Hashes.ofSha512 h) spec tabs record proofs
 
-theorem verifyWithK_id (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
-    (proofs : Array ByteArray) : verifyWithK id h spec tabs record proofs = verifyWith h spec tabs record proofs :=
-  rfl
-
-theorem verifyWithK_true (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
-    (proofs : Array ByteArray) :
-    verifyWithK (fun _ => true) h spec tabs record proofs = verifyWithE h spec tabs record proofs :=
-  rfl
-
 end Flock
 
 namespace Claims

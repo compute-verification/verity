@@ -208,8 +208,6 @@ theorem resp_zero_eq (pm₁ pm₂ : List (Msg × Msg) → Msg) (n : ℕ) (h : pm
   unfold resp
   rw [interact_head, interact_head, h]
 
-theorem pmD_nil : G.pmD H x ν r [] = G.hello x ν := by simp [pmD, dprover, strat_eval_nil]
-
 theorem pmR_nil : G.pmR H x w ν r [] = G.hello x ν := by simp [pmR, prover, strat_eval_nil]
 
 theorem pmF_nil (c : Fin (G.K x) → G.Coin) (v : List Msg) : G.pmF H x ν c v [] = G.hello x ν := by

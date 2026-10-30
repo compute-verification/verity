@@ -140,12 +140,6 @@ theorem zkLevelZero_enc {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Fiel
   funext M q ℓ
   exact encPoly_eval A hA d _ hd hk _ q
 
-/-- **The masked code's Johnson count** at `agree`: `⌊(2^cols + t + 1)/agree²⌋ + 1`. -/
-theorem zkLevelZero_nMin {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
-    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
-    (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) :
-    (zkLevelZero A hA s cols t d c₀ hd hk).nMin agree = johnsonCount (2 ^ cols + t) agree := rfl
-
 /-- **The masked level-0 decoder meets `ListComplete`** for the masked columns, at the Johnson count
 `⌊(2^cols + t + 1)/agree²⌋ + 1`, at every `agree > 0`. -/
 theorem listComplete_zkLevelZero {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
@@ -198,18 +192,6 @@ theorem pad_lt_zkJohnsonCount {cols t : ℕ} {agree : ℝ} (ha0 : 0 < agree) (ha
     t < johnsonCount (2 ^ cols + t) agree := by
   exact lt_of_le_of_lt (Nat.le_add_left t (2 ^ cols)) (Nat.lt_of_succ_lt (lt_johnsonCount ha0 ha1))
 
-/-- In the masked code's Johnson regime the decoder is the Guruswami–Sudan path. -/
-theorem zkLevelZero_decode_eq_gsPath {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
-    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
-    (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) (os : List (ℕ × (Fin s → F))) (hnd : (os.map Prod.fst).Nodup)
-    (hlt : ∀ p ∈ os, p.1 < 2 ^ 64) (ha : agree ≤ 1)
-    (hJ : Real.sqrt ((2 ^ cols + t + 1) * os.length) < agree * os.length) :
-    (zkLevelZero A hA s cols t d c₀ hd hk).decode agree os =
-      (zkLevelZero A hA s cols t d c₀ hd hk).gsPath agree os
-        (zkLevelZero_regime A hA s cols t d c₀ hd hk agree os hnd hlt ha hJ).1 :=
-  (zkLevelZero A hA s cols t d c₀ hd hk).decode_eq_gsPath agree os
-    (zkLevelZero_regime A hA s cols t d c₀ hd hk agree os hnd hlt ha hJ)
-
 /-! ## The read step -/
 
 /-- The witness lanes' messages: the first `2^lanes` lanes' message symbols; their padding and the `e` extra lanes are
@@ -240,11 +222,5 @@ theorem readTrace_hid {F K : Type} [Field F] [Field K] (A : Arith F K) (m lanes 
 theorem readTrace_hid_length {F K : Type} [Field F] [Field K] (A : Arith F K) (m lanes cols : ℕ)
     (M : Message F lanes cols) : (readTrace A m lanes cols M).hid.length = 2 ^ m := by
   simp [readTrace, traceBits]
-
-/-- The masked read sees only the witness lanes' messages: the padding and the extra lanes don't reach the witness. -/
-theorem zkRead_eq_of_witnessMsg {F K : Type} [Field F] [Field K] (A : Arith F K) (m lanes e cols t : ℕ)
-    {M M' : ZkMessage F (2 ^ lanes + e) cols t} (h : zkWitnessMsg M = zkWitnessMsg M') :
-    zkRead A m lanes e cols t M = zkRead A m lanes e cols t M' := by
-  simp only [zkRead, h]
 
 end Claims.Flock
