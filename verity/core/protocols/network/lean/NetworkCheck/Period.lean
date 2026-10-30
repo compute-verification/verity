@@ -837,9 +837,10 @@ def inputsOf (r : Json) (ts : Array (Flock.Program.Defn × Nat)) (pins : Array (
   unless apart rects do throw "an input row is filled by two of its wires and declarations"
   pure { total, declared := sum.wiredBits + ingress, reads, pins }
 
-/-- The verifier's pins of an audit's registered parameters, fixed before the run: `{param: root}`, each root a SHA-512
-digest. -/
-def pinsOf (j : Json) (ctx : String) : V (Array (String × String)) := do
+/-- The verifier's pins of audit `a`'s registered parameters (its `pins`), fixed before the run: `{param: root}`, each
+root a SHA-512 digest; none without `pins`. -/
+def pinsOf (a : Json) (ctx : String) : V (Array (String × String)) := do
+  let .ok j := a.getObjVal? "pins" | pure #[]
   let kvs ← (Wires.fields j).mapError fun _ => s!"{ctx}: pins: not an object of roots by parameter"
   (kvs.toArray.mapM fun (p, v) => match v with
     | .str r => if isDigest r then pure (p, r) else throw s!"{ctx}: pins: {p}'s root is not a SHA-512 digest"
@@ -857,29 +858,24 @@ bound. -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
   let ks := (keysOf a).filter (· != "free")
   let withCircuit := ks == ["circuit", "program", "steps"] || ks == ["circuit", "pins", "program", "steps"]
-  unless withCircuit || ks == ["program", "steps"] do
-    throw s!"{ctx}: the keys must be [program, steps], [circuit, program, steps] or [circuit, pins, program, steps], \
-      and optionally free, not {keysOf a}"
-  if (keysOf a).contains "free" then discard <| Flock.J.nat a "free" ctx
+  need (withCircuit || ks == ["program", "steps"]) s!"{ctx}: the keys must be [program, steps], [circuit, program, \
+    steps] or [circuit, pins, program, steps], and optionally free, not {keysOf a}"
+  discard <| if (keysOf a).contains "free" then Flock.J.nat a "free" ctx else pure 0
   let pj ← Flock.J.get a "program" ctx
-  let prog ← match Flock.Program.decode (← Flock.canon pj).toUTF8 with
-    | .ok prog => pure prog
-    | .error e => throw s!"{ctx}: program: {e}"
-  let some root := prog.defs[prog.root]? | throw s!"{ctx}: program: no root"
+  let prog ← (Flock.Program.decode (← Flock.canon pj).toUTF8).mapError (s!"{ctx}: program: " ++ ·)
+  let root ← needSome prog.defs[prog.root]? s!"{ctx}: program: no root"
   let templates := root.body.nodes.filterMap fun x => match prog.defs[x.fn]? with
     | some d => if d.prim then none else some (d.key, x.members, bitsOf d.ret)
     | none => none
-  if templates.isEmpty then throw s!"{ctx}: program: no template"
+  need (!templates.isEmpty) s!"{ctx}: program: no template"
   let program := Flock.hexOf prog.sha512
-  let pins ← match a.getObjVal? "pins" with
-    | .ok j => pinsOf j ctx
-    | .error _ => pure #[]
-  let (circuit, registered, inputs) ← if withCircuit then do
+  let pins ← pinsOf a ctx
+  let (circuit, registered, inputs) ← (if withCircuit then do
       let r ← Flock.J.get a "circuit" ctx
       let circuit ← (circuitDigest r).mapError (s!"{ctx}: circuit: " ++ ·)
       let registered ← entriesOf r pj program (templates.map (·.1)) ctx
       pure (circuit, registered, ← (inputsOf r (rootTemplates prog) pins).mapError (s!"{ctx}: circuit: " ++ ·))
-    else pure ("", ({} : Entries), ({ total := inputBits (rootTemplates prog) } : Inputs))
+    else pure ("", ({} : Entries), ({ total := inputBits (rootTemplates prog) } : Inputs)))
   let entries ← (templates.filter fun (k, _, _) => registered.templates.any (·.1 == k)).mapM fun (k, n, _) => do
     pure (k, n, ← (closureDigest pj k).mapError (s!"{ctx}: " ++ ·))
   pure { inputs, steps := ← Flock.J.nat a "steps" ctx, program, units := templates.foldl (· + ·.2.1) 0,

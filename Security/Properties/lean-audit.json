@@ -1599,6 +1599,12 @@
    "assumptions": [],
    "type_hash": "30ac246ed35e00d232bcbf769692a986c35476bf91dadb94f044d3eb7e708d0d"
   },
+  "Properties.NetworkPeriod.auditFreeOfLayout": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.freeOfLayout": {
+   "owner": "@network-accounting"
+  },
   "Properties.NetworkPeriod.rowsKBoundsCount": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkPeriod.rowsKBoundsCount : Properties.NetworkPeriod.RowsKBoundsCount"],
@@ -3563,6 +3569,14 @@
    "Properties.NetworkPeriod.clockKBoundsCount": {
     "function": "NetworkCheck.Period.terms",
     "outcome": "none"
+   },
+   "Properties.NetworkPeriod.auditFreeOfLayout": {
+    "function": "NetworkCheck.Period.auditOf",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.freeOfLayout": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsProgWired": {
     "function": "NetworkCheck.Period.check",

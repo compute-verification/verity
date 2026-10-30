@@ -16,11 +16,11 @@ communication audit's bridge to `PeriodLeakAccepted`) instantiates it at the run
 supplies each of the statement's quantities as at most the check's number:
 
 - in the clock form the windows are the compute audits: `#Ss ≤ #Σ_sync ^ (link-windows)` (each link-window under one
-  sync of Σ_sync), an audit's free inputs at most its layout's (`free`), its faulty sets at most the sets of at most `b`
-  of its `N` units, `β` at most `b · bits` with `bits` the most one of its Program's units commits (`faulty_bits`), and
-  `Dj^k` at most `jitter ^ steps`;
+  sync of Σ_sync), an audit's free inputs at most those its registered circuit leaves free under its registration
+  (`Audit.free`), its faulty sets at most the sets of at most `b` of its `N` units, `β` at most `b · bits` with `bits`
+  the most one of its Program's units commits (`faulty_bits`), and `Dj^k` at most `jitter ^ steps`;
 - in the rows form the windows are the link-windows' scans: `#Ss ≤ ∏_c (cap_c + 1)` (a schedule is its lanes'
-  lengths), a window's free inputs at most its scan's Program's and its tied audits' (`free`: the egress renders the
+  lengths), a window's free inputs at most its scan's Program's and its tied audits' (`tiedFree`: the egress renders the
   outputs of the audits its scan's `prog` is tied to, so the bits the prover chose of their inputs are the window's),
   each window's faulty sets at most the sets of at most `b` of its `N` units, `β` at most `b · max(b_ing, b_eg)`
   (`faulty_bits`) and, when a tied audit is sampled in part with a bound of at least one incorrect proof block, every
@@ -39,6 +39,12 @@ conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`) of every period `check` accept
 property of any period check at `check` (`RowsProgWiredOf`, `RowsStateTiedOf`), which the nontrivial lemmas state
 false at `acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather
 than being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
+
+The free inputs `K` charges are the check's own count, from what the integration registered, never a number the caller
+supplies. `AuditFreeOfLayout` says an audit `auditOf` accepts counts its free inputs from the circuit record its window
+registers (`inputsOf`, at the record's SHA-512, which `Audit.free` holds its registration to), or, without one, every
+input bit of its Program; `FreeOfLayout` says each term the check publishes charges those counts (`Audit.free`) under
+the audits' own registrations, and in the rows form the tied audits' under each link-window's (`tiedFree`).
 -/
 
 namespace Properties.NetworkPeriod
@@ -46,16 +52,18 @@ namespace Properties.NetworkPeriod
 open NetworkCheck.Period
 
 /-- **The clock form's `K` bounds `PeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
-connections, `n` compute audits `a` and their facts `w`, the jitter bound `jitter`, `#Σ_sync` `syncs` and `windows`
-link-windows: `#Ss` at `syncs ^ windows` (`schedules`), `∏_c (cap_c + 1)` at `∏_j (caps j + 1)` (`cells`), and audit
-`i`'s `2^#(free inputs)` at `2 ^ (a i).free`, `#faultySets` at `atMost N b`, `2^β` at `2 ^ (b · (a i).bits)` (each of
+connections, `n` compute audits `a`, their registrations `r` and their facts `w`, the jitter bound `jitter`,
+`#Σ_sync` `syncs` and `windows` link-windows: `#Ss` at `syncs ^ windows` (`schedules`), `∏_c (cap_c + 1)` at
+`∏_j (caps j + 1)` (`cells`), and audit `i`'s `2^#(free inputs)` at `2 ^ (a i).free (r i)` (its registered circuit's
+count under its registration, `Audit.free`), `#faultySets` at `atMost N b`, `2^β` at `2 ^ (b · (a i).bits)` (each of
 its at most `b` wrong units commits at most its Program's widest unit's bits) and `Dj^k` at `jitter ^ (a i).steps`,
 their product is at most `2 ^ K`. -/
 def ClockKBoundsCount : Prop :=
-  ∀ (jitter syncs windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (a : Fin n → Audit) (w : Fin n → Facts),
-    syncs ^ windows * ((∏ j, (caps j + 1)) * ∏ i, (2 ^ (a i).free * atMost (w i).units (w i).wrong *
+  ∀ (jitter syncs windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (a : Fin n → Audit) (r : Fin n → Lean.Json)
+    (w : Fin n → Facts),
+    syncs ^ windows * ((∏ j, (caps j + 1)) * ∏ i, (2 ^ (a i).free (r i) * atMost (w i).units (w i).wrong *
         2 ^ ((w i).wrong * (a i).bits) * jitter ^ (a i).steps)) ≤
-      2 ^ (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K
+      2 ^ (terms (Array.ofFn a) (Array.ofFn r) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K
 
 /-- **The rows form's `K` bounds `PeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
 connections, the facts `w` of `n` link-windows' scans, their tied audits' free inputs `tied` (`tiedAudits`) and the
@@ -116,6 +124,37 @@ refused. -/
 def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
+
+/-- **A compute audit's free inputs are counted from its registered circuit** (`#(freeInputs \ reg)`). If `auditOf`
+accepts the audit `a`, its `program` decodes to a Program `P` and either its free inputs are every input bit of `P`'s
+root templates (`inputBits`) under any registration, or its window's circuit record `r` is the one whose SHA-512
+(`circuitDigest`) its registration must bind (`Audit.circuit`, which `Audit.free` reads through `Audit.boundIn`), and its
+inputs are those `inputsOf` counts from `r` under the verifier's pins (`pinsOf`): the input bits, those the record's wires
+and ingress fill and those its registered reads read by parameter. No other field of `a` is read for them, so a `free`
+count the caller supplies, right or wrong, changes no audit's inputs. -/
+def AuditFreeOfLayout : Prop :=
+  ∀ (a : Lean.Json) (ctx : String) (A : Audit), auditOf a ctx = .ok A →
+    ∃ (pj : Lean.Json) (c : String) (P : Flock.Program.Prog),
+      a.getObjVal? "program" = .ok pj ∧ Flock.canon pj = .ok c ∧ Flock.Program.decode c.toUTF8 = .ok P ∧
+      ((∀ reg, A.free reg = inputBits (rootTemplates P)) ∨
+        ∃ (r : Lean.Json) (pins : Array (String × String)), a.getObjVal? "circuit" = .ok r ∧
+          circuitDigest r = .ok A.circuit ∧ pinsOf a ctx = .ok pins ∧ inputsOf r (rootTemplates P) pins = .ok A.inputs)
+
+/-- What `FreeOfLayout` says of a period its check accepted, publishing `pub`: each term's free inputs are counted by
+`Audit.free` under a registration of the commitment's, in the clock form one compute audit's under its own, and in the
+rows form the scan's own and its tied audits' (`tiedFree`, each under its own) of one link-window's. -/
+def FreeOfLayoutAt (p : Params) (c : Commitment) (pub : Public) : Prop :=
+  ∀ t ∈ pub.units, match p.form with
+    | .clock _ => ∃ a reg, (a, reg) ∈ p.audits.zip c.audits ∧ t.free = a.free reg
+    | .rows _ _ scan => ∃ reg ∈ c.windows, t.free = scan.free + tiedFree p.audits c.audits reg
+
+/-- **`K` charges the free inputs the registered circuits leave, under the registrations.** If the check accepts a
+period, each term it publishes charges as free inputs `Audit.free`'s count (`AuditFreeOfLayout`) under a registration of
+the commitment: a compute audit's under its own in the clock form, and in the rows form the scan's own and its tied
+audits' (`tiedFree`) under one link-window's. -/
+def FreeOfLayout : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → FreeOfLayoutAt p c pub
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
 `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsProgWired` and `RowsStateTied` (each its `…Of` at

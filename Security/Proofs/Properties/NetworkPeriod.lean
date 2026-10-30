@@ -1,4 +1,5 @@
 import Properties.NetworkPeriod
+import Proofs.Properties.NetworkScan.Accept
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
@@ -10,6 +11,10 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 
 `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every finding is none
 (`firstFinding_none`), each link-window's `wiredCheck` and `stateCheck` among them.
+
+`AuditFreeOfLayout` reads `auditOf`'s steps one by one, each a bind (`bind_ok`), and keeps the Program, the circuit
+record and the inputs it counts from them; `FreeOfLayout` reads the terms off the accepted public, a map over the audits
+and their registrations in the clock form and over the scans and the link-windows' registrations in the rows form.
 -/
 
 namespace Properties.NetworkPeriod
@@ -54,15 +59,15 @@ theorem zip_ofFn {α β : Type} {n : ℕ} (f : Fin n → α) (g : Fin n → β) 
   ext <;> simp
 
 theorem clockK_ofFn (jitter syncs windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (a : Fin n → Audit)
-    (w : Fin n → Facts) :
-    (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K =
-      clog2 (syncs ^ windows) + (∑ j, clog2 (caps j + 1)) + ∑ i, (AuditTerms.of (a i) (w i) jitter).bits := by
+    (r : Fin n → Lean.Json) (w : Fin n → Facts) :
+    (terms (Array.ofFn a) (Array.ofFn r) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K =
+      clog2 (syncs ^ windows) + (∑ j, clog2 (caps j + 1)) + ∑ i, (AuditTerms.of (a i) (r i) (w i) jitter).bits := by
   simp only [Public.K, terms, capsTerm_ofFn, zip_ofFn, Array.map_ofFn]
   rw [foldl_ofFn]
   rfl
 
 theorem clockKBoundsCount : ClockKBoundsCount := by
-  intro jitter syncs windows m n caps a w
+  intro jitter syncs windows m n caps a r w
   rw [clockK_ofFn, pow_add, pow_add, mul_assoc]
   refine Nat.mul_le_mul (le_two_pow_clog2 _) (Nat.mul_le_mul (caps_le caps) ?_)
   rw [← Finset.prod_pow_eq_pow_sum]
@@ -127,7 +132,7 @@ def tiedWindow : Lean.Json :=
 whose circuit record, of SHA-512 `c`, registers that template as an entry template at that digest; and the schedule of
 one slot a window (one lane, T = 1, `every` 1). -/
 def slotAudit : Audit :=
-  ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "e")], "c", { templates := #[("SlotEntry_v1{KO=1}", "e")] }⟩
+  ⟨{}, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "e")], "c", { templates := #[("SlotEntry_v1{KO=1}", "e")] }⟩
 
 def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
 
@@ -155,7 +160,7 @@ def otherKey : String := "NetworkPeriodEntry_v1{V=512,STOP=[3,7]}"
 /-- A compute audit serving the second model: its Program's one template of one member, `otherKey` at the closure digest
 `f`, which its circuit record, of SHA-512 `c'`, registers as an entry template at that digest, with the vocabulary size
 512 and the stop ids [3, 7] it binds. -/
-def otherAudit : Audit := ⟨0, 0, "", 1, 0, #[(otherKey, 1, "f")], "c'", ⟨#[(otherKey, "f")], 512, #[3, 7]⟩⟩
+def otherAudit : Audit := ⟨{}, 0, "", 1, 0, #[(otherKey, 1, "f")], "c'", ⟨#[(otherKey, "f")], 512, #[3, 7]⟩⟩
 
 /-- Its honest side, with no change to the check: a link-window whose scan's `prog` is at the root and domain of the
 entries port of the template its registered circuit record names is wired, and the audit is tied to it. -/
@@ -281,5 +286,80 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
       stateWindow rfl
   rw [stateWindow_skipped] at hs
   cases hs
+
+/-! ## `K`'s free inputs are counted from the registered circuits -/
+
+open Properties.NetworkScan.Fits (bind_ok)
+
+theorem mapError_ok {ε ε' α : Type} {f : ε → ε'} {x : Except ε α} {a : α} (h : x.mapError f = .ok a) :
+    x = .ok a := by
+  cases x with
+  | error e => cases h
+  | ok b => cases h; rfl
+
+theorem get_ok {j v : Lean.Json} {k ctx : String} (h : Flock.J.get j k ctx = .ok v) : j.getObjVal? k = .ok v := by
+  unfold Flock.J.get at h
+  split at h
+  · cases h; assumption
+  · cases h
+
+theorem auditFreeOfLayout : AuditFreeOfLayout := by
+  intro a ctx A h
+  unfold auditOf at h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨pj, hpj, h⟩ := bind_ok h
+  obtain ⟨c, hc, h⟩ := bind_ok h
+  obtain ⟨P, hP, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨pins, hpins, h⟩ := bind_ok h
+  obtain ⟨⟨circuit, registered, inputs⟩, ht, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  cases h
+  refine ⟨pj, c, P, get_ok hpj, hc, mapError_ok hP, ?_⟩
+  split at ht
+  · obtain ⟨r, hr, ht⟩ := bind_ok ht
+    obtain ⟨d, hd, ht⟩ := bind_ok ht
+    obtain ⟨_, -, ht⟩ := bind_ok ht
+    obtain ⟨i, hi, ht⟩ := bind_ok ht
+    cases ht
+    exact Or.inr ⟨r, pins, get_ok hr, mapError_ok hd, hpins, mapError_ok hi⟩
+  · cases ht
+    refine Or.inl fun reg => ?_
+    simp [Audit.free, Inputs.heldBits]
+
+theorem freeOfLayout : FreeOfLayout := by
+  intro p c e pub prof h
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  intro t ht
+  rcases hf : p.form with ss | ⟨s, sd, scan⟩
+  · simp only [hf] at h ⊢
+    split at h
+    · cases h
+    · cases h
+    · injection h with hpub
+      subst hpub
+      simp only [terms] at ht
+      obtain ⟨⟨⟨a, reg⟩, f⟩, hx, rfl⟩ := Array.mem_map.1 ht
+      exact ⟨a, reg, (Array.of_mem_zip hx).1, rfl⟩
+  · simp only [hf] at h ⊢
+    split at h
+    · cases h
+    · cases h
+    · injection h with hpub
+      subst hpub
+      simp only [rowsPublic, rowsTerms, Array.map_map] at ht
+      obtain ⟨⟨f, reg⟩, hx, rfl⟩ := Array.mem_map.1 ht
+      exact ⟨reg, (Array.of_mem_zip hx).2, rfl⟩
 
 end Properties.NetworkPeriod
