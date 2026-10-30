@@ -369,7 +369,7 @@ theorem levelCalls_of_check {decode : Claims.Msg → Option Read} {x : Claims.Ms
       exact ⟨_, hv.2, hl⟩
   obtain ⟨name, hH, hl⟩ := hnet
   obtain ⟨hr, -, -, -, hss, hrow, haux, -, -, hdir⟩ := openIns_reads (copyOf p t htl w o g u) LANES H
-  have hL := laidRows_of_satisfies L regs hz ho hg hu hl
+  have hL := laidRows_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu hl
   rw [FlockVBridge.inWords_unit hl] at hL
   exact FlockVBridge.laid_unit_calls LANES H hH _ hL _ _ _ (by rw [FlockVBridge.size_rowBytes, hr]) hss hrow haux hdir
 
@@ -1019,7 +1019,7 @@ part's recorded calls, or a tie with the setup's evaluations at `xO`). -/
 def PartReadsTo (H : Msg → Msg) (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
     (G : Msg → (ℕ → Coin) → Flock.Wit → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     PartReads decode L s x xO fun w ms => G x c w ms ∨ PartColl H D L s x xO w
 
 /-- **The goal from a part's links, or the fallback** (`goal_of_links` for `PartReadsTo`). -/
@@ -1027,7 +1027,7 @@ theorem goal_of_partReadsTo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Depl
     {decode : Msg → Option Flock.Readable.Read} {L : Layout} {shape : Form → Prop}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {G : Msg → (ℕ → Coin) → Flock.Wit → List Msg → Prop} {s : ℕ}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (h : PartReadsTo H D decode L shape shows G s) (x : Msg) (st : Stmt) (hst : D.parse x = some st)
+    (h : PartReadsTo H D decode L shape shows G s) (x : Msg) (st : CompiledStatement) (hst : D.parse x = some st)
     (hf : shape st.form) (xO : Msg) (w : Flock.Wit) (hck : Flock.check DO.parse xO w = true) :
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg, Agrees L x s w ms → G x c w ms) ∨
       PartColl H D L s x xO w := by
@@ -1760,7 +1760,7 @@ one table) and, at each witness, every copy of every table of `sv` holding its k
 layout's messages at the copies' columns, `agrees_colsHold`) and the goal from the outputs. -/
 def StmtReadsTo (L : Layout) (shape : Form → Prop)
     (G : Msg → (ℕ → FlockDeploy.Coin) → Flock.Wit → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : CompiledStatement), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
     ∀ (xO : Msg) (c : ℕ → FlockDeploy.Coin), RecDeploy.showsPart untr b s x xO c →
     ∀ (p : Flock.Readable.Parsed) (r : RecDeploy.XR) (sv : VStar.Stmt),
       Flock.Readable.parseBytes RecDeploy.readOfO xO = some p → RecDeploy.readX x = some r →
@@ -1786,7 +1786,7 @@ every copy's gadgets (`copyForm` at `unitCol`, read by `readLin`); or the fallba
 the circuit's (`LevelCalls`, `levelCalls_recorded`). -/
 def LevelLogReads (L : Layout) (shape : Form → Prop)
     (logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : CompiledStatement), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
     ∀ (xO : Msg) (c : ℕ → FlockDeploy.Coin), RecDeploy.showsPart untr b s x xO c →
     ∀ (p : Flock.Readable.Parsed) (r : RecDeploy.XR) (sv : VStar.Stmt),
       Flock.Readable.parseBytes RecDeploy.readOfO xO = some p → RecDeploy.readX x = some r →

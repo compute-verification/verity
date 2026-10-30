@@ -28,8 +28,8 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
 | `resource_accounting/` | a chain of dependent matmuls at Llama-3.1-8B's shapes on one RTX PRO 6000, natively and under each protocol, with what each run certifies | maintained |
 | `load_time/` | the time from spawn to engine-ready for a large model under vLLM at TP 8, by page-cache, compile-cache and loader state | frozen |
-| `rho/` | a lower bound on the overhead a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
-| `nci/` | the sources, parameters and policies NCI's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
+| `rho/` | a lower bound on the slowdown a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
+| `nci/` | the sources, parameters and policies the inference-only policy's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
 
 ## Kernels
 

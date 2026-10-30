@@ -1,4 +1,4 @@
-"""Option A's prover side (CA, 21 Oct 16:04Z): a drawn leaf's 32 lane partials, recomputed after the draw from what serving
+"""Option A's prover side: a drawn leaf's 32 lane partials, recomputed after the draw from what serving
 committed, bit for bit the words the served receipt XORed.  Serving is unchanged: one receipt a 32 × 32 leaf (`receipts`).
 The proof of a drawn leaf is 32 lane sub-statements and a combine that checks the XOR of their partials is the committed
 receipt; this module computes those partials.
