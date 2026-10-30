@@ -10,20 +10,9 @@ patterns = ['"advice_before_draw"', '"fixed_before_draw"']
 
 # the device's salts, taken from its own coins at each PoUW window
 [[words_in]]
-files = ["verity/core/devices/certifier/lean/CertifierDevice/Driver.lean"]
-[words_in.words]
-"drawSalts" = "freshSalts"
-
-[[words_in]]
-files = ["verity/core/protocols/certifier/active.py", "verity/core/devices/certifier/lean/CertifierDevice/Device.lean"]
+files = ["verity/core/protocols/certifier/active.py"]
 [words_in.words]
 "_draw_salt" = "_fresh_salt"
-
-# a uniform sample's hypotheses, satisfiable
-[[words_in]]
-files = ["Security/Proofs/NetworkCertifier/Pooled.lean"]
-[words_in.words]
-"drawUniform_val" = "sampleUniform_val"
 
 # a prover's environment behind the ZK server
 [[words_in]]
