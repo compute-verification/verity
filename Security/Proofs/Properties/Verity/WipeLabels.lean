@@ -128,14 +128,14 @@ theorem egress_eq : (V.wipe θ (V.circuitFile θ F)).egress = W.τ.egress := con
 
 /-- **A read-back of the wipe that opens the period, as the strategy's**: on the strategy's egress, which is the wipe's,
 and the commitment's spot reads through `spots`. -/
-def keepOf {S : ℕ}
+noncomputable def keepOf {S : ℕ}
     (keep : Device.State d → (Fin (V.wipe θ (V.circuitFile θ F)).egress → Bool) → V.Spots → Fin S → Bool) :
     Device.State d → (Fin W.τ.egress → Bool) → Accounting.Wipe.Reads W.c.params.labels W.c.params.k → Pous.Bits S :=
   fun σ ξ c => keep σ (ξ ∘ Fin.cast W.egress_eq) (W.spots.symm c)
 
 /-- **The distinguisher the moves make** (`Accounting.Wipe.Strategy.distinguisher`), at the device's state `hold` from
 the foreign content and the read-back `keep` of the wipe that opens the period. -/
-def distinguisher {S : ℕ} (hold : Pous.Bits S → Device.State d)
+noncomputable def distinguisher {S : ℕ} (hold : Pous.Bits S → Device.State d)
     (keep : Device.State d → (Fin (V.wipe θ (V.circuitFile θ F)).egress → Bool) → V.Spots → Fin S → Bool) :
     (Pous.Bits S × Accounting.Wipe.Reads W.c.params.labels W.c.params.k) × Accounting.Wipe.Labels W.c.params.labels →
       Prop :=
@@ -167,7 +167,7 @@ theorem epsilon_le {ε : ℕ → ℕ → ℝ≥0∞} {t S : ℕ} {hold : (Fin S 
     {keep : Device.State d → (Fin (V.wipe θ (V.circuitFile θ F)).egress → Bool) → V.Spots → Fin S → Bool}
     (h : Accounting.Assumptions.WipeLabelsPrf sha512Msg ε (W.distinguisher hold keep) t) :
     W.epsilon S hold keep ≤ (W.eps.num : ℝ≥0∞) / W.eps.den + ε t W.c.params.labels + W.deltaNet hold :=
-  add_le_add_right (add_le_add_left (tsub_le_iff_left.mpr h) _) _
+  add_le_add (add_le_add le_rfl (tsub_le_iff_left.mpr h)) le_rfl
 
 end WipeSession
 
