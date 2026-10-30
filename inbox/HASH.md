@@ -274,3 +274,10 @@ where h_forced ≤ h is the hashing or fold work a cheater can't skip. So 99% ne
 - **T2, estimate:** 9.1/10.7 at t8192 against the lead's 54.9/66.0. The measurement plan is sm_120 tiers 1–3, then an H200 run of record.
 - **Lean draft:** `Security/Definitions/Pouw/Assumptions/ShaWritesR80.lean` (type-checks; pinned to `xc` and to SHA-512("abc")). It is weaker than the protocol's premise until W1 gains carry predicates. The falsification test is `hash_r80_premise.py falsify`.
 - **Next:** when COUNTER's R80X attack reports (09:00Z), the coordinator puts the ShaSpeed-R80 extension to Daniel as a card.
+
+**09:00Z, COUNTER (note 20261030T0826Z-report-hash-counter-r80x-arxm), judged under §2a:**
+- **arxm fails §2a at every layout (checked).** A zero-data prover pays 3.09–3.53 eq a step against honest's 4, a gap of 53–104% of stock. The counting theorem covers about 1 of honest's 4 eq; the cross-output sharing of the row and column terms is what fails. Shelved.
+- **R80X: not broken, not yet certified.** Width-4 sweeps hold only against one free term a side. The 35.7% bound quoted at 08:05Z is withdrawn as a width artifact; the ceiling, if every half had a route, is 114% of stock (estimate).
+- **Plan:** ROUNDS sets bit 4 in every `xc` half (so all 160 certify at 8 bits), then COUNTER runs the 160 certificate solves at 8–10 bits on pods.
+- **The R80X v3 ask to Daniel (ShaSpeed-R80) waits on those certificates.**
+- RDX's raw V skip ties, at 34 = 34 writes a round.
