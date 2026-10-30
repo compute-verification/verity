@@ -2,6 +2,7 @@
 `poison FILE`."""
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -74,6 +75,12 @@ def natural(d):
               f"{min(r['tiled_r0']['h200_b1']['cost'] for r in rs):.3f} | {min(r['tiled_r0']['sm120_b2']['cost'] for r in rs):.3f} | "
               f"{max(r['tiled_r0']['sm120_b2']['frac_tiles_below_1'] for r in rs):.4f} |")
     print()
+    w = np.array([math.prod(r["shape"]) for r in rows], dtype=float)
+    for k in KEYS:
+        c = np.array([r["best_cost"][k] for r in rows])
+        fl = np.array([r["no_outlier_floor"][k] for r in rows])
+        print(f"{k}: matrices below 0.9999: {(c < 0.9999).sum()}/{len(rows)}; MAC-weighted best {float((c * w).sum() / w.sum()):.5f}; "
+              f"Eckart-Young no-outlier floor min {fl.min():.3f}, matrices with floor < 1: {(fl < 1).sum()}")
     best_any = sorted(rows, key=lambda r: min(r["best_cost"][k] for k in KEYS))[:5]
     print("Lowest five matrices by any chip/b:")
     for r in best_any:
