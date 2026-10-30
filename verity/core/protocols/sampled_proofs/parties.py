@@ -59,7 +59,7 @@ from typing import Any
 
 from verity.core.deploy.config import COMPOSITES
 from verity.core.deploy.manifest import Channel, Manifest, Role
-from verity.core.deploy.party import Finish, Identity, Received, Record, Send
+from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send
 from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Hex, Int, Message, Schema, Str
 
@@ -70,14 +70,14 @@ VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
 #: `Core.Remote.components`): onsite's PoUW is its period check and its bandwidth the P2 session on PoUS's store,
-#: remote's PoUW its window check, and both audit sampled proofs on the proofs themselves (one-stage v2)
+#: remote's PoUW its window check, and both audit sampled proofs with the one-stage audit (`ID`, one-stage v1)
 SUBPROTOCOLS = {
     "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
                          "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run",
-                         "pouw": "verity/pouw/period/v1", "sampled-proofs": "verity/sampled-proofs/one-stage/v2",
+                         "pouw": "verity/pouw/period/v1", "sampled-proofs": ID,
                          "wipe": "verity/wipe/v0"},
     "verity/remote/v0": {"inference-only": "verity/inference-only/v0", "pouw": "verity/pouw/v1",
-                         "sampled-proofs": "verity/sampled-proofs/one-stage/v2"},
+                         "sampled-proofs": ID},
 }
 #: a configuration's subprotocol names and the protocol id each has outside a composite
 IDS = {"bandwidth": "verity/remote-bandwidth/v0", "certifier": "verity/certifier/v0",
@@ -258,7 +258,7 @@ class Verifier:
             out += self._finish(None)
         return out
 
-    def _decide(self, i: int) -> list[Record]:
+    def _decide(self, i: int) -> list[LogEntry]:
         """Block ``i``'s line as an output entry, after a private one saying why its audit was unavailable."""
         raw, record = self.registrations[i]
         digest = R.digest(record)
@@ -267,7 +267,7 @@ class Verifier:
             answer, case = self.audit(i, raw, dict(self.challenger), dict(self.firewall))
         except Unavailable as e:
             answer, case = {"verdict": "error"}, None
-            out.append(Record({"block": i, "audit": "unavailable", "error": _why(e)}, "private"))
+            out.append(LogEntry({"block": i, "audit": "unavailable", "error": _why(e)}, "private"))
         if answer.get("verdict") == "accept" and answer.get("commitment") != digest:
             answer, case = {"verdict": "reject", "commitment": answer.get("commitment"),
                             "reason": "the audit's commitment is not the registration the workers sent"}, None
@@ -287,7 +287,7 @@ class Verifier:
             verdict = {"product": None, "verdict": "error", "reason": _why(e)}
         line = {"block": i, "coins": self.params["coins"], "components": status, "registration": digest, **verdict}
         self.lines.append(line)
-        return [*out, Record(line, "output")]
+        return [*out, LogEntry(line, "output")]
 
     def _finish(self, refused: str | None) -> list[Any]:
         out: list[Any] = [] if self.done else [Send(CHALLENGER, Message("Done"))]

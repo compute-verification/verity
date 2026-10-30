@@ -43,7 +43,7 @@ theorem length_zip_finRange_le {α : Type} (k : ℕ) (l : List α) : ((List.finR
   exact min_le_left _ _
 
 /-- `checkRevealed`'s own calls: the commitment's checks of each opening, under its roots. -/
-theorem ownLog_checkRevealed_length {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : Commitment Bool)
+theorem ownLog_checkRevealed_length {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) :
     (ownLog H run (checkRevealed (R := R) Cm rs)).length = (rs.map fun p => ((Cm.opens p.1 p.2).eval H).2.length).sum := by
   unfold checkRevealed
@@ -81,7 +81,7 @@ theorem E_ext_eq (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- A checked unit's extraction reruns at most `m′·K′` times: Flock's waits on its session. -/
 theorem unitExt_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : Stmt) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x)
+    (s : AuditStatement) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x)
     (run' : (Fin (D.V.k x) → Coin) → Trace) :
     ((unitExt D decode x s u r v ρ).eval H run').2.2 ≤ D.innerWaits x * D.innerCap x := by
   unfold unitExt
@@ -100,7 +100,7 @@ theorem unitExt_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem innerBody_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : Stmt) (c : ECoins D x) (j : Fin (D.k x)) (li : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))
+    (s : AuditStatement) (c : ECoins D x) (j : Fin (D.k x)) (li : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))
     (run' : (Fin (D.V.k x) → Coin) → Trace) :
     ((innerBody D decode x s c j li).eval H run').2.2 ≤ nPU D x * (D.innerWaits x * D.innerCap x) :=
   (flatMapRP_runs_le H run' _ _ _ fun iu _ => unitExt_runs_le H D decode x s iu.2 li.2.1 li.2.2 _ run').trans
@@ -108,7 +108,7 @@ theorem innerBody_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : Li
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem outerBody_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : Stmt) (c : ECoins D x) (jo : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))
+    (s : AuditStatement) (c : ECoins D x) (jo : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))
     (run' : (Fin (D.V.k x) → Coin) → Trace) :
     ((outerBody D decode x s c jo).eval H run').2.2 ≤
       D.cap x + D.k x * (nPU D x * (D.innerWaits x * D.innerCap x)) := by
@@ -163,7 +163,7 @@ theorem E_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- A checked unit's extraction's own calls are its reveal's checks, at most `openCalls`. -/
 theorem unitExt_own_le {H : Msg → Msg} {D : Deploy Coin Col T} (hopen : OpenCallsLe H D)
-    (decode : List (ℕ × Col) → List T) {x : Msg} {s : Stmt} (hs : D.parse x = some s) (u : ℕ × ℕ)
+    (decode : List (ℕ × Col) → List T) {x : Msg} {s : AuditStatement} (hs : D.parse x = some s) (u : ℕ × ℕ)
     (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x) (run' : (Fin (D.V.k x) → Coin) → Trace) :
     (ownLog H run' (unitExt D decode x s u r v ρ)).length ≤ D.openCalls x := by
   unfold unitExt
@@ -177,7 +177,7 @@ theorem unitExt_own_le {H : Msg → Msg} {D : Deploy Coin Col T} (hopen : OpenCa
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem outerBody_own_le {H : Msg → Msg} {D : Deploy Coin Col T} (hopen : OpenCallsLe H D)
-    (decode : List (ℕ × Col) → List T) {x : Msg} {s : Stmt} (hs : D.parse x = some s) (c : ECoins D x)
+    (decode : List (ℕ × Col) → List T) {x : Msg} {s : AuditStatement} (hs : D.parse x = some s) (c : ECoins D x)
     (jo : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen)) (run' : (Fin (D.V.k x) → Coin) → Trace) :
     (ownLog H run' (outerBody D decode x s c jo)).length ≤ D.k x * (nPU D x * D.openCalls x) := by
   unfold outerBody

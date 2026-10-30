@@ -1,11 +1,9 @@
 """No composite composes a protocol that publishes private data in the clear (`IN_THE_CLEAR`) unless `KNOWN` lists it
 with its reason. The inference-only policy's public form, `verity/inference-only/v0` (`NciCheck.Protocol.protocol`),
-publishes the declared division, and each inference block's gates and fresh-input bits, so it isn't zero-knowledge; both
-composites compose it for the run of record of 28 Oct only, a stated exception by Daniel's ruling: "Let's run it in
-the clear tonight as a stated exception." v1's private form replaces it after 15:00Z on 28 Oct. The
-composites' components are read wherever they are listed: their Lean (`Core.Onsite.components` and
-`Core.Remote.components`, with the ids each one's `#guard` pins), the reference's mirror of
-them (`reference.ONSITE`, `REMOTE`), and the ids a configuration may name as components (`parties.IDS`, which step0's
+publishes the division, and each inference block's gates and fresh-input bits, so it isn't zero-knowledge; both
+composites compose it for one run of record only, a stated exception, and v1's private form replaces it. The
+composites' components are read wherever they are listed: their Lean (`Core.Onsite.components` and `Core.Remote.components`,
+with the ids each one's `#guard` pins), the reference's mirror of them (`reference.ONSITE`, `REMOTE`), and the ids a configuration may name as components (`parties.IDS`, which step0's
 `MANIFESTS` lists), read from its source: importing `parties` would read the deploy runtime, which this suite doesn't
 declare."""
 
@@ -26,7 +24,7 @@ PRIVATE_ONLY = ("only the private form (v1: division committed under hiding leav
                 "may be composed")
 COMPOSITES = {"Core.Onsite": PROTOCOLS / "onsite/CoreOnsite.lean", "Core.Remote": PROTOCOLS / "remote/CoreRemote.lean"}
 #: The protocols that publish private data in the clear, each with what it publishes.
-IN_THE_CLEAR = {V0: "the declared division, and each inference block's gates and fresh-input bits"}
+IN_THE_CLEAR = {V0: "the division, and each inference block's gates and fresh-input bits"}
 #: The protocols of `IN_THE_CLEAR` a composite may compose, each with its reason. KNOWN only shrinks: an entry no
 #: composite composes any more fails `test_known_only_shrinks`.
 KNOWN = {"verity/inference-only/v0": "stated exception for tonight's run of record (Daniel's ruling); v1's private form "

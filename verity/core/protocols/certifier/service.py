@@ -443,8 +443,8 @@ PUBLIC_ADVISED = tuple(p for p in PUBLIC_SERVED if p.item not in ("served", "syn
     S.Public("advised", "structure",
              "windows, the link's framing (the ingress frames a request of each prompt length takes) and the "
              "certifier's own frames a window (its salt's), fixed before the run"),
-    S.Public("sync", "output", "each window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
-             "`charge` already counts, whose δ and ρ the unit's ingress floor reads, refused outside Σ_sync"),
+    S.Public("sync", "output", "each window's declared clock sync, one of sync_set (fixed before the run): the advice "
+             "`charge` already counts, whose delta and rho the unit's ingress floor reads, refused outside sync_set"),
     S.Public("advice", "output", "the advice (`advised.LinkAdvice`, one per certifier session, after serving): I1's, "
              "charged by `advice.bits`, and its windows' received request frames, which the unit holds to the "
              "ingress heads. The unit reads its window view, `advised.view` of its kept outputs' release buckets, its "
@@ -1012,8 +1012,7 @@ class LinkWindows:
                 return None
             insts.append(HC.Instance(root, self.domain(window).domain_id, self.link.encode("utf-8"), d, window,
                                      self.grid(d), None if profile is None else tuple(profile[window]), c.digest,
-                                     bytes(HC.Shape(L, T).HL), bytes(_INST.salt_bytes),
-                                     (bytes(HC.DIGEST_BYTES), bytes(HC.DIGEST_BYTES)),
+                                     bytes(HC.Shape(L, T).HL), bytes(_INST.salt_bytes), (bytes(64), bytes(64)),
                                      bytes(64), T))
         args = self._arguments(insts, sync, view)
         return {n: args[n] for n in self.layout["pub"]}

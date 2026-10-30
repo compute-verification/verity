@@ -60,7 +60,8 @@ The team's agents run these remotely (the team skill).
 The rules in force, each stated as itself; the friction skill has the standing rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
-  every output, is a value, committed under a hiding leaf and touched only inside a zero-knowledge proof.
+  every output, is a value, touched only inside a zero-knowledge proof. Only a proof block's inputs and outputs are
+  committed, each under a hiding leaf; the values inside a proof block never are.
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
   reason: protocol structure, the protocol's outputs, the verifier's coins and samples, and hiding commitments. Partitions
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
@@ -76,7 +77,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
-  named premise H-μ⁺, not yet in a lock.
+  named premise H-μ⁺, not yet in a lock. Transport has one more: ML-KEM-1024, for a cableless remote party's sessions
+  only, its key always XORed with a SHA-512 one (never below hash-only) and never on pair links (`ind-cca/ml-kem-1024`).
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
   inside a window, from the window's live challenge and the previous pass's root; and PoUW's
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the window's
@@ -147,14 +149,19 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 
 There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
 `circuit-check --all`, C-Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
-`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes.
+`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes. `circuit-check` is off the
+merge gate (`gate = false` in `tools/verity/check/ci.toml`) until `circuit-check --all` fits inside the rest of the check: a
+recorded check, `research merge` and the move of `main` leave it out, and it runs after landing on `checked`'s tip, where a red
+reverts its culprit at once and holds the PRs touching its inputs until it passes.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
 
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
-docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. PRs land
-on review, and the full check runs after landing (how a PR lands: the team skill).
+docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
+only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, runs the full check on its tip itself,
+and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate; a red step's culprit is
+reverted on `checked` (how a PR lands: the team skill).
 
 ## Lean
 
@@ -198,6 +205,10 @@ on review, and the full check runs after landing (how a PR lands: the team skill
 - Solve the task with the smallest clear implementation, reusing code and commands before adding any. Enforce
   deterministic requirements in code, with the fix in the failure message, rather than in prose. Remove obsolete rules and
   machinery rather than accumulating them.
+- **Something broken becomes a benchmark.** A step that fails or costs far too much (an OOM, hours where minutes would
+  do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
+  baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research
+  run` compute. Each measured run carries a label with its numbers, and the best one that passes the guard lands.
 - **The tree gets smaller over time.** Make two interfaces or definitions of one thing one, make things extensible,
   delete dead and superseded code, and move data and logs to the evidence store.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
