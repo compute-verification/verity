@@ -52,6 +52,8 @@ PUBLIC = {
                                               "the registered value, its class, its words and a slot's bridge",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
+    "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
+                                     "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.pipeline.cli": "I1: the verity-vllm command, which a harness runs in-process around one of its commands",
     "verity_vllm.protocols.pouw.lead": "I3: the lead's scheme as a kernel outside the integration serves it: its name, the "
                                        "backend it calls and a window's keys",
