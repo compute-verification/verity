@@ -13,7 +13,7 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
   ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S_cert, Q_cert, K, the wipe's foreign_bits at its reads ``k``
   and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
-  certificate at δ = 1/100 and 1/10^6 (`DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
+  certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
   ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`), else not established.
   A leg whose ``server`` is not the block's is carried but not composed.
 * ``composed``: ``verdict`` (`compose`: reject when a composed leg rejects or errs, accept when every leg ran on the block's
@@ -21,7 +21,7 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
   one, and ``joint_horizon``: `JOINT_HORIZON`'s error over this block, the composed legs' errors summed, and at each δ of
   `DELTAS` that δ times the legs established at it. The statement names five audits; the wipe is ``outside_statement``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
-  `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
+  core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
 
 `check` recomputes every derived field from the legs. `from_period` builds a record from a runner report and extra legs.
@@ -30,20 +30,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import sys
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS
+from verity.core.protocols.profile import Stratified
+
 FORMAT = "verity/block-record/v1"
 EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")
 LEGS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
 #: the runner's protocol keys, by leg
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
-DELTAS: tuple[Fraction, ...] = (Fraction(1, 100), Fraction(1, 10**6))
-PERIODS: tuple[tuple[str, int], ...] = (("week", 7 * 86400), ("month", 30 * 86400), ("year", 365 * 86400))
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizonLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}
@@ -54,18 +54,10 @@ def frac(x: Any) -> Fraction:
 
 
 def integrity_bound(n: int, kd: int, delta: Fraction) -> int:
-    """The most wrong units of ``n`` an accepted uniform ``kd``-subset draw leaves except with ``δ``: one less than the least
-    ``K₀`` whose sampling term ``C(n − K₀, kd)/C(n, kd)`` is at most ``δ`` (exact; the all-protocols monitoring period's
-    window threshold)."""
-    total = math.comb(n, kd)
-    lo, hi = 0, n + 1
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if mid <= n and math.comb(n - mid, kd) * delta.denominator <= delta.numerator * total:
-            hi = mid
-        else:
-            lo = mid + 1
-    return lo - 1
+    """The most wrong units of ``n`` an accepted uniform sample of ``kd`` leaves except with ``δ``: the integrity profile's
+    count bound (`Stratified.count_bound`), the largest ``K`` whose sampling term ``C(n − K, kd)/C(n, kd)`` is at least
+    ``δ``."""
+    return Stratified.uniform(n, kd).count_bound(delta)
 
 
 def _draw(answer: Mapping[str, Any]) -> tuple[int, int]:
