@@ -13,7 +13,8 @@ in range, a filler's fields zero, and a link's two digests equal (`okForms`, `re
 instance's `rin` and `rout` against the two roots the verifier registers.
 
 Ports, u16 words: `trow` 64, `xr` 32, `yr` 96, `raux` `A(D)`, `xw` 32, `yw` 96, `waux` `A(D)` (`D = UB + PB`, `A` as
-`RecOpen`'s `auxWords`); `rin` 64 and `rout` 64.
+`RecOpen`'s `auxWords`); `rin` 64 and `rout` 64. The unit commits them as five rows of whole SHA-512 blocks
+(`linkRows`): `trow`, `xyr` (`xr ‖ yr`), `raux`, `xyw` (`xw ‖ yw`), `waux`.
 
 V*'s statement of the table is `Stmt.link UB PB N` (`VStar/Stage.lean`), over its `N = grid(L)` rows.
 -/
@@ -33,12 +34,18 @@ def linkPorts (UB PB : Nat) : List Nat :=
   let a := auxWords (UB + PB)
   [LINK_ROW_WORDS, LINK_X_WORDS, LINK_Y_WORDS, a, LINK_X_WORDS, LINK_Y_WORDS, a]
 
+/-- `rec_link.row_words`: the unit's committed rows over `linkPorts`' words, each whole SHA-512 blocks (`checkRow`):
+`trow`, `xyr` (`xr` then `yr`), `raux`, `xyw` (`xw` then `yw`), `waux`. -/
+def linkRows (UB PB : Nat) : List Nat :=
+  let a := auxWords (UB + PB)
+  [LINK_ROW_WORDS, LINK_X_WORDS + LINK_Y_WORDS, a, LINK_X_WORDS + LINK_Y_WORDS, a]
+
 /-- `rec_link.unit_name`. -/
 def linkName (UB PB : Nat) : String := s!"rec-link/u{UB}-p{PB}"
 
-/-- `rec_link`'s subcircuit: its seven ports, outputs `rin` and `rout`. -/
+/-- `rec_link`'s subcircuit: its five rows (`linkRows`), outputs `rin` and `rout`. -/
 def linkSub (UB PB : Nat) : Sub :=
-  { id := linkName UB PB, template := "rec-link", inputs := ["trow", "xr", "yr", "raux", "xw", "yw", "waux"],
+  { id := linkName UB PB, template := "rec-link", inputs := ["trow", "xyr", "raux", "xyw", "waux"],
     outputs := ["rin", "rout"] }
 
 /-- The chaining value after a constant prefix of whole 128-byte blocks (`sha512.midstate`). -/
@@ -125,7 +132,7 @@ def linkUnit (UB PB : Nat) : Except String UnitC := do
     | [trow, xr, yr, raux, xw, yw, waux] => linkSteps UB PB trow xr yr raux xw yw waux
     | _ => pure ([], [])
   let r := build.run St.empty
-  pure { name := linkName UB PB, inPorts := pw, outPorts := [LINK_OUT_WORDS, LINK_OUT_WORDS], st := r.2,
+  pure { name := linkName UB PB, inPorts := linkRows UB PB, outPorts := [LINK_OUT_WORDS, LINK_OUT_WORDS], st := r.2,
          outs := (r.1.1 ++ r.1.2).toArray }
 
 /-- `rec-link/u<UB>-p<PB>`'s `(UB, PB)`, the name exactly as `linkName` writes it. -/
