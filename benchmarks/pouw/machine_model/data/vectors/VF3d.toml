@@ -2,7 +2,6 @@
 name = "VF3d"
 epoch = "VF3d"
 summary = "VF3c audited for how many merges one instruction does, and for copies (RS-W′ round 3)."
-note = "note:20261016T0715Z-draft-rs-merge-multiplicity"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
