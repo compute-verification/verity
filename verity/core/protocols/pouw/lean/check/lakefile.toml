@@ -3,8 +3,7 @@
 # the proof service's answer, and PoUW's rule over them. Lean core only; its properties are stated in
 # `Security/Properties/Pouw/Check.lean`, and the difftest (`tests/test_difftest.py`, on the shared harness) holds
 # `pouw-check serve` and `pouw-check-difftest` (a unit's opening, `PouwCheck.Opening`; the window's pass and draw,
-# `PouwCheck.Pass`; a live window's round coins, `PouwCheck.Rounds`; a served window's credit, `PouwCheck.Credit`; the
-# lead's window, `PouwCheck.Lead`) to
+# `PouwCheck.Pass`; a live window's round coins, `PouwCheck.Rounds`; a served window's credit, `PouwCheck.Credit`) to
 # the Python on generated cases. `pouw-leaf-own-window` is the leaf verifier's check of a window unit's leaf statement's
 # `--registered` file at the unit's placement, from the window's descriptor and round log (`PouwCheck.LeafOwn`).
 name = "pouw_check"
