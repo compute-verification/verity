@@ -5,8 +5,9 @@ holding the digest can search a low-entropy value, for example a token id, howev
 rules wrap a SHA-256 or SHA-512 leaf digest so that the published data hides the value, statistically given uniform salts (section 3;
 with the pinned key the bound holds except for a 2^-64 fraction of keys). Binding rests on the collision resistance of the one hash
 alone. `hm96-sha512/v1` is the rule for SHA-512 data commitments (Daniel, 2026-09-26: SHA-512 on every commitment path); both
-instances have the same hiding bound. The one other rule is PoUW's lead's keyed leaf, which hides computationally under a window's
-secret key and commits that key as an `hm96-sha512/v1` leaf (`ARCHITECTURE.md`, Glossary, "Keyed leaf").
+instances have the same hiding bound.
+The one other rule is PoUW's lead's keyed leaf, which hides computationally under a window's secret key and commits that
+key as an `hm96-sha512/v1` leaf (frame-v3's `PROTOCOL.md`, §6, "Keyed leaves").
 
 - **Reference.** `verity.ml.commitments.hm96`, stdlib only: the instances `SHA256` and `SHA512`, and `Hm96Sha256(base)` and
   `Hm96Sha512(base)` over a `vllm-v1` or `vllm-v1-sha512` configuration. The module-level names are `hm96-sha256/v1`'s.

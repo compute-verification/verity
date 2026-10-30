@@ -254,7 +254,17 @@ tree leaf = leaf(domain, rank, position, "hm96-sha512/row/v1", hm96.SHA512.tree_
 
 The schema string names the rule that produced the 64 bytes, so a statement is explicit about it. Over a bit row's digest it is
 `hm96-sha512/row/v2` (`BitRowLeaf.hiding_schema`). `rowleaf.row_leaf` accepts each at its width. The SHA-256 frame has no hiding
-row schema: every commitment is hm96 rows or keyed leaves in `frame-v3-sha512` trees (Daniel's one-hash ruling).
+row schema: every commitment is hm96 rows in `frame-v3-sha512` trees (Daniel's one-hash ruling).
+
+**Keyed leaves.** The one exception is PoUW's lead, whose instances are keyed leaves. A keyed leaf is a `frame-v3-sha512`
+subtree hashed as above up to M_top, the message whose SHA-512 would be its root (its root node, or a one-leaf subtree's
+leaf), and published as d = SHA-512(ks ‖ salt ‖ M_top) in the root's place, with ks the window's secret key (64 OS bytes,
+never published) and salt its live salt; ks ‖ salt is one 128-byte block (`Hash.Keyed`). It hides computationally: over
+tops with distinct domain ids, a distinguisher's view (the key leaf and every digest) moves by at most the explicit
+advantages of two distinguishers built from it, one in hm96's hiding game and one against SHA-512 as a PRF keyed by its
+first block (`Pouw.Guarantees.KeyedLeaf.Hides`). The window's key is committed before its salt as its key leaf, the
+`hm96-sha512/v1` leaf over ks under 192 OS salt bytes, which the lead's registration records (`pouw.salt.lead_record`)
+and a proof opens ks against.
 
 **Openings and multiproofs.**
 - Paths carry 64-byte siblings.

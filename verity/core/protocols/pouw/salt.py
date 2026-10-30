@@ -19,9 +19,8 @@ published, once, and only until its reveal deadline on its own clock after p's e
   weights' root, the stream and the prover, or the lead's `lead_record`. The salt binds no weights, so a certified
   window passes only weights, a stream and a prover recorded before its salt (`core_check.pass_epoch`).
 * `pouw_salt(reveal, p, stream, prover)` is the salt PoUW applies in window p, the one function that states its form,
-  `pouw_record(weights_root, stream, prover)` what PoUW records for p before the salt, `lead_record(weights_root,
-  stream, prover, key_leaf, calls)` what the lead records in its place, with the window's key leaf and its calls a
-  forward, and `prover_id(public_key)` the 64-byte id of the prover whose key the certifier verifies records under.
+  `pouw_record(weights_root, stream, prover)` what PoUW records for p before the salt, and `prover_id(public_key)` the
+  64-byte id of the prover whose key the certifier verifies records under.
 * `Registrations` is the certified windows' once-only registration ledger: one registration per PoUW window, stream and
   prover, taken when the challenger receives the window, before its draw and any proof. It is not the window's credit,
   which is its outcome's verdict.
@@ -52,10 +51,6 @@ SALT_BYTES = 64
 SALT_TAG = b"verity/pouw-salt/v1"
 #: `pouw_record`'s domain tag
 RECORD_TAG = b"verity/pouw-record/v1"
-#: `lead_record`'s domain tag
-LEAD_RECORD_TAG = b"verity/pouw-lead-record/v1"
-#: a window's key leaf, the hm96-sha512 leaf over its key ks_w (`lead_record`)
-KEY_LEAF_BYTES = 64
 #: `prover_id`'s domain tag
 PROVER_TAG = b"verity/pouw-prover/v1"
 #: a weights' root, a SHA-512 `tagged`: an H1 window's `weights.weights_root` (`window_open_root`), an epoch's
@@ -125,6 +120,12 @@ def pouw_record(weights_root: bytes, stream: bytes, prover: bytes) -> bytes:
     if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
         raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
     return hashlib.sha512(RECORD_TAG + weights_root + _bound(stream, prover)).digest()
+
+
+#: `lead_record`'s domain tag
+LEAD_RECORD_TAG = b"verity/pouw-lead-record/v1"
+#: a window's key leaf, the hm96-sha512 leaf over its key ks_w (`lead_record`)
+KEY_LEAF_BYTES = 64
 
 
 def lead_record(weights_root: bytes, stream: bytes, prover: bytes, key_leaf: bytes, calls: int) -> bytes:
@@ -338,9 +339,8 @@ def pouw_window(windows: Sequence[int], k: int) -> int:
     return ws[0] // k
 
 
-__all__ = ["ANCHORED_EPOCH_TAG", "ANCHORS_ROOT_BYTES", "EPOCH_OPEN_TAG", "KEY_LEAF_BYTES", "LEAD_RECORD_TAG",
-           "PROVER_BYTES", "PROVER_TAG", "RECORD_TAG", "REQUESTS_ROOT_BYTES", "Registrations", "Reregistered",
-           "SALT_BYTES", "SALT_TAG", "SESSION", "STREAM_BYTES", "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_OPEN_TAG",
-           "WINDOW_SEGMENT", "anchored_epoch_root", "committed", "context", "epoch_open_root", "lead_record",
-           "pouw_record", "pouw_salt", "pouw_window", "prover_id", "registered", "revealed", "unit_reason", "window_of",
-           "window_open_root"]
+__all__ = ["ANCHORED_EPOCH_TAG", "ANCHORS_ROOT_BYTES", "EPOCH_OPEN_TAG", "PROVER_BYTES", "PROVER_TAG", "RECORD_TAG",
+           "REQUESTS_ROOT_BYTES", "Registrations", "Reregistered", "SALT_BYTES", "SALT_TAG", "SESSION", "STREAM_BYTES",
+           "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_OPEN_TAG", "WINDOW_SEGMENT", "anchored_epoch_root", "committed",
+           "context", "epoch_open_root", "pouw_record", "pouw_salt", "pouw_window", "prover_id", "registered",
+           "revealed", "unit_reason", "window_of", "window_open_root", "KEY_LEAF_BYTES", "LEAD_RECORD_TAG", "lead_record"]
