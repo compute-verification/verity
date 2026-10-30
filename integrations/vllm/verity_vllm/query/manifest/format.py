@@ -675,8 +675,8 @@ def tp_peer_binding(parts: list[dict[str, Any]], collective_kind: Callable[[str]
 
 
 def manifest_digest(identities: list[dict[str, Any]]) -> str:
-    """sha256 of the canonical JSON of the sorted identity tuples (+ family), independent of the annotations."""
-    h = hashlib.sha256()
+    """SHA-512 of the canonical JSON of the sorted identity tuples (+ family), independent of the annotations."""
+    h = hashlib.sha512()
     for r in sorted(identities, key=row_key):
         h.update(json.dumps([r["family"]] + canonical_identity(r), separators=(",", ":"), sort_keys=True).encode())
         h.update(b"\n")
