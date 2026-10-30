@@ -1,6 +1,6 @@
-"""PoUW's lead on the int8 plain arm (``tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min``, Lean's `Pouw.Lead.lead`): the
-serving side of each noised linear call. `feed` is a call's coin feed and the in-process certifier that stands in for the
-network certifier's coin link; `record` is the pass's record.
+"""PoUW's lead on the int8 plain arm (``tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min``): the serving side of each
+noised linear call. `feed` is a call's coin feed and the in-process certifier that stands in for the network certifier's
+coin link; `record` is the pass's record.
 
 `LeadRun` is one install's lead (`pouw.install` under `SCHEME`). Each engine step's forward is one pass and one window,
 whose calls are fixed in number at install: the hooked linears (``calls``). At the pass's first call the window opens:
@@ -68,8 +68,8 @@ class LeadBackend(Protocol):
         install."""
 
     def key_leaf(self, key: bytes) -> bytes:
-        """The 64-byte hm96 leaf over a window's key ``key`` (Lean's `SaltDerivation`'s `keyLeaf`), which the certifier
-        holds before it samples the window's salt."""
+        """The 64-byte hm96 leaf over a window's key ``key``, which binds the key before the certifier samples the window's
+        salt: with that salt, the key derives the hiding of the committer's leaves."""
 
     def a_root(self, w: int, call: F.Call, xq: Any, window: WindowKeys) -> bytes:
         """root(A_j) of the call's s8 rows ``xq`` [m, K]: 64 bytes, the keyed root of A_j's instance at position

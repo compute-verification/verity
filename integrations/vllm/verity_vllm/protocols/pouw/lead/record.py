@@ -2,10 +2,11 @@
 the one root of its words.
 
 The window opens in this order. The record takes the weights' root, the committer's hm96 leaf over the window's key
-(``key_leaf``, Lean's `SaltDerivation`'s `keyLeaf`) and the window's call count (``calls``), all three fixed before the
-certifier samples the window's salt salt_w. Then the record takes salt_w (`salted`). Then come the calls, in order:
-each one's root(A_j), at a position j below ``calls`` (`a_root`), so the committer's positions are injective. Once every
-call is in, the forward's words root comes (`words`): one words instance a forward, its calls' words in call order.
+(``key_leaf``, which binds the key the window's coins derive from) and the window's call count (``calls``), all three
+fixed before the certifier samples the window's salt salt_w. Then the record takes salt_w (`salted`). Then come the
+calls, in order: each one's root(A_j), at a position j below ``calls`` (`a_root`), so the committer's positions are
+injective. Once every call is in, the forward's words root comes (`words`): one words instance a forward, its calls'
+words in call order.
 
 Both kinds of root are the committer's, and the record never recomputes them: it fixes their order. `publish` freezes
 the record as core's `PassCommitment`:
@@ -14,7 +15,7 @@ the record as core's `PassCommitment`:
 - ``activation_roots`` is the SHA-512 over the A roots in call order, and ``transcript_root`` the words root;
 - ``records_root`` is the SHA-512 over the window's header (``key_leaf``, then ``calls`` as a u64be) and the calls'
   headers (six u64be each: pass, call, linear, m, K, n);
-- ``units`` counts the calls, and ``tiles`` their committed MMA tiles of words (Lean's `rowBlocks · colBlocks · S`).
+- ``units`` counts the calls, and ``tiles`` their committed MMA tiles of words, (R/16)·(C/8)·S a call.
 
 A sample before publication (`commitment`) is refused, and so is anything recorded after it.
 """
