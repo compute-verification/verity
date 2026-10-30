@@ -41,10 +41,11 @@ false at `acceptAllRows`, a check that accepts every period. Each guarantee writ
 than being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
 
 The free inputs `K` charges are the check's own count, from what the integration registered, never a number the caller
-supplies. `AuditFreeOfLayout` says an audit `auditOf` accepts counts its free inputs from the circuit record its window
-registers (`inputsOf`, at the record's SHA-512, which `Audit.free` holds its registration to), or, without one, every
-input bit of its Program; `FreeOfLayout` says each term the check publishes charges those counts (`Audit.free`) under
-the audits' own registrations, and in the rows form the tied audits' under each link-window's (`tiedFree`).
+supplies. `AuditFreeOfLayout` says an audit `auditOf` accepts, at the Program its descriptor decodes to
+(`auditOfProgram`), counts its free inputs from the circuit record its window registers (`inputsOf`, at the record's
+SHA-512, which `Audit.free` holds its registration to), or, without one, every input bit of its Program. It holds at an
+honest audit (`auditFreeOfLayout_honest`, `oneTemplateAudit`) and fails at an audit claiming a free bit its Program
+lacks (`auditFreeOfLayout_nontrivial`, `oneFreeBit`).
 -/
 
 namespace Properties.NetworkPeriod
@@ -125,36 +126,51 @@ def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
 
-/-- **A compute audit's free inputs are counted from its registered circuit** (`#(freeInputs \ reg)`). If `auditOf`
-accepts the audit `a`, its `program` decodes to a Program `P` and either its free inputs are every input bit of `P`'s
-root templates (`inputBits`) under any registration, or its window's circuit record `r` is the one whose SHA-512
-(`circuitDigest`) its registration must bind (`Audit.circuit`, which `Audit.free` reads through `Audit.boundIn`), and its
-inputs are those `inputsOf` counts from `r` under the verifier's pins (`pinsOf`): the input bits, those the record's wires
-and ingress fill and those its registered reads read by parameter. No other field of `a` is read for them, so a `free`
-count the caller supplies, right or wrong, changes no audit's inputs. -/
+/-- What `AuditFreeOfLayout` says of an audit `A` that `auditOfProgram` accepted from `a` at Program `P`: with a
+circuit record `r` in `a` and the verifier's pins `pins` of `a` (`pinsOf`), `A.circuit` is the SHA-512 of `r` its
+registration must bind (`circuitDigest`, which `Audit.free` reads through `Audit.boundIn`) and its inputs are those
+`inputsOf` counts from `r` under `pins`: the input bits, those the record's wires and ingress fill and those its
+registered reads read by parameter; without one, its free inputs are every input bit of `P`'s root templates
+(`inputBits`) under any registration. -/
+def AuditFreeOfLayoutAt (a : Lean.Json) (P : Flock.Program.Prog) (ctx : String) (A : Audit) : Prop :=
+  (∀ r pins, a.getObjVal? "circuit" = .ok r → pinsOf a ctx = .ok pins →
+      circuitDigest r = .ok A.circuit ∧ inputsOf r (rootTemplates P) pins = .ok A.inputs) ∧
+    ((a.getObjVal? "circuit").toOption = none → ∀ reg, A.free reg = inputBits (rootTemplates P))
+
+/-- **A compute audit's free inputs are counted from its registered circuit** (`#(freeInputs \ reg)`). If
+`auditOfProgram` accepts the audit `a` at the Program `P` its descriptor decodes to (as `auditOf` reads every audit of
+the period), its inputs are those its window's circuit record leaves free, under the verifier's pins
+(`AuditFreeOfLayoutAt`). No other field of `a` is read for them, so a `free` count the caller supplies, right or
+wrong, changes no audit's inputs. -/
 def AuditFreeOfLayout : Prop :=
-  ∀ (a : Lean.Json) (ctx : String) (A : Audit), auditOf a ctx = .ok A →
-    ∃ (pj : Lean.Json) (c : String) (P : Flock.Program.Prog),
-      a.getObjVal? "program" = .ok pj ∧ Flock.canon pj = .ok c ∧ Flock.Program.decode c.toUTF8 = .ok P ∧
-      ((∀ reg, A.free reg = inputBits (rootTemplates P)) ∨
-        ∃ (r : Lean.Json) (pins : Array (String × String)), a.getObjVal? "circuit" = .ok r ∧
-          circuitDigest r = .ok A.circuit ∧ pinsOf a ctx = .ok pins ∧ inputsOf r (rootTemplates P) pins = .ok A.inputs)
+  ∀ (a : Lean.Json) (P : Flock.Program.Prog) (ctx : String) (A : Audit),
+    auditOfProgram a P ctx = .ok A → AuditFreeOfLayoutAt a P ctx A
 
-/-- What `FreeOfLayout` says of a period its check accepted, publishing `pub`: each term's free inputs are counted by
-`Audit.free` under a registration of the commitment's, in the clock form one compute audit's under its own, and in the
-rows form the scan's own and its tied audits' (`tiedFree`, each under its own) of one link-window's. -/
-def FreeOfLayoutAt (p : Params) (c : Commitment) (pub : Public) : Prop :=
-  ∀ t ∈ pub.units, match p.form with
-    | .clock _ => ∃ a reg, (a, reg) ∈ p.audits.zip c.audits ∧ t.free = a.free reg
-    | .rows _ _ scan => ∃ reg ∈ c.windows, t.free = scan.free + tiedFree p.audits c.audits reg
+/-- A Program of one template, `t`, of one 16-bit parameter and a 16-bit return, whose root calls it in a batch of
+two: `AuditFreeOfLayout`'s honest instance, with `oneTemplateAudit`. -/
+def oneTemplate : Flock.Program.Prog where
+  defs := #[{ key := "t", id := "t_v1", prim := false, params := #[("x", .value 16)], ret := .value 16, gates := 0,
+              paramLeaves := 1, outLeaves := 1 },
+            { key := "root", id := "root_v1", prim := false, params := #[], ret := .tuple #[], gates := 0,
+              paramLeaves := 0, outLeaves := 0,
+              body := { params := #[], retType := .tuple #[], ret := ⟨#[], #[], 0⟩, offsets := #[],
+                        nodes := #[{ form := .batch, fn := 0, args := #[], out := .value 16, n := 2 }] } }]
+  index := {}
+  root := 1
+  programFn := "root"
+  sha512 := .empty
 
-/-- **`K` charges the free inputs the registered circuits leave, under the registrations.** If the check accepts a
-period, each term it publishes charges as free inputs `Audit.free`'s count (`AuditFreeOfLayout`) under a registration of
-the commitment: a compute audit's under its own in the clock form, and in the rows form the scan's own and its tied
-audits' (`tiedFree`) under one link-window's. -/
-def FreeOfLayout : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    check p c e = .accept pub prof → FreeOfLayoutAt p c pub
+/-- A compute audit of `oneTemplate` over three steps, with no circuit record and no pins. -/
+def oneTemplateAudit : Lean.Json := Lean.Json.mkObj [("program", Lean.Json.mkObj []), ("steps", (3 : ℕ))]
+
+/-- An audit claiming one free input bit of a Program of no template, which a verifier accepting every audit would
+take: what `AuditFreeOfLayoutAt` must fail at for `AuditFreeOfLayout` to say something. -/
+def oneFreeBit : Audit :=
+  { inputs := { total := 1 }, steps := 0, program := "", units := 0, bits := 0, entries := #[], circuit := "",
+    registered := {} }
+
+/-- A Program of no Definition. -/
+def noTemplate : Flock.Program.Prog := { defs := #[], index := {}, root := 0, programFn := "", sha512 := .empty }
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
 `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsProgWired` and `RowsStateTied` (each its `…Of` at

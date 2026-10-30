@@ -12,9 +12,10 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every finding is none
 (`firstFinding_none`), each link-window's `wiredCheck` and `stateCheck` among them.
 
-`AuditFreeOfLayout` reads `auditOf`'s steps one by one, each a bind (`bind_ok`), and keeps the Program, the circuit
-record and the inputs it counts from them; `FreeOfLayout` reads the terms off the accepted public, a map over the audits
-and their registrations in the clock form and over the scans and the link-windows' registrations in the rows form.
+`AuditFreeOfLayout` reads `auditOfProgram`'s steps one by one, each a bind (`bind_ok`), and keeps the pins, the circuit
+record and the inputs it counts from them. Its honest lemma has the kernel evaluate `auditOfProgram` at an audit
+without a circuit record (`decide +kernel`); with one, `entriesOf` compares `Json` by its `==`, a `partial def` no
+proof evaluates.
 -/
 
 namespace Properties.NetworkPeriod
@@ -297,20 +298,9 @@ theorem mapError_ok {ε ε' α : Type} {f : ε → ε'} {x : Except ε α} {a : 
   | error e => cases h
   | ok b => cases h; rfl
 
-theorem get_ok {j v : Lean.Json} {k ctx : String} (h : Flock.J.get j k ctx = .ok v) : j.getObjVal? k = .ok v := by
-  unfold Flock.J.get at h
-  split at h
-  · cases h; assumption
-  · cases h
-
 theorem auditFreeOfLayout : AuditFreeOfLayout := by
-  intro a ctx A h
-  unfold auditOf at h
-  obtain ⟨_, -, h⟩ := bind_ok h
-  obtain ⟨_, -, h⟩ := bind_ok h
-  obtain ⟨pj, hpj, h⟩ := bind_ok h
-  obtain ⟨c, hc, h⟩ := bind_ok h
-  obtain ⟨P, hP, h⟩ := bind_ok h
+  intro a P ctx A h
+  unfold auditOfProgram at h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨pins, hpins, h⟩ := bind_ok h
@@ -318,48 +308,33 @@ theorem auditFreeOfLayout : AuditFreeOfLayout := by
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
   cases h
-  refine ⟨pj, c, P, get_ok hpj, hc, mapError_ok hP, ?_⟩
-  split at ht
-  · obtain ⟨r, hr, ht⟩ := bind_ok ht
+  refine ⟨fun r pins' hr hp => ?_, fun hn reg => ?_⟩
+  · rw [hpins] at hp
+    cases hp
+    rw [hr] at ht
     obtain ⟨d, hd, ht⟩ := bind_ok ht
     obtain ⟨_, -, ht⟩ := bind_ok ht
     obtain ⟨i, hi, ht⟩ := bind_ok ht
     cases ht
-    exact Or.inr ⟨r, pins, get_ok hr, mapError_ok hd, hpins, mapError_ok hi⟩
-  · cases ht
-    refine Or.inl fun reg => ?_
-    simp [Audit.free, Inputs.heldBits]
+    exact ⟨mapError_ok hd, mapError_ok hi⟩
+  · cases hc : a.getObjVal? "circuit" with
+    | ok r => rw [hc] at hn; cases hn
+    | error e =>
+      rw [hc] at ht
+      cases ht
+      simp [Audit.free, Inputs.heldBits]
 
-theorem freeOfLayout : FreeOfLayout := by
-  intro p c e pub prof h
-  unfold check at h
-  split at h
-  · cases h
-  split at h
-  · cases h
-  split at h
-  · cases h
-  split at h
-  · cases h
-  intro t ht
-  rcases hf : p.form with ss | ⟨s, sd, scan⟩
-  · simp only [hf] at h ⊢
-    split at h
-    · cases h
-    · cases h
-    · injection h with hpub
-      subst hpub
-      simp only [terms] at ht
-      obtain ⟨⟨⟨a, reg⟩, f⟩, hx, rfl⟩ := Array.mem_map.1 ht
-      exact ⟨a, reg, (Array.of_mem_zip hx).1, rfl⟩
-  · simp only [hf] at h ⊢
-    split at h
-    · cases h
-    · cases h
-    · injection h with hpub
-      subst hpub
-      simp only [rowsPublic, rowsTerms, Array.map_map] at ht
-      obtain ⟨⟨f, reg⟩, hx, rfl⟩ := Array.mem_map.1 ht
-      exact ⟨reg, (Array.of_mem_zip hx).2, rfl⟩
+/-- **`AuditFreeOfLayout`'s acceptance holds at an honest audit**: `auditOfProgram` accepts `oneTemplateAudit`, an
+audit of `oneTemplate`'s two units over three steps without a circuit record, so the guarantee's hypothesis holds at
+an audit an honest prover registers. -/
+theorem auditFreeOfLayout_honest : (auditOfProgram oneTemplateAudit oneTemplate "audit").isOk = true := by
+  decide +kernel
+
+/-- **`AuditFreeOfLayoutAt` fails at an audit a verifier accepting every audit would take**: `oneFreeBit` claims one
+free input bit of `noTemplate`, a Program with none, so its free count under any registration is not its Program's
+input bits. -/
+theorem auditFreeOfLayout_nontrivial : ¬ AuditFreeOfLayoutAt .null noTemplate "audit" oneFreeBit := by
+  rintro ⟨-, h⟩
+  exact absurd (h rfl .null) (by decide +kernel)
 
 end Properties.NetworkPeriod

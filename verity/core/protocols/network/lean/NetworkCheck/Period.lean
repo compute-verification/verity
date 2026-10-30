@@ -846,40 +846,44 @@ def pinsOf (a : Json) (ctx : String) : V (Array (String × String)) := do
     | .str r => if isDigest r then pure (p, r) else throw s!"{ctx}: pins: {p}'s root is not a SHA-512 digest"
     | _ => throw s!"{ctx}: pins: {p}'s root is not a SHA-512 digest")
 
-/-- A compute audit's inputs, monitoring period and Program, from the Program's descriptor (`Flock.Program.decode` of
-its canonical bytes): its units are its root's template instances, each committing its template's return; a root with
-no template is refused. With its window's circuit record (`circuit`), its `circuit` is the record's SHA-512
+/-- A compute audit `a`'s inputs, monitoring period and Program, at the Program `P` its descriptor (`a`'s `program`)
+decodes to: its units are its root's template instances, each committing its template's return; a root with no
+template is refused. With its window's circuit record (`circuit`), its `circuit` is the record's SHA-512
 (`circuitDigest`), `registered` what the record registers of its slot entries (`entriesOf`), and its inputs counted
 from the record (`inputsOf`) under the verifier's pins (`pins`, `pinsOf`); its slot entries' templates are its root's
 template nodes whose descriptor id the record registers as an entry template, each with its closure digest
-(`closureDigest`). Without a record it registers none, and all its inputs count free. A `free` count, a natural, is
-read as nothing: the check derives it (`Audit.free`), so no number the caller supplies reaches the verdict or the
-bound. -/
-def auditOf (a : Json) (ctx : String) : V Audit := do
-  let ks := (keysOf a).filter (· != "free")
-  let withCircuit := ks == ["circuit", "program", "steps"] || ks == ["circuit", "pins", "program", "steps"]
-  need (withCircuit || ks == ["program", "steps"]) s!"{ctx}: the keys must be [program, steps], [circuit, program, \
-    steps] or [circuit, pins, program, steps], and optionally free, not {keysOf a}"
-  discard <| if (keysOf a).contains "free" then Flock.J.nat a "free" ctx else pure 0
-  let pj ← Flock.J.get a "program" ctx
-  let prog ← (Flock.Program.decode (← Flock.canon pj).toUTF8).mapError (s!"{ctx}: program: " ++ ·)
-  let root ← needSome prog.defs[prog.root]? s!"{ctx}: program: no root"
-  let templates := root.body.nodes.filterMap fun x => match prog.defs[x.fn]? with
+(`closureDigest`). Without a record it registers none, and all its inputs count free. -/
+def auditOfProgram (a : Json) (P : Flock.Program.Prog) (ctx : String) : V Audit := do
+  let root ← needSome P.defs[P.root]? s!"{ctx}: program: no root"
+  let templates := root.body.nodes.filterMap fun x => match P.defs[x.fn]? with
     | some d => if d.prim then none else some (d.key, x.members, bitsOf d.ret)
     | none => none
   need (!templates.isEmpty) s!"{ctx}: program: no template"
-  let program := Flock.hexOf prog.sha512
+  let program := Flock.hexOf P.sha512
   let pins ← pinsOf a ctx
-  let (circuit, registered, inputs) ← (if withCircuit then do
-      let r ← Flock.J.get a "circuit" ctx
+  let (circuit, registered, inputs) ← (match a.getObjVal? "circuit" with
+    | .ok r => do
       let circuit ← (circuitDigest r).mapError (s!"{ctx}: circuit: " ++ ·)
-      let registered ← entriesOf r pj program (templates.map (·.1)) ctx
-      pure (circuit, registered, ← (inputsOf r (rootTemplates prog) pins).mapError (s!"{ctx}: circuit: " ++ ·))
-    else pure ("", ({} : Entries), ({ total := inputBits (rootTemplates prog) } : Inputs)))
+      let registered ← entriesOf r (a.getObjValD "program") program (templates.map (·.1)) ctx
+      pure (circuit, registered, ← (inputsOf r (rootTemplates P) pins).mapError (s!"{ctx}: circuit: " ++ ·))
+    | .error _ => pure ("", ({} : Entries), ({ total := inputBits (rootTemplates P) } : Inputs)))
   let entries ← (templates.filter fun (k, _, _) => registered.templates.any (·.1 == k)).mapM fun (k, n, _) => do
-    pure (k, n, ← (closureDigest pj k).mapError (s!"{ctx}: " ++ ·))
+    pure (k, n, ← (closureDigest (a.getObjValD "program") k).mapError (s!"{ctx}: " ++ ·))
   pure { inputs, steps := ← Flock.J.nat a "steps" ctx, program, units := templates.foldl (· + ·.2.1) 0,
          bits := templates.foldl (fun b t => max b t.2.2) 0, entries, circuit, registered }
+
+/-- A compute audit's inputs, monitoring period and Program (`auditOfProgram`), from the Program's descriptor
+(`Flock.Program.decode` of its canonical bytes), with its circuit record and the verifier's pins where it carries them.
+A `free` count, a natural, is read as nothing: the check derives it (`Audit.free`), so no number the caller supplies
+reaches the verdict or the bound. -/
+def auditOf (a : Json) (ctx : String) : V Audit := do
+  let ks := (keysOf a).filter (· != "free")
+  need (ks == ["program", "steps"] || ks == ["circuit", "program", "steps"] ||
+      ks == ["circuit", "pins", "program", "steps"]) s!"{ctx}: the keys must be [program, steps], [circuit, program, \
+    steps] or [circuit, pins, program, steps], and optionally free, not {keysOf a}"
+  discard <| if (keysOf a).contains "free" then Flock.J.nat a "free" ctx else pure 0
+  let pj ← Flock.J.get a "program" ctx
+  auditOfProgram a (← (Flock.Program.decode (← Flock.canon pj).toUTF8).mapError (s!"{ctx}: program: " ++ ·)) ctx
 
 /-- Whether a batch node of ingress buckets `t0, t0 + 1, …` reads the slot entries at their slots: for each lane `j`
 and member `m` (bucket `t0 + m`), its argument `o + j` (`prog<j>`) is row `⌊(t0 + m) / every⌋` of input node `ks[j]`,

@@ -1602,7 +1602,10 @@
   "Properties.NetworkPeriod.auditFreeOfLayout": {
    "owner": "@network-accounting"
   },
-  "Properties.NetworkPeriod.freeOfLayout": {
+  "Properties.NetworkPeriod.auditFreeOfLayout_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.auditFreeOfLayout_nontrivial": {
    "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsKBoundsCount": {
@@ -3571,11 +3574,7 @@
     "outcome": "none"
    },
    "Properties.NetworkPeriod.auditFreeOfLayout": {
-    "function": "NetworkCheck.Period.auditOf",
-    "outcome": "accept"
-   },
-   "Properties.NetworkPeriod.freeOfLayout": {
-    "function": "NetworkCheck.Period.check",
+    "function": "NetworkCheck.Period.auditOfProgram",
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsProgWired": {
@@ -3732,7 +3731,9 @@
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
    "Properties.Challenger.LiveAnswer": "unstated: a live check's answer at the coins its evidence reads is its answer, proved in security_proofs by Properties.Challenger.liveAnswer; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.Challenger.DrawnByDevice": "unstated: Challenger.drawCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision); an open statement, to be proved from euf-cma/lms-sha512-n64 and ecr/sha-512 asked of that finder",
-   "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from DrawnByDevice in security_proofs by Properties.Challenger.coinsFromLog; a draft statement, which gets a guarantee entry once the one theorem reads it"
+   "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from DrawnByDevice in security_proofs by Properties.Challenger.coinsFromLog; a draft statement, which gets a guarantee entry once the one theorem reads it",
+   "Properties.NetworkPeriod.auditFreeOfLayout_honest": "completeness: AuditFreeOfLayout's honest lemma: auditOfProgram accepts an audit of a one-template Program without a circuit record (oneTemplateAudit), so the guarantee's hypothesis holds at an honest audit",
+   "Properties.NetworkPeriod.auditFreeOfLayout_nontrivial": "lemma: AuditFreeOfLayout's nontrivial witness: AuditFreeOfLayoutAt fails at an audit claiming a free input bit of a Program with none (oneFreeBit), which a verifier accepting every audit would take"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -15120,5 +15121,11 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Properties.NetworkPeriod.auditFreeOfLayout": {
+   "honest": ["Properties.NetworkPeriod.auditFreeOfLayout_honest"],
+   "nontrivial": "Properties.NetworkPeriod.auditFreeOfLayout_nontrivial"
+  }
  }
 }
