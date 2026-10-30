@@ -95,8 +95,9 @@ Credit and all reporting are in circuit size, counted in AND gates (tentative).
   U/s_× (above) replaces κ/2.
 - **Credit** is of two kinds (ASK-166 A). Sampled proofs' is declared size, values certified: an accepted run credits
   S, and Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤
-  δ_coin + δ_crypto, with no algorithmic premise. PoUW's compute credit also needs values that read live noise and SAK
-  (`SAKResidual`), over noised operands only; an un-noised call earns none (ASK-174 D4). PoUB (`Accounting.Remote`)
+  δ_coin + δ_crypto, with no algorithmic premise. Dither's compute credit also needs values that read live noise and SAK
+  (`SAKResidual`), over noised operands only; an un-noised call earns none (ASK-174 D4). PoUW's bar is now T1–T3, under a
+  premise milder than SAK (`verity/core/protocols/pouw/README.md`). PoUB (`Accounting.Remote`)
   bounds no hidden work itself, so PoUW's guarantee beside it is its compute credit alone.
 - **The overhead lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
   verified compute (products the declared circuit computes anyway, through inference-block yields) as well as free

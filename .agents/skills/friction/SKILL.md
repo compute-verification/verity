@@ -154,8 +154,8 @@ Protocols and claims:
 
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
   exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
-- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (PoUW's) also
-  needs values that read live noise and SAK's lower bound, so SAK is a premise of compute credit as well as of exclusion
+- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's; PoUW's bar is now T1–T3)
+  also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute credit as well as of exclusion
   (ASK-166). SAK is over noised operands only, never prover-chosen ones (pinned weights, served activations, un-noised
   outputs), and an un-noised call earns no compute credit (ASK-174).
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
