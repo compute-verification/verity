@@ -52,6 +52,11 @@ PUBLIC = {
                                               "the registered value, its class, its words and a slot's bridge",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
+    "verity_vllm.pipeline.cli": "I1: the verity-vllm command, which a harness runs in-process around one of its commands",
+    "verity_vllm.protocols.pouw.lead": "I3: the lead's scheme as a kernel outside the integration serves it: its name, the "
+                                       "backend it calls and a window's keys",
+    "verity_vllm.protocols.pouw.lead.feed": "I3: the lead's coin feed: a call's shape and coins, and the in-process certifier "
+                                            "that releases them",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.

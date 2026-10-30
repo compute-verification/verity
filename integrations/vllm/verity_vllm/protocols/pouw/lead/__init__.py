@@ -36,6 +36,8 @@ from verity.core.protocols.pouw.serving import PassCommitment
 from verity_vllm.protocols.pouw.lead import feed as F
 from verity_vllm.protocols.pouw.lead import record as R
 
+__all__ = ["SCHEME", "LeadBackend", "WindowKeys"]
+
 SCHEME = "lead-blc4a-t64-rot"
 #: the pouw settings the lead never reads: its coins come off the coin link, call by call, and it retains nothing
 OTHERS = ("coins", "draws", "tamper", "device", "kernel", "cubin", "transcript_dir")

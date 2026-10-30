@@ -40,6 +40,8 @@ from typing import Protocol
 
 import numpy as np
 
+__all__ = ["MAGIC", "ROT_W", "Call", "CallCoins", "Feed", "FeedError", "InProcessCertifier", "Rand", "Shape", "codes", "steps"]
+
 LAYOUT = "blc4a_t64_e7_s1_rot_fold"
 STEP0_LANES, LATER_LANES = 21, 28
 ROW_TILE, COL_TILE, COIN_TILE = 16, 8, 64
