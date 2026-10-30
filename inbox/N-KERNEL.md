@@ -50,3 +50,18 @@
   - **Results:** 0 of 1,510,400 served-shape outputs differ (83d82109a8 misses 9.06%). The np_kernel suite passes 22/22 and cpu_check 17/17. The build-only run.sh, the SASS gate and the mainloop check pass (r20261030-145935-819b, r20261030-151101-2dc0).
   - **Cost:** +3 instructions an output; registers 158→162 at BN 256 only (estimate).
   - **For N-KERNEL:** `gate.json` is still 83d82109a8's, so the re-gate must rewrite it. `gate.py` now requires honest lines to state what they were checked against. Kernels' three diffs (f763becfb3, 7e33cfbf1b, 32643b48ef) apply cleanly in that order on 33b5021deb8. Merge origin/main after #6687 lands. **Order:** fast-forward #6630's branch to 33b5021deb8, merge main (after #6687), apply the three diffs, run the H200 re-gate, `gate.py --write`, re-mark #6630. Then tell vllm.
+- (15:38Z, N-KERNEL) **ASK-202's H200 tensor-clock duty sweep: PASS, so 1830 can land.**
+  - **Verdict:** 0 of 1,978 points exceed 132 · 4096 · 1830 MHz = 9.894 · 10¹⁴ s8 MAC/s.
+  - **MACs over the wall clock** (cudaEvent, 1.2 s launches): the highest is **988.48 T = 0.99904 of the bound** (wg_s8, zero operands, the 1980 lock, duty 100%). Over the host's interval it is 988.59 T.
+  - **clock64:** under the lock, the whole kernel reads at most 1830.0 MHz and the tensor phases at most 1830.03 (bursts of 36 µs or more). At the default clock the tensor phases read at most 1815.2.
+  - **Maximum by class at the 1980 lock:**
+    - s8 wgmma: zero 988.48, const 988.42, u2 988.42, u4 988.29, s2 952.41, uniform 939.20 T. s2 and uniform are power-capped at 700 W.
+    - e4m3 wgmma: zero 927.76, const 924.02, uniform 824.82 T.
+    - mma.sync s8: 649.67 T.
+  - **Duty, fill and clock:** no duty below 100% and neither fill (idle, FFMA) lifts the tensor clock. The 1980 lock lifts it more than the default clock does (1829 against 1815 MHz).
+  - **Where:** run `r20261030-144548-0744` on vy-dc-h200-2, GPU-0c81a571. Branch `cursor/compute-research-h200-sweep-a647` at 1e55d6b941; the summary is from 9b122e7f73; no PR.
+  - **Note:** `lanes/compute-research/20261030T1534Z-report-h200-tensor-sweep.md`.
+  - **Node:** clocks and power restored (`-rgc` rc 0, `-pl` 700 W rc 0). vy-dc-h200-2 stopped at 15:37Z, with no lease held or waiting.
+  - **What lands:** `Accel.H200`'s tensorLong at 499,712 MACs a tick, with DMMA at 1980 (#5956's change). I opened no PR for it.
+  - **CORE-H32** wasn't sweeping: the node was STOPPED at 14:15Z and no lease was held.
+  - **#6630:** its re-gate waits on #6687, which is still open at 15:38Z.
