@@ -1,5 +1,5 @@
 """The active certifier (`active`): its shaper is `run_shaper`'s rule on frames that arrive, its faults fail closed, and
-over real localhost sockets, on an injected clock, an honest run is accepted raw and committed on every link-window
+over real localhost sockets, on an injected clock, an honest run is accepted raw and committed on every execution phase
 while a sender that times its writes to signal either leaves the wire byte-identical or is rejected by the audit."""
 
 import asyncio
@@ -749,7 +749,7 @@ async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt
 
 
 def audit(proxy, frames, syncs, egress=EGRESS):
-    """The audit of the proxy's records, raw then committed: every egress and ingress link-window's verdict."""
+    """The audit of the proxy's records, raw then committed: every egress and ingress execution phase's verdict."""
     out = []
     for committed in (False, True):
         records = [commit(r, egress if r.link == "responses" else INGRESS) if committed else r for r in proxy.records]
@@ -775,7 +775,7 @@ def honest_run():
 
 
 def test_an_honest_run_over_sockets_is_accepted_raw_and_committed(honest_run):
-    """Every link-window is accepted, raw and committed; the records and hand times are `run_shaper`'s; the anchors
+    """Every execution phase is accepted, raw and committed; the records and hand times are `run_shaper`'s; the anchors
     are the ingress releases; and the peer reads exactly the Program's grids, r frames of B bytes per bucket."""
     proxy, wire = honest_run
     raw, committed = audit(proxy, FRAMES, SYNCS)
@@ -878,7 +878,7 @@ def compact_write(session: str, index: int, n: int, position: int) -> bytes:
 @pytest.mark.parametrize("cell", [8, 16])
 def test_compact_records_over_sockets_are_b_byte_cells_and_the_run_is_accepted(cell, honest_run):
     """Under `compact` the server writes each output as a (position, record) unit after its HTTP head, and the proxy
-    frames each record as its cell of B = 8 or 16 bytes: every link-window is accepted raw and committed against the
+    frames each record as its cell of B = 8 or 16 bytes: every execution phase is accepted raw and committed against the
     Program's cells, the records and hand times are `run_shaper`'s and the event-framed run's, the ingress records are
     unchanged, and the wire is B/512 of the event-framed run's, the same frames a bucket."""
     egress = dataclasses.replace(EGRESS, frame_bytes=cell)
@@ -1388,7 +1388,7 @@ def test_the_salt_reaches_only_the_blocks_side_and_no_record_depends_on_it(hones
 
 
 def test_one_salt_per_pouw_window_of_its_width(honest_run):
-    """With PoUW windows of two certifier windows and 256-bit salts, the proxy draws one 256-bit salt per PoUW window,
+    """With PoUW windows of two certifier windows and 256-bit salts, the proxy samples one 256-bit salt per PoUW window,
     at its first bucket: PoUW window 0's at certifier window 0, 1's at window 2. Window 1's ingress record is the
     unsalted run's, and the server receives each salt once. `reveal` gives PoUW window 0's salt at the tick windows 0 and
     1 are published (t_d), and only then, and never PoUW window 1's, whose window 3 the run doesn't reach. `check_salts` reads the salt
@@ -1614,7 +1614,7 @@ def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_th
     it. They answer a `Revealed` that names the certifier's key id and run and verifies under the certifier's key over
     `reveal_response_message`, and under no other key, run, window, value, kind, registration or link. The once rule
     and the published condition are `reveal`'s. A signer that refuses spends the reveal and gives nothing. A proxy
-    takes both keys or neither; a keyless one takes no request and serves no endpoint. Each proxy draws its own
+    takes both keys or neither; a keyless one takes no request and serves no endpoint. Each proxy samples its own
     32-byte run id unless given a source. A deployed signature (`lms.DEPLOYED`), in hex, fits a request line with room
     for the registration."""
     challenger_key, sign = prover_signer(b"challenger")
@@ -1949,7 +1949,7 @@ class Held(Executor):
 def test_a_choice_not_ready_at_its_window_declares_the_envelope():
     """Window 1's choice never finishes. Its tick doesn't wait: no tick is late, window 1 declares the envelope and
     logs it unready, and window 2's choice, started at its tick less the lag, reads that declaration. The audit
-    accepts every link-window, raw and committed, since the envelope is in Σ_sync. The proxy refuses a prover that
+    accepts every execution phase, raw and committed, since the envelope is in Σ_sync. The proxy refuses a prover that
     would choose at its tick (lag 0)."""
     lag = 2
     held = Held({1})

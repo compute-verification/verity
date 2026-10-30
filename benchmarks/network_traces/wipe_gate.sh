@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Network accounting's side of a memory wipe: one warden session through the auditor's gate (`warden-rehearse --scan
-# --prompts`, the toy's class) spanning the wipe's session, under the lane's gate key (GATE_KEY), inside a job on the
-# machine that holds it (site.json's auditor), cwd = the source tree; everything into $OUT. GATE_KEY, CHALLENGER, PEER
-# and KEEP default to site.json's gate_key (under ~/.ssh), gate, peer and keep.
+# Network accounting's side of a memory wipe: one network certifier session through the auditor's gate (`warden-rehearse
+# --scan --prompts`, the toy's class) spanning the wipe's session, under the lane's gate key (GATE_KEY), inside a job on
+# the machine that holds it (site.json's auditor), cwd = the source tree; everything into $OUT. GATE_KEY, CHALLENGER,
+# PEER and KEEP default to site.json's gate_key (under ~/.ssh), gate, peer and keep.
 #
 # With AT (a UTC time) it first waits until then, so a run launched early fires on the clock with no VM awake: give the
 # run a time limit past AT, MINUTES, the fetch and the leak guard (below). Launched more than LATE_S (60) seconds
@@ -24,11 +24,11 @@
 # the outputs stay in the hold, out of the record, and the job fails. PY is the guard's interpreter (python3).
 #
 # 1700 requests, the gate's most (`auditor.WARDEN_REQUESTS`), on the gate's most prompts, 400 (`WARDEN_PROMPTS`; request
-# j sends the (j mod n)-th), are 1064 link-windows at its fixed seed (`warden_serve.prompt_traffic`): 3404.8 s from the
-# session's origin, which is about 16 s after the request at HEIGHT 13. At about 5 one-time signatures a link-window
-# they take about 5300 of height 13's 8192 (height 12's 4096 sign about 819 windows). A gate pinned before 1700 takes
-# 400 requests at most, 259 link-windows: give it REQUESTS=400 HEIGHT=12 MINUTES=20. A wipe whose [t0, t1) lies within
-# [origin + 1 s, origin + 3403.8 s) is covered; then
+# j sends the (j mod n)-th), are 1064 execution phases at its fixed seed (`warden_serve.prompt_traffic`): 3404.8 s from
+# the session's origin, which is about 16 s after the request at HEIGHT 13. At about 5 one-time signatures an execution
+# phase they take about 5300 of height 13's 8192 (height 12's 4096 sign about 819 windows). A gate pinned before 1700
+# takes 400 requests at most, 259 execution phases: give it REQUESTS=400 HEIGHT=12 MINUTES=20. A wipe whose [t0, t1)
+# lies within [origin + 1 s, origin + 3403.8 s) is covered; then
 #
 #   python benchmarks/network_traces/wipe_egress.py $OUT/bundle.tgz --t0-ns T0 --t1-ns T1 --out egress.json
 #
