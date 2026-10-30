@@ -84,9 +84,10 @@ records leaves the host, so the signed close covers them:
 `after` is the round's message's SHA-512 (the record's ``msg_sha512``), and for the link points (stream ``session``,
 round 0) the SHA-512 of the link's ``root_F`` and each table's ``root_B`` (`link_after`).  `released_roots_of` reads past
 these lines (`tree_line`), `coin_trees_of` reads them, and `session_tree_reason` holds a session's record to them: its
-``coin_tree`` a tree the log shows drawn, its link points and every round's coins that tree's logged openings.  The tree's
-root and key leave at ``Hello``, as C-Flock's coin server releases them, so its unopened coins rest on the tree's hm96
-hiding.
+``coin_tree`` a tree the log shows drawn, its link points and every round's coins that tree's logged openings.
+`sessions_tree_reason` holds an audit's sessions to them, one tree a session and every tree a session's, so no statement's
+coins are drawn twice.  The tree's root and key leave at ``Hello``, as C-Flock's coin server releases them, so its
+unopened coins rest on the tree's hm96 hiding.
 
 **The auditor's ledger** names the one challenger session each window's coins come from (`audited_session`).  The
 auditor (`benchmarks/live_challenger/auditor.py` on the challenger's host, run by the host's operator) appends a signed
@@ -223,6 +224,8 @@ TREE_SPEC_FORM = (f"a coin tree's spec is {{block, rounds_log, scheme, streams}}
                   f"round, 2^0 to 2^{MAX_ROUNDS_LOG} rounds a stream, and its streams distinct names of 1 to "
                   f"{MAX_SESSION_ID} ASCII letters, digits, '-', '.', '_' and '/'")
 NO_TREE = "its coin tree is none the challenger's release log shows it drew"
+SHARED_TREE = "its coin tree is another session's"
+UNUSED_TREE = "a tree no session records is a redraw, and each session draws its coins once"
 CLOSE_FORM = ("a challenger close record is {chain, ended, lines, session, signature}: a 64-byte chain and a signature in "
               "lowercase hex, how the session ended (null when its client closed it), the release log's line count, "
               f"1 to {MAX_LOG_LINES}, and a session id of at most {MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'")
@@ -906,6 +909,26 @@ def session_tree_reason(trees: dict[str, LoggedTree], record: Any) -> str | None
             o = t.opening(name, k)
             if o is None or (o.n, o.after, o.coins) != (r["n"], r["msg_sha512"], hashlib.sha512(coins).hexdigest()):
                 return f"its {name} round {k} is not coins the challenger opened under its tree after that round's message"
+    return None
+
+
+def sessions_tree_reason(trees: dict[str, LoggedTree], records: Sequence[tuple[str, Any]]) -> str | None:
+    """Why the ``--zk`` sessions `records`, each its name and its record, don't show their coins to be the ones the
+    challenger's release log shows it drew and opened (`trees`, `coin_trees_of`'s), one tree a session; None when they
+    do.  In order, each session's coins must be its tree's (`session_tree_reason`), a tree no earlier session's
+    (`SHARED_TREE`); and every tree the log shows must be a session's (`UNUSED_TREE`), so no statement drew twice."""
+    used: list[str] = []
+    for name, record in records:
+        why = session_tree_reason(trees, record)
+        root = record["coin_tree"]["root"] if why is None else None
+        if why is None and root in used:
+            why = SHARED_TREE
+        if why is not None:
+            return f"session {name}'s coins are not the challenger's: {why}"
+        used.append(root)
+    if len(used) != len(trees):
+        return (f"the challenger's release log shows {len(trees)} coin trees and the sessions use {len(used)}: "
+                f"{UNUSED_TREE}")
     return None
 
 
@@ -1727,12 +1750,12 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "MAIN_FORM", "MAX_BLOCK", "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_ROUNDS_LOG", "MAX_SESSION_ID",
            "MAX_TREE_COINS", "MAX_TREE_LINES", "MINUTES", "NO_AUDIT", "NO_CLOSE", "NO_MAIN", "NO_PINS", "NO_RECORD", "NO_TREE",
            "OPEN_EVENT", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE", "RECORD_FORM",
-           "RECORD_ROLE", "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "TREE_EVENT", "TREE_RECORD_FORM",
-           "TREE_SPEC_FORM", "LoggedTree", "TreeOpening", "Verify", "WINDOW_FORM", "WITHHELD", "audited_session",
+           "RECORD_ROLE", "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "SHARED_TREE", "TREE_EVENT",
+           "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening", "Verify", "WINDOW_FORM", "WITHHELD", "audited_session",
            "cap_of", "circuit_of", "circuit_reason", "close_message", "coin_trees_of", "coins_digest", "credited_session",
            "extends", "first_parent_reason", "key_of_record", "lane_of", "later", "layout_problem",
            "leaf_of", "ledger_head", "ledger_line", "link_after", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
-           "session_named", "session_of", "session_tree_reason", "tree_line", "tree_spec_reason", "trusted_commitment",
+           "session_named", "session_of", "session_tree_reason", "sessions_tree_reason", "tree_line", "tree_spec_reason", "trusted_commitment",
            "trusted_reason", "trusted_session_of", "verify_ledger", "verify_periods", "withheld_on", "write_record"]
