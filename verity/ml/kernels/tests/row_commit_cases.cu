@@ -9,8 +9,8 @@ namespace rcc {
 using rc::u64;
 
 enum Kind { LEAF, PAD, NODE, HM96, EMPTY, LEAF_AT };
-// LEAF, PAD, NODE: 0 compile-time nb, 1 run-time nb; NODE 2 run-time through Compact. HM96: the table and loop of the
-// mask, and the frame leaf's nb.
+// LEAF, PAD, NODE: 0 compile-time nb, 1 run-time nb; LEAF 2 compile-time a body a length (frame_leaf_nb), NODE 2 run-time
+// through Compact. HM96: the table and loop of the mask, and the frame leaf's nb.
 constexpr int HM96_FORMS = 5;
 
 struct Case {
@@ -35,16 +35,25 @@ RC_HD void bytes(const u64* w, uint8_t* p, int n) {
 }
 
 template <int SX>
-RC_HD void leaf_ct(const rc::FrameK& F, u64 pos, const u64* v, u64* out) {
-  rc::frame_leaf<SX>(F, pos, v, out);
+RC_HD void leaf_ct(int form, const rc::FrameK& F, u64 pos, const u64* v, u64* out) {
+  if (form == 0) {
+    rc::frame_leaf<SX>(F, pos, v, out);
+    return;
+  }
+  switch (rc::nbytes(pos)) {
+    case 1: rc::frame_leaf_nb<SX, 1>(F, pos, v, out); break;
+    case 2: rc::frame_leaf_nb<SX, 2>(F, pos, v, out); break;
+    case 3: rc::frame_leaf_nb<SX, 3>(F, pos, v, out); break;
+    default: rc::frame_leaf_nb<SX, 4>(F, pos, v, out); break;
+  }
 }
-// the compile-time leaf for the schema lengths the vectors take: 13, 17, 18 and 22
-RC_HD int leaf_by_sx(const rc::FrameK& F, u64 pos, const u64* v, u64* out) {
+// the compile-time leaf (form 0, or 2 through frame_leaf_nb) for the schema lengths the vectors take: 13, 17, 18 and 22
+RC_HD int leaf_by_sx(int form, const rc::FrameK& F, u64 pos, const u64* v, u64* out) {
   switch (F.sx) {
-    case -5: leaf_ct<-5>(F, pos, v, out); return 0;
-    case -1: leaf_ct<-1>(F, pos, v, out); return 0;
-    case 0: leaf_ct<0>(F, pos, v, out); return 0;
-    case 4: leaf_ct<4>(F, pos, v, out); return 0;
+    case -5: leaf_ct<-5>(form, F, pos, v, out); return 0;
+    case -1: leaf_ct<-1>(form, F, pos, v, out); return 0;
+    case 0: leaf_ct<0>(form, F, pos, v, out); return 0;
+    case 4: leaf_ct<4>(form, F, pos, v, out); return 0;
     default: return -1;
   }
 }
@@ -96,8 +105,8 @@ RC_HD int run(const Case& k, const Tabs& T, rc::FrameK& F, rc::NodeK& N, Out& o)
     case LEAF:
       if (rc::frame_plan(k.did, k.schema, k.sl, F)) return -1;
       words(k.value, v, 8);
-      if (k.form == 0) {
-        if (leaf_by_sx(F, k.pos, v, d)) return -1;
+      if (k.form != 1) {
+        if (leaf_by_sx(k.form, F, k.pos, v, d)) return -1;
       } else if (F.sx == 0) {
         rc::frame_first_rt(F, k.pos, d);
         rc::frame_second_rt<0>(F, k.pos, v, d);
