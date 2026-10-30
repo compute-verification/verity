@@ -222,7 +222,7 @@ theorem honest_hit (s : ContState sch.B) (i : Fin sch.B) :
       rw [← List.getElem_eq_getD (h := hlt) false]
       simp only [contMem, honest, List.getElem_ofFn, Fin.eta, Equiv.symm_apply_apply]
     cases T <;> simp only [ContMachine.round, honest_step, hans]
-  simp only [contRecord, contProg, hround, contVerdict, Prog.run, Prog.work, Prog.depth, Nat.not_lt_zero,
+  simp only [contRecord, contProg, hround, contVerdict, OracleAlgorithm.run, OracleAlgorithm.work, OracleAlgorithm.depth, Nat.not_lt_zero,
     or_self, ↓reduceIte]
 
 end
