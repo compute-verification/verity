@@ -163,18 +163,36 @@ def renamed(name: str, moved: dict[str, str]) -> str:
     return name
 
 
+def module_files(files: list[str]) -> dict[str, str]:
+    """Each Lean module's file ({module: path}): a module is its file's path below its package's source directory, so it is
+    each dotted tail of a `.lean` path that no other file's path ends in."""
+    tails: dict[str, list[str]] = {}
+    for p in files:
+        if p.endswith(".lean"):
+            parts = p[:-len(".lean")].split("/")
+            for i in range(len(parts)):
+                tails.setdefault(".".join(parts[i:]), []).append(p)
+    return {m: ps[0] for m, ps in tails.items() if len(ps) == 1}
+
+
 def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
-    """The declaration renames the locks' records need: for each guarantee and read definition whose name the words rename,
-    its first renamed prefix, and the full name too when that prefix alone would rename it otherwise; none implied by
-    another."""
+    """The declaration renames the locks' records need: for each guarantee and read definition whose name the words rename
+    where it is declared (a read definition in its module's file, a guarantee in its lock), its first renamed prefix, and
+    the full name too when that prefix alone would rename it otherwise; none implied by another. A prefix with such a name
+    under it is listed as its names in full instead, since `check.py --moved` reads no move under another move's new name
+    that maps back elsewhere (its `move_errors`)."""
     want: dict[str, str] = {}
+    where = module_files(files)
     for p in files:
         if posixpath.basename(p) != POLICY or words.excluded(p):
             continue
         d = json.loads((root / p).read_text())
-        names = set(d.get("guarantees", {})) | {n for g in d.get("reads", {}).values() for n in g.get("definitions", {})}
-        for n in sorted(names):
-            if (new := words.name(n, p)) != n and want.setdefault(n, new) != new:
+        names = dict.fromkeys(d.get("guarantees", {}), p)
+        names |= {n: where.get(m, p) for m, g in d.get("reads", {}).items() for n in g.get("definitions", {})}
+        for n, f in sorted(names.items()):
+            if words.excluded(f):
+                continue
+            if (new := words.name(n, f)) != n and want.setdefault(n, new) != new:
                 raise SystemExit(f"{n} is renamed {want[n]} in one lock and {new} in {p}")
     want = dict(sorted(want.items()))
     moves: dict[str, str] = {}
@@ -185,6 +203,13 @@ def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
     for old, new in want.items():
         if renamed(old, moves) != new:
             moves[old] = new
+    while nested := sorted({p for p, q in moves.items() for o, n in moves.items()
+                            if n.startswith(q + ".") and o != p + n[len(q):]}):
+        if nested[0] in want:
+            raise SystemExit(f"{nested[0]} is renamed {moves[nested[0]]} and a name under it is renamed elsewhere: "
+                             "`check.py --moved` can't read both back, so rename them in two moves")
+        del moves[nested[0]]
+        moves |= {o: n for o, n in want.items() if o.startswith(nested[0] + ".")}
     for old in sorted(moves, key=lambda k: -k.count(".")):
         rest = {k: v for k, v in moves.items() if k != old}
         if renamed(old, rest) == moves[old]:
