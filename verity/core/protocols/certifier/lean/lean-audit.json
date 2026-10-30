@@ -8,11 +8,11 @@
  },
  "runs": {
   "NetworkCertifier.CallsDifftestMain": {
-   "why": "1,000 random windows on which the certifier program's calls (Calls.run from a window's entropy: each A root's release, byte for byte, or its refusal, each bucket's refused calls, each words root's verdict, the close's verdicts, and the record's calls) give what calls.Calls gives",
+   "why": "1,000 random windows on which the certifier program's calls (Calls.run from a window's entropy and the release's bits: each A root's release, byte for byte, or its refusal, each bucket's count or refusal, each words root's forward verdict, the close's verdicts, and the record's forwards and their calls) give what calls.Calls gives",
    "args": ["{calls/instances.jsonl}", "{calls/python.jsonl}", "1000"],
    "data": {
-    "calls/instances.jsonl": "795b841c353639f1c91217f18b2b1ada7748a1b86375da8cf985fddeace1c1c3",
-    "calls/python.jsonl": "95611e35838459634231191ebd49066717f1684589e6b950bce06602cd18b229"
+    "calls/instances.jsonl": "53ad9edd40dd5fb6728df023be3b17f464262b2f40647d43c9a4265c8075127e",
+    "calls/python.jsonl": "4ff292f5f15bb66424e885f17f789f16b2e43e636de3cc1c00fab49c67c90bc5"
    },
    "generate": ["python3", "scripts/calls_vectors.py", "{repo}", "--out", "{out}"]
   },
