@@ -33,7 +33,6 @@ print(json.dumps({
     "core": sorted(m for m in sys.modules if m.startswith("verity.core")),
     "integration": sorted(m for m, mod in list(sys.modules.items())
                           if Path(getattr(mod, "__file__", None) or "/").resolve().is_relative_to(repo / "integrations")),
-    "in_verity": Path(catalog.__file__).resolve().is_relative_to(repo / "verity"),
 }))
 """
 
@@ -123,10 +122,7 @@ def test_the_catalog_reads_no_protocol():
     assert not fresh()["core"], f"a registry module imports verity.core: {fresh()['core']}"
 
 
-def test_the_catalog_in_verity_loads_nothing_of_the_integration():
-    """Holds once the catalog sits in `verity` (the move); before it, the catalog is the integration's own."""
-    if not fresh()["in_verity"]:
-        return
+def test_the_catalog_loads_nothing_of_the_integration():
     assert not fresh()["integration"], f"loading the catalog imports the integration: {fresh()['integration']}"
 
 
