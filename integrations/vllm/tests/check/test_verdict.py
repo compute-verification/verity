@@ -262,7 +262,7 @@ def test_pass_record_passes_in_both_and_names_its_scope():
 def test_a_tp1_eager_row_that_binds_a_route_pinned_gemm_is_refused_by_name_without_its_cublas_facts():
     (ok, why), out, checks = _both(_routed(None))
     assert ok is False and why.startswith("cuBLAS route pin (rank 0): CublasSplitKGemmF32Out_v1 x6, CublasSplitKGemm_v1 x4 bound at the "
-                                          f"routes of {BC.CUBLAS_ROUTES['run']}, served otherwise: no cuBLAS facts recorded"), why
+                                          f"routes of {BC.CUBLAS_ROUTES['run_record']}, served otherwise: no cuBLAS facts recorded"), why
     rule = {c.name: c for c in checks}["local_replay/cublas_route_pin"]
     assert out != V.PASS and rule.outcome == V.FAIL and rule.reason == why and rule.code == VC.EXPECTATION_MISMATCH
     assert rule.differences == [{"name": "served_off_route_pin", "departures": [why.split("served otherwise: ")[1]]}]
@@ -272,7 +272,7 @@ def test_the_same_row_passes_with_the_pins_facts_of_record():
     (ok, why), out, checks = _both(_routed({"cublas": PIN_FACTS}))
     rule = {c.name: c for c in checks}["local_replay/cublas_route_pin"]
     assert ok is True and out == V.PASS, why
-    assert rule.outcome == V.PASS and rule.scope == {"families": ROUTED, "pin": BC.CUBLAS_ROUTES["run"]}
+    assert rule.outcome == V.PASS and rule.scope == {"families": ROUTED, "pin": BC.CUBLAS_ROUTES["run_record"]}
 
 
 def test_the_same_row_served_under_the_split_k_off_switch_is_refused_naming_each_departure():
