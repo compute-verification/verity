@@ -124,6 +124,9 @@ def row(ne, nr, strassen=None):
         out["strassen"] = {k: round(v, 3) for k, v in att.items()}
         out["credit_attack"] = round(min(forced, att["fast"]), 3)
         out["credit_floor"] = round(min(forced_mod, att["fast"]) if b else 0.0, 3)
+    k8 = (strassen or {}).get(f"e{ne}r{nr}_attack_k8")
+    if k8 is not None:
+        out["credit_attack_k8"] = {k: round(v, 3) for k, v in k8.items()}
     return out
 
 
