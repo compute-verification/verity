@@ -144,7 +144,8 @@ syncs (`Queue._drive_only`): `eject` only withdraws the mark, for drive's next t
 (`Queue.hand_sync`) waits as drive's tick does for a running Lean check whose prefix holds an ejected member (`lean_waits`) and
 keeps `next` up to drive's running and passed Lean checks (`lean_hold`).  A
 PR whose head contains another open PR's head, or by ancestry an older one (a head the queue saw it at, or its branch merged in:
-`Queue.entries`; never by PR number, and never for commits the two merely share), goes
+`Queue.entries`; never by PR number, never for commits the two merely share, and never for commits admitted members below it on
+`next` already bring), goes
 in after it and waits while that one waits, unless it carries that one's change: the same owner, or that one's owner withdrew its
 mark (`Queue._carried`); drive tells the owner of the one it waits for (unmarked, ejected, held or waiting itself) and those of
 every marked PR left out for it in one post, with the fix (`Driver.tell_out`); but a member a running or passed check covers
@@ -207,6 +208,7 @@ import dataclasses
 import difflib
 import fcntl
 import fnmatch
+import functools
 import hashlib
 import importlib.util
 import json
@@ -992,6 +994,19 @@ def contained(repo: Path, base: str, head: str, heads: dict[str, int]) -> list[i
     return sorted({heads[h] for h in _out(repo, "rev-list", f"{base}..{head}").split() if h in heads})
 
 
+def _brought(parents: dict[str, list[str]], heads: Iterable[tuple[int, str]]) -> dict[str, int]:
+    """Each commit of ``parents`` (`rev-list --parents` of `next` above its base) that one of ``heads`` ((position on `next`,
+    member head), lowest first) contains, with the position of the lowest that does: the member whose merge brings it."""
+    at: dict[str, int] = {}
+    for i, h in heads:
+        todo = [h]
+        while todo:
+            if (c := todo.pop()) in parents and c not in at:
+                at[c] = i
+                todo += parents[c]
+    return at
+
+
 def based_on(pr: PR, prs: Iterable[PR]) -> str:
     """``pr``'s base branch, with the open PR whose head that branch is (`BRANCH (#P's head)`) when one is."""
     parent = next((p for p in prs if p.branch == pr.base and p.number != pr.number), None)
@@ -1204,10 +1219,12 @@ class Queue:
             at = at[:-1] + ":59Z"                       # recorded to the minute: a mark in that minute may predate the ejection
         return when is not None and when > at
 
-    def entries(self, prs: list[PR], state: dict, base: str | None = None, landed: str | None = None) -> dict[int, Entry]:
+    def entries(self, prs: list[PR], state: dict, base: str | None = None, landed: str | None = None,
+                queued: str | None = None) -> dict[int, Entry]:
         """Each open PR's standing.  A PR P goes after, and waits while it isn't admitted, each other open PR Q whose current
         head P's head contains, or an older head of Q's, by ancestry alone (never by PR number).  P holds an older head of Q
-        when one of P's own commits (those in ``base``.. its head less those below the heads of open PRs it contains) is
+        when one of P's own commits (those in ``base``.. its head less those below the heads of open PRs it contains, and
+        less those `next` already carries without P, below) is
 
         - a head the queue saw Q at, and the first open PR it saw there (`seen`), that Q's head still contains, as when P
           branched from Q and Q moved on unmarked (else P would land Q's unmarked commits under P's mark); of several PRs
@@ -1215,10 +1232,17 @@ class Queue:
         - one of Q's own commits on Q's first-parent line that P has only through a merge, as when P merged Q's branch and Q
           moved on (P waits for Q, and Q for nothing).
 
+        What `next` (``queued``: the queue's branch as fetched unless given) already carries without P isn't P's own: each
+        commit above ``landed`` that a member below P's merge brings (any member, when P isn't one), counting only members
+        at their PR's current head that this call admits (`_brought`).  So a commit P shares with Q's older head through work
+        admitted members already bring holds P for nothing, P's own merge never excuses its own commits, and a member that
+        moved on or that this call leaves waiting carries nothing: the call judges again without it.  A head of Q's that
+        P's head contains still holds P as before.
+
         Commits two PRs merely share wait for nothing: a third branch both merged (on neither first-parent line), or a fork
         point the queue never saw either PR at (on both), and neither does a head of Q's that P holds (`Entry.held`) on
         ``landed``, the landing branch's tip (`base` as fetched unless given: the preflight judges on `main`).  One `rev-list`
-        and one `rev-list --first-parent` a PR, not a merge base for each pair."""
+        and one `rev-list --first-parent` a PR and one `rev-list --parents` of `next`, not a merge base for each pair."""
         rules, base = self.rules(), base or self.base
         landed = landed or self.base
         heads = {p.head: p.number for p in prs}
@@ -1249,35 +1273,48 @@ class Queue:
             line[p.number] = set(_out(self.workdir, "rev-list", "--first-parent", f"{base}..{p.head}").split())
             e.held = {heads[h]: h for h in order[p.number] if h in heads and heads[h] != p.number}
             e.after = tuple(sorted(e.held))
-        own = {n: below[n].difference(*(below[a] for a in e.after)) for n, e in out.items()}
-        branch: dict[str, list[int]] = {}                   # commit: the PRs it is an own commit on the first-parent line of
-        for n, cs in own.items():
-            for c in cs & line[n]:
-                branch.setdefault(c, []).append(n)
+        members = chain_of(self.workdir, landed, queued or f"refs/remotes/origin/{self.branch}")
+        pos = {m.pr: i for i, m in enumerate(members) if m.pr in out and m.head == out[m.pr].pr.head}
+        parents = {c: ps for c, *ps in map(str.split, _out(self.workdir, "rev-list", "--parents", f"{landed}..{members[-1].commit}")
+                                           .splitlines())} if pos else {}
+        first = {n: (e.state, e.why, e.after, e.held) for n, e in out.items()}
+        on = functools.cache(lambda c: not _git(self.workdir, "merge-base", "--is-ancestor", c, landed, check=False).returncode)
         seen = state.get("seen") or {}
-        for n, e in out.items():
-            older: dict[int, str] = {}
-            for c in (c for c in order[n] if c in own[n]):
-                # a head several PRs were seen at is carried by the marked ones among them, whose marks cover it
-                at = [q for q in seen.get(c, ()) if q in out and c in below[q]]
-                for q in [*([q for q in at if out[q].state == "ready"] or at), *(branch.get(c, ()) if c not in line[n] else ())]:
-                    if q != n:
-                        older.setdefault(q, c)
-            e.older = tuple(sorted(older))
-            e.after = tuple(sorted(e.after + e.older))
-            e.held |= older
-        on = lambda c: not _git(self.workdir, "merge-base", "--is-ancestor", c, landed, check=False).returncode  # noqa: E731
-        for e in out.values():
-            e.after = tuple(a for a in e.after if not on(e.held[a]) and not self._carried(e.pr, out[a], state))
-            e.older = tuple(a for a in e.older if a in e.after)
-            e.held = {a: e.held[a] for a in e.after}
-        changed = True
-        while changed:                                      # a PR waits while a PR whose commits it contains isn't admitted
-            changed = False
+        carriers = set(pos)
+        while True:                                         # until every member counted as carrying commits is admitted
+            brought = _brought(parents, sorted((pos[n], members[pos[n]].head) for n in carriers))
+            for n, e in out.items():
+                e.state, e.why, e.after, e.held = *first[n][:3], dict(first[n][3])
+            own = {n: {c for c in below[n].difference(*(below[a] for a in e.after)) if brought.get(c, math.inf) >= pos.get(n, math.inf)}
+                   for n, e in out.items()}
+            branch: dict[str, list[int]] = {}               # commit: the PRs it is an own commit on the first-parent line of
+            for n, cs in own.items():
+                for c in cs & line[n]:
+                    branch.setdefault(c, []).append(n)
+            for n, e in out.items():
+                older: dict[int, str] = {}
+                for c in (c for c in order[n] if c in own[n]):
+                    # a head several PRs were seen at is carried by the marked ones among them, whose marks cover it
+                    at = [q for q in seen.get(c, ()) if q in out and c in below[q]]
+                    for q in [*([q for q in at if out[q].state == "ready"] or at), *(branch.get(c, ()) if c not in line[n] else ())]:
+                        if q != n:
+                            older.setdefault(q, c)
+                e.older = tuple(sorted(older))
+                e.after = tuple(sorted(e.after + e.older))
+                e.held |= older
             for e in out.values():
-                if e.state == "ready" and (blocking := [a for a in e.after if out[a].state != "ready"]):
-                    e.state, e.why, changed = "waiting", f"contains {e.contains(blocking[0])}, which isn't admitted", True
-        return out
+                e.after = tuple(a for a in e.after if not on(e.held[a]) and not self._carried(e.pr, out[a], state))
+                e.older = tuple(a for a in e.older if a in e.after)
+                e.held = {a: e.held[a] for a in e.after}
+            changed = True
+            while changed:                                  # a PR waits while a PR whose commits it contains isn't admitted
+                changed = False
+                for e in out.values():
+                    if e.state == "ready" and (blocking := [a for a in e.after if out[a].state != "ready"]):
+                        e.state, e.why, changed = "waiting", f"contains {e.contains(blocking[0])}, which isn't admitted", True
+            if not (fell := {n for n in carriers if out[n].state != "ready"}):
+                return out
+            carriers -= fell
 
     @staticmethod
     def _seen(state: dict, prs: list[PR], open_numbers: set[int]) -> None:
@@ -2836,6 +2873,7 @@ class Preflight:
             main, into = _out(self.repo, "rev-parse", f"refs/queue/preflight/{land}"), land
         r = _git(self.repo, *STALL, "ls-remote", "--exit-code", self.remote, f"refs/heads/{BRANCH}", check=False)
         if r.returncode == 2:
+            _git(self.repo, "update-ref", "-d", f"refs/queue/preflight/{BRANCH}", check=False)
             return main, f"`{into}` at {main[:12]} (no `{BRANCH}`)", []
         if r.returncode:
             raise QueueError(f"git ls-remote {self.remote}: {(r.stderr or r.stdout).strip()[-200:]}")
@@ -2866,7 +2904,8 @@ class Preflight:
         land = f"refs/queue/preflight/{into_at(self.repo, main)}"
         landed = land if not _git(self.repo, "rev-parse", "-q", "--verify", f"{land}^{{commit}}", check=False).returncode else main
         try:
-            entries = q.entries([pr, *(p for p in prs if p.number in inside)], {"ejected": {}}, base=main, landed=landed)
+            entries = q.entries([pr, *(p for p in prs if p.number in inside)], {"ejected": {}}, base=main, landed=landed,
+                                queued=f"refs/queue/preflight/{BRANCH}")
         except QueueError as e:
             self.log(f"research queue: preflight: can't tell whether the open PRs this head contains are admitted ({e})")
             return []
