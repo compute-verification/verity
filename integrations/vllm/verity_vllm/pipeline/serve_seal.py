@@ -32,13 +32,14 @@ are committed as before, same leaves and roots, but not copied off the device, s
 manifest names them ``committed_not_retained``: no reader of a sealed window opens them (no Program of record reads an
 ``fa*.m1`` identity, and C2 and the oracle compare skip them), and a read of one is refused by name.
 
-A window is sealed off the engine loop (`Sealer`), over a view of the committer that holds the window's own per-step state,
+A window is sealed off the engine loop (`seal_stages.Sealer`), over a view of the committer that holds the window's own per-step state,
 with the pinned blocks its values sit in lent out of the committer's pool until the seal has read them (`thaw`): the view
-the window was detached into at its close (`NativeHostCommitter.detach`), finalized on the sealer's thread before its seal,
-or, for a committer that detaches no window, the committer frozen after a finalize at the close (`freeze`). The registered
-tensors' bytes (`extras_of`) are read once for each weights root, and `seal_window` runs over the view on the sealer's
-thread while the engine serves the next window; the bytes it writes are the ones an inline seal writes. `serve_guard.DiskFloor`
-keeps the serve dir's filesystem above a floor: a window whose seal would take it under is not sealed.
+the window was detached into at its close (`NativeHostCommitter.detach`), finalized on the sealer's first thread before its
+seal, or, for a committer that detaches no window, the committer frozen after a finalize at the close (`freeze`). The
+registered tensors' bytes (`extras_of`) are read once for each weights root, and `seal_window` runs over the view on the
+sealer's second thread, beside the next window's finalize, while the engine serves the window after; the bytes it writes are
+the ones an inline seal writes. `serve_guard.DiskFloor` keeps the serve dir's filesystem above a floor: a window whose seal
+would take it under is not sealed.
 
 A seal on the sealer's thread shares the engine's GIL, so it holds it only briefly: its binding map is encoded a chunk of
 entries at a time (`commit.json_chunks`), built with no cyclic collection running (`gc_paused`) and freed a chunk at a time
@@ -53,9 +54,7 @@ import copy
 import functools
 import gc
 import json
-import threading
 import time
-from collections import deque
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -727,65 +726,3 @@ def committed_bytes(com: Any) -> int:
     steps: about what its seal writes (the retained values and their tree levels)."""
     return sum(int(s.n_bytes) for s in list((getattr(com, "_done", None) or {}).values()))
 
-
-class Sealer:
-    """Seals closed windows off the engine loop: one thread runs each window's job (its finalize and records when the close
-    detached it, then its seal and its line in seals.jsonl) in window order. `submit` returns at once while the windows awaiting their seal hold under ``hold_bytes`` of committed values
-    (the pinned host memory the double-buffered windows take), else it waits for room and says how long; `drain` waits for
-    every job. A job's own failure is its window's: the next one still runs."""
-    process: Any = None                                  # the `seal_process.SealProcess` its seals run in (`seal_process.ProcessSealer`)
-
-    def __init__(self, hold_bytes: int, clock: Callable[[], float] = time.perf_counter) -> None:
-        self.hold_bytes, self.clock = int(hold_bytes), clock
-        self.held = 0                                    # committed bytes of the windows queued or sealing
-        self.errors: list[str] = []
-        self._cv = threading.Condition()
-        self._jobs: deque = deque()
-        self.thread = threading.Thread(target=self._run, name="serve-seal", daemon=True)
-        self.thread.start()
-
-    def submit(self, job: Callable[[float], Any], nbytes: int = 0) -> float:
-        """Queue ``job``, which holds ``nbytes`` of a window's values until it returns and is called with the seconds the caller
-        waited for room; returns them too."""
-        t0 = self.clock()
-        with self._cv:
-            while nbytes and self.held and self.held + nbytes > self.hold_bytes:
-                self._cv.wait()
-            waited = self.clock() - t0
-            self.held += int(nbytes)
-            self._jobs.append((functools.partial(job, waited), int(nbytes)))
-            self._cv.notify_all()
-        return waited
-
-    def _run(self) -> None:
-        while True:
-            with self._cv:
-                while not self._jobs:
-                    self._cv.wait()
-                job, nbytes = self._jobs[0]
-            if job is not None:
-                try:
-                    job()
-                except Exception as e:  # noqa: BLE001
-                    self.errors.append(f"{type(e).__name__}: {e}"[:300])
-            with self._cv:
-                self._jobs.popleft()
-                self.held -= nbytes
-                self._cv.notify_all()
-            if job is None:
-                return
-
-    def drain(self) -> None:
-        with self._cv:
-            while self._jobs:
-                self._cv.wait()
-
-    def close(self) -> None:
-        """Every job run, then the thread ended."""
-        with self._cv:
-            self._jobs.append((None, 0))
-            self._cv.notify_all()
-        self.thread.join()
-
-    def summary(self) -> dict[str, Any]:
-        return {"hold_bytes": self.hold_bytes, "held": self.held, "errors": self.errors[:10], "errors_n": len(self.errors)}
