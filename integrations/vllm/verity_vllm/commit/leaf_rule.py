@@ -4,11 +4,10 @@ call per step) retained with the step.  ``tests/commit/test_hiding.py`` pins it.
 """
 from __future__ import annotations
 
-from verity.ml.commitments import vllm_v1
-
 from verity.ml.windows.hiding import NAME, HidingLeaves
+from verity_vllm.commit import scheme
 
-LEAF_SCHEMES = (vllm_v1.NAME, NAME)
+LEAF_SCHEMES = (scheme.NAME, NAME)
 
 
 class LeafSchemeRule:
