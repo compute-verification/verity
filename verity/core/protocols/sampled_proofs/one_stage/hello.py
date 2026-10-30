@@ -43,10 +43,10 @@ def _integers(x: Any) -> bool:
 
 
 def _canon(x: Any) -> str:
-    """`Flock.canon`: compact, keys sorted, non-ASCII as is, integers only."""
+    """`Flock.canon`: compact, keys sorted, every character outside printable ASCII escaped, integers only."""
     if not _integers(x):
         raise ValueError("canonical JSON: a non-integer number")
-    return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
 def _no_constant(c: str) -> Any:

@@ -1,8 +1,8 @@
-"""The Python of the remote audit's verifier held to the Lean's pieces (`remote-audit-difftest`, the definition), each on
+"""The Python of PoUB's verifier held to the Lean's pieces (`remote-audit-difftest`, the definition), each on
 drawn inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
 and an append's coin), a plan (`receipts.Plan`: its length, digest and chunks) and its change (`Plan.changed`), a receipt
 (`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.ml.commitments.verify_opening`
-over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`Session.close`'s), a
+over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`AuditRun.close`'s), a
 registration's digest (`audit.Registration.digest`), and the registration `audit.register` makes, its codec seed drawn
 from the verifier's secret and a nonce. `test_session.py` holds the whole verifier."""
 
@@ -314,7 +314,7 @@ def test_leaf_receipt(server) -> None:
 
 
 def draws(v) -> list:
-    """`Session.close`'s draw from window t's openings coin, on the passes' lengths."""
+    """`AuditRun.close`'s draw from window t's openings coin, on the passes' lengths."""
     coin, registration, t, samples = M.hex_(v, "coin"), M.hex_(v, "registration"), M.nat(v, "window"), M.nat(v, "samples")
     lengths = M._list(v, "lengths")
     if not lengths or any(not isinstance(n, int) or isinstance(n, bool) or n < 1 for n in lengths):
@@ -387,14 +387,15 @@ def test_registration_digest(server) -> None:
 
 
 def register(v) -> dict:
-    """`registerFn`: `audit.register` on the input's source and nonce, `bind` refused as the Lean refuses it."""
+    """`registerFn`: `audit.register`'s draw (`_draw`, of the node, N and payload root the log gives it) on the input's
+    source and nonce, `bind` refused as the Lean refuses it."""
     with M.decoding():
         source, node, root, nonce = (M.hex_(v, k) for k in ("source", "node", "payload_root", "nonce"))
         c, kind, layout = M.codec_of(M._get(v, "codec")), M._str(v, "receipt"), M._str(v, "layout")
         blocks, rows = M.nat(v, "blocks"), M.nat(v, "rows")
         if M._bool(v, "bind"):
             raise D.Reject("a registration that binds PoUW's tile outputs is not covered: the Lean refuses it")
-        r = audit.register(source, node, blocks, root, c, kind, layout=layout, rows=rows, nonce=nonce)
+        r = audit._draw(source, node, blocks, root, c, kind, layout=layout, rows=rows, nonce=nonce)
     return {"codec_seed": r.codec_seed.hex(), "digest": r.digest.hex()}
 
 

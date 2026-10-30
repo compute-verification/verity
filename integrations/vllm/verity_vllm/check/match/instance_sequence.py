@@ -74,12 +74,12 @@ class Prog(PeerReads, PX.PrefixInput):
             del lr
         else:
             from verity.ml.circuits.codec import decode_program
-            _spec_id, runs = self._node_functions()
+            descriptor_id, runs = self._node_functions()
             dec = decode_program(desc, _registry())
             root = dec.root
             body = root.body if hasattr(root, "body") else root.defn.body
             for k, n in enumerate(body.nodes):
-                fid = _spec_id(n.fn)
+                fid = descriptor_id(n.fn)
                 if n.form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n.n)
                     continue

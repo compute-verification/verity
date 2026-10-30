@@ -1,4 +1,4 @@
-"""The toy model served from its P2-encoded weights store under the remote bandwidth audit: the CPU reference of the
+"""The toy model served from its P2-encoded weights store under PoUB: the CPU reference of the
 serving loop, and the fixture a decode kernel's sketch is held to.
 
     serve.py [--steps 12] [--per-window 3] [--prompt 1]   # serve the toy, print its tokens and each window's verdict
@@ -100,7 +100,7 @@ def registration(store: S.Store, doc: dict, c_star: bytes, node: bytes = NODE) -
     blocks = blocks_of(store, c_star)
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.register(source, node, commitment, vk)
+    return p2.register(source, p2.site_log(node, p2.codec_of(vk.params).blocks), p2.STORE, commitment, vk)
 
 
 def _requant(v: np.ndarray, k: int) -> np.ndarray:
@@ -208,8 +208,9 @@ def serve(engine: Engine, store: p2.Store, *, prompt: int, windows: int, per_win
                           delta=1e-6, window_ns=per_window * step_ns, codec=reg.codec, receipt=reg.receipt,
                           layout=reg.layout, rows=reg.rows)
     entropy = entropy or Entropy(b"verity-pous/p2-serve/entropy/v0")
-    session = p2.Session(params, reg, coins.local(reg.digest, 0, windows, entropy), not_before_ns=0, clock=clock)
-    prover = p2.Prover(store, session.commitment, entropy=entropy)
+    session = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, windows, entropy), not_before_ns=0,
+                             clock=clock)
+    prover = p2.Prover(store, entropy=entropy)
     opener = (open_ or (lambda pr: pr.open))(prover)
     out, token, previous = Served(), prompt, reg.digest
     challenge, t, i, closed, passes = session.start(), 0, 0, 0, {}

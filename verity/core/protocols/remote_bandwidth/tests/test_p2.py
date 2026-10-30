@@ -1,4 +1,4 @@
-"""The remote bandwidth audit over PoUS's P2 store (`p2.py`): the registration from PoUS's setup of a 9-block C*
+"""PoUB over PoUS's P2 store (`p2.py`): the registration from PoUS's setup of a 9-block C*
 (`fixtures/p2-c-star.bin`, the prover's bytes), the unit sketch and its per-block partials, an honest session
 accepted and recorded, and each way an opening goes wrong rejected."""
 
@@ -12,6 +12,9 @@ from pathlib import Path
 
 import pytest
 
+from remote_bandwidth_fakes import Clock, Entropy
+from verity.core import site as S
+from verity.core.protocols import registration as log
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes import p2 as pous_p2
 from verity.core.protocols.pous.schemes.p2 import P2Params
@@ -23,26 +26,6 @@ SOURCE = b"the verifier's secret"
 NODE = b"p2-node-under-test"
 SCHEDULE = timing.honest(1000, 2, 300, gap_ns=10, down_ns=20, up_ns=30)
 A = 20 + 30 + 300 + 10
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
-class Entropy:
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 @pytest.fixture(scope="module")
@@ -67,8 +50,24 @@ def vk(fixture):
 
 @pytest.fixture(scope="module")
 def store(fixture, vk) -> p2.Store:
-    reg = p2.register(SOURCE, NODE, bytes.fromhex(fixture["commitment"]), vk)
+    reg = p2.register(SOURCE, p2.site_log(NODE, p2.codec_of(vk.params).blocks), p2.STORE,
+                      bytes.fromhex(fixture["commitment"]), vk)
     return p2.Store(reg, fixture["blocks"])
+
+
+def test_a_p2_store_drawn_from_the_registration_log_is_the_registration_of_its_node(fixture, vk, store) -> None:
+    """The node `register` reads from the log is the one whose memory leaf holds vk's blocks: its registration is
+    `_draw`'s of that node, byte for byte.  A leaf of other bytes, or no such leaf, draws nothing."""
+    def logged(store_bytes: int) -> log.View:
+        site = log.site(locs=(S.Loc("site", "site"), S.Loc(NODE.decode(), "host", "site"),
+                              S.Loc("c-star", "memory", NODE.decode(), tier="disk", bytes=store_bytes)))
+        return log.check(log.Auditor(), "remote", log.chain("remote", [site])).view()
+
+    reg, size = store.registration, store.registration.codec.blocks * p2.BLOCK_BYTES
+    assert p2.register(SOURCE, logged(size), "c-star", reg.commitment, vk) == reg
+    for view, name in ((logged(size + p2.BLOCK_BYTES), "c-star"), (logged(size), "elsewhere"), (logged(size), "site")):
+        with pytest.raises(ValueError):
+            p2.register(SOURCE, view, name, reg.commitment, vk)
 
 
 def params(reg: p2.Registration, **kw) -> audit.Params:
@@ -79,9 +78,10 @@ def params(reg: p2.Registration, **kw) -> audit.Params:
 
 def drive(store: p2.Store, p: audit.Params, run=None):
     clock = Clock()
-    s = p2.Session(p, store.registration, coins.local(store.registration.digest, 0, p.windows, Entropy(b"coins")),
-                   not_before_ns=0, clock=clock)
-    prover = p2.Prover(store, s.commitment, entropy=Entropy(b"receipt salts"))
+    reg = store.registration
+    s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins")), not_before_ns=0,
+                       clock=clock)
+    prover = p2.Prover(store, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(SCHEDULE.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in SCHEDULE.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest
@@ -135,7 +135,7 @@ def test_the_registration_is_pous_setups(fixture, vk, store) -> None:
     assert len({reg.digest, dataclasses.replace(reg, rows=64).digest, dataclasses.replace(reg, node=b"x").digest}) == 3
     other = setup.draw_salt(b"another secret", reg.commitment)
     with pytest.raises(ValueError, match="under the salt"):
-        p2.register(b"another secret", NODE, reg.commitment, vk)
+        p2.register(b"another secret", p2.site_log(NODE, p2.codec_of(vk.params).blocks), p2.STORE, reg.commitment, vk)
     assert other != reg.salt
     with pytest.raises(ValueError, match="not the registered C"):
         p2.Store(reg, fixture["blocks"][1:] + fixture["blocks"][:1])
@@ -233,20 +233,27 @@ def test_the_tail_past_the_last_unit_is_in_no_plan(store) -> None:
         receipts.Plan(((2, 1),), s.registration.blocks)
 
 
-def test_a_p2_store_takes_no_append_and_no_sloth_session(store) -> None:
+def test_a_p2_store_takes_no_append_no_tiles_and_no_sloth_session(store) -> None:
+    """One session type over either codec: over a P2 store its blocks are units, an append is refused, check 3's unit
+    (which decodes) has no draws to take, no tiles bind, and the registration and codec are P2's together."""
     reg = store.registration
-    s = p2.Session(params(reg), reg, coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0, clock=Clock())
+    s = audit.AuditRun(params(reg), reg, None, coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0,
+                       clock=Clock())
+    assert s.block_bytes == p2.UNIT_BYTES
     s.start()
+    with pytest.raises(audit.SessionError, match="P2 store's openings are checked on PoUS's vk"):
+        s.drawn(0)
     v = s.append(bytes(64), 1)
     assert isinstance(v, audit.Verdict) and v.failure == "append"
-    with pytest.raises(ValueError, match="p2.Session"):
-        audit.Session(params(reg), reg, None, coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
-    sloth = audit.register(SOURCE, NODE, 2, bytes(64), nonce=bytes(32))
+    with pytest.raises(ValueError, match="takes None"):
+        audit.AuditRun(params(reg), reg, audit.NoiseTiles(), coins.local(reg.digest, 0, 2, Entropy(b"c")),
+                       not_before_ns=0)
+    sloth = audit.register(SOURCE, audit.site_log(NODE, 2, bytes(64)), audit.STORE, nonce=bytes(32))
     with pytest.raises(ValueError, match="P2 Registration"):
-        p2.Session(params(reg), sloth, coins.local(sloth.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
-    with pytest.raises(ValueError, match="P2Codec"):
-        p2.Session(audit.Params(blocks=2, deadline_ns=A, windows=2), reg, coins.local(reg.digest, 0, 2, Entropy(b"c")),
-                   not_before_ns=0)
+        audit.AuditRun(params(reg), sloth, None, coins.local(sloth.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
+    with pytest.raises(ValueError, match="not the registration's"):
+        audit.AuditRun(audit.Params(blocks=2, deadline_ns=A, windows=2), reg, None,
+                       coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
     for kw in (dict(layout=receipts.STORE_ORDER), dict(receipt=receipts.BLOCK_SHA512, rows=0), dict(bind=True)):
         with pytest.raises(ValueError, match="P2 store's session"):
             params(reg, **kw)

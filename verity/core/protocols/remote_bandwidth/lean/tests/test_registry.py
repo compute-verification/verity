@@ -43,19 +43,34 @@ def node(draw) -> str:
     return draw(st.sampled_from(NODES)).hex()
 
 
-def register_op(draw) -> dict:
+def register_op(draw) -> tuple[dict, str]:
+    """A registration of the store a registration log registers, and its node; now and then of a store the log doesn't
+    register so (θ's value for it of other leaves, words, word width or node, a leaf not whole blocks, or a store the
+    log doesn't name), or with a field either side refuses."""
+    n, blocks = draw(st.sampled_from(NODES)), draw(st.sampled_from([1, 6]))
+    root = bytes.fromhex(expand(draw(st.binary(max_size=4)), 64))
+    good, item, store_bytes, store = audit.payload_item(M.STORE, n, blocks, root), None, None, M.STORE
+    if rare(draw, 6):
+        bad = draw(st.sampled_from(["leaves", "words", "word_bits", "domain", "bytes", "store"]))
+        if bad == "bytes":
+            store_bytes = blocks * codec.BLOCK_BYTES + 2
+        elif bad == "store":
+            store = "elsewhere"
+        else:
+            item = good | {"leaves": {"leaves": blocks + 1}, "words": {"words": 1024},
+                           "word_bits": {"word_bits": 32, "words": 1024},
+                           "domain": {"domain": audit.payload_item(M.STORE, b"node-b", 2, root)["domain"]}}[bad]
     c = draw(st.sampled_from([M.P512, codec.DEFAULT]))
     kind = draw(st.sampled_from(receipts.KINDS))
-    v = {"op": "register", "node": node(draw), "blocks": draw(st.sampled_from([1, 6])),
-         "payload_root": expand(draw(st.binary(max_size=4)), 64), "codec": M.codec_json(c), "receipt": kind,
-         "bind": False, "layout": receipts.LAYOUT, "rows": 16 if kind == receipts.SKETCH_SHA512 else 0,
+    v = {"op": "register", **M.store_log(n, blocks, root, item=item, store_bytes=store_bytes), "store": store,
+         "codec": M.codec_json(c), "receipt": kind, "bind": False, "layout": receipts.LAYOUT,
+         "rows": 16 if kind == receipts.SKETCH_SHA512 else 0,
          "nonce": expand(draw(st.binary(max_size=4)), audit.NONCE_BYTES)}
     if rare(draw):
-        k, bad = draw(st.sampled_from([("bind", True), ("nonce", "00" * 31), ("blocks", 0), ("layout", "fused/v0"),
-                                       ("receipt", "x"), ("rows", 32), ("codec", {"field": "p512", "rounds": 1,
-                                                                                  "masked": False})]))
+        k, bad = draw(st.sampled_from([("bind", True), ("nonce", "00" * 31), ("layout", "fused/v0"), ("receipt", "x"),
+                                       ("rows", 32), ("codec", {"field": "p512", "rounds": 1, "masked": False})]))
         v[k] = bad
-    return v
+    return v, n.hex()
 
 
 def event_op(draw, n: str) -> dict:
@@ -145,9 +160,8 @@ def registry_inputs(draw) -> dict:
         kind = draw(st.sampled_from(["fresh", "fresh", "fresh", "register", "session", "event", "close", "close",
                                      "live", "drawn"]))
         if kind in ("fresh", "register"):
-            r = register_op(draw)
+            r, n = register_op(draw)
             ops.append(r)
-            n = r["node"]
             if n not in live:
                 live[n] = (len(drawn), 0)
                 drawn.append(n)
@@ -179,8 +193,9 @@ def recorded(name: str, cut: int | None = None) -> dict:
     scenario's store was (`ra_cases.SOURCE`, a zero nonce), a second refused, the first closed, and a third drawn."""
     case, _ = M.recorded(name)
     reg = case["registration"]
-    register = {"op": "register", "nonce": ZERO} | {k: reg[k] for k in (
-        "node", "blocks", "payload_root", "codec", "receipt", "bind", "layout", "rows")}
+    r = M.registration_of(reg)
+    register = {"op": "register", "nonce": ZERO, "store": M.STORE, **M.store_log(r.node, r.blocks, r.payload_root)} | {
+        k: reg[k] for k in ("codec", "receipt", "bind", "layout", "rows")}
     session = {"op": "session", "registration": 0, "index": 0} | {k: case[k] for k in (
         "params", "coins", "append_coins", "not_before_ns")}
     events = [{"op": "event", "node": reg["node"], "session": 0, "event": e} for e in case["events"][:cut]]
