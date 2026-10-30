@@ -3,11 +3,11 @@
 predicate). What a recorded honest session meets is asserted; what none meets yet is asserted refused by name, so the
 change that closes it has to say so here. Two recorded sets, both fetched fixtures:
 
-* `rec-coins/16-16-8-n64` (a recorded inner statement and honest inner session, and level 3's `pub.bin`,
-  `registered.json` and outer session, proved again at the current leaf scheme), with level
-  3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
-  `verity/flock-circuit`; its outer session was proved before the OS masks (the level proved again with them, by
-  `r20261010-212517-4f68`, is accepted by today's verifier). The inner description is not
+* `rec-coins/16-16-8-n64` (a recorded inner statement and its honest inner session on the challenger's coin tree,
+  level 3's `pub.bin` and `registered.json` as staging recorded them, and an earlier recording's level-3 outer session),
+  with level 3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
+  `verity/flock-circuit`; the outer session was proved before the OS masks, over the level of an earlier inner session of
+  the same population, so only its draw is this level's. The inner description is not
   registered (no staging runs `inner_registered register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags`
   (`TagsOkZHJ`) takes them, and their shared-row public file passes `ScopeZR`, `Typable`'s statement check; the
   public-output one-table checks, `TagsOk` and `ScopeZ`, refuse them.
@@ -67,9 +67,9 @@ PROVED = "verity/flock-circuit@cec3e347"
 #: `CoinTree.checkHello`'s refusal of a session whose Hello is not the verifier's own
 S2_R7 = "S2/R7: the session parameters are not the verifier's"
 STALE_FIXTURE = "the fixture is re-proved with the OS-masks prover; this skip goes with that re-proof"
-#: the recorded level's circuit (`v/L3/circuit.txt`), which its outer session proves (`test_lean_rec_coins`)
-CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479cf7a525e331ed7152ab5e451bb27f39905f695af6295408db"
-                  "459a42e2dda3e07463")
+#: level 3's circuit (`v/L3/circuit.txt`) at the inner statement's shape (`test_lean_rec_coins`)
+CIRCUIT_SHA512 = ("27aded67e57a39ba5ccc3dbfff854d0de705cd2fd858261e281749a0fe5805c48fc9bdddb013219e4deed491c1a717006bf70bc3cce6a9e7d9"
+                  "b5e13cdb010ccd")
 
 #: the gate run's files these tests read, a file `f` stored as `f.xz` when large, and `prover.sha256`: their lines of
 #: the art's own listing (`out/data.sha256`)
