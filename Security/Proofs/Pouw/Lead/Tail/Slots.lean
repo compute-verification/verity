@@ -11,7 +11,7 @@ block's slots (step, coin tile) hold two equal tiles on at most a `λ_b^x / x!` 
 A slot's own coordinates are 64 fresh bits, one a row of its coin tile (`setBits`): digit 0 of the step-0 bits `a₁` at
 step 0, the tag bits `b` of its step at a later step. With whole coin tiles the coins are the rest (`b` at step 0,
 `a₁`'s digits 1 to 3, `G`, the coin lanes), drawn first, and a product over the slots in slot order (step, then coin
-tile). `count_tail_fiber` then needs:
+tile; `bitsEquiv`). `count_tail_equiv` then needs:
 
 * **Reads**: a slot's tiles are prefix sums over steps up to its own, of its own coin tile's rows: the bits of slots
   at or before it.
@@ -126,6 +126,171 @@ theorem slots_fiber (T m n K : ℕ) (κ : Fin (lead T m n K).m → Fin (lead T m
       (pairs (lead T m n K) : ℝ) / 2 ^ 16 * Fintype.card (Fin 64 → Fin 2) :=
   slots_fiber_of _ (lead_m T m n K) (lead_n T m n K) κ ω cb t ct
 
+/-- Row `64 ct + k`, with whole coin tiles. -/
+def rowIdx (L : Pouw.Lead.Layout) (hmt : L.m = 64 * L.tiles) (ct : Fin L.tiles) (k : Fin 64) : Fin L.m :=
+  ⟨64 * ct + k, by have := ct.isLt; have := k.isLt; omega⟩
+
+/-- Row `i`'s coin tile, with whole coin tiles. -/
+def rowTile (L : Pouw.Lead.Layout) (hmt : L.m = 64 * L.tiles) (i : Fin L.m) : Fin L.tiles :=
+  ⟨(i : ℕ) / 64, by have := i.isLt; omega⟩
+
+theorem rowIdx_rowTile (L : Pouw.Lead.Layout) (hmt : L.m = 64 * L.tiles) (i : Fin L.m) :
+    rowIdx L hmt (rowTile L hmt i) ⟨(i : ℕ) % 64, Nat.mod_lt _ (by norm_num)⟩ = i :=
+  Fin.ext (by simp only [rowIdx, rowTile]; omega)
+
+/-- The slots in slot order: step, then coin tile. -/
+noncomputable def slotEquiv (L : Pouw.Lead.Layout) : Fin L.S × Fin L.tiles ≃ Fin (L.S * L.tiles) :=
+  Equiv.ofBijective (fun s => ⟨s.1 * L.tiles + s.2, mul_add_lt s.1.isLt s.2.isLt⟩)
+    ((Fintype.bijective_iff_injective_and_card _).2 ⟨fun s s' h => by
+      obtain ⟨e1, e2⟩ := mul_add_inj s.2.isLt s'.2.isLt (congrArg Fin.val h)
+      exact Prod.ext (Fin.ext e1) (Fin.ext e2), by simp only [Fintype.card_prod, Fintype.card_fin]⟩)
+
+/-- A slot's 64 fresh bits: `a₁`'s digit 0 at step 0, the tag bits of its step at a later step. -/
+def slotBits (L : Pouw.Lead.Layout) (hmt : L.m = 64 * L.tiles) (ω : Coins L) (s : Fin L.S × Fin L.tiles)
+    (k : Fin 64) : Fin 2 :=
+  if (s.1 : ℕ) = 0 then ω.2.1 (rowIdx L hmt s.2 k) 0 else ω.1 (rowIdx L hmt s.2 k) s.1
+
+theorem slotBits_row (L : Pouw.Lead.Layout) (hmt : L.m = 64 * L.tiles) (ω : Coins L) (τ : Fin L.S) (i : Fin L.m) :
+    slotBits L hmt ω (τ, rowTile L hmt i) ⟨(i : ℕ) % 64, Nat.mod_lt _ (by norm_num)⟩ =
+      if (τ : ℕ) = 0 then ω.2.1 i 0 else ω.1 i τ := by
+  simp only [slotBits, rowIdx_rowTile]
+
+/-- **With whole coin tiles, the coins are the rest and each slot's fresh bits**, the slots in slot order. -/
+noncomputable def bitsEquiv (L : Pouw.Lead.Layout) (hS : 0 < L.S) (hmt : L.m = 64 * L.tiles) :
+    Coins L ≃ ((Fin L.m → Fin 2) × (Fin L.m → Fin 3 → Fin 2) × (Fin 4 → Fin L.n → Fin 7) ×
+      (Fin L.S → Fin L.tiles → Fin 3 → Fin L.n → Fin (2 ^ L.e))) × (Fin (L.S * L.tiles) → Fin 64 → Fin 2) where
+  toFun ω := ((fun i => ω.1 i ⟨0, hS⟩, fun i k => ω.2.1 i k.succ, ω.2.2.1, ω.2.2.2),
+    fun s => slotBits L hmt ω ((slotEquiv L).symm s))
+  invFun x := (fun i τ => if (τ : ℕ) = 0 then x.1.1 i
+      else x.2 (slotEquiv L (τ, rowTile L hmt i)) ⟨(i : ℕ) % 64, Nat.mod_lt _ (by norm_num)⟩,
+    fun i q => if h : (q : ℕ) = 0 then
+        x.2 (slotEquiv L (⟨0, hS⟩, rowTile L hmt i)) ⟨(i : ℕ) % 64, Nat.mod_lt _ (by norm_num)⟩
+      else x.1.2.1 i ⟨(q : ℕ) - 1, by omega⟩,
+    x.1.2.2.1, x.1.2.2.2)
+  left_inv ω := by
+    refine Prod.ext (funext fun i => funext fun τ => ?_) (Prod.ext (funext fun i => funext fun q => ?_) rfl)
+    · simp only [Equiv.symm_apply_apply, slotBits_row]
+      split_ifs with h0
+      · exact congrArg (ω.1 i) (Fin.ext h0.symm)
+      · rfl
+    · simp only [Equiv.symm_apply_apply, slotBits_row]
+      split_ifs with h0
+      · exact congrArg (ω.2.1 i) (Fin.ext h0.symm)
+      · exact congrArg (ω.2.1 i) (Fin.ext (by simp only [Fin.val_succ]; omega))
+  right_inv x := by
+    refine Prod.ext (Prod.ext (funext fun i => ?_) (Prod.ext (funext fun i => funext fun k => ?_) rfl))
+      (funext fun s => funext fun k => ?_)
+    · simp only [↓reduceIte]
+    · simp only [Fin.val_succ, Nat.add_one_ne_zero, ↓reduceDIte, Nat.add_sub_cancel]
+    · obtain ⟨⟨t, ct⟩, rfl⟩ := (slotEquiv L).surjective s
+      have h1 : rowTile L hmt (rowIdx L hmt ct k) = ct := Fin.ext (by simp only [rowIdx, rowTile]; omega)
+      have h2 : (⟨((rowIdx L hmt ct k : Fin L.m) : ℕ) % 64, Nat.mod_lt _ (by norm_num)⟩ : Fin 64) = k :=
+        Fin.ext (by simp only [rowIdx]; omega)
+      simp only [Equiv.symm_apply_apply, slotBits]
+      by_cases h0 : (t : ℕ) = 0
+      · have ht : (⟨0, hS⟩ : Fin L.S) = t := Fin.ext h0.symm
+        simp only [h0, ↓reduceIte, Fin.val_zero, ↓reduceDIte]
+        rw [h1, h2, ht]
+      · simp only [h0, ↓reduceIte]
+        rw [h1, h2]
+
+/-- Moving one slot's coordinate is `setBits`. -/
+theorem bitsEquiv_update (L : Pouw.Lead.Layout) (hS : 0 < L.S) (hmt : L.m = 64 * L.tiles) (ω : Coins L)
+    (s : Fin (L.S * L.tiles)) (v : Fin 64 → Fin 2) :
+    (bitsEquiv L hS hmt).symm ((bitsEquiv L hS hmt ω).1, Function.update (bitsEquiv L hS hmt ω).2 s v) =
+      setBits L ω ((slotEquiv L).symm s).1 ((slotEquiv L).symm s).2 v := by
+  obtain ⟨⟨t, ct⟩, rfl⟩ := (slotEquiv L).surjective s
+  simp only [Equiv.symm_apply_apply]
+  refine Prod.ext (funext fun i => funext fun τ => ?_) (Prod.ext (funext fun i => funext fun q => ?_) rfl)
+  · simp only [bitsEquiv, Equiv.coe_fn_mk, Equiv.coe_fn_symm_mk, setBits]
+    by_cases h0 : (τ : ℕ) = 0
+    · rw [ite_eq_left h0, ite_eq_right (by rintro ⟨h1, rfl, -⟩; exact h1 h0)]
+      exact congrArg (ω.1 i) (Fin.ext h0.symm)
+    · rw [ite_eq_right h0]
+      by_cases hk : slotEquiv L (τ, rowTile L hmt i) = slotEquiv L (t, ct)
+      · have he := (slotEquiv L).injective hk
+        simp only [Prod.mk.injEq] at he
+        obtain ⟨ht, hct⟩ := he
+        rw [hk, Function.update_self, ite_eq_left (show (t : ℕ) ≠ 0 ∧ τ = t ∧ (i : ℕ) / 64 = ct from
+          ⟨by rw [← ht]; exact h0, ht, by rw [← hct]; rfl⟩)]
+      · rw [Function.update_of_ne hk, ite_eq_right ?_]
+        · simp only [Equiv.symm_apply_apply, slotBits_row, h0, ↓reduceIte]
+        · rintro ⟨-, rfl, h3⟩
+          exact hk (congrArg _ (Prod.ext rfl (Fin.ext h3)))
+  · simp only [bitsEquiv, Equiv.coe_fn_mk, Equiv.coe_fn_symm_mk, setBits]
+    by_cases h0 : (q : ℕ) = 0
+    · simp only [h0, ↓reduceDIte]
+      by_cases hk : slotEquiv L (⟨0, hS⟩, rowTile L hmt i) = slotEquiv L (t, ct)
+      · have he := (slotEquiv L).injective hk
+        simp only [Prod.mk.injEq] at he
+        obtain ⟨ht, hct⟩ := he
+        rw [hk, Function.update_self, ite_eq_left ⟨by rw [← ht], trivial, by rw [← hct]; rfl⟩]
+      · rw [Function.update_of_ne hk, ite_eq_right ?_]
+        · simp only [Equiv.symm_apply_apply, slotBits_row, ↓reduceIte]
+          exact congrArg (ω.2.1 i) (Fin.ext h0.symm)
+        · rintro ⟨h1, -, h3⟩
+          exact hk (congrArg _ (Prod.ext (Fin.ext h1.symm) (Fin.ext h3)))
+    · simp only [h0, ↓reduceDIte, false_and, and_false, ↓reduceIte]
+      exact congrArg (ω.2.1 i) (Fin.ext (by simp only [Fin.val_succ]; omega))
+
+open Classical Finset in
+/-- `slots_tail` on any layout of whole MMA tiles, whole 64-row coin tiles and at least one step. -/
+theorem slots_tail_of (L : Pouw.Lead.Layout) (hS : 0 < L.S) (htile : L.tile = 64) (hmt : L.m = 64 * L.tiles)
+    (hLm : L.m = 16 * L.rowBlocks) (hLn : L.n = 8 * L.colBlocks) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
+    (cb : Fin L.colBlocks) (x : ℕ) :
+    Pouw.pr (fun ω : Coins L => x ≤ (hitSlots L κ ω cb).card) ≤ lamB L ^ x / x.factorial := by
+  let e := bitsEquiv L hS hmt
+  let p : Fin (L.S * L.tiles) → ℝ := fun _ => (pairs L : ℝ) / 2 ^ 16
+  have hcount : ∀ ω, (hitSlots L κ ω cb).card =
+      (univ.filter fun s => withinAt L κ ω (((slotEquiv L).symm s).1, ((slotEquiv L).symm s).2, cb)).card :=
+    fun ω => Finset.card_equiv (slotEquiv L) fun s => by
+      simp only [hitSlots, Finset.mem_filter, Finset.mem_univ, true_and, Equiv.symm_apply_apply]
+  have htail := count_tail_equiv e
+    (fun s ω => withinAt L κ ω (((slotEquiv L).symm s).1, ((slotEquiv L).symm s).2, cb)) p
+    (fun i => by positivity) (fun s ω ω' hr hl => ?_) (fun s ω => ?_) x
+  · have hsum : ∑ i, p i = lamB L := by
+      simp only [p, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, lamB]
+      push_cast
+      ring
+    rw [← hsum]
+    exact le_of_eq_of_le (pr_congr fun ω => by rw [hcount]) htail
+  · obtain ⟨⟨t, ct⟩, rfl⟩ := (slotEquiv L).surjective s
+    simp only [Equiv.symm_apply_apply]
+    have hr' : ((fun i => ω.1 i ⟨0, hS⟩), (fun i (k : Fin 3) => ω.2.1 i k.succ), ω.2.2.1, ω.2.2.2) =
+        ((fun i => ω'.1 i ⟨0, hS⟩), (fun i (k : Fin 3) => ω'.2.1 i k.succ), ω'.2.2.1, ω'.2.2.2) := hr
+    simp only [Prod.mk.injEq] at hr'
+    obtain ⟨-, ha, hg, hs⟩ := hr'
+    have hbit : ∀ (τ : Fin L.S) (i : Fin L.m), τ ≤ t → (i : ℕ) / 64 = ct →
+        (if (τ : ℕ) = 0 then ω.2.1 i 0 else ω.1 i τ) = (if (τ : ℕ) = 0 then ω'.2.1 i 0 else ω'.1 i τ) :=
+      fun τ i hτ hi => by
+        have hle : slotEquiv L (τ, rowTile L hmt i) ≤ slotEquiv L (t, ct) := by
+          change (τ : ℕ) * L.tiles + (i : ℕ) / 64 ≤ (t : ℕ) * L.tiles + ct
+          rw [hi]
+          exact Nat.add_le_add_right (Nat.mul_le_mul_right _ hτ) _
+        have := congrFun (hl _ hle) ⟨(i : ℕ) % 64, Nat.mod_lt _ (by norm_num)⟩
+        simp only [e, bitsEquiv, Equiv.coe_fn_mk, Equiv.symm_apply_apply, slotBits_row] at this
+        exact this
+    have htl : ∀ rb, rb / 4 = (ct : ℕ) → tileOf L κ ω rb cb t = tileOf L κ ω' rb cb t := fun rb hrb =>
+      tileOf_congr L κ ω ω' rb cb t fun i' τ j hi _ hτ => by
+        have hi64 : (i' : ℕ) / 64 = ct := by omega
+        have hb := hbit τ i' hτ hi64
+        refine coinTerm_congr L htile ω ω' i' τ j (fun h0 => ?_) (fun h0 q => ?_) (fun _ q => by rw [hg])
+          fun k ℓ _ => by rw [hs]
+        · simpa only [h0, ↓reduceIte] using hb
+        · by_cases hq : (q : ℕ) = 0
+          · have hq0 : q = 0 := Fin.ext hq
+            subst hq0
+            simpa only [h0, ↓reduceIte] using hb
+          · have := congrFun (congrFun ha i') ⟨(q : ℕ) - 1, by omega⟩
+            have hq' : (⟨(q : ℕ) - 1, by omega⟩ : Fin 3).succ = q := Fin.ext (by simp only [Fin.val_succ]; omega)
+            rwa [hq'] at this
+    unfold withinAt
+    refine exists_congr fun rb => and_congr_right fun _ => exists_congr fun rb' => and_congr_right fun _ =>
+      and_congr_right fun h1 => and_congr_right fun h2 => and_congr_right fun _ => ?_
+    rw [htl rb h1, htl rb' h2]
+  · simp only [e, bitsEquiv_update]
+    exact slots_fiber_of L hLm hLn κ ω cb _ _
+
 /-- **One column block's slots with a repeat inside a block are rarely many**: `x` or more of them on at most a
 `λ_b^x / x!` share of the coins, when the coin tiles are whole or there is one row block. -/
 theorem slots_tail (T m n K : ℕ) (hm : 64 ∣ m ∨ m ≤ 16)
@@ -133,6 +298,26 @@ theorem slots_tail (T m n K : ℕ) (hm : 64 ∣ m ∨ m ≤ 16)
     (cb : Fin (lead T m n K).colBlocks) (x : ℕ) :
     Pouw.pr (fun ω : Coins (lead T m n K) => x ≤ (hitSlots _ κ ω cb).card) ≤
       lamB (lead T m n K) ^ x / x.factorial := by
-  sorry
+  classical
+  rcases hm with hm | hm
+  · have hmt : (lead T m n K).m = 64 * (lead T m n K).tiles := by
+      obtain ⟨k, rfl⟩ := hm
+      simp only [lead, padRows, Layout.tiles]
+      omega
+    exact slots_tail_of _ (by simp only [lead, stepsFor]; omega) rfl hmt (lead_m T m n K) (lead_n T m n K) κ cb x
+  · have hrb : (lead T m n K).rowBlocks ≤ 1 := by simp only [Layout.rowBlocks, lead, padRows]; omega
+    have hempty : ∀ ω, hitSlots _ κ ω cb = ∅ := fun ω => by
+      unfold hitSlots
+      rw [Finset.filter_eq_empty_iff]
+      rintro s - ⟨rb, hrb1, rb', hrb2, -, -, hne, -⟩
+      omega
+    have hp : pairs (lead T m n K) = 0 := by
+      have : rho (lead T m n K) ≤ 1 := (min_le_right _ _).trans hrb
+      unfold pairs
+      rw [Nat.sub_eq_zero_of_le this, mul_zero, Nat.zero_div]
+    rcases x with _ | x
+    · simpa using Pouw.pr_le_one _
+    · rw [Pouw.pr_eq_zero fun ω h => by rw [hempty] at h; simp at h]
+      simp [lamB, hp]
 
 end Pouw.SecurityProofs.Lead.Tail
