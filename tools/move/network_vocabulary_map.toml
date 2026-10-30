@@ -37,8 +37,7 @@ files = ["benchmarks/network_traces/n2_zk.py", "benchmarks/network_traces/n2_tie
 "firewall(M, sg)" = "zk_server_env(M, sg)"
 
 [[words_in]]
-files = ["benchmarks/network_traces/tests/test_n2_zk.py", "benchmarks/network_traces/tests/test_n2_tie_zk.py",
-         "benchmarks/network_traces/tests/test_n2_advised_zk.py"]
+files = ["benchmarks/network_traces/tests/test_n2_zk.py", "benchmarks/network_traces/tests/test_n2_tie_zk.py"]
 [words_in.words]
 "test_jobs_is_one_firewalled_session_at_a_time" = "test_jobs_is_one_zk_server_session_at_a_time"
 
