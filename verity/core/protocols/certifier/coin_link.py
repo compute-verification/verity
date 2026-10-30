@@ -47,7 +47,7 @@ from dataclasses import asdict, dataclass, field
 from functools import cached_property
 from typing import Any
 
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, row_count
+from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, BlockGrid, row_count
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.core.protocols.sampled_proofs.remote import HEADER, MAX_HEAD
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
@@ -219,7 +219,7 @@ class _Connection:
     tasks: list[asyncio.Task] = field(default_factory=list)
 
 
-def _status(record: Record) -> str | None:
+def _status(record: BlockGrid) -> str | None:
     return None if record.status.complete else record.status.reason.value
 
 
@@ -238,7 +238,7 @@ class CoinLink:
                  connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
                  slack: float = 0.025, buckets: int | None = None, backlog: int = BACKLOG,
-                 publish: Callable[[Record, GridParams], None] | None = None) -> None:
+                 publish: Callable[[BlockGrid, GridParams], None] | None = None) -> None:
         self.params, self.connect = params, connect
         self.origin, self.clock, self.sleep, self.slack, self.buckets = origin, clock, sleep, slack, buckets
         self.backlog, self.publish = backlog, publish

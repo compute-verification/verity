@@ -110,7 +110,7 @@ inductive Action where
   /-- Write to stream `s`'s server connection; with `drain`, the world answers `delivered` once it is written. -/
   | writeUpstream (s : Nat) (bytes : ByteArray) (drain : Bool)
   /-- A window's record closed, with its grid's parameters. -/
-  | publish (record : Record) (params : Params)
+  | publish (record : BlockGrid) (params : Params)
   /-- Open the salt connection to the server; the world answers `saltConnected` or `saltRefused`. -/
   | connectSalt
   /-- Write a salt frame on the salt connection; the world answers `saltDelivered` once it is written. -/
