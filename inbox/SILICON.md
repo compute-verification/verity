@@ -152,3 +152,14 @@ Together (synthesized netlists, not simulated):
 - Every area figure is a yosys + ABC netlist on a generic library, not simulated, against SI-ALG's synthesized baselines. The premise margins are estimates.
 - "h ≈ 0.28" is the card's operand binding plus the seal. It is not a measured kernel.
 - SI-NOISE's coin ratio used the stale 13.2 MB decode figure; the lead's real decode stream is 144.79 MB a token, so the saving is larger.
+
+**08:00Z, SI-RED (note 20261030T0750Z-report-silicon-red; run r20261030-074057-61d1). All three proposals break as written; each has a checked fix that costs about nothing:**
+1. **Sparse or int4 issue at the credited shape** (m16n8k32): a 2:4-sparse s8 or an int4 issue advances the transcript at half the cycles, T1 = 50%. It passes `closure_ref`'s verify and SI-FOLD's trigger; SI-FOLD's trigger refuses int4. **Fix:** advance and tag on the whole instruction descriptor (format, sparsity and shape), not on shape alone.
+2. **Copy across tiles at zero data:** if a call's tiles share coins, one chain seals every zero-data tile, T1 = 1 − 1/N. **Fix:** start each tile's fold from its own state, H(coins ‖ tile index).
+3. **SI-NOISE's sketch falls to double duty:** a hidden GEMM scaled so every accumulator ≡ 0 mod 2^b (int7×int8 at b = 1, int4×int4 at b = 8) makes the sketch split into hidden plus claimed. Over-credit is 31.6–48.4% of stock. **Fix:** absorb acc + n·φ with φ fixed by no rotation (φ = 2³¹ − 1; 0x01010101 fails).
+- With all three fixes, the harness finds no over-credit. Still open:
+  - the descriptor's field list must be measured on sm_120 and the H200;
+  - φ is checked only against exact separation;
+  - the seal's and the PRF's premises are unattacked.
+- BRW: brw32 over ℤ/2³² fails from G 3. brw31 (F_p) and the hardware BRWs hold to G 31, except at zero data without per-tile starts.
+- **Correction to §prelim:** the design needs these three rules to hold. §prelim's "T1 = 0" was the proposals' own claim, before attack.
