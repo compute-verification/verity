@@ -119,7 +119,7 @@ import time
 from datetime import UTC, datetime, timezone
 from pathlib import Path
 
-from . import checkview, clone
+from . import clone
 from . import compare as C
 from . import record, remote, result
 from . import runs as R
@@ -1511,6 +1511,8 @@ def _fmt(s: dict) -> str:
 
 
 def cmd_status(argv: list[str]) -> int:
+    from . import checkview
+
     ap = argparse.ArgumentParser(prog="research status")
     ap.add_argument("ref", nargs="?", help="just this run, its records fetched first while it is remote and not finished (a full run "
                                            "id another VM launched is found on its machine)")
@@ -1601,6 +1603,8 @@ def cmd_status(argv: list[str]) -> int:
 def _check_view(root: Path, run_dir: Path, basis_ref: str | None) -> list[str]:
     """`checkview.view` of a check run: against ``basis_ref`` (a finished check, fetched when it is remote), else the newest
     other finished check on the run's machine, else none; its first line names the basis."""
+    from . import checkview
+
     basis, why = None, ""
     if basis_ref:
         try:
