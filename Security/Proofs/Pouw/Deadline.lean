@@ -15,13 +15,42 @@ deadline.
 
 The sm_120 instances are stated at W1: each is `PearlCSampledByDeadline` at `CM := W1.w1Priced dv salt`, with its
 sampled γ from the old reduction at that cost model (`Proofs.Pouw.PearlC.TTOutW1`).
+
+The honest clock is stated once over `Adversaries`; at each game's `CostModel.adversaries` it unfolds, by `Iff.rfl`, to
+that game's own reading (`CostModel.honestClock_iff`, `PearlC.CostModel.honestClock_iff`).
 -/
+
+namespace Pouw
+
+variable {Q R S : Type}
+
+/-- The honest clock at the integer game's adversaries of `CM` on `U`, unfolded. -/
+theorem CostModel.honestClock_iff {CM : CostModel Q R S} {U : Workload} {A : Adversary CM} {run : TimedRun Q R S}
+    {td : ℝ} :
+    Assumptions.HonestClock (CM.adversaries U) A run td ↔
+      ∃ A' : Adversary CM, A'.pre = A.pre ∧ ∀ (H : Q → R) (s : S),
+        (run.tr H s ≤ td → A'.transcript U H s = A.transcript U H s) ∧
+        CM.cost A'.online H U A'.act (A'.pre.eval H) s ≤ run.spentIn H s run.ts td ∧
+        CM.calls A'.online H U A'.act (A'.pre.eval H) s ≤ CM.calls A.online H U A.act (A.pre.eval H) s :=
+  Iff.rfl
+
+/-- The honest clock at Pearl-C's adversaries of `CM` on `U`, unfolded. -/
+theorem PearlC.CostModel.honestClock_iff {CM : PearlC.CostModel Q R S} {U : PearlC.Workload} {A : PearlC.Adversary CM}
+    {run : TimedRun Q R S} {td : ℝ} :
+    Assumptions.HonestClock (CM.adversaries U) A run td ↔
+      ∃ A' : PearlC.Adversary CM, A'.pre = A.pre ∧ ∀ (H : Q → R) (s : S),
+        (run.tr H s ≤ td → A'.transcript U H s = A.transcript U H s) ∧
+        CM.cost A'.online H U A'.act (A'.pre.eval H) s ≤ run.spentIn H s run.ts td ∧
+        CM.calls A'.online H U A'.act (A'.pre.eval H) s ≤ CM.calls A.online H U A.act (A.pre.eval H) s :=
+  Iff.rfl
+
+end Pouw
 
 namespace Pouw.SecurityProofs
 
 theorem WorkBetweenSaltAndDeadline : Pouw.Guarantees.WorkBetweenSaltAndDeadline := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU A run td hclock T hT q hq hB t εs hεs
-  obtain ⟨A', hpre, hA'⟩ := hclock
+  obtain ⟨A', hpre, hA'⟩ := CostModel.honestClock_iff.1 hclock
   have hb : A'.Bounded U T q := by
     intro H s
     refine ⟨(hA' H s).2.1.trans (hB H s).1, ?_⟩
@@ -45,7 +74,7 @@ theorem SpareCapacityAtDeadline : Pouw.Guarantees.SpareCapacityAtDeadline := by
 
 theorem PearlCSampledByDeadline : Pouw.Guarantees.PearlCSampledByDeadline := by
   intro Q R S _ _ _ _ CM P TR D γ η hG U hU A run td hclock T hT q hq hB w κ hκ hw t εs hεs
-  obtain ⟨A', hpre, hA'⟩ := hclock
+  obtain ⟨A', hpre, hA'⟩ := PearlC.CostModel.honestClock_iff.1 hclock
   have hb : A'.Bounded U T q := by
     intro H s
     refine ⟨(hA' H s).2.1.trans (hB H s).1, ?_⟩
