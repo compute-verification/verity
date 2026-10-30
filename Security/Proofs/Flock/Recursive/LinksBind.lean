@@ -104,7 +104,8 @@ domain are one, or SHA-512 collides: the two commit strings' tree leaves differ 
 `Registered.opensLeaf_collision`), or the leaves are one and the digests or the salts differ (the `hm96` leaf's binding,
 `Hm96.Default512.leaf_binding`), or the digests are one and the rows' `sha512/row/v1` messages differ. -/
 theorem rowOpens_binding {dom T : ByteArray} {N n : ℕ} {row row' : List UInt8} (h : RowOpens dom T N n row)
-    (h' : RowOpens dom T N n row') : row = row' ∨ Sha512.Collision := by
+    (h' : RowOpens dom T N n row') :
+    row = row' ∨ (∃ u v : ByteArray, u ≠ v ∧ Sha512.hash u = Sha512.hash v) := by
   obtain ⟨salt, path, ho⟩ := h
   obtain ⟨salt', path', ho'⟩ := h'
   by_cases hrow : row = row'
@@ -279,10 +280,10 @@ link part's program registers a domain, are one, or SHA-512 collides. -/
 theorem linksHold_rows {x : Msg} {r : XR} (hr : readX x = some r) {T : ByteArray} {N : ℕ}
     (hl : r.w.links = some (T, N)) {s N' : ℕ} {c : Circuit} {dom : ByteArray} (hc : linkCircuit r = some (s, N', c))
     (hd : tableDomain c N = some dom) {w w' : Claims.Flock.Wit} {rs rs' : List (List UInt8)} (h : LinksHold x w rs)
-    (h' : LinksHold x w' rs') : rs = rs' ∨ Sha512.Collision := by
+    (h' : LinksHold x w' rs') : rs = rs' ∨ (∃ u v : ByteArray, u ≠ v ∧ Sha512.hash u = Sha512.hash v) := by
   obtain ⟨hn, ho, -⟩ := h r hr T N hl
   obtain ⟨hn', ho', -⟩ := h' r hr T N hl
-  by_cases hc' : Sha512.Collision
+  by_cases hc' : (∃ u v : ByteArray, u ≠ v ∧ Sha512.hash u = Sha512.hash v)
   · exact .inr hc'
   refine .inl (List.ext_getElem (hn.trans hn'.symm) fun n h1 h2 => ?_)
   rcases rowOpens_binding (ho s N' c dom hc hd n h1) (ho' s N' c dom hc hd n h2) with he | he
