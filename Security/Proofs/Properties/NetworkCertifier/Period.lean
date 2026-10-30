@@ -51,9 +51,7 @@ theorem answered_ok {what : String} {reg : Registration} {a : Core.Answer} {v : 
       cases h
       refine ⟨?_, ?_, hv, prof, hp, hpr, hi⟩
       · simpa [bne_iff_ne] using d1
-      · first
-          | (cases hb : (a.digest == some reg.digest) <;> simp_all [bne])
-          | simpa [bne] using d2
+      · cases hb : (a.digest == some reg.digest) <;> simp_all [bne]
     · cases h
   · cases h
   · cases h
