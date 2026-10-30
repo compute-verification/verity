@@ -2,8 +2,12 @@
 certifier-serve run's records, clock certificates and the client's kept copies (`n2_zk.virtual`, fresh keys, each
 window's declared sync signed), refuses the window of a record whose signature is changed, every window from a clock
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
+each record's verdict is the Lean audit's, which refuses the changed one beside a reference that accepts it, each
+kept certificate's the Lean check's, which refuses the changed one's window beside a reference that keeps it, and each
+window's sync the Lean's read of the clock openings, which leaves no window one beside a reference that signs a changed
+clock certificate;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
-several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
+several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose incorrect
 window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
 Lean's does; leak counts the scan's widths and terms on a warden run's files, and refuses a sampled draw and a warden
 the scan's class doesn't serve; the job's copy of the
@@ -35,6 +39,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+from verity.core.protocols.certifier import audit, lean_audit
 
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
@@ -101,6 +107,10 @@ def test_certs_accepts_the_kept_files(honest):
     got = cr.certs(honest, honest / "client")
     assert got["verdict"] == "accepted", got.get("why")
     assert got["certified_windows"] == got["windows"] == got["clocks_signed"]
+    assert got["window_buckets"] == json.loads((honest / "calibration.json").read_text())["grid"]["window_buckets"]
+    assert all(r["by"] == "lean" and r["reference"] is True for r in got["rows"])
+    assert got["client_check"]["by"] == "lean" and not got["client_check"]["refused"]
+    assert got["clocks_by"] == "lean" and got["clocks_refused"] == 0
     assert got["client_check"]["records_are_the_clients"] and got["client_check"]["clocks_are_the_clients"]
     assert got["signed_are_declared"] and not got["key"]["deployed"]
     assert cr.certs(honest, honest / "client", deployed=True)["verdict"] == "refused"
@@ -110,14 +120,77 @@ def test_certs_refuses_a_changed_signature(honest, tmp_path):
     _corrupt(honest, tmp_path / "rec", "certified.jsonl", 0)
     got = cr.certs(tmp_path / "rec", tmp_path / "rec" / "client")
     assert got["verdict"] == "refused" and got["certified_windows"] == got["windows"] - 1
+    assert [(r["by"], r["reference"]) for r in got["rows"] if not r["certified"]] == [("lean", False)]
     assert not got["client_check"]["records_are_the_clients"]
     _corrupt(honest, tmp_path / "clk", "clocks.jsonl", 0)
     got = cr.certs(tmp_path / "clk", tmp_path / "clk" / "client")
     assert got["verdict"] == "refused" and got["clocks_signed"] == 0 and got["certified_windows"] == 0
+    assert got["clocks_refused"] == 1
     _corrupt(honest, tmp_path / "kept", "client/certificates.jsonl", 0)
     got = cr.certs(tmp_path / "kept", tmp_path / "kept" / "client")
     assert got["verdict"] == "refused" and got["certified_windows"] == got["windows"]
     assert "its signature doesn't verify" in got["client_check"]["refused"][0]
+
+
+class _Accepting(audit.Audit):
+    """A reference audit that accepts every link-window it is asked about."""
+
+    def check_link(self, link, records, frames, syncs, *args, **kwargs):
+        return [audit.Verdict(link, w, None) for w in range(len(syncs))]
+
+    def check_ingress_link(self, link, records, windows, *args, **kwargs):
+        return [audit.Verdict(link, w, None) for w in range(windows)]
+
+
+def test_a_certified_record_is_the_lean_audits_and_a_reference_that_accepts_it_doesnt_certify_it(honest, tmp_path,
+                                                                                                 monkeypatch):
+    """The certs step's verdict on a record is the Lean's (`NetworkCheck.Records`' ``verdicts-no-grid``): beside a
+    reference that accepts everything, the record whose signature is changed is still refused, its row naming the
+    reference's accept, and every other window is certified."""
+    monkeypatch.setattr(n2.cs, "Audit", lambda: lean_audit.Audit(python=_Accepting()))
+    _corrupt(honest, tmp_path / "rec", "certified.jsonl", 0)
+    got = cr.certs(tmp_path / "rec", tmp_path / "rec" / "client")
+    assert [(r["by"], r["reference"]) for r in got["rows"] if not r["certified"]] == [("lean", True)]
+    assert got["certified_windows"] == got["windows"] - 1 and got["verdict"] == "refused"
+
+
+def test_a_kept_certificate_is_the_lean_checks_and_a_reference_that_keeps_it_doesnt_keep_it(honest, tmp_path,
+                                                                                            monkeypatch):
+    """The client check's refusals are the Lean's (`NetworkCheck.LinkWindow.refusals`): beside a reference that keeps
+    every certificate, the window whose kept certificate's signature is changed is refused whole, each of its
+    certificates and its clock certificate as a disagreement, and the step refuses."""
+    monkeypatch.setattr(audit, "certificate_refusals",
+                        lambda key, s, link, w, xs, ks, seen=(): ([None] * len(xs), [None] * len(ks)))
+    _corrupt(honest, tmp_path / "kept", "client/certificates.jsonl", 0)
+    got = cr.certs(tmp_path / "kept", tmp_path / "kept" / "client")
+    cc = got["client_check"]
+    assert cc["by"] == "lean" and len(cc["refused"]) == 3 and all("disagree" in r for r in cc["refused"])
+    assert cc["certificates"] == 2 * got["windows"] - 2 and got["verdict"] == "refused"
+
+
+class _SigningAll:
+    """A reference clock source that takes every opening's sync, refusing none."""
+
+    def __init__(self, key, session, openings):
+        self.refused, self.split, self.openings = (), (), openings
+        self.codes = (None,) * len(openings)
+
+    def syncs(self, link):
+        return tuple(o.sync for o in sorted(self.openings, key=lambda o: o.window))
+
+
+def test_a_windows_sync_is_the_lean_openings_and_a_reference_that_signs_a_forged_one_doesnt_sign_it(honest, tmp_path,
+                                                                                                   monkeypatch):
+    """Each window's sync is the Lean's read of the clock openings (`NetworkCheck.Period.signedSyncs`): beside a
+    reference that takes every opening's sync, a run whose window-0 clock signature is changed has no sync, every
+    window is refused as the two's disagreement, and the step refuses."""
+    monkeypatch.setattr(lean_audit, "SignedClocks", _SigningAll)
+    assert cr.certs(honest, honest / "client")["verdict"] == "accepted"
+    _corrupt(honest, tmp_path / "clk", "clocks.jsonl", 0)
+    got = cr.certs(tmp_path / "clk", tmp_path / "clk" / "client")
+    assert got["clocks_by"] == "lean" and got["clocks_signed"] == 0 and got["certified_windows"] == 0
+    assert got["clocks_refused"] == got["clock_certificates"] and all("disagree" in r["why"] for r in got["rows"])
+    assert got["verdict"] == "refused"
 
 
 def test_certs_refuses_a_client_without_clocks(honest, tmp_path):
@@ -222,9 +295,9 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
     n2s = got["steps"]["n2"]
     assert got["verdict"] == "accepted" and got["negatives_refused"] == {"n2/moved": "escaped the draw"}
     assert n2s["members"]["honest"]["structured"] == {"head egress 45 @320": "across"}
-    assert n2s["members"]["moved"]["escaped_the_draw"] == {"faulty_windows": [0], "drawn": [1, 2]}
+    assert n2s["members"]["moved"]["escaped_the_draw"] == {"incorrect_windows": [0], "drawn": [1, 2]}
     assert n2s["eps_at_delta"]["law"] == "subset:2" and (n2s["eps_at_delta"]["units"], n2s["eps_at_delta"]["drawn"]) == (4, 2)
-    assert n2s["eps_at_delta"]["wrong_units_at_delta"]["0.5"] == 1
+    assert n2s["eps_at_delta"]["incorrect_at_delta"]["0.5"] == 1
     steps.n2[1] = run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [0, 1])
     got = cr.report(steps)["steps"]["n2"]
     assert got["verdict"] == "failed" and got["why"] == "moved: network accepted"
@@ -319,7 +392,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
         "the case's link, session: not the chain's, so another certifier session's period")
     assert why(period_answer=_period(tmp_path / "mixed", foreign, answer)) == (
         "the case isn't the answer's: its commitment's digest is another")
-    rows = period.case("accept", 0, "rows")
+    rows = period.build("rows-honest", 0, small=True)
     assert why(period_answer=_period(tmp_path / "rows", rows, period.reference(rows))).startswith("a rows-form answer")
     assert why(period_answer=_period(tmp_path / "k", case, answer | {"public": answer["public"] | {"K": 1}})) == (
         f"network-period check on the case answers accept with K {answer['public']['K']}, not the given answer: it "
@@ -405,6 +478,19 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     assert got["scope"] is None and got["verdict"] == "refused" and got["negatives_refused"]["scan/forged"] is False
 
 
+def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negative(tmp_path):
+    def rnd(accepted):
+        return {"audit": {"window_accepted": accepted}}
+
+    def scan(block):
+        return {"ok": True, "T": 1, "rounds": {"block": rnd(block), "honest": rnd(True), "chain": rnd(False)}}
+
+    got = cr.scan_step(scan(True), "g1/warden")
+    assert got["verdict"] == "accepted" and got["negatives"] == {"chain": True}, got
+    got = cr.scan_step(scan(False), "g1/warden")
+    assert (got["verdict"], got["why"]) == ("failed", "block: window refused")
+
+
 def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     import math
     from dataclasses import asdict
@@ -415,19 +501,75 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
     (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
     doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
-    assert doc["widths"] == {"NS": 149_648, "NP": 4_480, "NV": 4_832, "egress_row": 65_536}
+    assert doc["widths"] == {"NS": 149_648, "NE": 1_136, "entries": 8, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
-    week = {r["prog"]: r for r in doc["rows"] if r["period"] == "week" and r["machines"] == 1}
-    lw, rate, cap = 604_800 / 3.2, 100 / 75, math.log2(66)
-    assert week["registered"]["per_period"] == pytest.approx(lw * (32 * 4_480 + rate * cap))
-    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_120 + cap))
-    assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
+    assert not {"schedules_per_request", "cells_per_request", "cap_per_request"} & set(doc["terms"])
+    assert (doc["terms"]["jitter_bound"], doc["terms"]["jitter_per_block"]) == (2, 32)
+    assert (doc["terms"]["e_w"], doc["terms"]["unchecked"]) == (9_088, "unchecked (stand-in tie)")
+    assert doc["links"] == {"link": 1, "datacenter": 12_500, "world": 18_550_229}
+    assert "BF16" in doc["weights"]["label"] and "BF16" in cr.leak_markdown(doc)
+    json.dumps(doc)
+    lw = 604_800 / 3.2
+    window = {(t["tie"], t["sampling"]): t for t in doc["per_link_window"]}
+    assert list(window) == [("stand-in", "whole"), ("served", "whole"), ("served", "in part")]
+    assert all(t["timing"] == 32 and "caps" not in t for t in window.values())
+    assert (window["stand-in", "whole"]["unchecked"], window["stand-in", "whole"]["K"]) == (9_088, None)
+    assert [window["served", s]["checking"] for s in ("whole", "in part")] == [0, 9_088]
+    assert all(t["side"] is None and t["K"] is None for t in window.values())
+    rows = {(r["period"], r["scope"], r["tie"], r["sampling"]): r for r in doc["rows"]}
+    stand_in, part = rows["week", "link", "stand-in", "whole"], rows["week", "link", "served", "in part"]
+    assert stand_in["per_period"]["unchecked"] == pytest.approx(lw * 8 * 1_136)
+    assert stand_in["per_period"]["checking"] == 0 and stand_in["per_period"]["K"] is None
+    assert part["per_period"]["checking"] == pytest.approx(lw * 8 * 1_136) and part["per_period"]["unchecked"] == 0
+    assert part["pooled"]["0.01"]["checking"] - part["per_period"]["checking"] == pytest.approx(
         5 * (154_480 + math.log2(lw * 64 + 1)))
-    with pytest.raises(SystemExit, match="drew 16 of 64"):
+    assert Fraction(part["eps"]) == Fraction(189_000, 2 ** 20)
+    for scope, n in doc["links"].items():
+        assert rows["week", scope, "served", "in part"]["per_period"]["timing"] == pytest.approx(
+            n * part["per_period"]["timing"])
+        assert Fraction(rows["week", scope, "stand-in", "whole"]["eps"]) == n * Fraction(189_000, 2 ** 20)
+    md = cr.leak_markdown(doc)
+    assert "| stand-in | whole | 32 | unchecked (stand-in tie): 9,088 | 0 | no bound |" in md
+    assert "| served | in part | 32 | not given (--audit) | 9,088 | 9,120 + side channels |" in md
+    with pytest.raises(SystemExit, match="sampled 16 of its 64"):
         cr.leak(run, {"draw": {"honest": 16}})
     (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
     with pytest.raises(ValueError, match="lanes = 4"):
         cr.leak(run)
+
+
+def test_leak_reads_a_served_audits_free_inputs_and_sampling(tmp_path):
+    from dataclasses import asdict
+    sz = sys.modules.get("scan_zk") or _load("scan_zk")
+    sys.modules["scan_zk"] = sz
+    run = tmp_path / "c1"
+    (run / "out").mkdir(parents=True)
+    (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
+    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
+    window = tmp_path / "audit"
+    window.mkdir()
+    (window / "circuit.json").write_text(json.dumps({
+        "templates": [["T", 4]], "external": ["T/y"], "wires": [],
+        "statements": {"T": {"in_rows": [["x", 0, 8, ["x"]], ["y", 1, 16, ["y"]]]}}}))
+    lw = 604_800 / 3.2
+    for k, sampling, checking in ((4, "whole", 0), (2, "in part", 9_088)):
+        (window / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": k}}))
+        out = tmp_path / f"leak-{k}.json"
+        assert cr.main(["leak", "--warden-run", str(run), "--audit", str(window), "--out", str(out)]) == 0
+        doc = json.loads(out.read_text())
+        assert (doc["audit"]["free"], doc["audit"]["drawn"]) == (32, k)
+        served = [t for t in doc["per_link_window"] if t["tie"] == "served"]
+        assert [t["sampling"] for t in served] == [sampling]
+        assert served[0]["side"] == 32 and served[0]["checking"] == checking
+        assert served[0]["K"] == 32 + 32 + checking
+        week = next(r for r in doc["rows"] if (r["period"], r["scope"], r["tie"]) == ("week", "link", "served"))
+        assert week["per_period"]["side"] == pytest.approx(lw * 32)
+        assert week["per_period"]["K"] == pytest.approx(lw * (32 + 32 + checking))
+        assert week["per_period"]["share"] == week["per_period"]["K"] / doc["weights"]["bits"]
+        stand_in = next(t for t in doc["per_link_window"] if t["tie"] == "stand-in")
+        assert (stand_in["side"], stand_in["unchecked"], stand_in["K"]) == (None, 9_088, None)
+        md = out.with_suffix(".md").read_text()
+        assert "unchecked (stand-in tie): 9,088" in md and "not given" not in md and "+ side channels" not in md
 
 
 def test_subset_bound():
@@ -435,7 +577,7 @@ def test_subset_bound():
     assert cr.subset_bound(256, 64, 0.5) == 2
     assert cr.subset_bound(256, 2, 0.5) == 74
     assert cr.subset_bound(0, 0, 0.5) is None
-    # one wrong unit of 4 escapes a sample of 2 with C(3, 2)/C(4, 2) = 1/2 exactly: within δ = 1/2
+    # one incorrect proof block of 4 escapes a sample of 2 with C(3, 2)/C(4, 2) = 1/2 exactly: within δ = 1/2
     assert cr.subset_bound(4, 2, 0.5) == 1
 
 
@@ -465,11 +607,33 @@ def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_ta
     assert off["verdict"] == "refused" and off["stubbed"] == []
 
 
+def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_exited_its_finds(tmp_path):
+    ok = {"profile": "advice", "rc": {"n2": "0", "scan": "0"}}
+    assert cr.report(_steps(tmp_path, ok))["why"] is None
+    steps = _steps(tmp_path, ok | {"rc": {"n2": "0", "scan": "1"}})
+
+    def found(*k):
+        return {"audit": {"window_accepted": True, "received": {"verifier_found": list(k)}}}
+
+    Path(steps.scan).write_text(json.dumps({"ok": False, "T": 1, "rounds": {
+        "honest": found("first o1 0 @0"), "chain": found("first o1 0 @0"), "tampered": found()}}))
+    got = cr.report(steps)
+    why = ("scan_zk exited 1; honest: witness pieces found at the verifier: ['first o1 0 @0']; chain: witness pieces "
+           "found at the verifier: ['first o1 0 @0']; scan_zk's ok is not true")
+    assert (got["verdict"], got["steps"]["scan"]["verdict"], got["steps"]["scan"]["why"]) == ("refused", "failed", why)
+    assert got["why"] == {"scan": f"failed: {why}"}
+    Path(steps.job).write_text(json.dumps(ok | {"rc": {"n2": "0", "scan": "1"}, "why": {"scan": "done: FAILED"}}))
+    assert cr.report(steps)["why"] == {"scan": f"failed: done: FAILED; {why}"}
+    Path(steps.scan).unlink()
+    assert cr.report(steps)["why"] == {"scan": "failed: done: FAILED; scan_zk exited 1"}
+    stand_in = cr.report(_steps(tmp_path, ok | {"stand_in": {"n2": "the simulated link"}}))
+    assert stand_in["why"] == {"n2": "stand-in: the simulated link"}
+
+
 def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path):
-    h = cr.horizon_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100),
-                     {"advice": 8, "syncs": 0, "cells": 6})
-    assert (h["Fmax"], h["terms"]["faulty_sets"], h["K"]) == (5, 15, 8 + 6 + 80 + 15 + 2 + 4)
-    assert h["conditional"] == cr.HORIZON_CONDITION
+    h = cr.pooled_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100), {"advice": 8, "syncs": 3})
+    assert (h["Fmax"], h["terms"]["faulty_sets"], h["K"]) == (5, 15, 8 + 3 + 80 + 15 + 2 + 4)
+    assert h["conditional"] == cr.POOLED_CONDITION
     circuit = {"templates": [["T", 4]], "external": ["T/y"], "wires": [],
                "statements": {"T": {"in_rows": [["x", 0, 8, ["x"]], ["y", 1, 16, ["y"]]]}}}
     assert cr.free_inputs(circuit) == 4 * 8
@@ -485,12 +649,16 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
         cr.audit_of(tmp_path)
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
     audit = cr.audit_of(tmp_path)
-    assert (audit["units"], audit["drawn"], audit["free"], audit["jitter"]) == (4, 2, 32, 0)
-    cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)]}
-    assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90}}) == {"advice": 40, "syncs": 21,
-                                                                                        "cells": 0}
+    assert (audit["units"], audit["drawn"], audit["free"]) == (4, 2, 32) and "jitter" not in audit
+    cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)], "window_buckets": 60}
+    assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90}}) == {"advice": 40, "syncs": 21}
     assert cr.network_terms(cert, {"advice_bits": {"derived": None, "v0_total": 90}})["advice"] == 90
     d1 = cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}}, [audit])
     k = d1["K"][f"{2.0 ** -20:.3g}"]
     assert k["Fmax"] == math.ceil(20 * math.log(2) * 2) and k["K"] == sum(k["terms"].values())
+    import leak_bounds as lb
+    assert (d1["K"]["audits"][0]["steps"], k["terms"]["jitter"], k["jitter_term"]) == (180, 180, lb.JITTER)
     assert "open" in cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}})["K"]
+    unbucketed = {k: v for k, v in cert.items() if k != "window_buckets"}
+    open_ = cr.d1_terms(unbucketed, {}, {}, {}, {"advice_bits": {"derived": 40}}, [audit])["K"]["open"]
+    assert "window_buckets" in open_

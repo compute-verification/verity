@@ -10,7 +10,7 @@ as a read of that row (`Flock.Registered.checkPort` accepts a hidden-output stat
 PROTOCOL.md §16.13; `warden_rows.bucket_port`: unit `reads_from + t` reads row t), so the proof opens the warden's
 registered row only when the row the state renders is it, bit for bit. Only o0 is public: a unit proof's public output
 is at most 16 bits, and o1 is committed. Every switch is computed from the state, none is witness, so the unit adds
-nothing to c, and bucket t's egress reads no ingress after bucket t: structural Fits (`NetTiming.Layout.Fits`: no
+nothing to c, and bucket t's egress reads no ingress after bucket t: structural Fits (`NetTiming.BoundaryGates.Fits`: no
 egress gate is an input, and none of step t depends on an ingress gate of a step t' > t) holds by construction. It
 reads S_t rather than S_{t−1} because the warden's egress row of a connection's admission bucket already holds its
 lane, a `PAD` on its q.
@@ -117,8 +117,8 @@ def _u32(name: str, x: object) -> int:
 
 # --- the reference ---------------------------------------------------------------------------------------------------
 
-class Record(NamedTuple):
-    """A slot's record: its stream q (0 for a slot no connection holds), its request slot j, and e: `EMPTY` for a
+class Occupancy(NamedTuple):
+    """A slot's occupancy: its stream q (0 for a slot no connection holds), its request slot j, and e: `EMPTY` for a
     `PAD`, `END_ENTRY` for the `END`, or the output k for `DATA`."""
 
     q: int
@@ -127,7 +127,7 @@ class Record(NamedTuple):
 
 
 #: a lane no live request slot holds: B zero bytes, a `PAD` on stream 0
-UNHELD = Record(0, 0, EMPTY)
+UNHELD = Occupancy(0, 0, EMPTY)
 
 
 class Request(NamedTuple):
@@ -158,7 +158,7 @@ class State(NamedTuple):
 FREE = Slot(0, 0, 0, 0, ())
 
 
-def bucket_map(b: int, slots: Sequence[Request | None], R: int, r: int, D: int) -> tuple[tuple[Record, ...], bool]:
+def bucket_map(b: int, slots: Sequence[Request | None], R: int, r: int, D: int) -> tuple[tuple[Occupancy, ...], bool]:
     """Bucket b's records and whether it overflows: the live request slots at b, the j with a request admitted at or
     before b and b ≤ admitted_j + D + ⌊n_j / r⌋, ranked by (q, j) as ρ. Slot ρ·r + i is (q_j, j, `EMPTY`) before
     admitted_j + D; else, with k = (b − admitted_j − D)·r + i, (q_j, j, k) for k < n_j, (q_j, j, `END_ENTRY`) for
@@ -174,7 +174,7 @@ def bucket_map(b: int, slots: Sequence[Request | None], R: int, r: int, D: int) 
         for i in range(r):
             k = (b - s.admitted - D) * r + i
             e = EMPTY if b < s.admitted + D or k > s.n else END_ENTRY if k == s.n else k
-            out[rho * r + i] = Record(q, j, e)
+            out[rho * r + i] = Occupancy(q, j, e)
     return tuple(out), len(live) * r > R
 
 
@@ -413,6 +413,6 @@ EgressBucket = _part(
     "bit i of byte k")
 
 
-__all__ = ["ACCEPT", "ADMITTED", "EgressBucket", "FREE", "IDS", "LIVE", "N", "Q", "Record", "Request", "Shape",
+__all__ = ["ACCEPT", "ADMITTED", "EgressBucket", "FREE", "IDS", "LIVE", "N", "Q", "Occupancy", "Request", "Shape",
            "Slot", "State", "UNHELD", "bucket_arguments", "bucket_map", "computed", "output_bits", "outputs",
            "rendered", "state_bits", "state_words"]
