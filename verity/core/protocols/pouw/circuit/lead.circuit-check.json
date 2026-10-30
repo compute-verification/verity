@@ -1,8 +1,8 @@
 {
  "definitions": {
   "PouwLeadFold_v2": {
-   "and": 70,
-   "type": "9d66496746f20b38513045b8abf5ea65cdacab9cf515bd24a1bb478a12409bf55dc918271fc0a7ea225bc92b55744fa732cb70f49da08193ed3aaaa371f44a7d"
+   "and": 1142,
+   "type": "05f4832edbfb2821e5730fd7f2da1cf8d0d1a3e17bfa00239a9f0bf9f994b18d7c53c74e03a3c1479c8d09886f7d858a0a6ddad88aed097e4ecaa7c057780992"
   },
   "PouwLeadPad0_v2": {
    "and": 1150,
@@ -20,6 +20,10 @@
    "and": 8,
    "type": "0b7914883c027aca5e1ea6d83ab11f43fbc2ebae284a178c78bed1856c0b3c7415f03040502b0a6e01741b9f30f5c7c167bcfc7b5af37c4f5b0974ca035d75b0"
   },
+  "PouwLeadPop_v2": {
+   "and": 31,
+   "type": "6a9975f0b7427dd1831434d485cc917f25524407c250c40791379e41321ff884e95e5456f302348ab8fd5c74ac4114e03a6beabea60cafffefc5377d77e2c71e"
+  },
   "PouwLeadStep0Row_v1": {
    "and": 30712,
    "type": "af895c85c736fc8d96bcd6a716073be154a339462b4ed25278f4cfb171593be88444b80b0bc9b364985045a5e711316085439f16f60dced2a276cbaba1deadbd"
@@ -35,6 +39,10 @@
   "PouwLeadStep_v2": {
    "and": 3711,
    "type": "2a9e836bee1d860921dd68934cb75dd477e45661acea800d90076ffe64154f5407aa3c3852bf7b6790bd855618e648422a300ef64156acc7b4994dc59b0d0e66"
+  },
+  "PouwLeadSub32_v2": {
+   "and": 31,
+   "type": "2a9dc0f805e23183140b36eefb60326cbdde54f6ad6dba4ca67e0e27c2bcfb19ee4ada24ef4ef9ac849db56d0a28f3825e8689bb001b960e641f063a84ccb5f7"
   },
   "PouwLeadTagWeight_v2": {
    "and": 7,

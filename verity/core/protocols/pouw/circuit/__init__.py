@@ -44,7 +44,8 @@
   row a decode), for the public m that dense credit counts.
 * `lead`: the lead's sampled unit (`verity/pouw/v2`, `PouwLeadTile`): one 16 × 8 MMA tile of a call over a block of at
   most 32 k32 steps, its committed words against the call's data and the certifier's coin feed at the layout of
-  `Security/Definitions/Pouw/Lead/Layout.lean`, and on the call's last block the served fold's 2^22 window.
+  `Security/Definitions/Pouw/Lead/Layout.lean`, and on the call's last block the served fold, which reads A_i · B_j back
+  exactly within 2^22 and serves verity_int8's epilogue on it.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs

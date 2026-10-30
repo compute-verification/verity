@@ -1,11 +1,13 @@
 """`circuit.lead`: each piece is its word and has its stated ANDs, the reference's words are Layout.lean's `word`, the unit
-accepts a call's committed words and rejects a changed word, a tag weight outside [-3, 3], an even lane coin and a fold past
-2^22, a ragged call's padding rows and columns carry their coins, a unit's ANDs are `unit_ands`, its output is one bit, and
-a binding past the calls the verifier admits is refused."""
+accepts a call's committed words and rejects a changed word, a tag weight outside [-3, 3], an even lane coin and a served
+word past 2^22, the fold reads back A_i · B_j and serves verity_int8's bf16 bit for bit, a ragged call's padding rows and
+columns carry their coins, a unit's ANDs are `unit_ands`, its output is one bit, and a binding past the calls the verifier
+admits is refused."""
 from __future__ import annotations
 
 import copy
 import random
+import struct
 
 import numpy as np
 import pytest
@@ -19,7 +21,18 @@ from verity.core.protocols.pouw.circuit import lead as L
 WORDS = {L.PouwLeadStep0: L.PouwLeadStep0Word, L.PouwLeadStep: L.PouwLeadStepWord, L.PouwLeadPad0: L.PouwLeadPad0Word,
          L.PouwLeadPad: L.PouwLeadPadWord, L.PouwLeadWeigh: L.PouwLeadWeighWord,
          L.PouwLeadTagWeight: L.PouwLeadTagWeightWord, L.PouwLeadPairS8: L.PouwLeadPairS8Word,
-         L.PouwLeadPair32: L.PouwLeadPair32Word, L.PouwLeadFold: L.PouwLeadFoldWord}
+         L.PouwLeadPair32: L.PouwLeadPair32Word, L.PouwLeadPop: L.PouwLeadPopWord, L.PouwLeadSub32: L.PouwLeadSub32Word,
+         L.PouwLeadFold: L.PouwLeadFoldWord}
+#: p at and just past the fold's window's ends, and far past them
+EDGES = [0, L.LEAD_FOLD_BOUND, -L.LEAD_FOLD_BOUND, L.LEAD_FOLD_BOUND + 1, -L.LEAD_FOLD_BOUND - 1, 1 << 31, (1 << 31) - 1]
+
+
+def _fold_inputs(rng: random.Random, p: int) -> list[int]:
+    """The fold's inputs, random sources and bytes, with the final word chosen so the fold word is FOLD_MAGIC + p."""
+    r, c = rng.randrange(1 << 32), rng.randrange(1 << 32)
+    nt, g, na, cj = ([rng.randrange(256) for _ in range(4)] for _ in range(4))
+    w = (L.FOLD_MAGIC + p - L.fold_word(0, r, c, nt, g, na, cj)) & L.M32
+    return [w, r, c, *nt, *g, *na, *cj]
 #: each step piece's product lanes and whether it takes a tag lane
 STEPS = {L.PouwLeadStep0: (L.LANES_0, False), L.PouwLeadStep: (L.LANES_T, True), L.PouwLeadPad0: (L.COINS_0, False),
          L.PouwLeadPad: (0, True)}
@@ -37,10 +50,7 @@ def _vectors(piece, rng: random.Random, n: int) -> list[list[int]]:
             tail = [lane, tag] if tagged else [lane]
             out.append([prev, (w + (0 if k % 2 else rng.choice([1, -1, 1 << 31, 1 << 16]))) & L.M32, *a, *b, *tail])
         elif piece is L.PouwLeadFold:
-            sigma = rng.randrange(1 << 32)
-            p = rng.choice([0, L.FOLD_RANGE, -L.FOLD_RANGE, L.FOLD_RANGE + 1, -L.FOLD_RANGE - 1, 1 << 31,
-                            rng.randrange(-(1 << 31), 1 << 31)])
-            out.append([(p + sigma) & L.M32, sigma])
+            out.append(_fold_inputs(rng, rng.choice(EDGES + [rng.randrange(-(1 << 31), 1 << 31)])))
         elif piece is L.PouwLeadTagWeight:
             out.append([k % 256])
         else:
@@ -83,10 +93,11 @@ def test_each_piece_has_its_stated_ands():
 def test_the_steps_the_fold_and_the_tag_weight_decide_what_they_say(piece):
     rows = _vectors(piece, random.Random(1), 64)
     assert [evaluate(WORDS[piece], *r)[0] for r in rows] == [k % 2 for k in range(64)]
-    sigma = (127 * -381 + 7 - 9) & L.M32
-    for p, ok in [(0, 1), (L.FOLD_RANGE, 1), (-L.FOLD_RANGE, 1), (L.FOLD_RANGE + 1, 0), (-L.FOLD_RANGE - 1, 0)]:
-        assert evaluate(L.PouwLeadFoldWord, (p + sigma) & L.M32, sigma) == (ok,)
+    rng = random.Random(2)
+    for p in EDGES:
+        assert evaluate(L.PouwLeadFoldWord, *_fold_inputs(rng, p)) == (int(L.fold_admits(p)),)
     assert [G for G in range(256) if evaluate(L.PouwLeadTagWeightWord, G) == (1,)] == [0, 1, 2, 3, 253, 254, 255]
+    assert [evaluate(L.PouwLeadPopWord, x)[0] for x in (0, 1, L.M32, 0x80000001)] == [0, 1, 32, 2]
 
 
 def _ediv(a: int, b: int) -> int:
@@ -189,16 +200,59 @@ def test_blocks_chain_through_the_words_before_them(rows, i):
         assert (c.unit_ok(0, 0, 0, bad), c.unit_ok(0, 0, 1, bad)) == want
 
 
-@pytest.mark.parametrize("K, a, ok", [(245, 127, 1), (301, 127, 0), (301, -128, 0)])
-def test_the_fold_past_its_window_is_a_visible_failure(K, a, ok):
-    """All-127 B against all-a A: |p| is about 127 · |a| · K, within 2^22 at K = 245 and past it at K = 301."""
+@pytest.mark.parametrize("K, a, ok", [(260, 127, 1), (261, 127, 0), (256, -128, 1), (301, -128, 0)])
+def test_a_served_word_past_the_folds_range_is_a_visible_failure(K, a, ok):
+    """All-127 B against all-a A: A_i · B_j is 127 · a · K, 4,193,540 at K = 260 and 4,209,669 at K = 261; -128 · 127 ·
+    256 is -2^22 + 2^15."""
     c = L.Call.draw(random.Random(K), 16, 8, K)
     c.A, c.B = [[a] * K for _ in range(16)], [[127] * K for _ in range(8)]
+    assert (c.refuse() is None) == bool(ok)
+    assert c.unit_ok(0, 0, 0) == ok
+
+
+@pytest.mark.parametrize("rows, cols, K", [(17, 13, 77), (1, 64, 2048), (16, 8, 917)])
+def test_the_fold_reads_back_a_times_b_and_serves_verity_int8s_bf16(rows, cols, K):
+    """Every coin term leaves the fold word, which is FOLD_MAGIC + A_i · B_j, and the served bf16 under any fp32 scales is
+    verity_int8's epilogue on A_i · B_j; a decode row at Llama's K among them."""
+    rng = random.Random(rows * K)
+    c = L.Call.draw(rng, rows, cols, K)
     W = c.words()
-    sigma = lambda i, j: sum(L.rot_weight(i, ell) * c.s(t, i, ell, j) for t in range(c.S) for ell in range(3))  # noqa: E731
-    within = all(abs(W[-1][i][j] - sigma(i, j)) <= L.FOLD_RANGE for i in range(16) for j in range(8))
-    assert within == bool(ok)
-    assert c.unit_ok(0, 0, 0, W) == ok
+    for i in range(rows):
+        for j in range(cols):
+            assert (c.fold(i, j, W) - L.FOLD_MAGIC) & L.M32 == c.product(i, j) & L.M32
+            si, sj = (L.f32(rng.uniform(2.0 ** -12, 2.0 ** -2)) for _ in range(2))
+            assert c.served(i, j, si, sj, W) == L.int8_epilogue(c.product(i, j), si, sj)
+
+
+def test_the_fold_word_misreads_past_its_range():
+    """FADD reads FOLD_MAGIC + p back as p exactly at |p| <= 2^22; 2^22 + 1 reads as 2^22 + 2 and -2^22 - 1 as
+    -2^22 - 0.5."""
+    def fadd(p):
+        return struct.unpack("<f", struct.pack("<I", (L.FOLD_MAGIC + p) & L.M32))[0] - L.FOLD_OFFSET
+
+    assert all(fadd(p) == p for p in (0, 1, -1, L.LEAD_FOLD_BOUND, -L.LEAD_FOLD_BOUND, 12345, -999999))
+    assert (fadd(L.LEAD_FOLD_BOUND + 1), fadd(-L.LEAD_FOLD_BOUND - 1)) == (L.LEAD_FOLD_BOUND + 2, -L.LEAD_FOLD_BOUND - 0.5)
+
+
+@pytest.mark.parametrize("change", ["tag", "a1", "g"])
+def test_the_last_block_folds_with_every_coin_it_reads(change):
+    """At a cell with A_i · B_j = 2^22 exactly, a tag bit of an earlier block's step (the walk), an a₁ bit or a G read
+    differently moves p to 2^22 + 1, and the last block refuses; the honest coins pass. Row 0's tag and column 0's code
+    are both (1, 0, 0, 0), so a₁[0, 0] from 1 to 0 and G[0, 0] from 0 to -1 each add 1 to p."""
+    K = 917
+    c = L.Call.draw(random.Random(9), 16, 8, K)
+    c.A[0], c.B[0] = [-128] * 256 + [0] * (K - 256), [-128] * 256 + [0] * (K - 256)
+    c.b[0][5], c.a1[0][0], c.g[0][0] = 1, 1, 3
+    assert c.product(0, 0) == L.LEAD_FOLD_BOUND and L.row_tag(0) == L.col_code(0) == [1, 0, 0, 0]
+    W = c.words()
+    assert c.unit_ok(0, 0, 1, W) == 1
+    if change == "tag":
+        c.b[0][5] = 0
+    elif change == "a1":
+        c.a1[0][0] = 0
+    else:
+        c.g[0][0] = 2
+    assert c.unit_ok(0, 0, 1, W) == 0
 
 
 def test_a_ragged_calls_padding_rows_and_columns_carry_their_coins():

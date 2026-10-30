@@ -1,6 +1,6 @@
 """The lead's sampled unit (`verity/pouw/v2`): one 16 × 8 MMA tile of one call over one block of at most 32 k32 steps, its
-committed words checked against the call's data and the certifier's coins, and on the call's last block the served fold's
-range, at the layout of `Security/Definitions/Pouw/Lead/Layout.lean` (`Pouw.Lead`).
+committed words checked against the call's data and the certifier's coins, and on the call's last block the served fold,
+at the layout of `Security/Definitions/Pouw/Lead/Layout.lean` (`Pouw.Lead`).
 
 The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min`. A call of ``rows`` × K × ``cols`` commits its words over
 ``m = pad_rows(rows)`` rows and ``n = pad_cols(cols)`` columns (Lean's `padRows`, `padCols`), at S = `steps_for`(K) k32
@@ -23,22 +23,30 @@ data lanes past K zero, so Σ_l A′_l B′_l is κ(i, t, j) + coinTerm(i, t, j)
 **The unit** `PouwLeadTile_v1{K, R0, C0, ROWS, COLS, BLK}` is the tile of rows R0 .. R0 + 15 and columns C0 .. C0 + 7
 (16 | R0, 8 | C0), ROWS and COLS of them the call's own, over steps [32 BLK, min(32 BLK + 32, S)). Its inputs, every one a
 value, are `Unit.params`: A's ROWS rows and B's COLS rows at the block's K entries; the tile's coins as the certifier's
-feed encodes them: its 16 rows' row-word bits at the block (bit q < 4 a₁[i, q], bit t + 3 b_t[i]; on block 0 bits
-0 .. t₁ + 2, after it the block's steps' bits), on block 0 its 8 columns' G words (byte q the tag weight G[q, j] as an
-int8), and the coin bytes of its coin tile's lane-coin words (bytes 0-2 s_t[ℓ, ⌊i/64⌋, j] as int8s, by step, column and
-lane) at the block's steps, at every step on the call's last block; on a block after the first the tile's committed words
-at the step before it; and the block's committed words, each step's 128 at Lean's `tileOf` position 8 r + c. They are
-Layout.lean's `Coins` (g = G + 3, u = (s + 127) / 2) exactly when every G is in [-3, 3] and every s odd, which the unit
-checks. It returns one bit, ok, a proof block's outputs being at most 16 bits:
+feed encodes them: its 16 rows' row-word bits at the block (bit q < 4 a₁[i, q], bit t + 3 b_t[i]; on block 0 and on the
+call's last block bits 0 .. t₁ + 2, on a block between them the block's steps' bits), on block 0 and on the last block
+its 8 columns' G words (byte q the tag weight G[q, j] as an int8), and the coin bytes of its coin tile's lane-coin words
+(bytes 0-2 s_t[ℓ, ⌊i/64⌋, j] as int8s, by step, column and lane) at the block's steps, at every step on the last block;
+on a block after the first the tile's committed words at the step before it; and the block's committed words, each
+step's 128 at Lean's `tileOf` position 8 r + c. They are Layout.lean's `Coins` (g = G + 3, u = (s + 127) / 2) exactly
+when every G is in [-3, 3] and every s odd, which the unit checks. It returns one bit, ok, a proof block's outputs being
+at most 16 bits:
 
 * **each step** (`PouwLeadStep0`, `PouwLeadStep`): ``w_t ≡ w_{t-1} + Σ_l A′_l B′_l (mod 2^32)``, w_{-1} = -β_j the
   public bias, so the committed words are Lean's read as s32 (each fits s32 up to `MAX_K`, Lean's `Tags.word_exact`);
-* **the coins** (`PouwLeadTagWeight`): every G in [-3, 3], `Coins`' Fin 7 less 3, and every s odd, `Coins`' Fin 128
-  as 2u - 127;
-* **the fold** (`PouwLeadFold`), on the call's last block: the served noisy output is the final word less the coin lanes'
-  sum σ, p = w_{S-1} - σ, σ = Σ_t Σ_ℓ A′[i, ℓ] s_t[ℓ, j], which the epilogue's one IADD3 of 0x4B400000 - σ reads back
-  exactly only while |p| <= 2^22 (`Proofs.Pouw.Lead.Tags.iadd3_fold`). The unit checks it, so a call past it is a visible
-  failure.
+* **the coins** (`PouwLeadTagWeight`): every G it reads in [-3, 3], `Coins`' Fin 7 less 3, and every s odd, `Coins`'
+  Fin 128 as 2u - 127;
+* **the fold** (`PouwLeadFold`), on the call's last block, at each of the call's cells: the kernel's epilogue
+  (`layout.h`'s `fold_word`) adds to the final word d its row source r_i = 0x4B400000 - walk_i, walk_i = Σ_{t >= 1}
+  (1 + b_t[i]) the tag lanes, and its column source c_j = β_j - σ, σ = Σ_t Σ_ℓ A′[i, ℓ] s_t[ℓ, j] the row class's coin
+  lanes, in one IADD3, then takes a₁[i] · C[:, j] and T(i) · G[:, j] out by two IDP4A (the bytes -a₁[i], -T(i) against
+  C[:, j], G[:, j]). Every coin term leaves, so q = 0x4B400000 + p with p = A_i · B_j mod 2^32, and the epilogue serves
+  FMUL s_j (FMUL s_i (FADD(q as fp32, -1.5 · 2^23))): verity_int8's epilogue on A_i · B_j bit for bit while
+  |p| <= `LEAD_FOLD_BOUND` = 2^22 (`fold_epilogue`, `int8_epilogue`), and past it another float (2^22 + 1 reads back as
+  2^22 + 2) that nothing in the kernel flags. The unit computes r_i (`PouwLeadPop`, `PouwLeadSub32`) and c_j
+  (`PouwLeadSub32`) from the coins it reads and checks |p| <= 2^22, so a call with a served word past it is refused as a
+  visible failure (`Call.refuse`, `fold_admits`): `Layout.Admits`' counterpart on the private words, which the verifier
+  makes through the unit's ok.
 
 ok is the AND of those bits (`verity.ml.circuits.boolean.and_gate`). The tags, codes, biases and row weights are public
 constants of the tile's position, and the coins enter as the feed sends them. A cell's step multiplies only its lanes
@@ -49,16 +57,19 @@ later step none (`PouwLeadPad`). The coin lanes' term 127 s_t[i mod 2] + s_t[1 -
 row's class and the column, so each step's 16 are `PouwLeadWeigh` once and each cell adds its own. On a tile of the
 call's cells alone a step is `PouwLeadStep0Mma` or `PouwLeadStepMma`, 16 rows (`PouwLeadStep0Row`, `PouwLeadStepRow`) of
 8 cells each, and on a ragged tile each cell's own piece, batched; the fold's σ is `PouwLeadWeigh` of the three lanes'
-sums, trees of `PouwLeadPairS8` then `PouwLeadPair32` over each lane's coins. Each piece's ANDs are `PIECE_ANDS`, which
-its pin holds, and a unit's are `unit_ands`.
+sums, trees of `PouwLeadPairS8` then `PouwLeadPair32` over each lane's coins, and each row's walk `PouwLeadPop` of its
+tag bits 32 at a time, a tree of `PouwLeadPair32` over them. Each piece's ANDs are `PIECE_ANDS`, which its pin holds,
+and a unit's are `unit_ands`.
 
 **Refused** (`bind`, `Unit.refuse`): what `Statement.admits_of_caps` doesn't cover, K outside [1, `MAX_K`], rows past
 `MAX_ROWS` or columns past `MAX_COLS`; a tile off the 16 × 8 grid; ROWS outside [1, 16] or COLS outside [1, 8]; and a
-block past the call's steps. `Call` is the reference: a call's data and coins, its words, and a unit's inputs and verdict.
+block past the call's steps. `Call` is the reference: a call's data and coins, its words, its served bf16s, and a unit's
+inputs and verdict.
 """
 from __future__ import annotations
 
 import random
+import struct
 from dataclasses import dataclass
 from typing import Any
 
@@ -70,11 +81,12 @@ from verity.ml.circuits.refs import Affine, Coll, Strided, concat
 from verity.ml.circuits.types import Array, Value
 
 __all__ = [
-    "MAX_K", "MAX_ROWS", "MAX_COLS", "FOLD_RANGE", "PIECE_ANDS", "PIECES", "Unit", "Call", "unit_ands", "steps_for",
-    "pad_rows", "pad_cols", "k_range", "bal13", "row_tag", "col_code", "rot_weight", "bias", "word_bound",
+    "MAX_K", "MAX_ROWS", "MAX_COLS", "LEAD_FOLD_BOUND", "FOLD_MAGIC", "PIECE_ANDS", "PIECES", "Unit", "Call", "unit_ands",
+    "steps_for", "pad_rows", "pad_cols", "k_range", "bal13", "row_tag", "col_code", "rot_weight", "bias", "word_bound",
+    "fold_word", "fold_admits", "f32", "bf16", "int8_epilogue", "fold_epilogue",
     "PouwLeadStep0", "PouwLeadStep", "PouwLeadPad0", "PouwLeadPad", "PouwLeadWeigh", "PouwLeadTagWeight", "PouwLeadPairS8",
-    "PouwLeadPair32",
-    "PouwLeadFold", "PouwLeadStep0Row", "PouwLeadStep0Mma", "PouwLeadStepRow", "PouwLeadStepMma", "PouwLeadTile",
+    "PouwLeadPair32", "PouwLeadPop", "PouwLeadSub32", "PouwLeadFold", "PouwLeadStep0Row", "PouwLeadStep0Mma",
+    "PouwLeadStepRow", "PouwLeadStepMma", "PouwLeadTile",
 ]
 
 BIT = BL.BIT
@@ -91,8 +103,10 @@ COIN_TILE, E, LANE_COINS = 64, 7, 3
 LANES0, LANES, K32 = 21, 28, 32
 #: the calls the verifier admits (`Statement.admits_of_caps`): K from 1 to 2^16, at most 2^15 rows and 2^20 columns
 MAX_K, MAX_ROWS, MAX_COLS = 1 << 16, 1 << 15, 1 << 20
-#: the fold's window: the epilogue reads p back exactly while |p| <= 2^22
-FOLD_RANGE = 1 << 22
+#: the fold's exact range (`serving.LEAD_FOLD_BOUND`): the epilogue reads p = A_i · B_j back exactly while |p| <= 2^22
+LEAD_FOLD_BOUND = 1 << 22
+#: 1.5 · 2^23 as an fp32's bits: the fold word is FOLD_MAGIC + p, and the epilogue's FADD takes 1.5 · 2^23 off
+FOLD_MAGIC, FOLD_OFFSET = 0x4B400000, 12582912.0
 #: a step's coin term's bound (`Proofs.Pouw.Lead.Tags.coinTerm_abs`) and a step's data bound with every int8, -128 included
 COIN_ABS, DATA_ABS = 16479, LANES * 128 * 128
 
@@ -222,10 +236,42 @@ def PouwLeadPair32Word(x0: int, x1: int) -> int:
     return (x0 + x1) & M32
 
 
-@primitive("PouwLeadFold", 1, [("w", Value(32)), ("sigma", Value(32))], Value(1), conformance="protocol-defined")
-def PouwLeadFoldWord(w: int, sigma: int) -> int:
-    """1 iff p = w - σ, mod 2^32 read as s32, is within [-2^22, 2^22]: the final word less its coin lanes' sum."""
-    return int((w - sigma + FOLD_RANGE) & M32 <= 2 * FOLD_RANGE)
+@primitive("PouwLeadPop", 1, [("x", Value(32))], Value(32), conformance="protocol-defined")
+def PouwLeadPopWord(x: int) -> int:
+    """The number of x's 32 bits that are set: a row's tag bits, 32 at a time."""
+    return bin(x & M32).count("1")
+
+
+@primitive("PouwLeadSub32", 1, [("x", Array(2, Value(32)))], Value(32), conformance="protocol-defined")
+def PouwLeadSub32Word(x0: int, x1: int) -> int:
+    """x0 - x1 mod 2^32: a fold source, a public constant less a sum of coins."""
+    return (x0 - x1) & M32
+
+
+def _dp4a(a: Any, b: Any, c: int) -> int:
+    """IDP4A: c plus the dot product of a's and b's four int8s, mod 2^32."""
+    return (c + sum(_sx8(x) * _sx8(y) for x, y in zip(a, b))) & M32
+
+
+def fold_word(d: int, r: int, c: int, nt: Any, g: Any, na: Any, cj: Any) -> int:
+    """`layout.h`'s `fold_word` on a final word d: q = d + r + c (one IADD3 of the row and column sources), then
+    q = IDP4A(na, cj, IDP4A(nt, g, q)), which takes a₁ · C and T · G out, all mod 2^32."""
+    return _dp4a(na, cj, _dp4a(nt, g, d + r + c))
+
+
+def fold_admits(p: int) -> bool:
+    """Whether the epilogue reads p back exactly: |p| <= `LEAD_FOLD_BOUND`."""
+    return -LEAD_FOLD_BOUND <= p <= LEAD_FOLD_BOUND
+
+
+@primitive("PouwLeadFold", 1, [("w", Value(32)), ("r", Value(32)), ("c", Value(32)), ("nt", Array(4, Value(8))),
+                               ("g", Array(4, Value(8))), ("na", Array(4, Value(8))), ("cj", Array(4, Value(8)))],
+           Value(1), conformance="protocol-defined")
+def PouwLeadFoldWord(w: int, r: int, c: int, *rest: int) -> int:
+    """1 iff `fold_word`(w, r, c, nt, g, na, cj) is FOLD_MAGIC + p, mod 2^32, with p `fold_admits`: the served word's fold,
+    read as an fp32, is exactly 1.5 · 2^23 + p."""
+    q = fold_word(w, r, c, rest[0:4], rest[4:8], rest[8:12], rest[12:16])
+    return int((q - FOLD_MAGIC + LEAD_FOLD_BOUND) & M32 <= 2 * LEAD_FOLD_BOUND)
 
 
 # -- the pieces on bits -------------------------------------------------------------------------------------------------------
@@ -234,15 +280,21 @@ def PouwLeadFoldWord(w: int, sigma: int) -> int:
 _BW = -(1 << 15) + (1 << 8)
 
 
-def _step_check(C, prev, w, a, b, addends, one):
-    """One carry-save reduction mod 2^32 of the Baugh-Wooley products of a and b, prev, the addends, the complement of w
-    and the constant n · BW + 1 + one, which is 0 iff the congruence holds; then a NOR of its 32 bits."""
+def _products(C, a, b) -> list[list]:
+    """32 columns of the Baugh-Wooley partial products of a and b, int8 lane by lane, less their constant len(a) · BW."""
     cols: list[list] = [[] for _ in range(32)]
     for x, y in zip(a, b):
         for i in range(8):
             for j in range(8):
                 p = C.AND(x[i], y[j])
                 cols[i + j].append(NOT(p) if (i == 7) != (j == 7) else p)
+    return cols
+
+
+def _step_check(C, prev, w, a, b, addends, one):
+    """One carry-save reduction mod 2^32 of the Baugh-Wooley products of a and b, prev, the addends, the complement of w
+    and the constant n · BW + 1 + one, which is 0 iff the congruence holds; then a NOR of its 32 bits."""
+    cols = _products(C, a, b)
     for i in range(32):
         cols[i] += [prev[i], NOT(w[i])]
     for e in addends:
@@ -285,11 +337,24 @@ def _tag_weight_bits(C, G):
     return [C.AND(equal, NOT(C.AND(G[7], C.AND(NOT(G[1]), NOT(G[0])))))]
 
 
-def _fold_bits(C, w, sigma):
-    """p = w - σ mod 2^32, then (p + 2^22) mod 2^32 < 2^23 + 1 by a borrow."""
-    p = sub(C, list(w), list(sigma), 32)[0]
-    q = add(C, p, const_bits(FOLD_RANGE, 32), width=32)
-    return [sub(C, q, const_bits(2 * FOLD_RANGE + 1, 32), 32)[1]]
+def _fold_bits(C, w, r, c, *rest):
+    """x = q - FOLD_MAGIC + 2^22 = p + 2^22 in one carry-save reduction mod 2^32 of w, r, c, the Baugh-Wooley products of
+    (nt, g) and (na, cj) and the constant 8 · BW - FOLD_MAGIC + 2^22; then x <= 2^23: bits 24 .. 31 clear, and bit 23
+    clear or bits 0 .. 22 clear."""
+    cols = _products(C, rest[0:4] + rest[8:12], rest[4:8] + rest[12:16])
+    for i in range(32):
+        cols[i] += [w[i], r[i], c[i]]
+    for i, v in enumerate(const_bits((8 * _BW - FOLD_MAGIC + LEAD_FOLD_BOUND) & M32, 32)):
+        if v.c:
+            cols[i].append(v)
+    x = compress_columns(C, cols)[:32]
+    high, low = NOT(or_reduce(C, x[24:])), NOT(or_reduce(C, x[:23]))
+    return [C.AND(high, NOT(C.AND(x[23], NOT(low))))]
+
+
+def _pop_bits(C, x):
+    """x's set bits counted in one carry-save reduction of its one column."""
+    return (compress_columns(C, [list(x)]) + [ZERO] * 32)[:32]
 
 
 def _pair_s8_bits(C, x0, x1):
@@ -336,16 +401,27 @@ PouwLeadPair32 = definition(
     "PouwLeadPair32", 2, lambda C, x0, x1: add(C, list(x0), list(x1), width=32), (("x", Array(2, U32)),), U32,
     word=PouwLeadPair32Word, conformance="protocol-defined",
     doc="x0 + x1 mod 2^32 on bits, a ripple add: PouwLeadPair32_v1. 31 ANDs")
+PouwLeadPop = definition(
+    "PouwLeadPop", 2, _pop_bits, (("x", U32),), U32, word=PouwLeadPopWord, conformance="protocol-defined",
+    doc="x's set bits counted on bits, one carry-save reduction of its one column: PouwLeadPop_v1. 31 ANDs")
+PouwLeadSub32 = definition(
+    "PouwLeadSub32", 2, lambda C, x0, x1: sub(C, list(x0), list(x1), 32)[0], (("x", Array(2, U32)),), U32,
+    word=PouwLeadSub32Word, conformance="protocol-defined",
+    doc="x0 - x1 mod 2^32 on bits, a ripple subtract: PouwLeadSub32_v1. 31 ANDs")
 PouwLeadFold = definition(
-    "PouwLeadFold", 2, _fold_bits, (("w", U32), ("sigma", U32)), BIT, word=PouwLeadFoldWord, conformance="protocol-defined",
-    doc="|w - σ| <= 2^22 as s32 on bits: PouwLeadFold_v1. 70 ANDs over its subtract, its add and its borrow")
+    "PouwLeadFold", 2, _fold_bits,
+    (("w", U32), ("r", U32), ("c", U32), ("nt", Array(4, I8)), ("g", Array(4, I8)), ("na", Array(4, I8)),
+     ("cj", Array(4, I8))), BIT, word=PouwLeadFoldWord, conformance="protocol-defined",
+    doc="fold_word(w, r, c, nt, g, na, cj) - 0x4B400000 within [-2^22, 2^22] mod 2^32 on bits, one carry-save reduction of "
+        "the IADD3 and the two IDP4A's 8 int8 products, then its range: PouwLeadFold_v1. 1,142 ANDs: 512 partial "
+        "products, 599 in the tree and its final ripple, and the range's 31")
 
 #: each piece's ANDs, which its pin holds
 PIECE_ANDS = {"PouwLeadStep0_v2": 3839, "PouwLeadStep_v2": 3711, "PouwLeadPad0_v2": 1150, "PouwLeadPad_v2": 123,
               "PouwLeadWeigh_v2": 92, "PouwLeadTagWeight_v2": 7, "PouwLeadPairS8_v2": 8, "PouwLeadPair32_v2": 31,
-              "PouwLeadFold_v2": 70}
+              "PouwLeadPop_v2": 31, "PouwLeadSub32_v2": 31, "PouwLeadFold_v2": 1142}
 PIECES = (PouwLeadStep0, PouwLeadStep, PouwLeadPad0, PouwLeadPad, PouwLeadWeigh, PouwLeadTagWeight, PouwLeadPairS8,
-          PouwLeadPair32, PouwLeadFold)
+          PouwLeadPair32, PouwLeadPop, PouwLeadSub32, PouwLeadFold)
 
 WORDS_ROW, WORDS_TILE = Array(TN, U32), Array(TM, Array(TN, U32))
 
@@ -424,9 +500,15 @@ class Unit:
 
     @property
     def row_bits(self) -> tuple[int, int]:
-        """The bits [lo, hi) of each row's row words the unit reads: a₁ at bits 0 .. 3 on block 0, and b_t at bit t + 3 for
-        the block's steps past 0."""
-        return (0 if self.BLK == 0 else self.t0 + 3), self.t1 + 3
+        """The bits [lo, hi) of each row's row words the unit reads: a₁ at bits 0 .. 3 on block 0 and on the call's last
+        block, and b_t at bit t + 3 for the block's steps past 0, on the last block every step's."""
+        return (0 if self.BLK == 0 or self.last else self.t0 + 3), self.t1 + 3
+
+    @property
+    def reads_g(self) -> bool:
+        """Whether the unit reads its columns' G words: on block 0 (step 0's lanes) and on the call's last block (the
+        fold)."""
+        return self.BLK == 0 or self.last
 
     @property
     def u0(self) -> int:
@@ -452,7 +534,7 @@ class Unit:
         lo, hi = self.row_bits
         out = [("a", Array(self.ROWS, Array(self.kb, I8))), ("b", Array(self.COLS, Array(self.kb, I8))),
                ("row", Array(TM, Array(hi - lo, BIT)))]
-        if self.BLK == 0:
+        if self.reads_g:
             out.append(("g", Array(TN, Array(4, I8))))
         out.append(("s", Array(self.t1 - self.u0, Array(TN, Array(LANE_COINS, I8)))))
         if self.BLK > 0:
@@ -478,15 +560,16 @@ def _signature(S: Any) -> tuple:
     return u.params(), BIT
 
 
-def _lanes(s: Coll, n: int) -> Coll:
-    """The lane coins s (n steps × 8 columns × 3 lanes, the feed's order) lane by lane, lane ℓ · 8 + c its n steps."""
+def _lanes(s: Coll, n: int, cols: int) -> Coll:
+    """The lane coins s (n steps × 8 columns × 3 lanes, the feed's order) of the first ``cols`` columns lane by lane, lane
+    ℓ · cols + c its n steps."""
     refs = s.refs
     if not isinstance(refs, Affine):
         raise TypeError(f"the lane coins are one run of a parameter's leaves, not {refs!r}")
     step = TN * LANE_COINS * 8
-    return Coll(Array(LANE_COINS * TN * n, I8), concat([
+    return Coll(Array(LANE_COINS * cols * n, I8), concat([
         Strided(refs.space, refs.idx, refs.base + (c * LANE_COINS + ell) * 8, 8, step, 1, 8 * n)
-        for ell in range(LANE_COINS) for c in range(TN)]))
+        for ell in range(LANE_COINS) for c in range(cols)]))
 
 
 def _wide(refs: Any, width: int) -> Any:
@@ -494,10 +577,10 @@ def _wide(refs: Any, width: int) -> Any:
     return refs if width == 32 else concat([refs] + [refs.slice(7, 8)] * 24)
 
 
-def _lane_sums(B: Any, x: Coll, n: int) -> Coll:
-    """Each of the 3 · 8 lanes' sum of its n coins (`_lanes`) as an s32: a tree of `PouwLeadPairS8` then `PouwLeadPair32`,
-    a level's odd one out carried up."""
-    lanes, piece, width = LANE_COINS * TN, PouwLeadPairS8, 8
+def _sums(B: Any, x: Coll, lanes: int, n: int, width: int) -> Coll:
+    """Each of ``lanes`` lanes' sum of its n ``width``-bit terms, a lane's run after the one before, as an s32: a tree of
+    `PouwLeadPairS8` on int8 terms, then `PouwLeadPair32`, a level's odd one out carried up."""
+    piece = PouwLeadPairS8 if width == 8 else PouwLeadPair32
     while n > 1:
         half, odd = n // 2, n % 2
         pairs = concat([x[k * n:k * n + 2 * half].refs for k in range(lanes)])
@@ -518,10 +601,16 @@ def _body(B: Any, S: Any, *args: Coll) -> Coll:
             bits[b] = B.call(BL.constant(b)).refs
         return concat([bits[v >> k & 1] for k in range(width)])
 
+    def each(piece: Any, members: list, *fields: Any) -> Any:
+        """``piece`` once a member, its k-th parameter ``fields[k]`` of the member."""
+        params, _ret = bind(piece).signature()
+        return B.batch(piece, *[Coll(Array(len(members), t), concat([f(*x) for x in members]))
+                                for (_n, t), f in zip(params, fields)], axes=(0,) * len(fields)).refs
+
     su, lo = u.t1 - u.u0, u.row_bits[0]
     srefs = p["s"].refs
     oks = [Strided(srefs.space, srefs.idx, srefs.base, 1, 8, 1, LANE_COINS * TN * su)]
-    if u.BLK == 0:
+    if u.reads_g:
         oks.append(B.batch(PouwLeadTagWeight, p["g"].reshape(Array(4 * TN, I8)), axes=(0,)).refs)
     weighed = B.batch(PouwLeadWeigh, Coll(Array(u.steps * 2 * TN, Array(LANE_COINS, U32)), concat([
         _wide(p["s"][t - u.u0][c][ell].refs, 8)
@@ -553,6 +642,7 @@ def _body(B: Any, S: Any, *args: Coll) -> Coll:
         return [const(v & 0xFF, 8) for v in col_code(u.C0 + c)] + [p["g"][c].refs]
 
     later = range(max(u.t0, 1), u.t1)
+    real = [cell for cell in range(TILE_WORDS) if cell // TN < u.ROWS and cell % TN < u.COLS]
     if u.ROWS == TM and u.COLS == TN:
         if u.t0 == 0:
             oks.append(B.call(
@@ -574,13 +664,6 @@ def _body(B: Any, S: Any, *args: Coll) -> Coll:
                 Coll(Array(n, Array(TM, BIT)), concat([p["row"].take(1, t + 3 - lo).refs for t in later])),
                 axes=(0,) * 6).refs)
     else:
-        def each(piece: Any, members: list, *fields: Any) -> Any:
-            """``piece`` once a member, its k-th parameter ``fields[k]`` of the member."""
-            params, _ret = bind(piece).signature()
-            return B.batch(piece, *[Coll(Array(len(members), t), concat([f(*x) for x in members]))
-                                    for (_n, t), f in zip(params, fields)], axes=(0,) * len(fields)).refs
-
-        real = [cell for cell in range(TILE_WORDS) if cell // TN < u.ROWS and cell % TN < u.COLS]
         pad = [cell for cell in range(TILE_WORDS) if cell not in real]
         if u.t0 == 0:
             prev, w, step0 = (lambda cell: before(0, cell)), (lambda cell: p["w"][0][cell].refs), (lambda cell: lane(0, cell))
@@ -597,13 +680,31 @@ def _body(B: Any, S: Any, *args: Coll) -> Coll:
                             lane, tag))
             oks.append(each(PouwLeadPad, [(t, cell) for t in later for cell in pad], prev, w, lane, tag))
     if u.last:
-        sums = _lane_sums(B, _lanes(p["s"], su), su)
-        sigma = B.batch(PouwLeadWeigh, Coll(Array(2 * TN, Array(LANE_COINS, U32)), concat([
-            sums[ell * TN + c].refs for cls in range(2) for c in range(TN) for ell in (cls, 1 - cls, 2)])), axes=(0,))
-        cells = Array(TILE_WORDS, U32)
-        oks.append(B.batch(PouwLeadFold, p["w"][u.steps - 1].reshape(cells),
-                           Coll(cells, concat([sigma[r % 2 * TN:(r % 2 + 1) * TN].refs for r in range(TM)])),
-                           axes=(0, 0)).refs)
+        cols, classes = u.COLS, min(u.ROWS, 2)
+        sums = _sums(B, _lanes(p["s"], su, cols), LANE_COINS * cols, su, 8)
+        sigma = B.batch(PouwLeadWeigh, Coll(Array(classes * cols, Array(LANE_COINS, U32)), concat([
+            sums[ell * cols + c].refs for cls in range(classes) for c in range(cols) for ell in (cls, 1 - cls, 2)])),
+            axes=(0,))
+        col_src = B.batch(PouwLeadSub32, Coll(Array(classes * cols, Array(2, U32)), concat([
+            x for cls in range(classes) for c in range(cols)
+            for x in (const(bias(u.S, u.C0 + c) & M32, 32), sigma[cls * cols + c].refs)])), axes=(0,))
+        tags, chunks = u.S - 1, -(-(u.S - 1) // 32)
+        if tags:
+            pops = B.batch(PouwLeadPop, Coll(Array(u.ROWS * chunks, U32), concat([
+                x for r in range(u.ROWS) for k in range(chunks)
+                for x in [p["row"][r][4 + 32 * k:4 + min(32 * k + 32, tags)].refs]
+                + ([const(0, 32 * k + 32 - tags)] if 32 * k + 32 > tags else [])])), axes=(0,))
+            walks = _sums(B, Coll(Array(u.ROWS * chunks, U32), pops.refs), u.ROWS, chunks, 32)
+            row_src = B.batch(PouwLeadSub32, Coll(Array(u.ROWS, Array(2, U32)), concat([
+                x for r in range(u.ROWS) for x in (const((FOLD_MAGIC - tags) & M32, 32), walks[r].refs)])), axes=(0,))
+        oks.append(each(
+            PouwLeadFold, [(cell,) for cell in real], lambda cell: p["w"][u.steps - 1][cell].refs,
+            lambda cell: row_src[cell // TN].refs if tags else const(FOLD_MAGIC, 32),
+            lambda cell: col_src[cell // TN % 2 * cols + cell % TN].refs,
+            lambda cell: concat([const(-v & 0xFF, 8) for v in row_tag(u.R0 + cell // TN)]),
+            lambda cell: p["g"][cell % TN].refs,
+            lambda cell: concat([p["row"][cell // TN][q].refs for q in range(4) for _ in range(8)]),
+            lambda cell: concat([const(v & 0xFF, 8) for v in col_code(u.C0 + cell % TN)])))
     every = concat(oks)
     return B.call(BL.and_gate(every.count), Coll(Array(every.count, BIT), every))
 
@@ -614,39 +715,72 @@ PouwLeadTile = CompositeDefinition(
     doc="The lead's sampled unit (`circuit.lead`): one 16 × 8 MMA tile at row R0 and column C0 of a call at contraction K, "
         "ROWS and COLS of its rows and columns the call's, over steps [32 BLK, 32 BLK + 32), to ok: every committed word is "
         "the step's formed k32 lanes added to the word before, every tag weight is in [-3, 3] and every lane coin odd, and "
-        "on the call's last block the final word less the coin lanes' sum is within 2^22. Its ANDs are `unit_ands`.")
+        "on the call's last block each served word's fold reads back A_i · B_j exactly, |A_i · B_j| <= 2^22. Its ANDs are "
+        "`unit_ands`.")
 
 
-def _tree_ands(n: int) -> int:
-    ands, piece = 0, "PouwLeadPairS8_v2"
+def _tree_ands(n: int, lanes: int, piece: str) -> int:
+    ands = 0
     while n > 1:
-        ands += LANE_COINS * TN * (n // 2) * PIECE_ANDS[piece]
+        ands += lanes * (n // 2) * PIECE_ANDS[piece]
         n, piece = n // 2 + n % 2, "PouwLeadPair32_v2"
     return ands
 
 
 def unit_ands(K: int, BLK: int, ROWS: int = TM, COLS: int = TN) -> int:
     """`PouwLeadTile_v1`'s ANDs at K and block BLK with ROWS × COLS of its 128 cells the call's: on block 0 step 0's
-    `PouwLeadStep0` a cell of the call's and `PouwLeadPad0` a padding cell, and 32 tag weights' `PouwLeadTagWeight`; its
-    later steps' `PouwLeadStep` and `PouwLeadPad` likewise; each step's 16 lane terms' `PouwLeadWeigh`; on the call's last
-    block its lane sums, their 16 `PouwLeadWeigh` and 128 `PouwLeadFold`; and the AND of its oks, its lane coins' low bits
-    among them."""
+    `PouwLeadStep0` a cell of the call's and `PouwLeadPad0` a padding cell; its later steps' `PouwLeadStep` and
+    `PouwLeadPad` likewise; each step's 16 lane terms' `PouwLeadWeigh`; 32 tag weights' `PouwLeadTagWeight` on a block that
+    reads G; on the call's last block, over the call's columns and rows only, its columns' lane sums, a `PouwLeadWeigh`
+    and a column source's `PouwLeadSub32` for each column and row class, each row's walk (`PouwLeadPop` 32 tag bits at a
+    time, summed) and row source's `PouwLeadSub32`, and a `PouwLeadFold` a cell of the call's; and the AND of its oks, its
+    lane coins' low bits among them."""
     u, real = Unit(K, 0, 0, ROWS, COLS, BLK), ROWS * COLS
     su, pad = u.t1 - u.u0, TILE_WORDS - real
     ands = (u.t1 - max(u.t0, 1)) * (real * PIECE_ANDS["PouwLeadStep_v2"] + pad * PIECE_ANDS["PouwLeadPad_v2"]) \
         + u.steps * 2 * TN * PIECE_ANDS["PouwLeadWeigh_v2"]
     oks = u.steps * TILE_WORDS + LANE_COINS * TN * su
     if BLK == 0:
-        ands += real * PIECE_ANDS["PouwLeadStep0_v2"] + pad * PIECE_ANDS["PouwLeadPad0_v2"] \
-            + 4 * TN * PIECE_ANDS["PouwLeadTagWeight_v2"]
+        ands += real * PIECE_ANDS["PouwLeadStep0_v2"] + pad * PIECE_ANDS["PouwLeadPad0_v2"]
+    if u.reads_g:
+        ands += 4 * TN * PIECE_ANDS["PouwLeadTagWeight_v2"]
         oks += 4 * TN
     if u.last:
-        ands += _tree_ands(su) + 2 * TN * PIECE_ANDS["PouwLeadWeigh_v2"] + TILE_WORDS * PIECE_ANDS["PouwLeadFold_v2"]
-        oks += TILE_WORDS
+        ands += _tree_ands(su, LANE_COINS * COLS, "PouwLeadPairS8_v2") + real * PIECE_ANDS["PouwLeadFold_v2"] \
+            + min(ROWS, 2) * COLS * (PIECE_ANDS["PouwLeadWeigh_v2"] + PIECE_ANDS["PouwLeadSub32_v2"])
+        if (chunks := -(-(u.S - 1) // 32)):
+            ands += ROWS * (chunks * PIECE_ANDS["PouwLeadPop_v2"] + PIECE_ANDS["PouwLeadSub32_v2"]) \
+                + _tree_ands(chunks, ROWS, "PouwLeadPair32_v2")
+        oks += real
     return ands + oks - 1
 
 
 # -- the reference ------------------------------------------------------------------------------------------------------------
+
+def f32(x: float) -> float:
+    """x rounded to the nearest fp32, ties to even (finite x)."""
+    return struct.unpack("<f", struct.pack("<f", x))[0]
+
+
+def bf16(x: float) -> int:
+    """The bf16 pack of the fp32 x, rounded to nearest even (finite x): its bits."""
+    u = struct.unpack("<I", struct.pack("<f", x))[0]
+    return (u + 0x7FFF + (u >> 16 & 1)) >> 16 & 0xFFFF
+
+
+def int8_epilogue(y: int, si: float, sj: float) -> int:
+    """verity_int8's epilogue on its int32 product y (`int8_exact.dequantize`): RN_bf16(RN32(RN32(RN32(y) s_i) s_j)), the
+    activation's scale first."""
+    return bf16(f32(f32(f32(y) * si) * sj))
+
+
+def fold_epilogue(q: int, si: float, sj: float) -> int:
+    """The lead's epilogue on its fold word q (`layout.h`'s `xu_fold`, then the bf16 pack): v the fp32 whose bits are q,
+    FADD(v, -1.5 · 2^23), FMUL s_i, FMUL s_j. It is `int8_epilogue` on p bit for bit while q = FOLD_MAGIC + p with
+    `fold_admits`(p): v is then 1.5 · 2^23 + p exactly. Past it v is another float (2^22 + 1 reads back as 2^22 + 2)."""
+    v = struct.unpack("<f", struct.pack("<I", q & M32))[0]
+    return bf16(f32(f32(f32(v - FOLD_OFFSET) * si) * sj))
+
 
 @dataclass
 class Call:
@@ -731,6 +865,39 @@ class Call:
             out.append([row[:] for row in acc])
         return out
 
+    def product(self, i: int, j: int) -> int:
+        """A_i · B_j, the int32 product verity_int8 serves."""
+        return sum(x * y for x, y in zip(self.A[i], self.B[j]))
+
+    def refuse(self) -> str | None:
+        """Why the verifier refuses the call, else None: a served word whose fold the epilogue can't read back exactly
+        (`fold_admits`), which the unit of its tile's last block outputs as a visible failure."""
+        for i in range(self.rows):
+            for j in range(self.cols):
+                if not fold_admits(p := self.product(i, j)):
+                    return f"the served word at row {i}, column {j} is A_i · B_j = {p}, past the fold's exact range " \
+                           f"|p| <= {LEAD_FOLD_BOUND}"
+        return None
+
+    def sources(self, i: int, j: int) -> tuple[int, int]:
+        """Row i's and column j's fold sources: the row's FOLD_MAGIC less its walk Σ_{t >= 1} (1 + b_t[i]) and the column's
+        β_j less σ, the row class's coin lanes Σ_t Σ_ℓ A′[i, ℓ] s_t[ℓ, j]."""
+        walk = sum(1 + self.b[i][t] for t in range(1, self.S))
+        sigma = sum(rot_weight(i, ell) * self.s(t, i, ell, j) for t in range(self.S) for ell in range(LANE_COINS))
+        return (FOLD_MAGIC - walk) & M32, (bias(self.S, j) - sigma) & M32
+
+    def fold(self, i: int, j: int, words: list | None = None) -> int:
+        """The kernel's fold word q of the final word (i, j) (`fold_word`): the IADD3 of its sources, then -a₁[i] against
+        C[:, j] and -T(i) against G[:, j]."""
+        W = self.words() if words is None else words
+        r, c = self.sources(i, j)
+        return fold_word(W[-1][i][j], r, c, [-v & 0xFF for v in row_tag(i)], [self.g[q][j] - 3 & 0xFF for q in range(4)],
+                         [-v & 0xFF for v in self.a1[i]], [v & 0xFF for v in col_code(j)])
+
+    def served(self, i: int, j: int, si: float, sj: float, words: list | None = None) -> int:
+        """The bf16 the lead serves at row i and column j under scales s_i and s_j (`fold_epilogue` on its fold)."""
+        return fold_epilogue(self.fold(i, j, words), si, sj)
+
     def unit(self, R0: int, C0: int, BLK: int) -> Unit:
         return Unit(self.K, R0, C0, min(self.rows - R0, TM), min(self.cols - C0, TN), BLK)
 
@@ -745,7 +912,7 @@ class Call:
         args = {"a": [x & 0xFF for i in range(R0, R0 + u.ROWS) for x in self.A[i][lo:hi]],
                 "b": [x & 0xFF for j in range(C0, C0 + u.COLS) for x in self.B[j][lo:hi]],
                 "row": [self.row_word(R0 + r) >> rlo & (1 << (rhi - rlo)) - 1 for r in range(TM)],
-                "g": [self.g[q][C0 + c] - 3 & 0xFF for c in range(TN) for q in range(4)],
+                "g": [self.g[q][C0 + c] - 3 & 0xFF for c in range(TN) for q in range(4)] if u.reads_g else [],
                 "s": [self.s(t, R0, ell, C0 + c) & 0xFF for t in range(u.u0, u.t1) for c in range(TN)
                       for ell in range(LANE_COINS)],
                 "prev": [W[u.t0 - 1][i][j] & M32 for i, j in cells] if u.BLK else [],
