@@ -1,4 +1,4 @@
-"""The ingress tie through the proof service (`tie_service`): each bucket row of an ingress link-window of the warden's
+"""The ingress tie through the proof system (`tie_service`): each bucket row of an ingress link-window of the warden's
 cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the warden's root and decided by
 the verifier of record on its own lanes), and `advised.IoTieVerdict` built from the stream's outcomes of record alone.
 An honest link is tied, `advised.ends` reads the tie, and the advised link takes it only from `Ties`, the tie, its
@@ -326,7 +326,7 @@ def test_a_row_that_isnt_the_wardens_is_refused(tmp_path):
 
 
 def test_a_head_of_another_window_is_refused(tmp_path):
-    """The verifier reads the registered root's head: a head of window 1 on window 0's draw, or a head of another
+    """The verifier reads the registered root's head: a head of window 1 on window 0's sample, or a head of another
     session's domain, refuses it."""
     run, advice = Run(tmp_path), _advice(SPAN)
     draw, delivered = run.prove(0, advice)
