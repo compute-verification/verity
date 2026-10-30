@@ -911,10 +911,11 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                partition: dict | None = None) -> None:
     """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
-    verifier's own partition object, which v2 verifies the sessions against), in ``out/case.json``, and
-    the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case onsite's
-    evidence carries for sampled proofs, `SampledProofs.OneStageZk`'s (`case_v2`) in sampled proofs' one-stage form
-    (`case_with_form`), in ``out/case-v2.json``, or why there is none in ``out/case-v2-error.txt``."""
+    verifier's own partition object, which v2 verifies the sessions against), in ``out/case.json``, the current Python
+    on it (`replay.python`) in ``out/case-python.json``, and the case in sampled proofs' one-stage form
+    (`case_with_form`), which onsite's and remote's evidence carries for sampled proofs, in ``out/case-sampled.json``.
+    With ``v2`` (`v2_proof`), the case of the audit on the proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in
+    ``out/case-v2.json``, or why there is none in ``out/case-v2-error.txt``."""
     try:
         import replay as RP
 
@@ -924,6 +925,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
         c = RP.Case("", "a5", rec["format"], "audit", "audit", program, p, rec, e, None)
         (out / "case.json").write_text(json.dumps(c.case(), sort_keys=True))
         (out / "case-python.json").write_text(json.dumps(RP.python(c), sort_keys=True, default=str))
+        (out / "case-sampled.json").write_text(json.dumps(case_with_form(c.case()), sort_keys=True))
     except Exception as x:  # noqa: BLE001 -- the case is a copy of the audit for onsite; its failure leaves the audit's verdict
         (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
         return
@@ -932,7 +934,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     try:
         if isinstance(v2, str):
             raise ValueError(v2)
-        (out / "case-v2.json").write_text(json.dumps(case_with_form(case_v2(c.case(), sessions, **v2)), sort_keys=True))
+        (out / "case-v2.json").write_text(json.dumps(case_v2(c.case(), sessions, **v2), sort_keys=True))
     except Exception as x:  # noqa: BLE001 -- as the v1 case's
         (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
@@ -953,13 +955,13 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registe
             "params": {**case["params"], "proofs": {"circuit": circuit, "registered": registered}}}
 
 
-#: onsite's and remote's sampled proofs component (`VStar.Recursive.Sampled`): one-stage v2's audit or the recursive audit,
+#: onsite's and remote's sampled proofs component (`VStar.Recursive.Sampled`): one-stage v1's audit or the recursive audit,
 #: whichever form its params and evidence name
 SAMPLED_PROOFS = "verity/sampled-proofs/v1"
 
 
 def case_with_form(case: dict, form: str = "one-stage") -> dict:
-    """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as sampled proofs' (`SAMPLED_PROOFS`): its params and its
+    """`case`, one-stage v1's or the recursive audit's, as sampled proofs' (`SAMPLED_PROOFS`): its params and its
     evidence each with ``form``, which `VStar.Recursive.Sampled` splits off before that form's decoders read the
     rest."""
     import replay as RP

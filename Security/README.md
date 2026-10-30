@@ -68,14 +68,15 @@ PoUW has other guarantees, outside protocol soundness.
 ## The remote protocol in Lean
 
 Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
-site. It composes three subprotocols, sampled proofs' one-stage audit on the proofs themselves (v2), PoUW's window
+site. It composes three subprotocols, sampled proofs' one-stage audit (v1), PoUW's window
 check and the inference-only policy's check (`NciCheck.Protocol`), and accepts only when all three accept and the
 commitment binds them (`Properties.Composition`, proved), and only when all three commit to one record
 (`Core.Composition.same`). Onsite adds PoUS, PoUB, network certification and memory wipes.
 
 - **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. The composed statement, `Verity.Soundness`, is
-  not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs subprotocol is one-stage v2, which runs
-  `flock-verify --zk` on the sessions' files it is handed as blobs rather than taking their verdicts as evidence.
+  not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs subprotocol is one-stage v1, which takes
+  the sessions' verdicts as evidence; v2, which runs `flock-verify --zk` on the sessions' files itself, joins once its
+  check reads the challenger's signed coins.
 - **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`, `LinkCRZC`,
   `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`,
   `ReceiptLuckAt` and `GuessLuckAt`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,

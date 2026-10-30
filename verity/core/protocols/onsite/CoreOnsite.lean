@@ -1,9 +1,10 @@
 /-
 Onsite Verity (`verity/onsite/v0`): remote Verity's accounting with the verifier's hardware at the site, so it also
-accounts for space, bandwidth and communication. Its subprotocols are integrity by sampled proofs on the proofs
-themselves (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the form its params name: one-stage v2's
-audit, flock-verify `--zk` run on each session's files, or the recursive audit, V*'s compiled check run on the recursive
-session's parts, each on the files the caller hands in as blobs), the inference-only policy (`NciCheck.Protocol.protocol`,
+accounts for space, bandwidth and communication. Its subprotocols are integrity by sampled proofs
+(`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the form its params name: one-stage v1's audit, or
+the recursive audit, V*'s compiled check run on the recursive session's parts on the files the caller hands in as blobs,
+then v1's live check on its verdict of record; v2, the audit on the proofs themselves, is not onsite's until its check
+reads the challenger's signed coins), the inference-only policy (`NciCheck.Protocol.protocol`,
 `verity/inference-only/v0`: the declared circuit divides into inference blocks within their gate and fresh-input
 budgets), work by proof of useful work over the period (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the
 period's windows credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth

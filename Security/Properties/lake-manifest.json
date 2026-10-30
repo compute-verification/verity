@@ -133,7 +133,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/protocols/onsite/../remote_bandwidth/lean/../../../difftest/lean",
+   "../../verity/core/protocols/onsite/../../devices/memory_challenger/lean/../../../difftest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -141,7 +141,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/protocols/onsite/../remote_bandwidth/lean/../../../primitives/randomness",
+   "../../verity/core/protocols/onsite/../../devices/memory_challenger/lean/../../../primitives/randomness",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -149,7 +149,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/protocols/onsite/../remote_bandwidth/lean/../../pous/check/../../../devices/memory_challenger/lean/../../../primitives/lms/lean",
+   "../../verity/core/protocols/onsite/../../devices/memory_challenger/lean/../../../primitives/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -173,7 +173,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/protocols/onsite/../remote_bandwidth/lean/../../pous/check/../../../devices/memory_challenger/lean/../../../attest/lean",
+   "../../verity/core/protocols/onsite/../../devices/memory_challenger/lean/../../../attest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

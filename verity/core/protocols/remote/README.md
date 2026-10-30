@@ -9,8 +9,7 @@ registered circuit is inference, not training).
 **The open gap.** Remote's composed soundness theorem, `Verity.Soundness`, is not in Lean yet. It is due after the Lean
 dedupe (one vocabulary), and its owner is soundness. Today the pieces below compose by hand: each is proved on its own,
 and no Lean theorem states remote's guarantee from them. Nothing yet ties the deployed verifier's verdicts to those
-theorems either, because remote reads sampled proofs' one-stage v1, which takes the sessions' verdicts as evidence
-instead of computing them.
+theorems either.
 
 This file is an outline with signposts. The Lean is the definition. The vocabulary is the Glossary's: `ARCHITECTURE.md`'s
 Glossary, and `GLOSSARY.md` for the notation and the older names. The lifecycle's terms (the reported advice, the
@@ -56,19 +55,14 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses, on the proofs themselves, which it reads as blobs | `VStar.Recursive.Sampled.protocol` (`verity/core/service/vstar/recursive`): one-stage v2's audit or the recursive audit, as the params' `form` names it | `verity/sampled-proofs/v1` |
+| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/core/service/vstar/recursive`): one-stage v1's audit, or the recursive audit on the proofs themselves, which it reads as blobs, as the params' `form` names it | `verity/sampled-proofs/v1` |
 | PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the registered work's | `PouwCheck.protocol` (`verity/core/protocols/pouw/lean/check`) | `verity/pouw/v1` |
-| The inference-only policy ([README](../network/nci/README.md); its Lean is still named `Nci`, `NciCheck`) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
-
-The inference-only policy's check reads only the registered circuit and the registered information, so it needs no
-hardware at the site. Its commitment is the run's record, which must name the registered circuit, and remote refuses
-unless it is the record PoUW's window and sampled proofs commit to (one record, below). Its evidence, the division
-and θ's provenance, reaches the verifier in the clear, not inside a zero-knowledge proof.
+| The inference-only policy ([README](../network/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`, `protocol = sameB "verity/remote/v0" ids components` over `components =
-[NciCheck.Protocol.protocol, PouwCheck.protocol, VStar.Recursive.Sampled.protocol]`, `ids` their ids: every one of the
-three commits to the run's record, and once the cases fit, two records' digests reject remote whatever the subprotocols
-answer (`Core.Composition.same`; the `#guard`s pin a policy on one record and the others on another). Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
+[NciCheck.Protocol.protocol, PouwCheck.protocol, VStar.Recursive.Sampled.protocol]`. All three commit to the run's
+record, which names the registered circuit; once the cases fit, two different records reject remote whatever the
+subprotocols answer (`Core.Composition.same`). Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
 (`RemoteMain.lean`). The Lake package `core_remote` is code: it has no Mathlib and nothing of `Security/`
 (`lean-audit.json`). The product's rule and its difftest are the composition's ([README](../composition/README.md),
 `verity/core/protocols/composition/tests/test_composition_difftest.py`).
@@ -129,7 +123,7 @@ PoUW `--zk`), and a chain can be "none" while each piece is proved.
 | Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
 | A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
-| The verifier's verdicts tied to those theorems | none at remote's verdict yet: remote reads sampled proofs (`verity/sampled-proofs/v1`), whose one-stage form (v2) runs `flock-verify verify --zk` itself and whose recursive form runs V*'s compiled check | **open** | — |
+| The verifier's verdicts tied to those theorems | none at remote's verdict yet: remote reads sampled proofs (`verity/sampled-proofs/v1`), whose one-stage form is v1, which takes the verdicts as evidence, and whose recursive form runs V*'s compiled check; v2 (`verity/sampled-proofs/one-stage/v2`) runs `flock-verify verify --zk` itself, and remote doesn't read v2 yet | **open** | — |
 | PoUW's accept rule, and its accepted prefix tied to the period credit | `Properties.Pouw.Check.AcceptMeans`, and `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (`Security/Properties/Pouw/Period.lean`; proofs `Properties.Pouw.Check.acceptMeans`, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` and `checkedCreditPeriod`, all in `Security/Properties/lean-audit.json`) | **proved**, under the PoUW assumptions below | — |
 | PoUW's credit over a monitoring period | `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` | **proved** | — |
 | PoUW's proof layer | `Accounting.Guarantees.TS.SessionSoundAt`: proved, but it needs `AcceptedLive`, which no served path meets yet | **open** as a chain | PoUW `--zk`: broken at the proof layer |

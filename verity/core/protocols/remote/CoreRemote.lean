@@ -3,12 +3,13 @@ Remote Verity (`verity/remote/v0`): what the verifier establishes with no hardwa
 components are the inference-only policy (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`: the declared circuit
 divides into inference blocks within their gate and fresh-input budgets, which reads only the declared circuit and the
 registered information and so needs no hardware at the site), work by proof of useful work (`PouwCheck.protocol`), and
-integrity by sampled proofs on the proofs themselves (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in
-the form its params name: one-stage v2's audit, flock-verify `--zk` run on each session's files, or the recursive audit,
-V*'s compiled check run on the recursive session's parts, each on the files the caller hands in as blobs).
-`Core.Composition.sameB` composes them on the caller's blobs: every component accepts or remote doesn't, and any
-one's rejection rejects remote whatever the others answer. Each one's commitment is the run's record, and all three must
-commit to the same one: two records' digests reject remote whatever the components answer.
+integrity by sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the form its params
+name: one-stage v1's audit, or the recursive audit, V*'s compiled check run on the recursive session's parts on the files
+the caller hands in as blobs, then v1's live check on its verdict of record; v2, the audit on the proofs themselves, is
+not remote's until its check reads the challenger's signed coins). `Core.Composition.sameB` composes them on the
+caller's blobs: every component accepts or remote doesn't, and any one's rejection rejects remote whatever the others
+answer. Each one's commitment is the run's record, and all three must commit to the same one: two records' digests
+reject remote whatever the components answer.
 
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
 fresh-input bits) in the clear. Remote composes it for one run of record only, as an exception to

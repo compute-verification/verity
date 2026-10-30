@@ -1,6 +1,7 @@
-"""a5's case for onsite's integrity component, `SampledProofs.OneStageZk`'s: v1's case with the evidence's verdicts
-replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit digest, and blobs the paths of
-those files and the pinned tables; and the audits v2 can't verify say why."""
+"""a5's case for the audit on the proofs themselves, `SampledProofs.OneStageZk`'s: v1's case with the evidence's
+verdicts replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit digest, and blobs the
+paths of those files and the pinned tables; the audits v2 can't verify say why; and v1's case in sampled proofs'
+one-stage form, which onsite and remote compose."""
 
 from __future__ import annotations
 
@@ -81,6 +82,7 @@ def test_a_v2_refusal_is_written_beside_the_v1_case(tmp_path, monkeypatch, RP):
     a5.write_case(tmp_path, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
                   session_roots={}, served=[], v2="v2 verifies --zk sessions; this audit's are plain")
     assert json.loads((tmp_path / "case.json").read_text())["commitment"] == "ab"
+    assert json.loads((tmp_path / "case-sampled.json").read_text())["params"] == {"form": "one-stage"}
     assert not (tmp_path / "case-v2.json").exists()
     assert (tmp_path / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
 

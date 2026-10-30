@@ -9,9 +9,11 @@ applied to its committed inputs. The protocol is stated in Lean (see "Where thin
 points to the code, and lists what the Lean does not state yet.
 
 Sampled proofs is a subprotocol of both composite protocols. The remote protocol (`verity/remote/v0`,
-`verity/core/protocols/remote/`) composes its one-stage audit (`verity/sampled-proofs/one-stage/v1`) with PoUW
-(`verity/pouw/v1`), and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols. In each, the
-composite's verifier runs the one-stage audit's Lean check as a component, and the composite accepts only when every
+`verity/core/protocols/remote/`) composes it (`verity/sampled-proofs/v1`) with PoUW (`verity/pouw/v1`), and onsite
+(`verity/core/protocols/onsite/`) composes it with the other subprotocols. In each, the composite's verifier runs
+`VStar.Recursive.Sampled`'s Lean check as a component, in the form its params name: the one-stage audit
+(`verity/sampled-proofs/one-stage/v1`) or the recursive audit (`verity/sampled-proofs/recursive/v1`, V*'s compiled
+check, which ends in the one-stage audit's live check on its verdict of record). The composite accepts only when every
 component accepts.
 
 ## Guarantee and assumptions
@@ -133,14 +135,15 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
   circuit digest and the verifier's registered file, its evidence names the public file and each session's record and
-  rep files by SHA-512 in place of `verdicts`, and the files come in as `Core.Blobs`. The check runs
+  rep files by SHA-512 in place of `verdicts`, and the files come in as `Core.Blobs`. Its draw's coins are always the
+  challenger's: parameters naming no `challenger` are refused, and the check reads the coins as v1 does
+  (`OneStage.coinsOf`, `Security/Properties/Challenger.lean`'s `oneStageZkReads`). The check runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
-  evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `check`.
+  evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s. It is the one-stage form of onsite's and remote's integrity component, sampled proofs
-  (`verity/sampled-proofs/v1`, `VStar.Recursive.Sampled` in `../../service/vstar/recursive`, through
-  `Core.Composition.sameB`), whose other form is the recursive audit (`verity/sampled-proofs/recursive/v1`, V*'s
-  compiled check), as the params' `form` names it; neither v1 nor v2 alone is a component.
+  to `verify`'s. It is not a form of onsite's and remote's integrity component (`verity/sampled-proofs/v1`,
+  `VStar.Recursive.Sampled` in `../../service/vstar/recursive`), whose one-stage form is v1, until v2's check reads the
+  challenger's signed coins; neither v1 nor v2 alone is a component.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
