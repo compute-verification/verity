@@ -86,14 +86,15 @@ id 128001. It runs at a given UTC time when asked. The endpoint is started by ha
 `examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
 staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
 (prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
-endpoint step runs there: `io` writes the kept warden run's certified I/O to a 0600 file in the kept fetch's directory,
-and `endpoint`, a run on the served node given that file over a private route, checks the endpoint's trace against it
-in a 0700 copy whose `requests.jsonl` is rebuilt from `request_users.jsonl` (each engine request's `engine_id` and its
-warden user) and the certified I/O. Its art is the step's report, `windows.jsonl` and `serve.json`; it writes nothing
-unless `serve.json` shows the endpoint's flags and no published file holds a prompt's ids, a trace's arrive, step or
-finish record, or a request-valued field. `chain` reads that report as the served node's. The session's fetch, with
-`witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the
-session's outcome. `chain` runs the chain's warden path on the kept fetch, and only from a tree with the record's leak
+endpoint step runs there: `io` writes the kept network certifier run's certified I/O to a 0600 file in the kept fetch's
+directory, and `endpoint`, a run on the served node given that file over a private route, checks the endpoint's trace
+against it in a 0700 copy whose `requests.jsonl` is rebuilt from `request_users.jsonl` (each engine request's
+`engine_id` and its network certifier user) and the certified I/O. Its art is the step's report, `windows.jsonl` and
+`serve.json`; it writes nothing unless `serve.json` shows the endpoint's flags and no published file holds a prompt's
+ids, a trace's arrive, step or finish record, or a request-valued field. `chain` reads that report as the served node's.
+The session's fetch, with `witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle
+less `witness/` and the session's outcome. `chain` runs the chain's network certifier path on the kept fetch, and only
+from a tree with the record's leak
 guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as
 the endpoint. `chain --coins gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain
 runs on, which the challenger's coin link reaches through that node's own line of

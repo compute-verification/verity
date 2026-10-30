@@ -1,5 +1,6 @@
 """egress-zk: N2's egress bucket in zero knowledge, the generator form. Every bucket of one egress execution phase
-computed by its own `EgressBucket_v1` proof block, its computed row, output ``o1``, registered against the warden's signed root
+computed by its own `EgressBucket_v1` proof block, its computed row, output ``o1``, registered against the network
+certifier's signed root
 (`warden_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean ZK server and held
 by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
 16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
@@ -7,21 +8,22 @@ by the Lean verifier's registered reads (`flock-verify verify --zk --registered`
 
     python benchmarks/network_traces/egress_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
 
-* **The link** (`PARAMS`, `NR`, `K`): a fake upstream's responses served through the warden's own egress
-  (`egress_traffic.busy`, the egress tests'), each execution phase's rows committed by the warden and its head signed by
-  a test-size LMS key (`warden_rows.attest`). The window read is the one with the most `DATA` cells; its registration
-  is read by the verifier (`warden_rows.check_registration`) before its port is built from the head it names.
+* **The link** (`PARAMS`, `NR`, `K`): a fake upstream's responses served through the network certifier's own egress
+  (`egress_traffic.busy`, the egress tests'), each execution phase's rows committed by the network certifier and its
+  head signed by a test-size LMS key (`warden_rows.attest`). The window read is the one with the most `DATA` cells; its
+  registration is read by the verifier (`warden_rows.check_registration`) before its port is built from the head it
+  names.
 * **The proof blocks** (`EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`, circuit-check's pinned shape), one a bucket, T
   of them: each reads row ``state`` (the egress view of the slot state the scan's ingress step wrote at its bucket,
   `egress_traffic.states`; a hidden row under a fresh salt here, where the scan registers it), and computes ``o0``, 1
   when the state renders a row, and ``o1``, the row, committed under the salt of the warden's row t and registered as
   a read of it, so the proof opens the warden's row only when the row the state renders is it.
 * **Members.** ``honest``: accepted, every ``o0`` 1. ``lying``: one rendered output id of one bucket's state changed:
-  the proof block computes a row the warden didn't sign, so its ``o1`` opens no registered row: refused by Lean ("does
-  not open"). ``moved``: proof blocks t and t + 1 given each other's state, their positions and salts swapped to match,
-  so each ``o1`` opens at the other proof block's position: refused by Lean ("reads position"). Each is registered,
-  every proof block sampled by the verifier's Lean (`flock-verify draw --stratified n`), proved ``--zk`` behind the ZK
-  server (``FC_FIREWALL=1``)
+  the proof block computes a row the network certifier didn't sign, so its ``o1`` opens no registered row: refused by
+  Lean ("does not open"). ``moved``: proof blocks t and t + 1 given each other's state, their positions and salts
+  swapped to match, so each ``o1`` opens at the other proof block's position: refused by Lean ("reads position"). Each
+  is registered, every proof block sampled by the verifier's Lean (`flock-verify draw --stratified n`), proved ``--zk``
+  behind the ZK server (``FC_FIREWALL=1``)
   and held by Lean `verify --zk --partition --program --registered`; the verifier opens each held unit's ``o0`` under
   the salt the prover sends for it.
 * **What the verifier receives** is scanned for every 16-byte piece of every unit's state and row and every salt but
@@ -78,8 +80,8 @@ def _data(row: bytes) -> int:
 
 
 def link(out: Path) -> SimpleNamespace:
-    """The execution phase to prove: the warden's opening and its signed registration, read back by the verifier (the
-    head and domain the port is built on), and each bucket's state (`egress_traffic.states`)."""
+    """The execution phase to prove: the network certifier's opening and its signed registration, read back by the
+    verifier (the head and domain the port is built on), and each bucket's state (`egress_traffic.states`)."""
     served = traffic.busy(SEED, PARAMS, CONNECTIONS, LONGEST, WINDOWS)
     T = PARAMS.window
     states, rows = traffic.states(served, NR, K), traffic.rows(served)

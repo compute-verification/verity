@@ -72,9 +72,9 @@ def prove_tie(tie: Any, cells: Any, draw: S.Draw, lanes: Any, out: Path, *, prog
               accepted: bool = True, words: dict[int, int] | None = None,
               salts: dict[int, dict[str, bytes]] | None = None, units: Sequence[int] | None = None,
               rows: Sequence[bytes] | None = None) -> TS.Delivered:
-    """The delivered proof of the sampled ingress-tie proof blocks (`tie_service.IngressTie`) on the warden's opening
-    `cells` (`warden_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: proof block t's
-    ``wit`` row its
+    """The delivered proof of the sampled ingress-tie proof blocks (`tie_service.IngressTie`) on the network certifier's
+    opening `cells` (`warden_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: proof
+    block t's ``wit`` row its
     bucket row under the warden's salt and its header's registered read of the warden's root (`Cells.statement`), its
     ``pub`` row its lanes and its ``o0`` row its output bit by IoTieRequest's reference (`io_request.reference`),
     which the tests hold to the circuit, each read off the root of the prover's rows of the port as the verifier
