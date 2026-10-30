@@ -17,7 +17,7 @@ import pytest
 
 import research.queue as Q
 from research import merge
-from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP
+from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP, SIGTERM_RC
 from research.queue import PR, QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
 from test_queue import World, _git
@@ -154,6 +154,73 @@ def test_a_sharded_after_landing_run_verifies_main_only_once_every_shard_passed(
     h.tick()
     pl = h.postland()
     assert pl["verified"] == main and pl["run"] is None, world.logs
+
+
+@pytest.mark.parametrize("on, n, want", [
+    ("m1,m2,m3,m4,m5", 3, ["m1,m4", "m2,m5", "m3"]),
+    ("m1,m2,m3", 3, ["m1", "m2", "m3"]),
+    ("m1,m2", 3, ["m1", "m2", "m1"]),
+    ("auto", 2, ["auto", "auto"]),
+])
+def test_each_shard_of_the_after_landing_run_gets_machines_no_other_shard_has(world, monkeypatch, on, n, want):
+    """train.sh twins only when no slot is free, so shards launched with one machine list all took its one free slot and
+    waited one behind another.  Shard K gets every Nth machine of `on` from the Kth, in `on`'s order; with fewer machines than
+    shards they share, and drive says so once."""
+    h = Review(world, monkeypatch)
+    h.d.on, h.d.after_landing_shards, machines = on, n, []
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or h.launch_post(repo, commit, machine,
+                                                                                                             steps, **kw)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    assert machines == want and [kw["shard"] for _, _, kw in h.posted] == [f"{k}/{n}" for k in range(1, n + 1)]
+    shared = [line for line in world.logs if "fewer machines than shards" in line]
+    if len(on.split(",")) >= n:
+        assert not shared and len({m for ms in machines for m in ms.split(",")}) == sum(len(ms.split(",")) for ms in machines)
+    else:
+        assert len(shared) == 1, world.logs
+
+
+def test_a_run_ci_adds_to_a_shard_counts_as_its_twin(world, monkeypatch):
+    """A shard whose twin waits behind another shard: ci launches its run elsewhere and `drive-shard-add TIP K RUN_ID` makes it
+    one of that shard's twins, so its pass passes the shard.  Refused for another tip, a shard out of range, a run already
+    counted, a run still launching, and off the control pod."""
+    from research.merge import DRIVE_ENV
+
+    h = Review(world, monkeypatch)
+    h.d.after_landing_shards = 2
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    main = _main(world)
+    argv = ["drive-shard-add", main[:12], "2", "r-hand", "--workdir", str(h.q.workdir), "--remote", str(world.origin), "--repo",
+            "o/r", "--store", str(world.tmp / "store"), "--rules", str(world.dev / "ci" / "queue.toml")]
+    with pytest.raises(QueueError, match="still launching"):
+        Q.drive_shard_add(h.q, main, 2, "r-hand")
+    h.run_state.update({"r-post-0": ("done", 0, None), "r-post-1": ("waiting", None, None), "r-hand": ("done", 0, None)})
+    h.evidence = [_steps_run(world.tmp, "r-hand", {s: "passed" for s in AFTER_LANDING})]
+    h.tick()
+    assert h.postland()["verified"] != main, "shard 2's only twin waits"
+    monkeypatch.delenv(DRIVE_ENV, raising=False)
+    assert Q.main(argv) == 1 and h.postland()["run"]["groups"] == [["r-post-0"], ["r-post-1"]]
+    monkeypatch.setenv(DRIVE_ENV, "1")
+    for tip, k, rid, why in ((_git(world.origin, "rev-parse", "main^1"), 2, "r-hand", "is not the tip"),
+                             (main[:6], 2, "r-hand", "is not the tip"), (main, 3, "r-hand", "shard 3 is not one of the run's 2"),
+                             (main, 0, "r-hand", "shard 0 is not one"), (main, 2, "r-post-0", "already a run")):
+        with pytest.raises(QueueError, match=why):
+            Q.drive_shard_add(h.q, tip, k, rid)
+    with pytest.raises(SystemExit):
+        Q.main([*argv[:3], *argv[4:]])
+    assert Q.main(argv) == 0
+    run = h.postland()["run"]
+    assert run["groups"] == [["r-post-0"], ["r-post-1", "r-hand"]] and run["ids"] == ["r-post-0", "r-post-1", "r-hand"]
+    h.tick()
+    assert h.postland()["verified"] != main, "drive waits while a twin it replaced still waits: ci cancels it"
+    h.run_state["r-post-1"] = ("done", SIGTERM_RC, None)
+    h.tick()
+    pl = h.postland()
+    assert pl["verified"] == main and pl["run"] is None, world.logs
+    assert h.cancelled == [] and len(h.posted) == 2
 
 
 def test_an_after_landing_run_sends_a_base_below_its_tip_so_ratchet_gate_judges_the_landings_above_it(world, monkeypatch):
