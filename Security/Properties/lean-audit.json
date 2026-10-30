@@ -289,6 +289,30 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
+  },
+  "Verity.Vocab.BandwidthAuditSound": {
+   "owner": "@memory-accounting"
+  },
+  "Verity.Vocab.InferenceOnlySound": {
+   "owner": "@lean"
+  },
+  "Verity.Vocab.NetworkCertifierSound": {
+   "owner": "@network-accounting"
+  },
+  "Verity.Vocab.PousSound": {
+   "owner": "@memory-accounting"
+  },
+  "Verity.Vocab.PouwSound": {
+   "owner": "@compute-accounting"
+  },
+  "Verity.Vocab.SampledProofsSound": {
+   "owner": "@proofs"
+  },
+  "Verity.Vocab.Target": {
+   "owner": "@soundness"
+  },
+  "Verity.Vocab.WipeSound": {
+   "owner": "@memory-accounting"
   }
  },
  "meaning": [
