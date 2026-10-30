@@ -17,3 +17,12 @@ Every Nebius CPU node stopped at 06:00Z (an unrenewed deadline), killing runs on
 - The warm unsharded prologue (5505 s, from stored records) is slower than the cold one (4965 s), because each target's description walks its own graph. A shared walk or a memo over the descriptor closure should fix it. CC-KEY: this is the cost a source-digest key avoids. CC-SPEED: make sure the zygotes don't repeat it per target.
 - Cold, a shard describes only its own targets before its checks (148-199 s against 414 s), but storing records afterwards costs more (723-929 s against 532 s).
 Put the warm-path fix in your measured numbers if it's in your change.
+
+# 09:00Z Fri: the apart path's scratch filled cpu-2's disk
+infra (CIR-145): cpu-2's /workspace was at 99%. 178 GB of it was /workspace/tmp/circuit-check-apart-x5ouz14b, units.py's TemporaryDirectory holding 47 JSON files of about 8 GB each, left behind when its writer died in cpu-2's soft lockup (your run of 18:54Z Thu). I approved its removal. Before #6546 lands (it has land and is queued), answer, and fix if needed:
+1. Does the normal --all apart path (the one check runs) write files of that size, or did only your wrapper? Give the peak scratch bytes of one real cold --all.
+2. A crash must not leave scratch behind: put it under the run's own scratch (a mktemp -d that research run's cleanup or the next start removes), or remove stale circuit-check-apart-* dirs at start.
+3. If the 8 GB files are per-binding records, write them compact (no indent, or a binary form) or stream them, so peak scratch is bounded and stated.
+If a fix is needed, make it a small follow-up PR on top of #6546's head (no new head for #6546), mark it, and tell me. This comes before the long-target work.
+
+Note: your inbox branch is cursor/inbox-ccspeed-21f3 (not -cc-speed-, as my 08:00Z brief said).
