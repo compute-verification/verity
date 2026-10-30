@@ -6,7 +6,10 @@ A recursive statement's V* parts each ran ``flock-verify verify --zk --rec-part 
 is one log per V* statement with one ``VERDICT``; ``rec_part`` 0 to n - 1 each once; every ``VERDICT`` accepts, ran
 ``--zk``, names no identifier and the composition's own rows file's SHA-512; the first part's ``rec_shared`` holds every
 input the compiled verifier's parts read at the composition's own inner shape, and every part's is that one; and no two
-sessions share a coin key."""
+sessions share a coin key. Then the challenger's interactive-run record (``verity/rec-run/v1``, `RecCompose.runOf`,
+written by `verity.core.protocols.sampled_proofs.challenger.RunRecord`) must be one run of them (`RecCompose.checkRun`,
+C10 ``OneRun``): the staging first, at the composition's rows and the shared set every part read; exactly one session
+opened per part and none for another; every opened session a composed part's and every part's opened; the close last."""
 from __future__ import annotations
 
 import hashlib
@@ -215,11 +218,93 @@ def _check_verdicts(n: int, rows: str, inner: str, vs: list[tuple[str, dict]]) -
                           "(CoinTree.checkFresh)")
 
 
-def check(n: int, rows: str, inner: str, parts: list[tuple[str, str]]) -> tuple[bool, str]:
-    """`RecCompose.check` at V*'s ``n`` statements, the composition's own rows file's SHA-512 ``rows`` and inner
-    shape's ``inner``, over ``parts``' logs (name, text): (accepted, the refusal's reason or "")."""
+RUN_KIND = "verity/rec-run/v1"
+
+
+def _event(j) -> tuple | None:
+    """`Event.ofJson?`: ``("stage", rows, shared)``, ``("open", session, part, coin key)`` or ``("close",)``."""
+    o = j if isinstance(j, dict) else {}
+    kind = o.get("event")
+    if kind == "stage":
+        rows, sh = _str(o.get("rec_rows_sha512")), _read_shared(o["rec_shared"]) if "rec_shared" in o else None
+        return None if rows is None or sh is None else ("stage", rows, sh)
+    if kind == "open":
+        session, part, key = _str(o.get("session")), _nat(o.get("rec_part")), _str(o.get("coin_key"))
+        return None if session is None or part is None or key is None else ("open", session, part, key)
+    return ("close",) if kind == "close" else None
+
+
+def _run_of(text: str) -> list[tuple]:
+    """`RecCompose.runOf`: the record's events in order."""
     try:
-        _check_verdicts(n, rows, inner, [_part_of(name, log) for name, log in parts])
+        j = json.loads(text)
+    except ValueError:
+        raise Refused("run record: not JSON") from None
+    if not isinstance(j, dict) or j.get("kind") != RUN_KIND:
+        raise Refused(f"run record: not a {RUN_KIND} record")
+    if not isinstance(j.get("events"), list):
+        raise Refused("run record: no list of events")
+    out = []
+    for i, e in enumerate(j["events"]):
+        ev = _event(e)
+        if ev is None:
+            raise Refused(f"run record: its event {i} is not a stage, an open or a close in its form")
+        out.append(ev)
+    return out
+
+
+def _opens_of(evs: list[tuple]) -> list[tuple[str, int, str]]:
+    """`RecCompose.opensOf`: the sessions opened up to the close, which is the last event."""
+    opens = []
+    for i, e in enumerate(evs):
+        if e[0] == "open":
+            opens.append(e[1:])
+        elif e[0] == "stage":
+            raise Refused("run record: a second staging: V*'s statements are staged once, before the first part's Hello")
+        elif i != len(evs) - 1:
+            raise Refused("run record: an event after its close")
+        else:
+            return opens
+    raise Refused("run record: not closed: the challenger closes a run's record after its last session, and an open "
+                  "record may gain sessions")
+
+
+def _check_run(n: int, rows: str, vs: list[tuple[str, dict]], evs: list[tuple]) -> None:
+    """`RecCompose.checkRun`."""
+    if not evs or evs[0][0] != "stage":
+        raise Refused("run record: its first event is not the staging: V*'s statements are staged before the first "
+                      "part's Hello")
+    _, r, sh = evs[0]
+    if r != rows:
+        raise Refused(f"run record: it staged the rows file {r}, not the composition's {rows}")
+    for name, v in vs:
+        if v["shared"] != sh:
+            raise Refused(f"{name}: its rec_shared is not the one the run record staged before the first Hello")
+    opens = _opens_of(evs[1:])
+    for session, part, _ in opens:
+        if part >= n:
+            raise Refused(f"run record: session {session} was opened for part {part}: V* has {n} statements")
+    for j in range(n):
+        c = sum(1 for _, part, _ in opens if part == j)
+        if c != 1:
+            raise Refused(f"part {j}: {c} sessions opened in the run record, not one: a part is never retried")
+    for session, part, key in opens:
+        if not any(v["part"] == part and v["coin_key"] == key for _, v in vs):
+            raise Refused(f"run record: session {session} was opened for part {part}, and it is not the session "
+                          "composed for that part")
+    for name, v in vs:
+        if not any(v["part"] == part and v["coin_key"] == key for _, part, key in opens):
+            raise Refused(f"{name}: its session is not one the run record opened for its part")
+
+
+def check(n: int, rows: str, inner: str, run: str, parts: list[tuple[str, str]]) -> tuple[bool, str]:
+    """`RecCompose.check` at V*'s ``n`` statements, the composition's own rows file's SHA-512 ``rows`` and inner
+    shape's ``inner``, over the challenger's interactive-run record ``run`` (its text) and ``parts``' logs (name, text):
+    (accepted, the refusal's reason or "")."""
+    try:
+        vs = [_part_of(name, log) for name, log in parts]
+        _check_verdicts(n, rows, inner, vs)
+        _check_run(n, rows, vs, _run_of(run))
     except Refused as e:
         return False, str(e)
     return True, ""
