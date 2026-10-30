@@ -16,6 +16,7 @@ if not torch.cuda.is_available():
 from verity_vllm.commit import lead_rows as L  # noqa: E402
 from verity_vllm.commit import step_rows as R  # noqa: E402
 from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
+from verity_vllm.errors import Refused  # noqa: E402
 
 SALT = hashlib.sha512(b"lead_rows_cuda/salt").digest()
 
@@ -113,3 +114,41 @@ def test_subtrees_are_lead_rows(ext, hasher, m, n, S, bn, K):
         leaves = got.cpu().numpy().tobytes()
         assert [leaves[64 * i:64 * i + 64] for i in range(len(values))] == list(sub.levels[0][:len(values)])
         assert _root(ext, hasher, dom, list(sub.levels[0][:len(values)])) == sub.root
+
+
+def _window(calls: int = 64) -> L.WindowKeying:
+    w = L.WindowKeying(calls, ks_w=hashlib.sha512(b"lead_rows_cuda/ks_w").digest(), y0=bytes(L.KEY_SALT_BYTES))
+    w.register(hashlib.sha512(b"lead_rows_cuda/weights").digest())
+    w.open(SALT)
+    return w
+
+
+@pytest.mark.parametrize("shapes", [((1, 128, 1, 128),), ((1, 128, 1, 128),) * 3, ((1, 3072, 64, 256),),
+                                    ((17, 256, 9, 128), (1, 3072, 74, 256), (64, 2048, 74, 128), (1, 8, 1, 128)),
+                                    ((16, 2048, 256, 256), (16, 16384, 16, 256), (16, 3072, 64, 256))])
+def test_device_words_top_keys_the_cpus_words_root(ext, hasher, shapes):
+    """`DeviceWords` over a forward's calls (one chunk; one-chunk calls with pads; whole powers of two; ragged last chunks
+    across calls) hands `words_top` the CPU subtree's top: check mode passes and d is `words_root`'s."""
+    rng = np.random.default_rng(len(shapes) + sum(map(sum, shapes)))
+    exports = [_export(rng, *s) for s in shapes]
+    streams = [L.stream(ex, *s) for ex, s in zip(exports, shapes)]
+    count = sum(L.chunk_count(m, n, S) for m, n, S, _ in shapes)
+    w = _window()
+    dw = L.DeviceWords(ext, hasher, w.words_domain(0, count), _stream())
+    for ex, s in zip(exports, shapes):
+        dw.add(torch.from_numpy(ex).cuda(), *s)
+    top = dw.top()
+    assert len(top) == (len(streams[0]) if count == 1 else 128)
+    assert w.words_top(0, count, top, check=streams) == _window().words_root(0, streams)
+
+
+def test_device_words_refuses_leaves_past_or_short_of_its_count(ext, hasher):
+    shape = (17, 256, 9, 128)
+    ex = torch.from_numpy(_export(np.random.default_rng(9), *shape)).cuda()
+    k = L.chunk_count(*shape[:3])
+    dw = L.DeviceWords(ext, hasher, _window().words_domain(0, k + 1), _stream())
+    dw.add(ex, *shape)
+    with pytest.raises(Refused):
+        dw.top()
+    with pytest.raises(Refused):
+        dw.add(ex, *shape)

@@ -21,7 +21,11 @@ calls concatenate their chunks into one words instance, chunks never spanning ca
 (``verity.ml.commitments.keyed``), in the subtree root's place.  A window's instances are A_j at f calls + j, one a call, and the
 forward's words at 2^63 + f, one a forward.  :class:`WindowKeying` keys them in the order d's hiding needs.  The window's call count
 is fixed when it is made.  keyLeaf (ks_w's hm96 leaf) and the weights' root are recorded before salt_w arrives.  Each position
-then gets one d.  It refuses everything else (:class:`verity_vllm.errors.Refused`).
+then gets one d, and a forward's A_j come before its words.  It refuses everything else (:class:`verity_vllm.errors.Refused`).
+
+**On the device.**  A forward's words are hashed where they are served (:class:`DeviceWords`): ``native_rows.cu``'s tile
+gather and inline leaves call by call, then its pads and levels up to the subtree's top, which :meth:`WindowKeying.words_top`
+keys as :meth:`WindowKeying.words_root` keys the CPU's.
 """
 from __future__ import annotations
 
@@ -32,15 +36,16 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from verity.errors import ProtocolError
 from verity.ml.commitments import hm96, keyed
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity_vllm.errors import Refused
 
 __all__ = ["A_LEAF_TAG", "A_SEGMENT", "BINDING_TAG", "CHUNK_WORDS", "KEY_SALT_BYTES", "ROW_TILE", "TILE_COLS", "TILE_ROWS",
-           "TILE_WORDS", "WORDS_LEAF_TAG", "WORDS_POSITION", "Subtree", "WindowKeying", "a_position", "a_segments", "chunks",
-           "committed_tiles", "instance_domain", "key_leaf", "keyed_root", "pad_cols", "pad_rows", "stream", "subtree",
-           "words_position", "words_values"]
+           "TILE_WORDS", "WORDS_LEAF_TAG", "WORDS_POSITION", "DeviceWords", "Subtree", "WindowKeying", "a_position",
+           "a_segments", "chunk_count", "chunks", "committed_tiles", "instance_domain", "key_leaf", "keyed_root", "pad_cols",
+           "pad_rows", "stream", "subtree", "words_position", "words_values"]
 
 TILE_ROWS, TILE_COLS = 16, 8
 TILE_WORDS = TILE_ROWS * TILE_COLS
@@ -96,6 +101,11 @@ def chunks(words: bytes) -> list[bytes]:
 def words_values(calls: Sequence[bytes]) -> list[bytes]:
     """A words instance's leaf values: each call's chunks, in call order."""
     return [c for words in calls for c in chunks(words)]
+
+
+def chunk_count(m: int, n: int, S: int) -> int:
+    """A call's chunks, from its shape: its ``pad_rows(m) * pad_cols(n) * S`` committed words in ``CHUNK_WORDS``-word chunks."""
+    return -(-pad_rows(m) * pad_cols(n) * S // CHUNK_WORDS)
 
 
 def a_segments(a: bytes) -> list[bytes]:
@@ -206,20 +216,118 @@ class WindowKeying:
         self._salt_w = bytes(salt_w)
 
     def a_root(self, forward: int, call: int, a: bytes) -> bytes:
-        """root(A_j): the keyed digest of the call's A, in ``A_SEGMENT``-byte segments, at f calls + j."""
-        return self._keyed(a_position(forward, self._calls, call), A_LEAF_TAG, a_segments(a))
+        """root(A_j): the keyed digest of the call's A, in ``A_SEGMENT``-byte segments, at f calls + j, before the forward's
+        words are keyed."""
+        position = a_position(forward, self._calls, call)
+        if words_position(forward) in self._digests:
+            raise Refused(f"call {call} of forward {forward} after the forward's words were keyed")
+        return self._keyed(position, A_LEAF_TAG, a_segments(a))
 
     def words_root(self, forward: int, calls: Sequence[bytes]) -> bytes:
         """The forward's words root: the keyed digest of its calls' committed streams, in call order, at 2^63 + f."""
+        return self._keyed(words_position(forward), WORDS_LEAF_TAG, words_values(self._words_calls(calls)))
+
+    def words_domain(self, forward: int, count: int) -> CommitmentDomain:
+        """The domain of the forward's words instance of ``count`` leaves, for its leaves on the device (`DeviceWords`).  Its
+        id binds ``count``, so a forward's chunks (`chunk_count` of each call) are fixed before its first leaf."""
+        position = self._unkeyed(words_position(forward))
+        if type(count) is not int or not 1 <= count < 1 << 32:
+            raise Refused(f"a words instance of {count} leaves: 1 to 2^32 - 1, the device's ranks")
+        return instance_domain(self._salt_w, position, count)
+
+    def words_top(self, forward: int, count: int, top: bytes, *, check: Sequence[bytes] | None = None) -> bytes:
+        """The forward's words root from its subtree's top as the device hashed it (`DeviceWords.top`): the root's two
+        children (128 bytes) for ``count`` >= 2 leaves, or the one chunk.  ``check``, the calls' committed streams, recomputes
+        the subtree on the CPU and refuses a top that differs."""
+        dom = self.words_domain(forward, count)
+        try:
+            m_top = keyed.top_from(dom, WORDS_LEAF_TAG, count, bytes(top))
+        except ProtocolError as e:
+            raise Refused(str(e)) from None
+        if count == 1 and not 0 < len(top) <= 4 * CHUNK_WORDS:
+            raise Refused(f"a one-chunk words instance holds 1 to {4 * CHUNK_WORDS} bytes, not {len(top)}")
+        if check is not None:
+            values = words_values(self._words_calls(check))
+            if len(values) != count:
+                raise Refused(f"the device's words instance has {count} leaves and the CPU's {len(values)}")
+            sub = subtree(dom, WORDS_LEAF_TAG, values)
+            if keyed.top_message(dom, WORDS_LEAF_TAG, sub.values, sub.levels) != m_top:
+                raise Refused(f"forward {forward}'s words top from the device is not the CPU's")
+        return self._store(words_position(forward), keyed.digest(self._ks_w, self._salt_w, m_top))
+
+    def _words_calls(self, calls: Sequence[bytes]) -> Sequence[bytes]:
         if len(calls) > self._calls:
             raise Refused(f"{len(calls)} calls' words in a window of {self._calls} calls a forward")
-        return self._keyed(words_position(forward), WORDS_LEAF_TAG, words_values(calls))
+        return calls
 
-    def _keyed(self, position: int, schema: str, values: list[bytes]) -> bytes:
+    def _unkeyed(self, position: int) -> int:
         if self._salt_w is None:
             raise Refused("a keyed digest before salt_w")
         if position in self._digests:
             raise Refused(f"a second keyed digest at position {position} in the window")
-        d = keyed_root(self._ks_w, self._salt_w, subtree(instance_domain(self._salt_w, position, len(values)), schema, values))
+        return position
+
+    def _keyed(self, position: int, schema: str, values: list[bytes]) -> bytes:
+        self._unkeyed(position)
+        sub = subtree(instance_domain(self._salt_w, position, len(values)), schema, values)
+        return self._store(position, keyed_root(self._ks_w, self._salt_w, sub))
+
+    def _store(self, position: int, d: bytes) -> bytes:
         self._digests[position] = d
         return d
+
+
+class DeviceWords:
+    """A forward's words instance hashed on the device as its calls are served (``native_rows.cu``, through the native
+    collector ``ext`` and its ``StepHasher`` ``hasher``, on the CUDA stream ``stream_ptr``).  :meth:`add` takes each call's
+    export: its committed stream (``lead_stream``, the tile gather) and its chunks' inline position-bound leaves
+    (``lead_leaves``) at the instance's next ranks.  :meth:`top` pads the leaves (``rows_frame``) and hashes the levels
+    (``rows_tree``) up to the top :meth:`WindowKeying.words_top` keys.  ``dom`` is :meth:`WindowKeying.words_domain`'s; only
+    the leaves outlive a call, 64 bytes a chunk."""
+
+    def __init__(self, ext, hasher, dom: CommitmentDomain, stream_ptr: int) -> None:
+        import torch
+
+        self._torch, self._hasher, self._dom = torch, hasher, dom
+        self._stream_ptr, self._stream = stream_ptr, torch.cuda.ExternalStream(stream_ptr)
+        self._ls = ext.LeadStep(dom.domain_id, WORDS_LEAF_TAG)
+        # pads and nodes read only the domain id; the row-leaf fields are never hashed here
+        self._rs = ext.RowStep(dom.domain_id, bytes(64), bytes(128), bytes(128), bytes(128), WORDS_LEAF_TAG, 64)
+        self._leaves: list = []
+        self._next = 0
+        self._one = None
+
+    @property
+    def count(self) -> int:
+        return self._dom.count
+
+    def add(self, export, m: int, n: int, S: int, bn: int) -> None:
+        """The next call's export (``lead_stream``'s): its chunks become the instance's next leaves."""
+        k = chunk_count(m, n, S)
+        if self._next + k > self.count:
+            raise Refused(f"a call of {k} chunks after {self._next} of a words instance of {self.count} leaves")
+        with self._torch.cuda.stream(self._stream):
+            words = self._hasher.lead_stream(export, m, n, S, bn, self._stream_ptr)
+            size = 4 * words.numel()
+            leaves = self._hasher.lead_leaves(self._ls, words.view(self._torch.uint8), 4 * CHUNK_WORDS, k,
+                                              size - 4 * CHUNK_WORDS * (k - 1), self._next, self._stream_ptr)
+        self._leaves.append(leaves)
+        if self.count == 1:
+            self._one = words
+        self._next += k
+
+    def top(self) -> bytes:
+        """The subtree's top: the root's two children (128 bytes), or the one chunk of a one-leaf instance."""
+        torch, count = self._torch, self.count
+        if self._next != count:
+            raise Refused(f"a words instance of {count} leaves got {self._next}")
+        with torch.cuda.stream(self._stream):
+            if count == 1:
+                return self._one.view(torch.uint8).cpu().numpy().tobytes()
+            leaves = torch.cat(self._leaves) if len(self._leaves) > 1 else self._leaves[0]
+            width = 1 << (count - 1).bit_length()
+            if width > count:
+                pads = self._hasher.rows_frame(self._rs, leaves.new_empty((0, 64)), count, width - count, count, self._stream_ptr)
+                leaves = torch.cat([leaves, pads])
+            levels, _root, _ms = self._hasher.rows_tree(self._rs, leaves.contiguous(), 0, self._stream_ptr)
+            return levels[-2].cpu().numpy().tobytes()
