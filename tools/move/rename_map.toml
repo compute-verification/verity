@@ -45,7 +45,7 @@
 "Warden" = "Certifier"
 "WARDEN" = "CERTIFIER"
 
-# --- the firewall (was the prover gateway) and the challenger (was the verifier gateway)
+# --- the ZK server (was the prover gateway) and the challenger (was the verifier gateway)
 "prover gateways" = "firewalls"
 "prover gateway" = "firewall"
 "Prover gateway" = "Firewall"
