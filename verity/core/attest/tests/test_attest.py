@@ -9,7 +9,8 @@ import hashlib
 import pytest
 
 from verity.core import attest as A
-from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.gates import attest as attest_gate
+from verity.ml.commitments.indexed import RangeU64Domain
 from verity.ml.commitments.limits import VerificationLimits
 from verity.ml.commitments.merkle import (
     Commitment,
@@ -31,9 +32,9 @@ def _records(n: int) -> list[bytes]:
 
 @pytest.mark.parametrize("n", [0, 1, 2, 3, 5, 8, 9, 17])
 def test_the_tree_is_merkles_frame_v3_sha512(n: int) -> None:
-    """Root, domain id and every opening are `merkle`'s over the range domain at `BINDING`, owner -1, schema `SCHEMA`."""
+    """Root, domain id and every opening are `merkle`'s over the range-u64 domain at `BINDING`, owner -1, schema `SCHEMA`."""
     records = _records(n)
-    domain = CommitmentDomain(A.BINDING, -1, RangeIndexedDomain(0, n), hash="sha512")
+    domain = CommitmentDomain(A.BINDING, -1, RangeU64Domain(0, n), hash="sha512")
     assert A.domain_id(n) == domain.domain_id
     tree = MerkleTree(domain, dict(enumerate(records)), lambda _: A.SCHEMA)
     assert A.root(records) == tree.commitment.root
@@ -43,6 +44,19 @@ def test_the_tree_is_merkles_frame_v3_sha512(n: int) -> None:
         assert A.verify_opening(A.root(records), n, r, records[r], opening.path)
         assert verify_opening(domain, Commitment(A.root(records), n), Opening(r, records[r], A.path(records, r)), A.SCHEMA,
                               VerificationLimits())
+
+
+def test_the_domain_id_frames_a_u64_count() -> None:
+    """At the u64 bounds too, and at the period unit's binding (`AttestPeriod_v1` computes the id in its proof)."""
+    assert attest_gate.BINDING == A.BINDING
+    for n in (2**32, 2**64 - 1):
+        assert A.domain_id(n) == CommitmentDomain(A.BINDING, -1, RangeU64Domain(0, n), hash="sha512").domain_id
+    for n in (-1, 2**64):
+        with pytest.raises(ValueError, match="u64"):
+            A.domain_id(n)
+    one = _records(1)
+    assert A.verify_opening(A.root(one), 1, 0, one[0], ())
+    assert not A.verify_opening(A.root(one), 2**64, 0, one[0], ())
 
 
 def test_an_opening_is_refused_off_its_record_position_count_or_root() -> None:
