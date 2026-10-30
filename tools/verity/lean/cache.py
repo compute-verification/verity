@@ -134,7 +134,7 @@ class S3:
     """The few S3 calls the cache makes, path-style against one bucket."""
 
     def __init__(self, endpoint: str, bucket: str, key_id: str, secret: str, region: str = "auto",
-                 now=lambda: datetime.datetime.now(datetime.timezone.utc)):
+                 now=lambda: datetime.datetime.now(datetime.UTC)):
         u = urllib.parse.urlsplit(endpoint)
         if u.scheme not in ("https", "http") or not u.netloc:
             raise ValueError(f"not an endpoint URL: {endpoint!r}")
@@ -153,11 +153,11 @@ class S3:
                  "x-amz-content-sha256": hashlib.sha256(body).hexdigest() if body is not None else EMPTY_SHA,
                  **(headers or {})}
             auth = sign(method, self.host, path, query, h, self.key_id, self.secret, self.region)
-            req = urllib.request.Request(url, data=body, method=method, headers={**h, "Authorization": auth})
+            req = urllib.request.Request(url, data=body, method=method, headers={**h, "Authorization": auth})  # noqa: S310  (as below)
             if body is not None:
                 req.add_header("Content-Type", "application/octet-stream")
             try:
-                return urllib.request.urlopen(req, timeout=timeout)
+                return urllib.request.urlopen(req, timeout=timeout)  # noqa: S310  (`__init__` takes only https or http)
             except urllib.error.HTTPError as e:
                 if e.code not in TRANSIENT or wait is None:
                     raise
@@ -237,7 +237,7 @@ class S3:
                 when = datetime.datetime.strptime(c.findtext(f"{ns}LastModified")[:19], "%Y-%m-%dT%H:%M:%S")
                 out.append({"key": c.findtext(f"{ns}Key"), "bytes": int(c.findtext(f"{ns}Size") or 0),
                             "etag": (c.findtext(f"{ns}ETag") or "").strip('"'),
-                            "modified": when.replace(tzinfo=datetime.timezone.utc).timestamp()})
+                            "modified": when.replace(tzinfo=datetime.UTC).timestamp()})
             if root.findtext(f"{ns}IsTruncated") != "true":
                 return out
             token = root.findtext(f"{ns}NextContinuationToken")
@@ -385,7 +385,7 @@ def state(url: str, cache: Path, now: float, fetch=None) -> tuple[bool, list[str
         pass
     if doc is None:
         try:
-            raw = fetch(url) if fetch else urllib.request.urlopen(url, timeout=10).read()
+            raw = fetch(url) if fetch else urllib.request.urlopen(url, timeout=10).read()  # noqa: S310  (STATE_URL or its override)
             doc = json.loads(raw)
         except (OSError, ValueError) as e:
             return False, [], f"the kill switch ({url}) is unreachable ({getattr(e, 'code', None) or type(e).__name__})"

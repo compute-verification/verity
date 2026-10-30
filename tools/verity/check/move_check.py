@@ -1227,7 +1227,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             sh = is_shell(old, a) and is_shell(new, b)
             sh_names = (sh_self_names(a), sh_self_names(b)) if sh else (set(), set())
 
-            def pair(x: str, y: str, at_old=at(B, old, a), at_new=at(H, new, b)) -> bool:
+            def pair(x: str, y: str, at_old=at(B, old, a), at_new=at(H, new, b)) -> bool:  # noqa: B008  (this pair's, bound now)
                 return any((py and (import_rewrite(z, y, modules, old, new) or anchor_rewrite(z, y, at_old, at_new, pmap)))
                            or (sh and sh_anchor_rewrite(z, y, old, new, *sh_names, pmap))
                            or dotted_rewrite(z, y, modules) or registry_pair(new, z, y)

@@ -390,7 +390,7 @@ def restore(store: Path, k: str, url: str, pin: dict, name: str, log=print) -> b
     t0 = time.monotonic()
     try:
         h, n = hashlib.sha256(), 0
-        with urllib.request.urlopen(url, timeout=120) as r, open(part, "wb") as f:
+        with urllib.request.urlopen(url, timeout=120) as r, open(part, "wb") as f:  # noqa: S310  (the store's presigned URL)
             for chunk in iter(lambda: r.read(1 << 20), b""):
                 h.update(chunk)
                 n += len(chunk)
@@ -847,7 +847,7 @@ class LakeArtifacts:
             part = self.store / f".{h}.{os.getpid()}.part"
             try:
                 d = hashlib.sha256()
-                with urllib.request.urlopen(url, timeout=120) as r, open(part, "wb") as f:
+                with urllib.request.urlopen(url, timeout=120) as r, open(part, "wb") as f:  # noqa: S310  (a presigned URL)
                     for chunk in iter(lambda: r.read(1 << 20), b""):
                         d.update(chunk)
                         f.write(chunk)

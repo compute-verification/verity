@@ -405,8 +405,11 @@ def _array(o: list[str], a: list[str], b: list[str], keep: set | None = None) ->
     sides = [[s for s in side if s.strip()] for side in (o, a, b)]
     if not sides[1] or not all(ITEM_LINE.match(s) for side in sides for s in side):
         return None
-    opening = lambda side: (m.group(1) if side and (m := ITEM_LINE.match(side[0])) and m.group(1) else None)
-    closes = lambda side: bool(side) and side[-1].rstrip().endswith("]")
+    def opening(side):
+        return m.group(1) if side and (m := ITEM_LINE.match(side[0])) and m.group(1) else None
+
+    def closes(side):
+        return bool(side) and side[-1].rstrip().endswith("]")
     if sides[2] and (opening(sides[2]) != opening(sides[1]) or closes(sides[2]) != closes(sides[1])):
         return None
     head = opening(sides[1])

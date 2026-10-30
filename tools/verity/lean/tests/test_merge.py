@@ -119,18 +119,23 @@ def test_what_only_a_person_writes_still_refuses_beside_derived_candidates():
     """A dependency bumped two ways, an owner set two ways and a `frozen` entry written two ways refuse, whatever derived
     record merges as a candidate beside them."""
     base = record(t=thm([F]))
-    restated = lambda s, h: record(t=thm([F], s, h))
+    def restated(s, h):
+        return record(t=thm([F], s, h))
     ours, theirs = restated("P.f n ≤ n", "00000000000000dd"), restated("P.f n < n + 1", "00000000000000ee")
-    deps = lambda d: {"dependencies": {"mathlib": d * 64, "toolchain": "c" * 64}}
+    def deps(d):
+        return {"dependencies": {"mathlib": d * 64, "toolchain": "c" * 64}}
     assert M.merge(base, ours | deps("b"), theirs | deps("d"))[1] == [
         "dependencies[mathlib]: changed on both sides, differently"]
-    owner = lambda rec, who: rec | {"guarantees": {"P.t": rec["guarantees"]["P.t"] | {"owner": who}}}
+    def owner(rec, who):
+        return rec | {"guarantees": {"P.t": rec["guarantees"]["P.t"] | {"owner": who}}}
     assert M.merge(base, owner(ours, "@proofs"), owner(theirs, "@circuits"))[1] == [
         "guarantees[P.t].owner: changed on both sides, differently"]
-    frozen = lambda rec, why: rec | {"shape": {"frozen": {"P.t": why}}}
+    def frozen(rec, why):
+        return rec | {"shape": {"frozen": {"P.t": why}}}
     assert M.merge(base, frozen(ours, "lemma"), frozen(theirs, "restatable"))[1] == [
         "shape[frozen][P.t]: added on both sides, differently"]
-    hyp = lambda rec, who: rec | {"assumptions": {"P.Hyp": {"owner": who, "digest": "a" * 64}}}
+    def hyp(rec, who):
+        return rec | {"assumptions": {"P.Hyp": {"owner": who, "digest": "a" * 64}}}
     assert M.merge(hyp(base, "@lean"), hyp(ours, "@proofs"), hyp(theirs, "@circuits"))[1] == [
         "assumptions[P.Hyp].owner: changed on both sides, differently"]
 
@@ -212,7 +217,8 @@ def test_an_assumption_s_digest_changed_two_ways_or_removed_against_changed_merg
     base = record(t=thm([F, G]))
     drop_g = record(t=thm([F]), u=thm([F], "P.f n = 0 + n", "00000000000000bb"))
     keep_g = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
-    hyp = lambda rec, d: rec | {"assumptions": {"P.Hyp": {"owner": "@lean", "digest": d * 64}}}
+    def hyp(rec, d):
+        return rec | {"assumptions": {"P.Hyp": {"owner": "@lean", "digest": d * 64}}}
     merged, why = M.merge(hyp(base, "a"), hyp(drop_g, "b"), hyp(keep_g, "c"), candidate := [])
     assert why == [] and "assumptions[P.Hyp].digest (ours)" in candidate
     assert merged["assumptions"] == {"P.Hyp": {"owner": "@lean", "digest": "b" * 64}}
@@ -423,7 +429,8 @@ def test_an_import_one_side_removed_stays_removed_where_the_other_side_moved_it(
 
 
 def test_imports_both_sides_add_merge_and_one_both_sides_remove_stays_removed(tmp_path):
-    imports = lambda *ms: "".join(f"import G.{m}\n" for m in ms) + "\ntheorem t : True := trivial\n"
+    def imports(*ms):
+        return "".join(f"import G.{m}\n" for m in ms) + "\ntheorem t : True := trivial\n"
     text, left = _lean(tmp_path, imports("A", "B", "C"), imports("A", "X", "C"), imports("A", "Y", "C"))
     assert left == 0 and text == imports("A", "Y", "X", "C"), "both added: the union; both removed B: gone"
     text, left = _lean(tmp_path, imports("A", "B", "C"), imports("A", "X", "B", "C"), imports("A", "Y", "B", "C"))
@@ -447,10 +454,12 @@ def test_a_lakefile_root_or_require_one_side_removed_stays_removed_where_the_oth
     import tempfile
     import tomllib
     tmp = Path(tempfile.mkdtemp())
-    roots = lambda *ms: 'name = "p"\n\n[[lean_lib]]\nname = "P"\nroots = [' + ",\n  ".join(f'"{m}"' for m in ms) + "]\n"
+    def roots(*ms):
+        return 'name = "p"\n\n[[lean_lib]]\nname = "P"\nroots = [' + ",\n  ".join(f'"{m}"' for m in ms) + "]\n"
     text, left = _lakefile(tmp, roots("A", "B", "C", "D", "E"), roots("A", "C", "D", "E", "F"), roots("A", "C", "D", "E", "B"))
     assert left == 0 and tomllib.loads(text)["lean_lib"][0]["roots"] == ["A", "C", "D", "E", "F"], text
-    req = lambda *ns: 'name = "p"\n' + "".join(f'\n[[require]]\nname = "{n}"\npath = "../{n}"\n' for n in ns)
+    def req(*ns):
+        return 'name = "p"\n' + "".join(f'\n[[require]]\nname = "{n}"\npath = "../{n}"\n' for n in ns)
     text, left = _lakefile(tmp, req("a", "b", "c"), req("a", "c", "d"), req("a", "c", "b"))
     assert left == 0 and [r["name"] for r in tomllib.loads(text)["require"]] == ["a", "c", "d"], text
     text, left = _lakefile(tmp, req("a", "c"), req("a", "c", "x"), req("a", "c", "y"))
@@ -461,9 +470,11 @@ def test_a_root_or_require_one_side_removed_stays_removed_where_git_merges_the_o
     """ci's case against ef47f3bd (#4814): roots A..H, ours removes B, theirs moves B after D.  Git merges that without a
     conflict, to [A, C, D, B, E, F, G, H]; the whole merged file is held to `kept`, so B stays removed.  Requires alike."""
     import tomllib
-    roots = lambda *ms: 'name = "p"\n\n[[lean_lib]]\nname = "P"\nroots = [' + ",\n  ".join(f'"{m}"' for m in ms) + "]\n"
-    req = lambda *ns: 'name = "p"\n' + "".join(f'\n[[require]]\nname = "{n}"\npath = "../{n}"\n' for n in ns) + \
-        '\n[[lean_lib]]\nname = "P"\n'
+    def roots(*ms):
+        return 'name = "p"\n\n[[lean_lib]]\nname = "P"\nroots = [' + ",\n  ".join(f'"{m}"' for m in ms) + "]\n"
+    def req(*ns):
+        return 'name = "p"\n' + "".join(f'\n[[require]]\nname = "{n}"\npath = "../{n}"\n' for n in ns) + \
+            '\n[[lean_lib]]\nname = "P"\n'
     for side, (o, a, b) in {"roots": (roots(*"ABCDEFGH"), roots(*"ACDEFGH"), roots(*"ACDBEFGH")),
                             "require": (req(*"abcdefgh"), req(*"acdefgh"), req(*"acdbefgh"))}.items():
         for n, t in (("base", o), ("ours", a), ("theirs", b)):
@@ -533,7 +544,8 @@ def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
     import tempfile
     import tomllib
     tmp = Path(tempfile.mkdtemp())
-    req = lambda n: f'\n[[require]]\nname = "{n}"\npath = "../../{n}"\n'
+    def req(n):
+        return f'\n[[require]]\nname = "{n}"\npath = "../../{n}"\n'
     anchor = 'path = "../../pouw/window"\n'
     tail = '"Proofs.Properties.Nci"]'
     ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]')
@@ -550,7 +562,8 @@ def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
     text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]'), theirs)
     assert left == 0 and tomllib.loads(text)["lean_lib"][0]["roots"] == [
         "Properties.Pouw", "Properties.Nci", "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"], text
-    comment = lambda s: LAKEFILE.replace("the code's properties.", s)
+    def comment(s):
+        return LAKEFILE.replace("the code's properties.", s)
     text, left = _lakefile(tmp, LAKEFILE, comment("ours."), comment("theirs."))
     assert left == 1 and "<<<<<<< ours" in text, "a comment both sides changed stays git's"
     text, left = _lakefile(tmp, LAKEFILE, LAKEFILE.replace('"security_properties"', '"a"'),
