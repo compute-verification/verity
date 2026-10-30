@@ -86,7 +86,7 @@ def frozen_all() -> W.Locator:
 
 def test_the_shared_layout_and_its_writers_are_circuits_at_the_frozen_shape(frozen) -> None:
     assert frozen.layout.row_count == W.FROZEN_ROWS and frozen.layout.digest.hex() == W.FROZEN_DIGEST
-    assert L.Layout(frozen.layout.name, frozen.layout.groups).json_digest.hex() == W.FROZEN_JSON_DIGEST
+    assert L.RowsPerSlot(frozen.layout.name, frozen.layout.groups).json_digest.hex() == W.FROZEN_JSON_DIGEST
     ws = frozen.writers()
     assert len(ws) == 1203 and W.writers_digest(ws) == FROZEN_WRITERS
 
