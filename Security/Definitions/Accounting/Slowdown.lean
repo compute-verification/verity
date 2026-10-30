@@ -28,19 +28,19 @@ open Verity
 open scoped ENNReal
 
 /-- **A static task** `𝒢` over inputs `In` and outputs `Y`: one uniform coin, drawn up front, and the input `x` and the
-set `𝒴` of its acceptable outputs that it gives (`draw ω = (x, 𝒴)`). -/
+set `𝒴` of its acceptable outputs that it gives (`sample ω = (x, 𝒴)`). -/
 structure Task (In Y : Type) where
   /-- the coin -/
   Ω : Type
   [fintype : Fintype Ω]
   [nonempty : Nonempty Ω]
   /-- the input and its acceptable outputs, at each value of the coin -/
-  draw : Ω → In × Set Y
+  sample : Ω → In × Set Y
 
 attribute [instance] Task.fintype Task.nonempty
 
 /-- The task as a game: its one coin, then the pair it draws. -/
-def Task.game {In Y : Type} (G : Task In Y) : Game (In × Set Y) := .coin G.Ω fun ω => .ret (G.draw ω)
+def Task.game {In Y : Type} (G : Task In Y) : Game (In × Set Y) := .coin G.Ω fun ω => .ret (G.sample ω)
 
 /-- **The probability over the task** `Pr_{(x, 𝒴) ∼ 𝒢}[E x 𝒴]`. -/
 noncomputable def Task.prob {In Y : Type} (G : Task In Y) (E : In → Set Y → Prop) : ℝ≥0∞ :=

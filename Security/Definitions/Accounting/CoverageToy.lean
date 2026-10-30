@@ -42,7 +42,7 @@ def guess (b : Bool) : Actual.Run Unit where
 /-- The task: a hidden coin `ω`, one input, and the outputs whose one position holds `[ω]` acceptable. -/
 def task : Task Unit (Fin 1 → List Bool) where
   Ω := Bool
-  draw := fun ω => ((), {y | y 0 = [ω]})
+  sample := fun ω => ((), {y | y 0 = [ω]})
 
 /-- The computation that guesses `1` on its input. -/
 def comp : Unit → Actual.Run Unit := fun _ => guess true

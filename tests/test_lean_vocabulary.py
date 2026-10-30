@@ -506,7 +506,7 @@ KNOWN: dict[str, str] = {
         "homonym, the boundary's gates in a program: rename (network-accounting)",
     "Security/Definitions/NetworkCertifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
-    "Security/Definitions/Population/DrawPressure.lean::Population.Exfil.Draw":
+    "Security/Definitions/Population/SamplePressure.lean::Population.Exfil.Draw":
         "duplicate of `Verity.Draw`: becomes it (k of n units, without replacement) (lean)",
     "Security/Definitions/Pous/Game/Oracle.lean::Pous.Prog":
         "homonym, PoUS's parallel oracle program: rename (memory-accounting)",
