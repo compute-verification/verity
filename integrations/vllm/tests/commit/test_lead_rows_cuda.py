@@ -1,6 +1,7 @@
 """``native_rows.cu``'s lead kernels (``StepHasher.lead_stream``, ``lead_leaves``) compute what ``verity_vllm.commit.lead_rows`` does,
 bit for bit: the committed stream of random exports at ragged and served shapes, the inline leaves of chunks and segments at ranks
-across every position width, both schemas and short last values, and whole subtrees with the rows-sha512 pads and nodes."""
+across every position width, both schemas and short last values, whole subtrees with the rows-sha512 pads and nodes, and the tops
+``DeviceWords`` and ``device_a_top`` hand ``words_top`` and ``a_top``, keyed as the CPU's."""
 from __future__ import annotations
 
 import hashlib
@@ -55,6 +56,11 @@ def test_stream_is_lead_rows(hasher, m, n, S, bn):
 def test_stream_refuses_an_export_of_another_shape(hasher):
     with pytest.raises(RuntimeError):
         hasher.lead_stream(torch.zeros(64 * 128 * 2 - 1, dtype=torch.int32, device="cuda"), 1, 128, 2, 128, _stream())
+
+
+def test_stream_refuses_a_call_past_the_gathers_u32_tiles(hasher):
+    with pytest.raises(RuntimeError, match="split the call's rows"):
+        hasher.lead_stream(torch.zeros(8, dtype=torch.int32, device="cuda"), 1 << 30, 1 << 30, 1, 8, _stream())
 
 
 def _leaves(ext, hasher, dom, schema: str, values: list[bytes], first: int) -> list[bytes]:
@@ -180,3 +186,34 @@ def test_device_words_refuses_leaves_past_or_short_of_its_count(ext, hasher):
         dw.top()
     with pytest.raises(Refused):
         dw.add(ex, *shape)
+
+
+@pytest.mark.parametrize("m,K", [(1, 8), (1, 1024), (1, 1032), (2, 1024), (3, 2048), (5, 104), (80, 2048), (80, 8192)])
+def test_device_a_top_keys_the_cpus_a_root(ext, hasher, m, K):
+    """`device_a_top` over A_j's bytes (one segment up to the 1024-byte edge; a ragged last segment; whole segments; pads; a
+    decode's 80 rows at K 2048 and 8192) hands `a_top` the CPU subtree's top: check mode passes and d is `a_root`'s."""
+    a = np.random.default_rng(m * K).integers(-128, 128, size=(m, K), dtype=np.int8)
+    count = -(-m * K // L.A_SEGMENT)
+    w = _window()
+    top = L.device_a_top(ext, hasher, w.a_domain(2, 9, count), torch.from_numpy(a).cuda(), _stream())
+    assert len(top) == (m * K if count == 1 else 128)
+    assert w.a_top(2, 9, count, top, check=a.tobytes()) == _window().a_root(2, 9, a.tobytes())
+
+
+def test_device_a_top_reads_a_row_major_whatever_its_strides_or_byte_type(ext, hasher):
+    a = np.random.default_rng(11).integers(-128, 128, size=(17, 2048), dtype=np.int8)
+    w, count = _window(), -(-a.size // L.A_SEGMENT)
+    dom = w.a_domain(0, 3, count)
+    strided = torch.from_numpy(np.ascontiguousarray(a.T)).cuda().T
+    fp8 = torch.from_numpy(a).cuda().view(torch.float8_e4m3fn)
+    tops = {L.device_a_top(ext, hasher, dom, t, _stream()) for t in (strided, fp8, torch.from_numpy(a).cuda())}
+    assert len(tops) == 1 and w.a_top(0, 3, count, tops.pop(), check=a.tobytes()) == _window().a_root(0, 3, a.tobytes())
+
+
+def test_device_a_top_refuses_another_count_byte_type_or_ragged_words(ext, hasher):
+    dom = _window().a_domain(0, 0, 2)
+    for a in (torch.zeros(1024, dtype=torch.uint8, device="cuda"), torch.zeros(3072, dtype=torch.uint8, device="cuda"),
+              torch.zeros(1028, dtype=torch.uint8, device="cuda"), torch.zeros(516, dtype=torch.int16, device="cuda"),
+              torch.zeros(1032, dtype=torch.uint8)):
+        with pytest.raises(Refused):
+            L.device_a_top(ext, hasher, dom, a, _stream())

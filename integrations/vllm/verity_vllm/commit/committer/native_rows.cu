@@ -399,20 +399,21 @@ struct Prefix {
 
 // Thread a 16-byte piece of committed tile k: the call's r16 x c8 tiles a step, row tiles of 64 rows (the last may commit fewer than
 // four tile rows) and column tiles of nni tile columns (the last may commit fewer), so stream tile k is export tile
-// ((rt nct + ct) S + t) 4 nni + 4 ni + w.
-__global__ void __launch_bounds__(THREADS) rows_leaf_gather_kernel(const uint4* __restrict__ ex, uint4* __restrict__ out, u64 n_tiles, u32 r16,
+// ((rt nct + ct) S + t) 4 nni + 4 ni + w.  Tile indices are u32 (verity_rows_lead_gather_launch refuses a call whose 64-row tiles'
+// tile count, or a column tile's, reaches 2^32), so no u64 division; the export's and the stream's offsets are u64.
+__global__ void __launch_bounds__(THREADS) rows_leaf_gather_kernel(const uint4* __restrict__ ex, uint4* __restrict__ out, u32 n_tiles, u32 r16,
                                                                    u32 c8, u32 S, u32 nct, u32 nni) {
   const u64 g = (u64)blockIdx.x * blockDim.x + threadIdx.x;
-  if (g >= 32 * n_tiles) return;
-  u64 k = g >> 5;
-  const u64 per_rt = 4ull * c8 * S, rt = k / per_rt;
+  if (g >= 32ull * n_tiles) return;
+  u32 k = static_cast<u32>(g >> 5);
+  const u32 per_rt = 4 * c8 * S, rt = k / per_rt;
   k -= rt * per_rt;
-  const u32 nw = min(4u, r16 - 4 * (u32)rt);
-  const u64 per_ct = (u64)nw * S * nni, ct = k / per_ct;
+  const u32 nw = min(4u, r16 - 4 * rt);
+  const u32 per_ct = nw * S * nni, ct = k / per_ct;
   k -= ct * per_ct;
-  const u32 ncol = min(nni, c8 - nni * (u32)ct);
-  const u64 t = k / (ncol * nw), r = k % (ncol * nw), ni = r / nw, w = r % nw;
-  out[g] = __ldg(ex + 32 * (((rt * nct + ct) * S + t) * 4 * nni + 4 * ni + w) + (g & 31));
+  const u32 ncol = min(nni, c8 - nni * ct);
+  const u32 t = k / (ncol * nw), r = k % (ncol * nw), ni = r / nw, w = r % nw;
+  out[g] = __ldg(ex + 32 * ((((u64)rt * nct + ct) * S + t) * 4 * nni + 4 * ni + w) + (g & 31));
 }
 
 // value word q of a len-byte value (len a multiple of 8), big-endian; zero outside it
@@ -684,6 +685,14 @@ extern "C" int verity_rows_lead_build(const uint8_t* domain_id, const char* sche
   return 0;
 }
 
+// The most tiles the gather of a call (m, n, S, bn all positive) counts in u32: its tiles with every 64-row tile taken as four tile
+// rows, and one column tile's over the steps.  The gather needs this below 2^32.
+extern "C" uint64_t verity_rows_lead_gather_tiles(int m, int n, int S, int bn) {
+  const u64 r16 = (m + 15) / 16, c8 = (n + 7) / 8, nni = bn / 8;
+  const u64 rows = 4 * ((r16 + 3) / 4) * c8 * S, col = 4 * (u64)S * nni;
+  return rows > col ? rows : col;
+}
+
 // The committed stream of a call of m rows and n columns at S steps from its export over bn-column tiles (64 ceil(m / 64) x
 // bn ceil(n / bn) words a step): pad_rows(m) pad_cols(n) S words to out.  ex and out 16-byte aligned.
 extern "C" int verity_rows_lead_gather_launch(const uint8_t* ex, uint8_t* out, int m, int n, int S, int bn, cudaStream_t st) {
@@ -691,9 +700,11 @@ extern "C" int verity_rows_lead_gather_launch(const uint8_t* ex, uint8_t* out, i
     return static_cast<int>(cudaErrorInvalidValue);
   if (const int rc = rows_kernel_attributes()) return rc;
   const u32 r16 = (m + 15) / 16, c8 = (n + 7) / 8, nct = (n + bn - 1) / bn, nni = bn / 8;
+  if (verity_rows_lead_gather_tiles(m, n, S, bn) > UINT32_MAX) return static_cast<int>(cudaErrorInvalidValue);
   const u64 tiles = (u64)r16 * c8 * S;
   lead::rows_leaf_gather_kernel<<<static_cast<unsigned>((32 * tiles + THREADS - 1) / THREADS), THREADS, 0, st>>>(
-      reinterpret_cast<const uint4*>(ex), reinterpret_cast<uint4*>(out), tiles, r16, c8, static_cast<u32>(S), nct, nni);
+      reinterpret_cast<const uint4*>(ex), reinterpret_cast<uint4*>(out), static_cast<u32>(tiles), r16, c8, static_cast<u32>(S), nct,
+      nni);
   return static_cast<int>(cudaGetLastError());
 }
 
