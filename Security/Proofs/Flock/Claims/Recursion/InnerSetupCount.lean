@@ -40,7 +40,7 @@ SHA-512 the drawn statement (`hst`) has at most `1024` regions and the undrawn o
 shared-row table. -/
 theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : ByteArray} {d : Json} {co co' : Coins}
     {pa pa' : Option Json} {pr pr' : Option ByteArray} {st st' : Stmt} (ht : tags.typed = false)
-    (hst : Stmt.setupHidden tags cf pf co [] (some d) pa pr = .ok st)
+    (hi : tags.isTmpl = false) (hst : Stmt.setupHidden tags cf pf co [] (some d) pa pr = .ok st)
     (hst' : Stmt.setupHidden tags cf pf co' [] none pa' pr' = .ok st')
     (hreg : st.regions.size ≤ 1024) (hrows : ∀ t, st'.pub.tables = some t → ∀ r ∈ t.counts, r ≤ 2 ^ 28)
     (coins : Coins) (partition : Option Json) (program publicInputs : Option ByteArray) :
@@ -60,7 +60,7 @@ theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
   have hpub : st'.pub = pop := (hn' rfl).trans hpp.symm
   rw [hpub] at hrows
   have hstd : HmOut.parseWith (M := Except String) (Hashes.ofSha512 Sha512.hash) tags cf [] = .ok st'.c :=
-    (With.outParseWith_std tags cf []).trans s'.parse
+    (With.outParseWith_std tags cf []).trans (s'.parseF hi)
   have hrow : HmRow.loadPublicWith (M := Except String) (Hashes.ofSha512 Sha512.hash) tags
       { st'.c with outPorts := #[] } pf = .ok pop :=
     (With.loadPublicWith_std _ _ _).trans (FlockSoundness.Discharge.Hidden.loadPublic_nil hpop)
@@ -71,7 +71,7 @@ theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
     rw [hDp, ← hpub, e]
     exact hn
   refine setupHidden_cost h tags cf pf coins [] d partition program publicInputs (fun c => c.ports = st'.c.ports)
-    1024 28 ht (fun c hc' => by have e : c.ports = st'.c.ports := hc'; rw [e]; exact hP) ?_ ?_ ?_
+    1024 28 ht hi (fun c hc' => by have e : c.ports = st'.c.ports := hc'; rw [e]; exact hP) ?_ ?_ ?_
   · exact okC_of_V (fun k => With.hmOutParseWith_sim (With.Sim.forget _) With.Throws.exceptT With.Throws.v
       (With.Sim.forget_counted h) tags cf [] k) fun c hc' => SetupValues.parse_ports_eq h Sha512.hash ht hc' hstd
   · intro c pi hc'
@@ -93,7 +93,7 @@ theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
 outputs. -/
 theorem innerTables_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : ByteArray} {d : Json} {co co' : Coins}
     {pa pa' : Option Json} {pr pr' : Option ByteArray} {st st' : Stmt} (ht : tags.typed = false)
-    (hh : tags.hiddenOutputs = true)
+    (hi : tags.isTmpl = false) (hh : tags.hiddenOutputs = true)
     (hst : Stmt.setupHidden tags cf pf co [] (some d) pa pr = .ok st)
     (hst' : Stmt.setupHidden tags cf pf co' [] none pa' pr' = .ok st')
     (hreg : st.regions.size ≤ 1024) (hrows : ∀ t, st'.pub.tables = some t → ∀ r ∈ t.counts, r ≤ 2 ^ 28)
@@ -103,7 +103,7 @@ theorem innerTables_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
     Stmt.setupCalls h tags cf pf coins count [] (some d) partition program work stratified closure publicInputs ≤
       innerB := by
   have hc := countC.mono (setupTables_cost h tags cf pf coins count [] d partition program work stratified closure
-    publicInputs _ hcount hh (innerHidden_cost h ht hst hst' hreg hrows coins partition program publicInputs))
+    publicInputs _ hcount hh (innerHidden_cost h ht hi hst hst' hreg hrows coins partition program publicInputs))
     (show 2 + (10 + 1024 * perRow 28) ≤ innerB by unfold innerB; omega)
   have h0 := hc 0
   unfold Stmt.setupCalls
@@ -178,12 +178,13 @@ theorem innerSetup_calls {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
   rw [z2, z3, z4, z5, z7, hs3, hdraw, hpart, hpi] at hsetup
   have hh : RecCoins.innerTags.hiddenOutputs = true := rfl
   have ht : RecCoins.innerTags.typed = false := rfl
+  have hi : RecCoins.innerTags.isTmpl = false := by first | rfl | decide
   rcases FlockSoundness.Discharge.HiddenExec.setupTables_okH hh hsetup with ⟨-, st, hst, rfl, rfl⟩ | ⟨hc, -⟩
   · refine ⟨s, _, #[st], hset, fun h => ?_⟩
     obtain ⟨-, hreg, -⟩ := (show _ ∧ st.regions.size ≤ 1024 ∧ _ from hrange st (by simp))
     unfold FlockDeploy.setupCallsOf
     rw [z2, z3, z4, z5, z7, hs3, hdraw, hpart, hpi]
-    exact SetupCount.innerTables_cost h ht hh hst hst' hreg hrows _ _ hcount _ _ _ _ _ _
+    exact SetupCount.innerTables_cost h ht hi hh hst hst' hreg hrows _ _ hcount _ _ _ _ _ _
   · omega
 
 section Runs

@@ -207,6 +207,9 @@ theorem hmOutParse_ports (h : ByteArray → ByteArray) (tags : Tags) (bytes : By
     ∃ mj, metaOf bytes = some mj ∧ HmRow.rowPorts mj tags.typed = .ok c.ports := by
   unfold HmOut.parseWith at hp
   simp (config := { zeta := false }) only [ht, Bool.not_false, ↓reduceIte] at hp
+  by_cases hi : tags.isTmpl = true
+  · rw [if_pos hi] at hp; cases hp
+  rw [if_neg hi] at hp
   obtain ⟨c0, h0, hp⟩ := except_bind_ok hp
   obtain ⟨_, -, hp⟩ := except_bind_ok hp
   cases hp

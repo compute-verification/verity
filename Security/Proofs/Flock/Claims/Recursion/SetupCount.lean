@@ -239,7 +239,8 @@ theorem publicDigest_cost (header : Json) (pubs : ByteArray) :
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
-theorem descParse_cost (bytes : ByteArray) : countC.P (TemplateQuery.Desc.parseWith (Hashes.counted h) bytes) 1 := by
+theorem descParse_cost (bytes : ByteArray) :
+    countC.P (TemplateQuery.Desc.parseWith (Hashes.counted h).sha512 bytes) 1 := by
   apply countC.mono
   · unfold TemplateQuery.Desc.parseWith
     repeat (first
@@ -1638,10 +1639,10 @@ theorem map_bind_cost {α β γ : Type} {x : CountV α} {g : α → β} {f : β 
     (h : countC.P (x >>= fun a => f (g a)) N) : countC.P ((g <$> x) >>= f) N := by
   rw [bind_map_left]; exact h
 
-theorem outParse_cost (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (ht : tags.typed = false) :
-    countC.P (HmOut.parseWith (Hashes.counted h) tags bytes tables) 2 := by
+theorem outParse_cost (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (ht : tags.typed = false)
+    (hi : tags.isTmpl = false) : countC.P (HmOut.parseWith (Hashes.counted h) tags bytes tables) 2 := by
   unfold HmOut.parseWith
-  simp only [ht, Bool.not_false, ↓reduceIte]
+  simp only [ht, hi, Bool.not_false, Bool.false_eq_true, ↓reduceIte]
   apply countC.mono
   · repeat (first
       | extract_lets
@@ -1702,14 +1703,20 @@ theorem outParse_cost (tags : Tags) (bytes : ByteArray) (tables : List (String �
         | (with_reducible apply diteAny)
         | split)
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
-  · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
+    · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
+
+/-- At a flat statement's tags, the committed circuit is `HmOut.parseWith`'s. -/
+theorem outParseCommit_flat (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
+    (hi : tags.isTmpl = false) :
+    HmOut.parseCommitWith (Hashes.counted h) tags bytes tables = HmOut.parseWith (Hashes.counted h) tags bytes tables := by
+  rw [HmOut.parseCommitWith, if_neg (by simp [hi])]
 
 set_option maxHeartbeats 8000000 in
-/-- **`Stmt.setupHiddenWith`'s calls**, at a drawn statement of an untyped circuit: ten for its parse, partition, load,
-draw, law, links or query and digests, and `checkPublic`'s, at the ports and rows its parse, load and draw return. -/
+/-- **`Stmt.setupHiddenWith`'s calls**, at a drawn statement of an untyped, flat circuit: ten for its parse, partition,
+load, draw, law, links or query and digests, and `checkPublic`'s, at the ports and rows its parse, load and draw return. -/
 theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (d : Json) (partition : Option Json) (program publicInputs : Option ByteArray) (PC : Circuit → Prop) (NP K : Nat)
-    (ht : tags.typed = false) (hPC : ∀ c, PC c → c.ports.size ≤ NP)
+    (ht : tags.typed = false) (hi : tags.isTmpl = false) (hPC : ∀ c, PC c → c.ports.size ≤ NP)
     (H1 : okC (HmOut.parseWith (Hashes.counted h) tags cf tables) PC)
     (H2 : ∀ c pi, PC c → okC (HmIn.loadPublicWith (Hashes.counted h) tags c pi pf) (PT K))
     (H3 : ∀ c pi pop, PT K pop → okC (HmIn.drawnWith (Hashes.counted h) c pi pop d) (fun pub => PT K pub ∧ PN K pub)) :
@@ -1717,7 +1724,7 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
       (10 + NP * perRow K) := by
   have hParse : ∀ {β : Type} {f : Circuit → CountV β} {m N : Nat}, (∀ c, PC c → countC.P (f c) m) → 2 + m ≤ N →
       countC.P (HmOut.parseWith (Hashes.counted h) tags cf tables >>= f) N :=
-    fun hf hN => bindQ (outParse_cost h tags cf tables ht) H1 hf hN
+    fun hf hN => bindQ (outParse_cost h tags cf tables ht hi) H1 hf hN
   have hLoad : ∀ c pi {β : Type} {f : Public → CountV β} {m N : Nat}, PC c → (∀ pop, PT K pop → countC.P (f pop) m) →
       1 + m ≤ N → countC.P (HmIn.loadPublicWith (Hashes.counted h) tags c pi pf >>= f) N :=
     fun c pi _ _ _ _ hc hf hN => bindQ (inLoadPublic_cost h tags c pi pf) (H2 c pi hc) hf hN
@@ -1740,6 +1747,7 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
       countC.P (HmOut.checkPublicWith (Hashes.counted h) c pub) (NP * perRow K) :=
     fun c pub hc hp => countC.mono (checkPublic_cost h c pub K hp.1 hp.2) (Nat.mul_le_mul_right _ (hPC c hc))
   unfold Stmt.setupHiddenWith
+  rw [outParseCommit_flat h tags cf tables hi]
   -- `if let some d := draw` binds its own `d`; only once that match reduces is the law's `Except.map` at the theorem's
   -- `d`, where `generalize` finds it. A `split` the walk leaves unreduced shares one bound between its arms.
   try simp -zeta only
