@@ -118,11 +118,12 @@ Two kinds of committed run:
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
   any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
-  (`window_rows.standin_state`), a per-window value under the run root. Where the certifier front kept the network
-  certifier's run under the serve dir, slot k is instead the request whose Program the network certifier's scan of that
-  run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's records for
-  ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the verifier's own
-  ``window-circuit`` record is the circuit it holds it to.
+  (`window_rows.standin_state`), a per-window value under the run root, whose rows and salts it also writes whole, prover
+  only, for the network certifier's scan to read as its state tree (`scan_state_opening`, ``scan_zk.py --v3c``). Where
+  the certifier front kept the network certifier's run under the serve dir, slot k is instead the request whose Program
+  the network certifier's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
+  records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
+  verifier's own ``window-circuit`` record is the circuit it holds it to.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -172,7 +173,7 @@ from records_audit import PORTS, REFUSED, free_ports, pin_arg, pins_of, registra
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
-from verity.ml.windows import interface as IF  # noqa: E402
+from verity.ml.windows import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
@@ -1404,6 +1405,22 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
     return rows, [None if q is None else user[q] for q in starts]
 
 
+def scan_state_opening(value: Any, out: Path) -> Path:
+    """The window's `SCAN_STATE` value ``value`` (`window_rows.state_value`'s) opened whole for the network certifier's
+    scan, which reads it as its state tree (``scan_zk.py --v3c``): ``out``/`scan_zk.SCAN_STATE_FILE`, prover only,
+    every row (u16 little-endian) and then every salt. The window's ``v<j>-private.bin`` holds only the rows its members
+    read."""
+    import numpy as np
+
+    with network_traces():
+        from scan_zk import SCAN_STATE_FILE
+    at, path = np.arange(value.leaves), out / SCAN_STATE_FILE
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+        os.fchmod(f.fileno(), 0o600)
+        f.write(np.ascontiguousarray(RW.value_rows(value, at), dtype="<u2").tobytes() + RW.value_salts(value, at))
+    return path
+
+
 def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[str, Any]],
                 scan: tuple[Sequence[str | None], Sequence[tuple[Sequence[int], Sequence[int]]]] | None = None,
                 ) -> list[tuple[str | None, list[int], int]]:
@@ -1546,6 +1563,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
     win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)))
+    scan_state_opening(values[SS.SCAN_STATE], Path(a.out))
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
