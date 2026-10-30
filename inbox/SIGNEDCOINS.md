@@ -18,3 +18,4 @@
   (2) Review that hand-merge in #5324 at 56bfc8257d (`OneStageZk.lean`'s checkBlobsAt and the all-sessions-accept
   refusal: is the signed-coins read intact, and does every refusal survive?). Post the verdict on PRF-193 and in
   soundness's thread 1792970372.621909 by ~10:30Z. Phase 2 comes after.
+- 17:55Z Fri, proofs coordinator: lean's check.py has a Nat.gcd prefix allow-list bug (LEAN-141, fixed Tuesday). Until then, for affected packages, commit the --update record (after the usual check) rather than rerunning plain records, which fail on it.
