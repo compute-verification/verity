@@ -437,7 +437,7 @@ before the session's first coin, not bounds state by state.
   coin. Their own collision resistance matters to what the statement refers to (registered data, linked proofs), not to
   this theorem.
 - **`os` coins** (the default). Each round's coins are uniform and unknown to the prover before it sent the round. They
-  come from the verifier's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved. For the unit sample it is
+  come from the verifier's `/dev/urandom` (`Tags.coinScheme`). The randomness is trusted, not proved. For the unit sample it is
   A3. The theorems, the headline among them, are for these coins.
 - **`seed` coins** (`coin-commit/sha256/v1`; M0's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
   add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,

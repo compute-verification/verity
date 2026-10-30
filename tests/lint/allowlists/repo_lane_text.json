@@ -1607,7 +1607,6 @@
     {"file": "verity/ml/flock/tests/tmpl_statement.py", "count": 1},
     {"file": "verity/ml/flock/tests/zk_rewind_stats.py", "count": 1},
     {"file": "verity/ml/flock/tests/zk_stats.py", "count": 1},
-    {"file": "verity/ml/flock/verifier/PROTOCOL.md", "count": 17},
     {"file": "verity/ml/flock/verifier/README.md", "count": 5},
     {"file": "verity/ml/flock/verifier/cut_check_agree.py", "count": 1},
     {"file": "verity/ml/flock/verifier/firewall_agree.py", "count": 6},

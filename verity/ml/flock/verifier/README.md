@@ -1,6 +1,6 @@
-# C-Flock verifier: runners and cross-checks
+# Flock verifier: runners and cross-checks
 
-C-Flock's verifier of record is the Lean package in `verity/core/service/flock/` (`flock_verifier`, Lean 4, no
+Flock's verifier is the Lean package in `verity/core/service/flock/` (`flock_verifier`, Lean 4, no
 dependencies, toolchain pinned in its `lean-toolchain`). Its definitions are the specification, and its docstrings say
 what each check is. This directory holds what runs it and what holds it to other implementations: the agreement job
 against upstream's Rust verifier, the agreement scripts for single parts, the mutant and fuzz generators, and the vectors.
@@ -24,7 +24,7 @@ the verifier follows upstream because the paper is silent are listed below.
 | the pinned configuration: profile, reps, flavour, link shape, coin scheme, statement versions | `Flock.Tags` |
 | the session record (`flock-live-session/v1`), its session checks and its one canonical text | `Flock.Record`, `Flock.RecordText` |
 | the replay transcript (transcript-v2 framing; coins read from the record, never derived) | `Flock.Transcript` |
-| the unit draw (subset, bernoulli, stratified, work; derived by the verifier, never taken as stated) | `Flock.Draw` (`HmRow.stratifiedLaw`, `HmRow.workLaw`; full draws of commitment readers: `Registered.checkFull`) |
+| the unit sample (subset, bernoulli, stratified, work; derived by the verifier, never taken as stated) | `Flock.Draw` (`HmRow.stratifiedLaw`, `HmRow.workLaw`; commitment readers sampled in full: `Registered.checkFull`) |
 | a `--zk` session's keyed coin tree | `Flock.CoinTree` (`checkFresh`) |
 | the proof container (bincode, refused unless canonical, every nonce 0) | `Flock.Proof` (`decodeProof_canonical`), `Flock.ZkProof` |
 | statement binding, zerocheck, lincheck, the claims handed to the opening | `Flock.Piop` |
@@ -45,9 +45,9 @@ the verifier follows upstream because the paper is silent are listed below.
 | `--zk` sessions: the mask slot, and Δ and regions kept off it | `Flock.Zk` (`shapeOk`, `maskFree`, `SLOT_LOG_MIN`) |
 | plain leaves, a recursive session's inner statement | `Tags.withPlainLeaves`, `Registered.checkDescription` |
 | fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `drawLaw`, `programHeld`) |
-| the firewall's contract, frames, coins, `Hello` and session loop | `Flock.Firewall` and `Flock/Firewall/` |
+| the ZK server's contract, frames, coins, `Hello` and session loop | `Flock.Firewall` and `Flock/Firewall/` |
 
-`verify` fails closed: after every check passes, `Flock.ProvedScope` refuses each statement form, draw design or setting
+`verify` fails closed: after every check passes, `Flock.ProvedScope` refuses each statement form, sampling design or setting
 the soundness theorem doesn't cover, with `refused: <why>: a statement form the soundness proof does not cover`, so a
 session that fails a check keeps that check's reason.
 
@@ -66,6 +66,10 @@ session that fails a check keeps that check's reason.
   `Assumptions/Custody.lean` (`RecordCustodyExec`, `RecordCustodyExecH`), and the rest of the lock's `assumptions` list
   (`Model.Statement.LinkLayout`, `SHA512CRStrict`, the `Zk.RecordCustodyZK*` family); what each means:
   `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`.
+- The trusted code: the running binary also trusts the toolchain's compiler and runtime and the C compiler and library
+  under them, and no declaration swaps a definition for code no proof reads (`verity/core/service/flock/README.md`,
+  enforced by `verity/ml/flock/tests/test_lean_verifier.py`). The agreement corpus's coverage rule is
+  `verity/ml/flock/tests/test_vectors_coverage.py`.
 - The lemmas the verifier's parts rest on: `merkle_binding` (`Security/Proofs/Flock/Verifier/Merkle.lean`),
   `squeeze_answers` and `squeeze_retained` (`Verifier/Transcript.lean`), `G_irreducible` and `Q_irreducible`
   (`Security/Proofs/Flock/Level3/`). The model they're about: `Security/Definitions/Flock/`.
@@ -106,12 +110,12 @@ it. The names pinned at older commits (`verity/flock-circuit@<commit>`, back to 
 parsed, so recorded sessions keep their names, and each one before hm96-sha512 rows is refused for its form.
 
 The other `flock-verify` subcommands run one part on its own: `field-test`, `hash-test`, `merkle-test`, `hm96-test` (on
-`verity/ml/commitments/hm96/vectors.json`) and `comp-check` (the component checks); `draw` and `draw-test` (the unit
-draw); `unit-cut`, `cut-check`, `qword-program`, `qcall-program`, `input-ids`, `sigma-check` and `template-query` (the
+`verity/ml/commitments/hm96/vectors.json`) and `comp-check` (`Flock.Comp`'s checks); `draw` and `draw-test` (the unit
+sample); `unit-cut`, `cut-check`, `qword-program`, `qcall-program`, `input-ids`, `sigma-check` and `template-query` (the
 partition and program checks); `net-check`, `region-words`, `typed-expand`, `typed-rows`, `circuit-type` and `layout`
 (statement setup); `archive-put` (the object store); `evaluate`; and `rec-inner`, `rec-statements`, `rec-transcript` and
 `rec-record` (the recursion). The other executables are `flock-firewall` (`contract`, `frame`, `tap`, `coins`, `hello`,
-`session`, `finish`: the ZK server's firewall), `flock-rows`, `flock-witness`, `flock-rec-opening` and
+`session`, `finish`: the ZK server), `flock-rows`, `flock-witness`, `flock-rec-opening` and
 `flock-rec-sparse`.
 
 ## Agreement with upstream
@@ -139,7 +143,7 @@ patches applied (`cargo build --release -p flock-live --bin <binary>`). The stat
 
 The Lean verifier is deliberately stricter than upstream in these places, each refused by Lean and accepted by upstream.
 A set marked `lean_refuses`, `lean_refuses_drawn` or `lean_refuses_drawless` compares a session refused for its form,
-draw or missing draw alone as accepted.
+sampling design or missing sample alone as accepted.
 
 | id | Lean refuses |
 |---|---|
@@ -153,11 +157,11 @@ draw or missing draw alone as accepted.
 | D8, D9 | no unit in a VU; no VU in a block, or a count that isn't a power of two |
 | D10 | an `identifier` other than the verifier's own `--identifier F` |
 | D11 | an output group past its slot |
-| D12 | a statement form, draw design or session the soundness proof doesn't cover (`Flock.ProvedScope`), and a `--zk` mask slot below 2^13 bits or met by Δ or a region |
+| D12 | a statement form, sampling design or session the soundness proof doesn't cover (`Flock.ProvedScope`), and a `--zk` mask slot below 2^13 bits or met by Δ or a region |
 | D13 | a `rec-open` unit whose name, bits, rows or net aren't the verifier's |
-| D14 | a draw that doesn't draw in full each unit reading a round's commitment |
+| D14 | a sample that doesn't take in full each unit reading a round's commitment |
 | D15 | an inner statement's registered description that isn't the registration |
-| D16 | a V* session whose instance labels aren't its drawn units |
+| D16 | a V* session whose instance labels aren't its sampled proof blocks |
 | D17 | a plain file in the form its statement doesn't pin, or a byte after a proof's end |
 | D18 | a non-empty `matrix_evals` |
 | D19 | a V* cap session that doesn't read its level's tops at the verifier's shared rows |
@@ -198,7 +202,7 @@ Each holds one Lean part to its Python or Rust counterpart, or generates inputs 
 | `record_text.py` | the record's canonical text against Lean's |
 | `zk_mutants.py` | `--zk` session mutants |
 | `template_query_agree.py`, `qword_agree.py`, `qword_program_agree.py`, `qcall_agree.py`, `cut_check_agree.py`, `unit_cut_agree.py`, `layout_agree.py`, `circuit_type_agree.py` | each Lean part against its Python counterpart in `verity.ml` |
-| `firewall_agree.py`, `firewall_controls.sh`, `firewall_finish_agree.py`, `firewall_finish_agree.sh` | the firewall's contract and session loop against the inner phase's proxy, and each tamper control held to a visible refusal |
+| `firewall_agree.py`, `firewall_controls.sh`, `firewall_finish_agree.py`, `firewall_finish_agree.sh` | the ZK server's contract and session loop against the inner phase's proxy, and each tamper control held to a visible refusal |
 | `tool.py` | the agreement job's store declaration: `ci-pod.sh` with its settings, the shipped bundle as its input |
 
 `vectors.json` lists the honest sessions, the record-level negatives, the forgeries and the replayable and live sets; the

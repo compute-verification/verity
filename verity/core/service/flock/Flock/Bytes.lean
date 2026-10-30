@@ -164,7 +164,7 @@ theorem runAll_of_run {α} {m : M α} {bytes : ByteArray} {what : String} {a : �
   rw [h]
   simp only [hr, ite_true]
 
-/-- `runAll` for §8's plain pair, which takes one byte more: `zk_level0`'s `Option` tag, `None` (0). The zk patch puts the
+/-- `runAll` for `Flock.Proof`'s plain pair, which takes one byte more: `zk_level0`'s `Option` tag, `None` (0). The zk patch puts the
 field at the end of upstream's `LigeritoProof` and writes it as `None` on every plain proof, and upstream's builds don't write it,
 so a file ends after `consistency_batch_grinding_nonces` or after one 0 after it (D17). -/
 def runPlain {α} (m : M α) (bytes : ByteArray) (what : String) : V α :=

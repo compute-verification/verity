@@ -31,7 +31,7 @@ final check, linearly, with coin-derived coefficients κ (`verifier_rows`' ``kap
 row_j[l]`` to a running sum (`verity_flock.rec_open`), so the final check's component r adds the rep's last running sum and
 its first in their place.
 
-``z_partial``'s comb is the circuit fold of §10 at the rep's coins, which the verifier computes from the inner statement. With
+``z_partial``'s comb is the circuit fold of the lincheck (`Flock.Piop`) at the rep's coins, which the verifier computes from the inner statement. With
 hidden unit circuits (``Shape.holo``) it is the public part's fold and the prover absorbs the hidden part's, h, in a round of
 its own (`h_round`, which `rec_sparse.RecSparse`'s H1 reads too): the lincheck's operand is ``comb[l] + h[l]``, an XOR of a v
 and a w term, so its 64 products are unchanged. The
@@ -134,7 +134,7 @@ class Shape:
         return fast100(self.m)
 
 
-# --- §8: the proof ------------------------------------------------------------------------------------------------------------
+# --- the proof (`Flock.Proof`) ------------------------------------------------------------------------------------------------
 
 @dataclass
 class Proof:
@@ -670,7 +670,7 @@ def run(sh: Shape, coins: CoinSource, M: Messages, extras: Sequence[Claim], fold
         claim = sm(1 ^ rr, g0) ^ sm(rr, g1) ^ sm(mul(rr, 1 ^ rr), ginf)
     out = [claim ^ mv(M.fa, M.fb)]
     info.update(z=z, rho=rho, r=r, v_c=pc)
-    # §10 lincheck
+    # the lincheck (`Flock.Piop`)
     alpha, beta = coins.one(), coins.one()
     claim = sm(alpha, M.fa) ^ M.fb ^ cst(beta)
     ts = []

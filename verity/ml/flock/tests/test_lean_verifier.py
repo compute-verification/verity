@@ -1157,7 +1157,7 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
     """Two statements whose bit-row ports have every residue between them (length 0; length mod 8 of 0, 1 and 7; bytes mod
     128 of 0, 1, 111, 112 and 127) have the statement digests `flock-circuit statement` gives them under its build's identity
     `verity/flock-circuit` (its `row_leaf_in_circuit` naming `hm96-sha512/row/v2`; the output row a bit row of all its words'
-    bits, §16.13), seeded and under `FC_COINS=os` (`--coins os`: the live-OS identity, `Tags.withCoins`, composed with the
+    bits, `HmOut`), seeded and under `FC_COINS=os` (`--coins os`: the live-OS identity, `Tags.withCoins`, composed with the
     bit-row and hidden-output text), so the two verifiers' Δ constants, forced-zero leaf bits, row wires and identities
     agree. A META that differs from what the verifier derives is refused, with the Rust verifier's message: a wrong length
     (its prefix, or its words and compressions), a length of 2^64 or one past `MAX_COMPS`, a v1 prefix and midstate under v2,

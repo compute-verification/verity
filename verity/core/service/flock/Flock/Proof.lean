@@ -131,7 +131,7 @@ def wLigerito (sh : Shape) (l : LigeritoProof) : ByteArray :=
     wLen 0 ++ wVec (fun m : F256 × F256 => wF256 m.1 ++ wF256 m.2) l.messages ++ wVec le64 l.queryNonces ++
     wVec F128.toBytes l.oodValues ++ wLen 0 ++ wVec le64 l.claimNonces ++ wVec le64 l.consistencyNonces
 
-/-- The commitment and `R1csProofLigerito` (§8's pair, which a `--zk` file's proof also starts with). -/
+/-- The commitment and `R1csProofLigerito` (the plain pair, which a `--zk` file's proof also starts with). -/
 def wProof (sh : Shape) (p : Proof) : ByteArray :=
   wVec id p.cap ++ wParams p.params ++
     (wVec F128.toBytes p.zerocheck.round1ab ++ wVec F128.toBytes p.zerocheck.round1c ++ wVec wPair p.zerocheck.rounds ++

@@ -142,7 +142,7 @@ def test_an_honest_registered_statement_is_accepted_and_reports_its_roots(staged
     line = json.loads(out.splitlines()[0])
     assert line["registered"] == {"cs": {"value": VALUE, "root": staged.reg.root.hex()}}
     assert line["partition_check"]["units"] == "derived"
-    assert json.loads(line["identity"])["outputs"].startswith("hidden"), "the statement hides its outputs (§16.13)"
+    assert json.loads(line["identity"])["outputs"].startswith("hidden"), "the statement hides its outputs (`HmOut`)"
 
 
 def test_registered_reads_need_the_verifiers_own_roots(staged):

@@ -113,7 +113,7 @@ def test_every_selftest_session_gets_its_live_verdict(zk):
 
 @pytest.mark.slow
 def test_a_session_key_is_used_once(zk):
-    """The coin tree's key is fresh (§7.4): a session read twice in one run is refused the second time."""
+    """The coin tree's key is fresh (`Flock.CoinTree`): a session read twice in one run is refused the second time."""
     honest = zk / "sessions" / "selftest" / "honest"
     first, second = _verify(zk, honest, honest)
     assert _passes(first), first["why"]
