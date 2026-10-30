@@ -3,8 +3,8 @@
 // h1tile.Layout's `blocks` from seed_j and `lanes` from sigma_R (576 + 32 at K = 4096, 1856 + 32 at K = 14336).
 //
 //   ca     compute accounting's benchmarks/pouw/served_h1/noise.cu `h1_noise`, copied verbatim but for the compression:
-//          one thread a noise chunk, sx::compress<0, 2> (sha512x.cuh; codec_tensor's sha512_compress statement for
-//          statement, K from constant memory)
+//          one thread a noise chunk, sx::compress<0, 2> (verity/ml/kernels/sha512.cuh; codec_tensor's sha512_compress
+//          statement for statement, K from constant memory)
 //   mid    one warp an (S, chunk) item, J blocks a lane (t = chunk 32 J + 32 j + lane): the message's words 0..10 are the
 //          seed's, so rounds 0..10 (the midstate) and every schedule term free of word 11 (t) are computed once an item,
 //          then each block runs rounds 11..79 on them (h1sha.cuh's noise_mid and noise_block, h1u.cu's own)
