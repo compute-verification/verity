@@ -1,6 +1,5 @@
 """The wire every party speaks: frames, messages and their schemas, and refusals by name. Stdlib only, and it imports no
-other unit, so an auditor party and a developer party parse with the same code (`note:memory-accounting/20261026T2305Z-
-draft-deployment-api-v3` §2).
+other unit, so an auditor party and a developer party parse with the same code.
 
 ~~~text
 frame     u32be len(head) ‖ u32be len(body) ‖ head ‖ body
