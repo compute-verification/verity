@@ -17,7 +17,7 @@ workload the record served.  Neither side evaluates a row, so the Definitions th
 one-stage proof is over the verifier's own template.  `source` holds a registration's window to it: ``served``, its run ``<TP run root>/rank<r>`` under a
 SHA-512 TP run root, its ``tp`` the record's and its served Programs the ones the verifier loaded.  A served window names a SHA-512
 commitment, as `deferred_rows.source` holds a deferred Commit's: a TP Commit's run root is SHA-512 (``verity/tp-run-root/v2``), and a
-record under the SHA-256 v1 root (an old record, or ``--commit-scheme vllm-v1``) passes no window as served (``sha512``).
+record under the SHA-256 v1 root (an old record) passes no window as served (``sha512``).
 
 A TP Commit that deferred its ranks' replay to sealed bundles and wrote no window has its windows from those bundles afterwards
 (``verity-vllm tp-serving-rows COMMIT_OUT --partition F --out O``, `from_bundle`): rank ``r``'s bundle opened against the record as
@@ -40,6 +40,7 @@ from typing import Any
 
 from verity_vllm import config as C
 from verity_vllm.config import option
+from verity_vllm.pipeline.tp import run_root as RT
 
 SCHEMA = "verity-vllm/tp-serving-rows/v1"
 ROWS_SCHEME = "rows-sha512"
@@ -68,11 +69,11 @@ def stand_in(tp: dict[str, Any], bundle_manifest_sha256: str) -> dict[str, Any]:
                    "bundle_manifest_sha256": bundle_manifest_sha256, "rows": ROWS}, "link": LINK}
 
 
-def commit(llm: Any, args: Any, root: bytes, claimed: dict[str, str], world: int, root_tag: bytes) -> dict[str, Any]:
-    """Every rank's window under the TP run root ``root`` (tagged ``root_tag``) of the ranks' roots ``claimed`` (rank -> hex), and
+def commit(llm: Any, args: Any, root: bytes, claimed: dict[str, str], world: int) -> dict[str, Any]:
+    """Every rank's window under the SHA-512 TP run root ``root`` of the ranks' roots ``claimed`` (rank -> hex), and
     ``tp.json``."""
     req = json.loads(Path(args.serving_rows).read_text())
-    tp = {"world": world, "tp_run_root": root.hex(), "roots": {str(r): claimed[str(r)] for r in range(world)}, "root_tag": root_tag.decode()}
+    tp = {"world": world, "tp_run_root": root.hex(), "roots": {str(r): claimed[str(r)] for r in range(world)}, "root_tag": RT.TP_ROOT_TAG.decode()}
     got = llm.collective_rpc(rank_rows, timeout=args.rpc_timeout, args=(dict(req, row=args.label), tp))
     return gather(req["dir"], tp, got)
 
@@ -202,7 +203,6 @@ def record(commit_dir: str | os.PathLike) -> dict[str, Any]:
     v2, or an old record's v1, which `source` refuses as served), and any other tag is refused.  ``bundles``: the manifest sha256 of
     each rank's sealed pair-0 bundle whose replay did not fail (``replay_deferred.json``; none when nothing was deferred)."""
     from verity_vllm.pipeline.tp import c2 as C2
-    from verity_vllm.pipeline.tp import run_root as RT
 
     d = Path(commit_dir)
     rows = [json.loads(x) for x in (d / "runs.jsonl").read_text().splitlines() if x.strip()]
