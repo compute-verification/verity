@@ -187,7 +187,7 @@ def test_launch_names_the_commit_it_shipped_not_the_checkout_it_read(tmp_path, m
                                                          "rate_observed_utc": "t"})
     monkeypatch.setattr(remote, "wake", lambda m, ssh: None)
     monkeypatch.setattr(remote, "ship_tool", lambda *a: "/r/tool/x")
-    monkeypatch.setattr(remote, "ship_source", lambda ssh, root, src: (shipped, f"/r/src/{shipped}", {"tree": tree, "transport": "stream"}))
+    monkeypatch.setattr(remote, "ship_source", lambda ssh, root, src, **_: (shipped, f"/r/src/{shipped}", {"tree": tree, "transport": "stream"}))
     staged = []
 
     def stage(ssh, root, run_id, request, sends, private=None):
