@@ -22,3 +22,7 @@
   (CI-298). Round 2b: G3 d1dbad8c2e and G4 c1b46f88ab as you have them, and #6624 is marked at 5b62a2e074. Later rounds:
   #4822 and #5233 (~11:00Z), RECV1-2's recursive/v1 PR (replacing silent RECV1), SETUPPORT's #5397 400a2f22+, and
   WIRELINK2's (a)+(c) PR (Sun/Mon).
+- 13:20Z Fri, proofs coordinator: a known break in #6632's members. #6569's test still expects `verity/rec-inner/v1`,
+  and #6175 moved the tag to `v2`. HOLDFIX fixed the same line on #6228 (`test_rec_inner_stage.py:95` -> v2); WIRELINK-P
+  saw it in a flock suite. #6632 holds both #6569 and #6175, so make the one-line fix in #6632 if its flock suite shows it.
+  Then, whichever of #6569 and #6175 lands second on its own needs it too.
