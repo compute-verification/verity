@@ -5,7 +5,7 @@ repository's per-file limit, so grafana_up.sh fetches them on the server and thi
 
 Preparing a dashboard: every `${DS_...}` import placeholder becomes the provisioned Prometheus data source; the old `graph` panels
 (Angular, gone in Grafana 12) become `timeseries`; and DCGM queries select one scrape Service, because SkyPilot's Prometheus scrapes
-the one dcgm-exporter pod through two Services (`dcgm-exporter`, `nvidia-dcgm-exporter`) and would draw every GPU twice.
+the one dcgm-exporter pod through two Services (`dcgm-exporter`, `nvidia-dcgm-exporter`) and would sample every GPU twice.
 Stdlib only.
 """
 from __future__ import annotations
