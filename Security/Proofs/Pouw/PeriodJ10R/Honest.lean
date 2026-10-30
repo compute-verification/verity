@@ -161,7 +161,7 @@ abbrev Ω1 : Type := Coin Bool Unit (circuit (tileCount σ sT)).rounds σ sT
 
 /-- The period's windows as `Credit.window` reads them: window `w` registers `regOf` of its round coin, and the rest of
 its inputs are `evOf` of its round coin and its draw coin. -/
-def windows (regOf : Bool → Registered) (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered)
+def windows (regOf : Bool → PreDraw) (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered)
     (n : ℕ) : CreditWindows (Ω1 σ sT) n where
   reg x w := regOf (coinAt (coinAt x w).1 ⟨0, hr1 _⟩)
   ev x w := evOf (coinAt (coinAt x w).1 ⟨0, hr1 _⟩) (coinAt x w).2
@@ -190,7 +190,7 @@ noncomputable def play (B : Type) (N Kd n : ℕ) : Play (WCoin N B) n Unit Unit 
 
 /-- **The registration is fixed before the draw coin**: it reads only the round coin, which the splice at window `w`
 after its one round keeps. -/
-theorem registeredBeforeDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (regOf : Bool → Registered)
+theorem registeredBeforeDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (regOf : Bool → PreDraw)
     (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (n : ℕ) :
     RegisteredBeforeDraw (windows σ sT regOf evOf n) := by
   intro x z w
@@ -259,7 +259,7 @@ theorem sum_div_le {N n : ℕ} (hn : 0 < n) (f : Fin n → Fin N → ℝ)
 section Meets
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-  (unitOf : Fin nB → ℕ) (regOf : Bool → Registered)
+  (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **Every window credited**, its prefix every window. -/
