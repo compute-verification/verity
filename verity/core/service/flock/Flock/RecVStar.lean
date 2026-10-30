@@ -668,7 +668,8 @@ def openingRepS (S : RecOpen.GfS) (ports : List (String × Nat)) (nv : Nat) : VS
 (`codec.descriptor_id`), the key of its `program_digests` and its partition's template. A level's (of the table or of R)
 `RecOpen_v4{LANES=…,H=…}` (`rec_open.definition`), a part's (of the algebra or of R's opening)
 `InnerRepCheck_v2{S=…}` at the part's S (`rec_residuals.definition`), RecSparse's `RecSparse_v1{NU=…,ELL=…,S_LOG=…,T_LOG=…}`
-(`rec_sparse.definition`) and a cap's `RecCap_v1` (`rec_cap.definition`). -/
+(`rec_sparse.definition`), a cap's `RecCap_v1` (`rec_cap.definition`) and the link table's `RecLink_v1{UB=…,PB=…}`
+(`rec_link.definition`). -/
 def templateId : VStar.Stmt → Except String String
   | .recOpen _ L H _ | .recOpenStacked _ L H _ => pure ("RecOpen_v4{LANES=" ++ toString L ++ ",H=" ++ toString H ++ "}")
   | .inner _ _ p => do pure ("InnerRepCheck_v2{S=" ++ (← staticDumpsAt 64 p.S.toJson) ++ "}")
@@ -677,6 +678,7 @@ def templateId : VStar.Stmt → Except String String
   | .sparse sh _ => pure ("RecSparse_v1{NU=" ++ toString sh.nu ++ ",ELL=" ++ toString sh.ell ++ ",S_LOG=" ++
       toString sh.sLog ++ ",T_LOG=" ++ toString sh.tLog ++ "}")
   | .cap .. => pure "RecCap_v1"
+  | .link UB PB _ => pure ("RecLink_v1{UB=" ++ toString UB ++ ",PB=" ++ toString PB ++ "}")
 
 /-- A descriptor id as an error shows it: whole up to 160 characters, else its first 120 and its length (a part's S runs
 to tens of kB). -/
