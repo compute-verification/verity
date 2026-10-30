@@ -46,6 +46,7 @@ Notes are records, never messages.
                           --default V --deadline '3:00 PM'|ISO (--page FILE.md --area AREA | --link NOTION_URL) [--wait]
                           # the ask's page in the Asks for Daniel database, and a card in #ask-daniel linking it; prints `<id> <ts> <permalink>`
   research msg ask-daniel status ID [--wait] [--json] | resolve ID --choice V [--note T]
+  research msg ask-daniel extend ID --deadline '3:00 PM'|ISO [--note T] | withdraw ID --note T   # the asker only, while pending
                           # --wait polls for at most 20 min: a card still pending then exits 79 with the status command (research/waitcap.py)
   research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]  # asks' pages edited lately: Status, Decision, newest comment
 
@@ -3729,7 +3730,9 @@ def route_error(what: str, e: urllib.error.HTTPError) -> str:
     if e.code == 401:
         return f"{what}: the route rejected this agent's Cursor identity ({why}): it takes managed agents on compute-verification/verity only"
     if e.code == 403:
-        return f"{what}: the route refused ({why}): only a card's own asker may resolve it"
+        return f"{what}: the route refused ({why}): only a card's own asker may resolve, extend or withdraw it"
+    if e.code == 409:
+        return f"{what}: the card is closed ({why}): it was decided or withdrawn already; `ask-daniel status ID` says which"
     if e.code == 429:
         return f"{what}: the route is rate limiting ({why}; retry after {e.headers.get('Retry-After')} s)"
     if e.code >= 500:
@@ -3888,6 +3891,29 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
                 if e.status == 404:
                     raise SlackError(no_such_card("resolve", ns.id)) from None
                 raise
+        if ns.verb in ("extend", "withdraw"):
+            if ns.verb == "extend":
+                if not ns.deadline:
+                    raise SlackError("ask-daniel extend needs --deadline: later than the card's, at most 7 days out")
+                body = {"deadline": _iso(parse_deadline(ns.deadline, _now())), **({"note": ns.note} if ns.note else {})}
+            elif not ns.note:
+                raise SlackError("ask-daniel withdraw needs --note: why the ask no longer stands")
+            else:
+                body = {"note": ns.note}
+            if ns.dry_run:
+                print(f"dry-run: POST {ASK_DANIEL}{path}/{ns.verb} {json.dumps(body, sort_keys=True)}", file=sys.stderr)
+                return 0
+            try:
+                out = AskDaniel().call("POST", f"{path}/{ns.verb}", body)
+            except RouteError as e:
+                if e.status == 404:
+                    raise SlackError(no_such_card(ns.verb, ns.id)) from None
+                raise
+            if ns.json:
+                print(json.dumps(out, indent=2, ensure_ascii=False))
+            else:
+                print(" ".join(str(out.get(k)) if out.get(k) not in (None, "") else "-" for k in ("status", "deadline", "held")))
+            return 0
         if ns.dry_run:
             print(f"dry-run: GET {ASK_DANIEL}{path}", file=sys.stderr)
             return 0
@@ -4151,9 +4177,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")
     p.add_argument("--json", action="store_true")
     p = cmd("ask-daniel", "an ask's page in the Asks for Daniel database and its card in #ask-daniel; `status ID` reads the card's "
-            "answer, `resolve ID` records one from its page or thread, `pages` lists the pages edited lately")
-    p.add_argument("verb", nargs="?", choices=("status", "resolve", "pages"),
-                   help="read a card's decision, record Daniel's answer from its page or thread, or list the asks' pages edited lately")
+            "answer, `resolve ID` records one from its page or thread, `extend ID` moves its deadline later, `withdraw ID` "
+            "takes back an ask events overtook, `pages` lists the pages edited lately")
+    p.add_argument("verb", nargs="?", choices=("status", "resolve", "extend", "withdraw", "pages"),
+                   help="read a card's decision, record Daniel's answer from its page or thread, move its deadline later "
+                        "(a held default resumes at it), withdraw it, or list the asks' pages edited lately")
     p.add_argument("id", nargs="?", metavar="ID", help="the card's id, as posting it printed")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
                    help="the asking coordinator's handle (workers ask through theirs); pages: only this lane's")
@@ -4166,7 +4194,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                         "naming `ask-daniel status ID` to check back")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")
     p.add_argument("--choice", default=None, metavar="VALUE", help="resolve: the option Daniel chose in the thread")
-    p.add_argument("--note", default=None, help="resolve: his words, or a link to them")
+    p.add_argument("--note", default=None, help="resolve: his words, or a link to them; extend: why; withdraw: why the ask no longer stands")
     p.add_argument("--provisional", action="store_true",
                    help="resolve: the lane decided it under the standing rule, so the card says the lane decided, not "
                         "Daniel (implied by a --note starting 'Provisionally accepted')")
