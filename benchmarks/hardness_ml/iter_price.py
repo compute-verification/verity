@@ -18,6 +18,8 @@ import argparse
 import json
 import math
 
+import numpy as np
+
 D = {0, 1, -1, 2, -2, 3, -3, 4, -4, 6, -6}
 FFMA_UNITS = 8.0  # sm_120: 1024 FP8 MACs against 128 FP32 lanes an SM-clock
 
@@ -112,8 +114,41 @@ def row(ne, nr):
             "forced_mod": round(min(1.0, h200_mod(ne, b), sm120_mod(ne, b)), 3)}
 
 
+def rounding_rho(n, grid):
+    """Least ‖R − round(R)‖/‖R‖ for R uniform on n consecutive integers rounded to the nearest point of an affine image
+    o + α·grid (integer α ≥ 1, o on R's integer lattice, since A + R stays integer): the post-draw move (D1's ball)
+    that puts R on that grid."""
+    vals = np.arange(n) - (n - 1) / 2
+    best = math.inf
+    span = max(grid) - min(grid)
+    for alpha in range(1, 2 * n // max(1, span) + 3):
+        pts = np.array(sorted(alpha * g for g in grid), dtype=float)
+        for o2 in range(int(2 * (vals[0] - pts[-1])) - 2, int(2 * (vals[-1] - pts[0])) + 3):
+            if o2 % 2 != (n - 1) % 2:
+                continue
+            p = pts + o2 / 2
+            i = np.clip(np.searchsorted(p, vals), 1, len(p) - 1)
+            err = np.minimum((vals - p[i - 1]) ** 2, (vals - p[i]) ** 2).mean()
+            best = min(best, float(err))
+    return math.sqrt(best / var(n))
+
+
+def ball(ne, nr):
+    """Forced work left after a post-draw move of relative size ρ: the cheapest representation R can be rounded onto
+    within ρ, by route. b1 with P planes takes any progression of 2^P values; E2M1 one plane takes o + α·D."""
+    out = []
+    for p in range(1, planes(nr)):
+        out.append({"route": f"b1 {p} planes", "rho": round(rounding_rho(nr, list(range(1 << p))), 4),
+                    "h200": min(1.0, planes(ne) * p / 8)})
+    if nr > 9:
+        out.append({"route": "E2M1 one plane", "rho": round(rounding_rho(nr, sorted(D)), 4),
+                    "sm120": min(1.0, 0.5 * side_factor(ne))})
+    return out
+
+
 PAIRS = [(2, 2), (2, 4), (2, 16), (3, 3), (3, 9), (3, 10), (4, 16), (3, 16), (3, 17), (3, 19), (3, 22), (3, 32),
          (3, 64), (5, 19), (5, 32), (10, 10), (19, 3), (17, 3), (2, 129), (2, 256)]
+BALL_PAIRS = [(3, 19), (3, 32), (10, 16), (2, 256)]
 
 
 def main():
@@ -123,8 +158,11 @@ def main():
     rows = [row(*p) for p in PAIRS]
     for r in rows:
         print(json.dumps(r))
+    balls = {f"{ne},{nr}": ball(ne, nr) for ne, nr in BALL_PAIRS}
+    for k, v in balls.items():
+        print(json.dumps({"ball": k, "routes": v}))
     if a.json:
-        open(a.json, "w").write(json.dumps(rows, indent=1))
+        open(a.json, "w").write(json.dumps({"pairs": rows, "ball": balls}, indent=1))
 
 
 if __name__ == "__main__":
