@@ -13,7 +13,8 @@ A retired id (``IDS``: PoUB's `verity/remote-bandwidth/` tags, `verity/poub/` si
 in every tracked file, the Lean's too, with the same ``ALLOWED`` spellings.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
-"block" is reserved for parts of circuits, the subprotocols go by their names, and "leg", the dampener and NCI are retired). Their code
+"block" is reserved for parts of circuits, the subprotocols go by their names, PoUB by its own, and "leg", the dampener
+and NCI are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 """
@@ -63,6 +64,7 @@ DOC_TERMS = {
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
                                           "renamed)",
     "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
+    "remote bandwidth audit, remote bandwidth, remote audit, proof of useful bandwidth": "PoUB",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -70,7 +72,8 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?)"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
-                       rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
+                       rf"|novel{_SPACE}communication{_SPACE}intensity|remote{_SPACE}(?:bandwidth(?:{_SPACE}audits?)?|audits?)"
+                       rf"|proofs?{_SPACE}of{_SPACE}useful{_SPACE}bandwidth)\b)|\bIUs?\b|\bNCI\b"
                        rf"|\bcommit{_SPACE}periods?\b")
 #: The commitments' own docs, where hm96 rows keep their name.
 HM96_HOME = "verity/ml/commitments/"
@@ -354,3 +357,15 @@ def test_the_doc_scan_reads_the_training_terms():
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "dampener"), ("a.md", 1, "Dampeners"), ("a.md", 1, "NCI"), ("a.md", 1, "novel communication intensity")]
+
+
+def test_the_doc_scan_reads_poubs_old_names():
+    """PoUB's old names in prose, on toy files: never its paths and ids in code spans, nor the remote composite protocol."""
+    docs = {
+        "a.md": "The remote bandwidth audit; a Remote Audit's session, remote\nbandwidth and the remote-audit gate.\n"
+                "A proof of useful bandwidth. `verity/core/protocols/remote_bandwidth/` and `remote_audit` stay; the remote\n"
+                "composite protocol and a remote check stay too.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "remote bandwidth audit"), ("a.md", 1, "Remote Audit"), ("a.md", 1, "remote bandwidth"),
+        ("a.md", 2, "remote-audit"), ("a.md", 3, "proof of useful bandwidth"), ("a.md", 4, "remote check")]
