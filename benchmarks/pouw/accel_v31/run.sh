@@ -78,7 +78,8 @@ git rev-parse HEAD > "$O/commit.txt" 2>&1
 : > "$O/rc.txt"
 # knob VARIANT KEY DEFAULT: the variant's KEY, else DEFAULT
 knob() { local v; v=$(tr ',' '\n' <<< "$1" | sed -n "s/^$2=//p" | tail -1); echo "${v:-$3}"; }
-# knob_env VARIANT: its knobs as v31.cu's environment
+# knob_env VARIANT: its knobs as v31.cu's environment, past those above rp 6 and 7 (v31.cu's ping-pong GEMM, each consumer
+# warpgroup hashing O rows while the other runs its mainloop; 7: warps 9 to 11 hashing too), ppm (0), pph (1) and lord (0)
 knob_env() {
   echo -n "V31_FULL=$(knob "$1" full 1) V31_SMINB=$(knob "$1" sminb 4) V31_LFOLD=$(knob "$1" lfold 0) V31_MASK=$(knob "$1" mask 0) "
   echo "V31_CPRIO=$(knob "$1" cprio lo) V31_CARVE=$(knob "$1" carve 100) V31_DYN=$(knob "$1" dyn 1) V31_WRAP=$(knob "$1" wrap 2)" \
@@ -87,7 +88,8 @@ knob_env() {
     "V31_GEMM=$(knob "$1" gemm 0) V31_WGBN=$(knob "$1" wgbn 256) V31_CM=$(knob "$1" cm 0) V31_WGG=$(knob "$1" wgg 16)" \
     "V31_RP=$(knob "$1" rp 0) V31_R5H=$(knob "$1" r5h 96) V31_HALL=$(knob "$1" hall 0) V31_HCHUNK=$(knob "$1" hchunk 0)" \
     "V31_WGW=$(knob "$1" wgw 1) V31_R5W=$(knob "$1" r5w 1) V31_TST=$(knob "$1" tst 0)" \
-    "V31_LMINB=$(knob "$1" lminb 5) V31_SAHEAD=$(knob "$1" sahead 0)"
+    "V31_LMINB=$(knob "$1" lminb 5) V31_SAHEAD=$(knob "$1" sahead 0) V31_PPM=$(knob "$1" ppm 0) V31_PPH=$(knob "$1" pph 1)" \
+    "V31_LORD=$(knob "$1" lord 0)"
 }
 export -f knob knob_env
 
