@@ -47,12 +47,14 @@ at most `Q + P` candidate seeds and `Q` receipt-hash queries in all, with SHA-51
 of uniform. -/
 def SketchBoundP2 : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N S L q Q : ℕ) (G qtot : Fin P → ℕ) (ε : ℝ)
-    (A : Session β Hs P N 257 512 S L q 16 G) (T : Trace (Outcome β Hs N 257)),
+    (A : Session β P N 257 512 S L q 16 G)
+    (keys : β → Accounting.RateSketch.Data N 257 0 Accounting.RateSketch.Sector → Hs → Keys P N 257 512 16 G)
+    (kept : Outcome β Hs N 257 → (j : Fin P) → Fin (G j)) (T : Trace (Outcome β Hs N 257)),
     0 ≤ ε → T.passes ≤ P →
     Accounting.Assumptions.SketchRank 16 257 12 (ENNReal.ofReal ε) →
     ∑ j, G j ≤ Q + P → ∑ j, qtot j ≤ Q →
-    Accounting.Assumptions.SketchHashRandom A (((Q : ℝ) + P) ^ 2 / 2 ^ 257) → KeyBudget A qtot → Receipted A T →
-    Present A T →
+    Accounting.Assumptions.SketchHashRandom keys (((Q : ℝ) + P) ^ 2 / 2 ^ 257) → KeyBudget A qtot →
+    Receipted A keys kept T → Present A keys kept T →
     SketchBound T ((Q : ℝ) / 2 ^ 96 + ((Q : ℝ) + P) * (ε + N / 2 ^ 512) + ((Q : ℝ) + P) ^ 2 / 2 ^ 257)
 
 end Accounting.Guarantees.Remote

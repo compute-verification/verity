@@ -43,16 +43,19 @@ open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote
   Accounting.Remote.Sketch.Assumptions
 
 /-- **The sketch bound at every parameter.** On a trace over a session's outcomes whose receipts and obtained blocks
-are the session devices' (`Receipted`, `Present`), with SHA-512's keys at the candidate seeds within `ε_ro` of
-uniform (`SketchHashRandom`), within the per-pass hash budget `qtot` (`KeyBudget`) and with signs whose rank tail below
-`r ≤ 32` is at most `ε` (`SketchRank`), `SketchBound` holds at
+are the kept candidates' devices' (`Receipted`, `Present`), with SHA-512's keys at the candidate seeds (`keys`) within
+`ε_ro` of uniform (`SketchHashRandom`), within the per-pass hash budget `qtot` (`KeyBudget`) and with signs whose rank
+tail below `r ≤ 32` is at most `ε` (`SketchRank`), `SketchBound` holds at
 `(Σ_j G_j)·(ε + N/2^h) + (Σ_j qtot_j)/2^(8r) + ε_ro`. -/
 def SketchBoundSession : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N m h S L q ks r : ℕ) (G qtot : Fin P → ℕ) (ε εro : ℝ)
-    (A : Session β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)),
+    (A : Session β P N m h S L q ks G)
+    (keys : β → Accounting.RateSketch.Data N m 0 Accounting.RateSketch.Sector → Hs → Keys P N m h ks G)
+    (kept : Outcome β Hs N m → (j : Fin P) → Fin (G j)) (T : Trace (Outcome β Hs N m)),
     r ≤ 32 → 0 ≤ ε → 0 ≤ εro → T.passes ≤ P →
     Accounting.Assumptions.SketchRank ks m r (ENNReal.ofReal ε) →
-    Accounting.Assumptions.SketchHashRandom A εro → KeyBudget A qtot → Receipted A T → Present A T →
+    Accounting.Assumptions.SketchHashRandom keys εro → KeyBudget A qtot → Receipted A keys kept T →
+    Present A keys kept T →
     SketchBound T (((∑ j, G j : ℕ) : ℝ) * (ε + N / 2 ^ h) + ((∑ j, qtot j : ℕ) : ℝ) / 2 ^ (8 * r) + εro)
 
 /-- **The sketch bound at the deployed receipts.** `SketchBoundSession` at 4096-byte blocks (`m = 128`), 16 sign rows,
@@ -61,12 +64,14 @@ outside-compute factor `F`): at most `Q + P` candidate seeds and `Q` receipt-has
 at them within `(Q + P)²/2^257` of uniform. -/
 def SketchBoundDeployed : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N S L q Q : ℕ) (G qtot : Fin P → ℕ) (ε : ℝ)
-    (A : Session β Hs P N 128 512 S L q 16 G) (T : Trace (Outcome β Hs N 128)),
+    (A : Session β P N 128 512 S L q 16 G)
+    (keys : β → Accounting.RateSketch.Data N 128 0 Accounting.RateSketch.Sector → Hs → Keys P N 128 512 16 G)
+    (kept : Outcome β Hs N 128 → (j : Fin P) → Fin (G j)) (T : Trace (Outcome β Hs N 128)),
     0 ≤ ε → T.passes ≤ P →
     Accounting.Assumptions.SketchRank 16 128 12 (ENNReal.ofReal ε) →
     ∑ j, G j ≤ Q + P → ∑ j, qtot j ≤ Q →
-    Accounting.Assumptions.SketchHashRandom A (((Q : ℝ) + P) ^ 2 / 2 ^ 257) → KeyBudget A qtot → Receipted A T →
-    Present A T →
+    Accounting.Assumptions.SketchHashRandom keys (((Q : ℝ) + P) ^ 2 / 2 ^ 257) → KeyBudget A qtot →
+    Receipted A keys kept T → Present A keys kept T →
     SketchBound T ((Q : ℝ) / 2 ^ 96 + ((Q : ℝ) + P) * (ε + N / 2 ^ 512) + ((Q : ℝ) + P) ^ 2 / 2 ^ 257)
 
 end Accounting.Guarantees.Remote

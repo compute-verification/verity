@@ -14,8 +14,9 @@ block's, a server block's.
   to its stop. Its part `j` (`Cut.part`) is the span between boundaries `j` and `j + 1`.
 * **A monitoring period** (`MonitoringPeriod`): a span of ticks cut into its execution blocks' spans, each cut into its
   sampling blocks' spans.
-* **A play** over `n` sampling blocks (`Play`): block `t`'s move is any function of the coins of the blocks before it.
-  `Play.at` reads every move along one whole draw of the coins, the non-adaptive reading.
+* **A play** over `n` sampling blocks (`Play`): block `t`'s move is any function of the coins of the blocks before it,
+  each block's coin of its own type. `Play.at` reads every move along one whole draw of the coins, the non-adaptive
+  reading.
 
 A bound over a monitoring period has two readings: per sampling block, every sampling block's bound holds at once, at
 their errors summed; pooled, the monitoring period's total holds at one error.
@@ -85,15 +86,15 @@ def samplingSpan (m : MonitoringPeriod) (j : Fin m.executionBlocks) (t : Fin (m.
 
 end MonitoringPeriod
 
-/-- **A play over `n` sampling blocks**, each drawing a coin from `Ω`: block `t`'s move, an `X t`, is any function of
-the coins of the blocks before it. It is a `Game.Strategy` of the game that, block by block, receives the block's move
-and then draws its coin, indexed by block where the strategy is a tree: the same data, uncurried. -/
-abbrev Play (n : ℕ) (Ω : Type) (X : Fin n → Type) : Type :=
-  (t : Fin n) → ({s : Fin n // s < t} → Ω) → X t
+/-- **A play over `n` sampling blocks**, block `s` drawing a coin from `Ω s`: block `t`'s move, an `X t`, is any
+function of the coins of the blocks before it. It is a `Game.Strategy` of the game that, block by block, receives the
+block's move and then draws its coin, indexed by block where the strategy is a tree: the same data, uncurried. -/
+abbrev Play (n : ℕ) (Ω X : Fin n → Type) : Type :=
+  (t : Fin n) → ((s : {s : Fin n // s < t}) → Ω s.1) → X t
 
 /-- **The moves along a whole draw `ω`**: block `t`'s move on the coins `ω` gives the blocks before it, the
 non-adaptive reading every statement over one draw takes. -/
-def Play.at {n : ℕ} {Ω : Type} {X : Fin n → Type} (P : Play n Ω X) (ω : Fin n → Ω) (t : Fin n) : X t :=
+def Play.at {n : ℕ} {Ω X : Fin n → Type} (P : Play n Ω X) (ω : (t : Fin n) → Ω t) (t : Fin n) : X t :=
   P t fun s => ω s.1
 
 end Verity

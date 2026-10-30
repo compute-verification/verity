@@ -1,5 +1,5 @@
 """The schedule check: each pass's plan is a fixed function of the schedule the prover publishes, which `audit.ledger`
-requires before it credits an appended chunk (`audit.Session.scheduled`).  Of record in its Lean,
+requires before it credits an appended chunk (`audit.AuditRun.scheduled`).  Of record in its Lean,
 `lean/RemoteAudit/Schedule.lean`; this is held to it by the difftest (`lean/tests/test_schedule.py`, refusals compared
 word for word).
 
@@ -37,7 +37,7 @@ from dataclasses import dataclass
 STEP_LIMIT = 1 << 64
 """Steps are below 2^64."""
 
-Block = tuple[int, int | None] | None
+Chunk = tuple[int, int | None] | None
 """An appended chunk: None never resident, or its write's step and its free's, if it is freed."""
 
 
@@ -50,7 +50,7 @@ class Malformed(ValueError):
     """The JSON form isn't the schedule check's inputs."""
 
 
-def _resident(b: Block, s: int) -> bool:
+def _resident(b: Chunk, s: int) -> bool:
     if b is None:
         return False
     w, f = b
@@ -66,7 +66,7 @@ def _varint(n: int) -> bytes:
     return bytes(out)
 
 
-def _block_code(b: Block) -> list[int]:
+def _block_code(b: Chunk) -> list[int]:
     if b is None:
         return [0]
     w, f = b
@@ -78,7 +78,7 @@ class Schedule:
     """A session's schedule: the registered runs it frees, each append's chunks and the passes' steps."""
 
     registered: tuple[tuple[int, int, int], ...]
-    appends: tuple[tuple[Block, ...], ...]
+    appends: tuple[tuple[Chunk, ...], ...]
     steps: tuple[int, ...]
 
     def plan(self, blocks: int, s: int) -> tuple[tuple[int, int], ...]:
@@ -225,7 +225,7 @@ def _triple(x: object) -> tuple[int, int, int]:
     return _nat(x[0], "a run's first"), _nat(x[1], "a run's count"), _nat(x[2], "a run's free")
 
 
-def _block(x: object) -> Block:
+def _block(x: object) -> Chunk:
     if x is None:
         return None
     if type(x) is not list or len(x) != 2:
