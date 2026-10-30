@@ -13,6 +13,8 @@ the definitions the partitioning guarantees (`Partitioning.Guarantees`) read:
   number of units it draws;
 * `unitCost f o s = f + o · s`, the simple cost model: a fixed cost `f` per drawn unit plus an overhead `o` per unit of
   work;
+* `servedCost F C f o δ w β h s`, the leading cost of cutting work `F` into units of work `s` when serving commits every
+  unit: proving's `c(s) · (F/C) · Λ` plus the commitment's `w · (F/s) · β · h`;
 * `MeetsTarget L w C δ`, the free-compute target: every set of wrong units whose work is at least `C` escapes with
   probability at most `δ`;
 * `locBits n K = log₂ ∑_{j ≤ K} C(n, j)`, the location term of `audit_exfiltration`, and `CertifiesLeak L b δ ℓ`, the
@@ -41,6 +43,12 @@ noncomputable def meanDraws (L : Law n) : ℝ := ∑ u, (L.incl u).toReal
 
 /-- The simple cost model: a fixed cost `f` per drawn unit plus an overhead `o` per unit of work `s`. -/
 def unitCost (f o s : ℝ) : ℝ := f + o * s
+
+/-- The leading served cost of cutting work `F` into units of work `s`: proving, `c(s) · (F/C) · Λ` with `Λ = ln(1/δ)`,
+plus serving's commitment of every one of the `F/s` units, drawn or not, `β` bytes each at `h` a byte, weighted `w`
+against proving. -/
+noncomputable def servedCost (F C f o δ w β h s : ℝ) : ℝ :=
+  unitCost f o s * (F / C * Real.log δ⁻¹) + w * (F / s * β * h)
 
 /-- **The free-compute target**: every set of wrong units whose work is at least `C` escapes with probability at most
 `δ`. -/
