@@ -16,7 +16,7 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/experimental/protocols/" = "verity/core/protocols/"
 "verity/experimental/claims/" = "verity/core/claims/"
 # --- core/: the Lean ports, each beside the part it ports (primitives, protocols, service, devices) and the difftest
-# harness; `service/` already holds C-Flock's verifier (`flock/`), which stays
+# harness; `service/` already holds Flock's verifier (`flock/`), which stays
 "verity/experimental/core/" = "verity/core/"
 # PoUW's ports would land in the Python package, `window/` beside `window.py`: they join its Lean, `pouw/lean/`
 "verity/experimental/core/protocols/pouw/" = "verity/core/protocols/pouw/lean/"

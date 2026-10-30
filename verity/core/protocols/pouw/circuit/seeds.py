@@ -1,7 +1,7 @@
 """The seed and the noise a PoUW unit derives inside its own proof (decisions 105 and 106, `PROTOCOL.md` §`compile`).
 
-A drawn unit's noise is neither a public nor a coin input: the unit computes its seed from the window's salt
-(`pouw.salt`, the one coin), its position and its operands' roots, all inputs of the unit bound before the draw, and its
+A sampled proof block's noise is neither a public nor a coin input: the unit computes its seed from the window's salt
+(`pouw.salt`, the one coin), its position and its operands' roots, all inputs of the unit bound before the sample, and its
 noise from the seed, in gates.
 
     seed_j  = SHA-512(u64(j) ‖ (SEED_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)        `PouwSeed`

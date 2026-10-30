@@ -421,7 +421,7 @@ def main(argv=None) -> int:
     store.add_argument("--store", type=Path, help="the development store")
     store.add_argument("--encoded", type=Path, help="an encoded store's directory (p2_v1/store.py encode's), read only")
     ap.add_argument("--salt", help="the development store's public test salt, 24 bytes hex")
-    ap.add_argument("--source", help="the encoded store's coin (hex), drawn after its commitment")
+    ap.add_argument("--source", help="the encoded store's coin (hex), flipped after its commitment")
     ap.add_argument("--commitment", help="the encoded store's commitment (hex)")
     ap.add_argument("--lib", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
