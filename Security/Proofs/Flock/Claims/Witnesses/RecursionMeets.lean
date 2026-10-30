@@ -59,7 +59,7 @@ open Claims Claims.Recursion
 /-! ## The readable scope's kinds -/
 
 /-- A V* session's full draw over four units. -/
-def fullDraw4 : Recursion.Draw := ⟨some 4, 4, [0, 1, 2, 3], []⟩
+def fullDraw4 : Recursion.DrawRecord := ⟨some 4, 4, [0, 1, 2, 3], []⟩
 
 /-- A statement at candidate 3's inner table (`m = 25`, `k_log = 22`, three regions, eight claims), its circuits private
 or not (`holo`), with no RecSparse phase and no R, and one V* session that draws every unit. -/
