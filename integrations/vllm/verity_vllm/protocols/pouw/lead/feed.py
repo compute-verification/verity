@@ -17,7 +17,8 @@ in-process certifier that stands in for the certifier's coin link (`CoinLink`).
   G words       u32 [C]: byte e is the int8 G[e, j]. The certifier samples a u32 u and keeps it below `G_KEEP`; G[e, j]
                 is digit e of u mod 2401 in base 7, less 3, so G is uniform on [−3, 3]⁴
   lane words    u32 [T, S, C]: bytes 0-2 the int8 coin lanes s[t, rt, ℓ, j]; byte 3 public, C[3, j] at step 0, else 1
-  col sources   i32 [T, 2, C]: 0x4B400000 − σ, σ[rt, c, j] = Σ_t Σ_ℓ ROT_W[c][ℓ]·s[t, rt, ℓ, j], row class c = i mod 2
+  col sources   i32 [T, 2, C]: β_j − σ[rt, c, j], σ[rt, c, j] = Σ_t Σ_ℓ ROT_W[c][ℓ]·s[t, rt, ℓ, j], row class c = i mod 2,
+                and β_j the column's public bias (`betas`), which the GEMM takes out of each final word
   ============  ==================================================================================================
 
   The kernel reads lane words and column sources at the stride of its computed columns N (`Feed.lanes`,
@@ -40,7 +41,8 @@ from typing import Protocol
 
 import numpy as np
 
-__all__ = ["MAGIC", "ROT_W", "Call", "CallCoins", "Feed", "FeedError", "InProcessCertifier", "Rand", "Shape", "codes", "steps"]
+__all__ = ["ROT_W", "Call", "CallCoins", "Feed", "FeedError", "InProcessCertifier", "Rand", "Shape", "betas", "codes",
+           "steps"]
 
 LAYOUT = "blc4a_t64_e7_s1_rot_fold"
 STEP0_LANES, LATER_LANES = 21, 28
@@ -50,8 +52,6 @@ COIN_BITS = 7
 ROT_W = np.array([[127, 1, 1], [1, 127, 1]], dtype=np.int64)
 #: a sampled u32 is G's when below this: 2401 ⌊2³² / 2401⌋ (872 of the 2³² are rejected)
 G_KEEP = 2401 * (2**32 // 2401)
-#: 1.5 · 2²³: the fold reads a word plus its column source as this float plus the integer it leaves
-MAGIC = 0x4B400000
 #: the most MMA tiles of words the lead admits in a call, (R/16)·(C/8)·S
 MAX_TILES = 2**40
 ROOT_BYTES = 64
@@ -75,6 +75,12 @@ def codes(cols: int) -> np.ndarray:
     base-13 digits of j + 1."""
     c = np.arange(cols, dtype=np.int64) + 14281
     return np.stack([(c // 13**e) % 13 - 6 for e in range(4)])
+
+
+def betas(cols: int, s: int) -> np.ndarray:
+    """β_j for j < ``cols`` at ``s`` k32 steps, int64 [cols]: ⌊(Σ_e C[e, j] + 3(s − 1) + 1)/2⌋, the public bias the GEMM
+    takes out of each final word of column j."""
+    return (codes(cols).sum(0) + 3 * (s - 1) + 1) // 2
 
 
 @dataclass(frozen=True)
@@ -250,9 +256,15 @@ class Feed:
         """The lane words at the kernel's stride ``n`` (its computed columns), u32 [T·S·n] at (rt·S + t)·n + j."""
         return self._strided(self.lanes_c, n, np.uint32)
 
+    @property
+    def sources_c(self) -> np.ndarray:
+        """The column sources β_j − σ, int64 [T, 2, C]."""
+        sh = self.call.shape
+        return betas(sh.C, sh.S) - self.sigma
+
     def sources(self, n: int) -> np.ndarray:
-        """The column sources at stride ``n``, i32 [2·T·n] at (rt·2 + c)·n + j: 0x4B400000 − σ, and 0 past C."""
-        return self._strided(MAGIC - self.sigma, n, np.int32)
+        """The column sources at stride ``n``, i32 [2·T·n] at (rt·2 + c)·n + j: β_j − σ, and 0 past C."""
+        return self._strided(self.sources_c, n, np.int32)
 
     def _strided(self, a: np.ndarray, n: int, dtype: type) -> np.ndarray:
         c = self.call.shape.C

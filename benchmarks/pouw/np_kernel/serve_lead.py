@@ -10,8 +10,6 @@ in-process certifier's. Measurement only: what it serves credits nothing.
   of Llama-3.2-1B's four fused linears at 1, 17, 100 and 640 rows against `reference` and against stock's y
   (`int8_exact.dequantize` of the exact product, verity_int8's) bit for bit, its buffers poisoned first, under fresh coins
   (`feed.InProcessCertifier`) and under pooled ones (`PooledCertifier`). Exits 1 on any output that differs from either.
-  ssn.cu's FOLD=1 fold serves the word less σ alone, the other coin terms left in, through fl(−1.5·2²³·s_j) with the
-  weight's scale first, so `check` fails on it.
 * ``serve``: serve-openai (``ARGS``, its own arguments) with the lead on its engine: ``protocols`` the lead's scheme and
   its ``backend`` this library, added to serve-openai's engine options; the coin link a `PooledCertifier` prepared once
   the linears are loaded. ``--audit N`` checks the first N calls' outputs against `reference` and stock's. ``--stats``
@@ -63,7 +61,9 @@ CHECK_ROWS = (1, 17, 100, 640)
 #: (m, N, K) of the operand checks: a ragged one-row call, a ragged tile, two column tiles at a whole step's K
 OPERANDS = ((1, 256, 1024), (100, 256, 1024), (64, 512, 2048))
 FOLD_BOUND = 1 << 22
-MAGIC = F.MAGIC
+#: 1.5·2²³, the row source's constant: the epilogue reads a final word plus its row source 0x4B400000 − w_i and its column
+#: source β_j − σ, less a1·C and T·G (layout.h's fold_word), as this float plus A_i·B_j
+MAGIC = 0x4B400000
 #: the engine options every served arm adds: the scheduler the B4 row's Build declares (vLLM's own default is its choice)
 ENGINE = {"async_scheduling": False}
 
@@ -146,7 +146,7 @@ class Pool:
             f = F.Feed.of(F.Call(0, r, 0, ROW_TILE, k, n), F.CallCoins.sample(tile, rand))
             got["rows"][r * ROW_TILE:(r + 1) * ROW_TILE] = torch.from_numpy(f.rows.view(np.int32))
             got["lanes"][r] = torch.from_numpy(f.lanes_c[0].view(np.int32))
-            got["sources"][r] = torch.from_numpy((MAGIC - f.sigma[0]).astype(np.int32))
+            got["sources"][r] = torch.from_numpy(f.sources_c[0].astype(np.int32))
             if r == 0:
                 got["g"][:] = torch.from_numpy(f.g.view(np.int32))
         return cls(k, n, **got)
@@ -211,7 +211,7 @@ class PooledCertifier(F.InProcessCertifier):
 
 def fold(read: Any, s_a: Any, s_w: Any) -> Any:
     """The lead's fold: y [m, N] bf16 from the integer its epilogue reads back, ``read`` (int64 [m, N], taken mod 2³²: the
-    word plus its row and column sources, every coin term folded out), and the scales ``s_a`` [m] and ``s_w`` [N]. v is
+    final word less every coin term, `MAGIC`'s), and the scales ``s_a`` [m] and ``s_w`` [N]. v is
     the float whose bits are ``read`` and y = bf16(fl(fl(fl(v − 1.5·2²³)·s_i)·s_j)): an FADD, then the scales in
     verity_int8's order, the activation's first. On read = 0x4B400000 + p, v − 1.5·2²³ is p exactly while |p| ≤ 2²²
     (`FOLD_BOUND`), so y is stock's y on p; past it v is another float."""

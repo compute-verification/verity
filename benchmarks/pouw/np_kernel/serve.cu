@@ -1,15 +1,16 @@
 // The lead's kernel (ssn.cu under BLC=2, ROT=1, FOLD=1: blc4a_t64_e7_s1_rot_fold) as a library a serving process calls
 // on its own device tensors; `serve_lead.py` binds it as the lead's `LeadBackend`.
-//   load      a linear's B' from its int8 weight [N, K] (N whole 256-column tiles), beta_j and (s_j, -1.5 2^23 s_j) from its
-//             weight scale, formed on the device once
+//   load      a linear's B' from its int8 weight [N, K] (N whole 256-column tiles), beta_j and its column words
+//             (layout.h's FoldCol: s_j from its weight scale and the code C[0..3, j]), formed on the device once
 //   ready     the call's buffers, sized from the loaded linears, and the hash streams
 //   a_root    a stand-in for root(A_j): hm96-sha512 rows (native_rows.cu, the served committer's leaves under ssn.cu's
 //             stand-in constants) of 1 KiB over A_j's m K bytes and their frame tree, its root handed back (the call's
 //             stream synchronized: the certifier's coins follow it)
 //   call      A' formed on the device from the call's s8 rows (a_k, tile_a's layout), the certifier's feed copied in
-//             (row words, G words and H zero words; lane words and column sources at stride N), the forming and G's copy
-//             (form_g), then the GEMM chunk by chunk (ssn.cu's chunk: at most BUDGET bytes of words), the fold serving y
-//             bf16 [64 ceil(m / 64), N]. Mode 2 exports each chunk's words and hashes them as 64 KiB hm96 rows with their
+//             (row words, G words and H zero words; lane words and column sources beta_j - sigma at stride N), the
+//             forming, which also writes each row's fold words (layout.h's FoldRow), and G's copy (form_g), then the GEMM
+//             chunk by chunk (ssn.cu's chunk: at most BUDGET bytes of words), the fold serving verity_int8's y bf16
+//             [64 ceil(m / 64), N]. Mode 2 exports each chunk's words and hashes them as 64 KiB hm96 rows with their
 //             frame tree on a hash stream of their own buffer, beside the GEMM stream; mode 1 exports and hashes nothing;
 //             mode 0 keeps the words in registers (the GEMM serving y alone)
 //   words_roots  the hash streams drained, the chunks' tree roots since the last call to it
@@ -27,19 +28,6 @@ constexpr int BN = 256, A_ROW = 1024, W_ROW = 65536, MAX_CHUNKS = 8192;
 __device__ __forceinline__ int kidx_d(int t, int l, int K) {
   const int k = t == 0 ? (l < 21 ? l : -1) : (l < 28 ? 21 + 28 * (t - 1) + l : -1);
   return k >= 0 && k < K ? k : -1;
-}
-__device__ __forceinline__ int code_d(int j, int e) {
-  long long c = (long long)j + 14281;
-  for (int r = 0; r < e; r++) c /= 13;
-  return (int)(c % 13) - 6;
-}
-__device__ __forceinline__ int tag_d(int i, int e) {
-  int z = (i / 2 + 1) * (i & 1 ? -1 : 1), d = 0;
-  for (int r = 0; r <= e; r++) {
-    d = ((z % 13) + 19) % 13 - 6;
-    z = (z - d) / 13;
-  }
-  return d;
 }
 // the tile-local position of u32 q of a K-major tile of `tile` bytes (kmaj_off inverted): its row and first lane
 __device__ __forceinline__ void kmaj_at(long long q, int tile, long long* blk, int* row, int* lane) {
@@ -64,7 +52,7 @@ __global__ void a_k(uint8_t* __restrict__ A, const int8_t* __restrict__ x, int m
   for (int b = 0; b < 4; b++) {
     const int l = l0 + b, k = kidx_d(t, l, K);
     int a = k >= 0 && i < m ? x[(size_t)i * K + k] : 0;
-    if (t == 0 && l >= 24 && l < 28) a = tag_d(i, l - 24);
+    if (t == 0 && l >= 24 && l < 28) a = tag_of(i, l - 24);
     if (l >= 28 && l < 31) a = l - 28 == (i & 1) ? 127 : 1;
     v |= (u32)(uint8_t)(int8_t)a << (8 * b);
   }
@@ -83,24 +71,23 @@ __global__ void b_k(uint8_t* __restrict__ B, const int8_t* __restrict__ w, int N
   for (int b = 0; b < 4; b++) {
     const int l = l0 + b, k = kidx_d(t, l, K);
     int a = k >= 0 && j < N ? w[(size_t)j * K + k] : 0;
-    if (t == 0 && ((l >= 21 && l < 24) || l == 31)) a = code_d(j, l == 31 ? 3 : l - 21);
+    if (t == 0 && ((l >= 21 && l < 24) || l == 31)) a = code_of(j, l == 31 ? 3 : l - 21);
     if (t > 0 && l == 31) a = 1;
     v |= (u32)(uint8_t)(int8_t)a << (8 * b);
   }
   reinterpret_cast<u32*>(B)[q] = v;
 }
-__global__ void xj_k(float2* __restrict__ xj, const float* __restrict__ s, int N, int n) {
+__global__ void xj_k(FoldCol* __restrict__ xj, const float* __restrict__ s, int N, int n) {
   const int j = blockIdx.x * blockDim.x + threadIdx.x;
   if (j >= n) return;
-  const float sj = j < N ? s[j] : 0.0f;
-  xj[j] = make_float2(sj, __fmul_rn(-12582912.0f, sj));
+  xj[j] = FoldCol{j < N ? s[j] : 0.0f, code_word(j)};
 }
 
 struct Linear {
   int N = 0, K = 0, S = 0, chunk = 0;
   uint8_t* B = nullptr;
   int* beta = nullptr;
-  float2* xj = nullptr;
+  FoldCol* xj = nullptr;
 };
 struct State {
   int max_m = 0, nbuf = 0, mode = 2;
@@ -109,7 +96,8 @@ struct State {
   std::vector<Linear> lins;
   uint8_t* A = nullptr;
   u32 *head = nullptr, *lanes = nullptr;
-  int *src = nullptr, *xr = nullptr;
+  int* src = nullptr;
+  FoldRow* xr = nullptr;
   float* xs = nullptr;
   std::vector<uint4*> W;
   std::vector<Hasher> hw;
@@ -182,7 +170,7 @@ int ssn_lead_load(int w, int N, int K, const int8_t* w8, const float* sw, cudaSt
   for (int j = 0; j < N; j++) beta[j] = beta_of(j, d.S);
   CK(cudaMalloc(&d.beta, N * sizeof(int)));
   CK(cudaMemcpyAsync(d.beta, beta.data(), N * sizeof(int), cudaMemcpyHostToDevice, st));
-  CK(cudaMalloc(&d.xj, N * sizeof(float2)));
+  CK(cudaMalloc(&d.xj, N * sizeof(FoldCol)));
   xj_k<<<blocks_of(N), 256, 0, st>>>(d.xj, sw, N, N);
   CK(cudaGetLastError());
   CK(cudaStreamSynchronize(st));
@@ -204,14 +192,13 @@ int ssn_lead_ready(unsigned long long* bytes) {
     words = std::max(words, (size_t)d.chunk * d.N * d.S);
     ab = std::max(ab, (size_t)M * d.K);
   }
-  size_t held = a + 4 * (lanes + src + head + 2 * (size_t)M);
+  size_t held = a + 4 * (lanes + src + head + (size_t)M) + sizeof(FoldRow) * M;
   CK(cudaMalloc(&g.A, a));
   CK(cudaMalloc(&g.lanes, lanes * 4));
   CK(cudaMalloc(&g.src, src * 4));
   CK(cudaMalloc(&g.head, head * 4));
   CK(cudaMalloc(&g.xs, (size_t)M * 4));
-  CK(cudaMalloc(&g.xr, (size_t)M * 4));
-  CK(cudaMemset(g.xr, 0, (size_t)M * 4));
+  CK(cudaMalloc(&g.xr, sizeof(FoldRow) * M));
   CK(cudaMalloc(&g.roots, (size_t)MAX_CHUNKS * 64));
   CK(cudaMallocHost(&g.hroot, 64));
   g.ha.init(ab, A_ROW, (u64)M);
@@ -268,7 +255,7 @@ int ssn_lead_call(int w, int m, const int8_t* x, const float* sa, const u32* row
   if (M > m) CK(cudaMemsetAsync(g.xs + m, 0, (size_t)(M - m) * 4, st));
   a_k<<<blocks_of((long long)M * S * (KB / 4)), 256, 0, st>>>(g.A, x, m, M, d.K, S);
   CK(cudaGetLastError());
-  form_g(g.head, g.A, d.B, M, n, R, C, S, BN, st, FORM | GCOPY, 0, nullptr);
+  form_g(g.head, g.A, d.B, M, n, R, C, S, BN, st, FORM | GCOPY, 0, g.xr);
   for (int r0 = 0; r0 < M; r0 += d.chunk) {
     const int mc = std::min(d.chunk, M - r0), b = g.mode == 2 ? (int)(g.chunks % g.nbuf) : 0;
     if (g.mode == 2) CK(cudaStreamWaitEvent(st, g.done[b]));

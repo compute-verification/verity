@@ -178,7 +178,8 @@ def test_the_kernel_reads_lanes_and_sources_at_its_column_stride():
         assert (row[:200] == feed.lanes_c[rt, t]).all() and not row[200:].any()
     for rt, c in itertools.product(range(sh.T), range(2)):
         row = src[(rt * 2 + c) * n:(rt * 2 + c + 1) * n]
-        assert (row[:200] == F.MAGIC - feed.sigma[rt, c]).all() and not row[200:].any()
+        assert (row[:200] == F.betas(200, sh.S) - feed.sigma[rt, c]).all() and not row[200:].any()
+    assert F.betas(3, sh.S).tolist() == [4, 4, 5] and F.betas(3, 1).tolist() == [1, 1, 2]
     with pytest.raises(F.FeedError, match="stride 199"):
         feed.lanes(199)
 
