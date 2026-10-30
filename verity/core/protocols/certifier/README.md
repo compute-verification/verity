@@ -296,7 +296,12 @@ A spec-level reference for network accounting's timing channel:
   first. The control channel, which carries the registrations in and the releases out, ends at the certifier and is no
   boundary link. On a node (`NodeCalls`) a window's forwards are a PoUW window's, and the proxies of all of the node's
   links count their buckets against the open one (`active.Proxy(calls=…)`); the prover registers on the control channel
-  (`serve_calls`, `CallsClient`).
+  (`serve_calls`, `CallsClient`). The hold makes that count completeness for an honest server: the prover's frames are
+  handed between forwards, and an A root that would open the next forward is held until an egress tick has run since
+  it came with none of the prover's frames still to leave on any link, so they count against no forward, for up to a
+  bucket a forward. Nothing on a link is held, and the grid and its Program are unchanged. The deployment's down-link
+  from the certifier carries each GPU's releases, a forward's calls' `release_bytes` summed, as fast as its forwards
+  take them: at least 7.95 GB/s a GPU at prefill, two 400 GbE ports for an 8-GPU node.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's

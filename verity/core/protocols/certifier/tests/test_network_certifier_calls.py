@@ -11,6 +11,7 @@ import os
 import random
 import socket
 import struct
+import threading
 
 import pytest
 
@@ -541,6 +542,85 @@ def test_a_node_whose_entropy_fails_refuses_its_windows_forwards_and_flips_again
     node.tick(1, 0)
     assert verdicts(node.records[0]) == {0: "a call's coins were not flipped", 1: "a call's coins were not flipped"}
     assert len(node.a_root(0, 0, ROOT_A, SMALL)) == SMALL.release_bytes
+
+
+def held_a_root(node: NodeCalls, *request, held: int = 1):
+    """`node.a_root(*request)` on a thread, once the hold holds `held` A roots: join the thread, and `out` holds the
+    release or the refusal."""
+    out = []
+
+    def run() -> None:
+        try:
+            out.append(node.a_root(*request))
+        except CallRefusal as e:
+            out.append(e)
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    node.until(lambda n: n.held == held)
+    return thread, out
+
+
+def test_an_a_root_that_would_open_a_forward_is_held_to_an_egress_tick_with_no_frame_waiting():
+    """The forward opens in the report that lifts the hold, so a bucket ticked while it is held counts against no
+    forward (32 bits more would pass TIGHT's 32) and the next one against it."""
+    node = NodeCalls(EgressCap(32, TIGHT.macs))
+    node.tick(0, 0)
+    node.waiting("responses", 1)
+    thread, out = held_a_root(node, 0, 0, ROOT_A, TIGHT)
+    node.tick(0, 32, [26])
+    node.waiting("responses", 0)
+    assert node.held == 1
+    node.waiting("responses", 2, tick=True)
+    assert node.held == 1
+    node.waiting("responses", 0, tick=True)
+    assert node.held == 0
+    node.tick(0, 32, [26])
+    thread.join()
+    assert len(out[0]) == TIGHT.release_bytes
+    assert node.words_root(0, ROOT_W) is ForwardVerdict.ACCEPTED
+    with pytest.raises(ValueError, match="waiting frames"):
+        node.waiting("responses", -1)
+
+
+def test_the_hold_reads_every_link_and_holds_only_a_forwards_opening():
+    """A link's tick lifts nothing while another link's frame waits; a link that ends is no longer read, and once every
+    link has ended nothing is held. A later call of the open forward isn't held, frames waiting or not."""
+    node = NodeCalls(LEAD)
+    node.tick(0, 0)
+    node.waiting("a", 0)
+    node.waiting("b", 1)
+    thread, out = held_a_root(node, 0, 0, ROOT_A, SMALL)
+    node.waiting("a", 0, tick=True)
+    assert node.held == 1
+    node.ended("b")
+    assert node.held == 0
+    thread.join()
+    node.waiting("b", 2)
+    assert [len(out[0]), len(node.a_root(0, 1, ROOT_A, SMALL))] == [SMALL.release_bytes] * 2
+    assert node.words_root(0, ROOT_W) is ForwardVerdict.ACCEPTED
+    node.ended("a")
+    node.ended("b")
+    assert len(node.a_root(1, 0, ROOT_A, SMALL)) == SMALL.release_bytes
+
+
+def test_held_a_roots_open_in_the_order_they_came_and_the_nodes_close_refuses_them():
+    node = NodeCalls(LEAD)
+    node.tick(0, 0)
+    node.waiting("responses", 1)
+    first, first_out = held_a_root(node, 0, 0, ROOT_A, SMALL)
+    second, second_out = held_a_root(node, 1, 0, ROOT_A, SMALL, held=2)
+    node.waiting("responses", 0, tick=True)
+    first.join()
+    second.join()
+    assert len(first_out[0]) == SMALL.release_bytes
+    assert isinstance(second_out[0], CallRefusal) and "serial" in str(second_out[0])
+    assert node.words_root(0, ROOT_W) is ForwardVerdict.ACCEPTED
+    third, third_out = held_a_root(node, 1, 0, ROOT_A, SMALL)
+    node.close()
+    third.join()
+    assert isinstance(third_out[0], CallRefusal) and "closed" in str(third_out[0])
+    assert verdicts(node.records[0]) == {0: "accepted"}
 
 
 def control_channel(node: NodeCalls, prover):
