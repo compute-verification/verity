@@ -5,10 +5,11 @@ in order), each a list of forms LSB first, as Flock's pieces take one argument p
 list of forms (one element) or a list of elements, those of the return type in order.
 
 `trace` runs it once on a `Circuit` whose forms remember how they were made (`TL`: the XOR of two forms, or the NOT of one),
-and keeps the ANDs live in the outputs. A form's bits are a frozenset, or past `_SMALL` bits a `_Set` whose subtrees the circuit
-interns, so a chain that XORs one bit a step into a growing form (a running max's `mux`) shares the form's bits instead of
-copying them, and equal sets are still equal. Each AND becomes one `And2_v1`, except a committed copy (an AND with the constant 1,
-``A = form, B = 1``, as `sha512.commit` writes one), which becomes no gate: its bit is its form's wire. Each AND operand and each
+and keeps the ANDs live in the outputs. A form's bits are a frozenset, or past `_SMALL` bits in more than one block (``2^_B``
+consecutive bits) a `_Set` whose subtrees the circuit interns, so a chain that XORs one bit a step into a growing form (a running
+max's `mux`) shares the form's bits instead of copying them, and equal sets are still equal. Each AND becomes one `And2_v1`,
+except a committed copy (an AND with the constant 1, ``A = form, B = 1``, as `sha512.commit` writes one), which becomes no
+gate: its bit is its form's wire. Each AND operand and each
 output is written as the XORs and NOTs the builder made it by (identical forms share one wire), or, for a form the builder did
 not make from tracked forms, as a balanced XOR tree over its bits. So the gate circuit has exactly the builder's live ANDs (its
 copies none), and its XOR and NOT gates are the builder's own linear work.
@@ -42,21 +43,26 @@ from .forms import ONE, Circuit, L
 
 __all__ = ["TL", "Traced", "TracingCircuit", "definition", "emit", "part", "trace", "word_of"]
 
-#: a form of more bits than this keeps them as a `_Set`, of at most this many as a frozenset (one of each per set)
+#: a form of more bits than this, not all in one block, keeps them as a `_Set`; else as a frozenset (one of each per set)
 _SMALL = 8
+#: a trie's leaf is one block of ``_W = 2^_B`` consecutive keys, the int ``(block << _W) | mask``: bit j of ``mask`` (never 0)
+#: is the key ``block * _W + j``
+_B = 6
+_W = 1 << _B
+_M = (1 << _W) - 1
 
 
 class _Set:
-    """A set of committed bits as a big-endian Patricia trie: ``l`` holds the keys without bit ``m``, ``r`` those with it, each
-    an int (one key) or a `_Set`, and ``p`` the bits above ``m`` they share. Its circuit's table ``tab`` interns every node by its
-    children, so equal sets are one node: equality and hashing are identity, and a set one key away from another shares all of
-    it but one path."""
+    """A set of committed bits as a big-endian Patricia trie over their blocks: ``l`` holds the blocks without bit ``m`` of
+    their number, ``r`` those with it, each a leaf or a `_Set`, and ``p`` the bits above ``m`` they share. Its circuit's table
+    ``tab`` interns every node by its children, so equal sets are one node: equality and hashing are identity, and a set one
+    key away from another shares all of it but one path."""
 
     __slots__ = ("p", "m", "l", "r", "n", "tab")
 
     def __init__(self, p, m, l, r, tab):
         self.p, self.m, self.l, self.r, self.tab = p, m, l, r, tab
-        self.n = (1 if type(l) is int else l.n) + (1 if type(r) is int else r.n)
+        self.n = ((l & _M).bit_count() if type(l) is int else l.n) + ((r & _M).bit_count() if type(r) is int else r.n)
 
     def __len__(self):
         return self.n
@@ -66,23 +72,38 @@ class _Set:
         while stack:
             t = stack.pop()
             if type(t) is int:
-                yield t
+                yield from _keys(t)
             else:
                 stack.append(t.r)
                 stack.append(t.l)
 
     def __contains__(self, k):
-        t = self
+        b, t = k >> _B, self
         while type(t) is not int:
-            if (k & ~((t.m << 1) - 1)) != t.p:
+            if (b & ~((t.m << 1) - 1)) != t.p:
                 return False
-            t = t.r if k & t.m else t.l
-        return t == k
+            t = t.r if b & t.m else t.l
+        return t >> _W == b and (t >> (k & (_W - 1))) & 1 == 1
 
     def __xor__(self, o):
         return _sx(self.tab, self, o)
 
     __rxor__ = __xor__
+
+
+def _keys(t):
+    """The keys of leaf ``t``, increasing."""
+    base, m, out = (t >> _W) << _B, t & _M, []
+    while m:
+        low = m & -m
+        out.append(base + low.bit_length() - 1)
+        m ^= low
+    return out
+
+
+def _leaf(k):
+    """The leaf of key ``k`` alone."""
+    return ((k >> _B) << _W) | (1 << (k & (_W - 1)))
 
 
 def _br(tab, p, m, l, r):
@@ -97,28 +118,32 @@ def _br(tab, p, m, l, r):
 
 
 def _join(tab, p0, t0, p1, t1):
-    """The union of disjoint tries ``t0``, ``t1`` whose prefixes ``p0``, ``p1`` differ (a key is its own prefix)."""
+    """The union of disjoint tries ``t0``, ``t1`` whose prefixes ``p0``, ``p1`` differ (a leaf's is its block)."""
     m = 1 << ((p0 ^ p1).bit_length() - 1)
     p = p0 & ~((m << 1) - 1)
     return _br(tab, p, m, t1, t0) if p0 & m else _br(tab, p, m, t0, t1)
 
 
-def _tog(tab, t, k):
-    """``t`` with key ``k`` added if absent, else removed."""
+def _tog(tab, t, x):
+    """``t`` with the keys of leaf ``x`` added where absent and removed where present."""
     if t is None:
-        return k
+        return x
+    b = x >> _W
     if type(t) is int:
-        return None if t == k else _join(tab, k, k, t, t)
+        if t >> _W != b:
+            return _join(tab, b, x, t >> _W, t)
+        y = t ^ (x & _M)
+        return y if y & _M else None
     p, m = t.p, t.m
-    if (k & ~((m << 1) - 1)) != p:
-        return _join(tab, k, k, p, t)
-    if k & m:
-        return _br(tab, p, m, t.l, _tog(tab, t.r, k))
-    return _br(tab, p, m, _tog(tab, t.l, k), t.r)
+    if (b & ~((m << 1) - 1)) != p:
+        return _join(tab, b, x, p, t)
+    if b & m:
+        return _br(tab, p, m, t.l, _tog(tab, t.r, x))
+    return _br(tab, p, m, _tog(tab, t.l, x), t.r)
 
 
 def _xor(tab, s, t):
-    """The symmetric difference of tries ``s`` and ``t``."""
+    """The symmetric difference of tries ``s`` and ``t`` (``None``, a leaf or a `_Set`)."""
     if s is None:
         return t
     if t is None:
@@ -139,30 +164,45 @@ def _xor(tab, s, t):
     return _join(tab, ps, s, pt, t)
 
 
-def _build(tab, ks, lo=0, hi=None):
-    """The trie of the sorted distinct keys ``ks[lo:hi]``, which are not none."""
-    hi = len(ks) if hi is None else hi
+def _build(tab, ks):
+    """The trie of the sorted distinct keys ``ks``, which are not none."""
+    lv, last = [], -1
+    for k in ks:
+        b = k >> _B
+        if b == last:
+            lv[-1] |= 1 << (k & (_W - 1))
+        else:
+            lv.append((b << _W) | (1 << (k & (_W - 1))))
+            last = b
+    return _tree(tab, lv, 0, len(lv))
+
+
+def _tree(tab, lv, lo, hi):
+    """The trie of the leaves ``lv[lo:hi]``, by increasing block."""
     if hi - lo == 1:
-        return ks[lo]
-    a, b = ks[lo], ks[hi - 1]
+        return lv[lo]
+    a, b = lv[lo] >> _W, lv[hi - 1] >> _W
     m = 1 << ((a ^ b).bit_length() - 1)
     p = a & ~((m << 1) - 1)
-    mid = bisect_left(ks, p | m, lo, hi)
-    return _br(tab, p, m, _build(tab, ks, lo, mid), _build(tab, ks, mid, hi))
+    mid = bisect_left(lv, (p | m) << _W, lo, hi)
+    return _br(tab, p, m, _tree(tab, lv, lo, mid), _tree(tab, lv, mid, hi))
 
 
 def _set(t):
-    """The set of trie ``t`` (``None``, a key or a `_Set`) as a form keeps it: a frozenset of at most `_SMALL` keys, else a `_Set`."""
+    """The set of trie ``t`` (``None``, a leaf or a `_Set`) as a form keeps it: a `_Set` of more than `_SMALL` keys, else a
+    frozenset."""
     if t is None:
         return frozenset()
     if type(t) is int:
-        return frozenset((t,))
+        return frozenset(_keys(t))
     return t if t.n > _SMALL else frozenset(t)
 
 
 def _canon(tab, s):
     """The set ``s`` (a frozenset or a `_Set`) as a form keeps it."""
-    return _build(tab, sorted(s)) if type(s) is not _Set and len(s) > _SMALL else s
+    if type(s) is _Set or len(s) <= _SMALL or (min(s) ^ max(s)) >> _B == 0:
+        return s
+    return _build(tab, sorted(s))
 
 
 def _sx(tab, a, b):
@@ -174,7 +214,7 @@ def _sx(tab, a, b):
     if type(b) is _Set:
         return _set(_xor(tab, a, b))
     if len(b) <= 1:
-        return _set(_tog(tab, a, next(iter(b)))) if b else a
+        return _set(_tog(tab, a, _leaf(next(iter(b))))) if b else a
     return _set(_xor(tab, a, _build(tab, sorted(b))))
 
 
@@ -192,13 +232,13 @@ class TL(L):
     def __xor__(self, o):
         s = self.s ^ o.s
         if type(s) is frozenset and len(s) > _SMALL:
-            s = _build(self.tab, sorted(s))
+            s = _canon(self.tab, s)
         return TL(s, self.c ^ o.c, ("x", self, o), self.tab)
 
     def __rxor__(self, o):
         s = o.s ^ self.s
         if type(s) is frozenset and len(s) > _SMALL:
-            s = _build(self.tab, sorted(s))
+            s = _canon(self.tab, s)
         return TL(s, o.c ^ self.c, ("x", o, self), self.tab)
 
     def inv(self):
@@ -207,8 +247,8 @@ class TL(L):
 
 class TracingCircuit(Circuit):
     """A `Circuit` whose committed bits are `TL` forms; it refuses hints and table reads (not Boolean gates). ``sets`` interns
-    its forms' `_Set` nodes; a plain `L` a builder makes of more than `_SMALL` bits gets its bits as one (`canon`) where a form is
-    compared, so equal sets compare equal."""
+    its forms' `_Set` nodes; a plain `L` a builder makes of more than `_SMALL` bits in more than one block gets its bits as one
+    (`canon`) where a form is compared, so equal sets compare equal."""
 
     def __init__(self, cse: bool = False):
         super().__init__(cse)
@@ -221,9 +261,8 @@ class TracingCircuit(Circuit):
         return TL(w.s, 0, None, self.sets)
 
     def canon(self, f: L) -> L:
-        if type(f.s) is not _Set and len(f.s) > _SMALL:
-            return L(_build(self.sets, sorted(f.s)), f.c)
-        return f
+        s = _canon(self.sets, f.s)
+        return f if s is f.s else L(s, f.c)
 
     def AND(self, a, b):
         return super().AND(self.canon(a), self.canon(b))
@@ -244,7 +283,7 @@ class TracingCircuit(Circuit):
             while nodes:
                 t = nodes.pop()
                 if type(t) is int:
-                    stack.append(t)
+                    stack.extend(_keys(t))
                 elif t not in walked:
                     walked.add(t)
                     nodes.append(t.l)
