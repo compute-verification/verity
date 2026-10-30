@@ -441,8 +441,8 @@ bits in `lamLin2`, at a compiled record where an accepted run shows each V* sess
 `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, each searching the inner verifier's own calls at each draw's
 coins (`Deploy.callsAt`) and charged their evaluations (`Finder.charge`): `|S(x_I)|` once (`setupLen`) and `n + v` per
 draw it reads, for a prover making at most `t ≥ 1` calls per run. Each finder's expected cost is its draws' cost (`B_I`
-and `Fdev` over the draws' evaluations, `BinnerV` and `FdevV`, differ from `Binner` and `Fdev` only in their output) plus
-its charge, at most `t·(c_Be + |S(x_I)| + 2(n + v))` times its draws' count. -/
+and `Fdev` over the draws' evaluations, `BinnerV` and `FdevV`, differ from `Binner` and `Fdev` only in their output)
+plus its charge, at most `t·(c_Be + |S(x_I)| + 2(n + v))` times its draws' count. -/
 theorem lin2_calls_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (Cp : Caps Coin) (hS : SessionAccepts D)
     (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ) (ht1 : 1 ≤ t)

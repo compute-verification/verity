@@ -231,8 +231,8 @@ makes `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}`.
 
 The size conditions are on public data and none is a hash premise or says anything about the prover's behaviour:
 `h1`, `hO`, `hn` and `hS` are read off `x` by the verifier's own setups (`PlainIn`'s and `PartIn`'s `setupO`), and `n`
-and `v` are the call bounds `BitsLin2KOn` quantifies over, which `hU` and `hV` cap (`v` at the deployed brings is at most
-`nS x` times one statement's `deployedSetup` inputs, `setupCalls_deployedB_le`). -/
+and `v` are the call bounds `BitsLin2KOn` quantifies over, which `hU` and `hV` cap (`v` at the deployed brings is at
+most `nS x` times one statement's `deployedSetup` inputs, `setupCalls_deployedB_le`). -/
 theorem kappa_eps_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
