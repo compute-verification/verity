@@ -788,7 +788,7 @@
     {"file": "verity/ml/flock/verifier/qword_program_agree.py", "count": 6},
     {"file": "verity/ml/flock/verifier/template_query_agree.py", "count": 1},
     {"file": "README.md", "count": 2},
-    {"file": "Security/Definitions/Accounting/Remote/Draw.lean", "count": 1},
+    {"file": "Security/Definitions/Accounting/Remote/Sample.lean", "count": 1},
     {"file": "Security/Definitions/Accounting/Wipe.lean", "count": 1},
     {"file": "benchmarks/pouw/lean_headline_dc.py", "count": 1},
     {"file": "examples/vllm/README.md", "count": 1},

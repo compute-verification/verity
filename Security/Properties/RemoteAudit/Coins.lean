@@ -3,7 +3,7 @@ import Properties.RemoteAudit
 /-!
 # When the verifier reads a window's openings coin (`RemoteAudit`)
 
-The code's half of the opening draw's premises (`Accounting.Remote.Draw.Assumptions`): what `verifyWindow` and the
+The code's half of the opening draw's premises (`Accounting.Remote.Sample.Assumptions`): what `verifyWindow` and the
 session give of `Refused` and of `Live`, stated against the verifier's functions, for every input of their types.
 
 A session's coins are `coins[0 … W − 1]`, window `t`'s challenge at `t` (`releaseCoin`), and `coins[W + t]`, window

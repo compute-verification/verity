@@ -26,8 +26,8 @@ namespace Accounting.SecurityProofs.Remote.DrawMeets
 open Finset Accounting.Rate.Pooled
 open Pous (pr)
 open scoped ENNReal
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions Accounting.SecurityProofs.Remote.Meets
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions Accounting.SecurityProofs.Remote.Meets
 
 /-! ## The honest session -/
 

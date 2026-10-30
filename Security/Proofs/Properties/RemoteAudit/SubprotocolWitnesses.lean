@@ -45,8 +45,8 @@ deriving instance DecidableEq for RemoteAudit.Line.Group
 
 namespace Properties.RemoteAudit.Subprotocol
 
-open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions Properties.RemoteAudit.Line
+open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions Properties.RemoteAudit.Line
 
 theorem acceptIsVerified_iff : AcceptIsVerified ↔ AcceptIsVerifiedFor RemoteAudit.Protocol.check := Iff.rfl
 

@@ -1,11 +1,11 @@
-import Definitions.Accounting.Remote.Draw
+import Definitions.Accounting.Remote.Sample
 import Definitions.Accounting.TS.Drawn
 
 /-!
 # The receipts' fork game (trusted)
 
 What the receipts' binding term (`Receipts.binding`) is bounded by: two runs of the session from window `t`'s cut on
-independent openings coins (`cont t`, `Remote.Draw`), and what each break of them costs. `Receipts.held` is the
+independent openings coins (`cont t`, `Remote.Sample`), and what each break of them costs. `Receipts.held` is the
 plurality of the rows a receipt shows (`Receipts.Shows`) over those continuations, so a move squared is at most a fork.
 
 * `Receipts.Broken D prf rest t ω ζ`: **the fork's break**. Some receipt window `t` opens in both runs, `ω` and
@@ -25,7 +25,7 @@ plurality of the rows a receipt shows (`Receipts.Shows`) over those continuation
   `cr/sha-512` (`Claims.StrictBirthday`) bounds its chance by `q²/2^513`.
 -/
 
-namespace Accounting.Remote.Draw
+namespace Accounting.Remote.Sample
 
 open scoped ENNReal
 
@@ -94,4 +94,4 @@ noncomputable def finder [Fintype X] [Nonempty X] (D : Session n m s κ X) (prf 
 
 end Receipts
 
-end Accounting.Remote.Draw
+end Accounting.Remote.Sample

@@ -37,10 +37,10 @@ completing.
   (`Accounting.Assumptions.SketchHashRandom`).
 * `LiveCoins W δ`: except with probability `δ`, the credited passes' wrong receipts are at most `W`: each window's
   openings, from a live coin released after its roots, are uniform over its receipts, and pooled over the session they
-  bound the wrong ones (`audit.pooled`). It is derived from the deployed opening draw (`Accounting.Remote.Draw`) for
+  bound the wrong ones (`audit.pooled`). It is derived from the deployed opening draw (`Accounting.Remote.Sample`) for
   every `W` at least the record's pooled bound (`Accounting.Guarantees.Remote.LiveCoinsDrawn`), under the draw's own
-  premises (`Accounting.Remote.Draw.Assumptions`), at `δ` plus the sampler's rejections plus the coin function's
-  advantage plus the receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`: an opened receipt moved off
+  premises (`Accounting.Remote.Sample.Assumptions`), at `δ` plus the sampler's rejections plus the coin function's
+  advantage plus the receipts' binding term (`Accounting.Remote.Sample.Receipts.binding`: an opened receipt moved off
   the row its root holds, a SHA-512 collision between its held and presented openings).
 -/
 

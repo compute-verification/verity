@@ -47,8 +47,8 @@ messages entering it, as its certifiers count (`quietIngress`), on a schedule th
 
 namespace Properties.RemoteAudit.Subprotocol
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions Properties.RemoteAudit.Line
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions Properties.RemoteAudit.Line
 
 /-- **The component's check accepts only what `Shared.run g` accepts.** Whenever `RemoteAudit.Protocol.check` accepts
 parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session

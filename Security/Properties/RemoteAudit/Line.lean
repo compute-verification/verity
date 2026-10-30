@@ -37,7 +37,7 @@ g = 1 is `Session.run`):
   zeros (`Committed.junk`), `hide_c` draw `c`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191` over the
   session's `n` draws in all), and `bind` the receipts' binding term over the session's draws (`Receipts.binding`:
   some opened receipt presented with an accepted row other than the one its root holds). The openings are the
-  deployed draw's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf c` gives draw `c`'s coin, at most
+  deployed draw's (`Accounting.Remote.Sample`: `Key.subset` on the first blocks `prf c` gives draw `c`'s coin, at most
   `receiptMax = 2^64 − 1 < 2^448` receipts a draw, the verifier's `RECEIPT_LIMIT` less one, the sampler's fallbacks
   `rest` free), at the error `Accounting.Guarantees.Remote.PooledDraw` states.
 
@@ -81,8 +81,8 @@ holds from any start in `[s_0, e_0]`, which the held lemma uses.
 
 namespace Properties.RemoteAudit.Line
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions _root_.RemoteAudit.Line
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions _root_.RemoteAudit.Line
 
 /-- **LineChecked**: a line the code computes had a block of one or more bytes, a block's encode of one or more
 squarings, nonnegative rates and bursts, and read a nonnegative wrong receipts' bound. -/
