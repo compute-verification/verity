@@ -33,7 +33,7 @@ g = 1 is `Session.run`):
   blocks the record's) credits more bits read than the trace's passes read (`ReadAt`) is at most
   `δs + δ_net + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the one the line reads its pooled bound at
   (`Node.delta`, a nonnegative rational; the line computes at none outside `(0, 1)`), `adv_c` the advantage on `prf c`
-  of draw `c`'s distinguisher at that `δ` (`Session.distinguisher`) with openings coin `c`'s commitment leaf committing
+  of draw `c`'s distinguisher at that `δ` (`Moves.distinguisher`) with openings coin `c`'s commitment leaf committing
   zeros (`Committed.junk`), `hide_c` draw `c`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191` over the
   session's `n` draws in all), and `bind` the receipts' binding term over the session's draws (`Receipts.binding`:
   some opened receipt presented with an accepted row other than the one its root holds). The openings are the

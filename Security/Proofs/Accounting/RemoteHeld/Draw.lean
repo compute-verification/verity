@@ -11,8 +11,8 @@ import Proofs.Hash.RowBinding
 Window `t`'s size `U_t` and correct receipts `C_t` are fixed before its openings coin (`Live`), so given the other coins
 and the earlier windows' coins the window's draw is `Key.subset` on the first blocks `prf t` gives a uniform coin. The
 hybrid is proved for a session read through a commitment (`Committed`, `Live` of `Committed.view c`), as the memory line
-over the prover's records (`RemoteHeld.Line`) states it; the guarantees take the session the prover plays, which holds
-no commitment while the session runs, as the committed session whose view reads none (`Draw.pooledDrawLive`).
+over the prover's records (`RemoteHeld.Line`) states it; the guarantees take the moves the prover plays, which hold
+no commitment while the session runs, as the committed moves whose view reads none (`Draw.pooledDrawLive`).
 
 * **On uniform first blocks** (`Draw.pr_test_le`). Step `i` of the partial Fisher–Yates reads its first word, uniform
   (`Draw.pr_word_le`: a first word is the top bits of a uniform block). The sampler rejects it with probability at
@@ -22,21 +22,22 @@ no commitment while the session runs, as the committed session whose view reads 
   steps took receipts of `C_t`, `g_t − i` of the positions left hold receipts of `C_t` (`Draw.card_arrange_mem`), so
   step `i` takes one with probability at most `(g_t − i)/(U_t − i) ≤ g_t/U_t`, and the draw lands in `C_t` with
   probability at most `(g_t/U_t)^(s'_t)`, `0` when `g_t < s'_t` (`Draw.pr_window_le`, the steps as rounds of
-  `Draw.pr_rounds_le`, the adaptive product bound `Draw.pr_live_le`): `bound t` (`Session.bound`).
+  `Draw.pr_rounds_le`, the adaptive product bound `Draw.pr_live_le`): `bound t` (`Moves.bound`).
 * **The pooled bound** (`Draw.prod_le_of_pooled_lt`). When the wrong receipts pass the pooled bound, the wrong shares
   `f_t = 1 − g_t/U_t` are no point of its knapsack, so a window has fewer correct receipts than draws, or
   `Σ_t s'_t·f_t` passes the budget `S·(1 − δ^(1/S))` and weighted AM–GM puts `∏_t bound t` at most `δ`.
-* **The hybrid over windows** (`Draw.pr_potential_le`). The potential after `t` windows (`Session.potential`) is the
+* **The hybrid over windows** (`Draw.pr_potential_le`). The potential after `t` windows (`Moves.potential`) is the
   event that windows `j < t` land on `prf j` and a uniform 512-bit threshold coin `u` falls below `P = ∏_{j<t} bound j`
   (`below`, of probability `Draw.coinWeight δ P`, `min(1, δ/P)` rounded down to a multiple of `2^-512`,
   `Draw.pr_below`). After no window it has probability at most `δ`. Window `t`'s step (`Draw.pr_potential_succ_le`, the
   arithmetic `Draw.hybrid_step`) first trades the commitment for `Committed.junk com t`, whose leaf `t` commits zeros,
   at the potentials after `t + 1` and after `t` windows: that is `Committed.hide com prf δ t`, `0` at a view that reads
   no commitment (`Draw.hide_const`). In the junk session windows `j ≤ t` read nothing of coin `t` (`Draw.SwapFree`, from
-  `Live` at each fixed commitment, `Draw.swapFree_junk`). There window `t`'s distinguisher on `prf t` under a uniform
-  key is the potential after `t + 1` windows, its key read as window `t`'s coin (`Draw.pr_potential_succ`, by
-  `Draw.swapCoin`), so it is at most its probability on uniform blocks plus its advantage. On uniform blocks it is at
-  most the potential after `t` windows plus `s_t/2^64` (`Draw.pr_distinguisher_le`): given the earlier coins, window `t`
+  `Live` at each fixed commitment, which reads no later coin by `Draw.live_agree`, `Draw.swapFree_junk`). There window
+  `t`'s distinguisher on `prf t` under a uniform key is the potential after `t + 1` windows, its key read as window
+  `t`'s coin (`Draw.pr_potential_succ`, by `Draw.swapCoin`), so it is at most its probability on uniform blocks plus
+  its advantage. On uniform blocks it is at most the potential after `t` windows plus `s_t/2^64`
+  (`Draw.pr_distinguisher_le`): given the earlier coins, window `t`
   lands with probability at most `s'_t·(2^-64 − 2^-512) + bound t`, independently of `u` falling below `P·bound t`, and
   `coinWeight δ (P·bound t)·(s'_t·(2^-64 − 2^-512) + bound t)` is at most `coinWeight δ P + s_t/2^64`
   (`Draw.window_step_le`: rounding costs at most `2^-512`, which the sharper rejection bound pays when `s'_t ≥ 1`; a
@@ -828,9 +829,9 @@ theorem gap_nonneg : (0 : ℝ) ≤ 1 / 2 ^ 64 - 1 / 2 ^ 512 :=
 
 /-! ## The hybrid over windows -/
 
-section Session
+section Moves
 
-variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
+variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Moves n m s κ X)
 
 theorem draws_le (t : Fin n) (ω : DrawCoins n κ X) : D.draws t ω ≤ m :=
   (min_le_right _ _).trans (Nat.lt_succ_iff.1 (D.size t ω).isLt)
@@ -839,30 +840,41 @@ theorem good_le (t : Fin n) (ω : DrawCoins n κ X) : D.good t ω ≤ D.size t �
   (card_le_card (filter_subset _ _)).trans_eq (card_range _)
 
 theorem bound_nonneg (t : Fin n) (ω : DrawCoins n κ X) : 0 ≤ D.bound t ω := by
-  unfold Session.bound
+  unfold Moves.bound
   split_ifs
   · positivity
   · exact le_rfl
 
 theorem bound_le_one (t : Fin n) (ω : DrawCoins n κ X) : D.bound t ω ≤ 1 := by
-  unfold Session.bound
+  unfold Moves.bound
   split_ifs
   · exact pow_le_one₀ (by positivity) (div_le_one_of_le₀ (by exact_mod_cast good_le D t ω) (by positivity))
   · exact zero_le_one
 
+/-- **`Live` gives windows that read no later coin**: two outcomes that agree on the other coins and on the earlier
+windows' openings coins give window `t` the same size and the same correct receipts. -/
+theorem live_agree {D : Moves n m s κ X} (h : Live D) {t : Fin n} {ω ω' : DrawCoins n κ X} (h1 : ω.1 = ω'.1)
+    (h2 : ∀ j, j < t → ω.2 j = ω'.2 j) : D.size t ω = D.size t ω' ∧ D.correct t ω = D.correct t ω' := by
+  obtain ⟨P, hP⟩ := h
+  have hη : (fun j : {j : Fin n // j < t} => ω.2 j.1) = fun j => ω'.2 j.1 := funext fun j => h2 j.1 j.2
+  have e : Verity.Play.at P ω.2 t ω.1 = Verity.Play.at P ω'.2 t ω'.1 := by
+    show P t (fun j => ω.2 j.1) ω.1 = P t (fun j => ω'.2 j.1) ω'.1
+    exact congr (congrArg (P t) hη) h1
+  exact Prod.mk.inj ((hP t ω).trans (e.trans (hP t ω').symm))
+
 theorem lands_eq {t : Fin n} {ω ω' : DrawCoins n κ X} (e1 : D.size t ω = D.size t ω')
     (e2 : D.correct t ω = D.correct t ω') : D.lands t ω = D.lands t ω' := by
   funext b
-  simp only [Session.lands, Session.draws]
+  simp only [Moves.lands, Moves.draws]
   rw [e1, e2]
 
 theorem bound_eq {t : Fin n} {ω ω' : DrawCoins n κ X} (e1 : D.size t ω = D.size t ω')
     (e2 : D.correct t ω = D.correct t ω') : D.bound t ω = D.bound t ω' := by
-  have e3 : D.draws t ω = D.draws t ω' := by simp only [Session.draws, e1]
+  have e3 : D.draws t ω = D.draws t ω' := by simp only [Moves.draws, e1]
   have e4 : D.good t ω = D.good t ω' := by
-    unfold Session.good
+    unfold Moves.good
     rw [e1, e2]
-  unfold Session.bound
+  unfold Moves.bound
   rw [e3, e4, e1]
 
 /-- Windows `j ≤ t` read nothing of window `t`'s openings coin: replacing it leaves their sizes and correct receipts
@@ -893,7 +905,7 @@ theorem distinguisher_swap_iff (prf : Fin n → Pous.Bits κ → Blocks m) (δ :
     bound_eq D (hS j hj y c K).1 (hS j hj y c K).2
   have hf : univ.filter (fun j : Fin n => (j : ℕ) < (t : ℕ) + 1) = univ.filter (· ≤ t) :=
     filter_congr fun j _ => by rw [Fin.le_def]; omega
-  simp only [Session.distinguisher, Session.potential, swapCoin, Equiv.coe_fn_mk, hf]
+  simp only [Moves.distinguisher, Moves.potential, swapCoin, Equiv.coe_fn_mk, hf]
   rw [prod_congr rfl fun j hj => hb j (mem_filter.1 hj).2]
   constructor
   · rintro ⟨h1, h2, h3⟩
@@ -963,7 +975,7 @@ theorem pr_distinguisher_le [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks
             ← ENNReal.ofReal_mul (coinWeight_nonneg _ _)]
       _ ≤ ENNReal.ofReal (coinWeight δ P + s t / 2 ^ 64) :=
           ENNReal.ofReal_le_ofReal (window_step_le hδ hP0 (bound_nonneg D t ω) (bound_le_one D t ω) (min_le_left _ _)
-            fun h0 => by simp [Session.bound, h0])
+            fun h0 => by simp [Moves.bound, h0])
       _ = pr (fun u => D.potential prf δ t (ω, u)) + ENNReal.ofReal (s t / 2 ^ 64) := by
           rw [ENNReal.ofReal_add (coinWeight_nonneg _ _) (by positivity), ← pr_below hδ]
           congr 2
@@ -982,7 +994,7 @@ theorem distinguisher_congr (prf : Fin n → Pous.Bits κ → Blocks m) (δ : �
     D.distinguisher prf δ t (y, b) ↔ D.distinguisher prf δ t (y, b') := by
   have e : D.lands t y.1 b ↔ D.lands t y.1 b' :=
     test_congr _ fun i hi => h i (lt_of_lt_of_le hi (min_le_left _ _))
-  simp only [Session.distinguisher, e]
+  simp only [Moves.distinguisher, e]
 
 /-- **An honest session's distinguishers gain nothing.** -/
 theorem prfAdvantage_honest [Fintype X] (hc : ∀ t ω, range (D.size t ω : ℕ) ⊆ D.correct t ω)
@@ -1007,7 +1019,7 @@ theorem prfAdvantage_honest [Fintype X] (hc : ∀ t ω, range (D.size t ω : ℕ
   unfold Pous.StreamedWipe.prfAdvantage
   rw [h1, h2, tsub_self]
 
-end Session
+end Moves
 
 /-! ## The junk-commitment hybrid -/
 
@@ -1043,7 +1055,7 @@ theorem swapFree_junk (hL : ∀ c, Live (F.view c)) (com : DrawCoins n κ X → 
   have hω : ∀ i, i < j → Function.update c t K i = c i := fun i hi =>
     Function.update_of_ne (ne_of_lt (lt_of_lt_of_le hi hj)) _ _
   rw [play_size, play_size, play_correct, play_correct, hc]
-  exact hL (Committed.junk com t (x, c)) j (x, Function.update c t K) (x, c) rfl hω
+  exact live_agree (hL (Committed.junk com t (x, c))) (ω := (x, Function.update c t K)) (ω' := (x, c)) rfl hω
 
 theorem hide_le [Fintype X] (com : DrawCoins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
     F.hide com prf δ t ≤ 1 + 1 := by
@@ -1142,7 +1154,7 @@ theorem error_toReal {n : ℕ} (s : Fin n → ℕ) {δ : ℝ} (hδ : 0 ≤ δ) (
 
 /-- An opened receipt that `Refused` lets through on an accepting outcome off the binding event is correct: a moved one
 is in the event. -/
-theorem opened_sub {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] {D : Session n m s κ X}
+theorem opened_sub {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] {D : Moves n m s κ X}
     {prf : Fin n → Pous.Bits κ → Blocks m} {rest : DrawCoins n κ X → Fin n → ℕ → ℕ} {T : Trace (DrawCoins n κ X)}
     {R : Receipts n κ X} (hR : Refused D prf rest T R) {ω : DrawCoins n κ X} (ha : T.accepts ω)
     (hb : ¬ ∃ t, ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) (t : Fin n) :
@@ -1165,7 +1177,7 @@ theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
     intro ω ⟨⟨hacc, hw⟩, hb⟩
     refine ⟨fun t ha => ?_, ?_⟩
     · have h := opened_sub hR hacc hb t
-      simp only [Session.opened] at h
+      simp only [Moves.opened] at h
       rwa [openings_congr (fun _ => 0) (rest ω t) (draws_le (F.play com) t ω) ha]
     · refine prod_le_of_pooled_lt (fun t => (F.play com).size t ω) (fun t => (F.play com).good t ω)
         (fun t => (F.play com).draws t ω) hδ (fun t => good_le (F.play com) t ω) ?_
@@ -1175,7 +1187,7 @@ theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
             (F.play com).pooled δ ω := rfl
         _ < (F.play com).wrong ω := hw'.trans_le hc
         _ = ∑ t, (((F.play com).size t ω - (F.play com).good t ω : ℕ) : ℝ) := by
-            rw [Session.wrong, Nat.cast_sum]
+            rw [Moves.wrong, Nat.cast_sum]
   have hall := pr_landed_le F hL com prf hδ hm
     (fun ω => (T.accepts ω ∧ ¬ (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
       ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)) hreal
@@ -1196,7 +1208,7 @@ theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
     (R.binding (F.play com) prf rest) (pr_le_one _) (hsplit.trans (add_le_add hall le_rfl))
 
 /-- A session that reads no commitment has no hiding term. -/
-theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X] (D : Session n m s κ X)
+theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X] (D : Moves n m s κ X)
     (com : DrawCoins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
     (⟨fun _ => D⟩ : Committed n m s κ X Cm).hide com prf δ t = 0 := by
   change (pr (D.potential prf δ ((t : ℕ) + 1)) - pr (D.potential prf δ ((t : ℕ) + 1))) +
@@ -1206,7 +1218,7 @@ theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
 /-- `PooledDraw` at one session: the committed bound at a view that reads no commitment, whose hiding terms vanish
 (`hide_const`). -/
 theorem pooledDrawLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Session n m s κ X)
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Moves n m s κ X)
     (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (hL : Live D)
     (hR : Refused D prf rest T R) (hC : Counted D T) :
     T.Holds (δ + ((∑ t, s t : ℕ) : ℝ) / 2 ^ 64 +

@@ -221,7 +221,7 @@ def SHARED : String :=
 auditor saw of each of its windows (`seen`): group `t` is window `t`, its passes the record's and its times and reads
 the auditor's, and window `t`'s receipts and draws are the record's, `(Σ lengths_t, drawn_t)`. Refused unless the
 auditor saw each of the record's windows and each window drew `min(s, U_t)` of its receipts at the session's `samples`
-`s`, as the verifier's draw does (`Session.draws`). -/
+`s`, as the verifier's draw does (`Moves.draws`). -/
 def ofSummary (sm : Session.Summary) (samples : Nat) (seen : Array Seen) :
     Except String (Array Group × Array (Nat × Nat)) :=
   if seen.size ≠ sm.windows.size then

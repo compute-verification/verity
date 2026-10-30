@@ -11,7 +11,7 @@ the pass had in node memory or on a chip. By `Receipted` that receipt is the kep
 rebuilt (`Miss`). So `SketchBound`'s failure is within some pass's some candidate's `Miss` at the outcome's model coins
 (`miss_of_fails`), an event of the model's coins.
 
-The random-oracle step is `pr_coins_le`: by `SketchHashRandom A ε` the keys SHA-512 gives at every prover coin and
+The random-oracle step is `pr_coins_le`: by `SketchHashRandom keys ε` the keys SHA-512 gives at every prover coin and
 store are within `ε` of uniform, so averaged over those (`pr_le_add_of_fst`) an event of the model's coins is at most
 `ε` likelier at the outcome's model coins than over the model's coins. The rest is over the model's coins.
 
@@ -282,19 +282,19 @@ namespace Session
 variable {β Hs : Type} [Fintype β] {P : ℕ} {G : Fin P → ℕ}
 
 /-- **The random-oracle step.** With SHA-512's keys at the candidate seeds within `ε` of uniform at every prover coin
-and store (`SketchHashRandom A ε`), an event of the model's coins is at most `ε` likelier at the outcome's model coins
-than over the model's coins: average the premise over the prover's coins and the store. -/
-theorem pr_coins_le [Fintype Hs] (A : Session β Hs P N m h S L q ks G) {ε : ℝ}
-    (hH : Accounting.Assumptions.SketchHashRandom A ε) (E : ModelCoins β P N m h ks G → Prop) :
-    pr (fun ω : Outcome β Hs N m => E (A.coins ω)) ≤ pr E + ENNReal.ofReal ε := by
-  refine pr_le_add_of_fst (fun ω : β × (Data N m 0 Sector × Hs) => E (A.coins ω)) E _ fun b => ?_
-  refine pr_le_add_of_fst (fun y : Data N m 0 Sector × Hs => E (A.coins (b, y))) (fun z => E (b, z)) _
+and store (`SketchHashRandom keys ε`), an event of the model's coins is at most `ε` likelier at the outcome's model
+coins than over the model's coins: average the premise over the prover's coins and the store. -/
+theorem pr_coins_le [Fintype Hs] (keys : β → Data N m 0 Sector → Hs → Keys P N m h ks G) {ε : ℝ}
+    (hH : Accounting.Assumptions.SketchHashRandom keys ε) (E : ModelCoins β P N m h ks G → Prop) :
+    pr (fun ω : Outcome β Hs N m => E (coins keys ω)) ≤ pr E + ENNReal.ofReal ε := by
+  refine pr_le_add_of_fst (fun ω : β × (Data N m 0 Sector × Hs) => E (coins keys ω)) E _ fun b => ?_
+  refine pr_le_add_of_fst (fun y : Data N m 0 Sector × Hs => E (coins keys (b, y))) (fun z => E (b, z)) _
     fun D => ?_
   exact hH b D fun κ => E (b, D, κ)
 
 /-- **Sequencing.** Pass `j`'s candidates miss with the one-pass bound for every device family the prover's coins and
 the earlier passes' keys select: pass `j`'s keys and the store are a uniform fiber of the model's coins. -/
-theorem pr_pass_le (A : Session β Hs P N m h S L q ks G) (j : Fin P) (δ : ℝ≥0∞)
+theorem pr_pass_le (A : Session β P N m h S L q ks G) (j : Fin P) (δ : ℝ≥0∞)
     (hδ : ∀ b η, pr (fun y : Data N m 0 Sector × (Fin (G j) → Key N m h ks) =>
       ∃ c, Miss (A.device b j η c) (y.2 c) y.1) ≤ δ) :
     pr (fun ω : ModelCoins β P N m h ks G => ∃ c, Miss (A.devAt ω j c) (ω.2.2 j c) ω.2.1) ≤ δ := by
@@ -332,18 +332,19 @@ end Session
 
 /-- An accepting outcome where `SketchBound`'s event fails has some pass's kept candidate missing at the outcome's
 model coins. -/
-theorem miss_of_fails {β Hs : Type} {P : ℕ} {G : Fin P → ℕ} (A : Session β Hs P N m h S L q ks G)
+theorem miss_of_fails {β Hs : Type} {P : ℕ} {G : Fin P → ℕ} (A : Session β P N m h S L q ks G)
+    (keys : β → Data N m 0 Sector → Hs → Keys P N m h ks G) (kept : Outcome β Hs N m → (j : Fin P) → Fin (G j))
     (T : Accounting.Remote.Held.Trace (Outcome β Hs N m)) (hP : T.passes ≤ P)
-    (hrec : Assumptions.Receipted A T) (hpres : Assumptions.Present A T) (ω : Outcome β Hs N m)
+    (hrec : Assumptions.Receipted A keys kept T) (hpres : Assumptions.Present A keys kept T) (ω : Outcome β Hs N m)
     (hacc : T.accepts ω)
     (hfail : ¬ ∀ p < T.passes, ∀ b ∈ T.correct ω p,
       ∃ τ, T.tick ω p ≤ τ ∧ τ < T.tick ω (p + 1) ∧ b ∈ T.present ω τ) :
-    ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1 := by
+    ∃ j : Fin P, ∃ c, Miss (A.devAt (coins keys ω) j c) ((coins keys ω).2.2 j c) (coins keys ω).2.1 := by
   push Not at hfail
   obtain ⟨p, hp, b, hb, hnot⟩ := hfail
   let j : Fin P := ⟨p, lt_of_lt_of_le hp hP⟩
   obtain ⟨t, ht, htb⟩ := hrec ω hacc j b hb
-  refine ⟨j, A.kept ω j, t, ht, ?_⟩
+  refine ⟨j, kept ω j, t, ht, ?_⟩
   by_contra hall
   push Not at hall
   obtain ⟨τ, h1, h2, h3⟩ := hpres ω hacc j t hall b htb.symm
@@ -371,7 +372,7 @@ private theorem pouw_pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : �
 
 /-- **The sketch bound at every parameter** (`Accounting.Guarantees.Remote.SketchBoundSession`). -/
 theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := by
-  intro β Hs _ _ P N m h S L q ks r G qtot ε εro A T hr32 hε hεro hP hRank hH hq hrec hpres
+  intro β Hs _ _ P N m h S L q ks r G qtot ε εro A keys kept T hr32 hε hεro hP hRank hH hq hrec hpres
   classical
   let δ : ℝ≥0∞ := ((∑ j, G j : ℕ) : ℝ≥0∞) * (ENNReal.ofReal ε + (N : ℝ≥0∞) / 2 ^ h) +
     ((∑ j, qtot j : ℕ) : ℝ≥0∞) / 2 ^ (8 * r)
@@ -386,9 +387,9 @@ theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := 
       _ = δ := by
           simp only [δ, Finset.sum_add_distrib, ← Finset.sum_mul, ENNReal.sum_div, Nat.cast_sum]
   have hout : pr (fun ω : Outcome β Hs N m =>
-      ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) ≤
+      ∃ j : Fin P, ∃ c, Miss (A.devAt (coins keys ω) j c) ((coins keys ω).2.2 j c) (coins keys ω).2.1) ≤
       δ + ENNReal.ofReal εro :=
-    (Session.pr_coins_le A hH
+    (Session.pr_coins_le keys hH
       (fun x : ModelCoins β P N m h ks G => ∃ j : Fin P, ∃ c, Miss (A.devAt x j c) (x.2.2 j c) x.2.1)).trans
       (add_le_add hsum le_rfl)
   have hfin : δ ≠ ⊤ := by
@@ -414,12 +415,12 @@ theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := 
   have hmono : Pouw.pr (fun ω => T.accepts ω ∧ ¬ ∀ p < T.passes, ∀ b ∈ T.correct ω p,
       ∃ τ, T.tick ω p ≤ τ ∧ τ < T.tick ω (p + 1) ∧ b ∈ T.present ω τ) ≤
       Pouw.pr (fun ω : Outcome β Hs N m =>
-        ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) :=
-    pouw_pr_mono fun ω hω => miss_of_fails A T hP hrec hpres ω hω.1 hω.2
+        ∃ j : Fin P, ∃ c, Miss (A.devAt (coins keys ω) j c) ((coins keys ω).2.2 j c) (coins keys ω).2.1) :=
+    pouw_pr_mono fun ω hω => miss_of_fails A keys kept T hP hrec hpres ω hω.1 hω.2
   have hpr : Pouw.pr (fun ω : Outcome β Hs N m =>
-        ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) =
+        ∃ j : Fin P, ∃ c, Miss (A.devAt (coins keys ω) j c) ((coins keys ω).2.2 j c) (coins keys ω).2.1) =
       (pr (fun ω : Outcome β Hs N m =>
-        ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1)).toReal := by
+        ∃ j : Fin P, ∃ c, Miss (A.devAt (coins keys ω) j c) ((coins keys ω).2.2 j c) (coins keys ω).2.1)).toReal := by
     unfold Pouw.pr Pous.pr
     rw [ENNReal.toReal_div]
     simp
@@ -432,8 +433,9 @@ theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := 
 `SketchBoundSession` at `m = 128`, 16 rows, `h = 512`, `r = 12`, with at most `Q + P` candidate seeds and `Q` queries,
 at `ε_ro = (Q + P)²/2^257`. -/
 theorem SketchBoundDeployed : Accounting.Guarantees.Remote.SketchBoundDeployed := by
-  intro β Hs _ _ P N S L q Q G qtot ε A T hε hP hRank hG hqtot hH hq hrec hpres
-  have h := SketchBoundSession β Hs P N 128 512 S L q 16 12 G qtot ε (((Q : ℝ) + P) ^ 2 / 2 ^ 257) A T (by norm_num)
+  intro β Hs _ _ P N S L q Q G qtot ε A keys kept T hε hP hRank hG hqtot hH hq hrec hpres
+  have h := SketchBoundSession β Hs P N 128 512 S L q 16 12 G qtot ε (((Q : ℝ) + P) ^ 2 / 2 ^ 257) A keys kept T
+    (by norm_num)
     hε (by positivity) hP hRank hH hq hrec hpres
   unfold SketchBound Trace.Holds at h ⊢
   rw [show (8 * 12 : ℕ) = 96 from rfl] at h

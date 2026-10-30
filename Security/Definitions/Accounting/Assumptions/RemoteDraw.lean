@@ -5,18 +5,19 @@ import Definitions.Accounting.Remote.Held
 # What the remote audit's opening draw assumes (trusted)
 
 The premises of `Accounting.Guarantees.Remote.PooledDraw`, which derives the memory line's `LiveCoins` from the
-verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a session and the trace over its coins:
+verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on the windows' moves (`Moves`) and the trace
+over their coins:
 
-* `Live`: window `t`'s size and correct receipts are fixed before its openings coin is released, by the other coins and
-  the earlier windows' openings coins, never by its own or a later one. The verifier releases the coin after the
-  window's roots arrived (`RemoteAudit.verifyWindow`), and a receipt is correct when the row its root holds
-  (`Receipts.held`, the plurality of what the receipt shows over the window's continuations, read only off what
-  precedes the coin) is: the roots bind the receipts only up to a collision, which is `Refused`'s and the guarantees'
-  binding term (`Receipts.binding`), not this premise. The guarantees take it of the session the prover plays: the
-  challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last
-  root, with the outcome (`coins.Released`, `audit.AuditRun.disclose`), so nothing the prover holds before window `t`'s
-  coin reads that coin. A prover that held the commitment from the start could size a window off its bits, and that
-  session is not `Live` (red team RD-12).
+* `Live`: the moves are a session's (`Session`, a play over the windows) read along the draw: window `t`'s size and
+  correct receipts are fixed before its openings coin is released, by the other coins and the earlier windows'
+  openings coins, never by its own or a later one. The verifier releases the coin after the window's roots arrived
+  (`RemoteAudit.verifyWindow`), and a receipt is correct when the row its root holds (`Receipts.held`, the plurality
+  of what the receipt shows over the window's continuations, read only off what precedes the coin) is: the roots bind
+  the receipts only up to a collision, which is `Refused`'s and the guarantees' binding term (`Receipts.binding`), not
+  this premise. The guarantees take it of the moves the prover plays: the challenger sends each coin as it releases it
+  and its commitment to the session's coins only after the prover's last root, with the outcome (`coins.Released`,
+  `audit.AuditRun.disclose`), so nothing the prover holds before window `t`'s coin reads that coin. A prover that held
+  the commitment from the start could size a window off its bits, and those moves are not `Live` (red team RD-12).
 * `Refused`: the verifier refuses a window one of whose opened receipts is wrong as presented
   (`RemoteAudit.checkOpening`): on an accepted session each receipt a window's draw opens is correct, or moved
   (`Receipts.Moved`: accepted at its root and rank with a row other than the one the root holds). The guarantees
@@ -26,7 +27,7 @@ verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a ses
   receipts of the window it ran in.
 
 The draw is the deployed one, not a premise: each window's openings are `Key.subset` on the first blocks its coin gives
-(`Session.opened`), the sampler exact on each draw's first word and the rest free. The openings coins are uniform and
+(`Moves.opened`), the sampler exact on each draw's first word and the rest free. The openings coins are uniform and
 independent of the other coins, as the challenger draws them (the trace's uniform measure on `DrawCoins`).
 -/
 
@@ -36,24 +37,23 @@ open Accounting.Remote.Held
 
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type}
 
-/-- **Live coins, as the verifier releases them**: two outcomes that agree on the other coins and on the earlier
-windows' openings coins give window `t` the same size and the same correct receipts, whatever its own openings coin and
-the later ones. The guarantees read it of the session the prover plays, which holds no coin commitment while it runs;
+/-- **Live coins, as the verifier releases them**: the moves are a session's read along the draw, window `t`'s size
+and correct receipts its move at the earlier windows' openings coins, on the other coins, whatever its own openings coin
+and the later ones. The guarantees read it of the moves the prover plays, which hold no coin commitment while it runs;
 the memory line over the prover's records reads it of `Committed.view c` at every commitment `c`. -/
-def Live (D : Session n m s κ X) : Prop :=
-  ∀ t (ω ω' : DrawCoins n κ X), ω.1 = ω'.1 → (∀ j, j < t → ω.2 j = ω'.2 j) →
-    D.size t ω = D.size t ω' ∧ D.correct t ω = D.correct t ω'
+def Live (D : Moves n m s κ X) : Prop :=
+  ∃ P : Session n m κ X, ∀ t (ω : DrawCoins n κ X), (D.size t ω, D.correct t ω) = Verity.Play.at P ω.2 t ω.1
 
 /-- **Refused**: on every accepting outcome, every receipt a window opens, on the first blocks `prf` and the
 fallbacks `rest`, is among its correct ones or moved: presented, accepted at its root and rank, with a row other than
 the one its root holds. -/
-def Refused [Fintype X] (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
+def Refused [Fintype X] (D : Moves n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) : Prop :=
   ∀ ω, T.accepts ω → ∀ t, ∀ p ∈ D.opened prf rest t ω, p ∈ D.correct t ω ∨ R.Moved D prf rest t ω p
 
 /-- **Counted**: on every accepting outcome, the credited passes' wrong receipts of registered blocks are at most the
 windows' wrong receipts. -/
-def Counted (D : Session n m s κ X) (T : Trace (DrawCoins n κ X)) : Prop :=
+def Counted (D : Moves n m s κ X) (T : Trace (DrawCoins n κ X)) : Prop :=
   ∀ ω, T.accepts ω → T.wrong ω ≤ D.wrong ω
 
 end Accounting.Remote.Draw.Assumptions

@@ -96,7 +96,7 @@ theorem sketch_zero {Ω : Type} [Fintype Ω] (T : Trace Ω) (O : Outside T)
   obtain ⟨t, h1, h2, h3⟩ := h ω p hp
   exact ⟨t, h1, h2, mem_union_left _ (h3 ▸ mem_univ j)⟩
 
-theorem counted_of {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
+theorem counted_of {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Moves n m s κ X)
     (T : Trace (DrawCoins n κ X)) (h : ∀ ω p, T.plan ω p ⊆ T.correct ω p) : Counted D T := fun ω _ => by
   have hw : T.wrong ω = 0 := by
     unfold Trace.wrong
@@ -122,13 +122,13 @@ theorem offsets_zero_lt {m U k : ℕ} (b : Blocks m) (hk : k ≤ U) (hkm : k ≤
 
 /-- With the sampler's fallbacks 0, every receipt a draw opens is among its receipts, so at correct receipts that
 hold all of them nothing is refused. -/
-theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : Session n m s κ X)
+theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : Moves n m s κ X)
     (hc : ∀ t ω, range (D.size t ω : ℕ) ⊆ D.correct t ω) (prf : Fin n → Pous.Bits κ → Blocks m)
     (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) : Refused D prf (fun _ _ _ => 0) T R := by
   intro ω _ t p hp
   left
   apply hc t ω
-  unfold Session.opened openings at hp
+  unfold Moves.opened openings at hp
   obtain ⟨q, hq, rfl⟩ := mem_image.1 hp
   have hk : D.draws t ω ≤ D.size t ω := min_le_right _ _
   exact mem_range.2 (Accounting.SecurityProofs.Remote.Draw.arrange_lt hk
@@ -165,14 +165,17 @@ theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Finty
     ∀ t, (recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).hide com prf (node.delta : ℝ) t = 0 := by
   obtain ⟨hW, htick, hsize, hgs⟩ := hS
   rw [ofRecord_honest]
-  have hc : ∀ D : Session node.draws receiptMax (fun _ => node.params.samples) κ X,
+  have hc : ∀ D : Moves node.draws receiptMax (fun _ => node.params.samples) κ X,
       (∀ t ω, D.correct t ω = Finset.range (receiptMax + 1)) → ∀ t ω, range (D.size t ω : ℕ) ⊆ D.correct t ω :=
     fun D h t ω => by
       rw [h]
       exact Finset.range_subset_range.2 (D.size t ω).isLt.le
   refine ⟨?_, covers_univ _ fun _ _ => rfl,
     sketch_zero _ _ fun ω p _ => ⟨tick ω p, le_refl _, htick ω p, Finset.union_empty _⟩, covered_noOutside _ _,
-    ingressCounted_quiet _, fun c t ω ω' _ _ => ⟨Fin.ext (congrArg (min · receiptMax) (hsize c c ω ω' t)), rfl⟩,
+    ingressCounted_quiet _,
+    fun c => ⟨fun t _ x => (((recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).view c).size t
+        (x, fun _ _ => false), Finset.range (receiptMax + 1)),
+      fun t ω => Prod.ext (Fin.ext (congrArg (min · receiptMax) (hsize c c ω (ω.1, fun _ _ => false) t))) rfl⟩,
     refused_honest _ (hc _ fun _ _ => rfl) prf _ R, counted_of _ _ fun _ _ => Finset.Subset.refl _,
     fun t => Accounting.SecurityProofs.Remote.Draw.prfAdvantage_honest _ (hc _ fun _ _ => rfl) prf _ t,
     fun t => ?_⟩
@@ -563,7 +566,7 @@ theorem toy_sketch {Ω : Type} [Fintype Ω] (ver : Node → Record → Prop)
       exact Finset.mem_univ j
 
 theorem binding_empty {n κ : ℕ} {X : Type} [Fintype X] [IsEmpty (Fin n)] {m : ℕ} {s : Fin n → ℕ}
-    (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
+    (D : Moves n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) : R.binding D prf rest = 0 := by
   simp [Receipts.binding, Pous.pr]
 
@@ -583,7 +586,8 @@ theorem lineHeld_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
   have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
     (fun _ _ _ => ∅) (fun _ => ()) Toy.trace Toy.receipts 0 0 (noOutside _) (quietIngress _) (toy_paced _)
     (toy_covers _) (toy_sketch _ _) (covered_noOutside _ _) (ingressCounted_quiet _)
-    (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t) (counted_of _ _ fun _ _ => Finset.Subset.refl _)
+    (fun _ => ⟨fun t => isEmptyElim t, fun t => isEmptyElim t⟩) (fun _ _ t => isEmptyElim t)
+    (counted_of _ _ fun _ _ => Finset.Subset.refl _)
   refine absurd hb (not_le.2 ?_)
   rw [Pouw.pr_eq_one]
   · norm_num [binding_empty, toy_delta]
@@ -599,7 +603,8 @@ theorem lineHeldAtComponent_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
   have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
     (fun _ _ _ => ∅) (fun _ => ()) Toy.trace Toy.receipts 0 0 (fun _ => .empty) (fun _ => .empty) (fun _ => .empty)
     (noOutside _) (quietIngress _) (toy_paced _) (toy_covers _) (toy_sketch _ _)
-    (covered_noOutside _ _) (ingressCounted_quiet _) (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t)
+    (covered_noOutside _ _) (ingressCounted_quiet _) (fun _ => ⟨fun t => isEmptyElim t, fun t => isEmptyElim t⟩)
+    (fun _ _ t => isEmptyElim t)
     (counted_of _ _ fun _ _ => Finset.Subset.refl _)
   refine absurd hb (not_le.2 ?_)
   rw [Pouw.pr_eq_one]

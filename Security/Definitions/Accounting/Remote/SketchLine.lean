@@ -18,10 +18,10 @@ any way, so a device that reads an openings coin early is one of the model's.
 * `lineCoins ω`: the sketch outcome `ω` read as the line's coins.
 * `Trace.sketch T O`: the line's trace `T` on that space read on the sketch model's outcomes, with the registered blocks
   a device outside the node computes on at a tick (`Outside.blocks`) counted with the chips' then. Where a block is,
-  the sketch model reads only `present`, so `Present A (T.sketch O)` is the sketch model's `Present` with outside
-  computation allowed (a block the kept candidate obtained whole was on the node or computed on outside it at a tick
-  of its pass), which the relay prover meets, and `SketchBound (T.sketch O) δ` is `SketchBoundAt T O δ` over the line's
-  coins.
+  the sketch model reads only `present`, so `Present A keys kept (T.sketch O)` is the sketch model's `Present` with
+  outside computation allowed (a block the kept candidate obtained whole was on the node or computed on outside it at a
+  tick of its pass), which the relay prover meets, and `SketchBound (T.sketch O) δ` is `SketchBoundAt T O δ` over the
+  line's coins.
 -/
 
 namespace Accounting.Remote.Sketch

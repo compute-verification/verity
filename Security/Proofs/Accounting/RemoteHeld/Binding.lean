@@ -76,13 +76,13 @@ theorem cont_swap (t : Fin n) (ω ζ : DrawCoins n κ X) : cont t (cont t ω ζ)
   by_cases h : j < t <;> simp [h]
 
 /-- **The held row reads only the cut**: every continuation of `ω` from window `t`'s cut holds `ω`'s row. -/
-theorem held_cont [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
+theorem held_cont [Fintype X] (D : Moves n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω ζ : DrawCoins n κ X) (p : ℕ) :
     R.held D prf rest t (cont t ω ζ) p = R.held D prf rest t ω p :=
   Accounting.SecurityProofs.TS.Plurality.plural_sp (opens := R.Shows D prf rest t p) (cont_left t) ω ζ
 
 /-- **The held row is the likeliest**: no row is shown alone on more of window `t`'s continuations of `ω`. -/
-theorem tally_le_held [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
+theorem tally_le_held [Fintype X] (D : Moves n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : DrawCoins n κ X) (p : ℕ) (v : Hash.Row) :
     tally (cont t) (R.Shows D prf rest t p) ω v ≤
       tally (cont t) (R.Shows D prf rest t p) ω (R.held D prf rest t ω p) :=
@@ -97,13 +97,13 @@ theorem claims_pr {α : Type} [Fintype α] (P : α → Prop) : Claims.Pr P = pro
   congr
 
 /-- A window opens at most `s_t` receipts: its draws, `min(s_t, U_t)`. -/
-theorem card_opened_le (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
+theorem card_opened_le (D : Moves n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : DrawCoins n κ X) : (D.opened prf rest t ω).card ≤ s t := by
-  unfold Session.opened openings
-  exact Finset.card_image_le.trans ((Finset.card_range _).le.trans (by unfold Session.draws; exact min_le_left _ _))
+  unfold Moves.opened openings
+  exact Finset.card_image_le.trans ((Finset.card_range _).le.trans (by unfold Moves.draws; exact min_le_left _ _))
 
 /-- **Window `t`'s share of the binding term** is at most `√(|L_t|·s_t·(fork_t + split_t))`. -/
-theorem window_le [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
+theorem window_le [Fintype X] (D : Moves n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ) (hL : ∀ t ω, D.opened prf rest t ω ⊆ L t)
     (t : Fin n) :
     prob (fun ω => ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) ≤
@@ -152,7 +152,7 @@ theorem window_le [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X) (pr
   exact h1.trans ((Real.sqrt_sq hA).symm.le.trans (Real.sqrt_le_sqrt hfin))
 
 /-- A fork break is a collision the window's fork finder outputs. -/
-theorem fork_le_finder [Fintype X] [Nonempty X] (D : Session n m s κ X) (R : Receipts n κ X)
+theorem fork_le_finder [Fintype X] [Nonempty X] (D : Moves n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (q : ℕ) :
     (R.fork D prf rest t).toReal ≤ (R.finder D prf rest t q).Pr (fun u => (R.hash u).bytes) := by
   rw [Receipts.fork, toReal_pr, Claims.Finder.Pr, claims_pr]
@@ -191,7 +191,7 @@ variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type}
 
 /-- **Fixed roots**: where every window's cut fixes its receipts' verifiers, roots and ranks, the roots never split,
 and under `cr/sha-512` the binding term is at most `Σ_t √(|L_t|·s_t)·q_t/2^256.5`, `ledger.binding`'s charge. -/
-theorem binding_le_of_fixed [Fintype X] [Nonempty X] (D : Session n m s κ X) (R : Receipts n κ X)
+theorem binding_le_of_fixed [Fintype X] [Nonempty X] (D : Moves n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ)
     (q : Fin n → ℕ) (hL : ∀ t ω, D.opened prf rest t ω ⊆ L t)
     (hq : ∀ t, Claims.StrictBirthday (fun u => (R.hash u).bytes) (R.finder D prf rest t (q t)))

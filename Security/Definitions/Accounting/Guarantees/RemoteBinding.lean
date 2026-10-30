@@ -37,7 +37,7 @@ its receipts `R`, and sets `L_t` holding every receipt window `t` opens, the bin
 coins hash a SHA-512 collision between the checks of one receipt's two openings (`Receipts.fork`), `split_t` the chance
 that their roots split (`Receipts.split`). -/
 def ReceiptsBindingOfFork : Prop :=
-  ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X)
+  ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : Moves n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ),
     (∀ t ω, D.opened prf rest t ω ⊆ L t) →
     (R.binding D prf rest).toReal ≤
@@ -47,7 +47,7 @@ def ReceiptsBindingOfFork : Prop :=
 (`Receipts.finder`, at `q_t` SHA-512 calls) meeting `Claims.StrictBirthday`: the binding term is at most
 `Σ_t √(|L_t|·s_t·(q_t²/2^513 + split_t))`. -/
 def ReceiptsBindingOfCR : Prop :=
-  ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] [Nonempty X] (D : Session n m s κ X)
+  ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] [Nonempty X] (D : Moves n m s κ X)
     (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ)
     (L : Fin n → Finset ℕ) (q : Fin n → ℕ),
     (∀ t ω, D.opened prf rest t ω ⊆ L t) →

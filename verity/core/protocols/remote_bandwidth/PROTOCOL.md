@@ -1343,7 +1343,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
   \(2^{448}\) receipts (the verifier's `RECEIPT_LIMIT`, \(2^{64}\), keeps them there), at δ plus
   \(\sum_t s_t/2^{64}\) (a rejected first word) plus each window's PRF advantage, C3's term, against one
-  distinguisher a window that the session fixes (`Session.distinguisher`: it runs the session through window \(t\)
+  distinguisher a window that the session fixes (`Moves.distinguisher`: it runs the session through window \(t\)
   and reads at most \(s_t\) first blocks of the stream it is given). It has no hiding term: the prover is sent each
   coin's value as it is released and the coin commitment only once the session has its outcome (§4), so the session
   it plays is the one `PooledDraw` reads, `Live` of that session. Plus the receipts' binding term

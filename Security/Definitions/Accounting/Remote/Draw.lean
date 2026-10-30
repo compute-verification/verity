@@ -1,6 +1,7 @@
 import Mathlib
 import Definitions.Accounting.Actual.Sampler
 import Definitions.Accounting.TS.Drawn
+import Definitions.Core.Period
 import Definitions.Hash.RowLeaf
 import Definitions.Pous.Model.StreamedWipe
 
@@ -30,22 +31,25 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   `2^-512`, and always when `P ≤ δ`.
 * `DrawCoins n κ X`: a session's coins, the other coins `x` (the prover's, the world's, every window's challenge) and each
   window's `κ`-bit openings coin.
-* `Session`: each window's size `U_t` and correct receipts, read off the coins. The prover is sent every coin once it is
-  released (`coins.coin_reason`), so it may read an earlier window's whole coin, not only its openings. That window
-  `t`'s are read only off the earlier windows' openings coins is `Assumptions.Live`. `Session.lands t ω b` is window
-  `t`'s test at its own `U_t`, `s'_t` and correct receipts, and `Session.bound t ω` the most it lands on uniform
-  blocks, `(g_t/U_t)^(s'_t)` with `g_t` its correct receipts, `0` when `g_t < s'_t`.
-* `Committed`: **a session read through a coin commitment.** The challenger commits every coin before the first is
+* `Session`: **a session**, a play over its windows (`Verity.Play`), window `t` drawing its openings coin: window `t`'s
+  move, its size `U_t` and correct receipts as functions of the other coins, reads the earlier windows' openings coins.
+* `Moves`: each window's size `U_t` and correct receipts, read off the whole coins. The prover is sent every coin once
+  it is released (`coins.coin_reason`), so it may read an earlier window's whole coin, not only its openings. That the
+  moves are a session's read along the draw, window `t`'s read only off the other coins and the earlier windows'
+  openings coins, is `Assumptions.Live`. `Moves.lands t ω b` is window `t`'s test at its own `U_t`, `s'_t` and correct
+  receipts, and `Moves.bound t ω` the most it lands on uniform blocks, `(g_t/U_t)^(s'_t)` with `g_t` its correct
+  receipts, `0` when `g_t < s'_t`.
+* `Committed`: **moves read through a coin commitment.** The challenger commits every coin before the first is
   released, as hm96-sha512 leaves (192-byte salts) in a frame-v3-sha512 tree (`coins.py`). It sends the prover each
   coin as it releases it and the root only after the prover's last root, with the outcome (`audit.AuditRun.disclose`;
-  soundness's ruling of 27 Oct, no hiding premise on the root), so the session the prover plays is a `Session` and the
-  guarantees take it plainly. A root is a function of every coin, so a prover holding it from the start could size a
-  window off window `t`'s openings coin, and that session is not `Live` (red team RD-12). `view c` is the session
+  soundness's ruling of 27 Oct, no hiding premise on the root), so the moves the prover plays are a session's and the
+  guarantees take them plainly. A root is a function of every coin, so a prover holding it from the start could size
+  a window off window `t`'s openings coin, and those moves are not `Live` (red team RD-12). `view c` is the moves
   played holding commitment `c`; `play com` holds `com ω` at coins `ω` (the salts among the other coins `x`).
   `junk com t` is the commitment with openings coin `t`'s leaf committing zeros, the other coins and every salt as
   they are: it reads no bit of coin `t`. The memory line over the prover's records reads its records through it
   (`Properties.RemoteAudit.Line.recordCommitted`).
-* `Session.potential prf δ t`: the hybrid's potential after `t` windows: windows `j < t` land on `prf j` at their own
+* `Moves.potential prf δ t`: the hybrid's potential after `t` windows: windows `j < t` land on `prf j` at their own
   coins, and a uniform 512-bit threshold coin `u` falls below `∏_{j<t} bound j`.
 * `Committed.hide com prf δ t`: **window `t`'s hiding term**, what the junk-commitment hybrid costs at window `t`
   (`0` at a view that reads no commitment):
@@ -59,7 +63,7 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   the session's hiding terms total at most `n·2^-191` (`ledger.hiding`). That bound reads a prover whose view before
   coin `t` holds no salt of a coin not yet released, as the deployed prover's doesn't: a `view` that reads leaf `t`'s
   salt off the other coins gets no bound from hm96, rightly.
-* `Session.distinguisher prf δ t`: **window `t`'s distinguisher**, in `Pous.StreamedWipe.prfAdvantage`'s form, one a
+* `Moves.distinguisher prf δ t`: **window `t`'s distinguisher**, in `Pous.StreamedWipe.prfAdvantage`'s form, one a
   window and fixed by the session. On coins `(ω, u)` and blocks `b` it runs the session through window `t`: windows
   `j < t` on `prf j` at their own coins in `ω`, which it computes itself, window `t` on `b`. It outputs whether every
   one of them lands in its correct receipts and `u` falls below `∏_{j ≤ t} bound j`. It reads `ω`'s other coins and
@@ -147,8 +151,16 @@ def below (δ P : ℝ) (u : Pous.Bits 512) : Prop := P ≤ δ ∨ Pous.bitsVal u
 openings coin seeds a draw without replacement over its window's own receipts, and the other coins hold the prover's. -/
 abbrev DrawCoins (n κ : ℕ) (X : Type) : Type := X × (Fin n → Pous.Bits κ)
 
-/-- A session of `n` windows of at most `m` receipts, window `t` drawing `min(s_t, U_t)` of its `U_t`. -/
-structure Session (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) where
+/-- A window's move: its receipt count `U_t`, at most `m`, and its correct receipts, by position, on the other coins. -/
+abbrev Move (m : ℕ) (X : Type) : Type := X → Fin (m + 1) × Finset ℕ
+
+/-- **A session** of `n` windows of at most `m` receipts: a play over its windows (`Verity.Play`), window `t`'s coin its
+openings coin and its move its size and correct receipts on the other coins. -/
+abbrev Session (n m κ : ℕ) (X : Type) : Type := Verity.Play n (fun _ => Pous.Bits κ) (fun _ => Move m X)
+
+/-- **The windows' moves read off the whole coins**: `n` windows of at most `m` receipts, window `t` drawing
+`min(s_t, U_t)` of its `U_t`. A session's, read along the draw, are `Assumptions.Live`. -/
+structure Moves (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) where
   /-- Window `t`'s receipt count `U_t`. -/
   size : Fin n → DrawCoins n κ X → Fin (m + 1)
   /-- Window `t`'s correct receipts, by position. -/
@@ -163,9 +175,9 @@ noncomputable def pooled (n : ℕ) (U d : Fin n → ℕ) (δ : ℝ) : ℝ :=
   sSup ((fun f : Fin n → ℝ => ∑ t, f t * U t) ''
     {f | (∀ t, 0 ≤ f t ∧ f t ≤ 1 - (d t : ℝ) / U t) ∧ ∑ t, (d t : ℝ) * f t ≤ budget (∑ t, d t) δ})
 
-namespace Session
+namespace Moves
 
-variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
+variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Moves n m s κ X)
 
 /-- Window `t`'s draw count, `min(s_t, U_t)`. -/
 def draws (t : Fin n) (ω : DrawCoins n κ X) : ℕ := min (s t) (D.size t ω)
@@ -209,19 +221,19 @@ def wrong (ω : DrawCoins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good 
 noncomputable def pooled (δ : ℝ) (ω : DrawCoins n κ X) : ℝ :=
   Draw.pooled n (fun t => D.size t ω) (fun t => D.draws t ω) δ
 
-end Session
+end Moves
 
-/-- **A session that reads the coin commitment**: `view c` is the session the prover plays holding commitment `c`. -/
+/-- **Moves that read the coin commitment**: `view c` is the moves the prover plays holding commitment `c`. -/
 structure Committed (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X Cm : Type) where
-  /-- The session the prover plays holding commitment `c`. -/
-  view : Cm → Session n m s κ X
+  /-- The moves the prover plays holding commitment `c`. -/
+  view : Cm → Moves n m s κ X
 
 namespace Committed
 
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} (F : Committed n m s κ X Cm)
 
-/-- The session the prover plays holding commitment `com ω` at coins `ω`. -/
-def play (com : DrawCoins n κ X → Cm) : Session n m s κ X where
+/-- The moves the prover plays holding commitment `com ω` at coins `ω`. -/
+def play (com : DrawCoins n κ X → Cm) : Moves n m s κ X where
   size t ω := (F.view (com ω)).size t ω
   correct t ω := (F.view (com ω)).correct t ω
 
@@ -268,7 +280,7 @@ variable {n κ : ℕ} {X : Type} (R : Receipts n κ X)
 
 /-- **Receipt `p` of window `t` shows row `v` at coins `ω`**: the window opens it, the verifier accepts the opening the
 prover presents at the receipt's root and rank, and its row is `v`. -/
-def Shows {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
+def Shows {m : ℕ} {s : Fin n → ℕ} (D : Moves n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (p : ℕ) (ω : DrawCoins n κ X) (v : Hash.Row) : Prop :=
   p ∈ D.opened prf rest t ω ∧
     Hash.RowLeaf.accepts R.hash R.hash (R.verifier t ω p) (R.root t ω p) (R.rank t ω p) (R.opened t ω p) ∧
@@ -277,20 +289,20 @@ def Shows {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X) (prf : Fin n �
 /-- **The row receipt `p`'s root holds** at window `t` and coins `ω`: the plurality of the rows it shows over window
 `t`'s continuations of `ω`, a row that the most of them show (`Accounting.TS.plural` at `cont t`, ties broken by
 `Classical.epsilon`). -/
-noncomputable def held [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X)
+noncomputable def held [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Moves n m s κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : DrawCoins n κ X)
     (p : ℕ) : Hash.Row :=
   Accounting.TS.plural (cont t) (R.Shows D prf rest t p) ω
 
 /-- **Receipt `p` of window `t` moved**: the verifier accepts the opening presented, at the receipt's root and rank,
 with a row other than the one its root holds. -/
-def Moved [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
+def Moved [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Moves n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : DrawCoins n κ X) (p : ℕ) : Prop :=
   Hash.RowLeaf.accepts R.hash R.hash (R.verifier t ω p) (R.root t ω p) (R.rank t ω p) (R.opened t ω p) ∧
     (R.opened t ω p).row ≠ R.held D prf rest t ω p
 
 /-- **The receipts' binding term**: the probability that some window opens a receipt that moved. -/
-noncomputable def binding [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X)
+noncomputable def binding [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Moves n m s κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) : ℝ≥0∞ :=
   Pous.pr fun ω => ∃ t, ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p
 
