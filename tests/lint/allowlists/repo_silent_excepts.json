@@ -30,7 +30,6 @@
     {"file": "benchmarks/live_challenger/auditor.py", "count": 13},
     {"file": "benchmarks/live_challenger/models.py", "count": 1},
     {"file": "benchmarks/live_verifier/host.py", "count": 4},
-    {"file": "benchmarks/load_time/load_time.py", "count": 2},
     {"file": "benchmarks/multi_unit/summarize.py", "count": 2},
     {"file": "benchmarks/native_peak/measure.py", "count": 2},
     {"file": "benchmarks/nci/tests/test_library.py", "count": 2},
