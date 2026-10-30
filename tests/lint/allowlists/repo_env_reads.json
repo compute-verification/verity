@@ -278,7 +278,7 @@
     {"file": "tools/verity/check/lean_slot.py", "count": 8},
     {"file": "tools/verity/check/plan.py", "count": 6},
     {"file": "tools/verity/check/preflight.py", "count": 3},
-    {"file": "tools/verity/check/slot.py", "count": 14},
+    {"file": "tools/verity/check/slot.py", "count": 15},
     {"file": "tools/verity/check/spans.py", "count": 2},
     {"file": "tools/verity/check/suites.py", "count": 9},
     {"file": "tools/verity/check/tests/test_lean_changed.py", "count": 1},
