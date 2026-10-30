@@ -80,7 +80,7 @@ column tile `Shape.bn`, the tiles past m and n skipped, each tile's 128 s32 litt
 (`Shape.tile`, `fragment`), and `unit_opening` says which leaves and bytes a unit reads. The certifier opens a forward
 at its first A root and closes it at its words root, one forward open at a time, and counts against it every bucket a
 boundary link ticks while it is open, holding the node's links at r = 0 and counting the boundary's release once
-(`forward_count`); it refuses a forward whose count passes its calls' bits (`egress_refused`, R17's per-forward bound).
+(`forward_count`); it refuses a forward whose count passes its calls' bits (`egress_refused`, the per-forward bound).
 The verifier refuses the window (`window_refusal`) unless its record opens to its weights' root, keyLeaf and call count,
 every A root follows salt_w, the forwards are serial, and the certifier accepted every forward's egress. Its Lean reader
 is `PouwCheck.Lead` (`lean/check/PouwCheck/Opening.lean`), which the package's difftest holds to these functions.
@@ -1105,8 +1105,8 @@ def unit_opening(shapes: list[Shape], call: int, R0: int, C0: int, BLK: int) -> 
 
 def egress_refused(count: int, shapes: list[Shape], cap: int, fwd_macs: int) -> bool:
     """Whether a forward's egress count passes its bits, the sum of its calls' cap · rows · n · K / fwdMacs
-    (`Layout.callBits`), compared in integers: R17's per-forward bound, which the certifier applies when the forward's
-    words root closes it."""
+    (`Layout.callBits`), compared in integers: the per-forward egress bound, which the certifier applies when the
+    forward's words root closes it."""
     return count * fwd_macs > cap * sum(s.macs for s in shapes)
 
 
