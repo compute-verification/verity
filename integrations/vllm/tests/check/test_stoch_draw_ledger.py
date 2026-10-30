@@ -1,4 +1,4 @@
-"""stoch_recompute's DRAW LEDGER: 'RNG advances iff r_t' measured on the record, per
+"""stoch_recompute's sample LEDGER: 'RNG advances iff r_t' measured on the record, per
 request -- the DRAWN positions compared as an ordered set with the positions the Program's stop rule EXECUTES ({prompt_len - 1 + (t - 1) :
 r_t = 1}: to the cap, or the first EOS at slot t < C then min(A, C - t) lag slot(s)); every extra / missing position a FAIL reason by name
 (over-cap without EOS fails; the lag slot is bounded by the cap); a record with no EOS stop says 'not measured', never 'pass'.  Torch-free (the accounting is pure
@@ -73,7 +73,7 @@ def test_a_draw_past_the_lag_slot_a_missing_lag_draw_and_a_lag_pos_off_by_one_ea
     assert two_after["requests"]["a"]["drawn_not_expected"] == [13]
     none_after = draw_accounting(_draws("a", 10, 3, 0, served=[7, 7, 99]), wl, b, lag_attested=(1, "t"))
     assert len(none_after["problems"]) == 1 and "the lag slot did not draw" in none_after["problems"][0] and none_after["requests"]["a"]["expected_not_drawn"] == [12]
-    # lag 0 (async_scheduling False): the same 3-draw record is clean; the 4-draw one has a draw past the slot
+    # lag 0 (async_scheduling False): the same 3-draw record is clean; the 4-draw one has a sample past the slot
     assert draw_accounting(_draws("a", 10, 3, 0, served=[7, 7, 99]), wl, b, lag_attested=(0, "t"))["problems"] == []
     assert "RNG advanced" in draw_accounting(_draws("a", 10, 4, 0, served=[7, 7, 99, 5]), wl, b, lag_attested=(0, "t"))["problems"][0]
     # the lag draw at the wrong pos: an extra position AND a missing one, both named
@@ -86,7 +86,7 @@ def test_a_draw_past_the_lag_slot_a_missing_lag_draw_and_a_lag_pos_off_by_one_ea
 def test_f_r17b_35_over_cap_without_eos_fails_and_the_lag_slot_is_bounded_by_the_cap(tmp_path):
     """(a) 9 draws for cap 8 / lag 1 / NO EOS is 'the RNG advanced without r_t' (nothing is scheduled past the length
     bound; the lag slot exists only after an EOS before the cap) -- before the fix the only over-cap check was len > cap + lag and this
-    passed silently; (b) EOS at slot C - 1 under A = 1: the cap bounds the lag slot to ONE draw (n_exec = min(t_eos + A, C)), which is
+    passed silently; (b) EOS at slot C - 1 under A = 1: the cap bounds the lag slot to ONE sample (n_exec = min(t_eos + A, C)), which is
     correct, not a failure; a second draw after it is the failure."""
     wl = _wl(tmp_path, [("a", 10, 8)])
     b = _build(tmp_path, [99])
@@ -104,7 +104,7 @@ def test_f_r17b_35_over_cap_without_eos_fails_and_the_lag_slot_is_bounded_by_the
     # (b') a 9th draw after that bounded slot fails
     near_over = draw_accounting(_draws("a", 10, 9, 0, served=[7] * 6 + [99, 5, 5]), wl, b, lag_attested=(1, "t"))
     assert len(near_over["problems"]) == 1 and "past the EOS's lag slot" in near_over["problems"][0]
-    # (b'') A = 0 with EOS at slot 7: no lag slot; 7 draws clean, 8 draws = a draw without r_t
+    # (b'') A = 0 with EOS at slot 7: no lag slot; 7 draws clean, 8 draws = a sample without r_t
     assert draw_accounting(_draws("a", 10, 7, 0, served=[7] * 6 + [99]), wl, b, lag_attested=(0, "t"))["problems"] == []
     assert "RNG advanced" in draw_accounting(_draws("a", 10, 8, 0, served=[7] * 6 + [99, 5]), wl, b, lag_attested=(0, "t"))["problems"][0]
     # a profile that is not 0/1 is refused by name (one rule)
