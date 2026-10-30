@@ -95,7 +95,7 @@ def f128s (a : Array Json) : V (Array F128) := a.mapM fun x => match x.getStr? w
 
 def check (b : Bool) (why : String) : V Unit := if b then pure () else throw why
 
-/-- Decode the record and run S1–S14. -/
+/-- Decode the record and run S1–S14 (§5.3). -/
 def decode (spec : SessionSpec) (text : String) : V Session := do
   let j ← match Json.parse text with
     | .ok j => pure j

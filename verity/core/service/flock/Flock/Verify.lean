@@ -33,7 +33,7 @@ def Setup.ofCircuit (st : Stmt) : Setup :=
 
 def pcsParams (ms : MerkleScheme) (sch : Schedule) : PcsParams := ⟨sch.m.toUInt64, 1, sch.k0.toUInt64, 1, none, ms.pcsIndex⟩
 
-/-- `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle` for table `i`'s rep `r`; returns the proof's flattened cap. -/
+/-- §9–§14 for table `i`'s rep `r`; returns the proof's flattened cap. -/
 def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat) (bytes : ByteArray) : V ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"

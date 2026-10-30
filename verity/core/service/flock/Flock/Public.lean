@@ -1,5 +1,5 @@
 /-
-`Flock.Circuit`, `HmRow.checkPublic`: the verifier's public file (no rows) and frame-v3 hashing. The output roots are checked here;
+PROTOCOL.md §16.5, §16.6: the verifier's public file (no rows) and frame-v3 hashing. The output roots are checked here;
 the input ports' roots depend on the row leaf's schema and are the row leaf's check (`RowLeaf.checkPublic`).
 -/
 import Flock.Circuit
@@ -60,7 +60,7 @@ def Public.digest (pub : Public) (i p np : Nat) : ByteArray :=
   | some t => pub.digests.getD (t.starts.getD p 0 + t.refs.getD (i * np + p) 0) ByteArray.empty
   | none => pub.digests.getD (i * np + p) ByteArray.empty
 
-/- frame-v3 hashing (`HmRow.checkPublic`) -/
+/- frame-v3 hashing (§16.6) -/
 namespace FV3
 
 def FRAME : ByteArray := "veritor/protocol/merkle/frame/v3".toUTF8.push 0
