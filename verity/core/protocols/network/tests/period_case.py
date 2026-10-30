@@ -245,6 +245,21 @@ def _members(x: dict) -> int:
     return x["n"] if x["form"] in ("batch", "scan") else 1
 
 
+def prog_params(lanes: int) -> tuple[str, ...]:
+    """`progParams`: an ingress bucket's entry ports, `prog<j>` lane j's slot entry."""
+    return tuple(f"prog{j}" for j in range(lanes))
+
+
+def first_params(lanes: int) -> tuple[str, ...]:
+    """`firstParams`: bucket 0's parameters in the generator form (`ingress_scan.IngressScanFirst`)."""
+    return ("row", *prog_params(lanes))
+
+
+def ingress_params(lanes: int) -> tuple[str, ...]:
+    """`ingressParams`: each later ingress bucket's parameters (`ingress_scan.IngressScanBucket`)."""
+    return ("row", "sin", *prog_params(lanes))
+
+
 def leaves_of(t) -> int:
     """`Ty.leaves`: a descriptor type's leaves."""
     kind = t[0]
