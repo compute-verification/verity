@@ -7,8 +7,8 @@ import Proofs.Pouw.Lead.Tags.Repeats
 The lead commits whole MMA tiles (`lead_m`, `lead_n`) in 64-row coin tiles, so a tile's position `8 r + c` is the word
 of its row `r` and column `c` (`tileOf_at`), and a coin tile's row blocks are `4 ct + a` for `a < 4`. A block that
 repeats a tile of its own has two row blocks `a < b` of its coin tile whose tiles agree (`withinAt_pair`), and a coin
-tile has at most `pairs` such pairs (`pairsAt_card`). A set of functions on `Fin 64` that agree off one 16-index block
-only when equal has at most `|X|^48` members (`card_le_of_block`).
+tile has at most `pairs` such pairs (`pairsAt_card`). A fiber count covers its event by pieces on each of which a map
+is injective (`card_filter_le_cover`): for a slot's bits, their values off one row block (`offBlock`).
 -/
 
 namespace Pouw.SecurityProofs.Lead.Tail
@@ -64,22 +64,35 @@ theorem withinAt_pair {L : Pouw.Lead.Layout} {κ : Fin L.m → Fin L.S → Fin L
     · simp only [pairsAt, mem_filter, mem_product, mem_range]; omega
     · simp only [e1, e2]; exact heq.symm
 
-/-- **Functions on `Fin 64` pinned by 48 of their values**: if two members of `A` that agree off block `b`'s 16
-indices are equal, `A` has at most `|X|^48` members. -/
-theorem card_le_of_block {X : Type} [Fintype X] (A : Finset (Fin 64 → X)) {b : ℕ} (hb : b < 4)
-    (h : ∀ v ∈ A, ∀ v' ∈ A, (∀ k : Fin 64, (k : ℕ) / 16 ≠ b → v k = v' k) → v = v') :
-    #A ≤ Fintype.card X ^ 48 := by
+/-- **A cover by pinned pieces**: if `P` holds only where some piece `Q i` (`i ∈ s`) does, and on each piece some map
+to `W` is injective, `P` holds on at most `|s| · |W|` points. Over a type as large as a slot's bits, the elaborator
+unfolds `Finset.univ` when it checks a membership in it, so the fiber counts reason through this lemma, about their
+pieces' predicates only. -/
+theorem card_filter_le_cover {V W I : Type} [Fintype V] [Fintype W] (P : V → Prop) [DecidablePred P] (s : Finset I)
+    (Q : I → V → Prop) (hP : ∀ v, P v → ∃ i ∈ s, Q i v)
+    (hQ : ∀ i ∈ s, ∃ f : V → W, ∀ v w, Q i v → Q i w → f v = f w → v = w) :
+    #(univ.filter P) ≤ #s * Fintype.card W := by
   classical
-  let idx : Fin 48 → Fin 64 := fun k => ⟨if (k : ℕ) < 16 * b then k else k + 16, by split_ifs <;> omega⟩
-  have hc := card_le_card_of_injOn (s := A) (t := univ) (fun v k => v (idx k)) (fun _ _ => mem_coe.2 (mem_univ _))
-    fun v hv v' hv' hvv => h v hv v' hv' fun k hk => by
-      have hk' : (if (k : ℕ) < 16 * b then (k : ℕ) else k - 16) < 48 := by split_ifs <;> omega
-      have e : idx ⟨_, hk'⟩ = k := by
-        refine Fin.ext ?_
-        simp only [idx]
-        split_ifs <;> omega
-      rw [← e]
-      exact congrFun hvv _
-  simpa only [card_univ, Fintype.card_fun, Fintype.card_fin] using hc
+  calc #(univ.filter P) ≤ #(s.biUnion fun i => univ.filter (Q i)) := card_le_card fun v hv => by
+        obtain ⟨i, hi, hq⟩ := hP v (mem_filter.1 hv).2
+        exact mem_biUnion.2 ⟨i, hi, mem_filter.2 ⟨mem_univ _, hq⟩⟩
+    _ ≤ ∑ i ∈ s, #(univ.filter (Q i)) := card_biUnion_le
+    _ ≤ ∑ _i ∈ s, Fintype.card W := sum_le_sum fun i hi => by
+        obtain ⟨f, hf⟩ := hQ i hi
+        rw [← card_univ]
+        exact card_le_card_of_injOn f (fun _ _ => mem_coe.2 (mem_univ _)) fun v hv w hw h =>
+          hf v w (mem_filter.1 hv).2 (mem_filter.1 hw).2 h
+    _ = #s * Fintype.card W := by rw [sum_const, smul_eq_mul]
+
+/-- A function on `Fin 64` off block `b`'s 16 indices. -/
+def offBlock {X : Type} (b : ℕ) (v : Fin 64 → X) : Fin 48 → X :=
+  fun k => v ⟨if (k : ℕ) < 16 * b then k else k + 16, by split_ifs <;> omega⟩
+
+theorem offBlock_eq {X : Type} {b : ℕ} (hb : b < 4) {v w : Fin 64 → X} (h : offBlock b v = offBlock b w)
+    (k : Fin 64) (hk : (k : ℕ) / 16 ≠ b) : v k = w k := by
+  have hk' : (if (k : ℕ) < 16 * b then (k : ℕ) else k - 16) < 48 := by split_ifs <;> omega
+  have := congrFun h ⟨_, hk'⟩
+  simp only [offBlock] at this
+  convert this using 2 <;> exact Fin.ext (by simp only; split_ifs <;> omega)
 
 end Pouw.SecurityProofs.Lead.Tail
