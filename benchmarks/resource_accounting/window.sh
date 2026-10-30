@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# The timed window's legs under one lease, from the run tree's root (--cwd clone: the PoUS and joint legs build Lean in it):
+# The timed window's legs under one lease, from the run tree's root (--cwd clone: the PoUS and hosted legs build Lean in it):
 #   GPU_LEASE_WHO=<id> LEGS=A,B,C,F [AT=<the booking's start, UTC> RELEASE='<its booking's text>'] \
 #     bash benchmarks/resource_accounting/window.sh
 # Each leg (`leg` below) is run.sh into $OUT/<leg> with that leg's env, and TUNED for the tuned arms:
-#  1. every leg's PHASE=prepare, over one scratch, on the CPUs: the ship, the PoUS verdict and the tagger, each built once; a
+#  1. every leg's PHASE=prepare, over one scratch, on the CPUs: the ship and the PoUS verdict, each built once; a
 #     leg whose preparation fails is dropped;
 #  2. at AT (the booked window's start, UTC; at once when unset or past), `gpu-lease $LEASE --max-min $MINUTES` (default
 #     `8 --wait --timed`, 60) with every host thread under `taskset -c $HOST_CPUS` (default 128-159) runs each leg's PHASE=gpu
@@ -30,8 +30,7 @@ leg() {
     A) echo "8 10 ARMS=$NATIVE,$PEARLS" ;;
     B) echo "5 7 ARMS=$NATIVE SIDECAR=1" ;;
     C) echo "6 8 SHAPES=o,down,cube8192 LENGTHS=8,128 ARMS=$NATIVE,$PEARLS" ;;
-    D) echo "9 11 JOINT=joint-v1 SHAPES=o BATCHES=1,128 ARMS=native-bf16,native-fp8 POUS_AUDITS=100 SMI_MS=10 ROUND_MIN=6" ;;
-    E) echo "20 21 JOINT=separate,inproc,joint SHAPES=o BATCHES=1,128 ARMS=native-bf16,native-fp8 POUS_AUDITS=100 ROUND_MIN=5" ;;
+    E) echo "20 21 JOINT=separate,inproc SHAPES=o BATCHES=1,128 ARMS=native-bf16,native-fp8 POUS_AUDITS=100 ROUND_MIN=5" ;;
     F) echo "7 9 POUS=1 POUS_IDLE=1 SHAPES=o BATCHES=1,128 ARMS=native-fp8,pearl-c" ;;
     *) return 1 ;;
   esac
@@ -75,7 +74,7 @@ if [ "${1:-}" = inside ]; then
 fi
 
 S=$(mktemp -d /workspace/tmp/ra-window.XXXXXX); trap 'rm -rf "$S"' EXIT
-for l in ${LEGS//,/ }; do leg "$l" > /dev/null || { stamp "RUN_FAIL_LEGS: no leg $l (A to F)"; exit 2; }; done
+for l in ${LEGS//,/ }; do leg "$l" > /dev/null || { stamp "RUN_FAIL_LEGS: no leg $l (A, B, C, E or F)"; exit 2; }; done
 git rev-parse HEAD > "$OUT/tree.txt"
 stamp "legs $LEGS: preparing"
 ready=()

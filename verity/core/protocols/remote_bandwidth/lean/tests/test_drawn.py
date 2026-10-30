@@ -1,5 +1,5 @@
-"""`audit.Session` held to the remote audit's verifier in Lean (the definition) on drawn sessions: honest ones of a drawn
-shape (windows, passes, appends, releases, plans sent whole or as changes, steps, samples), and recorded ones
+"""`audit.AuditRun` held to the remote audit's verifier in Lean (the definition) on drawn sessions: honest ones of a
+drawn shape (windows, passes, appends, releases, plans sent whole or as changes, steps, samples), and recorded ones
 (`ra_cases.SCENARIOS`) with one or two edits, each to an event (dropped, repeated, swapped with the next, or one of its
 fields changed: a clock reading, an index, a step, a run, a root, an opening's byte or path) or to the case (a
 parameter, a coin, the registration). An edit may make an honest session dishonest, a dishonest one fail elsewhere, or the case one that both

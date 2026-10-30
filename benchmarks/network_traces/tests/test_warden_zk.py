@@ -6,11 +6,16 @@ member's statement is accepted or refused by the host's read of Lean's registere
 (sender and receiver accepted; unsigned and altered by their rows; pad and swapped, made for other units' wiring, by
 their value, swapped at the Program's own rows; pad-named, under the Program's value, by its row's position); the
 scan's public pieces hold every pad the warden wrote, pad's read among them, and none of the Program's cells; the toy
-unit is the identity on a row's bits. Nothing here lowers or proves (`warden_zk.prove` does, on a node)."""
+unit is the identity on a row's bits. Lean's statement setup (`flock-verify statement`, the verifier's checks before
+any proof, `Registered.checkComplete` among them) holds staged members to the verifier's registered reads of every
+port. Nothing here proves (`warden_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
 import importlib.util
+import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -38,6 +43,35 @@ def _load():
 
 wz = _load()
 UNITS = 8
+LEAN = HERE.parents[1] / "verity" / "core" / "service" / "flock"
+#: the Lean verifier, which check builds before this suite (`AFTER_LEAN`)
+needs_lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+
+
+def flock_verify() -> Path:
+    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    return LEAN / ".lake" / "build" / "bin" / "flock-verify"
+
+
+def statement(m: dict, tmp: Path, *, ports: dict | None = None, header: tuple[str, ...] | None = None) -> tuple[int, str]:
+    """Lean's statement setup of member m's staged statement, held to the verifier's own registered reads (its
+    ``registered_file``, or `ports`, `{port: port}`), with the public file's header naming registered only the ports
+    `header` lists, when given: its exit code and its line."""
+    pub, reads = m["dir"] / f"pub-{m['n']}.bin", m["registered_file"]
+    if header is not None:
+        head, body = pub.read_bytes().split(b"\n", 1)
+        h = json.loads(head)
+        h["registered"] = {p: e for p, e in h["registered"].items() if p in header}
+        pub = tmp / pub.name
+        pub.write_bytes(json.dumps(h, sort_keys=True).encode() + b"\n" + body)
+    if ports is not None:
+        reads = tmp / "registered.json"
+        reads.write_text(json.dumps(WR.reads_file(ports), sort_keys=True))
+    p = subprocess.run([str(flock_verify()), "statement", "--statement", "verity/flock-circuit", "--circuit",
+                        str(m["dir"] / "circuit.txt"), "--public", str(pub), "--partition", str(m["partition_file"]),
+                        "--program", str(m["program_file"]), "--registered", str(reads)],
+                       capture_output=True, text=True, check=False)
+    return p.returncode, (p.stdout.strip() or p.stderr.strip())
 
 
 @pytest.fixture(scope="module")
@@ -129,3 +163,41 @@ def test_the_toy_unit_is_the_identity_on_a_rows_bits(at):
     bits = np.asarray([[(row[k // 8] >> (k % 8)) & 1 for k in range(8 * len(row))]], dtype=np.uint8)
     assert np.asarray(evaluate_bits(defn, bits)).reshape(-1).tolist() == bits.reshape(-1).tolist()
     assert defn.gates > 0
+
+
+def reads_of(m: dict) -> dict:
+    return json.loads(m["registered_file"].read_text())["ports"]
+
+
+@pytest.fixture(scope="module")
+def staged(at, tmp_path_factory):
+    """The sender's, receiver's and altered's statements, staged as `warden_zk.prove` stages them."""
+    M = wz._statement()
+    sg = wz.stager(M, WR.row_bytes(tws.PARAMS), UNITS, tmp_path_factory.mktemp("warden-zk-stager"))
+    return sg, {name: wz.stage(M, sg, at, name) for name in ("sender", "receiver", "altered")}
+
+
+@pytest.mark.slow
+@needs_lean
+def test_lean_holds_every_port_of_each_members_statement_to_the_verifiers_registered_reads(at, staged, tmp_path):
+    """Lean's statement setup, `Registered.checkComplete` with it: sender and receiver pass under the verifier's file,
+    which names both ports, the warden's at its root and the other at the member's committed value; altered fails at the
+    warden's port; the sender's statement shaped as before every port was registered (its row port's rows stated by the
+    public file) fails for the port it leaves out; and a row port at a value committed afresh, under other salts, fails
+    at its rows. The host reads above only mirror Lean: this holds the staged files to the checks the verifier runs, so
+    a staging or a refusal that drifts from Lean's fails here (lowering the unit takes about 20 s)."""
+    sg, ms = staged
+    for name in ("sender", "receiver"):
+        rc, line = statement(ms[name], tmp_path)
+        assert rc == 0, (name, line)
+        own = reads_of(ms[name])
+        assert sorted(own) == sorted(wz.PORTS)
+        assert {p: f["root"] for p, f in json.loads(line)["registered"].items()} == {p: e["root"] for p, e in own.items()}
+    rc, line = statement(ms["altered"], tmp_path)
+    assert rc == 1 and line.startswith("setup: registered reads: port o0: table row 0 does not open"), line
+    sender, own = ms["sender"], reads_of(ms["sender"])
+    rc, line = statement(sender, tmp_path, ports={"o0": own["o0"]}, header=("o0",))
+    assert rc == 1 and line.startswith("setup: registered reads (complete): the statement's port row is no port"), line
+    afresh = wz.committed_value(sg.program_sha512, at.head, "row", [WR.words(r) for r in sender["rows"]])
+    rc, line = statement(sender, tmp_path, ports=own | {"row": wz.value_port(afresh, sg.base)})
+    assert rc == 1 and line.startswith("setup: registered reads: port row: table row 0 does not open"), line
