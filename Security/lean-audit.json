@@ -11384,8 +11384,7 @@
   "Verity.SecurityProofs.SampleAfterRecorded_honest": {
    "owner": "@soundness",
    "signature": [
-    "Verity.SecurityProofs.SampleAfterRecorded_honest {U : Type} (L : Verity.Law U)",
-    "  (bad : Verity.Challenger.Log L.Ω L.Ω → Finset U) (K : Nat) :",
+    "Verity.SecurityProofs.SampleAfterRecorded_honest :",
     "  And",
     "    (Verity.Assumptions.ChallengerLogsCoins fun ω =>",
     "      List.cons (Verity.Challenger.Entry.released (ω 0))",
@@ -11408,48 +11407,84 @@
     "                (Eq (List.instGetElem?NatLtLength.getElem? (List.cons (ω 0) (List.cons (ω 1) List.nil)) 1)",
     "                  (Option.some c))",
     "                (And",
-    "                  (instLENat.le K",
-    "                    (bad",
+    "                  (instLENat.le 1",
+    "                    (List.map (fun x => x.not)",
+    "                          (Verity.Challenger.Log.before",
+    "                              (List.cons (Verity.Challenger.Entry.released (ω 0))",
+    "                                (List.cons (Verity.Challenger.Entry.recorded (ω 0))",
+    "                                  (List.cons (Verity.Challenger.Entry.released (ω 1)) List.nil)))",
+    "                              1).coins).toFinset.card)",
+    "                  (Disjoint",
+    "                    ({ Ω := Bool, fintype := Bool.fintype, nonempty := ⋯,",
+    "                          draw := fun c => Finset.instSingleton.singleton c }.draw",
+    "                      c)",
+    "                    (List.map (fun x => x.not)",
     "                        (Verity.Challenger.Log.before",
-    "                          (List.cons (Verity.Challenger.Entry.released (ω 0))",
-    "                            (List.cons (Verity.Challenger.Entry.recorded (ω 0))",
-    "                              (List.cons (Verity.Challenger.Entry.released (ω 1)) List.nil)))",
-    "                          1)).card)",
-    "                  (Disjoint (L.draw c)",
-    "                    (bad",
-    "                      (Verity.Challenger.Log.before",
-    "                        (List.cons (Verity.Challenger.Entry.released (ω 0))",
-    "                          (List.cons (Verity.Challenger.Entry.recorded (ω 0))",
-    "                            (List.cons (Verity.Challenger.Entry.released (ω 1)) List.nil)))",
-    "                        1)))))",
-    "          (L.miss K))))"
+    "                            (List.cons (Verity.Challenger.Entry.released (ω 0))",
+    "                              (List.cons (Verity.Challenger.Entry.recorded (ω 0))",
+    "                                (List.cons (Verity.Challenger.Entry.released (ω 1)) List.nil)))",
+    "                            1).coins).toFinset)))",
+    "          ({ Ω := Bool, fintype := Bool.fintype, nonempty := ⋯, draw := fun c => Finset.instSingleton.singleton c }.miss",
+    "            1))))"
    ],
    "assumptions": [],
-   "type_hash": "dc5a91ec5527363d291a05283eed58a9f88b010b083723cecf94e32965b6317c"
+   "type_hash": "3b6eab4f5fb34bafe12c924de19b7ebb2df302861e6c1e43e77c6edfe5e0af8a"
   },
   "Verity.SecurityProofs.SampleAfterRecorded_nontrivial": {
    "owner": "@soundness",
    "signature": [
     "Verity.SecurityProofs.SampleAfterRecorded_nontrivial :",
-    "  Exists fun L =>",
-    "    Exists fun log =>",
-    "      Exists fun vc =>",
-    "        Exists fun bad =>",
-    "          And (Verity.Assumptions.ChallengerLogsCoins log)",
-    "            (And (Verity.Assumptions.VerifierReadsLog vc log)",
-    "              (And (Not (Verity.Assumptions.FlipsAfterRecorded log))",
-    "                (ENNReal.instPartialOrder.lt (L.miss 1)",
-    "                  (Verity.Game.prCoin fun ω =>",
-    "                    Exists fun c =>",
-    "                      And (Eq (List.instGetElem?NatLtLength.getElem? (vc ω) 0) (Option.some c))",
-    "                        (And (instLENat.le 1 (bad ((log ω).before 0)).card)",
-    "                          (Disjoint (L.draw c) (bad ((log ω).before 0))))))))"
+    "  Not",
+    "    (ENNReal.instLE.le",
+    "      (Verity.Game.prCoin fun ω =>",
+    "        Exists fun c =>",
+    "          And (Eq (List.instGetElem?NatLtLength.getElem? (List.cons (ω 0) List.nil) 0) (Option.some c))",
+    "            (And",
+    "              (instLENat.le 1",
+    "                (ite",
+    "                    (List.instMembership.mem",
+    "                      (Verity.Challenger.Log.before",
+    "                        (List.cons (Verity.Challenger.Entry.recorded (ω 0).not)",
+    "                          (List.cons (Verity.Challenger.Entry.released (ω 0)) List.nil))",
+    "                        0)",
+    "                      (Verity.Challenger.Entry.recorded Bool.true))",
+    "                    (Finset.instSingleton.singleton Bool.true) (Finset.instSingleton.singleton Bool.false)).card)",
+    "              (Disjoint",
+    "                ({ Ω := Bool, fintype := Bool.fintype, nonempty := ⋯,",
+    "                      draw := fun c => Finset.instSingleton.singleton c }.draw",
+    "                  c)",
+    "                (ite",
+    "                  (List.instMembership.mem",
+    "                    (Verity.Challenger.Log.before",
+    "                      (List.cons (Verity.Challenger.Entry.recorded (ω 0).not)",
+    "                        (List.cons (Verity.Challenger.Entry.released (ω 0)) List.nil))",
+    "                      0)",
+    "                    (Verity.Challenger.Entry.recorded Bool.true))",
+    "                  (Finset.instSingleton.singleton Bool.true) (Finset.instSingleton.singleton Bool.false)))))",
+    "      ({ Ω := Bool, fintype := Bool.fintype, nonempty := ⋯, draw := fun c => Finset.instSingleton.singleton c }.miss 1))"
    ],
    "assumptions": [],
-   "type_hash": "0a0d2cf2d114fd42f47757951d0c484436447b2716e0fa51a0098ff033328483"
+   "type_hash": "430dc81409e889548eaad6f48704f86999542d81c0971c4f288cc768cd1dff14"
   },
   "Verity.SecurityProofs.SampleAfterRecorded_nontrivial_log": {
-   "owner": "@soundness"
+   "owner": "@soundness",
+   "signature": [
+    "Verity.SecurityProofs.SampleAfterRecorded_nontrivial_log :",
+    "  And",
+    "    (Verity.Assumptions.ChallengerLogsCoins fun ω =>",
+    "      List.cons (Verity.Challenger.Entry.recorded (ω 0).not)",
+    "        (List.cons (Verity.Challenger.Entry.released (ω 0)) List.nil))",
+    "    (And",
+    "      (Verity.Assumptions.VerifierReadsLog (fun ω => List.cons (ω 0) List.nil) fun ω =>",
+    "        List.cons (Verity.Challenger.Entry.recorded (ω 0).not)",
+    "          (List.cons (Verity.Challenger.Entry.released (ω 0)) List.nil))",
+    "      (Not",
+    "        (Verity.Assumptions.FlipsAfterRecorded fun ω =>",
+    "          List.cons (Verity.Challenger.Entry.recorded (ω 0).not)",
+    "            (List.cons (Verity.Challenger.Entry.released (ω 0)) List.nil))))"
+   ],
+   "assumptions": [],
+   "type_hash": "77c78883f3746176207714172f88f436d115babd37d7333947e36dd85955835f"
   },
   "Verity.SecurityProofs.ServingBlockSum": {
    "owner": "@lean",
@@ -18953,7 +18988,7 @@
    "guarantees": [
     "Verity.SecurityProofs.SampleAfterRecorded",
     "Verity.SecurityProofs.SampleAfterRecorded_honest",
-    "Verity.SecurityProofs.SampleAfterRecorded_nontrivial"
+    "Verity.SecurityProofs.SampleAfterRecorded_nontrivial_log"
    ]
   },
   "Definitions.Core.Boolean": {
@@ -19044,7 +19079,8 @@
    "guarantees": [
     "Verity.SecurityProofs.SampleAfterRecorded",
     "Verity.SecurityProofs.SampleAfterRecorded_honest",
-    "Verity.SecurityProofs.SampleAfterRecorded_nontrivial"
+    "Verity.SecurityProofs.SampleAfterRecorded_nontrivial",
+    "Verity.SecurityProofs.SampleAfterRecorded_nontrivial_log"
    ]
   },
   "Definitions.Core.Circuit": {
