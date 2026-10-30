@@ -99,7 +99,7 @@ theorem auditChecks_getElem? {p : Params} {c : Commitment} {e : Evidence} {i : �
 /-- On acceptance in the rows form, every audit's finding is its facts. -/
 theorem auditChecks_ok {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
     {s : Schedule} {sd : ByteArray} {scan : Scan} (hform : p.form = .rows s sd scan)
-    (h : check p c e = .accept pub prof) : ∀ y ∈ auditChecks p c e, ∃ f, y = .ok f := by
+    {bs : Core.Blobs} (h : check p c e bs = .accept pub prof) : ∀ y ∈ auditChecks p c e, ∃ f, y = .ok f := by
   intro y hy
   unfold check at h
   split at h
@@ -165,8 +165,8 @@ theorem auditCheck_tied_whole {i : ℕ} {a : Audit} {reg : Registration} {x : Co
       by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
         by_cases c2 : g.units = a.units <;> simp_all [refuse, pure, Except.pure]
 
-theorem check_sizes {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
-    (h : check p c e = .accept pub prof) : c.audits.size = p.audits.size := by
+theorem check_sizes {p : Params} {c : Commitment} {e : Evidence} {bs : Core.Blobs} {pub : Public} {prof : Profile}
+    (h : check p c e bs = .accept pub prof) : c.audits.size = p.audits.size := by
   unfold check at h
   split at h
   · cases h
@@ -177,7 +177,7 @@ theorem check_sizes {p : Params} {c : Commitment} {e : Evidence} {pub : Public} 
   exact hs hc
 
 theorem rowsTiedDrawn : RowsTiedDrawn := by
-  intro p c e pub prof h s sd scan hform i reg x hreg hx htied
+  intro p c e bs pub prof h s sd scan hform i reg x hreg hx htied
   obtain ⟨hlt, -⟩ := Array.getElem?_eq_some_iff.mp hreg
   have hi : i < p.audits.size := by rw [← check_sizes h]; exact hlt
   have hget := auditChecks_getElem? (Array.getElem?_eq_getElem hi) hreg hx
@@ -214,8 +214,8 @@ theorem rowsTiedDrawn_nontrivial : ¬ RowsTiedDrawnOf acceptAllRows := by
   intro h
   let s : Schedule := ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
   let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0⟩, 1⟩
-  obtain ⟨prof, pub, f, ha, -, -⟩ := h p ⟨#[tiedAudit], #[tiedWindow], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl s .empty
-    ⟨0, 0, 0, 0⟩ rfl 0 tiedAudit otherAnswer rfl rfl tiedWindow_ties
+  obtain ⟨prof, pub, f, ha, -, -⟩ := h p ⟨#[tiedAudit], #[tiedWindow], .empty⟩ ⟨#[otherAnswer], #[]⟩ .empty _ _ rfl s
+    .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedAudit otherAnswer rfl rfl tiedWindow_ties
   have := otherAnswer_refused
   rw [ha] at this
   simp [Except.toBool] at this
@@ -228,7 +228,7 @@ theorem wiredChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : 
   simp [wiredChecks, hform, Array.getElem?_zipIdx, hreg]
 
 theorem rowsProgWired : RowsProgWired := by
-  intro p c e pub prof h s sd scan hform i reg hreg
+  intro p c e bs pub prof h s sd scan hform i reg hreg
   have hmem := Array.mem_of_getElem? (wiredChecks_getElem? hform hreg)
   unfold check at h
   split at h
@@ -277,7 +277,7 @@ theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
   have hw : wired #[] slotSchedule #[] tiedWindow = true :=
-    h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
+    h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ .empty _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
   rw [tiedWindow_unwired] at hw
   cases hw
 
@@ -298,7 +298,8 @@ theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
   let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
     .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
   have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedWindow = true :=
-    h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
+    h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ .empty _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedWindow
+      rfl
   rw [renamedAudit_unwired] at hw
   cases hw
 
@@ -310,7 +311,7 @@ theorem stateChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : 
   simp [stateChecks, hform, Array.getElem?_zipIdx, hreg]
 
 theorem rowsStateTied : RowsStateTied := by
-  intro p c e pub prof h s sd scan hform i reg hreg
+  intro p c e bs pub prof h s sd scan hform i reg hreg
   have hmem := Array.mem_of_getElem? (stateChecks_getElem? hform hreg)
   unfold check at h
   split at h
@@ -369,8 +370,8 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
   have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = true :=
-    h p ⟨#[stateReg "t"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 stateWindow
-      rfl
+    h p ⟨#[stateReg "t"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ .empty _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0
+      stateWindow rfl
   rw [stateWindow_skipped] at hs
   cases hs
 

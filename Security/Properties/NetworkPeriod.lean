@@ -74,15 +74,15 @@ def DrawnWhole (i : ℕ) (reg : Registration) (x : Core.Answer) : Prop :=
 audit some link-window's scan's `prog` is an output of (`tiedIn` over the commitment's registrations) drew every unit
 (`DrawnWhole`): `rowsTerms` charges such an audit's free inputs to its link-window and no faulty term for it. -/
 def RowsTiedDrawn : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pub : Public) (prof : Profile),
+    check p c e bs = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
       ∀ (i : ℕ) (reg : Registration) (x : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some x →
         tiedIn c.audits c.windows i = true → DrawnWhole i reg x
 
 /-- `RowsTiedDrawn` of any period check. -/
-def RowsTiedDrawnOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+def RowsTiedDrawnOf (chk : Params → Commitment → Evidence → Core.Blobs → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pub : Public) (prof : Profile),
+    chk p c e bs = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
       ∀ (i : ℕ) (reg : Registration) (x : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some x →
         tiedIn c.audits c.windows i = true → DrawnWhole i reg x
 
@@ -93,14 +93,14 @@ domain of an audit's entries port, `<descriptor id>/c0/o0` of a template node of
 another body is refused), with one member a slot of the window (`wired`), so each slot's entry, read bit included, is
 one its Program computed. -/
 def RowsProgWired : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pub : Public) (prof : Profile),
+    check p c e bs = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
       ∀ (i : ℕ) (reg : Registration), c.windows[i]? = some reg → wired p.audits s c.audits reg = true
 
 /-- `RowsProgWired` of any period check. -/
-def RowsProgWiredOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+def RowsProgWiredOf (chk : Params → Commitment → Evidence → Core.Blobs → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pub : Public) (prof : Profile),
+    chk p c e bs = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
       ∀ (i : ℕ) (reg : Registration), c.windows[i]? = some reg → wired p.audits s c.audits reg = true
 
 /-- **The rows form accepts no link-window whose scan's state is not its wired audit's `SCAN_STATE`.** If the check
@@ -111,20 +111,20 @@ scan's units read their state at that root and register the state their transiti
 slot's Program reads is the scan's, and a `SCAN_STATE` that skips or alters a transition, at another root or domain, is
 refused. -/
 def RowsStateTied : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pub : Public) (prof : Profile),
+    check p c e bs = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
       ∀ (i : ℕ) (reg : Registration), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
 
 /-- `RowsStateTied` of any period check. -/
-def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Blobs → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pub : Public) (prof : Profile),
+    chk p c e bs = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
       ∀ (i : ℕ) (reg : Registration), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
 `RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsTiedDrawn`, `RowsProgWired` and
 `RowsStateTied` to say something. -/
-def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
+def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) (_ : Core.Blobs) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
 
 end Properties.NetworkPeriod
