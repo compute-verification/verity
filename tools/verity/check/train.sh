@@ -28,10 +28,11 @@
 # --combine` joins with the other N-1 into the commit's check.
 #
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
-# temporary credential, which cannot mint the run's custody key, a shell that skips the store-backed tests, and a COMMIT that is
-# empty (its tree is its base's: where it leaves origin/main, or its parent for a commit on main) or that origin doesn't hold.
+# temporary credential, which cannot mint the run's custody key, a shell with a debug or unknown check setting (`settings.py
+# --of-record`: one that skips the store-backed tests), and a COMMIT that is empty (its tree is its base's: where it leaves
+# origin/main, or its parent for a commit on main) or that origin doesn't hold.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
 pass=() deferred= nocache= ccache= noregen= shard= below=
 while [ $# -gt 0 ]; do
@@ -63,7 +64,9 @@ done
 [ -z "$ccache" ] || pass+=(--circuit-cache)
 [ -z "$noregen" ] || pass+=(--no-regenerate)
 [ -z "$shard" ] || pass+=(--shard "$shard")
-[ -z "${VERITY_SKIP_STORE:-}" ] || { echo "train: VERITY_SKIP_STORE is set; a recorded train runs the store-backed tests" >&2; exit 1; }
+# the tree's settings.py first: drive runs a copy of this script from outside the tree (`drive.detach`)
+settings=tools/verity/check/settings.py; [ -f "$settings" ] || settings="$(dirname "$0")/settings.py"
+python3 "$settings" --of-record || { echo "train: a recorded train takes no debug or unknown check setting" >&2; exit 1; }
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
 [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${R2_ENDPOINT:-}" ] || { echo "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)" >&2; exit 1; }
 # From here a launch that registers no run says so in the merge thread, with the reason and the log's last lines, as well as
