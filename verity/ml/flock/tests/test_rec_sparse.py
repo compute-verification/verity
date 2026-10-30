@@ -1,5 +1,5 @@
-"""`verity_flock.rec_sparse`, V*'s sparse phase (F4 candidate 3): an honest prover written from the design note (§1.3 and §5.4
-"10 Oct, 10:00Z") runs a rep of a session of S slots of hidden types over a stacked table of T random templates, from the
+"""`verity_flock.rec_sparse`, V*'s sparse phase (the opening-only candidate): an honest prover written from its design
+runs a rep of a session of S slots of hidden types over a stacked table of T random templates, from the
 hidden matrix's comb to the registered claim, and the reference accepts it; a forged round message, a wrong registered
 claim, a slot's type swapped for another and a type outside the bucket are refused; the Definition computes the reference
 bit for bit, honest and forged; and its ANDs are the products' 2,187 each and the selects'."""
