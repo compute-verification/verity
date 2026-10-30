@@ -1,6 +1,7 @@
 """`research queue`: the merge queue.  `next` is `checked` (drive.toml's `land_into`: `Queue.into`) plus every
 admitted PR, one merge commit each, in the order they were admitted.  Drive (`research.drive`) fast-forwards `checked` to the top
-of the longest prefix of `next` whose every member has a reviewer's land verdict at its head, and `main` to a commit of `checked`
+of the longest prefix of `next` whose every member has a reviewer's land verdict at its head, merges onto `checked` each member
+whose merge changes no Lean, lock or soundness-path file (drive.toml's `lowrisk_lane`) on its ready mark alone, and `main` to a commit of `checked`
 only once that commit's after-landing run, the full check, passed every step on the merge gate (not circuit-check, ci.toml's
 `gate = false`): `main` holds only tested commits.
 
