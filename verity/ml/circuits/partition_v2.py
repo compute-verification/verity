@@ -3,7 +3,7 @@
 In v1 (`partition_object`) the partition is a query the verifier evaluates on a circuit it holds.  In v2 the circuit and its
 partition are the prover's: the partition is *advice*, fixed-width rows committed before any coin (hm96-sha512 hiding rows in one
 frame-v3-sha512 tree, `verity.ml.commitments.advice`), and the verifier holds only a statement naming the predicates the
-advice must satisfy.  A proof shows them (the global predicates once per registration, the local ones with each drawn unit);
+advice must satisfy.  A proof shows them (the global predicates once per registration, the local ones with each sampled proof block);
 this module is the reference both statements are checked against.
 
 **Statement** (public; `statement`, `validate`, `digest` = `SHA-512("verity/partition/v2\\0" || canon(statement))`)::
@@ -58,7 +58,7 @@ the header's count up to R_b are all 0.
 A width, a covering or a count that a consumer's weighting relies on must hold for every unit, faulty or not; only these global
 predicates give that.  Instances of a Definition are laid out identically, so a check per entry is a check of every activation.
 
-**Local predicates** (`check_unit`, with drawn unit i; `openings` lists the rows it reads):
+**Local predicates** (`check_unit`, with sampled proof block i; `openings` lists the rows it reads):
 
 * L1 Locate: the header, the Call rows a bisection reads, the directory rows and parts rows down the path, then the flat entry's
   owner rows and the unit's shape row [unit-outside, unit-locate]; a filler (n <= i < n_b) is empty.  The rows read depend on
@@ -971,7 +971,7 @@ def _roots(program: Any, a: Activation, base: int, uc: UnitCircuit) -> dict[int,
 
 def check_unit(st: Mapping[str, Any], read: Callable[[int], bytes], i: int, program: Any, values: Mapping[int, int],
                acts: dict | None = None) -> CutVerdict:
-    """L1-L4 for drawn unit `i`: located and cut (`unit`), then its gates recomputed from the committed values `values` (root gate
+    """L1-L4 for sampled proof block `i`: located and cut (`unit`), then its gates recomputed from the committed values `values` (root gate
     -> value) at its inputs and compared with them at its outputs (`unit-incorrect`: the root gates that differ)."""
     try:
         U = unit(st, read, i, program, acts)

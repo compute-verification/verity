@@ -30,7 +30,7 @@ from verity.ml.crypto import lms
 
 COUNT = 600
 #: (N, W, toy) of every parameter set `Params` admits, by weight: verification at N = 64, W = 8 takes about 8,000 hashes,
-#: so it is drawn least
+#: so it is sampled least
 SETS = [((64, 1, False), 30), ((64, 2, False), 12), ((64, 4, False), 10), ((64, 8, False), 1), ((8, 1, True), 8),
         ((8, 2, True), 6), ((8, 4, True), 6), ((8, 8, True), 4)]
 HEIGHTS = {8: [1, 2], 4: [1, 2, 3], 2: [1, 2, 3, 5], 1: [1, 2, 3, 5]}

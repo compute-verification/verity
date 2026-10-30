@@ -81,6 +81,8 @@ import Proofs.Pouw.Period.Honest
 import Proofs.Pouw.Period.Sort
 import Proofs.Pouw.PeriodJ10R
 import Proofs.Pouw.PeriodJ10R.Honest
+import Proofs.Pouw.PeriodJ10R.Nontrivial
+import Proofs.Pouw.PeriodJ10R.Stratum
 import Proofs.Pouw.ServedValues
 import Proofs.Pouw.ServedValues.Honest
 import Proofs.Pouw.PearlC

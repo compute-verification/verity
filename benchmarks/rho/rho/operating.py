@@ -2,15 +2,15 @@
 the registry).
 
 * **Work** (`work.<name>.flops`, reference-algorithm FLOPs, `T_0` gates through `hardware.Units`): the inventory does it
-  in at least the overhead times `T_0 / Φ_total` seconds at the overhead's lower bound, and in that at the best known
-  attack's (`Scenario.seconds`, the idealized normalization); the reference itself in `T_0 / (MFU₀ Φ_total)`
-  (`unencumbered`, at the training MFU), and the dark leaves alone in `T_0 / (mfu_dark ε_dark Φ_total)`.
+  in at least the overhead times `T_0 / (MFU₀ Φ_total)` seconds at the overhead's lower bound, and in that at the best
+  known attack's (`Scenario.seconds`); the reference itself in `T_0 / (mfu_train Φ_total)` (`unencumbered`), and the
+  dark leaves alone in `T_0 / (mfu_dark ε_dark Φ_total)`.
 * **Exfiltration** (`exfil.<name>.bits`): onsite, what monitored locations produce reaches the dark leaves only through
   the channels no certifier reads (the certifier's `timing` and `side` bit/s per host, times the location's hosts;
-  certified egress is the declared circuit's output, fixed by its registered inputs), from one location or from every
+  certified egress is the registered circuit's output, fixed by its registered inputs), from one location or from every
   location at once. Remotely nothing bounds it (0 s).
 * **Faulty outputs** (`faulty.*`): a block the sampled proofs let go unchecked returns outputs the adversary chose, in
-  certified egress, in either regime. Each faulty step carries `step_bits` and is drawn with chance `q`, and a drawn one
+  certified egress, in either regime. Each faulty step carries `step_bits` and is sampled with chance `q`, and a drawn one
   ends its identity, so time doesn't bound the channel; detection does. Its row gives the bits it carries before the
   first detection, except with chance `δ`, and the chance of detection moving each reference.
 """
@@ -46,8 +46,8 @@ def work(result: Result, flops: float) -> dict[str, float]:
     f, phi = s.context.fleet, s.total_phi
     gates = s.context.units.gates(flops)
     dark = f.eps_dark * f.dark_mfu * phi
-    return {"unencumbered": gates / (f.mfu_train * phi), "lower bound": result.lo * gates / phi,
-            "best attack": result.attack * gates / phi, "dark pool": gates / dark if dark > 0 else math.inf}
+    return {"unencumbered": gates / (f.mfu_train * phi), "lower bound": result.lo * gates / (s.mfu * phi),
+            "best attack": result.attack * gates / (s.mfu * phi), "dark pool": gates / dark if dark > 0 else math.inf}
 
 
 def exfil(scenario: Scenario, bits: float) -> dict[str, float]:
@@ -68,7 +68,7 @@ class Faulty:
     delta: float
     #: the output bits a faulty step chooses
     step_bits: float
-    #: steps in a class drawn at a floor of one
+    #: steps in a class sampled at a floor of one
     floor_steps: float
     identities: float = 1.0
 
@@ -89,7 +89,7 @@ class Row:
     capacity: float
     #: the chance of detection, by exfiltration reference
     detect: Mapping[str, float]
-    #: the draw rate per step and the reporting confidence it was taken at
+    #: the sample rate per step and the reporting confidence it was taken at
     q: float = 0.0
     delta: float = math.nan
 
