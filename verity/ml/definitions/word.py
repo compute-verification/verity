@@ -438,8 +438,7 @@ def _cache_rule(fn: Any, X: int, W: int, extras: int, limits: dict[str, int], ru
     os.replace(tmp, path)
 
 
-def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict | None = None, max_gates: Limits = None,
-              graphs: dict | None = None) -> dict[str, Any]:
+def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict | None = None, max_gates: Limits = None, graphs: dict | None = None) -> dict[str, Any]:
     """One Definition specialization under `Q_word_v1{X,W}`: {"definition", "query", "gates", "units_per_call", "by_kind",
     "committed_interior_words", "max_out_bits", "classes", "violations"}.  A class groups units by kind, the primitive and the
     activation of their first boundary gate, gates per unit and |out(S)|; `count` is units per Call, `nodes` the primitives of one
@@ -478,8 +477,7 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
         rule = _finish(fn.id, fn.gates, [], [], X, W, extras)
         rule["violations"] = [{"definition": fn.id, "class": "too-large", "gates": fn.gates, "limit": limit}]
     else:
-        G = Graph(fn)
-        R = units(G, X, W, extras)
+        R = units(G := Graph(fn), X, W, extras)
         if graphs is not None:
             graphs[fn.id] = (G, R)
         cut = R["cut"]
@@ -505,8 +503,7 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
                 ibits[(c["scope"], c["head"])] += c["out_bits"] * c["count"]
         rule = _finish(fn.id, G.total, classes, [{"scope": s, "head": p, "words": w, "bits": ibits[(s, p)]} for (s, p), w in interior.most_common()],
                        X, W, extras)
-        rule["free_gates"] = G.free
-        rule["free_by_prim"] = dict(G.free_by_prim.most_common(8))
+        rule["free_gates"], rule["free_by_prim"] = G.free, dict(G.free_by_prim.most_common(8))
         rule["redundant_gates"] = cut.detail["redundant_gates"]
         if not cut.ok:
             rule["violations"].append({"definition": fn.id, "class": "cut", "codes": list(cut.codes), "detail": cut.detail})
