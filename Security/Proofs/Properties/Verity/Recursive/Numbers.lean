@@ -95,7 +95,7 @@ set_option maxHeartbeats 4000000 in
 count `n` the shape reads, and its regions. -/
 theorem setupHidden_shape {st : Flock.Stmt}
     (h : Flock.Stmt.setupHidden tags cf pf coins tables draw partition program publicInputs = .ok st) :
-    ∃ pi pop A B, HmOut.parse tags cf tables = .ok st.c ∧ HmIn.parse st.c = .ok pi ∧
+    ∃ pi pop A B, HmOut.parseCommit tags cf tables = .ok st.c ∧ HmIn.parse st.c = .ok pi ∧
       HmIn.loadPublic tags st.c pi pf = .ok pop ∧ (draw = none → st.pub = pop) ∧
       (∀ d, draw = some d → HmIn.drawn st.c pi pop d = .ok st.pub) ∧ st.n = st.pub.n ∧
       st.m = st.c.kLog + max 3 (log2ceil (max ((st.n + st.c.g - 1) / st.c.g) 1)) ∧
@@ -222,7 +222,7 @@ def nOf (r : XR) (s : ℕ) : Option Json → Option ℕ
 theorem side {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {i : RecIns}
     {spec : SessionSpec} {sts : Array Flock.Stmt} (h : setupO (staged st x ms s) = some (i, spec, sts)) :
     ∃ r t, readX x = some r ∧ spec = t.spec ∧ sts = #[t] ∧
-      HmOut.parse i.base.read.tags i.base.read.I.circuitFile i.base.read.I.tables = .ok t.c ∧
+      HmOut.parseCommit i.base.read.tags i.base.read.I.circuitFile i.base.read.I.tables = .ok t.c ∧
       some t.n = nOf r s i.base.read.draw ∧
       (∃ pi B, HmIn.parse t.c = .ok pi ∧ HmIn.regions t.c pi t.pub = .ok B ∧
         t.regions.size = t.c.ports.size + B.size) ∧
