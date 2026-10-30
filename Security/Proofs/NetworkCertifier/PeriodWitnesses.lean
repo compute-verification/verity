@@ -83,10 +83,10 @@ theorem tiedIncorrectBlocksLe_uniform_none (n k : ℕ) (hk : k ≤ n) (F : ℕ) 
   have : Nonempty {S : Finset (Fin n) // S.card = k} := Fintype.card_pos_iff.1 (by
     rw [Fintype.card_finset_len, Fintype.card_fin]
     exact Nat.choose_pos hk)
-  exact tiedIncorrectBlocksLe_of_samples Set.univ _ (fun _ => n) (fun _ => k) (fun _ x => x.1)
-    (fun _ => (uniform_draw n k).1) (fun _ => (uniform_draw n k).2) (fun _ _ _ => ∅)
-    (fun _ _ _ _ _ => rfl) _ (fun _ _ _ => (Finset.map_empty _).symm) (fun _ => 0)
-    (fun _ _ i => PooledIncorrectBlocksLe_honest n k 1 (fun _ _ => True) i) q hq0 hq1 (fun _ => hq) F
+  exact tiedIncorrectBlocksLe_of_samples (m := 1) (Ω := {S : Finset (Fin n) // S.card = k}) (Z := Unit) Set.univ
+    (fun _ _ _ _ => True) (fun _ => n) (fun _ => k) (fun _ x => x.1) (fun _ => (uniform_draw n k).1)
+    (fun _ => (uniform_draw n k).2) (fun _ _ _ => ∅) (fun _ _ _ _ _ => rfl) (fun _ _ _ => ∅)
+    (fun _ _ _ => (Finset.map_empty _).symm) (fun _ => 0) (fun _ _ _ => by simp [Pr]) q hq0 hq1 (fun _ => hq) F
 
 /-- **`PooledLeakAccepted`'s premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone: each fits
 its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`); and sampled proofs' pooled bound at the
