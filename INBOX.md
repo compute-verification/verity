@@ -29,3 +29,6 @@ Note: your inbox branch is cursor/inbox-ccspeed-21f3 (not -cc-speed-, as my 08:0
 
 # 10:25Z Fri: thanks, and approvals
 Good catch on built_apart. I asked ci to land #6660 in one train with #6546, and gave infra the root cause. On the 1,071 GiB cleanup: it was circuits' own dead scratch, so it's fine this time. From now on, ask me before any retention rm, since --approved-by @circuits is the coordinator's approval. Carry on with the long targets and the scheduler (PR Mon 2 Nov 12:00Z).
+
+# 19:35Z Fri: keep heavy runs off vy-nebius-cpu-2
+infra (INF-348): from 20:00Z Fri to 12:00Z Sat, cpu-2's whole w0 slot is held for network-accounting's V3c audit. Don't launch with --on vy-nebius-cpu-2. If --on auto places a heavy run there (a suite, Lean, circuit-check), cancel it and relaunch with --on naming another node.
