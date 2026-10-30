@@ -1,6 +1,6 @@
-"""C-Flock's pieces for the exact s8 family's word primitives: the sm_120 IMMA steps (`ops.prims`' satfinite s8 x s8 and wrapping
+"""Flock's pieces for the exact s8 family's word primitives: the sm_120 IMMA steps (`ops.prims`' satfinite s8 x s8 and wrapping
 u8 x s8) and `LimbSplit_v1`'s four limb steps (`ops.s8`).  Each lowers by its Boolean version's builder (`ir_lower._boolean_build`:
-`ops.boolean.gemm`, `ops.boolean.s8`).  Lowered by `ir_lower.lower` into a C-Flock circuit and evaluated there, each agrees with
+`ops.boolean.gemm`, `ops.boolean.s8`).  Lowered by `ir_lower.lower` into a Flock circuit and evaluated there, each agrees with
 its Definition's reference on uniform words and on the edges: s32's ends against the operand corners (the clamp, the wrap), the
 clamp's thresholds at +-127, the carry's at each byte.  The limb splits and an s8 dot over the u8 x s8 step lower piece by piece
 and agree too; the dot's nonzeros grow by one step's own per step, so a K-long chain stays linear in K.  The pieces resolve in

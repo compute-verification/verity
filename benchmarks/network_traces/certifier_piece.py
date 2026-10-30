@@ -13,7 +13,7 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
   (`served_session.session`, ``warden-rehearse --scan --prompts --window-per-group``) against serve-openai on PORT, one
   group of ``--prompts`` requests (at most the scan's 4 lanes) of ``--prompt-ids`` ids below ``--vocab``, each answered
-  with exactly ``--tokens`` ids, drawn from a fresh secret seed. A group is sent half a bucket into link-window 0 and
+  with exactly ``--tokens`` ids, sampled from a fresh secret seed. A group is sent half a bucket into link-window 0 and
   its cells are link-window 0's alone (``--tokens`` at most 4 keeps the group in one link-window), so the engine admits
   the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
   ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
@@ -314,7 +314,7 @@ def endpoint_copy(serve_dir: Path, dest: Path) -> Path:
 
 
 def sized(windows: int, sets: list[str]) -> list[str]:
-    """N2's draw and the tie's link-windows for a run of ``windows`` link-windows: every one when they are at most
+    """N2's sample and the tie's link-windows for a run of ``windows`` link-windows: every one when they are at most
     `served_session.chain`'s 8 (whose draw of 8 a shorter run refuses), unless a CR_K=V of ``sets`` names them."""
     given = {kv.partition("=")[0] for kv in sets}
     if windows > 8:
