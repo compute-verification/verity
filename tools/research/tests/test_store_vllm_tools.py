@@ -41,7 +41,7 @@ def _drv(tool, argv: list[str], inputs: dict | None = None) -> str:
 def test_vllm_tools_are_registered_and_loadable_by_name():
     for stage in ("build", "plan", "match", "commit", "replay"):
         t = tools_registry.load(f"vllm.{stage}", REPO)
-        assert t.name == f"vllm.{stage}" and t.spec == f"research.store.vllm_tools:VLLM_{stage.upper()}"
+        assert t.name == f"vllm.{stage}" and t.spec == f"tools.research.src.research.store.vllm_tools:VLLM_{stage.upper()}"
         assert t.command == [*CMD, stage]
         assert t.key_conditions == ["hw.family", f"tool.vllm.{stage}.torch", f"tool.vllm.{stage}.vllm"]
         assert t.closure == ["integrations/vllm/**", *(f"{d}/**" for d in package_dirs(REPO, "verity"))]

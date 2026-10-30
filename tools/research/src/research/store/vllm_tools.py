@@ -31,8 +31,8 @@ import subprocess
 from pathlib import PurePosixPath
 from typing import Any
 
-from .settings import workload_python
-from .tool import Tool
+from research.store.settings import workload_python
+from research.store.tool import Tool
 
 DEFAULT_QUERY = "Q_word_v1{X=16,W=32,R=no-recompute}"
 DEFAULT_PY = "/workspace/venv312/bin/python"

@@ -51,7 +51,7 @@ def _stage_run(tmp: Path, stage: str, *, params: dict, inputs: dict, files: dict
     job = json.loads((d / "job.json").read_text())
     job["run"]["id"] = rid
     job["ownership"]["job"] = rid
-    job["store"] = {"tool": {"name": f"vllm.{stage}", "version": "1", "spec": f"research.store.vllm_tools:VLLM_{stage.upper()}"},
+    job["store"] = {"tool": {"name": f"vllm.{stage}", "version": "1", "spec": f"tools.research.src.research.store.vllm_tools:VLLM_{stage.upper()}"},
                     "key_params": KEY_PARAMS + (["pairs"] if stage == "commit" else []), "key_conditions": ["hw.family"],
                     "params": params, "key_params_resolved": {k: params.get(k) for k in KEY_PARAMS}, "inputs": inputs, "closure": {},
                     "campaign": "test"}

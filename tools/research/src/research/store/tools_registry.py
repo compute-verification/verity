@@ -32,11 +32,11 @@ REGISTRY: dict[str, str] = {
     "lean_audit": "tools.verity.lean.tool:LEAN_AUDIT",
     "lean_upstream": "tools.verity.lean.tool:LEAN_UPSTREAM",
     # the vLLM integration's row stages
-    "vllm.build": "research.store.vllm_tools:VLLM_BUILD",
-    "vllm.plan": "research.store.vllm_tools:VLLM_PLAN",
-    "vllm.match": "research.store.vllm_tools:VLLM_MATCH",
-    "vllm.commit": "research.store.vllm_tools:VLLM_COMMIT",
-    "vllm.replay": "research.store.vllm_tools:VLLM_REPLAY",
+    "vllm.build": "tools.research.src.research.store.vllm_tools:VLLM_BUILD",
+    "vllm.plan": "tools.research.src.research.store.vllm_tools:VLLM_PLAN",
+    "vllm.match": "tools.research.src.research.store.vllm_tools:VLLM_MATCH",
+    "vllm.commit": "tools.research.src.research.store.vllm_tools:VLLM_COMMIT",
+    "vllm.replay": "tools.research.src.research.store.vllm_tools:VLLM_REPLAY",
 }
 
 
