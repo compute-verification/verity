@@ -282,6 +282,17 @@ def test_a_checked_below_a_moved_main_fast_forwards_to_it(world, monkeypatch):
     assert _checked(world) == _main(world)
 
 
+def test_the_branch_sweep_deletes_what_is_on_checked(world, monkeypatch):
+    """`main` lags `checked` by hours, so a sweep measured against `main` leaves landed branches to pile up."""
+    from research import merge
+
+    h = Review(world, monkeypatch, land_into="checked")
+    calls = []
+    monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: calls.append(k["into"]) or (2, 0))
+    h.tick()
+    assert calls == ["checked"] and any("branch sweep: 2 deleted (on checked)" in x for x in world.logs), world.logs
+
+
 def test_land_into_takes_checked_or_main_and_only_drive_pushes_checked(world, monkeypatch):
     assert DriveFlags.parse('land_into = "checked"\n').land_into == "checked" and DriveFlags().land_into == "main"
     with pytest.raises(QueueError, match="land_into"):
