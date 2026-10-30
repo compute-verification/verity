@@ -1946,6 +1946,25 @@ def test_the_preflight_runs_on_a_head_its_pull_ref_doesnt_have_yet_from_the_bran
     assert f"it contains #5's head {five[:12]}, and #5 isn't admitted" in capsys.readouterr().err
 
 
+def test_the_preflight_never_holds_a_head_behind_a_contained_head_on_the_landing_branch(world, capsys):
+    """Under `land_into = "checked"` the preflight judges on `main`, which a PR landed on `checked` hasn't reached: that PR, still
+    open and here held, holds no head containing it.  A contained PR that hasn't landed and isn't admitted still does."""
+    from research.queue import MarkOnly, ready
+
+    world.with_store_remote()
+    _move_main(world, {"tools/verity/check/drive.toml": 'land_into = "checked"\n'})
+    world.gh.put(5, five := world.change({"x.txt": "x\n"}), labels=("hold",), ready=False)
+    _git(world.dev, "push", "-q", "origin", f"{five}:refs/heads/checked")
+    world.gh.put(4, world.change({"y.txt": "y\n"}, base=five), ready=False)
+    pre = _preflight(world)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0, capsys.readouterr().err
+    world.gh.put(6, six := world.change({"z.txt": "z\n"}, base=five), labels=("hold",), ready=False)
+    world.gh.put(3, world.change({"w.txt": "w\n"}, base=six), ready=False)
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=pre) == 1
+    err = capsys.readouterr().err
+    assert f"it contains #6's head {six[:12]}, and #6 isn't admitted (held (`hold` label))" in err and "#5's" not in err, err
+
+
 def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_and_names_it(world, capsys):
     """Drive holds a PR that contains one never marked, or one whose mark was withdrawn; the preflight refuses it first."""
     from research.queue import MarkOnly, ready

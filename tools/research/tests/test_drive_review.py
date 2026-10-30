@@ -1807,12 +1807,34 @@ def test_a_marked_pr_left_out_for_an_ejected_pr_it_holds_an_older_head_of_is_tol
 
     h.tick()
     assert told() == [
-        f"@ci @lane-7 @lane-6 queue: #7 at {seven[:8]} is out of `next`: it contains #6's commits (at an older head), and #6 at "
+        f"@ci @lane-7 @lane-6 queue: #7 at {seven[:8]} is out of `next`: it contains #6's commits at its older head {old[:12]}, and #6 at "
         f"{new[:8]} isn't admitted (ejected at {new[:8]}: breaks circuits (a new push or ready mark re-admits it)). Fix: mark #6 "
         f"ready at {new[:8]}, drop #6's commits from #7, or ask @top to close #6"], told()
     assert h.q.status()[7].state == "waiting"
     h.tick()
     assert len(told()) == 1
+
+
+def test_the_notice_names_the_older_head_a_pr_carries_never_a_merge_base_on_main(world, monkeypatch):
+    """#7 merged #5's branch at `q1`, then both merged `main` once it moved: their merge bases are `q1` and `main`'s commit, and
+    `git merge-base` may name either.  #5 hasn't landed, so #7 still waits for it, and the notice names `q1`, the head of #5's
+    whose commits #7 carries, never the commit of `main`."""
+    from test_queue import _merge
+
+    _registry(world, "lane-5", "lane-7")
+    q1 = world.change({"x.txt": "x = 1\n"})
+    seven = _merge(world, world.change({"k.txt": "kernels\n"}), q1)
+    _move_main(world, {"m.txt": "landed\n"})
+    main = _main(world)
+    five, seven = _merge(world, q1, main), _merge(world, seven, main)
+    assert main in _git(world.dev, "merge-base", "--all", seven, five).split()
+    h = Review(world, monkeypatch)
+    world.gh.put(5, five, ready=False)
+    world.gh.put(7, seven)
+    h.tick()
+    (told,) = [p for p in h.posts if "waits for your mark" in p]
+    assert f"waits for your mark of #5, which it contains (at {q1[:12]}): mark #5 ready at {five[:8]}" in told, told
+    assert main[:12] not in told and h.q.status()[7].state == "waiting"
 
 
 def _detached(h: Review, tmp_path, lean: bool = True, post: bool = False) -> list[str]:
