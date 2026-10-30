@@ -19,7 +19,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'
 # Lean: sampled proofs' one-stage audit (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
 # its window, commitments, and core's identity and randomness), the network certifier's period check (with the
-# certifier program and the LMS verifier), the inference-only policy's check (`nci_check`), PoUS's run check (with the
+# certifier program, the LMS verifier and sampled proofs' one-stage v2), the inference-only policy's check (`nci_check`), PoUS's run check (with the
 # memory challenger's Lean), the PoUB session's and the memory challenger's wipe. The reference runs the
 # subprotocols' Python: PoUW's `core_check` and what it imports, and sampled proofs' one-stage difftest (`one_stage`,
 # the integrity profile, the proof system) with its generators, PoUW's check cases, the network certifier's period
