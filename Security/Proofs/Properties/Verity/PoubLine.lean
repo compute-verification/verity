@@ -14,12 +14,16 @@ oracle: the verdict at the code is the P2 subprotocol's acceptance, and the line
   its records, coin commitment, trace, receipts, the bytes the subprotocol is given at each outcome, and the model's
   premises at the record's trace and pace. Its event is at most its bound (`LineAt.pr_le`).
 * **The refinement** (`Subprotocol.LineRefines`): where PoUB's verdict holds, PoUB's own coin, carried to the line's
-  coins (`coin`), is an outcome where the subprotocol accepts bytes that play the record (`Plays`) and the certifiers
-  counted nothing entering the node over the credited passes (`Accounting.Remote.Held.Quiet`).
-* **The claim** (`Subprotocol.poub_atCode_of_line`): where the verdict holds, the certificate claims no more than the
-  record's credit (`P2Line.ClaimWithinCredit`) and the period's schedule reads at least what the record's passes read
+  coins (`coin`), is an outcome where the subprotocol accepts bytes that play the record (`Plays`).
+* **The claim** (`Subprotocol.poub_atCode_of_line`): where the verdict holds, the certifiers counted nothing entering
+  the node over the credited passes (`P2Line.QuietOverPasses`), the certificate claims no more than the record's credit
+  (`P2Line.ClaimWithinCredit`) and the period's schedule reads at least what the record's passes read
   (`P2Line.PassesWithinSchedule`), so a failed claim `Q ≤ read` is a credit that claims more than the passes read, the
   line's event (`plays_summary`: the record exists where the subprotocol accepts).
+* **The target** (`Vocab.bandwidthAuditSound_onsite_of_line`): onsite's PoUB couplings, each read by a line of record
+  under the three premises at a `δ` within PoUB's published `δ` (`Vocab.LineCoupled`), with the error beyond `δ`
+  answered for where the finder meets `FinderCR` (`Vocab.Coupling.BreakBound`), give `Vocab.BandwidthAuditSound` at
+  onsite (`Vocab.poubSound_of_coupling`).
 -/
 
 namespace Properties.RemoteAudit.P2Subprotocol.SecurityProofs
@@ -102,24 +106,26 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circui
 /-- **PoUB-P2's refinement by its line**: at every value `ξ` of the other audits' coins and every value `x` of PoUB's
 own where PoUB's verdict `A .poub` holds (at the code, `Vocab.Coupling.verdict`: onsite's PoUB-P2 component,
 `RemoteAudit.P2Protocol.protocol` on PoUS's store, accepts its case, its releases are logged, and the coupling's break is
-absent), at the line's coins `coin x` the subprotocol accepts bytes that play the record of the line at `ξ` (`Plays`),
-and the certifiers counted nothing entering the node over its credited passes (`Accounting.Remote.Held.Quiet`). -/
+absent), at the line's coins `coin x` the subprotocol accepts bytes that play the record of the line at `ξ`
+(`Plays`). -/
 def LineRefines {r : PeriodRun d α C Ω} {node : Audited} {κ : ℕ} {X : Type} [Fintype X]
     (coin : Ω (r.own .poub) ≃ Accounting.Remote.Draw.Coins node.draws κ X) (L : ((i : I) → Ω i) → LineAt node κ X)
     (A : Audit → ((i : I) → Ω i) → Prop) : Prop :=
   ∀ ξ x, A .poub (Function.update ξ (r.own .poub) x) →
-    Plays node ((L ξ).record (coin x)) ((L ξ).a (coin x)) ((L ξ).b (coin x)) ((L ξ).e (coin x)) ∧
-      Accounting.Remote.Held.Quiet (L ξ).trace (L ξ).ingress.counted (coin x)
+    Plays node ((L ξ).record (coin x)) ((L ξ).a (coin x)) ((L ξ).b (coin x)) ((L ξ).e (coin x))
 
 variable [∀ i, Fintype (Ω i)]
 
 /-- **PoUB-P2 at the code, by its line of record**: at the verdicts `A` that `LineRefines` reads as the P2
-subprotocol's acceptance, where each accepted outcome's certificate claims no more than the record's credit
-(`ClaimWithinCredit`) and the period's schedule reads at least what the record's passes read (`PassesWithinSchedule`),
-PoUB's per-period guarantee holds at the line's bound: a failed claim at an accepted outcome is the line's event. -/
+subprotocol's acceptance, where at each accepted outcome the certifiers counted nothing entering the node over the
+credited passes (`QuietOverPasses`), the certificate claims no more than the record's credit (`ClaimWithinCredit`) and
+the period's schedule reads at least what the record's passes read (`PassesWithinSchedule`), PoUB's per-period
+guarantee holds at the line's bound: a failed claim at an accepted outcome is the line's event. -/
 theorem poub_atCode_of_line {r : PeriodRun d α C Ω} {c : Certificates} {p : Price} {node : Audited} {κ : ℕ}
     {X : Type} [Fintype X] (coin : Ω (r.own .poub) ≃ Accounting.Remote.Draw.Coins node.draws κ X)
     (L : ((i : I) → Ω i) → LineAt node κ X) {A : Audit → ((i : I) → Ω i) → Prop} (hR : LineRefines coin L A)
+    (hq : ∀ ξ x, A .poub (Function.update ξ (r.own .poub) x) →
+      QuietOverPasses (L ξ).trace (L ξ).ingress (coin x))
     (hQ : ∀ ξ x, A .poub (Function.update ξ (r.own .poub) x) →
       ClaimWithinCredit c.Q node ((L ξ).record (coin x)))
     (hS : ∀ ξ x, A .poub (Function.update ξ (r.own .poub) x) →
@@ -135,12 +141,62 @@ theorem poub_atCode_of_line {r : PeriodRun d α C Ω} {c : Certificates} {p : Pr
       (atCode r A).accepts .poub (Function.update ξ ((atCode r A).own .poub) x) ∧
         ¬ (atCode r A).Holds c p .poub (Function.update ξ ((atCode r A).own .poub) x) → E (coin x) := by
     intro x ⟨hA, hH⟩
-    obtain ⟨hP, hq⟩ := hR ξ x hA
+    have hP := hR ξ x hA
     refine ⟨hP, fun h => hH ((holds_atCode r A c p .poub _).2 ?_)⟩
     obtain ⟨sm, hsm⟩ := plays_summary hP
-    exact (hQ ξ x hA sm hsm).trans ((h hq sm hsm).trans (hS ξ x hA sm hsm))
+    exact (hQ ξ x hA sm hsm).trans ((h (hq ξ x hA) sm hsm).trans (hS ξ x hA sm hsm))
   exact (Pouw.pr_mono key).trans ((Pouw.pr_equiv coin E).le.trans (((L ξ).pr_le).trans (hδ ξ)))
 
 end
 
 end Verity.Subprotocol
+
+namespace Verity
+
+open Accounting Core Properties.RemoteAudit.P2Line Properties.RemoteAudit.P2Subprotocol.SecurityProofs
+
+namespace Vocab
+
+variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+
+/-- **Onsite's PoUB coupling, read by a line of record**: a line on a node at each value `ξ` of the other audits' coins
+(`L`), PoUB's own coin carried to the line's coins (`coin`), the coupling's verdict at the code refining the P2
+subprotocol's acceptance (`Subprotocol.LineRefines`), the three premises at each outcome where the verdict holds
+(`QuietOverPasses`, `ClaimWithinCredit` at the certificate's `Q`, `PassesWithinSchedule` at the coupled run's
+`read`), and a `δ` at least every line's bound and within PoUB's published `δ` at the strategy's calls. -/
+structure LineCoupled {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
+    (q : V.Coupling .onsite .poub θ F c σ) where
+  node : Audited
+  κ : ℕ
+  X : Type
+  [fintypeX : Fintype X]
+  coin : q.Ω (q.run.own .poub) ≃ Accounting.Remote.Draw.Coins node.draws κ X
+  L : ((i : q.I) → q.Ω i) → LineAt node κ X
+  refines : Subprotocol.LineRefines (r := q.run) coin L q.verdict
+  quiet : ∀ ξ x, q.verdict .poub (Function.update ξ (q.run.own .poub) x) →
+    QuietOverPasses (L ξ).trace (L ξ).ingress (coin x)
+  claim : ∀ ξ x, q.verdict .poub (Function.update ξ (q.run.own .poub) x) →
+    ClaimWithinCredit (V.certOf θ).Q node ((L ξ).record (coin x))
+  schedule : ∀ ξ x, q.verdict .poub (Function.update ξ (q.run.own .poub) x) →
+    PassesWithinSchedule (q.run.read (Function.update ξ (q.run.own .poub) x)) (L ξ).trace (coin x) node
+      ((L ξ).record (coin x))
+  δ : ℝ
+  bound_le : ∀ ξ, (L ξ).bound ≤ δ
+  within : ENNReal.ofReal δ ≤ V.delta θ .poub (V.cost θ F c σ)
+
+attribute [instance] LineCoupled.fintypeX
+
+/-- **Onsite's bandwidth audit by PoUB-P2's line of record** (`poubSound_of_coupling`, `Subprotocol.poub_atCode_of_line`):
+where every onsite PoUB coupling is read by a line of record (`LineCoupled`), and its error beyond `δ` answers for the
+rest of the event where the finder meets `FinderCR` (`Coupling.BreakBound`), `BandwidthAuditSound` holds at onsite. No
+random oracle: the line bounds the P2 subprotocol's acceptance directly. -/
+theorem bandwidthAuditSound_onsite_of_line (q : ∀ θ F c σ, V.Coupling .onsite .poub θ F c σ)
+    (h : ∀ θ F c σ, V.LineCoupled (q θ F c σ))
+    (hb : ∀ θ F c σ, V.FinderCR .poub θ F c σ → (q θ F c σ).BreakBound) : V.BandwidthAuditSound .onsite :=
+  V.poubSound_of_coupling q (fun θ F c σ =>
+    ⟨(h θ F c σ).δ, Subprotocol.poub_atCode_of_line (h θ F c σ).coin (h θ F c σ).L (h θ F c σ).refines
+      (h θ F c σ).quiet (h θ F c σ).claim (h θ F c σ).schedule (h θ F c σ).bound_le, (h θ F c σ).within⟩) hb
+
+end Vocab
+
+end Verity
