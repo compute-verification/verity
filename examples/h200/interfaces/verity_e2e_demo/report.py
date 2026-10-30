@@ -63,8 +63,10 @@ nothing else), and each block not accepted is a visible failure.
 **Per-call noise's serving overhead** is `serve_noise_line`: the seconds it adds a step, its
 units' and commit's parts, and two ratios, against the commit-bound step γ_step was measured on and against the plain
 served step, never γ_step alone; then the units' share of the tensor peak, and the commit's own overhead as a
-separate line. Demo A's part 2 renders it as ``⟨SERVE_NOISE⟩``; in M3's report a section with ``"serve_noise": true``
-ends with it, and a section row about per-call noise is refused.
+separate line: the seconds it adds as served and at circuits' 1 KiB shared rows, each over the step it adds to, at the
+run's two slot counts, the 1 KiB ratio against `COMMIT_OVERHEAD_TARGET`, and its share of the step's ANDs. Demo A's
+part 2 renders it as ``⟨SERVE_NOISE⟩``; in M3's report a section with ``"serve_noise": true`` ends with it, and a
+section row about per-call noise is refused.
 
 The measurements file::
 
@@ -138,7 +140,14 @@ BLOCKS = ("LABEL", "RECORDS", "VISIBLE_FAILURES", "SUBCIRCUITS", "PERIODS", "CAV
 #: the numbers `serve_noise_line` states
 SERVE_NOISE = ("SERVE_NOISE_S", "SERVE_NOISE_BATCH", "SERVE_NOISE_UNITS_S", "SERVE_NOISE_COMMIT_S",
                "SERVE_NOISE_GAMMA_STEP", "SERVE_NOISE_BASE_S", "SERVE_NOISE_RATIO_4562", "SERVE_STEP_4562_S",
-               "SERVE_NOISE_UNITS_PEAK", "SERVE_COMMIT_OVERHEAD_S")
+               "SERVE_NOISE_UNITS_PEAK", "SERVE_COMMIT_SLOTS_SMALL", "SERVE_COMMIT_STEP_S_SMALL",
+               "SERVE_COMMIT_AS_SERVED_S_SMALL", "SERVE_COMMIT_AS_SERVED_RATIO_SMALL", "SERVE_COMMIT_SLOTS",
+               "SERVE_COMMIT_STEP_S", "SERVE_COMMIT_AS_SERVED_S", "SERVE_COMMIT_AS_SERVED_RATIO",
+               "SERVE_COMMIT_OVERHEAD_S_SMALL", "SERVE_COMMIT_OVERHEAD_RATIO_SMALL", "SERVE_COMMIT_OVERHEAD_S",
+               "SERVE_COMMIT_OVERHEAD_RATIO", "SERVE_COMMIT_COMPRESSIONS", "SERVE_COMMIT_COMPRESSIONS_TO",
+               "SERVE_COMMIT_AND_SHARE_AS_SERVED", "SERVE_COMMIT_AND_SHARE")
+#: the target band for the commit's own overhead at 1 KiB rows, over the step it adds to
+COMMIT_OVERHEAD_TARGET = (Fraction(1, 5), Fraction(1, 4))
 #: a section row that states per-call noise itself, which `serve_noise_line` states instead
 NOISE_ROW = re.compile(r"per-call noise|γ_step|gamma_step", re.IGNORECASE)
 #: M3's report: the measurements file's ``sections`` and ``proved``
@@ -220,8 +229,22 @@ MEASURED: dict[str, str] = {
     "SERVE_STEP_4562_S": "the earlier per-call build's (`percall:kraq`) served step on the H200, in seconds",
     "SERVE_NOISE_UNITS_PEAK": "the tensor-peak run: the share of the tensor peak per-call noise's units "
                               "reach, ALU-bound",
-    "SERVE_COMMIT_OVERHEAD_S": "the commit overhead run: the commit's own overhead a step at 1 KiB rows, with each add's "
-                               "tables dropped at their read",
+    "SERVE_COMMIT_SLOTS": "the commit overhead run (one H200, the frozen shape): the slots of its larger step",
+    "SERVE_COMMIT_STEP_S": "the commit overhead run: M3's served step at SERVE_COMMIT_SLOTS slots, without the commit, "
+                           "in seconds",
+    "SERVE_COMMIT_AS_SERVED_S": "the commit overhead run: seconds the commit adds that step as served (FAMILIES, every "
+                                "SM)",
+    "SERVE_COMMIT_OVERHEAD_S": "the commit overhead run: seconds the commit adds that step at circuits' 1 KiB shared "
+                               "rows, with each add's tables dropped at their read",
+    "SERVE_COMMIT_SLOTS_SMALL": "the commit overhead run: the slots of its smaller step",
+    "SERVE_COMMIT_STEP_S_SMALL": "the commit overhead run: M3's served step at SERVE_COMMIT_SLOTS_SMALL slots, without "
+                                 "the commit, in seconds",
+    "SERVE_COMMIT_AS_SERVED_S_SMALL": "the commit overhead run: seconds the commit adds that smaller step as served",
+    "SERVE_COMMIT_OVERHEAD_S_SMALL": "the commit overhead run: seconds the commit adds that smaller step at 1 KiB rows",
+    "SERVE_COMMIT_COMPRESSIONS": "the commit overhead run: SHA-512 compressions a row-slot the commit takes now",
+    "SERVE_COMMIT_COMPRESSIONS_TO": "the compressions a row-slot of the leaner layout kernels proposed, not built",
+    "SERVE_COMMIT_AND_SHARE_AS_SERVED": "the commit overhead run: the commit's ANDs over the served step's, as served",
+    "SERVE_COMMIT_AND_SHARE": "the commit overhead run: the commit's ANDs over the served step's, at 1 KiB rows",
     "SIMULATED_RTT_MS": "the block run: the challenger's simulated round trip",
     "STEP_S_B512": "M3's block run on the H200 at batch 512: seconds a step",
     "ROW_SLOT_NS_B512": "the same run: nanoseconds a step per row-slot",
@@ -258,6 +281,8 @@ DERIVED: dict[str, str] = {
     "PLANNER_RATIO": "PROVING_GPU_S / PLANNER_PREDICTED_S",
     "SERVE_COMMIT_SHARE": "SERVE_COMMIT_S / SERVE_STEP_S",
     "SERVE_NOISE_RATIO_4562": "(SERVE_STEP_4562_S + SERVE_NOISE_S) / SERVE_STEP_4562_S, to two figures",
+    **{f"SERVE_COMMIT_{kind}_RATIO{size}": f"SERVE_COMMIT_{kind}_S{size} / SERVE_COMMIT_STEP_S{size}, to three figures"
+       for kind in ("AS_SERVED", "OVERHEAD") for size in ("", "_SMALL")},
     "BOUND_CITATION": "JOINT_LOCKED: `Flock.Guarantees.JointStratified` when locked, else the "
                       "per-subcircuit bound with the joint figure unlocked",
     "HORIZON_CITATION": "JOINT_LOCKED: `JointStratifiedHorizon` when locked, else "
@@ -449,6 +474,12 @@ def derive(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) ->
     noise, step = _num(values.get("SERVE_NOISE_S")), _num(values.get("SERVE_STEP_4562_S"))
     if noise is not None and step:
         put("SERVE_NOISE_RATIO_4562", f"{float((step + noise) / step):.2g}", "SERVE_NOISE_S", "SERVE_STEP_4562_S")
+    for kind in ("AS_SERVED", "OVERHEAD"):
+        for size in ("", "_SMALL"):
+            added, base = f"SERVE_COMMIT_{kind}_S{size}", f"SERVE_COMMIT_STEP_S{size}"
+            x, y = _num(values.get(added)), _num(values.get(base))
+            if x is not None and y:
+                put(f"SERVE_COMMIT_{kind}_RATIO{size}", f"{float(x / y):.3g}", added, base)
     if (lk := values.get("JOINT_LOCKED")) is not None:
         put("BOUND_CITATION", "`Flock.Guarantees.JointStratified` (locked)" if lk.value is True else
             "the per-subcircuit bound, the joint figure unlocked", "JOINT_LOCKED")
@@ -498,14 +529,30 @@ def serve_noise_line(values: Mapping[str, V], quiet: str | None = None) -> str:
         v = values.get(name)
         return " against ".join(RUN_ID.findall(v.source)) if v and RUN_ID.search(v.source) else f"⟨{name}⟩'s run"
 
+    tenths, thousandths = (lambda x: f"{float(x):.1f}"), (lambda x: f"{float(x):.3f}")
+    lo, hi = COMMIT_OVERHEAD_TARGET
+    added, step = _num(values.get("SERVE_COMMIT_OVERHEAD_S")), _num(values.get("SERVE_COMMIT_STEP_S"))
+    r = None if added is None or not step else added / step
+    where = "against" if r is None else "under" if r < lo else "inside" if r <= hi else "above"
     return (f"Per-call noise adds **+{c('SERVE_NOISE_S')} s a step at batch {c('SERVE_NOISE_BATCH')}** "
             f"({c('SERVE_NOISE_UNITS_S')} s of units plus {c('SERVE_NOISE_COMMIT_S')} s of commit, "
             f"{runs('SERVE_NOISE_S')}): {c('SERVE_NOISE_GAMMA_STEP')}× against that commit-bound "
             f"{c('SERVE_NOISE_BASE_S')} s served step, which is mostly FAMILIES' slot commit (`commit_gpu`), and about "
             f"{c('SERVE_NOISE_RATIO_4562')}× against the earlier per-call build's {c('SERVE_STEP_4562_S')} s served "
             f"step. The units are ALU-bound at about {c('SERVE_NOISE_UNITS_PEAK', _pct)} of the tensor peak "
-            f"({runs('SERVE_NOISE_UNITS_PEAK')}). The commit's own overhead is a separate line: "
-            f"+{c('SERVE_COMMIT_OVERHEAD_S')} s at 1 KiB rows ({runs('SERVE_COMMIT_OVERHEAD_S')}).")
+            f"({runs('SERVE_NOISE_UNITS_PEAK')}). The commit's own overhead, measured on one H200 at the frozen shape "
+            f"({runs('SERVE_COMMIT_OVERHEAD_S')}): as served (FAMILIES, every SM) it adds "
+            f"+{c('SERVE_COMMIT_AS_SERVED_S_SMALL', tenths)} s to M3's {c('SERVE_COMMIT_STEP_S_SMALL', thousandths)} s "
+            f"step at {c('SERVE_COMMIT_SLOTS_SMALL')} slots ({c('SERVE_COMMIT_AS_SERVED_RATIO_SMALL')}×) and "
+            f"+{c('SERVE_COMMIT_AS_SERVED_S', tenths)} s to the {c('SERVE_COMMIT_STEP_S', thousandths)} s step at "
+            f"{c('SERVE_COMMIT_SLOTS')} slots ({c('SERVE_COMMIT_AS_SERVED_RATIO')}×); on circuits' 1 KiB shared rows, "
+            f"which e2e_h200's committer doesn't serve yet, it adds +{c('SERVE_COMMIT_OVERHEAD_S_SMALL')} s "
+            f"({c('SERVE_COMMIT_OVERHEAD_RATIO_SMALL')}×) and +{c('SERVE_COMMIT_OVERHEAD_S')} s "
+            f"({c('SERVE_COMMIT_OVERHEAD_RATIO')}×, {where} {float(lo):.2f}–{float(hi):.2f}×). Capping the commit's "
+            f"SMs doesn't help the served loop, and {c('SERVE_COMMIT_COMPRESSIONS')} → "
+            f"{c('SERVE_COMMIT_COMPRESSIONS_TO')} compressions a row-slot isn't built. In ANDs the commit is "
+            f"{c('SERVE_COMMIT_AND_SHARE_AS_SERVED')}× the served step as served and {c('SERVE_COMMIT_AND_SHARE')}× at "
+            f"1 KiB rows.")
 
 
 def _records(records: Sequence[Mapping[str, Any]], failures: int = 0) -> str:
