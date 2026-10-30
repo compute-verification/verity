@@ -1,5 +1,5 @@
 """Markdown tables from the runs' outputs: `summarize.py natural DIR`, `tiles FILE`, `seeds FILE`, `tails FILE`,
-`poison FILE`, `plant FILE`."""
+`poison FILE`, `plant FILE`, `preimage FILE`."""
 
 import json
 import math
@@ -174,6 +174,19 @@ def plant(f):
             print(f"| {a} | {L} | {p['val_loss']:.4f} ({v['honest_val']:.4f}) | {fmt(p['at_plant'])} | {fmt(p['planted_final'])} | "
                   f"{fmt(p['honest_final'])} | {p['s0']:.3f} | {p['s_le1']:.3f} | {p['rel_dist_to_plant']:.3f} | "
                   f"{p['corr_with_honest']:.3f} | {[round(x, 3) for x in p['planes_agree_with_honest']]} |")
+    print(f"(routes: {' / '.join(ks)})")
+
+
+def preimage(f):
+    r = json.loads(Path(f).read_text())
+    ks = ("h200_b1", "h200_b2", "sm120_b2")
+    print("| pin | L | iteration | val (honest) | jump ‖W′ − W_{T−L}‖/‖W‖ | route at T | S = 0 | mean / max miss (target LSB) |")
+    print("|---:|---:|---:|---|---:|---|---:|---|")
+    for v in sorted(r["runs"].values(), key=lambda v: (v["pin"], v["L"])):
+        for it in v["iters"]:
+            print(f"| {v['pin']} | {v['L']} | {it['iter']} | {it['val_loss']:.4f} ({v['honest_val']:.4f}) | {it['jump_rel']:.3f} | "
+                  f"{'/'.join(f'{it['route'][k]:.3f}' for k in ks)} | {it['s0']:.4f} | "
+                  f"{it['miss_lsb_mean']:.3f} / {it['miss_lsb_max']:.2f} |")
     print(f"(routes: {' / '.join(ks)})")
 
 
