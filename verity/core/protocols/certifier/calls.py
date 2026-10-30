@@ -576,8 +576,6 @@ async def serve_calls(node: NodeCalls, host: str, port: int) -> asyncio.Server:
                 if out:
                     writer.write(out)
                 await writer.drain()
-        except ConnectionError:
-            pass
         finally:
             writer.close()
 
@@ -614,18 +612,18 @@ class CallsClient:
             raise ValueError(f"forward {forward}'s answer isn't a verdict: {answer}") from None
 
     def _ask(self, body: dict) -> dict:
+        ids = {k: body[k] for k in _IDS if k in body}
         self._stream.write(_line(body))
         self._stream.flush()
         line = self._stream.readline(CALLS_LINE_BYTES)
         try:
             answer = json.loads(line)
         except ValueError:
-            answer = None
+            raise ValueError(f"the certifier's answer to {ids} isn't one: {line[:200]!r}") from None
         if isinstance(answer, dict) and isinstance(answer.get("refused"), str):
             raise CallRefusal(answer["refused"])
-        if not (isinstance(answer, dict) and all(answer.get(k) == body[k] for k in _IDS if k in body)):
-            raise ValueError(f"the certifier's answer to {({k: body[k] for k in _IDS if k in body})} isn't one: "
-                             f"{line[:200]!r}")
+        if not (isinstance(answer, dict) and all(answer.get(k) == v for k, v in ids.items())):
+            raise ValueError(f"the certifier's answer to {ids} isn't one: {line[:200]!r}")
         return answer
 
     def close(self) -> None:
