@@ -1,7 +1,7 @@
 """The generic POUS protocol: one lifecycle for every scheme, which implements only what differs between schemes.
 
 A scheme (`Scheme`) is a keyed, rate-1 encoding of `W`, one segment at a time, together with the certificate its audit
-carries at its parameters (`Certificate`).  It implements `encode_segment` and `decode_segment`, and `respond` when an
+carries at its parameters (`CapacityBound`).  It implements `encode_segment` and `decode_segment`, and `respond` when an
 honest answer is more than the stored label.  Everything else is written once, here:
 
 1. **Commit.** The server commits to `W` before any salt exists (`commit`).
@@ -96,7 +96,7 @@ def claim(id: str) -> Entry:
 
 
 @dataclass(frozen=True)
-class Certificate:
+class CapacityBound:
     """What an accepted audit of a scheme at its parameters establishes: Lean's `Meets S .sequential D Q k ε`.
 
     A server that holds fewer than `⌊rho · |C|⌋` bits when the challenges arrive, and answers each within `rounds`
@@ -182,12 +182,12 @@ class Scheme(ABC):
         self.prims = type(self).backend(params) if prims is None else prims
 
     @property
-    def certificate(self) -> Certificate | None:
+    def certificate(self) -> CapacityBound | None:
         """The certificate at these parameters; None when no theorem covers them."""
         return None
 
     @property
-    def certificates(self) -> tuple[Certificate, ...]:
+    def certificates(self) -> tuple[CapacityBound, ...]:
         """Every certificate at these parameters, the default (`certificate`, when there is one) first.  A scheme with
         guarantees at several round budgets lists them all; the memory challenger audits under the first that covers its
         `k` and deadline."""
@@ -303,7 +303,7 @@ class StorageProfile:
     block_bits: int
     k: int
     limit_ns: int
-    certificate: Certificate | None
+    certificate: CapacityBound | None
     gaps: tuple[str, ...] = field(default=())
     experimental: str | None = None
 
@@ -421,5 +421,5 @@ class TimedAudit:
                               self.gaps, self.scheme.experimental)
 
 
-__all__ = ["LOCAL_CLAIMS", "PRIVATE", "PUBLIC", "Certificate", "Scheme", "StorageProfile", "TimedAudit", "challenge_key",
+__all__ = ["LOCAL_CLAIMS", "PRIVATE", "PUBLIC", "CapacityBound", "Scheme", "StorageProfile", "TimedAudit", "challenge_key",
            "claim", "commit", "decode", "decode_tensor", "draw_salt", "encode", "responder", "verifier_key"]
