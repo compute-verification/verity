@@ -14,12 +14,15 @@ For a constrained run of size N trained on D tokens to validation loss L:
   ``compute_penalty`` includes.
 
 Baselines are runs with design ``dense``, no noise, no int8 and ``baseline_lr`` (default: each size's best final loss
-at the largest token count picks its lr).
+at the largest token count picks its lr). The ladder and the frontier are seed 0's. A run of another seed is compared
+with the baseline of its own seed where one exists: its gap is to that baseline, and its loss is moved by that
+baseline's offset from seed 0 before it is read off seed 0's ladder and frontier (seeds share most of their scatter).
 """
 
 import argparse
 import json
 import math
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -78,7 +81,7 @@ def envelope(points):
     return out
 
 
-def analyze(runs, baseline_lr=None):
+def analyze(runs, baseline_lr=None, best=False):
     base = [r for r in runs.values() if is_baseline(r)]
     by_size = defaultdict(list)
     for r in base:
@@ -88,10 +91,17 @@ def analyze(runs, baseline_lr=None):
         top = max(r["tokens"] for r in rs)
         cands = [r for r in rs if r["tokens"] == top]
         lr_of[size] = baseline_lr or min(cands, key=lambda r: r["final_val"])["cfg"]["lr"]
-    ladder = {s: sorted(((r["tokens"], r["final_val"]) for r in rs if r["cfg"]["lr"] == lr_of[s]))
-              for s, rs in by_size.items()}
+    on_lr = [r for r in base if r["cfg"]["lr"] == lr_of[r["cfg"]["size"]]]
+    ladder = {s: sorted((r["tokens"], r["final_val"]) for r in on_lr if r["cfg"]["size"] == s and r["cfg"]["seed"] == 0)
+              for s in by_size}
+    base_at = {(r["cfg"]["size"], r["tokens"], r["cfg"]["seed"]): r["final_val"] for r in on_lr}
+    base_lr = {(r["cfg"]["size"], r["tokens"], r["cfg"]["seed"], r["cfg"]["lr"]): r["final_val"] for r in base}
+    best0 = {}
+    for (s, t, seed, _), v in base_lr.items():
+        if seed == 0:
+            best0[(s, t)] = min(best0.get((s, t), math.inf), v)
     base_fpt = {s: rs[0]["train_flops_per_token"] for s, rs in by_size.items()}
-    frontier = envelope([(r["train_flops"], r["final_val"]) for r in base])
+    frontier = envelope([(r["train_flops"], r["final_val"]) for r in base if r["cfg"]["seed"] == 0])
     rows = []
     for name, r in sorted(runs.items()):
         c = r["cfg"]
@@ -103,17 +113,27 @@ def analyze(runs, baseline_lr=None):
                "hardened_frac_fwd": r["hardened_frac_fwd"], "train_flops": r["train_flops"],
                "trainable_params": r["trainable_params"], "baseline": is_baseline(r)}
         lad = ladder.get(c["size"], [])
-        same = [l for t, l in lad if t == r["tokens"]]
-        if same:
-            row["gap"] = L - same[0]
+        b0 = base_at.get((c["size"], r["tokens"], 0))
+        bs = base_at.get((c["size"], r["tokens"], c["seed"]), b0)
+        if bs is not None:
+            row["gap"] = L - bs
+        bl = base_lr.get((c["size"], r["tokens"], c["seed"], c["lr"]))
+        if bl is not None and c["lr"] != lr_of.get(c["size"]):
+            row["gap_same_lr"] = L - bl
+        L0 = L - (bs - b0) if bs is not None and b0 is not None else L  # on seed 0's ladder, paired by seed
+        Lf = L0  # the frontier already holds every lr's baselines
+        if best and b0 is not None and (c["size"], r["tokens"]) in best0:
+            shift = best0[(c["size"], r["tokens"])] - b0  # the lr-tuned baseline's offset from the ladder's lr
+            row["gap"] = row["gap"] - shift
+            L0 -= shift
         if len(lad) >= 2:
-            ld, ext = interp([math.log(t) for t, _ in lad], [l for _, l in lad], L)
+            ld, ext = interp([math.log(t) for t, _ in lad], [l for _, l in lad], L0)
             if ld is not None:
                 row["token_mult"] = r["tokens"] / math.exp(ld)
                 row["token_mult_extrapolated"] = ext
                 row["size_penalty"] = row["token_mult"] * r["train_flops_per_token"] / base_fpt[c["size"]]
         if len(frontier) >= 2:
-            lc, ext = interp([math.log(x) for x, _ in frontier], [l for _, l in frontier], L)
+            lc, ext = interp([math.log(x) for x, _ in frontier], [l for _, l in frontier], Lf)
             if lc is not None:
                 row["compute_penalty"] = r["train_flops"] / math.exp(lc)
                 row["compute_penalty_dense"] = r["dense_train_flops"] / math.exp(lc)
@@ -151,16 +171,24 @@ def table(res):
     return "\n".join(lines)
 
 
-def pivot(res):
-    """Arms (run names without their size prefix) by size: gap / size_penalty for each finished run."""
+def pivot(res, best=False):
+    """Arms (run names without their size prefix) by size: gap / size_penalty for each finished run. With ``best``,
+    an arm's lr variants (a trailing ``-lr<x>``) fold into the arm, keeping the lowest loss."""
     sizes = sorted({r["size"] for r in res["rows"]}, key=lambda s: int("".join(ch for ch in s if ch.isdigit())))
     cells = defaultdict(dict)
-    for r in res["rows"]:
-        if r["baseline"] or "gap" not in r:
-            continue
+    rows = [r for r in res["rows"] if not r["baseline"] and "gap" in r]
+    if best:
+        keep = {}
+        for r in rows:
+            k = (r["size"], re.sub(r"-lr[0-9.e-]+$", "", r["name"]))
+            if k not in keep or r["final_val"] < keep[k]["final_val"]:
+                keep[k] = {**r, "name": k[1]}
+        rows = [{k: v for k, v in r.items() if k != "gap_same_lr"} for r in keep.values()]
+    for r in rows:
         arm = r["name"].split("-", 1)[1]
         pen = r.get("size_penalty")
-        cells[arm][r["size"]] = f"{r['gap']:+.3f} / " + (f"{pen:.2f}×" if pen is not None else "-")
+        cells[arm][r["size"]] = f"{r['gap']:+.3f} / " + (f"{pen:.2f}×" if pen is not None else "-") + (
+            f" (same lr {r['gap_same_lr']:+.3f})" if "gap_same_lr" in r else "")
     lines = ["| arm | " + " | ".join(sizes) + " |", "|---|" + "---|" * len(sizes)]
     for arm in sorted(cells):
         lines.append(f"| {arm} | " + " | ".join(cells[arm].get(s, "") for s in sizes) + " |")
@@ -187,14 +215,17 @@ def main():
     ap.add_argument("--json", default=None)
     ap.add_argument("--curves", action="store_true", help="print each run's gap to its baseline at every eval")
     ap.add_argument("--pivot", action="store_true", help="print arms by size: gap / size_penalty")
+    ap.add_argument("--best", action="store_true",
+                    help="against each size's best baseline over the lrs run (the ladder shifted by its offset), "
+                         "and with --pivot each arm at its best lr")
     a = ap.parse_args()
     if a.curves:
         for name, pts in sorted(curves(load(a.dirs, partial=True)).items()):
             print(name, " ".join(f"{t / 1e6:.0f}M:{g:+.3f}" for t, g in pts[::2] + pts[-1:]))
         return
-    res = analyze(load(a.dirs), a.baseline_lr)
+    res = analyze(load(a.dirs), a.baseline_lr, a.best)
     if a.pivot:
-        print(pivot(res))
+        print(pivot(res, a.best))
         return
     if a.json:
         Path(a.json).write_text(json.dumps(res, indent=1))
