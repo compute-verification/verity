@@ -14,8 +14,9 @@ establishes with no hardware of its own at the prover's site. It composes three 
 - integrity, by sampled proofs' one-stage audit (`verity/sampled-proofs/one-stage/v1`): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger samples proof blocks, the prover proves each sampled
   proof block in C-Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
-- work, by PoUW's window check (`verity/pouw/v1`): the GPU's time is credited to useful matmuls through receipts the live
-  coins open;
+- work, by PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too): the GPU's time is credited
+  to useful matmuls through receipts the live coins open, the period's windows all or nothing, each window's Commit
+  record the one record the policy and the one-stage audit committed to;
 - the inference-only policy (`verity/inference-only/v0`): the declared circuit divides into inference blocks within
   their gate and fresh-input budgets, checked from the declared circuit and the registered information alone.
 

@@ -9,8 +9,8 @@ applied to its committed inputs. The protocol is stated in Lean (see "Where thin
 points to the code, and lists what the Lean does not state yet.
 
 Sampled proofs is a subprotocol of both composite protocols. The remote protocol (`verity/remote/v0`,
-`verity/core/protocols/remote/`) composes its one-stage audit (`verity/sampled-proofs/one-stage/v1`) with PoUW
-(`verity/pouw/v1`), and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols. In each, the
+`verity/core/protocols/remote/`) composes its one-stage audit (`verity/sampled-proofs/one-stage/v1`) with PoUW's
+period (`verity/pouw/period/v1`) and the inference-only policy, and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols. In each, the
 composite's verifier runs the one-stage audit's Lean check as a component, and the composite accepts only when every
 component accepts.
 

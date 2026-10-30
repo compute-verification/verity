@@ -20,7 +20,8 @@ from verity.core.protocols.sampled_proofs import parties as P
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.wire import Refused
 
-SP, CERT, POUW = P.SUBPROTOCOLS["verity/remote/v0"]["sampled-proofs"], P.IDS["certifier"], P.IDS["pouw"]
+SP, POUW = P.SUBPROTOCOLS["verity/remote/v0"]["sampled-proofs"], P.SUBPROTOCOLS["verity/remote/v0"]["pouw"]
+CERT = P.IDS["certifier"]
 NCI = P.IDS["inference-only"]
 REMOTE = ("sampled-proofs", "pouw", "inference-only")
 ROLES = [P.CHALLENGER, P.FIREWALL, P.VERIFIER, P.WORKERS]
@@ -134,7 +135,7 @@ def test_onsites_subprotocols_answers_and_cases_reach_the_composite():
     assert line["product"] == "verity/onsite/v0"
     _, ids, _, digests = next(c for c in m.calls if c[0] == "product")
     assert ids == [P.SUBPROTOCOLS["verity/onsite/v0"][c] for c in onsite] and digests[CERT] == "cd" * 64
-    assert "verity/pouw/period/v1" in ids and POUW not in ids
+    assert POUW == "verity/pouw/period/v1" and POUW in ids and P.IDS["pouw"] not in ids
 
 
 def test_an_accepting_audit_of_another_registration_rejects():
