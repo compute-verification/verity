@@ -47,7 +47,9 @@ repeats, the free terms are per drawn row and column, and each cell draws its ow
 is a fit to be rechecked and an unsat at any grid holds. `--escalate` solves the second grid only where the first is
 sat, as soon as it is. `--cegis` gives the same answers from a growing subset of a grid's examples (`cegis`).
 `--split-ops` solves each choice of one instruction per slot apart (16 solves at L = 2, most without a multiplier),
-escalates each on its own, and counts a member none only when every choice is unsat.
+escalates each on its own, and counts a member none only when every choice is unsat. `--ops=AB,AB` keeps only the
+listed choices (digits index `fold_window.OPS`: 0 LOP3, 1 IADD3, 2 IMAD, 3 LEA), so a choice can run at a narrower width
+where its unsat comes sooner; a run of some choices leaves its members open.
 
 `--pairs=PATH` makes the members `xoradd` steps at the listed constants (a JSON list of {"c", "k", "width", "carry",
 "covers", "lo"}, `r80x_batch.py --pairs-out`'s), keeping those of the run's width: a round's word-entry certificates. A
@@ -62,7 +64,7 @@ can do; carries split over two predicates and spent in different instructions ar
 
 Run: `uv run --no-project --with z3-solver python -B fold_family.py OUT.json --window=PATH/fold_window.py [--width=8]
 [--members=12] [--steps=1,2] [--families=...] [--targets=zero,words] [--timeout=300] [--jobs=4] [--sweep=KIND]
-[--sweep-c=C] [--ks=K,K] [--free=F] [--pairs=PATH] [--grids=3x3x4,4x4x6] [--escalate] [--cegis] [--split-ops] [--full]`
+[--sweep-c=C] [--ks=K,K] [--free=F] [--pairs=PATH] [--grids=3x3x4,4x4x6] [--escalate] [--cegis] [--split-ops] [--ops=AB,AB] [--full]`
 (from this directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
 """
 from __future__ import annotations
@@ -295,6 +297,7 @@ def specs(opt):
     if full and w != 32:
         raise SystemExit("--full needs --width=32: its instructions move high bits down, so no width reduction holds")
     nops = len(WINDOW.OPS) * (2 if full else 1)
+    only = str(opt["--ops"]).split(",") if "--ops" in opt else None
     out = []
     for fam in fams:
         for s in steps:
@@ -310,6 +313,8 @@ def specs(opt):
                             continue
                         split = "--split-ops" in opt and L < h
                         for ops in itertools.product(range(nops), repeat=L) if split else [None]:
+                            if ops and only and "".join(map(str, ops)) not in only:
+                                continue
                             out.append({"name": f"{fam}-s{s}-m{i}-{target}-L{L}-g{'x'.join(map(str, grid))}"
                                                 + (f"-F{'-'.join(map(str, free)) if isinstance(free, list) else free}"
                                                    if free else "") + ("-full" if full else "")
